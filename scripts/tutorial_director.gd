@@ -1,6 +1,7 @@
 class_name TutorialDirector
 extends Node
-## Runs the guided tutorial (tool track W1-W6 + rule track R1, R3) on the REAL table inside main.tscn.
+## Runs the guided tutorial (tool track W1-W6 + Wave-1 T-02/T-03/T-04 + rule track R1, R3) on the
+## REAL table inside main.tscn.
 ## Owns the pure pieces — a TutorialFlow cursor over the lesson track and a
 ## TutorialProgress cfg — and does the scene work around them: it translates the real
 ## gameplay seams into TutorialFlow.Events, resolves each step's spotlight target
@@ -10,14 +11,17 @@ extends Node
 ##
 ## Steps advance ONLY on real signals / real UI state edges — never a "Next" button:
 ##   selection_changed / selection_dropped / rotation_committed  (object_manager)
+##   arrangement_applied / objects_pasted / lock_state_changed    (object_manager, Wave-1 T-03)
 ##   action_undone                                               (undo_manager)
 ##   measurement_finished                                        (object_manager)
 ##   roll_finnished                                              (dice tray)
-##   unit_activated                                              (radial controller)
+##   unit_activated / model_deleted / unit_deleted               (radial controller)
+##   spell_preview_changed                                       (range_ring_controller, Wave-1 T-04)
 ##   loose_model_dead_changed / round_advanced                   (army manager)
 ##   visualization_completed                                     (coherency visualizer, R3)
 ## plus polled state edges for camera deltas, menu/import-dialog visibility, dock
-## open/presented and movement-band activity. Concept-only steps (the archived R2 regiments
+## open/presented, movement-band activity, pinned-ruler count and G-range-ring activity
+## (Wave-1 T-04). Concept-only steps (the archived R2 regiments
 ## card, kept for a future Regiments tutorial) advance via the coach "GOT IT" button, never
 ## a generic Next.
 
@@ -61,6 +65,10 @@ var _army_manager: Node = null
 var _undo_manager: Node = null
 var _coherency_visualizer: Node = null
 var _round_button: Control = null
+# Wave-1 measurement aids, resolved from the object manager in setup (may be null on a
+# degraded board). Their state is polled for the pin/clear-ruler and G-ring edges.
+var _range_ring_controller: Node = null
+var _pinned_rulers: Node = null
 
 # ===== Private state =====
 var _coach: TutorialCoachMark = null
@@ -82,6 +90,16 @@ var _prev_import_open: bool = false
 var _prev_dock_open: bool = false
 var _prev_presented: bool = false
 var _prev_bands_active: bool = false
+# Wave-1 poll edges (T-04): pinned-ruler count (P pins / K clears), G-range-ring activity,
+# and the spell-preview fallback (the real seam is spell_preview_changed; this poll backs it up).
+var _prev_ruler_count: int = 0
+var _prev_ring_active: bool = false
+var _prev_spell_preview: bool = false
+# T-02 second highlighted unit: a distinct player-1 unit (not the primary target) the multi-select
+# step spotlights so the Alt+click has an obvious second target.
+var _second_unit: GameUnit = null
+var _second_nodes: Array[Node3D] = []
+var _second_visuals: Array[VisualInstance3D] = []
 var _assessment_dialog: ConfirmationDialog = null
 # R3: latch a broken-coherency edge so the follow-up "restored" step only fires after the
 # unit was actually seen out of coherency first (never on the initial coherent snapshot).
@@ -134,6 +152,12 @@ func setup(refs: Dictionary) -> void:
 	_round_button = refs.get("round_button", null)
 	if _camera_pivot != null:
 		_camera = _camera_pivot.get_node_or_null("Camera3D") as Camera3D
+	# Wave-1 measurement aids live on the object manager (like movement_range_controller);
+	# resolve them here so the poll edges (pin/clear rulers, G-rings) and the spell-preview
+	# seam have a ref. Null-safe: a degraded board leaves these null and the polls read 0.
+	if _object_manager != null:
+		_range_ring_controller = _object_manager.get("range_ring_controller")
+		_pinned_rulers = _object_manager.get("pinned_rulers")
 
 
 ## Start the tutorial. With `start_lesson` empty: run the assessment (once), apply the
@@ -182,6 +206,39 @@ static func moves_hit(moves: Array, target_nodes: Array) -> bool:
 	return false
 
 
+## The distinct GameUnits a selection touches, read from each node's "game_unit" meta (set by
+## the board loader / equipment distributor). Pure + testable: a test just stamps the meta.
+## T-02 uses the count to detect a multi-unit (Alt+click) selection.
+static func distinct_units_in(selected: Array) -> Array:
+	var seen: Array = []
+	for obj in selected:
+		if obj == null or not is_instance_valid(obj) or not obj.has_meta("game_unit"):
+			continue
+		var unit = obj.get_meta("game_unit")
+		if unit != null and not seen.has(unit):
+			seen.append(unit)
+	return seen
+
+
+## True when a selection is exactly ONE unit's full set of alive models (double-click whole unit):
+## every alive model node of a single unit is selected and nothing else. T-02 "unit" step gate.
+static func is_whole_unit_selection(selected: Array) -> bool:
+	var units := distinct_units_in(selected)
+	if units.size() != 1 or not units[0] is GameUnit:
+		return false
+	var unit: GameUnit = units[0]
+	var alive_nodes: Array = []
+	for model in unit.get_alive_models():
+		if model != null and is_instance_valid(model.node):
+			alive_nodes.append(model.node)
+	if alive_nodes.is_empty() or alive_nodes.size() != selected.size():
+		return false
+	for node in alive_nodes:
+		if not selected.has(node):
+			return false
+	return true
+
+
 # ===== Seam wiring =====
 
 func _connect_seams() -> void:
@@ -194,12 +251,29 @@ func _connect_seams() -> void:
 			_object_manager.rotation_committed.connect(_on_rotation_committed)
 		if _object_manager.has_signal("measurement_finished"):
 			_object_manager.measurement_finished.connect(_on_measurement_finished)
+		# Wave-1 T-03 additive seams (arrange / paste / lock).
+		if _object_manager.has_signal("arrangement_applied"):
+			_object_manager.arrangement_applied.connect(_on_arrangement_applied)
+		if _object_manager.has_signal("objects_pasted"):
+			_object_manager.objects_pasted.connect(_on_objects_pasted)
+		if _object_manager.has_signal("lock_state_changed"):
+			_object_manager.lock_state_changed.connect(_on_lock_state_changed)
 	if _undo_manager != null and _undo_manager.has_signal("action_undone"):
 		_undo_manager.action_undone.connect(_on_action_undone)
 	if _dice_tray != null and _dice_tray.has_signal("roll_finnished"):
 		_dice_tray.roll_finnished.connect(_on_roll_finnished)
-	if _radial_controller != null and _radial_controller.has_signal("unit_activated"):
-		_radial_controller.unit_activated.connect(_on_unit_activated)
+	if _radial_controller != null:
+		if _radial_controller.has_signal("unit_activated"):
+			_radial_controller.unit_activated.connect(_on_unit_activated)
+		# Wave-1 T-03 delete: the Delete key routes selection through delete_objects(), which
+		# emits model_deleted / unit_deleted — both funnel to OBJECT_DELETED.
+		if _radial_controller.has_signal("model_deleted"):
+			_radial_controller.model_deleted.connect(_on_model_deleted)
+		if _radial_controller.has_signal("unit_deleted"):
+			_radial_controller.unit_deleted.connect(_on_unit_deleted)
+	# Wave-1 T-04 spell-range preview (real seam; a poll fallback also backs it up).
+	if _range_ring_controller != null and _range_ring_controller.has_signal("spell_preview_changed"):
+		_range_ring_controller.spell_preview_changed.connect(_on_spell_preview_changed)
 	if _army_manager != null:
 		if _army_manager.has_signal("loose_model_dead_changed"):
 			_army_manager.loose_model_dead_changed.connect(_on_loose_model_dead_changed)
@@ -215,12 +289,19 @@ func _disconnect_seams() -> void:
 		_disconnect_if(_object_manager, "selection_dropped", _on_selection_dropped)
 		_disconnect_if(_object_manager, "rotation_committed", _on_rotation_committed)
 		_disconnect_if(_object_manager, "measurement_finished", _on_measurement_finished)
+		_disconnect_if(_object_manager, "arrangement_applied", _on_arrangement_applied)
+		_disconnect_if(_object_manager, "objects_pasted", _on_objects_pasted)
+		_disconnect_if(_object_manager, "lock_state_changed", _on_lock_state_changed)
 	if _undo_manager != null:
 		_disconnect_if(_undo_manager, "action_undone", _on_action_undone)
 	if _dice_tray != null:
 		_disconnect_if(_dice_tray, "roll_finnished", _on_roll_finnished)
 	if _radial_controller != null:
 		_disconnect_if(_radial_controller, "unit_activated", _on_unit_activated)
+		_disconnect_if(_radial_controller, "model_deleted", _on_model_deleted)
+		_disconnect_if(_radial_controller, "unit_deleted", _on_unit_deleted)
+	if _range_ring_controller != null:
+		_disconnect_if(_range_ring_controller, "spell_preview_changed", _on_spell_preview_changed)
 	if _army_manager != null:
 		_disconnect_if(_army_manager, "loose_model_dead_changed", _on_loose_model_dead_changed)
 		_disconnect_if(_army_manager, "round_advanced", _on_round_advanced)
@@ -242,6 +323,20 @@ func _on_selection_changed(selected: Array) -> void:
 		if is_instance_valid(_r3_mover_node) and selected.has(_r3_mover_node):
 			_on_event(TutorialFlow.Event.UNIT_SELECTED)
 		return
+	# T-02 selecting: the same selection_changed edge carries every gesture, so the director
+	# reads the RESULTING selection composition (empty / whole-unit / multi-unit / box / hits
+	# the primary unit) and emits the matching event. consume() ignores any that don't match the
+	# current step, so emitting several candidates per edge is safe (a whole-unit selection can
+	# never also span >=2 units, which rules out a double-advance — see build_wave1_track order).
+	if selected.is_empty():
+		_on_event(TutorialFlow.Event.SELECTION_CLEARED)
+		return
+	if is_whole_unit_selection(selected):
+		_on_event(TutorialFlow.Event.UNIT_WHOLE_SELECTED)
+	if distinct_units_in(selected).size() >= 2:
+		_on_event(TutorialFlow.Event.MULTI_SELECTED)
+	if _box_select_in_progress():
+		_on_event(TutorialFlow.Event.BOX_SELECTED)
 	if selection_hits(selected, _target_nodes):
 		_on_event(TutorialFlow.Event.UNIT_SELECTED)
 
@@ -275,6 +370,36 @@ func _on_roll_finnished(_total: int) -> void:
 
 func _on_unit_activated(_game_unit) -> void:
 	_on_event(TutorialFlow.Event.UNIT_ACTIVATED)
+
+
+## T-03: a formation (rows / arrow) was applied to the selection.
+func _on_arrangement_applied(_kind: StringName) -> void:
+	_on_event(TutorialFlow.Event.ARRANGED)
+
+
+## T-03: Ctrl+V / Ctrl+D produced new table nodes.
+func _on_objects_pasted(_nodes: Array) -> void:
+	_on_event(TutorialFlow.Event.PASTED)
+
+
+## T-03: the selection's lock state toggled (L).
+func _on_lock_state_changed(_objects: Array, _locked: bool) -> void:
+	_on_event(TutorialFlow.Event.LOCK_TOGGLED)
+
+
+## T-03: a model or whole unit was deleted (Delete key routes through the radial controller).
+func _on_model_deleted(_model) -> void:
+	_on_event(TutorialFlow.Event.OBJECT_DELETED)
+
+
+func _on_unit_deleted(_game_unit) -> void:
+	_on_event(TutorialFlow.Event.OBJECT_DELETED)
+
+
+## T-04: a caster spell was hovered / un-hovered — only the "on" edge advances the spell step.
+func _on_spell_preview_changed(active: bool) -> void:
+	if active:
+		_on_event(TutorialFlow.Event.SPELL_RANGE_SHOWN)
 
 
 func _on_loose_model_dead_changed(node: Node3D, dead: bool) -> void:
@@ -443,6 +568,12 @@ func _enter_step() -> void:
 		_resolve_target_unit()
 		if event == TutorialFlow.Event.UNIT_SELECTED:
 			_focus_camera_on_nodes(_target_nodes)
+	elif target == TutorialFlow.TARGET_SECOND_UNIT:
+		# T-02 multi-select: keep the primary target and light up a DISTINCT second unit as the
+		# Alt+click destination, framing it so the player sees where to click.
+		_resolve_target_unit()
+		_resolve_second_unit()
+		_focus_camera_on_nodes(_second_nodes)
 	elif target == TutorialFlow.TARGET_PARKED_MODEL and is_instance_valid(_parked_node):
 		_focus_camera_on_nodes([_parked_node])
 	elif target == TutorialFlow.TARGET_R3_MODEL or target == TutorialFlow.TARGET_R3_MARKER:
@@ -619,6 +750,9 @@ func _init_ui_edges() -> void:
 	_prev_dock_open = _dock_open()
 	_prev_presented = _card_presented()
 	_prev_bands_active = _bands_active()
+	_prev_ruler_count = _ruler_count()
+	_prev_ring_active = _range_ring_active()
+	_prev_spell_preview = _spell_preview_active()
 
 
 func _poll_ui_edges() -> void:
@@ -649,6 +783,27 @@ func _poll_ui_edges() -> void:
 		_on_event(TutorialFlow.Event.BANDS_SHOWN)
 	_prev_bands_active = bands
 
+	# T-04 pin / clear rulers: P raises the pinned-ruler count, K lowers it.
+	var ruler_count := _ruler_count()
+	if ruler_count > _prev_ruler_count:
+		_on_event(TutorialFlow.Event.RULER_PINNED)
+	elif ruler_count < _prev_ruler_count:
+		_on_event(TutorialFlow.Event.RULER_CLEARED)
+	_prev_ruler_count = ruler_count
+
+	# T-04 G-range-ring: any active ring on the rising edge.
+	var ring_active := _range_ring_active()
+	if ring_active and not _prev_ring_active:
+		_on_event(TutorialFlow.Event.RANGE_RING_SHOWN)
+	_prev_ring_active = ring_active
+
+	# T-04 spell-range preview: fallback for the spell_preview_changed seam (in case the signal
+	# is unavailable on a degraded board) — the rising edge advances the spell step.
+	var spell_preview := _spell_preview_active()
+	if spell_preview and not _prev_spell_preview:
+		_on_event(TutorialFlow.Event.SPELL_RANGE_SHOWN)
+	_prev_spell_preview = spell_preview
+
 
 func _menu_open() -> bool:
 	return _left_panel != null and _left_panel.visible
@@ -674,6 +829,32 @@ func _bands_active() -> bool:
 	return bands_controller != null and bands_controller.active_count() > 0
 
 
+## T-04: number of pinned rulers (P pins, K clears). 0 when no controller (degraded board).
+func _ruler_count() -> int:
+	if _pinned_rulers != null and _pinned_rulers.has_method("ruler_count"):
+		return int(_pinned_rulers.ruler_count())
+	return 0
+
+
+## T-04: at least one G-range ring is active on a model.
+func _range_ring_active() -> bool:
+	return _range_ring_controller != null and _range_ring_controller.has_method("active_count") \
+		and int(_range_ring_controller.active_count()) > 0
+
+
+## T-04: a caster spell's range preview is on screen (poll fallback for the real seam).
+func _spell_preview_active() -> bool:
+	return _range_ring_controller != null and _range_ring_controller.has_method("has_spell_preview") \
+		and bool(_range_ring_controller.has_spell_preview())
+
+
+## T-02: true while a rubber-band box drag is producing the current selection. The object
+## manager keeps _is_box_selecting true through the per-model selection_changed emits fired
+## inside _finish_box_selection, so reading it here reliably tags a box gesture.
+func _box_select_in_progress() -> bool:
+	return _object_manager != null and bool(_object_manager.get("_is_box_selecting"))
+
+
 ## For events that reflect a UI STATE (not a gesture): true when the state is already
 ## reached at step entry, so the step self-completes instead of waiting for an edge.
 func _state_already_satisfied(event: TutorialFlow.Event) -> bool:
@@ -688,6 +869,10 @@ func _state_already_satisfied(event: TutorialFlow.Event) -> bool:
 			return _card_presented()
 		TutorialFlow.Event.BANDS_SHOWN:
 			return _bands_active()
+		TutorialFlow.Event.RANGE_RING_SHOWN:
+			return _range_ring_active()
+		TutorialFlow.Event.SPELL_RANGE_SHOWN:
+			return _spell_preview_active()
 		_:
 			return false
 
@@ -723,6 +908,38 @@ func _resolve_target_unit() -> void:
 		if model != null and is_instance_valid(model.node):
 			_target_nodes.append(model.node)
 	_target_visuals = _collect_visuals(_target_nodes)
+
+
+## T-02: pick a SECOND player-1 unit distinct from the primary target (the one with the most
+## alive models that isn't _target_unit), so the multi-select step has an obvious Alt+click
+## destination. No-op / empty when the board has only one player-1 unit.
+func _resolve_second_unit() -> void:
+	if _second_unit != null and _second_unit != _target_unit \
+			and _second_unit.get_alive_count() > 0 and not _second_nodes.is_empty():
+		return
+	_second_unit = null
+	_second_nodes = []
+	_second_visuals = []
+	if _army_manager == null:
+		return
+	var units = _army_manager.get("game_units")
+	if not units is Dictionary:
+		return
+	var best: GameUnit = null
+	for unit in units.values():
+		if not unit is GameUnit or unit == _target_unit:
+			continue
+		if int(unit.unit_properties.get("player_id", 0)) != 1 or unit.get_alive_count() == 0:
+			continue
+		if best == null or unit.get_alive_count() > best.get_alive_count():
+			best = unit
+	if best == null:
+		return
+	_second_unit = best
+	for model in best.models:
+		if model != null and is_instance_valid(model.node):
+			_second_nodes.append(model.node)
+	_second_visuals = _collect_visuals(_second_nodes)
 
 
 ## All VisualInstance3D under the given nodes (cached per step; AABBs are then
@@ -892,6 +1109,8 @@ func _resolve_target_rect(target: String) -> Rect2:
 	match target:
 		TutorialFlow.TARGET_UNIT:
 			return _project_visuals(_target_visuals, _target_nodes)
+		TutorialFlow.TARGET_SECOND_UNIT:
+			return _project_visuals(_second_visuals, _second_nodes)
 		TutorialFlow.TARGET_PARKED_MODEL:
 			var parked: Array[Node3D] = []
 			if is_instance_valid(_parked_node):

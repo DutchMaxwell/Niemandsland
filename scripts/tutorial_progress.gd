@@ -7,18 +7,22 @@ extends RefCounted
 ## player's real progress file.
 ##
 ## Schema (cfg):
-##   [meta]       version = 2
+##   [meta]       version = 3
+##                last_system = "gf"            ; drives the RULES chapter picker (design §17)
 ##   [assessment] answered = bool, knows_opr_rules = bool, used_simulator = bool
-##   [lessons]    <lesson_id> = true            ; completed (or explicitly skipped)
+##   [lessons]    <lesson_id> = true            ; completed (or explicitly skipped) — any id string
 ##   [tips]       <tip_id> = true               ; a one-time tip / guest-intro shown once ever
 ##
-## Migration: a v1 file (no [tips] section) loads unchanged — the schema is purely
-## additive — and is rewritten as v2 on the next save. `_migrate` is the forward-only
-## hook for any future non-additive change.
+## Migration (forward-only, additive): a v1 file (no [tips]) loads unchanged; v2 -> v3 stamps
+## last_system = "gf" and maps the one identical chapter (completed W1 -> T-01, since the camera
+## lesson is unchanged). Old W2..W6 / R* flags are left as-is (harmless: they are not members of
+## the richer T-track, so a returning player replays the fuller chapters). `_migrate` is the
+## forward-only hook.
 
 # ===== Constants =====
 const DEFAULT_PATH := "user://tutorial.cfg"
-const CFG_VERSION := 2
+const CFG_VERSION := 3
+const DEFAULT_SYSTEM := "gf"    # game system the RULES picker defaults to (Grimdark Future)
 const SECTION_META := "meta"
 const SECTION_ASSESSMENT := "assessment"
 const SECTION_LESSONS := "lessons"
@@ -74,6 +78,18 @@ func cfg_version() -> int:
 	return int(_config.get_value(SECTION_META, "version", 1))
 
 
+## The last game system the player was in (GF/GFF/AoF/AoFS/AoFR) — drives which RULES
+## chapters the picker shows. Defaults to Grimdark Future (design §17).
+func last_system() -> String:
+	return String(_config.get_value(SECTION_META, "last_system", DEFAULT_SYSTEM))
+
+
+func set_last_system(system: String) -> void:
+	if system.is_empty():
+		return
+	_config.set_value(SECTION_META, "last_system", system)
+
+
 ## Forward-only migration of an older on-disk schema to CFG_VERSION, in memory only
 ## (persisted on the next save). v1 -> v2 is purely additive (the new [tips] section
 ## simply did not exist), so there is nothing to transform — we only stamp the version
@@ -82,7 +98,15 @@ func _migrate() -> void:
 	var from := int(_config.get_value(SECTION_META, "version", 1))
 	if from >= CFG_VERSION:
 		return
-	# v1 -> v2: additive only (tips). No field moves.
+	# v1 -> v2: additive only (the [tips] section). Nothing to transform.
+	# v2 -> v3: the camera chapter W1 became T-01 (identical content), so a player who finished
+	# W1 keeps that completion; default the RULES-picker system. Other legacy W2..W6 / R* flags
+	# stay as-is (a returning player replays the richer T-chapters — design §17).
+	if from < 3:
+		if bool(_config.get_value(SECTION_LESSONS, "W1", false)):
+			_config.set_value(SECTION_LESSONS, "T-01", true)
+		if not _config.has_section_key(SECTION_META, "last_system"):
+			_config.set_value(SECTION_META, "last_system", DEFAULT_SYSTEM)
 	_config.set_value(SECTION_META, "version", CFG_VERSION)
 
 

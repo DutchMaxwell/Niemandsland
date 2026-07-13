@@ -33,6 +33,21 @@ enum Event {
 	ACK,                  # player acknowledged a concept card via the coach "GOT IT" button — R2
 	COHERENCY_BROKEN,     # a unit's coherency visualization reported it out of coherency — R3
 	COHERENCY_RESTORED,   # a previously-broken unit is back in 1" coherency — R3
+	# --- Wave 1 tool track (T-02 Selecting) ---
+	UNIT_WHOLE_SELECTED,  # selection == every alive model of ONE unit (double-click) — T-02
+	MULTI_SELECTED,       # selection spans >= 2 distinct units (Alt+click) — T-02
+	BOX_SELECTED,         # selection grew from a rubber-band box drag on empty table — T-02
+	SELECTION_CLEARED,    # selection became empty (Esc) — T-02
+	# --- Wave 1 tool track (T-03 Moving, rotating & arranging) ---
+	ARRANGED,             # object_manager.arrangement_applied (1-9 rows / Shift+A arrow) — T-03
+	PASTED,               # object_manager.objects_pasted (Ctrl+V / Ctrl+D) — T-03
+	LOCK_TOGGLED,         # object_manager.lock_state_changed (L) — T-03
+	OBJECT_DELETED,       # radial_menu_controller.model_deleted / unit_deleted (Delete) — T-03
+	# --- Wave 1 tool track (T-04 Measuring, rings & coherency) ---
+	RULER_PINNED,         # pinned_rulers.ruler_count() rose (P pins the live ruler) — T-04
+	RULER_CLEARED,        # pinned_rulers.ruler_count() fell (K clears pinned rulers) — T-04
+	RANGE_RING_SHOWN,     # range_ring_controller.active_count() > 0 (G range rings) — T-04
+	SPELL_RANGE_SHOWN,    # range_ring_controller.spell_preview_changed(true) (hover a spell) — T-04
 }
 
 # ===== Spotlight target keys (resolved to rects by the director) =====
@@ -48,6 +63,7 @@ const TARGET_PARKED_MODEL := "parked_model"   # the casualty parked on the tray
 const TARGET_ROUND_BUTTON := "round_button"   # the Next Round button (R1: end the round)
 const TARGET_R3_MODEL := "r3_model"           # ONE designated model of the unit (R3: click this model)
 const TARGET_R3_MARKER := "r3_marker"         # the R3 world-space destination marker, projected to screen
+const TARGET_SECOND_UNIT := "second_unit"     # a SECOND player-1 unit's projected AABB (T-02: Alt+click it)
 
 # ===== Chapter metadata keys (for the future tool-vs-rules / system-ladder split) =====
 ## Each lesson carries a `track` ("tool" | "rule") and `system` tag so a later package can
@@ -72,7 +88,8 @@ func _init(p_lessons: Array = []) -> void:
 
 # ===== Track definition =====
 
-## The T1 tool track (Tutorial_Plan lessons W1-W6). Each step: one imperative
+## The TOOL track: the shipped basics (W1-W6) followed by Wave 1 of the comprehensive
+## track (T-02, T-03, T-04 — appended by build_wave1_track). Each step: one imperative
 ## sentence, the real-signal event that completes it, a spotlight target key, and
 ## whether input outside the spotlight is soft-masked (never for 3D drag steps).
 static func build_tool_track() -> Array:
@@ -124,6 +141,67 @@ static func build_tool_track() -> Array:
 				"event": Event.MODEL_KILLED, "target": TARGET_UNIT, "mask": false},
 			{"id": "revive", "text": "The casualty is parked on your army tray. Right-click it and revive it.",
 				"event": Event.MODEL_REVIVED, "target": TARGET_PARKED_MODEL, "mask": false},
+		]},
+	] + build_wave1_track()
+
+
+## Wave 1 of the comprehensive TOOL track (design spec 2026-07-13): T-02 Selecting,
+## T-03 Moving/rotating/arranging, T-04 Measuring/rings/coherency. Appended to the shipped
+## W1-W6 track — same standard GF board, no reload. Clears the maintainer's named gaps:
+## multi-select (Alt+click), Anordnen/Formation (1-9 / Shift+A), Pin Rule (P), G-Ringe,
+## Zauberreichweiten, and *names* the auto coherency lines. Every step gates on a real seam
+## (existing signal, poll edge, or a Wave-1 additive signal — see TutorialDirector).
+static func build_wave1_track() -> Array:
+	return [
+		{"id": "T-02", "title": "Selecting", "track": TRACK_TOOL, "system": SYSTEM_GF, "steps": [
+			{"id": "single", "text": "Left-click one model of the highlighted unit to select it.",
+				"event": Event.UNIT_SELECTED, "target": TARGET_UNIT, "mask": true},
+			{"id": "unit", "text": "Double-click any model to select its whole unit at once.",
+				"event": Event.UNIT_WHOLE_SELECTED, "target": TARGET_UNIT, "mask": true},
+			{"id": "multi", "text": "Hold Alt and click a model of the second highlighted unit — Alt+click adds it to your selection.",
+				"event": Event.MULTI_SELECTED, "target": TARGET_SECOND_UNIT, "mask": true},
+			{"id": "box", "text": "Drag a box across empty table to rubber-band-select everything inside it.",
+				"event": Event.BOX_SELECTED, "target": TARGET_NONE, "mask": false},
+			{"id": "cancel", "text": "Press Esc to clear the selection.",
+				"event": Event.SELECTION_CLEARED, "target": TARGET_NONE, "mask": false},
+		]},
+		{"id": "T-03", "title": "Moving, rotating & arranging", "track": TRACK_TOOL, "system": SYSTEM_GF, "steps": [
+			{"id": "move", "text": "Drag the selected models to a new spot, then release.",
+				"event": Event.UNIT_MOVED, "target": TARGET_UNIT, "mask": false},
+			{"id": "aim", "text": "Hold R and move the cursor — the models turn to face it. Release R to confirm.",
+				"event": Event.ROTATED, "target": TARGET_UNIT, "mask": false},
+			{"id": "group_rotate", "text": "Select the whole unit, hold Shift and press R to spin the group around its centre.",
+				"event": Event.ROTATED, "target": TARGET_UNIT, "mask": false},
+			{"id": "snap", "text": "Press Ctrl+R to snap the unit's facing to the nearest 90°.",
+				"event": Event.ROTATED, "target": TARGET_UNIT, "mask": false},
+			{"id": "arrange", "text": "Press a number key 1–9 to arrange the selected models into that many rows.",
+				"event": Event.ARRANGED, "target": TARGET_UNIT, "mask": false},
+			{"id": "arrow", "text": "Press Shift+A to fan the unit into an arrow formation.",
+				"event": Event.ARRANGED, "target": TARGET_UNIT, "mask": false},
+			{"id": "duplicate", "text": "Press Ctrl+D to duplicate the selected unit right at the cursor.",
+				"event": Event.PASTED, "target": TARGET_UNIT, "mask": false},
+			{"id": "lock", "text": "Press L to lock the unit so it can't be moved by accident. Press L again to unlock.",
+				"event": Event.LOCK_TOGGLED, "target": TARGET_UNIT, "mask": false},
+			{"id": "delete", "text": "Select the duplicate you just made and press Delete to remove it.",
+				"event": Event.OBJECT_DELETED, "target": TARGET_UNIT, "mask": false},
+			{"id": "undo", "text": "Press Ctrl+Z to undo — and Ctrl+Y to redo.",
+				"event": Event.UNDONE, "target": TARGET_NONE, "mask": false},
+		]},
+		{"id": "T-04", "title": "Measuring, rings & coherency", "track": TRACK_TOOL, "system": SYSTEM_GF, "steps": [
+			{"id": "measure", "text": "Hold Shift and drag the left mouse button to measure a distance.",
+				"event": Event.MEASURED, "target": TARGET_NONE, "mask": false},
+			{"id": "pin", "text": "While a measurement is on screen, press P to pin that ruler so it stays.",
+				"event": Event.RULER_PINNED, "target": TARGET_NONE, "mask": false},
+			{"id": "clear", "text": "Press K to clear your pinned rulers again.",
+				"event": Event.RULER_CLEARED, "target": TARGET_NONE, "mask": false},
+			{"id": "bands", "text": "Select a unit and press M to show its movement bands — Advance 6\" and Rush 12\".",
+				"event": Event.BANDS_SHOWN, "target": TARGET_UNIT, "mask": false},
+			{"id": "rings", "text": "Press G to cycle a range ring (3 / 6 / 9 / 12 / 18 / 24\") — press G again to step through, Shift+G to clear.",
+				"event": Event.RANGE_RING_SHOWN, "target": TARGET_UNIT, "mask": false},
+			{"id": "spell", "text": "Open a caster's card and hover a spell name — a purple ring shows that spell's range.",
+				"event": Event.SPELL_RANGE_SHOWN, "target": TARGET_PRESENTED_CARD, "mask": false},
+			{"id": "coherency", "text": "As you drag a selected unit, watch the green chain lines. Green = every model within 1\" coherency; red = the chain is broken. Move a model to see them.",
+				"event": Event.UNIT_MOVED, "target": TARGET_UNIT, "mask": false},
 		]},
 	]
 
@@ -181,10 +259,10 @@ static func build_regiment_track() -> Array:
 	]
 
 
-## The full guided tutorial in track order: the tool track (W1-W6) followed by the rule
-## track (R1, R3). This is what the director runs and the chapter picker lists; the sub-track
-## builders stay separate so each can be reasoned about (and tested) on its own, and so the
-## future package can recombine them (tool-only, rules-only, per-system ladder) freely.
+## The full guided tutorial in track order: the tool track (W1-W6 + Wave 1 T-02/T-03/T-04)
+## followed by the rule track (R1, R3). This is what the director runs and the chapter picker
+## lists; the sub-track builders stay separate so each can be reasoned about (and tested) on its
+## own, and so the future package can recombine them (tool-only, rules-only, per-system ladder).
 static func build_full_track() -> Array:
 	var full: Array = build_tool_track()
 	full.append_array(build_rule_track())

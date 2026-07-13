@@ -12,10 +12,25 @@ func _new_flow() -> TutorialFlow:
 
 ## ===== Track definition =====
 
-func test_tool_track_has_six_lessons_w1_to_w6() -> void:
+func test_tool_track_is_w1_to_w6_plus_wave1() -> void:
+	# The TOOL track is the shipped basics (W1-W6) followed by Wave 1 (T-02, T-03, T-04).
 	var track := Flow.build_tool_track()
-	assert_int(track.size()).is_equal(6)
-	assert_array(Flow.ids(track)).is_equal(["W1", "W2", "W3", "W4", "W5", "W6"])
+	assert_int(track.size()).is_equal(9)
+	assert_array(Flow.ids(track)).is_equal(["W1", "W2", "W3", "W4", "W5", "W6", "T-02", "T-03", "T-04"])
+
+
+func test_wave1_track_has_the_three_chapters_with_expected_step_counts() -> void:
+	var wave1 := Flow.build_wave1_track()
+	assert_array(Flow.ids(wave1)).is_equal(["T-02", "T-03", "T-04"])
+	# T-02 selecting = 5 steps, T-03 move/rotate/arrange = 10, T-04 measuring/rings = 7.
+	assert_int((wave1[0] as Dictionary).get("steps", []).size()).is_equal(5)
+	assert_int((wave1[1] as Dictionary).get("steps", []).size()).is_equal(10)
+	assert_int((wave1[2] as Dictionary).get("steps", []).size()).is_equal(7)
+	# The multi-select step spotlights a SECOND unit and gates on the multi-unit event.
+	var t02_steps: Array = (wave1[0] as Dictionary).get("steps", [])
+	var multi: Dictionary = t02_steps[2]
+	assert_str(String(multi.get("target", ""))).is_equal(Flow.TARGET_SECOND_UNIT)
+	assert_int(int(multi.get("event", Flow.Event.NONE))).is_equal(Flow.Event.MULTI_SELECTED)
 
 
 func test_every_step_is_fully_defined() -> void:
@@ -70,7 +85,7 @@ func test_full_walk_finishes_the_track() -> void:
 	var flow := _new_flow()
 	var completed: Array[String] = []
 	var guard := 0
-	while not flow.finished and guard < 60:
+	while not flow.finished and guard < 80:
 		guard += 1
 		var event := int(flow.current_step().get("event", Flow.Event.NONE)) as TutorialFlow.Event
 		var result := flow.consume(event)
@@ -78,8 +93,8 @@ func test_full_walk_finishes_the_track() -> void:
 		if not String(result.lesson_completed).is_empty():
 			completed.append(String(result.lesson_completed))
 	assert_bool(flow.finished).is_true()
-	assert_array(completed).is_equal(["W1", "W2", "W3", "W4", "W5", "W6"])
-	assert_int(guard).is_equal(18)  # 3+3+4+3+3+2 steps
+	assert_array(completed).is_equal(["W1", "W2", "W3", "W4", "W5", "W6", "T-02", "T-03", "T-04"])
+	assert_int(guard).is_equal(40)  # 18 basics + T-02(5) + T-03(10) + T-04(7)
 
 
 func test_finished_flow_ignores_events() -> void:
@@ -117,9 +132,9 @@ func test_skip_current_lesson_completes_and_advances() -> void:
 
 func test_skip_on_last_lesson_finishes() -> void:
 	var flow := _new_flow()
-	flow.start_at("W6")
+	flow.start_at("T-04")  # the last TOOL lesson (Wave 1 appended after W6)
 	var result := flow.skip_current_lesson()
-	assert_str(String(result.lesson_completed)).is_equal("W6")
+	assert_str(String(result.lesson_completed)).is_equal("T-04")
 	assert_bool(result.finished).is_true()
 	assert_bool(flow.finished).is_true()
 
@@ -167,9 +182,10 @@ func test_regiment_track_archives_r2() -> void:
 
 func test_full_track_is_tool_plus_rule() -> void:
 	var track := Flow.build_full_track()
-	assert_array(Flow.ids(track)).is_equal(["W1", "W2", "W3", "W4", "W5", "W6", "R1", "R3"])
+	assert_array(Flow.ids(track)).is_equal([
+		"W1", "W2", "W3", "W4", "W5", "W6", "T-02", "T-03", "T-04", "R1", "R3"])
 	# The full track must not mutate the sub-track builders (fresh arrays each call).
-	assert_int(Flow.build_tool_track().size()).is_equal(6)
+	assert_int(Flow.build_tool_track().size()).is_equal(9)
 	assert_int(Flow.build_rule_track().size()).is_equal(2)
 
 
@@ -211,16 +227,18 @@ func test_rule_track_walk_via_events() -> void:
 	assert_bool(flow.finished).is_true()
 
 
-func test_full_walk_finishes_all_eight_lessons() -> void:
+func test_full_walk_finishes_all_eleven_lessons() -> void:
 	var flow := Flow.new(Flow.build_full_track())
 	var completed: Array[String] = []
 	var guard := 0
-	while not flow.finished and guard < 80:
+	while not flow.finished and guard < 120:
 		guard += 1
 		var event := int(flow.current_step().get("event", Flow.Event.NONE)) as TutorialFlow.Event
 		var result := flow.consume(event)
 		assert_bool(result.advanced).is_true()
 		if not String(result.lesson_completed).is_empty():
 			completed.append(String(result.lesson_completed))
-	assert_array(completed).is_equal(["W1", "W2", "W3", "W4", "W5", "W6", "R1", "R3"])
-	assert_int(guard).is_equal(25)  # 18 tool steps + R1(3) + R3(4: pick, spread, restore, done)
+	assert_array(completed).is_equal([
+		"W1", "W2", "W3", "W4", "W5", "W6", "T-02", "T-03", "T-04", "R1", "R3"])
+	# 18 basics + T-02(5) + T-03(10) + T-04(7) + R1(3) + R3(4) = 47 steps.
+	assert_int(guard).is_equal(47)

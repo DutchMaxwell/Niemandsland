@@ -201,3 +201,59 @@ func test_migration_from_v1_preserves_state_and_bumps_version() -> void:
 	assert_int(reloaded.cfg_version()).is_equal(Progress.CFG_VERSION)
 	assert_bool(reloaded.is_lesson_completed("W1")).is_true()
 	assert_bool(reloaded.knows_opr_rules()).is_true()
+
+
+## ===== Wave 1: cfg schema migration v2 -> v3 (W1 -> T-01, default last_system) =====
+
+func test_migration_v2_to_v3_maps_w1_to_t01_and_defaults_system() -> void:
+	# Author a raw v2 file: version 2, an assessment, W1 + W3 completed, a tip. No last_system.
+	var v2 := ConfigFile.new()
+	v2.set_value("meta", "version", 2)
+	v2.set_value("assessment", "answered", true)
+	v2.set_value("assessment", "knows_opr_rules", true)
+	v2.set_value("lessons", "W1", true)
+	v2.set_value("lessons", "W3", true)
+	v2.set_value("tips", "radial", true)
+	assert_int(v2.save(TEST_PATH)).is_equal(OK)
+
+	# Loading migrates v2 -> v3 in memory: W1 (unchanged camera lesson) maps to T-01, the RULES
+	# picker system defaults to GF, and every pre-existing flag survives.
+	var progress := _new_progress()
+	assert_int(progress.cfg_version()).is_equal(3)
+	assert_bool(progress.is_lesson_completed("T-01")).is_true()
+	assert_bool(progress.is_lesson_completed("W1")).is_true()   # legacy flag left intact
+	assert_bool(progress.is_lesson_completed("W3")).is_true()
+	assert_str(progress.last_system()).is_equal("gf")
+	assert_bool(progress.assessment_answered()).is_true()
+	assert_bool(progress.knows_opr_rules()).is_true()
+	assert_bool(progress.is_tip_shown("radial")).is_true()
+
+	# Persist + reload: the bumped version and the mapped completion stick.
+	assert_int(progress.save_to_disk()).is_equal(OK)
+	var reloaded := _new_progress()
+	assert_int(reloaded.cfg_version()).is_equal(3)
+	assert_bool(reloaded.is_lesson_completed("T-01")).is_true()
+	assert_str(reloaded.last_system()).is_equal("gf")
+
+
+func test_migration_v2_without_w1_does_not_fabricate_t01() -> void:
+	var v2 := ConfigFile.new()
+	v2.set_value("meta", "version", 2)
+	v2.set_value("lessons", "W3", true)
+	assert_int(v2.save(TEST_PATH)).is_equal(OK)
+
+	var progress := _new_progress()
+	assert_int(progress.cfg_version()).is_equal(3)
+	assert_bool(progress.is_lesson_completed("T-01")).is_false()
+	assert_str(progress.last_system()).is_equal("gf")
+
+
+func test_last_system_round_trip_and_default() -> void:
+	var progress := _new_progress()
+	assert_str(progress.last_system()).is_equal("gf")  # default
+	progress.set_last_system("aofr")
+	assert_int(progress.save_to_disk()).is_equal(OK)
+	assert_str(_new_progress().last_system()).is_equal("aofr")
+	# An empty system is ignored (never clobbers the stored value).
+	progress.set_last_system("")
+	assert_str(progress.last_system()).is_equal("aofr")

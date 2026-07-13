@@ -65,6 +65,29 @@ func _nodes_of(unit: GameUnit) -> Array[Node3D]:
 	return nodes
 
 
+## As _new_unit but stamps each model node with the "game_unit" meta the real board loader sets,
+## so the T-02 composition helpers (distinct_units_in / is_whole_unit_selection) resolve it.
+func _unit_with_meta(model_count: int) -> GameUnit:
+	var unit := GameUnit.new()
+	unit.unit_properties = {"name": "Meta Unit", "player_id": 1}
+	for i in model_count:
+		var model := ModelInstance.new()
+		model.node = auto_free(Node3D.new())
+		model.node.set_meta("game_unit", unit)
+		model.unit = unit
+		model.model_index = i
+		unit.models.append(model)
+	return unit
+
+
+func _step_id(director: TutorialDirector) -> String:
+	return String(director.flow.current_step().get("id", ""))
+
+
+func _lesson_id(director: TutorialDirector) -> String:
+	return String(director.flow.current_lesson().get("id", ""))
+
+
 ## ===== Static payload predicates =====
 
 func test_selection_hits() -> void:
@@ -131,20 +154,22 @@ func test_events_out_of_step_are_ignored() -> void:
 
 ## ===== W6: kill / revive =====
 
-func test_w6_kill_then_revive_finishes_the_track() -> void:
+func test_w6_kill_then_revive_completes_and_advances_to_wave1() -> void:
 	var director := _new_director("W6")
 	var casualty: Node3D = auto_free(Node3D.new())
-	var finished := [null]
-	director.tutorial_finished.connect(func(completed: bool) -> void: finished[0] = completed)
+	var completions: Array = []
+	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
 
 	director._on_loose_model_dead_changed(casualty, true)
 	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("revive")
 	assert_object(director._parked_node).is_equal(casualty)
 
+	# W6 is no longer the last tool lesson — Wave 1 (T-02) follows it in track order.
 	director._on_loose_model_dead_changed(casualty, false)
-	assert_bool(director.flow.finished).is_true()
-	assert_bool(finished[0]).is_true()
+	assert_bool(director.flow.finished).is_false()
+	assert_array(completions).is_equal(["W6"])
 	assert_bool(director.progress.is_lesson_completed("W6")).is_true()
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("T-02")
 
 
 ## ===== Lesson jumping: resume skips completed, chapter replay does not =====
@@ -432,6 +457,215 @@ func test_r3_visualizer_path_broken_then_restored_finishes_track() -> void:
 	assert_bool(director.progress.is_lesson_completed("R3")).is_true()
 
 
+## ===== Wave 1: T-02 Selecting (composition-gated) =====
+
+func test_t02_selecting_chain_completes_via_real_signals() -> void:
+	var director := _new_director("T-02")
+	var primary := _unit_with_meta(2)
+	var second := _unit_with_meta(2)
+	director._target_unit = primary
+	director._target_nodes = _nodes_of(primary)
+	director._second_unit = second
+	director._second_nodes = _nodes_of(second)
+	var box: _BoxSelectStub = auto_free(_BoxSelectStub.new())
+	director._object_manager = box
+	var completions: Array = []
+	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
+
+	# single: left-click one model of the primary unit.
+	director._on_selection_changed([director._target_nodes[0]])
+	assert_str(_step_id(director)).is_equal("unit")
+	# unit: double-click selects the whole primary unit (every alive model).
+	director._on_selection_changed(director._target_nodes)
+	assert_str(_step_id(director)).is_equal("multi")
+	# multi: Alt+click a model of the SECOND unit -> selection spans two units.
+	director._on_selection_changed([director._target_nodes[0], director._second_nodes[0]])
+	assert_str(_step_id(director)).is_equal("box")
+	# box: a rubber-band drag produces a selection while box-select is in progress.
+	box._is_box_selecting = true
+	director._on_selection_changed([director._target_nodes[0]])
+	assert_str(_step_id(director)).is_equal("cancel")
+	box._is_box_selecting = false
+	# cancel: Esc clears the selection -> T-02 done, advance to T-03.
+	director._on_selection_changed([])
+	assert_array(completions).is_equal(["T-02"])
+	assert_str(_lesson_id(director)).is_equal("T-03")
+
+
+func test_t02_selecting_wrong_gestures_never_softlock() -> void:
+	# A single-model / stranger selection must not satisfy the whole-unit or multi steps.
+	var director := _new_director("T-02")
+	var primary := _unit_with_meta(3)
+	director._target_unit = primary
+	director._target_nodes = _nodes_of(primary)
+	director._second_unit = _unit_with_meta(2)
+	director._second_nodes = _nodes_of(director._second_unit)
+	director._object_manager = auto_free(_BoxSelectStub.new())
+
+	# Advance to the "unit" (whole-unit) step.
+	director._on_selection_changed([director._target_nodes[0]])
+	assert_str(_step_id(director)).is_equal("unit")
+	# A PARTIAL selection of the unit (not every alive model) must NOT complete the whole-unit step.
+	director._on_selection_changed([director._target_nodes[0], director._target_nodes[1]])
+	assert_str(_step_id(director)).is_equal("unit")
+	# The full alive set does.
+	director._on_selection_changed(director._target_nodes)
+	assert_str(_step_id(director)).is_equal("multi")
+
+
+func test_t02_box_select_quick_and_slow_variants() -> void:
+	# Quick drag: the box grabs models in a single selection edge -> advances once.
+	var quick := _new_director("T-02")
+	quick._target_unit = _unit_with_meta(2)
+	quick._target_nodes = _nodes_of(quick._target_unit)
+	var qbox: _BoxSelectStub = auto_free(_BoxSelectStub.new())
+	quick._object_manager = qbox
+	for _i in 3:  # walk single -> unit -> multi -> box
+		quick._force_complete_current_step()
+	assert_str(_step_id(quick)).is_equal("box")
+	qbox._is_box_selecting = true
+	quick._on_selection_changed([quick._target_nodes[0]])
+	assert_str(_step_id(quick)).is_equal("cancel")
+
+	# Slow drag: the band grabs models incrementally (several selection edges while box-selecting).
+	# It must advance exactly once (on the first grab) and never over-shoot past the cancel step.
+	var slow := _new_director("T-02")
+	slow._target_unit = _unit_with_meta(3)
+	slow._target_nodes = _nodes_of(slow._target_unit)
+	var sbox: _BoxSelectStub = auto_free(_BoxSelectStub.new())
+	slow._object_manager = sbox
+	for _i in 3:
+		slow._force_complete_current_step()
+	assert_str(_step_id(slow)).is_equal("box")
+	sbox._is_box_selecting = true
+	slow._on_selection_changed([slow._target_nodes[0]])
+	slow._on_selection_changed([slow._target_nodes[0], slow._target_nodes[1]])
+	slow._on_selection_changed([slow._target_nodes[0], slow._target_nodes[1], slow._target_nodes[2]])
+	assert_str(_step_id(slow)).is_equal("cancel")  # advanced once, not thrice
+
+
+## ===== Wave 1: T-03 Moving, rotating & arranging =====
+
+func test_t03_move_rotate_arrange_chain_completes() -> void:
+	var director := _new_director("T-03")
+	var unit := _new_unit(2)
+	director._target_unit = unit
+	director._target_nodes = _nodes_of(unit)
+	var completions: Array = []
+	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
+
+	# move: a drop that moved a target model.
+	director._on_selection_dropped([{"node": director._target_nodes[0], "inches": 3.0}])
+	assert_str(_step_id(director)).is_equal("aim")
+	# aim -> group_rotate -> snap: three committed rotations (hold-R / Shift+R / Ctrl+R).
+	for expected in ["group_rotate", "snap", "arrange"]:
+		var rotated: Array[Node3D] = []
+		director._on_rotation_committed(rotated)
+		assert_str(_step_id(director)).is_equal(expected)
+	# arrange (rows) -> arrow: the arrangement_applied seam, either kind.
+	director._on_arrangement_applied(&"rows")
+	assert_str(_step_id(director)).is_equal("arrow")
+	director._on_arrangement_applied(&"arrow")
+	assert_str(_step_id(director)).is_equal("duplicate")
+	# duplicate: the objects_pasted seam.
+	director._on_objects_pasted([auto_free(Node3D.new())])
+	assert_str(_step_id(director)).is_equal("lock")
+	# lock: the lock_state_changed seam.
+	director._on_lock_state_changed([director._target_nodes[0]], true)
+	assert_str(_step_id(director)).is_equal("delete")
+	# delete: a model_deleted from the radial controller (Delete key routes through it).
+	director._on_model_deleted(null)
+	assert_str(_step_id(director)).is_equal("undo")
+	# undo -> T-03 done, advance to T-04.
+	director._on_action_undone("Undo move")
+	assert_array(completions).is_equal(["T-03"])
+	assert_str(_lesson_id(director)).is_equal("T-04")
+
+
+## ===== Wave 1: T-04 Measuring, rings & coherency =====
+
+func test_t04_measuring_rings_chain_completes_via_seams_and_polls() -> void:
+	var director := _new_director("T-04")
+	var om: _BoxSelectStub = auto_free(_BoxSelectStub.new())
+	var bands: _MeasureStub = auto_free(_MeasureStub.new())
+	om.movement_range_controller = bands
+	var rulers: _MeasureStub = auto_free(_MeasureStub.new())
+	var rings: _MeasureStub = auto_free(_MeasureStub.new())
+	director._object_manager = om
+	director._pinned_rulers = rulers
+	director._range_ring_controller = rings
+	var unit := _new_unit(2)
+	director._target_unit = unit
+	director._target_nodes = _nodes_of(unit)
+	director._init_ui_edges()  # baseline every poll edge at 0/false
+	var completions: Array = []
+	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
+
+	# measure: Shift+drag ruler finished.
+	director._on_measurement_finished(6.0)
+	assert_str(_step_id(director)).is_equal("pin")
+	# pin: pinned-ruler count rises (P).
+	rulers.count = 1
+	director._poll_ui_edges()
+	assert_str(_step_id(director)).is_equal("clear")
+	# clear: pinned-ruler count falls (K).
+	rulers.count = 0
+	director._poll_ui_edges()
+	assert_str(_step_id(director)).is_equal("bands")
+	# bands: movement bands active (M).
+	bands.count = 1
+	director._poll_ui_edges()
+	assert_str(_step_id(director)).is_equal("rings")
+	# rings: a G-range ring becomes active.
+	rings.count = 1
+	director._poll_ui_edges()
+	assert_str(_step_id(director)).is_equal("spell")
+	# spell: the spell_preview_changed seam (hover a caster's spell).
+	director._on_spell_preview_changed(true)
+	assert_str(_step_id(director)).is_equal("coherency")
+	# coherency: dragging a selected unit (a drop that moved a target model) names the lines.
+	director._target_nodes[0].position = Vector3(0, 0, 0.2)
+	director._on_selection_dropped([{"node": director._target_nodes[0], "inches": 8.0}])
+	assert_array(completions).is_equal(["T-04"])
+	assert_bool(director.flow.finished).is_true()  # T-04 is the last tool lesson
+
+
+func test_t04_spell_preview_off_edge_does_not_advance() -> void:
+	var director := _new_director("T-04")
+	director.flow.start_at("T-04")
+	# Jump to the spell step.
+	for _i in 5:  # measure, pin, clear, bands, rings
+		director._force_complete_current_step()
+	assert_str(_step_id(director)).is_equal("spell")
+	# An OFF edge (spell un-hovered) must never satisfy the "show the spell range" step.
+	director._on_spell_preview_changed(false)
+	assert_str(_step_id(director)).is_equal("spell")
+	director._on_spell_preview_changed(true)
+	assert_str(_step_id(director)).is_equal("coherency")
+
+
+## ===== Wave 1: static composition helpers =====
+
+func test_distinct_units_in_counts_by_meta() -> void:
+	var a := _unit_with_meta(2)
+	var b := _unit_with_meta(1)
+	var stranger: Node3D = auto_free(Node3D.new())  # no game_unit meta
+	assert_int(TutorialDirector.distinct_units_in(_nodes_of(a)).size()).is_equal(1)
+	var mixed: Array = [_nodes_of(a)[0], _nodes_of(b)[0], stranger]
+	assert_int(TutorialDirector.distinct_units_in(mixed).size()).is_equal(2)
+	assert_int(TutorialDirector.distinct_units_in([stranger]).size()).is_equal(0)
+
+
+func test_is_whole_unit_selection_requires_every_alive_model() -> void:
+	var a := _unit_with_meta(3)
+	var nodes := _nodes_of(a)
+	assert_bool(TutorialDirector.is_whole_unit_selection(nodes)).is_true()
+	assert_bool(TutorialDirector.is_whole_unit_selection([nodes[0], nodes[1]])).is_false()
+	# Two units together are never "one whole unit".
+	var b := _unit_with_meta(1)
+	assert_bool(TutorialDirector.is_whole_unit_selection([nodes[0], _nodes_of(b)[0]])).is_false()
+
+
 ## A minimal CoherencyVisualizer stand-in that records the director's show_coherency calls, so a
 ## headless test can assert the teaching visual is driven onto the right unit without any scene.
 class _RecordingVisualizer extends Node:
@@ -441,3 +675,25 @@ class _RecordingVisualizer extends Node:
 	func show_coherency(game_unit: GameUnit, _is_skirmish: bool = false, _animate: bool = true) -> void:
 		calls += 1
 		last_unit = game_unit
+
+
+## A stand-in object manager exposing just the state the Wave-1 director reads: the box-select
+## flag (T-02) and a movement_range_controller ref (T-04 bands poll).
+class _BoxSelectStub extends Node:
+	var _is_box_selecting: bool = false
+	var movement_range_controller: Node = null
+
+
+## A count/preview stub for the T-04 poll edges (pinned rulers, G-range rings, spell preview).
+class _MeasureStub extends Node:
+	var count: int = 0
+	var preview: bool = false
+
+	func active_count() -> int:
+		return count
+
+	func ruler_count() -> int:
+		return count
+
+	func has_spell_preview() -> bool:
+		return preview

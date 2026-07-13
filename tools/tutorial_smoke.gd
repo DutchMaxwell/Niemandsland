@@ -18,7 +18,9 @@ const SHOT_DIR := "user://tutorial_shots/"
 const CFG_PATH := "user://tutorial.cfg"
 const MAX_BOOT_FRAMES := 1800
 const SETTLE_FRAMES := 8
-const MAX_STEPS := 60  # watchdog: the full track is 24 steps (18 tool + R1×3 + R3×3); near this = a loop
+const MAX_STEPS := 80  # watchdog: the full track is 47 steps (18 basics + T-02/03/04 = 22 + R1×3 + R3×4); near this = a loop
+## The Wave-1 chapters the walk must visit on the live board (regression net for the new track).
+const WAVE1_CHAPTERS: Array[String] = ["T-02", "T-03", "T-04"]
 
 var _cfg_backup: PackedByteArray = PackedByteArray()
 var _cfg_existed: bool = false
@@ -55,6 +57,7 @@ func _drive() -> void:
 
 	var steps_walked := 0
 	var last_lesson := ""
+	var visited_lessons: Dictionary = {}
 	# The director frees itself (via main) when the track finishes — a freed director
 	# IS the success exit of this loop, so guard every access with is_instance_valid.
 	while is_instance_valid(director) and director.flow != null and not director.flow.finished:
@@ -70,6 +73,7 @@ func _drive() -> void:
 		if lesson.is_empty() or step.is_empty():
 			break
 		var lesson_id := String(lesson.get("id", "?"))
+		visited_lessons[lesson_id] = true
 		var coach: TutorialCoachMark = director.get_node_or_null("TutorialCoachMark")
 		if coach == null:
 			_restore_cfg()
@@ -89,6 +93,14 @@ func _drive() -> void:
 		steps_walked += 1
 		await process_frame
 
+	# The Wave-1 chapters must actually have been walked on the live board (not silently skipped).
+	for chapter in WAVE1_CHAPTERS:
+		if not visited_lessons.has(chapter):
+			_restore_cfg()
+			printerr("SMOKE-FAIL: Wave-1 chapter %s was never visited during the walk" % chapter)
+			quit(1)
+			return
+
 	# The walk marks every lesson completed — verify persistence, then restore the player's file.
 	var check := TutorialProgress.new()
 	check.load_from_disk()
@@ -98,7 +110,7 @@ func _drive() -> void:
 		printerr("SMOKE-FAIL: walk ended but tutorial.cfg does not show all lessons completed")
 		quit(1)
 		return
-	printerr("SMOKE-OK: walked %d steps across W1-W6 + R1 + R3 on the live main.tscn; overlay + spotlight per step; cfg persisted + restored" % steps_walked)
+	printerr("SMOKE-OK: walked %d steps across W1-W6 + T-02/T-03/T-04 + R1 + R3 on the live main.tscn; overlay + spotlight per step; cfg persisted + restored" % steps_walked)
 	quit(0)
 
 
