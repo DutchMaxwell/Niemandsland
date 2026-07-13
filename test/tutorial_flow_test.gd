@@ -133,6 +133,25 @@ func test_rule_track_has_two_lessons_r1_and_r3() -> void:
 	assert_array(Flow.ids(track)).is_equal(["R1", "R3"])
 
 
+func test_r3_is_four_steps_ending_in_a_restored_success_card() -> void:
+	# The coherency lesson now closes on an explicit success card so the player gets a clear
+	# "you did it" confirmation before the tutorial ends.
+	var r3: Dictionary = Flow.build_rule_track()[1]
+	assert_str(String(r3.get("id", ""))).is_equal("R3")
+	var steps: Array = r3.get("steps", [])
+	assert_int(steps.size()).is_equal(4)
+	assert_array(steps.map(func(s: Dictionary) -> String: return String(s.get("id", "")))) \
+		.is_equal(["pick", "spread", "restore", "done"])
+	# The pick imperative cites both coherency numbers so the player learns the rule up front.
+	assert_str(String(steps[0].get("text", ""))).contains("1\"")
+	assert_str(String(steps[0].get("text", ""))).contains("9\"")
+	# The final step is an acknowledge-only success card with a visible checkmark confirmation.
+	var done: Dictionary = steps[3]
+	assert_int(int(done.get("event", Flow.Event.NONE))).is_equal(Flow.Event.ACK)
+	assert_bool(done.get("ack", false)).is_true()
+	assert_str(String(done.get("text", ""))).contains("✓")
+
+
 func test_regiment_track_archives_r2() -> void:
 	# R2 lives on for the future purpose-built Regiments tutorial: a single ACK concept card,
 	# tagged archived + AoF:R system so the later package can pick it up without re-shaping it.
@@ -182,10 +201,12 @@ func test_rule_track_walk_via_events() -> void:
 	assert_bool(flow.consume(Flow.Event.DICE_ROLLED).advanced).is_true()
 	var r1_done := flow.consume(Flow.Event.ROUND_ADVANCED)
 	assert_str(String(r1_done.lesson_completed)).is_equal("R1")
-	# R3: pick the model, break coherency, then restore it — finishing the whole track.
-	assert_bool(flow.consume(Flow.Event.UNIT_SELECTED).advanced).is_true()
-	assert_bool(flow.consume(Flow.Event.COHERENCY_BROKEN).advanced).is_true()
-	var r3_done := flow.consume(Flow.Event.COHERENCY_RESTORED)
+	# R3: pick the model, break coherency, restore it, then acknowledge the success card —
+	# finishing the whole track.
+	assert_bool(flow.consume(Flow.Event.UNIT_SELECTED).advanced).is_true()      # pick   -> spread
+	assert_bool(flow.consume(Flow.Event.COHERENCY_BROKEN).advanced).is_true()   # spread -> restore
+	assert_bool(flow.consume(Flow.Event.COHERENCY_RESTORED).advanced).is_true() # restore -> done (success card)
+	var r3_done := flow.consume(Flow.Event.ACK)                                 # done   -> R3 complete
 	assert_str(String(r3_done.lesson_completed)).is_equal("R3")
 	assert_bool(flow.finished).is_true()
 
@@ -202,4 +223,4 @@ func test_full_walk_finishes_all_eight_lessons() -> void:
 		if not String(result.lesson_completed).is_empty():
 			completed.append(String(result.lesson_completed))
 	assert_array(completed).is_equal(["W1", "W2", "W3", "W4", "W5", "W6", "R1", "R3"])
-	assert_int(guard).is_equal(24)  # 18 tool steps + R1(3) + R3(3)
+	assert_int(guard).is_equal(25)  # 18 tool steps + R1(3) + R3(4: pick, spread, restore, done)

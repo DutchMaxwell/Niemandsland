@@ -286,9 +286,121 @@ func test_r3_restore_advances_from_drop_recheck_without_visualizer() -> void:
 	# must fire from the drop re-check alone (this is exactly what regressed in the field).
 	mover.position = Vector3(0, 0, 0.08)
 	director._on_selection_dropped([{"node": mover, "inches": 22.0}])
+	# Restore advances to the success card (not straight to finish); acknowledging it ends R3.
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("done")
+	director._on_continue()
 	assert_bool(director.flow.finished).is_true()
 	assert_bool(finished[0]).is_true()
 	assert_bool(director.progress.is_lesson_completed("R3")).is_true()
+
+
+## A SLOW drag (many throttled visualizer samples arrive) must complete just as reliably as a
+## quick one: the intermediate broken samples advance spread -> restore, and the final on-drop
+## re-check clears it to the success card — no dependence on a perfectly-timed final sample.
+func test_r3_slow_drag_completes_via_samples_and_drop_recheck() -> void:
+	var director := _new_full_director("R3")
+	var unit := _r3_unit([Vector3(0, 0, 0), Vector3(0, 0, 0.04), Vector3(0, 0, 0.08)])
+	director._target_unit = unit
+	director._target_nodes = _nodes_of(unit)
+	var mover: Node3D = director._target_nodes[2]
+	director._r3_mover_node = mover
+
+	# Pick -> spread.
+	director._on_selection_changed([mover])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("spread")
+
+	# Slow drag OUT: several live samples fire while the model crosses the threshold.
+	mover.position = Vector3(0, 0, 0.3)
+	director._on_coherency_visualized(_coherency_result(false))
+	mover.position = Vector3(0, 0, 0.6)
+	director._on_coherency_visualized(_coherency_result(false))
+	director._on_selection_dropped([{"node": mover, "inches": 22.0}])  # drop recheck (still broken)
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("restore")
+
+	# Slow drag BACK: live samples report still-broken until the last, then the drop re-check
+	# clears it — the step must reach the success card exactly once.
+	mover.position = Vector3(0, 0, 0.3)
+	director._on_coherency_visualized(_coherency_result(false))
+	mover.position = Vector3(0, 0, 0.08)
+	director._on_selection_dropped([{"node": mover, "inches": 22.0}])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("done")
+
+
+## Soft-lock guard: moving a model that is NOT part of the taught unit during the spread step
+## must be ignored (no crash, no false advance); the real mover still breaks coherency after.
+func test_r3_moving_a_non_target_model_does_not_softlock() -> void:
+	var director := _new_full_director("R3")
+	var unit := _r3_unit([Vector3(0, 0, 0), Vector3(0, 0, 0.04), Vector3(0, 0, 0.08)])
+	director._target_unit = unit
+	director._target_nodes = _nodes_of(unit)
+	var mover: Node3D = director._target_nodes[2]
+	director._r3_mover_node = mover
+	var stranger: Node3D = auto_free(Node3D.new())
+
+	# Pick -> spread.
+	director._on_selection_changed([mover])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("spread")
+
+	# Dropping a stranger (not in the unit) must not advance or break anything.
+	director._on_selection_dropped([{"node": stranger, "inches": 22.0}])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("spread")
+
+	# The real mover breaking coherency still advances the step.
+	mover.position = Vector3(0, 0, 0.6)
+	director._on_selection_dropped([{"node": mover, "inches": 22.0}])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("restore")
+
+
+## The instruction must switch from "drag it OUT" (spread) to "drag it BACK" (restore) as the
+## unit goes broken, and land on the "restored ✓" confirmation once coherency is regained.
+func test_r3_instruction_switches_broken_to_restored_to_confirmation() -> void:
+	var director := _new_full_director("R3")
+	var unit := _r3_unit([Vector3(0, 0, 0), Vector3(0, 0, 0.04), Vector3(0, 0, 0.08)])
+	director._target_unit = unit
+	director._target_nodes = _nodes_of(unit)
+	var mover: Node3D = director._target_nodes[2]
+	director._r3_mover_node = mover
+
+	director._on_selection_changed([mover])
+	var spread_text := String(director.flow.current_step().get("text", ""))
+	assert_str(spread_text).contains("onto the glowing ring")  # drag it OUT
+
+	mover.position = Vector3(0, 0, 0.6)
+	director._on_selection_dropped([{"node": mover, "inches": 22.0}])
+	var restore_text := String(director.flow.current_step().get("text", ""))
+	assert_str(restore_text).contains("Drag it back")  # drag it BACK
+	assert_str(restore_text).is_not_equal(spread_text)
+
+	mover.position = Vector3(0, 0, 0.08)
+	director._on_selection_dropped([{"node": mover, "inches": 22.0}])
+	assert_str(String(director.flow.current_step().get("text", ""))).contains("✓")  # restored confirmation
+
+
+## The director must drive the real coherency visualizer onto the taught unit while R3 runs, so
+## the player SEES the 1"/9" chain and the broken-chain warning (not only when a unit happens to
+## be selected mid-drag). A recording stub captures the calls the director makes.
+func test_r3_visualizer_is_driven_on_the_taught_unit() -> void:
+	var director := _new_full_director("R3")
+	var unit := _r3_unit([Vector3(0, 0, 0), Vector3(0, 0, 0.04), Vector3(0, 0, 0.08)])
+	director._target_unit = unit
+	director._target_nodes = _nodes_of(unit)
+	var visualizer: _RecordingVisualizer = auto_free(_RecordingVisualizer.new())
+	director._coherency_visualizer = visualizer
+
+	# Entering the pick step must point the visualizer at the taught unit.
+	director._setup_r3_step(TutorialFlow.TARGET_R3_MODEL)
+	assert_int(visualizer.calls).is_greater(0)
+	assert_object(visualizer.last_unit).is_equal(unit)
+
+	# And every on-drop re-check refreshes it too, so the broken chain is on screen the instant
+	# the instruction switches.
+	var before := visualizer.calls
+	director._on_selection_changed([director._r3_mover_node])  # pick -> spread
+	var mover: Node3D = director._r3_mover_node
+	mover.position = Vector3(0, 0, 0.6)
+	director._on_selection_dropped([{"node": mover, "inches": 22.0}])
+	assert_int(visualizer.calls).is_greater(before)
+	assert_object(visualizer.last_unit).is_equal(unit)
 
 
 ## The live visualizer path still works too: the throttled `visualization_completed` edge
@@ -309,10 +421,23 @@ func test_r3_visualizer_path_broken_then_restored_finishes_track() -> void:
 	# A coherent-first report must NOT satisfy restore (nothing broke yet).
 	director._on_coherency_visualized(_coherency_result(true))
 	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("spread")
-	# Broken -> restore, then restored -> finish.
+	# Broken -> restore, then restored -> the success card; acknowledging it finishes the track.
 	director._on_coherency_visualized(_coherency_result(false))
 	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("restore")
 	director._on_coherency_visualized(_coherency_result(true))
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("done")
+	director._on_continue()
 	assert_bool(director.flow.finished).is_true()
 	assert_bool(finished[0]).is_true()
 	assert_bool(director.progress.is_lesson_completed("R3")).is_true()
+
+
+## A minimal CoherencyVisualizer stand-in that records the director's show_coherency calls, so a
+## headless test can assert the teaching visual is driven onto the right unit without any scene.
+class _RecordingVisualizer extends Node:
+	var calls: int = 0
+	var last_unit: GameUnit = null
+
+	func show_coherency(game_unit: GameUnit, _is_skirmish: bool = false, _animate: bool = true) -> void:
+		calls += 1
+		last_unit = game_unit

@@ -137,8 +137,10 @@ static func build_tool_track() -> Array:
 ##      explicit imperatives: activate ONE unit -> resolve its shot on the dice -> end the round.
 ##   R3 "Unit Coherency": "All models in a unit must always stay within 1" of at least one
 ##      other model, and must stay within 9" of all other models ... forming an uninterrupted
-##      chain of models in 1" coherency." R3 is three micro-steps with a world-space marker:
-##      pick THIS model -> drag it onto the far marker (breaks the chain) -> drag it back.
+##      chain of models in 1" coherency." R3 is four micro-steps with a world-space marker and
+##      the live coherency visualizer running on the taught unit the whole time: pick THIS
+##      model -> drag it onto the far marker (breaks the chain; the warning flares) -> drag it
+##      back onto the marker at its old spot (the warning clears) -> a "restored" success card.
 ##
 ## R2 (Regiments) is intentionally NOT in this track — see build_regiment_track().
 static func build_rule_track() -> Array:
@@ -152,12 +154,14 @@ static func build_rule_track() -> Array:
 				"event": Event.ROUND_ADVANCED, "target": TARGET_ROUND_BUTTON, "mask": true},
 		]},
 		{"id": "R3", "title": "Coherency & spacing", "track": TRACK_RULE, "system": SYSTEM_GF, "steps": [
-			{"id": "pick", "text": "A unit must keep coherency: every model within 1\" of a neighbour AND within 9\" of all other models, forming an unbroken chain. Click the highlighted model to select it.",
+			{"id": "pick", "text": "Coherency keeps a unit together: every model must stay within 1\" of a neighbour AND within 9\" of all other models — one unbroken chain. Click the pulsing model to pick it up.",
 				"event": Event.UNIT_SELECTED, "target": TARGET_R3_MODEL, "mask": false},
-			{"id": "spread", "text": "Now drag that model onto the marker, away from the rest — watch the coherency warning appear as it breaks the 1\"/9\" chain.",
+			{"id": "spread", "text": "Now drag that model onto the glowing ring, away from the rest of the unit. Watch the coherency warning flare up the instant it leaves the 1\" chain.",
 				"event": Event.COHERENCY_BROKEN, "target": TARGET_R3_MARKER, "mask": false},
-			{"id": "restore", "text": "And now drag it back onto the marker at its old spot — the warning clears the moment every model is within 1\" of a neighbour again.",
+			{"id": "restore", "text": "The unit is torn apart — the red line marks the model that is out of range. Drag it back onto the ring, next to the unit, until every model is within 1\" of a neighbour again.",
 				"event": Event.COHERENCY_RESTORED, "target": TARGET_R3_MARKER, "mask": false},
+			{"id": "done", "text": "Coherency restored ✓  Every model is back within 1\" of a neighbour and 9\" of the unit. Keep your models in one tight chain and the unit never loses coherency.",
+				"event": Event.ACK, "target": TARGET_NONE, "mask": false, "ack": true},
 		]},
 	]
 

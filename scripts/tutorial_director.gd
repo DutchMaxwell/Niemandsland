@@ -32,6 +32,9 @@ const SPOTLIGHT_MIN_PX := 90.0       # never let a projected 3D spotlight get to
 # neighbour AND past the 9" unit spread), so the visualizer shows both failure modes.
 const R3_BREAK_DISTANCE_M := 0.28    # ~11", clears the 9" max-spread rule with margin
 const R3_MARKER_RADIUS_M := 0.03     # flat ring radius on the table (~1.2")
+const R3_MARKER_PULSE_SCALE := 1.35  # peak of the on-table ring's breathing pulse
+const R3_MARKER_PULSE_HALF_S := 0.6  # half-period (grow, then shrink) of that pulse
+const R3_MARKER_PULSE_LOOPS := 600   # finite loop count (~12 min) — avoids Godot's infinite-loop tween guard
 
 # ===== Signals =====
 signal step_changed(lesson_id: String, step_id: String)
@@ -92,6 +95,7 @@ var _r3_origin: Vector3 = Vector3.ZERO           # the mover's table origin (res
 var _r3_break_dest: Vector3 = Vector3.ZERO       # the far spot the mover is sent to (spread destination)
 var _r3_origin_captured: bool = false
 var _world_marker: MeshInstance3D = null
+var _world_marker_pulse: Tween = null              # looping scale pulse so the on-table ring visibly breathes
 # Chapter-picker launch: play forward from the chosen lesson WITHOUT skipping lessons
 # that are already completed (replaying is the point). Resume launches skip them.
 var _replay_mode: bool = false
@@ -323,7 +327,26 @@ func _recheck_coherency_on_drop(moves: Array) -> void:
 		return
 	var skirmish := CoherencyChecker.is_skirmish_system(_target_unit)
 	var result := CoherencyChecker.check_unit_coherency(_target_unit, skirmish)
+	# Refresh the teaching visual to this exact post-drop state BEFORE advancing, so the red
+	# broken-chain (or its clearing) is on screen the moment the instruction switches.
+	_show_lesson_coherency()
 	_evaluate_coherency(bool(result.valid))
+
+
+## R3: keep the real coherency visualizer pointed at the tutorial's taught unit so the player
+## SEES the rule — the green 1" chain, the red ring on the isolated model and the labelled gap —
+## exactly while the lesson talks about it. The game normally only drives the visualizer for a
+## SELECTED unit mid-drag; here the director drives it directly on every R3 (re)entry and on every
+## drop re-check, so the teaching visual never depends on what happens to be selected. No-op
+## headless (null visualizer) and for a coherent unit (the visualizer hides itself — a whole,
+## in-coherency chain has nothing to warn about).
+func _show_lesson_coherency() -> void:
+	if _coherency_visualizer == null or _target_unit == null:
+		return
+	if not _coherency_visualizer.has_method("show_coherency"):
+		return
+	var skirmish := CoherencyChecker.is_skirmish_system(_target_unit)
+	_coherency_visualizer.show_coherency(_target_unit, skirmish, false)
 
 
 ## True while the R3 "pick" step (click ONE specific model) is the current step.
@@ -424,6 +447,11 @@ func _enter_step() -> void:
 		_focus_camera_on_nodes([_parked_node])
 	elif target == TutorialFlow.TARGET_R3_MODEL or target == TutorialFlow.TARGET_R3_MARKER:
 		_setup_r3_step(target)
+	# The world-space destination ring belongs only to the two marker steps; retire it the instant
+	# any other step becomes current (the pick step, the "restored" success card, or an earlier
+	# lesson) so it never lingers on the table over an unrelated instruction.
+	if target != TutorialFlow.TARGET_R3_MARKER:
+		_hide_world_marker()
 
 	if is_instance_valid(_coach):
 		var lesson := flow.current_lesson()
@@ -455,6 +483,9 @@ func _finish(completed: bool) -> void:
 	if is_instance_valid(_assessment_dialog):
 		_assessment_dialog.queue_free()
 		_assessment_dialog = null
+	if _world_marker_pulse != null and _world_marker_pulse.is_valid():
+		_world_marker_pulse.kill()
+	_world_marker_pulse = null
 	if is_instance_valid(_world_marker):
 		_world_marker.queue_free()
 		_world_marker = null
@@ -734,6 +765,9 @@ func _setup_r3_step(target: String) -> void:
 		var dest := _r3_break_dest if event == TutorialFlow.Event.COHERENCY_BROKEN else _r3_origin
 		if _r3_origin_captured:
 			_show_world_marker(dest)
+	# Drive the coherency visualizer onto the taught unit for every R3 step so the 1"/9" rings
+	# and the broken chain are always on screen while the lesson explains them.
+	_show_lesson_coherency()
 
 
 ## Designate the mover: the unit's most peripheral model (farthest from the centre), which
@@ -796,10 +830,30 @@ func _show_world_marker(pos: Vector3) -> void:
 		parent.add_child(_world_marker)
 	_world_marker.global_position = Vector3(pos.x, 0.02, pos.z)
 	_world_marker.visible = true
+	_start_marker_pulse()
+
+
+## Loop a gentle grow/shrink on the ring so "drop it HERE" reads at a glance from any camera
+## angle. Guarded to a single live tween; a finite loop count sidesteps Godot's infinite-loop
+## tween guard. Never runs headless (the marker only exists once a real camera is present).
+func _start_marker_pulse() -> void:
+	if not is_instance_valid(_world_marker):
+		return
+	if _world_marker_pulse != null and _world_marker_pulse.is_valid():
+		return
+	_world_marker.scale = Vector3.ONE
+	_world_marker_pulse = _world_marker.create_tween()
+	_world_marker_pulse.set_loops(R3_MARKER_PULSE_LOOPS)
+	_world_marker_pulse.tween_property(_world_marker, "scale", Vector3.ONE * R3_MARKER_PULSE_SCALE, R3_MARKER_PULSE_HALF_S)
+	_world_marker_pulse.tween_property(_world_marker, "scale", Vector3.ONE, R3_MARKER_PULSE_HALF_S)
 
 
 func _hide_world_marker() -> void:
+	if _world_marker_pulse != null and _world_marker_pulse.is_valid():
+		_world_marker_pulse.kill()
+	_world_marker_pulse = null
 	if is_instance_valid(_world_marker):
+		_world_marker.scale = Vector3.ONE
 		_world_marker.visible = false
 
 
