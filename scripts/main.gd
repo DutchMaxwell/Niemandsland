@@ -253,6 +253,9 @@ var _solo_game_finished: bool = false        # summary shown after SOLO_GAME_ROU
 var _solo_ai_banner: Label = null            # non-blocking "AI is taking its turn…" banner during the tail
 var _solo_fast: bool = false                 # fast-forward: shrink pacing holds + skip move animation
 var _solo_dev: bool = false                  # developer mode: render the AI's decision records into the battle log
+## Per-activation stderr trace of the both-AI arena loop (env NML_AI_TRACE=1) — the ladder tooling's
+## progress/stall diagnostic for long unattended headless matches. Off by default: zero output in normal play.
+var _solo_arena_trace: bool = OS.get_environment("NML_AI_TRACE") == "1"
 var _solo_toast: Label = null                # transient AI-action attribution/outcome toast
 var _solo_unmodeled_logged: Dictionary = {}  # rule name -> true: once-per-session unmodeled-rule notes
 # === AI ARENA — native both-AI mode + per-side difficulty (see SoloDifficulty) ===
@@ -921,7 +924,11 @@ func _solo_set_active_side(slot: int) -> void:
 ## (OPR one-for-one, opener = the side that did NOT take the last activation), resolves each side's shooting /
 ## melee / morale on the SAME real dice tray (the AI defender auto-rolls — no dialogs), arrives Ambush
 ## reserves at the start of rounds ≥2 for both sides, seizes objectives at round end, and shows the summary.
-func _solo_run_both_ai_game() -> void:
+## `first_opener` is the ROUND-1 opener: the official rule (GF/AoF Advanced v3.5.1) hands round 1's first
+## turn to whoever won the deployment roll-off, so the launcher performs SoloController.roll_off() before
+## deploying and passes the winner here. The default 1 keeps legacy callers running (they behave as if P1
+## won the roll-off).
+func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 	if opr_army_manager == null or movement_range_controller == null:
 		push_warning("[AI ARENA] not ready — import + deploy armies first")
 		return
@@ -931,7 +938,7 @@ func _solo_run_both_ai_game() -> void:
 		return
 	_solo_ai_busy = true
 	_solo_game_finished = false
-	var opener: int = 1   # round 1 opens with P1 (OPR: the deploying-first side; symmetric here)
+	var opener: int = first_opener if (first_opener == 1 or first_opener == 2) else 1
 	while not _solo_game_finished:
 		var round_no: int = opr_army_manager.current_round
 		if round_no >= 2:
@@ -973,10 +980,15 @@ func _solo_run_both_ai_round(opener: int) -> int:
 			break
 		var act: int = side if side_has else other
 		_solo_set_active_side(act)
+		if _solo_arena_trace:
+			printerr("[ARENA] R%d act#%d side P%d …" % [opr_army_manager.current_round, guard, act])
 		var unit: GameUnit = await _solo_activate_one_ai()
 		_solo_flush_dev()
 		if unit != null:
 			last_side = act
+			if _solo_arena_trace:
+				printerr("[ARENA] R%d act#%d side P%d = %s done" % [
+					opr_army_manager.current_round, guard, act, unit.get_name()])
 		side = 2 if act == 1 else 1   # alternate to the other side next (one-for-one)
 	return last_side
 

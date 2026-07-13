@@ -112,6 +112,10 @@ var limited_used: Dictionary = {}
 ## Ring-buffered at DECISION_LOG_CAP (drop-oldest) so an undrained log never grows unbounded.
 var decision_log: Array = []
 const DECISION_LOG_CAP := 200
+## Optional mirror of EVERY decision record (Callable(rec: Dictionary) -> void), invoked at record time
+## BEFORE ring-buffer eviction — the rating-ladder harness captures the full stream for its per-game
+## result JSON without touching the dev-toggle drain path. Invalid (default) ⇒ zero cost, no behaviour change.
+var decision_sink: Callable = Callable()
 ## Injected by main: Callable(from: Vector3, to: Vector3) -> bool for terrain line of sight.
 var los_checker: Callable = Callable()
 ## Injected by main: Callable(shooter: GameUnit, target: GameUnit) -> bool — the GEOMETRIC PER-MODEL line
@@ -2438,11 +2442,34 @@ static func counter_models_of(unit: GameUnit) -> int:
 # ===== AI decision records (developer mode — introspection first, then intelligence) =====
 
 ## Append one structured decision record (see decision_log). Ring-buffered: the oldest record is
-## dropped past DECISION_LOG_CAP, so an undrained buffer stays bounded in long games.
+## dropped past DECISION_LOG_CAP, so an undrained buffer stays bounded in long games. A configured
+## decision_sink sees every record first (lossless — the harness capture is not subject to eviction).
 func record_decision(rec: Dictionary) -> void:
+	if decision_sink.is_valid():
+		decision_sink.call(rec)
 	decision_log.append(rec)
 	if decision_log.size() > DECISION_LOG_CAP:
 		decision_log.pop_front()
+
+
+## Official ROLL-OFF procedure (core rules): each player rolls a die, the higher result wins, and tied
+## results are rolled again until someone wins. Returns the winning player slot (1 or 2). `roller` is an
+## optional Callable() -> int producing one die result per call (tests script it); the default draws d6s
+## from the controller's seeded _rng, so a fixed seed reproduces the roll-off. The rulebook couples this
+## to match start: the roll-off winner deploys first AND opens round 1 — the both-AI driver passes the
+## winner through as `first_opener`. A defensive cap guards against a degenerate roller that ties forever.
+func roll_off(roller: Callable = Callable()) -> int:
+	const ROLL_OFF_CAP := 100
+	for _attempt in range(ROLL_OFF_CAP):
+		var d1: int = int(roller.call()) if roller.is_valid() else _rng.randi_range(1, 6)
+		var d2: int = int(roller.call()) if roller.is_valid() else _rng.randi_range(1, 6)
+		record_decision({"kind": "roll_off", "unit": "-",
+			"rule": "roll-off (core rules): higher die wins, tied dice roll again",
+			"candidates": [], "chosen": ("P1" if d1 > d2 else ("P2" if d2 > d1 else "tie — re-roll")),
+			"why": "deployment/first-turn roll-off", "data": {"p1": d1, "p2": d2}})
+		if d1 != d2:
+			return 1 if d1 > d2 else 2
+	return 1   # unreachable with fair dice; deterministic fallback for a broken scripted roller
 
 
 ## Hand the pending records to the renderer and clear the buffer. The caller (main) renders them into

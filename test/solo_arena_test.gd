@@ -113,6 +113,62 @@ func test_default_null_difficulty_is_the_sharp_pick() -> void:
 	assert_str(solo.nearest_human_unit(ai).get_name()).is_equal("A")
 
 
+# === Official deployment roll-off (each player rolls a die, higher wins, tied dice roll again) ===
+# The round-1 opener rule: the roll-off winner deploys first AND opens round 1 — the arena launcher
+# passes SoloController.roll_off() through to main._solo_run_both_ai_game(first_opener).
+
+func test_roll_off_high_die_wins_and_a_tie_rerolls() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	# Scripted dice: the first pair TIES (3,3) → the official procedure re-rolls; the second pair is
+	# decisive (5 vs 2) → P1 wins. Exactly 4 dice must have been consumed (the tie really re-rolled).
+	var script: Array = [3, 3, 5, 2]
+	var drawn := {"n": 0}
+	var roller := func() -> int:
+		drawn["n"] = int(drawn["n"]) + 1
+		return int(script[int(drawn["n"]) - 1])
+	assert_int(solo.roll_off(roller)).is_equal(1)
+	assert_int(int(drawn["n"])).is_equal(4)
+	var records: Array = solo.drain_decisions()
+	assert_int(records.size()).is_equal(2)   # one record per pair: the tie, then the decisive roll
+	assert_str(str((records[0] as Dictionary).get("chosen"))).contains("re-roll")
+	# A decisive first pair with P2 higher → P2 wins after exactly one pair.
+	var script2: Array = [2, 6]
+	var drawn2 := {"n": 0}
+	var roller2 := func() -> int:
+		drawn2["n"] = int(drawn2["n"]) + 1
+		return int(script2[int(drawn2["n"]) - 1])
+	assert_int(solo.roll_off(roller2)).is_equal(2)
+	assert_int(int(drawn2["n"])).is_equal(2)
+
+
+func test_roll_off_default_rng_is_seed_reproducible() -> void:
+	# The default roller draws from the controller's seeded _rng: same seed ⇒ same winner (the ladder's
+	# reproducibility contract), and the winner is always a valid slot.
+	var a: SoloController = auto_free(SoloController.new())
+	add_child(a)
+	var b: SoloController = auto_free(SoloController.new())
+	add_child(b)
+	a._rng.seed = 42
+	b._rng.seed = 42
+	var w: int = a.roll_off()
+	assert_bool(w == 1 or w == 2).is_true()
+	assert_int(b.roll_off()).is_equal(w)
+
+
+func test_decision_sink_mirrors_records_without_touching_the_drain() -> void:
+	# The harness capture hook: a configured sink sees every record at record time, while the dev-toggle
+	# drain path keeps working unchanged (the sink is a mirror, not a diversion).
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	var seen: Array = []
+	solo.decision_sink = func(rec: Dictionary) -> void: seen.append(rec)
+	solo.record_decision({"kind": "probe", "unit": "U"})
+	assert_int(seen.size()).is_equal(1)
+	assert_str(str((seen[0] as Dictionary).get("kind"))).is_equal("probe")
+	assert_int(solo.drain_decisions().size()).is_equal(1)
+
+
 # === Both-AI headless game completion (minimal controller-level driver) ===
 
 func test_both_ai_game_completes_headless_over_four_rounds() -> void:
