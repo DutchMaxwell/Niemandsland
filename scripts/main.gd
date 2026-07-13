@@ -683,7 +683,12 @@ func _solo_activate_one_ai() -> GameUnit:
 	if unit == null:
 		return null
 	_solo_ai_took_last_activation = true   # the AI just took an activation (finding 7: round-opener tracking)
-	# Camera follows the acting unit so each activation is watchable (goal 001, F1).
+	# PRESENTATION ORDER (field-test finding 2): the controller already applied + broadcast the FINAL model
+	# positions, so the model nodes currently SHOW the end state. Return them to their route START before the
+	# camera focus + announce beat, so the choreography reads (1) highlight the unit at its start, (2) show
+	# the planned corridors while it is still there, (3) glide — the end state must never appear first.
+	_solo_present_move_start(solo_controller.last_move_paths)
+	# Camera follows the acting unit so each activation is watchable (goal 001, F1) — now framed on its START.
 	_solo_focus_on_unit(unit)
 	if radial_menu_controller != null:
 		radial_menu_controller._update_activated_markers(unit)
@@ -864,9 +869,15 @@ func _solo_end_round() -> void:
 		battle_log.log_event(BattleLog.Category.GENERAL, "Round %d begins" % opr_army_manager.current_round, true)
 	var human_has: bool = not solo_controller.eligible_units_for(solo_controller.human_slot).is_empty()
 	var ai_has: bool = not solo_controller.eligible_ai_units().is_empty()
-	if SoloController.ai_opens_next_round(_solo_ai_took_last_activation, human_has, ai_has):
+	# A new round owes NO carried-over AI replies (field-test finding 7): an undeliverable reply from last
+	# round (the human took the round's last activation while the AI was already exhausted) used to survive
+	# across the boundary and STACK onto the opener's grant, so the AI activated twice back-to-back when it
+	# opened. The pending count is derived fresh from the opener decision — never incremented — so the opener
+	# grants exactly one AI activation (GF/AoF v3.5.1 "Rounds, Turns & Activations": one-for-one alternation).
+	var ai_opens: bool = SoloController.ai_opens_next_round(_solo_ai_took_last_activation, human_has, ai_has)
+	_solo_pending_replies = SoloController.pending_replies_at_round_start(ai_opens)
+	if ai_opens:
 		# The AI opens this round with one activation; the pump's tail then drains an empty human side.
-		_solo_pending_replies += 1
 		await _solo_pump()
 	# Otherwise the human opens — the pump waits for the human's own activation (the alternation resumes there).
 
@@ -1088,6 +1099,15 @@ func _on_solo_deploy_pressed() -> void:
 	# reveals them (their single placement — field-test finding 4: no earlier phantom placement).
 	for u in solo_controller.ambush_reserve:
 		_solo_set_unit_visible(u as GameUnit, false)
+	# YOUR OWN Ambush units are set aside too (GF/AoF v3.5.1 p.13 "May be set aside before deployment";
+	# field-test finding 5: the maintainer's Ambush units were never asked for). They wait off-table and the
+	# game PROMPTS you to bring them in from round 2 via guided placement (>9" from enemies, terrain-legal).
+	var set_aside: Array = solo_controller.set_aside_human_ambush()
+	for u in set_aside:
+		_solo_set_unit_visible(u as GameUnit, false)
+	if not set_aside.is_empty() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"You hold %d Ambush unit(s) in reserve — you'll be asked to deploy them from round 2 (GF/AoF p.13)." % set_aside.size(), false)
 	_solo_flush_dev()   # render the per-unit deployment records when the dev toggle is on
 
 
@@ -2135,6 +2155,28 @@ func _solo_show_outcome(text: String) -> void:
 ## drags a base-width swept CORRIDOR (its outer base edges along the path), and one label states the
 ## longest actual path length against the granted budget ("9.4\" / 12\"") — the distance truth made
 ## visible (GF v3.5.1 p.7).
+## Return each moving model's NODE to its route START (path[0]) BEFORE the announce beat (field-test
+## finding 2: the end state must not leak first). The logical + broadcast state is already final; this is a
+## purely local visual reset that _solo_animate_move then draws the corridors from and glides back to the
+## final. No-op for a HOLD / idle (no paths) and for any model whose node is gone. Uses the pure
+## SoloController.presentation_start_positions truth so the start each model is shown at is unit-tested.
+func _solo_present_move_start(move_paths: Array) -> void:
+	if move_paths.is_empty():
+		return
+	var starts: Array = SoloController.presentation_start_positions(move_paths)
+	var si := 0
+	for entry in move_paths:
+		var model := (entry as Dictionary).get("model") as ModelInstance
+		var path: Array = (entry as Dictionary).get("path", [])
+		if path.size() < 2:
+			continue
+		var start: Vector3 = starts[si]
+		si += 1
+		if model == null or model.node == null or not is_instance_valid(model.node):
+			continue
+		model.node.global_position = Vector3(start.x, model.node.global_position.y, start.z)
+
+
 func _solo_animate_move(move_paths: Array) -> void:
 	if move_paths.is_empty():
 		return
@@ -2987,6 +3029,7 @@ func _on_solo_round_advanced(round_number: int) -> void:
 	# with no clear spot in round 2 gets another chance later.
 	if round_number >= 2:
 		await _solo_arrive_ambush()
+		await _solo_prompt_human_ambush(round_number)   # field-test finding 5: ASK the human to deploy reserves
 
 
 ## Wave-4 Battleborn (army-book rule, Battle Brothers — "If a unit where all models have this rule is
@@ -3012,6 +3055,81 @@ func _solo_battleborn_recovery() -> void:
 		elif battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
 				"Battleborn: roll for %s to recover from Shaken (4+)" % gu.get_name(), true)
+
+
+## Prompt the human to deploy Ambush reserves at the start of a round ≥2 (field-test finding 5; GF/AoF
+## v3.5.1 p.13: reserve units MAY be deployed at the start of any round after the first). A ConfirmationDialog
+## lists the held units — "Deploy now" places them all via guided placement (>9" from enemies, near an
+## objective, terrain-legal), "Keep waiting" holds them for a later round (they are prompted again). Only a
+## GENUINE human side is ever prompted (never in AI-vs-AI self-play, where the human slot is also AI). The
+## AI's world-model already counts these reserves as existing-but-off-table (unit_in_reserve everywhere), so
+## nothing reads as "board complete" while they wait.
+func _solo_prompt_human_ambush(round_number: int) -> void:
+	if solo_controller == null or opr_army_manager == null or table == null:
+		return
+	if solo_ai_slots.has(solo_controller.human_slot):
+		return   # the "human" slot is AI (self-play) — never prompt
+	var reserves: Array = solo_controller.human_reserve_units()
+	if not SoloController.should_prompt_human_ambush(round_number, reserves.size()):
+		return
+	var names: Array = []
+	for u in reserves:
+		names.append((u as GameUnit).get_name())
+	var dlg := ConfirmationDialog.new()
+	dlg.title = "Ambush — Round %d" % round_number
+	dlg.dialog_text = "Deploy your Ambush reserve now, more than 9\" from enemies?\n\n%s\n\n“Deploy now” places them; “Keep waiting” holds them for a later round." % ", ".join(names)
+	dlg.ok_button_text = "Deploy now"
+	dlg.get_cancel_button().text = "Keep waiting"
+	var done := [false]
+	var chose_deploy := [false]
+	dlg.confirmed.connect(func() -> void: chose_deploy[0] = true; done[0] = true)
+	dlg.canceled.connect(func() -> void: done[0] = true)
+	dlg.close_requested.connect(func() -> void: done[0] = true)
+	$UI.add_child(dlg)
+	dlg.popup_centered()
+	while not done[0]:
+		await get_tree().process_frame
+	if chose_deploy[0]:
+		await _solo_deploy_human_ambush(reserves)
+	if is_instance_valid(dlg):
+		dlg.queue_free()
+
+
+## Guided deployment of the human's chosen Ambush reserves (finding 5): placed ONE at a time, >9" from every
+## on-table AI unit, near an objective, terrain-legal (SoloController.arrive_human_reserve_unit — the same
+## legal core the AI's arrival uses), then revealed + synced with a paced camera beat and a battle-log line,
+## so a human arrival is as watchable as an AI one. A unit with no legal spot this round stays reserved and
+## is prompted again next round (GF/AoF v3.5.1 p.13).
+func _solo_deploy_human_ambush(reserves: Array) -> void:
+	var w: float = table.table_size.x * 0.3048
+	var d: float = table.table_size.y * 0.3048
+	var arrival_zone := Rect2(Vector2(-w / 2.0, -d / 2.0), Vector2(w, d))
+	var enemy_positions: Array = []
+	for u in opr_army_manager.get_game_units_for_player(solo_controller.ai_slot):
+		var gu := u as GameUnit
+		if gu != null and gu.get_alive_count() > 0 and not SoloController.unit_in_reserve(gu):
+			var c := solo_controller.unit_centre(gu)
+			enemy_positions.append(Vector2(c.x, c.z))
+	var occupied: Array = []
+	var round_no: int = opr_army_manager.current_round
+	for u in reserves:
+		var unit := u as GameUnit
+		if unit == null or unit.get_alive_count() <= 0 or not SoloController.unit_in_reserve(unit):
+			continue
+		if solo_controller.arrive_human_reserve_unit(unit, arrival_zone, enemy_positions, occupied, round_no):
+			_solo_set_unit_visible(unit, true)
+			_solo_focus_on_unit(unit)
+			_solo_show_toast("%s deploys from reserve" % unit.get_name())
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL,
+					"You deploy %s from Ambush reserve (>9\" from enemies) — it may act this round" % unit.get_name(), false)
+			await _solo_pace_attention()
+	if is_instance_valid(_solo_toast):
+		_solo_toast.visible = false
+	var held: int = solo_controller.human_reserve_units().size()
+	if held > 0 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"%d of your Ambush unit(s) had no legal spot — you'll be asked again next round." % held, false)
 
 
 ## OPR Ambush (GF/AoF v3.5.1 p.13; field-test findings 4 + 5): the AI's reserved units arrive at the start

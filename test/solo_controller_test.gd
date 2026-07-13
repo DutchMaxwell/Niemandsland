@@ -471,6 +471,82 @@ func test_alternation_next_replies_then_tails_then_ends() -> void:
 	assert_int(S.alternation_next(3, 0, 0)).is_equal(S.AltStep.END_ROUND)  # stale replies never outlive the AI side
 
 
+# === Round-boundary alternation (field-test finding 7: AI activated two units back-to-back with initiative) ===
+
+func test_pending_replies_at_round_start_is_derived_fresh_not_carried() -> void:
+	var S := SoloController
+	# A new round owes exactly ONE AI reply iff the AI opens it — NEVER a count carried over from last round.
+	# Deriving it fresh (instead of INCREMENTING a member that could still hold an undeliverable reply) is the
+	# whole fix: the opener can only ever grant a single AI activation.
+	assert_int(S.pending_replies_at_round_start(true)).is_equal(1)
+	assert_int(S.pending_replies_at_round_start(false)).is_equal(0)
+
+
+func test_round_boundary_grants_ai_exactly_one_opener_activation() -> void:
+	var S := SoloController
+	# Finding 7: human(3) vs AI(2). The AI runs out first in round 1, so the human's unanswered 3rd activation
+	# used to leave a STALE owed reply that survived into round 2 and STACKED on the opener's grant → the AI
+	# took two activations back-to-back with initiative. The AI finished first, so it opens round 2:
+	var ai_opens := S.ai_opens_next_round(false, true, true)   # ai_took_last=false → AI finished first → opens
+	assert_bool(ai_opens).is_true()
+	# Pending is derived FRESH from the opener decision (no stale carry): exactly one opener activation.
+	var pending := S.pending_replies_at_round_start(ai_opens)
+	assert_int(pending).is_equal(1)
+	# The pump then does that ONE reply and immediately WAITs for the human (who still has all 3 units), so
+	# the AI never activates twice in a row while the human has units.
+	assert_int(S.alternation_next(pending, 3, 2)).is_equal(S.AltStep.REPLY)
+	assert_int(S.alternation_next(pending - 1, 3, 1)).is_equal(S.AltStep.WAIT)
+
+
+# === Presentation order (field-test finding 2: the END STATE must not appear first) ===
+
+func test_presentation_start_positions_returns_route_starts() -> void:
+	var S := SoloController
+	var paths: Array = [
+		{"model": null, "path": [Vector3(1, 0, 1), Vector3(2, 0, 2), Vector3(3, 0, 3)]},
+		{"model": null, "path": [Vector3(-1, 0, -1), Vector3(-4, 0, -4)]},
+		{"model": null, "path": [Vector3(9, 0, 9)]},   # single point (no move) → skipped
+	]
+	var starts: Array = S.presentation_start_positions(paths)
+	assert_int(starts.size()).is_equal(2)   # the 1-point path is excluded
+	assert_vector(starts[0] as Vector3).is_equal(Vector3(1, 0, 1))   # each model shown at its route START
+	assert_vector(starts[1] as Vector3).is_equal(Vector3(-1, 0, -1))
+	assert_array(S.presentation_start_positions([])).is_empty()
+
+
+# === Human Ambush reserves (field-test finding 5: the game must ASK) ===
+
+func test_should_prompt_human_ambush_only_from_round_two_with_reserves() -> void:
+	var S := SoloController
+	assert_bool(S.should_prompt_human_ambush(1, 2)).is_false()   # no ambush arrival in round 1 (p.13)
+	assert_bool(S.should_prompt_human_ambush(2, 0)).is_false()   # round 2 but nothing held
+	assert_bool(S.should_prompt_human_ambush(2, 1)).is_true()    # round 2 with a reserve → ASK
+	assert_bool(S.should_prompt_human_ambush(4, 3)).is_true()    # any later round too
+
+
+func test_set_aside_human_ambush_marks_only_the_humans_ambush_units() -> void:
+	var ambusher := _unit(1, [Vector3(0.3, 0, 0.3)])
+	ambusher.unit_id = "amb1"
+	ambusher.unit_properties["special_rules"] = ["Ambush"]
+	var line := _unit(1, [Vector3(-0.3, 0, -0.3)])   # human, no Ambush → stays deployed
+	line.unit_id = "line1"
+	var enemy := _unit(2, [Vector3(0, 0, 0.5)])       # AI unit, carries Ambush but is NOT the human side
+	enemy.unit_id = "ai_amb"
+	enemy.unit_properties["special_rules"] = ["Ambush"]
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {ambusher.unit_id: ambusher, line.unit_id: line, enemy.unit_id: enemy}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)   # human=1, ai=2
+	var set_aside: Array = solo.set_aside_human_ambush()
+	assert_int(set_aside.size()).is_equal(1)
+	assert_bool(SoloController.unit_in_reserve(ambusher)).is_true()
+	assert_bool(SoloController.unit_in_reserve(line)).is_false()    # not an Ambush unit → deployed
+	assert_bool(SoloController.unit_in_reserve(enemy)).is_false()   # AI side untouched by the HUMAN set-aside
+	assert_int(solo.human_reserve_units().size()).is_equal(1)
+	assert_int(solo.set_aside_human_ambush().size()).is_equal(0)    # idempotent — already reserved
+
+
 # === Wound application core (maintainer field test: Tough hero soaked wounds with no visible tick) ===
 
 func test_apply_wounds_decrements_tough_and_reports_seams() -> void:

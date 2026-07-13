@@ -49,6 +49,14 @@ const CLEARANCE_EPS_IN := 0.1
 ## convention, not an official value.
 const TARGET_TIE_BAND_IN := 1.0
 
+# --- Hard final placement gate (field-test findings 3 + 6; real-game loose-unit path only) ---
+const OVERLAP_GATE_PASSES := 4        # Gauss-Seidel passes of the per-model absolute overlap resolution
+const COH_SHORTEN_BISECT := 16        # bisection depth of the coherency move-shorten (2^-16 ≈ 0.0015%)
+const TERRAIN_OUT_STEP_M := 0.01      # radial search granularity when projecting a model OUT of impassable
+const TERRAIN_OUT_MAX_M := 0.20       # max radial reach of the impassable-out projection (~8")
+const TERRAIN_OUT_DIRS := 16          # compass directions sampled for the impassable-out projection
+const OVERLAP_EPS_M := 0.0005         # sub-0.5 mm world moves are noise (matches the animation snap tolerance)
+
 var army_manager: OPRArmyManager = null
 var network_manager: Node = null
 var movement_range: MovementRangeController = null
@@ -549,17 +557,31 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	if not moved:
 		last_move_paths = []
 		return 0
-	# Flying ignores terrain effects whilst moving (p.13) — no Dangerous tests for its crossings.
+	# Flying ignores terrain effects whilst moving (p.13) — no Dangerous tests for its crossings. Counted on
+	# the ROUTE (pre-gate endpoints): the model still traversed those cells even if the gate nudges its rest spot.
 	var dang := 0 if flying else _count_dangerous_trails(trails)
+	# The decision-log / label arc is the PLANNED within-budget move (pre-gate route), so the move-band audit
+	# and the "X / Y" label stay truthful; the gate's physical un-stack nudge is not counted as extra distance.
+	var longest_arc_m := 0.0
+	for t in trails:
+		longest_arc_m = maxf(longest_arc_m, MovementPlanner.polyline_length(t as Array))
+	# HARD FINAL PLACEMENT GATE (field-test findings 3 + 6), applied HERE — AFTER the distance-truth trim — so
+	# the trim can never cut a gate-corrected (coherency-shortened) endpoint off its trail (the trim runs on the
+	# pre-gate route). Resolves impassable-terrain rest → base overlap → coherency to a bounded fixed point.
+	# Skipped for a REGIMENT: its rigid tray slide preserves coherency + internal spacing by construction, and
+	# the per-model overlap push would break the block (regiments plan as a rigid body, not individual models).
+	if not _is_regiment(unit):
+		new_positions = _finalize_placement(unit, models, positions, new_positions, allow_contact, charge_target)
+		# Retrace each animation trail to its GATED endpoint so the glide ends exactly where the state now is.
+		for i in range(mini(trails.size(), new_positions.size())):
+			trails[i] = _retrace_to(trails[i] as Array, positions[i] as Vector3, new_positions[i] as Vector3)
 	_apply_model_positions(models, new_positions)
 	# Publish the per-model routes + base radii for the presentation layer (glide + swept corridor +
 	# distance label) — the STATE is already final (applied + broadcast above); the replay is local.
 	last_move_budget_in = reach
 	var radii := _model_radius_map(models)
 	last_move_paths = []
-	var longest_arc_m := 0.0
 	for i in range(mini(models.size(), trails.size())):
-		longest_arc_m = maxf(longest_arc_m, MovementPlanner.polyline_length(trails[i] as Array))
 		last_move_paths.append({"model": models[i], "path": trails[i],
 			"radius_m": float(radii.get(models[i], SeparationChecker.DEFAULT_BASE_RADIUS_M))})
 	record_decision({"kind": "move", "unit": unit.get_name(),
@@ -898,17 +920,16 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	var plan_trails: Array = []
 	var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, sampled["grid"],
 		allow_contact, board_in, plan_trails, opts)
-	# The FINAL formation guarantees (coherency ending, GF/AoF v3.5.1 p.7 finding 4; no intra-unit base
-	# overlap, p.7 finding 6) plus unit-spacing and terrain-avoidance are now resolved TOGETHER by the unified
-	# solver inside plan_unit_step (solve_formation) — no more competing shorten-then-separate passes that
-	# traded one constraint for another (self-play nightloop evidence).
+	# The unified solver (solve_formation, inside plan_unit_step) resolves unit-spacing, own-base separation,
+	# coherency and terrain-avoidance TOGETHER — but its least-violating fallback can still KEEP a residual
+	# violation. The HARD final gate (findings 3 + 6) that guarantees them is applied by the CALLER
+	# (_execute_move) AFTER the distance-truth trim, so the trim can never cut a gate-corrected (pulled-back)
+	# endpoint off its trail. Here we only convert the solver's inch positions to world + build the route trail.
 	var out: Array = []
 	if world_trails != null:
 		world_trails.clear()
 	for i in range(positions.size()):
-		var pi: Vector2 = mpos[i]
-		if i < planned.size():
-			pi = planned[i]
+		var pi: Vector2 = planned[i] if i < planned.size() else mpos[i]
 		var world := (pi * INCHES_TO_METERS) - off
 		var src: Vector3 = positions[i]
 		out.append(Vector3(world.x, src.y, world.y))
@@ -918,14 +939,270 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 				for wp in plan_trails[i]:
 					var wv := ((wp as Vector2) * INCHES_TO_METERS) - off
 					leg.append(Vector3(wv.x, src.y, wv.y))
-			# The coherency/overlap correction moved the endpoint off the planner's last waypoint — glide the
-			# model on to its corrected final position so the animated trail matches the applied state.
-			if leg.is_empty() or (leg.back() as Vector3).distance_to(out[i]) > 0.0005:
+			if leg.is_empty() or (leg.back() as Vector3).distance_to(out[i]) > OVERLAP_EPS_M:
 				leg.append(out[i])
 			if leg.size() < 2:
 				leg = [src, out[i]]
 			world_trails.append(leg)
 	return out
+
+
+# === HARD final placement gate (field-test findings 3 + 6 — real-game loose-unit path only) ==========
+# The formation solver only APPROXIMATES the placement rules; its least-violating fallback can keep a
+# residual violation the self-play audit still flags. This gate ENFORCES three invariants after every loose
+# AI move, in the order the maintainer specified — terrain → overlap → coherency-shorten — iterated to a
+# bounded fixed point, using the SAME base geometry (SeparationChecker) and coherency thresholds
+# (CoherencyChecker) the audit measures, so the numbers actually drop:
+#   (3a) NO model rests in impassable terrain (CONTAINER/RUINS — GF/AoF v3.5.1 p.7 "may never move through");
+#   (3b) NO base overlaps ANY other base — same unit, other units, enemies (p.7; ported
+#        SeparationResolver.resolve_overlaps, escape-scan-guaranteed to reach edge ≥ 0);
+#   (6)  the unit ENDS in coherency (p.7; shorten the whole move back along its taut line toward the
+#        coherent START until coherency holds — the unit began coherent, so a coherent result always exists).
+# A CHARGE (allow_contact) must reach base contact with its target, so it skips the coherency + terrain
+# shorten but STILL resolves overlap to CONTACT (edge ≥ 0): it touches, never moves through (p.7/p.8).
+# The sim never calls this (it plans through MovementPlanner directly), so the fairness oracle is untouched.
+
+## Resolve the placement invariants for one loose move. `start_world` = the coherent, overlap-free pre-move
+## positions (a legal fallback the coherency-shorten can always retreat to); `planned_world` = the solver's
+## output. Returns NEW world positions. Reads live obstacle node positions; mutates nothing on the scene.
+func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, planned_world: Array,
+		allow_contact: bool, _charge_target: GameUnit) -> Array:
+	var cfg: Array = planned_world.duplicate()
+	var n := models.size()
+	if n == 0:
+		return cfg
+	var obstacles := _external_obstacle_shapes(unit)
+	# (terrain) Project every model out of forbidden terrain (impassable CONTAINER/RUINS + DANGEROUS — a model
+	# should not REST in either). A charge may end wherever base contact demands, so it skips the terrain step.
+	if not allow_contact:
+		for i in range(n):
+			cfg[i] = _project_out_forbidden_world(cfg[i])
+	# (overlap) Push every base off every other base — own unit, other units, enemies (SeparationResolver,
+	# escape-scan-guaranteed to edge ≥ 0). On a charge this pushes exactly to CONTACT with the target, never through.
+	_resolve_overlaps_world(models, cfg, obstacles)
+	if allow_contact or n == 1:
+		return cfg   # charge: contact reached; single model: no coherency notion — both are done
+	# (coherency) If the unit is coherent AND overlap-free, keep the full move. Otherwise shorten the whole
+	# move back along its taut line toward the coherent, overlap-free START until BOTH hold — the unit began
+	# legal, so a legal factor always exists (t = 0), and the search takes the largest one (GF/AoF v3.5.1 p.7:
+	# "or as close as possible"). Making the shorten OVERLAP-AWARE stops the coherency pull-back from dragging a
+	# model back INTO a friendly unit near its start (self-play: the residual inter/intra overlap after v1).
+	var max_chain: float = CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES \
+		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
+	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
+			and _config_terrain_clear(cfg):
+		return cfg
+	return _shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain)
+
+
+## Every OTHER on-table unit's alive-model BaseShapes (at their live positions) — the obstacle set the
+## moving unit's bases may never overlap. Excludes the moving unit + its attached heroes (coherency owns
+## their internal spacing) and any Ambush-reserve unit (off-table — GF/AoF v3.5.1 p.13). Enemies AND
+## friendlies both count: the no-through rule binds against any base (p.7).
+func _external_obstacle_shapes(unit: GameUnit) -> Array:
+	var out: Array = []
+	if army_manager == null:
+		return out
+	var own := {unit: true}
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h != null:
+				own[h] = true
+	for g in army_manager.get_all_game_units():
+		var gu := g as GameUnit
+		if gu == null or own.has(gu) or unit_in_reserve(gu):
+			continue
+		for m in gu.get_alive_models():
+			var sh := SeparationChecker.shape_for_model(m as ModelInstance)
+			if sh != null:
+				out.append(sh)
+	return out
+
+
+## BaseShapes for the moving models re-centred at the config positions `cfg` (world). The shape kind /
+## extents / yaw come from each live model (round exact, oval/rect circumscribed); only the centre is
+## overridden to the planned XZ, so the overlap + coherency math runs on the REAL base footprints.
+func _moving_shapes_at(models: Array, cfg: Array) -> Array:
+	var out: Array = []
+	for i in range(models.size()):
+		var sh := SeparationChecker.shape_for_model(models[i] as ModelInstance)
+		if sh == null:
+			sh = SeparationChecker.BaseShape.make_round(Vector2.ZERO, SeparationChecker.DEFAULT_BASE_RADIUS_M)
+		sh.center = Vector2((cfg[i] as Vector3).x, (cfg[i] as Vector3).z)
+		out.append(sh)
+	return out
+
+
+## Push every moving model out until NO base overlaps another (own unit, other units, enemies) — the
+## ported SeparationResolver.resolve_overlaps applied per model (Gauss-Seidel: each model treated as the
+## item, all OTHER bases as obstacles), a few passes so mutual pushes converge. Writes the cleared centres
+## back into `cfg`. resolve_overlaps' escape-scan guarantees a finite obstacle set is always cleared.
+func _resolve_overlaps_world(models: Array, cfg: Array, external_obstacles: Array) -> void:
+	var n := models.size()
+	if n == 0:
+		return
+	var shapes := _moving_shapes_at(models, cfg)
+	for _pass in range(OVERLAP_GATE_PASSES):
+		var moved := false
+		for i in range(n):
+			var obstacles: Array = external_obstacles.duplicate()
+			for j in range(n):
+				if j != i:
+					obstacles.append(shapes[j])
+			var delta := SeparationResolver.resolve_overlaps([shapes[i]], obstacles)
+			if delta.length_squared() > 0.0:
+				moved = true
+		if not moved:
+			break
+	for i in range(n):
+		cfg[i] = Vector3(shapes[i].center.x, (cfg[i] as Vector3).y, shapes[i].center.y)
+
+
+## True when a world point sits in FORBIDDEN terrain a model must not REST in: impassable (CONTAINER / RUINS,
+## GF/AoF v3.5.1 p.7 "may never move through") or DANGEROUS (the route planner routes around it; a model
+## should not END its move standing in it — self-play audit). The move-through of Dangerous mid-route still
+## triggers its test (counted from the route), independently of where the model finally rests.
+func _world_forbidden(pos: Vector3) -> bool:
+	if not terrain_type_at.is_valid():
+		return false
+	var t: int = int(terrain_type_at.call(pos))
+	return t == TerrainRules.TerrainType.CONTAINER or t == TerrainRules.TerrainType.RUINS \
+		or t == TerrainRules.TerrainType.DANGEROUS
+
+
+## Project a model resting in forbidden terrain out to the nearest clear point (16 compass directions ×
+## expanding 1 cm rings), world-frame tie-break within a ring for determinism. A model with no clear point
+## in range is left where it is (the overlap pass + coherency-shorten still act on it). No-op when clear.
+func _project_out_forbidden_world(pos: Vector3) -> Vector3:
+	if not _world_forbidden(pos):
+		return pos
+	var dist := TERRAIN_OUT_STEP_M
+	while dist <= TERRAIN_OUT_MAX_M + OVERLAP_EPS_M:
+		var best := pos
+		var found := false
+		for k in range(TERRAIN_OUT_DIRS):
+			var ang := TAU * float(k) / float(TERRAIN_OUT_DIRS)
+			var c := _clamp_to_bounds(pos + Vector3(cos(ang) * dist, 0.0, sin(ang) * dist))
+			if _world_forbidden(c):
+				continue
+			if not found or (c.x < best.x - OVERLAP_EPS_M or (absf(c.x - best.x) <= OVERLAP_EPS_M and c.z < best.z - OVERLAP_EPS_M)):
+				best = c
+				found = true
+		if found:
+			return best
+		dist += TERRAIN_OUT_STEP_M
+	return pos
+
+
+## OPR coherency of a config (GF/AoF v3.5.1 p.7), measured on REAL base geometry exactly as the audit's
+## CoherencyChecker does: models LINK when their bases are within COHERENCY_DISTANCE (1") edge-to-edge, the
+## link graph must be a SINGLE connected chain, and the widest edge-to-edge spread must be ≤ `max_chain`
+## (9", or 6" Skirmish). A unit of ≤1 model is trivially coherent.
+func _config_coherent_world(models: Array, cfg: Array, max_chain: float) -> bool:
+	var n := models.size()
+	if n <= 1:
+		return true
+	var shapes := _moving_shapes_at(models, cfg)
+	# Single connected 1"-link component (BFS).
+	var visited: Array[bool] = []
+	visited.resize(n)
+	visited.fill(false)
+	var queue: Array = [0]
+	visited[0] = true
+	var seen := 1
+	while not queue.is_empty():
+		var cur: int = queue.pop_back()
+		for other in range(n):
+			if visited[other]:
+				continue
+			if SeparationChecker.edge_distance(shapes[cur], shapes[other]) <= CoherencyChecker.COHERENCY_DISTANCE_INCHES:
+				visited[other] = true
+				seen += 1
+				queue.append(other)
+	if seen < n:
+		return false
+	# Widest edge-to-edge spread within max_chain.
+	for i in range(n):
+		for j in range(i + 1, n):
+			if SeparationChecker.edge_distance(shapes[i], shapes[j]) > max_chain:
+				return false
+	return true
+
+
+## True when NO model in the config rests in forbidden terrain (impassable + dangerous).
+func _config_terrain_clear(cfg: Array) -> bool:
+	for p in cfg:
+		if _world_forbidden(p as Vector3):
+			return false
+	return true
+
+
+## True when NO moving base overlaps another moving base or any external obstacle base (edge ≥ 0, within a
+## tiny epsilon so base CONTACT is allowed). The audit's no-stack invariant (GF/AoF v3.5.1 p.7), shape-exact.
+func _config_overlap_free(models: Array, cfg: Array, obstacles: Array) -> bool:
+	var n := models.size()
+	var shapes := _moving_shapes_at(models, cfg)
+	var tol := -SeparationResolver.RESOLVE_EPSILON_INCHES
+	for i in range(n):
+		for j in range(i + 1, n):
+			if SeparationChecker.edge_distance(shapes[i], shapes[j]) < tol:
+				return false
+		for o in obstacles:
+			if SeparationChecker.edge_distance(shapes[i], o as SeparationChecker.BaseShape) < tol:
+				return false
+	return true
+
+
+## Shorten a move back along its taut line toward the legal START until the unit is BOTH coherent AND
+## overlap-free (findings 3 + 6). Bisects the whole-unit blend factor: t = 0 is the start (coherent and
+## overlap-free by the move invariant), t = 1 the planned config (illegal here), so the search always returns
+## a legal placement, as far forward as the rules allow and no further ("or as close as possible" — GF/AoF
+## v3.5.1 p.7). Retreating toward the start also moves the unit AWAY from whatever it overlapped, so making
+## the predicate overlap-aware stops the pull-back from dragging a model back into a friendly unit.
+func _shorten_world_to_legal(start_world: Array, cfg: Array, models: Array, obstacles: Array, max_chain: float) -> Array:
+	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
+			and _config_terrain_clear(cfg):
+		return cfg.duplicate()
+	var lo := 0.0
+	var hi := 1.0
+	for _b in range(COH_SHORTEN_BISECT):
+		var mid := (lo + hi) * 0.5
+		var blended := _blend_world(start_world, cfg, mid)
+		if _config_coherent_world(models, blended, max_chain) and _config_overlap_free(models, blended, obstacles) \
+				and _config_terrain_clear(blended):
+			lo = mid
+		else:
+			hi = mid
+	return _blend_world(start_world, cfg, lo)
+
+
+## Per-model linear blend of two same-length world-position arrays at t (0 = a, 1 = b); Y from `a`.
+func _blend_world(a: Array, b: Array, t: float) -> Array:
+	var out: Array = []
+	for i in range(a.size()):
+		var pa: Vector3 = a[i]
+		var pb: Vector3 = b[i]
+		out.append(Vector3(lerpf(pa.x, pb.x, t), pa.y, lerpf(pa.z, pb.z, t)))
+	return out
+
+
+## Retrace a model's route trail so it ENDS at the gate-corrected endpoint (findings 3/6). The route is the
+## taut path the model walked; the gate then adjusted its rest position (coherency pull-back / overlap push /
+## terrain-out). Trimming the route to the straight start→gated distance keeps the path monotonic and within
+## the arc it actually needs (a pull-back is shorter than the route arc), then the exact gated point is
+## snapped on — so the glide follows the route's shape and lands precisely on the applied state. Pure.
+func _retrace_to(route: Array, start: Vector3, gated: Vector3) -> Array:
+	var straight := Vector2(gated.x - start.x, gated.z - start.z).length()
+	if straight < OVERLAP_EPS_M:
+		return [start]   # ended at (or pulled fully back to) the start — no visible glide
+	if route.size() < 2:
+		return [start, gated]
+	var trimmed := MovementPlanner.trim_polyline(route, straight)
+	if trimmed.is_empty():
+		trimmed = [start]
+	if (trimmed.back() as Vector3).distance_to(gated) > OVERLAP_EPS_M:
+		trimmed.append(gated)
+	return trimmed
 
 
 ## Straight one-leg trails for a rigid slide (start → end per model).
@@ -1081,8 +1358,8 @@ func _enemy_in_way(from: Vector3, obj: Vector3) -> bool:
 	var reach_m := IN_THE_WAY_IN * INCHES_TO_METERS
 	for h in army_manager.get_game_units_for_player(human_slot):
 		var hu := h as GameUnit
-		if hu == null or hu.is_destroyed():
-			continue
+		if hu == null or hu.is_destroyed() or unit_in_reserve(hu):
+			continue   # an Ambush-reserve unit is off-table — it blocks no path (findings 4/5)
 		var c := unit_centre(hu)
 		if _seg_dist(a, b, Vector2(c.x, c.z)) <= reach_m:
 			return true
@@ -1328,6 +1605,16 @@ static func ai_opens_next_round(ai_took_last_activation: bool, human_has_units: 
 	return ai_has_units
 
 
+## The owed-AI-reply count at the START of a fresh round (field-test finding 7). Pending replies are a
+## PER-ROUND quantity: a new round begins owing ZERO, plus exactly one grant if the AI opens it. The former
+## code INCREMENTED a member that could still carry an undeliverable reply from the previous round (the
+## human took a round's last activation while the AI was already exhausted), so the opener's grant stacked
+## and the AI activated twice back-to-back. Deriving the fresh count from scratch makes that impossible —
+## strict one-for-one alternation (GF/AoF v3.5.1 "Rounds, Turns & Activations"). Returns 1 iff the AI opens.
+static func pending_replies_at_round_start(ai_opens: bool) -> int:
+	return 1 if ai_opens else 0
+
+
 ## Apply `wounds` whole-wounds to a unit's models back-rank-first (Tough models absorb damage before
 ## dying — GF v3.5.1 p.9 casualty removal, defender-optimal). The TESTABLE core of the solo damage
 ## application (maintainer field-test: an AI Tough hero soaked wounds with no visible tick — main's seams
@@ -1430,6 +1717,21 @@ static func pace_seconds(phase: int, fast: bool) -> float:
 ## attacks. Static + pure so the staging is unit-testable and the Fast-AI compression is provable.
 static func pace_attention_seconds(fast: bool) -> float:
 	return PACE_ATTENTION_S * (PACE_FAST_SCALE if fast else 1.0)
+
+
+## The per-model ROUTE-START positions from a published last_move_paths list (each entry {model, path,
+## radius_m}; path[0] is the model's staging position). Field-test finding 2: the model NODES must be
+## returned to these START positions BEFORE the camera-focus + announce beat + corridor display, so the
+## planned path is shown with the models still at their start — the END STATE must never leak first. The
+## logical/broadcast state is already final (the controller applied + synced it); this drives only the
+## local visual replay. Pure: returns one Vector3 per input path (skips paths shorter than 2 points).
+static func presentation_start_positions(move_paths: Array) -> Array:
+	var out: Array = []
+	for entry in move_paths:
+		var path: Array = (entry as Dictionary).get("path", [])
+		if path.size() >= 2:
+			out.append(path[0])
+	return out
 
 
 ## OPR objective control at ROUND END (Solo & Co-Op v3.5.0 p.6, mirrors SoloSim._seize_objectives): a marker
@@ -1744,7 +2046,57 @@ func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, block
 			"data": {"section": int(section_of.get(int(id), 2)), "x_m": spot.x, "z_m": spot.y}})
 		occupied.append({"pos": spot, "radius": radius})
 		deployed += 1
+	# Clear any residual base overlap the spacing-relaxed "must deploy" fallbacks leave behind (self-play R0:
+	# two crowded units deployed stacked) — the same ZERO-overlap invariant the move gate enforces (finding 3),
+	# so a unit never STARTS a game overlapping a neighbour (which would then poison the coherency-shorten every
+	# round). Terrain-aware; regiments keep their rigid tray.
+	_resolve_deploy_overlaps()
 	return {"deployed": deployed, "reserved": ambush_reserve.size(), "seed": seed_value}
+
+
+## Post-deploy absolute overlap cleanup (field-test finding 3 — "ZERO overlapping bases after every AI
+## move/deploy"). Each non-regiment on-table unit is un-stacked as a RIGID WHOLE-UNIT translation (all its
+## models shifted by one vector via SeparationResolver, escape-scan-guaranteed) so it clears every other
+## on-table base WITHOUT disturbing its own formation — a per-model push here would spread the compact deploy
+## grid and break the unit's coherency (self-play v4 lesson). A few Gauss-Seidel sweeps let a cluster settle;
+## a model the shift lands in forbidden terrain is nudged out individually (rare — deployment already avoids
+## terrain). Regiments keep their rigid tray. Uses the REAL base shapes the audit measures.
+func _resolve_deploy_overlaps() -> void:
+	if army_manager == null:
+		return
+	for _sweep in range(OVERLAP_GATE_PASSES):
+		for u in army_manager.get_all_game_units():
+			var unit := u as GameUnit
+			if unit == null or unit.get_alive_count() <= 0 or unit_in_reserve(unit):
+				continue
+			if _is_regiment(unit) or (unit.has_method("is_attached") and unit.is_attached()):
+				continue
+			var models := _moving_models(unit)
+			if models.is_empty():
+				continue
+			var cfg: Array = _positions_of(models)
+			# (a) INTERNAL: separate the unit's OWN overlapping bases just to contact (a tight deploy grid can
+			# pack a large-based model into its neighbour). Pushing only to edge ≈ 0 keeps every pair within the
+			# 1" coherency link, so it never spreads the unit out of coherency (unlike an unbounded per-model push).
+			var own_shapes := _moving_shapes_at(models, cfg)
+			for _p in range(OVERLAP_GATE_PASSES):
+				for i in range(own_shapes.size()):
+					var others: Array = []
+					for j in range(own_shapes.size()):
+						if j != i:
+							others.append(own_shapes[j])
+					SeparationResolver.resolve_overlaps([own_shapes[i]], others)
+			for i in range(cfg.size()):
+				var oc: Vector2 = (own_shapes[i] as SeparationChecker.BaseShape).center
+				cfg[i] = Vector3(oc.x, (cfg[i] as Vector3).y, oc.y)
+			# (b) EXTERNAL: shift the WHOLE unit as one rigid item to clear every OTHER unit's bases — one
+			# translation, formation intact (a per-model external push would spread the grid out of coherency).
+			var shapes := _moving_shapes_at(models, cfg)
+			var delta := SeparationResolver.resolve_overlaps(shapes, _external_obstacle_shapes(unit))
+			for i in range(cfg.size()):
+				var p: Vector3 = cfg[i]
+				cfg[i] = _project_out_forbidden_world(Vector3(p.x + delta.x, p.y, p.z + delta.y))
+			_apply_model_positions(models, cfg)
 
 
 const AMBUSH_MIN_ENEMY_DIST_M := 0.2286   # OPR: Ambush arrivals deploy MORE THAN 9" from enemy units
@@ -1784,7 +2136,6 @@ func arrive_one_ambush_unit(arrival_zone: Rect2, enemy_positions: Array, occupie
 	if occupied.is_empty():
 		for e in enemy_positions:
 			occupied.append({"pos": e, "radius": AMBUSH_MIN_ENEMY_DIST_M})
-	var no_block := func(_p: Vector2) -> bool: return false
 	var remaining: Array = []
 	var arrived: GameUnit = null
 	for u in ambush_reserve:
@@ -1794,28 +2145,96 @@ func arrive_one_ambush_unit(arrival_zone: Rect2, enemy_positions: Array, occupie
 		if arrived != null:
 			remaining.append(unit)
 			continue   # one arrival per call (the caller paces each) — keep the rest reserved
-		var ignores_terrain: bool = unit.has_special_rule("Strider") or unit.has_special_rule("Flying")
-		var blocked: Callable = _deploy_blocked_flying if ignores_terrain else _deploy_blocked_normal
-		if not blocked.is_valid():
-			blocked = no_block
-		var radius := _deploy_footprint_radius(unit)
-		var footprint := _deploy_footprint_offsets(unit)   # per-model footprint (finding 1)
-		var base_r := _deploy_base_radius(_deploy_models(unit))
-		var spot := AiDeployment.best_spot(arrival_zone, _deploy_objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r)
-		if spot == Vector2.INF:
+		if _try_place_reserve_unit(unit, arrival_zone, occupied, round_no):
+			arrived = unit
+		else:
 			remaining.append(unit)   # no legal spot this round — hold for a later one (p.13)
-			continue
-		_place_unit_at(unit, spot)
-		occupied.append({"pos": spot, "radius": radius})
-		unit.unit_properties["ambush_reserve"] = false          # on the table now → activatable this round
-		unit.unit_properties["ambush_arrived_round"] = round_no  # can't seize/contest objectives this round
-		record_decision({"kind": "deploy", "unit": unit.get_name(),
-			"rule": "GF/AoF v3.5.1 p.13 Ambush: arrive start of a round after the first, >9\" from enemies",
-			"candidates": [], "chosen": "", "why": "ambush arrival (does not consume its activation)",
-			"data": {"round": round_no, "x_m": spot.x, "z_m": spot.y}})
-		arrived = unit
 	ambush_reserve = remaining
 	return arrived
+
+
+## Place ONE reserve unit at a legal Ambush-arrival spot (GF/AoF v3.5.1 p.13): near an objective, out of
+## blocking terrain (reusing the stashed deploy context), and — because the caller seeds `occupied` with the
+## enemies' 9" no-go rings — strictly MORE THAN 9" from every enemy. On success clears the unit's reserve
+## flag (activatable this round), stamps its arrival round (no seize/contest this round), appends its
+## footprint to `occupied`, records the decision, and returns true. Returns false (the unit stays reserved)
+## when no legal spot exists right now. Shared by the AI's paced arrival and the human's guided arrival.
+func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Array, round_no: int) -> bool:
+	var no_block := func(_p: Vector2) -> bool: return false
+	var ignores_terrain: bool = unit.has_special_rule("Strider") or unit.has_special_rule("Flying")
+	var blocked: Callable = _deploy_blocked_flying if ignores_terrain else _deploy_blocked_normal
+	if not blocked.is_valid():
+		blocked = no_block
+	var radius := _deploy_footprint_radius(unit)
+	var footprint := _deploy_footprint_offsets(unit)   # per-model footprint (finding 1)
+	var base_r := _deploy_base_radius(_deploy_models(unit))
+	var spot := AiDeployment.best_spot(arrival_zone, _deploy_objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r)
+	if spot == Vector2.INF:
+		return false
+	_place_unit_at(unit, spot)
+	occupied.append({"pos": spot, "radius": radius})
+	unit.unit_properties["ambush_reserve"] = false          # on the table now → activatable this round
+	unit.unit_properties["ambush_arrived_round"] = round_no  # can't seize/contest objectives this round
+	record_decision({"kind": "deploy", "unit": unit.get_name(),
+		"rule": "GF/AoF v3.5.1 p.13 Ambush: arrive start of a round after the first, >9\" from enemies",
+		"candidates": [], "chosen": "", "why": "ambush arrival (does not consume its activation)",
+		"data": {"round": round_no, "x_m": spot.x, "z_m": spot.y}})
+	return true
+
+
+# === Human Ambush reserves (field-test finding 5 — the game must ASK) ========================
+
+## The human's units still HELD in Ambush reserve (off-table, undeployed). The `ambush_reserve` flag is the
+## single truth for BOTH sides (unit_in_reserve); the AI keeps its own paced `ambush_reserve` LIST, while
+## the human's reserves are queried on demand from the army. GF/AoF v3.5.1 p.13.
+func human_reserve_units() -> Array:
+	var out: Array = []
+	if army_manager == null:
+		return out
+	for u in army_manager.get_game_units_for_player(human_slot):
+		var gu := u as GameUnit
+		if gu != null and not gu.is_destroyed() and unit_in_reserve(gu):
+			out.append(gu)
+	return out
+
+
+## Set aside the human's Ambush-rule units into reserve (GF/AoF v3.5.1 p.13: "May be set aside before
+## deployment"), mirroring the AI's deploy_army handling so the human gets the same off-table reserve and
+## round-2+ arrival prompt. Skips attached heroes (they deploy with their host) and already-reserved units.
+## Returns the units newly set aside; the caller hides them + syncs. Idempotent.
+func set_aside_human_ambush() -> Array:
+	var out: Array = []
+	if army_manager == null:
+		return out
+	for u in army_manager.get_game_units_for_player(human_slot):
+		var gu := u as GameUnit
+		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
+			continue
+		if gu.has_method("is_attached") and gu.is_attached():
+			continue
+		if gu.has_special_rule("Ambush"):
+			gu.unit_properties["ambush_reserve"] = true
+			out.append(gu)
+	return out
+
+
+## Should the game PROMPT the human to deploy Ambush reserves? GF/AoF v3.5.1 p.13: reserve units MAY be
+## deployed at the start of ANY round after the first. Pure decision so the trigger is unit-testable.
+static func should_prompt_human_ambush(round_number: int, undeployed_count: int) -> bool:
+	return round_number >= 2 and undeployed_count > 0
+
+
+## Guided arrival of ONE human Ambush-reserve unit (finding 5): seed `occupied` with the AI enemies' 9"
+## no-go rings and place the unit >9" from them, near an objective, terrain-legal — the same legal core as
+## the AI arrival. Returns true if placed (the caller reveals + syncs the unit). GF/AoF v3.5.1 p.13.
+func arrive_human_reserve_unit(unit: GameUnit, arrival_zone: Rect2, enemy_positions: Array,
+		occupied: Array, round_no: int) -> bool:
+	if unit == null or unit.get_alive_count() <= 0 or not unit_in_reserve(unit):
+		return false
+	if occupied.is_empty():
+		for e in enemy_positions:
+			occupied.append({"pos": e, "radius": AMBUSH_MIN_ENEMY_DIST_M})
+	return _try_place_reserve_unit(unit, arrival_zone, occupied, round_no)
 
 
 const DEPLOY_SPACING_M := 0.04   # compact deployment grid: model-centre spacing (~1.6", coherent)
