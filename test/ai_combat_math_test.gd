@@ -270,3 +270,56 @@ func test_reliable_sets_melee_to_hit_to_two_plus() -> void:
 	# Without Reliable the same weapon still needs 5+.
 	var q_plain := AiCombatMath.reliable_quality(5, false)
 	assert_int(AiCombatMath.modified_hit_target(AiCombatMath.thrust_to_hit(q_plain, false), 0)).is_equal(5)
+
+
+# === Wave-5 primitives (registry-derived params; semantics verified against the official rulebook PDFs) ===
+
+func test_shred_counts_unmodified_save_ones() -> void:
+	# Shred (army-book weapon rule, same text in all five systems): each unmodified Defense roll of 1
+	# deals 1 extra wound.
+	assert_int(AiCombatMath.shred_bonus_wounds([1, 3, 1, 6])).is_equal(2)
+	assert_int(AiCombatMath.shred_bonus_wounds([2, 3, 4])).is_equal(0)
+	assert_int(AiCombatMath.shred_bonus_wounds([])).is_equal(0)
+
+
+func test_shred_reads_the_final_faces_after_bane_rerolls() -> void:
+	# With Bane, a Defense 6 is re-rolled once: a re-roll of 1 shreds; a re-rolled 6 stays a block
+	# (and is NOT a 1). Original 1s always count.
+	assert_int(AiCombatMath.shred_bonus_wounds([6, 1], [1])).is_equal(2)   # 6→1 re-roll + original 1
+	assert_int(AiCombatMath.shred_bonus_wounds([6], [6])).is_equal(0)      # re-rolled 6 blocks, no shred
+	assert_int(AiCombatMath.shred_bonus_wounds([6, 6], [1, 4])).is_equal(1)
+
+
+func test_sergeant_bonus_hits_capped_at_the_bearers_attacks() -> void:
+	# Sergeant (core v3.5.1, MODEL-level): the bearer's unmodified 6s deal +1 hit — the pooled volley
+	# caps the bonus at the bearer's own attack count (documented approximation).
+	assert_int(AiCombatMath.sergeant_bonus_hits([6, 6, 6, 2], 1)).is_equal(1)
+	assert_int(AiCombatMath.sergeant_bonus_hits([6, 6, 3], 2)).is_equal(2)
+	assert_int(AiCombatMath.sergeant_bonus_hits([5, 4], 2)).is_equal(0)
+	assert_int(AiCombatMath.sergeant_bonus_hits([6], 0)).is_equal(0)
+
+
+func test_armored_defense_counts_as_best_of() -> void:
+	# Armor(X) (army-book upgrade: "counts as having Defense X+") — best-of: it improves a worse
+	# printed Defense and never degrades a better one; 0/invalid ratings change nothing.
+	assert_int(AiCombatMath.armored_defense(5, 4)).is_equal(4)
+	assert_int(AiCombatMath.armored_defense(3, 4)).is_equal(3)
+	assert_int(AiCombatMath.armored_defense(5, 2)).is_equal(2)
+	assert_int(AiCombatMath.armored_defense(5, 0)).is_equal(5)
+	assert_int(AiCombatMath.armored_defense(5, 1)).is_equal(5)
+
+
+func test_morale_target_applies_banner_bonus_clamped() -> void:
+	# Banner: +1 to morale test rolls = the roll target drops by one, bounded to [2,6] (a natural 1
+	# always fails — core p.1 "Modifiers").
+	assert_int(AiCombatMath.morale_target(4, 1)).is_equal(3)
+	assert_int(AiCombatMath.morale_target(2, 1)).is_equal(2)
+	assert_int(AiCombatMath.morale_target(4, 0)).is_equal(4)
+	assert_int(AiCombatMath.morale_target(6, -3)).is_equal(6)
+
+
+func test_indirect_hit_modifier_only_after_moving() -> void:
+	# Indirect (core v3.5.1): "-1 to hit rolls when shooting after moving" — nothing on a Hold.
+	assert_int(AiCombatMath.indirect_hit_modifier(true)).is_equal(-1)
+	assert_int(AiCombatMath.indirect_hit_modifier(false)).is_equal(0)
+	assert_int(AiCombatMath.indirect_hit_modifier(true, 2)).is_equal(-2)

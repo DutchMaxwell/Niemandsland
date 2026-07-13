@@ -1018,3 +1018,69 @@ func test_pull_stragglers_restores_coherency_without_moving_the_advanced_models(
 	# The two advanced models did NOT retreat (minimal repair — the under-move fix).
 	assert_float((cfg[0] as Vector3).distance_to(Vector3(0, 0, 0))).is_less(0.01)
 	assert_float((cfg[1] as Vector3).distance_to(Vector3(r * 2.8, 0, 0))).is_less(0.01)
+
+
+# === Wave-5: Indirect hold overlay + LOS waiver, Musician move bands, Limited once-per-game ===
+
+func _weapon(rng: int, rules: Array) -> OPRApiClient.OPRWeapon:
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "W%d" % rng
+	w.range_value = rng
+	w.attacks = 2
+	w.count = 1
+	for r in rules:
+		w.special_rules.append(str(r))
+	return w
+
+
+func test_hold_and_shoot_overlay_names_relentless_or_indirect() -> void:
+	# Solo AI overlays: a Relentless — or (wave 5) Indirect — ranged weapon with an enemy in range
+	# forces Hold-and-shoot; the returned label names the trigger for the decision record.
+	assert_str(SoloController.hold_and_shoot_rule([_weapon(24, ["Relentless"])], true)).is_equal("Relentless")
+	assert_str(SoloController.hold_and_shoot_rule([_weapon(24, ["Indirect"])], true)).is_equal("Indirect")
+	assert_str(SoloController.hold_and_shoot_rule([_weapon(24, ["AP(1)"])], true)).is_equal("")
+	# Out of range → no overlay; melee Indirect (range 0) never counts.
+	assert_str(SoloController.hold_and_shoot_rule([_weapon(24, ["Indirect"])], false)).is_equal("")
+	assert_str(SoloController.hold_and_shoot_rule([_weapon(0, ["Indirect"])], true)).is_equal("")
+	# The boolean wrapper keeps the pre-wave-5 contract.
+	assert_bool(SoloController._forces_hold_and_shoot([_weapon(24, ["Indirect"])], true)).is_true()
+
+
+func test_has_indirect_ranged_ignores_melee_weapons() -> void:
+	assert_bool(SoloController.has_indirect_ranged([_weapon(24, ["Indirect"])])).is_true()
+	assert_bool(SoloController.has_indirect_ranged([_weapon(0, ["Indirect"]), _weapon(24, ["AP(1)"])])).is_false()
+	assert_bool(SoloController.has_indirect_ranged([])).is_false()
+
+
+func test_musician_grants_one_inch_on_move_bands() -> void:
+	# Musician (wave 5, core rule — data-derived +1" on move actions). A plain unit gets nothing.
+	var mus := _unit(2, [Vector3.ZERO])
+	mus.unit_properties["special_rules"] = ["Musician"]
+	assert_float(SoloController.musician_move_bonus_in(mus)).is_equal_approx(1.0, 0.0001)
+	var plain := _unit(2, [Vector3.ZERO])
+	assert_float(SoloController.musician_move_bonus_in(plain)).is_equal_approx(0.0, 0.0001)
+	assert_float(SoloController.musician_move_bonus_in(null)).is_equal_approx(0.0, 0.0001)
+
+
+func test_limited_profiles_fire_once_per_game() -> void:
+	# Limited (core v3.5.1: "may only be used once per game"): the shared pre-filter feeds BOTH the
+	# dice path and the EV, so an expended weapon neither rolls nor sways targeting.
+	var sc: SoloController = auto_free(SoloController.new())
+	var u := _unit(2, [Vector3.ZERO])
+	var limited_prof := {"name": "Rocket", "attacks": 1, "limited": true}
+	var plain_prof := {"name": "Rifle", "attacks": 10, "limited": false}
+	var profiles := [limited_prof, plain_prof]
+	# Untouched before the first shot.
+	assert_int(sc.filter_limited(u, profiles).size()).is_equal(2)
+	assert_bool(sc.is_limited_used(u, limited_prof)).is_false()
+	# After firing: the Limited profile is spent — filtered out, and a decision record was emitted.
+	sc.mark_limited_used(u, limited_prof)
+	assert_bool(sc.is_limited_used(u, limited_prof)).is_true()
+	var left := sc.filter_limited(u, profiles)
+	assert_int(left.size()).is_equal(1)
+	assert_str(str((left[0] as Dictionary)["name"])).is_equal("Rifle")
+	assert_bool(sc.drain_decisions().size() > 0).is_true()
+	# Another unit's identical weapon name is NOT spent (per-unit state).
+	var other := _unit(2, [Vector3(1, 0, 0)])
+	other.unit_id = "other_unit"
+	assert_bool(sc.is_limited_used(other, limited_prof)).is_false()

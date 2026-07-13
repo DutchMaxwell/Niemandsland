@@ -75,6 +75,24 @@ const EVASIVE_HIT_PENALTY: int = 1
 ## not from spells."). The solo automation has no spell damage, so every hit qualifies.
 const SHIELDED_DEFENSE_BONUS: int = 1
 
+## The unmodified minimum d6 face — the trigger face for Shred (wave 5): a natural 1 on a Defense roll
+## both fails the save AND deals the extra wound. Sibling of UNMODIFIED_SIX.
+const UNMODIFIED_ONE: int = 1
+
+## Indirect moved-shooting penalty (wave 5, OPR core v3.5.1 weapon rule: -1 to hit when shooting after
+## moving; the LOS/cover-ignore facets are handled at the targeting/save sites). Data-derived at the
+## call sites via RulesRegistry ("Indirect".moved_hit_penalty); this constant is the fallback seam.
+const INDIRECT_MOVED_HIT_PENALTY: int = 1
+
+## Banner morale-test bonus (wave 5, OPR core v3.5.1: +1 to morale test rolls; the GFF/AoFS variant
+## scopes it to the bearer + up to 3 picked friendly units — the bearer facet is automated, the pick is
+## manual). Fallback for the RulesRegistry "Banner".morale_bonus param.
+const BANNER_MORALE_BONUS: int = 1
+
+## Musician move-action bonus in inches (wave 5, OPR core v3.5.1: moves +1" on move actions; GFF/AoFS
+## picked-units variant as with Banner). Fallback for "Musician".move_bonus_in.
+const MUSICIAN_MOVE_BONUS_IN: float = 1.0
+
 
 ## Hits from the attacker's to-hit roll: faces >= Quality (Quality is "better is lower", e.g. 3+).
 static func count_hits(faces: Array, quality: int) -> int:
@@ -310,6 +328,58 @@ static func unpredictable_fighter_effect(die_face: int) -> Dictionary:
 static func deadly_multiplier(deadly_x: int, target_tough: int) -> int:
 	var cap: int = maxi(target_tough, 1)
 	return clampi(deadly_x, 1, cap)
+
+
+## Shred extra wounds (wave 5, OPR army-book weapon rule — same text in all five systems: on unmodified
+## Defense results of 1, the weapon deals 1 extra wound). Counts the natural 1s among the FINAL save
+## faces: original non-6 faces plus, when Bane forced re-rolls, the re-roll faces that replaced the 6s
+## (a re-roll is itself an unmodified roll; a 6 that was re-rolled into a 1 both fails and shreds).
+## These extra wounds are NOT Deadly-multiplied (they come from the save step, not the weapon's unsaved
+## wounds — documented reading, mirrored in the EV metric).
+static func shred_bonus_wounds(save_faces: Array, reroll_faces: Array = []) -> int:
+	var ones := 0
+	var ri := 0
+	for f in save_faces:
+		if int(f) == UNMODIFIED_SIX and ri < reroll_faces.size():
+			if int(reroll_faces[ri]) == UNMODIFIED_ONE:
+				ones += 1
+			ri += 1
+		elif int(f) == UNMODIFIED_ONE:
+			ones += 1
+	return ones
+
+
+## Sergeant bonus hits (wave 5, OPR core v3.5.1 MODEL-level rule: when this model attacks, unmodified
+## 6s to hit deal 1 extra hit). The pooled resolution cannot attribute dice to the one bearer model, so
+## the bonus is the volley's unmodified 6s CAPPED at the bearer's own attack count (`per_model_attacks`)
+## — exact in expectation, a bounded over-estimate per roll (documented approximation, one batch per
+## phase; see docs/SOLO_AI_RULES_COVERAGE.md).
+static func sergeant_bonus_hits(faces: Array, per_model_attacks: int) -> int:
+	return mini(unmodified_sixes(faces), maxi(per_model_attacks, 0))
+
+
+## Effective Defense under Armor(X) (wave 5, OPR army-book upgrade rule: "counts as having Defense X+").
+## Applied best-of (the lower, better value wins) so a unit whose printed Defense already beats the
+## armor keeps it — the counts-as reading never worsens a save here (documented guard; every fielded
+## Armor upgrade improves the printed value). X < 2 is invalid and ignored; 0 = no Armor.
+static func armored_defense(defense: int, armor_x: int) -> int:
+	if armor_x < BEST_HIT_TARGET:
+		return defense
+	return mini(defense, armor_x)
+
+
+## Morale-test roll target under a net roll modifier (wave 5 — Banner's +1 to morale test rolls):
+## quality lowered by the bonus, bounded to [2, 6] (a natural 1 always fails, a 6 always passes —
+## GF/AoF v3.5.1 p.1 "Modifiers"). With bonus 0 this is the plain quality target.
+static func morale_target(quality: int, morale_bonus: int) -> int:
+	return clampi(quality - maxi(morale_bonus, 0), BEST_HIT_TARGET, UNMODIFIED_SIX)
+
+
+## Indirect's to-hit ROLL modifier for a shooting attack (wave 5, core v3.5.1: "-1 to hit rolls when
+## shooting after moving"). 0 when the shooter held. `penalty` is the data-derived knob (RulesRegistry
+## "Indirect".moved_hit_penalty; fallback INDIRECT_MOVED_HIT_PENALTY).
+static func indirect_hit_modifier(moved: bool, penalty: int = INDIRECT_MOVED_HIT_PENALTY) -> int:
+	return -maxi(penalty, 0) if moved else 0
 
 
 ## A unit is "at or below half" when its alive count has dropped to <= half its starting size (the OPR

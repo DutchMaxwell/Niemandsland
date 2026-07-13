@@ -57,7 +57,7 @@ Mount was available on 2026-07-09; every rule below was read from the PDFs/army 
 | **Mend** (active: remove D3 wounds from a friendly Tough model) | ⏳ | not in the test army; needs an activation-phase heal step (pick friendly Tough model within 3", remove D3). Distinct from the passive Regeneration medic above. |
 | **Fast / Slow** (±move) | ⏳ sim / ✅ **real game** | the real AI's move bands come from `movement_range_controller.move_bands_for_props` (Fast +2"/+4", Slow −2"/−4", negation-aware). Sim import still fixed 6"/12" (open). |
 | **Immobile / Artillery** (Hold only; Artillery ±to-hit >9") | ⏳ sim / ✅ **real game** | Wave 3: `SoloController.forces_hold` overrides the tree to HOLD (still shoots in range — Artillery solo overlay p.57); Artillery's +1 to hit (shooter, >9") and −2 to hit (as target, >9") via `shooting_hit_modifier`, both directions. Artillery's deploy-high overlay facet is NOT modeled (flagged). Sim wiring open. |
-| **Limited** (once per game) | ➖ | 4-round sim rarely exhausts it; ammo tracking is low value here. |
+| **Limited** (once per game) | ⏳ sim / ✅ **real game** | Wave 5: per-(unit, weapon) expenditure tracked in `SoloController.limited_used`; expended profiles are pre-filtered from BOTH the dice paths and the EV. Sim wiring open. |
 | **Caster** (cast a random spell after moving) | ⏳ | spell system unmodelled; Solo rule: D3+level random spell after move. |
 | **Aircraft / Flying / Strider / Ambush / Scout** | ➖/⏳/✅ | Ambush/Scout deployment ✅ (real game). Wave 3: **Strider** ignores the Difficult-halving and **Flying** additionally skips Dangerous tests on the real AI's moves (`SoloController._execute_move`, core p.13/14 + solo overlay p.57). Aircraft stays out of scope (➖). |
 | **Transport(X) / Unstoppable** | ➖ | transports & aircraft-only targeting are out of the point-sim's scope. |
@@ -73,7 +73,7 @@ These change **which target** a weapon picks or **which action** a unit takes (n
 | **Deadly → single-model Tough first, then Tough (lowest remaining)** | 🆕 | `AiTargeting` Overlay.DEADLY |
 | **Takedown → heroes first** | 🆕 (partial) | `AiTargeting` Overlay.TAKEDOWN. **Flagged:** the rules' "models with upgrades, most expensive first" tier is **not representable** — the sim has no per-model upgrade cost, so only *heroes-first* is honoured. |
 | **Relentless → Hold and shoot when in range** | 🆕 | `SoloSim._forces_hold_and_shoot` |
-| **Indirect / Artillery → Hold and shoot when in range** | ⏳ / ✅ **Artillery (real game)** | Artillery: Hold-only + shoot (`SoloController.forces_hold`) with the ±to-hit facets modeled (Wave 3); its deploy-high facet stays open. Indirect (−1 after moving + ignore LOS/cover) remains deliberately out — its damage facets are unmodelled. |
+| **Indirect / Artillery → Hold and shoot when in range** | ✅ **real game (both)** | Artillery: Hold-only + shoot (`SoloController.forces_hold`) with the ±to-hit facets modeled (Wave 3); its deploy-high facet stays open. Indirect: Wave 5 — hold-and-shoot overlay (`hold_and_shoot_rule`), −1 after moving, LOS-free targeting and cover-ignore all modeled. |
 | Caster / Counter / Ambush / Scout / Aircraft ordering | ⏳/✅ | Wave 3: **Counter last in section** implemented in the real game's pick (`SoloController._select_ai_unit`); Shaken-last was already in. Ambush/Scout deployment ✅. Caster/Aircraft remain out of scope. |
 
 ### Ambiguities flagged (not guessed)
@@ -777,3 +777,52 @@ preset knob-vectors:
 (`SoloController.set_difficulty(slot, …)`, indexed by the acting side, flips with `ai_slot`), e.g. `NML_AI_P1=
 rekrut NML_AI_P2=kriegsherr`. Tests: `solo_difficulty_test.gd` (10) + `solo_arena_test.gd` (6), incl. the
 headless both-AI game-completion driver.
+
+## Wave 5 — rules-registry wiring + top-breadth primitives (real game, 2026-07-13)
+
+The wave the registry package was built for: special-rule mechanics become **system-scoped DATA**, and the
+five highest-breadth unautomated rule families gain primitives.
+
+### Registry derivation (rules are data now)
+
+- `tools/rules_mechanics_export.py` reads the maintainer's LOCAL rules registry (per-(system, faction) books;
+  path is an argument, `~`-derived default, never a hardcoded user path) and emits **derived, text-free**
+  mechanics maps: `assets/solo/rules_mechanics_{gf,gff,aof,aofs,aofr}.json` — rule name → `{primitive,
+  params, rated, book_version}`, one `common` (core) section + per-faction sections. **No OPR rule text is
+  ever committed** (generator hygiene guard + `rules_registry_test.test_committed_maps_carry_no_rule_texts`);
+  the maps carry only our own primitive/parameter encoding, verified against the official rulebook PDFs.
+- `scripts/solo/rules_registry.gd` (`RulesRegistry`) loads the maps. **HARD invariant:** every lookup is
+  keyed `(game_system, faction, name)` with fallback `(game_system, "common", name)` — never name-only
+  across systems (154 of 383 shared rule names diverge between systems). The runtime system is the imported
+  army's `gameSystem` (carried in `unit_properties["game_system"]`); faction = `faction_folder`.
+- **Derived rule sets:** `main.SOLO_MODELED_RULES` / `SOLO_DECISION_RULES` are now FALLBACKS — the live
+  inventory classification and the unmodeled-rule notes read `RulesRegistry.modeled_tokens/decision_tokens`
+  per system, so e.g. Royal Legion counts as modeled for an AoF army but not for a GF one (whose books never
+  field it). Wave-1..4 parameter knobs read the map where clean, with the old constants as byte-identical
+  fallbacks: Regeneration 5+/Self-Repair 6+ (`_solo_regen_target` + `AiEv._regen_target`), Fearless 4+
+  (`_solo_morale_test`), Royal Legion +4" (`shooting_range_bonus`). The dice math itself proved unchanged:
+  the full pre-wave suite (1202) stays green.
+- **System-scoping proof:** Banner/Musician are rewritten by the skirmish-scale games — GF/AoF/AoFR grant
+  the bearer's UNIT; GFF/AoFS grant "bearer + up to 3 picked friendly units". Same name, different params
+  per system, pinned by `rules_registry_test.test_system_scoping_banner_and_musician_params_diverge`.
+
+### The five new primitive families (registry-derived params; PDFs authoritative)
+
+| Rule | Semantics modeled | Dice path | EV / decision |
+|---|---|---|---|
+| **Shred** (weapon/unit) | each unmodified Defense roll of 1 → +1 wound (final faces, after Bane re-rolls; NOT Deadly-multiplied — save-step reading) | `AiCombatMath.shred_bonus_wounds` in `_solo_save_batch`, logged | `profile_ev` adds hits/6 expected wounds |
+| **Indirect** (weapon) | -1 to hit when shooting after moving; targets without LOS ("as if in line of sight"); ignores cover; solo overlay: Hold & shoot when in range | moved-penalty + LOS-free per-model sighting + cover-ignore in both shooting directions | `hold_and_shoot_rule` overlay (decision record names the trigger); `can_shoot` LOS waiver; cover-ignore in `profile_ev` |
+| **Banner** | +1 to morale test rolls (GFF/AoFS: bearer + 3 picked — bearer facet automated, the pick stays manual, param in data) | `AiCombatMath.morale_target` in `_solo_morale_test` (both sides), logged | `charge_score` risk weight relaxes by bonus/6 (advisory, tie-break only) |
+| **Musician** | +1" on move actions (same picked-variant note as Banner) | — (movement) | `musician_move_bonus_in` widens Advance/Rush(=Charge) bands in `_act`; dev-record carries `musician_bonus_in` |
+| **Sergeant** (model-level) | the bearer's unmodified 6s to hit deal +1 hit (shooting AND melee) | `sergeant_bonus_hits` capped at the bearer's attack share, stamped on ONE profile per member (`AiEv.stamp_sergeant`) — documented pooled approximation | same stamp feeds `profile_ev` (+share/6 hits) |
+| **Limited** | once per game, per weapon | expended profiles skipped in the AI volley, human shooting and melee groups; spent on the roll (`mark_limited_used`, decision record) | `filter_limited` pre-filters the EV's profile lists — an expended weapon stops swaying targeting |
+| **Armor(X)** | "counts as having Defense X+" (best-of guard: never degrades a better printed Defense) | `armored_defense` folded into `_solo_shielded_defense` — every save site (shooting/melee/Impact), logged | `ctx_for` defense + the targeting overlay's defense key |
+
+Notes and honest gaps: the GFF/AoFS Banner/Musician "pick up to 3 friendly units before the game" facet is
+data (`scope:"picked"`, `picked_units:3`) but not automated (needs a pre-game pick step); the human's own
+Indirect moved-penalty is not applied (the automation does not track the human's move state); Sergeant's
+per-model dice attribution is approximated by the capped bonus (exact in expectation); Limited tracking
+covers both sides' units through the shared profile paths.
+
+Baseline 1202 → 1227 tests green (25 new: 9 registry/system-scoping/hygiene, 6 combat-math primitives,
+6 EV flow-through, 4 controller decision/state).

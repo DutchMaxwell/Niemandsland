@@ -72,12 +72,18 @@ static func unit_rating(unit: GameUnit, rule_name: String) -> int:
 
 ## Build the EV context for a live unit. `in_cover` / `counter_models` come from the caller's terrain /
 ## weapon knowledge (cover is a terrain read, counter models a weapon walk — injected, not divined).
+## Wave 5: `defense` is the Armor(X)-adjusted value ("counts as having Defense X+", best-of — the same
+## AiCombatMath.armored_defense the dice path uses) and `morale_bonus` carries Banner's +1 (both gated
+## by the system-scoped RulesRegistry, so a rule only fires where its book fields it).
 static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int = 0) -> Dictionary:
 	if unit == null:
 		return NEUTRAL_DEFENDER.duplicate()
 	return {
 		"quality": unit.get_quality(),
-		"defense": unit.get_defense(),
+		"defense": AiCombatMath.armored_defense(unit.get_defense(),
+			unit_rating(unit, "Armor") if RulesRegistry.unit_rule_active(unit, "Armor") else 0),
+		"morale_bonus": int(RulesRegistry.unit_param(unit, "Banner", "morale_bonus", AiCombatMath.BANNER_MORALE_BONUS)) \
+			if RulesRegistry.unit_rule_active(unit, "Banner") else 0,
 		"tough": maxi(unit_rating(unit, "Tough"), 1),
 		"models": maxi(unit.get_alive_count(), 1),
 		"artillery": unit.has_special_rule("Artillery"),
@@ -96,13 +102,34 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 
 ## The Regeneration-family wound-ignore roll target for a unit (0 = none): Regeneration / Medical Training
 ## → 5+ (any bearing model), else Self-Repair (wave-4 army-book, all models) → 6+. Mirrors main's
-## _solo_regen_target so the EV metric and the dice resolution ignore wounds at the SAME rate.
+## _solo_regen_target so the EV metric and the dice resolution ignore wounds at the SAME rate — wave 5:
+## both read the target from the RulesRegistry mechanics map (constants as byte-identical fallback).
 static func _regen_target(unit: GameUnit) -> int:
 	if unit.has_special_rule("Regeneration") or unit.has_special_rule("Medical Training"):
-		return REGENERATION_TARGET
+		return int(RulesRegistry.unit_param(unit, "Regeneration", "ignore_target", REGENERATION_TARGET))
 	if rule_on_all_models(unit, "Self-Repair"):
-		return SELF_REPAIR_TARGET
+		return int(RulesRegistry.unit_param(unit, "Self-Repair", "ignore_target", SELF_REPAIR_TARGET))
 	return 0
+
+
+## Stamp the Sergeant facet onto a unit's weapon profiles (wave 5, model-level rule): the FIRST profile
+## with attacks gets "sergeant_attacks" = the bearer's own attack share (total attacks / alive models,
+## min 1) — the pooled resolution's documented approximation of "when THIS model attacks". Gated by the
+## system-scoped RulesRegistry so the rule only fires where the unit's book fields it. Returns the same
+## array (profiles mutated in place — callers build them fresh per activation). Shared by the dice path
+## and the EV metric (one stamping, one truth).
+static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
+	if unit == null or not RulesRegistry.unit_rule_active(unit, "Sergeant"):
+		return profiles
+	var alive: int = maxi(unit.get_alive_count(), 1)
+	for p in profiles:
+		var profile := p as Dictionary
+		var attacks := int(profile.get("attacks", 0))
+		if attacks <= 0:
+			continue
+		profile["sergeant_attacks"] = maxi(1, roundi(float(attacks) / float(alive)))
+		break
+	return profiles
 
 
 # ===== Core expected value (one weapon profile) =====
@@ -135,6 +162,12 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		hits += attacks * SIX_P
 	if melee and charging and (bool(profile.get("furious", false)) or bool(att.get("furious", false))):
 		hits += attacks * SIX_P
+	# — Sergeant (wave 5, model-level: the bearer's unmodified 6s deal +1 hit). The stamping caller
+	#   (stamp_sergeant) marks ONE profile with the bearer's own attack share; expectation = share/6,
+	#   the exact expected count of the bearer's 6s (mirrors the dice path's capped bonus) —
+	var sergeant_attacks := float(mini(int(profile.get("sergeant_attacks", 0)), int(attacks)))
+	if sergeant_attacks > 0.0:
+		hits += sergeant_attacks * SIX_P
 	# — Rending / Destructive (wave 4): the expected unmodified-6 hits save at AP(+4); NOT Blast-multiplied
 	#   (matches the resolution's rending_ap_hits cap convention). Same AP(+4) math for both rules —
 	var six_hits: float = attacks * SIX_P if (bool(profile.get("rending", false)) or bool(profile.get("destructive", false))) else 0.0
@@ -143,9 +176,10 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	if blast > 1:
 		hits *= float(clampi(blast, 1, maxi(int(def_ctx.get("models", 1)), 1)))
 	six_hits = minf(six_hits, hits)
-	# — Saves: Shielded then Cover (shooting only; Blast ignores cover, not Shielded) then AP —
+	# — Saves: Shielded then Cover (shooting only; Blast AND Indirect ignore cover — wave 5 — not
+	#   Shielded) then AP —
 	var defense := AiCombatMath.shielded_defense(int(def_ctx.get("defense", 4)), bool(def_ctx.get("shielded", false)))
-	if not melee and blast <= 1:
+	if not melee and blast <= 1 and not bool(profile.get("indirect", false)):
 		defense = AiCombatMath.covered_defense(defense, bool(def_ctx.get("in_cover", false)))
 	var ap := int(profile.get("ap", 0))
 	var bane := bool(profile.get("bane", false))
@@ -155,6 +189,10 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	var deadly := int(profile.get("deadly", 0))
 	if deadly > 0:
 		unsaved *= float(AiCombatMath.deadly_multiplier(deadly, maxi(int(def_ctx.get("tough", 1)), 1)))
+	# — Shred (wave 5): every save die (one per hit) that lands a natural 1 deals +1 wound — expected
+	#   +hits/6, NOT Deadly-multiplied (mirrors the dice path's save-step reading) —
+	if bool(profile.get("shred", false)):
+		unsaved += hits * SIX_P
 	# — Regeneration family (5+ Regeneration / 6+ Self-Repair ignores; only Bane/Rending bypass it — the
 	#   _solo_ignores_regen rule. Destructive does NOT bypass, so its wounds are reduced here too) —
 	if bool(def_ctx.get("regeneration", false)) and not (bane or bool(profile.get("rending", false))):
@@ -230,6 +268,10 @@ static func charge_score(our_profiles: Array, us: Dictionary, their_profiles: Ar
 	dealt *= clampf(1.0 - counter_first / pool, 0.0, 1.0)
 	var taken := melee_ev(their_profiles, them, us, false)
 	var risk_weight: float = 0.5 if bool(us.get("fearless", false)) else 1.0
+	# Banner (wave 5): +1 to morale test rolls shaves 1/6 off the chance a failed test sticks, so the
+	# wounds-taken weight relaxes by morale_bonus/6 — an advisory heuristic, tie-breaks only (the same
+	# discipline as the Fearless half-weight above).
+	risk_weight *= maxf(0.0, 1.0 - float(int(us.get("morale_bonus", 0))) * SIX_P)
 	return dealt - taken * risk_weight
 
 

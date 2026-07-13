@@ -86,6 +86,10 @@ var last_flow_order: Array = []
 ## Move budget (inches) actually granted to the last AI move (band, difficult-capped when the route
 ## entered difficult terrain) — the denominator of the corridor's distance label.
 var last_move_budget_in: float = 0.0
+## Limited weapons already fired this game (wave 5, core v3.5.1: "may only be used once per game").
+## Key: "<unit_id>::<weapon name>" (limited_key). Tracked for EVERY unit — AI and human — since both
+## resolve through the shared profile paths; lives with the controller (one game = one controller).
+var limited_used: Dictionary = {}
 ## Structured AI decision records (the developer-mode lane + the foundation for future introspection-
 ## driven AI). Each record is a typed Dictionary built AT DECISION TIME — cheap fields only, no string
 ## formatting (rendering happens in render_decision, and only when the dev toggle is on):
@@ -357,9 +361,11 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 	var why := "official: nearest, not-activated first"
 	var chosen: Dictionary = tied[0]
 	if tied.size() > 1:
-		# A genuine tie: rank by EV (utility instead of the rules' die roll — hybrid policy).
+		# A genuine tie: rank by EV (utility instead of the rules' die roll — hybrid policy). Wave 5:
+		# expended Limited profiles are filtered out and the Sergeant facet is stamped on BOTH sides,
+		# so the score sees the same weapon state the dice would roll.
 		var our_weapons := _unit_weapons(ai_unit)
-		var our_melee := AiShooting.melee_profiles(our_weapons)
+		var our_melee := AiEv.stamp_sergeant(filter_limited(ai_unit, AiShooting.melee_profiles(our_weapons)), ai_unit)
 		var us := AiEv.ctx_for(ai_unit, majority_in_cover(ai_unit), counter_models_of(ai_unit))
 		for t in tied:
 			var td := t as Dictionary
@@ -368,9 +374,11 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 			# woods/ruins is worth less to shoot — the EV must see it, not a hardcoded false.
 			var them := AiEv.ctx_for(hu, majority_in_cover(hu), counter_models_of(hu))
 			if our_melee.is_empty():
-				td["ev"] = AiEv.shoot_ev(AiShooting.profiles_in_range(our_weapons, 0.0), us, them, float(td["d"]))
+				td["ev"] = AiEv.shoot_ev(AiEv.stamp_sergeant(
+					filter_limited(ai_unit, AiShooting.profiles_in_range(our_weapons, 0.0)), ai_unit), us, them, float(td["d"]))
 			else:
-				td["ev"] = AiEv.charge_score(our_melee, us, AiShooting.melee_profiles(_unit_weapons(hu)), them)
+				td["ev"] = AiEv.charge_score(our_melee, us,
+					AiEv.stamp_sergeant(filter_limited(hu, AiShooting.melee_profiles(_unit_weapons(hu))), hu), them)
 		var diff := active_difficulty()
 		if diff == null:
 			# DEFAULT AI (and human-vs-AI): the sharp pick — the earliest maximum-EV tied target. Byte-identical.
@@ -497,6 +505,13 @@ func _act(unit: GameUnit) -> Dictionary:
 	var bands: Dictionary = move_bands_for_unit(unit, movement_range)
 	var advance := float(bands.get("advance", 6))
 	var rush := float(bands.get("rush", 12))
+	# Musician (wave 5, system-scoped via RulesRegistry — the full games grant the bearer's unit +1" on
+	# move actions; GFF/AoFS scope it to the bearer + up to 3 picked units, of which the automation
+	# applies the bearer facet): +1" on every move band (Advance AND Rush/Charge are move actions).
+	var musician_in := musician_move_bonus_in(unit)
+	if musician_in > 0.0:
+		advance += musician_in
+		rush += musician_in
 	var centre := unit_centre(unit)
 	var tcentre := unit_centre(target_unit)
 	var enemy_dist := MoveIntent.distance_inches(centre, tcentre)
@@ -536,11 +551,13 @@ func _act(unit: GameUnit) -> Dictionary:
 	var action: int = int(dec["action"])
 	var do_shoot: bool = bool(dec["shoot"])
 	var action_why := "decision tree"
-	# Relentless overlay (Solo & Co-Op Rules v3.5.0 p.2): a Relentless ranged weapon in range → Hold and shoot.
-	if _forces_hold_and_shoot(weapons, shoot_range > 0 and enemy_dist <= float(shoot_range)):
+	# Relentless / Indirect overlay (Solo & Co-Op AI overlays; Indirect is wave 5): a Relentless or
+	# Indirect ranged weapon with an enemy in range → Hold and shoot. The record names the trigger.
+	var hold_rule := hold_and_shoot_rule(weapons, shoot_range > 0 and enemy_dist <= float(shoot_range))
+	if not hold_rule.is_empty():
 		action = AiDecision.Action.HOLD
 		do_shoot = true
-		action_why = "Relentless hold-and-shoot overlay"
+		action_why = "%s hold-and-shoot overlay" % hold_rule
 	# Immobile / Artillery (GF/AoF v3.5.1 p.13): "may only use Hold actions" — the tree's move is overridden
 	# to HOLD unconditionally; the unit still shoots when a target is in range (Artillery solo overlay p.57:
 	# "If they are in range of enemies, they always use Hold and shoot"; can_shoot re-gates on range + LOS).
@@ -548,13 +565,16 @@ func _act(unit: GameUnit) -> Dictionary:
 		action = AiDecision.Action.HOLD
 		do_shoot = shoot_range > 0
 		action_why = "Immobile/Artillery hold-only"
+	var action_data := {"arch": archetype, "objective": bool(ctx["objective"]), "in_way": bool(ctx["in_way"]),
+		"enemy_in_charge": bool(ctx["enemy_in_charge"]), "shoot_after_advance": bool(ctx["shoot_after_advance"]),
+		"enemy_dist_in": enemy_dist, "charge_gap_in": charge_gap, "obj_dist_in": obj_dist,
+		"toward_objective": int(dec["toward"]) == AiDecision.Toward.OBJECTIVE}
+	if musician_in > 0.0:
+		# Dev-mode visibility (wave 5): the Musician bonus changed this unit's move reach.
+		action_data["musician_bonus_in"] = musician_in
 	record_decision({"kind": "action", "unit": unit.get_name(),
 		"rule": "Solo v3.5.0 decision tree (archetype branch; EV fills the p.1 'better than')",
-		"candidates": [], "chosen": AiDecision.action_name(action), "why": action_why,
-		"data": {"arch": archetype, "objective": bool(ctx["objective"]), "in_way": bool(ctx["in_way"]),
-			"enemy_in_charge": bool(ctx["enemy_in_charge"]), "shoot_after_advance": bool(ctx["shoot_after_advance"]),
-			"enemy_dist_in": enemy_dist, "charge_gap_in": charge_gap, "obj_dist_in": obj_dist,
-			"toward_objective": int(dec["toward"]) == AiDecision.Toward.OBJECTIVE}})
+		"candidates": [], "chosen": AiDecision.action_name(action), "why": action_why, "data": action_data})
 	report["action"] = action
 	report["shoot"] = do_shoot
 	report["toward"] = int(dec["toward"])
@@ -595,10 +615,14 @@ func _act(unit: GameUnit) -> Dictionary:
 				"why": ("toward objective" if to_obj else "toward enemy"),
 				"data": {"obj_gap_after_in": obj_gap_after, "toward_objective": to_obj,
 					"in_seize_range": obj_gap_after <= OBJECTIVE_CONTROL_IN}})
-	# Shooting eligibility is measured AFTER the move; only actions the tree marked shoot=true actually fire.
+	# Shooting eligibility is measured AFTER the move; only actions the tree marked shoot=true actually
+	# fire. Indirect (wave 5) may target enemies out of line of sight, so an Indirect ranged weapon
+	# waives the LOS gate here (the volley's per-model sighting then counts range-only for it).
 	var d2 := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target_unit))
 	report["dist_in"] = d2
-	report["can_shoot"] = do_shoot and shoot_range > 0 and d2 <= float(shoot_range) and _has_los(unit, target_unit)
+	report["moved"] = action != AiDecision.Action.HOLD   # Indirect's -1 to hit fires when shooting after moving
+	report["can_shoot"] = do_shoot and shoot_range > 0 and d2 <= float(shoot_range) \
+		and (_has_los(unit, target_unit) or has_indirect_ranged(weapons))
 	return report
 
 
@@ -974,10 +998,22 @@ static func move_bands_for_unit(unit: GameUnit, mrc: MovementRangeController) ->
 ## "Royal Legion" (Mummified Undead; official Army Forge text: "This model gets +4" range when shooting and
 ## moves +2" when using Charge actions." — the +2" Charge flows through move_bands_for_props). Applied to
 ## the AI's shoot decision + reach AND the human's target validity/preview, so both directions honour it.
-## Static + pure (unit-testable).
+## Static + pure (unit-testable). Wave 5: the inch value is DATA (RulesRegistry "Royal Legion"
+## .range_bonus_in for the unit's system/faction); this constant is the byte-identical fallback.
 const ROYAL_LEGION_RANGE_BONUS_IN := 4
 static func shooting_range_bonus(unit: GameUnit) -> int:
-	return ROYAL_LEGION_RANGE_BONUS_IN if unit != null and unit.has_special_rule("Royal Legion") else 0
+	if unit == null or not unit.has_special_rule("Royal Legion"):
+		return 0
+	return int(RulesRegistry.unit_param(unit, "Royal Legion", "range_bonus_in", ROYAL_LEGION_RANGE_BONUS_IN))
+
+
+## Musician move-action bonus (inches) for a unit (wave 5, system-scoped): +1" on move actions when the
+## unit carries Musician AND its book fields the rule (RulesRegistry gate — the GFF/AoFS picked-units
+## variant still grants the bearer's own move; the pick facet is manual). 0.0 otherwise.
+static func musician_move_bonus_in(unit: GameUnit) -> float:
+	if unit == null or not RulesRegistry.unit_rule_active(unit, "Musician"):
+		return 0.0
+	return float(RulesRegistry.unit_param(unit, "Musician", "move_bonus_in", AiCombatMath.MUSICIAN_MOVE_BONUS_IN))
 
 
 ## Line of sight between two units via the injected checker (main wires terrain LOS); no checker = clear.
@@ -1672,18 +1708,42 @@ static func _seg_dist(a: Vector2, b: Vector2, p: Vector2) -> float:
 	return p.distance_to(a + ab * t)
 
 
-## Relentless "Hold and shoot" overlay (Solo & Co-Op Rules v3.5.0 p.2): a ranged weapon with Relentless and
-## an enemy in range forces a Hold-and-shoot activation instead of manoeuvring.
-static func _forces_hold_and_shoot(weapons: Array, enemy_in_range: bool) -> bool:
+## Relentless / Indirect "Hold and shoot" overlay (Solo & Co-Op AI overlays: an AI unit whose Relentless —
+## or, wave 5, Indirect — ranged weapon has an enemy in range always uses Hold and shoots instead of
+## manoeuvring). Returns the triggering rule name ("" when none) so the decision record names WHICH rule
+## overrode the tree.
+static func hold_and_shoot_rule(weapons: Array, enemy_in_range: bool) -> String:
 	if not enemy_in_range:
-		return false
+		return ""
 	for w in weapons:
 		var rng_in: int = int((w as Object).range_value) if (w is Object and (w as Object).get("range_value") != null) else 0
 		if rng_in <= 0:
 			continue
 		var rules: Array = (w as Object).special_rules if (w is Object and (w as Object).get("special_rules") != null) else []
 		for r in rules:
-			if str(r).strip_edges().begins_with("Relentless"):
+			var s := str(r).strip_edges()
+			if s.begins_with("Relentless"):
+				return "Relentless"
+			if s.begins_with("Indirect"):
+				return "Indirect"
+	return ""
+
+
+## Boolean form of hold_and_shoot_rule (the pre-wave-5 predicate, kept for the tests/callers).
+static func _forces_hold_and_shoot(weapons: Array, enemy_in_range: bool) -> bool:
+	return not hold_and_shoot_rule(weapons, enemy_in_range).is_empty()
+
+
+## Whether any RANGED weapon carries Indirect (wave 5: "may target enemies that are not in line of
+## sight") — the LOS waiver for the post-move can_shoot gate. Accepts OPRWeapon objects.
+static func has_indirect_ranged(weapons: Array) -> bool:
+	for w in weapons:
+		var rng_in: int = int((w as Object).range_value) if (w is Object and (w as Object).get("range_value") != null) else 0
+		if rng_in <= 0:
+			continue
+		var rules: Array = (w as Object).special_rules if (w is Object and (w as Object).get("special_rules") != null) else []
+		for r in rules:
+			if str(r).strip_edges().begins_with("Indirect"):
 				return true
 	return false
 
@@ -1831,6 +1891,40 @@ static func classify_rule_inventory(rule_names: Array, modeled: Array, decision_
 				decision[name] = int(decision.get(name, 0)) + 1
 				break
 	return {"resolved": resolved, "decision": decision, "unknown": unknown}
+
+
+## The expenditure key of a Limited weapon profile for a unit (wave 5): unit identity + weapon name —
+## a unit's Limited weapon fires once per GAME, whatever target it picked.
+static func limited_key(unit: GameUnit, profile: Dictionary) -> String:
+	return "%s::%s" % [unit.unit_id if unit != null else "?", str(profile.get("name", "?"))]
+
+
+## Whether this unit's Limited profile is already spent.
+func is_limited_used(unit: GameUnit, profile: Dictionary) -> bool:
+	return limited_used.has(limited_key(unit, profile))
+
+
+## Mark a Limited profile spent (called after its dice actually rolled) + a dev-mode decision record —
+## the once-per-game state is a DECISION input (an expended weapon stops shaping targeting/EV).
+func mark_limited_used(unit: GameUnit, profile: Dictionary) -> void:
+	limited_used[limited_key(unit, profile)] = true
+	record_decision({"kind": "action", "unit": unit.get_name() if unit != null else "?",
+		"rule": "Limited (core v3.5.1): may only be used once per game",
+		"candidates": [], "chosen": str(profile.get("name", "?")), "why": "limited weapon expended",
+		"data": {"weapon": str(profile.get("name", "?"))}})
+
+
+## Drop the Limited profiles a unit has already fired (wave 5) — the shared pre-filter of BOTH the dice
+## resolution and the EV metric, so an expended weapon neither rolls nor sways targeting. Non-Limited
+## profiles pass through untouched; with no expenditure this is the identity (byte-identical seam).
+func filter_limited(unit: GameUnit, profiles: Array) -> Array:
+	var out: Array = []
+	for p in profiles:
+		var profile := p as Dictionary
+		if bool(profile.get("limited", false)) and is_limited_used(unit, profile):
+			continue
+		out.append(p)
+	return out
 
 
 ## OPR "Determine Attacks" (mirrors SoloSim._effective_attacks): only living models' weapons count, so scale

@@ -63,6 +63,13 @@ static func _profile(w: Variant, attacks: int, range_in: int) -> Dictionary:
 		# "On unmodified results of 6 to hit, those hits get AP(+4)."). Identical to Rending's AP(+4) facet
 		# but WITHOUT Rending's Regeneration-bypass — so Destructive wounds stay Regeneration-able.
 		"destructive": _has_rule(w, "Destructive"),
+		# Wave-5 weapon rules (parameter knobs live in the RulesRegistry mechanics maps; these facets
+		# are the raw "the weapon carries it" flags): Shred (unmodified Defense 1 → +1 wound), Indirect
+		# (-1 to hit when shooting after moving; ignores LOS + cover from sight obstructions; solo
+		# overlay: hold & shoot), Limited (once per game — SoloController tracks the expenditure).
+		"shred": _has_rule(w, "Shred"),
+		"indirect": _has_rule(w, "Indirect"),
+		"limited": _has_rule(w, "Limited"),
 		"range": range_in,
 		"rules": _rules_of(w),
 	}

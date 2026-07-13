@@ -163,3 +163,89 @@ func test_self_repair_regen_target_is_six_and_devalues_shooting() -> void:
 	var rg_ev := AiEv.profile_ev(_rprof(), ATT, regen5, 12.0, false)
 	assert_bool(sr_ev < plain_ev).is_true()      # 6+ ignore reduces wounds
 	assert_bool(sr_ev > rg_ev).is_true()          # but less reduction than a 5+ regen
+
+
+# === Wave-5: the new primitives flow through the EV (the AI VALUES them) ===
+
+func test_shred_raises_ev_by_hits_over_six() -> void:
+	# Shred: every save die (one per hit) that rolls a natural 1 deals +1 wound → expected +hits/6,
+	# not Deadly-multiplied (mirrors the dice path's save-step reading).
+	var base: float = AiEv.profile_ev(_rprof(), ATT, DEF_PLAIN, 12.0, false)
+	var shred: float = AiEv.profile_ev(_rprof({"shred": true}), ATT, DEF_PLAIN, 12.0, false)
+	# 10 attacks at 4+ → 5 expected hits → +5/6 expected shred wounds.
+	assert_float(shred).is_equal_approx(base + 5.0 / 6.0, 0.0001)
+
+
+func test_indirect_ignores_cover_in_the_ev() -> void:
+	# Indirect ignores cover from sight obstructions: a covered target scores like an open one.
+	var covered := {"defense": 4, "tough": 1, "models": 5, "in_cover": true}
+	var w := _rprof({"indirect": true})
+	assert_float(AiEv.profile_ev(w, ATT, covered, 12.0, false)).is_equal_approx(
+		AiEv.profile_ev(w, ATT, DEF_PLAIN, 12.0, false), 0.0001)
+	# A non-Indirect weapon still pays the cover tax (control).
+	assert_bool(AiEv.profile_ev(_rprof(), ATT, covered, 12.0, false) <
+		AiEv.profile_ev(_rprof(), ATT, DEF_PLAIN, 12.0, false)).is_true()
+
+
+func test_sergeant_attacks_add_expected_bonus_hits() -> void:
+	# The stamped bearer share adds share/6 expected hits, which then save normally.
+	var base: float = AiEv.profile_ev(_rprof(), ATT, DEF_PLAIN, 12.0, false)
+	var with_sgt: float = AiEv.profile_ev(_rprof({"sergeant_attacks": 2}), ATT, DEF_PLAIN, 12.0, false)
+	# +2/6 expected hits × 1/2 unsaved = +1/6 expected wounds.
+	assert_float(with_sgt).is_equal_approx(base + 2.0 / 6.0 * 0.5, 0.0001)
+
+
+func test_banner_morale_bonus_relaxes_charge_risk() -> void:
+	# Banner's +1 morale shaves 1/6 off the wounds-taken risk weight (advisory, tie-breaks only) —
+	# a Banner unit scores a contested charge higher than the same unit without it.
+	var our_melee := [_mprof({"attacks": 6})]
+	var their_melee := [_mprof({"attacks": 6})]
+	var us := {"quality": 4, "models": 5, "defense": 4, "tough": 1}
+	var us_banner := {"quality": 4, "models": 5, "defense": 4, "tough": 1, "morale_bonus": 1}
+	var them := {"defense": 4, "tough": 1, "models": 5, "quality": 4}
+	assert_bool(AiEv.charge_score(our_melee, us_banner, their_melee, them) >
+		AiEv.charge_score(our_melee, us, their_melee, them)).is_true()
+
+
+func test_stamp_sergeant_marks_one_profile_with_the_bearers_share() -> void:
+	# A 5-model unit with Sergeant (core rule — active in the default system): the FIRST profile with
+	# attacks carries the bearer's per-model share (10 attacks / 5 models = 2); the second stays clean.
+	var u := GameUnit.new()
+	u.unit_id = "sgt1"
+	u.unit_properties = {"player_id": 2, "name": "S", "quality": 4, "defense": 4,
+		"special_rules": ["Sergeant"]}
+	for i in range(5):
+		var m := ModelInstance.new()
+		m.is_alive = true
+		u.models.append(m)
+	var profiles := [_rprof({"attacks": 10}), _rprof({"attacks": 4, "name": "Pistol"})]
+	AiEv.stamp_sergeant(profiles, u)
+	assert_int(int((profiles[0] as Dictionary).get("sergeant_attacks", 0))).is_equal(2)
+	assert_int(int((profiles[1] as Dictionary).get("sergeant_attacks", 0))).is_equal(0)
+	# No Sergeant rule → nothing stamped.
+	var plain_unit := GameUnit.new()
+	plain_unit.unit_id = "sgt2"
+	plain_unit.unit_properties = {"player_id": 2, "name": "P", "quality": 4, "defense": 4, "special_rules": []}
+	var clean := [_rprof({"attacks": 10})]
+	AiEv.stamp_sergeant(clean, plain_unit)
+	assert_int(int((clean[0] as Dictionary).get("sergeant_attacks", 0))).is_equal(0)
+
+
+func test_ctx_for_applies_armor_counts_as_defense() -> void:
+	# Armor(4) on a Defense-5 unit: the EV context sees Defense 4 (the same armored_defense the dice
+	# path uses — one seam). Without Armor the printed value stays.
+	var u := GameUnit.new()
+	u.unit_id = "arm1"
+	u.unit_properties = {"player_id": 2, "name": "A", "quality": 4, "defense": 5,
+		"special_rules": ["Armor(4)", "Tough(3)"]}
+	var m := ModelInstance.new()
+	m.is_alive = true
+	u.models.append(m)
+	assert_int(int(AiEv.ctx_for(u)["defense"])).is_equal(4)
+	var plain := GameUnit.new()
+	plain.unit_id = "arm2"
+	plain.unit_properties = {"player_id": 2, "name": "B", "quality": 4, "defense": 5, "special_rules": []}
+	var m2 := ModelInstance.new()
+	m2.is_alive = true
+	plain.models.append(m2)
+	assert_int(int(AiEv.ctx_for(plain)["defense"])).is_equal(5)
