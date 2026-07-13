@@ -344,3 +344,72 @@ func test_shorten_to_coherent_no_op_when_already_coherent() -> void:
 	var out := MovementPlanner.shorten_to_coherent(start, planned)
 	assert_float((out[0] as Vector2).distance_to(planned[0])).is_less(0.001)
 	assert_float((out[1] as Vector2).distance_to(planned[1])).is_less(0.001)
+
+
+# === Unified pipeline: C-space inflation + Theta*/funnel + the unified constraint solver ======
+# (the pathfinding-research rewrite; real-game path, gated on opts["radii"])
+
+func test_cspace_theta_star_routes_clear_of_an_inflated_wall() -> void:
+	# Configuration-space inflation (research §1.6): a vertical wall the straight line would cross. With
+	# base-radius clearance the any-angle route + string-pull rounds the wall END no closer than the base
+	# radius — so a POINT that clears the inflated wall clears the REAL wall by >= radius (no shaving/snag).
+	var walls := [[Vector2(20, 14), Vector2(20, 26)]]
+	var opts := {"clearance": 1.0}
+	var route := MovementPlanner.theta_star(Vector2(16, 20), Vector2(24, 20), walls, {}, 48.0, opts)
+	var taut := MovementPlanner.string_pull(route, walls, {}, opts)
+	assert_int(taut.size()).is_greater(2)   # it bent AROUND the wall (not a straight shot through it)
+	var wa := Vector2(20, 14)
+	var wb := Vector2(20, 26)
+	for i in range(1, taut.size()):
+		# every taut leg keeps the base radius clear of the real wall (the c-space guarantee, by construction)
+		assert_float(MovementPlanner.seg_seg_distance(taut[i - 1], taut[i], wa, wb)).is_greater_equal(1.0 - 0.1)
+	# and no leg actually crosses the wall
+	for i in range(1, taut.size()):
+		assert_bool(MovementPlanner.path_crosses_wall(taut[i - 1], taut[i], walls)).is_false()
+
+
+func test_theta_star_funnel_taut_path_routes_around_terrain_within_band() -> void:
+	# Theta* + funnel (research §1.2/1.3): an impassable container cell squarely on the direct line. The
+	# any-angle route + string-pull must go AROUND it (never through), taut, within the movement band.
+	var grid := {Vector2i(7, 6): TerrainRules.TerrainType.CONTAINER}   # cell covers x[21,24), y[18,21)
+	var start := Vector2(22.5, 16.0)
+	var goal := Vector2(22.5, 23.0)
+	var route := MovementPlanner.theta_star(start, goal, [], grid, 48.0, {})
+	var taut := MovementPlanner.string_pull(route, [], grid, {})
+	assert_int(taut.size()).is_greater(2)                          # detoured (not the blocked straight line)
+	for i in range(1, taut.size()):
+		assert_bool(TerrainRules.path_crosses(grid, taut[i - 1], taut[i], TerrainRules.PathCheck.IMPASSABLE)).is_false()
+	assert_float((taut[0] as Vector2).distance_to(start)).is_less(0.001)
+	assert_float((taut.back() as Vector2).distance_to(goal)).is_less(0.001)
+	assert_float(MovementPlanner.polyline_length(taut)).is_less(12.0)   # taut, well within a 12" rush band
+
+
+func test_unified_solver_resolves_overlap_coherency_and_terrain_together() -> void:
+	# The hard cluster the OLD passes could not solve without a trade (nightloop evidence): three overlapping
+	# bases ALL sitting in one forbidden (no-rest) cell. The unified solver must end with NO base overlap AND
+	# unit coherency AND no model resting in forbidden terrain — all three simultaneously.
+	var forbid := {Vector2i(20, 20): true}   # the 1" cell x[20,21), y[20,21)
+	var desired: Array = [Vector2(20.4, 20.0), Vector2(20.8, 20.0), Vector2(20.0, 20.0)]   # overlap + all in cell
+	var radii: Array = [0.5, 0.5, 0.5]
+	var opts := {"radii": radii, "forbid_cells": forbid}
+	var out := MovementPlanner.solve_formation(desired, radii, [], opts, 48.0, false)
+	for i in range(out.size()):
+		for j in range(i + 1, out.size()):
+			assert_float((out[i] as Vector2).distance_to(out[j])).is_greater_equal(radii[i] + radii[j] - 0.05)
+	assert_bool(MovementPlanner.is_coherent(out)).is_true()
+	for p in out:
+		assert_bool(forbid.has(TerrainRules.cell_of(p as Vector2, MovementPlanner.PLAN_CELL_IN))).is_false()
+
+
+func test_collinear_pin_escapes_via_cspace_inflation() -> void:
+	# The collinear-pin degenerate (research §3.2): two wall ends leave a 1" gap straight ahead — narrower
+	# than the base DIAMETER (2 × 0.85"). A point planner threads it and freezes; c-space inflation merges the
+	# gap so the model advances to the barrier and STOPS CLEANLY (never stalls), without crossing the wall.
+	var walls := [[Vector2(10, 20), Vector2(19.5, 20)], [Vector2(20.5, 20), Vector2(30, 20)]]
+	var opts := {"radii": [0.75], "clearance": 0.85}
+	var trails: Array = []
+	var out := MovementPlanner.plan_unit_step([Vector2(20, 24)], Vector2(0, -8), walls, {}, false, 48.0, trails, opts)
+	var final: Vector2 = out[0]
+	assert_float(Vector2(20, 24).distance_to(final)).is_greater(1.0)   # it advanced (did NOT freeze in place)
+	assert_float(final.y).is_greater(20.0)                             # stopped on the near side of the wall
+	assert_bool(MovementPlanner.path_crosses_wall(Vector2(20, 24), final, walls)).is_false()

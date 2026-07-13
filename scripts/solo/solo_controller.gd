@@ -712,6 +712,46 @@ func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool, avoi
 	return {"grid": grid, "avoid": avoid}
 
 
+## Fine (MovementPlanner.PLAN_CELL_IN, ~1") set of cells NO model may REST in — CONTAINER/RUINS (the
+## self-play geometry audit's "impassable" class) and DANGEROUS — sampled from the REAL overlay only over the
+## move's local AABB (start + target + margin) so it stays cheap, in the planner's 0-origin inch frame. The
+## unified solver projects any model resting in one of these cells back out (GF/AoF v3.5.1 p.7 movement).
+## Keyed by TerrainRules.cell_of(centre, PLAN_CELL_IN) so it matches the solver's lookup exactly. Empty when
+## no terrain provider is wired (headless unit tests).
+func _forbid_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Vector2, own_r_m: float) -> Dictionary:
+	var forbid := {}
+	if not terrain_type_at.is_valid() or mpos.is_empty():
+		return forbid
+	var lo := Vector2(INF, INF)
+	var hi := Vector2(-INF, -INF)
+	for p in mpos:
+		var v := p as Vector2
+		for q in [v, v + mdelta]:
+			var w := q as Vector2
+			lo.x = minf(lo.x, w.x)
+			lo.y = minf(lo.y, w.y)
+			hi.x = maxf(hi.x, w.x)
+			hi.y = maxf(hi.y, w.y)
+	var margin: float = own_r_m / INCHES_TO_METERS + TerrainRules.CELL_IN   # base radius + one coarse cell
+	lo -= Vector2(margin, margin)
+	hi += Vector2(margin, margin)
+	var cell: float = MovementPlanner.PLAN_CELL_IN
+	var n := maxi(1, int(ceil(board_in / cell)))
+	var cx0 := clampi(int(floor(lo.x / cell)), 0, n - 1)
+	var cx1 := clampi(int(floor(hi.x / cell)), 0, n - 1)
+	var cy0 := clampi(int(floor(lo.y / cell)), 0, n - 1)
+	var cy1 := clampi(int(floor(hi.y / cell)), 0, n - 1)
+	for cy in range(cy0, cy1 + 1):
+		for cx in range(cx0, cx1 + 1):
+			var centre_in := Vector2((float(cx) + 0.5) * cell, (float(cy) + 0.5) * cell)
+			var world := centre_in * INCHES_TO_METERS - off
+			var t: int = int(terrain_type_at.call(Vector3(world.x, 0.0, world.y)))
+			if t == TerrainRules.TerrainType.CONTAINER or t == TerrainRules.TerrainType.RUINS \
+					or t == TerrainRules.TerrainType.DANGEROUS:
+				forbid[Vector2i(cx, cy)] = true
+	return forbid
+
+
 ## The models an AI move displaces: the unit's own alive models PLUS its attached heroes' (one unit,
 ## one move — coherency). Filtered to models with a live node so the list aligns 1:1 with the
 ## position arrays the planner produces (no index drift on a freed node).
@@ -844,25 +884,24 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 		opts["zones"] = zones_in
 	var sampled := _terrain_grid_in(board_in, off, avoid_difficult, avoid_dangerous)
 	opts["avoid_cells"] = sampled["avoid"]
-	if not MovementPlanner.rigid_blocked(mpos, mdelta, walls_in, opts):
-		_fill_straight_trails(world_trails, positions, rigid)
-		return rigid
-	var plan_trails: Array = []
-	var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, sampled["grid"],
-		allow_contact, board_in, plan_trails, opts)
-	# FINAL formation guarantees on the inch-frame result (real-game path only — SoloSim never calls this,
-	# so its mirror-fairness proof is untouched). First the move ENDS in coherency (field-test finding 4,
-	# GF/AoF v3.5.1 p.7): a non-charge move that fell out of the 1"/9" chain is shortened back toward the
-	# (coherent) start just enough to restore it — a Charge is exempt, it must reach base contact. Then no
-	# two of the unit's OWN bases overlap (field-test finding 6, p.7 "may never move through other models …
-	# friendly or enemy"): overlapping pairs are pushed apart, wall/zone-checked. Coherency first so the
-	# tiny anti-overlap nudge (≤ base radius, well under the 1" link) is the last word and can't be undone.
-	if not allow_contact:
-		planned = MovementPlanner.shorten_to_coherent(mpos, planned)
+	# Unified-solver inputs (real-game path only): the presence of "radii" selects the C-space / Theta* /
+	# funnel + unified-constraint-solver pipeline inside plan_unit_step. SoloSim never sets it, so its
+	# steer+A* path and the mirror-fairness oracle stay byte-identical. radii = per-model base radius (inches)
+	# for the anti-overlap constraint; forbid_cells = the fine (1") no-rest terrain set (Impassable +
+	# Dangerous) the solver keeps every model out of. Every move runs the solver (no rigid fast-return here)
+	# so even a straight slide can never park a model inside forbidden terrain.
 	var radii_in: Array = []
 	for m in models:
 		radii_in.append(model_base_radius_m(m as ModelInstance) / INCHES_TO_METERS)
-	planned = MovementPlanner.separate_overlaps(planned, radii_in, walls_in, opts)
+	opts["radii"] = radii_in
+	opts["forbid_cells"] = _forbid_cells_in(mpos, mdelta, board_in, off, own_r_m)
+	var plan_trails: Array = []
+	var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, sampled["grid"],
+		allow_contact, board_in, plan_trails, opts)
+	# The FINAL formation guarantees (coherency ending, GF/AoF v3.5.1 p.7 finding 4; no intra-unit base
+	# overlap, p.7 finding 6) plus unit-spacing and terrain-avoidance are now resolved TOGETHER by the unified
+	# solver inside plan_unit_step (solve_formation) — no more competing shorten-then-separate passes that
+	# traded one constraint for another (self-play nightloop evidence).
 	var out: Array = []
 	if world_trails != null:
 		world_trails.clear()

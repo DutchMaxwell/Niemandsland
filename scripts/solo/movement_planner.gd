@@ -43,6 +43,31 @@ const GATHER_PASSES := 16                    # a fully-parked model may need to 
 # Deflection fan for wall-sliding: straight first, then widening turns to either side (degrees).
 const SLIDE_ANGLES: Array[float] = [0.0, 20.0, -20.0, 45.0, -45.0, 70.0, -70.0, 90.0, -90.0]
 
+# === Unified formation pipeline (REAL-GAME PATH ONLY — gated on opts["radii"]) ================
+# The pathfinding-research rewrite: configuration-space inflation + any-angle Theta* + funnel/string-pull +
+# a UNIFIED constraint solver that satisfies base-separation, coherency, unit-spacing AND terrain-avoidance
+# TOGETHER (iterative projection) instead of the competing separate passes that traded one constraint for
+# another (self-play nightloop evidence). This branch runs ONLY when opts carries "radii" (the controller /
+# self-play path); SoloSim passes empty opts and keeps the legacy steer+A* path byte-identical, so the
+# mirror-fairness oracle is untouched. See docs: pathfinding_research.md §1.3/1.6/3.
+const PLAN_CELL_IN := 1.0                    # any-angle search grid (~1"): matches the smallest base + OPR 1" granularity
+const DIFFICULT_COST_MULT := 2.0            # Theta* soft cost: route AROUND Difficult when cheaper (research §1.3/3.3)
+const DANGEROUS_COST_MULT := 3.0            # Dangerous costs more than Difficult, but is still traversable (not hard-blocked)
+const THETA_DIAG := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]   # 8-connected (any-angle)
+const SOLVE_PASSES := 24                     # iterative-projection sweeps (compact AI units converge well within this)
+const TERRAIN_PUSH_MAX_IN := 6.0            # max radial search when projecting a model OUT of forbidden terrain
+const TERRAIN_PUSH_STEP_IN := 0.5           # radial search granularity for the terrain-out projection
+# Deterministic radial directions for terrain-out projection: 16 compass points, world-frame ordered so the
+# nearest-valid tie-break stays canonical (research §4 — no rotation-sign/iteration-order chirality).
+const RADIAL_DIRS := 16
+# Least-violating-fallback weights: a config the solver can't make perfect is scored so the WORST classes
+# (a model stuck in terrain, then a broken chain) are shed first — exactly the trade the nightloop rejected.
+const W_TERRAIN := 100.0
+const W_COHERENCY := 60.0
+const W_OVERLAP := 40.0
+const W_ZONE := 30.0
+
 
 # === Public geometry: wall-segment intersection =============================================
 
@@ -419,6 +444,12 @@ static func plan_unit_step(model_pos: Array, delta: Vector2, walls: Array, grid:
 	var allowance := delta.length()
 	if allowance < EPS or model_pos.is_empty():
 		return model_pos.duplicate()
+	# Real-game formation path: when opts carries per-model "radii" the caller (SoloController / self-play)
+	# wants the UNIFIED pipeline — configuration-space Theta*/funnel routing + a single constraint solver that
+	# resolves base-separation, coherency, unit-spacing and terrain-avoidance TOGETHER. SoloSim never passes
+	# radii, so its steer+A* path below (and the mirror-fairness oracle) is byte-identical.
+	if opts.has("radii"):
+		return _plan_unit_step_unified(model_pos, delta, walls, grid, allow_contact, board_in, trails, opts)
 	# Fast path: nothing in the way → the exact rigid slide (keeps open-field play identical).
 	if not rigid_blocked(model_pos, delta, walls, opts):
 		var out: Array = []
@@ -721,3 +752,545 @@ static func _reconstruct(came_from: Dictionary, current: Vector2i) -> Array:
 	for i in range(1, cells.size()):   # drop the start cell — corridor waypoints only
 		out.append(_cell_center(cells[i]))
 	return out
+
+
+# === Unified pipeline entry (opts["radii"] path) ============================================
+
+## Plan one unit move on the REAL-GAME path: a configuration-space Theta*/funnel route (walls inflated by
+## the base radius via opts.clearance, terrain soft-costed), each model walking the taut route as true arc
+## length, then ONE constraint solver that resolves base-separation, coherency, unit-spacing and terrain
+## avoidance simultaneously (solve_formation). Replaces the legacy steer-fan + separate coherency/overlap
+## passes on this path only; the sim's empty-opts path is untouched. Pure + deterministic.
+static func _plan_unit_step_unified(model_pos: Array, delta: Vector2, walls: Array, grid: Dictionary,
+		allow_contact: bool, board_in: float, trails: Array, opts: Dictionary) -> Array:
+	var allowance := delta.length()
+	var radii: Array = opts.get("radii", [])
+	var targets: Array = []
+	if not rigid_blocked(model_pos, delta, walls, opts):
+		# The straight slide clears walls / zones / avoided cells → rigid targets. The solver below still
+		# projects any model that would REST in forbidden terrain (RUINS/DANGEROUS are not routing-avoided)
+		# back out — so a "clear" slide can never park a model inside impassable/dangerous terrain.
+		for m in model_pos:
+			targets.append((m as Vector2) + delta)
+		_record_trail_pair(trails, model_pos, targets)
+	else:
+		# Plan a taut any-angle route for the unit anchor, then every model rides it at its slot offset.
+		var anchor := _centroid(model_pos)
+		var goal := anchor + delta
+		var route := theta_star(anchor, goal, walls, grid, board_in, opts)
+		var taut := string_pull(route, walls, grid, opts)
+		if trails != null:
+			trails.clear()
+		for i in range(model_pos.size()):
+			var offset := (model_pos[i] as Vector2) - anchor
+			var leg := _walk_offset(model_pos[i], taut, offset, allowance, walls, grid, opts, board_in)
+			targets.append((leg.back()) as Vector2)
+			if trails != null:
+				trails.append(leg)
+	var solved := solve_formation(targets, radii, walls, opts, board_in, allow_contact)
+	_append_trail_finals(trails, solved)
+	return solved
+
+
+# === Configuration-space visibility (research §1.6: obstacle ⊕ base-radius disc, planned as a POINT) =====
+
+## Fine-grid cell centre (Vector2i -> inch point) at PLAN_CELL_IN resolution.
+static func _cell_center_fine(cell: Vector2i) -> Vector2:
+	return Vector2((float(cell.x) + 0.5) * PLAN_CELL_IN, (float(cell.y) + 0.5) * PLAN_CELL_IN)
+
+
+## Terrain cost multiplier for routing at point `p` (research §1.3 soft cost): INF = hard block (Impassable
+## or a caller-avoided cell — the go-around set), else a >1 multiplier for Dangerous/Difficult so the search
+## routes AROUND them when cheaper yet may still enter. Uses the 3" typed grid + opts.avoid_cells.
+static func _terrain_cost_at(p: Vector2, grid: Dictionary, opts: Dictionary) -> float:
+	if grid.is_empty():
+		return 1.0
+	var cell := TerrainRules.cell_of(p, TerrainRules.CELL_IN)
+	var t: int = int(grid.get(cell, TerrainRules.TerrainType.NONE))
+	if TerrainRules.is_impassable(t):
+		return INF
+	if (opts.get("avoid_cells", {}) as Dictionary).has(cell):
+		return INF
+	if TerrainRules.is_dangerous(t):
+		return DANGEROUS_COST_MULT
+	if TerrainRules.is_difficult(t):
+		return DIFFICULT_COST_MULT
+	return 1.0
+
+
+## True if the straight segment a→b is NOT traversable in configuration space: it shaves an inflated wall,
+## crosses a no-go zone (step_blocked owns those, base-aware), or its interior touches a hard-blocked
+## terrain cell. Endpoints are excluded from the terrain sampling (the search validates nodes on expansion),
+## mirroring TerrainRules.has_line_of_sight — so a route may START in a hard cell and escape it.
+static func _cspace_blocked(a: Vector2, b: Vector2, walls: Array, grid: Dictionary, opts: Dictionary) -> bool:
+	if step_blocked(a, b, walls, opts):
+		return true
+	if grid.is_empty():
+		return false
+	var span := a.distance_to(b)
+	var steps := maxi(1, int(ceil(span / (PLAN_CELL_IN * 0.5))))
+	if steps < 2:
+		return false
+	for i in range(1, steps):
+		if is_inf(_terrain_cost_at(a.lerp(b, float(i) / float(steps)), grid, opts)):
+			return true
+	return false
+
+
+## World-frame canonical cell order (smaller x, then y) — the deterministic, reflection-covariant tie-break
+## for the search frontier (research §4: never break ties on iteration order or rotation sign).
+static func _cell_before(a: Vector2i, b: Vector2i) -> bool:
+	return a.x < b.x or (a.x == b.x and a.y < b.y)
+
+
+## World-frame canonical point order (smaller x, then y).
+static func _world_before(a: Vector2, b: Vector2) -> bool:
+	return a.x < b.x - EPS or (absf(a.x - b.x) <= EPS and a.y < b.y - EPS)
+
+
+# === Theta* — any-angle path over the inflated obstacle set (research §1.3) ==================
+
+## Any-angle shortest path from `start` to `goal` on the PLAN_CELL_IN grid, reusing the configuration-space
+## LOS (_cspace_blocked) so a node may take its parent's parent as its own parent whenever the straight line
+## is visible — yielding taut, natural legs without a polygon navmesh. Edge cost carries the terrain soft
+## multiplier (route around Difficult/Dangerous). Deterministic (world-frame tie-break). Returns the polyline
+## [start … goal] (straight [start, goal] when already visible or no route is found — the solver still fixes
+## the end state). Bounded by the board so it always terminates.
+static func theta_star(start: Vector2, goal: Vector2, walls: Array, grid: Dictionary,
+		board_in: float, opts: Dictionary) -> Array:
+	if not _cspace_blocked(start, goal, walls, grid, opts):
+		return [start, goal]
+	var start_c := TerrainRules.cell_of(start, PLAN_CELL_IN)
+	var goal_c := TerrainRules.cell_of(goal, PLAN_CELL_IN)
+	if start_c == goal_c:
+		return [start, goal]
+	var n := maxi(1, int(ceil(board_in / PLAN_CELL_IN)))
+	var g := {start_c: 0.0}
+	var parent := {start_c: start_c}
+	var pos := {start_c: start}
+	var open: Array = [start_c]
+	var open_set := {start_c: true}
+	var closed := {}
+	var guard := n * n * 4
+	while not open.is_empty() and guard > 0:
+		guard -= 1
+		var best_i := 0
+		var best_f := INF
+		for k in range(open.size()):
+			var c: Vector2i = open[k]
+			var f: float = float(g[c]) + (pos[c] as Vector2).distance_to(goal)
+			if f < best_f - EPS or (absf(f - best_f) <= EPS and _cell_before(c, open[best_i])):
+				best_f = f
+				best_i = k
+		var cur: Vector2i = open[best_i]
+		if cur == goal_c:
+			return _theta_reconstruct(parent, pos, cur)
+		open.remove_at(best_i)
+		open_set.erase(cur)
+		closed[cur] = true
+		var cur_pt: Vector2 = pos[cur]
+		for d in THETA_DIAG:
+			var nb: Vector2i = cur + d
+			if nb.x < 0 or nb.x >= n or nb.y < 0 or nb.y >= n or closed.has(nb):
+				continue
+			var nb_pt := goal if nb == goal_c else _cell_center_fine(nb)
+			if nb != goal_c and is_inf(_terrain_cost_at(nb_pt, grid, opts)):
+				continue
+			if step_blocked(cur_pt, nb_pt, walls, opts):
+				continue
+			# Any-angle: connect nb straight to cur's PARENT when that line is visible (taut), else to cur.
+			var par: Vector2i = parent[cur]
+			var use_par: bool = not _cspace_blocked(pos[par] as Vector2, nb_pt, walls, grid, opts)
+			var from_node: Vector2i = par if use_par else cur
+			var from_pt: Vector2 = pos[from_node]
+			var mult := _terrain_cost_at(nb_pt, grid, opts)
+			if is_inf(mult):
+				mult = 1.0   # the goal cell itself may be terrain — cost its entry as plain ground
+			var tentative: float = float(g[from_node]) + from_pt.distance_to(nb_pt) * mult
+			if not g.has(nb) or tentative < float(g[nb]) - EPS:
+				g[nb] = tentative
+				parent[nb] = from_node
+				pos[nb] = nb_pt
+				if not open_set.has(nb):
+					open.append(nb)
+					open_set[nb] = true
+	return [start, goal]
+
+
+## Walk the Theta* parent chain back to the start; return the world points [start … goal].
+static func _theta_reconstruct(parent: Dictionary, pos: Dictionary, goal_cell: Vector2i) -> Array:
+	var nodes: Array = [goal_cell]
+	var cur := goal_cell
+	while parent.has(cur) and parent[cur] != cur:
+		cur = parent[cur]
+		nodes.append(cur)
+	nodes.reverse()
+	var out: Array = []
+	for node in nodes:
+		out.append(pos[node])
+	return out
+
+
+# === Funnel / string-pull (research §1.2: pull the corridor taut) ===========================
+
+## Greedy string-pull: from each anchor, advance to the FARTHEST later point still visible in a straight
+## configuration-space line, dropping the vertices between — the point-path equivalent of the funnel, so the
+## already-any-angle Theta* legs collapse to their minimal taut form. Pure; returns a NEW array.
+static func string_pull(path: Array, walls: Array, grid: Dictionary, opts: Dictionary) -> Array:
+	if path.size() <= 2:
+		return path.duplicate()
+	var out: Array = [path[0]]
+	var anchor := 0
+	while anchor < path.size() - 1:
+		var farthest := anchor + 1
+		for j in range(anchor + 2, path.size()):
+			if _cspace_blocked(path[anchor] as Vector2, path[j] as Vector2, walls, grid, opts):
+				break
+			farthest = j
+		out.append(path[farthest])
+		anchor = farthest
+	return out
+
+
+## Walk one model along the anchor's taut route translated by its slot `offset`, spending `allowance` as TRUE
+## arc length (research §3.3), stopping cleanly at the first leg a wall/zone/hard-cell blocks (the offset can
+## shift a leg into an obstacle the anchor cleared) so a boxed model never stalls the unit. Returns the model
+## polyline [start … end]; the last point is its planned target.
+static func _walk_offset(start_pt: Vector2, taut: Array, offset: Vector2, allowance: float,
+		walls: Array, grid: Dictionary, opts: Dictionary, board_in: float) -> Array:
+	if taut.size() <= 1:
+		return [start_pt]
+	var out: Array = [start_pt]
+	var spent := 0.0
+	for i in range(1, taut.size()):
+		var a: Vector2 = out.back()
+		var b: Vector2 = (taut[i] as Vector2) + offset
+		b = Vector2(clampf(b.x, 0.0, board_in), clampf(b.y, 0.0, board_in))
+		var leg := a.distance_to(b)
+		if leg < EPS:
+			continue
+		if _cspace_blocked(a, b, walls, grid, opts):
+			# The offset shifted this leg into an obstacle the anchor cleared — advance to the FURTHEST clear
+			# point on the leg and stop cleanly (never stall the whole unit). For a charge this walks the model
+			# right up to the target's body-zone edge, i.e. base contact (GF/AoF v3.5.1 p.8).
+			var stop := _furthest_clear(a, b, walls, grid, opts)
+			var slen := a.distance_to(stop)
+			if slen > EPS:
+				if spent + slen <= allowance + EPS:
+					out.append(stop)
+				else:
+					var f := (allowance - spent) / slen
+					if f > EPS:
+						out.append(a.lerp(stop, f))
+			break
+		if spent + leg <= allowance + EPS:
+			out.append(b)
+			spent += leg
+		else:
+			var frac := (allowance - spent) / leg
+			if frac > EPS:
+				out.append(a.lerp(b, frac))
+			break
+	return out
+
+
+## Furthest point on a→b reachable without crossing an obstacle (a assumed clear) — bisection on the
+## configuration-space LOS, so the returned point sits just outside the blocking wall/zone/terrain boundary.
+static func _furthest_clear(a: Vector2, b: Vector2, walls: Array, grid: Dictionary, opts: Dictionary) -> Vector2:
+	if not _cspace_blocked(a, b, walls, grid, opts):
+		return b
+	var lo := 0.0
+	var hi := 1.0
+	for _i in range(COHERENCY_BISECT_STEPS):
+		var mid := (lo + hi) * 0.5
+		if _cspace_blocked(a, a.lerp(b, mid), walls, grid, opts):
+			hi = mid
+		else:
+			lo = mid
+	return a.lerp(b, lo)
+
+
+# === Unified constraint solver (research §3.3 / §1.7: project ALL constraints together) =====
+
+## Board clamp helper (shared by every projection).
+static func _board_clamp(p: Vector2, board_in: float) -> Vector2:
+	return Vector2(clampf(p.x, 0.0, board_in), clampf(p.y, 0.0, board_in))
+
+
+## Wall + no-go-zone check for a projection step p→c (hard resting constraints). Unlike step_blocked this
+## does NOT consult avoid_cells: a model may legally REST in Difficult (soft-routed, not a violation), so the
+## solver must be free to place it there when escaping a harder constraint — only walls (base-inflated) and
+## unit-spacing zones are inviolable at rest. Terrain the model may not rest in is handled separately by the
+## forbid-cell projection.
+static func _wall_zone_blocked(p: Vector2, c: Vector2, walls: Array, opts: Dictionary) -> bool:
+	var clearance: float = float(opts.get("clearance", 0.0))
+	if clearance > 0.0:
+		for w in walls:
+			if _wall_blocks(p, c, _wall_a(w), _wall_b(w), clearance):
+				return true
+	elif path_crosses_wall(p, c, walls):
+		return true
+	for z in opts.get("zones", []):
+		var zd := z as Dictionary
+		if _zone_blocks(p, c, zd.get("c", Vector2.ZERO), float(zd.get("r", 0.0))):
+			return true
+	return false
+
+
+## THE UNIFIED SOLVER. Place the unit's models to satisfy ALL formation constraints TOGETHER — no two bases
+## overlap (GF/AoF v3.5.1 p.7), unit coherency (1"/9" chain, p.7), ≥1" from every other unit (p.7 no-go
+## zones, charge target exempted body-only by the caller), and no model resting in forbidden terrain
+## (Impassable/Dangerous — self-play audit) — via iterative projection instead of the competing sequential
+## passes that traded one constraint for another (nightloop evidence). Each sweep projects every constraint
+## once; the least-violating config seen is kept, so the result is never worse than the desired formation and
+## converges to a jointly-legal placement (or the closest legal one). Charges skip terrain + coherency (they
+## must reach base contact with the target — p.7). Pure + deterministic; returns a NEW Array[Vector2].
+static func solve_formation(desired: Array, radii: Array, walls: Array,
+		opts: Dictionary, board_in: float, allow_contact: bool) -> Array:
+	var out := desired.duplicate()
+	if out.is_empty():
+		return out
+	var forbid: Dictionary = {} if allow_contact else opts.get("forbid_cells", {})
+	var zones: Array = opts.get("zones", [])
+	var best := out.duplicate()
+	var best_score := _formation_score(out, radii, forbid, zones)
+	if best_score <= EPS:
+		return out
+	for _pass in range(SOLVE_PASSES):
+		_project_out_of_zones(out, zones, walls, opts, board_in)
+		_project_separate(out, radii, walls, opts, board_in)
+		_project_out_of_terrain(out, forbid, walls, opts, board_in)
+		if not allow_contact:
+			_project_coherency(out, radii, walls, opts, board_in)
+		var s := _formation_score(out, radii, forbid, zones)
+		if s < best_score - EPS:
+			best_score = s
+			best = out.duplicate()
+		if best_score <= EPS:
+			break
+	return best
+
+
+## Weighted violation score for the least-violating fallback: a model stuck in terrain outweighs a broken
+## chain, which outweighs an overlap, which outweighs a spacing dip — so a config the solver cannot make
+## perfect sheds the WORST class first (exactly the trade the nightloop gate rejected). Zero = fully legal.
+static func _formation_score(out: Array, radii: Array, forbid: Dictionary, zones: Array) -> float:
+	var score := 0.0
+	if not forbid.is_empty():
+		for p in out:
+			if forbid.has(TerrainRules.cell_of(p as Vector2, PLAN_CELL_IN)):
+				score += W_TERRAIN
+	score += _coherency_penalty(out, radii) * W_COHERENCY
+	if radii.size() == out.size():
+		for i in range(out.size()):
+			for j in range(i + 1, out.size()):
+				var overlap: float = float(radii[i]) + float(radii[j]) - (out[i] as Vector2).distance_to(out[j])
+				if overlap > EPS:
+					score += overlap * W_OVERLAP
+	for z in zones:
+		var zd := z as Dictionary
+		var c: Vector2 = zd.get("c", Vector2.ZERO)
+		var r: float = float(zd.get("r", 0.0))
+		for p in out:
+			var pen: float = r - (p as Vector2).distance_to(c)
+			if pen > EPS:
+				score += pen * W_ZONE
+	return score
+
+
+# --- Radii-aware coherency (solver only) -----------------------------------------------------
+# The shared is_coherent / _components / _spread above fold a NOMINAL base contact (BASE_CONTACT_IN = 2")
+# into point space for the sim (which has no per-model radii). The solver DOES have the real radii, so it
+# uses CoherencyChecker's EXACT edge-to-edge measure instead: two models link when centre_gap - r_i - r_j
+# <= 1" (COHERENCY_IN), and the unit over-spreads when the widest such edge gap > 9" (MAX_CHAIN_IN). This
+# matches the self-play audit's coherency check for real 25-60 mm bases (the point-space 3"/11" thresholds
+# were ~1" too loose for small bases, leaving chains the audit still flags broken).
+
+## Edge-to-edge coherency link between two bases (CoherencyChecker._are_linked, point form).
+static func _linked_r(a: Vector2, b: Vector2, ra: float, rb: float) -> bool:
+	return a.distance_to(b) <= ra + rb + COHERENCY_IN + EPS
+
+
+## Connected components of the radii-aware 1"-link graph (indices into `out`).
+static func _components_r(out: Array, radii: Array) -> Array:
+	var n := out.size()
+	var visited: Array[bool] = []
+	visited.resize(n)
+	visited.fill(false)
+	var comps: Array = []
+	for start in range(n):
+		if visited[start]:
+			continue
+		var comp: Array = [start]
+		var queue: Array = [start]
+		visited[start] = true
+		while not queue.is_empty():
+			var cur: int = queue.pop_back()
+			for other in range(n):
+				if visited[other] or other == cur:
+					continue
+				if _linked_r(out[cur], out[other], float(radii[cur]), float(radii[other])):
+					visited[other] = true
+					queue.append(other)
+					comp.append(other)
+		comps.append(comp)
+	return comps
+
+
+## Widest edge-to-edge gap between any two models (the unit's spread, CoherencyChecker._get_max_spread_pair).
+static func _max_edge_spread_r(out: Array, radii: Array) -> float:
+	var worst := 0.0
+	for i in range(out.size()):
+		for j in range(i + 1, out.size()):
+			var edge: float = (out[i] as Vector2).distance_to(out[j]) - float(radii[i]) - float(radii[j])
+			worst = maxf(worst, edge)
+	return worst
+
+
+## Graded coherency penalty (models outside the largest link-component + any 9" edge over-spread) — a
+## gradient for the least-violating fallback. Radii-aware when radii align; else the point-space fallback.
+static func _coherency_penalty(out: Array, radii: Array = []) -> float:
+	if out.size() <= 1:
+		return 0.0
+	var use_r: bool = radii.size() == out.size()
+	var pen := 0.0
+	var comps := _components_r(out, radii) if use_r else _components(out)
+	if comps.size() > 1:
+		pen += float(out.size() - _largest(comps).size())
+	var over: float = (_max_edge_spread_r(out, radii) - MAX_CHAIN_IN) if use_r else (_spread(out) - SPREAD_IN)
+	if over > 0.0:
+		pen += over
+	return pen
+
+
+## Project each model radially out of any no-go zone it sits inside (to the zone edge), wall/zone-checked. On
+## a charge the target's body-only zone pushes the model back to base contact — the legal charge end.
+static func _project_out_of_zones(out: Array, zones: Array, walls: Array, opts: Dictionary, board_in: float) -> void:
+	if zones.is_empty():
+		return
+	for i in range(out.size()):
+		var p: Vector2 = out[i]
+		for z in zones:
+			var zd := z as Dictionary
+			var c: Vector2 = zd.get("c", Vector2.ZERO)
+			var r: float = float(zd.get("r", 0.0))
+			var d := p.distance_to(c)
+			if d >= r - EPS:
+				continue
+			var dir := p - c
+			dir = dir.normalized() if dir.length() > EPS else Vector2(1.0, 0.0)
+			var cand := _board_clamp(c + dir * (r + EPS), board_in)
+			if not _wall_zone_blocked(p, cand, walls, opts):
+				p = cand
+		out[i] = p
+
+
+## Push overlapping own-base pairs apart along their centre line (split evenly), wall/zone-checked — one
+## Gauss-Seidel sweep of the p.7 "may never move through other models … friendly or enemy" separation.
+static func _project_separate(out: Array, radii: Array, walls: Array, opts: Dictionary, board_in: float) -> void:
+	var n := out.size()
+	if n <= 1 or radii.size() != n:
+		return
+	for i in range(n):
+		for j in range(i + 1, n):
+			var pi: Vector2 = out[i]
+			var pj: Vector2 = out[j]
+			var min_gap: float = float(radii[i]) + float(radii[j])
+			var d := pi.distance_to(pj)
+			if d >= min_gap - EPS:
+				continue
+			var dir := pj - pi
+			dir = dir.normalized() if dir.length() > EPS else Vector2(1.0, 0.0)
+			var push := (min_gap - d) * 0.5 + EPS
+			var ci := _board_clamp(pi - dir * push, board_in)
+			var cj := _board_clamp(pj + dir * push, board_in)
+			if not _wall_zone_blocked(pi, ci, walls, opts):
+				out[i] = ci
+			if not _wall_zone_blocked(pj, cj, walls, opts):
+				out[j] = cj
+
+
+## Restore coherency (one sweep, radii-aware, wall/zone-checked): pull every model outside the largest
+## link-component toward its NEAREST in-component neighbour (the exact pair CoherencyChecker measures), and
+## pull the model furthest from the centroid inward when the unit over-spreads. Interleaved with the other
+## projections each pass so an overlap push can no longer permanently undo it (the nightloop trade).
+static func _project_coherency(out: Array, radii: Array, walls: Array, opts: Dictionary, board_in: float) -> void:
+	var n := out.size()
+	if n <= 1 or radii.size() != n:
+		return
+	var comps := _components_r(out, radii)
+	if comps.size() > 1:
+		var main := _largest(comps)
+		var in_main := {}
+		for idx in main:
+			in_main[idx] = true
+		for i in range(n):
+			if in_main.has(i):
+				continue
+			var nearest := -1
+			var nd := INF
+			for m in main:
+				var d: float = (out[i] as Vector2).distance_to(out[m])
+				if d < nd:
+					nd = d
+					nearest = m
+			if nearest < 0:
+				continue
+			var to_n := (out[nearest] as Vector2) - (out[i] as Vector2)
+			var dn := to_n.length()
+			if dn < EPS:
+				continue
+			var cand := _board_clamp((out[i] as Vector2) + to_n / dn * minf(COH_PULL_IN, dn), board_in)
+			if not _wall_zone_blocked(out[i], cand, walls, opts):
+				out[i] = cand
+	if _max_edge_spread_r(out, radii) > MAX_CHAIN_IN + EPS:
+		var c := _centroid(out)
+		var far := -1
+		var fd := -1.0
+		for i in range(n):
+			var d: float = (out[i] as Vector2).distance_to(c)
+			if d > fd:
+				fd = d
+				far = i
+		if far >= 0:
+			var to_c := c - (out[far] as Vector2)
+			var d := to_c.length()
+			if d >= EPS:
+				var cand := _board_clamp((out[far] as Vector2) + to_c / d * minf(COH_PULL_IN, d), board_in)
+				if not _wall_zone_blocked(out[far], cand, walls, opts):
+					out[far] = cand
+
+
+## Project each model resting in a forbidden-terrain cell out to the nearest clear point (16 compass
+## directions × 0.5" rings), wall/zone-checked and never into another forbidden cell. A boxed model is left
+## in place (the least-violating fallback keeps the config). Deterministic: nearest ring first, world-frame
+## tie-break within a ring.
+static func _project_out_of_terrain(out: Array, forbid: Dictionary, walls: Array, opts: Dictionary, board_in: float) -> void:
+	if forbid.is_empty():
+		return
+	for i in range(out.size()):
+		var p: Vector2 = out[i]
+		if not forbid.has(TerrainRules.cell_of(p, PLAN_CELL_IN)):
+			continue
+		out[i] = _nearest_clear_of_terrain(p, forbid, walls, opts, board_in)
+
+
+static func _nearest_clear_of_terrain(p: Vector2, forbid: Dictionary, walls: Array, opts: Dictionary, board_in: float) -> Vector2:
+	var dist := TERRAIN_PUSH_STEP_IN
+	while dist <= TERRAIN_PUSH_MAX_IN + EPS:
+		var found := false
+		var best_c := p
+		for k in range(RADIAL_DIRS):
+			var ang := TAU * float(k) / float(RADIAL_DIRS)
+			var c := _board_clamp(p + Vector2(cos(ang), sin(ang)) * dist, board_in)
+			if forbid.has(TerrainRules.cell_of(c, PLAN_CELL_IN)):
+				continue
+			if _wall_zone_blocked(p, c, walls, opts):
+				continue
+			if not found or _world_before(c, best_c):
+				best_c = c
+				found = true
+		if found:
+			return best_c
+		dist += TERRAIN_PUSH_STEP_IN
+	return p
