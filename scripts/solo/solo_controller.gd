@@ -121,6 +121,18 @@ var objective_owner_of: Callable = Callable()
 var turn_manager: TurnManager = null
 var _rng := RandomNumberGenerator.new()
 
+# === AI ARENA difficulty (policy knobs; see SoloDifficulty) ===
+## Per-side difficulty presets: player-slot → SoloDifficulty. Empty ⇒ the DEFAULT AI (the human-vs-AI flow
+## is byte-identical to before — no knob code runs when active_difficulty() returns null). Set per side so a
+## both-AI arena match can pit e.g. Rekrut (P1) vs Kriegsherr (P2). The knobs shape only the discretionary
+## hybrid-policy zones; legality is never affected (SoloDifficulty).
+var difficulty_by_slot: Dictionary = {}
+## Game-level base seed folded into every knob draw, so a whole match's "mistakes" replay identically.
+var difficulty_seed: int = 0
+## Monotonic activation counter (never reset) — the per-activation seed part that makes each decision's
+## deterministic draw unique while staying fully reproducible for a fixed seed.
+var _activation_seq: int = 0
+
 
 func setup(p_army_manager: OPRArmyManager, p_network_manager: Node, p_movement_range: MovementRangeController,
 		p_human_slot: int = 1, p_ai_slot: int = 2) -> void:
@@ -139,6 +151,30 @@ func setup(p_army_manager: OPRArmyManager, p_network_manager: Node, p_movement_r
 func _on_activation_required(side: int) -> void:
 	if side == TurnManager.Side.AI:
 		activate_next_ai_unit()
+
+
+## Assign a difficulty preset to one player slot (the arena's per-side grading). `diff == null` clears it
+## (that slot reverts to the DEFAULT sharp AI). The base seed is stamped onto every assigned preset so all
+## sides draw from the same reproducible game seed.
+func set_difficulty(slot: int, diff: SoloDifficulty) -> void:
+	if diff == null:
+		difficulty_by_slot.erase(slot)
+		return
+	diff.base_seed = difficulty_seed
+	difficulty_by_slot[slot] = diff
+
+
+## The difficulty steering the CURRENTLY-acting AI side (ai_slot), or null when none is configured — in
+## which case every knob site falls through to the original, byte-identical decision path.
+func active_difficulty() -> SoloDifficulty:
+	return difficulty_by_slot.get(ai_slot, null)
+
+
+## The deterministic seed parts for a knob draw on `unit` this activation: the game seed is folded in by
+## SoloDifficulty; here we add the acting side, the monotonic activation index and the unit's name hash so
+## two units (or two sides) in the same activation slot never share a draw.
+func _knob_seed_parts(unit: GameUnit) -> Array:
+	return [ai_slot, _activation_seq, str(unit.get_name()).hash()]
 
 
 # === TurnManager delegate contract ===
@@ -210,6 +246,7 @@ func activate_next_ai_unit() -> GameUnit:
 	var unit := _select_ai_unit(eligible)
 	if unit == null:
 		return null
+	_activation_seq += 1   # monotonic per-activation index for the deterministic difficulty draws
 	last_move_paths = []   # cleared per activation — HOLD / Shaken idle replays nothing
 	if unit.is_shaken:
 		# OPR (p.10): a Shaken unit spends its activation idle, which lets it recover.
@@ -334,10 +371,17 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 				td["ev"] = AiEv.shoot_ev(AiShooting.profiles_in_range(our_weapons, 0.0), us, them, float(td["d"]))
 			else:
 				td["ev"] = AiEv.charge_score(our_melee, us, AiShooting.melee_profiles(_unit_weapons(hu)), them)
-		for t in tied:
-			if float((t as Dictionary)["ev"]) > float(chosen["ev"]):
-				chosen = t
-		why = "ev tie-break"
+		var diff := active_difficulty()
+		if diff == null:
+			# DEFAULT AI (and human-vs-AI): the sharp pick — the earliest maximum-EV tied target. Byte-identical.
+			for t in tied:
+				if float((t as Dictionary)["ev"]) > float(chosen["ev"]):
+					chosen = t
+			why = "ev tie-break"
+		else:
+			# ARENA: the difficulty knobs shape which of the (equally legal) tied targets is taken.
+			chosen = _difficulty_target_pick(ai_unit, tied, diff)
+			why = "ev tie-break (%s)" % diff.grade_name
 	var rec_cands: Array = []
 	for t in tied:
 		var td := t as Dictionary
@@ -352,6 +396,78 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 		"candidates": rec_cands, "chosen": (chosen["unit"] as GameUnit).get_name(), "why": why,
 		"data": {"considered": cands.size(), "dist_in": float(chosen["d"])}})
 	return chosen["unit"] as GameUnit
+
+
+## ARENA — pick the taken target from a set of GENUINELY TIED candidates (same official key; EV already
+## filled) under a difficulty. Every candidate here is an equally-legal choice, so the knobs shape only
+## CLEVERNESS: rule_exploitation narrows by the weapon overlay (Deadly→Tough…), coordination orders for
+## focus-fire vs spread, ev_noise deviates to the 2nd/3rd-best. Deterministic; each application is recorded.
+func _difficulty_target_pick(ai_unit: GameUnit, tied: Array, diff: SoloDifficulty) -> Dictionary:
+	var pool: Array = tied.duplicate()
+	# rule_exploitation: press the weapon overlay to narrow the tie (Solo & Co-Op v3.5.0 p.2 targeting keys).
+	# Lower grades skip it — they leave the Deadly-onto-Tough / AP-onto-armour optimisation unused.
+	var exploited := false
+	if diff.exploits_rules() and pool.size() > 1:
+		var overlay: int = AiTargeting.weapon_overlay(_all_weapon_rules(ai_unit))
+		if overlay != AiTargeting.Overlay.NONE:
+			var descs: Array = []
+			for t in pool:
+				descs.append(_overlay_descriptor(t as Dictionary))
+			var keep: Array = AiTargeting.tied_with_best(descs, overlay, AiTargeting.best_index(descs, overlay))
+			if not keep.is_empty() and keep.size() < pool.size():
+				var narrowed: Array = []
+				for i in keep:
+					narrowed.append(pool[i])
+				pool = narrowed
+				exploited = true
+	# coordination: order best-first for FOCUS FIRE (highest EV first) or worst-first to SPREAD onto another
+	# tied target. A total order (EV, then original tie index) keeps it deterministic regardless of sort stability.
+	var focus := diff.focus_fires()
+	for i in range(pool.size()):
+		(pool[i] as Dictionary)["_i"] = i
+	pool.sort_custom(func(a, b) -> bool:
+		var ea := float((a as Dictionary)["ev"])
+		var eb := float((b as Dictionary)["ev"])
+		if ea != eb:
+			return (ea > eb) if focus else (ea < eb)
+		return int((a as Dictionary)["_i"]) < int((b as Dictionary)["_i"]))
+	# ev_noise: deviate to the 2nd/3rd-best of the coordination ordering with the seeded probability.
+	var idx: int = diff.noisy_pick(pool.size(), _knob_seed_parts(ai_unit))
+	var chosen: Dictionary = pool[idx]
+	record_decision({"kind": "difficulty", "unit": ai_unit.get_name(),
+		"rule": "ARENA target knobs (%s): overlay/coordination/ev_noise on a genuine tie — always legal" % diff.grade_name,
+		"candidates": [], "chosen": (chosen["unit"] as GameUnit).get_name(),
+		"why": ("focus-fire" if focus else "spread") + (" +noise" if idx > 0 else ""),
+		"data": {"grade": diff.grade_name, "exploited": exploited, "spread": not focus,
+			"deviation": idx, "tied": tied.size(), "pool": pool.size()}})
+	return chosen
+
+
+## Every special-rule string carried by the unit's weapons — the input to the dominant targeting overlay.
+func _all_weapon_rules(unit: GameUnit) -> Array:
+	var out: Array = []
+	for w in _unit_weapons(unit):
+		var rules: Array = []
+		if w is Object and (w as Object).get("special_rules") != null:
+			rules = (w as Object).special_rules
+		elif w is Dictionary:
+			rules = (w as Dictionary).get("special_rules", [])
+		for r in rules:
+			out.append(r)
+	return out
+
+
+## Build the AiTargeting candidate descriptor for one tied enemy (for the overlay narrowing). Upgrade-cost
+## tiers are not representable in this data (flagged in docs/SOLO_AI_RULES_COVERAGE.md) → defaults.
+func _overlay_descriptor(td: Dictionary) -> Dictionary:
+	var hu := td["unit"] as GameUnit
+	var tough: int = maxi(AiEv.unit_rating(hu, "Tough"), 1)
+	var alive: int = maxi(hu.get_alive_count(), 1)
+	return {"dist": float(td["d"]), "activated": bool(td.get("activated", false)),
+		"in_cover": majority_in_cover(hu), "defense": hu.get_defense(),
+		"is_hero": hu.has_special_rule("Hero"), "has_upgrade": false, "upgrade_cost": 0,
+		"single_tough": alive == 1 and tough > 1, "has_tough": tough > 1,
+		"remaining_tough": tough * alive}
 
 
 ## Official target ordering: not-yet-activated before activated, then the nearer 1" distance band.
@@ -394,6 +510,16 @@ func _act(unit: GameUnit) -> Dictionary:
 	# prefers a HOLDABLE marker over a contested one so units peel off to open flanks (field-test finding 1).
 	var obj_pos := _nearest_uncontrolled_objective(centre, unit)
 	var has_obj: bool = obj_pos != NO_OBJECTIVE
+	# ARENA mission_focus knob: a lower grade may deliberately IGNORE an uncontrolled objective and just fight
+	# the enemy (always a legal play). Deterministic + reproducible; at full focus (Kriegsherr/Albtraum, or the
+	# default null AI) this never fires, so the official tree is untouched. Every application is explainable.
+	var diff := active_difficulty()
+	if diff != null and has_obj and diff.skips_objective(_knob_seed_parts(unit)):
+		has_obj = false
+		record_decision({"kind": "difficulty", "unit": unit.get_name(),
+			"rule": "ARENA mission_focus (%s): weaker grades fight instead of holding — legal, never forced" % diff.grade_name,
+			"candidates": [], "chosen": "ignore objective, engage enemy", "why": "mission_focus knob",
+			"data": {"grade": diff.grade_name, "mission_focus": diff.mission_focus}})
 	var obj_dist: float = MoveIntent.distance_inches(centre, obj_pos) if has_obj else INF
 	# The charge gate measures the REAL base-to-base gap, not the coarse centre-to-centre distance (finding
 	# 3): a wide/offset unit whose centres are >12" apart can still have bases inside the 12" charge band —

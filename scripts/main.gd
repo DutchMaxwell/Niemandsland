@@ -252,6 +252,10 @@ var _solo_fast: bool = false                 # fast-forward: shrink pacing holds
 var _solo_dev: bool = false                  # developer mode: render the AI's decision records into the battle log
 var _solo_toast: Label = null                # transient AI-action attribution/outcome toast
 var _solo_unmodeled_logged: Dictionary = {}  # rule name -> true: once-per-session unmodeled-rule notes
+# === AI ARENA — native both-AI mode + per-side difficulty (see SoloDifficulty) ===
+var _solo_both_ai: bool = false              # BOTH sides are AI: combat auto-resolves, the game runs unattended
+var _solo_difficulty_grades: Dictionary = {} # player-slot -> SoloDifficulty preset name (the graded arena)
+var _solo_arena_seed: int = 0                # game-level base seed for the reproducible difficulty knob draws
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
@@ -636,6 +640,8 @@ func _ready() -> void:
 	# Our own black backdrop (chooser prompt or intro) is up now — fade out the menu's
 	# transition loading overlay so the hand-off stays black, never grey.
 	_dismiss_transition_overlay()
+	# AI ARENA: arm native both-AI mode from the environment (no-op in normal play).
+	_solo_init_arena_from_env()
 
 
 ## Fade out + free the menu->game loading overlay (added to the SceneTree root by
@@ -848,6 +854,151 @@ func _solo_after_activation() -> void:
 	await _solo_end_round()
 
 
+# === AI ARENA — native both-AI mode + graded per-side difficulty ===
+
+## Enable (or disable) native both-AI mode with a difficulty grade per side — the maintainer's graded-arena
+## requirement (e.g. P1=Rekrut vs P2=Kriegsherr). Grades are SoloDifficulty preset names
+## (rekrut/veteran/kriegsherr/albtraum). `base_seed` seeds the reproducible knob draws (same seed + same
+## grades → identical decisions). This is the first-class setter the harness / a rating-ladder launcher calls;
+## the env vars NML_BOTH_AI / NML_AI_P1 / NML_AI_P2 / NML_AI_SEED drive it too (_solo_init_arena_from_env).
+func set_both_ai(enabled: bool, p1_grade: String = "kriegsherr", p2_grade: String = "kriegsherr", base_seed: int = 0) -> void:
+	_solo_both_ai = enabled
+	if enabled:
+		solo_ai_slots = {1: true, 2: true}   # BOTH sides are AI units → _solo_is_ai_unit true both ways
+		_solo_arena_seed = base_seed
+		_solo_difficulty_grades = {1: p1_grade, 2: p2_grade}
+	else:
+		_solo_difficulty_grades = {}
+	if solo_controller != null:
+		_solo_apply_difficulty()
+
+
+## Push the configured per-side difficulty presets onto the live controller (idempotent). No-op when no
+## grades are configured, so the DEFAULT human-vs-AI flow keeps active_difficulty() == null (byte-identical).
+func _solo_apply_difficulty() -> void:
+	if solo_controller == null:
+		return
+	solo_controller.difficulty_seed = _solo_arena_seed
+	solo_controller.difficulty_by_slot = {}
+	for slot in _solo_difficulty_grades:
+		var grade := str(_solo_difficulty_grades[slot])
+		solo_controller.set_difficulty(int(slot), SoloDifficulty.for_grade(grade, _solo_arena_seed))
+
+
+## Point the controller at `slot` as the acting AI and the OTHER slot as its enemy — main's combat helpers
+## and the controller's target selection read human_slot, so both must flip together (the harness pattern).
+func _solo_set_active_side(slot: int) -> void:
+	if solo_controller == null:
+		return
+	solo_controller.ai_slot = slot
+	solo_controller.human_slot = 2 if slot == 1 else 1
+
+
+## Run a WHOLE both-AI match unattended to the SOLO_GAME_ROUNDS scoring end — the native driver the
+## rating-ladder tooling calls after deploying both armies. Alternates activation between the two AI sides
+## (OPR one-for-one, opener = the side that did NOT take the last activation), resolves each side's shooting /
+## melee / morale on the SAME real dice tray (the AI defender auto-rolls — no dialogs), arrives Ambush
+## reserves at the start of rounds ≥2 for both sides, seizes objectives at round end, and shows the summary.
+func _solo_run_both_ai_game() -> void:
+	if opr_army_manager == null or movement_range_controller == null:
+		push_warning("[AI ARENA] not ready — import + deploy armies first")
+		return
+	_solo_both_ai = true
+	_ensure_solo_controller()
+	if solo_controller == null:
+		return
+	_solo_ai_busy = true
+	_solo_game_finished = false
+	var opener: int = 1   # round 1 opens with P1 (OPR: the deploying-first side; symmetric here)
+	while not _solo_game_finished:
+		var round_no: int = opr_army_manager.current_round
+		if round_no >= 2:
+			await _solo_both_ai_round_start(round_no)
+		var last_side: int = await _solo_run_both_ai_round(opener)
+		# The side that did NOT take the last activation opens the next round (GF/AoF v3.5.1 round-opener rule;
+		# finding 7 — never back-to-back across the boundary). If the round had no activation, keep the opener.
+		if last_side != 0:
+			opener = 2 if last_side == 1 else 1
+		_solo_auto_seize()
+		if round_no >= SOLO_GAME_ROUNDS:
+			if not _solo_game_finished:
+				_solo_game_finished = true
+				_solo_show_game_summary()
+			break
+		opr_army_manager.advance_round()
+		_refresh_round_visuals()
+		if network_manager != null:
+			network_manager.broadcast_round_advance()
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Round %d begins" % opr_army_manager.current_round, true)
+	_solo_ai_busy = false
+
+
+## One both-AI round: alternate one activation per side (OPR one-for-one), starting with `opener`, until both
+## sides are out of eligible units. A wiped/exhausted side is skipped so the other plays out its tail. Returns
+## the side that took the LAST activation (0 if none acted) — the caller derives the next round's opener.
+func _solo_run_both_ai_round(opener: int) -> int:
+	var side: int = opener
+	var last_side := 0
+	var guard := 0
+	const ACTIVATION_GUARD := 400   # defensive cap (a full army is far fewer activations than this)
+	while guard < ACTIVATION_GUARD:
+		guard += 1
+		var other: int = 2 if side == 1 else 1
+		var side_has := _solo_side_has_eligible(side)
+		var other_has := _solo_side_has_eligible(other)
+		if not side_has and not other_has:
+			break
+		var act: int = side if side_has else other
+		_solo_set_active_side(act)
+		var unit: GameUnit = await _solo_activate_one_ai()
+		_solo_flush_dev()
+		if unit != null:
+			last_side = act
+		side = 2 if act == 1 else 1   # alternate to the other side next (one-for-one)
+	return last_side
+
+
+## Whether player `slot` has an eligible AI unit right now (flips the controller's side to read its pool,
+## then restores it — the same non-destructive probe the harness uses).
+func _solo_side_has_eligible(slot: int) -> bool:
+	if solo_controller == null:
+		return false
+	var prev_ai: int = solo_controller.ai_slot
+	var prev_human: int = solo_controller.human_slot
+	_solo_set_active_side(slot)
+	var has: bool = not solo_controller.eligible_ai_units().is_empty()
+	solo_controller.ai_slot = prev_ai
+	solo_controller.human_slot = prev_human
+	return has
+
+
+## Both-AI round-start bookkeeping (round ≥2): Battleborn Shaken-recovery for every side, then Ambush
+## reserve arrivals for each AI side (the arrival's >9" check reads the OTHER side as the enemy).
+func _solo_both_ai_round_start(round_number: int) -> void:
+	await _solo_battleborn_recovery()
+	if round_number >= 2:
+		for slot in [1, 2]:
+			_solo_set_active_side(slot)
+			await _solo_arrive_ambush()
+
+
+## Read NML_BOTH_AI / NML_AI_P1 / NML_AI_P2 / NML_AI_SEED from the environment and, when NML_BOTH_AI is set,
+## configure native both-AI mode with graded sides. Called once at startup; a no-op in normal play. The mode
+## still needs armies imported + deployed before _solo_run_both_ai_game() is driven (a launcher/harness does that).
+func _solo_init_arena_from_env() -> void:
+	var flag := OS.get_environment("NML_BOTH_AI").strip_edges().to_lower()
+	if flag == "" or flag == "0" or flag == "false":
+		return
+	var p1 := OS.get_environment("NML_AI_P1").strip_edges()
+	var p2 := OS.get_environment("NML_AI_P2").strip_edges()
+	var seed_env := OS.get_environment("NML_AI_SEED").strip_edges()
+	set_both_ai(true, (p1 if p1 != "" else "kriegsherr"), (p2 if p2 != "" else "kriegsherr"),
+		(int(seed_env) if seed_env.is_valid_int() else 0))
+	print("[AI ARENA] both-AI mode armed via env — P1=%s P2=%s seed=%s" % [
+		_solo_difficulty_grades.get(1, "?"), _solo_difficulty_grades.get(2, "?"), _solo_arena_seed])
+
+
 ## Round end in a solo game: objectives seize/contest at round end (official rule), then either the
 ## end-of-game summary (after SOLO_GAME_ROUNDS — the OPR standard match length) or the round advances
 ## exactly like the manual Next-Round button (bookkeeping + visuals + MP broadcast). OPR round-opener rule
@@ -1012,7 +1163,9 @@ func _solo_ai_slot() -> int:
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
 	var ai_slot := _solo_ai_slot()
-	if solo_controller != null and solo_controller.ai_slot != ai_slot:
+	# In native both-AI mode the driver flips solo_controller.ai_slot per activation, so a slot-mismatch is
+	# EXPECTED and must NOT tear down the controller (that would lose the activation counter + decision log).
+	if not _solo_both_ai and solo_controller != null and solo_controller.ai_slot != ai_slot:
 		solo_controller.queue_free()
 		solo_controller = null
 	if solo_controller == null:
@@ -1042,6 +1195,7 @@ func _ensure_solo_controller() -> void:
 			return terrain_overlay.get_objectives() if terrain_overlay != null else []
 		solo_controller.objective_owner_of = func(index: int) -> int:
 			return terrain_overlay.get_objective_owner(index) if terrain_overlay != null else 0
+	_solo_apply_difficulty()
 
 
 ## "Deploy AI army" (goal 001 P2b): run the official OPR AI deployment for the designated army — the
@@ -1249,9 +1403,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array)
 			continue
 		total_hits += hits
 		# Blast ignores cover (GF v3.5.1) — its saves roll against the UNCOVERED Defense. Rending/Bane
-		# (unmodified-6 save-step rules) resolve inside _solo_resolve_saves; the human is the defender.
+		# (unmodified-6 save-step rules) resolve inside _solo_resolve_saves. Native both-AI (AI ARENA): when the
+		# DEFENDER is itself AI, the saves auto-roll on the real tray (no human prompt) — the human_defends flag
+		# is derived, never assumed, so an AI-vs-AI game resolves shooting unattended.
 		var save_def: int = base_defense if int(profile.get("blast", 0)) > 1 else covered_defense
-		var w: int = await _solo_resolve_saves(member, target, str(profile.get("name", "?")), faces, hits, save_def, profile, true, false)
+		var w: int = await _solo_resolve_saves(member, target, str(profile.get("name", "?")), faces, hits, save_def, profile, not _solo_is_ai_unit(target), false)
 		total_caused += w
 		if _solo_ignores_regen(member, profile):
 			regen_proof += w
@@ -2523,16 +2679,21 @@ func _run_ai_melee(report: Dictionary) -> void:
 	#   Counter weapons resolve BEFORE the charger's attacks (incl. Impact — Counter's Impact reduction
 	#   presumes the counter-attack precedes it; the PDF pins no finer order). One strike-back choice
 	#   covers the whole melee: Counter weapons now, remaining weapons in the normal slot, or neither. —
+	# Native both-AI (AI ARENA): when the DEFENDER is AI, it ALWAYS strikes back (Solo & Co-Op v3.5.0 p.57:
+	# "the AI always strikes back") and auto-rolls its saves — no human ConfirmationDialog. The human defender
+	# still gets the one strike-back choice. `_defender_is_ai` drives both the strike-back and every save UX.
+	var defender_is_ai: bool = _solo_is_ai_unit(target)
 	var strike_back := -1   # -1 = not yet asked, 0 = declined, 1 = strikes
 	var counter_first: bool = _solo_has_counter(target)
 	if counter_first and _solo_combined_alive(target) > 0:
-		strike_back = 1 if await _solo_confirm_strike_back(target, unit, true) else 0
+		strike_back = 1 if defender_is_ai or await _solo_confirm_strike_back(target, unit, true) else 0
 		if strike_back == 1:
 			human_caused += await _solo_melee_strike_phase(target, unit, false, SoloStrike.COUNTER_ONLY)
 	# — Impact(X) auto-hits fire BEFORE the normal strikes (GF/AoF v3.5.1 p.13; reduced by Counter models);
-	#   applied + tallied inside. The charger may already be wiped by Counter — nothing left to roll then. —
+	#   applied + tallied inside. The charger may already be wiped by Counter — nothing left to roll then.
+	#   human_defends is derived (false when the AI defends → saves auto-roll on the tray). —
 	if _solo_combined_alive(unit) > 0:
-		ai_caused += await _solo_charge_impact(unit, target, true)
+		ai_caused += await _solo_charge_impact(unit, target, not defender_is_ai)
 	# — AI strikes (unit + attached heroes; only models within 2" strike; Deadly multiplies wounds). The AI
 	#   is the charger here, so Furious/Thrust charge bonuses apply (charging = true) —
 	if _solo_combined_alive(unit) > 0:
@@ -2543,7 +2704,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	#   Counter the choice was already made; only the NON-Counter weapons remain for this slot. —
 	if _solo_combined_alive(target) > 0 and _solo_combined_alive(unit) > 0:
 		if strike_back == -1:
-			strike_back = 1 if await _solo_confirm_strike_back(target, unit, false) else 0
+			strike_back = 1 if defender_is_ai or await _solo_confirm_strike_back(target, unit, false) else 0
 		if strike_back == 1:
 			human_caused += await _solo_melee_strike_phase(target, unit, false,
 				SoloStrike.NON_COUNTER if counter_first else SoloStrike.ALL)
@@ -2554,9 +2715,9 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var ai_score: int = AiCombatMath.fear_adjusted_wounds(ai_caused, _solo_unit_rating(unit, "Fear"))
 	var human_score: int = AiCombatMath.fear_adjusted_wounds(human_caused, _solo_unit_rating(target, "Fear"))
 	if ai_score > human_score and _solo_combined_alive(target) > 0:
-		await _solo_morale_test(target, "You")
+		await _solo_morale_test(target, _solo_owner_label(target))   # "You" for a human defender, "AI (…)" in both-AI
 	elif human_score > ai_score and _solo_combined_alive(unit) > 0:
-		await _solo_morale_test(unit, "AI (%s)" % unit.get_name())
+		await _solo_morale_test(unit, _solo_owner_label(unit))
 	# — Consolidation (GF v3.5.1 p.9, after morale): neither destroyed → the CHARGER (the AI here) moves
 	#   back 1" to clear the separation — visibly, via the corridor + glide replay. —
 	await _solo_separate_after_melee(unit, target)

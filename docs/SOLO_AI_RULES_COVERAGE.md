@@ -710,3 +710,70 @@ combat/positions vary run-to-run, so the two incidental flags are not determinis
 **Fairness:** every change lives in the game/solo layer (`MovementPlanner` real-game `opts["radii"]` path,
 `SoloController`, `main.gd`); `SoloSim` and the SIM's empty-opts `plan_unit_step` path are untouched, so the
 mirror-fairness oracle is byte-identical — no re-run required (same precedent as waves 1–5 and rounds 2–5).
+
+## AI ARENA — native both-AI mode + graded difficulty (real game, 2026-07-13)
+
+The foundation for the rating ladder: a first-class **both-AI** game mode (BOTH sides are AI, the match runs
+unattended to the 4-round scoring end) and **graded DIFFICULTY** as POLICY KNOBS on the SAME deterministic
+engine. **Every grade plays 100% legally** — the knobs shape only CLEVERNESS in the discretionary zones the
+official rules leave open (the "genuine tie" hybrid-policy points and the objective-vs-fight emphasis), never
+what is legal.
+
+### Native both-AI mode
+
+The AI-attack resolution paths (`main._run_ai_shooting` / `_run_ai_melee`) no longer ASSUME the defender is
+human — `human_defends` is DERIVED from `_solo_is_ai_unit(target)` at every save / Impact / strike-back site.
+When the defender is AI it auto-rolls its saves on the SAME real dice tray and ALWAYS strikes back (Solo &
+Co-Op v3.5.0 p.57), with no `ConfirmationDialog`. So an AI-vs-AI game resolves shooting, strike-backs and
+morale unattended (the self-play harness's `DialogAutoConfirm` stub becomes unnecessary — the harness is
+untouched). The human-vs-AI flow is byte-compatible: `_solo_is_ai_unit` returns false for a human defender, so
+every prompt still fires. Mode is set via `main.set_both_ai(enabled, p1_grade, p2_grade, seed)` or the env
+vars `NML_BOTH_AI` / `NML_AI_P1` / `NML_AI_P2` / `NML_AI_SEED`; the native driver
+`main._solo_run_both_ai_game()` alternates activation between the two sides (OPR one-for-one; opener = the side
+that did NOT take the last activation), arrives Ambush reserves both sides at round start, seizes objectives at
+round end, and shows the summary. Runnable end-to-end via `tools/arena_match.gd` (imports two armies, autogens
+a symmetric board, deploys both sides, runs the graded match).
+
+### The knobs (`scripts/solo/solo_difficulty.gd`)
+
+All in `[0,1]` unless noted; every seeded draw is a PURE hash of explicit integer parts (base seed · acting
+side · monotonic activation index · unit-name hash · per-knob salt) — no shared RNG, no `Math.random`-style
+nondeterminism. Same seed + same preset ⇒ identical "mistakes".
+
+| Knob | Where it bites (discretionary only) | Effect at lower grades |
+|---|---|---|
+| **ev_noise** | the EV ranking of a GENUINELY TIED target set (`SoloController.nearest_human_unit` → `_difficulty_target_pick`) | takes the 2nd/3rd-best EV option with this seeded probability (never a non-tied, i.e. never-illegal, target) |
+| **rule_exploitation** | the SAME tie set — narrow by the weapon overlay (Deadly → single-Tough/Tough, AP → highest Defense, Takedown → heroes; `AiTargeting`) | below the threshold the AI SKIPS the optimisation (e.g. does not steer Deadly onto Tough). `spend_boosts` mirrors the gate for a future boost-token subsystem (none in this build) |
+| **mission_focus** | the objective-vs-fight pivot (`SoloController._act`, before the official tree) | ignores an uncontrolled objective and just fights (always legal) with probability `1 − mission_focus` |
+| **coordination** | ordering the tie set for the pick | below the threshold SPREADS onto a different tied target instead of focus-firing the best |
+| **lookahead** (bool) | Albtraum ceiling flag | full EV/boost headroom — a decision-record marker; the shared engine currently equals Kriegsherr play + the boost gate |
+
+Each application emits a `kind:"difficulty"` decision record (dev-mode explainability preserved). The four
+preset knob-vectors:
+
+| Grade | ev_noise | rule_exploitation | mission_focus | coordination | lookahead |
+|---|---|---|---|---|---|
+| **Rekrut** | 0.40 | 0.0 | 0.35 | 0.0 | false |
+| **Veteran** | 0.15 | 0.5 | 0.70 | 0.60 | false |
+| **Kriegsherr** | 0.0 | 1.0 | 1.0 | 1.0 | false |
+| **Albtraum** | 0.0 | 1.0 | 1.0 | 1.0 | true |
+
+### Legality & determinism (the hard invariants)
+
+- **Never illegal at any grade.** Every knob operates STRICTLY inside the official-tied set (same
+  not-activated / nearest key) or on the objective-vs-fight choice (fighting is always legal). A weaker grade
+  is a WEAKER opponent, not an illegal one — proved by the legality sweep
+  (`solo_arena_test.test_rekrut_target_pick_is_always_a_legal_tied_candidate`: across 300 seeds Rekrut's pick
+  is always one of the two tied enemies, never the nearer-but-activated unit nor the farther one).
+- **Ceiling grades never deviate** (`solo_difficulty_test.test_ceiling_grades_never_deviate_regardless_of_seed`).
+- **Reproducible.** Same seed + same preset → identical decisions (`test_noisy_pick_is_reproducible_for_a_fixed_
+  seed`, `test_kriegsherr_is_deterministic_and_reproducible`).
+- **Default unchanged / SIM untouched.** When no difficulty is configured, `active_difficulty()` is null and
+  every knob site falls through to the original decision path (byte-identical human-vs-AI). The difficulty
+  lives entirely game-side (the opts-pattern discipline): `SoloSim` never constructs a `SoloDifficulty`, so the
+  mirror-fairness oracle is byte-identical — no re-run required.
+
+**Per-side grading** (the maintainer's graded-arena requirement) is set with a difficulty per slot
+(`SoloController.set_difficulty(slot, …)`, indexed by the acting side, flips with `ai_slot`), e.g. `NML_AI_P1=
+rekrut NML_AI_P2=kriegsherr`. Tests: `solo_difficulty_test.gd` (10) + `solo_arena_test.gd` (6), incl. the
+headless both-AI game-completion driver.
