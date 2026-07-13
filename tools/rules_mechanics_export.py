@@ -87,6 +87,11 @@ PRIMITIVE_PARAMS = {
     "Musician": {"move_bonus_in": 1, "scope": "unit"},
     "Sergeant": {"bonus_hits_per_six": 1, "model_level": True},
     "Armor": {"rating": "X", "defense_value": "X", "best_of": True},
+    # --- Wave 6 (spellcasting) --- Caster(X) token economy, verified byte-identical
+    # across all five systems in the official v3.5.1 rulebooks; held as per-system
+    # DATA regardless, so a future skirmish errata stays a data change.
+    "Caster": {"rating": "X", "token_cap": 6, "cast_target": 4, "aura_in": 18.0,
+               "boost_per_token": 1},
 }
 
 # Per-(system, rule) parameter overrides — the SYSTEM-SCOPED divergences.
@@ -114,6 +119,9 @@ WAVE5_PRIMITIVES = {
     "Musician": "Musician",
     "Sergeant": "Sergeant",
     "Armor": "Armor",
+    # Wave 6: Caster(X) — automated by the spellcasting subsystem (AiSpell +
+    # the spells_mechanics_<system>.json maps emitted by spells_mechanics_export.py).
+    "Caster": "Caster",
 }
 
 # Rules the solo layer models although NO army-book lists them as a book rule:

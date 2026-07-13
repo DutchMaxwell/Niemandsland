@@ -144,16 +144,20 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 		return 0.0
 	var melee: bool = int(profile.get("range", 0)) <= 0
 	var quality := int(att.get("quality", 4))
+	# Wave 6: a spell buff/debuff's ±N to hit rolls (AiSpell P3 seam) folds into the SAME net-modifier
+	# composition as the rule modifiers — 0 when absent, so the pre-spell EV is byte-identical.
+	var spell_mod := int(att.get("spell_hit_mod", 0))
 	# — To-hit target: the same composition as _solo_melee_strike_phase / the shooting volleys —
 	var target: int
 	if melee:
 		target = AiCombatMath.thrust_to_hit(quality, charging and bool(profile.get("thrust", false)))
-		target = AiCombatMath.modified_hit_target(target, AiCombatMath.melee_hit_modifier(bool(def_ctx.get("evasive", false))))
+		target = AiCombatMath.modified_hit_target(target,
+			AiCombatMath.melee_hit_modifier(bool(def_ctx.get("evasive", false))) + spell_mod)
 	else:
 		target = AiCombatMath.reliable_quality(quality, bool(profile.get("reliable", false)))
 		target = AiCombatMath.modified_hit_target(target, AiCombatMath.shooting_hit_modifier(dist_in,
 			bool(att.get("artillery", false)), bool(def_ctx.get("stealth", false)),
-			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false))))
+			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false))) + spell_mod)
 	var hits := attacks * AiCombatMath.success_chance(target)
 	# — Per-unmodified-6 bonus hits (expected +attacks/6 each; "only the original hit counts as a 6") —
 	if not melee and bool(profile.get("relentless", false)) and dist_in > AiCombatMath.LONG_RANGE_IN:

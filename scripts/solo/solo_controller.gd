@@ -623,7 +623,353 @@ func _act(unit: GameUnit) -> Dictionary:
 	report["moved"] = action != AiDecision.Action.HOLD   # Indirect's -1 to hit fires when shooting after moving
 	report["can_shoot"] = do_shoot and shoot_range > 0 and d2 <= float(shoot_range) \
 		and (_has_los(unit, target_unit) or has_indirect_ranged(weapons))
+	# Wave 6 — Caster(X): the official Solo v3.5.0 procedure casts AFTER moving, BEFORE attacking, so
+	# the cast plan is drawn from the post-move geometry here; main resolves the cast rolls on the real
+	# dice tray before the shooting/melee it already resolves (spells are ADDITIONAL to the attack).
+	var casts := _plan_casts(unit)
+	if not casts.is_empty():
+		report["casts"] = casts
 	return report
+
+
+# ===== Wave 6 — the Caster(X) cast phase (official Solo & Co-Op v3.5.0 "Caster" procedure) =====
+
+## Whether the OTHER side's interference tokens are auto-planned (native both-AI mode: the defending
+## AI decides + spends deterministically at plan time — no dialogs). In human-vs-AI games this stays
+## false and main.gd offers the human a resist prompt at resolution time instead.
+var auto_interference: bool = false
+
+## Plan the activation's casts for every Caster member of `unit` (the unit itself + attached heroes
+## — each is its own caster with its own tokens and D3+X pick). Follows the official procedure
+## verbatim: one selection cycle per caster, first valid spell or nothing; the EV metric fills ONLY
+## the officially-open choices (which target, boost/interference tokens). Spell tokens are SPENT here
+## (the official cost is paid on the ATTEMPT, before rolling); main rolls the 4+ cast die on the real
+## tray and applies the effect. Every decision is recorded (kind "cast" / "cast_skip").
+func _plan_casts(unit: GameUnit) -> Array:
+	var casts: Array = []
+	if army_manager == null:
+		return casts
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for m in members:
+		var member := m as GameUnit
+		if member == null or member.get_alive_count() == 0 or not member.is_caster():
+			continue
+		if not RulesRegistry.unit_rule_active(member, "Caster"):
+			continue   # system-scoped gate: the rule only fires where the book fields it
+		var plan := _plan_member_cast(unit, member)
+		if not plan.is_empty():
+			casts.append(plan)
+	return casts
+
+
+## The one cast attempt of a single caster member: D3+X over the faction's BOOK-ORDERED spell list,
+## cycle to the first valid spell (official); target + token economy filled by EV. Returns {} when
+## the caster holds (no valid spell / no spell data), with the decision recorded either way.
+func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
+	var tokens: int = member.casts_current
+	if tokens <= 0:
+		return {}
+	var spells := SpellsRegistry.spells_for_unit(member)
+	if spells.is_empty():
+		# No committed spell data for this (system, faction): casting stays fully manual (the honest
+		# pre-wave-6 behaviour) — recorded once per activation so the gap is visible in dev mode.
+		record_decision({"kind": "cast_skip", "unit": member.get_name(),
+			"rule": "Solo v3.5.0 'Caster' — no spell data for this faction/system; casting stays manual",
+			"candidates": [], "chosen": "hold tokens", "why": "no spell map",
+			"data": {"tokens": tokens, "system": RulesRegistry.system_of_unit(member),
+				"faction": RulesRegistry.faction_of_unit(member)}})
+		return {}
+	var caster_x: int = member.get_caster_value()
+	var d3: int = _rng.randi_range(1, 3)
+	var order: Array = AiSpell.official_pick_order(spells.size(), d3, caster_x)
+	var diff := active_difficulty()
+	# Difficulty ladder (design table): Rekrut/default follow the official D3+X die exactly; Veteran
+	# cycles past valid-but-worthless (0-EV) spells; Kriegsherr/Albtraum replace the die with the
+	# EV-best castable spell (the same die-replacement licence as the targeting tie-break).
+	var skip_zero_ev: bool = diff != null and diff.rule_exploitation > 0.0 and not diff.exploits_rules()
+	var ev_best_pick: bool = diff != null and diff.exploits_rules()
+	var candidates_rec: Array = []
+	var chosen: Dictionary = {}
+	var chosen_targets: Array = []
+	var chosen_ev := 0.0
+	var fallback: Dictionary = {}      # first officially-valid spell (kept when better filters find nothing)
+	var fallback_targets: Array = []
+	var fallback_ev := 0.0
+	for idx in order:
+		var entry: Dictionary = spells[idx]
+		var threshold := int(entry.get("threshold", 0))
+		var status := str(entry.get("status", "unmodeled"))
+		var valid := true
+		var why := ""
+		var targets: Array = []
+		var ev := 0.0
+		if status == "unmodeled":
+			valid = false
+			why = "unmodeled"
+		elif threshold > tokens:
+			valid = false
+			why = "not enough tokens"
+		else:
+			targets = _spell_targets(unit, member, entry)
+			if targets.is_empty():
+				valid = false
+				why = "no valid target"
+			else:
+				ev = _targets_ev(targets)
+		candidates_rec.append({"name": str(entry.get("name", "?")), "ev": ev,
+			"key": [threshold, valid, why]})
+		if not valid:
+			continue
+		if fallback.is_empty():
+			fallback = entry
+			fallback_targets = targets
+			fallback_ev = ev
+			if not skip_zero_ev and not ev_best_pick:
+				break   # official: the FIRST valid spell in cycle order is cast
+		if skip_zero_ev and ev > 0.0 and chosen.is_empty():
+			chosen = entry
+			chosen_targets = targets
+			chosen_ev = ev
+			break   # Veteran: first valid spell with a real payoff
+		if ev_best_pick and ev > chosen_ev:
+			chosen = entry
+			chosen_targets = targets
+			chosen_ev = ev
+	if chosen.is_empty():
+		chosen = fallback
+		chosen_targets = fallback_targets
+		chosen_ev = fallback_ev
+	if chosen.is_empty():
+		record_decision({"kind": "cast_skip", "unit": member.get_name(),
+			"rule": "Solo v3.5.0 'Caster': D3+X pick, cycle-to-valid — no valid spell, don't cast",
+			"candidates": candidates_rec, "chosen": "hold tokens", "why": "no castable spell",
+			"data": {"d3": d3, "caster_x": caster_x, "tokens": tokens}})
+		return {}
+	# — Token economy (officially open — the EV heuristics fill it): boost from OTHER friendly casters
+	#   within 18" LoS (+1 each), gated by the difficulty's spend_boosts (default sharp AI spends). —
+	var threshold := int(chosen.get("threshold", 0))
+	var base_target := int(RulesRegistry.unit_param(member, "Caster", "cast_target", AiSpell.CAST_BASE_TARGET))
+	var boost := 0
+	var boost_sources: Array = []
+	var spend_boosts: bool = diff == null or diff.spend_boosts()
+	var helpers := _aura_casters(ai_slot, unit, member)
+	if spend_boosts and not helpers.is_empty():
+		var pool := 0
+		for h in helpers:
+			pool += int((h as Dictionary)["tokens"])
+		boost = AiSpell.plan_boost(chosen_ev, pool)
+		boost_sources = _draw_aura_tokens(helpers, boost)
+	# — Interference (the enemy's officially-open counter-choice): auto-planned ONLY in both-AI mode
+	#   (the defending AI spends deterministically); in human-vs-AI main prompts the human instead. —
+	var interference := 0
+	var interference_sources: Array = []
+	var enemy_helpers := _aura_casters(human_slot, unit, null)
+	if auto_interference and not enemy_helpers.is_empty():
+		var ediff: SoloDifficulty = difficulty_by_slot.get(human_slot)
+		if ediff == null or ediff.spend_boosts():
+			var epool := 0
+			for h in enemy_helpers:
+				epool += int((h as Dictionary)["tokens"])
+			interference = AiSpell.plan_interference(chosen_ev, epool, boost)
+			interference_sources = _draw_aura_tokens(enemy_helpers, interference)
+	# — SPEND (the attempt's cost is paid before the roll — v3.5.1; one try per spell): the caster's
+	#   threshold, the helpers' boost tokens, the enemy's interference tokens. —
+	var tokens_before := member.casts_current
+	member.spend_caster_points(threshold)
+	_broadcast_casts(member)
+	for src in boost_sources + interference_sources:
+		var su := (src as Dictionary)["unit"] as GameUnit
+		su.spend_caster_points(int((src as Dictionary)["tokens"]))
+		_broadcast_casts(su)
+	var p_cast := AiSpell.cast_success_chance(boost, interference, base_target)
+	var target_names: Array = []
+	for t in chosen_targets:
+		target_names.append(((t as Dictionary)["unit"] as GameUnit).get_name())
+	record_decision({"kind": "cast", "unit": member.get_name(),
+		"rule": "Solo v3.5.0 'Caster' (D3+X, cycle-to-valid) + Caster(X) v3.5.1 (4+, boost/interference 18\" LoS)",
+		"candidates": candidates_rec, "chosen": str(chosen.get("name", "?")),
+		"why": ("ev-best pick" if ev_best_pick else ("skip 0-EV" if skip_zero_ev and chosen_ev > 0.0 else "official D3+X cycle")),
+		"data": {"d3": d3, "caster_x": caster_x, "targets": ", ".join(PackedStringArray(target_names)),
+			"ev": chosen_ev, "boost": boost, "interference": interference, "p_cast": p_cast,
+			"tokens_before": tokens_before, "tokens_after": member.casts_current}})
+	var target_units: Array = []
+	for t in chosen_targets:
+		target_units.append((t as Dictionary)["unit"])
+	return {"caster": member, "caster_unit": unit, "spell": chosen,
+		"name": str(chosen.get("name", "?")), "threshold": threshold,
+		"targets": target_units, "ev": chosen_ev, "boost": boost, "interference": interference,
+		"target_num": AiSpell.cast_target(boost, interference, base_target), "base_target": base_target,
+		"interference_open": not auto_interference and not enemy_helpers.is_empty(),
+		"tokens_before": tokens_before, "tokens_after": member.casts_current}
+
+
+## The legal targets of one spell for this caster, EV-ranked best-first: side/count/range from the
+## committed entry, distances from the CASTER UNIT's centre (the spell projects from the unit), line
+## of sight through the same seam the shoot decision uses (v3.5.1: "a target in line of sight").
+## Returns up to target.count entries {unit, ev} (multi-target spells hit the N best). The EV per
+## kind fills the officially-open target choice: damage → P2 expected wounds; buff → P3 delta on the
+## candidate's own attack; debuff → P3 delta for our attacks against it (or the reduction of ITS
+## attack when the penalty lands on the target itself); "castable"-status spells value 0 (still
+## legally castable — the official procedure needs only a valid target, not a payoff).
+func _spell_targets(unit: GameUnit, member: GameUnit, entry: Dictionary) -> Array:
+	var target_spec: Dictionary = entry.get("target", {})
+	var side := str(target_spec.get("side", "enemy"))
+	var count := maxi(int(target_spec.get("count", 1)), 1)
+	var range_in := float(entry.get("range_in", 0))
+	var pool_slot: int = ai_slot if side == "friendly" else human_slot
+	var from := unit_centre(unit)
+	var cands: Array = []
+	for c in army_manager.get_game_units_for_player(pool_slot):
+		var cu := c as GameUnit
+		if cu == null or cu.is_destroyed() or unit_in_reserve(cu):
+			continue
+		if cu.has_method("is_attached") and cu.is_attached():
+			continue   # a joined hero is part of its host unit — the unit is the target
+		if MoveIntent.distance_inches(from, unit_centre(cu)) > range_in:
+			continue
+		if cu != unit and not _has_los(unit, cu):
+			continue   # LoS from the caster's unit (own unit is trivially in sight)
+		cands.append({"unit": cu, "ev": _spell_ev_for(unit, member, entry, cu)})
+	if cands.is_empty():
+		return []
+	cands.sort_custom(func(a, b) -> bool:
+		return float((a as Dictionary)["ev"]) > float((b as Dictionary)["ev"]))
+	return cands.slice(0, count)
+
+
+## The EV of one spell against/for ONE candidate unit (the metric that ranks the open target choice).
+func _spell_ev_for(unit: GameUnit, _member: GameUnit, entry: Dictionary, cand: GameUnit) -> float:
+	var effect: Dictionary = entry.get("effect", {})
+	var kind := str(effect.get("kind", ""))
+	if str(entry.get("status", "")) != "modeled":
+		return 0.0
+	if kind == "damage":
+		var facets := AiSpell.spell_facets(effect.get("weapon_rules", []))
+		var def_ctx := AiEv.ctx_for(cand, false, 0)   # cover irrelevant: spells ignore Cover AND Shielded
+		if str((entry.get("target", {}) as Dictionary).get("kind", "unit")) == "model":
+			def_ctx["models"] = 1   # "resolved as if the target was a unit of [1]" — no Blast fan-out
+		return AiSpell.spell_damage_ev(int(effect.get("hits", 0)), def_ctx, facets)
+	if kind == "buff":
+		# Buff value = expected delta on the buffed unit's OWN next attack (design §4): the better of
+		# its shooting (at its current enemy gap) and its melee swing.
+		return _modifier_value_on_attack(cand, effect, false)
+	if kind == "debuff":
+		if str(effect.get("beneficiary", "")) == "attackers":
+			# Our attackers gain the effect against the target: proxy = the ACTIVATING unit's own
+			# attack into that target (the nearest attacker the AI controls this activation).
+			return _modifier_delta(unit, cand, effect)
+		# The penalty lands on the target's own attacks: value = how much WORSE its attack gets.
+		return -_modifier_value_on_attack(cand, effect, true)
+	return 0.0
+
+
+## P3 wrapper: the EV delta `effect` causes on `attacker`'s attack into `defender` (shooting at the
+## current gap when it has ranged reach, else its melee swing).
+func _modifier_delta(attacker: GameUnit, defender: GameUnit, effect: Dictionary) -> float:
+	var weapons := _unit_weapons(attacker)
+	var att := AiEv.ctx_for(attacker, false, 0)
+	var def_ctx := AiEv.ctx_for(defender, majority_in_cover(defender), 0)
+	var dist := MoveIntent.distance_inches(unit_centre(attacker), unit_centre(defender))
+	var ranged := AiEv.stamp_sergeant(filter_limited(attacker, AiShooting.profiles_in_range(weapons, dist)), attacker)
+	if not ranged.is_empty():
+		return AiSpell.spell_modifier_delta(ranged, att, def_ctx, effect, true, dist, false)
+	var melee := AiEv.stamp_sergeant(filter_limited(attacker, AiShooting.melee_profiles(weapons)), attacker)
+	return AiSpell.spell_modifier_delta(melee, att, def_ctx, effect, false, 0.0, true)
+
+
+## The value of a modifier/grant on `cand`'s OWN attack (vs its nearest enemy): max of the shooting
+## delta (when in reach) and the melee delta. `flip_sides` evaluates the effect on an ENEMY unit's
+## attack (debuffs on the target itself) — the enemy of that unit is then OUR side's nearest unit.
+func _modifier_value_on_attack(cand: GameUnit, effect: Dictionary, flip_sides: bool) -> float:
+	var enemy_slot: int = human_slot if not flip_sides else ai_slot
+	var nearest: GameUnit = null
+	var best := INF
+	for e in army_manager.get_game_units_for_player(enemy_slot):
+		var eu := e as GameUnit
+		if eu == null or eu.is_destroyed() or unit_in_reserve(eu):
+			continue
+		if eu.has_method("is_attached") and eu.is_attached():
+			continue
+		var d := MoveIntent.distance_inches(unit_centre(cand), unit_centre(eu))
+		if d < best:
+			best = d
+			nearest = eu
+	if nearest == null:
+		return 0.0
+	var weapons := _unit_weapons(cand)
+	var att := AiEv.ctx_for(cand, false, 0)
+	var def_ctx := AiEv.ctx_for(nearest, majority_in_cover(nearest), 0)
+	var ranged := AiEv.stamp_sergeant(filter_limited(cand, AiShooting.profiles_in_range(weapons, best)), cand)
+	var shoot_delta := AiSpell.spell_modifier_delta(ranged, att, def_ctx, effect, true, best, false) \
+		if not ranged.is_empty() else 0.0
+	var melee := AiEv.stamp_sergeant(filter_limited(cand, AiShooting.melee_profiles(weapons)), cand)
+	var melee_delta := AiSpell.spell_modifier_delta(melee, att, def_ctx, effect, false, 0.0, true) \
+		if not melee.is_empty() else 0.0
+	return maxf(shoot_delta, melee_delta)
+
+
+## The caster units of `slot` holding spell tokens within the 18" boost/interference aura of
+## `caster_unit`, in line of sight (v3.5.1: "Models within 18\" in line of sight of the caster's
+## unit may spend any number of spell tokens"). `exclude` drops the casting member itself (the ±1
+## comes from OTHER models). Returns [{unit, tokens}] nearest-first (a deterministic draw order).
+func _aura_casters(slot: int, caster_unit: GameUnit, exclude: GameUnit) -> Array:
+	var aura_in := float(RulesRegistry.unit_param(caster_unit, "Caster", "aura_in", AiSpell.AURA_RANGE_IN))
+	var from := unit_centre(caster_unit)
+	var out: Array = []
+	for c in army_manager.get_game_units_for_player(slot):
+		var cu := c as GameUnit
+		if cu == null or cu.is_destroyed() or unit_in_reserve(cu):
+			continue
+		var members: Array = [cu]
+		if cu.has_method("get_attached_heroes"):
+			members = members + cu.get_attached_heroes()
+		for m in members:
+			var member := m as GameUnit
+			if member == null or member == exclude or member.get_alive_count() == 0:
+				continue
+			if not member.is_caster() or member.casts_current <= 0:
+				continue
+			var d := MoveIntent.distance_inches(from, unit_centre(member if member.models.size() > 0 else cu))
+			if d > aura_in:
+				continue
+			if cu != caster_unit and not _has_los(caster_unit, cu):
+				continue
+			out.append({"unit": member, "tokens": member.casts_current, "d": d})
+	out.sort_custom(func(a, b) -> bool:
+		return float((a as Dictionary)["d"]) < float((b as Dictionary)["d"]))
+	return out
+
+
+## Distribute a total token spend across the aura helpers nearest-first. Returns [{unit, tokens}]
+## for the units that actually pay (deterministic; the caller spends them).
+static func _draw_aura_tokens(helpers: Array, total: int) -> Array:
+	var out: Array = []
+	var left := total
+	for h in helpers:
+		if left <= 0:
+			break
+		var hd := h as Dictionary
+		var take: int = mini(int(hd["tokens"]), left)
+		if take > 0:
+			out.append({"unit": hd["unit"], "tokens": take})
+			left -= take
+	return out
+
+
+## Sum of the ranked targets' EVs (multi-target spells add up — each picked unit takes the effect).
+static func _targets_ev(targets: Array) -> float:
+	var total := 0.0
+	for t in targets:
+		total += float((t as Dictionary)["ev"])
+	return total
+
+
+## Broadcast a unit's token count to MP peers (the same seam the manual casts dialog uses).
+func _broadcast_casts(member: GameUnit) -> void:
+	if network_manager != null and network_manager.has_method("broadcast_unit_casts"):
+		network_manager.broadcast_unit_casts(member)
 
 
 ## Rigid move toward `goal_world`, capped at `inches`, table-clamped; Difficult terrain on the straight path

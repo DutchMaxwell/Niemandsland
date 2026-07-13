@@ -15,6 +15,7 @@
   "Bane",
   "Banner",
   "Blast",
+  "Caster",
   "Counter",
   "Deadly",
   "Destructive",
@@ -60,6 +61,7 @@
   "Bane",
   "Banner",
   "Blast",
+  "Caster",
   "Counter",
   "Deadly",
   "Destructive",
@@ -175,9 +177,16 @@
    }
   },
   "Caster": {
-   "primitive": null,
+   "primitive": "Caster",
    "rated": false,
-   "book_version": "3.5.1"
+   "book_version": "3.5.1",
+   "params": {
+    "rating": "X",
+    "token_cap": 6,
+    "cast_target": 4,
+    "aura_in": 18.0,
+    "boost_per_token": 1
+   }
   },
   "Counter": {
    "primitive": "Counter",

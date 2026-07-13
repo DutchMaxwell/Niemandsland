@@ -58,7 +58,7 @@ Mount was available on 2026-07-09; every rule below was read from the PDFs/army 
 | **Fast / Slow** (±move) | ⏳ sim / ✅ **real game** | the real AI's move bands come from `movement_range_controller.move_bands_for_props` (Fast +2"/+4", Slow −2"/−4", negation-aware). Sim import still fixed 6"/12" (open). |
 | **Immobile / Artillery** (Hold only; Artillery ±to-hit >9") | ⏳ sim / ✅ **real game** | Wave 3: `SoloController.forces_hold` overrides the tree to HOLD (still shoots in range — Artillery solo overlay p.57); Artillery's +1 to hit (shooter, >9") and −2 to hit (as target, >9") via `shooting_hit_modifier`, both directions. Artillery's deploy-high overlay facet is NOT modeled (flagged). Sim wiring open. |
 | **Limited** (once per game) | ⏳ sim / ✅ **real game** | Wave 5: per-(unit, weapon) expenditure tracked in `SoloController.limited_used`; expended profiles are pre-filtered from BOTH the dice paths and the EV. Sim wiring open. |
-| **Caster** (cast a random spell after moving) | ⏳ | spell system unmodelled; Solo rule: D3+level random spell after move. |
+| **Caster** (cast a random spell after moving) | ⏳ sim / ✅ **real game** | Wave 6: the full official Solo v3.5.0 procedure (D3+X over the book-ordered faction list, cycle-to-valid, else hold) + the v3.5.1 token economy (X/round cap 6, spend-on-attempt, 4+, boost/interference ±1 per token in 18" LoS). Damage spells resolve mechanically (fixed hits → the shared save path; **no Shielded, no Cover vs spells**); buff/debuff/utility spells are cast + announced, effect applied manually. See "Wave 6" below. Sim wiring open. |
 | **Aircraft / Flying / Strider / Ambush / Scout** | ➖/⏳/✅ | Ambush/Scout deployment ✅ (real game). Wave 3: **Strider** ignores the Difficult-halving and **Flying** additionally skips Dangerous tests on the real AI's moves (`SoloController._execute_move`, core p.13/14 + solo overlay p.57). Aircraft stays out of scope (➖). |
 | **Transport(X) / Unstoppable** | ➖ | transports & aircraft-only targeting are out of the point-sim's scope. |
 
@@ -74,7 +74,7 @@ These change **which target** a weapon picks or **which action** a unit takes (n
 | **Takedown → heroes first** | 🆕 (partial) | `AiTargeting` Overlay.TAKEDOWN. **Flagged:** the rules' "models with upgrades, most expensive first" tier is **not representable** — the sim has no per-model upgrade cost, so only *heroes-first* is honoured. |
 | **Relentless → Hold and shoot when in range** | 🆕 | `SoloSim._forces_hold_and_shoot` |
 | **Indirect / Artillery → Hold and shoot when in range** | ✅ **real game (both)** | Artillery: Hold-only + shoot (`SoloController.forces_hold`) with the ±to-hit facets modeled (Wave 3); its deploy-high facet stays open. Indirect: Wave 5 — hold-and-shoot overlay (`hold_and_shoot_rule`), −1 after moving, LOS-free targeting and cover-ignore all modeled. |
-| Caster / Counter / Ambush / Scout / Aircraft ordering | ⏳/✅ | Wave 3: **Counter last in section** implemented in the real game's pick (`SoloController._select_ai_unit`); Shaken-last was already in. Ambush/Scout deployment ✅. Caster/Aircraft remain out of scope. |
+| Caster / Counter / Ambush / Scout / Aircraft ordering | ⏳/✅ | Wave 3: **Counter last in section** implemented in the real game's pick (`SoloController._select_ai_unit`); Shaken-last was already in. Ambush/Scout deployment ✅. **Caster: Wave 6** — the official cast procedure runs after the move, before the attack (`SoloController._plan_casts`). Aircraft remains out of scope. |
 
 ### Ambiguities flagged (not guessed)
 
@@ -826,3 +826,122 @@ covers both sides' units through the shared profile paths.
 
 Baseline 1202 → 1227 tests green (25 new: 9 registry/system-scoping/hygiene, 6 combat-math primitives,
 6 EV flow-through, 4 controller decision/state).
+
+## Wave 6 — Caster(X) spellcasting (real game, 2026-07-13)
+
+The most widespread previously-unautomated rule (fielded by every faction book with a spell list —
+all 226 across the five systems). Verified against GF/AoF/AoFS/AoFR/GFF Advanced Rules **v3.5.1**
+("Caster(X)" — byte-identical across all five systems: X tokens/round, cap 6, accumulate incl.
+off-table; spend the spell's value to try casting before attacking, one try per spell; 1d6, 4+ =
+effect on a target in line of sight; models with tokens within 18" LoS give +1/-1 per token) and
+the GF **Solo & Co-Op Rules v3.5.0** entry "Caster", which DEFINES the official AI procedure:
+
+> cast after moving (before attacking), selecting a random spell by rolling **D3+X** (X = caster
+> level); no valid target / not enough tokens → **cycle through the list** until a valid spell, or
+> else don't cast anything.
+
+The implementation follows that procedure verbatim; the EV metric fills ONLY what it leaves open
+(which target; how many boost/interference tokens) — the same charter as every other EV site.
+
+### Data layer — committed, text-free, system-scoped spell maps
+
+- `tools/spells_mechanics_export.py` (sibling of the rules-map generator) reads the maintainer's
+  LOCAL registry + the registry sync tool's Army Forge fetch cache and emits
+  `assets/solo/spells_mechanics_{gf,gff,aof,aofs,aofr}.json`: spell NAMES, thresholds and our own
+  numeric target/effect encoding — **never any spell prose** (recursive hygiene guard in the
+  generator + `spells_registry_test.test_committed_maps_carry_no_spell_prose`).
+- **System scoping is mandatory for spells too**: measured on the source data, **77 of 82 books
+  published for 2+ systems carry parameter-divergent spell lists** (same names — different target
+  counts / hits / ranges; only the per-system effect text carries the divergence, so the generator
+  parses each system's own text through a strict grammar at generation time). Pinned by
+  `spells_registry_test.test_spell_lists_diverge_across_systems_for_the_same_faction`
+  (Alien Hives "Animate Spirit": 1 target in GF, up to 2 in GFF).
+- Lists are **book-ordered** — the official D3+X pick indexes the printed list, so the committed
+  order is rule data (`SpellsRegistry`, cached loader keyed `(system, faction)`).
+- Status ladder per spell (never pretend): **modeled** (mechanics price + resolve it) · **castable**
+  (target side/count/range parsed → legally castable + announced; effect manual, EV 0) ·
+  **unmodeled** (grammar failed → the AI never selects it).
+- Map stats (generator output, registry state 2026-07-13): gf 47 factions / 282 spells
+  (160 modeled · 122 castable) · gff 53 / 318 (182 · 136) · aof 40 / 240 (134 · 106) ·
+  aofs 46 / 276 (155 · 121) · aofr 40 / 240 (134 · 106) — **1356 spells total, 765 modeled,
+  591 castable, 0 unparsed**.
+- The RULES maps gained the `Caster` entry (primitive `Caster`, params `rating X · token_cap 6 ·
+  cast_target 4 · aura_in 18 · boost_per_token 1`, per-system data), so the unmodeled-rules log
+  stops flagging Caster and `RulesRegistry.unit_rule_active` gates the cast phase system-scoped.
+
+### Mechanics layer — the three new primitives (`scripts/solo/ai_spell.gd`, pure)
+
+| Primitive | Semantics | Where |
+|---|---|---|
+| **P1 `cast_success_chance`** (+ `cast_target`) | 4+ base, +1/boost token, −1/interference token, clamped [2,6] (natural 1 fails / 6 succeeds) | plan + tray target number |
+| **P2 `spell_damage_ev`** | expected wounds from a **FIXED hit count** — no to-hit step; saves at the RAW (Armor-adjusted) Defense: **Shielded does NOT apply** ("+1 to defense rolls against hits that are not from spells") and **Cover does NOT apply** (granted "against shooting"); Blast ×min(X, models), on-6 trigger facets (Surge/Crack/Destructive) as expected sub-batches, Bane/Lacerate re-rolls, Deadly Tough-cap, Shred +hits/6, Regeneration family with the Bane/Lacerate/Disintegrate bypass | target ranking + boost economy |
+| **P3 `spell_modifier_delta`** | EV(with effect) − EV(without) over the SAME `AiEv` chain: `hit_mod` (via the new `spell_hit_mod` seam in `profile_ev`), `def_mod`, rule grants (Bane/Shred profile facets), scope-gated (melee/shooting/charging); movement/range/morale/casting modifiers price 0 — the honest boundary | buff/debuff target choice |
+
+Facet parsing (`spell_facets` + `effective_ap`) resolves the spells' weapon-rule tokens including
+the conditional-AP army rules (Shatter +2 vs Tough(3)+, Tear +4 vs Tough(9)+, Disintegrate +2 vs
+Def 2-3+ and regen-bypass) against the CONCRETE defender; unknown facets are conservative no-ops.
+
+### Policy layer — the cast phase (`SoloController._plan_casts`, after move / before attack)
+
+- One selection cycle per caster member (unit + attached heroes, each with its own tokens and
+  D3+X); the D3 is the controller's seeded RNG (self-play replays identically).
+- Validity per the official text: tokens ≥ threshold AND a legal target (side, range from the
+  caster unit's centre, LoS through the same `_has_los` seam the shoot decision uses).
+- Target choice (officially open → EV): damage → max P2 (multi-target spells take the N best);
+  buff → max P3 delta on the buffed unit's own next attack; debuff → P3 delta for our attacks
+  against it (or the reduction of ITS attack when the penalty lands on the target).
+- Token economy (officially open → deterministic marginal calculus, `plan_boost` /
+  `plan_interference`): boost from OTHER friendly casters within the 18" LoS aura, spent while the
+  marginal EV — [P(k+1) − P(k)] × effect value — clears the documented opportunity floor
+  (`TOKEN_VALUE_EPS = 0.05` wounds/token); interference mirrors it on the defending side.
+- Tokens are SPENT at plan time (the official cost is paid on the attempt, before the roll);
+  MP-synced via the existing `broadcast_unit_casts` seam.
+- Difficulty ladder (same axis as all knobs, never illegal): Rekrut/default = the official D3+X
+  first-valid; Veteran = D3+X but cycles past 0-EV spells; Kriegsherr/Albtraum = EV-best castable
+  spell (the same die-replacement licence as the targeting tie-break) + the marginal boost spend
+  (`SoloDifficulty.spend_boosts`, the pre-built gate).
+- Dev-mode records for EVERY decision: kind `cast` (candidate list with thresholds/EVs/validity,
+  the D3, the chosen spell/targets, boost + interference token counts, p_cast, tokens before/after)
+  and kind `cast_skip` (why the caster held).
+
+### Resolution layer — real tray dice (`main._solo_resolve_ai_casts`)
+
+announce → resist? → roll → saves → effect, matching the shooting choreography: attribution
+highlights + a battle-log line stating cost/boost/interference and the needed roll; then in a
+human-vs-AI game the RESIST PROMPT (v3.5.1 interference for the human side: one token per confirm,
+−1 each, drawn from their nearest caster in 18" LoS — the wave-6 "basic" prompt); then ONE visible
+cast die on the real tray; on success damage spells run the SHARED save machinery
+(`_solo_save_batch`: tray saves, Bane re-rolls, Deadly, Shred) at the Armor-adjusted but
+NOT-Shielded, NOT-Covered Defense, with the trigger roll ("roll as many dice as hits") feeding
+Surge/Crack/Destructive/Hazardous, Regeneration honoring the bypass facets, and the standard
+half-strength morale test. In native both-AI mode everything auto-rolls (the defender AI's
+interference was planned deterministically) — casters work unattended in the arena.
+
+Buff/debuff/utility spells announce the effect (the LIVE army-book spell text, runtime data — never
+committed) with an explicit "not auto-applied — apply manually" note, exactly the un-automated-rule
+convention. Human-side casting (radial "C", CastsDialog, token ±, preview ring) is untouched.
+
+### Honest gaps (kept visible, not guessed away)
+
+- **Buff/debuff effect application is manual** (announced + logged; the AI casts them per the
+  official procedure and values them via P3, but granted rules/modifiers do not yet alter later
+  dice automatically — needs a per-unit once-effect store consumed by every attack site).
+- **Interference of HUMAN casts by the AI** needs a cast-declaration hook (human casting is fully
+  manual today) — later wave, per the design.
+- **Advanced Casting (Winds/Currents of Power)** is an opt-in pre-game module that heavily rewrites
+  Caster(X) — out of scope (standard Caster only). **Spell Conduit** and **Mystic Terrain's** token
+  bonus likewise follow-ups.
+- **Last Stand** ("can't use rules that require picking a target, ex. Caster") is not tracked as a
+  state by the automation — if it ever is, the cast phase must gate on it.
+- **"This model's unit" Hazardous self-wounds** apply direct (no Regeneration roll) — a documented
+  simplification (5 spells fielded).
+- **The mirror SIM does not cast** (`SoloSim` untouched — its fairness oracle stays byte-identical);
+  sim casting via the same `AiSpell` helpers is the follow-up, as with the other real-game-first
+  waves.
+- Spell maps are generated from the registry sync cache; the registry-side spell sidecar
+  (`spells/<system>/<faction>.json` + a dedicated crawl in `rules_registry_sync.py`) is follow-up
+  plumbing — the committed maps carry the same derived content either way.
+
+Baseline 1227 → **1257 tests green** (30 new: 15 AiSpell primitives/facets/pick/token-economy,
+7 SpellsRegistry system-scoping/order/hygiene, 8 controller cast phase incl. the both-AI arena
+smoke where a Caster faction actually casts).

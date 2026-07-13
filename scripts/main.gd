@@ -739,6 +739,14 @@ func _solo_activate_one_ai() -> GameUnit:
 		await _run_ai_dangerous(unit, dangerous_models)
 	if unit.is_destroyed():
 		return unit
+	# Wave 6 — Caster(X): resolve the activation's planned casts BEFORE the attack (v3.5.1: "at any
+	# point before attacking"; the official solo procedure casts after moving). The tokens were spent
+	# at plan time (the attempt's cost); here the 4+ cast die rolls on the real tray and the effect
+	# lands (spell damage saves reuse the shooting save path — no Shielded, no Cover against spells).
+	if not (report.get("casts", []) as Array).is_empty():
+		await _solo_resolve_ai_casts(report)
+	if unit.is_destroyed():
+		return unit
 	if bool(report.get("can_shoot", false)):
 		await _run_ai_shooting(report)
 	elif int(report.get("action", 0)) == AiDecision.Action.CHARGE:
@@ -878,6 +886,9 @@ func set_both_ai(enabled: bool, p1_grade: String = "kriegsherr", p2_grade: Strin
 func _solo_apply_difficulty() -> void:
 	if solo_controller == null:
 		return
+	# Wave 6: in native both-AI mode the DEFENDING AI auto-plans its cast interference (no dialogs);
+	# in human-vs-AI the flag stays false and the human gets the resist prompt at resolution instead.
+	solo_controller.auto_interference = _solo_both_ai
 	solo_controller.difficulty_seed = _solo_arena_seed
 	solo_controller.difficulty_by_slot = {}
 	for slot in _solo_difficulty_grades:
@@ -1450,6 +1461,245 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		models_before - _solo_combined_alive(target), ("" if models_before - _solo_combined_alive(target) == 1 else "s")])
 	if landed > 0:
 		await _solo_shooting_morale(target, alive_before, _solo_owner_label(target))
+
+
+# === Wave 6 — Caster(X) cast resolution (official Solo v3.5.0 procedure; real tray dice) ===
+
+## Resolve every cast the controller planned for this activation: announce → (human resist prompt) →
+## the 4+ cast roll on the real tray → the effect. Damage spells reuse the shooting SAVE path with two
+## rule-mandated differences: Shielded does NOT apply ("+1 to defense rolls against hits that are not
+## from spells") and Cover does NOT apply (it is granted "against shooting"); there is NO to-hit roll
+## (spells deal fixed hits). Buff/debuff/utility spells announce their effect (the live spell text) and
+## stay manually applied — the honest wave-6 boundary, mirrored in docs/SOLO_AI_RULES_COVERAGE.md.
+func _solo_resolve_ai_casts(report: Dictionary) -> void:
+	if dice_roller_control == null or solo_controller == null:
+		return
+	for c in report.get("casts", []):
+		var cast := c as Dictionary
+		var caster: GameUnit = cast.get("caster")
+		if caster == null or caster.get_alive_count() == 0:
+			continue   # the caster died to a Dangerous-terrain test before the cast resolved
+		await _solo_resolve_one_cast(cast)
+	_solo_refresh_caster_markers()
+
+
+## One cast: the announced spell, the boost/interference-adjusted target number, one real tray die.
+func _solo_resolve_one_cast(cast: Dictionary) -> void:
+	var caster: GameUnit = cast["caster"]
+	var caster_unit: GameUnit = cast.get("caster_unit", caster)
+	var entry: Dictionary = cast.get("spell", {})
+	var effect: Dictionary = entry.get("effect", {})
+	var spell_name := str(cast.get("name", "?"))
+	var targets: Array = []
+	for t in cast.get("targets", []):
+		var tu := t as GameUnit
+		if tu != null and not tu.is_destroyed():
+			targets.append(tu)
+	if targets.is_empty():
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"%s's %s fizzles — no target remains" % [caster.get_name(), spell_name], true)
+		return
+	var boost := int(cast.get("boost", 0))
+	var interference := int(cast.get("interference", 0))
+	var base_target := int(cast.get("base_target", AiSpell.CAST_BASE_TARGET))
+	# ANNOUNCE (announce → resist? → roll → saves → effect): attribution highlights + one log line
+	# stating cost, boost/interference and the needed roll BEFORE any die is thrown.
+	var announce := _solo_show_attack_announce(caster_unit, targets[0], "casts %s at" % spell_name)
+	if battle_log != null:
+		var token_note := "%d token%s" % [int(cast.get("threshold", 0)), ("" if int(cast.get("threshold", 0)) == 1 else "s")]
+		if boost > 0:
+			token_note += ", +%d boost" % boost
+		if interference > 0:
+			token_note += ", -%d interference" % interference
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s casts %s at %s — needs %d+ (%s)" % [
+			caster.get_name(), spell_name, _solo_cast_target_label(targets),
+			AiSpell.cast_target(boost, interference, base_target), token_note], true)
+	await _solo_pace_hold(SoloController.Pace.ANNOUNCE)
+	# RESIST (v3.5.1: enemy models with tokens within 18" LoS may spend for -1 each): in a human-vs-AI
+	# game the human is prompted; in native both-AI the controller already planned + spent this.
+	if bool(cast.get("interference_open", false)) and not _solo_both_ai:
+		interference += await _solo_prompt_interference(caster, caster_unit, spell_name)
+	var target_num := AiSpell.cast_target(boost, interference, base_target)
+	# THE CAST ROLL — one visible die on the real tray (no hidden RNG).
+	var faces: Array = await _solo_tray_roll(1, target_num, "AI (%s)" % caster.get_name())
+	var success: bool = not faces.is_empty() and DiceRules.is_success(int(faces[0]), target_num, 0)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s: cast roll %d vs %d+ — %s" % [
+			spell_name, (int(faces[0]) if not faces.is_empty() else 0), target_num,
+			("SUCCESS" if success else "FAILED")], true)
+	if not success:
+		_solo_clear_announce(announce)
+		await _solo_show_outcome("%s fails to cast %s" % [caster.get_name(), spell_name])
+		return
+	if str(effect.get("kind", "")) == "damage":
+		for tu in targets:
+			await _solo_resolve_spell_damage(caster, caster_unit, spell_name, entry, tu)
+	else:
+		_solo_announce_spell_effect(caster, spell_name, effect, targets)
+	_solo_clear_announce(announce)
+	await _solo_show_outcome("%s resolves %s" % [caster.get_name(), spell_name])
+
+
+## The damage-spell resolution against ONE target: fixed hits (no to-hit roll), the optional trigger
+## roll for the on-6/on-1 facets ("Roll as many dice as hits …"), Blast fan-out, then the SHARED save
+## machinery (_solo_save_batch: real tray saves, Bane re-rolls, Deadly, Shred) at the Armor-adjusted
+## Defense — deliberately NOT Shielded-adjusted and NOT Cover-adjusted (spell hits, see the callers).
+func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_name: String,
+		entry: Dictionary, target: GameUnit) -> void:
+	var effect: Dictionary = entry.get("effect", {})
+	var facets: Dictionary = AiSpell.spell_facets(effect.get("weapon_rules", []))
+	var hits := int(effect.get("hits", 0))
+	if hits <= 0:
+		return
+	var alive_before: int = target.get_alive_count()
+	var models_before: int = _solo_combined_alive(target)
+	var hazardous: bool = _solo_spell_has_rule(effect, "Hazardous")
+	# Trigger roll (the spell text's "Roll as many dice as hits to see if on-6/on-1 effects trigger"):
+	# one die per printed hit; 6s feed Surge (+1 hit each) / Crack/Destructive (AP-upgraded sub-batch),
+	# 1s feed Hazardous (the caster's unit takes one wound each).
+	var trigger_sixes := 0
+	var trigger_ones := 0
+	if bool(facets.get("surge", false)) or int(facets.get("on6_ap", 0)) > 0 or hazardous:
+		var trigger_faces: Array = await _solo_tray_roll(hits, AiCombatMath.UNMODIFIED_SIX, "AI (%s)" % caster.get_name())
+		trigger_sixes = AiCombatMath.unmodified_sixes(trigger_faces)
+		for f in trigger_faces:
+			if int(f) == AiCombatMath.UNMODIFIED_ONE:
+				trigger_ones += 1
+	var total_hits := hits
+	if bool(facets.get("surge", false)):
+		total_hits += trigger_sixes
+	# Blast ×min(X, models) — a "model"-targeted spell resolves as a unit of 1 (no fan-out).
+	var fanout_models: int = 1 if str((entry.get("target", {}) as Dictionary).get("kind", "")) == "model" else _solo_combined_alive(target)
+	total_hits = AiCombatMath.blast_hits(total_hits, int(facets.get("blast", 0)), maxi(fanout_models, 1))
+	# Saves at the Armor-adjusted Defense — Shielded and Cover are EXCLUDED against spells.
+	_solo_log_armor(target)
+	var base_defense: int = _solo_armored_defense(target)
+	var def_ctx := {"defense": base_defense, "tough": _solo_unit_tough(target)}
+	var ap := AiSpell.effective_ap(facets, def_ctx)
+	var bane := bool(facets.get("bane", false))
+	var profile := {"name": spell_name, "ap": ap, "deadly": int(facets.get("deadly", 0)),
+		"shred": bool(facets.get("shred", false)), "rules": effect.get("weapon_rules", [])}
+	var human_defends: bool = not _solo_is_ai_unit(target)
+	var upgraded: int = mini(trigger_sixes if int(facets.get("on6_ap", 0)) > 0 else 0, total_hits)
+	var caused := 0
+	if upgraded > 0:
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d hit%s on a 6 → AP(+%d)" % [
+				spell_name, upgraded, ("" if upgraded == 1 else "s"), int(facets.get("on6_ap", 0))], true)
+		caused += await _solo_save_batch(caster, target, "%s (on-6)" % spell_name, upgraded,
+			base_defense, ap + int(facets.get("on6_ap", 0)), profile, human_defends, bane)
+	if total_hits - upgraded > 0:
+		caused += await _solo_save_batch(caster, target, spell_name, total_hits - upgraded,
+			base_defense, ap, profile, human_defends, bane)
+	# Regeneration: only Bane / Lacerate / Disintegrate wounds bypass it (the facets carry this).
+	var landed: int
+	if bane or bool(facets.get("ignores_regen", false)):
+		landed = await _solo_land_wounds(target, 0, caused)
+	else:
+		landed = await _solo_land_wounds(target, caused, 0)
+	await _solo_show_outcome("%s: %d hit%s → %d wound%s land — %s loses %d model%s" % [
+		spell_name, total_hits, ("" if total_hits == 1 else "s"), landed, ("" if landed == 1 else "s"),
+		target.get_name(), models_before - _solo_combined_alive(target),
+		("" if models_before - _solo_combined_alive(target) == 1 else "s")])
+	# Hazardous (army-book rule: "this model's unit takes one wound on unmodified rolls of 1").
+	if trigger_ones > 0 and hazardous:
+		_solo_apply_wounds(caster_unit, trigger_ones)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d trigger roll%s of 1 — %s takes %d wound%s" % [
+				spell_name, trigger_ones, ("" if trigger_ones == 1 else "s"), caster_unit.get_name(),
+				trigger_ones, ("" if trigger_ones == 1 else "s")], true)
+	if landed > 0 and not target.is_destroyed():
+		await _solo_shooting_morale(target, alive_before, _solo_owner_label(target))
+
+
+## Whether a spell's weapon-rule token list carries `rule_name` (facet gate for the dice path).
+func _solo_spell_has_rule(effect: Dictionary, rule_name: String) -> bool:
+	for r in effect.get("weapon_rules", []):
+		if str(r).strip_edges().begins_with(rule_name):
+			return true
+	return false
+
+
+## Announce a successful buff/debuff/utility spell: the effect stays MANUALLY applied (exactly like
+## every other unautomated rule — the once-per-session log convention), but the human sees WHAT the
+## spell does: the live army-book spell text (runtime data from the import — never committed).
+func _solo_announce_spell_effect(caster: GameUnit, spell_name: String, effect: Dictionary, targets: Array) -> void:
+	if battle_log == null:
+		return
+	var names: PackedStringArray = []
+	for t in targets:
+		names.append((t as GameUnit).get_name())
+	var effect_text := ""
+	if opr_army_manager != null and opr_army_manager.has_method("get_spells_for_unit"):
+		for sp in opr_army_manager.get_spells_for_unit(caster):
+			if str((sp as Dictionary).get("name", "")) == spell_name:
+				effect_text = str((sp as Dictionary).get("effect", ""))
+				break
+	if effect_text.is_empty():
+		var grant := str(effect.get("grants_rule", ""))
+		effect_text = ("grants %s (once)" % grant) if not grant.is_empty() else "see the faction's spell list"
+	battle_log.log_event(BattleLog.Category.COMBAT, "%s takes effect on %s: %s" % [
+		spell_name, ", ".join(names), effect_text], true)
+	battle_log.log_event(BattleLog.Category.GENERAL,
+		"Note: spell effects other than damage are not auto-applied — apply \"%s\" manually" % spell_name, true)
+
+
+## The human's resist prompt (v3.5.1 interference: enemy models with tokens within 18" LoS of the
+## caster's unit spend any number for -1 each). Iterative and optional: one token per confirm, cancel
+## keeps the rest — the wave-6 "basic prompt" (full counter-casting UX is a later wave). Returns the
+## interference total; the tokens are spent from the nearest eligible caster and MP-synced.
+func _solo_prompt_interference(caster: GameUnit, caster_unit: GameUnit, spell_name: String) -> int:
+	var spent := 0
+	while true:
+		var helpers: Array = solo_controller._aura_casters(solo_controller.human_slot, caster_unit, null)
+		if helpers.is_empty():
+			break
+		var total := 0
+		for h in helpers:
+			total += int((h as Dictionary)["tokens"])
+		var dlg := ConfirmationDialog.new()
+		dlg.title = "Enemy spell!"
+		dlg.dialog_text = "%s is casting %s.\nSpend 1 spell token to interfere (-1 to the cast roll)?\nTokens in 18\" line of sight: %d%s" % [
+			caster.get_name(), spell_name, total, (" (spent so far: %d)" % spent if spent > 0 else "")]
+		dlg.ok_button_text = "Spend 1 token (-1)"
+		dlg.get_cancel_button().text = "No"
+		add_child(dlg)
+		var confirmed := [false]
+		dlg.confirmed.connect(func() -> void: confirmed[0] = true)
+		dlg.popup_centered()
+		await dlg.visibility_changed   # fires on hide — both buttons close the dialog
+		dlg.queue_free()
+		if not confirmed[0]:
+			break
+		var payer := (helpers[0] as Dictionary)["unit"] as GameUnit
+		payer.spend_caster_points(1)
+		if network_manager != null and network_manager.has_method("broadcast_unit_casts"):
+			network_manager.broadcast_unit_casts(payer)
+		spent += 1
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s spends a spell token to interfere (-%d total)" % [
+				payer.get_name(), spent], true)
+	return spent
+
+
+## The joined display label of a cast's target list.
+func _solo_cast_target_label(targets: Array) -> String:
+	var names: PackedStringArray = []
+	for t in targets:
+		names.append((t as GameUnit).get_name())
+	return ", ".join(names)
+
+
+## Refresh every caster's purple token disc after the AI's token spends (plan-time spends included:
+## boost helpers and interference sources are known only to the controller, so refresh all).
+func _solo_refresh_caster_markers() -> void:
+	if radial_menu_controller == null or opr_army_manager == null:
+		return
+	for game_unit in opr_army_manager.game_units.values():
+		var gu := game_unit as GameUnit
+		if gu != null and gu.is_caster():
+			radial_menu_controller._update_caster_marker(gu)
 
 
 ## Pick the AI's shooting target for a weapon overlay (goal 003 P3): every alive HUMAN unit in range with a
