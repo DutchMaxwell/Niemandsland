@@ -41,7 +41,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var args := OS.get_cmdline_user_args()
-	var out_dir: String = args[0] if args.size() > 0 else "/home/user/basing_out"
+	var out_dir: String = args[0] if args.size() > 0 else OS.get_environment("HOME").path_join("basing_out")
 	# Optional filename suffix (e.g. "_v2" for a re-render). When set, only the AFTER pass runs
 	# (the BEFORE/legacy look was captured in the first round) plus a close brightness comparison.
 	var suffix: String = args[1] if args.size() > 1 else ""
