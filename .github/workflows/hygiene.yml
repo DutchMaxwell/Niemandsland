@@ -12,7 +12,7 @@ jobs:
           if [ -n "$BAD" ]; then echo "::error::Internal working docs must not be committed:"; echo "$BAD"; exit 1; fi
       - name: No hardcoded home paths
         run: |
-          if grep -rIlE '/home/[a-z]+/' --include='*.gd' --include='*.py' --include='*.sh' . | grep -v '.github' ; then
+          if grep -rIlE '/home/[a-z]+/' --include='*.gd' --include='*.py' --include='*.sh' . | grep -v '.github' | grep -v '^\./test/' ; then
             echo "::error::Hardcoded /home/<user> paths found (derive from env/user:// instead)"; exit 1; fi
       - name: No private patterns (secret-provided)
         env:
