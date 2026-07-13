@@ -519,3 +519,68 @@ no re-run required.
    `snap_charge`, factored into a shared `nearest_charge_vector`) and rigid-moves exactly that far along that
    line, capped at the band — so the nearest models land in contact. Tests:
    `test_charge_within_band_reaches_base_contact`, `test_target_beyond_charge_band_is_not_charged`.
+
+## Field-test findings — AI movement, placement & activation hardening (real game)
+
+A Windows build of the solo stack surfaced seven behaviour findings. All are in the **real-game controller
+path** (`solo_controller.gd` / `main.gd`); the headless **SIM (`solo_sim.gd`) and `MovementPlanner` are
+byte-identical** (the mirror-fairness oracle is untouched — the controller path adds its guarantees on top,
+gated so the sim never runs them). Every rule cites the official rulebook PDFs (GF/AoF Advanced Rules
+v3.5.1; Solo & Co-Op v3.5.0). Self-play audit (2 fixed seeds, the real board + real armies) before → after:
+
+| Audit class (self-play) | Before (s424242 / s777) | After |
+|---|---|---|
+| `coherency_broken` | 12 / 12 | **0 / 0** |
+| `base_overlap_inter_unit` | 2 / 2 | **0 / 0** |
+| `base_overlap_intra_unit` | 0 / 4 | **0 / 0** |
+| `model_in_impassable_terrain` | 1 / 0 | **0 / 0** |
+| `model_in_dangerous_terrain` | 0 / 0 | **0 / 0** |
+| `shoot_without_centre_los` | 1 / 0 | **0 / 0** |
+| **total violations** | **17 / 18** | **0 / 0** |
+
+1. **Movement "looks strange" + show the distance.** Route evidence (per-move `arc_in` vs `band_in` dumped
+   from self-play): the Theta*/funnel route is already taut — `arc` never exceeds the granted band and equals
+   it only when routing *around* terrain, i.e. no zig-zag and no over-budget truncation. So the "seltsam"
+   look was NOT the route geometry; it was the concrete causes fixed below — the end-state-leaking
+   presentation (finding 2), broken coherency (finding 6) and stacking (finding 3). **Multi-candidate routing
+   was therefore NOT adopted** (it would not measurably improve an already-taut, within-band route);
+   the concrete causes were fixed instead. The corridor **distance label** (`"9.4\" / 12\""`) was verified to
+   spawn for every move that produces a planned path (auto-fades, no leak) and is now computed from the
+   pre-gate route arc so it stays the truthful planned distance.
+2. **Presentation order (end state appeared first).** The controller applies + broadcasts the final model
+   positions immediately (state authority + MP), so the nodes showed the END. Fix (`main._solo_present_move_start`
+   via the pure `SoloController.presentation_start_positions`): the model nodes are returned to their route
+   START *before* the camera focus + announce beat, so the choreography reads (1) highlight the unit at its
+   start → (2) show the planned corridors while it is still there → (3) glide. Test:
+   `test_presentation_start_positions_returns_route_starts`.
+3. **Models stacked (AI placement) — the HARD no-overlap gate.** A ported, escape-scan-guaranteed
+   `SeparationResolver.resolve_overlaps` (shared `separation_checker` base geometry) runs after the formation
+   solver: every base is pushed off EVERY other base — same unit, other units, enemies (GF/AoF v3.5.1 p.7
+   "may never move through other models or units"). Applied to every AI **move** (per-model, terrain-aware)
+   AND at **deploy** (`_resolve_deploy_overlaps` — internal grid packing separated to contact, then the whole
+   unit rigid-shifted off other units so it never spreads out of coherency). Invariant achieved: **zero
+   overlapping bases** after every AI move/deploy (both seeds). Tests: `separation_resolver_test.gd`.
+4. **Unplaced Ambush units must NOT demand activation.** Reserves are already excluded from activation
+   eligibility (`is_eligible` / `eligible_units_for`) and the alternation counts; the residual path
+   (`_enemy_in_way` counting an off-table reserve as blocking the AI's route to an objective) was fixed —
+   an Ambush-reserve unit blocks no path (it is off-table).
+5. **The human's Ambush units — the game must ASK.** The human's Ambush-rule units are now set aside into
+   reserve at deployment (`set_aside_human_ambush`, symmetric to the AI, p.13 "May be set aside before
+   deployment"). At the start of any round ≥ 2 the game **prompts** the human (`_solo_prompt_human_ambush`)
+   to deploy them via guided placement (>9" from enemies, near an objective, terrain-legal — the same legal
+   core as the AI arrival) or keep waiting; the AI's world-model already counts them as existing-but-off-table
+   everywhere. Tests: `test_should_prompt_human_ambush_*`, `test_set_aside_human_ambush_*`.
+6. **AI broke coherency — the HARD coherency gate.** If, after the terrain + overlap passes, the unit is not
+   coherent (measured with the audit's own `CoherencyChecker` thresholds — 1" links, single chain, ≤ 9"/6"
+   spread), the whole move is shortened back along its taut line toward the coherent START (bisection) until
+   coherency holds (GF/AoF v3.5.1 p.7 "or as close as possible"). The shorten is overlap- AND terrain-aware,
+   so pulling back never re-introduces a stack or a terrain rest. Composed order per move: terrain → overlap →
+   coherency-shorten, applied AFTER the distance-truth trim (so the trim can never cut a shortened endpoint).
+   Self-play `coherency_broken`: **12 → 0** (both seeds).
+7. **AI activated two units back-to-back with initiative.** Root cause: `_solo_pending_replies` (owed AI
+   replies) was a member that could carry an UNDELIVERABLE reply across the round boundary (the human took a
+   round's last activation while the AI was already exhausted); the opener's own grant then stacked on top.
+   Fix: the fresh-round count is DERIVED (`pending_replies_at_round_start`), never incremented — the opener
+   grants exactly one AI activation (one-for-one alternation; a one-sided tail after exhaustion stays legal).
+   Tests: `test_pending_replies_at_round_start_is_derived_fresh_not_carried`,
+   `test_round_boundary_grants_ai_exactly_one_opener_activation`.
