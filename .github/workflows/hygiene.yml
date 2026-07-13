@@ -1,0 +1,23 @@
+name: Repo Hygiene
+on: [push, pull_request]
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 1 }
+      - name: No internal working docs
+        run: |
+          BAD=$(find . -maxdepth 2 -iname "CLAUDE.md" -o -iname "HANDOFF_*.md" -o -iname "HANDOVER*.md" | grep -v node_modules || true)
+          if [ -n "$BAD" ]; then echo "::error::Internal working docs must not be committed:"; echo "$BAD"; exit 1; fi
+      - name: No hardcoded home paths
+        run: |
+          if grep -rIlE '/home/[a-z]+/' --include='*.gd' --include='*.py' --include='*.sh' . | grep -v '.github' ; then
+            echo "::error::Hardcoded /home/<user> paths found (derive from env/user:// instead)"; exit 1; fi
+      - name: No private patterns (secret-provided)
+        env:
+          FORBIDDEN: ${{ secrets.FORBIDDEN_PATTERNS }}
+        run: |
+          if [ -z "$FORBIDDEN" ]; then echo "::warning::FORBIDDEN_PATTERNS secret not set — skipping"; exit 0; fi
+          HITS=$(grep -rIliE "$FORBIDDEN" . --exclude-dir=.git --exclude-dir=.github | wc -l)
+          if [ "$HITS" -gt 0 ]; then echo "::error::$HITS file(s) match private forbidden patterns (names withheld)"; exit 1; fi
