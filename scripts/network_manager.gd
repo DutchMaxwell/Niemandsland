@@ -696,6 +696,49 @@ func sync_rulers_to_peer(peer_id: int) -> void:
 		_remote_call("pin_ruler_networked", [int(d["id"]), int(d["owner"]), float(d["fx"]), float(d["fy"]), float(d["fz"]), float(d["tx"]), float(d["ty"]), float(d["tz"]), float(d["dist"]), bool(d["blocked"])], peer_id)
 
 
+# === Path painting: committed move trails (proof-of-movement, cosmetic-additive) ===
+
+## Broadcast ONE unit's committed trails from a single drop, so the OPPONENT sees the
+## painted proof too. `batch` is flat plain data, per moved model:
+## [model_id, radius_m, n_points, x0, z0, x1, z1, ...] — a handful of floats per move
+## (simplified polylines), strictly additive display data: the host-authoritative move
+## path (broadcast_move/_batch) is untouched. drop_id groups the messages of one drop
+## so the receiver's per-owner activation fade matches the sender's exactly.
+func broadcast_move_trails(owner_slot: int, unit_id: String, unit_name: String,
+		round_num: int, drop_id: int, batch: Array) -> void:
+	if not is_multiplayer_active() or batch.is_empty():
+		return
+	if not _validate_rpc_ready("broadcast_move_trails"):
+		return
+	_remote_call("sync_move_trails", [owner_slot, unit_id, unit_name, round_num, drop_id, batch], 0)
+
+
+## RPC: a peer committed move trails — paint the same chalk on our table. Purely
+## cosmetic: the trail renders from the message alone (unit identity is the id string,
+## no node lookup needed), and a missing MoveTrails node just drops the message.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_move_trails(owner_slot: int, unit_id: String, unit_name: String,
+		round_num: int, drop_id: int, batch: Array) -> void:
+	var trails := get_node_or_null("/root/Main/MoveTrails")
+	if trails == null or not trails.has_method("commit_trail"):
+		return
+	var i := 0
+	while i + 2 < batch.size():
+		var model_id := int(batch[i])
+		var radius := float(batch[i + 1])
+		var n := int(batch[i + 2])
+		i += 3
+		var pts := PackedVector2Array()
+		var j := 0
+		while j < n and i + 1 < batch.size():
+			pts.append(Vector2(float(batch[i]), float(batch[i + 1])))
+			i += 2
+			j += 1
+		if pts.size() >= 2 and radius > 0.0:
+			trails.commit_trail(owner_slot, unit_id, unit_name, model_id, pts,
+					radius, round_num, drop_id)
+
+
 ## Helper to broadcast movement to all peers
 func broadcast_move(object_id: int, pos: Vector3) -> void:
 	if not is_multiplayer_active():

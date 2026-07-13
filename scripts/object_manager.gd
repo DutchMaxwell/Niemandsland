@@ -110,6 +110,17 @@ var range_ring_controller: Node = null
 # rings; local-only display aid. See scripts/movement_range_controller.gd.
 var movement_range_controller: Node = null
 
+# Path painting (move trails): the model IS the brush. During a drag the anchor's
+# traversed polyline is sampled and painted live behind the models (MoveTrails, injected
+# by main.gd); on drop each moved model's own path (the anchor path translated to its
+# base, drop-resolved final appended) rides the selection_dropped seam. T toggles trail
+# visibility, Shift+T clears; a left-click on a committed trail shows its measured proof.
+var move_trails: Node = null
+var _drag_path_points: PackedVector2Array = PackedVector2Array()
+var _drag_anchor_object: Node3D = null
+## Min anchor travel (metres) between two path samples (~0.2").
+const TRAIL_SAMPLE_MIN_M: float = 0.005
+
 # Movement cap: an opt-in limit so a dragged model/unit can't move further than its Advance or
 # Rush/Charge allowance. OFF = free drag (sandbox default). Set from the HUD "Movement" area.
 enum MovementCap { OFF, ADVANCE, RUSH }
@@ -399,6 +410,13 @@ func _input(event: InputEvent) -> void:
 				_clear_all_rulers()
 			else:
 				_clear_my_rulers()
+		elif event.keycode == KEY_T and move_trails != null:
+			# Path painting: T hides/shows the committed move trails, Shift+T clears them
+			# (local display choice — the ledger keeps its records either way).
+			if event.shift_pressed:
+				move_trails.clear_all()
+			else:
+				move_trails.toggle_trails_visible()
 
 
 ## Double-click handling: select the WHOLE unit under the cursor in one click (issue #81) — no box
@@ -491,6 +509,14 @@ func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> voi
 				_add_to_selection(target)
 				_start_dragging(screen_pos)
 			return
+
+	# Path painting click-proof: a click that hit no selectable may sit on a committed
+	# trail — surface its measured proof ("Unit — X.X\" moved"). Deliberately does NOT
+	# consume the click, so box selection below keeps working.
+	if move_trails != null:
+		var proof_pos := _get_table_position_at_screen(screen_pos)
+		if proof_pos != Vector3.INF:
+			move_trails.try_proof_at(proof_pos)
 
 	# Anything else starts a box selection: the table, a terrain prop (walls,
 	# containers, trees...) or empty space past the table edge. Requiring a TABLE hit
@@ -1035,6 +1061,14 @@ func _start_dragging(screen_pos: Vector2) -> void:
 	# Anchor = first movable object (original position)
 	_drag_anchor_position = _drag_start_positions[movable[0]]
 
+	# Path painting: start the traversed-path record at the anchor's start, and open the
+	# live ribbons (one per painted mover) that follow the drag behind the models.
+	_drag_anchor_object = movable[0]
+	_drag_path_points = PackedVector2Array(
+		[Vector2(_drag_anchor_position.x, _drag_anchor_position.z)])
+	if move_trails != null:
+		move_trails.begin_live(_live_trail_specs())
+
 	# Resolve the movement cap (Advance/Rush inches → metres) once for this drag.
 	_movement_cap_meters = _compute_movement_cap_meters()
 
@@ -1117,6 +1151,11 @@ func _stop_dragging() -> void:
 
 		# Battle-Log / replay seam: every object that actually moved, with exact from→to table positions
 		# (y flattened to the table plane). Read from _drag_start_positions BEFORE it is cleared below.
+		# Path painting: each entry also carries the model's TRAVERSED polyline ("path": the anchor's
+		# sampled path translated to this base, with the drop-RESOLVED final position appended and
+		# collinear noise simplified — never re-routed), its measured arc length ("arc_in") and the
+		# base half-width ("radius_m") — main.gd commits these as visible trails + ledger entries.
+		var base_path: PackedVector2Array = MoveLedger.simplify(_drag_path_points)
 		var moves: Array = []
 		for obj in _selected_objects:
 			if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
@@ -1127,7 +1166,16 @@ func _stop_dragging() -> void:
 			end.y = 0.0
 			var inches: float = start.distance_to(end) * METERS_TO_INCHES
 			if inches > 0.1:
-				moves.append({"node": obj, "from": start, "to": end, "inches": inches})
+				var offset := Vector2(start.x - _drag_anchor_position.x, start.z - _drag_anchor_position.z)
+				var path: PackedVector2Array = MoveLedger.with_final(
+						MoveLedger.translated(base_path, offset), Vector2(end.x, end.z))
+				moves.append({"node": obj, "from": start, "to": end, "inches": inches,
+						"path": path, "arc_in": MoveLedger.length_inches(path),
+						"radius_m": _trail_radius_for(obj)})
+		# The live ribbons hand over to the committed trails (drawn by main's
+		# selection_dropped handler below, in the same frame).
+		if move_trails != null:
+			move_trails.end_live()
 		if not moves.is_empty():
 			selection_dropped.emit(moves)
 
@@ -1139,6 +1187,8 @@ func _stop_dragging() -> void:
 	_coherency_update_timer = 0.0
 	_drag_start_positions.clear()
 	_drag_anchor_position = Vector3.ZERO
+	_drag_anchor_object = null
+	_drag_path_points = PackedVector2Array()
 	_destroy_drag_line()
 
 
@@ -1380,12 +1430,101 @@ func _cancel_drag() -> void:
 			if obj is RigidBody3D:
 				obj.freeze = false
 
+	# Cancelled = no move executed: the live ribbons vanish, nothing is committed.
+	if move_trails != null:
+		move_trails.end_live()
+
 	_is_dragging = false
 	_move_broadcast_timer = 0.0
 	_coherency_update_timer = 0.0
 	_drag_start_positions.clear()
 	_drag_anchor_position = Vector3.ZERO
+	_drag_anchor_object = null
+	_drag_path_points = PackedVector2Array()
 	_destroy_drag_line()
+
+
+# ===== Path painting helpers (move trails) =====
+
+## The live-ribbon specs for the current drag: one entry per painted mover —
+## {offset (mover start - anchor start, XZ), radius_m (base half-width), owner (army
+## player slot)}. Only battlefield OPR pieces paint (live model bases and regiment
+## trays); terrain, dice and parked casualties never leave trails.
+func _live_trail_specs() -> Array:
+	var specs: Array = []
+	for obj in _drag_start_positions:
+		if not is_instance_valid(obj):
+			continue
+		var radius := _trail_radius_for(obj)
+		if radius <= 0.0:
+			continue
+		var start: Vector3 = _drag_start_positions[obj]
+		specs.append({
+			"offset": Vector2(start.x - _drag_anchor_position.x, start.z - _drag_anchor_position.z),
+			"radius_m": radius,
+			"owner": _trail_owner_of(obj),
+		})
+	return specs
+
+
+## The trail ribbon's half-width (metres) for a dragged object — the base's OUTER edge
+## is the binding geometry rule, so the ribbon is exactly as wide as the base. 0.0 =
+## this object paints no trail (terrain, dice, dead/parked models, unknown pieces).
+func _trail_radius_for(obj: Node3D) -> float:
+	if obj == null or not is_instance_valid(obj):
+		return 0.0
+	if obj is RegimentTray or obj.is_in_group(RegimentTray.GROUP):
+		return _tray_trail_radius(obj)
+	if not obj.has_meta("model_instance") or bool(obj.get_meta("deleted", false)):
+		return 0.0
+	var model := obj.get_meta("model_instance") as ModelInstance
+	if model == null or not model.is_alive:
+		return 0.0
+	var shape := SeparationChecker.shape_for_model(model)
+	return shape.bounding_radius() if shape != null else 0.0
+
+
+## A regiment moves as ONE block: its ribbon spans the member bases across the tray's
+## local X (frontage) axis — exact for the forward/backward moves regiments make
+## (AoF:R p.8, Shift locks the drag to that axis); pivot arcs are a later stage.
+func _tray_trail_radius(tray: Node3D) -> float:
+	var basis_x: Vector3 = tray.global_transform.basis.x
+	var axis := Vector2(basis_x.x, basis_x.z)
+	if axis.length_squared() < 0.000001:
+		return 0.0
+	axis = axis.normalized()
+	var origin := Vector2(tray.global_position.x, tray.global_position.z)
+	var extent := 0.0
+	for child in tray.get_children():
+		if not (child is Node3D) or not child.has_meta("model_instance"):
+			continue
+		var model := child.get_meta("model_instance") as ModelInstance
+		if model == null or not model.is_alive:
+			continue
+		var shape := SeparationChecker.shape_for_model(model)
+		if shape == null:
+			continue
+		extent = maxf(extent, absf((shape.center - origin).dot(axis)) + shape.bounding_radius())
+	return extent
+
+
+## The owning ARMY's player slot for a dragged object (trail colour + the per-owner
+## activation bookkeeping). Falls back through the unit's player_id; a regiment tray
+## reads its first live member. 0 = unknown (neutral chalk).
+func _trail_owner_of(obj: Node3D) -> int:
+	if obj == null or not is_instance_valid(obj):
+		return 0
+	if obj.has_meta("opr_player_id"):
+		return int(obj.get_meta("opr_player_id"))
+	if obj.has_meta("game_unit"):
+		var gu = obj.get_meta("game_unit")
+		if gu != null and "unit_properties" in gu:
+			return int(gu.unit_properties.get("player_id", 0))
+	if obj is RegimentTray or obj.is_in_group(RegimentTray.GROUP):
+		for child in obj.get_children():
+			if child is Node3D and child.has_meta("model_instance"):
+				return _trail_owner_of(child)
+	return 0
 
 
 ## Records the just-finished drag as one undoable MoveAction. No-op if nothing
@@ -1857,22 +1996,43 @@ func _update_drag(screen_pos: Vector2) -> void:
 				if not batch.is_empty():
 					_network_manager.broadcast_move_batch(batch)
 
+		# Path painting: sample the anchor's TRAVERSED polyline (the model is the brush —
+		# the record is what was actually dragged, never re-routed).
+		var live_tail := Vector2.ZERO
+		var have_tail := false
+		if _drag_anchor_object != null and is_instance_valid(_drag_anchor_object):
+			var apos := _drag_anchor_object.global_position
+			live_tail = Vector2(apos.x, apos.z)
+			have_tail = true
+			if _drag_path_points.is_empty() \
+					or _drag_path_points[_drag_path_points.size() - 1].distance_to(live_tail) >= TRAIL_SAMPLE_MIN_M:
+				_drag_path_points.append(live_tail)
+
 		# Calculate horizontal distance for display
 		var current_anchor_pos = anchor.global_position
 		var horizontal_distance = _horizontal_distance(_drag_anchor_position, current_anchor_pos)
 		var distance_inches = horizontal_distance * METERS_TO_INCHES
 
-		# Update drag line visualization
+		# Update drag line visualization (the straight line keeps its own direct distance)
 		_update_drag_line(_drag_anchor_position, current_anchor_pos, distance_inches)
 
-		# Emit distance
-		distance_changed.emit(distance_inches, _drag_anchor_position, current_anchor_pos)
+		# Emit the CONSUMED inches (arc length of the painted path + the bit since the
+		# last sample) — the live measurement of the design ("the band measures live").
+		# Falls back to the straight distance when no path is being recorded.
+		var consumed_inches: float = distance_inches
+		if have_tail and _drag_path_points.size() >= 1:
+			consumed_inches = MoveLedger.length_inches(_drag_path_points) \
+					+ _drag_path_points[_drag_path_points.size() - 1].distance_to(live_tail) * METERS_TO_INCHES
+		distance_changed.emit(consumed_inches, _drag_anchor_position, current_anchor_pos)
 
 		# Throttled live update for coherency feedback while dragging
 		_coherency_update_timer += get_process_delta_time()
 		if _coherency_update_timer >= COHERENCY_UPDATE_INTERVAL:
 			_coherency_update_timer = 0.0
 			drag_updated.emit()
+			# Repaint the live trail ribbons behind the dragged models (same throttle).
+			if move_trails != null and have_tail:
+				move_trails.update_live(_drag_path_points, live_tail)
 
 
 ## Start measuring distance from a point on the table
@@ -3460,10 +3620,20 @@ func clear_all_objects(broadcast: bool = true) -> void:
 	if boundary_visualizer and boundary_visualizer.has_method("clear_all"):
 		boundary_visualizer.clear_all()
 
+	# An emptied table has no moves to prove — the painted trails go with it
+	# (single seam: covers the local button AND the remote clear).
+	if move_trails != null:
+		move_trails.clear_all()
+
 
 ## Resets all units to their import positions and clears all markers/status
 ## Unlike clear_all_objects(), this preserves the models
 func sort_table(broadcast: bool = true) -> void:
+	# Sort Table teleports every model back to its import spot — the trails no longer
+	# describe any executed move, so they clear (locally and via the synced re-run).
+	if move_trails != null:
+		move_trails.clear_all()
+
 	# Get reference to OPR army manager via Main. Use the absolute path (matches
 	# how this manager resolves its other siblings) instead of a recursive
 	# find_child() string search.

@@ -13,6 +13,7 @@ const UnitBoundaryVisualizerScript = preload("res://scripts/unit_boundary_visual
 const RangeRingControllerScript = preload("res://scripts/range_ring_controller.gd")
 const MovementRangeControllerScript = preload("res://scripts/movement_range_controller.gd")
 const PinnedRulersScript = preload("res://scripts/pinned_rulers.gd")
+const MoveTrailsScript = preload("res://scripts/move_trails.gd")
 
 # ==============================================================================
 # CONSTANTS
@@ -243,6 +244,7 @@ var unit_boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
 var range_ring_controller: Node = null  # RangeRingController (base-anchored range auras)
 var movement_range_controller: Node = null  # MovementRangeController (Advance/Rush reach)
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
+var move_trails: Node = null  # MoveTrails (path painting: chalk trails + move ledger)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
 var battlefield_stains: BattlefieldStains = null
@@ -1080,6 +1082,9 @@ func _do_next_round() -> void:
 	if opr_army_manager:
 		opr_army_manager.advance_round()
 	_refresh_round_visuals()
+	# Round advance ends every activation — the painted move trails sweep clean.
+	if move_trails:
+		move_trails.on_round_advance()
 	if network_manager:
 		network_manager.broadcast_round_advance()
 
@@ -1087,6 +1092,8 @@ func _do_next_round() -> void:
 ## A remote peer advanced the round (the RPC already advanced our state).
 func _on_remote_round_advanced() -> void:
 	_refresh_round_visuals()
+	if move_trails:
+		move_trails.on_round_advance()
 
 
 ## Refreshes everything advance_round() affects: the button label plus the
@@ -1676,6 +1683,63 @@ func _log_move_summaries(summaries: Array) -> void:
 		else:
 			battle_log.log_event(BattleLog.Category.MOVEMENT,
 				"%s: %d of %d models move %.0f\"" % [unit_name, count, alive, max_in])
+
+
+## Path painting: a drag dropped — commit each moved model's traversed path as a visible
+## trail + ledger entry (MoveTrails), and replicate the proof to the other players as
+## small additive polyline messages (the host-authoritative move path is untouched).
+## ONE drop_id groups everything in this drop — locally AND in the MP messages — so a
+## multi-unit drop never fades its own trails on either side.
+func _on_trails_dropped(moves: Array) -> void:
+	if move_trails == null:
+		return
+	var round_num: int = opr_army_manager.current_round if opr_army_manager != null else 0
+	var drop_id: int = Time.get_ticks_msec()
+	var per_unit: Dictionary = {}   # unit_id -> {"owner", "name", "batch": Array}
+	for mv in moves:
+		var node: Node3D = mv.get("node")
+		var path: PackedVector2Array = mv.get("path", PackedVector2Array())
+		var radius: float = float(mv.get("radius_m", 0.0))
+		if node == null or not is_instance_valid(node) or path.size() < 2 or radius <= 0.0:
+			continue
+		var gu: GameUnit = _trail_unit_of(node)
+		if gu == null:
+			continue
+		var owner: int = int(gu.unit_properties.get("player_id", 0))
+		var model_id: int = int(node.get_meta("network_id")) if node.has_meta("network_id") else 0
+		move_trails.commit_trail(owner, gu.unit_id, gu.get_name(), model_id, path,
+				radius, round_num, drop_id)
+		if network_manager != null and network_manager.is_multiplayer_active():
+			var entry: Dictionary = per_unit.get(gu.unit_id, {})
+			if entry.is_empty():
+				entry = {"owner": owner, "name": gu.get_name(), "batch": []}
+				per_unit[gu.unit_id] = entry
+			var batch: Array = entry["batch"]
+			batch.append(model_id)
+			batch.append(radius)
+			batch.append(path.size())
+			for p in path:
+				batch.append(p.x)
+				batch.append(p.y)
+	for unit_id in per_unit:
+		var e: Dictionary = per_unit[unit_id]
+		network_manager.broadcast_move_trails(int(e["owner"]), str(unit_id),
+				str(e["name"]), round_num, drop_id, e["batch"])
+
+
+## The GameUnit behind a dragged battlefield piece (model node or regiment tray) — the
+## trail's unit identity. Mirrors _battle_log_unit_name's resolution; null = no unit
+## (terrain / dice / props — they paint no trails).
+func _trail_unit_of(node: Node3D) -> GameUnit:
+	if node == null or not is_instance_valid(node):
+		return null
+	if node.has_meta("game_unit"):
+		return node.get_meta("game_unit") as GameUnit
+	if node is RegimentTray and opr_army_manager != null:
+		for reg in opr_army_manager.regiments.values():
+			if reg != null and reg.tray == node and reg.game_unit != null:
+				return reg.game_unit
+	return null
 
 
 ## Alive model count of the unit a node belongs to (denominator for partial-move lines).
@@ -4483,6 +4547,21 @@ func _init_radial_menu() -> void:
 	add_child(pinned_rulers)
 	object_manager.pinned_rulers = pinned_rulers
 
+	# Path painting (P1+P2): the model is the brush — drags paint chalk trails as wide
+	# as the base, every executed move lands in the ledger with its measured arc, trails
+	# persist until the unit's activation ends and replicate to the opponent (the
+	# proof-of-movement layer). T hides them, Shift+T clears, click a trail for proof.
+	move_trails = MoveTrailsScript.new()
+	move_trails.name = "MoveTrails"
+	add_child(move_trails)
+	object_manager.move_trails = move_trails
+	object_manager.selection_dropped.connect(_on_trails_dropped)
+	# A unit marked Activated is DONE for the round — its trail's job ends with it.
+	if radial_menu_controller.has_signal("unit_activated"):
+		radial_menu_controller.unit_activated.connect(func(gu) -> void:
+			if gu != null and move_trails != null:
+				move_trails.on_activation_done(gu.unit_id))
+
 	# Create unit boundary visualizer (shows which models belong to which unit)
 	unit_boundary_visualizer = UnitBoundaryVisualizerScript.new()
 	unit_boundary_visualizer.name = "UnitBoundaryVisualizer"
@@ -4614,6 +4693,10 @@ func _stain_is_vehicle(props: Dictionary) -> bool:
 func _on_remote_activation_updated(game_unit: GameUnit) -> void:
 	if radial_menu_controller:
 		radial_menu_controller._update_activated_markers(game_unit)
+	# Marked Activated remotely = that unit's activation is done — its trails fade
+	# (same rule as the local toggle, so both tables stay in step).
+	if move_trails != null and game_unit != null and game_unit.is_activated:
+		move_trails.on_activation_done(game_unit.unit_id)
 
 
 ## Called when a remote peer changes a unit marker (Fatigued, Shaken, etc.)
@@ -4632,6 +4715,8 @@ func _on_remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, ad
 		"ActivatedMarker":
 			game_unit.is_activated = add
 			radial_menu_controller._update_activated_markers(game_unit)
+			if move_trails != null and add:
+				move_trails.on_activation_done(game_unit.unit_id)
 		_:
 			# Dialog marker (Pinned, Stunned, custom, counter, ...) - render its token
 			radial_menu_controller.set_unit_marker_token(game_unit, marker_name, add, color, value)
