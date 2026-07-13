@@ -584,3 +584,129 @@ v3.5.1; Solo & Co-Op v3.5.0). Self-play audit (2 fixed seeds, the real board + r
    grants exactly one AI activation (one-for-one alternation; a one-sided tail after exhaustion stays legal).
    Tests: `test_pending_replies_at_round_start_is_derived_fresh_not_carried`,
    `test_round_boundary_grants_ai_exactly_one_opener_activation`.
+
+## Field-test round 6 — seven findings, centred on sequential per-model flow movement (real game, 2026-07-13)
+
+The maintainer's sixth field test (build `61c3527`) surfaced seven findings. The centrepiece (#7) is his own
+design — SEQUENTIAL PER-MODEL FLOW — which replaces the rigid formation-slot slide for loose AI units. All
+fixes live in the game/solo layer (`MovementPlanner` real-game path, `SoloController`, `main.gd`); `SoloSim`
+and the SIM's empty-opts `plan_unit_step` path are UNTOUCHED, so the mirror-fairness oracle is byte-identical
+(no re-run required — same precedent as waves 1–5). Each rule cites the PDFs (GF/AoF Advanced Rules v3.5.1;
+Solo & Co-Op v3.5.0).
+
+### The sequential-flow architecture (finding 7 — the breakthrough)
+
+At a choke point the rigid formation slide drives every model at its own translated slot and they **block each
+other** — the formation jams into nonsense. The new placement, in `MovementPlanner.plan_sequential_flow`
+(driven from `_plan_unit_step_unified`, the `opts["radii"]` real-game path only):
+
+1. **Order** the unit's models by distance to the DESIGNATED DESTINATION (`centroid + delta`), nearest FIRST,
+   ties broken by stable model index — a total order, so it is deterministic regardless of sort stability.
+2. **Move them ONE AT A TIME.** Each model plans its OWN taut route to its slot — configuration-space Theta*
+   + funnel/string-pull, walls inflated by the base radius (`_cspace_blocked`) — treating the **already-placed**
+   models (at their final spots) and the **not-yet-moved** models (at their current spots) as BODY obstacles
+   (base contact allowed, no 1" buffer — same unit); other units keep their full 1" no-go zones. The lead
+   models vacate forward and the rest FLOW after them through the gap.
+3. **Progressive coherency:** each model, once walked, is pulled into a 1" link with the already-placed set
+   (`_pull_into_placed`, the neighbour's own body excluded so base contact is reachable) — or as close as a
+   clear pull allows. A Charge skips this (it must reach base contact with the enemy).
+4. **Safety net:** `solve_formation` (the unified constraint solver — base-separation, coherency,
+   unit-spacing, terrain-avoidance projected together) runs on the flow's output; a fully-legal flow is
+   returned unchanged (its score short-circuits). The HARD final gate in `_execute_move` (terrain → overlap →
+   coherency) remains the last word.
+5. **Presentation:** the flow order is written back to `opts["flow_order"]`, `SoloController` reorders
+   `last_move_paths` into it, and `main._solo_animate_move` glides each model INDIVIDUALLY in that order
+   (corridors + distance label drawn up front, not-yet-moved models waiting at their start; Fast-AI compresses
+   the per-model glide). The step-by-step flow is now visible, exactly as the maintainer specified.
+
+   Tests: `test_sequential_flow_threads_a_narrow_gap_that_the_rigid_slide_jams` (a gap the rigid slide jams;
+   the flow files all models through, no wall crossed, ends coherent), `…_order_is_nearest_destination_first_
+   and_deterministic`, `…_open_field_matches_the_rigid_slide`.
+
+### The other six findings
+
+6. **Edge-not-centre terrain checks.** Every terrain no-rest / containment check in the solo path now tests the
+   base's OUTER EDGE (centre + 8 base-edge points at the real base radius — shared `_base_edge_offsets_world`),
+   never the centre point alone: the round-5 terrain-out gate (`_world_forbidden` / `_project_out_forbidden_
+   world` / `_config_terrain_clear` are now radius-aware) and the difficult/dangerous destination checks
+   (`_targets_in_difficult` / `_targets_in_dangerous`). This is the "models half inside containers" cause — a
+   base whose centre clears a container but whose edge overlaps it is now rejected. Test:
+   `test_world_forbidden_is_edge_aware_for_a_container_the_base_only_touches`.
+1. **Deployment placed bases in Blocking terrain (containers).** A container may be a SPAWNED object carrying
+   WALL SEGMENTS rather than a terrain-grid cell, so `get_terrain_at_world_position` returns NONE and the tiny
+   2 cm physics probe can miss it. The deploy `blocked_normal` / `blocked_flying` (`main._on_solo_deploy_
+   pressed`) now ALSO test the container/ruin wall segments (`get_wall_segments_world`, a sample point within
+   2 cm of any wall is blocked); combined with `AiDeployment`'s existing base-edge footprint sampling, no base
+   edge overlaps a container at deploy. (`AiDeployment._blocked_at` edge sampling is already unit-tested.)
+2 & 3. **Advance under-moves AND doesn't shoot.** Root cause was the round-5 coherency gate: the whole-unit
+   `_shorten_world_to_legal` bisected the ENTIRE move back toward the start whenever one straggler broke
+   coherency, systematically under-moving the unit — and an under-moved advance then ended short of shooting
+   range, so it never shot. Fix: with finding 7's progressive coherency the unit usually arrives coherent, and
+   when it does not the MINIMAL per-model repair (`_pull_stragglers_coherent_world`) pulls ONLY the stragglers
+   into a link, leaving the models that advanced correctly at their full move; the whole-unit shorten remains
+   only as a guaranteed-coherent last resort. The shoot-after-advance step was verified intact: `report.can_
+   shoot` is measured on the FINAL (post-gate) positions and fires in `_solo_activate_one_ai`. Test:
+   `test_pull_stragglers_restores_coherency_without_moving_the_advanced_models`.
+4. **Ambush detection (placement + activation).** Both sides' Ambush units are recognised and set aside
+   (`deploy_army` / `set_aside_human_ambush`), reserves stay off-table everywhere (`unit_in_reserve` gates
+   eligibility, obstacles, targets — reserves are never counted in alternation). The real bug was a RACE: the
+   round-2+ AI arrival + human prompt ran off the fire-and-forget `round_advanced` signal, CONCURRENTLY with
+   the opener pump, so the AI could open while reserves were still off-table / the human dialog was still open,
+   and a just-arrived reserve was miscounted. Fixed by sequencing them into an AWAITED `_solo_round_start`
+   called from `_solo_end_round` BEFORE the opener pumps (eligibility read after, so a just-arrived reserve
+   counts this round).
+5. **Human unit wiped in melee during ITS OWN activation → alternation stuck.** A unit destroyed by a
+   strike-back (or dangerous test) can never be marked activated via the radial toggle, so the alternation
+   trigger never fired and the AI never got its reply. `_run_human_attack` now AUTO-COMPLETES it
+   (`SoloController.human_activation_autocompletes` — destroyed AND not already marked): it counts as the
+   human's activation and grants the AI its one alternating reply. A pre-toggled unit is never double-counted.
+   Test: `test_human_activation_autocompletes_only_when_destroyed_and_unmarked`.
+
+### Self-play audit (real board + real armies, before → after)
+
+Both mirror armies run the identical AI; the geometry audit (`tools/solo_selfplay.gd`, harness from
+`feat/solo-selfplay-harness`) flags every base overlap, coherency break, and model resting in impassable /
+dangerous terrain per activation. Three matches were run (Battle Brothers vs Robot Legions, real board):
+s424242 and s2024 on the default board, s777 on an alternate board (layout 13371337).
+
+The strongest before→after is the **head-to-head on seed s2024** (same seed, base `61c3527` vs this branch):
+
+| Class | base `61c3527` (before) | this branch (after) |
+|---|---|---|
+| `coherency_broken` | **2** (R3, R4) | **0** |
+| `base_overlap_intra_unit` | 0 | **0** |
+
+The sequential flow + progressive coherency ELIMINATE the base build's after-move coherency breaks. (An
+intermediate build introduced a deploy-side intra-unit stack — the edge-aware terrain-out spreading a compact
+grid — caught by this same audit and fixed by re-separating own bases after the deploy terrain-out; the final
+branch is 0/0.) Per-seed, after:
+
+| Audit class (self-play) | s424242 (default board) | s777 (alt board) | s2024 (default board) |
+|---|---|---|---|
+| `coherency_broken` | 0 | 0 | 0 |
+| `base_overlap_intra_unit` | 0 | 0 | 0 |
+| `model_in_impassable_terrain` | 0 | 0 | 0 |
+| `model_in_dangerous_terrain` | 0 | 0 | 0 |
+| `base_overlap_inter_unit` | 1 † | 0 | 0 |
+| `shoot_without_centre_los` | 0 | 1 ‡ | 0 |
+| **total** | **1** | **1** | **0** |
+
+The classes the round-6 rewrite governs — **coherency, intra-unit overlap, impassable- and dangerous-terrain
+rests — are 0 across all three seeds**, unchanged from the post-round-5 baseline (which was 0 on these).
+The two incidental flags are pre-existing edge cases outside the round-6 scope, not flow regressions:
+
+- **†** A DEEP inter-unit base overlap in a multi-charger MELEE SCRUM (two AI units charged the same enemy from
+  both sides; charge_gap was already −1"). This is the charge base-contact path (unchanged by the flow — a
+  Charge is exempt from the coherency gate and resolves to contact); the audit itself tolerates enemy charge
+  contact up to 0.3" and flags only deeper penetration, which a two-charger scrum can leave. Not a movement
+  or coherency regression.
+- **‡** The audit's COARSE unit-CENTRE LOS check false-positives; the real AI gates the shot on per-model
+  GEOMETRIC LOS (round-3 findings 2/6/11), which legitimately clears it (the audit line is tagged "per-model
+  LOS may still clear it"). Not a real rule break.
+
+(The base build `61c3527` — post round-5 — scored 0 on the four governed classes; the physics dice tray makes
+combat/positions vary run-to-run, so the two incidental flags are not deterministically reproducible.)
+
+**Fairness:** every change lives in the game/solo layer (`MovementPlanner` real-game `opts["radii"]` path,
+`SoloController`, `main.gd`); `SoloSim` and the SIM's empty-opts `plan_unit_step` path are untouched, so the
+mirror-fairness oracle is byte-identical — no re-run required (same precedent as waves 1–5 and rounds 2–5).

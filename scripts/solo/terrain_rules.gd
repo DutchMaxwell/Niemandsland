@@ -57,6 +57,48 @@ static func is_impassable(t: int) -> bool:
 	return t == TerrainType.CONTAINER
 
 
+## Forbidden-to-REST terrain: a model may not END its move standing with any part of its base in impassable
+## (CONTAINER — GF/AoF Advanced Rules v3.5.1: a base "may never move through" it) or DANGEROUS terrain, nor in
+## RUINS (whose internal walls are impassable to movement). The class selector for the base-containment
+## no-rest check (base_in_terrain).
+static func is_forbidden_rest(t: int) -> bool:
+	return t == TerrainType.CONTAINER or t == TerrainType.RUINS or t == TerrainType.DANGEROUS
+
+
+# === Base-in-terrain containment (THE single predicate — GF/AoF Advanced Rules v3.5.1) ==============
+# Terrain-containment rule (core rulebook, terrain guidelines): a model counts as being IN a piece of terrain
+# if ANY part of its base overlaps that terrain — a base even slightly inside a piece of terrain is in it (not
+# centre-in, not majority-of-base). Every terrain-EFFECT trigger (difficult 6" cap, dangerous test, the
+# impassable/dangerous no-rest gate) and the movement/placement collision boundary key on the base's OUTER
+# EDGE through this ONE predicate, so no call site re-implements the geometry (field-test round 6, finding 6).
+# (Cover is deliberately NOT routed here: OPR cover keys on the majority of a unit being FULLY inside cover,
+# not on partial "in terrain" — a different rule, handled by majority_in_cover.)
+
+const BASE_RING_SAMPLES := 16   # perimeter samples around the base edge (terrain features ≫ base → ample)
+
+## True when a base of `radius` centred at `centre` OVERLAPS terrain for which `class_check.call(type)` holds
+## — the base is IN that terrain if any part of it is (partial overlap suffices). `sample_type` is a
+## Callable(pos) -> int terrain-type lookup at a point (grid cells AND spawned footprints); `centre`/`radius`
+## are in the sampler's own units (world metres for the game overlay). Tests the base CENTRE plus a full
+## perimeter ring at the base edge: a base whose edge dips in by any amount registers, a base clear by any
+## margin does not. Pure + deterministic (given the callables). `centre` is Vector3 (game world) or Vector2.
+static func base_in_terrain(centre, radius: float, sample_type: Callable, class_check: Callable) -> bool:
+	if not sample_type.is_valid():
+		return false
+	if class_check.call(int(sample_type.call(centre))):
+		return true
+	if radius <= 0.0:
+		return false
+	var is3 := centre is Vector3
+	for k in range(BASE_RING_SAMPLES):
+		var ang := TAU * float(k) / float(BASE_RING_SAMPLES)
+		var edge = (centre + Vector3(cos(ang) * radius, 0.0, sin(ang) * radius)) if is3 \
+			else (centre + Vector2(cos(ang) * radius, sin(ang) * radius))
+		if class_check.call(int(sample_type.call(edge))):
+			return true
+	return false
+
+
 # === Grid lookup ===
 
 static func cell_of(p: Vector2, cell_size: float = CELL_IN) -> Vector2i:

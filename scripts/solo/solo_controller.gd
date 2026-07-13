@@ -78,6 +78,11 @@ var last_report: Dictionary = {}
 ## The presentation layer replays them as glide animation + base-width corridors; purely observational —
 ## positions are applied/broadcast before this is read.
 var last_move_paths: Array = []
+## Flow order (MODEL indices, nearest-to-destination first) of the last loose AI move — the sequential
+## per-model flow (field-test round 6, finding 7). last_move_paths is reordered into this order so the
+## presentation glides each model individually in the order it filed to its slot. Empty for a regiment / a
+## move that produced no plan.
+var last_flow_order: Array = []
 ## Move budget (inches) actually granted to the last AI move (band, difficult-capped when the route
 ## entered difficult terrain) — the denominator of the corridor's distance label.
 var last_move_budget_in: float = 0.0
@@ -522,13 +527,14 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	var flying: bool = unit.has_special_rule("Flying")
 	var ignores_difficult: bool = flying or unit.has_special_rule("Strider")
 	var reach := inches
+	var own_r_m := _move_base_radius_m(models)   # base radius for the EDGE-AWARE destination-terrain tests (finding 6)
 	# Pass 1: full band, going AROUND difficult terrain — unless the unit ignores it or its destination
 	# lies inside difficult terrain (objective/charge into a forest — the p.57 overlay exceptions).
-	var avoid: bool = not ignores_difficult and not _targets_in_difficult(positions, goal, reach)
+	var avoid: bool = not ignores_difficult and not _targets_in_difficult(positions, goal, reach, own_r_m)
 	# DANGEROUS terrain is also routed AROUND when a clear path exists (field-test finding 4). Only Flying
 	# ignores it (Strider ignores Difficult but NOT Dangerous — GF/AoF v3.5.1 p.13/p.14); if the destination
 	# itself is dangerous, going around is impossible, so the model routes in and takes its dangerous test.
-	var avoid_dangerous: bool = not flying and not _targets_in_dangerous(positions, goal, reach)
+	var avoid_dangerous: bool = not flying and not _targets_in_dangerous(positions, goal, reach, own_r_m)
 	var trails: Array = []
 	var new_positions := _plan_move(unit, models, positions, goal, reach, allow_contact, avoid, avoid_dangerous, trails, charge_target)
 	if not ignores_difficult and _trails_cross_difficult(trails):
@@ -584,6 +590,19 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	for i in range(mini(models.size(), trails.size())):
 		last_move_paths.append({"model": models[i], "path": trails[i],
 			"radius_m": float(radii.get(models[i], SeparationChecker.DEFAULT_BASE_RADIUS_M))})
+	# Present the models in the SEQUENTIAL FLOW ORDER (finding 7): each glides individually, nearest-to-
+	# destination first, so the step-by-step flow the planner produced is visible (main glides them in
+	# last_move_paths order). Only reorder when the order is a valid 1:1 permutation of the built paths.
+	if last_flow_order.size() == last_move_paths.size():
+		var reordered: Array = []
+		var seen := {}
+		for oi in last_flow_order:
+			var k := int(oi)
+			if k >= 0 and k < last_move_paths.size() and not seen.has(k):
+				reordered.append(last_move_paths[k])
+				seen[k] = true
+		if reordered.size() == last_move_paths.size():
+			last_move_paths = reordered
 	record_decision({"kind": "move", "unit": unit.get_name(),
 		"rule": "GF v3.5.1 p.7 move bands; p.11 difficult 6\" cap; p.57 move around difficult",
 		"candidates": [], "chosen": "",
@@ -607,12 +626,14 @@ func _plan_move(unit: GameUnit, models: Array, positions: Array, goal: Vector3, 
 
 ## Would the rigid move's per-model TARGETS land inside difficult terrain? (Objective or charge target
 ## inside a forest — then going around is impossible and the 6" cap path is taken directly.)
-func _targets_in_difficult(positions: Array, goal: Vector3, reach_in: float) -> bool:
+func _targets_in_difficult(positions: Array, goal: Vector3, reach_in: float, radius_m: float = 0.0) -> bool:
 	if not terrain_type_at.is_valid():
 		return false
 	var delta := _clamp_delta_to_bounds(positions, MoveIntent.plan_unit_move(positions, goal, reach_in))
 	for p in positions:
-		if TerrainRules.is_difficult(int(terrain_type_at.call((p as Vector3) + delta))):
+		# Edge-aware via the single containment predicate: a base whose EDGE lands in difficult terrain by any
+		# amount is IN it (finding 6; the effect trigger keys on the base edge, not the centre).
+		if TerrainRules.base_in_terrain((p as Vector3) + delta, radius_m, terrain_type_at, TerrainRules.is_difficult):
 			return true
 	return false
 
@@ -621,12 +642,14 @@ func _targets_in_difficult(positions: Array, goal: Vector3, reach_in: float) -> 
 ## (the destination itself is dangerous — e.g. an objective sitting in a lava pool), so the planner routes
 ## straight in and the model simply takes its dangerous test. Otherwise dangerous cells are routed AROUND
 ## (field-test finding 4: the AI walked through dangerous terrain when a clear route existed).
-func _targets_in_dangerous(positions: Array, goal: Vector3, reach_in: float) -> bool:
+func _targets_in_dangerous(positions: Array, goal: Vector3, reach_in: float, radius_m: float = 0.0) -> bool:
 	if not terrain_type_at.is_valid():
 		return false
 	var delta := _clamp_delta_to_bounds(positions, MoveIntent.plan_unit_move(positions, goal, reach_in))
 	for p in positions:
-		if TerrainRules.is_dangerous(int(terrain_type_at.call((p as Vector3) + delta))):
+		# Edge-aware via the single containment predicate (finding 6): a base whose EDGE lands in dangerous
+		# terrain by any amount is IN it, so the dangerous-terrain routing/test triggers.
+		if TerrainRules.base_in_terrain((p as Vector3) + delta, radius_m, terrain_type_at, TerrainRules.is_dangerous):
 			return true
 	return false
 
@@ -871,6 +894,7 @@ func _apply_model_positions(models: Array, new_positions: Array) -> void:
 ## slide. `world_trails` (optional out): one WORLD-space waypoint list per model — the real route taken.
 func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vector3, allow_contact: bool,
 		world_trails: Array = [], avoid_difficult: bool = true, avoid_dangerous: bool = false, charge_target: GameUnit = null) -> Array:
+	last_flow_order = []
 	var rigid: Array = []
 	for p in positions:
 		rigid.append((p as Vector3) + delta)
@@ -920,6 +944,9 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	var plan_trails: Array = []
 	var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, sampled["grid"],
 		allow_contact, board_in, plan_trails, opts)
+	# The sequential per-model flow (finding 7) writes back the order its models filed to their slots, so the
+	# presentation glides each model individually in that order (main._solo_animate_move).
+	last_flow_order = (opts.get("flow_order", []) as Array).duplicate()
 	# The unified solver (solve_formation, inside plan_unit_step) resolves unit-spacing, own-base separation,
 	# coherency and terrain-avoidance TOGETHER — but its least-violating fallback can still KEEP a residual
 	# violation. The HARD final gate (findings 3 + 6) that guarantees them is applied by the CALLER
@@ -976,7 +1003,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	# should not REST in either). A charge may end wherever base contact demands, so it skips the terrain step.
 	if not allow_contact:
 		for i in range(n):
-			cfg[i] = _project_out_forbidden_world(cfg[i])
+			cfg[i] = _project_out_forbidden_world(cfg[i], model_base_radius_m(models[i] as ModelInstance))
 	# (overlap) Push every base off every other base — own unit, other units, enemies (SeparationResolver,
 	# escape-scan-guaranteed to edge ≥ 0). On a charge this pushes exactly to CONTACT with the target, never through.
 	_resolve_overlaps_world(models, cfg, obstacles)
@@ -990,9 +1017,150 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	var max_chain: float = CoherencyChecker.SKIRMISH_CHAIN_DISTANCE_INCHES \
 		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
-			and _config_terrain_clear(cfg):
+			and _config_terrain_clear(models, cfg):
+		return cfg
+	# MINIMAL per-model coherency repair FIRST (field-test round 6 findings 2/3): pull only the stragglers into
+	# the coherent set, leaving the models that advanced correctly at their FULL move. The whole-unit shorten
+	# below blends the ENTIRE unit back toward the start, which systematically under-moved the advance (and so
+	# left the unit short of shooting range — finding 3). With finding 7's sequential flow the unit usually
+	# arrives coherent, so this rarely fires; when it does it is a nudge, not a retreat. Fall back to the
+	# whole-unit shorten only if the minimal repair can't restore a legal config (guarantees coherency: t=0 is
+	# the coherent start).
+	_pull_stragglers_coherent_world(models, cfg, obstacles, max_chain)
+	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
+			and _config_terrain_clear(models, cfg):
 		return cfg
 	return _shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain)
+
+
+## The indices of the LARGEST 1"-edge-link component among `shapes` (CoherencyChecker's link graph, BFS).
+func _largest_link_component_world(shapes: Array) -> Array:
+	var n := shapes.size()
+	var best: Array = []
+	var seen: Array[bool] = []
+	seen.resize(n)
+	seen.fill(false)
+	for start in range(n):
+		if seen[start]:
+			continue
+		var comp: Array = [start]
+		var queue: Array = [start]
+		seen[start] = true
+		while not queue.is_empty():
+			var cur: int = queue.pop_back()
+			for other in range(n):
+				if seen[other]:
+					continue
+				if SeparationChecker.edge_distance(shapes[cur], shapes[other]) <= CoherencyChecker.COHERENCY_DISTANCE_INCHES:
+					seen[other] = true
+					queue.append(other)
+					comp.append(other)
+		if comp.size() > best.size():
+			best = comp
+	return best
+
+
+const COH_REPAIR_PASSES := 12   # bounded per-model coherency-repair sweeps (finding 2 minimal-shorten)
+
+## Pull only the STRAGGLERS into coherency (field-test round 6 findings 2/3): each model outside the unit's
+## largest 1"-link component is stepped toward its nearest in-component neighbour (stopping at a 1" edge link
+## so no overlap is created), and the single model furthest from the centroid is pulled in when the unit
+## over-spreads. Every nudge is table-clamped and projected out of forbidden terrain; a final overlap pass
+## clears any residual stack. A MINIMAL correction — the models that advanced correctly keep their full move
+## (unlike the whole-unit shorten). Mutates `cfg`; returns true when it ends coherent.
+func _pull_stragglers_coherent_world(models: Array, cfg: Array, obstacles: Array, max_chain: float) -> bool:
+	var n := models.size()
+	if n <= 1:
+		return true
+	var link_step: float = CoherencyChecker.COHERENCY_DISTANCE_INCHES * INCHES_TO_METERS
+	for _pass in range(COH_REPAIR_PASSES):
+		if _config_coherent_world(models, cfg, max_chain):
+			return true
+		var shapes := _moving_shapes_at(models, cfg)
+		var main := _largest_link_component_world(shapes)
+		var in_main := {}
+		for k in main:
+			in_main[k] = true
+		var moved := false
+		# (a) Reconnect: each out-of-component model steps toward its nearest in-component neighbour, capped so
+		# it stops at ~a 1" edge link (never overshoots into an overlap).
+		for i in range(n):
+			if in_main.has(i):
+				continue
+			var nearest := -1
+			var nd := INF
+			for m in main:
+				var d: float = SeparationChecker.edge_distance(shapes[i], shapes[m])
+				if d < nd:
+					nd = d
+					nearest = m
+			if nearest < 0:
+				continue
+			var pi := Vector2((cfg[i] as Vector3).x, (cfg[i] as Vector3).z)
+			var pn := Vector2((cfg[nearest] as Vector3).x, (cfg[nearest] as Vector3).z)
+			var to_n := pn - pi
+			var dist := to_n.length()
+			if dist < OVERLAP_EPS_M:
+				continue
+			# Close the edge gap to the 1" link, capped at one link_step per pass (bounded, monotonic-inward).
+			var close: float = minf(minf(nd - CoherencyChecker.COHERENCY_DISTANCE_INCHES * INCHES_TO_METERS, dist), link_step)
+			if close <= OVERLAP_EPS_M:
+				continue
+			var cand := _clamp_to_bounds(Vector3((cfg[i] as Vector3).x + to_n.x / dist * close,
+				(cfg[i] as Vector3).y, (cfg[i] as Vector3).z + to_n.y / dist * close))
+			cfg[i] = _project_out_forbidden_world(cand, model_base_radius_m(models[i] as ModelInstance))
+			moved = true
+		# (b) Over-spread: pull the model furthest from the centroid inward.
+		if _config_overspread_world(shapes, max_chain):
+			var c := _config_centroid_world(cfg)
+			var far := _furthest_from_world(cfg, c)
+			if far >= 0:
+				var pf := Vector2((cfg[far] as Vector3).x, (cfg[far] as Vector3).z)
+				var to_c := Vector2(c.x, c.z) - pf
+				var dc := to_c.length()
+				if dc > OVERLAP_EPS_M:
+					var stepc: float = minf(link_step, dc)
+					var cand := _clamp_to_bounds(Vector3((cfg[far] as Vector3).x + to_c.x / dc * stepc,
+						(cfg[far] as Vector3).y, (cfg[far] as Vector3).z + to_c.y / dc * stepc))
+					cfg[far] = _project_out_forbidden_world(cand, model_base_radius_m(models[far] as ModelInstance))
+					moved = true
+		if not moved:
+			break
+	# Clear any residual overlap the inward pulls introduced, then report the final coherency.
+	_resolve_overlaps_world(models, cfg, obstacles)
+	return _config_coherent_world(models, cfg, max_chain)
+
+
+## True when the widest edge-to-edge spread of `shapes` exceeds `max_chain` (the unit over-spreads, p.7).
+func _config_overspread_world(shapes: Array, max_chain: float) -> bool:
+	for i in range(shapes.size()):
+		for j in range(i + 1, shapes.size()):
+			if SeparationChecker.edge_distance(shapes[i], shapes[j]) > max_chain:
+				return true
+	return false
+
+
+## Centroid (world) of a config's XZ positions (Y from the first entry).
+func _config_centroid_world(cfg: Array) -> Vector3:
+	if cfg.is_empty():
+		return Vector3.ZERO
+	var s := Vector2.ZERO
+	for p in cfg:
+		s += Vector2((p as Vector3).x, (p as Vector3).z)
+	s /= float(cfg.size())
+	return Vector3(s.x, (cfg[0] as Vector3).y, s.y)
+
+
+## Index of the config model furthest (centre distance) from `c`.
+func _furthest_from_world(cfg: Array, c: Vector3) -> int:
+	var far := -1
+	var fd := -1.0
+	for i in range(cfg.size()):
+		var d: float = Vector2((cfg[i] as Vector3).x, (cfg[i] as Vector3).z).distance_to(Vector2(c.x, c.z))
+		if d > fd:
+			fd = d
+			far = i
+	return far
 
 
 ## Every OTHER on-table unit's alive-model BaseShapes (at their live positions) — the obstacle set the
@@ -1058,23 +1226,23 @@ func _resolve_overlaps_world(models: Array, cfg: Array, external_obstacles: Arra
 		cfg[i] = Vector3(shapes[i].center.x, (cfg[i] as Vector3).y, shapes[i].center.y)
 
 
-## True when a world point sits in FORBIDDEN terrain a model must not REST in: impassable (CONTAINER / RUINS,
-## GF/AoF v3.5.1 p.7 "may never move through") or DANGEROUS (the route planner routes around it; a model
-## should not END its move standing in it — self-play audit). The move-through of Dangerous mid-route still
-## triggers its test (counted from the route), independently of where the model finally rests.
-func _world_forbidden(pos: Vector3) -> bool:
-	if not terrain_type_at.is_valid():
-		return false
-	var t: int = int(terrain_type_at.call(pos))
-	return t == TerrainRules.TerrainType.CONTAINER or t == TerrainRules.TerrainType.RUINS \
-		or t == TerrainRules.TerrainType.DANGEROUS
+## True when a model's BASE (radius `radius_m`) OVERLAPS forbidden-to-rest terrain it must not END on:
+## impassable CONTAINER, RUINS (impassable internal walls) or DANGEROUS (the route planner routes around it; a
+## model should not stand in it). Edge-aware via the SINGLE containment predicate (field-test round 6, finding
+## 6; GF/AoF Advanced Rules v3.5.1 terrain guidelines — any part of the base in the terrain counts as in it):
+## a base whose outer edge dips into the terrain by any amount is forbidden even when its centre sits outside.
+## The move-through of Dangerous mid-route still triggers its test (counted from the route), independently of
+## where the model finally rests.
+func _world_forbidden(pos: Vector3, radius_m: float = 0.0) -> bool:
+	return TerrainRules.base_in_terrain(pos, radius_m, terrain_type_at, TerrainRules.is_forbidden_rest)
 
 
-## Project a model resting in forbidden terrain out to the nearest clear point (16 compass directions ×
-## expanding 1 cm rings), world-frame tie-break within a ring for determinism. A model with no clear point
-## in range is left where it is (the overlap pass + coherency-shorten still act on it). No-op when clear.
-func _project_out_forbidden_world(pos: Vector3) -> Vector3:
-	if not _world_forbidden(pos):
+## Project a model (base radius `radius_m`) resting in / OVERLAPPING forbidden terrain out to the nearest spot
+## whose whole BASE is clear (16 compass directions × expanding 1 cm rings; edge-aware — finding 6), world-frame
+## tie-break within a ring for determinism. A model with no clear point in range is left where it is (the
+## overlap pass + coherency-shorten still act on it). No-op when the base is already clear.
+func _project_out_forbidden_world(pos: Vector3, radius_m: float = 0.0) -> Vector3:
+	if not _world_forbidden(pos, radius_m):
 		return pos
 	var dist := TERRAIN_OUT_STEP_M
 	while dist <= TERRAIN_OUT_MAX_M + OVERLAP_EPS_M:
@@ -1083,7 +1251,7 @@ func _project_out_forbidden_world(pos: Vector3) -> Vector3:
 		for k in range(TERRAIN_OUT_DIRS):
 			var ang := TAU * float(k) / float(TERRAIN_OUT_DIRS)
 			var c := _clamp_to_bounds(pos + Vector3(cos(ang) * dist, 0.0, sin(ang) * dist))
-			if _world_forbidden(c):
+			if _world_forbidden(c, radius_m):
 				continue
 			if not found or (c.x < best.x - OVERLAP_EPS_M or (absf(c.x - best.x) <= OVERLAP_EPS_M and c.z < best.z - OVERLAP_EPS_M)):
 				best = c
@@ -1129,10 +1297,12 @@ func _config_coherent_world(models: Array, cfg: Array, max_chain: float) -> bool
 	return true
 
 
-## True when NO model in the config rests in forbidden terrain (impassable + dangerous).
-func _config_terrain_clear(cfg: Array) -> bool:
-	for p in cfg:
-		if _world_forbidden(p as Vector3):
+## True when NO model in the config has its BASE in forbidden terrain (impassable + dangerous), edge-aware:
+## each model is tested at its real base radius (finding 6), so a base whose edge overlaps a container counts.
+func _config_terrain_clear(models: Array, cfg: Array) -> bool:
+	for i in range(cfg.size()):
+		var r: float = model_base_radius_m(models[i] as ModelInstance) if i < models.size() else 0.0
+		if _world_forbidden(cfg[i] as Vector3, r):
 			return false
 	return true
 
@@ -1161,7 +1331,7 @@ func _config_overlap_free(models: Array, cfg: Array, obstacles: Array) -> bool:
 ## the predicate overlap-aware stops the pull-back from dragging a model back into a friendly unit.
 func _shorten_world_to_legal(start_world: Array, cfg: Array, models: Array, obstacles: Array, max_chain: float) -> Array:
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
-			and _config_terrain_clear(cfg):
+			and _config_terrain_clear(models, cfg):
 		return cfg.duplicate()
 	var lo := 0.0
 	var hi := 1.0
@@ -1169,7 +1339,7 @@ func _shorten_world_to_legal(start_world: Array, cfg: Array, models: Array, obst
 		var mid := (lo + hi) * 0.5
 		var blended := _blend_world(start_world, cfg, mid)
 		if _config_coherent_world(models, blended, max_chain) and _config_overlap_free(models, blended, obstacles) \
-				and _config_terrain_clear(blended):
+				and _config_terrain_clear(models, blended):
 			lo = mid
 		else:
 			hi = mid
@@ -1613,6 +1783,16 @@ static func ai_opens_next_round(ai_took_last_activation: bool, human_has_units: 
 ## strict one-for-one alternation (GF/AoF v3.5.1 "Rounds, Turns & Activations"). Returns 1 iff the AI opens.
 static func pending_replies_at_round_start(ai_opens: bool) -> int:
 	return 1 if ai_opens else 0
+
+
+## Whether a human unit destroyed DURING its own activation must AUTO-COMPLETE that activation (field-test
+## round 6, finding 5). A unit wiped by a melee strike-back (or a dangerous-terrain test) while it is the
+## currently-activating unit can never be marked activated via the radial toggle — the trigger the alternation
+## depends on never fires — so if it was not ALREADY marked, its activation is consumed here and the AI
+## receives its one alternating reply. Guarded on `already_activated` so a unit the player pre-toggled (the AI
+## already replied) is never double-counted. Pure + unit-testable.
+static func human_activation_autocompletes(destroyed: bool, already_activated: bool) -> bool:
+	return destroyed and not already_activated
 
 
 ## Apply `wounds` whole-wounds to a unit's models back-rank-first (Tough models absorb damage before
@@ -2095,7 +2275,23 @@ func _resolve_deploy_overlaps() -> void:
 			var delta := SeparationResolver.resolve_overlaps(shapes, _external_obstacle_shapes(unit))
 			for i in range(cfg.size()):
 				var p: Vector3 = cfg[i]
-				cfg[i] = _project_out_forbidden_world(Vector3(p.x + delta.x, p.y, p.z + delta.y))
+				cfg[i] = _project_out_forbidden_world(Vector3(p.x + delta.x, p.y, p.z + delta.y),
+					model_base_radius_m(models[i] as ModelInstance))
+			# (c) The per-model terrain-out above pushes each base out of terrain by its own EDGE (finding 6), so
+			# it can nudge two own bases into overlap. Re-separate the unit's OWN bases to contact so deploy NEVER
+			# leaves an intra-unit stack (field-test finding 3) — a deploy overlap would otherwise persist every
+			# round, because each move's coherency-shorten retreats toward the (overlapping) deploy START.
+			var reshapes := _moving_shapes_at(models, cfg)
+			for _q in range(OVERLAP_GATE_PASSES):
+				for i in range(reshapes.size()):
+					var others2: Array = []
+					for j in range(reshapes.size()):
+						if j != i:
+							others2.append(reshapes[j])
+					SeparationResolver.resolve_overlaps([reshapes[i]], others2)
+			for i in range(cfg.size()):
+				var rc: Vector2 = (reshapes[i] as SeparationChecker.BaseShape).center
+				cfg[i] = Vector3(rc.x, (cfg[i] as Vector3).y, rc.y)
 			_apply_model_positions(models, cfg)
 
 

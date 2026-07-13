@@ -969,3 +969,52 @@ func test_render_decision_floors_negative_target_ev() -> void:
 	assert_bool(line.contains("Battle Brothers EV 0.00")).is_true()
 	assert_bool(line.contains("Master Brother EV 1.11")).is_true()
 	assert_bool(line.contains("-1.11")).is_false()
+
+
+# === Field-test round 6, finding 5: a human unit wiped in its own activation auto-completes ===
+
+func test_human_activation_autocompletes_only_when_destroyed_and_unmarked() -> void:
+	# A human unit wiped DURING its own activation (melee strike-back / dangerous) can never be marked
+	# activated via the radial toggle, so it must AUTO-COMPLETE — count as the human's activation and grant the
+	# AI its one alternating reply. A surviving unit uses the normal flow; a pre-toggled one is never
+	# double-counted (is_activated already true).
+	assert_bool(SoloController.human_activation_autocompletes(true, false)).is_true()    # wiped, unmarked → auto-complete
+	assert_bool(SoloController.human_activation_autocompletes(true, true)).is_false()    # wiped but pre-toggled → no
+	assert_bool(SoloController.human_activation_autocompletes(false, false)).is_false()  # survived → normal flow
+	assert_bool(SoloController.human_activation_autocompletes(false, true)).is_false()
+
+
+# === Field-test round 6, finding 6: terrain rest checks use the base OUTER EDGE, not the centre ===
+
+func test_world_forbidden_is_edge_aware_for_a_container_the_base_only_touches() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	# A container occupying x∈[0.10, 0.30] m. A base centred at x=0.09 (just OUTSIDE) with radius 0.02 m has
+	# its outer edge (x=0.11) INSIDE the container — the edge-aware check must reject it, while a centre-only
+	# check (radius 0) passes: exactly the "models half inside containers" cause.
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		return int(TerrainRules.TerrainType.CONTAINER) if p.x >= 0.10 and p.x <= 0.30 else int(TerrainRules.TerrainType.NONE)
+	var centre := Vector3(0.09, 0.0, 0.0)
+	assert_bool(solo._world_forbidden(centre, 0.0)).is_false()      # centre-only: clear
+	assert_bool(solo._world_forbidden(centre, 0.02)).is_true()      # edge-aware: the base edge overlaps the container
+
+
+# === Field-test round 6, finding 2: coherency repair is per-model + minimal (no whole-unit under-move) ===
+
+func test_pull_stragglers_restores_coherency_without_moving_the_advanced_models() -> void:
+	# Two models sit linked+advanced; a third has fallen out of coherency. The minimal per-model repair pulls
+	# ONLY the straggler back into a link, leaving the two advanced models exactly where they moved to — unlike
+	# the whole-unit shorten, which would drag the entire unit back toward the start and under-move it.
+	var r: float = SeparationChecker.DEFAULT_BASE_RADIUS_M
+	var unit := _unit(2, [Vector3.ZERO, Vector3(r * 2.8, 0, 0), Vector3.ZERO])   # positions overwritten below
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	var models: Array = unit.get_alive_models()
+	var cfg: Array = [Vector3(0, 0, 0), Vector3(r * 2.8, 0, 0), Vector3(0, 0, 0.30)]   # model2 marooned 0.30 m away
+	assert_bool(solo._config_coherent_world(models, cfg, CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES)).is_false()
+	var ok: bool = solo._pull_stragglers_coherent_world(models, cfg, [], CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES)
+	assert_bool(ok).is_true()
+	assert_bool(solo._config_coherent_world(models, cfg, CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES)).is_true()
+	# The two advanced models did NOT retreat (minimal repair — the under-move fix).
+	assert_float((cfg[0] as Vector3).distance_to(Vector3(0, 0, 0))).is_less(0.01)
+	assert_float((cfg[1] as Vector3).distance_to(Vector3(r * 2.8, 0, 0))).is_less(0.01)

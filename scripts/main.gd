@@ -240,6 +240,7 @@ var _solo_los_cache: Dictionary = {}         # {target_id, count, at} — thrott
 # Solo P2 auto-game state (goal 003 P2): alternation queue + match end.
 const SOLO_GAME_ROUNDS := 4                  # OPR standard match length (rounds)
 const SOLO_AI_TAIL_DELAY_S := 1.2            # readable pause between the AI's unprompted tail activations
+const SOLO_DEPLOY_WALL_CLEARANCE_M := 0.02   # a deploy sample point within 2 cm (~0.8") of a container/ruin wall is blocked (finding 1)
 var _solo_pending_replies: int = 0           # human activations still owed one AI answer (alternation)
 var _solo_ai_took_last_activation: bool = true  # who took the LAST activation of the current round (finding 7:
                                              # drives who OPENS the next round — the OTHER side, never back-to-back).
@@ -867,6 +868,13 @@ func _solo_end_round() -> void:
 		network_manager.broadcast_round_advance()
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "Round %d begins" % opr_army_manager.current_round, true)
+	# ROUND-START sequence, AWAITED here so it completes BEFORE the new round's first activation (GF/AoF v3.5.1
+	# p.13): Battleborn Shaken-recovery, then Ambush reserve arrivals (AI) + the human's reserve deployment
+	# prompt. The former path ran these off the fire-and-forget round_advanced signal, CONCURRENTLY with the
+	# opener pump below (field-test round 6, finding 4: the AI could open while reserves were still off-table or
+	# the human ambush dialog was still open, and newly-arrived reserves were miscounted). Eligibility is read
+	# AFTER, so a just-arrived reserve is counted for this round's alternation.
+	await _solo_round_start(opr_army_manager.current_round)
 	var human_has: bool = not solo_controller.eligible_units_for(solo_controller.human_slot).is_empty()
 	var ai_has: bool = not solo_controller.eligible_ai_units().is_empty()
 	# A new round owes NO carried-over AI replies (field-test finding 7): an undeliverable reply from last
@@ -1072,8 +1080,20 @@ func _on_solo_deploy_pressed() -> void:
 			if col is Node3D and not (col as Node3D).is_in_group("miniature"):
 				return true
 		return false
+	# Container/ruin WALL SEGMENTS (field-test round 6, finding 1): a container may be a SPAWNED object that
+	# carries wall segments rather than a terrain-GRID cell, so `get_terrain_at_world_position` returns NONE and
+	# the tiny physics probe can miss it — the deploy check must ALSO test the container/ruin walls. A sample
+	# point within SOLO_DEPLOY_WALL_CLEARANCE_M of any wall segment is blocked; combined with the footprint's
+	# base-edge sampling (AiDeployment) this rejects a base whose OUTER EDGE overlaps a container (finding 6).
+	var wall_segs: Array = terrain_overlay.get_wall_segments_world() \
+		if terrain_overlay != null and terrain_overlay.has_method("get_wall_segments_world") else []
+	var near_wall := func(p: Vector2) -> bool:
+		for wseg in wall_segs:
+			if MovementPlanner.point_seg_distance(p, wseg[0], wseg[1]) < SOLO_DEPLOY_WALL_CLEARANCE_M:
+				return true
+		return false
 	var blocked_normal := func(p: Vector2) -> bool:
-		if hits_prop.call(p):
+		if hits_prop.call(p) or near_wall.call(p):
 			return true
 		if terrain_overlay == null:
 			return false
@@ -1081,7 +1101,7 @@ func _on_solo_deploy_pressed() -> void:
 		return t == terrain_overlay.TerrainType.FOREST or t == terrain_overlay.TerrainType.DANGEROUS \
 			or t == terrain_overlay.TerrainType.CONTAINER or t == terrain_overlay.TerrainType.RUINS
 	var blocked_flying := func(p: Vector2) -> bool:
-		if hits_prop.call(p):
+		if hits_prop.call(p) or near_wall.call(p):
 			return true
 		if terrain_overlay == null:
 			return false
@@ -2207,9 +2227,10 @@ func _solo_animate_move(move_paths: Array) -> void:
 		_solo_spawn_move_label(longest_path, longest_len, solo_controller.last_move_budget_in)
 	# (d) Attention beat: corridors drawn, models poised at the start.
 	await _solo_pace_attention()
-	# (e) Glide every model along its corridor.
-	var longest := 0.0
-	var tweens: Array = []
+	# (e) Glide the models ONE AT A TIME in the SEQUENTIAL FLOW ORDER (field-test round 6, finding 7):
+	# move_paths is already ordered nearest-to-destination first, so the lead models visibly vacate the choke
+	# and the rest FLOW after them (the maintainer's explicit staging). Each model's glide completes before the
+	# next begins; not-yet-moved models wait at their route start (snapped above). Fast-AI compresses `speed`.
 	for entry in move_paths:
 		var model := (entry as Dictionary).get("model") as ModelInstance
 		var path: Array = (entry as Dictionary).get("path", [])
@@ -2228,21 +2249,14 @@ func _solo_animate_move(move_paths: Array) -> void:
 			var dur := leg / speed
 			tw.tween_property(node, "global_position", Vector3(b.x, y, b.z), dur)
 			total += dur
-		longest = maxf(longest, total)
-		tweens.append(tw)
-	if longest > 0.0:
-		await get_tree().create_timer(longest).timeout
-	for t in tweens:
-		if (t as Tween).is_valid():
-			(t as Tween).kill()
-	# Snap every model onto its exact final (the tween end) so state and visuals agree to the millimetre.
-	for entry in move_paths:
-		var model := (entry as Dictionary).get("model") as ModelInstance
-		var path: Array = (entry as Dictionary).get("path", [])
-		if model != null and model.node != null and is_instance_valid(model.node) and not path.is_empty():
-			var fin := path.back() as Vector3
-			model.node.global_position = Vector3(fin.x, model.node.global_position.y, fin.z)
-	# The corridors fade now that the glide is complete (persisted corridors are faded here, not on spawn).
+		if total > 0.0:
+			await get_tree().create_timer(total).timeout
+		if tw.is_valid():
+			tw.kill()
+		# Snap onto the exact final (the tween end) so state and visuals agree to the millimetre.
+		var fin := path.back() as Vector3
+		node.global_position = Vector3(fin.x, node.global_position.y, fin.z)
+	# The corridors fade now that the whole unit has flowed through (persisted corridors faded here, not on spawn).
 	for body in corridors:
 		_solo_fade_corridor(body as MeshInstance3D)
 
@@ -2901,9 +2915,18 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 		await _run_human_melee(attacker, target)
 	else:
 		await _run_human_shooting(attacker, target)
-	# The AI's strike-back can destroy the human's LAST eligible unit — re-check the alternation
-	# state so the AI's remaining activations auto-continue (goal 003 P2 auto-tail).
-	await _solo_pump()
+	# Finding 5: if the human's ACTIVATING unit was WIPED during its own activation (a melee strike-back or a
+	# dangerous-terrain test), it can never be marked activated via the radial toggle — so AUTO-COMPLETE it
+	# here: mark it consumed and register the human activation so the AI gets its one alternating reply.
+	# Otherwise the alternation stalls (the human's activation trigger never fired). A pre-toggled unit
+	# (is_activated already true) is untouched and falls through to the normal pump.
+	if attacker != null and SoloController.human_activation_autocompletes(attacker.is_destroyed(), attacker.is_activated):
+		attacker.is_activated = true
+		await _on_solo_human_activated(attacker)
+	else:
+		# The AI's strike-back can destroy the human's LAST eligible unit — re-check the alternation
+		# state so the AI's remaining activations auto-continue (goal 003 P2 auto-tail).
+		await _solo_pump()
 
 
 ## The player's shooting volley (goal 001 P8): per-model attack scaling, Reliable composed with the to-hit
@@ -3020,11 +3043,25 @@ func _solo_set_fatigued(unit: GameUnit) -> void:
 
 ## Solo auto-game round change (goal 003 P1). Gated on an active Solo AI so manual/MP games keep managing
 ## their own markers by hand. Fires with the NEW round number.
-func _on_solo_round_advanced(round_number: int) -> void:
+func _on_solo_round_advanced(_round_number: int) -> void:
 	if solo_ai_slots.is_empty():
 		return
 	_solo_reset_all_fatigue()
-	await _solo_battleborn_recovery()   # wave-4: round-start Shaken recovery (Battleborn), before activations
+	# Battleborn recovery + Ambush arrivals + the human reserve prompt are the ROUND-START sequence, now driven
+	# AND AWAITED by _solo_end_round (_solo_round_start) so they complete before the opener activates (field-test
+	# round 6, finding 4). Kept OUT of this fire-and-forget signal handler so they never run concurrently with
+	# the activation pump.
+
+
+## The solo ROUND-START sequence (GF/AoF v3.5.1 p.13), run at the start of every new round BEFORE any
+## activation and AWAITED by _solo_end_round: the AI's Battleborn Shaken-recovery (wave 4), then — from round 2
+## — Ambush reserve arrivals (AI, paced) and the human's reserve deployment prompt. Sequencing it here (rather
+## than off the round_advanced signal) is finding 4: reserves are on the table and the prompt resolved before
+## the opener activates, and a just-arrived reserve is counted in this round's alternation.
+func _solo_round_start(round_number: int) -> void:
+	if solo_ai_slots.is_empty():
+		return
+	await _solo_battleborn_recovery()
 	# Ambush arrivals happen at the start of ANY round after the first (GF/AoF v3.5.1 p.13), so a unit
 	# with no clear spot in round 2 gets another chance later.
 	if round_number >= 2:

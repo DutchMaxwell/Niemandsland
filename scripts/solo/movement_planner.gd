@@ -756,40 +756,135 @@ static func _reconstruct(came_from: Dictionary, current: Vector2i) -> Array:
 
 # === Unified pipeline entry (opts["radii"] path) ============================================
 
-## Plan one unit move on the REAL-GAME path: a configuration-space Theta*/funnel route (walls inflated by
-## the base radius via opts.clearance, terrain soft-costed), each model walking the taut route as true arc
-## length, then ONE constraint solver that resolves base-separation, coherency, unit-spacing and terrain
-## avoidance simultaneously (solve_formation). Replaces the legacy steer-fan + separate coherency/overlap
-## passes on this path only; the sim's empty-opts path is untouched. Pure + deterministic.
+## Plan one unit move on the REAL-GAME path. PRIMARY placement is the SEQUENTIAL PER-MODEL FLOW (field-test
+## round 6, finding 7): the models file to their slots one at a time in nearest-to-destination order, each
+## planning its own taut configuration-space Theta*/funnel route while treating the other models as body
+## obstacles, so a choke the rigid formation slide would jam is threaded model-by-model. solve_formation then
+## runs as the final SAFETY NET (base-separation, coherency, unit-spacing and terrain-avoidance projected
+## together). Replaces the former rigid-slot slide on this path only; the sim's empty-opts path is untouched.
+## Pure + deterministic. The flow ORDER is written back into opts["flow_order"] for the caller's step-by-step
+## glide presentation.
 static func _plan_unit_step_unified(model_pos: Array, delta: Vector2, walls: Array, grid: Dictionary,
 		allow_contact: bool, board_in: float, trails: Array, opts: Dictionary) -> Array:
-	var allowance := delta.length()
 	var radii: Array = opts.get("radii", [])
-	var targets: Array = []
-	if not rigid_blocked(model_pos, delta, walls, opts):
-		# The straight slide clears walls / zones / avoided cells → rigid targets. The solver below still
-		# projects any model that would REST in forbidden terrain (RUINS/DANGEROUS are not routing-avoided)
-		# back out — so a "clear" slide can never park a model inside impassable/dangerous terrain.
-		for m in model_pos:
-			targets.append((m as Vector2) + delta)
-		_record_trail_pair(trails, model_pos, targets)
-	else:
-		# Plan a taut any-angle route for the unit anchor, then every model rides it at its slot offset.
-		var anchor := _centroid(model_pos)
-		var goal := anchor + delta
-		var route := theta_star(anchor, goal, walls, grid, board_in, opts)
-		var taut := string_pull(route, walls, grid, opts)
-		if trails != null:
-			trails.clear()
-		for i in range(model_pos.size()):
-			var offset := (model_pos[i] as Vector2) - anchor
-			var leg := _walk_offset(model_pos[i], taut, offset, allowance, walls, grid, opts, board_in)
-			targets.append((leg.back()) as Vector2)
-			if trails != null:
-				trails.append(leg)
-	var solved := solve_formation(targets, radii, walls, opts, board_in, allow_contact)
+	var order_out: Array = []
+	# PRIMARY: sequential per-model flow — each model files to its slot in nearest-to-destination order,
+	# treating the already-placed + not-yet-moved models as body obstacles, coherency kept progressively.
+	var flowed := plan_sequential_flow(model_pos, delta, radii, walls, grid, opts, board_in, allow_contact,
+		trails, order_out)
+	opts["flow_order"] = order_out   # the caller replays the glide in this order (finding 7 presentation)
+	# SAFETY NET: the unified constraint solver clears any residual overlap / broken chain / terrain rest / zone
+	# dip the flow's least-violating pull could not (starting from the flow's already-mostly-legal placement, so
+	# a fully-legal flow is returned unchanged — best_score == 0 short-circuits).
+	var solved := solve_formation(flowed, radii, walls, opts, board_in, allow_contact)
 	_append_trail_finals(trails, solved)
 	return solved
+
+
+# === Sequential per-model flow (field-test round 6, finding 7 — the maintainer's design) =====
+
+## Order the unit's models by distance to the DESTINATION (nearest first; ties by stable index) and move them
+## ONE AT A TIME. Each model plans its OWN taut Theta*/funnel route (configuration space, base-radius
+## clearance) to its formation slot, treating the already-PLACED models (at their final spots) and the
+## not-yet-moved models (at their current spots) as BODY obstacles (base contact allowed, no 1" buffer — same
+## unit), so the lead models vacate forward and the rest FLOW after them through a choke the rigid formation
+## slide would jam. Coherency is kept PROGRESSIVELY: each model ends within a 1" link of the already-placed
+## set (or as close as a clear pull allows — GF/AoF v3.5.1 p.7). `trails` (sized n, per MODEL index) receives
+## each model's route; the flow ORDER is appended to `order_out` for the caller's sequential glide. A Charge
+## (allow_contact) skips the progressive-coherency pull (it must reach base contact). Pure + deterministic;
+## returns a NEW Array[Vector2]. The caller runs solve_formation on the result as the final safety net.
+static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array, walls: Array,
+		grid: Dictionary, opts: Dictionary, board_in: float, allow_contact: bool,
+		trails: Array = [], order_out: Array = []) -> Array:
+	var n := model_pos.size()
+	var result := model_pos.duplicate()
+	if trails != null:
+		trails.clear()
+		for i in range(n):
+			trails.append([model_pos[i]])
+	if n == 0:
+		return result
+	var allowance := delta.length()
+	var goal_anchor := _centroid(model_pos) + delta
+	# Deterministic flow order: nearest to the destination first, ties broken by stable model index (total
+	# order → the same sequence regardless of sort stability; research §4 canonicity).
+	var order: Array = []
+	for i in range(n):
+		order.append(i)
+	order.sort_custom(func(a: int, b: int) -> bool:
+		var da: float = (model_pos[a] as Vector2).distance_squared_to(goal_anchor)
+		var db: float = (model_pos[b] as Vector2).distance_squared_to(goal_anchor)
+		if absf(da - db) > EPS:
+			return da < db
+		return a < b)
+	var base_clearance: float = float(opts.get("clearance", 0.0))
+	var base_zones: Array = opts.get("zones", [])
+	var avoid_cells: Dictionary = opts.get("avoid_cells", {})
+	var have_r: bool = radii.size() == n
+	var placed: Array = []   # model indices already settled at their final spots
+	for idx in order:
+		# Body zones for EVERY other own model (placed → final spot, else current spot): base contact allowed
+		# (radii sum, no 1" buffer), so this model files up to its neighbours but never moves THROUGH one
+		# (GF/AoF v3.5.1 p.7). Other units keep their full 1" zones (base_zones).
+		var zones: Array = base_zones.duplicate()
+		if have_r:
+			for j in range(n):
+				if j == idx:
+					continue
+				var jc: Vector2 = result[j] if placed.has(j) else model_pos[j]
+				zones.append({"c": jc, "r": float(radii[j]) + float(radii[idx])})
+		var oi := {"clearance": base_clearance, "avoid_cells": avoid_cells, "zones": zones}
+		var slot: Vector2 = (model_pos[idx] as Vector2) + delta
+		var route := theta_star(model_pos[idx], slot, walls, grid, board_in, oi)
+		var taut := string_pull(route, walls, grid, oi)
+		var leg := _walk_offset(model_pos[idx], taut, Vector2.ZERO, allowance, walls, grid, oi, board_in)
+		var final_pt: Vector2 = leg.back()
+		# Progressive coherency: link this model into the already-placed set (or as close as a clear pull
+		# allows). A charge is exempt (it must reach base contact with the enemy).
+		if not allow_contact and have_r and not placed.is_empty():
+			var linked := _pull_into_placed(final_pt, idx, radii, placed, result, walls,
+				base_clearance, base_zones, avoid_cells, board_in)
+			if linked.distance_to(final_pt) > EPS:
+				leg.append(linked)
+				final_pt = linked
+		result[idx] = final_pt
+		placed.append(idx)
+		if trails != null and idx < trails.size():
+			trails[idx] = leg
+		order_out.append(idx)
+	return result
+
+
+## Pull model `idx` (at `pos`) toward the NEAREST already-placed own model until their bases LINK (edge ≤ 1",
+## CoherencyChecker) or a clear pull can bring it no closer — the progressive-coherency step of the sequential
+## flow. Stepped in COH_PULL_IN increments, each checked against walls, OTHER units' zones and avoided cells
+## (the neighbour's OWN body is deliberately NOT a zone here, so base contact is reachable). Returns the
+## adjusted position (pos unchanged when already linked / no clear pull helps). Pure + deterministic.
+static func _pull_into_placed(pos: Vector2, idx: int, radii: Array, placed: Array, result: Array,
+		walls: Array, clearance: float, other_zones: Array, avoid_cells: Dictionary, board_in: float) -> Vector2:
+	var nearest := -1
+	var nd := INF
+	for j in placed:
+		var edge: float = pos.distance_to(result[j]) - float(radii[idx]) - float(radii[j])
+		if edge < nd:
+			nd = edge
+			nearest = j
+	if nearest < 0 or _linked_r(pos, result[nearest], float(radii[idx]), float(radii[nearest])):
+		return pos
+	var step_opts := {"clearance": clearance, "zones": other_zones, "avoid_cells": avoid_cells}
+	var cur := pos
+	for _p in range(GATHER_PASSES):
+		if _linked_r(cur, result[nearest], float(radii[idx]), float(radii[nearest])):
+			break
+		var to_n := (result[nearest] as Vector2) - cur
+		var d := to_n.length()
+		if d < EPS:
+			break
+		var cand := _board_clamp(cur + to_n / d * minf(COH_PULL_IN, d), board_in)
+		if step_blocked(cur, cand, walls, step_opts):
+			break
+		cur = cand
+	return cur
 
 
 # === Configuration-space visibility (research §1.6: obstacle ⊕ base-radius disc, planned as a POINT) =====

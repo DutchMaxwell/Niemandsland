@@ -413,3 +413,58 @@ func test_collinear_pin_escapes_via_cspace_inflation() -> void:
 	assert_float(Vector2(20, 24).distance_to(final)).is_greater(1.0)   # it advanced (did NOT freeze in place)
 	assert_float(final.y).is_greater(20.0)                             # stopped on the near side of the wall
 	assert_bool(MovementPlanner.path_crosses_wall(Vector2(20, 24), final, walls)).is_false()
+
+
+# === Sequential per-model flow (field-test round 6, finding 7 — the maintainer's design) ===
+
+func test_sequential_flow_threads_a_narrow_gap_that_the_rigid_slide_jams() -> void:
+	# A wall along y=20 with a single 2" gap at x∈[19,21]; a coherent 3-model line (2" spacing) must reach the
+	# far side. The RIGID translation jams — the two flanking models' straight paths drive INTO the wall. The
+	# sequential flow orders the models nearest-destination-first and files them THROUGH the gap one at a time,
+	# so all three clear the wall, no route crosses it, and the unit ends coherent (progressive coherency).
+	var walls := [[Vector2(6, 20), Vector2(19, 20)], [Vector2(21, 20), Vector2(30, 20)]]
+	var start := [Vector2(18, 26), Vector2(20, 26), Vector2(22, 26)]
+	var delta := Vector2(0, -12)
+	var radii: Array = [0.5, 0.5, 0.5]
+	var opts := {"radii": radii, "clearance": 0.6}
+	assert_bool(MovementPlanner.is_coherent(start)).is_true()                       # premise: starts coherent
+	# The naive rigid slide jams: both flanking models' straight paths cross the wall.
+	assert_bool(MovementPlanner.path_crosses_wall(start[0], (start[0] as Vector2) + delta, walls)).is_true()
+	assert_bool(MovementPlanner.path_crosses_wall(start[2], (start[2] as Vector2) + delta, walls)).is_true()
+	var trails: Array = []
+	var order: Array = []
+	var out := MovementPlanner.plan_sequential_flow(start, delta, radii, walls, {}, opts, 48.0, false, trails, order)
+	for p in out:
+		assert_float((p as Vector2).y).is_less(20.0)                                # every model cleared the wall
+	for leg in trails:
+		var poly := leg as Array
+		for i in range(1, poly.size()):
+			assert_bool(MovementPlanner.path_crosses_wall(poly[i - 1], poly[i], walls)).is_false()
+	assert_bool(MovementPlanner.is_coherent(out)).is_true()                         # ends coherent (filed together)
+
+
+func test_sequential_flow_order_is_nearest_destination_first_and_deterministic() -> void:
+	# Destination = centroid + delta = (10, 19). Models at y 30/20/25 → distances 11/1/6 → order 1, 2, 0.
+	# Re-running yields the identical order (the sort's index tie-break makes it a total order).
+	var start := [Vector2(10, 30), Vector2(10, 20), Vector2(10, 25)]
+	var delta := Vector2(0, -6)
+	var radii: Array = [0.5, 0.5, 0.5]
+	var opts := {"radii": radii}
+	var order1: Array = []
+	MovementPlanner.plan_sequential_flow(start, delta, radii, [], {}, opts, 48.0, false, [], order1)
+	assert_array(order1).is_equal([1, 2, 0])
+	var order2: Array = []
+	MovementPlanner.plan_sequential_flow(start, delta, radii, [], {}, opts, 48.0, false, [], order2)
+	assert_array(order2).is_equal(order1)
+
+
+func test_sequential_flow_open_field_matches_the_rigid_slide() -> void:
+	# With nothing in the way each model files straight to its slot, so the flow equals the rigid translation
+	# (why an unobstructed AI move is unchanged and the presentation just glides them in order).
+	var start := [Vector2(10, 20), Vector2(11, 20), Vector2(12, 20)]
+	var delta := Vector2(5, 0)
+	var radii: Array = [0.5, 0.5, 0.5]
+	var out := MovementPlanner.plan_sequential_flow(start, delta, radii, [], {}, {"radii": radii}, 48.0, false, [], [])
+	for i in range(3):
+		assert_float((out[i] as Vector2).distance_to((start[i] as Vector2) + delta)).is_less(0.05)
+	assert_bool(MovementPlanner.is_coherent(out)).is_true()

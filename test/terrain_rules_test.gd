@@ -102,3 +102,27 @@ func test_path_crosses_difficult_and_dangerous() -> void:
 	assert_bool(TerrainRules.path_crosses(danger, Vector2(10, 16.5), Vector2(25, 16.5), TerrainRules.PathCheck.DANGEROUS)).is_true()
 	# A move that stays clear of the cell crosses nothing.
 	assert_bool(TerrainRules.path_crosses(forest, Vector2(0, 0), Vector2(5, 0), TerrainRules.PathCheck.DIFFICULT)).is_false()
+
+
+# === Base-in-terrain containment: partial overlap = in (GF/AoF v3.5.1; field-test round 6, finding 6) ===
+
+func test_base_in_terrain_triggers_on_any_partial_overlap() -> void:
+	# A model counts as IN a piece of terrain if ANY part of its base overlaps it (not centre-in, not
+	# majority). The forest occupies x >= 1.0; the base has radius 0.3. THE single containment predicate every
+	# terrain-effect / no-rest check routes through.
+	var sampler := func(p) -> int:
+		var x: float = (p as Vector3).x if p is Vector3 else (p as Vector2).x
+		return int(T.FOREST) if x >= 1.0 else int(T.NONE)
+	# Base centred at x=0.8 with radius 0.3 → its edge reaches x=1.1, INSIDE the forest (~33% overlap) → in.
+	assert_bool(TerrainRules.base_in_terrain(Vector3(0.8, 0.0, 0.0), 0.3, sampler, TerrainRules.is_difficult)).is_true()
+	# Base whose edge just barely enters (x=0.75 + 0.3 = 1.05 >= 1.0) → still in the forest.
+	assert_bool(TerrainRules.base_in_terrain(Vector3(0.75, 0.0, 0.0), 0.3, sampler, TerrainRules.is_difficult)).is_true()
+	# Base clear by a margin (x=0.6 + 0.3 = 0.9 < 1.0) → NOT in the forest.
+	assert_bool(TerrainRules.base_in_terrain(Vector3(0.6, 0.0, 0.0), 0.3, sampler, TerrainRules.is_difficult)).is_false()
+	# Centre INSIDE the forest is trivially in, regardless of radius.
+	assert_bool(TerrainRules.base_in_terrain(Vector3(1.5, 0.0, 0.0), 0.0, sampler, TerrainRules.is_difficult)).is_true()
+	# The predicate is class-selectable and works in the Vector2 frame too (forbidden-rest here).
+	var danger := func(p) -> int:
+		return int(T.DANGEROUS) if (p as Vector2).x >= 1.0 else int(T.NONE)
+	assert_bool(TerrainRules.base_in_terrain(Vector2(0.8, 0.0), 0.3, danger, TerrainRules.is_forbidden_rest)).is_true()
+	assert_bool(TerrainRules.base_in_terrain(Vector2(0.6, 0.0), 0.3, danger, TerrainRules.is_forbidden_rest)).is_false()
