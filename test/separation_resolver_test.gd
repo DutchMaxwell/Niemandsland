@@ -113,3 +113,73 @@ func test_snap_picks_nearest_enemy() -> void:
 func test_empty_inputs_are_safe() -> void:
 	assert_float(SeparationResolver.resolve_translation([], [_cand(_round(0, 0, 0.5), 2)], 1).length()).is_equal(0.0)
 	assert_float(SeparationResolver.resolve_translation([_round(0, 0, 0.5)], [], 1).length()).is_equal(0.0)
+
+
+# ===== Absolute anti-stacking (resolve_overlaps) =====
+## No two bases may overlap for ANY pair — same unit, own other unit, enemy. resolve_overlaps
+## is affiliation-agnostic (plain obstacle-shape arrays) and must leave 0 overlapping pairs,
+## including a fully-surrounded drop (the escape-scan fallback).
+
+## Overlapping pairs (edge_distance < -TOL) between `item` and every obstacle.
+func _item_overlap_count(item: SeparationChecker.BaseShape, obstacles: Array) -> int:
+	var n := 0
+	for o: SeparationChecker.BaseShape in obstacles:
+		if SeparationChecker.edge_distance(item, o) < -TOL:
+			n += 1
+	return n
+
+
+func test_absolute_overlap_same_unit_pushes_apart() -> void:
+	# A base dropped ON a SAME-unit sibling (the case Phase 1 exempts) must still separate.
+	var item := _round(0, 0, 0.5)
+	var sibling := _round(0.4, 0, 0.5)  # overlap 0.6"
+	SeparationResolver.resolve_overlaps([item], [sibling])
+	assert_float(SeparationChecker.edge_distance(item, sibling)).is_greater_equal(-TOL)
+
+
+func test_absolute_overlap_mixed_cluster_leaves_no_overlaps() -> void:
+	# Item wedged into a SAME-unit sibling, an OWN-OTHER-unit base, and an ENEMY base
+	# (open to the south) -> clears all three.
+	var item := _round(0, 0, 0.5)
+	var obstacles := [_round(0.6, 0, 0.5), _round(-0.6, 0, 0.5), _round(0, 0.6, 0.5)]
+	assert_int(_item_overlap_count(item, obstacles)).is_equal(3)  # sanity: starts stacked
+	SeparationResolver.resolve_overlaps([item], obstacles)
+	assert_int(_item_overlap_count(item, obstacles)).is_equal(0)
+
+
+func test_absolute_overlap_fully_surrounded_escapes() -> void:
+	# Symmetric 4-way trap: the relaxation resultant cancels, so the escape scan must move
+	# the item to the nearest clear spot rather than leave it stacked.
+	var item := _round(0, 0, 0.5)
+	var ring := [_round(0.6, 0, 0.5), _round(-0.6, 0, 0.5), _round(0, 0.6, 0.5), _round(0, -0.6, 0.5)]
+	assert_int(_item_overlap_count(item, ring)).is_equal(4)
+	SeparationResolver.resolve_overlaps([item], ring)
+	assert_int(_item_overlap_count(item, ring)).is_equal(0)
+
+
+func test_absolute_overlap_no_move_when_clear() -> void:
+	var item := _round(0, 0, 0.5)
+	var delta := SeparationResolver.resolve_overlaps([item], [_round(3, 0, 0.5)])  # 2" gap
+	assert_float(delta.length()).is_equal_approx(0.0, M_TOL)
+
+
+func test_absolute_overlap_base_contact_left_alone() -> void:
+	# Clean base contact (gap ~0) is the closest ALLOWED state -> not pushed.
+	var item := _round(0, 0, 0.5)
+	var delta := SeparationResolver.resolve_overlaps([item], [_round(1.0, 0, 0.5)])
+	assert_float(delta.length()).is_equal_approx(0.0, M_TOL)
+
+
+func test_absolute_overlap_multi_base_item_block_clears() -> void:
+	# A two-base item (e.g. a tray block) translates as one and clears the obstacle.
+	var a := _round(0, 0, 0.5)
+	var b := _round(1.0, 0, 0.5)   # same item, in contact (not counted as overlap of the item)
+	var obstacle := _round(0.5, 0, 0.5)  # overlaps BOTH item bases
+	SeparationResolver.resolve_overlaps([a, b], [obstacle])
+	assert_float(SeparationChecker.edge_distance(a, obstacle)).is_greater_equal(-TOL)
+	assert_float(SeparationChecker.edge_distance(b, obstacle)).is_greater_equal(-TOL)
+
+
+func test_absolute_overlap_empty_inputs_safe() -> void:
+	assert_float(SeparationResolver.resolve_overlaps([], [_round(0, 0, 0.5)]).length()).is_equal(0.0)
+	assert_float(SeparationResolver.resolve_overlaps([_round(0, 0, 0.5)], []).length()).is_equal(0.0)

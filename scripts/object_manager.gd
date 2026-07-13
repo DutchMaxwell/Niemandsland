@@ -1142,11 +1142,16 @@ func _stop_dragging() -> void:
 	_destroy_drag_line()
 
 
-## Drop-time separation resolution (SeparationResolver): slides each dropped item out of
-## any base overlap with ANOTHER unit to clean base contact (anti-stacking, enemy AND
-## friendly), and snaps a near-miss to enemy base contact (charge). Runs BEFORE the
-## drop batch / undo record in _stop_dragging so the resolved x/z flows the normal move
-## path. Local-only geometry; no RPC of its own (the standard move broadcast carries it).
+## Drop-time separation resolution (SeparationResolver). Runs BEFORE the drop batch / undo
+## record in _stop_dragging so the resolved x/z flows the normal move path. Two phases:
+##  1. Unit-scoped: snap a near-miss to ENEMY base contact (charge) and push a dropped item
+##     out of overlap with OTHER units to clean contact.
+##  2. Absolute anti-stacking: guarantee NO dropped base overlaps ANY other base — same
+##     unit, own other unit, enemy, or a sibling dragged item. Overlap is a hard physical
+##     impossibility, distinct from the 1" spacing rule (which binds only between units and
+##     exempts a charge); Phase 1 alone leaves same-unit / mutually-dragged stacks, which
+##     this closes.
+## Local-only geometry; no RPC of its own (the standard move broadcast carries it).
 func _resolve_drop_separation() -> void:
 	var army := get_node_or_null("/root/Main/OPRArmyManager")
 	if army == null or not army.has_method("get_all_game_units"):
@@ -1167,31 +1172,97 @@ func _resolve_drop_separation() -> void:
 				if child is Node3D and child.has_meta("model_instance"):
 					dragged_ids[child.get_instance_id()] = true
 
+	# Phase 1 — unit-scoped enemy snap + other-unit contact push (charge semantics). Skipped
+	# when nothing else is on the field, but Phase 2 (absolute anti-stacking) still runs.
 	var candidates := _separation_candidates(army, dragged_ids)
-	if candidates.is_empty():
-		return
+	if not candidates.is_empty():
+		var min_move: float = SeparationResolver.RESOLVE_EPSILON_INCHES * SeparationResolver.INCHES_TO_METERS
+		for obj in movable:
+			if not is_instance_valid(obj):
+				continue
+			var item := _drag_item_shapes(obj)
+			var item_shapes: Array = item["shapes"]
+			if item_shapes.is_empty():
+				continue
+			var item_unit_id: int = item["unit_id"]
+			# Only OTHER units obstruct HERE (the 1" rule binds between units; same-unit
+			# spacing is coherency / formation). Overlap between any pair is handled below.
+			var item_cands: Array = []
+			for c in candidates:
+				if int(c["unit_id"]) != item_unit_id:
+					item_cands.append(c)
+			if item_cands.is_empty():
+				continue
+			var delta := SeparationResolver.resolve_translation(item_shapes, item_cands, int(item["player"]))
+			if delta.length() > min_move:
+				obj.global_position.x += delta.x
+				obj.global_position.z += delta.y
 
-	var min_move: float = SeparationResolver.RESOLVE_EPSILON_INCHES * SeparationResolver.INCHES_TO_METERS
+	# Phase 2 — absolute anti-stacking (runs AFTER the unit-scoped snap/push above): guarantee no
+	# dropped base overlaps ANY other base — same unit, own other unit, enemy, OR a sibling
+	# dragged item. Overlap is a hard physical impossibility, distinct from the 1" spacing
+	# rule (which binds only between units and exempts a charge). The snap/push above only
+	# considers OTHER units, so same-unit siblings and mutually-dragged models can still be
+	# stacked; this pass closes that.
+	_resolve_drop_stacking(army, movable, dragged_ids)
+
+
+## Absolute anti-stacking pass for the drop: no two model bases may overlap, for ANY pair.
+## Each dragged item (a loose model = 1 base; a regiment tray = its whole member block) is
+## pushed out of overlap with every other alive base — the stationary bases of ALL units
+## (same unit included) AND the other dragged items' live bases. Iterated to convergence so
+## items also clear each other; moves the item NODES so undo + MP sync carry the result
+## (this runs before the drop batch / undo record in _stop_dragging). Best-effort escape
+## for a fully-surrounded drop (SeparationResolver.resolve_overlaps settles at the
+## shallowest opening rather than leaving a deep stack).
+func _resolve_drop_stacking(army: Node, movable: Array, dragged_ids: Dictionary) -> void:
+	# Movable items with live shapes (rebuilt at their post-snap/push positions).
+	var items: Array = []
 	for obj in movable:
 		if not is_instance_valid(obj):
 			continue
-		var item := _drag_item_shapes(obj)
-		var item_shapes: Array = item["shapes"]
-		if item_shapes.is_empty():
+		var d := _drag_item_shapes(obj)
+		var shapes: Array = d["shapes"]
+		if shapes.is_empty():
 			continue
-		var item_unit_id: int = item["unit_id"]
-		# Only OTHER units obstruct (the rule binds between units; same-unit spacing is
-		# coherency / formation, left alone here).
-		var item_cands: Array = []
-		for c in candidates:
-			if int(c["unit_id"]) != item_unit_id:
-				item_cands.append(c)
-		if item_cands.is_empty():
+		items.append({"node": obj, "shapes": shapes})
+	if items.is_empty():
+		return
+
+	# Fixed obstacles: every alive base NOT part of the drag (all units, both armies).
+	var fixed: Array = []
+	for game_unit in army.get_all_game_units():
+		if game_unit == null:
 			continue
-		var delta := SeparationResolver.resolve_translation(item_shapes, item_cands, int(item["player"]))
-		if delta.length() > min_move:
-			obj.global_position.x += delta.x
-			obj.global_position.z += delta.y
+		for model in game_unit.get_alive_models():
+			if model == null or model.node == null or not is_instance_valid(model.node):
+				continue
+			if dragged_ids.has(model.node.get_instance_id()):
+				continue
+			var shape := SeparationChecker.shape_for_model(model)
+			if shape != null:
+				fixed.append(shape)
+
+	var min_move: float = SeparationResolver.RESOLVE_EPSILON_INCHES * SeparationResolver.INCHES_TO_METERS
+	# Outer relaxation: moving one item can nudge it into another dragged item, so re-pass
+	# until nothing moves (or the hard cap). Each item clears `fixed` PLUS the other items'
+	# live bases (their centres were updated in place when they last moved).
+	for _pass in range(SeparationResolver.MAX_OVERLAP_ITERATIONS):
+		var moved_any := false
+		for i in range(items.size()):
+			var it: Dictionary = items[i]
+			var obstacles: Array = fixed.duplicate()
+			for j in range(items.size()):
+				if j != i:
+					obstacles.append_array(items[j]["shapes"])
+			var delta := SeparationResolver.resolve_overlaps(it["shapes"], obstacles)
+			if delta.length() > min_move:
+				var node: Node3D = it["node"]
+				node.global_position.x += delta.x
+				node.global_position.z += delta.y
+				moved_any = true
+		if not moved_any:
+			break
 
 
 ## Base shapes of a dragged node for separation resolution: a loose model yields one
