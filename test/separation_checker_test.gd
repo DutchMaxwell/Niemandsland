@@ -320,3 +320,54 @@ func test_shape_for_model_missing_node_returns_null() -> void:
 	var model := ModelInstance.new()
 	model.node = null
 	assert_object(SeparationChecker.shape_for_model(model)).is_null()
+
+
+# ===== Retreat-ruler witness points (nearest_edge_points) =====
+## The ruler LABEL must always agree with the distance math, so gap_inches ==
+## edge_distance for every shape kind; the witness SEGMENT reproduces that gap exactly
+## for round-round and round-rect (the exact branches).
+
+func test_nearest_edge_points_gap_matches_edge_distance_round() -> void:
+	var a := _round(0, 0, 0.5)
+	var b := _round(3, 0, 0.5)  # 2" gap
+	var pts := SeparationChecker.nearest_edge_points(a, b)
+	assert_float(pts["gap_inches"]).is_equal_approx(SeparationChecker.edge_distance(a, b), TOL)
+	# Exact for round-round: the witness segment length equals the gap.
+	var seg := (pts["to"] as Vector2).distance_to(pts["from"]) / INCH
+	assert_float(seg).is_equal_approx(2.0, TOL)
+
+
+func test_nearest_edge_points_gap_matches_edge_distance_oval() -> void:
+	var a := _oval(0, 0, 0.0, 0.8, 0.4)
+	var b := _oval(3, 0, 0.0, 0.8, 0.4)
+	var pts := SeparationChecker.nearest_edge_points(a, b)
+	assert_float(pts["gap_inches"]).is_equal_approx(SeparationChecker.edge_distance(a, b), TOL)
+
+
+func test_nearest_edge_points_gap_matches_edge_distance_rect() -> void:
+	# round-vs-rect (an exact branch): 1"-radius circle, 1"x1" half-extent rect, 4" apart.
+	var round_base := _round(0, 0, 1.0)
+	var rect := _rect(4, 0, 0.0, 1.0, 1.0)
+	var pts := SeparationChecker.nearest_edge_points(round_base, rect)
+	var gap := SeparationChecker.edge_distance(round_base, rect)
+	assert_float(pts["gap_inches"]).is_equal_approx(gap, TOL)
+	# Exact branch: witness segment length reproduces the gap (2" here: 4 - 1 - 1).
+	var seg := (pts["to"] as Vector2).distance_to(pts["from"]) / INCH
+	assert_float(seg).is_equal_approx(2.0, TOL)
+
+
+func test_nearest_edge_points_witness_lies_on_boundaries_round() -> void:
+	# Each witness point sits on its own base's boundary (distance from centre == radius).
+	var a := _round(0, 0, 0.5)
+	var b := _round(2, 0, 0.5)
+	var pts := SeparationChecker.nearest_edge_points(a, b)
+	assert_float((pts["from"] as Vector2).distance_to(a.center) / INCH).is_equal_approx(0.5, TOL)
+	assert_float((pts["to"] as Vector2).distance_to(b.center) / INCH).is_equal_approx(0.5, TOL)
+
+
+func test_nearest_edge_points_concentric_is_degenerate() -> void:
+	# Coincident centres -> from == to (caller hides the zero-length line).
+	var a := _round(0, 0, 0.5)
+	var b := _round(0, 0, 0.5)
+	var pts := SeparationChecker.nearest_edge_points(a, b)
+	assert_float((pts["from"] as Vector2).distance_to(pts["to"] as Vector2)).is_equal_approx(0.0, 0.0001)

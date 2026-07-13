@@ -51,6 +51,36 @@ const FADE_DURATION := 0.25
 ## Violation pulse angular speed (radians/second); ~1 s per breath.
 const PULSE_SPEED := TAU / 1.1
 
+## Numerical guard for near-zero lengths (metres).
+const EPSILON_M := 0.00001
+
+# --- Retreat ruler (violation only) ---
+## When a wall is BLINKING (an active sub-1" violation), a bright measured line is drawn
+## between the two offending base EDGES (the nearest pair), labelled with the live edge
+## GAP and the 1" target, so the player sees exactly how deep inside the zone they are and
+## which way to back out. The line + label are built once and CACHED — a drag frame only
+## updates their transform + text. Colour matches the offending wall (red enemy / amber
+## friendly). Local render only; driven by main.gd, which finds the nearest violating pair.
+
+## Ruler line height above the table (metres) — just above the 1" band (BAND_Y).
+const RULER_LINE_Y := 0.012
+
+## Ruler line vertical thinness / on-table thickness (metres): a flat 1 mm x 3 mm ribbon.
+const RULER_LINE_THIN := 0.001
+const RULER_LINE_WIDTH := 0.003
+
+## Ruler label height above the table (metres) — above the line, below the minis.
+const RULER_LABEL_Y := 0.02
+
+## Ruler label sizing (mirrors the measurement tool's Label3D for a consistent look).
+const RULER_LABEL_PIXEL_SIZE := 0.001
+const RULER_LABEL_FONT_SIZE := 22
+const RULER_LABEL_OUTLINE := 8
+
+## Render priorities: draw the ruler (and its label above it) over the ground band + decals.
+const RULER_RENDER_PRIORITY := 20
+const RULER_LABEL_PRIORITY := 21
+
 
 # ===== Zone Spec (input) =====
 
@@ -90,6 +120,14 @@ class Wall:
 
 var _walls: Dictionary = {}     # unit_id -> Wall
 var _pulse_phase: float = 0.0
+
+# Cached retreat-ruler nodes (built lazily on the first violation; only transform + text
+# update afterwards).
+var _ruler_line: MeshInstance3D = null
+var _ruler_line_mesh: BoxMesh = null
+var _ruler_material: StandardMaterial3D = null
+var _ruler_label: Label3D = null
+var _ruler_last_text: String = ""
 
 
 func _ready() -> void:
@@ -133,7 +171,87 @@ func show_zones(zones: Array) -> void:
 		set_process(true)
 
 
+## Show the retreat ruler between two base-edge witness points (world XZ, metres),
+## labelled with the current edge GAP (inches) and the 1" target. Colour matches the
+## offending wall — red enemy / amber friendly. Lazily builds the cached line + label; a
+## repeat call only updates their transform + text. `gap_inches` is clamped to 0 for
+## display (a mid-drag overlap reads as touching, 0.0"), while the target stays 1.0".
+func set_retreat_ruler(from_xz: Vector2, to_xz: Vector2, gap_inches: float, is_friendly: bool) -> void:
+	if _ruler_line == null:
+		_build_ruler()
+	var from3 := Vector3(from_xz.x, RULER_LINE_Y, from_xz.y)
+	var to3 := Vector3(to_xz.x, RULER_LINE_Y, to_xz.y)
+	var flat := Vector2(to3.x - from3.x, to3.z - from3.z)
+	var length := flat.length()
+	if length < EPSILON_M:
+		clear_retreat_ruler()  # degenerate (concentric bases) -> nothing to draw
+		return
+
+	_ruler_line.visible = true
+	_ruler_label.visible = true
+	visible = true  # a violation always co-occurs with a wall, but be explicit
+
+	_ruler_line_mesh.size = Vector3(length, RULER_LINE_THIN, RULER_LINE_WIDTH)
+	var mid := (from3 + to3) * 0.5
+	_ruler_line.global_position = mid
+	var angle := atan2(flat.x, flat.y)
+	_ruler_line.rotation = Vector3(0.0, angle + PI * 0.5, 0.0)
+
+	var col := COLOR_FRIENDLY if is_friendly else COLOR_ENEMY
+	_ruler_material.albedo_color = Color(col.r, col.g, col.b, 1.0)
+	_ruler_material.emission = col
+
+	var shown := maxf(gap_inches, 0.0)
+	var text := "%.1f\" / %.1f\"" % [shown, SeparationChecker.SEPARATION_DISTANCE_INCHES]
+	if text != _ruler_last_text:
+		_ruler_label.text = text
+		_ruler_last_text = text
+	_ruler_label.global_position = Vector3(mid.x, RULER_LABEL_Y, mid.z)
+	_ruler_label.rotation = Vector3(-PI * 0.5, angle, 0.0)
+
+
+## Hide the retreat ruler (no active violation). Cheap; keeps the cached nodes for reuse.
+func clear_retreat_ruler() -> void:
+	_ruler_last_text = ""
+	if _ruler_line != null:
+		_ruler_line.visible = false
+	if _ruler_label != null:
+		_ruler_label.visible = false
+
+
 # ===== Private Methods =====
+
+
+## Builds the cached retreat-ruler line + label (once, on the first violation).
+func _build_ruler() -> void:
+	_ruler_material = StandardMaterial3D.new()
+	_ruler_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_ruler_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_ruler_material.no_depth_test = true
+	_ruler_material.emission_enabled = true
+	_ruler_material.render_priority = RULER_RENDER_PRIORITY
+
+	_ruler_line_mesh = BoxMesh.new()
+	_ruler_line = MeshInstance3D.new()
+	_ruler_line.name = "SeparationRetreatRuler"
+	_ruler_line.mesh = _ruler_line_mesh
+	_ruler_line.material_override = _ruler_material
+	_ruler_line.visible = false
+	add_child(_ruler_line)
+
+	_ruler_label = Label3D.new()
+	_ruler_label.name = "SeparationRetreatRulerLabel"
+	_ruler_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	_ruler_label.no_depth_test = true
+	_ruler_label.render_priority = RULER_LABEL_PRIORITY
+	_ruler_label.pixel_size = RULER_LABEL_PIXEL_SIZE
+	_ruler_label.font_size = RULER_LABEL_FONT_SIZE
+	_ruler_label.outline_size = RULER_LABEL_OUTLINE
+	_ruler_label.modulate = Color.WHITE
+	_ruler_label.outline_modulate = Color.BLACK
+	_ruler_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_ruler_label.visible = false
+	add_child(_ruler_label)
 
 func _process(delta: float) -> void:
 	_pulse_phase = fmod(_pulse_phase + delta * PULSE_SPEED, TAU)

@@ -4196,6 +4196,7 @@ const SEPARATION_PROACTIVE_INCHES := 3.0
 func _on_selection_changed_for_separation(selected: Array) -> void:
 	_separation_cache_valid = false
 	if selected.is_empty() and separation_visualizer:
+		separation_visualizer.clear_retreat_ruler()
 		separation_visualizer.show_zones([])
 
 
@@ -4312,11 +4313,13 @@ func _check_separation_for_selected_units(proactive: bool = false) -> void:
 	# untyped assignment (matches _check_coherency_for_selected_units).
 	var selected = object_manager.get_selected_objects()
 	if selected.is_empty():
+		separation_visualizer.clear_retreat_ruler()
 		separation_visualizer.show_zones([])
 		return
 
 	var moved := _collect_moved_separation_models(selected)
 	if moved.is_empty():
+		separation_visualizer.clear_retreat_ruler()
 		separation_visualizer.show_zones([])
 		return
 
@@ -4337,6 +4340,14 @@ func _check_separation_for_selected_units(proactive: bool = false) -> void:
 	var proactive_m: float = SEPARATION_PROACTIVE_INCHES * SeparationChecker.INCHES_TO_METERS
 	var sep_inches: float = SeparationChecker.SEPARATION_DISTANCE_INCHES
 	var contact_eps: float = SeparationChecker.BASE_CONTACT_EPSILON_INCHES
+
+	# Track the globally NEAREST violating base pair (min edge gap) across all foreign
+	# units, so the retreat ruler measures the deepest incursion — the pair the player
+	# most needs to back away from.
+	var worst_gap := INF
+	var worst_a: SeparationChecker.BaseShape = null
+	var worst_b: SeparationChecker.BaseShape = null
+	var worst_friendly := false
 
 	var zones: Array = []
 	for unit_id in _separation_units_cache:
@@ -4368,12 +4379,20 @@ func _check_separation_for_selected_units(proactive: bool = false) -> void:
 					color_is_friendly = false
 				var gap := SeparationChecker.edge_distance(mv["shape"], cs)
 				min_gap = minf(min_gap, gap)
+				var pair_violation := false
 				if gap < sep_inches:
 					if pair_friendly:
-						is_violation = true  # friendly: any sub-1" including contact warns
+						pair_violation = true  # friendly: any sub-1" including contact warns
 					elif gap > contact_eps:
-						is_violation = true  # enemy/unknown: sub-1" but not base contact
+						pair_violation = true  # enemy/unknown: sub-1" but not base contact
 					# enemy/unknown base contact = intentional Charge into melee -> exempt
+				if pair_violation:
+					is_violation = true
+					if gap < worst_gap:
+						worst_gap = gap
+						worst_a = mv["shape"]
+						worst_b = cs
+						worst_friendly = pair_friendly
 		if min_gap == INF:
 			continue  # no member pair within even the proactive reach
 
@@ -4387,6 +4406,15 @@ func _check_separation_for_selected_units(proactive: bool = false) -> void:
 			unit_id, entry_shapes, color_is_friendly, is_violation, float(entry["signature"])))
 
 	separation_visualizer.show_zones(zones)
+
+	# Retreat aid: while a violation is live, draw a measured ruler between the nearest
+	# offending base edges, labelled with the actual gap and the 1" target, so the player
+	# sees how deep they are inside the zone and which way to back out. Cleared otherwise.
+	if worst_a != null and worst_b != null:
+		var pts := SeparationChecker.nearest_edge_points(worst_a, worst_b)
+		separation_visualizer.set_retreat_ruler(pts["from"], pts["to"], worst_gap, worst_friendly)
+	else:
+		separation_visualizer.clear_retreat_ruler()
 
 
 ## ============================================================================

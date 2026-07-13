@@ -179,6 +179,37 @@ static func is_separation_violation(a: BaseShape, b: BaseShape, contact_is_melee
 	return true
 
 
+## Nearest edge points (world XZ, metres) between two bases — the witness SEGMENT whose
+## length equals |edge_distance|. Drives the retreat ruler: `from` sits on a's boundary,
+## `to` on b's boundary, and `gap_inches` is the authoritative edge gap (== edge_distance,
+## so the ruler label always agrees with the distance math). Round-round and rect-round
+## witnesses are exact; oval- and rect-rect-involved pairs use the same centre-line
+## support the distance uses. Concentric bases return from == to == centre (degenerate ->
+## the caller hides the line). Returns {from: Vector2, to: Vector2, gap_inches: float}.
+static func nearest_edge_points(a: BaseShape, b: BaseShape) -> Dictionary:
+	var gap_inches := edge_distance(a, b)
+	if a == null or b == null:
+		return {"from": Vector2.ZERO, "to": Vector2.ZERO, "gap_inches": gap_inches}
+	# Rect-vs-round: exact — the closest point on the rect and the circle boundary toward it.
+	if a.kind == BaseShape.Kind.RECT and b.kind == BaseShape.Kind.ROUND:
+		var cp := _closest_point_on_rect(a, b.center)
+		return {"from": cp, "to": _circle_boundary_point(b, cp), "gap_inches": gap_inches}
+	if b.kind == BaseShape.Kind.RECT and a.kind == BaseShape.Kind.ROUND:
+		var cp2 := _closest_point_on_rect(b, a.center)
+		return {"from": _circle_boundary_point(a, cp2), "to": cp2, "gap_inches": gap_inches}
+	# General case (round-round, oval-involved, rect-rect): centre-line support witnesses.
+	var d := b.center - a.center
+	var dist := d.length()
+	if dist < EPSILON_M:
+		return {"from": a.center, "to": a.center, "gap_inches": gap_inches}
+	var dir := d / dist
+	return {
+		"from": a.center + dir * _support_extent(a, dir),
+		"to": b.center - dir * _support_extent(b, -dir),
+		"gap_inches": gap_inches,
+	}
+
+
 ## Whether two army-affiliation slots are enemies: different AND both known.
 ## player_id <= 0 (or missing) is "unknown" -> not comparable -> false, so an
 ## un-affiliated model is never CLASSIFIED as an enemy (callers then keep the
@@ -323,6 +354,16 @@ static func _gap_with_rect(a: BaseShape, b: BaseShape) -> float:
 		return -minf(_min_extent(rect), _min_extent(other))
 	var dir := d / center_dist
 	return center_dist - _support_extent(rect, dir) - _support_extent(other, -dir)
+
+
+## The point on a round base's boundary nearest an external point (world XZ). Used only
+## to place the retreat-ruler witness on a circle facing a rectangle's closest point.
+static func _circle_boundary_point(circle: BaseShape, toward: Vector2) -> Vector2:
+	var d := toward - circle.center
+	var dist := d.length()
+	if dist < EPSILON_M:
+		return circle.center + Vector2.RIGHT * circle.radius
+	return circle.center + (d / dist) * circle.radius
 
 
 ## Closest point (world XZ) on a rotated rectangle to an external point.
