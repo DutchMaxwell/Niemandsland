@@ -9,10 +9,13 @@ extends RefCounted
 ## trees. Do not fork the semantics here from terrain_overlay.gd.
 ##
 ## Terrain effects (GF Advanced Rules v3.5.1 p.11-12; mirrors terrain_overlay._terrain_effect_label):
-##   RUINS      Cover, Blocks LoS             (Height 5)
-##   FOREST     Difficult, Cover, Blocks LoS  (Height 5)
-##   CONTAINER  Impassable, Blocks LoS        (Height 5)
-##   DANGEROUS  Dangerous Terrain             (Ground)
+##   RUINS      Cover, Blocks LoS (area — see in/out, not through)  (Height 5)
+##   FOREST     Difficult, Cover, Blocks LoS (area — see in/out, not through)  (Height 5)
+##   CONTAINER  Impassable, Blocks LoS (solid — hard-block)         (Height 5)
+##   DANGEROUS  Dangerous Terrain                                   (Ground)
+## RUINS and FOREST are AREA terrain (p.12 "see into and out of forests, but not through them" — the
+## maintainer applies the same to ruins); a sight line is only blocked when it passes all the way THROUGH
+## the zone to a target beyond. CONTAINERS are solid Impassable+Blocking buildings and hard-block outright.
 
 enum TerrainType { NONE = 0, RUINS = 1, FOREST = 2, CONTAINER = 3, DANGEROUS = 4 }
 
@@ -32,6 +35,13 @@ static func height_category(t: int) -> int:
 
 
 static func gives_cover(t: int) -> bool:
+	return t == TerrainType.RUINS or t == TerrainType.FOREST
+
+
+## AREA terrain (Forests + Ruins): you see INTO and OUT OF it, but not completely THROUGH it (GF/AoF v3.5.1
+## p.12). Containers are solid Impassable+Blocking buildings — NOT area terrain, so they hard-block LOS and
+## the see-in/out zone exception in has_line_of_sight() does not apply to them.
+static func is_area_terrain(t: int) -> bool:
 	return t == TerrainType.RUINS or t == TerrainType.FOREST
 
 
@@ -77,10 +87,11 @@ static func flood_fill_zone(grid_cells: Dictionary, start_cell: Vector2i) -> Dic
 
 # === Line of sight (top-down; copied from terrain_overlay.has_line_of_sight, 2D) ===
 
-## True if `from_pt` can see `to_pt`. A blocking zone the line crosses blocks LOS only when (a) neither
-## endpoint stands inside that same zone ("see in/out of your own zone, not through someone else's") AND
-## (b) the zone's Height >= BOTH endpoints' Height categories. Points and cell_size share one unit
-## (inches in the sim, metres in the game).
+## True if `from_pt` can see `to_pt`. A blocking zone the line crosses blocks LOS only when (a) for AREA
+## terrain (Forests + Ruins) neither endpoint stands inside that same zone ("see in/out of your own zone,
+## not through someone else's"); solid CONTAINERS skip this exception and hard-block. AND (b) the zone's
+## Height >= BOTH endpoints' Height categories. Points and cell_size share one unit (inches in the sim,
+## metres in the game).
 static func has_line_of_sight(grid_cells: Dictionary, from_pt: Vector2, to_pt: Vector2,
 		from_h: int, to_h: int, cell_size: float = CELL_IN) -> bool:
 	if grid_cells.is_empty():
@@ -96,8 +107,8 @@ static func has_line_of_sight(grid_cells: Dictionary, from_pt: Vector2, to_pt: V
 		var ttype: int = int(grid_cells.get(cell, TerrainType.NONE))
 		if not blocks_los(ttype):
 			continue
-		if from_zone.has(cell) or to_zone.has(cell):
-			continue   # own zone: you see in/out of it
+		if is_area_terrain(ttype) and (from_zone.has(cell) or to_zone.has(cell)):
+			continue   # area terrain: you see IN/OUT of your own zone — just not through someone else's
 		var th := height_category(ttype)
 		if th >= from_h and th >= to_h:
 			return false

@@ -47,6 +47,44 @@ func test_you_see_out_of_your_own_forest_zone() -> void:
 	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(16.5, 16.5), Vector2(25, 16.5), 1, 1)).is_true()
 
 
+func test_area_terrain_predicate() -> void:
+	# Forests + Ruins are AREA terrain (see in/out, not through); solid Containers are NOT (hard-block).
+	assert_bool(TerrainRules.is_area_terrain(T.RUINS)).is_true()
+	assert_bool(TerrainRules.is_area_terrain(T.FOREST)).is_true()
+	assert_bool(TerrainRules.is_area_terrain(T.CONTAINER)).is_false()
+	assert_bool(TerrainRules.is_area_terrain(T.DANGEROUS)).is_false()
+
+
+func test_ruins_between_two_points_block_los() -> void:
+	# Ruins are area terrain (GF/AoF v3.5.1 p.12, applied to ruins per maintainer correction to round-4): a
+	# line drawn straight THROUGH a ruin to a far-side target on open ground is blocked (see in/out, NOT through).
+	var grid := {Vector2i(5, 5): T.RUINS}
+	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(10, 16.5), Vector2(25, 16.5), 1, 1)).is_false()
+
+
+func test_you_see_into_and_out_of_your_own_ruin_zone() -> void:
+	# A shooter/target standing INSIDE a ruin sees in and out of it (own-zone exception, like a forest).
+	var grid := {Vector2i(5, 5): T.RUINS}
+	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(16.5, 16.5), Vector2(25, 16.5), 1, 1)).is_true()
+	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(25, 16.5), Vector2(16.5, 16.5), 1, 1)).is_true()
+
+
+func test_deep_area_zone_target_inside_visible_but_beyond_blocked() -> void:
+	# Depth boundary: a 3-cell-deep ruin (cells 5,6,7 on row 5 = x in [15,24)). A target INSIDE the far cell
+	# (x=22, cell 7) is visible (see-in, no depth cap), but a target just BEYOND the zone (x=28, open) is
+	# blocked (the line passed all the way through). The boundary is the zone perimeter, not an inch depth.
+	var grid := {Vector2i(5, 5): T.RUINS, Vector2i(6, 5): T.RUINS, Vector2i(7, 5): T.RUINS}
+	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(6, 16.5), Vector2(22, 16.5), 1, 1)).is_true()
+	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(6, 16.5), Vector2(28, 16.5), 1, 1)).is_false()
+
+
+func test_container_hard_blocks_even_when_endpoints_share_the_zone() -> void:
+	# Solid Containers are NOT area terrain: the see-in/out zone exception does not apply. Even with both
+	# endpoints on the container's own cell, it still hard-blocks (contrast the forest own-zone exception).
+	var grid := {Vector2i(5, 5): T.CONTAINER, Vector2i(6, 5): T.CONTAINER, Vector2i(7, 5): T.CONTAINER}
+	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(16.5, 16.5), Vector2(22, 16.5), 1, 1)).is_false()
+
+
 func test_majority_in_cover_needs_a_strict_majority() -> void:
 	var grid := {Vector2i(5, 5): T.FOREST}
 	var three_in := [Vector2(16, 16), Vector2(16.5, 16.5), Vector2(17, 17), Vector2(30, 30), Vector2(31, 31)]

@@ -1084,14 +1084,25 @@ func world_to_cell(world_pos: Vector3) -> Vector2i:
 	return Vector2i(grid_x, grid_z)
 
 
-## True if a terrain type blocks line of sight when drawn THROUGH it. Per the GF/AoF Advanced Rules v3.5.1
-## terrain guidelines: Buildings/Containers are "Impassable + Blocking" and Forests block sight THROUGH them
-## (you still see into/out — the own-zone rule below), but RUINS are "Cover + Dangerous when using
-## rush/charge" — their low walls confer cover yet are SEE-THROUGH (field-test finding 5: ruins wrongly
-## blocked LOS). Dangerous terrain is Open and never blocks.
+## True if a terrain type is a line-of-sight blocker when a sight line is drawn THROUGH it. Per the GF/AoF
+## Advanced Rules v3.5.1 terrain guidelines (p.12): "Forests — Difficult + Cover + units can see into and out
+## of forests, but not through them". Ruins are AREA terrain too (maintainer correction to field-test round-4,
+## which over-corrected them to fully see-through): a model sees INTO and OUT OF ruins, but a line passing all
+## the way THROUGH them to a target beyond is blocked — exactly like a forest. FOREST and RUINS therefore both
+## block here and rely on the has_line_of_sight() zone rule for the see-in/out exception. CONTAINERS are solid
+## "Impassable + Blocking" buildings and hard-block LOS outright (no see-in/out). Dangerous terrain is Open and
+## never blocks.
 func terrain_blocks_los(terrain_type: int) -> bool:
 	return terrain_type == TerrainType.FOREST \
+		or terrain_type == TerrainType.RUINS \
 		or terrain_type == TerrainType.CONTAINER
+
+
+## AREA terrain (Forests + Ruins): you can see INTO and OUT OF it, but not completely THROUGH it (GF/AoF
+## v3.5.1 p.12). Solid blockers (Containers = Impassable + Blocking buildings) are NOT area terrain — they
+## hard-block, so the see-in/out zone exception in has_line_of_sight() does not apply to them.
+func terrain_is_area(terrain_type: int) -> bool:
+	return terrain_type == TerrainType.FOREST or terrain_type == TerrainType.RUINS
 
 
 ## Asgard Height category of a terrain type (blockers are Height 5; open = 0).
@@ -1118,10 +1129,12 @@ func _flood_fill_zone(start_cell: Vector2i) -> Dictionary:
 
 
 ## Top-down Asgard line-of-sight between two world points. A blocking terrain zone
-## the line crosses blocks LOS only when (a) neither endpoint stands inside that same
-## zone ("see in/out, not through") AND (b) the zone's Height is >= BOTH endpoints'
-## Height categories (otherwise the taller one sees over it). Dangerous terrain never
-## blocks. Heights are Asgard categories 1-6 (see LosRules).
+## the line crosses blocks LOS only when (a) for AREA terrain (Forests + Ruins) neither
+## endpoint stands inside that same zone ("see in/out, not through" — a target INSIDE the
+## zone or a shooter looking OUT is visible, but a line passing all the way through to a
+## target beyond is blocked); solid CONTAINERS skip this exception and hard-block. AND
+## (b) the zone's Height is >= BOTH endpoints' Height categories (otherwise the taller one
+## sees over it). Dangerous terrain never blocks. Heights are Asgard categories 1-6 (see LosRules).
 func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_height: int) -> bool:
 	if grid_cells.is_empty():
 		return true
@@ -1137,8 +1150,8 @@ func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_
 		var ttype: int = grid_cells.get(cell, TerrainType.NONE)
 		if not terrain_blocks_los(ttype):
 			continue
-		if from_zone.has(cell) or to_zone.has(cell):
-			continue  # own zone: you see in/out of it
+		if terrain_is_area(ttype) and (from_zone.has(cell) or to_zone.has(cell)):
+			continue  # area terrain: you see IN/OUT of your own zone — just not through someone else's
 		var th := terrain_height_category(ttype)
 		if th >= from_height and th >= to_height:
 			return false
@@ -1151,7 +1164,7 @@ func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_
 func _terrain_effect_label(terrain_type: int) -> String:
 	match terrain_type:
 		TerrainType.RUINS:
-			return "Ruins\nGround\nCover (see-through)"
+			return "Ruins\nHeight 5\nCover, Blocks LoS (see in/out)"
 		TerrainType.FOREST:
 			return "Forest\nHeight 5\nDifficult, Cover, Blocks LoS"
 		TerrainType.CONTAINER:

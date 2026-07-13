@@ -1310,15 +1310,16 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int) -> 
 ## GEOMETRIC PER-MODEL line of sight for a shooter→target model pair (GF/AoF v3.5.1 p.5: "Models can't see
 ## through solid obstacles, including the perimeter of other units (friendly or enemy), but they can always
 ## see through friendly models from their own unit."; p.8 "Who Can Shoot" is PER MODEL). The sight line is
-## blocked by (a) blocking terrain zones (the grid "see in/out, not through" rule — Forests + Buildings/
-## Containers only) and (b) the base of ANY OTHER unit's model — never the shooter's or the target's own
-## unit (you can always see the target and through your own models). Heights follow the Asgard rule: a
-## blocker only stops the line when its Height ≥ BOTH endpoint units' Heights (a taller model sees over a
-## smaller one). RUIN WALL SEGMENTS are deliberately NOT LOS blockers: per the v3.5.1 terrain guidelines
-## ruins are "Cover + Dangerous on rush/charge" — their low walls block MOVEMENT (the movement planner still
-## treats them as impassable) but are SEE-THROUGH for sight (field-test finding 5). Blocker list + endpoint
-## heights are built ONCE per pair; the returned Callable(sp, tp) is what SoloController.sighted_models runs
-## per shooter-model × target-model pair (findings 2/6/11).
+## blocked by (a) blocking terrain zones (the grid "see in/out, not through" rule — AREA terrain Forests +
+## Ruins let you see INTO/OUT of them but not all the way THROUGH; solid Buildings/Containers hard-block) and
+## (b) the base of ANY OTHER unit's model — never the shooter's or the target's own unit (you can always see
+## the target and through your own models). Heights follow the Asgard rule: a blocker only stops the line
+## when its Height ≥ BOTH endpoint units' Heights (a taller model sees over a smaller one). RUINS are AREA
+## terrain (GF/AoF v3.5.1 p.12, applied per maintainer correction to field-test round-4, which over-corrected
+## ruins to fully see-through): a model sees into/out of ruins but a line drawn THROUGH them to a far-side
+## target is blocked — exactly like a forest. Their low walls also block MOVEMENT (the movement planner treats
+## them as impassable). Blocker list + endpoint heights are built ONCE per pair; the returned Callable(sp, tp)
+## is what SoloController.sighted_models runs per shooter-model × target-model pair (findings 2/6/11).
 func _solo_true_los_callable(shooter: GameUnit, target: GameUnit) -> Callable:
 	var overlay := terrain_overlay
 	var blockers: Array[LosRules.Blocker] = _solo_los_blockers(shooter, target)
@@ -1327,7 +1328,7 @@ func _solo_true_los_callable(shooter: GameUnit, target: GameUnit) -> Callable:
 	return func(sp: Vector3, tp: Vector3) -> bool:
 		if overlay != null and overlay.has_method("has_line_of_sight") \
 				and not overlay.has_line_of_sight(sp, tp, from_h, to_h):
-			return false   # (a) blocking terrain (Forest / Building-Container; ruins are see-through)
+			return false   # (a) blocking terrain (area Forest/Ruins — see in/out, not through; Container hard-blocks)
 		var a2 := Vector2(sp.x, sp.z)
 		var b2 := Vector2(tp.x, tp.z)
 		# Blockers already exclude the shooter's and target's own units, so no per-call exclude list is needed.

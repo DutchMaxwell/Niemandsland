@@ -30,16 +30,22 @@ func test_toggle_flip_returns_state() -> void:
 	assert_bool(o.toggle_deployment_colors_flipped()).is_false()
 
 
-# === Ruins are Cover + SEE-THROUGH, not LOS blockers (finding 5) ===
+# === Ruins are AREA terrain: see in/out, not through (maintainer correction to round-4) ===
 
-func test_ruins_do_not_block_line_of_sight() -> void:
-	# GF/AoF v3.5.1 terrain guidelines: "Ruins - Cover + Dangerous on rush/charge" — their low walls confer
-	# cover yet are see-through (field-test finding 5). Buildings/Containers ("Impassable + Blocking") and
-	# Forests ("see into/out, not through") still block sight through them; Dangerous is Open.
+func test_ruins_are_area_terrain_blockers() -> void:
+	# GF/AoF v3.5.1 p.12: "Forests - Difficult + Cover + units can see into and out of forests, but not
+	# through them." The maintainer applies the same AREA-terrain rule to Ruins (round-4 over-corrected them
+	# to fully see-through): ruins DO block a sight line drawn all the way through them, so they are a
+	# Height-5 area blocker like a forest. Buildings/Containers ("Impassable + Blocking") hard-block;
+	# Dangerous is Open.
 	var o := _overlay()
-	assert_bool(o.terrain_blocks_los(OverlayScript.TerrainType.RUINS)).is_false()
+	assert_bool(o.terrain_blocks_los(OverlayScript.TerrainType.RUINS)).is_true()
 	assert_bool(o.terrain_blocks_los(OverlayScript.TerrainType.CONTAINER)).is_true()
 	assert_bool(o.terrain_blocks_los(OverlayScript.TerrainType.FOREST)).is_true()
 	assert_bool(o.terrain_blocks_los(OverlayScript.TerrainType.DANGEROUS)).is_false()
-	# A see-through ruin is Ground (Height 0), not a Height-5 sight blocker.
-	assert_int(o.terrain_height_category(OverlayScript.TerrainType.RUINS)).is_equal(0)
+	# An area-terrain ruin is a Height-5 sight blocker (matches the forest).
+	assert_int(o.terrain_height_category(OverlayScript.TerrainType.RUINS)).is_equal(5)
+	# Ruins + Forests are area terrain (see in/out); solid Containers are not.
+	assert_bool(o.terrain_is_area(OverlayScript.TerrainType.RUINS)).is_true()
+	assert_bool(o.terrain_is_area(OverlayScript.TerrainType.FOREST)).is_true()
+	assert_bool(o.terrain_is_area(OverlayScript.TerrainType.CONTAINER)).is_false()
