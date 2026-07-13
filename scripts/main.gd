@@ -242,6 +242,9 @@ const SOLO_GAME_ROUNDS := 4                  # OPR standard match length (rounds
 const SOLO_AI_TAIL_DELAY_S := 1.2            # readable pause between the AI's unprompted tail activations
 const SOLO_DEPLOY_WALL_CLEARANCE_M := 0.02   # a deploy sample point within 2 cm (~0.8") of a container/ruin wall is blocked (finding 1)
 var _solo_pending_replies: int = 0           # human activations still owed one AI answer (alternation)
+var _solo_replied_ids: Dictionary = {}       # unit instance ids whose activation already earned the AI's reply
+                                             # THIS round (round 7, finding 5: re-toggling a unit's activation
+                                             # marker must never grant the AI a second answer)
 var _solo_ai_took_last_activation: bool = true  # who took the LAST activation of the current round (finding 7:
                                              # drives who OPENS the next round — the OTHER side, never back-to-back).
                                              # Init true so round 1 opens with the human (the default deployment order).
@@ -771,6 +774,14 @@ func _solo_activate_one_ai() -> GameUnit:
 func _on_solo_human_activated(gu: GameUnit) -> void:
 	if not _solo_alternation_ready(gu):
 		return
+	# ONE reply per unit per round (round 7, finding 5): the radial activation marker is a TOGGLE, so
+	# un-marking and re-marking a unit (a mis-click fix, or re-marking after an attack) re-emitted
+	# unit_activated and queued the AI a SECOND answer for the same activation — the alternation then ran
+	# ahead of the human ("unrecognized activations"). The pump still runs so the state machine drains.
+	if _solo_replied_ids.has(gu.get_instance_id()):
+		await _solo_pump()
+		return
+	_solo_replied_ids[gu.get_instance_id()] = true
 	_solo_ai_took_last_activation = false   # the human just took an activation (finding 7: round-opener tracking)
 	_solo_pending_replies += 1
 	await _solo_pump()
@@ -1046,6 +1057,7 @@ func _solo_end_round() -> void:
 	# grants exactly one AI activation (GF/AoF v3.5.1 "Rounds, Turns & Activations": one-for-one alternation).
 	var ai_opens: bool = SoloController.ai_opens_next_round(_solo_ai_took_last_activation, human_has, ai_has)
 	_solo_pending_replies = SoloController.pending_replies_at_round_start(ai_opens)
+	_solo_replied_ids.clear()   # a new round: every unit's activation owes the AI one fresh reply (finding 5)
 	if ai_opens:
 		# The AI opens this round with one activation; the pump's tail then drains an empty human side.
 		await _solo_pump()
@@ -1279,20 +1291,30 @@ func _on_solo_deploy_pressed() -> void:
 	if battle_log != null:
 		var reserve_note: String = (" (%d in reserve)" % int(res.reserved)) if int(res.reserved) > 0 else ""
 		battle_log.log_event(BattleLog.Category.GENERAL, "AI deploys %d units%s [seed %d]" % [int(res.deployed), reserve_note, seed_value], true)
-	# Ambush reserve units are OFF-TABLE (GF/AoF v3.5.1 p.13): hide their models so they are neither
-	# visible, targetable, nor perceived as "deployed" until they arrive (field-test finding 3). Arrival
-	# reveals them (their single placement — field-test finding 4: no earlier phantom placement).
-	for u in solo_controller.ambush_reserve:
-		_solo_set_unit_visible(u as GameUnit, false)
-	# YOUR OWN Ambush units are set aside too (GF/AoF v3.5.1 p.13 "May be set aside before deployment";
-	# field-test finding 5: the maintainer's Ambush units were never asked for). They wait off-table and the
-	# game PROMPTS you to bring them in from round 2 via guided placement (>9" from enemies, terrain-legal).
-	var set_aside: Array = solo_controller.set_aside_human_ambush()
-	for u in set_aside:
-		_solo_set_unit_visible(u as GameUnit, false)
-	if not set_aside.is_empty() and battle_log != null:
+	# Ambush reserve units are OFF-TABLE (GF/AoF v3.5.1 p.13) but stay VISIBLE on their army tray — field-test
+	# round 7, finding 1: hiding them made them "vanish from the tableau" after Deploy Army. They were never
+	# placed on the table (excluded from the placement order), so they simply remain standing in the tray's
+	# Ambush band, clearly not deployed; every rules seam (targeting, LOS blockers, movement obstacles, the
+	# eligibility pump) already excludes them via unit_in_reserve. The battle log names them so the roster is
+	# explicit; arrival moves them from the tray onto the table (their single placement — finding 4).
+	if not solo_controller.ambush_reserve.is_empty() and battle_log != null:
+		var reserve_names: PackedStringArray = []
+		for u in solo_controller.ambush_reserve:
+			reserve_names.append((u as GameUnit).get_name())
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"You hold %d Ambush unit(s) in reserve — you'll be asked to deploy them from round 2 (GF/AoF p.13)." % set_aside.size(), false)
+			"AI Ambush reserve (stays on the tray until it arrives): %s" % ", ".join(reserve_names), true)
+	# YOUR OWN Ambush units are set aside too (GF/AoF v3.5.1 p.13 "May be set aside before deployment";
+	# field-test finding 5: the maintainer's Ambush units were never asked for). They too stay VISIBLE on
+	# their tray (round 7, finding 1) and the game PROMPTS you to bring them in from round 2 via guided
+	# placement (>9" from enemies, terrain-legal).
+	var set_aside: Array = solo_controller.set_aside_human_ambush()
+	if not set_aside.is_empty() and battle_log != null:
+		var aside_names: PackedStringArray = []
+		for u in set_aside:
+			aside_names.append((u as GameUnit).get_name())
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"You hold %d Ambush unit(s) in reserve on your tray (%s) — you'll be asked to deploy them from round 2 (GF/AoF p.13)." % [
+				set_aside.size(), ", ".join(aside_names)], false)
 	_solo_flush_dev()   # render the per-unit deployment records when the dev toggle is on
 
 
@@ -1875,7 +1897,6 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
-	var enemy_positions: Array = solo_controller.alive_positions(enemy) if (melee and enemy != null and solo_controller != null) else []
 	var groups: Array = []
 	for m in members:
 		var member := m as GameUnit
@@ -1884,13 +1905,22 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		var weapons: Array = []
 		if member.source_type == "opr" and member.source_data is OPRApiClient.OPRUnit:
 			weapons = (member.source_data as OPRApiClient.OPRUnit).weapons
-		var profiles: Array = AiShooting.melee_profiles(weapons) if melee else AiShooting.profiles_in_range(weapons, dist_in)
+		# Range is measured MODEL to MODEL (GF v3.5.1 p.8), so the in-range gate uses the NEAREST model pair,
+		# not the unit-centre distance (field-test round 7, finding 5: a spread unit whose CENTRE was out of
+		# range rolled NOTHING — silently — while its forward models were sighted and in range). Per-profile
+		# scaling by the per-model sighted count below still zeroes any profile no model can actually reach.
+		var member_dist: float = dist_in
+		if not melee and enemy != null and solo_controller != null:
+			member_dist = _solo_nearest_model_gap_in(member, enemy, dist_in)
+		var profiles: Array = AiShooting.melee_profiles(weapons) if melee else AiShooting.profiles_in_range(weapons, member_dist)
 		if profiles.is_empty():
 			continue
 		var max_models: int = member.models.size()
 		var melee_count: int = member.get_alive_count()
 		if melee and enemy != null and solo_controller != null:
-			melee_count = SoloController.striking_models(solo_controller.alive_positions(member), enemy_positions)
+			# BASE-EDGE strike reach (round 7, finding 3): the old centre-space count excluded big bases
+			# (walker/vehicle) from their own melee — the charger rolled nothing, only the defender struck.
+			melee_count = solo_controller.striking_models_for(member, enemy)
 		var scaled: Array = []
 		var member_shred: bool = RulesRegistry.unit_rule_active(member, "Shred")   # unit-level grant (wave 5)
 		for p in profiles:
@@ -1921,6 +1951,23 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		groups.append({"name": member.get_name(), "quality": member.get_quality(),
 			"fatigued": member.is_fatigued, "member": member, "profiles": scaled})
 	return groups
+
+
+## The NEAREST alive-model-to-alive-model distance (inches, table plane) between a member and the enemy —
+## the model-to-model range measure of GF v3.5.1 p.8 (round 7, finding 5). Falls back to the caller's
+## unit-centre distance when either side has no live model positions.
+func _solo_nearest_model_gap_in(member: GameUnit, enemy: GameUnit, fallback_in: float) -> float:
+	if solo_controller == null:
+		return fallback_in
+	var own: Array = solo_controller.alive_positions(member)
+	var theirs: Array = solo_controller.alive_positions(enemy)
+	if own.is_empty() or theirs.is_empty():
+		return fallback_in
+	var best := INF
+	for a in own:
+		for b in theirs:
+			best = minf(best, MoveIntent.distance_inches(a as Vector3, b as Vector3))
+	return best
 
 
 # === Solo combat facets (goal 003 P3 — shared pure-module math: cover / hits / wounds / regen / tough) ===
@@ -3111,8 +3158,8 @@ func _run_ai_melee(report: Dictionary) -> void:
 	elif human_score > ai_score and _solo_combined_alive(unit) > 0:
 		await _solo_morale_test(unit, _solo_owner_label(unit))
 	# — Consolidation (GF v3.5.1 p.9, after morale): neither destroyed → the CHARGER (the AI here) moves
-	#   back 1" to clear the separation — visibly, via the corridor + glide replay. —
-	await _solo_separate_after_melee(unit, target)
+	#   back 1"; one side destroyed → the survivor consolidates up to 3" (round 7, finding 4) —
+	await _solo_consolidate_melee(unit, target)
 	# OUTCOME: one readable melee summary (toast + hold).
 	await _solo_show_outcome("Melee: %s deals %d — takes %d back — %s loses %d model%s" % [
 		unit.get_name(), ai_caused, human_caused, target.get_name(),
@@ -3120,25 +3167,57 @@ func _run_ai_melee(report: Dictionary) -> void:
 		("" if target_models_before - _solo_combined_alive(target) == 1 else "s")])
 
 
-## Post-melee separation (GF Advanced Rules v3.5.1 p.9 "Consolidation Moves": "If neither of the units
-## was destroyed, then the charging unit must move back by 1” (if possible), to keep the separation
-## between units clear"). The AI charger backs off through the normal planned-move seam (state applied +
-## broadcast; the corridor + glide replay make it visible); Dangerous crossings on the back-step still
-## test (p.12). No-op when either side was destroyed (the "may move up to 3”" winner consolidation is a
-## MAY and is not automated — flagged in docs/SOLO_AI_RULES_COVERAGE.md).
-func _solo_separate_after_melee(charger: GameUnit, defender: GameUnit) -> void:
-	if solo_controller == null or _solo_combined_alive(charger) <= 0 or _solo_combined_alive(defender) <= 0:
+## Consolidation Moves (GF Advanced Rules v3.5.1 p.9 — wording verified in the official rulebook; the
+## values are identical across GF/AoF/AoFS/GFF/AoFR v3.5.1, so no system scoping):
+##   · NEITHER unit destroyed → the CHARGING unit must move back 1" (if possible) — the separation;
+##   · ONE unit destroyed     → the OTHER unit may move by up to 3" — the winner consolidation.
+## Round 7, finding 4: the winner consolidation was missing entirely. AI units take their move
+## automatically (the 1" back-step is mandatory; the 3" "may" is EV-aware — toward an uncontrolled
+## objective, else the next target — via consolidate_after_melee_win). The HUMAN's units are OFFERED the
+## move instead (battle log + toast), consistent with the solo convention that the automation never moves
+## the player's models; the player drags the models through the normal move flow.
+func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
+	if solo_controller == null:
 		return
-	var dang: int = solo_controller.separate_from_melee(charger, solo_controller.unit_centre(defender))
-	solo_controller.record_decision({"kind": "separate", "unit": charger.get_name(),
-		"rule": "GF v3.5.1 p.9 consolidation: the charger moves back 1\" when neither unit was destroyed",
-		"candidates": [], "chosen": "", "why": "mandatory separation", "data": {"back_in": 1.0}})
+	var charger_alive: bool = _solo_combined_alive(charger) > 0
+	var defender_alive: bool = _solo_combined_alive(defender) > 0
+	if charger_alive and defender_alive:
+		if not _solo_is_ai_unit(charger):
+			# The human charged: the mandatory 1" back-step is surfaced, never auto-applied.
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"Consolidation: move %s back 1\" (the charger separates — GF v3.5.1 p.9)" % charger.get_name(), true)
+			return
+		var dang: int = solo_controller.separate_from_melee(charger, solo_controller.unit_centre(defender))
+		solo_controller.record_decision({"kind": "separate", "unit": charger.get_name(),
+			"rule": "GF v3.5.1 p.9 consolidation: the charger moves back 1\" when neither unit was destroyed",
+			"candidates": [], "chosen": "", "why": "mandatory separation", "data": {"back_in": 1.0}})
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s moves back 1\" (consolidation — GF v3.5.1 p.9)" % charger.get_name(), true)
+		await _solo_animate_move(solo_controller.last_move_paths)
+		if dang > 0:
+			await _run_ai_dangerous(charger, dang)
+		_solo_flush_dev()
+		return
+	if charger_alive == defender_alive:
+		return   # both sides wiped — nobody left to consolidate
+	var survivor: GameUnit = charger if charger_alive else defender
+	if _solo_is_ai_unit(survivor):
+		var dang2: int = solo_controller.consolidate_after_melee_win(survivor)
+		if not solo_controller.last_move_paths.is_empty():
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"%s consolidates up to 3\" (enemy destroyed — GF v3.5.1 p.9)" % survivor.get_name(), true)
+			await _solo_animate_move(solo_controller.last_move_paths)
+		if dang2 > 0:
+			await _run_ai_dangerous(survivor, dang2)
+		_solo_flush_dev()
+		return
+	# The human's unit survived a melee that destroyed the enemy: OFFER the 3" consolidation.
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s moves back 1\" (consolidation — GF v3.5.1 p.9)" % charger.get_name(), true)
-	await _solo_animate_move(solo_controller.last_move_paths)
-	if dang > 0:
-		await _run_ai_dangerous(charger, dang)
-	_solo_flush_dev()
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Consolidation: %s may move up to 3\" (enemy destroyed — GF v3.5.1 p.9)" % survivor.get_name(), false)
+	_solo_show_toast("Consolidation: %s may move up to 3\"" % survivor.get_name())
 
 
 ## One OPR morale test with a real tray die: >= Quality passes; fail → Shaken, at/below half → Routs
@@ -3516,6 +3595,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
 		var total := _solo_combined_alive(attacker)
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d/%d model%s with line of sight + range" % [
 			attacker.get_name(), _solo_sighted_count(attacker, target, rng_in), total, ("" if total == 1 else "s")], true)
+	var fired_any := false   # round 7, finding 5: a volley that rolls NOTHING must say so, never end silently
 	for grp in _solo_attack_groups(attacker, dist, false, target):
 		var group := grp as Dictionary
 		var base_quality: int = int(group.get("quality", 4))
@@ -3524,6 +3604,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
 			var profile := p as Dictionary
 			if int(profile.get("attacks", 0)) <= 0:
 				continue
+			fired_any = true
 			# Reliable sets the Quality (2+), THEN the roll modifiers apply (GF v3.5.1 p.14: "Reliable only
 			# changes the Quality value, so the roll can still be modified").
 			var to_hit: int = AiCombatMath.modified_hit_target(
@@ -3545,6 +3626,11 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
 				regen_proof += w
 			else:
 				regenable += w
+	# A volley where every profile scaled to zero (or none was in range) used to end SILENTLY — the player's
+	# click looked ignored and he retried in vain (round 7, finding 5: the "unrecognized" shooting attempts).
+	if not fired_any and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"%s has no weapon in range of %s — no shots" % [attacker.get_name(), target.get_name()], true)
 	await _solo_land_wounds(target, regenable, regen_proof)
 	# The AI's unit tests morale if your volley dropped it to half strength or less (goal 003 P1).
 	await _solo_shooting_morale(target, target_alive_before, "AI (%s)" % target.get_name())
@@ -3588,11 +3674,10 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit) -> void:
 		await _solo_morale_test(target, "AI (%s)" % target.get_name())
 	elif ai_score > human_score and _solo_combined_alive(attacker) > 0:
 		await _solo_morale_test(attacker, "You")
-	# — Consolidation (GF v3.5.1 p.9): the CHARGER must move back 1" — that is YOUR unit here, and the
-	#   solo automation never moves the player's models, so the rule is surfaced as a reminder. —
-	if _solo_combined_alive(attacker) > 0 and _solo_combined_alive(target) > 0 and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT,
-			"Consolidation: move %s back 1\" (the charger separates — GF v3.5.1 p.9)" % attacker.get_name(), true)
+	# — Consolidation (GF v3.5.1 p.9, round 7 finding 4): neither destroyed → the human charger's 1"
+	#   back-step is surfaced as a reminder; one side destroyed → the survivor consolidates up to 3"
+	#   (your unit gets the move OFFERED; a surviving AI defender takes it automatically, EV-aware). —
+	await _solo_consolidate_melee(attacker, target)
 
 
 ## Mark a unit (and its attached heroes — they fought too) Fatigued after its first melee this round

@@ -194,8 +194,9 @@ bounding_radius + the constants covered the planner's needs; `edge_distance` its
 for a future non-circular zone shape.
 
 **Flagged, not guessed** (documented gaps): regiments keep the rigid tray slide (not obstacle-planned);
-the winner's OPTIONAL "may move by up to 3”" consolidation (p.9) is not automated; oval/rect bases sweep
-their circumscribed circle in zones and corridors (conservative, never permissive).
+oval/rect bases sweep their circumscribed circle in zones and corridors (conservative, never permissive).
+(The winner's "may move by up to 3”" consolidation, formerly flagged here, is automated since field-test
+round 7 — see the round-7 section at the end of this document.)
 
 ## Capstone — rule inventory, EV decisions, developer mode (real game, 2026-07-10)
 
@@ -945,3 +946,44 @@ convention. Human-side casting (radial "C", CastsDialog, token ±, preview ring)
 Baseline 1227 → **1257 tests green** (30 new: 15 AiSpell primitives/facets/pick/token-economy,
 7 SpellsRegistry system-scoping/order/hygiene, 8 controller cast phase incl. the both-AI arena
 smoke where a Caster faction actually casts).
+
+## Field-test round 7 — melee reach, consolidation, movement commitment, coordination slice (2026-07-13)
+
+Maintainer findings from the round-7 field test, all on the REAL-game path (the sim and its
+mirror-fairness oracle are untouched):
+
+1. **Ambush reserve stays visible on the tray** — Deploy Army no longer hides reserve units; they
+   stand in their tray's Ambush band (clearly off-table) and the battle log names them. Every rules
+   seam (targeting, LOS blockers, movement obstacles, eligibility, seize) already excluded them via
+   `unit_in_reserve`.
+2. **Movement commitment** — three fixes to the "10-model squad moves half an inch" collapse:
+   a body-zone contact epsilon (`CONTACT_SLIDE_EPS_IN` — packed bases can slide along each other), a
+   lead-stall deferral in the sequential flow (a stuck lead files LAST instead of anchoring the unit),
+   and a stall-escalation re-plan in `_execute_move` (a move that achieved <25% of its budget going
+   AROUND difficult/dangerous terrain is re-planned THROUGH it — 6" cap / dangerous tests apply).
+   Every move record now logs `achieved_in` (post-gate centroid displacement) as the regression metric.
+3. **Melee "Who Can Strike" is base-edge true** — `striking_models_for` measures base EDGE to base
+   edge (2" reach) via the shared SeparationChecker shapes; the old centre-space count (fixed 1"
+   contact allowance) excluded big bases (walker/vehicle) from their own melee, so a charger could
+   roll nothing while the small-based defender struck back. The centre-space `striking_models`
+   remains for the sim.
+4. **Consolidation Moves complete** (p.9, values verified in the official rulebook and identical
+   across GF/AoF/AoFS/GFF/AoFR v3.5.1): neither destroyed → charger back 1" (AI automatic, human
+   reminded — as before); ONE side destroyed → the survivor may move up to 3" (`CONSOLIDATION_WIN_IN`)
+   — the AI takes it EV-aware (nearest uncontrolled objective, else next target; slot-aware for the
+   arena defender), the human gets it OFFERED (battle log + toast).
+5. **Alternation robustness** — one AI reply per human unit per round (re-toggling an activation
+   marker no longer grants extra AI activations); the human shooting gate measures range on the
+   NEAREST model pair (p.8), and a volley where nothing fires says so in the log instead of ending
+   silently.
+6. **Coordination — first slice** ("units support each other"): a RUSH/ADVANCE mover that would PARK
+   inside a bigger, not-yet-activated friendly shooter's line of fire side-steps to an equivalent
+   position (equal progress ±1"; small/cheap units defer — points, model-count fallback; charges and
+   seize-range moves exempt). Decision records carry the role label (`role` on [action]) and a
+   `yield_lof` record when a lane is cleared.
+
+**Deferred to a future coordination wave** (documented, not faked): route-level lane awareness (the
+slice only checks END positions), the friend's REAL intended target (nearest-enemy proxy today),
+screening/bodyguard behaviour (cheap units interposing against charges), focus-fire target pooling,
+terrain-anchored roles (holding cover/choke points), and any multi-unit lookahead. The natural home
+for these is an EV term over candidate end positions rather than more goal post-processing.

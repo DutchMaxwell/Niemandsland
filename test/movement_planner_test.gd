@@ -468,3 +468,60 @@ func test_sequential_flow_open_field_matches_the_rigid_slide() -> void:
 	for i in range(3):
 		assert_float((out[i] as Vector2).distance_to((start[i] as Vector2) + delta)).is_less(0.05)
 	assert_bool(MovementPlanner.is_coherent(out)).is_true()
+
+
+# === Round 7, finding 2: flow-movement quality (packed squads must COMMIT to their advance) ===
+
+func test_packed_ten_model_squad_advances_close_to_full_band() -> void:
+	# A 10-model squad in two ranks of five, bases (r = 0.5") packed to EXACT contact — precisely what the
+	# deploy grid produces. Before the fix the lead model's tangent first step read as blocked (its
+	# neighbours' un-shaved body zones), it stalled at its start, and the progressive coherency then pulled
+	# every later model back to it: the whole advance collapsed to a token sub-inch move (the maintainer's
+	# "10-model squad moves half an inch"). Open field → the centroid must cover close to the 6" band.
+	var pos: Array = []
+	var radii: Array = []
+	for row in range(2):
+		for col in range(5):
+			pos.append(Vector2(20.0 + col * 1.0, 20.0 + row * 1.0))
+			radii.append(0.5)
+	var out := MovementPlanner.plan_unit_step(pos, Vector2(0, 6), [], {}, false, 48.0, [], {"radii": radii})
+	var moved: Vector2 = MovementPlanner._centroid(out) - MovementPlanner._centroid(pos)
+	assert_float(moved.y).is_greater(5.0)
+	# No residual overlap: every pair keeps at least its bases' contact distance (minus float noise).
+	for i in range(out.size()):
+		for j in range(i + 1, out.size()):
+			assert_float((out[i] as Vector2).distance_to(out[j] as Vector2)).is_greater(0.9)
+
+
+func test_exact_contact_pair_slides_forward_full_band() -> void:
+	# Two bases at exact contact moving in parallel: the tangent step along each other's body zone must
+	# not read as blocked (CONTACT_SLIDE_EPS_IN) — both models cover the full band.
+	var pos: Array = [Vector2(20, 20), Vector2(21, 20)]
+	var out := MovementPlanner.plan_unit_step(pos, Vector2(0, 6), [], {}, false, 48.0, [], {"radii": [0.5, 0.5]})
+	assert_float((out[0] as Vector2).y).is_greater(25.5)
+	assert_float((out[1] as Vector2).y).is_greater(25.5)
+
+
+func test_boxed_lead_model_is_deferred_and_the_unit_still_advances() -> void:
+	# The model NEAREST the destination sits in a U-shaped wall pocket opening backward: its own route is
+	# genuinely stuck. Before the fix it filed FIRST, achieved ~nothing, and anchored the whole unit (every
+	# later model was coherency-pulled back to it). With the lead-stall deferral it files LAST and the other
+	# nine models commit to the advance — the unit centroid still covers most of the band.
+	var pos: Array = []
+	var radii: Array = []
+	for row in range(2):
+		for col in range(5):
+			pos.append(Vector2(20.0 + col * 1.0, 20.0 + row * 1.0))
+			radii.append(0.5)
+	# U-pocket around the front-middle model at (22, 21): walls left/right/top, open to the south.
+	var walls := [
+		[Vector2(21.3, 20.3), Vector2(21.3, 22.3)],
+		[Vector2(22.7, 20.3), Vector2(22.7, 22.3)],
+		[Vector2(21.3, 22.3), Vector2(22.7, 22.3)],
+	]
+	var opts := {"radii": radii, "clearance": 0.5}
+	var out := MovementPlanner.plan_unit_step(pos, Vector2(0, 6), walls, {}, false, 48.0, [], opts)
+	var moved: Vector2 = MovementPlanner._centroid(out) - MovementPlanner._centroid(pos)
+	# Without the deferral this centroid managed ~1.8" (measured on the pre-fix planner); with the boxed
+	# lead filing last the unit commits to ~3" while staying chained to the marooned model (coherency).
+	assert_float(moved.y).is_greater(2.5)

@@ -1084,3 +1084,141 @@ func test_limited_profiles_fire_once_per_game() -> void:
 	var other := _unit(2, [Vector3(1, 0, 0)])
 	other.unit_id = "other_unit"
 	assert_bool(sc.is_limited_used(other, limited_prof)).is_false()
+
+
+# === Round 7, finding 3: melee strike reach is measured base EDGE to base edge ===
+
+func test_striking_models_for_counts_a_big_base_in_contact() -> void:
+	# A 100 mm walker base-touching a 25 mm defender: centres sit ~3.5" apart, so the old centre-space
+	# count (2" reach + fixed 1" contact allowance) said NEITHER side had a model in reach — the charging
+	# walker never struck and only tiny bases ever fought. The base-EDGE measure counts both sides.
+	var walker := _unit(2, [Vector3(0, 0, 0)])
+	walker.unit_properties["base_size_round"] = 100
+	walker.models[0].unit = walker
+	var foe := _unit(1, [Vector3(0.09, 0, 0)])   # edge gap 90 - 50 - 12.5 = 27.5 mm ≈ 1.1" (within 2" reach)
+	foe.unit_properties["base_size_round"] = 25
+	foe.models[0].unit = foe
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	assert_int(solo.striking_models_for(walker, foe)).is_equal(1)
+	assert_int(solo.striking_models_for(foe, walker)).is_equal(1)
+	# The centre-space fallback (kept for the sim) misses the same pair — the documented old bug.
+	assert_int(SoloController.striking_models([Vector3(0, 0, 0)], [Vector3(0.09, 0, 0)])).is_equal(0)
+	# Far apart (edge gap ~4.3") neither measure finds a striker.
+	foe.models[0].node.global_position = Vector3(0.172, 0, 0)
+	assert_int(solo.striking_models_for(walker, foe)).is_equal(0)
+
+
+# === Round 7, finding 4: winner consolidation (official rulebook p.9 — enemy destroyed → up to 3") ===
+
+func test_consolidate_after_melee_win_moves_toward_next_target() -> void:
+	# No objectives wired → the EV-aware goal falls to the nearest enemy: the winner closes 3" toward it.
+	var winner := _unit(2, [Vector3(0, 0, 0)])
+	var next_foe := _unit(1, [Vector3(0.5, 0, 0)])   # ~19.7" east
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {winner.unit_id: winner, next_foe.unit_id: next_foe}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.consolidate_after_melee_win(winner)
+	assert_float(winner.models[0].node.global_position.x).is_equal_approx(3.0 * 0.0254, 0.006)
+	# The decision lane recorded the consolidation.
+	var kinds: Array = []
+	for rec in solo.drain_decisions():
+		kinds.append(str((rec as Dictionary).get("kind", "")))
+	assert_bool(kinds.has("consolidate")).is_true()
+
+
+func test_consolidate_after_melee_win_is_slot_aware_for_the_defender() -> void:
+	# The DEFENDER (the controller's human_slot side in an arena game) must consolidate toward ITS enemy —
+	# the other side — never toward its own units (the slot-aware _nearest_enemy_of seam).
+	var defender := _unit(1, [Vector3(0, 0, 0)])
+	var own_friend := _unit(1, [Vector3(-0.3, 0, 0)])
+	own_friend.unit_id = "p1_friend"
+	var foe := _unit(2, [Vector3(0.5, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {defender.unit_id: defender, own_friend.unit_id: own_friend, foe.unit_id: foe}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.consolidate_after_melee_win(defender)
+	assert_float(defender.models[0].node.global_position.x).is_greater(0.05)   # moved EAST, toward the foe
+
+
+func test_consolidate_after_melee_win_prefers_an_uncontrolled_objective() -> void:
+	# With an uncontrolled marker in reach preference, the 3" consolidation heads for it (seize progress),
+	# not the enemy standing the other way.
+	var winner := _unit(2, [Vector3(0, 0, 0)])
+	var foe := _unit(1, [Vector3(0.5, 0, 0)])          # enemy east
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {winner.unit_id: winner, foe.unit_id: foe}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.objectives_provider = func() -> Array: return [Vector3(-0.4, 0, 0)]   # marker west
+	solo.objective_owner_of = func(_i: int) -> int: return 0                    # uncontrolled
+	solo.consolidate_after_melee_win(winner)
+	assert_float(winner.models[0].node.global_position.x).is_less(-0.05)      # moved WEST, toward the marker
+
+
+# === Round 7, finding 6 (coordination slice): yield a bigger friendly shooter's line of fire ===
+
+func test_yielded_goal_side_steps_a_friendly_fire_lane() -> void:
+	# The mover's destination parks it ON a friendly fire lane running south-north through it: the goal is
+	# offset laterally to the first side-step that clears the lane while keeping (almost) full progress.
+	var corridors := [{"a": Vector2(0, -10), "b": Vector2(0, 30), "friend": "Guns"}]
+	var res := SoloController.yielded_goal_2d(Vector2(0, 0), Vector2(0, 12), 6.0, corridors, 1.5, [2.0, 4.0], 1.0)
+	assert_bool(bool(res["yielded"])).is_true()
+	var g: Vector2 = res["goal"]
+	assert_float(absf(g.x)).is_greater_equal(2.0)
+	assert_str(str(res["friend"])).is_equal("Guns")
+	# The yielded END still advances nearly the full band (an "equivalent position", not a retreat).
+	var end := Vector2(0, 0) + (g - Vector2(0, 0)).normalized() * 6.0
+	assert_float(end.y).is_greater(5.0)
+
+
+func test_yielded_goal_keeps_a_clear_or_unavoidable_goal() -> void:
+	var corridors := [{"a": Vector2(0, -10), "b": Vector2(0, 30), "friend": "Guns"}]
+	# A mover far from the lane is untouched.
+	var free := SoloController.yielded_goal_2d(Vector2(10, 0), Vector2(10, 12), 6.0, corridors, 1.5, [2.0, 4.0], 1.0)
+	assert_bool(bool(free["yielded"])).is_false()
+	assert_that(free["goal"]).is_equal(Vector2(10, 12))
+	# No corridors at all → never yields.
+	var none := SoloController.yielded_goal_2d(Vector2(0, 0), Vector2(0, 12), 6.0, [], 1.5, [2.0, 4.0], 1.0)
+	assert_bool(bool(none["yielded"])).is_false()
+
+
+# === Round 7, finding 2: stall escalation — hemmed in by difficult terrain, go THROUGH at the cap ===
+
+func test_move_stalled_by_difficult_ring_replans_through_at_the_cap() -> void:
+	# The unit starts inside a pocket of difficult terrain (a forest ring 2"–10" out): routing AROUND is
+	# impossible, so the old avoid-first plan stalled at the ring's edge — the maintainer's "moves only
+	# half an inch toward something". The stall escalation re-plans THROUGH the forest: legal, at the
+	# official 6" difficult cap, and the unit actually covers ground.
+	var human := _unit(1, [Vector3(0, 0, 0.55)])   # ~21.7" north — beyond charge → the melee unit RUSHES
+	var ai := _unit(2, [Vector3(0, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		var m: float = maxf(absf(p.x), absf(p.z))
+		return TerrainRules.TerrainType.FOREST if (m > 0.04 and m < 0.25) else TerrainRules.TerrainType.NONE
+	var moved := solo.activate_next_ai_unit()
+	assert_object(moved).is_equal(ai)
+	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.RUSH)
+	# The unit went THROUGH the ring: well past the ~3" stall line, capped at the 6" difficult budget.
+	var move_rec: Dictionary = {}
+	for rec in solo.drain_decisions():
+		if str((rec as Dictionary).get("kind", "")) == "move":
+			move_rec = rec as Dictionary
+	assert_bool(move_rec.is_empty()).is_false()
+	var data: Dictionary = move_rec.get("data", {})
+	assert_float(float(data.get("achieved_in", 0.0))).is_greater(3.5)
+	assert_float(float(data.get("budget_in", 0.0))).is_equal_approx(6.0, 0.01)
+	assert_str(str(move_rec.get("why", ""))).is_equal("difficult cap")

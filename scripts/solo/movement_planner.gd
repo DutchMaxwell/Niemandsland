@@ -56,6 +56,11 @@ const DANGEROUS_COST_MULT := 3.0            # Dangerous costs more than Difficul
 const THETA_DIAG := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
 	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)]   # 8-connected (any-angle)
 const SOLVE_PASSES := 24                     # iterative-projection sweeps (compact AI units converge well within this)
+## Shaved off an OWN-model body zone (radii sum) in the sequential flow so bases at EXACT contact can slide
+## along each other (round 7, finding 2): the deploy grid packs to edge ≈ 0, and an un-shaved zone made every
+## tangent step float-marginal — the lead model of a packed squad stalled at its start and anchored the unit.
+## Well under the overlap the solver/final gate resolves back to contact, so it never leaves real overlap.
+const CONTACT_SLIDE_EPS_IN := 0.05
 const TERRAIN_PUSH_MAX_IN := 6.0            # max radial search when projecting a model OUT of forbidden terrain
 const TERRAIN_PUSH_STEP_IN := 0.5           # radial search granularity for the terrain-out projection
 # Deterministic radial directions for terrain-out projection: 16 compass points, world-frame ordered so the
@@ -789,10 +794,14 @@ static func _plan_unit_step_unified(model_pos: Array, delta: Vector2, walls: Arr
 ## not-yet-moved models (at their current spots) as BODY obstacles (base contact allowed, no 1" buffer — same
 ## unit), so the lead models vacate forward and the rest FLOW after them through a choke the rigid formation
 ## slide would jam. Coherency is kept PROGRESSIVELY: each model ends within a 1" link of the already-placed
-## set (or as close as a clear pull allows — GF/AoF v3.5.1 p.7). `trails` (sized n, per MODEL index) receives
-## each model's route; the flow ORDER is appended to `order_out` for the caller's sequential glide. A Charge
-## (allow_contact) skips the progressive-coherency pull (it must reach base contact). Pure + deterministic;
-## returns a NEW Array[Vector2]. The caller runs solve_formation on the result as the final safety net.
+## set (or as close as a clear pull allows — GF/AoF v3.5.1 p.7). A model whose OWN route stalls far short of
+## its slot while others still wait is DEFERRED to the back of the queue once (round 7, finding 2): placing a
+## stalled model FIRST anchored the whole unit — every later model was coherency-pulled back to it and a
+## 10-model advance achieved half an inch; deferred last, the stall pulls TOWARD the advanced group instead.
+## `trails` (sized n, per MODEL index) receives each model's route; the flow ORDER is appended to `order_out`
+## for the caller's sequential glide. A Charge (allow_contact) skips the progressive-coherency pull (it must
+## reach base contact). Pure + deterministic; returns a NEW Array[Vector2]. The caller runs solve_formation
+## on the result as the final safety net.
 static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array, walls: Array,
 		grid: Dictionary, opts: Dictionary, board_in: float, allow_contact: bool,
 		trails: Array = [], order_out: Array = []) -> Array:
@@ -822,23 +831,39 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 	var avoid_cells: Dictionary = opts.get("avoid_cells", {})
 	var have_r: bool = radii.size() == n
 	var placed: Array = []   # model indices already settled at their final spots
-	for idx in order:
+	var deferred := {}       # indices already sent to the back of the queue once (no re-defer → terminates)
+	var queue: Array = order.duplicate()
+	while not queue.is_empty():
+		var idx: int = queue.pop_front()
 		# Body zones for EVERY other own model (placed → final spot, else current spot): base contact allowed
-		# (radii sum, no 1" buffer), so this model files up to its neighbours but never moves THROUGH one
-		# (GF/AoF v3.5.1 p.7). Other units keep their full 1" zones (base_zones).
+		# (radii sum MINUS a hair — see CONTACT_SLIDE_EPS_IN), so this model files up to and slides ALONG its
+		# neighbours but never moves THROUGH one (GF/AoF v3.5.1 p.7). The epsilon matters (finding 2): the
+		# deploy grid packs bases to EXACT contact, and a zone of exactly radii-sum made the tangent forward
+		# step float-marginal — every outgoing edge of a packed model read as blocked, the lead model stalled
+		# at its start, and the progressive coherency then collapsed the whole unit onto it. Other units keep
+		# their full 1" buffer zones (base_zones), where the epsilon is irrelevant.
 		var zones: Array = base_zones.duplicate()
 		if have_r:
 			for j in range(n):
 				if j == idx:
 					continue
 				var jc: Vector2 = result[j] if placed.has(j) else model_pos[j]
-				zones.append({"c": jc, "r": float(radii[j]) + float(radii[idx])})
+				zones.append({"c": jc, "r": maxf(0.0, float(radii[j]) + float(radii[idx]) - CONTACT_SLIDE_EPS_IN)})
 		var oi := {"clearance": base_clearance, "avoid_cells": avoid_cells, "zones": zones}
 		var slot: Vector2 = (model_pos[idx] as Vector2) + delta
 		var route := theta_star(model_pos[idx], slot, walls, grid, board_in, oi)
 		var taut := string_pull(route, walls, grid, oi)
 		var leg := _walk_offset(model_pos[idx], taut, Vector2.ZERO, allowance, walls, grid, oi, board_in)
 		var final_pt: Vector2 = leg.back()
+		# Lead-stall deferral (finding 2): this model got badly stuck on its own route while other models
+		# still wait — try it again LAST, when the vacated ground and the advanced placed set give it both a
+		# clearer route and a FORWARD coherency pull. Each model defers at most once (deterministic, bounded).
+		var intended: float = minf(allowance, (model_pos[idx] as Vector2).distance_to(slot))
+		if not queue.is_empty() and not deferred.has(idx) and intended > STEP_IN \
+				and (model_pos[idx] as Vector2).distance_to(final_pt) < intended * STUCK_FRACTION:
+			deferred[idx] = true
+			queue.push_back(idx)
+			continue
 		# Progressive coherency: link this model into the already-placed set (or as close as a clear pull
 		# allows). A charge is exempt (it must reach base contact with the enemy).
 		if not allow_contact and have_r and not placed.is_empty():

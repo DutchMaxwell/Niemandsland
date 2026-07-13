@@ -40,9 +40,18 @@ const UNIT_SPACING_IN := 1.0
 ## was destroyed, then the charging unit must move back by 1” (if possible), to keep the separation
 ## between units clear."
 const MELEE_SEPARATION_IN := 1.0
+## Winner consolidation (GF Advanced Rules v3.5.1 p.9 "Consolidation Moves"): "If one of the two units was
+## destroyed (by removing all models as casualties, or by routing due to a failed morale test), then the
+## other unit may move by up to 3”." — verified identical across GF / AoF / AoFS / GFF / AoFR v3.5.1, so one
+## shared constant (no system scoping needed; re-check on errata).
+const CONSOLIDATION_WIN_IN := 3.0
 ## Safety margin added to the moving base's radius when inflating obstacles (inches) — guards float
 ## shaving at wall corners; not a rule value.
 const CLEARANCE_EPS_IN := 0.1
+## A planned move achieving less than this fraction of its budget counts as STALLED and is re-planned
+## straight through the terrain it tried to route around (round 7, finding 2 — mirrors the planner's
+## STUCK_FRACTION). A convention, not a rule value.
+const STALL_REPLAN_FRACTION := 0.25
 ## Target candidates within the same 1" distance band count as "equally near" — tabletop measuring
 ## precision for the official nearest-target key. A GENUINE tie is where the official rules would roll a
 ## die; the hybrid policy (docs/SOLO_AI_PLAN.md) ranks it by the EV metric instead. A documented
@@ -565,7 +574,8 @@ func _act(unit: GameUnit) -> Dictionary:
 		action = AiDecision.Action.HOLD
 		do_shoot = shoot_range > 0
 		action_why = "Immobile/Artillery hold-only"
-	var action_data := {"arch": archetype, "objective": bool(ctx["objective"]), "in_way": bool(ctx["in_way"]),
+	var action_data := {"arch": archetype, "role": archetype_role_label(archetype),
+		"objective": bool(ctx["objective"]), "in_way": bool(ctx["in_way"]),
 		"enemy_in_charge": bool(ctx["enemy_in_charge"]), "shoot_after_advance": bool(ctx["shoot_after_advance"]),
 		"enemy_dist_in": enemy_dist, "charge_gap_in": charge_gap, "obj_dist_in": obj_dist,
 		"toward_objective": int(dec["toward"]) == AiDecision.Toward.OBJECTIVE}
@@ -581,6 +591,30 @@ func _act(unit: GameUnit) -> Dictionary:
 	var to_obj: bool = int(dec["toward"]) == AiDecision.Toward.OBJECTIVE and has_obj
 	report["to_objective"] = to_obj   # main narrates "→ objective" instead of the enemy name (finding 1 label)
 	var goal: Vector3 = obj_pos if to_obj else tcentre
+	# Coordination first slice (round 7, finding 6): a RUSH/ADVANCE mover that would PARK in a bigger,
+	# not-yet-activated friendly shooter's line of fire side-steps to an equivalent position (equal
+	# progress, small/cheap units defer). Charges are exempt (they must reach their target), and so is a
+	# move that reaches seize range of its objective (holding the marker beats keeping a lane clear).
+	if (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) \
+			and not (to_obj and (bool(ctx["obj_in_rush"]) or bool(ctx["obj_in_advance"]))):
+		var corridors := _friendly_fire_corridors(unit)
+		if not corridors.is_empty():
+			var band_m: float = (rush if action == AiDecision.Action.RUSH else advance) * INCHES_TO_METERS
+			var clear_m: float = _deploy_footprint_radius(unit) + LANE_CLEAR_MARGIN_IN * INCHES_TO_METERS
+			var offsets_m: Array = []
+			for o in LANE_OFFSET_STEPS_IN:
+				offsets_m.append(float(o) * INCHES_TO_METERS)
+			var yg := yielded_goal_2d(Vector2(centre.x, centre.z), Vector2(goal.x, goal.z), band_m,
+				corridors, clear_m, offsets_m, LANE_PROGRESS_TOL_IN * INCHES_TO_METERS)
+			if bool(yg["yielded"]):
+				var g2: Vector2 = yg["goal"]
+				goal = Vector3(g2.x, goal.y, g2.y)
+				record_decision({"kind": "yield_lof", "unit": unit.get_name(),
+					"rule": "Coordination: don't end a move in a bigger friendly shooter's line of fire when an equivalent spot exists (small/cheap units defer)",
+					"candidates": [], "chosen": "side-step %.1f\"" % (float(yg["offset"]) / INCHES_TO_METERS),
+					"why": "clears %s's line of fire" % str(yg["friend"]),
+					"data": {"friend": str(yg["friend"]),
+						"offset_in": float(yg["offset"]) / INCHES_TO_METERS, "role": archetype_role_label(archetype)}})
 	var goal_dist := MoveIntent.distance_inches(centre, goal)
 	var dang := 0
 	match action:
@@ -598,7 +632,7 @@ func _act(unit: GameUnit) -> Dictionary:
 				# "Advancing" (p.58): a shooter already in range steps BACK to the range edge, still shooting.
 				dang = _move_away(unit, tcentre, minf(advance, float(shoot_range) - enemy_dist))
 			else:
-				dang = _move_toward(unit, tcentre, advance, false)
+				dang = _move_toward(unit, goal, advance, false)
 		_:
 			pass   # HOLD
 	report["dangerous_models"] = dang
@@ -990,6 +1024,176 @@ func separate_from_melee(charger: GameUnit, defender_centre: Vector3) -> int:
 	return _move_away(charger, defender_centre, MELEE_SEPARATION_IN)
 
 
+## Winner consolidation (GF Advanced Rules v3.5.1 p.9: the enemy unit was destroyed in melee → the survivor
+## "may move by up to 3”") — round 7, finding 4. A MAY, so the AI takes it when it helps: EV-aware goal =
+## the nearest objective this side doesn't control (seize-range progress wins games), else the nearest
+## living enemy (sets up the next charge/volley). No goal → the unit stays (the honest "may"). Slot-aware
+## (reads the unit's OWN player_id), so the arena's defender consolidates toward ITS enemy, never its own
+## side. Returns the Dangerous-crossing model count; last_move_paths carries the replay corridor.
+func consolidate_after_melee_win(unit: GameUnit) -> int:
+	if unit == null or unit.get_alive_count() <= 0:
+		return 0
+	# The consolidating unit may be the DEFENDER — the side the controller currently calls human_slot
+	# (both-AI arena) — while the objective seam (_nearest_uncontrolled_objective) is ai/human oriented.
+	# Flip the orientation to the unit's OWN side for the goal choice, restore after (non-destructive,
+	# the same probe pattern as _solo_side_has_eligible).
+	var prev_ai := ai_slot
+	var prev_human := human_slot
+	var own_pid: int = int(unit.unit_properties.get("player_id", ai_slot))
+	if own_pid != ai_slot:
+		ai_slot = own_pid
+		human_slot = prev_ai
+	var centre := unit_centre(unit)
+	var goal := _nearest_uncontrolled_objective(centre, unit)
+	var why := "toward objective"
+	if goal == NO_OBJECTIVE:
+		var enemy := _nearest_enemy_of(unit)
+		if enemy == null:
+			ai_slot = prev_ai
+			human_slot = prev_human
+			last_move_paths = []
+			return 0
+		goal = unit_centre(enemy)
+		why = "toward next target"
+	var dang := _move_toward(unit, goal, CONSOLIDATION_WIN_IN, false)
+	ai_slot = prev_ai
+	human_slot = prev_human
+	record_decision({"kind": "consolidate", "unit": unit.get_name(),
+		"rule": "GF v3.5.1 p.9 consolidation: enemy destroyed in melee — the survivor may move up to 3\"",
+		"candidates": [], "chosen": why, "why": "melee winner consolidation",
+		"data": {"band_in": CONSOLIDATION_WIN_IN}})
+	return dang
+
+
+# === AI coordination — friendly line-of-fire yielding (round 7, finding 6, FIRST SLICE) =============
+# "Small units yield space to bigger ones": a cheap mover side-steps rather than PARKING in a bigger,
+# not-yet-activated friendly shooter's line of fire — when an equally-good position exists. Deliberately
+# narrow: end-position awareness only (the route itself may still cross a lane — models keep moving),
+# nearest-enemy proxy for the friend's intended target, centre-line corridors. The wider role-aware
+# coordination (screening, focus-fire lanes, terrain-anchored roles) is documented as future work in
+# docs/SOLO_AI_RULES_COVERAGE.md.
+
+const LANE_CLEAR_MARGIN_IN := 1.0            # clearance beyond the mover's footprint radius
+const LANE_OFFSET_STEPS_IN: Array[float] = [2.0, 4.0]   # lateral side-step magnitudes tried, small first
+const LANE_PROGRESS_TOL_IN := 1.0            # a side-step may cost at most this much goal progress
+const LANE_TARGET_SLACK_IN := 2.0            # corridor counts while the friend's target is near its range
+
+
+## PURE lane-yield decision (unit-agnostic: pass metres or inches consistently). `corridors` =
+## [{a: Vector2, b: Vector2, friend: String}] — friendly shooter centre → its intended target centre.
+## The mover's END anchor (centre advanced toward `goal`, capped at `band`) must keep `clear` distance
+## from every corridor segment; when it doesn't, lateral offsets of the GOAL are tried (smallest first,
+## +perp then -perp — deterministic) and the first candidate that clears every corridor while losing at
+## most `progress_tol` of forward progress wins. Returns {goal, yielded, offset, friend}.
+static func yielded_goal_2d(centre: Vector2, goal: Vector2, band: float, corridors: Array,
+		clear: float, offsets: Array, progress_tol: float) -> Dictionary:
+	var to_goal := goal - centre
+	if to_goal.length() < 0.0001 or corridors.is_empty():
+		return {"goal": goal, "yielded": false, "offset": 0.0, "friend": ""}
+	var dirn := to_goal.normalized()
+	var end := centre + dirn * minf(band, to_goal.length())
+	var blocked_idx := _nearest_corridor(end, corridors)
+	if blocked_idx < 0 or _corridor_distance(end, corridors[blocked_idx]) >= clear:
+		return {"goal": goal, "yielded": false, "offset": 0.0, "friend": ""}
+	var base_progress := (end - centre).dot(dirn)
+	var perp := Vector2(-dirn.y, dirn.x)
+	for mag in offsets:
+		for side in [1.0, -1.0]:
+			var g2: Vector2 = goal + perp * (float(mag) * side)
+			var to2 := g2 - centre
+			if to2.length() < 0.0001:
+				continue
+			var end2 := centre + to2.normalized() * minf(band, to2.length())
+			var ok := true
+			for c in corridors:
+				if _corridor_distance(end2, c as Dictionary) < clear:
+					ok = false
+					break
+			if not ok:
+				continue
+			if (end2 - centre).dot(dirn) < base_progress - progress_tol:
+				continue   # the side-step gives up too much progress — not an "equivalent position"
+			return {"goal": g2, "yielded": true, "offset": float(mag) * side,
+				"friend": str((corridors[blocked_idx] as Dictionary).get("friend", ""))}
+	return {"goal": goal, "yielded": false, "offset": 0.0, "friend": ""}
+
+
+static func _corridor_distance(p: Vector2, corridor: Dictionary) -> float:
+	return MovementPlanner.point_seg_distance(p, corridor.get("a", Vector2.ZERO), corridor.get("b", Vector2.ZERO))
+
+
+static func _nearest_corridor(p: Vector2, corridors: Array) -> int:
+	var best := -1
+	var best_d := INF
+	for i in range(corridors.size()):
+		var d := _corridor_distance(p, corridors[i] as Dictionary)
+		if d < best_d:
+			best_d = d
+			best = i
+	return best
+
+
+## The fire corridors this mover must respect (world XZ metres): one segment per friendly unit that
+## (a) has NOT yet activated (its shot is still to come), (b) has ranged weapons with its nearest enemy
+## around range, and (c) represents an EQUAL-OR-BIGGER investment than the mover (points; alive-model
+## count when points are absent) — the "small/cheap units defer" rule. The friend's intended target is
+## approximated by its nearest enemy (the official solo targeting default).
+func _friendly_fire_corridors(mover: GameUnit) -> Array:
+	var out: Array = []
+	if army_manager == null or mover == null:
+		return out
+	var own_pid: int = int(mover.unit_properties.get("player_id", 0))
+	var mover_weight: int = mover.get_cost() if mover.get_cost() > 0 else mover.get_alive_count()
+	for g in army_manager.get_all_game_units():
+		var gu := g as GameUnit
+		if gu == null or gu == mover or gu.is_destroyed() or gu.is_shaken or unit_in_reserve(gu):
+			continue
+		if int(gu.unit_properties.get("player_id", 0)) != own_pid or gu.is_activated:
+			continue
+		if gu.has_method("is_attached") and gu.is_attached():
+			continue
+		var rng_in: int = AiArchetype.max_range_inches(_unit_weapons(gu))
+		if rng_in <= 0:
+			continue
+		var friend_weight: int = gu.get_cost() if gu.get_cost() > 0 else gu.get_alive_count()
+		if friend_weight < mover_weight:
+			continue   # the mover outweighs this friend — the smaller unit defers, not us
+		var target := _nearest_enemy_of(gu)
+		if target == null:
+			continue
+		var fc := unit_centre(gu)
+		var tc := unit_centre(target)
+		if MoveIntent.distance_inches(fc, tc) > float(rng_in) + LANE_TARGET_SLACK_IN:
+			continue   # its target is way out of range — no live lane to protect
+		out.append({"a": Vector2(fc.x, fc.z), "b": Vector2(tc.x, tc.z), "friend": gu.get_name()})
+	return out
+
+
+## The nearest living enemy unit measured from `unit`'s OWN side (player_id), not from the controller's
+## current ai/human orientation — consolidation runs for defenders too (both-AI arena), where the acting
+## side and `unit`'s side differ. Reserve units are off-table; attached heroes are part of their host.
+func _nearest_enemy_of(unit: GameUnit) -> GameUnit:
+	if army_manager == null or unit == null:
+		return null
+	var own_pid: int = int(unit.unit_properties.get("player_id", 0))
+	var from := unit_centre(unit)
+	var best: GameUnit = null
+	var best_d := INF
+	for g in army_manager.get_all_game_units():
+		var gu := g as GameUnit
+		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
+			continue
+		if int(gu.unit_properties.get("player_id", 0)) == own_pid:
+			continue
+		if gu.has_method("is_attached") and gu.is_attached():
+			continue
+		var d := MoveIntent.distance_inches(from, unit_centre(gu))
+		if d < best_d:
+			best_d = d
+			best = gu
+	return best
+
+
 ## Rigid move directly AWAY from `from_world` by `inches` (the shooter "stay at range edge" step), clamped.
 func _move_away(unit: GameUnit, from_world: Vector3, inches: float) -> int:
 	if is_zero_approx(inches):
@@ -1039,6 +1243,25 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		reach = minf(inches, DIFFICULT_MOVE_CAP_IN)
 		trails = []
 		new_positions = _plan_move(unit, models, positions, goal, reach, allow_contact, false, avoid_dangerous, trails, charge_target)
+	elif not allow_contact and (avoid or avoid_dangerous) \
+			and _achieved_m(positions, new_positions) < reach * INCHES_TO_METERS * STALL_REPLAN_FRACTION:
+		# STALL ESCALATION (round 7, finding 2): routing AROUND difficult/dangerous terrain hemmed the unit
+		# in (avoided cells walling its start) and the whole move collapsed to a token step — the maintainer's
+		# "half an inch toward something". Going THROUGH is always legal — difficult costs the 6" cap (p.11),
+		# dangerous costs the tests (p.12) — and a unit that decided to advance must actually cover distance
+		# unless genuinely blocked. Keep the through-plan only when it really gets further.
+		var t2: Array = []
+		var p2 := _plan_move(unit, models, positions, goal, reach, allow_contact, false, false, t2, charge_target)
+		var r2 := reach
+		if not ignores_difficult and _trails_cross_difficult(t2):
+			r2 = minf(inches, DIFFICULT_MOVE_CAP_IN)
+			t2 = []
+			p2 = _plan_move(unit, models, positions, goal, r2, allow_contact, false, false, t2, charge_target)
+		if _achieved_m(positions, p2) > _achieved_m(positions, new_positions) + 0.01:
+			reach = r2
+			new_positions = p2
+			trails = t2
+			avoid = false   # the move goes through — the decision record's label follows suit
 	# Distance truth (p.7): no model's polyline may exceed the granted budget — the coherency easing is
 	# best-effort and may not stretch a route past its legal length.
 	var budget_m := reach * INCHES_TO_METERS
@@ -1099,13 +1322,24 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 				seen[k] = true
 		if reordered.size() == last_move_paths.size():
 			last_move_paths = reordered
+	# Achieved-distance truth (round 7, finding 2 regression metric): the unit's POST-GATE centroid
+	# displacement in inches — "how far did the unit actually go" — logged with every move record so a
+	# seeded self-play run can assert that open-field advances achieve close to their band (the half-inch
+	# token moves of the flow-collapse bug show up here as achieved_in << budget_in).
+	var achieved_m := _achieved_m(positions, new_positions)
 	record_decision({"kind": "move", "unit": unit.get_name(),
 		"rule": "GF v3.5.1 p.7 move bands; p.11 difficult 6\" cap; p.57 move around difficult",
 		"candidates": [], "chosen": "",
 		"why": ("difficult cap" if reach < inches else ("around difficult" if avoid else "direct")),
 		"data": {"band_in": inches, "budget_in": reach, "arc_in": longest_arc_m / INCHES_TO_METERS,
-			"dangerous_models": dang}})
+			"achieved_in": achieved_m / INCHES_TO_METERS, "dangerous_models": dang}})
 	return dang
+
+
+## Centroid displacement (metres) between two same-length position sets — the "how far did the unit
+## actually go" measure behind the stall re-plan and the achieved_in metric (round 7, finding 2).
+static func _achieved_m(before: Array, after: Array) -> float:
+	return (MoveIntent.anchor_of(after) - MoveIntent.anchor_of(before)).length()
 
 
 ## One planning pass: rigid clamp to the table, then obstacle-aware per-model planning. Returns the new
@@ -2316,6 +2550,18 @@ static func sighted_models(shooter_positions: Array, target_positions: Array, ra
 enum AltStep { WAIT, REPLY, TAIL, END_ROUND }
 
 
+## Human-readable role of an AiArchetype.Type — the decision records carry it so the dev lane shows the
+## ROLE reasoning behind an action, not just the branch index (round 7, finding 6b).
+static func archetype_role_label(archetype: int) -> String:
+	match archetype:
+		AiArchetype.Type.MELEE:
+			return "melee"
+		AiArchetype.Type.HYBRID:
+			return "hybrid"
+		_:
+			return "shooting"
+
+
 static func alternation_next(pending_replies: int, human_eligible: int, ai_eligible: int) -> AltStep:
 	if ai_eligible <= 0:
 		return AltStep.END_ROUND if human_eligible <= 0 else AltStep.WAIT
@@ -2522,9 +2768,40 @@ static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array
 	return {"owners": new_owners, "changes": changes}
 
 
+## OPR "Who Can Strike" — BASE-EDGE measure (field-test round 7, finding 3): count `member`'s alive models
+## whose base EDGE is within 2" (MELEE_REACH_IN) of ANY enemy base edge, via the shared SeparationChecker
+## shapes. The official rule measures model-to-model distance — which OPR takes base to base — so the old
+## centre-to-centre test with a fixed 1" contact allowance (striking_models, kept for the sim) excluded any
+## BIG base from its own melee: a walker/vehicle base-touching its target had its centre >3" from the enemy's
+## and rolled NOTHING while the small-based defender still struck back (the maintainer's one-sided charge).
+## Models without a buildable shape fall back to the centre measure with their default radius folded in.
+func striking_models_for(member: GameUnit, enemy: GameUnit) -> int:
+	if member == null or enemy == null:
+		return 0
+	var enemy_shapes: Array = []
+	for em in _moving_models(enemy):
+		var es := SeparationChecker.shape_for_model(em as ModelInstance)
+		if es != null:
+			enemy_shapes.append(es)
+	if enemy_shapes.is_empty():
+		return striking_models(alive_positions(member), alive_positions(enemy))
+	var n := 0
+	for m in member.get_alive_models():
+		var shape := SeparationChecker.shape_for_model(m as ModelInstance)
+		if shape == null:
+			continue
+		for es in enemy_shapes:
+			if SeparationChecker.edge_distance(shape, es) <= MELEE_REACH_IN:
+				n += 1
+				break
+	return n
+
+
 ## OPR "Who Can Strike" (GF Advanced Rules v3.5.1 p.9, mirrors SoloSim._striking_models): count the striker's
 ## alive models within 2" (base contact folded in) of ANY enemy model. World positions in METRES. Falls back
-## to the whole living set when either side has no positions (a focused test).
+## to the whole living set when either side has no positions (a focused test). The REAL-GAME path uses the
+## base-edge striking_models_for above (round 7, finding 3); this centre-space form remains for the sim and
+## for tests without scene shapes.
 static func striking_models(striker_positions: Array, enemy_positions: Array) -> int:
 	if striker_positions.is_empty() or enemy_positions.is_empty():
 		return striker_positions.size()
