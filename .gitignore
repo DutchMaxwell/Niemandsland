@@ -125,3 +125,8 @@ assets/miniatures/**/*_preprocessed*
 # Maintainer-private notes (restored to disk, kept OUT of the public repo)
 _internal/
 /MODEL_FORGE_EXTRACTION.md
+
+# internal working docs — never commit
+CLAUDE.md
+HANDOFF_*.md
+HANDOVER*.md
