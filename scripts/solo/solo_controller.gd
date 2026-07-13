@@ -1282,21 +1282,63 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	if not moved:
 		last_move_paths = []
 		return 0
+	# HARD FINAL PLACEMENT GATE (field-test findings 3 + 6), applied HERE — AFTER the distance-truth trim — so
+	# the trim can never cut a gate-corrected (coherency-shortened) endpoint off its trail (the trim runs on the
+	# pre-gate route). Resolves impassable-terrain rest → base overlap → coherency to a bounded fixed point.
+	# Skipped for a REGIMENT: its rigid tray slide preserves coherency + internal spacing by construction, and
+	# the per-model overlap push would break the block (regiments plan as a rigid body, not individual models).
+	var gate_shortened := false
+	if not _is_regiment(unit):
+		var planned_m := _achieved_m(positions, new_positions)   # pre-gate displacement, post-trim
+		new_positions = _finalize_placement(unit, models, positions, new_positions, allow_contact, charge_target)
+		# GATE-COLLAPSE LADDER (round 7, finding 2 — "a constraint gate truncates the whole move"): the gate
+		# legalizes by shortening the WHOLE move toward its start, so a full-length plan with no nearby legal
+		# end state can collapse to ~zero even though the route itself was fine (self-play: arc_in 6.0,
+		# achieved_in 0.0). A SHORTER advance along the same line usually has a legal end state — re-plan at
+		# half, then a quarter of the reach, gate each, and keep the best POST-GATE displacement. Bounded
+		# (two retries, collapsed moves only); a charge is exempt (its contact snap owns the endpoint).
+		if not allow_contact and planned_m > 0.01 \
+				and _achieved_m(positions, new_positions) < planned_m * STALL_REPLAN_FRACTION:
+			var best_pos := new_positions
+			var best_trails := trails
+			var best_ach := _achieved_m(positions, new_positions)
+			var best_reach := reach
+			for frac in [0.5, 0.25]:
+				var r3: float = reach * float(frac)
+				var t3: Array = []
+				var p3 := _plan_move(unit, models, positions, goal, r3, allow_contact, avoid, avoid_dangerous, t3, charge_target)
+				var b3 := r3 * INCHES_TO_METERS
+				for i in range(mini(t3.size(), p3.size())):
+					var leg3 := t3[i] as Array
+					if MovementPlanner.polyline_length(leg3) > b3 + 0.0005:
+						var cut3 := MovementPlanner.trim_polyline(leg3, b3)
+						t3[i] = cut3
+						if not cut3.is_empty():
+							var fin3 := cut3.back() as Vector3
+							p3[i] = Vector3(fin3.x, (p3[i] as Vector3).y, fin3.z)
+				p3 = _finalize_placement(unit, models, positions, p3, allow_contact, charge_target)
+				var a3 := _achieved_m(positions, p3)
+				if a3 > best_ach + 0.005:
+					best_pos = p3
+					best_trails = t3
+					best_ach = a3
+					best_reach = r3
+					gate_shortened = true
+				if a3 >= b3 * 0.75:
+					break   # a committed shorter move — good enough, stop retrying
+			new_positions = best_pos
+			trails = best_trails
+			reach = best_reach
 	# Flying ignores terrain effects whilst moving (p.13) — no Dangerous tests for its crossings. Counted on
-	# the ROUTE (pre-gate endpoints): the model still traversed those cells even if the gate nudges its rest spot.
+	# the ROUTE (pre-gate endpoints of the CHOSEN plan): the model still traversed those cells even if the
+	# gate nudges its rest spot.
 	var dang := 0 if flying else _count_dangerous_trails(trails)
 	# The decision-log / label arc is the PLANNED within-budget move (pre-gate route), so the move-band audit
 	# and the "X / Y" label stay truthful; the gate's physical un-stack nudge is not counted as extra distance.
 	var longest_arc_m := 0.0
 	for t in trails:
 		longest_arc_m = maxf(longest_arc_m, MovementPlanner.polyline_length(t as Array))
-	# HARD FINAL PLACEMENT GATE (field-test findings 3 + 6), applied HERE — AFTER the distance-truth trim — so
-	# the trim can never cut a gate-corrected (coherency-shortened) endpoint off its trail (the trim runs on the
-	# pre-gate route). Resolves impassable-terrain rest → base overlap → coherency to a bounded fixed point.
-	# Skipped for a REGIMENT: its rigid tray slide preserves coherency + internal spacing by construction, and
-	# the per-model overlap push would break the block (regiments plan as a rigid body, not individual models).
 	if not _is_regiment(unit):
-		new_positions = _finalize_placement(unit, models, positions, new_positions, allow_contact, charge_target)
 		# Retrace each animation trail to its GATED endpoint so the glide ends exactly where the state now is.
 		for i in range(mini(trails.size(), new_positions.size())):
 			trails[i] = _retrace_to(trails[i] as Array, positions[i] as Vector3, new_positions[i] as Vector3)
@@ -1327,10 +1369,12 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# seeded self-play run can assert that open-field advances achieve close to their band (the half-inch
 	# token moves of the flow-collapse bug show up here as achieved_in << budget_in).
 	var achieved_m := _achieved_m(positions, new_positions)
+	var why := "difficult cap" if reach < inches else ("around difficult" if avoid else "direct")
+	if gate_shortened:
+		why = "gate-legal shorten"   # the collapse ladder chose a shorter move with a LEGAL end state
 	record_decision({"kind": "move", "unit": unit.get_name(),
 		"rule": "GF v3.5.1 p.7 move bands; p.11 difficult 6\" cap; p.57 move around difficult",
-		"candidates": [], "chosen": "",
-		"why": ("difficult cap" if reach < inches else ("around difficult" if avoid else "direct")),
+		"candidates": [], "chosen": "", "why": why,
 		"data": {"band_in": inches, "budget_in": reach, "arc_in": longest_arc_m / INCHES_TO_METERS,
 			"achieved_in": achieved_m / INCHES_TO_METERS, "dangerous_models": dang}})
 	return dang
