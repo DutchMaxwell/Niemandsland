@@ -4,13 +4,59 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
-## [Unreleased]
+## [0.3.9.0-alpha] — Unreleased
+
+> **Not in this release:** the **Solo / Co-Op AI** opponent and the **guided Tutorial** are still in
+> field test (held back for a maintainer verdict) and are **not** part of 0.3.9 — see
+> [`docs/ROADMAP.md`](docs/ROADMAP.md). This section is dated when the `v` tag is cut.
+
+### Added
+- **Terrain-projected miniature bases.** Every model now sits on a "perfectly based" three-part base:
+  a **terrain-projected top** that reads as a live window onto the biome ground directly beneath the
+  model (a shader reconstructs the table's ground UV from the base's world position, so it matches the
+  board and updates with a biome/table-size change), a near-black **beveled rim** like a real tabletop
+  base edge, and — for **solo models** (units of one) — a player-coloured **affiliation ring** on the
+  rim (multi-model units keep a clean black rim; their affiliation is the boundary rubberband). Shared
+  materials + cached meshes, so a whole squad costs almost nothing; a killswitch (`legacy_solid_disc`)
+  restores the old flat disc. (#123)
+- **Mummified Undead — go-live game-side integration.** The game side of the faction's on-demand 3D is
+  merged: the loadout→variant slug map gains the faction's weapon/role/mount lines, the mount matcher
+  learns `snake`/`sphinx` keywords and scores mounts by whole-token overlap (so "Skeleton Beast" no
+  longer collides with a bare "beast"), and a mounted hero resolves to a composed
+  `<hero>#<weapon>+<mountslug>` bake with a rider-anatomy fit so the rider matches a foot trooper. The
+  faction's models become downloadable when the maintainer flips the live root manifest on R2 (a QA
+  step, tracked separately); until then this is engine plumbing, not new visible content. (#117)
+
+### Fixed
+- **A stalled guest army-import can no longer hang forever.** A guest receives a remote army as a
+  stream of RPCs (header → unit batches → complete); if the host dropped or the relay lost the final
+  message mid-stream, the guest waited forever on the LOADING overlay. An inactivity-timeout guard now
+  aborts a genuinely stalled import (75 s of silence), releases the restore lock, toasts the player and
+  recovers — the host can re-import. A healthy import keeps superseding its own timer and never false-
+  aborts. Completes the 3+-player reconnect hardening. (#120)
+- **Relay usage stats no longer under-count on Fly.** The room-lifetime and peak-peers-per-room
+  histograms are written when a room closes, but the dominant close path in production — a graceful
+  **server shutdown** (scale-to-zero / redeploy) — didn't record still-open rooms, so the histograms
+  read empty however busy the relay had been. Shutdown now folds every open room into the histograms
+  before exit (idempotent, so it can't double-count a racing close); only a hard kill (SIGKILL/OOM)
+  still loses open rooms. `games_played` was already counted live and is unaffected. No PII. (#124)
 
 ### Changed
+- **Save files now migrate through a versioned chain instead of "warn and load anyway".** Loading a
+  `.nml` save runs it through an explicit migration chain: the current format loads directly, a
+  supported older format is migrated step by step, and a save that is **older than the alpha-launch
+  format** or **newer than this build** is refused with a clear message that leaves the current table
+  untouched — instead of loading a mismatched file into silent data damage. (Save format bumped to
+  schema checkpoint `1.6`.) (#119)
 - **Model rotation aims at the cursor.** Holding R now turns every selected loose model in place to
   FACE the mouse cursor (the degrees from its start facing shown next to it, release to commit),
   replacing the old hold-and-spin-until-you-release gesture — each model in a multi-selection faces the
   cursor independently, matching how regiment movement-trays already rotate. (community feedback, #114)
+
+### Documentation
+- Worker-gotchas pass on `docs/DEVELOPMENT.md` (headless import before gdUnit, German+English parse-
+  error grep, the scene-script launch smoke gate, `/tmp` sandbox limits, relay `fly deploy` from a
+  pulled tree) and the broader 0.3.9 doc rework. (#118)
 
 ## [0.3.8.0-alpha] — 2026-07-08
 

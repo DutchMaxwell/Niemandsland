@@ -22,22 +22,36 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **`0.3.8.0-alpha` shipped (2026-07-08) — the "cards, logs & fair play" release.** The whole July
-  wave in one tag: the reworked unit-card dock, the Battle Log (now recording BOTH sides' moves and
-  every roll with faces), ctex runtime assets, dead-model parking, MP 3+ colour/reconnect hardening
-  (#105), the session-wide free-move toggle (#107), the permanent room-code readout (#110), and the
-  restore-path variant/ctex fix — synced and loaded armies no longer degrade to meeples (#111). A
-  27-check two-instance release test drove out five real bugs before tagging. Next: **feedback-driven**
-  toward the **MP-first Beta** (see Next); the **Solo / Co-Op AI** (OPR's official ruleset) is in
-  field-testing on `feat/solo-ai`; **autosave + save-migration** is the set 0.3.9 candidate. _S_
-- **Post-tag on `main` (unreleased):** the loose-model **rotate-to-face-cursor** community fix (Zach H.,
-  Discord) — holding R now aims each selected loose model at the cursor instead of the old
-  hold-and-spin-until-release — landed after the tag ([#114](../../pull/114)) and ships with the next
-  release. _S_
-- **Mummified Undead modular-sockets pilot — game-side landed, awaiting maintainer QA + root flip.**
-  The offline producer side is **done** (114 pilot socket keys); the **game-side integration** (17 slug-map
-  lines, `snake`/`sphinx` mount keywords + beast-collision specificity) is now merged — remaining is the
-  **maintainer QA pass via manifest override** and the **root-manifest flip** to go live on R2. _M_
+- **`0.3.9.0-alpha` — release prep.** The next wave is **merged to `main` and awaiting the
+  `v` tag** (see the unreleased CHANGELOG section): terrain-projected miniature bases
+  ([#123](../../pull/123)), the versioned `.nml` save-migration chain ([#119](../../pull/119)),
+  the guest army-import await timeout that completes the 3+ hardening ([#120](../../pull/120)),
+  the relay usage-stats histogram fix ([#124](../../pull/124)), the Mummified Undead go-live
+  **game-side integration** ([#117](../../pull/117)), the folded-in worker gotchas doc pass
+  ([#118](../../pull/118)), and the loose-model **rotate-to-face-cursor** community fix
+  ([#114](../../pull/114)). Cut the tag once the field-test items below have a maintainer
+  verdict. _S_
+- **Mummified Undead — root-manifest flip (blocks the faction going live).** The game-side
+  integration merged ([#117](../../pull/117): slug-map lines, `snake`/`sphinx` mount keywords,
+  whole-token mount specificity, composed `<hero>#<weapon>+<mountslug>` resolution). The faction's
+  3D models are **not yet in the live root manifest** — the remaining step is the maintainer's QA
+  pass via a staged manifest override and then the **root-manifest flip** on R2 (see
+  [`MANIFEST_DELIVERY.md`](MANIFEST_DELIVERY.md)). Until the flip, the CHANGELOG must not claim the
+  models are live. _M_
+
+### Held back for a field-test verdict (NOT in 0.3.9)
+
+These are built or in-progress on their own branches and are **held out of the release** until the
+maintainer field-tests them and gives a go/no-go — the changelog deliberately does not claim them.
+
+- **Solo / Co-Op AI — field test (`feat/solo-ai` stack, #122).** The in-game `SoloController` +
+  headless self-play sim share OPR's official ruleset. Awaiting a maintainer play verdict before it
+  ships; the remaining rule/wiring work is tracked under **Next** (Solo rules wave 5). _L_
+- **Guided Tutorial — field test (#121 + T2).** A first-run guided tutorial; held for a maintainer
+  pass on flow/coverage. The intended split into two tracks (tool tutorial vs OPR rules tutorial) is
+  under **Next**. _M_
+- **1″ separation hint (`feat/proximity-hint`).** A display-only nudge when two models sit closer
+  than 1″ (OPR unit spacing). Pending a maintainer verdict on the visual. _S_
 
 ## 📋 Next (post-Alpha — Beta + alpha-feedback driven)
 
@@ -53,25 +67,35 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   45° arc quadrants on the selected unit (p.5), live rotation-degrees readout, unit-card for trays.
   **Remaining:** display-only melee aids (two-front-rows highlight, full-rows counter,
   flank/rear morale modifier hint) — not yet built. Beta. _L_
-- **MP reconnect — 3+ player hardening** — **mostly shipped in `0.3.8.0-alpha`
-  ([#105](../../pull/105)):** the host peer→slot-table mirror (3+-player avatar/cursor colour agreement
-  after a reconnect), the shared wrapping `slot→palette` helper (army bases match presence colour at
-  slot ≥ 5), and the regiment tray's serialized `network_id` all landed. The last piece — a
-  **guest army-import await timeout** (a stalled import aborts, releases the restore lock, toasts
-  the player, and recovers; host can re-import) — is now **code-complete ([#120](../../pull/120)),
-  pending live 2-instance verification**. 2-player reconnect is shipped + soak-validated. _S_
+- **MP reconnect — 3+ player hardening — DONE.** Shipped across `0.3.8.0-alpha`
+  ([#105](../../pull/105): host peer→slot-table mirror, shared wrapping `slot→palette`, serialized
+  regiment `network_id`) and the 0.3.9 wave ([#120](../../pull/120): the **guest army-import await
+  timeout** — a stalled import aborts on an inactivity budget, releases the restore lock, toasts the
+  player, and recovers; the host can re-import). 2- and 3+-player reconnect are soak-validated. _done_
 - **UX polish (feedback-driven)** — Measure-on-pickup → snap-back (live ghost preview, ESC to return)
   · Coherency visualizer (sharpen — highlight models outside X″ of a neighbour) · contextual control
   hints (hover an object → its hotkeys). Deeper post-Alpha resilience / accessibility / onboarding
   items live in **Ideas**. _S–M_
-- **Solo / Co-Op AI — to merge-ready (`feat/solo-ai`)** — the in-game `SoloController` and the headless
-  self-play sim share OPR's official ruleset; remaining rule/wiring work before merge: melee "only
-  models **within 2″** strike"; **split-fire** + the weapon-rule overlays (**AP** → target the best
-  Defense, **Deadly**, **Takedown**, **Relentless**) + **Medics**; **P3** — wire the sim's
-  `AiDecision` / `TerrainRules` / 1″-spacing modules into the real `SoloController` (and fix the
-  `_solo_attack_groups` dead-models-still-attack bug there — already fixed in the sim); **P2** in-game
-  auto-game (in-game alternation + scoring). **Objective re-allocation** (units re-target when the
-  holders of a second objective die) is a **difficulty/tuning layer**, not a correctness fix. _L_
+- **Solo / Co-Op AI — rules wave 5 (`feat/solo-ai` stack).** The in-game `SoloController` and the
+  headless self-play sim share OPR's official ruleset; the module is in **field test** (see Now). The
+  next rule/coverage wave: **Caster** (spend tokens, cast/counter), **Shred**, **Indirect**, and the
+  remaining weapon-rule overlays (**AP** → target the best Defense, **Deadly**, **Takedown**,
+  **Relentless**) + **Medics** + split-fire; then **P2** in-game auto-game (alternation + scoring).
+  **Objective re-allocation** (units re-target when the holders of a second objective die) is a
+  **difficulty/tuning layer**, not a correctness fix. _L_
+- **Two-track tutorial split (`feat/tutorial-t2`).** Split the guided tutorial (in field test, see Now)
+  into two independent tracks: a **Niemandsland tool tutorial** (camera, select/move, import, measure,
+  dice, MP) and an **OPR rules tutorial** that walks a game system at a time — **GF → AoF → Skirmish →
+  Regiments** — so a player learns the app and the rules separately. _M_
+- **Game-system context + rules registry.** A first-class game-system selection
+  (**GF / GFF / AoF / AoFS / AoFR**) carried through import and the table, wired to a **rules registry**
+  (`feat/rules-registry`) so system-specific behaviour (coherency spread, base shapes, facing/arcs,
+  the rules-reference overlays) is chosen by the active system instead of inferred per unit. Unblocks
+  per-system tutorials and cleaner Skirmish/Regiments handling. _M_
+- **CAS asset-library normalization (M1 migration).** The maintainer reviewed the whole model library
+  and flagged normalization work — facing, shadow-disc removal, floater fix, and per-model triage —
+  to bring the content-addressed asset library to a consistent M1 baseline (pipeline-side, in the
+  separate private repository; the game consumes the re-published manifest). _L_
 - **Solo movement overhaul (design pending — planned with the coordinator)** — (a) treat walls as
   **Impassable movement blockers**, reusing `terrain_overlay.gd`'s wall segments (`_wall_cells` /
   `_last_wall_segments`); (b) replace the rigid-grid formation move with **individual models moving in
@@ -191,9 +215,16 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   ring buffer). MP-safe: both clients observe the same central events. (Maintainer, 2026-07-06.) _L_
   - **Cinematic replay** (far future) — a camera director on top of the journal: framing the active unit,
     dice moments, charges — instead of the static top view. _XL, after the base replay_
-- **Variant-aware mounting** — a mounted leader currently swaps to the mount GLB and loses his weapon-
-  variant visual (`opr_army_manager` replaces model 0); a later game-side change could resolve composed
-  `<unit>#<mount>+<slug>` variants instead. _M, after the mounts chapter ships_
+- ~~**Variant-aware mounting**~~ — **game-side resolution DONE (#117).** A mounted hero now resolves to
+  a composed `<hero>#<weapon>+<mountslug>` bake (the mount folds a slug into the carrier's labels), with
+  the old fuzzy faction-mount GLB as the fallback where no composed bake exists. What remains is
+  **producer-side**: the composed mount bakes themselves per faction (pipeline, private repo). _partly done_
+- **Per-part mount decimation fix** — a composed mount bake (rider + beast/cart) is decimated as one
+  blob, so the rider's fine detail is thinned to the same budget as the bulky mount; a per-part budget
+  (rider vs mount) would keep the rider crisp. Pipeline-side (the separate private repository). _M_
+- **Tournament-training AI mode** — a stricter Solo/AI profile aimed at *practice*: it plays a clean,
+  rules-correct game a human can drill against (list-legal target priority, no fog-of-war shortcuts),
+  layered on the Solo/Co-Op AI ruleset once that ships. Distinct from the difficulty/tuning layer. _L_
 - **Persistent room / async play** — a long-running hosted table (or a turn-based save-file relay flow)
   so players take turns asynchronously; today's answer is save-file exchange + the battle log. We are
   host-authoritative with a dumb relay, so a "persistent room" means either a headless host client or
@@ -209,7 +240,16 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.8.0-alpha` (2026-07-08):** unit-card dock rework
+See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.9.0-alpha` (merged to `main`, tag pending):**
+terrain-projected miniature bases ([#123](../../pull/123)), versioned `.nml` save-migration chain
+([#119](../../pull/119)), guest army-import await timeout completing the 3+ hardening
+([#120](../../pull/120)), relay usage-stats histogram fix incl. shutdown flush
+([#124](../../pull/124)), Mummified Undead go-live game-side integration ([#117](../../pull/117);
+faction goes live on the pending root-manifest flip), worker-gotchas doc pass
+([#118](../../pull/118)), and loose-model rotate-to-face-cursor ([#114](../../pull/114)). Solo mode
+and the guided Tutorial are **held back** (field test — see Now), so 0.3.9 does not claim them.
+
+**`0.3.8.0-alpha` (2026-07-08):** unit-card dock rework
 (#84–#103), Battle Log incl. remote moves (#99/#101/#106/#112), ctex runtime assets (#85–#93),
 dead-model parking (#87–#91), MP 3+ hardening + shared palette (#105), session-wide free-move (#107),
 offline-peer singleplayer fix (#108), permanent room-code readout (#110), variant/ctex restore fix
