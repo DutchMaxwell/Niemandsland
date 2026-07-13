@@ -68,7 +68,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var args := OS.get_cmdline_user_args()
-	var out_dir: String = args[0] if args.size() > 0 else "/home/andreaskesberg/basing_out"
+	var out_dir: String = args[0] if args.size() > 0 else OS.get_environment("HOME").path_join("basing_out")
 	var suffix: String = args[1] if args.size() > 1 else "_v3"
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	get_root().size = IMAGE_SIZE
