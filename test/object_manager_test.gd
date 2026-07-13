@@ -92,6 +92,61 @@ func test_select_emits_selection_changed() -> void:
 	assert_int(seen[0]).is_greater(0)
 
 
+# ===== Wave-1 additive seams: arrange / paste / lock (tutorial T-03) =====
+
+func test_arrange_in_rows_emits_arrangement_applied_rows() -> void:
+	var a: Node3D = _om.spawn_miniature(Vector3.ZERO, false)
+	var b: Node3D = _om.spawn_miniature(Vector3(0.1, 0, 0), false)
+	_om.select_objects([a, b])
+	var kinds: Array = []
+	_om.arrangement_applied.connect(func(kind): kinds.append(kind))
+	_om.arrange_selected_in_rows(2)
+	assert_array(kinds).is_equal([&"rows"])
+
+
+func test_arrange_arrow_emits_arrangement_applied_arrow() -> void:
+	var a: Node3D = _om.spawn_miniature(Vector3.ZERO, false)
+	var b: Node3D = _om.spawn_miniature(Vector3(0.1, 0, 0), false)
+	_om.select_objects([a, b])
+	var kinds: Array = []
+	_om.arrangement_applied.connect(func(kind): kinds.append(kind))
+	_om.arrange_selected_arrow()
+	assert_array(kinds).is_equal([&"arrow"])
+
+
+func test_arrange_too_small_selection_does_not_emit() -> void:
+	# A single-model selection can't form rows — no arrangement, so no signal.
+	var a: Node3D = _om.spawn_miniature(Vector3.ZERO, false)
+	_om.select_objects([a])
+	var emitted := [false]
+	_om.arrangement_applied.connect(func(_kind): emitted[0] = true)
+	_om.arrange_selected_in_rows(2)
+	assert_bool(emitted[0]).is_false()
+
+
+func test_paste_emits_objects_pasted_with_the_new_nodes() -> void:
+	var a: Node3D = _om.spawn_miniature(Vector3.ZERO, false)
+	_om.select_objects([a])
+	_om.copy_to_clipboard()
+	var counts: Array = []
+	_om.objects_pasted.connect(func(nodes): counts.append(nodes.size()))
+	_om.paste_from_clipboard(Vector3(0.3, 0, 0.3))
+	assert_array(counts).is_equal([1])
+
+
+func test_toggle_lock_emits_lock_state_changed_both_ways() -> void:
+	var a: Node3D = _om.spawn_miniature(Vector3.ZERO, false)
+	var events: Array = []
+	_om.lock_state_changed.connect(func(objs, locked): events.append([objs.size(), locked]))
+	# Lock: the affected object is reported BEFORE the lock-driven deselect clears the selection.
+	_om.select_objects([a])
+	_om.toggle_lock_selected()
+	# Unlock: re-select (locking deselected) and toggle back.
+	_om.select_objects([a])
+	_om.toggle_lock_selected()
+	assert_array(events).is_equal([[1, true], [1, false]])
+
+
 # ===== Teardown =====
 
 func test_clear_all_objects_resets_state() -> void:

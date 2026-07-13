@@ -21,6 +21,15 @@ signal drag_updated()
 ## mirroring what selection_dropped is for moves.
 signal rotation_committed(objects: Array[Node3D])
 signal context_menu_requested(screen_pos: Vector2, selected_objects: Array)
+## A formation was (re)applied to the selection — kind is "rows" (1-9) or "arrow" (Shift+A).
+## Additive seam (tutorial T-03 / future replay); the arrange still snaps + broadcasts as before.
+signal arrangement_applied(kind: StringName)
+## Clipboard paste/duplicate produced new table nodes (Ctrl+V / Ctrl+D). Additive seam
+## (tutorial T-03); carries the freshly spawned copies.
+signal objects_pasted(nodes: Array)
+## The selection's lock state was toggled (L) — `objects` are the affected nodes, `locked`
+## the new state. Additive seam (tutorial T-03); the lock/dim/deselect behaviour is unchanged.
+signal lock_state_changed(objects: Array, locked: bool)
 
 @export var drag_height: float = 0.5  # Drag height in meters
 @export var min_drag_height: float = 0.01  # Minimum height above table when dragging
@@ -3524,6 +3533,7 @@ func arrange_selected_in_rows(num_rows: int) -> void:
 			idx += 1
 
 	_broadcast_arrange_positions(objects)
+	arrangement_applied.emit(&"rows")
 
 
 
@@ -3577,6 +3587,7 @@ func arrange_selected_arrow() -> void:
 		row_count += 1
 
 	_broadcast_arrange_positions(objects)
+	arrangement_applied.emit(&"arrow")
 
 
 ## Average (X,Z) of the selection's current positions — the anchor the arrange formations centre on.
@@ -3634,6 +3645,7 @@ func paste_from_clipboard(cursor_pos: Vector3) -> void:
 
 	# Paste at cursor position, maintaining relative positions
 	var pasted_count = 0
+	var pasted_nodes: Array = []
 	_deselect_all()  # Deselect current selection
 
 	for obj in _clipboard:
@@ -3665,7 +3677,11 @@ func paste_from_clipboard(cursor_pos: Vector3) -> void:
 			# Select the pasted object
 			_add_to_selection(copy)
 			_broadcast_pasted_copy(copy)
+			pasted_nodes.append(copy)
 			pasted_count += 1
+
+	if not pasted_nodes.is_empty():
+		objects_pasted.emit(pasted_nodes)
 
 
 ## Mirror a pasted/duplicated object to remote peers by serializing it and
@@ -3822,13 +3838,20 @@ func toggle_lock_selected() -> void:
 
 	var new_state = any_unlocked  # Lock if any unlocked, unlock if all locked
 
+	# Snapshot the affected objects BEFORE a lock-driven deselect clears the selection,
+	# so the additive lock_state_changed seam always reports what actually toggled.
+	var affected: Array = []
 	for obj in _selected_objects:
 		if is_instance_valid(obj):
 			_set_object_locked(obj, new_state)
+			affected.append(obj)
 
 	# Deselect if locking
 	if new_state:
 		_deselect_all()
+
+	if not affected.is_empty():
+		lock_state_changed.emit(affected, new_state)
 
 
 ## Set lock state of a single object

@@ -95,3 +95,24 @@ func test_clear_all() -> void:
 	assert_int(c.active_count()).is_equal(0)
 	assert_object(a.get_node_or_null("RangeRing")).is_null()
 	assert_object(b.get_node_or_null("RangeRing")).is_null()
+
+
+# === Wave-1 spell-range preview seam (tutorial T-04) ===
+
+func test_spell_preview_changed_fires_on_edges_only() -> void:
+	# The seam must fire only on a real on/off flip (never per rebuild), and has_spell_preview()
+	# is the poll fallback the director keeps for a degraded board.
+	var c := _controller()
+	var m := _model()
+	var states: Array = []
+	c.spell_preview_changed.connect(func(active): states.append(active))
+	c.show_spell_preview([m], 12)   # off -> on
+	assert_bool(c.has_spell_preview()).is_true()
+	c.show_spell_preview([m], 18)   # on -> on (rebuild): no redundant emit
+	c.clear_spell_preview()         # on -> off
+	assert_bool(c.has_spell_preview()).is_false()
+	c.clear_spell_preview()         # off -> off: no emit
+	# Also confirm the purple preview ring is a SEPARATE node from the persistent G rings.
+	c.show_spell_preview([m], 9)    # off -> on again
+	assert_object(m.get_node_or_null(RangeRingController.SPELL_PREVIEW_NODE_NAME)).is_not_null()
+	assert_array(states).is_equal([true, false, true])
