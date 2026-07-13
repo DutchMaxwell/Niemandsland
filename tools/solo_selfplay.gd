@@ -33,6 +33,11 @@ extends SceneTree
 ##   (or export NML_SELFPLAY_SEED=7 instead of the -- seed= arg). No seed => legacy
 ##   fixed board + "game1_*" outputs (back-compat). A BATCH of N diverse games:
 ##   tools/selfplay_batch.sh N   (import pass, then seeds 1..N, then batch_summary.json).
+## Same board, different dice (dice_seed= re-seeds ONLY the dice-tray stream; board/terrain/
+## deploy/AI-pick stay under seed=; same seed+dice_seed pair => bit-identical replay):
+##   … -s res://tools/solo_selfplay.gd -- seed=7 dice_seed=3
+##   (or export NML_SELFPLAY_DICE_SEED=3; default dice_seed derives from seed=, preserving
+##   the old one-seed replays; default out stem becomes game_<seed>_d<dice_seed>).
 ## Run (gamescope — same, PLUS board screenshots at deploy / round 2 / end):
 ##   gamescope --backend headless -W 1600 -H 900 -- \
 ##     flatpak run --filesystem=home --socket=wayland --share=network org.godotengine.Godot \
@@ -69,6 +74,13 @@ var _layout_seed: int = LAYOUT_SEED
 var _play_seed: int = SELFPLAY_SEED
 var _deploy_seed_p1: int = SELFPLAY_SEED + 1
 var _deploy_seed_p2: int = SELFPLAY_SEED + 2
+# Dice stream: seeds ONLY the global RNG from the round loop on — which the dice tray's throw
+# velocities / instant faces draw from (dice_tray.gd) — while board/terrain (layout seed),
+# deployment (deploy seeds) and AI section-pick (solo._rng = play seed) stay under seed=.
+# Default: == _play_seed, so a bare seed= run reproduces the old single-seed replay bit-for-bit;
+# pass dice_seed= to hold the board and vary only the dice.
+var _dice_seed: int = SELFPLAY_SEED
+var _dice_seed_explicit: bool = false
 
 # --- Objective instrumentation ---
 var _objectives_world: Array = []   # objective marker positions (world Vector3, metres) — fixed for the game
@@ -77,6 +89,8 @@ var _prev_owners: Array = []         # objective owners snapshot, to diff for SE
 var _terrain_pieces: int = 0         # placed terrain prefab count (per-game diversity proof)
 var _terrain_fingerprint: String = ""   # hash of sorted piece origins — proves POSITION diversity per seed
 var _terrain_origins: Array = []     # sorted "prefab@x,y" list (piece count is often constant; positions vary)
+var _deploy_fingerprint: String = ""    # hash of sorted PRE-GAME deploy spots (snapshotted before round 1)
+var _deploy_positions: int = 0          # pre-game deploy spot count backing the fingerprint
 
 const OVERLAP_EPS_IN := 0.10    # ignore sub-0.1" base overlaps (float / resting-jitter noise)
 
@@ -96,8 +110,9 @@ func _run() -> void:
 	_out_dir = OS.get_environment("HOME").path_join("selfplay_out")
 	DirAccess.make_dir_recursive_absolute(_out_dir)
 	printerr("[SELFPLAY] out dir: %s" % _out_dir)
-	printerr("[SELFPLAY] game seed=%s out=%s (layout=%d play=%d deploy=%d/%d)" % [
-		("legacy" if _game_seed < 0 else str(_game_seed)), _out_name,
+	printerr("[SELFPLAY] game seed=%s dice_seed=%d%s out=%s (layout=%d play=%d deploy=%d/%d)" % [
+		("legacy" if _game_seed < 0 else str(_game_seed)), _dice_seed,
+		("" if _dice_seed_explicit else " (derived)"), _out_name,
 		_layout_seed, _play_seed, _deploy_seed_p1, _deploy_seed_p2])
 
 	change_scene_to_file("res://scenes/main.tscn")
@@ -147,21 +162,40 @@ func _run() -> void:
 	printerr("[SELFPLAY] terrain: %d prefab pieces (fingerprint %s), %d grid cells" % [
 		_terrain_pieces, _terrain_fingerprint, layout_editor.grid_cells.size()])
 
-	# --- Objectives: three markers across the centre line (OPR standard), through the real editor seam ---
-	var objectives_in: Array[Vector2] = [Vector2(-24.0, 0.0), Vector2(0.0, 0.0), Vector2(24.0, 0.0)]  # inches
-	layout_editor.mission_objectives = objectives_in
-	layout_editor.objectives_changed.emit(objectives_in)   # -> main._on_objectives_changed -> overlay
-	await process_frame
+	# --- Objectives: three markers across the centre line (OPR standard), written in WORLD METRES ---
+	# The markers are written DIRECTLY to the overlay. Do NOT route table-centred inches through
+	# layout_editor.mission_objectives / get_objectives_for_overlay(): that seam expects the GRID-ORIGIN
+	# inch frame (0..table width; the editor's click handler adds half_inches_x) and subtracts a
+	# ~24" table-centre offset, so centred inches get double-shifted ≈(-24,-24)" into P1's back corner
+	# (one marker off-table) — the proven root cause of the 0%-decisive self-play artifact.
+	# Centred inches * IN2M ARE world metres, so the direct overlay write is exact, and
+	# objectives_provider / _solo_auto_seize read the overlay live, so AI + scoring both see them.
+	var objectives_in: Array[Vector2] = [Vector2(-16.0, 0.0), Vector2(0.0, 0.0), Vector2(16.0, 0.0)]  # table-centred inches
+	var obj_world: Array = []
+	for o in objectives_in:
+		obj_world.append(Vector3((o as Vector2).x * IN2M, 0.0, (o as Vector2).y * IN2M))
+	terrain_overlay.update_objectives(obj_world)
 	var objectives: Array = terrain_overlay.get_objectives()
-	if objectives.is_empty():
-		# Fallback: write the overlay directly (world metres) if the editor seam didn't take.
-		var direct: Array = []
-		for o in objectives_in:
-			direct.append(Vector3((o as Vector2).x * IN2M, 0.0, (o as Vector2).y * IN2M))
-		terrain_overlay.update_objectives(direct)
-		objectives = terrain_overlay.get_objectives()
+	# HARD assertion: all requested markers took, and every one is within the table bounds.
+	var half_w_m: float = table.table_size.x * 0.3048 / 2.0
+	var half_d_m: float = table.table_size.y * 0.3048 / 2.0
+	if objectives.size() != objectives_in.size():
+		printerr("[SELFPLAY] FATAL: overlay reports %d objectives, expected %d" % [objectives.size(), objectives_in.size()])
+		quit(1)
+		return
+	for oi in range(objectives.size()):
+		var op := objectives[oi] as Vector3
+		if absf(op.x) > half_w_m or absf(op.z) > half_d_m:
+			printerr("[SELFPLAY] FATAL: objective #%d OFF TABLE at (%.3f, %.3f) m — half-extents (%.3f, %.3f) m" % [
+				oi + 1, op.x, op.z, half_w_m, half_d_m])
+			quit(1)
+			return
 	_objectives_world = objectives   # cache (positions fixed) for per-activation nearest-objective distance
-	printerr("[SELFPLAY] objectives on table: %d" % objectives.size())
+	for oi in range(objectives.size()):
+		var op := objectives[oi] as Vector3
+		printerr("[SELFPLAY] objective #%d world (%.3f, %.3f) m = (%.1f\", %.1f\") centred — in bounds" % [
+			oi + 1, op.x, op.z, op.x / IN2M, op.z / IN2M])
+	printerr("[SELFPLAY] objectives on table: %d (centre-line spread, all within bounds)" % objectives.size())
 
 	# --- Wire the REAL SoloController for the whole board (main's own _ensure_solo_controller) ---
 	main.set("solo_ai_slots", {1: true, 2: true})   # BOTH armies are AI (self-play)
@@ -187,11 +221,32 @@ func _run() -> void:
 	_deploy_side(main, solo, table, terrain_overlay, 1, objectives_v2, _deploy_seed_p1)
 	_deploy_side(main, solo, table, terrain_overlay, 2, objectives_v2, _deploy_seed_p2)
 	await process_frame
+	# Deployment fingerprint: hash the sorted deploy spots NOW, before round 1 — Ambush arrivals in
+	# rounds 2+ also emit "deploy" decision records, and their spots depend on the game course (the
+	# dice), so hashing at game end would contaminate this board-identity signal with dice noise.
+	var deploy_pts: Array = []
+	for d in _decisions:
+		var dd := d as Dictionary
+		if str(dd.get("kind", "")) == "deploy":
+			var data := dd.get("data", {}) as Dictionary
+			deploy_pts.append("%.3f,%.3f" % [float(data.get("x_m", 0.0)), float(data.get("z_m", 0.0))])
+	deploy_pts.sort()
+	_deploy_fingerprint = str(hash("|".join(deploy_pts)))
+	_deploy_positions = deploy_pts.size()
+	printerr("[SELFPLAY] deployment: %d spots (fingerprint %s)" % [_deploy_positions, _deploy_fingerprint])
 	battle_log.log_event(0, "=== SELF-PLAY: Battle Brothers (P1) vs Robot Legions (P2) — %d rounds ===" % GAME_ROUNDS, true)
 	_audit_all_units(main, 0, "deploy")   # deploy-time geometry audit (terrain / overlap / coherency)
 	# Objective ownership baseline (all neutral) for the per-round SEIZE diff.
 	_prev_owners = terrain_overlay.get_objective_owners()
 	await _screenshot("%s_deploy.png" % _out_name)
+
+	# --- Dice stream split: from here on the GLOBAL RNG feeds only the dice tray ---
+	# Everything board-shaped is already fixed above (spawn + objectives under play seed, terrain
+	# under layout seed, deployment under its own sub-seeds) and the AI section-pick draws from
+	# solo._rng (play seed). The only remaining global-RNG consumer during the rounds is the dice
+	# tray's throw randomness, so re-seeding here isolates "the dice" as an independent stream:
+	# same seed + different dice_seed => identical board/deploy, different game course.
+	seed(_dice_seed)
 
 	# --- Run the full match ---
 	army_manager.current_round = 1
@@ -458,35 +513,52 @@ func _other(slot: int) -> int:
 
 # === Seed + output naming (per-game diversity) ===
 
-## Parse `-- seed=<n> out=<name>` (cmdline user args, after the `--`) or the NML_SELFPLAY_SEED env var.
-## A seed derives four independent sub-seeds so different seeds => different terrain / deploy / AI pick,
-## same seed => identical game (real dice aside). No seed => legacy fixed board + "game1_*" outputs.
+## Parse `-- seed=<n> dice_seed=<n> out=<name>` (cmdline user args, after the `--`) or the
+## NML_SELFPLAY_SEED / NML_SELFPLAY_DICE_SEED env vars.
+## `seed=` derives four sub-seeds (terrain / play / deploy P1 / deploy P2) so different seeds =>
+## different boards, same seed => identical board. `dice_seed=` re-seeds ONLY the dice stream
+## (see _run); if omitted it defaults to the play seed, so a bare seed= run replays bit-for-bit
+## as before. Same (seed, dice_seed) pair => fully identical replay.
+## No seed => legacy fixed board + "game1_*" outputs.
 func _parse_args() -> void:
 	var seed_str := ""
+	var dice_str := ""
 	var out_name := ""
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("seed="):
 			seed_str = a.substr("seed=".length())
+		elif a.begins_with("dice_seed="):
+			dice_str = a.substr("dice_seed=".length())
 		elif a.begins_with("out="):
 			out_name = a.substr("out=".length())
 	if seed_str.is_empty():
 		var env := OS.get_environment("NML_SELFPLAY_SEED")
 		if not env.is_empty():
 			seed_str = env
+	if dice_str.is_empty():
+		var denv := OS.get_environment("NML_SELFPLAY_DICE_SEED")
+		if not denv.is_empty():
+			dice_str = denv
+	_dice_seed_explicit = not dice_str.is_empty() and dice_str.is_valid_int()
 	if not seed_str.is_empty() and seed_str.is_valid_int():
 		_game_seed = int(seed_str)
-		_out_name = out_name if not out_name.is_empty() else "game_%d" % _game_seed
 		_layout_seed = _derive_seed(_game_seed, 101)
 		_play_seed = _derive_seed(_game_seed, 202)
 		_deploy_seed_p1 = _derive_seed(_game_seed, 303)
 		_deploy_seed_p2 = _derive_seed(_game_seed, 404)
 	else:
 		_game_seed = -1
-		_out_name = "game1"
 		_layout_seed = LAYOUT_SEED
 		_play_seed = SELFPLAY_SEED
 		_deploy_seed_p1 = SELFPLAY_SEED + 1
 		_deploy_seed_p2 = SELFPLAY_SEED + 2
+	_dice_seed = int(dice_str) if _dice_seed_explicit else _play_seed
+	if not out_name.is_empty():
+		_out_name = out_name
+	elif _game_seed < 0:
+		_out_name = "game1" if not _dice_seed_explicit else "game1_d%d" % _dice_seed
+	else:
+		_out_name = ("game_%d" % _game_seed) if not _dice_seed_explicit else "game_%d_d%d" % [_game_seed, _dice_seed]
 
 
 ## Deterministic 31-bit sub-seed mix (splitmix-style) — same (base, salt) always yields the same value,
@@ -685,29 +757,27 @@ func _write_outputs(main: Node, solo: Node, terrain_overlay: Node, army_manager:
 	for ev in _obj_events:
 		if str((ev as Dictionary).get("kind", "")) == "seize":
 			seize_count += 1
-	# Deploy-position fingerprint: hash the sorted deploy spots so "different unit start positions" per seed
-	# is machine-provable (the deploy RNG is seeded per game).
-	var deploy_pts: Array = []
-	for d in _decisions:
-		var dd := d as Dictionary
-		if str(dd.get("kind", "")) == "deploy":
-			var data := dd.get("data", {}) as Dictionary
-			deploy_pts.append("%.3f,%.3f" % [float(data.get("x_m", 0.0)), float(data.get("z_m", 0.0))])
-	deploy_pts.sort()
-	var deploy_fingerprint: String = str(hash("|".join(deploy_pts)))
+	# Deploy-position fingerprint: snapshotted pre-round-1 in _run (_deploy_fingerprint) so per-seed
+	# "different unit start positions" is machine-provable WITHOUT dice-dependent ambush-arrival noise.
 	var rounds_played: int = mini(army_manager.current_round, GAME_ROUNDS)
 	var lines: Array = []
-	lines.append("SELF-PLAY %s — Battle Brothers (P1) vs Robot Legions (P2)  [seed %s]" % [
-		_out_name, ("legacy" if _game_seed < 0 else str(_game_seed))])
+	lines.append("SELF-PLAY %s — Battle Brothers (P1) vs Robot Legions (P2)  [seed %s, dice_seed %d%s]" % [
+		_out_name, ("legacy" if _game_seed < 0 else str(_game_seed)), _dice_seed,
+		("" if _dice_seed_explicit else " (derived)")])
 	lines.append("Rounds played: %d / %d%s" % [rounds_played, GAME_ROUNDS,
 		("  [ABORTED: %s]" % _blocker) if not _blocker.is_empty() else ""])
 	lines.append("Objectives: %d markers — P1 %d · P2 %d · neutral %d" % [objectives.size(), p1_held, p2_held, neutral])
+	for oi in range(objectives.size()):
+		var op := objectives[oi] as Vector3
+		lines.append("  marker #%d at world (%.3f, %.3f) m = (%.1f\", %.1f\") table-centred" % [
+			oi + 1, op.x, op.z, op.x / IN2M, op.z / IN2M])
 	# Machine-readable objective + seize result line (grep-friendly for the batch aggregator).
 	lines.append("OBJECTIVES_RESULT total=%d p1=%d p2=%d neutral=%d seizes=%d" % [
 		objectives.size(), p1_held, p2_held, neutral, seize_count])
 	lines.append("Verdict: %s" % verdict)
 	lines.append("")
 	lines.append("Unit fates:")
+	var survivors := {}   # {pid: {models, units}} — also emitted machine-readable in <out>_result.json
 	for pid in [1, 2]:
 		var alive_models := 0
 		var alive_units := 0
@@ -722,6 +792,7 @@ func _write_outputs(main: Node, solo: Node, terrain_overlay: Node, army_manager:
 			var state := "destroyed" if u.is_destroyed() else ("SHAKEN" if u.is_shaken else "ok")
 			lines.append("  P%d  %-28s %d/%d models  %s" % [pid, u.get_name(), a, m, state])
 		lines.append("  -> P%d: %d units left, %d models alive" % [pid, alive_units, alive_models])
+		survivors[pid] = {"models": alive_models, "units": alive_units}
 	lines.append("")
 	lines.append("Decisions captured: %d   Battle-log entries: %d" % [_decisions.size(), battle_log.size()])
 	# Rule-violation audit summary folded into the game summary, full detail in <out>_violations.txt.
@@ -739,23 +810,30 @@ func _write_outputs(main: Node, solo: Node, terrain_overlay: Node, army_manager:
 	_write_file("%s_summary.txt" % _out_name, "\n".join(lines) + "\n")
 
 	# 3b) Machine-readable per-game result (the batch aggregator reads these directly).
+	var obj_world_in: Array = []
+	for o in objectives:
+		obj_world_in.append([snappedf((o as Vector3).x / IN2M, 0.01), snappedf((o as Vector3).z / IN2M, 0.01)])
 	var result := {
 		"seed": _game_seed,
 		"out": _out_name,
 		"legacy": _game_seed < 0,
 		"layout_seed": _layout_seed,
 		"play_seed": _play_seed,
+		"dice_seed": _dice_seed,
+		"dice_seed_explicit": _dice_seed_explicit,
+		"objective_positions_in": obj_world_in,
 		"terrain_pieces": _terrain_pieces,
 		"terrain_fingerprint": _terrain_fingerprint,
 		"terrain_origins": _terrain_origins,
-		"deploy_fingerprint": deploy_fingerprint,
-		"deploy_positions": deploy_pts.size(),
+		"deploy_fingerprint": _deploy_fingerprint,
+		"deploy_positions": _deploy_positions,
 		"rounds_played": rounds_played,
 		"rounds_total": GAME_ROUNDS,
 		"aborted": _blocker,
 		"objectives": {"total": objectives.size(), "p1": p1_held, "p2": p2_held, "neutral": neutral},
 		"seize_events": seize_count,
 		"verdict": verdict,
+		"survivors": {"p1": survivors[1], "p2": survivors[2]},
 		"decisions": _decisions.size(),
 		"battle_log_entries": battle_log.size(),
 		"violations": {"total": _violations.size(), "by_kind": counts},
