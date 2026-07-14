@@ -21,6 +21,14 @@ extends RefCounted
 ##   • coordination       — focus-fire vs spread: among tied targets, high coordination concentrates on the
 ##                          best-EV target (focus fire); below COORD_THRESHOLD the AI spreads onto a different
 ##                          tied target instead. 1.0 = full focus fire.
+##   • persistence        — plan-persistence / role discipline (AI plausibility Stage 4). How strongly the
+##                          commander's STANDING ORDERS survive across activations and rounds, re-validated
+##                          rather than re-derived (Killzone continue/abort): a shooter HOLDS its firing
+##                          position instead of being dragged off a clean shot, a melee unit keeps closing on
+##                          ONE enemy across rounds. FULL (≥ PERSIST_FULL, kriegsherr/albtraum) holds a clean
+##                          shot whenever the marker is not seizable THIS move; BASIC (≥ PERSIST_THRESHOLD,
+##                          veteran) holds only when the marker is out of even a Rush; NONE (rekrut) never —
+##                          units act locally/short-sighted (their characteristic idle-prone weakness).
 ##   • lookahead (bool)   — the ceiling flag (Albtraum): full EV lookahead / boost spending headroom. A design
 ##                          marker surfaced in the decision record; the deterministic engine is shared, so it
 ##                          currently equals Kriegsherr play plus the boost gate — the hook for future depth.
@@ -40,6 +48,12 @@ const EXPLOIT_THRESHOLD := 1.0
 ## coordination below this spreads fire instead of concentrating it.
 const COORD_THRESHOLD := 0.5
 
+## persistence at/above this holds standing orders at all (BASIC discipline); at/above PERSIST_FULL the
+## discipline is FULL (a clean shot is held whenever the marker is not seizable this move). Below it the
+## grade keeps no standing orders — units re-decide locally each activation (rekrut's short-sighted play).
+const PERSIST_THRESHOLD := 0.5
+const PERSIST_FULL := 1.0
+
 ## Per-knob salts so the two independent draws inside ONE activation (objective skip, target noise) never
 ## correlate — same activation index, different salt ⇒ independent deterministic draws.
 const SALT_TARGET := 101
@@ -56,10 +70,10 @@ const _UNIT_RESOLUTION := 1000000
 ## mild noise, partial smarts; Kriegsherr = no noise, full exploitation, full focus & coordination (the
 ## sharp deterministic ceiling); Albtraum = Kriegsherr + the lookahead/boost ceiling flag.
 const PRESETS := {
-	"rekrut": {"grade": Grade.REKRUT, "ev_noise": 0.40, "rule_exploitation": 0.0, "mission_focus": 0.35, "coordination": 0.0, "lookahead": false},
-	"veteran": {"grade": Grade.VETERAN, "ev_noise": 0.15, "rule_exploitation": 0.5, "mission_focus": 0.70, "coordination": 0.60, "lookahead": false},
-	"kriegsherr": {"grade": Grade.KRIEGSHERR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "lookahead": false},
-	"albtraum": {"grade": Grade.ALBTRAUM, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "lookahead": true},
+	"rekrut": {"grade": Grade.REKRUT, "ev_noise": 0.40, "rule_exploitation": 0.0, "mission_focus": 0.35, "coordination": 0.0, "persistence": 0.0, "lookahead": false},
+	"veteran": {"grade": Grade.VETERAN, "ev_noise": 0.15, "rule_exploitation": 0.5, "mission_focus": 0.70, "coordination": 0.60, "persistence": 0.5, "lookahead": false},
+	"kriegsherr": {"grade": Grade.KRIEGSHERR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": false},
+	"albtraum": {"grade": Grade.ALBTRAUM, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true},
 }
 
 # ===== State =====
@@ -70,6 +84,7 @@ var ev_noise: float = 0.0
 var rule_exploitation: float = 1.0
 var mission_focus: float = 1.0
 var coordination: float = 1.0
+var persistence: float = 1.0
 var lookahead: bool = false
 
 ## The game-level base seed folded into every deterministic draw (reproducibility across a rating run).
@@ -90,6 +105,7 @@ static func for_grade(name: String, p_base_seed: int = 0) -> SoloDifficulty:
 	d.rule_exploitation = float(preset["rule_exploitation"])
 	d.mission_focus = float(preset["mission_focus"])
 	d.coordination = float(preset["coordination"])
+	d.persistence = float(preset.get("persistence", 1.0))
 	d.lookahead = bool(preset["lookahead"])
 	d.base_seed = p_base_seed
 	return d
@@ -103,7 +119,8 @@ static func grade_names() -> Array:
 ## A flat view of this preset's knobs (for the decision record and tests).
 func to_dict() -> Dictionary:
 	return {"grade": grade_name, "ev_noise": ev_noise, "rule_exploitation": rule_exploitation,
-		"mission_focus": mission_focus, "coordination": coordination, "lookahead": lookahead}
+		"mission_focus": mission_focus, "coordination": coordination, "persistence": persistence,
+		"lookahead": lookahead}
 
 
 # ===== Deterministic draws (pure — the whole point of "reproducible mistakes") =====
@@ -139,6 +156,18 @@ func spend_boosts() -> bool:
 ## Whether this grade FOCUS-FIRES (concentrates on the best target) or SPREADS across tied targets.
 func focus_fires() -> bool:
 	return coordination >= COORD_THRESHOLD
+
+
+## Plan-persistence / role-discipline TIER for the commander's standing orders (AI plausibility Stage 4):
+##   2 = FULL    (kriegsherr/albtraum) — hold a clean shot whenever the marker is not seizable this move;
+##   1 = BASIC   (veteran)             — hold a clean shot only when the marker is out of even a Rush;
+##   0 = NONE    (rekrut)              — no standing orders; the unit re-decides locally each activation.
+func persistence_tier() -> int:
+	if persistence >= PERSIST_FULL:
+		return 2
+	if persistence >= PERSIST_THRESHOLD:
+		return 1
+	return 0
 
 
 ## Deterministically decide whether an activation IGNORES its uncontrolled objective and just fights (a

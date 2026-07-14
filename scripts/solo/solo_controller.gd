@@ -174,8 +174,12 @@ const DECISION_LOG_CAP := 200
 enum CmdRole { CLOSE_AND_FIGHT, RANGED_LINE, FLANK, CASTER, AIRCRAFT }
 const CMD_ROLE_NAMES := ["close-and-fight", "ranged line", "flanker", "caster", "aircraft"]
 const COMMANDER_FULL_COORD := 0.9   # coordination at/above which the commander drives EVERY close-role unit
-## Standing orders keyed by unit_id → {role:int, target_id:String, round:int, driven:bool}. One game = one
-## controller, so this persists for the whole match; re-validated on each activation of the unit.
+## Standing orders keyed by unit_id → {role:int, kind:String, target_id:String, round:int,
+## since_round:int, driven:bool}. One game = one controller, so this persists for the whole match. Each
+## activation RE-VALIDATES the order (Stage 4 continue/abort) rather than re-deriving it: `since_round` is
+## the round the current order KIND was first issued (multi-round persistence — how long the unit has held
+## the plan), reset only when the order changes or is aborted (target died / no shot / a strictly better
+## play). `kind` ∈ {"close","hold_fire","flank","caster","aircraft","local"}.
 var commander_orders: Dictionary = {}
 ## Optional mirror of EVERY decision record (Callable(rec: Dictionary) -> void), invoked at record time
 ## BEFORE ring-buffer eviction — the rating-ladder harness captures the full stream for its per-game
@@ -725,6 +729,18 @@ func _act(unit: GameUnit) -> Dictionary:
 		action = AiDecision.Action.HOLD
 		do_shoot = shoot_range > 0
 		action_why = "Immobile/Artillery hold-only"
+	# COMMANDER RANGED DISCIPLINE (AI plausibility Stage 4, Part B): a ranged-line unit with a clean shot is
+	# NOT dragged off it toward a marker it cannot seize this move — it holds and shoots (the Stage-3 firepower
+	# fix). Standing order, re-validated (continue while the shot holds, abort with a reason when it does not).
+	# Runs before the position solver / flank hooks so a held shot short-circuits any repositioning. Charges,
+	# the final round, and the null-AI / SoloSim path (diff2 == null) are untouched — byte-identical there.
+	var ranged_hold := _commander_ranged_hold(unit, target_unit, weapons, action, int(dec["toward"]),
+		float(shoot_range), enemy_dist, ctx, diff2)
+	if not ranged_hold.is_empty():
+		action = AiDecision.Action.HOLD
+		do_shoot = true
+		dec["toward"] = AiDecision.Toward.ENEMY
+		action_why = str(ranged_hold["why"])
 	# STAGE 1 POSITION SOLVER (AI plausibility): the dedicated joint move×target position pipeline replaces
 	# the naive single-destination pick for GRADED games (arena + graded human-vs-AI). It generalises the
 	# Wave-1 flank/anchor/yield single-hooks to EVERY archetype and BOTH channels (enemy + objective); when
@@ -1068,18 +1084,51 @@ func _commander_apply(unit: GameUnit, default_target: GameUnit) -> GameUnit:
 	# role; MINIMAL (rekrut) drives ONLY big monsters (the anti-idle floor) — small melee act locally, which
 	# is rekrut's characteristic idle-prone weakness.
 	var driven: bool = role == CmdRole.CLOSE_AND_FIGHT and (scope >= 1 or is_big)
+	# The standing order KIND is fixed by the role (a unit's composition doesn't change round to round): a
+	# driven close role holds a "close" order (a persistent target), a ranged line holds a "hold_fire" order
+	# (re-validated as an action overlay in _act — _commander_ranged_hold). The others carry a role label.
+	var kind := "local"
+	if driven:
+		kind = "close"
+	elif role == CmdRole.RANGED_LINE:
+		kind = "hold_fire"
+	elif role == CmdRole.FLANK:
+		kind = "flank"
+	elif role == CmdRole.CASTER:
+		kind = "caster"
+	elif role == CmdRole.AIRCRAFT:
+		kind = "aircraft"
+	# Re-validate the STANDING order against last activation's (Stage 4 continue/abort). continuity ∈
+	# {"issue","continue","abort"}; `since_round` carries the round the order KIND was first held so the
+	# reasoning record can report multi-round persistence (how long the unit has kept the plan).
+	var prev: Dictionary = commander_orders.get(unit.unit_id, {})
+	var prev_kind: String = str(prev.get("kind", ""))
 	var chosen := default_target
+	var continuity := "issue"
 	var why := "role assigned; acts on the local nearest target"
 	if driven:
-		chosen = _commander_persist_target(unit, default_target, diff)
-		why = "standing close-and-fight order — keep closing on one enemy across rounds"
+		var res := _commander_close_order(unit, default_target, prev)
+		chosen = res["target"]
+		continuity = str(res["continuity"])
+		why = str(res["why"])
+	elif prev_kind == kind:
+		continuity = "continue"
+		why = "%s role held" % _cmd_role_name(role)
+	var round_now := _current_round()
+	# since_round persists while the order KIND holds and was not aborted; otherwise it resets to now.
+	var since: int = int(prev.get("since_round", round_now))
+	if prev_kind != kind or continuity == "abort" or continuity == "issue":
+		since = round_now
+	var held: int = round_now - since + 1
 	var persisted: bool = driven and chosen != default_target
-	commander_orders[unit.unit_id] = {"role": role, "target_id": (chosen.unit_id if chosen != null else ""),
-		"round": _current_round(), "driven": driven}
+	commander_orders[unit.unit_id] = {"role": role, "kind": kind,
+		"target_id": (chosen.unit_id if chosen != null else ""),
+		"round": round_now, "since_round": since, "driven": driven}
 	record_decision({"kind": "commander", "unit": unit.get_name(),
-		"rule": "Commander (%s): weighted role for EVERY unit; melee/monster hold a standing close order (Killzone full-assignment)" % diff.grade_name,
+		"rule": "Commander (%s): weighted role for EVERY unit; standing order re-validated each activation (Killzone continue/abort)" % diff.grade_name,
 		"candidates": [], "chosen": _cmd_role_name(role) + ((" → " + chosen.get_name()) if (driven and chosen != null) else ""),
 		"why": why, "data": {"grade": diff.grade_name, "scope": scope, "role": _cmd_role_name(role),
+			"order": kind, "continuity": continuity, "since_round": since, "rounds_held": held,
 			"driven": driven, "big_monster": is_big, "persisted": persisted}})
 	return chosen if chosen != null else default_target
 
@@ -1112,24 +1161,29 @@ func _commander_role(unit: GameUnit) -> int:
 	return CmdRole.RANGED_LINE
 
 
-## The persistent close-and-fight target: keep the SAME enemy the unit was closing on (Killzone continue-task)
-## while it is alive and on the table, so the monster stops flip-chasing the momentary nearest. Two legal
-## overrides: the standing target died / left the table, or a NEARER enemy is now in charge range while the
-## standing one is not (a certain charge THIS turn is the strictly better plan).
-func _commander_persist_target(unit: GameUnit, default_target: GameUnit, _diff: SoloDifficulty) -> GameUnit:
-	var prev: Dictionary = commander_orders.get(unit.unit_id, {})
+## The persistent close-and-fight standing order: keep the SAME enemy the unit was closing on (Killzone
+## continue-task) while it is alive and on the table, so the monster stops flip-chasing the momentary
+## nearest and can mount a MULTI-ROUND charge approach. Re-validated each activation. Returns
+## {target, continuity, why}: continuity ∈ {"issue","continue","abort"}. Two legal aborts — the standing
+## target died / left the table, or a NEARER enemy is now in charge range while the standing one is not (a
+## certain charge THIS turn is the strictly better plan). The target selection is identical to Stage 3.
+func _commander_close_order(unit: GameUnit, default_target: GameUnit, prev: Dictionary) -> Dictionary:
 	var prev_id: String = str(prev.get("target_id", ""))
-	if prev_id == "":
-		return default_target   # first assignment: adopt the nearest as the standing target
+	if prev_id == "" or str(prev.get("kind", "")) != "close":
+		return {"target": default_target, "continuity": "issue",
+			"why": "issue standing close order — adopt an enemy and keep closing across rounds"}
 	var pu := _unit_by_id(prev_id)
 	if pu == null or pu.is_destroyed() or unit_in_reserve(pu) \
 			or (pu.has_method("is_attached") and pu.is_attached()):
-		return default_target   # standing target gone → re-adopt the nearest
+		return {"target": default_target, "continuity": "abort",
+			"why": "abort standing close order: target gone — re-adopt the nearest enemy"}
 	if default_target != null and default_target != pu:
 		var rush: float = float(move_bands_for_unit(unit, movement_range).get("rush", 12))
 		if nearest_melee_gap_in(unit, default_target) <= rush and nearest_melee_gap_in(unit, pu) > rush:
-			return default_target   # a certain charge on a nearer enemy beats continuing to close on the far one
-	return pu
+			return {"target": default_target, "continuity": "abort",
+				"why": "abort standing close order: a certain charge on a nearer enemy beats closing on the far one"}
+	return {"target": pu, "continuity": "continue",
+		"why": "continue standing close order — keep closing on one enemy across rounds"}
 
 
 ## Whether ANY member of the unit (itself or an attached hero) is a Caster — the caster role package.
@@ -1156,6 +1210,67 @@ func _unit_by_id(id: String) -> GameUnit:
 
 func _cmd_role_name(role: int) -> String:
 	return CMD_ROLE_NAMES[role] if role >= 0 and role < CMD_ROLE_NAMES.size() else "?"
+
+
+## RANGED-LINE standing order (Stage 4, Part B — preserve firepower): a shooter's order is to HOLD a firing
+## position with LOS + range, NOT be dragged into an objective run that costs its shot (the Stage-3 firepower
+## dip: the commander pulled units toward combat/objectives and shooters fired less). When the unit's role is
+## the ranged line, it ALREADY has a clean shot from where it stands, and the tree would walk it TOWARD a
+## marker it cannot seize this move (a pure loss — drops the shot, gains no objective), keep the shot instead.
+## Persistent + re-validated (Killzone continue/abort): CONTINUE while the shot holds; ABORT when no target is
+## in range/LOS (→ reposition via the tree) so the shooter is never frozen out of a firing lane. Difficulty:
+## FULL (kriegsherr/albtraum) holds whenever the marker is not seizable with THIS move (not obj_in_advance);
+## BASIC (veteran) holds only when it is out of even a Rush (not obj_in_rush) — weaker discipline; NONE
+## (rekrut) never. Never overrides a CHARGE (melee-connects stays) and NEVER touches the FINAL round (markers
+## are all that scores then — decisiveness/urgency win). Empty return ⇒ no override (null-AI/SoloSim: diff==null).
+## Returns {} to leave the plan, or {"why": ...} to force HOLD + shoot toward the enemy.
+func _commander_ranged_hold(unit: GameUnit, target: GameUnit, weapons: Array, action: int,
+		toward: int, shoot_range: float, enemy_dist: float, ctx: Dictionary, diff: SoloDifficulty) -> Dictionary:
+	if diff == null or target == null:
+		return {}
+	if _commander_role(unit) != CmdRole.RANGED_LINE:
+		return {}
+	var tier := diff.persistence_tier()
+	if tier <= 0:
+		return {}
+	# The final round is objective-decisive — never freeze a shooter out of a reachable marker there.
+	if _is_final_round():
+		return {}
+	# Only intervene on a non-charge MOVE that is being pulled toward an objective. A charge, a hold, or a
+	# move toward the enemy (which keeps the shot band) is left untouched.
+	if not (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE):
+		return {}
+	if toward != AiDecision.Toward.OBJECTIVE:
+		return {}
+	var prev: Dictionary = commander_orders.get(unit.unit_id, {})
+	var since: int = int(prev.get("since_round", _current_round()))
+	var held: int = _current_round() - since + 1
+	# Does the unit have a REAL shot from HERE right now (range + LOS, or Indirect waives LOS)?
+	var has_shot: bool = shoot_range > 0.0 and enemy_dist <= shoot_range \
+			and (_has_los(unit, target) or has_indirect_ranged(weapons))
+	if not has_shot:
+		# Abort the hold-fire order for this activation: no target in range/LOS → let the tree reposition.
+		record_decision({"kind": "commander", "unit": unit.get_name(),
+			"rule": "Ranged-line standing order re-validated: hold a firing position with LOS + range",
+			"candidates": [], "chosen": "abort hold — reposition",
+			"why": "abort hold-fire: no target in range and line of sight — reposition to a firing lane",
+			"data": {"grade": diff.grade_name, "order": "hold_fire", "continuity": "abort",
+				"rounds_held": held, "has_shot": false}})
+		return {}
+	# The unit has a clean shot but is being walked at a marker. Is that marker seizable with THIS move? If so,
+	# grabbing it scores (and the objective firing anchor keeps the shot) — let it go, decisiveness wins. Only
+	# when the marker is NOT reachable this move is the walk a pure firepower loss → hold the shot.
+	var marker_reachable: bool = bool(ctx.get("obj_in_advance", false)) if tier >= 2 else bool(ctx.get("obj_in_rush", false))
+	if marker_reachable:
+		return {}
+	var continuity: String = "continue" if str(prev.get("kind", "")) == "hold_fire" and held > 1 else "issue"
+	record_decision({"kind": "commander", "unit": unit.get_name(),
+		"rule": "Ranged-line standing order: hold a firing position with LOS + range — don't drop a clean shot to chase an out-of-reach marker",
+		"candidates": [], "chosen": "hold and shoot",
+		"why": "commander hold-and-shoot: keep the clear shot rather than walk at a marker out of reach this turn",
+		"data": {"grade": diff.grade_name, "order": "hold_fire", "continuity": continuity,
+			"since_round": since, "rounds_held": held, "tier": tier, "target": target.get_name()}})
+	return {"why": "commander hold-and-shoot standing order — keep the clean shot"}
 
 
 ## Nearest alive-model distance (inches) from `unit` to a world position.
