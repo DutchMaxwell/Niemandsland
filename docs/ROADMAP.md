@@ -209,7 +209,14 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.8.0-alpha` (2026-07-08):** unit-card dock rework
+See [`CHANGELOG.md`](../CHANGELOG.md). **On `main` (unreleased):** the movement/UX bundle (#131) —
+**Path Painting** (base-width chalk trails, arc-truth distance in ruler + battle log, click-to-measure,
+MP-synced move ledger, trail toggle + deployment auto-suppress, backtrack-erase), **1″ spacing**
+protection (proximity walls, base-contact snap, no-overlap drops), a **game-phase gate** (Deployment →
+Start Game → Playing with an MP ready-sync + save/load), and an opt-in **"dry-brush" movement cap**
+(action-band-aware, Advance/Rush-Charge).
+
+**`0.3.8.0-alpha` (2026-07-08):** unit-card dock rework
 (#84–#103), Battle Log incl. remote moves (#99/#101/#106/#112), ctex runtime assets (#85–#93),
 dead-model parking (#87–#91), MP 3+ hardening + shared palette (#105), session-wide free-move (#107),
 offline-peer singleplayer fix (#108), permanent room-code readout (#110), variant/ctex restore fix
