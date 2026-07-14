@@ -156,6 +156,27 @@ var limited_used: Dictionary = {}
 ## Ring-buffered at DECISION_LOG_CAP (drop-oldest) so an undrained log never grows unbounded.
 var decision_log: Array = []
 const DECISION_LOG_CAP := 200
+
+# === COMMANDER LAYER (AI plausibility Stage 3, Part B) ===============================================
+## A thin per-round commander (research §3 SCHICHT 1; Killzone full-assignment): EVERY graded AI unit gets
+## a weighted ROLE + a standing order so nothing structurally idles. The load-bearing effect is a PERSISTENT
+## close-and-fight target for melee/monster roles: a unit keeps closing on ONE enemy across rounds instead of
+## re-chasing whoever is momentarily "nearest, not-yet-activated" — the Carnivo-Rex flip-chase (enemy gap
+## 34→22→34→31 over four rounds) that left a 295-pt monster idle at the board edge. Orders PERSIST and are
+## re-validated each activation (Killzone continue-task: keep unless the target died or a certain charge on a
+## nearer enemy appears). Difficulty scales the SCOPE via the (previously dead) coordination knob:
+##   FULL  (kriegsherr/albtraum, coord ≥ 0.9): every close-role unit is driven with a standing target.
+##   BASIC (veteran, coord ≥ COORD_THRESHOLD): every close-role unit is driven.
+##   MINIMAL (rekrut, coord < COORD_THRESHOLD): ONLY big monsters get a standing order — the rest act
+##           locally (re-pick nearest each round = rekrut's characteristic idle-prone weakness).
+## Only consulted under a difficulty (arena / graded human-vs-AI); the default null-AI and the SoloSim oracle
+## never enter it, so their planned decisions stay byte-identical. Every assignment is a reasoning record.
+enum CmdRole { CLOSE_AND_FIGHT, RANGED_LINE, FLANK, CASTER, AIRCRAFT }
+const CMD_ROLE_NAMES := ["close-and-fight", "ranged line", "flanker", "caster", "aircraft"]
+const COMMANDER_FULL_COORD := 0.9   # coordination at/above which the commander drives EVERY close-role unit
+## Standing orders keyed by unit_id → {role:int, target_id:String, round:int, driven:bool}. One game = one
+## controller, so this persists for the whole match; re-validated on each activation of the unit.
+var commander_orders: Dictionary = {}
 ## Optional mirror of EVERY decision record (Callable(rec: Dictionary) -> void), invoked at record time
 ## BEFORE ring-buffer eviction — the rating-ladder harness captures the full stream for its per-game
 ## result JSON without touching the dev-toggle drain path. Invalid (default) ⇒ zero cost, no behaviour change.
@@ -604,6 +625,10 @@ func _act(unit: GameUnit) -> Dictionary:
 	var target_unit := nearest_human_unit(unit)
 	if target_unit == null:
 		return report
+	# COMMANDER (Stage 3, Part B): a graded standing order. For a close-and-fight role it PERSISTS the target
+	# across rounds so the unit keeps closing on ONE enemy instead of re-chasing the momentary nearest (the
+	# idle monster). Returns the default target unchanged for the null-AI / non-driven roles (byte-identical).
+	target_unit = _commander_apply(unit, target_unit)
 	report["target"] = target_unit
 	var weapons := _unit_weapons(unit)
 	var bands: Dictionary = move_bands_for_unit(unit, movement_range)
@@ -1023,6 +1048,114 @@ func _current_round() -> int:
 
 func _is_final_round() -> bool:
 	return game_rounds > 0 and _current_round() >= game_rounds
+
+
+# === Commander layer (Stage 3, Part B) ==============================================================
+
+## The commander's decision for `unit` this activation: classify a weighted ROLE, and for a DRIVEN
+## close-and-fight role return a PERSISTENT target (kept across rounds) in place of the momentary nearest,
+## so a melee/monster keeps closing on ONE enemy instead of flip-chasing. Records the order (every unit is
+## assigned — Killzone: no structural idle). Returns `default_target` unchanged when no difficulty is
+## configured (null-AI / SoloSim — byte-identical) or when the role is not driven at this grade's scope.
+func _commander_apply(unit: GameUnit, default_target: GameUnit) -> GameUnit:
+	var diff := active_difficulty()
+	if diff == null:
+		return default_target
+	var role := _commander_role(unit)
+	var scope := _commander_scope(diff)
+	var is_big: bool = _move_base_radius_m(_moving_models(unit)) >= LARGE_BASE_RADIUS_IN * INCHES_TO_METERS
+	# Driven = a close-combat role the commander steers with a standing target. FULL/BASIC drive every close
+	# role; MINIMAL (rekrut) drives ONLY big monsters (the anti-idle floor) — small melee act locally, which
+	# is rekrut's characteristic idle-prone weakness.
+	var driven: bool = role == CmdRole.CLOSE_AND_FIGHT and (scope >= 1 or is_big)
+	var chosen := default_target
+	var why := "role assigned; acts on the local nearest target"
+	if driven:
+		chosen = _commander_persist_target(unit, default_target, diff)
+		why = "standing close-and-fight order — keep closing on one enemy across rounds"
+	var persisted: bool = driven and chosen != default_target
+	commander_orders[unit.unit_id] = {"role": role, "target_id": (chosen.unit_id if chosen != null else ""),
+		"round": _current_round(), "driven": driven}
+	record_decision({"kind": "commander", "unit": unit.get_name(),
+		"rule": "Commander (%s): weighted role for EVERY unit; melee/monster hold a standing close order (Killzone full-assignment)" % diff.grade_name,
+		"candidates": [], "chosen": _cmd_role_name(role) + ((" → " + chosen.get_name()) if (driven and chosen != null) else ""),
+		"why": why, "data": {"grade": diff.grade_name, "scope": scope, "role": _cmd_role_name(role),
+			"driven": driven, "big_monster": is_big, "persisted": persisted}})
+	return chosen if chosen != null else default_target
+
+
+## Commander scope from the (previously dead) coordination knob: 2=FULL (kriegsherr/albtraum, coord ≥ 0.9),
+## 1=BASIC (veteran, coord ≥ COORD_THRESHOLD), 0=MINIMAL (rekrut — only big monsters driven).
+func _commander_scope(diff: SoloDifficulty) -> int:
+	if diff.coordination >= COMMANDER_FULL_COORD:
+		return 2
+	if diff.coordination >= SoloDifficulty.COORD_THRESHOLD:
+		return 1
+	return 0
+
+
+## Classify the unit's commander ROLE (research §3 role packages; Days-Gone pattern — a role slots onto the
+## existing decision tree without rewriting it). Aircraft and casters are their own packages; a melee-only or
+## MELEE-archetype unit closes-and-fights; a Fast ranged unit flanks; everything else holds the ranged line.
+func _commander_role(unit: GameUnit) -> int:
+	if is_aircraft(unit):
+		return CmdRole.AIRCRAFT
+	if _unit_has_caster(unit):
+		return CmdRole.CASTER
+	var weapons := _unit_weapons(unit)
+	if AiShooting.profiles_in_range(weapons, 0.0).is_empty():
+		return CmdRole.CLOSE_AND_FIGHT   # no ranged weapon at all → pure melee
+	if AiEv.classify(weapons, AiEv.ctx_for(unit, false, 0)) == AiArchetype.Type.MELEE:
+		return CmdRole.CLOSE_AND_FIGHT
+	if unit.has_special_rule("Fast"):
+		return CmdRole.FLANK
+	return CmdRole.RANGED_LINE
+
+
+## The persistent close-and-fight target: keep the SAME enemy the unit was closing on (Killzone continue-task)
+## while it is alive and on the table, so the monster stops flip-chasing the momentary nearest. Two legal
+## overrides: the standing target died / left the table, or a NEARER enemy is now in charge range while the
+## standing one is not (a certain charge THIS turn is the strictly better plan).
+func _commander_persist_target(unit: GameUnit, default_target: GameUnit, _diff: SoloDifficulty) -> GameUnit:
+	var prev: Dictionary = commander_orders.get(unit.unit_id, {})
+	var prev_id: String = str(prev.get("target_id", ""))
+	if prev_id == "":
+		return default_target   # first assignment: adopt the nearest as the standing target
+	var pu := _unit_by_id(prev_id)
+	if pu == null or pu.is_destroyed() or unit_in_reserve(pu) \
+			or (pu.has_method("is_attached") and pu.is_attached()):
+		return default_target   # standing target gone → re-adopt the nearest
+	if default_target != null and default_target != pu:
+		var rush: float = float(move_bands_for_unit(unit, movement_range).get("rush", 12))
+		if nearest_melee_gap_in(unit, default_target) <= rush and nearest_melee_gap_in(unit, pu) > rush:
+			return default_target   # a certain charge on a nearer enemy beats continuing to close on the far one
+	return pu
+
+
+## Whether ANY member of the unit (itself or an attached hero) is a Caster — the caster role package.
+func _unit_has_caster(unit: GameUnit) -> bool:
+	if RulesRegistry.unit_rule_active(unit, "Caster"):
+		return true
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h != null and RulesRegistry.unit_rule_active(h, "Caster"):
+				return true
+	return false
+
+
+## Look up a live GameUnit by its unit_id (any slot), or null — re-resolves a standing target each round.
+func _unit_by_id(id: String) -> GameUnit:
+	if army_manager == null or id == "":
+		return null
+	for g in army_manager.get_all_game_units():
+		var gu := g as GameUnit
+		if gu != null and gu.unit_id == id:
+			return gu
+	return null
+
+
+func _cmd_role_name(role: int) -> String:
+	return CMD_ROLE_NAMES[role] if role >= 0 and role < CMD_ROLE_NAMES.size() else "?"
 
 
 ## Nearest alive-model distance (inches) from `unit` to a world position.
@@ -2082,7 +2215,7 @@ func _plan_move(unit: GameUnit, models: Array, positions: Array, goal: Vector3, 
 	if delta == Vector3.ZERO:
 		_fill_straight_trails(trails, positions, positions)
 		return positions.duplicate()
-	return _plan_positions(unit, models, positions, delta, allow_contact, trails, avoid_difficult, avoid_dangerous, charge_target)
+	return _plan_positions(unit, models, positions, delta, allow_contact, trails, avoid_difficult, avoid_dangerous, charge_target, reach_in)
 
 
 ## Would the rigid move's per-model TARGETS land inside difficult terrain? (Objective or charge target
@@ -2418,7 +2551,8 @@ func _apply_model_positions(models: Array, new_positions: Array) -> void:
 ## MovementPlanner in its 0-origin inch frame. The fast path (nothing in the way) stays the exact rigid
 ## slide. `world_trails` (optional out): one WORLD-space waypoint list per model — the real route taken.
 func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vector3, allow_contact: bool,
-		world_trails: Array = [], avoid_difficult: bool = true, avoid_dangerous: bool = false, charge_target: GameUnit = null) -> Array:
+		world_trails: Array = [], avoid_difficult: bool = true, avoid_dangerous: bool = false,
+		charge_target: GameUnit = null, charge_arc_in: float = 0.0) -> Array:
 	last_flow_order = []
 	var rigid: Array = []
 	for p in positions:
@@ -2466,6 +2600,18 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 		radii_in.append(model_base_radius_m(m as ModelInstance) / INCHES_TO_METERS)
 	opts["radii"] = radii_in
 	opts["forbid_cells"] = _forbid_cells_in(mpos, mdelta, board_in, off, own_r_m)
+	# CHARGE arc budget (field-test finding 3, charge-reach fix): a charge whose nearest models must DETOUR
+	# around obstacles or a LARGE enemy base needs more ARC than the straight-line gap; the delta (aimed at
+	# contact) is short, so we hand the planner the FULL charge band as the per-model arc allowance. The
+	# target's body-only zone (built above) still clamps the stop AT base contact — the extra budget only
+	# lets the route bend around, never overshoot. Non-charge moves pass 0 ⇒ the delta-length allowance.
+	if allow_contact and charge_target != null and charge_arc_in > 0.0:
+		opts["charge_allowance"] = charge_arc_in   # inches (the planner's frame) — the full charge band
+		# The enemy BODY as the reach goal (planner inch frame): a charging model routes toward the target
+		# centre and, blocked by its body-only zone, stops at base contact — bending around obstacles to the
+		# nearest open face rather than stalling on the along-the-line point (charge-reach fix).
+		var tc := unit_centre(charge_target)
+		opts["charge_goal"] = (Vector2(tc.x, tc.z) + off) / INCHES_TO_METERS
 	var plan_trails: Array = []
 	var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, sampled["grid"],
 		allow_contact, board_in, plan_trails, opts)
@@ -3686,21 +3832,31 @@ func nearest_charge_vector(charger: GameUnit, target: GameUnit) -> Dictionary:
 	return {"gap": best_gap, "dir": best_dir.normalized()}
 
 
-## Charge the unit into base contact (field-test finding 3): the former "move toward the enemy centre, capped
-## at the band" closed the CENTRE gap but left the nearest bases short — a wide/offset charge within the 12"
-## band ended ~2" from contact and was ruled short. Measure the REAL base-to-base gap and the nearest-pair
-## direction, then rigid-move exactly that far along that line (capped at the band, terrain/walls still
-## routed), so the nearest models land in contact (GF/AoF v3.5.1 p.8). Returns the Dangerous-crossing count.
+## Charge the unit into base contact (field-test finding 3 + charge-reach fix): the former "move toward the
+## enemy centre, capped at the band" closed the CENTRE gap but left the nearest bases short. Measure the REAL
+## base-to-base gap and the nearest-pair direction, AIM the nearest models at exact base contact (goal =
+## contact point along that line), and grant the move the FULL charge band as its arc budget — NOT the tight
+## straight-line gap. The old code used `travel` (gap + a hair) as both the aim AND the arc budget, so any
+## DETOUR around an obstacle / other unit / a large enemy base (arc > straight gap) starved the charge and it
+## fell 1–5" short (worse for large bases: bigger detours). With the full band as the arc allowance the route
+## bends around and still closes to contact; the target's body-only planner zone clamps the stop AT contact,
+## never through (GF/AoF v3.5.1 p.8), and the contact-aimed slot stops a straight charge from overrunning.
+## Difficult terrain on the forced path still caps the whole move at 6" (p.11). Returns the Dangerous count.
 func _charge_move(unit: GameUnit, target: GameUnit, band_in: float) -> int:
 	var nv := nearest_charge_vector(unit, target)
 	var gap: float = float(nv.get("gap", INF))
 	var dir: Vector2 = nv.get("dir", Vector2.ZERO)
 	if gap == INF or dir == Vector2.ZERO:
 		return _move_toward(unit, unit_centre(target), band_in, true, target)   # degenerate → old aim
-	var travel := minf(band_in, gap + CHARGE_CONTACT_MARGIN_IN)
+	# AIM the nearest model at the target's contact boundary (gap closed), NOT 0.25" inside it: a slot INSIDE
+	# the target's body-only zone is an unreachable Theta* goal, so the router returned a straight line and the
+	# model STALLED at the first obstacle instead of bending around it (the detour never happened). Aimed at
+	# the boundary the goal is reachable, the route bends around obstacles, and the model lands at contact; any
+	# sub-epsilon residual is closed by the melee snap (snap_charge, within MELEE_ENGAGE_IN). Capped at the band.
+	var travel := minf(band_in, gap)
 	var centre := unit_centre(unit)
 	var goal := centre + Vector3(dir.x, 0.0, dir.y) * (travel * INCHES_TO_METERS)
-	return _move_toward(unit, goal, travel, true, target)
+	return _move_toward(unit, goal, band_in, true, target)
 
 
 ## Charge snap (field-test finding 5): rigidly translate the whole charging unit so its NEAREST model lands

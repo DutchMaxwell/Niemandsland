@@ -813,7 +813,15 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 			trails.append([model_pos[i]])
 	if n == 0:
 		return result
-	var allowance := delta.length()
+	# A Charge routes its nearest models to base contact, and the ONLY path to the target may DETOUR around
+	# obstacles / other units' zones / a large enemy base — a bend whose arc length exceeds the straight
+	# gap. The straight-line delta length was the sole arc budget, so any detour starved the charge and it
+	# fell short by the bend amount (field-test: 1–5" short whenever the lane wasn't dead straight). For a
+	# charge the caller grants the FULL charge band via opts.charge_allowance so the route can bend around
+	# and still close to contact; the target's body-only zone clamps the nearest models AT contact, and the
+	# per-model slot (delta, aimed at contact) never lets a non-detouring model overrun. Non-charge moves
+	# omit the key ⇒ the exact old delta-length allowance (byte-identical).
+	var allowance := float(opts.get("charge_allowance", delta.length()))
 	var goal_anchor := _centroid(model_pos) + delta
 	# Deterministic flow order: nearest to the destination first, ties broken by stable model index (total
 	# order → the same sequence regardless of sort stability; research §4 canonicity).
@@ -851,6 +859,27 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 				zones.append({"c": jc, "r": maxf(0.0, float(radii[j]) + float(radii[idx]) - CONTACT_SLIDE_EPS_IN)})
 		var oi := {"clearance": base_clearance, "avoid_cells": avoid_cells, "zones": zones}
 		var slot: Vector2 = (model_pos[idx] as Vector2) + delta
+		# CHARGE body-goal (charge-reach fix): aim the charging model at the ENEMY BODY (opts.charge_goal, the
+		# target centre) rather than the fixed along-the-line slot. If the direct line is blocked (an obstacle
+		# or another unit's zone straddling the approach), Theta*'s reach_closest bends the route around to the
+		# target's nearest OPEN face instead of stalling; the appended body point then lets _walk_offset walk
+		# right up to the target's body-only zone — base contact. The full charge band (allowance) funds the
+		# detour arc. Straight, clear charges are unchanged (the body point is co-linear with the slot).
+		if allow_contact and opts.has("charge_goal"):
+			var body: Vector2 = opts["charge_goal"]
+			var coi := oi.duplicate()
+			coi["reach_closest"] = true
+			var croute := theta_star(model_pos[idx], body, walls, grid, board_in, coi)
+			var ctaut := string_pull(croute, walls, grid, coi)
+			if ctaut.is_empty() or (ctaut.back() as Vector2).distance_to(body) > EPS:
+				ctaut.append(body)
+			var cleg := _walk_offset(model_pos[idx], ctaut, Vector2.ZERO, allowance, walls, grid, oi, board_in)
+			result[idx] = cleg.back()
+			placed.append(idx)
+			if trails != null and idx < trails.size():
+				trails[idx] = cleg
+			order_out.append(idx)
+			continue
 		var route := theta_star(model_pos[idx], slot, walls, grid, board_in, oi)
 		var taut := string_pull(route, walls, grid, oi)
 		var leg := _walk_offset(model_pos[idx], taut, Vector2.ZERO, allowance, walls, grid, oi, board_in)
@@ -992,6 +1021,13 @@ static func theta_star(start: Vector2, goal: Vector2, walls: Array, grid: Dictio
 	var open_set := {start_c: true}
 	var closed := {}
 	var guard := n * n * 4
+	# reach_closest (charge-reach fix): when the GOAL itself is unreachable (a charge aims at the enemy's
+	# body, which sits inside its own no-go zone), return the path to the closest REACHABLE node instead of
+	# the straight line — so the mover bends around obstacles to the target's nearest open face rather than
+	# stalling at the first thing in the way. Off by default ⇒ every existing caller is byte-identical.
+	var reach_closest: bool = bool(opts.get("reach_closest", false))
+	var best_reach: Vector2i = start_c
+	var best_reach_d: float = start.distance_to(goal)
 	while not open.is_empty() and guard > 0:
 		guard -= 1
 		var best_i := 0
@@ -1031,9 +1067,16 @@ static func theta_star(start: Vector2, goal: Vector2, walls: Array, grid: Dictio
 				g[nb] = tentative
 				parent[nb] = from_node
 				pos[nb] = nb_pt
+				if reach_closest:
+					var rd: float = (nb_pt as Vector2).distance_to(goal)
+					if rd < best_reach_d - EPS:
+						best_reach_d = rd
+						best_reach = nb
 				if not open_set.has(nb):
 					open.append(nb)
 					open_set[nb] = true
+	if reach_closest and best_reach != start_c:
+		return _theta_reconstruct(parent, pos, best_reach)
 	return [start, goal]
 
 
