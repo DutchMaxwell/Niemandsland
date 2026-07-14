@@ -700,14 +700,37 @@ func _act(unit: GameUnit) -> Dictionary:
 		action = AiDecision.Action.HOLD
 		do_shoot = shoot_range > 0
 		action_why = "Immobile/Artillery hold-only"
+	# STAGE 1 POSITION SOLVER (AI plausibility): the dedicated joint move×target position pipeline replaces
+	# the naive single-destination pick for GRADED games (arena + graded human-vs-AI). It generalises the
+	# Wave-1 flank/anchor/yield single-hooks to EVERY archetype and BOTH channels (enemy + objective); when
+	# it overrides the plan the Wave-1 single-hooks below are skipped (their behaviour is subsumed). The
+	# default null-AI path and the SoloSim oracle never enter it (byte-identical). Charges/holds untouched.
+	var solver_goal := NO_OBJECTIVE
+	var solver_used := false
+	if (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) and _position_solver_active():
+		var sol := _solve_position(unit, target_unit, weapons, archetype, advance, rush, obj_pos, has_obj, int(dec["toward"]), do_shoot)
+		if bool(sol.get("used", false)):
+			solver_used = true
+			action = int(sol["action"])
+			do_shoot = bool(sol["shoot"])
+			dec["toward"] = int(sol["toward"])
+			action_why = str(sol["why"])
+			var new_target := sol.get("target", target_unit) as GameUnit
+			if new_target != null and new_target != target_unit:
+				target_unit = new_target
+				report["target"] = target_unit
+				tcentre = unit_centre(target_unit)
+				enemy_dist = MoveIntent.distance_inches(centre, tcentre)
+			solver_goal = sol["goal"]
 	# FAST-UNIT FLANKING DOCTRINE (AI plausibility wave 1): a fast ranged unit that would walk toward an
 	# enemy it can't shoot THIS activation (out of range, or range without line of sight) instead heads
 	# for a FLANK firing anchor — a stand-off point on the target's flank with range + LOS. Reachable
 	# with an Advance → advance there and SHOOT; further → rush the approach lane (the deferred shot).
 	# Placement of a legal move is officially the player's open choice, so this is pure doctrine — the
-	# hold overlays below keep their precedence, charges and objective moves are untouched.
+	# hold overlays below keep their precedence, charges and objective moves are untouched. Skipped when
+	# the general position solver already chose a position (it subsumes this single-hook).
 	var flank_goal := NO_OBJECTIVE
-	if (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) \
+	if not solver_used and (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) \
 			and int(dec["toward"]) == AiDecision.Toward.ENEMY and not bool(ctx["enemy_in_charge"]) \
 			and shoot_range > 0 and (advance >= FLANK_MIN_ADVANCE_IN or unit.has_special_rule("Fast")) \
 			and (enemy_dist > float(shoot_range) or not _has_los(unit, target_unit)):
@@ -744,13 +767,16 @@ func _act(unit: GameUnit) -> Dictionary:
 	report["toward"] = int(dec["toward"])
 	var to_obj: bool = int(dec["toward"]) == AiDecision.Toward.OBJECTIVE and has_obj
 	report["to_objective"] = to_obj   # main narrates "→ objective" instead of the enemy name (finding 1 label)
-	var to_flank: bool = flank_goal != NO_OBJECTIVE and not to_obj
-	var goal: Vector3 = obj_pos if to_obj else (flank_goal if to_flank else tcentre)
+	# The general position solver (when it fired) already chose a filtered, dual-channel-scored destination
+	# that subsumes the flank anchor; otherwise fall back to the Wave-1 goal (objective / flank / enemy).
+	var to_flank: bool = (solver_used or flank_goal != NO_OBJECTIVE) and not to_obj
+	var goal: Vector3 = solver_goal if solver_used else (obj_pos if to_obj else (flank_goal if to_flank else tcentre))
 	# OBJECTIVE FIRING ANCHOR (AI plausibility wave 1): an objective-bound SHOOTER whose tree promised a
 	# shot (Advance toward marker + shoot) stops at a spot INSIDE the seize ring that keeps range + line
 	# of sight to its target — the marker CENTRE is only a placement convention, and walking onto it
 	# regularly broke the post-move shot (kriegsherr showcase: the bikers held markers but never fired).
-	if to_obj and do_shoot and shoot_range > 0 and action == AiDecision.Action.ADVANCE:
+	# Skipped when the general solver already placed the unit (its seize-ring candidates cover this).
+	if not solver_used and to_obj and do_shoot and shoot_range > 0 and action == AiDecision.Action.ADVANCE:
 		var fire_anchor := _objective_fire_anchor(unit, target_unit, goal, float(shoot_range))
 		if fire_anchor != NO_OBJECTIVE:
 			goal = fire_anchor
@@ -762,7 +788,8 @@ func _act(unit: GameUnit) -> Dictionary:
 	# not-yet-activated friendly shooter's line of fire side-steps to an equivalent position (equal
 	# progress, small/cheap units defer). Charges are exempt (they must reach their target), and so is a
 	# move that reaches seize range of its objective (holding the marker beats keeping a lane clear).
-	if (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) \
+	# Skipped when the general solver already ran — its blocks_friend hard filter covers the same lane.
+	if not solver_used and (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) \
 			and not (to_obj and (bool(ctx["obj_in_rush"]) or bool(ctx["obj_in_advance"]))):
 		var corridors := _friendly_fire_corridors(unit)
 		if not corridors.is_empty():
@@ -1107,6 +1134,168 @@ func _flank_goal(unit: GameUnit, target: GameUnit, range_in: float, advance_in: 
 				best_score = score
 				best = {"found": true, "goal": anchor, "within_advance": reach_now,
 					"angle_deg": float(mag) * float(side), "dist_in": dist_to, "ring_in": ring_in, "ev": ring_ev}
+	return best
+
+
+# ===== AI plausibility stage 1 — the dedicated POSITION SOLVER adapter (AiPosition) =====
+
+## Whether the joint move×target position pipeline is live for THIS activation: only when a difficulty is
+## configured (arena / a graded human-vs-AI solo game) AND the geometry callables are wired. The default
+## null-AI path and the SoloSim fairness oracle never enter here, so both stay byte-identical (§ the
+## opts-pattern discipline). Headless unit tests without injected LOS also fall through untouched.
+func _position_solver_active() -> bool:
+	return active_difficulty() != null and (los_checker.is_valid() or unit_los_checker.is_valid())
+
+
+## Difficulty → position-band width: the ev_noise knob finally gets a real surface (POSITION choice). A
+## wide band at Rekrut (2nd/3rd-best firing spot allowed), narrowing to argmax at Kriegsherr/Albtraum.
+func _position_band_frac(diff: SoloDifficulty) -> float:
+	return diff.ev_noise if diff != null else 0.0
+
+
+## Build the AiPosition params from live units and run the solver. Returns {} (no override) when the
+## solver is inactive or finds nothing worth changing; otherwise the mapped result the caller applies:
+## {used, action:int(AiDecision.Action), shoot:bool, toward:int(AiDecision.Toward), target:GameUnit,
+##  goal:Vector3, why:String}. Pure of side effects apart from the one explainability record it emits.
+func _solve_position(unit: GameUnit, primary_target: GameUnit, weapons: Array, archetype: int,
+		advance: float, rush: float, obj_pos: Vector3, has_obj: bool, dec_toward: int, do_shoot: bool) -> Dictionary:
+	var diff := active_difficulty()
+	if diff == null or unit == null or primary_target == null:
+		return {}
+	var centre := unit_centre(unit)
+	var yy := centre.y
+	var in_per_m := 1.0 / INCHES_TO_METERS
+	var own_pid: int = int(unit.unit_properties.get("player_id", 0))
+	var to_obj: bool = dec_toward == AiDecision.Toward.OBJECTIVE and has_obj
+	var is_shooter: bool = (archetype == AiArchetype.Type.SHOOTING or archetype == AiArchetype.Type.HYBRID) \
+		and not AiShooting.profiles_in_range(weapons, 0.0).is_empty()
+
+	# Attacker channel: OUR ranged volley (Sergeant-stamped, expended-Limited filtered) + context.
+	var our_profiles: Array = AiEv.stamp_sergeant(filter_limited(unit, AiShooting.profiles_in_range(weapons, 0.0)), unit)
+	var our_ctx: Dictionary = AiEv.ctx_for(unit, false, 0)
+	var base_range_in: float = float(AiArchetype.max_range_inches(weapons)) + shooting_range_bonus(unit)
+
+	# Target + threat lists — every LIVE enemy of THIS unit's side (side-agnostic: both-AI arena defenders
+	# target their own enemies). Aircraft are unshootable-for-free targets but valid firing targets.
+	var targets: Array = []
+	var threats: Array = []
+	if army_manager != null:
+		for g in army_manager.get_all_game_units():
+			var gu := g as GameUnit
+			if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
+				continue
+			if int(gu.unit_properties.get("player_id", 0)) == own_pid:
+				continue
+			if gu.has_method("is_attached") and gu.is_attached():
+				continue
+			var gc := unit_centre(gu)
+			var g2 := Vector2(gc.x, gc.z)
+			var pen: float = target_range_penalty_in(gu) if is_aircraft(gu) else 0.0
+			targets.append({"centre": g2,
+				"def_ctx": AiEv.ctx_for(gu, majority_in_cover(gu), counter_models_of(gu)),
+				"range_penalty_in": pen})
+			threats.append({"centre": g2, "range_in": float(AiArchetype.max_range_inches(_unit_weapons(gu)))})
+	if is_shooter and targets.is_empty():
+		return {}
+
+	# Legality + geometry closures (capture the acting unit's footprint + the live spacing zones once).
+	var own_r := _deploy_footprint_radius(unit)
+	var zones := _spacing_zones_world(unit, own_r, null)
+	# The coarse centre-to-centre terrain LOS is the hypothetical-spot gate (per-model LOS needs real units
+	# placed at the candidate — the same gate Wave-1's flank/anchor already validate candidates with).
+	var los_at := func(a: Vector2, b: Vector2) -> bool:
+		if los_checker.is_valid():
+			return bool(los_checker.call(Vector3(a.x, yy, a.y), Vector3(b.x, yy, b.y)))
+		return true
+	var cover_at := func(pt: Vector2) -> bool:
+		if not terrain_type_at.is_valid():
+			return false
+		return TerrainRules.gives_cover(int(terrain_type_at.call(Vector3(pt.x, yy, pt.y))))
+	var legal_at := func(pt: Vector2) -> bool:
+		var w := Vector3(pt.x, yy, pt.y)
+		if _clamp_to_bounds(w).distance_to(w) > 0.0005:
+			return false
+		if _world_forbidden(w, own_r):
+			return false
+		for z in zones:
+			if ((z as Dictionary)["c"] as Vector2).distance_to(pt) < float((z as Dictionary)["r"]):
+				return false
+		return true
+	# Friendly firing lanes to yield (Wave-1 coordination, extended to the whole candidate set).
+	var corridors := _friendly_fire_corridors(unit)
+	var lane_clear_m: float = _deploy_footprint_radius(unit) + LANE_CLEAR_MARGIN_IN * INCHES_TO_METERS
+	var blocks_friend := func(pt: Vector2) -> bool:
+		for c in corridors:
+			var cd := c as Dictionary
+			if MovementPlanner.point_seg_distance(pt, cd["a"], cd["b"]) < lane_clear_m:
+				return true
+		return false
+
+	var naive_goal := obj_pos if to_obj else unit_centre(primary_target)
+	var params := {
+		"from": Vector2(centre.x, centre.z),
+		"toward": Vector2(naive_goal.x, naive_goal.z),
+		"advance_m": advance * INCHES_TO_METERS,
+		"rush_m": rush * INCHES_TO_METERS,
+		"our_profiles": our_profiles, "our_ctx": our_ctx, "shoot_range_in": base_range_in,
+		"targets": targets, "threats": threats, "in_per_m": in_per_m, "is_shooter": is_shooter,
+		"objective": ({"pos": Vector2(obj_pos.x, obj_pos.z),
+			"seize_ring_m": OBJECTIVE_CONTROL_IN * INCHES_TO_METERS,
+			"to_objective": to_obj, "final_round": _is_final_round()} if has_obj else {}),
+		"los": los_at, "cover_at": cover_at, "legal_at": legal_at, "blocks_friend": blocks_friend,
+		"band_frac_pick": _position_band_frac(diff),
+		# A distinct seed part (7331) decorrelates the POSITION band draw from the target-tie draw, which
+		# also runs noisy_pick on the same activation seed — same reproducibility, independent deviations.
+		"pick": func(n: int) -> int: return diff.noisy_pick(n, _knob_seed_parts(unit) + [7331]),
+	}
+	var sol := AiPosition.solve(params)
+	if not bool(sol.get("used", false)):
+		return {}
+
+	var ti: int = int(sol.get("target_index", -1))
+	var chosen_target: GameUnit = primary_target
+	if ti >= 0 and ti < targets.size() and army_manager != null:
+		# Map the winning target descriptor back to its GameUnit (re-walk in the same order it was built).
+		chosen_target = _enemy_by_centre(unit, (targets[ti] as Dictionary)["centre"])
+		if chosen_target == null:
+			chosen_target = primary_target
+	var goal2: Vector2 = sol["goal"]
+	var goal := Vector3(goal2.x, yy, goal2.y)
+	var act: int = AiDecision.Action.ADVANCE if str(sol["action"]) == "advance" else AiDecision.Action.RUSH
+	var toward: int = AiDecision.Toward.OBJECTIVE if str(sol["toward"]) == "objective" else AiDecision.Toward.ENEMY
+	record_decision({"kind": "position", "unit": unit.get_name(),
+		"rule": "Stage 1 position solver: joint move×target enumeration → hard filters (LOS/range/cover/lane) → dual-channel (EV + location veto) → argmax within the %s band" % diff.grade_name,
+		"candidates": [], "chosen": AiDecision.action_name(act) + (" and shoots" if bool(sol["shoot"]) else ""),
+		"why": str(sol.get("why", "")),
+		"data": {"considered": int(sol.get("considered", 0)), "shooters": int(sol.get("shooters", 0)),
+			"filtered": sol.get("filtered", {}), "chosen_ev": float(sol.get("chosen_ev", 0.0)),
+			"chosen_loc": float(sol.get("chosen_loc", 0.0)), "deviation": int(sol.get("deviation", 0)),
+			"grade": diff.grade_name}})
+	return {"used": true, "action": act, "shoot": bool(sol["shoot"]), "toward": toward,
+		"target": chosen_target, "goal": goal, "why": str(sol.get("why", ""))}
+
+
+## Map a target descriptor's world-plane centre back to its live GameUnit (nearest enemy centre match). The
+## descriptor list is built from live units in one pass, so an exact-centre match recovers the unit.
+func _enemy_by_centre(unit: GameUnit, centre2: Vector2) -> GameUnit:
+	if army_manager == null:
+		return null
+	var own_pid: int = int(unit.unit_properties.get("player_id", 0))
+	var best: GameUnit = null
+	var best_d := INF
+	for g in army_manager.get_all_game_units():
+		var gu := g as GameUnit
+		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
+			continue
+		if int(gu.unit_properties.get("player_id", 0)) == own_pid:
+			continue
+		if gu.has_method("is_attached") and gu.is_attached():
+			continue
+		var gc := unit_centre(gu)
+		var d := Vector2(gc.x, gc.z).distance_to(centre2)
+		if d < best_d:
+			best_d = d
+			best = gu
 	return best
 
 
