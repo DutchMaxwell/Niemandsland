@@ -121,20 +121,53 @@ func test_events_out_of_step_are_ignored() -> void:
 
 ## ===== W6: kill / revive =====
 
-func test_w6_kill_then_revive_finishes_the_track() -> void:
+func test_w6_kill_then_revive_completes_and_advances_to_w7() -> void:
 	var director := _new_director("W6")
 	var casualty: Node3D = auto_free(Node3D.new())
-	var finished := [null]
-	director.tutorial_finished.connect(func(completed: bool) -> void: finished[0] = completed)
 
 	director._on_loose_model_dead_changed(casualty, true)
 	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("revive")
 	assert_object(director._parked_node).is_equal(casualty)
 
+	# W6 is no longer terminal (W7 movement wave follows): completing it persists W6 and
+	# advances the cursor to W7 rather than finishing the track.
 	director._on_loose_model_dead_changed(casualty, false)
+	assert_bool(director.progress.is_lesson_completed("W6")).is_true()
+	assert_bool(director.flow.finished).is_false()
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W7")
+
+
+## ===== W7: movement bundle (game-phase gate, trail, dry-brush cap, 1" spacing) =====
+
+func test_w7_movement_wave_via_real_signal_handlers() -> void:
+	var director := _new_director("W7")
+	var unit := _new_unit(2)
+	director._target_unit = unit
+	director._target_nodes = _nodes_of(unit)
+	var finished := [null]
+	director.tutorial_finished.connect(func(completed: bool) -> void: finished[0] = completed)
+
+	# Step 1 — game-phase gate: only the PLAYING transition advances it.
+	director._on_game_phase_changed(0)  # still DEPLOYMENT (no army_manager -> _game_started false)
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("start_game")
+	director._on_event(Flow.Event.GAME_STARTED)  # simulate the PLAYING edge
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("trail")
+
+	# Step 2 — path painting: a real model drop advances trail -> cap.
+	director._on_selection_dropped([{"node": director._target_nodes[0], "inches": 4.0}])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("cap")
+
+	# Step 3 — dry-brush cap: a NON-dry cap report is ignored; the dry one advances cap -> spacing.
+	director._on_movement_capped(3.0, 6.0, false)
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("cap")
+	director._on_movement_capped(6.0, 6.0, true)
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("spacing")
+
+	# Step 4 — the 1" spacing wall: drop_separated finishes the track.
+	director._on_drop_separated(true)
 	assert_bool(director.flow.finished).is_true()
 	assert_bool(finished[0]).is_true()
-	assert_bool(director.progress.is_lesson_completed("W6")).is_true()
+	assert_bool(director.progress.is_lesson_completed("W7")).is_true()
 
 
 ## ===== Lesson jumping: resume skips completed, chapter replay does not =====

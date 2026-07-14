@@ -12,10 +12,10 @@ func _new_flow() -> TutorialFlow:
 
 ## ===== Track definition =====
 
-func test_tool_track_has_six_lessons_w1_to_w6() -> void:
+func test_tool_track_has_seven_lessons_w1_to_w7() -> void:
 	var track := Flow.build_tool_track()
-	assert_int(track.size()).is_equal(6)
-	assert_array(Flow.ids(track)).is_equal(["W1", "W2", "W3", "W4", "W5", "W6"])
+	assert_int(track.size()).is_equal(7)
+	assert_array(Flow.ids(track)).is_equal(["W1", "W2", "W3", "W4", "W5", "W6", "W7"])
 
 
 func test_every_step_is_fully_defined() -> void:
@@ -78,8 +78,8 @@ func test_full_walk_finishes_the_track() -> void:
 		if not String(result.lesson_completed).is_empty():
 			completed.append(String(result.lesson_completed))
 	assert_bool(flow.finished).is_true()
-	assert_array(completed).is_equal(["W1", "W2", "W3", "W4", "W5", "W6"])
-	assert_int(guard).is_equal(18)  # 3+3+4+3+3+2 steps
+	assert_array(completed).is_equal(["W1", "W2", "W3", "W4", "W5", "W6", "W7"])
+	assert_int(guard).is_equal(22)  # 3+3+4+3+3+2+4 steps
 
 
 func test_finished_flow_ignores_events() -> void:
@@ -117,8 +117,34 @@ func test_skip_current_lesson_completes_and_advances() -> void:
 
 func test_skip_on_last_lesson_finishes() -> void:
 	var flow := _new_flow()
-	flow.start_at("W6")
+	flow.start_at("W7")
 	var result := flow.skip_current_lesson()
-	assert_str(String(result.lesson_completed)).is_equal("W6")
+	assert_str(String(result.lesson_completed)).is_equal("W7")
 	assert_bool(result.finished).is_true()
+	assert_bool(flow.finished).is_true()
+
+
+## ===== W7 movement wave (the #131 movement-bundle lesson) =====
+
+func test_w7_movement_wave_steps_and_gating_events() -> void:
+	var track := Flow.build_tool_track()
+	assert_str(Flow.title_of(track, "W7")).is_equal("Movement & trails")
+	var flow := _new_flow()
+	assert_bool(flow.start_at("W7")).is_true()
+	# Step 1 — the game-phase gate: only GAME_STARTED advances it.
+	assert_str(String(flow.current_step().get("id", ""))).is_equal("start_game")
+	assert_bool(flow.consume(Flow.Event.MOVE_CAPPED).advanced).is_false()
+	assert_bool(flow.consume(Flow.Event.GAME_STARTED).advanced).is_true()
+	# Step 2 — path painting: a real model drop (UNIT_MOVED).
+	assert_str(String(flow.current_step().get("id", ""))).is_equal("trail")
+	assert_bool(flow.consume(Flow.Event.UNIT_MOVED).advanced).is_true()
+	# Step 3 — the dry-brush cap: MOVE_CAPPED.
+	assert_str(String(flow.current_step().get("id", ""))).is_equal("cap")
+	assert_bool(flow.consume(Flow.Event.UNIT_MOVED).advanced).is_false()
+	assert_bool(flow.consume(Flow.Event.MOVE_CAPPED).advanced).is_true()
+	# Step 4 — the 1" spacing wall: MODELS_SEPARATED, and it completes the track.
+	assert_str(String(flow.current_step().get("id", ""))).is_equal("spacing")
+	var last := flow.consume(Flow.Event.MODELS_SEPARATED)
+	assert_bool(last.advanced).is_true()
+	assert_str(String(last.lesson_completed)).is_equal("W7")
 	assert_bool(flow.finished).is_true()

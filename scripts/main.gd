@@ -4043,6 +4043,7 @@ func _start_tutorial() -> void:
 		"radial_controller": radial_menu_controller,
 		"army_manager": opr_army_manager,
 		"undo_manager": undo_manager,
+		"start_game_button": _start_game_button,
 	})
 	_tutorial_director.begin(progress, _tutorial_start_lesson)
 

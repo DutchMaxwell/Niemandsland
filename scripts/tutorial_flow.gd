@@ -28,6 +28,9 @@ enum Event {
 	UNIT_ACTIVATED,   # radial_menu_controller.unit_activated (card chip or radial)
 	MODEL_KILLED,     # loose_model_dead_changed dead=true (casualty parked)
 	MODEL_REVIVED,    # loose_model_dead_changed dead=false (parked model revived)
+	GAME_STARTED,     # game_phase_changed -> PLAYING (Start Game / both-ready)
+	MOVE_CAPPED,      # movement_capped with dry=true (dry-brush cap reached mid-drag)
+	MODELS_SEPARATED, # drop_separated (the 1" spacing rule snapped/pushed a dropped base)
 }
 
 # ===== Spotlight target keys (resolved to rects by the director) =====
@@ -40,6 +43,7 @@ const TARGET_DOCK_TAB := "dock_tab"           # Units dock tab at the bottom
 const TARGET_DOCK_STRIP := "dock_strip"       # the open card strip
 const TARGET_PRESENTED_CARD := "presented_card"
 const TARGET_PARKED_MODEL := "parked_model"   # the casualty parked on the tray
+const TARGET_START_GAME := "start_game"       # the Start Game / Ready button in the left panel
 
 # ===== State =====
 var lessons: Array = []
@@ -106,6 +110,16 @@ static func build_tool_track() -> Array:
 				"event": Event.MODEL_KILLED, "target": TARGET_UNIT, "mask": false},
 			{"id": "revive", "text": "The casualty is parked on your army tray. Right-click it and revive it.",
 				"event": Event.MODEL_REVIVED, "target": TARGET_PARKED_MODEL, "mask": false},
+		]},
+		{"id": "W7", "title": "Movement & trails", "steps": [
+			{"id": "start_game", "text": "Deployment is done — press Start Game in the left panel to begin play. Chalk move-trails only paint once the game has started.",
+				"event": Event.GAME_STARTED, "target": TARGET_START_GAME, "mask": false},
+			{"id": "trail", "text": "Drag the highlighted unit across the table. A chalk trail paints behind it along the ACTUAL path you took, and the counter reads the inches travelled. Click a finished trail to read its distance again.",
+				"event": Event.UNIT_MOVED, "target": TARGET_UNIT, "mask": false},
+			{"id": "cap", "text": "With Enforce Movement Limit on, pick Advance above the dice, then drag the unit past 6\". The counter turns red as the brush runs dry — Advance caps at 6\", Rush/Charge at 12\".",
+				"event": Event.MOVE_CAPPED, "target": TARGET_UNIT, "mask": false},
+			{"id": "spacing", "text": "Now drag the unit up to an enemy model. A red 1\" wall stops you and snaps the base to contact — models can never stack or crowd inside 1\".",
+				"event": Event.MODELS_SEPARATED, "target": TARGET_UNIT, "mask": false},
 		]},
 	]
 

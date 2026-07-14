@@ -48,6 +48,7 @@ var _unit_dock: Node = null
 var _radial_controller: Node = null
 var _army_manager: Node = null
 var _undo_manager: Node = null
+var _start_game_button: Control = null
 
 # ===== Private state =====
 var _coach: TutorialCoachMark = null
@@ -89,7 +90,8 @@ func _process(delta: float) -> void:
 
 ## Wire the director to the live scene. `refs` keys (all optional, null-guarded):
 ## object_manager, camera_pivot, dice_tray, dice_panel, hamburger, left_panel,
-## import_button, import_dialog, unit_dock, radial_controller, army_manager, undo_manager.
+## import_button, import_dialog, unit_dock, radial_controller, army_manager, undo_manager,
+## start_game_button.
 func setup(refs: Dictionary) -> void:
 	_object_manager = refs.get("object_manager", null)
 	_camera_pivot = refs.get("camera_pivot", null)
@@ -103,6 +105,7 @@ func setup(refs: Dictionary) -> void:
 	_radial_controller = refs.get("radial_controller", null)
 	_army_manager = refs.get("army_manager", null)
 	_undo_manager = refs.get("undo_manager", null)
+	_start_game_button = refs.get("start_game_button", null)
 	if _camera_pivot != null:
 		_camera = _camera_pivot.get_node_or_null("Camera3D") as Camera3D
 
@@ -164,6 +167,10 @@ func _connect_seams() -> void:
 			_object_manager.rotation_committed.connect(_on_rotation_committed)
 		if _object_manager.has_signal("measurement_finished"):
 			_object_manager.measurement_finished.connect(_on_measurement_finished)
+		if _object_manager.has_signal("movement_capped"):
+			_object_manager.movement_capped.connect(_on_movement_capped)
+		if _object_manager.has_signal("drop_separated"):
+			_object_manager.drop_separated.connect(_on_drop_separated)
 	if _undo_manager != null and _undo_manager.has_signal("action_undone"):
 		_undo_manager.action_undone.connect(_on_action_undone)
 	if _dice_tray != null and _dice_tray.has_signal("roll_finnished"):
@@ -172,6 +179,8 @@ func _connect_seams() -> void:
 		_radial_controller.unit_activated.connect(_on_unit_activated)
 	if _army_manager != null and _army_manager.has_signal("loose_model_dead_changed"):
 		_army_manager.loose_model_dead_changed.connect(_on_loose_model_dead_changed)
+	if _army_manager != null and _army_manager.has_signal("game_phase_changed"):
+		_army_manager.game_phase_changed.connect(_on_game_phase_changed)
 
 
 func _disconnect_seams() -> void:
@@ -180,6 +189,8 @@ func _disconnect_seams() -> void:
 		_disconnect_if(_object_manager, "selection_dropped", _on_selection_dropped)
 		_disconnect_if(_object_manager, "rotation_committed", _on_rotation_committed)
 		_disconnect_if(_object_manager, "measurement_finished", _on_measurement_finished)
+		_disconnect_if(_object_manager, "movement_capped", _on_movement_capped)
+		_disconnect_if(_object_manager, "drop_separated", _on_drop_separated)
 	if _undo_manager != null:
 		_disconnect_if(_undo_manager, "action_undone", _on_action_undone)
 	if _dice_tray != null:
@@ -188,6 +199,7 @@ func _disconnect_seams() -> void:
 		_disconnect_if(_radial_controller, "unit_activated", _on_unit_activated)
 	if _army_manager != null:
 		_disconnect_if(_army_manager, "loose_model_dead_changed", _on_loose_model_dead_changed)
+		_disconnect_if(_army_manager, "game_phase_changed", _on_game_phase_changed)
 
 
 func _disconnect_if(source: Object, signal_name: String, callable: Callable) -> void:
@@ -234,6 +246,20 @@ func _on_loose_model_dead_changed(node: Node3D, dead: bool) -> void:
 		_on_event(TutorialFlow.Event.MODEL_KILLED)
 	else:
 		_on_event(TutorialFlow.Event.MODEL_REVIVED)
+
+
+func _on_movement_capped(_consumed_inches: float, _cap_inches: float, dry: bool) -> void:
+	if dry:
+		_on_event(TutorialFlow.Event.MOVE_CAPPED)
+
+
+func _on_drop_separated(_applied: bool) -> void:
+	_on_event(TutorialFlow.Event.MODELS_SEPARATED)
+
+
+func _on_game_phase_changed(_phase: int) -> void:
+	if _game_started():
+		_on_event(TutorialFlow.Event.GAME_STARTED)
 
 
 func _on_skip_lesson() -> void:
@@ -510,6 +536,12 @@ func _bands_active() -> bool:
 	return bands_controller != null and bands_controller.active_count() > 0
 
 
+## True once the game has left DEPLOYMENT for the PLAYING phase (Start Game / both-ready).
+func _game_started() -> bool:
+	return _army_manager != null and _army_manager.has_method("is_deployment_phase") \
+		and not _army_manager.is_deployment_phase()
+
+
 ## For events that reflect a UI STATE (not a gesture): true when the state is already
 ## reached at step entry, so the step self-completes instead of waiting for an edge.
 func _state_already_satisfied(event: TutorialFlow.Event) -> bool:
@@ -524,6 +556,8 @@ func _state_already_satisfied(event: TutorialFlow.Event) -> bool:
 			return _card_presented()
 		TutorialFlow.Event.BANDS_SHOWN:
 			return _bands_active()
+		TutorialFlow.Event.GAME_STARTED:
+			return _game_started()
 		_:
 			return false
 
@@ -599,6 +633,8 @@ func _resolve_target_rect(target: String) -> Rect2:
 			return _dock_rect("strip_rect")
 		TutorialFlow.TARGET_PRESENTED_CARD:
 			return _dock_rect("presented_rect")
+		TutorialFlow.TARGET_START_GAME:
+			return _control_rect(_start_game_button)
 		_:
 			return Rect2()
 
