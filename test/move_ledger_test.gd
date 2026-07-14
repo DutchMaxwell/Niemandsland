@@ -22,6 +22,15 @@ func _line(points_in: Array) -> PackedVector2Array:
 	return out
 
 
+## Fold extend_path over a sequence of cursor points (inches), starting empty — the net
+## retrace-erased path a drag through those cursor positions would record.
+func _drag(points_in: Array) -> PackedVector2Array:
+	var path := PackedVector2Array()
+	for p in points_in:
+		path = MoveLedger.extend_path(path, (p as Vector2) * INCH)
+	return path
+
+
 # ===== Arc length (the measured truth) =====
 
 func test_length_inches_straight_line() -> void:
@@ -85,6 +94,54 @@ func test_simplify_collapses_near_duplicates_keeps_exact_endpoint() -> void:
 	assert_that(out[0]).is_equal(Vector2(0, 0))
 	assert_that(out[out.size() - 1]).is_equal(Vector2(0.1004, 0.0004))
 	assert_int(out.size()).is_equal(2)
+
+
+# ===== Backtrack erasing ("Rückwärtsmalen radiert" — you can't inflate by wiggling) =====
+
+func test_forward_extends_normally() -> void:
+	# A plain forward drag records the straight travel — nothing to erase.
+	var path := _drag([Vector2(0, 0), Vector2(2, 0), Vector2(4, 0), Vector2(6, 0)])
+	assert_float(MoveLedger.length_inches(path)).is_equal_approx(6.0, 0.05)
+
+
+func test_forward_then_back_to_start_measures_near_zero() -> void:
+	# Out 6" then all the way back: the retrace erases the outgoing path and refunds the
+	# budget — the model is back where it started, so net travel ≈ 0 (NOT 12").
+	var path := _drag([Vector2(0, 0), Vector2(2, 0), Vector2(4, 0), Vector2(6, 0),
+			Vector2(4, 0), Vector2(2, 0), Vector2(0.1, 0)])
+	assert_float(MoveLedger.length_inches(path)).is_less(0.3)
+
+
+func test_forward_back_forward_measures_the_net_taut_path() -> void:
+	# Out 6", back to 3", out again to 5": the net taut path is 5" (final position), NOT
+	# the wiggle sum (6 + 3 + 2 = 11").
+	var path := _drag([Vector2(0, 0), Vector2(2, 0), Vector2(4, 0), Vector2(6, 0),
+			Vector2(5, 0), Vector2(4, 0), Vector2(3, 0), Vector2(4, 0), Vector2(5, 0)])
+	assert_float(MoveLedger.length_inches(path)).is_equal_approx(5.0, 0.1)
+
+
+func test_backtrack_is_robust_to_lateral_jitter() -> void:
+	# The return drag is offset ~2 mm sideways (< the retrace tolerance) — imperfect
+	# retracing must still erase, so a jittery there-and-back can't inflate the distance.
+	var jz := 0.002 / INCH   # ~2 mm expressed in the helper's inch units
+	var path := _drag([Vector2(0, 0), Vector2(3, 0), Vector2(6, 0),
+			Vector2(5, jz), Vector2(4, jz), Vector2(3, jz), Vector2(2, jz),
+			Vector2(1, jz), Vector2(0.1, jz)])
+	assert_float(MoveLedger.length_inches(path)).is_less(0.5)
+
+
+func test_genuine_detour_is_preserved_not_erased() -> void:
+	# A wide sidestep (offset far beyond the tolerance) is a REAL detour, not a backtrack:
+	# the return leg is parallel but 3" away, so the path keeps its arc (not collapsed).
+	var path := _drag([Vector2(0, 0), Vector2(4, 0), Vector2(4, 3), Vector2(0, 3)])
+	# 4 (east) + 3 (north) + 4 (west) = 11" of real travel around the detour.
+	assert_float(MoveLedger.length_inches(path)).is_greater(9.0)
+
+
+func test_extend_from_empty_seeds_the_start() -> void:
+	var path := MoveLedger.extend_path(PackedVector2Array(), _p(1, 1))
+	assert_int(path.size()).is_equal(1)
+	assert_that(path[0]).is_equal(_p(1, 1))
 
 
 # ===== Per-model path derivation =====

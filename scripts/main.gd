@@ -1648,7 +1648,10 @@ func _on_battle_log_dropped(moves: Array) -> void:
 			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "alive": _battle_log_unit_alive(node), "whole": false}
 		var e: Dictionary = per_unit[unit_name]
 		e["count"] = int(e["count"]) + 1
-		e["max_in"] = maxf(float(e["max_in"]), float(mv.get("inches", 0.0)))
+		# Movement distance = the ACTUAL traveled arc (the ledger's measured net path),
+		# NOT crow-flight — one source of truth with the trail stamp / HUD / ruler. Falls
+		# back to the straight from→to only for a mover with no recorded path.
+		e["max_in"] = maxf(float(e["max_in"]), float(mv.get("arc_in", mv.get("inches", 0.0))))
 		if node is RegimentTray:
 			e["whole"] = true
 	var summaries: Array = []
@@ -3020,6 +3023,10 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 			if deployment_zone_check:
 				deployment_zone_check.button_pressed = vis
 
+	# A loaded/synced deployment state drives the trail-chalk phase too.
+	if settings.has("deployment_type") or settings.has("deployment_visible"):
+		_sync_move_trails_deployment()
+
 	if settings.has("deployment_flipped"):
 		var flipped = bool(settings["deployment_flipped"])
 		if terrain_overlay and terrain_overlay.has_method("set_deployment_colors_flipped"):
@@ -4138,8 +4145,25 @@ func _on_deployment_zones_visibility_toggled(show_zones: bool) -> void:
 
 	terrain_overlay.set_deployment_zones_visible(show_zones)
 
+	# Deployment zones showing = deployment phase → suppress the movement chalk.
+	_sync_move_trails_deployment()
+
 	# Sync visibility to remote clients
 	_broadcast_table_settings_update("deployment_visible", show_zones)
+
+
+## Push the current deployment PHASE to the move-trail chalk: while the deployment zones
+## are shown, players are placing armies (not proving movement), so the trails auto-hide;
+## when the zones are hidden, play has begun and trails resume. This is the existing
+## game-phase signal (there is no separate turn-phase machine). The move LEDGER keeps
+## recording throughout — only the visible chalk follows the phase.
+func _sync_move_trails_deployment() -> void:
+	if move_trails == null:
+		return
+	var deploying := terrain_overlay != null \
+			and "deployment_zones_visible" in terrain_overlay \
+			and bool(terrain_overlay.deployment_zones_visible)
+	move_trails.set_deployment_active(deploying)
 
 
 ## Handle the deployment-zone colour flip (asymmetric-map side choice).
@@ -4561,6 +4585,9 @@ func _init_radial_menu() -> void:
 		radial_menu_controller.unit_activated.connect(func(gu) -> void:
 			if gu != null and move_trails != null:
 				move_trails.on_activation_done(gu.unit_id))
+	# Auto-suppress chalk while the deployment phase is active (deployment isn't
+	# movement-proof) — seed from the current deployment-zones state.
+	_sync_move_trails_deployment()
 
 	# Create unit boundary visualizer (shows which models belong to which unit)
 	unit_boundary_visualizer = UnitBoundaryVisualizerScript.new()

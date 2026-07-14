@@ -116,10 +116,10 @@ var movement_range_controller: Node = null
 # base, drop-resolved final appended) rides the selection_dropped seam. T toggles trail
 # visibility, Shift+T clears; a left-click on a committed trail shows its measured proof.
 var move_trails: Node = null
+## The anchor model's NET traversed path this drag (retrace-erased, budget-refunding —
+## MoveLedger.extend_path). Feeds the consumed-inches readout, live trail, ledger + log.
 var _drag_path_points: PackedVector2Array = PackedVector2Array()
 var _drag_anchor_object: Node3D = null
-## Min anchor travel (metres) between two path samples (~0.2").
-const TRAIL_SAMPLE_MIN_M: float = 0.005
 
 # Movement cap: an opt-in limit so a dragged model/unit can't move further than its Advance or
 # Rush/Charge allowance. OFF = free drag (sandbox default). Set from the HUD "Movement" area.
@@ -1137,17 +1137,16 @@ func _stop_dragging() -> void:
 		# which is cleared further below).
 		_record_move_for_undo()
 
-		# Emit final distance for anchor object
-		if _selected_objects.size() > 0:
-			var anchor = _selected_objects[0]
-			if is_instance_valid(anchor):
-				var final_pos = anchor.global_position
-				# Use table surface level for distance calculation
-				final_pos.y = 0.0
-				var distance_m = _drag_anchor_position.distance_to(final_pos)
-				var distance_inches = distance_m * METERS_TO_INCHES
-				if distance_inches > 0.1:  # Only emit if actually moved
-					distance_changed.emit(distance_inches, _drag_anchor_position, final_pos)
+		# Emit the final MOVEMENT-travel distance = the anchor's NET arc (with the drop-
+		# resolved final appended), so the HUD's parting readout matches the trail stamp,
+		# the ledger and the battle log — not the crow-flight straight line.
+		if _drag_anchor_object != null and is_instance_valid(_drag_anchor_object):
+			var final_pos = _drag_anchor_object.global_position
+			final_pos.y = 0.0  # table surface level
+			var final_path := MoveLedger.with_final(_drag_path_points, Vector2(final_pos.x, final_pos.z))
+			var arc_inches := MoveLedger.length_inches(final_path)
+			if arc_inches > 0.1:  # Only emit if actually moved
+				distance_changed.emit(arc_inches, _drag_anchor_position, final_pos)
 
 		# Battle-Log / replay seam: every object that actually moved, with exact from→to table positions
 		# (y flattened to the table plane). Read from _drag_start_positions BEFORE it is cleared below.
@@ -1996,33 +1995,31 @@ func _update_drag(screen_pos: Vector2) -> void:
 				if not batch.is_empty():
 					_network_manager.broadcast_move_batch(batch)
 
-		# Path painting: sample the anchor's TRAVERSED polyline (the model is the brush —
-		# the record is what was actually dragged, never re-routed).
+		# Path painting: extend the anchor's TRAVERSED polyline toward the cursor, ERASING
+		# any retraced portion (the model is the brush; backward = erase, budget refunded).
+		# The record is the NET taut path, never re-routed and never inflatable by wiggling.
 		var live_tail := Vector2.ZERO
 		var have_tail := false
 		if _drag_anchor_object != null and is_instance_valid(_drag_anchor_object):
 			var apos := _drag_anchor_object.global_position
 			live_tail = Vector2(apos.x, apos.z)
 			have_tail = true
-			if _drag_path_points.is_empty() \
-					or _drag_path_points[_drag_path_points.size() - 1].distance_to(live_tail) >= TRAIL_SAMPLE_MIN_M:
-				_drag_path_points.append(live_tail)
+			_drag_path_points = MoveLedger.extend_path(_drag_path_points, live_tail)
 
-		# Calculate horizontal distance for display
 		var current_anchor_pos = anchor.global_position
-		var horizontal_distance = _horizontal_distance(_drag_anchor_position, current_anchor_pos)
-		var distance_inches = horizontal_distance * METERS_TO_INCHES
 
-		# Update drag line visualization (the straight line keeps its own direct distance)
-		_update_drag_line(_drag_anchor_position, current_anchor_pos, distance_inches)
-
-		# Emit the CONSUMED inches (arc length of the painted path + the bit since the
-		# last sample) — the live measurement of the design ("the band measures live").
-		# Falls back to the straight distance when no path is being recorded.
-		var consumed_inches: float = distance_inches
-		if have_tail and _drag_path_points.size() >= 1:
+		# The CONSUMED inches = arc length of the net path + the sub-sample tail to the
+		# cursor — the movement-travel measurement (design's "the band measures live").
+		# Falls back to the straight distance when no path is being recorded (non-model drag).
+		var consumed_inches: float = _horizontal_distance(_drag_anchor_position, current_anchor_pos) * METERS_TO_INCHES
+		if have_tail and not _drag_path_points.is_empty():
 			consumed_inches = MoveLedger.length_inches(_drag_path_points) \
 					+ _drag_path_points[_drag_path_points.size() - 1].distance_to(live_tail) * METERS_TO_INCHES
+
+		# The drag line's readout is a MOVEMENT-travel measure — label it with the consumed
+		# arc (matches the trail stamp + HUD counter). Range/charge stays on the measure tool.
+		_update_drag_line(_drag_anchor_position, current_anchor_pos, consumed_inches)
+
 		distance_changed.emit(consumed_inches, _drag_anchor_position, current_anchor_pos)
 
 		# Throttled live update for coherency feedback while dragging

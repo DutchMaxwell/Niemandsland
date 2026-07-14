@@ -37,6 +37,11 @@ var reduce_motion: bool = false
 ## stalls fullscreen Vulkan), which persists to windowed on the next launch.
 var fullscreen: bool = true
 
+## Path-painting move trails: show the chalk trails at all (the visible layer only — the
+## move ledger always records for MP proof). Persisted; bound to the T hotkey and the
+## Settings "Show Move Trails" toggle. Default on; auto-suppressed during deployment.
+var show_move_trails: bool = true
+
 # Preset configurations - optimized for tabletop gaming performance
 const PRESETS = {
 	QualityPreset.PERFORMANCE: {
@@ -330,6 +335,7 @@ func save_settings() -> void:
 	config.set_value("graphics", "ui_scale", ui_scale)
 	config.set_value("graphics", "reduce_motion", reduce_motion)
 	config.set_value("graphics", "fullscreen", fullscreen)
+	config.set_value("graphics", "show_move_trails", show_move_trails)
 	config.save("user://graphics_settings.cfg")
 
 
@@ -347,3 +353,4 @@ func load_settings() -> void:
 	ui_scale = config.get_value("graphics", "ui_scale", 1.0)
 	reduce_motion = config.get_value("graphics", "reduce_motion", false)
 	fullscreen = config.get_value("graphics", "fullscreen", true)
+	show_move_trails = config.get_value("graphics", "show_move_trails", true)

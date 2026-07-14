@@ -33,6 +33,17 @@ const SIMPLIFY_MAX_DEV_M := 0.002
 ## Consecutive samples closer than this (metres) collapse into one point.
 const SIMPLIFY_MIN_DIST_M := 0.003
 
+## Backtrack ("Rückwärtsmalen radiert") tolerance (metres): while the cursor retraces
+## toward the start within this perpendicular band of the last recorded leg, the head is
+## erased and the budget REFUNDED — so wiggling or repositioning can't inflate the
+## measured travel. 0.25" ≈ absorbs hand jitter but well under a base width, so a genuine
+## parallel detour (offset further than this) is NOT mistaken for a backtrack.
+const RETRACE_TOLERANCE_M := 0.00635
+
+## Min forward advance (metres) before a new committed vertex is laid down (~0.2"): keeps
+## legs long enough for stable retrace geometry; the live head tracks the cursor between.
+const PATH_SAMPLE_MIN_M := 0.005
+
 # ===== State =====
 
 ## Every recorded move this session: {owner, unit, unit_name, model, points, inches,
@@ -54,6 +65,49 @@ static func length_inches(points: PackedVector2Array) -> float:
 	for i in range(1, points.size()):
 		metres += points[i - 1].distance_to(points[i])
 	return metres / INCHES_TO_METERS
+
+
+## Extend the recorded drag polyline toward the current cursor `c`, ERASING any retraced
+## portion — the design's "Rückwärtsmalen radiert, Budget kommt zurück". `points` is the
+## net path so far (points[0] = drag start). Behaviour:
+##   - RETRACE: while the head lies "behind" the last leg (the cursor's projection falls
+##     before the leg's end) and within `retrace_tol` of that leg's line, the head vertex
+##     is popped — the trail shrinks and the budget it represented is refunded. Cascades
+##     back leg by leg, so a full there-and-back collapses to ~0 net.
+##   - EXTEND: once the cursor is no longer retracing, it becomes the new head (appended
+##     when it has advanced at least `sample_min` from the current head, so legs stay long
+##     enough for stable geometry; nearer than that, the head simply tracks it next frame).
+## A genuine parallel detour (offset further than the tolerance) is never mistaken for a
+## backtrack, so real S-curves and flanking routes are preserved. Pure + deterministic.
+static func extend_path(points: PackedVector2Array, c: Vector2,
+		retrace_tol: float = RETRACE_TOLERANCE_M,
+		sample_min: float = PATH_SAMPLE_MIN_M) -> PackedVector2Array:
+	var pts := points.duplicate()
+	if pts.is_empty():
+		pts.append(c)
+		return pts
+	# Erase every trailing leg the cursor has walked back along (within the tolerance band).
+	while pts.size() >= 2:
+		var head: Vector2 = pts[pts.size() - 1]
+		var prev: Vector2 = pts[pts.size() - 2]
+		var seg := head - prev
+		var seg_len := seg.length()
+		if seg_len < 0.000001:
+			pts.remove_at(pts.size() - 1)   # degenerate leg — drop it
+			continue
+		var dir := seg / seg_len
+		var proj := (c - prev).dot(dir)                       # distance along prev -> head
+		var perp := (c - (prev + dir * proj)).length()        # offset from the leg's line
+		# Retracing = the cursor sits before the head along this leg (proj < seg_len) and
+		# close to its line. Pop the head; the next iteration re-checks the shorter path.
+		if perp <= retrace_tol and proj < seg_len - 0.000001:
+			pts.remove_at(pts.size() - 1)
+			continue
+		break
+	# Forward: lay a new head once the cursor has advanced far enough from the current one.
+	if pts[pts.size() - 1].distance_to(c) >= sample_min:
+		pts.append(c)
+	return pts
 
 
 ## Simplify a sampled drag polyline WITHOUT re-routing it: collapse near-duplicate

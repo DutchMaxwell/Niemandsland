@@ -63,13 +63,67 @@ var _live: Array[Dictionary] = []
 var _mesh_pool: Array = []
 var _label_pool: Array = []
 
+## VISIBILITY CONTROL — two independent gates over the CHALK only (the ledger records
+## regardless, so the MP proof-of-movement data always survives):
+##   user_show_trails : the player's persisted preference (GraphicsSettings.show_move_trails,
+##     default on) — the T hotkey and the Settings toggle flip it; drives `visible`.
+##   _deployment_active : the deployment PHASE gate — while deploying, no chalk paints or
+##     shows (placement isn't movement-proof). Derived from the deployment-zones state.
+## Trails are only PAINTED (live + committed visuals) when both allow it; the ledger's
+## record()/note_commit() run unconditionally.
+var user_show_trails: bool = true
+var _deployment_active: bool = false
+
+
+func _ready() -> void:
+	# Load the persisted preference (default on). GraphicsSettings is an always-present
+	# autoload; guarded so headless/test contexts without it still work.
+	if Engine.has_singleton("GraphicsSettings") or get_node_or_null("/root/GraphicsSettings") != null:
+		user_show_trails = bool(GraphicsSettings.show_move_trails)
+	_apply_visibility()
+
+
+## May chalk be drawn right now? (Live ribbons + committed visuals — NOT the ledger.)
+func _painting_allowed() -> bool:
+	return user_show_trails and not _deployment_active
+
+
+## Recompute the node's visibility from the two gates. During deployment nothing shows;
+## with the preference off nothing shows; otherwise trails are visible.
+func _apply_visibility() -> void:
+	visible = user_show_trails and not _deployment_active
+
+
+# ===== Visibility control (persisted preference + deployment phase) =====
+
+## Set the persisted "show move trails" preference (T hotkey + Settings toggle). Writes it
+## through to GraphicsSettings so it sticks across sessions, and re-applies visibility.
+func set_user_show_trails(on: bool) -> void:
+	user_show_trails = on
+	if get_node_or_null("/root/GraphicsSettings") != null:
+		GraphicsSettings.show_move_trails = on
+		GraphicsSettings.save_settings()
+	_apply_visibility()
+
+
+## Deployment PHASE gate: while true, no chalk paints or shows (the ledger keeps recording).
+## Driven by the deployment-zones-visible state (see main._sync_move_trails_deployment).
+func set_deployment_active(active: bool) -> void:
+	if _deployment_active == active:
+		return
+	_deployment_active = active
+	_apply_visibility()
+
 
 # ===== Live painting (during the drag) =====
 
 ## Begin painting for one drag. `specs`: one entry per painted mover —
 ## {offset: Vector2 (mover start - anchor start, XZ), radius_m: float, owner: int}.
+## No-op while chalk is suppressed (deployment / preference off) — the drop still records.
 func begin_live(specs: Array) -> void:
 	end_live()
+	if not _painting_allowed():
+		return
 	for spec in specs:
 		var d := spec as Dictionary
 		var radius: float = float(d.get("radius_m", 0.0))
@@ -107,17 +161,23 @@ func end_live() -> void:
 
 # ===== Committed trails =====
 
-## Commit one model's executed move as a persistent trail: fades whatever activation
-## this commit ends (per the ledger rules), records the move, and paints the ribbon
-## with its inch stamp. Called for local drops (main) AND for received MP trails
-## (network_manager) — drop_id travels with the message so both sides fade identically.
+## Commit one model's executed move: ALWAYS records to the ledger (unit, model, net
+## polyline, measured arc — the MP proof-of-movement data, kept whether or not chalk is
+## drawn), then paints the persistent trail UNLESS chalk is suppressed. Called for local
+## drops (main) AND for received MP trails (network_manager) — drop_id travels with the
+## message so both sides fade identically.
 func commit_trail(owner: int, unit_key: String, unit_name: String, model_id: int,
 		points: PackedVector2Array, radius_m: float, round_num: int, drop_id: int) -> void:
 	if points.size() < 2 or radius_m <= 0.0:
 		return
+	# Activation bookkeeping + the ledger record run UNCONDITIONALLY (proof always survives).
 	for ended in ledger.note_commit(owner, unit_key, drop_id):
 		fade_unit(ended)
 	var entry := ledger.record(owner, unit_key, unit_name, model_id, points, round_num)
+	# DEPLOYMENT = record-only: no chalk is built, so nothing pops in when play begins.
+	# (The preference-off case still builds hidden, so toggling on reveals the activation.)
+	if _deployment_active:
+		return
 	var chalk := _chalk_color(owner)
 	var fill := Color(chalk.r, chalk.g, chalk.b, FILL_ALPHA)
 	var edge := Color(chalk.r, chalk.g, chalk.b, EDGE_ALPHA)
@@ -174,9 +234,10 @@ func clear_all() -> void:
 	_trails.clear()
 
 
-## Hide/show all trails (T) — the "don't nag" switch from the design.
+## Hide/show all trails (T hotkey + Settings toggle) — the "don't nag" switch from the
+## design. Flips the PERSISTED preference so the choice sticks across sessions.
 func toggle_trails_visible() -> void:
-	visible = not visible
+	set_user_show_trails(not user_show_trails)
 
 
 # ===== Click-proof =====
