@@ -254,6 +254,10 @@ var battlefield_stains: BattlefieldStains = null
 var deployment_zone_check: CheckBox = null
 var deployment_flip_check: CheckBox = null
 
+# Game-phase (deployment -> playing) gate UI: the Start-Game / Ready button + its MP status line.
+var _start_game_button: Button = null
+var _game_phase_status_label: Label = null
+
 # Player Presence System
 var _remote_cursors: Dictionary = {}  # peer_id -> RemoteCursor node
 var _player_avatars: Dictionary = {}  # peer_id -> PlayerAvatar node
@@ -383,6 +387,9 @@ func _ready() -> void:
 	network_manager.remote_player_name_updated.connect(_on_remote_player_name_updated)
 	network_manager.remote_chat_message.connect(_on_remote_chat_message)
 	network_manager.remote_table_settings_changed.connect(_on_remote_table_settings_changed)
+	# Deployment ready-sync: the host's authoritative deployment->playing transition + the ready tally.
+	network_manager.remote_game_phase_changed.connect(_on_remote_game_phase_changed)
+	network_manager.ready_state_changed.connect(_on_ready_state_changed)
 	network_manager.remote_army_header_received.connect(_on_remote_army_header)
 	network_manager.remote_army_unit_received.connect(_on_remote_army_unit)
 	network_manager.remote_army_complete_received.connect(_on_remote_army_complete)
@@ -469,6 +476,8 @@ func _ready() -> void:
 		opr_army_manager.model_library.caching_finished.connect(_on_model_caching_finished)
 	# Per-unit spawn progress drives the second half of the army loading bar.
 	opr_army_manager.spawn_progress.connect(_on_army_spawn_progress)
+	# Game phase (deployment -> playing): one seam for the trail-chalk gate + the Start-Game/Ready UI.
+	opr_army_manager.game_phase_changed.connect(_on_game_phase_changed)
 
 	# Set army_manager reference on SaveManager for GameUnit serialization
 	save_manager.army_manager = opr_army_manager
@@ -559,6 +568,9 @@ func _ready() -> void:
 
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
+
+	# Start-Game / Ready button (deployment -> playing gate)
+	_init_game_phase_ui()
 
 	# Host tools: the free-move toggle (lift the ownership lock — community feedback for solo play).
 	_init_host_tools_ui()
@@ -3023,9 +3035,7 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 			if deployment_zone_check:
 				deployment_zone_check.button_pressed = vis
 
-	# A loaded/synced deployment state drives the trail-chalk phase too.
-	if settings.has("deployment_type") or settings.has("deployment_visible"):
-		_sync_move_trails_deployment()
+	# (Deployment-zone type/visibility no longer drives the trail chalk — the formal game phase does.)
 
 	if settings.has("deployment_flipped"):
 		var flipped = bool(settings["deployment_flipped"])
@@ -3148,6 +3158,9 @@ func _update_network_ui(connected: bool, _is_host: bool) -> void:
 	# Chat + roster are only meaningful in a live session (central toggle — every
 	# connect/disconnect path routes through here).
 	_set_chat_visible(connected)
+	# The Start-Game / Ready button label depends on MP state (single-player "Start Game" vs the MP
+	# ready toggle) — refresh it on every connect/disconnect.
+	_update_game_phase_ui()
 
 
 ## ============================================================================
@@ -3196,6 +3209,10 @@ func _on_save_completed(path: String) -> void:
 func _on_load_completed(object_count: int) -> void:
 	print("Game loaded: %d objects" % object_count)
 	_update_round_button()  # restored round may differ from 1
+	# Restored game phase drives the trail chalk + the Start-Game/Ready UI (a mid-play save resumes in
+	# PLAYING with trails live; a setup save resumes in DEPLOYMENT).
+	_sync_move_trails_deployment()
+	_update_game_phase_ui()
 
 	# Sync to multiplayer clients if hosting
 	if network_manager.is_host and network_manager.connected_peers.size() > 0:
@@ -3344,8 +3361,11 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	if synced_counter > 0:
 		object_manager._object_counter = synced_counter
 
-	# Restore game state (round, current player)
+	# Restore game state (round, current player, game phase). The phase rides the same serializer, so
+	# a guest that joins/reconnects mid-play lands in PLAYING (trails live), not DEPLOYMENT.
 	save_manager._deserialize_game_state(state.get("game_state", {}))
+	_sync_move_trails_deployment()
+	_update_game_phase_ui()
 
 	# Restore marker visualizations (fatigue, shaken, wounds) + AoF:R regiment trays.
 	save_manager._restore_hero_attachments_after_load()
@@ -4145,24 +4165,22 @@ func _on_deployment_zones_visibility_toggled(show_zones: bool) -> void:
 
 	terrain_overlay.set_deployment_zones_visible(show_zones)
 
-	# Deployment zones showing = deployment phase → suppress the movement chalk.
-	_sync_move_trails_deployment()
+	# NOTE: zone visibility no longer drives the move-trail chalk — that follows the formal game
+	# phase now (see _sync_move_trails_deployment). Toggling zones during play keeps trails visible.
 
 	# Sync visibility to remote clients
 	_broadcast_table_settings_update("deployment_visible", show_zones)
 
 
-## Push the current deployment PHASE to the move-trail chalk: while the deployment zones
-## are shown, players are placing armies (not proving movement), so the trails auto-hide;
-## when the zones are hidden, play has begun and trails resume. This is the existing
-## game-phase signal (there is no separate turn-phase machine). The move LEDGER keeps
-## recording throughout — only the visible chalk follows the phase.
+## Push the current GAME PHASE to the move-trail chalk: during DEPLOYMENT players are placing
+## armies (not proving movement), so the trails auto-hide; once play begins the chalk resumes.
+## This now keys off the FORMAL game phase (OPRArmyManager.game_phase), NOT the deployment-zone
+## visibility — so leaving the zones shown during play no longer suppresses trails (the old caveat).
+## The move LEDGER keeps recording throughout — only the visible chalk follows the phase.
 func _sync_move_trails_deployment() -> void:
 	if move_trails == null:
 		return
-	var deploying := terrain_overlay != null \
-			and "deployment_zones_visible" in terrain_overlay \
-			and bool(terrain_overlay.deployment_zones_visible)
+	var deploying := opr_army_manager != null and opr_army_manager.is_deployment_phase()
 	move_trails.set_deployment_active(deploying)
 
 
@@ -4172,6 +4190,117 @@ func _on_deployment_flip_toggled(flipped: bool) -> void:
 		return
 	terrain_overlay.set_deployment_colors_flipped(flipped)
 	_broadcast_table_settings_update("deployment_flipped", flipped)
+
+
+## ============================================================================
+## Game Phase Gate (Deployment -> Playing)
+## ============================================================================
+
+## Tiny DE/EN picker for the phase-gate labels (the app has no i18n infra; German maintainer/community
+## wanted these strings localised). German on a `de*` OS locale, English otherwise.
+func _phase_tr(en: String, de: String) -> String:
+	return de if str(OS.get_locale()).begins_with("de") else en
+
+
+## Build the Start-Game / Ready control: a discoverable button in the left panel that flips the game
+## from DEPLOYMENT to PLAYING. In single-player it starts the game immediately; in multiplayer it is a
+## per-player ready toggle (host starts play only once BOTH players are ready). A status line under it
+## shows the MP waiting state. Built programmatically to match the deployment/host-tools panels and
+## keep main.tscn churn-free.
+func _init_game_phase_ui() -> void:
+	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
+	if not left_panel_vbox:
+		return
+	var panel := VBoxContainer.new()
+	panel.name = "GamePhasePanel"
+	left_panel_vbox.add_child(panel)
+
+	_start_game_button = Button.new()
+	_start_game_button.name = "StartGameButton"
+	_start_game_button.focus_mode = Control.FOCUS_NONE
+	_start_game_button.add_theme_color_override("font_color", Color(0.4, 0.95, 0.55))
+	_start_game_button.pressed.connect(_on_start_game_pressed)
+	panel.add_child(_start_game_button)
+
+	_game_phase_status_label = Label.new()
+	_game_phase_status_label.name = "GamePhaseStatus"
+	_game_phase_status_label.add_theme_font_size_override("font_size", 11)
+	_game_phase_status_label.add_theme_color_override("font_color", Color(0.6, 0.63, 0.7, 1.0))
+	_game_phase_status_label.visible = false
+	panel.add_child(_game_phase_status_label)
+
+	_update_game_phase_ui()
+
+
+## Start-Game / Ready button pressed. Single-player: start play now. Multiplayer: toggle THIS player's
+## ready flag and report it to the host — the host's both-ready gate fires the authoritative transition.
+func _on_start_game_pressed() -> void:
+	if network_manager != null and network_manager.is_multiplayer_active():
+		network_manager.set_local_ready(not network_manager.is_local_ready())
+		_update_game_phase_ui()
+	elif opr_army_manager != null:
+		opr_army_manager.start_game()  # emits game_phase_changed -> _on_game_phase_changed
+
+
+## The game phase changed locally (single-player start, MP transition applied, or save/load). Re-derive
+## the trail-chalk gate and refresh the button/status.
+func _on_game_phase_changed(_phase: int) -> void:
+	_sync_move_trails_deployment()
+	_update_game_phase_ui()
+
+
+## The host broadcast the authoritative game phase (host applies it here too). Apply it to the army
+## manager; the game_phase_changed seam then updates the trails + UI on this peer.
+func _on_remote_game_phase_changed(phase: int) -> void:
+	if opr_army_manager != null:
+		opr_army_manager.set_game_phase(phase)
+
+
+## Host-side ready tally changed (a player readied/un-readied). Refresh the waiting readout.
+func _on_ready_state_changed(_all_ready: bool, _count: int, _total: int) -> void:
+	_update_game_phase_ui()
+
+
+## Refresh the Start-Game / Ready button label + the MP status line from the current phase and MP
+## ready state. Hidden once play has begun.
+func _update_game_phase_ui() -> void:
+	if _start_game_button == null:
+		return
+	var playing := opr_army_manager != null and not opr_army_manager.is_deployment_phase()
+	if playing:
+		_start_game_button.visible = false
+		if _game_phase_status_label != null:
+			_game_phase_status_label.visible = false
+		return
+	_start_game_button.visible = true
+	# network_manager is typed as Node here, so its bool method returns need explicit typing (no :=).
+	var in_mp: bool = network_manager != null and network_manager.is_multiplayer_active()
+	if in_mp:
+		var ready: bool = network_manager.is_local_ready()
+		_start_game_button.text = _phase_tr("Cancel Ready", "Bereit abbrechen") if ready \
+				else _phase_tr("Ready", "Fertig aufgestellt")
+		_start_game_button.tooltip_text = _phase_tr(
+				"Signal you have finished deploying. Play begins when both players are ready.",
+				"Signalisiere, dass du fertig aufgestellt hast. Das Spiel startet, wenn beide Spieler bereit sind.")
+		if _game_phase_status_label != null:
+			if ready and network_manager.is_host:
+				# Host sees the live tally (it tracks both sides); a guest just knows it is waiting.
+				_game_phase_status_label.text = _phase_tr(
+						"Waiting for other player (%d/%d)" % [network_manager.ready_count(), network_manager.seated_slots().size()],
+						"Warte auf Mitspieler (%d/%d)" % [network_manager.ready_count(), network_manager.seated_slots().size()])
+				_game_phase_status_label.visible = true
+			elif ready:
+				_game_phase_status_label.text = _phase_tr("Waiting for other player…", "Warte auf Mitspieler…")
+				_game_phase_status_label.visible = true
+			else:
+				_game_phase_status_label.visible = false
+	else:
+		_start_game_button.text = _phase_tr("Start Game", "Spiel starten")
+		_start_game_button.tooltip_text = _phase_tr(
+				"Begin round 1 — deployment is done.",
+				"Runde 1 beginnen — die Aufstellung ist abgeschlossen.")
+		if _game_phase_status_label != null:
+			_game_phase_status_label.visible = false
 
 
 ## ============================================================================
@@ -4585,8 +4714,8 @@ func _init_radial_menu() -> void:
 		radial_menu_controller.unit_activated.connect(func(gu) -> void:
 			if gu != null and move_trails != null:
 				move_trails.on_activation_done(gu.unit_id))
-	# Auto-suppress chalk while the deployment phase is active (deployment isn't
-	# movement-proof) — seed from the current deployment-zones state.
+	# Auto-suppress chalk while the game is in the deployment phase (deployment isn't
+	# movement-proof) — seed from the current formal game phase.
 	_sync_move_trails_deployment()
 
 	# Create unit boundary visualizer (shows which models belong to which unit)

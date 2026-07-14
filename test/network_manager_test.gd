@@ -172,3 +172,99 @@ func test_sync_dice_roll_emits_signal_with_tags() -> void:
 	var monitor := monitor_signals(nm)
 	nm.sync_dice_roll([4, 2], {"context": "test"}, [1, 0])
 	await assert_signal(monitor).is_emitted("remote_dice_rolled", [0, [4, 2], {"context": "test"}, [1, 0]])
+
+
+# ===== Deployment ready-sync (host-authoritative both-ready gate) =====
+# The host-side gate keys off the is_host flag (set from multiplayer.is_server() on connect in prod),
+# so a test sets is_host=true to act as the host. Seated slots are simulated by populating
+# connected_peers/validated_peers/peer_to_slot directly, the same way network_identity_test seeds host
+# state. The over-the-wire report/broadcast frames are exercised by the relay suite + manual MP test.
+
+## A NetworkManager acting as the HOST (host-authority gate keys off is_host, set on connect in prod).
+func _make_host() -> Node:
+	var nm := _make_manager()
+	nm.is_host = true
+	return nm
+
+
+## Seat a validated guest at `slot` on transport `peer` in the host's roster.
+func _seat_guest(nm: Node, peer: int, slot: int) -> void:
+	nm.connected_peers.append(peer)
+	nm.validated_peers[peer] = true
+	nm.peer_to_slot[peer] = slot
+	nm.slot_to_peer[slot] = peer
+
+
+func test_seated_slots_host_only_when_alone() -> void:
+	var nm := _make_host()
+	assert_array(nm.seated_slots()).is_equal([1])
+
+
+func test_seated_slots_includes_validated_guest_excludes_unvalidated() -> void:
+	var nm := _make_host()
+	_seat_guest(nm, 10, 2)
+	# An unvalidated, still-handshaking peer is NOT counted toward the ready gate.
+	nm.connected_peers.append(11)
+	nm.peer_to_slot[11] = 3
+	assert_array(nm.seated_slots()).is_equal([1, 2])
+
+
+func test_all_players_ready_false_until_every_seat_ready() -> void:
+	var nm := _make_host()
+	_seat_guest(nm, 10, 2)
+	assert_bool(nm.all_players_ready()).is_false()   # nobody ready
+	nm._host_record_ready(1, true)                   # host readies
+	assert_bool(nm.all_players_ready()).is_false()   # guest slot 2 still not ready
+	assert_int(nm.ready_count()).is_equal(1)
+
+
+func test_single_ready_does_not_fire_transition() -> void:
+	var nm := _make_host()
+	_seat_guest(nm, 10, 2)
+	var monitor := monitor_signals(nm)
+	nm._host_record_ready(1, true)  # only the host is ready
+	await assert_signal(monitor).is_not_emitted("remote_game_phase_changed")
+
+
+func test_both_ready_fires_authoritative_transition() -> void:
+	var nm := _make_host()
+	_seat_guest(nm, 10, 2)
+	var monitor := monitor_signals(nm)
+	nm._host_record_ready(1, true)  # host
+	nm._host_record_ready(2, true)  # guest -> gate closes, host broadcasts PLAYING
+	await assert_signal(monitor).is_emitted("remote_game_phase_changed", [OPRArmyManager.GamePhase.PLAYING])
+	# The ready roster is cleared once the start fires (a later re-deploy re-arms it).
+	assert_bool(nm.is_local_ready()).is_false()
+
+
+func test_unready_reopens_the_gate() -> void:
+	var nm := _make_host()
+	# Two guests so a partial-ready set never trips the transition mid-test.
+	_seat_guest(nm, 10, 2)
+	_seat_guest(nm, 11, 3)
+	nm._host_record_ready(1, true)
+	nm._host_record_ready(2, true)
+	assert_bool(nm.all_players_ready()).is_false()  # slot 3 outstanding
+	assert_int(nm.ready_count()).is_equal(2)
+	# A player un-readies before the start fires — the gate stays closed.
+	nm._host_record_ready(2, false)
+	assert_bool(nm.all_players_ready()).is_false()
+	assert_int(nm.ready_count()).is_equal(1)
+
+
+func test_reset_ready_state_clears_flags() -> void:
+	var nm := _make_host()
+	_seat_guest(nm, 10, 2)
+	nm._host_record_ready(1, true)
+	nm.set_local_ready(true)
+	nm.reset_ready_state()
+	assert_bool(nm.is_local_ready()).is_false()
+	assert_int(nm.ready_count()).is_equal(0)
+
+
+func test_rpc_set_game_phase_emits_for_guest_apply() -> void:
+	# The guest-side handler simply re-emits the authoritative phase for main.gd to apply.
+	var nm := _make_manager()
+	var monitor := monitor_signals(nm)
+	nm._rpc_set_game_phase(OPRArmyManager.GamePhase.PLAYING)
+	await assert_signal(monitor).is_emitted("remote_game_phase_changed", [OPRArmyManager.GamePhase.PLAYING])

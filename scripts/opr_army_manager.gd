@@ -13,6 +13,10 @@ signal loose_model_dead_changed(node: Node3D, dead: bool)
 ## Fired when the round counter advances (single seam for the Battle Log — both the local Next-Round path
 ## via advance_round() and the remote round-advance apply via set_current_round() go through here).
 signal round_advanced(round_number: int)
+## Fired when the game phase changes (DEPLOYMENT <-> PLAYING). One seam for every listener that has to
+## react to "play has begun": the move-trail chalk gate, the Start-Game / Ready UI, and (host-side) the
+## MP both-ready transition. Carries the new GamePhase value.
+signal game_phase_changed(phase: int)
 ## Pooled regiment wounds changed (single Battle-Log seam — local radial/card edits AND the remote apply
 ## both run through apply_regiment_wounds). delta is negative when wounds were healed.
 signal regiment_wounds_applied(unit_name: String, delta: int, remaining: int, pool: int)
@@ -146,6 +150,15 @@ var _regiment_arcs_visible: bool = false
 ## Current game round (OPR rounds start at 1). Bookkeeping only - the players
 ## decide when a round ends; advance_round() does the standard transition.
 var current_round: int = 1
+
+## Formal game-phase gate. DEPLOYMENT = armies are being placed (no proof-of-movement yet — the
+## move-trail chalk is suppressed); PLAYING = round 1+ underway. This is the first-class phase state
+## that REPLACES the old "deployment zones are visible" proxy: showing/hiding the zones no longer
+## drives play. A fresh table is DEPLOYMENT; start_game() (single-player Start-Game button, or the MP
+## both-ready gate) flips it to PLAYING. The round counter is unchanged by the flip — it is already 1,
+## so round 1 simply begins (no round 0).
+enum GamePhase { DEPLOYMENT, PLAYING }
+var game_phase: int = GamePhase.DEPLOYMENT
 
 ## Army trays by player
 var army_trays: Dictionary = {}  # player_id -> Node3D
@@ -1964,6 +1977,31 @@ func set_current_round(value: int) -> void:
 	current_round = maxi(1, value)
 
 
+# ===== Game Phase (deployment -> playing) =====
+
+## True while armies are still being deployed (nothing on the table is movement-proof yet).
+## The move-trail chalk gate keys off this, NOT the deployment-zone visibility.
+func is_deployment_phase() -> bool:
+	return game_phase == GamePhase.DEPLOYMENT
+
+
+## Set the game phase (idempotent). Emits game_phase_changed only on a real change so listeners
+## (trail gate, Start-Game/Ready UI) refresh exactly once. Used by the local transition, the MP
+## host-authoritative apply, and save/load restore.
+func set_game_phase(phase: int) -> void:
+	phase = clampi(phase, GamePhase.DEPLOYMENT, GamePhase.PLAYING)
+	if game_phase == phase:
+		return
+	game_phase = phase
+	game_phase_changed.emit(phase)
+
+
+## Begin play: DEPLOYMENT -> PLAYING. Round 1 is already the current round (the counter is never
+## touched here — there is no round 0), so this just opens the round. No-op if already playing.
+func start_game() -> void:
+	set_game_phase(GamePhase.PLAYING)
+
+
 ## Clear all armies and spawned models
 func clear_all() -> void:
 	# Remove all spawned models. Guard against double-free: ObjectManager.
@@ -1988,6 +2026,7 @@ func clear_all() -> void:
 	army_trays.clear()
 	_scene_cache.clear()  # release parsed PackedScenes; rebuilt lazily on next spawn
 	current_round = 1
+	game_phase = GamePhase.DEPLOYMENT  # a fresh/cleared table is back in deployment
 
 
 ## Clear army for a specific player
