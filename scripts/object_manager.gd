@@ -124,9 +124,10 @@ var move_trails: Node = null
 ## MoveLedger.extend_path). Feeds the consumed-inches readout, live trail, ledger + log.
 var _drag_path_points: PackedVector2Array = PackedVector2Array()
 var _drag_anchor_object: Node3D = null
-## STRICT "dry brush" cap (metres) for the current drag: the anchor model's MAX legal move
-## band (Rush/Charge, Fast/Slow/aura-aware). 0 = not enforced (Casual, deployment, or a
-## non-model drag). Resolved once at drag start; the painted ARC hard-stops here.
+## STRICT "dry brush" cap (metres) for the current drag: the anchor model's band for the
+## SELECTED movement action (Advance vs Rush/Charge; Fast/Slow/aura-aware). 0 = not enforced
+## (Casual, deployment, or a non-model drag). Resolved at drag start and re-resolved live if the
+## action selector is switched mid-drag; the painted ARC hard-stops here.
 var _strict_cap_meters: float = 0.0
 
 # Movement cap: an opt-in limit so a dragged model/unit can't move further than its Advance or
@@ -625,9 +626,14 @@ func _selected_model_nodes() -> Array:
 	return out
 
 
-## Set the drag movement cap (OFF / ADVANCE / RUSH). Applies to the NEXT drag.
+## Set the selected movement action (OFF / ADVANCE / RUSH — the "Movement" selector above the
+## dice tray). Drives both the legacy opt-in straight clamp and the STRICT dry-brush arc cap.
+## Applies to the NEXT drag; if the action is switched DURING a drag, the strict cap re-resolves
+## live so the dry-brush band updates immediately.
 func set_movement_cap(mode: int) -> void:
 	_movement_cap = mode
+	if _is_dragging:
+		_strict_cap_meters = _compute_strict_cap_meters()
 
 
 ## The active cap distance in metres for the current selection (0 = no cap). Reads the selected
@@ -645,10 +651,11 @@ func _compute_movement_cap_meters() -> float:
 
 ## The STRICT "dry brush" arc cap (metres) for this drag, or 0 when not enforced. Enforced when
 ## the persisted "Enforce Movement Limit" setting is on AND play has begun (never during
-## deployment) AND the anchor resolves to a real model with a Rush/Charge band. The cap is the
-## MAXIMUM legal movement (Rush/Charge, Fast/Slow/Swift/aura-aware — the same band the movement
-## system computes), so no legal action can exceed it. Purely the MOVEMENT path/ruler — shooting
-## and every other action are untouched.
+## deployment) AND the anchor resolves to a real model with a movement band. The cap FOLLOWS THE
+## SELECTED MOVEMENT ACTION (the "Movement" selector above the dice tray): ADVANCE -> the Advance
+## band, RUSH/CHARGE -> the Rush/Charge band (Fast/Slow/Swift/aura-aware — the same bands the
+## movement system computes). With no action selected yet (OFF) it falls back to the MAX legal
+## move (Rush/Charge). Purely the MOVEMENT path/ruler — shooting and every other action untouched.
 func _compute_strict_cap_meters() -> float:
 	if not _strict_movement_enforced() or movement_range_controller == null:
 		return 0.0
@@ -658,10 +665,18 @@ func _compute_strict_cap_meters() -> float:
 	if node == null:
 		return 0.0
 	var bands: Dictionary = movement_range_controller.bands_for_model(node)
-	var inches: int = int(bands.get("rush", 12))   # MAX legal move = Rush/Charge band
+	var inches: int = _cap_band_inches(bands)
 	if inches <= 0:
 		return 0.0
 	return float(inches) / METERS_TO_INCHES
+
+
+## The band distance (inches) the strict cap uses for the currently-selected action: the Advance
+## band when ADVANCE is picked, the Rush/Charge band for RUSH or the OFF fallback (max legal move).
+func _cap_band_inches(bands: Dictionary) -> int:
+	if _movement_cap == MovementCap.ADVANCE:
+		return int(bands.get("advance", 6))
+	return int(bands.get("rush", 12))   # RUSH, or OFF -> fall back to the max legal move
 
 
 ## Is Strict movement enforcement active right now? Persisted preference ON and the game is in

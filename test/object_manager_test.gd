@@ -252,3 +252,63 @@ func test_facing_rotation_is_relative_to_own_position() -> void:
 	# A loose model at (5, 5) with the target at (5, 8) faces straight +Z, independent of world origin
 	# (each model pivots around its OWN base, not a shared centre).
 	assert_float(ObjectManagerScript.facing_rotation_to(5.0, 5.0, 5.0, 8.0)).is_equal_approx(0.0, 0.0001)
+
+
+# ===== Strict "dry brush" cap: the band FOLLOWS the selected movement action =====
+# (Regression for the refinement: Advance -> Advance band, Rush/Charge -> Rush band, not always Rush.)
+
+const _CAP_INCH := 0.0254   # metres per inch, for the metres assertions
+
+
+## Minimal stand-in for the movement-range controller (typed Node in ObjectManager): returns
+## fixed Advance/Rush bands so the cap resolution can be exercised without a live army / props.
+class _BandStub extends Node:
+	var bands: Dictionary = {"advance": 6, "rush": 12}
+	func bands_for_model(_node) -> Dictionary:
+		return bands
+
+
+func test_cap_band_advance_selection_uses_advance_band() -> void:
+	_om.set("_movement_cap", ObjectManager.MovementCap.ADVANCE)
+	assert_int(int(_om._cap_band_inches({"advance": 6, "rush": 12}))).is_equal(6)
+
+
+func test_cap_band_rush_selection_uses_rush_band() -> void:
+	_om.set("_movement_cap", ObjectManager.MovementCap.RUSH)
+	assert_int(int(_om._cap_band_inches({"advance": 6, "rush": 12}))).is_equal(12)
+
+
+func test_cap_band_off_falls_back_to_rush_max() -> void:
+	_om.set("_movement_cap", ObjectManager.MovementCap.OFF)
+	assert_int(int(_om._cap_band_inches({"advance": 6, "rush": 12}))).is_equal(12)
+
+
+func test_cap_band_follows_fast_modified_bands() -> void:
+	# Fast/aura-widened bands flow through unchanged (the controller already folded them in).
+	var bands := {"advance": 8, "rush": 16}
+	_om.set("_movement_cap", ObjectManager.MovementCap.ADVANCE)
+	assert_int(int(_om._cap_band_inches(bands))).is_equal(8)
+	_om.set("_movement_cap", ObjectManager.MovementCap.RUSH)
+	assert_int(int(_om._cap_band_inches(bands))).is_equal(16)
+
+
+func test_strict_cap_meters_resolves_per_selected_action() -> void:
+	# End-to-end: with enforcement on + a model anchor, the cap METRES follow the selector —
+	# Advance caps at the Advance band (6"), Rush/Charge at the Rush band (12").
+	var was := GraphicsSettings.enforce_movement_limit
+	GraphicsSettings.enforce_movement_limit = true
+	var stub: Node = auto_free(_BandStub.new())
+	add_child(stub)
+	_om.movement_range_controller = stub
+	var mini: Node3D = auto_free(Node3D.new())
+	add_child(mini)
+	mini.add_to_group("miniature")
+	_om.set("_drag_anchor_object", mini)
+
+	_om.set("_movement_cap", ObjectManager.MovementCap.ADVANCE)
+	assert_float(float(_om._compute_strict_cap_meters())).is_equal_approx(6.0 * _CAP_INCH, 0.0005)
+
+	_om.set("_movement_cap", ObjectManager.MovementCap.RUSH)
+	assert_float(float(_om._compute_strict_cap_meters())).is_equal_approx(12.0 * _CAP_INCH, 0.0005)
+
+	GraphicsSettings.enforce_movement_limit = was
