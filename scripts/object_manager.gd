@@ -20,6 +20,14 @@ signal drag_updated()
 ## commit_rotation_capture, so this is the single seam (tutorial / future replay),
 ## mirroring what selection_dropped is for moves.
 signal rotation_committed(objects: Array[Node3D])
+## Emitted (throttled) during a STRICT movement-budget-capped model drag: the consumed arc,
+## the model's max legal band (both inches), and whether the brush has run dry (at the cap).
+## The HUD shows "X.X/Y.Y″" and a dry colour; not emitted for free (Casual) or non-model drags.
+signal movement_capped(consumed_inches: float, cap_inches: float, dry: bool)
+## Emitted once on drop when the 1" spacing rule actually MOVED a dropped base — the unit-scoped
+## enemy base-contact snap or the other-unit 1" push (Phase 1 of _resolve_drop_separation). Lets
+## the tutorial confirm the player felt the red 1" wall; carries whether a snap/push was applied.
+signal drop_separated(applied: bool)
 signal context_menu_requested(screen_pos: Vector2, selected_objects: Array)
 
 @export var drag_height: float = 0.5  # Drag height in meters
@@ -114,6 +122,22 @@ var range_ring_controller: Node = null
 # Shift+M clears all. The MovementRangeController (injected by main.gd) owns the per-model
 # rings; local-only display aid. See scripts/movement_range_controller.gd.
 var movement_range_controller: Node = null
+
+# Path painting (move trails): the model IS the brush. During a drag the anchor's
+# traversed polyline is sampled and painted live behind the models (MoveTrails, injected
+# by main.gd); on drop each moved model's own path (the anchor path translated to its
+# base, drop-resolved final appended) rides the selection_dropped seam. T toggles trail
+# visibility, Shift+T clears; a left-click on a committed trail shows its measured proof.
+var move_trails: Node = null
+## The anchor model's NET traversed path this drag (retrace-erased, budget-refunding —
+## MoveLedger.extend_path). Feeds the consumed-inches readout, live trail, ledger + log.
+var _drag_path_points: PackedVector2Array = PackedVector2Array()
+var _drag_anchor_object: Node3D = null
+## STRICT "dry brush" cap (metres) for the current drag: the anchor model's band for the
+## SELECTED movement action (Advance vs Rush/Charge; Fast/Slow/aura-aware). 0 = not enforced
+## (Casual, deployment, or a non-model drag). Resolved at drag start and re-resolved live if the
+## action selector is switched mid-drag; the painted ARC hard-stops here.
+var _strict_cap_meters: float = 0.0
 
 # Movement cap: an opt-in limit so a dragged model/unit can't move further than its Advance or
 # Rush/Charge allowance. OFF = free drag (sandbox default). Set from the HUD "Movement" area.
@@ -404,6 +428,13 @@ func _input(event: InputEvent) -> void:
 				_clear_all_rulers()
 			else:
 				_clear_my_rulers()
+		elif event.keycode == KEY_T and move_trails != null:
+			# Path painting: T hides/shows the committed move trails, Shift+T clears them
+			# (local display choice — the ledger keeps its records either way).
+			if event.shift_pressed:
+				move_trails.clear_all()
+			else:
+				move_trails.toggle_trails_visible()
 
 
 ## Double-click handling: select the WHOLE unit under the cursor in one click (issue #81) — no box
@@ -496,6 +527,14 @@ func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> voi
 				_add_to_selection(target)
 				_start_dragging(screen_pos)
 			return
+
+	# Path painting click-proof: a click that hit no selectable may sit on a committed
+	# trail — surface its measured proof ("Unit — X.X\" moved"). Deliberately does NOT
+	# consume the click, so box selection below keeps working.
+	if move_trails != null:
+		var proof_pos := _get_table_position_at_screen(screen_pos)
+		if proof_pos != Vector3.INF:
+			move_trails.try_proof_at(proof_pos)
 
 	# Anything else starts a box selection: the table, a terrain prop (walls,
 	# containers, trees...) or empty space past the table edge. Requiring a TABLE hit
@@ -596,9 +635,14 @@ func _selected_model_nodes() -> Array:
 	return out
 
 
-## Set the drag movement cap (OFF / ADVANCE / RUSH). Applies to the NEXT drag.
+## Set the selected movement action (OFF / ADVANCE / RUSH — the "Movement" selector above the
+## dice tray). Drives both the legacy opt-in straight clamp and the STRICT dry-brush arc cap.
+## Applies to the NEXT drag; if the action is switched DURING a drag, the strict cap re-resolves
+## live so the dry-brush band updates immediately.
 func set_movement_cap(mode: int) -> void:
 	_movement_cap = mode
+	if _is_dragging:
+		_strict_cap_meters = _compute_strict_cap_meters()
 
 
 ## The active cap distance in metres for the current selection (0 = no cap). Reads the selected
@@ -612,6 +656,62 @@ func _compute_movement_cap_meters() -> float:
 	var bands: Dictionary = movement_range_controller.bands_for_model(models[0])
 	var inches: int = int(bands.get("rush", 12)) if _movement_cap == MovementCap.RUSH else int(bands.get("advance", 6))
 	return float(inches) / METERS_TO_INCHES
+
+
+## The STRICT "dry brush" arc cap (metres) for this drag, or 0 when not enforced. Enforced when
+## the persisted "Enforce Movement Limit" setting is on AND play has begun (never during
+## deployment) AND the anchor resolves to a real model with a movement band. The cap FOLLOWS THE
+## SELECTED MOVEMENT ACTION (the "Movement" selector above the dice tray): ADVANCE -> the Advance
+## band, RUSH/CHARGE -> the Rush/Charge band (Fast/Slow/Swift/aura-aware — the same bands the
+## movement system computes). With no action selected yet (OFF) it falls back to the MAX legal
+## move (Rush/Charge). Purely the MOVEMENT path/ruler — shooting and every other action untouched.
+func _compute_strict_cap_meters() -> float:
+	if not _strict_movement_enforced() or movement_range_controller == null:
+		return 0.0
+	if not movement_range_controller.has_method("bands_for_model"):
+		return 0.0
+	var node := _cap_anchor_model_node()
+	if node == null:
+		return 0.0
+	var bands: Dictionary = movement_range_controller.bands_for_model(node)
+	var inches: int = _cap_band_inches(bands)
+	if inches <= 0:
+		return 0.0
+	return float(inches) / METERS_TO_INCHES
+
+
+## The band distance (inches) the strict cap uses for the currently-selected action: the Advance
+## band when ADVANCE is picked, the Rush/Charge band for RUSH or the OFF fallback (max legal move).
+func _cap_band_inches(bands: Dictionary) -> int:
+	if _movement_cap == MovementCap.ADVANCE:
+		return int(bands.get("advance", 6))
+	return int(bands.get("rush", 12))   # RUSH, or OFF -> fall back to the max legal move
+
+
+## Is Strict movement enforcement active right now? Persisted preference ON and the game is in
+## the PLAYING phase (no cap while deploying — models are being placed, not moved).
+func _strict_movement_enforced() -> bool:
+	if get_node_or_null("/root/GraphicsSettings") == null or not GraphicsSettings.enforce_movement_limit:
+		return false
+	var army := get_node_or_null("/root/Main/OPRArmyManager")
+	if army != null and army.has_method("is_deployment_phase") and army.is_deployment_phase():
+		return false
+	return true
+
+
+## The model node the strict cap measures the band from: the dragged anchor itself when it is a
+## miniature, else (regiment tray) its first live member. null for a non-model drag (terrain/dice).
+func _cap_anchor_model_node() -> Node3D:
+	var a := _drag_anchor_object
+	if a == null or not is_instance_valid(a):
+		return null
+	if a.is_in_group("miniature"):
+		return a
+	if a is RegimentTray or a.is_in_group(RegimentTray.GROUP):
+		for child in a.get_children():
+			if child is Node3D and child.has_meta("model_instance") and child.is_in_group("miniature"):
+				return child
+	return null
 
 
 ## Public: Select specific objects (replaces current selection)
@@ -1040,8 +1140,20 @@ func _start_dragging(screen_pos: Vector2) -> void:
 	# Anchor = first movable object (original position)
 	_drag_anchor_position = _drag_start_positions[movable[0]]
 
+	# Path painting: start the traversed-path record at the anchor's start, and open the
+	# live ribbons (one per painted mover) that follow the drag behind the models.
+	_drag_anchor_object = movable[0]
+	_drag_path_points = PackedVector2Array(
+		[Vector2(_drag_anchor_position.x, _drag_anchor_position.z)])
+	if move_trails != null:
+		move_trails.begin_live(_live_trail_specs())
+
 	# Resolve the movement cap (Advance/Rush inches → metres) once for this drag.
 	_movement_cap_meters = _compute_movement_cap_meters()
+
+	# Resolve the STRICT "dry brush" arc cap once: the anchor model's MAX legal band
+	# (Rush/Charge). 0 unless Strict is enforced AND play has begun AND this is a model drag.
+	_strict_cap_meters = _compute_strict_cap_meters()
 
 	# Remember where on the table the cursor grabbed, so the unit keeps that grab offset
 	# while dragging instead of snapping its first model onto the cursor.
@@ -1060,6 +1172,11 @@ func _start_dragging(screen_pos: Vector2) -> void:
 
 func _stop_dragging() -> void:
 	if _is_dragging and not _selected_objects.is_empty():
+		# Anti-stacking + charge-snap: nudge dropped bases out of any overlap with other
+		# units and snap a near-miss to enemy contact. Done BEFORE the batch / undo below
+		# so the resolved position flows the normal move path (undo + MP broadcast).
+		_resolve_drop_separation()
+
 		# Build batch of final positions for network broadcast
 		var drop_batch: Array = []
 
@@ -1103,20 +1220,24 @@ func _stop_dragging() -> void:
 		# which is cleared further below).
 		_record_move_for_undo()
 
-		# Emit final distance for anchor object
-		if _selected_objects.size() > 0:
-			var anchor = _selected_objects[0]
-			if is_instance_valid(anchor):
-				var final_pos = anchor.global_position
-				# Use table surface level for distance calculation
-				final_pos.y = 0.0
-				var distance_m = _drag_anchor_position.distance_to(final_pos)
-				var distance_inches = distance_m * METERS_TO_INCHES
-				if distance_inches > 0.1:  # Only emit if actually moved
-					distance_changed.emit(distance_inches, _drag_anchor_position, final_pos)
+		# Emit the final MOVEMENT-travel distance = the anchor's NET arc (with the drop-
+		# resolved final appended), so the HUD's parting readout matches the trail stamp,
+		# the ledger and the battle log — not the crow-flight straight line.
+		if _drag_anchor_object != null and is_instance_valid(_drag_anchor_object):
+			var final_pos = _drag_anchor_object.global_position
+			final_pos.y = 0.0  # table surface level
+			var final_path := MoveLedger.with_final(_drag_path_points, Vector2(final_pos.x, final_pos.z))
+			var arc_inches := MoveLedger.length_inches(final_path)
+			if arc_inches > 0.1:  # Only emit if actually moved
+				distance_changed.emit(arc_inches, _drag_anchor_position, final_pos)
 
 		# Battle-Log / replay seam: every object that actually moved, with exact from→to table positions
 		# (y flattened to the table plane). Read from _drag_start_positions BEFORE it is cleared below.
+		# Path painting: each entry also carries the model's TRAVERSED polyline ("path": the anchor's
+		# sampled path translated to this base, with the drop-RESOLVED final position appended and
+		# collinear noise simplified — never re-routed), its measured arc length ("arc_in") and the
+		# base half-width ("radius_m") — main.gd commits these as visible trails + ledger entries.
+		var base_path: PackedVector2Array = MoveLedger.simplify(_drag_path_points)
 		var moves: Array = []
 		for obj in _selected_objects:
 			if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
@@ -1127,7 +1248,16 @@ func _stop_dragging() -> void:
 			end.y = 0.0
 			var inches: float = start.distance_to(end) * METERS_TO_INCHES
 			if inches > 0.1:
-				moves.append({"node": obj, "from": start, "to": end, "inches": inches})
+				var offset := Vector2(start.x - _drag_anchor_position.x, start.z - _drag_anchor_position.z)
+				var path: PackedVector2Array = MoveLedger.with_final(
+						MoveLedger.translated(base_path, offset), Vector2(end.x, end.z))
+				moves.append({"node": obj, "from": start, "to": end, "inches": inches,
+						"path": path, "arc_in": MoveLedger.length_inches(path),
+						"radius_m": _trail_radius_for(obj)})
+		# The live ribbons hand over to the committed trails (drawn by main's
+		# selection_dropped handler below, in the same frame).
+		if move_trails != null:
+			move_trails.end_live()
 		if not moves.is_empty():
 			selection_dropped.emit(moves)
 
@@ -1139,7 +1269,197 @@ func _stop_dragging() -> void:
 	_coherency_update_timer = 0.0
 	_drag_start_positions.clear()
 	_drag_anchor_position = Vector3.ZERO
+	_drag_anchor_object = null
+	_drag_path_points = PackedVector2Array()
+	_strict_cap_meters = 0.0
 	_destroy_drag_line()
+
+
+## Drop-time separation resolution (SeparationResolver). Runs BEFORE the drop batch / undo
+## record in _stop_dragging so the resolved x/z flows the normal move path. Two phases:
+##  1. Unit-scoped: snap a near-miss to ENEMY base contact (charge) and push a dropped item
+##     out of overlap with OTHER units to clean contact.
+##  2. Absolute anti-stacking: guarantee NO dropped base overlaps ANY other base — same
+##     unit, own other unit, enemy, or a sibling dragged item. Overlap is a hard physical
+##     impossibility, distinct from the 1" spacing rule (which binds only between units and
+##     exempts a charge); Phase 1 alone leaves same-unit / mutually-dragged stacks, which
+##     this closes.
+## Local-only geometry; no RPC of its own (the standard move broadcast carries it).
+func _resolve_drop_separation() -> void:
+	var army := get_node_or_null("/root/Main/OPRArmyManager")
+	if army == null or not army.has_method("get_all_game_units"):
+		return
+	var movable := _movable_selection()
+	if movable.is_empty():
+		return
+
+	# Node ids being dragged (loose models + tray members) — excluded as obstacles so a
+	# multi-select group doesn't push against itself.
+	var dragged_ids: Dictionary = {}
+	for obj in movable:
+		if not is_instance_valid(obj):
+			continue
+		dragged_ids[obj.get_instance_id()] = true
+		if obj is RegimentTray or obj.is_in_group(RegimentTray.GROUP):
+			for child in obj.get_children():
+				if child is Node3D and child.has_meta("model_instance"):
+					dragged_ids[child.get_instance_id()] = true
+
+	# Phase 1 — unit-scoped enemy snap + other-unit contact push (charge semantics). Skipped
+	# when nothing else is on the field, but Phase 2 (absolute anti-stacking) still runs.
+	var separated_applied := false
+	var candidates := _separation_candidates(army, dragged_ids)
+	if not candidates.is_empty():
+		var min_move: float = SeparationResolver.RESOLVE_EPSILON_INCHES * SeparationResolver.INCHES_TO_METERS
+		for obj in movable:
+			if not is_instance_valid(obj):
+				continue
+			var item := _drag_item_shapes(obj)
+			var item_shapes: Array = item["shapes"]
+			if item_shapes.is_empty():
+				continue
+			var item_unit_id: int = item["unit_id"]
+			# Only OTHER units obstruct HERE (the 1" rule binds between units; same-unit
+			# spacing is coherency / formation). Overlap between any pair is handled below.
+			var item_cands: Array = []
+			for c in candidates:
+				if int(c["unit_id"]) != item_unit_id:
+					item_cands.append(c)
+			if item_cands.is_empty():
+				continue
+			var delta := SeparationResolver.resolve_translation(item_shapes, item_cands, int(item["player"]))
+			if delta.length() > min_move:
+				obj.global_position.x += delta.x
+				obj.global_position.z += delta.y
+				separated_applied = true
+
+	# Phase 2 — absolute anti-stacking (runs AFTER the unit-scoped snap/push above): guarantee no
+	# dropped base overlaps ANY other base — same unit, own other unit, enemy, OR a sibling
+	# dragged item. Overlap is a hard physical impossibility, distinct from the 1" spacing
+	# rule (which binds only between units and exempts a charge). The snap/push above only
+	# considers OTHER units, so same-unit siblings and mutually-dragged models can still be
+	# stacked; this pass closes that.
+	_resolve_drop_stacking(army, movable, dragged_ids)
+
+	# Tutorial seam: report the 1" rule actually engaging on this drop (enemy contact snap /
+	# other-unit push). Listeners other than the tutorial ignore it.
+	if separated_applied:
+		drop_separated.emit(true)
+
+
+## Absolute anti-stacking pass for the drop: no two model bases may overlap, for ANY pair.
+## Each dragged item (a loose model = 1 base; a regiment tray = its whole member block) is
+## pushed out of overlap with every other alive base — the stationary bases of ALL units
+## (same unit included) AND the other dragged items' live bases. Iterated to convergence so
+## items also clear each other; moves the item NODES so undo + MP sync carry the result
+## (this runs before the drop batch / undo record in _stop_dragging). Best-effort escape
+## for a fully-surrounded drop (SeparationResolver.resolve_overlaps settles at the
+## shallowest opening rather than leaving a deep stack).
+func _resolve_drop_stacking(army: Node, movable: Array, dragged_ids: Dictionary) -> void:
+	# Movable items with live shapes (rebuilt at their post-snap/push positions).
+	var items: Array = []
+	for obj in movable:
+		if not is_instance_valid(obj):
+			continue
+		var d := _drag_item_shapes(obj)
+		var shapes: Array = d["shapes"]
+		if shapes.is_empty():
+			continue
+		items.append({"node": obj, "shapes": shapes})
+	if items.is_empty():
+		return
+
+	# Fixed obstacles: every alive base NOT part of the drag (all units, both armies).
+	var fixed: Array = []
+	for game_unit in army.get_all_game_units():
+		if game_unit == null:
+			continue
+		for model in game_unit.get_alive_models():
+			if model == null or model.node == null or not is_instance_valid(model.node):
+				continue
+			if dragged_ids.has(model.node.get_instance_id()):
+				continue
+			var shape := SeparationChecker.shape_for_model(model)
+			if shape != null:
+				fixed.append(shape)
+
+	var min_move: float = SeparationResolver.RESOLVE_EPSILON_INCHES * SeparationResolver.INCHES_TO_METERS
+	# Outer relaxation: moving one item can nudge it into another dragged item, so re-pass
+	# until nothing moves (or the hard cap). Each item clears `fixed` PLUS the other items'
+	# live bases (their centres were updated in place when they last moved).
+	for _pass in range(SeparationResolver.MAX_OVERLAP_ITERATIONS):
+		var moved_any := false
+		for i in range(items.size()):
+			var it: Dictionary = items[i]
+			var obstacles: Array = fixed.duplicate()
+			for j in range(items.size()):
+				if j != i:
+					obstacles.append_array(items[j]["shapes"])
+			var delta := SeparationResolver.resolve_overlaps(it["shapes"], obstacles)
+			if delta.length() > min_move:
+				var node: Node3D = it["node"]
+				node.global_position.x += delta.x
+				node.global_position.z += delta.y
+				moved_any = true
+		if not moved_any:
+			break
+
+
+## Base shapes of a dragged node for separation resolution: a loose model yields one
+## shape, a regiment tray yields all its member shapes (the whole block translates as
+## one). Returns {shapes: Array[BaseShape], unit_id: int, player: int}.
+func _drag_item_shapes(node: Node3D) -> Dictionary:
+	var member_nodes: Array = []
+	if node is RegimentTray or node.is_in_group(RegimentTray.GROUP):
+		for child in node.get_children():
+			if child is Node3D and child.has_meta("model_instance"):
+				member_nodes.append(child)
+	elif node.has_meta("model_instance"):
+		member_nodes.append(node)
+
+	var shapes: Array = []
+	var unit_id: int = 0
+	var player: int = 0
+	for mn in member_nodes:
+		if mn.get_meta("deleted", false):
+			continue
+		var model := mn.get_meta("model_instance") as ModelInstance
+		if model == null or not model.is_alive:
+			continue
+		var shape := SeparationChecker.shape_for_model(model)
+		if shape == null:
+			continue
+		shapes.append(shape)
+		if unit_id == 0:
+			var eff := SeparationChecker.effective_unit(model.unit as GameUnit)
+			if eff != null and eff.unit_properties != null:
+				unit_id = eff.get_instance_id()
+				player = int(eff.unit_properties.get("player_id", 0))
+	return {"shapes": shapes, "unit_id": unit_id, "player": player}
+
+
+## Every alive OPR base NOT part of the current drag, as {shape, unit_id, player_id}
+## for the resolver. A joined Hero folds into its host unit.
+func _separation_candidates(army: Node, dragged_ids: Dictionary) -> Array:
+	var out: Array = []
+	for game_unit in army.get_all_game_units():
+		if game_unit == null:
+			continue
+		var eff := SeparationChecker.effective_unit(game_unit)
+		if eff == null or eff.unit_properties == null:
+			continue
+		var unit_id: int = eff.get_instance_id()
+		var player: int = int(eff.unit_properties.get("player_id", 0))
+		for model in game_unit.get_alive_models():
+			if model == null or model.node == null or not is_instance_valid(model.node):
+				continue
+			if dragged_ids.has(model.node.get_instance_id()):
+				continue
+			var shape := SeparationChecker.shape_for_model(model)
+			if shape == null:
+				continue
+			out.append({"shape": shape, "unit_id": unit_id, "player_id": player})
+	return out
 
 
 ## After a drag, snap each moved model to face its own movement direction (playtest feedback, per-model).
@@ -1200,12 +1520,102 @@ func _cancel_drag() -> void:
 			if obj is RigidBody3D:
 				obj.freeze = false
 
+	# Cancelled = no move executed: the live ribbons vanish, nothing is committed.
+	if move_trails != null:
+		move_trails.end_live()
+
 	_is_dragging = false
 	_move_broadcast_timer = 0.0
 	_coherency_update_timer = 0.0
 	_drag_start_positions.clear()
 	_drag_anchor_position = Vector3.ZERO
+	_drag_anchor_object = null
+	_drag_path_points = PackedVector2Array()
+	_strict_cap_meters = 0.0
 	_destroy_drag_line()
+
+
+# ===== Path painting helpers (move trails) =====
+
+## The live-ribbon specs for the current drag: one entry per painted mover —
+## {offset (mover start - anchor start, XZ), radius_m (base half-width), owner (army
+## player slot)}. Only battlefield OPR pieces paint (live model bases and regiment
+## trays); terrain, dice and parked casualties never leave trails.
+func _live_trail_specs() -> Array:
+	var specs: Array = []
+	for obj in _drag_start_positions:
+		if not is_instance_valid(obj):
+			continue
+		var radius := _trail_radius_for(obj)
+		if radius <= 0.0:
+			continue
+		var start: Vector3 = _drag_start_positions[obj]
+		specs.append({
+			"offset": Vector2(start.x - _drag_anchor_position.x, start.z - _drag_anchor_position.z),
+			"radius_m": radius,
+			"owner": _trail_owner_of(obj),
+		})
+	return specs
+
+
+## The trail ribbon's half-width (metres) for a dragged object — the base's OUTER edge
+## is the binding geometry rule, so the ribbon is exactly as wide as the base. 0.0 =
+## this object paints no trail (terrain, dice, dead/parked models, unknown pieces).
+func _trail_radius_for(obj: Node3D) -> float:
+	if obj == null or not is_instance_valid(obj):
+		return 0.0
+	if obj is RegimentTray or obj.is_in_group(RegimentTray.GROUP):
+		return _tray_trail_radius(obj)
+	if not obj.has_meta("model_instance") or bool(obj.get_meta("deleted", false)):
+		return 0.0
+	var model := obj.get_meta("model_instance") as ModelInstance
+	if model == null or not model.is_alive:
+		return 0.0
+	var shape := SeparationChecker.shape_for_model(model)
+	return shape.bounding_radius() if shape != null else 0.0
+
+
+## A regiment moves as ONE block: its ribbon spans the member bases across the tray's
+## local X (frontage) axis — exact for the forward/backward moves regiments make
+## (AoF:R p.8, Shift locks the drag to that axis); pivot arcs are a later stage.
+func _tray_trail_radius(tray: Node3D) -> float:
+	var basis_x: Vector3 = tray.global_transform.basis.x
+	var axis := Vector2(basis_x.x, basis_x.z)
+	if axis.length_squared() < 0.000001:
+		return 0.0
+	axis = axis.normalized()
+	var origin := Vector2(tray.global_position.x, tray.global_position.z)
+	var extent := 0.0
+	for child in tray.get_children():
+		if not (child is Node3D) or not child.has_meta("model_instance"):
+			continue
+		var model := child.get_meta("model_instance") as ModelInstance
+		if model == null or not model.is_alive:
+			continue
+		var shape := SeparationChecker.shape_for_model(model)
+		if shape == null:
+			continue
+		extent = maxf(extent, absf((shape.center - origin).dot(axis)) + shape.bounding_radius())
+	return extent
+
+
+## The owning ARMY's player slot for a dragged object (trail colour + the per-owner
+## activation bookkeeping). Falls back through the unit's player_id; a regiment tray
+## reads its first live member. 0 = unknown (neutral chalk).
+func _trail_owner_of(obj: Node3D) -> int:
+	if obj == null or not is_instance_valid(obj):
+		return 0
+	if obj.has_meta("opr_player_id"):
+		return int(obj.get_meta("opr_player_id"))
+	if obj.has_meta("game_unit"):
+		var gu = obj.get_meta("game_unit")
+		if gu != null and "unit_properties" in gu:
+			return int(gu.unit_properties.get("player_id", 0))
+	if obj is RegimentTray or obj.is_in_group(RegimentTray.GROUP):
+		for child in obj.get_children():
+			if child is Node3D and child.has_meta("model_instance"):
+				return _trail_owner_of(child)
+	return 0
 
 
 ## Records the just-finished drag as one undoable MoveAction. No-op if nothing
@@ -1635,11 +2045,42 @@ func _update_drag(screen_pos: Vector2) -> void:
 		if Input.is_key_pressed(KEY_SHIFT) and anchor is RegimentTray:
 			delta_xz = RegimentTray.project_drag_onto_facing(delta_xz, (anchor as RegimentTray).facing_dir())
 
-		# Movement cap (opt-in): don't let the drag exceed the unit's Advance/Rush allowance. Clamp
-		# the shared delta length, so the whole group is capped by the anchor's travel. Composes
-		# after the axis-lock (direction) — cap then limits the magnitude.
-		if _movement_cap_meters > 0.0 and delta_xz.length() > _movement_cap_meters:
+		# Movement cap (opt-in, legacy straight-line delta clamp) — only when the STRICT arc cap
+		# below is NOT governing, so the two never fight. Composes after the axis-lock (direction).
+		if _strict_cap_meters <= 0.0 and _movement_cap_meters > 0.0 and delta_xz.length() > _movement_cap_meters:
 			delta_xz = delta_xz.normalized() * _movement_cap_meters
+
+		# Path painting + STRICT "dry brush" cap: the anchor model's NET traversed ARC is the
+		# measured travel; when Strict is on it HARD-STOPS at the model's max legal band. Retrace
+		# (backtrack-erase) frees budget, so pulling back lets the brush paint forward again. The
+		# capped head becomes the anchor's target; the whole formation follows by that (shortened)
+		# delta. Non-model drags skip this — `head` stays unused and delta_xz is left as-is.
+		var head := Vector2.ZERO
+		var have_path := _drag_anchor_object != null and is_instance_valid(_drag_anchor_object)
+		if have_path:
+			var desired := Vector2(_drag_anchor_position.x + delta_xz.x, _drag_anchor_position.z + delta_xz.z)
+			# Erase whatever the cursor walked back over (refunds budget), keeping the path sparse.
+			var committed := MoveLedger.retrace(_drag_path_points, desired)
+			head = desired
+			if _strict_cap_meters > 0.0:
+				var used_m := MoveLedger.length_meters(committed)
+				var from_pt: Vector2 = committed[committed.size() - 1] if not committed.is_empty() else desired
+				var remaining := _strict_cap_meters - used_m
+				if remaining <= 0.0:
+					# Already at/over the cap even after retrace — hold at the budget boundary.
+					committed = MoveLedger.truncate_to_length(committed, _strict_cap_meters)
+					head = committed[committed.size() - 1]
+				elif from_pt.distance_to(desired) > remaining:
+					# The brush runs dry mid-stroke: stop the head at the max-reach point.
+					head = from_pt + (desired - from_pt).normalized() * remaining
+			# Commit the (capped) head forward once it has advanced a sample step.
+			if committed.is_empty():
+				committed = PackedVector2Array([head])
+			elif committed[committed.size() - 1].distance_to(head) >= MoveLedger.PATH_SAMPLE_MIN_M:
+				committed.append(head)
+			_drag_path_points = committed
+			# Re-derive the shared delta so the anchor lands exactly at the (capped) head.
+			delta_xz = Vector3(head.x - _drag_anchor_position.x, 0.0, head.y - _drag_anchor_position.z)
 
 		# Move all selected objects by the same XZ delta (formation kept). Each model's
 		# Y rests on the ground surface beneath its own base (table or a terrain prop),
@@ -1678,22 +2119,37 @@ func _update_drag(screen_pos: Vector2) -> void:
 				if not batch.is_empty():
 					_network_manager.broadcast_move_batch(batch)
 
-		# Calculate horizontal distance for display
+		# (The net path was already built + capped above; `head` is the anchor's painted tip.)
 		var current_anchor_pos = anchor.global_position
-		var horizontal_distance = _horizontal_distance(_drag_anchor_position, current_anchor_pos)
-		var distance_inches = horizontal_distance * METERS_TO_INCHES
 
-		# Update drag line visualization
-		_update_drag_line(_drag_anchor_position, current_anchor_pos, distance_inches)
+		# CONSUMED inches = the net traveled ARC to the painted head — the movement-travel
+		# measurement ("the band measures live"), and EXACTLY the cap once the brush is dry.
+		# Falls back to the straight distance for a non-model drag (no path recorded).
+		var consumed_inches: float = _horizontal_distance(_drag_anchor_position, current_anchor_pos) * METERS_TO_INCHES
+		if have_path and not _drag_path_points.is_empty():
+			consumed_inches = MoveLedger.length_inches(_drag_path_points) \
+					+ _drag_path_points[_drag_path_points.size() - 1].distance_to(head) * METERS_TO_INCHES
 
-		# Emit distance
-		distance_changed.emit(distance_inches, _drag_anchor_position, current_anchor_pos)
+		# The drag line's readout is a MOVEMENT-travel measure — label it with the consumed
+		# arc (matches the trail stamp + HUD counter). Range/charge stays on the measure tool.
+		_update_drag_line(_drag_anchor_position, current_anchor_pos, consumed_inches)
+
+		distance_changed.emit(consumed_inches, _drag_anchor_position, current_anchor_pos)
+
+		# STRICT feedback: report consumed vs the cap + the "dry" flag so the HUD shows
+		# "X.X/Y.Y″" and a colour once the budget is spent.
+		if _strict_cap_meters > 0.0:
+			var cap_in := _strict_cap_meters * METERS_TO_INCHES
+			movement_capped.emit(consumed_inches, cap_in, consumed_inches >= cap_in - 0.05)
 
 		# Throttled live update for coherency feedback while dragging
 		_coherency_update_timer += get_process_delta_time()
 		if _coherency_update_timer >= COHERENCY_UPDATE_INTERVAL:
 			_coherency_update_timer = 0.0
 			drag_updated.emit()
+			# Repaint the live trail ribbons behind the dragged models (same throttle).
+			if move_trails != null and have_path:
+				move_trails.update_live(_drag_path_points, head)
 
 
 ## Start measuring distance from a point on the table
@@ -3281,10 +3737,20 @@ func clear_all_objects(broadcast: bool = true) -> void:
 	if boundary_visualizer and boundary_visualizer.has_method("clear_all"):
 		boundary_visualizer.clear_all()
 
+	# An emptied table has no moves to prove — the painted trails go with it
+	# (single seam: covers the local button AND the remote clear).
+	if move_trails != null:
+		move_trails.clear_all()
+
 
 ## Resets all units to their import positions and clears all markers/status
 ## Unlike clear_all_objects(), this preserves the models
 func sort_table(broadcast: bool = true) -> void:
+	# Sort Table teleports every model back to its import spot — the trails no longer
+	# describe any executed move, so they clear (locally and via the synced re-run).
+	if move_trails != null:
+		move_trails.clear_all()
+
 	# Get reference to OPR army manager via Main. Use the absolute path (matches
 	# how this manager resolves its other siblings) instead of a recursive
 	# find_child() string search.
@@ -3856,7 +4322,11 @@ func _set_object_dimmed(obj: Node3D, dimmed: bool) -> void:
 	for child in obj.get_children():
 		if child is MeshInstance3D:
 			var mesh_inst = child as MeshInstance3D
-			if mesh_inst.material_override:
+			# Never mutate a SHARED material (e.g. BaseDecor's rim/ring/top): dimming its albedo
+			# would darken every base in the session. Those meshes are tagged; skip them.
+			if mesh_inst.has_meta(BaseDecor.SHARED_MATERIAL_META):
+				pass
+			elif mesh_inst.material_override:
 				var mat = mesh_inst.material_override as StandardMaterial3D
 				if mat:
 					if dimmed:

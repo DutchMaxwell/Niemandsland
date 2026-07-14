@@ -47,6 +47,19 @@ distribution; coherency check + on-table visualizer; radial context menu; docked
 unit info card; per-model wounds and caster points; unit-wide Fatigue/Shaken/
 Activated tokens; hero attachment.
 
+**Movement & trails** — dragging a model paints a base-width "chalk" trail behind it
+(**Path Painting**); the in-move ruler and the battle log report the actual traveled
+path length (arc), not straight-line, while weapon/charge RANGE stays straight-line.
+Every executed move is recorded to a move ledger and MP-synced (proof-of-movement),
+and clicking a trail reports its distance. A **1″ spacing** layer shows proximity walls
+(red enemy / orange friendly), snaps to base contact and forbids overlapping drops (own
+units too). An **opt-in "dry-brush" movement cap** (default on) hard-stops the drag at
+the selected action band (Advance ~6″ / Rush-Charge ~12″, Fast/aura-aware); backtracking
+refunds the budget. A **game-phase gate** frames setup vs play (Deployment → *Start Game*
+→ Playing, with a multiplayer ready-sync and save/load persistence); trails auto-suppress
+during deployment. Trail-visibility and movement-cap toggles persist in settings. This
+is UX/measurement only — no move is resolved or forced; the player still moves the models.
+
 **Multiplayer** — ENet over LAN and over the internet via the WebSocket relay
 ([`relay/`](relay/README.md)); full state sync (models, terrain, rotation, table
 size) with batch RPCs; shared dice log; player avatars/cursors; multiplayer
@@ -111,9 +124,13 @@ sections (Age of Fantasy + Regiments, MP 3+ hardening, Solo/Co-Op AI, …).
 ## Out of scope (by design)
 
 Niemandsland is a **tool for human players, not an automated game**. We deliberately
-do **not** build turn/phase/activation tracking, combat/save/damage resolution, or an
-AI opponent. (An earlier AI system + battle simulator, ~5500 lines, was removed as
-legacy and will not be reimplemented.)
+do **not** build automated combat/damage resolution or per-activation turn tracking.
+The one deliberate exception is a lightweight **deployment→play phase gate** — a
+Start-Game affordance with a multiplayer ready-sync (see *Works today*) — which frames
+setup vs play but resolves nothing. The legacy AI system + battle simulator (~5500 lines)
+was removed and will not be revived; a fresh, deterministic and explainable **Solo/Co-Op
+AI** (OPR's official ruleset) is a separately-tracked **planned** item — see
+[`docs/ROADMAP.md`](docs/ROADMAP.md) — not part of this human-tool core, and not on `main`.
 
 ## Not built (despite older docs)
 
@@ -136,9 +153,10 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 
 ## Tests
 
-gdUnit4: **629 tests green** in `test/` (incl. `coherency_checker`,
-`save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`,
-`network_version_handshake`, `dice_rules`, `player_identity`). Python:
-`relay/test_relay_server.py` (49 green). How to run:
-[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
-Coverage is still thin — most gameplay scripts are untested.
+gdUnit4: **1,110 tests green** in `test/` (incl. `coherency_checker`, `save_manager`,
+`startup_menu`, `internet_lobby`, `relay_multiplayer_peer`, `network_manager` /
+`network_version_handshake`, `dice_rules`, `player_identity`, and the movement/spacing
+suites `separation_checker` / `separation_resolver` / `separation_zone`, `move_ledger` /
+`move_trails`, `game_phase`, `object_manager`). Python: `relay/test_relay_server.py`
+(49 green). How to run: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). Coverage of the
+newer movement/MP paths is solid; some older gameplay scripts are still untested.

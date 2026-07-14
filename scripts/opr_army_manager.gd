@@ -13,6 +13,10 @@ signal loose_model_dead_changed(node: Node3D, dead: bool)
 ## Fired when the round counter advances (single seam for the Battle Log — both the local Next-Round path
 ## via advance_round() and the remote round-advance apply via set_current_round() go through here).
 signal round_advanced(round_number: int)
+## Fired when the game phase changes (DEPLOYMENT <-> PLAYING). One seam for every listener that has to
+## react to "play has begun": the move-trail chalk gate, the Start-Game / Ready UI, and (host-side) the
+## MP both-ready transition. Carries the new GamePhase value.
+signal game_phase_changed(phase: int)
 ## Pooled regiment wounds changed (single Battle-Log seam — local radial/card edits AND the remote apply
 ## both run through apply_regiment_wounds). delta is negative when wounds were healed.
 signal regiment_wounds_applied(unit_name: String, delta: int, remaining: int, pool: int)
@@ -55,11 +59,25 @@ const FOOTPRINT_MAX_RATIO: float = 1.25
 ## base_long x 1.25 and sticking far over the narrow width. Round bases keep FOOTPRINT_MAX_RATIO
 ## (organic minis may overhang their round base a little).
 const OVAL_FOOTPRINT_RATIO: float = 1.0
-## Hover height for Flying units, relative to the base long side (40mm base -> ~14mm).
-const FLYING_HOVER_RATIO: float = 0.35
-## Aircraft (the OPR "Aircraft" rule — NOT the same as Flying) hover much higher, on a tall flight
-## stand: a fixed ~20cm above the base for ALL aircraft (1 unit = 1 m, so 0.2).
+## Aircraft (the OPR "Aircraft" rule) sit on a tall flight stand: a fixed ~20cm above the base for ALL
+## aircraft (1 unit = 1 m, so 0.2). Flying is NOT Aircraft and no longer hovers — every Flying model
+## (and its mount) stands on its base.
 const AIRCRAFT_HOVER_M: float = 0.2
+## Rider-constant mount scale (QA round 3, HARD RULE): a mounted rider's height must EQUAL the foot
+## infantry model's height. Composed mount bakes are rider-normalized (producer contract v1.2: the rider
+## `body` node at scale 1 has trooper proportions), so a mounted model scales by the STANDARD 25mm-based
+## trooper height target applied to its rider body — independent of the mount's (much larger) base AND of
+## the unit's Tough (Tough 3–18 belongs to the mount's stats, not the rider's anatomy). The mount's size
+## then follows from the model's own proportions.
+const RIDER_ANATOMY_BASE_MM: int = 25
+## Geometric rider detection (QA round 6): a `body` node whose bottom sits at least this fraction of its
+## own height ABOVE the model's lowest point is a RIDER/CREW (it rides ON something) → the rider-anatomy
+## fit engages regardless of the resolution path (hero-mount upgrade, variant key, or a mounted-by-default
+## UNIT like the Skeleton Chariot). A body starting at the model's feet is the model's OWN body (giant,
+## snakemen, troopers) and keeps the base-driven fit. Calibrated on the staged pilot blobs: self-bodies
+## measure 0.00–0.11 (the 0.11 = a below-feet bow tip lowering the combined min), riders 0.39–1.60;
+## 0.25 splits noise from signal with >2x margin on both sides.
+const RIDER_ELEVATION_MIN_RATIO: float = 0.25
 const TRAY_SIZE_INCHES: float = 32.0  # 32x32 inch tray
 const TRAY_MARGIN: float = 0.05  # 5cm gap from table edge
 const TRAY_DROP_HEIGHT: float = 0.5  # Start 50cm above table
@@ -146,6 +164,15 @@ var _regiment_arcs_visible: bool = false
 ## Current game round (OPR rounds start at 1). Bookkeeping only - the players
 ## decide when a round ends; advance_round() does the standard transition.
 var current_round: int = 1
+
+## Formal game-phase gate. DEPLOYMENT = armies are being placed (no proof-of-movement yet — the
+## move-trail chalk is suppressed); PLAYING = round 1+ underway. This is the first-class phase state
+## that REPLACES the old "deployment zones are visible" proxy: showing/hiding the zones no longer
+## drives play. A fresh table is DEPLOYMENT; start_game() (single-player Start-Game button, or the MP
+## both-ready gate) flips it to PLAYING. The round counter is unchanged by the flip — it is already 1,
+## so round 1 simply begins (no round 0).
+enum GamePhase { DEPLOYMENT, PLAYING }
+var game_phase: int = GamePhase.DEPLOYMENT
 
 ## Army trays by player
 var army_trays: Dictionary = {}  # player_id -> Node3D
@@ -253,6 +280,10 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 	for unit in army.units:
 		var base_name = unit.name
 		unit_name_counts[base_name] = unit_name_counts.get(base_name, 0) + 1
+
+	# Optional per-entry manifest base overrides (`base_mm`) — applied BEFORE any spacing/spawn math
+	# so every consumer (base mesh, fit, collision, spacing, save/load, MP sync) sees the final base.
+	_apply_manifest_base_overrides(army)
 
 	# Order units so each joined Hero spawns right after its host unit (adjacent
 	# on the tray), instead of as a separate group elsewhere.
@@ -1163,8 +1194,10 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 	# bigger base lands on the exact carrier model). Plain models keep the unit base unchanged.
 	var loadout := EquipmentDistributor.build_loadout(unit)
 	var toughs := EquipmentDistributor.per_model_toughs(unit.size, loadout, unit.special_rules)
-	# Per-model loadout labels → pre-baked variant model resolution (I2).
-	var labels_per_model := EquipmentDistributor.per_model_labels(unit.size, loadout)
+	# Per-model loadout labels → pre-baked variant model resolution (I2). The mount upgrade is folded
+	# into the carrier (model 0) so it contributes a variant slug like any weapon (a composed mount bake
+	# resolves as `<hero>#<weapon>+<mountslug>`); mountless units are byte-unchanged.
+	var labels_per_model := _labels_with_mount(EquipmentDistributor.per_model_labels(unit.size, loadout), unit.mount_name)
 	var unit_base_long := int(max(unit.base_width_mm, unit.base_depth_mm)) if (unit.base_is_oval or unit.base_is_square) else unit.base_size_round
 	var model_longs: Array = []
 	var any_enlarged := false
@@ -1190,15 +1223,16 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 			model_pos = Vector3(spawn_pos.x + i * spacing, spawn_pos.y, spawn_pos.z)
 
 		var override_mm: int = int(model_longs[i]) if any_enlarged else 0
-		# Mount/vehicle GLB applies to the leader model (model 0); its base is already on the unit.
-		# Otherwise resolve a pre-baked loadout variant (`<unit>#<slug>`), falling back to the base (I2).
-		var mglb: String = mount_glb if i == 0 else ""
-		if mglb.is_empty():
-			mglb = _resolve_model_variant_name(unit.name, labels_per_model[i], faction_folder)
-			# A slug was derived but no `<unit>#<slug>` key exists → base fallback (rare; logged in E6).
-			if mglb.is_empty() and model_library != null and not model_library.variant_slug(labels_per_model[i]).is_empty():
-				_variant_missing_count += 1
-		var model = _create_unit_model(unit, player_color, name_suffix, faction_folder, override_mm, mglb)
+		# Model resolution order (go-live): pre-baked loadout VARIANT first — a composed mount bake
+		# (`<hero>#<weapon>+<mountslug>`) resolves here because the mount folds a slug into the carrier's
+		# labels — then, ONLY for the mount carrier (model 0) when no variant key matched, the OLD fuzzy
+		# faction-mount GLB (keeps GF bikes + factions without composed mount bakes on their mount).
+		var is_mount: bool = i == 0 and not unit.mount_name.is_empty()
+		var mglb: String = _resolve_carrier_model(unit.name, labels_per_model[i], faction_folder, mount_glb if is_mount else "")
+		# A slug was derived but neither a variant bake nor a mount replaced it → base fallback (rare; E6).
+		if mglb.is_empty() and model_library != null and not model_library.variant_slug(labels_per_model[i]).is_empty():
+			_variant_missing_count += 1
+		var model = _create_unit_model(unit, player_color, name_suffix, faction_folder, override_mm, mglb, is_mount)
 		if model:
 			# Assign a slot-namespaced network_id for multiplayer position sync (no
 			# cross-army collision regardless of import order).
@@ -1281,7 +1315,23 @@ static func effective_base_props(props: Dictionary, model_tough: int) -> Diction
 	return copy
 
 
-func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_suffix: String = "", faction_folder: String = "", base_long_override_mm: int = 0, model_name_override: String = "") -> StaticBody3D:
+## Build and attach a model's "perfectly based" base: a terrain-projected top (a live window onto
+## the battlefield ground under the model), a black slightly-beveled rim, and — for SOLO models only
+## (units of one / loose single models) — a player-coloured affiliation ring (the one-model
+## equivalent of a multi-model unit's boundary rubberband). The terrain-top material is the table's
+## shared one (kept current across biome/size changes); the rim/ring materials are shared/cached in
+## BaseDecor. Shared by both the import path and the save/load restore path.
+func _build_model_base(wrapper: Node3D, base_is_oval: bool, base_is_square: bool, base_width: float,
+		base_depth: float, base_radius: float, player_color: Color, is_solo: bool) -> void:
+	var top_material: Material = null
+	if table != null and table.has_method("get_base_top_material"):
+		top_material = table.get_base_top_material()
+	var base_node := BaseDecor.build_base(base_is_oval, base_is_square, base_width, base_depth,
+		base_radius, player_color, is_solo, top_material)
+	wrapper.add_child(base_node)
+
+
+func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_suffix: String = "", faction_folder: String = "", base_long_override_mm: int = 0, model_name_override: String = "", is_mount: bool = false) -> StaticBody3D:
 	var wrapper = StaticBody3D.new()
 	wrapper.collision_layer = MINIATURE_COLLISION_LAYER
 	wrapper.collision_mask = GROUND_COLLISION_LAYER
@@ -1315,47 +1365,15 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 			base_width = base_long_override_mm * 0.001
 			base_depth = base_long_override_mm * 0.001
 
-	# Create base mesh
-	var base_instance = MeshInstance3D.new()
+	# Create the base: terrain-projected top (a live window onto the battlefield ground) + a black
+	# beveled rim + — for SOLO models only — a player-coloured affiliation ring. A multi-model unit
+	# keeps a clean black rim; its affiliation is the boundary rubberband (see BaseDecor).
+	_build_model_base(wrapper, base_is_oval, unit.base_is_square, base_width, base_depth, base_radius,
+		player_color, BaseDecor.should_ring(unit.size))
 
-	if unit.base_is_square:
-		# Square/rectangular base (Age of Fantasy: Regiments): flat box.
-		# Long side (depth) faces north (+Z direction), matching the oval convention.
-		var base_mesh = BoxMesh.new()
-		base_mesh.size = Vector3(base_width, 0.003, base_depth)
-		base_instance.mesh = base_mesh
-		base_instance.position.y = 0.0015
-	elif base_is_oval:
-		# Oval base: use cylinder with non-uniform scale
-		# Long side (depth) faces north (+Z direction)
-		var base_mesh = CylinderMesh.new()
-		base_mesh.top_radius = 0.5  # Unit radius, will be scaled
-		base_mesh.bottom_radius = 0.5
-		base_mesh.height = 0.003
-		base_instance.mesh = base_mesh
-		# Scale: X = width, Y = height (unchanged), Z = depth
-		base_instance.scale = Vector3(base_width, 1.0, base_depth)
-		base_instance.position.y = 0.0015
-	else:
-		# Round base: normal cylinder
-		var base_mesh = CylinderMesh.new()
-		base_mesh.top_radius = base_radius
-		base_mesh.bottom_radius = base_radius
-		base_mesh.height = 0.003
-		base_instance.mesh = base_mesh
-		base_instance.position.y = 0.0015
-
-	var base_material = StandardMaterial3D.new()
-	base_material.albedo_color = player_color
-	base_material.roughness = 0.7
-	base_instance.material_override = base_material
-	base_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-
-	wrapper.add_child(base_instance)
-
-	# Visual hover: Flying units, drones and hover vehicles float above the base.
-	# Hover height: Aircraft on a tall stand (~20cm), Flying/drones a small base-relative float.
-	var hover_lift: float = _hover_lift_m(unit.special_rules, unit.name, natural_base_long_mm)
+	# Visual hover: ONLY Aircraft (the OPR "Aircraft" rule) sit on a tall flight stand. Flying models
+	# (and their mounts) stand on their base — the Flying float was removed at go-live.
+	var hover_lift: float = _hover_lift_m(unit.special_rules)
 
 	# Try to load GLB model for this unit (mount upgrades pick a faction mount/bike GLB instead).
 	var glb_name: String = model_name_override if not model_name_override.is_empty() else unit.name
@@ -1379,16 +1397,20 @@ func _create_unit_model(unit: OPRApiClient.OPRUnit, player_color: Color, name_su
 		# Bundled res:// GLBs load via ResourceLoader; downloaded user:// GLBs via glTF.
 		var glb_instance = _instantiate_model(model_path)
 		if glb_instance:
-			# Fit the model to its base (footprint cap against scale-creep; Flying hovers)
+			# Fit the model to its base (footprint cap against scale-creep). A MOUNT scales by its rider
+			# (the named `body` node) like infantry but grounds on the mount's own feet (see _compute_model_fit).
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value(unit)
-			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base, _get_body_aabb(glb_instance))
+			var entry_fit_scale: float = model_library.fit_scale(faction_folder, glb_name) if model_library != null else 1.0
+			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base, _get_body_aabb(glb_instance), is_mount, entry_fit_scale)
 			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
 			glb_instance.position.y = fit.y_offset
-			# Orient on an oval base: walkers crosswise (quer), other vehicles along the long axis.
-			_align_to_oval_long_axis(glb_instance, aabb, base_is_oval, base_width, base_depth, _is_walker(unit.name))
+			# Orient on an oval base: walkers crosswise (quer), vehicles AND mounts along the long axis
+			# (rotation is driven ONLY by the per-entry manifest `long_axis` marker; no marker = no turn).
+			var axis_override: String = model_library.long_axis_override(faction_folder, glb_name) if model_library != null else ""
+			_align_to_oval_long_axis(glb_instance, aabb, base_is_oval, base_width, base_depth, _model_faces_crosswise(unit.name, is_mount), axis_override)
 
 			if use_ctex:
 				# Apply the offline-baked BC7 albedo onto the (texture-stripped) ctex mesh, then match
@@ -1522,42 +1544,23 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0, glb_n
 	var player_id: int = props.get("player_id", 1)
 	var player_color: Color = OPRArmyManager.army_color(player_id, Color.GRAY)
 
-	# Create base mesh
-	var base_instance = MeshInstance3D.new()
+	# Create the base (save/load + MP restore path): same treatment as the import path — terrain top +
+	# black beveled rim + (solo only) affiliation ring. Unit size travels in unit_properties["size"].
+	var base_is_square: bool = bool(props.get("base_is_square", false))
+	var unit_size: int = int(props.get("size", 1))
+	_build_model_base(wrapper, base_is_oval, base_is_square, base_width, base_depth, base_radius,
+		player_color, BaseDecor.should_ring(unit_size))
 
-	if base_is_oval:
-		var base_mesh = CylinderMesh.new()
-		base_mesh.top_radius = 0.5
-		base_mesh.bottom_radius = 0.5
-		base_mesh.height = 0.003
-		base_instance.mesh = base_mesh
-		base_instance.scale = Vector3(base_width, 1.0, base_depth)
-		base_instance.position.y = 0.0015
-	else:
-		var base_mesh = CylinderMesh.new()
-		base_mesh.top_radius = base_radius
-		base_mesh.bottom_radius = base_radius
-		base_mesh.height = 0.003
-		base_instance.mesh = base_mesh
-		base_instance.position.y = 0.0015
-
-	var base_material = StandardMaterial3D.new()
-	base_material.albedo_color = player_color
-	base_material.roughness = 0.7
-	base_instance.material_override = base_material
-	base_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-
-	wrapper.add_child(base_instance)
-
-	# Visual hover: Flying units, drones and hover vehicles float above the base.
-	# Hover height: Aircraft on a tall stand (~20cm), Flying/drones a small float (matches import).
-	var hover_lift: float = _hover_lift_m(props.get("special_rules", []), unit_name, natural_base_long_mm)
+	# Visual hover: ONLY Aircraft (the OPR "Aircraft" rule) sit on a tall flight stand; Flying models
+	# (and their mounts) stand on their base (matches the import path).
+	var hover_lift: float = _hover_lift_m(props.get("special_rules", []))
 
 	# Try to load GLB model for this unit (a mounted unit re-resolves its faction mount GLB so a
 	# saved/synced Combat Bike hero keeps the bike model, matching the import path).
 	var faction_folder: String = props.get("faction_folder", "")
 	var glb_name: String = unit_name
 	var saved_mount: String = str(props.get("mount_name", ""))
+	var is_mount: bool = not saved_mount.is_empty()
 	if not saved_mount.is_empty():
 		var mount_glb: String = _find_mount_glb_name(saved_mount, faction_folder)
 		if not mount_glb.is_empty():
@@ -1579,13 +1582,16 @@ func create_model_from_properties(props: Dictionary, model_tough: int = 0, glb_n
 		if glb_instance:
 			var aabb = _get_model_aabb(glb_instance)
 			var tough = _get_tough_value_from_rules(props.get("special_rules", []))
-			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base, _get_body_aabb(glb_instance))
+			var entry_fit_scale: float = model_library.fit_scale(faction_folder, glb_name) if model_library != null else 1.0
+			var fit = _compute_model_fit(aabb, natural_base_long_mm, tough, hover_lift, natural_base_short_mm, fit_to_base, _get_body_aabb(glb_instance), is_mount, entry_fit_scale)
 			var final_scale = fit.scale
 
 			glb_instance.scale = Vector3(final_scale, final_scale, final_scale)
 			glb_instance.position.y = fit.y_offset
-			# Orient on an oval base: walkers crosswise (quer), other vehicles along the long axis.
-			_align_to_oval_long_axis(glb_instance, aabb, base_is_oval, base_width, base_depth, _is_walker(unit_name))
+			# Orient on an oval base: walkers crosswise (quer), vehicles AND mounts along the long axis
+			# (rotation is driven ONLY by the per-entry manifest `long_axis` marker; matches the import path).
+			var axis_override: String = model_library.long_axis_override(faction_folder, glb_name) if model_library != null else ""
+			_align_to_oval_long_axis(glb_instance, aabb, base_is_oval, base_width, base_depth, _model_faces_crosswise(unit_name, is_mount), axis_override)
 
 			if use_ctex:
 				# Same treatment as the import path so ctex and legacy render identically.
@@ -1964,6 +1970,31 @@ func set_current_round(value: int) -> void:
 	current_round = maxi(1, value)
 
 
+# ===== Game Phase (deployment -> playing) =====
+
+## True while armies are still being deployed (nothing on the table is movement-proof yet).
+## The move-trail chalk gate keys off this, NOT the deployment-zone visibility.
+func is_deployment_phase() -> bool:
+	return game_phase == GamePhase.DEPLOYMENT
+
+
+## Set the game phase (idempotent). Emits game_phase_changed only on a real change so listeners
+## (trail gate, Start-Game/Ready UI) refresh exactly once. Used by the local transition, the MP
+## host-authoritative apply, and save/load restore.
+func set_game_phase(phase: int) -> void:
+	phase = clampi(phase, GamePhase.DEPLOYMENT, GamePhase.PLAYING)
+	if game_phase == phase:
+		return
+	game_phase = phase
+	game_phase_changed.emit(phase)
+
+
+## Begin play: DEPLOYMENT -> PLAYING. Round 1 is already the current round (the counter is never
+## touched here — there is no round 0), so this just opens the round. No-op if already playing.
+func start_game() -> void:
+	set_game_phase(GamePhase.PLAYING)
+
+
 ## Clear all armies and spawned models
 func clear_all() -> void:
 	# Remove all spawned models. Guard against double-free: ObjectManager.
@@ -1988,6 +2019,7 @@ func clear_all() -> void:
 	army_trays.clear()
 	_scene_cache.clear()  # release parsed PackedScenes; rebuilt lazily on next spawn
 	current_round = 1
+	game_phase = GamePhase.DEPLOYMENT  # a fresh/cleared table is back in deployment
 
 
 ## Clear army for a specific player
@@ -2096,12 +2128,43 @@ func _resolve_model_variant_name(base_name: String, labels: Array, faction_folde
 	return variant if model_library.has_model(faction_folder, variant) else ""
 
 
+## Per-model loadout labels with the mount upgrade folded into the MOUNT CARRIER (model 0), so the
+## mount contributes a variant slug like any weapon and a composed mount bake resolves as
+## `<hero>#<weapon>+<mountslug>`. Non-carrier models and mountless units are byte-unchanged (the input
+## array is not mutated). Shared by the spawn loop AND the prefetch spec builder, so the composed
+## variant is both resolved AND downloaded.
+static func _labels_with_mount(labels_per_model: Array, mount_name: String) -> Array:
+	if mount_name.strip_edges().is_empty() or labels_per_model.is_empty():
+		return labels_per_model
+	var out: Array = labels_per_model.duplicate()  # shallow: only model 0 is replaced with a new array
+	var carrier: Array = (out[0] as Array).duplicate()
+	carrier.append(mount_name)
+	out[0] = carrier
+	return out
+
+
+## The resolved model name for a unit's model, applying the go-live ordering: the pre-baked loadout
+## VARIANT first (a composed mount bake `<hero>#<weapon>+<mountslug>` resolves here because the mount
+## folds a slug into the carrier's labels), then — ONLY for the mount carrier, when no variant key
+## matched — the OLD fuzzy faction-mount GLB (keeps GF bikes + factions without composed mount bakes on
+## their mount). "" → the caller uses the base unit model. `carrier_mount_glb` is "" for non-carrier
+## models / mountless units, so a matched variant always wins over the fuzzy mount, and the fuzzy mount
+## only ever replaces a base fallback.
+func _resolve_carrier_model(base_name: String, labels: Array, faction_folder: String, carrier_mount_glb: String) -> String:
+	var variant: String = _resolve_model_variant_name(base_name, labels, faction_folder)
+	if not variant.is_empty():
+		return variant
+	return carrier_mount_glb
+
+
 ## Per-model resolved variant model name ("" = base) for a unit — the SINGLE derivation shared by the
 ## prefetch spec builder AND the spawn loop, so every variant a unit needs is DOWNLOADED, not just
 ## derived at spawn (009). Length == unit.size.
 func _unit_model_variant_names(unit, faction_folder: String) -> Array:
 	var loadout := EquipmentDistributor.build_loadout(unit)
-	var labels := EquipmentDistributor.per_model_labels(unit.size, loadout)
+	# Same mount folding as the spawn loop, so a composed mount variant `<hero>#<weapon>+<mountslug>` is
+	# PREFETCHED (else it resolves at spawn but was never downloaded → "No model found").
+	var labels := _labels_with_mount(EquipmentDistributor.per_model_labels(unit.size, loadout), unit.mount_name)
 	var out: Array = []
 	for i in range(unit.size):
 		out.append(_resolve_model_variant_name(unit.name, labels[i], faction_folder))
@@ -2166,7 +2229,7 @@ func _find_model_for_unit(unit_name: String, faction_folder: String) -> String:
 ## that word (fuzzy). Dedicated per-mount models are a Model Forge follow-up.
 const MOUNT_KEYWORDS: Array[String] = ["bike", "jetbike", "mount", "steed", "horse", "chariot",
 	"cavalry", "disc", "drake", "wyvern", "hover", "speeder", "beast", "sled", "raptor", "carnosaur",
-	"dino", "dinosaur", "lizard", "saurus", "serpent", "dragon", "monster"]
+	"dino", "dinosaur", "lizard", "saurus", "serpent", "snake", "sphinx", "dragon", "monster"]
 
 
 ## The faction GLB name for a unit's mount/vehicle upgrade, fuzzy-matched from the mount name's
@@ -2180,7 +2243,9 @@ func _find_mount_glb_name(mount_name: String, faction_folder: String) -> String:
 			kws.append(w)
 	if kws.is_empty():
 		return ""
-	return model_library.find_faction_model_matching(faction_folder, kws)
+	# Pass the FULL mount name so the library can score by whole-token overlap and resolve a specific
+	# mount ("Skeleton Beast" -> `skeleton beast`) instead of a single-"beast" keyword collision.
+	return model_library.find_faction_model_matching(faction_folder, kws, mount_name)
 
 
 ## Extract Tough value from unit's special rules
@@ -2196,16 +2261,16 @@ func _calculate_model_scale(tough: int) -> float:
 	return pow(1.05, tough / 3.0)
 
 
-## True if the rules contain "Flying" (or Flying(x)).
-func _is_flying_from_rules(rules: Array) -> bool:
-	for r in rules:
-		if String(r).strip_edges().to_lower().begins_with("flying"):
-			return true
-	return false
+## The base-driven height target (mm, before the Tough factor): 25mm bases get +3mm, otherwise = the
+## base long side. Single source for the infantry fit AND the rider-constant mount fit (which applies it
+## to RIDER_ANATOMY_BASE_MM so a mounted rider matches a foot trooper).
+static func _height_target_mm(base_long_mm: int) -> float:
+	return float(base_long_mm + 3 if base_long_mm <= 25 else base_long_mm)
 
 
-## True if a unit has the OPR "Aircraft" rule. NOT the same as Flying (aircraft must move every turn,
-## can't be charged, etc.) — it drives the tall flight-stand hover, not the small Flying float.
+## True if a unit has the OPR "Aircraft" rule. Aircraft sit on a tall flight stand (they must move
+## every turn, can't be charged, etc.). Flying is a DIFFERENT rule and does NOT hover — a Flying model
+## stands on its base like everything else.
 func _is_aircraft_from_rules(rules: Array) -> bool:
 	for r in rules:
 		if String(r).strip_edges().to_lower().begins_with("aircraft"):
@@ -2213,35 +2278,31 @@ func _is_aircraft_from_rules(rules: Array) -> bool:
 	return false
 
 
-## Visual hover height (m): a fixed tall stand for Aircraft, a small base-relative float for Flying /
-## drones / hover vehicles, else 0 (on the table). Single source of truth for the GLB fit, the
-## procedural fallback and the save/load rebuild.
-func _hover_lift_m(rules: Array, unit_name: String, base_long_mm: int) -> float:
-	if _is_aircraft_from_rules(rules):
-		return AIRCRAFT_HOVER_M
-	if _should_hover(unit_name, rules):
-		return base_long_mm * FLYING_HOVER_RATIO * 0.001
-	return 0.0
-
-
-## True if a unit should visually hover above its base: it has the Flying rule,
-## or its name marks it as a drone / hover vehicle (e.g. "Gun Drones", "Hover
-## Tank"). Hover is cosmetic only - in this sim Flying has no other effect since
-## coherency reads the model wrapper at table level, not the rule.
-func _should_hover(unit_name: String, rules: Array) -> bool:
-	if _is_flying_from_rules(rules):
-		return true
-	var lowered := unit_name.to_lower()
-	return "drone" in lowered or "hover" in lowered
+## Visual hover height (m): a fixed tall flight stand for Aircraft, else 0 (on the table). Single source
+## of truth for the GLB fit, the procedural fallback and the save/load rebuild. Flying no longer floats:
+## every Flying model (and its mount) stands on its base.
+func _hover_lift_m(rules: Array) -> float:
+	return AIRCRAFT_HOVER_M if _is_aircraft_from_rules(rules) else 0.0
 
 
 ## Orients a GLB on an OVAL base relative to the base's long axis (depth/Z when base_depth >=
-## base_width). Y-only rotation, so it leaves the (rotation-invariant) uniform scale and y-offset
+## base_width — the AF oval parse always puts the long side into depth, so in-game oval bases are
+## Z-long). Y-only rotation, so it leaves the (rotation-invariant) uniform scale and y-offset
 ## intact. No-op for round/square bases.
 ##
-## Vehicles (cross_align=false): align the model's LONGER horizontal axis ALONG the base's long
-## axis (a tank runs front-to-back down its oval). This uses the AABB, which is reliable for a
-## tank-shaped hull.
+## Vehicles AND mounts (cross_align=false): the MODEL's long axis runs ALONG the base's long axis (a
+## tank — or a snake / chariot — sits front-to-back down its oval). The model's long axis comes ONLY
+## from the per-entry manifest `long_axis` marker ("x"/"z", authoring truth); without a marker the
+## legacy +Z convention holds (model long axis = Z → no turn on the standard Z-long oval), keeping
+## every live model byte-identical.
+##
+## The AABB is deliberately IGNORED (the `_aabb` parameter is kept so all alignment call sites and
+## suites share one signature). An earlier decisive-aspect inference (QA r4–r7) was removed: an XZ
+## footprint cannot distinguish body LENGTH from WINGSPAN — a 43-faction blob sweep found live
+## wide/winged models (avatars, greater mutated: shoulders/wings spread in X, facing +Z) that the
+## aspect gate would have turned sideways, and the coiled great-snakes blob (X-wide, +Z-facing)
+## already proved geometry cannot express intent. Only the producer knows the authored facing, so
+## rotation is opt-in per manifest entry.
 ##
 ## Walkers (cross_align=true): sit CROSSWISE ("quer") — DETERMINISTICALLY, ignoring the AABB. A
 ## biped's footprint is near-square (e.g. 0.672 x 0.642), so the AABB "long axis" is just noise
@@ -2249,17 +2310,20 @@ func _should_hover(unit_name: String, rules: Array) -> bool:
 ## (+Z) ACROSS the base's long axis purely from the base geometry, so every walker is consistent.
 ## (Near-square means the exact facing barely shows; if it ever reads 90° off, flip the rotate.)
 func _align_to_oval_long_axis(glb: Node3D, _aabb: AABB, base_is_oval: bool,
-		base_width: float, base_depth: float, cross_align: bool = false) -> void:
+		base_width: float, base_depth: float, cross_align: bool = false,
+		long_axis_override: String = "") -> void:
 	if not base_is_oval or glb == null:
 		return
-	# Deterministic from the base geometry (model forward = +Z): a WALKER faces ACROSS the base's
-	# long axis (its +Z onto the SHORT side), a VEHICLE runs ALONG it (its +Z onto the LONG side) —
-	# exact opposites. The AABB is ignored on purpose: a near-square hull has no reliable long axis,
-	# and AABB-based turns rotated identical models inconsistently (same reason walkers are
-	# deterministic).
 	var base_long_is_z: bool = base_depth >= base_width
-	var turn: bool = base_long_is_z if cross_align else not base_long_is_z
-	if turn:
+	if cross_align:
+		# WALKER: faces ACROSS the base's long axis (its +Z onto the SHORT side), deterministic.
+		if base_long_is_z:
+			glb.rotate_y(PI / 2.0)
+		return
+	# VEHICLE / MOUNT: the model's long axis onto the base's long axis, driven ONLY by the manifest
+	# marker; without one the legacy Z-long assumption holds (no turn on the standard Z-long oval).
+	var model_long_is_x: bool = long_axis_override == "x"
+	if model_long_is_x == base_long_is_z:
 		glb.rotate_y(PI / 2.0)
 
 
@@ -2269,6 +2333,46 @@ func _is_walker(unit_name: String) -> bool:
 	return "walker" in unit_name.to_lower()
 
 
+## Whether a model faces CROSSWISE on its oval base (a walker's quer facing) vs runs lengthwise like a
+## vehicle. A MOUNT is never crosswise — a snake / chariot / beast sits lengthwise down its oval like a
+## vehicle (go-live) — so the mount flag overrides the walker-name heuristic.
+func _model_faces_crosswise(unit_name: String, is_mount: bool) -> bool:
+	return _is_walker(unit_name) and not is_mount
+
+
+## Applies optional per-entry manifest base overrides (`base_mm`, shaped like the AF base spec) to an
+## army's units BEFORE spawning. Precedence: MANIFEST OVERRIDE > AF API base > Tough-derived fallback —
+## the parse already resolved API-vs-derived, so a present override simply replaces that result (a
+## deliberate maintainer choice where the AF spec reads wrong on the actual model; first user: Skeleton
+## Giant at 80mm round vs AF's 60). The override lands in the unit's base fields, which save/load and
+## MP sync already carry — guests and reloads stay consistent without re-applying.
+func _apply_manifest_base_overrides(army: OPRApiClient.OPRArmy) -> void:
+	if model_library == null or army == null or army.faction_folder.is_empty():
+		return
+	for unit in army.units:
+		var spec: Dictionary = model_library.base_override_mm(army.faction_folder, unit.name)
+		if spec.is_empty():
+			continue
+		var square_val: Variant = spec.get("square", "")
+		var round_val: Variant = spec.get("round", "")
+		if unit.base_is_square and OPRApiClient._is_usable_base_value(square_val):
+			# AoF:R square/rectangular base — same WIDTHxDEPTH convention as the AF parse.
+			var pq: Array = OPRApiClient._parse_base_size(square_val, unit.base_size_round)
+			unit.base_width_mm = int(pq[1])
+			unit.base_depth_mm = int(pq[2])
+			unit.base_size_round = maxi(int(pq[1]), int(pq[2]))
+			unit.base_size_square = unit.base_size_round
+			unit.base_from_tough = false
+		elif OPRApiClient._is_usable_base_value(round_val):
+			var pr: Array = OPRApiClient._parse_base_size(round_val, unit.base_size_round)
+			unit.base_is_oval = bool(pr[0])
+			unit.base_is_square = false
+			unit.base_width_mm = int(pr[1])
+			unit.base_depth_mm = int(pr[2])
+			unit.base_size_round = maxi(int(pr[1]), int(pr[2]))
+			unit.base_from_tough = false
+
+
 ## Computes scale + vertical offset so a GLB fits its base nicely.
 ##
 ## Rule against scale-creep:
@@ -2276,33 +2380,67 @@ func _is_walker(unit_name: String) -> bool:
 ##   - footprint cap: largest horizontal extent <= 125% of the base long side
 ##     (oval: the long axis) -> wide vehicles/drones don't spill over.
 ##   - the SMALLER of the two factors wins (min), so both constraints hold.
-## Flying units hover slightly above the base.
+## Aircraft additionally sit on a caller-supplied flight-stand lift; every other model stands on its base.
 ## base_long_mm = base long side in mm (round: diameter; oval: longer axis).
+## RIDER-CONSTANT fit: a model with a rider `body` node gets the rider-anatomy scale — exactly the
+## standard 25mm-trooper height target applied to the rider body (RIDER_ANATOMY_BASE_MM), independent of
+## the mount's base AND of Tough, and NOT footprint-capped (the mount's size follows the model's own
+## proportions; the >2.5x warning below guards mis-authored comps). It engages for is_mount (hero-mount
+## upgrades) AND — regardless of the resolution path — whenever the body is geometrically a RIDER: its
+## bottom sits >= RIDER_ELEVATION_MIN_RATIO of its height above the model's lowest point (a mounted-by-
+## default UNIT like the Skeleton Chariot has no mount_name, but its crew rides just the same). Grounding
+## is on the whole model's lowest point (the mount's feet / wheels, BELOW the rider) so the mount stands
+## on its base instead of the rider being buried onto it. is_mount WITHOUT a body node (legacy fuzzy
+## mount GLBs, e.g. GF bikes) keeps the base-driven fit unchanged.
+## fit_scale: optional per-entry manifest multiplier (default 1.0) applied MULTIPLICATIVELY to the
+## computed scale on every path (grounding recomputed after) — a deliberate artistic size correction
+## (first user: scarab swarms at 0.5, whose base-fitted mound reads too large).
 ## Returns { "scale": float, "y_offset": float, "height": float }.
-func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m: float, base_short_mm: int = -1, fit_to_base: bool = false, body_aabb: AABB = AABB()) -> Dictionary:
-	# Contract v1.2: when the GLB carries a named `body` node, HEIGHT and GROUNDING measure that node's
-	# box (body_aabb) so composed parts (a banner pole, a downward-held bow) can't shrink the body or lift
-	# it off the base; the COMBINED aabb still drives the horizontal footprint/base-fit cap. Empty
-	# body_aabb (legacy single-mesh models) → measure everything from the combined aabb, unchanged.
-	var fit_aabb: AABB = body_aabb if body_aabb.size.y > 0.0 else aabb
-	var raw_height: float = fit_aabb.size.y
-	var raw_footprint: float = max(aabb.size.x, aabb.size.z)
+func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m: float, base_short_mm: int = -1, fit_to_base: bool = false, body_aabb: AABB = AABB(), is_mount: bool = false, fit_scale: float = 1.0) -> Dictionary:
+	# Contract v1.2: when the GLB carries a named `body` node, the BODY box drives HEIGHT **and the
+	# horizontal footprint cap** — composed parts (a banner pole, a raised great weapon, a protruding
+	# bow) can neither shrink the body nor change the model's scale. Measuring the cap on the COMBINED
+	# box made weapon VARIANTS of one unit render at different sizes (snakemen #greatweapon 1.15x larger,
+	# giant #bow/#royalbow smaller — identical bodies, different weapon overhang). Parts may overhang the
+	# base like any mini's weapon does. Empty body_aabb (legacy single-mesh models) → combined, unchanged.
+	var has_body: bool = body_aabb.size.y > 0.0
+	# Geometric rider detection: the body floats well above the model's lowest point → it rides on
+	# something (steed / chariot deck / beast). A small offset is below-feet-part noise (a bow tip
+	# lowers the combined min by up to ~0.11 body heights on the real blobs), NOT a rider.
+	var body_elevated: bool = has_body \
+		and (body_aabb.position.y - aabb.position.y) >= body_aabb.size.y * RIDER_ELEVATION_MIN_RATIO
+	var rider_mode: bool = has_body and (is_mount or body_elevated)
+	var height_aabb: AABB = body_aabb if has_body else aabb
+	# GROUNDING: infantry ground on the body's feet (a below-feet bow must not float the model). A MOUNT
+	# (either flavour: hero-mount or geometrically detected rider) grounds on the COMBINED lowest point
+	# (the mount's feet / wheels sit below the rider `body`), so the mount stands on the base rather
+	# than being pushed down until the rider touches it.
+	var ground_aabb: AABB = aabb if (is_mount or rider_mode or not has_body) else body_aabb
+	var raw_height: float = height_aabb.size.y
+	var raw_footprint: float = max(height_aabb.size.x, height_aabb.size.z)
 	if raw_height <= 0.0 or raw_footprint <= 0.0:
 		return {"scale": 0.001, "y_offset": 0.003, "height": 0.03}
 
-	# Height target: 25mm bases get +3mm, otherwise = base; Tough scales it mildly.
-	var height_target_mm: float = float(base_long_mm + 3 if base_long_mm <= 25 else base_long_mm)
-	var target_height_m: float = height_target_mm * 0.001 * _calculate_model_scale(tough)
-	var height_scale: float = target_height_m / raw_height
+	# Height target. Rider mode (HARD RULE, QA r3): the mounted rider's height must EQUAL the foot
+	# infantry model's — the standard 25mm-trooper target on the rider body, NO Tough factor (Tough 3–18
+	# is the mount's stat, not the rider's anatomy) and NO base-size influence (the mount's 60–160mm base
+	# must not inflate the rider). Otherwise: 25mm bases get +3mm, else = base; Tough scales it mildly.
+	var height_scale: float
+	if rider_mode:
+		height_scale = _height_target_mm(RIDER_ANATOMY_BASE_MM) * 0.001 / raw_height
+	else:
+		var target_height_m: float = _height_target_mm(base_long_mm) * 0.001 * _calculate_model_scale(tough)
+		height_scale = target_height_m / raw_height
 
-	# Footprint cap. Round base: cap to base_long x FOOTPRINT_MAX_RATIO (organic overhang ok).
-	# Oval/rectangular base (base_short < base_long): fit WITHIN BOTH axes at OVAL_FOOTPRINT_RATIO, so
-	# a wide/square hull can't overhang the narrow side (the vehicle scale-creep). Uniform scale, so
-	# the tighter axis wins; raw_footprint = the model's longer horizontal side, raw_short the shorter.
+	# Footprint cap (on the BODY box when present — see above). Round base: cap to base_long x
+	# FOOTPRINT_MAX_RATIO (organic overhang ok). Oval/rectangular base (base_short < base_long): fit
+	# WITHIN BOTH axes at OVAL_FOOTPRINT_RATIO, so a wide/square hull can't overhang the narrow side
+	# (the vehicle scale-creep). Uniform scale, so the tighter axis wins; raw_footprint = the measured
+	# box's longer horizontal side, raw_short the shorter.
 	var short_mm: int = base_short_mm if base_short_mm > 0 else base_long_mm
 	var footprint_scale: float
 	if short_mm < base_long_mm:
-		var raw_short: float = max(0.001, min(aabb.size.x, aabb.size.z))
+		var raw_short: float = max(0.001, min(height_aabb.size.x, height_aabb.size.z))
 		footprint_scale = min(
 			base_long_mm * OVAL_FOOTPRINT_RATIO * 0.001 / raw_footprint,
 			short_mm * OVAL_FOOTPRINT_RATIO * 0.001 / raw_short)
@@ -2313,21 +2451,42 @@ func _compute_model_fit(aabb: AABB, base_long_mm: int, tough: int, hover_lift_m:
 		var round_ratio: float = 1.0 if fit_to_base else FOOTPRINT_MAX_RATIO
 		footprint_scale = base_long_mm * round_ratio * 0.001 / raw_footprint
 
-	var final_scale: float = min(height_scale, footprint_scale)
+	# Rider mode: the rider-constant scale is EXACT — the footprint never caps it (the mount's size
+	# follows the model's own proportions); the >2.5x warning below is the only footprint guard.
+	var final_scale: float = height_scale if rider_mode else min(height_scale, footprint_scale)
+	# Optional per-entry manifest correction (default 1.0): multiplicative, AFTER the normal fit, so
+	# grounding and heights below are recomputed from the corrected scale.
+	if fit_scale > 0.0 and fit_scale != 1.0:
+		final_scale *= fit_scale
 
-	# Feet on the base top (the base is 3mm tall); Flying/Aircraft additionally hover (caller-supplied).
-	# Ground on the BODY's minimum-y (fit_aabb) so a below-feet part can't float the model.
+	# Defensive: a composed mount is rider-normalized, so its footprint should land near its base. If
+	# the scale still spills the COMBINED footprint far over the base (a mis-authored / non-normalized
+	# comp), warn rather than silently ship a table-filling regression.
+	if (is_mount or rider_mode) and max(aabb.size.x, aabb.size.z) * final_scale > base_long_mm * 0.001 * 2.5:
+		push_warning("OPRArmyManager: mounted model footprint %.3fm exceeds base %dmm by >2.5x (rider-constant fit)" % [max(aabb.size.x, aabb.size.z) * final_scale, base_long_mm])
+
+	# Feet on the base top (the base is 3mm tall); Aircraft additionally sit on a flight stand (lift).
+	# Ground on ground_aabb's minimum-y: the body's feet for infantry, the mount's feet for a mount.
 	var lift: float = hover_lift_m
-	var y_offset: float = -fit_aabb.position.y * final_scale + 0.003 + lift
+	var y_offset: float = -ground_aabb.position.y * final_scale + 0.003 + lift
 
+	# Collision/visual height: the whole model for a mount (rider + beast/cart), the body otherwise.
+	var visible_height: float = (aabb.size.y if (is_mount or rider_mode) else raw_height) * final_scale + lift
 	return {
 		"scale": final_scale,
 		"y_offset": y_offset,
-		"height": raw_height * final_scale + lift,
+		"height": visible_height,
 	}
 
 
-## Calculate the combined AABB (bounding box) of a 3D model and all its children
+## Calculate the combined AABB (bounding box) of a 3D model and all its children, expressed in
+## `node`'s local space. Each mesh's box is composed through EVERY ancestor transform up to `node`
+## (via _relative_transform) — NOT just the mesh's own local transform. A composed / re-exported GLB
+## can carry its scale on an ANCESTOR node instead of the mesh node (e.g. the mummified "skeleton
+## beast" mount: mesh accessor ~1u, a parent node scales it ~5.8x); reading only the mesh's local
+## transform under-measures the model and the base-fit then scales it grossly too large (the
+## table-filling-mount bug). Flat single-mesh models (the mesh is a direct child of `node`) are
+## unaffected — the composed transform equals the mesh's own transform there.
 func _get_model_aabb(node: Node3D) -> AABB:
 	var combined_aabb = AABB()
 	var first = true
@@ -2342,8 +2501,9 @@ func _get_model_aabb(node: Node3D) -> AABB:
 			var mesh_instance = current as MeshInstance3D
 			if mesh_instance.mesh:
 				var mesh_aabb = mesh_instance.mesh.get_aabb()
-				# Transform AABB to node's local space
-				var transformed_aabb = mesh_instance.transform * mesh_aabb
+				# Express the mesh box in `node`'s space via the full ancestor chain, not just the
+				# mesh's own transform, so scale carried on a parent node is not dropped.
+				var transformed_aabb = _relative_transform(mesh_instance, node) * mesh_aabb
 				if first:
 					combined_aabb = transformed_aabb
 					first = false

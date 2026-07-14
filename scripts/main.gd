@@ -13,6 +13,7 @@ const UnitBoundaryVisualizerScript = preload("res://scripts/unit_boundary_visual
 const RangeRingControllerScript = preload("res://scripts/range_ring_controller.gd")
 const MovementRangeControllerScript = preload("res://scripts/movement_range_controller.gd")
 const PinnedRulersScript = preload("res://scripts/pinned_rulers.gd")
+const MoveTrailsScript = preload("res://scripts/move_trails.gd")
 
 # ==============================================================================
 # CONSTANTS
@@ -231,10 +232,24 @@ var atmospheric_clouds: Node3D = null
 # Radial Menu
 var radial_menu_controller: RadialMenuController = null
 var coherency_visualizer: CoherencyVisualizer = null
+## 1" unit-separation proximity hint (OPR GF/AoF Advanced Rules v3.5.1 p.7: no model
+## within 1" of models from OTHER units — friendly included — unless charging).
+## Renders the warning; SeparationChecker does the base-edge distance math. Local only.
+var separation_visualizer: SeparationVisualizer = null
+## Cache of every alive OPR unit's member base shapes for the proximity-hint scan,
+## grouped per (effective) unit so each foreign unit's WALL is built from its whole
+## footprint. Rebuilt lazily on selection change (non-selected units stay put during
+## the local drag, so their shapes stay valid) and refreshed on drop. Keyed by unit
+## instance id; each entry: {unit: GameUnit, player_id: int, shapes: Array[BaseShape],
+## centroid: Vector2, radius: float (centroid -> farthest member edge), signature:
+## float (member-position hash for the visualizer's mesh cache)}.
+var _separation_units_cache: Dictionary = {}
+var _separation_cache_valid: bool = false
 var unit_boundary_visualizer: Node3D = null  # UnitBoundaryVisualizer
 var range_ring_controller: Node = null  # RangeRingController (base-anchored range auras)
 var movement_range_controller: Node = null  # MovementRangeController (Advance/Rush reach)
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
+var move_trails: Node = null  # MoveTrails (path painting: chalk trails + move ledger)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
 var battlefield_stains: BattlefieldStains = null
@@ -243,6 +258,10 @@ var battlefield_stains: BattlefieldStains = null
 # unit-placement compliance is verified manually by the players)
 var deployment_zone_check: CheckBox = null
 var deployment_flip_check: CheckBox = null
+
+# Game-phase (deployment -> playing) gate UI: the Start-Game / Ready button + its MP status line.
+var _start_game_button: Button = null
+var _game_phase_status_label: Label = null
 
 # Player Presence System
 var _remote_cursors: Dictionary = {}  # peer_id -> RemoteCursor node
@@ -265,6 +284,14 @@ var _is_reconnecting: bool = false
 ## manager has one shared HTTPRequest, so per-unit concurrent downloads collide). Keyed by
 ## player_id -> { army_name, units: Array, objects: Array }.
 var _incoming_armies: Dictionary = {}
+## Inactivity window (seconds) a guest waits between remote army-import RPCs before it gives up.
+## The host paces unit batches ~250 ms apart (ARMY_BATCH_DELAY_MS), so even a large army never
+## has a multi-second gap; this generous silence budget only trips when the host truly went away
+## (dropped / relay lost the complete). On trip we abort the wait and recover (see below).
+const IMPORT_AWAIT_TIMEOUT_SEC: float = 75.0
+## Liveness guard for the above — header + each unit bump the player's generation, and a fired
+## timer only aborts if its captured generation is still current (nothing arrived since).
+var _import_await_guard := ImportAwaitGuard.new()
 
 
 func _ready() -> void:
@@ -300,10 +327,14 @@ func _ready() -> void:
 
 	# Connect to object manager signals
 	object_manager.distance_changed.connect(_on_distance_changed)
+	object_manager.movement_capped.connect(_on_movement_capped)
 	object_manager.measurement_finished.connect(_on_measurement_finished)
 	object_manager.drag_ended.connect(_on_drag_ended)
 	object_manager.drag_updated.connect(_check_coherency_for_selected_units)
+	# Proactive during drag: nearby foreign units fade their wall in (~3"); violations pulse.
+	object_manager.drag_updated.connect(_check_separation_for_selected_units.bind(true))
 	object_manager.selection_changed.connect(_on_selection_changed_update_card)
+	object_manager.selection_changed.connect(_on_selection_changed_for_separation)
 
 	# Hide distance label initially
 	distance_label.text = ""
@@ -370,6 +401,9 @@ func _ready() -> void:
 	network_manager.remote_player_name_updated.connect(_on_remote_player_name_updated)
 	network_manager.remote_chat_message.connect(_on_remote_chat_message)
 	network_manager.remote_table_settings_changed.connect(_on_remote_table_settings_changed)
+	# Deployment ready-sync: the host's authoritative deployment->playing transition + the ready tally.
+	network_manager.remote_game_phase_changed.connect(_on_remote_game_phase_changed)
+	network_manager.ready_state_changed.connect(_on_ready_state_changed)
 	network_manager.remote_army_header_received.connect(_on_remote_army_header)
 	network_manager.remote_army_unit_received.connect(_on_remote_army_unit)
 	network_manager.remote_army_complete_received.connect(_on_remote_army_complete)
@@ -456,6 +490,8 @@ func _ready() -> void:
 		opr_army_manager.model_library.caching_finished.connect(_on_model_caching_finished)
 	# Per-unit spawn progress drives the second half of the army loading bar.
 	opr_army_manager.spawn_progress.connect(_on_army_spawn_progress)
+	# Game phase (deployment -> playing): one seam for the trail-chalk gate + the Start-Game/Ready UI.
+	opr_army_manager.game_phase_changed.connect(_on_game_phase_changed)
 
 	# Set army_manager reference on SaveManager for GameUnit serialization
 	save_manager.army_manager = opr_army_manager
@@ -546,6 +582,9 @@ func _ready() -> void:
 
 	# Initialize Deployment Zones UI
 	_init_deployment_zones_ui()
+
+	# Start-Game / Ready button (deployment -> playing gate)
+	_init_game_phase_ui()
 
 	# Host tools: the free-move toggle (lift the ownership lock — community feedback for solo play).
 	_init_host_tools_ui()
@@ -1091,6 +1130,9 @@ func _do_next_round() -> void:
 	if opr_army_manager:
 		opr_army_manager.advance_round()
 	_refresh_round_visuals()
+	# Round advance ends every activation — the painted move trails sweep clean.
+	if move_trails:
+		move_trails.on_round_advance()
 	if network_manager:
 		network_manager.broadcast_round_advance()
 
@@ -1098,6 +1140,8 @@ func _do_next_round() -> void:
 ## A remote peer advanced the round (the RPC already advanced our state).
 func _on_remote_round_advanced() -> void:
 	_refresh_round_visuals()
+	if move_trails:
+		move_trails.on_round_advance()
 
 
 ## Refreshes everything advance_round() affects: the button label plus the
@@ -1152,6 +1196,15 @@ func _on_distance_changed(distance_inches: float, _from_pos: Vector3, _to_pos: V
 	distance_label.text = "%.1f\"" % distance_inches
 
 
+## STRICT "dry brush" HUD readout: during a movement-budget-capped drag, show consumed vs the
+## model's max legal band ("6.0/6.0″") and colour it amber → red the moment the brush runs dry,
+## so the cap reads unmistakably. Emitted after _on_distance_changed, so it wins the label.
+func _on_movement_capped(consumed_inches: float, cap_inches: float, dry: bool) -> void:
+	distance_label.text = "%.1f/%.1f\"" % [consumed_inches, cap_inches]
+	distance_label.add_theme_color_override("font_color",
+			Color(1.0, 0.35, 0.3) if dry else Color(1.0, 0.78, 0.25))
+
+
 ## Clear distance display after measurement finishes
 func _on_measurement_finished(distance_inches: float) -> void:
 	distance_label.text = "%.1f\"" % distance_inches
@@ -1167,6 +1220,8 @@ func _on_measurement_finished(distance_inches: float) -> void:
 
 ## Clear distance display after drag ends
 func _on_drag_ended() -> void:
+	# Clear any strict-cap colour so the next plain measurement reads in the default colour.
+	distance_label.remove_theme_color_override("font_color")
 	# Fade out after 1 second
 	var tween = create_tween()
 	tween.tween_interval(1.0)
@@ -1652,7 +1707,10 @@ func _on_battle_log_dropped(moves: Array) -> void:
 			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "alive": _battle_log_unit_alive(node), "whole": false}
 		var e: Dictionary = per_unit[unit_name]
 		e["count"] = int(e["count"]) + 1
-		e["max_in"] = maxf(float(e["max_in"]), float(mv.get("inches", 0.0)))
+		# Movement distance = the ACTUAL traveled arc (the ledger's measured net path),
+		# NOT crow-flight — one source of truth with the trail stamp / HUD / ruler. Falls
+		# back to the straight from→to only for a mover with no recorded path.
+		e["max_in"] = maxf(float(e["max_in"]), float(mv.get("arc_in", mv.get("inches", 0.0))))
 		if node is RegimentTray:
 			e["whole"] = true
 	var summaries: Array = []
@@ -1687,6 +1745,63 @@ func _log_move_summaries(summaries: Array) -> void:
 		else:
 			battle_log.log_event(BattleLog.Category.MOVEMENT,
 				"%s: %d of %d models move %.0f\"" % [unit_name, count, alive, max_in])
+
+
+## Path painting: a drag dropped — commit each moved model's traversed path as a visible
+## trail + ledger entry (MoveTrails), and replicate the proof to the other players as
+## small additive polyline messages (the host-authoritative move path is untouched).
+## ONE drop_id groups everything in this drop — locally AND in the MP messages — so a
+## multi-unit drop never fades its own trails on either side.
+func _on_trails_dropped(moves: Array) -> void:
+	if move_trails == null:
+		return
+	var round_num: int = opr_army_manager.current_round if opr_army_manager != null else 0
+	var drop_id: int = Time.get_ticks_msec()
+	var per_unit: Dictionary = {}   # unit_id -> {"owner", "name", "batch": Array}
+	for mv in moves:
+		var node: Node3D = mv.get("node")
+		var path: PackedVector2Array = mv.get("path", PackedVector2Array())
+		var radius: float = float(mv.get("radius_m", 0.0))
+		if node == null or not is_instance_valid(node) or path.size() < 2 or radius <= 0.0:
+			continue
+		var gu: GameUnit = _trail_unit_of(node)
+		if gu == null:
+			continue
+		var owner: int = int(gu.unit_properties.get("player_id", 0))
+		var model_id: int = int(node.get_meta("network_id")) if node.has_meta("network_id") else 0
+		move_trails.commit_trail(owner, gu.unit_id, gu.get_name(), model_id, path,
+				radius, round_num, drop_id)
+		if network_manager != null and network_manager.is_multiplayer_active():
+			var entry: Dictionary = per_unit.get(gu.unit_id, {})
+			if entry.is_empty():
+				entry = {"owner": owner, "name": gu.get_name(), "batch": []}
+				per_unit[gu.unit_id] = entry
+			var batch: Array = entry["batch"]
+			batch.append(model_id)
+			batch.append(radius)
+			batch.append(path.size())
+			for p in path:
+				batch.append(p.x)
+				batch.append(p.y)
+	for unit_id in per_unit:
+		var e: Dictionary = per_unit[unit_id]
+		network_manager.broadcast_move_trails(int(e["owner"]), str(unit_id),
+				str(e["name"]), round_num, drop_id, e["batch"])
+
+
+## The GameUnit behind a dragged battlefield piece (model node or regiment tray) — the
+## trail's unit identity. Mirrors _battle_log_unit_name's resolution; null = no unit
+## (terrain / dice / props — they paint no trails).
+func _trail_unit_of(node: Node3D) -> GameUnit:
+	if node == null or not is_instance_valid(node):
+		return null
+	if node.has_meta("game_unit"):
+		return node.get_meta("game_unit") as GameUnit
+	if node is RegimentTray and opr_army_manager != null:
+		for reg in opr_army_manager.regiments.values():
+			if reg != null and reg.tray == node and reg.game_unit != null:
+				return reg.game_unit
+	return null
 
 
 ## Alive model count of the unit a node belongs to (denominator for partial-move lines).
@@ -2967,6 +3082,8 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 			if deployment_zone_check:
 				deployment_zone_check.button_pressed = vis
 
+	# (Deployment-zone type/visibility no longer drives the trail chalk — the formal game phase does.)
+
 	if settings.has("deployment_flipped"):
 		var flipped = bool(settings["deployment_flipped"])
 		if terrain_overlay and terrain_overlay.has_method("set_deployment_colors_flipped"):
@@ -3088,6 +3205,9 @@ func _update_network_ui(connected: bool, _is_host: bool) -> void:
 	# Chat + roster are only meaningful in a live session (central toggle — every
 	# connect/disconnect path routes through here).
 	_set_chat_visible(connected)
+	# The Start-Game / Ready button label depends on MP state (single-player "Start Game" vs the MP
+	# ready toggle) — refresh it on every connect/disconnect.
+	_update_game_phase_ui()
 
 
 ## ============================================================================
@@ -3136,6 +3256,10 @@ func _on_save_completed(path: String) -> void:
 func _on_load_completed(object_count: int) -> void:
 	print("Game loaded: %d objects" % object_count)
 	_update_round_button()  # restored round may differ from 1
+	# Restored game phase drives the trail chalk + the Start-Game/Ready UI (a mid-play save resumes in
+	# PLAYING with trails live; a setup save resumes in DEPLOYMENT).
+	_sync_move_trails_deployment()
+	_update_game_phase_ui()
 
 	# Sync to multiplayer clients if hosting
 	if network_manager.is_host and network_manager.connected_peers.size() > 0:
@@ -3284,8 +3408,11 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	if synced_counter > 0:
 		object_manager._object_counter = synced_counter
 
-	# Restore game state (round, current player)
+	# Restore game state (round, current player, game phase). The phase rides the same serializer, so
+	# a guest that joins/reconnects mid-play lands in PLAYING (trails live), not DEPLOYMENT.
 	save_manager._deserialize_game_state(state.get("game_state", {}))
+	_sync_move_trails_deployment()
+	_update_game_phase_ui()
 
 	# Restore marker visualizations (fatigue, shaken, wounds) + AoF:R regiment trays.
 	save_manager._restore_hero_attachments_after_load()
@@ -3547,6 +3674,9 @@ func _on_remote_army_header(player_id: int, army_name: String, unit_count: int) 
 		get_tree().root.add_child(_army_loading_overlay)
 		_army_loading_overlay.set_label("LOADING ARMY")
 		_army_loading_overlay.set_indeterminate()
+	# Arm the inactivity timeout: if the host goes silent before the complete RPC, the guest
+	# must not wait on this overlay forever — it aborts and recovers (host can re-import).
+	_arm_import_await_timeout(player_id, _import_await_guard.bump(player_id))
 
 
 ## Receive a single unit — BUFFER it. We do not download/spawn per unit: the model
@@ -3559,12 +3689,16 @@ func _on_remote_army_unit(unit_data: Dictionary, objects_data: Array, player_id:
 		_incoming_armies[player_id] = buf
 	buf["units"].append(unit_data)
 	buf["objects"].append(objects_data)
+	# Progress arrived — push the inactivity deadline out (a slow but live import must not abort).
+	_arm_import_await_timeout(player_id, _import_await_guard.bump(player_id))
 
 
 ## All units received — build the whole army in ONE pass: rebuild the units, download every
 ## model with a single ensure_models call (feeds the loading bar like a self-import), spawn
 ## all model objects, then restore markers / heroes / regiment trays.
 func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> void:
+	# The stream finished — cancel the inactivity timeout so it can't abort the build below.
+	_import_await_guard.clear(player_id)
 	# Merge rule descriptions FIRST (before building units) so tooltips like "Bloodborn" resolve.
 	if opr_army_manager and opr_army_manager.has_method("merge_rule_descriptions"):
 		opr_army_manager.merge_rule_descriptions(rule_descriptions)
@@ -3643,6 +3777,45 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 		_army_loading_overlay = null
 	_is_army_syncing = false  # army built — resume presence broadcasts (Fix A)
 	print("[ArmySync] Army built for player_id=%d (%d units)" % [player_id, units.size()])
+
+
+## Arm (or re-arm) the guest's inactivity timeout for an in-flight remote army import. `gen` is
+## the liveness token captured at arm time; the fired timer aborts only if it is still current
+## (no header/unit/complete arrived since), so a healthy stream keeps superseding its own timers.
+func _arm_import_await_timeout(player_id: int, gen: int) -> void:
+	await get_tree().create_timer(IMPORT_AWAIT_TIMEOUT_SEC).timeout
+	# Superseded by later progress or already resolved/aborted → this timer is a no-op.
+	if not _import_await_guard.is_current(player_id, gen):
+		return
+	# Nothing arrived within the window AND the buffer is still pending → the host went silent.
+	if not _incoming_armies.has(player_id):
+		return
+	_abort_import_await(player_id)
+
+
+## Abort a stalled remote army import and return the session to a recoverable state. We undo ONLY
+## what _on_remote_army_header set — the partial buffer (a host re-import cleanly overwrites it via
+## a fresh header), the presence-suppression flag, and the shared loading overlay. We deliberately
+## do NOT build the partial army: the stream may be missing units and its network_ids would then
+## collide with the host's re-import — so a clean re-import is the recovery.
+##
+## Crucially we must NOT touch the global restore lock or the busy gate here. Both are acquired only
+## in _on_remote_army_complete (begin_restore + broadcast_peer_busy(true)), whose very first act —
+## _import_await_guard.clear() — makes this abort unreachable once it runs. So a stalled import
+## provably never held either; force-releasing them would clobber a *concurrent* legitimate restore
+## / busy state (another player's join or import), reintroducing the interleave the lock guards.
+func _abort_import_await(player_id: int) -> void:
+	push_warning("[ArmySync] Import from player_id=%d timed out after %.0fs — aborting, session recoverable" % [player_id, IMPORT_AWAIT_TIMEOUT_SEC])
+	_import_await_guard.clear(player_id)
+	_incoming_armies.erase(player_id)
+	# Only settle the shared presence flag + overlay when no OTHER remote army is still buffering,
+	# so a concurrent second import keeps its "loading" indicator and presence suppression.
+	if _incoming_armies.is_empty():
+		_is_army_syncing = false  # resume presence broadcasts (Fix A) — nothing else is loading
+		if is_instance_valid(_army_loading_overlay):
+			_army_loading_overlay.complete_and_free()
+			_army_loading_overlay = null
+	_show_toast("⚠ Army import from another player timed out — ask them to import again")
 
 
 ## Receive TTS terrain spawn from a remote peer
@@ -4154,8 +4327,23 @@ func _on_deployment_zones_visibility_toggled(show_zones: bool) -> void:
 
 	terrain_overlay.set_deployment_zones_visible(show_zones)
 
+	# NOTE: zone visibility no longer drives the move-trail chalk — that follows the formal game
+	# phase now (see _sync_move_trails_deployment). Toggling zones during play keeps trails visible.
+
 	# Sync visibility to remote clients
 	_broadcast_table_settings_update("deployment_visible", show_zones)
+
+
+## Push the current GAME PHASE to the move-trail chalk: during DEPLOYMENT players are placing
+## armies (not proving movement), so the trails auto-hide; once play begins the chalk resumes.
+## This now keys off the FORMAL game phase (OPRArmyManager.game_phase), NOT the deployment-zone
+## visibility — so leaving the zones shown during play no longer suppresses trails (the old caveat).
+## The move LEDGER keeps recording throughout — only the visible chalk follows the phase.
+func _sync_move_trails_deployment() -> void:
+	if move_trails == null:
+		return
+	var deploying := opr_army_manager != null and opr_army_manager.is_deployment_phase()
+	move_trails.set_deployment_active(deploying)
 
 
 ## Handle the deployment-zone colour flip (asymmetric-map side choice).
@@ -4164,6 +4352,117 @@ func _on_deployment_flip_toggled(flipped: bool) -> void:
 		return
 	terrain_overlay.set_deployment_colors_flipped(flipped)
 	_broadcast_table_settings_update("deployment_flipped", flipped)
+
+
+## ============================================================================
+## Game Phase Gate (Deployment -> Playing)
+## ============================================================================
+
+## Tiny DE/EN picker for the phase-gate labels (the app has no i18n infra; German maintainer/community
+## wanted these strings localised). German on a `de*` OS locale, English otherwise.
+func _phase_tr(en: String, de: String) -> String:
+	return de if str(OS.get_locale()).begins_with("de") else en
+
+
+## Build the Start-Game / Ready control: a discoverable button in the left panel that flips the game
+## from DEPLOYMENT to PLAYING. In single-player it starts the game immediately; in multiplayer it is a
+## per-player ready toggle (host starts play only once BOTH players are ready). A status line under it
+## shows the MP waiting state. Built programmatically to match the deployment/host-tools panels and
+## keep main.tscn churn-free.
+func _init_game_phase_ui() -> void:
+	var left_panel_vbox = $UI/HUD/LeftPanelScroll/LeftPanelVBox
+	if not left_panel_vbox:
+		return
+	var panel := VBoxContainer.new()
+	panel.name = "GamePhasePanel"
+	left_panel_vbox.add_child(panel)
+
+	_start_game_button = Button.new()
+	_start_game_button.name = "StartGameButton"
+	_start_game_button.focus_mode = Control.FOCUS_NONE
+	_start_game_button.add_theme_color_override("font_color", Color(0.4, 0.95, 0.55))
+	_start_game_button.pressed.connect(_on_start_game_pressed)
+	panel.add_child(_start_game_button)
+
+	_game_phase_status_label = Label.new()
+	_game_phase_status_label.name = "GamePhaseStatus"
+	_game_phase_status_label.add_theme_font_size_override("font_size", 11)
+	_game_phase_status_label.add_theme_color_override("font_color", Color(0.6, 0.63, 0.7, 1.0))
+	_game_phase_status_label.visible = false
+	panel.add_child(_game_phase_status_label)
+
+	_update_game_phase_ui()
+
+
+## Start-Game / Ready button pressed. Single-player: start play now. Multiplayer: toggle THIS player's
+## ready flag and report it to the host — the host's both-ready gate fires the authoritative transition.
+func _on_start_game_pressed() -> void:
+	if network_manager != null and network_manager.is_multiplayer_active():
+		network_manager.set_local_ready(not network_manager.is_local_ready())
+		_update_game_phase_ui()
+	elif opr_army_manager != null:
+		opr_army_manager.start_game()  # emits game_phase_changed -> _on_game_phase_changed
+
+
+## The game phase changed locally (single-player start, MP transition applied, or save/load). Re-derive
+## the trail-chalk gate and refresh the button/status.
+func _on_game_phase_changed(_phase: int) -> void:
+	_sync_move_trails_deployment()
+	_update_game_phase_ui()
+
+
+## The host broadcast the authoritative game phase (host applies it here too). Apply it to the army
+## manager; the game_phase_changed seam then updates the trails + UI on this peer.
+func _on_remote_game_phase_changed(phase: int) -> void:
+	if opr_army_manager != null:
+		opr_army_manager.set_game_phase(phase)
+
+
+## Host-side ready tally changed (a player readied/un-readied). Refresh the waiting readout.
+func _on_ready_state_changed(_all_ready: bool, _count: int, _total: int) -> void:
+	_update_game_phase_ui()
+
+
+## Refresh the Start-Game / Ready button label + the MP status line from the current phase and MP
+## ready state. Hidden once play has begun.
+func _update_game_phase_ui() -> void:
+	if _start_game_button == null:
+		return
+	var playing := opr_army_manager != null and not opr_army_manager.is_deployment_phase()
+	if playing:
+		_start_game_button.visible = false
+		if _game_phase_status_label != null:
+			_game_phase_status_label.visible = false
+		return
+	_start_game_button.visible = true
+	# network_manager is typed as Node here, so its bool method returns need explicit typing (no :=).
+	var in_mp: bool = network_manager != null and network_manager.is_multiplayer_active()
+	if in_mp:
+		var ready: bool = network_manager.is_local_ready()
+		_start_game_button.text = _phase_tr("Cancel Ready", "Bereit abbrechen") if ready \
+				else _phase_tr("Ready", "Fertig aufgestellt")
+		_start_game_button.tooltip_text = _phase_tr(
+				"Signal you have finished deploying. Play begins when both players are ready.",
+				"Signalisiere, dass du fertig aufgestellt hast. Das Spiel startet, wenn beide Spieler bereit sind.")
+		if _game_phase_status_label != null:
+			if ready and network_manager.is_host:
+				# Host sees the live tally (it tracks both sides); a guest just knows it is waiting.
+				_game_phase_status_label.text = _phase_tr(
+						"Waiting for other player (%d/%d)" % [network_manager.ready_count(), network_manager.seated_slots().size()],
+						"Warte auf Mitspieler (%d/%d)" % [network_manager.ready_count(), network_manager.seated_slots().size()])
+				_game_phase_status_label.visible = true
+			elif ready:
+				_game_phase_status_label.text = _phase_tr("Waiting for other player…", "Warte auf Mitspieler…")
+				_game_phase_status_label.visible = true
+			else:
+				_game_phase_status_label.visible = false
+	else:
+		_start_game_button.text = _phase_tr("Start Game", "Spiel starten")
+		_start_game_button.tooltip_text = _phase_tr(
+				"Begin round 1 — deployment is done.",
+				"Runde 1 beginnen — die Aufstellung ist abgeschlossen.")
+		if _game_phase_status_label != null:
+			_game_phase_status_label.visible = false
 
 
 ## ============================================================================
@@ -4205,6 +4504,13 @@ func _on_table_resized(size_feet: Vector2) -> void:
 func _on_unit_moved() -> void:
 	# Auto-check coherency for any selected units after movement
 	_check_coherency_for_selected_units()
+	# Re-evaluate the 1" unit-separation hint on drop (fades out if now compliant).
+	# Refresh the shape cache first so a drop of a multi-unit selection measures
+	# every base at its final position (the drag-time cache holds pre-drag spots).
+	# proactive=false: on drop only VIOLATING units keep their wall (persist); merely
+	# nearby walls fade out.
+	_separation_cache_valid = false
+	_check_separation_for_selected_units(false)
 
 
 ## Check coherency for all currently selected units
@@ -4238,6 +4544,256 @@ func _check_coherency_for_selected_units() -> void:
 			# live (~15 Hz) while dragging, so re-running the fade/pulse each frame
 			# would make the lines flicker.
 			coherency_visualizer.show_coherency(game_unit, CoherencyChecker.is_skirmish_system(game_unit), false)
+
+
+## ============================================================================
+## 1" Unit-Separation Zone Walls
+## ============================================================================
+## OPR rule (GF/AoF Advanced Rules v3.5.1, p.7 "General Movement"): "Models may never
+## be within 1” of models from other units, unless they are taking a Charge action" —
+## ANY other unit, friendly included. While a model / regiment tray is dragged, every
+## nearby foreign UNIT is wrapped in a translucent ground WALL (SeparationVisualizer):
+## a 1"-wide band hugging the merged outline of that unit's bases — its no-go area.
+## RED = enemy unit (base contact is exempt — a Charge into melee), ORANGE/AMBER =
+## friendly unit (no legal contact). A wall fades IN proactively when the dragged base
+## comes within SEPARATION_PROACTIVE_INCHES of the unit; an actual sub-1" violation
+## intensifies and pulses. On a compliant drop the merely-nearby walls fade out; a
+## violating unit's wall persists. Same-unit bases are exempt (coherency governs INSIDE
+## a unit); a joined Hero folds into its host. Strictly local render (no RPCs); works
+## identically in single-player, hotseat and multiplayer.
+##
+## Coverage: local drag (~15 Hz via drag_updated, proactive) + local drop (via
+## _on_unit_moved, violation-only). Undo/redo and remote-peer moves are NOT
+## re-evaluated (neither is coherency) — the drag+drop path is the must-have.
+
+## A dragged base's wall fades in once it comes within this of a foreign unit's edge
+## (proactive display). Beyond it the unit shows no wall.
+const SEPARATION_PROACTIVE_INCHES := 3.0
+
+## Invalidate the other-units shape cache on any selection change; clear the walls if
+## the selection emptied (nothing is being moved any more).
+func _on_selection_changed_for_separation(selected: Array) -> void:
+	_separation_cache_valid = false
+	if selected.is_empty() and separation_visualizer:
+		separation_visualizer.clear_retreat_ruler()
+		separation_visualizer.show_zones([])
+
+
+## Rebuild the per-unit base-shape cache (all units, both armies), grouped by effective
+## unit so each foreign unit's wall is built from its whole footprint. A joined Hero's
+## models fold into its host's entry. Each entry also carries a centroid/radius (for the
+## per-unit quick reject) and a member-position signature (the visualizer's mesh cache
+## key). Non-selected units stay put during the local drag, so the cache stays valid.
+func _rebuild_separation_cache() -> void:
+	_separation_units_cache.clear()
+	if opr_army_manager == null:
+		_separation_cache_valid = true
+		return
+	for game_unit in opr_army_manager.get_all_game_units():
+		if game_unit == null:
+			continue
+		# A joined Hero resolves to its host unit — coherency requires the hero within
+		# 1" of the host, so hero and host must read as the SAME unit (one shared wall).
+		var eff_unit: GameUnit = SeparationChecker.effective_unit(game_unit)
+		if eff_unit == null or eff_unit.unit_properties == null:
+			continue
+		var key: int = eff_unit.get_instance_id()
+		for model in game_unit.get_alive_models():
+			if model == null or model.node == null or not is_instance_valid(model.node):
+				continue
+			var shape := SeparationChecker.shape_for_model(model)
+			if shape == null:
+				continue
+			var entry: Dictionary = _separation_units_cache.get(key, {})
+			if entry.is_empty():
+				entry = {
+					"unit": eff_unit,
+					"player_id": int(eff_unit.unit_properties.get("player_id", 0)),
+					"shapes": [],
+				}
+				_separation_units_cache[key] = entry
+			(entry["shapes"] as Array).append(shape)
+	# Finalise per-unit centroid / bounding radius / member signature.
+	for key in _separation_units_cache:
+		var entry: Dictionary = _separation_units_cache[key]
+		var shapes: Array = entry["shapes"]
+		var centroid := Vector2.ZERO
+		for s in shapes:
+			centroid += s.center
+		centroid /= float(shapes.size())
+		var radius := 0.0
+		var signature := 0.0
+		for s in shapes:
+			radius = maxf(radius, centroid.distance_to(s.center) + s.bounding_radius())
+			signature += s.center.x * 131.0 + s.center.y * 197.0 + s.yaw * 17.0 + s.bounding_radius() * 7.0
+		entry["centroid"] = centroid
+		entry["radius"] = radius
+		entry["signature"] = signature
+	_separation_cache_valid = true
+
+
+## Collects the models currently being moved (loose model nodes AND regiment-tray
+## members), each with a FRESH base shape at its current position. Returns an Array of
+## {model, shape, unit, player_id, center, bound}.
+func _collect_moved_separation_models(selected: Array) -> Array:
+	var moved: Array = []
+	for obj in selected:
+		if obj == null or not is_instance_valid(obj):
+			continue
+		if obj is RegimentTray or obj.is_in_group(RegimentTray.GROUP):
+			for child in obj.get_children():
+				_append_moved_separation_model(child, moved)
+		else:
+			_append_moved_separation_model(obj, moved)
+	return moved
+
+
+## Appends one moved model (if the node is a live, non-parked OPR model) to `moved`.
+func _append_moved_separation_model(node: Node3D, moved: Array) -> void:
+	if node == null or not is_instance_valid(node):
+		return
+	if not node.has_meta("model_instance"):
+		return
+	if node.get_meta("deleted", false):
+		return  # parked casualty — not on the battlefield
+	var model := node.get_meta("model_instance") as ModelInstance
+	if model == null or not model.is_alive:
+		return
+	var shape := SeparationChecker.shape_for_model(model)
+	if shape == null:
+		return
+	# Unit identity is the rule's seam; a model without a resolvable unit cannot be
+	# classified against "other units" -> skip (no warning over a false one).
+	var eff_unit: GameUnit = SeparationChecker.effective_unit(model.unit as GameUnit)
+	if eff_unit == null:
+		return
+	moved.append({
+		"model": model,
+		"shape": shape,
+		"unit": eff_unit,
+		"player_id": int(eff_unit.unit_properties.get("player_id", 0)),
+		"center": shape.center,
+		"bound": shape.bounding_radius(),
+	})
+
+
+## Evaluates the 1" unit-separation walls for the current selection and drives the
+## visualizer. For each foreign unit it aggregates the min edge gap to the moved bases,
+## whether any pair actually violates (per the exception matrix), and the wall colour,
+## then emits one ZoneSpec per unit to show. Pre-filtered per unit (footprint reject)
+## and per pair (distance_squared) so only nearby bases run the exact edge test.
+## @param proactive: true on drag — a unit within SEPARATION_PROACTIVE_INCHES shows its
+##   wall even without a violation; false on drop — only violating units keep a wall.
+func _check_separation_for_selected_units(proactive: bool = false) -> void:
+	if separation_visualizer == null or object_manager == null or opr_army_manager == null:
+		return
+
+	# object_manager is typed Node3D, so its return type isn't inferable here — use an
+	# untyped assignment (matches _check_coherency_for_selected_units).
+	var selected = object_manager.get_selected_objects()
+	if selected.is_empty():
+		separation_visualizer.clear_retreat_ruler()
+		separation_visualizer.show_zones([])
+		return
+
+	var moved := _collect_moved_separation_models(selected)
+	if moved.is_empty():
+		separation_visualizer.clear_retreat_ruler()
+		separation_visualizer.show_zones([])
+		return
+
+	if not _separation_cache_valid:
+		_rebuild_separation_cache()
+
+	# Moved aggregate (effective-unit ids + centroid/radius) for a per-unit quick reject.
+	var moved_unit_ids: Dictionary = {}
+	var moved_centroid := Vector2.ZERO
+	for mv in moved:
+		moved_unit_ids[(mv["unit"] as GameUnit).get_instance_id()] = true
+		moved_centroid += mv["center"]
+	moved_centroid /= float(moved.size())
+	var moved_radius := 0.0
+	for mv in moved:
+		moved_radius = maxf(moved_radius, moved_centroid.distance_to(mv["center"]) + float(mv["bound"]))
+
+	var proactive_m: float = SEPARATION_PROACTIVE_INCHES * SeparationChecker.INCHES_TO_METERS
+	var sep_inches: float = SeparationChecker.SEPARATION_DISTANCE_INCHES
+	var contact_eps: float = SeparationChecker.BASE_CONTACT_EPSILON_INCHES
+
+	# Track the globally NEAREST violating base pair (min edge gap) across all foreign
+	# units, so the retreat ruler measures the deepest incursion — the pair the player
+	# most needs to back away from.
+	var worst_gap := INF
+	var worst_a: SeparationChecker.BaseShape = null
+	var worst_b: SeparationChecker.BaseShape = null
+	var worst_friendly := false
+
+	var zones: Array = []
+	for unit_id in _separation_units_cache:
+		if moved_unit_ids.has(unit_id):
+			continue  # never wall the unit(s) being moved
+		var entry: Dictionary = _separation_units_cache[unit_id]
+		# Per-unit quick reject: whole footprint beyond proactive reach of the moved set.
+		var reach_unit: float = proactive_m + float(entry["radius"]) + moved_radius
+		if moved_centroid.distance_squared_to(entry["centroid"]) > reach_unit * reach_unit:
+			continue
+
+		var unit_player: int = int(entry["player_id"])
+		var entry_shapes: Array = entry["shapes"]
+		var min_gap := INF
+		var is_violation := false
+		var color_is_friendly := true
+		for cs in entry_shapes:
+			var cs_center: Vector2 = cs.center
+			var cs_bound: float = cs.bounding_radius()
+			for mv in moved:
+				var reach: float = proactive_m + float(mv["bound"]) + cs_bound
+				if (mv["center"] as Vector2).distance_squared_to(cs_center) > reach * reach:
+					continue
+				var mv_player: int = mv["player_id"]
+				var pair_friendly: bool = mv_player > 0 and unit_player > 0 and mv_player == unit_player
+				# Any near enemy/unknown pair makes the whole wall red; amber needs all
+				# near pairs to be known same-army.
+				if not pair_friendly:
+					color_is_friendly = false
+				var gap := SeparationChecker.edge_distance(mv["shape"], cs)
+				min_gap = minf(min_gap, gap)
+				var pair_violation := false
+				if gap < sep_inches:
+					if pair_friendly:
+						pair_violation = true  # friendly: any sub-1" including contact warns
+					elif gap > contact_eps:
+						pair_violation = true  # enemy/unknown: sub-1" but not base contact
+					# enemy/unknown base contact = intentional Charge into melee -> exempt
+				if pair_violation:
+					is_violation = true
+					if gap < worst_gap:
+						worst_gap = gap
+						worst_a = mv["shape"]
+						worst_b = cs
+						worst_friendly = pair_friendly
+		if min_gap == INF:
+			continue  # no member pair within even the proactive reach
+
+		if proactive:
+			if min_gap > SEPARATION_PROACTIVE_INCHES and not is_violation:
+				continue
+		elif not is_violation:
+			continue  # drop: only violating units keep their wall
+
+		zones.append(SeparationVisualizer.ZoneSpec.new(
+			unit_id, entry_shapes, color_is_friendly, is_violation, float(entry["signature"])))
+
+	separation_visualizer.show_zones(zones)
+
+	# Retreat aid: while a violation is live, draw a measured ruler between the nearest
+	# offending base edges, labelled with the actual gap and the 1" target, so the player
+	# sees how deep they are inside the zone and which way to back out. Cleared otherwise.
+	if worst_a != null and worst_b != null:
+		var pts := SeparationChecker.nearest_edge_points(worst_a, worst_b)
+		separation_visualizer.set_retreat_ruler(pts["from"], pts["to"], worst_gap, worst_friendly)
+	else:
+		separation_visualizer.clear_retreat_ruler()
 
 
 ## ============================================================================
@@ -4278,6 +4834,11 @@ func _init_radial_menu() -> void:
 	add_child(coherency_visualizer)
 	radial_menu_controller.coherency_visualizer = coherency_visualizer
 
+	# Create the 1" enemy-separation proximity hint visualizer (local-only render).
+	separation_visualizer = SeparationVisualizer.new()
+	separation_visualizer.name = "SeparationVisualizer"
+	add_child(separation_visualizer)
+
 	# Base-anchored range rings ("auras"): per-model range circles toggled with G on the
 	# selection (local-only display aid). Owns the rings under /root/Main.
 	range_ring_controller = RangeRingControllerScript.new()
@@ -4300,6 +4861,24 @@ func _init_radial_menu() -> void:
 	pinned_rulers.name = "PinnedRulers"
 	add_child(pinned_rulers)
 	object_manager.pinned_rulers = pinned_rulers
+
+	# Path painting (P1+P2): the model is the brush — drags paint chalk trails as wide
+	# as the base, every executed move lands in the ledger with its measured arc, trails
+	# persist until the unit's activation ends and replicate to the opponent (the
+	# proof-of-movement layer). T hides them, Shift+T clears, click a trail for proof.
+	move_trails = MoveTrailsScript.new()
+	move_trails.name = "MoveTrails"
+	add_child(move_trails)
+	object_manager.move_trails = move_trails
+	object_manager.selection_dropped.connect(_on_trails_dropped)
+	# A unit marked Activated is DONE for the round — its trail's job ends with it.
+	if radial_menu_controller.has_signal("unit_activated"):
+		radial_menu_controller.unit_activated.connect(func(gu) -> void:
+			if gu != null and move_trails != null:
+				move_trails.on_activation_done(gu.unit_id))
+	# Auto-suppress chalk while the game is in the deployment phase (deployment isn't
+	# movement-proof) — seed from the current formal game phase.
+	_sync_move_trails_deployment()
 
 	# Create unit boundary visualizer (shows which models belong to which unit)
 	unit_boundary_visualizer = UnitBoundaryVisualizerScript.new()
@@ -4432,6 +5011,10 @@ func _stain_is_vehicle(props: Dictionary) -> bool:
 func _on_remote_activation_updated(game_unit: GameUnit) -> void:
 	if radial_menu_controller:
 		radial_menu_controller._update_activated_markers(game_unit)
+	# Marked Activated remotely = that unit's activation is done — its trails fade
+	# (same rule as the local toggle, so both tables stay in step).
+	if move_trails != null and game_unit != null and game_unit.is_activated:
+		move_trails.on_activation_done(game_unit.unit_id)
 
 
 ## Called when a remote peer changes a unit marker (Fatigued, Shaken, etc.)
@@ -4450,6 +5033,8 @@ func _on_remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, ad
 		"ActivatedMarker":
 			game_unit.is_activated = add
 			radial_menu_controller._update_activated_markers(game_unit)
+			if move_trails != null and add:
+				move_trails.on_activation_done(game_unit.unit_id)
 		_:
 			# Dialog marker (Pinned, Stunned, custom, counter, ...) - render its token
 			radial_menu_controller.set_unit_marker_token(game_unit, marker_name, add, color, value)

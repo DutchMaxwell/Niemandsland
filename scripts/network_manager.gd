@@ -171,6 +171,7 @@ func disconnect_game() -> void:
 	connected_peers.clear()
 	validated_peers.clear()
 	_clear_all_busy_peers()
+	reset_ready_state()  # deployment-ready flags belong to the session that just ended
 	player_names.clear()
 	# Genuine session end (NOT the auto-reconnect path, which goes through
 	# internet_lobby.reconnect_to_room and never calls this): drop all identity maps so
@@ -694,6 +695,49 @@ func sync_rulers_to_peer(peer_id: int) -> void:
 		return
 	for d in pr.serialize():
 		_remote_call("pin_ruler_networked", [int(d["id"]), int(d["owner"]), float(d["fx"]), float(d["fy"]), float(d["fz"]), float(d["tx"]), float(d["ty"]), float(d["tz"]), float(d["dist"]), bool(d["blocked"])], peer_id)
+
+
+# === Path painting: committed move trails (proof-of-movement, cosmetic-additive) ===
+
+## Broadcast ONE unit's committed trails from a single drop, so the OPPONENT sees the
+## painted proof too. `batch` is flat plain data, per moved model:
+## [model_id, radius_m, n_points, x0, z0, x1, z1, ...] — a handful of floats per move
+## (simplified polylines), strictly additive display data: the host-authoritative move
+## path (broadcast_move/_batch) is untouched. drop_id groups the messages of one drop
+## so the receiver's per-owner activation fade matches the sender's exactly.
+func broadcast_move_trails(owner_slot: int, unit_id: String, unit_name: String,
+		round_num: int, drop_id: int, batch: Array) -> void:
+	if not is_multiplayer_active() or batch.is_empty():
+		return
+	if not _validate_rpc_ready("broadcast_move_trails"):
+		return
+	_remote_call("sync_move_trails", [owner_slot, unit_id, unit_name, round_num, drop_id, batch], 0)
+
+
+## RPC: a peer committed move trails — paint the same chalk on our table. Purely
+## cosmetic: the trail renders from the message alone (unit identity is the id string,
+## no node lookup needed), and a missing MoveTrails node just drops the message.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_move_trails(owner_slot: int, unit_id: String, unit_name: String,
+		round_num: int, drop_id: int, batch: Array) -> void:
+	var trails := get_node_or_null("/root/Main/MoveTrails")
+	if trails == null or not trails.has_method("commit_trail"):
+		return
+	var i := 0
+	while i + 2 < batch.size():
+		var model_id := int(batch[i])
+		var radius := float(batch[i + 1])
+		var n := int(batch[i + 2])
+		i += 3
+		var pts := PackedVector2Array()
+		var j := 0
+		while j < n and i + 1 < batch.size():
+			pts.append(Vector2(float(batch[i]), float(batch[i + 1])))
+			i += 2
+			j += 1
+		if pts.size() >= 2 and radius > 0.0:
+			trails.commit_trail(owner_slot, unit_id, unit_name, model_id, pts,
+					radius, round_num, drop_id)
 
 
 ## Helper to broadcast movement to all peers
@@ -1439,6 +1483,126 @@ func sync_table_settings(settings: Dictionary) -> void:
 func broadcast_table_settings(settings: Dictionary) -> void:
 	if is_multiplayer_active():
 		_remote_call("sync_table_settings", [settings], 0)
+
+
+# ===== Deployment Ready-Sync (host-authoritative game-phase gate) =====
+#
+# Additive messaging over the SAME command channel every other host-authoritative sync uses (NOT
+# @rpc/SceneMultiplayer, which does not work over our relay). Flow:
+#   1. Each player clicks "Ready / Fertig aufgestellt" -> set_local_ready(true).
+#        - GUEST sends its flag to the host:  _remote_call("_rpc_report_ready", [ready], 1)
+#        - HOST records its own flag directly (it IS the authority).
+#   2. The HOST tracks a ready-flag per seated slot (_ready_by_slot) and, when EVERY seated player is
+#      ready, fires the authoritative deployment->playing transition to ALL peers
+#      (_rpc_set_game_phase, broadcast) and applies it locally. A player can un-ready (ready=false)
+#      any time before the start fires — that clears the gate.
+#   3. Guests never decide the transition; they only report and obey. Core host-authoritative flow is
+#      untouched — this is purely additive.
+
+## This client's own ready flag (mirrored to the host). Kept so the UI can toggle it.
+var _local_ready: bool = false
+## HOST-side roster of ready flags: slot(int) -> bool. Meaningless on a guest.
+var _ready_by_slot: Dictionary = {}
+
+## UI seam: emitted on the host AND on every peer? No — emitted host-side when the ready tally changes
+## (both-ready is `all`), so the host UI can show "waiting for other player (n/total)". Guests drive
+## their own local label from is_local_ready() + the phase transition they receive.
+signal ready_state_changed(all_ready: bool, ready_count: int, total: int)
+## The authoritative game phase arrived (host applied it locally too). main.gd applies it to the army
+## manager. Carries an OPRArmyManager.GamePhase value.
+signal remote_game_phase_changed(phase: int)
+
+
+## This client's current ready flag.
+func is_local_ready() -> bool:
+	return _local_ready
+
+
+## The player slots currently seated at the table: the host (always slot 1) plus every VALIDATED
+## connected guest's canonical slot. This is the set that must all be ready before play begins.
+## Host-side (a guest has no roster) — deterministic (sorted).
+func seated_slots() -> Array:
+	var slots: Array = [1]
+	for p in connected_peers:
+		if validated_peers.get(p, false):
+			var s: int = slot_for_peer(p)
+			if not slots.has(s):
+				slots.append(s)
+	slots.sort()
+	return slots
+
+
+## Host-side: are ALL seated players ready? True only when every seated slot's flag is set.
+func all_players_ready() -> bool:
+	for s in seated_slots():
+		if not bool(_ready_by_slot.get(s, false)):
+			return false
+	return true
+
+
+## Number of seated slots whose ready flag is set (host-side; for the "n/total" readout).
+func ready_count() -> int:
+	var n := 0
+	for s in seated_slots():
+		if bool(_ready_by_slot.get(s, false)):
+			n += 1
+	return n
+
+
+## Set THIS client's ready flag and propagate it. Single-player is a no-op on the wire (the caller
+## starts the game directly). Host records into its own roster and re-checks the gate; a guest reports
+## the flag to the host.
+func set_local_ready(ready: bool) -> void:
+	_local_ready = ready
+	if not is_multiplayer_active():
+		return
+	if is_host:
+		_host_record_ready(1, ready)  # the host is always slot 1
+	else:
+		_remote_call("_rpc_report_ready", [ready], 1)  # to host only
+
+
+## RPC (guest -> host): a guest reports its ready flag. Host-only; ignored elsewhere.
+@rpc("any_peer", "call_remote", "reliable")
+func _rpc_report_ready(ready: bool) -> void:
+	if not is_host:
+		return
+	_host_record_ready(slot_for_peer(_get_sender()), ready)
+
+
+## Host-only: record a slot's ready flag, notify the local UI, and — when every seated player is
+## ready — fire the authoritative deployment->playing transition.
+func _host_record_ready(slot: int, ready: bool) -> void:
+	if not is_host:
+		return
+	_ready_by_slot[slot] = ready
+	var slots := seated_slots()
+	ready_state_changed.emit(all_players_ready(), ready_count(), slots.size())
+	if all_players_ready():
+		start_game_networked()
+
+
+## Host-only: broadcast the authoritative deployment->playing transition to all peers and apply it
+## locally (via remote_game_phase_changed). Clears the ready roster so a later re-deploy re-arms it.
+func start_game_networked() -> void:
+	if not is_host:
+		return
+	_ready_by_slot.clear()
+	_local_ready = false
+	_remote_call("_rpc_set_game_phase", [OPRArmyManager.GamePhase.PLAYING], 0)  # to guests
+	remote_game_phase_changed.emit(OPRArmyManager.GamePhase.PLAYING)  # host applies locally
+
+
+## RPC (host -> guests): apply the authoritative game phase. Guests obey; they never originate it.
+@rpc("authority", "call_remote", "reliable")
+func _rpc_set_game_phase(phase: int) -> void:
+	remote_game_phase_changed.emit(phase)
+
+
+## Drop any ready state (called on disconnect/teardown so a re-hosted session starts clean).
+func reset_ready_state() -> void:
+	_local_ready = false
+	_ready_by_slot.clear()
 
 
 # ===== Generic Object Spawn / Visibility Synchronization =====

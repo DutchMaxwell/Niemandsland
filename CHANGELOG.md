@@ -6,7 +6,30 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Added
+- **Path Painting — measured, provable movement.** Dragging a model paints a base-width "chalk" trail
+  behind it; a live counter shows the inches consumed (the actual traveled path, not straight-line),
+  and clicking a committed trail reports how far that model moved. Every executed move is recorded to a
+  move ledger and synced in multiplayer, so an opponent can verify a move was legal. Trails persist until
+  the unit's activation ends and auto-suppress during deployment; a **Show Move Trails** toggle
+  (Settings › Display, persisted) plus `T` / `Shift+T` hide or clear them. Dragging back down a path
+  refunds the budget (no wiggle inflation). (#131)
+- **1″ spacing protection.** Flat 1″ proximity walls light up as a model nears another (red enemy /
+  orange friendly), models snap to base contact, and no model may be dropped overlapping another —
+  enemy **or** own. (#131)
+- **Game-phase gate.** An explicit **Deployment → Start Game → Playing** flow: place your army, then
+  start play (round 1 begins). In multiplayer both players signal ready and the host starts once both
+  are — a host-authoritative ready-sync over the relay. The phase is saved and restored with the game.
+  (#131)
+- **"Dry brush" movement-budget cap (opt-in default-on).** With the *Enforce Movement Limit* toggle a
+  movement drag hard-stops at the model's selected action band — Advance (~6″) or Rush/Charge (~12″),
+  Fast/aura-aware — measured along the actual path; the counter turns red when the brush runs dry.
+  Switching the Advance / Rush-Charge selector above the dice re-caps live. (#131)
+
 ### Changed
+- **Movement distance reports the traveled arc.** The battle log and the in-move ruler now show the
+  actual path length a model covered, not the straight-line from→to distance. Weapon/charge RANGE
+  measurement stays straight-line (rules-correct). (#131)
 - **Model rotation aims at the cursor.** Holding R now turns every selected loose model in place to
   FACE the mouse cursor (the degrees from its start facing shown next to it, release to commit),
   replacing the old hold-and-spin-until-you-release gesture — each model in a multi-selection faces the

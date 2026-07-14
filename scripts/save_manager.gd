@@ -7,7 +7,9 @@ signal save_completed(path: String)
 signal load_completed(object_count: int)
 signal load_failed(error: String)
 
-const SAVE_VERSION = "1.5"  # Added free-placed sandbox terrain (ruins/forests/hazard clusters)
+const SAVE_VERSION = "1.6"  # Schema checkpoint (goal 002): normalises the post-1.5 no-bump additions.
+# RULE: whoever bumps SAVE_VERSION ships the matching SaveMigrations step + fixture test in the SAME
+# change — see scripts/save_migrations.gd for the chain and docs/ARCHITECTURE.md.
 const SAVE_EXTENSION = "nml"  # Niemandsland Save
 ## Yield to the main loop every N object spawns during a load/army-receive so heavy GLB
 ## instantiation never blocks the thread for seconds — a long stall starves the relay
@@ -285,6 +287,10 @@ func _serialize_game_state() -> Dictionary:
 		lib = radial_menu_controller.token_library.to_dict()
 	return {
 		"current_round": army_manager.current_round if army_manager else 1,
+		# Formal game phase (0 = deployment, 1 = playing). A game saved mid-play reloads in PLAYING;
+		# a fresh table saved during setup reloads in DEPLOYMENT. Also carried on the MP full-state
+		# push (host -> joining/reconnecting guest) since that path reuses this serializer.
+		"game_phase": army_manager.game_phase if army_manager else OPRArmyManager.GamePhase.DEPLOYMENT,
 		"current_player": 1,  # No turn-order system yet; players track this themselves
 		"token_library": lib
 	}
@@ -336,10 +342,16 @@ func load_game(path: String) -> Error:
 		load_failed.emit("Invalid save file format")
 		return ERR_INVALID_DATA
 
-	# Validate version
-	var version = state.get("version", "")
-	if version != SAVE_VERSION:
-		push_warning("Save file version mismatch: %s (expected %s)" % [version, SAVE_VERSION])
+	# Versioned migration (goal 002): the current format passes through, supported older formats are
+	# lifted step by step, pre-alpha or newer-build saves fail with a CLEAR message instead of loading
+	# into silent data damage (the old code only push_warning'ed and loaded anyway).
+	var migration := SaveMigrations.migrate(state)
+	if not bool(migration["ok"]):
+		load_failed.emit(str(migration["error"]))
+		return ERR_INVALID_DATA
+	state = migration["state"]
+	if not str(migration["migrated_from"]).is_empty():
+		print("[SaveManager] migrated save from version %s to %s" % [migration["migrated_from"], SAVE_VERSION])
 
 	# Clear current state
 	if object_manager:
@@ -858,6 +870,10 @@ func _restore_dead_parking_after_load() -> void:
 func _deserialize_game_state(state_data: Dictionary) -> void:
 	if army_manager:
 		army_manager.set_current_round(int(state_data.get("current_round", 1)))
+		# Restore the game phase. Older saves without the key predate the phase gate; a loaded battle
+		# with units on the table is a game in progress, so default those to PLAYING (not DEPLOYMENT,
+		# which would wrongly suppress the move-trail chalk on a resumed game).
+		army_manager.set_game_phase(int(state_data.get("game_phase", OPRArmyManager.GamePhase.PLAYING)))
 	# current_player is not restored: there is no turn-order system yet.
 	# Restore the custom-token library before markers re-render so colors/effects resolve.
 	if radial_menu_controller and radial_menu_controller.token_library:

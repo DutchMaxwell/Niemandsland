@@ -578,6 +578,39 @@ static func _apply_tough_base_fallback(unit: OPRUnit) -> void:
 			_set_round_base(unit, _base_size_from_tough(tough))  # large infantry / cavalry
 
 
+## Applies an Army Forge base recommendation (bases:{round,square}) to the unit. Returns true when a
+## usable value was applied. PRECEDENCE RULE: explicit API base data WINS — callers may only use the
+## Tough-derived fallback (_apply_tough_base_fallback) when this returns false. Shared by the TTS
+## import AND the file/army-book import so both honour the same order (the file path used to skip the
+## API bases entirely and always derive — the Great-Scorpion-on-a-small-base bug).
+static func _apply_base_recommendation(unit: OPRUnit, bases: Variant, is_regiments: bool) -> bool:
+	var round_size = bases.get("round", "") if bases is Dictionary else ""
+	var square_size = bases.get("square", "") if bases is Dictionary else ""
+	if is_regiments and _is_usable_base_value(square_size):
+		# Age of Fantasy: Regiments uses square/rectangular bases. Reuse the oval
+		# WIDTHxDEPTH parser (long side faces +Z / "north"); render as a box later.
+		var parsed_sq = _parse_base_size(square_size, 25)
+		unit.base_is_square = true
+		unit.base_is_oval = false
+		unit.base_width_mm = clampi(parsed_sq[1], 20, 150)
+		unit.base_depth_mm = clampi(parsed_sq[2], 20, 150)
+		unit.base_size_round = max(unit.base_width_mm, unit.base_depth_mm)
+		unit.base_size_square = unit.base_size_round
+		return true
+	if _is_usable_base_value(round_size):
+		# Parse base size including oval format like "60x35"
+		var parsed = _parse_base_size(round_size, 32)
+		unit.base_is_oval = parsed[0]
+		unit.base_width_mm = clampi(parsed[1], 20, 150)
+		unit.base_depth_mm = clampi(parsed[2], 20, 150)
+		# base_size_round stores the larger dimension for compatibility
+		unit.base_size_round = max(unit.base_width_mm, unit.base_depth_mm)
+		unit.base_size_square = _safe_int(square_size, 30)
+		unit.base_size_square = clampi(unit.base_size_square, 20, 150)
+		return true
+	return false
+
+
 ## Set a round base (mm), growing only (never shrink below an existing / default base).
 static func _set_round_base(unit: OPRUnit, mm: int) -> void:
 	if mm <= unit.base_size_round:
@@ -621,33 +654,8 @@ func _parse_tts_unit(data: Dictionary, game_system_abbrev: String = "") -> OPRUn
 	# Parse base sizes from Army Forge recommendations. Army Forge returns
 	# bases:{round:"none"} for models without one (many vehicles / monsters), so a
 	# non-empty dict is not proof of a real recommendation — require a usable value.
-	var bases = data.get("bases", {})
-	var round_size = bases.get("round", "") if bases is Dictionary else ""
-	var square_size = bases.get("square", "") if bases is Dictionary else ""
 	var is_regiments: bool = game_system_abbrev == "aofr"
-	var had_base_recommendation: bool = false
-	if is_regiments and _is_usable_base_value(square_size):
-		had_base_recommendation = true
-		# Age of Fantasy: Regiments uses square/rectangular bases. Reuse the oval
-		# WIDTHxDEPTH parser (long side faces +Z / "north"); render as a box later.
-		var parsed = _parse_base_size(square_size, 25)
-		unit.base_is_square = true
-		unit.base_is_oval = false
-		unit.base_width_mm = clampi(parsed[1], 20, 150)
-		unit.base_depth_mm = clampi(parsed[2], 20, 150)
-		unit.base_size_round = max(unit.base_width_mm, unit.base_depth_mm)
-		unit.base_size_square = unit.base_size_round
-	elif _is_usable_base_value(round_size):
-		had_base_recommendation = true
-		# Parse base size including oval format like "60x35"
-		var parsed = _parse_base_size(round_size, 32)
-		unit.base_is_oval = parsed[0]
-		unit.base_width_mm = clampi(parsed[1], 20, 150)
-		unit.base_depth_mm = clampi(parsed[2], 20, 150)
-		# base_size_round stores the larger dimension for compatibility
-		unit.base_size_round = max(unit.base_width_mm, unit.base_depth_mm)
-		unit.base_size_square = _safe_int(square_size, 30)
-		unit.base_size_square = clampi(unit.base_size_square, 20, 150)
+	var had_base_recommendation: bool = _apply_base_recommendation(unit, data.get("bases", {}), is_regiments)
 
 	# Parse special rules (TTS API uses "rules" field, not "specialRules")
 	var rules_field = data.get("rules", null)
@@ -946,7 +954,7 @@ func _parse_army_forge_json(json_text: String, source_name: String = "") -> OPRA
 	var book_data = await _fetch_army_book(army_id, army.game_system_abbrev)
 
 	for unit_data in units_data:
-		var unit = _parse_unit_from_list(unit_data, book_data)
+		var unit = _parse_unit_from_list(unit_data, book_data, army.game_system_abbrev)
 		if unit:
 			army.units.append(unit)
 
@@ -1162,7 +1170,7 @@ func _on_request_completed(result: int, response_code: int, _headers: PackedStri
 
 
 ## Parse a unit from list data, enriching with book data if available
-func _parse_unit_from_list(list_unit: Dictionary, book_data: Dictionary) -> OPRUnit:
+func _parse_unit_from_list(list_unit: Dictionary, book_data: Dictionary, game_system_abbrev: String = "") -> OPRUnit:
 	var unit = OPRUnit.new()
 
 	var unit_def_id = list_unit.get("id", "")
@@ -1230,9 +1238,12 @@ func _parse_unit_from_list(list_unit: Dictionary, book_data: Dictionary) -> OPRU
 				# Add upgrade cost
 				unit.cost += upgrade_def.get("cost", 0)
 
-	# This path carries no base recommendation, so size the base from Tough
-	# (only enlarges high-Tough vehicles/monsters; normal infantry keep the default).
-	_apply_tough_base_fallback(unit)
+	# EXPLICIT API BASE DATA WINS: the army book delivers per-unit bases (e.g. the Great Scorpion's
+	# round '60') — apply them exactly like the TTS path does. Only when the book gives no usable
+	# value does the Tough-derived fallback size the base. (This path used to SKIP the book bases and
+	# always derive, shrinking API-based units to the default/derived base.)
+	if not _apply_base_recommendation(unit, unit_def.get("bases", {}), game_system_abbrev == "aofr"):
+		_apply_tough_base_fallback(unit)
 
 	return unit
 
@@ -1322,10 +1333,42 @@ func _merge_combined_units(units: Array[OPRUnit]) -> Array[OPRUnit]:
 			anchor.size += unit.size
 			anchor.cost += unit.cost
 			_merge_weapon_counts(anchor.weapons, unit.weapons)
+			# Per-model equipment/roles (a Sergeant / Banner / weapon-team item on the SECONDARY half)
+			# must survive the merge: they drive the base ring, per-model Tough AND the loadout-variant
+			# model (`#crest`). Dropping them silently de-cresetd combined squads' sergeants.
+			_merge_equipment_items(anchor.equipment_items, unit.equipment_items)
+			for equip_name in unit.equipment:
+				if equip_name not in anchor.equipment:
+					anchor.equipment.append(equip_name)
+			# Unit-wide rule lines only the secondary half carried (its Banner's rule, an upgrade-granted
+			# ability) stay on the merged card.
+			for rule in unit.special_rules:
+				if rule not in anchor.special_rules:
+					anchor.special_rules.append(rule)
+			for item_name in unit.item_grants:
+				if not anchor.item_grants.has(item_name):
+					anchor.item_grants[item_name] = unit.item_grants[item_name]
 			continue
 		merged.append(unit)
 
 	return merged
+
+
+## Folds `extra` per-model equipment items into `target`, summing counts for same-named items so a
+## merged Combined unit keeps BOTH halves' Sergeants/Banners/weapon-team items (each with its ring,
+## per-model Tough and `#<slug>` variant model).
+static func _merge_equipment_items(target: Array, extra: Array) -> void:
+	for item in extra:
+		var item_name: String = str(item.get("name", ""))
+		var existing: Dictionary = {}
+		for t in target:
+			if str(t.get("name", "")) == item_name:
+				existing = t
+				break
+		if existing.is_empty():
+			target.append(item)
+		else:
+			existing["count"] = int(existing.get("count", 1)) + int(item.get("count", 1))
 
 
 ## Folds `extra` weapons into `target`, summing counts for identical weapons

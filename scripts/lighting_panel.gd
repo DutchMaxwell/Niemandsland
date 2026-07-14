@@ -209,6 +209,35 @@ func _build_ui() -> void:
 		GraphicsSettings.apply_fullscreen(on))
 	vbox.add_child(fs_cb)
 
+	# Show Move Trails (path painting): the discoverable twin of the T hotkey. Persisted
+	# via GraphicsSettings; also pushed to the live MoveTrails node so it toggles at once.
+	# The move LEDGER keeps recording regardless — only the visible chalk is switched.
+	var trails_cb := CheckButton.new()
+	trails_cb.text = "Show Move Trails"
+	trails_cb.button_pressed = GraphicsSettings.show_move_trails
+	trails_cb.toggled.connect(func(on: bool) -> void:
+		var mt := get_node_or_null("/root/Main/MoveTrails")
+		if mt != null and mt.has_method("set_user_show_trails"):
+			mt.set_user_show_trails(on)   # updates the live node AND persists
+		else:
+			GraphicsSettings.show_move_trails = on
+			GraphicsSettings.save_settings())
+	vbox.add_child(trails_cb)
+
+	# Enforce Movement Limit (path-painting "dry brush"): Strict = a movement drag hard-stops
+	# at the model's max legal band; off = Casual (free drag). DEFAULT ON. Persisted. Movement
+	# only — shooting and other actions are never gated. DE/EN by locale.
+	var de := str(OS.get_locale()).begins_with("de")
+	var limit_cb := CheckButton.new()
+	limit_cb.text = "Bewegungslimit erzwingen" if de else "Enforce Movement Limit"
+	limit_cb.tooltip_text = ("Strikt: Eine Bewegung stoppt hart bei der maximal erlaubten Reichweite des Modells (Rush/Charge). Aus = Casual (freies Ziehen)." if de
+			else "Strict: a movement drag hard-stops at the model's maximum legal range (Rush/Charge). Off = Casual (free drag).")
+	limit_cb.button_pressed = GraphicsSettings.enforce_movement_limit
+	limit_cb.toggled.connect(func(on: bool) -> void:
+		GraphicsSettings.enforce_movement_limit = on
+		GraphicsSettings.save_settings())
+	vbox.add_child(limit_cb)
+
 
 ## UI Scale slider (content_scale_factor) — reachability/HiDPI. Bound to GraphicsSettings.
 func _add_ui_scale_slider(parent: Control) -> void:
