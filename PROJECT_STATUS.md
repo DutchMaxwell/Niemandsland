@@ -1,6 +1,6 @@
 # Niemandsland — Status & Roadmap
 
-**Version:** 0.3.8.0-alpha *(public alpha — forward-looking backlog in [`docs/ROADMAP.md`](docs/ROADMAP.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
+**Version:** 0.3.9.0-alpha *(public alpha — forward-looking backlog in [`docs/ROADMAP.md`](docs/ROADMAP.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
 
 This is the single source of truth for what works, what's in progress, and what's
 planned. Architecture details live in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md);
@@ -79,6 +79,15 @@ rate-limit / army-sync cascade was live-validated across two real clients.
 save format with OS file association
 ([`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md)).
 
+**Onboarding — guided tutorial (foundation)** — a T0 walking skeleton + a T1 tool track
+(W1–W7) that teaches on the real table, event-gated (a lesson advances only when the
+player does the action): camera & table, army import, select/move/rotate/undo, dice &
+measuring, unit cards & activation, wounds & casualties, and movement & trails (path
+painting, dry-brush cap, 1″ spacing, Start-Game phase gate). It ships with a bundled
+board (official lists, real minis, auto-generated terrain), progress persistence and an
+end assessment. The broader coverage (Settings, Map Layout, Terrain Mode, the full dice
+toolset, save/load, hosting, Regiments, and an OPR-rules track) is planned as later waves.
+
 **Presentation** — a built-in Tactical-HUD UI theme (sleek; cyan/amber), atmosphere
 presets (Day/Sunset/Night/Overcast/Rain), graphics quality presets, SSAO + glow, cinematic intro. **Battlefield atmosphere**
 ([`docs/ATMOSPHERE.md`](docs/ATMOSPHERE.md)): one-click Day/Sunset/Night/Overcast/Rain
@@ -153,10 +162,11 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 
 ## Tests
 
-gdUnit4: **1,110 tests green** in `test/` (incl. `coherency_checker`, `save_manager`,
+gdUnit4: **1,139 tests green** in `test/` (incl. `coherency_checker`, `save_manager`,
 `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`, `network_manager` /
-`network_version_handshake`, `dice_rules`, `player_identity`, and the movement/spacing
+`network_version_handshake`, `dice_rules`, `player_identity`, the movement/spacing
 suites `separation_checker` / `separation_resolver` / `separation_zone`, `move_ledger` /
-`move_trails`, `game_phase`, `object_manager`). Python: `relay/test_relay_server.py`
-(49 green). How to run: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). Coverage of the
-newer movement/MP paths is solid; some older gameplay scripts are still untested.
+`move_trails`, `game_phase`, `object_manager`, and the guided-tutorial flow). Python:
+`relay/test_relay_server.py` (49 green). How to run:
+[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). Coverage of the newer movement / MP /
+tutorial paths is solid; some older gameplay scripts are still untested.

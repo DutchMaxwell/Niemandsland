@@ -6,6 +6,8 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+## [0.3.9.0-alpha] — 2026-07-15
+
 ### Added
 - **Path Painting — measured, provable movement.** Dragging a model paints a base-width "chalk" trail
   behind it; a live counter shows the inches consumed (the actual traveled path, not straight-line),
@@ -25,6 +27,24 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   movement drag hard-stops at the model's selected action band — Advance (~6″) or Rush/Charge (~12″),
   Fast/aura-aware — measured along the actual path; the counter turns red when the brush runs dry.
   Switching the Advance / Rush-Charge selector above the dice re-caps live. (#131)
+- **Guided tutorial (foundation).** A T0 walking skeleton plus a T1 tool track (W1–W7) that teaches on
+  the real table, event-gated (a lesson advances only when you actually do the action): camera & table,
+  army import, select / move / rotate / undo, dice & measuring, unit cards & activation, wounds &
+  casualties, and movement & trails (path painting, the dry-brush cap, 1″ spacing, and the Start-Game
+  phase gate). Ships with a bundled board (official lists, real minis, auto-generated terrain), progress
+  persistence and an end assessment. (#121)
+- **Mummified Undead — live.** The AoF Mummified Undead book is now delivered from Cloudflare R2, with
+  game-side slug-map + mount-keyword integration so every weapon / command / mount option resolves to the
+  right model. (#117)
+- **"Perfectly based" miniature bases.** The flat player-colour disc is replaced by a live window onto the
+  battlefield ground under the model (a shared shader mirrors the table's biome, so the base reads as a
+  seamless cut-out), plus a black beveled rim and an affiliation ring on solo models. (#123)
+- **Versioned `.nml` save migration.** Older saves are lifted step-by-step up an explicit chain; pre-alpha
+  formats and saves from newer builds now fail with a clear message instead of "warn and load anyway".
+  (#119)
+- **Relay usage stats (privacy-preserving).** Aggregate-only counters from the relay's own room metadata —
+  games played, join failures by reason, and a room-lifetime histogram — never IPs, room codes or player
+  identities. (#115)
 
 ### Changed
 - **Movement distance reports the traveled arc.** The battle log and the in-move ruler now show the
@@ -34,6 +54,22 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   FACE the mouse cursor (the degrees from its start facing shown next to it, release to commit),
   replacing the old hold-and-spin-until-you-release gesture — each model in a multi-selection faces the
   cursor independently, matching how regiment movement-trays already rotate. (community feedback, #114)
+
+### Fixed
+- **Guest army import no longer hangs.** An inactivity timeout with liveness generations aborts a
+  genuinely stalled import stream and recovers, without ever falsely aborting a healthy one — completing
+  the multiplayer 3+ hardening. (#120)
+- **Relay records room stats at shutdown.** The room-lifetime / peers-per-room histograms are now written
+  on server shutdown too (the dominant path under Fly's scale-to-zero), not only on normal room teardown.
+  (#124)
+- **QA render tools derive their output dir from `$HOME`** instead of a hardcoded user path. (#127)
+
+### Internal
+- Repo-hygiene hardening: a CI guard blocks internal working docs, hardcoded home paths and
+  secret-provided private patterns, and the internal working docs were removed from the public repo.
+  (#128, #129, #130)
+- Docs: a post-0.3.8 status/roadmap truth pass, dev-workflow gotchas, and the movement-bundle doc sweep.
+  (#116, #118, #132)
 
 ## [0.3.8.0-alpha] — 2026-07-08
 

@@ -218,12 +218,16 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). **On `main` (unreleased):** the movement/UX bundle (#131) —
+See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.9.0-alpha` (2026-07-15):** the movement/UX bundle (#131) —
 **Path Painting** (base-width chalk trails, arc-truth distance in ruler + battle log, click-to-measure,
 MP-synced move ledger, trail toggle + deployment auto-suppress, backtrack-erase), **1″ spacing**
 protection (proximity walls, base-contact snap, no-overlap drops), a **game-phase gate** (Deployment →
 Start Game → Playing with an MP ready-sync + save/load), and an opt-in **"dry-brush" movement cap**
-(action-band-aware, Advance/Rush-Charge).
+(action-band-aware, Advance/Rush-Charge); the **guided tutorial** foundation (T0 + T1 tool track W1–W7,
+#121); **Mummified Undead** live on R2 (#117); "perfectly based" terrain-projected bases (#123);
+versioned `.nml` save migration (#119); privacy-preserving relay usage stats (#115); rotate-to-cursor
+(#114); guest-import timeout + relay-shutdown-stats fixes (#120/#124); repo-hygiene CI hardening
+(#128–#130).
 
 **`0.3.8.0-alpha` (2026-07-08):** unit-card dock rework
 (#84–#103), Battle Log incl. remote moves (#99/#101/#106/#112), ctex runtime assets (#85–#93),
