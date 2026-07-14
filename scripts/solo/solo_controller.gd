@@ -746,6 +746,18 @@ func _act(unit: GameUnit) -> Dictionary:
 	report["to_objective"] = to_obj   # main narrates "→ objective" instead of the enemy name (finding 1 label)
 	var to_flank: bool = flank_goal != NO_OBJECTIVE and not to_obj
 	var goal: Vector3 = obj_pos if to_obj else (flank_goal if to_flank else tcentre)
+	# OBJECTIVE FIRING ANCHOR (AI plausibility wave 1): an objective-bound SHOOTER whose tree promised a
+	# shot (Advance toward marker + shoot) stops at a spot INSIDE the seize ring that keeps range + line
+	# of sight to its target — the marker CENTRE is only a placement convention, and walking onto it
+	# regularly broke the post-move shot (kriegsherr showcase: the bikers held markers but never fired).
+	if to_obj and do_shoot and shoot_range > 0 and action == AiDecision.Action.ADVANCE:
+		var fire_anchor := _objective_fire_anchor(unit, target_unit, goal, float(shoot_range))
+		if fire_anchor != NO_OBJECTIVE:
+			goal = fire_anchor
+			record_decision({"kind": "flank", "unit": unit.get_name(),
+				"rule": "Objective firing anchor: any spot within 3\" seizes — prefer one that keeps range and line of sight to the target",
+				"candidates": [], "chosen": "seize-ring firing spot", "why": "keeps the promised shot while seizing",
+				"data": {"anchor_dist_in": MoveIntent.distance_inches(centre, fire_anchor)}})
 	# Coordination first slice (round 7, finding 6): a RUSH/ADVANCE mover that would PARK in a bigger,
 	# not-yet-activated friendly shooter's line of fire side-steps to an equivalent position (equal
 	# progress, small/cheap units defer). Charges are exempt (they must reach their target), and so is a
@@ -991,6 +1003,50 @@ func _nearest_model_gap_to_in(unit: GameUnit, pos: Vector3) -> float:
 	var best := INF
 	for p in alive_positions(unit):
 		best = minf(best, MoveIntent.distance_inches(p as Vector3, pos))
+	return best
+
+
+## OBJECTIVE FIRING ANCHOR: a stop INSIDE the marker's seize ring (2" of 3" — a measuring margin) that
+## keeps range + LOS to `target`. Candidates: the marker centre plus 8 ring bearings; each must be on
+## the table, out of impassable rest terrain, clear of other units' spacing zones, within
+## `range_in − KITE_RANGE_MARGIN_IN` of the target and sighted. The nearest-travel candidate wins
+## (deterministic bearing order breaks ties). NO_OBJECTIVE when nothing qualifies (keep the centre).
+func _objective_fire_anchor(unit: GameUnit, target: GameUnit, obj_pos: Vector3, range_in: float) -> Vector3:
+	if target == null or range_in <= 0.0:
+		return NO_OBJECTIVE
+	var centre := unit_centre(unit)
+	var tcentre := unit_centre(target)
+	var own_r := _deploy_footprint_radius(unit)
+	var zones := _spacing_zones_world(unit, own_r, null)
+	var ring_m: float = (OBJECTIVE_CONTROL_IN - 1.0) * INCHES_TO_METERS   # 2" of the 3" seize bubble
+	var candidates: Array = [obj_pos]
+	for i in range(8):
+		var ang := TAU * float(i) / 8.0
+		candidates.append(obj_pos + Vector3(cos(ang), 0.0, sin(ang)) * ring_m)
+	var best := NO_OBJECTIVE
+	var best_travel := INF
+	for c in candidates:
+		var anchor := c as Vector3
+		if _clamp_to_bounds(anchor).distance_to(anchor) > 0.0005:
+			continue
+		if _world_forbidden(anchor, own_r):
+			continue
+		var blocked := false
+		var a2 := Vector2(anchor.x, anchor.z)
+		for z in zones:
+			if ((z as Dictionary)["c"] as Vector2).distance_to(a2) < float((z as Dictionary)["r"]):
+				blocked = true
+				break
+		if blocked:
+			continue
+		if MoveIntent.distance_inches(anchor, tcentre) > range_in - KITE_RANGE_MARGIN_IN:
+			continue
+		if los_checker.is_valid() and not bool(los_checker.call(anchor, tcentre)):
+			continue
+		var travel := MoveIntent.distance_inches(centre, anchor)
+		if travel < best_travel - 0.001:
+			best_travel = travel
+			best = anchor
 	return best
 
 
