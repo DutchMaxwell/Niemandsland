@@ -15,6 +15,10 @@ signal selection_dropped(moves: Array)
 ## Emitted (throttled) while dragging, so listeners can refresh live feedback
 ## such as unit coherency without waiting for the drag to finish.
 signal drag_updated()
+## Emitted (throttled) during a STRICT movement-budget-capped model drag: the consumed arc,
+## the model's max legal band (both inches), and whether the brush has run dry (at the cap).
+## The HUD shows "X.X/Y.Y″" and a dry colour; not emitted for free (Casual) or non-model drags.
+signal movement_capped(consumed_inches: float, cap_inches: float, dry: bool)
 signal context_menu_requested(screen_pos: Vector2, selected_objects: Array)
 
 @export var drag_height: float = 0.5  # Drag height in meters
@@ -120,6 +124,10 @@ var move_trails: Node = null
 ## MoveLedger.extend_path). Feeds the consumed-inches readout, live trail, ledger + log.
 var _drag_path_points: PackedVector2Array = PackedVector2Array()
 var _drag_anchor_object: Node3D = null
+## STRICT "dry brush" cap (metres) for the current drag: the anchor model's MAX legal move
+## band (Rush/Charge, Fast/Slow/aura-aware). 0 = not enforced (Casual, deployment, or a
+## non-model drag). Resolved once at drag start; the painted ARC hard-stops here.
+var _strict_cap_meters: float = 0.0
 
 # Movement cap: an opt-in limit so a dragged model/unit can't move further than its Advance or
 # Rush/Charge allowance. OFF = free drag (sandbox default). Set from the HUD "Movement" area.
@@ -635,6 +643,53 @@ func _compute_movement_cap_meters() -> float:
 	return float(inches) / METERS_TO_INCHES
 
 
+## The STRICT "dry brush" arc cap (metres) for this drag, or 0 when not enforced. Enforced when
+## the persisted "Enforce Movement Limit" setting is on AND play has begun (never during
+## deployment) AND the anchor resolves to a real model with a Rush/Charge band. The cap is the
+## MAXIMUM legal movement (Rush/Charge, Fast/Slow/Swift/aura-aware — the same band the movement
+## system computes), so no legal action can exceed it. Purely the MOVEMENT path/ruler — shooting
+## and every other action are untouched.
+func _compute_strict_cap_meters() -> float:
+	if not _strict_movement_enforced() or movement_range_controller == null:
+		return 0.0
+	if not movement_range_controller.has_method("bands_for_model"):
+		return 0.0
+	var node := _cap_anchor_model_node()
+	if node == null:
+		return 0.0
+	var bands: Dictionary = movement_range_controller.bands_for_model(node)
+	var inches: int = int(bands.get("rush", 12))   # MAX legal move = Rush/Charge band
+	if inches <= 0:
+		return 0.0
+	return float(inches) / METERS_TO_INCHES
+
+
+## Is Strict movement enforcement active right now? Persisted preference ON and the game is in
+## the PLAYING phase (no cap while deploying — models are being placed, not moved).
+func _strict_movement_enforced() -> bool:
+	if get_node_or_null("/root/GraphicsSettings") == null or not GraphicsSettings.enforce_movement_limit:
+		return false
+	var army := get_node_or_null("/root/Main/OPRArmyManager")
+	if army != null and army.has_method("is_deployment_phase") and army.is_deployment_phase():
+		return false
+	return true
+
+
+## The model node the strict cap measures the band from: the dragged anchor itself when it is a
+## miniature, else (regiment tray) its first live member. null for a non-model drag (terrain/dice).
+func _cap_anchor_model_node() -> Node3D:
+	var a := _drag_anchor_object
+	if a == null or not is_instance_valid(a):
+		return null
+	if a.is_in_group("miniature"):
+		return a
+	if a is RegimentTray or a.is_in_group(RegimentTray.GROUP):
+		for child in a.get_children():
+			if child is Node3D and child.has_meta("model_instance") and child.is_in_group("miniature"):
+				return child
+	return null
+
+
 ## Public: Select specific objects (replaces current selection)
 func select_objects(objects: Array) -> void:
 	_deselect_all()
@@ -1072,6 +1127,10 @@ func _start_dragging(screen_pos: Vector2) -> void:
 	# Resolve the movement cap (Advance/Rush inches → metres) once for this drag.
 	_movement_cap_meters = _compute_movement_cap_meters()
 
+	# Resolve the STRICT "dry brush" arc cap once: the anchor model's MAX legal band
+	# (Rush/Charge). 0 unless Strict is enforced AND play has begun AND this is a model drag.
+	_strict_cap_meters = _compute_strict_cap_meters()
+
 	# Remember where on the table the cursor grabbed, so the unit keeps that grab offset
 	# while dragging instead of snapping its first model onto the cursor.
 	_drag_grab_world = _drag_anchor_position
@@ -1188,6 +1247,7 @@ func _stop_dragging() -> void:
 	_drag_anchor_position = Vector3.ZERO
 	_drag_anchor_object = null
 	_drag_path_points = PackedVector2Array()
+	_strict_cap_meters = 0.0
 	_destroy_drag_line()
 
 
@@ -1440,6 +1500,7 @@ func _cancel_drag() -> void:
 	_drag_anchor_position = Vector3.ZERO
 	_drag_anchor_object = null
 	_drag_path_points = PackedVector2Array()
+	_strict_cap_meters = 0.0
 	_destroy_drag_line()
 
 
@@ -1952,11 +2013,42 @@ func _update_drag(screen_pos: Vector2) -> void:
 		if Input.is_key_pressed(KEY_SHIFT) and anchor is RegimentTray:
 			delta_xz = RegimentTray.project_drag_onto_facing(delta_xz, (anchor as RegimentTray).facing_dir())
 
-		# Movement cap (opt-in): don't let the drag exceed the unit's Advance/Rush allowance. Clamp
-		# the shared delta length, so the whole group is capped by the anchor's travel. Composes
-		# after the axis-lock (direction) — cap then limits the magnitude.
-		if _movement_cap_meters > 0.0 and delta_xz.length() > _movement_cap_meters:
+		# Movement cap (opt-in, legacy straight-line delta clamp) — only when the STRICT arc cap
+		# below is NOT governing, so the two never fight. Composes after the axis-lock (direction).
+		if _strict_cap_meters <= 0.0 and _movement_cap_meters > 0.0 and delta_xz.length() > _movement_cap_meters:
 			delta_xz = delta_xz.normalized() * _movement_cap_meters
+
+		# Path painting + STRICT "dry brush" cap: the anchor model's NET traversed ARC is the
+		# measured travel; when Strict is on it HARD-STOPS at the model's max legal band. Retrace
+		# (backtrack-erase) frees budget, so pulling back lets the brush paint forward again. The
+		# capped head becomes the anchor's target; the whole formation follows by that (shortened)
+		# delta. Non-model drags skip this — `head` stays unused and delta_xz is left as-is.
+		var head := Vector2.ZERO
+		var have_path := _drag_anchor_object != null and is_instance_valid(_drag_anchor_object)
+		if have_path:
+			var desired := Vector2(_drag_anchor_position.x + delta_xz.x, _drag_anchor_position.z + delta_xz.z)
+			# Erase whatever the cursor walked back over (refunds budget), keeping the path sparse.
+			var committed := MoveLedger.retrace(_drag_path_points, desired)
+			head = desired
+			if _strict_cap_meters > 0.0:
+				var used_m := MoveLedger.length_meters(committed)
+				var from_pt: Vector2 = committed[committed.size() - 1] if not committed.is_empty() else desired
+				var remaining := _strict_cap_meters - used_m
+				if remaining <= 0.0:
+					# Already at/over the cap even after retrace — hold at the budget boundary.
+					committed = MoveLedger.truncate_to_length(committed, _strict_cap_meters)
+					head = committed[committed.size() - 1]
+				elif from_pt.distance_to(desired) > remaining:
+					# The brush runs dry mid-stroke: stop the head at the max-reach point.
+					head = from_pt + (desired - from_pt).normalized() * remaining
+			# Commit the (capped) head forward once it has advanced a sample step.
+			if committed.is_empty():
+				committed = PackedVector2Array([head])
+			elif committed[committed.size() - 1].distance_to(head) >= MoveLedger.PATH_SAMPLE_MIN_M:
+				committed.append(head)
+			_drag_path_points = committed
+			# Re-derive the shared delta so the anchor lands exactly at the (capped) head.
+			delta_xz = Vector3(head.x - _drag_anchor_position.x, 0.0, head.y - _drag_anchor_position.z)
 
 		# Move all selected objects by the same XZ delta (formation kept). Each model's
 		# Y rests on the ground surface beneath its own base (table or a terrain prop),
@@ -1995,26 +2087,16 @@ func _update_drag(screen_pos: Vector2) -> void:
 				if not batch.is_empty():
 					_network_manager.broadcast_move_batch(batch)
 
-		# Path painting: extend the anchor's TRAVERSED polyline toward the cursor, ERASING
-		# any retraced portion (the model is the brush; backward = erase, budget refunded).
-		# The record is the NET taut path, never re-routed and never inflatable by wiggling.
-		var live_tail := Vector2.ZERO
-		var have_tail := false
-		if _drag_anchor_object != null and is_instance_valid(_drag_anchor_object):
-			var apos := _drag_anchor_object.global_position
-			live_tail = Vector2(apos.x, apos.z)
-			have_tail = true
-			_drag_path_points = MoveLedger.extend_path(_drag_path_points, live_tail)
-
+		# (The net path was already built + capped above; `head` is the anchor's painted tip.)
 		var current_anchor_pos = anchor.global_position
 
-		# The CONSUMED inches = arc length of the net path + the sub-sample tail to the
-		# cursor — the movement-travel measurement (design's "the band measures live").
-		# Falls back to the straight distance when no path is being recorded (non-model drag).
+		# CONSUMED inches = the net traveled ARC to the painted head — the movement-travel
+		# measurement ("the band measures live"), and EXACTLY the cap once the brush is dry.
+		# Falls back to the straight distance for a non-model drag (no path recorded).
 		var consumed_inches: float = _horizontal_distance(_drag_anchor_position, current_anchor_pos) * METERS_TO_INCHES
-		if have_tail and not _drag_path_points.is_empty():
+		if have_path and not _drag_path_points.is_empty():
 			consumed_inches = MoveLedger.length_inches(_drag_path_points) \
-					+ _drag_path_points[_drag_path_points.size() - 1].distance_to(live_tail) * METERS_TO_INCHES
+					+ _drag_path_points[_drag_path_points.size() - 1].distance_to(head) * METERS_TO_INCHES
 
 		# The drag line's readout is a MOVEMENT-travel measure — label it with the consumed
 		# arc (matches the trail stamp + HUD counter). Range/charge stays on the measure tool.
@@ -2022,14 +2104,20 @@ func _update_drag(screen_pos: Vector2) -> void:
 
 		distance_changed.emit(consumed_inches, _drag_anchor_position, current_anchor_pos)
 
+		# STRICT feedback: report consumed vs the cap + the "dry" flag so the HUD shows
+		# "X.X/Y.Y″" and a colour once the budget is spent.
+		if _strict_cap_meters > 0.0:
+			var cap_in := _strict_cap_meters * METERS_TO_INCHES
+			movement_capped.emit(consumed_inches, cap_in, consumed_inches >= cap_in - 0.05)
+
 		# Throttled live update for coherency feedback while dragging
 		_coherency_update_timer += get_process_delta_time()
 		if _coherency_update_timer >= COHERENCY_UPDATE_INTERVAL:
 			_coherency_update_timer = 0.0
 			drag_updated.emit()
 			# Repaint the live trail ribbons behind the dragged models (same throttle).
-			if move_trails != null and have_tail:
-				move_trails.update_live(_drag_path_points, live_tail)
+			if move_trails != null and have_path:
+				move_trails.update_live(_drag_path_points, head)
 
 
 ## Start measuring distance from a point on the table

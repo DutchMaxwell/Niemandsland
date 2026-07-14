@@ -61,32 +61,28 @@ var _active: Dictionary = {}
 ## Arc length of a world-XZ polyline (metres in) in INCHES — the measured truth stamped
 ## onto every trail. 0.0 for fewer than 2 points.
 static func length_inches(points: PackedVector2Array) -> float:
+	return length_meters(points) / INCHES_TO_METERS
+
+
+## Arc length of a world-XZ polyline in METRES — the movement-budget currency for the cap.
+static func length_meters(points: PackedVector2Array) -> float:
 	var metres := 0.0
 	for i in range(1, points.size()):
 		metres += points[i - 1].distance_to(points[i])
-	return metres / INCHES_TO_METERS
+	return metres
 
 
-## Extend the recorded drag polyline toward the current cursor `c`, ERASING any retraced
-## portion — the design's "Rückwärtsmalen radiert, Budget kommt zurück". `points` is the
-## net path so far (points[0] = drag start). Behaviour:
-##   - RETRACE: while the head lies "behind" the last leg (the cursor's projection falls
-##     before the leg's end) and within `retrace_tol` of that leg's line, the head vertex
-##     is popped — the trail shrinks and the budget it represented is refunded. Cascades
-##     back leg by leg, so a full there-and-back collapses to ~0 net.
-##   - EXTEND: once the cursor is no longer retracing, it becomes the new head (appended
-##     when it has advanced at least `sample_min` from the current head, so legs stay long
-##     enough for stable geometry; nearer than that, the head simply tracks it next frame).
-## A genuine parallel detour (offset further than the tolerance) is never mistaken for a
-## backtrack, so real S-curves and flanking routes are preserved. Pure + deterministic.
-static func extend_path(points: PackedVector2Array, c: Vector2,
-		retrace_tol: float = RETRACE_TOLERANCE_M,
-		sample_min: float = PATH_SAMPLE_MIN_M) -> PackedVector2Array:
+## RETRACE-only pass — the erase half of a drag update: pop every trailing leg the cursor
+## `c` has walked back along (within `retrace_tol` of the leg's line, projecting before the
+## leg's end). This is the design's "Rückwärtsmalen radiert, Budget kommt zurück" — it
+## SHORTENS the net path (refunding the budget) and never appends. Cascades back leg by
+## leg, so a full there-and-back collapses to ~0 net; a genuine parallel detour (offset
+## beyond the tolerance) is preserved. Returns the shortened path (>=1 point when non-empty).
+static func retrace(points: PackedVector2Array, c: Vector2,
+		retrace_tol: float = RETRACE_TOLERANCE_M) -> PackedVector2Array:
 	var pts := points.duplicate()
 	if pts.is_empty():
-		pts.append(c)
 		return pts
-	# Erase every trailing leg the cursor has walked back along (within the tolerance band).
 	while pts.size() >= 2:
 		var head: Vector2 = pts[pts.size() - 1]
 		var prev: Vector2 = pts[pts.size() - 2]
@@ -104,10 +100,49 @@ static func extend_path(points: PackedVector2Array, c: Vector2,
 			pts.remove_at(pts.size() - 1)
 			continue
 		break
-	# Forward: lay a new head once the cursor has advanced far enough from the current one.
-	if pts[pts.size() - 1].distance_to(c) >= sample_min:
+	return pts
+
+
+## Extend the recorded drag polyline toward the current cursor `c`: RETRACE (erase what the
+## cursor walked back over — budget refunded) then EXTEND (append `c` as the new head once it
+## has advanced at least `sample_min`, so legs stay long enough for stable geometry). The one
+## drag-sampler behind the free-drag path (the movement-cap path composes retrace() itself so
+## it can clamp the head before appending). Pure + deterministic.
+static func extend_path(points: PackedVector2Array, c: Vector2,
+		retrace_tol: float = RETRACE_TOLERANCE_M,
+		sample_min: float = PATH_SAMPLE_MIN_M) -> PackedVector2Array:
+	if points.is_empty():
+		return PackedVector2Array([c])
+	var pts := retrace(points, c, retrace_tol)
+	if pts.is_empty() or pts[pts.size() - 1].distance_to(c) >= sample_min:
 		pts.append(c)
 	return pts
+
+
+## Truncate a world-XZ polyline to a maximum arc length (metres), interpolating the final
+## leg so the result is EXACTLY `max_len_m` long — the "dry brush" boundary: the path can't
+## represent more travel than the budget. Returns the head-only path for a non-positive
+## budget, and the input unchanged when it is already within budget.
+static func truncate_to_length(points: PackedVector2Array, max_len_m: float) -> PackedVector2Array:
+	if points.is_empty():
+		return points.duplicate()
+	if max_len_m <= 0.0:
+		return PackedVector2Array([points[0]])
+	var out := PackedVector2Array([points[0]])
+	var acc := 0.0
+	for i in range(1, points.size()):
+		var a: Vector2 = points[i - 1]
+		var b: Vector2 = points[i]
+		var seg := a.distance_to(b)
+		if acc + seg <= max_len_m + 0.000000001:
+			out.append(b)
+			acc += seg
+		else:
+			var remaining := max_len_m - acc
+			if remaining > 0.0 and seg > 0.000001:
+				out.append(a + (b - a).normalized() * remaining)
+			return out
+	return out
 
 
 ## Simplify a sampled drag polyline WITHOUT re-routing it: collapse near-duplicate

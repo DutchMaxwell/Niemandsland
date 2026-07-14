@@ -314,6 +314,7 @@ func _ready() -> void:
 
 	# Connect to object manager signals
 	object_manager.distance_changed.connect(_on_distance_changed)
+	object_manager.movement_capped.connect(_on_movement_capped)
 	object_manager.measurement_finished.connect(_on_measurement_finished)
 	object_manager.drag_ended.connect(_on_drag_ended)
 	object_manager.drag_updated.connect(_check_coherency_for_selected_units)
@@ -1160,6 +1161,15 @@ func _on_distance_changed(distance_inches: float, _from_pos: Vector3, _to_pos: V
 	distance_label.text = "%.1f\"" % distance_inches
 
 
+## STRICT "dry brush" HUD readout: during a movement-budget-capped drag, show consumed vs the
+## model's max legal band ("6.0/6.0″") and colour it amber → red the moment the brush runs dry,
+## so the cap reads unmistakably. Emitted after _on_distance_changed, so it wins the label.
+func _on_movement_capped(consumed_inches: float, cap_inches: float, dry: bool) -> void:
+	distance_label.text = "%.1f/%.1f\"" % [consumed_inches, cap_inches]
+	distance_label.add_theme_color_override("font_color",
+			Color(1.0, 0.35, 0.3) if dry else Color(1.0, 0.78, 0.25))
+
+
 ## Clear distance display after measurement finishes
 func _on_measurement_finished(distance_inches: float) -> void:
 	distance_label.text = "%.1f\"" % distance_inches
@@ -1175,6 +1185,8 @@ func _on_measurement_finished(distance_inches: float) -> void:
 
 ## Clear distance display after drag ends
 func _on_drag_ended() -> void:
+	# Clear any strict-cap colour so the next plain measurement reads in the default colour.
+	distance_label.remove_theme_color_override("font_color")
 	# Fade out after 1 second
 	var tween = create_tween()
 	tween.tween_interval(1.0)

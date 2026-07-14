@@ -31,6 +31,39 @@ func _drag(points_in: Array) -> PackedVector2Array:
 	return path
 
 
+## Reproduce ObjectManager's STRICT "dry brush" cap loop over a sequence of desired anchor
+## positions (inches): retrace toward the target (frees budget), clamp the head to the cap,
+## then commit the (capped) head forward. Returns the net traveled arc in inches — the same
+## number the HUD shows and the trail stamps. The first point seeds the drag start.
+func _capped_drag(desireds_in: Array, cap_inches: float) -> float:
+	var cap_m := cap_inches * INCH
+	var committed := PackedVector2Array()
+	var head := Vector2.ZERO
+	for i in range(desireds_in.size()):
+		var desired: Vector2 = (desireds_in[i] as Vector2) * INCH
+		if committed.is_empty():
+			committed = PackedVector2Array([desired])   # drag start
+			head = desired
+			continue
+		committed = MoveLedger.retrace(committed, desired)
+		head = desired
+		if cap_m > 0.0:
+			var used := MoveLedger.length_meters(committed)
+			var from_pt: Vector2 = committed[committed.size() - 1] if not committed.is_empty() else desired
+			var remaining := cap_m - used
+			if remaining <= 0.0:
+				committed = MoveLedger.truncate_to_length(committed, cap_m)
+				head = committed[committed.size() - 1]
+			elif from_pt.distance_to(desired) > remaining:
+				head = from_pt + (desired - from_pt).normalized() * remaining
+		if committed.is_empty():
+			committed = PackedVector2Array([head])
+		elif committed[committed.size() - 1].distance_to(head) >= MoveLedger.PATH_SAMPLE_MIN_M:
+			committed.append(head)
+	var tail := committed[committed.size() - 1].distance_to(head) if not committed.is_empty() else 0.0
+	return (MoveLedger.length_meters(committed) + tail) / INCH
+
+
 # ===== Arc length (the measured truth) =====
 
 func test_length_inches_straight_line() -> void:
@@ -254,3 +287,66 @@ func test_same_unit_continues_across_a_new_drop_id() -> void:
 	# A follow-up drop of u2 alone: u2's activation CONTINUES (it never fades itself),
 	# while u1 — no longer part of the active set — ends.
 	assert_array(Array(ledger.note_commit(1, "u2", 101))).contains_exactly(["u1"])
+
+
+# ===== truncate_to_length (the "dry brush" boundary) =====
+
+func test_truncate_shortens_a_long_line() -> void:
+	var out := MoveLedger.truncate_to_length(_line([Vector2(0, 0), Vector2(10, 0)]), 6.0 * INCH)
+	assert_float(MoveLedger.length_inches(out)).is_equal_approx(6.0, TOL)
+	assert_float(out[out.size() - 1].x / INCH).is_equal_approx(6.0, TOL)
+
+
+func test_truncate_leaves_a_short_path_untouched() -> void:
+	var path := _line([Vector2(0, 0), Vector2(3, 0)])
+	var out := MoveLedger.truncate_to_length(path, 6.0 * INCH)
+	assert_float(MoveLedger.length_inches(out)).is_equal_approx(3.0, TOL)
+
+
+func test_truncate_across_a_corner_keeps_the_bend() -> void:
+	# 3" east + 4" north; truncate to 5" lands 2" up the north leg (3 + 2 = 5).
+	var out := MoveLedger.truncate_to_length(_line([Vector2(0, 0), Vector2(3, 0), Vector2(3, 4)]), 5.0 * INCH)
+	assert_float(MoveLedger.length_inches(out)).is_equal_approx(5.0, TOL)
+	assert_float(out[out.size() - 1].y / INCH).is_equal_approx(2.0, 0.02)
+
+
+func test_retrace_shortens_without_appending() -> void:
+	# retrace erases the walked-back head but never adds the cursor point.
+	var path := _line([Vector2(0, 0), Vector2(2, 0), Vector2(4, 0)])
+	var out := MoveLedger.retrace(path, _p(3, 0))   # cursor back between 2 and 4
+	assert_float(MoveLedger.length_inches(out)).is_equal_approx(2.0, 0.05)
+
+
+# ===== STRICT cap x backtrack interop (the "dry brush" runs dry, retrace refills) =====
+
+func test_cap_hard_stops_at_the_band() -> void:
+	# Drag straight out to 10" with a 6" band: the brush runs dry — the net arc holds at 6".
+	assert_float(_capped_drag([Vector2(0, 0), Vector2(2, 0), Vector2(4, 0),
+			Vector2(6, 0), Vector2(8, 0), Vector2(10, 0)], 6.0)).is_equal_approx(6.0, 0.05)
+
+
+func test_cap_never_limits_a_move_within_budget() -> void:
+	# A 4" drag under a 6" band is unaffected — the cap only bites at the max.
+	assert_float(_capped_drag([Vector2(0, 0), Vector2(2, 0), Vector2(4, 0)], 6.0)) \
+		.is_equal_approx(4.0, 0.05)
+
+
+func test_backtrack_refunds_capped_budget() -> void:
+	# Push past the 6" cap (dry), then drag all the way back: retrace frees the budget so the
+	# net collapses to ~0 — the enforcement composes with the backtrack-erase.
+	assert_float(_capped_drag([Vector2(0, 0), Vector2(4, 0), Vector2(6, 0), Vector2(8, 0),
+			Vector2(10, 0), Vector2(6, 0), Vector2(3, 0), Vector2(0.1, 0)], 6.0)).is_less(0.4)
+
+
+func test_backtrack_then_repaint_reaches_full_band_again() -> void:
+	# Dry at 6", retrace back to 1", then paint forward again: the freed budget lets the brush
+	# reach the full 6" band once more (it is not permanently stuck at the old cap point).
+	assert_float(_capped_drag([Vector2(0, 0), Vector2(10, 0), Vector2(1, 0), Vector2(6, 0)], 6.0)) \
+		.is_equal_approx(6.0, 0.05)
+
+
+func test_cap_off_allows_moving_past_the_band() -> void:
+	# cap 0 = Casual (free drag): a straight 10" move is NOT truncated to any band — the full
+	# arc is recorded. (Backtrack-erase still applies independently; it is not the cap.)
+	assert_float(_capped_drag([Vector2(0, 0), Vector2(2, 0), Vector2(4, 0),
+			Vector2(6, 0), Vector2(8, 0), Vector2(10, 0)], 0.0)).is_equal_approx(10.0, 0.05)
