@@ -15,10 +15,19 @@ signal selection_dropped(moves: Array)
 ## Emitted (throttled) while dragging, so listeners can refresh live feedback
 ## such as unit coherency without waiting for the drag to finish.
 signal drag_updated()
+## A rotation gesture actually TURNED something (> the undo epsilon). All rotation
+## paths — R-hold aim-at-cursor, Shift+R group spin, Ctrl+R snap — commit through
+## commit_rotation_capture, so this is the single seam (tutorial / future replay),
+## mirroring what selection_dropped is for moves.
+signal rotation_committed(objects: Array[Node3D])
 ## Emitted (throttled) during a STRICT movement-budget-capped model drag: the consumed arc,
 ## the model's max legal band (both inches), and whether the brush has run dry (at the cap).
 ## The HUD shows "X.X/Y.Y″" and a dry colour; not emitted for free (Casual) or non-model drags.
 signal movement_capped(consumed_inches: float, cap_inches: float, dry: bool)
+## Emitted once on drop when the 1" spacing rule actually MOVED a dropped base — the unit-scoped
+## enemy base-contact snap or the other-unit 1" push (Phase 1 of _resolve_drop_separation). Lets
+## the tutorial confirm the player felt the red 1" wall; carries whether a snap/push was applied.
+signal drop_separated(applied: bool)
 signal context_menu_requested(screen_pos: Vector2, selected_objects: Array)
 
 @export var drag_height: float = 0.5  # Drag height in meters
@@ -1298,6 +1307,7 @@ func _resolve_drop_separation() -> void:
 
 	# Phase 1 — unit-scoped enemy snap + other-unit contact push (charge semantics). Skipped
 	# when nothing else is on the field, but Phase 2 (absolute anti-stacking) still runs.
+	var separated_applied := false
 	var candidates := _separation_candidates(army, dragged_ids)
 	if not candidates.is_empty():
 		var min_move: float = SeparationResolver.RESOLVE_EPSILON_INCHES * SeparationResolver.INCHES_TO_METERS
@@ -1321,6 +1331,7 @@ func _resolve_drop_separation() -> void:
 			if delta.length() > min_move:
 				obj.global_position.x += delta.x
 				obj.global_position.z += delta.y
+				separated_applied = true
 
 	# Phase 2 — absolute anti-stacking (runs AFTER the unit-scoped snap/push above): guarantee no
 	# dropped base overlaps ANY other base — same unit, own other unit, enemy, OR a sibling
@@ -1329,6 +1340,11 @@ func _resolve_drop_separation() -> void:
 	# considers OTHER units, so same-unit siblings and mutually-dragged models can still be
 	# stacked; this pass closes that.
 	_resolve_drop_stacking(army, movable, dragged_ids)
+
+	# Tutorial seam: report the 1" rule actually engaging on this drop (enemy contact snap /
+	# other-unit push). Listeners other than the tutorial ignore it.
+	if separated_applied:
+		drop_separated.emit(true)
 
 
 ## Absolute anti-stacking pass for the drop: no two model bases may overlap, for ANY pair.
@@ -1794,6 +1810,7 @@ func commit_rotation_capture() -> void:
 	if rotated and not objects.is_empty():
 		var rot_peer: int = _network_manager.get_my_peer_id() if _network_manager else 0
 		undo_manager.push(UndoManager.RotateAction.new(objects, from_rot, to_rot, _network_manager, rot_peer))
+		rotation_committed.emit(objects)
 
 
 ## Create (if needed) and show the rotation label with `degrees` (cumulative this

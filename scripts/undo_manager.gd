@@ -20,6 +20,11 @@ const MAX_HISTORY: int = 100
 ## can enable or disable its undo/redo affordances.
 signal history_changed(can_undo: bool, can_redo: bool)
 
+## An undo was actually performed (history_changed cannot distinguish push from
+## undo). Seam for listeners that react to the ACT of undoing — e.g. the tutorial's
+## "press Ctrl+Z" step — carrying the undone action's description.
+signal action_undone(description: String)
+
 # === Private variables ===
 
 var _undo_stack: Array[UndoableAction] = []
@@ -72,6 +77,7 @@ func undo() -> String:
 	action.undo()
 	_redo_stack.append(action)
 	_emit_changed()
+	action_undone.emit(action.description)
 	return action.description
 
 
@@ -86,6 +92,7 @@ func undo_for(peer_id: int) -> String:
 			action.undo()
 			_redo_stack.append(action)
 			_emit_changed()
+			action_undone.emit(action.description)
 			return action.description
 	return ""
 

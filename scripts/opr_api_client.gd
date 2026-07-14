@@ -304,6 +304,14 @@ func import_from_file(file_path: String) -> OPRArmy:
 	return await _parse_army_forge_json(content, file_path.get_file())
 
 
+## Import an army from a saved TTS-API JSON payload — the exact body /api/tts returns.
+## Runs the SAME parser as import_from_share_link (fully resolved units + army-book
+## faction/rules fetch), so bundled fixtures reproduce a real online import exactly.
+## Offline-regeneration seam for the tutorial board builder.
+func import_from_tts_json(json_text: String) -> OPRArmy:
+	return await _parse_tts_api_response(json_text)
+
+
 ## Import army from a share link or list ID
 ## Share link format: https://army-forge.onepagerules.com/share?id=XXX&name=YYY
 ## Or just the list ID: XXX

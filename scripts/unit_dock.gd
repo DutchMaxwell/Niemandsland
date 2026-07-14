@@ -164,6 +164,27 @@ func occludes_point(gpos: Vector2) -> bool:
 	return false
 
 
+## Read-only state/geometry accessors (tutorial coach-mark targeting; no behaviour).
+func is_dock_open() -> bool:
+	return _dock_open
+
+
+func get_presented_unit() -> GameUnit:
+	return _presented_unit if (_presented != null and _presented.visible) else null
+
+
+func tab_rect() -> Rect2:
+	return _tab.get_global_rect() if _tab != null else Rect2()
+
+
+func strip_rect() -> Rect2:
+	return _strip_panel.get_global_rect() if _strip_panel != null else Rect2()
+
+
+func presented_rect() -> Rect2:
+	return _presented.get_global_rect() if (_presented != null and _presented.visible) else Rect2()
+
+
 ## Where the ▲/▼ Units tab sits: at the screen bottom when closed, but ABOVE the open strip so the full-
 ## face cards can never cover the collapse button (maintainer feedback).
 func _tab_target_y(open: bool) -> float:

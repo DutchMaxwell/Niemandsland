@@ -189,6 +189,11 @@ var unit_card: UnitCard = null
 var unit_dock: UnitDock = null
 var battle_log: BattleLog = null              # narrative event log (collector)
 var battle_log_panel: BattleLogPanel = null   # collapsible HUD panel (top-centre, collapsed by default)
+var _tutorial_mode: bool = false              # guided tutorial: set from the startup-menu flag, drives _start_tutorial
+var _tutorial_director: TutorialDirector = null
+var _tutorial_start_lesson: String = ""       # chapter-picker lesson id ("" = assessment/resume flow)
+var _tutorial_board_pending: bool = false     # the bundled tutorial board was queued on the pending-load path
+var _tutorial_board_loaded: bool = false      # its load finished (load_completed/load_failed fired)
 var _host_free_move_check: CheckButton = null   # "Move all models" — host-operated, session-wide
 var _room_code_button: Button = null          # permanent room-code display in the left bar (click = copy)
 var _session_room_code: String = ""
@@ -603,6 +608,26 @@ func _ready() -> void:
 	# so the size chooser never overlaps the cinematic. Loaded/joined games skip the
 	# chooser and start the intro directly.
 
+	# Guided tutorial (startup menu -> TUTORIAL): read-and-clear the runtime-only flags
+	# FIRST, so the bundled tutorial board can ride the normal pending-load path below.
+	# Never persisted to project.godot — exactly like harness_mode.
+	var tutorial_mode: bool = ProjectSettings.get_setting("niemandsland/tutorial_mode", false)
+	if tutorial_mode:
+		ProjectSettings.set_setting("niemandsland/tutorial_mode", false)
+		_tutorial_mode = true
+		_tutorial_start_lesson = str(ProjectSettings.get_setting("niemandsland/tutorial_lesson", ""))
+		ProjectSettings.set_setting("niemandsland/tutorial_lesson", "")
+		if str(ProjectSettings.get_setting("niemandsland/pending_load_path", "")).is_empty() \
+				and FileAccess.file_exists(TutorialDirector.BOARD_PATH):
+			ProjectSettings.set_setting("niemandsland/pending_load_path", TutorialDirector.BOARD_PATH)
+			_tutorial_board_pending = true
+			# Race-free load gate: the director must only start once the board finished
+			# deserializing (units exist), success or failure alike.
+			save_manager.load_completed.connect(
+				func(_object_count: int) -> void: _tutorial_board_loaded = true, CONNECT_ONE_SHOT)
+			save_manager.load_failed.connect(
+				func(_error: String) -> void: _tutorial_board_loaded = true, CONNECT_ONE_SHOT)
+
 	# Check if a saved battle should be loaded (from startup menu)
 	var pending_load := ProjectSettings.get_setting("niemandsland/pending_load_path", "") as String
 	if not pending_load.is_empty():
@@ -632,8 +657,10 @@ func _ready() -> void:
 	# Headless MP test harness (test/mp/): skip the interactive table-size chooser AND the
 	# cinematic intro and drop straight onto a live, RPC-capable table. Inert in normal play.
 	var harness_mode: bool = ProjectSettings.get_setting("niemandsland/harness_mode", false)
-	if harness_mode:
-		if not joining_client:
+	# The tutorial reuses the harness seam: skip the chooser + intro, open a prepared table
+	# (its board load — queued above — provides the table size), then run the director.
+	if harness_mode or _tutorial_mode:
+		if not joining_client and pending_load.is_empty():
 			_set_table_size(DEFAULT_TABLE_SIZE_FEET)
 		call_deferred("_on_intro_finished")
 	elif pending_load.is_empty() and not joining_client:
@@ -3966,6 +3993,76 @@ func _on_intro_finished() -> void:
 		if is_instance_valid(cinematic_intro):
 			cinematic_intro.queue_free()
 			cinematic_intro = null
+
+	# Guided tutorial: the UI is now revealed, so start the director on the live table.
+	if _tutorial_mode:
+		call_deferred("_start_tutorial")
+
+
+## ============================================================================
+## Guided Tutorial (T1 tool track)
+## ============================================================================
+
+## How long to wait for the bundled tutorial board to produce units before running
+## the tutorial degraded (banner-only spotlights, no unit target). Generous: the very
+## first tutorial launch may download both factions' models (54 minis) from the CDN.
+const TUTORIAL_BOARD_TIMEOUT_S := 120.0
+
+## Wait for the bundled board (queued on the pending-load path), then hand control to
+## the TutorialDirector, which runs the event-gated W1-W6 tool track on the live table.
+func _start_tutorial() -> void:
+	if is_instance_valid(_tutorial_director):
+		return  # already running (guard against a double call_deferred)
+	# The board .nml deserializes asynchronously (unit-by-unit): wait for its
+	# load_completed/load_failed gate, with a hard timeout so a broken board never
+	# hangs the tutorial (it then runs degraded: banner spotlights, no unit target).
+	if _tutorial_board_pending:
+		var waited := 0.0
+		while not _tutorial_board_loaded and waited < TUTORIAL_BOARD_TIMEOUT_S:
+			await get_tree().create_timer(0.25).timeout
+			waited += 0.25
+		if opr_army_manager == null or opr_army_manager.game_units.is_empty():
+			push_warning("Tutorial: board produced no units after %.1fs — running degraded" % waited)
+	var progress := TutorialProgress.new()
+	progress.load_from_disk()
+	_tutorial_director = TutorialDirector.new()
+	_tutorial_director.name = "TutorialDirector"
+	add_child(_tutorial_director)
+	_tutorial_director.lesson_completed.connect(_on_tutorial_lesson_completed)
+	_tutorial_director.tutorial_finished.connect(_on_tutorial_finished)
+	_tutorial_director.setup({
+		"object_manager": object_manager,
+		"camera_pivot": camera_pivot,
+		"dice_tray": dice_roller_control,
+		"dice_panel": $UI/HUD/DiceRollerPanel as Control,
+		"hamburger": hamburger_button,
+		"left_panel": left_panel_scroll,
+		"import_button": import_opr_btn,
+		"import_dialog": opr_import_dialog,
+		"unit_dock": unit_dock,
+		"radial_controller": radial_menu_controller,
+		"army_manager": opr_army_manager,
+		"undo_manager": undo_manager,
+		"start_game_button": _start_game_button,
+	})
+	_tutorial_director.begin(progress, _tutorial_start_lesson)
+
+
+## A lesson finished (played through or skipped) — quick, non-blocking confirmation.
+func _on_tutorial_lesson_completed(lesson_id: String) -> void:
+	_show_toast("✓ Lesson %s complete" % lesson_id)
+
+
+## The tutorial ended (track completed, or the player ended it). Celebrate on a clean
+## finish, then free the director (which frees its overlay) — the player stays on the
+## live table either way.
+func _on_tutorial_finished(completed: bool) -> void:
+	if completed:
+		_show_toast("🎉 Tutorial complete — the table is yours. Play on!")
+	_tutorial_mode = false
+	if is_instance_valid(_tutorial_director):
+		_tutorial_director.queue_free()
+	_tutorial_director = null
 
 
 ## ============================================================================
