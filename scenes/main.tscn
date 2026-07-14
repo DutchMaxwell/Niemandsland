@@ -175,7 +175,8 @@ Controls:
 - G / Shift+G: Range Ring / clear
 - M / Shift+M: Move Bands / clear
 - P: Pin Ruler
-- K / Shift+K: Clear Rulers mine/all"
+- K / Shift+K: Clear Rulers mine/all
+- T / Shift+T: Move Trails hide/clear"
 
 [node name="PerformanceLabel" type="Label" parent="UI/HUD"]
 unique_name_in_owner = true

@@ -287,6 +287,10 @@ func _serialize_game_state() -> Dictionary:
 		lib = radial_menu_controller.token_library.to_dict()
 	return {
 		"current_round": army_manager.current_round if army_manager else 1,
+		# Formal game phase (0 = deployment, 1 = playing). A game saved mid-play reloads in PLAYING;
+		# a fresh table saved during setup reloads in DEPLOYMENT. Also carried on the MP full-state
+		# push (host -> joining/reconnecting guest) since that path reuses this serializer.
+		"game_phase": army_manager.game_phase if army_manager else OPRArmyManager.GamePhase.DEPLOYMENT,
 		"current_player": 1,  # No turn-order system yet; players track this themselves
 		"token_library": lib
 	}
@@ -866,6 +870,10 @@ func _restore_dead_parking_after_load() -> void:
 func _deserialize_game_state(state_data: Dictionary) -> void:
 	if army_manager:
 		army_manager.set_current_round(int(state_data.get("current_round", 1)))
+		# Restore the game phase. Older saves without the key predate the phase gate; a loaded battle
+		# with units on the table is a game in progress, so default those to PLAYING (not DEPLOYMENT,
+		# which would wrongly suppress the move-trail chalk on a resumed game).
+		army_manager.set_game_phase(int(state_data.get("game_phase", OPRArmyManager.GamePhase.PLAYING)))
 	# current_player is not restored: there is no turn-order system yet.
 	# Restore the custom-token library before markers re-render so colors/effects resolve.
 	if radial_menu_controller and radial_menu_controller.token_library:
