@@ -34,9 +34,15 @@ What the code actually does today:
   points, unit coherency check + visualizer, radial context menu, a bottom unit-card
   dock (the whole army as live stat cards) plus an in-game battle log, unit-wide
   status tokens (Fatigue / Shaken / Activated).
+- **Movement & trails** — drag a model to paint a base-width "chalk" trail (**Path
+  Painting**); the ruler and battle log report the actual traveled path (arc), while
+  weapon/charge range stays straight-line. 1″ spacing walls (red enemy / orange friendly)
+  with base-contact snap and no-overlap drops; an opt-in "dry-brush" cap stops the drag
+  at the selected action band (Advance ~6″ / Rush-Charge ~12″). A Deployment → **Start
+  Game** → Playing phase gate (with an MP ready-sync) frames setup vs play.
 - **Multiplayer** — ENet over LAN, or over the internet via a WebSocket relay
   (see [`relay/`](relay/README.md)); full state sync (models, terrain, table size),
-  shared dice log, player avatars/cursors, save/load.
+  shared dice log, player avatars/cursors, save/load, and a deployment ready-sync.
 - **Import / export** — Army Forge (OPR) and Wargaming Simulator (WGS) list import;
   `.nml` save format with OS file association.
 - **Asset pipeline** — the offline pipeline that generates the 3D miniatures
@@ -121,6 +127,7 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 |---|---|
 | Roll dice | `Space` |
 | Range rings / movement / pin ruler | `G` / `M` / `P` |
+| Hide / clear move trails | `T` / `Shift`+`T` |
 
 ## Project layout
 
