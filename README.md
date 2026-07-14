@@ -45,6 +45,9 @@ What the code actually does today:
   shared dice log, player avatars/cursors, save/load, and a deployment ready-sync.
 - **Import / export** — Army Forge (OPR) and Wargaming Simulator (WGS) list import;
   `.nml` save format with OS file association.
+- **Guided tutorial** — an event-gated tool track (W1–W7) that teaches the basics on a
+  real bundled board: camera, army import, select/move/rotate, dice & measuring, cards &
+  activation, wounds & casualties, and movement & trails. (More lessons planned.)
 - **Asset pipeline** — the offline pipeline that generates the 3D miniatures
   (image generation → TRELLIS mesh) lives in a separate private repository; the
   game consumes only its R2-delivered outputs.
