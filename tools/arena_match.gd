@@ -21,6 +21,12 @@ extends SceneTree
 ##     defaulting to the tutorial fixtures, so pairings can swap lists without file copies.
 ##   out= / NML_AI_OUT — directory for the machine-readable per-game result JSON
 ##     (default: $HOME/selfplay_out). File: arena_<p1>_vs_<p2>_s<seed>_d<dice_seed>.json.
+##   capture= / NML_AI_CAPTURE — showcase-artifact directory. When set, the run ADDITIONALLY writes
+##     board screenshots (deploy.png after both deployments, round<N>.png at each round end — needs a
+##     display; use `gamescope --backend headless`, PNGs are skipped under the headless dummy renderer),
+##     the FULL battle log (battlelog.txt — collected via entry_added, so the panel's 200-entry ring
+##     buffer cap does not truncate it) and EVERY decision record verbatim (decisions.json, annotated
+##     with side + round). Ladder runs without capture= are byte-identical to before.
 
 const P1_FIXTURE := "res://assets/tutorial/tutorial_army_p1.json"
 const P2_FIXTURE := "res://assets/tutorial/tutorial_army_p2.json"
@@ -44,6 +50,11 @@ var _out_dir := ""
 # verbatim knob/roll-off records the ladder's monotonicity diagnosis reads ("which knob failed to bite").
 var _decision_counts: Dictionary = {}   # side(int) → {kind(String): count}
 var _knob_records: Array = []           # full records of kind roll_off / difficulty (+side/round annotation)
+
+# Showcase capture (capture= / NML_AI_CAPTURE) — board PNGs + full battle log + verbatim decisions.
+var _capture_dir := ""                  # empty => captures off (the ladder default)
+var _all_decisions: Array = []          # EVERY decision record verbatim, annotated {side, round}
+var _log_entries: Array = []            # every battle-log entry (the panel itself caps at 200)
 
 
 func _initialize() -> void:
@@ -73,6 +84,17 @@ func _run() -> void:
 		printerr("[ARENA] FATAL: a manager is missing")
 		quit(1)
 		return
+
+	if not _capture_dir.is_empty():
+		DirAccess.make_dir_recursive_absolute(_capture_dir)
+		# Full-log collection: the Battle Log panel's data source is a 200-entry ring buffer, so a
+		# whole match overflows it — mirror every entry as it is logged and dump the mirror at the end.
+		battle_log.entry_added.connect(func(entry: Dictionary) -> void: _log_entries.append(entry))
+		# Round-end boards: advance_round() emits AFTER the round's auto-seize, i.e. exactly at the
+		# round boundary — new_round-1 is the round that just ended (rounds 1..3; the final round has
+		# no advance and is captured after the game returns).
+		army_manager.round_advanced.connect(func(new_round: int) -> void:
+			await _capture_board(main, "round%d.png" % (new_round - 1)))
 
 	main.set("_solo_fast", true)
 	main.set("_solo_dev", OS.get_environment("NML_AI_DEV") == "1")
@@ -138,6 +160,11 @@ func _run() -> void:
 			annotated["side"] = side
 			annotated["round"] = int(army_manager.current_round)
 			_knob_records.append(annotated)
+		if not _capture_dir.is_empty():
+			var full := rec.duplicate(true)
+			full["side"] = side
+			full["round"] = int(army_manager.current_round)
+			_all_decisions.append(full)
 
 	# OFFICIAL deployment roll-off (highest die wins, ties re-roll — drawn from the seeded controller RNG,
 	# so the winner is reproducible per seed): the winner deploys FIRST and takes round 1's first turn.
@@ -155,6 +182,9 @@ func _run() -> void:
 	for slot in deploy_order:
 		_deploy_side(main, solo, table, terrain_overlay, int(slot), objectives_v2, _seed + int(slot))
 	await process_frame
+	# Deployment board BEFORE the dice re-seed below, so the capture's frame ticks cannot leak into
+	# the dice stream (seed(_dice_seed) resets the global RNG right after either way).
+	await _capture_board(main, "deploy.png")
 
 	# Dice-stream split (harness-proven): everything board-shaped is fixed above (terrain under the layout
 	# seed, deployment under its per-slot seeds, AI pick/D3 under solo._rng = seed). The only remaining
@@ -167,6 +197,14 @@ func _run() -> void:
 	battle_log.log_event(0, "=== AI ARENA: %s (P1) vs %s (P2) — seed %d dice %d, P%d opens ===" % [
 		_p1_grade, _p2_grade, _seed, _dice_seed, opener], true)
 	await main._solo_run_both_ai_game(opener)
+
+	# Final-round board: the last round never advance_round()s, so it is captured here — after hiding
+	# the game-over AcceptDialog the summary pops (it would sit centred over the table).
+	if not _capture_dir.is_empty():
+		for c in main.get_children():
+			if c is Window and (c as Window).visible:
+				(c as Window).hide()
+		await _capture_board(main, "round%d.png" % int(army_manager.current_round))
 
 	# Report the objective outcome (the rating signal) + the machine-readable result JSON.
 	var owners: Array = terrain_overlay.get_objective_owners() if terrain_overlay.has_method("get_objective_owners") else []
@@ -193,7 +231,62 @@ func _run() -> void:
 		_seed, _dice_seed, _p1_grade, p1, _p2_grade, p2, winner])
 	_write_result_json(main, army_manager, opener, winner,
 		{"p1": p1, "p2": p2, "neutral": neutral}, float(Time.get_ticks_msec() - t0) / 1000.0)
+	_write_capture_outputs()
 	quit(0)
+
+
+# === Showcase capture (capture= / NML_AI_CAPTURE) ===
+
+## Board screenshot into the capture dir: re-frame the camera high-angle over the table centre (units +
+## objective markers recognizable), freeze the tree for the draw, grab the root viewport. No-op without
+## capture=; skipped (with a note) under the headless dummy renderer — run under gamescope for PNGs.
+func _capture_board(main: Node, file_name: String) -> void:
+	if _capture_dir.is_empty():
+		return
+	if DisplayServer.get_name() == "headless":
+		printerr("[ARENA] capture SKIPPED (headless dummy renderer): %s" % file_name)
+		return
+	var pivot: Node3D = main.get("camera_pivot")
+	if pivot != null:
+		# Whole-table framing via the camera controller's own state (its _process applies it, but we
+		# apply directly because the tree is paused during the grab): top-down-ish pitch, table centre.
+		pivot.set("_target_position", Vector3.ZERO)
+		pivot.set("_yaw", 0.0)
+		pivot.set("_pitch", -75.0)
+		pivot.set("_current_zoom", 2.0)
+		if pivot.has_method("_apply_camera_transform"):
+			pivot.call("_apply_camera_transform")
+	paused = true   # freeze game motion so the round-end board is exactly what gets drawn
+	await process_frame
+	await RenderingServer.frame_post_draw
+	var img: Image = root.get_texture().get_image() if root.get_texture() != null else null
+	paused = false
+	if img == null or img.is_empty():
+		printerr("[ARENA] capture FAILED (empty frame): %s" % file_name)
+		return
+	var path := _capture_dir.path_join(file_name)
+	if img.save_png(path) == OK:
+		printerr("[ARENA] capture -> %s" % path)
+	else:
+		printerr("[ARENA] capture WRITE FAILED: %s" % path)
+
+
+## End-of-run showcase artifacts: the FULL battle log (mirror of every entry_added — no ring-buffer
+## truncation) and EVERY decision record verbatim (side/round-annotated), both into the capture dir.
+func _write_capture_outputs() -> void:
+	if _capture_dir.is_empty():
+		return
+	var title := "AI ARENA %s (P1) vs %s (P2) — seed %d dice %d" % [_p1_grade, _p2_grade, _seed, _dice_seed]
+	var log_f := FileAccess.open(_capture_dir.path_join("battlelog.txt"), FileAccess.WRITE)
+	if log_f != null:
+		log_f.store_string(BattleLog.export_text(_log_entries, [], title))
+		log_f.close()
+		printerr("[ARENA] battle log (%d entries) -> %s" % [_log_entries.size(), _capture_dir.path_join("battlelog.txt")])
+	var dec_f := FileAccess.open(_capture_dir.path_join("decisions.json"), FileAccess.WRITE)
+	if dec_f != null:
+		dec_f.store_string(JSON.stringify(_all_decisions, "  "))
+		dec_f.close()
+		printerr("[ARENA] decisions (%d records) -> %s" % [_all_decisions.size(), _capture_dir.path_join("decisions.json")])
 
 
 ## The per-game result artifact the ladder tooling aggregates: identity (grades/seeds/armies/sides),
@@ -331,6 +424,7 @@ func _parse_config() -> void:
 	_army1 = _env_or("NML_AI_ARMY1", _army1)
 	_army2 = _env_or("NML_AI_ARMY2", _army2)
 	_out_dir = _env_or("NML_AI_OUT", _out_dir)
+	_capture_dir = _env_or("NML_AI_CAPTURE", _capture_dir)
 	var s := OS.get_environment("NML_AI_SEED").strip_edges()
 	if s.is_valid_int():
 		_seed = int(s)
@@ -355,6 +449,8 @@ func _parse_config() -> void:
 			_army2 = a.substr(6)
 		elif a.begins_with("out="):
 			_out_dir = a.substr(4)
+		elif a.begins_with("capture="):
+			_capture_dir = a.substr(8)
 	if not _dice_seed_explicit:
 		_dice_seed = _seed
 
