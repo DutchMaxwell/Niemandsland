@@ -92,6 +92,16 @@ PRIMITIVE_PARAMS = {
     # DATA regardless, so a future skirmish errata stays a data change.
     "Caster": {"rating": "X", "token_cap": 6, "cast_target": 4, "aura_in": 18.0,
                "boost_per_token": 1},
+    # --- AI plausibility wave 1 --- Aircraft (GF Advanced Rules v3.5.1 only — none of
+    # AoF/AoFS/AoFR/GFF v3.5.1 field the rule, see SYSTEM_SCOPED_PRIMITIVES): mandatory
+    # straight-line Advance-only move (+30" to the total move, at least 30" — the model may
+    # not use a table edge to move less), ignores units/terrain while moving and stopping,
+    # cannot seize or contest objectives, cannot be charged, and units targeting it get
+    # -12" to their range. solo_move_in is the AI-section simplification (always 30").
+    "Aircraft": {"advance_only": True, "straight_move": True, "move_add_in": 30.0,
+                 "min_move_in": 30.0, "solo_move_in": 30.0, "cannot_seize": True,
+                 "cannot_be_charged": True, "target_range_penalty_in": 12.0,
+                 "ignores_obstacles": True},
 }
 
 # Per-(system, rule) parameter overrides — the SYSTEM-SCOPED divergences.
@@ -122,6 +132,19 @@ WAVE5_PRIMITIVES = {
     # Wave 6: Caster(X) — automated by the spellcasting subsystem (AiSpell +
     # the spells_mechanics_<system>.json maps emitted by spells_mechanics_export.py).
     "Caster": "Caster",
+    # AI plausibility wave 1: Aircraft (system-scoped below — GF only).
+    "Aircraft": "Aircraft",
+}
+
+# Primitives that only exist in SOME systems' books: the bridging table above is
+# name-keyed across systems, but a rule name in the shared Army Forge common set can
+# be absent from a system's printed rulebook. Only the listed systems get the
+# primitive; everywhere else the entry stays unautomated (primitive null), so the
+# runtime gate (RulesRegistry.unit_rule_active) never fires cross-system.
+SYSTEM_SCOPED_PRIMITIVES = {
+    # Verified against the v3.5.1 Advanced Rules PDFs: the Aircraft special rule is
+    # printed in GF only (no hit in AoF / AoFS / AoFR / GFF v3.5.1).
+    "Aircraft": {"gf"},
 }
 
 # Rules the solo layer models although NO army-book lists them as a book rule:
@@ -158,6 +181,9 @@ def entry_for(system: str, rule: dict, book_version: str) -> dict:
     name = rule["name"]
     mech = rule.get("mechanic") or {}
     primitive = mech.get("primitive") or WAVE5_PRIMITIVES.get(name)
+    allowed_systems = SYSTEM_SCOPED_PRIMITIVES.get(name)
+    if allowed_systems is not None and system not in allowed_systems:
+        primitive = None
     out = {
         "primitive": primitive,
         "rated": bool(rule.get("rated", False)),

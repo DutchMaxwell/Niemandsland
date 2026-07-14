@@ -707,15 +707,28 @@ func _solo_activate_one_ai() -> GameUnit:
 		radial_menu_controller._update_activated_markers(unit)
 	var report: Dictionary = solo_controller.last_report
 	# Shaken idle (OPR p.10): the unit spends its activation idle and recovers — clear via the radial seam
-	# (state + marker + MP broadcast) and skip movement narration / combat entirely.
+	# (state + marker + MP broadcast) and skip movement narration / combat entirely. An AIRCRAFT's
+	# mandatory straight move still happened (GF v3.5.1: it flies even Shaken and still recovers) — show
+	# the flight, then the recovery.
 	if bool(report.get("idle_shaken", false)):
+		if bool(report.get("aircraft", false)) and not solo_controller.last_move_paths.is_empty():
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.MOVEMENT,
+					"%s makes its mandatory %d\" flight (Aircraft)" % [unit.get_name(), int(solo_controller.last_move_budget_in)], true)
+			await _solo_animate_move(solo_controller.last_move_paths)
 		if unit.is_shaken and radial_menu_controller != null:
 			radial_menu_controller.card_toggle_shaken(unit)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL, "%s spends its activation idle — recovers from Shaken" % unit.get_name(), true)
 		return unit
 	var target: GameUnit = report.get("target")
-	if battle_log != null and target != null:
+	if battle_log != null and bool(report.get("aircraft", false)):
+		# Aircraft narration (GF v3.5.1): the move is a straight strafing lane, never a ground walk —
+		# logged even with no target left (the flight is mandatory).
+		var strafe_label: String = ("(→ %s)" % target.get_name()) if target != null else "(no target in reach)"
+		battle_log.log_event(BattleLog.Category.MOVEMENT, "%s flies %d\" in a straight line %s" % [
+			unit.get_name(), int(solo_controller.last_move_budget_in), strafe_label], true)
+	elif battle_log != null and target != null:
 		# Narrate the TRUE move goal (field-test finding 1): an objective-seeking move used to print the enemy
 		# unit's name ("rushes → Snipers") even though it was heading for a marker, masking whether the AI ever
 		# contested the mission. When the tree routed toward an objective, say so; the enemy stays the combat
@@ -1095,10 +1108,12 @@ func _solo_auto_seize() -> void:
 		var gu := u as GameUnit
 		if gu == null or gu.get_alive_count() <= 0:
 			continue
-		# A unit that arrived from Ambush THIS round can neither seize nor contest (GF/AoF v3.5.1 p.13).
+		# A unit that arrived from Ambush THIS round can neither seize nor contest (GF/AoF v3.5.1 p.13);
+		# an Aircraft never can at all (GF v3.5.1 Aircraft, system-scoped via the mechanics maps).
 		var ambush_locked: bool = int(gu.unit_properties.get("ambush_arrived_round", -1)) == round_no
 		infos.append({"player": int(gu.unit_properties.get("player_id", 0)), "shaken": gu.is_shaken,
-			"ambush_locked": ambush_locked, "positions": solo_controller.alive_positions(gu)})
+			"ambush_locked": ambush_locked, "aircraft": SoloController.is_aircraft(gu),
+			"positions": solo_controller.alive_positions(gu)})
 	var res: Dictionary = SoloController.seize_objectives(infos, objectives, owners)
 	for c in res.get("changes", []):
 		var idx: int = int((c as Dictionary).get("index", -1))
@@ -1140,6 +1155,7 @@ func _solo_show_game_summary() -> void:
 	var ai_held := 0
 	var human_held := 0
 	var neutral := 0
+	var human_slot: int = 2 if ai_slot == 1 else 1
 	for i in range(objectives.size()):
 		var o: int = terrain_overlay.get_objective_owner(i)
 		if o == 0:
@@ -1148,22 +1164,31 @@ func _solo_show_game_summary() -> void:
 			ai_held += 1
 		else:
 			human_held += 1
+	# In native both-AI mode there is no "you" — the summary names P1/P2 (with their army names) and
+	# declares the ACTUAL winner (showcase finding: a both-AI log ended "you: 0 · AI: 1 · The AI wins").
+	# Slot orientation: human_slot/ai_slot are the controller's two sides in either mode.
+	var side_a_label: String = _solo_player_label(human_slot) if _solo_both_ai else "you"
+	var side_b_label: String = _solo_player_label(ai_slot) if _solo_both_ai else "AI"
+	var win_a: String = "%s wins" % side_a_label if _solo_both_ai else "You win"
+	var win_b: String = "%s wins" % side_b_label if _solo_both_ai else "The AI wins"
 	var verdict: String
 	if objectives.is_empty():
 		# No markers on the table: fall back to surviving models (documented tie-break, not an OPR mission).
 		var ai_alive := _solo_side_alive(ai_slot)
 		var human_alive := _solo_total_alive() - ai_alive
-		verdict = "You win" if human_alive > ai_alive else ("The AI wins" if ai_alive > human_alive else "Draw")
+		verdict = win_a if human_alive > ai_alive else (win_b if ai_alive > human_alive else "Draw")
 	else:
-		verdict = "You win" if human_held > ai_held else ("The AI wins" if ai_held > human_held else "Draw")
+		verdict = win_a if human_held > ai_held else (win_b if ai_held > human_held else "Draw")
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "=== GAME OVER — %d rounds played ===" % SOLO_GAME_ROUNDS, true)
 		if not objectives.is_empty():
-			battle_log.log_event(BattleLog.Category.GENERAL, "Objectives — you: %d · AI: %d · neutral: %d" % [human_held, ai_held, neutral], true)
+			battle_log.log_event(BattleLog.Category.GENERAL, "Objectives — %s: %d · %s: %d · neutral: %d" % [
+				side_a_label, human_held, side_b_label, ai_held, neutral], true)
 		battle_log.log_event(BattleLog.Category.GENERAL, verdict, true)
 	var dlg := AcceptDialog.new()
 	dlg.title = "Game over"
-	var obj_block: String = ("Objectives held:\n  You: %d\n  AI: %d\n  Neutral: %d\n\n" % [human_held, ai_held, neutral]) \
+	var obj_block: String = ("Objectives held:\n  %s: %d\n  %s: %d\n  Neutral: %d\n\n" % [
+		(side_a_label.capitalize() if not _solo_both_ai else side_a_label), human_held, side_b_label, ai_held, neutral]) \
 		if not objectives.is_empty() else "No objective markers were on the table.\n\n"
 	dlg.dialog_text = "%d rounds played.\n\n%s%s" % [SOLO_GAME_ROUNDS, obj_block, verdict]
 	dlg.confirmed.connect(dlg.queue_free)
@@ -1230,6 +1255,11 @@ func _ensure_solo_controller() -> void:
 			return terrain_overlay.get_objectives() if terrain_overlay != null else []
 		solo_controller.objective_owner_of = func(index: int) -> int:
 			return terrain_overlay.get_objective_owner(index) if terrain_overlay != null else 0
+		# Round awareness for the final-round objective urgency (AI plausibility wave 1): the controller
+		# learns which round is the match's last; without a scored match length it never fires.
+		solo_controller.round_provider = func() -> int:
+			return int(opr_army_manager.current_round) if opr_army_manager != null else 0
+		solo_controller.game_rounds = SOLO_GAME_ROUNDS
 	_solo_apply_difficulty()
 
 
@@ -1458,7 +1488,10 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			AiCombatMath.reliable_quality(int(shot["quality"]), bool(profile.get("reliable", false))), int(mod_info.get("mod", 0)))
 		_solo_log_hit_mod(mod_info, target, to_hit)
 		# Indirect (wave 5) targets as if in line of sight — its per-model sighting is range-only.
-		var sighted: int = _solo_sighted_count(member, target, int(shot["reach"]), bool(profile.get("indirect", false)))
+		# The Aircraft target penalty (-12", GF v3.5.1) shortens the sighting reach here too.
+		var sighted: int = _solo_sighted_count(member, target,
+			int(maxf(float(shot["reach"]) - SoloController.target_range_penalty_in(target), 0.0)),
+			bool(profile.get("indirect", false)))
 		var attacks: int = SoloController.effective_attacks(int(profile.get("attacks", 0)), sighted, int(shot["max"]))
 		if attacks <= 0:
 			continue
@@ -1756,7 +1789,10 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 			continue   # skip empty units and any still off-table in Ambush reserve (findings 3/4)
 		if hu.has_method("is_attached") and hu.is_attached():
 			continue   # a joined hero is targeted through its host unit, never alone
-		if _solo_sighted_count(attacker, hu, int(max_range), bool(profile.get("indirect", false))) <= 0:
+		# Targeting an Aircraft costs -12" of range (GF v3.5.1, system-scoped) — per CANDIDATE, so a
+		# ground target stays reachable while the aircraft next to it may not be.
+		var eff_range: int = int(maxf(max_range - SoloController.target_range_penalty_in(hu), 0.0))
+		if _solo_sighted_count(attacker, hu, eff_range, bool(profile.get("indirect", false))) <= 0:
 			continue   # no model of the shooter has range + LOS → not a valid target (p.8; Indirect waives LOS)
 		var dist := MoveIntent.distance_inches(from, solo_controller.unit_centre(hu))
 		var in_cover := _solo_majority_in_cover(hu)
@@ -1775,7 +1811,9 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 		dists.append(dist)
 		# Expected wounds of THIS weapon profile vs THIS defender — every wave-1..3 rule flows through
 		# the shared AiEv/AiCombatMath math (Deadly→Tough, Blast→big units, >9" Stealth devalued, …).
-		evs.append(AiEv.profile_ev(profile, att_ctx, AiEv.ctx_for(hu, in_cover, 0), dist, false) if not profile.is_empty() else 0.0)
+		# An aircraft candidate's -12" folds into the EV distance so its range gates see the effective reach.
+		evs.append(AiEv.profile_ev(profile, att_ctx, AiEv.ctx_for(hu, in_cover, 0),
+			dist + SoloController.target_range_penalty_in(hu), false) if not profile.is_empty() else 0.0)
 	var idx: int = AiTargeting.best_index(cands, overlay)
 	if idx < 0:
 		return null
@@ -1873,6 +1911,8 @@ func _solo_los_blockers(exclude_a: GameUnit, exclude_b: GameUnit) -> Array[LosRu
 		var gu := g as GameUnit
 		if gu == null or excluded.has(gu.get_instance_id()) or SoloController.unit_in_reserve(gu):
 			continue   # a reserve unit is off-table — it blocks no sight lines (findings 3/4)
+		if SoloController.is_aircraft(gu):
+			continue   # an Aircraft flies high — only the model counts; its base blocks no line of sight (GF v3.5.1)
 		var key: int = gu.get_instance_id()
 		for m in gu.get_alive_models():
 			var node: Node3D = (m as ModelInstance).node
@@ -2565,13 +2605,9 @@ func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 
 
 ## Alive models of the unit INCLUDING its attached heroes (a unit is destroyed only when both are gone).
+## Shared truth in SoloController.combined_alive — the battle log's destroyed-check counts the SAME pool.
 func _solo_combined_alive(unit: GameUnit) -> int:
-	var n: int = unit.get_alive_count()
-	if unit.has_method("get_attached_heroes"):
-		for h in unit.get_attached_heroes():
-			if h != null:
-				n += h.get_alive_count()
-	return n
+	return SoloController.combined_alive(unit)
 
 
 ## One attributed roll in the real dice tray: set count + success target, roll, await, read the faces,
@@ -3907,7 +3943,9 @@ func _solo_apply_wounds(target: GameUnit, wounds: int) -> void:
 			if h != null:
 				remaining = _solo_wound_models(h, remaining, pid)
 	if battle_log != null:
-		battle_log.on_wounds(target.get_name(), wounds, _solo_combined_alive(target), target.models.size())
+		# Combined alive AND combined total: with a joined hero both numbers must count the same pool
+		# (the old own-models total printed impossible "(4/3)" shapes once the hero soaked the spill).
+		battle_log.on_wounds(target.get_name(), wounds, _solo_combined_alive(target), SoloController.combined_total(target))
 
 
 ## Apply up to `wounds` to a unit's models back-rank-first (Tough absorbs before dying); returns the
@@ -4940,8 +4978,11 @@ func _on_battle_log_dead(node, dead: bool) -> void:
 		battle_log.log_event(BattleLog.Category.COMBAT if dead else BattleLog.Category.GENERAL,
 			"A model was killed" if dead else "A model returns")
 		return
-	var alive: int = gu.get_alive_count()
-	var total: int = gu.models.size()
+	# A JOINED HERO is part of the unit (GF/AoF v3.5.1 "Heroes"): the unit is destroyed only when the
+	# hero's models are gone TOO. Counting only gu.models declared "X destroyed" while the attached hero
+	# still fought on (showcase finding: the log killed Support Brothers a full activation early).
+	var alive: int = SoloController.combined_alive(gu)
+	var total: int = SoloController.combined_total(gu)
 	if dead:
 		if alive == 0:
 			battle_log.on_unit_destroyed(gu.get_name())

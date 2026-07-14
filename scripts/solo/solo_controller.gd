@@ -23,6 +23,10 @@ const BASE_CONTACT_IN := 1.0        # nominal centre-to-centre gap of two standa
 ## (the target's body-only planner zone clamps them to exact contact; snap_charge clears any residual).
 ## Not a rule value — a contact epsilon (field-test finding 3: a charge within band fell short of contact).
 const CHARGE_CONTACT_MARGIN_IN := 0.25
+## Kite margin: the "Advancing" step-back stops this hair INSIDE max range instead of exactly ON the
+## edge — a move ending at 24.000…1" of a 24" gun lost its shot to float noise (AI plausibility wave 1).
+## A measuring margin in the CHARGE_CONTACT_MARGIN_IN spirit, not a rule value.
+const KITE_RANGE_MARGIN_IN := 0.25
 const IN_THE_WAY_IN := 6.0          # OPR: an enemy within 6" of the unit→objective line is "in the way" (p.58)
 const NO_OBJECTIVE := Vector3(INF, INF, INF)   # _nearest_uncontrolled_objective sentinel: no uncontrolled objective
 ## Difficult-terrain move cap (GF Advanced Rules v3.5.1 p.11): "If any model in a unit moves in or
@@ -57,6 +61,46 @@ const STALL_REPLAN_FRACTION := 0.25
 ## die; the hybrid policy (docs/SOLO_AI_PLAN.md) ranks it by the EV metric instead. A documented
 ## convention, not an official value.
 const TARGET_TIE_BAND_IN := 1.0
+
+# --- Aircraft (GF Advanced Rules v3.5.1 special rule; AI plausibility wave 1) ---
+## Fallback values for the RulesRegistry "Aircraft" params (the committed gf mechanics map carries the
+## same numbers; these keep headless tests without assets byte-identical). Per the rulebook: Advance-only,
+## straight line, the move is mandatory and at least this long (a table edge may not shorten it below),
+## and enemies targeting the aircraft get the range penalty. The solo-AI section fixes the AI's aircraft
+## move at exactly 30".
+const AIRCRAFT_MOVE_IN := 30.0
+const AIRCRAFT_TARGET_RANGE_PENALTY_IN := 12.0
+## Compass headings sampled when no enemy-directed aircraft lane is legal/scoring (evenly spread, fixed
+## order ⇒ deterministic tie behaviour).
+const AIRCRAFT_HEADINGS := 16
+
+# --- Big-base maneuvering (AI plausibility wave 1) ---
+## A model whose base bounding radius reaches this counts as LARGE (Carnivo-Rex class, ≥ ~75 mm across):
+## it gets the boxed-reposition fallback and, at high coordination grades, activates before smaller
+## friends fill the lanes. A planning convention, not a rule value.
+const LARGE_BASE_RADIUS_IN := 1.5
+## A completed move that displaced the unit less than this counts as BOXED for the reposition fallback
+## and the plausibility metric ("no large model idles >2 activations unless surrounded").
+const BOXED_ACHIEVED_IN := 1.0
+## Lateral goal rotations (degrees, tried in order) of the boxed-reposition fallback: when even the
+## gate-collapse ladder left a LARGE base at a token step, re-aim the same band sideways to find an open
+## lane instead of grinding into the jam. Both signs of each magnitude are tried (+ then -); the fan
+## reaches all the way to a pure BACK-OUT (180°) — a deployment-crowd-boxed monster that waddles free
+## backward beats one twitching half an inch into the jam (rekrut showcase: Carnivo-Rex R1).
+const BOXED_REPOSITION_DEGREES: Array[float] = [35.0, 70.0, 110.0, 145.0, 180.0]
+
+# --- Fast-unit flanking doctrine (AI plausibility wave 1) ---
+## A ranged unit whose Advance band reaches this (Fast bikes and similar) prefers a FLANKING firing
+## position over walking straight at its target: stand-off points on the target's flanks that keep
+## range + LOS score an EV bonus. Conventions, not rule values (movement placement is officially open).
+const FLANK_MIN_ADVANCE_IN := 7.0
+## Flank candidate bearings (degrees off the straight approach line, tried symmetrically ±).
+const FLANK_ANGLES: Array[float] = [0.0, 35.0, 70.0, 100.0]
+## Stand-off gap kept inside max weapon range at the flank anchor (measuring slack + a step of kite room).
+const FLANK_RANGE_SLACK_IN := 2.0
+## Tie-break EV bonus per 90° of flank offset — enough to prefer a flank among near-equal shots, never
+## enough to override a materially better straight-line volley.
+const FLANK_EV_BONUS_PER_90 := 0.15
 
 # --- Hard final placement gate (field-test findings 3 + 6; real-game loose-unit path only) ---
 const OVERLAP_GATE_PASSES := 4        # Gauss-Seidel passes of the per-model absolute overlap resolution
@@ -116,6 +160,14 @@ const DECISION_LOG_CAP := 200
 ## BEFORE ring-buffer eviction — the rating-ladder harness captures the full stream for its per-game
 ## result JSON without touching the dev-toggle drain path. Invalid (default) ⇒ zero cost, no behaviour change.
 var decision_sink: Callable = Callable()
+## Injected by main: Callable() -> int returning the CURRENT round number, plus the match length —
+## the final-round objective urgency (AI plausibility wave 1) pivots on "is this the last round?".
+## Invalid/0 ⇒ the urgency never fires (headless tests, endless sandbox play).
+var round_provider: Callable = Callable()
+var game_rounds: int = 0
+## Kind-specific extras merged into the NEXT move decision record (_execute_move) — the acting layer
+## (_act) knows the enemy gap / objective intent the executor doesn't; cleared after each merge.
+var _move_extra: Dictionary = {}
 ## Injected by main: Callable(from: Vector3, to: Vector3) -> bool for terrain line of sight.
 var los_checker: Callable = Callable()
 ## Injected by main: Callable(shooter: GameUnit, target: GameUnit) -> bool — the GEOMETRIC PER-MODEL line
@@ -266,10 +318,18 @@ func activate_next_ai_unit() -> GameUnit:
 	_activation_seq += 1   # monotonic per-activation index for the deterministic difficulty draws
 	last_move_paths = []   # cleared per activation — HOLD / Shaken idle replays nothing
 	if unit.is_shaken:
-		# OPR (p.10): a Shaken unit spends its activation idle, which lets it recover.
-		last_report = {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
-			"toward": AiDecision.Toward.ENEMY, "shoot": false, "can_shoot": false,
-			"dist_in": INF, "dangerous_models": 0, "idle_shaken": true}
+		# OPR (p.10): a Shaken unit spends its activation idle, which lets it recover. An AIRCRAFT still
+		# makes its MANDATORY straight move first (GF v3.5.1: the move happens even Shaken, and it does
+		# not break the staying-idle requirement) — _act_aircraft skips targeting/shooting while Shaken.
+		if is_aircraft(unit):
+			last_report = _act(unit)
+			last_report["idle_shaken"] = true
+			last_report["shoot"] = false
+			last_report["can_shoot"] = false
+		else:
+			last_report = {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
+				"toward": AiDecision.Toward.ENEMY, "shoot": false, "can_shoot": false,
+				"dist_in": INF, "dangerous_models": 0, "idle_shaken": true}
 	else:
 		last_report = _act(unit)
 	mark_activated(unit)
@@ -332,12 +392,29 @@ func _select_ai_unit(eligible: Array) -> GameUnit:
 	var counter_deferred: bool = not non_counter.is_empty() and non_counter.size() < section.size()
 	if not non_counter.is_empty():
 		section = non_counter
+	# LARGE-BASES-FIRST (AI plausibility wave 1, big-model maneuvering): the official pick draws a RANDOM
+	# eligible unit from the section — a die roll the hybrid policy may fill with judgment. At high
+	# coordination grades the section's LARGE bases (Carnivo-Rex class) activate before small friends
+	# fill the lanes, so the big model still has room to plan its move. The pick stays random WITHIN the
+	# preferred pool (same seeded stream); the Shaken/Counter overlays keep their precedence above.
+	var diff := active_difficulty()
+	var large_first := false
+	if diff != null and diff.focus_fires() and section.size() > 1:
+		var large: Array = []
+		for u in section:
+			if _move_base_radius_m(_moving_models(u as GameUnit)) >= LARGE_BASE_RADIUS_IN * INCHES_TO_METERS:
+				large.append(u)
+		if not large.is_empty() and large.size() < section.size():
+			section = large
+			large_first = true
 	var picked: GameUnit = section[_rng.randi_range(0, section.size() - 1)]
 	record_decision({"kind": "pick", "unit": picked.get_name(),
 		"rule": "Solo v3.5.0: D6 section roll, random eligible; Shaken last; Counter last in section (p.57)",
 		"candidates": [], "chosen": picked.get_name(),
-		"why": ("counter units deferred" if counter_deferred else ("shaken pool" if fresh.is_empty() else "section roll")),
-		"data": {"west": west.size(), "east": east.size(), "rolled_west": roll_west, "eligible": eligible.size()}})
+		"why": ("large bases first" if large_first else ("counter units deferred" if counter_deferred
+			else ("shaken pool" if fresh.is_empty() else "section roll"))),
+		"data": {"west": west.size(), "east": east.size(), "rolled_west": roll_west,
+			"eligible": eligible.size(), "large_first": large_first}})
 	return picked
 
 
@@ -351,6 +428,9 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 	if army_manager == null:
 		return null
 	var from := unit_centre(ai_unit)
+	# An Aircraft can't be charged (GF v3.5.1) — for a unit with NO ranged weapons it is no valid
+	# target at all (it can never attack it), so the nearest-target key skips it.
+	var melee_only: bool = AiShooting.profiles_in_range(_unit_weapons(ai_unit), 0.0).is_empty()
 	var cands: Array = []
 	for h in army_manager.get_game_units_for_player(human_slot):
 		var hu := h as GameUnit
@@ -358,6 +438,8 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 			continue   # skip destroyed units and any still off-table in Ambush reserve (findings 3/4)
 		if hu.has_method("is_attached") and hu.is_attached():
 			continue   # a joined hero is PART of its host unit — you target the unit, never the hero alone
+		if melee_only and is_aircraft(hu):
+			continue   # unchargeable and out of reach for a pure melee unit — never "the nearest valid target"
 		var d := MoveIntent.distance_inches(from, unit_centre(hu))
 		cands.append({"unit": hu, "d": d, "band": int(floorf(d / TARGET_TIE_BAND_IN)),
 			"activated": hu.is_activated, "ev": 0.0})
@@ -387,8 +469,11 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 			# woods/ruins is worth less to shoot — the EV must see it, not a hardcoded false.
 			var them := AiEv.ctx_for(hu, majority_in_cover(hu), counter_models_of(hu))
 			if our_melee.is_empty():
+				# Targeting an Aircraft costs -12" of range — fold it into the EV distance so the
+				# range gates inside shoot_ev see the effective reach (system-scoped; 0 otherwise).
 				td["ev"] = AiEv.shoot_ev(AiEv.stamp_sergeant(
-					filter_limited(ai_unit, AiShooting.profiles_in_range(our_weapons, 0.0)), ai_unit), us, them, float(td["d"]))
+					filter_limited(ai_unit, AiShooting.profiles_in_range(our_weapons, 0.0)), ai_unit), us, them,
+					float(td["d"]) + target_range_penalty_in(hu))
 			else:
 				td["ev"] = AiEv.charge_score(our_melee, us,
 					AiEv.stamp_sergeant(filter_limited(hu, AiShooting.melee_profiles(_unit_weapons(hu))), hu), them)
@@ -510,8 +595,14 @@ static func _target_key_compare(a: Dictionary, b: Dictionary) -> int:
 func _act(unit: GameUnit) -> Dictionary:
 	var report := {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
 		"toward": AiDecision.Toward.ENEMY, "shoot": false, "can_shoot": false, "dist_in": INF, "dangerous_models": 0}
+	if alive_positions(unit).is_empty():
+		return report
+	# Aircraft (GF v3.5.1, system-scoped): mandatory straight Advance on an EV-picked strafing lane —
+	# a completely separate action shape (no decision tree, no objectives, no charge).
+	if is_aircraft(unit):
+		return _act_aircraft(unit, report)
 	var target_unit := nearest_human_unit(unit)
-	if target_unit == null or alive_positions(unit).is_empty():
+	if target_unit == null:
 		return report
 	report["target"] = target_unit
 	var weapons := _unit_weapons(unit)
@@ -529,6 +620,11 @@ func _act(unit: GameUnit) -> Dictionary:
 	var tcentre := unit_centre(target_unit)
 	var enemy_dist := MoveIntent.distance_inches(centre, tcentre)
 	var shoot_range := AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)   # +Royal Legion (wave 4)
+	# Targeting an Aircraft costs -12" of range (GF v3.5.1, system-scoped) — every range gate below
+	# measures against THIS target, so the penalty folds into the working range once, here.
+	var target_is_aircraft := is_aircraft(target_unit)
+	if target_is_aircraft and shoot_range > 0:
+		shoot_range = maxi(shoot_range - int(target_range_penalty_in(target_unit)), 0)
 	# The archetype's "better than" (Solo & Co-Op v3.5.0 p.1) is filled with the EV metric in the REAL
 	# game (AiEv.classify — Furious/Thrust/Impact weigh the melee side); the sim keeps the frozen
 	# AiArchetype.classify heuristic, so its fairness oracle is untouched.
@@ -557,13 +653,39 @@ func _act(unit: GameUnit) -> Dictionary:
 		"arch": archetype, "objective": has_obj, "in_way": has_obj and _enemy_in_way(centre, obj_pos),
 		"obj_in_advance": obj_dist <= advance + OBJECTIVE_CONTROL_IN,
 		"obj_in_rush": obj_dist <= rush + OBJECTIVE_CONTROL_IN,
-		"enemy_in_charge": charge_gap <= rush,
+		# An Aircraft can't be charged (GF v3.5.1) — the tree must never see it "in charge range".
+		"enemy_in_charge": charge_gap <= rush and not target_is_aircraft,
 		"shoot_after_advance": shoot_range > 0 and (enemy_dist - advance) <= float(shoot_range),
 	}
 	var dec := AiDecision.decide_solo(ctx)
 	var action: int = int(dec["action"])
 	var do_shoot: bool = bool(dec["shoot"])
 	var action_why := "decision tree"
+	# FINAL-ROUND OBJECTIVE URGENCY (AI plausibility wave 1): in the match's LAST round, a full-focus
+	# grade (kriegsherr/albtraum — and the default AI) that can still REACH seize range of an
+	# uncontrolled marker goes for it instead of a marginal fight: after this activation there is no
+	# later turn where the fight pays off, only the markers score. Never fires when the unit is already
+	# in seize range, when the charge target itself contests that marker (fighting there IS holding it),
+	# or mid-match. Overlays below (Relentless/Immobile hold) keep their precedence.
+	var diff2 := active_difficulty()
+	if _is_final_round() and has_obj and (diff2 == null or diff2.mission_focus >= 1.0) \
+			and int(dec["toward"]) == AiDecision.Toward.ENEMY \
+			and obj_dist <= rush + OBJECTIVE_CONTROL_IN \
+			and _nearest_model_gap_to_in(unit, obj_pos) > OBJECTIVE_CONTROL_IN \
+			and not (bool(ctx["enemy_in_charge"]) \
+				and MoveIntent.distance_inches(tcentre, obj_pos) <= OBJECTIVE_CONTROL_IN + CONTACT_IN):
+		action = AiDecision.Action.RUSH
+		do_shoot = false
+		if obj_dist <= advance + OBJECTIVE_CONTROL_IN and bool(ctx["shoot_after_advance"]):
+			action = AiDecision.Action.ADVANCE   # the marker is close enough to seize AND still shoot
+			do_shoot = true
+		dec["toward"] = AiDecision.Toward.OBJECTIVE
+		action_why = "final-round urgency: seize range beats a marginal fight"
+		record_decision({"kind": "urgency", "unit": unit.get_name(),
+			"rule": "Final round: only held markers score — a reachable uncontrolled marker outranks a fight that cannot pay off later",
+			"candidates": [], "chosen": AiDecision.action_name(action) + " toward objective",
+			"why": "final-round urgency",
+			"data": {"round": _current_round(), "obj_dist_in": obj_dist, "rush_in": rush}})
 	# Relentless / Indirect overlay (Solo & Co-Op AI overlays; Indirect is wave 5): a Relentless or
 	# Indirect ranged weapon with an enemy in range → Hold and shoot. The record names the trigger.
 	var hold_rule := hold_and_shoot_rule(weapons, shoot_range > 0 and enemy_dist <= float(shoot_range))
@@ -578,6 +700,34 @@ func _act(unit: GameUnit) -> Dictionary:
 		action = AiDecision.Action.HOLD
 		do_shoot = shoot_range > 0
 		action_why = "Immobile/Artillery hold-only"
+	# FAST-UNIT FLANKING DOCTRINE (AI plausibility wave 1): a fast ranged unit that would walk toward an
+	# enemy it can't shoot THIS activation (out of range, or range without line of sight) instead heads
+	# for a FLANK firing anchor — a stand-off point on the target's flank with range + LOS. Reachable
+	# with an Advance → advance there and SHOOT; further → rush the approach lane (the deferred shot).
+	# Placement of a legal move is officially the player's open choice, so this is pure doctrine — the
+	# hold overlays below keep their precedence, charges and objective moves are untouched.
+	var flank_goal := NO_OBJECTIVE
+	if (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) \
+			and int(dec["toward"]) == AiDecision.Toward.ENEMY and not bool(ctx["enemy_in_charge"]) \
+			and shoot_range > 0 and (advance >= FLANK_MIN_ADVANCE_IN or unit.has_special_rule("Fast")) \
+			and (enemy_dist > float(shoot_range) or not _has_los(unit, target_unit)):
+		var fl := _flank_goal(unit, target_unit, float(shoot_range), advance)
+		if bool(fl.get("found", false)):
+			flank_goal = fl["goal"] as Vector3
+			if bool(fl.get("within_advance", false)):
+				action = AiDecision.Action.ADVANCE
+				do_shoot = true
+				action_why = "flank: firing position with range and line of sight"
+			else:
+				action = AiDecision.Action.RUSH
+				do_shoot = false
+				action_why = "flank: approach run toward a firing lane"
+			record_decision({"kind": "flank", "unit": unit.get_name(),
+				"rule": "Fast-unit doctrine: move placement is the player's choice — a flank anchor with range+LOS beats walking blind at the target",
+				"candidates": [], "chosen": AiDecision.action_name(action) + " to flank",
+				"why": ("reaches firing position" if bool(fl.get("within_advance", false)) else "approach toward firing lane"),
+				"data": {"angle_deg": float(fl.get("angle_deg", 0.0)), "anchor_dist_in": float(fl.get("dist_in", 0.0)),
+					"ring_in": float(fl.get("ring_in", 0.0)), "ev": float(fl.get("ev", 0.0))}})
 	var action_data := {"arch": archetype, "role": archetype_role_label(archetype),
 		"objective": bool(ctx["objective"]), "in_way": bool(ctx["in_way"]),
 		"enemy_in_charge": bool(ctx["enemy_in_charge"]), "shoot_after_advance": bool(ctx["shoot_after_advance"]),
@@ -594,7 +744,8 @@ func _act(unit: GameUnit) -> Dictionary:
 	report["toward"] = int(dec["toward"])
 	var to_obj: bool = int(dec["toward"]) == AiDecision.Toward.OBJECTIVE and has_obj
 	report["to_objective"] = to_obj   # main narrates "→ objective" instead of the enemy name (finding 1 label)
-	var goal: Vector3 = obj_pos if to_obj else tcentre
+	var to_flank: bool = flank_goal != NO_OBJECTIVE and not to_obj
+	var goal: Vector3 = obj_pos if to_obj else (flank_goal if to_flank else tcentre)
 	# Coordination first slice (round 7, finding 6): a RUSH/ADVANCE mover that would PARK in a bigger,
 	# not-yet-activated friendly shooter's line of fire side-steps to an equivalent position (equal
 	# progress, small/cheap units defer). Charges are exempt (they must reach their target), and so is a
@@ -620,25 +771,33 @@ func _act(unit: GameUnit) -> Dictionary:
 					"data": {"friend": str(yg["friend"]),
 						"offset_in": float(yg["offset"]) / INCHES_TO_METERS, "role": archetype_role_label(archetype)}})
 	var goal_dist := MoveIntent.distance_inches(centre, goal)
+	# Extras for the MOVE decision record (_execute_move merges + clears them): the plausibility metrics
+	# need the acting context the executor doesn't know — how boxed-in by enemies the unit was, whether
+	# the move was mission play, and whether the base counts as LARGE (big-model maneuver acceptance).
+	_move_extra = {"enemy_gap_in": charge_gap, "to_objective": to_obj, "flank": to_flank,
+		"large": _move_base_radius_m(_moving_models(unit)) >= LARGE_BASE_RADIUS_IN * INCHES_TO_METERS}
 	var dang := 0
 	match action:
 		AiDecision.Action.RUSH:
-			dang = _move_toward(unit, goal, (minf(rush, goal_dist) if to_obj else rush), false)
+			dang = _move_toward(unit, goal, (minf(rush, goal_dist) if (to_obj or to_flank) else rush), false)
 		AiDecision.Action.CHARGE:
 			# Close the REAL base-to-base gap to base contact, capped at the band (field-test finding 3): the
 			# former "move toward the enemy centre, capped at rush" under-shot for wide/offset units and the
 			# charge fell short within band. Charge is the one action exempt from steering easing.
 			dang = _charge_move(unit, target_unit, rush)
 		AiDecision.Action.ADVANCE:
-			if to_obj:
+			if to_obj or to_flank:
 				dang = _move_toward(unit, goal, minf(advance, goal_dist), false)
 			elif enemy_dist <= float(shoot_range):
-				# "Advancing" (p.58): a shooter already in range steps BACK to the range edge, still shooting.
-				dang = _move_away(unit, tcentre, minf(advance, float(shoot_range) - enemy_dist))
+				# "Advancing" (p.58): a shooter already in range steps BACK toward the range edge, still
+				# shooting — held a measuring hair INSIDE range so the post-move gate never flips on floats.
+				dang = _move_away(unit, tcentre,
+					minf(advance, maxf(float(shoot_range) - enemy_dist - KITE_RANGE_MARGIN_IN, 0.0)))
 			else:
 				dang = _move_toward(unit, goal, advance, false)
 		_:
 			pass   # HOLD
+	_move_extra = {}
 	report["dangerous_models"] = dang
 	# Instrument the objective outcome (field-test finding 1: the harness logged enemy distance but NEVER the
 	# model-to-marker distance, so "did the AI actually contest?" was unmeasurable). Record the post-move gap
@@ -668,6 +827,231 @@ func _act(unit: GameUnit) -> Dictionary:
 	if not casts.is_empty():
 		report["casts"] = casts
 	return report
+
+
+# ===== Aircraft activation (GF Advanced Rules v3.5.1 "Aircraft"; AI plausibility wave 1) =====
+
+## One aircraft activation: the ONLY legal action is an Advance along a STRAIGHT line whose full length
+## (the AI-section 30") must fit on the table — the aircraft may not use an edge to move less. It ignores
+## every unit and all terrain while moving and stopping, can never seize or contest a marker, and shoots
+## after the move like any advancing unit (targets get their range against IT reduced, not the reverse).
+## The open choice — WHICH straight lane — is filled by the EV metric: the heading whose endpoint offers
+## the best expected volley (a strafing run), with "stay away from the edges" as the no-shot fallback.
+func _act_aircraft(unit: GameUnit, report: Dictionary) -> Dictionary:
+	var weapons := _unit_weapons(unit)
+	var move_in := aircraft_move_in(unit)
+	var centre := unit_centre(unit)
+	var pick := _aircraft_heading(unit, centre, move_in, weapons)
+	var dir2: Vector2 = pick.get("dir", Vector2(0, 1))
+	record_decision({"kind": "action", "unit": unit.get_name(),
+		"rule": "GF v3.5.1 Aircraft: straight Advance-only, mandatory length, ignores units/terrain, no seizing, uncharged",
+		"candidates": [], "chosen": "flies a strafing run",
+		"why": str(pick.get("why", "best strafing lane")),
+		"data": {"move_in": move_in, "heading_deg": rad_to_deg(dir2.angle()),
+			"strafe_ev": float(pick.get("ev", 0.0)), "legal_headings": int(pick.get("legal", 0))}})
+	_move_extra = {"aircraft": true, "large": true}
+	_aircraft_move(unit, dir2, move_in)
+	_move_extra = {}
+	report["action"] = AiDecision.Action.ADVANCE
+	report["aircraft"] = true   # main narrates "flies" and skips ground-move framing
+	report["moved"] = true
+	# Post-move targeting/shooting exactly like a ground advance: nearest valid target from the NEW
+	# position; the aircraft's own shooting suffers no penalty (the -12" applies only AGAINST it).
+	if unit.is_shaken:
+		return report   # the mandatory move happened; a Shaken aircraft still spends the turn recovering
+	var target_unit := nearest_human_unit(unit)
+	if target_unit == null:
+		return report
+	report["target"] = target_unit
+	var shoot_range := AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)
+	if is_aircraft(target_unit) and shoot_range > 0:
+		shoot_range = maxi(shoot_range - int(target_range_penalty_in(target_unit)), 0)
+	var d2 := MoveIntent.distance_inches(unit_centre(unit), unit_centre(target_unit))
+	report["dist_in"] = d2
+	report["shoot"] = shoot_range > 0
+	report["can_shoot"] = shoot_range > 0 and d2 <= float(shoot_range) \
+		and (_has_los(unit, target_unit) or has_indirect_ranged(weapons))
+	var casts := _plan_casts(unit)
+	if not casts.is_empty():
+		report["casts"] = casts
+	return report
+
+
+## Pick the aircraft's straight lane: candidate headings toward every living enemy centre plus a fixed
+## compass fan; a heading is LEGAL when the whole straight move keeps every model of the aircraft on the
+## table (the rulebook forbids shortening the mandatory move into an edge). Among legal headings the best
+## expected post-move volley wins; with no shot anywhere, the endpoint furthest from the edges (keeps
+## every next-turn lane open). Returns {dir, ev, why, legal}.
+func _aircraft_heading(unit: GameUnit, centre: Vector3, move_in: float, weapons: Array) -> Dictionary:
+	var half := _table_half_extents()
+	var own_r := _deploy_footprint_radius(unit)
+	var move_m := move_in * INCHES_TO_METERS
+	var candidates: Array = []   # Vector2 headings, enemy-directed first (deterministic order)
+	var enemies: Array = []
+	if army_manager != null:
+		for h in army_manager.get_game_units_for_player(human_slot):
+			var hu := h as GameUnit
+			if hu == null or hu.is_destroyed() or unit_in_reserve(hu):
+				continue
+			if hu.has_method("is_attached") and hu.is_attached():
+				continue
+			enemies.append(hu)
+			var to_enemy := Vector2(unit_centre(hu).x - centre.x, unit_centre(hu).z - centre.z)
+			if to_enemy.length() > 0.001:
+				candidates.append(to_enemy.normalized())
+	for i in range(AIRCRAFT_HEADINGS):
+		candidates.append(Vector2.from_angle(TAU * float(i) / float(AIRCRAFT_HEADINGS)))
+	var us := AiEv.ctx_for(unit, false, 0)
+	var profiles := AiEv.stamp_sergeant(filter_limited(unit, AiShooting.profiles_in_range(weapons, 0.0)), unit)
+	var best_dir := Vector2.ZERO
+	var best_ev := -1.0
+	var best_margin := -INF
+	var legal := 0
+	for c in candidates:
+		var dir := c as Vector2
+		var endpoint := centre + Vector3(dir.x, 0.0, dir.y) * move_m
+		# Legality: the FULL straight move stays on the table (endpoint in bounds ⇒ the whole straight
+		# segment is, by convexity), measured to the base's bounding radius like every bounds clamp.
+		var lim_x := half.x - BOUNDS_MARGIN_M - own_r
+		var lim_z := half.y - BOUNDS_MARGIN_M - own_r
+		if absf(endpoint.x) > lim_x or absf(endpoint.z) > lim_z:
+			continue
+		legal += 1
+		var ev := 0.0
+		for e in enemies:
+			var them := AiEv.ctx_for(e as GameUnit, majority_in_cover(e as GameUnit), 0)
+			var dist := MoveIntent.distance_inches(endpoint, unit_centre(e as GameUnit))
+			var e_los: bool = not los_checker.is_valid() \
+				or bool(los_checker.call(Vector3(endpoint.x, centre.y, endpoint.z), unit_centre(e as GameUnit)))
+			if e_los:
+				ev = maxf(ev, AiEv.shoot_ev(profiles, us, them, dist))
+		var margin := minf(lim_x - absf(endpoint.x), lim_z - absf(endpoint.z))
+		if ev > best_ev + 0.0001 or (absf(ev - best_ev) <= 0.0001 and margin > best_margin):
+			best_ev = ev
+			best_dir = dir
+			best_margin = margin
+	if best_dir == Vector2.ZERO:
+		# Degenerate board (no legal full-length lane — impossible on a standard table): fly toward the
+		# centre, the direction with the longest clear run; the bounds clamp keeps it on the table.
+		best_dir = Vector2(-centre.x, -centre.z).normalized() if Vector2(centre.x, centre.z).length() > 0.001 else Vector2(0, 1)
+		return {"dir": best_dir, "ev": 0.0, "why": "no legal full-length lane — inward fallback", "legal": 0}
+	return {"dir": best_dir, "ev": maxf(best_ev, 0.0),
+		"why": ("strafing run (best expected volley)" if best_ev > 0.0 else "no shot anywhere — keep lanes open"),
+		"legal": legal}
+
+
+## Execute the aircraft's straight move: every model shifts by the same delta — no planner, no spacing
+## zones, no terrain gates, no dangerous tests (the rule ignores units and terrain while moving and
+## stopping; only the actual model counts, bases block nothing). State is applied + broadcast like any
+## AI move and the trails feed the same glide presentation.
+func _aircraft_move(unit: GameUnit, dir: Vector2, move_in: float) -> void:
+	var models := _moving_models(unit)
+	var positions := _positions_of(models)
+	if positions.is_empty():
+		return
+	var delta := Vector3(dir.x, 0.0, dir.y) * move_in * INCHES_TO_METERS
+	# Defensive clamp only (the heading pick already guarantees the full length fits).
+	delta = _clamp_delta_to_bounds(positions, delta)
+	var new_positions: Array = []
+	for p in positions:
+		new_positions.append((p as Vector3) + delta)
+	var trails: Array = []
+	_fill_straight_trails(trails, positions, new_positions)
+	_apply_model_positions(models, new_positions)
+	last_move_budget_in = move_in
+	last_flow_order = []
+	var radii := _model_radius_map(models)
+	last_move_paths = []
+	for i in range(mini(models.size(), trails.size())):
+		last_move_paths.append({"model": models[i], "path": trails[i],
+			"radius_m": float(radii.get(models[i], SeparationChecker.DEFAULT_BASE_RADIUS_M))})
+	var achieved_m := _achieved_m(positions, new_positions)
+	var rec_data := {"band_in": move_in, "budget_in": move_in,
+		"arc_in": achieved_m / INCHES_TO_METERS, "achieved_in": achieved_m / INCHES_TO_METERS,
+		"dangerous_models": 0, "straight": true}
+	for k in _move_extra:
+		rec_data[k] = _move_extra[k]
+	record_decision({"kind": "move", "unit": unit.get_name(),
+		"rule": "GF v3.5.1 Aircraft: mandatory straight move, ignores all units and terrain while moving and stopping",
+		"candidates": [], "chosen": "", "why": "aircraft lane", "data": rec_data})
+
+
+## Final-round helpers (objective urgency): round data is injected by main (round_provider +
+## game_rounds); without it the urgency never fires (sandbox play, headless tests).
+func _current_round() -> int:
+	return int(round_provider.call()) if round_provider.is_valid() else 0
+
+
+func _is_final_round() -> bool:
+	return game_rounds > 0 and _current_round() >= game_rounds
+
+
+## Nearest alive-model distance (inches) from `unit` to a world position.
+func _nearest_model_gap_to_in(unit: GameUnit, pos: Vector3) -> float:
+	var best := INF
+	for p in alive_positions(unit):
+		best = minf(best, MoveIntent.distance_inches(p as Vector3, pos))
+	return best
+
+
+## FLANK ANCHOR search (fast-unit doctrine): stand-off points on a ring just inside max weapon range
+## around the target, at bearings fanned off the straight approach line — each must be ON the table,
+## outside impassable rest terrain, clear of every other unit's spacing zone, and have line of sight to
+## the target. Scored by the shared volley EV at ring distance, discounted when only reachable as an
+## approach run, plus a small bonus per degree of flank offset (the doctrine's tie-break). Returns
+## {found, goal, within_advance, angle_deg, dist_in, ring_in, ev} or {found: false}.
+func _flank_goal(unit: GameUnit, target: GameUnit, range_in: float, advance_in: float) -> Dictionary:
+	var none := {"found": false}
+	if range_in <= 0.0 or target == null:
+		return none
+	var centre := unit_centre(unit)
+	var tcentre := unit_centre(target)
+	var approach := Vector2(centre.x - tcentre.x, centre.z - tcentre.z)   # target → us
+	if approach.length() < 0.001:
+		return none
+	var profiles := AiEv.stamp_sergeant(filter_limited(unit, AiShooting.profiles_in_range(_unit_weapons(unit), 0.0)), unit)
+	if profiles.is_empty():
+		return none
+	var ring_in: float = maxf(range_in - FLANK_RANGE_SLACK_IN, minf(range_in, 6.0))
+	var us := AiEv.ctx_for(unit, false, 0)
+	var them := AiEv.ctx_for(target, majority_in_cover(target), counter_models_of(target))
+	var ring_ev := AiEv.shoot_ev(profiles, us, them, ring_in + target_range_penalty_in(target))
+	if ring_ev <= 0.0:
+		return none
+	var base_ang := approach.angle()
+	var own_r := _deploy_footprint_radius(unit)
+	var zones := _spacing_zones_world(unit, own_r, null)
+	var t2 := Vector2(tcentre.x, tcentre.z)
+	var best := none
+	var best_score := 0.0
+	for mag in FLANK_ANGLES:
+		var sides: Array = [1.0] if is_zero_approx(float(mag)) else [1.0, -1.0]
+		for side in sides:
+			var ang := base_ang + deg_to_rad(float(mag) * float(side))
+			var p2 := t2 + Vector2.from_angle(ang) * (ring_in * INCHES_TO_METERS)
+			var anchor := Vector3(p2.x, centre.y, p2.y)
+			if _clamp_to_bounds(anchor).distance_to(anchor) > 0.0005:
+				continue   # off the table
+			if _world_forbidden(anchor, own_r):
+				continue   # would rest in impassable terrain
+			var blocked := false
+			for z in zones:
+				if ((z as Dictionary)["c"] as Vector2).distance_to(p2) < float((z as Dictionary)["r"]):
+					blocked = true
+					break
+			if blocked:
+				continue   # inside another unit's 1" spacing zone — not a legal rest spot
+			if los_checker.is_valid() and not bool(los_checker.call(anchor, tcentre)):
+				continue   # no line of sight from the anchor — pointless as a firing position
+			var dist_to := MoveIntent.distance_inches(centre, anchor)
+			var reach_now := dist_to <= advance_in
+			var score := ring_ev * (1.0 if reach_now else 0.5) \
+				+ ring_ev * FLANK_EV_BONUS_PER_90 * (float(mag) / 90.0)
+			if score > best_score + 0.0001:
+				best_score = score
+				best = {"found": true, "goal": anchor, "within_advance": reach_now,
+					"angle_deg": float(mag) * float(side), "dist_in": dist_to, "ring_in": ring_in, "ev": ring_ev}
+	return best
 
 
 # ===== Wave 6 — the Caster(X) cast phase (official Solo & Co-Op v3.5.0 "Caster" procedure) =====
@@ -1333,6 +1717,51 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			new_positions = best_pos
 			trails = best_trails
 			reach = best_reach
+	# BOXED REPOSITION (AI plausibility wave 1, big-base maneuvering): even the gate-collapse ladder can
+	# leave a LARGE base (Carnivo-Rex class) at a token step when small units filled every straight lane —
+	# the maintainer's "big models had no room to maneuver". A boxed large model re-aims its SAME band
+	# sideways (rotated goals, both signs, small first) and keeps the best post-gate displacement: getting
+	# OUT of the jam this activation buys the room the next activation needs. Bounded, large bases only,
+	# never a charge (its contact snap owns the endpoint).
+	var boxed_repositioned := false
+	if not _is_regiment(unit) and not allow_contact \
+			and _move_base_radius_m(models) >= LARGE_BASE_RADIUS_IN * INCHES_TO_METERS \
+			and reach >= 2.0 \
+			and _achieved_m(positions, new_positions) < BOXED_ACHIEVED_IN * INCHES_TO_METERS:
+		var anchor := MoveIntent.anchor_of(positions)
+		var to_goal := Vector2(goal.x - anchor.x, goal.z - anchor.z)
+		if to_goal.length() > 0.001:
+			var best_pos2 := new_positions
+			var best_trails2 := trails
+			var best_ach2 := _achieved_m(positions, new_positions)
+			for mag in BOXED_REPOSITION_DEGREES:
+				for side in [1.0, -1.0]:
+					var rotated := to_goal.rotated(deg_to_rad(float(mag) * float(side)))
+					var goal4 := Vector3(anchor.x + rotated.x, goal.y, anchor.z + rotated.y)
+					var t4: Array = []
+					var p4 := _plan_move(unit, models, positions, _clamp_to_bounds(goal4), reach,
+						allow_contact, avoid, avoid_dangerous, t4, charge_target)
+					var b4 := reach * INCHES_TO_METERS
+					for i in range(mini(t4.size(), p4.size())):
+						var leg4 := t4[i] as Array
+						if MovementPlanner.polyline_length(leg4) > b4 + 0.0005:
+							var cut4 := MovementPlanner.trim_polyline(leg4, b4)
+							t4[i] = cut4
+							if not cut4.is_empty():
+								var fin4 := cut4.back() as Vector3
+								p4[i] = Vector3(fin4.x, (p4[i] as Vector3).y, fin4.z)
+					p4 = _finalize_placement(unit, models, positions, p4, allow_contact, charge_target)
+					var a4 := _achieved_m(positions, p4)
+					if a4 > best_ach2 + 0.005:
+						best_pos2 = p4
+						best_trails2 = t4
+						best_ach2 = a4
+						boxed_repositioned = true
+				if best_ach2 >= BOXED_ACHIEVED_IN * INCHES_TO_METERS * 2.0:
+					break   # clearly out of the box — smaller rotation preferred, stop widening
+			if boxed_repositioned:
+				new_positions = best_pos2
+				trails = best_trails2
 	# Flying ignores terrain effects whilst moving (p.13) — no Dangerous tests for its crossings. Counted on
 	# the ROUTE (pre-gate endpoints of the CHOSEN plan): the model still traversed those cells even if the
 	# gate nudges its rest spot.
@@ -1376,11 +1805,20 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	var why := "difficult cap" if reach < inches else ("around difficult" if avoid else "direct")
 	if gate_shortened:
 		why = "gate-legal shorten"   # the collapse ladder chose a shorter move with a LEGAL end state
+	if boxed_repositioned:
+		why = "boxed reposition"     # the straight lane was jammed — the band re-aimed to an open one
+	# goal_gap_in (plausibility metric): how far the intended goal was — an "arrival" (goal within reach)
+	# legitimately uses less than its band, an open-field move toward a distant goal must not.
+	var move_data := {"band_in": inches, "budget_in": reach, "arc_in": longest_arc_m / INCHES_TO_METERS,
+		"achieved_in": achieved_m / INCHES_TO_METERS, "dangerous_models": dang,
+		"goal_gap_in": MoveIntent.distance_inches(MoveIntent.anchor_of(positions), goal)}
+	for k in _move_extra:
+		move_data[k] = _move_extra[k]
+	_move_extra = {}
 	record_decision({"kind": "move", "unit": unit.get_name(),
 		"rule": "GF v3.5.1 p.7 move bands; p.11 difficult 6\" cap; p.57 move around difficult",
 		"candidates": [], "chosen": "", "why": why,
-		"data": {"band_in": inches, "budget_in": reach, "arc_in": longest_arc_m / INCHES_TO_METERS,
-			"achieved_in": achieved_m / INCHES_TO_METERS, "dangerous_models": dang}})
+		"data": move_data})
 	return dang
 
 
@@ -1499,6 +1937,8 @@ func _spacing_zones_world(unit: GameUnit, own_radius_m: float, charge_target: Ga
 		var gu := g as GameUnit
 		if gu == null or own.has(gu) or unit_in_reserve(gu):
 			continue   # a reserve unit is off-table — never a movement obstacle (field-test findings 3/4)
+		if is_aircraft(gu):
+			continue   # an Aircraft flies high — units may move under it; its base blocks no movement (GF v3.5.1)
 		var buffer_m: float = 0.0 if target_members.has(gu) else UNIT_SPACING_IN * INCHES_TO_METERS
 		for model in gu.get_alive_models():
 			var shape := SeparationChecker.shape_for_model(model as ModelInstance)
@@ -1642,6 +2082,56 @@ static func musician_move_bonus_in(unit: GameUnit) -> float:
 	if unit == null or not RulesRegistry.unit_rule_active(unit, "Musician"):
 		return 0.0
 	return float(RulesRegistry.unit_param(unit, "Musician", "move_bonus_in", AiCombatMath.MUSICIAN_MOVE_BONUS_IN))
+
+
+# ===== Aircraft (GF Advanced Rules v3.5.1; system-scoped via RulesRegistry — AI plausibility wave 1) =====
+
+## Whether the unit flies as an Aircraft — system-scoped: the rule only fires where the unit's book
+## fields it (the committed mechanics maps automate it for GF v3.5.1 only; AoF/AoFS/AoFR/GFF v3.5.1
+## print no such rule, verified against the official PDFs).
+static func is_aircraft(unit: GameUnit) -> bool:
+	return unit != null and RulesRegistry.unit_rule_active(unit, "Aircraft")
+
+
+## Range penalty (inches) a shooter suffers when targeting `target` — the Aircraft rule reduces every
+## enemy's range against it (system-scoped data; 0 for anything that is not an aircraft).
+static func target_range_penalty_in(target: GameUnit) -> float:
+	if not is_aircraft(target):
+		return 0.0
+	return float(RulesRegistry.unit_param(target, "Aircraft", "target_range_penalty_in", AIRCRAFT_TARGET_RANGE_PENALTY_IN))
+
+
+## The AI's fixed aircraft move length (inches) — the solo-AI section pins aircraft at a straight 30"
+## every activation (which also satisfies the core rule's mandatory minimum).
+static func aircraft_move_in(unit: GameUnit) -> float:
+	return float(RulesRegistry.unit_param(unit, "Aircraft", "solo_move_in", AIRCRAFT_MOVE_IN))
+
+
+## Alive models of a unit INCLUDING its attached heroes — a unit with a joined hero is destroyed only
+## when BOTH are gone (GF/AoF v3.5.1 "Heroes": the hero is part of the unit). The shared truth behind
+## the battle log's destroyed-check and main's wound summaries.
+static func combined_alive(unit: GameUnit) -> int:
+	if unit == null:
+		return 0
+	var n: int = unit.get_alive_count()
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h != null:
+				n += (h as GameUnit).get_alive_count()
+	return n
+
+
+## Total model count of a unit INCLUDING its attached heroes (the denominator shown next to
+## combined_alive in log lines — "(alive/total)" must count the same pool on both sides).
+static func combined_total(unit: GameUnit) -> int:
+	if unit == null:
+		return 0
+	var n: int = unit.models.size()
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h != null:
+				n += (h as GameUnit).models.size()
+	return n
 
 
 ## Line of sight between two units via the injected checker (main wires terrain LOS); no checker = clear.
@@ -1970,6 +2460,8 @@ func _external_obstacle_shapes(unit: GameUnit) -> Array:
 		var gu := g as GameUnit
 		if gu == null or own.has(gu) or unit_in_reserve(gu):
 			continue
+		if is_aircraft(gu):
+			continue   # an Aircraft's base blocks nothing on the ground (GF v3.5.1 — only the model counts)
 		for m in gu.get_alive_models():
 			var sh := SeparationChecker.shape_for_model(m as ModelInstance)
 			if sh != null:
@@ -2285,6 +2777,8 @@ func _units_controlling(obj: Vector3, slot: int, exclude: GameUnit) -> int:
 			continue
 		if gu.has_method("is_attached") and gu.is_attached():
 			continue
+		if is_aircraft(gu):
+			continue   # an Aircraft can neither seize nor contest objectives (GF v3.5.1)
 		for p in alive_positions(gu):
 			if MoveIntent.distance_inches(p, obj) <= OBJECTIVE_CONTROL_IN + 0.001:
 				n += 1
@@ -2818,6 +3312,8 @@ static func seize_objectives(unit_infos: Array, objectives: Array, owners: Array
 				continue   # Shaken units can neither seize nor contest
 			if bool(d.get("ambush_locked", false)):
 				continue   # arrived from Ambush THIS round → can't seize or contest (GF/AoF v3.5.1 p.13)
+			if bool(d.get("aircraft", false)):
+				continue   # an Aircraft can never seize or contest objectives (GF v3.5.1, system-scoped flag)
 			var pid: int = int(d.get("player", 0))
 			if near_players.has(pid):
 				continue

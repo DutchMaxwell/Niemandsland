@@ -50,6 +50,10 @@ var _out_dir := ""
 # verbatim knob/roll-off records the ladder's monotonicity diagnosis reads ("which knob failed to bite").
 var _decision_counts: Dictionary = {}   # side(int) → {kind(String): count}
 var _knob_records: Array = []           # full records of kind roll_off / difficulty (+side/round annotation)
+# Movement plausibility capture (AI plausibility wave 1): every MOVE record's numbers, per side — the
+# result JSON aggregates them into the acceptance metrics (median achieved/band on open-field moves,
+# aimless sub-inch moves, large-base stall streaks, aircraft lane compliance).
+var _move_records: Array = []           # {side, round, unit, why, data} for every kind == "move"
 
 # Showcase capture (capture= / NML_AI_CAPTURE) — board PNGs + full battle log + verbatim decisions.
 var _capture_dir := ""                  # empty => captures off (the ladder default)
@@ -151,8 +155,13 @@ func _run() -> void:
 	solo._rng.seed = _seed
 	solo.decision_sink = func(rec: Dictionary) -> void:
 		var side: int = int(solo.ai_slot)
-		var by_kind: Dictionary = _decision_counts.get(side, {})
 		var kind := str(rec.get("kind", "?"))
+		# A round-end SEIZE record is an OBJECTIVE ownership event, not an acting side's decision — its
+		# honest side is the marker's new owner (0 = contested/neutral), never whichever slot happened to
+		# take the round's last activation (showcase finding: every seize carried the active slot).
+		if kind == "seize":
+			side = int((rec.get("data", {}) as Dictionary).get("owner", 0))
+		var by_kind: Dictionary = _decision_counts.get(side, {})
 		by_kind[kind] = int(by_kind.get(kind, 0)) + 1
 		_decision_counts[side] = by_kind
 		if kind == "roll_off" or kind == "difficulty":
@@ -160,6 +169,10 @@ func _run() -> void:
 			annotated["side"] = side
 			annotated["round"] = int(army_manager.current_round)
 			_knob_records.append(annotated)
+		if kind == "move":
+			_move_records.append({"side": side, "round": int(army_manager.current_round),
+				"unit": str(rec.get("unit", "?")), "why": str(rec.get("why", "")),
+				"data": (rec.get("data", {}) as Dictionary).duplicate(true)})
 		if not _capture_dir.is_empty():
 			var full := rec.duplicate(true)
 			full["side"] = side
@@ -315,6 +328,7 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 		},
 		"decision_counts": _stringify_keys(_decision_counts),
 		"knob_records": _knob_records,
+		"move_usage": _move_usage_summary(),
 		"duration_sec": duration_sec,
 	}
 	if _out_dir.is_empty():
@@ -329,6 +343,66 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 	f.store_string(JSON.stringify(result, "  "))
 	f.close()
 	printerr("[ARENA] result JSON: %s" % path)
+
+
+## Movement plausibility metrics (AI plausibility wave 1), aggregated per side from every MOVE record:
+##   open_field_moves      — "direct"-route moves granted their full budget whose goal lay beyond the
+##                           band (the unit had room to use its whole allowance);
+##   median_achieved_ratio — median achieved/budget over those (acceptance at kriegsherr: >= 0.85);
+##   aimless_subinch       — sub-1" moves with a >2" goal, a >=2" band and no enemy within 2" — the
+##                           "half an inch toward nothing" class (acceptance: none);
+##   large_stall_streak    — longest consecutive sub-1" run of one LARGE-base unit while not surrounded
+##                           (acceptance: <= 2);
+##   aircraft_moves/full   — aircraft activations and how many flew their full straight lane.
+func _move_usage_summary() -> Dictionary:
+	var out := {}
+	for side in [1, 2]:
+		var ratios: Array = []
+		var aimless: Array = []
+		var streaks := {}      # unit -> running sub-1" streak
+		var max_streak := {}   # unit -> longest streak seen
+		var air_total := 0
+		var air_full := 0
+		for r in _move_records:
+			var rec := r as Dictionary
+			if int(rec.get("side", 0)) != side:
+				continue
+			var d := rec.get("data", {}) as Dictionary
+			var band := float(d.get("band_in", 0.0))
+			var budget := float(d.get("budget_in", 0.0))
+			var achieved := float(d.get("achieved_in", 0.0))
+			var gap := float(d.get("goal_gap_in", INF))
+			var why := str(rec.get("why", ""))
+			if bool(d.get("aircraft", false)):
+				air_total += 1
+				if achieved >= band - 0.1:
+					air_full += 1
+				continue
+			if why == "direct" and budget >= band - 0.001 and gap > band:
+				ratios.append(achieved / maxf(budget, 0.001))
+			var surrounded: bool = float(d.get("enemy_gap_in", INF)) <= 2.0
+			if achieved < 1.0 and band >= 2.0 and gap > 2.0 and not surrounded:
+				aimless.append("%s R%d %s (%.2f\" of %.1f\")" % [
+					str(rec.get("unit", "?")), int(rec.get("round", 0)), why, achieved, band])
+			if bool(d.get("large", false)):
+				var u := str(rec.get("unit", "?"))
+				if achieved < 1.0 and not surrounded:
+					streaks[u] = int(streaks.get(u, 0)) + 1
+					max_streak[u] = maxi(int(max_streak.get(u, 0)), int(streaks[u]))
+				else:
+					streaks[u] = 0
+		ratios.sort()
+		var median := 0.0
+		if not ratios.is_empty():
+			median = float(ratios[ratios.size() / 2]) if ratios.size() % 2 == 1 \
+				else (float(ratios[ratios.size() / 2 - 1]) + float(ratios[ratios.size() / 2])) / 2.0
+		var worst_large := 0
+		for u in max_streak:
+			worst_large = maxi(worst_large, int(max_streak[u]))
+		out[str(side)] = {"open_field_moves": ratios.size(), "median_achieved_ratio": median,
+			"aimless_subinch": aimless, "large_stall_streak": worst_large,
+			"large_stalls_by_unit": max_streak, "aircraft_moves": air_total, "aircraft_full_lanes": air_full}
+	return out
 
 
 func _survivors(main: Node, army_manager: Node, pid: int) -> Dictionary:
