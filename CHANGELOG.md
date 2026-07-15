@@ -63,6 +63,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   on server shutdown too (the dominant path under Fly's scale-to-zero), not only on normal room teardown.
   (#124)
 - **QA render tools derive their output dir from `$HOME`** instead of a hardcoded user path. (#127)
+- **UI is English-only.** The multiplayer phase-gate button (previously "Fertig aufgestellt") and the
+  *Enforce Movement Limit* toggle no longer switch to German on a `de*` OS locale — the game has no full
+  localization, so these read English like the rest of the UI. (#134)
 
 ### Internal
 - Repo-hygiene hardening: a CI guard blocks internal working docs, hardcoded home paths and

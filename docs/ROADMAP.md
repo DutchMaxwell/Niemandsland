@@ -22,26 +22,21 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **`0.3.8.0-alpha` shipped (2026-07-08) — the "cards, logs & fair play" release.** The whole July
-  wave in one tag: the reworked unit-card dock, the Battle Log (now recording BOTH sides' moves and
-  every roll with faces), ctex runtime assets, dead-model parking, MP 3+ colour/reconnect hardening
-  (#105), the session-wide free-move toggle (#107), the permanent room-code readout (#110), and the
-  restore-path variant/ctex fix — synced and loaded armies no longer degrade to meeples (#111). A
-  27-check two-instance release test drove out five real bugs before tagging. Next: **feedback-driven**
-  toward the **MP-first Beta** (see Next); the **Solo / Co-Op AI** (OPR's official ruleset) is in
-  field-testing on `feat/solo-ai`; **autosave + save-migration** is the set 0.3.9 candidate. _S_
-- **Post-tag on `main` (unreleased):** the loose-model **rotate-to-face-cursor** community fix (Zach H.,
-  Discord) — holding R now aims each selected loose model at the cursor instead of the old
-  hold-and-spin-until-release — landed after the tag ([#114](../../pull/114)) and ships with the next
-  release. _S_
-- **Mummified Undead modular-sockets pilot — game-side landed, awaiting maintainer QA + root flip.**
-  The offline producer side is **done** (114 pilot socket keys); the **game-side integration** (17 slug-map
-  lines, `snake`/`sphinx` mount keywords + beast-collision specificity) is now merged — remaining is the
-  **maintainer QA pass via manifest override** and the **root-manifest flip** to go live on R2. _M_
-- **Guided tutorial — T0 + T1 on `feat/tutorial` ([#121](../../pull/121)), maintainer field-test
-  pending.** Event-gated guided play on the real table (coach-mark spotlight overlay; steps advance
-  on real signals, never a "Next" button): T0 walking skeleton + T1 **tool track W1–W6** (camera ·
-  import · select/move/rotate/undo · dice & measuring · card dock & activation · wounds/park/revive)
+- **`0.3.9.0-alpha` shipped (2026-07-15) — the movement/UX update.** One tag: **Path Painting**
+  (paint your move; base-width chalk trails; arc-truth distance in ruler + battle log; MP-synced
+  ledger; opt-in dry-brush movement cap), **1″ spacing** protection, the **Deployment → Start Game →
+  Playing** phase gate (MP ready-sync), **Mummified Undead** live on R2 with 3D models
+  ([#117](../../pull/117) + root-manifest flip — 44 factions / 1,185 models now live), the
+  guided-tutorial foundation ([#121](../../pull/121), below), terrain-projected "perfectly based"
+  bases (#123), versioned `.nml` save migration (#119), anonymous relay usage stats (#115),
+  rotate-to-face-cursor (#114), and an English-only UI pass ([#134](../../pull/134)). Full detail
+  under **Recently shipped**. Next: **feedback-driven toward the MP-first Beta** (see Next), with the
+  **Solo / Co-Op AI** (OPR's official ruleset) field-testing on `feat/solo-ai` and **autosave** the
+  leading follow-up. _S_
+- **Guided tutorial — foundation shipped in `0.3.9.0-alpha` ([#121](../../pull/121)).** Event-gated guided play on the real table (coach-mark spotlight overlay; steps advance
+  on real signals, never a "Next" button): T0 walking skeleton + T1 **tool track W1–W7** (camera ·
+  import · select/move/rotate/undo · dice & measuring · card dock & activation · wounds/park/revive ·
+  movement & trails)
   with a bundled real board (`assets/tutorial/tutorial_board.nml`, offline — no Army Forge
   dependency), the two-question self-assessment (sim-experienced may skip W1/W3), and per-lesson
   persistence + resume/replay chapter picker (`user://tutorial.cfg`). **Remaining:** T2 rule track
