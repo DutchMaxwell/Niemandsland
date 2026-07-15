@@ -213,7 +213,11 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.9.0-alpha` (2026-07-15):** the movement/UX bundle (#131) —
+See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.9.1-alpha` (2026-07-15):** hotfix — a heavy Army Forge import
+could stall the main loop and blow up the dock unit-cards' spring animation into a NaN, freezing the game;
+the animation step is now capped so a card just catches up after a hitch ([#126](../../issues/126), #137).
+
+**`0.3.9.0-alpha` (2026-07-15):** the movement/UX bundle (#131) —
 **Path Painting** (base-width chalk trails, arc-truth distance in ruler + battle log, click-to-measure,
 MP-synced move ledger, trail toggle + deployment auto-suppress, backtrack-erase), **1″ spacing**
 protection (proximity walls, base-contact snap, no-overlap drops), a **game-phase gate** (Deployment →
