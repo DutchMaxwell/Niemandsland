@@ -25,6 +25,7 @@ const ROT_DAMPING: float = 0.85
 const SCALE_STIFFNESS: float = 260.0
 const SCALE_DAMPING: float = 0.82
 const SETTLE_EPSILON: float = 0.05       # below this (px / deg / %) the spring is "settled" → early-out
+const MAX_SPRING_STEP: float = 0.05      # cap the integration step (stiffness ≤ 260 ⇒ stable below ~0.12s) — a load/import stall must never hand the spring a huge delta (bug #126)
 
 # Hand-fan (D4: one constant; maintainer can zero it out). Applied by the dock via set_fan().
 const FAN_ENABLED: bool = true
@@ -153,6 +154,13 @@ func _wake() -> void:
 
 
 func _process(delta: float) -> void:
+	# Clamp the integration step. This is an explicit-Euler damped spring, which is only stable up to
+	# delta ≈ 2/sqrt(stiffness) (~0.12 s here) — a bigger frame delta DIVERGES to inf/NaN, and the NaN
+	# transform then floods Control.set_size every frame and freezes the game. That is exactly bug #126:
+	# a heavy Army-Forge import stalls the main loop (gmsshadow's log: "main loop stalled 6.4 s"), the next
+	# frame hands this spring a 6.4 s step, and a dock card explodes. Capping the step just makes the card
+	# catch up over a couple of frames instead of blowing up.
+	delta = minf(delta, MAX_SPRING_STEP)
 	# ONLY the deal-in / deal-out spring moves the card (position / rotation / scale toward the target).
 	# No hover lift, no shadow grow — cards stay rigid once settled (maintainer: "bewegt sich zu viel").
 	var sx: Vector2 = _spring_step(_cur_pos.x, _target_pos.x, _vel_pos.x, POS_STIFFNESS, POS_DAMPING, delta)

@@ -6,6 +6,15 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+## [0.3.9.1-alpha] — 2026-07-15
+
+### Fixed
+- **Game no longer freezes when importing a large army.** A heavy Army Forge import could stall the main
+  loop for several seconds; the dock unit-cards' spring animation then got one huge time-step and its
+  explicit-Euler integrator diverged to NaN, which flooded the UI layout (`set_size`) every frame and froze
+  the game. The integration step is now capped, so a card just catches up smoothly after a hitch instead of
+  blowing up. (reported by gmsshadow, #126)
+
 ## [0.3.9.0-alpha] — 2026-07-15
 
 ### Added
