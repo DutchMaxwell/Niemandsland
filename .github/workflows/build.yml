@@ -182,8 +182,21 @@ jobs:
           # The macOS export is already a .zip of the .app bundle — just give it the release name.
           cp "dist/macos/${EXPORT_NAME}.zip" "dist/Niemandsland-${GITHUB_REF_NAME}-macos.zip"
 
-      - name: Extract release notes (top CHANGELOG section)
-        run: awk '/^## \[/{c++} c==1{print} c==2{exit}' CHANGELOG.md > release_notes.md
+      - name: Extract release notes (CHANGELOG section for this tag)
+        # Match the section for THIS tag's version (e.g. v0.3.9.0-alpha -> "## [0.3.9.0-alpha]"),
+        # not just the first "## [" heading — a "## [Unreleased]" placeholder above it would otherwise
+        # be published as the (empty) release body. Fail loudly on a missing/empty section.
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" {f=1; print; next}
+            f && /^## \[/ {exit}
+            f {print}
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "ERROR: no CHANGELOG section found for $VERSION — refusing to publish blank release notes"
+            exit 1
+          fi
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
