@@ -201,6 +201,7 @@ func test_close_order_persists_the_same_target_across_rounds() -> void:
 	assert_str(str(sc.commander_orders[rex.unit_id].get("target_id", ""))).is_equal(a.unit_id)
 	var rec1 := _commander_record(sc.drain_decisions())
 	assert_str(str((rec1.get("data", {}) as Dictionary).get("continuity", ""))).is_equal("issue")
+	assert_bool(bool((rec1.get("data", {}) as Dictionary).get("persisted", true))).is_false()   # first issue → not yet persisted
 
 	# Round 2 — same board: the order is RE-VALIDATED and CONTINUES on the same enemy (multi-round approach).
 	rnd[0] = 2
@@ -211,6 +212,9 @@ func test_close_order_persists_the_same_target_across_rounds() -> void:
 	assert_str(str(d2.get("continuity", ""))).is_equal("continue")
 	assert_int(int(d2.get("since_round", -1))).is_equal(1)
 	assert_int(int(d2.get("rounds_held", -1))).is_equal(2)
+	# `persisted` is truthful: a CONTINUED order held for >1 round reports true (was mislabelled false when the
+	# standing target coincided with the momentary nearest — reporting only, no gameplay effect).
+	assert_bool(bool(d2.get("persisted", false))).is_true()
 
 
 func test_close_order_aborts_and_re_adopts_when_the_target_dies() -> void:

@@ -1120,7 +1120,11 @@ func _commander_apply(unit: GameUnit, default_target: GameUnit) -> GameUnit:
 	if prev_kind != kind or continuity == "abort" or continuity == "issue":
 		since = round_now
 	var held: int = round_now - since + 1
-	var persisted: bool = driven and chosen != default_target
+	# `persisted` reports whether THIS order carried over from a prior round (re-validated + CONTINUED, held
+	# for more than one round) — the truthful multi-round-persistence signal for the reasoning log. It is NOT
+	# "the standing target differs from the momentary nearest" (an order that keeps closing on the SAME enemy
+	# that is still the nearest has genuinely persisted, yet that enemy == default_target). Tied to continuity.
+	var persisted: bool = continuity == "continue" and held > 1
 	commander_orders[unit.unit_id] = {"role": role, "kind": kind,
 		"target_id": (chosen.unit_id if chosen != null else ""),
 		"round": round_now, "since_round": since, "driven": driven}
