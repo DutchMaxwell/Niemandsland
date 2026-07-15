@@ -226,12 +226,10 @@ func _build_ui() -> void:
 
 	# Enforce Movement Limit (path-painting "dry brush"): Strict = a movement drag hard-stops
 	# at the model's max legal band; off = Casual (free drag). DEFAULT ON. Persisted. Movement
-	# only — shooting and other actions are never gated. DE/EN by locale.
-	var de := str(OS.get_locale()).begins_with("de")
+	# only — shooting and other actions are never gated. English-only, like the rest of the UI.
 	var limit_cb := CheckButton.new()
-	limit_cb.text = "Bewegungslimit erzwingen" if de else "Enforce Movement Limit"
-	limit_cb.tooltip_text = ("Strikt: Eine Bewegung stoppt hart bei der maximal erlaubten Reichweite des Modells (Rush/Charge). Aus = Casual (freies Ziehen)." if de
-			else "Strict: a movement drag hard-stops at the model's maximum legal range (Rush/Charge). Off = Casual (free drag).")
+	limit_cb.text = "Enforce Movement Limit"
+	limit_cb.tooltip_text = "Strict: a movement drag hard-stops at the model's maximum legal range (Rush/Charge). Off = Casual (free drag)."
 	limit_cb.button_pressed = GraphicsSettings.enforce_movement_limit
 	limit_cb.toggled.connect(func(on: bool) -> void:
 		GraphicsSettings.enforce_movement_limit = on

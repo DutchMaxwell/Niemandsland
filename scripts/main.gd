@@ -4359,10 +4359,14 @@ func _on_deployment_flip_toggled(flipped: bool) -> void:
 ## Game Phase Gate (Deployment -> Playing)
 ## ============================================================================
 
-## Tiny DE/EN picker for the phase-gate labels (the app has no i18n infra; German maintainer/community
-## wanted these strings localised). German on a `de*` OS locale, English otherwise.
-func _phase_tr(en: String, de: String) -> String:
-	return de if str(OS.get_locale()).begins_with("de") else en
+## Phase-gate label picker. The app has no i18n infra and its UI is English-only, so this always
+## returns English; the `_de` arg at each call site preserves a German translation for a future
+## real localization pass (see body).
+func _phase_tr(en: String, _de: String) -> String:
+	# The UI is English-only (no TranslationServer / .po localization), so the phase-gate strings must
+	# be English too — a German OS locale otherwise left these buttons the ONLY German text in an English
+	# game. The `_de` args are kept at the call sites for a future real localization pass.
+	return en
 
 
 ## Build the Start-Game / Ready control: a discoverable button in the left panel that flips the game
@@ -4441,7 +4445,7 @@ func _update_game_phase_ui() -> void:
 	if in_mp:
 		var ready: bool = network_manager.is_local_ready()
 		_start_game_button.text = _phase_tr("Cancel Ready", "Bereit abbrechen") if ready \
-				else _phase_tr("Ready", "Fertig aufgestellt")
+				else _phase_tr("Ready", "Bereit")
 		_start_game_button.tooltip_text = _phase_tr(
 				"Signal you have finished deploying. Play begins when both players are ready.",
 				"Signalisiere, dass du fertig aufgestellt hast. Das Spiel startet, wenn beide Spieler bereit sind.")
