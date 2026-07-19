@@ -496,6 +496,18 @@ func _ready() -> void:
 	# Set army_manager reference on SaveManager for GameUnit serialization
 	save_manager.army_manager = opr_army_manager
 
+	# Autosave (ROADMAP "Now" follow-up): periodic + round-start rotating snapshots into the save dir
+	# (autosave_1..3.nml — the menu's CONTINUE + load dialog see them with no extra UI). Host-only in
+	# MP, restore-lock aware, empty-table silent; details in autosave_controller.gd.
+	var autosave := AutosaveController.new()
+	autosave.name = "AutosaveController"
+	add_child(autosave)
+	autosave.setup(save_manager, opr_army_manager, object_manager, network_manager)
+	autosave.autosaved.connect(func(path: String) -> void:
+		_show_toast("Autosaved — %s" % path.get_file())
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL, "Autosaved (%s)" % path.get_file(), true))
+
 	# Set army_manager reference on NetworkManager for unit state sync
 	network_manager.army_manager = opr_army_manager
 

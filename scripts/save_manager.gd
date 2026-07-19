@@ -791,6 +791,12 @@ func reset_restore_lock() -> void:
 	_restore_unlocked.emit()
 
 
+## Whether a save/load restore is currently running — the autosave gate reads this so a periodic
+## snapshot never fires mid-restore (it would serialize a half-rebuilt table).
+func is_restore_in_flight() -> bool:
+	return _restore_in_flight
+
+
 ## Deserialize GameUnits from saved data
 func _deserialize_game_units(units_data: Array) -> int:
 	_loaded_game_units.clear()
