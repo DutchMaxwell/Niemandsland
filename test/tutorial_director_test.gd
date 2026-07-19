@@ -159,21 +159,20 @@ func test_events_out_of_step_are_ignored() -> void:
 
 ## ===== W6: kill / revive =====
 
-func test_w6_kill_then_revive_completes_and_advances_to_w7() -> void:
-	var director := _new_director("W6")
-	var casualty: Node3D = auto_free(Node3D.new())
-
-	director._on_loose_model_dead_changed(casualty, true)
-	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("revive")
-	assert_object(director._parked_node).is_equal(casualty)
-
-	# W6 is no longer terminal (W7 movement wave follows): completing it persists W6 and
-	# advances the cursor to W7 rather than finishing the track.
-	director._on_loose_model_dead_changed(casualty, false)
-	assert_bool(director.progress.is_lesson_completed("W6")).is_true()
-	assert_bool(director.flow.finished).is_false()
-	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W7")
-
+func test_t07_casualty_loop_advances_to_w2() -> void:
+	var director := _new_director("T-07")
+	var unit := _new_meta_unit(2)
+	director._target_unit = unit
+	director._target_nodes = _nodes_of(unit)
+	director._on_loose_model_dead_changed(director._target_nodes[0], true)    # kill
+	director._on_loose_model_dead_changed(director._target_nodes[0], false)   # revive
+	director._on_loose_model_dead_changed(director._target_nodes[0], false)   # multi_revive (same signal)
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("return_unit")
+	var completions: Array = []
+	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
+	director._on_radial_action_selected("return_unit_3", {})
+	assert_array(completions).is_equal(["T-07"])
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W2")
 
 ## ===== W7: movement bundle (game-phase gate, trail, dry-brush cap, 1" spacing) =====
 
@@ -237,4 +236,4 @@ func test_skip_lesson_marks_completed_and_moves_on() -> void:
 	director._on_skip_lesson()
 	assert_array(completions).is_equal(["T-04"])
 	assert_bool(director.progress.is_lesson_completed("T-04")).is_true()
-	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W2")
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("T-05")

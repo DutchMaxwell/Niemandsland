@@ -51,6 +51,13 @@ var _undo_manager: Node = null
 var _start_game_button: Control = null
 var _pinned_rulers: Node = null
 var _range_rings: Node = null
+var _dice_controls_source: Node = null
+var _quick_roll_button: BaseButton = null
+var _radial_menu: Node = null
+var _wounds_dialog: Node = null
+var _casts_dialog: Node = null
+var _marker_dialog: Node = null
+var _step_timer: SceneTreeTimer = null   # timed banner steps (T-06 "read")
 
 # ===== Private state =====
 var _coach: TutorialCoachMark = null
@@ -119,6 +126,12 @@ func setup(refs: Dictionary) -> void:
 	_start_game_button = refs.get("start_game_button", null)
 	_pinned_rulers = refs.get("pinned_rulers", null)
 	_range_rings = refs.get("range_rings", null)
+	_dice_controls_source = refs.get("dice_controls_source", null)
+	_quick_roll_button = refs.get("quick_roll_button", null)
+	_radial_menu = refs.get("radial_menu", null)
+	_wounds_dialog = refs.get("wounds_dialog", null)
+	_casts_dialog = refs.get("casts_dialog", null)
+	_marker_dialog = refs.get("marker_dialog", null)
 	if _camera_pivot != null:
 		_camera = _camera_pivot.get_node_or_null("Camera3D") as Camera3D
 
@@ -204,6 +217,23 @@ func _connect_seams() -> void:
 		_army_manager.loose_model_dead_changed.connect(_on_loose_model_dead_changed)
 	if _army_manager != null and _army_manager.has_signal("game_phase_changed"):
 		_army_manager.game_phase_changed.connect(_on_game_phase_changed)
+	# — Wave 2 (T-05/T-06/T-07): dice-control edges, quick roll, radial depth, dialogs —
+	if _object_manager != null and _object_manager.has_signal("context_menu_requested"):
+		_object_manager.context_menu_requested.connect(_on_context_menu_requested)
+	if _dice_controls_source != null and _dice_controls_source.has_signal("dice_controls_changed"):
+		_dice_controls_source.dice_controls_changed.connect(_on_dice_controls_changed)
+	if _quick_roll_button != null:
+		_quick_roll_button.pressed.connect(_on_quick_roll_pressed)
+	if _dice_tray != null and _dice_tray.has_signal("color_tag_changed"):
+		_dice_tray.color_tag_changed.connect(_on_color_tag_changed)
+	if _radial_menu != null and _radial_menu.has_signal("action_selected"):
+		_radial_menu.action_selected.connect(_on_radial_action_selected)
+	if _wounds_dialog != null and _wounds_dialog.has_signal("wounds_changed"):
+		_wounds_dialog.wounds_changed.connect(_on_wounds_changed)
+	if _casts_dialog != null and _casts_dialog.has_signal("casts_changed"):
+		_casts_dialog.casts_changed.connect(_on_casts_changed)
+	if _marker_dialog != null and _marker_dialog.has_signal("marker_added"):
+		_marker_dialog.marker_added.connect(_on_marker_added)
 
 
 func _disconnect_seams() -> void:
@@ -228,6 +258,22 @@ func _disconnect_seams() -> void:
 	if _army_manager != null:
 		_disconnect_if(_army_manager, "loose_model_dead_changed", _on_loose_model_dead_changed)
 		_disconnect_if(_army_manager, "game_phase_changed", _on_game_phase_changed)
+	if _object_manager != null:
+		_disconnect_if(_object_manager, "context_menu_requested", _on_context_menu_requested)
+	if _dice_controls_source != null:
+		_disconnect_if(_dice_controls_source, "dice_controls_changed", _on_dice_controls_changed)
+	if _quick_roll_button != null and _quick_roll_button.pressed.is_connected(_on_quick_roll_pressed):
+		_quick_roll_button.pressed.disconnect(_on_quick_roll_pressed)
+	if _dice_tray != null:
+		_disconnect_if(_dice_tray, "color_tag_changed", _on_color_tag_changed)
+	if _radial_menu != null:
+		_disconnect_if(_radial_menu, "action_selected", _on_radial_action_selected)
+	if _wounds_dialog != null:
+		_disconnect_if(_wounds_dialog, "wounds_changed", _on_wounds_changed)
+	if _casts_dialog != null:
+		_disconnect_if(_casts_dialog, "casts_changed", _on_casts_changed)
+	if _marker_dialog != null:
+		_disconnect_if(_marker_dialog, "marker_added", _on_marker_added)
 
 
 func _disconnect_if(source: Object, signal_name: String, callable: Callable) -> void:
@@ -324,6 +370,52 @@ func _on_unit_deleted(_game_unit: GameUnit) -> void:
 	_on_event(TutorialFlow.Event.OBJECT_DELETED)
 
 
+# — Wave 2 handlers (T-05/T-06/T-07) —
+
+func _on_dice_controls_changed(kind: StringName, _value: int) -> void:
+	match kind:
+		&"count": _on_event(TutorialFlow.Event.DICE_COUNT_SET)
+		&"success": _on_event(TutorialFlow.Event.DICE_SUCCESS_SET)
+		&"modifier": _on_event(TutorialFlow.Event.DICE_MODIFIER_SET)
+		&"reroll": _on_event(TutorialFlow.Event.DICE_REROLLED)
+		&"movecap": _on_event(TutorialFlow.Event.DICE_MOVECAP_SET)
+
+
+func _on_quick_roll_pressed() -> void:
+	_on_event(TutorialFlow.Event.DICE_QUICK_ROLLED)
+
+
+func _on_color_tag_changed(_idx: int, _tag: int) -> void:
+	_on_event(TutorialFlow.Event.DICE_COLOUR_TAGGED)
+
+
+func _on_context_menu_requested(_pos: Vector2, _selected: Array) -> void:
+	_on_event(TutorialFlow.Event.RADIAL_OPENED)
+
+
+## The radial's single action pipe: state toggles, objective owners and unit returns all
+## arrive here (T-06/T-07); ids per the toolstrack spec's verified list.
+func _on_radial_action_selected(id: String, _ctx: Dictionary) -> void:
+	if id == "toggle_fatigued" or id == "toggle_shaken":
+		_on_event(TutorialFlow.Event.STATE_TOGGLED)
+	elif id.begins_with("set_owner_"):
+		_on_event(TutorialFlow.Event.OBJECTIVE_SET)
+	elif id.begins_with("return_unit"):
+		_on_event(TutorialFlow.Event.UNIT_RETURNED)
+
+
+func _on_wounds_changed(_model: Variant, _wounds: int) -> void:
+	_on_event(TutorialFlow.Event.WOUNDS_SET)
+
+
+func _on_casts_changed(_unit: Variant, _casts: int) -> void:
+	_on_event(TutorialFlow.Event.CASTS_SET)
+
+
+func _on_marker_added(_target: Variant, _marker: Variant) -> void:
+	_on_event(TutorialFlow.Event.MARKER_ADDED)
+
+
 func _on_unit_activated(_game_unit) -> void:
 	_on_event(TutorialFlow.Event.UNIT_ACTIVATED)
 
@@ -416,6 +508,20 @@ func _enter_step() -> void:
 	var event := int(step.get("event", TutorialFlow.Event.NONE)) as TutorialFlow.Event
 	var target := String(step.get("target", TutorialFlow.TARGET_NONE))
 	var mask := bool(step.get("mask", false))
+
+	# Timed banner step (spec T-06 "read": no gate seam by design) — the step's event fires
+	# after its dwell, unless the flow moved on. One timer per entry; superseded timers noop.
+	var timed := float(step.get("timed_sec", 0.0))
+	if timed > 0.0 and is_inside_tree():
+		var timer := get_tree().create_timer(timed)
+		_step_timer = timer
+		var timed_event := event
+		var my_lesson := flow.lesson_index
+		var my_step := flow.step_index
+		timer.timeout.connect(func() -> void:
+			if _step_timer == timer and flow != null and not flow.finished \
+					and flow.lesson_index == my_lesson and flow.step_index == my_step:
+				_on_event(timed_event))
 
 	if _is_camera_event(event):
 		_reset_camera_baselines()

@@ -111,6 +111,11 @@ const DICE_CAPTION_MIN_WIDTH: int = 56       # caption column width on the optio
 const MODIFIER_VALUE_MIN_WIDTH: int = 44     # modifier value readout width
 const SUCCESS_SUMMARY_FONT_SIZE: int = 16    # "✔ N" total under the success column
 const NO_DICE_TINT := Color(0, 0, 0, 0)      # sentinel: no colour-tag tint on a result count (#77)
+## Wave-2 tutorial seam (toolstrack spec §14): ONE consolidated edge for the dice-control rows —
+## count / success / modifier / reroll / movecap. The tutorial director gates T-05 steps on it;
+## display-consumers only, no game logic reads it back.
+signal dice_controls_changed(kind: StringName, value: int)
+
 var _dice_count: int = DEFAULT_DICE_COUNT
 var _dice_preset_buttons: Array[Button] = []
 var _dice_count_value_label: Label = null
@@ -1344,6 +1349,7 @@ func _on_movement_cap_pressed(mode: int) -> void:
 	if object_manager and object_manager.has_method("set_movement_cap"):
 		object_manager.set_movement_cap(mode)
 	_update_movement_cap_display()
+	dice_controls_changed.emit(&"movecap", mode)
 
 
 ## Highlight the active movement-cap button.
@@ -1423,6 +1429,7 @@ func _set_dice_count(count: int) -> void:
 	_dice_count = clampi(count, MIN_DICE, MAX_DICE)
 	_update_dice_set(_dice_count)
 	_update_dice_count_display()
+	dice_controls_changed.emit(&"count", _dice_count)
 	if not _is_mirroring_dice and network_manager.is_multiplayer_active():
 		network_manager.broadcast_dice_composition(_dice_count, dice_roller_control.get_color_tags())
 
@@ -1556,10 +1563,12 @@ func _on_success_target_pressed(target: int) -> void:
 	_success_target = target
 	_update_success_controls_display()
 	_refresh_roll_evaluation()
+	dice_controls_changed.emit(&"success", target)
 
 
 func _on_modifier_delta_pressed(delta: int) -> void:
 	_success_modifier = clampi(_success_modifier + delta, DiceRules.MODIFIER_MIN, DiceRules.MODIFIER_MAX)
+	dice_controls_changed.emit(&"modifier", _success_modifier)
 	_update_success_controls_display()
 	_refresh_roll_evaluation()
 
@@ -1592,6 +1601,7 @@ func _on_reroll_pressed(mode: int) -> void:
 		return
 	_pending_reroll_mode = mode
 	_pending_reroll_count = indices.size()
+	dice_controls_changed.emit(&"reroll", mode)
 	# Deliberately NOT calling _update_dice_set here: the dice_count/roller_size
 	# setters rebuild the tray and would wipe the kept dice.
 	dice_roller_control.reroll(indices)
@@ -4046,6 +4056,12 @@ func _start_tutorial() -> void:
 		"start_game_button": _start_game_button,
 		"pinned_rulers": pinned_rulers,
 		"range_rings": range_ring_controller,
+		"dice_controls_source": self,
+		"quick_roll_button": quick_roll_button,
+		"radial_menu": radial_menu_controller.radial_menu,
+		"wounds_dialog": radial_menu_controller.wounds_dialog,
+		"casts_dialog": radial_menu_controller.casts_dialog,
+		"marker_dialog": radial_menu_controller.marker_dialog,
 	})
 	_tutorial_director.begin(progress, _tutorial_start_lesson)
 

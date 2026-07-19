@@ -5,7 +5,7 @@ extends GdUnitTestSuite
 
 const Progress := preload("res://scripts/tutorial_progress.gd")
 const TEST_PATH := "user://test_tutorial_progress.cfg"
-const TRACK_IDS: Array[String] = ["T-01", "T-02", "T-03", "T-04", "W2", "W5", "W6", "W7"]
+const TRACK_IDS: Array[String] = ["T-01", "T-02", "T-03", "T-04", "T-05", "T-06", "T-07", "W2", "W7"]
 
 
 func before_test() -> void:

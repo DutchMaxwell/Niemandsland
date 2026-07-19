@@ -44,6 +44,22 @@ enum Event {
 	RULER_CLEARED,       # pinned-ruler count decreased (K)
 	RANGE_RING_SHOWN,    # a G range ring became active
 	SPELL_RANGE_SHOWN,   # the spell-range preview ring became active (card spell hover)
+	# — Wave 2 (toolstrack spec T-05/T-06/T-07) —
+	DICE_COUNT_SET,      # dice_controls_changed kind=count
+	DICE_QUICK_ROLLED,   # the Quick roll button was pressed
+	DICE_SUCCESS_SET,    # dice_controls_changed kind=success
+	DICE_MODIFIER_SET,   # dice_controls_changed kind=modifier
+	DICE_REROLLED,       # dice_controls_changed kind=reroll (a re-roll was armed)
+	DICE_MOVECAP_SET,    # dice_controls_changed kind=movecap
+	DICE_COLOUR_TAGGED,  # dice_tray.color_tag_changed
+	CARD_RULE_HOVERED,   # timed banner step (read the card — no gate seam by design)
+	RADIAL_OPENED,       # object_manager.context_menu_requested
+	WOUNDS_SET,          # wounds_dialog.wounds_changed
+	CASTS_SET,           # casts_dialog.casts_changed
+	STATE_TOGGLED,       # radial_menu.action_selected toggle_fatigued / toggle_shaken
+	MARKER_ADDED,        # marker_dialog.marker_added
+	OBJECTIVE_SET,       # radial_menu.action_selected objective-owner id
+	UNIT_RETURNED,       # radial_menu.action_selected return_unit_*
 }
 
 # ===== Spotlight target keys (resolved to rects by the director) =====
@@ -135,6 +151,56 @@ static func build_tool_track() -> Array:
 			{"id": "coherency", "text": "As you drag a selected unit, watch the green chain lines. Green = every model in 1\" coherency; red = the chain is broken. Move a model until you see them.",
 				"event": Event.UNIT_MOVED, "target": TARGET_UNIT, "mask": false},
 		]},
+		{"id": "T-05", "title": "The dice tray in full", "steps": [
+			{"id": "count", "text": "Set how many dice you'll throw — use the preset grid or the +/-1, +/-5, +/-10 buttons.",
+				"event": Event.DICE_COUNT_SET, "target": TARGET_DICE_PANEL, "mask": false},
+			{"id": "roll", "text": "Throw the dice — press Roll to tumble them physically.",
+				"event": Event.DICE_ROLLED, "target": TARGET_DICE_PANEL, "mask": true},
+			{"id": "quick", "text": "In a hurry? Press Quick for an instant result with no physics.",
+				"event": Event.DICE_QUICK_ROLLED, "target": TARGET_DICE_PANEL, "mask": true},
+			{"id": "success", "text": "Pick a success target (e.g. 4+). The tray counts hits for you.",
+				"event": Event.DICE_SUCCESS_SET, "target": TARGET_DICE_PANEL, "mask": false},
+			{"id": "modifier", "text": "Add a modifier with the -/+ stepper — say +1 to every die.",
+				"event": Event.DICE_MODIFIER_SET, "target": TARGET_DICE_PANEL, "mask": false},
+			{"id": "reroll", "text": "Re-roll the misses — press Re-roll Fails (or 1s / 6s / All).",
+				"event": Event.DICE_REROLLED, "target": TARGET_DICE_PANEL, "mask": false},
+			{"id": "movecap", "text": "The Movement row caps a drag to Advance or Rush distance — try setting it.",
+				"event": Event.DICE_MOVECAP_SET, "target": TARGET_DICE_PANEL, "mask": false},
+			{"id": "colour", "text": "Click a die to cycle its colour tag — handy for grouping attacks.",
+				"event": Event.DICE_COLOUR_TAGGED, "target": TARGET_DICE_PANEL, "mask": false},
+		]},
+		{"id": "T-06", "title": "Unit cards & the radial menu", "steps": [
+			{"id": "dock", "text": "Open the Units dock — click the Units tab at the bottom.",
+				"event": Event.DOCK_OPENED, "target": TARGET_DOCK_TAB, "mask": true},
+			{"id": "present", "text": "Click a unit card to select the unit and present its full card.",
+				"event": Event.CARD_PRESENTED, "target": TARGET_DOCK_STRIP, "mask": true},
+			{"id": "read", "text": "Hover a weapon or rule on the card to read its description.",
+				"event": Event.CARD_RULE_HOVERED, "target": TARGET_PRESENTED_CARD, "mask": false, "timed_sec": 4.0},
+			{"id": "open", "text": "Right-click a model to open its radial menu — every unit action lives here.",
+				"event": Event.RADIAL_OPENED, "target": TARGET_UNIT, "mask": false},
+			{"id": "activate", "text": "Choose Activate to mark the unit as activated this round.",
+				"event": Event.UNIT_ACTIVATED, "target": TARGET_NONE, "mask": false},
+			{"id": "wounds", "text": "Right-click a Tough model and open Wounds — set its remaining wounds.",
+				"event": Event.WOUNDS_SET, "target": TARGET_UNIT, "mask": false},
+			{"id": "casts", "text": "Open Casts on your caster to spend or restore caster points.",
+				"event": Event.CASTS_SET, "target": TARGET_UNIT, "mask": false},
+			{"id": "state", "text": "Toggle Fatigued or Shaken to mark the unit's state after a fight or failed morale.",
+				"event": Event.STATE_TOGGLED, "target": TARGET_UNIT, "mask": false},
+			{"id": "token", "text": "Open the token dialog to drop a custom marker or counter on a unit.",
+				"event": Event.MARKER_ADDED, "target": TARGET_UNIT, "mask": false},
+			{"id": "objective", "text": "Right-click an objective marker and set its owner.",
+				"event": Event.OBJECTIVE_SET, "target": TARGET_NONE, "mask": false},
+		]},
+		{"id": "T-07", "title": "Wounds, casualties & revive", "steps": [
+			{"id": "kill", "text": "Right-click a model of the highlighted unit and remove it as a casualty — it parks on your army tray.",
+				"event": Event.MODEL_KILLED, "target": TARGET_UNIT, "mask": false},
+			{"id": "revive", "text": "Right-click the parked model and revive it back onto the table.",
+				"event": Event.MODEL_REVIVED, "target": TARGET_PARKED_MODEL, "mask": false},
+			{"id": "multi_revive", "text": "Lost several models? Use Revive Unit-Dead to bring the whole unit's casualties back.",
+				"event": Event.MODEL_REVIVED, "target": TARGET_PARKED_MODEL, "mask": false},
+			{"id": "return_unit", "text": "A fully destroyed unit lands on the army tray — choose Return Unit to redeploy it.",
+				"event": Event.UNIT_RETURNED, "target": TARGET_NONE, "mask": false},
+		]},
 		{"id": "W2", "title": "Importing armies", "steps": [
 			{"id": "menu", "text": "Open the game menu with the button in the top-left corner.",
 				"event": Event.MENU_OPENED, "target": TARGET_HAMBURGER, "mask": true},
@@ -142,20 +208,6 @@ static func build_tool_track() -> Array:
 				"event": Event.IMPORT_OPENED, "target": TARGET_IMPORT_BUTTON, "mask": true},
 			{"id": "import_close", "text": "In a real game you would paste an Army Forge share link here. Your tutorial armies are already on the table — close the dialog to continue.",
 				"event": Event.IMPORT_CLOSED, "target": TARGET_NONE, "mask": false},
-		]},
-		{"id": "W5", "title": "Unit cards & activation", "steps": [
-			{"id": "dock", "text": "Open the Units dock — click the Units tab at the bottom of the screen.",
-				"event": Event.DOCK_OPENED, "target": TARGET_DOCK_TAB, "mask": true},
-			{"id": "present", "text": "Click one of the unit cards — it selects the unit and presents its card.",
-				"event": Event.CARD_PRESENTED, "target": TARGET_DOCK_STRIP, "mask": true},
-			{"id": "activate", "text": "Activate the unit with the ACTIVATE chip on its card.",
-				"event": Event.UNIT_ACTIVATED, "target": TARGET_PRESENTED_CARD, "mask": true},
-		]},
-		{"id": "W6", "title": "Wounds & casualties", "steps": [
-			{"id": "kill", "text": "Right-click a model of the highlighted unit and remove it as a casualty.",
-				"event": Event.MODEL_KILLED, "target": TARGET_UNIT, "mask": false},
-			{"id": "revive", "text": "The casualty is parked on your army tray. Right-click it and revive it.",
-				"event": Event.MODEL_REVIVED, "target": TARGET_PARKED_MODEL, "mask": false},
 		]},
 		{"id": "W7", "title": "Movement & trails", "steps": [
 			{"id": "start_game", "text": "Deployment is done — press Start Game in the left panel to begin play. Chalk move-trails only paint once the game has started.",
