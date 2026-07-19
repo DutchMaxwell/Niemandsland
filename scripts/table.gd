@@ -4,7 +4,7 @@ extends StaticBody3D
 
 ## Emitted whenever the table is rebuilt to a new size (in feet). Dependents that must
 ## track the play-field extent (ground mist, ...) connect here, so EVERY resize path —
-## size dialog, save load, network sync, WGS import — keeps them in sync.
+## size dialog, save load, network sync — keeps them in sync.
 signal table_resized(size_feet: Vector2)
 
 @export var default_color: Color = Color(0.2, 0.35, 0.2)  # Gaming mat green

@@ -199,11 +199,6 @@ var _room_code_button: Button = null          # permanent room-code display in t
 var _session_room_code: String = ""
 var _hovered_model: Node3D = null
 
-# WGS (Wargaming Simulator) Integration
-@onready var import_wgs_btn: Button = %ImportWGS
-var wgs_game_manager: WGSGameManager = null
-var wgs_import_dialog: WGSImportDialog = null
-
 # Map Layout Editor
 @onready var map_layout_btn: Button = %MapLayoutBtn
 var map_layout_editor: Control = null
@@ -521,21 +516,6 @@ func _ready() -> void:
 
 	# Connect OPR import button
 	import_opr_btn.pressed.connect(_on_import_opr_army)
-
-	# Initialize WGS Game Manager
-	wgs_game_manager = WGSGameManager.new()
-	wgs_game_manager.object_manager = object_manager
-	add_child(wgs_game_manager)
-
-	# Initialize WGS Import Dialog
-	wgs_import_dialog = WGSImportDialog.new()
-	get_tree().root.add_child(wgs_import_dialog)
-	wgs_import_dialog.game_imported.connect(_on_wgs_game_imported)
-	wgs_import_dialog.hide()
-
-	# Connect WGS import button (if it exists in UI)
-	if import_wgs_btn:
-		import_wgs_btn.pressed.connect(_on_import_wgs_game)
 
 	# Initialize Map Layout Editor
 	var map_layout_scene = load("res://scenes/map_layout.tscn")
@@ -3906,37 +3886,6 @@ func _on_selection_changed_update_card(selected_objects: Array[Node3D]) -> void:
 
 
 ## ============================================================================
-## WGS (Wargaming Simulator) Integration
-## ============================================================================
-
-## Open WGS import dialog
-func _on_import_wgs_game() -> void:
-	wgs_import_dialog.popup_centered()
-
-
-## Handle game imported from WGS dialog
-func _on_wgs_game_imported(game: WGSClient.WGSGame) -> void:
-	print("Importing WGS game '%s' with %d units" % [game.game_id, game.get_unit_count()])
-
-	# Store the game
-	wgs_game_manager.current_game = game
-
-	# Set table size from WGS game
-	var wgs_table_size = game.get_table_size_feet()
-	print("Setting table size to %.0fx%.0f ft (from WGS)" % [wgs_table_size.x, wgs_table_size.y])
-	table.setup_table(wgs_table_size)
-	_adjust_camera_for_table_size(wgs_table_size)
-
-	# Calculate offset: WGS uses top-left (0,0), Niemandsland uses center
-	var table_meters = game.get_table_size_meters()
-	var offset = Vector3(-table_meters.x / 2, 0, -table_meters.y / 2)
-
-	# Spawn all units
-	var spawned = wgs_game_manager.spawn_game(offset)
-	print("Spawned %d models from WGS game '%s'" % [spawned.size(), game.game_id])
-
-
-## ============================================================================
 ## Cinematic Intro Animation
 ## ============================================================================
 
@@ -4490,7 +4439,7 @@ func _init_atmospheric_clouds() -> void:
 	add_child(atmospheric_clouds)
 
 	# Track the play-field extent on EVERY resize path (size dialog, save load, network
-	# sync, WGS import) — sizing the mist only in _set_table_size left it hanging past
+	# sync) — sizing the mist only in _set_table_size left it hanging past
 	# the table boundaries after loading a save. Apply the current size immediately:
 	# the table is built before the clouds exist.
 	table.table_resized.connect(_on_table_resized)
