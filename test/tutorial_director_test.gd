@@ -77,46 +77,84 @@ func test_moves_hit() -> void:
 	assert_bool(Director.moves_hit([], nodes)).is_false()
 
 
-## ===== W3: target-bound select/move, generic rotate/undo =====
+## ===== T-02: selection composition (wave 1) =====
 
-func test_w3_walk_via_real_signal_handlers() -> void:
-	var director := _new_director("W3")
-	var unit := _new_unit(2)
+## Models carry the game_unit meta the composition classifier reads.
+func _new_meta_unit(model_count: int) -> GameUnit:
+	var unit := _new_unit(model_count)
+	for model in unit.models:
+		model.node.set_meta("game_unit", unit)
+	return unit
+
+
+func test_t02_selection_composition_walk() -> void:
+	var director := _new_director("T-02")
+	var unit := _new_meta_unit(2)
+	var second := _new_meta_unit(2)
 	director._target_unit = unit
 	director._target_nodes = _nodes_of(unit)
 	var stranger: Node3D = auto_free(Node3D.new())
 
-	# Selecting something else does nothing; selecting the unit advances select -> move.
+	# A stranger does nothing; clicking a target model advances single -> unit.
 	director._on_selection_changed([stranger])
-	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("select")
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("single")
 	director._on_selection_changed([director._target_nodes[0]])
-	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("move")
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("unit")
 
-	# A drop that moved a unit model advances move -> rotate.
-	director._on_selection_dropped([{"node": director._target_nodes[1], "inches": 3.0}])
-	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("rotate")
+	# The whole unit selected (double-click result) advances unit -> multi.
+	director._on_selection_changed([director._target_nodes[0], director._target_nodes[1]])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("multi")
 
-	# Any committed rotation advances rotate -> undo.
+	# Two distinct units in the selection (Alt+click result) advance multi -> box.
+	director._on_selection_changed([director._target_nodes[0], _nodes_of(second)[0]])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("box")
+
+	# A jump in selection size across units (rubber-band result) advances box -> cancel.
+	director._on_selection_changed([director._target_nodes[0], director._target_nodes[1],
+		_nodes_of(second)[0], _nodes_of(second)[1]])
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("cancel")
+
+	# Esc (empty selection) completes the lesson.
+	var completions: Array = []
+	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
+	director._on_selection_changed([])
+	assert_array(completions).is_equal(["T-02"])
+	assert_bool(director.progress.is_lesson_completed("T-02")).is_true()
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("T-03")
+
+
+func test_t03_walk_via_real_signal_handlers() -> void:
+	var director := _new_director("T-03")
+	var unit := _new_meta_unit(2)
+	director._target_unit = unit
+	director._target_nodes = _nodes_of(unit)
+	director._on_selection_dropped([{"node": director._target_nodes[0], "inches": 3.0}])
 	var rotated: Array[Node3D] = []
-	director._on_rotation_committed(rotated)
+	director._on_rotation_committed(rotated)   # aim
+	director._on_rotation_committed(rotated)   # group_rotate
+	director._on_rotation_committed(rotated)   # snap
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("arrange")
+	director._on_arrangement_applied("rows")
+	director._on_arrangement_applied("arrow")
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("duplicate")
+	director._on_objects_pasted([auto_free(Node3D.new())])
+	director._on_lock_state_changed([], true)
+	director._on_model_deleted(null)
 	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("undo")
-
-	# Undo completes the lesson; completion is persisted and the flow moved to W4.
 	var completions: Array = []
 	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
 	director._on_action_undone("Move 2 objects")
-	assert_array(completions).is_equal(["W3"])
-	assert_bool(director.progress.is_lesson_completed("W3")).is_true()
-	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W4")
+	assert_array(completions).is_equal(["T-03"])
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("T-04")
 
 
 func test_events_out_of_step_are_ignored() -> void:
-	var director := _new_director("W3")
+	var director := _new_director("T-02")
 	director._on_roll_finnished(6)
 	director._on_action_undone("whatever")
 	var rotated: Array[Node3D] = []
 	director._on_rotation_committed(rotated)
-	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("select")
+	assert_str(String(director.flow.current_step().get("id", ""))).is_equal("single")
 
 
 ## ===== W6: kill / revive =====
@@ -173,30 +211,30 @@ func test_w7_movement_wave_via_real_signal_handlers() -> void:
 ## ===== Lesson jumping: resume skips completed, chapter replay does not =====
 
 func test_completed_lessons_are_skipped_after_a_boundary() -> void:
-	var director := _new_director("W1")
-	director.progress.mark_lesson_completed("W2")
+	var director := _new_director("T-01")
+	director.progress.mark_lesson_completed("T-02")
 	for _i in 3:  # orbit, zoom, pan
 		director._force_complete_current_step()
-	# W1 done; W2 already completed -> the cursor lands on W3.
-	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W3")
+	# T-01 done; T-02 already completed -> the cursor lands on T-03.
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("T-03")
 
 
 func test_replay_mode_plays_completed_lessons_too() -> void:
-	var director := _new_director("W1")
+	var director := _new_director("T-01")
 	director._replay_mode = true
-	director.progress.mark_lesson_completed("W2")
+	director.progress.mark_lesson_completed("T-02")
 	for _i in 3:
 		director._force_complete_current_step()
-	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W2")
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("T-02")
 
 
 ## ===== Skip lesson (escape hatch) =====
 
 func test_skip_lesson_marks_completed_and_moves_on() -> void:
-	var director := _new_director("W4")
+	var director := _new_director("T-04")
 	var completions: Array = []
 	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
 	director._on_skip_lesson()
-	assert_array(completions).is_equal(["W4"])
-	assert_bool(director.progress.is_lesson_completed("W4")).is_true()
-	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W5")
+	assert_array(completions).is_equal(["T-04"])
+	assert_bool(director.progress.is_lesson_completed("T-04")).is_true()
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W2")

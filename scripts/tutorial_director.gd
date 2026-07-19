@@ -49,6 +49,8 @@ var _radial_controller: Node = null
 var _army_manager: Node = null
 var _undo_manager: Node = null
 var _start_game_button: Control = null
+var _pinned_rulers: Node = null
+var _range_rings: Node = null
 
 # ===== Private state =====
 var _coach: TutorialCoachMark = null
@@ -70,6 +72,15 @@ var _prev_import_open: bool = false
 var _prev_dock_open: bool = false
 var _prev_presented: bool = false
 var _prev_bands_active: bool = false
+# Wave-1 poll edges (toolstrack spec T-04) + selection-composition memory (T-02).
+var _prev_ruler_count: int = 0
+var _prev_ring_active: bool = false
+var _prev_spell_preview: bool = false
+var _prev_selection_size: int = 0
+# Second highlighted unit (T-02 multi step spotlight).
+var _second_unit: GameUnit = null
+var _second_nodes: Array[Node3D] = []
+var _second_visuals: Array[VisualInstance3D] = []
 var _assessment_dialog: ConfirmationDialog = null
 # Chapter-picker launch: play forward from the chosen lesson WITHOUT skipping lessons
 # that are already completed (replaying is the point). Resume launches skip them.
@@ -106,6 +117,8 @@ func setup(refs: Dictionary) -> void:
 	_army_manager = refs.get("army_manager", null)
 	_undo_manager = refs.get("undo_manager", null)
 	_start_game_button = refs.get("start_game_button", null)
+	_pinned_rulers = refs.get("pinned_rulers", null)
+	_range_rings = refs.get("range_rings", null)
 	if _camera_pivot != null:
 		_camera = _camera_pivot.get_node_or_null("Camera3D") as Camera3D
 
@@ -171,12 +184,22 @@ func _connect_seams() -> void:
 			_object_manager.movement_capped.connect(_on_movement_capped)
 		if _object_manager.has_signal("drop_separated"):
 			_object_manager.drop_separated.connect(_on_drop_separated)
+		if _object_manager.has_signal("arrangement_applied"):
+			_object_manager.arrangement_applied.connect(_on_arrangement_applied)
+		if _object_manager.has_signal("objects_pasted"):
+			_object_manager.objects_pasted.connect(_on_objects_pasted)
+		if _object_manager.has_signal("lock_state_changed"):
+			_object_manager.lock_state_changed.connect(_on_lock_state_changed)
 	if _undo_manager != null and _undo_manager.has_signal("action_undone"):
 		_undo_manager.action_undone.connect(_on_action_undone)
 	if _dice_tray != null and _dice_tray.has_signal("roll_finnished"):
 		_dice_tray.roll_finnished.connect(_on_roll_finnished)
 	if _radial_controller != null and _radial_controller.has_signal("unit_activated"):
 		_radial_controller.unit_activated.connect(_on_unit_activated)
+	if _radial_controller != null and _radial_controller.has_signal("model_deleted"):
+		_radial_controller.model_deleted.connect(_on_model_deleted)
+	if _radial_controller != null and _radial_controller.has_signal("unit_deleted"):
+		_radial_controller.unit_deleted.connect(_on_unit_deleted)
 	if _army_manager != null and _army_manager.has_signal("loose_model_dead_changed"):
 		_army_manager.loose_model_dead_changed.connect(_on_loose_model_dead_changed)
 	if _army_manager != null and _army_manager.has_signal("game_phase_changed"):
@@ -191,12 +214,17 @@ func _disconnect_seams() -> void:
 		_disconnect_if(_object_manager, "measurement_finished", _on_measurement_finished)
 		_disconnect_if(_object_manager, "movement_capped", _on_movement_capped)
 		_disconnect_if(_object_manager, "drop_separated", _on_drop_separated)
+		_disconnect_if(_object_manager, "arrangement_applied", _on_arrangement_applied)
+		_disconnect_if(_object_manager, "objects_pasted", _on_objects_pasted)
+		_disconnect_if(_object_manager, "lock_state_changed", _on_lock_state_changed)
 	if _undo_manager != null:
 		_disconnect_if(_undo_manager, "action_undone", _on_action_undone)
 	if _dice_tray != null:
 		_disconnect_if(_dice_tray, "roll_finnished", _on_roll_finnished)
 	if _radial_controller != null:
 		_disconnect_if(_radial_controller, "unit_activated", _on_unit_activated)
+		_disconnect_if(_radial_controller, "model_deleted", _on_model_deleted)
+		_disconnect_if(_radial_controller, "unit_deleted", _on_unit_deleted)
 	if _army_manager != null:
 		_disconnect_if(_army_manager, "loose_model_dead_changed", _on_loose_model_dead_changed)
 		_disconnect_if(_army_manager, "game_phase_changed", _on_game_phase_changed)
@@ -212,6 +240,47 @@ func _disconnect_if(source: Object, signal_name: String, callable: Callable) -> 
 func _on_selection_changed(selected: Array) -> void:
 	if selection_hits(selected, _target_nodes):
 		_on_event(TutorialFlow.Event.UNIT_SELECTED)
+	# Wave 1 (T-02): classify the RESULTING selection composition — gesture-independent by
+	# design (spec note: reaching the same selection another way still advances). Emission
+	# order multi -> whole -> box is safe: consume() only accepts the current step's event.
+	if selected.is_empty():
+		if _prev_selection_size > 0:
+			_on_event(TutorialFlow.Event.SELECTION_CLEARED)
+		_prev_selection_size = 0
+		return
+	var units := distinct_units_of(selected)
+	if units.size() >= 2:
+		_on_event(TutorialFlow.Event.MULTI_SELECTED)
+	if units.size() == 1 and is_whole_unit_selection(selected, units[0]):
+		_on_event(TutorialFlow.Event.UNIT_WHOLE_SELECTED)
+	if selected.size() >= _prev_selection_size + 2 and not (units.size() == 1 and is_whole_unit_selection(selected, units[0])):
+		_on_event(TutorialFlow.Event.BOX_SELECTED)
+	_prev_selection_size = selected.size()
+
+
+## PURE: the distinct GameUnits the selected nodes belong to (nodes without a unit meta count none).
+static func distinct_units_of(selected: Array) -> Array:
+	var units: Array = []
+	for obj in selected:
+		if obj is Node and (obj as Node).has_meta("game_unit"):
+			var unit: Object = (obj as Node).get_meta("game_unit")
+			if unit != null and not units.has(unit):
+				units.append(unit)
+	return units
+
+
+## PURE: whether the selection covers EVERY alive node of `unit` (the double-click result).
+static func is_whole_unit_selection(selected: Array, unit: Object) -> bool:
+	if unit == null or not unit.has_method("get_alive_models"):
+		return false
+	var alive: Array = unit.get_alive_models()
+	if alive.is_empty():
+		return false
+	for model in alive:
+		var node: Node = model.get("node") if model != null else null
+		if node == null or not selected.has(node):
+			return false
+	return true
 
 
 func _on_selection_dropped(moves: Array) -> void:
@@ -233,6 +302,26 @@ func _on_action_undone(_description: String) -> void:
 
 func _on_roll_finnished(_total: int) -> void:
 	_on_event(TutorialFlow.Event.DICE_ROLLED)
+
+
+func _on_arrangement_applied(_kind: String) -> void:
+	_on_event(TutorialFlow.Event.ARRANGED)
+
+
+func _on_objects_pasted(_nodes: Array) -> void:
+	_on_event(TutorialFlow.Event.PASTED)
+
+
+func _on_lock_state_changed(_objects: Array, _locked: bool) -> void:
+	_on_event(TutorialFlow.Event.LOCK_TOGGLED)
+
+
+func _on_model_deleted(_model_instance: ModelInstance) -> void:
+	_on_event(TutorialFlow.Event.OBJECT_DELETED)
+
+
+func _on_unit_deleted(_game_unit: GameUnit) -> void:
+	_on_event(TutorialFlow.Event.OBJECT_DELETED)
 
 
 func _on_unit_activated(_game_unit) -> void:
@@ -511,6 +600,41 @@ func _poll_ui_edges() -> void:
 		_on_event(TutorialFlow.Event.BANDS_SHOWN)
 	_prev_bands_active = bands
 
+	# Wave 1 (T-04): pinned rulers / G-rings / spell preview are pollable count-or-state
+	# getters — edge-detect like the shipped bands poll, no new game signals needed.
+	var rulers := _ruler_count()
+	if rulers > _prev_ruler_count:
+		_on_event(TutorialFlow.Event.RULER_PINNED)
+	elif rulers < _prev_ruler_count:
+		_on_event(TutorialFlow.Event.RULER_CLEARED)
+	_prev_ruler_count = rulers
+
+	var ring := _ring_active()
+	if ring and not _prev_ring_active:
+		_on_event(TutorialFlow.Event.RANGE_RING_SHOWN)
+	_prev_ring_active = ring
+
+	var spell := _spell_preview_active()
+	if spell and not _prev_spell_preview:
+		_on_event(TutorialFlow.Event.SPELL_RANGE_SHOWN)
+	_prev_spell_preview = spell
+
+
+func _ruler_count() -> int:
+	if _pinned_rulers != null and _pinned_rulers.has_method("ruler_count"):
+		return int(_pinned_rulers.ruler_count())
+	return 0
+
+
+func _ring_active() -> bool:
+	return _range_rings != null and _range_rings.has_method("active_count") \
+		and int(_range_rings.active_count()) > 0
+
+
+func _spell_preview_active() -> bool:
+	return _range_rings != null and _range_rings.has_method("has_spell_preview") \
+		and bool(_range_rings.has_spell_preview())
+
 
 func _menu_open() -> bool:
 	return _left_panel != null and _left_panel.visible
@@ -595,6 +719,35 @@ func _resolve_target_unit() -> void:
 	_target_visuals = _collect_visuals(_target_nodes)
 
 
+## The SECOND highlighted unit (T-02 multi step): the largest own unit that is not the
+## primary target — same selection rules as _resolve_target_unit.
+func _resolve_second_unit() -> void:
+	if _second_unit != null and _second_unit.get_alive_count() > 0 and not _second_nodes.is_empty():
+		return
+	_second_unit = null
+	_second_nodes = []
+	if _army_manager == null:
+		return
+	var units = _army_manager.get("game_units")
+	if not units is Dictionary:
+		return
+	var best: GameUnit = null
+	for unit in units.values():
+		if not unit is GameUnit or unit == _target_unit:
+			continue
+		if int(unit.unit_properties.get("player_id", 0)) != 1 or unit.get_alive_count() == 0:
+			continue
+		if best == null or unit.get_alive_count() > best.get_alive_count():
+			best = unit
+	if best == null:
+		return
+	_second_unit = best
+	for model in best.models:
+		if model != null and is_instance_valid(model.node):
+			_second_nodes.append(model.node)
+	_second_visuals = _collect_visuals(_second_nodes)
+
+
 ## All VisualInstance3D under the given nodes (cached per step; AABBs are then
 ## projected per frame without walking the tree again).
 func _collect_visuals(nodes: Array) -> Array[VisualInstance3D]:
@@ -616,6 +769,9 @@ func _resolve_target_rect(target: String) -> Rect2:
 	match target:
 		TutorialFlow.TARGET_UNIT:
 			return _project_visuals(_target_visuals, _target_nodes)
+		TutorialFlow.TARGET_SECOND_UNIT:
+			_resolve_second_unit()
+			return _project_visuals(_second_visuals, _second_nodes)
 		TutorialFlow.TARGET_PARKED_MODEL:
 			var parked: Array[Node3D] = []
 			if is_instance_valid(_parked_node):

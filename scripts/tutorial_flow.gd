@@ -31,6 +31,19 @@ enum Event {
 	GAME_STARTED,     # game_phase_changed -> PLAYING (Start Game / both-ready)
 	MOVE_CAPPED,      # movement_capped with dry=true (dry-brush cap reached mid-drag)
 	MODELS_SEPARATED, # drop_separated (the 1" spacing rule snapped/pushed a dropped base)
+	# — Wave 1 (toolstrack spec T-02/T-03/T-04) —
+	UNIT_WHOLE_SELECTED, # selection == every alive node of one unit (double-click)
+	MULTI_SELECTED,      # selection spans >=2 distinct units (Alt+click)
+	BOX_SELECTED,        # selection grew via a rubber-band drag over empty table
+	SELECTION_CLEARED,   # selection became empty (Esc)
+	ARRANGED,            # object_manager.arrangement_applied (1-9 rows / Shift+A arrow)
+	PASTED,              # object_manager.objects_pasted (Ctrl+V / Ctrl+D)
+	LOCK_TOGGLED,        # object_manager.lock_state_changed (L)
+	OBJECT_DELETED,      # radial_menu_controller.model_deleted / unit_deleted (Delete key)
+	RULER_PINNED,        # pinned-ruler count increased (P)
+	RULER_CLEARED,       # pinned-ruler count decreased (K)
+	RANGE_RING_SHOWN,    # a G range ring became active
+	SPELL_RANGE_SHOWN,   # the spell-range preview ring became active (card spell hover)
 }
 
 # ===== Spotlight target keys (resolved to rects by the director) =====
@@ -44,6 +57,7 @@ const TARGET_DOCK_STRIP := "dock_strip"       # the open card strip
 const TARGET_PRESENTED_CARD := "presented_card"
 const TARGET_PARKED_MODEL := "parked_model"   # the casualty parked on the tray
 const TARGET_START_GAME := "start_game"       # the Start Game / Ready button in the left panel
+const TARGET_SECOND_UNIT := "second_unit"     # a SECOND highlighted unit (multi-select step)
 
 # ===== State =====
 var lessons: Array = []
@@ -63,13 +77,63 @@ func _init(p_lessons: Array = []) -> void:
 ## whether input outside the spotlight is soft-masked (never for 3D drag steps).
 static func build_tool_track() -> Array:
 	return [
-		{"id": "W1", "title": "Camera & table", "steps": [
+		{"id": "T-01", "title": "Camera & table", "steps": [
 			{"id": "orbit", "text": "Hold the right mouse button and drag to orbit the camera.",
 				"event": Event.CAMERA_ORBIT, "target": TARGET_NONE, "mask": false},
 			{"id": "zoom", "text": "Zoom in and out with the mouse wheel.",
 				"event": Event.CAMERA_ZOOM, "target": TARGET_NONE, "mask": false},
 			{"id": "pan", "text": "Pan across the table with WASD or by dragging the middle mouse button.",
 				"event": Event.CAMERA_PAN, "target": TARGET_NONE, "mask": false},
+		]},
+		{"id": "T-02", "title": "Selecting", "steps": [
+			{"id": "single", "text": "Left-click one model of the highlighted unit to select it.",
+				"event": Event.UNIT_SELECTED, "target": TARGET_UNIT, "mask": true},
+			{"id": "unit", "text": "Double-click any model to select its whole unit at once.",
+				"event": Event.UNIT_WHOLE_SELECTED, "target": TARGET_UNIT, "mask": false},
+			{"id": "multi", "text": "Hold Alt and click a model of a second unit — Alt+click adds to your selection.",
+				"event": Event.MULTI_SELECTED, "target": TARGET_SECOND_UNIT, "mask": false},
+			{"id": "box", "text": "Drag a box across empty table to rubber-band-select everything inside it.",
+				"event": Event.BOX_SELECTED, "target": TARGET_NONE, "mask": false},
+			{"id": "cancel", "text": "Press Esc to clear the selection.",
+				"event": Event.SELECTION_CLEARED, "target": TARGET_NONE, "mask": false},
+		]},
+		{"id": "T-03", "title": "Moving, rotating & arranging", "steps": [
+			{"id": "move", "text": "Drag the selected models to a new spot, then release.",
+				"event": Event.UNIT_MOVED, "target": TARGET_UNIT, "mask": false},
+			{"id": "aim", "text": "Hold R and move the cursor — the models turn to face it. Release R to confirm.",
+				"event": Event.ROTATED, "target": TARGET_UNIT, "mask": false},
+			{"id": "group_rotate", "text": "Select the whole unit, hold Shift and press R to rotate the group around its centre.",
+				"event": Event.ROTATED, "target": TARGET_UNIT, "mask": false},
+			{"id": "snap", "text": "Press Ctrl+R to snap the unit's facing to the nearest 90 degrees.",
+				"event": Event.ROTATED, "target": TARGET_UNIT, "mask": false},
+			{"id": "arrange", "text": "Press a number key 1-9 to arrange the selected models into that many rows.",
+				"event": Event.ARRANGED, "target": TARGET_UNIT, "mask": false},
+			{"id": "arrow", "text": "Press Shift+A to fan the unit into an arrow formation.",
+				"event": Event.ARRANGED, "target": TARGET_UNIT, "mask": false},
+			{"id": "duplicate", "text": "Press Ctrl+D to duplicate the selected unit right where the cursor is.",
+				"event": Event.PASTED, "target": TARGET_UNIT, "mask": false},
+			{"id": "lock", "text": "Press L to lock the unit so it can't be moved by accident. Press L again to unlock.",
+				"event": Event.LOCK_TOGGLED, "target": TARGET_UNIT, "mask": false},
+			{"id": "delete", "text": "Select the duplicate you just made and press Delete to remove it.",
+				"event": Event.OBJECT_DELETED, "target": TARGET_UNIT, "mask": false},
+			{"id": "undo", "text": "Press Ctrl+Z to undo — and Ctrl+Y to redo.",
+				"event": Event.UNDONE, "target": TARGET_NONE, "mask": false},
+		]},
+		{"id": "T-04", "title": "Measuring, rings & the lines you already see", "steps": [
+			{"id": "measure", "text": "Hold Shift and drag the left mouse button to measure a distance.",
+				"event": Event.MEASURED, "target": TARGET_NONE, "mask": false},
+			{"id": "pin", "text": "While a measurement is on screen, press P to pin that ruler so it stays.",
+				"event": Event.RULER_PINNED, "target": TARGET_NONE, "mask": false},
+			{"id": "clear", "text": "Press K to clear your pinned rulers again.",
+				"event": Event.RULER_CLEARED, "target": TARGET_NONE, "mask": false},
+			{"id": "bands", "text": "Select a unit and press M to show its movement bands — Advance 6\" and Rush 12\".",
+				"event": Event.BANDS_SHOWN, "target": TARGET_UNIT, "mask": false},
+			{"id": "rings", "text": "Press G to cycle a range ring (3 / 6 / 9 / 12 / 18 / 24\") — press G again to step through, Shift+G to clear.",
+				"event": Event.RANGE_RING_SHOWN, "target": TARGET_UNIT, "mask": false},
+			{"id": "spell", "text": "Open a caster's card and hover a spell name — a purple ring shows that spell's range.",
+				"event": Event.SPELL_RANGE_SHOWN, "target": TARGET_PRESENTED_CARD, "mask": false},
+			{"id": "coherency", "text": "As you drag a selected unit, watch the green chain lines. Green = every model in 1\" coherency; red = the chain is broken. Move a model until you see them.",
+				"event": Event.UNIT_MOVED, "target": TARGET_UNIT, "mask": false},
 		]},
 		{"id": "W2", "title": "Importing armies", "steps": [
 			{"id": "menu", "text": "Open the game menu with the button in the top-left corner.",
@@ -78,24 +142,6 @@ static func build_tool_track() -> Array:
 				"event": Event.IMPORT_OPENED, "target": TARGET_IMPORT_BUTTON, "mask": true},
 			{"id": "import_close", "text": "In a real game you would paste an Army Forge share link here. Your tutorial armies are already on the table — close the dialog to continue.",
 				"event": Event.IMPORT_CLOSED, "target": TARGET_NONE, "mask": false},
-		]},
-		{"id": "W3", "title": "Select, move, rotate & undo", "steps": [
-			{"id": "select", "text": "Click a model of the highlighted unit to select it.",
-				"event": Event.UNIT_SELECTED, "target": TARGET_UNIT, "mask": true},
-			{"id": "move", "text": "Drag the selected models to a new spot, then release.",
-				"event": Event.UNIT_MOVED, "target": TARGET_UNIT, "mask": false},
-			{"id": "rotate", "text": "Hold R and move the cursor — the models turn to face it. Release R to confirm.",
-				"event": Event.ROTATED, "target": TARGET_UNIT, "mask": false},
-			{"id": "undo", "text": "Press Ctrl+Z to undo your last action.",
-				"event": Event.UNDONE, "target": TARGET_NONE, "mask": false},
-		]},
-		{"id": "W4", "title": "Dice & measuring", "steps": [
-			{"id": "measure", "text": "Hold Shift and drag with the left mouse button to measure a distance.",
-				"event": Event.MEASURED, "target": TARGET_NONE, "mask": false},
-			{"id": "bands", "text": "Select a model and press M to show its movement bands (Advance / Rush).",
-				"event": Event.BANDS_SHOWN, "target": TARGET_UNIT, "mask": false},
-			{"id": "roll", "text": "Roll the dice in the dice tray.",
-				"event": Event.DICE_ROLLED, "target": TARGET_DICE_PANEL, "mask": true},
 		]},
 		{"id": "W5", "title": "Unit cards & activation", "steps": [
 			{"id": "dock", "text": "Open the Units dock — click the Units tab at the bottom of the screen.",

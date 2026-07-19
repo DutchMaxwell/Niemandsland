@@ -4044,6 +4044,8 @@ func _start_tutorial() -> void:
 		"army_manager": opr_army_manager,
 		"undo_manager": undo_manager,
 		"start_game_button": _start_game_button,
+		"pinned_rulers": pinned_rulers,
+		"range_rings": range_ring_controller,
 	})
 	_tutorial_director.begin(progress, _tutorial_start_lesson)
 

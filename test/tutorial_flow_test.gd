@@ -12,10 +12,11 @@ func _new_flow() -> TutorialFlow:
 
 ## ===== Track definition =====
 
-func test_tool_track_has_seven_lessons_w1_to_w7() -> void:
+func test_tool_track_order_wave1() -> void:
+	# Wave 1 (toolstrack spec §13/§15): T-01..T-04 lead; the not-yet-superseded W chapters follow.
 	var track := Flow.build_tool_track()
-	assert_int(track.size()).is_equal(7)
-	assert_array(Flow.ids(track)).is_equal(["W1", "W2", "W3", "W4", "W5", "W6", "W7"])
+	assert_int(track.size()).is_equal(8)
+	assert_array(Flow.ids(track)).is_equal(["T-01", "T-02", "T-03", "T-04", "W2", "W5", "W6", "W7"])
 
 
 func test_every_step_is_fully_defined() -> void:
@@ -33,7 +34,7 @@ func test_every_step_is_fully_defined() -> void:
 
 func test_title_lookup() -> void:
 	var track := Flow.build_tool_track()
-	assert_str(Flow.title_of(track, "W4")).is_equal("Dice & measuring")
+	assert_str(Flow.title_of(track, "T-02")).is_equal("Selecting")
 	assert_str(Flow.title_of(track, "W9")).is_equal("")
 
 
@@ -60,9 +61,9 @@ func test_lesson_boundary_reports_completion_and_moves_on() -> void:
 	flow.consume(Flow.Event.CAMERA_ZOOM)
 	var result := flow.consume(Flow.Event.CAMERA_PAN)  # last W1 step
 	assert_bool(result.advanced).is_true()
-	assert_str(String(result.lesson_completed)).is_equal("W1")
+	assert_str(String(result.lesson_completed)).is_equal("T-01")
 	assert_bool(result.finished).is_false()
-	assert_str(String(flow.current_lesson().get("id", ""))).is_equal("W2")
+	assert_str(String(flow.current_lesson().get("id", ""))).is_equal("T-02")
 	assert_int(flow.step_index).is_equal(0)
 
 
@@ -78,8 +79,8 @@ func test_full_walk_finishes_the_track() -> void:
 		if not String(result.lesson_completed).is_empty():
 			completed.append(String(result.lesson_completed))
 	assert_bool(flow.finished).is_true()
-	assert_array(completed).is_equal(["W1", "W2", "W3", "W4", "W5", "W6", "W7"])
-	assert_int(guard).is_equal(22)  # 3+3+4+3+3+2+4 steps
+	assert_array(completed).is_equal(["T-01", "T-02", "T-03", "T-04", "W2", "W5", "W6", "W7"])
+	assert_int(guard).is_equal(37)  # 3+5+10+7+3+3+2+4 steps
 
 
 func test_finished_flow_ignores_events() -> void:
@@ -94,8 +95,8 @@ func test_finished_flow_ignores_events() -> void:
 
 func test_start_at_jumps_to_lesson_start() -> void:
 	var flow := _new_flow()
-	assert_bool(flow.start_at("W4")).is_true()
-	assert_str(String(flow.current_lesson().get("id", ""))).is_equal("W4")
+	assert_bool(flow.start_at("T-04")).is_true()
+	assert_str(String(flow.current_lesson().get("id", ""))).is_equal("T-04")
 	assert_int(flow.step_index).is_equal(0)
 	assert_str(String(flow.current_step().get("id", ""))).is_equal("measure")
 
@@ -103,7 +104,7 @@ func test_start_at_jumps_to_lesson_start() -> void:
 func test_start_at_unknown_lesson_is_rejected() -> void:
 	var flow := _new_flow()
 	assert_bool(flow.start_at("W9")).is_false()
-	assert_str(String(flow.current_lesson().get("id", ""))).is_equal("W1")
+	assert_str(String(flow.current_lesson().get("id", ""))).is_equal("T-01")
 
 
 func test_skip_current_lesson_completes_and_advances() -> void:
@@ -111,8 +112,8 @@ func test_skip_current_lesson_completes_and_advances() -> void:
 	flow.consume(Flow.Event.CAMERA_ORBIT)  # mid-lesson
 	var result := flow.skip_current_lesson()
 	assert_bool(result.advanced).is_true()
-	assert_str(String(result.lesson_completed)).is_equal("W1")
-	assert_str(String(flow.current_lesson().get("id", ""))).is_equal("W2")
+	assert_str(String(result.lesson_completed)).is_equal("T-01")
+	assert_str(String(flow.current_lesson().get("id", ""))).is_equal("T-02")
 
 
 func test_skip_on_last_lesson_finishes() -> void:

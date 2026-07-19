@@ -15,6 +15,11 @@ signal selection_dropped(moves: Array)
 ## Emitted (throttled) while dragging, so listeners can refresh live feedback
 ## such as unit coherency without waiting for the drag to finish.
 signal drag_updated()
+## Wave-1 tutorial seams (toolstrack spec §14): the formation snap, paste/duplicate and lock
+## toggle were silent — the tutorial director gates steps on them. Display-consumers only.
+signal arrangement_applied(kind: String)
+signal objects_pasted(nodes: Array)
+signal lock_state_changed(objects: Array, locked: bool)
 ## A rotation gesture actually TURNED something (> the undo epsilon). All rotation
 ## paths — R-hold aim-at-cursor, Shift+R group spin, Ctrl+R snap — commit through
 ## commit_rotation_capture, so this is the single seam (tutorial / future replay),
@@ -55,6 +60,7 @@ var _selection_glow_material: StandardMaterial3D = null
 
 # Clipboard for copy/paste
 var _clipboard: Array[Node3D] = []  # Stores references to copied objects for duplication
+var _pasted_nodes_scratch: Array = []  # collects the copies of ONE paste for objects_pasted
 
 # Rotation tracking
 var _is_rotating: bool = false
@@ -3990,6 +3996,7 @@ func arrange_selected_in_rows(num_rows: int) -> void:
 			idx += 1
 
 	_broadcast_arrange_positions(objects)
+	arrangement_applied.emit("rows")
 
 
 
@@ -4043,6 +4050,7 @@ func arrange_selected_arrow() -> void:
 		row_count += 1
 
 	_broadcast_arrange_positions(objects)
+	arrangement_applied.emit("arrow")
 
 
 ## Average (X,Z) of the selection's current positions — the anchor the arrange formations centre on.
@@ -4083,6 +4091,7 @@ func paste_from_clipboard(cursor_pos: Vector3) -> void:
 	if _clipboard.is_empty():
 		push_warning("Clipboard is empty")
 		return
+	_pasted_nodes_scratch = []
 
 	# Calculate center of clipboard objects
 	var clipboard_center = Vector3.ZERO
@@ -4131,7 +4140,13 @@ func paste_from_clipboard(cursor_pos: Vector3) -> void:
 			# Select the pasted object
 			_add_to_selection(copy)
 			_broadcast_pasted_copy(copy)
+			_pasted_nodes_scratch.append(copy)
 			pasted_count += 1
+
+
+	if not _pasted_nodes_scratch.is_empty():
+		objects_pasted.emit(_pasted_nodes_scratch)
+		_pasted_nodes_scratch = []
 
 
 ## Mirror a pasted/duplicated object to remote peers by serializing it and
@@ -4291,6 +4306,8 @@ func toggle_lock_selected() -> void:
 	for obj in _selected_objects:
 		if is_instance_valid(obj):
 			_set_object_locked(obj, new_state)
+
+	lock_state_changed.emit(_selected_objects.duplicate(), new_state)
 
 	# Deselect if locking
 	if new_state:
