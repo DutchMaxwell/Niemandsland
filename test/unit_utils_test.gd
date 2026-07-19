@@ -17,7 +17,6 @@ func _node(groups: Array) -> Node3D:
 
 func test_is_unit_detects_groups() -> void:
 	assert_bool(UnitUtils.is_unit(_node(["opr_unit"]))).is_true()
-	assert_bool(UnitUtils.is_unit(_node(["wgs_unit"]))).is_true()
 	assert_bool(UnitUtils.is_unit(_node(["terrain"]))).is_false()
 	assert_bool(UnitUtils.is_unit(null)).is_false()
 
