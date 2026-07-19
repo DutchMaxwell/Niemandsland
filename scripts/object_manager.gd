@@ -15,6 +15,9 @@ signal selection_dropped(moves: Array)
 ## Emitted (throttled) while dragging, so listeners can refresh live feedback
 ## such as unit coherency without waiting for the drag to finish.
 signal drag_updated()
+## Emitted when the hovered selectable changes (null = nothing hovered) — deduplicated, so UI like
+## the contextual control hints can listen without per-frame churn.
+signal hover_changed(obj: Node3D)
 ## A rotation gesture actually TURNED something (> the undo epsilon). All rotation
 ## paths — R-hold aim-at-cursor, Shift+R group spin, Ctrl+R snap — commit through
 ## commit_rotation_capture, so this is the single seam (tutorial / future replay),
@@ -82,6 +85,7 @@ const SORT_ANIM_RESTING_Y: float = 0.0  # Table surface height for all models
 
 # Drag distance tracking
 var _drag_start_positions: Dictionary = {}  # Object -> start position mapping
+var _hover_hint_obj: Node3D = null  # last emitted hover_changed target (dedupe)
 var _drag_anchor_position: Vector3 = Vector3.ZERO  # Primary drag anchor point
 var _drag_grab_world: Vector3 = Vector3.ZERO  # Cursor table position at grab (preserves grab offset)
 var _drag_line: MeshInstance3D = null  # Visual line during drag
@@ -129,6 +133,8 @@ var movement_range_controller: Node = null
 # base, drop-resolved final appended) rides the selection_dropped seam. T toggles trail
 # visibility, Shift+T clears; a left-click on a committed trail shows its measured proof.
 var move_trails: Node = null
+## Measure-on-pickup ghost (UX polish): origin silhouettes while dragging; injected by main.
+var pickup_ghosts: Node = null
 ## The anchor model's NET traversed path this drag (retrace-erased, budget-refunding —
 ## MoveLedger.extend_path). Feeds the consumed-inches readout, live trail, ledger + log.
 var _drag_path_points: PackedVector2Array = PackedVector2Array()
@@ -856,6 +862,9 @@ func _update_hover(screen_pos: Vector2) -> void:
 	if obj != null and obj in _selected_objects:
 		obj = null  # selected objects keep their green glow; no gold hover on top
 	_hover_glow.set_target(obj)
+	if obj != _hover_hint_obj:
+		_hover_hint_obj = obj
+		hover_changed.emit(obj)
 
 
 ## Highlight a selected object with a green model glow (material_overlay), saving
@@ -1125,7 +1134,15 @@ func _start_dragging(screen_pos: Vector2) -> void:
 
 	_is_dragging = true
 	_hover_glow.set_target(null)
+	if _hover_hint_obj != null:
+		_hover_hint_obj = null
+		hover_changed.emit(null)
 	_drag_start_positions.clear()
+
+	# Measure-on-pickup ghost (UX polish): capture the origin silhouettes BEFORE the lift,
+	# so the ghost shows the true pre-drag pose (what ESC returns to).
+	if pickup_ghosts != null:
+		pickup_ghosts.begin(movable)
 
 	# Store start positions for the movable objects and lift them
 	for obj in movable:
@@ -1171,6 +1188,9 @@ func _start_dragging(screen_pos: Vector2) -> void:
 
 
 func _stop_dragging() -> void:
+	# The drop ends the origin preview whatever else happens below (ghost is drag-scoped).
+	if pickup_ghosts != null:
+		pickup_ghosts.end()
 	if _is_dragging and not _selected_objects.is_empty():
 		# Anti-stacking + charge-snap: nudge dropped bases out of any overlap with other
 		# units and snap a near-miss to enemy contact. Done BEFORE the batch / undo below
@@ -1523,6 +1543,8 @@ func _cancel_drag() -> void:
 	# Cancelled = no move executed: the live ribbons vanish, nothing is committed.
 	if move_trails != null:
 		move_trails.end_live()
+	if pickup_ghosts != null:
+		pickup_ghosts.end()
 
 	_is_dragging = false
 	_move_broadcast_timer = 0.0
