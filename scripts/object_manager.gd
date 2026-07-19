@@ -15,6 +15,9 @@ signal selection_dropped(moves: Array)
 ## Emitted (throttled) while dragging, so listeners can refresh live feedback
 ## such as unit coherency without waiting for the drag to finish.
 signal drag_updated()
+## Emitted when the hovered selectable changes (null = nothing hovered) — deduplicated, so UI like
+## the contextual control hints can listen without per-frame churn.
+signal hover_changed(obj: Node3D)
 ## A rotation gesture actually TURNED something (> the undo epsilon). All rotation
 ## paths — R-hold aim-at-cursor, Shift+R group spin, Ctrl+R snap — commit through
 ## commit_rotation_capture, so this is the single seam (tutorial / future replay),
@@ -82,6 +85,7 @@ const SORT_ANIM_RESTING_Y: float = 0.0  # Table surface height for all models
 
 # Drag distance tracking
 var _drag_start_positions: Dictionary = {}  # Object -> start position mapping
+var _hover_hint_obj: Node3D = null  # last emitted hover_changed target (dedupe)
 var _drag_anchor_position: Vector3 = Vector3.ZERO  # Primary drag anchor point
 var _drag_grab_world: Vector3 = Vector3.ZERO  # Cursor table position at grab (preserves grab offset)
 var _drag_line: MeshInstance3D = null  # Visual line during drag
@@ -858,6 +862,9 @@ func _update_hover(screen_pos: Vector2) -> void:
 	if obj != null and obj in _selected_objects:
 		obj = null  # selected objects keep their green glow; no gold hover on top
 	_hover_glow.set_target(obj)
+	if obj != _hover_hint_obj:
+		_hover_hint_obj = obj
+		hover_changed.emit(obj)
 
 
 ## Highlight a selected object with a green model glow (material_overlay), saving
@@ -1127,6 +1134,9 @@ func _start_dragging(screen_pos: Vector2) -> void:
 
 	_is_dragging = true
 	_hover_glow.set_target(null)
+	if _hover_hint_obj != null:
+		_hover_hint_obj = null
+		hover_changed.emit(null)
 	_drag_start_positions.clear()
 
 	# Measure-on-pickup ghost (UX polish): capture the origin silhouettes BEFORE the lift,

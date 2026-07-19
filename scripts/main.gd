@@ -4881,6 +4881,12 @@ func _init_radial_menu() -> void:
 	pickup_ghosts.name = "PickupGhostController"
 	add_child(pickup_ghosts)
 	object_manager.pickup_ghosts = pickup_ghosts
+	# Contextual control hints (ROADMAP UX polish): hover an object → its verified hotkeys in a
+	# small dimmed bottom line (dwell-delayed, hides on hover end / drag start). Local display aid.
+	var control_hints := ControlHintsController.new()
+	control_hints.name = "ControlHintsController"
+	add_child(control_hints)
+	object_manager.hover_changed.connect(control_hints.on_hover_changed)
 	object_manager.selection_dropped.connect(_on_trails_dropped)
 	# A unit marked Activated is DONE for the round — its trail's job ends with it.
 	if radial_menu_controller.has_signal("unit_activated"):
