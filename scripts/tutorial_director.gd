@@ -58,6 +58,10 @@ var _wounds_dialog: Node = null
 var _casts_dialog: Node = null
 var _marker_dialog: Node = null
 var _step_timer: SceneTreeTimer = null   # timed banner steps (T-06 "read")
+var _table: Node = null
+var _map_layout: Node = null
+var _terrain_shelf: Node = null
+var _terrain_mode_btn: BaseButton = null
 
 # ===== Private state =====
 var _coach: TutorialCoachMark = null
@@ -132,6 +136,10 @@ func setup(refs: Dictionary) -> void:
 	_wounds_dialog = refs.get("wounds_dialog", null)
 	_casts_dialog = refs.get("casts_dialog", null)
 	_marker_dialog = refs.get("marker_dialog", null)
+	_table = refs.get("table", null)
+	_map_layout = refs.get("map_layout", null)
+	_terrain_shelf = refs.get("terrain_shelf", null)
+	_terrain_mode_btn = refs.get("terrain_mode_btn", null)
 	if _camera_pivot != null:
 		_camera = _camera_pivot.get_node_or_null("Camera3D") as Camera3D
 
@@ -234,6 +242,26 @@ func _connect_seams() -> void:
 		_casts_dialog.casts_changed.connect(_on_casts_changed)
 	if _marker_dialog != null and _marker_dialog.has_signal("marker_added"):
 		_marker_dialog.marker_added.connect(_on_marker_added)
+	# — Wave 3 (T-08/T-09): real import, table setup, terrain shelf, layout editor —
+	if _import_dialog != null and _import_dialog.has_signal("army_imported"):
+		_import_dialog.army_imported.connect(_on_army_imported)
+	if _table != null and _table.has_signal("table_resized"):
+		_table.table_resized.connect(_on_table_resized)
+	if _table != null and _table.has_signal("biome_changed"):
+		_table.biome_changed.connect(_on_biome_changed)
+	if _terrain_mode_btn != null:
+		_terrain_mode_btn.toggled.connect(_on_terrain_mode_toggled)
+	if _terrain_shelf != null and _terrain_shelf.has_signal("piece_placed"):
+		_terrain_shelf.piece_placed.connect(_on_terrain_piece_placed)
+	if _map_layout != null:
+		if _map_layout.has_signal("editor_opened"):
+			_map_layout.editor_opened.connect(_on_layout_opened)
+		if _map_layout.has_signal("layout_updated"):
+			_map_layout.layout_updated.connect(_on_layout_updated)
+		if _map_layout.has_signal("deployment_type_changed"):
+			_map_layout.deployment_type_changed.connect(_on_deploy_type_changed)
+		if _map_layout.has_signal("layout_closed"):
+			_map_layout.layout_closed.connect(_on_layout_closed)
 
 
 func _disconnect_seams() -> void:
@@ -274,6 +302,20 @@ func _disconnect_seams() -> void:
 		_disconnect_if(_casts_dialog, "casts_changed", _on_casts_changed)
 	if _marker_dialog != null:
 		_disconnect_if(_marker_dialog, "marker_added", _on_marker_added)
+	if _import_dialog != null:
+		_disconnect_if(_import_dialog, "army_imported", _on_army_imported)
+	if _table != null:
+		_disconnect_if(_table, "table_resized", _on_table_resized)
+		_disconnect_if(_table, "biome_changed", _on_biome_changed)
+	if _terrain_mode_btn != null and _terrain_mode_btn.toggled.is_connected(_on_terrain_mode_toggled):
+		_terrain_mode_btn.toggled.disconnect(_on_terrain_mode_toggled)
+	if _terrain_shelf != null:
+		_disconnect_if(_terrain_shelf, "piece_placed", _on_terrain_piece_placed)
+	if _map_layout != null:
+		_disconnect_if(_map_layout, "editor_opened", _on_layout_opened)
+		_disconnect_if(_map_layout, "layout_updated", _on_layout_updated)
+		_disconnect_if(_map_layout, "deployment_type_changed", _on_deploy_type_changed)
+		_disconnect_if(_map_layout, "layout_closed", _on_layout_closed)
 
 
 func _disconnect_if(source: Object, signal_name: String, callable: Callable) -> void:
@@ -414,6 +456,54 @@ func _on_casts_changed(_unit: Variant, _casts: int) -> void:
 
 func _on_marker_added(_target: Variant, _marker: Variant) -> void:
 	_on_event(TutorialFlow.Event.MARKER_ADDED)
+
+
+## The sandbox shelf is created lazily on the first Terrain Mode toggle — main late-binds it
+## here so the T-09a place step can gate on piece_placed whenever the shelf finally exists.
+func late_bind_terrain_shelf(shelf: Node) -> void:
+	_terrain_shelf = shelf
+	if _terrain_shelf != null and _terrain_shelf.has_signal("piece_placed") \
+			and not _terrain_shelf.piece_placed.is_connected(_on_terrain_piece_placed):
+		_terrain_shelf.piece_placed.connect(_on_terrain_piece_placed)
+
+
+# — Wave 3 handlers (T-08/T-09) —
+
+func _on_army_imported(_army: Variant, _player_id: int) -> void:
+	_on_event(TutorialFlow.Event.ARMY_IMPORTED)
+
+
+func _on_table_resized(_size_feet: Vector2) -> void:
+	_on_event(TutorialFlow.Event.TABLE_RESIZED)
+
+
+func _on_biome_changed(_biome_name: String) -> void:
+	_on_event(TutorialFlow.Event.BIOME_CHANGED)
+
+
+func _on_terrain_mode_toggled(on: bool) -> void:
+	if on:
+		_on_event(TutorialFlow.Event.TERRAIN_MODE_ENTERED)
+
+
+func _on_terrain_piece_placed(_prop_id: String) -> void:
+	_on_event(TutorialFlow.Event.TERRAIN_PLACED)
+
+
+func _on_layout_opened() -> void:
+	_on_event(TutorialFlow.Event.LAYOUT_OPENED)
+
+
+func _on_layout_updated(_cells: Variant, _size: Variant, _rot: Variant, _rest: Variant = null, _rest2: Variant = null, _rest3: Variant = null) -> void:
+	_on_event(TutorialFlow.Event.LAYOUT_EDITED)
+
+
+func _on_deploy_type_changed(_type: int) -> void:
+	_on_event(TutorialFlow.Event.DEPLOY_TYPE_SET)
+
+
+func _on_layout_closed() -> void:
+	_on_event(TutorialFlow.Event.LAYOUT_CLOSED)
 
 
 func _on_unit_activated(_game_unit) -> void:

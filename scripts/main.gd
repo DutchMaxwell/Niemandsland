@@ -3456,6 +3456,8 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 ## Spawns free-placed, draggable terrain pieces on the 3D table (grassland ruins first).
 func _setup_sandbox_shelf() -> void:
 	_sandbox_shelf = SandboxTerrainShelf.new()
+	if is_instance_valid(_tutorial_director):
+		_tutorial_director.late_bind_terrain_shelf(_sandbox_shelf)   # the shelf is lazy — bind the T-09a seam now
 	$UI.add_child(_sandbox_shelf)
 	_sandbox_shelf.setup(object_manager)
 	_sandbox_shelf.closed.connect(_on_sandbox_shelf_closed)
@@ -4062,6 +4064,10 @@ func _start_tutorial() -> void:
 		"wounds_dialog": radial_menu_controller.wounds_dialog,
 		"casts_dialog": radial_menu_controller.casts_dialog,
 		"marker_dialog": radial_menu_controller.marker_dialog,
+		"table": table,
+		"map_layout": map_layout_editor,
+		"terrain_shelf": _sandbox_shelf,   # usually still null here — late-bound on first Terrain Mode
+		"terrain_mode_btn": _terrain_mode_btn,
 	})
 	_tutorial_director.begin(progress, _tutorial_start_lesson)
 
@@ -4118,6 +4124,7 @@ func _on_map_layout_pressed() -> void:
 	if map_layout_editor:
 		map_layout_editor.set_table_size(table.table_size)
 		map_layout_editor.visible = true
+		map_layout_editor.editor_opened.emit()
 		$UI/HUD.visible = false  # Hide main HUD while in layout mode
 		# Disable object selection while in map layout mode
 		if object_manager:

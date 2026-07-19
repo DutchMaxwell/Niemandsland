@@ -3,6 +3,8 @@ extends Control
 ## OPR terrain recommendations are displayed in real-time
 
 signal layout_closed
+## Wave-3 tutorial seam: the editor became visible (main sets .visible — this names the edge).
+signal editor_opened
 signal layout_updated(grid_cells: Dictionary, table_size: Vector2, rotation: float,
 	wall_segments: Array, placed_objects: Array)
 

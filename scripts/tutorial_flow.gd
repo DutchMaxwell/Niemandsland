@@ -60,6 +60,16 @@ enum Event {
 	MARKER_ADDED,        # marker_dialog.marker_added
 	OBJECTIVE_SET,       # radial_menu.action_selected objective-owner id
 	UNIT_RETURNED,       # radial_menu.action_selected return_unit_*
+	# — Wave 3 (toolstrack spec T-08/T-09) —
+	ARMY_IMPORTED,       # opr_import_dialog.army_imported (the real import landed units)
+	TABLE_RESIZED,       # table.table_resized
+	BIOME_CHANGED,       # table.biome_changed
+	TERRAIN_MODE_ENTERED,# the Terrain Mode toggle turned on
+	TERRAIN_PLACED,      # sandbox_terrain_shelf.piece_placed
+	LAYOUT_OPENED,       # map_layout.editor_opened
+	LAYOUT_EDITED,       # map_layout.layout_updated (paint / prefab / auto-generate)
+	DEPLOY_TYPE_SET,     # map_layout.deployment_type_changed
+	LAYOUT_CLOSED,       # map_layout.layout_closed
 }
 
 # ===== Spotlight target keys (resolved to rects by the director) =====
@@ -201,13 +211,37 @@ static func build_tool_track() -> Array:
 			{"id": "return_unit", "text": "A fully destroyed unit lands on the army tray — choose Return Unit to redeploy it.",
 				"event": Event.UNIT_RETURNED, "target": TARGET_NONE, "mask": false},
 		]},
-		{"id": "W2", "title": "Importing armies", "steps": [
+		{"id": "T-08", "title": "Importing an army (for real)", "steps": [
 			{"id": "menu", "text": "Open the game menu with the button in the top-left corner.",
 				"event": Event.MENU_OPENED, "target": TARGET_HAMBURGER, "mask": true},
-			{"id": "import_open", "text": "Click IMPORT OPR ARMY — this is where armies come from.",
+			{"id": "import_open", "text": "Click IMPORT OPR ARMY.",
 				"event": Event.IMPORT_OPENED, "target": TARGET_IMPORT_BUTTON, "mask": true},
-			{"id": "import_close", "text": "In a real game you would paste an Army Forge share link here. Your tutorial armies are already on the table — close the dialog to continue.",
-				"event": Event.IMPORT_CLOSED, "target": TARGET_NONE, "mask": false},
+			{"id": "import", "text": "Paste an Army Forge share link and press Import — the units drop onto the table (needs internet; Skip lesson if offline).",
+				"event": Event.ARMY_IMPORTED, "target": TARGET_NONE, "mask": false},
+		]},
+		{"id": "T-09a", "title": "Table & casual terrain", "steps": [
+			{"id": "table_size", "text": "Open Table Size in the menu and pick a size (72x48 is standard).",
+				"event": Event.TABLE_RESIZED, "target": TARGET_NONE, "mask": false},
+			{"id": "biome", "text": "Switch the battlemap biome — grassland, desert, tundra, volcanic, jungle or urban.",
+				"event": Event.BIOME_CHANGED, "target": TARGET_NONE, "mask": false},
+			{"id": "terrain_mode", "text": "Turn on Terrain Mode — a shelf of scenery opens.",
+				"event": Event.TERRAIN_MODE_ENTERED, "target": TARGET_NONE, "mask": false},
+			{"id": "place", "text": "Pick a ruin or forest from the shelf and place it on the table.",
+				"event": Event.TERRAIN_PLACED, "target": TARGET_NONE, "mask": false},
+			{"id": "prop_edit", "text": "Drag the piece into position — hold R to rotate it.",
+				"event": Event.ROTATED, "target": TARGET_NONE, "mask": false},
+		]},
+		{"id": "T-09b", "title": "The competitive Map Layout editor", "steps": [
+			{"id": "open", "text": "Open Map Layout to design a tournament-legal table on a 2D grid.",
+				"event": Event.LAYOUT_OPENED, "target": TARGET_NONE, "mask": false},
+			{"id": "paint", "text": "Choose Paint Cells and paint a Ruins or Forest region.",
+				"event": Event.LAYOUT_EDITED, "target": TARGET_NONE, "mask": false},
+			{"id": "auto", "text": "Short on time? Press Auto-Generate for an OPR-compliant layout.",
+				"event": Event.LAYOUT_EDITED, "target": TARGET_NONE, "mask": false},
+			{"id": "deploy", "text": "Open the Deployment tab and set a deployment-zone type.",
+				"event": Event.DEPLOY_TYPE_SET, "target": TARGET_NONE, "mask": false},
+			{"id": "save", "text": "Close the editor — your table is ready underneath.",
+				"event": Event.LAYOUT_CLOSED, "target": TARGET_NONE, "mask": false},
 		]},
 		{"id": "W7", "title": "Movement & trails", "steps": [
 			{"id": "start_game", "text": "Deployment is done — press Start Game in the left panel to begin play. Chalk move-trails only paint once the game has started.",

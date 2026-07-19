@@ -15,8 +15,8 @@ func _new_flow() -> TutorialFlow:
 func test_tool_track_order_wave1() -> void:
 	# Wave 1 (toolstrack spec §13/§15): T-01..T-04 lead; the not-yet-superseded W chapters follow.
 	var track := Flow.build_tool_track()
-	assert_int(track.size()).is_equal(9)
-	assert_array(Flow.ids(track)).is_equal(["T-01", "T-02", "T-03", "T-04", "T-05", "T-06", "T-07", "W2", "W7"])
+	assert_int(track.size()).is_equal(11)
+	assert_array(Flow.ids(track)).is_equal(["T-01", "T-02", "T-03", "T-04", "T-05", "T-06", "T-07", "T-08", "T-09a", "T-09b", "W7"])
 
 
 func test_every_step_is_fully_defined() -> void:
@@ -71,7 +71,7 @@ func test_full_walk_finishes_the_track() -> void:
 	var flow := _new_flow()
 	var completed: Array[String] = []
 	var guard := 0
-	while not flow.finished and guard < 60:
+	while not flow.finished and guard < 80:
 		guard += 1
 		var event := int(flow.current_step().get("event", Flow.Event.NONE)) as TutorialFlow.Event
 		var result := flow.consume(event)
@@ -79,8 +79,8 @@ func test_full_walk_finishes_the_track() -> void:
 		if not String(result.lesson_completed).is_empty():
 			completed.append(String(result.lesson_completed))
 	assert_bool(flow.finished).is_true()
-	assert_array(completed).is_equal(["T-01", "T-02", "T-03", "T-04", "T-05", "T-06", "T-07", "W2", "W7"])
-	assert_int(guard).is_equal(54)  # 3+5+10+7+8+10+4+3+4 steps
+	assert_array(completed).is_equal(["T-01", "T-02", "T-03", "T-04", "T-05", "T-06", "T-07", "T-08", "T-09a", "T-09b", "W7"])
+	assert_int(guard).is_equal(64)  # 3+5+10+7+8+10+4+3+5+5+4 steps
 
 
 func test_finished_flow_ignores_events() -> void:

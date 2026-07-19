@@ -172,7 +172,7 @@ func test_t07_casualty_loop_advances_to_w2() -> void:
 	director.lesson_completed.connect(func(id: String) -> void: completions.append(id))
 	director._on_radial_action_selected("return_unit_3", {})
 	assert_array(completions).is_equal(["T-07"])
-	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("W2")
+	assert_str(String(director.flow.current_lesson().get("id", ""))).is_equal("T-08")
 
 ## ===== W7: movement bundle (game-phase gate, trail, dry-brush cap, 1" spacing) =====
 
