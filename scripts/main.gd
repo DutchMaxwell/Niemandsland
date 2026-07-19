@@ -4875,6 +4875,12 @@ func _init_radial_menu() -> void:
 	move_trails.name = "MoveTrails"
 	add_child(move_trails)
 	object_manager.move_trails = move_trails
+	# Measure-on-pickup ghost (ROADMAP UX polish): translucent origin silhouettes while dragging —
+	# shows what ESC snaps back to and where the measured arc starts. Local display aid.
+	var pickup_ghosts := PickupGhostController.new()
+	pickup_ghosts.name = "PickupGhostController"
+	add_child(pickup_ghosts)
+	object_manager.pickup_ghosts = pickup_ghosts
 	object_manager.selection_dropped.connect(_on_trails_dropped)
 	# A unit marked Activated is DONE for the round — its trail's job ends with it.
 	if radial_menu_controller.has_signal("unit_activated"):

@@ -129,6 +129,8 @@ var movement_range_controller: Node = null
 # base, drop-resolved final appended) rides the selection_dropped seam. T toggles trail
 # visibility, Shift+T clears; a left-click on a committed trail shows its measured proof.
 var move_trails: Node = null
+## Measure-on-pickup ghost (UX polish): origin silhouettes while dragging; injected by main.
+var pickup_ghosts: Node = null
 ## The anchor model's NET traversed path this drag (retrace-erased, budget-refunding —
 ## MoveLedger.extend_path). Feeds the consumed-inches readout, live trail, ledger + log.
 var _drag_path_points: PackedVector2Array = PackedVector2Array()
@@ -1127,6 +1129,11 @@ func _start_dragging(screen_pos: Vector2) -> void:
 	_hover_glow.set_target(null)
 	_drag_start_positions.clear()
 
+	# Measure-on-pickup ghost (UX polish): capture the origin silhouettes BEFORE the lift,
+	# so the ghost shows the true pre-drag pose (what ESC returns to).
+	if pickup_ghosts != null:
+		pickup_ghosts.begin(movable)
+
 	# Store start positions for the movable objects and lift them
 	for obj in movable:
 		if is_instance_valid(obj):
@@ -1171,6 +1178,9 @@ func _start_dragging(screen_pos: Vector2) -> void:
 
 
 func _stop_dragging() -> void:
+	# The drop ends the origin preview whatever else happens below (ghost is drag-scoped).
+	if pickup_ghosts != null:
+		pickup_ghosts.end()
 	if _is_dragging and not _selected_objects.is_empty():
 		# Anti-stacking + charge-snap: nudge dropped bases out of any overlap with other
 		# units and snap a near-miss to enemy contact. Done BEFORE the batch / undo below
@@ -1523,6 +1533,8 @@ func _cancel_drag() -> void:
 	# Cancelled = no move executed: the live ribbons vanish, nothing is committed.
 	if move_trails != null:
 		move_trails.end_live()
+	if pickup_ghosts != null:
+		pickup_ghosts.end()
 
 	_is_dragging = false
 	_move_broadcast_timer = 0.0
