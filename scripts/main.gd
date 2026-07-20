@@ -913,15 +913,16 @@ func _unhandled_key_input(event: InputEvent) -> void:
 				object_manager.begin_rotation_capture()
 			_is_group_rotating = true
 			get_viewport().set_input_as_handled()
-		# Snap selected regiment trays to the nearest 90° facing (Ctrl+R). AoF:R
-		# v3.5.1 p.8 "Pivoting" — the four cardinal facings are the natural snap
-		# targets (Hold may pivot up to 180°, Move actions up to 90°). The player
-		# decides whether the snap is a legal pivot; this is a quick-alignment aid.
+		# Snap the WHOLE selection to the nearest 90° facing (Ctrl+R). Born as the AoF:R
+		# regiment pivot aid (v3.5.1 p.8 "Pivoting" — the four cardinal facings are the
+		# natural snap targets); extended to every selectable (maintainer 2026-07-20:
+		# units, single models and terrain want the same quick alignment). The player
+		# decides whether a snap is a legal pivot; this is a quick-alignment aid.
 		elif event.keycode == KEY_R and event.ctrl_pressed and not event.shift_pressed:
 			object_manager.begin_rotation_capture()
 			var snapped: int = 0
 			for obj in object_manager.get_selected_objects():
-				if obj is RegimentTray and is_instance_valid(obj):
+				if obj is Node3D and is_instance_valid(obj):
 					obj.rotation.y = RegimentTray.nearest_quarter_turn(obj.rotation.y)
 					snapped += 1
 			object_manager.commit_rotation_capture()
