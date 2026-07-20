@@ -76,6 +76,9 @@ func _build_layers() -> void:
 	# through to the CardVisual body for select/locate (bus: rule hover was flaky through IGNORE).
 	_content_holder = Control.new()
 	_content_holder.mouse_filter = Control.MOUSE_FILTER_PASS
+	# Belt-and-braces: content past the face's bottom edge (a card at its height cap) clips at
+	# the card boundary instead of painting onto the table (maintainer screenshot 2026-07-20).
+	_content_holder.clip_contents = true
 	add_child(_content_holder)
 	_on_resized()
 
@@ -90,6 +93,16 @@ func _on_resized() -> void:
 
 
 # === Public API ===
+
+## The content's true minimum height at the card's CURRENT width. Only valid once the tree
+## has laid out: the rules rows are flow containers that must know their width before they
+## can report a wrapped (multi-row) height — measured synchronously they claim one row.
+func content_min_height() -> float:
+	if _content_holder == null or _content_holder.get_child_count() == 0:
+		return size.y
+	var c := _content_holder.get_child(0) as Control
+	return c.get_combined_minimum_size().y if c != null else size.y
+
 
 ## Attach the card's content (labels, stats, status dots). Reparented above the face.
 func set_content_node(node: Control) -> void:
