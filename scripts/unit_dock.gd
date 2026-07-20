@@ -248,7 +248,6 @@ func _refit_strip_heights(gen: int) -> void:
 	await get_tree().process_frame
 	if gen != _refit_gen or _strip == null or not is_inside_tree():
 		return
-	var changed := false
 	# Cards may take up to ~40% of the screen: real full-face cards (weapons + wrapped rule
 	# rows) need 270+ px — the old hard 240 cap CUT the last rule row (maintainer screenshot
 	# 2026-07-20, second finding). The strip band then hugs the tallest card.
@@ -262,13 +261,13 @@ func _refit_strip_heights(gen: int) -> void:
 		tallest = maxf(tallest, h)
 		if absf(h - cv.size.y) > 0.5:
 			cv.size = Vector2(cv.size.x, h)
-			changed = true
 	var new_strip_h: float = maxf(float(STRIP_H), tallest + STRIP_FAN_ARC_PX + 22.0)
-	if absf(new_strip_h - _strip_h) > 0.5:
-		_strip_h = new_strip_h
-		changed = true
-	if changed:
-		_layout()   # re-seats panel + tab for the new band height, then re-fans
+	_strip_h = new_strip_h
+	# ALWAYS re-seat, even when nothing changed height: a rebuild that ran before the first
+	# real layout (tutorial/startup army auto-load) centred the panel against a zero-width
+	# viewport and parked it hard left — this pass, two frames later, sees the real viewport
+	# (maintainer finding 2026-07-20). Idempotent when geometry is already right.
+	_layout()
 
 
 ## Arrange the strip cards as a playing-card hand: a slight per-card rotation arc and horizontal overlap,

@@ -146,3 +146,17 @@ func test_rule_link_empty_text_pops_no_tooltip_panel() -> void:
 	var panel: Object = lb._make_custom_tooltip("Fearless — description")
 	assert_object(panel).is_not_null()
 	(panel as Node).free()
+
+
+## Regression #5: a rebuild BEFORE the first real layout (startup/tutorial army auto-load) centred
+## the panel against a tiny viewport and parked it hard left — the refit must re-seat the panel
+## against the real viewport even when no card height changed.
+func test_refit_recenters_panel_after_early_mislayout() -> void:
+	var dock := _dock_with_units(["Alpha", "Bravo"])
+	# Simulate the early mis-centre: park the panel hard left after the build.
+	dock._strip_panel.position.x = -500.0
+	for _i in range(4):
+		await get_tree().process_frame
+	var vp_x: float = dock.get_viewport_rect().size.x
+	var expected: float = (vp_x - dock._strip_panel.size.x) * 0.5
+	assert_float(dock._strip_panel.position.x).is_equal_approx(expected, 1.0)
