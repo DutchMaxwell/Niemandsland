@@ -45,6 +45,7 @@ var _tab: Button = null
 var _strip_panel: PanelContainer = null
 var _strip: Control = null             # fan holder — cards are placed manually (CardVisual self-positions)
 var _cards: Dictionary = {}            # unit_id -> {card}
+var _refit_gen: int = 0                # invalidates in-flight deferred height refits on rebuild
 var _presented: CardVisual = null      # the presented card is a CardVisual (feel) holding CardFace content
 var _presented_unit: GameUnit = null
 var _refresh_timer: Timer = null
@@ -232,6 +233,31 @@ func rebuild() -> void:
 		_add_card(unit)
 	_refresh_status()
 	_layout_fan()
+	_refit_gen += 1
+	_refit_strip_heights(_refit_gen)
+
+
+## Deferred SECOND height fit (maintainer screenshot 2026-07-20: rule lines spilled past the
+## card's bottom edge). The synchronous measure in _add_card runs before the layout pass, so
+## the HFlow rules rows — whose min height depends on the card WIDTH they have not been given
+## yet — report a single row and long rule lists under-size the card. Re-measure after the
+## tree has laid out, then re-fan. Generation-guarded against overlapping rebuilds.
+func _refit_strip_heights(gen: int) -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if gen != _refit_gen or _strip == null or not is_inside_tree():
+		return
+	var changed := false
+	for child in _strip.get_children():
+		var cv := child as CardVisual
+		if cv == null or cv.is_queued_for_deletion():
+			continue
+		var h: float = clampf(cv.content_min_height(), float(STRIP_CARD_H), 240.0)
+		if absf(h - cv.size.y) > 0.5:
+			cv.size = Vector2(cv.size.x, h)
+			changed = true
+	if changed:
+		_layout_fan()
 
 
 ## Arrange the strip cards as a playing-card hand: a slight per-card rotation arc and horizontal overlap,

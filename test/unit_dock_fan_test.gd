@@ -54,3 +54,27 @@ func test_fan_slots_start_at_the_left_margin_after_rebuild() -> void:
 	# corpse slot would leave a hole there (the screenshot's empty left half).
 	var first: CardVisual = _live_cards(dock)[0]
 	assert_float(first._target_pos.x).is_equal_approx(float(UnitDock.STRIP_SIDE_MARGIN), 0.5)
+
+
+## Regression #2 (same screenshot): the rules rows are HFlowContainers — measured synchronously
+## they claim ONE row, so a rule-heavy unit's card was sized too short and the wrapped rows
+## painted past the card's bottom edge. After the deferred refit the card must be at least as
+## tall as its content's true (laid-out) minimum height, up to the strip cap.
+func test_card_grows_to_wrapped_rules_after_layout() -> void:
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	var u := _unit("Rulesy")
+	u.unit_properties["special_rules"] = ["Ambush", "Tough(3)", "Battleborn", "Fearless",
+		"Combat Shield", "Relentless", "Versatile Attack", "Shield Wall", "Counter", "Slow"]
+	army.game_units[u.unit_id] = u
+	var dock: UnitDock = auto_free(UnitDock.new())
+	add_child(dock)
+	dock.setup(army, null, null, null, null)
+	# Let layout + the deferred refit run (two frames in the refit + one for the fan).
+	for _i in range(4):
+		await get_tree().process_frame
+	var cv: CardVisual = _live_cards(dock)[0]
+	var needed: float = minf(cv.content_min_height(), 240.0)
+	assert_float(cv.size.y).is_greater_equal(needed - 0.5)
+	# And the content really wraps (the test would be vacuous if one row fit): the needed
+	# height must exceed the static minimum the old synchronous measure settled at.
+	assert_float(needed).is_greater(float(UnitDock.STRIP_CARD_H))
