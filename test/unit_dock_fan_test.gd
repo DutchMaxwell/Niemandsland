@@ -78,3 +78,71 @@ func test_card_grows_to_wrapped_rules_after_layout() -> void:
 	# And the content really wraps (the test would be vacuous if one row fit): the needed
 	# height must exceed the static minimum the old synchronous measure settled at.
 	assert_float(needed).is_greater(float(UnitDock.STRIP_CARD_H))
+
+
+func _opr_unit_with_weapons(unit_name: String, rules: Array, weapons: Array) -> GameUnit:
+	var u := _unit(unit_name)
+	u.unit_properties["special_rules"] = rules
+	u.source_type = "opr"
+	var opr := OPRApiClient.OPRUnit.new()
+	for wd in weapons:
+		var w := OPRApiClient.OPRWeapon.new()
+		w.name = wd[0]
+		w.range_value = wd[1]
+		w.attacks = 1
+		w.count = 1
+		w.special_rules.assign(wd[2])
+		opr.weapons.append(w)
+	u.source_data = opr
+	return u
+
+
+## Regression #3 (same day, third finding): a REAL full-face card (weapons + weapon-rule rows +
+## wrapped unit rules) needs 270+ px — the hard 240 cap CUT the last rule row (the clip made it
+## invisible instead of spilling). Cards may now grow to a viewport-relative cap and the strip
+## band hugs the tallest card.
+func test_tall_card_grows_past_240_and_strip_follows() -> void:
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	var master := _opr_unit_with_weapons("Master Brothers",
+		["Hero", "Tough(3)", "Battleborn", "Fearless"],
+		[["Flamer Pistol", 6, ["Blast(3)", "Reliable"]], ["CCW", 0, []]])
+	army.game_units[master.unit_id] = master
+	var dock: UnitDock = auto_free(UnitDock.new())
+	add_child(dock)
+	dock.setup(army, null, null, null, null)
+	for _i in range(4):
+		await get_tree().process_frame
+	var cv: CardVisual = _live_cards(dock)[0]
+	# The card reaches its true laid-out content height (no cap cut at 240)...
+	assert_float(cv.content_min_height()).is_greater(240.0)   # fixture really is the tall case
+	assert_float(cv.size.y).is_greater_equal(cv.content_min_height() - 0.5)
+	# ...and the strip band grew to contain it.
+	assert_float(dock._strip_panel.size.y).is_greater_equal(cv.size.y + 6.0)
+
+
+## Regression #4: strip-card rule links were never wired — hovering popped an EMPTY tooltip.
+func test_strip_rule_links_carry_descriptions() -> void:
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.rule_descriptions = {"Fearless": "This unit only fails morale tests on a roll of 1."}
+	var u := _unit("Fearless Unit")
+	u.unit_properties["special_rules"] = ["Fearless"]
+	army.game_units[u.unit_id] = u
+	var dock: UnitDock = auto_free(UnitDock.new())
+	add_child(dock)
+	dock.setup(army, null, null, null, null)
+	var cv: CardVisual = _live_cards(dock)[0]
+	var wired := 0
+	for node in cv.find_children("*", "LinkButton", true, false):
+		var lb := node as LinkButton
+		if lb != null and lb.has_meta("rule_meta") and str(lb.get_meta("rule_meta")) == "Fearless":
+			assert_str(lb.tooltip_text).contains("only fails morale")
+			wired += 1
+	assert_int(wired).is_greater_equal(1)
+
+
+func test_rule_link_empty_text_pops_no_tooltip_panel() -> void:
+	var lb: RuleLink = auto_free(RuleLink.new())
+	assert_object(lb._make_custom_tooltip("")).is_null()
+	var panel: Object = lb._make_custom_tooltip("Fearless — description")
+	assert_object(panel).is_not_null()
+	(panel as Node).free()

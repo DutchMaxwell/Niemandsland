@@ -11,7 +11,7 @@ extends Control
 
 const TAB_W := 168
 const TAB_H := 28
-const STRIP_H := 256           # fits the tallest full-face card (240) so cards don't spill onto the tab
+const STRIP_H := 256           # MINIMUM strip band height; grows with the tallest card (see _strip_h)
 const CARD_W := 196            # wider so the full face is legible in the strip
 const STRIP_CARD_H := 200      # min full-face card height in the strip (cards auto-grow to content)
 # Strip hand-fan tunables (bus 028): per-card rotation, edge cap, and horizontal overlap. Overlap
@@ -46,6 +46,7 @@ var _strip_panel: PanelContainer = null
 var _strip: Control = null             # fan holder — cards are placed manually (CardVisual self-positions)
 var _cards: Dictionary = {}            # unit_id -> {card}
 var _refit_gen: int = 0                # invalidates in-flight deferred height refits on rebuild
+var _strip_h: float = float(STRIP_H)   # current strip band height — hugs the tallest card vertically
 var _presented: CardVisual = null      # the presented card is a CardVisual (feel) holding CardFace content
 var _presented_unit: GameUnit = null
 var _refresh_timer: Timer = null
@@ -136,7 +137,7 @@ func _layout() -> void:
 	if _tab != null:
 		_tab.position = Vector2(vp.x / 2.0 - TAB_W / 2.0, _tab_target_y(_dock_open))
 	if _strip_panel != null:
-		_strip_panel.size.y = STRIP_H
+		_strip_panel.size.y = _strip_h
 		_strip_panel.position.y = _strip_target_y(_dock_open)
 		_layout_fan()   # sizes the panel WIDTH to hug the fan + centres it horizontally
 	if _presented != null and _presented.visible:
@@ -145,7 +146,7 @@ func _layout() -> void:
 
 func _strip_target_y(open: bool) -> float:
 	var vp := get_viewport_rect().size
-	return (vp.y - STRIP_H - TAB_H) if open else vp.y
+	return (vp.y - _strip_h - TAB_H) if open else vp.y
 
 
 ## True if a screen point is over one of the dock's interactive surfaces (tab, open strip, presented
@@ -248,16 +249,26 @@ func _refit_strip_heights(gen: int) -> void:
 	if gen != _refit_gen or _strip == null or not is_inside_tree():
 		return
 	var changed := false
+	# Cards may take up to ~40% of the screen: real full-face cards (weapons + wrapped rule
+	# rows) need 270+ px — the old hard 240 cap CUT the last rule row (maintainer screenshot
+	# 2026-07-20, second finding). The strip band then hugs the tallest card.
+	var cap: float = maxf(240.0, get_viewport_rect().size.y * 0.4 - STRIP_FAN_ARC_PX - 22.0)
+	var tallest: float = float(STRIP_CARD_H)
 	for child in _strip.get_children():
 		var cv := child as CardVisual
 		if cv == null or cv.is_queued_for_deletion():
 			continue
-		var h: float = clampf(cv.content_min_height(), float(STRIP_CARD_H), 240.0)
+		var h: float = clampf(cv.content_min_height(), float(STRIP_CARD_H), cap)
+		tallest = maxf(tallest, h)
 		if absf(h - cv.size.y) > 0.5:
 			cv.size = Vector2(cv.size.x, h)
 			changed = true
+	var new_strip_h: float = maxf(float(STRIP_H), tallest + STRIP_FAN_ARC_PX + 22.0)
+	if absf(new_strip_h - _strip_h) > 0.5:
+		_strip_h = new_strip_h
+		changed = true
 	if changed:
-		_layout_fan()
+		_layout()   # re-seats panel + tab for the new band height, then re-fans
 
 
 ## Arrange the strip cards as a playing-card hand: a slight per-card rotation arc and horizontal overlap,
@@ -345,6 +356,9 @@ func _add_card(unit: GameUnit) -> void:
 	var data := _card_data(unit)
 	var content := CardFace.build_presented(data, Callable(), false)
 	cv.set_content_node(content)
+	# Same rule/spell tooltips as the focus card — the strip links were never wired, so hovering
+	# them popped an EMPTY tooltip panel (maintainer 2026-07-20).
+	_wire_rules_hover(content, unit)
 	cv.size = Vector2(CARD_W, clampf(content.get_combined_minimum_size().y, float(STRIP_CARD_H), 240.0))
 	_cards[unit.unit_id] = {"card": cv, "sig": data.hash()}
 
@@ -524,7 +538,7 @@ func _fill_presented(unit: GameUnit) -> void:
 	_presented_sig = data.hash()
 	var content := CardFace.build_presented(data, _card_action)
 	_presented.set_content_node(content)
-	_wire_rules_hover(content)   # bus 033: the focus card absorbs the old Info card's rule/spell tooltips
+	_wire_rules_hover(content, unit)   # bus 033: the focus card absorbs the old Info card's rule/spell tooltips
 	_resize_presented_to_fit(content)
 
 
@@ -559,13 +573,13 @@ func set_range_ring_controller(rrc: Node) -> void:
 ## custom mouse_entered popup which fired erratically for weapon rules (maintainer). Spells additionally
 ## show the range ring on hover. No click popup — the card no longer rebuilds under the cursor (see
 ## _refresh_status), so the hover tooltip is stable on its own.
-func _wire_rules_hover(content: Control) -> void:
+func _wire_rules_hover(content: Control, unit: GameUnit) -> void:
 	for node in content.find_children("*", "LinkButton", true, false):
 		var lb := node as LinkButton
 		if lb == null or not lb.has_meta("rule_meta"):
 			continue
 		var meta_key := str(lb.get_meta("rule_meta", ""))
-		lb.tooltip_text = _rule_description(meta_key)
+		lb.tooltip_text = _rule_description(meta_key, unit)
 		if meta_key.begins_with("spell:"):
 			lb.mouse_entered.connect(_show_spell_ring.bind(meta_key.substr(6)))
 			lb.mouse_exited.connect(_clear_spell_ring)
@@ -575,14 +589,14 @@ func _wire_rules_hover(content: Control) -> void:
 ## (ported, issue #74): a spell/rule whose text references another known rule (e.g. a spell granting
 ## Blast(3)) appends that rule's description too, and an ITEM entry shows the rule(s) it grants instead
 ## of its own (usually empty) description.
-func _rule_description(meta_key: String) -> String:
+func _rule_description(meta_key: String, unit: GameUnit) -> String:
 	var title := meta_key.trim_prefix("spell:")
 	if army_manager == null:
 		return title
-	var grants := _item_grants_of(_presented_unit)
+	var grants := _item_grants_of(unit)
 	var out: String
 	if meta_key.begins_with("spell:"):
-		var effect := _spell_effect(title).strip_edges()
+		var effect := _spell_effect(title, unit).strip_edges()
 		out = "%s — %s" % [title, effect] if not effect.is_empty() else title
 		out += _referenced_rules_text(effect, "")
 	elif grants.has(title):
@@ -626,10 +640,12 @@ func _item_grants_of(unit: GameUnit) -> Dictionary:
 	return {}
 
 
-func _spell_effect(spell_name: String) -> String:
-	if _presented_unit == null or army_manager == null or not army_manager.has_method("get_spells_for_unit"):
+func _spell_effect(spell_name: String, unit: GameUnit = null) -> String:
+	if unit == null:
+		unit = _presented_unit
+	if unit == null or army_manager == null or not army_manager.has_method("get_spells_for_unit"):
 		return ""
-	for s in army_manager.get_spells_for_unit(_presented_unit):
+	for s in army_manager.get_spells_for_unit(unit):
 		if str((s as Dictionary).get("name", "")) == spell_name:
 			return str((s as Dictionary).get("effect", ""))
 	return ""
