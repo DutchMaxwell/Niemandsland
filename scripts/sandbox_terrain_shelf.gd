@@ -24,6 +24,8 @@ const WINDOW_SIZE := Vector2i(380, 460)
 ## Emitted when the shelf is closed (X or Close button), so the host can leave terrain edit
 ## mode and re-lock the pieces.
 signal closed
+## Wave-3 tutorial seam: a shelf piece was actually spawned onto the table.
+signal piece_placed(prop_id: String)
 
 # === Private state ===
 
@@ -143,4 +145,5 @@ func _place(index: int) -> void:
 		return
 	var cursor_pos: Vector3 = _object_manager.get_cursor_table_position()
 	_object_manager.spawn_sandbox_terrain(entry.get("prop_id", ""), int(entry.get("kind", 0)), cursor_pos)
+	piece_placed.emit(str(entry.get("prop_id", "")))
 	# Keep the shelf open for placing multiple pieces.
