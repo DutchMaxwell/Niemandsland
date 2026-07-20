@@ -218,6 +218,10 @@ func rebuild() -> void:
 	if _strip == null:
 		return
 	for child in _strip.get_children():
+		# Detach BEFORE queue_free: the free is deferred, so a still-attached corpse would be
+		# counted by the same-frame _layout_fan below — the panel came out double-wide with the
+		# real cards bunched in its right half (maintainer screenshot, 2026-07-20).
+		_strip.remove_child(child)
 		child.queue_free()
 	_cards.clear()
 	# Sort: living units before wiped ones, then by name (⑨ grouping) — applied only on rebuild so
@@ -236,7 +240,12 @@ func rebuild() -> void:
 func _layout_fan() -> void:
 	if _strip == null:
 		return
-	var cards := _strip.get_children()
+	# Only live CardVisuals count: a queued-for-deletion or foreign child must neither widen
+	# the panel nor consume a fan slot (it would leave a visible hole where it sat).
+	var cards: Array = []
+	for child in _strip.get_children():
+		if child is CardVisual and not child.is_queued_for_deletion():
+			cards.append(child)
 	var n := cards.size()
 	if n == 0:
 		return
