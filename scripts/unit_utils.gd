@@ -7,7 +7,7 @@ extends RefCounted
 
 enum UnitType {
 	NONE,           # Not a unit (terrain, dice, etc.)
-	GAME_UNIT,      # OPR/WGS unit with full stats
+	GAME_UNIT,      # OPR unit with full stats
 	PROXY_UNIT,     # Miniature assigned as proxy for a unit
 	GENERIC_UNIT    # Generic miniature without stats
 }
@@ -20,15 +20,14 @@ static func is_unit(obj: Node3D) -> bool:
 	if not obj:
 		return false
 	return obj.is_in_group("unit") or \
-		   obj.is_in_group("opr_unit") or \
-		   obj.is_in_group("wgs_unit")
+		   obj.is_in_group("opr_unit")
 
 
 ## Returns the UnitType for an object.
 static func get_unit_type(obj: Node3D) -> UnitType:
 	if not obj:
 		return UnitType.NONE
-	if obj.is_in_group("opr_unit") or obj.is_in_group("wgs_unit"):
+	if obj.is_in_group("opr_unit"):
 		return UnitType.GAME_UNIT
 	if obj.has_meta("proxy_unit"):
 		return UnitType.PROXY_UNIT

@@ -210,7 +210,8 @@ func _validate_rpc_ready(context: String = "") -> bool:
 ## Check if we're currently in a multiplayer session (works for ENet and Relay).
 ## NOT the engine's default OfflineMultiplayerPeer: it reports CONNECTED, so pure singleplayer counted
 ## as an active MP session — the ownership guard then locked "foreign" armies (a second local army could
-## not be moved) and is_server() granted a phantom host slot.
+## not be moved, and the Solo field test could not move the AI's player-2 units) and is_server() granted
+## a phantom host slot.
 func is_multiplayer_active() -> bool:
 	var mp = multiplayer.multiplayer_peer
 	if mp == null or mp is OfflineMultiplayerPeer:
@@ -1764,3 +1765,31 @@ func sync_camera_position(pos_x: float, pos_y: float, pos_z: float) -> void:
 func broadcast_camera_position(pos: Vector3) -> void:
 	if is_multiplayer_active():
 		_remote_call("sync_camera_position", [pos.x, pos.y, pos.z], 0)
+
+
+# === Transport(X) embark sync (NML-105) =====================================================
+
+## Embark/disembark state flip, id-addressed like sync_model_wounds. The destroyed-transport
+## cargo SPILL needs no RPC of its own: the killing wound already syncs, and each peer's
+## dead-parking choke point derives the identical spill deterministically. Tray slot order may
+## differ per peer (cosmetic only — disembark addresses the UNIT, never a slot).
+func broadcast_unit_embark(unit_id: String, transport_id: String, embarked: bool) -> void:
+	if not is_multiplayer_active():
+		return
+	if not _validate_rpc_ready("broadcast_unit_embark"):
+		return
+	_remote_call("sync_unit_embark", [unit_id, transport_id, embarked], 0)
+
+
+func sync_unit_embark(unit_id: String, transport_id: String, embarked: bool) -> void:
+	if army_manager == null:
+		return
+	var unit := army_manager.get_game_unit_by_id(unit_id)
+	if unit == null:
+		return
+	if embarked:
+		var tr := army_manager.get_game_unit_by_id(transport_id)
+		if tr != null:
+			army_manager.set_unit_embarked(unit, tr, true)   # gate re-runs peer-side (idempotent)
+	else:
+		army_manager.set_unit_embarked(unit, null, false)

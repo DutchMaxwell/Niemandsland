@@ -10,6 +10,8 @@ const TOOLTIP_WIDTH := 300.0
 
 
 func _make_custom_tooltip(for_text: String) -> Object:
+	if for_text.strip_edges().is_empty():
+		return null   # no text -> no popup (an unwired link once popped an empty panel)
 	var panel := PanelContainer.new()
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.08, 0.10, 0.14, 0.98)

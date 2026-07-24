@@ -30,6 +30,12 @@ const OPR_RUSH_CHARGE_INCHES: int = 12
 ## OPR "Fast": +2" Advance, +4" Rush/Charge. "Slow": the same magnitudes, subtracted.
 const FAST_ADVANCE_BONUS: int = 2
 const FAST_RUSH_BONUS: int = 4
+## OPR army-book "Rapid Rush": "+6" when using Rush actions" — Rush band only, Advance untouched.
+const RAPID_RUSH_BONUS: int = 6
+## OPR army-book "Quick": +2" on Advance AND Rush/Charge (the Scurry shape, unlike Fast's +2/+4).
+const QUICK_BONUS: int = 2
+## OPR army-book "Rapid Advance": "+4" when using Advance actions" — Advance band only.
+const RAPID_ADVANCE_BONUS: int = 4
 
 const RING_Y: float = 0.004
 const RING_SEGMENTS: int = 48
@@ -65,14 +71,21 @@ func base_radius_for_props(props: Dictionary) -> float:
 ## parsing every description here picks up indirectly-granted modifiers too (issue #79). A Fast/Slow
 ## constant fallback covers a core rule listed directly but without (parseable) description text.
 ## Returns {"advance": int, "rush": int}, clamped at 0 so a heavy Slow can't go negative.
-func move_bands_for_props(props: Dictionary) -> Dictionary:
+## STATIC + pure (reads only `props`): so callers WITHOUT a live controller instance — the Solo AI when
+## no MovementRangeController is injected — resolve Fast/Slow through this ONE band source instead of a
+## hardcoded 6"/12" fallback (field-test finding 1: a Slow unit moved the full 6").
+static func move_bands_for_props(props: Dictionary) -> Dictionary:
 	var advance := OPR_ADVANCE_INCHES
 	var rush := OPR_RUSH_CHARGE_INCHES
 	var descriptions: Dictionary = props.get("rule_descriptions", {})
 	# Some rules NEGATE another movement rule (e.g. "Swift": "may ignore the Slow rule"); a negated
 	# rule contributes nothing, so its modifier is skipped below (issue #79).
 	var negated: Dictionary = _negated_move_rules(descriptions)
-	var counted: Dictionary = {}  # rule base names whose modifier is already applied
+	# B10 (test game 2): counted tracks WHICH BAND a description contributed, not just the rule name.
+	# A partial parse (e.g. the advance half attributed, the rush half not) used to mark the whole
+	# rule counted and suppress the name fallback — Fast then lost its +4" rush/charge bonus. Now the
+	# fallback fills exactly the missing band.
+	var counted: Dictionary = {}  # rule base name -> {"advance": bool, "rush": bool} already applied
 	for name in descriptions:
 		if negated.has(name):
 			continue
@@ -80,26 +93,93 @@ func move_bands_for_props(props: Dictionary) -> Dictionary:
 		if int(mod["advance"]) != 0 or int(mod["rush"]) != 0:
 			advance += int(mod["advance"])
 			rush += int(mod["rush"])
-			counted[name] = true
+			counted[name] = {"advance": int(mod["advance"]) != 0, "rush": int(mod["rush"]) != 0}
+	# Swift name-fallback ("This model may ignore the Slow rule"): with description text the negation
+	# scan above cancels Slow already; with bare rule NAMES (no descriptions — tests, fallback imports)
+	# the name pair must still cancel. Mixed shapes (Slow with text, Swift without) stay a documented
+	# edge — imports deliver descriptions as a package.
+	var swift_by_name := false
+	for r in props.get("special_rules", []):
+		if _rule_base_name(str(r)) == "Swift":
+			swift_by_name = true
+			break
 	for r in props.get("special_rules", []):
 		var base := _rule_base_name(str(r))
-		if counted.has(base) or negated.has(base):
-			continue  # already applied from its description, or negated by another rule
+		if negated.has(base):
+			continue  # negated by another rule
+		# B10: the fallback fills only the band(s) the description pass did NOT already apply.
+		var done: Dictionary = counted.get(base, {})
+		var adv_done := bool(done.get("advance", false))
+		var rush_done := bool(done.get("rush", false))
+		if adv_done and rush_done:
+			continue
+		if base == "Slow" and swift_by_name:
+			counted[base] = {"advance": true, "rush": true}
+			continue  # Swift cancels Slow (name-level fallback)
 		if base == "Fast":
-			advance += FAST_ADVANCE_BONUS
-			rush += FAST_RUSH_BONUS
-			counted[base] = true
+			if not adv_done:
+				advance += FAST_ADVANCE_BONUS
+			if not rush_done:
+				rush += FAST_RUSH_BONUS
+			counted[base] = {"advance": true, "rush": true}
 		elif base == "Slow":
-			advance -= FAST_ADVANCE_BONUS
-			rush -= FAST_RUSH_BONUS
-			counted[base] = true
+			if not adv_done:
+				advance -= FAST_ADVANCE_BONUS
+			if not rush_done:
+				rush -= FAST_RUSH_BONUS
+			counted[base] = {"advance": true, "rush": true}
+		elif base == "Rapid Rush":
+			if not rush_done:
+				rush += RAPID_RUSH_BONUS
+			counted[base] = {"advance": true, "rush": true}
+		elif base == "Quick":
+			if not adv_done:
+				advance += QUICK_BONUS
+			if not rush_done:
+				rush += QUICK_BONUS
+			counted[base] = {"advance": true, "rush": true}
+		elif base == "Rapid Advance":
+			if not adv_done:
+				advance += RAPID_ADVANCE_BONUS
+			counted[base] = {"advance": true, "rush": true}
+	# Coverage wave (2026-07-23): REGISTRY pass — data aliases of the move-band family (Scurry /
+	# Highborn / Agile → Quick-style mods, Lustbound's charge half via Royal Legion, …) apply their
+	# params to any band the description/name passes did not already cover. Offline-safe: works
+	# without description texts (the bundled AI lists ship stripped).
+	var reg_system := RulesRegistry.normalize_system(str(props.get("game_system", "")))
+	var reg_faction := str(props.get("faction_folder", ""))
+	for r in props.get("special_rules", []):
+		var base2 := _rule_base_name(str(r))
+		if negated.has(base2):
+			continue
+		var done2: Dictionary = counted.get(base2, {})
+		if bool(done2.get("advance", false)) and bool(done2.get("rush", false)):
+			continue
+		var entry := RulesRegistry.lookup(reg_system, reg_faction, base2)
+		var prim: Variant = entry.get("primitive")
+		if not (prim is String) or not ["Fast", "Slow", "Quick", "Rapid Advance", "Rapid Rush", "Royal Legion"].has(str(prim)):
+			continue
+		var rp: Dictionary = entry.get("params", {})
+		if int(rp.get("uses_per_game", 0)) > 0:
+			continue   # once-per-game feats (Speed Feat) never ride the permanent bands
+		if not bool(done2.get("advance", false)):
+			advance += int(rp.get("advance_mod", 0))
+		if not bool(done2.get("rush", false)):
+			rush += int(rp.get("rush_mod", rp.get("charge_mod", 0)))
+		counted[base2] = {"advance": true, "rush": true}
+	# NML-006: active spell tokens with movement modifiers ('+2" advance / +4" rush', once) are stamped
+	# into props as "spell_move_mod" by the solo layer — read here so the AI's bands AND the human's
+	# move rings shrink/grow through this ONE band source (stays pure: props in, bands out).
+	var spell_mod: Dictionary = props.get("spell_move_mod", {})
+	advance += int(spell_mod.get("advance", 0))
+	rush += int(spell_mod.get("rush", 0))
 	return {"advance": maxi(0, advance), "rush": maxi(0, rush)}
 
 
 ## Movement rules that are NEGATED by another rule's text — e.g. "Swift" whose description reads
 ## "This model may ignore the Slow rule" cancels Slow. Returns the set of negated rule base names.
 ## Detected by an "ignore … <RuleName>" phrase where <RuleName> is another rule with a description.
-func _negated_move_rules(descriptions: Dictionary) -> Dictionary:
+static func _negated_move_rules(descriptions: Dictionary) -> Dictionary:
 	var negated: Dictionary = {}
 	for name in descriptions:
 		var text: String = str(descriptions[name]).to_lower()
@@ -139,7 +219,13 @@ static func move_modifier_from_description(description: String) -> Dictionary:
 		# Stems so inflections match too ("advancing", "charges").
 		var adv_at := window.find("advanc")
 		var rush_at := _first_index(window, ["rush", "charg"])
-		if adv_at != -1 and (rush_at == -1 or adv_at <= rush_at):
+		# B10: ONE modifier naming BOTH actions ("+2\" when using Advance or Rush actions") applies to
+		# both bands — the old first-stem-wins attribution silently dropped the second band. Windows
+		# end at the next modifier, so the classic "+2\" Advance, +4\" Rush" pair is unaffected.
+		if adv_at != -1 and rush_at != -1:
+			result["advance"] = int(result["advance"]) + value
+			result["rush"] = int(result["rush"]) + value
+		elif adv_at != -1:
 			result["advance"] = int(result["advance"]) + value
 		elif rush_at != -1:
 			result["rush"] = int(result["rush"]) + value
@@ -157,14 +243,18 @@ static func _first_index(haystack: String, needles: Array) -> int:
 
 
 ## A rule's base name without its rating parenthetical: "Swift(3)" -> "Swift", "Fast" -> "Fast".
-func _rule_base_name(rule: String) -> String:
+static func _rule_base_name(rule: String) -> String:
 	return rule.split("(")[0].strip_edges()
 
 
 ## The Advance/Rush bands (inches) for a model NODE — resolves its effective props (base upgrade +
 ## movement rules + auras) then computes the bands. Public entry for callers like the movement cap.
+## B10: an unresolvable node is NAMED loudly instead of silently moving at the bare 6"/12" bands.
 func bands_for_model(model_node: Node3D) -> Dictionary:
-	return move_bands_for_props(_props_of(model_node))
+	var props := _props_of(model_node)
+	if props.is_empty():
+		push_warning("bands_for_model: no GameUnit resolved for '%s' — bare 6\"/12\" OPR bands in effect" % model_node.name)
+	return move_bands_for_props(props)
 
 
 ## Outer radius (metres) of a band = base edge radius + the band distance.
@@ -290,15 +380,20 @@ func _props_of(model_node: Node3D) -> Dictionary:
 
 
 ## The GameUnit a model node belongs to (via the game_unit meta, or model_instance.unit), or null.
+## B10: walks UP the parents too — a nested pickable child (mount part, proxy mesh) otherwise
+## resolved nothing and the caller silently fell back to the bare 6"/12" bands, losing Fast/Slow.
 func _game_unit_of(model_node: Node3D) -> GameUnit:
-	if model_node.has_meta("game_unit"):
-		var gu = model_node.get_meta("game_unit")
-		if gu is GameUnit:
-			return gu
-	if model_node.has_meta("model_instance"):
-		var m = model_node.get_meta("model_instance")
-		if m is ModelInstance and m.unit is GameUnit:
-			return m.unit
+	var n: Node = model_node
+	while n != null:
+		if n.has_meta("game_unit"):
+			var gu = n.get_meta("game_unit")
+			if gu is GameUnit:
+				return gu
+		if n.has_meta("model_instance"):
+			var m = n.get_meta("model_instance")
+			if m is ModelInstance and m.unit is GameUnit:
+				return m.unit
+		n = n.get_parent()
 	return null
 
 

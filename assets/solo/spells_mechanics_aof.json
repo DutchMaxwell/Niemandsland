@@ -1,0 +1,5176 @@
+{
+ "_meta": {
+  "system": "aof",
+  "generator": "tools/spells_mechanics_export.py",
+  "contract": "spells resolve by (system, faction); lists are BOOK-ORDERED (the official solo D3+X pick indexes them); never share lists across systems",
+  "content": "derived mechanics only - spell names, thresholds and our own numeric target/effect encoding; no spell texts"
+ },
+ "factions": {
+  "beastmen": {
+   "book_uid": "TciwNI3AOMXAM-dr",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Surge of Power",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Bestial Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Flock Attack",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)",
+       "Surge"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Hunting Roar",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "modifier": {
+       "morale_mod": -1
+      },
+      "duration": "once",
+      "beneficiary": "target"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Ancestral Wrath",
+     "threshold": 2,
+     "range_in": 24,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "Tear"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Spirit Mantle",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Regeneration",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Destructive Flame",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 9,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 9
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "change_disciples": {
+   "book_uid": "CNOmkR5Q2C7Dc4Nm",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Shifting Form",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "modifier": {
+       "casting_mod": -3
+      },
+      "duration": "once",
+      "beneficiary": "target"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Sky Blaze",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)",
+       "Surge"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Breath of Change",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Bane when Shooting",
+      "duration": "once"
+     },
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Bane when Shooting"
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Mutating Inferno",
+     "threshold": 2,
+     "range_in": 9,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Change Boon",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Changebound Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Power Bolt",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "chivalrous_kingdoms": {
+   "book_uid": "FF4UemWHh60T1VRq",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Protection of the Huntress",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Fortified",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Cleansing Light",
+     "threshold": 1,
+     "range_in": 24,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 1,
+      "weapon_rules": [
+       "Tear"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Great Hunt",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Vale Oath Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Searing Gaze",
+     "threshold": 2,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "Bane"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Curse of the Huntress",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Surge",
+      "duration": "once",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Wrath of the Huntress",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "dark_elves": {
+   "book_uid": "IKT625BeGZtF67EA",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Dark Isle Spirit",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Harassing Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Blade Storm",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)",
+       "Lacerate"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "World of Pain",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Rapid Charge",
+      "duration": "once",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Storm Wave",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "Blast(3)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Healing Winds",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Regeneration",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Black Bolt",
+     "threshold": 3,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "AP(2)",
+       "Deadly(3)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "deep_sea_elves": {
+   "book_uid": "L1zCkfmeAongLj1X",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "High Tide",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Stealth",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Erode Soul",
+     "threshold": 1,
+     "range_in": 24,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 1,
+      "weapon_rules": [
+       "AP(4)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Power Wave",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Wave-Step Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Crushing Pressure",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Darkest Abyss",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "modifier": {
+       "hit_mod": -1
+      },
+      "duration": "once",
+      "scope": "attacking",
+      "beneficiary": "target"
+     },
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "hit_mod": -1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Sea Storm",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "Blast(3)",
+       "Lacerate"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "dragon_empire": {
+   "book_uid": "Lo39Hss3bevFj44V",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Spirit Wind",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Rapid Rush",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Dragon Fire",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Jade Claws",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Royal Warrior Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Astral Storm",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": [
+       "AP(1)",
+       "Surge"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Ancestral Guidance",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Indirect when Shooting",
+      "duration": "once",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Blazing Starlight",
+     "threshold": 3,
+     "range_in": 24,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "Tear"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "duchies_of_vinci": {
+   "book_uid": "VU1EFPa2uODffW8D",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Clearview Leaves",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "modifier": {
+       "range_in": 6
+      },
+      "scope": "shooting",
+      "duration": "once",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Explosive Concoction",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "Disintegrate"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Mesmer Oils",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Steadfast",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Choking Fog",
+     "threshold": 2,
+     "range_in": 9,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Fury Herbs",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Vinci Tech Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Neurotoxin Gas",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(1)",
+       "Shred"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "dwarves": {
+   "book_uid": "RJDq2ZD7wjlAcUVB",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Rune of Battle",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Rapid Charge",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Rune of Breaking",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Rune of Protection",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Sturdy Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Rune of Cleaving",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": [
+       "AP(1)",
+       "Shred"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Rune of Spite",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "modifier": {
+       "advance_in": -2,
+       "rush_in": -4
+      },
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Rune of Smiting",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "Blast(3)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "eternal_wardens": {
+   "book_uid": "-MrGWaleoZR7pxIn",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Shock Attack",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Unstoppable",
+      "duration": "once",
+      "scope": "shooting",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Thunder Clap",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 1,
+      "weapon_rules": [
+       "Lacerate"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Star Strike",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Unpredictable Fighter",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Heavy Storm",
+     "threshold": 2,
+     "range_in": 9,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Warding Cloud",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Warden Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Lightning Bolt",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "Blast(3)",
+       "Lacerate"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "ghostly_undead": {
+   "book_uid": "mdT4HVzHUmxGevc_",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Ethereal Warding",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Empyrean Spirit Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Dread Shriek",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)",
+       "Surge"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Irresistible Grief",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Bane",
+      "duration": "once",
+      "scope": "attacking",
+      "beneficiary": "attackers"
+     },
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Bane"
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Reaping Terror",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": [
+       "Disintegrate"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Vicious Spirits",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "modifier": {
+       "hit_mod": 1
+      },
+      "duration": "once",
+      "scope": "melee"
+     },
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "hit_mod": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Eat Soul",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "giant_tribes": {
+   "book_uid": "HjmV6_v6dmBmEdy7",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Aura of Heroism",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "modifier": {
+       "morale_mod": 1
+      },
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Fire Ball",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)",
+       "Surge"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Magic Targeting",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "modifier": {
+       "hit_mod": 1
+      },
+      "duration": "once",
+      "scope": "melee",
+      "beneficiary": "attackers"
+     },
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "hit_mod": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Blood Hex",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Elemental Form",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "utility"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Spirit Leech",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(1)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "giant_tribes_change_disciples": {
+   "book_uid": "cZEjmUJf-qCSdWSA",
+   "book_version": "3.5.2",
+   "spells": [
+    {
+     "name": "Shifting Form",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "modifier": {
+       "casting_mod": -3
+      },
+      "duration": "once",
+      "beneficiary": "target"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Sky Blaze",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)",
+       "Surge"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Breath of Change",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Bane when Shooting",
+      "duration": "once"
+     },
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Bane when Shooting"
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Mutating Inferno",
+     "threshold": 2,
+     "range_in": 9,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Change Boon",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Changebound Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Power Bolt",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "giant_tribes_lust_disciples": {
+   "book_uid": "KAmoZbLcBoqrt6ZS",
+   "book_version": "3.5.2",
+   "spells": [
+    {
+     "name": "Combat Ecstasy",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Quick Shot",
+      "duration": "once",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Beautiful Pain",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "Shatter"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Blissful Dance",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Melee Evasion",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Total Seizure",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": [
+       "AP(1)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Lust Boon",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Lustbound Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Overpowering Lash",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(1)",
+       "Shred"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "giant_tribes_plague_disciples": {
+   "book_uid": "EiBIYQlLB0-9V8W8",
+   "book_version": "3.5.2",
+   "spells": [
+    {
+     "name": "Aura of Pestilence",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "utility"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Rapid Putrefaction",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)",
+       "Surge"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Blessed Virus",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Rapid Rush",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Plague Malediction",
+     "threshold": 2,
+     "range_in": 24,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(4)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Plague Boon",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Plaguebound Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Rot Wave",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "giant_tribes_war_disciples": {
+   "book_uid": "05ICj2EFntjZAPD9",
+   "book_version": "3.5.2",
+   "spells": [
+    {
+     "name": "Terrifying Fury",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "utility"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Brutal Massacre",
+     "threshold": 1,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "Crack"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Fiery Protection",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Melee Evasion",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Headtaker Strike",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "War Boon",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Warbound Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Flame of Destruction",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "Blast(3)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "goblins": {
+   "book_uid": "q9BQlBp583ZuuOnQ",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Spider Might",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Mischievous Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Stinging Spider",
+     "threshold": 1,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "Bane"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Bat Thirst",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Piercing Fighter",
+      "duration": "once",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Pouncing Wolf",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Wolf Resiliance",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "modifier": {
+       "def_mod": 1
+      },
+      "duration": "once"
+     },
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "def_mod": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Biting Bat",
+     "threshold": 3,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "Deadly(3)",
+       "Tear"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "halflings": {
+   "book_uid": "0EXXlzFwAk3q1n5e",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Luck of the Ancients",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Lucky Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Cleansing Spirit",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "Blast(3)",
+       "Lacerate"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Giant Shadow",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "modifier": {
+       "morale_mod": -1
+      },
+      "duration": "once",
+      "beneficiary": "target"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Nightmare Spirit",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Shortling Courage",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Fearless",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Dark Forest Spirit",
+     "threshold": 3,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "AP(2)",
+       "Deadly(3)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "havoc_dwarves": {
+   "book_uid": "8siLk9I6-H8lk78b",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Rune of Piercing",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Piercing Hunter",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Rune of Lightning",
+     "threshold": 1,
+     "range_in": 24,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 1,
+      "weapon_rules": [
+       "AP(4)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Rune of Ashes",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Havocbound Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Rune of Darkness",
+     "threshold": 2,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "Disintegrate"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Rune of Cracking",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Relentless",
+      "duration": "once",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Rune of Insanity",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "Blast(3)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "havoc_warriors": {
+   "book_uid": "PGxKcq4R571OtwqD",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Cursed Stride",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "utility"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Barbed Chains",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Havoc Boost",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Havocbound Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Impaling Spike",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": [
+       "AP(1)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Dark Shielding",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Fortified",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Thorn Field",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(1)",
+       "Shred"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "high_elves": {
+   "book_uid": "bPAtRGFrpFfyAjLW",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Eagle-Eyed Focus",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "modifier": {
+       "hit_mod": 1
+      },
+      "duration": "once",
+      "scope": "shooting",
+      "beneficiary": "attackers"
+     },
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "hit_mod": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Arcane Blast",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 1,
+      "weapon_rules": [
+       "Blast(3)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Magical Surge",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Bane",
+      "duration": "once",
+      "scope": "melee"
+     },
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Bane"
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "High Tempest",
+     "threshold": 2,
+     "range_in": 9,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Path to Glory",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Highborn Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Magic Arrows",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(1)",
+       "Crack"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "human_empire": {
+   "book_uid": "jZ02AVPLx_S48Mnb",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Aura of Heroism",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Hold the Line Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Fire Ball",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)",
+       "Crack"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Magic Targeting",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "modifier": {
+       "hit_mod": 1
+      },
+      "duration": "once",
+      "scope": "melee",
+      "beneficiary": "attackers"
+     },
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "hit_mod": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Blood Hex",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Elemental Form",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "utility"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Spirit Leech",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(1)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "kingdom_of_angels": {
+   "book_uid": "RgHxqAlAXnUuF3ty",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Heavenly Guidance",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Flying",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Lightning Bolt",
+     "threshold": 1,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 1,
+      "weapon_rules": [
+       "Deadly(3)",
+       "Tear"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Star Blessing",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Angelic Blessing Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Angelic Storm",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Shock Energy",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Slayer",
+      "duration": "once",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Thunder Strike",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "lust_disciples": {
+   "book_uid": "zZ3RNHVtFJIZqzzN",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Combat Ecstasy",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Quick Shot",
+      "duration": "once",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Beautiful Pain",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "Shatter"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Blissful Dance",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Melee Evasion",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Total Seizure",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": [
+       "AP(1)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Lust Boon",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Lustbound Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Overpowering Lash",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(1)",
+       "Shred"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "mummified_undead": {
+   "book_uid": "t-sIke2snonFSL6Q",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Desert Storm",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "utility"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Storm of Skulls",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 1,
+      "weapon_rules": [
+       "Blast(3)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Cursed Arrows",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Shred",
+      "duration": "once",
+      "scope": "shooting"
+     },
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Shred"
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Rapid Desiccation",
+     "threshold": 2,
+     "range_in": 24,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(4)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Tomb Queen's Guidance",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Royal Legion Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Tomb Queen's Vengeance",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(1)",
+       "Destructive"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "ogres": {
+   "book_uid": "lpRj9EBwROpO1um7",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Battle Guts",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Resistance",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Gobble Up",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Gorging Feast",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Destroyer Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Great Trampling",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": [
+       "AP(1)",
+       "Destructive"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Crack Spirits",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Unwieldy",
+      "duration": "once",
+      "scope": "melee",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Ice Maw",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "orcs": {
+   "book_uid": "AQSDPFVL1DiNNnSU",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Evil Gaze",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Counter-Attack",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Godly Smash",
+     "threshold": 1,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 1,
+      "weapon_rules": [
+       "Deadly(3)",
+       "Tear"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Way-Clan Chant",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Ferocious Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Bone Strike",
+     "threshold": 2,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "Bane"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Magic Fists",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Rending",
+      "duration": "once",
+      "scope": "melee",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Iron Burst",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "ossified_undead": {
+   "book_uid": "a_HXTYv06IFtSs9G",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Drain Spirit",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Unstoppable",
+      "duration": "once",
+      "scope": "melee"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Deep Fracture",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Rapid Ossification",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Ossified Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Shattering Blast",
+     "threshold": 2,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "Destructive"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Soul Enslaver",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Furious",
+      "duration": "once",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Bone Breaker",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "plague_disciples": {
+   "book_uid": "upWNWC9UIXtQP2o_",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Aura of Pestilence",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "utility"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Rapid Putrefaction",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)",
+       "Surge"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Blessed Virus",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Rapid Rush",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Plague Malediction",
+     "threshold": 2,
+     "range_in": 24,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(4)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Plague Boon",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Plaguebound Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Rot Wave",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "ratmen": {
+   "book_uid": "tOWt5fgqK2nfpoBN",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Magic Skitter-Step",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Scurry Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Heavenly Strike",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 1,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "God-Mother's Frenzy",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Melee Slayer",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Choking Censer-Fog",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Cracking Bell-Chime",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "modifier": {
+       "def_mod": -1
+      },
+      "duration": "once",
+      "beneficiary": "target"
+     },
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "def_mod": -1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Lightning Blast",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "Hazardous"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "rift_daemons_of_change": {
+   "book_uid": "yxVDySKYQYRhdEgA",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Shifting Form",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "modifier": {
+       "casting_mod": -3
+      },
+      "duration": "once",
+      "beneficiary": "target"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Sky Blaze",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)",
+       "Surge"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Breath of Change",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Bane when Shooting",
+      "duration": "once"
+     },
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Bane when Shooting"
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Mutating Inferno",
+     "threshold": 2,
+     "range_in": 9,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Change Boon",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Changebound Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Power Bolt",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "rift_daemons_of_lust": {
+   "book_uid": "CuyCCyZTIHo5rc0Z",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Combat Ecstasy",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Quick Shot",
+      "duration": "once",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Beautiful Pain",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "Shatter"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Blissful Dance",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Melee Evasion",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Total Seizure",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": [
+       "AP(1)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Lust Boon",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Lustbound Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Overpowering Lash",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "AP(1)",
+       "Shred"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "rift_daemons_of_plague": {
+   "book_uid": "vJuokTQpJWj3_MrJ",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Aura of Pestilence",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "utility"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Rapid Putrefaction",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)",
+       "Surge"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Blessed Virus",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Rapid Rush",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Plague Malediction",
+     "threshold": 2,
+     "range_in": 24,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(4)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Plague Boon",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Plaguebound Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Rot Wave",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "rift_daemons_of_war": {
+   "book_uid": "Q59-nh6A1AhRBrLR",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Terrifying Fury",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "utility"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Flame of Destruction",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 1,
+      "weapon_rules": [
+       "Blast(3)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Fiery Protection",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Melee Evasion",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Brutal Massacre",
+     "threshold": 2,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "Crack"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "War Boon",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Warbound Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Headtaker Strike",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "saurians": {
+   "book_uid": "BubhE1kUpgYbqZvW",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Poison Mist",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Shred",
+      "duration": "once",
+      "scope": "attacking",
+      "beneficiary": "attackers"
+     },
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Shred"
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Piranha Swarm",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "Disintegrate"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Fateful Guidance",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Steadfast",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Jaguar Pounce",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": [
+       "AP(1)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Primordial Roar",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Primal Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Serpent Egg",
+     "threshold": 3,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 9,
+      "weapon_rules": [
+       "Bane"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 9
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "shadow_stalkers": {
+   "book_uid": "gHTrjw-g76vfGCSt",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Labyrinthian Sparkle",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Evasive",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Maze Vines",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)",
+       "Disintegrate"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Dream Haunter",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Unpredictable Fighter",
+      "duration": "once",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Chill of Death",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Combat Possession",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "modifier": {
+       "advance_in": 2,
+       "rush_in": 4
+      },
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Spectral Light",
+     "threshold": 3,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "AP(2)",
+       "Deadly(3)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "sky_city_dwarves": {
+   "book_uid": "AcDXPPXmWrgHChlS",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Aether-Cloud Rune",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "modifier": {
+       "casting_mod": -3
+      },
+      "duration": "once",
+      "beneficiary": "target"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Aether Shock",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "Shatter"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Wind Rune",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Swift",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Lightning Shock",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Tinkering Rune",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Buccaneer Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Thunder Shock",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "Shred"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "vampiric_undead": {
+   "book_uid": "qABIfXYbYxmA75yL",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Vigorous Return",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Cursed Undead Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Cursed Strike",
+     "threshold": 1,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "Disintegrate"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Seductive Invocation",
+     "threshold": 2,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "utility"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Spectral Wind",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Dance of Death",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Teleport",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Deadly Gaze",
+     "threshold": 3,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "AP(2)",
+       "Deadly(3)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "volcanic_dwarves": {
+   "book_uid": "Ir5XtqTM8JS3YEAJ",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Searing Heat",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "utility"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Lava Bolts",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Auric Fury",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Hit & Run Fighter",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Suffocating Ashes",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 4,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 4
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Seismic Shift",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Grounded Protection",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Fire Storm",
+     "threshold": 3,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 9,
+      "weapon_rules": [
+       "Destructive"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 9
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "war_disciples": {
+   "book_uid": "TjNtGnCDVts3l3ER",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Terrifying Fury",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "utility"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Flame of Destruction",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 1,
+      "weapon_rules": [
+       "Blast(3)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 1
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Fiery Protection",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Melee Evasion",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Brutal Massacre",
+     "threshold": 2,
+     "range_in": 6,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": [
+       "Crack"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "War Boon",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Warbound Boost",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Headtaker Strike",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 3,
+      "weapon_rules": [
+       "AP(2)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 3
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  },
+  "wood_elves": {
+   "book_uid": "qtuyeoRfXKlNflK0",
+   "book_version": "3.5.3",
+   "spells": [
+    {
+     "name": "Hunter's Strike",
+     "threshold": 1,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "debuff",
+      "grants_rule": "Quick Shot",
+      "duration": "once",
+      "beneficiary": "attackers"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Spirit Vines",
+     "threshold": 1,
+     "range_in": 12,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(1)",
+       "Destructive"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Natural Harmony",
+     "threshold": 2,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 2,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Resistance",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Tree Stomp",
+     "threshold": 2,
+     "range_in": 24,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "model"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 2,
+      "weapon_rules": [
+       "AP(4)"
+      ]
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 2
+      }
+     },
+     "status": "modeled"
+    },
+    {
+     "name": "Tree-Bark Growth",
+     "threshold": 3,
+     "range_in": 12,
+     "target": {
+      "side": "friendly",
+      "count": 3,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "buff",
+      "grants_rule": "Grounded Reinforcement",
+      "duration": "once"
+     },
+     "status": "castable"
+    },
+    {
+     "name": "Insect Attack",
+     "threshold": 3,
+     "range_in": 18,
+     "target": {
+      "side": "enemy",
+      "count": 1,
+      "kind": "unit"
+     },
+     "effect": {
+      "kind": "damage",
+      "hits": 6,
+      "weapon_rules": []
+     },
+     "mechanic": {
+      "primitive": "spell_damage_ev",
+      "params": {
+       "hits": 6
+      }
+     },
+     "status": "modeled"
+    }
+   ]
+  }
+ }
+}

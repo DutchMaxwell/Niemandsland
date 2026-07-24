@@ -312,7 +312,8 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 
 		# Lane selection: a unit carrying the Ambush/Scout rule is relocated into its band half
 		# (Ambush wins if both). Otherwise it stays in the main top-2/3 packer (unchanged).
-		var is_ambush := _unit_has_rule(unit, "Ambush") or _unit_rule_describes(unit, "Ambush", army.rule_descriptions)
+		var is_ambush := _unit_has_rule(unit, "Ambush") or _unit_rule_describes(unit, "Ambush", army.rule_descriptions) \
+			or _unit_has_rule(unit, "Infiltrate")   # Infiltrate "counts as having Ambush" (Bug 26) — stage together
 		var is_scout := _unit_has_rule(unit, "Scout") or _unit_rule_describes(unit, "Scout", army.rule_descriptions)
 		var spawn_pos: Vector3
 		if is_ambush:
@@ -368,6 +369,10 @@ func spawn_army(army: OPRApiClient.OPRArmy, _start_position: Vector3 = Vector3.Z
 
 	# Wire up joined Heroes (OPR: a Hero "joined to" a unit belongs to it).
 	_attach_joined_heroes(army)
+
+	# Aura expansion (army-book "X Aura" = "this model and its unit get X"): grant the base rule to the
+	# whole unit so every downstream rule check sees it. Runs after heroes are attached.
+	_expand_auras(army)
 
 	print("OPRArmyManager: Spawned %d models for army '%s' on tray" % [all_models.size(), army.name])
 	army_spawned.emit(army, all_models)
@@ -677,6 +682,12 @@ func set_loose_model_dead(node: Node3D, player_id: int, dead: bool, unit_id: Str
 	# Choke point (J9): every path that parks/un-parks a loose model runs through here, so token
 	# cleanup/re-derivation is driven once from this signal instead of at each call site.
 	loose_model_dead_changed.emit(node, dead)
+	# NML-105: the death that DESTROYS a transport spills its cargo (GF v3.5.1: dangerous test,
+	# Shaken, placed fully within 6" before removal) — state here, visuals/log ride the signal.
+	if dead and node.has_meta("model_instance"):
+		var dmi := node.get_meta("model_instance") as ModelInstance
+		if dmi != null and dmi.unit is GameUnit:
+			_spill_destroyed_transport(dmi.unit as GameUnit)
 
 
 ## The slot a parked model occupies (set by the last set_loose_model_dead call), or -1. Lets the MP
@@ -1934,6 +1945,32 @@ func _order_units_heroes_after_host(units: Array) -> Array:
 ## OPR: a Hero unit can be "joined to" another unit (Army Forge sets the Hero's
 ## joinToUnit to the host's selectionId). Combined-unit halves were already merged
 ## away during parsing, so the remaining units carrying join_to_unit are Heroes.
+## Aura expansion (see AiEv.aura_granted_rules): for every unit, if any member (the unit or an attached
+## Hero) carries "X Aura", add the base rule X to the unit AND every attached Hero (so the "all models"
+## checks see it too). Purely additive + deduped; grants regardless of whether X is modelled (an unmodelled
+## base is simply inert — data refines, never breaks).
+func _expand_auras(army: OPRApiClient.OPRArmy) -> void:
+	for unit in army.units:
+		var gu: GameUnit = unit_to_game_unit.get(unit)
+		if gu == null:
+			continue
+		var members: Array = [gu]
+		if gu.has_method("get_attached_heroes"):
+			members += gu.get_attached_heroes()
+		var granted: Array = AiEv.aura_granted_rules(members)
+		if granted.is_empty():
+			continue
+		for m in members:
+			var target := m as GameUnit
+			if target == null:
+				continue
+			var rules: Array = (target.get_special_rules() as Array).duplicate()
+			for g in granted:
+				if not rules.has(g):
+					rules.append(g)
+			target.unit_properties["special_rules"] = rules
+
+
 func _attach_joined_heroes(army: OPRApiClient.OPRArmy) -> void:
 	# Index every unit's GameUnit by its selectionId.
 	var by_selection: Dictionary = {}
@@ -2634,3 +2671,334 @@ func _on_army_loaded(army: OPRApiClient.OPRArmy) -> void:
 
 func _on_import_failed(error: String) -> void:
 	push_error("OPR Import failed: %s" % error)
+
+
+# === Transport(X) — embark state + tray parking (NML-105 S1) ================================
+# Design decisions settled with the maintainer (2026-07-22). The embark STATE lives in
+# unit_properties (save-stable unit ids, never node refs); the embarked models park on their
+# owner's army tray through the SAME slot books as dead parking (one tray, contiguous per-unit
+# blocks, so dead and embarked models can never collide on a slot) — but WITHOUT the dead
+# desaturation and WITHOUT the "deleted" meta: an embarked model keeps its colours and carries
+# meta "embarked" instead. The interaction gates, the radial intents, the 6" disembark placer,
+# the targeting locks, destruction, MP sync and the save bump are the follow-up commits of
+# this branch (see the plan's S1 list).
+
+## A unit's embark state changed (embarked=true: it went inside `transport`). UI badges, unit
+## cards and the MP sync layer all hang off this one choke point.
+signal unit_embark_changed(unit: GameUnit, transport: GameUnit, embarked: bool)
+
+
+## Transport(X) capacity of a unit's rules; 0 = not a transport.
+func transport_capacity(unit: GameUnit) -> int:
+	if unit == null:
+		return 0
+	return TransportState.capacity_of_rules(unit.get_special_rules())
+
+
+## The transport a unit currently sits in (resolved over the save-stable unit id), or null.
+func transport_of(unit: GameUnit) -> GameUnit:
+	if unit == null:
+		return null
+	var tid := str(unit.unit_properties.get("embarked_in", ""))
+	return get_game_unit_by_id(tid) if not tid.is_empty() else null
+
+
+## The LIVE units embarked in `transport` (stale/destroyed ids are skipped, not repaired here).
+func cargo_units(transport: GameUnit) -> Array:
+	var out: Array = []
+	if transport == null:
+		return out
+	for tid in transport.unit_properties.get("cargo_unit_ids", []):
+		var u := get_game_unit_by_id(str(tid))
+		if u != null and not u.is_destroyed():
+			out.append(u)
+	return out
+
+
+## Spaces the whole JOINED unit (unit + attached heroes, alive models only) occupies —
+## TransportState.UNTRANSPORTABLE if any model can never embark (the unit embarks whole).
+func unit_embark_spaces(unit: GameUnit) -> int:
+	if unit == null:
+		return TransportState.UNTRANSPORTABLE
+	var descs: Array = []
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		chain.append_array(unit.get_attached_heroes())
+	for c in chain:
+		var member := c as GameUnit
+		if member == null:
+			continue
+		var hero := member.is_hero()
+		var tough := TransportState.tough_of_rules(member.get_special_rules())
+		for _m in member.get_alive_models():
+			descs.append({"hero": hero, "tough": tough})
+	return TransportState.spaces_of_models(descs)
+
+
+## Spaces already taken inside `transport` by its current cargo.
+func transport_used_spaces(transport: GameUnit) -> int:
+	var used := 0
+	for u in cargo_units(transport):
+		var s := unit_embark_spaces(u as GameUnit)
+		if s > 0:
+			used += s
+	return used
+
+
+## Embark gate — {ok: bool, reason: String}. The reason strings are English UI/battle-log text
+## (the game has no i18n). Placement legality (the one-model-reaches move, the 6" exit) is the
+## ACTION layer's job; this gate is pure capacity/state truth.
+func can_embark(unit: GameUnit, transport: GameUnit) -> Dictionary:
+	if unit == null or transport == null:
+		return {"ok": false, "reason": "no unit/transport"}
+	var cap := transport_capacity(transport)
+	if cap <= 0:
+		return {"ok": false, "reason": "%s is not a transport" % transport.get_name()}
+	if transport.is_destroyed():
+		return {"ok": false, "reason": "%s is destroyed" % transport.get_name()}
+	if unit == transport:
+		return {"ok": false, "reason": "a transport cannot embark itself"}
+	if transport_of(unit) != null:
+		return {"ok": false, "reason": "%s is already embarked" % unit.get_name()}
+	if transport_of(transport) != null:
+		return {"ok": false, "reason": "%s is itself embarked" % transport.get_name()}
+	var need := unit_embark_spaces(unit)
+	if need == TransportState.UNTRANSPORTABLE:
+		return {"ok": false, "reason": "%s cannot be transported (Tough too high — GF v3.5.1 Transport(X))" % unit.get_name()}
+	var free := cap - transport_used_spaces(transport)
+	if need > free:
+		return {"ok": false, "reason": "not enough space in %s (needs %d, %d free of Transport(%d))" % [transport.get_name(), need, free, cap]}
+	return {"ok": true, "reason": ""}
+
+
+## Flip a unit's embark state and park/return its models (joined heroes included). Embark runs
+## the can_embark gate; disembark places the unit through the 6" auto-formation placer (grill
+## decision 3 — the player adjusts afterwards) and falls back to the stashed pre-embark
+## transforms only when the placer finds no full-unit spot. `exit_toward` opens the formation
+## toward a world point (Vector3.INF = the transport's facing). Returns whether state changed.
+func set_unit_embarked(unit: GameUnit, transport: GameUnit, embarked: bool,
+		exit_toward: Vector3 = Vector3.INF) -> bool:
+	if unit == null:
+		return false
+	var exit_spots: Array = []
+	if embarked:
+		if not bool(can_embark(unit, transport).get("ok", false)):
+			return false
+		unit.unit_properties["embarked_in"] = transport.unit_id
+		var cargo: Array = transport.unit_properties.get("cargo_unit_ids", [])
+		if not cargo.has(unit.unit_id):
+			cargo.append(unit.unit_id)
+		transport.unit_properties["cargo_unit_ids"] = cargo
+	else:
+		var t := transport_of(unit)
+		if t == null:
+			return false
+		if transport == null:
+			transport = t
+		exit_spots = disembark_positions(transport, unit, exit_toward)
+		unit.unit_properties.erase("embarked_in")
+		var cargo2: Array = transport.unit_properties.get("cargo_unit_ids", [])
+		cargo2.erase(unit.unit_id)
+		transport.unit_properties["cargo_unit_ids"] = cargo2
+	var exit_i := 0
+	# Pre-embark spots ride unit_properties ("embark_return_spots", [[x,y,z,yaw],...]) so they
+	# SURVIVE a save (node metas do not) — the placer's formation wins on exit, the spots are
+	# only the no-full-spot fallback.
+	var return_spots: Array = [] if embarked else unit.unit_properties.get("embark_return_spots", [])
+	var collect_spots: Array = []
+	var pid: int = int(unit.unit_properties.get("player_id", 1))
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		chain.append_array(unit.get_attached_heroes())
+	for c in chain:
+		var member := c as GameUnit
+		if member == null:
+			continue
+		for m in member.get_alive_models():
+			var node: Node3D = (m as ModelInstance).node
+			if node == null or not is_instance_valid(node):
+				continue
+			if embarked:
+				collect_spots.append([node.global_position.x, node.global_position.y,
+					node.global_position.z, node.rotation.y])
+				node.set_meta("embarked", true)
+				var slot := _claim_dead_slot(pid, node, "embark:%s" % member.unit_id)
+				if slot != Vector3.ZERO:
+					node.global_position = slot
+			else:
+				_release_dead_slot(pid, node)
+				if node.has_meta("embarked"):
+					node.remove_meta("embarked")
+				if exit_i < exit_spots.size():
+					node.global_position = exit_spots[exit_i]
+				elif exit_i < return_spots.size():
+					var sp: Array = return_spots[exit_i]
+					node.global_position = Vector3(float(sp[0]), float(sp[1]), float(sp[2]))
+					node.rotation.y = float(sp[3])
+				exit_i += 1
+	if embarked:
+		unit.unit_properties["embark_return_spots"] = collect_spots
+	else:
+		unit.unit_properties.erase("embark_return_spots")
+	unit_embark_changed.emit(unit, transport, embarked)
+	return true
+
+
+## NML-105 — the 6" auto-formation disembark placer (grill decision 3: one click gives the
+## DIRECTION, the engine places legally, the player may adjust afterwards). Deterministic
+## concentric arcs around the transport, opened toward `exit_toward`: ring by ring, angles
+## fanning out from the exit bearing, each candidate checked against (a) the rule's zone —
+## the model base FULLY within 6" of the transport's base edge (GF v3.5.1: "must stay fully
+## within 6\" of it when exiting") — and (b) overlap against every other live base and the
+## already-placed models (bounding-circle test, the adjust pass owns exactness). Terrain
+## legality is deliberately NOT gated here yet (sandbox tables are hand-built; the player
+## adjusts) — noted in the plan. Returns [] when not every model finds a spot (caller falls
+## back to the stashed pre-embark transforms rather than placing a half unit).
+const DISEMBARK_ZONE_IN := 6.0
+const DISEMBARK_GAP_M := 0.012   # base-edge gap inside the formation (< 1", keeps the chain linked)
+func disembark_positions(transport: GameUnit, unit: GameUnit, exit_toward: Vector3 = Vector3.INF) -> Array:
+	if transport == null or unit == null:
+		return []
+	var t_model: ModelInstance = null
+	for tm in transport.models:
+		var cmi := tm as ModelInstance
+		if cmi.node != null and is_instance_valid(cmi.node):
+			t_model = cmi
+			if cmi.is_alive:
+				break   # alive model preferred; a dead one is the DESTROYED-spill fallback
+	if t_model == null:
+		return []
+	var t_shape := SeparationChecker.shape_for_model(t_model)
+	var t_r: float = t_shape.bounding_radius() if t_shape != null else SeparationChecker.DEFAULT_BASE_RADIUS_M
+	# Destroyed transport (cargo spill): its model is already PARKED on the tray — the rule places
+	# the cargo "within 6\" of the transport BEFORE it's removed", i.e. at its last TABLE spot,
+	# which dead-parking stashed as revive_transform.
+	var t_xf: Transform3D = t_model.node.global_transform
+	if not t_model.is_alive and t_model.node.has_meta("revive_transform"):
+		t_xf = t_model.node.get_meta("revive_transform")
+	var t_pos: Vector3 = t_xf.origin
+	var dir: Vector3 = exit_toward - t_pos if exit_toward != Vector3.INF else -t_xf.basis.z
+	dir.y = 0.0
+	if dir.length_squared() < 0.000001:
+		dir = Vector3(0, 0, -1)
+	var dir_angle := atan2(dir.normalized().z, dir.normalized().x)
+	# The moving chain (unit + attached heroes) and every OTHER live base as blockers.
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		chain.append_array(unit.get_attached_heroes())
+	var movers: Array = []   # [{model, r}]
+	for c in chain:
+		var member := c as GameUnit
+		if member == null:
+			continue
+		for m in member.get_alive_models():
+			var mi := m as ModelInstance
+			if mi.node == null or not is_instance_valid(mi.node):
+				continue
+			var sh := SeparationChecker.shape_for_model(mi)
+			movers.append({"model": mi, "r": (sh.bounding_radius() if sh != null else SeparationChecker.DEFAULT_BASE_RADIUS_M)})
+	if movers.is_empty():
+		return []
+	var blockers: Array = []   # [{p: Vector3, r: float}] — every live base not in the moving chain
+	for g in game_units.values():
+		var gu := g as GameUnit
+		if gu == null or chain.has(gu):
+			continue
+		for om in gu.get_alive_models():
+			var oi := om as ModelInstance
+			if oi.node == null or not is_instance_valid(oi.node) or bool(oi.node.get_meta("embarked", false)) \
+					or bool(oi.node.get_meta("deleted", false)):
+				continue
+			var osh := SeparationChecker.shape_for_model(oi)
+			blockers.append({"p": oi.node.global_position,
+				"r": (osh.bounding_radius() if osh != null else SeparationChecker.DEFAULT_BASE_RADIUS_M)})
+	var zone_m := DISEMBARK_ZONE_IN * INCHES_TO_METERS
+	var out: Array = []
+	var placed: Array = []   # [{p, r}]
+	for mv in movers:
+		var m_r: float = float((mv as Dictionary)["r"])
+		var found := Vector3.INF
+		var ring := 0
+		while found == Vector3.INF and ring < 6:
+			var ring_dist: float = t_r + m_r + DISEMBARK_GAP_M + float(ring) * (2.0 * m_r + DISEMBARK_GAP_M)
+			# Rule zone: the base's FARTHEST point stays within 6" of the transport's base edge.
+			if (ring_dist - t_r) + m_r > zone_m:
+				break
+			var step: float = 2.0 * asin(clampf((m_r + DISEMBARK_GAP_M * 0.5) / ring_dist, 0.05, 0.95))
+			var k := 0
+			while found == Vector3.INF and float(k) * step < PI + step:
+				for side in ([0] if k == 0 else [1, -1]):
+					var ang: float = dir_angle + float(side) * float(k) * step
+					var cand := t_pos + Vector3(cos(ang), 0.0, sin(ang)) * ring_dist
+					cand.y = t_pos.y
+					var clear := true
+					for b in blockers:
+						if cand.distance_to((b as Dictionary)["p"]) < m_r + float((b as Dictionary)["r"]) + 0.001:
+							clear = false
+							break
+					if clear:
+						for pl in placed:
+							if cand.distance_to((pl as Dictionary)["p"]) < m_r + float((pl as Dictionary)["r"]) + 0.001:
+								clear = false
+								break
+					if clear:
+						found = cand
+						break
+				k += 1
+			ring += 1
+		if found == Vector3.INF:
+			return []   # not every model fits — caller falls back, never a half-placed unit
+		placed.append({"p": found, "r": m_r})
+		out.append(found)
+	return out
+
+
+## NML-105 destruction spill — the STATE half (GF v3.5.1 Transport: "When a transport is
+## destroyed, units inside must take a dangerous terrain test, are Shaken, and must be placed
+## fully within 6\" of the transport before it's removed"). Every cargo unit disembarks at the
+## transport's last TABLE spot (the placer reads the parked model's revive_transform) and its
+## is_shaken flag is set; the radial controller rides transport_cargo_spilled for the marker,
+## the MP broadcast and the battle-log line. The dangerous-terrain DICE stay the player's hand
+## in sandbox play (the solo AI automates the roll on its side, wave S2).
+signal transport_cargo_spilled(transport: GameUnit, spilled: Array)
+func _spill_destroyed_transport(tr: GameUnit) -> void:
+	if tr == null or transport_capacity(tr) <= 0 or not tr.is_destroyed():
+		return
+	var cargo: Array = cargo_units(tr)
+	if cargo.is_empty():
+		return
+	var spilled: Array = []
+	for u in cargo:
+		var unit := u as GameUnit
+		if set_unit_embarked(unit, null, false):
+			unit.is_shaken = true
+			spilled.append(unit)
+	if not spilled.is_empty():
+		transport_cargo_spilled.emit(tr, spilled)
+
+
+## NML-105 save restore: re-park the models of every unit that LOADED as embarked. The STATE
+## (embarked_in / cargo_unit_ids / embark_return_spots) rides unit_properties and survives the
+## save; the node metas and tray slots are runtime and rebuilt here — the exact mirror of
+## _restore_dead_parking_after_load's shape (called by SaveManager after unit restore).
+func restore_embarked_after_load() -> void:
+	for g in game_units.values():
+		var unit := g as GameUnit
+		if unit == null or transport_of(unit) == null:
+			continue
+		var pid: int = int(unit.unit_properties.get("player_id", 1))
+		var chain: Array = [unit]
+		if unit.has_method("get_attached_heroes"):
+			chain.append_array(unit.get_attached_heroes())
+		for c in chain:
+			var member := c as GameUnit
+			if member == null:
+				continue
+			for m in member.get_alive_models():
+				var node: Node3D = (m as ModelInstance).node
+				if node == null or not is_instance_valid(node) or bool(node.get_meta("embarked", false)):
+					continue
+				node.set_meta("embarked", true)
+				var slot := _claim_dead_slot(pid, node, "embark:%s" % member.unit_id)
+				if slot != Vector3.ZERO:
+					node.global_position = slot

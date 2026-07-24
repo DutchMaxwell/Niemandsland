@@ -180,6 +180,25 @@ func _l_params(i: int) -> Dictionary:
 		"top": h,
 	}
 
+## NML-005 step 5: the prop's two L outer walls as world XZ segments (metres) — the AI's
+## MOVEMENT wall channel (planner swept checks, rest clamps). Sight stays area-semantics
+## (ruins: see in/out, not through), so these segments are NOT fed to the LOS/fan side.
+func wall_segments_world() -> Array:
+	var l := _l_params(0)
+	var ax := float(l["ax"])
+	var az := float(l["az"])
+	var lx := float(l["lx"])
+	var lz := float(l["lz"])
+	var xf := global_transform
+	var out: Array = []
+	for seg in [[Vector3(ax, 0, az), Vector3(ax + lx, 0, az)],
+			[Vector3(ax, 0, az), Vector3(ax, 0, az + lz)]]:
+		var a := xf * (seg[0] as Vector3)
+		var b := xf * (seg[1] as Vector3)
+		out.append([Vector2(a.x, a.z), Vector2(b.x, b.z)])
+	return out
+
+
 # === Private: colliders ===
 
 ## Two walkable arm slabs per storey (an L), each top at the walkable surface, shrinking toward

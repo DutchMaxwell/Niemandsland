@@ -1,15 +1,15 @@
 class_name GameUnit
 extends RefCounted
 ## System-agnostic wrapper for a unit.
-## Can wrap OPR units, WGS units, or generic miniatures.
+## Can wrap OPR units or generic miniatures.
 ## Provides a unified interface regardless of source.
 
 # ===== Source Data =====
 
-## Original data from import (OPRUnit, WGSUnit, or generic Dictionary)
+## Original data from import (OPRUnit or generic Dictionary)
 var source_data: Variant = null
 
-## Source type identifier: "opr", "wgs", "generic"
+## Source type identifier: "opr", "generic" (old saves may carry retired types — treated as generic)
 var source_type: String = "generic"
 
 ## Unique identifier for this unit (for multiplayer sync and save/load)

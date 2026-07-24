@@ -173,6 +173,7 @@ Controls:
 - Ctrl+C/V/D: Copy/Paste/Dup
 - L: Lock/Unlock
 - G / Shift+G: Range Ring / clear
+- F / Shift+F: Sight/Range Fan / clear
 - M / Shift+M: Move Bands / clear
 - P: Pin Ruler
 - K / Shift+K: Clear Rulers mine/all
@@ -240,12 +241,6 @@ unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Import OPR Army..."
-
-[node name="ImportWGS" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-text = "Import WGS Game..."
 
 [node name="MapLayoutBtn" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
 unique_name_in_owner = true

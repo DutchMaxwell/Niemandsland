@@ -1,0 +1,1726 @@
+extends GdUnitTestSuite
+## Solo/AI M1: the walking-skeleton controller. Pure logic (nearest-target selection, table-edge move
+## clamp) is unit-tested directly; a light integration proves an AI unit advances toward the nearest
+## human unit by its Advance distance and is marked activated.
+
+
+func test_nearest_index_picks_the_closest_table_plane() -> void:
+	var from := Vector3.ZERO
+	assert_int(SoloController.nearest_index(from, [Vector3(10, 0, 0), Vector3(1, 0, 0), Vector3(5, 0, 0)])).is_equal(1)
+	assert_int(SoloController.nearest_index(from, [])).is_equal(-1)
+	# Y is ignored (table plane): the x=0.5 point is nearer than the tall x=0,z=2 one.
+	assert_int(SoloController.nearest_index(from, [Vector3(0, 100, 2), Vector3(0.5, 0, 0)])).is_equal(1)
+
+
+func test_axis_scale_clamps_a_move_at_the_table_edge() -> void:
+	assert_float(SoloController._axis_scale(0.0, 0.3, 0.6)).is_equal_approx(1.0, 0.001)   # within → full
+	assert_float(SoloController._axis_scale(0.0, 1.0, 0.6)).is_equal_approx(0.6, 0.001)   # overshoot → onto edge
+	assert_float(SoloController._axis_scale(0.5, 0.0, 0.6)).is_equal_approx(1.0, 0.001)   # no move → full
+	assert_float(SoloController._axis_scale(0.0, -1.0, 0.6)).is_equal_approx(0.6, 0.001)  # negative dir
+
+
+func _unit(pid: int, positions: Array) -> GameUnit:
+	var u := GameUnit.new()
+	u.unit_id = "p%d_%d" % [pid, positions.size()]
+	u.unit_properties = {"player_id": pid, "name": "U%d" % pid, "quality": 4, "defense": 4}
+	for p in positions:
+		var m := ModelInstance.new()
+		m.is_alive = true
+		var n := Node3D.new()
+		add_child(n)
+		n.global_position = p
+		m.node = n
+		u.models.append(m)
+	return u
+
+
+## Field-test finding 1: a Slow unit MUST get the reduced move band even when no MovementRangeController
+## is injected (the old _act fell back to a hardcoded 6"/12" that dropped Slow). Slow = -2"/-4" (GF/AoF
+## Advanced Rules v3.5.1 p.13), so a Slow unit's Advance band is 4" and Rush 8" — from the SAME band
+## source the human's reach rings use.
+func test_move_bands_for_unit_honours_slow_without_a_controller() -> void:
+	var slow := _unit(2, [Vector3(0.2, 0, 0)])
+	slow.unit_properties["special_rules"] = ["Slow", "Tough(3)"]
+	var bands := SoloController.move_bands_for_unit(slow, null)   # no controller — must NOT hardcode 6"/12"
+	assert_int(int(bands["advance"])).is_less_equal(4)
+	assert_int(int(bands["advance"])).is_equal(4)
+	assert_int(int(bands["rush"])).is_equal(8)
+	# A plain unit (no move rule) still reads the OPR defaults, and Fast still adds +2"/+4".
+	var plain := _unit(2, [Vector3(0.2, 0, 0)])
+	assert_int(int(SoloController.move_bands_for_unit(plain, null)["advance"])).is_equal(6)
+	var fast := _unit(2, [Vector3(0.2, 0, 0)])
+	fast.unit_properties["special_rules"] = ["Fast"]
+	assert_int(int(SoloController.move_bands_for_unit(fast, null)["advance"])).is_equal(8)
+
+
+func test_ai_unit_advances_toward_nearest_human_and_activates() -> void:
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var ai := _unit(2, [Vector3(0.5, 0, 0)])   # 0.5 m east of the human, inside a 4 ft table
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+
+	var moved := solo.activate_next_ai_unit()
+	assert_object(moved).is_equal(ai)
+	assert_bool(ai.is_activated).is_true()
+	# A weaponless unit counts as MELEE; at 0.5 m (~19.7") the enemy is beyond charge range (12") — the
+	# official v3.5.0 tree RUSHES 12" = 0.3048 m toward the human at x=0 → x drops from 0.5 to ~0.1952.
+	assert_float(ai.models[0].node.global_position.x).is_equal_approx(0.1952, 0.004)
+	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.RUSH)
+	# A second call finds no more eligible AI units.
+	assert_object(solo.activate_next_ai_unit()).is_null()
+
+
+func test_targeting_prefers_a_not_yet_activated_human_over_a_nearer_activated_one() -> void:
+	# OPR Solo v3.5.0: nearest valid enemy, but prefer not-yet-activated.
+	var near_active := _unit(1, [Vector3(0.35, 0, 0)])   # closer, but already acted
+	near_active.is_activated = true
+	near_active.unit_id = "human_active"
+	var far_fresh := _unit(1, [Vector3(0.1, 0, 0)])      # farther from the AI, not yet activated
+	far_fresh.unit_id = "human_fresh"
+	var ai := _unit(2, [Vector3(0.5, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {near_active.unit_id: near_active, far_fresh.unit_id: far_fresh, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_object(solo.nearest_human_unit(ai)).is_equal(far_fresh)
+	# If ALL humans are activated, fall back to the nearest.
+	far_fresh.is_activated = true
+	assert_object(solo.nearest_human_unit(ai)).is_equal(near_active)
+
+
+func test_run_ai_turn_activates_every_eligible_ai_unit() -> void:
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var ai1 := _unit(2, [Vector3(0.4, 0, 0)])
+	var ai2 := _unit(2, [Vector3(0, 0, 0.4)])
+	ai2.unit_id = "ai2"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai1.unit_id: ai1, ai2.unit_id: ai2}
+	army.current_round = 1
+
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+
+	assert_int(solo.run_ai_turn()).is_equal(2)
+	assert_bool(ai1.is_activated).is_true()
+	assert_bool(ai2.is_activated).is_true()
+
+
+func test_ambush_reserve_arrives_round_two_and_empties() -> void:
+	var enemy := _unit(1, [Vector3(0, 0, 0)])           # human unit at the table centre
+	var ambusher := _unit(2, [Vector3(3, 0, 3)])        # held in reserve (staging position)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {enemy.unit_id: enemy, ambusher.unit_id: ambusher}
+
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.ambush_reserve = [ambusher]
+	solo._deploy_objectives = [Vector2(0.4, 0.4)]        # an objective attractor
+
+	# 4ft table; the enemy sits at the origin — the ambusher must land MORE THAN 9" (0.2286 m) away.
+	var zone := Rect2(Vector2(-0.61, -0.61), Vector2(1.22, 1.22))
+	var res: Dictionary = solo.arrive_ambush_reserve(zone, [Vector2(0, 0)])
+
+	assert_int(int(res["arrived"])).is_equal(1)
+	assert_int(solo.ambush_reserve.size()).is_equal(0)   # reserve emptied
+	var c := solo.unit_centre(ambusher)
+	assert_float(Vector2(c.x, c.z).length()).is_greater(0.2286)   # >9" from the enemy
+
+
+func test_repel_ambushers_pushes_the_arrival_ring_to_12_inches() -> void:
+	# Repel Ambushers (cut B): an enemy entry may be {pos, min_dist_m} — the arriving Ambusher must
+	# land beyond the LARGER of its own 9" ring and the enemy's projected 12" (0.3048 m).
+	var enemy := _unit(1, [Vector3(0, 0, 0)])
+	var ambusher := _unit(2, [Vector3(3, 0, 3)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {enemy.unit_id: enemy, ambusher.unit_id: ambusher}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.ambush_reserve = [ambusher]
+	solo._deploy_objectives = [Vector2(0.4, 0.4)]
+	var zone := Rect2(Vector2(-0.61, -0.61), Vector2(1.22, 1.22))
+	var res: Dictionary = solo.arrive_ambush_reserve(zone, [{"pos": Vector2(0, 0), "min_dist_m": 12.0 * 0.0254}])
+	assert_int(int(res["arrived"])).is_equal(1)
+	var c := solo.unit_centre(ambusher)
+	assert_float(Vector2(c.x, c.z).length()).is_greater(0.3048)   # >12", not merely >9"
+
+
+func test_ambush_arrival_is_noop_with_empty_reserve() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(auto_free(OPRArmyManager.new()), null, null, 1, 2)
+	var res: Dictionary = solo.arrive_ambush_reserve(Rect2(0, 0, 1, 1), [])
+	assert_int(int(res["arrived"])).is_equal(0)
+
+
+## Field-test finding 5: a reserve Ambush unit is NOT activatable while held, and arriving from Ambush does
+## NOT consume its activation — it is eligible to act that same round (GF/AoF v3.5.1 p.13).
+func test_ambush_reserve_unit_is_ineligible_until_it_arrives_then_can_act() -> void:
+	var enemy := _unit(1, [Vector3(0.5, 0, 0.5)])
+	var ambusher := _unit(2, [Vector3(3, 0, 3)])
+	ambusher.unit_properties["ambush_reserve"] = true          # held off-table
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {enemy.unit_id: enemy, ambusher.unit_id: ambusher}
+	army.current_round = 2
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.ambush_reserve = [ambusher]
+	solo._deploy_objectives = [Vector2(0.3, 0.3)]
+	# Held in reserve → ineligible, and the AI has nothing to activate.
+	assert_bool(solo.is_eligible(ambusher)).is_false()
+	assert_array(solo.eligible_ai_units()).is_empty()
+	# One paced arrival >9" from the enemy → flag cleared, activation NOT spent, eligible THIS round.
+	var occupied: Array = []
+	var arrived := solo.arrive_one_ambush_unit(Rect2(Vector2(-0.61, -0.61), Vector2(1.22, 1.22)), [Vector2(0.5, 0.5)], occupied, 2)
+	assert_object(arrived).is_equal(ambusher)
+	assert_bool(ambusher.is_activated).is_false()
+	assert_bool(bool(ambusher.unit_properties.get("ambush_reserve", false))).is_false()
+	assert_bool(solo.is_eligible(ambusher)).is_true()
+	assert_int(int(ambusher.unit_properties["ambush_arrived_round"])).is_equal(2)
+
+
+## Field-test finding 5 (seize rule): a unit that arrived from Ambush this round can neither seize nor
+## contest an objective it stands on (GF/AoF v3.5.1 p.13) — but the same unit seizes normally otherwise.
+func test_seize_objectives_skips_ambush_units_on_their_arrival_round() -> void:
+	var obj: Array = [Vector3(0, 0, 0)]
+	var locked: Array = [{"player": 2, "shaken": false, "ambush_locked": true, "positions": [Vector3(0, 0, 0)]}]
+	assert_int(int((SoloController.seize_objectives(locked, obj, [0])["owners"] as Array)[0])).is_equal(0)
+	var free: Array = [{"player": 2, "shaken": false, "ambush_locked": false, "positions": [Vector3(0, 0, 0)]}]
+	assert_int(int((SoloController.seize_objectives(free, obj, [0])["owners"] as Array)[0])).is_equal(2)
+
+
+## Field-test finding 6: cover feeds the EV from REAL terrain, not a constant. majority_in_cover reads the
+## injected terrain callback and honours the strict-majority rule (GF/AoF v3.5.1 p.11).
+func test_majority_in_cover_reads_real_terrain() -> void:
+	var unit := _unit(1, [Vector3(0, 0, 0), Vector3(0.1, 0, 0), Vector3(5, 0, 5)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {unit.unit_id: unit}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_bool(solo.majority_in_cover(unit)).is_false()   # no terrain wired → honest false
+	# A forest patch around the origin covers 2 of the 3 models → strict majority → in cover.
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		return TerrainRules.TerrainType.FOREST if Vector2(p.x, p.z).length() < 1.0 else TerrainRules.TerrainType.NONE
+	assert_bool(solo.majority_in_cover(unit)).is_true()
+	unit.models[1].node.global_position = Vector3(5, 0, 5)   # only 1/3 left in the woods
+	assert_bool(solo.majority_in_cover(unit)).is_false()
+
+
+## Wave-4 Royal Legion (Mummified Undead army-book rule): +4" shooting range. The +2" Charge is verified
+## via move_bands_for_props in the movement-range suite.
+func test_royal_legion_shooting_range_bonus() -> void:
+	var u := _unit(2, [Vector3(0, 0, 0)])
+	assert_int(SoloController.shooting_range_bonus(u)).is_equal(0)   # plain unit
+	u.unit_properties["special_rules"] = ["Royal Legion", "Tough(3)"]
+	assert_int(SoloController.shooting_range_bonus(u)).is_equal(4)
+	assert_int(SoloController.shooting_range_bonus(null)).is_equal(0)
+	# NML-006: der Zauber-Reichweiten-Stempel addiert sich auf JEDEN Konsumenten dieser einen Quelle.
+	u.unit_properties["spell_range_mod"] = 6
+	assert_int(SoloController.shooting_range_bonus(u)).is_equal(10)   # Royal Legion 4 + Spruch 6
+	u.unit_properties["special_rules"] = []
+	assert_int(SoloController.shooting_range_bonus(u)).is_equal(6)    # Stempel allein
+	u.unit_properties.erase("spell_range_mod")
+	assert_int(SoloController.shooting_range_bonus(u)).is_equal(0)
+
+
+## NML-009 — Gate-Chord-Basen-Clamp (Leiter g51003, EXAKTE Capture-Geometrie in Metern): der Charger
+## endete legal in Kontakt mit dem Nachbarn; der Gate-Chord zum Rastplatz schnitt dann quer durch eine
+## Ziel-Base (Zentrum-Distanz 0,0056 m bei Radiensumme 0,025 m) — die eine Durchroute unter 83 Movern.
+func test_gate_chord_crosses_base_g51003_geometry() -> void:
+	var base := SeparationChecker.BaseShape.make_round(Vector2(0.2832, 0.2032), 0.0125)
+	var a := Vector2(0.3161, 0.1881)   # Planner-Endpunkt (route-treu, legal)
+	var b := Vector2(0.2652, 0.2025)   # Gate-Rastplatz — der Chord kreuzt die Base
+	assert_bool(SoloController.gate_chord_crosses_base(a, b, 0.0125, [base])).is_true()
+	# Kontakt-ENDE ist KEIN Durchschneiden: der Chord endet an der Berührkante (edge ~ -epsilon).
+	var c := Vector2(0.2832, 0.2032)
+	var stop := c + Vector2(0.0, 0.0251)   # Zentrumsabstand = Radiensumme + Hauch
+	assert_bool(SoloController.gate_chord_crosses_base(stop + Vector2(0.0, 0.08), stop, 0.0125, [base])).is_false()
+	# ESCAPE: startet der Chord IN der Base (Overlap-Push schiebt raus), zählt er nie.
+	assert_bool(SoloController.gate_chord_crosses_base(c + Vector2(0.005, 0.0), c + Vector2(0.05, 0.0), 0.0125, [base])).is_false()
+	# Ferner Chord bleibt frei.
+	assert_bool(SoloController.gate_chord_crosses_base(Vector2(0.0, 0.0), Vector2(0.1, 0.0), 0.0125, [base])).is_false()
+
+
+func test_effective_attacks_scales_by_the_surviving_fraction() -> void:
+	# OPR "Determine Attacks": only living models' weapons count → attacks × alive / max (rounded). This is
+	# the real-game mirror of the sim's dead-models fix (goal 003 P3).
+	assert_int(SoloController.effective_attacks(10, 10, 10)).is_equal(10)   # full strength
+	assert_int(SoloController.effective_attacks(10, 4, 10)).is_equal(4)     # 4 of 10 alive
+	assert_int(SoloController.effective_attacks(4, 1, 4)).is_equal(1)       # last model
+	assert_int(SoloController.effective_attacks(4, 0, 4)).is_equal(0)       # wiped → no attacks
+	assert_int(SoloController.effective_attacks(3, 5, 0)).is_equal(3)       # no max known → unchanged
+
+
+func test_striking_models_counts_only_models_within_2in_reach() -> void:
+	# OPR "Who Can Strike": a striker model contributes only if within 2" (+ base contact) of an enemy model.
+	var enemy := [Vector3(0, 0, 0)]
+	var striker := [Vector3(0.05, 0, 0), Vector3(0.2, 0, 0)]   # ~2" vs ~7.9" from the enemy (metres)
+	assert_int(SoloController.striking_models(striker, enemy)).is_equal(1)
+	# Fallbacks: no enemy positions → the whole living set strikes; no striker → none.
+	assert_int(SoloController.striking_models([Vector3(0, 0, 0), Vector3(1, 0, 0)], [])).is_equal(2)
+	assert_int(SoloController.striking_models([], [Vector3(0, 0, 0)])).is_equal(0)
+
+
+func test_ai_rushes_toward_an_uncontrolled_objective_over_the_enemy() -> void:
+	# The FULL Solo & Co-Op tree (decide_solo) is objective-first: a MELEE unit with an uncontrolled objective
+	# and no enemy in the way RUSHES the objective (not the enemy). Wires objectives via the injected providers.
+	var human := _unit(1, [Vector3(0.5, 0, -0.5)])         # ~19.7" south of the AI (beyond charge)
+	var ai := _unit(2, [Vector3(0.5, 0, 0)])               # weaponless → MELEE
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var objective := Vector3(0.5, 0, 0.3)                  # ~11.8" NORTH — the opposite way from the enemy
+	solo.objectives_provider = func() -> Array: return [objective]
+	solo.objective_owner_of = func(_i: int) -> int: return 0   # neutral → uncontrolled by the AI
+
+	var moved := solo.activate_next_ai_unit()
+	assert_object(moved).is_equal(ai)
+	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.RUSH)
+	assert_int(int(solo.last_report["toward"])).is_equal(AiDecision.Toward.OBJECTIVE)
+	# It rushes north onto the objective (clamped at the marker), NOT south toward the enemy.
+	assert_float(ai.models[0].node.global_position.z).is_equal_approx(0.3, 0.01)
+	assert_float(ai.models[0].node.global_position.x).is_equal_approx(0.5, 0.01)
+
+
+func test_shaken_ai_unit_idles_recovers_and_moves_nothing() -> void:
+	# OPR p.10 (goal 003 P2): a Shaken unit spends its activation idle. The controller reports idle_shaken
+	# (main clears the state via the radial seam), the unit does not move, and it counts as activated.
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var ai := _unit(2, [Vector3(0.5, 0, 0)])
+	ai.is_shaken = true
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+
+	var moved := solo.activate_next_ai_unit()
+	assert_object(moved).is_equal(ai)
+	assert_bool(bool(solo.last_report.get("idle_shaken", false))).is_true()
+	assert_bool(ai.is_activated).is_true()
+	assert_float(ai.models[0].node.global_position.x).is_equal_approx(0.5, 0.0001)   # did not move
+
+
+func test_non_shaken_units_activate_before_shaken_ones() -> void:
+	# OPR Solo p.2: Shaken units activate LAST. With one fresh and one Shaken AI unit, the fresh one goes first.
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var fresh := _unit(2, [Vector3(0.4, 0, 0)])
+	fresh.unit_id = "ai_fresh"
+	var shaken := _unit(2, [Vector3(0.3, 0, 0)])
+	shaken.unit_id = "ai_shaken"
+	shaken.is_shaken = true
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, fresh.unit_id: fresh, shaken.unit_id: shaken}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_object(solo.activate_next_ai_unit()).is_equal(fresh)
+	assert_object(solo.activate_next_ai_unit()).is_equal(shaken)
+
+
+# === Objective auto-seize (goal 003 P2 — pure SoloController.seize_objectives) ===
+
+const IN3 := 3.0 * 0.0254   # the 3" control radius in metres
+
+
+func _info(player: int, positions: Array, shaken: bool = false) -> Dictionary:
+	return {"player": player, "shaken": shaken, "positions": positions}
+
+
+func test_seize_single_side_takes_the_marker() -> void:
+	var res := SoloController.seize_objectives(
+		[_info(1, [Vector3(0.02, 0, 0)])], [Vector3(0, 0, 0)], [0])
+	assert_array(res["owners"]).is_equal([1])
+	assert_int((res["changes"] as Array).size()).is_equal(1)
+
+
+func test_seize_respects_the_3in_boundary() -> void:
+	# Exactly 3" counts; just beyond does not (owner persists at neutral, no change entry).
+	var on_edge := SoloController.seize_objectives(
+		[_info(2, [Vector3(IN3, 0, 0)])], [Vector3(0, 0, 0)], [0])
+	assert_array(on_edge["owners"]).is_equal([2])
+	var beyond := SoloController.seize_objectives(
+		[_info(2, [Vector3(IN3 + 0.003, 0, 0)])], [Vector3(0, 0, 0)], [0])
+	assert_array(beyond["owners"]).is_equal([0])
+	assert_int((beyond["changes"] as Array).size()).is_equal(0)
+
+
+func test_seize_both_sides_near_contests_to_neutral() -> void:
+	var res := SoloController.seize_objectives(
+		[_info(1, [Vector3(0.02, 0, 0)]), _info(2, [Vector3(-0.02, 0, 0)])],
+		[Vector3(0, 0, 0)], [1])
+	assert_array(res["owners"]).is_equal([0])
+	assert_int((res["changes"] as Array).size()).is_equal(1)
+
+
+func test_seize_owner_persists_when_nobody_is_near() -> void:
+	var res := SoloController.seize_objectives(
+		[_info(1, [Vector3(1.0, 0, 0)])], [Vector3(0, 0, 0)], [2])
+	assert_array(res["owners"]).is_equal([2])
+	assert_int((res["changes"] as Array).size()).is_equal(0)
+
+
+func test_seize_shaken_units_neither_seize_nor_contest() -> void:
+	# A Shaken unit alone cannot seize; and it cannot contest the other side's seize either.
+	var alone := SoloController.seize_objectives(
+		[_info(1, [Vector3(0.02, 0, 0)], true)], [Vector3(0, 0, 0)], [0])
+	assert_array(alone["owners"]).is_equal([0])
+	var vs := SoloController.seize_objectives(
+		[_info(1, [Vector3(0.02, 0, 0)], true), _info(2, [Vector3(-0.02, 0, 0)])],
+		[Vector3(0, 0, 0)], [0])
+	assert_array(vs["owners"]).is_equal([2])
+
+
+# === P8 targeting-input routing (pure SoloController.targeting_route) ===
+# REGRESSION (maintainer field-test): the enemy click in Shoot/Fight targeting did nothing — the handler
+# was fed only from _unhandled_key_input, which never receives mouse events in Godot 4. These tests pin
+# the contract that MOUSE events are first-class targeting input: LMB picks, RMB cancels, motion tracks.
+
+func _lmb(pressed: bool = true) -> InputEventMouseButton:
+	var e := InputEventMouseButton.new()
+	e.button_index = MOUSE_BUTTON_LEFT
+	e.pressed = pressed
+	return e
+
+
+func test_targeting_route_left_click_picks_the_target() -> void:
+	assert_int(SoloController.targeting_route(_lmb(), false)).is_equal(SoloController.TargetingRoute.PICK)
+	# Release is not a pick (only the press resolves the target).
+	assert_int(SoloController.targeting_route(_lmb(false), false)).is_equal(SoloController.TargetingRoute.IGNORE)
+
+
+func test_targeting_route_click_over_hud_control_is_ignored() -> void:
+	# A click on an interactive HUD widget (dock, dice tray) keeps working during targeting.
+	assert_int(SoloController.targeting_route(_lmb(), true)).is_equal(SoloController.TargetingRoute.IGNORE)
+
+
+func test_targeting_route_right_click_and_escape_cancel() -> void:
+	var rmb := InputEventMouseButton.new()
+	rmb.button_index = MOUSE_BUTTON_RIGHT
+	rmb.pressed = true
+	assert_int(SoloController.targeting_route(rmb, false)).is_equal(SoloController.TargetingRoute.CANCEL)
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.pressed = true
+	assert_int(SoloController.targeting_route(esc, false)).is_equal(SoloController.TargetingRoute.CANCEL)
+	# Any other key passes through untouched.
+	var other := InputEventKey.new()
+	other.keycode = KEY_A
+	other.pressed = true
+	assert_int(SoloController.targeting_route(other, false)).is_equal(SoloController.TargetingRoute.IGNORE)
+
+
+func test_targeting_route_mouse_motion_tracks_the_los_line() -> void:
+	assert_int(SoloController.targeting_route(InputEventMouseMotion.new(), false)).is_equal(SoloController.TargetingRoute.TRACK)
+
+
+# === Attached-hero unity (GF v3.5.1 "Hero": a joined hero deploys/activates/moves WITH its host) ===
+
+func test_attached_hero_is_never_its_own_activation() -> void:
+	# The AI's D6 pick moved a joined hero SOLO out of his unit (maintainer field test) — an attached
+	# hero must not be eligible on its own; activating the HOST covers both (GameUnit.activate cascades).
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var host := _unit(2, [Vector3(0.5, 0, 0), Vector3(0.53, 0, 0)])
+	host.unit_id = "host"
+	var hero := _unit(2, [Vector3(0.56, 0, 0)])
+	hero.unit_id = "hero"
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, host.unit_id: host, hero.unit_id: hero}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var eligible := solo.eligible_ai_units()
+	assert_int(eligible.size()).is_equal(1)          # the host only — the hero is not a separate activation
+	assert_object(eligible[0]).is_equal(host)
+	assert_object(solo.activate_next_ai_unit()).is_equal(host)
+	assert_bool(hero.is_activated).is_true()          # activated WITH the host (cascade)
+	assert_object(solo.activate_next_ai_unit()).is_null()   # round over — no phantom hero activation
+
+
+func test_host_move_carries_the_attached_hero() -> void:
+	# One unit, one move: the hero's model must shift with the host's models (movement cohesion).
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var host := _unit(2, [Vector3(0.5, 0, 0)])
+	host.unit_id = "host"
+	var hero := _unit(2, [Vector3(0.53, 0, 0)])
+	hero.unit_id = "hero"
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, host.unit_id: host, hero.unit_id: hero}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var hero_before: Vector3 = hero.models[0].node.global_position
+	assert_object(solo.activate_next_ai_unit()).is_equal(host)   # weaponless MELEE → rushes the enemy
+	var hero_delta: float = hero.models[0].node.global_position.distance_to(hero_before)
+	assert_float(hero_delta).is_greater(0.1)                     # the hero moved with the block (~12" rush)
+	# The hero stays in formation next to the host (rigid slide preserves the offset).
+	assert_float(hero.models[0].node.global_position.distance_to(host.models[0].node.global_position)) \
+		.is_equal_approx(0.03, 0.005)
+
+
+# === Per-model line of sight (GF v3.5.1 p.8 "Who Can Shoot") ===
+
+func test_sighted_models_gates_per_model_behind_a_blocker() -> void:
+	# A CONTAINER strip blocks the southern half of the shooting line: only the 2 clear models fire.
+	var grid := {}
+	for x in range(0, 8):
+		grid[Vector2i(x, 1)] = TerrainRules.TerrainType.CONTAINER   # wall row at y in [3,6)"
+	# Blocker only spans x in [0,24)": shooters at x=26,29 see PAST its end, x=2,5 are blocked.
+	for x in range(8, 16):
+		grid.erase(Vector2i(x, 1))
+	var los := func(a: Vector3, b: Vector3) -> bool:
+		return TerrainRules.has_line_of_sight(grid,
+			Vector2(a.x, a.z) / 0.0254, Vector2(b.x, b.z) / 0.0254, 1, 1)
+	var m := 0.0254
+	var shooters := [Vector3(2 * m, 0, 0), Vector3(5 * m, 0, 0), Vector3(26 * m, 0, 0), Vector3(29 * m, 0, 0)]
+	var targets := [Vector3(2 * m, 0, 12 * m), Vector3(26 * m, 0, 12 * m)]
+	assert_int(SoloController.sighted_models(shooters, targets, 24.0 * m, los)).is_equal(2)
+	# Range gates too: at 6" nothing reaches the 12"-away targets even with clear LOS.
+	assert_int(SoloController.sighted_models(shooters, targets, 6.0 * m, los)).is_equal(0)
+	# Open field: everyone in range fires.
+	assert_int(SoloController.sighted_models(shooters, targets, 24.0 * m,
+		func(_a: Vector3, _b: Vector3) -> bool: return true)).is_equal(4)
+
+
+# === Auto-tail alternation state machine (goal 003 P2 — the maintainer's "how do I proceed?" gap) ===
+
+func test_alternation_next_replies_then_tails_then_ends() -> void:
+	var S := SoloController
+	assert_int(S.alternation_next(1, 3, 3)).is_equal(S.AltStep.REPLY)      # human just activated → one answer
+	assert_int(S.alternation_next(0, 3, 3)).is_equal(S.AltStep.WAIT)       # balanced → wait for the human
+	assert_int(S.alternation_next(0, 0, 3)).is_equal(S.AltStep.TAIL)       # human exhausted → AI plays on
+	assert_int(S.alternation_next(1, 0, 3)).is_equal(S.AltStep.REPLY)      # owed reply resolves before the tail
+	assert_int(S.alternation_next(0, 2, 0)).is_equal(S.AltStep.WAIT)       # AI exhausted → human finishes alone
+	assert_int(S.alternation_next(0, 0, 0)).is_equal(S.AltStep.END_ROUND)  # both done → round over
+	assert_int(S.alternation_next(3, 0, 0)).is_equal(S.AltStep.END_ROUND)  # stale replies never outlive the AI side
+
+
+# === Round-boundary alternation (field-test finding 7: AI activated two units back-to-back with initiative) ===
+
+func test_pending_replies_at_round_start_is_derived_fresh_not_carried() -> void:
+	var S := SoloController
+	# A new round owes exactly ONE AI reply iff the AI opens it — NEVER a count carried over from last round.
+	# Deriving it fresh (instead of INCREMENTING a member that could still hold an undeliverable reply) is the
+	# whole fix: the opener can only ever grant a single AI activation.
+	assert_int(S.pending_replies_at_round_start(true)).is_equal(1)
+	assert_int(S.pending_replies_at_round_start(false)).is_equal(0)
+
+
+func test_round_boundary_grants_ai_exactly_one_opener_activation() -> void:
+	var S := SoloController
+	# Finding 7: human(3) vs AI(2). The AI runs out first in round 1, so the human's unanswered 3rd activation
+	# used to leave a STALE owed reply that survived into round 2 and STACKED on the opener's grant → the AI
+	# took two activations back-to-back with initiative. The AI finished first, so it opens round 2:
+	var ai_opens := S.ai_opens_next_round(false, true, true)   # ai_took_last=false → AI finished first → opens
+	assert_bool(ai_opens).is_true()
+	# Pending is derived FRESH from the opener decision (no stale carry): exactly one opener activation.
+	var pending := S.pending_replies_at_round_start(ai_opens)
+	assert_int(pending).is_equal(1)
+	# The pump then does that ONE reply and immediately WAITs for the human (who still has all 3 units), so
+	# the AI never activates twice in a row while the human has units.
+	assert_int(S.alternation_next(pending, 3, 2)).is_equal(S.AltStep.REPLY)
+	assert_int(S.alternation_next(pending - 1, 3, 1)).is_equal(S.AltStep.WAIT)
+
+
+# === Presentation order (field-test finding 2: the END STATE must not appear first) ===
+
+func test_presentation_start_positions_returns_route_starts() -> void:
+	var S := SoloController
+	var paths: Array = [
+		{"model": null, "path": [Vector3(1, 0, 1), Vector3(2, 0, 2), Vector3(3, 0, 3)]},
+		{"model": null, "path": [Vector3(-1, 0, -1), Vector3(-4, 0, -4)]},
+		{"model": null, "path": [Vector3(9, 0, 9)]},   # single point (no move) → skipped
+	]
+	var starts: Array = S.presentation_start_positions(paths)
+	assert_int(starts.size()).is_equal(2)   # the 1-point path is excluded
+	assert_vector(starts[0] as Vector3).is_equal(Vector3(1, 0, 1))   # each model shown at its route START
+	assert_vector(starts[1] as Vector3).is_equal(Vector3(-1, 0, -1))
+	assert_array(S.presentation_start_positions([])).is_empty()
+
+
+# === Human Ambush reserves (field-test finding 5: the game must ASK) ===
+
+func test_should_prompt_human_ambush_only_from_round_two_with_reserves() -> void:
+	var S := SoloController
+	assert_bool(S.should_prompt_human_ambush(1, 2)).is_false()   # no ambush arrival in round 1 (p.13)
+	assert_bool(S.should_prompt_human_ambush(2, 0)).is_false()   # round 2 but nothing held
+	assert_bool(S.should_prompt_human_ambush(2, 1)).is_true()    # round 2 with a reserve → ASK
+	assert_bool(S.should_prompt_human_ambush(4, 3)).is_true()    # any later round too
+
+
+func test_set_aside_human_ambush_marks_only_the_humans_ambush_units() -> void:
+	var ambusher := _unit(1, [Vector3(0.3, 0, 0.3)])
+	ambusher.unit_id = "amb1"
+	ambusher.unit_properties["special_rules"] = ["Ambush"]
+	var line := _unit(1, [Vector3(-0.3, 0, -0.3)])   # human, no Ambush → stays deployed
+	line.unit_id = "line1"
+	var enemy := _unit(2, [Vector3(0, 0, 0.5)])       # AI unit, carries Ambush but is NOT the human side
+	enemy.unit_id = "ai_amb"
+	enemy.unit_properties["special_rules"] = ["Ambush"]
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {ambusher.unit_id: ambusher, line.unit_id: line, enemy.unit_id: enemy}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)   # human=1, ai=2
+	var set_aside: Array = solo.set_aside_human_ambush()
+	assert_int(set_aside.size()).is_equal(1)
+	assert_bool(SoloController.unit_in_reserve(ambusher)).is_true()
+	assert_bool(SoloController.unit_in_reserve(line)).is_false()    # not an Ambush unit → deployed
+	assert_bool(SoloController.unit_in_reserve(enemy)).is_false()   # AI side untouched by the HUMAN set-aside
+	assert_int(solo.human_reserve_units().size()).is_equal(1)
+	assert_int(solo.set_aside_human_ambush().size()).is_equal(0)    # idempotent — already reserved
+
+
+# === Wound application core (maintainer field test: Tough hero soaked wounds with no visible tick) ===
+
+func test_apply_wounds_decrements_tough_and_reports_seams() -> void:
+	var unit := _unit(2, [Vector3.ZERO])
+	unit.models[0].wounds_max = 3
+	unit.models[0].wounds_current = 3   # a Tough(3) hero
+	var changed: Array = []
+	var died: Array = []
+	var on_changed := func(m: ModelInstance) -> void: changed.append(m)
+	var on_died := func(m: ModelInstance) -> void: died.append(m)
+	# 2 wounds: the hero soaks them, stays alive, and the CHANGED seam fires (wound token + broadcast).
+	assert_int(SoloController.apply_wounds_to_models(unit, 2, on_changed, on_died)).is_equal(0)
+	assert_int(unit.models[0].wounds_current).is_equal(1)
+	assert_bool(unit.models[0].is_alive).is_true()
+	assert_int(changed.size()).is_equal(1)
+	assert_int(died.size()).is_equal(0)
+	# 1 more wound kills him: the DIED seam fires instead.
+	assert_int(SoloController.apply_wounds_to_models(unit, 1, on_changed, on_died)).is_equal(0)
+	assert_bool(unit.models[0].is_alive).is_false()
+	assert_int(died.size()).is_equal(1)
+	assert_int(changed.size()).is_equal(1)
+
+
+func test_apply_wounds_removes_outermost_first_and_returns_leftover() -> void:
+	var unit := _unit(2, [Vector3.ZERO, Vector3(0.03, 0, 0), Vector3(0.06, 0, 0)])   # 3 one-wound models
+	var dead: Array = []
+	var on_died := func(m: ModelInstance) -> void: dead.append(m)
+	# 5 wounds into 3 models: all die, 2 wounds spill to the caller (attached-hero spill — GF v3.5.1
+	# p.9 casualty removal is the defender's order choice). With casualty_order (Bug 24) the CENTRAL
+	# model (index 1) is removed LAST — the outermost bodies go first, so the chain stays intact.
+	assert_int(SoloController.apply_wounds_to_models(unit, 5, Callable(), on_died)).is_equal(2)
+	assert_int(unit.get_alive_count()).is_equal(0)
+	assert_int(dead.size()).is_equal(3)
+	assert_object(dead.back()).is_equal(unit.models[1])   # central model spared longest (coherency)
+
+
+# === AI-action pacing machine (goal 003 game-feel — pure) ===
+
+func test_pace_phases_run_in_order_and_end() -> void:
+	var S := SoloController
+	assert_int(S.pace_next(S.Pace.ANNOUNCE)).is_equal(S.Pace.EXECUTE)
+	assert_int(S.pace_next(S.Pace.EXECUTE)).is_equal(S.Pace.RESOLVE)
+	assert_int(S.pace_next(S.Pace.RESOLVE)).is_equal(S.Pace.OUTCOME)
+	assert_int(S.pace_next(S.Pace.OUTCOME)).is_equal(S.Pace.DONE)
+	assert_int(S.pace_next(S.Pace.DONE)).is_equal(S.Pace.DONE)
+
+
+func test_pace_holds_are_readable_and_fast_forward_shrinks_them() -> void:
+	var S := SoloController
+	# ANNOUNCE and OUTCOME are fixed readable holds; EXECUTE is event-gated (animation/dice) → no hold;
+	# RESOLVE is the post-settle buffer on top of the tray's own physical-rest gate.
+	assert_float(S.pace_seconds(S.Pace.ANNOUNCE, false)).is_equal(S.PACE_ANNOUNCE_S)
+	assert_float(S.pace_seconds(S.Pace.OUTCOME, false)).is_equal(S.PACE_OUTCOME_S)
+	assert_float(S.pace_seconds(S.Pace.RESOLVE, false)).is_equal(S.PACE_DICE_SETTLE_BUFFER_S)
+	assert_float(S.pace_seconds(S.Pace.EXECUTE, false)).is_equal(0.0)
+	assert_float(S.pace_seconds(S.Pace.ANNOUNCE, true)).is_equal_approx(S.PACE_ANNOUNCE_S * S.PACE_FAST_SCALE, 0.0001)
+	assert_float(S.pace_seconds(S.Pace.OUTCOME, true)).is_less(S.pace_seconds(S.Pace.OUTCOME, false))
+
+
+## Finding 7: the activation-choreography attention beat is the named PACE_ATTENTION_S (~2s), and Fast-AI
+## compresses it by PACE_FAST_SCALE exactly like every other fixed hold — so focus → corridors → glide →
+## attacks all shrink proportionally under Fast AI.
+func test_attention_beat_is_named_and_fast_ai_compresses_it() -> void:
+	var S := SoloController
+	assert_float(S.pace_attention_seconds(false)).is_equal(S.PACE_ATTENTION_S)
+	assert_float(S.pace_attention_seconds(true)).is_equal_approx(S.PACE_ATTENTION_S * S.PACE_FAST_SCALE, 0.0001)
+	assert_float(S.pace_attention_seconds(true)).is_less(S.pace_attention_seconds(false))
+
+
+# === Blast(X) + Reliable (GF v3.5.1) ===
+
+func test_blast_hits_match_the_rulebook_example() -> void:
+	# "2 Attacks and Blast(3) scores two hits against a unit with 2 models. Each hit is multiplied by 2,
+	# so the target takes a total of 4 hits."
+	assert_int(AiCombatMath.blast_hits(2, 3, 2)).is_equal(4)
+	assert_int(AiCombatMath.blast_hits(2, 3, 10)).is_equal(6)   # full ×3 against a big unit
+	assert_int(AiCombatMath.blast_hits(2, 3, 1)).is_equal(2)    # capped at 1 model → ×1
+	assert_int(AiCombatMath.blast_hits(0, 3, 5)).is_equal(0)
+	assert_int(AiCombatMath.blast_hits(4, 0, 5)).is_equal(4)    # no Blast → unchanged
+
+
+func test_reliable_shoots_at_quality_2() -> void:
+	assert_int(AiCombatMath.reliable_quality(4, true)).is_equal(2)
+	assert_int(AiCombatMath.reliable_quality(4, false)).is_equal(4)
+	assert_int(AiCombatMath.reliable_quality(2, true)).is_equal(2)
+
+
+func test_shooting_profile_threads_blast_reliable_and_deadly() -> void:
+	# The real-game adapter reads these keys off the AiShooting profile — pin them at the source.
+	var w := {"name": "Heavy Flamer", "range_value": 12, "attacks": 1, "count": 1,
+		"special_rules": ["AP(1)", "Blast(3)", "Reliable", "Deadly(3)"]}
+	var prof := AiShooting.profiles_in_range([w], 12.0)[0] as Dictionary
+	assert_int(int(prof["blast"])).is_equal(3)
+	assert_bool(bool(prof["reliable"])).is_true()
+	assert_int(int(prof["deadly"])).is_equal(3)
+	assert_int(int(prof["ap"])).is_equal(1)
+
+
+func test_forces_hold_for_immobile_and_artillery() -> void:
+	# GF/AoF v3.5.1 p.13: Immobile / Artillery "may only use Hold actions".
+	assert_bool(SoloController.forces_hold(["Immobile"])).is_true()
+	assert_bool(SoloController.forces_hold(["Artillery"])).is_true()
+	assert_bool(SoloController.forces_hold(["Fearless", "Tough(3)"])).is_false()
+	assert_bool(SoloController.forces_hold([])).is_false()
+
+
+func test_has_counter_from_weapon_or_unit_rule() -> void:
+	# Counter as a melee-weapon rule (the usual shape) or granted unit-wide; ranged Counter never counts
+	# (melee_profiles drops ranged weapons).
+	var counter_melee := AiShooting.melee_profiles([{"name": "Spear", "range_value": 0, "attacks": 1, "count": 5, "special_rules": ["Counter"]}])
+	var plain_melee := AiShooting.melee_profiles([{"name": "Fists", "range_value": 0, "attacks": 1, "count": 5, "special_rules": []}])
+	assert_bool(SoloController.has_counter(counter_melee, [])).is_true()
+	assert_bool(SoloController.has_counter(plain_melee, [])).is_false()
+	assert_bool(SoloController.has_counter(plain_melee, ["Counter"])).is_true()
+	assert_bool(SoloController.has_counter([], [])).is_false()
+
+
+func test_model_base_radius_falls_back_without_a_shape() -> void:
+	# A model with no live node yields no SeparationChecker shape → the module's shared 32 mm fallback
+	# (one radius truth between the proximity hint and the AI planner).
+	var m := ModelInstance.new()
+	assert_float(SoloController.model_base_radius_m(m)).is_equal_approx(SeparationChecker.DEFAULT_BASE_RADIUS_M, 0.0001)
+
+
+func test_classify_rule_inventory_three_classes_with_counts() -> void:
+	# RESOLVED (modeled), of which the decision-relevant subset is ALSO marked, and UNKNOWN — prefix
+	# matched ("AP(1)" → "AP"); occurrence counting per bearing entry.
+	var inv := SoloController.classify_rule_inventory(
+		["AP(1)", "AP(2)", "Fearless", "Battleborn", "Deadly(3)", "Weird Aura"],
+		["AP", "Fearless", "Deadly"], ["AP", "Deadly"])
+	assert_int(int((inv["resolved"] as Dictionary).get("AP", 0))).is_equal(2)
+	assert_int(int((inv["resolved"] as Dictionary).get("Fearless", 0))).is_equal(1)
+	assert_int(int((inv["decision"] as Dictionary).get("AP", 0))).is_equal(2)
+	assert_bool((inv["decision"] as Dictionary).has("Fearless")).is_false()
+	assert_int(int((inv["unknown"] as Dictionary).get("Battleborn", 0))).is_equal(1)
+	assert_int(int((inv["unknown"] as Dictionary).get("Weird Aura", 0))).is_equal(1)
+	assert_bool((inv["resolved"] as Dictionary).has("Battleborn")).is_false()
+
+
+func test_decision_log_records_cap_and_drain() -> void:
+	var sc: SoloController = auto_free(SoloController.new())
+	for i in range(SoloController.DECISION_LOG_CAP + 25):
+		sc.record_decision({"kind": "action", "unit": "U%d" % i, "rule": "", "candidates": [],
+			"chosen": "", "why": "", "data": {}})
+	# Ring: bounded at the cap, oldest dropped.
+	assert_int(sc.decision_log.size()).is_equal(SoloController.DECISION_LOG_CAP)
+	assert_str(str((sc.decision_log[0] as Dictionary)["unit"])).is_equal("U25")
+	# Drain empties the buffer and returns everything pending.
+	var drained := sc.drain_decisions()
+	assert_int(drained.size()).is_equal(SoloController.DECISION_LOG_CAP)
+	assert_int(sc.decision_log.size()).is_equal(0)
+
+
+func test_render_decision_formats_candidates_and_reason() -> void:
+	# Rendering is the ONLY formatting step (dev-off = records stay raw dictionaries).
+	var line := SoloController.render_decision({"kind": "target", "unit": "Squad A",
+		"rule": "Solo v3.5.0 p.2", "candidates": [{"name": "B", "ev": 2.4}, {"name": "C", "ev": 1.1}],
+		"chosen": "B", "why": "ev tie-break", "data": {"dist_in": 9.4}})
+	assert_bool(line.contains("Squad A")).is_true()
+	assert_bool(line.contains("B EV 2.40")).is_true()
+	assert_bool(line.contains("chose B")).is_true()
+	assert_bool(line.contains("ev tie-break")).is_true()
+	# A minimal record renders without optional sections.
+	assert_bool(SoloController.render_decision({"kind": "move", "unit": "X"}).contains("X")).is_true()
+
+
+func test_target_key_compare_official_order() -> void:
+	# Not-yet-activated beats activated regardless of band; then the nearer band; equal = genuine tie.
+	var fresh_far := {"activated": false, "band": 20}
+	var done_near := {"activated": true, "band": 2}
+	var fresh_near := {"activated": false, "band": 2}
+	assert_bool(SoloController._target_key_compare(fresh_far, done_near) < 0).is_true()
+	assert_bool(SoloController._target_key_compare(fresh_near, fresh_far) < 0).is_true()
+	assert_int(SoloController._target_key_compare(fresh_near, {"activated": false, "band": 2})).is_equal(0)
+
+
+## Field-test finding 3: a unit HELD in Ambush reserve is off-table — never eligible, never activated (even
+## when it is the only "unit" on its side), and skipped as a valid target. `unit_in_reserve` is the single
+## truth the game reads everywhere.
+func test_reserve_units_never_eligible_activate_or_target() -> void:
+	var enemy := _unit(1, [Vector3(0, 0, 0)])
+	enemy.unit_id = "enemy"
+	var human_reserve := _unit(1, [Vector3(0.15, 0, 0)])   # nearer to the AI, but off-table in reserve
+	human_reserve.unit_id = "human_reserve"
+	human_reserve.unit_properties["ambush_reserve"] = true
+	var reserved := _unit(2, [Vector3(3, 0, 3)])
+	reserved.unit_id = "ai_reserve"
+	reserved.unit_properties["ambush_reserve"] = true
+	var fielded := _unit(2, [Vector3(0.4, 0, 0)])
+	fielded.unit_id = "ai_fielded"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {enemy.unit_id: enemy, human_reserve.unit_id: human_reserve,
+		reserved.unit_id: reserved, fielded.unit_id: fielded}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_bool(SoloController.unit_in_reserve(reserved)).is_true()
+	assert_bool(SoloController.unit_in_reserve(fielded)).is_false()
+	assert_bool(solo.is_eligible(reserved)).is_false()
+	# Only the fielded unit is eligible; activation never picks the reserve, and the second call is empty.
+	assert_array(solo.eligible_ai_units()).contains_exactly([fielded])
+	assert_object(solo.activate_next_ai_unit()).is_equal(fielded)
+	assert_object(solo.activate_next_ai_unit()).is_null()
+	# A reserved HUMAN unit is not a valid AI target even though it is nearer — nearest_human_unit skips it.
+	assert_object(solo.nearest_human_unit(fielded)).is_equal(enemy)
+
+
+## Field-test finding 4: DANGEROUS cells enter the planner's avoid set only when asked (route AROUND them
+## when a clear path exists); Impassable is always avoided, plain ground never.
+func test_terrain_grid_marks_dangerous_avoid_only_when_requested() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(auto_free(OPRArmyManager.new()), null, null, 1, 2)
+	# Cell (0,0)'s centre (~0.038 m) is Dangerous; everything else is open ground.
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		return TerrainRules.TerrainType.DANGEROUS if (p.x < 0.05 and p.z < 0.05) else TerrainRules.TerrainType.NONE
+	var with_avoid: Dictionary = solo._terrain_grid_in(6.0, Vector2.ZERO, false, true)
+	assert_bool((with_avoid["avoid"] as Dictionary).has(Vector2i(0, 0))).is_true()
+	var without: Dictionary = solo._terrain_grid_in(6.0, Vector2.ZERO, false, false)
+	assert_bool((without["avoid"] as Dictionary).has(Vector2i(0, 0))).is_false()
+	# The grid still records the cell's type regardless (so the dangerous TEST still fires when crossed).
+	assert_int(int((without["grid"] as Dictionary).get(Vector2i(0, 0), 0))).is_equal(TerrainRules.TerrainType.DANGEROUS)
+
+
+## Field-test finding 10: Difficult and Dangerous are detected INDEPENDENTLY along a route — a path that
+## crosses a difficult cell AND a dangerous cell reports BOTH, so the dangerous test still happens even when
+## the difficult-terrain (6" cap) handling applies.
+func test_route_reports_difficult_and_dangerous_independently() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(auto_free(OPRArmyManager.new()), null, null, 1, 2)
+	# West half (x<0) is Forest (Difficult); east half (x>0.2) is Dangerous; a W→E path crosses both.
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		if p.x < 0.0:
+			return TerrainRules.TerrainType.FOREST
+		if p.x > 0.2:
+			return TerrainRules.TerrainType.DANGEROUS
+		return TerrainRules.TerrainType.NONE
+	var a := Vector3(-0.1, 0, 0)
+	var b := Vector3(0.3, 0, 0)
+	assert_bool(solo._path_crosses_terrain(a, b, TerrainRules.PathCheck.DIFFICULT)).is_true()
+	assert_bool(solo._path_crosses_terrain(a, b, TerrainRules.PathCheck.DANGEROUS)).is_true()
+
+
+## Field-test finding 5: melee contact is measured base-to-base (not unit centre), and the charge snap pulls
+## the whole unit into clean base contact preserving formation (coherency).
+func test_nearest_melee_gap_and_charge_snap() -> void:
+	var att := _unit(2, [Vector3(0, 0, 0), Vector3(-0.05, 0, 0)])   # two round bases (r≈0.016 m)
+	var foe := _unit(1, [Vector3(0.05, 0, 0)])                       # ~0.018 m edge gap (~0.7") from the front model
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {att.unit_id: att, foe.unit_id: foe}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var gap := solo.nearest_melee_gap_in(att, foe)
+	assert_float(gap).is_between(0.5, 1.0)                           # within melee-engage tolerance, not touching
+	var back_before := att.models[1].node.global_position.x         # the rear model, for the coherency check
+	var snapped := solo.snap_charge(att, foe)
+	assert_float(snapped).is_greater(0.0)
+	# After the snap the nearest models are in clean contact (~0 gap) and the enemy did not move.
+	assert_float(solo.nearest_melee_gap_in(att, foe)).is_less(0.06)
+	assert_float(foe.models[0].node.global_position.x).is_equal_approx(0.05, 0.0001)
+	# The rear model translated by the SAME delta (rigid = coherency preserved).
+	var delta := att.models[0].node.global_position.x - 0.0
+	assert_float(att.models[1].node.global_position.x).is_equal_approx(back_before + delta, 0.0005)
+
+
+# === Round opener: the side that finished FIRST opens the next round (finding 7) ===
+
+func test_ai_opens_next_round_never_back_to_back() -> void:
+	# GF/AoF v3.5.1: "the player that finished activating first on the last round gets to activate first" —
+	# i.e. the side that did NOT take the last activation opens next. So no side takes a round's last
+	# activation AND the next round's first (field-test finding 7).
+	assert_bool(SoloController.ai_opens_next_round(true, true, true)).is_false()    # AI went last → human opens
+	assert_bool(SoloController.ai_opens_next_round(false, true, true)).is_true()    # human went last → AI opens
+
+
+func test_ai_opens_next_round_falls_through_when_opener_is_wiped() -> void:
+	# The designated opener has no units → the other side opens instead.
+	assert_bool(SoloController.ai_opens_next_round(true, false, true)).is_true()    # human wiped → AI opens
+	assert_bool(SoloController.ai_opens_next_round(false, true, false)).is_false()  # AI wiped → human opens
+
+
+# === Melee finding 8: the charger's skipped strike was a missing melee weapon, not a reach asymmetry ===
+
+func test_melee_profiles_empty_for_shooting_only_unit() -> void:
+	# The charger's strikes never rolled because a shooting-only unit yields NO melee-weapon profile (the game
+	# now logs "no melee weapons in reach"). A range-0 weapon DOES yield one.
+	var ranged_only := [{"name": "Heavy Rifle", "range_value": 30, "attacks": 2, "count": 1, "special_rules": []}]
+	assert_array(AiShooting.melee_profiles(ranged_only)).is_empty()
+	var with_melee := [{"name": "CCW", "range_value": 0, "attacks": 3, "count": 1, "special_rules": []}]
+	assert_int(AiShooting.melee_profiles(with_melee).size()).is_equal(1)
+
+
+func test_striking_models_is_symmetric_for_two_bases_in_contact() -> void:
+	# Charger and defender share the SAME nearest-pair reach, so striking_models is symmetric — the charger's
+	# skipped strike (finding 8) was the missing melee weapon, not a reach/scaling asymmetry.
+	var a := [Vector3(0.0, 0.0, 0.0)]
+	var b := [Vector3(0.05, 0.0, 0.0)]   # ~2" apart, within the 1"+2" strike reach
+	assert_int(SoloController.striking_models(a, b)).is_equal(SoloController.striking_models(b, a))
+	assert_int(SoloController.striking_models(a, b)).is_equal(1)
+
+
+# === Field-test round-5 finding 1: the AI must contest + distribute across objectives ===
+
+func test_ai_moves_into_seize_range_of_open_marker_and_seizes() -> void:
+	# A unit within reach of an OPEN neutral marker heads for it, ends in seize range (≤3"), and the round-end
+	# seize then flips the marker to the AI (Solo & Co-Op v3.5.0 p.2/p.6).
+	var human := _unit(1, [Vector3(0.0, 0, -0.55)])   # ~21.6" south — far out of the way
+	var ai := _unit(2, [Vector3(0.0, 0, 0.0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var marker := Vector3(0.0, 0, 0.25)   # ~9.8" north — inside the 12" Rush band, open
+	solo.objectives_provider = func() -> Array: return [marker]
+	solo.objective_owner_of = func(_i: int) -> int: return 0
+
+	solo.activate_next_ai_unit()
+	assert_int(int(solo.last_report["toward"])).is_equal(AiDecision.Toward.OBJECTIVE)
+	assert_float(float(solo.last_report.get("obj_gap_after_in", 999.0))).is_less_equal(3.0)
+	var infos: Array = [{"player": 2, "shaken": false, "positions": solo.alive_positions(ai)}]
+	var res := SoloController.seize_objectives(infos, [marker], [0])
+	assert_int(int((res["owners"] as Array)[0])).is_equal(2)
+
+
+func test_decision_prefers_a_holdable_open_marker_over_a_contested_one() -> void:
+	# Round-5 finding: both armies piled onto the contested centre and never held an open flank. Among un-held
+	# markers the tree now prefers a HOLDABLE one (no enemy within 3") over a contested one — even if farther.
+	var ai := _unit(2, [Vector3(0.0, 0, 0.0)])
+	var enemy := _unit(1, [Vector3(0.20, 0, 0.0)])   # sitting ON the near marker → contests it
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {ai.unit_id: ai, enemy.unit_id: enemy}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var near_contested := Vector3(0.20, 0, 0.0)   # ~7.9", enemy within 3"
+	var far_open := Vector3(0.45, 0, 0.0)          # ~17.7", no enemy near
+	solo.objectives_provider = func() -> Array: return [near_contested, far_open]
+	solo.objective_owner_of = func(_i: int) -> int: return 0
+	# Prefers the farther OPEN marker over the near CONTESTED one.
+	assert_vector(solo._nearest_uncontrolled_objective(solo.unit_centre(ai), ai)).is_equal(far_open)
+
+
+func test_ai_peels_off_a_marker_another_ai_unit_already_holds() -> void:
+	# Official "Controlling Objectives" (Solo & Co-Op v3.5.0 p.2): a marker with an AI non-Shaken majority
+	# within 3" counts as controlled. A SECOND AI unit therefore skips it and heads for the next open marker
+	# (distribution) — but a lone holder does not read itself as controlling and wander off.
+	var mover := _unit(2, [Vector3(0.0, 0, 0.0)])
+	var holder := _unit(2, [Vector3(0.20, 0, 0.0)])   # already sitting on the near marker
+	holder.unit_id = "ai_holder"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {mover.unit_id: mover, holder.unit_id: holder}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var near_marker := Vector3(0.20, 0, 0.0)   # held by `holder`
+	var far_marker := Vector3(0.45, 0, 0.0)     # open
+	solo.objectives_provider = func() -> Array: return [near_marker, far_marker]
+	solo.objective_owner_of = func(_i: int) -> int: return 0
+	# The holder controls the near marker → the mover peels off to the far one.
+	assert_vector(solo._nearest_uncontrolled_objective(solo.unit_centre(mover), mover)).is_equal(far_marker)
+	# The holder itself, deciding, does NOT abandon the marker only it holds — it still targets the near one.
+	assert_vector(solo._nearest_uncontrolled_objective(solo.unit_centre(holder), holder)).is_equal(near_marker)
+
+
+
+
+# === Field-test round-5 finding 3: a charge within the band must REACH base contact ===
+
+func test_charge_within_band_reaches_base_contact() -> void:
+	# GF/AoF v3.5.1 p.8: a charge closes to base contact. The target's bases are ~10.6" away (well inside the
+	# 12" band); the charge must end in contact — the old "aim at the enemy centre, cap at rush" under-shot
+	# and the charge fell short within band (finding 3).
+	var human := _unit(1, [Vector3(0.0, 0, 0.30)])   # ~11.8" centre-to-centre north → ~10.6" base gap
+	var ai := _unit(2, [Vector3(0.0, 0, 0.0)])         # weaponless → MELEE archetype
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)   # no objectives → the tree targets the enemy
+
+	var moved := solo.activate_next_ai_unit()
+	assert_object(moved).is_equal(ai)
+	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.CHARGE)
+	# The nearest bases end within the melee-engage tolerance (1") — i.e. in (or a snap from) base contact.
+	assert_float(solo.nearest_melee_gap_in(ai, human)).is_less_equal(1.0)
+
+
+func test_target_beyond_charge_band_is_not_charged() -> void:
+	# The enemy's bases are ~18" away — beyond the 12" band. The AI must NOT declare a charge it cannot
+	# complete (finding 3): it Rushes toward the enemy instead and does not reach contact.
+	var human := _unit(1, [Vector3(0.0, 0, 0.50)])   # ~19.7" centre-to-centre → ~18.4" base gap
+	var ai := _unit(2, [Vector3(0.0, 0, 0.0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+
+	solo.activate_next_ai_unit()
+	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.RUSH)
+	assert_float(solo.nearest_melee_gap_in(ai, human)).is_greater(1.0)   # did not reach contact
+
+
+# === Field-test round-5 finding 2: a target EV must never render negative ===
+
+func test_render_decision_floors_negative_target_ev() -> void:
+	# The charge tie-break score is a NET utility that can dip below zero; it is only a ranking key, so the
+	# dev log must never show a negative "expected wounds" (finding 2). The positive option still shows raw.
+	var rec := {"kind": "target", "unit": "Warriors", "candidates": [
+		{"name": "Battle Brothers", "ev": -1.11}, {"name": "Master Brother", "ev": 1.11}], "chosen": "Master Brother"}
+	var line := SoloController.render_decision(rec)
+	assert_bool(line.contains("Battle Brothers EV 0.00")).is_true()
+	assert_bool(line.contains("Master Brother EV 1.11")).is_true()
+	assert_bool(line.contains("-1.11")).is_false()
+
+
+# === X1 (test game 2): a resolved human attack IS the activation — double-shoot exploit gate ===
+
+func test_human_attack_completes_activation_unless_pretoggled() -> void:
+	# The old rule auto-completed only WIPED attackers (finding 5); a surviving shooter stayed
+	# un-activated and the radial offered a second volley — the double-shoot exploit. Now any resolved
+	# attack consumes the activation; only a pre-toggled unit (AI already replied) is never
+	# double-counted.
+	assert_bool(SoloController.human_attack_completes_activation(false)).is_true()   # survivor OR wiped → complete
+	assert_bool(SoloController.human_attack_completes_activation(true)).is_false()   # pre-toggled → no double count
+
+
+# === Field-test round 6, finding 6: terrain rest checks use the base OUTER EDGE, not the centre ===
+
+func test_world_forbidden_is_edge_aware_for_a_container_the_base_only_touches() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	# A container occupying x∈[0.10, 0.30] m. A base centred at x=0.09 (just OUTSIDE) with radius 0.02 m has
+	# its outer edge (x=0.11) INSIDE the container — the edge-aware check must reject it, while a centre-only
+	# check (radius 0) passes: exactly the "models half inside containers" cause.
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		return int(TerrainRules.TerrainType.CONTAINER) if p.x >= 0.10 and p.x <= 0.30 else int(TerrainRules.TerrainType.NONE)
+	var centre := Vector3(0.09, 0.0, 0.0)
+	assert_bool(solo._world_forbidden(centre, 0.0)).is_false()      # centre-only: clear
+	assert_bool(solo._world_forbidden(centre, 0.02)).is_true()      # edge-aware: the base edge overlaps the container
+
+
+# === Field-test round 6, finding 2: coherency repair is per-model + minimal (no whole-unit under-move) ===
+
+func test_pull_stragglers_restores_coherency_without_moving_the_advanced_models() -> void:
+	# Two models sit linked+advanced; a third has fallen out of coherency. The minimal per-model repair pulls
+	# ONLY the straggler back into a link, leaving the two advanced models exactly where they moved to — unlike
+	# the whole-unit shorten, which would drag the entire unit back toward the start and under-move it.
+	var r: float = SeparationChecker.DEFAULT_BASE_RADIUS_M
+	var unit := _unit(2, [Vector3.ZERO, Vector3(r * 2.8, 0, 0), Vector3.ZERO])   # positions overwritten below
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	var models: Array = unit.get_alive_models()
+	var cfg: Array = [Vector3(0, 0, 0), Vector3(r * 2.8, 0, 0), Vector3(0, 0, 0.30)]   # model2 marooned 0.30 m away
+	assert_bool(solo._config_coherent_world(models, cfg, CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES)).is_false()
+	var ok: bool = solo._pull_stragglers_coherent_world(models, cfg, [], CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES)
+	assert_bool(ok).is_true()
+	assert_bool(solo._config_coherent_world(models, cfg, CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES)).is_true()
+	# The two advanced models did NOT retreat (minimal repair — the under-move fix).
+	assert_float((cfg[0] as Vector3).distance_to(Vector3(0, 0, 0))).is_less(0.01)
+	assert_float((cfg[1] as Vector3).distance_to(Vector3(r * 2.8, 0, 0))).is_less(0.01)
+
+
+# === Wave-5: Indirect hold overlay + LOS waiver, Musician move bands, Limited once-per-game ===
+
+func _weapon(rng: int, rules: Array) -> OPRApiClient.OPRWeapon:
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "W%d" % rng
+	w.range_value = rng
+	w.attacks = 2
+	w.count = 1
+	for r in rules:
+		w.special_rules.append(str(r))
+	return w
+
+
+func test_hold_and_shoot_overlay_names_relentless_or_indirect() -> void:
+	# Solo AI overlays: a Relentless — or (wave 5) Indirect — ranged weapon with an enemy in range
+	# forces Hold-and-shoot; the returned label names the trigger for the decision record.
+	assert_str(SoloController.hold_and_shoot_rule([_weapon(24, ["Relentless"])], true)).is_equal("Relentless")
+	assert_str(SoloController.hold_and_shoot_rule([_weapon(24, ["Indirect"])], true)).is_equal("Indirect")
+	assert_str(SoloController.hold_and_shoot_rule([_weapon(24, ["AP(1)"])], true)).is_equal("")
+	# Out of range → no overlay; melee Indirect (range 0) never counts.
+	assert_str(SoloController.hold_and_shoot_rule([_weapon(24, ["Indirect"])], false)).is_equal("")
+	assert_str(SoloController.hold_and_shoot_rule([_weapon(0, ["Indirect"])], true)).is_equal("")
+	# The boolean wrapper keeps the pre-wave-5 contract.
+	assert_bool(SoloController._forces_hold_and_shoot([_weapon(24, ["Indirect"])], true)).is_true()
+
+
+func test_has_indirect_ranged_ignores_melee_weapons() -> void:
+	assert_bool(SoloController.has_indirect_ranged([_weapon(24, ["Indirect"])])).is_true()
+	assert_bool(SoloController.has_indirect_ranged([_weapon(0, ["Indirect"]), _weapon(24, ["AP(1)"])])).is_false()
+	assert_bool(SoloController.has_indirect_ranged([])).is_false()
+
+
+func test_musician_grants_one_inch_on_move_bands() -> void:
+	# Musician (wave 5, core rule — data-derived +1" on move actions). A plain unit gets nothing.
+	var mus := _unit(2, [Vector3.ZERO])
+	mus.unit_properties["special_rules"] = ["Musician"]
+	assert_float(SoloController.musician_move_bonus_in(mus)).is_equal_approx(1.0, 0.0001)
+	var plain := _unit(2, [Vector3.ZERO])
+	assert_float(SoloController.musician_move_bonus_in(plain)).is_equal_approx(0.0, 0.0001)
+	assert_float(SoloController.musician_move_bonus_in(null)).is_equal_approx(0.0, 0.0001)
+
+
+func test_limited_profiles_fire_once_per_game() -> void:
+	# Limited (core v3.5.1: "may only be used once per game"): the shared pre-filter feeds BOTH the
+	# dice path and the EV, so an expended weapon neither rolls nor sways targeting.
+	var sc: SoloController = auto_free(SoloController.new())
+	var u := _unit(2, [Vector3.ZERO])
+	var limited_prof := {"name": "Rocket", "attacks": 1, "limited": true}
+	var plain_prof := {"name": "Rifle", "attacks": 10, "limited": false}
+	var profiles := [limited_prof, plain_prof]
+	# Untouched before the first shot.
+	assert_int(sc.filter_limited(u, profiles).size()).is_equal(2)
+	assert_bool(sc.is_limited_used(u, limited_prof)).is_false()
+	# After firing: the Limited profile is spent — filtered out, and a decision record was emitted.
+	sc.mark_limited_used(u, limited_prof)
+	assert_bool(sc.is_limited_used(u, limited_prof)).is_true()
+	var left := sc.filter_limited(u, profiles)
+	assert_int(left.size()).is_equal(1)
+	assert_str(str((left[0] as Dictionary)["name"])).is_equal("Rifle")
+	assert_bool(sc.drain_decisions().size() > 0).is_true()
+	# Another unit's identical weapon name is NOT spent (per-unit state).
+	var other := _unit(2, [Vector3(1, 0, 0)])
+	other.unit_id = "other_unit"
+	assert_bool(sc.is_limited_used(other, limited_prof)).is_false()
+
+
+# === Round 7, finding 3: melee strike reach is measured base EDGE to base edge ===
+
+func test_striking_models_for_counts_a_big_base_in_contact() -> void:
+	# A 100 mm walker base-touching a 25 mm defender: centres sit ~3.5" apart, so the old centre-space
+	# count (2" reach + fixed 1" contact allowance) said NEITHER side had a model in reach — the charging
+	# walker never struck and only tiny bases ever fought. The base-EDGE measure counts both sides.
+	var walker := _unit(2, [Vector3(0, 0, 0)])
+	walker.unit_properties["base_size_round"] = 100
+	walker.models[0].unit = walker
+	var foe := _unit(1, [Vector3(0.09, 0, 0)])   # edge gap 90 - 50 - 12.5 = 27.5 mm ≈ 1.1" (within 2" reach)
+	foe.unit_properties["base_size_round"] = 25
+	foe.models[0].unit = foe
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	assert_int(solo.striking_models_for(walker, foe)).is_equal(1)
+	assert_int(solo.striking_models_for(foe, walker)).is_equal(1)
+	# The centre-space fallback (kept for the sim) misses the same pair — the documented old bug.
+	assert_int(SoloController.striking_models([Vector3(0, 0, 0)], [Vector3(0.09, 0, 0)])).is_equal(0)
+	# Far apart (edge gap ~4.3") neither measure finds a striker.
+	foe.models[0].node.global_position = Vector3(0.172, 0, 0)
+	assert_int(solo.striking_models_for(walker, foe)).is_equal(0)
+
+
+# === Round 7, finding 4: winner consolidation (official rulebook p.9 — enemy destroyed → up to 3") ===
+
+func test_consolidate_after_melee_win_moves_toward_next_target() -> void:
+	# No objectives wired → the EV-aware goal falls to the nearest enemy: the winner closes 3" toward it.
+	var winner := _unit(2, [Vector3(0, 0, 0)])
+	var next_foe := _unit(1, [Vector3(0.5, 0, 0)])   # ~19.7" east
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {winner.unit_id: winner, next_foe.unit_id: next_foe}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.consolidate_after_melee_win(winner)
+	assert_float(winner.models[0].node.global_position.x).is_equal_approx(3.0 * 0.0254, 0.006)
+	# The decision lane recorded the consolidation.
+	var kinds: Array = []
+	for rec in solo.drain_decisions():
+		kinds.append(str((rec as Dictionary).get("kind", "")))
+	assert_bool(kinds.has("consolidate")).is_true()
+
+
+func test_consolidate_after_melee_win_is_slot_aware_for_the_defender() -> void:
+	# The DEFENDER (the controller's human_slot side in an arena game) must consolidate toward ITS enemy —
+	# the other side — never toward its own units (the slot-aware _nearest_enemy_of seam).
+	var defender := _unit(1, [Vector3(0, 0, 0)])
+	var own_friend := _unit(1, [Vector3(-0.3, 0, 0)])
+	own_friend.unit_id = "p1_friend"
+	var foe := _unit(2, [Vector3(0.5, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {defender.unit_id: defender, own_friend.unit_id: own_friend, foe.unit_id: foe}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.consolidate_after_melee_win(defender)
+	assert_float(defender.models[0].node.global_position.x).is_greater(0.05)   # moved EAST, toward the foe
+
+
+func test_consolidate_after_melee_win_prefers_an_uncontrolled_objective() -> void:
+	# With an uncontrolled marker in reach preference, the 3" consolidation heads for it (seize progress),
+	# not the enemy standing the other way.
+	var winner := _unit(2, [Vector3(0, 0, 0)])
+	var foe := _unit(1, [Vector3(0.5, 0, 0)])          # enemy east
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {winner.unit_id: winner, foe.unit_id: foe}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.objectives_provider = func() -> Array: return [Vector3(-0.4, 0, 0)]   # marker west
+	solo.objective_owner_of = func(_i: int) -> int: return 0                    # uncontrolled
+	solo.consolidate_after_melee_win(winner)
+	assert_float(winner.models[0].node.global_position.x).is_less(-0.05)      # moved WEST, toward the marker
+
+
+# === Round 7, finding 6 (coordination slice): yield a bigger friendly shooter's line of fire ===
+
+func test_yielded_goal_side_steps_a_friendly_fire_lane() -> void:
+	# The mover's destination parks it ON a friendly fire lane running south-north through it: the goal is
+	# offset laterally to the first side-step that clears the lane while keeping (almost) full progress.
+	var corridors := [{"a": Vector2(0, -10), "b": Vector2(0, 30), "friend": "Guns"}]
+	var res := SoloController.yielded_goal_2d(Vector2(0, 0), Vector2(0, 12), 6.0, corridors, 1.5, [2.0, 4.0], 1.0)
+	assert_bool(bool(res["yielded"])).is_true()
+	var g: Vector2 = res["goal"]
+	assert_float(absf(g.x)).is_greater_equal(2.0)
+	assert_str(str(res["friend"])).is_equal("Guns")
+	# The yielded END still advances nearly the full band (an "equivalent position", not a retreat).
+	var end := Vector2(0, 0) + (g - Vector2(0, 0)).normalized() * 6.0
+	assert_float(end.y).is_greater(5.0)
+
+
+func test_yielded_goal_keeps_a_clear_or_unavoidable_goal() -> void:
+	var corridors := [{"a": Vector2(0, -10), "b": Vector2(0, 30), "friend": "Guns"}]
+	# A mover far from the lane is untouched.
+	var free := SoloController.yielded_goal_2d(Vector2(10, 0), Vector2(10, 12), 6.0, corridors, 1.5, [2.0, 4.0], 1.0)
+	assert_bool(bool(free["yielded"])).is_false()
+	assert_that(free["goal"]).is_equal(Vector2(10, 12))
+	# No corridors at all → never yields.
+	var none := SoloController.yielded_goal_2d(Vector2(0, 0), Vector2(0, 12), 6.0, [], 1.5, [2.0, 4.0], 1.0)
+	assert_bool(bool(none["yielded"])).is_false()
+
+
+# === Round 7, finding 2: stall escalation — hemmed in by difficult terrain, go THROUGH at the cap ===
+
+func test_move_stalled_by_difficult_ring_replans_through_at_the_cap() -> void:
+	# The unit starts inside a pocket of difficult terrain (a forest ring 2"–10" out): routing AROUND is
+	# impossible, so the old avoid-first plan stalled at the ring's edge — the maintainer's "moves only
+	# half an inch toward something". The stall escalation re-plans THROUGH the forest: legal, at the
+	# official 6" difficult cap, and the unit actually covers ground.
+	var human := _unit(1, [Vector3(0, 0, 0.55)])   # ~21.7" north — beyond charge → the melee unit RUSHES
+	var ai := _unit(2, [Vector3(0, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		var m: float = maxf(absf(p.x), absf(p.z))
+		return TerrainRules.TerrainType.FOREST if (m > 0.04 and m < 0.25) else TerrainRules.TerrainType.NONE
+	var moved := solo.activate_next_ai_unit()
+	assert_object(moved).is_equal(ai)
+	assert_int(int(solo.last_report["action"])).is_equal(AiDecision.Action.RUSH)
+	# The unit went THROUGH the ring: well past the ~3" stall line, capped at the 6" difficult budget.
+	var move_rec: Dictionary = {}
+	for rec in solo.drain_decisions():
+		if str((rec as Dictionary).get("kind", "")) == "move":
+			move_rec = rec as Dictionary
+	assert_bool(move_rec.is_empty()).is_false()
+	var data: Dictionary = move_rec.get("data", {})
+	assert_float(float(data.get("achieved_in", 0.0))).is_greater(3.5)
+	assert_float(float(data.get("budget_in", 0.0))).is_equal_approx(6.0, 0.01)
+	assert_str(str(move_rec.get("why", ""))).is_equal("difficult cap")
+
+
+## Bug 24: casualty order removes plain models before special-weapon carriers, and among plain
+## models the OUTERMOST first (coherency-safe). Model 2 carries a Flamer, model 0 is elevated Tough.
+func test_casualty_order_spares_value_and_removes_from_the_edge() -> void:
+	var u := _unit(2, [Vector3(-0.30, 0, 0), Vector3(0, 0, 0), Vector3(0.30, 0, 0)])
+	# model 0: weapon-team body (Tough 3) — most valuable; model 2: a special weapon; model 1: plain, central.
+	u.models[0].wounds_max = 3
+	u.models[0].wounds_current = 3
+	u.models[0].properties["weapons"] = [{"name": "Rifle"}]
+	u.models[1].properties["weapons"] = [{"name": "Rifle"}]
+	u.models[2].properties["weapons"] = [{"name": "Rifle"}, {"name": "Flamer"}]
+	var order := SoloController.casualty_order(u)
+	# Plain models first (0 is elevated Tough, 2 has the special weapon → both later); of the plain
+	# bodies the outermost dies before the central one — here only model 1 is plain, so it leads.
+	assert_int(int(order[0])).is_equal(1)
+	assert_int(int(order.back())).is_equal(0)   # the Tough weapon-team body is spared longest
+	# The Flamer carrier outranks the plain body but is cheaper than the elevated-Tough body.
+	assert_int(order.find(2)).is_less(order.find(0))
+
+
+# === P2: Regroup mandatory action — a casualty-torn unit gathers (GF v3.5.1 p.7) ===
+
+func test_torn_unit_regroups_at_activation_start() -> void:
+	# An AI unit whose two models are ~4" apart is OUT of coherency (link is 1"). Its activation must be
+	# a REGROUP that pulls them back together, not a fight/advance. A human unit sits far away.
+	var human := _unit(1, [Vector3(0, 0, 1.0)])          # ~39" north — nothing to charge/shoot into
+	var ai := _unit(2, [Vector3(0, 0, 0), Vector3(0.10, 0, 0)])   # two models ~3.9" apart → torn
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	# Precondition: the unit really is torn before it acts.
+	assert_bool(solo.unit_coherent_now(ai)).is_false()
+	var moved := solo.activate_next_ai_unit()
+	assert_object(moved).is_equal(ai)
+	# It took the regroup action and is now back in coherency (the stragglers were pulled together).
+	var regrouped := false
+	for rec in solo.drain_decisions():
+		if str((rec as Dictionary).get("why", "")) == "torn at activation start (casualties)":
+			regrouped = true
+	assert_bool(regrouped).is_true()
+	assert_bool(solo.unit_coherent_now(ai)).is_true()
+
+
+## No Retreat's self-wound dice count: the wounds it would take to FULLY destroy the unit — every
+## alive model's remaining wounds summed (a wounded Tough model counts its remainder, dead models 0),
+## attached heroes included (they are part of the unit).
+func test_wounds_to_destroy_sums_remaining_wounds() -> void:
+	var u := _unit(2, [Vector3.ZERO, Vector3(0.05, 0, 0), Vector3(0.10, 0, 0)])
+	u.models[0].wounds_max = 3
+	u.models[0].wounds_current = 2   # a wounded Tough(3): 2 left
+	u.models[1].wounds_current = 1   # plain model
+	u.models[2].is_alive = false
+	u.models[2].wounds_current = 0   # dead: contributes nothing
+	assert_int(SoloController.wounds_to_destroy(u)).is_equal(3)
+	assert_int(SoloController.wounds_to_destroy(null)).is_equal(0)
+
+
+## Shrouding family (quick-win wave): the registry-aware reach seams. Ranged Shrouding trims a
+## shooter's working reach -6" (min 6"); Melee Shrouding trims the charge band -3" (min 6");
+## a plain target leaves both untouched, and effective_shoot_reach_in composes with Aircraft (flat).
+func test_shroud_reach_seams() -> void:
+	var plain := _unit(1, [Vector3.ZERO])
+	var rs := _unit(1, [Vector3.ZERO])
+	rs.unit_properties["special_rules"] = ["Ranged Shrouding"]
+	var ms := _unit(1, [Vector3.ZERO])
+	ms.unit_properties["special_rules"] = ["Melee Shrouding"]
+	assert_float(SoloController.ranged_shroud_reach_in(24.0, plain)).is_equal_approx(24.0, 0.001)
+	assert_float(SoloController.ranged_shroud_reach_in(24.0, rs)).is_equal_approx(18.0, 0.001)
+	assert_float(SoloController.ranged_shroud_reach_in(9.0, rs)).is_equal_approx(6.0, 0.001)
+	assert_float(SoloController.melee_shroud_charge_in(12.0, plain)).is_equal_approx(12.0, 0.001)
+	assert_float(SoloController.melee_shroud_charge_in(12.0, ms)).is_equal_approx(9.0, 0.001)
+	assert_float(SoloController.melee_shroud_charge_in(8.0, ms)).is_equal_approx(6.0, 0.001)
+	assert_float(SoloController.effective_shoot_reach_in(24.0, rs)).is_equal_approx(18.0, 0.001)
+	assert_float(SoloController.effective_shoot_reach_in(24.0, plain)).is_equal_approx(24.0, 0.001)
+
+
+## Vanguard (wahl-wave follow-up): after deploying, the unit is pushed up to 9" toward the table
+## centre (the enemy side) — on an empty table the full push lands it OUTSIDE its deploy zone.
+func test_vanguard_pushes_forward_out_of_the_deploy_zone() -> void:
+	var vg := _unit(2, [Vector3(0, 0, 0.5)])
+	vg.unit_properties["special_rules"] = ["Vanguard"]
+	vg.unit_properties["game_system"] = "gf"
+	vg.unit_properties["faction_folder"] = "dark_elf_raiders"   # a book that fields Vanguard (registry gate)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {vg.unit_id: vg}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	# Zone strip at the table's south edge (z in [0.3, 0.6]); forward = toward the centre = -z.
+	var zone := Rect2(Vector2(-0.61, 0.3), Vector2(1.22, 0.3))
+	var no_block := func(_p: Vector2) -> bool: return false
+	var res: Dictionary = solo.deploy_army(zone, [Vector2(0, 0)], no_block, no_block, 7)
+	assert_int(int(res["deployed"])).is_equal(1)
+	var c := solo.unit_centre(vg)
+	assert_bool(c.z < 0.3 - 0.01).is_true()   # left the zone toward the enemy side (9" = 0.2286 m)
+
+
+## Maintainer policy (2026-07-19): every applied special rule surfaces in the battle log. The
+## controller's report carries `rule_notes`; main prints them. Teleport is the reference case —
+## active on the acting unit → exactly one note naming the band bonuses.
+func test_rule_notes_carry_teleport_on_activation() -> void:
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var ai := _unit(2, [Vector3(0.5, 0, 0)])
+	ai.unit_properties["special_rules"] = ["Teleport"]
+	# Registry activity is system+faction-scoped — a bare unit falls back to common-only lookup,
+	# where Teleport is NOT modeled. Mirror what the army import sets.
+	ai.unit_properties["game_system"] = "gf"
+	ai.unit_properties["faction_folder"] = "eternal_dynasty"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_object(solo.activate_next_ai_unit()).is_equal(ai)
+	var notes: Array = solo.last_report.get("rule_notes", [])
+	assert_int(notes.size()).is_equal(1)
+	assert_str(str(notes[0])).contains("Teleport")
+	# A plain unit produces NO notes (no noise in the log).
+	human.is_activated = false
+	var plain := _unit(2, [Vector3(0.6, 0, 0)])
+	plain.unit_id = "plain_ai"
+	army.game_units[plain.unit_id] = plain
+	assert_object(solo.activate_next_ai_unit()).is_equal(plain)
+	assert_int((solo.last_report.get("rule_notes", []) as Array).size()).is_equal(0)
+
+
+# === Testspiel-Welle 3 (2026-07-22) ===
+
+## Der Charge-Snap ist BEWEGUNG: das Restbudget = Budget minus längster Einzelmodell-Bogen.
+func test_last_move_remaining_in_uses_longest_model_arc() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.last_move_budget_in = 6.0
+	var m := 0.0254
+	solo.last_move_paths = [
+		{"path": [Vector3.ZERO, Vector3(2.0 * m, 0, 0)]},                       # 2" Bogen
+		{"path": [Vector3.ZERO, Vector3(3.0 * m, 0, 0), Vector3(3.0 * m, 0, 2.5 * m)]},  # 5.5" Bogen
+	]
+	assert_float(solo.last_move_remaining_in()).is_equal_approx(0.5, 0.01)
+	solo.last_move_paths = []
+	assert_float(solo.last_move_remaining_in()).is_equal_approx(6.0, 0.01)
+
+
+## Kanten-bewusster Difficult-Trigger: Pfadzentrum läuft AN der Zone vorbei, die Basenkante ragt hinein.
+func test_trails_cross_difficult_fires_on_base_edge_graze() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	var m := 0.0254
+	# Difficult-Zone: x >= 0.0 (Weltmeter). Pfad läuft bei x = -0.5" parallel zur Kante.
+	solo.terrain_type_at = func(p) -> int:
+		var x: float = (p as Vector3).x if p is Vector3 else (p as Vector2).x
+		return TerrainRules.TerrainType.FOREST if x >= 0.0 else TerrainRules.TerrainType.NONE
+	var trail := [[Vector3(-0.5 * m, 0, 0), Vector3(-0.5 * m, 0, 10.0 * m)]]
+	# Ohne Radius (Alt-Verhalten): kein Treffer — das war der Exploit.
+	assert_bool(solo._trails_cross_difficult(trail, [])).is_false()
+	# Mit 1"-Basenradius: die Kante ragt 0.5" hinein → Cap-Trigger feuert.
+	assert_bool(solo._trails_cross_difficult(trail, [1.0 * m])).is_true()
+	# Basenradius 0.4" (Kante endet bei -0.1"): weiterhin frei.
+	assert_bool(solo._trails_cross_difficult(trail, [0.4 * m])).is_false()
+
+
+## Zauber-Welle F2: spell_candidates ist slot-parametrisiert — die Menschen-Perspektive zieht
+## friendly-Ziele aus dem EIGENEN Slot (der alte _spell_targets war KI-fest verdrahtet).
+func test_spell_candidates_respects_caster_perspective() -> void:
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var human2 := _unit(1, [Vector3(0.1, 0, 0)])
+	human2.unit_id = "h2"
+	var ai := _unit(2, [Vector3(0.3, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, human2.unit_id: human2, ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var entry := {"range_in": 24.0, "target": {"side": "enemy", "count": 1}}
+	# Menschen-Perspektive (own=1, other=2): enemy-Ziel = die KI-Einheit.
+	var enemies: Array = solo.spell_candidates(human, entry, 1, 2)
+	assert_int(enemies.size()).is_equal(1)
+	assert_object(enemies[0]).is_equal(ai)
+	# friendly-Seite: die eigenen Einheiten (inkl. Caster-Einheit selbst).
+	var fentry := {"range_in": 24.0, "target": {"side": "friendly", "count": 2}}
+	var friends: Array = solo.spell_candidates(human, fentry, 1, 2)
+	assert_bool(friends.has(human)).is_true()
+	assert_bool(friends.has(human2)).is_true()
+	# KI-Perspektive unverändert (own=2, other=1): enemy = Menschen.
+	var ai_enemies: Array = solo.spell_candidates(ai, entry, 2, 1)
+	assert_int(ai_enemies.size()).is_equal(2)
+
+
+## Gate-Refinement (2026-07-22): das Charge-Deklarations-Gate probt kanten-bewusst — ein Korridor,
+## dessen Mittellinie frei ist, dessen Basenbreite aber Difficult streift, zählt als gekappt.
+func test_charge_cap_gate_is_edge_aware() -> void:
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var ai := _unit(2, [Vector3(0.5, 0, 0)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var m := 0.0254
+	# Difficult-Band quer über ALLE Korridore (x 0.1..0.4 überspannt Mitte + beide 4"-Offsets),
+	# aber nur als schmaler Kanten-Streifen bei z >= -0.005 (Korridor-Mittellinien bei z=0 sind... )
+	# — einfacher: Wald überall außer einem schmalen z-Fenster, das die Mittellinie passiert, die
+	# Basenkante (0.5" Radius) aber nicht.
+	solo.terrain_type_at = func(p) -> int:
+		var v := p as Vector3
+		if v.x < 0.05 or v.x > 0.45:
+			return TerrainRules.TerrainType.NONE
+		# freies Fenster: |z| < 0.006 m (~0.24") — Mittellinien frei, 0.5"-Kante streift.
+		return TerrainRules.TerrainType.NONE if absf(v.z) < 0.006 else TerrainRules.TerrainType.FOREST
+	var from := Vector3(0.0, 0, 0)
+	var to := Vector3(0.5, 0, 0)
+	# Gap 19.7" > 6"-Cap; Modelle haben Default-Basenradius (~0.5").
+	assert_bool(solo._charge_capped_by_difficult(ai, from, to, 19.7)).is_true()
+
+
+## NML-002 Strafing: purer Move-Through-Test — Trail-Bein über einer Basis zählt, vorbei nicht.
+func test_trails_cross_unit_bases() -> void:
+	var enemy := _unit(1, [Vector3(0.2, 0, 0.2)])
+	var m := 0.0254
+	# Bein läuft mittig über die Basis (Radius Default ~0.016 m).
+	var hit := [[Vector3(0.2, 0, 0.0), Vector3(0.2, 0, 0.4)]]
+	assert_bool(SoloController.trails_cross_unit_bases(hit, enemy.models)).is_true()
+	# Bein 3" daneben: kein Treffer.
+	var miss := [[Vector3(0.2 + 3.0 * m, 0, 0.0), Vector3(0.2 + 3.0 * m, 0, 0.4)]]
+	assert_bool(SoloController.trails_cross_unit_bases(miss, enemy.models)).is_false()
+
+
+## NML-206 (Live-Test-Befund): Zauber-Reichweite misst Basenkante-zu-Basenkante, nicht Zentrum —
+## ein Ziel, dessen naechstes Modell in Reichweite steht, ist legal, auch wenn das Zentrum weiter weg ist.
+func test_spell_candidates_range_is_edge_based() -> void:
+	var caster := _unit(1, [Vector3(0, 0, 0)])
+	# Breite Einheit: naechstes Modell bei 11" (0.2794 m), Zentrum bei ~13" — Zentrum-Messung wuerde ablehnen.
+	var wide := _unit(1, [Vector3(0.2794, 0, 0), Vector3(0.3810, 0, 0)])
+	wide.unit_id = "wide"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {caster.unit_id: caster, wide.unit_id: wide}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var fentry := {"range_in": 12.0, "target": {"side": "friendly", "count": 1}}
+	var friends: Array = solo.spell_candidates(caster, fentry, 1, 2)
+	assert_bool(friends.has(wide)).is_true()
+	# Und ein Ziel JENSEITS der Kanten-Reichweite bleibt draussen.
+	var far := _unit(1, [Vector3(0.5, 0, 0)])   # ~19.7" edge gap
+	far.unit_id = "far"
+	army.game_units["far"] = far
+	var friends2: Array = solo.spell_candidates(caster, fentry, 1, 2)
+	assert_bool(friends2.has(far)).is_false()
+
+
+# === X2 (test game 2, B15): a dead bearer's weapon dies with it — living-bearer count ===
+
+func test_alive_bearers_of_counts_only_living_carriers() -> void:
+	# The Destroyer case from the log: 3 models, every model a sword, ONE fist on model 0. Two
+	# casualties (models 0+1) leave a single survivor — the fist's bearer is dead, so the fist
+	# contributes 0 copies while the survivor's own sword still counts 1.
+	var u := _unit(1, [Vector3.ZERO, Vector3(0.1, 0, 0), Vector3(0.2, 0, 0)])
+	EquipmentDistributor.distribute(u, [
+		{"name": "Energy Sword", "attacks": 2, "count": 3, "specialRules": []},
+		{"name": "Energy Fist", "attacks": 2, "count": 1, "specialRules": []},
+	], [])
+	u.models[0].is_alive = false   # the fist's bearer (limited items fill from model 0)
+	u.models[1].is_alive = false
+	assert_int(SoloController.alive_bearers_of(u, "Energy Fist")).is_equal(0)
+	assert_int(SoloController.alive_bearers_of(u, "Energy Sword")).is_equal(1)
+	# All alive again — full counts.
+	u.models[0].is_alive = true
+	u.models[1].is_alive = true
+	assert_int(SoloController.alive_bearers_of(u, "Energy Fist")).is_equal(1)
+	assert_int(SoloController.alive_bearers_of(u, "Energy Sword")).is_equal(3)
+	# A unit with NO per-model loadout data signals -1 → the strike builder falls back to ratio scaling.
+	var bare := _unit(1, [Vector3.ZERO])
+	assert_int(SoloController.alive_bearers_of(bare, "Energy Sword")).is_equal(-1)
+
+
+# === X3 (test game 2, B7): an attached caster hero must count ONCE in the boost/interference pool ===
+
+func test_aura_casters_counts_an_attached_hero_once() -> void:
+	# The hero appears in game_units AND in its host's member walk — the double count offered the
+	# player more boost tokens than existed (and the draw then "spent" phantom ones), which read as
+	# "the tableau ignores the spell's cost" in test game 2.
+	var host := _unit(1, [Vector3(0, 0, 0), Vector3(0.03, 0, 0)])
+	host.unit_id = "host"
+	var hero := _unit(1, [Vector3(0.06, 0, 0)])
+	hero.unit_id = "hero"
+	hero.unit_properties["special_rules"] = ["Caster(3)"]
+	hero.casts_current = 1   # what is LEFT after paying a 2-token spell from 3
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {host.unit_id: host, hero.unit_id: hero}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var helpers: Array = solo._aura_casters(1, host, null)
+	assert_int(helpers.size()).is_equal(1)   # the hero ONCE — not host-member + standalone entry
+	var pool := 0
+	for h in helpers:
+		pool += int((h as Dictionary)["tokens"])
+	assert_int(pool).is_equal(1)             # exactly the remaining tokens — no phantom double
+
+
+# === B4 (test game 1): slot-based pile-in — every legal model reaches ITS OWN contact point ===
+
+func test_pile_in_fans_all_models_onto_distinct_contact_slots() -> void:
+	# Three defenders hover ~1.1" off a single charger base. The old pile-in sent ALL of them at the
+	# same nearest point — the first arrival blocked the rest ("2 models pile in" where 3 could).
+	# Slot-based: each model gets its own arc point, so all three end in base contact.
+	var charger := _unit(2, [Vector3(0, 0, 0)])
+	charger.unit_id = "charger"
+	var defender := _unit(1, [Vector3(-0.02, 0, 0.06), Vector3(0, 0, 0.06), Vector3(0.02, 0, 0.06)])
+	defender.unit_id = "defender"
+	defender.unit_properties["special_rules"] = ["Flying"]   # skirts terrain walls (none injected here)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {charger.unit_id: charger, defender.unit_id: defender}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var moves: Array = solo.pile_in(defender, charger)
+	assert_int(moves.size()).is_equal(3)   # every non-contact model found a step
+	var eps_m := SeparationChecker.BASE_CONTACT_EPSILON_INCHES * 0.0254
+	var contacts := 0
+	for m in defender.models:
+		var mi := m as ModelInstance
+		var gap: float = Vector2(mi.node.global_position.x, mi.node.global_position.z).length() \
+			- SoloController.model_base_radius_m(mi) - SoloController.model_base_radius_m(charger.models[0])
+		if gap <= eps_m:
+			contacts += 1
+	assert_int(contacts).is_equal(3)       # a fan around the base, not a queue behind one spot
+
+
+# === Deployment wave: item-granted Ambush (B12), Scout band (B9), alternating deploy (B1) ===
+
+func test_unit_has_ambush_covers_item_granted_rule() -> void:
+	# The B12 root: Ambush granted by an UPGRADE lives in item_grants, not special_rules — the unit
+	# was never set aside, so the round-2 prompt had nothing to ask about.
+	var direct := _unit(1, [Vector3.ZERO])
+	direct.unit_properties["special_rules"] = ["Ambush"]
+	assert_bool(SoloController.unit_has_ambush(direct)).is_true()
+	var granted := _unit(1, [Vector3.ZERO])
+	granted.unit_properties["special_rules"] = ["Tough(3)"]
+	granted.unit_properties["item_grants"] = {"Drop Pod": ["Ambush"]}
+	assert_bool(SoloController.unit_has_ambush(granted)).is_true()
+	var plain := _unit(1, [Vector3.ZERO])
+	assert_bool(SoloController.unit_has_ambush(plain)).is_false()
+
+
+func test_scout_extended_zone_grows_toward_table_centre() -> void:
+	# Zone at the -Z edge: forward edge = end.y → the band extends end.y by 12" (0.3048 m).
+	var zone := Rect2(Vector2(-0.5, -0.6), Vector2(1.0, 0.3))
+	var ext := SoloController.scout_extended_zone(zone, zone.end.y)
+	assert_float(ext.end.y).is_equal_approx(zone.end.y + 0.3048, 0.001)
+	assert_float(ext.position.y).is_equal_approx(zone.position.y, 0.001)
+	# Zone at the +Z edge: forward edge = position.y → the band extends position.y by 12".
+	var zone2 := Rect2(Vector2(-0.5, 0.3), Vector2(1.0, 0.3))
+	var ext2 := SoloController.scout_extended_zone(zone2, zone2.position.y)
+	assert_float(ext2.position.y).is_equal_approx(zone2.position.y - 0.3048, 0.001)
+	assert_float(ext2.end.y).is_equal_approx(zone2.end.y, 0.001)
+
+
+func test_deploy_begin_and_next_one_step_through_the_queue() -> void:
+	# B1: begin/next-one is the alternating half of the old all-at-once deploy — same queue, same
+	# placements, one unit per call, finish on the last.
+	var human := _unit(1, [Vector3(0, 0, 0.5)])
+	var a := _unit(2, [Vector3(0, 0, -0.5), Vector3(0.03, 0, -0.5)])
+	a.unit_id = "a"
+	var b := _unit(2, [Vector3(0.2, 0, -0.5)])
+	b.unit_id = "b"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, a.unit_id: a, b.unit_id: b}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var zone := Rect2(Vector2(-0.55, -0.6), Vector2(1.1, 0.3))
+	var queued: int = solo.deploy_begin(zone, [Vector2(0, 0)], Callable(), Callable(), 4242)
+	assert_int(queued).is_equal(2)
+	assert_int(solo.deploy_pending()).is_equal(2)
+	assert_bool(solo.deploy_next_one() != null).is_true()
+	assert_int(solo.deploy_pending()).is_equal(1)
+	assert_bool(solo.deploy_next_one() != null).is_true()
+	assert_int(solo.deploy_pending()).is_equal(0)
+	assert_object(solo.deploy_next_one()).is_null()
+	for gu in [a, b]:
+		var c := solo.unit_centre(gu)
+		assert_bool(zone.has_point(Vector2(c.x, c.z))).is_true()   # both AI units stand in the zone
+
+
+func test_deploy_scouts_wait_in_their_own_queue_and_land_in_the_band() -> void:
+	# Maintainer flow: scouts deploy in their OWN phase after all other units (GF v3.5.1) — the
+	# main queue never contains them, and the scout placement may stand ahead of the zone.
+	var human := _unit(1, [Vector3(0, 0, 0.5)])
+	var a := _unit(2, [Vector3(0, 0, -0.5)])
+	a.unit_id = "a"
+	var sc := _unit(2, [Vector3(0.2, 0, -0.5)])
+	sc.unit_id = "sc"
+	sc.unit_properties["special_rules"] = ["Scout"]
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, a.unit_id: a, sc.unit_id: sc}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var zone := Rect2(Vector2(-0.55, -0.6), Vector2(1.1, 0.3))
+	solo.deploy_begin(zone, [Vector2(0, 0)], Callable(), Callable(), 777)
+	assert_int(solo.deploy_pending()).is_equal(1)          # only the normal unit
+	assert_int(solo.deploy_scouts_pending()).is_equal(1)   # the scout waits for its phase
+	assert_bool(solo.deploy_next_one() != null).is_true()
+	assert_object(solo.deploy_next_one()).is_null()        # main phase done — scout NOT drained here
+	assert_int(solo.deploy_scouts_pending()).is_equal(1)
+	var placed: GameUnit = solo.deploy_next_scout()
+	assert_object(placed).is_equal(sc)
+	var band := SoloController.scout_extended_zone(zone, zone.end.y)
+	var c := solo.unit_centre(sc)
+	assert_bool(band.has_point(Vector2(c.x, c.z))).is_true()   # inside zone + 12" band
+
+
+func test_ambush_arrival_ring_is_model_edge_true() -> void:
+	# Maintainer field find: the 9" arrival ring was measured to the enemy's unit CENTRE — a wide
+	# enemy line's forward models stood well inside it. Enemy entries are now PER MODEL with the
+	# base radius as pad, so every arriving model keeps >9" edge to edge.
+	var enemy := _unit(1, [Vector3(-0.1, 0, 0), Vector3(0, 0, 0), Vector3(0.1, 0, 0)])
+	enemy.unit_id = "enemy"
+	var amb := _unit(2, [Vector3(2.0, 0, 2.0)])
+	amb.unit_id = "amb"
+	amb.unit_properties["ambush_reserve"] = true
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {enemy.unit_id: enemy, amb.unit_id: amb}
+	army.current_round = 2
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.ambush_reserve = [amb]
+	var entries: Array = []
+	for m in enemy.models:
+		var mi := m as ModelInstance
+		entries.append({"pos": Vector2(mi.node.global_position.x, mi.node.global_position.z),
+			"min_dist_m": 0.0, "pad_m": SoloController.model_base_radius_m(mi)})
+	var zone := Rect2(Vector2(-0.9, -0.6), Vector2(1.8, 1.2))
+	var placed: GameUnit = solo.arrive_one_ambush_unit(zone, entries, [], 2)
+	assert_bool(placed != null).is_true()
+	var min_edge := INF
+	for am in placed.models:
+		var ai_m := am as ModelInstance
+		for em in enemy.models:
+			var e_m := em as ModelInstance
+			var gap: float = Vector2(ai_m.node.global_position.x - e_m.node.global_position.x,
+				ai_m.node.global_position.z - e_m.node.global_position.z).length() \
+				- SoloController.model_base_radius_m(ai_m) - SoloController.model_base_radius_m(e_m)
+			min_edge = minf(min_edge, gap)
+	assert_bool(min_edge >= 9.0 * 0.0254 - 0.005).is_true()   # >9" edge to edge (small numeric slack)
