@@ -61,11 +61,16 @@ computed per model from the base edge — walls and intervening units block, woo
 area terrain (see in and out, never through), containers block hard — so ruler, sight fan and
 engine always agree.
 
-**Not automated (named, not hidden)** — spell accumulators / caster groups, unit spawning
-(Spawn, Split, Reinforcement) and a handful of movement rules (Coordinate, Delayed Action,
-Traversal, Ambush Beacon …) are **not** resolved by the game; the per-unit notice in the battle
-log lists them so you can apply them by hand. The follow-up resolver waves are post-release work
-(see [`docs/ROADMAP.md`](docs/ROADMAP.md)).
+**Not automated (named, not hidden)** — thirteen rule names are **not** resolved by the game and
+are named in full rather than hidden behind an "…": the cross-unit caster economy (**Spell
+Accumulator**, **Caster Group**, **Extended Buff Range**), the rules that create or return units
+(**Spawn**, **Split**, **Reinforcement**, **Reanimation**) and the movement / deployment set
+(**Coordinate**, **Delayed Action**, **Traversal**, **Ambush Beacon**, **Ambush Re-Deployment**,
+**Rapid Ambush**). The per-unit notice in the battle log names the ones your list actually
+contains, so you can apply them by hand. Everything else in the books is modeled — note that
+plain *Re-Deployment* and *Grounded Reinforcement* **are** automated; only the two Ambush
+variants above are not. The follow-up resolver waves are post-release work (see
+[`docs/ROADMAP.md`](docs/ROADMAP.md)).
 
 **Transports (stage 1)** — units embark and unload through the radial menu with book-exact
 capacity, disembark into an automatic 6″ formation, and a destroyed transport spills its cargo
@@ -113,8 +118,10 @@ Impassable / Height) and height-aware top-down line-of-sight in the measure tool
 a 🚫 marker on the measure line when LOS is blocked). **Units also block sight
 lines** (Asgard: a model blocks at its Height when ≥ both endpoints' Height, and
 gaps under 1″ inside a unit count as closed; the endpoint units never block their
-own line — `LosRules.units_block_line`). Players apply the effects themselves —
-terrain has **no automated movement/cover/damage effects** by design.
+own line — `LosRules.units_block_line`). In a **human-vs-human** game the players apply
+the effects themselves — terrain has **no automated movement/cover/damage effects**
+there, by design. In a **solo** game the same pieces are rules-active for both sides
+(line of sight, cover, difficult and dangerous ground — `scripts/solo/terrain_rules.gd`).
 
 **Units (OPR)** — Army Forge import via the OPR API; per-model architecture
 (`ModelInstance`) wrapped by system-agnostic `GameUnit`; automatic equipment
@@ -212,7 +219,7 @@ The forward-looking work now lives in [`docs/ROADMAP.md`](docs/ROADMAP.md); see 
 The forward-looking plan and the feature-request pipeline now live in
 [`docs/ROADMAP.md`](docs/ROADMAP.md) (single source) — see its **Next** and **Ideas**
 sections (Age of Fantasy + Regiments, MP 3+ hardening, selectable AI difficulty grades,
-co-op against the AI, the remaining rule-resolver waves, …).
+co-op against the AI, transports stage 2, the remaining rule-resolver waves, …).
 
 ## Out of scope (by design)
 
@@ -229,8 +236,9 @@ table behaves exactly as before. The legacy AI system + battle simulator (~5500 
 removed and was **not** revived — today's solo engine (`scripts/solo/`) was written from
 scratch against OPR's official Solo & Co-Op ruleset, deterministic and explainable by design.
 
-Still out of scope for now: co-op (two humans vs the AI), campaigns/ladders, and any AI that
-learns or calls out to a service.
+**Not in this release, but planned:** co-op (two or more humans sharing a side against the AI) —
+solo is single-player today; it sits in **Next** in [`docs/ROADMAP.md`](docs/ROADMAP.md).
+Still out of scope by design: campaigns/ladders, and any AI that learns or calls out to a service.
 
 ## Not built (despite older docs)
 

@@ -26,9 +26,9 @@ What the code actually does today:
   Deployment is a click-guided rulebook flow (roll-off, alternating placement, scouts, ambush
   arrivals), and you shoot, fight and cast through the radial menu with real dice in the tray.
   Hundreds of special rules resolve automatically across all five systems, and **every applied
-  rule writes its own battle-log line**; rules the automation does not cover yet are listed per
-  unit so you can apply them by hand. One difficulty (full strength) — selectable grades are on
-  the roadmap.
+  rule writes its own battle-log line**; the thirteen rule names the automation does not cover yet
+  are named in full in [`PROJECT_STATUS.md`](PROJECT_STATUS.md) and listed per unit in the log, so
+  you can apply them by hand. One difficulty (full strength) — selectable grades are on the roadmap.
 - **3D tabletop** — variable table sizes (4×4, 6×4, custom), orbit/pan/zoom camera.
 - **Object handling** — click / Alt-click / box select, drag, rotate, copy / paste /
   duplicate, formation arrangement (rows `1`–`9`, arrow `A`) with constant base-edge
@@ -138,7 +138,7 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 
 | Regiments (AoF:R) | |
 |---|---|
-| Toggle 45° arc quadrants (front/flank/rear) — selected unit | `F` |
+| Toggle 45° arc quadrants (front/flank/rear) — selected unit | `F` (also raises the sight & range fan) |
 | Cycle frontage (models per rank) | `Shift`+`F` |
 | Axis-locked drag (forward/backward only) | `Shift`+drag |
 | Snap to nearest 90° facing | `Ctrl`+`R` |

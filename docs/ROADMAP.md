@@ -74,13 +74,15 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   **Remaining:** the coherency visualizer still needs sharpening (highlight the models that are outside
   X″ of a neighbour, not just the unit-level verdict). Deeper post-Alpha resilience / accessibility /
   onboarding items live in **Ideas**. _S–M_
-- **Solo rules automation — resolver waves B + C** — `0.3.10.0-alpha` automates hundreds of rules, but
-  the families that need their own resolver step are honestly still manual, and the per-unit battle-log
-  notice names them: **Spell Accumulator / Caster Group** (cross-unit casting economy), **unit spawning**
-  (Spawn, Split, Reinforcement / Grounded Reinforcement incl. the Aura variants), and the movement /
-  deployment set **Coordinate, Delayed Action, Traversal, Ambush Beacon**. Wave B = the spawning and
-  caster-economy families (they create or move units, so they touch the AI's plan, not just the dice);
-  wave C = the movement/deployment set. _M–L_
+- **Solo rules automation — resolver waves B + C** — `0.3.10.0-alpha` automates hundreds of rules; the
+  families that need their own resolver step are honestly still manual, and the per-unit battle-log
+  notice names them. The complete remainder is **thirteen rule names** (everything else in the books is
+  modeled — plain *Re-Deployment* and *Grounded Reinforcement* included):
+  - **Wave B — caster economy + unit creation:** **Spell Accumulator**, **Caster Group**, **Extended
+    Buff Range**, **Spawn**, **Split**, **Reinforcement**, **Reanimation**. These create, return or
+    re-point units, so they touch the AI's round plan, not just the dice. _M–L_
+  - **Wave C — movement / deployment:** **Coordinate**, **Delayed Action**, **Traversal**, **Ambush
+    Beacon**, **Ambush Re-Deployment**, **Rapid Ambush**. _M_
 - **Selectable AI difficulty grades** — `0.3.10.0-alpha` ships exactly one grade (NACHTMAHR at full
   strength); the difficulty selector is out of the solo panel and every legacy grade name maps to it.
   Bringing weaker personas back means re-validating each knob set on the self-play ladder so a lower
