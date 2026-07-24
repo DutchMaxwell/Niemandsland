@@ -283,7 +283,7 @@ var _solo_ai_busy: bool = false              # an AI activation chain is running
 var _solo_game_finished: bool = false        # summary shown after SOLO_GAME_ROUNDS — no further auto-advance
 var _solo_ai_banner: Label = null            # non-blocking "AI is taking its turn…" banner during the tail
 var _solo_dream_overlay: Control = null      # centred "NACHTMAHR dreams…" + spinner while the AI computes
-var _ai_opponent_btn: Button = null          # "KI-Gegner (eigene Liste)" — NACHTMAHR builds its own army
+var _ai_opponent_btn: Button = null          # "AI Opponent" — NACHTMAHR builds its own army
 const AI_LISTS_DIR := "res://assets/ai_lists"          # dev/arena bundle — NEVER in the public repo
 const AI_LISTS_CDN_PATH := "ai_lists"                   # <AssetCdn.HOST>/ai_lists/… (S6 runtime delivery)
 const AI_LISTS_CACHE_DIR := "user://ai_lists_cache"     # offline replay of fetched lists
@@ -591,8 +591,8 @@ func _ready() -> void:
 	# entry. The alternative — hand the AI YOUR imported list — is the existing per-slot AI checkbox.
 	_ai_opponent_btn = Button.new()
 	_ai_opponent_btn.name = "AiOpponentBtn"
-	_ai_opponent_btn.text = "KI-Gegner (eigene Liste)"
-	_ai_opponent_btn.tooltip_text = "NACHTMAHR baut sich selbst eine Liste: Fraktion + Punkte wählen. (Alternativ deiner KI eine importierte Liste geben: Häkchen beim Import.)"
+	_ai_opponent_btn.text = "AI Opponent"
+	_ai_opponent_btn.tooltip_text = "NACHTMAHR builds its own list: pick a faction and a points bracket. (To hand the AI an imported list instead, tick the AI box on import.)"
 	_ai_opponent_btn.pressed.connect(_open_ai_opponent_dialog)
 	if import_opr_btn.get_parent() != null:
 		import_opr_btn.get_parent().add_child(_ai_opponent_btn)
