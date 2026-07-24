@@ -294,6 +294,7 @@ var _solo_dev: bool = false                  # developer mode: render the AI's d
 ## progress/stall diagnostic for long unattended headless matches. Off by default: zero output in normal play.
 var _solo_arena_trace: bool = OS.get_environment("NML_AI_TRACE") == "1"
 var _solo_toast: Label = null                # transient AI-action attribution/outcome toast
+var _solo_toast_gen: int = 0   # generation token so an auto-hide never blanks a newer toast
 var _solo_unmodeled_logged: Dictionary = {}  # rule name -> true: once-per-session unmodeled-rule notes
 # === AI ARENA — native both-AI mode + per-side difficulty (see SoloDifficulty) ===
 var _solo_both_ai: bool = false              # BOTH sides are AI: combat auto-resolves, the game runs unattended
@@ -4720,8 +4721,11 @@ func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: Strin
 	dlg.ok_button_text = "Roll %d save%s" % [hits, ("" if hits == 1 else "s")]
 	dlg.get_cancel_button().hide()   # saves are not optional — one clear action
 	add_child(dlg)
-	dlg.popup_centered()
-	await dlg.confirmed
+	# UI audit 2026-07-24: this used to `await dlg.confirmed` directly. ESC still emits `canceled`
+	# even with the cancel button hidden, so the await never returned and the board locked up —
+	# in the MOST frequent solo interaction (every AI volley). The shared helper resolves on
+	# EITHER signal and re-asks a stray dismissal; saves are mandatory, so either way we roll.
+	await _solo_await_confirm(dlg)
 	dlg.queue_free()
 	# The battle log states the MODIFIED threshold (GF v3.5.1 AP(X): "targets get -X to Defense rolls"),
 	# so the AP arithmetic is auditable after the fact (maintainer field-test finding).
@@ -4862,7 +4866,10 @@ func _solo_clear_announce(nodes: Array) -> void:
 
 
 ## Transient top-centre toast for AI-action attribution/outcomes (below the AI-turn banner).
-func _solo_show_toast(text: String) -> void:
+## `auto_hide_s` > 0 fades the toast on its own (UI audit 2026-07-24: only _solo_show_outcome ever
+## hid it, so a plain notice — export path, autosave, "no AI lists" — stayed on screen until the
+## next combat outcome happened to overwrite it). Callers that manage their own hide pass 0.0.
+func _solo_show_toast(text: String, auto_hide_s: float = 6.0) -> void:
 	if not is_instance_valid(_solo_toast):
 		_solo_toast = Label.new()
 		_solo_toast.name = "SoloActionToast"
@@ -4875,11 +4882,22 @@ func _solo_show_toast(text: String) -> void:
 		$UI.add_child(_solo_toast)
 	_solo_toast.text = text
 	_solo_toast.visible = true
+	_solo_toast_gen += 1
+	if auto_hide_s > 0.0:
+		_solo_toast_autohide(_solo_toast_gen, auto_hide_s)
+
+
+## Hide the toast after `secs` — but only if no NEWER toast has replaced it meanwhile (generation
+## token), so a fast sequence of notices never blanks the latest one early.
+func _solo_toast_autohide(gen: int, secs: float) -> void:
+	await get_tree().create_timer(secs).timeout
+	if gen == _solo_toast_gen and is_instance_valid(_solo_toast):
+		_solo_toast.visible = false
 
 
 ## OUTCOME phase: show the result summary as a toast + hold it readable, then hide.
 func _solo_show_outcome(text: String) -> void:
-	_solo_show_toast(text)
+	_solo_show_toast(text, 0.0)   # this path times its own hide via the pace hold
 	await _solo_pace_hold(SoloController.Pace.OUTCOME)
 	if is_instance_valid(_solo_toast):
 		_solo_toast.visible = false
