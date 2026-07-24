@@ -43,6 +43,30 @@ func test_move_bands_unrelated_rule_is_normal() -> void:
 	assert_int(b["rush"]).is_equal(12)
 
 
+# === NML-006: spell movement stamps ("spell_move_mod", set by the solo layer) join the band math ===
+
+func test_move_bands_spell_stamp_buff_and_debuff() -> void:
+	var buff := _controller().move_bands_for_props({"spell_move_mod": {"advance": 2, "rush": 4}})
+	assert_int(buff["advance"]).is_equal(8)
+	assert_int(buff["rush"]).is_equal(16)
+	# Debuff stapelt mit Slow und clampt bei 0 (nie negative Bänder).
+	var slowed := _controller().move_bands_for_props({
+		"special_rules": ["Slow"], "spell_move_mod": {"advance": -2, "rush": -4}})
+	assert_int(slowed["advance"]).is_equal(2)   # 6 - 2 (Slow) - 2 (spell)
+	assert_int(slowed["rush"]).is_equal(4)      # 12 - 4 (Slow) - 4 (spell)
+	var floored := _controller().move_bands_for_props({"spell_move_mod": {"advance": -9, "rush": -20}})
+	assert_int(floored["advance"]).is_equal(0)
+	assert_int(floored["rush"]).is_equal(0)
+
+
+func test_move_bands_granted_rule_string_counts() -> void:
+	# NML-006 Grant-Overlay: eine zaubergewährte Regel liegt suffix-markiert in special_rules —
+	# der Basisnamen-Scan (Klammer-Split) MUSS sie wie die gedruckte Regel zählen.
+	var b := _controller().move_bands_for_props({"special_rules": ["Rapid Rush (spell)"]})
+	assert_int(b["advance"]).is_equal(6)
+	assert_bool(b["rush"] > 12).is_true()
+
+
 # === movement modifiers parsed from the rule description (issue #79) ===
 
 func test_parse_modifier_fast_text() -> void:
@@ -275,3 +299,106 @@ func test_clear_all_removes_every_indicator() -> void:
 	assert_int(c.active_count()).is_equal(2)
 	c.clear_all()
 	assert_int(c.active_count()).is_equal(0)
+
+
+## Rapid Rush (army-book rule, quick-win batch): "This model moves +6" when using Rush actions." —
+## the Rush/Charge band gains 6", Advance stays untouched. Parsed from the official description text.
+func test_move_bands_rapid_rush_from_description() -> void:
+	var desc := {"Rapid Rush": "This model moves +6\" when using Rush actions."}
+	var b := _controller().move_bands_for_props({"special_rules": ["Rapid Rush"], "rule_descriptions": desc})
+	assert_int(b["advance"]).is_equal(6)
+	assert_int(b["rush"]).is_equal(18)       # 12 + 6
+
+
+func test_move_bands_rapid_rush_name_fallback() -> void:
+	# Without (parseable) description text the constant fallback still applies — same seam as Fast/Slow.
+	var b := _controller().move_bands_for_props({"special_rules": ["Rapid Rush"]})
+	assert_int(b["advance"]).is_equal(6)
+	assert_int(b["rush"]).is_equal(18)
+
+
+## Autonomous wave 2026-07-19: Quick (+2/+2), Rapid Advance (+4 Advance only), Swift name-fallback.
+func test_move_bands_quick_and_rapid_advance_fallbacks() -> void:
+	var q := _controller().move_bands_for_props({"special_rules": ["Quick"]})
+	assert_int(q["advance"]).is_equal(8)
+	assert_int(q["rush"]).is_equal(14)
+	var ra := _controller().move_bands_for_props({"special_rules": ["Rapid Advance"]})
+	assert_int(ra["advance"]).is_equal(10)
+	assert_int(ra["rush"]).is_equal(12)
+
+
+func test_move_bands_swift_name_fallback_cancels_slow() -> void:
+	# Without any descriptions the bare NAME pair must still cancel (the description-negation
+	# path is covered by test_move_bands_swift_negates_slow).
+	var b := _controller().move_bands_for_props({"special_rules": ["Slow", "Swift"]})
+	assert_int(b["advance"]).is_equal(6)
+	assert_int(b["rush"]).is_equal(12)
+
+
+## Wave-4 Royal Legion (Mummified Undead army-book rule): "+4" range when shooting and moves +2" when
+## using Charge actions." The move parser must apply ONLY the +2" Charge (the Rush/Charge band), never the
+## +4" range — so a Royal Legion unit reads Advance 6", Rush/Charge 14".
+func test_move_bands_royal_legion_charge_bonus_only() -> void:
+	var desc := {"Royal Legion": "This model gets +4\" range when shooting and moves +2\" when using Charge actions."}
+	var b := _controller().move_bands_for_props({"special_rules": ["Royal Legion"], "rule_descriptions": desc})
+	assert_int(b["advance"]).is_equal(6)    # +4" range is NOT a move modifier
+	assert_int(b["rush"]).is_equal(14)       # 12 + 2 (Charge shares the Rush/Charge band)
+
+
+# === B10 (test game 2): movement-mod audit — partial parses must not eat a band ===
+
+func test_parse_modifier_one_value_naming_both_actions() -> void:
+	# ONE modifier naming BOTH actions applies to both bands (old: first-stem-wins dropped rush).
+	var d := "This model moves +2\" when using Advance or Rush/Charge actions."
+	var mod := MovementRangeController.move_modifier_from_description(d)
+	assert_int(mod["advance"]).is_equal(2)
+	assert_int(mod["rush"]).is_equal(2)
+	# The classic Fast pair is UNAFFECTED (windows end at the next modifier).
+	var fast := MovementRangeController.move_modifier_from_description(
+		"Moves +2\" when using Advance, and +4\" when using Rush/Charge.")
+	assert_int(fast["advance"]).is_equal(2)
+	assert_int(fast["rush"]).is_equal(4)
+
+
+func test_move_bands_fast_partial_description_fills_missing_band() -> void:
+	# A Fast description whose rush half is unparseable used to mark the WHOLE rule counted and
+	# suppress the name fallback — the +4" rush/charge bonus vanished (the maintainer's cap read
+	# 12" on a Fast vehicle). The fallback now fills exactly the missing band.
+	var b := _controller().move_bands_for_props({
+		"special_rules": ["Fast"],
+		"rule_descriptions": {"Fast": "Moves +2\" when Advancing. It is very fast."},
+	})
+	assert_int(b["advance"]).is_equal(8)    # 6 + 2 from the description
+	assert_int(b["rush"]).is_equal(16)       # 12 + 4 from the per-band name fallback
+	# Mirror case: only the rush half parses — advance comes from the fallback.
+	var b2 := _controller().move_bands_for_props({
+		"special_rules": ["Fast"],
+		"rule_descriptions": {"Fast": "Moves +4\" when using Rush or Charge actions."},
+	})
+	assert_int(b2["advance"]).is_equal(8)
+	assert_int(b2["rush"]).is_equal(16)
+
+
+func test_move_bands_slow_partial_description_fills_missing_band() -> void:
+	var b := _controller().move_bands_for_props({
+		"special_rules": ["Slow"],
+		"rule_descriptions": {"Slow": "Moves -2\" when Advancing."},
+	})
+	assert_int(b["advance"]).is_equal(4)    # 6 - 2 from the description
+	assert_int(b["rush"]).is_equal(8)        # 12 - 4 from the per-band fallback
+
+
+func test_bands_for_model_resolves_unit_via_parent_meta() -> void:
+	# B10: a nested pickable child (mount part / proxy mesh) resolves its unit through the PARENT's
+	# game_unit meta instead of silently reading bare 6"/12" bands.
+	var c := _controller()
+	var gu := GameUnit.new()
+	gu.unit_properties = {"special_rules": ["Fast"], "player_id": 1, "name": "F", "quality": 4, "defense": 4}
+	var parent: Node3D = auto_free(Node3D.new())
+	add_child(parent)
+	parent.set_meta("game_unit", gu)
+	var child := Node3D.new()
+	parent.add_child(child)
+	var b := c.bands_for_model(child)
+	assert_int(b["advance"]).is_equal(8)
+	assert_int(b["rush"]).is_equal(16)

@@ -12,13 +12,13 @@ extends RefCounted
 
 # ===== Constants =====
 const DEFAULT_PATH := "user://tutorial.cfg"
-const CFG_VERSION := 1
+const CFG_VERSION := 2
 const SECTION_META := "meta"
 const SECTION_ASSESSMENT := "assessment"
 const SECTION_LESSONS := "lessons"
 ## Lessons the assessment offers to skip for players who already know their way
 ## around a tabletop simulator: camera basics + select/move/rotate.
-const SIM_EXPERIENCED_SKIP: Array[String] = ["W1", "W3"]
+const SIM_EXPERIENCED_SKIP: Array[String] = ["T-01", "T-02", "T-03"]
 
 # ===== Private state =====
 var _path: String = DEFAULT_PATH
@@ -38,6 +38,19 @@ func load_from_disk() -> void:
 	if err != OK and err != ERR_FILE_NOT_FOUND:
 		push_warning("TutorialProgress: could not read %s (error %d) — starting fresh" % [_path, err])
 		_config = ConfigFile.new()
+	_migrate()
+
+
+## Forward-only schema lift (wave 1, toolstrack spec §17): v1's W-track ids gave way to the
+## T-chapter ids. Map ONLY the identical chapter (W1 -> T-01, camera unchanged); the other
+## W flags stay untouched and harmless (W2/W5/W6/W7 remain track members until their
+## T-supersets ship, and a stale completed W3/W4 must NOT auto-complete the richer T-02/T-03).
+func _migrate() -> void:
+	var version := int(_config.get_value(SECTION_META, "version", CFG_VERSION))
+	if version >= 2:
+		return
+	if bool(_config.get_value(SECTION_LESSONS, "W1", false)):
+		_config.set_value(SECTION_LESSONS, "T-01", true)
 
 
 func save_to_disk() -> Error:

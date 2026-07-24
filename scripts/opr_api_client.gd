@@ -670,12 +670,9 @@ func _parse_tts_unit(data: Dictionary, game_system_abbrev: String = "") -> OPRUn
 		if rule is String:
 			unit.special_rules.append(rule)
 		elif rule is Dictionary:
-			var rule_name = rule.get("name", "")
-			var rule_rating = rule.get("rating", null)
-			if rule_rating != null and str(rule_rating) != "":
-				unit.special_rules.append("%s(%s)" % [rule_name, _format_rating(rule_rating)])
-			elif not rule_name.is_empty():
-				unit.special_rules.append(rule_name)
+			var rule_str := _rule_to_string(rule)
+			if not rule_str.is_empty():
+				unit.special_rules.append(rule_str)
 
 	# Parse the loadout. Weapons (attacks > 0) become unit.weapons. Non-weapon items
 	# (ArmyBookItem) are tools/upgrades: when only a SUBSET of the unit's models carry
@@ -799,11 +796,9 @@ func _apply_selected_upgrade_rules(unit, selected_upgrades: Array) -> void:
 		for gain in option.get("gains", []):
 			if not (gain is Dictionary) or gain.get("type", "") != "ArmyBookRule":
 				continue
-			var rname := str(gain.get("name", gain.get("label", ""))).strip_edges()
-			if rname.is_empty():
+			var full := _rule_to_string(gain).strip_edges()
+			if full.is_empty():
 				continue
-			var rating = gain.get("rating", null)
-			var full := "%s(%s)" % [rname, _format_rating(rating)] if rating != null and str(rating) != "" else rname
 			role_counts[full] = int(role_counts.get(full, 0)) + 1
 			if affects_all:
 				role_unit_wide[full] = true
@@ -838,12 +833,7 @@ func _granted_rules_of_item(item: Dictionary) -> Array[String]:
 			if entry.get("type", "") == "ArmyBookWeapon":
 				continue  # a weapon profile (e.g. a Weapon Team's HE Autocannon) — surfaced as a
 				# weapon in the unit card, not as a (profile-less) entry in the rules line
-			var rule_name = entry.get("name", "")
-			var rule_rating = entry.get("rating", null)
-			if rule_rating != null and str(rule_rating) != "":
-				granted = "%s(%s)" % [rule_name, _format_rating(rule_rating)]
-			elif not rule_name.is_empty():
-				granted = rule_name
+			granted = _rule_to_string(entry)
 		if not granted.is_empty() and granted not in result:
 			result.append(granted)
 	return result
@@ -890,24 +880,38 @@ func _parse_tts_weapon(data) -> OPRWeapon:
 		if rule is String:
 			weapon.special_rules.append(rule)
 		elif rule is Dictionary:
-			var rule_name = rule.get("name", "")
-			var rule_rating = rule.get("rating", null)
-			if rule_rating != null and str(rule_rating) != "":
-				weapon.special_rules.append("%s(%s)" % [rule_name, _format_rating(rule_rating)])
-			elif not rule_name.is_empty():
-				weapon.special_rules.append(rule_name)
+			var rule_str := _rule_to_string(rule)
+			if not rule_str.is_empty():
+				weapon.special_rules.append(rule_str)
 
 	return weapon
 
 
 ## Format rating value - removes decimal places for whole numbers (1.0 -> 1)
-func _format_rating(value) -> String:
+static func _format_rating(value) -> String:
 	if value is float:
 		# Check if it's a whole number
 		if value == int(value):
 			return str(int(value))
 		return str(value)
 	return str(value)
+
+
+## One "Name(X)" special-rule string from an Army Forge rule entry. Type-safe across all real AF
+## shapes: `rating` may be an int, float or String — or MISSING entirely with the rating living only
+## inside `label` ("AP(2)"). That last shape silently degraded AP(X)/Deadly(X)/… to a bare, rating-less
+## name (maintainer field-test: the Annihilator's AP(2) never reached the defender's save), and int
+## ratings crashed the legacy file-import parser (`"".is_empty()` on an int). Single source of truth
+## for every rule-entry → string conversion in this client.
+static func _rule_to_string(rule: Dictionary) -> String:
+	var rule_name := str(rule.get("name", ""))
+	var rating: Variant = rule.get("rating", null)
+	if rating != null and str(rating) != "":
+		return "%s(%s)" % [rule_name, _format_rating(rating)]
+	var label := str(rule.get("label", ""))
+	if not rule_name.is_empty() and label.begins_with(rule_name + "(") and label.ends_with(")"):
+		return label   # rating only present inside the label — keep the full "Name(X)" form
+	return rule_name if not rule_name.is_empty() else label
 
 
 ## Parse Army Forge JSON export (the real format)
@@ -1200,18 +1204,16 @@ func _parse_unit_from_list(list_unit: Dictionary, book_data: Dictionary, game_sy
 		unit.size = unit_def.get("size", 1)
 		unit.cost = unit_def.get("cost", 0)
 
-		# Parse special rules
+		# Parse special rules (via the type-safe _rule_to_string — the old inline block crashed on
+		# int ratings and lost label-only ratings).
 		var rules = unit_def.get("specialRules", [])
 		for rule in rules:
 			if rule is String:
 				unit.special_rules.append(rule)
 			elif rule is Dictionary:
-				var rule_name = rule.get("name", "")
-				var rule_rating = rule.get("rating", "")
-				if not rule_rating.is_empty():
-					unit.special_rules.append("%s(%s)" % [rule_name, str(rule_rating)])
-				else:
-					unit.special_rules.append(rule_name)
+				var rule_str := _rule_to_string(rule)
+				if not rule_str.is_empty():
+					unit.special_rules.append(rule_str)
 
 		# Parse equipment/loadout
 		var equipment = unit_def.get("equipment", [])
@@ -1299,12 +1301,11 @@ func _parse_weapon(data) -> OPRWeapon:
 		if rule is String:
 			weapon.special_rules.append(rule)
 		elif rule is Dictionary:
-			var rule_name = rule.get("name", "")
-			var rule_rating = rule.get("rating", "")
-			if not rule_rating.is_empty():
-				weapon.special_rules.append("%s(%s)" % [rule_name, str(rule_rating)])
-			else:
-				weapon.special_rules.append(rule_name)
+			# _rule_to_string is type-safe: the old inline block crashed on int/float ratings
+			# (`is_empty` on a non-String), silently DROPPING the whole weapon on this path.
+			var rule_str := _rule_to_string(rule)
+			if not rule_str.is_empty():
+				weapon.special_rules.append(rule_str)
 
 	return weapon
 

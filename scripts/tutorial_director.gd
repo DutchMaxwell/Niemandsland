@@ -49,6 +49,19 @@ var _radial_controller: Node = null
 var _army_manager: Node = null
 var _undo_manager: Node = null
 var _start_game_button: Control = null
+var _pinned_rulers: Node = null
+var _range_rings: Node = null
+var _dice_controls_source: Node = null
+var _quick_roll_button: BaseButton = null
+var _radial_menu: Node = null
+var _wounds_dialog: Node = null
+var _casts_dialog: Node = null
+var _marker_dialog: Node = null
+var _step_timer: SceneTreeTimer = null   # timed banner steps (T-06 "read")
+var _table: Node = null
+var _map_layout: Node = null
+var _terrain_shelf: Node = null
+var _terrain_mode_btn: BaseButton = null
 
 # ===== Private state =====
 var _coach: TutorialCoachMark = null
@@ -70,6 +83,15 @@ var _prev_import_open: bool = false
 var _prev_dock_open: bool = false
 var _prev_presented: bool = false
 var _prev_bands_active: bool = false
+# Wave-1 poll edges (toolstrack spec T-04) + selection-composition memory (T-02).
+var _prev_ruler_count: int = 0
+var _prev_ring_active: bool = false
+var _prev_spell_preview: bool = false
+var _prev_selection_size: int = 0
+# Second highlighted unit (T-02 multi step spotlight).
+var _second_unit: GameUnit = null
+var _second_nodes: Array[Node3D] = []
+var _second_visuals: Array[VisualInstance3D] = []
 var _assessment_dialog: ConfirmationDialog = null
 # Chapter-picker launch: play forward from the chosen lesson WITHOUT skipping lessons
 # that are already completed (replaying is the point). Resume launches skip them.
@@ -106,6 +128,18 @@ func setup(refs: Dictionary) -> void:
 	_army_manager = refs.get("army_manager", null)
 	_undo_manager = refs.get("undo_manager", null)
 	_start_game_button = refs.get("start_game_button", null)
+	_pinned_rulers = refs.get("pinned_rulers", null)
+	_range_rings = refs.get("range_rings", null)
+	_dice_controls_source = refs.get("dice_controls_source", null)
+	_quick_roll_button = refs.get("quick_roll_button", null)
+	_radial_menu = refs.get("radial_menu", null)
+	_wounds_dialog = refs.get("wounds_dialog", null)
+	_casts_dialog = refs.get("casts_dialog", null)
+	_marker_dialog = refs.get("marker_dialog", null)
+	_table = refs.get("table", null)
+	_map_layout = refs.get("map_layout", null)
+	_terrain_shelf = refs.get("terrain_shelf", null)
+	_terrain_mode_btn = refs.get("terrain_mode_btn", null)
 	if _camera_pivot != null:
 		_camera = _camera_pivot.get_node_or_null("Camera3D") as Camera3D
 
@@ -171,16 +205,63 @@ func _connect_seams() -> void:
 			_object_manager.movement_capped.connect(_on_movement_capped)
 		if _object_manager.has_signal("drop_separated"):
 			_object_manager.drop_separated.connect(_on_drop_separated)
+		if _object_manager.has_signal("arrangement_applied"):
+			_object_manager.arrangement_applied.connect(_on_arrangement_applied)
+		if _object_manager.has_signal("objects_pasted"):
+			_object_manager.objects_pasted.connect(_on_objects_pasted)
+		if _object_manager.has_signal("lock_state_changed"):
+			_object_manager.lock_state_changed.connect(_on_lock_state_changed)
 	if _undo_manager != null and _undo_manager.has_signal("action_undone"):
 		_undo_manager.action_undone.connect(_on_action_undone)
 	if _dice_tray != null and _dice_tray.has_signal("roll_finnished"):
 		_dice_tray.roll_finnished.connect(_on_roll_finnished)
 	if _radial_controller != null and _radial_controller.has_signal("unit_activated"):
 		_radial_controller.unit_activated.connect(_on_unit_activated)
+	if _radial_controller != null and _radial_controller.has_signal("model_deleted"):
+		_radial_controller.model_deleted.connect(_on_model_deleted)
+	if _radial_controller != null and _radial_controller.has_signal("unit_deleted"):
+		_radial_controller.unit_deleted.connect(_on_unit_deleted)
 	if _army_manager != null and _army_manager.has_signal("loose_model_dead_changed"):
 		_army_manager.loose_model_dead_changed.connect(_on_loose_model_dead_changed)
 	if _army_manager != null and _army_manager.has_signal("game_phase_changed"):
 		_army_manager.game_phase_changed.connect(_on_game_phase_changed)
+	# — Wave 2 (T-05/T-06/T-07): dice-control edges, quick roll, radial depth, dialogs —
+	if _object_manager != null and _object_manager.has_signal("context_menu_requested"):
+		_object_manager.context_menu_requested.connect(_on_context_menu_requested)
+	if _dice_controls_source != null and _dice_controls_source.has_signal("dice_controls_changed"):
+		_dice_controls_source.dice_controls_changed.connect(_on_dice_controls_changed)
+	if _quick_roll_button != null:
+		_quick_roll_button.pressed.connect(_on_quick_roll_pressed)
+	if _dice_tray != null and _dice_tray.has_signal("color_tag_changed"):
+		_dice_tray.color_tag_changed.connect(_on_color_tag_changed)
+	if _radial_menu != null and _radial_menu.has_signal("action_selected"):
+		_radial_menu.action_selected.connect(_on_radial_action_selected)
+	if _wounds_dialog != null and _wounds_dialog.has_signal("wounds_changed"):
+		_wounds_dialog.wounds_changed.connect(_on_wounds_changed)
+	if _casts_dialog != null and _casts_dialog.has_signal("casts_changed"):
+		_casts_dialog.casts_changed.connect(_on_casts_changed)
+	if _marker_dialog != null and _marker_dialog.has_signal("marker_added"):
+		_marker_dialog.marker_added.connect(_on_marker_added)
+	# — Wave 3 (T-08/T-09): real import, table setup, terrain shelf, layout editor —
+	if _import_dialog != null and _import_dialog.has_signal("army_imported"):
+		_import_dialog.army_imported.connect(_on_army_imported)
+	if _table != null and _table.has_signal("table_resized"):
+		_table.table_resized.connect(_on_table_resized)
+	if _table != null and _table.has_signal("biome_changed"):
+		_table.biome_changed.connect(_on_biome_changed)
+	if _terrain_mode_btn != null:
+		_terrain_mode_btn.toggled.connect(_on_terrain_mode_toggled)
+	if _terrain_shelf != null and _terrain_shelf.has_signal("piece_placed"):
+		_terrain_shelf.piece_placed.connect(_on_terrain_piece_placed)
+	if _map_layout != null:
+		if _map_layout.has_signal("editor_opened"):
+			_map_layout.editor_opened.connect(_on_layout_opened)
+		if _map_layout.has_signal("layout_updated"):
+			_map_layout.layout_updated.connect(_on_layout_updated)
+		if _map_layout.has_signal("deployment_type_changed"):
+			_map_layout.deployment_type_changed.connect(_on_deploy_type_changed)
+		if _map_layout.has_signal("layout_closed"):
+			_map_layout.layout_closed.connect(_on_layout_closed)
 
 
 func _disconnect_seams() -> void:
@@ -191,15 +272,50 @@ func _disconnect_seams() -> void:
 		_disconnect_if(_object_manager, "measurement_finished", _on_measurement_finished)
 		_disconnect_if(_object_manager, "movement_capped", _on_movement_capped)
 		_disconnect_if(_object_manager, "drop_separated", _on_drop_separated)
+		_disconnect_if(_object_manager, "arrangement_applied", _on_arrangement_applied)
+		_disconnect_if(_object_manager, "objects_pasted", _on_objects_pasted)
+		_disconnect_if(_object_manager, "lock_state_changed", _on_lock_state_changed)
 	if _undo_manager != null:
 		_disconnect_if(_undo_manager, "action_undone", _on_action_undone)
 	if _dice_tray != null:
 		_disconnect_if(_dice_tray, "roll_finnished", _on_roll_finnished)
 	if _radial_controller != null:
 		_disconnect_if(_radial_controller, "unit_activated", _on_unit_activated)
+		_disconnect_if(_radial_controller, "model_deleted", _on_model_deleted)
+		_disconnect_if(_radial_controller, "unit_deleted", _on_unit_deleted)
 	if _army_manager != null:
 		_disconnect_if(_army_manager, "loose_model_dead_changed", _on_loose_model_dead_changed)
 		_disconnect_if(_army_manager, "game_phase_changed", _on_game_phase_changed)
+	if _object_manager != null:
+		_disconnect_if(_object_manager, "context_menu_requested", _on_context_menu_requested)
+	if _dice_controls_source != null:
+		_disconnect_if(_dice_controls_source, "dice_controls_changed", _on_dice_controls_changed)
+	if _quick_roll_button != null and _quick_roll_button.pressed.is_connected(_on_quick_roll_pressed):
+		_quick_roll_button.pressed.disconnect(_on_quick_roll_pressed)
+	if _dice_tray != null:
+		_disconnect_if(_dice_tray, "color_tag_changed", _on_color_tag_changed)
+	if _radial_menu != null:
+		_disconnect_if(_radial_menu, "action_selected", _on_radial_action_selected)
+	if _wounds_dialog != null:
+		_disconnect_if(_wounds_dialog, "wounds_changed", _on_wounds_changed)
+	if _casts_dialog != null:
+		_disconnect_if(_casts_dialog, "casts_changed", _on_casts_changed)
+	if _marker_dialog != null:
+		_disconnect_if(_marker_dialog, "marker_added", _on_marker_added)
+	if _import_dialog != null:
+		_disconnect_if(_import_dialog, "army_imported", _on_army_imported)
+	if _table != null:
+		_disconnect_if(_table, "table_resized", _on_table_resized)
+		_disconnect_if(_table, "biome_changed", _on_biome_changed)
+	if _terrain_mode_btn != null and _terrain_mode_btn.toggled.is_connected(_on_terrain_mode_toggled):
+		_terrain_mode_btn.toggled.disconnect(_on_terrain_mode_toggled)
+	if _terrain_shelf != null:
+		_disconnect_if(_terrain_shelf, "piece_placed", _on_terrain_piece_placed)
+	if _map_layout != null:
+		_disconnect_if(_map_layout, "editor_opened", _on_layout_opened)
+		_disconnect_if(_map_layout, "layout_updated", _on_layout_updated)
+		_disconnect_if(_map_layout, "deployment_type_changed", _on_deploy_type_changed)
+		_disconnect_if(_map_layout, "layout_closed", _on_layout_closed)
 
 
 func _disconnect_if(source: Object, signal_name: String, callable: Callable) -> void:
@@ -212,6 +328,47 @@ func _disconnect_if(source: Object, signal_name: String, callable: Callable) -> 
 func _on_selection_changed(selected: Array) -> void:
 	if selection_hits(selected, _target_nodes):
 		_on_event(TutorialFlow.Event.UNIT_SELECTED)
+	# Wave 1 (T-02): classify the RESULTING selection composition — gesture-independent by
+	# design (spec note: reaching the same selection another way still advances). Emission
+	# order multi -> whole -> box is safe: consume() only accepts the current step's event.
+	if selected.is_empty():
+		if _prev_selection_size > 0:
+			_on_event(TutorialFlow.Event.SELECTION_CLEARED)
+		_prev_selection_size = 0
+		return
+	var units := distinct_units_of(selected)
+	if units.size() >= 2:
+		_on_event(TutorialFlow.Event.MULTI_SELECTED)
+	if units.size() == 1 and is_whole_unit_selection(selected, units[0]):
+		_on_event(TutorialFlow.Event.UNIT_WHOLE_SELECTED)
+	if selected.size() >= _prev_selection_size + 2 and not (units.size() == 1 and is_whole_unit_selection(selected, units[0])):
+		_on_event(TutorialFlow.Event.BOX_SELECTED)
+	_prev_selection_size = selected.size()
+
+
+## PURE: the distinct GameUnits the selected nodes belong to (nodes without a unit meta count none).
+static func distinct_units_of(selected: Array) -> Array:
+	var units: Array = []
+	for obj in selected:
+		if obj is Node and (obj as Node).has_meta("game_unit"):
+			var unit: Object = (obj as Node).get_meta("game_unit")
+			if unit != null and not units.has(unit):
+				units.append(unit)
+	return units
+
+
+## PURE: whether the selection covers EVERY alive node of `unit` (the double-click result).
+static func is_whole_unit_selection(selected: Array, unit: Object) -> bool:
+	if unit == null or not unit.has_method("get_alive_models"):
+		return false
+	var alive: Array = unit.get_alive_models()
+	if alive.is_empty():
+		return false
+	for model in alive:
+		var node: Node = model.get("node") if model != null else null
+		if node == null or not selected.has(node):
+			return false
+	return true
 
 
 func _on_selection_dropped(moves: Array) -> void:
@@ -233,6 +390,120 @@ func _on_action_undone(_description: String) -> void:
 
 func _on_roll_finnished(_total: int) -> void:
 	_on_event(TutorialFlow.Event.DICE_ROLLED)
+
+
+func _on_arrangement_applied(_kind: String) -> void:
+	_on_event(TutorialFlow.Event.ARRANGED)
+
+
+func _on_objects_pasted(_nodes: Array) -> void:
+	_on_event(TutorialFlow.Event.PASTED)
+
+
+func _on_lock_state_changed(_objects: Array, _locked: bool) -> void:
+	_on_event(TutorialFlow.Event.LOCK_TOGGLED)
+
+
+func _on_model_deleted(_model_instance: ModelInstance) -> void:
+	_on_event(TutorialFlow.Event.OBJECT_DELETED)
+
+
+func _on_unit_deleted(_game_unit: GameUnit) -> void:
+	_on_event(TutorialFlow.Event.OBJECT_DELETED)
+
+
+# — Wave 2 handlers (T-05/T-06/T-07) —
+
+func _on_dice_controls_changed(kind: StringName, _value: int) -> void:
+	match kind:
+		&"count": _on_event(TutorialFlow.Event.DICE_COUNT_SET)
+		&"success": _on_event(TutorialFlow.Event.DICE_SUCCESS_SET)
+		&"modifier": _on_event(TutorialFlow.Event.DICE_MODIFIER_SET)
+		&"reroll": _on_event(TutorialFlow.Event.DICE_REROLLED)
+		&"movecap": _on_event(TutorialFlow.Event.DICE_MOVECAP_SET)
+
+
+func _on_quick_roll_pressed() -> void:
+	_on_event(TutorialFlow.Event.DICE_QUICK_ROLLED)
+
+
+func _on_color_tag_changed(_idx: int, _tag: int) -> void:
+	_on_event(TutorialFlow.Event.DICE_COLOUR_TAGGED)
+
+
+func _on_context_menu_requested(_pos: Vector2, _selected: Array) -> void:
+	_on_event(TutorialFlow.Event.RADIAL_OPENED)
+
+
+## The radial's single action pipe: state toggles, objective owners and unit returns all
+## arrive here (T-06/T-07); ids per the toolstrack spec's verified list.
+func _on_radial_action_selected(id: String, _ctx: Dictionary) -> void:
+	if id == "toggle_fatigued" or id == "toggle_shaken":
+		_on_event(TutorialFlow.Event.STATE_TOGGLED)
+	elif id.begins_with("set_owner_"):
+		_on_event(TutorialFlow.Event.OBJECTIVE_SET)
+	elif id.begins_with("return_unit"):
+		_on_event(TutorialFlow.Event.UNIT_RETURNED)
+
+
+func _on_wounds_changed(_model: Variant, _wounds: int) -> void:
+	_on_event(TutorialFlow.Event.WOUNDS_SET)
+
+
+func _on_casts_changed(_unit: Variant, _casts: int) -> void:
+	_on_event(TutorialFlow.Event.CASTS_SET)
+
+
+func _on_marker_added(_target: Variant, _marker: Variant) -> void:
+	_on_event(TutorialFlow.Event.MARKER_ADDED)
+
+
+## The sandbox shelf is created lazily on the first Terrain Mode toggle — main late-binds it
+## here so the T-09a place step can gate on piece_placed whenever the shelf finally exists.
+func late_bind_terrain_shelf(shelf: Node) -> void:
+	_terrain_shelf = shelf
+	if _terrain_shelf != null and _terrain_shelf.has_signal("piece_placed") \
+			and not _terrain_shelf.piece_placed.is_connected(_on_terrain_piece_placed):
+		_terrain_shelf.piece_placed.connect(_on_terrain_piece_placed)
+
+
+# — Wave 3 handlers (T-08/T-09) —
+
+func _on_army_imported(_army: Variant, _player_id: int) -> void:
+	_on_event(TutorialFlow.Event.ARMY_IMPORTED)
+
+
+func _on_table_resized(_size_feet: Vector2) -> void:
+	_on_event(TutorialFlow.Event.TABLE_RESIZED)
+
+
+func _on_biome_changed(_biome_name: String) -> void:
+	_on_event(TutorialFlow.Event.BIOME_CHANGED)
+
+
+func _on_terrain_mode_toggled(on: bool) -> void:
+	if on:
+		_on_event(TutorialFlow.Event.TERRAIN_MODE_ENTERED)
+
+
+func _on_terrain_piece_placed(_prop_id: String) -> void:
+	_on_event(TutorialFlow.Event.TERRAIN_PLACED)
+
+
+func _on_layout_opened() -> void:
+	_on_event(TutorialFlow.Event.LAYOUT_OPENED)
+
+
+func _on_layout_updated(_cells: Variant, _size: Variant, _rot: Variant, _rest: Variant = null, _rest2: Variant = null, _rest3: Variant = null) -> void:
+	_on_event(TutorialFlow.Event.LAYOUT_EDITED)
+
+
+func _on_deploy_type_changed(_type: int) -> void:
+	_on_event(TutorialFlow.Event.DEPLOY_TYPE_SET)
+
+
+func _on_layout_closed() -> void:
+	_on_event(TutorialFlow.Event.LAYOUT_CLOSED)
 
 
 func _on_unit_activated(_game_unit) -> void:
@@ -327,6 +598,20 @@ func _enter_step() -> void:
 	var event := int(step.get("event", TutorialFlow.Event.NONE)) as TutorialFlow.Event
 	var target := String(step.get("target", TutorialFlow.TARGET_NONE))
 	var mask := bool(step.get("mask", false))
+
+	# Timed banner step (spec T-06 "read": no gate seam by design) — the step's event fires
+	# after its dwell, unless the flow moved on. One timer per entry; superseded timers noop.
+	var timed := float(step.get("timed_sec", 0.0))
+	if timed > 0.0 and is_inside_tree():
+		var timer := get_tree().create_timer(timed)
+		_step_timer = timer
+		var timed_event := event
+		var my_lesson := flow.lesson_index
+		var my_step := flow.step_index
+		timer.timeout.connect(func() -> void:
+			if _step_timer == timer and flow != null and not flow.finished \
+					and flow.lesson_index == my_lesson and flow.step_index == my_step:
+				_on_event(timed_event))
 
 	if _is_camera_event(event):
 		_reset_camera_baselines()
@@ -511,6 +796,41 @@ func _poll_ui_edges() -> void:
 		_on_event(TutorialFlow.Event.BANDS_SHOWN)
 	_prev_bands_active = bands
 
+	# Wave 1 (T-04): pinned rulers / G-rings / spell preview are pollable count-or-state
+	# getters — edge-detect like the shipped bands poll, no new game signals needed.
+	var rulers := _ruler_count()
+	if rulers > _prev_ruler_count:
+		_on_event(TutorialFlow.Event.RULER_PINNED)
+	elif rulers < _prev_ruler_count:
+		_on_event(TutorialFlow.Event.RULER_CLEARED)
+	_prev_ruler_count = rulers
+
+	var ring := _ring_active()
+	if ring and not _prev_ring_active:
+		_on_event(TutorialFlow.Event.RANGE_RING_SHOWN)
+	_prev_ring_active = ring
+
+	var spell := _spell_preview_active()
+	if spell and not _prev_spell_preview:
+		_on_event(TutorialFlow.Event.SPELL_RANGE_SHOWN)
+	_prev_spell_preview = spell
+
+
+func _ruler_count() -> int:
+	if _pinned_rulers != null and _pinned_rulers.has_method("ruler_count"):
+		return int(_pinned_rulers.ruler_count())
+	return 0
+
+
+func _ring_active() -> bool:
+	return _range_rings != null and _range_rings.has_method("active_count") \
+		and int(_range_rings.active_count()) > 0
+
+
+func _spell_preview_active() -> bool:
+	return _range_rings != null and _range_rings.has_method("has_spell_preview") \
+		and bool(_range_rings.has_spell_preview())
+
 
 func _menu_open() -> bool:
 	return _left_panel != null and _left_panel.visible
@@ -595,6 +915,35 @@ func _resolve_target_unit() -> void:
 	_target_visuals = _collect_visuals(_target_nodes)
 
 
+## The SECOND highlighted unit (T-02 multi step): the largest own unit that is not the
+## primary target — same selection rules as _resolve_target_unit.
+func _resolve_second_unit() -> void:
+	if _second_unit != null and _second_unit.get_alive_count() > 0 and not _second_nodes.is_empty():
+		return
+	_second_unit = null
+	_second_nodes = []
+	if _army_manager == null:
+		return
+	var units = _army_manager.get("game_units")
+	if not units is Dictionary:
+		return
+	var best: GameUnit = null
+	for unit in units.values():
+		if not unit is GameUnit or unit == _target_unit:
+			continue
+		if int(unit.unit_properties.get("player_id", 0)) != 1 or unit.get_alive_count() == 0:
+			continue
+		if best == null or unit.get_alive_count() > best.get_alive_count():
+			best = unit
+	if best == null:
+		return
+	_second_unit = best
+	for model in best.models:
+		if model != null and is_instance_valid(model.node):
+			_second_nodes.append(model.node)
+	_second_visuals = _collect_visuals(_second_nodes)
+
+
 ## All VisualInstance3D under the given nodes (cached per step; AABBs are then
 ## projected per frame without walking the tree again).
 func _collect_visuals(nodes: Array) -> Array[VisualInstance3D]:
@@ -616,6 +965,9 @@ func _resolve_target_rect(target: String) -> Rect2:
 	match target:
 		TutorialFlow.TARGET_UNIT:
 			return _project_visuals(_target_visuals, _target_nodes)
+		TutorialFlow.TARGET_SECOND_UNIT:
+			_resolve_second_unit()
+			return _project_visuals(_second_visuals, _second_nodes)
 		TutorialFlow.TARGET_PARKED_MODEL:
 			var parked: Array[Node3D] = []
 			if is_instance_valid(_parked_node):

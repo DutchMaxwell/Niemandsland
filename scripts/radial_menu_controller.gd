@@ -139,6 +139,10 @@ func initialize(p_object_manager: Node, p_army_manager: OPRArmyManager) -> void:
 	# so the MP receive path + save/late-join restore get it too — not just the local call sites.
 	if army_manager and not army_manager.loose_model_dead_changed.is_connected(_on_loose_model_dead_changed):
 		army_manager.loose_model_dead_changed.connect(_on_loose_model_dead_changed)
+	# NML-105: the destroyed-transport cargo spill (state in the army manager) gets its Shaken
+	# marker, MP broadcast and battle-log line here.
+	if army_manager and not army_manager.transport_cargo_spilled.is_connected(_on_transport_cargo_spilled):
+		army_manager.transport_cargo_spilled.connect(_on_transport_cargo_spilled)
 
 	# Create radial menu instance if not exists
 	# Get UI CanvasLayer (node is named "UI")
@@ -237,6 +241,18 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 			radial_menu.open(screen_position, RadialMenu.create_dead_model_menu(unit_dead, sel_dead.size()), context)
 		return
 
+	# An EMBARKED model parked on the tray (NML-105): the only action is disembarking its unit —
+	# the exact mirror of the dead-model gate above.
+	if bool(first_obj.get_meta("embarked", false)):
+		var emb_unit = UnitUtils.get_game_unit(first_obj)
+		if emb_unit != null and army_manager != null:
+			var emb_tr: GameUnit = army_manager.transport_of(emb_unit)
+			if emb_tr != null:
+				context["disembark_unit"] = emb_unit
+				radial_menu.open(screen_position, RadialMenu.create_embarked_model_menu(
+					str(emb_tr.unit_properties.get("name", "transport"))), context)
+		return
+
 	var game_unit = UnitUtils.get_game_unit(first_obj)
 
 	if game_unit:
@@ -259,6 +275,10 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 					context["regiment_tray"] = tray
 					var readout: Dictionary = army_manager.regiment_wound_readout(tray)
 					items = RadialMenu.create_regiment_menu(game_unit, int(readout["remaining"]), int(readout["pool_max"]))
+					if _solo_combat_available(game_unit):
+						var solo_items := RadialMenu.solo_combat_items()
+						for si in range(solo_items.size()):
+							items.insert(si, solo_items[si])
 					radial_menu.open(screen_position, items, context)
 					return
 
@@ -280,11 +300,22 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 
 		if is_full_unit and not is_single_model_unit:
 			# Multi-model unit fully selected - show unit menu
-			items = RadialMenu.create_unit_menu(game_unit)
+			items = RadialMenu.create_unit_menu(game_unit, _solo_combat_available(game_unit))
+			_append_transport_items(game_unit, context, items)
 		elif model_instance:
 			# Single model or partial selection - show model menu (includes wounds)
 			context["model_instance"] = model_instance
 			items = RadialMenu.create_model_menu(model_instance)
+			# Solo P8: attacking is a UNIT action — offer Shoot/Fight on ANY selection shape that lands
+			# here (single model clicked, partial selection, lone hero), not only the full-unit menu.
+			# The resolution always fights with the whole unit + its attached heroes anyway.
+			if game_unit != null and _solo_combat_available(game_unit):
+				# Pass the unit so the Cast entry appears here too (maintainer 2026-07-22: a LONE
+				# caster hero always lands in this model-menu path — Cast was unreachable).
+				var solo_items := RadialMenu.solo_combat_items(game_unit)
+				for si in range(solo_items.size()):
+					items.insert(si, solo_items[si])
+			_append_transport_items(game_unit, context, items)
 	elif UnitUtils.is_terrain(first_obj):
 		context["terrain"] = first_obj
 		items = RadialMenu.create_terrain_menu()
@@ -322,7 +353,21 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		_return_destroyed_unit(action_id.trim_prefix("return_unit_"))
 		return
 
+	# Transport unload entries are dynamic too ("unload_cargo_<index>", NML-105).
+	if action_id.begins_with("unload_cargo_"):
+		var cargo_list: Array = context.get("cargo_units", [])
+		var ci := int(action_id.trim_prefix("unload_cargo_"))
+		if ci >= 0 and ci < cargo_list.size():
+			_disembark_unit(cargo_list[ci] as GameUnit)
+		return
+
 	match action_id:
+		"solo_shoot":
+			_solo_begin_targeting(context, false)
+		"solo_fight":
+			_solo_begin_targeting(context, true)
+		"solo_cast":
+			_solo_begin_cast(context)
 		"select_unit":
 			_select_entire_unit(context)
 		"wounds":
@@ -351,6 +396,10 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_revive_unit_dead(context)
 		"revive_selected":
 			_revive_selected_dead(context)
+		"embark":
+			_embark_unit(context)
+		"disembark":
+			_disembark_unit(context.get("disembark_unit") as GameUnit)
 		"delete_unit":
 			_delete_unit(context)
 		"delete_terrain":
@@ -516,6 +565,29 @@ func _toggle_shaken(context: Dictionary) -> void:
 
 
 ## Helper to get GameUnit from context (supports both unit and model selection)
+## Solo (goal 001 P8): Shoot/Fight appear on a unit's menu when a Solo-AI opponent exists and the unit
+## is NOT the AI's own — main owns the targeting mode + resolution.
+func _solo_combat_available(game_unit: GameUnit) -> bool:
+	var main_node := get_node_or_null("/root/Main")
+	if main_node == null or game_unit == null:
+		return false
+	return bool(main_node.call("solo_combat_available", game_unit)) if main_node.has_method("solo_combat_available") else false
+
+
+func _solo_begin_targeting(context: Dictionary, melee: bool) -> void:
+	var unit := _get_game_unit_from_context(context)
+	var main_node := get_node_or_null("/root/Main")
+	if unit != null and main_node != null and main_node.has_method("solo_begin_targeting"):
+		main_node.call("solo_begin_targeting", unit, melee)
+
+
+func _solo_begin_cast(context: Dictionary) -> void:
+	var unit := _get_game_unit_from_context(context)
+	var main_node := get_node_or_null("/root/Main")
+	if unit != null and main_node != null and main_node.has_method("solo_begin_cast"):
+		main_node.call("solo_begin_cast", unit)
+
+
 func _get_game_unit_from_context(context: Dictionary) -> GameUnit:
 	var game_unit = context.get("game_unit") as GameUnit
 	if game_unit:
@@ -644,6 +716,13 @@ func _delete_unit(context: Dictionary) -> void:
 	var game_unit = context.get("game_unit") as GameUnit
 	if not game_unit:
 		return
+
+	# NML-105: deleting a LOADED transport is table admin, not rules destruction — the cargo
+	# disembarks cleanly first (no Shaken, no test), so no unit ever vanishes inside a wreck.
+	if army_manager != null and army_manager.transport_capacity(game_unit) > 0:
+		for cu in army_manager.cargo_units(game_unit):
+			if army_manager.set_unit_embarked(cu as GameUnit, null, false):
+				_transport_log("%s is unloaded (transport removed from the table)" % str((cu as GameUnit).unit_properties.get("name", "unit")))
 
 	# A LOOSE unit is not destroyed permanently: every model is parked (desaturated) on the tray,
 	# revivable as a whole by right-clicking any of them. A regiment keeps the old permanent delete.
@@ -1081,12 +1160,23 @@ func _lone_token_model(unit: GameUnit) -> ModelInstance:
 	return unit.models[0]
 
 
+## A joined hero shares its HOST's unit state (GF v3.5.1 p.14: it acts as part of the unit) — the
+## host's boundary token already covers the hero's model, so the hero shows NO second marker while
+## the host still fields own models (maintainer 2026-07-22: duplicate Fatigue token). The hero's
+## FLAG stays untouched (melee groups read member.is_fatigued per member).
+func _hero_marker_suppressed(unit: GameUnit) -> bool:
+	if unit == null or not unit.has_method("is_attached") or not unit.is_attached():
+		return false
+	var host: GameUnit = unit.get_attached_to()
+	return host != null and host.get_alive_count() > 0
+
+
 ## Updates fatigued markers for a unit.
 func _update_fatigued_markers(unit: GameUnit) -> void:
 	var token_node = _get_unit_token_node(unit)
 	if not token_node:
 		return
-	_update_token(token_node, unit, "FatiguedMarker", unit.is_fatigued)
+	_update_token(token_node, unit, "FatiguedMarker", unit.is_fatigued and not _hero_marker_suppressed(unit))
 
 
 ## Updates shaken markers for a unit.
@@ -1094,7 +1184,7 @@ func _update_shaken_markers(unit: GameUnit) -> void:
 	var token_node = _get_unit_token_node(unit)
 	if not token_node:
 		return
-	_update_token(token_node, unit, "ShakenMarker", unit.is_shaken)
+	_update_token(token_node, unit, "ShakenMarker", unit.is_shaken and not _hero_marker_suppressed(unit))
 
 
 ## Updates activated markers for a unit.
@@ -1777,6 +1867,46 @@ func _on_marker_dialog_marker_removed(target: Variant, marker_name: String) -> v
 			network_manager.broadcast_unit_marker(target, marker_name, false)
 
 
+## Applies a LIBRARY token programmatically (AI spell effects; radial quick-apply) — the same
+## data + visual + MP path as the marker dialog. The definition must already be in the library
+## (rule/spell tokens are auto-defined at army import). Returns false for unknown tokens.
+func apply_library_token(target: Variant, token_name: String) -> bool:
+	if token_library == null or not token_library.has(token_name):
+		return false
+	var color := token_library.get_color(token_name)
+	if target is ModelInstance:
+		target.add_marker(token_name)
+	elif target is GameUnit:
+		target.add_marker_to_all(token_name)
+	else:
+		return false
+	_store_marker_color(target, token_name, color)
+	_apply_marker_token(target, token_name)
+	if network_manager:
+		if target is ModelInstance:
+			network_manager.broadcast_model_marker(target, token_name, true, color, -1)
+		elif target is GameUnit:
+			network_manager.broadcast_unit_marker(target, token_name, true, color, -1)
+	return true
+
+
+## Removes a library token again (spell expiry at the end of the round) — data + visual + MP.
+func remove_library_token(target: Variant, token_name: String) -> void:
+	if target is ModelInstance:
+		target.remove_marker(token_name)
+	elif target is GameUnit:
+		target.remove_marker_from_all(token_name)
+	else:
+		return
+	_apply_marker_token(target, token_name)
+	_clear_marker_color(target, token_name)
+	if network_manager:
+		if target is ModelInstance:
+			network_manager.broadcast_model_marker(target, token_name, false)
+		elif target is GameUnit:
+			network_manager.broadcast_unit_marker(target, token_name, false)
+
+
 ## Called when a counter marker's value is changed via the marker dialog (+/-).
 func _on_marker_dialog_value_changed(target: Variant, marker_name: String, value: int) -> void:
 	_store_marker_value(target, marker_name, value)
@@ -2164,3 +2294,128 @@ func _sync_marker_color_store(model: ModelInstance, marker_name: String, color: 
 		model.marker_colors[marker_name] = color
 	elif not add:
 		model.marker_colors.erase(marker_name)
+
+
+# === Transport(X) — radial intents (NML-105 S1) =============================================
+
+## The battle log (wired by main like army_manager) — embark/disembark are RULE actions and log
+## their line (rules-must-log); null-safe for tests/headless.
+var battle_log: BattleLog = null
+
+## "Reached" gate for the sandbox embark intent: the rule's move has already happened on the
+## table by hand, so one alive model of the JOINED unit standing within this base gap of a
+## transport model counts as "only one model needs to reach the Transport" (GF v3.5.1).
+const EMBARK_REACH_M := 0.0254   # 1"
+
+
+## Fill the menu context and append the transport items — "Embark" when a reachable friendly
+## transport with space exists, one "Unload <unit>" per live cargo unit. Shared by the unit menu
+## AND the model menu (a transport is usually a single-model unit).
+func _append_transport_items(game_unit: GameUnit, context: Dictionary, items: Array) -> void:
+	if army_manager == null or game_unit == null:
+		return
+	var target := _embark_target_for(game_unit)
+	if target != null:
+		context["embark_target"] = target
+		items.append(RadialMenu.RadialMenuItem.new("embark", "Embark", "▣", true,
+			"Embark into %s — a model of this unit has reached it (GF v3.5.1 Transport)" % str(target.unit_properties.get("name", "transport"))))
+	var cargo: Array = army_manager.cargo_units(game_unit)
+	if not cargo.is_empty():
+		context["cargo_units"] = cargo
+		for i in range(cargo.size()):
+			items.append(RadialMenu.RadialMenuItem.new("unload_cargo_%d" % i,
+				"Unload %s" % str((cargo[i] as GameUnit).unit_properties.get("name", "unit")), "▢", true,
+				"Disembark this unit (GF v3.5.1 Transport: fully within 6\")"))
+
+
+## The transport this unit could embark into RIGHT NOW: same player, capacity gate ok, reached.
+func _embark_target_for(unit: GameUnit) -> GameUnit:
+	if army_manager == null or unit == null or army_manager.transport_of(unit) != null:
+		return null
+	var pid := int(unit.unit_properties.get("player_id", 0))
+	for t in army_manager.get_game_units_for_player(pid):
+		var tr := t as GameUnit
+		if tr == unit or army_manager.transport_capacity(tr) <= 0:
+			continue
+		if not bool(army_manager.can_embark(unit, tr).get("ok", false)):
+			continue
+		if _joined_gap_to_m(unit, tr) <= EMBARK_REACH_M:
+			return tr
+	return null
+
+
+## Smallest base-edge gap (metres) between any alive model of `unit`'s joined chain and any
+## alive model of `other`. INF when either side has no live node.
+func _joined_gap_to_m(unit: GameUnit, other: GameUnit) -> float:
+	var best := INF
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		chain.append_array(unit.get_attached_heroes())
+	for c in chain:
+		var member := c as GameUnit
+		if member == null:
+			continue
+		for m in member.get_alive_models():
+			var mi := m as ModelInstance
+			if mi.node == null or not is_instance_valid(mi.node):
+				continue
+			var ms := SeparationChecker.shape_for_model(mi)
+			var mr: float = ms.bounding_radius() if ms != null else 0.0
+			for om in other.get_alive_models():
+				var oi := om as ModelInstance
+				if oi.node == null or not is_instance_valid(oi.node):
+					continue
+				var os := SeparationChecker.shape_for_model(oi)
+				var orr: float = os.bounding_radius() if os != null else 0.0
+				best = minf(best, mi.node.global_position.distance_to(oi.node.global_position) - mr - orr)
+	return best
+
+
+func _embark_unit(context: Dictionary) -> void:
+	var unit := context.get("game_unit") as GameUnit
+	var tr := context.get("embark_target") as GameUnit
+	if unit == null or tr == null or army_manager == null:
+		return
+	var gate: Dictionary = army_manager.can_embark(unit, tr)
+	if not bool(gate.get("ok", false)):
+		_transport_log("%s cannot embark: %s" % [str(unit.unit_properties.get("name", "unit")), str(gate.get("reason", ""))])
+		return
+	if army_manager.set_unit_embarked(unit, tr, true):
+		if network_manager:
+			network_manager.broadcast_unit_embark(unit.unit_id, tr.unit_id, true)
+		_transport_log("%s embarks into %s (%d/%d spaces used) — GF v3.5.1 Transport" % [
+			str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport")),
+			army_manager.transport_used_spaces(tr), army_manager.transport_capacity(tr)])
+
+
+func _disembark_unit(unit: GameUnit) -> void:
+	if unit == null or army_manager == null:
+		return
+	var tr := army_manager.transport_of(unit)
+	if tr == null:
+		return
+	if army_manager.set_unit_embarked(unit, null, false):
+		if network_manager:
+			network_manager.broadcast_unit_embark(unit.unit_id, tr.unit_id, false)
+		_transport_log("%s disembarks from %s — GF v3.5.1 Transport" % [
+			str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))])
+
+
+func _transport_log(msg: String) -> void:
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.MOVEMENT, msg, false)
+
+
+## NML-105 — the destroyed-transport spill's VISIBLE half (state happened in the army manager):
+## Shaken marker + MP marker broadcast per spilled unit, and the rules-must-log line naming the
+## player's remaining dice duty (the dangerous-terrain test stays a hand roll in sandbox play).
+func _on_transport_cargo_spilled(transport: GameUnit, spilled: Array) -> void:
+	for u in spilled:
+		var unit := u as GameUnit
+		if unit == null:
+			continue
+		_update_shaken_markers(unit)
+		if network_manager:
+			network_manager.broadcast_unit_marker(unit, "ShakenMarker", true)
+		_transport_log("%s is destroyed — %s spills out: placed within 6\", is SHAKEN; take a Dangerous Terrain test now (GF v3.5.1 Transport)" % [
+			str(transport.unit_properties.get("name", "transport")), str(unit.unit_properties.get("name", "unit"))])

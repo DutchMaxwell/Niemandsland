@@ -15,6 +15,14 @@ signal selection_dropped(moves: Array)
 ## Emitted (throttled) while dragging, so listeners can refresh live feedback
 ## such as unit coherency without waiting for the drag to finish.
 signal drag_updated()
+## Emitted when the hovered selectable changes (null = nothing hovered) — deduplicated, so UI like
+## the contextual control hints can listen without per-frame churn.
+signal hover_changed(obj: Node3D)
+## Wave-1 tutorial seams (toolstrack spec §14): the formation snap, paste/duplicate and lock
+## toggle were silent — the tutorial director gates steps on them. Display-consumers only.
+signal arrangement_applied(kind: String)
+signal objects_pasted(nodes: Array)
+signal lock_state_changed(objects: Array, locked: bool)
 ## A rotation gesture actually TURNED something (> the undo epsilon). All rotation
 ## paths — R-hold aim-at-cursor, Shift+R group spin, Ctrl+R snap — commit through
 ## commit_rotation_capture, so this is the single seam (tutorial / future replay),
@@ -55,6 +63,7 @@ var _selection_glow_material: StandardMaterial3D = null
 
 # Clipboard for copy/paste
 var _clipboard: Array[Node3D] = []  # Stores references to copied objects for duplication
+var _pasted_nodes_scratch: Array = []  # collects the copies of ONE paste for objects_pasted
 
 # Rotation tracking
 var _is_rotating: bool = false
@@ -82,6 +91,7 @@ const SORT_ANIM_RESTING_Y: float = 0.0  # Table surface height for all models
 
 # Drag distance tracking
 var _drag_start_positions: Dictionary = {}  # Object -> start position mapping
+var _hover_hint_obj: Node3D = null  # last emitted hover_changed target (dedupe)
 var _drag_anchor_position: Vector3 = Vector3.ZERO  # Primary drag anchor point
 var _drag_grab_world: Vector3 = Vector3.ZERO  # Cursor table position at grab (preserves grab offset)
 var _drag_line: MeshInstance3D = null  # Visual line during drag
@@ -117,6 +127,7 @@ var _measure_front_label: Label3D = null  # Regiment facing aid (front vs flank/
 # Shift+G clears all. The RangeRingController (injected by main.gd) owns the per-model
 # rings; local-only display aid. See scripts/range_ring_controller.gd.
 var range_ring_controller: Node = null
+var sight_fan_toggle: Callable = Callable()   # main provides: F toggles the selected unit's sight+range fan
 
 # Movement reach indicator: M toggles the Advance + Rush/Charge bands on selected models,
 # Shift+M clears all. The MovementRangeController (injected by main.gd) owns the per-model
@@ -129,6 +140,8 @@ var movement_range_controller: Node = null
 # base, drop-resolved final appended) rides the selection_dropped seam. T toggles trail
 # visibility, Shift+T clears; a left-click on a committed trail shows its measured proof.
 var move_trails: Node = null
+## Measure-on-pickup ghost (UX polish): origin silhouettes while dragging; injected by main.
+var pickup_ghosts: Node = null
 ## The anchor model's NET traversed path this drag (retrace-erased, budget-refunding —
 ## MoveLedger.extend_path). Feeds the consumed-inches readout, live trail, ledger + log.
 var _drag_path_points: PackedVector2Array = PackedVector2Array()
@@ -316,6 +329,11 @@ func _input(event: InputEvent) -> void:
 		var dock_node = main_node.get("unit_dock") if main_node != null else null
 		if dock_node != null and dock_node.has_method("occludes_point") and dock_node.occludes_point(mouse_event.position):
 			return
+		# Solo P8: while the player is picking an attack target, main's targeting mode owns the mouse —
+		# no selection/box-select underneath.
+		if main_node != null and main_node.get("_solo_target_mode") is Dictionary \
+				and not (main_node.get("_solo_target_mode") as Dictionary).is_empty():
+			return
 
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			if mouse_event.pressed:
@@ -363,7 +381,10 @@ func _input(event: InputEvent) -> void:
 						# Gate on dead_slot (J3): only a tray-parked model has it, so a blood stain
 						# (collider-less — the ray falls through to a hidden delete wrapper underneath)
 						# never opens the revive menu.
-						if bool(clicked_object.get_meta("deleted", false)) and clicked_object.has_meta("dead_slot"):
+						if (bool(clicked_object.get_meta("deleted", false)) and clicked_object.has_meta("dead_slot")) \
+								or bool(clicked_object.get_meta("embarked", false)):
+							# Dead OR embarked tray models skip selection — straight to their
+							# single-action menu (revive / disembark, NML-105).
 							context_menu_requested.emit(mouse_event.position, [clicked_object])
 							get_viewport().set_input_as_handled()
 						else:
@@ -421,6 +442,9 @@ func _input(event: InputEvent) -> void:
 				movement_range_controller.clear_all()
 			else:
 				movement_range_controller.toggle(_selected_model_nodes())
+		elif event.keycode == KEY_F and sight_fan_toggle.is_valid():
+			# F: sight+range fan for the selected unit; Shift+F clears (maintainer sketch overlay).
+			sight_fan_toggle.call([] if event.shift_pressed else _selected_model_nodes(), event.shift_pressed)
 		elif event.keycode == KEY_P and _is_measuring:
 			_pin_current_measurement()
 		elif event.keycode == KEY_K:
@@ -570,6 +594,12 @@ func _foreign_owner_slot(obj: Node) -> int:
 			owner = int(gu.unit_properties.get("player_id", 0))
 	if owner <= 0:
 		return 0
+	# Solo (goal 001): a designated AI army is never "foreign" — the human owns the physical table and
+	# may always adjust the AI's models (this is also the future co-op path: the AI army has no peer).
+	var main_node := get_node_or_null("/root/Main")
+	if main_node != null and main_node.get("solo_ai_slots") is Dictionary \
+			and (main_node.get("solo_ai_slots") as Dictionary).has(owner):
+		return 0
 	var my_slot: int = _network_manager.get_my_player_slot()
 	# Fail open while our own slot is still pending (0, the sub-second window right after
 	# (re)connect): NEVER lock a player out of their own army because the slot hasn't landed.
@@ -647,11 +677,16 @@ func set_movement_cap(mode: int) -> void:
 
 ## The active cap distance in metres for the current selection (0 = no cap). Reads the selected
 ## model's Advance/Rush allowance from the movement-range controller (Fast/Slow/Swift/aura-aware).
+## An AMBUSH-RESERVE unit is never capped (maintainer field find): dragging it from the tray onto
+## the table is DEPLOYMENT, not a move — the cap forced placement in stuttered capped drags.
 func _compute_movement_cap_meters() -> float:
 	if _movement_cap == MovementCap.OFF or movement_range_controller == null:
 		return 0.0
 	var models := _selected_model_nodes()
 	if models.is_empty() or not movement_range_controller.has_method("bands_for_model"):
+		return 0.0
+	var gu = models[0].get_meta("game_unit") if models[0].has_meta("game_unit") else null
+	if gu is GameUnit and bool((gu as GameUnit).unit_properties.get("ambush_reserve", false)):
 		return 0.0
 	var bands: Dictionary = movement_range_controller.bands_for_model(models[0])
 	var inches: int = int(bands.get("rush", 12)) if _movement_cap == MovementCap.RUSH else int(bands.get("advance", 6))
@@ -856,6 +891,9 @@ func _update_hover(screen_pos: Vector2) -> void:
 	if obj != null and obj in _selected_objects:
 		obj = null  # selected objects keep their green glow; no gold hover on top
 	_hover_glow.set_target(obj)
+	if obj != _hover_hint_obj:
+		_hover_hint_obj = obj
+		hover_changed.emit(obj)
 
 
 ## Highlight a selected object with a green model glow (material_overlay), saving
@@ -1125,7 +1163,15 @@ func _start_dragging(screen_pos: Vector2) -> void:
 
 	_is_dragging = true
 	_hover_glow.set_target(null)
+	if _hover_hint_obj != null:
+		_hover_hint_obj = null
+		hover_changed.emit(null)
 	_drag_start_positions.clear()
+
+	# Measure-on-pickup ghost (UX polish): capture the origin silhouettes BEFORE the lift,
+	# so the ghost shows the true pre-drag pose (what ESC returns to).
+	if pickup_ghosts != null:
+		pickup_ghosts.begin(movable)
 
 	# Store start positions for the movable objects and lift them
 	for obj in movable:
@@ -1171,6 +1217,9 @@ func _start_dragging(screen_pos: Vector2) -> void:
 
 
 func _stop_dragging() -> void:
+	# The drop ends the origin preview whatever else happens below (ghost is drag-scoped).
+	if pickup_ghosts != null:
+		pickup_ghosts.end()
 	if _is_dragging and not _selected_objects.is_empty():
 		# Anti-stacking + charge-snap: nudge dropped bases out of any overlap with other
 		# units and snap a near-miss to enemy contact. Done BEFORE the batch / undo below
@@ -1523,6 +1572,8 @@ func _cancel_drag() -> void:
 	# Cancelled = no move executed: the live ribbons vanish, nothing is committed.
 	if move_trails != null:
 		move_trails.end_live()
+	if pickup_ghosts != null:
+		pickup_ghosts.end()
 
 	_is_dragging = false
 	_move_broadcast_timer = 0.0
@@ -2477,7 +2528,13 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 	if terrain_overlay and terrain_overlay.has_method("has_line_of_sight"):
 		var from_height := _object_height_category(_measure_start_object)
 		var to_height := _object_height_category(_measure_end_object)
-		if not terrain_overlay.has_line_of_sight(from_pos, to_pos, from_height, to_height):
+		# Base radii keep the ruler consistent with the engine's base-aware terrain-zone LOS (a model whose
+		# base overlaps a forest/ruin edge sees in/out — the ruler must not show red where the volley fires).
+		var from_model := _object_model_instance(_measure_start_object)
+		var to_model := _object_model_instance(_measure_end_object)
+		var from_r: float = LosRules.model_base_radius_m(from_model) if from_model else 0.0
+		var to_r: float = LosRules.model_base_radius_m(to_model) if to_model else 0.0
+		if not terrain_overlay.has_line_of_sight(from_pos, to_pos, from_height, to_height, from_r, to_r):
 			los_blocked = true
 			line_color = Color.RED  # Change line to red if LOS is blocked
 		# Units block sight lines too (Asgard: formation Height, <1" gaps closed).
@@ -3990,6 +4047,7 @@ func arrange_selected_in_rows(num_rows: int) -> void:
 			idx += 1
 
 	_broadcast_arrange_positions(objects)
+	arrangement_applied.emit("rows")
 
 
 
@@ -4043,6 +4101,7 @@ func arrange_selected_arrow() -> void:
 		row_count += 1
 
 	_broadcast_arrange_positions(objects)
+	arrangement_applied.emit("arrow")
 
 
 ## Average (X,Z) of the selection's current positions — the anchor the arrange formations centre on.
@@ -4083,6 +4142,7 @@ func paste_from_clipboard(cursor_pos: Vector3) -> void:
 	if _clipboard.is_empty():
 		push_warning("Clipboard is empty")
 		return
+	_pasted_nodes_scratch = []
 
 	# Calculate center of clipboard objects
 	var clipboard_center = Vector3.ZERO
@@ -4131,7 +4191,13 @@ func paste_from_clipboard(cursor_pos: Vector3) -> void:
 			# Select the pasted object
 			_add_to_selection(copy)
 			_broadcast_pasted_copy(copy)
+			_pasted_nodes_scratch.append(copy)
 			pasted_count += 1
+
+
+	if not _pasted_nodes_scratch.is_empty():
+		objects_pasted.emit(_pasted_nodes_scratch)
+		_pasted_nodes_scratch = []
 
 
 ## Mirror a pasted/duplicated object to remote peers by serializing it and
@@ -4292,6 +4358,8 @@ func toggle_lock_selected() -> void:
 		if is_instance_valid(obj):
 			_set_object_locked(obj, new_state)
 
+	lock_state_changed.emit(_selected_objects.duplicate(), new_state)
+
 	# Deselect if locking
 	if new_state:
 		_deselect_all()
@@ -4313,7 +4381,9 @@ func _set_object_locked(obj: Node3D, locked: bool) -> void:
 
 ## Check if object is locked
 func is_object_locked(obj: Node3D) -> bool:
-	return obj.get_meta("locked", false)
+	# NML-105: an EMBARKED model is un-draggable while inside its transport — selection and the
+	# move gesture treat it like a locked object; its radial (Disembark) routes separately.
+	return obj.get_meta("locked", false) or obj.get_meta("embarked", false)
 
 
 ## Apply dimming effect to show locked state

@@ -41,7 +41,11 @@ var _phase := 0.0
 # === Lifecycle ===
 
 func _process(delta: float) -> void:
-	# Pure float math, no allocations: only runs when a light exists (see setup()).
+	# Pure float math, no allocations. Guard the light: _process is enabled by default on any
+	# node that defines it, so it can tick in the window before setup() runs (or when setup was
+	# called with_light=false) — flickering a null light spammed the headless log 68k×/run.
+	if _light == null:
+		return
 	_time += delta
 	_light.light_energy = LIGHT_ENERGY_BASE + LIGHT_ENERGY_FLICKER \
 			* (0.6 * sin(_time * TAU * FLICKER_HZ_A + _phase)

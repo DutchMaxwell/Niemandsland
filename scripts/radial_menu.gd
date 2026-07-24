@@ -373,8 +373,38 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 
 
 ## Creates menu items for a full unit selection.
-static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
+## Solo (goal 001 P8): declare an attack on the AI — enters targeting mode (line of sight shown), then
+## the whole exchange resolves with real tray dice, mirroring the AI's own combat flow.
+static func solo_combat_items(game_unit: GameUnit = null) -> Array[RadialMenuItem]:
+	var out: Array[RadialMenuItem] = []
+	out.append(RadialMenuItem.new("solo_shoot", "Shoot", "»", true, "Shoot at an AI unit — pick a target with line of sight"))
+	out.append(RadialMenuItem.new("solo_fight", "Fight", "⚔", true, "Strike an AI unit in melee contact"))
+	# Spell wave F2: a unit that fields a caster (itself or a joined hero) with tokens can cast —
+	# spell picker -> target -> boost -> automatic resolution.
+	if game_unit != null and _caster_member_of(game_unit) != null:
+		out.append(RadialMenuItem.new("solo_cast", "Cast", "✦", true, "Cast a spell — pick it, pick a target, boost, auto-resolved"))
+	return out
+
+
+## The unit member (unit itself or a joined hero) that can pay for a cast right now, or null.
+static func _caster_member_of(game_unit: GameUnit) -> GameUnit:
+	var members: Array = [game_unit]
+	if game_unit.has_method("get_attached_heroes"):
+		members = members + game_unit.get_attached_heroes()
+	for m in members:
+		var mu := m as GameUnit
+		# No casts_current gate (maintainer 2026-07-22): with 0 tokens the entry must still be
+		# DISCOVERABLE — the spell picker then shows every spell disabled with the token count.
+		if mu != null and mu.is_caster() and mu.get_alive_count() > 0:
+			return mu
+	return null
+
+
+static func create_unit_menu(game_unit: GameUnit, solo_combat: bool = false) -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
+
+	if solo_combat:
+		items.append_array(solo_combat_items(game_unit))
 
 	var activate_icon = "-" if game_unit.is_activated else "+"
 	var activate_tooltip = "Mark unit as not activated" if game_unit.is_activated else "Mark unit as activated this round"
@@ -394,6 +424,9 @@ static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
 	items.append(RadialMenuItem.new("toggle_shaken", "Shaken", shaken_icon, true, shaken_tooltip))
 
 	items.append(RadialMenuItem.new("add_marker", "Token", "T", true, "Add/adjust status & counter tokens for special rules"))
+	# Transport(X) items (Embark/Unload) are APPENDED by the controller for unit AND model menus
+	# alike (_append_transport_items) — a transport is usually a single-model unit and would never
+	# see additions made only here.
 	# NOTE: no "Revive" here by design — dead loose models are revived by RIGHT-CLICKING them on
 	# the army tray (see create_dead_model_menu).
 	items.append(RadialMenuItem.new("delete_unit", "Delete", "X", true, "Remove entire unit from the table"))
@@ -411,6 +444,14 @@ static func create_dead_model_menu(unit_dead_count: int = 1, selection_dead_coun
 		items.append(RadialMenuItem.new("revive_unit_dead", "Revive unit dead (%d)" % unit_dead_count, "U", true, "Revive all of this unit's dead models"))
 	if selection_dead_count > 1:
 		items.append(RadialMenuItem.new("revive_selected", "Revive selected (%d)" % selection_dead_count, "S", true, "Revive all selected dead models"))
+	return items
+
+
+## The only menu an EMBARKED model offers (NML-105, the dead-model mirror): disembark its unit.
+static func create_embarked_model_menu(transport_name: String) -> Array[RadialMenuItem]:
+	var items: Array[RadialMenuItem] = []
+	items.append(RadialMenuItem.new("disembark", "Disembark", "▢", true,
+		"Leave %s (GF v3.5.1 Transport: the unit is placed fully within 6\")" % transport_name))
 	return items
 
 

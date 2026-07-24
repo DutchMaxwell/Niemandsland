@@ -66,6 +66,49 @@ static func format_entry(entry: Dictionary) -> String:
 	return "R%d  %s" % [int(entry["round"]), str(entry["text"])]
 
 
+# === Export (shareable plain text — the maintainer's field-test artefact) ===
+
+## Format the full log as shareable plain text: a header, then EVERY entry as its round-prefixed one-liner,
+## and — when the dev "AI reasoning" toggle fed us records — an AI-decision-records section beneath (the
+## diagnostic gold). Pure + dependency-free: the caller pre-renders the decision lines (via
+## SoloController.render_decision) and passes them in, so BattleLog stays free of any Solo import.
+## Directly unit-tested (records → text).
+static func export_text(all_entries: Array, decision_lines: Array = [], title: String = "Niemandsland — Battle Log") -> String:
+	var lines: PackedStringArray = [title, "=".repeat(title.length()), ""]
+	for e in all_entries:
+		lines.append(format_entry(e as Dictionary))
+	if not decision_lines.is_empty():
+		lines.append("")
+		lines.append("--- AI decision records ---")
+		for d in decision_lines:
+			lines.append(str(d))
+	lines.append("")
+	return "\n".join(lines)
+
+
+## Write the whole log (+ optional pre-rendered AI decision lines) to user://battle_log_<timestamp>.txt and
+## return the ABSOLUTE filesystem path (also printed to the console so the maintainer can find + share it).
+## No external deps; returns "" on a write failure.
+## The full export text (maintainer request: clipboard hand-off for live-test triage) —
+## the same rendering the file export writes, without touching disk.
+func export_as_text(decision_lines: Array = []) -> String:
+	return export_text(_entries, decision_lines)
+
+
+func export_to_file(decision_lines: Array = []) -> String:
+	var stamp := Time.get_datetime_string_from_system(false, true).replace(":", "-").replace(" ", "_")
+	var vpath := "user://battle_log_%s.txt" % stamp
+	var f := FileAccess.open(vpath, FileAccess.WRITE)
+	if f == null:
+		push_error("BattleLog export failed (%s): %s" % [vpath, error_string(FileAccess.get_open_error())])
+		return ""
+	f.store_string(export_text(_entries, decision_lines))
+	f.close()
+	var abs_path := ProjectSettings.globalize_path(vpath)
+	print("[BattleLog] exported %d entries → %s" % [_entries.size(), abs_path])
+	return abs_path
+
+
 func _where(pred: Callable) -> Array:
 	var out: Array = []
 	for e in _entries:
@@ -94,11 +137,16 @@ func on_unit_moved(unit_name: String, distance_inches: float, ai: bool = false) 
 	log_event(Category.MOVEMENT, "%s %s %.0f\"" % [unit_name, verb, distance_inches], ai)
 
 
-func on_dice_rolled(count: int, hits: int, target: int, player: String = "", faces: Array = []) -> void:
+func on_dice_rolled(count: int, hits: int, target: int, player: String = "", faces: Array = [],
+		kind: String = "attack") -> void:
 	# WHO rolled + the FACE RESULTS, not just a count (maintainer): "You: 6 4 2 1 → 2 hits (3+)" /
 	# "Alice: 5 3 1". Faces sort high→low (same convention as the dice-log icon strip). Callers without
 	# faces (e.g. Solo-AI summaries) fall back to the count-only lines; no-target rolls log too.
-	var prefix := (player + ": ") if not player.is_empty() else ""
+	# `kind` (live-test Bug 16): DEFENSE rolls read "… defends: … → N block(s)" so a save can never be
+	# mistaken for an attack line ("0 hits (7+)" used to be a SAVE at 7+); attacks keep the hit wording.
+	var defense := kind == "defense"
+	var noun := "block" if defense else "hit"
+	var prefix := (player + (" defends: " if defense else ": ")) if not player.is_empty() else ""
 	if not faces.is_empty():
 		var sorted_faces := faces.duplicate()
 		sorted_faces.sort()
@@ -109,7 +157,7 @@ func on_dice_rolled(count: int, hits: int, target: int, player: String = "", fac
 		var faces_str := " ".join(parts)
 		if target > 0:
 			var plural := "" if hits == 1 else "s"
-			log_event(Category.COMBAT, "%s%s → %d hit%s (%d+)" % [prefix, faces_str, hits, plural, target])
+			log_event(Category.COMBAT, "%s%s → %d %s%s (%d+)" % [prefix, faces_str, hits, noun, plural, target])
 		elif prefix.is_empty():
 			log_event(Category.COMBAT, "%d dice: %s" % [count, faces_str])
 		else:
@@ -119,7 +167,7 @@ func on_dice_rolled(count: int, hits: int, target: int, player: String = "", fac
 		log_event(Category.COMBAT, "%s%d dice rolled" % [prefix, count])
 		return
 	var plural2 := "" if hits == 1 else "s"
-	log_event(Category.COMBAT, "%s%d dice → %d hit%s (%d+)" % [prefix, count, hits, plural2, target])
+	log_event(Category.COMBAT, "%s%d dice → %d %s%s (%d+)" % [prefix, count, hits, noun, plural2, target])
 
 
 func on_wounds(unit_name: String, lost: int, alive: int, total: int) -> void:
