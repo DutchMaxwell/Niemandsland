@@ -6,7 +6,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
-## [0.3.10.0-alpha] — 2026-07-28
+## [0.3.10.0-alpha] — 2026-07-27
 
 ### Added — Solo mode
 - **Play full games against NACHTMAHR, the built-in opponent (alpha).** Mark any imported army as
