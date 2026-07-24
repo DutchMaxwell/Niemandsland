@@ -1,12 +1,87 @@
 # Niemandsland — Status & Roadmap
 
-**Version:** 0.3.9.1-alpha *(public alpha — forward-looking backlog in [`docs/ROADMAP.md`](docs/ROADMAP.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
+**Version:** 0.3.10.0-alpha *(public alpha — forward-looking backlog in [`docs/ROADMAP.md`](docs/ROADMAP.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
 
 This is the single source of truth for what works, what's in progress, and what's
 planned. Architecture details live in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md);
 the full change history is in `git log`.
 
 ## Works today
+
+**Solo mode — a full game against NACHTMAHR** — mark any imported army as AI-controlled
+(checkbox at import, or later in the solo panel), or press **AI Opponent** and let
+NACHTMAHR bring a list of its own (faction and 1000–3000 pts selectable). NACHTMAHR is a
+**game AI in the classic sense: rule-based, deterministic, fully offline** — no machine
+learning, no language model, no network call; the same inputs produce the same decisions.
+**Exactly one difficulty ships: full strength** (`scripts/solo/solo_difficulty.gd` — every
+legacy grade name resolves to NACHTMAHR; selectable grades are a roadmap item). The match
+runs the rulebook flow end to end: roll-off → the winner picks a table edge and deploys
+first → both sides alternate unit by unit with explicit hand-over clicks → scout phase in
+the 12″ band → the roll-off winner opens round 1. Ambush / Infiltrate reserves wait off
+table and arrive from round 2 (alternating placement, a per-model >9″ base-edge gate,
+terrain-legal), objective markers are scored at the end of each round, and after the final
+round (4 by default) a victory dialog states the result. The AI's own lists are fetched
+from the asset CDN at runtime and cached for offline play — they are **never bundled in
+this repo**, and a CI hygiene check blocks any commit that would add them.
+
+**Solo — your side of the table** — you attack through the radial menu: **Shoot** / **Fight**
+on any of your units (single models and lone heroes included), with a target mode that draws
+the range ring and a live line-of-sight ray (green = clear, red = blocked), and real physics
+dice in the tray for **both** sides. The melee sequence follows the book: the charge snaps to
+base contact, Counter strikes first, Impact hits land, your strike-back is an explicit prompt,
+fatigue applies to both sides, the loser tests morale up to Rout, and pile-in plus the
+up-to-3″ consolidation wait for your input instead of locking the board. Casualties are
+removed per model (plain models before special-weapon / equipment / Tough bearers, outside-in
+so the chain does not tear); Takedown model picks, Deadly multiplication and Regeneration ask
+the human player where they land.
+
+**Solo — casting, both sides** — **Cast** in the radial menu opens the spell list with token
+costs and effect text, marks legal targets with pulsing rings (green friendly / yellow enemy),
+measures spell range base-edge to base-edge, and offers a boost tableau with live success odds;
+NACHTMAHR then decides whether to interfere. It casts by the official D3+X procedure with its
+own token economy and asks you to interfere through a single tableau (+/− tokens, the odds
+update as you spend). Spell effects are **mechanical, not cosmetic**: lasting spells create
+buff/debuff tokens from the army book, and hit / defence / movement / range / morale modifiers
+and granted rules feed the real dice rolls, the movement rings and the target checks. Tokens
+are consumed after exactly one exchange, expire at round end, and each application is logged.
+
+**Solo — rules automation and one measuring truth** — a per-system rules registry
+(`scripts/solo/rules_registry.gd`; values load strictly per game system, because the same rule
+name means different things in GF / GFF / AoF / AoFS / AoFR) resolves hundreds of special rules
+automatically for both sides: the core combat set (Deadly, Blast, Takedown, Counter, Impact,
+Fear, Rending, Furious, Relentless …), the modifier families (Stealth / Evasive / Shielded /
+Fortified / Guarded, the conditional-AP family, the "X Aura" variants) and the behaviour rules
+(Aircraft, Strider / Flying terrain, Hit & Run, Retaliate, Strafing, Re-Deployment, Vanguard,
+Bounding, Teleport …) — **100 % coverage over the bundled opponent lists, >91 % playable
+book-wide**. **Every applied rule writes its own battle-log line** (a silently-correct rule
+reads like a broken one), and any rule the automation does *not* cover is named per unit in the
+log. Measurement has a single truth: shooting gates, charge reach, melee reach, spell range and
+objective control all measure **base edge to base edge** like the ruler, and line of sight is
+computed per model from the base edge — walls and intervening units block, woods and ruins are
+area terrain (see in and out, never through), containers block hard — so ruler, sight fan and
+engine always agree.
+
+**Not automated (named, not hidden)** — spell accumulators / caster groups, unit spawning
+(Spawn, Split, Reinforcement) and a handful of movement rules (Coordinate, Delayed Action,
+Traversal, Ambush Beacon …) are **not** resolved by the game; the per-unit notice in the battle
+log lists them so you can apply them by hand. The follow-up resolver waves are post-release work
+(see [`docs/ROADMAP.md`](docs/ROADMAP.md)).
+
+**Transports (stage 1)** — units embark and unload through the radial menu with book-exact
+capacity, disembark into an automatic 6″ formation, and a destroyed transport spills its cargo
+with a Shaken marker. The whole embark state syncs in multiplayer and persists in saves
+(`SAVE_VERSION` 1.7, with a migration step).
+
+**Battle log & play aids** — a collapsible event log narrates the game (moves with the real
+traveled distance, who rolled what and the faces, wounds, kills, revives, round changes and
+every automated rule) with All / Combat / Movement / AI filters. **Export** or `F8` writes the
+log to a text file and **Copy** puts the rendered log on the clipboard — both intended for bug
+reports; a developer "AI reasoning" toggle adds NACHTMAHR's per-decision record. A **sight &
+range fan** (`F`, `Shift+F` clears) shades what the selected unit can legally see and shoot —
+walls cast shadows, woods are see-into-not-through, one band per weapon range — and it appears
+automatically on every AI volley. Picking a unit up leaves a translucent **origin ghost** where
+the move began, hovering an object shows that object's hotkeys in a hint line, and `Ctrl+R`
+snaps any selectable (unit, loose model, terrain) to the nearest 90°.
 
 **Sandbox & objects** — 3D table (variable sizes), orbit/pan/zoom camera, spawn/
 move/rotate/delete, multi- and box-select, copy/paste/duplicate, row/arrow
@@ -57,8 +132,11 @@ units too). An **opt-in "dry-brush" movement cap** (default on) hard-stops the d
 the selected action band (Advance ~6″ / Rush-Charge ~12″, Fast/aura-aware); backtracking
 refunds the budget. A **game-phase gate** frames setup vs play (Deployment → *Start Game*
 → Playing, with a multiplayer ready-sync and save/load persistence); trails auto-suppress
-during deployment. Trail-visibility and movement-cap toggles persist in settings. This
-is UX/measurement only — no move is resolved or forced; the player still moves the models.
+during deployment. Trail-visibility and movement-cap toggles persist in settings. For
+**your own** models this is UX/measurement only — no move is resolved or forced; you still
+move the models. In a solo game the phase gate flips automatically (solo deploy / first
+activation), so the opening moves are painted too, and NACHTMAHR moves its own models along
+the same measured, base-width corridors with a distance label.
 
 **Multiplayer** — ENet over LAN and over the internet via the WebSocket relay
 ([`relay/`](relay/README.md)); full state sync (models, terrain, rotation, table
@@ -75,18 +153,21 @@ host rehosts and re-syncs full state) is also live; see
 host-reconnect) is deployed to Fly.io (`niemandsland-relay`, fra). The reconnect /
 rate-limit / army-sync cascade was live-validated across two real clients.
 
-**Import/export** — Army Forge (OPR) + Wargaming Simulator (WGS) list import, `.nml`
-save format with OS file association
-([`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md)).
+**Import, saves & autosave** — Army Forge (OPR) list import and the `.nml` save format with
+OS file association. The game **autosaves** every 5 minutes and at every round change into
+three rotating slots that show up in CONTINUE and the load dialog (in multiplayer only the
+host writes them; each autosave is announced by toast and battle-log line). The Wargaming
+Simulator (WGS) import was **retired** — the menu entry and its code are gone; older saves
+containing WGS units still load, as generic units.
 
-**Onboarding — guided tutorial (foundation)** — a T0 walking skeleton + a T1 tool track
-(W1–W7) that teaches on the real table, event-gated (a lesson advances only when the
-player does the action): camera & table, army import, select/move/rotate/undo, dice &
-measuring, unit cards & activation, wounds & casualties, and movement & trails (path
-painting, dry-brush cap, 1″ spacing, Start-Game phase gate). It ships with a bundled
-board (official lists, real minis, auto-generated terrain), progress persistence and an
-end assessment. The broader coverage (Settings, Map Layout, Terrain Mode, the full dice
-toolset, save/load, hosting, Regiments, and an OPR-rules track) is planned as later waves.
+**Onboarding — guided tutorial course** — **64 steps in 11 chapters** that teach on the real
+table, event-gated (a lesson advances only when the player actually does the action): camera
+& table, selecting, moving/rotating/arranging, measuring and rings, the full dice tray, unit
+cards & the radial menu, wounds/casualties/revive, a real army import, table & casual terrain,
+the competitive Map Layout editor, and movement & trails (path painting, dry-brush cap, 1″
+spacing, Start-Game phase gate). It ships with a bundled board (official lists, real minis,
+auto-generated terrain), progress persistence and an end assessment. Still open for later
+waves: Settings, hosting/multiplayer, Regiments, and an OPR-rules / solo-play track.
 
 **Presentation** — a built-in Tactical-HUD UI theme (sleek; cyan/amber), atmosphere
 presets (Day/Sunset/Night/Overcast/Rain), graphics quality presets, SSAO + glow, cinematic intro. **Battlefield atmosphere**
@@ -130,27 +211,39 @@ The forward-looking work now lives in [`docs/ROADMAP.md`](docs/ROADMAP.md); see 
 
 The forward-looking plan and the feature-request pipeline now live in
 [`docs/ROADMAP.md`](docs/ROADMAP.md) (single source) — see its **Next** and **Ideas**
-sections (Age of Fantasy + Regiments, MP 3+ hardening, Solo/Co-Op AI, …).
+sections (Age of Fantasy + Regiments, MP 3+ hardening, selectable AI difficulty grades,
+co-op against the AI, the remaining rule-resolver waves, …).
 
 ## Out of scope (by design)
 
-Niemandsland is a **tool for human players, not an automated game**. We deliberately
-do **not** build automated combat/damage resolution or per-activation turn tracking.
-The one deliberate exception is a lightweight **deployment→play phase gate** — a
-Start-Game affordance with a multiplayer ready-sync (see *Works today*) — which frames
-setup vs play but resolves nothing. The legacy AI system + battle simulator (~5500 lines)
-was removed and will not be revived; a fresh, deterministic and explainable **Solo/Co-Op
-AI** (OPR's official ruleset) is a separately-tracked **planned** item — see
-[`docs/ROADMAP.md`](docs/ROADMAP.md) — not part of this human-tool core, and not on `main`.
+For **human-vs-human** play Niemandsland stays a **tool, not an automated game**: in a local
+or multiplayer game between people nothing is resolved for you — no automated combat or damage
+resolution, no forced turn tracking, no automated terrain effects. The only framing device is
+the lightweight **deployment→play phase gate** (a Start-Game affordance with a multiplayer
+ready-sync), which resolves nothing.
+
+**Solo mode is the deliberate exception**, because an opponent that resolves nothing cannot
+play: when an army is marked AI-controlled the game runs activations, dice, wounds, morale and
+special rules for both sides. Those systems only activate in a solo game; a human-vs-human
+table behaves exactly as before. The legacy AI system + battle simulator (~5500 lines) was
+removed and was **not** revived — today's solo engine (`scripts/solo/`) was written from
+scratch against OPR's official Solo & Co-Op ruleset, deterministic and explainable by design.
+
+Still out of scope for now: co-op (two humans vs the AI), campaigns/ladders, and any AI that
+learns or calls out to a service.
 
 ## Not built (despite older docs)
 
-The `ai_*.gd` and `battle_simulator.gd` scripts no longer exist. `activation_tracker.gd`
+The old root-level `ai_*.gd` scripts and `battle_simulator.gd` are gone and were not revived —
+the `scripts/solo/ai_*.gd` files are the new, unrelated solo engine. `activation_tracker.gd`
 and `hero_attachment_dialog.gd` never existed as separate files — that logic lives in
 `game_unit.gd` / `radial_menu*.gd` / `network_manager.gd`.
 
 ## Known issues
 
+- **Solo is alpha.** One difficulty grade only (full strength); solo is single-player
+  (co-op vs the AI is not built); the rules listed under *Not automated* above must be
+  applied by hand; all solo UI is English-only.
 - Dice can occasionally jitter at miniature scale (mitigated by the scaled-SubViewport
   dice approach; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#scaling)).
 - Some TTS texture-loading errors (non-fatal).
@@ -164,11 +257,15 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 
 ## Tests
 
-gdUnit4: **1,139 tests green** in `test/` (incl. `coherency_checker`, `save_manager`,
+gdUnit4: **1,687 tests green** in `test/` (incl. `coherency_checker`, `save_manager`,
 `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`, `network_manager` /
 `network_version_handshake`, `dice_rules`, `player_identity`, the movement/spacing
 suites `separation_checker` / `separation_resolver` / `separation_zone`, `move_ledger` /
-`move_trails`, `game_phase`, `object_manager`, and the guided-tutorial flow). Python:
-`relay/test_relay_server.py` (49 green). How to run:
-[`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). Coverage of the newer movement / MP /
-tutorial paths is solid; some older gameplay scripts are still untested.
+`move_trails`, `game_phase`, `object_manager`, the guided-tutorial flow, and the solo
+suites — `solo_controller`, `turn_manager`, `movement_planner`, `ai_decision` /
+`ai_targeting` / `ai_position` / `ai_round_planner` / `ai_combat_math` / `ai_spell`,
+`rules_registry`, `spells_registry`, `terrain_rules`, `sight_fan`, `transport_state` /
+`transport_embark`, `autosave_controller`). Python: `relay/test_relay_server.py`
+(67 green). How to run: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). Coverage of the
+solo / movement / MP / tutorial paths is solid; some older gameplay scripts are still
+untested.

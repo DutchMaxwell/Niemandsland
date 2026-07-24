@@ -6,11 +6,12 @@ Fantasy). Built in Godot.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
-[![Status](https://img.shields.io/badge/Status-0.3.9.1--alpha-orange.svg)]()
+[![Status](https://img.shields.io/badge/Status-0.3.10.0--alpha-orange.svg)]()
 
-> **Status: public alpha (`0.3.9.1`).** The tabletop sandbox, OPR army import, multiplayer
-> and the 3D-model pipeline work; rules automation (turn/combat resolution, terrain gameplay
-> effects) is **not** implemented. See [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the honest
+> **Status: public alpha (`0.3.10.0`).** The tabletop sandbox, OPR army import, multiplayer
+> and the 3D-model pipeline work. **Solo play against the built-in AI opponent (NACHTMAHR)**
+> resolves turns, combat, spells and terrain effects automatically; human-vs-human multiplayer
+> is still a manual-rules sandbox. See [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the honest
 > done / in-progress / planned breakdown, and [`docs/ROADMAP.md`](docs/ROADMAP.md) for what's
 > planned next.
 
@@ -18,6 +19,16 @@ Fantasy). Built in Godot.
 
 What the code actually does today:
 
+- **Solo mode vs NACHTMAHR** — play a whole game against the built-in opponent. NACHTMAHR is a
+  rules-based, deterministic game AI (no LLM, no neural net) that runs entirely offline; it plays
+  by the official OPR solo decision trees and never cheats. Mark an imported army as AI-controlled,
+  or let NACHTMAHR bring one of its own pre-built lists (fetched at runtime, cached locally).
+  Deployment is a click-guided rulebook flow (roll-off, alternating placement, scouts, ambush
+  arrivals), and you shoot, fight and cast through the radial menu with real dice in the tray.
+  Hundreds of special rules resolve automatically across all five systems, and **every applied
+  rule writes its own battle-log line**; rules the automation does not cover yet are listed per
+  unit so you can apply them by hand. One difficulty (full strength) — selectable grades are on
+  the roadmap.
 - **3D tabletop** — variable table sizes (4×4, 6×4, custom), orbit/pan/zoom camera.
 - **Object handling** — click / Alt-click / box select, drag, rotate, copy / paste /
   duplicate, formation arrangement (rows `1`–`9`, arrow `A`) with constant base-edge
@@ -28,12 +39,16 @@ What the code actually does today:
 - **Measurement** — distance measuring in inches.
 - **Map layout editor** — top-down 3″ grid, terrain pieces (ruins / forest /
   container / dangerous), front-line + custom-polygon deployment zones, objectives,
-  auto-generate, 3D overlay, save/load layouts. (Terrain is currently visual; it has
-  **no** gameplay effect yet.)
+  auto-generate, 3D overlay, save/load layouts. (In solo mode terrain is rules-active — line of
+  sight, cover, difficult / dangerous ground; in the sandbox and in multiplayer it stays visual.)
 - **OPR units** — import Army Forge lists via the OPR API, per-model wounds, caster
   points, unit coherency check + visualizer, radial context menu, a bottom unit-card
-  dock (the whole army as live stat cards) plus an in-game battle log, unit-wide
-  status tokens (Fatigue / Shaken / Activated).
+  dock (the whole army as live stat cards) plus an in-game battle log (exportable to a
+  text file or the clipboard), unit-wide status tokens (Fatigue / Shaken / Activated),
+  and transports (embark / unload with book-exact capacity, saved and MP-synced).
+- **Sight & range fan** — press `F` on a selected unit to see exactly what it can legally see
+  and shoot: walls cast shadows, woods are seen into but not through, one band per weapon range.
+  It also appears on its own for every AI volley.
 - **Movement & trails** — drag a model to paint a base-width "chalk" trail (**Path
   Painting**); the ruler and battle log report the actual traveled path (arc), while
   weapon/charge range stays straight-line. 1″ spacing walls (red enemy / orange friendly)
@@ -43,11 +58,13 @@ What the code actually does today:
 - **Multiplayer** — ENet over LAN, or over the internet via a WebSocket relay
   (see [`relay/`](relay/README.md)); full state sync (models, terrain, table size),
   shared dice log, player avatars/cursors, save/load, and a deployment ready-sync.
-- **Import / export** — Army Forge (OPR) and Wargaming Simulator (WGS) list import;
-  `.nml` save format with OS file association.
-- **Guided tutorial** — an event-gated tool track (W1–W7) that teaches the basics on a
-  real bundled board: camera, army import, select/move/rotate, dice & measuring, cards &
-  activation, wounds & casualties, and movement & trails. (More lessons planned.)
+- **Import / export** — Army Forge (OPR) list import; `.nml` save format with OS file
+  association, plus autosave (every 5 minutes and at round changes, three rotating slots
+  offered in CONTINUE).
+- **Guided tutorial** — an event-gated course of 64 steps in 11 chapters that teaches on a
+  real bundled board: camera & table, selecting, move/rotate/arrange, measuring & rings, the
+  dice tray, unit cards & the radial menu, wounds & casualties, a real army import, table &
+  terrain, the map-layout editor, and movement & trails.
 - **Asset pipeline** — the offline pipeline that generates the 3D miniatures
   (image generation → TRELLIS mesh) lives in a separate private repository; the
   game consumes only its R2-delivered outputs.
@@ -80,6 +97,8 @@ macOS) — no install. The start menu shows the version; the first log line is
   otherwise).
 - **Import an army** from the menu by pasting an [Army Forge](https://army-forge.onepagerules.com/)
   list link. A faction's 3D models download on first use (cached afterwards) — internet required.
+- **Play solo**: import a second list with **AI-controlled (Solo)** ticked, or let NACHTMAHR pick
+  one of its own (faction + points), then follow the guided deployment into round 1.
 - Honest alpha caveats are in [`docs/KNOWN_ISSUES.md`](docs/KNOWN_ISSUES.md); hit **"Report a
   problem"** in the start menu to send an anonymised bug report.
 
@@ -130,7 +149,9 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 |---|---|
 | Roll dice | `Space` |
 | Range rings / movement / pin ruler | `G` / `M` / `P` |
+| Sight & range fan (selected unit) / clear | `F` / `Shift`+`F` |
 | Hide / clear move trails | `T` / `Shift`+`T` |
+| Export the battle log to a text file | `F8` |
 
 ## Project layout
 
@@ -165,7 +186,8 @@ scale, **dice run in a separate scaled SubViewport** (our own MIT `dice_tray.gd`
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — systems & code map
 - [`docs/REGIMENTS.md`](docs/REGIMENTS.md) — Age of Fantasy: Regiments design notes
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — build, run, test
-- [`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md) — Wargaming Simulator integration
+- [`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md) — Wargaming Simulator integration (the WGS
+  import was retired in `0.3.10.0` — historical)
 
 ## Security note
 
