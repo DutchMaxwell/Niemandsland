@@ -130,3 +130,4 @@ _internal/
 CLAUDE.md
 HANDOFF_*.md
 HANDOVER*.md
+tools/review_trace.json
