@@ -264,6 +264,8 @@ var _solo_model_pick: Dictionary = {}        # B5: {unit, recommended, outcome} 
 var _solo_deploy_fsm: Dictionary = {}        # click-driven deployment machine (side/main/scout/done — maintainer flow 2026-07-23)
 var _solo_deploy_ui: CanvasLayer = null      # the deployment hand-over panel (label + up to two buttons)
 var _solo_deploy_ui_label: Label = null
+var _solo_strip_cb1: Callable = Callable()   # the strip owns its callbacks (see _solo_strip_fire)
+var _solo_strip_cb2: Callable = Callable()
 var _solo_deploy_ui_btn1: Button = null
 var _solo_deploy_ui_btn2: Button = null
 var _solo_los_line: MeshInstance3D = null    # live line to the hovered target: green = clear, red = blocked
@@ -1681,17 +1683,40 @@ func _on_solo_deploy_pressed() -> void:
 	if ai_roll > you_roll:
 		# NACHTMAHR picks its edge (v1 heuristic: opposite the human's army tray — the natural
 		# setup; objectives sit centre-line, so the edges are near-symmetric) and deploys first.
-		var ai_neg_z := not _solo_human_tray_neg_z()
+		var ai_neg_z := not _solo_near_edge_is_neg_z()   # the AI takes the edge AWAY from the player
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
-				"NACHTMAHR wins %d:%d — it picks the %s edge and deploys first" % [
-				ai_roll, you_roll, ("far" if ai_neg_z != _solo_human_tray_neg_z() else "near")], true)
+				"NACHTMAHR wins %d:%d — it takes the far edge and deploys first" % [ai_roll, you_roll], true)
 		await _solo_deploy_begin_side(ai_neg_z)
 	else:
 		# YOU win: choose your edge — NACHTMAHR takes the opposite one.
-		_solo_deploy_ui_show("Roll-off %d:%d — YOU win and deploy first.\nPick your table edge:" % [you_roll, ai_roll],
-			"Keep tray side", func() -> void: _solo_deploy_begin_side(not _solo_human_tray_neg_z()),
-			"Switch sides", func() -> void: _solo_deploy_begin_side(_solo_human_tray_neg_z()))
+		# The labels name what the player SEES: the near edge is the one on his side of the camera.
+		# NACHTMAHR always takes the other one.
+		_solo_deploy_ui_show("Roll-off %d:%d — YOU win and deploy first.\nWhich edge do you take?" % [you_roll, ai_roll],
+			"Near edge (my side)", func() -> void: _solo_deploy_begin_side(not _solo_near_edge_is_neg_z()),
+			"Far edge", func() -> void: _solo_deploy_begin_side(_solo_near_edge_is_neg_z()))
+## Fire one strip button. The callbacks used to live inside `_solo_deploy_fsm`, which is REASSIGNED
+## wholesale when deployment starts — anything holding a prompt open across that point clicked into
+## the void and waited forever. They belong to the strip now. A dead callback says so instead of
+## looking like a hung game.
+func _solo_strip_fire(cb: Callable, which: String) -> void:
+	if cb.is_valid():
+		cb.call()
+		return
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Prompt button %s has no action left — closing the prompt (please report this)" % which, true)
+	_solo_deploy_ui_hide()
+
+
+## Which table edge — in Z, the axis the deployment zones split along — the player is LOOKING FROM.
+## This replaces a tray-based test that could never work: army trays sit on ±X and their z is the
+## literal 0 (opr_army_manager tray placement), so `z < 0.0` was constantly false. Both a NACHTMAHR
+## roll-off win and the player's own "keep" choice therefore put the AI on the SAME edge, and the
+## player's pick did nothing at all (maintainer TC-001: "gegner stellt dennoch einheit bei meiner
+## seite auf"). The camera is the one reference the player can actually see.
+
+
 ## The deployment hand-over panel (maintainer flow): ONE persistent bottom-centre panel with a
 ## status line and up to two buttons — every human placement is handed over by CLICK, never by
 ## drop guessing. Buttons dispatch through the fsm so the panel is rebuilt-free between states.
@@ -1733,23 +1758,19 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 		_solo_deploy_ui_btn1.custom_minimum_size.x = 280
 		UiPolish.primary_button(_solo_deploy_ui_btn1)
 		_solo_deploy_ui_btn1.focus_mode = Control.FOCUS_NONE   # a panel button must not eat Space/Enter
-		_solo_deploy_ui_btn1.pressed.connect(func() -> void:
-			var cb: Callable = _solo_deploy_fsm.get("cb1", Callable())
-			if cb.is_valid():
-				cb.call())
+		_solo_deploy_ui_btn1.pressed.connect(func() -> void: _solo_strip_fire(_solo_strip_cb1, "1"))
 		row.add_child(_solo_deploy_ui_btn1)
 		_solo_deploy_ui_btn2 = Button.new()
 		_solo_deploy_ui_btn2.custom_minimum_size.x = 280
 		UiPolish.primary_button(_solo_deploy_ui_btn2)
 		_solo_deploy_ui_btn2.focus_mode = Control.FOCUS_NONE
-		_solo_deploy_ui_btn2.pressed.connect(func() -> void:
-			var cb: Callable = _solo_deploy_fsm.get("cb2", Callable())
-			if cb.is_valid():
-				cb.call())
+		_solo_deploy_ui_btn2.pressed.connect(func() -> void: _solo_strip_fire(_solo_strip_cb2, "2"))
 		row.add_child(_solo_deploy_ui_btn2)
 		add_child(_solo_deploy_ui)
 	_solo_deploy_ui_label.text = text
 	_solo_deploy_ui_btn1.text = b1
+	_solo_strip_cb1 = cb1
+	_solo_strip_cb2 = cb2
 	_solo_deploy_fsm["cb1"] = cb1
 	_solo_deploy_ui_btn2.visible = not b2.is_empty()
 	_solo_deploy_ui_btn2.text = b2
@@ -1779,13 +1800,11 @@ func _solo_deploy_ui_hide() -> void:
 
 
 ## The HUMAN's army tray side: true when it stands on the -Z half (the side pick's reference).
-func _solo_human_tray_neg_z() -> bool:
-	var hslot: int = solo_controller.human_slot if solo_controller != null else 1
-	for n in get_tree().get_nodes_in_group("army_tray"):
-		var t := n as Node3D
-		if t != null and int(t.get_meta("player_id", 0)) == hslot:
-			return t.global_position.z < 0.0
-	return true
+func _solo_near_edge_is_neg_z() -> bool:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return true
+	return cam.global_position.z < 0.0
 
 
 ## Build the zones from the chosen AI edge, queue the AI army (main + scout queues), set the
