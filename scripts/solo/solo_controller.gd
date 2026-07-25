@@ -4343,6 +4343,19 @@ func _nearest_uncontrolled_objective(from: Vector3, activating_unit: GameUnit = 
 						return mpos + perp * (2.5 * 0.0254)
 					return mpos
 			elif str(task.get("kind", "")) == "fight":
+				# GARRISON LOCK (maintainer: "wieder bleiben einheiten doof stehen oder ruckeln blöd
+				# herum"; trace g61005: a unit stands ON its marker in R1 and walks away in R2, then
+				# never returns — 22 such A-B-A swings across 8 games). A "fight" task used to drop
+				# the objective entirely, so a unit already HOLDING a marker was sent hunting and gave
+				# the marker up for free. If this unit is the only reason we hold a marker, that
+				# marker stays its objective: obj_dist ≈ 0, _move_toward bails on is_zero_approx, and
+				# the unit simply stands its ground and keeps shooting.
+				var garrison := _garrisoned_marker(activating_unit, arr)
+				if garrison != NO_OBJECTIVE:
+					record_decision({"kind": "garrison", "unit": activating_unit.get_name(),
+						"rule": "holds the objective it is standing on instead of leaving it uncontested",
+						"candidates": [], "chosen": "stay", "why": "sole holder", "data": {}})
+					return garrison
 				return NO_OBJECTIVE
 	# albtraum v2 (endgame_convergence): a marker that already has a runner this round ranks a tier
 	# below an unclaimed one — simultaneous objective trips FAN OUT across different markers instead
@@ -4436,6 +4449,31 @@ func _plan_ev_of(gu: GameUnit) -> float:
 ## official "Controlling Objectives" presence, Solo & Co-Op v3.5.0 p.2 — counted per UNIT, not per model).
 ## `exclude` drops one unit from the tally (the unit currently deciding its own move). Reserve/attached
 ## units never count (they are not free-standing on the table).
+## The marker this unit is currently the SOLE reason we hold — i.e. one of its live models sits
+## inside the control ring and, without this unit, our side controls it with nobody. Returns
+## NO_OBJECTIVE when the unit holds nothing, or when a friend would keep the marker anyway (then it
+## is free to go fight). Ties are broken by the nearest model, so a unit straddling two rings keeps
+## the one it is deepest in.
+func _garrisoned_marker(unit: GameUnit, arr: Array) -> Vector3:
+	if unit == null or unit.is_destroyed() or unit.is_shaken or is_aircraft(unit):
+		return NO_OBJECTIVE
+	var best := NO_OBJECTIVE
+	var best_d := INF
+	for o in arr:
+		var marker: Vector3 = o
+		var gap := INF
+		for p in alive_positions(unit):
+			gap = minf(gap, MoveIntent.distance_inches(p, marker))
+		if gap > OBJECTIVE_CONTROL_IN + 0.001:
+			continue
+		if _units_controlling(marker, ai_slot, unit) > 0:
+			continue   # a friend holds it too — this unit is not needed here
+		if gap < best_d:
+			best_d = gap
+			best = marker
+	return best
+
+
 func _units_controlling(obj: Vector3, slot: int, exclude: GameUnit) -> int:
 	if army_manager == null:
 		return 0
