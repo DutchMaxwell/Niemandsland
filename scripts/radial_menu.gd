@@ -184,6 +184,14 @@ func _draw_tooltip(font: Font, tip: String) -> void:
 	var ts := font.get_string_size(tip, HORIZONTAL_ALIGNMENT_LEFT, -1, TOOLTIP_FONT_SIZE)
 	var box_size := _tooltip_box_size(font, tip)
 	var box_pos := _center_pos + Vector2(-box_size.x / 2.0, menu_radius + HOVER_POP + TOOLTIP_GAP)
+	# The box is centred under the ring but can be far WIDER than the ring (measured: 374-618 px
+	# against a 230 px ring). Reserving that width in _clamp_to_viewport would shove the whole
+	# menu up to ~310 px away from the click for every model in the outer third of the screen —
+	# on the game's most frequent interaction. So only the ring drives the menu's position and
+	# the tooltip slides along the bottom edge on its own: the ring stays under the cursor and
+	# the text stays readable. maxf keeps clampf legal if the box is wider than the viewport.
+	var view_w := get_viewport_rect().size.x
+	box_pos.x = clampf(box_pos.x, EDGE_PADDING, maxf(EDGE_PADDING, view_w - box_size.x - EDGE_PADDING))
 
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(HudTokens.SURFACE.r, HudTokens.SURFACE.g, HudTokens.SURFACE.b, 0.96)
@@ -291,10 +299,12 @@ func _select_index(index: int) -> void:
 	close()
 
 
-## Nudges the menu centre so the WHOLE menu — glow halo, popped segment and the tooltip that
-## hangs below the ring — stays inside the viewport. Opened next to a screen border the menu
-## was previously drawn half off-image, and this is the most frequent interaction of the game
-## (click a unit -> radial menu), so the edge case is not an edge case at all.
+## Nudges the menu centre so everything the player has to HIT — glow halo, popped segment and
+## the height of the tooltip below the ring — stays inside the viewport. Opened next to a screen
+## border the menu was previously drawn half off-image, and this is the most frequent interaction
+## of the game (click a unit -> radial menu), so the edge case is not an edge case at all.
+## The tooltip's WIDTH is deliberately not reserved here — it clamps itself in _draw_tooltip, so
+## the ring keeps landing where the player clicked instead of jumping a tooltip-width inward.
 ##
 ## Why this cannot corrupt the hit zones: _update_hover() measures the cursor RELATIVE to
 ## _center_pos, exactly as _draw() places the segments. Shifting the centre therefore moves
@@ -305,22 +315,21 @@ func _clamp_to_viewport(pos: Vector2) -> Vector2:
 	var view_size := get_viewport_rect().size
 	var font: Font = _font if _font else ThemeDB.fallback_font
 
-	# The tooltip is centred UNDER the ring and its width depends on the hovered item, which is
-	# still unknown while opening — so reserve room for the widest tooltip this menu can show.
-	var tip_size := Vector2.ZERO
+	# The tooltip sits UNDER the ring and which one is shown depends on the hovered item, which
+	# is still unknown while opening — so reserve the height of the tallest one this menu can
+	# show. Only the height: the width is the tooltip's own problem (see _draw_tooltip).
+	var tip_h := 0.0
 	for item in _items:
 		if item.tooltip.is_empty():
 			continue
-		var box := _tooltip_box_size(font, item.tooltip)
-		tip_size.x = maxf(tip_size.x, box.x)
-		tip_size.y = maxf(tip_size.y, box.y)
+		tip_h = maxf(tip_h, _tooltip_box_size(font, item.tooltip).y)
 
 	var ring := menu_radius + maxf(HALO_EXTENT, HOVER_POP)
-	var pad_x := maxf(ring, tip_size.x / 2.0) + EDGE_PADDING
+	var pad_x := ring + EDGE_PADDING
 	var pad_top := ring + EDGE_PADDING
 	var pad_bottom := ring + EDGE_PADDING
-	if tip_size.y > 0.0:
-		pad_bottom = menu_radius + HOVER_POP + TOOLTIP_GAP + tip_size.y + EDGE_PADDING
+	if tip_h > 0.0:
+		pad_bottom = menu_radius + HOVER_POP + TOOLTIP_GAP + tip_h + EDGE_PADDING
 
 	# On a viewport too small for the reserved box the lower and upper bound would cross;
 	# maxf keeps clampf legal and parks the menu at the top/left edge instead of erroring.

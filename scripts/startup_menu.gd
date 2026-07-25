@@ -348,8 +348,10 @@ func _on_credits_pressed() -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = "Credits & Licenses"
 	# As plain dialog_text these ~12 licence lines size the window themselves, with nothing
-	# stopping it (and its OK button) from growing past a small screen. Same construction as
-	# the room list instead: a scrolled body plus the standard viewport clamp.
+	# stopping it (and its OK button) from growing past a small screen. A scrolled body with a
+	# FIXED viewport is the clamp here: an AcceptDialog wraps its contents (wrap_controls), so
+	# its window size is always the contents' minimum — an outer keep_window_reachable() would
+	# be overruled the moment it pops up (measured: clamped to 520x400, popped up at 452x317).
 	var scroll := ScrollContainer.new()
 	scroll.custom_minimum_size = Vector2(420, 240)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -367,8 +369,11 @@ func _on_credits_pressed() -> void:
 	scroll.add_child(body)
 	dialog.add_child(scroll)
 	add_child(dialog)
+	# popup_centered() centres whatever size the window carries at that moment, and the wrap to
+	# the contents happens afterwards — so take the wrapped size FIRST or the window opens off
+	# centre by half the difference.
+	dialog.reset_size()
 	dialog.popup_centered()
-	UiPolish.keep_window_reachable(dialog, Vector2i(520, 400))
 	dialog.confirmed.connect(dialog.queue_free)
 	dialog.canceled.connect(dialog.queue_free)
 
