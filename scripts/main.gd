@@ -202,6 +202,7 @@ var _tutorial_start_lesson: String = ""       # chapter-picker lesson id ("" = a
 var _tutorial_board_pending: bool = false     # the bundled tutorial board was queued on the pending-load path
 var _tutorial_board_loaded: bool = false      # its load finished (load_completed/load_failed fired)
 var _host_free_move_check: CheckButton = null   # "Move all models" — host-operated, session-wide
+var _host_tools_box: VBoxContainer = null   # host-only tools; hidden offline / in solo
 var _room_code_button: Button = null          # permanent room-code display in the left bar (click = copy)
 var _session_room_code: String = ""
 var _hovered_model: Node3D = null
@@ -281,7 +282,7 @@ var _solo_ai_took_last_activation: bool = true  # who took the LAST activation o
                                              # Init true so round 1 opens with the human (the default deployment order).
 var _solo_ai_busy: bool = false              # an AI activation chain is running (guards re-entry)
 var _solo_game_finished: bool = false        # summary shown after SOLO_GAME_ROUNDS — no further auto-advance
-var _solo_ai_banner: Label = null            # non-blocking "AI is taking its turn…" banner during the tail
+var _solo_ai_banner: Label = null            # non-blocking "NACHTMAHR is taking its turn…" banner during the tail
 var _solo_dream_overlay: Control = null      # centred "NACHTMAHR dreams…" + spinner while the AI computes
 var _ai_opponent_btn: Button = null          # "AI Opponent" — NACHTMAHR builds its own army
 const AI_LISTS_DIR := "res://assets/ai_lists"          # dev/arena bundle — NEVER in the public repo
@@ -294,6 +295,7 @@ var _solo_dev: bool = false                  # developer mode: render the AI's d
 ## progress/stall diagnostic for long unattended headless matches. Off by default: zero output in normal play.
 var _solo_arena_trace: bool = OS.get_environment("NML_AI_TRACE") == "1"
 var _solo_toast: Label = null                # transient AI-action attribution/outcome toast
+var _solo_live_announce: Array = []          # announce rings/line currently on the board (leak sweep)
 var _solo_toast_gen: int = 0   # generation token so an auto-hide never blanks a newer toast
 var _solo_unmodeled_logged: Dictionary = {}  # rule name -> true: once-per-session unmodeled-rule notes
 # === AI ARENA — native both-AI mode + per-side difficulty (see SoloDifficulty) ===
@@ -994,7 +996,7 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 
 ## Drive the alternation state machine until it waits for the human or the round ends. TAIL activations
 ## (the AI playing out its remaining units unprompted) run with a readable pause between them and a
-## non-blocking "AI is taking its turn" banner so the player stays oriented.
+## non-blocking "NACHTMAHR is taking its turn" banner so the player stays oriented.
 func _solo_pump() -> void:
 	if solo_controller == null or _solo_ai_busy:
 		return
@@ -1030,19 +1032,34 @@ func _solo_pump() -> void:
 
 ## Non-blocking status banner while the AI plays out its tail activations (same widget pattern as the
 ## peer-busy banner: top-centre label, never intercepts the mouse).
+## Top-centre status lanes (UI audit A-5): the AI banner and the peer-busy banner were identical
+## copies at the SAME margin, so in a hosted solo session they drew on top of each other. One
+## builder, three fixed lanes — banner, toast, peer-busy — so any combination stacks readably.
+const STATUS_LANE_BANNER := 12
+const STATUS_LANE_TOAST := 40
+const STATUS_LANE_PEER := 68
+
+
+## One top-centre status label (never intercepts the mouse). `lane` is one of STATUS_LANE_*.
+func _make_status_banner(node_name: String, text: String, lane: int) -> Label:
+	var lbl := Label.new()
+	lbl.name = node_name
+	lbl.text = text
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE   # never blocks clicks/camera
+	lbl.add_theme_font_size_override("font_size", 18)
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.92, 0.6))
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	lbl.add_theme_constant_override("outline_size", 4)
+	lbl.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, lane)
+	$UI.add_child(lbl)
+	return lbl
+
+
 func _show_solo_ai_banner() -> void:
 	if is_instance_valid(_solo_ai_banner):
 		return
-	_solo_ai_banner = Label.new()
-	_solo_ai_banner.name = "SoloAiBanner"
-	_solo_ai_banner.text = "AI is taking its turn…"
-	_solo_ai_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_solo_ai_banner.add_theme_font_size_override("font_size", 18)
-	_solo_ai_banner.add_theme_color_override("font_color", Color(1.0, 0.92, 0.6))
-	_solo_ai_banner.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	_solo_ai_banner.add_theme_constant_override("outline_size", 4)
-	_solo_ai_banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 12)
-	$UI.add_child(_solo_ai_banner)
+	_solo_ai_banner = _make_status_banner("SoloAiBanner",
+		"NACHTMAHR is taking its turn…", STATUS_LANE_BANNER)
 
 
 func _hide_solo_ai_banner() -> void:
@@ -1128,6 +1145,7 @@ func _solo_alternation_ready(gu: GameUnit) -> bool:
 ## After any activation chain: when BOTH sides are out of eligible units the round is over — auto-seize
 ## objectives, then advance the round (or end the game after SOLO_GAME_ROUNDS).
 func _solo_after_activation() -> void:
+	_solo_clear_announce(_solo_live_announce)   # leak sweep: an aborted await path leaves rings behind
 	if solo_controller == null or _solo_ai_busy or not _solo_alternation_active():
 		return
 	if not solo_controller.eligible_units_for(solo_controller.human_slot).is_empty():
@@ -1474,6 +1492,9 @@ func _solo_show_game_summary() -> void:
 	dlg.dialog_text = "%d rounds played.\n\n%s%s" % [SOLO_GAME_ROUNDS, obj_block, verdict]
 	dlg.confirmed.connect(dlg.queue_free)
 	dlg.canceled.connect(dlg.queue_free)
+	if ThemeManager != null:
+		dlg.theme = ThemeManager.get_current_theme()
+	dlg.min_size = Vector2i(SOLO_DIALOG_MIN_WIDTH, 0)
 	add_child(dlg)
 	dlg.popup_centered()
 
@@ -1679,6 +1700,8 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 		_solo_deploy_ui = CanvasLayer.new()
 		_solo_deploy_ui.layer = 85
 		var panel := PanelContainer.new()
+		panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
+		_add_hud_frame(panel)
 		panel.anchor_left = 0.5
 		panel.anchor_right = 0.5
 		panel.anchor_top = 1.0
@@ -1697,20 +1720,28 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 		_solo_deploy_ui_label = Label.new()
 		_solo_deploy_ui_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		_solo_deploy_ui_label.add_theme_font_size_override("font_size", 15)
+		# Reserve/unit names are foreign data: wrap them instead of letting them stretch the strip
+		# past the screen edge (UI audit B-6).
+		_solo_deploy_ui_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		_solo_deploy_ui_label.custom_minimum_size.x = 580
 		box.add_child(_solo_deploy_ui_label)
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		box.add_child(row)
 		_solo_deploy_ui_btn1 = Button.new()
-		_solo_deploy_ui_btn1.custom_minimum_size = Vector2(280, 38)
+		_solo_deploy_ui_btn1.custom_minimum_size.x = 280
+		UiPolish.primary_button(_solo_deploy_ui_btn1)
+		_solo_deploy_ui_btn1.focus_mode = Control.FOCUS_NONE   # a panel button must not eat Space/Enter
 		_solo_deploy_ui_btn1.pressed.connect(func() -> void:
 			var cb: Callable = _solo_deploy_fsm.get("cb1", Callable())
 			if cb.is_valid():
 				cb.call())
 		row.add_child(_solo_deploy_ui_btn1)
 		_solo_deploy_ui_btn2 = Button.new()
-		_solo_deploy_ui_btn2.custom_minimum_size = Vector2(280, 38)
+		_solo_deploy_ui_btn2.custom_minimum_size.x = 280
+		UiPolish.primary_button(_solo_deploy_ui_btn2)
+		_solo_deploy_ui_btn2.focus_mode = Control.FOCUS_NONE
 		_solo_deploy_ui_btn2.pressed.connect(func() -> void:
 			var cb: Callable = _solo_deploy_fsm.get("cb2", Callable())
 			if cb.is_valid():
@@ -1799,7 +1830,7 @@ func _solo_deploy_show_human_turn() -> void:
 	var what := "one unit" if phase == "main" else "one SCOUT unit (up to 12\" ahead of your zone)"
 	if ai_left > 0:
 		_solo_deploy_ui_show("Your turn: place %s on your side, then hand over.\n(NACHTMAHR has %d left.)" % [what, ai_left],
-			"✔ Unit placed — NACHTMAHR's turn", func() -> void: _solo_deploy_human_done_one(),
+			"✔ Unit placed", func() -> void: _solo_deploy_human_done_one(),
 			"No units left — NACHTMAHR deploys the rest", func() -> void: _solo_deploy_human_out())
 	else:
 		_solo_deploy_ui_show("NACHTMAHR is done — place your remaining %s.\nThen close the phase." % ("units" if phase == "main" else "scouts"),
@@ -3986,7 +4017,10 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 ## an OK click read as "No" — the strike-back that never rolled and the spell interference that never spent
 ## a token (Windows playtest bug 3; invisible headless, where the AI defender skips the dialog). Polling the
 ## two outcome signals is order-proof; a dialog hidden by code without either signal counts as "No".
-func _solo_await_confirm(dlg: AcceptDialog, keep_exclusive: bool = true) -> bool:
+## Fixed width for every solo prompt (UI audit): data text never decides the window width.
+const SOLO_DIALOG_MIN_WIDTH := 420
+
+func _solo_await_confirm(dlg: AcceptDialog, keep_exclusive: bool = true, dismiss_default: bool = false) -> bool:
 	var outcome: Array = []
 	dlg.confirmed.connect(func() -> void: outcome.append(true))
 	dlg.canceled.connect(func() -> void: outcome.append(false))
@@ -3997,6 +4031,15 @@ func _solo_await_confirm(dlg: AcceptDialog, keep_exclusive: bool = true) -> bool
 	# If it still hides without a choice (window-manager path), RE-ASK a bounded number of times
 	# instead of guessing "No"; only then default to the safe refusal.
 	dlg.exclusive = keep_exclusive
+	# UI audit 2026-07-24 (B-5/B-6): every dialog routed through this helper used to pop as a bare
+	# grey Godot box in the cyan/amber HUD, and none set a size — so the width tracked whatever army,
+	# unit or weapon name the text happened to contain and the window visibly jumped between prompts.
+	# The neighbouring dialogs in this file already themed themselves (_apply_ui_theme's precedent);
+	# doing it HERE covers all of them at once. Width is fixed, height still grows with the body.
+	if dlg.theme == null and ThemeManager != null:
+		dlg.theme = ThemeManager.get_current_theme()
+	if dlg.min_size == Vector2i.ZERO:
+		dlg.min_size = Vector2i(SOLO_DIALOG_MIN_WIDTH, 0)
 	dlg.popup_centered()
 	var reasks := 0
 	while outcome.is_empty() and is_instance_valid(dlg):
@@ -4006,7 +4049,11 @@ func _solo_await_confirm(dlg: AcceptDialog, keep_exclusive: bool = true) -> bool
 			reasks += 1
 			dlg.popup_centered()
 		await get_tree().process_frame
-	return false if outcome.is_empty() else bool(outcome[0])
+	# `dismiss_default` is what a window that vanished WITHOUT either signal means (after the
+	# re-asks above). For a yes/no question that is the safe refusal (false, the default); for a
+	# prompt whose two buttons are two equally valid GAME options — Versatile — falling back to the
+	# not-recommended one would let a stray click make a bad tactical decision (UI audit A-4).
+	return dismiss_default if outcome.is_empty() else bool(outcome[0])
 
 
 ## The defender's strike-back choice dialog. With `counter_first` the prompt explains that Counter weapons
@@ -4809,6 +4856,7 @@ func _solo_focus_on_unit(unit: GameUnit) -> void:
 ## Attack attribution: pulse rings under the shooter (amber) and the target (red), an attack line
 ## between them, and a toast naming both. Returns the created nodes; free via _solo_clear_announce.
 func _solo_show_attack_announce(shooter: GameUnit, target: GameUnit, verb: String) -> Array:
+	_solo_clear_announce(_solo_live_announce)   # a stray set from an aborted path never survives
 	var nodes: Array = []
 	if solo_controller == null:
 		return nodes
@@ -4835,6 +4883,7 @@ func _solo_show_attack_announce(shooter: GameUnit, target: GameUnit, verb: Strin
 	_solo_show_toast("%s %s %s" % [shooter.get_name(), verb, target.get_name()])
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s %s %s" % [shooter.get_name(), verb, target.get_name()], true)
+	_solo_live_announce = nodes   # sweep target if the caller's cleanup never runs
 	return nodes
 
 
@@ -4863,6 +4912,7 @@ func _solo_clear_announce(nodes: Array) -> void:
 	for n in nodes:
 		if n is Node and is_instance_valid(n):
 			(n as Node).queue_free()
+	_solo_live_announce = []   # whichever set was just freed, nothing is left to sweep
 
 
 ## Transient top-centre toast for AI-action attribution/outcomes (below the AI-turn banner).
@@ -4878,7 +4928,7 @@ func _solo_show_toast(text: String, auto_hide_s: float = 6.0) -> void:
 		_solo_toast.add_theme_color_override("font_color", Color(0.95, 0.95, 0.9))
 		_solo_toast.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 		_solo_toast.add_theme_constant_override("outline_size", 4)
-		_solo_toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 40)
+		_solo_toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, STATUS_LANE_TOAST)
 		$UI.add_child(_solo_toast)
 	_solo_toast.text = text
 	_solo_toast.visible = true
@@ -5419,7 +5469,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"Consolidation: move %s back 1\" (the charger separates — GF v3.5.1 p.9)" % charger.get_name(), true)
 			var dlg1 := AcceptDialog.new()
-			dlg1.title = "Consolidation"
+			dlg1.title = "Pull Back 1\""
 			dlg1.dialog_text = "%s: move the charger back 1\" now (GF v3.5.1 p.9).\nDrag the models, then click OK — the game waits." % charger.get_name()
 			dlg1.exclusive = false
 			add_child(dlg1)
@@ -5458,7 +5508,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Consolidation: %s may move up to 3\" (enemy destroyed — GF v3.5.1 p.9)" % survivor.get_name(), false)
 	var dlg := AcceptDialog.new()
-	dlg.title = "Consolidation"
+	dlg.title = "Consolidate 3\""
 	dlg.dialog_text = "%s destroyed the enemy in melee.\nYou may move the unit up to 3\" now (GF v3.5.1 p.9).\nClick OK when you are done — the game waits." % survivor.get_name()
 	dlg.exclusive = false   # the board stays interactive: drag the models, then confirm
 	add_child(dlg)
@@ -6225,10 +6275,11 @@ func _solo_prompt_versatile(weapon_name: String, recommended: Dictionary) -> Dic
 	var dlg := ConfirmationDialog.new()
 	dlg.title = "Versatile Attack"
 	dlg.dialog_text = "%s is Versatile (target over 9\").\nChoose the mode for this volley:" % weapon_name
-	dlg.ok_button_text = ("AP(+1)  — recommended" if rec_ap else "+1 to hit  — recommended")
+	dlg.ok_button_text = ("AP(+1) — recommended" if rec_ap else "+1 to hit — recommended")
 	dlg.get_cancel_button().text = ("+1 to hit" if rec_ap else "AP(+1)")
 	add_child(dlg)
-	var take_recommended: bool = await _solo_await_confirm(dlg)   # order-proof (see _solo_await_confirm)
+	# Both buttons are real choices here, so a dismissed window takes the RECOMMENDED mode.
+	var take_recommended: bool = await _solo_await_confirm(dlg, true, true)
 	dlg.queue_free()
 	if take_recommended:
 		return recommended
@@ -6788,7 +6839,7 @@ func _show_toast(text: String) -> void:
 	label.add_theme_color_override("font_color", Color(0.92, 0.96, 1.0))
 	label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	label.add_theme_constant_override("outline_size", 4)
-	label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 48)
+	label.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, STATUS_LANE_TOAST)
 	$UI.add_child(label)
 	var tw := create_tween()
 	tw.tween_interval(3.0)
@@ -6821,16 +6872,7 @@ func _show_peer_busy_banner() -> void:
 	if is_instance_valid(_peer_busy_banner):
 		_peer_busy_banner.text = text
 		return
-	_peer_busy_banner = Label.new()
-	_peer_busy_banner.name = "PeerBusyBanner"
-	_peer_busy_banner.text = text
-	_peer_busy_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE  # never blocks clicks/camera
-	_peer_busy_banner.add_theme_font_size_override("font_size", 18)
-	_peer_busy_banner.add_theme_color_override("font_color", Color(1.0, 0.92, 0.6))
-	_peer_busy_banner.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
-	_peer_busy_banner.add_theme_constant_override("outline_size", 4)
-	_peer_busy_banner.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, 12)
-	$UI.add_child(_peer_busy_banner)
+	_peer_busy_banner = _make_status_banner("PeerBusyBanner", text, STATUS_LANE_PEER)
 
 
 ## Remove the "waiting for load" banner (the remote peer finished / disconnected).
@@ -9698,11 +9740,14 @@ func _open_ai_opponent_dialog() -> void:
 		_solo_show_toast("No AI lists available (no connection yet?) — import any list with the AI checkbox instead")
 		return
 	var dlg := ConfirmationDialog.new()
-	dlg.title = "AI Opponent — NACHTMAHR builds its list"
-	dlg.min_size = Vector2i(420, 220)
+	dlg.title = "AI Opponent"
+	dlg.min_size = Vector2i(SOLO_DIALOG_MIN_WIDTH, 220)
+	if ThemeManager != null:
+		dlg.theme = ThemeManager.get_current_theme()
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 10)
 
+	box.add_child(_dialog_label("NACHTMAHR builds its own list."))
 	box.add_child(_dialog_label("Faction:"))
 	var fac_opt := OptionButton.new()
 	var fac_keys: Array = manifest.keys()
@@ -10552,6 +10597,7 @@ func _init_solo_panel() -> void:
 ## Rebuild the Solo section: a header + one "AI plays P<n> — <army>" CheckButton per imported army.
 ## Hidden entirely while no armies are imported.
 func _refresh_solo_panel() -> void:
+	_refresh_host_tools_visibility()
 	if solo_panel_box == null or opr_army_manager == null:
 		return
 	for c in solo_panel_box.get_children():
@@ -10562,7 +10608,7 @@ func _refresh_solo_panel() -> void:
 	if pids.is_empty():
 		return
 	var label := Label.new()
-	label.text = "Solo AI:"
+	label.text = "NACHTMAHR:"
 	label.tooltip_text = "Mark the army the AI controls. The AI answers each of your activations with one of its own (alternating activation); after %d rounds the game is scored. F11 runs the whole remaining AI side at once (debug)." % SOLO_GAME_ROUNDS
 	label.mouse_filter = Control.MOUSE_FILTER_STOP   # labels ignore the mouse by default — needed for the tooltip
 	label.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
@@ -10575,7 +10621,10 @@ func _refresh_solo_panel() -> void:
 	fast_cb.add_theme_font_size_override("font_size", 12)
 	fast_cb.toggled.connect(func(pressed: bool) -> void: _solo_fast = pressed)
 	solo_panel_box.add_child(fast_cb)
+	# UI audit A-8: developer instrumentation, hidden in shipped builds (it reads as an unfinished
+	# product in the player's HUD) — still one click away in a debug run.
 	var dev_cb := CheckButton.new()
+	dev_cb.visible = OS.is_debug_build()
 	dev_cb.text = "AI reasoning (dev)"
 	dev_cb.tooltip_text = "Log WHY the AI decides: deployment spots, activation picks, tree branches, target EV scores, move budgets. Off = zero rendering cost."
 	dev_cb.button_pressed = _solo_dev
@@ -10633,6 +10682,7 @@ func _init_host_tools_ui() -> void:
 	var box := VBoxContainer.new()
 	box.name = "HostToolsPanel"
 	left_panel_vbox.add_child(box)
+	_host_tools_box = box
 	var label := Label.new()
 	label.text = "Host tools:"
 	label.add_theme_color_override("font_color", Color(0.85, 0.87, 0.92, 1.0))
@@ -10644,6 +10694,16 @@ func _init_host_tools_ui() -> void:
 	_host_free_move_check.add_theme_font_size_override("font_size", 12)
 	_host_free_move_check.toggled.connect(_on_host_free_move_toggled)
 	box.add_child(_host_free_move_check)
+	_refresh_host_tools_visibility()
+
+
+## The host-tools box only means something to the HOST of a live session (UI audit A-8): offline and
+## in pure solo it is a dead box, and a guest who clicks it just watches the switch flip back.
+func _refresh_host_tools_visibility() -> void:
+	if not is_instance_valid(_host_tools_box):
+		return
+	_host_tools_box.visible = network_manager != null \
+		and network_manager.is_multiplayer_active() and network_manager.is_host
 
 
 ## Session-wide free-move: HOST-operated, applies to everyone (guests may then move the host's army too
@@ -10746,16 +10806,6 @@ func _on_deployment_flip_toggled(flipped: bool) -> void:
 ## Game Phase Gate (Deployment -> Playing)
 ## ============================================================================
 
-## Phase-gate label picker. The app has no i18n infra and its UI is English-only, so this always
-## returns English; the `_de` arg at each call site preserves a German translation for a future
-## real localization pass (see body).
-func _phase_tr(en: String, _de: String) -> String:
-	# The UI is English-only (no TranslationServer / .po localization), so the phase-gate strings must
-	# be English too — a German OS locale otherwise left these buttons the ONLY German text in an English
-	# game. The `_de` args are kept at the call sites for a future real localization pass.
-	return en
-
-
 ## Build the Start-Game / Ready control: a discoverable button in the left panel that flips the game
 ## from DEPLOYMENT to PLAYING. In single-player it starts the game immediately; in multiplayer it is a
 ## per-player ready toggle (host starts play only once BOTH players are ready). A status line under it
@@ -10831,28 +10881,22 @@ func _update_game_phase_ui() -> void:
 	var in_mp: bool = network_manager != null and network_manager.is_multiplayer_active()
 	if in_mp:
 		var ready: bool = network_manager.is_local_ready()
-		_start_game_button.text = _phase_tr("Cancel Ready", "Bereit abbrechen") if ready \
-				else _phase_tr("Ready", "Bereit")
-		_start_game_button.tooltip_text = _phase_tr(
-				"Signal you have finished deploying. Play begins when both players are ready.",
-				"Signalisiere, dass du fertig aufgestellt hast. Das Spiel startet, wenn beide Spieler bereit sind.")
+		_start_game_button.text = "Cancel Ready" if ready else "Ready"
+		_start_game_button.tooltip_text = "Signal you have finished deploying. Play begins when both players are ready."
 		if _game_phase_status_label != null:
 			if ready and network_manager.is_host:
 				# Host sees the live tally (it tracks both sides); a guest just knows it is waiting.
-				_game_phase_status_label.text = _phase_tr(
-						"Waiting for other player (%d/%d)" % [network_manager.ready_count(), network_manager.seated_slots().size()],
-						"Warte auf Mitspieler (%d/%d)" % [network_manager.ready_count(), network_manager.seated_slots().size()])
+				_game_phase_status_label.text = "Waiting for other player (%d/%d)" % [
+						network_manager.ready_count(), network_manager.seated_slots().size()]
 				_game_phase_status_label.visible = true
 			elif ready:
-				_game_phase_status_label.text = _phase_tr("Waiting for other player…", "Warte auf Mitspieler…")
+				_game_phase_status_label.text = "Waiting for other player…"
 				_game_phase_status_label.visible = true
 			else:
 				_game_phase_status_label.visible = false
 	else:
-		_start_game_button.text = _phase_tr("Start Game", "Spiel starten")
-		_start_game_button.tooltip_text = _phase_tr(
-				"Begin round 1 — deployment is done.",
-				"Runde 1 beginnen — die Aufstellung ist abgeschlossen.")
+		_start_game_button.text = "Start Game"
+		_start_game_button.tooltip_text = "Begin round 1 — deployment is done."
 		if _game_phase_status_label != null:
 			_game_phase_status_label.visible = false
 

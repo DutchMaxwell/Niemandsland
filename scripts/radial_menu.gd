@@ -31,6 +31,11 @@ const SEGMENT_GAP := 0.07          # radians trimmed from each side of a segment
 const HOVER_POP := 10.0            # px the hovered segment extends outward
 const LABEL_FONT_SIZE := 14
 const TOOLTIP_FONT_SIZE := 14
+const TOOLTIP_PAD := Vector2(12.0, 7.0)   # px of padding inside the tooltip box
+const TOOLTIP_BAR_W := 4.0                # px width of the tooltip's left accent bar
+const TOOLTIP_GAP := 16.0                 # px between the ring's popped edge and the tooltip box
+const HALO_EXTENT := 15.0                 # px the glow halo reaches past menu_radius (see _draw)
+const EDGE_PADDING := 8.0                 # px kept clear between the menu and the viewport border
 
 
 # ===== Internal State =====
@@ -79,7 +84,14 @@ class RadialMenuItem:
 func _ready() -> void:
 	# Start hidden
 	visible = false
-	mouse_filter = Control.MOUSE_FILTER_STOP
+	# The scene said PASS while this line said STOP: the menu blocked the board without ever
+	# being exclusive. Resolved in favour of "catch clicks while the menu is open" — the SCRIPT
+	# owns the filter from here on and tracks the open state, so the scene value is irrelevant.
+	# STOP while open: this Control covers the FULL viewport, so it must swallow the click that
+	# picked a segment — otherwise the same click also falls through to the board's picking and
+	# moves/deselects a model behind the menu. IGNORE while closed (and during close()'s fade-out,
+	# where the node is still visible but no longer accepting input) so the board stays clickable.
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# Load the project font (Inter); fall back to the engine default if missing.
 	var loaded := load(INTER_FONT_PATH)
@@ -161,12 +173,17 @@ func _draw() -> void:
 			_draw_tooltip(font, hovered_item.tooltip)
 
 
+## Size of the tooltip box for `tip`. Shared by the drawing below and by the viewport clamp
+## in _clamp_to_viewport, so the two can never disagree about how much room a tooltip needs.
+func _tooltip_box_size(font: Font, tip: String) -> Vector2:
+	var ts := font.get_string_size(tip, HORIZONTAL_ALIGNMENT_LEFT, -1, TOOLTIP_FONT_SIZE)
+	return Vector2(ts.x + TOOLTIP_PAD.x * 2.0 + TOOLTIP_BAR_W + 4.0, ts.y + TOOLTIP_PAD.y * 2.0)
+
+
 func _draw_tooltip(font: Font, tip: String) -> void:
 	var ts := font.get_string_size(tip, HORIZONTAL_ALIGNMENT_LEFT, -1, TOOLTIP_FONT_SIZE)
-	var pad := Vector2(12.0, 7.0)
-	var bar_w := 4.0
-	var box_size := Vector2(ts.x + pad.x * 2.0 + bar_w + 4.0, ts.y + pad.y * 2.0)
-	var box_pos := _center_pos + Vector2(-box_size.x / 2.0, menu_radius + HOVER_POP + 16.0)
+	var box_size := _tooltip_box_size(font, tip)
+	var box_pos := _center_pos + Vector2(-box_size.x / 2.0, menu_radius + HOVER_POP + TOOLTIP_GAP)
 
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(HudTokens.SURFACE.r, HudTokens.SURFACE.g, HudTokens.SURFACE.b, 0.96)
@@ -176,10 +193,10 @@ func _draw_tooltip(font: Font, tip: String) -> void:
 	sb.draw(get_canvas_item(), Rect2(box_pos, box_size))
 
 	# Accent bar.
-	draw_rect(Rect2(box_pos + Vector2(pad.x * 0.4, pad.y), Vector2(bar_w, box_size.y - pad.y * 2.0)), ACCENT_COLOR)
+	draw_rect(Rect2(box_pos + Vector2(TOOLTIP_PAD.x * 0.4, TOOLTIP_PAD.y), Vector2(TOOLTIP_BAR_W, box_size.y - TOOLTIP_PAD.y * 2.0)), ACCENT_COLOR)
 
 	# Text.
-	var text_pos := box_pos + Vector2(pad.x + bar_w + 4.0, box_size.y / 2.0 + ts.y * 0.32)
+	var text_pos := box_pos + Vector2(TOOLTIP_PAD.x + TOOLTIP_BAR_W + 4.0, box_size.y / 2.0 + ts.y * 0.32)
 	draw_string(font, text_pos, tip, HORIZONTAL_ALIGNMENT_LEFT, -1, TOOLTIP_FONT_SIZE, text_color)
 
 
@@ -274,15 +291,59 @@ func _select_index(index: int) -> void:
 	close()
 
 
+## Nudges the menu centre so the WHOLE menu — glow halo, popped segment and the tooltip that
+## hangs below the ring — stays inside the viewport. Opened next to a screen border the menu
+## was previously drawn half off-image, and this is the most frequent interaction of the game
+## (click a unit -> radial menu), so the edge case is not an edge case at all.
+##
+## Why this cannot corrupt the hit zones: _update_hover() measures the cursor RELATIVE to
+## _center_pos, exactly as _draw() places the segments. Shifting the centre therefore moves
+## the drawn segments AND their hit zones by the same vector — the segment under the cursor
+## stays the segment drawn there. Any future hit test must keep measuring from _center_pos
+## (never from the raw position handed to open()) or that guarantee breaks.
+func _clamp_to_viewport(pos: Vector2) -> Vector2:
+	var view_size := get_viewport_rect().size
+	var font: Font = _font if _font else ThemeDB.fallback_font
+
+	# The tooltip is centred UNDER the ring and its width depends on the hovered item, which is
+	# still unknown while opening — so reserve room for the widest tooltip this menu can show.
+	var tip_size := Vector2.ZERO
+	for item in _items:
+		if item.tooltip.is_empty():
+			continue
+		var box := _tooltip_box_size(font, item.tooltip)
+		tip_size.x = maxf(tip_size.x, box.x)
+		tip_size.y = maxf(tip_size.y, box.y)
+
+	var ring := menu_radius + maxf(HALO_EXTENT, HOVER_POP)
+	var pad_x := maxf(ring, tip_size.x / 2.0) + EDGE_PADDING
+	var pad_top := ring + EDGE_PADDING
+	var pad_bottom := ring + EDGE_PADDING
+	if tip_size.y > 0.0:
+		pad_bottom = menu_radius + HOVER_POP + TOOLTIP_GAP + tip_size.y + EDGE_PADDING
+
+	# On a viewport too small for the reserved box the lower and upper bound would cross;
+	# maxf keeps clampf legal and parks the menu at the top/left edge instead of erroring.
+	var out := pos
+	out.x = clampf(out.x, pad_x, maxf(pad_x, view_size.x - pad_x))
+	out.y = clampf(out.y, pad_top, maxf(pad_top, view_size.y - pad_bottom))
+	return out
+
+
 # ===== Public API =====
 
 ## Opens the menu at the specified position with the given items.
 func open(screen_pos: Vector2, items: Array[RadialMenuItem], context: Dictionary = {}) -> void:
 	_items = items
 	_context = context
-	_center_pos = screen_pos
+	# Clamp before ANYTHING reads the centre — _draw(), _update_hover() and pivot_offset below
+	# all measure from _center_pos, which is exactly why the shift is safe (see _clamp_to_viewport).
+	# _items must already be assigned: the clamp measures this menu's widest tooltip.
+	_center_pos = _clamp_to_viewport(screen_pos)
 	_hovered_index = -1
 	_is_open = true
+	# Swallow board clicks for as long as the menu stands (see the filter note in _ready).
+	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	# Animate in
 	visible = true
@@ -308,6 +369,9 @@ func close() -> void:
 		return
 
 	_is_open = false
+	# Hand the board back immediately: the node stays VISIBLE for the fade-out below, and a
+	# full-rect STOP control would eat the player's next click for the length of the animation.
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	if _tween:
 		_tween.kill()
