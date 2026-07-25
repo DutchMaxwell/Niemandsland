@@ -3493,7 +3493,9 @@ static func combined_alive(unit: GameUnit) -> int:
 	var n: int = unit.get_alive_count()
 	if unit.has_method("get_attached_heroes"):
 		for h in unit.get_attached_heroes():
-			if h != null:
+			# `is GameUnit`, not a null check: mid-load these entries can still be the serialized
+			# unit_id STRINGS, and casting one is a hard error (see save_manager's load order).
+			if h is GameUnit:
 				n += (h as GameUnit).get_alive_count()
 	return n
 
@@ -3506,7 +3508,7 @@ static func combined_total(unit: GameUnit) -> int:
 	var n: int = unit.models.size()
 	if unit.has_method("get_attached_heroes"):
 		for h in unit.get_attached_heroes():
-			if h != null:
+			if h is GameUnit:
 				n += (h as GameUnit).models.size()
 	return n
 

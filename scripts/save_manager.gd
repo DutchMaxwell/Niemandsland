@@ -377,6 +377,14 @@ func load_game(path: String) -> Error:
 	# Recreate each army's tray (the platform it stands on) — same gap as the late-joiner sync.
 	restore_army_trays_after_load(state.get("army_names", {}))
 
+	# Rebuild hero attachment (stored as unit_ids) into live GameUnit refs. MUST run before anything
+	# that walks the unit graph: dead-parking below reports each dead model through the battle-log
+	# seam, which asks SoloController.combined_alive() for the unit — and that iterates
+	# get_attached_heroes(). While those entries are still the saved unit_id STRINGS, the cast to
+	# GameUnit is a hard runtime error, and loading any save with an attached hero blew up there
+	# (maintainer: "beim Laden eines Autosaves stürzt Niemandsland ab").
+	_restore_hero_attachments_after_load()
+
 	# Re-park loose models saved dead (needs the trays above to exist so slots can be claimed).
 	_restore_dead_parking_after_load()
 	# NML-105: re-park the models of units that LOADED as embarked (state rides unit_properties;
@@ -386,9 +394,6 @@ func load_game(path: String) -> Error:
 
 	# Restore game state
 	_deserialize_game_state(state.get("game_state", {}))
-
-	# Rebuild hero attachment (stored as unit_ids) into live GameUnit refs.
-	_restore_hero_attachments_after_load()
 
 	# Restore token/marker visualizations for all loaded game units
 	_restore_markers_after_load()
