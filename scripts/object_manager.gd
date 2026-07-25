@@ -685,8 +685,7 @@ func _compute_movement_cap_meters() -> float:
 	var models := _selected_model_nodes()
 	if models.is_empty() or not movement_range_controller.has_method("bands_for_model"):
 		return 0.0
-	var gu = models[0].get_meta("game_unit") if models[0].has_meta("game_unit") else null
-	if gu is GameUnit and bool((gu as GameUnit).unit_properties.get("ambush_reserve", false)):
+	if _is_reserve_placement(models[0]):
 		return 0.0
 	var bands: Dictionary = movement_range_controller.bands_for_model(models[0])
 	var inches: int = int(bands.get("rush", 12)) if _movement_cap == MovementCap.RUSH else int(bands.get("advance", 6))
@@ -706,7 +705,7 @@ func _compute_strict_cap_meters() -> float:
 	if not movement_range_controller.has_method("bands_for_model"):
 		return 0.0
 	var node := _cap_anchor_model_node()
-	if node == null:
+	if node == null or _is_reserve_placement(node):
 		return 0.0
 	var bands: Dictionary = movement_range_controller.bands_for_model(node)
 	var inches: int = _cap_band_inches(bands)
@@ -723,8 +722,20 @@ func _cap_band_inches(bands: Dictionary) -> int:
 	return int(bands.get("rush", 12))   # RUSH, or OFF -> fall back to the max legal move
 
 
+## Dragging a unit that is still in AMBUSH RESERVE onto the table is DEPLOYMENT, not a move — the
+## rules place reserves freely (>9" from enemies), they do not spend a movement allowance. Both caps
+## ask this; the soft one always did, the strict one did not, so with "Enforce Movement Limit" on the
+## reserve drag snapped back to the Advance band (maintainer, TC-006).
+func _is_reserve_placement(model_node: Node) -> bool:
+	if model_node == null or not model_node.has_meta("game_unit"):
+		return false
+	var gu = model_node.get_meta("game_unit")
+	return gu is GameUnit and bool((gu as GameUnit).unit_properties.get("ambush_reserve", false))
+
+
 ## Is Strict movement enforcement active right now? Persisted preference ON and the game is in
-## the PLAYING phase (no cap while deploying — models are being placed, not moved).
+## the PLAYING phase (no cap while deploying — models are being placed, not moved). Ambush arrivals
+## are the exception that the phase check alone misses: they happen mid-GAME but are placement.
 func _strict_movement_enforced() -> bool:
 	if get_node_or_null("/root/GraphicsSettings") == null or not GraphicsSettings.enforce_movement_limit:
 		return false

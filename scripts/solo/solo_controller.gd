@@ -5586,7 +5586,18 @@ func pile_in(defender: GameUnit, charger: GameUnit) -> Array:
 		var full_step: float = minf(PILE_IN_MAX_IN * INCHES_TO_METERS, maxf(0.0, to_slot.length() - 0.001))
 		if full_step <= 0.0005:
 			continue
-		for frac in [1.0, 0.5, 0.25]:
+		# AS CLOSE AS POSSIBLE (GF v3.5.1 p.9 + maintainer TC-012: "die Modelle muessen so nah wie
+		# moeglich an den Gegner ranruecken … damit so viele Modelle wie moeglich in den Nahkampf
+		# kommen"). Three coarse fractions used to be the whole search, so a model whose full step
+		# was blocked simply stayed put and sat out the fight. Now the step is scanned finely from
+		# full down to a base-width nudge, and coherency is a PREFERENCE, not a veto: the best
+		# coherent step wins, but if none exists the longest physically legal one is still taken —
+		# touching a friendly base is explicitly fine, pile-in aims at contact.
+		var fracs: Array = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.05]
+		var best_coherent: Vector3 = Vector3.INF
+		var best_legal: Vector3 = Vector3.INF
+		var old := node.global_position
+		for frac in fracs:
 			var step: float = full_step * float(frac)
 			var cand := Vector3(pos.x + dir.x * step, pos.y, pos.z + dir.y * step)
 			var wall_ok := true
@@ -5599,13 +5610,19 @@ func pile_in(defender: GameUnit, charger: GameUnit) -> Array:
 				continue
 			if not _pile_spot_free(cand, r_i, mi):
 				continue
-			var old := node.global_position
+			if best_legal == Vector3.INF:
+				best_legal = cand   # fractions descend, so the first legal one is the longest
 			node.global_position = cand
 			var ms2 := _moving_models(defender)
-			if _config_coherent_world(ms2, _positions_of(ms2), chain_in):
-				moves.append({"model": mi, "path": [old, cand], "radius_m": r_i})
+			var coherent := _config_coherent_world(ms2, _positions_of(ms2), chain_in)
+			node.global_position = old
+			if coherent:
+				best_coherent = cand
 				break
-			node.global_position = old   # this step would tear the unit — try shorter
+		var chosen: Vector3 = best_coherent if best_coherent != Vector3.INF else best_legal
+		if chosen != Vector3.INF:
+			node.global_position = chosen
+			moves.append({"model": mi, "path": [old, chosen], "radius_m": r_i})
 	if not moves.is_empty():
 		_broadcast_positions(defender)
 	return moves

@@ -871,9 +871,20 @@ static func charge_contact_slots(mpos: Array, radii: Array, tgt_bases: Array) ->
 				if d < best_d:
 					best_d = d
 					best = slot
-		if best == Vector2.INF:   # everything taken — fall back to the nearest base's facing point
+		if best == Vector2.INF:
+			# Every slot is taken. Aim at the facing point of the base this model is actually
+			# CLOSEST to — the old code always used tgt_bases[0], which sent models on the far
+			# flank marching at the wrong enemy model and left them out of the fight entirely
+			# (maintainer TC-012: "so viele Modelle wie möglich in den Nahkampf").
 			var c0: Vector2 = tgt_bases[0][0]
 			var tr0 := float(tgt_bases[0][1])
+			var near_d := INF
+			for tb2 in tgt_bases:
+				var d2: float = (mpos[idx] as Vector2).distance_to(tb2[0] as Vector2) - float(tb2[1])
+				if d2 < near_d:
+					near_d = d2
+					c0 = tb2[0]
+					tr0 = float(tb2[1])
 			var face0 := ((mpos[idx] as Vector2) - c0).normalized()
 			best = c0 + face0 * (tr0 + ri)
 		taken.append({"p": best, "r": ri})
