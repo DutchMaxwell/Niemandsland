@@ -1757,6 +1757,22 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 	_solo_deploy_ui.visible = true
 
 
+## Board-side prompt: the bottom strip instead of a centred window, for every question the player
+## can only answer BY USING the board (consolidation, ambush, takedown). A centred dialog is
+## non-blocking there too, but it sits over the very models the player is asked to drag — the strip
+## keeps the whole table visible. Returns the index of the button pressed (0 or 1).
+func _solo_board_prompt(text: String, b1: String, b2: String = "") -> int:
+	if _solo_batch:
+		return 0   # headless self-play: nobody is there to click, take the first option
+	var picked: Array = []
+	_solo_deploy_ui_show(text, b1, func() -> void: picked.append(0), b2,
+		(func() -> void: picked.append(1)) if not b2.is_empty() else Callable())
+	while picked.is_empty():
+		await get_tree().process_frame
+	_solo_deploy_ui_hide()
+	return int(picked[0])
+
+
 func _solo_deploy_ui_hide() -> void:
 	if _solo_deploy_ui != null and is_instance_valid(_solo_deploy_ui):
 		_solo_deploy_ui.visible = false
@@ -4507,8 +4523,22 @@ func _solo_prompt_takedown_model(target: GameUnit, weapon_name: String, recommen
 			weapon_name, target.get_name(), _solo_model_label(target, recommended)], false)
 	_solo_model_pick = {"unit": target, "recommended": recommended, "outcome": []}
 	var outcome: Array = _solo_model_pick["outcome"]
-	while outcome.is_empty() and not _solo_model_pick.is_empty():
+	# UI audit A-3: this wait used to be INVISIBLE — the instruction lived only in the battle log,
+	# so with the log collapsed the game simply looked frozen. The strip states what the game is
+	# waiting for and offers the recommended pick as a button; clicking a model still works, because
+	# the strip never blocks the board.
+	var skipped: Array = []
+	if not _solo_batch:
+		_solo_deploy_ui_show(
+			"Takedown (%s): click the model in %s to snipe." % [weapon_name, target.get_name()],
+			"Take the recommended %s" % _solo_model_label(target, recommended),
+			func() -> void: skipped.append(true))
+	while outcome.is_empty() and skipped.is_empty() and not _solo_model_pick.is_empty():
 		await get_tree().process_frame
+	if not _solo_batch:
+		_solo_deploy_ui_hide()
+	if not skipped.is_empty():
+		outcome = []   # the player took the recommendation instead of picking
 	_solo_model_pick = {}
 	var idx: int = recommended if outcome.is_empty() or int(outcome[0]) < 0 else int(outcome[0])
 	if battle_log != null:
@@ -5468,13 +5498,9 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"Consolidation: move %s back 1\" (the charger separates — GF v3.5.1 p.9)" % charger.get_name(), true)
-			var dlg1 := AcceptDialog.new()
-			dlg1.title = "Pull Back 1\""
-			dlg1.dialog_text = "%s: move the charger back 1\" now (GF v3.5.1 p.9).\nDrag the models, then click OK — the game waits." % charger.get_name()
-			dlg1.exclusive = false
-			add_child(dlg1)
-			await _solo_await_confirm(dlg1, false)
-			dlg1.queue_free()
+			await _solo_board_prompt(
+				"Pull back 1\": drag %s back from the melee (GF v3.5.1 p.9) — the game waits." % charger.get_name(),
+				"✔ Pulled back")
 			return
 		var dang: int = solo_controller.separate_from_melee(charger, solo_controller.unit_centre(defender))
 		solo_controller.record_decision({"kind": "separate", "unit": charger.get_name(),
@@ -5507,13 +5533,9 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Consolidation: %s may move up to 3\" (enemy destroyed — GF v3.5.1 p.9)" % survivor.get_name(), false)
-	var dlg := AcceptDialog.new()
-	dlg.title = "Consolidate 3\""
-	dlg.dialog_text = "%s destroyed the enemy in melee.\nYou may move the unit up to 3\" now (GF v3.5.1 p.9).\nClick OK when you are done — the game waits." % survivor.get_name()
-	dlg.exclusive = false   # the board stays interactive: drag the models, then confirm
-	add_child(dlg)
-	await _solo_await_confirm(dlg, false)   # order-proof; NON-exclusive — the drag must stay possible
-	dlg.queue_free()
+	await _solo_board_prompt(
+		"Consolidate: %s destroyed the enemy — you may drag it up to 3\" (GF v3.5.1 p.9)." % survivor.get_name(),
+		"✔ Done consolidating")
 
 
 ## One OPR morale test with a real tray die: >= Quality passes; fail → Shaken, at/below half → Routs
