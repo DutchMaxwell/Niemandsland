@@ -1683,7 +1683,8 @@ func _on_solo_deploy_pressed() -> void:
 	if ai_roll > you_roll:
 		# NACHTMAHR picks its edge (v1 heuristic: opposite the human's army tray — the natural
 		# setup; objectives sit centre-line, so the edges are near-symmetric) and deploys first.
-		var ai_neg_z := not _solo_near_edge_is_neg_z()   # the AI takes the edge AWAY from the player
+		# NACHTMAHR won: it leaves the player his own drawn zone and takes the opposite one.
+		var ai_neg_z := not _solo_human_zone_is_neg_z()
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
 				"NACHTMAHR wins %d:%d — it takes the far edge and deploys first" % [ai_roll, you_roll], true)
@@ -1692,9 +1693,10 @@ func _on_solo_deploy_pressed() -> void:
 		# YOU win: choose your edge — NACHTMAHR takes the opposite one.
 		# The labels name what the player SEES: the near edge is the one on his side of the camera.
 		# NACHTMAHR always takes the other one.
-		_solo_deploy_ui_show("Roll-off %d:%d — YOU win and deploy first.\nWhich edge do you take?" % [you_roll, ai_roll],
-			"Near edge (my side)", func() -> void: _solo_deploy_begin_side(not _solo_near_edge_is_neg_z()),
-			"Far edge", func() -> void: _solo_deploy_begin_side(_solo_near_edge_is_neg_z()))
+		# The labels name the zones the table is already SHOWING him, not an abstract edge.
+		_solo_deploy_ui_show("Roll-off %d:%d — YOU win and deploy first.\nWhich deployment zone do you take?" % [you_roll, ai_roll],
+			"Keep my zone", func() -> void: _solo_deploy_pick_side(false),
+			"Take the other zone", func() -> void: _solo_deploy_pick_side(true))
 ## Fire one strip button. The callbacks used to live inside `_solo_deploy_fsm`, which is REASSIGNED
 ## wholesale when deployment starts — anything holding a prompt open across that point clicked into
 ## the void and waited forever. They belong to the strip now. A dead callback says so instead of
@@ -1800,11 +1802,24 @@ func _solo_deploy_ui_hide() -> void:
 
 
 ## The HUMAN's army tray side: true when it stands on the -Z half (the side pick's reference).
-func _solo_near_edge_is_neg_z() -> bool:
-	var cam := get_viewport().get_camera_3d()
-	if cam == null:
-		return true
-	return cam.global_position.z < 0.0
+func _solo_human_zone_is_neg_z() -> bool:
+	if terrain_overlay != null and "deployment_colors_flipped" in terrain_overlay:
+		return not bool(terrain_overlay.deployment_colors_flipped)
+	return true
+
+
+## The roll-off winner's side pick. The table ALREADY draws both deployment zones in the player
+## colours — so a pick that only fed the AI's zone maths left NACHTMAHR deploying inside the blue
+## band the player was looking at (maintainer: "er platziert IMMER noch in meiner Hälfte"). The
+## pick now flips the DRAWN zones as well, so what the player sees and where the AI goes are one
+## and the same thing. `swap` = the human takes the other zone; the AI always takes the leftover.
+func _solo_deploy_pick_side(swap: bool) -> void:
+	if terrain_overlay != null and terrain_overlay.has_method("set_deployment_colors_flipped"):
+		terrain_overlay.set_deployment_colors_flipped(swap)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"You take the %s zone — NACHTMAHR deploys in the other one" % ("far" if swap else "near"), true)
+	await _solo_deploy_begin_side(swap)
 
 
 ## Build the zones from the chosen AI edge, queue the AI army (main + scout queues), set the
