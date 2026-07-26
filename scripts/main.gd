@@ -10733,10 +10733,12 @@ func _refresh_solo_panel() -> void:
 	fast_cb.add_theme_font_size_override("font_size", 12)
 	fast_cb.toggled.connect(func(pressed: bool) -> void: _solo_fast = pressed)
 	solo_panel_box.add_child(fast_cb)
-	# UI audit A-8: developer instrumentation, hidden in shipped builds (it reads as an unfinished
-	# product in the player's HUD) — still one click away in a debug run.
+	# UI audit A-8: developer instrumentation, hidden from ordinary players (it reads as an
+	# unfinished product in the HUD) — but the maintainer tests with EXPORTED builds and needs it
+	# for exactly the AI findings it explains, so the existing NML_AI_TRACE opt-in brings it back:
+	#   NML_AI_TRACE=1 ./Niemandsland.x86_64
 	var dev_cb := CheckButton.new()
-	dev_cb.visible = OS.is_debug_build()
+	dev_cb.visible = OS.is_debug_build() or OS.get_environment("NML_AI_TRACE") == "1"
 	dev_cb.text = "AI reasoning (dev)"
 	dev_cb.tooltip_text = "Log WHY the AI decides: deployment spots, activation picks, tree branches, target EV scores, move budgets. Off = zero rendering cost."
 	dev_cb.button_pressed = _solo_dev
