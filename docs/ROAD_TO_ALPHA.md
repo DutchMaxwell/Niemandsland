@@ -93,7 +93,8 @@ Legend: ✅ done · 🔧 in `0.3.5.x` · ⬜ to do · ❓ decision needed
   pipeline lives in the private `model-forge` repo). The ~3.2 GB local copy is untracked working junk.
 - ⬜ Verify the **git-history scrub** is complete.
 - ⬜ GitHub **issue templates** (Bug / Feedback) + `CONTRIBUTING.md` confirmed as the intake.
-- ⬜ Repo visibility flip + a published release tag.
+- ✅ Repo visibility flip + a published release tag — done 2026-06-23; this document is
+  history now, kept for the record of how the alpha shipped.
 
 ## Alpha exit criteria
 

@@ -124,7 +124,6 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 | Rotate | Right-drag |
 | Pan | Middle-drag |
 | Zoom | Mouse wheel |
-| Reset | `Home` |
 
 | Objects | |
 |---|---|

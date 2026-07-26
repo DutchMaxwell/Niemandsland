@@ -11,7 +11,8 @@ Start with the repo entry points: [`../README.md`](../README.md) (project overvi
 |---|---|
 | [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md) | What works / in progress |
 | [`ROADMAP.md`](ROADMAP.md) | Prioritized plan + how feature requests flow |
-| [`ROAD_TO_ALPHA.md`](ROAD_TO_ALPHA.md) | The `0.3.6` Alpha release plan & checklist |
+| [`GETTING_STARTED.md`](GETTING_STARTED.md) | First game: import an army, play, save |
+| [`ROAD_TO_ALPHA.md`](ROAD_TO_ALPHA.md) | Historical: the plan that shipped the public alpha |
 | [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) | Honest alpha limitations & caveats |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Systems, scripts, data flow, networking, scaling |
 | [`DEVELOPMENT.md`](DEVELOPMENT.md) | Build, run, test (Godot 4.6 / Flatpak / gdUnit4) |
@@ -23,7 +24,8 @@ Start with the repo entry points: [`../README.md`](../README.md) (project overvi
 |---|---|---|
 | [`ASSET_DELIVERY.md`](ASSET_DELIVERY.md) | On-demand 3D models + terrain via Cloudflare R2 | Live |
 | [`ATMOSPHERE.md`](ATMOSPHERE.md) | Lighting + audio ambience | Reference |
-| [`UPDATE_CHECK.md`](UPDATE_CHECK.md) | In-app update checker | Reference |
+| [`UPDATE_CHECK.md`](UPDATE_CHECK.md) | In-app update checker | Live |
+| [`REGIMENTS.md`](REGIMENTS.md) | Age of Fantasy: Regiments movement trays | Reference |
 | [`WGS_INTEGRATION.md`](WGS_INTEGRATION.md) | Wargaming Simulator integration | Implemented |
 
 ## Tools

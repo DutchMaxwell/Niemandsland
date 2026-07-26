@@ -5,7 +5,7 @@ published and, if so, offers the player a download — without ever blocking the
 This is the launcher-style "an update is available" prompt you know from Steam and
 similar clients.
 
-> **Status:** the plumbing ships now but is **inert until releases are published**.
+> **Status:** live — releases are published on GitHub and the checker compares against them.
 > With no GitHub Releases the check resolves to "up to date" and the menu shows
 > nothing. Publishing a release (see [Activating it](#activating-it)) turns it on with
 > no code change.
