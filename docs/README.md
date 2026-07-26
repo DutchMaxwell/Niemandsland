@@ -24,7 +24,6 @@ Start with the repo entry points: [`../README.md`](../README.md) (project overvi
 | [`ASSET_DELIVERY.md`](ASSET_DELIVERY.md) | On-demand 3D models + terrain via Cloudflare R2 | Live |
 | [`ATMOSPHERE.md`](ATMOSPHERE.md) | Lighting + audio ambience | Reference |
 | [`UPDATE_CHECK.md`](UPDATE_CHECK.md) | In-app update checker | Reference |
-| [`WGS_INTEGRATION.md`](WGS_INTEGRATION.md) | Wargaming Simulator integration | Implemented |
 
 ## Tools
 

@@ -43,8 +43,8 @@ What the code actually does today:
 - **Multiplayer** — ENet over LAN, or over the internet via a WebSocket relay
   (see [`relay/`](relay/README.md)); full state sync (models, terrain, table size),
   shared dice log, player avatars/cursors, save/load, and a deployment ready-sync.
-- **Import / export** — Army Forge (OPR) and Wargaming Simulator (WGS) list import;
-  `.nml` save format with OS file association.
+- **Import / export** — Army Forge (OPR) list import; `.nml` save format with OS file
+  association.
 - **Guided tutorial** — an event-gated tool track (W1–W7) that teaches the basics on a
   real bundled board: camera, army import, select/move/rotate, dice & measuring, cards &
   activation, wounds & casualties, and movement & trails. (More lessons planned.)
@@ -165,7 +165,6 @@ scale, **dice run in a separate scaled SubViewport** (our own MIT `dice_tray.gd`
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — systems & code map
 - [`docs/REGIMENTS.md`](docs/REGIMENTS.md) — Age of Fantasy: Regiments design notes
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — build, run, test
-- [`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md) — Wargaming Simulator integration
 
 ## Security note
 
