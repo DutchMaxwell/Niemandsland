@@ -4129,6 +4129,11 @@ func _solo_await_confirm(dlg: AcceptDialog, keep_exclusive: bool = true, dismiss
 	# re-asks above). For a yes/no question that is the safe refusal (false, the default); for a
 	# prompt whose two buttons are two equally valid GAME options — Versatile — falling back to the
 	# not-recommended one would let a stray click make a bad tactical decision (UI audit A-4).
+	# Hide BEFORE the caller frees it: freeing a still-VISIBLE Window makes Godot try to unhook a
+	# popup registration that is no longer there, which logs "Attempt to disconnect a nonexistent
+	# connection from 'root:<Window>'" — 22 of those in one of the maintainer's sessions.
+	if is_instance_valid(dlg):
+		dlg.hide()
 	return dismiss_default if outcome.is_empty() else bool(outcome[0])
 
 
@@ -8010,6 +8015,13 @@ func _on_battle_log_dropped(moves: Array) -> void:
 func _log_move_summaries(summaries: Array) -> void:
 	if battle_log == null:
 		return
+	# Placement is not movement (maintainer's deployment log: dragging a unit from the tray onto the
+	# table wrote "Saurian Warriors moves 57\"" into the battle log). During DEPLOYMENT the ledger
+	# still measures the drag — the trail and the ruler want that — but the log must not report a
+	# 57-inch march that never happened.
+	if opr_army_manager != null and opr_army_manager.has_method("is_deployment_phase") \
+			and opr_army_manager.is_deployment_phase():
+		return
 	for entry in summaries:
 		var e: Dictionary = entry as Dictionary
 		if e == null or e.is_empty():
@@ -8445,6 +8457,7 @@ func _on_table_size_chosen(size_feet: Vector2, dialog: Window) -> void:
 	else:
 		t.tween_interval(0.4)
 	t.tween_callback(func() -> void:
+		dialog.hide()   # hide before free — see the note in _solo_await_confirm
 		dialog.queue_free()
 		# Start the intro (its own opaque black covers the screen). Keep our black backdrop
 		# up a few frames longer so the hand-off stays black -> never a grey flash if the
