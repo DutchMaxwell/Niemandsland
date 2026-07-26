@@ -1815,10 +1815,6 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 	var depth: float = float(_solo_deploy_fsm.get("depth", 0.3048))
 	var zmin: float = (-d / 2.0) if ai_neg_z else (d / 2.0 - depth)
 	var zone := Rect2(Vector2(-w / 2.0, zmin), Vector2(w, depth))
-	# The human's zone is the opposite band — remembered so the hand-over can check that a unit
-	# really landed in it before it counts as placed.
-	var hz_min: float = (d / 2.0 - depth) if ai_neg_z else (-d / 2.0)
-	_solo_deploy_fsm["human_zone"] = Rect2(Vector2(-w / 2.0, hz_min), Vector2(w, depth))
 	var queued: int = solo_controller.deploy_begin(zone, _solo_deploy_fsm.get("objectives", []),
 		_solo_deploy_fsm.get("blocked_normal", Callable()), _solo_deploy_fsm.get("blocked_flying", Callable()),
 		int(_solo_deploy_fsm.get("seed", 0)))
@@ -1885,7 +1881,7 @@ func _solo_deploy_human_done_one() -> void:
 	# while the player still had his own on the tray.
 	var placed := _solo_deploy_newly_placed_human()
 	if placed.is_empty():
-		_solo_show_toast("No newly placed unit in your zone — place one first, then ✔")
+		_solo_show_toast("Nothing new on the table — place a unit first, then ✔")
 		_solo_deploy_show_human_turn()
 		return
 	for gu in placed:
@@ -1894,8 +1890,12 @@ func _solo_deploy_human_done_one() -> void:
 	_solo_deploy_ai_turn()
 
 
-## Human units that have arrived in the player's deployment zone since the last hand-over. Mirrors
-## the ambush check: the strip's ✔ only advances when the table actually changed.
+## Human units that have newly arrived ON THE TABLE since the last hand-over. Deliberately the
+## TABLE, not the deployment zone: that band is never DRAWN for the player, so gating on it
+## rejected units he had placed perfectly reasonably and the hand-over never went through at all
+## (maintainer, live test: "eine unit platziert aber die KI stellt danach keine einheit auf").
+## The button's job is only "did the table change" — zone legality is the rules' business.
+## Same standard the ambush hand-over has always used.
 func _solo_deploy_newly_placed_human() -> Array:
 	var out: Array = []
 	if solo_controller == null or opr_army_manager == null:
@@ -1903,9 +1903,11 @@ func _solo_deploy_newly_placed_human() -> Array:
 	if not _solo_deploy_fsm.has("human_placed"):
 		_solo_deploy_fsm["human_placed"] = {}
 	var seen: Dictionary = _solo_deploy_fsm["human_placed"]
-	var zone: Rect2 = _solo_deploy_fsm.get("human_zone", Rect2())
-	if zone.size == Vector2.ZERO:
-		return out   # no zone known (older flow) — do not block the player
+	if table == null:
+		return out
+	var tw: float = table.table_size.x * 0.3048
+	var td: float = table.table_size.y * 0.3048
+	var trect := Rect2(Vector2(-tw / 2.0, -td / 2.0), Vector2(tw, td))
 	for u in opr_army_manager.get_game_units_for_player(solo_controller.human_slot):
 		var gu := u as GameUnit
 		if gu == null or gu.is_destroyed() or seen.has(gu.unit_id):
@@ -1915,7 +1917,7 @@ func _solo_deploy_newly_placed_human() -> Array:
 		if SoloController.unit_in_reserve(gu):
 			continue   # Ambush/Scout reserves have their own phases
 		var c := solo_controller.unit_centre(gu)
-		if zone.has_point(Vector2(c.x, c.z)):
+		if trect.has_point(Vector2(c.x, c.z)):
 			out.append(gu)
 	return out
 
