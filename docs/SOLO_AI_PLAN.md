@@ -1,11 +1,14 @@
 # Solo / Co-Op AI — Implementation Plan
 
-> **Status:** playable Solo v1 assembled on `feat/solo-ai` — M1 skeleton, M2 combat brain, the headless
-> self-play sim (goal 003) with terrain/walls/movement + mirror-fairness proof, **P3** (the sim's pure
-> modules wired into the real game — see the P3 section) and **P2** (in-game auto-game: alternating
-> activation, objective auto-seize, 4-round match + scoring — see the P2 section). NOT merge-ready until
-> the maintainer field-tests the assembled flow. Branch: `feat/solo-ai`.
-> See [`ROADMAP.md`](ROADMAP.md) for where this sits in the backlog and
+> **Status: shipped — Solo v1 is live on `main` in `0.3.10.0-alpha`** (the solo core landed in
+> [#151](../../pull/151); NACHTMAHR's own AI lists in [#150](../../pull/150)). The engine lives under
+> `scripts/solo/` (M1 skeleton, M2 combat brain, the headless self-play sim, **P3** — the sim's pure
+> modules wired into the real game — and **P2** — the in-game auto-game: alternating activation,
+> objective scoring, the 4-round match). NACHTMAHR is an in-game **AI Opponent** you can play a full
+> game against today. This document is retained as the design record; the sections below describe how
+> the shipped system was built, so some milestone framing ("to merge-ready") is historical.
+> See [`ROADMAP.md`](ROADMAP.md) for what remains (resolver waves B + C, difficulty grades, co-op),
+> [`SOLO_AI_RULES_COVERAGE.md`](SOLO_AI_RULES_COVERAGE.md) for the rule-by-rule coverage matrix, and
 > [`docs/ARCHITECTURE.md`](ARCHITECTURE.md) for the system map.
 
 Niemandsland is currently a **manual sandbox**: players move minis by hand and resolve

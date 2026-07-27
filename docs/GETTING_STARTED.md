@@ -1,6 +1,6 @@
 # Getting Started with Niemandsland
 
-Niemandsland is a 3D tabletop sandbox for [OnePageRules](https://onepagerules.com/) miniature games (Grimdark Future, Age of Fantasy, and related systems). It follows a **"show, don't decide"** design philosophy: it presents ranges, coherency, and unit state on the table; it does not enforce rules or automate turns.
+Niemandsland is a 3D tabletop sandbox for [OnePageRules](https://onepagerules.com/) miniature games (Grimdark Future, Age of Fantasy, and related systems). Between two human players it follows a **"show, don't decide"** design philosophy: it presents ranges, coherency, and unit state on the table; it does not enforce rules or automate turns. **The exception is solo play against the built-in AI opponent, NACHTMAHR** — that mode *does* resolve activations, dice, shooting, melee, morale, spells, terrain effects and hundreds of special rules for both sides (see [Play solo vs NACHTMAHR](#play-solo-vs-nachtmahr)).
 
 ---
 
@@ -29,6 +29,18 @@ The start menu shows the version number. The first line of the log reads `[Boot]
 From the start menu, choose **Start New Battle** to open the 3D sandbox. Pick a table size (6×4 ft default) and a map layout, or generate one automatically.
 
 The table opens in the **Deployment** phase — place your army, then press **Start Game** (left panel) to begin play. In multiplayer both players signal ready and the host starts once both are. During play, dragging a model paints a measured **move trail** (`T` hides / `Shift`+`T` clears); an optional *Enforce Movement Limit* setting stops the drag at the model's Advance/Rush-Charge band.
+
+The game **autosaves** every 5 minutes and at every round change into three rotating slots; **CONTINUE** on the start menu reloads the newest one.
+
+### Play solo vs NACHTMAHR
+
+To play a full game against the built-in AI opponent:
+
+1. Give NACHTMAHR an army — either **import a second list** and tick **AI-controlled (Solo)**, or press **AI Opponent** and let NACHTMAHR bring one of its own pre-built lists (pick a faction and 1000–3000 pts; the list is fetched from the asset CDN and cached for offline play).
+2. Follow the **guided deployment**: a roll-off decides who picks a table edge and deploys first, then both sides place units alternately with explicit hand-over clicks (Scout, Ambush and Infiltrate reserves are handled for you).
+3. On **Start Game**, play alternates unit by unit. You act through the **radial menu** — **Shoot**, **Fight**, **Cast** — with real dice in the tray for both sides; NACHTMAHR takes its own activations, and **every applied rule writes a battle-log line** so you can follow (and audit) each decision. The thirteen rules the automation does not cover yet are named per unit in the log for you to apply by hand.
+
+NACHTMAHR is a rules-based, deterministic game AI (no LLM, no neural net) that runs entirely offline and never cheats. One difficulty ships (full strength); see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) for the solo caveats.
 
 ### Camera
 

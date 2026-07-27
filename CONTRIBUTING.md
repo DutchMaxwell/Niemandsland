@@ -11,7 +11,7 @@ useful thing you can do.
   - 🐞 **Bug report** — something broke or behaves wrong.
   - 💡 **Feedback / idea** — UX friction, suggestions, feature ideas.
 - For bugs, please include your **OS** (Windows / macOS / Linux), the
-  **version** (title bar, e.g. `v0.3.7.2-alpha`), and **steps to reproduce**. A Godot
+  **version** (title bar, e.g. `v0.3.10.0-alpha`), and **steps to reproduce**. A Godot
   log or screenshot helps a lot.
 - Security issues: please report privately — see [`SECURITY.md`](SECURITY.md).
 
@@ -57,6 +57,11 @@ godot --headless -s -d res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
 # relay (Python):
 cd relay && pip install -r requirements-dev.txt && python -m pytest
 ```
+
+The `-a res://test` run also covers the **end-to-end layer** (`test/e2e/`), which boots the
+real `scenes/main.tscn` to catch defects in `main.gd`'s own flow that unit tests skip. If your
+change adds a test, **prove it can go red first** — a test that never fails against the broken
+behaviour proves nothing. See the *Tests* section of [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md).
 
 ### Pull request flow
 

@@ -5,11 +5,13 @@
 **Maxim:** AAA-level ambition — no compromises on stability, performance, or
 rules-fidelity.
 
-> Niemandsland is a **tool for human players, not an automated game**. There is no
-> combat/damage resolution and no AI opponent (an earlier AI + battle simulator was
-> removed and will not return). The guiding principle is **"show, don't decide"**: we
-> measure, visualise and synchronise — the players apply the rules. These standards
-> exist to keep that tool stable, fast and faithful to OnePageRules.
+> Niemandsland is first a **tool for human players**: in human-vs-human games we
+> measure, visualise and synchronise — the players apply the rules ("show, don't
+> decide"). Since 0.3.10.0 the **solo mode is the deliberate exception**: against the
+> built-in opponent, `scripts/solo/` resolves combat, morale and spells for both
+> sides, rules-exact and fully logged — every applied rule states its battle-log
+> line, silence is treated as a bug. These standards exist to keep both halves
+> stable, fast and faithful to OnePageRules.
 
 All code, comments, identifiers, commit messages and docs are written in **English** so
 the project stays usable internationally.

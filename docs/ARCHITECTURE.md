@@ -80,6 +80,14 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 
 **OPR & import**
 - `opr_api_client.gd` — Army Forge API client + unit data classes (incl. base sizes).
+  `_apply_base_recommendation` uses Army Forge's own `bases: {round, square}` when present;
+  `_apply_tough_base_fallback` derives a base from Tough only when the API gives none.
+- `model_library.gd` (`ModelLibrary`) — the manifest-layering resolver the game and the
+  offline pipeline share. Turns a `(faction, unit_name)` + loadout labels into a delivered
+  GLB: `variant_slug` maps labels to the shared slug vocabulary (`assets/label_slug_map.json`),
+  `find_faction_model_matching` does the whole-token fuzzy fallback, and per-entry `fit_scale` /
+  `base_override_mm` / `long_axis_override` carry the manifest's overrides. Also owns the ctex
+  (BC7) texture resolution + the `_ctex_block_usable` forward-compat guard.
 - `opr_army_manager.gd` — spawns imported armies onto a per-player **army tray**; loads
   per-unit GLBs and **scales them to the base** (height-fit vs 125 % footprint cap,
   whichever is smaller; Flying units hover). See [Scaling](#scaling). The tray's near
@@ -95,9 +103,56 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
   R2 delivery pattern.
 
 > **On-demand delivery (live):** miniature GLBs are downloaded + cached via `asset_cdn.gd` /
-> `asset_download_manager.gd` from Cloudflare R2 so the repo/build stay lean and only an army's
-> needed models are fetched — see [`ASSET_DELIVERY.md`](ASSET_DELIVERY.md). OPR stats/data load
-> only via the Army Forge API (never bundled).
+> `asset_download_manager.gd` from Cloudflare R2, resolved through `model_library.gd`, so the
+> repo/build stay lean and only an army's needed models are fetched — see
+> [`ASSET_DELIVERY.md`](ASSET_DELIVERY.md). OPR stats/data load only via the Army Forge API
+> (never bundled).
+
+**Solo AI (`scripts/solo/`)**
+
+The solo opponent (**NACHTMAHR**) is a self-contained, rule-based, deterministic engine — no
+machine learning, no network, same inputs → same decisions. It runs only in a solo game; a
+human-vs-human table never touches it. Written from scratch against OPR's official Solo & Co-Op
+ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and **not** revived).
+- `solo_controller.gd` (`SoloController`) — the orchestrator wired into `main.gd`: the **AI
+  Opponent** flow, the click-guided deployment (roll-off → edge → alternating placement → scout
+  band → reserves), per-unit activation (`activate_next_ai_unit`), shooting / melee / morale /
+  consolidation, casting, and objective scoring.
+- `turn_manager.gd` (`TurnManager`) — round + alternating-activation state machine and end-of-round
+  objective scoring / victory check.
+- `ai_decision.gd` / `ai_round_planner.gd` / `ai_position.gd` / `ai_targeting.gd` /
+  `ai_shooting.gd` / `ai_spell.gd` / `ai_combat_math.gd` / `ai_ev.gd` / `ai_archetype.gd` — the
+  decision brain: round plan + look-ahead activation ordering, positioning, target and
+  expected-value math, per-phase choices, and the per-archetype behaviour weights.
+- `movement_planner.gd` (`MovementPlanner`) — deterministic A* movement with wall segments as real
+  impassable barriers, dangerous terrain routed around, and individual models steered while the
+  unit is held in coherency; `move_intent.gd` (`MoveIntent`) is the planned-move value type.
+- `terrain_rules.gd` (`TerrainRules`) — applies Cover / Difficult / Dangerous / Impassable / LoS
+  to the AI's moves and rolls (the solo-only mechanical terrain the sandbox only *shows*).
+- `rules_registry.gd` (`RulesRegistry`) — per-game-system special-rule values (a rule name means
+  different things in GF / GFF / AoF / AoFS / AoFR), driving automatic resolution for both sides.
+- `spells_registry.gd` (`SpellsRegistry`) — spell definitions, token costs and the mechanical
+  buff/debuff effects that feed the real dice / rings / target checks.
+- `sight_fan.gd` (`SightFan`) — per-model, base-edge line-of-sight + weapon-range geometry (also
+  the source for the `F`-key sight fan, presented by `sight_fan_controller.gd`).
+- `transport_state.gd` (`TransportState`) — embark / capacity / disembark-formation / destruction-
+  spill state (see [Save format](#save-format-nml)).
+- `solo_difficulty.gd` (`SoloDifficulty`) — the single shipped grade (full strength); every legacy
+  grade name resolves to it. `solo_sim.gd` (`SoloSim`) is the headless self-play harness that runs
+  the same pure modules for balance/regression proofs.
+
+**Play aids & dialogs (new in `0.3.10.0`)**
+- `spell_picker_dialog.gd` (`SpellPickerDialog`) / `interference_dialog.gd` (`InterferenceDialog`)
+  — the human cast flow: pick a spell (cost + live effect text), and one modal tableau to spend
+  tokens interfering with an enemy cast (live odds before you confirm). Code-built, awaitable.
+- `control_hints_controller.gd` (`ControlHintsController`) — hover an object → a curated hint line
+  of the hotkeys that apply to it (every listed key is a verified live binding). Display-only, local.
+- `pickup_ghost_controller.gd` (`PickupGhostController`) — a translucent origin silhouette while a
+  drag is live (what ESC snaps back to). Display-only, local.
+- `sight_fan_controller.gd` (`SightFanController`) — draws the summed `SightFan` overlay above the
+  table (like `RangeRingController`); local, never synced/saved.
+- `dream_spinner.gd` (`DreamSpinner`) — a self-drawn idle "thinking" spinner shown while NACHTMAHR
+  computes (no external assets).
 
 **Map & terrain**
 - `map_layout.gd` / `map_layout_grid.gd` — top-down editor + 3″ grid.
@@ -127,7 +182,20 @@ the `.nml` extension with OS file association; the same serialization feeds
 multiplayer load. Regiment blocks persist via `Regiment.to_dict()` (frontage, tray
 transform, `wounds_taken`) and are rebuilt by `OPRArmyManager.restore_regiment`,
 which re-applies the pooled-wound counter so model alive/dead states + the boundary
-wound token are restored exactly.
+wound token are restored exactly. Transport embark state (`embarked_in` /
+`cargo_unit_ids` / `embark_return_spots`) rides in `unit_properties` (`transport_state.gd`).
+
+**Versioned migration.** `save_manager.gd` stamps a `SAVE_VERSION` (currently **1.7**).
+`save_migrations.gd` (`SaveMigrations`) lifts an older file forward step by step —
+`1.4 → 1.5 → 1.6 → 1.7` (1.7 = the Transport(X) embark state above). Pre-alpha formats
+below `OLDEST_SUPPORTED` (`1.4`) are refused with a message; a newer-than-current file is
+refused too. **Standing rule:** whoever bumps `SAVE_VERSION` ships the matching migration
+step **and** a fixture test in the same change.
+
+**Autosave.** `autosave_controller.gd` (`AutosaveController`, scene-instantiated) writes a
+snapshot every ~5 minutes and at each round change, rotating over `autosave_1.nml` …
+`autosave_<SLOTS>.nml` (always overwriting the oldest). In multiplayer only the host writes.
+The newest slot is offered by CONTINUE / the load dialog and announced by toast + battle-log line.
 
 ## Multiplayer
 
@@ -142,6 +210,14 @@ wound token are restored exactly.
 - `internet_lobby.gd`, `player_avatar.gd`, `remote_cursor.gd` — lobby + presence.
 - `player_identity.gd` — local display name + per-install client token; static helpers for
   sanitisation and slot-stable identity across reconnects.
+- `import_await_guard.gd` (`ImportAwaitGuard`) — a per-player generation counter that lets a
+  stalled guest army-import abort cleanly (`IMPORT_AWAIT_TIMEOUT_SEC` = 75), release the restore
+  lock and recover instead of wedging the session.
+
+The relay keeps **anonymous, aggregate** usage stats only (`relay/relay_server.py`): totals,
+peaks and two coarse close-time histograms (room lifetime, peak peers per room). `games_played`
+counts a room that reached ≥ 2 peers; a shutdown flush folds still-open rooms in, guarded against
+double counting. No room codes, player names or IPs are ever recorded.
 
 ## Dice
 
@@ -156,7 +232,28 @@ Godot's default physics. Table dice are display-only.
 `opr_army_manager._compute_model_fit()`: target height ≈ base size (mildly larger for
 Tough), but the horizontal footprint is capped at 125 % of the base's long side
 (`FOOTPRINT_MAX_RATIO`); the smaller factor wins, so slim infantry stay height-driven
-while wide vehicles are footprint-capped. Flying units hover (`AIRCRAFT_HOVER_M`).
+while wide vehicles are footprint-capped. Flying units hover (`AIRCRAFT_HOVER_M`), and an
+aircraft stands on its flight stand rather than floating.
+
+## Miniatures — mounts & riders
+
+A loadout resolves to a variant key `<baseKey>#<slug>`; a mounted model uses a two-tier
+resolution — first a composed `<hero>#<weapon>+<mountslug>`, then a whole-token fuzzy fallback
+over the manifest (so a `snake` / `sphinx` mount still matches). A **rider** is height-fit to a
+foot-trooper reference (`RIDER_ANATOMY_BASE_MM` = 25) instead of the mount's base, and is only
+treated as a rider when its body sits at least `RIDER_ELEVATION_MIN_RATIO` (0.25) of its height
+above the model's lowest point (a mounted-by silhouette). Oval/rectangular base alignment is a
+**marker-only** long-axis hint (`long_axis`); the manifest override wins over the Army Forge
+recommendation, which wins over the Tough fallback. All constants live in `opr_army_manager.gd`.
+
+## Miniature bases (terrain-projected)
+
+`base_decor.gd` (`BaseDecor.build_base`) builds the base a model stands on and projects the
+tabletop's own surface onto its top via `shaders/base_terrain_top.gdshader` (world-XZ sampling),
+inside a shared near-black rim. `should_ring` adds an affiliation ring for lone solo models
+(units of one); members of a multi-model unit are shown by the boundary rubberband instead. One shared base
+material is owned by `table.gd`; `legacy_solid_disc` is the killswitch back to the flat
+player-coloured disc (QA "before" look). Base-render QA harnesses live in `tools/`.
 
 ## Asset pipeline (offline, separate repo)
 

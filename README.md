@@ -4,6 +4,9 @@ A desktop tabletop simulator focused on miniature wargames, with first-class
 support for [OnePageRules](https://onepagerules.com/) (Grimdark Future / Age of
 Fantasy). Built in Godot.
 
+<!-- The version badge and the Status line below track `application/config/version`
+     (project.godot) — the single source. Bump them at release per docs/DEVELOPMENT.md
+     (§ Release checklist); never hardcode a version elsewhere in the UI. -->
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
 [![Status](https://img.shields.io/badge/Status-0.3.10.0--alpha-orange.svg)]()
@@ -130,7 +133,7 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 | Select / multi-select | Left-click / `Alt`+Left-click |
 | Box select | Left-drag on table |
 | Move / rotate | Left-drag / `R` (live degree readout) |
-| Snap rotate to 90° (regiments) | `Ctrl`+`R` |
+| Snap rotate to 90° (any selectable — units, loose models, terrain) | `Ctrl`+`R` |
 | Delete | `Del` / `Backspace` |
 | Copy / paste / duplicate | `Ctrl`+`C` / `V` / `D` |
 | Arrange (multi-select) | `1`–`9` rows, `A` arrow |
@@ -140,7 +143,6 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 | Toggle 45° arc quadrants (front/flank/rear) — selected unit | `F` (also raises the sight & range fan) |
 | Cycle frontage (models per rank) | `Shift`+`F` |
 | Axis-locked drag (forward/backward only) | `Shift`+drag |
-| Snap to nearest 90° facing | `Ctrl`+`R` |
 | Mouse-driven rotation (R held) | `R` (drag mouse) |
 | Take/revive casualties (pooled Tough(1)) | Right-click model → `W` |
 
@@ -157,7 +159,7 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 ```
 Niemandsland/
 ├── scenes/            # startup_menu.tscn (main), main.tscn, dialogs
-├── scripts/           # ~100 GDScript files (see docs/ARCHITECTURE.md)
+├── scripts/           # ~150 GDScript files, incl. scripts/solo/ (see docs/ARCHITECTURE.md)
 ├── addons/            # gdUnit4 (tests)
 ├── test/              # gdUnit4 test suites
 ├── assets/            # models, miniatures, terrain, UI
@@ -185,8 +187,6 @@ scale, **dice run in a separate scaled SubViewport** (our own MIT `dice_tray.gd`
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — systems & code map
 - [`docs/REGIMENTS.md`](docs/REGIMENTS.md) — Age of Fantasy: Regiments design notes
 - [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) — build, run, test
-- [`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md) — Wargaming Simulator integration (the WGS
-  import was retired in `0.3.10.0` — historical)
 
 ## Security note
 
