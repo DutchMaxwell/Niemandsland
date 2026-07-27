@@ -164,8 +164,7 @@ rate-limit / army-sync cascade was live-validated across two real clients.
 OS file association. The game **autosaves** every 5 minutes and at every round change into
 three rotating slots that show up in CONTINUE and the load dialog (in multiplayer only the
 host writes them; each autosave is announced by toast and battle-log line). The Wargaming
-Simulator (WGS) import was **retired** — the menu entry and its code are gone; older saves
-containing WGS units still load, as generic units.
+Older saves from removed import paths still load; their units come in as generic units.
 
 **Onboarding — guided tutorial course** — **64 steps in 11 chapters** that teach on the real
 table, event-gated (a lesson advances only when the player actually does the action): camera

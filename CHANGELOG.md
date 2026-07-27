@@ -46,8 +46,8 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   Aircraft, Lacerate, Resistance, conditional-AP families, auras, Retaliate, Strafing,
   Hit & Run …) up to 17 new combat mechanics (Takedown Shot/Strike, the Marks family, Vengeance,
   Hazardous, Unwieldy, Deathstrike, Self-Destruct, Instinctive, Reckless Piercing, Bloodthirsty
-  Fighter, Retreating Strike, Fatigue Debuff). **100% coverage over the bundled opponent lists,
-  >91% playable book-wide.**
+  Fighter, Retreating Strike, Fatigue Debuff). Battle-tested most thoroughly in Grimdark Future
+  so far — the other systems share the same automation but have seen far less table time.
 - **Every applied rule writes its own battle-log line** — nothing resolves silently; rules the
   automation does not yet cover are honestly listed per unit.
 - **One measuring truth.** Shooting gates, charge reach, spell range and marker control measure
@@ -69,7 +69,6 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   selectable (#148) · unit-card strip repaired in a four-part fix wave (#144–#147).
 
 ### Changed
-- **WGS import retired** (menu + code); old saves with WGS units still load. (#143)
 - All new panels and dialogs are English-only (the game has no i18n yet).
 - Repository docs brought to release truth in a dedicated pass (supersedes #125).
 
