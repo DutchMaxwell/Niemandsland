@@ -766,6 +766,12 @@ func _dismiss_transition_overlay() -> void:
 ## _on_solo_human_activated). The AI army is whichever slot is marked in solo_ai_slots (import checkbox /
 ## Solo panel); with no designation it falls back to player 2 (backward compat).
 func _run_solo_ai_turn() -> void:
+	# F11 is a FOURTH door into play, and it is player-facing — the import dialog and the Solo panel both
+	# advertise it. Ungated it was the worst of them: _solo_ensure_playing_phase() below deploys the AI's
+	# remainder and flips to PLAYING, and then the whole AI side runs at once against a human army that
+	# may still be standing on its tray.
+	if _deployment_gate_refuses_start():
+		return
 	_solo_ensure_playing_phase()
 	if opr_army_manager == null or movement_range_controller == null:
 		push_warning("[Solo/AI] not ready — import armies first")
@@ -977,6 +983,12 @@ func _solo_run_redeployment() -> void:
 
 
 func _on_solo_human_activated(gu: GameUnit) -> void:
+	# The first solo activation IS the game start (see _solo_ensure_playing_phase), so it faces the same
+	# deployment gate as the Start-Game button — otherwise activating a unit is a second, button-free way
+	# to begin play with the rest of the army still on the tray.
+	if _deployment_gate_refuses_start():
+		_solo_undo_refused_activation(gu)
+		return
 	_solo_ensure_playing_phase()
 	if not _solo_alternation_ready(gu):
 		return
@@ -1984,6 +1996,14 @@ func _solo_deploy_phase_advance() -> void:
 				_solo_deploy_show_human_turn()
 			return
 	if phase != "done":
+		# "No units left" / "✔ Done" is an ASSERTION, not a fact: _solo_deploy_human_out sets human_out
+		# with nothing verified (unlike the ✔ at _solo_deploy_human_done_one). Check the table BEFORE the
+		# phase flip and re-open the human turn — guarding after it would strand the game in DEPLOYMENT
+		# with the deployment panel already hidden.
+		if _deployment_gate_refuses_start():
+			_solo_deploy_fsm["human_out"] = false
+			_solo_deploy_show_human_turn()
+			return
 		_solo_deploy_fsm["phase"] = "done"
 		_solo_deploy_ui_hide()
 		if battle_log != null:
@@ -10991,13 +11011,191 @@ func _init_game_phase_ui() -> void:
 	_update_game_phase_ui()
 
 
+## The table's play surface as a table-plane rect (metres). The army trays stand strictly OUTSIDE it
+## (OPRArmyManager._get_tray_position_and_bounds places them at ±table/2 ± margin ± tray/2 for every
+## table size), so "unit centre inside the rect" is this project's on-table test.
+func _table_rect() -> Rect2:
+	if table == null:
+		return Rect2()
+	var tw: float = table.table_size.x * 0.3048
+	var td: float = table.table_size.y * 0.3048
+	return Rect2(Vector2(-tw / 2.0, -td / 2.0), Vector2(tw, td))
+
+
+## Does this unit's live centre stand OFF the table (i.e. still on its tray)? Only ALIVE models are
+## measured — casualties are parked on the tray by design, and a per-model test would flag every unit
+## that ever lost one. A unit whose models have not spawned yet cannot be judged and counts as placed.
+func _unit_is_off_table(gu: GameUnit, trect: Rect2) -> bool:
+	var pts: Array = []
+	for m in gu.get_alive_models():
+		var node: Node3D = (m as ModelInstance).node
+		if node != null and is_instance_valid(node):
+			pts.append(node.global_position)
+	if pts.is_empty():
+		return false
+	var c: Vector3 = MoveIntent.anchor_of(pts)
+	return not trect.has_point(Vector2(c.x, c.z))
+
+
+## Units of `slot` (-1 = every army on this table) that still stand on their tray — the deployment
+## gate's evidence. Same standard the deployment hand-over already uses (_solo_deploy_newly_placed_human).
+## Legitimately off the table, so exempt:
+##   - attached heroes (they deploy WITH their host, never as their own drop),
+##   - reserves, and units that MAY be held in reserve (GF/AoF v3.5.1 p.13 Ambush/Infiltrate — they
+##     arrive from round 2). The rule is read, not the ambush_reserve flag: that flag is only ever set
+##     on the guided deployment path, so on the Start-Game path it is false for every Ambush unit,
+##     and a gate keyed on it would make an Ambush-carrying army unstartable,
+##   - embarked units (their models ride parked on the owner's tray, OPRArmyManager embark slots).
+## Scouts are NOT exempt: their phase (p.14) is part of deployment and completes before play begins,
+## so they belong on the table — and being auto-staged into the tray's Scout band at import they are
+## the likeliest offenders of all.
+func _units_still_on_tray(slot: int = -1) -> Array:
+	var out: Array = []
+	if opr_army_manager == null or table == null:
+		return out
+	var trect := _table_rect()
+	var pool: Array = []
+	if slot >= 0:
+		pool = opr_army_manager.get_game_units_for_player(slot)
+	else:
+		pool = opr_army_manager.get_all_game_units()
+	for u in pool:
+		var gu := u as GameUnit
+		if gu == null or gu.is_destroyed() or gu.get_alive_count() <= 0:
+			continue
+		if gu.has_method("is_attached") and gu.is_attached():
+			continue
+		if SoloController.unit_in_reserve(gu) or SoloController.unit_has_ambush(gu):
+			continue
+		if opr_army_manager.transport_of(gu) != null:
+			continue
+		if _unit_is_off_table(gu, trect):
+			out.append(gu)
+	return out
+
+
+## Whose tray the gate inspects. In multiplayer every peer answers for its OWN army only (the
+## opponent may still be placing, and both have to ready up anyway). Off the network — solo and the
+## local hotseat table alike — every army on this machine must stand on the table, NACHTMAHR's
+## included: on the bypass path its list was never queued for deployment either.
+func _deployment_gate_slot() -> int:
+	if network_manager != null and network_manager.is_multiplayer_active():
+		# 0 = this guest's slot assignment is still pending (network_manager awaits slot_assigned).
+		# The former maxi(1, …) silently answered "slot 1" there, so the gate inspected the HOST's army
+		# and named the HOST's units to the guest. The caller refuses plainly instead.
+		return int(network_manager.get_my_player_slot())
+	return -1
+
+
+## The activation the gate just refused must not STICK. radial_menu_controller._toggle_activation marks
+## the unit, updates its marker and broadcasts BEFORE it emits unit_activated, so a bare `return` in the
+## refusal branch left the unit activated: it entered round 1 already spent and dropped out of
+## eligible_units_for(). Undo it exactly the way the radial's own un-toggle does.
+func _solo_undo_refused_activation(gu: GameUnit) -> void:
+	if gu == null or not gu.is_activated:
+		return
+	gu.is_activated = false
+	if radial_menu_controller != null and radial_menu_controller.has_method("_update_activated_markers"):
+		radial_menu_controller._update_activated_markers(gu)
+	if network_manager != null and network_manager.has_method("broadcast_unit_activation"):
+		network_manager.broadcast_unit_activation(gu)
+
+
+## Unit list for the gate's messages, capped so the toast stays a toast (the log gets them all).
+static func _tray_names(units: Array, cap: int = 6) -> String:
+	var names: PackedStringArray = []
+	for u in units:
+		if names.size() >= cap:
+			names.append("+%d more" % (units.size() - cap))
+			break
+		names.append((u as GameUnit).get_name())
+	return ", ".join(names)
+
+
+## GF/AoF v3.5.1 p.13: an Ambush/Infiltrate unit still off the table when play begins IS a unit "set
+## aside before deployment" — flag it as a reserve so the game treats it as off-table (not activatable,
+## invisible to the AI's target loop, prompted to arrive from round 2). The guided deployment does this
+## in _solo_deploy_begin_side; the Start-Game path never ran it, which is exactly why the AI charged the
+## player's Ambush units at their TRAY coordinates. Deliberately NOT set_aside_human_ambush(): that has
+## no on-table test and would pull back Ambush units he had already deployed ("MAY be set aside").
+## Solo only — the round-2 arrival prompt is a solo feature, so a flag nobody clears would strand the
+## unit in multiplayer.
+func _set_aside_offtable_ambush() -> void:
+	if solo_controller == null or opr_army_manager == null or table == null:
+		return
+	if network_manager != null and network_manager.is_multiplayer_active():
+		return
+	var trect := _table_rect()
+	var set_aside: Array = []
+	for u in opr_army_manager.get_game_units_for_player(solo_controller.human_slot):
+		var gu := u as GameUnit
+		if gu == null or gu.is_destroyed() or SoloController.unit_in_reserve(gu):
+			continue
+		if gu.has_method("is_attached") and gu.is_attached():
+			continue
+		if not SoloController.unit_has_ambush(gu) or not _unit_is_off_table(gu, trect):
+			continue
+		gu.unit_properties["ambush_reserve"] = true
+		set_aside.append(gu)
+	if not set_aside.is_empty() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"You hold %d Ambush unit(s) in reserve on your tray (%s) — placement alternates from round 2 (GF/AoF p.13)." % [
+				set_aside.size(), _tray_names(set_aside, 99)], false)
+
+
+## The deployment gate (maintainer 2026-07-27: "Ich konnte das Deployment einfach umgehen. Ich habe die
+## Einheit einfach nach vorne geschoben und Start Game gedrückt. Kein Deployment notwendig."). Play must
+## not begin while units that belong on the table are still on their tray: they keep their TRAY
+## coordinates, and the AI then targets and charges them there — he had to delete his own units by hand
+## to keep playing. True = the start was REFUSED and the player was told which units are missing.
+## False = play may begin, and on the way through the off-table Ambush units are formally set aside
+## (the flag is what makes them off-table to the rest of the game).
+## Only ever fires during DEPLOYMENT — once play runs, off-table units are the rules' business.
+func _deployment_gate_refuses_start() -> bool:
+	if opr_army_manager == null or not opr_army_manager.is_deployment_phase():
+		return false
+	# Unattended runs deploy themselves (nobody is there to place anything), and the tutorial's
+	# start_game lesson comes before any deployment lesson — refusing there would deadlock the track.
+	if _solo_batch or _solo_both_ai or _tutorial_mode:
+		return false
+	var slot := _deployment_gate_slot()
+	if slot == 0:
+		# Guest whose slot is not assigned yet: we cannot tell whose army to inspect, and guessing named
+		# the host's units at him. Refuse truthfully — the window is short (main.gd awaits slot_assigned).
+		_solo_show_toast("Still joining — your player slot is being assigned. Try again in a moment.")
+		return true
+	var left := _units_still_on_tray(slot)
+	if left.is_empty():
+		_set_aside_offtable_ambush()
+		return false
+	var ai_side := false
+	for u in left:
+		if not solo_ai_slots.is_empty() and _solo_is_ai_unit(u as GameUnit):
+			ai_side = true
+			break
+	var hint := "\nNACHTMAHR has not deployed either — press Start Deployment." if ai_side else ""
+	_solo_show_toast("%d unit(s) are still on the tray: %s — place them, then start.%s" % [
+		left.size(), _tray_names(left), hint])
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Start refused — %d unit(s) still on the tray: %s. Deploy them first (GF/AoF v3.5.1)." % [
+				left.size(), _tray_names(left, 99)], false)
+	return true
+
+
 ## Start-Game / Ready button pressed. Single-player: start play now. Multiplayer: toggle THIS player's
 ## ready flag and report it to the host — the host's both-ready gate fires the authoritative transition.
 func _on_start_game_pressed() -> void:
 	if network_manager != null and network_manager.is_multiplayer_active():
-		network_manager.set_local_ready(not network_manager.is_local_ready())
+		var want_ready: bool = not network_manager.is_local_ready()
+		# Readying UP is a start intent and faces the gate; un-readying never is.
+		if want_ready and _deployment_gate_refuses_start():
+			return
+		network_manager.set_local_ready(want_ready)
 		_update_game_phase_ui()
 	elif opr_army_manager != null:
+		if _deployment_gate_refuses_start():
+			return
 		opr_army_manager.start_game()  # emits game_phase_changed -> _on_game_phase_changed
 
 

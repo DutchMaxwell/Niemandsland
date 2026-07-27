@@ -11,7 +11,8 @@ extends Node
 ## click-to-select are deferred (M2).
 
 # === Constants / enums ===
-const CAP := 200                       # ring-buffer cap (oldest entries drop off)
+const CAP := 200                       # ring-buffer cap for the LIVE view (oldest entries drop off)
+const ARCHIVE_CAP := 20000             # export-archive ceiling; a whole game runs a few thousand entries
 
 enum Category { GENERAL, COMBAT, MOVEMENT }
 enum Filter { ALL, COMBAT, MOVEMENT, AI }
@@ -22,7 +23,9 @@ signal cleared()
 
 # === State ===
 var current_round: int = 1
-var _entries: Array = []
+var _entries: Array = []               # capped live view — panel, filters, size()
+var _archive: Array = []               # append-only whole game — what the EXPORT reads
+var _archive_dropped: int = 0          # only ever non-zero past ARCHIVE_CAP; announced in the header
 var _seq: int = 0
 
 
@@ -36,6 +39,13 @@ func log_event(category: int, text: String, ai: bool = false) -> Dictionary:
 	_entries.append(entry)
 	if _entries.size() > CAP:
 		_entries.pop_front()
+	# The EXPORT must carry the WHOLE game (maintainer: a full game exported only its last rounds — the
+	# 200-entry ring had already eaten the opening, and his whole test process runs on these files). The
+	# panel keeps its capped view for performance; the archive keeps everything.
+	_archive.append(entry)
+	if _archive.size() > ARCHIVE_CAP:
+		_archive.pop_front()
+		_archive_dropped += 1
 	entry_added.emit(entry)
 	return entry
 
@@ -58,6 +68,8 @@ func size() -> int:
 
 func clear() -> void:
 	_entries.clear()
+	_archive.clear()
+	_archive_dropped = 0
 	cleared.emit()
 
 
@@ -92,7 +104,7 @@ static func export_text(all_entries: Array, decision_lines: Array = [], title: S
 ## The full export text (maintainer request: clipboard hand-off for live-test triage) —
 ## the same rendering the file export writes, without touching disk.
 func export_as_text(decision_lines: Array = []) -> String:
-	return export_text(_entries, decision_lines)
+	return export_text(_archive, decision_lines, _export_title())
 
 
 func export_to_file(decision_lines: Array = []) -> String:
@@ -102,11 +114,20 @@ func export_to_file(decision_lines: Array = []) -> String:
 	if f == null:
 		push_error("BattleLog export failed (%s): %s" % [vpath, error_string(FileAccess.get_open_error())])
 		return ""
-	f.store_string(export_text(_entries, decision_lines))
+	f.store_string(export_text(_archive, decision_lines, _export_title()))
 	f.close()
 	var abs_path := ProjectSettings.globalize_path(vpath)
-	print("[BattleLog] exported %d entries → %s" % [_entries.size(), abs_path])
+	print("[BattleLog] exported %d entries → %s" % [_archive.size(), abs_path])
 	return abs_path
+
+
+## Header note for the one case where the export is still incomplete: the archive ceiling was hit.
+## Silent truncation is the defect being fixed — if it ever happens again the file must SAY so.
+func _export_title() -> String:
+	if _archive_dropped > 0:
+		return "Niemandsland — Battle Log (WARNING: %d earliest entries dropped, archive ceiling %d)" % [
+			_archive_dropped, ARCHIVE_CAP]
+	return "Niemandsland — Battle Log"
 
 
 func _where(pred: Callable) -> Array:

@@ -103,6 +103,20 @@ func test_export_text_without_records_omits_that_section() -> void:
 	assert_bool(text.contains("AI decision records")).is_false()
 
 
+func test_export_carries_the_whole_game_past_the_live_cap() -> void:
+	# Maintainer: a full game exported only its LAST rounds — the 200-entry live ring had already eaten
+	# the opening. The panel stays capped; the export reads the append-only archive, so e0 survives.
+	var log_node: BattleLog = auto_free(BattleLog.new())
+	for i in range(BattleLog.CAP + 50):
+		log_node.log_event(BattleLog.Category.GENERAL, "e%d" % i)
+	assert_int(log_node.size()).is_equal(BattleLog.CAP)   # the live view is untouched
+	var text := log_node.export_as_text()
+	assert_str(text).contains("R1  e0")
+	assert_str(text).contains("R1  e%d" % (BattleLog.CAP + 49))
+	log_node.clear()
+	assert_bool(log_node.export_as_text().contains("e0")).is_false()
+
+
 func test_export_to_file_writes_and_returns_absolute_path() -> void:
 	var log_node: BattleLog = auto_free(BattleLog.new())
 	log_node.log_event(BattleLog.Category.GENERAL, "Battle started")
