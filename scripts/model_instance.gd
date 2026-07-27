@@ -2,7 +2,7 @@ class_name ModelInstance
 extends RefCounted
 ## Represents a single model within a unit.
 ## Uses a generic properties dictionary - no hardcoded roles or equipment names.
-## This allows flexibility for any game system (OPR, WGS, custom).
+## This allows flexibility for any game system (OPR, custom).
 
 # ===== References =====
 

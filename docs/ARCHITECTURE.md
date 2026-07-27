@@ -98,8 +98,6 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 > `asset_download_manager.gd` from Cloudflare R2 so the repo/build stay lean and only an army's
 > needed models are fetched — see [`ASSET_DELIVERY.md`](ASSET_DELIVERY.md). OPR stats/data load
 > only via the Army Forge API (never bundled).
-- `wgs_client.gd` / `wgs_game_manager.gd` / `wgs_import_dialog.gd` — Wargaming
-  Simulator format ([`WGS_INTEGRATION.md`](WGS_INTEGRATION.md)).
 
 **Map & terrain**
 - `map_layout.gd` / `map_layout_grid.gd` — top-down editor + 3″ grid.

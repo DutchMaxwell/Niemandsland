@@ -75,9 +75,9 @@ host rehosts and re-syncs full state) is also live; see
 host-reconnect) is deployed to Fly.io (`niemandsland-relay`, fra). The reconnect /
 rate-limit / army-sync cascade was live-validated across two real clients.
 
-**Import/export** — Army Forge (OPR) + Wargaming Simulator (WGS) list import, `.nml`
-save format with OS file association
-([`docs/WGS_INTEGRATION.md`](docs/WGS_INTEGRATION.md)).
+**Import/export** — Army Forge (OPR) list import, `.nml` save format with OS file
+association. (The Wargaming Simulator import was retired; saves that still contain WGS
+units keep loading, as generic units.)
 
 **Onboarding — guided tutorial (foundation)** — a T0 walking skeleton + a T1 tool track
 (W1–W7) that teaches on the real table, event-gated (a lesson advances only when the
