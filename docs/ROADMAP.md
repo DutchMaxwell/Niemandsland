@@ -248,7 +248,7 @@ format 1.7); the **tutorial course at 64 steps / 11 chapters**; the **sight & ra
 **autosave** ([#139](../../pull/139)); **battle-log export & copy** (F8); measure-on-pickup origin ghost
 + hover hotkey hints ([#140](../../pull/140)); Ctrl+R 90° snap on every selectable
 ([#148](../../pull/148)); the unit-card strip fix wave ([#144](../../pull/144)–[#147](../../pull/147));
-and the retirement of the WGS import ([#143](../../pull/143)). This release also closed out the
+and an import-path cleanup ([#143](../../pull/143)). This release also closed out the
 **"solo movement overhaul"** backlog item: AI models now steer individually while the unit is held in
 coherency, wall segments are real impassable barriers, dangerous terrain is routed around when a free
 path exists, and a placement gate guarantees no overlaps and no models inside blocked terrain after
