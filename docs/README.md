@@ -26,7 +26,13 @@ Start with the repo entry points: [`../README.md`](../README.md) (project overvi
 | [`ATMOSPHERE.md`](ATMOSPHERE.md) | Lighting + audio ambience | Reference |
 | [`UPDATE_CHECK.md`](UPDATE_CHECK.md) | In-app update checker | Live |
 | [`REGIMENTS.md`](REGIMENTS.md) | Age of Fantasy: Regiments movement trays | Reference |
-| [`WGS_INTEGRATION.md`](WGS_INTEGRATION.md) | Wargaming Simulator integration | Implemented |
+
+## Solo AI
+
+| Doc | Contents | Status |
+|---|---|---|
+| [`SOLO_AI_PLAN.md`](SOLO_AI_PLAN.md) | NACHTMAHR solo opponent — design & implementation plan | Shipped (v1) |
+| [`SOLO_AI_RULES_COVERAGE.md`](SOLO_AI_RULES_COVERAGE.md) | Which OPR special rules the solo AI resolves automatically | Reference |
 
 ## Tools
 
@@ -44,5 +50,4 @@ consumes only its outputs, delivered on demand from Cloudflare R2 (see
 - [Godot docs](https://docs.godotengine.org/en/stable/) ·
   [GDScript style guide](https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_styleguide.html)
 - [OnePageRules](https://onepagerules.com/) ·
-  [Army Forge](https://army-forge.onepagerules.com/) ·
-  [Wargaming Simulator](https://udos3dworld.com/WargamingSimulator/)
+  [Army Forge](https://army-forge.onepagerules.com/)
