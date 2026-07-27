@@ -83,8 +83,8 @@ func set_atmosphere_controller(atmosphere_ctrl: Node) -> void:
 	_main_vbox.add_child(section)
 	_main_vbox.move_child(section, 0)
 
-	# Connect close button signal
-	close_requested.connect(func(): hide())
+	# close_requested is wired in _build_ui() instead — it must hold even when this late
+	# atmosphere wiring never happens, or the title-bar X would do nothing in some builds.
 	visibility_changed.connect(func() -> void:
 		if visible:
 			UiPolish.grab_first_focus.call_deferred(self))
@@ -98,7 +98,24 @@ func _build_ui() -> void:
 	# 900px is taller than a 720p screen; clamp so the ScrollContainer below governs
 	# overflow and every control stays reachable.
 	UiPolish.keep_window_reachable(self, Vector2i(500, 900))
-	position = Vector2i(50, 50)
+
+	# As a bare Window this panel could slide BEHIND the main window and be lost there, and it
+	# always opened at the fixed corner (50, 50) instead of centred. `transient` ties it to the
+	# main window (stays above it, minimises with it) and fixes exactly that. Deliberately NOT
+	# `exclusive`: main.gd toggles this panel with show()/hide(), and an exclusive window opened
+	# that way can leave the game unclickable if anything swallows its close — the reported
+	# problem is "it disappears behind the game", which transient alone solves.
+	transient = true
+	# The title-bar X must be wired here rather than in the optional atmosphere hook below, or a
+	# build without that section has no way to dismiss the panel at all.
+	close_requested.connect(_on_close_requested)
+	# main.gd toggles this panel with show()/hide() and never repositions it, so re-centre on
+	# every open: a window centred once would sit off-place after a host-window resize (and
+	# keep_window_reachable may have resized it in between).
+	visibility_changed.connect(func() -> void:
+		if visible:
+			move_to_center())
+	move_to_center()
 
 	# Main container
 	var margin = MarginContainer.new()
@@ -152,10 +169,14 @@ func _build_ui() -> void:
 	var action_hbox = HBoxContainer.new()
 	vbox.add_child(action_hbox)
 
-	var print_btn = Button.new()
-	print_btn.text = "Print to Console"
-	print_btn.pressed.connect(_on_print_pressed)
-	action_hbox.add_child(print_btn)
+	# Developer tool: dumps the current lighting preset as pasteable code. Useful internally
+	# for authoring atmosphere presets, but in a shipped build it reads as an unfinished UI
+	# (there is no console for the player to read) — so it exists only in debug builds.
+	if OS.is_debug_build():
+		var print_btn = Button.new()
+		print_btn.text = "Print to Console"
+		print_btn.pressed.connect(_on_print_pressed)
+		action_hbox.add_child(print_btn)
 
 	var close_btn = Button.new()
 	close_btn.text = "Close"
@@ -404,6 +425,11 @@ func _on_color_changed(color: Color, key: String) -> void:
 			lighting_controller.set_ambient_color(color)
 
 
+
+
+## Title-bar X — the only dismissal path besides the Close button.
+func _on_close_requested() -> void:
+	hide()
 
 
 func _on_print_pressed() -> void:

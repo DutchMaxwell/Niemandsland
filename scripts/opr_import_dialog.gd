@@ -2,10 +2,11 @@ extends Window
 class_name OPRImportDialog
 ## Dialog for importing OPR Army Forge armies via Share-Link
 
-signal army_imported(army: OPRApiClient.OPRArmy, player_id: int)
+signal army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_controlled: bool)
 
 ## UI Elements
 var player_option: OptionButton
+var ai_check: CheckBox   # "AI-controlled (Solo)" — goal 001 / bus 038
 var army_preview: RichTextLabel
 var state_panel: StatePanel
 var import_btn: Button
@@ -125,6 +126,14 @@ func _setup_ui() -> void:
 	player_option.add_item("Player 4 (Gold)", 4)
 	player_option.select(0)
 	player_row.add_child(player_option)
+
+	# Solo mode: mark this army as AI-controlled at import (goal 001 / bus 038 — replaces the M1
+	# player-2 hardcode; changeable later in the left-panel Solo section).
+	ai_check = CheckBox.new()
+	ai_check.text = "AI-controlled (Solo)"
+	ai_check.tooltip_text = "The Solo AI plays this army (F11 runs its activations)."
+	ai_check.focus_mode = Control.FOCUS_NONE
+	player_row.add_child(ai_check)
 
 	# Army preview
 	var preview_label = Label.new()
@@ -286,9 +295,10 @@ func _on_import() -> void:
 	# Hide + reset BEFORE emitting: the handler spawns the army synchronously (it blocks
 	# the main thread), so anything after the emit would only run once loading is done —
 	# the dialog would otherwise stay on screen over the loading overlay the whole time.
+	var ai_controlled: bool = ai_check != null and ai_check.button_pressed
 	hide()
 	_reset_dialog()
-	army_imported.emit(army, player_id)
+	army_imported.emit(army, player_id, ai_controlled)
 
 
 func _on_cancel() -> void:
@@ -302,6 +312,8 @@ func _reset_dialog() -> void:
 	link_status_label.text = ""
 	army_preview.text = ""
 	import_btn.disabled = true
+	if ai_check:
+		ai_check.button_pressed = false
 	if state_panel:
 		_show_empty_state()
 

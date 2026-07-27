@@ -155,13 +155,20 @@ func _update_library_section() -> void:
 	if not token_library:
 		return
 
-	for token_name in token_library.names():
+	var names: Array = token_library.names()
+	names.sort()   # rule + spell tokens mixed in — alphabetical keeps the list scannable
+	for token_name in names:
 		var row = HBoxContainer.new()
 
 		var apply_btn = Button.new()
 		apply_btn.text = token_name
 		apply_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		apply_btn.tooltip_text = "Apply '%s' to the current selection" % token_name
+		# The token colour tells buff (green) from debuff (red) at a glance; the effect text from
+		# the army book (rule/spell) rides on the tooltip so picking needs no rules lookup.
+		apply_btn.add_theme_color_override("font_color", token_library.get_color(token_name))
+		var effect := token_library.get_effect(token_name)
+		apply_btn.tooltip_text = effect if not effect.is_empty() \
+				else "Apply '%s' to the current selection" % token_name
 		apply_btn.pressed.connect(_on_library_apply.bind(token_name))
 		row.add_child(apply_btn)
 

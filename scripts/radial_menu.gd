@@ -31,6 +31,11 @@ const SEGMENT_GAP := 0.07          # radians trimmed from each side of a segment
 const HOVER_POP := 10.0            # px the hovered segment extends outward
 const LABEL_FONT_SIZE := 14
 const TOOLTIP_FONT_SIZE := 14
+const TOOLTIP_PAD := Vector2(12.0, 7.0)   # px of padding inside the tooltip box
+const TOOLTIP_BAR_W := 4.0                # px width of the tooltip's left accent bar
+const TOOLTIP_GAP := 16.0                 # px between the ring's popped edge and the tooltip box
+const HALO_EXTENT := 15.0                 # px the glow halo reaches past menu_radius (see _draw)
+const EDGE_PADDING := 8.0                 # px kept clear between the menu and the viewport border
 
 
 # ===== Internal State =====
@@ -79,7 +84,14 @@ class RadialMenuItem:
 func _ready() -> void:
 	# Start hidden
 	visible = false
-	mouse_filter = Control.MOUSE_FILTER_STOP
+	# The scene said PASS while this line said STOP: the menu blocked the board without ever
+	# being exclusive. Resolved in favour of "catch clicks while the menu is open" — the SCRIPT
+	# owns the filter from here on and tracks the open state, so the scene value is irrelevant.
+	# STOP while open: this Control covers the FULL viewport, so it must swallow the click that
+	# picked a segment — otherwise the same click also falls through to the board's picking and
+	# moves/deselects a model behind the menu. IGNORE while closed (and during close()'s fade-out,
+	# where the node is still visible but no longer accepting input) so the board stays clickable.
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# Load the project font (Inter); fall back to the engine default if missing.
 	var loaded := load(INTER_FONT_PATH)
@@ -161,12 +173,25 @@ func _draw() -> void:
 			_draw_tooltip(font, hovered_item.tooltip)
 
 
+## Size of the tooltip box for `tip`. Shared by the drawing below and by the viewport clamp
+## in _clamp_to_viewport, so the two can never disagree about how much room a tooltip needs.
+func _tooltip_box_size(font: Font, tip: String) -> Vector2:
+	var ts := font.get_string_size(tip, HORIZONTAL_ALIGNMENT_LEFT, -1, TOOLTIP_FONT_SIZE)
+	return Vector2(ts.x + TOOLTIP_PAD.x * 2.0 + TOOLTIP_BAR_W + 4.0, ts.y + TOOLTIP_PAD.y * 2.0)
+
+
 func _draw_tooltip(font: Font, tip: String) -> void:
 	var ts := font.get_string_size(tip, HORIZONTAL_ALIGNMENT_LEFT, -1, TOOLTIP_FONT_SIZE)
-	var pad := Vector2(12.0, 7.0)
-	var bar_w := 4.0
-	var box_size := Vector2(ts.x + pad.x * 2.0 + bar_w + 4.0, ts.y + pad.y * 2.0)
-	var box_pos := _center_pos + Vector2(-box_size.x / 2.0, menu_radius + HOVER_POP + 16.0)
+	var box_size := _tooltip_box_size(font, tip)
+	var box_pos := _center_pos + Vector2(-box_size.x / 2.0, menu_radius + HOVER_POP + TOOLTIP_GAP)
+	# The box is centred under the ring but can be far WIDER than the ring (measured: 374-618 px
+	# against a 230 px ring). Reserving that width in _clamp_to_viewport would shove the whole
+	# menu up to ~310 px away from the click for every model in the outer third of the screen —
+	# on the game's most frequent interaction. So only the ring drives the menu's position and
+	# the tooltip slides along the bottom edge on its own: the ring stays under the cursor and
+	# the text stays readable. maxf keeps clampf legal if the box is wider than the viewport.
+	var view_w := get_viewport_rect().size.x
+	box_pos.x = clampf(box_pos.x, EDGE_PADDING, maxf(EDGE_PADDING, view_w - box_size.x - EDGE_PADDING))
 
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(HudTokens.SURFACE.r, HudTokens.SURFACE.g, HudTokens.SURFACE.b, 0.96)
@@ -176,10 +201,10 @@ func _draw_tooltip(font: Font, tip: String) -> void:
 	sb.draw(get_canvas_item(), Rect2(box_pos, box_size))
 
 	# Accent bar.
-	draw_rect(Rect2(box_pos + Vector2(pad.x * 0.4, pad.y), Vector2(bar_w, box_size.y - pad.y * 2.0)), ACCENT_COLOR)
+	draw_rect(Rect2(box_pos + Vector2(TOOLTIP_PAD.x * 0.4, TOOLTIP_PAD.y), Vector2(TOOLTIP_BAR_W, box_size.y - TOOLTIP_PAD.y * 2.0)), ACCENT_COLOR)
 
 	# Text.
-	var text_pos := box_pos + Vector2(pad.x + bar_w + 4.0, box_size.y / 2.0 + ts.y * 0.32)
+	var text_pos := box_pos + Vector2(TOOLTIP_PAD.x + TOOLTIP_BAR_W + 4.0, box_size.y / 2.0 + ts.y * 0.32)
 	draw_string(font, text_pos, tip, HORIZONTAL_ALIGNMENT_LEFT, -1, TOOLTIP_FONT_SIZE, text_color)
 
 
@@ -274,15 +299,60 @@ func _select_index(index: int) -> void:
 	close()
 
 
+## Nudges the menu centre so everything the player has to HIT — glow halo, popped segment and
+## the height of the tooltip below the ring — stays inside the viewport. Opened next to a screen
+## border the menu was previously drawn half off-image, and this is the most frequent interaction
+## of the game (click a unit -> radial menu), so the edge case is not an edge case at all.
+## The tooltip's WIDTH is deliberately not reserved here — it clamps itself in _draw_tooltip, so
+## the ring keeps landing where the player clicked instead of jumping a tooltip-width inward.
+##
+## Why this cannot corrupt the hit zones: _update_hover() measures the cursor RELATIVE to
+## _center_pos, exactly as _draw() places the segments. Shifting the centre therefore moves
+## the drawn segments AND their hit zones by the same vector — the segment under the cursor
+## stays the segment drawn there. Any future hit test must keep measuring from _center_pos
+## (never from the raw position handed to open()) or that guarantee breaks.
+func _clamp_to_viewport(pos: Vector2) -> Vector2:
+	var view_size := get_viewport_rect().size
+	var font: Font = _font if _font else ThemeDB.fallback_font
+
+	# The tooltip sits UNDER the ring and which one is shown depends on the hovered item, which
+	# is still unknown while opening — so reserve the height of the tallest one this menu can
+	# show. Only the height: the width is the tooltip's own problem (see _draw_tooltip).
+	var tip_h := 0.0
+	for item in _items:
+		if item.tooltip.is_empty():
+			continue
+		tip_h = maxf(tip_h, _tooltip_box_size(font, item.tooltip).y)
+
+	var ring := menu_radius + maxf(HALO_EXTENT, HOVER_POP)
+	var pad_x := ring + EDGE_PADDING
+	var pad_top := ring + EDGE_PADDING
+	var pad_bottom := ring + EDGE_PADDING
+	if tip_h > 0.0:
+		pad_bottom = menu_radius + HOVER_POP + TOOLTIP_GAP + tip_h + EDGE_PADDING
+
+	# On a viewport too small for the reserved box the lower and upper bound would cross;
+	# maxf keeps clampf legal and parks the menu at the top/left edge instead of erroring.
+	var out := pos
+	out.x = clampf(out.x, pad_x, maxf(pad_x, view_size.x - pad_x))
+	out.y = clampf(out.y, pad_top, maxf(pad_top, view_size.y - pad_bottom))
+	return out
+
+
 # ===== Public API =====
 
 ## Opens the menu at the specified position with the given items.
 func open(screen_pos: Vector2, items: Array[RadialMenuItem], context: Dictionary = {}) -> void:
 	_items = items
 	_context = context
-	_center_pos = screen_pos
+	# Clamp before ANYTHING reads the centre — _draw(), _update_hover() and pivot_offset below
+	# all measure from _center_pos, which is exactly why the shift is safe (see _clamp_to_viewport).
+	# _items must already be assigned: the clamp measures this menu's widest tooltip.
+	_center_pos = _clamp_to_viewport(screen_pos)
 	_hovered_index = -1
 	_is_open = true
+	# Swallow board clicks for as long as the menu stands (see the filter note in _ready).
+	mouse_filter = Control.MOUSE_FILTER_STOP
 
 	# Animate in
 	visible = true
@@ -308,6 +378,9 @@ func close() -> void:
 		return
 
 	_is_open = false
+	# Hand the board back immediately: the node stays VISIBLE for the fade-out below, and a
+	# full-rect STOP control would eat the player's next click for the length of the animation.
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	if _tween:
 		_tween.kill()
@@ -373,8 +446,38 @@ static func create_model_menu(model: ModelInstance) -> Array[RadialMenuItem]:
 
 
 ## Creates menu items for a full unit selection.
-static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
+## Solo (goal 001 P8): declare an attack on the AI — enters targeting mode (line of sight shown), then
+## the whole exchange resolves with real tray dice, mirroring the AI's own combat flow.
+static func solo_combat_items(game_unit: GameUnit = null) -> Array[RadialMenuItem]:
+	var out: Array[RadialMenuItem] = []
+	out.append(RadialMenuItem.new("solo_shoot", "Shoot", "»", true, "Shoot at an AI unit — pick a target with line of sight"))
+	out.append(RadialMenuItem.new("solo_fight", "Fight", "⚔", true, "Strike an AI unit in melee contact"))
+	# Spell wave F2: a unit that fields a caster (itself or a joined hero) with tokens can cast —
+	# spell picker -> target -> boost -> automatic resolution.
+	if game_unit != null and _caster_member_of(game_unit) != null:
+		out.append(RadialMenuItem.new("solo_cast", "Cast", "✦", true, "Cast a spell — pick it, pick a target, boost, auto-resolved"))
+	return out
+
+
+## The unit member (unit itself or a joined hero) that can pay for a cast right now, or null.
+static func _caster_member_of(game_unit: GameUnit) -> GameUnit:
+	var members: Array = [game_unit]
+	if game_unit.has_method("get_attached_heroes"):
+		members = members + game_unit.get_attached_heroes()
+	for m in members:
+		var mu := m as GameUnit
+		# No casts_current gate (maintainer 2026-07-22): with 0 tokens the entry must still be
+		# DISCOVERABLE — the spell picker then shows every spell disabled with the token count.
+		if mu != null and mu.is_caster() and mu.get_alive_count() > 0:
+			return mu
+	return null
+
+
+static func create_unit_menu(game_unit: GameUnit, solo_combat: bool = false) -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
+
+	if solo_combat:
+		items.append_array(solo_combat_items(game_unit))
 
 	var activate_icon = "-" if game_unit.is_activated else "+"
 	var activate_tooltip = "Mark unit as not activated" if game_unit.is_activated else "Mark unit as activated this round"
@@ -394,6 +497,9 @@ static func create_unit_menu(game_unit: GameUnit) -> Array[RadialMenuItem]:
 	items.append(RadialMenuItem.new("toggle_shaken", "Shaken", shaken_icon, true, shaken_tooltip))
 
 	items.append(RadialMenuItem.new("add_marker", "Token", "T", true, "Add/adjust status & counter tokens for special rules"))
+	# Transport(X) items (Embark/Unload) are APPENDED by the controller for unit AND model menus
+	# alike (_append_transport_items) — a transport is usually a single-model unit and would never
+	# see additions made only here.
 	# NOTE: no "Revive" here by design — dead loose models are revived by RIGHT-CLICKING them on
 	# the army tray (see create_dead_model_menu).
 	items.append(RadialMenuItem.new("delete_unit", "Delete", "X", true, "Remove entire unit from the table"))
@@ -411,6 +517,14 @@ static func create_dead_model_menu(unit_dead_count: int = 1, selection_dead_coun
 		items.append(RadialMenuItem.new("revive_unit_dead", "Revive unit dead (%d)" % unit_dead_count, "U", true, "Revive all of this unit's dead models"))
 	if selection_dead_count > 1:
 		items.append(RadialMenuItem.new("revive_selected", "Revive selected (%d)" % selection_dead_count, "S", true, "Revive all selected dead models"))
+	return items
+
+
+## The only menu an EMBARKED model offers (NML-105, the dead-model mirror): disembark its unit.
+static func create_embarked_model_menu(transport_name: String) -> Array[RadialMenuItem]:
+	var items: Array[RadialMenuItem] = []
+	items.append(RadialMenuItem.new("disembark", "Disembark", "▢", true,
+		"Leave %s (GF v3.5.1 Transport: the unit is placed fully within 6\")" % transport_name))
 	return items
 
 

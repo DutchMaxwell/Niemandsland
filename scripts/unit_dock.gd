@@ -149,21 +149,13 @@ func _strip_target_y(open: bool) -> float:
 	return (vp.y - _strip_h - TAB_H) if open else vp.y
 
 
-## True if a screen point is over one of the dock's interactive surfaces (tab, open strip, presented
-## card). object_manager consults this to reject a world click by ACTUAL position — the cached
-## gui_get_hovered_control() goes stale the instant a card click collapses the strip, which otherwise let
-## the click fall through to the table and open a box-select rubber-band (maintainer bug).
-func occludes_point(gpos: Vector2) -> bool:
-	if _tab != null and _tab.visible and _tab.get_global_rect().has_point(gpos):
-		return true
-	# Actual rect, NOT gated on _dock_open: while the strip tweens closed it is still on screen and must
-	# keep blocking table clicks — the second click of a double-click otherwise landed on the table and
-	# deselected the unit (the "card vanishes" gamble). Closed = fully offscreen = never contains a point.
-	if _strip_panel != null and _strip_panel.get_global_rect().has_point(gpos):
-		return true
-	if _presented != null and _presented.visible and _presented.get_global_rect().has_point(gpos):
-		return true
-	return false
+## NOTE: occludes_point() lived here and was consulted by object_manager to reject a world click by its
+## ACTUAL position, because the gui_get_hovered_control() cache went stale the instant a card click
+## collapsed the strip. Both are gone. World picking now runs in _unhandled_input, so the engine
+## consumes a click over the dock before object_manager is ever dispatched. That works only because
+## this dock obeys the ownership invariant (see test/card_ui_occlusion_test.gd): the root and _strip
+## are IGNORE holders, while _tab, _strip_panel and each CardVisual are STOP surfaces that own their
+## clicks — including while the strip tweens closed, since it is then still on screen and still STOP.
 
 
 ## Read-only state/geometry accessors (tutorial coach-mark targeting; no behaviour).
