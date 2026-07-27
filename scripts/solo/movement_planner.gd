@@ -786,6 +786,66 @@ static func _reconstruct(came_from: Dictionary, current: Vector2i) -> Array:
 
 # === Unified pipeline entry (opts["radii"] path) ============================================
 
+## NML-230 Breach B (GF v3.5.1 p.11: a model that moves in or through difficult terrain may not move
+## more than 6" total): enforce the cap PER GENERATED POLYLINE, at the single seam every real-game plan
+## variant flows through. The controller's unit-wide pre-plan reach clamp only ever judges the pass-1
+## trails — the gate-collapse ladder, the boxed/sidestep replans and the solver's projections could hand
+## a full-band route through a forest to execution (probe games: 8.68"/13.99" walked where 6" is legal).
+## PER MODEL by design: only a model whose OWN route enters difficult is trimmed — the rest keep the
+## full band, and journey FEASIBILITY is never re-priced (trip-band lesson: planner optimism untouched,
+## the clamp acts on the executed polyline only). The endpoint follows the cut so positions and trails
+## stay one truth; the caller's placement gate settles any coherency debt exactly as it does after its
+## own distance-truth trim. Opt-in via opts["difficult_cap_in"] (the controller omits the key for
+## Strider/Flying); SoloSim passes no opts, so the mirror-fairness path stays byte-identical.
+static func _cap_difficult_polylines(trails: Array, solved: Array, radii: Array, grid: Dictionary,
+		cap_in: float) -> void:
+	if cap_in <= 0.0 or grid.is_empty() or trails == null:
+		return
+	for i in range(mini(trails.size(), solved.size())):
+		var leg := trails[i] as Array
+		if polyline_length(leg) <= cap_in + EPS:
+			continue
+		var r_in: float = float(radii[i]) if i < radii.size() else 0.0
+		if not trail_crosses_difficult_cells(leg, grid, r_in):
+			continue
+		var cut := trim_polyline(leg, cap_in)
+		if cut.is_empty():
+			continue
+		trails[i] = cut
+		solved[i] = cut.back()
+
+
+## True when a planned polyline ENTERS difficult terrain (3" typed cells, planner inch frame) —
+## EDGE-AWARE: the base edge (radius_in) grazing a difficult cell counts, mirroring the controller's
+## _trails_cross_difficult trigger (Testspiel-Welle 3 edge-graze finding). Pure; feeds the p.11
+## per-polyline cap and its tests.
+static func trail_crosses_difficult_cells(leg: Array, grid: Dictionary, radius_in: float = 0.0) -> bool:
+	if grid.is_empty():
+		return false
+	for i in range(1, leg.size()):
+		var a := leg[i - 1] as Vector2
+		var b := leg[i] as Vector2
+		var steps := maxi(1, int(ceil(a.distance_to(b) / (TerrainRules.CELL_IN * 0.5))))
+		for s in range(steps + 1):
+			if _difficult_at_point(a.lerp(b, float(s) / float(steps)), grid, radius_in):
+				return true
+	return false
+
+
+## Difficult-cell containment at a point, base-edge-aware via 8 compass samples at the base radius
+## (the quantised-grid form of TerrainRules.base_in_terrain).
+static func _difficult_at_point(p: Vector2, grid: Dictionary, radius_in: float) -> bool:
+	if TerrainRules.is_difficult(TerrainRules.terrain_at(grid, p)):
+		return true
+	if radius_in <= EPS:
+		return false
+	for k in range(8):
+		var ang := TAU * float(k) / 8.0
+		if TerrainRules.is_difficult(TerrainRules.terrain_at(grid, p + Vector2(cos(ang), sin(ang)) * radius_in)):
+			return true
+	return false
+
+
 ## Plan one unit move on the REAL-GAME path. PRIMARY placement is the SEQUENTIAL PER-MODEL FLOW (field-test
 ## round 6, finding 7): the models file to their slots one at a time in nearest-to-destination order, each
 ## planning its own taut configuration-space Theta*/funnel route while treating the other models as body
@@ -808,6 +868,9 @@ static func _plan_unit_step_unified(model_pos: Array, delta: Vector2, walls: Arr
 	# a fully-legal flow is returned unchanged — best_score == 0 short-circuits).
 	var solved := solve_formation(flowed, radii, walls, opts, board_in, allow_contact)
 	_append_trail_finals(trails, solved)
+	# NML-230 Breach B: the p.11 per-polyline difficult cap runs LAST, on the final trails + endpoints,
+	# so replanned/solver-adjusted routes that newly cross difficult can never keep the full band.
+	_cap_difficult_polylines(trails, solved, radii, grid, float(opts.get("difficult_cap_in", 0.0)))
 	return solved
 
 

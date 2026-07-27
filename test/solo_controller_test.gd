@@ -1830,3 +1830,37 @@ func test_ambush_arrival_ring_is_model_edge_true() -> void:
 				- SoloController.model_base_radius_m(ai_m) - SoloController.model_base_radius_m(e_m)
 			min_edge = minf(min_edge, gap)
 	assert_bool(min_edge >= 9.0 * 0.0254 - 0.005).is_true()   # >9" edge to edge (small numeric slack)
+
+
+# === NML-230 Breach A: the placement gate's de-overlap nudge may not stretch a trail past the band ===
+
+## A single model walks EXACTLY its 6" band north; another unit's base straddles the endpoint from
+## BEHIND, so the gate's overlap push shoves the mover FORWARD — beyond its band. The retraced trail
+## (route + appended gate displacement, _retrace_to) must still fit the band (+ the packed-contact
+## epsilon): the physical un-stack is never a free distance bonus (GF v3.5.1 p.7 distance truth).
+## Without the slack cap the push is the full overlap depth (~0.47" here; probe games: band+2.0").
+func test_gate_nudge_never_stretches_a_trail_past_the_band() -> void:
+	var m := 0.0254
+	var human := _unit(1, [Vector3(2.0, 0, 2.0)])   # far away — irrelevant to the gate geometry
+	var ai := _unit(2, [Vector3.ZERO])
+	var blocker := _unit(2, [Vector3(0, 0, 6.0 * m - 0.02)])   # 0.02 m gap < 0.032 m radii sum → overlap
+	blocker.unit_id = "blocker"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, ai.unit_id: ai, blocker.unit_id: blocker}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var models: Array = ai.get_alive_models()
+	var start := Vector3.ZERO
+	var planned := Vector3(0, 0, 6.0 * m)   # a full-band 6" route — zero slack left
+	var route: Array = [start, planned]
+	# The exact production wiring: budgets from the walked trail, then the gate, then the retrace.
+	var caps: Array = solo._gate_disp_caps_m([route], [SoloController.model_base_radius_m(models[0] as ModelInstance)], 6.0, false)
+	var gated: Array = solo._finalize_placement(ai, models, [start], [planned], false, null, caps)
+	var trail: Array = solo._retrace_to(route, start, gated[0] as Vector3)
+	assert_float(MovementPlanner.polyline_length(trail) / m).is_less_equal(6.0 + 0.1)
+	# The clamp actually engaged (feeds the one-line battle log) — the overlap was NOT silently kept
+	# resolvable for free: the mover stayed within its slack circle around the planned endpoint.
+	assert_bool(solo._gate_clamped_models.size() > 0).is_true()
+	assert_float(SoloController._xz_dist_m(gated[0] as Vector3, planned) / m).is_less_equal(SoloController.GATE_SLACK_EPS_IN + 0.02)

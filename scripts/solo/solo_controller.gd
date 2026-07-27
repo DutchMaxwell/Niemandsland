@@ -115,6 +115,11 @@ const TERRAIN_OUT_STEP_M := 0.01      # radial search granularity when projectin
 const TERRAIN_OUT_MAX_M := 0.20       # max radial reach of the impassable-out projection (~8")
 const TERRAIN_OUT_DIRS := 16          # compass directions sampled for the impassable-out projection
 const OVERLAP_EPS_M := 0.0005         # sub-0.5 mm world moves are noise (matches the animation snap tolerance)
+## NML-230 Breach A: free epsilon (inches) on top of a model's band slack for the gate's physical
+## corrections — packed formations sit at edge ≈ 0 by design, so a full-band mover ALWAYS needs a
+## mm-scale un-stack nudge; a strict slack=0 cap would route every packed full-band move into the
+## shorten/ladder (the trip-band freeze). Mirrors MovementPlanner.CONTACT_SLIDE_EPS_IN.
+const GATE_SLACK_EPS_IN := 0.05
 
 var army_manager: OPRArmyManager = null
 var network_manager: Node = null
@@ -146,6 +151,9 @@ var last_flow_order: Array = []
 ## entered difficult terrain) — the denominator of the corridor's distance label.
 var last_move_budget_in: float = 0.0
 var last_dangerous_dice: int = 0   # Bug 23: Tough-weighted dice for the move's dangerous tests (p.12)
+## NML-230: model indices whose gate correction was clamped to the band slack during the LAST
+## _finalize_placement call — the accepted gate call's count feeds the one-line battle log.
+var _gate_clamped_models: Dictionary = {}
 ## Limited weapons already fired this game (wave 5, core v3.5.1: "may only be used once per game").
 ## Key: "<unit_id>::<weapon name>" (limited_key). Tracked for EVERY unit — AI and human — since both
 ## resolve through the shared profile paths; lives with the controller (one game = one controller).
@@ -2867,9 +2875,15 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# Skipped for a REGIMENT: its rigid tray slide preserves coherency + internal spacing by construction, and
 	# the per-model overlap push would break the block (regiments plan as a rigid body, not individual models).
 	var gate_shortened := false
+	var band_clamp_models := 0
 	if not _is_regiment(unit):
 		var planned_m := _achieved_m(positions, new_positions)   # pre-gate displacement, post-trim
-		new_positions = _finalize_placement(unit, models, positions, new_positions, allow_contact, charge_target)
+		# NML-230 Breach A: hand the gate per-model displacement budgets (band slack after the walked
+		# route) so its physical un-stack can never stretch a retraced trail past the band. A charge
+		# keeps the unbounded contact push (the snap owns the endpoint, pushing back off the target).
+		var gate_caps: Array = [] if allow_contact else _gate_disp_caps_m(trails, trail_radii_m, reach, ignores_difficult)
+		new_positions = _finalize_placement(unit, models, positions, new_positions, allow_contact, charge_target, gate_caps)
+		band_clamp_models = _gate_clamped_models.size()
 		# GATE-COLLAPSE LADDER (round 7, finding 2 — "a constraint gate truncates the whole move"): the gate
 		# legalizes by shortening the WHOLE move toward its start, so a full-length plan with no nearby legal
 		# end state can collapse to ~zero even though the route itself was fine (self-play: arc_in 6.0,
@@ -2902,7 +2916,8 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 						if not cut3.is_empty():
 							var fin3 := cut3.back() as Vector3
 							p3[i] = Vector3(fin3.x, (p3[i] as Vector3).y, fin3.z)
-				p3 = _finalize_placement(unit, models, positions, p3, allow_contact, charge_target)
+				p3 = _finalize_placement(unit, models, positions, p3, allow_contact, charge_target,
+					_gate_disp_caps_m(t3, trail_radii_m, r3, ignores_difficult))
 				var a3 := _achieved_m(positions, p3)
 				var c3 := _config_coherent_world(models, p3, chain_in)
 				# Lexicographic: coherent beats torn at ANY displacement; within a class more distance wins.
@@ -2913,6 +2928,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 					best_reach = r3
 					best_coherent = c3
 					gate_shortened = true
+					band_clamp_models = _gate_clamped_models.size()   # the accepted gate call's count
 				if a3 >= b3 * 0.75 and c3:
 					break   # a committed, COHERENT shorter move — good enough, stop retrying
 			# Torn at every reach FROM A COHERENT START → the unit HOLDS: movement never CREATES a tear
@@ -2982,7 +2998,8 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 							if not cut4.is_empty():
 								var fin4 := cut4.back() as Vector3
 								p4[i] = Vector3(fin4.x, (p4[i] as Vector3).y, fin4.z)
-					p4 = _finalize_placement(unit, models, positions, p4, allow_contact, charge_target)
+					p4 = _finalize_placement(unit, models, positions, p4, allow_contact, charge_target,
+						_gate_disp_caps_m(t4, trail_radii_m, reach, ignores_difficult))
 					var a4 := _achieved_m(positions, p4)
 					var c4 := _config_coherent_world(models, p4, chain_in)
 					# Lexicographic: a coherent sidestep beats a torn one at any distance; within a
@@ -2993,6 +3010,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 						best_ach2 = a4
 						best_coh2 = c4
 						boxed_repositioned = true
+						band_clamp_models = _gate_clamped_models.size()   # the accepted gate call's count
 					# Early-out for small bases (bounded horde runtime): the first COHERENT angle that
 					# clears the jam is enough — the unit is unstuck, the next activation has room.
 					if not is_big_base and best_coh2 and best_ach2 >= BOXED_ACHIEVED_IN * INCHES_TO_METERS:
@@ -3080,6 +3098,14 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	for k in _move_extra:
 		move_data[k] = _move_extra[k]
 	_move_extra = {}
+	if band_clamp_models > 0:
+		# NML-230 (rules-must-log): the placement gate's physical correction hit the band-slack cap
+		# this move — ONE line, only when the clamp actually bit; residual overlap/coherency debt (if
+		# any) was settled through the shorten/ladder, never as free distance.
+		record_decision({"kind": "move", "unit": unit.get_name(),
+			"rule": "GF v3.5.1 p.7 distance truth: placement-gate nudge clamped to band slack (NML-230)",
+			"candidates": [], "chosen": "", "why": "band clamp",
+			"data": {"models": band_clamp_models, "budget_in": reach}})
 	record_decision({"kind": "move", "unit": unit.get_name(),
 		"rule": "GF v3.5.1 p.7 move bands; p.11 difficult 6\" cap; p.57 move around difficult",
 		"candidates": [], "chosen": "", "why": why,
@@ -3625,6 +3651,12 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 		radii_in.append(model_base_radius_m(m as ModelInstance) / INCHES_TO_METERS)
 	opts["radii"] = radii_in
 	opts["forbid_cells"] = _forbid_cells_in(mpos, mdelta, board_in, off, own_r_m)
+	# NML-230 Breach B: hand the planner the p.11 cap so EVERY generated polyline that enters difficult
+	# terrain is trimmed to 6" at the source — the gate-collapse-ladder and boxed/sidestep replans (and
+	# the solver's projections) bypass the unit-wide pre-plan reach clamp in _execute_move, which only
+	# ever re-checks the pass-1 trails. Strider/Flying ignore difficult (p.13/p.14) and stay uncapped.
+	if not (unit.has_special_rule("Flying") or unit.has_special_rule("Strider")):
+		opts["difficult_cap_in"] = DIFFICULT_MOVE_CAP_IN
 	# CHARGE arc budget (field-test finding 3, charge-reach fix): a charge whose nearest models must DETOUR
 	# around obstacles or a LARGE enemy base needs more ARC than the straight-line gap; the delta (aimed at
 	# contact) is short, so we hand the planner the FULL charge band as the per-model arc allowance. The
@@ -3715,24 +3747,76 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 # shorten but STILL resolves overlap to CONTACT (edge ≥ 0): it touches, never moves through (p.7/p.8).
 # The sim never calls this (it plans through MovementPlanner directly), so the fairness oracle is untouched.
 
+## XZ distance (metres) between two world points — the gate's displacement measure (Y is height).
+static func _xz_dist_m(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.z - b.z).length()
+
+
+## NML-230 Breach A: per-model gate-displacement budgets (metres) for _finalize_placement — how far the
+## gate's physical corrections may still displace each model beyond its planned endpoint before the
+## RETRACED trail (which appends the correction — _retrace_to) would exceed the model's legal band.
+## Budget = the granted reach, difficult-capped for a model whose OWN route entered difficult terrain
+## (p.11 — the compound class: 6"-capped route + multi-inch gate pull); slack = budget − walked arc +
+## the packed-contact epsilon (full-band movers in a deploy-packed line always need a mm-scale
+## un-stack — the trip-band lesson: never route every packed advance into the shorten/ladder).
+func _gate_disp_caps_m(trails: Array, trail_radii_m: Array, reach_in: float, ignores_difficult: bool) -> Array:
+	var caps: Array = []
+	for i in range(trails.size()):
+		var leg := trails[i] as Array
+		var budget_in := reach_in
+		if not ignores_difficult \
+				and _trails_cross_difficult([leg], [float(trail_radii_m[i]) if i < trail_radii_m.size() else 0.0]):
+			budget_in = minf(budget_in, DIFFICULT_MOVE_CAP_IN)
+		var walked_in: float = MovementPlanner.polyline_length(leg) / INCHES_TO_METERS
+		caps.append((maxf(0.0, budget_in - walked_in) + GATE_SLACK_EPS_IN) * INCHES_TO_METERS)
+	return caps
+
+
+## Truncate one gate correction to the model's band-slack circle around its planned endpoint (XZ, Y
+## kept). Marks the model in _gate_clamped_models when the truncation actually bit (the accepted gate
+## call's count feeds the one-line battle log — rules-must-log doctrine).
+func _cap_gate_disp(cand: Vector3, planned: Vector3, cap_m: float, idx: int) -> Vector3:
+	var off := Vector2(cand.x - planned.x, cand.z - planned.z)
+	if off.length() <= cap_m:
+		return cand
+	_gate_clamped_models[idx] = true
+	var lim := off.normalized() * cap_m
+	return Vector3(planned.x + lim.x, cand.y, planned.z + lim.y)
+
+
 ## Resolve the placement invariants for one loose move. `start_world` = the coherent, overlap-free pre-move
 ## positions (a legal fallback the coherency-shorten can always retreat to); `planned_world` = the solver's
 ## output. Returns NEW world positions. Reads live obstacle node positions; mutates nothing on the scene.
 func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, planned_world: Array,
-		allow_contact: bool, _charge_target: GameUnit) -> Array:
+		allow_contact: bool, _charge_target: GameUnit, disp_caps_m: Array = []) -> Array:
 	var cfg: Array = planned_world.duplicate()
 	var n := models.size()
+	_gate_clamped_models = {}
 	if n == 0:
 		return cfg
 	var gate_flying := unit.has_special_rule("Flying")   # Bug 20: wall clamp must not revert legal fly-overs
 	var obstacles := _external_obstacle_shapes(unit)
+	# NML-230 Breach A: the gate's physical corrections (terrain projection + overlap push + straggler
+	# pull) share ONE per-model displacement budget — the band slack the walked route left over
+	# (disp_caps_m, metres, from _gate_disp_caps_m) — because _retrace_to appends the total
+	# planned→final displacement to the walked trail (probe games: models at band+2.0" exactly).
+	# A charge passes none (its contact push owns the endpoint and pushes back off the target); the
+	# regroup legaliser passes none (regroup is un-banded gathering, its own action).
+	var caps: Array = disp_caps_m if (not allow_contact and disp_caps_m.size() == n) else []
 	# (terrain) Project every model out of forbidden terrain (impassable CONTAINER/RUINS + DANGEROUS — a model
 	# should not REST in either). A charge keeps its CONTACT models untouched (base contact owns their
 	# spot), but every NON-contact model still may not rest inside a container (container wave: a charge
 	# next to a box parked bases edge-in — "may never move through", and resting inside is worse).
 	if not allow_contact:
 		for i in range(n):
-			cfg[i] = _project_out_forbidden_world(cfg[i], model_base_radius_m(models[i] as ModelInstance))
+			var proj := _project_out_forbidden_world(cfg[i], model_base_radius_m(models[i] as ModelInstance))
+			if not caps.is_empty() and _xz_dist_m(proj, planned_world[i] as Vector3) > float(caps[i]):
+				# Projection beyond the band slack: keep the route-true spot (a PARTIAL projection would
+				# still rest in forbidden ground) — the predicates below hand the debt to the
+				# shorten/ladder at a shorter reach (the wall-clamp discipline: route truth wins).
+				_gate_clamped_models[i] = true
+			else:
+				cfg[i] = proj
 	elif _charge_target != null:
 		var eps_m: float = SeparationChecker.BASE_CONTACT_EPSILON_INCHES * INCHES_TO_METERS
 		for i in range(n):
@@ -3751,7 +3835,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 				cfg[i] = _project_out_forbidden_world(cfg[i], model_base_radius_m(mi))
 	# (overlap) Push every base off every other base — own unit, other units, enemies (SeparationResolver,
 	# escape-scan-guaranteed to edge ≥ 0). On a charge this pushes exactly to CONTACT with the target, never through.
-	_resolve_overlaps_world(models, cfg, obstacles)
+	_resolve_overlaps_world(models, cfg, obstacles, planned_world if not caps.is_empty() else [], caps)
 	if allow_contact or n == 1:
 		if allow_contact and n > 1:
 			# CHARGE COHERENCY (GF v3.5.1 p.9, wording verified: "…whilst still maintaining unit
@@ -3780,7 +3864,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	# arrives coherent, so this rarely fires; when it does it is a nudge, not a retreat. Fall back to the
 	# whole-unit shorten only if the minimal repair can't restore a legal config (guarantees coherency: t=0 is
 	# the coherent start).
-	_pull_stragglers_coherent_world(models, cfg, obstacles, max_chain)
+	_pull_stragglers_coherent_world(models, cfg, obstacles, max_chain, planned_world if not caps.is_empty() else [], caps)
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
 			and _config_terrain_clear(models, cfg):
 		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, obstacles)
@@ -3882,10 +3966,15 @@ const COH_REPAIR_PASSES := 12   # bounded per-model coherency-repair sweeps (fin
 ## over-spreads. Every nudge is table-clamped and projected out of forbidden terrain; a final overlap pass
 ## clears any residual stack. A MINIMAL correction — the models that advanced correctly keep their full move
 ## (unlike the whole-unit shorten). Mutates `cfg`; returns true when it ends coherent.
-func _pull_stragglers_coherent_world(models: Array, cfg: Array, obstacles: Array, max_chain: float) -> bool:
+func _pull_stragglers_coherent_world(models: Array, cfg: Array, obstacles: Array, max_chain: float,
+		planned_world: Array = [], disp_caps_m: Array = []) -> bool:
 	var n := models.size()
 	if n <= 1:
 		return true
+	# NML-230 Breach A: a pull is a gate correction too — it may not displace a model past its band
+	# slack (up to 12 × 1" cumulative in pathological configs; the retrace appends the displacement).
+	# A true straggler lags its route and so carries LARGE slack — the cap rarely bites here.
+	var capped: bool = planned_world.size() == n and disp_caps_m.size() == n
 	var link_step: float = CoherencyChecker.COHERENCY_DISTANCE_INCHES * INCHES_TO_METERS
 	for _pass in range(COH_REPAIR_PASSES):
 		if _config_coherent_world(models, cfg, max_chain):
@@ -3922,7 +4011,12 @@ func _pull_stragglers_coherent_world(models: Array, cfg: Array, obstacles: Array
 				continue
 			var cand := _clamp_to_bounds(Vector3((cfg[i] as Vector3).x + to_n.x / dist * close,
 				(cfg[i] as Vector3).y, (cfg[i] as Vector3).z + to_n.y / dist * close))
-			cfg[i] = _project_out_forbidden_world(cand, model_base_radius_m(models[i] as ModelInstance))
+			cand = _project_out_forbidden_world(cand, model_base_radius_m(models[i] as ModelInstance))
+			if capped:
+				cand = _cap_gate_disp(cand, planned_world[i] as Vector3, float(disp_caps_m[i]), i)
+				if _xz_dist_m(cand, cfg[i] as Vector3) <= OVERLAP_EPS_M:
+					continue   # the band leaves no room to pull this model — the shorten/ladder settles it
+			cfg[i] = cand
 			moved = true
 		# (b) Over-spread: pull the model furthest from the centroid inward.
 		if _config_overspread_world(shapes, max_chain):
@@ -3936,12 +4030,16 @@ func _pull_stragglers_coherent_world(models: Array, cfg: Array, obstacles: Array
 					var stepc: float = minf(link_step, dc)
 					var cand := _clamp_to_bounds(Vector3((cfg[far] as Vector3).x + to_c.x / dc * stepc,
 						(cfg[far] as Vector3).y, (cfg[far] as Vector3).z + to_c.y / dc * stepc))
-					cfg[far] = _project_out_forbidden_world(cand, model_base_radius_m(models[far] as ModelInstance))
-					moved = true
+					cand = _project_out_forbidden_world(cand, model_base_radius_m(models[far] as ModelInstance))
+					if capped:
+						cand = _cap_gate_disp(cand, planned_world[far] as Vector3, float(disp_caps_m[far]), far)
+					if not capped or _xz_dist_m(cand, cfg[far] as Vector3) > OVERLAP_EPS_M:
+						cfg[far] = cand
+						moved = true
 		if not moved:
 			break
 	# Clear any residual overlap the inward pulls introduced, then report the final coherency.
-	_resolve_overlaps_world(models, cfg, obstacles)
+	_resolve_overlaps_world(models, cfg, obstacles, planned_world if capped else [], disp_caps_m if capped else [])
 	return _config_coherent_world(models, cfg, max_chain)
 
 
@@ -4021,25 +4119,56 @@ func _moving_shapes_at(models: Array, cfg: Array) -> Array:
 ## ported SeparationResolver.resolve_overlaps applied per model (Gauss-Seidel: each model treated as the
 ## item, all OTHER bases as obstacles), a few passes so mutual pushes converge. Writes the cleared centres
 ## back into `cfg`. resolve_overlaps' escape-scan guarantees a finite obstacle set is always cleared.
-func _resolve_overlaps_world(models: Array, cfg: Array, external_obstacles: Array) -> void:
+func _resolve_overlaps_world(models: Array, cfg: Array, external_obstacles: Array,
+		planned_world: Array = [], disp_caps_m: Array = []) -> void:
 	var n := models.size()
 	if n == 0:
 		return
 	var shapes := _moving_shapes_at(models, cfg)
+	# NML-230 Breach A: with band budgets the push is SLACK-AWARE — models with remaining slack resolve
+	# first (the un-stack lands on a party that can still legally move), a model at its cap is frozen
+	# (it stays in every neighbour's obstacle set, so the crowd walks around it), and each push is
+	# truncated to the cap circle around the planned endpoint so the retraced trail stays within the
+	# band (p.7 distance truth). Residual overlap between two capped models is deliberately LEFT: the
+	# gate predicates fail and the shorten/ladder settles it at a shorter reach (the wall clamp's
+	# residual-debt discipline) — the physical nudge is never a free distance bonus.
+	var capped: bool = planned_world.size() == n and disp_caps_m.size() == n
 	for _pass in range(OVERLAP_GATE_PASSES):
 		var moved := false
-		for i in range(n):
+		var order: Array = range(n)
+		if capped:
+			var rem: Array = []
+			for i in range(n):
+				rem.append(float(disp_caps_m[i]) - (shapes[i] as SeparationChecker.BaseShape).center.distance_to(
+					Vector2((planned_world[i] as Vector3).x, (planned_world[i] as Vector3).z)))
+			order.sort_custom(func(a: int, b: int) -> bool:
+				if absf(float(rem[a]) - float(rem[b])) > OVERLAP_EPS_M:
+					return float(rem[a]) > float(rem[b])
+				return a < b)
+		for i in order:
+			var sh := shapes[i] as SeparationChecker.BaseShape
+			if capped:
+				var pl := Vector2((planned_world[i] as Vector3).x, (planned_world[i] as Vector3).z)
+				if float(disp_caps_m[i]) - sh.center.distance_to(pl) <= OVERLAP_EPS_M:
+					continue   # band-frozen: stays put; the pass resolves its neighbours around it
 			var obstacles: Array = external_obstacles.duplicate()
 			for j in range(n):
 				if j != i:
 					obstacles.append(shapes[j])
-			var delta := SeparationResolver.resolve_overlaps([shapes[i]], obstacles)
+			var delta := SeparationResolver.resolve_overlaps([sh], obstacles)
 			if delta.length_squared() > 0.0:
 				moved = true
+				if capped:
+					var pl2 := Vector2((planned_world[i] as Vector3).x, (planned_world[i] as Vector3).z)
+					var off: Vector2 = sh.center - pl2
+					if off.length() > float(disp_caps_m[i]):
+						sh.center = pl2 + off.normalized() * float(disp_caps_m[i])
+						_gate_clamped_models[i] = true
 		if not moved:
 			break
 	for i in range(n):
-		cfg[i] = Vector3(shapes[i].center.x, (cfg[i] as Vector3).y, shapes[i].center.y)
+		cfg[i] = Vector3((shapes[i] as SeparationChecker.BaseShape).center.x, (cfg[i] as Vector3).y,
+			(shapes[i] as SeparationChecker.BaseShape).center.y)
 
 
 ## True when a model's BASE (radius `radius_m`) OVERLAPS forbidden-to-rest terrain it must not END on:

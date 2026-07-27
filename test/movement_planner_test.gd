@@ -776,3 +776,42 @@ func test_container_edges_block_crossing_but_allow_tight_hug() -> void:
 	assert_bool(MovementPlanner.step_blocked(Vector2(24.0, 15), Vector2(24.0, 25), walls, opts)).is_false()
 	# Streifen INNERHALB der Clearance (0.3" neben der Kante): blockiert.
 	assert_bool(MovementPlanner.step_blocked(Vector2(23.3, 15), Vector2(23.3, 25), walls, opts)).is_true()
+
+
+# === NML-230 Breach B: every generated polyline through difficult terrain caps at 6" (p.11) ===
+
+func test_unified_polyline_through_difficult_is_capped_at_six_inches() -> void:
+	# A forest band spans the WHOLE board width across the route (y in [3,21)) — crossing is
+	# unavoidable. The difficult cells are deliberately NOT in avoid_cells (the controller's
+	# through-replan configuration): the 6" budget used to exist only as the controller's pre-plan
+	# unit-wide reach clamp, so a 12" rush replanned by the ladder/sidestep walked 12"+ through
+	# difficult (probe_g3: 13.99"). The planner itself must trim every crossing polyline to the cap,
+	# and the returned endpoint must follow the cut (one truth for the coherency gate).
+	var grid := {}
+	for cx in range(0, 16):
+		for cy in range(1, 7):
+			grid[Vector2i(cx, cy)] = TerrainRules.TerrainType.FOREST
+	var pos: Array = [Vector2(22, 2), Vector2(23.5, 2)]
+	var opts := {"radii": [0.5, 0.5], "clearance": 0.5, "difficult_cap_in": 6.0}
+	var trails: Array = []
+	var out := MovementPlanner.plan_unit_step(pos, Vector2(0, 12), [], grid, false, 48.0, trails, opts)
+	assert_int(trails.size()).is_equal(2)
+	for i in range(trails.size()):
+		var leg := trails[i] as Array
+		assert_bool(MovementPlanner.trail_crosses_difficult_cells(leg, grid, 0.5)).is_true()
+		assert_float(MovementPlanner.polyline_length(leg)).is_less_equal(6.0 + 0.05)
+		assert_float((out[i] as Vector2).distance_to(leg.back() as Vector2)).is_less(0.01)
+
+
+func test_unified_polyline_clear_of_difficult_keeps_the_full_band() -> void:
+	# Planner-optimism guard (trip-band lesson): a unit whose route never touches the forest keeps its
+	# full 12" — the cap is per MODEL POLYLINE, never a unit-wide or feasibility-level pessimism.
+	var grid := {}
+	for cx in range(0, 4):        # forest far to the WEST (x in [0,12)); route runs at x≈40
+		for cy in range(1, 7):
+			grid[Vector2i(cx, cy)] = TerrainRules.TerrainType.FOREST
+	var opts := {"radii": [0.5], "clearance": 0.5, "difficult_cap_in": 6.0}
+	var trails: Array = []
+	var out := MovementPlanner.plan_unit_step([Vector2(40, 2)], Vector2(0, 12), [], grid, false, 48.0, trails, opts)
+	assert_float((out[0] as Vector2).distance_to(Vector2(40, 14))).is_less(0.5)
+	assert_float(MovementPlanner.polyline_length(trails[0] as Array)).is_greater(11.0)
