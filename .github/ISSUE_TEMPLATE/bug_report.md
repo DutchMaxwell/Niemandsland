@@ -17,8 +17,8 @@ What you expected to happen instead.
 
 **Environment**
 - OS: (Windows / macOS / Linux)
-- Version: (e.g. `v0.3.7.2-alpha`)
-- Mode: (single / multiplayer host / multiplayer join)
+- Version: (e.g. `v0.3.10.0-alpha`)
+- Mode: (sandbox / solo vs AI / multiplayer host / multiplayer join)
 
 **Logs / screenshots**
 Attach the Godot log or a screenshot if you can.

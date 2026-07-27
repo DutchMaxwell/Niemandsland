@@ -80,6 +80,17 @@ Reports are written to `reports/` (git-ignored).
 > plainly exists, or silently run the old method count. The `--headless --editor --quit`
 > import above regenerates the cache — run it, then the suite.
 
+> **The end-to-end layer (`test/e2e/`).** Most suites are unit level — no suite loads
+> `scripts/main.gd`, so defects that live in `main.gd`'s own flow (a walk-around of the
+> deployment gate, menu clicks falling through to the battlefield, a truncated log export,
+> an AI path label positioned before it entered the tree) passed the whole suite and reached
+> the maintainer. The `test/e2e/*_test.gd` suites boot the **real** `scenes/main.tscn`, let its
+> real `_ready()` run and drive the real functions, so that class of defect fails in CI instead.
+> They are collected by the same `-a res://test` run — no separate command. `e2e_boot.gd` is the
+> shared harness (not a `*_test.gd`, so gdUnit does not collect it as a suite). When you add a new
+> e2e test, **prove it can go red** (make it fail against the un-fixed behaviour first), so a
+> green run actually means something.
+
 **Python** — the relay's tests (the offline asset pipeline lives in a separate private repo and has no tests here):
 
 ```bash

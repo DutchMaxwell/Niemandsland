@@ -265,15 +265,17 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 
 ## Tests
 
-gdUnit4: **1,687 tests green** in `test/` (incl. `coherency_checker`, `save_manager`,
-`startup_menu`, `internet_lobby`, `relay_multiplayer_peer`, `network_manager` /
+gdUnit4: **1,709 tests green** across **160 suites** in `test/` (incl. `coherency_checker`,
+`save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`, `network_manager` /
 `network_version_handshake`, `dice_rules`, `player_identity`, the movement/spacing
 suites `separation_checker` / `separation_resolver` / `separation_zone`, `move_ledger` /
 `move_trails`, `game_phase`, `object_manager`, the guided-tutorial flow, and the solo
 suites — `solo_controller`, `turn_manager`, `movement_planner`, `ai_decision` /
 `ai_targeting` / `ai_position` / `ai_round_planner` / `ai_combat_math` / `ai_spell`,
 `rules_registry`, `spells_registry`, `terrain_rules`, `sight_fan`, `transport_state` /
-`transport_embark`, `autosave_controller`). Python: `relay/test_relay_server.py`
+`transport_embark`, `autosave_controller`). A small **end-to-end layer** (`test/e2e/`)
+boots the real `scenes/main.tscn` and drives the real menu / deployment-gate / click-ownership
+/ battle-log-export / AI-path-label flows that unit tests skip. Python: `relay/test_relay_server.py`
 (67 green). How to run: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). Coverage of the
 solo / movement / MP / tutorial paths is solid; some older gameplay scripts are still
 untested.
