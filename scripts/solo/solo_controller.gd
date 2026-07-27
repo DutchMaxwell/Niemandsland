@@ -27,7 +27,6 @@ const CHARGE_CONTACT_MARGIN_IN := 0.25
 ## edge — a move ending at 24.000…1" of a 24" gun lost its shot to float noise (AI plausibility wave 1).
 ## A measuring margin in the CHARGE_CONTACT_MARGIN_IN spirit, not a rule value.
 const KITE_RANGE_MARGIN_IN := 0.25
-const KITE_MIN_STEP_IN := 1.0           # NML-224: kite steps under an inch are jitter, not tactics
 const IN_THE_WAY_IN := 6.0          # OPR: an enemy within 6" of the unit→objective line is "in the way" (p.58)
 const NO_OBJECTIVE := Vector3(INF, INF, INF)   # _nearest_uncontrolled_objective sentinel: no uncontrolled objective
 ## Difficult-terrain move cap (GF Advanced Rules v3.5.1 p.11): "If any model in a unit moves in or
@@ -1325,17 +1324,8 @@ func _act(unit: GameUnit) -> Dictionary:
 			elif enemy_dist <= float(shoot_range):
 				# "Advancing" (p.58): a shooter already in range steps BACK toward the range edge, still
 				# shooting — held a measuring hair INSIDE range so the post-move gate never flips on floats.
-				# NML-224 deadzone: a unit almost AT the range edge computed kite steps of fractions of an
-				# inch (measured band_in=0.7) — tactically worthless, and on the table it reads as broken
-				# jitter ("Einheiten ruckeln bloed herum"). Below the threshold the unit HOLDS and shoots.
-				var kite_in := minf(advance, maxf(float(shoot_range) - enemy_dist - KITE_RANGE_MARGIN_IN, 0.0))
-				if kite_in < KITE_MIN_STEP_IN:
-					record_decision({"kind": "kite_deadzone", "unit": unit.get_name(),
-						"rule": "Advancing (p.58) kite suppressed: the step to the range edge is under %.1f\" — hold and shoot instead of a sub-inch shuffle" % KITE_MIN_STEP_IN,
-						"candidates": [], "chosen": "HOLD", "why": "kite step %.2f\" below deadzone" % kite_in,
-						"data": {"kite_in": kite_in}})
-				else:
-					dang = _move_away(unit, tcentre, kite_in)
+				dang = _move_away(unit, tcentre,
+					minf(advance, maxf(float(shoot_range) - enemy_dist - KITE_RANGE_MARGIN_IN, 0.0)))
 			else:
 				dang = _move_toward(unit, goal, advance, false)
 		_:
