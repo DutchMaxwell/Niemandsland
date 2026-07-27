@@ -6100,12 +6100,12 @@ func _solo_end_targeting() -> void:
 
 
 ## Targeting-mode input, driven by the pure SoloController.targeting_route router. Mouse events reach it
-## via main._input below (object_manager defers the mouse while targeting); ESC arrives via
+## via main._unhandled_input below (object_manager defers the mouse while targeting); ESC arrives via
 ## _unhandled_key_input. Returns true when the event was consumed.
 func _solo_targeting_input(event: InputEvent) -> bool:
 	if _solo_target_mode.is_empty():
 		return false
-	match SoloController.targeting_route(event, _solo_over_blocking_ui()):
+	match SoloController.targeting_route(event):
 		SoloController.TargetingRoute.CANCEL:
 			_solo_end_targeting()
 			return true
@@ -6147,20 +6147,22 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 	return false
 
 
-## True when the mouse hovers an interactive HUD control that must keep receiving its own clicks while
-## targeting (same heuristic as object_manager._control_blocks_world_click — reused, not forked).
-func _solo_over_blocking_ui() -> bool:
-	if object_manager == null or not object_manager.has_method("_control_blocks_world_click"):
-		return false
-	return object_manager._control_blocks_world_click(get_viewport().gui_get_hovered_control())
+## True while main's solo input owns the mouse: attack targeting (P8) or a Takedown model pick (B5).
+## ObjectManager consults this because it is dispatched BEFORE Main in the _unhandled_input group
+## (the group is walked in reverse tree order and Main is the scene root), so without it ObjectManager
+## would open a selection/box-select on the very click main is waiting for.
+func solo_owns_mouse() -> bool:
+	return not _solo_target_mode.is_empty() or not _solo_model_pick.is_empty()
 
 
-## Solo P8 targeting owns the MOUSE while active — and this hook MUST live in _input:
-## _unhandled_key_input only ever receives KEY events in Godot 4, so the original P8 wiring left the
-## enemy click unreachable (maintainer field-test bug: clicking a target did nothing — object_manager's
-## _input defers all mouse handling while targeting is active, and nobody else picked the click up).
+## Solo P8 targeting owns the MOUSE while active. This hook must receive MOUSE events, which
+## _unhandled_key_input never delivers in Godot 4 — that conflation is what originally left the enemy
+## click unreachable (maintainer field-test bug: clicking a target did nothing). _unhandled_input DOES
+## deliver mouse events, and it is the correct stage: it runs after the GUI, so a click that a HUD
+## control owns never reaches targeting in the first place — no hand-rolled "is the pointer over UI?"
+## check needed (that heuristic, _solo_over_blocking_ui, is deleted).
 ## Keys (ESC) keep flowing through _unhandled_key_input; only mouse events are handled here.
-func _input(event: InputEvent) -> void:
+func _unhandled_input(event: InputEvent) -> void:
 	# B5: an active Takedown model pick owns the mouse first — one click chooses the sniped model.
 	if not _solo_model_pick.is_empty():
 		if _solo_model_pick_input(event):
@@ -7476,18 +7478,29 @@ func _update_round_button() -> void:
 func _on_hamburger_pressed() -> void:
 	var is_opening = not left_panel_scroll.visible
 
+	# The panel fades via modulate, so it is on-screen and hit-testable while still fully transparent.
+	# It owns every pixel it PAINTS: the ScrollContainer draws the panel background across its whole
+	# rect (opaque, plus a drop shadow), so the empty tail below the last button is menu, not table,
+	# and must eat clicks too — measured, after a first attempt made that tail click-through and put a
+	# 200x246 px hole in the middle of the visible menu at 1080p.
 	if is_opening:
+		# Fading IN: an INVISIBLE surface over the table is a click-eater. IGNORE until it is solid.
+		left_panel_scroll.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		# Show panel and animate in
 		left_panel_scroll.visible = true
 		left_panel_scroll.modulate.a = 0.0
 		var tween = create_tween()
 		tween.tween_property(left_panel_scroll, "modulate:a", 1.0, 0.2)
+		tween.tween_callback(func(): left_panel_scroll.mouse_filter = Control.MOUSE_FILTER_STOP)
 		hamburger_button.text = "✕"
 	else:
-		# Animate out then hide
+		# Fading OUT: the menu is still VISIBLE and still solid for most of the fade, so it must keep
+		# owning its clicks the whole way down. Dropping the filter up front re-created this very bug
+		# for 0.15 s — a click on the closing menu went through to the table.
 		var tween = create_tween()
 		tween.tween_property(left_panel_scroll, "modulate:a", 0.0, 0.15)
-		tween.tween_callback(func(): left_panel_scroll.visible = false)
+		tween.tween_callback(func():
+			left_panel_scroll.visible = false)
 		hamburger_button.text = "☰"
 
 
@@ -9143,7 +9156,9 @@ func _ensure_cache_progress_ui() -> void:
 	_cache_progress_panel.anchor_bottom = 0.5
 	_cache_progress_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	_cache_progress_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
-	_cache_progress_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# It renders as a centred modal with a progress bar, so it owns its clicks: with IGNORE every
+	# click on it fell straight through to the table behind.
+	_cache_progress_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_cache_progress_panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
 	_cache_progress_panel.visible = false
 	var margin := MarginContainer.new()

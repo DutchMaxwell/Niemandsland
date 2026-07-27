@@ -5085,15 +5085,17 @@ static func apply_wounds_to_models(unit: GameUnit, wounds: int, on_changed: Call
 
 ## What the P8 targeting mode does with one input event (pure, testable — the event→action resolution).
 ## The mode owns the MOUSE while active: LMB picks the hovered enemy, RMB/ESC cancels, motion tracks the
-## live LOS line. A click over an interactive HUD control is IGNOREd so the GUI keeps working underneath.
+## live LOS line. There is no "is the pointer over UI?" parameter any more: main forwards these events
+## from _unhandled_input, which runs AFTER the GUI, so a click an interactive HUD control owns has
+## already been consumed and never reaches this router.
 ## REGRESSION GUARD (maintainer field-test bug): the original P8 wiring fed the handler only from
 ## _unhandled_key_input, which never receives mouse events in Godot 4 — the enemy click landed nowhere
 ## (object_manager defers the mouse while targeting). Mouse events MUST be first-class targeting input;
-## main._input forwards them through this router.
+## main._unhandled_input forwards them through this router.
 enum TargetingRoute { IGNORE, CANCEL, PICK, TRACK }
 
 
-static func targeting_route(event: InputEvent, over_blocking_ui: bool) -> TargetingRoute:
+static func targeting_route(event: InputEvent) -> TargetingRoute:
 	if event is InputEventKey:
 		var k := event as InputEventKey
 		if k.pressed and k.keycode == KEY_ESCAPE:
@@ -5108,7 +5110,7 @@ static func targeting_route(event: InputEvent, over_blocking_ui: bool) -> Target
 		if mb.button_index == MOUSE_BUTTON_RIGHT:
 			return TargetingRoute.CANCEL
 		if mb.button_index == MOUSE_BUTTON_LEFT:
-			return TargetingRoute.IGNORE if over_blocking_ui else TargetingRoute.PICK
+			return TargetingRoute.PICK
 	return TargetingRoute.IGNORE
 
 

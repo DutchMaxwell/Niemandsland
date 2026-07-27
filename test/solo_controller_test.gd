@@ -400,34 +400,33 @@ func _lmb(pressed: bool = true) -> InputEventMouseButton:
 
 
 func test_targeting_route_left_click_picks_the_target() -> void:
-	assert_int(SoloController.targeting_route(_lmb(), false)).is_equal(SoloController.TargetingRoute.PICK)
+	assert_int(SoloController.targeting_route(_lmb())).is_equal(SoloController.TargetingRoute.PICK)
 	# Release is not a pick (only the press resolves the target).
-	assert_int(SoloController.targeting_route(_lmb(false), false)).is_equal(SoloController.TargetingRoute.IGNORE)
-
-
-func test_targeting_route_click_over_hud_control_is_ignored() -> void:
-	# A click on an interactive HUD widget (dock, dice tray) keeps working during targeting.
-	assert_int(SoloController.targeting_route(_lmb(), true)).is_equal(SoloController.TargetingRoute.IGNORE)
+	assert_int(SoloController.targeting_route(_lmb(false))).is_equal(SoloController.TargetingRoute.IGNORE)
+	# There is no over_blocking_ui parameter any more: main forwards these events from
+	# _unhandled_input, which runs AFTER the GUI, so a click an interactive HUD control owns has
+	# already been consumed and never reaches this router. (The engine decides, not a heuristic —
+	# see test/ui_click_ownership_test.gd for the tree invariant that makes that true.)
 
 
 func test_targeting_route_right_click_and_escape_cancel() -> void:
 	var rmb := InputEventMouseButton.new()
 	rmb.button_index = MOUSE_BUTTON_RIGHT
 	rmb.pressed = true
-	assert_int(SoloController.targeting_route(rmb, false)).is_equal(SoloController.TargetingRoute.CANCEL)
+	assert_int(SoloController.targeting_route(rmb)).is_equal(SoloController.TargetingRoute.CANCEL)
 	var esc := InputEventKey.new()
 	esc.keycode = KEY_ESCAPE
 	esc.pressed = true
-	assert_int(SoloController.targeting_route(esc, false)).is_equal(SoloController.TargetingRoute.CANCEL)
+	assert_int(SoloController.targeting_route(esc)).is_equal(SoloController.TargetingRoute.CANCEL)
 	# Any other key passes through untouched.
 	var other := InputEventKey.new()
 	other.keycode = KEY_A
 	other.pressed = true
-	assert_int(SoloController.targeting_route(other, false)).is_equal(SoloController.TargetingRoute.IGNORE)
+	assert_int(SoloController.targeting_route(other)).is_equal(SoloController.TargetingRoute.IGNORE)
 
 
 func test_targeting_route_mouse_motion_tracks_the_los_line() -> void:
-	assert_int(SoloController.targeting_route(InputEventMouseMotion.new(), false)).is_equal(SoloController.TargetingRoute.TRACK)
+	assert_int(SoloController.targeting_route(InputEventMouseMotion.new())).is_equal(SoloController.TargetingRoute.TRACK)
 
 
 # === Attached-hero unity (GF v3.5.1 "Hero": a joined hero deploys/activates/moves WITH its host) ===

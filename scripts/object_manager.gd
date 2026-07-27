@@ -270,69 +270,84 @@ func _process(delta: float) -> void:
 		_rotation_broadcast_timer = 0.0
 
 
-## Checks if a GUI element is blocking input (e.g., modal dialog or a focused text
-## field like the chat input — object shortcuts must not fire while typing). Also true
-## while a REMOTE peer is loading: object move/edit must be blocked until they finish (the
-## non-loading player is held back). Camera/pan/zoom/chat are NOT routed through this gate.
-func _is_gui_blocking_input() -> bool:
+## Game-state gate — NOT a UI gate. Mouse OCCLUSION is the engine's job now (see _unhandled_input);
+## what is left here is about game state and about KEYS, which no Control consumes on our behalf.
+## A focused text field (chat input) must keep its keys: object shortcuts must not fire while typing.
+## A REMOTE peer mid-load (importing an army / syncing state) must not have objects moved under them.
+## Camera/pan/zoom/chat are NOT routed through this gate.
+func _is_game_blocking_input() -> bool:
 	if get_viewport().gui_get_focus_owner() is LineEdit:
 		return true
 	# A remote peer is mid-load (importing an army / syncing state): freeze object edits.
 	if _network_manager != null and _network_manager.is_any_remote_peer_busy():
 		return true
-	# Check if any modal Control is visible and covering the viewport
+	# A modal wounds edit is in progress. Its CLICKS are already the engine's (the dialog is a
+	# full-rect STOP backdrop), but it only consumes ESC / - / + — so without this the object hotkeys
+	# below (G/M/F/P/K/T, hold-R rotate) would still fire on the selection behind the modal.
 	var ui_layer = get_tree().root.find_child("UI", true, false)
 	if ui_layer:
-		# Check for WoundsDialog or other modal dialogs
 		var wounds_dialog = ui_layer.find_child("WoundsDialog", false, false)
 		if wounds_dialog and wounds_dialog is Control and wounds_dialog.visible:
 			return true
 	return false
 
 
-## D6 UI-occlusion decision (pure, unit-tested): a hovered control blocks the 3D-world click when it is a
-## genuine HUD WIDGET — a STOP-filter control that does NOT span the whole viewport. The transparent
-## full-rect HUD root (a STOP Control that merely holds the overlay) must NOT block, or every world click
-## is occluded and nothing in the 3D scene is selectable (URGENT-024). IGNORE/PASS controls and empty
-## space (null) never block, so field-clicks over the open scene still select/deselect.
-func _control_blocks_world_click(hovered: Control) -> bool:
-	if hovered == null or hovered.mouse_filter != Control.MOUSE_FILTER_STOP:
-		return false
-	var vp: Vector2 = hovered.get_viewport_rect().size
-	var r: Vector2 = hovered.get_global_rect().size
-	if r.x >= vp.x - 1.0 and r.y >= vp.y - 1.0:
-		return false   # full-viewport container (HUD root) — not a click target
-	return true
-
-
+## World picking lives in _unhandled_input, NEVER in _input. Godot dispatches
+##     _input group  →  GUI (Control._gui_input)  →  _unhandled_input group
+## and aborts as soon as the event is handled. By the time we are called, every Control that owns
+## this click has already consumed it: the engine calls set_input_as_handled() when the event
+## reaches a MOUSE_FILTER_STOP ancestor, or when a control calls accept_event().
+##
+## This REPLACES the old gui_get_hovered_control() heuristic, which ran one stage too early and read
+## a motion-driven cache. It was blind to MOUSE_FILTER_PASS containers (every gap, every padding
+## pixel, every IGNORE Label band in every panel), it exempted full-viewport STOP overlays (every
+## modal backdrop, the open radial menu), and it went stale whenever a panel appeared or re-flowed
+## under a resting cursor. All three produced the same maintainer bug: the button did not fire and
+## the click opened a selection/box-select on the table behind it.
+##
+## THE INVARIANT THIS DEPENDS ON — see test/ui_click_ownership_test.gd:
+##   interactive surface  → STOP at its own root
+##   transparent holder   → IGNORE   (UI/HUD, UnitDock root, toasts, banners, decorations)
+##   PASS                 → only INSIDE a surface whose root is STOP
+## Break it and clicks either fall through to the table (holder left STOP-less) or the whole table
+## becomes unselectable (holder left STOP) — the URGENT-024 regression.
+## The ONE thing that may not wait for stage 3: motion belonging to a gesture that is already running.
+## Godot routes motion to gui_find_control(pos) whenever gui.mouse_focus is NULL — precisely the state
+## during a drag that STARTED on the table — and a MOUSE_FILTER_STOP ancestor then consumes it.
+## Measured on 4.6.2: a drag sweeping from the table across the dice panel loses half its motion events
+## at stage 3. The damage was silent, and worst for dragging: the model stopped following the cursor at
+## the panel edge, but the RELEASE still arrived, so it was committed at the frozen position — a model
+## placed somewhere the player never dropped it. Box-select and the ruler froze the same way.
+## Only LIVE gestures are claimed here; plain hover stays in _unhandled_input where the UI can win, and
+## the button that STARTS a gesture is still gated by the UI, so a drag can never begin on a panel.
 func _input(event: InputEvent) -> void:
-	# Skip if GUI is handling input (dialog open, etc.)
-	if _is_gui_blocking_input():
+	if not (_is_dragging or _is_box_selecting or _is_measuring):
+		return
+	if event is not InputEventMouseMotion:
+		return
+	if _is_game_blocking_input():
+		return
+	if _is_dragging:
+		_update_drag(event.position)
+	elif _is_box_selecting:
+		_update_box_selection(event.position)
+	else:
+		_update_measurement(event.position)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _is_game_blocking_input():
 		return
 
 	if event is InputEventMouseButton:
 		var mouse_event = event as InputEventMouseButton
 
-		# A click over ANY interactive HUD control (dice tray, unit-dock card/strip/tab, panels) must
-		# NOT reach the 3D world: _input fires before the control's _gui_input, so the control can't
-		# consume it first. Without this, a click over the dock falls through, the selection raycast
-		# finds nothing behind the UI, deselects the unit, hides the dock card, and nulls the action
-		# target (the D6 dead-button + vanishing-card bug). Generalises the former dice-tray-only guard.
-		# Motion still passes so camera drag over UI keeps working.
-		if _control_blocks_world_click(get_viewport().gui_get_hovered_control()):
-			return
-
-		# Also reject by the ACTUAL click position over the unit dock: the cached hover above goes stale the
-		# instant a card click collapses the strip, which otherwise let the click fall through to the table
-		# and open a box-select rubber-band (maintainer bug).
+		# Solo P8/B5: while main owns the mouse for attack targeting or a Takedown model pick, no
+		# selection/box-select underneath. Ordering, not politeness: the _unhandled_input group is
+		# walked in REVERSE tree order, and Main is the scene root, so ObjectManager is dispatched
+		# BEFORE Main and would otherwise eat the click main is waiting for.
 		var main_node := get_node_or_null("/root/Main")
-		var dock_node = main_node.get("unit_dock") if main_node != null else null
-		if dock_node != null and dock_node.has_method("occludes_point") and dock_node.occludes_point(mouse_event.position):
-			return
-		# Solo P8: while the player is picking an attack target, main's targeting mode owns the mouse —
-		# no selection/box-select underneath.
-		if main_node != null and main_node.get("_solo_target_mode") is Dictionary \
-				and not (main_node.get("_solo_target_mode") as Dictionary).is_empty():
+		if main_node != null and main_node.has_method("solo_owns_mouse") and main_node.solo_owns_mouse():
 			return
 
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
@@ -401,13 +416,9 @@ func _input(event: InputEvent) -> void:
 						_try_remove_ruler_at(mouse_event.position)
 
 	elif event is InputEventMouseMotion:
-		if _is_dragging:
-			_update_drag(event.position)
-		elif _is_box_selecting:
-			_update_box_selection(event.position)
-		elif _is_measuring:
-			_update_measurement(event.position)
-		else:
+		# Live gestures claim motion in _input (stage 1) — see the comment there. Only plain hover
+		# reaches this far, and there a Control under the pointer legitimately wins.
+		if not (_is_dragging or _is_box_selecting or _is_measuring):
 			_update_hover(event.position)
 
 	# Rotation: hold R key for continuous rotation - requires selection
@@ -427,7 +438,7 @@ func _input(event: InputEvent) -> void:
 		if _is_dragging:
 			_cancel_drag()
 
-	# Range-ring + movement + ruler hotkeys (gated above by _is_gui_blocking_input, so safe
+	# Range-ring + movement + ruler hotkeys (gated above by _is_game_blocking_input, so safe
 	# while chatting): G cycles the range ring (off → 3 → … → 24 → off), Shift+G clears all;
 	# M toggles the Advance/Rush move bands, Shift+M clears all; P pins the live measurement;
 	# K clears my rulers, Shift+K (host) clears all.
@@ -1102,6 +1113,9 @@ func _create_box_select_rect() -> void:
 
 	_box_select_rect = ColorRect.new()
 	_box_select_rect.color = Color(0.3, 0.5, 1.0, 0.2)  # Semi-transparent blue
+	# Pure decoration on a layer-100 overlay: a ColorRect defaults to STOP, which would let the
+	# rubber-band eat the very release that finishes the box-select.
+	_box_select_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	# Add border using a StyleBoxFlat
 	var style = StyleBoxFlat.new()
