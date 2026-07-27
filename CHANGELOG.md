@@ -71,7 +71,39 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ### Changed
 - **WGS import retired** (menu + code); old saves with WGS units still load. (#143)
 - All new panels and dialogs are English-only (the game has no i18n yet).
-- Contributor docs reworked and verified against the shipped code. (#125)
+- Repository docs brought to release truth in a dedicated pass (supersedes #125).
+
+### Fixed — release-hardening day (2026-07-27)
+- **Deployment can no longer be bypassed.** All four ways into play (Start button, first
+  activation, deployment hand-over, F11) refuse while units that belong on the table are still on
+  their tray — naming them — so the AI can never again target an undeployed army at its tray
+  coordinates. Ambush/Infiltrate reserves, attached heroes and embarked units are exempt; off-table
+  Ambush units are formally set aside on the way through. Guarded by an end-to-end suite that
+  drives the real scene.
+- **Clicks on menus stop falling through to the battlefield.** World picking moved behind the UI
+  (`_unhandled_input`), replacing a hand-rolled hover guard that leaked every button seam, label
+  band and panel margin to the 3D table; mouse gestures started on the table keep tracking across
+  HUD panels. A scene-tree click-ownership invariant is now CI-tested.
+- **The battle-log export carries the whole game.** The on-screen panel keeps its capped ring; the
+  export reads an uncapped archive, so field-test logs no longer start mid-game.
+- **NACHTMAHR's moves leave the same chalk as yours.** Ribbon plus inch stamp per model through the
+  shared trail system (an earlier per-model label wall is gone); the transient walked/allowed pace
+  label stays.
+- **Takedown resolves as a true unit of [1].** The target model is picked BEFORE the roll and
+  brings its own to-hit modifiers, its own cover and — for attached heroes — its own Defense;
+  Fortified/Regeneration and Vengeance/Blast quantify over the picked model only. An always-snipe-
+  the-hero AI preference was measured in self-play and rejected — the AI keeps its value ranking.
+- **Pick-one movement bonuses no longer bake into the bands.** "Either +4\" range … or +2\" when
+  charging" (Versatile Reach) had granted a permanent 14″ rush to every Founder's-Banner unit,
+  even in range mode.
+- **No model path may exceed its band or the 6″ difficult-terrain cap.** The de-overlap nudge is
+  clamped to per-model band slack, and every planned polyline through difficult ground is trimmed
+  to the cap — verified in self-play (measured overruns of up to +8″ through woods are gone).
+- **HUD corner cleaned up.** The confirm check mark renders (the embedded font carries ✓, not ✔),
+  status toasts no longer print onto the FPS row, the deployment strip clears the Units tab, and
+  weapon names from Army Forge lose their stray leading spaces ("fires  Heavy Sniper Rifle").
+- **Un-toggling an activation frees the attached hero too** — a refused or reverted activation no
+  longer leaves a joined hero spent for the round.
 
 ### Fixed
 - Solo single-player: player-2 units no longer count as "foreign" without a real MP connection.
