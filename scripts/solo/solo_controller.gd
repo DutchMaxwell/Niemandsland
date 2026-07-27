@@ -5015,6 +5015,28 @@ static func attacker_pick_model(unit: GameUnit) -> int:
 	return int(order.back()) if not order.is_empty() else -1
 
 
+## TC-023 (Takedown, GF v3.5.1 p.14: "may pick ANY model in the target unit") — the attacker's pick over
+## the WHOLE joined chain: the host unit's models AND every attached hero's. A joined hero is its own
+## GameUnit in this engine, so the models-only pick above could never name the rulebook's flagship victim
+## (the Stealth hero inside a plain squad). A living attached hero outranks every host body by
+## construction — the same hero-first tiering AiTargeting's Takedown overlay already applies to units —
+## and INSIDE a unit the ranking stays casualty_order's inverse. Returns {"unit": GameUnit, "index": int},
+## {} when nothing in the chain is alive.
+static func attacker_pick_target(unit: GameUnit) -> Dictionary:
+	if unit == null:
+		return {}
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			var hero := h as GameUnit
+			if hero == null or not is_instance_valid(hero) or hero.get_alive_count() <= 0:
+				continue
+			var hi := attacker_pick_model(hero)
+			if hi >= 0:
+				return {"unit": hero, "index": hi}
+	var idx := attacker_pick_model(unit)
+	return {} if idx < 0 else {"unit": unit, "index": idx}
+
+
 ## Apply `wounds` to ONE model index (Takedown "resolved as a unit of [1]"): the model soaks its Tough
 ## then dies; overflow does NOT spill to the unit (a unit of [1] has nowhere to spill). Returns the
 ## unspent wounds (always ≥ 0 for a single model — the caller discards Takedown overkill).
@@ -5709,6 +5731,21 @@ func majority_in_cover(unit: GameUnit) -> bool:
 				and TerrainRules.gives_cover(int(terrain_type_at.call((node as Node3D).global_position))):
 			n += 1
 	return n * 2 > models.size()   # strict majority (p.11)
+
+
+## TC-023 (Takedown, GF v3.5.1 p.14: the attack "is resolved as if it was a unit of [1]" and the other
+## models "don't … provide cover to the target model in the unit") — ONE model's own cover state. It is
+## deliberately the SAME centre-point probe majority_in_cover folds over its unit, so the single-model
+## answer and the majority answer can never contradict each other on the same terrain.
+## This is the SHIPPED reader, not a test mirror: main._solo_model_in_cover (the Takedown resolution's only
+## cover source) is a pure delegate to it, so the regression test below guards the code the dice run on.
+func model_in_cover(m: ModelInstance) -> bool:
+	if m == null or not terrain_type_at.is_valid():
+		return false
+	var node := m.node
+	if node == null or not is_instance_valid(node):
+		return false
+	return TerrainRules.gives_cover(int(terrain_type_at.call((node as Node3D).global_position)))
 
 
 func alive_positions(unit: GameUnit) -> Array:

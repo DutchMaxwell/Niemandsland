@@ -260,7 +260,16 @@ var _solo_interactive_grade: String = "nachtmahr"  # the ONE grade (NML-211): NA
                                                   # → the naive baseline AI (no position solver, no knobs).
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
 var _solo_target_mode: Dictionary = {}       # {unit, melee} while the player picks an attack target (P8)
-var _solo_model_pick: Dictionary = {}        # B5: {unit, recommended, outcome} while a Takedown pick awaits a model click
+var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, outcome} while a Takedown pick awaits a model click
+# TC-023 (Takedown, GF v3.5.1 p.14 "resolved as if it was a unit of [1]"): while this holds the picked
+# model, the shared target-side readers answer for THAT MODEL ALONE — its own unit's rules (the joined
+# chain's other members neither grant nor withhold them) and its own cover square (the other models
+# "don't … provide cover to the target model"). Readers: _solo_rule_on_all_models, _solo_majority_in_cover,
+# _solo_has_regeneration. It is set and cleared inside three PURELY SYNCHRONOUS windows — the whole of
+# _solo_takedown_context, the Fortified prologue of _solo_save_batch and the pick of
+# _solo_apply_regeneration — so no await can ever observe it. Never widen a window across an await:
+# every attack in the game shares those functions, and a leaked flag would rewrite an unrelated save.
+var _solo_takedown_solo: Dictionary = {}     # {unit, index, model} or {}
 var _solo_deploy_fsm: Dictionary = {}        # click-driven deployment machine (side/main/scout/done — maintainer flow 2026-07-23)
 var _solo_deploy_ui: CanvasLayer = null      # the deployment hand-over panel (label + up to two buttons)
 var _solo_deploy_ui_label: Label = null
@@ -2282,10 +2291,36 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		var shot := s as Dictionary
 		var member := shot["member"] as GameUnit
 		var profile := _solo_bridge_granted_flags(member, shot["profile"] as Dictionary)
+		# Per-model shooting (GF v3.5.1 p.8 "Who Can Shoot") decides the dice count FIRST, so a shot that
+		# scales to nothing leaves before any rule fires on it (it also keeps the Takedown pick below out
+		# of volleys that never roll). Indirect (wave 5) targets as if in line of sight — its per-model
+		# sighting is range-only; the Aircraft penalty (-12") and Ranged Shrouding (-6" min 6") shorten
+		# the reach here too.
+		var sighted: int = _solo_sighted_count(member, target,
+			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
+			bool(profile.get("indirect", false)))
+		var attacks: int = SoloController.effective_attacks(int(profile.get("attacks", 0)), sighted, int(shot["max"]))
+		if attacks <= 0:
+			continue
 		# Reliable (GF v3.5.1) sets the Quality (2+); the to-hit roll modifiers (Stealth / Artillery /
 		# Evasive, and Indirect's moved-shooting -1 — wave 5) then apply on top ("Reliable only changes
 		# the Quality value", p.14).
 		var mod_info: Dictionary = _solo_hit_mod_info(member, target, dist_in, false)
+		# TC-023 (Takedown, GF v3.5.1 p.14): the model is the TARGET, so it is picked HERE — before the
+		# to-hit roll — and the whole shot then resolves as a unit of [1] against it. The attacker is
+		# always the AI on this path, so the pick never prompts and never awaits a frame.
+		var is_takedown: bool = bool(profile.get("takedown", false))
+		var td_pick: Dictionary = {}
+		var td_ctx: Dictionary = {}
+		var shot_base: int = base_defense
+		var shot_cover: int = covered_defense
+		if is_takedown:
+			td_pick = await _solo_takedown_pick(attacker, target, str(profile.get("name", "?")))
+			if not td_pick.is_empty():
+				td_ctx = _solo_takedown_context(member, td_pick, dist_in, false, dist_in > AiCombatMath.LONG_RANGE_IN)
+				mod_info = td_ctx["mod"] as Dictionary
+				shot_base = int(td_ctx["defense"])
+				shot_cover = int(td_ctx["covered"])
 		if moved and bool(profile.get("indirect", false)) \
 				and not bool(RulesRegistry.best_primitive_param(member, "Indirect", "no_moved_penalty", false)):
 			# Quick Readjustment (coverage wave): the bearer ignores the Indirect moved-penalty.
@@ -2303,7 +2338,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# — the SAME chooser AiEv.profile_ev uses, so the AI's plan and the real dice pick the same mode.
 		# Shooting facet only (the melee/charge >9" facet needs the pre-charge distance — tracked follow-up).
 		if bool(profile.get("versatile_attack", false)) and dist_in > AiCombatMath.LONG_RANGE_IN:
-			var vm: Dictionary = AiEv.versatile_best_mode(to_hit, base_defense, int(profile.get("ap", 0)), bool(profile.get("bane", false)))
+			var vm: Dictionary = AiEv.versatile_best_mode(to_hit, shot_base, int(profile.get("ap", 0)), bool(profile.get("bane", false)))
 			to_hit = AiCombatMath.modified_hit_target(to_hit, int(vm.get("hit_mod", 0)))
 			if int(vm.get("ap", 0)) > 0:
 				profile = profile.duplicate()
@@ -2312,14 +2347,6 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s at long range" % [
 					"AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
 		_solo_log_hit_mod(mod_info, target, to_hit)
-		# Indirect (wave 5) targets as if in line of sight — its per-model sighting is range-only.
-		# The Aircraft target penalty (-12") and Ranged Shrouding (-6" min 6") shorten the reach here too.
-		var sighted: int = _solo_sighted_count(member, target,
-			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
-			bool(profile.get("indirect", false)))
-		var attacks: int = SoloController.effective_attacks(int(profile.get("attacks", 0)), sighted, int(shot["max"]))
-		if attacks <= 0:
-			continue
 		var shooter_name: String = member.get_name()
 		var faces: Array = await _solo_tray_roll(attacks, to_hit, "AI (%s)" % shooter_name)
 		if bool(profile.get("limited", false)):
@@ -2338,23 +2365,27 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# save-step rules) resolve inside _solo_resolve_saves. Native both-AI (AI ARENA): when the
 		# DEFENDER is itself AI, the saves auto-roll on the real tray (no human prompt) — the human_defends flag
 		# is derived, never assumed, so an AI-vs-AI game resolves shooting unattended.
-		var save_def: int = base_defense if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else covered_defense
+		var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover
 		var is_deadly: bool = int(profile.get("deadly", 0)) > 0
-		var is_takedown: bool = bool(profile.get("takedown", false))
+		# TC-023: the saves are the PICKED MODEL's — rolled by its own GameUnit, so a sniped attached
+		# hero blocks on HIS Defense (and his own Fortified / conditional-AP profile), not the host's.
+		var save_unit: GameUnit = target if td_pick.is_empty() else (td_pick["unit"] as GameUnit)
+		if not td_ctx.is_empty():
+			_solo_log_takedown_context(str(profile.get("name", "?")), td_pick, td_ctx, to_hit, save_def, false)
 		# Deadly/Takedown weapons return RAW unsaved (apply_deadly=false) so their wounds land per-model
 		# instead of the pooled defender-optimal removal — Deadly's "no carry-over" and Takedown's
 		# "unit of [1]" are both per-model rules.
-		var w: int = await _solo_resolve_saves(member, target, str(profile.get("name", "?")), faces, hits, save_def, profile, not _solo_is_ai_unit(target), false, not (is_deadly or is_takedown), false, dist_in)
+		var w: int = await _solo_resolve_saves(member, save_unit, str(profile.get("name", "?")), faces, hits, save_def, profile, not _solo_is_ai_unit(target), false, not (is_deadly or is_takedown), false, dist_in, td_pick)
 		total_caused += w
-		if is_takedown and w > 0:
-			# Takedown (GF v3.5.1 p.14, Bug 25): resolved as a unit of [1] against ONE chosen model.
-			# Resolver wave A: a Takedown weapon's Deadly multiplies on that model (p.14) — this also
-			# fixes book weapons carrying both (the multiply was silently dropped before).
+		if is_takedown and w > 0 and not td_pick.is_empty():
+			# Takedown (GF v3.5.1 p.14, Bug 25): resolved as a unit of [1] against the model picked
+			# before the roll. Resolver wave A: a Takedown weapon's Deadly multiplies on that model
+			# (p.14) — this also fixes book weapons carrying both (the multiply was silently dropped).
 			var td_w: int = w * maxi(int(profile.get("deadly", 0)), 1)
 			if _solo_ignores_regen(member, profile):
-				await _solo_land_takedown_wounds(member, target, str(profile.get("name", "?")), 0, td_w)
+				await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, 0, td_w)
 			else:
-				await _solo_land_takedown_wounds(member, target, str(profile.get("name", "?")), td_w, 0)
+				await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, td_w, 0)
 		elif is_deadly and w > 0:
 			# Deadly (GF v3.5.1 p.14): each unsaved wound ×X on one model, no carry-over.
 			if _solo_ignores_regen(member, profile):
@@ -3340,7 +3371,11 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 		hits += sergeant_hits
 	var blast: int = int(profile.get("blast", 0))
 	if hits > 0 and blast > 1 and target != null:
-		var boosted: int = AiCombatMath.blast_hits(hits, blast, _solo_combined_alive(target))
+		# TC-023 — a Takedown resolves "as if it was a unit of [1]" (GF v3.5.1 p.14), so Blast has exactly
+		# one model to spill onto and can never multiply. Read off the profile, not the takedown flag:
+		# the flag's window is synchronous and has already closed by the time the dice are counted.
+		var models_in_target: int = 1 if bool(profile.get("takedown", false)) else _solo_combined_alive(target)
+		var boosted: int = AiCombatMath.blast_hits(hits, blast, models_in_target)
 		if boosted != hits and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "Blast(%d): %d hit%s ×%d → %d hits" % [
 				blast, hits, ("" if hits == 1 else "s"), boosted / hits, boosted], true)
@@ -3375,7 +3410,13 @@ enum SoloStrike { ALL, COUNTER_ONLY, NON_COUNTER }
 ## Whether ALL models of a unit carry `rule` — the trigger form of Stealth / Evasive / Shielded. The
 ## shared AiEv.rule_on_all_models reader (one truth between the dice resolution and the EV metric).
 func _solo_rule_on_all_models(unit: GameUnit, rule: String) -> bool:
-	return AiEv.rule_on_all_models(unit, rule)
+	# TC-023 — Takedown's unit of [1] (GF v3.5.1 p.14): while the picked model is being resolved, only ITS
+	# OWN unit is polled. The "all models" quantifier is a UNIT trigger; for a unit of [1] the rest of the
+	# joined chain neither grants the rule (a Stealth squad hiding a plain hero) nor withholds it (the
+	# rulebook's own example: a Stealth hero inside a non-Stealth unit still gives -1 to hit). The collapse
+	# itself lives in AiEv so it stays ONE truth — and one tested one.
+	return AiEv.rule_on_all_models(unit, rule,
+		not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"))
 
 
 ## The over-9" +1-defense rule a target projects ("" when none): Guarded (unconditional), or a
@@ -3759,6 +3800,11 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 func _solo_vengeance_bonus(target: GameUnit) -> int:
 	if target == null:
 		return 0
+	# TC-023 — Takedown's unit of [1] (GF v3.5.1 p.14): the markers sit on a UNIT, so while the picked
+	# model is being resolved only its own unit's markers count. Without this a melee Takedown on an
+	# attached hero inherited the HOST squad's markers as a to-hit bonus, and vice versa.
+	if not _solo_takedown_solo.is_empty() and target == _solo_takedown_solo.get("unit"):
+		return int(target.unit_properties.get("vengeance_markers", 0))
 	var markers := 0
 	for m in _solo_joined_chain(target):
 		markers = maxi(markers, int((m as GameUnit).unit_properties.get("vengeance_markers", 0)))
@@ -3992,6 +4038,24 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if filter == SoloStrike.NON_COUNTER and bool(profile.get("counter", false)):
 				continue
 			struck_any = true
+			# TC-023 (Takedown, GF v3.5.1 p.14): the struck model is the TARGET, so it is picked HERE —
+			# before the to-hit roll — and this strike then resolves as a unit of [1] against it (its own
+			# rules modify the to-hit roll, its own unit's Defense blocks). A human striker CLICKS the
+			# model, and the prompt now runs BEFORE any die, so the pick can never read as mere wound
+			# placement. Cover stays out of it: p.11 is shooting-only, exactly as the unit-wide path.
+			var m_takedown: bool = bool(profile.get("takedown", false))
+			var p_mod: Dictionary = mod_info
+			var p_defense: int = defense
+			var td_pick: Dictionary = {}
+			var td_ctx: Dictionary = {}
+			if m_takedown:
+				td_pick = await _solo_takedown_pick(striker, defender, str(profile.get("name", "?")))
+				if not td_pick.is_empty():
+					td_ctx = _solo_takedown_context(striker, td_pick, 0.0, true,
+						charging and charge_from_in > AiCombatMath.LONG_RANGE_IN)
+					p_mod = td_ctx["mod"] as Dictionary
+					p_defense = int(td_ctx["defense"])
+			var strike_unit: GameUnit = defender if td_pick.is_empty() else (td_pick["unit"] as GameUnit)
 			# Reliable (GF/AoF v3.5.1 p.14: the weapon "shoots at Quality 2+") sets the base Quality FIRST —
 			# it applies to a Reliable MELEE weapon exactly as it does when shooting (field-test finding 9: the
 			# melee strike path dropped it, so a Reliable strike still rolled at the unit's Quality). Thrust
@@ -4000,13 +4064,13 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			# only) overrides every to-hit modifier.
 			var strike_quality: int = AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false)))
 			var to_hit: int = 6 if fatigued else AiCombatMath.modified_hit_target(
-				AiCombatMath.thrust_to_hit(strike_quality, bool(profile.get("thrust", false))), int(mod_info.get("mod", 0)) + uf_hit)
+				AiCombatMath.thrust_to_hit(strike_quality, bool(profile.get("thrust", false))), int(p_mod.get("mod", 0)) + uf_hit)
 			# Versatile Attack (army-book): on a charge from over 9" the AI picks the EV-better of +1 to hit
 			# or AP(+1) for this weapon — the SAME chooser as the shooting facet + the EV metric. Fatigue
 			# (unmodified-6-only) overrides the +1-to-hit part; the AP(+1) part still folds in below.
 			var v_ap := 0
 			if bool(profile.get("versatile_attack", false)) and charging and charge_from_in > AiCombatMath.LONG_RANGE_IN:
-				var vm: Dictionary = AiEv.versatile_best_mode(to_hit, _solo_shielded_defense(defender), int(profile.get("ap", 0)), bool(profile.get("bane", false)))
+				var vm: Dictionary = AiEv.versatile_best_mode(to_hit, _solo_shielded_defense(strike_unit), int(profile.get("ap", 0)), bool(profile.get("bane", false)))
 				if not fatigued:
 					to_hit = AiCombatMath.modified_hit_target(to_hit, int(vm.get("hit_mod", 0)))
 				v_ap = int(vm.get("ap", 0))
@@ -4014,7 +4078,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s on the charge" % [
 						"AP(+1)" if v_ap > 0 else "+1 to hit"], true)
 			if not fatigued:
-				_solo_log_hit_mod(mod_info, defender, to_hit)
+				_solo_log_hit_mod(p_mod, strike_unit, to_hit)
 			var roll_owner: String = ("AI (%s)" % str(group.get("name", "?"))) if _solo_is_ai_unit(striker) else "You"
 			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, roll_owner)
 			if bool(profile.get("limited", false)):
@@ -4031,18 +4095,21 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				eff = eff.duplicate()
 				eff["ap"] = int(eff.get("ap", 0)) + uf_ap + v_ap + extra_ap
 			var m_deadly: bool = int(eff.get("deadly", 0)) > 0
-			var m_takedown: bool = bool(eff.get("takedown", false))
 			_solo_last_save_ones = 0   # resolver wave A: count only THIS batch's blocked 1s
-			var w: int = await _solo_resolve_saves(group.get("member"), defender, str(profile.get("name", "?")), faces, hits, defense, eff, human_defends, true, not (m_deadly or m_takedown), charging)
-			if m_takedown and w > 0:
-				# Takedown Strike (resolver wave A): wounds go to the CHOSEN model (AI picks, the
-				# human clicks — the B5 flow), multiplied by the profile's Deadly.
+			if not td_ctx.is_empty():
+				_solo_log_takedown_context(str(profile.get("name", "?")), td_pick, td_ctx, to_hit, p_defense, true)
+			# dist_in stays -1.0 (melee: the range-gated conditional AP legs stay off, as before) — it is
+			# spelled out only so the Takedown pick can ride the trailing `solo` argument.
+			var w: int = await _solo_resolve_saves(group.get("member"), strike_unit, str(profile.get("name", "?")), faces, hits, p_defense, eff, human_defends, true, not (m_deadly or m_takedown), charging, -1.0, td_pick)
+			if m_takedown and w > 0 and not td_pick.is_empty():
+				# Takedown Strike (resolver wave A): the wounds go to the model picked BEFORE the roll
+				# (TC-023), multiplied by the profile's Deadly.
 				var td_w: int = w * maxi(int(eff.get("deadly", 0)), 1)
 				var td_dealt: int
 				if _solo_ignores_regen(group.get("member"), eff):
-					td_dealt = await _solo_land_takedown_wounds(group.get("member"), defender, str(profile.get("name", "?")), 0, td_w)
+					td_dealt = await _solo_land_takedown_wounds(defender, str(profile.get("name", "?")), td_pick, 0, td_w)
 				else:
-					td_dealt = await _solo_land_takedown_wounds(group.get("member"), defender, str(profile.get("name", "?")), td_w, 0)
+					td_dealt = await _solo_land_takedown_wounds(defender, str(profile.get("name", "?")), td_pick, td_w, 0)
 				caused += td_dealt
 			elif m_deadly and w > 0:
 				# Deadly (GF v3.5.1 p.14, no carry-over): each unsaved wound ×X on one model; the DEALT
@@ -4274,10 +4341,12 @@ func _solo_deadly_wounds(w: int, profile: Dictionary, target: GameUnit) -> int:
 ## human is prompted + rolls their own dice, else the AI auto-rolls in the tray. `melee` scopes the
 ## conditional Bane variants. Deadly multiplies per batch. Wounds are RETURNED, not applied — the caller
 ## buckets Regeneration-proof vs Regeneration-able. With no Rending/Bane this is one batch, identical to the
-## previous single-save-roll behaviour.
+## previous single-save-roll behaviour. `solo` is the Takedown pick (TC-023) whose unit-of-[1] view the save
+## step must keep — {} for every other attack, which leaves this path byte-identical.
 func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: String, to_hit_faces: Array,
 		hits: int, base_defense: int, profile: Dictionary, human_defends: bool, melee: bool,
-		apply_deadly: bool = true, charging: bool = false, dist_in: float = -1.0) -> int:
+		apply_deadly: bool = true, charging: bool = false, dist_in: float = -1.0,
+		solo: Dictionary = {}) -> int:
 	if hits <= 0:
 		return 0
 	# Base AP plus any conditional AP (Shatter/Tear/Melee Slayer/Disintegrate; range-gated Slayer/
@@ -4311,10 +4380,10 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d hit%s on a 6 → AP(+%d)" % [
 				ap4_label, ap4_hits, ("" if ap4_hits == 1 else "s"), on6_bonus], true)
 		total += await _solo_save_batch(striker, defender, "%s (%s)" % [weapon_name, ap4_label], ap4_hits,
-			base_defense, ap + on6_bonus, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN)
+			base_defense, ap + on6_bonus, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo)
 	var normal: int = hits - ap4_hits
 	if normal > 0:
-		total += await _solo_save_batch(striker, defender, weapon_name, normal, base_defense, ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN)
+		total += await _solo_save_batch(striker, defender, weapon_name, normal, base_defense, ap, profile, human_defends, bane, apply_deadly, dist_in > AiCombatMath.LONG_RANGE_IN, solo)
 	return total
 
 
@@ -4324,9 +4393,15 @@ func _solo_resolve_saves(striker: GameUnit, defender: GameUnit, weapon_name: Str
 ## human (their dice), else the AI auto-rolls its saves.
 func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String, count: int,
 		base_defense: int, ap: int, profile: Dictionary, human_defends: bool, bane: bool,
-		apply_deadly: bool = true, over9: bool = false) -> int:
+		apply_deadly: bool = true, over9: bool = false, solo: Dictionary = {}) -> int:
 	if count <= 0:
 		return 0
+	# TC-023 — the Fortified family is an ALL-MODELS unit trigger, and a Takedown save is a unit of [1]'s
+	# (GF v3.5.1 p.14): the picked model's own unit answers alone, so a sniped trooper keeps the Fortified
+	# his squad carries even under a non-Fortified attached hero (and never borrows a hero's). `solo` is {}
+	# for every other attack in the game, which leaves the two lookups below exactly as they were. The
+	# window is PURELY SYNCHRONOUS — the flag is down again long before the save tray awaits.
+	_solo_takedown_solo = solo
 	# Fortified (defender): incoming hits count as AP(-1), to a min. of AP(0).
 	if _solo_rule_on_all_models(defender, "Fortified"):
 		var ap_before := ap
@@ -4355,6 +4430,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+" % [
 					n, defender.get_name(), ap, apb, base_defense + ap], true)
 			break
+	_solo_takedown_solo = {}   # TC-023: window closed — everything below awaits
 	var save_faces: Array
 	if human_defends:
 		save_faces = await _solo_prompt_saves(striker, defender, weapon_name, count, base_defense, ap)
@@ -4441,8 +4517,14 @@ func _solo_striker_has_bane(striker: GameUnit, profile: Dictionary, melee: bool)
 ## it. AP never affects this roll (AP only modifies Defense rolls). The battle log always states the
 ## outcome ("rolls N regeneration dice — M ignored"), so a 0-ignore roll is still visible. Returns the
 ## wounds that actually land; units without the rule take full wounds (no roll).
-func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = false) -> int:
+## `solo` is the Takedown pick (TC-023) whose unit-of-[1] view decides WHICH rule the roll comes from —
+## {} for every other wound in the game, which leaves the lookup exactly as it was.
+func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = false, solo: Dictionary = {}) -> int:
+	# PURELY SYNCHRONOUS window: _solo_regen_pick only reads rules, and the flag is down again before the
+	# tray below awaits (a leaked flag would rewrite the next unrelated unit's ignore roll).
+	_solo_takedown_solo = solo
 	var pick := _solo_regen_pick(target, from_spell)
+	_solo_takedown_solo = {}
 	var regen_target: int = int(pick.get("target", 0))
 	if wounds <= 0 or regen_target <= 0:
 		return maxi(wounds, 0)
@@ -4575,20 +4657,119 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 	return dealt
 
 
-## Bug 25 — land Takedown wounds on ONE chosen model (resolved as a unit of [1]): the AI attacker
-## auto-picks the highest-value model; a human attacker is asked. Overkill past that model is lost
-## (a unit of [1] has nowhere to spill). Returns the wounds that actually landed on the pool.
-func _solo_land_takedown_wounds(attacker: GameUnit, target: GameUnit, weapon_name: String,
+## TC-023 (maintainer, 2026-07-27: "must I not pick a model FIRST and roll afterwards?") — yes. The
+## Takedown model is the TARGET (GF v3.5.1 p.14: "may pick any model in the target unit as its individual
+## target"), so it is chosen BEFORE a single die is thrown: the AI takes its own recommendation, a human
+## attacker CLICKS the model (the B5 flow below, unchanged). Returns {"unit", "index", "model"}, or {}
+## when the chain has no living model — the shot then resolves against the unit exactly as before, so a
+## wiped target can never strand the loop. The pick is unconditional now: it is a targeting decision, not
+## a wound-distribution one, so it happens even when the shot ends up saving everything.
+func _solo_takedown_pick(attacker: GameUnit, target: GameUnit, weapon_name: String) -> Dictionary:
+	var pick: Dictionary = SoloController.attacker_pick_target(target)
+	if pick.is_empty():
+		return {}
+	# _solo_batch (headless self-play) has no clicker, and the pick's frame-spin would never end there.
+	# The arena marks both slots AI today, so this only guards a future human-attacker batch run.
+	if not _solo_is_ai_unit(attacker) and not _solo_batch:
+		pick = await _solo_prompt_takedown_model(target, weapon_name, pick)
+	var owner := pick.get("unit") as GameUnit
+	var idx: int = int(pick.get("index", -1))
+	if owner == null or not is_instance_valid(owner) or idx < 0 or idx >= owner.models.size():
+		return {}
+	var m: ModelInstance = owner.models[idx]
+	if m == null or not m.is_alive:
+		return {}
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "Takedown (%s): targets the %s in %s — resolved as a unit of [1]" % [
+			weapon_name, _solo_model_label(owner, idx), owner.get_name()], true)
+	return {"unit": owner, "index": idx, "model": m}
+
+
+## TC-023 — the numbers of a Takedown attack, resolved as a unit of [1] (GF v3.5.1 p.14). Everything
+## target-side comes from the PICKED MODEL instead of its unit:
+##   * to-hit modifiers — the model's own unit's rules (the rulebook's example: a Stealth hero inside a
+##     non-Stealth unit really gives -1 to hit; the "all models" quantifier has no other members to poll),
+##   * cover — the model's own square, never the unit's majority ("the other models … don't … provide
+##     cover to the target model in the unit"),
+##   * Defense — the model's own GameUnit, so a sniped attached hero saves on HIS Defense, not the host's.
+## `over9` is the caller's already-measured >9" gate (shot distance / charge distance). Returns
+## {"unit", "mod", "defense", "covered", "in_cover", "over9_rule"}. Purely synchronous: the unit-of-[1]
+## flag is set and cleared inside, so no await can ever observe it. "over9_rule" is the name of the >9"
+## Defense rule that ACTUALLY fired and actually moved the number — "" otherwise, so the log line below
+## can never name a rule the dice never saw.
+func _solo_takedown_context(member: GameUnit, pick: Dictionary, dist_in: float, melee: bool, over9: bool) -> Dictionary:
+	var owner := pick.get("unit") as GameUnit
+	if owner == null:
+		return {}
+	_solo_takedown_solo = pick
+	var info: Dictionary = _solo_hit_mod_info(member, owner, dist_in, melee)
+	var defense: int = _solo_shielded_defense(owner)
+	var over9_rule: String = _solo_over9_defense_rule(owner)
+	if over9 and not over9_rule.is_empty():
+		var guarded: int = AiCombatMath.guarded_defense(defense, true)
+		if guarded == defense:
+			over9_rule = ""   # already at the 2+ floor: the rule fired but changed nothing to report
+		defense = guarded
+	else:
+		over9_rule = ""   # not shot/charged from over 9" (or no such rule) — it never fired
+	# Cover is shooting-only (p.11) — melee keeps the uncovered Defense, as every melee path already does.
+	var covered: int = defense if melee else _solo_cover_defense(owner, defense)
+	var in_cover: bool = _solo_model_in_cover(pick.get("model") as ModelInstance)
+	_solo_takedown_solo = {}
+	return {"unit": owner, "mod": info, "defense": defense, "covered": covered,
+		"in_cover": in_cover, "over9_rule": over9_rule}
+
+
+## Rules-must-log: a Takedown resolves on numbers that differ from the rest of its unit's, and a silently
+## correct rule reads like a broken one. One line names the model, the modifiers that fired against IT,
+## the cover decision (shooting) and the save target the picked model actually rolls at. The cover clause
+## is derived from `save_def` — the number the dice really use — NOT from the model's cover state alone:
+## a Blast / Indirect / Ignores-Cover profile and a Defense already at the 2+ floor both leave a model
+## standing in woods saving at its uncovered value, and a line that claims "+1 Defense" there contradicts
+## the very roll it explains (worse than no line at all).
+func _solo_log_takedown_context(weapon_name: String, pick: Dictionary, ctx: Dictionary, to_hit: int,
+		save_def: int, melee: bool) -> void:
+	if battle_log == null or ctx.is_empty():
+		return
+	var owner := ctx.get("unit") as GameUnit
+	var parts: PackedStringArray = ["hits on %d+" % to_hit]
+	var note: String = str((ctx.get("mod", {}) as Dictionary).get("note", ""))
+	if not note.is_empty():
+		parts.append(note)
+	if not melee:
+		var base_def: int = int(ctx.get("defense", 0))
+		var cov_def: int = int(ctx.get("covered", 0))
+		if not bool(ctx.get("in_cover", false)):
+			parts.append("no cover of its own")
+		elif cov_def == base_def:
+			parts.append("in cover, but Defense is already %d+" % base_def)
+		elif save_def == cov_def:
+			parts.append("in cover: +1 Defense")
+		else:
+			parts.append("in cover, but this weapon ignores cover")
+	if not str(ctx.get("over9_rule", "")).is_empty():
+		parts.append("%s: +1 Defense" % str(ctx["over9_rule"]))
+	parts.append("saves on %d+" % save_def)
+	battle_log.log_event(BattleLog.Category.COMBAT, "Takedown (%s) vs the %s of %s — unit of [1]: %s" % [
+		weapon_name, _solo_model_label(owner, int(pick.get("index", -1))), owner.get_name(),
+		", ".join(parts)], true)
+
+
+## Bug 25 — land Takedown wounds on the model that was picked BEFORE the roll (resolved as a unit of [1]).
+## Overkill past that model is lost (a unit of [1] has nowhere to spill). Regeneration is the PICKED
+## model's own unit's roll (TC-023: it used to be a unit-level roll standing in front of the pick).
+## Returns the wounds that actually landed.
+func _solo_land_takedown_wounds(target: GameUnit, weapon_name: String, pick: Dictionary,
 		regenable: int, regen_proof: int) -> int:
-	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(target, regenable)
+	var owner := pick.get("unit") as GameUnit
+	if owner == null or not is_instance_valid(owner):
+		return 0
+	# TC-023: the ignore roll is the PICKED MODEL's unit-of-[1] roll — a Regeneration/medic hero joined to a
+	# plain squad no longer covers the sniped trooper (and the hero's own roll still stands when HE is hit).
+	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(owner, regenable, false, pick)
 	if landed <= 0:
 		return 0
-	var idx: int = SoloController.attacker_pick_model(target)
-	if idx < 0:
-		return 0
-	if not _solo_is_ai_unit(attacker):
-		idx = await _solo_prompt_takedown_model(target, weapon_name, idx)
-	var pid: int = int(target.unit_properties.get("player_id", 1))
+	var pid: int = int(owner.unit_properties.get("player_id", target.unit_properties.get("player_id", 1)))
 	var before: int = _solo_combined_alive(target)
 	var on_changed := func(m: ModelInstance) -> void:
 		if radial_menu_controller != null:
@@ -4597,33 +4778,36 @@ func _solo_land_takedown_wounds(attacker: GameUnit, target: GameUnit, weapon_nam
 			network_manager.broadcast_model_wounds(m)
 	var on_died := func(m: ModelInstance) -> void:
 		if m.node != null and is_instance_valid(m.node):
-			opr_army_manager.set_loose_model_dead(m.node, pid, true, target.unit_id)
+			opr_army_manager.set_loose_model_dead(m.node, pid, true, owner.unit_id)
 		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
 			network_manager.broadcast_model_wounds(m)
-	SoloController.apply_wounds_to_model(target, idx, landed, on_changed, on_died)
+	SoloController.apply_wounds_to_model(owner, int(pick.get("index", -1)), landed, on_changed, on_died)
 	if battle_log != null:
 		var killed: int = before - _solo_combined_alive(target)
-		battle_log.log_event(BattleLog.Category.COMBAT, "Takedown (%s): snipes 1 model — %s" % [
-			weapon_name, ("killed" if killed > 0 else "wounded")], true)
+		battle_log.log_event(BattleLog.Category.COMBAT, "Takedown (%s): the %s of %s is %s" % [
+			weapon_name, _solo_model_label(owner, int(pick.get("index", -1))), owner.get_name(),
+			("killed" if killed > 0 else "wounded")], true)
 	return landed
 
 
 ## The human's Takedown model pick (GF v3.5.1 p.14) — B5 (test game 2, decided): a real CLICK on the
 ## model in the target unit (hero / upgrade bearer), not a two-option dialog. Right-click takes the
-## EV-recommended model; the choice always gets its log line. Returns a model index.
-func _solo_prompt_takedown_model(target: GameUnit, weapon_name: String, recommended: int) -> int:
-	var alive: Array = []
-	for i in range(target.models.size()):
-		var m: ModelInstance = target.models[i]
-		if m != null and m.is_alive:
-			alive.append(i)
-	if alive.size() <= 1:
+## EV-recommended model. TC-023: the pool spans the whole JOINED CHAIN — an attached hero is his own
+## GameUnit here, so before this the rulebook's flagship victim was literally unclickable (the click
+## router dropped him and the prompt spun on). Takes and returns {"unit": GameUnit, "index": int}.
+func _solo_prompt_takedown_model(target: GameUnit, weapon_name: String, recommended: Dictionary) -> Dictionary:
+	var chain: Array = _solo_joined_chain(target)
+	var alive := 0
+	for cu in chain:
+		alive += (cu as GameUnit).get_alive_count()
+	if alive <= 1:
 		return recommended
+	var rec_label: String = _solo_model_label(recommended.get("unit") as GameUnit, int(recommended.get("index", -1)))
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Takedown (%s): CLICK the model in %s to snipe — right-click takes the recommended %s" % [
-			weapon_name, target.get_name(), _solo_model_label(target, recommended)], false)
-	_solo_model_pick = {"unit": target, "recommended": recommended, "outcome": []}
+			weapon_name, target.get_name(), rec_label], false)
+	_solo_model_pick = {"unit": target, "chain": chain, "recommended": recommended, "outcome": []}
 	var outcome: Array = _solo_model_pick["outcome"]
 	# UI audit A-3: this wait used to be INVISIBLE — the instruction lived only in the battle log,
 	# so with the log collapsed the game simply looked frozen. The strip states what the game is
@@ -4633,7 +4817,7 @@ func _solo_prompt_takedown_model(target: GameUnit, weapon_name: String, recommen
 	if not _solo_batch:
 		_solo_deploy_ui_show(
 			"Takedown (%s): click the model in %s to snipe." % [weapon_name, target.get_name()],
-			"Take the recommended %s" % _solo_model_label(target, recommended),
+			"Take the recommended %s" % rec_label,
 			func() -> void: skipped.append(true))
 	while outcome.is_empty() and skipped.is_empty() and not _solo_model_pick.is_empty():
 		await get_tree().process_frame
@@ -4642,17 +4826,13 @@ func _solo_prompt_takedown_model(target: GameUnit, weapon_name: String, recommen
 	if not skipped.is_empty():
 		outcome = []   # the player took the recommendation instead of picking
 	_solo_model_pick = {}
-	var idx: int = recommended if outcome.is_empty() or int(outcome[0]) < 0 else int(outcome[0])
-	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "Takedown (%s): snipes the %s in %s" % [
-			weapon_name, _solo_model_label(target, idx), target.get_name()], false)
-	return idx
+	return recommended if outcome.is_empty() else (outcome[0] as Dictionary)
 
 
 ## A short loadout label for a model (its distinctive weapon/equipment, else "trooper") — the Takedown
 ## picker's human-readable option text.
 func _solo_model_label(unit: GameUnit, idx: int) -> String:
-	if idx < 0 or idx >= unit.models.size():
+	if unit == null or idx < 0 or idx >= unit.models.size():
 		return "model"
 	var m: ModelInstance = unit.models[idx]
 	var weps: Array = m.properties.get("weapons", [])
@@ -4776,8 +4956,12 @@ func _solo_unit_tough(unit: GameUnit) -> int:
 ## maintainer's field test hit the model-level gap: the rule lived on the bearer model's equipment,
 ## not in the unit's own special_rules, so the ignore roll was never offered.
 func _solo_has_regeneration(unit: GameUnit) -> bool:
+	# TC-023 — Takedown's unit of [1] (GF v3.5.1 p.14): the sniped model's OWN unit answers alone. Neither a
+	# medic hero joined to a plain squad nor a bearer standing next to the victim may hand him an ignore roll
+	# a unit of [1] never earns; the unit's own rules still apply, because they ARE the picked model's.
+	var solo: bool = not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit")
 	var members: Array = [unit]
-	if unit.has_method("get_attached_heroes"):
+	if not solo and unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
 	for m in members:
 		var member := m as GameUnit
@@ -4788,6 +4972,8 @@ func _solo_has_regeneration(unit: GameUnit) -> bool:
 				return true
 		for model in member.get_alive_models():
 			var mi := model as ModelInstance
+			if solo and mi != _solo_takedown_solo.get("model"):
+				continue   # a unit of [1] holds exactly the picked model — no other bearer is in it
 			if mi != null and (mi.has_special_rule("Regeneration") or mi.has_special_rule("Medical Training")):
 				return true
 	return false
@@ -4801,6 +4987,11 @@ static func _solo_is_regen_rule(rule: String) -> bool:
 ## True when the majority of a unit's alive models sit in cover terrain (TerrainRules predicate on the real
 ## overlay data) — the OPR +1 Defense trigger.
 func _solo_majority_in_cover(unit: GameUnit) -> bool:
+	# TC-023 — Takedown's unit of [1] (GF v3.5.1 p.14: the other models "don't … provide cover to the
+	# target model in the unit"): the picked model's OWN square decides, never the unit's majority. A
+	# hero in the open whose squad stands in woods used to collect a +1 Defense he never earned.
+	if not _solo_takedown_solo.is_empty() and unit != null and unit == _solo_takedown_solo.get("unit"):
+		return _solo_model_in_cover(_solo_takedown_solo.get("model") as ModelInstance)
 	if terrain_overlay == null or not terrain_overlay.has_method("get_terrain_at_world_position"):
 		return false
 	var models: Array = unit.get_alive_models()
@@ -4814,6 +5005,16 @@ func _solo_majority_in_cover(unit: GameUnit) -> bool:
 		if TerrainRules.gives_cover(terrain_overlay.get_terrain_at_world_position(node.global_position)):
 			n += 1
 	return n * 2 > models.size()
+
+
+## TC-023 — ONE model's own cover state (Takedown's unit of [1], GF v3.5.1 p.14). PURE DELEGATE: the rule
+## itself lives ONCE, in SoloController.model_in_cover, which reads the same injected terrain callable
+## (wired to terrain_overlay.get_terrain_at_world_position in _ensure_solo_controller) that every other
+## solo terrain read uses — and which the regression test exercises. A second copy here would be a twin
+## that can drift, and the test would then guard the wrong one. No controller yet = no terrain = no cover,
+## the same honest false the probe itself returns without an overlay.
+func _solo_model_in_cover(model: ModelInstance) -> bool:
+	return solo_controller != null and solo_controller.model_in_cover(model)
 
 
 ## Battle-log / dice-owner label for a unit: "AI (name)" for an AI-controlled unit, else "You".
@@ -6185,13 +6386,15 @@ func _solo_model_pick_input(event: InputEvent) -> bool:
 		return false
 	var outcome: Array = _solo_model_pick.get("outcome", [])
 	if mb.button_index == MOUSE_BUTTON_RIGHT:
-		outcome.append(int(_solo_model_pick.get("recommended", -1)))
+		outcome.append(_solo_model_pick.get("recommended", {}))
 		return true
 	if mb.button_index != MOUSE_BUTTON_LEFT:
 		return false
-	var unit := _solo_model_pick.get("unit") as GameUnit
+	# TC-023: any model of the JOINED CHAIN counts — an attached hero's ModelInstance belongs to the
+	# HERO's GameUnit, so the old `mi.unit == unit` test silently swallowed the click on him.
+	var chain: Array = _solo_model_pick.get("chain", [])
 	var camera := get_viewport().get_camera_3d()
-	if unit == null or camera == null:
+	if chain.is_empty() or camera == null:
 		return true
 	var query := PhysicsRayQueryParameters3D.create(
 		camera.project_ray_origin(mb.position),
@@ -6200,8 +6403,8 @@ func _solo_model_pick_input(event: InputEvent) -> bool:
 	var col: Object = hit.get("collider")
 	if col is Node and (col as Node).has_meta("model_instance"):
 		var mi := (col as Node).get_meta("model_instance") as ModelInstance
-		if mi != null and mi.is_alive and mi.unit == unit:
-			outcome.append(mi.model_index)
+		if mi != null and mi.is_alive and chain.has(mi.unit):
+			outcome.append({"unit": mi.unit, "index": mi.model_index})
 	return true
 
 
@@ -6526,11 +6729,28 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
 			if int(profile.get("attacks", 0)) <= 0:
 				continue
 			fired_any = true
+			# TC-023 (Takedown, GF v3.5.1 p.14, maintainer: "must I not pick a model FIRST and roll
+			# afterwards?"): YOU click the sniped model HERE — before your dice — and the shot then
+			# resolves as a unit of [1] against it: ITS to-hit modifiers, ITS own cover square (never the
+			# unit's majority) and ITS own unit's Defense (an attached hero is his own GameUnit).
+			var is_takedown: bool = bool(profile.get("takedown", false))
+			var td_pick: Dictionary = {}
+			var td_ctx: Dictionary = {}
+			var p_mod: Dictionary = mod_info
+			var shot_base: int = shielded_def
+			var shot_cover: int = covered_def
+			if is_takedown:
+				td_pick = await _solo_takedown_pick(attacker, target, str(profile.get("name", "?")))
+				if not td_pick.is_empty():
+					td_ctx = _solo_takedown_context(group.get("member"), td_pick, dist, false, dist > AiCombatMath.LONG_RANGE_IN)
+					p_mod = td_ctx["mod"] as Dictionary
+					shot_base = int(td_ctx["defense"])
+					shot_cover = int(td_ctx["covered"])
 			# Reliable sets the Quality (2+), THEN the roll modifiers apply (GF v3.5.1 p.14: "Reliable only
 			# changes the Quality value, so the roll can still be modified").
 			var to_hit: int = AiCombatMath.modified_hit_target(
 				AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false))),
-				int(mod_info.get("mod", 0)) + upr_hit)
+				int(p_mod.get("mod", 0)) + upr_hit)
 			if upr_ap + extra_ap > 0:
 				profile = profile.duplicate()
 				profile["ap"] = int(profile.get("ap", 0)) + upr_ap + extra_ap   # Unpredictable + Tag/Reckless AP
@@ -6541,7 +6761,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
 			if bool(profile.get("versatile_attack", false)) and dist > AiCombatMath.LONG_RANGE_IN:
 				var pname := str(profile.get("name", "?"))
 				if not chosen_versatile.has(pname):
-					var rec: Dictionary = AiEv.versatile_best_mode(to_hit, shielded_def, int(profile.get("ap", 0)), bool(profile.get("bane", false)))
+					var rec: Dictionary = AiEv.versatile_best_mode(to_hit, shot_base, int(profile.get("ap", 0)), bool(profile.get("bane", false)))
 					chosen_versatile[pname] = await _solo_prompt_versatile(pname, rec)
 				var vm: Dictionary = chosen_versatile[pname]
 				to_hit = AiCombatMath.modified_hit_target(to_hit, int(vm.get("hit_mod", 0)))
@@ -6551,7 +6771,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
 				if battle_log != null:
 					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s at long range" % [
 						"AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
-			_solo_log_hit_mod(mod_info, target, to_hit)
+			_solo_log_hit_mod(p_mod, target, to_hit)
 			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You")
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
@@ -6563,21 +6783,23 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
 			if hits <= 0:
 				continue
 			# Blast (GF v3.5.1) and Indirect (wave 5) ignore cover — saves at the Shielded (uncovered) Defense.
-			var save_def: int = shielded_def if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else covered_def
+			var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover
 			# B5 (test game 2): the HUMAN volley now mirrors the AI's per-model landing — Takedown
 			# wounds go to the model the PLAYER picks (click), Deadly lands ×X on one model with no
 			# carry-over. Both previously pooled into the defender-optimal removal, so the player's
 			# Takedown visibly "did nothing".
 			var is_deadly: bool = int(profile.get("deadly", 0)) > 0
-			var is_takedown: bool = bool(profile.get("takedown", false))
-			var w: int = await _solo_resolve_saves(group.get("member"), target, str(profile.get("name", "?")), faces, hits, save_def, profile, false, false, not (is_deadly or is_takedown), false, dist)
-			if is_takedown and w > 0:
+			var save_unit: GameUnit = target if td_pick.is_empty() else (td_pick["unit"] as GameUnit)
+			if not td_ctx.is_empty():
+				_solo_log_takedown_context(str(profile.get("name", "?")), td_pick, td_ctx, to_hit, save_def, false)
+			var w: int = await _solo_resolve_saves(group.get("member"), save_unit, str(profile.get("name", "?")), faces, hits, save_def, profile, false, false, not (is_deadly or is_takedown), false, dist, td_pick)
+			if is_takedown and w > 0 and not td_pick.is_empty():
 				# Resolver wave A: Deadly multiplies on the picked model (see the AI branch).
 				var td_w: int = w * maxi(int(profile.get("deadly", 0)), 1)
 				if _solo_ignores_regen(group.get("member"), profile):
-					await _solo_land_takedown_wounds(group.get("member"), target, str(profile.get("name", "?")), 0, td_w)
+					await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, 0, td_w)
 				else:
-					await _solo_land_takedown_wounds(group.get("member"), target, str(profile.get("name", "?")), td_w, 0)
+					await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, td_w, 0)
 			elif is_deadly and w > 0:
 				if _solo_ignores_regen(group.get("member"), profile):
 					await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w)

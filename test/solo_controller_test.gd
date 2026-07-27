@@ -217,6 +217,107 @@ func test_majority_in_cover_reads_real_terrain() -> void:
 	assert_bool(solo.majority_in_cover(unit)).is_false()
 
 
+## TC-023 (Takedown, GF v3.5.1 p.14): the attack "is resolved as if it was a unit of [1]" and "other models
+## in the target's unit don't block line of sight or provide cover to the target model in the unit" — so the
+## SNIPED model's own square decides its save, never the unit's majority. Both directions of the maintainer's
+## finding are pinned: a model in the open whose unit stands in woods used to collect a +1 Defense it never
+## earned, and a model alone in the woods was denied the +1 its unit's majority did not reach.
+## SoloController.model_in_cover is the SHIPPED reader — main._solo_model_in_cover is a pure delegate to it,
+## so breaking the code below really does break the Takedown resolution (adversarial review: this test used
+## to guard a dead twin while main.gd carried its own copy of the probe).
+func test_takedown_uses_the_picked_models_own_cover_not_the_units_majority() -> void:
+	var squad := _unit(1, [Vector3.ZERO, Vector3(0.1, 0, 0), Vector3(5, 0, 5)])   # 2 in the woods, 1 out
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {squad.unit_id: squad}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		return TerrainRules.TerrainType.FOREST if Vector2(p.x, p.z).length() < 1.0 else TerrainRules.TerrainType.NONE
+	# The UNIT rule fires (2 of 3 in cover) — the picked model standing outside must not ride on it.
+	assert_bool(solo.majority_in_cover(squad)).is_true()
+	assert_bool(solo.model_in_cover(squad.models[2])).is_false()
+	assert_int(AiCombatMath.covered_defense(squad.get_defense(), solo.majority_in_cover(squad))).is_equal(3)
+	assert_int(AiCombatMath.covered_defense(squad.get_defense(), solo.model_in_cover(squad.models[2]))) \
+		.override_failure_message("a Takedown target standing in the open must save at its own Defense, not at the unit's majority cover") \
+		.is_equal(4)
+	# Vice versa: the unit's majority leaves the woods, the picked model walks in — now HE gets the +1.
+	squad.models[0].node.global_position = Vector3(6, 0, 5)
+	squad.models[1].node.global_position = Vector3(7, 0, 5)
+	squad.models[2].node.global_position = Vector3.ZERO
+	assert_bool(solo.majority_in_cover(squad)).is_false()
+	assert_bool(solo.model_in_cover(squad.models[2])).is_true()
+	assert_int(AiCombatMath.covered_defense(squad.get_defense(), solo.model_in_cover(squad.models[2]))).is_equal(3)
+	# No terrain wired at all → honest false (same contract as majority_in_cover), and null is safe.
+	solo.terrain_type_at = Callable()
+	assert_bool(solo.model_in_cover(squad.models[2])).is_false()
+	assert_bool(solo.model_in_cover(null)).is_false()
+
+
+## TC-023 consequence 4: an attached hero is his OWN GameUnit here, so the models-only attacker_pick_model
+## could never name him — the rulebook's flagship Takedown victim was unreachable. attacker_pick_target
+## spans the joined chain and returns the owning unit with the index, which is what lets the sniped hero
+## save on HIS Defense instead of the host squad's.
+func test_attacker_pick_target_reaches_the_joined_hero_and_his_own_defense() -> void:
+	var squad := _unit(1, [Vector3.ZERO, Vector3(0.03, 0, 0), Vector3(0.06, 0, 0)])
+	var hero := _unit(1, [Vector3(0.09, 0, 0)])
+	hero.unit_properties["special_rules"] = ["Hero", "Tough(3)"]
+	hero.unit_properties["defense"] = 2
+	hero.models[0].wounds_max = 3
+	hero.models[0].wounds_current = 3
+	squad.unit_properties["attached_heroes"] = [hero]
+	# The old models-only pick can only ever name a body of the host unit.
+	assert_int(SoloController.attacker_pick_model(squad)).is_between(0, squad.models.size() - 1)
+	var pick := SoloController.attacker_pick_target(squad)
+	assert_object(pick.get("unit")).is_same(hero)
+	assert_int(int(pick.get("index", -1))).is_equal(0)
+	# Consequence 4: the save target comes from the PICKED model's own unit (Defense 2), not the host (4).
+	assert_int((pick["unit"] as GameUnit).get_defense()).is_equal(2)
+	assert_int(squad.get_defense()).is_equal(4)
+	# The singular lander (a unit of [1] has nowhere to spill): 2 wounds tick the Tough(3) hero …
+	var noop := func(_m: ModelInstance) -> void: pass
+	assert_int(SoloController.apply_wounds_to_model(hero, 0, 2, noop, noop)).is_equal(0)
+	assert_bool(hero.models[0].is_alive).is_true()
+	assert_int(hero.models[0].wounds_current).is_equal(1)
+	# … and the overkill of the killing blow is discarded rather than spilling into the host squad.
+	assert_int(SoloController.apply_wounds_to_model(hero, 0, 3, noop, noop)).is_equal(2)
+	assert_bool(hero.models[0].is_alive).is_false()
+	assert_int(squad.get_alive_count()).is_equal(3)
+	# A dead chain has nothing to pick — the resolver falls back to the unit-wide path instead of hanging.
+	for m in squad.models:
+		(m as ModelInstance).is_alive = false
+	assert_bool(SoloController.attacker_pick_target(squad).is_empty()).is_true()
+	assert_bool(SoloController.attacker_pick_target(null).is_empty()).is_true()
+
+
+## TC-023, the SAVE step: "all models have this rule" is a UNIT quantifier, and a Takedown save is a unit of
+## [1]'s (GF v3.5.1 p.14). AiEv.rule_on_all_models(…, solo) is the seam main._solo_rule_on_all_models routes
+## through, so the Fortified / Guarded / Shielded / Self-Repair family sees the picked model's OWN unit alone.
+## Adversarial-review finding A1: the window used to close before the saves, so sniping a trooper out of a
+## Fortified squad that carries a NON-Fortified attached hero denied him the AP(-1) his unit of [1] has.
+func test_takedown_all_models_rules_answer_for_the_picked_models_own_unit() -> void:
+	var squad := _unit(1, [Vector3.ZERO, Vector3(0.03, 0, 0)])
+	var hero := _unit(1, [Vector3(0.06, 0, 0)])
+	squad.unit_properties["special_rules"] = ["Fortified"]
+	hero.unit_properties["special_rules"] = ["Hero"]           # the joined hero has NO Fortified
+	squad.unit_properties["attached_heroes"] = [hero]
+	# Unit-wide view (every other attack in the game): the plain hero withholds the squad's rule.
+	assert_bool(AiEv.rule_on_all_models(squad, "Fortified")).is_false()
+	# Unit-of-[1] view: the sniped trooper's own unit answers, so the AP(-1) he carries actually applies.
+	assert_bool(AiEv.rule_on_all_models(squad, "Fortified", true)) \
+		.override_failure_message("a Takedown target must keep the all-models rule its OWN unit carries") \
+		.is_true()
+	assert_int(AiCombatMath.fortified_ap(2, AiEv.rule_on_all_models(squad, "Fortified", true))).is_equal(1)
+	assert_int(AiCombatMath.fortified_ap(2, AiEv.rule_on_all_models(squad, "Fortified", false))).is_equal(2)
+	# The collapse never INVENTS a rule: the hero's unit of [1] still has no Fortified of its own …
+	assert_bool(AiEv.rule_on_all_models(hero, "Fortified", true)).is_false()
+	# … and the rulebook's own example — a Stealth hero inside a plain squad — keeps his -1 to hit.
+	hero.unit_properties["special_rules"] = ["Hero", "Stealth"]
+	assert_bool(AiEv.rule_on_all_models(squad, "Stealth", true)).is_false()
+	assert_bool(AiEv.rule_on_all_models(hero, "Stealth", true)).is_true()
+	assert_bool(AiEv.rule_on_all_models(null, "Stealth", true)).is_false()
+
+
 ## Wave-4 Royal Legion (Mummified Undead army-book rule): +4" shooting range. The +2" Charge is verified
 ## via move_bands_for_props in the movement-range suite.
 func test_royal_legion_shooting_range_bonus() -> void:

@@ -69,9 +69,16 @@ static func aura_granted_rules(members: Array) -> Array:
 	return granted
 
 
-static func rule_on_all_models(unit: GameUnit, rule: String) -> bool:
+## Whether ALL models of `unit` carry `rule` — the trigger form of Stealth / Evasive / Fortified / …, and
+## the ONE truth between the EV metric and the dice resolution. `solo` collapses the quantifier to a unit of
+## [1] (TC-023, Takedown, GF v3.5.1 p.14 "resolved as if it was a unit of [1]"): the picked model's own unit
+## answers alone, so the joined chain's other members neither withhold the rule (a Fortified squad's sniped
+## trooper keeps his AP(-1) under a non-Fortified attached hero) nor grant it. Default false = unchanged.
+static func rule_on_all_models(unit: GameUnit, rule: String, solo: bool = false) -> bool:
 	if unit == null or not unit.has_special_rule(rule):
 		return false
+	if solo:
+		return true
 	if unit.has_method("get_attached_heroes"):
 		for h in unit.get_attached_heroes():
 			var hero := h as GameUnit
