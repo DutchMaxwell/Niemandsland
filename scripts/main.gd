@@ -5329,7 +5329,6 @@ func _solo_animate_move(move_paths: Array) -> void:
 	# each model back to its route START, so the attention beat shows the plotted paths with the models
 	# still at their staging positions before they move.
 	var corridors: Array = []
-	var corridor_labels: Array = []   # Label3D, freed with the corridors (not MeshInstance3D)
 	var longest_path: Array = []
 	var longest_len := 0.0
 	for entry in move_paths:
@@ -5343,12 +5342,6 @@ func _solo_animate_move(move_paths: Array) -> void:
 		if body != null:
 			corridors.append(body)
 		var arc: float = MovementPlanner.polyline_length(path)
-		# The player's own chalk trail states the inches it cost (move_trails.commit_trail); the AI's
-		# corridor did not, so the one side of the table you cannot verify was also the one without a
-		# number (maintainer: "bei den Pfaden die die KI zurücklegt hinschreiben wieviel Zoll").
-		var dist_label := _solo_spawn_corridor_distance_label(path, y, arc)
-		if dist_label != null:
-			corridor_labels.append(dist_label)
 		if arc > longest_len:
 			longest_len = arc
 			longest_path = path
@@ -5390,47 +5383,27 @@ func _solo_animate_move(move_paths: Array) -> void:
 	# The corridors fade now that the whole unit has flowed through (persisted corridors faded here, not on spawn).
 	for body in corridors:
 		_solo_fade_corridor(body as MeshInstance3D)
-	for lbl in corridor_labels:
-		_solo_fade_corridor_label(lbl as Label3D)
-
-
-## Fade a corridor distance label out on the same beat as its ribbon, then free it — a Label3D is
-## not a MeshInstance3D, so it cannot ride _solo_fade_corridor and would otherwise stay forever.
-func _solo_fade_corridor_label(lbl: Label3D) -> void:
-	if not is_instance_valid(lbl):
-		return
-	var tw := lbl.create_tween()
-	tw.tween_property(lbl, "modulate:a", 0.0, SoloController.PACE_TRAIL_FADE_S)
-	tw.tween_callback(lbl.queue_free)
-
-
-## The travelled distance written onto an AI corridor, in the same "12.0\"" form the player's chalk
-## uses. Placed at the route's midpoint and billboarded, so it stays readable from any camera angle.
-func _solo_spawn_corridor_distance_label(path: Array, y: float, arc_m: float) -> Label3D:
-	if path.size() < 2 or arc_m <= 0.0:
-		return null
-	var lbl := Label3D.new()
-	lbl.text = "%.1f\"" % (arc_m / 0.0254)
-	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	lbl.no_depth_test = true
-	lbl.fixed_size = true
-	lbl.pixel_size = 0.0012
-	lbl.font_size = 64
-	lbl.outline_size = 18
-	lbl.modulate = Color(1.0, 0.75, 0.2, 0.95)     # the AI's amber, against the player's chalk blue
-	lbl.outline_modulate = Color(0, 0, 0, 0.85)
-	var mid: Vector3 = path[path.size() >> 1]
-	# add_child FIRST: global_position on a node that is not yet in the tree cannot be resolved —
-	# Godot logs "Condition !is_inside_tree() is true" and hands back an identity transform, so the
-	# label silently lands in the wrong place. A self-play batch flooded its log with thousands of
-	# these, which is how it surfaced: the launch smoke never moves a unit, so nothing caught it.
-	add_child(lbl)
-	lbl.global_position = Vector3(mid.x, y + SOLO_CORRIDOR_LABEL_Y_M, mid.z)
-	return lbl
+	# The AI's move leaves the SAME persistent chalk the player's does. selection_dropped never fires
+	# for a choreographed move (nothing is dragged), so the trails are committed here directly — the
+	# maintainer's actual complaint behind "die KI-Pfade zeigen keine Zoll": the corridors and their
+	# 2-second pace label vanish, while his own chalk (ribbon + inch stamp, cleared with T) stays
+	# readable after the move. One system, one look, both sides of the table.
+	var chalk_moves: Array = []
+	for entry in move_paths:
+		var model := (entry as Dictionary).get("model") as ModelInstance
+		var path: Array = (entry as Dictionary).get("path", [])
+		if model == null or model.node == null or not is_instance_valid(model.node) or path.size() < 2:
+			continue
+		var pts := PackedVector2Array()
+		for p in path:
+			pts.append(Vector2((p as Vector3).x, (p as Vector3).z))
+		chalk_moves.append({"node": model.node, "path": pts,
+			"radius_m": float((entry as Dictionary).get("radius_m", 0.0125))})
+	if not chalk_moves.is_empty():
+		_on_trails_dropped(chalk_moves)
 
 
 ## Height offsets keeping the corridor visuals just above the table without z-fighting (metres).
-const SOLO_CORRIDOR_LABEL_Y_M := 0.05   # the distance label floats clear of the corridor ribbon
 const SOLO_CORRIDOR_Y_M := 0.012
 const SOLO_CORRIDOR_EDGE_Y_M := 0.015
 ## Semicircle end-cap resolution (segments per 180°).

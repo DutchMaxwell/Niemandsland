@@ -88,15 +88,44 @@ func test_ai_corridor_labels_land_on_their_route_midpoint(timeout := 120000) -> 
 	var paths := _move_paths(u, from, to)
 	var route_mid := (from + to) * 0.5
 
+	# An AI move happens in PLAYING, never in deployment — and MoveTrails deliberately builds no chalk
+	# while deployment is active (record-only, so nothing pops in when play begins). The boot leaves
+	# the scene in the deployment phase, so without this transition the chalk assertion below tests
+	# the wrong world and goes red on correct code.
+	if _main.opr_army_manager != null and _main.opr_army_manager.has_method("start_game"):
+		_main.opr_army_manager.start_game()
+		await await_idle_frame()
+
 	await _main._solo_animate_move(paths)
 
-	# _solo_animate_move spawns the corridor distance label (main.gd:5409) and, with a SoloController
-	# present, the distance-truth label (main.gd:5548). Both are Label3D children of Main and both must
-	# have been add_child()ed BEFORE their global_position was written.
+	# _solo_animate_move spawns the distance-truth pace label (one per unit, walked/budget — the
+	# per-model corridor labels are gone: ten stacked "6.0\"" blobs on a ten-model unit were the
+	# maintainer's "aus der Hölle"). It is a Label3D child of Main and must have been add_child()ed
+	# BEFORE its global_position was written.
 	var labels := _labels_on_main()
 	assert_int(labels.size()) \
 		.override_failure_message("the AI move choreography spawned no Label3D at all — the distance readout the maintainer asked for is gone") \
 		.is_greater_equal(1)
+
+	# The DURABLE half of the maintainer's ask: the AI's move must leave the same persistent chalk the
+	# player's does (ribbon + inch stamp via MoveTrails), not just the 2-second pace label. The first
+	# implementation instead stacked one giant Label3D per MODEL — ten overlapping "6.0\"" blobs on a
+	# ten-model unit ("aus der Hölle") — and the AI never wrote chalk at all, because commit only ran
+	# on selection_dropped, which a choreographed move never fires.
+	var trails_node := _main.get_node_or_null("MoveTrails")
+	assert_object(trails_node) \
+		.override_failure_message("MoveTrails is missing from the booted scene — the chalk system the AI must write into") \
+		.is_not_null()
+	var committed: Array = trails_node._trails
+	assert_int(committed.size()) \
+		.override_failure_message("the AI move committed NO chalk trail — its path leaves no persistent inches on the table while the player's own drag does") \
+		.is_greater_equal(1)
+	var inches := 0.0
+	for t in committed:
+		inches = maxf(inches, float((t as Dictionary).get("inches", 0.0)))
+	assert_float(inches) \
+		.override_failure_message("the AI's chalk trail carries no measured inches — the stamp would read 0.0\"") \
+		.is_greater(0.0)
 	for l in labels:
 		var lbl := l as Label3D
 		assert_bool(lbl.is_inside_tree()).is_true()

@@ -97,6 +97,9 @@ static func make_unit(host: Node, pid: int, unit_name: String, positions: Array)
 		m.unit = u
 		var n := Node3D.new()
 		n.name = "%s_m%d" % [unit_name, u.models.size()]
+		# Real spawned models carry their GameUnit as node meta (equipment_distributor / save_manager
+		# set it); _trail_unit_of and the reserve checks read it, so the fixture matches production.
+		n.set_meta("game_unit", u)
 		host.add_child(n)
 		n.global_position = p
 		m.node = n
