@@ -5025,14 +5025,12 @@ static func attacker_pick_model(unit: GameUnit) -> int:
 static func attacker_pick_target(unit: GameUnit) -> Dictionary:
 	if unit == null:
 		return {}
-	if unit.has_method("get_attached_heroes"):
-		for h in unit.get_attached_heroes():
-			var hero := h as GameUnit
-			if hero == null or not is_instance_valid(hero) or hero.get_alive_count() <= 0:
-				continue
-			var hi := attacker_pick_model(hero)
-			if hi >= 0:
-				return {"unit": hero, "index": hi}
+	# NO hero-first preference: an 8-seed Schmiede A/B (td_hero_off vs td_hero_on, 27.07.) REJECTED
+	# always-snipe-the-hero for the AI — 8 detectors worse (seized 90->86, congestion .372->.382,
+	# zero-volley .197->.22, neutral 8->5 ...) against only held 16->19. The value ranking below is the
+	# measured arm-A behaviour. The RULES rework stands regardless: whoever is picked is resolved as a
+	# unit of [1] with their own to-hit, cover and Defense. A smarter EV-based hero-vs-host choice
+	# would be NEW behaviour and needs its own A/B before it may replace this.
 	var idx := attacker_pick_model(unit)
 	return {} if idx < 0 else {"unit": unit, "index": idx}
 

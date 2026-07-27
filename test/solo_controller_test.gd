@@ -254,10 +254,13 @@ func test_takedown_uses_the_picked_models_own_cover_not_the_units_majority() -> 
 	assert_bool(solo.model_in_cover(null)).is_false()
 
 
-## TC-023 consequence 4: an attached hero is his OWN GameUnit here, so the models-only attacker_pick_model
-## could never name him — the rulebook's flagship Takedown victim was unreachable. attacker_pick_target
-## spans the joined chain and returns the owning unit with the index, which is what lets the sniped hero
-## save on HIS Defense instead of the host squad's.
+## TC-023 consequence 4: an attached hero is his OWN GameUnit, and a Takedown pick naming him must
+## resolve against HIS Defense, not the host squad's — that REACHABILITY is the rule and is pinned
+## here. What is deliberately NOT pinned any more: hero-FIRST preference for the AI. An 8-seed
+## Schmiede A/B (27.07., td_hero_off vs td_hero_on) rejected always-snipe-the-hero — 8 detectors
+## worse against 1 better — so the AI's own pick returns to the measured host value ranking, while
+## the {"unit": hero} pick shape stays fully supported for the human's click (and any future
+## A/B-proven policy).
 func test_attacker_pick_target_reaches_the_joined_hero_and_his_own_defense() -> void:
 	var squad := _unit(1, [Vector3.ZERO, Vector3(0.03, 0, 0), Vector3(0.06, 0, 0)])
 	var hero := _unit(1, [Vector3(0.09, 0, 0)])
@@ -266,13 +269,16 @@ func test_attacker_pick_target_reaches_the_joined_hero_and_his_own_defense() -> 
 	hero.models[0].wounds_max = 3
 	hero.models[0].wounds_current = 3
 	squad.unit_properties["attached_heroes"] = [hero]
-	# The old models-only pick can only ever name a body of the host unit.
-	assert_int(SoloController.attacker_pick_model(squad)).is_between(0, squad.models.size() - 1)
+	# The AI's own pick is the measured arm-A behaviour: a host body by value ranking, never null.
 	var pick := SoloController.attacker_pick_target(squad)
-	assert_object(pick.get("unit")).is_same(hero)
-	assert_int(int(pick.get("index", -1))).is_equal(0)
-	# Consequence 4: the save target comes from the PICKED model's own unit (Defense 2), not the host (4).
-	assert_int((pick["unit"] as GameUnit).get_defense()).is_equal(2)
+	assert_object(pick.get("unit")) \
+		.override_failure_message("the AI pick must be the HOST unit — hero-first was rejected by the Schmiede A/B (8 detectors worse)") \
+		.is_same(squad)
+	assert_int(int(pick.get("index", -1))).is_between(0, squad.models.size() - 1)
+	# Consequence 4 stays: a hero PICK (the human's click, or a future proven policy) resolves on the
+	# hero's own unit — Defense 2, not the host's 4 — and lands wounds on him as a unit of [1].
+	var hero_pick := {"unit": hero, "index": 0}
+	assert_int((hero_pick["unit"] as GameUnit).get_defense()).is_equal(2)
 	assert_int(squad.get_defense()).is_equal(4)
 	# The singular lander (a unit of [1] has nowhere to spill): 2 wounds tick the Tough(3) hero …
 	var noop := func(_m: ModelInstance) -> void: pass
