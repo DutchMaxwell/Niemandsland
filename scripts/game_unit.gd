@@ -292,6 +292,20 @@ func activate(round_number: int) -> void:
 			hero.activation_round = round_number
 
 
+## The exact inverse of activate(), attached heroes included. It lives next to activate() on purpose:
+## an undo that clears LESS than activate() set leaves a unit half-spent. That is exactly what
+## happened — the deployment gate's refused activation cleared only the host's flag, so a joined hero
+## stayed marked and the unit entered round 1 already spent. Caught by the e2e gate test, not by any
+## unit test, because only the real flow joins a hero.
+func deactivate() -> void:
+	is_activated = false
+	activation_round = 0
+	for hero in get_attached_heroes():
+		if hero is GameUnit:
+			hero.is_activated = false
+			hero.activation_round = 0
+
+
 ## Resets activation state for a new round.
 func reset_activation() -> void:
 	is_activated = false

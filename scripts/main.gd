@@ -11335,7 +11335,7 @@ func _deployment_gate_slot() -> int:
 func _solo_undo_refused_activation(gu: GameUnit) -> void:
 	if gu == null or not gu.is_activated:
 		return
-	gu.is_activated = false
+	gu.deactivate()   # the inverse of activate(), attached heroes included
 	if radial_menu_controller != null and radial_menu_controller.has_method("_update_activated_markers"):
 		radial_menu_controller._update_activated_markers(gu)
 	if network_manager != null and network_manager.has_method("broadcast_unit_activation"):

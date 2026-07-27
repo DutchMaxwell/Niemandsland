@@ -525,7 +525,9 @@ func _toggle_activation(context: Dictionary) -> void:
 		return
 
 	if game_unit.is_activated:
-		game_unit.is_activated = false
+		# Same asymmetry the deployment gate's undo had: activate() also marks every attached hero, so
+		# clearing only the host's flag left a joined hero spent after the player un-toggled.
+		game_unit.deactivate()
 		_update_activated_markers(game_unit)
 		unit_deactivated.emit(game_unit)
 	else:
