@@ -87,8 +87,9 @@ not high-frequency).
 
 ## What is NOT built (out of scope)
 
-Per [`CLAUDE.md`](../CLAUDE.md), Niemandsland does not automate combat/morale.
-The following are **player-applied**, not coded:
+In human-vs-human games Niemandsland does not automate combat/morale (solo mode
+does, via `scripts/solo/`). In the regiments context the following are
+**player-applied**, not coded:
 
 - Melee resolution (Quality to-hit, AP, Defense to-wound, wounds).
 - Morale tests (Shaken/Routed) and melee resolution (wounds + full rows).
