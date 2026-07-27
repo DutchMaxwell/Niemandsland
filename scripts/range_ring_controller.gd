@@ -111,6 +111,11 @@ func active_count() -> int:
 
 ## Show a temporary spell-range preview ring around the given caster model nodes (purple). Replaces
 ## any current preview; does NOT touch the persistent per-model G rings. range_inches <= 0 -> clears.
+## Whether a spell-range preview ring is currently up (wave-1 tutorial poll seam).
+func has_spell_preview() -> bool:
+	return not _preview_models.is_empty()
+
+
 func show_spell_preview(model_nodes: Array, range_inches: int) -> void:
 	clear_spell_preview()
 	if range_inches <= 0:
