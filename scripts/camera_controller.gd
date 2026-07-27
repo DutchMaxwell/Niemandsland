@@ -93,7 +93,15 @@ func focus_on(world_pos: Vector3) -> void:
 	_mark_dirty()
 
 
-## Check if mouse is over a scrollable UI element (to prevent zoom when scrolling menus)
+## Check if mouse is over a scrollable UI element (to prevent zoom when scrolling menus).
+##
+## SURVIVES the move to _unhandled_input, unlike every other hand-rolled UI guard in this project.
+## Control.mouse_force_pass_scroll_events defaults to TRUE, so MOUSE_FILTER_STOP does NOT stop wheel
+## events: they walk the whole chain and are consumed only if a control calls accept_event().
+## Measured on 4.6.2 — wheel over a STOP PanelContainer/Button: nothing consumed; over a
+## ScrollContainer whose content FITS: nothing consumed; over one that can actually scroll: only the
+## PRESS half is consumed, the release still arrives here. Since the branches below zoom on both
+## halves, dropping this guard would zoom the camera half a notch per tick while scrolling a menu.
 func _is_mouse_over_scrollable_ui() -> bool:
 	var mouse_pos = get_viewport().get_mouse_position()
 
@@ -129,7 +137,14 @@ func _check_scroll_container_recursive(node: Node, mouse_pos: Vector2) -> bool:
 	return false
 
 
-func _input(event: InputEvent) -> void:
+## Camera control lives in _unhandled_input, NEVER in _input. Godot dispatches
+##     _input group  →  GUI (Control._gui_input)  →  _unhandled_input group
+## and aborts as soon as the event is handled, so by the time we run, any Control that owns this
+## click has already consumed it. In _input the RMB/MMB branches below had no UI check at all:
+## right-clicking any HUD button jerked the camera into an orbit, and middle-clicking one panned it.
+## The engine now answers "is the pointer over UI?" per event, freshly and correctly.
+## The wheel is the one exception — see _is_mouse_over_scrollable_ui.
+func _unhandled_input(event: InputEvent) -> void:
 	# Handle mouse button events
 	if event is InputEventMouseButton:
 		var mouse_event = event as InputEventMouseButton
@@ -154,14 +169,27 @@ func _input(event: InputEvent) -> void:
 			if not _is_mouse_over_scrollable_ui():
 				_zoom(zoom_speed)
 
-	# Handle mouse motion
-	elif event is InputEventMouseMotion:
-		var motion_event = event as InputEventMouseMotion
+	# NOTE: mouse MOTION is deliberately not handled here — see _input below.
 
-		if _is_rotating:
-			_rotate_camera(motion_event.relative)
-		elif _is_panning:
-			_pan_camera(motion_event.relative)
+
+## Mouse MOTION cannot ride along in _unhandled_input, and this is the one place the measured design
+## was wrong. Godot routes motion to gui_find_control(pos) whenever gui.mouse_focus is NULL — which is
+## exactly the state during a drag that STARTED on the table — and a MOUSE_FILTER_STOP ancestor then
+## consumes it. Measured on 4.6.2: a right-drag orbit sweeping from the table across the dice panel
+## loses half its motion events at stage 3, so the camera silently stops turning mid-sweep over the
+## bottom-right quadrant. A gesture that is ALREADY live therefore claims motion here in stage 1; the
+## button that starts it still faces the UI in _unhandled_input, so right-clicking a HUD button still
+## does not begin an orbit.
+func _input(event: InputEvent) -> void:
+	if not (_is_rotating or _is_panning):
+		return
+	var motion_event := event as InputEventMouseMotion
+	if motion_event == null:
+		return
+	if _is_rotating:
+		_rotate_camera(motion_event.relative)
+	else:
+		_pan_camera(motion_event.relative)
 
 
 func _rotate_camera(delta: Vector2) -> void:

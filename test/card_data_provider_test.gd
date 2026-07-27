@@ -75,10 +75,10 @@ func test_rule_tooltip_cascades_referenced_rules_and_item_grants() -> void:
 	army._session_spells[1] = [{"name": "Fireball", "threshold": 2, "effect": "Target takes 6 hits with Blast(3)."}]
 	dock._presented_unit = u
 	# Spell tooltip reveals the referenced Blast rule.
-	var spell_tip := dock._rule_description("spell:Fireball")
+	var spell_tip := dock._rule_description("spell:Fireball", u)
 	assert_bool(spell_tip.contains("Blast — Ignores cover.")).is_true()
 	# Item tooltip lists what it grants instead of its own (empty) description.
-	var item_tip := dock._rule_description("Combat Shield")
+	var item_tip := dock._rule_description("Combat Shield", u)
 	assert_bool(item_tip.contains("grants:")).is_true()
 	assert_bool(item_tip.contains("Shielded — Gets +1 to defense rolls.")).is_true()
 	# The granted rule is hidden from the flat rules list.

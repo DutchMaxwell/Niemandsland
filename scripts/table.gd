@@ -4,8 +4,10 @@ extends StaticBody3D
 
 ## Emitted whenever the table is rebuilt to a new size (in feet). Dependents that must
 ## track the play-field extent (ground mist, ...) connect here, so EVERY resize path —
-## size dialog, save load, network sync, WGS import — keeps them in sync.
+## size dialog, save load, network sync — keeps them in sync.
 signal table_resized(size_feet: Vector2)
+## Wave-3 tutorial seam: the biome switch was silent (set_biome had no signal).
+signal biome_changed(biome_name: String)
 
 @export var default_color: Color = Color(0.2, 0.35, 0.2)  # Gaming mat green
 @export var show_grid: bool = true
@@ -193,6 +195,7 @@ func set_biome(biome_name: String) -> void:
 		return
 	biome = biome_name
 	_apply_biome(biome_name)
+	biome_changed.emit(biome_name)
 	if _grass_field != null:
 		_grass_field.set_biome(biome_name)
 	var overlay := get_node_or_null("TerrainOverlay")

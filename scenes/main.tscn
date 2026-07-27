@@ -149,6 +149,7 @@ layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+mouse_filter = 2
 
 [node name="InfoLabel" type="Label" parent="UI/HUD"]
 layout_mode = 1
@@ -173,6 +174,7 @@ Controls:
 - Ctrl+C/V/D: Copy/Paste/Dup
 - L: Lock/Unlock
 - G / Shift+G: Range Ring / clear
+- F / Shift+F: Sight/Range Fan / clear
 - M / Shift+M: Move Bands / clear
 - P: Pin Ruler
 - K / Shift+K: Clear Rulers mine/all
@@ -221,11 +223,13 @@ offset_top = 60.0
 offset_right = 210.0
 offset_bottom = -10.0
 grow_vertical = 2
+mouse_filter = 0
 horizontal_scroll_mode = 0
 clip_contents = false
 
 [node name="LeftPanelVBox" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll"]
 layout_mode = 2
+mouse_filter = 0
 size_flags_horizontal = 3
 
 [node name="SpawnPanel" type="VBoxContainer" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox"]
@@ -240,12 +244,6 @@ unique_name_in_owner = true
 layout_mode = 2
 focus_mode = 0
 text = "Import OPR Army..."
-
-[node name="ImportWGS" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
-unique_name_in_owner = true
-layout_mode = 2
-focus_mode = 0
-text = "Import WGS Game..."
 
 [node name="MapLayoutBtn" type="Button" parent="UI/HUD/LeftPanelScroll/LeftPanelVBox/SpawnPanel"]
 unique_name_in_owner = true

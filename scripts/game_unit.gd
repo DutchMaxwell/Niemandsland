@@ -1,15 +1,15 @@
 class_name GameUnit
 extends RefCounted
 ## System-agnostic wrapper for a unit.
-## Can wrap OPR units, WGS units, or generic miniatures.
+## Can wrap OPR units or generic miniatures.
 ## Provides a unified interface regardless of source.
 
 # ===== Source Data =====
 
-## Original data from import (OPRUnit, WGSUnit, or generic Dictionary)
+## Original data from import (OPRUnit or generic Dictionary)
 var source_data: Variant = null
 
-## Source type identifier: "opr", "wgs", "generic"
+## Source type identifier: "opr", "generic" (old saves may carry retired types — treated as generic)
 var source_type: String = "generic"
 
 ## Unique identifier for this unit (for multiplayer sync and save/load)
@@ -290,6 +290,20 @@ func activate(round_number: int) -> void:
 		if hero is GameUnit:
 			hero.is_activated = true
 			hero.activation_round = round_number
+
+
+## The exact inverse of activate(), attached heroes included. It lives next to activate() on purpose:
+## an undo that clears LESS than activate() set leaves a unit half-spent. That is exactly what
+## happened — the deployment gate's refused activation cleared only the host's flag, so a joined hero
+## stayed marked and the unit entered round 1 already spent. Caught by the e2e gate test, not by any
+## unit test, because only the real flow joins a hero.
+func deactivate() -> void:
+	is_activated = false
+	activation_round = 0
+	for hero in get_attached_heroes():
+		if hero is GameUnit:
+			hero.is_activated = false
+			hero.activation_round = 0
 
 
 ## Resets activation state for a new round.

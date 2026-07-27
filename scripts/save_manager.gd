@@ -7,7 +7,7 @@ signal save_completed(path: String)
 signal load_completed(object_count: int)
 signal load_failed(error: String)
 
-const SAVE_VERSION = "1.6"  # Schema checkpoint (goal 002): normalises the post-1.5 no-bump additions.
+const SAVE_VERSION = "1.7"  # 1.7: Transport(X) embark state (NML-105) — embarked_in/cargo_unit_ids/embark_return_spots in unit_properties.
 # RULE: whoever bumps SAVE_VERSION ships the matching SaveMigrations step + fixture test in the SAME
 # change — see scripts/save_migrations.gd for the chain and docs/ARCHITECTURE.md.
 const SAVE_EXTENSION = "nml"  # Niemandsland Save
@@ -377,14 +377,23 @@ func load_game(path: String) -> Error:
 	# Recreate each army's tray (the platform it stands on) — same gap as the late-joiner sync.
 	restore_army_trays_after_load(state.get("army_names", {}))
 
+	# Rebuild hero attachment (stored as unit_ids) into live GameUnit refs. MUST run before anything
+	# that walks the unit graph: dead-parking below reports each dead model through the battle-log
+	# seam, which asks SoloController.combined_alive() for the unit — and that iterates
+	# get_attached_heroes(). While those entries are still the saved unit_id STRINGS, the cast to
+	# GameUnit is a hard runtime error, and loading any save with an attached hero blew up there
+	# (maintainer: "beim Laden eines Autosaves stürzt Niemandsland ab").
+	_restore_hero_attachments_after_load()
+
 	# Re-park loose models saved dead (needs the trays above to exist so slots can be claimed).
 	_restore_dead_parking_after_load()
+	# NML-105: re-park the models of units that LOADED as embarked (state rides unit_properties;
+	# node metas + tray slots are runtime and rebuilt here).
+	if army_manager:
+		army_manager.restore_embarked_after_load()
 
 	# Restore game state
 	_deserialize_game_state(state.get("game_state", {}))
-
-	# Rebuild hero attachment (stored as unit_ids) into live GameUnit refs.
-	_restore_hero_attachments_after_load()
 
 	# Restore token/marker visualizations for all loaded game units
 	_restore_markers_after_load()
@@ -791,6 +800,12 @@ func reset_restore_lock() -> void:
 	_restore_unlocked.emit()
 
 
+## Whether a save/load restore is currently running — the autosave gate reads this so a periodic
+## snapshot never fires mid-restore (it would serialize a half-rebuilt table).
+func is_restore_in_flight() -> bool:
+	return _restore_in_flight
+
+
 ## Deserialize GameUnits from saved data
 func _deserialize_game_units(units_data: Array) -> int:
 	_loaded_game_units.clear()
@@ -928,6 +943,17 @@ func _restore_hero_attachments_after_load() -> void:
 
 	for game_unit in army_manager.get_all_game_units():
 		var props: Dictionary = game_unit.unit_properties
+
+		# NML-006: spell tokens do not survive a save, so their mechanical side effects must not
+		# either — strip suffix-marked granted rules (main.gd SOLO_SPELL_GRANT_SUFFIX) and the
+		# speed/range props stamps; otherwise a mid-round save would freeze a once-buff forever.
+		var rules: Array = props.get("special_rules", [])
+		var kept: Array = rules.filter(func(r) -> bool:
+			return not (r is String and (r as String).ends_with(" (spell)")))
+		if kept.size() != rules.size():
+			props["special_rules"] = kept
+		props.erase("spell_move_mod")
+		props.erase("spell_range_mod")
 
 		var attached_to_id = props.get("attached_to", "")
 		if attached_to_id is String:

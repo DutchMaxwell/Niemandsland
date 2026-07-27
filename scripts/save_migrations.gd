@@ -45,6 +45,9 @@ static func migrate(state: Dictionary) -> Dictionary:
 			"1.5":
 				migrated = _migrate_1_5_to_1_6(migrated)
 				from = "1.6"
+			"1.6":
+				migrated = _migrate_1_6_to_1_7(migrated)
+				from = "1.7"
 			_:
 				return _fail("No migration step from save version \"%s\" — this is a bug, please report it." % from)
 	migrated["version"] = current
@@ -112,3 +115,10 @@ static func _is_known_shape(v: String) -> bool:
 
 static func _fail(message: String) -> Dictionary:
 	return {"ok": false, "state": {}, "error": message, "migrated_from": ""}
+
+
+## 1.6 → 1.7: Transport(X) embark state was ADDED in 1.7 (NML-105) — a 1.6 save simply has no
+## embarked units (the keys live inside unit_properties and default to absent). Nothing to
+## transform; the step exists so the chain is explicit.
+static func _migrate_1_6_to_1_7(state: Dictionary) -> Dictionary:
+	return state

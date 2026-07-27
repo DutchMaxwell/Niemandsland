@@ -1,0 +1,9566 @@
+{
+ "_meta": {
+  "system": "gf",
+  "core_version": "3.5.1",
+  "faction_books": 47,
+  "generator": "tools/rules_mechanics_export.py",
+  "contract": "lookup (system, faction, name) -> fallback (system, common, name); never name-only across systems",
+  "content": "derived mechanics only - rule names + our own primitive/param encoding; no rule texts"
+ },
+ "modeled": [
+  "+1 to Defense",
+  "AP",
+  "Agile",
+  "Aircraft",
+  "Ambush",
+  "Ambush Aura",
+  "Ambushing Piercing Shot",
+  "Armor",
+  "Artillery",
+  "Bad Shot",
+  "Bane",
+  "Bane Mark",
+  "Bane in Melee",
+  "Bane in Melee Aura",
+  "Bane in Melee Buff",
+  "Bane when Shooting",
+  "Bane when Shooting Aura",
+  "Banner",
+  "Bash",
+  "Battleborn",
+  "Blast",
+  "Bloodborn",
+  "Bounding",
+  "Bounding Aura",
+  "Breath Attack",
+  "Brutal Fighter",
+  "Caster",
+  "Casting Buff",
+  "Casting Debuff",
+  "Changebound",
+  "Changebound Boost",
+  "Changebound Boost Aura",
+  "Clan Warrior",
+  "Clan Warrior Boost",
+  "Clan Warrior Boost Aura",
+  "Counter",
+  "Counter-Attack",
+  "Counter-Attack Aura",
+  "Courage Aura",
+  "Courage Buff",
+  "Crack",
+  "Crossing Attack",
+  "Dangerous Terrain Debuff",
+  "Darkborn",
+  "Dash",
+  "Dash Aura",
+  "Deadly",
+  "Deathstrike",
+  "Defense",
+  "Defense Debuff",
+  "Defensive Frenzy",
+  "Defensive Growth",
+  "Defensive Growth Aura",
+  "Destructive",
+  "Devout",
+  "Devout Boost",
+  "Devout Boost Aura",
+  "Difficult Terrain Debuff",
+  "Disintegrate",
+  "Drone Laser Gun",
+  "Entrenched",
+  "Entrenched Buff",
+  "Evasive",
+  "Evasive Aura",
+  "Fanatic",
+  "Fast",
+  "Fast Aura",
+  "Fatigue",
+  "Fatigue Debuff",
+  "Fear",
+  "Fearless",
+  "Fearless Aura",
+  "Ferocious",
+  "Ferocious Boost",
+  "Ferocious Boost Aura",
+  "Flying",
+  "Fortified",
+  "Fortified Aura",
+  "Fortified Growth",
+  "Furious",
+  "Furious Aura",
+  "Furious Buff",
+  "Furious Mark",
+  "Good Shot",
+  "Grounded Precision",
+  "Grounded Precision Aura",
+  "Grounded Reinforcement",
+  "Grounded Reinforcement Aura",
+  "Grounded Stealth",
+  "Growth Markers",
+  "Guarded",
+  "Guarded Buff",
+  "Guardian",
+  "Guardian Boost",
+  "Guardian Boost Aura",
+  "Guerrilla",
+  "Guerrilla Boost",
+  "Guerrilla Boost Aura",
+  "Harassing",
+  "Harassing Boost",
+  "Harassing Boost Aura",
+  "Havocbound",
+  "Havocbound Boost",
+  "Havocbound Boost Aura",
+  "Hazardous",
+  "Heavy Impact",
+  "Hero",
+  "Highborn",
+  "Highborn Boost",
+  "Highborn Boost Aura",
+  "Hit & Run",
+  "Hit & Run Fighter",
+  "Hit & Run Fighter Aura",
+  "Hit & Run Shooter",
+  "Hit & Run Shooter Aura",
+  "Hive Bond",
+  "Hive Bond Boost",
+  "Hive Bond Boost Aura",
+  "Hold the Line",
+  "Hold the Line Boost",
+  "Hold the Line Boost Aura",
+  "Honor Code",
+  "Ignores Cover",
+  "Ignores Cover Aura",
+  "Ignores Cover when Shooting",
+  "Ignores Cover when Shooting Aura",
+  "Ignores Regeneration",
+  "Ignores Regeneration in Melee",
+  "Immobile",
+  "Impact",
+  "Increased Shooting Range",
+  "Increased Shooting Range Aura",
+  "Increased Shooting Range Buff",
+  "Increased Shooting Range Mark",
+  "Indirect",
+  "Indirect Mark",
+  "Indirect when Shooting Aura",
+  "Infected",
+  "Infected Boost",
+  "Infected Boost Aura",
+  "Infiltrate",
+  "Infiltrate Aura",
+  "Inquisitorial Agent",
+  "Instinctive",
+  "Knightborn",
+  "Lacerate",
+  "Limited",
+  "Lustbound",
+  "Lustbound Boost",
+  "Lustbound Boost Aura",
+  "Machine-Fog",
+  "Machine-Fog Boost",
+  "Machine-Fog Boost Aura",
+  "Martial Prowess",
+  "Medical Training",
+  "Melee Evasion",
+  "Melee Evasion Aura",
+  "Melee Shrouding",
+  "Melee Shrouding Aura",
+  "Melee Slayer",
+  "Melee Slayer Aura",
+  "Mend",
+  "Mind Control",
+  "Mischievous",
+  "Mischievous Boost",
+  "Mischievous Boost Aura",
+  "Mobile Artillery",
+  "Morale",
+  "Morale Debuff",
+  "Musician",
+  "No Retreat",
+  "No Retreat Aura",
+  "No Retreat Buff",
+  "Piercing Assault",
+  "Piercing Assault Aura",
+  "Piercing Debuff",
+  "Piercing Fighter Aura",
+  "Piercing Frenzy",
+  "Piercing Growth",
+  "Piercing Hunter",
+  "Piercing Hunter Aura",
+  "Piercing Shooter Aura",
+  "Piercing Shooting Mark",
+  "Piercing Spotter",
+  "Piercing Tag",
+  "Piercing Target",
+  "Plaguebound",
+  "Plaguebound Boost",
+  "Plaguebound Boost Aura",
+  "Point-Blank Piercing",
+  "Point-Blank Piercing Aura",
+  "Point-Blank Surge",
+  "Precise",
+  "Precision Attacks Buff",
+  "Precision Charge Aura",
+  "Precision Debuff",
+  "Precision Fighter Aura",
+  "Precision Fighter Buff",
+  "Precision Fighting Mark",
+  "Precision Frenzy",
+  "Precision Growth",
+  "Precision Shooter Aura",
+  "Precision Shooter Buff",
+  "Precision Shooting Mark",
+  "Precision Spotter",
+  "Precision Tag",
+  "Precision Target",
+  "Predator",
+  "Predator Fighter",
+  "Predator Shooter",
+  "Predator Shooter Aura",
+  "Primal",
+  "Primal Boost",
+  "Primal Boost Buff",
+  "Primeborn",
+  "Protected",
+  "Protected Aura",
+  "Protection Feat",
+  "Protection Feat Aura",
+  "Quick",
+  "Quick Readjustment",
+  "Quick Shot",
+  "Quick Shot Aura",
+  "Quick Shot Mark",
+  "Ranged Shrouding",
+  "Ranged Shrouding Aura",
+  "Ranged Slayer",
+  "Ranged Slayer Aura",
+  "Rapid Advance",
+  "Rapid Advance Aura",
+  "Rapid Advance Buff",
+  "Rapid Blink",
+  "Rapid Blink Boost",
+  "Rapid Blink Boost Aura",
+  "Rapid Charge",
+  "Rapid Charge Aura",
+  "Rapid Rush",
+  "Rapid Rush Aura",
+  "Ravage",
+  "Re-Deployment",
+  "Re-Position Artillery",
+  "Reanimation Aura",
+  "Regeneration",
+  "Regeneration Aura",
+  "Regeneration Buff",
+  "Regenerative Strength",
+  "Relentless",
+  "Relentless Aura",
+  "Relentless Mark",
+  "Reliable",
+  "Rending",
+  "Rending Mark",
+  "Rending in Melee",
+  "Rending in Melee Aura",
+  "Rending when Shooting Aura",
+  "Repel Ambushers",
+  "Resistance",
+  "Resistance Aura",
+  "Retaliate",
+  "Royal Legion",
+  "Scout",
+  "Scout Aura",
+  "Scrapper",
+  "Scrapper Boost",
+  "Scrapper Boost Aura",
+  "Screened",
+  "Screened Aura",
+  "Scurry",
+  "Scurry Boost",
+  "Scurry Boost Aura",
+  "Second Wind",
+  "Self-Destruct",
+  "Self-Repair",
+  "Self-Repair Boost",
+  "Self-Repair Boost Buff",
+  "Sergeant",
+  "Shatter",
+  "Shielded",
+  "Shielded Aura",
+  "Shot Modifier",
+  "Shred",
+  "Shred Mark",
+  "Shred in Melee",
+  "Shred in Melee Aura",
+  "Shred when Shooting",
+  "Shred when Shooting Aura",
+  "Slayer",
+  "Slayer Mark",
+  "Slow",
+  "Sniper REMOVE",
+  "Speed Buff",
+  "Speed Debuff",
+  "Speed Feat",
+  "Speed Feat Aura",
+  "Spell Conduit",
+  "Steadfast",
+  "Steadfast Aura",
+  "Stealth",
+  "Stealth Aura",
+  "Stealth Buff",
+  "Storm Attack",
+  "Storm of Change",
+  "Storm of Lust",
+  "Storm of Plague",
+  "Storm of War",
+  "Strafing",
+  "Strider",
+  "Strider Aura",
+  "Sturdy",
+  "Sturdy Boost",
+  "Sturdy Boost Aura",
+  "Surge",
+  "Surge when Shooting",
+  "Surprise Attack",
+  "Swift",
+  "Swift Aura",
+  "Swift Buff",
+  "Takedown",
+  "Takedown Shot",
+  "Takedown Strike",
+  "Targeting Visor",
+  "Targeting Visor Boost",
+  "Targeting Visor Boost Aura",
+  "Tear",
+  "Teleport",
+  "Teleport Aura",
+  "Thrust",
+  "Thrust in Melee Aura",
+  "Tough",
+  "Transport",
+  "Unique",
+  "Unpredictable",
+  "Unpredictable Fighter",
+  "Unpredictable Fighter Aura",
+  "Unpredictable Fighter Mark",
+  "Unpredictable Shooter",
+  "Unpredictable Shooter Aura",
+  "Unpredictable Shooter Mark",
+  "Unstoppable",
+  "Unstoppable Mark",
+  "Unstoppable in Melee",
+  "Unstoppable in Melee Aura",
+  "Unstoppable when Shooting Aura",
+  "Unwieldy",
+  "Unwieldy Debuff",
+  "Utility Buff",
+  "Vanguard",
+  "Vengeance",
+  "Versatile Attack",
+  "Versatile Defense",
+  "Versatile Defense Aura",
+  "Versatile Reach",
+  "Versatile Reach Aura",
+  "Warbound",
+  "Warbound Boost",
+  "Warbound Boost Aura",
+  "Watchborn",
+  "Wolfborn"
+ ],
+ "decision": [
+  "AP",
+  "Aircraft",
+  "Ambush",
+  "Armor",
+  "Artillery",
+  "Bane",
+  "Banner",
+  "Blast",
+  "Bounding",
+  "Breath Attack",
+  "Caster",
+  "Counter",
+  "Crack",
+  "Deadly",
+  "Destructive",
+  "Disintegrate",
+  "Evasive",
+  "Fast",
+  "Fear",
+  "Fearless",
+  "Flying",
+  "Fortified",
+  "Furious",
+  "Guarded",
+  "Heavy Impact",
+  "Hero",
+  "Hit & Run",
+  "Hit & Run Fighter",
+  "Hit & Run Shooter",
+  "Immobile",
+  "Impact",
+  "Indirect",
+  "Infiltrate",
+  "Limited",
+  "Melee Evasion",
+  "Melee Shrouding",
+  "Melee Slayer",
+  "Mend",
+  "Musician",
+  "No Retreat",
+  "Piercing Assault",
+  "Piercing Hunter",
+  "Precise",
+  "Quick",
+  "Quick Shot",
+  "Ranged Shrouding",
+  "Rapid Advance",
+  "Rapid Rush",
+  "Ravage",
+  "Re-Deployment",
+  "Regeneration",
+  "Relentless",
+  "Reliable",
+  "Rending",
+  "Repel Ambushers",
+  "Resistance",
+  "Retaliate",
+  "Royal Legion",
+  "Scout",
+  "Second Wind",
+  "Self-Repair",
+  "Sergeant",
+  "Shatter",
+  "Shielded",
+  "Shred",
+  "Slayer",
+  "Slow",
+  "Steadfast",
+  "Stealth",
+  "Strafing",
+  "Strider",
+  "Surge",
+  "Swift",
+  "Takedown",
+  "Tear",
+  "Teleport",
+  "Thrust",
+  "Tough",
+  "Transport",
+  "Unpredictable",
+  "Unpredictable Shooter",
+  "Utility Buff",
+  "Vanguard",
+  "Versatile Attack",
+  "Versatile Defense",
+  "Versatile Reach"
+ ],
+ "common": {
+  "AP": {
+   "primitive": "AP",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "rating": "X"
+   }
+  },
+  "Aircraft": {
+   "primitive": "Aircraft",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "advance_only": true,
+    "straight_move": true,
+    "move_add_in": 30.0,
+    "min_move_in": 30.0,
+    "solo_move_in": 30.0,
+    "cannot_seize": true,
+    "cannot_be_charged": true,
+    "target_range_penalty_in": 12.0,
+    "ignores_obstacles": true
+   }
+  },
+  "Ambush": {
+   "primitive": "Ambush",
+   "rated": false,
+   "book_version": "3.5.1"
+  },
+  "Armor": {
+   "primitive": "Armor",
+   "rated": true,
+   "book_version": "3.5.1",
+   "params": {
+    "rating": "X",
+    "defense_value": "X",
+    "best_of": true
+   }
+  },
+  "Artillery": {
+   "primitive": "Artillery",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "shooter_hit_bonus": 1,
+    "target_hit_penalty": 2,
+    "over_in": 9.0,
+    "hold_only": true
+   }
+  },
+  "Bane": {
+   "primitive": "Bane",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "reroll_save_sixes": true,
+    "bypass_regen": true
+   }
+  },
+  "Bane in Melee": {
+   "primitive": "Bane",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "reroll_save_sixes": true,
+    "bypass_regen": true
+   }
+  },
+  "Bane when Shooting": {
+   "primitive": "Bane",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "reroll_save_sixes": true,
+    "bypass_regen": true
+   }
+  },
+  "Banner": {
+   "primitive": "Banner",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "morale_bonus": 1,
+    "scope": "unit"
+   }
+  },
+  "Blast": {
+   "primitive": "Blast",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "rating": "X",
+    "ignores_cover": true
+   }
+  },
+  "Caster": {
+   "primitive": "Caster",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "rating": "X",
+    "token_cap": 6,
+    "cast_target": 4,
+    "aura_in": 18.0,
+    "boost_per_token": 1
+   }
+  },
+  "Counter": {
+   "primitive": "Counter",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "strikes_first": true,
+    "impact_reduction_per_model": 1
+   }
+  },
+  "Deadly": {
+   "primitive": "Deadly",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "rating": "X",
+    "tough_capped": true
+   }
+  },
+  "Defense": {
+   "primitive": "Shielded",
+   "rated": true,
+   "book_version": "3.5.1",
+   "params": {
+    "defense_bonus_from_rating": true
+   }
+  },
+  "Entrenched": {
+   "primitive": "Stealth",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "hit_penalty": 2,
+    "over_in": 9,
+    "requires_stationary": true
+   }
+  },
+  "Fast": {
+   "primitive": "Fast",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "advance_mod": 2,
+    "rush_mod": 4
+   }
+  },
+  "Fear": {
+   "primitive": "Fear",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "rating": "X"
+   }
+  },
+  "Fearless": {
+   "primitive": "Fearless",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "recover_target": 4
+   }
+  },
+  "Flying": {
+   "primitive": "Flying",
+   "rated": false,
+   "book_version": "3.5.1"
+  },
+  "Furious": {
+   "primitive": "Furious",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bonus_hits_per_six": 1,
+    "charge_only": true
+   }
+  },
+  "Hero": {
+   "primitive": "Hero",
+   "rated": false,
+   "book_version": "3.5.1"
+  },
+  "Ignores Cover": {
+   "primitive": "Indirect",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "ignores_cover": true,
+    "cover_only": true
+   }
+  },
+  "Ignores Cover when Shooting": {
+   "primitive": "Indirect",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "ignores_cover": true,
+    "cover_only": true,
+    "shooting_only": true
+   }
+  },
+  "Ignores Regeneration": {
+   "primitive": "Lacerate",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bypass_regen": true
+   }
+  },
+  "Ignores Regeneration in Melee": {
+   "primitive": "Lacerate",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bypass_regen": true,
+    "melee_only": true
+   }
+  },
+  "Immobile": {
+   "primitive": "Immobile",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "hold_only": true
+   }
+  },
+  "Impact": {
+   "primitive": "Impact",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "rating": "X",
+    "hit_target": 2
+   }
+  },
+  "Indirect": {
+   "primitive": "Indirect",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "moved_hit_penalty": 1,
+    "ignores_cover": true,
+    "ignores_los": true,
+    "hold_and_shoot": true
+   }
+  },
+  "Limited": {
+   "primitive": "Limited",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "uses_per_game": 1
+   }
+  },
+  "Morale": {
+   "primitive": null,
+   "rated": false,
+   "book_version": "3.5.1"
+  },
+  "Musician": {
+   "primitive": "Musician",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "move_bonus_in": 1,
+    "scope": "unit"
+   }
+  },
+  "Regeneration": {
+   "primitive": "Regeneration",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "ignore_target": 5
+   }
+  },
+  "Relentless": {
+   "primitive": "Relentless",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bonus_hits_per_six": 1,
+    "over_in": 9.0
+   }
+  },
+  "Reliable": {
+   "primitive": "Reliable",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "quality": 2
+   }
+  },
+  "Rending": {
+   "primitive": "Rending",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "ap_bonus": 4,
+    "bypass_regen": true
+   }
+  },
+  "Rending in Melee": {
+   "primitive": "Rending",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "on6_ap": 4,
+    "bypass_regen": true,
+    "melee_only": true
+   }
+  },
+  "Scout": {
+   "primitive": "Scout",
+   "rated": false,
+   "book_version": "3.5.1"
+  },
+  "Sergeant": {
+   "primitive": "Sergeant",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bonus_hits_per_six": 1,
+    "model_level": true
+   }
+  },
+  "Shred in Melee": {
+   "primitive": "Shred",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "extra_wound_per_save_one": 1,
+    "melee_only": true
+   }
+  },
+  "Shred when Shooting": {
+   "primitive": "Shred",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "extra_wound_per_save_one": 1,
+    "shooting_only": true
+   }
+  },
+  "Slow": {
+   "primitive": "Slow",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "advance_mod": -2,
+    "rush_mod": -4
+   }
+  },
+  "Sniper REMOVE": {
+   "primitive": null,
+   "rated": false,
+   "book_version": "3.5.1"
+  },
+  "Stealth": {
+   "primitive": "Stealth",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "hit_penalty": 1,
+    "over_in": 9.0
+   }
+  },
+  "Strider": {
+   "primitive": "Strider",
+   "rated": false,
+   "book_version": "3.5.1"
+  },
+  "Surge when Shooting": {
+   "primitive": "Surge",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bonus_hits_per_six": 1
+   }
+  },
+  "Takedown": {
+   "primitive": "Takedown",
+   "rated": false,
+   "book_version": "3.5.1"
+  },
+  "Thrust": {
+   "primitive": "Thrust",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "hit_bonus": 1,
+    "ap_bonus": 1,
+    "charge_only": true
+   }
+  },
+  "Tough": {
+   "primitive": "Tough",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "rating": "X"
+   }
+  },
+  "Transport": {
+   "primitive": "Transport",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "rating": "X"
+   }
+  },
+  "Unique": {
+   "primitive": null,
+   "rated": false,
+   "book_version": "3.5.1"
+  },
+  "Unstoppable": {
+   "primitive": "Unstoppable",
+   "rated": false,
+   "book_version": "3.5.1"
+  },
+  "Unstoppable in Melee": {
+   "primitive": "Lacerate",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bypass_regen": true,
+    "melee_only": true
+   }
+  }
+ },
+ "factions": {
+  "alien_hives": {
+   "Breath Attack": {
+    "primitive": "Breath Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "trigger_target": 2,
+     "range_in": 6.0,
+     "blast": 3,
+     "ap": 1
+    }
+   },
+   "Caster Group": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Destructive": {
+    "primitive": "Destructive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 4,
+     "bypass_regen": false
+    }
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Furious Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Furious Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Furious",
+     "range_in": 12,
+     "target": "friendly",
+     "once": true
+    }
+   },
+   "Hit & Run Fighter": {
+    "primitive": "Hit & Run Fighter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true,
+     "after": "melee"
+    }
+   },
+   "Hive Bond": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1,
+     "trigger": "combat"
+    }
+   },
+   "Hive Bond Boost": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 2,
+     "trigger": "combat"
+    }
+   },
+   "Hive Bond Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Increased Shooting Range": {
+    "primitive": "Royal Legion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 6
+    }
+   },
+   "Increased Shooting Range Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Infiltrate": {
+    "primitive": "Infiltrate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "counts_as": "Ambush",
+     "min_enemy_dist_in": 3.0
+    }
+   },
+   "No Retreat": {
+    "primitive": "No Retreat",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "self_wound_max": 3,
+     "bypass_regen": true
+    }
+   },
+   "Piercing Growth": {
+    "primitive": "Growth Markers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "per_round": true,
+     "max_markers": 4,
+     "ap_per_two": 1
+    }
+   },
+   "Piercing Tag": {
+    "primitive": "Piercing Tag",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "range_in": 24,
+     "needs_los": true,
+     "uses_per_game": 1
+    }
+   },
+   "Precise": {
+    "primitive": "Precise",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Precision Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_mod": -1,
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Predator Fighter": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack": true,
+     "melee_only": true
+    }
+   },
+   "Rapid Charge": {
+    "primitive": "Fast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 4,
+     "charge_only": true
+    }
+   },
+   "Rapid Charge Aura": {
+    "primitive": "Fast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 4,
+     "charge_only": true,
+     "scope": "unit"
+    }
+   },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6,
+     "no_save": true
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Regenerative Strength": {
+    "primitive": "Growth Markers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "on_ignore_wound": true,
+     "attacks_per_marker": 1,
+     "scope": "one_melee_weapon"
+    }
+   },
+   "Resistance": {
+    "primitive": "Resistance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 2,
+     "all_models": true
+    }
+   },
+   "Retaliate": {
+    "primitive": "Retaliate",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "hits_per_wound": "X"
+    }
+   },
+   "Self-Destruct": {
+    "primitive": "Self-Destruct",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "hits": "X",
+     "trigger": "death_in_melee_or_post_m"
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Spawn": {
+    "primitive": null,
+    "rated": true,
+    "book_version": "3.5.3"
+   },
+   "Spell Conduit": {
+    "primitive": "Spell Conduit",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_in": 12,
+     "casting_mod": 1
+    }
+   },
+   "Stealth Buff": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9.0
+    }
+   },
+   "Strafing": {
+    "primitive": "Strafing",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_through_attack": true,
+     "weapon_only": true
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Surprise Attack": {
+    "primitive": "Infiltrate",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Infiltrate",
+     "first_activation": true,
+     "range_in": 6,
+     "dice": "X",
+     "trigger_target": 2,
+     "ap": 1,
+     "needs_los": true,
+     "arrival_strike": "planned"
+    }
+   },
+   "Takedown Strike": {
+    "primitive": "Takedown",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack_q": 2,
+     "ap": 2,
+     "uses_per_game": 1
+    }
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unpredictable Fighter Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   }
+  },
+  "battle_brothers": {
+   "Bane in Melee Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bane when Shooting Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Battleborn": {
+    "primitive": "Battleborn",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "recover_target": 4
+    }
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Lacerate": {
+    "primitive": "Lacerate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bypass_regen": true
+    }
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Rapid Rush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Re-Deployment": {
+    "primitive": "Re-Deployment",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "max_units": 2
+    }
+   },
+   "Re-Position Artillery": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reposition_in": 9,
+     "range_in": 6,
+     "target": "friendly_artillery"
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Unstoppable Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach": {
+    "primitive": "Versatile Reach",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4.0,
+     "charge_bonus_in": 2.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "blessed_sisters": {
+   "Casting Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "casting_mod": -1,
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Courage Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_mod": 1,
+     "range_in": 12,
+     "target": "friendly",
+     "once": true
+    }
+   },
+   "Devout": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Devout Boost": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "upgrades": "Devout",
+     "surge_low": 5,
+     "over_in": 9
+    }
+   },
+   "Devout Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Disintegrate": {
+    "primitive": "Disintegrate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_armor",
+     "threshold": 3,
+     "bypass_regen": true
+    }
+   },
+   "Fast Aura": {
+    "primitive": "Fast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 2,
+     "rush_mod": 4
+    }
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Fortified Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Guarded": {
+    "primitive": "Guarded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1,
+     "over_in": 9.0
+    }
+   },
+   "Guarded Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Guarded",
+     "target": "friendly",
+     "max_targets": 1,
+     "range_in": 12,
+     "once": true
+    }
+   },
+   "Increased Shooting Range Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Piercing Assault": {
+    "primitive": "Piercing Assault",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "on_charge"
+    }
+   },
+   "Piercing Hunter": {
+    "primitive": "Piercing Hunter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "ranged_over",
+     "over_in": 9.0
+    }
+   },
+   "Point-Blank Piercing": {
+    "primitive": "Piercing Hunter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "ranged_within",
+     "within_in": 12
+    }
+   },
+   "Point-Blank Piercing Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Point-Blank Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1,
+     "within_in": 12
+    }
+   },
+   "Precision Fighter Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_mod": 1,
+     "scope": "melee",
+     "range_in": 12,
+     "target": "friendly",
+     "once": true
+    }
+   },
+   "Precision Shooter Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_mod": 1,
+     "scope": "shooting",
+     "range_in": 12,
+     "target": "friendly",
+     "once": true
+    }
+   },
+   "Precision Target": {
+    "primitive": "Utility Buff",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_mod": "X",
+     "range_in": 18,
+     "target": "enemy",
+     "needs_los": true,
+     "uses_per_game": 1
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Shred in Melee Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Spell Conduit": {
+    "primitive": "Spell Conduit",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_in": 12,
+     "casting_mod": 1
+    }
+   }
+  },
+  "blood_brothers": {
+   "Bane in Melee Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bane when Shooting Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bloodborn": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack": true
+    }
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Lacerate": {
+    "primitive": "Lacerate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bypass_regen": true
+    }
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Piercing Assault": {
+    "primitive": "Piercing Assault",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "on_charge"
+    }
+   },
+   "Piercing Assault Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Rapid Rush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Re-Deployment": {
+    "primitive": "Re-Deployment",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "max_units": 2
+    }
+   },
+   "Re-Position Artillery": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reposition_in": 9,
+     "range_in": 6,
+     "target": "friendly_artillery"
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Unstoppable Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach": {
+    "primitive": "Versatile Reach",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4.0,
+     "charge_bonus_in": 2.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "blood_prime_brothers": {
+   "Bane in Melee Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bane when Shooting Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bloodborn": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack": true
+    }
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Slayer": {
+    "primitive": "Melee Slayer",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "charge_only": true
+    }
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Piercing Assault": {
+    "primitive": "Piercing Assault",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "on_charge"
+    }
+   },
+   "Piercing Assault Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Precise": {
+    "primitive": "Precise",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Rapid Rush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6,
+     "no_save": true
+    }
+   },
+   "Re-Deployment": {
+    "primitive": "Re-Deployment",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "max_units": 2
+    }
+   },
+   "Re-Position Artillery": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reposition_in": 9,
+     "range_in": 6,
+     "target": "friendly_artillery"
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Retaliate": {
+    "primitive": "Retaliate",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "hits_per_wound": "X"
+    }
+   },
+   "Shatter": {
+    "primitive": "Shatter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Unstoppable Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach": {
+    "primitive": "Versatile Reach",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4.0,
+     "charge_bonus_in": 2.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "change_disciples": {
+   "Changebound": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9,
+     "applies_charged": true
+    }
+   },
+   "Changebound Boost": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "applies_charged": true,
+     "upgrades": "Changebound"
+    }
+   },
+   "Changebound Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Dangerous Terrain Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Dangerous Terrain",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Furious Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Relentless Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Resistance": {
+    "primitive": "Resistance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 2,
+     "all_models": true
+    }
+   },
+   "Resistance Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Scout Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Steadfast": {
+    "primitive": "Steadfast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "recover_target": 4
+    }
+   },
+   "Steadfast Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Defense": {
+    "primitive": "Versatile Defense",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1,
+     "hit_penalty": 1,
+     "over_in": 9.0,
+     "default_mode": "def"
+    }
+   },
+   "Versatile Defense Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "custodian_brothers": {
+   "Dash": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 1,
+     "timing": "end_of_activation",
+     "per_round": true
+    }
+   },
+   "Dash Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Guardian": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1,
+     "over_in": 9
+    }
+   },
+   "Guardian Boost": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Guardian Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Hit & Run": {
+    "primitive": "Hit & Run",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true
+    }
+   },
+   "Hit & Run Shooter": {
+    "primitive": "Hit & Run Shooter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true,
+     "after": "shoot"
+    }
+   },
+   "Hit & Run Shooter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Piercing Target": {
+    "primitive": "Piercing Tag",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "range_in": 18,
+     "needs_los": true,
+     "uses_per_game": 1
+    }
+   },
+   "Ranged Shrouding": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_penalty_in": 6.0,
+     "floor_in": 6.0
+    }
+   },
+   "Ranged Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Shred Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Shred",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Shred when Shooting Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Steadfast": {
+    "primitive": "Steadfast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "recover_target": 4
+    }
+   },
+   "Steadfast Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Stealth Aura": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9.0
+    }
+   },
+   "Tear": {
+    "primitive": "Tear",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 4,
+     "condition": "vs_tough_ge",
+     "threshold": 9
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unstoppable in Melee Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   }
+  },
+  "dao_union": {
+   "Ambush Beacon": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Counter-Attack": {
+    "primitive": "Counter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "strikes_first": true,
+     "impact_reduction_per_model": 1
+    }
+   },
+   "Counter-Attack Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Disintegrate": {
+    "primitive": "Disintegrate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_armor",
+     "threshold": 3,
+     "bypass_regen": true
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Fortified Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Good Shot": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Hit & Run": {
+    "primitive": "Hit & Run",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true
+    }
+   },
+   "Hit & Run Shooter": {
+    "primitive": "Hit & Run Shooter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true,
+     "after": "shoot"
+    }
+   },
+   "Hit & Run Shooter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Increased Shooting Range Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Piercing Shooting Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "AP(+1) when shooting",
+     "target": "enemy",
+     "vs_marked": true,
+     "beneficiary": "friendly_attackers",
+     "max_targets": 1,
+     "range_in": 18,
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Precision Spotter": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_mod": "X",
+     "range_in": 30,
+     "target": "enemy",
+     "needs_los": true,
+     "place_roll": 4
+    }
+   },
+   "Ranged Slayer": {
+    "primitive": "Slayer",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "threshold": 3,
+     "gate": "ranged_over",
+     "over_in": 9
+    }
+   },
+   "Ranged Slayer Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Slayer": {
+    "primitive": "Slayer",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "gate": "ranged_over_or_charge",
+     "over_in": 9.0
+    }
+   },
+   "Stealth Aura": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9.0
+    }
+   },
+   "Strafing": {
+    "primitive": "Strafing",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_through_attack": true,
+     "weapon_only": true
+    }
+   },
+   "Targeting Visor": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "over_in": 9
+    }
+   },
+   "Targeting Visor Boost": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Targeting Visor Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "dark_brothers": {
+   "Bane in Melee Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bane when Shooting Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Darkborn": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_penalty_in": 4,
+     "floor_in": 6,
+     "melee_move_penalty_in": 2,
+     "melee_floor_in": 6
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Lacerate": {
+    "primitive": "Lacerate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bypass_regen": true
+    }
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Rapid Ambush": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Rapid Rush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Re-Deployment": {
+    "primitive": "Re-Deployment",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "max_units": 2
+    }
+   },
+   "Re-Position Artillery": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reposition_in": 9,
+     "range_in": 6,
+     "target": "friendly_artillery"
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Stealth Buff": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9.0
+    }
+   },
+   "Strafing": {
+    "primitive": "Strafing",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_through_attack": true,
+     "weapon_only": true
+    }
+   },
+   "Unstoppable Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach": {
+    "primitive": "Versatile Reach",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4.0,
+     "charge_bonus_in": 2.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "dark_elf_raiders": {
+   "Agile": {
+    "primitive": "Quick",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 1,
+     "rush_mod": 2
+    }
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Furious Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Harassing": {
+    "primitive": "Hit & Run",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3,
+     "per_round": true
+    }
+   },
+   "Harassing Boost": {
+    "primitive": "Hit & Run",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 6,
+     "upgrades": "Harassing"
+    }
+   },
+   "Harassing Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Infiltrate": {
+    "primitive": "Infiltrate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "counts_as": "Ambush",
+     "min_enemy_dist_in": 3.0
+    }
+   },
+   "Lacerate": {
+    "primitive": "Lacerate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bypass_regen": true
+    }
+   },
+   "Martial Prowess": {
+    "primitive": "Second Wind",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "uses_per_game": 1,
+     "army_cap_fraction": 3
+    }
+   },
+   "Melee Evasion": {
+    "primitive": "Melee Evasion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "melee_only": true
+    }
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Slayer": {
+    "primitive": "Melee Slayer",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "charge_only": true
+    }
+   },
+   "Piercing Frenzy": {
+    "primitive": "Growth Markers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "on_kill": true,
+     "max_markers": 2,
+     "ap_per_marker": 1
+    }
+   },
+   "Piercing Hunter": {
+    "primitive": "Piercing Hunter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "ranged_over",
+     "over_in": 9.0
+    }
+   },
+   "Piercing Hunter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Precision Fighting Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_mod": 1,
+     "scope": "melee",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Regeneration Buff": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Regenerative Strength": {
+    "primitive": "Growth Markers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "on_ignore_wound": true,
+     "attacks_per_marker": 1,
+     "scope": "one_melee_weapon"
+    }
+   },
+   "Strafing": {
+    "primitive": "Strafing",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_through_attack": true,
+     "weapon_only": true
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   }
+  },
+  "dark_prime_brothers": {
+   "Bane in Melee Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bane when Shooting Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Darkborn": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_penalty_in": 4,
+     "floor_in": 6,
+     "melee_move_penalty_in": 2,
+     "melee_floor_in": 6
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Slayer": {
+    "primitive": "Melee Slayer",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "charge_only": true
+    }
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Precise": {
+    "primitive": "Precise",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Rapid Ambush": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Rapid Rush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6,
+     "no_save": true
+    }
+   },
+   "Re-Deployment": {
+    "primitive": "Re-Deployment",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "max_units": 2
+    }
+   },
+   "Re-Position Artillery": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reposition_in": 9,
+     "range_in": 6,
+     "target": "friendly_artillery"
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Retaliate": {
+    "primitive": "Retaliate",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "hits_per_wound": "X"
+    }
+   },
+   "Shatter": {
+    "primitive": "Shatter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Unstoppable Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach": {
+    "primitive": "Versatile Reach",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4.0,
+     "charge_bonus_in": 2.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "dwarf_guilds": {
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Ignores Cover when Shooting Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Increased Shooting Range Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Infiltrate": {
+    "primitive": "Infiltrate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "counts_as": "Ambush",
+     "min_enemy_dist_in": 3.0
+    }
+   },
+   "Infiltrate Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Slayer": {
+    "primitive": "Melee Slayer",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "charge_only": true
+    }
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Precision Frenzy": {
+    "primitive": "Growth Markers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "on_kill": true,
+     "max_markers": 2,
+     "hit_per_marker": 1
+    }
+   },
+   "Re-Position Artillery": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reposition_in": 9,
+     "range_in": 6,
+     "target": "friendly_artillery"
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Speed Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Slow",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Stealth Aura": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9.0
+    }
+   },
+   "Sturdy": {
+    "primitive": "Guarded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1,
+     "over_in": 9
+    }
+   },
+   "Sturdy Boost": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1,
+     "upgrades": "Sturdy"
+    }
+   },
+   "Sturdy Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Swift": {
+    "primitive": "Swift",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "negates": "Slow"
+    }
+   },
+   "Swift Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unpredictable Fighter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "elven_jesters": {
+   "Ambush Re-Deployment": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Counter-Attack": {
+    "primitive": "Counter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "strikes_first": true,
+     "impact_reduction_per_model": 1
+    }
+   },
+   "Disintegrate": {
+    "primitive": "Disintegrate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_armor",
+     "threshold": 3,
+     "bypass_regen": true
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Point-Blank Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1,
+     "within_in": 12
+    }
+   },
+   "Rapid Blink": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 0
+    }
+   },
+   "Rapid Blink Boost": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 0,
+     "dice_count": 2
+    }
+   },
+   "Rapid Blink Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shielded Aura": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Shred when Shooting Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Slayer": {
+    "primitive": "Slayer",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "gate": "ranged_over_or_charge",
+     "over_in": 9.0
+    }
+   },
+   "Slayer Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Slayer",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Takedown Strike": {
+    "primitive": "Takedown",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack_q": 2,
+     "ap": 2,
+     "uses_per_game": 1
+    }
+   },
+   "Teleport": {
+    "primitive": "Teleport",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_bonus_in": 3.0,
+     "rush_bonus_in": 6.0
+    }
+   },
+   "Teleport Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unpredictable Fighter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "eternal_dynasty": {
+   "Ambush Beacon": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Bounding": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 1
+    }
+   },
+   "Casting Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "casting_mod": 1,
+     "range_in": 12,
+     "target": "friendly_caster",
+     "once": true
+    }
+   },
+   "Clan Warrior": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack": true
+    }
+   },
+   "Clan Warrior Boost": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "upgrades": "Clan Warrior",
+     "surge_low": 5,
+     "extra_attack": true
+    }
+   },
+   "Clan Warrior Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Counter-Attack": {
+    "primitive": "Counter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "strikes_first": true,
+     "impact_reduction_per_model": 1
+    }
+   },
+   "Counter-Attack Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Fearless Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Ignores Cover Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Increased Shooting Range Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "+6\" shooting range",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Melee Evasion": {
+    "primitive": "Melee Evasion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "melee_only": true
+    }
+   },
+   "Melee Evasion Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Piercing Hunter": {
+    "primitive": "Piercing Hunter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "ranged_over",
+     "over_in": 9.0
+    }
+   },
+   "Piercing Hunter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Precision Fighter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Rapid Advance": {
+    "primitive": "Rapid Advance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 4
+    }
+   },
+   "Rapid Advance Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Rapid Charge Aura": {
+    "primitive": "Fast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 4,
+     "charge_only": true,
+     "scope": "unit"
+    }
+   },
+   "Repel Ambushers": {
+    "primitive": "Repel Ambushers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "min_dist_in": 12.0
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Stealth Aura": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9.0
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Tear": {
+    "primitive": "Tear",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 4,
+     "condition": "vs_tough_ge",
+     "threshold": 9
+    }
+   },
+   "Teleport": {
+    "primitive": "Teleport",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_bonus_in": 3.0,
+     "rush_bonus_in": 6.0
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Vengeance": {
+    "primitive": "Vengeance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "trigger": "on_destroyed",
+     "target": "destroyer",
+     "markers": "models_with_rule_at_star",
+     "hit_bonus_per_marker": 1
+    }
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   }
+  },
+  "goblin_reclaimers": {
+   "Agile": {
+    "primitive": "Quick",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 1,
+     "rush_mod": 2
+    }
+   },
+   "Bounding": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 1
+    }
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Dangerous Terrain Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Dangerous Terrain",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Deathstrike": {
+    "primitive": "Deathstrike",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "trigger": "killed_in_melee",
+     "hits": "X",
+     "target": "attacking_unit"
+    }
+   },
+   "Good Shot": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Instinctive": {
+    "primitive": "Instinctive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "force_closest_target": true,
+     "hit_bonus": 1
+    }
+   },
+   "Melee Evasion": {
+    "primitive": "Melee Evasion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "melee_only": true
+    }
+   },
+   "Melee Evasion Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Mischievous": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": false
+    }
+   },
+   "Mischievous Boost": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_low": 5,
+     "over_in": 9,
+     "bypass_regen": false,
+     "upgrades": "Mischievous"
+    }
+   },
+   "Mischievous Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Precision Fighter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Quick": {
+    "primitive": "Quick",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 2,
+     "rush_mod": 2
+    }
+   },
+   "Quick Shot": {
+    "primitive": "Quick Shot",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "shoot_after_rush": true
+    }
+   },
+   "Quick Shot Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Re-Deployment": {
+    "primitive": "Re-Deployment",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "max_units": 2
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Retaliate": {
+    "primitive": "Retaliate",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "hits_per_wound": "X"
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Tear": {
+    "primitive": "Tear",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 4,
+     "condition": "vs_tough_ge",
+     "threshold": 9
+    }
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unpredictable Shooter": {
+    "primitive": "Unpredictable Shooter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Shooter Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Unpredictable Shooter",
+     "target": "enemy",
+     "vs_marked": true,
+     "beneficiary": "friendly_attackers",
+     "max_targets": 1,
+     "range_in": 18,
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   }
+  },
+  "havoc_brothers": {
+   "Dangerous Terrain Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Dangerous Terrain",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Furious Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Havocbound": {
+    "primitive": "Piercing Hunter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "ranged_over_or_charge",
+     "over_in": 9
+    }
+   },
+   "Havocbound Boost": {
+    "primitive": "Piercing Hunter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "always": true,
+     "upgrades": "Havocbound"
+    }
+   },
+   "Havocbound Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Relentless Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Resistance": {
+    "primitive": "Resistance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 2,
+     "all_models": true
+    }
+   },
+   "Resistance Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Scout Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Steadfast": {
+    "primitive": "Steadfast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "recover_target": 4
+    }
+   },
+   "Steadfast Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Defense": {
+    "primitive": "Versatile Defense",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1,
+     "hit_penalty": 1,
+     "over_in": 9.0,
+     "default_mode": "def"
+    }
+   },
+   "Versatile Defense Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "high_elf_fleets": {
+   "Agile": {
+    "primitive": "Quick",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 1,
+     "rush_mod": 2
+    }
+   },
+   "Caster Group": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Crack": {
+    "primitive": "Crack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "on6_ap": 2
+    }
+   },
+   "Crossing Attack": {
+    "primitive": "Crossing Attack",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6
+    }
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Highborn": {
+    "primitive": "Quick",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 2,
+     "rush_mod": 2
+    }
+   },
+   "Highborn Boost": {
+    "primitive": "Fast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 4,
+     "rush_mod": 4,
+     "upgrades": "Highborn"
+    }
+   },
+   "Highborn Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Hit & Run": {
+    "primitive": "Hit & Run",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true
+    }
+   },
+   "Hit & Run Shooter": {
+    "primitive": "Hit & Run Shooter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true,
+     "after": "shoot"
+    }
+   },
+   "Hit & Run Shooter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Increased Shooting Range Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Piercing Spotter": {
+    "primitive": "Piercing Tag",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "range_in": 30,
+     "needs_los": true,
+     "place_roll": 4
+    }
+   },
+   "Re-Position Artillery": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reposition_in": 9,
+     "range_in": 6,
+     "target": "friendly_artillery"
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Resistance": {
+    "primitive": "Resistance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 2,
+     "all_models": true
+    }
+   },
+   "Resistance Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Scout Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Shred in Melee Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Spell Conduit": {
+    "primitive": "Spell Conduit",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_in": 12,
+     "casting_mod": 1
+    }
+   },
+   "Stealth Aura": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9.0
+    }
+   },
+   "Teleport": {
+    "primitive": "Teleport",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_bonus_in": 3.0,
+     "rush_bonus_in": 6.0
+    }
+   },
+   "Unpredictable Shooter": {
+    "primitive": "Unpredictable Shooter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unwieldy": {
+    "primitive": "Unwieldy",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "strikes_last": true,
+     "condition": "charging"
+    }
+   },
+   "Unwieldy Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Unwieldy",
+     "scope": "melee",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   }
+  },
+  "human_defense_force": {
+   "Bane in Melee Buff": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Coordinate": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Crack": {
+    "primitive": "Crack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "on6_ap": 2
+    }
+   },
+   "Entrenched Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Entrenched",
+     "target": "friendly",
+     "max_targets": 1,
+     "range_in": 12,
+     "once": true
+    }
+   },
+   "Extended Buff Range": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Good Shot": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Hold the Line": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1,
+     "trigger": "combat"
+    }
+   },
+   "Hold the Line Boost": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 2,
+     "trigger": "combat"
+    }
+   },
+   "Hold the Line Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Mobile Artillery": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "over_in": 9,
+     "requires_stationary": true
+    }
+   },
+   "Morale Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_mod": -1,
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "No Retreat": {
+    "primitive": "No Retreat",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "self_wound_max": 3,
+     "bypass_regen": true
+    }
+   },
+   "No Retreat Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "No Retreat",
+     "target": "friendly",
+     "max_targets": 1,
+     "range_in": 12,
+     "once": true
+    }
+   },
+   "Precision Shooter Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_mod": 1,
+     "scope": "shooting",
+     "range_in": 12,
+     "target": "friendly",
+     "once": true
+    }
+   },
+   "Rapid Advance": {
+    "primitive": "Rapid Advance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 4
+    }
+   },
+   "Rapid Advance Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Rapid Advance",
+     "target": "friendly",
+     "max_targets": 1,
+     "range_in": 12,
+     "once": true
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Relentless Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Repel Ambushers": {
+    "primitive": "Repel Ambushers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "min_dist_in": 12.0
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   }
+  },
+  "human_inquisition": {
+   "Bounding": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 1
+    }
+   },
+   "Bounding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Brutal Fighter": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1,
+     "melee_only": true
+    }
+   },
+   "Caster Group": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Casting Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "casting_mod": -1,
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Defensive Growth": {
+    "primitive": "Growth Markers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "per_round": true,
+     "max_markers": 4,
+     "defense_per_two": 1
+    }
+   },
+   "Defensive Growth Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Delayed Action": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Furious Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Hit & Run": {
+    "primitive": "Hit & Run",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true
+    }
+   },
+   "Infiltrate": {
+    "primitive": "Infiltrate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "counts_as": "Ambush",
+     "min_enemy_dist_in": 3.0
+    }
+   },
+   "Inquisitorial Agent": {
+    "primitive": "Second Wind",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "uses_per_game": 1,
+     "army_cap_fraction": 3
+    }
+   },
+   "Piercing Tag": {
+    "primitive": "Piercing Tag",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "range_in": 24,
+     "needs_los": true,
+     "uses_per_game": 1
+    }
+   },
+   "Precision Fighter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Precision Shooter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Protected": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "all_models": true
+    }
+   },
+   "Quick Readjustment": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "no_moved_penalty": true
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Repel Ambushers": {
+    "primitive": "Repel Ambushers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "min_dist_in": 12.0
+    }
+   },
+   "Resistance": {
+    "primitive": "Resistance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 2,
+     "all_models": true
+    }
+   },
+   "Resistance Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Shred in Melee Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Spell Accumulator": {
+    "primitive": null,
+    "rated": true,
+    "book_version": "3.5.3"
+   },
+   "Spell Conduit": {
+    "primitive": "Spell Conduit",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_in": 12,
+     "casting_mod": 1
+    }
+   },
+   "Stealth Aura": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9.0
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Surprise Attack": {
+    "primitive": "Infiltrate",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Infiltrate",
+     "first_activation": true,
+     "range_in": 6,
+     "dice": "X",
+     "trigger_target": 2,
+     "ap": 1,
+     "needs_los": true,
+     "arrival_strike": "planned"
+    }
+   },
+   "Takedown Shot": {
+    "primitive": "Takedown",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack_q": 2,
+     "ap": 2,
+     "uses_per_game": 1
+    }
+   },
+   "Teleport": {
+    "primitive": "Teleport",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_bonus_in": 3.0,
+     "rush_bonus_in": 6.0
+    }
+   },
+   "Unpredictable Shooter": {
+    "primitive": "Unpredictable Shooter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   }
+  },
+  "infected_colonies": {
+   "Deathstrike": {
+    "primitive": "Deathstrike",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "trigger": "killed_in_melee",
+     "hits": "X",
+     "target": "attacking_unit"
+    }
+   },
+   "Fast Aura": {
+    "primitive": "Fast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 2,
+     "rush_mod": 4
+    }
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Fortified Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Infected": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Infected Boost": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "upgrades": "Infected",
+     "extra_wound_per_save_one": 1,
+     "save_fail_max": 2,
+     "over_in": 9
+    }
+   },
+   "Infected Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Lacerate": {
+    "primitive": "Lacerate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bypass_regen": true
+    }
+   },
+   "No Retreat": {
+    "primitive": "No Retreat",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "self_wound_max": 3,
+     "bypass_regen": true
+    }
+   },
+   "No Retreat Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Precision Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_mod": -1,
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Precision Growth": {
+    "primitive": "Growth Markers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "per_round": true,
+     "max_markers": 4,
+     "hit_per_two": 1
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Thrust in Melee Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Shooter": {
+    "primitive": "Unpredictable Shooter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Shooter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "jackals": {
+   "Ambushing Piercing Shot": {
+    "primitive": "Ambush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "counts_as": "Ambush"
+    }
+   },
+   "Bounding": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 1
+    }
+   },
+   "Crossing Attack": {
+    "primitive": "Crossing Attack",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6
+    }
+   },
+   "Destructive": {
+    "primitive": "Destructive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 4,
+     "bypass_regen": false
+    }
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Melee Evasion": {
+    "primitive": "Melee Evasion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "melee_only": true
+    }
+   },
+   "Mind Control": {
+    "primitive": "Mind Control",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_in": 18,
+     "move_in": 6,
+     "needs_los": true
+    }
+   },
+   "Morale Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_mod": -1,
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Precise": {
+    "primitive": "Precise",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Precision Fighter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Precision Tag": {
+    "primitive": "Utility Buff",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_mod": "Y",
+     "range_in": 24,
+     "target": "enemy",
+     "needs_los": true,
+     "uses_per_game": 1
+    }
+   },
+   "Ranged Shrouding": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_penalty_in": 6.0,
+     "floor_in": 6.0
+    }
+   },
+   "Ranged Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Repel Ambushers": {
+    "primitive": "Repel Ambushers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "min_dist_in": 12.0
+    }
+   },
+   "Scout Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Scrapper": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": false
+    }
+   },
+   "Scrapper Boost": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "upgrades": "Scrapper",
+     "reroll_save_sixes": true,
+     "reroll_save_from": 5,
+     "over_in": 9,
+     "bypass_regen": false
+    }
+   },
+   "Scrapper Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Shatter": {
+    "primitive": "Shatter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Stealth Aura": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9.0
+    }
+   },
+   "Strafing": {
+    "primitive": "Strafing",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_through_attack": true,
+     "weapon_only": true
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Shooter": {
+    "primitive": "Unpredictable Shooter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Shooter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "knight_brothers": {
+   "Bane in Melee Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bane when Shooting Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Knightborn": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 4,
+     "all_models": true
+    }
+   },
+   "Lacerate": {
+    "primitive": "Lacerate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bypass_regen": true
+    }
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Rapid Rush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6,
+     "no_save": true
+    }
+   },
+   "Re-Deployment": {
+    "primitive": "Re-Deployment",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "max_units": 2
+    }
+   },
+   "Re-Position Artillery": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reposition_in": 9,
+     "range_in": 6,
+     "target": "friendly_artillery"
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Teleport": {
+    "primitive": "Teleport",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_bonus_in": 3.0,
+     "rush_bonus_in": 6.0
+    }
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unpredictable Fighter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unstoppable Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach": {
+    "primitive": "Versatile Reach",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4.0,
+     "charge_bonus_in": 2.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "knight_prime_brothers": {
+   "Bane in Melee Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bane when Shooting Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Knightborn": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 4,
+     "all_models": true
+    }
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Slayer": {
+    "primitive": "Melee Slayer",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "charge_only": true
+    }
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Precise": {
+    "primitive": "Precise",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Rapid Rush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6,
+     "no_save": true
+    }
+   },
+   "Re-Deployment": {
+    "primitive": "Re-Deployment",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "max_units": 2
+    }
+   },
+   "Re-Position Artillery": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reposition_in": 9,
+     "range_in": 6,
+     "target": "friendly_artillery"
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Retaliate": {
+    "primitive": "Retaliate",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "hits_per_wound": "X"
+    }
+   },
+   "Shatter": {
+    "primitive": "Shatter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unpredictable Fighter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unstoppable Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach": {
+    "primitive": "Versatile Reach",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4.0,
+     "charge_bonus_in": 2.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "lust_disciples": {
+   "Dangerous Terrain Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Dangerous Terrain",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Furious Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Lustbound": {
+    "primitive": "Royal Legion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4,
+     "charge_mod": 2
+    }
+   },
+   "Lustbound Boost": {
+    "primitive": "Royal Legion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 8,
+     "charge_mod": 4,
+     "upgrades": "Lustbound"
+    }
+   },
+   "Lustbound Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Evasion": {
+    "primitive": "Melee Evasion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "melee_only": true
+    }
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Quick Shot": {
+    "primitive": "Quick Shot",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "shoot_after_rush": true
+    }
+   },
+   "Relentless Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Resistance": {
+    "primitive": "Resistance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 2,
+     "all_models": true
+    }
+   },
+   "Resistance Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Scout Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Shatter": {
+    "primitive": "Shatter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Steadfast": {
+    "primitive": "Steadfast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "recover_target": 4
+    }
+   },
+   "Steadfast Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Defense": {
+    "primitive": "Versatile Defense",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1,
+     "hit_penalty": 1,
+     "over_in": 9.0,
+     "default_mode": "def"
+    }
+   },
+   "Versatile Defense Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "machine_cults": {
+   "Bounding": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 1
+    }
+   },
+   "Crossing Attack": {
+    "primitive": "Crossing Attack",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6
+    }
+   },
+   "Grounded Stealth": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "terrain_within_in": 1
+    }
+   },
+   "Hit & Run Shooter": {
+    "primitive": "Hit & Run Shooter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true,
+     "after": "shoot"
+    }
+   },
+   "Lacerate": {
+    "primitive": "Lacerate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bypass_regen": true
+    }
+   },
+   "Machine-Fog": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9,
+     "applies_charged": true
+    }
+   },
+   "Machine-Fog Boost": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Machine-Fog Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Slayer": {
+    "primitive": "Melee Slayer",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "charge_only": true
+    }
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Piercing Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_mod": -1,
+     "target": "enemy",
+     "max_targets": 1,
+     "range_in": 18,
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Rending when Shooting Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Strafing": {
+    "primitive": "Strafing",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_through_attack": true,
+     "weapon_only": true
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Teleport": {
+    "primitive": "Teleport",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_bonus_in": 3.0,
+     "rush_bonus_in": 6.0
+    }
+   },
+   "Teleport Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unpredictable Fighter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   }
+  },
+  "orc_marauders": {
+   "Agile": {
+    "primitive": "Quick",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 1,
+     "rush_mod": 2
+    }
+   },
+   "Bad Shot": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": -1
+    }
+   },
+   "Bounding": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 1
+    }
+   },
+   "Ferocious": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Ferocious Boost": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "upgrades": "Ferocious",
+     "surge_low": 5,
+     "over_in": 9
+    }
+   },
+   "Ferocious Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Hit & Run": {
+    "primitive": "Hit & Run",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true
+    }
+   },
+   "Hit & Run Fighter": {
+    "primitive": "Hit & Run Fighter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true,
+     "after": "melee"
+    }
+   },
+   "Hit & Run Fighter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Piercing Assault": {
+    "primitive": "Piercing Assault",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "on_charge"
+    }
+   },
+   "Piercing Fighter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Precision Charge Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Protected": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "all_models": true
+    }
+   },
+   "Ranged Shrouding": {
+    "primitive": "Ranged Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_penalty_in": 6.0,
+     "floor_in": 6.0
+    }
+   },
+   "Ranged Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6,
+     "no_save": true
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Rending Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Repel Ambushers": {
+    "primitive": "Repel Ambushers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "min_dist_in": 12.0
+    }
+   },
+   "Resistance": {
+    "primitive": "Resistance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 2,
+     "all_models": true
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Speed Feat": {
+    "primitive": "Quick",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 2,
+     "rush_mod": 2,
+     "uses_per_game": 1
+    }
+   },
+   "Speed Feat Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Strafing": {
+    "primitive": "Strafing",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_through_attack": true,
+     "weapon_only": true
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Tear": {
+    "primitive": "Tear",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 4,
+     "condition": "vs_tough_ge",
+     "threshold": 9
+    }
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Shooter": {
+    "primitive": "Unpredictable Shooter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Shooter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "plague_disciples": {
+   "Bounding": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 1
+    }
+   },
+   "Bounding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Dangerous Terrain Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Dangerous Terrain",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Furious Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Plaguebound": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "all_models": true
+    }
+   },
+   "Plaguebound Boost": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5,
+     "all_models": true,
+     "upgrades": "Plaguebound"
+    }
+   },
+   "Plaguebound Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Protected": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "all_models": true
+    }
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Relentless Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Resistance": {
+    "primitive": "Resistance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 2,
+     "all_models": true
+    }
+   },
+   "Resistance Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Scout Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Steadfast": {
+    "primitive": "Steadfast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "recover_target": 4
+    }
+   },
+   "Steadfast Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Defense": {
+    "primitive": "Versatile Defense",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1,
+     "hit_penalty": 1,
+     "over_in": 9.0,
+     "default_mode": "def"
+    }
+   },
+   "Versatile Defense Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "prime_brothers": {
+   "Bane in Melee Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bane when Shooting Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Slayer": {
+    "primitive": "Melee Slayer",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "charge_only": true
+    }
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Precise": {
+    "primitive": "Precise",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Primeborn": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1,
+     "over_in": 9
+    }
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Rapid Rush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6,
+     "no_save": true
+    }
+   },
+   "Re-Deployment": {
+    "primitive": "Re-Deployment",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "max_units": 2
+    }
+   },
+   "Re-Position Artillery": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reposition_in": 9,
+     "range_in": 6,
+     "target": "friendly_artillery"
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Retaliate": {
+    "primitive": "Retaliate",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "hits_per_wound": "X"
+    }
+   },
+   "Shatter": {
+    "primitive": "Shatter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Unstoppable Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach": {
+    "primitive": "Versatile Reach",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4.0,
+     "charge_bonus_in": 2.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "ratmen_clans": {
+   "Ambush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Defense Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_mod": -1,
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Evasive Aura": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Good Shot": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Hazardous": {
+    "primitive": "Hazardous",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap": 4,
+     "self_wound_on_natural_hit_1": true
+    }
+   },
+   "Heavy Impact": {
+    "primitive": "Heavy Impact",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "ap": 1,
+     "counts_as": "Impact"
+    }
+   },
+   "Melee Evasion": {
+    "primitive": "Melee Evasion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "melee_only": true
+    }
+   },
+   "Melee Evasion Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "No Retreat": {
+    "primitive": "No Retreat",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "self_wound_max": 3,
+     "bypass_regen": true
+    }
+   },
+   "Piercing Assault": {
+    "primitive": "Piercing Assault",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "on_charge"
+    }
+   },
+   "Piercing Assault Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Precision Shooter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Predator": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack": true
+    }
+   },
+   "Predator Shooter": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack": true,
+     "shooting_only": true
+    }
+   },
+   "Predator Shooter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Quick Readjustment": {
+    "primitive": "Indirect",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "no_moved_penalty": true
+    }
+   },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6,
+     "no_save": true
+    }
+   },
+   "Reinforcement": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Scurry": {
+    "primitive": "Quick",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 2,
+     "rush_mod": 2
+    }
+   },
+   "Scurry Boost": {
+    "primitive": "Fast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 4,
+     "rush_mod": 4,
+     "upgrades": "Scurry"
+    }
+   },
+   "Scurry Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Self-Destruct": {
+    "primitive": "Self-Destruct",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "hits": "X",
+     "trigger": "death_in_melee_or_post_m"
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Spawn": {
+    "primitive": null,
+    "rated": true,
+    "book_version": "3.5.3"
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Takedown Shot": {
+    "primitive": "Takedown",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack_q": 2,
+     "ap": 2,
+     "uses_per_game": 1
+    }
+   },
+   "Takedown Strike": {
+    "primitive": "Takedown",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack_q": 2,
+     "ap": 2,
+     "uses_per_game": 1
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   }
+  },
+  "rebel_guerrillas": {
+   "Ambushing Piercing Shot": {
+    "primitive": "Ambush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "counts_as": "Ambush"
+    }
+   },
+   "Bane when Shooting Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Counter-Attack": {
+    "primitive": "Counter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "strikes_first": true,
+     "impact_reduction_per_model": 1
+    }
+   },
+   "Courage Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_mod": 1,
+     "range_in": 12,
+     "target": "friendly",
+     "once": true
+    }
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Furious Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Guerrilla": {
+    "primitive": "Hit & Run",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3,
+     "per_round": true
+    }
+   },
+   "Guerrilla Boost": {
+    "primitive": "Hit & Run",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 6,
+     "per_round": true
+    }
+   },
+   "Guerrilla Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Lacerate": {
+    "primitive": "Lacerate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bypass_regen": true
+    }
+   },
+   "Piercing Tag": {
+    "primitive": "Piercing Tag",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "range_in": 24,
+     "needs_los": true,
+     "uses_per_game": 1
+    }
+   },
+   "Precise": {
+    "primitive": "Precise",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Rending in Melee Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shielded Aura": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Strider Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Takedown Strike": {
+    "primitive": "Takedown",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack_q": 2,
+     "ap": 2,
+     "uses_per_game": 1
+    }
+   }
+  },
+  "robot_legions": {
+   "Ambush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Ambushing Piercing Shot": {
+    "primitive": "Ambush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "counts_as": "Ambush"
+    }
+   },
+   "Casting Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "casting_mod": 1,
+     "range_in": 12,
+     "target": "friendly_caster",
+     "once": true
+    }
+   },
+   "Destructive": {
+    "primitive": "Destructive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 4,
+     "bypass_regen": false
+    }
+   },
+   "Indirect Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Indirect",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Infiltrate": {
+    "primitive": "Infiltrate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "counts_as": "Ambush",
+     "min_enemy_dist_in": 3.0
+    }
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Mobile Artillery": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "over_in": 9,
+     "requires_stationary": true
+    }
+   },
+   "No Retreat": {
+    "primitive": "No Retreat",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "self_wound_max": 3,
+     "bypass_regen": true
+    }
+   },
+   "No Retreat Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Piercing Assault": {
+    "primitive": "Piercing Assault",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "on_charge"
+    }
+   },
+   "Piercing Assault Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Protection Feat": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5,
+     "all_models": true,
+     "uses_per_game": 1
+    }
+   },
+   "Protection Feat Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Rapid Advance": {
+    "primitive": "Rapid Advance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 4
+    }
+   },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6,
+     "no_save": true
+    }
+   },
+   "Reanimation": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Reanimation Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Relentless Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Repel Ambushers": {
+    "primitive": "Repel Ambushers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "min_dist_in": 12.0
+    }
+   },
+   "Self-Repair": {
+    "primitive": "Self-Repair",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "all_models": true
+    }
+   },
+   "Self-Repair Boost": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5,
+     "all_models": true
+    }
+   },
+   "Self-Repair Boost Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Self-Repair Boost",
+     "range_in": 12,
+     "target": "friendly",
+     "once": true
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Spawn": {
+    "primitive": null,
+    "rated": true,
+    "book_version": "3.5.3"
+   },
+   "Stealth Aura": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9.0
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Swift": {
+    "primitive": "Swift",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "negates": "Slow"
+    }
+   },
+   "Swift Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Swift",
+     "target": "friendly",
+     "max_targets": 1,
+     "range_in": 12,
+     "once": true
+    }
+   },
+   "Unstoppable when Shooting Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "saurian_starhost": {
+   "Ambush Beacon": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Bane Mark": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bounding": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 1
+    }
+   },
+   "Breath Attack": {
+    "primitive": "Breath Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "trigger_target": 2,
+     "range_in": 6.0,
+     "blast": 3,
+     "ap": 1
+    }
+   },
+   "Counter-Attack": {
+    "primitive": "Counter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "strikes_first": true,
+     "impact_reduction_per_model": 1
+    }
+   },
+   "Counter-Attack Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Disintegrate": {
+    "primitive": "Disintegrate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_armor",
+     "threshold": 3,
+     "bypass_regen": true
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Good Shot": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Heavy Impact": {
+    "primitive": "Heavy Impact",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "ap": 1,
+     "counts_as": "Impact"
+    }
+   },
+   "Precise": {
+    "primitive": "Precise",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Precision Target": {
+    "primitive": "Utility Buff",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_mod": "X",
+     "range_in": 18,
+     "target": "enemy",
+     "needs_los": true,
+     "uses_per_game": 1
+    }
+   },
+   "Primal": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack": true
+    }
+   },
+   "Primal Boost": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "upgrades": "Primal",
+     "extra_attack": true,
+     "surge_low": 5
+    }
+   },
+   "Primal Boost Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Primal Boost",
+     "range_in": 12,
+     "target": "friendly",
+     "once": true
+    }
+   },
+   "Protection Feat": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5,
+     "all_models": true,
+     "uses_per_game": 1
+    }
+   },
+   "Rapid Charge Aura": {
+    "primitive": "Fast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 4,
+     "charge_only": true,
+     "scope": "unit"
+    }
+   },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6,
+     "no_save": true
+    }
+   },
+   "Rending when Shooting Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Scout Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Spell Conduit": {
+    "primitive": "Spell Conduit",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_in": 12,
+     "casting_mod": 1
+    }
+   },
+   "Strafing": {
+    "primitive": "Strafing",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_through_attack": true,
+     "weapon_only": true
+    }
+   },
+   "Teleport": {
+    "primitive": "Teleport",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_bonus_in": 3.0,
+     "rush_bonus_in": 6.0
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "soul_snatcher_cults": {
+   "Bounding": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 1
+    }
+   },
+   "Disintegrate": {
+    "primitive": "Disintegrate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_armor",
+     "threshold": 3,
+     "bypass_regen": true
+    }
+   },
+   "Fanatic": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9
+    }
+   },
+   "Grounded Precision": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "terrain_within_in": 1,
+     "all_attacks": true
+    }
+   },
+   "Grounded Precision Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Grounded Reinforcement": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1,
+     "terrain_within_in": 1
+    }
+   },
+   "Grounded Reinforcement Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Increased Shooting Range Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 6,
+     "phase": "shoot",
+     "target": "friendly",
+     "max_targets": 1,
+     "range_in": 12,
+     "once": true
+    }
+   },
+   "Melee Slayer": {
+    "primitive": "Melee Slayer",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "charge_only": true
+    }
+   },
+   "Melee Slayer Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Mind Control": {
+    "primitive": "Mind Control",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_in": 18,
+     "move_in": 6,
+     "needs_los": true
+    }
+   },
+   "Precision Shooting Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_mod": 1,
+     "scope": "shooting",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Quick": {
+    "primitive": "Quick",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 2,
+     "rush_mod": 2
+    }
+   },
+   "Quick Shot": {
+    "primitive": "Quick Shot",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "shoot_after_rush": true
+    }
+   },
+   "Quick Shot Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Re-Deployment": {
+    "primitive": "Re-Deployment",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "max_units": 2
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Reinforcement": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Repel Ambushers": {
+    "primitive": "Repel Ambushers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "min_dist_in": 12.0
+    }
+   },
+   "Slayer": {
+    "primitive": "Slayer",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "gate": "ranged_over_or_charge",
+     "over_in": 9.0
+    }
+   },
+   "Speed Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Fast",
+     "target": "friendly",
+     "max_targets": 1,
+     "range_in": 12,
+     "once": true
+    }
+   },
+   "Spell Conduit": {
+    "primitive": "Spell Conduit",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_in": 12,
+     "casting_mod": 1
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Takedown Strike": {
+    "primitive": "Takedown",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack_q": 2,
+     "ap": 2,
+     "uses_per_game": 1
+    }
+   },
+   "Teleport": {
+    "primitive": "Teleport",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_bonus_in": 3.0,
+     "rush_bonus_in": 6.0
+    }
+   }
+  },
+  "titan_lords": {
+   "Delayed Action": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Honor Code": {
+    "primitive": "Battleborn",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "recover_target": 4
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   }
+  },
+  "titan_lords_change_disciples": {
+   "Changebound": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9,
+     "applies_charged": true
+    }
+   },
+   "Changebound Boost": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "hit_penalty": 1,
+     "applies_charged": true,
+     "upgrades": "Changebound"
+    }
+   },
+   "Delayed Action": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.2"
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   }
+  },
+  "titan_lords_lust_disciples": {
+   "Delayed Action": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.2"
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Lustbound": {
+    "primitive": "Royal Legion",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "range_bonus_in": 4,
+     "charge_mod": 2
+    }
+   },
+   "Lustbound Boost": {
+    "primitive": "Royal Legion",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "range_bonus_in": 8,
+     "charge_mod": 4,
+     "upgrades": "Lustbound"
+    }
+   },
+   "Melee Evasion": {
+    "primitive": "Melee Evasion",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "hit_penalty": 1,
+     "melee_only": true
+    }
+   },
+   "Quick Shot": {
+    "primitive": "Quick Shot",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "shoot_after_rush": true
+    }
+   },
+   "Shatter": {
+    "primitive": "Shatter",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   }
+  },
+  "titan_lords_plague_disciples": {
+   "Delayed Action": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.2"
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Plaguebound": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "ignore_target": 6,
+     "all_models": true
+    }
+   },
+   "Plaguebound Boost": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "ignore_target": 5,
+     "all_models": true,
+     "upgrades": "Plaguebound"
+    }
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   }
+  },
+  "titan_lords_war_disciples": {
+   "Crack": {
+    "primitive": "Crack",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "on6_ap": 2
+    }
+   },
+   "Delayed Action": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.2"
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Melee Evasion": {
+    "primitive": "Melee Evasion",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "hit_penalty": 1,
+     "melee_only": true
+    }
+   },
+   "Warbound": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Warbound Boost": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "extra_wound_save_low": 2,
+     "over_in": 9,
+     "upgrades": "Warbound"
+    }
+   }
+  },
+  "war_disciples": {
+   "Crack": {
+    "primitive": "Crack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "on6_ap": 2
+    }
+   },
+   "Dangerous Terrain Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Dangerous Terrain",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Furious Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Evasion": {
+    "primitive": "Melee Evasion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "melee_only": true
+    }
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Piercing Assault": {
+    "primitive": "Piercing Assault",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "on_charge"
+    }
+   },
+   "Relentless Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Resistance": {
+    "primitive": "Resistance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 2,
+     "all_models": true
+    }
+   },
+   "Resistance Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Scout Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Steadfast": {
+    "primitive": "Steadfast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "recover_target": 4
+    }
+   },
+   "Steadfast Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unpredictable": {
+    "primitive": "Unpredictable",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "low_roll_max": 3
+    }
+   },
+   "Unpredictable Fighter": {
+    "primitive": "Unpredictable Fighter",
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Defense": {
+    "primitive": "Versatile Defense",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1,
+     "hit_penalty": 1,
+     "over_in": 9.0,
+     "default_mode": "def"
+    }
+   },
+   "Versatile Defense Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Warbound": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Warbound Boost": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_save_low": 2,
+     "over_in": 9,
+     "upgrades": "Warbound"
+    }
+   },
+   "Warbound Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "watch_brothers": {
+   "Bane in Melee Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bane when Shooting Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Lacerate": {
+    "primitive": "Lacerate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bypass_regen": true
+    }
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Rapid Rush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Re-Position Artillery": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reposition_in": 9,
+     "range_in": 6,
+     "target": "friendly_artillery"
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Shred when Shooting Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Strafing": {
+    "primitive": "Strafing",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_through_attack": true,
+     "weapon_only": true
+    }
+   },
+   "Unstoppable Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Versatile Reach": {
+    "primitive": "Versatile Reach",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4.0,
+     "charge_bonus_in": 2.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Watchborn": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9,
+     "pick_one": true
+    }
+   }
+  },
+  "watch_prime_brothers": {
+   "Bane in Melee Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bane when Shooting Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Slayer": {
+    "primitive": "Melee Slayer",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "charge_only": true
+    }
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Precise": {
+    "primitive": "Precise",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Rapid Rush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6,
+     "no_save": true
+    }
+   },
+   "Re-Deployment": {
+    "primitive": "Re-Deployment",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "max_units": 2
+    }
+   },
+   "Re-Position Artillery": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reposition_in": 9,
+     "range_in": 6,
+     "target": "friendly_artillery"
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Retaliate": {
+    "primitive": "Retaliate",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "hits_per_wound": "X"
+    }
+   },
+   "Shatter": {
+    "primitive": "Shatter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Shred when Shooting Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unstoppable Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Versatile Reach": {
+    "primitive": "Versatile Reach",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4.0,
+     "charge_bonus_in": 2.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Watchborn": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9,
+     "pick_one": true
+    }
+   }
+  },
+  "wolf_brothers": {
+   "Bane in Melee Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bane when Shooting Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Counter-Attack": {
+    "primitive": "Counter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "strikes_first": true,
+     "impact_reduction_per_model": 1
+    }
+   },
+   "Counter-Attack Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Fortified": {
+    "primitive": "Fortified",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "incoming_ap_reduction": 1
+    }
+   },
+   "Lacerate": {
+    "primitive": "Lacerate",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bypass_regen": true
+    }
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Piercing Assault": {
+    "primitive": "Piercing Assault",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "on_charge"
+    }
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Rapid Rush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Re-Deployment": {
+    "primitive": "Re-Deployment",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "max_units": 2
+    }
+   },
+   "Re-Position Artillery": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reposition_in": 9,
+     "range_in": 6,
+     "target": "friendly_artillery"
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Unstoppable Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach": {
+    "primitive": "Versatile Reach",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4.0,
+     "charge_bonus_in": 2.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Wolfborn": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 0
+    }
+   }
+  },
+  "wolf_prime_brothers": {
+   "Bane in Melee Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Bane when Shooting Aura": {
+    "primitive": "Bane",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reroll_save_sixes": true,
+     "bypass_regen": true
+    }
+   },
+   "Counter-Attack": {
+    "primitive": "Counter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "strikes_first": true,
+     "impact_reduction_per_model": 1
+    }
+   },
+   "Counter-Attack Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Courage Aura": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1
+    }
+   },
+   "Evasive": {
+    "primitive": "Evasive",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1
+    }
+   },
+   "Melee Shrouding": {
+    "primitive": "Melee Shrouding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_penalty_in": 3.0,
+     "floor_in": 6.0
+    }
+   },
+   "Melee Shrouding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Slayer": {
+    "primitive": "Melee Slayer",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3,
+     "charge_only": true
+    }
+   },
+   "Mend": {
+    "primitive": "Mend",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "heal_d3": true,
+     "range_in": 3.0,
+     "requires_tough": true
+    }
+   },
+   "Piercing Assault": {
+    "primitive": "Piercing Assault",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "on_charge"
+    }
+   },
+   "Precise": {
+    "primitive": "Precise",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1
+    }
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Rapid Rush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6,
+     "no_save": true
+    }
+   },
+   "Re-Deployment": {
+    "primitive": "Re-Deployment",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "max_units": 2
+    }
+   },
+   "Re-Position Artillery": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "reposition_in": 9,
+     "range_in": 6,
+     "target": "friendly_artillery"
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Retaliate": {
+    "primitive": "Retaliate",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "hits_per_wound": "X"
+    }
+   },
+   "Shatter": {
+    "primitive": "Shatter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Unstoppable Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "vs_target": true
+    }
+   },
+   "Versatile Attack": {
+    "primitive": "Versatile Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "hit_bonus": 1,
+     "over_in": 9.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach": {
+    "primitive": "Versatile Reach",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4.0,
+     "charge_bonus_in": 2.0,
+     "pick_one": true
+    }
+   },
+   "Versatile Reach Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Wolfborn": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 0
+    }
+   }
+  },
+  "wormhole_daemons_of_change": {
+   "Ambush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Bounding": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 1
+    }
+   },
+   "Bounding Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Casting Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "casting_mod": -1,
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Changebound": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9,
+     "applies_charged": true
+    }
+   },
+   "Changebound Boost": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "applies_charged": true,
+     "upgrades": "Changebound"
+    }
+   },
+   "Changebound Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Fearless Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Indirect when Shooting Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Protected": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "all_models": true
+    }
+   },
+   "Protected Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Resistance": {
+    "primitive": "Resistance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 2,
+     "all_models": true
+    }
+   },
+   "Resistance Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Spell Accumulator": {
+    "primitive": null,
+    "rated": true,
+    "book_version": "3.5.3"
+   },
+   "Split": {
+    "primitive": null,
+    "rated": true,
+    "book_version": "3.5.3"
+   },
+   "Storm of Change": {
+    "primitive": "Storm Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "dice": 3,
+     "trigger_target": 2,
+     "range_in": 12,
+     "hits": 3,
+     "facet": "shred",
+     "uses_per_game": 1
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Teleport": {
+    "primitive": "Teleport",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_bonus_in": 3.0,
+     "rush_bonus_in": 6.0
+    }
+   },
+   "Teleport Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Unstoppable in Melee Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Vanguard": {
+    "primitive": "Vanguard",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_in": 9.0
+    }
+   }
+  },
+  "wormhole_daemons_of_lust": {
+   "Ambush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Counter-Attack": {
+    "primitive": "Counter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "strikes_first": true,
+     "impact_reduction_per_model": 1
+    }
+   },
+   "Counter-Attack Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Hit & Run": {
+    "primitive": "Hit & Run",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true
+    }
+   },
+   "Hit & Run Fighter": {
+    "primitive": "Hit & Run Fighter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true,
+     "after": "melee"
+    }
+   },
+   "Hit & Run Fighter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Lustbound": {
+    "primitive": "Royal Legion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 4,
+     "charge_mod": 2
+    }
+   },
+   "Lustbound Boost": {
+    "primitive": "Royal Legion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 8,
+     "charge_mod": 4,
+     "upgrades": "Lustbound"
+    }
+   },
+   "Lustbound Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Evasion": {
+    "primitive": "Melee Evasion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "melee_only": true
+    }
+   },
+   "Mind Control": {
+    "primitive": "Mind Control",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "range_in": 18,
+     "move_in": 6,
+     "needs_los": true
+    }
+   },
+   "Piercing Assault": {
+    "primitive": "Piercing Assault",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 1,
+     "condition": "on_charge"
+    }
+   },
+   "Piercing Assault Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Quick": {
+    "primitive": "Quick",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "advance_mod": 2,
+     "rush_mod": 2
+    }
+   },
+   "Quick Shot": {
+    "primitive": "Quick Shot",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "shoot_after_rush": true
+    }
+   },
+   "Quick Shot Mark": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Quick Shot",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Resistance": {
+    "primitive": "Resistance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 2,
+     "all_models": true
+    }
+   },
+   "Retaliate": {
+    "primitive": "Retaliate",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "hits_per_wound": "X"
+    }
+   },
+   "Shatter": {
+    "primitive": "Shatter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ap_bonus": 2,
+     "condition": "vs_tough_ge",
+     "threshold": 3
+    }
+   },
+   "Shred": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Spawn": {
+    "primitive": null,
+    "rated": true,
+    "book_version": "3.5.3"
+   },
+   "Storm of Lust": {
+    "primitive": "Storm Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "dice": 3,
+     "trigger_target": 2,
+     "range_in": 12,
+     "hits": 3,
+     "facet": "surge",
+     "uses_per_game": 1
+    }
+   },
+   "Strider Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
+   "Unstoppable when Shooting Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  },
+  "wormhole_daemons_of_plague": {
+   "Ambush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Difficult Terrain Debuff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Difficult Terrain",
+     "range_in": 18,
+     "target": "enemy",
+     "once": true,
+     "needs_los": true
+    }
+   },
+   "Fortified Growth": {
+    "primitive": "Growth Markers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "per_round": true,
+     "max_markers": 4,
+     "enemy_ap_per_two": -1,
+     "min_ap": 0,
+     "all_models": true
+    }
+   },
+   "Plaguebound": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "all_models": true
+    }
+   },
+   "Plaguebound Boost": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5,
+     "all_models": true,
+     "upgrades": "Plaguebound"
+    }
+   },
+   "Plaguebound Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Precision Attacks Buff": {
+    "primitive": "Utility Buff",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_mod": 1,
+     "range_in": 12,
+     "target": "friendly",
+     "once": true
+    }
+   },
+   "Rapid Rush": {
+    "primitive": "Rapid Rush",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 6
+    }
+   },
+   "Regeneration Aura": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Regeneration Buff": {
+    "primitive": "Regeneration",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 5
+    }
+   },
+   "Relentless Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Rending in Melee Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Screened": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9,
+     "applies_charged": true
+    }
+   },
+   "Screened Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Steadfast": {
+    "primitive": "Steadfast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "recover_target": 4
+    }
+   },
+   "Steadfast Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Storm of Plague": {
+    "primitive": "Storm Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "dice": 3,
+     "trigger_target": 2,
+     "range_in": 12,
+     "hits": 3,
+     "facet": "bane",
+     "uses_per_game": 1
+    }
+   },
+   "Surge": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   }
+  },
+  "wormhole_daemons_of_war": {
+   "+1 to Defense": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Ambush Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Crack": {
+    "primitive": "Crack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "on6_ap": 2
+    }
+   },
+   "Defensive Frenzy": {
+    "primitive": "Growth Markers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "on_kill": true,
+     "max_markers": 2,
+     "defense_per_marker": 1
+    }
+   },
+   "Fatigue Debuff": {
+    "primitive": "Mind Control",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "effect": "fatigue"
+    }
+   },
+   "Furious Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Melee Evasion": {
+    "primitive": "Melee Evasion",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "melee_only": true
+    }
+   },
+   "Piercing Fighter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Piercing Shooter Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   },
+   "Rapid Charge": {
+    "primitive": "Fast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 4,
+     "charge_only": true
+    }
+   },
+   "Rapid Charge Aura": {
+    "primitive": "Fast",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "rush_mod": 4,
+     "charge_only": true,
+     "scope": "unit"
+    }
+   },
+   "Ravage": {
+    "primitive": "Ravage",
+    "rated": true,
+    "book_version": "3.5.3",
+    "params": {
+     "rating": "X",
+     "wound_target": 6,
+     "no_save": true
+    }
+   },
+   "Repel Ambushers": {
+    "primitive": "Repel Ambushers",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "min_dist_in": 12.0
+    }
+   },
+   "Resistance": {
+    "primitive": "Resistance",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "ignore_target": 6,
+     "ignore_target_spell": 2,
+     "all_models": true
+    }
+   },
+   "Shielded": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Shielded Aura": {
+    "primitive": "Shielded",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "defense_bonus": 1
+    }
+   },
+   "Storm of War": {
+    "primitive": "Storm Attack",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "dice": 3,
+     "trigger_target": 2,
+     "range_in": 12,
+     "hits": 3,
+     "facet": "ap1",
+     "uses_per_game": 1
+    }
+   },
+   "Warbound": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_per_save_one": 1
+    }
+   },
+   "Warbound Boost": {
+    "primitive": "Shred",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_wound_save_low": 2,
+     "over_in": 9,
+     "upgrades": "Warbound"
+    }
+   },
+   "Warbound Boost Aura": {
+    "primitive": null,
+    "rated": false,
+    "book_version": "3.5.3"
+   }
+  }
+ }
+}

@@ -34,6 +34,9 @@ const ATTRACT_FADE_S := 0.2
 ## Fail the room-list request if neither rooms nor an error arrive in this time
 ## (safety net for a relay that accepts the socket but never replies).
 const BROWSE_TIMEOUT_S := 8.0
+## Room-code length the relay hands out (CODE_LENGTH in relay_server.py). Only used to
+## reject input the relay could never accept before the dialog closes on it.
+const JOIN_CODE_LEN := 6
 
 
 # === Node references ===
@@ -63,12 +66,14 @@ var _load_dialog: FileDialog
 var _host_popup: AcceptDialog
 var _join_popup: AcceptDialog
 var _browse_popup: AcceptDialog
+var _exit_confirm: ConfirmationDialog
 var _relay_url_input: LineEdit
 var _host_name_input: LineEdit
 var _host_public_check: CheckBox
 var _join_code_input: LineEdit
 var _join_relay_url_input: LineEdit
 var _join_name_input: LineEdit
+var _join_error_label: Label
 var _browse_name_input: LineEdit
 var _browse_url_input: LineEdit
 var _browse_rooms_vbox: VBoxContainer
@@ -342,7 +347,18 @@ func _on_report_problem_pressed() -> void:
 func _on_credits_pressed() -> void:
 	var dialog := AcceptDialog.new()
 	dialog.title = "Credits & Licenses"
-	dialog.dialog_text = "Niemandsland — © the Niemandsland project.\n\n" \
+	# As plain dialog_text these ~12 licence lines size the window themselves, with nothing
+	# stopping it (and its OK button) from growing past a small screen. A scrolled body with a
+	# FIXED viewport is the clamp here: an AcceptDialog wraps its contents (wrap_controls), so
+	# its window size is always the contents' minimum — an outer keep_window_reachable() would
+	# be overruled the moment it pops up (measured: clamped to 520x400, popped up at 452x317).
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(420, 240)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var body := Label.new()
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD
+	body.text = "Niemandsland — © the Niemandsland project.\n\n" \
 		+ "Game code: MIT License.\n" \
 		+ "3D miniatures & terrain: generated project assets, CC-BY-SA 4.0.\n" \
 		+ "Fonts: SIL Open Font License.\n" \
@@ -350,14 +366,37 @@ func _on_credits_pressed() -> void:
 		+ "Engine: Godot Engine (MIT).\n\n" \
 		+ "OnePageRules army data is loaded at runtime via the Army Forge API; it is not bundled.\n\n" \
 		+ "Full details: THIRD_PARTY.md in the project repository."
+	scroll.add_child(body)
+	dialog.add_child(scroll)
 	add_child(dialog)
+	# popup_centered() centres whatever size the window carries at that moment, and the wrap to
+	# the contents happens afterwards — so take the wrapped size FIRST or the window opens off
+	# centre by half the difference.
+	dialog.reset_size()
 	dialog.popup_centered()
 	dialog.confirmed.connect(dialog.queue_free)
 	dialog.canceled.connect(dialog.queue_free)
 
 
+## EXIT GAME / ESC ask first. Everywhere else in the project ESC only closes a surface, so
+## quitting the process on a single stray keypress was the hardest break in the interaction
+## language — and unrecoverable (a CONTINUE save one keypress away is not the same thing).
 func _on_exit_pressed() -> void:
-	get_tree().quit()
+	# is_instance_valid still reports true for the rest of the frame after queue_free, so the
+	# very ESC that closes this dialog cannot immediately open a second one.
+	if is_instance_valid(_exit_confirm):
+		return
+	_exit_confirm = ConfirmationDialog.new()
+	_exit_confirm.title = "Exit game"
+	_exit_confirm.dialog_text = "Quit Niemandsland?"
+	_exit_confirm.ok_button_text = "QUIT"
+	_exit_confirm.cancel_button_text = "CANCEL"
+	_exit_confirm.confirmed.connect(func() -> void: get_tree().quit())
+	_exit_confirm.canceled.connect(_exit_confirm.queue_free)
+	add_child(_exit_confirm)
+	_exit_confirm.popup_centered()
+	# CANCEL is the safe answer, so it — not QUIT — starts focused.
+	_exit_confirm.get_cancel_button().grab_focus()
 
 # === Update check =====
 
@@ -411,7 +450,7 @@ func _start_self_update(url: String) -> void:
 	var updater := SelfUpdater.new()
 	add_child(updater)
 	updater.progress.connect(_on_update_progress.bind(dialog))
-	updater.restarting.connect(_on_update_restarting.bind(dialog))
+	updater.restarting.connect(_on_update_restarting.bind(dialog, updater))
 	updater.update_failed.connect(_on_update_failed.bind(dialog, updater, url))
 	updater.install(url)
 
@@ -421,9 +460,16 @@ func _on_update_progress(stage: String, ratio: float, dialog: AcceptDialog) -> v
 		dialog.dialog_text = ("%s… %d%%" % [stage, int(ratio * 100.0)]) if ratio >= 0.0 else ("%s…" % stage)
 
 
-func _on_update_restarting(dialog: AcceptDialog) -> void:
+## Files are staged, the relaunch is starting. Clean up like the failure path does: the
+## success path used to be the one branch that left the (button-less, unclosable) progress
+## dialog and the updater in the tree — harmless only for as long as SelfUpdater really
+## quits right after emitting this.
+func _on_update_restarting(dialog: AcceptDialog, updater: SelfUpdater) -> void:
 	if is_instance_valid(dialog):
 		dialog.dialog_text = "Restarting…"
+		dialog.queue_free()
+	if is_instance_valid(updater):
+		updater.queue_free()
 
 
 func _on_update_failed(reason: String, dialog: AcceptDialog, updater: SelfUpdater, url: String) -> void:
@@ -431,12 +477,18 @@ func _on_update_failed(reason: String, dialog: AcceptDialog, updater: SelfUpdate
 		updater.queue_free()
 	if is_instance_valid(dialog):
 		dialog.queue_free()
-	OS.shell_open(url)  # fallback: the player downloads + unzips manually
 	var msg := AcceptDialog.new()
 	msg.title = "Auto-update unavailable"
 	msg.dialog_text = "Couldn't auto-update (%s).\nThe download page has opened — unzip it over your Niemandsland folder." % reason
+	# An AcceptDialog only HIDES itself on OK — without both close paths freeing it, the
+	# node stays in the tree for the rest of the session.
+	msg.confirmed.connect(msg.queue_free)
+	msg.canceled.connect(msg.queue_free)
 	add_child(msg)
 	msg.popup_centered()
+	# Open the browser only AFTER the message is up: shell_open raises the browser over the
+	# game window, so a dialog shown afterwards is hidden behind it and never read.
+	OS.shell_open(url)  # fallback: the player downloads + unzips manually
 
 # ===== Online Multiplayer =====
 
@@ -510,10 +562,24 @@ func _show_join_popup() -> void:
 	_join_code_input.add_theme_font_size_override("font_size", 24)
 	_join_code_input.alignment = HORIZONTAL_ALIGNMENT_CENTER
 	content.add_child(_join_code_input)
+	# Validation feedback right under the field it belongs to; hidden until Join is
+	# pressed with an unusable code (see _on_join_confirmed).
+	_join_error_label = NetDialog.label("")
+	_join_error_label.add_theme_color_override("font_color", HudTokens.DANGER)
+	_join_error_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	_join_error_label.visible = false
+	content.add_child(_join_error_label)
+	# Editing the code is the fix for the message, so the message must not outlive the edit.
+	_join_code_input.text_changed.connect(func(_new_text: String) -> void:
+		_join_error_label.visible = false)
 	content.add_child(NetDialog.label("Relay Server URL:"))
 	_join_relay_url_input = NetDialog.line_edit(InternetLobby.DEFAULT_RELAY_URL, "wss://niemandsland-relay.fly.dev")
 	content.add_child(_join_relay_url_input)
 
+	# The dialog must NOT close itself on OK: an unusable room code has to leave the mask
+	# open with its reason on screen (a window that just vanishes and does nothing reads
+	# like a crash). _on_join_confirmed hides it once the input is good.
+	_join_popup.dialog_hide_on_ok = false
 	_join_popup.confirmed.connect(_on_join_confirmed)
 	add_child(_join_popup)
 	_join_popup.popup_centered()
@@ -521,14 +587,34 @@ func _show_join_popup() -> void:
 	_join_code_input.grab_focus()
 
 
+## Join pressed. Anything the relay cannot possibly accept (relay: 6 characters) is
+## rejected HERE, with the mask staying open and the caret back in the code field —
+## previously this returned silently while the dialog closed anyway, so a typo looked
+## exactly like the game crashing on Join.
 func _on_join_confirmed() -> void:
 	var code = _join_code_input.text.strip_edges().replace("-", "").to_upper()
 	if code.is_empty():
+		_show_join_error("Enter the room code the host gave you.")
+		return
+	if code.length() != JOIN_CODE_LEN:
+		_show_join_error("A room code has %d characters, like ABC-123." % JOIN_CODE_LEN)
 		return
 	var url = _join_relay_url_input.text.strip_edges()
 	if url.is_empty():
 		url = InternetLobby.DEFAULT_RELAY_URL
+	# We took the close over from the dialog (dialog_hide_on_ok), so hide it before the
+	# scene swap — an embedded dialog would otherwise sit on top of the loading overlay.
+	_join_popup.hide()
 	_join_room_and_transition(code, url, PlayerIdentity.sanitize(_join_name_input.text))
+
+
+## Shows a rejection under the room-code field and returns the caret to it.
+func _show_join_error(message: String) -> void:
+	if not is_instance_valid(_join_error_label):
+		return
+	_join_error_label.text = message
+	_join_error_label.visible = true
+	_join_code_input.grab_focus()
 
 
 ## Persists the name, hands the join settings to the main scene and transitions.
@@ -716,9 +802,17 @@ func _open_load_battle_dialog() -> void:
 		_load_dialog.access = FileDialog.ACCESS_FILESYSTEM
 		_load_dialog.filters = PackedStringArray(["*.nml ; Niemandsland Save Files"])
 		_load_dialog.title = "Load Battle"
-		_load_dialog.size = Vector2i(800, 600)
+		# FileDialog derives its OK label from file_mode and takes both button labels from
+		# Godot's own translations, i.e. from the SYSTEM language — on a German Windows the
+		# only English-only UI in the game would suddenly read "Öffnen"/"Abbrechen". Pin them
+		# explicitly, AFTER file_mode (set_file_mode rewrites ok_button_text).
+		_load_dialog.ok_button_text = "Open"
+		_load_dialog.cancel_button_text = "Cancel"
 		_load_dialog.file_selected.connect(_on_load_file_selected)
 		add_child(_load_dialog)
+		# A hard 800x600 is nearly full-screen on a 1366x768 laptop; clamp to the host
+		# window instead (and re-clamp when it is resized).
+		UiPolish.keep_window_reachable(_load_dialog, Vector2i(800, 600))
 
 	_load_dialog.current_dir = SaveManager.get_default_save_dir()
 	_load_dialog.popup_centered()
@@ -755,6 +849,11 @@ func _input(event: InputEvent) -> void:
 		# has focus — digits in a name like "Boss5" would otherwise trigger menu
 		# entries and Esc would quit (same LineEdit guard used in-game).
 		if get_viewport().gui_get_focus_owner() is LineEdit:
+			return
+		# Same reason while the quit confirmation is up: it has no text field, so without
+		# this the menu behind it would still answer number keys, and ESC would be handled
+		# twice (once by the dialog's own close).
+		if is_instance_valid(_exit_confirm) and _exit_confirm.visible:
 			return
 		if event.keycode == KEY_ESCAPE:
 			_on_exit_pressed()
