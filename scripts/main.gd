@@ -5420,8 +5420,12 @@ func _solo_spawn_corridor_distance_label(path: Array, y: float, arc_m: float) ->
 	lbl.modulate = Color(1.0, 0.75, 0.2, 0.95)     # the AI's amber, against the player's chalk blue
 	lbl.outline_modulate = Color(0, 0, 0, 0.85)
 	var mid: Vector3 = path[path.size() >> 1]
-	lbl.global_position = Vector3(mid.x, y + SOLO_CORRIDOR_LABEL_Y_M, mid.z)
+	# add_child FIRST: global_position on a node that is not yet in the tree cannot be resolved —
+	# Godot logs "Condition !is_inside_tree() is true" and hands back an identity transform, so the
+	# label silently lands in the wrong place. A self-play batch flooded its log with thousands of
+	# these, which is how it surfaced: the launch smoke never moves a unit, so nothing caught it.
 	add_child(lbl)
+	lbl.global_position = Vector3(mid.x, y + SOLO_CORRIDOR_LABEL_Y_M, mid.z)
 	return lbl
 
 
