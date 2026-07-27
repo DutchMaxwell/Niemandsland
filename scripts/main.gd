@@ -109,7 +109,7 @@ const ACTIVE_DICE_BUTTON_TINT := Color(0.55, 0.85, 1.0)
 const DICE_CAPTION_FONT_SIZE: int = 12       # row captions + success tag in the log
 const DICE_CAPTION_MIN_WIDTH: int = 56       # caption column width on the option rows
 const MODIFIER_VALUE_MIN_WIDTH: int = 44     # modifier value readout width
-const SUCCESS_SUMMARY_FONT_SIZE: int = 16    # "✔ N" total under the success column
+const SUCCESS_SUMMARY_FONT_SIZE: int = 16    # "✓ N" total under the success column
 const NO_DICE_TINT := Color(0, 0, 0, 0)      # sentinel: no colour-tag tint on a result count (#77)
 ## Wave-2 tutorial seam (toolstrack spec §14): ONE consolidated edge for the dice-control rows —
 ## count / success / modifier / reroll / movecap. The tutorial director gates T-05 steps on it;
@@ -1058,9 +1058,12 @@ func _solo_pump() -> void:
 ## Top-centre status lanes (UI audit A-5): the AI banner and the peer-busy banner were identical
 ## copies at the SAME margin, so in a hosted solo session they drew on top of each other. One
 ## builder, three fixed lanes — banner, toast, peer-busy — so any combination stacks readably.
-const STATUS_LANE_BANNER := 12
-const STATUS_LANE_TOAST := 40
-const STATUS_LANE_PEER := 68
+# NML-226: the FPS/perf row occupies the 50–90 px band top-centre (scenes/main.tscn
+# PerformanceLabel), and lanes 40/68 printed straight onto it — every autosave toast landed on the
+# FPS text in the field-test screenshots. All three lanes now stack BELOW that band.
+const STATUS_LANE_BANNER := 92
+const STATUS_LANE_TOAST := 116
+const STATUS_LANE_PEER := 140
 
 
 ## One top-centre status label (never intercepts the mouse). `lane` is one of STATUS_LANE_*.
@@ -1754,7 +1757,9 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 		panel.anchor_right = 0.5
 		panel.anchor_top = 1.0
 		panel.anchor_bottom = 1.0
-		panel.offset_bottom = -18.0
+		# NML-226: the ▲ Units tab owns the last 28 px of the screen bottom (unit_dock TAB_H), and the
+		# strip's old -18 sat right on it. Clear the tab plus breathing room.
+		panel.offset_bottom = -54.0
 		panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
 		panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
 		_solo_deploy_ui.add_child(panel)
@@ -1901,23 +1906,23 @@ func _solo_deploy_show_human_turn() -> void:
 	var what := "one unit" if phase == "main" else "one SCOUT unit (up to 12\" ahead of your zone)"
 	if ai_left > 0:
 		_solo_deploy_ui_show("Your turn: place %s on your side, then hand over.\n(NACHTMAHR has %d left.)" % [what, ai_left],
-			"✔ Unit placed", func() -> void: _solo_deploy_human_done_one(),
+			"✓ Unit placed", func() -> void: _solo_deploy_human_done_one(),
 			"No units left — NACHTMAHR deploys the rest", func() -> void: _solo_deploy_human_out())
 	else:
 		_solo_deploy_ui_show("NACHTMAHR is done — place your remaining %s.\nThen close the phase." % ("units" if phase == "main" else "scouts"),
-			"✔ Done — close the phase", func() -> void: _solo_deploy_human_out())
+			"✓ Done — close the phase", func() -> void: _solo_deploy_human_out())
 
 
 func _solo_deploy_human_done_one() -> void:
 	if not bool(_solo_deploy_fsm.get("human_turn", false)):
 		return
-	# The ✔ must MEAN something (maintainer, deployment log 2026-07-26: two NACHTMAHR placements in
+	# The ✓ must MEAN something (maintainer, deployment log 2026-07-26: two NACHTMAHR placements in
 	# a row, because a hand-over was accepted without anything having been placed). Ambush already
 	# verified this; the main phase did not, so a stray click handed NACHTMAHR a free extra unit
 	# while the player still had his own on the tray.
 	var placed := _solo_deploy_newly_placed_human()
 	if placed.is_empty():
-		_solo_show_toast("Nothing new on the table — place a unit first, then ✔")
+		_solo_show_toast("Nothing new on the table — place a unit first, then ✓")
 		_solo_deploy_show_human_turn()
 		return
 	for gu in placed:
@@ -2005,8 +2010,8 @@ func _solo_deploy_phase_advance() -> void:
 				_solo_deploy_show_human_turn()
 			return
 	if phase != "done":
-		# "No units left" / "✔ Done" is an ASSERTION, not a fact: _solo_deploy_human_out sets human_out
-		# with nothing verified (unlike the ✔ at _solo_deploy_human_done_one). Check the table BEFORE the
+		# "No units left" / "✓ Done" is an ASSERTION, not a fact: _solo_deploy_human_out sets human_out
+		# with nothing verified (unlike the ✓ at _solo_deploy_human_done_one). Check the table BEFORE the
 		# phase flip and re-open the human turn — guarding after it would strand the game in DEPLOYMENT
 		# with the deployment panel already hidden.
 		if _deployment_gate_refuses_start():
@@ -5821,7 +5826,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
 					"Consolidation: move %s back 1\" (the charger separates — GF v3.5.1 p.9)" % charger.get_name(), true)
 			await _solo_board_prompt(
 				"Pull back 1\": drag %s back from the melee (GF v3.5.1 p.9) — the game waits." % charger.get_name(),
-				"✔ Pulled back")
+				"✓ Pulled back")
 			return
 		var dang: int = solo_controller.separate_from_melee(charger, solo_controller.unit_centre(defender))
 		solo_controller.record_decision({"kind": "separate", "unit": charger.get_name(),
@@ -5856,7 +5861,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
 			"Consolidation: %s may move up to 3\" (enemy destroyed — GF v3.5.1 p.9)" % survivor.get_name(), false)
 	await _solo_board_prompt(
 		"Consolidate: %s destroyed the enemy — you may drag it up to 3\" (GF v3.5.1 p.9)." % survivor.get_name(),
-		"✔ Done consolidating")
+		"✓ Done consolidating")
 
 
 ## One OPR morale test with a real tray die: >= Quality passes; fail → Shaken, at/below half → Routs
@@ -7046,7 +7051,7 @@ func _solo_ambush_enemy_positions(enemy_slot: int) -> Array:
 
 ## The human's Ambush turn (maintainer flow: SAME hand-over procedure as deployment): he places
 ## ONE reserve unit HIMSELF (drag from the tray, >9" from enemies — his measure) and hands over by
-## click; "Keine mehr" keeps the rest waiting this round. The ✔ click detects which reserve units
+## click; "Keine mehr" keeps the rest waiting this round. The ✓ click detects which reserve units
 ## newly stand on the table and clears their flags. Returns the placed units ([] = waiting).
 func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 	var names: PackedStringArray = []
@@ -7054,7 +7059,7 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 		names.append((u as GameUnit).get_name())
 	var outcome: Array = []
 	_solo_deploy_ui_show("Ambush — round %d: place ONE reserve unit from the tray (>9\" from enemies), then hand over.\nIn reserve: %s" % [round_number, ", ".join(names)],
-		"✔ Unit placed", func() -> void: outcome.append("placed"),
+		"✓ Unit placed", func() -> void: outcome.append("placed"),
 		"None this round — keep waiting", func() -> void: outcome.append("wait"))
 	while outcome.is_empty():
 		await get_tree().process_frame
@@ -7062,7 +7067,7 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 	if str(outcome[0]) == "placed":
 		placed = _solo_newly_tabled_reserves()
 		if placed.is_empty():
-			_solo_show_toast("No new reserve unit detected on the table — place it first, then ✔")
+			_solo_show_toast("No new reserve unit detected on the table — place it first, then ✓")
 			_solo_deploy_ui_hide()
 			return await _solo_ambush_human_turn(round_number, pool)
 		for g in placed:
@@ -7080,7 +7085,7 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 
 
 ## Human reserve units whose centre NOW stands on the table plane (dragged off the tray) — the
-## Ambush ✔ click's detection. The tray stands outside the table rect, so it never false-counts.
+## Ambush ✓ click's detection. The tray stands outside the table rect, so it never false-counts.
 func _solo_newly_tabled_reserves() -> Array:
 	var out: Array = []
 	if table == null or solo_controller == null:
@@ -8626,20 +8631,20 @@ func _ordered_color_groups(present: Array) -> Array[int]:
 	return ordered
 
 
-## The "✔ N" success summary line used at the bottom of a current-roll column.
+## The "✓ N" success summary line used at the bottom of a current-roll column.
 func _make_success_summary(count: int) -> Label:
 	var summary := Label.new()
-	summary.text = "✔ %d" % count
+	summary.text = "✓ %d" % count
 	summary.add_theme_font_size_override("font_size", SUCCESS_SUMMARY_FONT_SIZE)
 	summary.add_theme_color_override("font_color", HudTokens.CYAN)
 	summary.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return summary
 
 
-## The compact "✔N" success tag used inline in a dice-log entry.
+## The compact "✓N" success tag used inline in a dice-log entry.
 func _make_log_success_tag(count: int) -> Label:
 	var tag := Label.new()
-	tag.text = "✔%d" % count
+	tag.text = "✓%d" % count
 	tag.add_theme_font_size_override("font_size", DICE_CAPTION_FONT_SIZE)
 	tag.add_theme_color_override("font_color", HudTokens.CYAN)
 	tag.vertical_alignment = VERTICAL_ALIGNMENT_CENTER

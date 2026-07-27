@@ -144,7 +144,7 @@ func test_deployment_fsm_reopens_the_human_turn_instead_of_completing(timeout :=
 	_main._ensure_solo_controller()
 	_register(1, "Wachtturm", ON_TABLE)
 	_register(1, "Vergessene", ON_TRAY)
-	# "No units left" / "✔ Done" is the player ASSERTING he is finished — nothing was verified.
+	# "No units left" / "✓ Done" is the player ASSERTING he is finished — nothing was verified.
 	_main._solo_deploy_fsm = {"phase": "scout", "human_out": true, "winner_is_ai": false}
 
 	_main._solo_deploy_phase_advance()
