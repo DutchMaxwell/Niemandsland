@@ -204,6 +204,14 @@ static func move_modifier_from_description(description: String) -> Dictionary:
 	var result := {"advance": 0, "rush": 0}
 	if description.is_empty():
 		return result
+	# PICK-ONE rules never accrue into the permanent bands (NML-230): "either get +4\" range when
+	# shooting, or move +2\" when charging" (Versatile Reach) is a per-activation CHOICE — baking its
+	# charge half into the band gave every Founder's-Banner unit a permanent 14\" rush, even in range
+	# mode, and would double-count when the charge mode fires (solo_controller grants the conditional
+	# +2 at pick time). OPR phrases every pick-one as "either … or …"; the B10 both-bands case
+	# ("+2\" when using Advance or Rush actions") says "or" but never "either", so it still accrues.
+	if description.to_lower().contains("either"):
+		return result
 	var re := RegEx.new()
 	if re.compile("([+-]\\d+)\\s*[\"”]") != OK:
 		return result

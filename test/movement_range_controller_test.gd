@@ -99,6 +99,32 @@ func test_parse_modifier_ignores_unsigned_distances() -> void:
 	assert_int(mod["rush"]).is_equal(0)
 
 
+func test_parse_modifier_pick_one_rules_never_accrue() -> void:
+	# NML-230, found by a probe game: Versatile Reach ("either get +4\" range when shooting, or move
+	# +2\" when charging") is a per-activation CHOICE. Its charge half was baked permanently into the
+	# rush band, so every Founder's-Banner foot unit rushed 14\" instead of 12\" — even with the range
+	# mode picked, and double-counting when the charge mode fired (solo_controller grants the
+	# conditional +2 at pick time). OPR phrases every pick-one as "either … or"; the parser must
+	# return ZERO for such text.
+	var d := "The hero and their unit get either +4\" range when shooting, or move +2\" when charging."
+	var mod := MovementRangeController.move_modifier_from_description(d)
+	assert_int(mod["advance"]) \
+		.override_failure_message("a pick-one rule accrued into the ADVANCE band — the choice is per activation, not permanent") \
+		.is_equal(0)
+	assert_int(mod["rush"]) \
+		.override_failure_message("a pick-one rule accrued into the RUSH band — this is the permanent-14\"-rush bug") \
+		.is_equal(0)
+
+
+func test_parse_modifier_both_bands_or_still_accrues() -> void:
+	# The counter-case guarding B10: ONE modifier naming both actions with a plain "or" (no "either")
+	# is NOT a pick-one — it applies to both bands, permanently. The pick-one guard must not eat it.
+	var d := "This model gets +2\" when using Advance or Rush actions."
+	var mod := MovementRangeController.move_modifier_from_description(d)
+	assert_int(mod["advance"]).is_equal(2)
+	assert_int(mod["rush"]).is_equal(2)
+
+
 func test_parse_modifier_empty_description() -> void:
 	var mod := MovementRangeController.move_modifier_from_description("")
 	assert_int(mod["advance"]).is_equal(0)
