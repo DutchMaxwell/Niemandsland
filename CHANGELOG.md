@@ -6,6 +6,119 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+## [0.3.10.0-alpha] — 2026-07-27
+
+### Added — Solo mode
+- **Play full games against NACHTMAHR, the built-in opponent (alpha).** Mark any imported army as
+  AI-controlled or use the **AI Opponent** button: NACHTMAHR brings one of its own pre-built lists
+  (every faction, 1000–3000 pts, delivered via CDN at runtime with an offline cache) — or hand it
+  any list. A game AI in the classic video-game sense: rules-based, deterministic, fully offline.
+  One difficulty: full strength. Alternating activations, objective markers with round scoring,
+  and a victory dialog after the final round.
+- **NACHTMAHR plans, and shows its work.** Round plans with one task per unit, look-ahead
+  activation ordering, coordinated melee assaults, endgame convergence — it contests your held
+  markers in the final rounds. Every decision is explained in the battle log ("no shot" lines
+  name their reason, the round plan is logged with unit names); a "NACHTMAHR dreams…" overlay
+  shows while it thinks.
+- **Deployment as a click-guided rulebook flow.** Roll-off → winner picks a table edge and
+  deploys first → sides alternate unit by unit with explicit hand-over clicks → scout phase in
+  the 12″ band → the roll-off winner opens round 1. Full Ambush/reserve handling from round 2
+  (alternating placement, per-model >9″ edge-to-edge gate, terrain-legal arrivals), Infiltrate,
+  Vanguard, Re-Deployment.
+- **You fight through the radial menu.** Shoot/Fight with target mode, range ring and a live
+  line-of-sight ray; real dice in the tray for both sides. Full melee sequence: charge snap to
+  base contact, pile-in for both sides, Counter first, Impact, strike-back choice, Fear-adjusted
+  morale, consolidation moves that wait for you.
+- **Casting is fully playable for both sides.** "Cast" in the radial menu with token costs,
+  legal-target rings and a boost tableau with live success odds; the AI casts by its own
+  procedure and asks you to interfere via a single tableau. Spell tokens are mechanical:
+  buffs/debuffs act on the real dice, granted rules and movement/range modifiers apply, tokens
+  are consumed after exactly one exchange — every application logged. A pre-attack prompt
+  protects your cast window.
+- **Transports (stage 1).** Embark/unload via radial intents (book-exact capacity), automatic 6″
+  formation on disembark, rule-exact cargo spill with Shaken when the transport dies — synced in
+  multiplayer and persisted in saves (save format v1.7 with migration).
+
+### Added — rules automation
+- **Hundreds of special rules resolve automatically across all five systems** (GF/GFF/AoF/AoFS/
+  AoFR), driven by a per-system rules registry: the core combat set (Deadly, Blast, Takedown
+  model-pick, Counter, Impact, Fear …), wave after wave of book rules (Stealth/Evasive/Shielded,
+  Aircraft, Lacerate, Resistance, conditional-AP families, auras, Retaliate, Strafing,
+  Hit & Run …) up to 17 new combat mechanics (Takedown Shot/Strike, the Marks family, Vengeance,
+  Hazardous, Unwieldy, Deathstrike, Self-Destruct, Instinctive, Reckless Piercing, Bloodthirsty
+  Fighter, Retreating Strike, Fatigue Debuff). **100% coverage over the bundled opponent lists,
+  >91% playable book-wide.**
+- **Every applied rule writes its own battle-log line** — nothing resolves silently; rules the
+  automation does not yet cover are honestly listed per unit.
+- **One measuring truth.** Shooting gates, charge reach, spell range and marker control measure
+  base-edge to base-edge like the ruler; range penalties are named. Line of sight is computed
+  per model from the base edge — walls and intervening units block, woods/ruins are area terrain
+  (see in and out, never through) — and the ruler shows exactly what the engine sees.
+- **Rulebook conformance pass** from four live test games: exploits closed (no double-shoot via
+  joined heroes, dead bearers' weapons stay dead, no phantom boost tokens), per-model casualty
+  removal, Deadly per model, mandatory regroup, morale corrections, fatigue reset each round,
+  activation order exactly by the book.
+
+### Added — learning & comfort
+- **Tutorial course grown to 64 steps in 11 chapters** — from selecting models to the map editor.
+- **Sight & range fan (F)**: see exactly what a unit can see and shoot; appears automatically on
+  AI volleys.
+- **Autosave**: every 5 minutes and at round changes, three rotating slots in CONTINUE. (#139)
+- **Battle-log export & copy** (F8/buttons) — ideal for bug reports.
+- Measure-on-pickup origin ghost + hover hotkey hints (#140) · Ctrl+R 90° snap on every
+  selectable (#148) · unit-card strip repaired in a four-part fix wave (#144–#147).
+
+### Changed
+- **WGS import retired** (menu + code); old saves with WGS units still load. (#143)
+- All new panels and dialogs are English-only (the game has no i18n yet).
+- Repository docs brought to release truth in a dedicated pass (supersedes #125).
+
+### Fixed — release-hardening day (2026-07-27)
+- **Deployment can no longer be bypassed.** All four ways into play (Start button, first
+  activation, deployment hand-over, F11) refuse while units that belong on the table are still on
+  their tray — naming them — so the AI can never again target an undeployed army at its tray
+  coordinates. Ambush/Infiltrate reserves, attached heroes and embarked units are exempt; off-table
+  Ambush units are formally set aside on the way through. Guarded by an end-to-end suite that
+  drives the real scene.
+- **Clicks on menus stop falling through to the battlefield.** World picking moved behind the UI
+  (`_unhandled_input`), replacing a hand-rolled hover guard that leaked every button seam, label
+  band and panel margin to the 3D table; mouse gestures started on the table keep tracking across
+  HUD panels. A scene-tree click-ownership invariant is now CI-tested.
+- **The battle-log export carries the whole game.** The on-screen panel keeps its capped ring; the
+  export reads an uncapped archive, so field-test logs no longer start mid-game.
+- **NACHTMAHR's moves leave the same chalk as yours.** Ribbon plus inch stamp per model through the
+  shared trail system (an earlier per-model label wall is gone); the transient walked/allowed pace
+  label stays.
+- **Takedown resolves as a true unit of [1].** The target model is picked BEFORE the roll and
+  brings its own to-hit modifiers, its own cover and — for attached heroes — its own Defense;
+  Fortified/Regeneration and Vengeance/Blast quantify over the picked model only. An always-snipe-
+  the-hero AI preference was measured in self-play and rejected — the AI keeps its value ranking.
+- **Pick-one movement bonuses no longer bake into the bands.** "Either +4\" range … or +2\" when
+  charging" (Versatile Reach) had granted a permanent 14″ rush to every Founder's-Banner unit,
+  even in range mode.
+- **No model path may exceed its band or the 6″ difficult-terrain cap.** The de-overlap nudge is
+  clamped to per-model band slack, and every planned polyline through difficult ground is trimmed
+  to the cap — verified in self-play (measured overruns of up to +8″ through woods are gone).
+- **HUD corner cleaned up.** The confirm check mark renders (the embedded font carries ✓, not ✔),
+  status toasts no longer print onto the FPS row, the deployment strip clears the Units tab, and
+  weapon names from Army Forge lose their stray leading spaces ("fires  Heavy Sniper Rifle").
+- **Un-toggling an activation frees the attached hero too** — a refused or reverted activation no
+  longer leaves a joined hero spent for the round.
+
+### Fixed
+- Solo single-player: player-2 units no longer count as "foreign" without a real MP connection.
+- Dozens of solo-flow fixes from four live-test waves — melee strike-back dialog race,
+  consolidation waits, coherence/wall-overlap guarantees after every AI move, AI turn time on
+  2000-pt boards (minutes → seconds), and more.
+
+### Known issues (alpha)
+- Solo AI: spell accumulators/caster groups, unit spawning (Spawn/Split/Reinforcement) and a few
+  movement rules (Coordinate, Delayed Action, Traversal, Ambush Beacon …) are not yet automated —
+  the per-unit notice names them.
+- One difficulty grade (full strength); selectable grades return in a later release.
+- English-only UI; solo is single-player (co-op vs AI is on the roadmap).
+
+
 ## [0.3.9.1-alpha] — 2026-07-15
 
 ### Fixed

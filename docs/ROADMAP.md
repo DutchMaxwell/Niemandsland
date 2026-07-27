@@ -22,26 +22,30 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **`0.3.9.0-alpha` shipped (2026-07-15) — the movement/UX update.** One tag: **Path Painting**
-  (paint your move; base-width chalk trails; arc-truth distance in ruler + battle log; MP-synced
-  ledger; opt-in dry-brush movement cap), **1″ spacing** protection, the **Deployment → Start Game →
-  Playing** phase gate (MP ready-sync), **Mummified Undead** live on R2 with 3D models
-  ([#117](../../pull/117) + root-manifest flip — 44 factions / 1,185 models now live), the
-  guided-tutorial foundation ([#121](../../pull/121), below), terrain-projected "perfectly based"
-  bases (#123), versioned `.nml` save migration (#119), anonymous relay usage stats (#115),
-  rotate-to-face-cursor (#114), and an English-only UI pass ([#134](../../pull/134)). Full detail
-  under **Recently shipped**. Next: **feedback-driven toward the MP-first Beta** (see Next), with the
-  **Solo / Co-Op AI** (OPR's official ruleset) field-testing on `feat/solo-ai` and **autosave** the
-  leading follow-up. _S_
-- **Guided tutorial — foundation shipped in `0.3.9.0-alpha` ([#121](../../pull/121)).** Event-gated guided play on the real table (coach-mark spotlight overlay; steps advance
-  on real signals, never a "Next" button): T0 walking skeleton + T1 **tool track W1–W7** (camera ·
-  import · select/move/rotate/undo · dice & measuring · card dock & activation · wounds/park/revive ·
-  movement & trails)
-  with a bundled real board (`assets/tutorial/tutorial_board.nml`, offline — no Army Forge
-  dependency), the two-question self-assessment (sim-experienced may skip W1/W3), and per-lesson
-  persistence + resume/replay chapter picker (`user://tutorial.cfg`). **Remaining:** T2 rule track
-  (R1–R3) + context first-time tips + MP guest toast track; T3 relay step instrumentation
-  (design: maintainer's tutorial plan, 2026-07-09). _M_
+- **`0.3.10.0-alpha` shipped — the solo update.** The headline is **NACHTMAHR**, the built-in
+  opponent: a rules-based, deterministic game AI (no LLM, no neural net) that runs entirely offline and
+  plays the official OPR solo decision trees. Mark any imported army as AI-controlled, or let the **AI
+  Opponent** button bring one of NACHTMAHR's own pre-built lists (every faction, 1000–3000 pts, fetched
+  from the asset CDN at runtime with an offline cache — the lists are never in this repo). Around it: the
+  click-guided rulebook **deployment flow** (roll-off → table edge → alternating placement → scout band →
+  Ambush / Infiltrate / Vanguard reserves), **Shoot / Fight / Cast** for the human player through the
+  radial menu with real tray dice for both sides, **hundreds of special rules resolved automatically**
+  across all five systems (100% over the bundled opponent lists, >91% playable book-wide) with a
+  battle-log line per applied rule, **transports stage 1** (save format 1.7), the **tutorial course at
+  64 steps / 11 chapters**, the **sight & range fan** (`F`), **autosave** (#139), **battle-log export
+  and copy**, and base-edge-to-base-edge measurement everywhere. There is exactly **one difficulty**
+  (full strength); selectable grades are backlog, not shipped. Full detail under **Recently shipped**.
+  Next: alpha feedback on solo, **resolver waves B + C**, and the MP-first Beta (see Next). _L_
+- **Guided tutorial — course expanded in `0.3.10.0-alpha`.** Event-gated guided play on the real table
+  (coach-mark spotlight overlay; steps advance on real signals, never a "Next" button). The course now
+  runs **64 steps across 11 chapters**: camera & table · selecting · moving/rotating/arranging ·
+  measuring & rings · the full dice tray · unit cards & the radial menu · wounds, casualties & revive ·
+  a real army import · table & casual terrain · the competitive map-layout editor · movement & trails —
+  with a bundled offline board (`assets/tutorial/tutorial_board.nml`, no Army Forge dependency), the
+  two-question self-assessment, and per-lesson persistence + resume/replay chapter picker
+  (`user://tutorial.cfg`). **Remaining:** it teaches the *tools*, not yet the *game* — a rules/solo track
+  (activation, shooting, melee, morale, objectives against NACHTMAHR), context first-time tips, and the
+  MP guest toast track are still open. _M_
 
 ## 📋 Next (post-Alpha — Beta + alpha-feedback driven)
 
@@ -62,25 +66,37 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   after a reconnect), the shared wrapping `slot→palette` helper (army bases match presence colour at
   slot ≥ 5), and the regiment tray's serialized `network_id` all landed. The last piece — a
   **guest army-import await timeout** (a stalled import aborts, releases the restore lock, toasts
-  the player, and recovers; host can re-import) — is now **code-complete ([#120](../../pull/120)),
-  pending live 2-instance verification**. 2-player reconnect is shipped + soak-validated. _S_
-- **UX polish (feedback-driven)** — Measure-on-pickup → snap-back (live ghost preview, ESC to return)
-  · Coherency visualizer (sharpen — highlight models outside X″ of a neighbour) · contextual control
-  hints (hover an object → its hotkeys). Deeper post-Alpha resilience / accessibility / onboarding
-  items live in **Ideas**. _S–M_
-- **Solo / Co-Op AI — to merge-ready (`feat/solo-ai`)** — the in-game `SoloController` and the headless
-  self-play sim share OPR's official ruleset; remaining rule/wiring work before merge: melee "only
-  models **within 2″** strike"; **split-fire** + the weapon-rule overlays (**AP** → target the best
-  Defense, **Deadly**, **Takedown**, **Relentless**) + **Medics**; **P3** — wire the sim's
-  `AiDecision` / `TerrainRules` / 1″-spacing modules into the real `SoloController` (and fix the
-  `_solo_attack_groups` dead-models-still-attack bug there — already fixed in the sim); **P2** in-game
-  auto-game (in-game alternation + scoring). **Objective re-allocation** (units re-target when the
-  holders of a second objective die) is a **difficulty/tuning layer**, not a correctness fix. _L_
-- **Solo movement overhaul (design pending — planned with the coordinator)** — (a) treat walls as
-  **Impassable movement blockers**, reusing `terrain_overlay.gd`'s wall segments (`_wall_cells` /
-  `_last_wall_segments`); (b) replace the rigid-grid formation move with **individual models moving in
-  coherency**, reusing `coherency_checker.gd` (1″ / 9″). Approach (steering-first vs full grid-A*)
-  undecided. _L_
+  the player, and recovers; host can re-import) — **shipped in `0.3.9.0-alpha`
+  ([#120](../../pull/120))**; live 2-instance verification of that timeout path is still outstanding.
+  2-player reconnect is shipped + soak-validated. _S_
+- **UX polish (feedback-driven)** — measure-on-pickup origin ghost (ESC snaps back) and the contextual
+  control hints (hover an object → its hotkeys) **shipped in `0.3.10.0-alpha` ([#140](../../pull/140))**.
+  **Remaining:** the coherency visualizer still needs sharpening (highlight the models that are outside
+  X″ of a neighbour, not just the unit-level verdict). Deeper post-Alpha resilience / accessibility /
+  onboarding items live in **Ideas**. _S–M_
+- **Solo rules automation — resolver waves B + C** — `0.3.10.0-alpha` automates hundreds of rules; the
+  families that need their own resolver step are honestly still manual, and the per-unit battle-log
+  notice names them. The complete remainder is **thirteen rule names** (everything else in the books is
+  modeled — plain *Re-Deployment* and *Grounded Reinforcement* included):
+  - **Wave B — caster economy + unit creation:** **Spell Accumulator**, **Caster Group**, **Extended
+    Buff Range**, **Spawn**, **Split**, **Reinforcement**, **Reanimation**. These create, return or
+    re-point units, so they touch the AI's round plan, not just the dice. _M–L_
+  - **Wave C — movement / deployment:** **Coordinate**, **Delayed Action**, **Traversal**, **Ambush
+    Beacon**, **Ambush Re-Deployment**, **Rapid Ambush**. _M_
+- **Selectable AI difficulty grades** — `0.3.10.0-alpha` ships exactly one grade (NACHTMAHR at full
+  strength); the difficulty selector is out of the solo panel and every legacy grade name maps to it.
+  Bringing weaker personas back means re-validating each knob set on the self-play ladder so a lower
+  grade is *weaker but never illegal* — the AI must keep playing by the book and never cheat at any
+  grade. _M_
+- **Transports — stage 2 (AI doctrine)** — stage 1 (state, capacity, embark/disembark, destruction
+  spill, MP sync, save 1.7) shipped in `0.3.10.0-alpha`; the AI side of the official Solo & Co-Op
+  doctrine is open: seeded random loading at deployment, the transport activating before its cargo in
+  round 1, the mandatory disembark on the cargo's first activation (with a log line when it is not
+  possible), and transports as targets in the AI's target/EV selection. _M_
+- **Co-op vs the AI** — solo is single-player today: one human against NACHTMAHR. Co-op means two or
+  more humans sharing a side against the AI over the existing relay — the AI turn has to run
+  host-authoritatively and its dice, prompts and battle-log lines have to reach every guest identically,
+  including a mid-game reconnect. _L_
 
 ### Alpha-feedback batch (accepted 2026-07-01) — sorted Now vs soon
 
@@ -93,9 +109,9 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 - **Avatar transparency on zoom** — as a player zooms in (closer to the table), fade *their* avatar
   for the others so it stops hiding the detail they're inspecting; at max zoom only a faint ghost
   remains. Needs the remote camera zoom/distance synced. _M_
-- **Movement cap (opt-in enforcement)** — a "Movement" area docked ABOVE the dice interface: pick a
-  cap (Advance / Rush-Charge) and the selected model/unit can then only be dragged that far. Reuses
-  the movement-reach math (`MovementRangeController`) + the Solo-AI `MoveIntent` clamp. _M_
+- ~~**Movement cap (opt-in enforcement)**~~ — **shipped in `0.3.9.0-alpha`** as the "dry brush" cap
+  ([#131](../../pull/131)): the *Enforce Movement Limit* toggle hard-stops a drag at the selected action
+  band (Advance / Rush-Charge, Fast- and aura-aware) measured along the painted path. _shipped_
 - **Avatar + MP cursor rework** — beyond the label sizes: redesign the two-ring cursor + the avatar
   presentation (the transparency-on-zoom and label-size items fold in here). _M_
 - **Background world toggle** — switch the table backdrop between the current hobby-den/starfield and
@@ -213,7 +229,32 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.9.1-alpha` (2026-07-15):** hotfix — a heavy Army Forge import
+See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.10.0-alpha`:** the solo update — **NACHTMAHR**, the built-in
+opponent (rules-based, deterministic, fully offline; one difficulty, full strength) with alternating
+activations, its own objective-marker scoring, round plans and look-ahead activation ordering, and a
+battle log that explains every decision; the **AI Opponent** button (NACHTMAHR brings its own list —
+every faction, 1000–3000 pts, CDN-delivered at runtime, guarded out of the public repo by a CI check,
+[#150](../../pull/150)); the click-guided **deployment flow** (roll-off → edge → alternating placement →
+scout band) with full **Ambush / Infiltrate / Vanguard / Re-Deployment** reserve handling; **Shoot /
+Fight / Cast** from the radial menu with a live line-of-sight ray, range rings and real tray dice, the
+full melee sequence (charge snap to base contact, Counter, Impact, pile-in, strike-back, Fear-adjusted
+morale, consolidation) and the complete **spell flow for both sides** with mechanical buff/debuff tokens;
+**hundreds of special rules automated** across GF/GFF/AoF/AoFS/AoFR from a per-system rules registry
+(100% over the bundled opponent lists, >91% playable book-wide), each with its own battle-log line and an
+honest per-unit notice for what is *not* automated; **one measuring truth** (base-edge to base-edge for
+shooting, charges, spells and marker control; per-model line of sight from the base edge); **transports
+stage 1** (capacity, embark/disembark with 6″ auto-formation, rule-exact cargo spill, MP-synced, save
+format 1.7); the **tutorial course at 64 steps / 11 chapters**; the **sight & range fan** (`F`);
+**autosave** ([#139](../../pull/139)); **battle-log export & copy** (F8); measure-on-pickup origin ghost
++ hover hotkey hints ([#140](../../pull/140)); Ctrl+R 90° snap on every selectable
+([#148](../../pull/148)); the unit-card strip fix wave ([#144](../../pull/144)–[#147](../../pull/147));
+and the retirement of the WGS import ([#143](../../pull/143)). This release also closed out the
+**"solo movement overhaul"** backlog item: AI models now steer individually while the unit is held in
+coherency, wall segments are real impassable barriers, dangerous terrain is routed around when a free
+path exists, and a placement gate guarantees no overlaps and no models inside blocked terrain after
+every AI move.
+
+**`0.3.9.1-alpha` (2026-07-15):** hotfix — a heavy Army Forge import
 could stall the main loop and blow up the dock unit-cards' spring animation into a NaN, freezing the game;
 the animation step is now capped so a card just catches up after a hitch ([#126](../../issues/126), #137).
 

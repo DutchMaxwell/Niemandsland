@@ -10,6 +10,10 @@ Use GitHub's **private vulnerability reporting**: the *Report a vulnerability*
 button under this repository's **Security** tab. That reaches the maintainers
 privately.
 
+If that button is not visible to you for any reason, open a normal issue that says only
+"security report, please contact me" with no details — a maintainer will take it from
+there. Never put the details in a public issue.
+
 Please include reproduction steps and the affected version. We acknowledge and work
 on fixes on a best-effort basis (this is a hobby alpha).
 

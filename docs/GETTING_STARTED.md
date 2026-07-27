@@ -26,7 +26,7 @@ The start menu shows the version number. The first line of the log reads `[Boot]
 
 ### Start a game
 
-From the start menu, choose **Start New Battle** to open the 3D sandbox. Pick a table size (4×4 ft default) and a map layout, or generate one automatically.
+From the start menu, choose **Start New Battle** to open the 3D sandbox. Pick a table size (6×4 ft default) and a map layout, or generate one automatically.
 
 The table opens in the **Deployment** phase — place your army, then press **Start Game** (left panel) to begin play. In multiplayer both players signal ready and the host starts once both are. During play, dragging a model paints a measured **move trail** (`T` hides / `Shift`+`T` clears); an optional *Enforce Movement Limit* setting stops the drag at the model's Advance/Rush-Charge band.
 
@@ -37,7 +37,6 @@ The table opens in the **Deployment** phase — place your army, then press **St
 | Rotate | Right-drag |
 | Pan | Middle-drag |
 | Zoom | Mouse wheel |
-| Reset | `Home` |
 
 ### Select and move objects
 

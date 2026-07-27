@@ -156,7 +156,7 @@ Godot's default physics. Table dice are display-only.
 `opr_army_manager._compute_model_fit()`: target height ≈ base size (mildly larger for
 Tough), but the horizontal footprint is capped at 125 % of the base's long side
 (`FOOTPRINT_MAX_RATIO`); the smaller factor wins, so slim infantry stay height-driven
-while wide vehicles are footprint-capped. Flying units hover (`FLYING_HOVER_RATIO`).
+while wide vehicles are footprint-capped. Flying units hover (`AIRCRAFT_HOVER_M`).
 
 ## Asset pipeline (offline, separate repo)
 
