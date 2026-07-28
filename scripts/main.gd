@@ -89,6 +89,7 @@ const GROUP_ROTATION_BROADCAST_INTERVAL: float = 0.1  # 10 Hz
 
 # Dice Roller Plugin UI
 @onready var dice_roller_control: DiceTray = %DiceRollerControl
+@onready var roll_purpose_label: Label = %RollPurposeLabel
 @onready var roll_button: Button = %RollButton
 @onready var quick_roll_button: Button = %QuickRollButton
 @onready var _dice_log_scroll: ScrollContainer = %DiceLogScroll
@@ -126,6 +127,7 @@ var _movement_cap_buttons: Dictionary = {}  # MovementCap mode -> Button (the "M
 var _success_target: int = DiceRules.TARGET_NONE
 var _success_modifier: int = 0
 var _next_roll_owner: String = ""   # attribution for the next tray roll ("AI (…)"); empty = "You" (goal 001)
+var _next_roll_purpose: String = ""   # what the roll is about — tray label + MP context (community #170)
 var _next_roll_kind: String = "attack"   # Bug 16: "defense" words the dice-log line as "defends … blocks"
 var _target_buttons: Array[Button] = []
 var _modifier_value_label: Label = null
@@ -2353,7 +2355,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 					"AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
 		_solo_log_hit_mod(mod_info, target, to_hit)
 		var shooter_name: String = member.get_name()
-		var faces: Array = await _solo_tray_roll(attacks, to_hit, "AI (%s)" % shooter_name)
+		var faces: Array = await _solo_tray_roll(attacks, to_hit, "AI (%s)" % shooter_name, "attack",
+			"Shooting: %s → %s (%d+)" % [str(profile.get("name", "?")), target.get_name(), to_hit])
 		if bool(profile.get("limited", false)):
 			solo_controller.mark_limited_used(member, profile)   # once per game — spent on the roll (wave 5)
 		await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
@@ -2511,7 +2514,8 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	var target_num := AiSpell.cast_target(boost, interference, base_target)
 	# THE CAST ROLL — one visible die on the real tray (no hidden RNG).
 	var roll_owner := str(cast.get("owner_label", "AI (%s)" % caster.get_name()))
-	var faces: Array = await _solo_tray_roll(1, target_num, roll_owner)
+	var faces: Array = await _solo_tray_roll(1, target_num, roll_owner, "attack",
+		"Casting %s (%d+)" % [spell_name, target_num])
 	var success: bool = not faces.is_empty() and DiceRules.is_success(int(faces[0]), target_num, 0)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: cast roll %d vs %d+ — %s" % [
@@ -4085,7 +4089,8 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if not fatigued:
 				_solo_log_hit_mod(p_mod, strike_unit, to_hit)
 			var roll_owner: String = ("AI (%s)" % str(group.get("name", "?"))) if _solo_is_ai_unit(striker) else "You"
-			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, roll_owner)
+			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, roll_owner, "attack",
+				"Melee: %s → %s (%d+)" % [str(profile.get("name", "?")), defender.get_name(), to_hit])
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(striker, profile, faces)   # resolver wave A: natural 1s wound the striker
@@ -4306,7 +4311,9 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 		var p := pool as Dictionary
 		if int(p["dice"]) <= 0 or _solo_combined_alive(defender) <= 0:
 			continue
-		var faces: Array = await _solo_tray_roll(int(p["dice"]), AiCombatMath.IMPACT_HIT_TARGET, _solo_owner_label(charger))
+		var faces: Array = await _solo_tray_roll(int(p["dice"]), AiCombatMath.IMPACT_HIT_TARGET,
+			_solo_owner_label(charger), "attack",
+			"%s hits: %s → %s" % [str(p["label"]), charger.get_name(), defender.get_name()])
 		var hits: int = AiCombatMath.impact_hits(faces)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s(%d) rolls %d di%s → %d hit%s" % [
@@ -4441,7 +4448,8 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		save_faces = await _solo_prompt_saves(striker, defender, weapon_name, count, base_defense, ap)
 	else:
 		_solo_log_save_threshold(defender, base_defense, ap)
-		save_faces = await _solo_tray_roll(count, base_defense + ap, "AI (%s)" % defender.get_name(), "defense")
+		save_faces = await _solo_tray_roll(count, base_defense + ap, "AI (%s)" % defender.get_name(), "defense",
+			"Defense save vs %s" % weapon_name)
 	# Resolver wave A — Bloodthirsty Fighter reads the blocker's unmodified 1s of this batch (the
 	# melee strike loop resets the counter before its resolve and consumes it right after).
 	for sf in save_faces:
@@ -4455,7 +4463,8 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "Bane: %s re-rolls %d unmodified Defense 6%s" % [
 					defender.get_name(), sixes, ("" if sixes == 1 else "s")], true)
-			reroll = await _solo_tray_roll(sixes, base_defense + ap, _solo_owner_label(defender), "defense")
+			reroll = await _solo_tray_roll(sixes, base_defense + ap, _solo_owner_label(defender), "defense",
+				"Defense re-roll (Bane) vs %s" % weapon_name)
 		blocks = AiCombatMath.blocks_with_bane(save_faces, reroll, base_defense, ap)
 	else:
 		blocks = AiCombatMath.count_blocks(save_faces, base_defense, ap)
@@ -4533,7 +4542,8 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 	var regen_target: int = int(pick.get("target", 0))
 	if wounds <= 0 or regen_target <= 0:
 		return maxi(wounds, 0)
-	var faces: Array = await _solo_tray_roll(wounds, regen_target, _solo_owner_label(target))
+	var faces: Array = await _solo_tray_roll(wounds, regen_target, _solo_owner_label(target), "attack",
+		"Regeneration (%d+ ignores a wound)" % regen_target)
 	var ignored := 0
 	for f in faces:
 		if int(f) >= regen_target:
@@ -5032,7 +5042,8 @@ func _solo_owner_label(unit: GameUnit) -> String:
 func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 	if unit == null or dice_roller_control == null or model_count <= 0:
 		return
-	var faces: Array = await _solo_tray_roll(model_count, 6, "AI (%s)" % unit.get_name())
+	var faces: Array = await _solo_tray_roll(model_count, 6, "AI (%s)" % unit.get_name(), "attack",
+		"Dangerous terrain: %s (a 1 wounds)" % unit.get_name())
 	var wounds := 0
 	for f in faces:
 		if int(f) == 1:
@@ -5057,8 +5068,15 @@ func _solo_combined_alive(unit: GameUnit) -> int:
 
 ## One attributed roll in the real dice tray: set count + success target, roll, await, read the faces,
 ## then restore the player's previous tray settings.
-func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: String = "attack") -> Array:
+func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: String = "attack",
+		purpose: String = "") -> Array:
 	_next_roll_kind = roll_kind   # Bug 16: the dice-log line words saves as "defends … blocks"
+	# Community #170: the tray names WHAT is being rolled. High-value sites pass a specific
+	# purpose; the fallback synthesizes an honest generic one so no roll shows a bare tray.
+	if purpose.is_empty():
+		purpose = "%s rolls (%d+)" % [owner, success_target]
+	_next_roll_purpose = purpose
+	_set_roll_purpose(purpose)
 	var prev_count := _dice_count
 	var prev_target := _success_target
 	var prev_modifier := _success_modifier
@@ -5095,6 +5113,15 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 	return faces
 
 
+## Shows/hides the tray's roll-purpose label (community #170). The text stays up while the
+## dice lie there (the player reads result + reason together); the next roll replaces it,
+## the manual Roll button clears it.
+func _set_roll_purpose(text: String) -> void:
+	if roll_purpose_label != null:
+		roll_purpose_label.text = text
+		roll_purpose_label.visible = not text.is_empty()
+
+
 ## Save prompt (locked decision: prompt + auto-roll for speed): the human confirms and their save dice
 ## roll in the tray, attributed to "You". Returns the rolled faces.
 func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: String, hits: int, defense: int, ap: int) -> Array:
@@ -5115,7 +5142,8 @@ func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: Strin
 	# The battle log states the MODIFIED threshold (GF v3.5.1 AP(X): "targets get -X to Defense rolls"),
 	# so the AP arithmetic is auditable after the fact (maintainer field-test finding).
 	_solo_log_save_threshold(target, defense, ap)
-	return await _solo_tray_roll(hits, defense + ap, "You", "defense")
+	return await _solo_tray_roll(hits, defense + ap, "You", "defense",
+		"Defense save vs %s" % weapon_name)
 
 
 ## The unit's summed sight+range fan (the same one F toggles) — shared by the F-toggle and the
@@ -5972,7 +6000,8 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 		if spell_morale != 0 and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %+d to morale test rolls — %s passes on %d+" % [
 				", ".join(morale_notes), spell_morale, unit.get_name(), test_target], true)
-		var faces: Array = await _solo_tray_roll(1, test_target, owner)
+		var faces: Array = await _solo_tray_roll(1, test_target, owner, "attack",
+			"Morale test: %s (%d+)" % [unit.get_name(), test_target])
 		_solo_spend_once_kind(unit, ["morale"])   # NML-006: spent by this test
 		if faces.is_empty():
 			return
@@ -5982,7 +6011,8 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 	# DATA where the mechanics map carries it (RulesRegistry; constant fallback — byte-identical seam).
 	if result != AiCombatMath.Morale.PASSED and unit.has_special_rule("Fearless"):
 		var recover_target: int = int(RulesRegistry.unit_param(unit, "Fearless", "recover_target", AiCombatMath.FEARLESS_RECOVER_TARGET))
-		var reroll: Array = await _solo_tray_roll(1, recover_target, owner)
+		var reroll: Array = await _solo_tray_roll(1, recover_target, owner, "attack",
+			"Morale re-roll — Fearless (%d+)" % recover_target)
 		if not reroll.is_empty() and DiceRules.is_success(int(reroll[0]), recover_target, 0):
 			result = AiCombatMath.Morale.PASSED
 			if battle_log != null:
@@ -5999,7 +6029,8 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 	if result != AiCombatMath.Morale.PASSED and RulesRegistry.unit_rule_active(unit, "No Retreat"):
 		var wound_max: int = int(RulesRegistry.unit_param(unit, "No Retreat", "self_wound_max", AiCombatMath.NO_RETREAT_SELF_WOUND_MAX))
 		var dice_n: int = maxi(1, SoloController.wounds_to_destroy(unit))
-		var nr_faces: Array = await _solo_tray_roll(dice_n, wound_max + 1, owner)
+		var nr_faces: Array = await _solo_tray_roll(dice_n, wound_max + 1, owner, "attack",
+			"No Retreat self-wounds (1-%d = wound)" % wound_max)
 		var self_wounds: int = AiCombatMath.no_retreat_wounds(nr_faces, wound_max)
 		result = AiCombatMath.Morale.PASSED
 		if battle_log != null:
@@ -6754,7 +6785,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
 					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s at long range" % [
 						"AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
 			_solo_log_hit_mod(p_mod, target, to_hit)
-			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You")
+			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You", "attack",
+				"Shooting: %s → %s (%d+)" % [str(profile.get("name", "?")), target.get_name(), to_hit])
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
@@ -7761,6 +7793,9 @@ func _on_drag_ended() -> void:
 
 ## Dice Roller Plugin handlers
 func _on_roll_button_pressed() -> void:
+	# A manual roll has no scripted purpose — clear any leftover label (community #170).
+	_next_roll_purpose = ""
+	_set_roll_purpose("")
 	_update_dice_set(_dice_count)
 	dice_roller_control.roll()
 
@@ -7814,6 +7849,7 @@ func _on_roller_finished(_total: int) -> void:
 
 	_pending_reroll_mode = DiceRules.REROLL_NONE
 	_pending_reroll_count = 0
+	_next_roll_purpose = ""   # consume-on-roll: a later manual roll must not inherit it
 
 
 ## Face values of a tray result in stable die order ("die_0".."die_N" keys).
@@ -7833,6 +7869,7 @@ func _current_roll_context() -> Dictionary:
 		DiceRules.CTX_MODIFIER: _success_modifier,
 		DiceRules.CTX_REROLL_MODE: _pending_reroll_mode,
 		DiceRules.CTX_REROLL_COUNT: _pending_reroll_count,
+		DiceRules.CTX_PURPOSE: _next_roll_purpose,
 	}
 
 
@@ -9459,6 +9496,8 @@ func _on_remote_dice_rolled(peer_id: int, results: Array, context: Dictionary, t
 	# Guard prevents roll_finnished from re-logging/re-broadcasting.
 	_is_showing_remote_roll = true
 	_remote_roll_context = context
+	# Mirror the sender's roll purpose onto this tray (community #170) — it rides the context.
+	_set_roll_purpose(str(context.get(DiceRules.CTX_PURPOSE, "")))
 	_pending_reroll_mode = DiceRules.REROLL_NONE
 	_pending_reroll_count = 0
 	# Mirror guard: _update_dice_set → dice_count setter must not re-broadcast composition.
