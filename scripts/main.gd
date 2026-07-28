@@ -7622,12 +7622,16 @@ func _on_remote_sort_table() -> void:
 	object_manager.sort_table(false)
 
 
-## Advances the game round after confirmation.
+## Advances the game round after confirmation. The prompt names the round it moves
+## ONTO (community request, GitHub #161) — and in a solo match's final round it says
+## plainly that advancing ends the game.
 func _on_next_round() -> void:
+	var rnd: int = opr_army_manager.current_round if opr_army_manager != null else 1
+	var fin: bool = _solo_final_round_active()
 	_show_action_confirm(
-		"Next Round",
-		"Advance to the next round?\nAll activation tokens are cleared — no unit stays activated.",
-		"Next Round", _do_next_round)
+		next_round_button_label(rnd, fin),
+		next_round_confirm_body(rnd, fin),
+		next_round_button_label(rnd, fin), _do_next_round)
 
 
 ## Advances the game round (OPR bookkeeping; clears all activations), refreshes
@@ -7672,10 +7676,35 @@ func _refresh_round_visuals() -> void:
 	_update_round_button()
 
 
-## Updates the Next Round button to show the current round.
+## The Next Round button/confirm label names the round it moves ONTO ("Next Round → 3"
+## while Round 2 is played) — the old "(current)" suffix read as the round the button
+## opens (community confusion, GitHub #161). In a solo match's final round the same
+## control ends the game, so it says that instead. Static + pure for the unit test.
+static func next_round_button_label(current_round: int, final_round: bool) -> String:
+	if final_round:
+		return "End Round %d" % current_round
+	return "Next Round → %d" % (current_round + 1)
+
+
+## The confirm dialog body for the round advance (see next_round_button_label).
+static func next_round_confirm_body(current_round: int, final_round: bool) -> String:
+	if final_round:
+		return "End Round %d?\nThis is the final round — the game ends and the summary is shown." % current_round
+	return "Move on to Round %d?\nAll activation tokens are cleared — no unit stays activated." % (current_round + 1)
+
+
+## True while a SOLO match plays its FINAL round (advancing ends the game after
+## SOLO_GAME_ROUNDS) — sandbox/MP games have no round cap.
+func _solo_final_round_active() -> bool:
+	return _solo_alternation_active() and solo_controller != null \
+		and solo_controller.game_rounds > 0 and opr_army_manager != null \
+		and opr_army_manager.current_round >= solo_controller.game_rounds
+
+
+## Updates the Next Round button to name the round it moves ONTO (GitHub #161).
 func _update_round_button() -> void:
 	if next_round_btn and opr_army_manager:
-		next_round_btn.text = "Next Round (%d)" % opr_army_manager.current_round
+		next_round_btn.text = next_round_button_label(opr_army_manager.current_round, _solo_final_round_active())
 
 
 ## Toggle the left panel menu visibility with slide animation
