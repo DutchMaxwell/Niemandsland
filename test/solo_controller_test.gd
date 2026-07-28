@@ -1864,3 +1864,25 @@ func test_gate_nudge_never_stretches_a_trail_past_the_band() -> void:
 	# resolvable for free: the mover stayed within its slack circle around the planned endpoint.
 	assert_bool(solo._gate_clamped_models.size() > 0).is_true()
 	assert_float(SoloController._xz_dist_m(gated[0] as Vector3, planned) / m).is_less_equal(SoloController.GATE_SLACK_EPS_IN + 0.02)
+
+
+func test_embarked_cargo_is_not_eligible_for_activation() -> void:
+	# S1.5 (community #160): cargo parked inside a transport must neither be activatable nor
+	# count toward the round-over check — a phantom eligible unit would stall the alternation
+	# forever (the round waits for an activation nobody can perform).
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	human.unit_id = "human"
+	var apc := _unit(2, [Vector3(0.5, 0, 0)])
+	apc.unit_id = "apc"
+	var cargo := _unit(2, [Vector3(0.6, 0, 0)])
+	cargo.unit_id = "cargo"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, apc.unit_id: apc, cargo.unit_id: cargo}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_int(solo.eligible_ai_units().size()).is_equal(2)
+	cargo.unit_properties["embarked_in"] = "apc"   # parked inside the APC (state layer)
+	assert_int(solo.eligible_ai_units().size()).is_equal(1)
+	assert_bool(solo.is_eligible(cargo)).is_false()
