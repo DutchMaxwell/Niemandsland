@@ -90,9 +90,14 @@ func test_targeting_prefers_a_not_yet_activated_human_over_a_nearer_activated_on
 	add_child(solo)
 	solo.setup(army, null, null, 1, 2)
 	assert_object(solo.nearest_human_unit(ai)).is_equal(far_fresh)
+	# Community #164 narration flag: this pick walked PAST a nearer already-activated enemy —
+	# exactly the case the battle log must explain ("hits it before it acts").
+	assert_bool(solo.last_target_passed_activated).is_true()
 	# If ALL humans are activated, fall back to the nearest.
 	far_fresh.is_activated = true
 	assert_object(solo.nearest_human_unit(ai)).is_equal(near_active)
+	# Plain nearest pick: no passed-enemy story, the tag must stay silent.
+	assert_bool(solo.last_target_passed_activated).is_false()
 
 
 func test_run_ai_turn_activates_every_eligible_ai_unit() -> void:
