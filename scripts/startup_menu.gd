@@ -48,6 +48,7 @@ const JOIN_CODE_LEN := 6
 @onready var continue_btn: MenuListButton = %ContinueBtn
 @onready var start_battle_btn: MenuListButton = %StartBattleBtn
 @onready var tutorial_btn: MenuListButton = %TutorialBtn
+@onready var spielschule_btn: MenuListButton = %SpielschuleBtn
 @onready var host_online_btn: MenuListButton = %HostOnlineBtn
 @onready var join_online_btn: MenuListButton = %JoinOnlineBtn
 @onready var browse_online_btn: MenuListButton = %BrowseOnlineBtn
@@ -117,6 +118,7 @@ func _ready() -> void:
 	continue_btn.pressed.connect(_on_continue_pressed)
 	start_battle_btn.pressed.connect(_on_start_battle_pressed)
 	tutorial_btn.pressed.connect(_on_tutorial_pressed)
+	spielschule_btn.pressed.connect(_on_spielschule_pressed)
 	host_online_btn.pressed.connect(_on_host_online_pressed)
 	join_online_btn.pressed.connect(_on_join_online_pressed)
 	browse_online_btn.pressed.connect(_on_browse_online_pressed)
@@ -134,6 +136,7 @@ func _ready() -> void:
 	_start_menu_music()
 	_play_startup_animation()
 	_maybe_check_for_updates()
+	_maybe_show_spielschule_hint()
 	if get_tree().current_scene == self:
 		start_battle_btn.grab_focus.call_deferred()
 
@@ -319,6 +322,107 @@ func _show_tutorial_picker(progress: TutorialProgress, track: Array) -> void:
 	dialog.canceled.connect(dialog.queue_free)
 	add_child(dialog)
 	dialog.popup_centered()
+
+
+## GAME SCHOOL (working name "Spielschule") pressed: open the chapter list. The full game-school
+## track — ten isolated, repeatable lessons, each loading its own prepared scene, plus the reserved
+## spell slot. Chapters without a bundled scenario yet stay disabled ("scenario coming soon").
+func _on_spielschule_pressed() -> void:
+	var progress := SpielschuleProgress.new()
+	progress.load_from_disk()
+
+	var dialog := AcceptDialog.new()
+	dialog.title = "Game School"
+	dialog.ok_button_text = "CLOSE"
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", HudTokens.SECTION_SEP)
+
+	var intro := Label.new()
+	intro.text = "Ten short lessons — play them in any order, replay any time."
+	intro.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	intro.autowrap_mode = TextServer.AUTOWRAP_WORD
+	vbox.add_child(intro)
+	vbox.add_child(HSeparator.new())
+
+	for chapter in Spielschule.chapters():
+		_add_chapter_row(vbox, chapter, progress, dialog)
+
+	dialog.add_child(vbox)
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
+	add_child(dialog)
+	dialog.popup_centered()
+	# Keep the ten-row list (and its CLOSE button) reachable on small displays.
+	UiPolish.keep_window_reachable(dialog, Vector2i(520, 560))
+
+
+## One chapter row: a title Button (checkmarked when completed — everything stays replayable) with a
+## muted one-line goal beneath it. Playable rows launch the scenario; unbundled/reserved rows are
+## disabled and say why.
+func _add_chapter_row(vbox: VBoxContainer, chapter: Dictionary, progress: SpielschuleProgress, dialog: AcceptDialog) -> void:
+	var id := String(chapter.get("id", ""))
+	var title := String(chapter.get("title", ""))
+	var available := Spielschule.is_available(chapter)
+	var reserved := bool(chapter.get("reserved", false))
+	var done := progress.is_completed(id)
+
+	var btn := Button.new()
+	btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	var glyph := "✓" if done else "•"
+	var suffix := ""
+	if reserved:
+		suffix = "   —   coming with the spell wave"
+	elif not available:
+		suffix = "   —   scenario coming soon"
+	btn.text = "%s  %s · %s%s" % [glyph, id, title.to_upper(), suffix]
+	btn.disabled = not available
+	if available:
+		btn.pressed.connect(func() -> void:
+			dialog.queue_free()
+			_launch_scenario(chapter))
+	vbox.add_child(btn)
+
+	var goal := Label.new()
+	goal.text = "      " + String(chapter.get("goal", ""))
+	goal.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+	goal.autowrap_mode = TextServer.AUTOWRAP_WORD
+	vbox.add_child(goal)
+
+
+## Hand the picked chapter's bundled scenario to the game scene through the SAME runtime-only
+## ProjectSettings seam the tutorial uses (never persisted to project.godot). main.gd feeds
+## scenario_path into the NORMAL pending-load path (= same load path as a save-load), pauses autosave
+## and marks the chapter done. See main.gd _ready().
+func _launch_scenario(chapter: Dictionary) -> void:
+	ProjectSettings.set_setting("niemandsland/scenario_mode", true)
+	ProjectSettings.set_setting("niemandsland/scenario_path", String(chapter.get("scenario", "")))
+	ProjectSettings.set_setting("niemandsland/scenario_chapter", String(chapter.get("id", "")))
+	_transition_to_game()
+
+
+## One-time, dismissible pointer to the new GAME SCHOOL entry (mission part C). Persists a "seen"
+## flag BEFORE showing, so a decline (or quitting without pressing OK) never nags again. Guarded to
+## the live main scene only — gdUnit's scene_runner mounts the menu under /root (not as current_scene),
+## so tests never pop it (same guard as the update check + attract mode).
+func _maybe_show_spielschule_hint() -> void:
+	if get_tree().current_scene != self:
+		return
+	var progress := SpielschuleProgress.new()
+	progress.load_from_disk()
+	if progress.hint_seen():
+		return
+	progress.set_hint_seen(true)
+	progress.save_to_disk()
+
+	var dialog := AcceptDialog.new()
+	dialog.title = "New: Game School"
+	dialog.dialog_text = "New here? GAME SCHOOL walks you through the game in short, replayable lessons.\n\nFind it in the menu whenever you like."
+	dialog.ok_button_text = "GOT IT"
+	add_child(dialog)
+	dialog.popup_centered()
+	dialog.confirmed.connect(dialog.queue_free)
+	dialog.canceled.connect(dialog.queue_free)
 
 
 func _on_load_battle_pressed() -> void:
