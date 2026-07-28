@@ -31,7 +31,7 @@ func test_menu_has_expected_buttons() -> void:
 			buttons.append(child)
 
 	# Continue/Start/Tutorial/Host/Join/Browse/Load/ReportProblem/Credits/Exit; CONTINUE may be hidden.
-	assert_that(buttons.size()).is_equal(10)
+	assert_that(buttons.size()).is_equal(11)   # +1: the GAME SCHOOL entry (Spielschule wave 1)
 
 
 func test_continue_button_hidden_without_save() -> void:

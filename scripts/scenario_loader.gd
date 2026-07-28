@@ -1,5 +1,10 @@
 class_name ScenarioLoader
 extends RefCounted
+
+## Where bundled lesson scenarios live. _on_load_file_selected uses this marker to tell a lesson
+## load from the player loading their OWN battle — which must LEAVE the lesson (autosave pause is
+## scoped to lesson state, never to the scene).
+const SCENARIO_DIR := "res://assets/tutorial/scenarios/"
 ## Loads a bundled .nml Game School lesson through the REAL save/load path, isolating it from the
 ## player's own table:
 ##   begin_lesson()  captures the current table into memory AND pauses autosave for the lesson.
@@ -71,6 +76,18 @@ func has_snapshot() -> bool:
 ## The captured snapshot (empty when none is held) — exposed for tests + a future in-scene restore.
 func snapshot() -> Dictionary:
 	return _snapshot
+
+
+## The player loads a REAL save from inside a lesson: the lesson is over. The external load
+## replaces the whole board anyway, so the captured snapshot is dropped WITHOUT a restore (restoring
+## first would double-load), and the autosave pause lifts so the player's own game keeps its safety
+## net. Review finding: without this, begin_lesson()'s pause outlived the lesson for the entire
+## scene, and an in-scene "Load Game" left the real battle without periodic or round autosaves.
+func leave_lesson_for_external_load() -> void:
+	_clear_trails()
+	_captured = false
+	_snapshot = {}
+	_set_autosave_paused(false)
 
 
 func _set_autosave_paused(paused: bool) -> void:

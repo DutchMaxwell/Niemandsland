@@ -252,3 +252,30 @@ func _free_real_save_manager(sm: SaveManager) -> void:
 	if is_instance_valid(sm.map_layout_editor):
 		sm.map_layout_editor.queue_free()
 	sm.queue_free()
+
+
+class FakeAutosave extends Node:
+	var paused := false
+	func set_lesson_paused(p: bool) -> void:
+		paused = p
+
+
+func test_external_load_leaves_the_lesson_and_resumes_autosave() -> void:
+	# Review finding (blocking): begin_lesson() paused autosave and NOTHING on the in-scene path
+	# lifted it — a player loading their OWN battle mid-lesson played on without periodic or
+	# round autosaves until the next scene change. leave_lesson_for_external_load() is the fix:
+	# snapshot dropped without restore (the external load replaces the board anyway), pause lifted.
+	var autosave: FakeAutosave = auto_free(FakeAutosave.new())
+	var loader := ScenarioLoader.new()
+	loader.setup(null, autosave, null)
+	loader.begin_lesson()
+	assert_bool(autosave.paused) \
+		.override_failure_message("begin_lesson must pause autosave — lesson state must never hit the real slots") \
+		.is_true()
+	loader.leave_lesson_for_external_load()
+	assert_bool(autosave.paused) \
+		.override_failure_message("an external load must LIFT the lesson pause — otherwise the player's real game keeps a dead autosave") \
+		.is_false()
+	assert_bool(loader.has_snapshot()) \
+		.override_failure_message("the stale lesson snapshot must be dropped — restoring it over the freshly loaded battle would double-load") \
+		.is_false()

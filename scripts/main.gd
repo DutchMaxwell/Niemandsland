@@ -9865,6 +9865,13 @@ func _on_save_file_selected(path: String) -> void:
 
 ## Load file selected
 func _on_load_file_selected(path: String) -> void:
+	# Loading a REAL save from inside a Game-School lesson LEAVES the lesson: the autosave pause is
+	# scoped to lesson state only. Review caught the leak — begin_lesson() paused autosave and nothing
+	# on this in-scene path ever lifted it, so a player who loaded their own battle mid-lesson played
+	# on with a dead safety net (no periodic saves, no round snapshots) until the next scene change.
+	if _scenario_loader != null and not path.begins_with(ScenarioLoader.SCENARIO_DIR):
+		_scenario_loader.leave_lesson_for_external_load()
+		_scenario_mode = false
 	var error = await save_manager.load_game(path)
 	if error != OK:
 		push_error("Failed to load game: %d" % error)
