@@ -807,6 +807,9 @@ func _run_solo_ai_turn() -> void:
 ## log, then resolve Dangerous tests / shooting / melee with real tray dice. A Shaken unit idles and
 ## recovers instead (OPR p.10). Returns the activated unit, or null when the AI side is done.
 func _solo_activate_one_ai() -> GameUnit:
+	# #162: the AI's activation is "the next activation" — open take-backs expire.
+	if undo_manager != null:
+		undo_manager.expire_move_takebacks()
 	var unit: GameUnit = solo_controller.activate_next_ai_unit()
 	if unit == null:
 		return null
@@ -5059,6 +5062,9 @@ func _solo_combined_alive(unit: GameUnit) -> int:
 ## then restore the player's previous tray settings.
 func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: String = "attack") -> Array:
 	_next_roll_kind = roll_kind   # Bug 16: the dice-log line words saves as "defends … blocks"
+	# #162: any scripted tray roll (solo flow) commits the table — take-backs expire.
+	if undo_manager != null:
+		undo_manager.expire_move_takebacks()
 	var prev_count := _dice_count
 	var prev_target := _success_target
 	var prev_modifier := _success_modifier
@@ -7649,6 +7655,8 @@ func _do_next_round() -> void:
 	# Round advance ends every activation — the painted move trails sweep clean.
 	if move_trails:
 		move_trails.on_round_advance()
+	if undo_manager != null:
+		undo_manager.expire_move_takebacks()   # #162: round advance ends every activation
 	if network_manager:
 		network_manager.broadcast_round_advance()
 
@@ -7658,6 +7666,8 @@ func _on_remote_round_advanced() -> void:
 	_refresh_round_visuals()
 	if move_trails:
 		move_trails.on_round_advance()
+	if undo_manager != null:
+		undo_manager.expire_move_takebacks()   # #162: round advance ends every activation
 
 
 ## Refreshes everything advance_round() affects: the button label plus the
@@ -7779,6 +7789,10 @@ func _on_roller_started() -> void:
 
 
 func _on_roller_finished(_total: int) -> void:
+	# #162: dice hit the tray — every open movement take-back expires (the grilled
+	# boundary: once dice rolled, the game state is committed like at a real table).
+	if undo_manager != null:
+		undo_manager.expire_move_takebacks()
 	roll_button.text = "Roll"
 	roll_button.disabled = false
 	AudioManager.play_sfx(AudioManager.SFXType.DICE_IMPACT)
@@ -8339,11 +8353,17 @@ func _log_move_summaries(summaries: Array) -> void:
 ## small additive polyline messages (the host-authoritative move path is untouched).
 ## ONE drop_id groups everything in this drop — locally AND in the MP messages — so a
 ## multi-unit drop never fades its own trails on either side.
-func _on_trails_dropped(moves: Array) -> void:
+func _on_trails_dropped(moves: Array, undoable: bool = false) -> void:
 	if move_trails == null:
 		return
 	var round_num: int = opr_army_manager.current_round if opr_army_manager != null else 0
+	# #162: the drop identity is minted at the DRAG seam and rides the moves entries, so
+	# the take-back finds trail + ledger + MP mirror by one key. The AI's direct call
+	# (choreography) passes no drop_id — it mints one here and is never undoable.
 	var drop_id: int = Time.get_ticks_msec()
+	if not moves.is_empty() and (moves[0] as Dictionary).has("drop_id"):
+		drop_id = int((moves[0] as Dictionary)["drop_id"])
+	var takeback: Dictionary = {}   # unit_id -> {"owner","name","nodes","from_pos","from_rot"}
 	var per_unit: Dictionary = {}   # unit_id -> {"owner", "name", "batch": Array}
 	for mv in moves:
 		var node: Node3D = mv.get("node")
@@ -8358,6 +8378,14 @@ func _on_trails_dropped(moves: Array) -> void:
 		var model_id: int = int(node.get_meta("network_id")) if node.has_meta("network_id") else 0
 		move_trails.commit_trail(owner, gu.unit_id, gu.get_name(), model_id, path,
 				radius, round_num, drop_id)
+		if undoable and mv.has("from_raw"):
+			var tb: Dictionary = takeback.get(gu.unit_id, {})
+			if tb.is_empty():
+				tb = {"owner": owner, "name": gu.get_name(), "nodes": [], "from_pos": [], "from_rot": []}
+				takeback[gu.unit_id] = tb
+			(tb["nodes"] as Array).append(node)
+			(tb["from_pos"] as Array).append(mv["from_raw"])
+			(tb["from_rot"] as Array).append(float(mv.get("from_rot", node.rotation.y)))
 		if network_manager != null and network_manager.is_multiplayer_active():
 			var entry: Dictionary = per_unit.get(gu.unit_id, {})
 			if entry.is_empty():
@@ -8374,6 +8402,25 @@ func _on_trails_dropped(moves: Array) -> void:
 		var e: Dictionary = per_unit[unit_id]
 		network_manager.broadcast_move_trails(int(e["owner"]), str(unit_id),
 				str(e["name"]), round_num, drop_id, e["batch"])
+	# #162: a new drop expires every earlier take-back (one-step undo — the previous
+	# unit's activation moved on, per the grilled commit boundary), then arms this one.
+	if undoable and undo_manager != null and not takeback.is_empty():
+		undo_manager.expire_move_takebacks()
+		var peer: int = network_manager.get_my_peer_id() if network_manager != null else 0
+		for unit_id in takeback:
+			var tb: Dictionary = takeback[unit_id]
+			var nodes: Array[Node3D] = []
+			var from_pos: Array[Vector3] = []
+			var from_rot: Array[float] = []
+			for n in tb["nodes"]:
+				nodes.append(n as Node3D)
+			for p in tb["from_pos"]:
+				from_pos.append(p as Vector3)
+			for r in tb["from_rot"]:
+				from_rot.append(float(r))
+			undo_manager.push(UndoManager.MoveTakebackAction.new(nodes, from_pos, from_rot,
+					int(tb["owner"]), str(unit_id), str(tb["name"]), drop_id,
+					move_trails, network_manager, battle_log, peer))
 
 
 ## The GameUnit behind a dragged battlefield piece (model node or regiment tray) — the
@@ -11924,12 +11971,17 @@ func _init_radial_menu() -> void:
 	control_hints.name = "ControlHintsController"
 	add_child(control_hints)
 	object_manager.hover_changed.connect(control_hints.on_hover_changed)
-	object_manager.selection_dropped.connect(_on_trails_dropped)
-	# A unit marked Activated is DONE for the round — its trail's job ends with it.
+	# #162: HUMAN drops arm a take-back (the AI's direct choreography call never does).
+	object_manager.selection_dropped.connect(func(moves: Array) -> void:
+		_on_trails_dropped(moves, true))
+	# A unit marked Activated is DONE for the round — its trail's job ends with it,
+	# and every open take-back expires (#162: the next activation began).
 	if radial_menu_controller.has_signal("unit_activated"):
 		radial_menu_controller.unit_activated.connect(func(gu) -> void:
 			if gu != null and move_trails != null:
-				move_trails.on_activation_done(gu.unit_id))
+				move_trails.on_activation_done(gu.unit_id)
+			if undo_manager != null:
+				undo_manager.expire_move_takebacks())
 	# Auto-suppress chalk while the game is in the deployment phase (deployment isn't
 	# movement-proof) — seed from the current formal game phase.
 	_sync_move_trails_deployment()
@@ -12069,6 +12121,8 @@ func _on_remote_activation_updated(game_unit: GameUnit) -> void:
 	# (same rule as the local toggle, so both tables stay in step).
 	if move_trails != null and game_unit != null and game_unit.is_activated:
 		move_trails.on_activation_done(game_unit.unit_id)
+		if undo_manager != null:
+			undo_manager.expire_move_takebacks()   # #162: the game moved on
 
 
 ## Called when a remote peer changes a unit marker (Fatigued, Shaken, etc.)
@@ -12089,6 +12143,8 @@ func _on_remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, ad
 			radial_menu_controller._update_activated_markers(game_unit)
 			if move_trails != null and add:
 				move_trails.on_activation_done(game_unit.unit_id)
+				if undo_manager != null:
+					undo_manager.expire_move_takebacks()   # #162: the game moved on
 		_:
 			# Dialog marker (Pinned, Stunned, custom, counter, ...) - render its token
 			radial_menu_controller.set_unit_marker_token(game_unit, marker_name, add, color, value)

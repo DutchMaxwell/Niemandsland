@@ -741,6 +741,27 @@ func sync_move_trails(owner_slot: int, unit_id: String, unit_name: String,
 					radius, round_num, drop_id)
 
 
+## #162 — a peer TOOK BACK a move: mirror the take-back so the drop's chalk + inch
+## stamp + ledger proof vanish here too. The models' snap-back rides the ordinary
+## broadcast_move/broadcast_rotation messages the take-back action already sends.
+func broadcast_move_trails_undo(owner_slot: int, unit_id: String, drop_id: int) -> void:
+	if not is_multiplayer_active():
+		return
+	if not _validate_rpc_ready("broadcast_move_trails_undo"):
+		return
+	_remote_call("sync_move_trails_undo", [owner_slot, unit_id, drop_id], 0)
+
+
+## RPC: remove ONE drop's trail visuals + ledger entries (#162). Same keying as
+## sync_move_trails (owner_slot + unit_id + drop_id travel verbatim both ways).
+@rpc("any_peer", "call_remote", "reliable")
+func sync_move_trails_undo(owner_slot: int, unit_id: String, drop_id: int) -> void:
+	var trails := get_node_or_null("/root/Main/MoveTrails")
+	if trails == null or not trails.has_method("undo_drop"):
+		return
+	trails.undo_drop(owner_slot, unit_id, drop_id)
+
+
 ## Helper to broadcast movement to all peers
 func broadcast_move(object_id: int, pos: Vector3) -> void:
 	if not is_multiplayer_active():
