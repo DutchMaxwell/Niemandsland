@@ -4162,11 +4162,16 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	var landed_on_defender := 0
 	if regenable + regen_proof > 0:
 		landed_on_defender = await _solo_land_wounds(defender, regenable, regen_proof)
-	# Retaliate(X) — wave 7 (official text: "When this model takes wounds in melee, the attacker
-	# takes X hits per wound taken."): reactive hits AFTER the wounds landed (post-Regeneration =
-	# wounds actually TAKEN), saved at the striker's Shielded-adjusted Defense, no AP (not a
-	# weapon), NON-chaining (retaliation wounds never trigger the striker's own Retaliate). The
-	# wounds credit the DEFENDER's melee tally via _solo_take_retaliate_credit (caller collects).
+	# Retaliate(X) — wave 7. Army-book glossary, verbatim (GF army books v3.5.2; NOT in the GF/AoF
+	# Advanced core rules): "Retaliate: When this model takes a wound in melee, the attacker takes
+	# X hits." The rx*wounds step below is the standard per-triggering-event READING of that text
+	# (each wound taken fires the trigger once), not a quote. Hits resolve AFTER the wounds landed
+	# (post-Regeneration = wounds actually TAKEN), saved at the striker's Shielded-adjusted Defense,
+	# no AP (not a weapon), NON-chaining (retaliation wounds never trigger the striker's own
+	# Retaliate). Wounds credit the DEFENDER's melee tally via _solo_take_retaliate_credit.
+	# KNOWN EDGE (own ticket): the gate is UNIT-level, so a MIXED unit (only some models carry
+	# Retaliate) over-triggers on wounds landed on non-carriers — per-model accounting is a
+	# follow-up wave; TC-043 deliberately tests an all-carrier unit where unit==model level.
 	if landed_on_defender > 0 and _solo_combined_alive(striker) > 0 \
 			and RulesRegistry.unit_rule_active(defender, "Retaliate"):
 		var rx: int = maxi(1, _solo_unit_rating(defender, "Retaliate"))
