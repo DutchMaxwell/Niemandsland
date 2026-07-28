@@ -1,6 +1,7 @@
 extends GdUnitTestSuite
 ## The Game School start-menu ENTRY exists in scenes/startup_menu.tscn, right after the Tutorial
-## entry, as a MenuListButton reading "GAME SCHOOL". Instantiate-only (never added to the tree) so
+## entry, as a MenuListButton reading "FEUERTAUFE — TUTORIAL" (maintainer naming, 28.07.: the course
+## is your baptism of fire; the finale is "Into No Man's Land"). Instantiate-only (never in tree) so
 ## this asserts what the .tscn stores — what a future .tscn edit would break — without running the
 ## menu's heavy _ready() (diorama build, music, attract mode). Same pattern as ui_click_ownership_test.
 
@@ -18,7 +19,7 @@ func test_game_school_entry_exists_and_is_a_menu_list_button() -> void:
 		.override_failure_message("startup_menu.tscn must carry a SpielschuleBtn in the MenuButtons column") \
 		.is_not_null()
 	assert_bool(btn is MenuListButton).is_true()
-	assert_str((btn as Button).text).is_equal("GAME SCHOOL")
+	assert_str((btn as Button).text).is_equal("FEUERTAUFE — TUTORIAL")
 
 
 func test_game_school_entry_sits_right_after_the_tutorial_entry() -> void:
