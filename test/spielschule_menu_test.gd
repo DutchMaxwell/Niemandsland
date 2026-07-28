@@ -1,7 +1,7 @@
 extends GdUnitTestSuite
 ## The Game School start-menu ENTRY exists in scenes/startup_menu.tscn, right after the Tutorial
 ## entry, as a MenuListButton reading "FEUERTAUFE — TUTORIAL" (maintainer naming, 28.07.: the course
-## is your baptism of fire; the finale is "Into No Man's Land"). Instantiate-only (never in tree) so
+## is your baptism of fire; the finale is "Ins Niemandsland — face NACHTMAHR"). Instantiate-only (never in tree) so
 ## this asserts what the .tscn stores — what a future .tscn edit would break — without running the
 ## menu's heavy _ready() (diorama build, music, attract mode). Same pattern as ui_click_ownership_test.
 

@@ -44,7 +44,7 @@ static func chapters() -> Array:
 			"goal": "Use cover, terrain and line of sight.", "scenario": ""},
 		{"id": "S-09", "title": "Mission Objectives",
 			"goal": "Hold objectives and win the mission.", "scenario": ""},
-		{"id": "S-10", "title": "Into No Man's Land — face NACHTMAHR",
+		{"id": "S-10", "title": "Ins Niemandsland — face NACHTMAHR",
 			"goal": "A short real game against the solo AI.", "scenario": ""},
 		# Reserved: the spell lesson arrives with the spell wave (kept visible so players see it is
 		# coming). Never playable this wave.
