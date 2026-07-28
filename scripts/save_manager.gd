@@ -296,10 +296,23 @@ func _serialize_game_state() -> Dictionary:
 	}
 
 
-## Save game state to file
-func save_game(path: String) -> Error:
-	var state = serialize_game_state()
+## Scratch file the in-memory snapshot restore (restore_state) round-trips through, so returning to
+## the player's own table after a Game School lesson reuses the exact same load path as a save-load.
+const SCENARIO_RESTORE_TMP := "user://_scenario_restore.nml"
 
+
+## Save the current game state to file (serialize + write + save_completed signal).
+func save_game(path: String) -> Error:
+	var err := save_state_to_file(serialize_game_state(), path)
+	if err == OK:
+		save_completed.emit(path)
+	return err
+
+
+## Write an ALREADY-serialized game-state dictionary to `path` as pretty JSON. This is the
+## signal-free core of save_game: a captured in-memory snapshot (Game School scenario restore) can
+## be persisted with it WITHOUT emitting save_completed (that signal means "the player saved").
+func save_state_to_file(state: Dictionary, path: String) -> Error:
 	var json_string = JSON.stringify(state, "\t")  # Pretty print with tabs
 
 	var file = FileAccess.open(path, FileAccess.WRITE)
@@ -311,9 +324,22 @@ func save_game(path: String) -> Error:
 	file.store_string(json_string)
 	file.close()
 
-	print("Game saved to: %s (%d objects)" % [path, state.objects.size()])
-	save_completed.emit(path)
+	print("Game saved to: %s (%d objects)" % [path, state.get("objects", []).size()])
 	return OK
+
+
+## Restore a captured in-memory snapshot onto the table through the REAL load path: write it to a
+## scratch user:// file and load_game() it, so returning the player to their own table after a
+## lesson is byte-identical to loading a save they made (same migration + clear + deserialize +
+## signal chain). Used by ScenarioLoader.end_lesson(); the round-trip is the isolation invariant.
+func restore_state(state: Dictionary) -> Error:
+	var err := save_state_to_file(state, SCENARIO_RESTORE_TMP)
+	if err != OK:
+		return err
+	err = await load_game(SCENARIO_RESTORE_TMP)
+	if FileAccess.file_exists(SCENARIO_RESTORE_TMP):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(SCENARIO_RESTORE_TMP))
+	return err
 
 
 ## Load game state from file
