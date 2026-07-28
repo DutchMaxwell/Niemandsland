@@ -5274,6 +5274,7 @@ const PACE_ANNOUNCE_S := 1.0            # attribution hold before anything happe
 const PACE_OUTCOME_S := 1.8             # result summary hold after a combat resolves
 const PACE_DICE_SETTLE_BUFFER_S := 0.6  # extra beat after the tray reports physical rest
 const PACE_MOVE_SPEED_M_S := 0.20       # animated model speed (~8"/s — readable, not sluggish)
+const PACE_SNAP_MAX_IN := 1.0           # sub-inch repositioning snaps into place instead of gliding
 const PACE_TRAIL_FADE_S := 2.0          # movement trail ribbons fade out over this long
 const PACE_FAST_SCALE := 0.15           # fast-forward multiplier on every fixed hold
 ## Activation-choreography attention beat (maintainer's explicit staging, field-test finding 7): the fixed
@@ -5308,6 +5309,15 @@ static func pace_seconds(phase: int, fast: bool) -> float:
 ## attacks. Static + pure so the staging is unit-testable and the Fast-AI compression is provable.
 static func pace_attention_seconds(fast: bool) -> float:
 	return PACE_ATTENTION_S * (PACE_FAST_SCALE if fast else 1.0)
+
+
+## Sub-inch kite steps SNAP into place instead of glide-animating (NML-224, visual only —
+## the decision logic is untouched): true when even the LONGEST model arc of the move stays
+## under PACE_SNAP_MAX_IN. Callers whose moves must stay visibly animated regardless of
+## distance — pile-in and consolidation, where a teleport read as "nothing happened"
+## (NML-208) — pass allow_snap=false. Static + pure so the threshold is unit-testable.
+static func should_snap_move(longest_arc_m: float, allow_snap: bool) -> bool:
+	return allow_snap and longest_arc_m < PACE_SNAP_MAX_IN * INCHES_TO_METERS
 
 
 ## The per-model ROUTE-START positions from a published last_move_paths list (each entry {model, path,
