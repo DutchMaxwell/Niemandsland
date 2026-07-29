@@ -36,8 +36,9 @@ const SIMPLIFY_MIN_DIST_M := 0.003
 ## Backtrack ("Rückwärtsmalen radiert") tolerance (metres): while the cursor retraces
 ## toward the start within this perpendicular band of the last recorded leg, the head is
 ## erased and the budget REFUNDED — so wiggling or repositioning can't inflate the
-## measured travel. 0.25" ≈ absorbs hand jitter but well under a base width, so a genuine
-## parallel detour (offset further than this) is NOT mistaken for a backtrack.
+## measured travel. This 0.25" default is the FLOOR (sampling noise); the drag path widens
+## it to the anchor's ribbon half-width (#191 — inside your own painted chalk = retracing,
+## see ObjectManager._retrace_tolerance_m), so hand-walked corrections actually refund.
 const RETRACE_TOLERANCE_M := 0.00635
 
 ## Min forward advance (metres) before a new committed vertex is laid down (~0.2"): keeps

@@ -1664,6 +1664,16 @@ func _trail_radius_for(obj: Node3D) -> float:
 	return shape.bounding_radius() if shape != null else 0.0
 
 
+## #191 — the retrace ERASER band for the current drag (metres): the anchor's own ribbon
+## half-width, so walking the cursor back anywhere inside the already-painted chalk refunds
+## the budget ("still on your own path"). A human hand never re-walks a line to ±0.25", so
+## the ledger's pixel-sized default made corrections cost triple; the ribbon IS the visual
+## contract of where the base travelled, so it is also the honest eraser band. Floored at
+## the ledger default for non-painting drags (no ribbon to stay inside).
+func _retrace_tolerance_m() -> float:
+	return maxf(MoveLedger.RETRACE_TOLERANCE_M, _trail_radius_for(_drag_anchor_object))
+
+
 ## A regiment moves as ONE block: its ribbon spans the member bases across the tray's
 ## local X (frontage) axis — exact for the forward/backward moves regiments make
 ## (AoF:R p.8, Shift locks the drag to that axis); pivot arcs are a later stage.
@@ -2154,7 +2164,7 @@ func _update_drag(screen_pos: Vector2) -> void:
 		if have_path:
 			var desired := Vector2(_drag_anchor_position.x + delta_xz.x, _drag_anchor_position.z + delta_xz.z)
 			# Erase whatever the cursor walked back over (refunds budget), keeping the path sparse.
-			var committed := MoveLedger.retrace(_drag_path_points, desired)
+			var committed := MoveLedger.retrace(_drag_path_points, desired, _retrace_tolerance_m())
 			head = desired
 			if _strict_cap_meters > 0.0:
 				var used_m := MoveLedger.length_meters(committed)
