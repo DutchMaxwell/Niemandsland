@@ -2317,7 +2317,8 @@ func _append_transport_items(game_unit: GameUnit, context: Dictionary, items: Ar
 	if army_manager == null or game_unit == null:
 		return
 	var target := _embark_target_for(game_unit)
-	if target != null:
+	var economy := _activation_economy_on()
+	if target != null and not (economy and game_unit.is_activated):
 		context["embark_target"] = target
 		var tname := str(target.unit_properties.get("name", "transport"))
 		if bool(target.unit_properties.get("ambush_reserve", false)):
@@ -2326,15 +2327,22 @@ func _append_transport_items(game_unit: GameUnit, context: Dictionary, items: Ar
 			items.append(RadialMenu.RadialMenuItem.new("embark", "Embark (reserve)", "▣", true,
 				"Load into %s in Ambush reserve — the unit deploys inside and arrives with it (GF v3.5.1 Transport)" % tname))
 		else:
-			items.append(RadialMenu.RadialMenuItem.new("embark", "Embark", "▣", true,
-				"Embark into %s — a model of this unit has reached it (GF v3.5.1 Transport)" % tname))
+			# #209: in a solo game embarking IS the unit's move action — the label says so
+			# up front, the click is the confirmation.
+			items.append(RadialMenu.RadialMenuItem.new("embark",
+				"Embark — ends this unit's activation" if economy else "Embark", "▣", true,
+				"Embark into %s — any move action; only one model needs to reach it (GF v3.5.1 p.15 Transport)" % tname))
 	var cargo: Array = army_manager.cargo_units(game_unit)
 	if not cargo.is_empty():
 		context["cargo_units"] = cargo
 		for i in range(cargo.size()):
+			var cu := cargo[i] as GameUnit
+			if economy and cu.is_activated:
+				continue   # #209: its move action is spent — no second activation this round
 			items.append(RadialMenu.RadialMenuItem.new("unload_cargo_%d" % i,
-				"Unload %s" % str((cargo[i] as GameUnit).unit_properties.get("name", "unit")), "▢", true,
-				"Disembark this unit (GF v3.5.1 Transport: fully within 6\")"))
+				"Unload %s%s" % [str(cu.unit_properties.get("name", "unit")),
+					" — ends its activation" if economy else ""], "▢", true,
+				"Disembark this unit — any move action, fully within 6\" (GF v3.5.1 p.15 Transport)"))
 
 
 ## The transport this unit could embark into RIGHT NOW: same player, capacity gate ok, reached.
@@ -2397,12 +2405,15 @@ func _embark_unit(context: Dictionary) -> void:
 	if not bool(gate.get("ok", false)):
 		_transport_log("%s cannot embark: %s" % [str(unit.unit_properties.get("name", "unit")), str(gate.get("reason", ""))])
 		return
+	if not _transport_activation_open(unit, "embark"):
+		return
 	if army_manager.set_unit_embarked(unit, tr, true):
 		if network_manager:
 			network_manager.broadcast_unit_embark(unit.unit_id, tr.unit_id, true)
 		_transport_log("%s embarks into %s (%d/%d spaces used) — GF v3.5.1 Transport" % [
 			str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport")),
 			army_manager.transport_used_spaces(tr), army_manager.transport_capacity(tr)])
+		_consume_transport_activation(unit, "embark")
 
 
 func _disembark_unit(unit: GameUnit) -> void:
@@ -2411,11 +2422,46 @@ func _disembark_unit(unit: GameUnit) -> void:
 	var tr := army_manager.transport_of(unit)
 	if tr == null:
 		return
+	if not _transport_activation_open(unit, "disembark"):
+		return
 	if army_manager.set_unit_embarked(unit, null, false):
 		if network_manager:
 			network_manager.broadcast_unit_embark(unit.unit_id, tr.unit_id, false)
 		_transport_log("%s disembarks from %s — GF v3.5.1 Transport" % [
 			str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))])
+		_consume_transport_activation(unit, "disembark")
+
+
+## #209 — whether a solo game's activation economy is running. Embark/disembark are "any move
+## action" then (GF v3.5.1 p.15), so they consume the acting unit's activation; in the free
+## sandbox (and during deployment's reserve loading) nothing is consumed, like dice and rulers.
+func _activation_economy_on() -> bool:
+	if army_manager != null and army_manager.is_deployment_phase():
+		return false
+	var main_node := get_node_or_null("/root/Main")
+	return main_node != null and main_node.has_method("_solo_alternation_active") \
+			and main_node._solo_alternation_active()
+
+
+## The unit may still spend its activation on a transport move (#209). Refusal is logged —
+## a silently dead menu entry reads as a bug.
+func _transport_activation_open(unit: GameUnit, verb: String) -> bool:
+	if not _activation_economy_on() or not unit.is_activated:
+		return true
+	_transport_log("%s has already activated this round — %s is a move action (GF v3.5.1 p.15)" % [
+		str(unit.unit_properties.get("name", "unit")), verb])
+	return false
+
+
+## #209 — the transport move WAS the unit's activation: mark it, say it, and hand over (the
+## same unit_activated signal the attack flow emits, so the AI's reply turn runs).
+func _consume_transport_activation(unit: GameUnit, verb: String) -> void:
+	if not _activation_economy_on() or unit.is_activated:
+		return
+	unit.activate(army_manager.current_round if army_manager != null else 1)
+	_transport_log("%s spends its activation to %s (any move action — GF v3.5.1 p.15)" % [
+		str(unit.unit_properties.get("name", "unit")), verb])
+	unit_activated.emit(unit)
 
 
 func _transport_log(msg: String) -> void:
