@@ -124,6 +124,48 @@ func test_container_hard_blocks_even_when_endpoints_share_the_zone() -> void:
 	assert_bool(o.has_line_of_sight(A, B, 2, 2)).is_false()
 
 
+## === Community #171: standing ON a container (elevated y) sees over its own edge — and
+##     is seen. Exercises the OBB path a real spawned container records (NOT grid cells). ===
+
+const BOX_HE := Vector2(0.0762, 0.0381)   # 6x3" half-extents in metres
+const ON_TOP := Vector3(0, 0.0635, 0)     # model on the box top (container height 2.5" = 0.0635 m)
+const GROUND_OUT := Vector3(0.5, 0, 0)
+
+
+func _with_box(o: Node3D, c: Vector2 = Vector2.ZERO, yaw: float = 0.0) -> void:
+	# A real spawned container records OBB edges + the parallel OBB. grid_cells needs any
+	# entry to defeat the no-terrain early-return (a real map always has cells).
+	o.grid_cells[Vector2i(999, 999)] = OverlayScript.TerrainType.NONE
+	var k: Array = TerrainRules.obb_corners(c, BOX_HE, yaw)
+	for i in range(4):
+		o._blocker_edges.append([k[i], k[(i + 1) % 4]])
+	o._blocker_obbs.append({"c": c, "he": BOX_HE, "yaw": yaw})
+
+
+func test_model_on_container_sees_out_and_is_seen() -> void:
+	var o := _overlay()
+	_with_box(o)
+	# On-top shooter → ground target: the box under the model must not wall it in.
+	assert_bool(o.has_line_of_sight(ON_TOP, GROUND_OUT, 2, 2)).is_true()
+	# Reciprocity: ground shooter → on-top target sees (and hits) back.
+	assert_bool(o.has_line_of_sight(GROUND_OUT, ON_TOP, 2, 2)).is_true()
+
+
+func test_ground_line_through_a_container_still_blocks() -> void:
+	# No over-grant: neither endpoint is elevated — the box hard-blocks as before.
+	var o := _overlay()
+	_with_box(o)
+	assert_bool(o.has_line_of_sight(Vector3(-0.5, 0, 0), Vector3(0.5, 0, 0), 2, 2)).is_false()
+
+
+func test_only_the_box_you_stand_on_is_exempt() -> void:
+	# A SECOND container between the elevated model and its target still blocks.
+	var o := _overlay()
+	_with_box(o)                       # the box the model stands on (at the origin)
+	_with_box(o, Vector2(0.3, 0.0))    # another box in the line of fire
+	assert_bool(o.has_line_of_sight(ON_TOP, GROUND_OUT, 2, 2)).is_false()
+
+
 ## === Base-aware zone membership (_zone_for_base): a model is IN terrain its BASE overlaps (GF v3.5.1),
 ##     via base-perimeter sampling. Cell = 3" = 0.0762 m; on a 6x4 table grid_size = 30, so cell (cx) left
 ##     edge x = (cx-15)*0.0762. Forest cells cx<=15 fill x < 0.0762. ===

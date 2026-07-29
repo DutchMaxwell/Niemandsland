@@ -90,9 +90,14 @@ func test_targeting_prefers_a_not_yet_activated_human_over_a_nearer_activated_on
 	add_child(solo)
 	solo.setup(army, null, null, 1, 2)
 	assert_object(solo.nearest_human_unit(ai)).is_equal(far_fresh)
+	# Community #164 narration flag: this pick walked PAST a nearer already-activated enemy —
+	# exactly the case the battle log must explain ("hits it before it acts").
+	assert_bool(solo.last_target_passed_activated).is_true()
 	# If ALL humans are activated, fall back to the nearest.
 	far_fresh.is_activated = true
 	assert_object(solo.nearest_human_unit(ai)).is_equal(near_active)
+	# Plain nearest pick: no passed-enemy story, the tag must stay silent.
+	assert_bool(solo.last_target_passed_activated).is_false()
 
 
 func test_run_ai_turn_activates_every_eligible_ai_unit() -> void:
@@ -662,6 +667,20 @@ func test_presentation_start_positions_returns_route_starts() -> void:
 	assert_vector(starts[0] as Vector3).is_equal(Vector3(1, 0, 1))   # each model shown at its route START
 	assert_vector(starts[1] as Vector3).is_equal(Vector3(-1, 0, -1))
 	assert_array(S.presentation_start_positions([])).is_empty()
+
+
+func test_should_snap_move_only_below_one_inch_and_only_when_allowed() -> void:
+	var S := SoloController
+	var inch: float = S.INCHES_TO_METERS
+	# Sub-inch kite steps snap (NML-224 visual): just under the threshold → snap.
+	assert_bool(S.should_snap_move(0.9 * inch, true)).is_true()
+	# At and above the threshold the move must GLIDE — ordinary advances stay animated.
+	assert_bool(S.should_snap_move(1.0 * inch, true)).is_false()
+	assert_bool(S.should_snap_move(6.0 * inch, true)).is_false()
+	# NML-208: pile-in/consolidation callers forbid snapping even for sub-inch arcs.
+	assert_bool(S.should_snap_move(0.5 * inch, false)).is_false()
+	# Degenerate zero-length input never snaps into an animation problem either way.
+	assert_bool(S.should_snap_move(0.0, true)).is_true()
 
 
 # === Human Ambush reserves (field-test finding 5: the game must ASK) ===
@@ -1864,3 +1883,25 @@ func test_gate_nudge_never_stretches_a_trail_past_the_band() -> void:
 	# resolvable for free: the mover stayed within its slack circle around the planned endpoint.
 	assert_bool(solo._gate_clamped_models.size() > 0).is_true()
 	assert_float(SoloController._xz_dist_m(gated[0] as Vector3, planned) / m).is_less_equal(SoloController.GATE_SLACK_EPS_IN + 0.02)
+
+
+func test_embarked_cargo_is_not_eligible_for_activation() -> void:
+	# S1.5 (community #160): cargo parked inside a transport must neither be activatable nor
+	# count toward the round-over check — a phantom eligible unit would stall the alternation
+	# forever (the round waits for an activation nobody can perform).
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	human.unit_id = "human"
+	var apc := _unit(2, [Vector3(0.5, 0, 0)])
+	apc.unit_id = "apc"
+	var cargo := _unit(2, [Vector3(0.6, 0, 0)])
+	cargo.unit_id = "cargo"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, apc.unit_id: apc, cargo.unit_id: cargo}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_int(solo.eligible_ai_units().size()).is_equal(2)
+	cargo.unit_properties["embarked_in"] = "apc"   # parked inside the APC (state layer)
+	assert_int(solo.eligible_ai_units().size()).is_equal(1)
+	assert_bool(solo.is_eligible(cargo)).is_false()

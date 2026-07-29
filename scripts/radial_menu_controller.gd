@@ -2319,8 +2319,15 @@ func _append_transport_items(game_unit: GameUnit, context: Dictionary, items: Ar
 	var target := _embark_target_for(game_unit)
 	if target != null:
 		context["embark_target"] = target
-		items.append(RadialMenu.RadialMenuItem.new("embark", "Embark", "▣", true,
-			"Embark into %s — a model of this unit has reached it (GF v3.5.1 Transport)" % str(target.unit_properties.get("name", "transport"))))
+		var tname := str(target.unit_properties.get("name", "transport"))
+		if bool(target.unit_properties.get("ambush_reserve", false)):
+			# S1.5 (community #160): loading a transport that waits in Ambush reserve — the
+			# unit deploys INSIDE and arrives with it.
+			items.append(RadialMenu.RadialMenuItem.new("embark", "Embark (reserve)", "▣", true,
+				"Load into %s in Ambush reserve — the unit deploys inside and arrives with it (GF v3.5.1 Transport)" % tname))
+		else:
+			items.append(RadialMenu.RadialMenuItem.new("embark", "Embark", "▣", true,
+				"Embark into %s — a model of this unit has reached it (GF v3.5.1 Transport)" % tname))
 	var cargo: Array = army_manager.cargo_units(game_unit)
 	if not cargo.is_empty():
 		context["cargo_units"] = cargo
@@ -2331,10 +2338,16 @@ func _append_transport_items(game_unit: GameUnit, context: Dictionary, items: Ar
 
 
 ## The transport this unit could embark into RIGHT NOW: same player, capacity gate ok, reached.
+## S1.5 (community #160): during DEPLOYMENT the reach gate has a second door — a friendly
+## transport set aside in AMBUSH RESERVE may be loaded without table reach ("Transports may
+## deploy with units inside" / "units inside Transports are deployed at the same time as the
+## Transport", GF v3.5.1 p.15): a reserve transport parks on the tray, so no table-reach is
+## ever possible. Deployment-ONLY: in play, a reserve-embark would be a free un-deploy.
 func _embark_target_for(unit: GameUnit) -> GameUnit:
 	if army_manager == null or unit == null or army_manager.transport_of(unit) != null:
 		return null
 	var pid := int(unit.unit_properties.get("player_id", 0))
+	var deploying: bool = army_manager.is_deployment_phase()
 	for t in army_manager.get_game_units_for_player(pid):
 		var tr := t as GameUnit
 		if tr == unit or army_manager.transport_capacity(tr) <= 0:
@@ -2342,6 +2355,8 @@ func _embark_target_for(unit: GameUnit) -> GameUnit:
 		if not bool(army_manager.can_embark(unit, tr).get("ok", false)):
 			continue
 		if _joined_gap_to_m(unit, tr) <= EMBARK_REACH_M:
+			return tr
+		if deploying and bool(tr.unit_properties.get("ambush_reserve", false)):
 			return tr
 	return null
 

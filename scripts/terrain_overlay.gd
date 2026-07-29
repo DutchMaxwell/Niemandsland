@@ -381,6 +381,10 @@ var _rubble_instance: MultiMeshInstance3D = null
 var _ruin_fetch_started := false
 var _last_wall_segments: Array = []
 var _blocker_edges: Array = []   # container OBB edges [[Vector2 a, Vector2 b], ...] (world XZ, m) — ONE geometry truth
+## Parallel per-container OBBs [{c: Vector2, he: Vector2, yaw: float}] — the elevation
+## exemption (community #171: a model ON a container sees over its own edge) needs the
+## WHOLE box, not just its edges. Cleared/filled in lockstep with _blocker_edges.
+var _blocker_obbs: Array = []
 ## NML-001: frei platzierte Shelf-Terrain-Stücke (Regal-Ruinen/Wälder/Gefahrenfelder) als typed
 ## OBBs — main liefert sie live (frame-gecacht); Terrain-Lookup + LoS falten sie ein, damit die
 ## KI sie in Bewegung, Cover und Sichtlinien sieht (Maintainer 2026-07-22: "Gelände, das nicht
@@ -1185,15 +1189,29 @@ func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_
 	var to_zone := _zone_for_base(to_pos, to_radius_m)
 	var span := Vector2(to_pos.x - from_pos.x, to_pos.z - from_pos.z).length()
 	var cell_size := GRID_SIZE_INCHES * INCHES_TO_METERS
-	# Container blockers: EXACT segment test against the recorded 6x3 OBB edges (container wave —
+	# Container blockers: EXACT segment test against the recorded 6x3 OBBs (container wave —
 	# the sampled cell walk let lines slip through corners and granted every span under 1.5").
 	# Same height rule as cells: the box (category 5) blocks unless BOTH endpoints see over it.
+	# Community #171: an endpoint STANDING ON a container (elevated y, XZ inside that box's
+	# footprint) sees out over its own edge — and is seen — instead of being walled in by the
+	# very box it stands on. Only the box under the model is exempt; every other container
+	# still blocks. Ground models (y ≈ 0) never reach the exemption, so ground-vs-ground
+	# stays byte-identical.
 	var bh := terrain_height_category(TerrainType.CONTAINER)
 	if bh >= from_height and bh >= to_height:
 		var a2 := Vector2(from_pos.x, from_pos.z)
 		var b2 := Vector2(to_pos.x, to_pos.z)
-		for e in _blocker_edges:
-			if Geometry2D.segment_intersects_segment(a2, b2, e[0], e[1]) != null:
+		var on_top_y := CONTAINER_HEIGHT_INCHES * INCHES_TO_METERS * 0.5
+		for ob in _blocker_obbs:
+			var od := ob as Dictionary
+			var oc: Vector2 = od["c"]
+			var ohe: Vector2 = od["he"]
+			var oyaw := float(od["yaw"])
+			var from_on := from_pos.y > on_top_y and TerrainRules.point_in_obb(a2, oc, ohe, oyaw)
+			var to_on := to_pos.y > on_top_y and TerrainRules.point_in_obb(b2, oc, ohe, oyaw)
+			if from_on or to_on:
+				continue   # the endpoint stands on THIS box — it sees over its own edge
+			if TerrainRules.segment_intersects_obb(a2, b2, oc, ohe, oyaw):
 				return false
 	# NML-001: shelf pieces block like their terrain type — AREA semantics (forest/ruin: you see
 	# in/out of the piece an endpoint stands in, never through a foreign one), same height rule.
@@ -2657,6 +2675,7 @@ func _clear_wall_instances() -> void:
 ## @param rotation: Grid rotation in degrees
 func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> void:
 	_blocker_edges.clear()
+	_blocker_obbs.clear()
 	_clear_placed_objects()
 
 	# Remember the layout so a finishing panel download can upgrade fallback trees in
@@ -2771,6 +2790,9 @@ func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> v
 			var corners := [cc + dx + dz, cc + dx - dz, cc - dx - dz, cc - dx + dz]
 			for ci in range(4):
 				_blocker_edges.append([corners[ci], corners[(ci + 1) % 4]])
+			_blocker_obbs.append({"c": cc, "yaw": yaw,
+				"he": Vector2(CONTAINER_LENGTH_INCHES * INCHES_TO_METERS * 0.5,
+					CONTAINER_DEPTH_INCHES * INCHES_TO_METERS * 0.5)})
 		elif not handles_own_facing:
 			model.rotation.y = randf() * TAU
 		add_child(model)

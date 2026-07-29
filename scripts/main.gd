@@ -89,6 +89,7 @@ const GROUP_ROTATION_BROADCAST_INTERVAL: float = 0.1  # 10 Hz
 
 # Dice Roller Plugin UI
 @onready var dice_roller_control: DiceTray = %DiceRollerControl
+@onready var roll_purpose_label: Label = %RollPurposeLabel
 @onready var roll_button: Button = %RollButton
 @onready var quick_roll_button: Button = %QuickRollButton
 @onready var _dice_log_scroll: ScrollContainer = %DiceLogScroll
@@ -126,6 +127,7 @@ var _movement_cap_buttons: Dictionary = {}  # MovementCap mode -> Button (the "M
 var _success_target: int = DiceRules.TARGET_NONE
 var _success_modifier: int = 0
 var _next_roll_owner: String = ""   # attribution for the next tray roll ("AI (…)"); empty = "You" (goal 001)
+var _next_roll_purpose: String = ""   # what the roll is about — tray label + MP context (community #170)
 var _next_roll_kind: String = "attack"   # Bug 16: "defense" words the dice-log line as "defends … blocks"
 var _target_buttons: Array[Button] = []
 var _modifier_value_label: Label = null
@@ -273,6 +275,10 @@ var _solo_takedown_solo: Dictionary = {}     # {unit, index, model} or {}
 var _solo_deploy_fsm: Dictionary = {}        # click-driven deployment machine (side/main/scout/done — maintainer flow 2026-07-23)
 var _solo_deploy_ui: CanvasLayer = null      # the deployment hand-over panel (label + up to two buttons)
 var _solo_deploy_ui_label: Label = null
+var _solo_deploy_ui_panel: PanelContainer = null   # the draggable panel itself (community #159)
+var _solo_deploy_ui_moved: bool = false      # the player dragged the box — their spot wins
+var _solo_deploy_ui_pos: Vector2 = Vector2.ZERO
+var _solo_deploy_ui_dragging: bool = false
 var _solo_strip_cb1: Callable = Callable()   # the strip owns its callbacks (see _solo_strip_fire)
 var _solo_strip_cb2: Callable = Callable()
 var _solo_deploy_ui_btn1: Button = null
@@ -789,6 +795,13 @@ func _run_solo_ai_turn() -> void:
 	if _solo_ai_busy:
 		return
 	_solo_ai_busy = true
+	# Community #163: F11 gets the same "NACHTMAHR dreams…" indicator the alternation pump
+	# already shows — and the round plan is primed on its OWN frame so the round-start
+	# whole-army compute never compounds onto the first unit's burst.
+	_show_dream_overlay()
+	solo_controller.prime_round_plan()
+	if not _solo_batch:
+		await get_tree().process_frame
 	var moved := 0
 	while true:
 		var unit: GameUnit = await _solo_activate_one_ai()
@@ -796,6 +809,7 @@ func _run_solo_ai_turn() -> void:
 		if unit == null:
 			break
 		moved += 1
+	_hide_dream_overlay()
 	_solo_ai_busy = false
 	if moved == 0:
 		print("[Solo/AI] AI turn complete — all player-%d units activated" % _solo_ai_slot())
@@ -807,6 +821,14 @@ func _run_solo_ai_turn() -> void:
 ## log, then resolve Dangerous tests / shooting / melee with real tray dice. A Shaken unit idles and
 ## recovers instead (OPR p.10). Returns the activated unit, or null when the AI side is done.
 func _solo_activate_one_ai() -> GameUnit:
+	# Community #163: guarantee one OS message-pump tick per unit. A run of HOLD/idle
+	# units used to await NOTHING (the pace/animate awaits are has_move-gated), so the
+	# whole AI side ran as one synchronous burst and Windows flagged the window "not
+	# responding" past its ~5s watchdog. The yield sits OUTSIDE the atomic decision call —
+	# no RNG draw or position read straddles a frame (determinism audit in the PR) — and
+	# is skipped in batch, so every headless harness stays byte-identical.
+	if not _solo_batch:
+		await get_tree().process_frame
 	# #162: the AI's activation is "the next activation" — open take-backs expire.
 	if undo_manager != null:
 		undo_manager.expire_move_takebacks()
@@ -864,8 +886,12 @@ func _solo_activate_one_ai() -> GameUnit:
 			# playtest bug 7). The shot line right after names the real target; narrate the hold plainly.
 			battle_log.log_event(BattleLog.Category.MOVEMENT, "%s holds its position" % unit.get_name(), true)
 		else:
-			battle_log.log_event(BattleLog.Category.MOVEMENT, "%s %s (→ %s)" % [
-				unit.get_name(), AiDecision.action_name(int(report.get("action", 0))), goal_label], true)
+			# Community #164: when the official not-activated-first key walked past a NEARER
+			# enemy that already acted, say why — the by-the-book pick reads irrational silent.
+			var acts_soon: String = " — hits it before it acts" \
+				if bool(report.get("target_acts_soon", false)) and not bool(report.get("to_objective", false)) else ""
+			battle_log.log_event(BattleLog.Category.MOVEMENT, "%s %s (→ %s)%s" % [
+				unit.get_name(), AiDecision.action_name(int(report.get("action", 0))), goal_label, acts_soon], true)
 	_solo_log_unmodeled_rules(unit)   # once-per-session visibility of rules the automation skips
 	if target != null:
 		_solo_log_unmodeled_rules(target)
@@ -1028,6 +1054,11 @@ func _solo_pump() -> void:
 		return
 	_solo_ai_busy = true
 	_show_dream_overlay()   # centred "NACHTMAHR dreams…" for the WHOLE AI compute phase (maintainer)
+	# Community #163: pay the round-start whole-army plan on its own frame (cached — the
+	# first activation would otherwise build it lazily inside its synchronous burst).
+	solo_controller.prime_round_plan()
+	if not _solo_batch:
+		await get_tree().process_frame
 	var tail_count := 0
 	while true:
 		var step: int = SoloController.alternation_next(_solo_pending_replies,
@@ -1756,15 +1787,15 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 		var panel := PanelContainer.new()
 		panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
 		_add_hud_frame(panel)
-		panel.anchor_left = 0.5
-		panel.anchor_right = 0.5
-		panel.anchor_top = 1.0
-		panel.anchor_bottom = 1.0
-		# NML-226: the ▲ Units tab owns the last 28 px of the screen bottom (unit_dock TAB_H), and the
-		# strip's old -18 sat right on it. Clear the tab plus breathing room.
-		panel.offset_bottom = -54.0
-		panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-		panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		# Community #159: the box is DRAGGABLE — free top-left positioning instead of the old
+		# bottom-centre anchors (which recomputed offsets every layout and would clobber a drag).
+		# The default spot stays the familiar bottom-centre via _solo_deploy_panel_relayout.
+		panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		panel.grow_horizontal = Control.GROW_DIRECTION_END
+		panel.grow_vertical = Control.GROW_DIRECTION_END
+		panel.gui_input.connect(_solo_deploy_ui_drag)
+		get_viewport().size_changed.connect(_solo_deploy_panel_relayout)
+		_solo_deploy_ui_panel = panel
 		_solo_deploy_ui.add_child(panel)
 		var margin := MarginContainer.new()
 		for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
@@ -1797,6 +1828,13 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 		_solo_deploy_ui_btn2.focus_mode = Control.FOCUS_NONE
 		_solo_deploy_ui_btn2.pressed.connect(func() -> void: _solo_strip_fire(_solo_strip_cb2, "2"))
 		row.add_child(_solo_deploy_ui_btn2)
+		# Discoverability for the drag (community #159) — a dim one-liner, no extra chrome.
+		var hint := Label.new()
+		hint.text = "⠿  drag to move"
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hint.add_theme_font_size_override("font_size", 10)
+		hint.modulate = Color(1, 1, 1, 0.45)
+		box.add_child(hint)
 		add_child(_solo_deploy_ui)
 	_solo_deploy_ui_label.text = text
 	_solo_deploy_ui_btn1.text = b1
@@ -1807,6 +1845,9 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 	_solo_deploy_ui_btn2.text = b2
 	_solo_deploy_fsm["cb2"] = cb2
 	_solo_deploy_ui.visible = true
+	# Deferred: the container re-min-sizes on new text (1 vs 2 label lines) before the
+	# default bottom-centre spot / the clamp is applied.
+	_solo_deploy_panel_relayout.call_deferred()
 
 
 ## Board-side prompt: the bottom strip instead of a centred window, for every question the player
@@ -1828,6 +1869,36 @@ func _solo_board_prompt(text: String, b1: String, b2: String = "") -> int:
 func _solo_deploy_ui_hide() -> void:
 	if _solo_deploy_ui != null and is_instance_valid(_solo_deploy_ui):
 		_solo_deploy_ui.visible = false
+
+
+## Repositions the deployment panel: default = bottom-centre, 54 px above the Units tab
+## (the NML-226 clearance); once the player dragged it, their spot wins. Always clamped
+## fully on-screen — a resize can never strand the box (community #159).
+func _solo_deploy_panel_relayout() -> void:
+	if _solo_deploy_ui_panel == null or not is_instance_valid(_solo_deploy_ui_panel):
+		return
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var sz: Vector2 = _solo_deploy_ui_panel.size
+	if not _solo_deploy_ui_moved:
+		_solo_deploy_ui_pos = Vector2((vp.x - sz.x) * 0.5, vp.y - sz.y - 54.0)
+	_solo_deploy_ui_pos = _solo_deploy_ui_pos.clamp(Vector2.ZERO, (vp - sz).max(Vector2.ZERO))
+	_solo_deploy_ui_panel.position = _solo_deploy_ui_pos
+
+
+## Drag-to-move for the deployment panel (community #159): press the panel background or
+## label and drag. The buttons are MOUSE_FILTER_STOP, so they swallow their own presses —
+## a button click never starts a drag. The pressed control keeps mouse focus in Godot, so
+## the release arrives even when the pointer leaves the panel mid-drag.
+func _solo_deploy_ui_drag(event: InputEvent) -> void:
+	var mb := event as InputEventMouseButton
+	if mb != null and mb.button_index == MOUSE_BUTTON_LEFT:
+		_solo_deploy_ui_dragging = mb.pressed
+		return
+	var mm := event as InputEventMouseMotion
+	if mm != null and _solo_deploy_ui_dragging:
+		_solo_deploy_ui_moved = true
+		_solo_deploy_ui_pos += mm.relative
+		_solo_deploy_panel_relayout()
 
 
 ## The HUMAN's army tray side: true when it stands on the -Z half (the side pick's reference).
@@ -2356,7 +2427,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 					"AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
 		_solo_log_hit_mod(mod_info, target, to_hit)
 		var shooter_name: String = member.get_name()
-		var faces: Array = await _solo_tray_roll(attacks, to_hit, "AI (%s)" % shooter_name)
+		var faces: Array = await _solo_tray_roll(attacks, to_hit, "AI (%s)" % shooter_name, "attack",
+			"Shooting: %s → %s (%d+)" % [str(profile.get("name", "?")), target.get_name(), to_hit])
 		if bool(profile.get("limited", false)):
 			solo_controller.mark_limited_used(member, profile)   # once per game — spent on the roll (wave 5)
 		await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
@@ -2514,7 +2586,8 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	var target_num := AiSpell.cast_target(boost, interference, base_target)
 	# THE CAST ROLL — one visible die on the real tray (no hidden RNG).
 	var roll_owner := str(cast.get("owner_label", "AI (%s)" % caster.get_name()))
-	var faces: Array = await _solo_tray_roll(1, target_num, roll_owner)
+	var faces: Array = await _solo_tray_roll(1, target_num, roll_owner, "attack",
+		"Casting %s (%d+)" % [spell_name, target_num])
 	var success: bool = not faces.is_empty() and DiceRules.is_success(int(faces[0]), target_num, 0)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: cast roll %d vs %d+ — %s" % [
@@ -3384,11 +3457,23 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 		# the flag's window is synchronous and has already closed by the time the dice are counted.
 		var models_in_target: int = 1 if bool(profile.get("takedown", false)) else _solo_combined_alive(target)
 		var boosted: int = AiCombatMath.blast_hits(hits, blast, models_in_target)
-		if boosted != hits and battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "Blast(%d): %d hit%s ×%d → %d hits" % [
-				blast, hits, ("" if hits == 1 else "s"), boosted / hits, boosted], true)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				blast_log_text(blast, hits, boosted, models_in_target), true)
 		hits = boosted
 	return hits
+
+
+## The Blast battle-log line — ALWAYS emitted (community #169): a capped ×1 blast used to
+## stay silent, which read as "full blast, cap missing". When the cap clamps the
+## multiplier below X, the line names the model count that did it. Static + pure for the
+## unit test; the uncapped format is byte-identical to the old line.
+static func blast_log_text(x: int, hits: int, boosted: int, models_in_target: int) -> String:
+	var mult: int = boosted / maxi(hits, 1)
+	var capped: String = "" if mult >= x else " (capped by %d model%s in target)" % [
+		models_in_target, ("" if models_in_target == 1 else "s")]
+	return "Blast(%d): %d hit%s ×%d%s → %d hits" % [
+		x, hits, ("" if hits == 1 else "s"), mult, capped, boosted]
 
 
 ## Rating X of a unit-level "Name(X)" special rule (0 if absent), e.g. Impact(3) / Fear(2) — the shared
@@ -4088,7 +4173,8 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			if not fatigued:
 				_solo_log_hit_mod(p_mod, strike_unit, to_hit)
 			var roll_owner: String = ("AI (%s)" % str(group.get("name", "?"))) if _solo_is_ai_unit(striker) else "You"
-			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, roll_owner)
+			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, roll_owner, "attack",
+				"Melee: %s → %s (%d+)" % [str(profile.get("name", "?")), defender.get_name(), to_hit])
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(striker, profile, faces)   # resolver wave A: natural 1s wound the striker
@@ -4165,11 +4251,16 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	var landed_on_defender := 0
 	if regenable + regen_proof > 0:
 		landed_on_defender = await _solo_land_wounds(defender, regenable, regen_proof)
-	# Retaliate(X) — wave 7 (official text: "When this model takes wounds in melee, the attacker
-	# takes X hits per wound taken."): reactive hits AFTER the wounds landed (post-Regeneration =
-	# wounds actually TAKEN), saved at the striker's Shielded-adjusted Defense, no AP (not a
-	# weapon), NON-chaining (retaliation wounds never trigger the striker's own Retaliate). The
-	# wounds credit the DEFENDER's melee tally via _solo_take_retaliate_credit (caller collects).
+	# Retaliate(X) — wave 7. Army-book glossary, verbatim (GF army books v3.5.2; NOT in the GF/AoF
+	# Advanced core rules): "Retaliate: When this model takes a wound in melee, the attacker takes
+	# X hits." The rx*wounds step below is the standard per-triggering-event READING of that text
+	# (each wound taken fires the trigger once), not a quote. Hits resolve AFTER the wounds landed
+	# (post-Regeneration = wounds actually TAKEN), saved at the striker's Shielded-adjusted Defense,
+	# no AP (not a weapon), NON-chaining (retaliation wounds never trigger the striker's own
+	# Retaliate). Wounds credit the DEFENDER's melee tally via _solo_take_retaliate_credit.
+	# KNOWN EDGE (own ticket): the gate is UNIT-level, so a MIXED unit (only some models carry
+	# Retaliate) over-triggers on wounds landed on non-carriers — per-model accounting is a
+	# follow-up wave; TC-043 deliberately tests an all-carrier unit where unit==model level.
 	if landed_on_defender > 0 and _solo_combined_alive(striker) > 0 \
 			and RulesRegistry.unit_rule_active(defender, "Retaliate"):
 		var rx: int = maxi(1, _solo_unit_rating(defender, "Retaliate"))
@@ -4309,7 +4400,9 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 		var p := pool as Dictionary
 		if int(p["dice"]) <= 0 or _solo_combined_alive(defender) <= 0:
 			continue
-		var faces: Array = await _solo_tray_roll(int(p["dice"]), AiCombatMath.IMPACT_HIT_TARGET, _solo_owner_label(charger))
+		var faces: Array = await _solo_tray_roll(int(p["dice"]), AiCombatMath.IMPACT_HIT_TARGET,
+			_solo_owner_label(charger), "attack",
+			"%s hits: %s → %s" % [str(p["label"]), charger.get_name(), defender.get_name()])
 		var hits: int = AiCombatMath.impact_hits(faces)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s(%d) rolls %d di%s → %d hit%s" % [
@@ -4444,7 +4537,8 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		save_faces = await _solo_prompt_saves(striker, defender, weapon_name, count, base_defense, ap)
 	else:
 		_solo_log_save_threshold(defender, base_defense, ap)
-		save_faces = await _solo_tray_roll(count, base_defense + ap, "AI (%s)" % defender.get_name(), "defense")
+		save_faces = await _solo_tray_roll(count, base_defense + ap, "AI (%s)" % defender.get_name(), "defense",
+			"Defense save vs %s" % weapon_name)
 	# Resolver wave A — Bloodthirsty Fighter reads the blocker's unmodified 1s of this batch (the
 	# melee strike loop resets the counter before its resolve and consumes it right after).
 	for sf in save_faces:
@@ -4458,7 +4552,8 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "Bane: %s re-rolls %d unmodified Defense 6%s" % [
 					defender.get_name(), sixes, ("" if sixes == 1 else "s")], true)
-			reroll = await _solo_tray_roll(sixes, base_defense + ap, _solo_owner_label(defender), "defense")
+			reroll = await _solo_tray_roll(sixes, base_defense + ap, _solo_owner_label(defender), "defense",
+				"Defense re-roll (Bane) vs %s" % weapon_name)
 		blocks = AiCombatMath.blocks_with_bane(save_faces, reroll, base_defense, ap)
 	else:
 		blocks = AiCombatMath.count_blocks(save_faces, base_defense, ap)
@@ -4536,7 +4631,8 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 	var regen_target: int = int(pick.get("target", 0))
 	if wounds <= 0 or regen_target <= 0:
 		return maxi(wounds, 0)
-	var faces: Array = await _solo_tray_roll(wounds, regen_target, _solo_owner_label(target))
+	var faces: Array = await _solo_tray_roll(wounds, regen_target, _solo_owner_label(target), "attack",
+		"Regeneration (%d+ ignores a wound)" % regen_target)
 	var ignored := 0
 	for f in faces:
 		if int(f) >= regen_target:
@@ -5035,7 +5131,8 @@ func _solo_owner_label(unit: GameUnit) -> String:
 func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 	if unit == null or dice_roller_control == null or model_count <= 0:
 		return
-	var faces: Array = await _solo_tray_roll(model_count, 6, "AI (%s)" % unit.get_name())
+	var faces: Array = await _solo_tray_roll(model_count, 6, "AI (%s)" % unit.get_name(), "attack",
+		"Dangerous terrain: %s (a 1 wounds)" % unit.get_name())
 	var wounds := 0
 	for f in faces:
 		if int(f) == 1:
@@ -5060,8 +5157,15 @@ func _solo_combined_alive(unit: GameUnit) -> int:
 
 ## One attributed roll in the real dice tray: set count + success target, roll, await, read the faces,
 ## then restore the player's previous tray settings.
-func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: String = "attack") -> Array:
+func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: String = "attack",
+		purpose: String = "") -> Array:
 	_next_roll_kind = roll_kind   # Bug 16: the dice-log line words saves as "defends … blocks"
+	# Community #170: the tray names WHAT is being rolled. High-value sites pass a specific
+	# purpose; the fallback synthesizes an honest generic one so no roll shows a bare tray.
+	if purpose.is_empty():
+		purpose = "%s rolls (%d+)" % [owner, success_target]
+	_next_roll_purpose = purpose
+	_set_roll_purpose(purpose)
 	# #162: any scripted tray roll (solo flow) commits the table — take-backs expire.
 	if undo_manager != null:
 		undo_manager.expire_move_takebacks()
@@ -5101,6 +5205,15 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 	return faces
 
 
+## Shows/hides the tray's roll-purpose label (community #170). The text stays up while the
+## dice lie there (the player reads result + reason together); the next roll replaces it,
+## the manual Roll button clears it.
+func _set_roll_purpose(text: String) -> void:
+	if roll_purpose_label != null:
+		roll_purpose_label.text = text
+		roll_purpose_label.visible = not text.is_empty()
+
+
 ## Save prompt (locked decision: prompt + auto-roll for speed): the human confirms and their save dice
 ## roll in the tray, attributed to "You". Returns the rolled faces.
 func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: String, hits: int, defense: int, ap: int) -> Array:
@@ -5121,7 +5234,8 @@ func _solo_prompt_saves(attacker: GameUnit, target: GameUnit, weapon_name: Strin
 	# The battle log states the MODIFIED threshold (GF v3.5.1 AP(X): "targets get -X to Defense rolls"),
 	# so the AP arithmetic is auditable after the fact (maintainer field-test finding).
 	_solo_log_save_threshold(target, defense, ap)
-	return await _solo_tray_roll(hits, defense + ap, "You", "defense")
+	return await _solo_tray_roll(hits, defense + ap, "You", "defense",
+		"Defense save vs %s" % weapon_name)
 
 
 ## The unit's summed sight+range fan (the same one F toggles) — shared by the F-toggle and the
@@ -5158,8 +5272,21 @@ func _solo_clear_auto_fan() -> void:
 func _solo_log_save_threshold(defender: GameUnit, defense: int, ap: int) -> void:
 	if battle_log == null:
 		return
-	var threshold: String = ("%d+ (Def %d+, AP %d)" % [defense + ap, defense, ap]) if ap > 0 else "%d+" % defense
-	battle_log.log_event(BattleLog.Category.COMBAT, "%s saves on %s" % [defender.get_name(), threshold], true)
+	battle_log.log_event(BattleLog.Category.COMBAT, "%s saves on %s" % [
+		defender.get_name(), save_threshold_text(defense, ap)], true)
+
+
+## The save-threshold text. A bare "7+" reads as impossible on a d6 (community #173) —
+## the engine lets a natural 6 always succeed (GF: a 6 always succeeds, a 1 always
+## fails), so past 6 the text says that instead of the raw sum. Static + pure for the
+## unit test; thresholds within 2..6 keep the old format byte-identical.
+static func save_threshold_text(defense: int, ap: int) -> String:
+	var target: int = defense + ap
+	if ap > 0 and target > 6:
+		return "6 only (Def %d+, AP %d — a natural 6 always saves)" % [defense, ap]
+	if ap > 0:
+		return "%d+ (Def %d+, AP %d)" % [target, defense, ap]
+	return "%d+" % defense
 
 
 # === AI-action presentation layer (goal 003 game-feel: announce → execute → resolve → outcome) ===
@@ -5325,7 +5452,11 @@ func _solo_present_move_start(move_paths: Array) -> void:
 		model.node.global_position = Vector3(start.x, model.node.global_position.y, start.z)
 
 
-func _solo_animate_move(move_paths: Array) -> void:
+## Visual replay of an executed AI move. `allow_snap=false` (pile-in / consolidation,
+## NML-208: mandatory melee moves must visibly glide — a teleport read as "nothing
+## happened") forces the glide even for sub-inch arcs; regular activation moves snap
+## into place when even the longest model arc stays under PACE_SNAP_MAX_IN (NML-224).
+func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 	# Entrenched-family bookkeeping: any executed move stamps the unit's moved_round (the
 	# stationary gate reads it; pile-in/consolidation count as moving per the rule's wording).
 	if opr_army_manager != null:
@@ -5360,6 +5491,10 @@ func _solo_animate_move(move_paths: Array) -> void:
 	# Distance-truth label: longest actual arc vs the granted budget, at that corridor's midpoint.
 	if not longest_path.is_empty() and solo_controller != null:
 		_solo_spawn_move_label(longest_path, longest_len, solo_controller.last_move_budget_in)
+	# Sub-inch repositioning (kiting micro-steps) SNAPS instead of gliding — a tiny step
+	# animated at pace speed reads as shuffling ("Sub-Zoll-Geschlurfe", NML-224). Corridors,
+	# distance label, attention beat and chalk commit all still run; only the crawl is skipped.
+	var snap: bool = SoloController.should_snap_move(longest_len, allow_snap)
 	# (d) Attention beat: corridors drawn, models poised at the start.
 	await _solo_pace_attention()
 	# (e) Glide the models ONE AT A TIME in the SEQUENTIAL FLOW ORDER (field-test round 6, finding 7):
@@ -5373,20 +5508,22 @@ func _solo_animate_move(move_paths: Array) -> void:
 			continue
 		var node := model.node
 		var y := node.global_position.y
-		var tw := node.create_tween()
+		var tw: Tween = null
 		var total := 0.0
-		for i in range(1, path.size()):
-			var a := path[i - 1] as Vector3
-			var b := path[i] as Vector3
-			var leg := Vector2(b.x - a.x, b.z - a.z).length()
-			if leg <= 0.0001:
-				continue
-			var dur := leg / speed
-			tw.tween_property(node, "global_position", Vector3(b.x, y, b.z), dur)
-			total += dur
+		if not snap:
+			tw = node.create_tween()
+			for i in range(1, path.size()):
+				var a := path[i - 1] as Vector3
+				var b := path[i] as Vector3
+				var leg := Vector2(b.x - a.x, b.z - a.z).length()
+				if leg <= 0.0001:
+					continue
+				var dur := leg / speed
+				tw.tween_property(node, "global_position", Vector3(b.x, y, b.z), dur)
+				total += dur
 		if total > 0.0:
 			await get_tree().create_timer(total).timeout
-		if tw.is_valid():
+		if tw != null and tw.is_valid():
 			tw.kill()
 		# Snap onto the exact final (the tween end) so state and visuals agree to the millimetre.
 		var fin := path.back() as Vector3
@@ -5711,7 +5848,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	# Silent-correct reads as broken: a multi-model defender with nothing to do says so in the log.
 	var pile_moves: Array = solo_controller.pile_in(target, unit)
 	if not pile_moves.is_empty():
-		await _solo_animate_move(pile_moves)
+		await _solo_animate_move(pile_moves, false)   # NML-208: pile-in always glides
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
 				"%s: %d model%s pile in up to 3\" (GF v3.5.1 p.9)" % [target.get_name(), pile_moves.size(), ("" if pile_moves.size() == 1 else "s")], true)
@@ -5840,7 +5977,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
 			"candidates": [], "chosen": "", "why": "mandatory separation", "data": {"back_in": 1.0}})
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s moves back 1\" (consolidation — GF v3.5.1 p.9)" % charger.get_name(), true)
-		await _solo_animate_move(solo_controller.last_move_paths)
+		await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang > 0:
 			await _run_ai_dangerous(charger, dang)
 		_solo_flush_dev()
@@ -5854,7 +5991,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s consolidates up to 3\" (enemy destroyed — GF v3.5.1 p.9)" % survivor.get_name(), true)
-			await _solo_animate_move(solo_controller.last_move_paths)
+			await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang2 > 0:
 			await _run_ai_dangerous(survivor, dang2)
 		_solo_flush_dev()
@@ -5978,7 +6115,8 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 		if spell_morale != 0 and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %+d to morale test rolls — %s passes on %d+" % [
 				", ".join(morale_notes), spell_morale, unit.get_name(), test_target], true)
-		var faces: Array = await _solo_tray_roll(1, test_target, owner)
+		var faces: Array = await _solo_tray_roll(1, test_target, owner, "attack",
+			"Morale test: %s (%d+)" % [unit.get_name(), test_target])
 		_solo_spend_once_kind(unit, ["morale"])   # NML-006: spent by this test
 		if faces.is_empty():
 			return
@@ -5988,7 +6126,8 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 	# DATA where the mechanics map carries it (RulesRegistry; constant fallback — byte-identical seam).
 	if result != AiCombatMath.Morale.PASSED and unit.has_special_rule("Fearless"):
 		var recover_target: int = int(RulesRegistry.unit_param(unit, "Fearless", "recover_target", AiCombatMath.FEARLESS_RECOVER_TARGET))
-		var reroll: Array = await _solo_tray_roll(1, recover_target, owner)
+		var reroll: Array = await _solo_tray_roll(1, recover_target, owner, "attack",
+			"Morale re-roll — Fearless (%d+)" % recover_target)
 		if not reroll.is_empty() and DiceRules.is_success(int(reroll[0]), recover_target, 0):
 			result = AiCombatMath.Morale.PASSED
 			if battle_log != null:
@@ -6005,7 +6144,8 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 	if result != AiCombatMath.Morale.PASSED and RulesRegistry.unit_rule_active(unit, "No Retreat"):
 		var wound_max: int = int(RulesRegistry.unit_param(unit, "No Retreat", "self_wound_max", AiCombatMath.NO_RETREAT_SELF_WOUND_MAX))
 		var dice_n: int = maxi(1, SoloController.wounds_to_destroy(unit))
-		var nr_faces: Array = await _solo_tray_roll(dice_n, wound_max + 1, owner)
+		var nr_faces: Array = await _solo_tray_roll(dice_n, wound_max + 1, owner, "attack",
+			"No Retreat self-wounds (1-%d = wound)" % wound_max)
 		var self_wounds: int = AiCombatMath.no_retreat_wounds(nr_faces, wound_max)
 		result = AiCombatMath.Morale.PASSED
 		if battle_log != null:
@@ -6585,7 +6725,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 		# mandatory 3" pile-in is automated and now GLIDES visibly (teleport read as "nothing happened").
 		var pile_moves: Array = solo_controller.pile_in(target, attacker)
 		if not pile_moves.is_empty():
-			await _solo_animate_move(pile_moves)
+			await _solo_animate_move(pile_moves, false)   # NML-208: pile-in always glides
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s: %d model%s pile in up to 3\" (GF v3.5.1 p.9)" % [target.get_name(), pile_moves.size(), ("" if pile_moves.size() == 1 else "s")], true)
@@ -6760,7 +6900,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
 					battle_log.log_event(BattleLog.Category.COMBAT, "Versatile Attack: %s at long range" % [
 						"AP(+1)" if int(vm.get("ap", 0)) > 0 else "+1 to hit"], true)
 			_solo_log_hit_mod(p_mod, target, to_hit)
-			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You")
+			var faces: Array = await _solo_tray_roll(int(profile.get("attacks", 0)), to_hit, "You", "attack",
+				"Shooting: %s → %s (%d+)" % [str(profile.get("name", "?")), target.get_name(), to_hit])
 			if bool(profile.get("limited", false)):
 				solo_controller.mark_limited_used(group.get("member"), profile)   # once per game (wave 5)
 			await _solo_hazardous_self_wounds(attacker, profile, faces)   # resolver wave A: natural 1s wound the firer
@@ -7628,12 +7769,16 @@ func _on_remote_sort_table() -> void:
 	object_manager.sort_table(false)
 
 
-## Advances the game round after confirmation.
+## Advances the game round after confirmation. The prompt names the round it moves
+## ONTO (community request, GitHub #161) — and in a solo match's final round it says
+## plainly that advancing ends the game.
 func _on_next_round() -> void:
+	var rnd: int = opr_army_manager.current_round if opr_army_manager != null else 1
+	var fin: bool = _solo_final_round_active()
 	_show_action_confirm(
-		"Next Round",
-		"Advance to the next round?\nAll activation tokens are cleared — no unit stays activated.",
-		"Next Round", _do_next_round)
+		next_round_button_label(rnd, fin),
+		next_round_confirm_body(rnd, fin),
+		next_round_button_label(rnd, fin), _do_next_round)
 
 
 ## Advances the game round (OPR bookkeeping; clears all activations), refreshes
@@ -7682,10 +7827,35 @@ func _refresh_round_visuals() -> void:
 	_update_round_button()
 
 
-## Updates the Next Round button to show the current round.
+## The Next Round button/confirm label names the round it moves ONTO ("Next Round → 3"
+## while Round 2 is played) — the old "(current)" suffix read as the round the button
+## opens (community confusion, GitHub #161). In a solo match's final round the same
+## control ends the game, so it says that instead. Static + pure for the unit test.
+static func next_round_button_label(current_round: int, final_round: bool) -> String:
+	if final_round:
+		return "End Round %d" % current_round
+	return "Next Round → %d" % (current_round + 1)
+
+
+## The confirm dialog body for the round advance (see next_round_button_label).
+static func next_round_confirm_body(current_round: int, final_round: bool) -> String:
+	if final_round:
+		return "End Round %d?\nThis is the final round — the game ends and the summary is shown." % current_round
+	return "Move on to Round %d?\nAll activation tokens are cleared — no unit stays activated." % (current_round + 1)
+
+
+## True while a SOLO match plays its FINAL round (advancing ends the game after
+## SOLO_GAME_ROUNDS) — sandbox/MP games have no round cap.
+func _solo_final_round_active() -> bool:
+	return _solo_alternation_active() and solo_controller != null \
+		and solo_controller.game_rounds > 0 and opr_army_manager != null \
+		and opr_army_manager.current_round >= solo_controller.game_rounds
+
+
+## Updates the Next Round button to name the round it moves ONTO (GitHub #161).
 func _update_round_button() -> void:
 	if next_round_btn and opr_army_manager:
-		next_round_btn.text = "Next Round (%d)" % opr_army_manager.current_round
+		next_round_btn.text = next_round_button_label(opr_army_manager.current_round, _solo_final_round_active())
 
 
 ## Toggle the left panel menu visibility with slide animation
@@ -7771,6 +7941,9 @@ func _on_drag_ended() -> void:
 
 ## Dice Roller Plugin handlers
 func _on_roll_button_pressed() -> void:
+	# A manual roll has no scripted purpose — clear any leftover label (community #170).
+	_next_roll_purpose = ""
+	_set_roll_purpose("")
 	_update_dice_set(_dice_count)
 	dice_roller_control.roll()
 
@@ -7828,6 +8001,7 @@ func _on_roller_finished(_total: int) -> void:
 
 	_pending_reroll_mode = DiceRules.REROLL_NONE
 	_pending_reroll_count = 0
+	_next_roll_purpose = ""   # consume-on-roll: a later manual roll must not inherit it
 
 
 ## Face values of a tray result in stable die order ("die_0".."die_N" keys).
@@ -7847,6 +8021,7 @@ func _current_roll_context() -> Dictionary:
 		DiceRules.CTX_MODIFIER: _success_modifier,
 		DiceRules.CTX_REROLL_MODE: _pending_reroll_mode,
 		DiceRules.CTX_REROLL_COUNT: _pending_reroll_count,
+		DiceRules.CTX_PURPOSE: _next_roll_purpose,
 	}
 
 
@@ -9506,6 +9681,8 @@ func _on_remote_dice_rolled(peer_id: int, results: Array, context: Dictionary, t
 	# Guard prevents roll_finnished from re-logging/re-broadcasting.
 	_is_showing_remote_roll = true
 	_remote_roll_context = context
+	# Mirror the sender's roll purpose onto this tray (community #170) — it rides the context.
+	_set_roll_purpose(str(context.get(DiceRules.CTX_PURPOSE, "")))
 	_pending_reroll_mode = DiceRules.REROLL_NONE
 	_pending_reroll_count = 0
 	# Mirror guard: _update_dice_set → dice_count setter must not re-broadcast composition.
