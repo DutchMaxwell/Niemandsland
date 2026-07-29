@@ -234,9 +234,11 @@ static func distance_to_polyline_m(p: Vector2, points: PackedVector2Array) -> fl
 
 ## Record one executed move: unit, model, polyline, measured arc length, round and
 ## timestamp. Returns the appended entry (the caller stamps entry["inches"] onto the
-## visible trail). `points` is duplicated — the entry owns its data.
+## visible trail). `points` is duplicated — the entry owns its data. `drop_id` is the
+## physical drop's identity (shared with the trail visuals + the MP messages) so a
+## take-back can erase exactly this drop's proof (#162).
 func record(owner: int, unit_key: String, unit_name: String, model_id: int,
-		points: PackedVector2Array, round_num: int) -> Dictionary:
+		points: PackedVector2Array, round_num: int, drop_id: int = -1) -> Dictionary:
 	var entry := {
 		"owner": owner,
 		"unit": unit_key,
@@ -246,9 +248,28 @@ func record(owner: int, unit_key: String, unit_name: String, model_id: int,
 		"inches": length_inches(points),
 		"round": round_num,
 		"ts_ms": Time.get_ticks_msec(),
+		"drop_id": drop_id,
 	}
 	entries.append(entry)
 	return entry
+
+
+## Take-back (#162): erase every entry of ONE physical drop — the proof must reflect
+## reality, an undone move never happened. If that drop is the owner's still-open
+## activation, the unit leaves the active set too (its trail window closes with it).
+func remove_drop(owner: int, unit_key: String, drop_id: int) -> void:
+	for i in range(entries.size() - 1, -1, -1):
+		var e := entries[i]
+		if int(e.get("owner", -1)) == owner and str(e.get("unit", "")) == unit_key \
+				and int(e.get("drop_id", -2)) == drop_id:
+			entries.remove_at(i)
+	var cur: Dictionary = _active.get(owner, {})
+	if not cur.is_empty() and int(cur.get("drop", -1)) == drop_id:
+		var units: PackedStringArray = cur.get("units", PackedStringArray())
+		var idx := units.find(unit_key)
+		if idx >= 0:
+			units.remove_at(idx)
+			cur["units"] = units
 
 
 ## All recorded entries for one unit (proof lookup / later receipt stages).

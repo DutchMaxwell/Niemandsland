@@ -91,6 +91,9 @@ const SORT_ANIM_RESTING_Y: float = 0.0  # Table surface height for all models
 
 # Drag distance tracking
 var _drag_start_positions: Dictionary = {}  # Object -> start position mapping
+# #162: pre-drag yaw per object — auto-face rewrites rotation.y on drop; the take-back
+# must restore the ORIGINAL facing.
+var _drag_start_rotations: Dictionary = {}
 var _hover_hint_obj: Node3D = null  # last emitted hover_changed target (dedupe)
 var _drag_anchor_position: Vector3 = Vector3.ZERO  # Primary drag anchor point
 var _drag_grab_world: Vector3 = Vector3.ZERO  # Cursor table position at grab (preserves grab offset)
@@ -1192,6 +1195,7 @@ func _start_dragging(screen_pos: Vector2) -> void:
 		_hover_hint_obj = null
 		hover_changed.emit(null)
 	_drag_start_positions.clear()
+	_drag_start_rotations.clear()
 
 	# Measure-on-pickup ghost (UX polish): capture the origin silhouettes BEFORE the lift,
 	# so the ghost shows the true pre-drag pose (what ESC returns to).
@@ -1202,6 +1206,7 @@ func _start_dragging(screen_pos: Vector2) -> void:
 	for obj in movable:
 		if is_instance_valid(obj):
 			_drag_start_positions[obj] = obj.global_position
+			_drag_start_rotations[obj] = obj.rotation.y
 			# For rigid bodies, make them kinematic while dragging
 			if obj is RigidBody3D:
 				obj.freeze = true
@@ -1312,6 +1317,9 @@ func _stop_dragging() -> void:
 		# collinear noise simplified — never re-routed), its measured arc length ("arc_in") and the
 		# base half-width ("radius_m") — main.gd commits these as visible trails + ledger entries.
 		var base_path: PackedVector2Array = MoveLedger.simplify(_drag_path_points)
+		# ONE drop identity for this physical drop (#162): shared by the trail commit, the
+		# ledger entries, the MP messages and the take-back, so an undo can find them all.
+		var drop_id: int = Time.get_ticks_msec()
 		var moves: Array = []
 		for obj in _selected_objects:
 			if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
@@ -1327,7 +1335,10 @@ func _stop_dragging() -> void:
 						MoveLedger.translated(base_path, offset), Vector2(end.x, end.z))
 				moves.append({"node": obj, "from": start, "to": end, "inches": inches,
 						"path": path, "arc_in": MoveLedger.length_inches(path),
-						"radius_m": _trail_radius_for(obj)})
+						"radius_m": _trail_radius_for(obj),
+						"drop_id": drop_id,
+						"from_raw": _drag_start_positions[obj],
+						"from_rot": float(_drag_start_rotations.get(obj, obj.rotation.y))})
 		# The live ribbons hand over to the committed trails (drawn by main's
 		# selection_dropped handler below, in the same frame).
 		if move_trails != null:
@@ -1342,6 +1353,7 @@ func _stop_dragging() -> void:
 	_move_broadcast_timer = 0.0
 	_coherency_update_timer = 0.0
 	_drag_start_positions.clear()
+	_drag_start_rotations.clear()
 	_drag_anchor_position = Vector3.ZERO
 	_drag_anchor_object = null
 	_drag_path_points = PackedVector2Array()
@@ -1604,6 +1616,7 @@ func _cancel_drag() -> void:
 	_move_broadcast_timer = 0.0
 	_coherency_update_timer = 0.0
 	_drag_start_positions.clear()
+	_drag_start_rotations.clear()
 	_drag_anchor_position = Vector3.ZERO
 	_drag_anchor_object = null
 	_drag_path_points = PackedVector2Array()
@@ -1705,6 +1718,11 @@ func _record_move_for_undo() -> void:
 	var moved: bool = false
 	for obj in _selected_objects:
 		if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
+			continue
+		# #162: trail-painting unit models get a MoveTakebackAction from main's
+		# selection_dropped handler instead (position + facing + chalk + ledger + log in
+		# ONE entry) — pushing a plain MoveAction too would make Ctrl+Z need two presses.
+		if _trail_radius_for(obj) > 0.0:
 			continue
 		var start_pos: Vector3 = _drag_start_positions[obj]
 		# Final resting height: static bodies settle on the ground surface beneath the
