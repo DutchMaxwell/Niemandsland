@@ -2673,7 +2673,7 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 		("" if models_before - _solo_combined_alive(target) == 1 else "s")])
 	# Hazardous (army-book rule: "this model's unit takes one wound on unmodified rolls of 1").
 	if trigger_ones > 0 and hazardous:
-		_solo_apply_wounds(caster_unit, trigger_ones)
+		await _solo_apply_wounds(caster_unit, trigger_ones)
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d trigger roll%s of 1 — %s takes %d wound%s" % [
 				spell_name, trigger_ones, ("" if trigger_ones == 1 else "s"), caster_unit.get_name(),
@@ -4730,7 +4730,7 @@ func _solo_morale_bonus(unit: GameUnit) -> int:
 func _solo_land_wounds(target: GameUnit, regenable: int, regen_proof: int, from_spell: bool = false) -> int:
 	var landed: int = maxi(regen_proof, 0) + await _solo_apply_regeneration(target, regenable, from_spell)
 	if landed > 0:
-		_solo_apply_wounds(target, landed)
+		await _solo_apply_wounds(target, landed)
 	return landed
 
 
@@ -5139,7 +5139,7 @@ func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 			wounds += 1
 	if wounds <= 0:
 		return
-	_solo_apply_wounds(unit, wounds)
+	await _solo_apply_wounds(unit, wounds)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s takes %d wound%s from dangerous terrain" % [
 			unit.get_name(), wounds, ("" if wounds == 1 else "s")], true)
@@ -6152,7 +6152,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s has No Retreat — the test counts as passed; %d self-wound%s (1-%d on %d dice, can't be ignored)" % [
 				unit.get_name(), self_wounds, ("" if self_wounds == 1 else "s"), wound_max, dice_n], true)
 		if self_wounds > 0:
-			_solo_apply_wounds(unit, self_wounds)
+			await _solo_apply_wounds(unit, self_wounds)
 	match result:
 		AiCombatMath.Morale.PASSED:
 			if battle_log != null:
@@ -6166,7 +6166,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 		AiCombatMath.Morale.ROUT:
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s fails morale at half strength — ROUTS" % unit.get_name())
-			_solo_apply_wounds(unit, unit.models.size() * 12)   # overkill wipes the unit via the normal flows
+			await _solo_apply_wounds(unit, unit.models.size() * 12)   # overkill wipes the unit via the normal flows
 
 
 # === Solo P8: the player's own attack flow (radial "Shoot"/"Fight" → targeting mode → tray dice) ===
@@ -7275,7 +7275,15 @@ func _solo_apply_wounds(target: GameUnit, wounds: int) -> void:
 			opr_army_manager.apply_regiment_wounds(reg, reg.wounds_taken + wounds)
 			return
 	var pid: int = int(target.unit_properties.get("player_id", 1))
-	var remaining := _solo_wound_models(target, wounds, pid)
+	var requested := wounds
+	# #172 (grilled): the OWNER allocates their own losses when the choice matters — LMB
+	# assigns one wound per click, RMB (or the strip button) auto-allocates the rest via
+	# the defender-optimal casualty order. Clicked picks are applied inside the prompt;
+	# what comes back is the auto-allocate remainder. The AI's own allocation is the
+	# UNCHANGED casualty_order (it already protects special weapons/heroes).
+	if _solo_wound_choice_matters(target, wounds):
+		wounds = await _solo_prompt_wound_allocation(target, wounds, pid)
+	var remaining := _solo_wound_models(target, wounds, pid) if wounds > 0 else 0
 	# A joined hero is part of the unit and takes wounds LAST (defender-optimal, field-test lock).
 	if remaining > 0 and target.has_method("get_attached_heroes"):
 		for h in target.get_attached_heroes():
@@ -7288,8 +7296,100 @@ func _solo_apply_wounds(target: GameUnit, wounds: int) -> void:
 		# (the old own-models total printed impossible "(4/3)" shapes once the hero soaked the spill).
 		# Log the wounds that actually LANDED, not the requested amount — the rout wipe passes an overkill
 		# figure and printed "takes 120 wounds" (Windows playtest bug 6); spill past the pool is no wound.
-		battle_log.on_wounds(target.get_name(), maxi(0, wounds - remaining), _solo_combined_alive(target), SoloController.combined_total(target))
+		battle_log.on_wounds(target.get_name(), maxi(0, requested - maxi(remaining, 0)), _solo_combined_alive(target), SoloController.combined_total(target))
 	_solo_hero_carries_on(target)
+
+
+## #172 — does the owner get an allocation choice? Grilled gates: interactive solo HUMAN
+## unit only (never the AI's, never batch/harness, never both-AI, never MP co-op where the
+## peer cannot drive the click), never a regiment pool (no per-model identity), never an
+## overkill wipe (no real choice) — and only when the choice can matter: a Tough model in
+## the joined chain, or mixed loadouts across the alive models.
+func _solo_wound_choice_matters(target: GameUnit, wounds: int) -> bool:
+	if _solo_batch or _solo_both_ai or _solo_is_ai_unit(target):
+		return false
+	if network_manager != null and network_manager.is_multiplayer_active():
+		return false
+	var chain: Array = _solo_joined_chain(target)
+	var alive := 0
+	var pool := 0
+	var has_tough := false
+	var loadouts := {}
+	for cu in chain:
+		var gu := cu as GameUnit
+		if gu == null:
+			continue
+		for m in gu.models:
+			var mi := m as ModelInstance
+			if mi == null or not mi.is_alive:
+				continue
+			alive += 1
+			pool += maxi(int(mi.wounds_current), 1)
+			if int(mi.wounds_max) > 1:
+				has_tough = true
+			loadouts[str(mi.properties.get("weapons", [])) + "|" + str(mi.properties.get("equipment", []))] = true
+	if alive <= 1 or wounds >= pool:
+		return false
+	return has_tough or loadouts.size() > 1
+
+
+## #172 — the owner clicks their wounds onto their own models: LMB on a model of the
+## joined chain = 1 wound there (applied immediately through the same visible seams as
+## the auto path), RMB or the strip button = auto-allocate the rest. Returns the count
+## left for the auto path (0 when every wound was clicked).
+func _solo_prompt_wound_allocation(target: GameUnit, wounds: int, pid: int) -> int:
+	var chain: Array = _solo_joined_chain(target)
+	_solo_model_pick = {"unit": target, "chain": chain, "recommended": {}, "outcome": []}
+	var outcome: Array = _solo_model_pick["outcome"]
+	var skipped: Array = []
+	var left := wounds
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"%s: allocate %d wound%s — CLICK a model per wound; right-click auto-allocates the rest" % [
+			target.get_name(), wounds, ("" if wounds == 1 else "s")], false)
+	_solo_deploy_ui_show(
+		"Allocate %d wound%s to %s — click a model per wound." % [wounds, ("" if wounds == 1 else "s"), target.get_name()],
+		"Auto-allocate the rest",
+		func() -> void: skipped.append(true))
+	while left > 0:
+		while outcome.is_empty() and skipped.is_empty() and not _solo_model_pick.is_empty():
+			await get_tree().process_frame
+		if not skipped.is_empty() or _solo_model_pick.is_empty():
+			break
+		var pick := outcome.pop_back() as Dictionary
+		var pu := pick.get("unit") as GameUnit
+		var idx := int(pick.get("index", -1))
+		if pu == null:
+			break   # RMB: the recommended pick is empty by design — auto-allocate the rest
+		if idx < 0 or idx >= pu.models.size():
+			continue
+		var mi: ModelInstance = pu.models[idx]
+		if mi == null or not mi.is_alive:
+			continue
+		left -= 1
+		_solo_apply_picked_wound(pu, mi, pid)
+		if left > 0:
+			_solo_deploy_ui_show(
+				"Allocate %d wound%s to %s — click a model per wound." % [left, ("" if left == 1 else "s"), target.get_name()],
+				"Auto-allocate the rest",
+				func() -> void: skipped.append(true))
+	_solo_deploy_ui_hide()
+	_solo_model_pick = {}
+	return left
+
+
+## #172 — apply ONE clicked wound through the SAME visible seams as the auto path: the
+## wound token + MP wound broadcast on a surviving Tough model, tray-parking + broadcast
+## on death (the allocation DECISION is host-local; the RESULT syncs as always).
+func _solo_apply_picked_wound(unit: GameUnit, mi: ModelInstance, pid: int) -> void:
+	var died := mi.apply_damage(1)
+	if died:
+		if mi.node != null and is_instance_valid(mi.node):
+			opr_army_manager.set_loose_model_dead(mi.node, pid, true, unit.unit_id)
+	elif radial_menu_controller != null:
+		radial_menu_controller._update_wound_marker(mi)
+	if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
+		network_manager.broadcast_model_wounds(mi)
 
 
 ## When a unit's own models are all dead but a joined hero survives, the hero carries the UNIT's
@@ -12536,7 +12636,7 @@ func _solo_hazardous_self_wounds(owner_unit: GameUnit, profile: Dictionary, face
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Hazardous: %s rolls %d unmodified 1%s to hit — takes %d wound%s" % [
 			owner_unit.get_name(), ones, ("" if ones == 1 else "s"), ones, ("" if ones == 1 else "s")], true)
-	_solo_apply_wounds(owner_unit, ones)
+	await _solo_apply_wounds(owner_unit, ones)
 
 
 ## Unwieldy (resolver wave A — "strikes last when charging"): any chain member carrying the rule
@@ -12612,7 +12712,7 @@ func _solo_self_destruct_post_melee(unit: GameUnit, enemy: GameUnit) -> void:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s: %s detonates after the melee — destroyed; %s takes %d hit%s" % [
 					n, member.get_name(), enemy.get_name(), hits, ("" if hits == 1 else "s")], true)
-			_solo_apply_wounds(member, 9999)   # "it is immediately killed" — all surviving carriers
+			await _solo_apply_wounds(member, 9999)   # "it is immediately killed" — all surviving carriers
 			if _solo_combined_alive(enemy) > 0:
 				var sprofile: Dictionary = {"name": n, "ap": 0, "deadly": 0, "rules": []}
 				var sw: int = await _solo_resolve_saves(member, enemy, n, [], hits,
