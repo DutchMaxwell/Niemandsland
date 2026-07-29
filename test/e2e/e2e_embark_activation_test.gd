@@ -79,6 +79,34 @@ func test_no_disembark_in_the_same_round(timeout := 120000) -> void:
 	assert_str(_log_text()).contains("has already activated this round")
 
 
+func test_disembark_keeps_the_shot_window(timeout := 120000) -> void:
+	# #209 correction (maintainer rules check): exiting is "any move action" (p.15) and an
+	# ADVANCE may shoot after moving (p.7) — the exit must NOT consume the activation.
+	_solo_playing_on()
+	var tc := _truck_and_cargo()
+	_main.opr_army_manager.set_unit_embarked(tc[1], tc[0], true)
+	_main.radial_menu_controller._disembark_unit(tc[1])
+	assert_object(_main.opr_army_manager.transport_of(tc[1])).is_null()
+	assert_bool((tc[1] as GameUnit).is_activated) \
+		.override_failure_message("#209 — the Advance exit consumed the activation: the unit lost its rulebook shot window (GF v3.5.1 p.7)") \
+		.is_false()
+	assert_str(_log_text()).contains("may still shoot this activation")
+
+
+func test_no_reembark_in_the_exit_round(timeout := 120000) -> void:
+	# p.15: "can't both embark/disembark as part of the same activation" — the open shot
+	# window must not reopen the transport door.
+	_solo_playing_on()
+	var tc := _truck_and_cargo()
+	_main.opr_army_manager.set_unit_embarked(tc[1], tc[0], true)
+	_main.radial_menu_controller._disembark_unit(tc[1])
+	_main.radial_menu_controller._embark_unit({"game_unit": tc[1], "embark_target": tc[0]})
+	assert_object(_main.opr_army_manager.transport_of(tc[1])) \
+		.override_failure_message("#209 — the unit hopped back IN during its exit round") \
+		.is_null()
+	assert_str(_log_text()).contains("can't embark again")
+
+
 func test_sandbox_embark_stays_free(timeout := 120000) -> void:
 	# No solo game engaged: the sandbox consumes nothing (like dice and rulers).
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
