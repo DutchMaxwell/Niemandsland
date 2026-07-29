@@ -163,6 +163,25 @@ func is_dock_open() -> bool:
 	return _dock_open
 
 
+## #159 — pixels from the screen bottom the dock currently occupies (tab + open strip
+## band, or the presented card above the tab). The deployment box's auto-avoid reads
+## this so its DEFAULT spot never covers the cards; occupied_changed fires on every
+## open/close/present so the box re-places live.
+signal occupied_changed
+
+func occupied_height() -> float:
+	var h: float = float(TAB_H)
+	if _dock_open:
+		h += _strip_h + GAP_ABOVE_TAB
+	elif _presented != null and _presented.visible:
+		h += _presented.size.y + GAP_ABOVE_TAB
+	return h
+
+
+func _emit_occupied() -> void:
+	occupied_changed.emit()
+
+
 func get_presented_unit() -> GameUnit:
 	return _presented_unit if (_presented != null and _presented.visible) else null
 
@@ -204,6 +223,7 @@ func _toggle_dock() -> void:
 		_presented.visible = false
 	elif _presented_unit != null:
 		_animate_card_in()
+	_emit_occupied()
 
 
 # === Compact strip cards ===
@@ -671,6 +691,7 @@ func _animate_card_in() -> void:
 	_presented.visible = true
 	_presented.snap_to(rest + Vector2(40, 240), 7.0, 1.0)
 	_presented.spring_to(rest, 0.0, 1.0)
+	_emit_occupied()
 	UiFeedback.play_card_deal()   # D5: soft deal-in cue (chips already sound via the global button hook)
 
 
@@ -681,7 +702,8 @@ func _animate_card_out() -> void:
 	var t := get_tree().create_timer(0.22)
 	t.timeout.connect(func() -> void:
 		if _presented != null and _presented_unit == null:
-			_presented.visible = false)
+			_presented.visible = false
+			_emit_occupied())
 
 
 # === Card actions (⑤⑥⑦⑧) ===

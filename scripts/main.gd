@@ -1795,6 +1795,8 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 		panel.grow_vertical = Control.GROW_DIRECTION_END
 		panel.gui_input.connect(_solo_deploy_ui_drag)
 		get_viewport().size_changed.connect(_solo_deploy_panel_relayout)
+		if unit_dock != null and unit_dock.has_signal("occupied_changed"):
+			unit_dock.occupied_changed.connect(_solo_deploy_panel_relayout)
 		_solo_deploy_ui_panel = panel
 		_solo_deploy_ui.add_child(panel)
 		var margin := MarginContainer.new()
@@ -1880,7 +1882,13 @@ func _solo_deploy_panel_relayout() -> void:
 	var vp: Vector2 = get_viewport().get_visible_rect().size
 	var sz: Vector2 = _solo_deploy_ui_panel.size
 	if not _solo_deploy_ui_moved:
-		_solo_deploy_ui_pos = Vector2((vp.x - sz.x) * 0.5, vp.y - sz.y - 54.0)
+		# #159 auto-avoid: the default spot clears whatever the unit dock currently
+		# occupies (tab / open card fan / presented card) — the box must never cover
+		# the cards. A player-dragged spot still wins unconditionally.
+		var dock_clear: float = 54.0
+		if unit_dock != null and unit_dock.has_method("occupied_height"):
+			dock_clear = maxf(dock_clear, float(unit_dock.occupied_height()) + 14.0)
+		_solo_deploy_ui_pos = Vector2((vp.x - sz.x) * 0.5, vp.y - sz.y - dock_clear)
 	_solo_deploy_ui_pos = _solo_deploy_ui_pos.clamp(Vector2.ZERO, (vp - sz).max(Vector2.ZERO))
 	_solo_deploy_ui_panel.position = _solo_deploy_ui_pos
 

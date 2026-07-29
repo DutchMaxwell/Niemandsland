@@ -70,3 +70,19 @@ func test_deploy_box_clamps_to_the_screen() -> void:
 	_drag(-99999.0, -99999.0)
 	assert_float(panel.position.x).is_equal_approx(0.0, 0.5)
 	assert_float(panel.position.y).is_equal_approx(0.0, 0.5)
+
+
+func test_default_spot_clears_the_open_unit_dock() -> void:
+	# #159 follow-up (maintainer screenshots): the DEFAULT spot must sit ABOVE whatever
+	# the unit dock occupies — never on the presented card or inside the open card fan.
+	_main.unit_dock._toggle_dock()   # open the fan
+	await _runner.simulate_frames(2)
+	_main._solo_deploy_ui_show("Deploy a unit", "OK", Callable())
+	await _runner.simulate_frames(2)
+	var panel: PanelContainer = _main._solo_deploy_ui_panel
+	var vp: Vector2 = _main.get_viewport().get_visible_rect().size
+	var occupied: float = float(_main.unit_dock.occupied_height())
+	assert_float(panel.position.y + panel.size.y).is_less_equal(vp.y - occupied)
+	_main.unit_dock._toggle_dock()   # close again — the default drops back down (live signal)
+	await _runner.simulate_frames(12)
+	assert_float(panel.position.y + panel.size.y).is_greater(vp.y - occupied)
