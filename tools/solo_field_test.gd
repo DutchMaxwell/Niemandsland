@@ -8,7 +8,13 @@ extends SceneTree
 ## in-game path resolves the identical modules on the visual dice tray with the human rolling saves, which is
 ## interactive and cannot run headless).
 ##
-## Run: godot --headless -s res://tools/solo_field_test.gd -- <army_list.json> [seed]
+## Run: godot --headless -s res://tools/solo_field_test.gd -- <army_list.json> [seed] [mode]
+## Modes: objectives (default) · melee · autogame · denial
+##   denial (TC-019): autogame with the NACHTMAHR grade set (the probe otherwise runs
+##   ungraded and the round planner — and with it objective denial — is structurally
+##   unreachable) and ONE marker near the human edge: the scripted human walks onto it
+##   and HOLDS it, so in the last two rounds DENY is unambiguously the right play. The
+##   run prints every plan line and a final "DENIAL PROVOKED" verdict.
 
 const IN2M := 0.0254
 const ARCH_NAMES: Array[String] = ["MELEE", "SHOOTING", "HYBRID"]
@@ -30,7 +36,8 @@ func _run() -> void:
 		return
 	var mode := str(args[2]) if args.size() > 2 else "objectives"
 	var close := mode == "melee"
-	var autogame := mode == "autogame"
+	var denial := mode == "denial"
+	var autogame := mode == "autogame" or denial
 	var data: Dictionary = JSON.parse_string(FileAccess.open(list_path, FileAccess.READ).get_as_text())
 	var specs := _parse_units(data)
 	print("=== SOLO-AI FIELD TEST — %s (%d units/side, seed %d, mode=%s) ===" % [str(data.get("name", "army")), specs.size(), seed_value, mode])
@@ -51,7 +58,10 @@ func _run() -> void:
 	root.add_child(solo)
 	solo.setup(army, null, null, 1, 2)
 	solo._rng.seed = seed_value   # seed the D6-section unit pick so a trace is reproducible per seed
-	var objectives: Array = [] if close else [Vector3(-0.2, 0.0, 0.0), Vector3(0.2, 0.0, 0.0)]
+	# Denial provocation: ONE marker on the human half — the scripted human parks on it, and
+	# from R3 the enemy-held marker is the AI's only worthwhile trip (nothing free competes).
+	var objectives: Array = [] if close else ([Vector3(0.0, 0.0, -0.2)] if denial \
+		else [Vector3(-0.2, 0.0, 0.0), Vector3(0.2, 0.0, 0.0)])
 	var owners: Array = []
 	for _o in objectives:
 		owners.append(0)
@@ -59,15 +69,26 @@ func _run() -> void:
 	solo.objective_owner_of = func(i: int) -> int: return int(owners[i]) if i < owners.size() else 0
 	solo.terrain_type_at = Callable(self, "_terrain_at")
 	solo.los_checker = func(_a: Vector3, _b: Vector3) -> bool: return true
+	# Round awareness — mirrors main.gd's wiring. Without it the round planner solves ONCE
+	# for "round 0" and serves that stale plan the whole match (found by the first TC-019
+	# denial run: one plan record, "plan R0", denial never re-evaluated late-game).
+	solo.round_provider = func() -> int: return army.current_round
+	solo.game_rounds = AUTOGAME_ROUNDS
 	# One midfield wall so a loose unit's straight rush is blocked → MovementPlanner steers around it.
-	var walls: Array = [[Vector2(-0.12, 0.16), Vector2(0.12, 0.16)]]
+	# The denial provocation drops it: it sits exactly on the deny route, and TC-019 isolates the
+	# DENIAL branch, not pathfinding (the detour shortfall is NML-220's planner-vs-execution gap).
+	var walls: Array = [] if denial else [[Vector2(-0.12, 0.16), Vector2(0.12, 0.16)]]
 	solo.walls_provider = func() -> Array: return walls
 
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
 
+	if denial:
+		# TC-019: grade the AI like the live game does — without set_difficulty the round
+		# planner is bypassed (active_difficulty()==null) and denial can never fire here.
+		solo.set_difficulty(2, SoloDifficulty.for_grade("nachtmahr"))
 	if autogame:
-		_run_autogame(solo, army, human, ai, objectives, owners, rng)
+		_run_autogame(solo, army, human, ai, objectives, owners, rng, denial)
 		return
 
 	for round_no in range(1, 4):
@@ -102,7 +123,8 @@ const AUTOGAME_ROUNDS := 4   # == main.gd SOLO_GAME_ROUNDS (OPR standard match l
 
 
 func _run_autogame(solo: SoloController, army: OPRArmyManager, human: Array, ai: Array,
-		objectives: Array, owners: Array, rng: RandomNumberGenerator) -> void:
+		objectives: Array, owners: Array, rng: RandomNumberGenerator, denial: bool = false) -> void:
+	var plan_lines: Array = []
 	for round_no in range(1, AUTOGAME_ROUNDS + 1):
 		army.current_round = round_no
 		var ai_opens: bool = round_no % 2 == 0   # OPR: the opening side alternates (AI opens even rounds)
@@ -116,6 +138,14 @@ func _run_autogame(solo: SoloController, army: OPRArmyManager, human: Array, ai:
 			var a := _autogame_ai_step(solo, rng)
 			if h == null and a == null:
 				break   # both sides exhausted — the round is over
+		# Denial mode: surface the planner's reasoning — the plan line is the TC-019 evidence
+		# ("DENY marker N" = the denial branch chose an enemy-held target).
+		if denial:
+			for rec in solo.drain_decisions():
+				if str((rec as Dictionary).get("kind", "")) == "plan":
+					var line := str((rec as Dictionary).get("chosen", ""))
+					plan_lines.append(line)
+					print("  [plan] %s" % line)
 		# Round end: the SAME pure seize main.gd runs, against the real model positions.
 		var infos: Array = []
 		for u in (human + ai):
@@ -149,6 +179,13 @@ func _run_autogame(solo: SoloController, army: OPRArmyManager, human: Array, ai:
 	print("\n=== GAME OVER — %d rounds played ===" % AUTOGAME_ROUNDS)
 	print("Objectives — you: %d · AI: %d · neutral: %d" % [human_held, ai_held, neutral])
 	print(verdict)
+	if denial:
+		var denied := false
+		for l in plan_lines:
+			if str(l).contains("DENY marker"):
+				denied = true
+		print("DENIAL PROVOKED: %s" % ("YES — a plan line committed a DENY trip" if denied \
+			else "NO — no DENY plan line in %d plan records" % plan_lines.size()))
 	quit(0)
 
 

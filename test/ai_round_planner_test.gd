@@ -93,6 +93,25 @@ func test_enemy_held_denial_is_late_game_only() -> void:
 	assert_str(str((free["tasks"]["Gunner"] as Dictionary).get("kind"))).is_equal("fight")   # empty marker always pays
 
 
+func test_denial_is_tagged_deny_in_task_and_plan_line() -> void:
+	# TC-019 visibility (rules-must-log): the plan line used to be byte-identical for a free-marker
+	# trip and an enemy-held denial trip — denial could fire without ever being SEEN. The task now
+	# carries deny=true and the line reads "DENY marker N" for enemy-held targets ONLY.
+	var late := AiRoundPlanner.solve({
+		"units": [_u("Gunner", 0, 12.0, 2.0)],
+		"markers": [_m(0, 24, 1)],
+		"rounds_left": 2, "current_round": 3})
+	assert_bool(bool((late["tasks"]["Gunner"] as Dictionary).get("deny", false))).is_true()
+	assert_str(str(late["log"])).contains("DENY marker 0")
+	var free := AiRoundPlanner.solve({
+		"units": [_u("Idle", 6, 12.0, 0.0)],
+		"markers": [_m(0, 12)],
+		"rounds_left": 4, "current_round": 1})
+	assert_str(str((free["tasks"]["Idle"] as Dictionary).get("kind"))).is_equal("seize")
+	assert_bool(bool((free["tasks"]["Idle"] as Dictionary).get("deny", true))).is_false()
+	assert_str(str(free["log"])).not_contains("DENY")
+
+
 func test_rich_shooter_keeps_fighting_when_a_cheap_runner_exists() -> void:
 	# Both can reach; the shooter's volley (EV 6) makes the trip a bad trade — the idle unit runs.
 	var sol := AiRoundPlanner.solve({

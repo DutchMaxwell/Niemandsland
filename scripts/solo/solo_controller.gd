@@ -331,6 +331,11 @@ func is_eligible(unit) -> bool:
 	# (the AI activated a not-yet-arrived unit); arrival then read as if it had already spent its turn.
 	if unit_in_reserve(u):
 		return false
+	# Embarked cargo is parked off-table inside its transport (S1.5, community #160): it can
+	# never be activated and must not count toward the round-over check — otherwise the
+	# alternation would wait forever for a phantom activation.
+	if army_manager != null and army_manager.transport_of(u) != null:
+		return false
 	return not (u.has_method("is_attached") and u.is_attached())
 
 
@@ -641,7 +646,15 @@ func best_shoot_target_now(ai_unit: GameUnit) -> GameUnit:
 	return best
 
 
+## True when the LAST nearest_human_unit pick walked past a strictly nearer enemy because
+## that enemy had already acted (the official not-activated-first key, Solo v3.5.0 p.2).
+## Community #164: this is the by-the-book choice that READS irrational without a reason —
+## the battle log tags exactly these picks. Transient: valid right after the call.
+var last_target_passed_activated: bool = false
+
+
 func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
+	last_target_passed_activated = false
 	if army_manager == null:
 		return null
 	var from := unit_centre(ai_unit)
@@ -707,6 +720,15 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 			# ARENA: the difficulty knobs shape which of the (equally legal) tied targets is taken.
 			chosen = _difficulty_target_pick(ai_unit, tied, diff)
 			why = "ev tie-break (%s)" % diff.grade_name
+	# The official key can walk PAST a nearer enemy that has already acted — the surprising
+	# case the battle log must explain (community #164). Exact test: the chosen target has
+	# not acted yet AND a strictly nearer band exists — that nearer candidate must have been
+	# activated, else it would have won the key itself.
+	if not bool(chosen["activated"]):
+		for c in cands:
+			if int((c as Dictionary)["band"]) < int(chosen["band"]):
+				last_target_passed_activated = true
+				break
 	var rec_cands: Array = []
 	for t in tied:
 		var td := t as Dictionary
@@ -719,7 +741,8 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 	record_decision({"kind": "target", "unit": ai_unit.get_name(),
 		"rule": "Solo v3.5.0 p.2: nearest valid target, not-activated first",
 		"candidates": rec_cands, "chosen": (chosen["unit"] as GameUnit).get_name(), "why": why,
-		"data": {"considered": cands.size(), "dist_in": float(chosen["d"])}})
+		"data": {"considered": cands.size(), "dist_in": float(chosen["d"]),
+			"passed_nearer_activated": last_target_passed_activated}})
 	return chosen["unit"] as GameUnit
 
 
@@ -838,11 +861,17 @@ func _act(unit: GameUnit) -> Dictionary:
 	var target_unit := nearest_human_unit(unit)
 	if target_unit == null:
 		return report
+	# Capture the passed-a-nearer-enemy flag BEFORE _commander_apply may re-query targets and
+	# clobber the transient member (community #164 narration).
+	var base_target := target_unit
+	var acts_soon := last_target_passed_activated
 	# COMMANDER (Stage 3, Part B): a graded standing order. For a close-and-fight role it PERSISTS the target
 	# across rounds so the unit keeps closing on ONE enemy instead of re-chasing the momentary nearest (the
 	# idle monster). Returns the default target unchanged for the null-AI / non-driven roles (byte-identical).
 	target_unit = _commander_apply(unit, target_unit)
 	report["target"] = target_unit
+	# A commander-persisted target is a different reason — it must not inherit the stale tag.
+	report["target_acts_soon"] = acts_soon and target_unit == base_target
 	var weapons := _unit_weapons(unit)
 	var bands: Dictionary = move_bands_for_unit(unit, movement_range)
 	var advance := float(bands.get("advance", 6))
@@ -4822,6 +4851,17 @@ static func counter_models_of(unit: GameUnit) -> int:
 ## Append one structured decision record (see decision_log). Ring-buffered: the oldest record is
 ## dropped past DECISION_LOG_CAP, so an undrained buffer stays bounded in long games. A configured
 ## decision_sink sees every record first (lossless — the harness capture is not subject to eviction).
+## Idempotent round-plan primer (community #163): builds — or returns the cached — whole-
+## army round plan so the async drivers pay the round-start compute on its OWN frame
+## instead of compounding it onto the first unit's activation burst. The plan is cached
+## per (round, slot) and its inputs (unit positions, objective ownership) do not change
+## between round start and the first activation, so priming early yields the identical
+## plan the first activation would have built lazily. No-op without a graded difficulty.
+func prime_round_plan() -> void:
+	if active_difficulty() != null:
+		_plan_for_round()
+
+
 func record_decision(rec: Dictionary) -> void:
 	if decision_sink.is_valid():
 		decision_sink.call(rec)
@@ -5274,6 +5314,7 @@ const PACE_ANNOUNCE_S := 1.0            # attribution hold before anything happe
 const PACE_OUTCOME_S := 1.8             # result summary hold after a combat resolves
 const PACE_DICE_SETTLE_BUFFER_S := 0.6  # extra beat after the tray reports physical rest
 const PACE_MOVE_SPEED_M_S := 0.20       # animated model speed (~8"/s — readable, not sluggish)
+const PACE_SNAP_MAX_IN := 1.0           # sub-inch repositioning snaps into place instead of gliding
 const PACE_TRAIL_FADE_S := 2.0          # movement trail ribbons fade out over this long
 const PACE_FAST_SCALE := 0.15           # fast-forward multiplier on every fixed hold
 ## Activation-choreography attention beat (maintainer's explicit staging, field-test finding 7): the fixed
@@ -5308,6 +5349,15 @@ static func pace_seconds(phase: int, fast: bool) -> float:
 ## attacks. Static + pure so the staging is unit-testable and the Fast-AI compression is provable.
 static func pace_attention_seconds(fast: bool) -> float:
 	return PACE_ATTENTION_S * (PACE_FAST_SCALE if fast else 1.0)
+
+
+## Sub-inch kite steps SNAP into place instead of glide-animating (NML-224, visual only —
+## the decision logic is untouched): true when even the LONGEST model arc of the move stays
+## under PACE_SNAP_MAX_IN. Callers whose moves must stay visibly animated regardless of
+## distance — pile-in and consolidation, where a teleport read as "nothing happened"
+## (NML-208) — pass allow_snap=false. Static + pure so the threshold is unit-testable.
+static func should_snap_move(longest_arc_m: float, allow_snap: bool) -> bool:
+	return allow_snap and longest_arc_m < PACE_SNAP_MAX_IN * INCHES_TO_METERS
 
 
 ## The per-model ROUTE-START positions from a published last_move_paths list (each entry {model, path,
@@ -5981,7 +6031,9 @@ func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, bloc
 		# Infiltrate (Bug 26) "counts as having Ambush" → same reserve/round-2 arrival as Ambush, only its
 		# arrival ring is 3" not 9" (handled per-unit at arrival via _reserve_min_enemy_dist_m).
 		# B12: item-granted Ambush/Scout count too (has_special_rule alone missed upgrade grants).
-		var is_ambush: bool = unit_has_ambush(u)
+		# S1.5 (community #160): embarked cargo is never independently set aside — it rides
+		# its transport's reserve and arrives inside it.
+		var is_ambush: bool = unit_has_ambush(u) and army_manager.transport_of(u) == null
 		flags.append({"id": i, "scout": unit_has_scout(u), "ambush": is_ambush})
 		if is_ambush:
 			u.unit_properties["ambush_reserve"] = true   # held off-table → not activatable until it arrives
@@ -6785,6 +6837,8 @@ func set_aside_human_ambush() -> Array:
 			continue
 		if gu.has_method("is_attached") and gu.is_attached():
 			continue
+		if army_manager.transport_of(gu) != null:
+			continue   # S1.5 (community #160): embarked cargo rides its transport's reserve
 		if unit_has_ambush(gu):
 			gu.unit_properties["ambush_reserve"] = true
 			out.append(gu)

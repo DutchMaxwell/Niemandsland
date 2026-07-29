@@ -3,7 +3,7 @@ extends Node3D
 ## "Path painting" P2 — visible chalk trails: the model IS the brush. While a player
 ## drags, the traversed path paints itself BEHIND the model as a ribbon exactly as wide
 ## as the base (outer edge = the binding geometry rule); on drop the trail commits with
-## a subtle inch stamp of the measured arc. Committed trails persist until the END OF
+## a readable inch stamp of the measured arc. Committed trails persist until the END OF
 ## THE UNIT'S ACTIVATION (MoveLedger.note_commit / note_activation_done / round advance),
 ## then fade. Clicking a trail surfaces its proof ("Unit — X.X\" moved").
 ##
@@ -41,6 +41,9 @@ const EDGE_ALPHA := 0.7
 const FADE_S := 1.2
 const ROUND_FADE_S := 0.6
 const PROOF_S := 2.5
+## The inch stamp holds full-alpha this long after the ribbon starts fading, so the
+## measured number stays readable a beat past the trail (NML-234).
+const STAMP_DWELL_S := 0.8
 
 ## Extra pick margin (metres) past the ribbon's half-width for the click-proof.
 const PROOF_PICK_MARGIN_M := 0.01
@@ -76,10 +79,12 @@ var _deployment_active: bool = false
 
 
 func _ready() -> void:
-	# Load the persisted preference (default on). GraphicsSettings is an always-present
-	# autoload; guarded so headless/test contexts without it still work.
-	if Engine.has_singleton("GraphicsSettings") or get_node_or_null("/root/GraphicsSettings") != null:
-		user_show_trails = bool(GraphicsSettings.show_move_trails)
+	# Load the persisted preference (default on). Dynamic autoload access: guarded for
+	# headless/test contexts AND compilable from standalone QA tools (-s scripts run
+	# without the autoload table, where the bare identifier would not resolve).
+	var gs := get_node_or_null("/root/GraphicsSettings")
+	if gs != null:
+		user_show_trails = bool(gs.show_move_trails)
 	_apply_visibility()
 
 
@@ -100,9 +105,10 @@ func _apply_visibility() -> void:
 ## through to GraphicsSettings so it sticks across sessions, and re-applies visibility.
 func set_user_show_trails(on: bool) -> void:
 	user_show_trails = on
-	if get_node_or_null("/root/GraphicsSettings") != null:
-		GraphicsSettings.show_move_trails = on
-		GraphicsSettings.save_settings()
+	var gs := get_node_or_null("/root/GraphicsSettings")
+	if gs != null:
+		gs.show_move_trails = on
+		gs.save_settings()
 	_apply_visibility()
 
 
@@ -185,7 +191,9 @@ func commit_trail(owner: int, unit_key: String, unit_name: String, model_id: int
 	_rebuild_ribbon(mesh, points, radius_m, fill, edge)
 	var label := _acquire_label()
 	label.text = "%.1f\"" % float(entry["inches"])
-	label.modulate = Color(chalk.r, chalk.g, chalk.b, 0.9)
+	# White fill + the label's thick black outline reads on any table; ownership stays
+	# legible from the owner-tinted ribbon underneath (NML-234).
+	label.modulate = Color(1, 1, 1, 1)
 	var mid := points[points.size() >> 1]
 	label.global_position = Vector3(mid.x, TRAIL_STAMP_Y_M, mid.y)
 	_trails.append({
@@ -273,7 +281,6 @@ func try_proof_at(world_pos: Vector3) -> bool:
 	# Transient proof label above the click point (allocated, not pooled — user-paced).
 	var chalk := _chalk_color(int(best["owner"]))
 	var label := _make_label()
-	label.pixel_size = 0.0007
 	label.text = "%s — %.1f\" moved" % [str(best["name"]), float(best["inches"])]
 	label.modulate = Color(chalk.r, chalk.g, chalk.b, 1.0)
 	add_child(label)
@@ -401,7 +408,7 @@ func _acquire_label() -> Label3D:
 	else:
 		label = _label_pool.pop_back()
 		label.visible = true
-	label.pixel_size = 0.0004
+	label.pixel_size = 0.0009
 	label.modulate = Color(1, 1, 1, 1)
 	return label
 
@@ -416,13 +423,18 @@ func _release_label(label: Label3D) -> void:
 		label.queue_free()
 
 
-## A fresh billboard label in the trail style (subtle inch stamp / proof text).
+## A fresh billboard label in the trail style (inch stamp / proof text). Sized and
+## stroked like the other measurement labels (pinned ruler / separation visualizer):
+## thick explicit black outline and a render priority above the ground-stain decals.
 func _make_label() -> Label3D:
 	var label := Label3D.new()
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true
-	label.pixel_size = 0.0004
-	label.outline_size = 8
+	label.pixel_size = 0.0009
+	label.font_size = 24
+	label.outline_size = 12
+	label.outline_modulate = Color.BLACK
+	label.render_priority = 21
 	return label
 
 
@@ -448,7 +460,8 @@ func _fade_record(rec: Dictionary, duration: float) -> void:
 	tw.set_parallel(true)
 	tw.tween_property(mat, "albedo_color:a", 0.0, duration)
 	if is_instance_valid(label):
-		tw.tween_property(label, "modulate:a", 0.0, duration)
+		# The stamp dwells at full alpha while the ribbon fades, then fades itself.
+		tw.tween_property(label, "modulate:a", 0.0, duration).set_delay(STAMP_DWELL_S)
 	tw.set_parallel(false)
 	tw.tween_callback(_drop_record.bind(rec))
 	rec["fade"] = tw
