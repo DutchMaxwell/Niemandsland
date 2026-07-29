@@ -41,6 +41,9 @@ const CTX_TARGET := "target"
 const CTX_MODIFIER := "modifier"
 const CTX_REROLL_MODE := "reroll_mode"
 const CTX_REROLL_COUNT := "reroll_count"
+## What the roll is ABOUT ("Shooting: Rifle → Grunts (4+)") — shown on the tray (community
+## #170) and mirrored to peers inside the same context Dictionary.
+const CTX_PURPOSE := "purpose"
 
 # === Public (static) ===
 
