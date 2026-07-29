@@ -664,6 +664,20 @@ func test_presentation_start_positions_returns_route_starts() -> void:
 	assert_array(S.presentation_start_positions([])).is_empty()
 
 
+func test_should_snap_move_only_below_one_inch_and_only_when_allowed() -> void:
+	var S := SoloController
+	var inch: float = S.INCHES_TO_METERS
+	# Sub-inch kite steps snap (NML-224 visual): just under the threshold → snap.
+	assert_bool(S.should_snap_move(0.9 * inch, true)).is_true()
+	# At and above the threshold the move must GLIDE — ordinary advances stay animated.
+	assert_bool(S.should_snap_move(1.0 * inch, true)).is_false()
+	assert_bool(S.should_snap_move(6.0 * inch, true)).is_false()
+	# NML-208: pile-in/consolidation callers forbid snapping even for sub-inch arcs.
+	assert_bool(S.should_snap_move(0.5 * inch, false)).is_false()
+	# Degenerate zero-length input never snaps into an animation problem either way.
+	assert_bool(S.should_snap_move(0.0, true)).is_true()
+
+
 # === Human Ambush reserves (field-test finding 5: the game must ASK) ===
 
 func test_should_prompt_human_ambush_only_from_round_two_with_reserves() -> void:
