@@ -1905,3 +1905,23 @@ func test_embarked_cargo_is_not_eligible_for_activation() -> void:
 	cargo.unit_properties["embarked_in"] = "apc"   # parked inside the APC (state layer)
 	assert_int(solo.eligible_ai_units().size()).is_equal(1)
 	assert_bool(solo.is_eligible(cargo)).is_false()
+
+
+func test_charge_gate_denies_a_corridor_that_cannot_reach() -> void:
+	# #183 (Land-Train find): the straight-line gap fits the band, but the executable
+	# corridor must detour around a wall — the arc exceeds the band and the charge would
+	# fall short. The declaration gate dry-runs the REAL corridor and denies the charge;
+	# a clean lane must never be falsely denied (the regression guard).
+	var att := _unit(2, [Vector3(0, 0, 0)])
+	var foe := _unit(1, [Vector3(0.28, 0, 0)])   # straight edge gap ~9.7" — inside the 12" band
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {att.unit_id: att, foe.unit_id: foe}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	# Clean lane: the corridor IS the straight line — no false denial.
+	assert_bool(solo._charge_path_reaches(att, foe, 12.0)).is_true()
+	# A wall across the lane forces a detour far beyond the band: the gate denies.
+	solo.walls_provider = func() -> Array:
+		return [[Vector2(0.22, -0.35), Vector2(0.22, 0.35)]]
+	assert_bool(solo._charge_path_reaches(att, foe, 12.0)).is_false()

@@ -89,6 +89,10 @@ def audit(cap):
     r["d4_zero_volleys"] = sum(1 for v in vol if v == "0")
     r["d4_volleys"] = len(vol)
 
+    # D8 (#183) wasted charges: a DECLARED charge that ended short spent its whole
+    # activation for zero combat — the declaration gate must drive this to 0.
+    r["d8_charge_short"] = len(re.findall(r"charge falls short", log))
+
     # D5 caster waste: coin-flip casts left AFFORDABLE boost tokens unspent (tokens_after >= 1
     # means a boost was payable and skipped; a cast that drained the pool is not waste).
     d5 = 0
@@ -140,6 +144,7 @@ def main():
         "obj_diff_p1_minus_p2": sum(o["obj_p1"] - o["obj_p2"] for o in out),
         "neutral_total": sum(o["obj_neutral"] for o in out),
         "d1_short_total": sum(sum(o["d1_short"].values()) for o in out),
+        "d8_charge_short_total": sum(o["d8_charge_short"] for o in out),
         "d1_seized_total": sum(sum(o["d1_seized"].values()) for o in out),
         "d2_congestion_rate": round(sum(o["d2_congested"] for o in out) / max(1, sum(o["d2_moves"] for o in out)), 3),
         "d3_paralysed_units": sum(len(o["d3_paralysed_units"]) for o in out),

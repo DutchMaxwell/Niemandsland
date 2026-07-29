@@ -1070,6 +1070,17 @@ func _act(unit: GameUnit) -> Dictionary:
 			"rule": "Difficult cap (p.11): every charge corridor crosses difficult terrain and the gap exceeds 6\" — the charge cannot reach, the tree fights on without it",
 			"candidates": [], "chosen": "charge unavailable (difficult cap)", "why": "difficult-capped charge",
 			"data": {"gap_in": charge_gap, "cap_in": DIFFICULT_MOVE_CAP_IN}})
+	# #183: past the straight-line band test the EXECUTABLE corridor must reach base
+	# contact too — at most ONE dry-run per activation (only when the cheap gates already
+	# passed), computed once and reused in the record and the tree ctx below.
+	var charge_reaches := true
+	if charge_gap <= charge_band and not target_is_aircraft and not charge_capped:
+		charge_reaches = _charge_path_reaches(unit, target_unit, charge_band)
+		if not charge_reaches:
+			record_decision({"kind": "mission", "unit": unit.get_name(),
+				"rule": "Charge reach (#183, GF p.8): the real corridor to base contact exceeds the charge band — the tree rushes instead of declaring a charge that falls short",
+				"candidates": [], "chosen": "charge unavailable (path falls short)", "why": "charge path short",
+				"data": {"gap_in": charge_gap, "band_in": charge_band}})
 	# Quick Shot (army-book, grill round 2 cut A: "may shoot after using Rush actions"): the unit's
 	# move-and-shoot band is its RUSH distance, so the tree, the solver and the post-move gates all
 	# measure the same working reach.
@@ -1080,7 +1091,7 @@ func _act(unit: GameUnit) -> Dictionary:
 		"obj_in_rush": obj_dist <= rush + OBJECTIVE_CONTROL_IN,
 		# An Aircraft can't be charged (GF v3.5.1) — the tree must never see it "in charge range".
 		# Bug 22: nor a target only reachable through difficult terrain past the 6" cap.
-		"enemy_in_charge": charge_gap <= charge_band and not target_is_aircraft and not charge_capped,
+		"enemy_in_charge": charge_gap <= charge_band and not target_is_aircraft and not charge_capped and charge_reaches,
 		"shoot_after_advance": shoot_range > 0 and (enemy_dist - (rush if quick_shot else advance)) <= float(shoot_range),
 	}
 	var dec := AiDecision.decide_solo(ctx)
@@ -5674,6 +5685,73 @@ func _charge_move(unit: GameUnit, target: GameUnit, band_in: float) -> int:
 	var centre := unit_centre(unit)
 	var goal := centre + Vector3(dir.x, 0.0, dir.y) * (travel * INCHES_TO_METERS)
 	return _move_toward(unit, goal, band_in, true, target)
+
+
+## #183 (NML-220 family) — the charge DECLARATION gate: does the REAL executable corridor
+## reach base contact within the band? OPR charges are deterministic, so a charge whose
+## executable path ends short must never be declared — yet the straight-line gap test can
+## pass while the planned corridor (detour around a long hull like the Land Train,
+## contact-slot fan, terrain spacing) spends the whole band and still ends short: the
+## wasted "charge falls short" activation. Dry-runs the SAME move _charge_move would
+## execute (_plan_move is pure — no state write), then asks the question the melee snap
+## asks post-hoc, moved AHEAD of the declaration: does the residual gap at the planned
+## endpoints fit the remaining budget?
+func _charge_path_reaches(unit: GameUnit, target: GameUnit, band_in: float) -> bool:
+	var nv := nearest_charge_vector(unit, target)
+	var gap: float = float(nv.get("gap", INF))
+	var dir: Vector2 = nv.get("dir", Vector2.ZERO)
+	if gap == INF or dir == Vector2.ZERO:
+		return true   # degenerate geometry — keep the old behaviour
+	var models := _moving_models(unit)
+	var positions := _positions_of(models)
+	if positions.is_empty():
+		return true
+	var own_r_m := _move_base_radius_m(models)
+	var flying: bool = unit.has_special_rule("Flying")
+	var ignores_difficult: bool = flying or unit.has_special_rule("Strider")
+	var travel2 := minf(band_in, gap)
+	var goal2 := _clamp_to_bounds(unit_centre(unit) + Vector3(dir.x, 0.0, dir.y) * (travel2 * INCHES_TO_METERS))
+	var avoid: bool = not ignores_difficult and not _targets_in_difficult(positions, goal2, band_in, own_r_m)
+	var avoid_dang: bool = not flying and not _targets_in_dangerous(positions, goal2, band_in, own_r_m)
+	# The dry-run must not leak presentation state: every real move overwrites the flow
+	# order, but a DENIED charge would otherwise leave the dry-run's order behind.
+	var keep_flow := last_flow_order
+	var trails: Array = []
+	var planned := _plan_move(unit, models, positions, goal2, band_in, true, avoid, avoid_dang, trails, target)
+	last_flow_order = keep_flow
+	# The longest UNTRIMMED corridor arc: when it exceeds the band, the executor's
+	# distance-truth trim stops the model short — remaining goes negative and the residual
+	# can no longer be snapped closed (the exact #183 shape: 0.7" gap, budget spent).
+	var longest_m := 0.0
+	for t in trails:
+		longest_m = maxf(longest_m, MovementPlanner.polyline_length(t))
+	var residual_in := _planned_nearest_gap_in(models, positions, planned, target)
+	var remaining_in := band_in - longest_m / INCHES_TO_METERS
+	return residual_in <= remaining_in + SeparationChecker.BASE_CONTACT_EPSILON_INCHES
+
+
+## The nearest base-edge gap (inches) between the chargers AT THEIR PLANNED endpoints and
+## the target's alive bases — the dry-run twin of nearest_melee_gap_in (#183). Shapes are
+## the real per-model base shapes (round/oval/rect) translated to the planned spots.
+func _planned_nearest_gap_in(models: Array, positions: Array, planned: Array, target: GameUnit) -> float:
+	var t_shapes: Array = []
+	for tm in _moving_models(target):
+		var ts := SeparationChecker.shape_for_model(tm as ModelInstance)
+		if ts != null:
+			t_shapes.append(ts)
+	if t_shapes.is_empty():
+		return INF
+	var best := INF
+	for i in range(mini(models.size(), mini(positions.size(), planned.size()))):
+		var ashape := SeparationChecker.shape_for_model(models[i] as ModelInstance)
+		if ashape == null:
+			continue
+		var from_p: Vector3 = positions[i]
+		var to_p: Vector3 = planned[i]
+		ashape.center += Vector2(to_p.x - from_p.x, to_p.z - from_p.z)
+		for ts in t_shapes:
+			best = minf(best, SeparationChecker.edge_distance(ashape, ts))
+	return best
 
 
 ## NML-002 Strafing — pure move-through test: did any of the mover's trail legs pass over one
