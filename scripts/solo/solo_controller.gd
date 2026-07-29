@@ -4846,6 +4846,17 @@ static func counter_models_of(unit: GameUnit) -> int:
 ## Append one structured decision record (see decision_log). Ring-buffered: the oldest record is
 ## dropped past DECISION_LOG_CAP, so an undrained buffer stays bounded in long games. A configured
 ## decision_sink sees every record first (lossless — the harness capture is not subject to eviction).
+## Idempotent round-plan primer (community #163): builds — or returns the cached — whole-
+## army round plan so the async drivers pay the round-start compute on its OWN frame
+## instead of compounding it onto the first unit's activation burst. The plan is cached
+## per (round, slot) and its inputs (unit positions, objective ownership) do not change
+## between round start and the first activation, so priming early yields the identical
+## plan the first activation would have built lazily. No-op without a graded difficulty.
+func prime_round_plan() -> void:
+	if active_difficulty() != null:
+		_plan_for_round()
+
+
 func record_decision(rec: Dictionary) -> void:
 	if decision_sink.is_valid():
 		decision_sink.call(rec)

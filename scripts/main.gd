@@ -795,6 +795,13 @@ func _run_solo_ai_turn() -> void:
 	if _solo_ai_busy:
 		return
 	_solo_ai_busy = true
+	# Community #163: F11 gets the same "NACHTMAHR dreams…" indicator the alternation pump
+	# already shows — and the round plan is primed on its OWN frame so the round-start
+	# whole-army compute never compounds onto the first unit's burst.
+	_show_dream_overlay()
+	solo_controller.prime_round_plan()
+	if not _solo_batch:
+		await get_tree().process_frame
 	var moved := 0
 	while true:
 		var unit: GameUnit = await _solo_activate_one_ai()
@@ -802,6 +809,7 @@ func _run_solo_ai_turn() -> void:
 		if unit == null:
 			break
 		moved += 1
+	_hide_dream_overlay()
 	_solo_ai_busy = false
 	if moved == 0:
 		print("[Solo/AI] AI turn complete — all player-%d units activated" % _solo_ai_slot())
@@ -813,6 +821,14 @@ func _run_solo_ai_turn() -> void:
 ## log, then resolve Dangerous tests / shooting / melee with real tray dice. A Shaken unit idles and
 ## recovers instead (OPR p.10). Returns the activated unit, or null when the AI side is done.
 func _solo_activate_one_ai() -> GameUnit:
+	# Community #163: guarantee one OS message-pump tick per unit. A run of HOLD/idle
+	# units used to await NOTHING (the pace/animate awaits are has_move-gated), so the
+	# whole AI side ran as one synchronous burst and Windows flagged the window "not
+	# responding" past its ~5s watchdog. The yield sits OUTSIDE the atomic decision call —
+	# no RNG draw or position read straddles a frame (determinism audit in the PR) — and
+	# is skipped in batch, so every headless harness stays byte-identical.
+	if not _solo_batch:
+		await get_tree().process_frame
 	var unit: GameUnit = solo_controller.activate_next_ai_unit()
 	if unit == null:
 		return null
@@ -1035,6 +1051,11 @@ func _solo_pump() -> void:
 		return
 	_solo_ai_busy = true
 	_show_dream_overlay()   # centred "NACHTMAHR dreams…" for the WHOLE AI compute phase (maintainer)
+	# Community #163: pay the round-start whole-army plan on its own frame (cached — the
+	# first activation would otherwise build it lazily inside its synchronous burst).
+	solo_controller.prime_round_plan()
+	if not _solo_batch:
+		await get_tree().process_frame
 	var tail_count := 0
 	while true:
 		var step: int = SoloController.alternation_next(_solo_pending_replies,
