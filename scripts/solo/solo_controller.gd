@@ -5719,39 +5719,33 @@ func _charge_path_reaches(unit: GameUnit, target: GameUnit, band_in: float) -> b
 	var trails: Array = []
 	var planned := _plan_move(unit, models, positions, goal2, band_in, true, avoid, avoid_dang, trails, target)
 	last_flow_order = keep_flow
-	# The longest UNTRIMMED corridor arc: when it exceeds the band, the executor's
-	# distance-truth trim stops the model short — remaining goes negative and the residual
-	# can no longer be snapped closed (the exact #183 shape: 0.7" gap, budget spent).
-	var longest_m := 0.0
-	for t in trails:
-		longest_m = maxf(longest_m, MovementPlanner.polyline_length(t))
-	var residual_in := _planned_nearest_gap_in(models, positions, planned, target)
-	var remaining_in := band_in - longest_m / INCHES_TO_METERS
-	return residual_in <= remaining_in + SeparationChecker.BASE_CONTACT_EPSILON_INCHES
-
-
-## The nearest base-edge gap (inches) between the chargers AT THEIR PLANNED endpoints and
-## the target's alive bases — the dry-run twin of nearest_melee_gap_in (#183). Shapes are
-## the real per-model base shapes (round/oval/rect) translated to the planned spots.
-func _planned_nearest_gap_in(models: Array, positions: Array, planned: Array, target: GameUnit) -> float:
+	# PER-MODEL contact test (Schmiede v2 — v1 took the LONGEST arc over ALL models and
+	# denied every charge whose rear fan-model planned a long arc: 28 denials for only 8
+	# prevented falls-shorts, held/no-shot detectors dropped, VERDICT ABLEHNEN). The
+	# execution only needs the NEAREST model in base contact (melee starts, pile-in
+	# gathers the rest) — so the gate passes when ANY model's own corridor arc leaves
+	# enough budget to close ITS OWN residual gap (the snap's per-model truth).
 	var t_shapes: Array = []
 	for tm in _moving_models(target):
 		var ts := SeparationChecker.shape_for_model(tm as ModelInstance)
 		if ts != null:
 			t_shapes.append(ts)
 	if t_shapes.is_empty():
-		return INF
-	var best := INF
-	for i in range(mini(models.size(), mini(positions.size(), planned.size()))):
+		return true
+	for i in range(mini(models.size(), mini(positions.size(), mini(planned.size(), trails.size())))):
 		var ashape := SeparationChecker.shape_for_model(models[i] as ModelInstance)
 		if ashape == null:
 			continue
 		var from_p: Vector3 = positions[i]
 		var to_p: Vector3 = planned[i]
 		ashape.center += Vector2(to_p.x - from_p.x, to_p.z - from_p.z)
+		var residual_i := INF
 		for ts in t_shapes:
-			best = minf(best, SeparationChecker.edge_distance(ashape, ts))
-	return best
+			residual_i = minf(residual_i, SeparationChecker.edge_distance(ashape, ts))
+		var remaining_i := band_in - MovementPlanner.polyline_length(trails[i]) / INCHES_TO_METERS
+		if residual_i <= remaining_i + SeparationChecker.BASE_CONTACT_EPSILON_INCHES:
+			return true
+	return false
 
 
 ## NML-002 Strafing — pure move-through test: did any of the mover's trail legs pass over one
