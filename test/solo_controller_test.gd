@@ -4,6 +4,16 @@ extends GdUnitTestSuite
 ## human unit by its Advance distance and is marked activated.
 
 
+## NML-902 — this suite asserts EXACT planner geometry (e.g. the hero-carry offset), and
+## MovementPlanner.fast_planner is a process-wide STATIC that main._ensure_solo_controller
+## flips to true. Any e2e suite that boots the real scene earlier in the same run would
+## otherwise leak the bounded planner in here and shift the numbers (~1.8 cm on the hero
+## slide). Pin the statics this suite depends on — order-independence is the suite's job.
+func before_test() -> void:
+	MovementPlanner.fast_planner = false
+	MovementPlanner.fast_planner_guard = MovementPlanner.FAST_PLANNER_GUARD
+
+
 func test_nearest_index_picks_the_closest_table_plane() -> void:
 	var from := Vector3.ZERO
 	assert_int(SoloController.nearest_index(from, [Vector3(10, 0, 0), Vector3(1, 0, 0), Vector3(5, 0, 0)])).is_equal(1)
