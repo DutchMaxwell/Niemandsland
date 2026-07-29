@@ -2785,6 +2785,10 @@ func set_unit_embarked(unit: GameUnit, transport: GameUnit, embarked: bool,
 		if not bool(can_embark(unit, transport).get("ok", false)):
 			return false
 		unit.unit_properties["embarked_in"] = transport.unit_id
+		# S1.5 (community #160): embarked cargo is CARGO, never an independent Ambush reserve —
+		# its passengers ride the transport's own reserve and arrive INSIDE it. Without this,
+		# both arrival loops would ALSO place the cargo on the table (double arrival).
+		unit.unit_properties["ambush_reserve"] = false
 		var cargo: Array = transport.unit_properties.get("cargo_unit_ids", [])
 		if not cargo.has(unit.unit_id):
 			cargo.append(unit.unit_id)
