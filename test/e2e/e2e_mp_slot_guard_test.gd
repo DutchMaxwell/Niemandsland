@@ -118,3 +118,17 @@ func test_join_release_strips_the_designation_and_logs(timeout := 120000) -> voi
 	for e in _main.battle_log.entries():
 		text += str((e as Dictionary)["text"]) + "\n"
 	assert_str(text).contains("NACHTMAHR releases the slot")
+
+
+func test_join_release_tears_down_a_surviving_controller(timeout := 120000) -> void:
+	# The solo-session-rolls-into-hosting sequence: the controller is built OFFLINE (solo
+	# match), then a human joins its slot. The designation strip alone is not enough — the
+	# alternation pump drives by controller.ai_slot, not by the designation.
+	_main.solo_ai_slots = {2: true}
+	_main._ensure_solo_controller()
+	assert_object(_main.solo_controller).is_not_null()
+	_go_multiplayer({1: 1, GUEST_PEER: 2})
+	_main._solo_release_slot_to_human(2)
+	assert_object(_main.solo_controller) \
+		.override_failure_message("#196 — the controller from the earlier solo session survived the join release: the pump would still drive the guest's slot") \
+		.is_null()

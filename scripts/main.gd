@@ -1052,6 +1052,10 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 func _solo_pump() -> void:
 	if solo_controller == null or _solo_ai_busy:
 		return
+	# #196 belt-and-braces at the ONE place AI turns run: a controller whose ai_slot a
+	# human peer occupies (survivor of a solo session that rolled into hosting) never acts.
+	if network_manager != null and network_manager.slot_has_human_peer(solo_controller.ai_slot):
+		return
 	_solo_ai_busy = true
 	_show_dream_overlay()   # centred "NACHTMAHR dreams…" for the WHOLE AI compute phase (maintainer)
 	# Community #163: pay the round-start whole-army plan on its own frame (cached — the
@@ -9358,6 +9362,12 @@ func _solo_release_slot_to_human(slot: int) -> void:
 	if slot <= 0 or not solo_ai_slots.has(slot):
 		return
 	solo_ai_slots.erase(slot)
+	# The CONTROLLER can outlive the designation (a solo session rolling straight into
+	# hosting): its ai_slot would still point at the released slot and the alternation pump
+	# drives by that slot, not by the designation — tear it down with the designation.
+	if solo_controller != null and solo_controller.ai_slot == slot:
+		solo_controller.queue_free()
+		solo_controller = null
 	_solo_sync_difficulty()
 	_refresh_solo_panel.call_deferred()
 	_rebuild_roster()
