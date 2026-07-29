@@ -331,6 +331,11 @@ func is_eligible(unit) -> bool:
 	# (the AI activated a not-yet-arrived unit); arrival then read as if it had already spent its turn.
 	if unit_in_reserve(u):
 		return false
+	# Embarked cargo is parked off-table inside its transport (S1.5, community #160): it can
+	# never be activated and must not count toward the round-over check — otherwise the
+	# alternation would wait forever for a phantom activation.
+	if army_manager != null and army_manager.transport_of(u) != null:
+		return false
 	return not (u.has_method("is_attached") and u.is_attached())
 
 
@@ -6026,7 +6031,9 @@ func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, bloc
 		# Infiltrate (Bug 26) "counts as having Ambush" → same reserve/round-2 arrival as Ambush, only its
 		# arrival ring is 3" not 9" (handled per-unit at arrival via _reserve_min_enemy_dist_m).
 		# B12: item-granted Ambush/Scout count too (has_special_rule alone missed upgrade grants).
-		var is_ambush: bool = unit_has_ambush(u)
+		# S1.5 (community #160): embarked cargo is never independently set aside — it rides
+		# its transport's reserve and arrives inside it.
+		var is_ambush: bool = unit_has_ambush(u) and army_manager.transport_of(u) == null
 		flags.append({"id": i, "scout": unit_has_scout(u), "ambush": is_ambush})
 		if is_ambush:
 			u.unit_properties["ambush_reserve"] = true   # held off-table → not activatable until it arrives
@@ -6830,6 +6837,8 @@ func set_aside_human_ambush() -> Array:
 			continue
 		if gu.has_method("is_attached") and gu.is_attached():
 			continue
+		if army_manager.transport_of(gu) != null:
+			continue   # S1.5 (community #160): embarked cargo rides its transport's reserve
 		if unit_has_ambush(gu):
 			gu.unit_properties["ambush_reserve"] = true
 			out.append(gu)
