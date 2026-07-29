@@ -3381,11 +3381,23 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 		# the flag's window is synchronous and has already closed by the time the dice are counted.
 		var models_in_target: int = 1 if bool(profile.get("takedown", false)) else _solo_combined_alive(target)
 		var boosted: int = AiCombatMath.blast_hits(hits, blast, models_in_target)
-		if boosted != hits and battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "Blast(%d): %d hit%s ×%d → %d hits" % [
-				blast, hits, ("" if hits == 1 else "s"), boosted / hits, boosted], true)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				blast_log_text(blast, hits, boosted, models_in_target), true)
 		hits = boosted
 	return hits
+
+
+## The Blast battle-log line — ALWAYS emitted (community #169): a capped ×1 blast used to
+## stay silent, which read as "full blast, cap missing". When the cap clamps the
+## multiplier below X, the line names the model count that did it. Static + pure for the
+## unit test; the uncapped format is byte-identical to the old line.
+static func blast_log_text(x: int, hits: int, boosted: int, models_in_target: int) -> String:
+	var mult: int = boosted / maxi(hits, 1)
+	var capped: String = "" if mult >= x else " (capped by %d model%s in target)" % [
+		models_in_target, ("" if models_in_target == 1 else "s")]
+	return "Blast(%d): %d hit%s ×%d%s → %d hits" % [
+		x, hits, ("" if hits == 1 else "s"), mult, capped, boosted]
 
 
 ## Rating X of a unit-level "Name(X)" special rule (0 if absent), e.g. Impact(3) / Fear(2) — the shared
@@ -5157,8 +5169,21 @@ func _solo_clear_auto_fan() -> void:
 func _solo_log_save_threshold(defender: GameUnit, defense: int, ap: int) -> void:
 	if battle_log == null:
 		return
-	var threshold: String = ("%d+ (Def %d+, AP %d)" % [defense + ap, defense, ap]) if ap > 0 else "%d+" % defense
-	battle_log.log_event(BattleLog.Category.COMBAT, "%s saves on %s" % [defender.get_name(), threshold], true)
+	battle_log.log_event(BattleLog.Category.COMBAT, "%s saves on %s" % [
+		defender.get_name(), save_threshold_text(defense, ap)], true)
+
+
+## The save-threshold text. A bare "7+" reads as impossible on a d6 (community #173) —
+## the engine lets a natural 6 always succeed (GF: a 6 always succeeds, a 1 always
+## fails), so past 6 the text says that instead of the raw sum. Static + pure for the
+## unit test; thresholds within 2..6 keep the old format byte-identical.
+static func save_threshold_text(defense: int, ap: int) -> String:
+	var target: int = defense + ap
+	if ap > 0 and target > 6:
+		return "6 only (Def %d+, AP %d — a natural 6 always saves)" % [defense, ap]
+	if ap > 0:
+		return "%d+ (Def %d+, AP %d)" % [target, defense, ap]
+	return "%d+" % defense
 
 
 # === AI-action presentation layer (goal 003 game-feel: announce → execute → resolve → outcome) ===
