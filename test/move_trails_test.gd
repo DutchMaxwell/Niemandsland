@@ -83,3 +83,20 @@ func test_live_painting_suppressed_during_deployment() -> void:
 	t.set_deployment_active(true)
 	t.begin_live([{"offset": Vector2.ZERO, "radius_m": 0.02, "owner": 1}])
 	assert_int(t._live.size()).is_equal(0)   # no live ribbons while deploying
+
+
+# ===== #162: a take-back removes ONE drop's chalk + proof =====
+
+func test_undo_drop_erases_exactly_one_drops_trail_and_proof() -> void:
+	var t := _mt()
+	t.commit_trail(1, "u1", "Unit 1", 7, _line([Vector2(0, 0), Vector2(6, 0)]), 0.02, 1, 100)
+	t.commit_trail(1, "u1", "Unit 1", 7, _line([Vector2(6, 0), Vector2(9, 0)]), 0.02, 1, 101)
+	# Same drop_id, DIFFERENT owner — must survive (the keying is owner+unit+drop).
+	t.commit_trail(2, "u2", "Unit 2", 3, _line([Vector2(0, 2), Vector2(4, 2)]), 0.02, 1, 100)
+	assert_int(t._trails.size()).is_equal(3)
+	assert_int(t.ledger.entries.size()).is_equal(3)
+	t.undo_drop(1, "u1", 100)
+	assert_int(t._trails.size()).is_equal(2)
+	assert_int(t.ledger.entries.size()).is_equal(2)
+	for e in t.ledger.entries:
+		assert_bool(int(e["drop_id"]) == 100 and str(e["unit"]) == "u1").is_false()

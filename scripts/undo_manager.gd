@@ -75,7 +75,8 @@ func undo() -> String:
 		return ""
 	var action: UndoableAction = _undo_stack.pop_back()
 	action.undo()
-	_redo_stack.append(action)
+	if action.redoable:
+		_redo_stack.append(action)
 	_emit_changed()
 	action_undone.emit(action.description)
 	return action.description
@@ -90,7 +91,8 @@ func undo_for(peer_id: int) -> String:
 			var action: UndoableAction = _undo_stack[i]
 			_undo_stack.remove_at(i)
 			action.undo()
-			_redo_stack.append(action)
+			if action.redoable:
+				_redo_stack.append(action)
 			_emit_changed()
 			action_undone.emit(action.description)
 			return action.description
@@ -122,6 +124,22 @@ func redo_for(peer_id: int) -> String:
 	return ""
 
 
+## #162 — the take-back window closes: dice hit the tray, or the next activation /
+## round began. Removes every MoveTakebackAction (optionally only one unit's) from
+## BOTH stacks; plain Move/Rotate/Delete actions (terrain, sandbox bookkeeping) stay.
+func expire_move_takebacks(unit_key: String = "") -> void:
+	var changed := false
+	for stack: Array[UndoableAction] in [_undo_stack, _redo_stack]:
+		for i in range(stack.size() - 1, -1, -1):
+			var a := stack[i]
+			if a is MoveTakebackAction and (unit_key.is_empty() \
+					or (a as MoveTakebackAction).unit_key == unit_key):
+				stack.remove_at(i)
+				changed = true
+	if changed:
+		_emit_changed()
+
+
 ## Clears the entire history. Call when the table is replaced (new game / load),
 ## since recorded node references would otherwise be stale.
 func clear() -> void:
@@ -147,6 +165,9 @@ class UndoableAction:
 	## Peer id of the player who performed this action (0 = local / single-player).
 	## Undo/redo only act on the local player's own actions in multiplayer.
 	var peer_id: int = 0
+	## When false the action never enters the redo stack (a MOVEMENT take-back is
+	## final: redoing it would re-place models without re-painting their proof).
+	var redoable: bool = true
 
 	func undo() -> void:
 		pass
@@ -188,6 +209,63 @@ class MoveAction extends UndoableAction:
 				body.angular_velocity = Vector3.ZERO
 			if _net != null and _net.is_multiplayer_active() and obj.has_meta("network_id"):
 				_net.broadcast_move(obj.get_meta("network_id"), obj.global_position)
+
+
+## #162 — a MOVEMENT TAKE-BACK: restores each moved model's pre-drop position AND facing,
+## erases the drop's chalk ribbon + inch stamp + ledger proof (locally, and on every peer
+## via the MP take-back message) and writes the battle-log line (rules-must-log: a silent
+## take-back would read as a glitch). NOT redoable — a redone take-back would re-place
+## the models without their proof, so it never enters the redo stack.
+class MoveTakebackAction extends UndoableAction:
+	var unit_key: String = ""
+	var _models: Array[Node3D] = []
+	var _from_pos: Array[Vector3] = []
+	var _from_rot: Array[float] = []
+	var _owner_slot: int = 0
+	var _unit_name: String = ""
+	var _drop_id: int = -1
+	var _trails: Node = null
+	var _net: Node = null
+	var _log: Node = null
+
+	func _init(models: Array[Node3D], from_pos: Array[Vector3], from_rot: Array[float],
+			owner_slot: int, p_unit_key: String, unit_name: String, drop_id: int,
+			move_trails: Node, network_manager: Node, battle_log: Node,
+			owner_peer_id: int = 0) -> void:
+		_models = models
+		_from_pos = from_pos
+		_from_rot = from_rot
+		_owner_slot = owner_slot
+		unit_key = p_unit_key
+		_unit_name = unit_name
+		_drop_id = drop_id
+		_trails = move_trails
+		_net = network_manager
+		_log = battle_log
+		peer_id = owner_peer_id
+		redoable = false
+		description = "Take back move (%s)" % unit_name
+
+	func undo() -> void:
+		for i in _models.size():
+			var obj: Node3D = _models[i]
+			if not is_instance_valid(obj):
+				continue
+			obj.global_position = _from_pos[i]
+			obj.rotation.y = _from_rot[i]
+			if obj is RigidBody3D:
+				var body := obj as RigidBody3D
+				body.linear_velocity = Vector3.ZERO
+				body.angular_velocity = Vector3.ZERO
+			if _net != null and _net.is_multiplayer_active() and obj.has_meta("network_id"):
+				_net.broadcast_move(obj.get_meta("network_id"), obj.global_position)
+				_net.broadcast_rotation(obj.get_meta("network_id"), obj.rotation.y)
+		if _trails != null:
+			_trails.undo_drop(_owner_slot, unit_key, _drop_id)
+		if _net != null and _net.is_multiplayer_active():
+			_net.broadcast_move_trails_undo(_owner_slot, unit_key, _drop_id)
+		if _log != null:
+			_log.log_event(BattleLog.Category.MOVEMENT, "%s takes back its move" % _unit_name, false)
 
 
 ## Rotates a set of objects between recorded start and end Y rotations (radians).

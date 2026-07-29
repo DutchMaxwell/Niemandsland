@@ -179,7 +179,7 @@ func commit_trail(owner: int, unit_key: String, unit_name: String, model_id: int
 	# Activation bookkeeping + the ledger record run UNCONDITIONALLY (proof always survives).
 	for ended in ledger.note_commit(owner, unit_key, drop_id):
 		fade_unit(ended)
-	var entry := ledger.record(owner, unit_key, unit_name, model_id, points, round_num)
+	var entry := ledger.record(owner, unit_key, unit_name, model_id, points, round_num, drop_id)
 	# DEPLOYMENT = record-only: no chalk is built, so nothing pops in when play begins.
 	# (The preference-off case still builds hidden, so toggling on reveals the activation.)
 	if _deployment_active:
@@ -205,6 +205,7 @@ func commit_trail(owner: int, unit_key: String, unit_name: String, model_id: int
 		"inches": float(entry["inches"]),
 		"points": points,
 		"radius_m": radius_m,
+		"drop_id": drop_id,
 		"fading": false,
 		"pulse": null,
 		"fade": null,
@@ -230,6 +231,19 @@ func on_round_advance() -> void:
 	for rec in _trails:
 		if not bool(rec["fading"]):
 			_fade_record(rec, ROUND_FADE_S)
+
+
+## Take-back (#162): remove ONE physical drop's ribbon(s) + inch stamp(s) immediately —
+## no fade, the move never happened — and erase its ledger proof. Called locally by the
+## undo action and on peers via the MP take-back message (same drop_id both sides).
+func undo_drop(owner: int, unit_key: String, drop_id: int) -> void:
+	for i in range(_trails.size() - 1, -1, -1):
+		var rec := _trails[i]
+		if int(rec["owner"]) == owner and str(rec["unit"]) == unit_key \
+				and int(rec.get("drop_id", -2)) == drop_id:
+			_kill_record_tweens(rec)
+			_drop_record(rec)
+	ledger.remove_drop(owner, unit_key, drop_id)
 
 
 ## Remove every trail immediately (Shift+T) — visuals only; ledger entries persist.
