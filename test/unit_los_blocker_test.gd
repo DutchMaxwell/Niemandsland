@@ -40,6 +40,22 @@ func test_model_on_line_blocks() -> void:
 		Vector2(-1, 0), Vector2(1, 0), 2, 2, blockers, [])).is_true()
 
 
+func test_first_blocking_unit_key_names_the_blocker() -> void:
+	# #205 — the report variant: a direct base hit returns the blocking unit's key,
+	# a clear lane returns 0, and a closed-gap wall reports the gap's unit too.
+	var blockers: Array[LosRules.Blocker] = [_blocker(0, 0, 2, 100)]
+	assert_int(LosRules.first_blocking_unit_key(
+		Vector2(-1, 0), Vector2(1, 0), 2, 2, blockers, [])).is_equal(100)
+	assert_int(LosRules.first_blocking_unit_key(
+		Vector2(-1, 0.5), Vector2(1, 0.5), 2, 2, blockers, [])).is_equal(0)
+	# Two models of unit 7, 0.5" apart: the line threads the gap → the wall reports 7.
+	var gap_in := 0.5 * INCH
+	var wall: Array[LosRules.Blocker] = [
+		_blocker(0, -(R + gap_in / 2.0), 2, 7), _blocker(0, R + gap_in / 2.0, 2, 7)]
+	assert_int(LosRules.first_blocking_unit_key(
+		Vector2(-1, 0), Vector2(1, 0), 2, 2, wall, [])).is_equal(7)
+
+
 func test_taller_endpoints_see_over_smaller_blocker() -> void:
 	# H2 infantry between two H4 walkers: both endpoints see over it.
 	var blockers: Array[LosRules.Blocker] = [_blocker(0, 0, 2, 100)]
