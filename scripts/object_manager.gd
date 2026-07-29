@@ -610,9 +610,12 @@ func _foreign_owner_slot(obj: Node) -> int:
 		return 0
 	# Solo (goal 001): a designated AI army is never "foreign" — the human owns the physical table and
 	# may always adjust the AI's models (this is also the future co-op path: the AI army has no peer).
+	# #196: unless a connected human actually SITS on that slot — then the designation is void
+	# and the ownership lock protects the human like any other player.
 	var main_node := get_node_or_null("/root/Main")
 	if main_node != null and main_node.get("solo_ai_slots") is Dictionary \
-			and (main_node.get("solo_ai_slots") as Dictionary).has(owner):
+			and (main_node.get("solo_ai_slots") as Dictionary).has(owner) \
+			and not _network_manager.slot_has_human_peer(owner):
 		return 0
 	var my_slot: int = _network_manager.get_my_player_slot()
 	# Fail open while our own slot is still pending (0, the sub-second window right after

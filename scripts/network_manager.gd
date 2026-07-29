@@ -1554,6 +1554,19 @@ func seated_slots() -> Array:
 	return slots
 
 
+## #196 — whether a CONNECTED human occupies this player slot right now. The solo automation
+## must never act for such a slot, whatever a (stale) AI designation claims. Works on host
+## AND guest: peer_to_slot is host-authoritative and mirrored to guests via the slot-table
+## pushes; entries are erased on disconnect, so a vacated slot honestly reads unoccupied.
+func slot_has_human_peer(slot: int) -> bool:
+	if slot <= 0 or not is_multiplayer_active():
+		return false
+	for p in peer_to_slot:
+		if int(peer_to_slot[p]) == slot:
+			return true
+	return false
+
+
 ## Host-side: are ALL seated players ready? True only when every seated slot's flag is set.
 func all_players_ready() -> bool:
 	for s in seated_slots():
