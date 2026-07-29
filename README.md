@@ -9,9 +9,9 @@ Fantasy). Built in Godot.
      (§ Release checklist); never hardcode a version elsewhere in the UI. -->
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
-[![Status](https://img.shields.io/badge/Status-0.3.10.0--alpha-orange.svg)]()
+[![Status](https://img.shields.io/badge/Status-0.3.10.1--alpha-orange.svg)]()
 
-> **Status: public alpha (`0.3.10.0`).** The tabletop sandbox, OPR army import, multiplayer
+> **Status: public alpha (`0.3.10.1`).** The tabletop sandbox, OPR army import, multiplayer
 > and the 3D-model pipeline work. **Solo play against the built-in AI opponent (NACHTMAHR)**
 > resolves turns, combat, spells and terrain effects automatically; human-vs-human multiplayer
 > is still a manual-rules sandbox. See [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the honest
@@ -31,7 +31,9 @@ What the code actually does today:
   Hundreds of special rules resolve automatically across all five systems, and **every applied
   rule writes its own battle-log line**; the thirteen rule names the automation does not cover yet
   are named in full in [`PROJECT_STATUS.md`](PROJECT_STATUS.md) and listed per unit in the log, so
-  you can apply them by hand. One difficulty (full strength) — selectable grades are on the roadmap.
+  you can apply them by hand. When your unit takes wounds and the choice matters (Tough models,
+  mixed loadouts), **you allocate them by clicking** — LMB places one wound, RMB auto-allocates
+  the rest. One difficulty (full strength) — selectable grades are on the roadmap.
 - **3D tabletop** — variable table sizes (4×4, 6×4, custom), orbit/pan/zoom camera.
 - **Object handling** — click / Alt-click / box select, drag, rotate, copy / paste /
   duplicate, formation arrangement (rows `1`–`9`, arrow `A`) with constant base-edge
@@ -54,10 +56,14 @@ What the code actually does today:
   It also appears on its own for every AI volley.
 - **Movement & trails** — drag a model to paint a base-width "chalk" trail (**Path
   Painting**); the ruler and battle log report the actual traveled path (arc), while
-  weapon/charge range stays straight-line. 1″ spacing walls (red enemy / orange friendly)
-  with base-contact snap and no-overlap drops; an opt-in "dry-brush" cap stops the drag
-  at the selected action band (Advance ~6″ / Rush-Charge ~12″). A Deployment → **Start
-  Game** → Playing phase gate (with an MP ready-sync) frames setup vs play.
+  weapon/charge range stays straight-line. Walking the cursor back inside your own chalk
+  erases and refunds the measured inches (corrections are free; real detours count), and
+  **`Ctrl`+`Z` takes a finished move back** — position, facing, chalk and inch proof all
+  revert (MP-synced) until dice hit the tray or the next activation starts. 1″ spacing
+  walls (red enemy / orange friendly) with base-contact snap and no-overlap drops; an
+  opt-in "dry-brush" cap stops the drag at the selected action band (Advance ~6″ /
+  Rush-Charge ~12″). A Deployment → **Start Game** → Playing phase gate (with an MP
+  ready-sync) frames setup vs play.
 - **Multiplayer** — ENet over LAN, or over the internet via a WebSocket relay
   (see [`relay/`](relay/README.md)); full state sync (models, terrain, table size),
   shared dice log, player avatars/cursors, save/load, and a deployment ready-sync.
@@ -145,6 +151,7 @@ invocation and the gdUnit4 test runner), see [`docs/DEVELOPMENT.md`](docs/DEVELO
 | Axis-locked drag (forward/backward only) | `Shift`+drag |
 | Mouse-driven rotation (R held) | `R` (drag mouse) |
 | Take/revive casualties (pooled Tough(1)) | Right-click model → `W` |
+| Take back the last finished move | `Ctrl`+`Z` (until dice roll / next activation) |
 
 | Other | |
 |---|---|
