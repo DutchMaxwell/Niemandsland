@@ -6,6 +6,59 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+## [0.3.10.1-alpha] — 2026-07-29
+
+Hotfix wave from the first days of community play — thank you for the reports and the logs!
+
+### Fixed — multiplayer
+- **A human's slot is never NACHTMAHR's.** In a human-vs-human room the solo automation could
+  hijack the second player's army ("activated (AI)", auto-rolled defenses, whole AI turns).
+  Hard guard at the core: a slot a connected human occupies is never automation-driven, the
+  implicit "P2 is the AI" solo default no longer applies in multiplayer, joining strips a stale
+  AI designation (logged), and the Solo panel / AI-Opponent dialog refuse occupied slots. The
+  player roster now shows "P2: NACHTMAHR" rows, so who-is-what is readable at a glance. (#196)
+- **Deployment zones work for guests and stop flashing.** Zone geometry is host-authoritative
+  and synced on join; "Show Deployment Zones" and "Flip Zone Colours" are per-player view
+  preferences now (strictly local) — the broadcast ping-pong that made both peers' zones flash
+  permanently is gone, and a guest's Map Tool can no longer wipe the host's zones. (#194, #195)
+- "Room code copied" is a toast now, not a battle-log entry per click.
+
+### Fixed — measuring & movement
+- **Mid-drag corrections refund.** Walking a model back along its painted path erases and
+  refunds anywhere inside the chalk ribbon — "out 4″, back, out 4″ again" measures ~4″ now,
+  not 12″. The taut-path principle is untouched: a genuine detour still counts in full. (#191)
+- **Sub-inch AI moves snap into place** instead of gliding almost invisibly. (NML-224)
+- **Readable chalk inch stamps**: fixed reference size, black outline, and they linger a beat
+  after the trail fades. (NML-234)
+
+### Added
+- **Movement take-back (Ctrl+Z).** Undo a finished move — position, facing, chalk trail and
+  the inch proof all revert, synced in multiplayer. The window closes when dice hit the tray
+  or the next activation begins. (#162)
+- **You allocate wounds by clicking.** When your unit takes wounds and the choice matters,
+  pick the models yourself — full OPR freedom, including Tough stacking. (#172)
+- **Ambush transports can load during deployment** — reserve the transport, put cargo inside,
+  the whole package arrives together from round 2. (#160)
+- **The dice tray names what a roll is about** ("to hit", "morale", …). (#170)
+- **The deployment control box is draggable**, and its default spot auto-avoids the unit dock
+  so it never hides your cards. (#159)
+- **Round-advance texts name the round they move onto.** (#161)
+
+### Fixed — rules & solo
+- **Indirect fire without line of sight works for human players too** — the targeting path
+  completes the rule and logs it. (#182)
+- **Surge announces its on-6 bonus hits** — a "2 hits" tray resolving as 3 wounds now says
+  why. The last silent on-6 branch. (#193)
+- **Blast always writes its multiplier line** (with the model cap noted), and 7+ defense
+  saves say "only a natural 6 saves". (#169, #173)
+- **Deploying an Ambush-capable unit directly counts as choosing not to ambush** — no stuck
+  reserve prompt. (#187)
+- **A model on a container sees over its own edge — and can be seen.** (#171)
+- **The AI explains when it passes a nearer enemy that already acted**, and its denial trips
+  say DENY in the plan line. (#164)
+- **The AI turn keeps the frame loop alive** — no more OS "not responding" while NACHTMAHR
+  thinks. (#163)
+
 ## [0.3.10.0-alpha] — 2026-07-27
 
 ### Added — Solo mode
