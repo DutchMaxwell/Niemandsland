@@ -6626,7 +6626,51 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 					causes.append("Ranged Shrouding")
 				why = " — %s" % ", ".join(causes)
 			return "out of range (%.1f\" edge to edge > %d\"%s)" % [dist, rng_in, why]
-		return "no model has line of sight"
+		return "no model has line of sight" + _solo_los_refusal_detail(attacker, target)
+	return ""
+
+
+## #205 — WHO blocks (community: a rules-correct refusal read as a bug because nothing named
+## the blocker — often the player's OWN other unit; GF v3.5.1 p.5 blocks "the perimeter of
+## other units (friendly or enemy)"). Diagnosis only: re-tests the CLOSEST shooter→target
+## model lane and names the first thing in its way. "" when nothing identifiable (e.g. every
+## lane blocked by a different thing than the nearest one — the plain message then stands).
+func _solo_los_refusal_detail(shooter: GameUnit, target: GameUnit) -> String:
+	if solo_controller == null:
+		return ""
+	var sps: Array = solo_controller.alive_positions(shooter)
+	var tps: Array = []
+	var members: Array = [target]
+	if target.has_method("get_attached_heroes"):
+		members = members + target.get_attached_heroes()
+	for tm in members:
+		if tm != null:
+			tps.append_array(solo_controller.alive_positions(tm))
+	if sps.is_empty() or tps.is_empty():
+		return ""
+	var bp := Vector3.ZERO
+	var bq := Vector3.ZERO
+	var best := INF
+	for sp in sps:
+		for tp in tps:
+			var d: float = (sp as Vector3).distance_to(tp as Vector3)
+			if d < best:
+				best = d
+				bp = sp
+				bq = tp
+	if terrain_overlay != null and terrain_overlay.has_method("has_line_of_sight") \
+			and not terrain_overlay.has_line_of_sight(bp, bq, _solo_unit_los_height(shooter),
+				_solo_unit_los_height(target), _solo_unit_base_radius_m(shooter), _solo_unit_base_radius_m(target)):
+		return " — nearest lane blocked by terrain"
+	var key: int = LosRules.first_blocking_unit_key(Vector2(bp.x, bp.z), Vector2(bq.x, bq.z),
+		_solo_unit_los_height(shooter), _solo_unit_los_height(target),
+		_solo_los_blockers(shooter, target), ([] as Array[int]))
+	if key != 0:
+		var bu := instance_from_id(key) as GameUnit
+		if bu != null:
+			var own: bool = int(bu.unit_properties.get("player_id", 0)) == int(shooter.unit_properties.get("player_id", 0))
+			return " — nearest lane blocked by %s%s" % [bu.get_name(),
+				" (your own unit: only the shooter's OWN unit is see-through — GF v3.5.1 p.5)" if own else ""]
 	return ""
 
 
