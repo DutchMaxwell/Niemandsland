@@ -2029,11 +2029,21 @@ func _solo_deploy_newly_placed_human() -> Array:
 			continue
 		if gu.has_method("is_attached") and gu.is_attached():
 			continue
-		if SoloController.unit_in_reserve(gu):
-			continue   # Ambush/Scout reserves have their own phases
 		var c := solo_controller.unit_centre(gu)
-		if trect.has_point(Vector2(c.x, c.z)):
-			out.append(gu)
+		if not trect.has_point(Vector2(c.x, c.z)):
+			continue
+		if SoloController.unit_in_reserve(gu):
+			# #187 (TC-039 find, rule truth): Ambush is the OWNER'S choice — "MAY be set
+			# aside" (GF/AoF v3.5.1 p.13). Physically deploying the unit during the main
+			# phase IS choosing not to ambush: the hold clears and the placement counts.
+			# Units left on the tray keep their reserve exactly as before (tray positions
+			# sit outside the table rect). The AI's always-ambush stays mandatory per the
+			# official solo AI rules; human scouts are held by advice only, not this flag.
+			gu.unit_properties["ambush_reserve"] = false
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL,
+					"%s deploys normally — Ambush not used (GF/AoF p.13: 'may be set aside')." % gu.get_name(), false)
+		out.append(gu)
 	return out
 
 
