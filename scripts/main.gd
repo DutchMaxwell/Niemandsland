@@ -861,8 +861,12 @@ func _solo_activate_one_ai() -> GameUnit:
 			# playtest bug 7). The shot line right after names the real target; narrate the hold plainly.
 			battle_log.log_event(BattleLog.Category.MOVEMENT, "%s holds its position" % unit.get_name(), true)
 		else:
-			battle_log.log_event(BattleLog.Category.MOVEMENT, "%s %s (→ %s)" % [
-				unit.get_name(), AiDecision.action_name(int(report.get("action", 0))), goal_label], true)
+			# Community #164: when the official not-activated-first key walked past a NEARER
+			# enemy that already acted, say why — the by-the-book pick reads irrational silent.
+			var acts_soon: String = " — hits it before it acts" \
+				if bool(report.get("target_acts_soon", false)) and not bool(report.get("to_objective", false)) else ""
+			battle_log.log_event(BattleLog.Category.MOVEMENT, "%s %s (→ %s)%s" % [
+				unit.get_name(), AiDecision.action_name(int(report.get("action", 0))), goal_label, acts_soon], true)
 	_solo_log_unmodeled_rules(unit)   # once-per-session visibility of rules the automation skips
 	if target != null:
 		_solo_log_unmodeled_rules(target)

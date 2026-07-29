@@ -641,7 +641,15 @@ func best_shoot_target_now(ai_unit: GameUnit) -> GameUnit:
 	return best
 
 
+## True when the LAST nearest_human_unit pick walked past a strictly nearer enemy because
+## that enemy had already acted (the official not-activated-first key, Solo v3.5.0 p.2).
+## Community #164: this is the by-the-book choice that READS irrational without a reason —
+## the battle log tags exactly these picks. Transient: valid right after the call.
+var last_target_passed_activated: bool = false
+
+
 func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
+	last_target_passed_activated = false
 	if army_manager == null:
 		return null
 	var from := unit_centre(ai_unit)
@@ -707,6 +715,15 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 			# ARENA: the difficulty knobs shape which of the (equally legal) tied targets is taken.
 			chosen = _difficulty_target_pick(ai_unit, tied, diff)
 			why = "ev tie-break (%s)" % diff.grade_name
+	# The official key can walk PAST a nearer enemy that has already acted — the surprising
+	# case the battle log must explain (community #164). Exact test: the chosen target has
+	# not acted yet AND a strictly nearer band exists — that nearer candidate must have been
+	# activated, else it would have won the key itself.
+	if not bool(chosen["activated"]):
+		for c in cands:
+			if int((c as Dictionary)["band"]) < int(chosen["band"]):
+				last_target_passed_activated = true
+				break
 	var rec_cands: Array = []
 	for t in tied:
 		var td := t as Dictionary
@@ -719,7 +736,8 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 	record_decision({"kind": "target", "unit": ai_unit.get_name(),
 		"rule": "Solo v3.5.0 p.2: nearest valid target, not-activated first",
 		"candidates": rec_cands, "chosen": (chosen["unit"] as GameUnit).get_name(), "why": why,
-		"data": {"considered": cands.size(), "dist_in": float(chosen["d"])}})
+		"data": {"considered": cands.size(), "dist_in": float(chosen["d"]),
+			"passed_nearer_activated": last_target_passed_activated}})
 	return chosen["unit"] as GameUnit
 
 
@@ -838,11 +856,17 @@ func _act(unit: GameUnit) -> Dictionary:
 	var target_unit := nearest_human_unit(unit)
 	if target_unit == null:
 		return report
+	# Capture the passed-a-nearer-enemy flag BEFORE _commander_apply may re-query targets and
+	# clobber the transient member (community #164 narration).
+	var base_target := target_unit
+	var acts_soon := last_target_passed_activated
 	# COMMANDER (Stage 3, Part B): a graded standing order. For a close-and-fight role it PERSISTS the target
 	# across rounds so the unit keeps closing on ONE enemy instead of re-chasing the momentary nearest (the
 	# idle monster). Returns the default target unchanged for the null-AI / non-driven roles (byte-identical).
 	target_unit = _commander_apply(unit, target_unit)
 	report["target"] = target_unit
+	# A commander-persisted target is a different reason — it must not inherit the stale tag.
+	report["target_acts_soon"] = acts_soon and target_unit == base_target
 	var weapons := _unit_weapons(unit)
 	var bands: Dictionary = move_bands_for_unit(unit, movement_range)
 	var advance := float(bands.get("advance", 6))
