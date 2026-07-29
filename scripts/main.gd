@@ -9339,6 +9339,11 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# is not part of the serialized .nml game state, so it must be pushed separately).
 	if table != null:
 		network_manager.broadcast_table_settings({"biome": table.biome})
+	# #194 belt-and-braces: re-push the deployment-zone type so the joiner builds the zone
+	# GEOMETRY even if the state-sync race loses — without meshes, its "Show Deployment
+	# Zones" tick was a silent no-op (visibility only flips existing meshes).
+	if map_layout_editor != null and int(map_layout_editor.deployment_type) > 0:
+		network_manager.broadcast_table_settings({"deployment_type": int(map_layout_editor.deployment_type)})
 	# Late joiners also need the session's free-move state (host-operated, applies to everyone).
 	if object_manager != null and object_manager.host_free_move:
 		network_manager.broadcast_table_settings({"free_move": true})
@@ -10101,23 +10106,17 @@ func _on_remote_table_settings_changed(settings: Dictionary) -> void:
 			if dtype > 0:
 				terrain_overlay.set_deployment_zones_visible(true)
 				if deployment_zone_check:
-					deployment_zone_check.button_pressed = true
+					# #195: set_pressed_no_signal — `button_pressed =` re-emits `toggled`,
+					# and an inbound settings message must never trigger an outbound one.
+					deployment_zone_check.set_pressed_no_signal(true)
 
-	if settings.has("deployment_visible"):
-		var vis = bool(settings["deployment_visible"])
-		if terrain_overlay and terrain_overlay.has_method("set_deployment_zones_visible"):
-			terrain_overlay.set_deployment_zones_visible(vis)
-			if deployment_zone_check:
-				deployment_zone_check.button_pressed = vis
+	# #194/#195 — "deployment_visible" / "deployment_flipped" are DELIBERATELY not handled
+	# any more: showing zones and the colour flip are per-player VIEW preferences, strictly
+	# local now. Broadcasting them made both peers' handlers re-trigger each other (the
+	# checkbox mirror re-emitted `toggled`) — the permanent zone flashing of #195. Old
+	# clients may still send the keys; they fall through the has() guards harmlessly.
 
 	# (Deployment-zone type/visibility no longer drives the trail chalk — the formal game phase does.)
-
-	if settings.has("deployment_flipped"):
-		var flipped = bool(settings["deployment_flipped"])
-		if terrain_overlay and terrain_overlay.has_method("set_deployment_colors_flipped"):
-			terrain_overlay.set_deployment_colors_flipped(flipped)
-			if deployment_flip_check:
-				deployment_flip_check.button_pressed = flipped
 
 	if settings.has("objectives"):
 		var objectives = settings["objectives"]
@@ -10202,8 +10201,9 @@ func _init_room_code_display() -> void:
 	_room_code_button.pressed.connect(func() -> void:
 		if not _session_room_code.is_empty():
 			DisplayServer.clipboard_set(_session_room_code)
-			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.GENERAL, "Room code copied to clipboard"))
+			# Transient UI acknowledgement → toast, not a battle-log line (every click wrote
+			# another "copied" entry into the game record; "Room code: X" logs once elsewhere).
+			_solo_show_toast("Room code copied"))
 	left_panel_vbox.add_child(_room_code_button)
 	left_panel_vbox.move_child(_room_code_button, 0)
 
@@ -11374,10 +11374,14 @@ func _on_deployment_type_changed(deployment_type: int) -> void:
 	if deployment_type > 0:
 		terrain_overlay.set_deployment_zones_visible(true)
 		if deployment_zone_check:
-			deployment_zone_check.button_pressed = true
+			deployment_zone_check.set_pressed_no_signal(true)   # #195: no toggled re-emit
 
-	# Sync deployment type to remote clients
-	_broadcast_table_settings_update("deployment_type", deployment_type)
+	# Sync deployment type to remote clients. #194/#195: zone GEOMETRY is host-authoritative —
+	# map_layout emits this signal from non-user paths too (load_layout, sync), so a guest
+	# opening its Map Tool used to push deployment_type (even 0) at the host and WIPE the
+	# host's zone meshes mid-game.
+	if network_manager == null or not network_manager.is_multiplayer_active() or network_manager.is_host:
+		_broadcast_table_settings_update("deployment_type", deployment_type)
 
 
 ## Handle objectives change from Map Tool
@@ -11632,8 +11636,8 @@ func _on_deployment_zones_visibility_toggled(show_zones: bool) -> void:
 	# NOTE: zone visibility no longer drives the move-trail chalk — that follows the formal game
 	# phase now (see _sync_move_trails_deployment). Toggling zones during play keeps trails visible.
 
-	# Sync visibility to remote clients
-	_broadcast_table_settings_update("deployment_visible", show_zones)
+	# #194/#195: visibility is a per-player VIEW preference — never broadcast (the mutual
+	# mirror re-triggering is what made both peers' zones flash permanently).
 
 
 ## Push the current GAME PHASE to the move-trail chalk: during DEPLOYMENT players are placing
@@ -11652,8 +11656,8 @@ func _sync_move_trails_deployment() -> void:
 func _on_deployment_flip_toggled(flipped: bool) -> void:
 	if not terrain_overlay or not terrain_overlay.has_method("set_deployment_colors_flipped"):
 		return
+	# #194/#195: the colour flip is each player's own side-of-the-table choice — strictly local.
 	terrain_overlay.set_deployment_colors_flipped(flipped)
-	_broadcast_table_settings_update("deployment_flipped", flipped)
 
 
 ## ============================================================================
