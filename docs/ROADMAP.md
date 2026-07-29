@@ -229,7 +229,21 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.10.0-alpha`:** the solo update — **NACHTMAHR**, the built-in
+See [`CHANGELOG.md`](../CHANGELOG.md).
+
+**`0.3.10.1-alpha` (2026-07-29):** the community hotfix wave from the first days of public play —
+**multiplayer**: a slot a connected human occupies can never be driven by the solo automation
+([#196](../../issues/196)); deployment zones reach the guest and stop flashing (geometry host-synced,
+visibility/colour-flip strictly local, [#194](../../issues/194)/[#195](../../issues/195)). **Movement**:
+`Ctrl`+`Z` **movement take-back** (position, facing, chalk + inch proof, MP-synced, [#162](../../issues/162));
+mid-drag corrections refund inside your own chalk ribbon ([#191](../../issues/191)). **Solo**: click-based
+**wound allocation** when the choice matters ([#172](../../issues/172)); Ambush transports load cargo during
+deployment ([#160](../../issues/160)); Indirect fire without LOS for human players ([#182](../../issues/182));
+Surge/Blast/7+-save log lines ([#193](../../issues/193)/[#169](../../issues/169)/[#173](../../issues/173));
+the AI turn keeps the frame loop alive ([#163](../../issues/163)); the dice tray names what each roll is
+about ([#170](../../issues/170)); draggable deployment control box ([#159](../../issues/159)).
+
+**`0.3.10.0-alpha`:** the solo update — **NACHTMAHR**, the built-in
 opponent (rules-based, deterministic, fully offline; one difficulty, full strength) with alternating
 activations, its own objective-marker scoring, round plans and look-ahead activation ordering, and a
 battle log that explains every decision; the **AI Opponent** button (NACHTMAHR brings its own list —
