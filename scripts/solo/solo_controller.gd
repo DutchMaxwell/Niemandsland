@@ -5718,6 +5718,19 @@ func _charge_path_reaches(unit: GameUnit, target: GameUnit, band_in: float) -> b
 	var keep_flow := last_flow_order
 	var trails: Array = []
 	var planned := _plan_move(unit, models, positions, goal2, band_in, true, avoid, avoid_dang, trails, target)
+	# Mirror the executor's difficult ladder (p.11): when the ROUTE crosses difficult
+	# terrain, the budget collapses to the 6" cap and the executor re-plans through — the
+	# silent collapse behind the 13.5"-gap/9.8"-short Raptor charges (Schmiede v2 find,
+	# seed 61003). Charges are exempt from the stall ladders, so this is the ONLY
+	# execution branch the dry-run must reproduce.
+	var eff_band := band_in
+	var trail_radii_m: Array = []
+	for m in models:
+		trail_radii_m.append(model_base_radius_m(m as ModelInstance))
+	if not ignores_difficult and _trails_cross_difficult(trails, trail_radii_m):
+		eff_band = minf(band_in, DIFFICULT_MOVE_CAP_IN)
+		trails = []
+		planned = _plan_move(unit, models, positions, goal2, eff_band, true, false, avoid_dang, trails, target)
 	last_flow_order = keep_flow
 	# PER-MODEL contact test (Schmiede v2 — v1 took the LONGEST arc over ALL models and
 	# denied every charge whose rear fan-model planned a long arc: 28 denials for only 8
@@ -5742,7 +5755,7 @@ func _charge_path_reaches(unit: GameUnit, target: GameUnit, band_in: float) -> b
 		var residual_i := INF
 		for ts in t_shapes:
 			residual_i = minf(residual_i, SeparationChecker.edge_distance(ashape, ts))
-		var remaining_i := band_in - MovementPlanner.polyline_length(trails[i]) / INCHES_TO_METERS
+		var remaining_i := eff_band - MovementPlanner.polyline_length(trails[i]) / INCHES_TO_METERS
 		if residual_i <= remaining_i + SeparationChecker.BASE_CONTACT_EPSILON_INCHES:
 			return true
 	return false
