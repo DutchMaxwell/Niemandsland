@@ -6561,7 +6561,12 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 	# validity message names the shrunk figure AND the rule that shrank it (B11: no hidden penalty).
 	var raw_rng: int = rng_in
 	rng_in = int(SoloController.effective_shoot_reach_in(float(rng_in), target))
-	if rng_in <= 0 or _solo_sighted_count(attacker, target, rng_in) <= 0:
+	# #182 — Indirect (GF v3.5.1: "May target enemies that are not in line of sight as if
+	# in line of sight"): a unit with an Indirect ranged weapon waives the LOS test here;
+	# the range gate (incl. Aircraft/Shrouding shrink) stays fully in force. Mirrors the
+	# AI's unit-level legality gate, so both sides judge targets identically.
+	var indirect: bool = SoloController.has_indirect_ranged(_solo_all_weapons(attacker))
+	if rng_in <= 0 or _solo_sighted_count(attacker, target, rng_in, indirect) <= 0:
 		if dist > float(rng_in):
 			var why := ""
 			if rng_in < raw_rng:
@@ -6673,8 +6678,11 @@ func _solo_update_los_line(screen_pos: Vector2) -> void:
 		if str(_solo_los_cache.get("target_id", "")) != hovered.unit_id \
 				or now - int(_solo_los_cache.get("at", 0)) > SOLO_LOS_REFRESH_MS:
 			var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
+			# #182: the hover feedback judges like the legality gate — an Indirect gun must
+			# not show a red "0/N sight" line over a perfectly legal target.
 			_solo_los_cache = {"target_id": hovered.unit_id, "at": now,
-				"count": _solo_sighted_count(attacker, hovered, rng_in)}
+				"count": _solo_sighted_count(attacker, hovered, rng_in,
+					SoloController.has_indirect_ranged(_solo_all_weapons(attacker)))}
 		sighted = int(_solo_los_cache.get("count", 0))
 	var color := Color(0.2, 0.9, 0.3) if sighted > 0 else Color(0.95, 0.25, 0.2)
 	var from := solo_controller.unit_centre(attacker) + Vector3(0, 0.04, 0)
@@ -6826,8 +6834,15 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
 	if battle_log != null:
 		var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
 		var total := _solo_combined_alive(attacker)
+		var log_indirect: bool = SoloController.has_indirect_ranged(_solo_all_weapons(attacker))
+		# #182 — rules-must-log: when the volley is only legal BECAUSE of Indirect, say so
+		# (the old line read "0/N with line of sight" over a perfectly legal barrage).
+		if log_indirect and _solo_sighted_count(attacker, target, rng_in) <= 0:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"Indirect: %s targets %s without line of sight (GF v3.5.1)" % [
+				attacker.get_name(), target.get_name()], true)
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d/%d model%s with line of sight + range" % [
-			attacker.get_name(), _solo_sighted_count(attacker, target, rng_in), total, ("" if total == 1 else "s")], true)
+			attacker.get_name(), _solo_sighted_count(attacker, target, rng_in, log_indirect), total, ("" if total == 1 else "s")], true)
 	var fired_any := false   # round 7, finding 5: a volley that rolls NOTHING must say so, never end silently
 	var chosen_versatile: Dictionary = {}   # Bug 13: per-weapon Versatile choice, asked once per volley
 	# Unpredictable (generic, "when attacking"): the HUMAN's volley rolls the same visible die —
@@ -6874,6 +6889,17 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
 					p_mod = td_ctx["mod"] as Dictionary
 					shot_base = int(td_ctx["defense"])
 					shot_cover = int(td_ctx["covered"])
+			# #182 — Indirect "-1 to hit when shooting after moving" for the HUMAN volley (the
+			# AI block's mirror; Quick Readjustment waives it). Keyed on the same moved_round
+			# stamp the Entrenched gate reads — one truth for "moved this round".
+			var h_moved: bool = opr_army_manager != null \
+				and int(attacker.unit_properties.get("moved_round", -1)) == opr_army_manager.current_round
+			if h_moved and bool(profile.get("indirect", false)) \
+					and not bool(RulesRegistry.best_primitive_param(group.get("member"), "Indirect", "no_moved_penalty", false)):
+				var ind_mod: int = AiCombatMath.indirect_hit_modifier(true,
+					int(RulesRegistry.unit_param(group.get("member"), "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
+				p_mod = {"mod": int(p_mod.get("mod", 0)) + ind_mod,
+					"note": _solo_join_note(str(p_mod.get("note", "")), "Indirect moved %d" % ind_mod)}
 			# Reliable sets the Quality (2+), THEN the roll modifiers apply (GF v3.5.1 p.14: "Reliable only
 			# changes the Quality value, so the roll can still be modified").
 			var to_hit: int = AiCombatMath.modified_hit_target(
