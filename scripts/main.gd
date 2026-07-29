@@ -5319,7 +5319,11 @@ func _solo_present_move_start(move_paths: Array) -> void:
 		model.node.global_position = Vector3(start.x, model.node.global_position.y, start.z)
 
 
-func _solo_animate_move(move_paths: Array) -> void:
+## Visual replay of an executed AI move. `allow_snap=false` (pile-in / consolidation,
+## NML-208: mandatory melee moves must visibly glide — a teleport read as "nothing
+## happened") forces the glide even for sub-inch arcs; regular activation moves snap
+## into place when even the longest model arc stays under PACE_SNAP_MAX_IN (NML-224).
+func _solo_animate_move(move_paths: Array, allow_snap: bool = true) -> void:
 	# Entrenched-family bookkeeping: any executed move stamps the unit's moved_round (the
 	# stationary gate reads it; pile-in/consolidation count as moving per the rule's wording).
 	if opr_army_manager != null:
@@ -5354,6 +5358,10 @@ func _solo_animate_move(move_paths: Array) -> void:
 	# Distance-truth label: longest actual arc vs the granted budget, at that corridor's midpoint.
 	if not longest_path.is_empty() and solo_controller != null:
 		_solo_spawn_move_label(longest_path, longest_len, solo_controller.last_move_budget_in)
+	# Sub-inch repositioning (kiting micro-steps) SNAPS instead of gliding — a tiny step
+	# animated at pace speed reads as shuffling ("Sub-Zoll-Geschlurfe", NML-224). Corridors,
+	# distance label, attention beat and chalk commit all still run; only the crawl is skipped.
+	var snap: bool = SoloController.should_snap_move(longest_len, allow_snap)
 	# (d) Attention beat: corridors drawn, models poised at the start.
 	await _solo_pace_attention()
 	# (e) Glide the models ONE AT A TIME in the SEQUENTIAL FLOW ORDER (field-test round 6, finding 7):
@@ -5367,20 +5375,22 @@ func _solo_animate_move(move_paths: Array) -> void:
 			continue
 		var node := model.node
 		var y := node.global_position.y
-		var tw := node.create_tween()
+		var tw: Tween = null
 		var total := 0.0
-		for i in range(1, path.size()):
-			var a := path[i - 1] as Vector3
-			var b := path[i] as Vector3
-			var leg := Vector2(b.x - a.x, b.z - a.z).length()
-			if leg <= 0.0001:
-				continue
-			var dur := leg / speed
-			tw.tween_property(node, "global_position", Vector3(b.x, y, b.z), dur)
-			total += dur
+		if not snap:
+			tw = node.create_tween()
+			for i in range(1, path.size()):
+				var a := path[i - 1] as Vector3
+				var b := path[i] as Vector3
+				var leg := Vector2(b.x - a.x, b.z - a.z).length()
+				if leg <= 0.0001:
+					continue
+				var dur := leg / speed
+				tw.tween_property(node, "global_position", Vector3(b.x, y, b.z), dur)
+				total += dur
 		if total > 0.0:
 			await get_tree().create_timer(total).timeout
-		if tw.is_valid():
+		if tw != null and tw.is_valid():
 			tw.kill()
 		# Snap onto the exact final (the tween end) so state and visuals agree to the millimetre.
 		var fin := path.back() as Vector3
@@ -5705,7 +5715,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	# Silent-correct reads as broken: a multi-model defender with nothing to do says so in the log.
 	var pile_moves: Array = solo_controller.pile_in(target, unit)
 	if not pile_moves.is_empty():
-		await _solo_animate_move(pile_moves)
+		await _solo_animate_move(pile_moves, false)   # NML-208: pile-in always glides
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
 				"%s: %d model%s pile in up to 3\" (GF v3.5.1 p.9)" % [target.get_name(), pile_moves.size(), ("" if pile_moves.size() == 1 else "s")], true)
@@ -5834,7 +5844,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
 			"candidates": [], "chosen": "", "why": "mandatory separation", "data": {"back_in": 1.0}})
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s moves back 1\" (consolidation — GF v3.5.1 p.9)" % charger.get_name(), true)
-		await _solo_animate_move(solo_controller.last_move_paths)
+		await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang > 0:
 			await _run_ai_dangerous(charger, dang)
 		_solo_flush_dev()
@@ -5848,7 +5858,7 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s consolidates up to 3\" (enemy destroyed — GF v3.5.1 p.9)" % survivor.get_name(), true)
-			await _solo_animate_move(solo_controller.last_move_paths)
+			await _solo_animate_move(solo_controller.last_move_paths, false)   # NML-208: always glides
 		if dang2 > 0:
 			await _run_ai_dangerous(survivor, dang2)
 		_solo_flush_dev()
@@ -6579,7 +6589,7 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 		# mandatory 3" pile-in is automated and now GLIDES visibly (teleport read as "nothing happened").
 		var pile_moves: Array = solo_controller.pile_in(target, attacker)
 		if not pile_moves.is_empty():
-			await _solo_animate_move(pile_moves)
+			await _solo_animate_move(pile_moves, false)   # NML-208: pile-in always glides
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
 					"%s: %d model%s pile in up to 3\" (GF v3.5.1 p.9)" % [target.get_name(), pile_moves.size(), ("" if pile_moves.size() == 1 else "s")], true)
