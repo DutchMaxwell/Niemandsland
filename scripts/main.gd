@@ -275,6 +275,10 @@ var _solo_takedown_solo: Dictionary = {}     # {unit, index, model} or {}
 var _solo_deploy_fsm: Dictionary = {}        # click-driven deployment machine (side/main/scout/done — maintainer flow 2026-07-23)
 var _solo_deploy_ui: CanvasLayer = null      # the deployment hand-over panel (label + up to two buttons)
 var _solo_deploy_ui_label: Label = null
+var _solo_deploy_ui_panel: PanelContainer = null   # the draggable panel itself (community #159)
+var _solo_deploy_ui_moved: bool = false      # the player dragged the box — their spot wins
+var _solo_deploy_ui_pos: Vector2 = Vector2.ZERO
+var _solo_deploy_ui_dragging: bool = false
 var _solo_strip_cb1: Callable = Callable()   # the strip owns its callbacks (see _solo_strip_fire)
 var _solo_strip_cb2: Callable = Callable()
 var _solo_deploy_ui_btn1: Button = null
@@ -1759,15 +1763,15 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 		var panel := PanelContainer.new()
 		panel.add_theme_stylebox_override("panel", HudTokens.panel_style())
 		_add_hud_frame(panel)
-		panel.anchor_left = 0.5
-		panel.anchor_right = 0.5
-		panel.anchor_top = 1.0
-		panel.anchor_bottom = 1.0
-		# NML-226: the ▲ Units tab owns the last 28 px of the screen bottom (unit_dock TAB_H), and the
-		# strip's old -18 sat right on it. Clear the tab plus breathing room.
-		panel.offset_bottom = -54.0
-		panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-		panel.grow_vertical = Control.GROW_DIRECTION_BEGIN
+		# Community #159: the box is DRAGGABLE — free top-left positioning instead of the old
+		# bottom-centre anchors (which recomputed offsets every layout and would clobber a drag).
+		# The default spot stays the familiar bottom-centre via _solo_deploy_panel_relayout.
+		panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		panel.grow_horizontal = Control.GROW_DIRECTION_END
+		panel.grow_vertical = Control.GROW_DIRECTION_END
+		panel.gui_input.connect(_solo_deploy_ui_drag)
+		get_viewport().size_changed.connect(_solo_deploy_panel_relayout)
+		_solo_deploy_ui_panel = panel
 		_solo_deploy_ui.add_child(panel)
 		var margin := MarginContainer.new()
 		for side in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
@@ -1800,6 +1804,13 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 		_solo_deploy_ui_btn2.focus_mode = Control.FOCUS_NONE
 		_solo_deploy_ui_btn2.pressed.connect(func() -> void: _solo_strip_fire(_solo_strip_cb2, "2"))
 		row.add_child(_solo_deploy_ui_btn2)
+		# Discoverability for the drag (community #159) — a dim one-liner, no extra chrome.
+		var hint := Label.new()
+		hint.text = "⠿  drag to move"
+		hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hint.add_theme_font_size_override("font_size", 10)
+		hint.modulate = Color(1, 1, 1, 0.45)
+		box.add_child(hint)
 		add_child(_solo_deploy_ui)
 	_solo_deploy_ui_label.text = text
 	_solo_deploy_ui_btn1.text = b1
@@ -1810,6 +1821,9 @@ func _solo_deploy_ui_show(text: String, b1: String, cb1: Callable, b2: String = 
 	_solo_deploy_ui_btn2.text = b2
 	_solo_deploy_fsm["cb2"] = cb2
 	_solo_deploy_ui.visible = true
+	# Deferred: the container re-min-sizes on new text (1 vs 2 label lines) before the
+	# default bottom-centre spot / the clamp is applied.
+	_solo_deploy_panel_relayout.call_deferred()
 
 
 ## Board-side prompt: the bottom strip instead of a centred window, for every question the player
@@ -1831,6 +1845,36 @@ func _solo_board_prompt(text: String, b1: String, b2: String = "") -> int:
 func _solo_deploy_ui_hide() -> void:
 	if _solo_deploy_ui != null and is_instance_valid(_solo_deploy_ui):
 		_solo_deploy_ui.visible = false
+
+
+## Repositions the deployment panel: default = bottom-centre, 54 px above the Units tab
+## (the NML-226 clearance); once the player dragged it, their spot wins. Always clamped
+## fully on-screen — a resize can never strand the box (community #159).
+func _solo_deploy_panel_relayout() -> void:
+	if _solo_deploy_ui_panel == null or not is_instance_valid(_solo_deploy_ui_panel):
+		return
+	var vp: Vector2 = get_viewport().get_visible_rect().size
+	var sz: Vector2 = _solo_deploy_ui_panel.size
+	if not _solo_deploy_ui_moved:
+		_solo_deploy_ui_pos = Vector2((vp.x - sz.x) * 0.5, vp.y - sz.y - 54.0)
+	_solo_deploy_ui_pos = _solo_deploy_ui_pos.clamp(Vector2.ZERO, (vp - sz).max(Vector2.ZERO))
+	_solo_deploy_ui_panel.position = _solo_deploy_ui_pos
+
+
+## Drag-to-move for the deployment panel (community #159): press the panel background or
+## label and drag. The buttons are MOUSE_FILTER_STOP, so they swallow their own presses —
+## a button click never starts a drag. The pressed control keeps mouse focus in Godot, so
+## the release arrives even when the pointer leaves the panel mid-drag.
+func _solo_deploy_ui_drag(event: InputEvent) -> void:
+	var mb := event as InputEventMouseButton
+	if mb != null and mb.button_index == MOUSE_BUTTON_LEFT:
+		_solo_deploy_ui_dragging = mb.pressed
+		return
+	var mm := event as InputEventMouseMotion
+	if mm != null and _solo_deploy_ui_dragging:
+		_solo_deploy_ui_moved = true
+		_solo_deploy_ui_pos += mm.relative
+		_solo_deploy_panel_relayout()
 
 
 ## The HUMAN's army tray side: true when it stands on the -Z half (the side pick's reference).
