@@ -7287,11 +7287,26 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 		await get_tree().process_frame
 	var placed: Array = []
 	if str(outcome[0]) == "placed":
-		placed = _solo_newly_tabled_reserves()
+		var presence := _solo_reserve_table_presence()
+		placed = presence["placed"] as Array
+		var partial: Array = presence["partial"] as Array
 		if placed.is_empty():
-			_solo_show_toast("No new reserve unit detected on the table — place it first, then ✓")
+			# #190 — the silent middle: the player DID move models, but not the whole unit.
+			# Name the unit and the missing count instead of the generic "place it first".
+			if not partial.is_empty():
+				var pe := partial[0] as Dictionary
+				_solo_show_toast("%s: %d of %d models stand on the table — place the WHOLE unit (attached leader included), then ✓" % [
+					(pe["unit"] as GameUnit).get_name(), int(pe["on"]), int(pe["total"])])
+			else:
+				_solo_show_toast("No new reserve unit detected on the table — place it first, then ✓")
 			_solo_deploy_ui_hide()
 			return await _solo_ambush_human_turn(round_number, pool)
+		for p in partial:
+			var pe2 := p as Dictionary
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL,
+					"%s: %d of %d models on the table — it stays in reserve (place the whole unit)" % [
+						(pe2["unit"] as GameUnit).get_name(), int(pe2["on"]), int(pe2["total"])], false)
 		for g in placed:
 			var gu := g as GameUnit
 			gu.unit_properties["ambush_reserve"] = false
@@ -7300,27 +7315,68 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.GENERAL,
 					"You deploy %s from Ambush reserve (>9\" from enemies) — it may act this round, no seizing (GF v3.5.1 p.13)" % gu.get_name(), false)
+			_solo_warn_ambush_proximity(gu)
 	elif battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "Your Ambush reserve keeps waiting this round", false)
 	_solo_deploy_ui_hide()
 	return placed
 
 
-## Human reserve units whose centre NOW stands on the table plane (dragged off the tray) — the
-## Ambush ✓ click's detection. The tray stands outside the table rect, so it never false-counts.
-func _solo_newly_tabled_reserves() -> Array:
-	var out: Array = []
+## Human reserve units by their CURRENT table presence — the Ambush ✓ click's detection.
+## #190 (community, jetpack leader): a unit counts as PLACED only when EVERY alive model —
+## attached heroes included — stands on the table plane. The old unit-CENTRE test failed
+## silently in both directions: a placed leader with the squad still on the tray did not
+## register ("not registering as being placed"), and a mostly-placed squad counted as
+## complete while leftover models stayed hidden on the tray. Partial placements are
+## reported with counts so the hand-over can SAY what is missing.
+## Returns {"placed": Array[GameUnit], "partial": Array[{unit, on, total}]}.
+func _solo_reserve_table_presence() -> Dictionary:
+	var res := {"placed": [], "partial": []}
 	if table == null or solo_controller == null:
-		return out
+		return res
 	var w: float = table.table_size.x * 0.3048
 	var d: float = table.table_size.y * 0.3048
 	var trect := Rect2(Vector2(-w / 2.0, -d / 2.0), Vector2(w, d))
 	for u in solo_controller.human_reserve_units():
 		var gu := u as GameUnit
-		var c := solo_controller.unit_centre(gu)
-		if trect.has_point(Vector2(c.x, c.z)):
-			out.append(gu)
-	return out
+		var chain: Array = [gu]
+		if gu.has_method("get_attached_heroes"):
+			chain.append_array(gu.get_attached_heroes())
+		var on := 0
+		var total := 0
+		for c in chain:
+			var member := c as GameUnit
+			if member == null:
+				continue
+			for m in member.get_alive_models():
+				var mi := m as ModelInstance
+				if mi == null or mi.node == null or not is_instance_valid(mi.node):
+					continue
+				total += 1
+				var p := mi.node.global_position
+				if trect.has_point(Vector2(p.x, p.z)):
+					on += 1
+		if total > 0 and on == total:
+			(res["placed"] as Array).append(gu)
+		elif on > 0:
+			(res["partial"] as Array).append({"unit": gu, "on": on, "total": total})
+	return res
+
+
+## #190 — the >9"-from-enemies arrival rule stays the player's own measure (honor system,
+## like the physical table), but a violation is NAMED instead of silent: rules-must-log.
+func _solo_warn_ambush_proximity(gu: GameUnit) -> void:
+	if solo_controller == null or battle_log == null or opr_army_manager == null:
+		return
+	var worst := INF
+	for e in opr_army_manager.get_game_units_for_player(solo_controller.ai_slot):
+		var eu := e as GameUnit
+		if eu == null or eu.get_alive_count() <= 0 or SoloController.unit_in_reserve(eu):
+			continue
+		worst = minf(worst, solo_controller.nearest_melee_gap_in(gu, eu))
+	if worst < 9.0:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"⚠ %s stands %.1f\" from an enemy — Ambush arrivals must be >9\" away (GF v3.5.1 p.13); nudge it out (or house-rule it)" % [gu.get_name(), worst], false)
 
 
 ## OPR: Fatigue lasts only until the end of the round — clear it from EVERY unit (both sides, heroes
