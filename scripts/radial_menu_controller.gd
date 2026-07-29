@@ -2341,8 +2341,8 @@ func _append_transport_items(game_unit: GameUnit, context: Dictionary, items: Ar
 				continue   # #209: its move action is spent — no second activation this round
 			items.append(RadialMenu.RadialMenuItem.new("unload_cargo_%d" % i,
 				"Unload %s%s" % [str(cu.unit_properties.get("name", "unit")),
-					" — ends its activation" if economy else ""], "▢", true,
-				"Disembark this unit — any move action, fully within 6\" (GF v3.5.1 p.15 Transport)"))
+					" — its move action (may shoot after)" if economy else ""], "▢", true,
+				"Disembark this unit — an Advance exit: place fully within 6\", the shot window stays open (GF v3.5.1 p.7/p.15)"))
 
 
 ## The transport this unit could embark into RIGHT NOW: same player, capacity gate ok, reached.
@@ -2407,6 +2407,13 @@ func _embark_unit(context: Dictionary) -> void:
 		return
 	if not _transport_activation_open(unit, "embark"):
 		return
+	# #209 (p.15): "units can't both embark/disembark as part of the same activation" — an
+	# Advance-exit leaves the unit unactivated (shot window open), so the same-round
+	# re-embark needs its own gate.
+	if _activation_economy_on() and army_manager != null \
+			and int(unit.unit_properties.get("disembarked_round", -1)) == army_manager.current_round:
+		_transport_log("%s disembarked this round — it can't embark again (one move action per activation, GF v3.5.1 p.15)" % str(unit.unit_properties.get("name", "unit")))
+		return
 	if army_manager.set_unit_embarked(unit, tr, true):
 		if network_manager:
 			network_manager.broadcast_unit_embark(unit.unit_id, tr.unit_id, true)
@@ -2427,9 +2434,17 @@ func _disembark_unit(unit: GameUnit) -> void:
 	if army_manager.set_unit_embarked(unit, null, false):
 		if network_manager:
 			network_manager.broadcast_unit_embark(unit.unit_id, tr.unit_id, false)
-		_transport_log("%s disembarks from %s — GF v3.5.1 Transport" % [
-			str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))])
-		_consume_transport_activation(unit, "disembark")
+		# #209 correction (maintainer rules check): exiting is "any move action" (p.15) and an
+		# ADVANCE may shoot after moving (p.7) — so the exit leaves the shot window OPEN. The
+		# activation ends the normal way (the shot, or the player's hand-over); what the round
+		# forbids is embarking again (gate above). Only the exit round is stamped here.
+		if _activation_economy_on():
+			unit.unit_properties["disembarked_round"] = army_manager.current_round
+			_transport_log("%s disembarks from %s (Advance exit, fully within 6\") — it may still shoot this activation (GF v3.5.1 p.7/p.15)" % [
+				str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))])
+		else:
+			_transport_log("%s disembarks from %s — GF v3.5.1 Transport" % [
+				str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))])
 
 
 ## #209 — whether a solo game's activation economy is running. Embark/disembark are "any move
