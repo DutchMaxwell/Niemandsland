@@ -1584,6 +1584,11 @@ func _solo_ai_slot() -> int:
 
 ## (Re)build the SoloController for the currently designated AI slot (setup wires TurnManager once).
 func _ensure_solo_controller() -> void:
+	# #196 belt-and-braces: in multiplayer the controller exists only for an EXPLICITLY
+	# designated AI slot — a cast/targeting click in a human-vs-human room must not summon
+	# NACHTMAHR (the controller's existence alone arms the alternation pump).
+	if solo_ai_slots.is_empty() and network_manager != null and network_manager.is_multiplayer_active():
+		return
 	var ai_slot := _solo_ai_slot()
 	# In native both-AI mode the driver flips solo_controller.ai_slot per activation, so a slot-mismatch is
 	# EXPECTED and must NOT tear down the controller (that would lose the activation counter + decision log).
@@ -6206,7 +6211,10 @@ func solo_combat_available(unit: GameUnit) -> bool:
 	if u.is_activated:
 		return false
 	for au in opr_army_manager.get_game_units_for_player(_solo_ai_slot()):
-		if au != null and au.get_alive_count() > 0:
+		# #196: the prospective enemy must actually BE automation-driven — in a human-vs-human
+		# multiplayer room nothing is, so the solo Shoot/Fight entries stay out of the radial
+		# and combat is manual (dice tray), as multiplayer always was.
+		if au != null and au.get_alive_count() > 0 and _solo_is_ai_unit(au):
 			return true
 	return false
 
@@ -6265,7 +6273,19 @@ func _solo_combat_unit(unit: GameUnit) -> GameUnit:
 
 func _solo_is_ai_unit(unit: GameUnit) -> bool:
 	var pid: int = int(unit.unit_properties.get("player_id", 0))
-	return solo_ai_slots.has(pid) or (solo_ai_slots.is_empty() and pid == _solo_ai_slot())
+	# #196 HARD GUARD: a slot a connected human occupies is NEVER NACHTMAHR's — whatever a
+	# stale designation claims. This is the choke point all ~35 consumers share (auto-rolls,
+	# "AI (X)" labels, the alternation pump, radial gates), so the guard lives here once.
+	if network_manager != null and network_manager.slot_has_human_peer(pid):
+		return false
+	if solo_ai_slots.has(pid):
+		return true
+	# The implicit "no designation → P2 is the AI" default is a SOLO-mode convention. In
+	# multiplayer nobody is an AI unit unless explicitly designated — this implicit branch
+	# is what let NACHTMAHR hijack the guest's army in a human-vs-human room.
+	if network_manager != null and network_manager.is_multiplayer_active():
+		return false
+	return solo_ai_slots.is_empty() and pid == _solo_ai_slot()
 
 
 ## Enter targeting mode (P8): the weapon range shows as a ring, the line of sight to the hovered enemy
@@ -8570,8 +8590,9 @@ func _on_battle_log_copy() -> void:
 func _log_battle_activation(gu, _remote: bool) -> void:
 	if battle_log == null or gu == null:
 		return
-	var pid: int = int(gu.unit_properties.get("player_id", 0))
-	var is_ai: bool = pid == 2   # M1: player 2 is the Solo-AI slot
+	# #196: ask the guarded predicate — the old hardcoded "player 2 is the AI" stamped
+	# "activated (AI)" onto the guest's every activation in multiplayer.
+	var is_ai: bool = _solo_is_ai_unit(gu)
 	battle_log.on_unit_activated(gu.get_name(), ("AI" if is_ai else "you"), is_ai)
 
 
@@ -9301,6 +9322,10 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	if not multiplayer.is_server():
 		return
 	network_status_label.text = "Hosting (peer %d joined)" % peer_id
+	# #196 — the slot belongs to a HUMAN now: strip any AI designation it carried (e.g. a
+	# solo session that rolled into hosting), BEFORE the state push, so the guest never
+	# receives a table where NACHTMAHR claims its army.
+	_solo_release_slot_to_human(network_manager.slot_for_peer(peer_id))
 	_sync_state_to_peer(peer_id)
 	# The peer is registered and validated — hand it the full name roster so it
 	# immediately knows everyone already at the table (including the host).
@@ -9320,6 +9345,20 @@ func _on_peer_version_validated(peer_id: int) -> void:
 	# Replay the current pinned rulers so the late-joiner sees existing measurements
 	# (session-only state, not part of the .nml save).
 	network_manager.sync_rulers_to_peer(peer_id)
+
+
+## #196 — a human peer occupies `slot`: any AI designation on it is void. Logged, because a
+## silently released NACHTMAHR would read like a lost army marker (rules-must-log).
+func _solo_release_slot_to_human(slot: int) -> void:
+	if slot <= 0 or not solo_ai_slots.has(slot):
+		return
+	solo_ai_slots.erase(slot)
+	_solo_sync_difficulty()
+	_refresh_solo_panel.call_deferred()
+	_rebuild_roster()
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"P%d is a human player now — NACHTMAHR releases the slot" % slot)
 
 
 ## Client: the host refused us because our game versions differ. Leave the
@@ -9556,6 +9595,28 @@ func _rebuild_roster() -> void:
 		row.add_child(label)
 
 		_roster_vbox.add_child(row)
+
+	# #196 — AI-designated slots (no peer behind them) appear too, so who-is-what is readable
+	# at a glance: "P2: NACHTMAHR" under the human rows. A slot a human occupies never shows
+	# here (the designation would be void anyway — see _solo_is_ai_unit's hard guard).
+	var ai_slots: Array = solo_ai_slots.keys()
+	ai_slots.sort()
+	for slot in ai_slots:
+		if network_manager.slot_has_human_peer(int(slot)):
+			continue
+		var ai_row := HBoxContainer.new()
+		ai_row.add_theme_constant_override("separation", HudTokens.SPACE_4)
+		var ai_dot := ColorRect.new()
+		ai_dot.color = PlayerPalette.color_for_slot(int(slot))
+		ai_dot.custom_minimum_size = Vector2(10, 10)
+		ai_dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		ai_row.add_child(ai_dot)
+		var ai_label := Label.new()
+		ai_label.text = "P%d: NACHTMAHR" % int(slot)
+		ai_label.add_theme_font_size_override("font_size", CHAT_PANEL_SMALL_FONT)
+		ai_label.add_theme_color_override("font_color", HudTokens.TEXT_MUTED)
+		ai_row.add_child(ai_label)
+		_roster_vbox.add_child(ai_row)
 
 
 func _on_internet_failed(reason: String) -> void:
@@ -10541,6 +10602,15 @@ func _open_ai_opponent_dialog() -> void:
 	var slot_opt := OptionButton.new()
 	slot_opt.add_item("Player 2 (Red)", 2)
 	slot_opt.add_item("Player 1 (Blue)", 1)
+	# #196 — slots a connected human occupies are not on offer.
+	for i in slot_opt.item_count:
+		if network_manager != null and network_manager.slot_has_human_peer(slot_opt.get_item_id(i)):
+			slot_opt.set_item_disabled(i, true)
+			slot_opt.set_item_text(i, slot_opt.get_item_text(i) + " — human player")
+	for i in slot_opt.item_count:
+		if not slot_opt.is_item_disabled(i):
+			slot_opt.select(i)
+			break
 	box.add_child(slot_opt)
 
 	dlg.add_child(box)
@@ -10569,6 +10639,10 @@ func _dialog_label(text: String) -> Label:
 ## Load + parse an AI list (bundle → user-cache → CDN, in that order) and route it through the
 ## normal import path as an AI army.
 func _load_ai_opponent_list(file: String, slot: int) -> void:
+	# #196 final gate (the dialog may have been open while the peer joined).
+	if network_manager != null and network_manager.slot_has_human_peer(slot):
+		_solo_show_toast("P%d is a connected human player — NACHTMAHR stays out" % slot)
+		return
 	var text := _ai_lists_local_text(file)
 	if text.is_empty():
 		text = await _fetch_cdn_text("%s/%s" % [AI_LISTS_CDN_PATH, file])
@@ -10641,12 +10715,17 @@ func _load_ai_list_manifest() -> Dictionary:
 ## Handle army imported from dialog
 func _on_opr_army_imported(army: OPRApiClient.OPRArmy, player_id: int, ai_controlled: bool = false) -> void:
 	print("Importing army '%s' for Player %d%s" % [army.name, player_id, " (AI-controlled)" if ai_controlled else ""])
+	# #196 — a slot a connected human occupies can never be designated as the AI's.
+	if ai_controlled and network_manager != null and network_manager.slot_has_human_peer(player_id):
+		ai_controlled = false
+		_solo_show_toast("P%d is a connected human player — AI designation refused" % player_id)
 	# Solo (goal 001): remember the designation; the Solo panel + F11 read it. Re-importing the slot
 	# without the checkbox clears a stale designation.
 	if ai_controlled:
 		solo_ai_slots[player_id] = true
 	else:
 		solo_ai_slots.erase(player_id)
+	_rebuild_roster()
 	_solo_sync_difficulty()   # give the AI slot its grade → position solver + knobs run (not the naive baseline)
 	_refresh_solo_panel.call_deferred()   # deferred: the synchronous army spawn below blocks first
 
@@ -11422,6 +11501,11 @@ func _refresh_solo_panel() -> void:
 
 
 func _on_solo_ai_toggled(pressed: bool, player_id: int) -> void:
+	# #196 — a slot a connected human occupies can never be handed to NACHTMAHR.
+	if pressed and network_manager != null and network_manager.slot_has_human_peer(player_id):
+		_solo_show_toast("P%d is a connected human player — NACHTMAHR can't take that slot" % player_id)
+		_refresh_solo_panel.call_deferred()   # snap the checkbox back to off
+		return
 	if pressed:
 		solo_ai_slots[player_id] = true
 		_solo_game_finished = false   # (re)designating an AI army starts a fresh solo match
@@ -11429,6 +11513,7 @@ func _on_solo_ai_toggled(pressed: bool, player_id: int) -> void:
 	else:
 		solo_ai_slots.erase(player_id)
 	_solo_sync_difficulty()
+	_rebuild_roster()
 
 
 ## Re-apply the difficulty after an AI designation or Solo-panel grade change. Thin alias of
