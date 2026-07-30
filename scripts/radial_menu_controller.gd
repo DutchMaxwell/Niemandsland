@@ -358,7 +358,7 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		var cargo_list: Array = context.get("cargo_units", [])
 		var ci := int(action_id.trim_prefix("unload_cargo_"))
 		if ci >= 0 and ci < cargo_list.size():
-			_disembark_unit(cargo_list[ci] as GameUnit)
+			_begin_disembark_ghost(cargo_list[ci] as GameUnit)
 		return
 
 	# Embark entries are per-TRANSPORT ("embark_<index>") — with several reachable transports
@@ -2438,7 +2438,10 @@ func _embark_unit(context: Dictionary) -> void:
 		_consume_transport_activation(unit, "embark")
 
 
-func _disembark_unit(unit: GameUnit) -> void:
+## #210 (grilled 2026-07-30): the radial "Unload" opens the cursor-placement ghost — the
+## unit's formation hangs at the mouse (R rotates, LMB commits inside the 6" zone, RMB/ESC
+## keeps it inside). Headless/batch (tests, harness, AI) fall through to the direct placer.
+func _begin_disembark_ghost(unit: GameUnit) -> void:
 	if unit == null or army_manager == null:
 		return
 	var tr := army_manager.transport_of(unit)
@@ -2446,9 +2449,95 @@ func _disembark_unit(unit: GameUnit) -> void:
 		return
 	if not _transport_activation_open(unit, "disembark"):
 		return
-	if army_manager.set_unit_embarked(unit, null, false):
+	if DisplayServer.get_name() == "headless":
+		_disembark_unit(unit)
+		return
+	var spots: Array = army_manager.disembark_positions(tr, unit)
+	if spots.is_empty():
+		_disembark_unit(unit)   # no legal formation — the direct path owns its fallback chain
+		return
+	# The auto-formation as a cursor-relative SHAPE (chain order = assignment order).
+	var centroid := Vector3.ZERO
+	for p in spots:
+		centroid += p as Vector3
+	centroid /= float(spots.size())
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		chain.append_array(unit.get_attached_heroes())
+	var radii: Array = []
+	for c in chain:
+		var member := c as GameUnit
+		if member == null:
+			continue
+		for m in member.get_alive_models():
+			var sh := SeparationChecker.shape_for_model(m as ModelInstance)
+			radii.append(sh.bounding_radius() if sh != null else SeparationChecker.DEFAULT_BASE_RADIUS_M)
+	var shape: Array = []
+	for i in range(mini(spots.size(), radii.size())):
+		var sp := spots[i] as Vector3
+		shape.append({"off": Vector2(sp.x - centroid.x, sp.z - centroid.z), "r": radii[i]})
+	# Zone + blockers + bounds for the live validation.
+	var t_model: ModelInstance = null
+	for tm in tr.get_alive_models():
+		if (tm as ModelInstance).node != null and is_instance_valid((tm as ModelInstance).node):
+			t_model = tm as ModelInstance
+			break
+	if t_model == null:
+		_disembark_unit(unit)
+		return
+	var t_shape := SeparationChecker.shape_for_model(t_model)
+	var t_r: float = t_shape.bounding_radius() if t_shape != null else SeparationChecker.DEFAULT_BASE_RADIUS_M
+	var zone_m: float = OPRArmyManager.DISEMBARK_ZONE_IN * 0.0254 + t_r
+	var blockers: Array = []
+	for g in army_manager.get_all_game_units():
+		var gu := g as GameUnit
+		if gu == null or chain.has(gu) or SoloController.unit_in_reserve(gu):
+			continue
+		for m2 in gu.get_alive_models():
+			var mi2 := m2 as ModelInstance
+			if mi2.node != null and is_instance_valid(mi2.node) and not bool(mi2.node.get_meta("embarked", false)):
+				var s2 := SeparationChecker.shape_for_model(mi2)
+				blockers.append({"p": mi2.node.global_position,
+					"r": (s2.bounding_radius() if s2 != null else SeparationChecker.DEFAULT_BASE_RADIUS_M)})
+	var bounds := Rect2(-1000.0, -1000.0, 2000.0, 2000.0)
+	var main_node := get_node_or_null("/root/Main")
+	if main_node != null and main_node.get("table") != null:
+		var w: float = main_node.table.table_size.x * 0.3048
+		var dd: float = main_node.table.table_size.y * 0.3048
+		bounds = Rect2(-w / 2.0, -dd / 2.0, w, dd)
+	var ghost := PlacementGhost.new()
+	add_child(ghost)
+	ghost.begin(shape, t_model.node.global_position, zone_m, blockers, bounds,
+		func(positions: Array) -> void: _disembark_unit(unit, positions),
+		func() -> void: _transport_log("%s stays inside %s (placement cancelled)" % [
+			str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))]))
+
+
+func _disembark_unit(unit: GameUnit, override_spots: Array = []) -> void:
+	if unit == null or army_manager == null:
+		return
+	var tr := army_manager.transport_of(unit)
+	if tr == null:
+		return
+	if not _transport_activation_open(unit, "disembark"):
+		return
+	if army_manager.set_unit_embarked(unit, null, false, Vector3.INF, override_spots):
 		if network_manager:
 			network_manager.broadcast_unit_embark(unit.unit_id, tr.unit_id, false)
+			# #210: a ghost-placed exit uses PLAYER spots — the remote side auto-placed on the
+			# embark message, so correct it with the real positions (same path a drag syncs).
+			if not override_spots.is_empty() and network_manager.is_multiplayer_active():
+				var sync_chain: Array = [unit]
+				if unit.has_method("get_attached_heroes"):
+					sync_chain.append_array(unit.get_attached_heroes())
+				for c in sync_chain:
+					var member := c as GameUnit
+					if member == null:
+						continue
+					for m in member.get_alive_models():
+						var n: Node3D = (m as ModelInstance).node
+						if n != null and is_instance_valid(n) and n.has_meta("network_id"):
+							network_manager.broadcast_move(n.get_meta("network_id"), n.global_position)
 		# #209 correction (maintainer rules check): exiting is "any move action" (p.15) and an
 		# ADVANCE may shoot after moving (p.7) — so the exit leaves the shot window OPEN. The
 		# activation ends the normal way (the shot, or the player's hand-over); what the round

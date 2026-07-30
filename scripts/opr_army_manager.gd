@@ -2777,7 +2777,7 @@ func can_embark(unit: GameUnit, transport: GameUnit) -> Dictionary:
 ## transforms only when the placer finds no full-unit spot. `exit_toward` opens the formation
 ## toward a world point (Vector3.INF = the transport's facing). Returns whether state changed.
 func set_unit_embarked(unit: GameUnit, transport: GameUnit, embarked: bool,
-		exit_toward: Vector3 = Vector3.INF) -> bool:
+		exit_toward: Vector3 = Vector3.INF, override_spots: Array = []) -> bool:
 	if unit == null:
 		return false
 	var exit_spots: Array = []
@@ -2799,7 +2799,10 @@ func set_unit_embarked(unit: GameUnit, transport: GameUnit, embarked: bool,
 			return false
 		if transport == null:
 			transport = t
-		exit_spots = disembark_positions(transport, unit, exit_toward)
+		# #210: the cursor-placement ghost hands PLAYER-CHOSEN spots in (already validated
+		# against the fully-within-6" zone + overlap); without them the auto-placer decides.
+		exit_spots = override_spots if not override_spots.is_empty() \
+				else disembark_positions(transport, unit, exit_toward)
 		unit.unit_properties.erase("embarked_in")
 		var cargo2: Array = transport.unit_properties.get("cargo_unit_ids", [])
 		cargo2.erase(unit.unit_id)

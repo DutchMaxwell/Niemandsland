@@ -107,6 +107,19 @@ func test_no_reembark_in_the_exit_round(timeout := 120000) -> void:
 	assert_str(_log_text()).contains("can't embark again")
 
 
+func test_headless_unload_dispatch_bypasses_the_ghost(timeout := 120000) -> void:
+	# #210: the radial Unload opens the cursor ghost — but headless (tests, harness, AI)
+	# must fall through to the direct placer, or every automated flow would hang waiting
+	# for a mouse. Drives the REAL dispatch id.
+	_solo_playing_on()
+	var tc := _truck_and_cargo()
+	_main.opr_army_manager.set_unit_embarked(tc[1], tc[0], true)
+	_main.radial_menu_controller._on_action_selected("unload_cargo_0", {"cargo_units": [tc[1]]})
+	assert_object(_main.opr_army_manager.transport_of(tc[1])) \
+		.override_failure_message("#210 — the headless unload dispatch did not place the unit (ghost hang?)") \
+		.is_null()
+
+
 func test_two_reachable_transports_offer_a_choice(timeout := 120000) -> void:
 	# Maintainer find: with two trucks in reach the first was silently taken. Now one entry
 	# per vehicle, and the click routes to the PICKED one.
