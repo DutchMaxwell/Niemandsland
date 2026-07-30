@@ -3884,11 +3884,15 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 		notes.append("Artillery: no +1 (target within 9\")")
 	if stealth and over_nine:
 		notes.append("Stealth -1")
+	elif stealth:
+		notes.append("Stealth: no -1 (within 9\")")   # #224 sweep: name the non-application
 	if alias_pen > 0 and not (stealth and over_nine):
 		mod -= alias_pen
 		notes.append("%s -%d" % [alias_name, alias_pen])
 	if target_artillery and over_nine:
 		notes.append("Artillery target -2")
+	elif target_artillery:
+		notes.append("Artillery target: no -2 (within 9\")")   # #224 sweep
 	if evasive:
 		notes.append("Evasive -1")
 	# Coverage wave — growth markers (Precision Growth): +1 to hit per two markers.

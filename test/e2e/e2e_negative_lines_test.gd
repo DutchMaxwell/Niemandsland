@@ -41,3 +41,20 @@ func test_artillery_names_the_bonus_and_its_absence(timeout := 120000) -> void:
 	assert_str(str(near["note"])) \
 		.override_failure_message("#224 — the within-9\" case stays silent: testers read the conditional bonus as a missing rule (note: '%s')" % str(near["note"])) \
 		.contains("no +1")
+
+
+func test_stealth_and_artillery_target_name_their_absence(timeout := 120000) -> void:
+	# #224 sweep: the DEFENDER-side range conditionals get their negative lines too.
+	var shooter := E2EBoot.make_unit(_main, 1, "Shooter", [Vector3.ZERO])
+	var sneak := E2EBoot.make_unit(_main, 2, "Sneak", [Vector3.ZERO])
+	sneak.unit_properties["special_rules"] = ["Stealth"]
+	var gun2 := E2EBoot.make_unit(_main, 2, "FoeGun", [Vector3.ZERO])
+	gun2.unit_properties["special_rules"] = ["Artillery"]
+	for u in [shooter, sneak, gun2]:
+		_main.opr_army_manager.game_units[u.unit_id] = u
+	# Stealth bites only over 9": far names -1, near names the absence.
+	assert_str(str(_main._solo_hit_mod_info(shooter, sneak, 14.0, false)["note"])).contains("Stealth -1")
+	assert_str(str(_main._solo_hit_mod_info(shooter, sneak, 6.0, false)["note"])).contains("Stealth: no -1")
+	# Shooting AT an Artillery piece: -2 over 9", named absence below.
+	assert_str(str(_main._solo_hit_mod_info(shooter, gun2, 14.0, false)["note"])).contains("Artillery target -2")
+	assert_str(str(_main._solo_hit_mod_info(shooter, gun2, 6.0, false)["note"])).contains("Artillery target: no -2")
