@@ -120,6 +120,30 @@ func test_join_release_strips_the_designation_and_logs(timeout := 120000) -> voi
 	assert_str(text).contains("NACHTMAHR releases the slot")
 
 
+func test_activation_log_names_the_player_in_mp(timeout := 120000) -> void:
+	# Maintainer MP test: both sides read "activated (you)" — the line names the slot's
+	# player now, so both clients' logs read identically.
+	_go_multiplayer({1: 1, GUEST_PEER: 2})
+	_main.network_manager.player_names = {1: "Hosty", GUEST_PEER: "Deviantee"}
+	var u2 := E2EBoot.make_unit(_main, 2, "GuestUnit", [Vector3.ZERO])
+	_main._log_battle_activation(u2, false)
+	var text := ""
+	for e in _main.battle_log.entries():
+		text += str((e as Dictionary)["text"]) + "\n"
+	assert_str(text) \
+		.override_failure_message("MP activation line does not name the player (log: %s)" % text.strip_edges().split("\n")[-1]) \
+		.contains("GuestUnit activated (Deviantee)")
+
+
+func test_start_deployment_survives_a_human_room(timeout := 120000) -> void:
+	# Maintainer MP test: pressing "Start Deployment" in a human-vs-human room CRASHED —
+	# the slot guard refuses the controller and the guided flow walked into a null.
+	_go_multiplayer({1: 1, GUEST_PEER: 2})
+	_main.solo_ai_slots = {}
+	_main._on_solo_deploy_pressed()
+	assert_object(_main.solo_controller).is_null()   # surviving the call IS the fix
+
+
 func test_join_release_tears_down_a_surviving_controller(timeout := 120000) -> void:
 	# The solo-session-rolls-into-hosting sequence: the controller is built OFFLINE (solo
 	# match), then a human joins its slot. The designation strip alone is not enough — the
