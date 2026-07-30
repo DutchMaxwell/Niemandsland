@@ -8772,6 +8772,12 @@ func _on_battle_log_dropped(moves: Array) -> void:
 		var unit_name := _battle_log_unit_name(node)
 		if unit_name.is_empty():
 			continue
+		# #223 (community log: "Dark Drop Pod moves 155\""): dragging a RESERVE unit from the
+		# tray is PLACEMENT — the arrival line covers it; the tray distance is no march. At
+		# drop time the flag is still set (the arrival hand-over clears it afterwards).
+		var res_gu = UnitUtils.get_game_unit(node)
+		if res_gu != null and SoloController.unit_in_reserve(res_gu):
+			continue
 		if not per_unit.has(unit_name):
 			per_unit[unit_name] = {"count": 0, "max_in": 0.0, "alive": _battle_log_unit_alive(node), "whole": false}
 		var e: Dictionary = per_unit[unit_name]

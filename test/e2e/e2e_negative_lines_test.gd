@@ -43,6 +43,26 @@ func test_artillery_names_the_bonus_and_its_absence(timeout := 120000) -> void:
 		.contains("no +1")
 
 
+func test_reserve_drag_logs_no_phantom_march(timeout := 120000) -> void:
+	# #223 — "Dark Drop Pod moves 155\"": the tray→table drag of a RESERVE unit is placement,
+	# not movement; a normal unit's drop keeps its line.
+	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
+	var pod := E2EBoot.make_unit(_main, 1, "Pod", [Vector3.ZERO])
+	pod.unit_properties["ambush_reserve"] = true
+	var walker := E2EBoot.make_unit(_main, 1, "Walker", [Vector3(0.1, 0, 0)])
+	for u in [pod, walker]:
+		_main.opr_army_manager.game_units[u.unit_id] = u
+	_main._on_battle_log_dropped([{"node": (pod.models[0] as ModelInstance).node, "arc_in": 155.0}])
+	_main._on_battle_log_dropped([{"node": (walker.models[0] as ModelInstance).node, "arc_in": 5.0}])
+	var text := ""
+	for e in _main.battle_log.entries():
+		text += str((e as Dictionary)["text"]) + "\n"
+	assert_str(text) \
+		.override_failure_message("#223 — the reserve drag logged a phantom march (log: %s)" % text.strip_edges()) \
+		.not_contains("Pod moves")
+	assert_str(text).contains("Walker moves 5")
+
+
 func test_stealth_and_artillery_target_name_their_absence(timeout := 120000) -> void:
 	# #224 sweep: the DEFENDER-side range conditionals get their negative lines too.
 	var shooter := E2EBoot.make_unit(_main, 1, "Shooter", [Vector3.ZERO])
