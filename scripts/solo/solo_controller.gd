@@ -2569,6 +2569,8 @@ func _modifier_value_on_attack(cand: GameUnit, effect: Dictionary, flip_sides: b
 ## `caster_unit`, in line of sight (v3.5.1: "Models within 18\" in line of sight of the caster's
 ## unit may spend any number of spell tokens"). `exclude` drops the casting member itself (the ±1
 ## comes from OTHER models). Returns [{unit, tokens}] nearest-first (a deterministic draw order).
+const SPELL_ACCUMULATOR_REACH_IN := 12.0   # wave B: the battery's own lend radius
+
 func _aura_casters(slot: int, caster_unit: GameUnit, exclude: GameUnit) -> Array:
 	var aura_in := float(RulesRegistry.unit_param(caster_unit, "Caster", "aura_in", AiSpell.AURA_RANGE_IN))
 	var from := unit_centre(caster_unit)
@@ -2591,11 +2593,16 @@ func _aura_casters(slot: int, caster_unit: GameUnit, exclude: GameUnit) -> Array
 				continue
 			if seen.has(member.get_instance_id()):
 				continue
-			if not member.is_caster() or member.casts_current <= 0:
+			# Wave B — Spell Accumulator: a token battery joins the pool too ("casters from
+			# other friendly units within 12\" may spend this model's accumulator tokens as
+			# if they were their own"); its reach is the rule's own 12\", not the caster aura.
+			var is_battery: bool = member.has_special_rule("Spell Accumulator") \
+					or not RulesRegistry.unit_rules_of_primitive(member, "Spell Accumulator").is_empty()
+			if (not member.is_caster() and not is_battery) or member.casts_current <= 0:
 				continue
 			seen[member.get_instance_id()] = true
 			var d := MoveIntent.distance_inches(from, unit_centre(member if member.models.size() > 0 else cu))
-			if d > aura_in:
+			if d > (SPELL_ACCUMULATOR_REACH_IN if (is_battery and not member.is_caster()) else aura_in):
 				continue
 			if cu != caster_unit and not _has_los(caster_unit, cu):
 				continue
