@@ -1072,6 +1072,11 @@ func _act(unit: GameUnit) -> Dictionary:
 	# sees it as available (the wasted "charge falls short" activations from the live tests).
 	var charge_capped := _charge_capped_by_difficult(unit, centre, tcentre, charge_gap)
 	if charge_capped and charge_gap <= charge_band:
+		# #183 v6: this denial branch never fed the approach fallback (B5 forensics: the R3
+		# difficult-cap denial fell back to the 17.6" marker goal and dithered at 1.0").
+		var nv6 := nearest_charge_vector(unit, target_unit)
+		if float(nv6.get("gap", INF)) != INF and (nv6.get("dir", Vector2.ZERO) as Vector2) != Vector2.ZERO:
+			_denied_charge_approach[unit.unit_id] = {"dir": nv6["dir"], "gap_in": nv6["gap"]}
 		record_decision({"kind": "mission", "unit": unit.get_name(),
 			"rule": "Difficult cap (p.11): every charge corridor crosses difficult terrain and the gap exceeds 6\" — the charge cannot reach, the tree fights on without it",
 			"candidates": [], "chosen": "charge unavailable (difficult cap)", "why": "difficult-capped charge",
@@ -1301,7 +1306,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	# (gap - 1.2"), so the placement gate has a legal end state and the collapse ladder
 	# does not strangle the move (v4 fired never: it was gated on toward==ENEMY; B4 showed
 	# arc 6.0 -> achieved 0.9 on the marker path). Solver and flank picks keep precedence.
-	if not solver_used and flank_goal == NO_OBJECTIVE \
+	if not solver_used and flank_goal == NO_OBJECTIVE and not do_shoot \
 			and (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) \
 			and _denied_charge_approach.has(unit.unit_id):
 		var app: Dictionary = _denied_charge_approach[unit.unit_id]
