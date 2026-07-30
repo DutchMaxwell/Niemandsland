@@ -127,6 +127,9 @@ static func _profile(w: Variant, attacks: int, range_in: int) -> Dictionary:
 		# weapon rule (168×/10 factions), so aliasing it here is the single biggest coverage down-payment.
 		"bane": _has_rule(w, "Bane") or _has_rule(w, "Lacerate"),
 		"thrust": _has_rule(w, "Thrust"),
+		# Core-book audit (maintainer 30.07.): the Regeneration-bypass half of Unstoppable was
+		# long modeled — the "ignores all negative modifiers to this weapon" half needs the flag.
+		"unstoppable": _has_rule(w, "Unstoppable"),
 		# Wave-3 (GF/AoF v3.5.1 p.13): Counter — the weapon strikes first when its bearer is charged and
 		# reduces the charger's Impact rolls; drives the strike-first phase + the Counter-last activation.
 		"counter": _has_rule(w, "Counter"),

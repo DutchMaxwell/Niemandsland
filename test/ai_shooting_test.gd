@@ -160,3 +160,12 @@ func test_identical_melee_weapons_merge_too() -> void:
 	])
 	assert_int(profiles.size()).is_equal(1)
 	assert_int(int(profiles[0]["attacks"])).is_equal(6)
+
+
+func test_unstoppable_flag_reaches_the_profile() -> void:
+	# Core-book audit (2026-07-30): the negative-modifier half of Unstoppable was missing —
+	# the profile flag is the gate both volley resolvers clamp on.
+	var profiles := AiShooting.profiles_in_range([_w("Doom Cannon", 24, 2, 1, ["AP(2)", "Unstoppable"])], 12.0)
+	assert_bool(bool(profiles[0]["unstoppable"])).is_true()
+	var plain := AiShooting.profiles_in_range([_w("Rifle", 24, 1, 1, [])], 12.0)
+	assert_bool(bool(plain[0].get("unstoppable", false))).is_false()
