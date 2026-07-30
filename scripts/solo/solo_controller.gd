@@ -4900,6 +4900,16 @@ func drain_decisions() -> Array:
 
 ## Render one decision record as a battle-log line — the ONLY place record fields become formatted
 ## strings (zero formatting cost while the dev toggle is off). Pure + static (testable).
+## #227 — one click of a pick-up-to-N spell: append the target, drop it from the legal
+## set, report whether the cast is ready (all N picked, or the set ran dry). Pure.
+static func cast_pick_step(picked: Array, want: int, valid: Array, target) -> Dictionary:
+	var p2 := picked.duplicate()
+	p2.append(target)
+	var v2 := valid.duplicate()
+	v2.erase(target)
+	return {"picked": p2, "valid": v2, "done": p2.size() >= maxi(want, 1) or v2.is_empty()}
+
+
 ## Stage 3 (transparency, grilled 2026-07-30): the unit's newest decision as ONE plain
 ## sentence — the live banner and the expandable log line speak this, not the raw record.
 func plain_reason_for(unit: GameUnit) -> String:
