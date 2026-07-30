@@ -107,6 +107,29 @@ func test_no_reembark_in_the_exit_round(timeout := 120000) -> void:
 	assert_str(_log_text()).contains("can't embark again")
 
 
+func test_two_reachable_transports_offer_a_choice(timeout := 120000) -> void:
+	# Maintainer find: with two trucks in reach the first was silently taken. Now one entry
+	# per vehicle, and the click routes to the PICKED one.
+	_solo_playing_on()
+	var tc := _truck_and_cargo()
+	var truck2 := E2EBoot.make_unit(_main, 1, "Truck B", [Vector3(0.08, 0, 0)])
+	truck2.unit_properties["special_rules"] = ["Transport(6)"]
+	_main.opr_army_manager.game_units[truck2.unit_id] = truck2
+	var rmc = _main.radial_menu_controller
+	var ctx := {"game_unit": tc[1]}   # the menu-open path fills this before appending items
+	var items: Array = []
+	rmc._append_transport_items(tc[1], ctx, items)
+	var labels: Array = []
+	for it in items:
+		labels.append(str(it.label))
+	assert_int((ctx.get("embark_targets", []) as Array).size()) \
+		.override_failure_message("expected BOTH reachable transports on offer, items: %s" % str(labels)) \
+		.is_equal(2)
+	# Click the SECOND entry: the cargo must end up in Truck B, not the first hit.
+	rmc._on_action_selected("embark_1", ctx)
+	assert_object(_main.opr_army_manager.transport_of(tc[1])).is_equal(ctx["embark_targets"][1])
+
+
 func test_sandbox_embark_stays_free(timeout := 120000) -> void:
 	# No solo game engaged: the sandbox consumes nothing (like dice and rulers).
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING
