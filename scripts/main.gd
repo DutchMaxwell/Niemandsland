@@ -6588,8 +6588,20 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				if battle_log != null:
 					battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s" % [target.get_name(), verdict])
 				return true
+			# #226 SPLIT FIRE: a pending second-target pick resolves the declared split.
+			if _solo_target_mode.has("split_first"):
+				var sf: GameUnit = _solo_target_mode.get("split_first")
+				if target == sf:
+					if battle_log != null:
+						battle_log.log_event(BattleLog.Category.GENERAL,
+							"Split fire: pick a DIFFERENT unit as the second target (or right-click to cancel)")
+					return true
+				var sb: Array = _solo_target_mode.get("split_b_names", [])
+				_solo_end_targeting()
+				_run_human_attack_split(attacker, sf, target, sb)
+				return true
 			_solo_end_targeting()
-			_run_human_attack(attacker, target, melee)
+			_solo_split_or_attack(attacker, target, melee)
 			return true
 	return false
 
@@ -6893,6 +6905,71 @@ func _solo_update_los_line(screen_pos: Vector2) -> void:
 ## Resolve the player's declared attack — the mirror of the AI flow: your groups (unit + heroes, own
 ## Quality) roll REAL to-hit dice in the tray, the AI saves in the tray, wounds run through the flows.
 ## Melee: the AI ALWAYS strikes back (official rule) — you save via the prompt; loser tests morale.
+## #226 — after the first pick: multi-weapon shooters may declare a split (GF v3.5.1 p.8:
+## up to two targets, per weapon group, declared before rolling). Melee never splits
+## (Assault actions may not split fire). Fire-and-forget async — the input handler stays sync.
+func _solo_split_or_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> void:
+	if not melee:
+		var choice: Dictionary = await _solo_offer_split_fire(attacker, target)
+		if bool(choice.get("split", false)):
+			var names: Array = choice.get("names", [])
+			_solo_target_mode = {"unit": attacker, "melee": false,
+				"split_first": target, "split_b_names": names}
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL,
+					"Split fire: pick the SECOND target for %s — right-click cancels the attack" % ", ".join(names))
+			return
+	await _run_human_attack(attacker, target, melee)
+
+
+## The split dialog: one checkbox per distinct ranged weapon; checked weapons fire at a
+## SECOND target of your choice, the rest at the first. No dialog for single-weapon units,
+## headless/batch, or when nothing is checked.
+func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionary:
+	if _solo_batch or DisplayServer.get_name() == "headless":
+		return {"split": false}
+	var dist := solo_controller.nearest_melee_gap_in(attacker, target_a)
+	var names: Array = []
+	for grp in _solo_attack_groups(attacker, dist, false, target_a):
+		for p in (grp as Dictionary).get("profiles", []):
+			var n := str((p as Dictionary).get("name", ""))
+			if not n.is_empty() and not names.has(n):
+				names.append(n)
+	if names.size() < 2:
+		return {"split": false}
+	var dlg := ConfirmationDialog.new()
+	dlg.title = "Split fire?"
+	dlg.ok_button_text = "Pick 2nd target"
+	dlg.cancel_button_text = "All at %s" % target_a.get_name()
+	var box := VBoxContainer.new()
+	var lbl := Label.new()
+	lbl.text = "Up to two targets (GF v3.5.1 p.8). Checked weapons fire at a SECOND target:"
+	box.add_child(lbl)
+	var checks: Array = []
+	for n in names:
+		var cb := CheckBox.new()
+		cb.text = str(n)
+		box.add_child(cb)
+		checks.append(cb)
+	dlg.add_child(box)
+	var outcome: Array = []
+	dlg.confirmed.connect(func() -> void: outcome.append(true))
+	dlg.canceled.connect(func() -> void: outcome.append(false))
+	add_child(dlg)
+	dlg.popup_centered()
+	while outcome.is_empty():
+		await get_tree().process_frame
+	var picked: Array = []
+	if bool(outcome[0]):
+		for i in checks.size():
+			if (checks[i] as CheckBox).button_pressed:
+				picked.append(names[i])
+	dlg.queue_free()
+	if picked.is_empty() or picked.size() >= names.size():
+		return {"split": false}   # nothing checked, or everything — both mean one target
+	return {"split": true, "names": picked}
+
+
 func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> void:
 	if attacker == null or target == null or dice_roller_control == null:
 		return
@@ -6933,6 +7010,12 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 	# toggle path does the full job (GameUnit.activate marks host + heroes, marker, MP broadcast, log,
 	# alternation reply via unit_activated). A pre-toggled unit falls through to the normal pump so a
 	# mis-click fix never queues a second AI answer.
+	await _solo_complete_human_attack(attacker)
+
+
+## The attack's activation completion (X1 double-shoot exploit) — shared by the single-target
+## flow and #226 split fire (which completes ONCE, after its second volley).
+func _solo_complete_human_attack(attacker: GameUnit) -> void:
 	if attacker != null and SoloController.human_attack_completes_activation(attacker.is_activated):
 		if radial_menu_controller != null:
 			radial_menu_controller.card_toggle_activation(attacker)   # state + heroes + marker + MP + reply
@@ -6944,6 +7027,22 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 		# The AI's strike-back can destroy the human's LAST eligible unit — re-check the alternation
 		# state so the AI's remaining activations auto-continue (goal 003 P2 auto-tail).
 		await _solo_pump()
+
+
+## #226 — the declared split resolves both pre-committed volleys, then completes ONCE.
+func _run_human_attack_split(attacker: GameUnit, target_a: GameUnit, target_b: GameUnit, b_names: Array) -> void:
+	if attacker == null or target_a == null or target_b == null:
+		return
+	_solo_log_unmodeled_rules(attacker)
+	_solo_log_unmodeled_rules(target_a)
+	_solo_log_unmodeled_rules(target_b)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Split fire: %s fires at %s and %s (declared before rolling — GF v3.5.1 p.8)" % [
+			attacker.get_name(), target_a.get_name(), target_b.get_name()], false)
+	await _run_human_shooting(attacker, target_a, b_names, true)
+	await _run_human_shooting(attacker, target_b, b_names, false)
+	await _solo_complete_human_attack(attacker)
 
 
 ## The player's shooting volley (goal 001 P8): per-model attack scaling, Reliable composed with the to-hit
@@ -6969,7 +7068,7 @@ func _solo_prompt_versatile(weapon_name: String, recommended: Dictionary) -> Dic
 	return {"ap": 0, "hit_mod": 1} if rec_ap else {"ap": 1, "hit_mod": 0}
 
 
-func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
+func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Array = [], skip_named: bool = false) -> void:
 	# B11: ONE measuring truth — the shot distance (feeding the >9" Versatile/Guarded gates and the
 	# profile range gate's fallback) is the base-EDGE gap of the nearest model pair, like the ruler.
 	var dist := solo_controller.nearest_melee_gap_in(attacker, target)
@@ -7048,6 +7147,13 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
 			var profile := _solo_bridge_granted_flags(group.get("member"), p as Dictionary)
 			if int(profile.get("attacks", 0)) <= 0:
 				continue
+			# #226 SPLIT FIRE (GF v3.5.1 p.8): with a split declared, this volley only rolls
+			# its half — skip_named=true fires everything NOT in the set (target A), false
+			# fires exactly the set (target B). Empty set = the whole volley, as ever.
+			if not split_names.is_empty():
+				var in_set: bool = split_names.has(str(profile.get("name", "")))
+				if (skip_named and in_set) or (not skip_named and not in_set):
+					continue
 			fired_any = true
 			# TC-023 (Takedown, GF v3.5.1 p.14, maintainer: "must I not pick a model FIRST and roll
 			# afterwards?"): YOU click the sniped model HERE — before your dice — and the shot then
