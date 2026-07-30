@@ -102,3 +102,18 @@ func test_hover_label_names_the_aircraft_reach_penalty(timeout := 120000) -> voi
 	# A plain target shrinks nothing — the note stays empty.
 	var infantry := E2EBoot.make_unit(_main, 2, "Grunts", [Vector3(0.4, 0, 0)])
 	assert_str(_main._solo_reach_note(shooter, infantry)).is_equal("")
+
+
+func test_spot_markers_are_consumed_for_bonus_hits(timeout := 120000) -> void:
+	# NML-216 wave B — Precision Spotter: markers on the target are removed for +X to hit.
+	var foe := E2EBoot.make_unit(_main, 2, "Marked", [Vector3.ZERO])
+	_main.opr_army_manager.game_units[foe.unit_id] = foe
+	foe.unit_properties["spot_markers"] = 2
+	assert_int(_main._solo_consume_spot_markers(foe)).is_equal(2)
+	assert_int(int(foe.unit_properties.get("spot_markers", 0))).is_equal(0)
+	var text := ""
+	for e in _main.battle_log.entries():
+		text += str((e as Dictionary)["text"]) + "\n"
+	assert_str(text).contains("2 markers removed — +2 to hit")
+	# No markers → no bonus, no phantom line.
+	assert_int(_main._solo_consume_spot_markers(foe)).is_equal(0)
