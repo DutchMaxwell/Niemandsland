@@ -147,6 +147,12 @@ var last_move_paths: Array = []
 ## presentation glides each model individually in the order it filed to its slot. Empty for a regiment / a
 ## move that produced no plan.
 var last_flow_order: Array = []
+
+## #183 v4 — a DENIED charge's dry-run corridor heading (unit_id -> goal2): the tree's
+## fallback move rushes THIS goal instead of the generic enemy centre, so the denial leaves
+## forward pressure, not a hole (Raptor dithering, Schmiede forensics seeds 61003/61008).
+## Written by the gate on denial, consumed (and always cleared) in the same activation.
+var _denied_charge_approach: Dictionary = {}
 ## Move budget (inches) actually granted to the last AI move (band, difficult-capped when the route
 ## entered difficult terrain) — the denominator of the corridor's distance label.
 var last_move_budget_in: float = 0.0
@@ -1289,6 +1295,17 @@ func _act(unit: GameUnit) -> Dictionary:
 	# that subsumes the flank anchor; otherwise fall back to the Wave-1 goal (objective / flank / enemy).
 	var to_flank: bool = (solver_used or flank_goal != NO_OBJECTIVE) and not to_obj
 	var goal: Vector3 = solver_goal if solver_used else (obj_pos if to_obj else (flank_goal if to_flank else tcentre))
+	# #183 v4 (Schmiede): a DENIED charge leaves no hole — the plain fallback path rushes the
+	# very corridor the gate dry-ran (nearest contact heading) instead of the generic enemy
+	# centre, whose jammed lane re-aims sideways ("boxed reposition" dithering). Solver, flank
+	# and marker picks keep their own logic; the entry never survives the activation.
+	if not solver_used and flank_goal == NO_OBJECTIVE and not to_obj \
+			and (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) \
+			and int(dec["toward"]) == AiDecision.Toward.ENEMY \
+			and _denied_charge_approach.has(unit.unit_id):
+		goal = _denied_charge_approach[unit.unit_id]
+		action_why = "approach: denied charge — rushes its corridor"
+	_denied_charge_approach.erase(unit.unit_id)
 	# OBJECTIVE FIRING ANCHOR (AI plausibility wave 1): an objective-bound SHOOTER whose tree promised a
 	# shot (Advance toward marker + shoot) stops at a spot INSIDE the seize ring that keeps range + line
 	# of sight to its target — the marker CENTRE is only a placement convention, and walking onto it
@@ -5758,6 +5775,7 @@ func _charge_path_reaches(unit: GameUnit, target: GameUnit, band_in: float) -> b
 		var remaining_i := eff_band - MovementPlanner.polyline_length(trails[i]) / INCHES_TO_METERS
 		if residual_i <= remaining_i + SeparationChecker.BASE_CONTACT_EPSILON_INCHES:
 			return true
+	_denied_charge_approach[unit.unit_id] = goal2   # v4: the fallback rushes this corridor
 	return false
 
 
