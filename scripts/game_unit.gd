@@ -371,6 +371,17 @@ func get_caster_value() -> int:
 	# UNIT, so the transfer is inherent; X follows the ALIVE count (re-evaluated per grant).
 	if has_special_rule("Caster Group"):
 		return maxi(get_alive_count(), 0)
+	# Wave B — Spell Accumulator(X): "gets X accumulator tokens at the start of each round,
+	# but can't hold more than 6" — a token BATTERY: it stores via the same casts machinery
+	# (accumulating grant, cap 6) but is_caster() stays false (it never casts itself;
+	# neighbours within 12" spend its stock — see the pool builder).
+	for r2 in rules:
+		var rn := str(r2 if r2 is String else (r2 as Dictionary).get("name", "")) if (r2 is String or r2 is Dictionary) else ""
+		if rn.begins_with("Spell Accumulator("):
+			var s2 := rn.find("(") + 1
+			var e2 := rn.find(")")
+			if s2 > 0 and e2 > s2:
+				return int(rn.substr(s2, e2 - s2))
 	return 0
 
 

@@ -1985,3 +1985,38 @@ func test_caster_group_unit_is_a_caster_sized_by_alive_models() -> void:
 	assert_int(u.casts_current) \
 		.override_failure_message("Caster Group must reset to the ALIVE bearer count (got %d)" % u.casts_current) \
 		.is_equal(2)
+
+
+func test_spell_accumulator_is_a_battery_not_a_caster() -> void:
+	# Wave B: stores X tokens/round (accumulating, cap 6) but never casts itself.
+	var u := _unit(2, [Vector3.ZERO])
+	u.unit_properties["special_rules"] = ["Spell Accumulator(2)"]
+	assert_bool(u.is_caster()).is_false()
+	assert_int(u.get_caster_value()).is_equal(2)
+	u.initialize_caster_points()
+	assert_int(u.casts_current).is_equal(2)
+	u.add_round_caster_points()
+	assert_int(u.casts_current).is_equal(4)   # accumulates toward the cap of 6
+
+
+func test_accumulator_joins_the_token_pool_within_12() -> void:
+	var caster := _unit(2, [Vector3.ZERO])
+	caster.unit_id = "caster"
+	caster.unit_properties["special_rules"] = ["Caster(2)"]
+	caster.initialize_caster_points()
+	var battery := _unit(2, [Vector3(10.0 * 0.0254, 0, 0)])   # 10" away
+	battery.unit_id = "battery"
+	battery.unit_properties["special_rules"] = ["Spell Accumulator(3)"]
+	battery.initialize_caster_points()
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {caster.unit_id: caster, battery.unit_id: battery}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var pool := solo._aura_casters(2, caster, caster)
+	var names: Array = []
+	for h in pool:
+		names.append(((h as Dictionary)["unit"] as GameUnit).unit_id)
+	assert_bool(names.has("battery")) \
+		.override_failure_message("Spell Accumulator within 12\" must lend its tokens (pool: %s)" % str(names)) \
+		.is_true()
