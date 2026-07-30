@@ -1666,6 +1666,12 @@ func _on_solo_deploy_pressed() -> void:
 	if opr_army_manager == null or table == null:
 		return
 	_ensure_solo_controller()
+	# #196 aftershock (maintainer MP test): in a human-vs-human room the guard above refuses
+	# the controller — the guided flow would null-crash right here. The rulebook deployment
+	# in multiplayer is the players' own alternating placement (free drags), not this flow.
+	if solo_controller == null:
+		_solo_show_toast("Guided deployment is a solo-game flow — in multiplayer, deploy freely by dragging from the trays")
+		return
 	var w: float = table.table_size.x * 0.3048
 	var d: float = table.table_size.y * 0.3048
 	var depth: float = 12.0 * 0.0254
@@ -8697,7 +8703,16 @@ func _log_battle_activation(gu, _remote: bool) -> void:
 	# #196: ask the guarded predicate — the old hardcoded "player 2 is the AI" stamped
 	# "activated (AI)" onto the guest's every activation in multiplayer.
 	var is_ai: bool = _solo_is_ai_unit(gu)
-	battle_log.on_unit_activated(gu.get_name(), ("AI" if is_ai else "you"), is_ai)
+	var who := "AI" if is_ai else "you"
+	# Maintainer MP test: both sides read "(you)" — in multiplayer the line names the slot's
+	# PLAYER instead (both clients then log identical lines; solo keeps its you/AI voice).
+	if not is_ai and network_manager != null and network_manager.is_multiplayer_active():
+		var pid: int = int(gu.unit_properties.get("player_id", 0))
+		for p in network_manager.peer_to_slot:
+			if int(network_manager.peer_to_slot[p]) == pid:
+				who = _peer_display_name(int(p))
+				break
+	battle_log.on_unit_activated(gu.get_name(), who, is_ai)
 
 
 func _on_battle_log_dead(node, dead: bool) -> void:
@@ -11611,6 +11626,9 @@ func _refresh_solo_panel() -> void:
 	deploy_btn.tooltip_text = "GF v3.5.1: roll-off, the winner picks a table edge and deploys first; then alternate one unit each (hand-over by click), then the Scout phase. The roll-off winner takes round 1's first turn."
 	deploy_btn.focus_mode = Control.FOCUS_NONE
 	deploy_btn.pressed.connect(_on_solo_deploy_pressed)
+	# Maintainer MP test: the guided deployment is a solo-game flow — in a multiplayer room
+	# it is not offered (players deploy freely, alternating by their own agreement).
+	deploy_btn.visible = network_manager == null or not network_manager.is_multiplayer_active()
 	solo_panel_box.add_child(deploy_btn)
 
 
