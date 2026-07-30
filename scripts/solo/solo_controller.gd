@@ -4900,6 +4900,42 @@ func drain_decisions() -> Array:
 
 ## Render one decision record as a battle-log line — the ONLY place record fields become formatted
 ## strings (zero formatting cost while the dev toggle is off). Pure + static (testable).
+## Stage 3 (transparency, grilled 2026-07-30): the unit's newest decision as ONE plain
+## sentence — the live banner and the expandable log line speak this, not the raw record.
+func plain_reason_for(unit: GameUnit) -> String:
+	if unit == null:
+		return ""
+	for i in range(decision_log.size() - 1, -1, -1):
+		var r := decision_log[i] as Dictionary
+		if str(r.get("unit", "")) != unit.get_name():
+			continue
+		var kind := str(r.get("kind", ""))
+		if kind == "action":
+			return plain_action_sentence(r)
+		if kind in ["commander", "position", "flank", "kite_guard", "mission", "yield_lof"]:
+			var why := str(r.get("why", ""))
+			if not why.is_empty() and why != "decision tree":
+				return why
+	return ""
+
+
+## The 'action' record as a sentence: verb + destination + distance (+ a non-generic why).
+static func plain_action_sentence(r: Dictionary) -> String:
+	var bits := PackedStringArray()
+	var chosen := str(r.get("chosen", ""))
+	if not chosen.is_empty():
+		bits.append(chosen)
+	var d: Dictionary = r.get("data", {})
+	if bool(d.get("objective", false)) and float(d.get("obj_dist_in", 0.0)) > 0.0:
+		bits.append("toward the objective (%.0f\" away)" % float(d.get("obj_dist_in", 0.0)))
+	elif float(d.get("enemy_dist_in", 0.0)) > 0.0:
+		bits.append("at the enemy (%.0f\")" % float(d.get("enemy_dist_in", 0.0)))
+	var why := str(r.get("why", ""))
+	if not why.is_empty() and why != "decision tree":
+		bits.append("— " + why)
+	return " ".join(bits)
+
+
 static func render_decision(rec: Dictionary) -> String:
 	var parts: PackedStringArray = ["AI [%s] %s" % [str(rec.get("kind", "?")), str(rec.get("unit", "?"))]]
 	var rule := str(rec.get("rule", ""))
