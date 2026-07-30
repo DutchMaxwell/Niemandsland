@@ -343,7 +343,9 @@ func reset_to_import_state() -> void:
 
 ## Checks if this unit has the Caster special rule.
 func is_caster() -> bool:
-	return has_special_rule("Caster")
+	# NML-216 wave B: Caster Group makes the unit a caster too ("pick one model with this
+	# rule to have Caster(X)" — in our unit-level token model the unit carries the pool).
+	return has_special_rule("Caster") or has_special_rule("Caster Group")
 
 
 ## Gets the Caster(X) value from special rules.
@@ -363,6 +365,12 @@ func get_caster_value() -> int:
 			var end = rule_name.find(")")
 			if start > 0 and end > start:
 				return int(rule_name.substr(start, end - start))
+	# NML-216 wave B — Caster Group (army-book): "pick one model with this rule to have
+	# Caster(X), where X is the total number of models with this rule in this unit. If the
+	# model is killed, pick another and transfer all spell tokens" — our tokens live on the
+	# UNIT, so the transfer is inherent; X follows the ALIVE count (re-evaluated per grant).
+	if has_special_rule("Caster Group"):
+		return maxi(get_alive_count(), 0)
 	return 0
 
 
@@ -376,6 +384,12 @@ func initialize_caster_points() -> void:
 
 ## Adds caster points for a new round (accumulates, capped at 6).
 func add_round_caster_points() -> void:
+	if has_special_rule("Caster Group"):
+		# Wave B: "the caster loses all unspent spell tokens at the end of the round" — the
+		# grant RESETS to the current bearer count instead of accumulating.
+		casts_per_round = get_caster_value()
+		casts_current = casts_per_round
+		return
 	if casts_per_round > 0:
 		casts_current = mini(casts_current + casts_per_round, CASTER_POINTS_CAP)
 

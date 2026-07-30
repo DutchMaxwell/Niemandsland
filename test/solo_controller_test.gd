@@ -1967,3 +1967,21 @@ func test_cast_pick_step_collects_until_count_or_dry() -> void:
 	# The legal set running dry finishes early even below the count.
 	var s3: Dictionary = SoloController.cast_pick_step([], 3, [c], c)
 	assert_bool(bool(s3["done"])).is_true()
+
+
+# ===== NML-216 wave B — Caster Group =====
+
+func test_caster_group_unit_is_a_caster_sized_by_alive_models() -> void:
+	var u := _unit(2, [Vector3.ZERO, Vector3(0.05, 0, 0), Vector3(0.1, 0, 0)])
+	u.unit_properties["special_rules"] = ["Caster Group"]
+	assert_bool(u.is_caster()).is_true()
+	assert_int(u.get_caster_value()).is_equal(3)
+	u.initialize_caster_points()
+	assert_int(u.casts_current).is_equal(3)
+	# A dead bearer shrinks X; the round grant RESETS (unspent tokens are lost — no banking).
+	(u.models[2] as ModelInstance).is_alive = false
+	u.casts_current = 1
+	u.add_round_caster_points()
+	assert_int(u.casts_current) \
+		.override_failure_message("Caster Group must reset to the ALIVE bearer count (got %d)" % u.casts_current) \
+		.is_equal(2)
