@@ -161,3 +161,37 @@ func test_deployment_reserve_loading_stays_free(timeout := 120000) -> void:
 	_main.radial_menu_controller._embark_unit({"game_unit": tc[1], "embark_target": tc[0]})
 	assert_object(_main.opr_army_manager.transport_of(tc[1])).is_equal(tc[0])
 	assert_bool((tc[1] as GameUnit).is_activated).is_false()
+
+
+# ===== #230 — AI transport doctrine (official Solo rules p.58) =====
+
+func test_ai_deploy_fills_its_transport() -> void:
+	_solo_playing_on()
+	var truck := E2EBoot.make_unit(_main, 2, "AI Truck", [Vector3.ZERO])
+	truck.unit_properties["special_rules"] = ["Transport(6)"]
+	var grunts := E2EBoot.make_unit(_main, 2, "AI Grunts", [Vector3(0.3, 0, 0), Vector3(0.35, 0, 0)])
+	for u in [truck, grunts]:
+		_main.opr_army_manager.game_units[u.unit_id] = u
+	var blocked := func(_p: Vector3) -> bool: return false
+	_main.solo_controller.deploy_begin(Rect2(-0.5, -0.5, 1.0, 1.0), [], blocked, blocked, 4711)
+	assert_object(_main.opr_army_manager.transport_of(grunts)) \
+		.override_failure_message("#230 — the AI left its transport empty at deployment (Solo rules p.58: fill up the cargo limit)") \
+		.is_equal(truck)
+
+
+func test_ai_cargo_disembarks_on_first_activation() -> void:
+	_solo_playing_on()
+	var truck := E2EBoot.make_unit(_main, 2, "AI Truck", [Vector3.ZERO])
+	truck.unit_properties["special_rules"] = ["Transport(6)"]
+	truck.activate(1)   # the transport already acted — only the cargo is eligible
+	var grunts := E2EBoot.make_unit(_main, 2, "AI Grunts", [Vector3(0.05, 0, 0)])
+	var foe := E2EBoot.make_unit(_main, 1, "Foe", [Vector3(0.4, 0, 0)])
+	for u in [truck, grunts, foe]:
+		_main.opr_army_manager.game_units[u.unit_id] = u
+	_main.opr_army_manager.set_unit_embarked(grunts, truck, true)
+	var acted: GameUnit = _main.solo_controller.activate_next_ai_unit()
+	assert_object(acted).is_equal(grunts)
+	assert_object(_main.opr_army_manager.transport_of(grunts)) \
+		.override_failure_message("#230 — the embarked AI cargo did not disembark on its first activation") \
+		.is_null()
+	assert_bool(grunts.is_activated).is_true()
