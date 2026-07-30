@@ -834,6 +834,12 @@ func _solo_activate_one_ai() -> GameUnit:
 	if undo_manager != null:
 		undo_manager.expire_move_takebacks()
 	var unit: GameUnit = solo_controller.activate_next_ai_unit()
+	# Stage 3 (transparency): the banner narrates WHAT NACHTMAHR just decided, in one plain
+	# sentence — no more anonymous "is taking its turn…" while units visibly act.
+	if unit != null and is_instance_valid(_solo_ai_banner) and solo_controller != null:
+		var plain := solo_controller.plain_reason_for(unit)
+		if not plain.is_empty():
+			_solo_ai_banner.text = "NACHTMAHR: %s — %s" % [unit.get_name(), plain]
 	if unit == null:
 		return null
 	_solo_ai_took_last_activation = true   # the AI just took an activation (finding 7: round-opener tracking)
@@ -8742,6 +8748,11 @@ func _log_battle_activation(gu, _remote: bool) -> void:
 	# #196: ask the guarded predicate — the old hardcoded "player 2 is the AI" stamped
 	# "activated (AI)" onto the guest's every activation in multiplayer.
 	var is_ai: bool = _solo_is_ai_unit(gu)
+	# Stage 3: the AI's activation line carries its plain reasoning — expandable in the
+	# panel (click / tooltip), invisible in the export.
+	var reason := ""
+	if is_ai and solo_controller != null:
+		reason = solo_controller.plain_reason_for(gu)
 	var who := "AI" if is_ai else "you"
 	# Maintainer MP test: both sides read "(you)" — in multiplayer the line names the slot's
 	# PLAYER instead (both clients then log identical lines; solo keeps its you/AI voice).
@@ -8751,7 +8762,7 @@ func _log_battle_activation(gu, _remote: bool) -> void:
 			if int(network_manager.peer_to_slot[p]) == pid:
 				who = _peer_display_name(int(p))
 				break
-	battle_log.on_unit_activated(gu.get_name(), who, is_ai)
+	battle_log.on_unit_activated(gu.get_name(), who, is_ai, reason)
 
 
 func _on_battle_log_dead(node, dead: bool) -> void:

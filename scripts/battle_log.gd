@@ -33,8 +33,12 @@ var _seq: int = 0
 
 ## Record one event. `ai` tags Solo-AI-originated events (so the AI filter can surface them regardless of
 ## their combat/movement category). Emits entry_added for the panel; drops the oldest past CAP.
-func log_event(category: int, text: String, ai: bool = false) -> Dictionary:
+func log_event(category: int, text: String, ai: bool = false, detail: String = "") -> Dictionary:
 	var entry := {"round": current_round, "category": category, "ai": ai, "text": text, "seq": _seq}
+	if not detail.is_empty():
+		# Stage 3 (transparency): optional plain-language reasoning — the panel renders the
+		# row expandable (click) and mirrors it as the tooltip; export ignores it.
+		entry["detail"] = detail
 	_seq += 1
 	_entries.append(entry)
 	if _entries.size() > CAP:
@@ -149,8 +153,8 @@ func on_round_advanced(round_number: int) -> void:
 	log_event(Category.GENERAL, "— Round %d —" % round_number)
 
 
-func on_unit_activated(unit_name: String, owner: String, ai: bool = false) -> void:
-	log_event(Category.GENERAL, "%s activated (%s)" % [unit_name, owner], ai)
+func on_unit_activated(unit_name: String, owner: String, ai: bool = false, detail: String = "") -> void:
+	log_event(Category.GENERAL, "%s activated (%s)" % [unit_name, owner], ai, detail)
 
 
 func on_unit_moved(unit_name: String, distance_inches: float, ai: bool = false) -> void:

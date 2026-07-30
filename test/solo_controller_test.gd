@@ -1915,3 +1915,26 @@ func test_embarked_cargo_is_not_eligible_for_activation() -> void:
 	cargo.unit_properties["embarked_in"] = "apc"   # parked inside the APC (state layer)
 	assert_int(solo.eligible_ai_units().size()).is_equal(1)
 	assert_bool(solo.is_eligible(cargo)).is_false()
+
+
+# ===== Stage 3 (transparency): plain-language reasoning =====
+
+func test_plain_action_sentence_reads_like_a_sentence() -> void:
+	var rec := {"kind": "action", "unit": "Raptor Riders", "chosen": "rushes", "why": "decision tree",
+		"data": {"objective": true, "obj_dist_in": 16.7, "enemy_dist_in": 17.4}}
+	assert_str(SoloController.plain_action_sentence(rec)).is_equal("rushes toward the objective (17\" away)")
+	var rec2 := {"kind": "action", "chosen": "advances", "why": "flank: firing position with range and line of sight",
+		"data": {"enemy_dist_in": 12.3}}
+	var s2 := SoloController.plain_action_sentence(rec2)
+	assert_str(s2).contains("advances at the enemy (12\")")
+	assert_str(s2).contains("— flank: firing position")
+
+
+func test_plain_reason_for_finds_the_units_newest_action() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	var u := _unit(2, [Vector3.ZERO])
+	u.unit_properties["name"] = "Gators"
+	solo.decision_log.append({"kind": "action", "unit": "Gators", "chosen": "holds", "why": "decision tree", "data": {}})
+	solo.decision_log.append({"kind": "action", "unit": "Others", "chosen": "rushes", "why": "decision tree", "data": {}})
+	assert_str(solo.plain_reason_for(u)).is_equal("holds")

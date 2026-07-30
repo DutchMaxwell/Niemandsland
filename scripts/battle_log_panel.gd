@@ -167,14 +167,38 @@ func _passes(entry: Dictionary) -> bool:
 			return true
 
 
-func _entry_label(entry: Dictionary) -> Label:
+func _entry_label(entry: Dictionary) -> Control:
 	var l := Label.new()
 	l.text = BattleLog.format_entry(entry)
 	l.add_theme_font_size_override("font_size", ENTRY_FONT)
 	l.add_theme_color_override("font_color", AI_TINT if bool(entry["ai"]) else TEXT)
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	return l
+	var detail := str(entry.get("detail", ""))
+	if detail.is_empty():
+		return l
+	# Stage 3 (transparency, grilled 2026-07-30): a line with REASONING expands on click and
+	# carries it as the hover tooltip — "why did the AI do that" lives one click away.
+	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.text = "▸ " + l.text
+	l.mouse_filter = Control.MOUSE_FILTER_STOP
+	l.tooltip_text = detail
+	var d := Label.new()
+	d.text = "    " + detail
+	d.visible = false
+	d.add_theme_font_size_override("font_size", ENTRY_FONT - 1)
+	d.add_theme_color_override("font_color", Color(0.75, 0.85, 0.95))
+	d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	d.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	l.gui_input.connect(func(ev: InputEvent) -> void:
+		if ev is InputEventMouseButton and (ev as InputEventMouseButton).pressed \
+				and (ev as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
+			d.visible = not d.visible
+			l.text = ("▾ " if d.visible else "▸ ") + l.text.substr(2))
+	box.add_child(l)
+	box.add_child(d)
+	return box
 
 
 func _toggle() -> void:
