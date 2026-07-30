@@ -2447,9 +2447,14 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				int(RulesRegistry.unit_param(member, "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
 			mod_info = {"mod": int(mod_info.get("mod", 0)) + indirect_mod,
 				"note": _solo_join_note(str(mod_info.get("note", "")), "Indirect moved %d" % indirect_mod)}
+		var ai_mod: int = int(mod_info.get("mod", 0)) + upr_hit
+		if bool(profile.get("unstoppable", false)) and ai_mod < 0:
+			ai_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "Unstoppable: negative to-hit modifiers ignored", true)
 		var to_hit: int = AiCombatMath.modified_hit_target(
 			AiCombatMath.reliable_quality(int(shot["quality"]), bool(profile.get("reliable", false))),
-			int(mod_info.get("mod", 0)) + upr_hit)
+			ai_mod)
 		if upr_ap > 0:
 			profile = profile.duplicate()
 			profile["ap"] = int(profile.get("ap", 0)) + upr_ap   # Unpredictable AP(+1) leg (never mutate source)
@@ -7074,9 +7079,14 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit) -> void:
 					"note": _solo_join_note(str(p_mod.get("note", "")), "Indirect moved %d" % ind_mod)}
 			# Reliable sets the Quality (2+), THEN the roll modifiers apply (GF v3.5.1 p.14: "Reliable only
 			# changes the Quality value, so the roll can still be modified").
+			var h_mod: int = int(p_mod.get("mod", 0)) + upr_hit
+			if bool(profile.get("unstoppable", false)) and h_mod < 0:
+				h_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
+				if battle_log != null:
+					battle_log.log_event(BattleLog.Category.COMBAT, "Unstoppable: negative to-hit modifiers ignored", true)
 			var to_hit: int = AiCombatMath.modified_hit_target(
 				AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false))),
-				int(p_mod.get("mod", 0)) + upr_hit)
+				h_mod)
 			if upr_ap + extra_ap > 0:
 				profile = profile.duplicate()
 				profile["ap"] = int(profile.get("ap", 0)) + upr_ap + extra_ap   # Unpredictable + Tag/Reckless AP
