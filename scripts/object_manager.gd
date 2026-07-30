@@ -4075,6 +4075,11 @@ func arrange_selected_in_rows(num_rows: int) -> void:
 	if objects.size() < 2:
 		return
 
+	# #192: remember the pre-reform positions — the no-gain clamp measures against them.
+	var before_reform: Array = []
+	for obj in objects:
+		before_reform.append(obj.global_position)
+
 	var count = objects.size()
 	var cols = ceili(float(count) / num_rows)
 
@@ -4102,6 +4107,7 @@ func arrange_selected_in_rows(num_rows: int) -> void:
 				)
 			idx += 1
 
+	_reform_no_gain_clamp(objects, before_reform)
 	_broadcast_arrange_positions(objects)
 	arrangement_applied.emit("rows")
 
@@ -4112,6 +4118,11 @@ func arrange_selected_arrow() -> void:
 	var objects: Array[Node3D] = _movable_selection()  # own-only in MP; all live in single-player
 	if objects.size() < 2:
 		return
+
+	# #192: remember the pre-reform positions — the no-gain clamp measures against them.
+	var before_reform: Array = []
+	for obj in objects:
+		before_reform.append(obj.global_position)
 
 	var count = objects.size()
 
@@ -4156,8 +4167,95 @@ func arrange_selected_arrow() -> void:
 		row += 1
 		row_count += 1
 
+	_reform_no_gain_clamp(objects, before_reform)
 	_broadcast_arrange_positions(objects)
 	arrangement_applied.emit("arrow")
+
+
+## #192 (grilled 2026-07-30): in a running SOLO game a reform IS movement — no model may end
+## closer to ANY enemy than it stood (the free-inches exploit: move, then arrange forward).
+## Offenders are CLAMPED back along their reform path to their old enemy distance (slight
+## deformation beats a blocked grip); the count is logged. Multiplayer stays honor-system
+## with a visibility line; sandbox play is untouched.
+func _reform_no_gain_clamp(objects: Array[Node3D], old_positions: Array) -> void:
+	var main_node := get_node_or_null("/root/Main")
+	if main_node == null or objects.is_empty() or old_positions.size() != objects.size():
+		return
+	var solo_running: bool = main_node.has_method("_solo_alternation_active") \
+			and main_node._solo_alternation_active() \
+			and main_node.get("opr_army_manager") != null \
+			and not main_node.opr_army_manager.is_deployment_phase()
+	var mp_running: bool = _network_manager != null and _network_manager.is_multiplayer_active()
+	if not solo_running and not mp_running:
+		return
+	var own_pid := 0
+	if objects[0].has_meta("game_unit"):
+		var gu0 = objects[0].get_meta("game_unit")
+		if gu0 != null and "unit_properties" in gu0:
+			own_pid = int(gu0.unit_properties.get("player_id", 0))
+	if own_pid <= 0 or main_node.get("opr_army_manager") == null:
+		return
+	# Enemy model positions + radii (alive, on table).
+	var foes: Array = []
+	for u in main_node.opr_army_manager.get_all_game_units():
+		if u == null or int(u.unit_properties.get("player_id", 0)) == own_pid:
+			continue
+		if SoloController.unit_in_reserve(u):
+			continue
+		for m in u.get_alive_models():
+			var mi := m as ModelInstance
+			if mi != null and mi.node != null and is_instance_valid(mi.node):
+				var s := SeparationChecker.shape_for_model(mi)
+				foes.append({"pos": mi.node.global_position, "r": (s.bounding_radius() if s != null else 0.016)})
+	if foes.is_empty():
+		return
+	var clamped := 0
+	var max_gain_m := 0.0
+	for i in objects.size():
+		var obj := objects[i]
+		if not is_instance_valid(obj):
+			continue
+		var own_r := _trail_radius_for(obj)
+		if own_r <= 0.0:
+			own_r = 0.016
+		var old_d := _nearest_foe_gap_m(old_positions[i] as Vector3, own_r, foes)
+		var new_d := _nearest_foe_gap_m(obj.global_position, own_r, foes)
+		if new_d >= old_d - 0.0005:
+			continue
+		max_gain_m = maxf(max_gain_m, old_d - new_d)
+		if not solo_running:
+			continue   # MP: honor system — measured, named below, never forced
+		# Clamp: binary search along old→new for the farthest point keeping the old distance.
+		var a: Vector3 = old_positions[i] as Vector3
+		var b := obj.global_position
+		var lo := 0.0
+		var hi := 1.0
+		for _step in range(18):
+			var mid := (lo + hi) * 0.5
+			if _nearest_foe_gap_m(a.lerp(b, mid), own_r, foes) >= old_d - 0.0005:
+				lo = mid
+			else:
+				hi = mid
+		obj.global_position = a.lerp(b, lo)
+		clamped += 1
+	var log_node = main_node.get("battle_log")
+	if solo_running and clamped > 0 and log_node != null:
+		log_node.log_event(log_node.Category.MOVEMENT,
+			"Reform: %d model%s clamped at enemy distance — a reform is movement, no free inches" % [
+				clamped, ("" if clamped == 1 else "s")], false)
+	elif mp_running and not solo_running and max_gain_m > 0.0127 and log_node != null:
+		log_node.log_event(log_node.Category.MOVEMENT,
+			"Reform gains up to %.1f\" toward the enemy — reforms are movement (measure it like one)" % (
+				max_gain_m / 0.0254), false)
+
+
+## Smallest base-edge gap (metres) from a point-model of radius `own_r` to any foe entry.
+func _nearest_foe_gap_m(pos: Vector3, own_r: float, foes: Array) -> float:
+	var best := INF
+	for f in foes:
+		var fd := f as Dictionary
+		best = minf(best, pos.distance_to(fd["pos"] as Vector3) - own_r - float(fd["r"]))
+	return best
 
 
 ## Average (X,Z) of the selection's current positions — the anchor the arrange formations centre on.
