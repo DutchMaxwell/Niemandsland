@@ -4503,6 +4503,7 @@ func _solo_deadly_wounds(w: int, profile: Dictionary, target: GameUnit) -> int:
 		if mult > 1 and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "Deadly(%d): %d unsaved ×%d → %d wounds (Tough-capped)" % [
 				deadly, w, mult, w * mult], true)
+			_solo_rule_float(target, "Deadly(%d) ×%d" % [deadly, mult])
 		w *= mult
 	return w
 
@@ -4584,6 +4585,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		if ap < ap_before and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "Fortified: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+" % [
 				defender.get_name(), ap, ap_before, base_defense + ap], true)
+			_solo_rule_float(defender, "Fortified AP(%d)" % ap, Color(0.55, 0.85, 1.0))
 	else:
 		# Coverage wave: Fortified-family DATA aliases (Guardian, Primeborn — the over-9"-gated
 		# form: "shot or charged from over 9\" away → hits count as AP(-1), min AP(0)").
@@ -4602,6 +4604,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 			if ap < apb and battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+" % [
 					n, defender.get_name(), ap, apb, base_defense + ap], true)
+				_solo_rule_float(defender, "%s AP(%d)" % [n, ap], Color(0.55, 0.85, 1.0))
 			break
 	_solo_takedown_solo = {}   # TC-023: window closed — everything below awaits
 	var save_faces: Array
@@ -4637,6 +4640,7 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 		if shred_extra > 0 and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "Shred: %d Defense roll%s of 1 → +%d wound%s" % [
 				shred_extra, ("" if shred_extra == 1 else "s"), shred_extra, ("" if shred_extra == 1 else "s")], true)
+			_solo_rule_float(defender, "Shred +%d" % shred_extra, Color(1.0, 0.5, 0.4))
 	var unsaved := maxi(0, count - blocks)
 	# apply_deadly=false (Bug: Deadly no-carry-over): return the RAW unsaved count so the caller can
 	# apply Deadly per-model (each ×X, capped at one model, no spill). The pooled deadly_multiplier path
@@ -4715,6 +4719,8 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 		var rule_name: String = str(pick.get("name", "regeneration"))
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s rolls %d %s di%s (%d+) — %d wound%s ignored" % [
 			target.get_name(), wounds, rule_name, ("e" if wounds == 1 else "ce"), regen_target, ignored, ("" if ignored == 1 else "s")], true)
+		if ignored > 0:
+			_solo_rule_float(target, "%s: %d ignored" % [rule_name.capitalize(), ignored], Color(0.5, 1.0, 0.6))
 	return maxi(wounds - ignored, 0)
 
 
@@ -4830,6 +4836,7 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 	if battle_log != null and dealt > 0:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Deadly(%d): %d unsaved ×%d, no carry-over → %d wound%s dealt" % [
 			deadly_x, surviving, deadly_x, dealt, ("" if dealt == 1 else "s")], true)
+		_solo_rule_float(target, "Deadly(%d) → %d" % [deadly_x, dealt], Color(1.0, 0.5, 0.4))
 	return dealt
 
 
