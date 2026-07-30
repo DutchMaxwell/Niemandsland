@@ -2020,3 +2020,29 @@ func test_accumulator_joins_the_token_pool_within_12() -> void:
 	assert_bool(names.has("battery")) \
 		.override_failure_message("Spell Accumulator within 12\" must lend its tokens (pool: %s)" % str(names)) \
 		.is_true()
+
+
+func test_spell_conduit_extends_the_cast_origin() -> void:
+	# Wave B: a friendly conduit within 12" of the caster is an alternative origin — a
+	# target beyond the caster's own reach but inside the conduit's becomes legal.
+	var caster := _unit(2, [Vector3.ZERO])
+	caster.unit_id = "caster"
+	caster.unit_properties["special_rules"] = ["Caster(2)"]
+	var conduit := _unit(2, [Vector3(8.0 * 0.0254, 0, 0)])
+	conduit.unit_id = "conduit"
+	conduit.unit_properties["special_rules"] = ["Spell Conduit"]
+	var far_foe := _unit(1, [Vector3(19.0 * 0.0254, 0, 0)])   # ~19" from caster, ~11" from conduit
+	far_foe.unit_id = "far_foe"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {caster.unit_id: caster, conduit.unit_id: conduit, far_foe.unit_id: far_foe}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var entry := {"target": {"side": "enemy"}, "range_in": 12.0}
+	var with_conduit := solo.spell_candidates(caster, entry, 2, 1)
+	assert_bool(with_conduit.has(far_foe)) \
+		.override_failure_message("Spell Conduit must extend the cast origin (candidates: %d)" % with_conduit.size()) \
+		.is_true()
+	# Without the rule the same geometry is out of reach.
+	conduit.unit_properties["special_rules"] = []
+	assert_bool(solo.spell_candidates(caster, entry, 2, 1).has(far_foe)).is_false()

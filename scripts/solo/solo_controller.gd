@@ -2464,6 +2464,20 @@ func spell_candidates(unit: GameUnit, entry: Dictionary, own_slot: int, other_sl
 	var range_in := float(entry.get("range_in", 0))
 	var pool_slot: int = own_slot if side == "friendly" else other_slot
 	var from := unit_centre(unit)
+	# Wave B — Spell Conduit (army-book): "casters within 12\" that are from other friendly
+	# units may cast spells as if they were in this model's position" — every friendly
+	# conduit bearer within 12\" of the caster is an ALTERNATIVE origin for range + sight.
+	# No conduits on the table → origins = [caster] and the walk below is byte-identical.
+	var origins: Array = [unit]
+	for c0 in army_manager.get_game_units_for_player(own_slot):
+		var co := c0 as GameUnit
+		if co == null or co == unit or co.is_destroyed() or unit_in_reserve(co):
+			continue
+		if not (co.has_special_rule("Spell Conduit") \
+				or not RulesRegistry.unit_rules_of_primitive(co, "Spell Conduit").is_empty()):
+			continue
+		if nearest_melee_gap_in(unit, co) <= SPELL_ACCUMULATOR_REACH_IN:
+			origins.append(co)
 	var out: Array = []
 	for c in army_manager.get_game_units_for_player(pool_slot):
 		var cu := c as GameUnit
@@ -2473,10 +2487,15 @@ func spell_candidates(unit: GameUnit, entry: Dictionary, own_slot: int, other_sl
 			continue   # a joined hero is part of its host unit — the unit is the target
 		# NML-206: range is measured BASE EDGE to base edge (nearest models), not centre-to-centre —
 		# the centre reading rejected legal targets on wide units (maintainer live-test finding).
-		if cu != unit and nearest_melee_gap_in(unit, cu) > range_in:
-			continue
-		if cu != unit and not _has_los(unit, cu):
-			continue   # LoS from the caster's unit (own unit is trivially in sight)
+		if cu != unit:
+			var reachable := false
+			for o in origins:
+				var ou := o as GameUnit
+				if cu == ou or (nearest_melee_gap_in(ou, cu) <= range_in and _has_los(ou, cu)):
+					reachable = true
+					break
+			if not reachable:
+				continue
 		out.append(cu)
 	return out
 
