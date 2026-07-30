@@ -78,3 +78,27 @@ func test_stealth_and_artillery_target_name_their_absence(timeout := 120000) -> 
 	# Shooting AT an Artillery piece: -2 over 9", named absence below.
 	assert_str(str(_main._solo_hit_mod_info(shooter, gun2, 14.0, false)["note"])).contains("Artillery target -2")
 	assert_str(str(_main._solo_hit_mod_info(shooter, gun2, 6.0, false)["note"])).contains("Artillery target: no -2")
+
+
+func test_hover_label_names_the_aircraft_reach_penalty(timeout := 120000) -> void:
+	# #231 — the range ring is target-agnostic; the hover label's reach note must NAME the
+	# Aircraft shrink so the -12" never looks missing (enforcement lives in validate).
+	var shooter := E2EBoot.make_unit(_main, 1, "Gunner", [Vector3.ZERO])
+	var opr := OPRApiClient.OPRUnit.new()
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Rifle"
+	w.range_value = 24
+	var ws: Array[OPRApiClient.OPRWeapon] = [w]
+	opr.weapons = ws
+	shooter.source_type = "opr"
+	shooter.source_data = opr
+	var flyer := E2EBoot.make_unit(_main, 2, "Flyer", [Vector3(0.3, 0, 0)])
+	flyer.unit_properties["special_rules"] = ["Aircraft"]
+	var note: String = _main._solo_reach_note(shooter, flyer)
+	assert_str(note) \
+		.override_failure_message("#231 — hovering an Aircraft yields no reach note (got: '%s')" % note) \
+		.contains("Aircraft -12")
+	assert_str(note).contains("reach 12")
+	# A plain target shrinks nothing — the note stays empty.
+	var infantry := E2EBoot.make_unit(_main, 2, "Grunts", [Vector3(0.4, 0, 0)])
+	assert_str(_main._solo_reach_note(shooter, infantry)).is_equal("")
