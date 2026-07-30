@@ -974,6 +974,8 @@ func _solo_activate_one_ai() -> GameUnit:
 	if dangerous_models > 0 and not unit.is_destroyed() \
 			and int(report.get("action", 0)) != AiDecision.Action.CHARGE:
 		await _solo_shooting_morale(unit, alive_before_dangerous, _solo_owner_label(unit), wounds_before_dangerous)
+	if unit != null:
+		await _solo_try_precision_spot(unit)   # wave B: once per activation
 	return unit
 
 
@@ -2334,6 +2336,7 @@ func _solo_shot_priority(shot: Dictionary) -> int:
 ## that actually have range AND line of sight to the target — not by its whole living count. `moved` is
 ## the activation's move state (Indirect's -1 to hit fires only when shooting after moving — wave 5).
 func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array, moved: bool = false) -> void:
+	var ai_spot_hit := _solo_consume_spot_markers(target)   # wave B: markers removed for +X
 	# RESOLVE-FIRST ORDER (GF v3.5.1 p.14): "Takedown attacks must be resolved before other weapons" and
 	# "Hits from Deadly must be resolved first." With no-carry-over + the single-model Takedown pick, the
 	# order changes which models die, so sort each volley: Takedown, then Deadly, then the rest (stable).
@@ -2447,7 +2450,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				int(RulesRegistry.unit_param(member, "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
 			mod_info = {"mod": int(mod_info.get("mod", 0)) + indirect_mod,
 				"note": _solo_join_note(str(mod_info.get("note", "")), "Indirect moved %d" % indirect_mod)}
-		var ai_mod: int = int(mod_info.get("mod", 0)) + upr_hit
+		var ai_mod: int = int(mod_info.get("mod", 0)) + upr_hit + ai_spot_hit
 		if bool(profile.get("unstoppable", false)) and ai_mod < 0:
 			ai_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
 			if battle_log != null:
@@ -7013,9 +7016,73 @@ func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> voi
 	await _solo_complete_human_attack(attacker)
 
 
+## NML-216 wave B — Precision Spotter (army book): "Once per activation, pick one enemy
+## unit within 36\" and in line of sight of this model and roll one die, on a 4+ place a
+## marker on it." V1 auto-picks the NEAREST spottable enemy for both sides (logged; pick
+## agency is a noted refinement). Markers live on the target; the next friendly volley
+## consumes them for +X to hit ("Friendly units may remove markers ... to get +X").
+func _solo_try_precision_spot(unit: GameUnit) -> void:
+	if unit == null or solo_controller == null or opr_army_manager == null:
+		return
+	var bearer := false
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for m in members:
+		var mu := m as GameUnit
+		if mu != null and (mu.has_special_rule("Precision Spotter") \
+				or not RulesRegistry.unit_rules_of_primitive(mu, "Precision Spotter").is_empty()):
+			bearer = true
+			break
+	if not bearer:
+		return
+	var own_pid: int = int(unit.unit_properties.get("player_id", 0))
+	var best: GameUnit = null
+	var best_d := 36.0
+	for e in opr_army_manager.get_all_game_units():
+		var eu := e as GameUnit
+		if eu == null or eu.get_alive_count() <= 0 or SoloController.unit_in_reserve(eu):
+			continue
+		if int(eu.unit_properties.get("player_id", 0)) == own_pid:
+			continue
+		var d := solo_controller.nearest_melee_gap_in(unit, eu)
+		if d <= best_d and _solo_has_los(unit, eu):
+			best = eu
+			best_d = d
+	if best == null:
+		return
+	var faces: Array = await _solo_tray_roll(1, 4, _solo_owner_label(unit), "attack",
+		"Precision Spotter: 4+ marks %s" % best.get_name())
+	if not faces.is_empty() and int(faces[0]) >= 4:
+		best.unit_properties["spot_markers"] = int(best.unit_properties.get("spot_markers", 0)) + 1
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"Precision Spotter: %s marks %s (marker placed — friendly attackers may remove markers for +1 to hit each)" % [
+				unit.get_name(), best.get_name()], _solo_is_ai_unit(unit))
+		_solo_rule_float(best, "Spotted!", Color(1.0, 0.6, 0.9))
+	elif battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Precision Spotter: %s misses the mark on %s (needed 4+)" % [unit.get_name(), best.get_name()], _solo_is_ai_unit(unit))
+
+
+## Consume the target's spot markers for this volley: +X to hit, markers removed (the
+## rule's attacker choice is V1-automatic — leaving them lie is never better in our flows).
+func _solo_consume_spot_markers(target: GameUnit) -> int:
+	var sm := int(target.unit_properties.get("spot_markers", 0))
+	if sm <= 0:
+		return 0
+	target.unit_properties.erase("spot_markers")
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Precision Spotter: %d marker%s removed — +%d to hit this volley" % [sm, ("" if sm == 1 else "s"), sm], true)
+	_solo_rule_float(target, "Markers spent +%d" % sm)
+	return sm
+
+
 ## The attack's activation completion (X1 double-shoot exploit) — shared by the single-target
 ## flow and #226 split fire (which completes ONCE, after its second volley).
 func _solo_complete_human_attack(attacker: GameUnit) -> void:
+	await _solo_try_precision_spot(attacker)
 	if attacker != null and SoloController.human_attack_completes_activation(attacker.is_activated):
 		if radial_menu_controller != null:
 			radial_menu_controller.card_toggle_activation(attacker)   # state + heroes + marker + MP + reply
@@ -7120,6 +7187,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d/%d model%s with line of sight + range" % [
 			attacker.get_name(), _solo_sighted_count(attacker, target, rng_in, log_indirect), total, ("" if total == 1 else "s")], true)
 	var fired_any := false   # round 7, finding 5: a volley that rolls NOTHING must say so, never end silently
+	var spot_hit := _solo_consume_spot_markers(target)   # wave B: markers removed for +X
 	var chosen_versatile: Dictionary = {}   # Bug 13: per-weapon Versatile choice, asked once per volley
 	# Unpredictable (generic, "when attacking"): the HUMAN's volley rolls the same visible die —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile (resolution-integrated, both sides automatic).
@@ -7185,7 +7253,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 					"note": _solo_join_note(str(p_mod.get("note", "")), "Indirect moved %d" % ind_mod)}
 			# Reliable sets the Quality (2+), THEN the roll modifiers apply (GF v3.5.1 p.14: "Reliable only
 			# changes the Quality value, so the roll can still be modified").
-			var h_mod: int = int(p_mod.get("mod", 0)) + upr_hit
+			var h_mod: int = int(p_mod.get("mod", 0)) + upr_hit + spot_hit
 			if bool(profile.get("unstoppable", false)) and h_mod < 0:
 				h_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
 				if battle_log != null:
