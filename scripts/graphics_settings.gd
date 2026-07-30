@@ -41,6 +41,8 @@ var fullscreen: bool = true
 ## move ledger always records for MP proof). Persisted; bound to the T hotkey and the
 ## Settings "Show Move Trails" toggle. Default on; auto-suppressed during deployment.
 var show_move_trails: bool = true
+## Transparency stage 2: rising rule texts at the table ("Blast ×3", "Artillery +1").
+var show_rule_floats: bool = true
 
 ## Strict "dry brush" movement enforcement: hard-stop a movement path-paint / drag at the
 ## model's MAX legal band (Rush/Charge). ON = Strict (the maintainer's default — you learn the
@@ -342,6 +344,7 @@ func save_settings() -> void:
 	config.set_value("graphics", "reduce_motion", reduce_motion)
 	config.set_value("graphics", "fullscreen", fullscreen)
 	config.set_value("graphics", "show_move_trails", show_move_trails)
+	config.set_value("graphics", "show_rule_floats", show_rule_floats)
 	config.set_value("graphics", "enforce_movement_limit", enforce_movement_limit)
 	config.save("user://graphics_settings.cfg")
 
@@ -361,4 +364,5 @@ func load_settings() -> void:
 	reduce_motion = config.get_value("graphics", "reduce_motion", false)
 	fullscreen = config.get_value("graphics", "fullscreen", true)
 	show_move_trails = config.get_value("graphics", "show_move_trails", true)
+	show_rule_floats = config.get_value("graphics", "show_rule_floats", true)
 	enforce_movement_limit = config.get_value("graphics", "enforce_movement_limit", true)

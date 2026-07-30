@@ -323,6 +323,7 @@ var _solo_difficulty_grades: Dictionary = {} # player-slot -> SoloDifficulty pre
 var _solo_arena_seed: int = 0                # game-level base seed for the reproducible difficulty knob draws
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 var move_trails: Node = null  # MoveTrails (path painting: chalk trails + move ledger)
+var rule_floats: Node = null  # FloatingRuleText (transparency stage 2: rules announce at the table)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
 var battlefield_stains: BattlefieldStains = null
@@ -3438,6 +3439,7 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 			# "2 hits" without explanation looks broken, not Relentless.
 			battle_log.log_event(BattleLog.Category.COMBAT, "Relentless: +%d hit%s (unmodified 6s)" % [
 				rel_bonus, ("" if rel_bonus == 1 else "s")], true)
+			_solo_rule_float(target, "Relentless +%d" % rel_bonus)
 		hits += rel_bonus
 	if bool(profile.get("surge", false)):
 		# Coverage wave: Surge-family gates — within_in (Point-Blank Surge: only within 12") and the
@@ -3456,6 +3458,7 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 				# resolves as "3 hits" reads broken, not Surge.
 				battle_log.log_event(BattleLog.Category.COMBAT, "Surge: +%d hit%s (unmodified %s)" % [
 					bonus, ("" if bonus == 1 else "s"), ("6s" if surge_fives == 0 else "5-6s")], true)
+				_solo_rule_float(target, "Surge +%d" % bonus)
 			hits += bonus
 	# Coverage wave: the extra-ATTACK form (Bloodborn/Clan Warrior/Primal/Predator Fighter — "for
 	# each unmodified 6 to hit, roll +1 attack; doesn't apply to newly generated attacks"): the
@@ -3500,6 +3503,7 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
 				blast_log_text(blast, hits, boosted, models_in_target), true)
+			_solo_rule_float(target, "Blast ×%d → %d" % [maxi(boosted / maxi(hits, 1), 1), boosted])
 		hits = boosted
 	return hits
 
@@ -4045,6 +4049,25 @@ func _solo_log_hit_mod(info: Dictionary, target: GameUnit, to_hit: int) -> void:
 		return
 	battle_log.log_event(BattleLog.Category.COMBAT, "To-hit vs %s: %s → hits on %d+" % [
 		target.get_name(), str(info.get("note", "")), to_hit], true)
+	_solo_rule_float(target, str(info.get("note", "")))
+
+
+## Transparency stage 2: float one rule text over a unit's table position (cascades in
+## FloatingRuleText). Safe no-op headless-batch or when the unit has no live node.
+func _solo_rule_float(unit: GameUnit, text: String, color: Color = Color(1.0, 0.92, 0.5)) -> void:
+	if rule_floats == null or unit == null or text.is_empty() or _solo_batch:
+		return
+	var pos := Vector3.INF
+	if solo_controller != null:
+		pos = solo_controller.unit_centre(unit)
+	if pos == Vector3.INF or pos == Vector3.ZERO:
+		for m in unit.get_alive_models():
+			var mi := m as ModelInstance
+			if mi.node != null and is_instance_valid(mi.node):
+				pos = mi.node.global_position
+				break
+	if pos != Vector3.INF:
+		rule_floats.announce(pos, text, color)
 
 
 ## Whether a unit (incl. attached heroes) fights with Counter (GF/AoF v3.5.1 p.13) — a Counter melee
@@ -12519,6 +12542,12 @@ func _init_radial_menu() -> void:
 	move_trails.name = "MoveTrails"
 	add_child(move_trails)
 	object_manager.move_trails = move_trails
+	# Transparency wave stage 2 (grilled 2026-07-30): applied rules announce themselves AT
+	# the table — rising billboard texts on the affected unit, stagger-cascaded so full
+	# volleys stay readable. The battle log remains the archive.
+	rule_floats = FloatingRuleText.new()
+	rule_floats.name = "FloatingRuleText"
+	add_child(rule_floats)
 	# Measure-on-pickup ghost (ROADMAP UX polish): translucent origin silhouettes while dragging —
 	# shows what ESC snaps back to and where the measured arc starts. Local display aid.
 	var pickup_ghosts := PickupGhostController.new()
