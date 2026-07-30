@@ -6442,7 +6442,9 @@ func solo_begin_cast(unit: GameUnit) -> void:
 
 
 ## Execute the picked human cast (async; fired from the targeting click).
-func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, first_target: GameUnit) -> void:
+func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked_targets) -> void:
+	# #227: `picked_targets` is the PLAYER's pick list (Array) — legacy single-unit calls pass one.
+	var picked: Array = picked_targets if picked_targets is Array else [picked_targets]
 	var spell_name := str(entry.get("name", "?"))
 	var threshold := int(entry.get("threshold", 1))
 	if not member.spend_caster_points(threshold):
@@ -6451,23 +6453,11 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, first_
 		return
 	if network_manager != null and network_manager.has_method("broadcast_unit_casts"):
 		network_manager.broadcast_unit_casts(member)
-	# Multi-target spells: the player picked the FIRST target; the rest auto-fill nearest-first
-	# from the legal set (v1 simplification — logged so the choice is visible).
-	var targets: Array = [first_target]
-	var count := maxi(int((entry.get("target", {}) as Dictionary).get("count", 1)), 1)
-	if count > 1:
-		var rest: Array = []
-		for cu in solo_controller.spell_candidates(unit, entry, solo_controller.human_slot, solo_controller.ai_slot):
-			if cu != first_target:
-				rest.append(cu)
-		var from := solo_controller.unit_centre(first_target)
-		rest.sort_custom(func(a, b) -> bool:
-			return MoveIntent.distance_inches(from, solo_controller.unit_centre(a)) 				< MoveIntent.distance_inches(from, solo_controller.unit_centre(b)))
-		for cu in rest.slice(0, count - 1):
-			targets.append(cu)
-		if targets.size() > 1 and battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL, "%s hits %d targets: %s" % [
-				spell_name, targets.size(), _solo_cast_target_label(targets)])
+	# #227 (was the v1 auto-fill): every target is the PLAYER's click now.
+	var targets: Array = picked
+	if targets.size() > 1 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, "%s hits %d targets: %s" % [
+			spell_name, targets.size(), _solo_cast_target_label(targets)])
 	# BOOST tableau (own helpers in 18" LoS; the member's remaining tokens count via the pool).
 	var boost := 0
 	var helpers: Array = solo_controller._aura_casters(solo_controller.human_slot, unit, null)
@@ -6536,6 +6526,16 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 		return false
 	match SoloController.targeting_route(event):
 		SoloController.TargetingRoute.CANCEL:
+			# #227: with picks pending, right-click means "cast with these" (early finish).
+			if _solo_target_mode.has("cast_entry") \
+					and not (_solo_target_mode.get("cast_picked", []) as Array).is_empty():
+				var eattacker: GameUnit = _solo_target_mode.get("unit")
+				var ecentry: Dictionary = _solo_target_mode.get("cast_entry", {})
+				var ecmember: GameUnit = _solo_target_mode.get("cast_member")
+				var epicked: Array = _solo_target_mode.get("cast_picked", [])
+				_solo_end_targeting()
+				_run_human_cast(eattacker, ecmember, ecentry, epicked)
+				return true
 			_solo_end_targeting()
 			return true
 		SoloController.TargetingRoute.TRACK:
@@ -6558,8 +6558,21 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 					return true
 				var centry: Dictionary = _solo_target_mode.get("cast_entry", {})
 				var cmember: GameUnit = _solo_target_mode.get("cast_member")
+				# #227 (community): pick-up-to-N spells collect YOUR clicks — the engine never
+				# picks the 2nd target for you. Right-click casts early with fewer.
+				var want := maxi(int((centry.get("target", {}) as Dictionary).get("count", 1)), 1)
+				var step: Dictionary = SoloController.cast_pick_step(
+					_solo_target_mode.get("cast_picked", []), want, cvalid, target)
+				if not bool(step["done"]):
+					_solo_target_mode["cast_picked"] = step["picked"]
+					_solo_target_mode["cast_valid"] = step["valid"]
+					if battle_log != null:
+						battle_log.log_event(BattleLog.Category.GENERAL,
+							"%s: %d of up to %d targets picked — click more or right-click to cast" % [
+							str(centry.get("name", "?")), (step["picked"] as Array).size(), want])
+					return true
 				_solo_end_targeting()
-				_run_human_cast(attacker, cmember, centry, target)
+				_run_human_cast(attacker, cmember, centry, step["picked"])
 				return true
 			var melee: bool = bool(_solo_target_mode.get("melee", false))
 			if target == null or not _solo_is_ai_unit(target) or _solo_combined_alive(target) <= 0 \

@@ -1938,3 +1938,23 @@ func test_plain_reason_for_finds_the_units_newest_action() -> void:
 	solo.decision_log.append({"kind": "action", "unit": "Gators", "chosen": "holds", "why": "decision tree", "data": {}})
 	solo.decision_log.append({"kind": "action", "unit": "Others", "chosen": "rushes", "why": "decision tree", "data": {}})
 	assert_str(solo.plain_reason_for(u)).is_equal("holds")
+
+
+# ===== #227 — pick-up-to-N spell targets are the player's clicks =====
+
+func test_cast_pick_step_collects_until_count_or_dry() -> void:
+	var a := _unit(2, [Vector3.ZERO])
+	var b := _unit(2, [Vector3.ZERO])
+	var c := _unit(2, [Vector3.ZERO])
+	var s1: Dictionary = SoloController.cast_pick_step([], 2, [a, b, c], a)
+	assert_bool(bool(s1["done"])) \
+		.override_failure_message("#227 — one pick of a pick-two spell already casts: the engine would choose the 2nd target again") \
+		.is_false()
+	assert_int((s1["picked"] as Array).size()).is_equal(1)
+	assert_bool((s1["valid"] as Array).has(a)).is_false()
+	var s2: Dictionary = SoloController.cast_pick_step(s1["picked"], 2, s1["valid"], b)
+	assert_bool(bool(s2["done"])).is_true()
+	assert_int((s2["picked"] as Array).size()).is_equal(2)
+	# The legal set running dry finishes early even below the count.
+	var s3: Dictionary = SoloController.cast_pick_step([], 3, [c], c)
+	assert_bool(bool(s3["done"])).is_true()
