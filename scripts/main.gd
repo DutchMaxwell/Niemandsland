@@ -7258,6 +7258,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				h_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
 				if battle_log != null:
 					battle_log.log_event(BattleLog.Category.COMBAT, "Unstoppable: negative to-hit modifiers ignored", true)
+					_solo_rule_float(target, "Unstoppable: no penalties")
 			var to_hit: int = AiCombatMath.modified_hit_target(
 				AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false))),
 				h_mod)
