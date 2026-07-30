@@ -361,6 +361,16 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_disembark_unit(cargo_list[ci] as GameUnit)
 		return
 
+	# Embark entries are per-TRANSPORT ("embark_<index>") — with several reachable transports
+	# the player picks the vehicle, mirroring the per-cargo unload list (maintainer find).
+	if action_id.begins_with("embark_"):
+		var embark_list: Array = context.get("embark_targets", [])
+		var ei := int(action_id.trim_prefix("embark_"))
+		if ei >= 0 and ei < embark_list.size():
+			context["embark_target"] = embark_list[ei]
+			_embark_unit(context)
+		return
+
 	match action_id:
 		"solo_shoot":
 			_solo_begin_targeting(context, false)
@@ -396,8 +406,6 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_revive_unit_dead(context)
 		"revive_selected":
 			_revive_selected_dead(context)
-		"embark":
-			_embark_unit(context)
 		"disembark":
 			_disembark_unit(context.get("disembark_unit") as GameUnit)
 		"delete_unit":
@@ -2316,22 +2324,26 @@ const EMBARK_REACH_M := 0.0254   # 1"
 func _append_transport_items(game_unit: GameUnit, context: Dictionary, items: Array) -> void:
 	if army_manager == null or game_unit == null:
 		return
-	var target := _embark_target_for(game_unit)
+	var targets := _embark_targets_for(game_unit)
 	var economy := _activation_economy_on()
-	if target != null and not (economy and game_unit.is_activated):
-		context["embark_target"] = target
-		var tname := str(target.unit_properties.get("name", "transport"))
-		if bool(target.unit_properties.get("ambush_reserve", false)):
-			# S1.5 (community #160): loading a transport that waits in Ambush reserve — the
-			# unit deploys INSIDE and arrives with it.
-			items.append(RadialMenu.RadialMenuItem.new("embark", "Embark (reserve)", "▣", true,
-				"Load into %s in Ambush reserve — the unit deploys inside and arrives with it (GF v3.5.1 Transport)" % tname))
-		else:
-			# #209: in a solo game embarking IS the unit's move action — the label says so
-			# up front, the click is the confirmation.
-			items.append(RadialMenu.RadialMenuItem.new("embark",
-				"Embark — ends this unit's activation" if economy else "Embark", "▣", true,
-				"Embark into %s — any move action; only one model needs to reach it (GF v3.5.1 p.15 Transport)" % tname))
+	if not targets.is_empty() and not (economy and game_unit.is_activated):
+		context["embark_targets"] = targets
+		for ti in range(targets.size()):
+			var target := targets[ti] as GameUnit
+			var tname := str(target.unit_properties.get("name", "transport"))
+			if bool(target.unit_properties.get("ambush_reserve", false)):
+				# S1.5 (community #160): loading a transport that waits in Ambush reserve — the
+				# unit deploys INSIDE and arrives with it.
+				items.append(RadialMenu.RadialMenuItem.new("embark_%d" % ti,
+					"Load into %s (reserve)" % tname, "▣", true,
+					"Load into %s in Ambush reserve — the unit deploys inside and arrives with it (GF v3.5.1 Transport)" % tname))
+			else:
+				# #209: in a solo game embarking IS the unit's move action — the label says so
+				# up front, the click is the confirmation. One entry per reachable transport:
+				# the player picks the vehicle (maintainer find).
+				items.append(RadialMenu.RadialMenuItem.new("embark_%d" % ti,
+					"Embark: %s%s" % [tname, " — ends this unit's activation" if economy else ""], "▣", true,
+					"Embark into %s — any move action; only one model needs to reach it (GF v3.5.1 p.15 Transport)" % tname))
 	var cargo: Array = army_manager.cargo_units(game_unit)
 	if not cargo.is_empty():
 		context["cargo_units"] = cargo
@@ -2351,9 +2363,10 @@ func _append_transport_items(game_unit: GameUnit, context: Dictionary, items: Ar
 ## deploy with units inside" / "units inside Transports are deployed at the same time as the
 ## Transport", GF v3.5.1 p.15): a reserve transport parks on the tray, so no table-reach is
 ## ever possible. Deployment-ONLY: in play, a reserve-embark would be a free un-deploy.
-func _embark_target_for(unit: GameUnit) -> GameUnit:
+func _embark_targets_for(unit: GameUnit) -> Array:
+	var out: Array = []
 	if army_manager == null or unit == null or army_manager.transport_of(unit) != null:
-		return null
+		return out
 	var pid := int(unit.unit_properties.get("player_id", 0))
 	var deploying: bool = army_manager.is_deployment_phase()
 	for t in army_manager.get_game_units_for_player(pid):
@@ -2362,11 +2375,13 @@ func _embark_target_for(unit: GameUnit) -> GameUnit:
 			continue
 		if not bool(army_manager.can_embark(unit, tr).get("ok", false)):
 			continue
+		# ALL candidates, not the first hit — with two trucks in reach the player picks
+		# the vehicle (maintainer find), mirroring the per-cargo unload list.
 		if _joined_gap_to_m(unit, tr) <= EMBARK_REACH_M:
-			return tr
-		if deploying and bool(tr.unit_properties.get("ambush_reserve", false)):
-			return tr
-	return null
+			out.append(tr)
+		elif deploying and bool(tr.unit_properties.get("ambush_reserve", false)):
+			out.append(tr)
+	return out
 
 
 ## Smallest base-edge gap (metres) between any alive model of `unit`'s joined chain and any
