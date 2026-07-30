@@ -331,10 +331,12 @@ func is_eligible(unit) -> bool:
 	# (the AI activated a not-yet-arrived unit); arrival then read as if it had already spent its turn.
 	if unit_in_reserve(u):
 		return false
-	# Embarked cargo is parked off-table inside its transport (S1.5, community #160): it can
-	# never be activated and must not count toward the round-over check — otherwise the
-	# alternation would wait forever for a phantom activation.
-	if army_manager != null and army_manager.transport_of(u) != null:
+	# Embarked cargo is parked off-table inside its transport (S1.5, community #160). The
+	# HUMAN's cargo can never be auto-activated (it exits via the radial; phantom eligibility
+	# would stall the round-over check forever) — but #230 makes the AI's OWN cargo eligible:
+	# its activation IS the mandatory first-activation disembark (official Solo rules p.58).
+	if army_manager != null and army_manager.transport_of(u) != null \
+			and int(u.unit_properties.get("player_id", 0)) != ai_slot:
 		return false
 	return not (u.has_method("is_attached") and u.is_attached())
 
@@ -395,6 +397,12 @@ func activate_next_ai_unit() -> GameUnit:
 			last_report = {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
 				"toward": AiDecision.Toward.ENEMY, "shoot": false, "can_shoot": false,
 				"dist_in": INF, "dangerous_models": 0, "idle_shaken": true}
+	elif army_manager != null and army_manager.transport_of(unit) != null:
+		# #230 (official Solo rules p.58): "units inside must always disembark on their
+		# first activation (if possible)" — the exit is an Advance move action (#209
+		# semantics), so the shot window stays open; Shaken cargo idles inside (rules
+		# priority: Shaken forbids actions — the branch above wins).
+		last_report = _act_disembark(unit)
 	else:
 		last_report = _act(unit)
 	mark_activated(unit)
@@ -404,6 +412,28 @@ func activate_next_ai_unit() -> GameUnit:
 		turn_manager.notify_activated(unit)
 	ai_unit_activated.emit(unit)
 	return unit
+
+
+## #230 — the cargo's first activation: exit toward the nearest enemy (auto-formation,
+## fully within 6\" — the placer owns legality), then the normal volley machinery may fire
+## (main re-gates range + LOS as ever). No legal exit spot → the unit holds inside.
+func _act_disembark(unit: GameUnit) -> Dictionary:
+	var tr: GameUnit = army_manager.transport_of(unit)
+	var foe := _nearest_enemy_of(unit)
+	var toward: Vector3 = unit_centre(foe) if foe != null else Vector3.INF
+	var ok: bool = army_manager.set_unit_embarked(unit, null, false, toward)
+	record_decision({"kind": "mission", "unit": unit.get_name(),
+		"rule": "Official Solo rules p.58: units inside transports always disembark on their first activation (if possible); the exit is an Advance move action — the shot window stays open",
+		"candidates": [],
+		"chosen": ("disembarks from %s" % (tr.get_name() if tr != null else "transport")) if ok else "no room — stays inside",
+		"why": "cargo first-activation disembark" if ok else "no legal exit spot", "data": {}})
+	if not ok or foe == null:
+		return {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
+			"toward": AiDecision.Toward.ENEMY, "shoot": false, "can_shoot": false,
+			"dist_in": INF, "dangerous_models": 0}
+	return {"unit": unit, "target": foe, "action": AiDecision.Action.ADVANCE,
+		"toward": AiDecision.Toward.ENEMY, "shoot": true, "can_shoot": true,
+		"dist_in": nearest_melee_gap_in(unit, foe), "dangerous_models": 0}
 
 
 func eligible_ai_units() -> Array:
@@ -6057,10 +6087,36 @@ func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, bloc
 	_deploy_blocked_flying = blocked_flying
 	_deploy_alt = {"queue": [], "scout_queue": [], "deployed": 0, "seed": seed_value,
 		"blocked_normal": blocked_normal, "blocked_flying": blocked_flying}
+	# #230 (official Solo rules p.58): "the AI must always place random units in each
+	# [transport], trying to fill up its cargo limit" — filled BEFORE the queue build, so
+	# cargo rides its transport (S1.5) instead of deploying as its own drop. Lists without
+	# transports draw NOTHING here — the rng sequence (and every existing seed) is untouched.
+	var fill_transports: Array = []
+	var fill_pool: Array = []
+	for u0 in army_manager.get_game_units_for_player(ai_slot):
+		if u0 == null or u0.get_alive_count() <= 0 or (u0.has_method("is_attached") and u0.is_attached()):
+			continue
+		if army_manager.transport_capacity(u0) > 0:
+			fill_transports.append(u0)
+		elif army_manager.transport_of(u0) == null:
+			fill_pool.append(u0)
+	for tr0 in fill_transports:
+		var tries: Array = fill_pool.duplicate()
+		while not tries.is_empty():
+			var pick: GameUnit = tries.pop_at(rng.randi_range(0, tries.size() - 1))
+			if bool(army_manager.can_embark(pick, tr0).get("ok", false)) \
+					and army_manager.set_unit_embarked(pick, tr0, true):
+				fill_pool.erase(pick)
+				record_decision({"kind": "mission", "unit": tr0.get_name(),
+					"rule": "Official Solo rules p.58: the AI fills each transport with random units up to its cargo limit",
+					"candidates": [], "chosen": "loads %s" % pick.get_name(),
+					"why": "transport fill at deployment", "data": {}})
 	var all_units: Array = []
 	for u in army_manager.get_game_units_for_player(ai_slot):
 		# Attached heroes deploy WITH their host unit (coherency!), never as their own drop.
-		if u != null and u.get_alive_count() > 0 and not (u.has_method("is_attached") and u.is_attached()):
+		# #230: embarked cargo rides its transport — never its own drop.
+		if u != null and u.get_alive_count() > 0 and not (u.has_method("is_attached") and u.is_attached()) \
+				and army_manager.transport_of(u) == null:
 			all_units.append(u)
 	if all_units.is_empty():
 		return 0

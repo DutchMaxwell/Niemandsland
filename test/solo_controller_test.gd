@@ -1912,9 +1912,18 @@ func test_embarked_cargo_is_not_eligible_for_activation() -> void:
 	add_child(solo)
 	solo.setup(army, null, null, 1, 2)
 	assert_int(solo.eligible_ai_units().size()).is_equal(2)
+	# #230 update: the AI's OWN cargo stays eligible — its activation IS the mandatory
+	# first-activation disembark (official Solo rules p.58)…
 	cargo.unit_properties["embarked_in"] = "apc"   # parked inside the APC (state layer)
-	assert_int(solo.eligible_ai_units().size()).is_equal(1)
-	assert_bool(solo.is_eligible(cargo)).is_false()
+	assert_int(solo.eligible_ai_units().size()).is_equal(2)
+	assert_bool(solo.is_eligible(cargo)).is_true()
+	# …while HUMAN cargo keeps the S1.5 exclusion (it exits via the radial; phantom
+	# eligibility would stall the round-over check forever).
+	var h_cargo := _unit(1, [Vector3(0.1, 0, 0)])
+	h_cargo.unit_id = "h_cargo"
+	army.game_units["h_cargo"] = h_cargo
+	h_cargo.unit_properties["embarked_in"] = "apc"
+	assert_bool(solo.is_eligible(h_cargo)).is_false()
 
 
 # ===== Stage 3 (transparency): plain-language reasoning =====
