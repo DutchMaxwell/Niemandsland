@@ -3877,6 +3877,11 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	var over_nine: bool = dist_in > AiCombatMath.LONG_RANGE_IN
 	if attacker_artillery and over_nine:
 		notes.append("Artillery +1")
+	elif attacker_artillery:
+		# #224 (transparency wave stage 1 — rules-must-log covers NON-application too): the
+		# +1 is range-conditional (GF v3.5.1 p.13 "over 9\" away"); two testers independently
+		# read the silent short-range case as a missing rule.
+		notes.append("Artillery: no +1 (target within 9\")")
 	if stealth and over_nine:
 		notes.append("Stealth -1")
 	if alias_pen > 0 and not (stealth and over_nine):
