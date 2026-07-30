@@ -1295,16 +1295,22 @@ func _act(unit: GameUnit) -> Dictionary:
 	# that subsumes the flank anchor; otherwise fall back to the Wave-1 goal (objective / flank / enemy).
 	var to_flank: bool = (solver_used or flank_goal != NO_OBJECTIVE) and not to_obj
 	var goal: Vector3 = solver_goal if solver_used else (obj_pos if to_obj else (flank_goal if to_flank else tcentre))
-	# #183 v4 (Schmiede): a DENIED charge leaves no hole — the plain fallback path rushes the
-	# very corridor the gate dry-ran (nearest contact heading) instead of the generic enemy
-	# centre, whose jammed lane re-aims sideways ("boxed reposition" dithering). Solver, flank
-	# and marker picks keep their own logic; the entry never survives the activation.
-	if not solver_used and flank_goal == NO_OBJECTIVE and not to_obj \
+	# #183 v5 (Schmiede): a DENIED charge leaves no hole — the plain fallback path (enemy-
+	# OR marker-bound: the forensics units march the marker with the foe in the lane) walks
+	# the corridor the gate dry-ran, aimed at a LEGAL standoff just short of the enemy
+	# (gap - 1.2"), so the placement gate has a legal end state and the collapse ladder
+	# does not strangle the move (v4 fired never: it was gated on toward==ENEMY; B4 showed
+	# arc 6.0 -> achieved 0.9 on the marker path). Solver and flank picks keep precedence.
+	if not solver_used and flank_goal == NO_OBJECTIVE \
 			and (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) \
-			and int(dec["toward"]) == AiDecision.Toward.ENEMY \
 			and _denied_charge_approach.has(unit.unit_id):
-		goal = _denied_charge_approach[unit.unit_id]
-		action_why = "approach: denied charge — rushes its corridor"
+		var app: Dictionary = _denied_charge_approach[unit.unit_id]
+		var app_band: float = rush if action == AiDecision.Action.RUSH else advance
+		var app_in: float = minf(app_band, maxf(0.0, float(app["gap_in"]) - 1.2))
+		if app_in > 1.0:
+			var app_dir: Vector2 = app["dir"]
+			goal = _clamp_to_bounds(centre + Vector3(app_dir.x, 0.0, app_dir.y) * (app_in * INCHES_TO_METERS))
+			action_why = "approach: denied charge — presses its corridor to a legal standoff"
 	_denied_charge_approach.erase(unit.unit_id)
 	# OBJECTIVE FIRING ANCHOR (AI plausibility wave 1): an objective-bound SHOOTER whose tree promised a
 	# shot (Advance toward marker + shoot) stops at a spot INSIDE the seize ring that keeps range + line
@@ -5775,7 +5781,7 @@ func _charge_path_reaches(unit: GameUnit, target: GameUnit, band_in: float) -> b
 		var remaining_i := eff_band - MovementPlanner.polyline_length(trails[i]) / INCHES_TO_METERS
 		if residual_i <= remaining_i + SeparationChecker.BASE_CONTACT_EPSILON_INCHES:
 			return true
-	_denied_charge_approach[unit.unit_id] = goal2   # v4: the fallback rushes this corridor
+	_denied_charge_approach[unit.unit_id] = {"dir": dir, "gap_in": gap}   # v5: corridor heading
 	return false
 
 
