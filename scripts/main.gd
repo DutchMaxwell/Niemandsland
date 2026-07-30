@@ -6806,6 +6806,19 @@ const MELEE_ENGAGE_IN := 1.0   # base-edge gap within which the player may decla
 ## at least one attacker model can fire, red when none can, and a floating "7/10 sight" label shows how
 ## many models actually contribute attacks (GF v3.5.1 p.8). The per-model count is model×model grid walks,
 ## so it is cached per hovered unit and refreshed at most every SOLO_LOS_REFRESH_MS.
+## #231 — " · reach N\" (Aircraft -12\")" when the hovered target shrinks the attacker's
+## reach; "" otherwise. Pure read, shared by the hover label (and testable without a ray).
+func _solo_reach_note(attacker: GameUnit, hovered: GameUnit) -> String:
+	if attacker == null or hovered == null:
+		return ""
+	var raw_reach: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
+	var eff_reach: int = int(SoloController.effective_shoot_reach_in(float(raw_reach), hovered))
+	if eff_reach >= raw_reach:
+		return ""
+	return " · reach %d\" (%s)" % [eff_reach,
+		("Aircraft -12\"" if SoloController.target_range_penalty_in(hovered) > 0.0 else "Ranged Shrouding")]
+
+
 func _solo_update_los_line(screen_pos: Vector2) -> void:
 	var attacker: GameUnit = _solo_target_mode.get("unit")
 	var hovered := _solo_pick_unit_at(screen_pos)
@@ -6862,7 +6875,9 @@ func _solo_update_los_line(screen_pos: Vector2) -> void:
 			_solo_los_label.pixel_size = 0.0004
 			_solo_los_label.outline_size = 8
 			add_child(_solo_los_label)
-		_solo_los_label.text = "%d/%d sight" % [sighted, total]
+		# #231 (transparency): a target-side range penalty is visible ON HOVER — the ring is
+		# target-agnostic, so vs an Aircraft the label names the shrunk reach right here.
+		_solo_los_label.text = "%d/%d sight%s" % [sighted, total, _solo_reach_note(attacker, hovered)]
 		_solo_los_label.modulate = color
 		_solo_los_label.global_position = (from + to) * 0.5 + Vector3(0, 0.05, 0)
 		_solo_los_label.visible = true
