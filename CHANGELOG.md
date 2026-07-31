@@ -31,6 +31,13 @@ The community-feedback wave: rules the book always had, and a table that finally
   plain sentence ("rushes toward the objective (17″ away)"); afterwards every AI line in the
   battle log expands on click (▸) and shows its reasoning as a tooltip.
 - **The targeting hover names reach penalties** ("· reach 12″ (Aircraft -12″)").
+- **Split fire declares before it rolls.** Each declared target wears a ring plus a
+  firing-vector line naming the weapons staying on it; only the explicit "Fire!" button
+  commits the dice, and Cancel (right-click/ESC) frees the unit — nothing was spent.
+- **Combat holds on a stage card.** Declaration, per-weapon rolls, Result and Morale each
+  get a central card with every rule line — auto-advancing on a beat (adjustable in
+  Settings), click the card to skip ahead, Space pauses to read, ◂/▸ browse back through
+  the running activation.
 
 ### Added — combat & rules
 - **Split fire (GF p.8).** Multi-weapon units may fire at up to two targets: checkbox per
@@ -43,6 +50,10 @@ The community-feedback wave: rules the book always had, and a table that finally
 - **New army-book rules:** Caster Group (the unit casts with X = alive bearers), Spell
   Accumulator (a token battery casters within 12″ may drain), Spell Conduit (cast as if
   standing at the conduit), Precision Spotter (mark on 4+, attackers spend markers for +X).
+- **Precision Spotter is a radial action.** Spot picks one enemy within 36″ line of sight
+  yourself and rolls to mark it (4+, a visible token); before your to-hit roll, a dialog
+  lets you spend 0..N markers at +1 each, and partial removal leaves the rest lying on
+  the target.
 
 ### Added — transports
 - **The AI uses transports** (official solo rules): it fills them at deployment, and cargo
@@ -56,6 +67,9 @@ The community-feedback wave: rules the book always had, and a table that finally
 ### Added — spells
 - **Multi-target spells collect YOUR clicks** ("1 of up to 2 picked — click more or
   right-click to cast") — the engine never chooses a target for you.
+- **Cast picks are visible and reversible.** Every picked target wears a solid ring,
+  distinct from the pulsing candidate markers, and clicking a picked unit again takes
+  the pick back instead of refusing it.
 
 ### Fixed
 - A reform is movement: arranging models in a running solo game can no longer gain free
@@ -69,6 +83,12 @@ The community-feedback wave: rules the book always had, and a table that finally
 - MP: activation lines name the player; "Start Deployment" is hidden in multiplayer rooms
   (and no longer crashes); a solo controller surviving into hosting can never drive a
   human's slot.
+- Spell markers no longer expire by a blanket round-end rule — the spell's own wording
+  decides: "next time …" persists until it applies, "until the end of …" and unrecognized
+  wording still expire with the round (GF v3.5.1 has no blanket duration rule).
+- The AI's cargo waits for its transport before disembarking: riding inside a transport
+  that hasn't acted yet no longer burns the mandatory first-activation exit at the
+  deployment spot, and cargo inside a reserve transport stays off the table with it.
 
 ## [0.3.10.1-alpha] — 2026-07-29
 
