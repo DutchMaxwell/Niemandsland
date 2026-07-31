@@ -64,15 +64,15 @@ computed per model from the base edge — walls and intervening units block, woo
 area terrain (see in and out, never through), containers block hard — so ruler, sight fan and
 engine always agree.
 
-**Not automated (named, not hidden)** — thirteen rule names are **not** resolved by the game and
+**Not automated (named, not hidden)** — twelve rule names are **not** resolved by the game and
 are named in full rather than hidden behind an "…": the cross-unit caster economy (**Spell
 Accumulator**, **Caster Group**, **Extended Buff Range**), the rules that create or return units
-(**Spawn**, **Split**, **Reinforcement**, **Reanimation**) and the movement / deployment set
+(**Spawn**, **Split**, **Reinforcement**) and the movement / deployment set
 (**Coordinate**, **Delayed Action**, **Traversal**, **Ambush Beacon**, **Ambush Re-Deployment**,
 **Rapid Ambush**). The per-unit notice in the battle log names the ones your list actually
 contains, so you can apply them by hand. Everything else in the books is modeled — note that
-plain *Re-Deployment* and *Grounded Reinforcement* **are** automated; only the two Ambush
-variants above are not. The follow-up resolver waves are post-release work (see
+plain *Re-Deployment*, *Grounded Reinforcement* and *Reanimation* **are** automated; only the two
+Ambush variants above are not. The follow-up resolver waves are post-release work (see
 [`docs/ROADMAP.md`](docs/ROADMAP.md)).
 
 **Transports (stage 1)** — units embark and unload through the radial menu with book-exact

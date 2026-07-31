@@ -76,11 +76,12 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   onboarding items live in **Ideas**. _S–M_
 - **Solo rules automation — resolver waves B + C** — `0.3.10.0-alpha` automates hundreds of rules; the
   families that need their own resolver step are honestly still manual, and the per-unit battle-log
-  notice names them. The complete remainder is **thirteen rule names** (everything else in the books is
-  modeled — plain *Re-Deployment* and *Grounded Reinforcement* included):
+  notice names them. The complete remainder is **twelve rule names** (everything else in the books is
+  modeled — plain *Re-Deployment*, *Grounded Reinforcement* and *Reanimation* included):
   - **Wave B — caster economy + unit creation:** **Spell Accumulator**, **Caster Group**, **Extended
-    Buff Range**, **Spawn**, **Split**, **Reinforcement**, **Reanimation**. These create, return or
-    re-point units, so they touch the AI's round plan, not just the dice. _M–L_
+    Buff Range**, **Spawn**, **Split**, **Reinforcement**. These create, return or
+    re-point units, so they touch the AI's round plan, not just the dice. **Reanimation** shipped:
+    models and wounds return on activation (one die per missing wound, 5+, coherency-gated). _M–L_
   - **Wave C — movement / deployment:** **Coordinate**, **Delayed Action**, **Traversal**, **Ambush
     Beacon**, **Ambush Re-Deployment**, **Rapid Ambush**. _M_
 - **Selectable AI difficulty grades** — `0.3.10.0-alpha` ships exactly one grade (NACHTMAHR at full

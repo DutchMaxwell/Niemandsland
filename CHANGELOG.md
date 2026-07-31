@@ -6,6 +6,15 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Added
+- **Reanimation (army-book).** A unit whose models all carry the rule rolls one die per missing
+  model/wound when it activates; every 5+ brings one wound back — the first wound of a casualty
+  puts the model back on the table, further wounds heal it up. Returned models must be placed in
+  coherency with a model that was *not* restored, otherwise the success expires (with its own log
+  line). The rule reaches the table through the hero upgrade *Reanimation Aura*, and it ends when
+  its carrier falls — the battle log says so. Shaken units stay idle and do not reanimate.
+  Allocation is automatic in v1 for both sides; letting the owner click each restore is a follow-up.
+
 ## [0.3.11.0-alpha] — 2026-07-31
 
 The community-feedback wave: rules the book always had, and a table that finally SHOWS its work.

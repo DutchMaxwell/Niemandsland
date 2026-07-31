@@ -2159,3 +2159,119 @@ func test_spell_conduit_extends_the_cast_origin() -> void:
 	# Without the rule the same geometry is out of reach.
 	conduit.unit_properties["special_rules"] = []
 	assert_bool(solo.spell_candidates(caster, entry, 2, 1).has(far_foe)).is_false()
+
+
+# === Reanimation (army-book, Robot Legions 3.5.2) — the pure halves =========================
+# "When a unit where all models have this rule is activated, roll as many dice as the max. number of
+# models/wounds it could restore. For each 5+ you may restore one model/wound." The rule reaches the
+# table only through the hero upgrade "Reanimation Aura" ("This model and its unit get Reanimation").
+
+
+## A unit whose models carry the given [max, current] wound pairs; current <= 0 means the model is dead.
+func _reanim_unit(pid: int, unit_name: String, wounds: Array) -> GameUnit:
+	var u := GameUnit.new()
+	u.unit_id = "reanim_%s" % unit_name
+	u.unit_properties = {"player_id": pid, "name": unit_name, "quality": 4, "defense": 4}
+	for i in wounds.size():
+		var pair: Array = wounds[i]
+		var m := ModelInstance.new()
+		m.model_index = i
+		m.unit = u
+		m.wounds_max = int(pair[0])
+		m.wounds_current = int(pair[1])
+		m.is_alive = m.wounds_current > 0
+		var n := Node3D.new()
+		add_child(n)
+		n.global_position = Vector3(0.03 * i, 0, 0)
+		m.node = n
+		u.models.append(m)
+	return u
+
+
+func test_reanimation_pool_counts_wounds_not_models() -> void:
+	# Wound currency (maintainer reading): a dead Tough(3) is worth THREE dice, a living model missing
+	# two wounds two, an untouched model none.
+	var u := _reanim_unit(2, "Bots", [[3, 0], [3, 1], [1, 1], [1, 0]])
+	u.unit_properties["special_rules"] = ["Reanimation"]
+	assert_int(SoloController.reanimation_pool(u)).is_equal(3 + 2 + 0 + 1)
+	# Full strength = no dice at all.
+	var fresh := _reanim_unit(2, "Fresh", [[3, 3], [1, 1]])
+	fresh.unit_properties["special_rules"] = ["Reanimation"]
+	assert_int(SoloController.reanimation_pool(fresh)).is_equal(0)
+	# Without the rule there is nothing to roll for, however battered the unit is.
+	var plain := _reanim_unit(2, "Plain", [[3, 0], [1, 0]])
+	assert_int(SoloController.reanimation_pool(plain)).is_equal(0)
+
+
+func test_reanimation_gate_never_prefix_matches_the_aura() -> void:
+	# GameUnit.has_special_rule is PREFIX based, so "Reanimation Aura" answers true for "Reanimation".
+	# The carrier gate must not — otherwise a fallen Re-Animator would keep reanimating his unit.
+	var aura_only := _reanim_unit(2, "AuraOnly", [[1, 1]])
+	aura_only.unit_properties["special_rules"] = ["Reanimation Aura"]
+	assert_bool(aura_only.has_special_rule("Reanimation")) \
+		.override_failure_message("fixture check: the prefix reader is expected to say yes here") \
+		.is_true()
+	assert_bool(SoloController.has_exact_rule(aura_only, "Reanimation")) \
+		.override_failure_message("the exact reader must tell 'Reanimation' from 'Reanimation Aura'") \
+		.is_false()
+
+
+func test_reanimation_aura_dies_with_its_carrier() -> void:
+	# The import expands "X Aura" onto the unit AND stamps the provenance; an aura-granted rule may
+	# only work while a living carrier is attached.
+	var host := _reanim_unit(2, "Host", [[1, 0], [1, 1]])
+	host.unit_properties["special_rules"] = ["Reanimation"]
+	host.unit_properties["aura_granted"] = ["Reanimation"]
+	var hero := _reanim_unit(2, "ReAnimator", [[3, 3]])
+	hero.unit_properties["special_rules"] = ["Hero", "Reanimation Aura", "Reanimation"]
+	hero.unit_properties["aura_granted"] = ["Reanimation"]
+	host.unit_properties["attached_heroes"] = [hero]
+	assert_int(SoloController.reanimation_members(host).size()) \
+		.override_failure_message("a living carrier projects the rule over the whole chain") \
+		.is_equal(2)
+	# The Re-Animator falls: the unit keeps the imported rule NAME but loses the rule.
+	(hero.models[0] as ModelInstance).is_alive = false
+	(hero.models[0] as ModelInstance).wounds_current = 0
+	assert_bool(SoloController.reanimation_members(host).is_empty()) \
+		.override_failure_message("an aura-granted rule must not outlive its carrier") \
+		.is_true()
+	assert_object(SoloController.reanimation_aura_carrier(host, false)).is_equal(hero)
+	assert_object(SoloController.reanimation_aura_carrier(host, true)).is_null()
+	# A unit that owns the rule itself is untouched by the carrier's death.
+	host.unit_properties["aura_granted"] = []
+	assert_bool(SoloController.reanimation_members(host).is_empty()).is_false()
+
+
+func test_reanimation_plan_fills_the_living_before_it_raises_the_dead() -> void:
+	# Priority: living wounded first (hero before rank and file, biggest gap first), then casualties
+	# cheapest-first at one wound each, then the returned models are healed up.
+	var u := _reanim_unit(2, "Bots", [[3, 1], [1, 0], [3, 0], [1, 1]])
+	u.unit_properties["special_rules"] = ["Reanimation"]
+	# Two successes: both go into the living Tough model's gap, nobody comes back yet.
+	var two := SoloController.reanimation_plan(u, 2)
+	assert_int(two.size()).is_equal(1)
+	assert_object((two[0] as Dictionary)["model"]).is_equal(u.models[0])
+	assert_int(int((two[0] as Dictionary)["wounds"])).is_equal(2)
+	assert_bool(bool((two[0] as Dictionary)["revive"])).is_false()
+	# Three: the third buys the CHEAPEST casualty back (the Tough(1) trooper, not the Tough(3) elite).
+	var three := SoloController.reanimation_plan(u, 3)
+	assert_int(three.size()).is_equal(2)
+	assert_object((three[1] as Dictionary)["model"]).is_equal(u.models[1])
+	assert_bool(bool((three[1] as Dictionary)["revive"])).is_true()
+	assert_int(int((three[1] as Dictionary)["wounds"])).is_equal(1)
+	# Six: both casualties are back and the Tough(3) one is healed up with what is left.
+	var six := SoloController.reanimation_plan(u, 6)
+	var restored := 0
+	var spent := 0
+	for step in six:
+		spent += int((step as Dictionary)["wounds"])
+		if bool((step as Dictionary)["revive"]):
+			restored += 1
+	assert_int(restored).is_equal(2)
+	assert_int(spent).is_equal(6)
+	# The plan never spends more than the unit's own shortfall (pool = 2 + 1 + 3 = 6).
+	var overkill := SoloController.reanimation_plan(u, 99)
+	var over_spent := 0
+	for step in overkill:
+		over_spent += int((step as Dictionary)["wounds"])
+	assert_int(over_spent).is_equal(SoloController.reanimation_pool(u))

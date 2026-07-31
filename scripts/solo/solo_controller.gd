@@ -137,6 +137,8 @@ var _deploy_blocked_flying: Callable = Callable()
 ## What the last activate_next_ai_unit did: {unit, target, action, can_shoot, dist_in} — main reads it
 ## to resolve shooting (P3) and the charge melee (P4).
 var last_report: Dictionary = {}
+## Pick already drawn by peek_next_ai_unit(), waiting to be consumed by activate_next_ai_unit().
+var _peeked_unit: GameUnit = null
 ## Per-model routes of the last AI move: Array of {model: ModelInstance, path: Array[Vector3] (world
 ## waypoints, start … final), radius_m: float (the model's base radius — the swept-corridor half-width)}.
 ## The presentation layer replays them as glide animation + base-width corridors; purely observational —
@@ -363,7 +365,9 @@ func mark_activated(unit) -> void:
 
 
 func reset_round() -> void:
-	pass   # OPRArmyManager.advance_round() already clears activation flags for the whole table
+	# OPRArmyManager.advance_round() already clears activation flags for the whole table; only the
+	# unconsumed activation peek is ours to drop (a new round re-draws the pick).
+	_peeked_unit = null
 
 
 # === AI turn ===
@@ -384,10 +388,12 @@ func run_ai_turn() -> int:
 ## A Shaken unit's activation is an IDLE (no move/attack) reported as {"idle_shaken": true}; the caller
 ## clears the Shaken state through its marker/broadcast seam. Returns the unit, or null when none left.
 func activate_next_ai_unit() -> GameUnit:
-	var eligible := eligible_ai_units()
-	if eligible.is_empty():
-		return null
-	var unit := _select_ai_unit(eligible)
+	var unit := _take_peeked_unit()
+	if unit == null:
+		var eligible := eligible_ai_units()
+		if eligible.is_empty():
+			return null
+		unit = _select_ai_unit(eligible)
 	if unit == null:
 		return null
 	_activation_seq += 1   # monotonic per-activation index for the deterministic difficulty draws
@@ -420,6 +426,29 @@ func activate_next_ai_unit() -> GameUnit:
 		turn_manager.notify_activated(unit)
 	ai_unit_activated.emit(unit)
 	return unit
+
+
+## The unit the NEXT activate_next_ai_unit() will take, WITHOUT resolving its activation. Rules that
+## trigger "when a unit is activated" and need the real dice tray (Reanimation) have to fire before
+## the decision tree plans the move — otherwise a restored model would stand where its unit no longer
+## is. The pick is CACHED, so the following activate_next_ai_unit() consumes it instead of drawing a
+## second time: the seeded selection stream stays byte-identical to a run without any peek.
+func peek_next_ai_unit() -> GameUnit:
+	if _peeked_unit != null and is_eligible(_peeked_unit):
+		return _peeked_unit
+	_peeked_unit = null
+	var eligible := eligible_ai_units()
+	if eligible.is_empty():
+		return null
+	_peeked_unit = _select_ai_unit(eligible)
+	return _peeked_unit
+
+
+## Consume a cached peek (null when there is none, or when the peeked unit stopped being eligible).
+func _take_peeked_unit() -> GameUnit:
+	var unit := _peeked_unit
+	_peeked_unit = null
+	return unit if unit != null and is_eligible(unit) else null
 
 
 ## #230 — the cargo's first activation: exit toward the nearest enemy (auto-formation,
@@ -3648,6 +3677,182 @@ static func combined_alive(unit: GameUnit) -> int:
 			if h is GameUnit:
 				n += (h as GameUnit).get_alive_count()
 	return n
+
+
+# === Reanimation (army-book, Robot Legions 3.5.2) ===========================================
+# Official text: "When a unit where all models have this rule is activated, roll as many dice as the
+# max. number of models/wounds it could restore. For each 5+ you may restore one model/wound. Note
+# that new models may only be restored if they can be placed in coherency with non-restored models."
+# The rule reaches the table ONLY through the hero upgrade "Reanimation Aura" ("This model and its
+# unit get Reanimation"), which the army import expands onto the unit + every attached hero.
+#
+# The three pure halves live here so they are testable without the scene: who carries the rule right
+# now, how big the die pool is, and how the successes are spent. main.gd owns the tray roll, the
+# placement and the log lines.
+
+const REANIMATION_RULE := "Reanimation"
+const REANIMATION_AURA := "Reanimation Aura"
+## Each 5+ restores one model or one wound (registry-parametrised in main).
+const REANIMATION_TARGET := 5
+
+
+## Exact-name rule check — NEVER GameUnit.has_special_rule here: that one is PREFIX based, so a unit
+## carrying only "Reanimation Aura" would answer true for "Reanimation" and the aura could never end.
+static func has_exact_rule(unit: GameUnit, rule_name: String) -> bool:
+	if unit == null:
+		return false
+	for r in unit.get_special_rules():
+		var n := str(r) if r is String else str((r as Dictionary).get("name", ""))
+		if n.strip_edges() == rule_name:
+			return true
+	return false
+
+
+## Whether `rule_name` sits on `unit` only because an aura carrier granted it at import
+## (OPRArmyManager._expand_auras stamps the provenance). An aura-granted rule dies with its carrier;
+## a rule the unit owns itself does not.
+static func rule_is_aura_granted(unit: GameUnit, rule_name: String) -> bool:
+	if unit == null:
+		return false
+	return (unit.unit_properties.get("aura_granted", []) as Array).has(rule_name)
+
+
+## The chain (unit + attached heroes) whose models Reanimation may restore RIGHT NOW.
+## A LIVING aura carrier projects the rule over the whole chain ("this model and its unit"); without
+## one, only members that own the base rule themselves qualify — so a fallen Re-Animator takes the
+## rule with him even though the import stamped "Reanimation" onto the unit. Empty = no reanimation.
+static func reanimation_members(unit: GameUnit) -> Array:
+	if unit == null:
+		return []
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h is GameUnit:
+				chain.append(h)
+	for c in chain:
+		var member := c as GameUnit
+		if member != null and member.get_alive_count() > 0 and has_exact_rule(member, REANIMATION_AURA):
+			return chain
+	var out: Array = []
+	for c in chain:
+		var member := c as GameUnit
+		if member != null and has_exact_rule(member, REANIMATION_RULE) \
+				and not rule_is_aura_granted(member, REANIMATION_RULE):
+			out.append(member)
+	return out
+
+
+## A member that carries the aura (alive when `alive_only`) — the carrier named in the aura-ends line.
+static func reanimation_aura_carrier(unit: GameUnit, alive_only: bool) -> GameUnit:
+	if unit == null:
+		return null
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h is GameUnit:
+				chain.append(h)
+	for c in chain:
+		var member := c as GameUnit
+		if member == null or not has_exact_rule(member, REANIMATION_AURA):
+			continue
+		if alive_only and member.get_alive_count() <= 0:
+			continue
+		return member
+	return null
+
+
+## "The max. number of models/wounds it could restore" — maintainer reading (2026-07-31): the WOUND
+## is the currency. A dead model is worth its full wounds_max (a Tough(3) casualty = 3 dice), a living
+## wounded model its missing wounds. One die per missing wound, no cap beyond the unit's own shortfall.
+static func reanimation_pool(unit: GameUnit) -> int:
+	var n := 0
+	for m in reanimation_models(unit):
+		var mi := m as ModelInstance
+		if mi.is_alive:
+			n += maxi(mi.wounds_max - mi.wounds_current, 0)
+		else:
+			n += maxi(mi.wounds_max, 1)
+	return n
+
+
+## Every model of the carrying chain, in a stable order (chain order, then model order).
+static func reanimation_models(unit: GameUnit) -> Array:
+	var out: Array = []
+	for c in reanimation_members(unit):
+		var member := c as GameUnit
+		if member == null:
+			continue
+		for m in member.models:
+			if m is ModelInstance:
+				out.append(m)
+	return out
+
+
+## How `successes` restores are spent — v1 is AUTOMATIC for both sides (owner-click allocation is a
+## follow-up ticket). Priority (maintainer decision): top the LIVING wounded up first (heroes before
+## rank and file, most-wounded first), then bring casualties back cheapest-first (a Tough(1) trooper
+## before a Tough(3) elite) at one wound each, and only then heal the returned models up.
+## Returns [{model: ModelInstance, wounds: int, revive: bool}] — deterministic, never over-spending.
+static func reanimation_plan(unit: GameUnit, successes: int) -> Array:
+	var left := maxi(successes, 0)
+	var plan: Array = []
+	if left <= 0:
+		return plan
+	var models: Array = reanimation_models(unit)
+	# Phase A — living wounded, topped up. Heroes first, then the biggest gap; index breaks ties so
+	# the same board always produces the same allocation.
+	var wounded: Array = []
+	for i in models.size():
+		var mi := models[i] as ModelInstance
+		if mi.is_alive and mi.wounds_current < mi.wounds_max:
+			wounded.append({"model": mi, "i": i, "gap": mi.wounds_max - mi.wounds_current,
+				"hero": 1 if _reanimation_is_hero(mi) else 0})
+	wounded.sort_custom(func(a, b):
+		if int(a["hero"]) != int(b["hero"]):
+			return int(a["hero"]) > int(b["hero"])
+		if int(a["gap"]) != int(b["gap"]):
+			return int(a["gap"]) > int(b["gap"])
+		return int(a["i"]) < int(b["i"]))
+	for w in wounded:
+		if left <= 0:
+			break
+		var take: int = mini(int(w["gap"]), left)
+		left -= take
+		plan.append({"model": w["model"], "wounds": take, "revive": false})
+	# Phase B/C — casualties: one wound buys the model back, further wounds heal it up.
+	var dead: Array = []
+	for i in models.size():
+		var mi := models[i] as ModelInstance
+		if not mi.is_alive:
+			dead.append({"model": mi, "i": i, "cost": maxi(mi.wounds_max, 1)})
+	dead.sort_custom(func(a, b):
+		if int(a["cost"]) != int(b["cost"]):
+			return int(a["cost"]) < int(b["cost"])
+		return int(a["i"]) < int(b["i"]))
+	var revived: Array = []
+	for d in dead:
+		if left <= 0:
+			break
+		left -= 1
+		var entry := {"model": d["model"], "wounds": 1, "revive": true}
+		plan.append(entry)
+		revived.append(entry)
+	for entry in revived:
+		if left <= 0:
+			break
+		var mi := (entry as Dictionary)["model"] as ModelInstance
+		var top: int = mini(maxi(mi.wounds_max, 1) - 1, left)
+		if top > 0:
+			left -= top
+			(entry as Dictionary)["wounds"] = int((entry as Dictionary)["wounds"]) + top
+	return plan
+
+
+## Whether a model belongs to a Hero unit (the plan's first priority band).
+static func _reanimation_is_hero(model: ModelInstance) -> bool:
+	if model == null or not (model.unit is GameUnit):
+		return false
+	return (model.unit as GameUnit).is_hero()
 
 
 ## Total model count of a unit INCLUDING its attached heroes (the denominator shown next to

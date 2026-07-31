@@ -231,6 +231,7 @@
   "Ravage Aura",
   "Re-Deployment",
   "Re-Position Artillery",
+  "Reanimation",
   "Reanimation Aura",
   "Reckless Piercing",
   "Reckless Piercing Aura",
@@ -406,6 +407,7 @@
   "Rapid Rush",
   "Ravage",
   "Re-Deployment",
+  "Reanimation",
   "Relentless",
   "Reliable",
   "Rending",
@@ -7316,9 +7318,15 @@
     }
    },
    "Reanimation": {
-    "primitive": null,
+    "primitive": "Reanimation",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "trigger": "activation",
+     "restore_target": 5,
+     "restores": "models_and_wounds",
+     "coherency_required": true
+    }
    },
    "Reanimation Aura": {
     "primitive": null,
