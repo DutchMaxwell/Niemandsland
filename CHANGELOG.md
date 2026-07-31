@@ -7,6 +7,18 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **The three Ambush variants (army-book).** *Ambush Beacon*: a reserve that lands within 6″ of a
+  friendly beacon model ignores **every** enemy distance restriction — the 9″ (3″ Infiltrate)
+  arrival ring *and* an enemy's *Repel Ambushers* 12″. The AI actively hunts for those circles
+  instead of merely being allowed to use them, and on your side the honour-system ">9″" warning
+  gives way to the waiver line. *Rapid Ambush*: carriers may arrive at the start of round 1 — run
+  as a round-start beat after deployment **and** the Scout phase, so it can never buy an extra slot
+  in the deployment alternation, and still voluntary ("may"). *Ambush Re-Deployment*: a unit whose
+  models all carry it may leave the table once per game at the end of its activation and comes back
+  from Ambush at the start of the **next** round, exactly that one — you are asked, the AI decides
+  by a documented heuristic (leave under pressure, never off a marker it holds). Every application
+  *and* every non-application writes its own battle-log line, including a beacon that stood within
+  12″ and did not apply.
 - **Reanimation (army-book).** A unit whose models all carry the rule rolls one die per missing
   model/wound when it activates; every 5+ brings one wound back — the first wound of a casualty
   puts the model back on the table, further wounds heal it up. Returned models must be placed in

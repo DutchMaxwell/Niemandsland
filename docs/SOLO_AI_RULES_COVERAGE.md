@@ -987,3 +987,51 @@ slice only checks END positions), the friend's REAL intended target (nearest-ene
 screening/bodyguard behaviour (cheap units interposing against charges), focus-fire target pooling,
 terrain-anchored roles (holding cover/choke points), and any multi-unit lookahead. The natural home
 for these is an EV term over candidate end positions rather than more goal post-processing.
+
+---
+
+## Ambush variants — wave 1 (2026-07-31)
+
+The three army-book variants of the Ambush reserve, all registry-driven (`assets/solo/rules_mechanics_*.json`
+carry `primitive: "Ambush"` plus their own params — `beacon_in`, `arrive_from_round`, `re_reserve` /
+`uses_per_game`; the export tool now lists them in `SHIPPED_PLANNED`).
+
+1. **Ambush Beacon** — official text: *"Friendly units using Ambush may ignore distance restrictions from
+   enemies if they are deployed within 6" of this model."* **Maintainer ruling:** "distance restrictions" is
+   plural, so inside the circle **every** enemy distance restriction falls away — the 9″ (3″ Infiltrate)
+   arrival ring *and* an enemy's *Repel Ambushers* 12″. The waiver is keyed to the beacon **model**
+   (`SoloController.beacon_points` walks the carrier's live, on-table, non-embarked models). The arrival
+   search tries the beacon circles **first**, without the enemy rings (`_try_place_reserve_unit`) — otherwise
+   the AI would own the rule and never play it. The human side is the same truth from the other end:
+   `_solo_warn_ambush_proximity` prints the waiver line instead of the ">9″" complaint. A beacon that stood
+   within 12″ of the chosen spot and did **not** apply is named too (rules-must-log).
+2. **Rapid Ambush** — *"Counts as having Ambush, but may be deployed at the start of any round, including the
+   first."* `unit_has_ambush` carries it as the one true alias (set-aside paths unchanged);
+   `ambush_earliest_round` returns 1 for carriers, 2 for everyone else. **Maintainer ruling:** the AI may
+   arrive in round 1 — the specific army rule beats the general solo guideline. The round-1 beat
+   (`_solo_begin_rapid_ambush_round_one`) is a **round-start event**, run after regular deployment *and* the
+   Scout phase, so it can never buy an extra slot in the deployment alternation. It stays voluntary: a
+   carrier with no legal landing spot simply waits, and says so. `ambush_arrived_round` is stamped for a
+   round-1 arrival too, so the no-seizing clause holds.
+3. **Ambush Re-Deployment** — *"Once per game, when a unit where all models have this rule ends its
+   activation, you may immediately remove it from the table … and deploy it as if it had Ambush at the
+   beginning of the next round."* Both directions are new: the **withdrawal** hangs on the end of the
+   activation (`_solo_try_ambush_redeploy`, AI and human), the **return** is an exact date
+   (`ambush_return_round`, honoured by `may_arrive_this_round` — that round, not earlier, not later). The
+   "all models" quantifier includes joined heroes: a hero without the rule locks the unit out. AI heuristic
+   (documented, deliberately simple, in the decision log): leave when under pressure — Shaken, or an enemy
+   inside the 12″ charge band — and never off a marker within 3″. Carried objective markers are a no-op in
+   our missions (only static, round-end-seized markers exist); the TODO for carry-the-relic missions sits on
+   `ambush_redeploy_withdraw`. A transport takes its cargo along on the existing reserve machinery.
+
+**Prefix lesson, again.** `GameUnit.has_special_rule` matches by PREFIX, so *"Ambush Beacon"* and
+*"Ambush Re-Deployment"* both answered true to `"Ambush"` — their carriers were set aside off the table
+although both deploy normally. All three rules are matched by EXACT base name (`unit_carries_rule`, direct
+rules + item grants).
+
+**Tests.** `test/solo_controller_test.gd` (pure: exact detection, `beacon_cover`, `nearest_enemy_gap_in`, the
+round gate, the all-models/once-per-game gates, the AI policy) and `test/e2e/e2e_ambush_variants_test.gd`
+(11 cases on the real `main.tscn`). Documented red flips: beacon pass disabled → both beacon cases fail;
+`ambush_earliest_round` pinned to 2 → both Rapid cases fail; the exact return date relaxed to `>=` → the
+return case fails; the hero clause dropped → the all-models case fails; exact matching reverted to the prefix
+reader → the detection cases fail.
