@@ -46,6 +46,7 @@
   "Brutal Fighter",
   "Brute Courage",
   "Caster",
+  "Caster Group",
   "Casting Buff",
   "Casting Debuff",
   "Changebound",
@@ -307,6 +308,7 @@
   "Sniper REMOVE",
   "Speed Feat",
   "Speed Feat Aura",
+  "Spell Accumulator",
   "Spell Conduit",
   "Steadfast",
   "Steadfast Aura",
@@ -879,9 +881,12 @@
  "factions": {
   "alien_hives": {
    "Caster Group": {
-    "primitive": null,
+    "primitive": "Caster",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "pooled": true
+    }
    },
    "Destructive": {
     "primitive": "Destructive",
@@ -4489,9 +4494,12 @@
     }
    },
    "Caster Group": {
-    "primitive": null,
+    "primitive": "Caster",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "pooled": true
+    }
    },
    "Crack": {
     "primitive": "Crack",
@@ -4875,9 +4883,12 @@
     }
    },
    "Caster Group": {
-    "primitive": null,
+    "primitive": "Caster",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "pooled": true
+    }
    },
    "Casting Debuff": {
     "primitive": "Utility Buff",
@@ -5076,9 +5087,15 @@
     }
    },
    "Spell Accumulator": {
-    "primitive": null,
+    "primitive": "Spell Accumulator",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "tokens_per_round": "X",
+     "max_tokens": 6,
+     "share_range_in": 12,
+     "requires_not_shaken": true
+    }
    },
    "Spell Conduit": {
     "primitive": "Spell Conduit",
@@ -9872,9 +9889,15 @@
     }
    },
    "Spell Accumulator": {
-    "primitive": null,
+    "primitive": "Spell Accumulator",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "tokens_per_round": "X",
+     "max_tokens": 6,
+     "share_range_in": 12,
+     "requires_not_shaken": true
+    }
    },
    "Split": {
     "primitive": null,
