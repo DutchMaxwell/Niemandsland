@@ -1926,6 +1926,80 @@ func test_embarked_cargo_is_not_eligible_for_activation() -> void:
 	assert_bool(solo.is_eligible(h_cargo)).is_false()
 
 
+func test_cargo_defers_until_its_transport_has_acted() -> void:
+	# TC-081 (maintainer 31.07.): activating cargo before its ride moved wastes the lift —
+	# the mandatory first-activation disembark would exit at the deployment spot.
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	human.unit_id = "human"
+	var apc := _unit(2, [Vector3(0.5, 0, 0)])
+	apc.unit_id = "apc"
+	var cargo := _unit(2, [Vector3(0.6, 0, 0)])
+	cargo.unit_id = "cargo"
+	cargo.unit_properties["embarked_in"] = "apc"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, apc.unit_id: apc, cargo.unit_id: cargo}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	# Both are eligible, but the pick must be the TRANSPORT — deterministically, despite the
+	# D6-section randomness, because the deferral leaves it alone in the pool.
+	assert_object(solo._select_ai_unit([apc, cargo])) \
+		.override_failure_message("TC-081 — cargo must wait: the un-activated transport has to act first") \
+		.is_same(apc)
+	# The wait is explainable: one decision record names it.
+	var waits := 0
+	for r in solo.decision_log:
+		if str((r as Dictionary).get("chosen", "")).begins_with("waits inside"):
+			waits += 1
+	assert_int(waits).is_equal(1)
+	# Once the transport has acted, the cargo is next in line.
+	apc.is_activated = true
+	assert_bool(solo._cargo_should_wait_for_ride(cargo)).is_false()
+	assert_object(solo._select_ai_unit([cargo])).is_same(cargo)
+
+
+func test_cargo_deferral_never_stalls_when_only_cargo_is_left() -> void:
+	var apc := _unit(2, [Vector3(0.5, 0, 0)])
+	apc.unit_id = "apc"
+	var cargo := _unit(2, [Vector3(0.6, 0, 0)])
+	cargo.unit_id = "cargo"
+	cargo.unit_properties["embarked_in"] = "apc"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {apc.unit_id: apc, cargo.unit_id: cargo}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	# The ride is gone mid-round: the deferral must yield, not stall the alternation.
+	for m in apc.models:
+		(m as ModelInstance).is_alive = false
+	assert_bool(solo._cargo_should_wait_for_ride(cargo)).is_false()
+	assert_object(solo._select_ai_unit([cargo])).is_same(cargo)
+
+
+func test_cargo_of_a_reserve_transport_is_off_table_with_it() -> void:
+	# TC-081 side-fix: cargo rides its transport's reserve (S1.5) — while the ride is set
+	# aside, the cargo must not be activatable (it would disembark at tray coordinates).
+	var apc := _unit(2, [Vector3(0.5, 0, 0)])
+	apc.unit_id = "apc"
+	var cargo := _unit(2, [Vector3(0.6, 0, 0)])
+	cargo.unit_id = "cargo"
+	cargo.unit_properties["embarked_in"] = "apc"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {apc.unit_id: apc, cargo.unit_id: cargo}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	apc.unit_properties["ambush_reserve"] = true
+	assert_bool(solo.is_eligible(cargo)) \
+		.override_failure_message("cargo of a reserve transport leaked into the eligible pool") \
+		.is_false()
+	apc.unit_properties.erase("ambush_reserve")
+	assert_bool(solo.is_eligible(cargo)).is_true()
+
+
 # ===== Stage 3 (transparency): plain-language reasoning =====
 
 func test_plain_action_sentence_reads_like_a_sentence() -> void:
