@@ -78,8 +78,18 @@ const EVASIVE_HIT_PENALTY: int = 1
 
 ## Shielded Defense-roll bonus (OPR army-book rule; official Army Forge rule text, verified from the
 ## field-test list: "Units where all models have this rule get +1 to defense rolls against hits that are
-## not from spells."). The solo automation has no spell damage, so every hit qualifies.
+## not from spells."). The "not from spells" half is the rule's OWN scope — see HIT_SOURCE_SPELL.
 const SHIELDED_DEFENSE_BONUS: int = 1
+
+## The SOURCE of a hit that reaches the save step. The core block step is source-neutral ("roll one die
+## for every hit that the unit has taken"), and OPR names spells EXPLICITLY whenever a rule means them —
+## so a Defense modifier applies to all three unless its own text limits it (maintainer rules ruling
+## 2026-07-31, "the wording decides"). Scoped by their own wording, and therefore skipped for
+## HIT_SOURCE_SPELL: Shielded ("hits that are not from spells"), Cover ("from shooting") and the
+## Guarded/Versatile/Sturdy family ("shot or charged from over 9\" away").
+const HIT_SOURCE_SHOOTING: String = "shooting"
+const HIT_SOURCE_MELEE: String = "melee"
+const HIT_SOURCE_SPELL: String = "spell"
 
 ## The unmodified minimum d6 face — the trigger face for Shred (wave 5): a natural 1 on a Defense roll
 ## both fails the save AND deals the extra wound. Sibling of UNMODIFIED_SIX.

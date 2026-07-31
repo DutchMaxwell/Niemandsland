@@ -36,6 +36,15 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   charge you declare gets its own opening line, like the AI's always had.
 
 ### Fixed
+- **Defense modifiers follow their own wording against spell damage.** A blessing that gives "+1 to
+  defense rolls" did nothing the moment the wound came from a spell: the spell path saved at the bare
+  Armor-adjusted Defense and silently dropped every active modifier. The block step of the core rules
+  is source-neutral ("roll one die for every hit that the unit has taken"), and OPR names spells
+  explicitly whenever a rule means them — so a modifier now applies to spell damage unless its own
+  text limits it. Generic buffs count, hexes bite (a "-1 to defense rolls" worsens a spell save too)
+  and marker bonuses carry over; Shielded ("hits that are not from spells"), Cover ("from shooting")
+  and the Guarded/Versatile/Sturdy family ("shot or charged from over 9″") stay out. The battle log
+  names both halves — what applied, and what did not apply and why.
 - **Aircraft -12″ now bites on YOUR volley too (#231).** Picking the target already measured the
   shrunk reach, but once the shot was declared each weapon was gated at its printed range — so a
   24″ gun still rolled dice at an aircraft 20″ away whenever a longer weapon in the same unit kept

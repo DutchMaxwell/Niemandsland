@@ -282,12 +282,21 @@ static func plan_boost(effect_value: float, available: int, interference_tokens:
 ##   "speed"        : the bearer moves — advance_in/rush_in (feeds the props stamp, NML-006)
 ##   "grant"        : records granting a special rule (grants_rule non-empty; the overlay reader)
 ## melee filters scope ("melee"/"shooting"/"attacking"/""); "charging" is never applied here (v1).
-static func mods_for(records: Array, role: String, melee: bool) -> Array:
+## `source` (NML-104) names the hit source the read serves. A token's modifier carries no clause of
+## its own ("+1 to defense rolls"), so it counts against spell damage too — but a token whose text
+## DOES scope itself to an attack ("in melee", "against shooting") stays out of a spell's save step,
+## because a spell hit is neither. The attack paths pass "" and keep the melee/shooting filtering.
+static func mods_for(records: Array, role: String, melee: bool, source: String = "") -> Array:
 	var out: Array = []
 	for r in records:
 		var rd := r as Dictionary
 		var scope := str(rd.get("scope", ""))
-		if scope == "charging" or (scope == "melee" and not melee) or (scope == "shooting" and melee):
+		if scope == "charging":
+			continue
+		if source == AiCombatMath.HIT_SOURCE_SPELL:
+			if scope == AiCombatMath.HIT_SOURCE_MELEE or scope == AiCombatMath.HIT_SOURCE_SHOOTING:
+				continue
+		elif (scope == "melee" and not melee) or (scope == "shooting" and melee):
 			continue
 		var attackers := str(rd.get("beneficiary", "")) == "attackers"
 		match role:
