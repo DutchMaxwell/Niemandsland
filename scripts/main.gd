@@ -324,6 +324,7 @@ var _solo_arena_seed: int = 0                # game-level base seed for the repr
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
 var move_trails: Node = null  # MoveTrails (path painting: chalk trails + move ledger)
 var rule_floats: Node = null  # FloatingRuleText (transparency stage 2: rules announce at the table)
+var combat_stage: CombatStage = null  # pacing grill 31.07.: the central combat stage (solo)
 ## Persistent blood/oil stains left where models were removed (issue #60). Lives outside
 ## ObjectManager so it survives model cleanup; decorative, not saved.
 var battlefield_stains: BattlefieldStains = null
@@ -2340,6 +2341,7 @@ func _solo_shot_priority(shot: Dictionary) -> int:
 ## that actually have range AND line of sight to the target — not by its whole living count. `moved` is
 ## the activation's move state (Indirect's -1 to hit fires only when shooting after moving — wave 5).
 func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array, moved: bool = false) -> void:
+	_solo_stage_begin("%s fires at %s" % [attacker.get_name(), target.get_name()])
 	var ai_spot_hit := _solo_consume_spot_markers(target)   # wave B: markers removed for +X
 	# RESOLVE-FIRST ORDER (GF v3.5.1 p.14): "Takedown attacks must be resolved before other weapons" and
 	# "Hits from Deadly must be resolved first." With no-carry-over + the single-model Takedown pick, the
@@ -2393,7 +2395,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	# ANNOUNCE: who shoots at whom — highlights + attack line + toast, held before any die is thrown.
 	var announce := _solo_show_attack_announce(attacker, target, "fires at")
 	_solo_show_fan_for_unit(attacker)   # Bug 17: the volley fan appears automatically — the shot is traceable
-	await _solo_pace_hold(SoloController.Pace.ANNOUNCE)
+	await _solo_stage_phase("Declaration", SoloController.Pace.ANNOUNCE)
 	var regenable := 0
 	var regen_proof := 0
 	var total_hits := 0
@@ -2528,6 +2530,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			regen_proof += w
 		else:
 			regenable += w
+		await _solo_stage_phase(str(profile.get("name", "weapon")))
 	var landed: int = await _solo_land_wounds(target, regenable, regen_proof)
 	if _solo_combined_alive(target) <= 0:
 		_solo_growth_on_kill(attacker)   # Defensive Frenzy: volley kill credit
@@ -2539,8 +2542,11 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		target.get_name(), total_hits, ("" if total_hits == 1 else "s"),
 		landed, ("" if landed == 1 else "s"), target.get_name(),
 		models_before - _solo_combined_alive(target), ("" if models_before - _solo_combined_alive(target) == 1 else "s")])
+	await _solo_stage_phase("Result")
 	if landed > 0:
 		await _solo_shooting_morale(target, alive_before, _solo_owner_label(target), wounds_before)
+		await _solo_stage_phase("Morale")
+	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
 
 
@@ -5439,6 +5445,47 @@ func _solo_pace_hold(phase: int) -> void:
 		await get_tree().create_timer(secs).timeout
 
 
+# === Pacing stage seams (grill 31.07.) — the volleys speak through these ===
+
+## Inert in batch sweeps, with the stage off, or headless (unless a test forces the stage).
+func _solo_stage_active() -> bool:
+	if combat_stage == null or (_solo_batch and not combat_stage.force_for_tests):
+		return false
+	combat_stage.batch = _solo_batch
+	combat_stage.enabled = GraphicsSettings.show_combat_stage
+	combat_stage.hold_s = GraphicsSettings.combat_stage_hold_s
+	return combat_stage.active()
+
+
+func _solo_stage_begin(headline: String) -> void:
+	if _solo_stage_active():
+		# Lazy tap: battle_log and the stage mount in different setup passes — connect on
+		# first use, idempotent.
+		if battle_log != null and not battle_log.entry_added.is_connected(_solo_stage_collect):
+			battle_log.entry_added.connect(_solo_stage_collect)
+		combat_stage.activation_begin(headline)
+
+
+## Phase boundary: the stage holds (skippable, pausable); with the stage inert an optional
+## legacy pace-hold keeps the old fixed rhythm.
+func _solo_stage_phase(title: String, fallback_pace: int = -1) -> void:
+	if _solo_stage_active():
+		await combat_stage.phase(title)
+	elif fallback_pace >= 0:
+		await _solo_pace_hold(fallback_pace)
+
+
+func _solo_stage_end() -> void:
+	if _solo_stage_active():
+		combat_stage.activation_end()
+
+
+## The battle-log tap: every COMBAT line is a stage rule line (same stream as the floats).
+func _solo_stage_collect(entry: Dictionary) -> void:
+	if combat_stage != null and int(entry.get("category", -1)) == BattleLog.Category.COMBAT:
+		combat_stage.collect(str(entry.get("text", "")))
+
+
 ## The activation-choreography attention beat (SoloController.PACE_ATTENTION_S, Fast-AI-compressed) — the
 ## named ~2s pause the maintainer asked for between focus → corridors → glide → attacks (finding 7). A
 ## zero (never, at these constants) simply doesn't await, keeping the auto-tail responsive.
@@ -5609,7 +5656,8 @@ func _solo_toast_autohide(gen: int, secs: float) -> void:
 ## OUTCOME phase: show the result summary as a toast + hold it readable, then hide.
 func _solo_show_outcome(text: String) -> void:
 	_solo_show_toast(text, 0.0)   # this path times its own hide via the pace hold
-	await _solo_pace_hold(SoloController.Pace.OUTCOME)
+	if not _solo_stage_active():   # pacing grill: the stage's Result phase carries this hold
+		await _solo_pace_hold(SoloController.Pace.OUTCOME)
 	if is_instance_valid(_solo_toast):
 		_solo_toast.visible = false
 
@@ -6778,7 +6826,8 @@ func _solo_split_declare_second(target: GameUnit) -> void:
 		"🔥 Fire!", _solo_split_commit, "✕ Cancel attack", _solo_split_abort)
 
 
-## The GO button of the declared split — only now do dice roll. Fire-and-forget async.
+## The GO button of the declared split — only now do dice roll. Awaitable (tests wait on
+## real completion); the button Callable fires it without awaiting.
 func _solo_split_commit() -> void:
 	var attacker: GameUnit = _solo_target_mode.get("unit")
 	var a: GameUnit = _solo_target_mode.get("split_first")
@@ -6788,7 +6837,7 @@ func _solo_split_commit() -> void:
 	_solo_end_targeting()
 	if attacker == null or a == null or b == null:
 		return
-	_run_human_attack_split(attacker, a, b, sb)
+	await _run_human_attack_split(attacker, a, b, sb)
 
 
 ## Cancel at the GO stage: nothing rolled, nothing spent — the unit is still free to act.
@@ -7455,6 +7504,7 @@ func _solo_prompt_versatile(weapon_name: String, recommended: Dictionary) -> Dic
 
 
 func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Array = [], skip_named: bool = false) -> void:
+	_solo_stage_begin("%s fires at %s" % [attacker.get_name(), target.get_name()])
 	# B11: ONE measuring truth — the shot distance (feeding the >9" Versatile/Guarded gates and the
 	# profile range gate's fallback) is the base-EDGE gap of the nearest model pair, like the ruler.
 	var dist := solo_controller.nearest_melee_gap_in(attacker, target)
@@ -7508,6 +7558,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	var fired_any := false   # round 7, finding 5: a volley that rolls NOTHING must say so, never end silently
 	# Maintainer 31.07.: the attacker CHOOSES how many markers to remove (caster-points style).
 	var spot_hit: int = await _solo_offer_spot_markers(attacker, target)
+	await _solo_stage_phase("Declaration")
 	var chosen_versatile: Dictionary = {}   # Bug 13: per-weapon Versatile choice, asked once per volley
 	# Unpredictable (generic, "when attacking"): the HUMAN's volley rolls the same visible die —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile (resolution-integrated, both sides automatic).
@@ -7641,6 +7692,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				regen_proof += w
 			else:
 				regenable += w
+			await _solo_stage_phase(str(profile.get("name", "weapon")))
 	# A volley where every profile scaled to zero (or none was in range) used to end SILENTLY — the player's
 	# click looked ignored and he retried in vain (round 7, finding 5: the "unrecognized" shooting attempts).
 	if not fired_any and battle_log != null:
@@ -7650,8 +7702,11 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	if _solo_combined_alive(target) <= 0:
 		_solo_growth_on_kill(attacker)   # Defensive Frenzy: your volley kill counts too (symmetry)
 		_solo_vengeance_on_destroyed(target, attacker)
+	await _solo_stage_phase("Result")
 	# The AI's unit tests morale if your volley dropped it to half strength or less (goal 003 P1).
 	await _solo_shooting_morale(target, target_alive_before, "AI (%s)" % target.get_name(), target_wounds_before)
+	await _solo_stage_phase("Morale")
+	_solo_stage_end()
 	_solo_consume_once_mods(attacker, target, false)   # F4: once-mods spent by this exchange
 
 
@@ -13099,6 +13154,13 @@ func _init_radial_menu() -> void:
 	rule_floats = FloatingRuleText.new()
 	rule_floats.name = "FloatingRuleText"
 	add_child(rule_floats)
+	# Pacing grill 31.07.: the combat stage — the volleys hold at phase boundaries on a
+	# central card; it reads its rule lines from the battle log's COMBAT stream.
+	combat_stage = CombatStage.new()
+	combat_stage.name = "CombatStage"
+	add_child(combat_stage)
+	if battle_log != null:
+		battle_log.entry_added.connect(_solo_stage_collect)
 	# Measure-on-pickup ghost (ROADMAP UX polish): translucent origin silhouettes while dragging —
 	# shows what ESC snaps back to and where the measured arc starts. Local display aid.
 	var pickup_ghosts := PickupGhostController.new()

@@ -125,12 +125,9 @@ func test_second_pick_declares_and_fire_button_resolves(timeout := 240000) -> vo
 		.is_true()
 	assert_bool(shooter.is_activated).is_false()   # no dice yet — the GO button is the trigger
 	assert_str(_log_text()).contains("press Fire!")
-	_main._solo_split_commit()
-	# Fire-and-forget coroutine: both volleys ride tray timers — give them real frame budget.
-	for i in range(600):
-		await _runner.simulate_frames(10)
-		if shooter.is_activated:
-			break
+	# Awaiting the commit rides the REAL volleys to completion — a frame budget was
+	# CI-flaky (tray timers are real-time, not frame-count).
+	await _main._solo_split_commit()
 	var text := _log_text()
 	assert_str(text).contains("Split fire: Tank fires at FoeA and FoeB")
 	assert_str(text).contains("fires Rifle at FoeA")
