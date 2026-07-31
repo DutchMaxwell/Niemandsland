@@ -2370,7 +2370,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	# by Blast and by Indirect (wave 5: "ignores cover from sight obstructions").
 	_solo_log_armor(target)
 	var dist_in: float = MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
-	var base_defense: int = _solo_shielded_defense(target)
+	var base_defense: int = _solo_defense_vs(target)
 	if base_defense != _solo_armored_defense(target) and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
 			target.get_name(), base_defense], true)
@@ -2691,8 +2691,9 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 
 ## The damage-spell resolution against ONE target: fixed hits (no to-hit roll), the optional trigger
 ## roll for the on-6/on-1 facets ("Roll as many dice as hits …"), Blast fan-out, then the SHARED save
-## machinery (_solo_save_batch: real tray saves, Bane re-rolls, Deadly, Shred) at the Armor-adjusted
-## Defense — deliberately NOT Shielded-adjusted and NOT Cover-adjusted (spell hits, see the callers).
+## machinery (_solo_save_batch: real tray saves, Bane re-rolls, Deadly, Shred) at the Defense the
+## defender actually has against a SPELL hit (NML-104): the generic modifiers count, the ones their
+## own text limits to attacks (Shielded, Cover, the over-9" family) do not — _solo_defense_vs.
 func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_name: String,
 		entry: Dictionary, target: GameUnit) -> void:
 	var effect: Dictionary = entry.get("effect", {})
@@ -2721,9 +2722,11 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 	# Blast ×min(X, models) — a "model"-targeted spell resolves as a unit of 1 (no fan-out).
 	var fanout_models: int = 1 if str((entry.get("target", {}) as Dictionary).get("kind", "")) == "model" else _solo_combined_alive(target)
 	total_hits = AiCombatMath.blast_hits(total_hits, int(facets.get("blast", 0)), maxi(fanout_models, 1))
-	# Saves at the Armor-adjusted Defense — Shielded and Cover are EXCLUDED against spells.
+	# Saves at the Defense this unit has against a SPELL hit (NML-104): Armor(X), marker buffs and
+	# the generic +/- to defense rolls count, Shielded / Cover / the over-9" family do not.
 	_solo_log_armor(target)
-	var base_defense: int = _solo_armored_defense(target)
+	var base_defense: int = _solo_defense_vs(target, AiCombatMath.HIT_SOURCE_SPELL)
+	_solo_log_defense_vs_spell(target, base_defense)
 	var def_ctx := {"defense": base_defense, "tough": _solo_unit_tough(target)}
 	var ap := AiSpell.effective_ap(facets, def_ctx)
 	var bane := bool(facets.get("bane", false))
@@ -2849,7 +2852,7 @@ func _solo_place_spell_tokens(spell_name: String, targets: Array, effect: Dictio
 
 ## MECHANICAL token effect (maintainer 2026-07-22: buff/debuff tokens were decoration — the real
 ## dice never read them). A placed token with modifier data now registers hit_mod/def_mod on the
-## unit; the hit path (_solo_hit_mod_info) and the defense seam (_solo_shielded_defense) read it,
+## unit; the hit path (_solo_hit_mod_info) and the defense seam (_solo_defense_parts) read it,
 ## each application logs (rules-must-log). Cleared with the tokens at round end.
 func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary) -> void:
 	var modifier: Dictionary = effect.get("modifier", {})
@@ -3020,14 +3023,6 @@ func _solo_mods_of_chain(member: GameUnit) -> Array:
 		if uu != null:
 			out.append_array(_solo_spell_mods.get(uu.get_instance_id(), []))
 	return out
-
-
-## Active spell defense-modifier on a defending unit (+ its host for a joined hero).
-func _solo_spell_def_mod(target: GameUnit) -> int:
-	var total := 0
-	for rd in AiSpell.mods_for(_solo_mods_of_chain(target), "defense", false):
-		total += int(rd.get("def_mod", 0))
-	return total
 
 
 ## F4 — "once" consumption (book wording: the modifier applies to ONE attack exchange): after a
@@ -4011,7 +4006,7 @@ func _solo_apply_breath_attack(unit: GameUnit) -> void:
 		if _solo_nearest_model_gap_in(unit, hu, INF) > range_in or not _solo_has_los(unit, hu):
 			continue
 		var score: float = float(mini(blast_x, _solo_combined_alive(hu))) \
-			* (1.0 - AiEv.block_chance(_solo_shielded_defense(hu), b_ap, false))
+			* (1.0 - AiEv.block_chance(_solo_defense_vs(hu), b_ap, false))
 		if score > best:
 			best = score
 			btarget = hu
@@ -4031,7 +4026,7 @@ func _solo_apply_breath_attack(unit: GameUnit) -> void:
 			unit.get_name(), btarget.get_name(), bhits, ("" if bhits == 1 else "s"), blast_x, b_ap], true)
 	var bprofile: Dictionary = {"name": "Breath Attack", "ap": b_ap, "deadly": 0, "blast": blast_x, "rules": []}
 	var w: int = await _solo_resolve_saves(unit, btarget, "Breath Attack", [], bhits,
-		_solo_shielded_defense(btarget), bprofile, not _solo_is_ai_unit(btarget), false)
+		_solo_defense_vs(btarget), bprofile, not _solo_is_ai_unit(btarget), false)
 	if w > 0:
 		await _solo_land_wounds(btarget, w, 0)
 	await _solo_shooting_morale(btarget, alive_before, _solo_owner_label(btarget), wounds_before)
@@ -4095,15 +4090,55 @@ func _solo_unpredictable_rule(striker: GameUnit, melee: bool) -> String:
 	return ""
 
 
-## The defender's Defense value after Shielded (army-book rule: "+1 to defense rolls against hits that are
-## not from spells" — the solo automation has no spells, so every hit qualifies). Shared by every save site
-## so the prompts/logs show the modified value. Wave 5: Armor(X) ("counts as having Defense X+") sets the
-## working Defense FIRST — one seam, so shooting, melee, Impact and the EV metric all see the same value.
-func _solo_shielded_defense(target: GameUnit) -> int:
-	var base := AiCombatMath.shielded_defense(_solo_armored_defense(target), _solo_rule_on_all_models(target, "Shielded"))
-	# Coverage wave: Shielded-family DATA aliases (Grounded Reinforcement — terrain-conditional
-	# +1 defense; majority-in-cover approximation) via the generic primitive layer.
-	if base == _solo_armored_defense(target):
+## The groups of _solo_defense_parts, folded in this order (each with its own 2..6 clamp).
+const DEF_PART_SHIELDED := "shielded"
+const DEF_PART_MARKER := "marker"
+const DEF_PART_TOKEN := "token"
+
+
+## The defender's working Defense against a hit from `source` (NML-104 — maintainer rules ruling
+## 2026-07-31, "the wording decides"): the core block step is source-neutral ("roll one die for every
+## hit that the unit has taken") and OPR names spells EXPLICITLY whenever a rule means them, so a
+## Defense modifier applies to spell damage as well UNLESS its own text limits it. Shared by every save
+## site so the prompts/logs show the modified value. Wave 5: Armor(X) ("counts as having Defense X+")
+## sets the working Defense FIRST — one seam, so shooting, melee, Impact, spells and the EV metric all
+## see the same value. Shooting and melee compose identically HERE; the two contributions that need the
+## attack's geometry stay at their call sites, both scoped by their own wording and therefore absent
+## from the spell path by construction: Cover ("from shooting" — _solo_cover_defense) and the
+## Guarded/Versatile/Sturdy family ("shot or charged from over 9\"" — _solo_over9_defense_rule).
+func _solo_defense_vs(target: GameUnit, source: String = AiCombatMath.HIT_SOURCE_SHOOTING) -> int:
+	var base: int = _solo_armored_defense(target)
+	var parts: Array = _solo_defense_parts(target, source)
+	for group in [DEF_PART_SHIELDED, DEF_PART_MARKER, DEF_PART_TOKEN]:
+		var bonus := 0
+		for p in parts:
+			var pd := p as Dictionary
+			if str(pd["group"]) == group and bool(pd["applies"]):
+				bonus += int(pd["bonus"])
+		if bonus != 0:
+			base = clampi(base - bonus, 2, 6)
+	return base
+
+
+## Every Defense contribution the unit brings to a save, each DECLARING the scope its own rule text
+## states (NML-104). One entry: {"group", "name", "bonus" (+1 = save one better), "clause" (the wording
+## that limits it, "" = it applies to every hit) and "applies" for THIS source}. Two readers: the
+## arithmetic (_solo_defense_vs folds the applying ones) and the battle log (_solo_log_defense_vs_spell
+## names both halves) — one truth, so a rule can never count silently or vanish silently.
+func _solo_defense_parts(target: GameUnit, source: String) -> Array:
+	var parts: Array = []
+	if target == null:
+		return parts
+	# Shielded — "+1 to defense rolls against hits that are not from spells": the clause IS the scope.
+	var sh_name := ""
+	var sh_bonus := 0
+	if _solo_rule_on_all_models(target, "Shielded"):
+		sh_name = "Shielded"
+		sh_bonus = AiCombatMath.SHIELDED_DEFENSE_BONUS
+	else:
+		# Coverage wave: Shielded-family DATA aliases (Grounded Reinforcement — terrain-conditional
+		# +1 defense; majority-in-cover approximation) via the generic primitive layer. Same family,
+		# same clause — they are the Shielded wording with a condition bolted on.
 		for e in RulesRegistry.unit_rules_of_primitive(target, "Shielded"):
 			var ed := e as Dictionary
 			var n := str(ed["name"])
@@ -4113,18 +4148,75 @@ func _solo_shielded_defense(target: GameUnit) -> int:
 			if float(sp.get("terrain_within_in", 0.0)) > 0.0 and not _solo_majority_in_cover(target):
 				continue
 			# "Defense(X)": the bonus is the rule's RATING (coverage-wave no-text pass).
-			var dbonus := int(ed.get("rating", 0)) if bool(sp.get("defense_bonus_from_rating", false)) else int(sp.get("defense_bonus", 1))
-			base = clampi(base - maxi(dbonus, 0), 2, 6)
+			sh_name = n
+			sh_bonus = maxi(int(ed.get("rating", 0)) if bool(sp.get("defense_bonus_from_rating", false)) else int(sp.get("defense_bonus", 1)), 0)
 			break
-	# Coverage wave — growth markers (Defensive Frenzy): +1 Defense per marker.
-	var gb := _solo_growth_defense_bonus(target)
-	if gb > 0:
-		base = clampi(base - gb, 2, 6)
-	# Spell def_mod (F3): +1 to defense = save one better (lower target), clamped 2..6.
-	var dm := _solo_spell_def_mod(target)
-	if dm != 0:
-		base = clampi(base - dm, 2, 6)
-	return base
+	if sh_bonus > 0:
+		parts.append({"group": DEF_PART_SHIELDED, "name": sh_name, "bonus": sh_bonus,
+			"clause": "hits that are not from spells",
+			"applies": source != AiCombatMath.HIT_SOURCE_SPELL})
+	# Coverage wave — growth markers (Defensive Frenzy: "+1 Defense per marker"): no clause in the
+	# text, so the marker bonus counts against every hit the unit takes, spell damage included.
+	for gp in _solo_growth_defense_parts(target):
+		var gpd := gp as Dictionary
+		parts.append({"group": DEF_PART_MARKER, "name": str(gpd["name"]), "bonus": int(gpd["bonus"]),
+			"clause": "", "applies": true})
+	# Spell tokens' own "+/-X to defense rolls" (F3) — generic wording again, so they reach spell
+	# damage too, POSITIVE (a warding buff) and NEGATIVE (a hex) alike; a token whose text scopes
+	# ITSELF to an attack ("in melee") is filtered out by AiSpell.mods_for.
+	for rd in AiSpell.mods_for(_solo_mods_of_chain(target), "defense", false, source):
+		var rdd := rd as Dictionary
+		parts.append({"group": DEF_PART_TOKEN, "name": str(rdd.get("spell", "")),
+			"bonus": int(rdd.get("def_mod", 0)), "clause": str(rdd.get("scope", "")), "applies": true})
+	return parts
+
+
+## rules-must-log for NML-104: the spell save step NAMES both halves. What DOES apply gets a line —
+## a save that silently lands one better (or one worse) reads as broken dice, not as a rule. What does
+## NOT apply gets a negative line: the modifiers whose own text is limited to attacks are exactly the
+## ones a player expects to see, so their silence reads as a missing rule (the #224 pattern).
+func _solo_log_defense_vs_spell(target: GameUnit, defense: int) -> void:
+	if battle_log == null or target == null:
+		return
+	for p in _solo_defense_parts(target, AiCombatMath.HIT_SOURCE_SPELL):
+		var pd := p as Dictionary
+		var bonus := int(pd["bonus"])
+		if bonus == 0:
+			continue
+		if bool(pd["applies"]):
+			battle_log.log_event(BattleLog.Category.COMBAT, "%+d defense vs spell damage — %s (%s saves on %d+)" % [
+				bonus, str(pd["name"]), target.get_name(), defense], true)
+		else:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s does not apply to spell damage (\"%s\") — %s saves on %d+" % [
+				str(pd["name"]), str(pd["clause"]), target.get_name(), defense], true)
+	# A token whose OWN text scopes it to an attack ("in melee", "against shooting") never reaches the
+	# parts list — AiSpell.mods_for drops it for a spell source. What it WOULD have given a shot or a
+	# melee hit is the union of both attack reads; the diff against the spell read is the silence the
+	# player would otherwise have to explain, so it is named here rather than reimplemented.
+	var chain: Array = _solo_mods_of_chain(target)
+	var named: PackedStringArray = []
+	for rd in AiSpell.mods_for(chain, "defense", false, AiCombatMath.HIT_SOURCE_SPELL):
+		named.append(str((rd as Dictionary).get("spell", "")))
+	for att_melee in [false, true]:
+		for rd in AiSpell.mods_for(chain, "defense", att_melee):
+			var rdd := rd as Dictionary
+			var spell := str(rdd.get("spell", ""))
+			if named.has(spell):
+				continue
+			named.append(spell)
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s does not apply to spell damage (its modifier is scoped to %s) — %s saves on %d+" % [
+				spell, str(rdd.get("scope", "")), target.get_name(), defense], true)
+	# Cover and the over-9" family are applied by the ATTACK call sites, so on this path they are
+	# absent by construction — which is exactly what their wording says, and worth saying out loud.
+	if _solo_majority_in_cover(target):
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Cover does not apply to spell damage (its +1 is against shooting) — %s saves on %d+" % [
+			target.get_name(), defense], true)
+	var over9 := _solo_over9_defense_rule(target)
+	if not over9.is_empty():
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"%s does not apply to spell damage (its +1 is for being shot or charged from over 9\") — %s saves on %d+" % [
+			over9, target.get_name(), defense], true)
 
 
 ## The unit's Armor(X) rating (wave 5, army-book upgrade), 0 when absent or when its book does not field
@@ -4475,8 +4567,8 @@ func _solo_take_retaliate_credit() -> int:
 
 func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: bool, filter: int, charge_from_in: float = 0.0) -> int:
 	var human_defends: bool = not _solo_is_ai_unit(defender)
-	_solo_log_armor(defender)   # Armor(X) "counts as Defense X+" (wave 5) — folded into _solo_shielded_defense
-	var defense: int = _solo_shielded_defense(defender)
+	_solo_log_armor(defender)   # Armor(X) "counts as Defense X+" (wave 5) — folded into _solo_defense_vs
+	var defense: int = _solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE)
 	if defense != _solo_armored_defense(defender) and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
 			defender.get_name(), defense], true)
@@ -4592,7 +4684,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			# (unmodified-6-only) overrides the +1-to-hit part; the AP(+1) part still folds in below.
 			var v_ap := 0
 			if bool(profile.get("versatile_attack", false)) and charging and charge_from_in > AiCombatMath.LONG_RANGE_IN:
-				var vm: Dictionary = AiEv.versatile_best_mode(to_hit, _solo_shielded_defense(strike_unit), int(profile.get("ap", 0)), bool(profile.get("bane", false)))
+				var vm: Dictionary = AiEv.versatile_best_mode(to_hit, _solo_defense_vs(strike_unit, AiCombatMath.HIT_SOURCE_MELEE), int(profile.get("ap", 0)), bool(profile.get("bane", false)))
 				if not fatigued:
 					to_hit = AiCombatMath.modified_hit_target(to_hit, int(vm.get("hit_mod", 0)))
 				v_ap = int(vm.get("ap", 0))
@@ -4700,7 +4792,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				rx, defender.get_name(), rhits, ("" if rhits == 1 else "s"), rx], true)
 		var rprofile: Dictionary = {"name": "Retaliate", "ap": 0, "deadly": 0, "rules": []}
 		var rw: int = await _solo_resolve_saves(defender, striker, "Retaliate", [], rhits,
-			_solo_shielded_defense(striker), rprofile, not _solo_is_ai_unit(striker), true)
+			_solo_defense_vs(striker, AiCombatMath.HIT_SOURCE_MELEE), rprofile, not _solo_is_ai_unit(striker), true)
 		if rw > 0:
 			await _solo_land_wounds(striker, rw, 0)
 			_solo_retaliate_credit += rw
@@ -4821,7 +4913,7 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 	if counter_models > 0 and battle_log != null and (x + hx) * models > 0:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Counter: %s loses %d Impact roll%s" % [
 			charger.get_name(), counter_models, ("" if counter_models == 1 else "s")], true)
-	var impact_defense: int = AiCombatMath.guarded_defense(_solo_shielded_defense(defender),
+	var impact_defense: int = AiCombatMath.guarded_defense(_solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE),
 		not _solo_over9_defense_rule(defender).is_empty() and charge_from_in > AiCombatMath.LONG_RANGE_IN)
 	var caused: int = 0
 	for pool in [{"label": "Impact", "rating": x, "dice": dice, "ap": 0},
@@ -5243,7 +5335,7 @@ func _solo_takedown_context(member: GameUnit, pick: Dictionary, dist_in: float, 
 		return {}
 	_solo_takedown_solo = pick
 	var info: Dictionary = _solo_hit_mod_info(member, owner, dist_in, melee)
-	var defense: int = _solo_shielded_defense(owner)
+	var defense: int = _solo_defense_vs(owner, AiCombatMath.HIT_SOURCE_MELEE if melee else AiCombatMath.HIT_SOURCE_SHOOTING)
 	var over9_rule: String = _solo_over9_defense_rule(owner)
 	if over9 and not over9_rule.is_empty():
 		var guarded: int = AiCombatMath.guarded_defense(defense, true)
@@ -7905,7 +7997,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	# every hit; Cover (+1 Defense majority-in-cover, GF v3.5.1 p.11) is shooting-only and ignored by
 	# Blast and Indirect (wave 5).
 	_solo_log_armor(target)
-	var shielded_def: int = _solo_shielded_defense(target)
+	var shielded_def: int = _solo_defense_vs(target)
 	if shielded_def != _solo_armored_defense(target) and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
 			target.get_name(), shielded_def], true)
@@ -14012,7 +14104,7 @@ func _solo_deathstrike_hits(defender: GameUnit, striker: GameUnit, alive_before:
 			rule_name, defender.get_name(), striker.get_name(), total_hits, ("" if total_hits == 1 else "s")], true)
 	var dprofile: Dictionary = {"name": rule_name, "ap": 0, "deadly": 0, "rules": []}
 	var dw: int = await _solo_resolve_saves(defender, striker, rule_name, [], total_hits,
-		_solo_shielded_defense(striker), dprofile, not _solo_is_ai_unit(striker), true)
+		_solo_defense_vs(striker, AiCombatMath.HIT_SOURCE_MELEE), dprofile, not _solo_is_ai_unit(striker), true)
 	if dw > 0:
 		await _solo_land_wounds(striker, dw, 0)
 
@@ -14041,7 +14133,7 @@ func _solo_self_destruct_post_melee(unit: GameUnit, enemy: GameUnit) -> void:
 			if _solo_combined_alive(enemy) > 0:
 				var sprofile: Dictionary = {"name": n, "ap": 0, "deadly": 0, "rules": []}
 				var sw: int = await _solo_resolve_saves(member, enemy, n, [], hits,
-					_solo_shielded_defense(enemy), sprofile, not _solo_is_ai_unit(enemy), true)
+					_solo_defense_vs(enemy, AiCombatMath.HIT_SOURCE_MELEE), sprofile, not _solo_is_ai_unit(enemy), true)
 				if sw > 0:
 					await _solo_land_wounds(enemy, sw, 0)
 			break
@@ -14334,16 +14426,21 @@ func _solo_growth_on_kill(attacker: GameUnit) -> void:
 					n, attacker.get_name(), cur + 1, cap], _solo_is_ai_unit(attacker))
 
 
-## Defense bonus from growth markers (Defensive Frenzy: +1 Defense per marker).
-func _solo_growth_defense_bonus(unit: GameUnit) -> int:
-	var bonus := 0
+## Defense bonuses from growth markers (Defensive Frenzy: +1 Defense per marker), one entry per rule
+## that actually earned something: [{"name", "bonus"}]. Named, because _solo_defense_parts hands them
+## to the battle log as well as to the arithmetic.
+func _solo_growth_defense_parts(unit: GameUnit) -> Array:
+	var parts: Array = []
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Growth Markers"):
 		var ed := e as Dictionary
 		var sp: Dictionary = ed.get("params", {})
 		var per := int(sp.get("defense_per_marker", 0))
-		if per > 0:
-			bonus += per * _solo_growth_markers(unit, str(ed["name"]))
-	return bonus
+		if per <= 0:
+			continue
+		var bonus: int = per * _solo_growth_markers(unit, str(ed["name"]))
+		if bonus > 0:
+			parts.append({"name": str(ed["name"]), "bonus": bonus})
+	return parts
 
 
 ## Attack-side growth bonuses: {"ap": int, "hit": int} (Piercing/Precision Growth: per two markers).
@@ -14420,7 +14517,7 @@ func _solo_apply_storm_attack(unit: GameUnit) -> void:
 						if int(sf) == 6:
 							hits += 1
 				var w: int = await _solo_resolve_saves(bu, tgt, n, [], hits,
-					_solo_shielded_defense(tgt), profile, not _solo_is_ai_unit(tgt), false, true, false, range_in)
+					_solo_defense_vs(tgt), profile, not _solo_is_ai_unit(tgt), false, true, false, range_in)
 				await _solo_land_wounds(tgt, w, 0)
 				if _solo_combined_alive(tgt) <= 0:
 					targets_in_reach.erase(tgt)
