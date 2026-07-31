@@ -19,6 +19,7 @@ const MAX_QUEUE := 12           # runaway guard per anchor burst
 
 ## Player toggle (GraphicsSettings.show_rule_floats, default on).
 var enabled: bool = true
+var force_for_tests: bool = false   # e2e opts in — plain headless never spawns
 
 ## anchor key (rounded world pos) -> pending count, for the stagger/stack cascade.
 var _pending := {}
@@ -35,6 +36,11 @@ func _ready() -> void:
 ## already pending on the same anchor.
 func announce(world_pos: Vector3, text: String, color: Color = Color(1.0, 0.92, 0.5)) -> void:
 	if not enabled or text.is_empty():
+		return
+	# Headless spawns are invisible and only leak: the staggered cascade (12 queued + 1
+	# live) was the CI's recurring "13 orphans" in long volley e2e runs. Tests that assert
+	# the labels opt in explicitly — same pattern as the combat stage.
+	if DisplayServer.get_name() == "headless" and not force_for_tests:
 		return
 	var key := "%d:%d" % [int(round(world_pos.x * 10.0)), int(round(world_pos.z * 10.0))]
 	var slot := int(_pending.get(key, 0))
@@ -62,3 +68,12 @@ func announce(world_pos: Vector3, text: String, color: Color = Color(1.0, 0.92, 
 	tw.tween_callback(func() -> void:
 		_pending[key] = maxi(int(_pending.get(key, 1)) - 1, 0)
 		label.queue_free())
+
+
+## Test/teardown hygiene: drop the pending cascade and free every live label NOW —
+## queue_free'd-but-unprocessed labels read as orphans in the test harness.
+func clear() -> void:
+	_pending.clear()
+	for c in get_children():
+		if c is Label3D:
+			c.free()
