@@ -4959,11 +4959,31 @@ func drain_decisions() -> Array:
 ## #227 — one click of a pick-up-to-N spell: append the target, drop it from the legal
 ## set, report whether the cast is ready (all N picked, or the set ran dry). Pure.
 static func cast_pick_step(picked: Array, want: int, valid: Array, target) -> Dictionary:
+	# Maintainer UX (31.07.): re-clicking an ALREADY-PICKED unit takes the pick BACK (toggle,
+	# not refusal) — the unit returns to the valid pool and the cast never auto-completes here.
+	if picked.has(target):
+		var p0 := picked.duplicate()
+		p0.erase(target)
+		var v0 := valid.duplicate()
+		if not v0.has(target):
+			v0.append(target)
+		return {"picked": p0, "valid": v0, "done": false, "unpicked": true}
 	var p2 := picked.duplicate()
 	p2.append(target)
 	var v2 := valid.duplicate()
 	v2.erase(target)
-	return {"picked": p2, "valid": v2, "done": p2.size() >= maxi(want, 1) or v2.is_empty()}
+	return {"picked": p2, "valid": v2, "done": p2.size() >= maxi(want, 1) or v2.is_empty(),
+		"unpicked": false}
+
+
+## Maintainer rules check (31.07.): a spell marker's duration comes from the spell's OWN text.
+## "next time ..." wording persists until the effect applies; "until the end of ..." — and any
+## unrecognized wording — expires with the round (the safe old behavior).
+static func spell_text_lasts_once(text: String) -> bool:
+	var t := text.to_lower()
+	if t.find("until the end of") >= 0:
+		return false
+	return t.find("next time") >= 0
 
 
 ## Stage 3 (transparency, grilled 2026-07-30): the unit's newest decision as ONE plain

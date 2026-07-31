@@ -1969,6 +1969,45 @@ func test_cast_pick_step_collects_until_count_or_dry() -> void:
 	assert_bool(bool(s3["done"])).is_true()
 
 
+func test_cast_pick_step_reclick_takes_the_pick_back() -> void:
+	# Maintainer UX (31.07.): re-clicking a picked unit UNPICKS it — back to the valid pool,
+	# never auto-casting.
+	var a := _unit(2, [Vector3.ZERO])
+	var b := _unit(2, [Vector3.ZERO])
+	var s1: Dictionary = SoloController.cast_pick_step([a], 2, [b], a)
+	assert_bool(bool(s1.get("unpicked", false))) \
+		.override_failure_message("re-click on a picked unit must report unpicked=true, not add it twice") \
+		.is_true()
+	assert_bool(bool(s1["done"])).is_false()
+	assert_array(s1["picked"] as Array).is_empty()
+	assert_bool((s1["valid"] as Array).has(a)).is_true()
+	assert_bool((s1["valid"] as Array).has(b)).is_true()
+	# A fresh pick reports unpicked=false so the caller can tell the branches apart.
+	var s2: Dictionary = SoloController.cast_pick_step([], 2, [a, b], a)
+	assert_bool(bool(s2.get("unpicked", true))).is_false()
+
+
+# ===== Maintainer rules check (31.07.) — spell marker duration comes from the spell text =====
+
+func test_spell_text_next_time_wording_persists_until_it_applies() -> void:
+	assert_bool(SoloController.spell_text_lasts_once(
+		"Target enemy unit gets -1 to hit next time it attacks.")).is_true()
+	assert_bool(SoloController.spell_text_lasts_once(
+		"Target friendly unit gets Poison the next time the effect would apply.")).is_true()
+
+
+func test_spell_text_until_end_of_round_expires_with_it() -> void:
+	assert_bool(SoloController.spell_text_lasts_once(
+		"Target friendly unit gets +1 to defense rolls until the end of the round.")).is_false()
+	# "until the end of" beats a "next time" fragment in the same text.
+	assert_bool(SoloController.spell_text_lasts_once(
+		"Until the end of the round, enemies get -1 next time they shoot.")).is_false()
+
+
+func test_spell_text_unrecognized_wording_defaults_to_round() -> void:
+	assert_bool(SoloController.spell_text_lasts_once("Target enemy unit takes 8 hits.")).is_false()
+
+
 # ===== NML-216 wave B — Caster Group =====
 
 func test_caster_group_unit_is_a_caster_sized_by_alive_models() -> void:

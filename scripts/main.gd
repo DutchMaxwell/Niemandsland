@@ -2655,7 +2655,11 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 			await _solo_resolve_spell_damage(caster, caster_unit, spell_name, entry, tu)
 	else:
 		_solo_announce_spell_effect(caster, spell_name, effect, targets)
-		_solo_place_spell_tokens(spell_name, targets, effect)
+		var effect2 := effect.duplicate()
+		var token_once := _solo_spell_lasts_once(caster, spell_name, effect)
+		effect2["once"] = token_once
+		effect2["duration"] = "once" if token_once else "round"
+		_solo_place_spell_tokens(spell_name, targets, effect2)
 	_solo_clear_announce(announce)
 	await _solo_show_outcome("%s resolves %s" % [caster.get_name(), spell_name])
 
@@ -2745,6 +2749,19 @@ func _solo_spell_has_rule(effect: Dictionary, rule_name: String) -> bool:
 ## Announce a successful buff/debuff/utility spell: the effect stays MANUALLY applied (exactly like
 ## every other unautomated rule — the once-per-session log convention), but the human sees WHAT the
 ## spell does: the live army-book spell text (runtime data from the import — never committed).
+## Maintainer rules check (31.07.): a spell's OWN text decides its duration — "next time
+## the effect would apply" persists until consumed; "until the end of the round" (and any
+## unrecognized wording) expires with the round, as before.
+func _solo_spell_lasts_once(caster: GameUnit, spell_name: String, effect: Dictionary = {}) -> bool:
+	if opr_army_manager != null and opr_army_manager.has_method("get_spells_for_unit"):
+		for sp in opr_army_manager.get_spells_for_unit(caster):
+			if str((sp as Dictionary).get("name", "")) == spell_name:
+				var t := str((sp as Dictionary).get("effect", ""))
+				if not t.is_empty():
+					return SoloController.spell_text_lasts_once(t)
+	return bool(effect.get("once", str(effect.get("duration", "")) == "once"))
+
+
 func _solo_announce_spell_effect(caster: GameUnit, spell_name: String, effect: Dictionary, targets: Array) -> void:
 	if battle_log == null:
 		return
@@ -2793,10 +2810,15 @@ func _solo_place_spell_tokens(spell_name: String, targets: Array, effect: Dictio
 		if tu == null or tu.is_destroyed():
 			continue
 		if radial_menu_controller.apply_library_token(tu, spell_name):
-			_solo_spell_tokens_active.append({"unit": tu, "token": spell_name})
+			# Maintainer rules check (31.07.): "once (next time the effect would apply)" spells
+			# PERSIST until they apply — there is no blanket round-end rule in the book; only
+			# effects whose own text says "until the end of the round" expire with it.
+			var lasts_once: bool = bool(effect.get("once", false))
+			_solo_spell_tokens_active.append({"unit": tu, "token": spell_name, "once": lasts_once})
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.GENERAL,
-					"\"%s\" token placed on %s (expires at the end of the round)" % [spell_name, tu.get_name()], true)
+					"\"%s\" token placed on %s (%s)" % [spell_name, tu.get_name(),
+					"persists until it applies" if lasts_once else "expires at the end of the round"], true)
 		_solo_record_spell_mod(tu, spell_name, effect)
 
 
@@ -3052,22 +3074,36 @@ func _solo_expire_spell_tokens() -> void:
 	# also on the no-controller path, so headless/batch rounds never leak a granted rule or stamp.
 	var affected: Array = []
 	for key in _solo_spell_mods.keys():
+		var keep: Array = []
 		for rd in (_solo_spell_mods[key] as Array):
+			# Maintainer rules check (31.07.): apply-once effects persist across rounds until
+			# they fire (their own consumption removes them) — only round-scoped ones expire.
+			if str((rd as Dictionary).get("duration", "")) == "once":
+				keep.append(rd)
+				continue
 			_solo_revoke_grant(rd as Dictionary)
+		if keep.is_empty():
+			_solo_spell_mods.erase(key)
+		else:
+			_solo_spell_mods[key] = keep
+			continue
 		var u := instance_from_id(int(key)) as GameUnit
 		if u != null and is_instance_valid(u):
 			for cu in _solo_joined_chain(u):
 				if not affected.has(cu):
 					affected.append(cu)
-	_solo_spell_mods.clear()   # mechanical effects end with their tokens
 	for cu in affected:
 		(cu as GameUnit).unit_properties.erase("spell_move_mod")
 		(cu as GameUnit).unit_properties.erase("spell_range_mod")
 	if radial_menu_controller == null:
 		_solo_spell_tokens_active.clear()
 		return
+	var carried: Array = []
 	for e in _solo_spell_tokens_active:
 		var tu: GameUnit = (e as Dictionary).get("unit")
+		if bool((e as Dictionary).get("once", false)):
+			carried.append(e)   # persists until it applies (book wording)
+			continue
 		if tu != null and is_instance_valid(tu) and not tu.is_destroyed():
 			radial_menu_controller.remove_library_token(tu, str((e as Dictionary).get("token")))
 			# Release-pass find: a buff that never fired evaporated in silence — the player
@@ -3076,7 +3112,7 @@ func _solo_expire_spell_tokens() -> void:
 				battle_log.log_event(BattleLog.Category.GENERAL,
 					"\"%s\" on %s expires with the round — it was never consumed" % [
 					str((e as Dictionary).get("token")), tu.get_name()], true)
-	_solo_spell_tokens_active.clear()
+	_solo_spell_tokens_active = carried
 
 
 ## The human's resist prompt (v3.5.1 interference: enemy models with tokens within 18" LoS of the
@@ -5489,6 +5525,57 @@ func _solo_clear_announce(nodes: Array) -> void:
 	_solo_live_announce = []   # whichever set was just freed, nothing is left to sweep
 
 
+## Maintainer UX (31.07.): a PICKED cast target wears a SOLID cyan ring — visually distinct
+## from the pulsing candidate markers — until the cast resolves or a re-click takes it back.
+func _solo_spawn_picked_ring(at: Vector3) -> MeshInstance3D:
+	var ring := MeshInstance3D.new()
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.055
+	torus.outer_radius = 0.075
+	ring.mesh = torus
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color(0.25, 0.95, 1.0)
+	mat.no_depth_test = true
+	ring.material_override = mat
+	add_child(ring)
+	ring.global_position = at + Vector3(0, 0.012, 0)
+	return ring
+
+
+## Maintainer UX (31.07., split fire): a DECLARED weapon-group→target pair is drawn on the
+## table — a firing vector from shooter to target plus a mid-line label naming the weapons.
+## Returns [line, label]; freed with the targeting mode (_solo_end_targeting).
+func _solo_spawn_fire_vector(attacker: GameUnit, target: GameUnit, label_text: String, color: Color) -> Array:
+	var from := solo_controller.unit_centre(attacker) + Vector3(0, 0.045, 0)
+	var to := solo_controller.unit_centre(target) + Vector3(0, 0.045, 0)
+	var line := MeshInstance3D.new()
+	var im := ImmediateMesh.new()
+	line.mesh = im
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	mat.no_depth_test = true
+	line.material_override = mat
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	im.surface_set_color(color)
+	im.surface_add_vertex(from)
+	im.surface_set_color(color)
+	im.surface_add_vertex(to)
+	im.surface_end()
+	add_child(line)
+	var lbl := Label3D.new()
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.no_depth_test = true
+	lbl.pixel_size = 0.0004
+	lbl.outline_size = 8
+	lbl.text = label_text
+	lbl.modulate = color
+	add_child(lbl)
+	lbl.global_position = (from + to) * 0.5 + Vector3(0, 0.06, 0)
+	return [line, lbl]
+
+
 ## Transient top-centre toast for AI-action attribution/outcomes (below the AI-turn banner).
 ## `auto_hide_s` > 0 fades the toast on its own (UI audit 2026-07-24: only _solo_show_outcome ever
 ## hid it, so a plain notice — export path, autosave, "no AI lists" — stayed on screen until the
@@ -6524,6 +6611,8 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 
 func _solo_end_targeting() -> void:
 	_solo_clear_announce(_solo_target_mode.get("cast_rings", []))   # NML-206 candidate markers off
+	_solo_clear_announce((_solo_target_mode.get("cast_pick_rings", {}) as Dictionary).values())
+	_solo_clear_announce(_solo_target_mode.get("split_visuals", []))
 	_solo_target_mode = {}
 	if range_ring_controller != null and range_ring_controller.has_method("clear_spell_preview"):
 		range_ring_controller.clear_spell_preview()
@@ -6544,6 +6633,11 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 		return false
 	match SoloController.targeting_route(event):
 		SoloController.TargetingRoute.CANCEL:
+			# Declared split (maintainer UX 31.07.): right-click/ESC at the GO stage cancels
+			# the whole attack — same as the Cancel button; nothing rolled, unit still free.
+			if _solo_target_mode.has("split_second"):
+				_solo_split_abort()
+				return true
 			# Release-pass find (#226): stranding in the second-pick phase killed the whole
 			# attack — right-click now falls back to "everything at the first target".
 			if _solo_target_mode.has("split_first"):
@@ -6577,37 +6671,8 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			# Spell wave F2: cast mode accepts any unit from the precomputed LEGAL set (friendly-side
 			# spells target OWN units — the attack-path AI-only filter below must not run).
 			if _solo_target_mode.has("cast_entry"):
-				if target == null:
-					return true
-				var cvalid: Array = _solo_target_mode.get("cast_valid", [])
-				if not cvalid.has(target):
-					if battle_log != null:
-						# Release-pass find: clicking an ALREADY-PICKED unit said "not a legal
-						# target" — the maintainer read it as a targeting bug.
-						if (_solo_target_mode.get("cast_picked", []) as Array).has(target):
-							battle_log.log_event(BattleLog.Category.GENERAL,
-								"%s is already picked — click another target or right-click to cast" % target.get_name())
-						else:
-							battle_log.log_event(BattleLog.Category.GENERAL,
-								"%s is not a legal target (side, range or line of sight)" % target.get_name())
-					return true
-				var centry: Dictionary = _solo_target_mode.get("cast_entry", {})
-				var cmember: GameUnit = _solo_target_mode.get("cast_member")
-				# #227 (community): pick-up-to-N spells collect YOUR clicks — the engine never
-				# picks the 2nd target for you. Right-click casts early with fewer.
-				var want := maxi(int((centry.get("target", {}) as Dictionary).get("count", 1)), 1)
-				var step: Dictionary = SoloController.cast_pick_step(
-					_solo_target_mode.get("cast_picked", []), want, cvalid, target)
-				if not bool(step["done"]):
-					_solo_target_mode["cast_picked"] = step["picked"]
-					_solo_target_mode["cast_valid"] = step["valid"]
-					if battle_log != null:
-						battle_log.log_event(BattleLog.Category.GENERAL,
-							"%s: %d of up to %d targets picked — click more or right-click to cast" % [
-							str(centry.get("name", "?")), (step["picked"] as Array).size(), want])
-					return true
-				_solo_end_targeting()
-				_run_human_cast(attacker, cmember, centry, step["picked"])
+				if target != null:
+					_solo_cast_click(target)
 				return true
 			var melee: bool = bool(_solo_target_mode.get("melee", false))
 			if target == null or not _solo_is_ai_unit(target) or _solo_combined_alive(target) <= 0 \
@@ -6618,7 +6683,13 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				if battle_log != null:
 					battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s" % [target.get_name(), verdict])
 				return true
-			# #226 SPLIT FIRE: a pending second-target pick resolves the declared split.
+			# #226 SPLIT FIRE + maintainer UX (31.07.): the second pick DECLARES — both firing
+			# vectors stand on the table and the dice wait for the explicit Fire! button.
+			if _solo_target_mode.has("split_second"):
+				if battle_log != null:
+					battle_log.log_event(BattleLog.Category.GENERAL,
+						"Split fire is declared — press Fire! (or Cancel attack)")
+				return true
 			if _solo_target_mode.has("split_first"):
 				var sf: GameUnit = _solo_target_mode.get("split_first")
 				if target == sf:
@@ -6626,14 +6697,103 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 						battle_log.log_event(BattleLog.Category.GENERAL,
 							"Split fire: pick a DIFFERENT unit as the second target (or right-click to cancel)")
 					return true
-				var sb: Array = _solo_target_mode.get("split_b_names", [])
-				_solo_end_targeting()
-				_run_human_attack_split(attacker, sf, target, sb)
+				_solo_split_declare_second(target)
 				return true
 			_solo_end_targeting()
 			_solo_split_or_attack(attacker, target, melee)
 			return true
 	return false
+
+
+## Cast-mode click (#227, factored for headless tests): toggle-pick for multi-target spells.
+## A pick adds a solid ring, a re-click on a picked unit takes the pick back (maintainer UX
+## 31.07.), and the last needed pick — or an early right-click — casts.
+func _solo_cast_click(target: GameUnit) -> void:
+	var attacker: GameUnit = _solo_target_mode.get("unit")
+	var cvalid: Array = _solo_target_mode.get("cast_valid", [])
+	var cpicked: Array = _solo_target_mode.get("cast_picked", [])
+	if not cvalid.has(target) and not cpicked.has(target):
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"%s is not a legal target (side, range or line of sight)" % target.get_name())
+		return
+	var centry: Dictionary = _solo_target_mode.get("cast_entry", {})
+	var cmember: GameUnit = _solo_target_mode.get("cast_member")
+	# #227 (community): pick-up-to-N spells collect YOUR clicks — the engine never
+	# picks the 2nd target for you. Right-click casts early with fewer.
+	var want := maxi(int((centry.get("target", {}) as Dictionary).get("count", 1)), 1)
+	var step: Dictionary = SoloController.cast_pick_step(cpicked, want, cvalid, target)
+	var prings: Dictionary = _solo_target_mode.get("cast_pick_rings", {})
+	if bool(step.get("unpicked", false)):
+		_solo_target_mode["cast_picked"] = step["picked"]
+		_solo_target_mode["cast_valid"] = step["valid"]
+		var rid := target.get_instance_id()
+		if prings.has(rid):
+			var rn = prings[rid]
+			if rn is Node and is_instance_valid(rn):
+				(rn as Node).queue_free()
+			prings.erase(rid)
+		_solo_target_mode["cast_pick_rings"] = prings
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"%s unpicked — click targets to pick, right-click casts with the current picks" % target.get_name())
+		return
+	if not bool(step["done"]):
+		_solo_target_mode["cast_picked"] = step["picked"]
+		_solo_target_mode["cast_valid"] = step["valid"]
+		prings[target.get_instance_id()] = _solo_spawn_picked_ring(solo_controller.unit_centre(target))
+		_solo_target_mode["cast_pick_rings"] = prings
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"%s: %d of up to %d targets picked — click more or right-click to cast" % [
+				str(centry.get("name", "?")), (step["picked"] as Array).size(), want])
+		return
+	_solo_end_targeting()
+	_run_human_cast(attacker, cmember, centry, step["picked"])
+
+
+## Second-pick DECLARATION of the split (#226 + maintainer UX 31.07.): records the pair,
+## draws its ring + firing vector and opens the Fire!/Cancel prompt — no dice roll yet.
+func _solo_split_declare_second(target: GameUnit) -> void:
+	var attacker: GameUnit = _solo_target_mode.get("unit")
+	var sf: GameUnit = _solo_target_mode.get("split_first")
+	var sb: Array = _solo_target_mode.get("split_b_names", [])
+	var rest: Array = _solo_target_mode.get("split_rest_names", [])
+	var vis: Array = _solo_target_mode.get("split_visuals", [])
+	vis.append(_solo_spawn_picked_ring(solo_controller.unit_centre(target)))
+	vis.append_array(_solo_spawn_fire_vector(attacker, target, ", ".join(sb), Color(0.4, 0.85, 1.0)))
+	_solo_target_mode["split_visuals"] = vis
+	_solo_target_mode["split_second"] = target
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Split fire declared: %s → %s · %s → %s — press Fire! to roll (or Cancel attack)" % [
+			", ".join(rest), sf.get_name(), ", ".join(sb), target.get_name()])
+	_solo_deploy_ui_show("Split fire declared:\n· %s → %s\n· %s → %s" % [
+		", ".join(rest), sf.get_name(), ", ".join(sb), target.get_name()],
+		"🔥 Fire!", _solo_split_commit, "✕ Cancel attack", _solo_split_abort)
+
+
+## The GO button of the declared split — only now do dice roll. Fire-and-forget async.
+func _solo_split_commit() -> void:
+	var attacker: GameUnit = _solo_target_mode.get("unit")
+	var a: GameUnit = _solo_target_mode.get("split_first")
+	var b: GameUnit = _solo_target_mode.get("split_second")
+	var sb: Array = _solo_target_mode.get("split_b_names", [])
+	_solo_deploy_ui_hide()
+	_solo_end_targeting()
+	if attacker == null or a == null or b == null:
+		return
+	_run_human_attack_split(attacker, a, b, sb)
+
+
+## Cancel at the GO stage: nothing rolled, nothing spent — the unit is still free to act.
+func _solo_split_abort() -> void:
+	var attacker: GameUnit = _solo_target_mode.get("unit")
+	_solo_deploy_ui_hide()
+	_solo_end_targeting()
+	if battle_log != null and attacker != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Split fire cancelled — %s has not acted" % attacker.get_name())
 
 
 ## True while main's solo input owns the mouse: attack targeting (P8) or a Takedown model pick (B5).
@@ -6943,8 +7103,15 @@ func _solo_split_or_attack(attacker: GameUnit, target: GameUnit, melee: bool) ->
 		var choice: Dictionary = await _solo_offer_split_fire(attacker, target)
 		if bool(choice.get("split", false)):
 			var names: Array = choice.get("names", [])
+			var rest: Array = choice.get("rest", [])
+			# Maintainer UX (31.07.): the declaration is VISIBLE — target A wears a ring and
+			# the staying weapons' firing vector while you pick the second target.
+			var visuals: Array = [_solo_spawn_picked_ring(solo_controller.unit_centre(target))]
+			visuals.append_array(_solo_spawn_fire_vector(attacker, target,
+				", ".join(rest), Color(1.0, 0.75, 0.2)))
 			_solo_target_mode = {"unit": attacker, "melee": false,
-				"split_first": target, "split_b_names": names}
+				"split_first": target, "split_b_names": names, "split_rest_names": rest,
+				"split_visuals": visuals}
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.GENERAL,
 					"Split fire: pick the SECOND target for %s — right-click cancels the attack" % ", ".join(names))
@@ -7012,7 +7179,11 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 	dlg.queue_free()
 	if picked.is_empty() or picked.size() >= names.size():
 		return {"split": false}   # nothing checked, or everything — both mean one target
-	return {"split": true, "names": picked}
+	var rest: Array = []
+	for n in names:
+		if not picked.has(n):
+			rest.append(n)
+	return {"split": true, "names": picked, "rest": rest}
 
 
 func _run_human_attack(attacker: GameUnit, target: GameUnit, melee: bool) -> void:
