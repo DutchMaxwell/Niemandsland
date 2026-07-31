@@ -2497,6 +2497,9 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s%s — %d hit%s" % [
 				shooter_name, str(profile.get("name", "?")), target.get_name(), sight_note, hits, ("" if hits == 1 else "s")], true)
 		if hits <= 0:
+			# Stage seam: `continue` must not skip the phase boundary — a 0-hit weapon still
+			# closes its card (CI find: the miss line bled into the Result phase).
+			await _solo_stage_phase(str(profile.get("name", "weapon")))
 			continue
 		total_hits += hits
 		# Blast ignores cover (GF v3.5.1), and so does Indirect (wave 5: "ignores cover from sight
@@ -7945,6 +7948,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 				battle_log.log_event(BattleLog.Category.COMBAT, "%s fires %s at %s — %d hit%s" % [
 					str(group.get("name", "?")), str(profile.get("name", "?")), target.get_name(), hits, ("" if hits == 1 else "s")])
 			if hits <= 0:
+				# Stage seam: the 0-hit path still closes the weapon card (same CI find as the AI loop).
+				await _solo_stage_phase(str(profile.get("name", "weapon")))
 				continue
 			# Blast (GF v3.5.1) and Indirect (wave 5) ignore cover — saves at the Shielded (uncovered) Defense.
 			var save_def: int = shot_base if (int(profile.get("blast", 0)) > 1 or bool(profile.get("indirect", false)) or bool(profile.get("ignores_cover", false))) else shot_cover

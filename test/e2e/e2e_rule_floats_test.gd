@@ -20,9 +20,12 @@ func before_test() -> void:
 	_main.solo_ai_slots = {2: true}
 	_main._ensure_solo_controller()
 	_main._solo_batch = false
+	_main.rule_floats.force_for_tests = true   # headless is inert without the opt-in
 
 
 func after_test() -> void:
+	if _main != null and _main.rule_floats != null:
+		_main.rule_floats.clear()   # a live cascade at teardown reads as orphans
 	E2EBoot.free_stray_root_nodes(get_tree(), _root_before)
 	_main = null
 	_runner = null
