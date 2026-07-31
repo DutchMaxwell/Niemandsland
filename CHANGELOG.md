@@ -24,6 +24,14 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   charge you declare gets its own opening line, like the AI's always had.
 
 ### Fixed
+- **A reanimated model stands in the same place on both screens.** The message that brings a model
+  back carries wounds and alive/dead, but no position — so the other client rebuilt the spot itself
+  and put the model back where it fell. That is not always where it now stands: when the fall point
+  is blocked, the placer moves the model to a free ring position beside a survivor, and that choice
+  never left the acting client. Host and guest then showed the same model in two places, with
+  coherency, range and line of sight following the wrong one. The real position now follows the
+  restore message over the ordinary move channel, the same correction a ghost-placed disembark
+  already sends.
 - **Defense modifiers follow their own wording against spell damage.** A blessing that gives "+1 to
   defense rolls" did nothing the moment the wound came from a spell: the spell path saved at the bare
   Armor-adjusted Defense and silently dropped every active modifier. The block step of the core rules
