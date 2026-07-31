@@ -76,14 +76,20 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   onboarding items live in **Ideas**. _S–M_
 - **Solo rules automation — resolver waves B + C** — `0.3.10.0-alpha` automates hundreds of rules; the
   families that need their own resolver step are honestly still manual, and the per-unit battle-log
-  notice names them. The complete remainder is **twelve rule names** (everything else in the books is
-  modeled — plain *Re-Deployment*, *Grounded Reinforcement* and *Reanimation* included):
-  - **Wave B — caster economy + unit creation:** **Spell Accumulator**, **Caster Group**, **Extended
-    Buff Range**, **Spawn**, **Split**, **Reinforcement**. These create, return or
+  notice names them. The complete remainder is **seven rule names** (everything else in the books is
+  modeled — plain *Re-Deployment*, *Grounded Reinforcement*, *Reanimation*, *Caster Group*, *Spell
+  Accumulator* and all three Ambush variants included):
+  - **Wave B — caster economy + unit creation:** **Extended Buff Range**, **Spawn**, **Split**,
+    **Reinforcement**. These create, return or
     re-point units, so they touch the AI's round plan, not just the dice. **Reanimation** shipped:
-    models and wounds return on activation (one die per missing wound, 5+, coherency-gated). _M–L_
-  - **Wave C — movement / deployment:** **Coordinate**, **Delayed Action**, **Traversal**, **Ambush
-    Beacon**, **Ambush Re-Deployment**, **Rapid Ambush**. _M_
+    models and wounds return on activation (one die per missing wound, 5+, coherency-gated);
+    **Caster Group** and **Spell Accumulator** were bridged into the registry — their engine code had
+    shipped long before the data said so. _M–L_
+  - **Wave C — movement / deployment:** **Coordinate**, **Delayed Action**, **Traversal**. The three
+    **Ambush variants shipped** (wave 1): *Ambush Beacon* waives every enemy distance restriction
+    within 6″ of the beacon model, *Rapid Ambush* arrives from round 1 as a round-start beat, and
+    *Ambush Re-Deployment* takes a unit off the table once per game and brings it back exactly one
+    round later. _M_
 - **Selectable AI difficulty grades** — `0.3.10.0-alpha` ships exactly one grade (NACHTMAHR at full
   strength); the difficulty selector is out of the solo panel and every legacy grade name maps to it.
   Bringing weaker personas back means re-validating each knob set on the self-play ladder so a lower

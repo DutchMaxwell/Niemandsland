@@ -327,6 +327,15 @@ WAVE5_PRIMITIVES = {
 # the registry sync tool clears these when it next re-runs.
 SHIPPED_PLANNED = {
     "Reanimation",
+    "Caster Group",
+    "Spell Accumulator",
+    # Ambush variants, wave 1 (2026-07-31). All three already carry mechanic.primitive "Ambush"
+    # plus their own params in the registry ({beacon_in}, {arrive_from_round}, {re_reserve,
+    # uses_per_game}) — only the "planned" status kept nulling them. The resolvers ship with this
+    # wave (SoloController.beacon_cover / may_arrive_this_round / ambush_redeploy_withdraw).
+    "Ambush Beacon",
+    "Rapid Ambush",
+    "Ambush Re-Deployment",
 }
 
 # Primitives that only exist in SOME systems' books: the bridging table above is

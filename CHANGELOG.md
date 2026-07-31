@@ -7,6 +7,18 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **The three Ambush variants (army-book).** *Ambush Beacon*: a reserve that lands within 6″ of a
+  friendly beacon model ignores **every** enemy distance restriction — the 9″ (3″ Infiltrate)
+  arrival ring *and* an enemy's *Repel Ambushers* 12″. The AI actively hunts for those circles
+  instead of merely being allowed to use them, and on your side the honour-system ">9″" warning
+  gives way to the waiver line. *Rapid Ambush*: carriers may arrive at the start of round 1 — run
+  as a round-start beat after deployment **and** the Scout phase, so it can never buy an extra slot
+  in the deployment alternation, and still voluntary ("may"). *Ambush Re-Deployment*: a unit whose
+  models all carry it may leave the table once per game at the end of its activation and comes back
+  from Ambush at the start of the **next** round, exactly that one — you are asked, the AI decides
+  by a documented heuristic (leave under pressure, never off a marker it holds). Every application
+  *and* every non-application writes its own battle-log line, including a beacon that stood within
+  12″ and did not apply.
 - **Reanimation (army-book).** A unit whose models all carry the rule rolls one die per missing
   model/wound when it activates; every 5+ brings one wound back — the first wound of a casualty
   puts the model back on the table, further wounds heal it up. Returned models must be placed in
@@ -14,6 +26,39 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   line). The rule reaches the table through the hero upgrade *Reanimation Aura*, and it ends when
   its carrier falls — the battle log says so. Shaken units stay idle and do not reanimate.
   Allocation is automatic in v1 for both sides; letting the owner click each restore is a follow-up.
+- **The combat stage covers melee and spells.** The central card that already paced the shooting
+  volleys now walks a charge — Charge, Counter, Impact, one card per strike wave, Melee result,
+  Morale, Consolidation — and a cast: Cast, Cast roll, Effect (one Effect card per target). Both
+  sides use it, and it stays solo-only, skippable by click and inert in batch sweeps.
+- **The melee verdict says itself.** Who won a melee was decided silently: the tallies were
+  compared, Fear(X) shifted them, and a unit tested morale with no line explaining why. The battle
+  log now names both tallies (with the Fear-adjusted value where it differs) and who lost — and a
+  charge you declare gets its own opening line, like the AI's always had.
+
+### Fixed
+- **A reanimated model stands in the same place on both screens.** The message that brings a model
+  back carries wounds and alive/dead, but no position — so the other client rebuilt the spot itself
+  and put the model back where it fell. That is not always where it now stands: when the fall point
+  is blocked, the placer moves the model to a free ring position beside a survivor, and that choice
+  never left the acting client. Host and guest then showed the same model in two places, with
+  coherency, range and line of sight following the wrong one. The real position now follows the
+  restore message over the ordinary move channel, the same correction a ghost-placed disembark
+  already sends.
+- **Defense modifiers follow their own wording against spell damage.** A blessing that gives "+1 to
+  defense rolls" did nothing the moment the wound came from a spell: the spell path saved at the bare
+  Armor-adjusted Defense and silently dropped every active modifier. The block step of the core rules
+  is source-neutral ("roll one die for every hit that the unit has taken"), and OPR names spells
+  explicitly whenever a rule means them — so a modifier now applies to spell damage unless its own
+  text limits it. Generic buffs count, hexes bite (a "-1 to defense rolls" worsens a spell save too)
+  and marker bonuses carry over; Shielded ("hits that are not from spells"), Cover ("from shooting")
+  and the Guarded/Versatile/Sturdy family ("shot or charged from over 9″") stay out. The battle log
+  names both halves — what applied, and what did not apply and why.
+- **Aircraft -12″ now bites on YOUR volley too (#231).** Picking the target already measured the
+  shrunk reach, but once the shot was declared each weapon was gated at its printed range — so a
+  24″ gun still rolled dice at an aircraft 20″ away whenever a longer weapon in the same unit kept
+  the target legal, and rear models counted as "in range" that were not. Both now measure the
+  effective reach, exactly like the AI's volley always did. The battle log names the weapons the
+  penalty locks out instead of letting them vanish from the dice.
 
 ## [0.3.11.0-alpha] — 2026-07-31
 

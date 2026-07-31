@@ -244,6 +244,30 @@ func test_mods_for_defense_reads_def_mod_only() -> void:
 	assert_str(str((d[0] as Dictionary)["spell"])).is_equal("Banishing Sigil")
 
 
+# === NML-104: the hit SOURCE filters the defense read (the wording of each token decides) ===
+
+func _mods_scoped_defense() -> Array:
+	return [
+		{"spell": "Warding Chant", "def_mod": 1, "scope": "", "beneficiary": "", "duration": "round"},
+		{"spell": "Shield Wall", "def_mod": 1, "scope": "melee", "beneficiary": "", "duration": "round"},
+		{"spell": "Flak Field", "def_mod": 1, "scope": "shooting", "beneficiary": "", "duration": "round"},
+	]
+
+
+func test_mods_for_spell_source_keeps_only_the_unscoped_defense_mods() -> void:
+	# A spell hit is neither a shot nor a melee attack, so a token whose own text scopes ITSELF to an
+	# attack stays out — while the one without a clause applies, because the block step is neutral.
+	var spell_read: Array = AiSpell.mods_for(_mods_scoped_defense(), "defense", false,
+		AiCombatMath.HIT_SOURCE_SPELL).map(func(r): return r["spell"])
+	assert_array(spell_read).contains(["Warding Chant"])
+	assert_array(spell_read).not_contains(["Shield Wall"])
+	assert_array(spell_read).not_contains(["Flak Field"])
+	# The attack reads are untouched: shooting still keeps its shooting-scoped token.
+	var shot: Array = AiSpell.mods_for(_mods_scoped_defense(), "defense", false).map(func(r): return r["spell"])
+	assert_array(shot).contains(["Warding Chant"])
+	assert_array(shot).contains(["Flak Field"])
+
+
 # === NML-006: the remaining encoding kinds (casting/morale/range/speed/grant) as pure roles ===
 
 func _mods_nml006() -> Array:

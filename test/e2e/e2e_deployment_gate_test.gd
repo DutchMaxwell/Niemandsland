@@ -136,6 +136,7 @@ func test_first_solo_activation_refuses_and_does_not_spend_the_unit(timeout := 1
 	assert_bool(mover.is_activated) \
 		.override_failure_message("the refused activation STUCK: the unit stays marked activated, so it enters round 1 already spent and cannot act") \
 		.is_false()
+	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads
 
 
 # ===== Door 3 — the guided deployment FSM completing =====
@@ -174,6 +175,7 @@ func test_f11_ai_turn_refuses_and_moves_nothing(timeout := 120000) -> void:
 	assert_vector((ai_unit.models[0] as ModelInstance).node.global_position) \
 		.override_failure_message("an AI model MOVED although the start was refused — the AI turn ran past the gate") \
 		.is_equal(before)
+	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads
 
 
 ## Negative control for door 4: with the table clear, F11 must get through. The AI army is deliberately
@@ -187,6 +189,7 @@ func test_f11_ai_turn_proceeds_once_the_table_is_clear(timeout := 120000) -> voi
 	assert_bool(_is_deployment()) \
 		.override_failure_message("the table is clear and F11 still refuses — the gate has become unsatisfiable") \
 		.is_false()
+	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads
 
 
 # ===== Exemptions the rules require (a gate that refuses too much is also broken) =====
