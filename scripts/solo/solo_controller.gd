@@ -142,6 +142,7 @@ var last_report: Dictionary = {}
 ## The presentation layer replays them as glide animation + base-width corridors; purely observational —
 ## positions are applied/broadcast before this is read.
 var last_move_paths: Array = []
+var _cargo_wait_logged: Dictionary = {}   # TC-081: one "waits inside" record per unit+round
 ## Flow order (MODEL indices, nearest-to-destination first) of the last loose AI move — the sequential
 ## per-model flow (field-test round 6, finding 7). last_move_paths is reordered into this order so the
 ## presentation glides each model individually in the order it filed to its slot. Empty for a regiment / a
@@ -335,9 +336,16 @@ func is_eligible(unit) -> bool:
 	# HUMAN's cargo can never be auto-activated (it exits via the radial; phantom eligibility
 	# would stall the round-over check forever) — but #230 makes the AI's OWN cargo eligible:
 	# its activation IS the mandatory first-activation disembark (official Solo rules p.58).
-	if army_manager != null and army_manager.transport_of(u) != null \
-			and int(u.unit_properties.get("player_id", 0)) != ai_slot:
-		return false
+	if army_manager != null:
+		var tr := army_manager.transport_of(u)
+		if tr != null:
+			if int(u.unit_properties.get("player_id", 0)) != ai_slot:
+				return false
+			# TC-081 side-fix: cargo inside a RESERVE transport is off the table WITH it
+			# (S1.5: "it rides its transport's reserve and arrives inside it") — activating
+			# it would disembark at tray coordinates.
+			if unit_in_reserve(tr):
+				return false
 	return not (u.has_method("is_attached") and u.is_attached())
 
 
@@ -528,7 +536,38 @@ func _select_unit_lookahead(pool: Array) -> GameUnit:
 	return best if best != null else pool[0]
 
 
+## TC-081 (maintainer 31.07.): cargo that activates BEFORE its ride has moved throws the
+## ride away — the mandatory first-activation disembark (p.58) would exit at the deploy
+## spot. True while the transport is alive, same-side and still un-activated this round.
+func _cargo_should_wait_for_ride(u: GameUnit) -> bool:
+	if u == null or army_manager == null:
+		return false
+	var tr: GameUnit = army_manager.transport_of(u)
+	if tr == null or tr.is_destroyed() or tr.is_activated:
+		return false
+	return int(tr.unit_properties.get("player_id", 0)) == int(u.unit_properties.get("player_id", 0))
+
+
 func _select_ai_unit(eligible: Array) -> GameUnit:
+	# TC-081: defer embarked cargo while its transport has not acted — the transport sits in
+	# the same pool, so it always comes first; the deferral yields when ONLY cargo is left
+	# (never a stall). One decision record per unit and round keeps it explainable.
+	var undeferred: Array = []
+	for u0 in eligible:
+		var cu := u0 as GameUnit
+		if _cargo_should_wait_for_ride(cu):
+			var rkey := "%s#%d" % [cu.get_name(), army_manager.current_round if army_manager != null else 0]
+			if not _cargo_wait_logged.has(rkey):
+				_cargo_wait_logged[rkey] = true
+				var wtr: GameUnit = army_manager.transport_of(cu)
+				record_decision({"kind": "mission", "unit": cu.get_name(),
+					"rule": "cargo activates after its transport — disembarking before the ride moves wastes the lift (TC-081)",
+					"candidates": [], "chosen": "waits inside %s" % (wtr.get_name() if wtr != null else "transport"),
+					"why": "transport has not acted yet", "data": {}})
+			continue
+		undeferred.append(u0)
+	if not undeferred.is_empty():
+		eligible = undeferred
 	var fresh: Array = []
 	var shaken: Array = []
 	for u in eligible:
