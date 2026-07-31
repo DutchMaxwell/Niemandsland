@@ -43,6 +43,9 @@ var fullscreen: bool = true
 var show_move_trails: bool = true
 ## Transparency stage 2: rising rule texts at the table ("Blast ×3", "Artillery +1").
 var show_rule_floats: bool = true
+## Pacing grill 31.07.: the central combat stage (solo) — phases hold, click skips.
+var show_combat_stage: bool = true
+var combat_stage_hold_s: float = 2.5
 
 ## Strict "dry brush" movement enforcement: hard-stop a movement path-paint / drag at the
 ## model's MAX legal band (Rush/Charge). ON = Strict (the maintainer's default — you learn the
@@ -345,6 +348,8 @@ func save_settings() -> void:
 	config.set_value("graphics", "fullscreen", fullscreen)
 	config.set_value("graphics", "show_move_trails", show_move_trails)
 	config.set_value("graphics", "show_rule_floats", show_rule_floats)
+	config.set_value("graphics", "show_combat_stage", show_combat_stage)
+	config.set_value("graphics", "combat_stage_hold_s", combat_stage_hold_s)
 	config.set_value("graphics", "enforce_movement_limit", enforce_movement_limit)
 	config.save("user://graphics_settings.cfg")
 
@@ -365,4 +370,6 @@ func load_settings() -> void:
 	fullscreen = config.get_value("graphics", "fullscreen", true)
 	show_move_trails = config.get_value("graphics", "show_move_trails", true)
 	show_rule_floats = config.get_value("graphics", "show_rule_floats", true)
+	show_combat_stage = config.get_value("graphics", "show_combat_stage", true)
+	combat_stage_hold_s = float(config.get_value("graphics", "combat_stage_hold_s", 2.5))
 	enforce_movement_limit = config.get_value("graphics", "enforce_movement_limit", true)
