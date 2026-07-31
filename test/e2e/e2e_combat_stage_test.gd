@@ -121,6 +121,7 @@ func test_human_volley_walks_the_stage_phases(timeout := 240000) -> void:
 	for l in (decl["lines"] as Array):
 		decl_text += str(l) + "\n"
 	assert_str(decl_text).contains("line of sight")
+	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads
 
 
 func test_unforced_stage_stays_inert_for_plain_e2e() -> void:
@@ -133,6 +134,7 @@ func test_unforced_stage_stays_inert_for_plain_e2e() -> void:
 		.override_failure_message("an unforced headless stage must not capture or hold") \
 		.is_empty()
 	assert_bool(Time.get_ticks_msec() - t0 < 60000).is_true()
+	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads
 
 
 func test_a_full_miss_weapon_still_closes_its_phase_card() -> void:
@@ -163,6 +165,7 @@ func test_a_full_miss_weapon_still_closes_its_phase_card() -> void:
 			assert_str(text) \
 				.override_failure_message("the fires-line bled out of its weapon card into '%s'" % str(phd["title"])) \
 				.not_contains("fires Rifle")
+	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads
 
 
 # === Stage 2 — the melee exchange and the cast procedure ride the same stage ===
@@ -198,6 +201,7 @@ func test_human_charge_walks_the_melee_stage_phases(timeout := 240000) -> void:
 	assert_str(_text_outside("Melee result")) \
 		.override_failure_message("the melee verdict bled out of its own card") \
 		.not_contains("Melee result:")
+	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads
 
 
 func test_a_cast_walks_the_stage_phases(timeout := 240000) -> void:
@@ -230,6 +234,7 @@ func test_a_cast_walks_the_stage_phases(timeout := 240000) -> void:
 	assert_str(_text_outside("Effect")) \
 		.override_failure_message("the effect line bled out of the Effect card") \
 		.not_contains("takes effect on")
+	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads
 
 
 ## The early-exit lesson from the 0-hit weapon, on the cast path: a spell whose targets are all
@@ -247,6 +252,7 @@ func test_a_fizzled_cast_still_closes_its_card(timeout := 240000) -> void:
 		.override_failure_message("the fizzle must close its own card") \
 		.contains(["Cast"])
 	assert_str(_card_text("Cast")).contains("fizzles")
+	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads
 
 
 ## Inertness counter-check for the melee seam: a selfplay sweep sets batch and never forces the
@@ -261,3 +267,4 @@ func test_a_batch_melee_never_pays_for_the_stage(timeout := 240000) -> void:
 	assert_array(_main.combat_stage._phases) \
 		.override_failure_message("a batch sweep must never capture or hold") \
 		.is_empty()
+	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads

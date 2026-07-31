@@ -62,3 +62,4 @@ func test_declared_split_fires_each_group_at_its_target(timeout := 240000) -> vo
 	assert_str(text).not_contains("fires Cannon at FoeA")
 	assert_str(text).not_contains("fires Rifle at FoeB")
 	assert_bool(shooter.is_activated).is_true()   # completed exactly once, after volley B
+	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads
