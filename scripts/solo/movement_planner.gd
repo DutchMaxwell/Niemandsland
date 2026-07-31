@@ -453,6 +453,27 @@ static func rigid_blocked(model_pos: Array, delta: Vector2, walls: Array, opts: 
 	return false
 
 
+## Board extents in inches, PER AXIS, in the planner's corner-anchored frame (0 … extent on each axis).
+##
+## `board_in` is the X extent and stays the historical scalar: on its own it means a SQUARE board, which
+## is what every existing caller (and the whole sim/mirror fairness proof) assumes. opts["board_y_in"]
+## carries the Y extent for a RECTANGULAR table; 0 or absent = "same as X", so the square behaviour is
+## byte-identical and no existing call site has to change.
+##
+## Issue #215: the caller used to fold a rectangular table into ONE scalar via maxf(half.x, half.y), so on
+## the shipped 6x4 ft board (72"x48") the SHORT axis was bounded at 72" — the planner happily routed models
+## up to 24" past the table edge. Every bound below is therefore per-axis.
+static func board_extents(board_in: float, opts: Dictionary = {}) -> Vector2:
+	var by := float(opts.get("board_y_in", 0.0))
+	return Vector2(board_in, by if by > EPS else board_in)
+
+
+## Is this point outside the board? Per axis — a point may be well inside the long axis and still be off
+## the short one, which is exactly the case the folded scalar could not see.
+static func _off_board(p: Vector2, board: Vector2) -> bool:
+	return p.x < -EPS or p.x > board.x + EPS or p.y < -EPS or p.y > board.y + EPS
+
+
 ## Plan the next per-model positions for a unit moving by the (already spacing/Difficult-clamped) rigid
 ## `delta`. Each model steers toward its own rigid target (model + delta), never crossing a wall, capped at
 ## |delta| of travel; the unit is pulled back into coherency; and if the formation is boxed in (walls stop
@@ -463,7 +484,8 @@ static func rigid_blocked(model_pos: Array, delta: Vector2, walls: Array, opts: 
 ##   walls         : Array of [Vector2 a, Vector2 b] impassable segments (empty = open field)
 ##   grid          : TerrainRules typed 3" cells (for the A* rescue; CONTAINER = impassable)
 ##   allow_contact : Charge — exempt from spacing (handled by SoloSim; here it only skips coherency easing)
-##   board_in      : board extent in inches (A* bounds + off-board rejection)
+##   board_in      : board X extent in inches (A* bounds + off-board rejection); the Y extent rides in
+##                   opts["board_y_in"] — absent/0 means a square board (see board_extents)
 ##   trails        : OPTIONAL out-array — when provided it is filled with one Array[Vector2] of substep
 ##                   waypoints per model (start … final), so the game can ANIMATE each model along its
 ##                   real steering route (goal 003 presentation layer). Pure observation: passing it
@@ -547,6 +569,14 @@ static func _append_trail_finals(trails: Array, finals: Array) -> void:
 ## unchanged when every direction is blocked (a stuck model — feeds the A* trigger).
 static func _advance_model(p: Vector2, target: Vector2, step_cap: float, walls: Array, board_in: float,
 		opts: Dictionary = {}) -> Vector2:
+	return _advance_model_b(p, target, step_cap, walls, board_extents(board_in, opts), opts)
+
+
+## Per-axis core of _advance_model. The scalar entry point above stays for callers/tests that speak the
+## historical square board; the steering loop passes the resolved extents straight in, so the hot path
+## resolves them ONCE per plan instead of once per model per substep.
+static func _advance_model_b(p: Vector2, target: Vector2, step_cap: float, walls: Array, board: Vector2,
+		opts: Dictionary = {}) -> Vector2:
 	var to_t := target - p
 	var d := to_t.length()
 	if d < EPS or step_cap < EPS:
@@ -558,7 +588,7 @@ static func _advance_model(p: Vector2, target: Vector2, step_cap: float, walls: 
 	for ang in SLIDE_ANGLES:
 		var s := dir.rotated(deg_to_rad(ang)) * step_len
 		var c := p + s
-		if c.x < -EPS or c.x > board_in + EPS or c.y < -EPS or c.y > board_in + EPS:
+		if _off_board(c, board):
 			continue
 		if step_blocked(p, c, walls, opts):
 			continue
@@ -581,6 +611,7 @@ static func _advance_model(p: Vector2, target: Vector2, step_cap: float, walls: 
 ## only, never feeds back into the steering.
 static func _steer(model_pos: Array, targets: Array, allowance: float, walls: Array, board_in: float,
 		trails: Array = [], opts: Dictionary = {}) -> Array:
+	var board := board_extents(board_in, opts)
 	var n := model_pos.size()
 	var result := model_pos.duplicate()
 	var budget: Array = []
@@ -596,7 +627,7 @@ static func _steer(model_pos: Array, targets: Array, allowance: float, walls: Ar
 		for i in range(n):
 			if budget[i] <= EPS:
 				continue
-			var np := _advance_model(result[i], targets[i], minf(STEP_IN, budget[i]), walls, board_in, opts)
+			var np := _advance_model_b(result[i], targets[i], minf(STEP_IN, budget[i]), walls, board, opts)
 			var moved: float = (result[i] as Vector2).distance_to(np)
 			if moved > EPS:
 				result[i] = np
@@ -626,6 +657,7 @@ static func _enforce_coherency(result: Array, walls: Array, board_in: float, opt
 	var out := result.duplicate()
 	if out.size() <= 1:
 		return out
+	var board := board_extents(board_in, opts)
 	for _pass in range(COH_PASSES):
 		var bad := _incoherent_indices(out)
 		if bad.is_empty():
@@ -637,7 +669,7 @@ static func _enforce_coherency(result: Array, walls: Array, board_in: float, opt
 			if d < EPS:
 				continue
 			var cand: Vector2 = (out[i] as Vector2) + to_c / d * minf(COH_PULL_IN, d)
-			if cand.x < -EPS or cand.x > board_in + EPS or cand.y < -EPS or cand.y > board_in + EPS:
+			if _off_board(cand, board):
 				continue
 			# The pull must respect the same obstacles as the steering (a coherency correction may not
 			# clip a wall or drag a model into an enemy 1" zone).
@@ -658,6 +690,7 @@ static func _gather_laggards(before: Array, result: Array, delta: Vector2, walls
 	var out := result.duplicate()
 	if out.size() <= 1 or delta.length() < EPS:
 		return out
+	var board := board_extents(board_in, opts)
 	var dir := delta / delta.length()
 	var best_prog := 0.0
 	for i in range(out.size()):
@@ -676,7 +709,7 @@ static func _gather_laggards(before: Array, result: Array, delta: Vector2, walls
 			if d < EPS:
 				continue
 			var cand: Vector2 = (out[i] as Vector2) + to_c / d * minf(COH_PULL_IN, d)
-			if cand.x < -EPS or cand.x > board_in + EPS or cand.y < -EPS or cand.y > board_in + EPS:
+			if _off_board(cand, board):
 				continue
 			if not step_blocked(out[i], cand, walls, opts):
 				out[i] = cand
@@ -730,7 +763,11 @@ static func astar_corridor(start: Vector2, goal: Vector2, walls: Array, grid: Di
 	var goal_cell := TerrainRules.cell_of(goal)
 	if start_cell == goal_cell:
 		return []
-	var n := int(board_in / TerrainRules.CELL_IN)
+	# Grid dimensions PER AXIS (#215): a square grid over a rectangular table hands the search a phantom
+	# strip of "free" cells past the short edge, and the corridor then leads the unit off the board.
+	var board := board_extents(board_in, opts)
+	var nx := int(board.x / TerrainRules.CELL_IN)
+	var ny := int(board.y / TerrainRules.CELL_IN)
 	var came_from := {}
 	var g_score := {start_cell: 0.0}
 	var open: Array = [start_cell]
@@ -754,7 +791,7 @@ static func astar_corridor(start: Vector2, goal: Vector2, walls: Array, grid: Di
 		var cc := _cell_center(current)
 		for d in neighbours:
 			var nb: Vector2i = current + d
-			if nb.x < 0 or nb.x >= n or nb.y < 0 or nb.y >= n or closed.has(nb):
+			if nb.x < 0 or nb.x >= nx or nb.y < 0 or nb.y >= ny or closed.has(nb):
 				continue
 			if TerrainRules.is_impassable(int(grid.get(nb, TerrainRules.TerrainType.NONE))):
 				continue
@@ -980,6 +1017,9 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 			trails.append([model_pos[i]])
 	if n == 0:
 		return result
+	# Resolve the board ONCE and hand the extents down explicitly: the per-model option dictionaries
+	# below are rebuilt from scratch, so anything carried in opts alone would not survive the trip (#215).
+	var board := board_extents(board_in, opts)
 	# A Charge routes its nearest models to base contact, and the ONLY path to the target may DETOUR around
 	# obstacles / other units' zones / a large enemy base — a bend whose arc length exceeds the straight
 	# gap. The straight-line delta length was the sole arc budget, so any detour starved the charge and it
@@ -1068,20 +1108,20 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 			coi["zones"] = czones
 			var woi := oi.duplicate()
 			woi["zones"] = czones
-			var croute := theta_star(model_pos[idx], goal_pt, walls, grid, board_in, coi)
+			var croute := _theta_star_b(model_pos[idx], goal_pt, walls, grid, board, coi)
 			var ctaut := string_pull(croute, walls, grid, coi)
 			if ctaut.is_empty() or (ctaut.back() as Vector2).distance_to(goal_pt) > EPS:
 				ctaut.append(goal_pt)
-			var cleg := _walk_offset(model_pos[idx], ctaut, Vector2.ZERO, allowance, walls, grid, woi, board_in)
+			var cleg := _walk_offset(model_pos[idx], ctaut, Vector2.ZERO, allowance, walls, grid, woi, board)
 			result[idx] = cleg.back()
 			placed.append(idx)
 			if trails != null and idx < trails.size():
 				trails[idx] = cleg
 			order_out.append(idx)
 			continue
-		var route := theta_star(model_pos[idx], slot, walls, grid, board_in, oi)
+		var route := _theta_star_b(model_pos[idx], slot, walls, grid, board, oi)
 		var taut := string_pull(route, walls, grid, oi)
-		var leg := _walk_offset(model_pos[idx], taut, Vector2.ZERO, allowance, walls, grid, oi, board_in)
+		var leg := _walk_offset(model_pos[idx], taut, Vector2.ZERO, allowance, walls, grid, oi, board)
 		var final_pt: Vector2 = leg.back()
 		# Lead-stall deferral (finding 2): this model got badly stuck on its own route while other models
 		# still wait — try it again LAST, when the vacated ground and the advanced placed set give it both a
@@ -1096,7 +1136,7 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 		# allows). A charge is exempt (it must reach base contact with the enemy).
 		if not allow_contact and have_r and not placed.is_empty():
 			var linked := _pull_into_placed(final_pt, idx, radii, placed, result, walls,
-				base_clearance, base_zones, avoid_cells, board_in)
+				base_clearance, base_zones, avoid_cells, board)
 			if linked.distance_to(final_pt) > EPS:
 				leg.append(linked)
 				final_pt = linked
@@ -1119,7 +1159,7 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 			if trails != null and i < trails.size():
 				var t_end: Vector2 = (trails[i] as Array).back() if not (trails[i] as Array).is_empty() else model_pos[i]
 				if t_end.distance_to(result[i] as Vector2) > EPS:
-					var rroute := theta_star(model_pos[i], result[i], walls, grid, board_in, re_oi)
+					var rroute := _theta_star_b(model_pos[i], result[i], walls, grid, board, re_oi)
 					trails[i] = string_pull(rroute, walls, grid, re_oi)
 	return result
 
@@ -1168,7 +1208,7 @@ static func untangle_endpoints(model_pos: Array, result: Array, radii: Array, al
 ## (the neighbour's OWN body is deliberately NOT a zone here, so base contact is reachable). Returns the
 ## adjusted position (pos unchanged when already linked / no clear pull helps). Pure + deterministic.
 static func _pull_into_placed(pos: Vector2, idx: int, radii: Array, placed: Array, result: Array,
-		walls: Array, clearance: float, other_zones: Array, avoid_cells: Dictionary, board_in: float) -> Vector2:
+		walls: Array, clearance: float, other_zones: Array, avoid_cells: Dictionary, board: Vector2) -> Vector2:
 	var nearest := -1
 	var nd := INF
 	for j in placed:
@@ -1187,7 +1227,7 @@ static func _pull_into_placed(pos: Vector2, idx: int, radii: Array, placed: Arra
 		var d := to_n.length()
 		if d < EPS:
 			break
-		var cand := _board_clamp(cur + to_n / d * minf(COH_PULL_IN, d), board_in)
+		var cand := _board_clamp(cur + to_n / d * minf(COH_PULL_IN, d), board)
 		if step_blocked(cur, cand, walls, step_opts):
 			break
 		cur = cand
@@ -1282,6 +1322,15 @@ static func _world_before(a: Vector2, b: Vector2) -> bool:
 ## the end state). Bounded by the board so it always terminates.
 static func theta_star(start: Vector2, goal: Vector2, walls: Array, grid: Dictionary,
 		board_in: float, opts: Dictionary) -> Array:
+	return _theta_star_b(start, goal, walls, grid, board_extents(board_in, opts), opts)
+
+
+## Per-axis core of theta_star. Internal callers pass the RESOLVED extents rather than re-deriving them
+## from opts, because the flow builds fresh option dictionaries per model (charge zones, untangle re-routes)
+## — a board size carried in opts would be silently dropped there and the search would fall back to a
+## square board. The extents travel as an argument so they cannot get lost.
+static func _theta_star_b(start: Vector2, goal: Vector2, walls: Array, grid: Dictionary,
+		board: Vector2, opts: Dictionary) -> Array:
 	# Early-out only when the straight shot is hard-clear AND carries no soft-cost surcharge: a line that
 	# merely crosses Dangerous/Difficult ground is not hard-blocked, so the search never ran and the soft
 	# costs never bit — the true root cause of "the unit walked straight into Dangerous terrain" (the cost
@@ -1294,14 +1343,16 @@ static func theta_star(start: Vector2, goal: Vector2, walls: Array, grid: Dictio
 	var goal_c := TerrainRules.cell_of(goal, PLAN_CELL_IN)
 	if start_c == goal_c:
 		return [start, goal]
-	var n := maxi(1, int(ceil(board_in / PLAN_CELL_IN)))
+	# Fine planning grid, PER AXIS (#215) — see astar_corridor for why a square grid is wrong here.
+	var nx := maxi(1, int(ceil(board.x / PLAN_CELL_IN)))
+	var ny := maxi(1, int(ceil(board.y / PLAN_CELL_IN)))
 	var g := {start_c: 0.0}
 	var parent := {start_c: start_c}
 	var pos := {start_c: start}
 	var open: Array = [start_c]
 	var open_set := {start_c: true}
 	var closed := {}
-	var guard := n * n * 4
+	var guard := nx * ny * 4
 	if fast_planner:
 		guard = mini(guard, fast_planner_guard)
 	# reach_closest (charge-reach fix): when the GOAL itself is unreachable (a charge aims at the enemy's
@@ -1330,7 +1381,7 @@ static func theta_star(start: Vector2, goal: Vector2, walls: Array, grid: Dictio
 		var cur_pt: Vector2 = pos[cur]
 		for d in THETA_DIAG:
 			var nb: Vector2i = cur + d
-			if nb.x < 0 or nb.x >= n or nb.y < 0 or nb.y >= n or closed.has(nb):
+			if nb.x < 0 or nb.x >= nx or nb.y < 0 or nb.y >= ny or closed.has(nb):
 				continue
 			var nb_pt := goal if nb == goal_c else _cell_center_fine(nb)
 			if nb != goal_c and is_inf(_terrain_cost_at(nb_pt, grid, opts)):
@@ -1429,7 +1480,7 @@ static func _legs_cost(path: Array, i0: int, i1: int, grid: Dictionary, opts: Di
 ## shift a leg into an obstacle the anchor cleared) so a boxed model never stalls the unit. Returns the model
 ## polyline [start … end]; the last point is its planned target.
 static func _walk_offset(start_pt: Vector2, taut: Array, offset: Vector2, allowance: float,
-		walls: Array, grid: Dictionary, opts: Dictionary, board_in: float) -> Array:
+		walls: Array, grid: Dictionary, opts: Dictionary, board: Vector2) -> Array:
 	if taut.size() <= 1:
 		return [start_pt]
 	var out: Array = [start_pt]
@@ -1437,7 +1488,7 @@ static func _walk_offset(start_pt: Vector2, taut: Array, offset: Vector2, allowa
 	for i in range(1, taut.size()):
 		var a: Vector2 = out.back()
 		var b: Vector2 = (taut[i] as Vector2) + offset
-		b = Vector2(clampf(b.x, 0.0, board_in), clampf(b.y, 0.0, board_in))
+		b = Vector2(clampf(b.x, 0.0, board.x), clampf(b.y, 0.0, board.y))
 		var leg := a.distance_to(b)
 		if leg < EPS:
 			continue
@@ -1485,8 +1536,8 @@ static func _furthest_clear(a: Vector2, b: Vector2, walls: Array, grid: Dictiona
 # === Unified constraint solver (research §3.3 / §1.7: project ALL constraints together) =====
 
 ## Board clamp helper (shared by every projection).
-static func _board_clamp(p: Vector2, board_in: float) -> Vector2:
-	return Vector2(clampf(p.x, 0.0, board_in), clampf(p.y, 0.0, board_in))
+static func _board_clamp(p: Vector2, board: Vector2) -> Vector2:
+	return Vector2(clampf(p.x, 0.0, board.x), clampf(p.y, 0.0, board.y))
 
 
 ## Wall + no-go-zone check for a projection step p→c (hard resting constraints). Unlike step_blocked this
@@ -1524,16 +1575,17 @@ static func solve_formation(desired: Array, radii: Array, walls: Array,
 		return out
 	var forbid: Dictionary = {} if allow_contact else opts.get("forbid_cells", {})
 	var zones: Array = opts.get("zones", [])
+	var board := board_extents(board_in, opts)
 	var best := out.duplicate()
 	var best_score := _formation_score(out, radii, forbid, zones)
 	if best_score <= EPS:
 		return out
 	for _pass in range(SOLVE_PASSES):
-		_project_out_of_zones(out, zones, walls, opts, board_in)
-		_project_separate(out, radii, walls, opts, board_in)
-		_project_out_of_terrain(out, forbid, walls, opts, board_in)
+		_project_out_of_zones(out, zones, walls, opts, board)
+		_project_separate(out, radii, walls, opts, board)
+		_project_out_of_terrain(out, forbid, walls, opts, board)
 		if not allow_contact:
-			_project_coherency(out, radii, walls, opts, board_in)
+			_project_coherency(out, radii, walls, opts, board)
 		var s := _formation_score(out, radii, forbid, zones)
 		if s < best_score - EPS:
 			best_score = s
@@ -1637,7 +1689,7 @@ static func _coherency_penalty(out: Array, radii: Array = []) -> float:
 
 ## Project each model radially out of any no-go zone it sits inside (to the zone edge), wall/zone-checked. On
 ## a charge the target's body-only zone pushes the model back to base contact — the legal charge end.
-static func _project_out_of_zones(out: Array, zones: Array, walls: Array, opts: Dictionary, board_in: float) -> void:
+static func _project_out_of_zones(out: Array, zones: Array, walls: Array, opts: Dictionary, board: Vector2) -> void:
 	if zones.is_empty():
 		return
 	for i in range(out.size()):
@@ -1651,7 +1703,7 @@ static func _project_out_of_zones(out: Array, zones: Array, walls: Array, opts: 
 				continue
 			var dir := p - c
 			dir = dir.normalized() if dir.length() > EPS else Vector2(1.0, 0.0)
-			var cand := _board_clamp(c + dir * (r + EPS), board_in)
+			var cand := _board_clamp(c + dir * (r + EPS), board)
 			if not _wall_zone_blocked(p, cand, walls, opts):
 				p = cand
 		out[i] = p
@@ -1659,7 +1711,7 @@ static func _project_out_of_zones(out: Array, zones: Array, walls: Array, opts: 
 
 ## Push overlapping own-base pairs apart along their centre line (split evenly), wall/zone-checked — one
 ## Gauss-Seidel sweep of the p.7 "may never move through other models … friendly or enemy" separation.
-static func _project_separate(out: Array, radii: Array, walls: Array, opts: Dictionary, board_in: float) -> void:
+static func _project_separate(out: Array, radii: Array, walls: Array, opts: Dictionary, board: Vector2) -> void:
 	var n := out.size()
 	if n <= 1 or radii.size() != n:
 		return
@@ -1674,8 +1726,8 @@ static func _project_separate(out: Array, radii: Array, walls: Array, opts: Dict
 			var dir := pj - pi
 			dir = dir.normalized() if dir.length() > EPS else Vector2(1.0, 0.0)
 			var push := (min_gap - d) * 0.5 + EPS
-			var ci := _board_clamp(pi - dir * push, board_in)
-			var cj := _board_clamp(pj + dir * push, board_in)
+			var ci := _board_clamp(pi - dir * push, board)
+			var cj := _board_clamp(pj + dir * push, board)
 			if not _wall_zone_blocked(pi, ci, walls, opts):
 				out[i] = ci
 			if not _wall_zone_blocked(pj, cj, walls, opts):
@@ -1686,7 +1738,7 @@ static func _project_separate(out: Array, radii: Array, walls: Array, opts: Dict
 ## link-component toward its NEAREST in-component neighbour (the exact pair CoherencyChecker measures), and
 ## pull the model furthest from the centroid inward when the unit over-spreads. Interleaved with the other
 ## projections each pass so an overlap push can no longer permanently undo it (the nightloop trade).
-static func _project_coherency(out: Array, radii: Array, walls: Array, opts: Dictionary, board_in: float) -> void:
+static func _project_coherency(out: Array, radii: Array, walls: Array, opts: Dictionary, board: Vector2) -> void:
 	var n := out.size()
 	if n <= 1 or radii.size() != n:
 		return
@@ -1712,7 +1764,7 @@ static func _project_coherency(out: Array, radii: Array, walls: Array, opts: Dic
 			var dn := to_n.length()
 			if dn < EPS:
 				continue
-			var cand := _board_clamp((out[i] as Vector2) + to_n / dn * minf(COH_PULL_IN, dn), board_in)
+			var cand := _board_clamp((out[i] as Vector2) + to_n / dn * minf(COH_PULL_IN, dn), board)
 			if not _wall_zone_blocked(out[i], cand, walls, opts):
 				out[i] = cand
 	if _max_edge_spread_r(out, radii) > MAX_CHAIN_IN + EPS:
@@ -1728,7 +1780,7 @@ static func _project_coherency(out: Array, radii: Array, walls: Array, opts: Dic
 			var to_c := c - (out[far] as Vector2)
 			var d := to_c.length()
 			if d >= EPS:
-				var cand := _board_clamp((out[far] as Vector2) + to_c / d * minf(COH_PULL_IN, d), board_in)
+				var cand := _board_clamp((out[far] as Vector2) + to_c / d * minf(COH_PULL_IN, d), board)
 				if not _wall_zone_blocked(out[far], cand, walls, opts):
 					out[far] = cand
 
@@ -1737,24 +1789,24 @@ static func _project_coherency(out: Array, radii: Array, walls: Array, opts: Dic
 ## directions × 0.5" rings), wall/zone-checked and never into another forbidden cell. A boxed model is left
 ## in place (the least-violating fallback keeps the config). Deterministic: nearest ring first, world-frame
 ## tie-break within a ring.
-static func _project_out_of_terrain(out: Array, forbid: Dictionary, walls: Array, opts: Dictionary, board_in: float) -> void:
+static func _project_out_of_terrain(out: Array, forbid: Dictionary, walls: Array, opts: Dictionary, board: Vector2) -> void:
 	if forbid.is_empty():
 		return
 	for i in range(out.size()):
 		var p: Vector2 = out[i]
 		if not forbid.has(TerrainRules.cell_of(p, PLAN_CELL_IN)):
 			continue
-		out[i] = _nearest_clear_of_terrain(p, forbid, walls, opts, board_in)
+		out[i] = _nearest_clear_of_terrain(p, forbid, walls, opts, board)
 
 
-static func _nearest_clear_of_terrain(p: Vector2, forbid: Dictionary, walls: Array, opts: Dictionary, board_in: float) -> Vector2:
+static func _nearest_clear_of_terrain(p: Vector2, forbid: Dictionary, walls: Array, opts: Dictionary, board: Vector2) -> Vector2:
 	var dist := TERRAIN_PUSH_STEP_IN
 	while dist <= TERRAIN_PUSH_MAX_IN + EPS:
 		var found := false
 		var best_c := p
 		for k in range(RADIAL_DIRS):
 			var ang := TAU * float(k) / float(RADIAL_DIRS)
-			var c := _board_clamp(p + Vector2(cos(ang), sin(ang)) * dist, board_in)
+			var c := _board_clamp(p + Vector2(cos(ang), sin(ang)) * dist, board)
 			if forbid.has(TerrainRules.cell_of(c, PLAN_CELL_IN)):
 				continue
 			if _wall_zone_blocked(p, c, walls, opts):

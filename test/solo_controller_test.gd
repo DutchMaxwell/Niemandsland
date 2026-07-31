@@ -2275,3 +2275,67 @@ func test_reanimation_plan_fills_the_living_before_it_raises_the_dead() -> void:
 	for step in overkill:
 		over_spent += int((step as Dictionary)["wounds"])
 	assert_int(over_spent).is_equal(SoloController.reanimation_pool(u))
+
+
+## Belt-and-braces gate (#215). The planner is axis-correct now, but _finalize_placement is the LAST seam
+## before a plan becomes real model positions, and it used to clamp only its OWN correction candidates —
+## an incoming plan was taken on trust. It now clamps the incoming plan per axis and says so once.
+func _table_stub(feet: Vector2) -> Node:
+	var scr := GDScript.new()
+	scr.source_code = "extends Node\nvar table_size := Vector2(%f, %f)\n" % [feet.x, feet.y]
+	scr.reload()
+	var t := Node.new()
+	t.set_script(scr)
+	t.add_to_group("table")
+	add_child(t)
+	return t
+
+
+func test_gate_clamps_an_off_table_plan_back_onto_the_board() -> void:
+	var m := 0.0254
+	auto_free(_table_stub(TableSizeDialog.FEET_6X4))   # 72" x 48": half-extents 36" x 24"
+	var ai := _unit(2, [Vector3.ZERO])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var models: Array = ai.get_alive_models()
+	# THE #215 SHAPE: x sits comfortably on the board, z is ~19" past the SHORT edge — exactly what the
+	# folded scalar bound used to wave through (it believed the short axis ran to 72", too).
+	var start := Vector3(0.2, 0, 0.5)
+	var planned := Vector3(0.2, 0, 1.10)
+	var gated: Array = solo._finalize_placement(ai, models, [start], [planned], false, null, [])
+	var out: Vector3 = gated[0]
+	var half_x: float = TableSizeDialog.FEET_6X4.x * 0.3048 * 0.5
+	var half_z: float = TableSizeDialog.FEET_6X4.y * 0.3048 * 0.5
+	assert_float(absf(out.z)).override_failure_message(
+		"z=%.3f m still off the 48\" axis" % out.z).is_less_equal(half_z)
+	assert_float(absf(out.x)).is_less_equal(half_x)
+	# The untouched axis stays put — the clamp is per axis, not a wholesale pull toward the centre.
+	assert_float(out.x).is_equal_approx(0.2, 0.001)
+	# The correction is ANNOUNCED (a silent fix reads like a broken game; the reporter of #215 should
+	# see it in the battle log, which main drains from here).
+	assert_int(solo.board_clamp_notes.size()).is_equal(1)
+	# Read the note defensively so a regression fails as an ASSERTION, not as an index error.
+	var note: String = str(solo.board_clamp_notes[0]) if not solo.board_clamp_notes.is_empty() else ""
+	assert_str(note).contains("clamped to the table edge")
+	assert_str(note).contains(ai.get_name())
+	assert_float(SoloController._xz_dist_m(out, planned) / m).is_greater(1.0)   # it really moved
+
+
+func test_gate_stays_quiet_when_the_plan_is_already_on_the_board() -> void:
+	auto_free(_table_stub(TableSizeDialog.FEET_6X4))
+	var ai := _unit(2, [Vector3.ZERO])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var models: Array = ai.get_alive_models()
+	var planned := Vector3(0.3, 0, 0.4)   # well inside 36" x 24"
+	var gated: Array = solo._finalize_placement(ai, models, [Vector3(0.3, 0, 0.2)], [planned], false, null, [])
+	assert_float(SoloController._xz_dist_m(gated[0] as Vector3, planned)).is_less(0.001)
+	assert_int(solo.board_clamp_notes.size()).is_equal(0)   # no news, no line
