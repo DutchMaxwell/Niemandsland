@@ -815,3 +815,120 @@ func test_unified_polyline_clear_of_difficult_keeps_the_full_band() -> void:
 	var out := MovementPlanner.plan_unit_step([Vector2(40, 2)], Vector2(0, 12), [], grid, false, 48.0, trails, opts)
 	assert_float((out[0] as Vector2).distance_to(Vector2(40, 14))).is_less(0.5)
 	assert_float(MovementPlanner.polyline_length(trails[0] as Array)).is_greater(11.0)
+
+
+# === Rectangular table bounds (#215) ==========================================================
+# The planner used to carry ONE scalar board extent for both axes, and SoloController folded a
+# rectangular table into it with maxf(half.x, half.y). On the shipped 6x4 ft board that told the planner
+# the SHORT axis ran to 72" instead of 48", so plans reached up to 24" past the table edge. The bounds are
+# per-axis now: board_in is the X extent, opts["board_y_in"] the Y extent (absent/0 = square).
+#
+# These run as ONE property over several table shapes: no planned position and no trail waypoint may
+# leave [0, bx] x [0, by], measured PER AXIS. The square preset deliberately repeats existing coverage —
+# after the refactor it is the proof that the old square behaviour is intact.
+
+const FEET_TO_IN := 12.0
+## Board shapes in INCHES. The presets come from the size dialog's own constants (a new preset there is
+## picked up here instead of being re-typed), plus one deliberately extreme rectangle — the wider the
+## aspect ratio, the larger the phantom area the folded scalar used to declare playable.
+func _board_shapes() -> Array:
+	return [
+		{"name": "4x4 preset (square)", "size": TableSizeDialog.FEET_4X4 * FEET_TO_IN},
+		{"name": "6x4 preset (shipped default)", "size": TableSizeDialog.FEET_6X4 * FEET_TO_IN},
+		{"name": "72x24 (extreme rectangle)", "size": Vector2(72.0, 24.0)},
+	]
+
+
+## Assert one planned position lies on the board, per axis.
+func _assert_on_board(p: Vector2, size: Vector2, shape_name: String, what: String) -> void:
+	var eps := 0.05
+	assert_float(p.x).override_failure_message(
+		"%s: %s x=%.2f outside [0, %.1f]" % [shape_name, what, p.x, size.x]).is_between(-eps, size.x + eps)
+	assert_float(p.y).override_failure_message(
+		"%s: %s y=%.2f outside [0, %.1f]" % [shape_name, what, p.y, size.y]).is_between(-eps, size.y + eps)
+
+
+func test_plan_unit_step_keeps_every_model_and_waypoint_on_the_board() -> void:
+	# A unit parked 2" from the SHORT edge is told to advance 12" straight over it. Every shape must
+	# stop at its own edge; with the folded scalar the 6x4 and 72x24 boards let the models sail on.
+	for shape in _board_shapes():
+		var size: Vector2 = shape["size"]
+		var name: String = shape["name"]
+		var start_y: float = size.y - 2.0
+		var pos: Array = [Vector2(size.x * 0.5 - 1.5, start_y), Vector2(size.x * 0.5, start_y),
+			Vector2(size.x * 0.5 + 1.5, start_y)]
+		var opts := {"radii": [0.5, 0.5, 0.5], "clearance": 0.5, "board_y_in": size.y}
+		var trails: Array = []
+		var out := MovementPlanner.plan_unit_step(pos, Vector2(0, 12), [], {}, false, size.x, trails, opts)
+		assert_int(out.size()).is_equal(3)
+		for i in range(out.size()):
+			_assert_on_board(out[i] as Vector2, size, name, "planned position %d" % i)
+		for i in range(trails.size()):
+			for w in (trails[i] as Array):
+				_assert_on_board(w as Vector2, size, name, "trail waypoint of model %d" % i)
+
+
+func test_plan_unit_step_diagonal_corner_run_stays_on_the_board() -> void:
+	# Both axes at once: a corner run must be stopped by BOTH bounds, not just the larger one.
+	for shape in _board_shapes():
+		var size: Vector2 = shape["size"]
+		var name: String = shape["name"]
+		var pos: Array = [Vector2(size.x - 3.0, size.y - 3.0), Vector2(size.x - 4.5, size.y - 3.0)]
+		var opts := {"radii": [0.5, 0.5], "clearance": 0.5, "board_y_in": size.y}
+		var trails: Array = []
+		var out := MovementPlanner.plan_unit_step(pos, Vector2(10, 10), [], {}, false, size.x, trails, opts)
+		for i in range(out.size()):
+			_assert_on_board(out[i] as Vector2, size, name, "planned position %d" % i)
+		for i in range(trails.size()):
+			for w in (trails[i] as Array):
+				_assert_on_board(w as Vector2, size, name, "trail waypoint of model %d" % i)
+
+
+func test_plan_sequential_flow_keeps_every_model_on_the_board() -> void:
+	# The flow layer walks each model along its own routed leg — the leg endpoints are clamped per axis.
+	for shape in _board_shapes():
+		var size: Vector2 = shape["size"]
+		var name: String = shape["name"]
+		var start_y: float = size.y - 2.0
+		var pos: Array = [Vector2(size.x * 0.5, start_y), Vector2(size.x * 0.5 + 1.5, start_y)]
+		var radii: Array = [0.5, 0.5]
+		var opts := {"radii": radii, "clearance": 0.5, "board_y_in": size.y}
+		var trails: Array = []
+		var out := MovementPlanner.plan_sequential_flow(pos, Vector2(0, 12), radii, [], {}, opts,
+			size.x, false, trails, [])
+		for i in range(out.size()):
+			_assert_on_board(out[i] as Vector2, size, name, "flowed position %d" % i)
+		for i in range(trails.size()):
+			for w in (trails[i] as Array):
+				_assert_on_board(w as Vector2, size, name, "flow waypoint of model %d" % i)
+
+
+func test_solve_formation_pushes_models_apart_without_leaving_the_board() -> void:
+	# Two stacked models at the short edge: the separation projection pushes them apart, and the push
+	# must be clamped on the axis it actually crosses. With one scalar bound the outward model kept going.
+	for shape in _board_shapes():
+		var size: Vector2 = shape["size"]
+		var name: String = shape["name"]
+		var edge_y: float = size.y - 0.25
+		var desired: Array = [Vector2(size.x * 0.5, edge_y), Vector2(size.x * 0.5, edge_y - 0.1)]
+		var radii: Array = [2.0, 2.0]
+		var opts := {"radii": radii, "clearance": 0.5, "board_y_in": size.y}
+		var out := MovementPlanner.solve_formation(desired, radii, [], opts, size.x, false)
+		for i in range(out.size()):
+			_assert_on_board(out[i] as Vector2, size, name, "solved position %d" % i)
+
+
+func test_theta_star_never_routes_through_the_phantom_strip() -> void:
+	# The search grid is per-axis now. Aimed at a goal BEYOND the short edge with reach_closest (the
+	# charge behaviour), the route may only reach the closest node that is still ON the board. A wall just
+	# above the start blocks the straight shot, so the search really runs instead of early-returning.
+	for shape in _board_shapes():
+		var size: Vector2 = shape["size"]
+		var name: String = shape["name"]
+		var start := Vector2(size.x * 0.5, size.y - 4.0)
+		var goal := Vector2(size.x * 0.5, size.y + 16.0)        # off the board on purpose
+		var walls := [[Vector2(size.x * 0.5 - 6.0, size.y - 3.0), Vector2(size.x * 0.5 + 6.0, size.y - 3.0)]]
+		var route := MovementPlanner.theta_star(start, goal, walls, {}, size.x,
+			{"reach_closest": true, "board_y_in": size.y})
+		for w in route:
+			_assert_on_board(w as Vector2, size, name, "theta* waypoint")

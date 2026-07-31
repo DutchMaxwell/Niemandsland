@@ -14,6 +14,9 @@ extends Node
 signal ai_unit_activated(unit: GameUnit)   # emitted after the AI moves + activates a unit (for UI/log)
 
 const BOUNDS_MARGIN_M := 0.02   # keep models a hair inside the table edge
+## #215: only a clamp that actually MOVED a model (> 1 cm) is worth a battle-log line — the routine
+## margin nudge at the very edge is not news.
+const BOARD_CLAMP_NOTE_EPS_M := 0.01
 const INCHES_TO_METERS := 0.0254
 const OBJECTIVE_CONTROL_IN := 3.0   # OPR objective seize/hold radius (Solo & Co-Op v3.5.0 p.6)
 const CONTACT_IN := 2.0             # centre-to-centre "in melee" distance a charge closes to
@@ -160,6 +163,10 @@ var last_dangerous_dice: int = 0   # Bug 23: Tough-weighted dice for the move's 
 ## NML-230: model indices whose gate correction was clamped to the band slack during the LAST
 ## _finalize_placement call — the accepted gate call's count feeds the one-line battle log.
 var _gate_clamped_models: Dictionary = {}
+## #215: one line per activation whose planned positions had to be pulled back onto the table. main
+## prints these to the battle log (its single printing point, next to the rule notes) — a silent
+## correction reads like a broken game, and the reporter of #215 should see the fix work.
+var board_clamp_notes: Array = []
 ## Limited weapons already fired this game (wave 5, core v3.5.1: "may only be used once per game").
 ## Key: "<unit_id>::<weapon name>" (limited_key). Tracked for EVERY unit — AI and human — since both
 ## resolve through the shared profile paths; lives with the controller (one game = one controller).
@@ -401,6 +408,7 @@ func activate_next_ai_unit() -> GameUnit:
 		return null
 	_activation_seq += 1   # monotonic per-activation index for the deterministic difficulty draws
 	last_move_paths = []   # cleared per activation — HOLD / Shaken idle replays nothing
+	board_clamp_notes = []   # #215: per-activation, drained by main into the battle log
 	if unit.is_shaken:
 		# OPR (p.10): a Shaken unit spends its activation idle, which lets it recover. An AIRCRAFT still
 		# makes its MANDATORY straight move first (GF v3.5.1: the move happens even Shaken, and it does
@@ -3399,14 +3407,18 @@ func _spacing_zones_world(unit: GameUnit, own_radius_m: float, charge_target: Ga
 ## Sample the REAL overlay into the planner's typed 3" cell grid (inch frame). Returns
 ## {"grid": {Vector2i: TerrainType}, "avoid": {Vector2i: true}} — Impassable cells are always avoided;
 ## Difficult cells only when the route should go around them (solo overlay p.57).
-func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool, avoid_dangerous: bool = false) -> Dictionary:
+func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool, avoid_dangerous: bool = false,
+		board_y_in: float = 0.0) -> Dictionary:
 	var grid := {}
 	var avoid := {}
 	if not terrain_type_at.is_valid():
 		return {"grid": grid, "avoid": avoid}
-	var n := maxi(1, int(ceil(board_in / TerrainRules.CELL_IN)))
-	for cy in range(n):
-		for cx in range(n):
+	# Per-axis cell counts (#215): a square sweep over a rectangular table samples phantom ground past
+	# the short edge and misses none of the real board only by accident. board_y_in <= 0 means square.
+	var nx := maxi(1, int(ceil(board_in / TerrainRules.CELL_IN)))
+	var ny := maxi(1, int(ceil((board_y_in if board_y_in > 0.0 else board_in) / TerrainRules.CELL_IN)))
+	for cy in range(ny):
+		for cx in range(nx):
 			var centre_in := Vector2((float(cx) + 0.5) * TerrainRules.CELL_IN, (float(cy) + 0.5) * TerrainRules.CELL_IN)
 			var world := centre_in * INCHES_TO_METERS - off
 			var t: int = int(terrain_type_at.call(Vector3(world.x, 0.0, world.y)))
@@ -3438,7 +3450,7 @@ func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool, avoi
 ## centre). Sampled over the move AABB only (the _forbid_cells_in pattern); ADDITIVE — the coarse
 ## 3" avoid set and its consumers stay untouched, this feeds the planner's fine checks.
 func _avoid_fine_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Vector2,
-		clearance_m: float, avoid_difficult: bool, avoid_dangerous: bool) -> Dictionary:
+		clearance_m: float, avoid_difficult: bool, avoid_dangerous: bool, board_y_in: float = 0.0) -> Dictionary:
 	var fine := {}
 	if not terrain_type_at.is_valid() or mpos.is_empty():
 		return fine
@@ -3456,11 +3468,13 @@ func _avoid_fine_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Ve
 	lo -= Vector2(margin, margin)
 	hi += Vector2(margin, margin)
 	var cell: float = MovementPlanner.PLAN_CELL_IN
-	var n := maxi(1, int(ceil(board_in / cell)))
-	var cx0 := clampi(int(floor(lo.x / cell)), 0, n - 1)
-	var cx1 := clampi(int(floor(hi.x / cell)), 0, n - 1)
-	var cy0 := clampi(int(floor(lo.y / cell)), 0, n - 1)
-	var cy1 := clampi(int(floor(hi.y / cell)), 0, n - 1)
+	# Per-axis cell counts (#215); board_y_in <= 0 means a square board.
+	var nx := maxi(1, int(ceil(board_in / cell)))
+	var ny := maxi(1, int(ceil((board_y_in if board_y_in > 0.0 else board_in) / cell)))
+	var cx0 := clampi(int(floor(lo.x / cell)), 0, nx - 1)
+	var cx1 := clampi(int(floor(hi.x / cell)), 0, nx - 1)
+	var cy0 := clampi(int(floor(lo.y / cell)), 0, ny - 1)
+	var cy1 := clampi(int(floor(hi.y / cell)), 0, ny - 1)
 	var pred := func(t: int) -> bool:
 		# CONTAINER handled by the exact wall channel (container wave) — cells only for areas.
 		return (avoid_difficult and TerrainRules.is_difficult(t)) \
@@ -3474,7 +3488,8 @@ func _avoid_fine_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Ve
 	return fine
 
 
-func _forbid_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Vector2, own_r_m: float) -> Dictionary:
+func _forbid_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Vector2, own_r_m: float,
+		board_y_in: float = 0.0) -> Dictionary:
 	var forbid := {}
 	if not terrain_type_at.is_valid() or mpos.is_empty():
 		return forbid
@@ -3492,11 +3507,13 @@ func _forbid_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Vector
 	lo -= Vector2(margin, margin)
 	hi += Vector2(margin, margin)
 	var cell: float = MovementPlanner.PLAN_CELL_IN
-	var n := maxi(1, int(ceil(board_in / cell)))
-	var cx0 := clampi(int(floor(lo.x / cell)), 0, n - 1)
-	var cx1 := clampi(int(floor(hi.x / cell)), 0, n - 1)
-	var cy0 := clampi(int(floor(lo.y / cell)), 0, n - 1)
-	var cy1 := clampi(int(floor(hi.y / cell)), 0, n - 1)
+	# Per-axis cell counts (#215); board_y_in <= 0 means a square board.
+	var nx := maxi(1, int(ceil(board_in / cell)))
+	var ny := maxi(1, int(ceil((board_y_in if board_y_in > 0.0 else board_in) / cell)))
+	var cx0 := clampi(int(floor(lo.x / cell)), 0, nx - 1)
+	var cx1 := clampi(int(floor(hi.x / cell)), 0, nx - 1)
+	var cy0 := clampi(int(floor(lo.y / cell)), 0, ny - 1)
+	var cy1 := clampi(int(floor(hi.y / cell)), 0, ny - 1)
 	for cy in range(cy0, cy1 + 1):
 		for cx in range(cx0, cx1 + 1):
 			var centre_in := Vector2((float(cx) + 0.5) * cell, (float(cy) + 0.5) * cell)
@@ -3938,14 +3955,17 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 		_fill_straight_trails(world_trails, positions, rigid)
 		return rigid   # a regiment moves as its rigid tray block — no individual steering
 	# Map world XZ (metres, centred at 0) into the planner's non-negative inch frame: shift by the table
-	# half-extents, then divide by the inch scale. board_in is the larger table extent in inches.
+	# half-extents, then divide by the inch scale. BOTH extents travel (#215): this used to fold the two
+	# axes into one scalar via maxf(half.x, half.y), so on the shipped 6x4 ft table (72"x48") the planner
+	# was told the short axis also ran to 72" and happily routed models up to 24" past the table edge.
 	# FLYING ignores walls while moving (GF v3.5.1) — planning around ruin walls both wasted movement
 	# and fed the gate's wall clamp spurious reverts (live-test Bug 20: the torn winged unit). The
 	# REST legality (not ending inside a container) stays with the terrain projection, which is exact.
 	var walls_world: Array = [] if unit.has_special_rule("Flying") else _walls_world()
 	var half := _table_half_extents()
 	var off := Vector2(half.x, half.y)
-	var board_in: float = (maxf(half.x, half.y) * 2.0) / INCHES_TO_METERS
+	var board_in: float = (half.x * 2.0) / INCHES_TO_METERS      # X extent (long side on a 6x4)
+	var board_y_in: float = (half.y * 2.0) / INCHES_TO_METERS    # Y extent (short side on a 6x4)
 	var mpos: Array = []
 	for p in positions:
 		mpos.append((Vector2((p as Vector3).x, (p as Vector3).z) + off) / INCHES_TO_METERS)
@@ -3959,7 +3979,8 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	# for EVERY other unit (p.7; on a Charge the target is body-only); difficult/impassable cells to
 	# route around (p.57 overlay).
 	var own_r_m := _move_base_radius_m(models)
-	var opts := {"clearance": own_r_m / INCHES_TO_METERS + CLEARANCE_EPS_IN}
+	var opts := {"clearance": own_r_m / INCHES_TO_METERS + CLEARANCE_EPS_IN,
+		"board_y_in": board_y_in}   # the planner's second axis; without it every bound would be square
 	var zones_in: Array = []
 	for z in _spacing_zones_world(unit, own_r_m, charge_target if allow_contact else null):
 		var zd := z as Dictionary
@@ -3967,11 +3988,11 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 			"r": float(zd["r"]) / INCHES_TO_METERS})
 	if not zones_in.is_empty():
 		opts["zones"] = zones_in
-	var sampled := _terrain_grid_in(board_in, off, avoid_difficult, avoid_dangerous)
+	var sampled := _terrain_grid_in(board_in, off, avoid_difficult, avoid_dangerous, board_y_in)
 	opts["avoid_cells"] = sampled["avoid"]
 	if avoid_difficult or avoid_dangerous:
 		# Fine, base-radius-inflated avoidance so the routed BASE EDGE clears the terrain too.
-		opts["avoid_fine"] = _avoid_fine_cells_in(mpos, mdelta, board_in, off, own_r_m, avoid_difficult, avoid_dangerous)
+		opts["avoid_fine"] = _avoid_fine_cells_in(mpos, mdelta, board_in, off, own_r_m, avoid_difficult, avoid_dangerous, board_y_in)
 	# Unified-solver inputs (real-game path only): the presence of "radii" selects the C-space / Theta* /
 	# funnel + unified-constraint-solver pipeline inside plan_unit_step. SoloSim never sets it, so its
 	# steer+A* path and the mirror-fairness oracle stay byte-identical. radii = per-model base radius (inches)
@@ -3982,7 +4003,7 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	for m in models:
 		radii_in.append(model_base_radius_m(m as ModelInstance) / INCHES_TO_METERS)
 	opts["radii"] = radii_in
-	opts["forbid_cells"] = _forbid_cells_in(mpos, mdelta, board_in, off, own_r_m)
+	opts["forbid_cells"] = _forbid_cells_in(mpos, mdelta, board_in, off, own_r_m, board_y_in)
 	# NML-230 Breach B: hand the planner the p.11 cap so EVERY generated polyline that enters difficult
 	# terrain is trimmed to 6" at the source — the gate-collapse-ladder and boxed/sidestep replans (and
 	# the solver's projections) bypass the unit-wide pre-plan reach clamp in _execute_move, which only
@@ -4126,6 +4147,18 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	_gate_clamped_models = {}
 	if n == 0:
 		return cfg
+	# BELT AND BRACES (#215). The planner is axis-correct now, but this gate is the LAST seam before a plan
+	# becomes real positions, and it only ever clamped its OWN correction candidates — an incoming plan was
+	# taken on trust. Clamp it per axis FIRST, so no future planner regression can put a model off the table
+	# again, and every later correction starts from a legal configuration. Same rule the rest of the
+	# controller applies (_clamp_to_bounds keeps models a hair inside the edge).
+	var clamped_by_m := 0.0
+	for i in range(cfg.size()):
+		var inb := _clamp_to_bounds(cfg[i] as Vector3)
+		clamped_by_m = maxf(clamped_by_m, _xz_dist_m(inb, cfg[i] as Vector3))
+		cfg[i] = inb
+	if clamped_by_m > BOARD_CLAMP_NOTE_EPS_M:
+		board_clamp_notes.append("AI path clamped to the table edge (%s)" % unit.get_name())
 	var gate_flying := unit.has_special_rule("Flying")   # Bug 20: wall clamp must not revert legal fly-overs
 	var obstacles := _external_obstacle_shapes(unit)
 	# NML-230 Breach A: the gate's physical corrections (terrain projection + overlap push + straggler

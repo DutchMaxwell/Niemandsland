@@ -864,6 +864,10 @@ func _solo_activate_one_ai() -> GameUnit:
 	if battle_log != null:
 		for note in report.get("rule_notes", []):
 			battle_log.log_event(BattleLog.Category.COMBAT, str(note), true)
+		# #215: the placement gate pulled a planned position back onto the table — say so. A silent
+		# correction reads like a broken game to the player watching the move.
+		for note in solo_controller.board_clamp_notes:
+			battle_log.log_event(BattleLog.Category.GENERAL, str(note), true)
 	# Shaken idle (OPR p.10): the unit spends its activation idle and recovers — clear via the radial seam
 	# (state + marker + MP broadcast) and skip movement narration / combat entirely. An AIRCRAFT's
 	# mandatory straight move still happened (GF v3.5.1: it flies even Shaken and still recovers) — show
