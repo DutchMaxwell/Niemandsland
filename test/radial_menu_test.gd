@@ -66,3 +66,24 @@ func test_menu_item_tooltip_defaults_to_label() -> void:
 	var item := RadialMenu.RadialMenuItem.new("x", "My Label")
 	assert_str(item.tooltip).is_equal("My Label")
 	assert_bool(item.enabled).is_true()
+
+# ===== Spotter UX (maintainer 31.07.) — Precision Spotter is a radial action =====
+
+func test_spot_entry_appears_only_for_spotter_units() -> void:
+	var plain := GameUnit.new()
+	var plain_ids: Array = []
+	for it in RadialMenu.solo_combat_items(plain):
+		plain_ids.append(it.id)
+	assert_bool(plain_ids.has("solo_spot")).is_false()
+	var spotter := GameUnit.new()
+	spotter.unit_properties = {"special_rules": ["Precision Spotter"]}
+	var m := ModelInstance.new()
+	m.is_alive = true
+	m.unit = spotter
+	spotter.models.append(m)
+	var ids: Array = []
+	for it in RadialMenu.solo_combat_items(spotter):
+		ids.append(it.id)
+	assert_bool(ids.has("solo_spot")) \
+		.override_failure_message("a Precision Spotter unit must offer the Spot radial action") \
+		.is_true()
