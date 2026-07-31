@@ -834,6 +834,11 @@ func _solo_activate_one_ai() -> GameUnit:
 	# #162: the AI's activation is "the next activation" — open take-backs expire.
 	if undo_manager != null:
 		undo_manager.expire_move_takebacks()
+	# Activation-TRIGGERED rules fire before the action (Reanimation, GF army books): peek the pick,
+	# resolve them on the real tray, THEN let the decision tree plan — so a restored model is on the
+	# table while the move is planned instead of being left behind at the unit's start position. The
+	# peek caches its draw, so the seeded unit selection stays byte-identical to a run without it.
+	await _solo_try_reanimation(solo_controller.peek_next_ai_unit())
 	var unit: GameUnit = solo_controller.activate_next_ai_unit()
 	# Stage 3 (transparency): the banner narrates WHAT NACHTMAHR just decided, in one plain
 	# sentence — no more anonymous "is taking its turn…" while units visibly act.
@@ -3644,6 +3649,272 @@ func _solo_over9_defense_rule(target: GameUnit) -> String:
 	return ""
 
 
+# === Reanimation (army-book, Robot Legions 3.5.2) ===========================================
+# Official text: "When a unit where all models have this rule is activated, roll as many dice as the
+# max. number of models/wounds it could restore. For each 5+ you may restore one model/wound. Note
+# that new models may only be restored if they can be placed in coherency with non-restored models."
+# It only reaches the table via the hero upgrade "Reanimation Aura" ("This model and its unit get
+# Reanimation"), which the army import expands onto the unit and every attached hero.
+#
+# MAINTAINER DECISIONS (2026-07-31), documented here because they are readings, not code details:
+#  • WOUND CURRENCY. "models/wounds it could restore" is counted in WOUNDS: a Tough(3) casualty is
+#    worth three dice, a living model missing two wounds two. Each 5+ buys one wound; the first
+#    wound of a casualty brings it back (at 1 wound), further wounds heal it up.
+#  • SHAKEN DOES NOT REANIMATE. The core rules spend a Shaken unit's activation staying idle
+#    (GF v3.5.1 p.10) — it does nothing but recover, and that includes this trigger.
+#  • AUTOMATIC ALLOCATION v1 for both sides; letting the owner click each restore is a follow-up.
+#  • ONE TRIGGER PER ROUND per unit, stamped in unit_properties["reanimated_round"] — the human side
+#    has several activation doors (shoot, fight, cast, spot, embark/disembark, the manual toggle) and
+#    the stamp makes sure only the FIRST one rolls.
+
+## Whether the mechanics map fields Reanimation for this unit's (system, faction). Mirrors
+## RulesRegistry.unit_rule_active's data gate WITHOUT its prefix-based rule check — "Reanimation" is
+## a prefix of "Reanimation Aura", and that confusion is exactly what the carrier gate must not make.
+func _solo_reanimation_mapped(unit: GameUnit) -> bool:
+	var system := RulesRegistry.system_of_unit(unit)
+	if RulesRegistry.map_for(system).is_empty():
+		return true   # no assets (dev/test tree) → behave as before: data refines, never breaks
+	return RulesRegistry.has_primitive(system, RulesRegistry.faction_of_unit(unit),
+		SoloController.REANIMATION_RULE)
+
+
+## THE activation trigger — every door that starts a unit's activation calls this first (AI: the
+## peeked pick before the decision tree; human: shoot/fight/cast/spot, embark/disembark, the manual
+## activation toggle). Rolls the pool in the real dice tray and applies the restores. Silent no-op
+## when the unit does not carry the rule, when nothing is missing, or when it already fired this round.
+func _solo_try_reanimation(unit: GameUnit) -> void:
+	if unit == null or opr_army_manager == null or solo_controller == null:
+		return
+	unit = _solo_combat_unit(unit)   # a joined hero's activation is its host unit's (X1)
+	if unit == null or opr_army_manager.game_phase != OPRArmyManager.GamePhase.PLAYING:
+		return
+	if int(unit.unit_properties.get("reanimated_round", -1)) == opr_army_manager.current_round:
+		return
+	if not _solo_reanimation_mapped(unit):
+		return
+	if SoloController.reanimation_members(unit).is_empty():
+		_solo_reanimation_aura_end(unit)
+		return
+	if unit.is_shaken:
+		# The Shaken activation stays idle (GF v3.5.1 p.10) — stamped so no later door retries it.
+		unit.unit_properties["reanimated_round"] = opr_army_manager.current_round
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Reanimation: %s does not reanimate — Shaken (activation stays idle)" % unit.get_name(),
+				_solo_is_ai_unit(unit))
+		return
+	var pool: int = SoloController.reanimation_pool(unit)
+	if pool <= 0:
+		return   # a unit at full strength has nothing to restore — no roll, no line (log stays readable)
+	var target: int = int(RulesRegistry.unit_param(unit, SoloController.REANIMATION_RULE,
+		"restore_target", SoloController.REANIMATION_TARGET))
+	# Stamp BEFORE the roll: the tray await spans frames, and a second door must not roll again.
+	unit.unit_properties["reanimated_round"] = opr_army_manager.current_round
+	var faces: Array = await _solo_tray_roll(pool, target, _solo_owner_label(unit), "attack",
+		"Reanimation: %d+ restores models/wounds" % target)
+	var successes := 0
+	for f in faces:
+		if DiceRules.is_success(int(f), target, 0):
+			successes += 1
+	_solo_resolve_reanimation(unit, pool, target, successes)
+
+
+## Apply + narrate a finished Reanimation roll. Split from the roll on purpose: the dice are the one
+## part that cannot be asserted, so every log line and every allocation is reachable with fixed
+## successes (rules-must-log doctrine — a silently correct rule reads like a broken one).
+func _solo_resolve_reanimation(unit: GameUnit, pool: int, target: int, successes: int) -> void:
+	var result: Dictionary = _solo_apply_reanimation(unit, successes)
+	if battle_log == null:
+		return
+	var ai: bool = _solo_is_ai_unit(unit)
+	var models_back: int = int(result.get("models", 0))
+	var wounds_back: int = int(result.get("wounds", 0))
+	battle_log.log_event(BattleLog.Category.COMBAT,
+		"Reanimation: %s rolls %d dice (%d+) — %d success%s → %d model(s), %d wound(s) restored (%d/%d wounds)" % [
+			unit.get_name(), pool, target, successes, ("" if successes == 1 else "es"),
+			models_back, wounds_back, int(result.get("wounds_now", 0)), int(result.get("wounds_max", 0))], ai)
+	if int(result.get("unplaceable", 0)) > 0:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Reanimation: %d successes but only %d models placeable — coherency to non-restored models missing" % [
+				successes, models_back], ai)
+	if models_back > 0 or wounds_back > 0:
+		_solo_rule_float(unit, "Reanimation +%d" % (models_back + wounds_back), Color(0.5, 1.0, 0.6))
+
+
+## The aura-ends notice: a unit that HAS reanimated at some point and now finds its Re-Animator dead
+## learns why the rule stopped — once (the flag keeps it out of every following activation).
+func _solo_reanimation_aura_end(unit: GameUnit) -> void:
+	if battle_log == null or unit == null:
+		return
+	if int(unit.unit_properties.get("reanimated_round", -1)) < 0:
+		return   # never reanimated — nothing was lost from the player's point of view
+	if bool(unit.unit_properties.get("reanimation_aura_ended", false)):
+		return
+	var carrier: GameUnit = SoloController.reanimation_aura_carrier(unit, false)
+	if carrier == null or carrier.get_alive_count() > 0:
+		return
+	unit.unit_properties["reanimation_aura_ended"] = true
+	battle_log.log_event(BattleLog.Category.COMBAT,
+		"Reanimation Aura ends — %s has fallen; %s loses Reanimation" % [carrier.get_name(), unit.get_name()],
+		_solo_is_ai_unit(unit))
+
+
+## Spend `successes` on the unit — the allocation plan (SoloController.reanimation_plan) applied
+## through the SAME revive/heal seams the manual wound workflow uses (wound marker, regiment reform,
+## MP broadcast). A casualty only comes back where it can stand in coherency with a model that was
+## NOT restored in this activation; a success with nowhere legal to put its model simply expires.
+## Returns {models, wounds, unplaceable, wounds_now, wounds_max}.
+func _solo_apply_reanimation(unit: GameUnit, successes: int) -> Dictionary:
+	var out := {"models": 0, "wounds": 0, "unplaceable": 0, "wounds_now": 0, "wounds_max": 0}
+	if unit == null:
+		return out
+	if successes <= 0:
+		out["wounds_now"] = _solo_unit_wounds_now(unit)
+		out["wounds_max"] = _solo_unit_wounds_max(unit)
+		return out
+	var plan: Array = SoloController.reanimation_plan(unit, successes)
+	# The anchors: every model that is ALIVE right now, i.e. was not restored by this activation.
+	var anchors: Array = []
+	for m in SoloController.reanimation_models(unit):
+		if (m as ModelInstance).is_alive:
+			anchors.append(m)
+	var taken: Array = []   # [{p: Vector3, r: float}] — spots this activation already claimed
+	for step in plan:
+		var entry := step as Dictionary
+		var model := entry["model"] as ModelInstance
+		var wounds := int(entry["wounds"])
+		if not bool(entry["revive"]):
+			model.heal(wounds)
+			out["wounds"] = int(out["wounds"]) + wounds
+			if radial_menu_controller != null:
+				radial_menu_controller._update_wound_marker(model)
+			if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
+				network_manager.broadcast_model_wounds(model)
+			continue
+		var spot: Vector3 = _solo_reanimation_spot(model, anchors, taken)
+		if spot == Vector3.INF:
+			out["unplaceable"] = int(out["unplaceable"]) + 1
+			continue
+		if radial_menu_controller != null:
+			radial_menu_controller._revive_single_model(model, unit)
+		else:
+			model.reset_wounds()
+		# Wound currency: the model returns with the ONE wound its first success bought, plus every
+		# further wound spent on it — never at full health unless the dice paid for it.
+		model.wounds_current = clampi(wounds, 1, maxi(model.wounds_max, 1))
+		model.is_alive = true
+		if model.node != null and is_instance_valid(model.node):
+			model.node.global_position = spot
+		taken.append({"p": spot, "r": _solo_base_radius(model)})
+		out["models"] = int(out["models"]) + 1
+		out["wounds"] = int(out["wounds"]) + maxi(wounds - 1, 0)
+		if radial_menu_controller != null:
+			radial_menu_controller._update_wound_marker(model)
+		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
+			network_manager.broadcast_model_wounds(model)
+	out["wounds_now"] = _solo_unit_wounds_now(unit)
+	out["wounds_max"] = _solo_unit_wounds_max(unit)
+	return out
+
+
+## Full wound capacity of a unit including its attached heroes — the denominator of the Reanimation
+## line ("<cur>/<max> wounds"), counting every model whether it is currently standing or not.
+func _solo_unit_wounds_max(unit: GameUnit) -> int:
+	if unit == null:
+		return 0
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h is GameUnit:
+				chain.append(h)
+	var total := 0
+	for c in chain:
+		for m in (c as GameUnit).models:
+			var mi := m as ModelInstance
+			if mi != null:
+				total += maxi(mi.wounds_max, 1)
+	return total
+
+
+## A model's base bounding radius in metres (the placement's blocker/coherency geometry).
+func _solo_base_radius(model: ModelInstance) -> float:
+	var shape := SeparationChecker.shape_for_model(model)
+	return shape.bounding_radius() if shape != null else SeparationChecker.DEFAULT_BASE_RADIUS_M
+
+
+## Where a restored model may stand: "new models may only be restored if they can be placed in
+## coherency with non-restored models". First choice is the spot where it FELL (dead-parking stashed
+## it as revive_transform) when that still touches a survivor; otherwise a free ring position beside
+## the nearest anchor. Vector3.INF = nowhere legal, and the success expires.
+func _solo_reanimation_spot(model: ModelInstance, anchors: Array, taken: Array) -> Vector3:
+	if model == null or model.node == null or not is_instance_valid(model.node) or anchors.is_empty():
+		return Vector3.INF
+	var r: float = _solo_base_radius(model)
+	var fell: Vector3 = model.node.global_position
+	if model.node.has_meta("revive_transform"):
+		fell = (model.node.get_meta("revive_transform") as Transform3D).origin
+	if _solo_reanimation_spot_ok(fell, r, model, anchors, taken):
+		return fell
+	var coherency_m: float = CoherencyChecker.COHERENCY_DISTANCE_INCHES * CoherencyChecker.INCHES_TO_METERS
+	for a in anchors:
+		var anchor := a as ModelInstance
+		if anchor.node == null or not is_instance_valid(anchor.node):
+			continue
+		var a_pos: Vector3 = anchor.node.global_position
+		var a_r: float = _solo_base_radius(anchor)
+		# Rings from "bases touching" out to the coherency limit; 16 headings each, deterministic.
+		for ring in 3:
+			var dist: float = a_r + r + 0.002 + float(ring) * (coherency_m * 0.5)
+			if dist - a_r - r > coherency_m:
+				break
+			for k in 16:
+				var ang: float = TAU * float(k) / 16.0
+				var cand := Vector3(a_pos.x + cos(ang) * dist, a_pos.y, a_pos.z + sin(ang) * dist)
+				if _solo_reanimation_spot_ok(cand, r, model, anchors, taken):
+					return cand
+	return Vector3.INF
+
+
+## Spot test: within 1" (base edge to base edge) of at least one anchor, and clear of every other
+## live base on the table plus the spots this activation already claimed.
+func _solo_reanimation_spot_ok(pos: Vector3, r: float, model: ModelInstance, anchors: Array,
+		taken: Array) -> bool:
+	var coherency_m: float = CoherencyChecker.COHERENCY_DISTANCE_INCHES * CoherencyChecker.INCHES_TO_METERS
+	var coherent := false
+	for a in anchors:
+		var anchor := a as ModelInstance
+		if anchor.node == null or not is_instance_valid(anchor.node):
+			continue
+		var gap: float = Vector2(pos.x - anchor.node.global_position.x, pos.z - anchor.node.global_position.z).length() \
+			- r - _solo_base_radius(anchor)
+		if gap <= coherency_m:
+			coherent = true
+			break
+	if not coherent:
+		return false
+	for t in taken:
+		var td := t as Dictionary
+		var tp: Vector3 = td["p"]
+		if Vector2(pos.x - tp.x, pos.z - tp.z).length() < r + float(td["r"]) + 0.001:
+			return false
+	if opr_army_manager == null:
+		return true
+	for g in opr_army_manager.get_all_game_units():
+		var gu := g as GameUnit
+		if gu == null:
+			continue
+		for om in gu.get_alive_models():
+			var oi := om as ModelInstance
+			if oi == model or oi.node == null or not is_instance_valid(oi.node):
+				continue
+			if bool(oi.node.get_meta("embarked", false)) or bool(oi.node.get_meta("deleted", false)):
+				continue
+			if Vector2(pos.x - oi.node.global_position.x, pos.z - oi.node.global_position.z).length() \
+					< r + _solo_base_radius(oi) + 0.001:
+				return false
+	return true
+
+
 ## Mend (army-book, grill round 2 cut A — official text: "Once per activation, before attacking, pick
 ## one friendly model within 3\" with Tough, and remove D3 wounds from it."): the AI heals the WOUNDED
 ## Tough model (wounds_max > 1 — Tough(1) regiment pools are excluded by the rule's wording) with the
@@ -5952,7 +6223,10 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 	"Shred", "Indirect", "Banner", "Musician", "Sergeant", "Limited", "Armor",
 	# Army-book: Versatile Attack (>9" shooting — the AI picks the EV-better of AP(+1) or +1-to-hit via
 	# AiEv.versatile_best_mode, one truth for the EV metric + the dice). Melee/charge facet is a follow-up.
-	"Versatile Attack"]
+	"Versatile Attack",
+	# Army-book: Reanimation (+ its carrier upgrade Reanimation Aura) — models/wounds return on
+	# activation, one die per missing wound, each 5+ buys one back.
+	"Reanimation", "Reanimation Aura"]
 
 ## The SOLO_MODELED_RULES subset that ALSO steers the AI's behaviour choices (not only the dice math):
 ## targeting overlays (AP/Deadly/Takedown — Solo v3.5.0 p.2), Hold overlays (Relentless/Artillery/
@@ -5968,7 +6242,8 @@ const SOLO_DECISION_RULES: Array = ["AP", "Deadly", "Takedown", "Relentless", "A
 	# Wave-5: all seven steer decisions — Indirect (hold overlay + LOS-free targeting), Musician (move
 	# bands), Banner (charge-risk EV), Sergeant/Shred/Armor (EV inputs), Limited (profile availability).
 	"Shred", "Indirect", "Banner", "Musician", "Sergeant", "Limited", "Armor",
-	"Versatile Attack"]   # >9" AP(+1)/+1-to-hit mode choice steers the shoot EV
+	"Versatile Attack",   # >9" AP(+1)/+1-to-hit mode choice steers the shoot EV
+	"Reanimation"]        # restores BEFORE the action, so the returned models are in the move plan
 
 
 ## The modeled-rule tokens for a unit's game system — mechanics-map-derived (wave 5), constant fallback.
@@ -6511,6 +6786,8 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 			battle_log.log_event(BattleLog.Category.GENERAL,
 				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
 		return
+	# Activation door (Reanimation): the first door a unit opens this round rolls its restores.
+	await _solo_try_reanimation(unit)
 	# Cast-window guard (maintainer decision "Vorfrage" 2026-07-23): spells go BEFORE the attack
 	# ("at any point before attacking" — GF v3.5.1 Caster(X)) and the attack COMPLETES the
 	# activation (X1), so a shoot click would silently burn the cast window. ONE ask per unit per
@@ -6544,6 +6821,8 @@ func solo_begin_cast(unit: GameUnit) -> void:
 				"%s has already activated this round — one activation per unit (GF v3.5.1)" % unit.get_name())
 		return
 	_ensure_solo_controller()
+	# Activation door (Reanimation) — see solo_begin_targeting; the round stamp keeps it to one roll.
+	await _solo_try_reanimation(unit)
 	var member := RadialMenu._caster_member_of(unit)
 	if member == null:
 		if battle_log != null:
@@ -7397,6 +7676,8 @@ func solo_begin_spot(unit: GameUnit) -> void:
 			battle_log.log_event(BattleLog.Category.GENERAL,
 				"%s already spotted this round (once per activation)" % unit.get_name())
 		return
+	# Activation door (Reanimation) — see solo_begin_targeting; the round stamp keeps it to one roll.
+	await _solo_try_reanimation(unit)
 	var own_pid: int = int(unit.unit_properties.get("player_id", 0))
 	var cands: Array = []
 	for e in opr_army_manager.get_all_game_units():

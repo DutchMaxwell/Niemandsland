@@ -72,6 +72,8 @@ PRIMITIVE_PARAMS = {
     "Artillery": {"shooter_hit_bonus": 1, "target_hit_penalty": 2, "over_in": 9.0, "hold_only": True},
     "Immobile": {"hold_only": True},
     "Regeneration": {"ignore_target": 5},
+    # Reanimation (army-book): one die per missing model/wound at activation, each 5+ restores one.
+    "Reanimation": {"restore_target": 5, "coherency_required": True},
     "Self-Repair": {"ignore_target": 6, "all_models": True},
     # Resistance (AoF/GF army-book rule — official Army Forge text: "When a unit where all
     # models have this rule takes wounds, roll one die for each. On a 6+ it is ignored. If the
@@ -313,6 +315,18 @@ WAVE5_PRIMITIVES = {
     "Strafing": "Strafing",
     # AI plausibility wave 1: Aircraft (system-scoped below — GF only).
     "Aircraft": "Aircraft",
+    # 2026-07-31: Reanimation — on activation, roll one die per missing model/wound; each 5+ buys one
+    # back (coherency-gated placement). Its carrier upgrade "Reanimation Aura" stays an aura-grant
+    # entry: the import expands it onto the unit, which then answers to this primitive.
+    "Reanimation": "Reanimation",
+}
+
+# Rules the registry still files as "planned" (mechanic documented, no resolver) whose resolver has
+# SINCE shipped in the game. Without this bridge entry_for() would keep nulling the primitive and the
+# rule would stay listed as manual work in the battle log's inventory. Same seam as WAVE5_PRIMITIVES:
+# the registry sync tool clears these when it next re-runs.
+SHIPPED_PLANNED = {
+    "Reanimation",
 }
 
 # Primitives that only exist in SOME systems' books: the bridging table above is
@@ -370,7 +384,7 @@ def entry_for(system: str, rule: dict, book_version: str) -> dict:
     primitive = mech.get("primitive") or WAVE5_PRIMITIVES.get(name)
     # Coverage wave: a "planned" entry documents the intended mechanic but has NO resolver yet —
     # it must NOT emit as automated (the manual notice stays visible until the resolver ships).
-    if rule.get("status") == "planned":
+    if rule.get("status") == "planned" and name not in SHIPPED_PLANNED:
         primitive = None
     allowed_systems = SYSTEM_SCOPED_PRIMITIVES.get(name)
     if allowed_systems is not None and system not in allowed_systems:

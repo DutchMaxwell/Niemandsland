@@ -358,6 +358,7 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		var cargo_list: Array = context.get("cargo_units", [])
 		var ci := int(action_id.trim_prefix("unload_cargo_"))
 		if ci >= 0 and ci < cargo_list.size():
+			_solo_activation_rules(cargo_list[ci] as GameUnit)
 			_begin_disembark_ghost(cargo_list[ci] as GameUnit)
 		return
 
@@ -368,6 +369,7 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		var ei := int(action_id.trim_prefix("embark_"))
 		if ei >= 0 and ei < embark_list.size():
 			context["embark_target"] = embark_list[ei]
+			_solo_activation_rules(_get_game_unit_from_context(context))
 			_embark_unit(context)
 		return
 
@@ -409,6 +411,7 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		"revive_selected":
 			_revive_selected_dead(context)
 		"disembark":
+			_solo_activation_rules(context.get("disembark_unit") as GameUnit)
 			_disembark_unit(context.get("disembark_unit") as GameUnit)
 		"delete_unit":
 			_delete_unit(context)
@@ -541,6 +544,9 @@ func _toggle_activation(context: Dictionary) -> void:
 		_update_activated_markers(game_unit)
 		unit_deactivated.emit(game_unit)
 	else:
+		# The manual toggle is the catch-all activation door (free dragging has none) — the
+		# activation-triggered rules get their shot before the unit counts as spent.
+		_solo_activation_rules(game_unit)
 		game_unit.activate(1)
 		_update_activated_markers(game_unit)
 		unit_activated.emit(game_unit)
@@ -584,6 +590,19 @@ func _solo_combat_available(game_unit: GameUnit) -> bool:
 	if main_node == null or game_unit == null:
 		return false
 	return bool(main_node.call("solo_combat_available", game_unit)) if main_node.has_method("solo_combat_available") else false
+
+
+## PRE-hook for activation-triggered solo rules (Reanimation): the doors that START a unit's
+## activation without going through main's own combat entries — the manual activation toggle and the
+## transport embark/disembark actions — announce the activation here first. main owns the round stamp,
+## so whichever door opens first is the only one that rolls. Fire-and-forget: the tray roll drives
+## itself, the door's own action continues immediately.
+func _solo_activation_rules(unit: GameUnit) -> void:
+	if unit == null:
+		return
+	var main_node := get_node_or_null("/root/Main")
+	if main_node != null and main_node.has_method("_solo_try_reanimation"):
+		main_node.call("_solo_try_reanimation", unit)
 
 
 func _solo_begin_targeting(context: Dictionary, melee: bool) -> void:

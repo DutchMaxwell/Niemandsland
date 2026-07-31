@@ -1965,10 +1965,17 @@ func _expand_auras(army: OPRApiClient.OPRArmy) -> void:
 			if target == null:
 				continue
 			var rules: Array = (target.get_special_rules() as Array).duplicate()
+			# PROVENANCE (Reanimation wave): remember which names arrived via an aura, so a rule that
+			# only exists while its carrier lives can end when he falls. Rules the unit owns itself
+			# are never listed here, even when an aura would have granted the same name.
+			var from_aura: Array = (target.unit_properties.get("aura_granted", []) as Array).duplicate()
 			for g in granted:
 				if not rules.has(g):
 					rules.append(g)
+					if not from_aura.has(g):
+						from_aura.append(g)
 			target.unit_properties["special_rules"] = rules
+			target.unit_properties["aura_granted"] = from_aura
 
 
 func _attach_joined_heroes(army: OPRApiClient.OPRArmy) -> void:
