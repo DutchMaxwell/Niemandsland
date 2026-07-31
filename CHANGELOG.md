@@ -15,6 +15,14 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   its carrier falls — the battle log says so. Shaken units stay idle and do not reanimate.
   Allocation is automatic in v1 for both sides; letting the owner click each restore is a follow-up.
 
+### Fixed
+- **Aircraft -12″ now bites on YOUR volley too (#231).** Picking the target already measured the
+  shrunk reach, but once the shot was declared each weapon was gated at its printed range — so a
+  24″ gun still rolled dice at an aircraft 20″ away whenever a longer weapon in the same unit kept
+  the target legal, and rear models counted as "in range" that were not. Both now measure the
+  effective reach, exactly like the AI's volley always did. The battle log names the weapons the
+  penalty locks out instead of letting them vanish from the dice.
+
 ## [0.3.11.0-alpha] — 2026-07-31
 
 The community-feedback wave: rules the book always had, and a table that finally SHOWS its work.
