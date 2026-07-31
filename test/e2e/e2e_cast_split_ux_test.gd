@@ -133,6 +133,7 @@ func test_second_pick_declares_and_fire_button_resolves(timeout := 240000) -> vo
 	assert_str(text).contains("fires Rifle at FoeA")
 	assert_str(text).contains("fires Cannon at FoeB")
 	assert_bool(shooter.is_activated).is_true()
+	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads
 
 
 func test_cancel_at_go_stage_leaves_the_unit_free() -> void:

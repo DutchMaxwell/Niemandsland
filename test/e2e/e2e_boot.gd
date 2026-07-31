@@ -33,11 +33,67 @@ static func root_children(tree: SceneTree) -> Array:
 	return tree.root.get_children()
 
 
+## Let the game finish what the test started, then make any leftover death deterministic.
+##
+## THE BUG THIS EXISTS FOR — the wandering "13 orphans" CI report.
+##
+## A solo activation does not end when the resolver the test awaited returns: the round/turn
+## bookkeeping still runs on trailing continuations. One of those clears the shooter's activation, and
+## radial_menu_controller._update_token() takes the ACTIVATED status token down with `remove_child()`
+## + `queue_free()`. Both halves are right in play — remove_child so the token stops counting as
+## active at once, queue_free so the delete lands at the end of the frame — but from remove_child on
+## the subtree is DETACHED, and gdUnit's orphan monitor counts exactly the nodes outside the tree.
+##
+## The timing is what made it wander. gdUnit snapshots orphans in GC_ORPHANS_CHECK.TEST_CASE, right
+## after the test BODY and before after_test, and GdUnitMemoryObserver.gc() only pumps its "give the
+## engine time to process objects marked by queue_free()" frame when something was registered for that
+## context — for a plain test case nothing is, so no frame runs. The trailing continuation therefore
+## lands in the narrow window between the body and the snapshot: measured 0 detached at body end, 13 at
+## after_test. Cleaning up in after_test is provably too late, and cleaning up at the end of the body
+## is too early. The body has to WAIT for the game to go quiet instead.
+##
+## Why exactly 13: the ACTIVATED disc is the marker root + Border + Disc + LetterLabel + one Label3D
+## per character of "ACTIVATED". No other token reaches 13 (CASTS 9, WOUNDS/SHAKEN 10, FATIGUED 12).
+##
+## CALL THIS as the last line of any e2e test that drives a real activation to completion
+## (_run_human_shooting, _run_human_attack_split, _solo_split_commit, _solo_activate_one_ai,
+## _run_solo_ai_turn, _on_solo_human_activated). Assertions come first; the frames only let the engine
+## catch up, so they cannot change what was already asserted.
+static func settle(tree: SceneTree, frames: int = 4) -> void:
+	if tree == null:
+		return
+	for _i in frames:
+		await tree.process_frame
+	flush_pending_frees(tree)
+
+
+## Nodes production DETACHED and condemned, but whose death the tree never got a frame to carry out —
+## see settle() for the whole story. Test-side hygiene only: production keeps its queue_free, and only
+## nodes it already condemned (is_queued_for_deletion) and already detached (no parent) are touched, so
+## live state a test still owns is never freed. Returns how many subtrees were flushed.
+static func flush_pending_frees(tree: SceneTree) -> int:
+	if tree == null or tree.root == null:
+		return 0
+	var freed := 0
+	for id in tree.root.get_orphan_node_ids():
+		# A previous free() in this same sweep may already have taken this node down as a child.
+		var node := instance_from_id(id) as Node
+		if node == null or not is_instance_valid(node):
+			continue
+		if not node.is_queued_for_deletion() or node.get_parent() != null:
+			continue
+		node.free()   # free(), not queue_free(): the whole point is not to need another frame
+		freed += 1
+	return freed
+
+
 ## Free everything main.gd parked on /root during a boot. Call from after_test() with the snapshot
-## taken in before_test().
+## taken in before_test(). Also flushes the detached-and-condemned subtrees described on
+## flush_pending_frees() — every e2e suite calls this, so the whole directory gets that hygiene.
 static func free_stray_root_nodes(tree: SceneTree, before: Array) -> void:
 	if tree == null or tree.root == null:
 		return
+	flush_pending_frees(tree)
 	for child in tree.root.get_children():
 		if before.has(child):
 			continue
