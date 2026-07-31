@@ -62,9 +62,11 @@ func test_indirect_may_target_without_los_plain_weapon_may_not() -> void:
 	_wall_between(_main.terrain_overlay)
 	var target := E2EBoot.make_unit(_main, 2, "Hidden", [Vector3(0.3, 0, 0)])
 	(target.models[0] as ModelInstance).model_index = 0
-	# The plain gun still refuses with the LOS reason (no over-grant)...
+	# The plain gun still refuses with the LOS reason (no over-grant). #205 appends a
+	# blocker detail ("— nearest lane blocked by ...") — that wave has its own suite,
+	# here only the refusal itself is the claim.
 	var plain := _armed_unit(1, "PlainGun", Vector3(-0.3, 0, 0), ["AP(1)"])
-	assert_str(_main._solo_validate_target(plain, target, false)).is_equal("no model has line of sight")
+	assert_str(_main._solo_validate_target(plain, target, false)).contains("no model has line of sight")
 	# ...the Indirect gun may target as if in line of sight (#182, the community case).
 	var arty := _armed_unit(1, "Arty", Vector3(-0.3, 0, 0), ["Indirect", "Blast(3)"])
 	assert_str(_main._solo_validate_target(arty, target, false)).is_equal("")
