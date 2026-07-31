@@ -327,6 +327,8 @@ WAVE5_PRIMITIVES = {
 # the registry sync tool clears these when it next re-runs.
 SHIPPED_PLANNED = {
     "Reanimation",
+    "Caster Group",
+    "Spell Accumulator",
 }
 
 # Primitives that only exist in SOME systems' books: the bridging table above is

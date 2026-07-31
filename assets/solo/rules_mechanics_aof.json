@@ -40,6 +40,7 @@
   "Buccaneer Boost",
   "Buccaneer Boost Aura",
   "Caster",
+  "Caster Group",
   "Casting Buff",
   "Casting Debuff",
   "Changebound",
@@ -284,6 +285,7 @@
   "Speed Debuff",
   "Speed Feat",
   "Speed Feat Aura",
+  "Spell Accumulator",
   "Spell Conduit",
   "Steadfast",
   "Steadfast Aura",
@@ -1761,9 +1763,15 @@
     "book_version": "3.5.3"
    },
    "Spell Accumulator": {
-    "primitive": null,
+    "primitive": "Spell Accumulator",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "tokens_per_round": "X",
+     "max_tokens": 6,
+     "share_range_in": 12,
+     "requires_not_shaken": true
+    }
    },
    "Stealth Buff": {
     "primitive": "Stealth",
@@ -1963,9 +1971,15 @@
     }
    },
    "Spell Accumulator": {
-    "primitive": null,
+    "primitive": "Spell Accumulator",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "tokens_per_round": "X",
+     "max_tokens": 6,
+     "share_range_in": 12,
+     "requires_not_shaken": true
+    }
    },
    "Spell Conduit": {
     "primitive": "Spell Conduit",
@@ -3133,9 +3147,12 @@
     }
    },
    "Caster Group": {
-    "primitive": null,
+    "primitive": "Caster",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "pooled": true
+    }
    },
    "Good Fighter": {
     "primitive": "Shot Modifier",
@@ -4086,9 +4103,12 @@
     }
    },
    "Caster Group": {
-    "primitive": null,
+    "primitive": "Caster",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "pooled": true
+    }
    },
    "Coordinate": {
     "primitive": null,
@@ -5448,9 +5468,15 @@
     "book_version": "3.5.3"
    },
    "Spell Accumulator": {
-    "primitive": null,
+    "primitive": "Spell Accumulator",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "tokens_per_round": "X",
+     "max_tokens": 6,
+     "share_range_in": 12,
+     "requires_not_shaken": true
+    }
    },
    "Swift": {
     "primitive": "Swift",
@@ -5993,9 +6019,15 @@
     }
    },
    "Spell Accumulator": {
-    "primitive": null,
+    "primitive": "Spell Accumulator",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "tokens_per_round": "X",
+     "max_tokens": 6,
+     "share_range_in": 12,
+     "requires_not_shaken": true
+    }
    },
    "Split": {
     "primitive": null,

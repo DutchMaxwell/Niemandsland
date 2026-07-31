@@ -6335,7 +6335,7 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 	"Versatile Attack",
 	# Army-book: Reanimation (+ its carrier upgrade Reanimation Aura) — models/wounds return on
 	# activation, one die per missing wound, each 5+ buys one back.
-	"Reanimation", "Reanimation Aura"]
+	"Reanimation", "Reanimation Aura", "Caster Group", "Spell Accumulator"]
 
 ## The SOLO_MODELED_RULES subset that ALSO steers the AI's behaviour choices (not only the dice math):
 ## targeting overlays (AP/Deadly/Takedown — Solo v3.5.0 p.2), Hold overlays (Relentless/Artillery/
