@@ -3954,9 +3954,41 @@ func _solo_apply_reanimation(unit: GameUnit, successes: int) -> Dictionary:
 			radial_menu_controller._update_wound_marker(model)
 		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
 			network_manager.broadcast_model_wounds(model)
+		# ORDER MATTERS: the wounds message above un-parks the model on the peer (at the spot where
+		# it FELL); only then does the correction below put it where the placer actually stood it.
+		_broadcast_restored_position(model)
 	out["wounds_now"] = _solo_unit_wounds_now(unit)
 	out["wounds_max"] = _solo_unit_wounds_max(unit)
 	return out
+
+
+## Push a restored model's REAL table position to the peers.
+##
+## broadcast_model_wounds carries no position, so a peer that receives "alive again" rebuilds the
+## spot itself: set_loose_model_dead(dead=false) returns the model to the stashed revive_transform —
+## the point where it fell. The placer here does NOT always pick that point: a blocked fall point
+## sends the model to a free ring position beside a survivor, and that choice never left this
+## machine. Host and guest then showed the same model in different places, with coherency, range
+## and line of sight following the wrong one.
+##
+## Same correction the ghost-placed disembark sends (radial_menu_controller._disembark_unit): the
+## state message first, then the real positions through the ordinary move channel. No new message
+## type, so the wire format stays compatible with older clients.
+##
+## Regiment members are deliberately NOT addressed here: they live under their tray, so the move
+## handler (which walks ObjectManager's direct children) cannot reach them anyway — their block is
+## re-ranked from the wounds message on both sides.
+func _broadcast_restored_position(model: ModelInstance) -> void:
+	if model == null or network_manager == null or not network_manager.has_method("broadcast_move"):
+		return
+	if not network_manager.is_multiplayer_active():
+		return
+	var node: Node3D = model.node
+	if node == null or not is_instance_valid(node):
+		return
+	if node.has_meta(RegimentTray.MEMBER_META) or not node.has_meta("network_id"):
+		return
+	network_manager.broadcast_move(node.get_meta("network_id"), node.global_position)
 
 
 ## Full wound capacity of a unit including its attached heroes — the denominator of the Reanimation
