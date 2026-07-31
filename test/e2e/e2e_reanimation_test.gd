@@ -92,10 +92,14 @@ func test_activation_rolls_the_missing_wounds_and_stamps_the_round() -> void:
 	assert_int(_count("Reanimation: Bots rolls")) \
 		.override_failure_message("only the FIRST activation door may roll") \
 		.is_equal(1)
-	# A new round re-arms it.
+	# A new round re-arms it. Re-open the pool first: the round-1 roll may have HEALED the
+	# deficit (5+ luck), and a whole unit legitimately does not roll — which is not what
+	# this case tests (CI flake: the assert below raced the dice).
 	_main.opr_army_manager.current_round += 1
-	if _main.opr_army_manager.get_all_game_units().size() > 0:
-		await _main._solo_try_reanimation(u)
+	var m0 := u.models[3] as ModelInstance
+	m0.wounds_current = 0
+	m0.is_alive = false
+	await _main._solo_try_reanimation(u)
 	assert_int(_count("Reanimation: Bots rolls")).is_greater(1)
 
 
