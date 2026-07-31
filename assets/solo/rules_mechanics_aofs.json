@@ -14,6 +14,7 @@
   "Aircraft",
   "Ambush",
   "Ambush Aura",
+  "Ambush Re-Deployment",
   "Angelic Blessing",
   "Angelic Blessing Boost",
   "Angelic Blessing Boost Buff",
@@ -1836,9 +1837,13 @@
   },
   "deep_sea_elves": {
    "Ambush Re-Deployment": {
-    "primitive": null,
+    "primitive": "Ambush",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "re_reserve": true,
+     "uses_per_game": 1
+    }
    },
    "Bane in Melee Aura": {
     "primitive": "Bane",

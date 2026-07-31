@@ -133,6 +133,7 @@ func test_ambush_reserve_arrives_round_two_and_empties() -> void:
 	var ambusher := _unit(2, [Vector3(3, 0, 3)])        # held in reserve (staging position)
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
 	army.game_units = {enemy.unit_id: enemy, ambusher.unit_id: ambusher}
+	army.current_round = 2   # base Ambush arrives from round 2 (p.13) — the arrival gate reads this
 
 	var solo: SoloController = auto_free(SoloController.new())
 	add_child(solo)
@@ -157,6 +158,7 @@ func test_repel_ambushers_pushes_the_arrival_ring_to_12_inches() -> void:
 	var ambusher := _unit(2, [Vector3(3, 0, 3)])
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
 	army.game_units = {enemy.unit_id: enemy, ambusher.unit_id: ambusher}
+	army.current_round = 2
 	var solo: SoloController = auto_free(SoloController.new())
 	add_child(solo)
 	solo.setup(army, null, null, 1, 2)
@@ -212,6 +214,140 @@ func test_seize_objectives_skips_ambush_units_on_their_arrival_round() -> void:
 	assert_int(int((SoloController.seize_objectives(locked, obj, [0])["owners"] as Array)[0])).is_equal(0)
 	var free: Array = [{"player": 2, "shaken": false, "ambush_locked": false, "positions": [Vector3(0, 0, 0)]}]
 	assert_int(int((SoloController.seize_objectives(free, obj, [0])["owners"] as Array)[0])).is_equal(2)
+
+
+# === Ambush variants, wave 1 (Ambush Beacon / Rapid Ambush / Ambush Re-Deployment) ============
+
+const INCH_M := 0.0254
+
+
+## The prefix trap that made this wave necessary: GameUnit.has_special_rule matches by PREFIX, so a
+## beacon or re-deployment carrier answered TRUE to "Ambush" and unit_has_ambush pulled it off the
+## table into reserve although both deploy normally. unit_carries_rule matches EXACTLY.
+func test_rule_detection_is_exact_and_rapid_ambush_is_the_only_alias() -> void:
+	var beacon := _unit(2, [Vector3.ZERO])
+	beacon.unit_properties["special_rules"] = ["Ambush Beacon"]
+	assert_bool(beacon.has_special_rule("Ambush")) \
+		.override_failure_message("fixture check — the prefix reader must still answer true here") \
+		.is_true()
+	assert_bool(SoloController.unit_carries_rule(beacon, "Ambush")).is_false()
+	assert_bool(SoloController.unit_carries_rule(beacon, SoloController.RULE_AMBUSH_BEACON)).is_true()
+	assert_bool(SoloController.unit_has_ambush(beacon)) \
+		.override_failure_message("a beacon carrier deploys NORMALLY — it must never be set aside") \
+		.is_false()
+
+	var redeploy := _unit(2, [Vector3.ZERO])
+	redeploy.unit_properties["special_rules"] = ["Ambush Re-Deployment"]
+	assert_bool(SoloController.unit_has_ambush(redeploy)) \
+		.override_failure_message("Re-Deployment carriers deploy normally and leave LATER") \
+		.is_false()
+
+	# Rapid Ambush "counts as having Ambush" — the one true alias, item-granted included.
+	var rapid := _unit(2, [Vector3.ZERO])
+	rapid.unit_properties["special_rules"] = ["Rapid Ambush"]
+	assert_bool(SoloController.unit_has_ambush(rapid)).is_true()
+	var granted := _unit(2, [Vector3.ZERO])
+	granted.unit_properties["item_grants"] = {"Teleport Relay": ["Rapid Ambush"]}
+	assert_bool(SoloController.unit_has_ambush(granted)).is_true()
+	# Ratings are stripped, plain Ambush still counts.
+	var plain := _unit(2, [Vector3.ZERO])
+	plain.unit_properties["special_rules"] = ["Ambush", "Tough(3)"]
+	assert_bool(SoloController.unit_has_ambush(plain)).is_true()
+
+
+## Ambush Beacon (maintainer ruling): within 6" of the beacon MODEL every enemy distance restriction
+## falls away. The pure predicate is the whole waiver — nearest beacon wins, 6" is inclusive.
+func test_beacon_cover_waives_inside_six_inches_only() -> void:
+	var beacons: Array = [{"pos": Vector2.ZERO, "radius_m": 6.0 * INCH_M, "unit": "Relay"}]
+	var inside: Dictionary = SoloController.beacon_cover(Vector2(5.0 * INCH_M, 0.0), beacons)
+	assert_bool(bool(inside["covered"])).is_true()
+	assert_str(str(inside["name"])).is_equal("Relay")
+	assert_float(float(inside["dist_in"])).is_equal_approx(5.0, 0.01)
+	# ROT-Beweis: one inch further out and the SAME machinery refuses the waiver.
+	var outside: Dictionary = SoloController.beacon_cover(Vector2(7.0 * INCH_M, 0.0), beacons)
+	assert_bool(bool(outside["covered"])) \
+		.override_failure_message("7\" is outside the 6\" circle — the waiver must not apply") \
+		.is_false()
+	# Exactly on the rim still counts ("within 6\"").
+	assert_bool(bool(SoloController.beacon_cover(Vector2(6.0 * INCH_M, 0.0), beacons)["covered"])).is_true()
+	# No beacon at all: {} — the caller keeps the normal rings.
+	assert_bool(SoloController.beacon_cover(Vector2.ZERO, []).is_empty()).is_true()
+	# Two beacons: the NEAREST one is reported (it decides the waiver and names the log line).
+	var two: Array = [{"pos": Vector2(1.0, 0.0), "radius_m": 6.0 * INCH_M, "unit": "Far"},
+		{"pos": Vector2(2.0 * INCH_M, 0.0), "radius_m": 6.0 * INCH_M, "unit": "Near"}]
+	assert_str(str(SoloController.beacon_cover(Vector2.ZERO, two)["name"])).is_equal("Near")
+
+
+## The beacon log line names the real distance to the enemy — measured base-edge true (pad_m).
+func test_nearest_enemy_gap_is_edge_true_and_infinite_without_enemies() -> void:
+	var entries: Array = [{"pos": Vector2(10.0 * INCH_M, 0.0), "pad_m": 1.0 * INCH_M}]
+	assert_float(SoloController.nearest_enemy_gap_in(Vector2.ZERO, entries)).is_equal_approx(9.0, 0.01)
+	assert_float(SoloController.nearest_enemy_gap_in(Vector2.ZERO, [Vector2(4.0 * INCH_M, 0.0)])).is_equal_approx(4.0, 0.01)
+	assert_bool(is_inf(SoloController.nearest_enemy_gap_in(Vector2.ZERO, []))).is_true()
+
+
+## Rapid Ambush ("may be deployed at the start of any round, including the first") vs base Ambush
+## (round 2+), and Ambush Re-Deployment's EXACT return date.
+func test_arrival_round_gate_reads_rapid_ambush_and_the_return_date() -> void:
+	var plain := _unit(2, [Vector3.ZERO])
+	plain.unit_properties["special_rules"] = ["Ambush"]
+	assert_int(SoloController.ambush_earliest_round(plain)).is_equal(2)
+	assert_bool(SoloController.may_arrive_this_round(plain, 1)) \
+		.override_failure_message("base Ambush may NOT arrive in round 1 (GF/AoF v3.5.1 p.13)") \
+		.is_false()
+	assert_bool(SoloController.may_arrive_this_round(plain, 2)).is_true()
+
+	var rapid := _unit(2, [Vector3.ZERO])
+	rapid.unit_properties["special_rules"] = ["Rapid Ambush"]
+	assert_int(SoloController.ambush_earliest_round(rapid)).is_equal(1)
+	assert_bool(SoloController.may_arrive_this_round(rapid, 1)).is_true()
+	assert_bool(SoloController.may_arrive_this_round(rapid, 3)).is_true()
+
+	# "deploy it ... at the beginning of the NEXT round": exactly that round, not earlier, not later.
+	var back := _unit(2, [Vector3.ZERO])
+	back.unit_properties["special_rules"] = ["Rapid Ambush"]   # even a rapid carrier waits for its date
+	back.unit_properties["ambush_return_round"] = 3
+	assert_bool(SoloController.may_arrive_this_round(back, 2)).is_false()
+	assert_bool(SoloController.may_arrive_this_round(back, 3)).is_true()
+	assert_bool(SoloController.may_arrive_this_round(back, 4)) \
+		.override_failure_message("the return date is exact — a missed round does not become a free choice") \
+		.is_false()
+
+
+## "a unit where ALL models have this rule" — a joined hero without it locks the whole unit out.
+func test_ambush_redeployment_needs_the_rule_on_every_model_and_once_per_game() -> void:
+	var jesters := _unit(2, [Vector3.ZERO, Vector3(0.05, 0, 0)])
+	jesters.unit_properties["special_rules"] = ["Ambush Re-Deployment"]
+	assert_bool(SoloController.unit_all_models_ambush_redeploy(jesters)).is_true()
+	assert_bool(SoloController.can_ambush_redeploy(jesters)).is_true()
+
+	var hero := _unit(2, [Vector3(0.1, 0, 0)])
+	hero.unit_properties["special_rules"] = ["Hero"]
+	jesters.unit_properties["attached_heroes"] = [hero]
+	assert_bool(SoloController.unit_all_models_ambush_redeploy(jesters)) \
+		.override_failure_message("a joined hero WITHOUT the rule breaks the 'all models' quantifier") \
+		.is_false()
+	assert_bool(SoloController.can_ambush_redeploy(jesters)).is_false()
+	# The same hero WITH the rule re-opens it.
+	hero.unit_properties["special_rules"] = ["Hero", "Ambush Re-Deployment"]
+	assert_bool(SoloController.can_ambush_redeploy(jesters)).is_true()
+
+	# Once per game, and never while already off the table.
+	jesters.unit_properties["ambush_redeploy_used"] = true
+	assert_bool(SoloController.can_ambush_redeploy(jesters)).is_false()
+	jesters.unit_properties["ambush_redeploy_used"] = false
+	jesters.unit_properties["ambush_reserve"] = true
+	assert_bool(SoloController.can_ambush_redeploy(jesters)).is_false()
+
+
+## The AI's documented withdraw heuristic: leave when under pressure, never off a held marker.
+func test_ambush_redeployment_ai_policy_leaves_under_pressure_but_never_off_a_marker() -> void:
+	assert_bool(SoloController.ambush_redeploy_ai_wants(6.0, false, false)).is_true()    # enemy in the charge band
+	assert_bool(SoloController.ambush_redeploy_ai_wants(30.0, false, true)).is_true()    # Shaken far away
+	assert_bool(SoloController.ambush_redeploy_ai_wants(30.0, false, false)).is_false()  # safe → stay
+	assert_bool(SoloController.ambush_redeploy_ai_wants(2.0, true, true)) \
+		.override_failure_message("walking off a held marker throws the mission — never worth it") \
+		.is_false()
 
 
 ## Field-test finding 6: cover feeds the EV from REAL terrain, not a constant. majority_in_cover reads the
@@ -701,6 +837,10 @@ func test_should_prompt_human_ambush_only_from_round_two_with_reserves() -> void
 	assert_bool(S.should_prompt_human_ambush(2, 0)).is_false()   # round 2 but nothing held
 	assert_bool(S.should_prompt_human_ambush(2, 1)).is_true()    # round 2 with a reserve → ASK
 	assert_bool(S.should_prompt_human_ambush(4, 3)).is_true()    # any later round too
+	# Rapid Ambush ("including the first"): a round-1 prompt is owed as soon as ONE carrier waits —
+	# but only for the carrier, and never with an empty reserve.
+	assert_bool(S.should_prompt_human_ambush(1, 2, 1)).is_true()
+	assert_bool(S.should_prompt_human_ambush(1, 0, 1)).is_false()
 
 
 func test_set_aside_human_ambush_marks_only_the_humans_ambush_units() -> void:

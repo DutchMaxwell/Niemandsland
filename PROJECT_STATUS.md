@@ -64,16 +64,25 @@ computed per model from the base edge — walls and intervening units block, woo
 area terrain (see in and out, never through), containers block hard — so ruler, sight fan and
 engine always agree.
 
-**Not automated (named, not hidden)** — twelve rule names are **not** resolved by the game and
-are named in full rather than hidden behind an "…": the cross-unit caster economy (**Spell
-Accumulator**, **Caster Group**, **Extended Buff Range**), the rules that create or return units
-(**Spawn**, **Split**, **Reinforcement**) and the movement / deployment set
-(**Coordinate**, **Delayed Action**, **Traversal**, **Ambush Beacon**, **Ambush Re-Deployment**,
-**Rapid Ambush**). The per-unit notice in the battle log names the ones your list actually
-contains, so you can apply them by hand. Everything else in the books is modeled — note that
-plain *Re-Deployment*, *Grounded Reinforcement* and *Reanimation* **are** automated; only the two
-Ambush variants above are not. The follow-up resolver waves are post-release work (see
+**Not automated (named, not hidden)** — seven rule names are **not** resolved by the game and
+are named in full rather than hidden behind an "…": the cross-unit caster aura (**Extended Buff
+Range**), the rules that create or return units (**Spawn**, **Split**, **Reinforcement**) and the
+movement / deployment set (**Coordinate**, **Delayed Action**, **Traversal**). The per-unit notice
+in the battle log names the ones your list actually contains, so you can apply them by hand.
+Everything else in the books is modeled — including plain *Re-Deployment*, *Grounded
+Reinforcement*, *Reanimation*, *Caster Group*, *Spell Accumulator* and all three Ambush variants
+(see below). The follow-up resolver waves are post-release work (see
 [`docs/ROADMAP.md`](docs/ROADMAP.md)).
+
+**Ambush variants** — **Ambush Beacon** waives *every* enemy distance restriction (the 9″/3″
+arrival ring and an enemy's *Repel Ambushers* 12″ alike) for a reserve that lands within 6″ of the
+beacon model; the AI actively looks for those circles, and your own arrivals get the waiver instead
+of the honour-system warning. **Rapid Ambush** arrives from round 1 — after deployment and the
+Scout phase, as a round-start beat, so it never buys an extra deployment slot. **Ambush
+Re-Deployment** lets a unit whose models all carry it leave the table once per game at the end of
+its activation and return, as if from Ambush, at the start of the *next* round exactly. Every one
+of them writes its own battle-log line — including when a beacon stood close by and did *not*
+apply.
 
 **Transports (stage 1)** — units embark and unload through the radial menu with book-exact
 capacity, disembark into an automatic 6″ formation, and a destroyed transport spills its cargo
