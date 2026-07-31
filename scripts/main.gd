@@ -14218,8 +14218,12 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 				continue
 			var modifier := {"hit_mod": int(sp.get("hit_mod", 0)), "casting_mod": int(sp.get("casting_mod", 0)),
 				"morale_mod": int(sp.get("morale_mod", 0))}
+			# Wave 4 recon find: the buff data carries its own scope ("shooting"/"melee" —
+			# Precision Shooter/Fighter Buff) and AiSpell.mods_for honours it, but this record
+			# hard-coded "" — a shooting-only +1 silently applied in melee too.
 			_solo_record_spell_mod(tgt, n, {"modifier": modifier,
-				"grants_rule": str(sp.get("grants_rule", "")), "scope": "", "beneficiary": "",
+				"grants_rule": str(sp.get("grants_rule", "")), "scope": str(sp.get("scope", "")),
+				"beneficiary": "",
 				"duration": ("once" if bool(sp.get("once", true)) else "round")})
 			if battle_log != null:
 				var bits: PackedStringArray = []
