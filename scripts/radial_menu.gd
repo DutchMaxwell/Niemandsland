@@ -456,7 +456,27 @@ static func solo_combat_items(game_unit: GameUnit = null) -> Array[RadialMenuIte
 	# spell picker -> target -> boost -> automatic resolution.
 	if game_unit != null and _caster_member_of(game_unit) != null:
 		out.append(RadialMenuItem.new("solo_cast", "Cast", "✦", true, "Cast a spell — pick it, pick a target, boost, auto-resolved"))
+	# Spotter UX (maintainer 31.07.): Precision Spotter is a radial action — the player picks
+	# the target (book: "pick one enemy unit within 36\" and in line of sight"), 4+ marks it.
+	if game_unit != null and _spotter_member_of(game_unit) != null:
+		out.append(RadialMenuItem.new("solo_spot", "Spot", "◎", true,
+			"Precision Spotter: pick an enemy within 36\" line of sight — on 4+ a marker lands; attackers may remove markers for +1 to hit each"))
 	return out
+
+
+## The member (unit itself or a joined hero) bearing Precision Spotter, or null.
+static func _spotter_member_of(game_unit: GameUnit) -> GameUnit:
+	var members: Array = [game_unit]
+	if game_unit.has_method("get_attached_heroes"):
+		members = members + game_unit.get_attached_heroes()
+	for m in members:
+		var mu := m as GameUnit
+		if mu == null or mu.get_alive_count() <= 0:
+			continue
+		if mu.has_special_rule("Precision Spotter") \
+				or not RulesRegistry.unit_rules_of_primitive(mu, "Precision Spotter").is_empty():
+			return mu
+	return null
 
 
 ## The unit member (unit itself or a joined hero) that can pay for a cast right now, or null.

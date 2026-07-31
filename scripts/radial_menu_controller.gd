@@ -378,6 +378,8 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_solo_begin_targeting(context, true)
 		"solo_cast":
 			_solo_begin_cast(context)
+		"solo_spot":
+			_solo_begin_spot(context)
 		"select_unit":
 			_select_entire_unit(context)
 		"wounds":
@@ -596,6 +598,13 @@ func _solo_begin_cast(context: Dictionary) -> void:
 	var main_node := get_node_or_null("/root/Main")
 	if unit != null and main_node != null and main_node.has_method("solo_begin_cast"):
 		main_node.call("solo_begin_cast", unit)
+
+
+func _solo_begin_spot(context: Dictionary) -> void:
+	var unit := _get_game_unit_from_context(context)
+	var main_node := get_node_or_null("/root/Main")
+	if unit != null and main_node != null and main_node.has_method("solo_begin_spot"):
+		main_node.call("solo_begin_spot", unit)
 
 
 func _get_game_unit_from_context(context: Dictionary) -> GameUnit:

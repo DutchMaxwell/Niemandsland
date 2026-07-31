@@ -6670,6 +6670,11 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			var attacker: GameUnit = _solo_target_mode.get("unit")
 			# Spell wave F2: cast mode accepts any unit from the precomputed LEGAL set (friendly-side
 			# spells target OWN units — the attack-path AI-only filter below must not run).
+			# Spotter UX (maintainer 31.07.): spot mode owns the click — one pick, one roll.
+			if _solo_target_mode.has("spot"):
+				if target != null:
+					_solo_spot_click(target)
+				return true
 			if _solo_target_mode.has("cast_entry"):
 				if target != null:
 					_solo_cast_click(target)
@@ -7267,35 +7272,136 @@ func _solo_try_precision_spot(unit: GameUnit) -> void:
 	var faces: Array = await _solo_tray_roll(1, 4, _solo_owner_label(unit), "attack",
 		"Precision Spotter: 4+ marks %s" % best.get_name())
 	if not faces.is_empty() and int(faces[0]) >= 4:
-		best.unit_properties["spot_markers"] = int(best.unit_properties.get("spot_markers", 0)) + 1
-		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT,
-				"Precision Spotter: %s marks %s (marker placed — friendly attackers may remove markers for +1 to hit each)" % [
-				unit.get_name(), best.get_name()], _solo_is_ai_unit(unit))
-		_solo_rule_float(best, "Spotted!", Color(1.0, 0.6, 0.9))
+		_solo_place_spot_marker(unit, best)
 	elif battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Precision Spotter: %s misses the mark on %s (needed 4+)" % [unit.get_name(), best.get_name()], _solo_is_ai_unit(unit))
 
 
-## Consume the target's spot markers for this volley: +X to hit, markers removed (the
-## rule's attacker choice is V1-automatic — leaving them lie is never better in our flows).
-func _solo_consume_spot_markers(target: GameUnit) -> int:
+## Shared marker placement (AI auto-spot + the radial spot): property, VISIBLE "Spotted"
+## token on the target, log + float (rules-must-log).
+func _solo_place_spot_marker(spotter: GameUnit, target: GameUnit) -> void:
+	var n := int(target.unit_properties.get("spot_markers", 0)) + 1
+	target.unit_properties["spot_markers"] = n
+	if radial_menu_controller != null and radial_menu_controller.token_library != null:
+		if not radial_menu_controller.token_library.has("Spotted"):
+			radial_menu_controller.token_library.define("Spotted", Color(1.0, 0.55, 0.15), false,
+				"Precision Spotter mark — attackers may remove markers for +1 to hit each")
+		if n == 1:
+			radial_menu_controller.apply_library_token(target, "Spotted")
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Precision Spotter: %s marks %s (%d marker%s — attackers may remove markers for +1 to hit each)" % [
+			spotter.get_name(), target.get_name(), n, ("" if n == 1 else "s")], _solo_is_ai_unit(spotter))
+	_solo_rule_float(target, "Spotted!", Color(1.0, 0.6, 0.9))
+
+
+## Remove `count` spot markers from the target for +X to hit this volley (-1 = all). Partial
+## removal leaves the rest lying (the book's attacker choice); the visible token goes with
+## the last marker.
+func _solo_consume_spot_markers(target: GameUnit, count: int = -1) -> int:
+	var sm := int(target.unit_properties.get("spot_markers", 0))
+	var take := sm if count < 0 else clampi(count, 0, sm)
+	if take <= 0:
+		return 0
+	if take >= sm:
+		target.unit_properties.erase("spot_markers")
+		if radial_menu_controller != null:
+			radial_menu_controller.remove_library_token(target, "Spotted")
+	else:
+		target.unit_properties["spot_markers"] = sm - take
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Precision Spotter: %d marker%s removed — +%d to hit this volley%s" % [
+			take, ("" if take == 1 else "s"), take,
+			(" (%d remain%s)" % [sm - take, ("s" if sm - take == 1 else "")]) if take < sm else ""], true)
+	_solo_rule_float(target, "Markers spent +%d" % take)
+	return take
+
+
+## Spotter UX (maintainer 31.07.): removing markers is the ATTACKER's choice before the
+## to-hit roll, caster-points style (+/- dialog). Headless/batch keeps the take-all policy.
+func _solo_offer_spot_markers(attacker: GameUnit, target: GameUnit) -> int:
 	var sm := int(target.unit_properties.get("spot_markers", 0))
 	if sm <= 0:
 		return 0
-	target.unit_properties.erase("spot_markers")
+	if _solo_batch or DisplayServer.get_name() == "headless":
+		return _solo_consume_spot_markers(target)
+	var dlg := InterferenceDialog.new()
+	add_child(dlg)
+	var n: int = await dlg.ask(attacker.get_name(), "", target.get_name(), 0, 0, sm, "spot")
+	return _solo_consume_spot_markers(target, n)
+
+
+## Spotter UX (maintainer 31.07.): Precision Spotter is a RADIAL action with the player's
+## own target pick (book: "pick one enemy unit within 36\" and in line of sight of this
+## model and roll one die, on a 4+ place a marker on it") — once per activation,
+## round-stamped. Candidates get pulse rings; the click rolls in the tray.
+func solo_begin_spot(unit: GameUnit) -> void:
+	if unit == null or solo_controller == null or opr_army_manager == null:
+		return
+	if int(unit.unit_properties.get("spotted_round", -1)) == opr_army_manager.current_round:
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"%s already spotted this round (once per activation)" % unit.get_name())
+		return
+	var own_pid: int = int(unit.unit_properties.get("player_id", 0))
+	var cands: Array = []
+	for e in opr_army_manager.get_all_game_units():
+		var eu := e as GameUnit
+		if eu == null or eu.get_alive_count() <= 0 or SoloController.unit_in_reserve(eu):
+			continue
+		if int(eu.unit_properties.get("player_id", 0)) == own_pid:
+			continue
+		if solo_controller.nearest_melee_gap_in(unit, eu) <= 36.0 and _solo_has_los(unit, eu):
+			cands.append(eu)
+	if cands.is_empty():
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"%s: no enemy within 36\" line of sight to spot" % unit.get_name())
+		return
+	var rings: Array = []
+	for cu in cands:
+		rings.append(_solo_spawn_pulse_ring(solo_controller.unit_centre(cu), Color(1.0, 0.6, 0.9)))
+	_solo_target_mode = {"unit": unit, "spot": true, "spot_valid": cands, "cast_rings": rings}
 	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"%s: pick a target to spot (%d in range, 4+ places a marker) — right-click cancels" % [
+			unit.get_name(), cands.size()])
+
+
+## Spot-mode click: one pick, one tray roll. The once-per-activation stamp burns on the
+## PICK (not on opening the mode — a cancel must not cost the spot).
+func _solo_spot_click(target: GameUnit) -> void:
+	var spotter: GameUnit = _solo_target_mode.get("unit")
+	if not (_solo_target_mode.get("spot_valid", []) as Array).has(target):
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"%s is not spottable (side, 36\" range or line of sight)" % target.get_name())
+		return
+	_solo_end_targeting()
+	if opr_army_manager != null:
+		spotter.unit_properties["spotted_round"] = opr_army_manager.current_round
+	_solo_resolve_spot(spotter, target)
+
+
+## Fire-and-forget: the spot roll (4+) in the tray, then the shared marker placement.
+func _solo_resolve_spot(spotter: GameUnit, target: GameUnit) -> void:
+	var faces: Array = await _solo_tray_roll(1, 4, _solo_owner_label(spotter), "attack",
+		"Precision Spotter: 4+ marks %s" % target.get_name())
+	if not faces.is_empty() and int(faces[0]) >= 4:
+		_solo_place_spot_marker(spotter, target)
+	elif battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
-			"Precision Spotter: %d marker%s removed — +%d to hit this volley" % [sm, ("" if sm == 1 else "s"), sm], true)
-	_solo_rule_float(target, "Markers spent +%d" % sm)
-	return sm
+			"Precision Spotter: %s misses the mark on %s (needed 4+)" % [
+			spotter.get_name(), target.get_name()], _solo_is_ai_unit(spotter))
 
 
 ## The attack's activation completion (X1 double-shoot exploit) — shared by the single-target
 ## flow and #226 split fire (which completes ONCE, after its second volley).
 func _solo_complete_human_attack(attacker: GameUnit) -> void:
-	await _solo_try_precision_spot(attacker)
+	# Spotter UX (maintainer 31.07.): the HUMAN spots via the radial with a real target pick —
+	# the v1 auto-nearest after the attack is gone. The AI keeps its auto path (activation end).
 	if attacker != null and SoloController.human_attack_completes_activation(attacker.is_activated):
 		if radial_menu_controller != null:
 			radial_menu_controller.card_toggle_activation(attacker)   # state + heroes + marker + MP + reply
@@ -7400,7 +7506,8 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s: %d/%d model%s with line of sight + range" % [
 			attacker.get_name(), _solo_sighted_count(attacker, target, rng_in, log_indirect), total, ("" if total == 1 else "s")], true)
 	var fired_any := false   # round 7, finding 5: a volley that rolls NOTHING must say so, never end silently
-	var spot_hit := _solo_consume_spot_markers(target)   # wave B: markers removed for +X
+	# Maintainer 31.07.: the attacker CHOOSES how many markers to remove (caster-points style).
+	var spot_hit: int = await _solo_offer_spot_markers(attacker, target)
 	var chosen_versatile: Dictionary = {}   # Bug 13: per-weapon Versatile choice, asked once per volley
 	# Unpredictable (generic, "when attacking"): the HUMAN's volley rolls the same visible die —
 	# 1-3 → AP(+1), 4-6 → +1 to hit on every profile (resolution-integrated, both sides automatic).
