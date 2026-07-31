@@ -54,6 +54,9 @@ const ACTIVATION_GUARD := 400   # hard cap on activations per round (defensive)
 const WALL_CLOCK_BUDGET_S := 1500.0   # abort + dump what we have if the match overruns
 const FRONT_LINE := 1           # MapLayout.DeploymentType.FRONT_LINE
 const IN2M := 0.0254
+## Off-board audit (#215): shared with tools/arena_match.gd so BOTH harnesses emit the identical
+## parseable line that tools/tactic_audit.py counts as d9.
+const OffboardAudit := preload("res://tools/offboard_audit.gd")
 
 var _out_dir: String = ""
 var _decisions: Array = []      # raw SoloController.decision_log records, in order
@@ -396,6 +399,13 @@ func _audit_unit_geometry(main: Node, unit, round_no: int, phase: String) -> voi
 		return
 	var overlay: Node = main.terrain_overlay
 	var models: Array = unit.get_alive_models()
+	# Off-board (#215): no model centre may rest outside the table. On a RECTANGULAR table the planner
+	# used to fold both axes into one scalar bound, so the short axis was over-permitted — this is the
+	# detector that turns that into a number (battle-log line => tactic_audit d9, plus a violation flag).
+	var off := OffboardAudit.audit_and_log(main.table, main.battle_log, unit, phase)
+	if int(off["count"]) > 0:
+		_flag(round_no, "model_offboard", unit.get_name(), "%s: %d model(s) rest off the table (max overhang %.2f\")" % [
+			phase, int(off["count"]), float(off["max_overhang_in"])])
 	# Terrain: DANGEROUS is a rules concern; CONTAINER/RUINS are impassable — no model may rest inside.
 	for m in models:
 		var node = (m as ModelInstance).node
@@ -846,7 +856,7 @@ func _write_outputs(main: Node, solo: Node, terrain_overlay: Node, army_manager:
 	vlines.append("Classes checked: model in blocking/dangerous terrain (deploy + after move); shooting")
 	vlines.append("without LOS; move corridor arc > band; coherency broken after move; two AI activations")
 	vlines.append("back-to-back across alternation; declared charge with no attacks rolled; base overlap")
-	vlines.append("(intra-unit + inter-unit).")
+	vlines.append("(intra-unit + inter-unit); model centre off the table (#215).")
 	vlines.append("")
 	if _violations.is_empty():
 		vlines.append("RESULT: 0 violations detected across all classes.")

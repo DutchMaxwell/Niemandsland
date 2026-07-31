@@ -3414,12 +3414,14 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		if not melee and enemy != null and solo_controller != null:
 			member_dist = _solo_nearest_model_gap_in(member, enemy, dist_in)
 		var profiles: Array = AiShooting.melee_profiles(weapons) if melee else AiShooting.profiles_in_range(weapons, member_dist)
-		# Ranged Shrouding (quick-win wave): the target's "-6\" range to a min. of 6\"" denial re-gates
-		# each profile at the SAME nearest-model distance the plain range gate used — covers the human's
-		# volleys and the AI's alike (both build their strikes here).
+		# #231 — TARGET-SIDE reach shrinks re-gate each profile at the SAME nearest-model distance the
+		# plain range gate used: Aircraft (-12", GF v3.5.1) AND Ranged Shrouding (-6" min 6"). Both ride
+		# the one SoloController.effective_shoot_reach_in seam the AI volley already measured with — this
+		# gate only knew the Shrouding half, so a human 24" gun still rolled dice at an aircraft 20" away
+		# whenever a longer weapon kept the target legal.
 		if not melee and enemy != null:
 			profiles = profiles.filter(func(p) -> bool:
-				return SoloController.ranged_shroud_reach_in(float((p as Dictionary).get("range", 0)), enemy) >= member_dist)
+				return SoloController.effective_shoot_reach_in(float((p as Dictionary).get("range", 0)), enemy) >= member_dist)
 		if profiles.is_empty():
 			continue
 		var max_models: int = member.models.size()
@@ -3454,9 +3456,13 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 				prof["ap"] = int(prof.get("ap", 0)) + growth_ap
 			# Per-model shooting (GF v3.5.1 p.8): a ranged profile fires with the member's models that
 			# have range + LOS at ITS OWN range; melee scales by the models within 2" strike reach (p.9).
+			# #231: "its own range" is the EFFECTIVE one — against an Aircraft (-12") or a Ranged
+			# Shrouding target the rear models drop out of the count, exactly as on the AI volley.
 			var count: int = melee_count
 			if not melee:
-				count = _solo_sighted_count(member, enemy, int(prof.get("range", 0)), bool(prof.get("indirect", false))) if enemy != null else member.get_alive_count()
+				count = _solo_sighted_count(member, enemy,
+					int(SoloController.effective_shoot_reach_in(float(prof.get("range", 0)), enemy)),
+					bool(prof.get("indirect", false))) if enemy != null else member.get_alive_count()
 			# X2 (test game 2, B15): a dead bearer's weapon dies with it. Special weapons (fewer copies
 			# than models) are pinned to specific models by EquipmentDistributor — fire per-copy attacks
 			# × LIVING bearers (capped by the reach/sight count) instead of the unit-wide alive/max
@@ -7839,6 +7845,49 @@ func _solo_prompt_versatile(weapon_name: String, recommended: Dictionary) -> Dic
 	return {"ap": 0, "hit_mod": 1} if rec_ap else {"ap": 1, "hit_mod": 0}
 
 
+## #231 (rules-must-log) — the TARGET-SIDE reach shrinks of a volley, named on the log: Aircraft
+## (-12", GF v3.5.1) and Ranged Shrouding (-6" min 6"). The rule lines alone are not enough — a
+## weapon that quietly stops rolling dice reads as a bug (transparency wave #224), so the weapons
+## the shrink LOCKS OUT are named too. The reach source and the base-edge distance are the same
+## ones the per-weapon gate in _solo_attack_groups uses, so the line can never claim otherwise.
+func _solo_log_reach_shrink(attacker: GameUnit, target: GameUnit) -> void:
+	if battle_log == null or attacker == null or target == null:
+		return
+	var aircraft: bool = SoloController.target_range_penalty_in(target) > 0.0
+	var shrouded: bool = AiEv.rule_on_all_models(target, "Ranged Shrouding")
+	if aircraft:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"%s is an Aircraft: weapon ranges count -12\" against it (GF v3.5.1)" % target.get_name(), true)
+	if shrouded:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"%s has Ranged Shrouding: weapon ranges -6\" (min 6\") against it" % target.get_name(), true)
+	if not (aircraft or shrouded):
+		return
+	var locked: PackedStringArray = []
+	var members: Array = [attacker]
+	if attacker.has_method("get_attached_heroes"):
+		members = members + attacker.get_attached_heroes()
+	for mm in members:
+		var member := mm as GameUnit
+		if member == null or member.get_alive_count() == 0 or member.source_type != "opr" \
+				or not (member.source_data is OPRApiClient.OPRUnit):
+			continue
+		# Profiles that WOULD reach at the printed range — the ones the shrink then takes away.
+		var gap: float = _solo_nearest_model_gap_in(member, target, INF)
+		for p in AiShooting.profiles_in_range((member.source_data as OPRApiClient.OPRUnit).weapons, gap):
+			var printed := float((p as Dictionary).get("range", 0))
+			if SoloController.effective_shoot_reach_in(printed, target) >= gap:
+				continue
+			var pname := str((p as Dictionary).get("name", "?"))
+			if not locked.has(pname):
+				locked.append(pname)
+	if locked.is_empty():
+		return
+	battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s out of reach against %s — %s not fired" % [
+		attacker.get_name(), ("Aircraft -12\"" if aircraft else "Ranged Shrouding"),
+		target.get_name(), ", ".join(locked)], true)
+
+
 func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Array = [], skip_named: bool = false) -> void:
 	_solo_stage_begin("%s fires at %s" % [attacker.get_name(), target.get_name()])
 	# B11: ONE measuring truth — the shot distance (feeding the >9" Versatile/Guarded gates and the
@@ -7847,12 +7896,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	if dist == INF:
 		dist = MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 	# B11: range penalties against THIS target are NAMED, never silently folded into the gate.
-	if battle_log != null and SoloController.target_range_penalty_in(target) > 0.0:
-		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s is an Aircraft: weapon ranges count -12\" against it (GF v3.5.1)" % target.get_name(), true)
-	if battle_log != null and AiEv.rule_on_all_models(target, "Ranged Shrouding"):
-		battle_log.log_event(BattleLog.Category.COMBAT,
-			"%s has Ranged Shrouding: weapon ranges -6\" (min 6\") against it" % target.get_name(), true)
+	_solo_log_reach_shrink(attacker, target)
 	var target_alive_before: int = target.get_alive_count()   # post-shooting morale (goal 003 P1)
 	var target_wounds_before: int = _solo_unit_wounds_now(target)
 	var regenable := 0
