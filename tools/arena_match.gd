@@ -36,6 +36,9 @@ const LAYOUT_SEED := 20260710
 const MAX_BOOT_FRAMES := 1200
 const SPAWN_SETTLE_FRAMES := 90
 const RESULT_SCHEMA := 1
+## Off-board audit (#215): shared with tools/solo_selfplay.gd so BOTH harnesses emit the identical
+## parseable line that tools/tactic_audit.py counts as d9.
+const OffboardAudit := preload("res://tools/offboard_audit.gd")
 
 var _p1_grade := "kriegsherr"
 var _p2_grade := "kriegsherr"
@@ -253,6 +256,11 @@ func _run() -> void:
 	solo._rng.seed = _seed
 	if _act_capture.is_valid():
 		solo.ai_unit_activated.connect(_act_capture)   # per-activation board PNG (NML_CAPTURE_ACTS=1)
+	# Off-board audit (#215) — ALWAYS on, no env gate: the ladder IS the A/B measurement track, so every
+	# graded game must carry the number. One parseable battle-log line per offending unit right after it
+	# settled; tools/tactic_audit.py counts those lines as d9. Measurement only — no decision is touched.
+	solo.ai_unit_activated.connect(func(u) -> void:
+		OffboardAudit.audit_and_log(main.get("table"), battle_log, u, "after activation"))
 	solo.decision_sink = func(rec: Dictionary) -> void:
 		var side: int = int(solo.ai_slot)
 		var kind := str(rec.get("kind", "?"))

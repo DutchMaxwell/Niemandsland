@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""KI-Schmiede — tactic audit over arena selfplay captures (NML-209, D1-D6).
+"""KI-Schmiede — tactic audit over arena selfplay captures (NML-209, D1-D7 + D9 off-board).
 
 Reads capture dirs (decisions.json + battlelog.txt) and scores every game with the named
 tactical-failure detectors from ~/Niemandsland_KI_Schmiede_Plan.md. The detectors are the
@@ -119,6 +119,16 @@ def audit(cap):
     no_shot = re.findall(r": no shot — (.+)", log)
     r["d7_no_shot"] = len(no_shot)
     r["d7_no_shot_los"] = sum(1 for s in no_shot if "line of sight" in s)
+
+    # D9 off-board (#215): units that settled with model CENTRES outside the table. The harnesses
+    # (tools/offboard_audit.gd, called from arena_match + solo_selfplay) emit one line per offending
+    # unit; the format is pinned there and in tools/test_tactic_audit.py. This detector is a HARD
+    # zero: a legal board state can never produce it, so any count > 0 is a planner bug, and the fix
+    # for #215 must drive it to 0 on the same seed batch.
+    offb = re.findall(r"AUDIT off-board: .+? — (\d+) model\(s\), max overhang ([\d.]+)\"", log)
+    r["d9_offboard_events"] = len(offb)
+    r["d9_offboard_models"] = sum(int(c) for c, _ in offb)
+    r["d9_max_overhang_in"] = max((float(o) for _, o in offb), default=0.0)
     return r
 
 
@@ -149,13 +159,18 @@ def main():
         "d6_never_released": sum(1 for o in out if o["d6_first_release_round"] == 0),
         "d7_no_shot_total": sum(o["d7_no_shot"] for o in out),
         "d7_no_shot_los": sum(o["d7_no_shot_los"] for o in out),
+        "d9_offboard_events": sum(o["d9_offboard_events"] for o in out),
+        "d9_offboard_models": sum(o["d9_offboard_models"] for o in out),
+        "d9_offboard_games": sum(1 for o in out if o["d9_offboard_events"] > 0),
+        "d9_max_overhang_in": round(max((o["d9_max_overhang_in"] for o in out), default=0.0), 2),
     }
     for o in out:
         print(f"{o['cap']}: P1 {o['obj_p1']} : {o['obj_p2']} P2 (neutral {o['obj_neutral']}, R{o['rounds']}) | "
               f"D1 short {sum(o['d1_short'].values())}/seized {sum(o['d1_seized'].values())} | D2 {o['d2_congested']}/{o['d2_moves']} | "
               f"D3 {len(o['d3_paralysed_units'])} | D4 lowEV {o['d4_lowev_picks']}/{o['d4_targets']}, 0-hit {o['d4_zero_volleys']}/{o['d4_volleys']} | "
               f"D5 {o['d5_waste_casts']}/{o['d5_casts']} | D6 rel R{o['d6_first_release_round']} | "
-              f"D7 no-shot {o['d7_no_shot']} (LOS {o['d7_no_shot_los']})")
+              f"D7 no-shot {o['d7_no_shot']} (LOS {o['d7_no_shot_los']}) | "
+              f"D9 off-board {o['d9_offboard_events']} (max {o['d9_max_overhang_in']:.2f}\")")
     print("AGG " + json.dumps(agg))
 
 
