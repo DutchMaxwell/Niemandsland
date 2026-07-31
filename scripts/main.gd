@@ -6826,7 +6826,8 @@ func _solo_split_declare_second(target: GameUnit) -> void:
 		"🔥 Fire!", _solo_split_commit, "✕ Cancel attack", _solo_split_abort)
 
 
-## The GO button of the declared split — only now do dice roll. Fire-and-forget async.
+## The GO button of the declared split — only now do dice roll. Awaitable (tests wait on
+## real completion); the button Callable fires it without awaiting.
 func _solo_split_commit() -> void:
 	var attacker: GameUnit = _solo_target_mode.get("unit")
 	var a: GameUnit = _solo_target_mode.get("split_first")
@@ -6836,7 +6837,7 @@ func _solo_split_commit() -> void:
 	_solo_end_targeting()
 	if attacker == null or a == null or b == null:
 		return
-	_run_human_attack_split(attacker, a, b, sb)
+	await _run_human_attack_split(attacker, a, b, sb)
 
 
 ## Cancel at the GO stage: nothing rolled, nothing spent — the unit is still free to act.
