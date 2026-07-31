@@ -14,6 +14,14 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   line). The rule reaches the table through the hero upgrade *Reanimation Aura*, and it ends when
   its carrier falls — the battle log says so. Shaken units stay idle and do not reanimate.
   Allocation is automatic in v1 for both sides; letting the owner click each restore is a follow-up.
+- **The combat stage covers melee and spells.** The central card that already paced the shooting
+  volleys now walks a charge — Charge, Counter, Impact, one card per strike wave, Melee result,
+  Morale, Consolidation — and a cast: Cast, Cast roll, Effect (one Effect card per target). Both
+  sides use it, and it stays solo-only, skippable by click and inert in batch sweeps.
+- **The melee verdict says itself.** Who won a melee was decided silently: the tallies were
+  compared, Fear(X) shifted them, and a unit tested morale with no line explaining why. The battle
+  log now names both tallies (with the Fear-adjusted value where it differs) and who lost — and a
+  charge you declare gets its own opening line, like the AI's always had.
 
 ## [0.3.11.0-alpha] — 2026-07-31
 

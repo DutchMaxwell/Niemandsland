@@ -2585,6 +2585,7 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	var entry: Dictionary = cast.get("spell", {})
 	var effect: Dictionary = entry.get("effect", {})
 	var spell_name := str(cast.get("name", "?"))
+	_solo_stage_begin("%s casts %s" % [caster.get_name(), spell_name])
 	var targets: Array = []
 	for t in cast.get("targets", []):
 		var tu := t as GameUnit
@@ -2594,6 +2595,9 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
 				"%s's %s fizzles — no target remains" % [caster.get_name(), spell_name], true)
+		# Stage seam: the fizzle exits early and still closes its card.
+		await _solo_stage_phase("Cast")
+		_solo_stage_end()
 		return
 	var boost := int(cast.get("boost", 0))
 	var interference := int(cast.get("interference", 0))
@@ -2643,7 +2647,7 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s casts %s at %s — needs %d+ (%s)" % [
 			caster.get_name(), spell_name, _solo_cast_target_label(targets),
 			AiSpell.cast_target(boost, interference, base_target), token_note], true)
-	await _solo_pace_hold(SoloController.Pace.ANNOUNCE)
+	await _solo_stage_phase("Cast", SoloController.Pace.ANNOUNCE)
 	# RESIST (v3.5.1: enemy models with tokens within 18" LoS may spend for -1 each): in a human-vs-AI
 	# game the human is prompted; in native both-AI the controller already planned + spent this.
 	if bool(cast.get("interference_open", false)) and not _solo_both_ai:
@@ -2660,13 +2664,18 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 			spell_name, (int(faces[0]) if not faces.is_empty() else 0), target_num,
 			("SUCCESS" if success else "FAILED")], true)
 	_solo_spend_once_kind(caster, ["casting"])   # NML-006: the casting once-mod is spent by this roll
+	# The interference lines and the cast die share one card — the roll and everything that moved it.
+	await _solo_stage_phase("Cast roll")
 	if not success:
 		_solo_clear_announce(announce)
 		await _solo_show_outcome("%s fails to cast %s" % [caster.get_name(), spell_name])
+		_solo_stage_end()
 		return
 	if str(effect.get("kind", "")) == "damage":
 		for tu in targets:
 			await _solo_resolve_spell_damage(caster, caster_unit, spell_name, entry, tu)
+			# One Effect card per target — a multi-target spell must not pile its damage into one.
+			await _solo_stage_phase("Effect")
 	else:
 		_solo_announce_spell_effect(caster, spell_name, effect, targets)
 		var effect2 := effect.duplicate()
@@ -2674,8 +2683,10 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 		effect2["once"] = token_once
 		effect2["duration"] = "once" if token_once else "round"
 		_solo_place_spell_tokens(spell_name, targets, effect2)
+	await _solo_stage_phase("Effect")
 	_solo_clear_announce(announce)
 	await _solo_show_outcome("%s resolves %s" % [caster.get_name(), spell_name])
+	_solo_stage_end()
 
 
 ## The damage-spell resolution against ONE target: fixed hits (no to-hit roll), the optional trigger
@@ -6340,6 +6351,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var target: GameUnit = report.get("target")
 	if unit == null or target == null or dice_roller_control == null:
 		return
+	_solo_stage_begin("%s charges %s" % [unit.get_name(), target.get_name()])
 	# The charge must actually reach combat, measured base-to-base (field-test finding 5): the planner ends
 	# the charge at/near base contact, so the gap between the nearest models — not the unit centres — is the
 	# true reach test. Within MELEE_ENGAGE_IN it snaps to clean contact; beyond it the charge falls short.
@@ -6347,6 +6359,10 @@ func _run_ai_melee(report: Dictionary) -> void:
 	if gap_in > MELEE_ENGAGE_IN:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s's charge falls short (%.1f\")" % [unit.get_name(), gap_in], true)
+		# Stage seam: an early exit still closes its phase boundary — the falls-short line gets
+		# its own card instead of bleeding into the next activation.
+		await _solo_stage_phase("Charge")
+		_solo_stage_end()
 		return
 	# The snap spends REMAINING budget (maintainer 2026-07-22: path 6.0" + snap 0.9" = illegal 6.9").
 	var snapped_ai: float = solo_controller.snap_charge(unit, target, solo_controller.last_move_remaining_in())
@@ -6354,6 +6370,8 @@ func _run_ai_melee(report: Dictionary) -> void:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT,
 				"%s's charge falls short (%.1f\" gap, move budget spent) — GF v3.5.1 p.8 'as close as possible'" % [unit.get_name(), -snapped_ai], true)
+		await _solo_stage_phase("Charge")
+		_solo_stage_end()
 		return
 	if snapped_ai > 0.05 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
@@ -6376,7 +6394,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var target_models_before: int = _solo_combined_alive(target)
 	# ANNOUNCE: who charges whom — highlights + line + toast, held before the first strike.
 	var announce := _solo_show_attack_announce(unit, target, "charges")
-	await _solo_pace_hold(SoloController.Pace.ANNOUNCE)
+	await _solo_stage_phase("Charge", SoloController.Pace.ANNOUNCE)
 	# — Counter (GF/AoF v3.5.1 p.13: "Strikes first with this weapon when charged"): the human defender's
 	#   Counter weapons resolve BEFORE the charger's attacks (incl. Impact — Counter's Impact reduction
 	#   presumes the counter-attack precedes it; the PDF pins no finer order). One strike-back choice
@@ -6392,11 +6410,15 @@ func _run_ai_melee(report: Dictionary) -> void:
 		if strike_back == 1:
 			human_caused += await _solo_melee_strike_phase(target, unit, false, SoloStrike.COUNTER_ONLY)
 			ai_caused += _solo_take_retaliate_credit()
+	# Stage seam: the boundary sits OUTSIDE the Counter branches, so a declined (or absent)
+	# counter-strike still closes the card — an empty phase is simply no beat.
+	await _solo_stage_phase("Counter")
 	# — Impact(X) auto-hits fire BEFORE the normal strikes (GF/AoF v3.5.1 p.13; reduced by Counter models);
 	#   applied + tallied inside. The charger may already be wiped by Counter — nothing left to roll then.
 	#   human_defends is derived (false when the AI defends → saves auto-roll on the tray). —
 	if _solo_combined_alive(unit) > 0:
 		ai_caused += await _solo_charge_impact(unit, target, not defender_is_ai, float(report.get("charge_from_in", 0.0)))
+	await _solo_stage_phase("Impact")
 	# Resolver wave A — vs-target Marks: the charger's pre-attack pick lands on this melee's defender.
 	_solo_apply_vs_marks(unit, target, 0.0)
 	# Unwieldy (resolver wave A — "strikes last when charging"): the CHARGER's strikes swap behind
@@ -6412,6 +6434,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 				ai_caused += await _solo_melee_strike_phase(unit, target, true, SoloStrike.ALL, float(report.get("charge_from_in", 0.0)))
 				human_caused += _solo_take_retaliate_credit()
 				_solo_set_fatigued(unit)
+			await _solo_stage_phase("%s strikes" % unit.get_name())
 		else:
 			# — Strike back (the human's choice; OPR lets the defender strike back — unit + attached heroes). With
 			#   Counter the choice was already made; only the NON-Counter weapons remain for this slot. —
@@ -6431,6 +6454,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 						SoloStrike.NON_COUNTER if counter_first else SoloStrike.ALL)
 					ai_caused += _solo_take_retaliate_credit()
 					_solo_set_fatigued(target)
+			await _solo_stage_phase("%s strikes back" % target.get_name())
 	_solo_clear_announce(announce)
 	# Resolver wave A — Self-Destruct survival half: "after both sides have finished attacking".
 	await _solo_self_destruct_post_melee(unit, target)
@@ -6439,18 +6463,46 @@ func _run_ai_melee(report: Dictionary) -> void:
 	#   v3.5.1 p.13) counts as +X dealt wounds for THIS comparison only (never changes wounds applied) —
 	var ai_score: int = AiCombatMath.fear_adjusted_wounds(ai_caused, _solo_unit_rating(unit, "Fear"))
 	var human_score: int = AiCombatMath.fear_adjusted_wounds(human_caused, _solo_unit_rating(target, "Fear"))
+	_solo_log_melee_result(unit, ai_caused, ai_score, target, human_caused, human_score)
+	await _solo_stage_phase("Melee result")
 	if ai_score > human_score and _solo_combined_alive(target) > 0:
 		await _solo_morale_test(target, _solo_owner_label(target), true)   # MELEE loser — rout possible at half
 	elif human_score > ai_score and _solo_combined_alive(unit) > 0:
 		await _solo_morale_test(unit, _solo_owner_label(unit), true)   # MELEE loser
+	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, after morale): neither destroyed → the CHARGER (the AI here) moves
 	#   back 1"; one side destroyed → the survivor consolidates up to 3" (round 7, finding 4) —
 	await _solo_consolidate_melee(unit, target)
+	await _solo_stage_phase("Consolidation")
 	# OUTCOME: one readable melee summary (toast + hold).
 	await _solo_show_outcome("Melee: %s deals %d — takes %d back — %s loses %d model%s" % [
 		unit.get_name(), ai_caused, human_caused, target.get_name(),
 		target_models_before - _solo_combined_alive(target),
 		("" if target_models_before - _solo_combined_alive(target) == 1 else "s")])
+	_solo_stage_end()
+
+
+## Rules-must-log (pacing grill 31.07.): the melee comparison itself was SILENT — the tallies were
+## weighed, Fear(X) shifted them, a unit tested morale and the log never said why. One line now names
+## both tallies (with the Fear-adjusted value where it differs) and who lost. Shared by both melee
+## paths, and it is what the stage's "Melee result" card shows.
+func _solo_log_melee_result(a: GameUnit, a_caused: int, a_score: int,
+		b: GameUnit, b_caused: int, b_score: int) -> void:
+	if battle_log == null or a == null or b == null:
+		return
+	var verdict := "a draw — no morale test"
+	if a_score > b_score:
+		verdict = "%s loses the melee" % b.get_name()
+	elif b_score > a_score:
+		verdict = "%s loses the melee" % a.get_name()
+	battle_log.log_event(BattleLog.Category.COMBAT, "Melee result: %s dealt %s, %s dealt %s — %s" % [
+		a.get_name(), _solo_melee_tally(a_caused, a_score),
+		b.get_name(), _solo_melee_tally(b_caused, b_score), verdict], true)
+
+
+## "3" — or "3 (Fear: 4)" where Fear(X) lifted the tally for the comparison only.
+func _solo_melee_tally(caused: int, score: int) -> String:
+	return str(caused) if score == caused else "%d (Fear: %d)" % [caused, score]
 
 
 ## Consolidation Moves (GF Advanced Rules v3.5.1 p.9 — wording verified in the official rulebook; the
@@ -8003,6 +8055,13 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 func _run_human_melee(attacker: GameUnit, target: GameUnit) -> void:
 	var human_caused := 0
 	var ai_caused := 0
+	_solo_stage_begin("%s charges %s" % [attacker.get_name(), target.get_name()])
+	# Rules-must-log: your charge never named itself in the log (only the AI's announce did), so the
+	# melee opened mid-strike. One declaration line — and the stage's Charge card has its content.
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s charges %s into melee" % [
+			attacker.get_name(), target.get_name()], true)
+	await _solo_stage_phase("Charge")
 	# — Counter (GF/AoF v3.5.1 p.13 "Strikes first with this weapon when charged"): before your attacks,
 	#   including Impact (Counter's Impact reduction presumes the counter-strike precedes it) —
 	var ai_counter: bool = _solo_has_counter(target)
@@ -8011,10 +8070,14 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit) -> void:
 			battle_log.log_event(BattleLog.Category.COMBAT, "Counter: %s strikes first" % target.get_name(), true)
 		ai_caused += await _solo_melee_strike_phase(target, attacker, false, SoloStrike.COUNTER_ONLY)
 		human_caused += _solo_take_retaliate_credit()
+	# Stage seam: the boundary sits OUTSIDE the branch — no Counter simply means an empty phase,
+	# which is no beat at all (the 0-hit weapon lesson).
+	await _solo_stage_phase("Counter")
 	# — Impact(X) auto-hits on your charge (GF/AoF v3.5.1 p.13; reduced by the AI's Counter models). The
 	#   counter-strike may already have wiped your unit — nothing left to roll then. —
 	if _solo_combined_alive(attacker) > 0:
 		human_caused += await _solo_charge_impact(attacker, target, false)
+	await _solo_stage_phase("Impact")
 	# Resolver wave A — vs-target Marks: your charger's pre-attack pick lands on the defender.
 	_solo_apply_vs_marks(attacker, target, 0.0)
 	# Unwieldy (resolver wave A): a charging Unwieldy unit strikes LAST — the AI's strike-back
@@ -8030,6 +8093,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit) -> void:
 				human_caused += await _solo_melee_strike_phase(attacker, target, true, SoloStrike.ALL)
 				ai_caused += _solo_take_retaliate_credit()
 				_solo_set_fatigued(attacker)
+			await _solo_stage_phase("%s strikes" % attacker.get_name())
 		else:
 			# — The AI's strike-back with its remaining (non-Counter) weapons — mandatory (solo rules p.57) —
 			if _solo_combined_alive(target) > 0 and _solo_combined_alive(attacker) > 0:
@@ -8037,6 +8101,7 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit) -> void:
 					SoloStrike.NON_COUNTER if ai_counter else SoloStrike.ALL)
 				human_caused += _solo_take_retaliate_credit()
 				ai_struck = true
+			await _solo_stage_phase("%s strikes back" % target.get_name())
 	if ai_struck and _solo_combined_alive(target) > 0:
 		_solo_set_fatigued(target)
 	# Resolver wave A — Self-Destruct survival half: "after both sides have finished attacking".
@@ -8046,14 +8111,19 @@ func _run_human_melee(attacker: GameUnit, target: GameUnit) -> void:
 	#   +X to the bearer's tally for THIS comparison only. —
 	var human_score: int = AiCombatMath.fear_adjusted_wounds(human_caused, _solo_unit_rating(attacker, "Fear"))
 	var ai_score: int = AiCombatMath.fear_adjusted_wounds(ai_caused, _solo_unit_rating(target, "Fear"))
+	_solo_log_melee_result(attacker, human_caused, human_score, target, ai_caused, ai_score)
+	await _solo_stage_phase("Melee result")
 	if human_score > ai_score and _solo_combined_alive(target) > 0:
 		await _solo_morale_test(target, "AI (%s)" % target.get_name(), true)   # MELEE loser
 	elif ai_score > human_score and _solo_combined_alive(attacker) > 0:
 		await _solo_morale_test(attacker, "You", true)   # MELEE loser
+	await _solo_stage_phase("Morale")
 	# — Consolidation (GF v3.5.1 p.9, round 7 finding 4): neither destroyed → the human charger's 1"
 	#   back-step is surfaced as a reminder; one side destroyed → the survivor consolidates up to 3"
 	#   (your unit gets the move OFFERED; a surviving AI defender takes it automatically, EV-aware). —
 	await _solo_consolidate_melee(attacker, target)
+	await _solo_stage_phase("Consolidation")
+	_solo_stage_end()
 
 
 ## Mark a unit (and its attached heroes — they fought too) Fatigued after its first melee this round
