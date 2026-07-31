@@ -6,6 +6,61 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+## [0.3.11.0-alpha] — 2026-07-31
+
+The community-feedback wave: rules the book always had, and a table that finally SHOWS its work.
+
+### Added — the table explains itself
+- **Rules announce at the table.** Every applied rule rises as a small text from the affected
+  unit — "Blast ×3 → 6", "Artillery +1", "Surge +1", "Guardian AP(0)" — stagger-cascaded so
+  full volleys stay readable, colored by kind, toggleable in Settings. The battle log stays
+  the archive; the moment lives on the table.
+- **Rules also say when they DON'T apply.** "Artillery: no +1 (target within 9″)", "Stealth:
+  no -1 (within 9″)" — two testers independently reported correctly-silent rules as bugs;
+  now the non-application is named too.
+- **NACHTMAHR explains itself.** While the AI acts, the banner narrates each decision in one
+  plain sentence ("rushes toward the objective (17″ away)"); afterwards every AI line in the
+  battle log expands on click (▸) and shows its reasoning as a tooltip.
+- **The targeting hover names reach penalties** ("· reach 12″ (Aircraft -12″)").
+
+### Added — combat & rules
+- **Split fire (GF p.8).** Multi-weapon units may fire at up to two targets: checkbox per
+  weapon after the first pick, both targets declared before any dice.
+- **Unstoppable completed.** A core-rules audit (all 33 GF v3.5.1 core rules) found exactly
+  one missing half: Unstoppable now also ignores all negative to-hit modifiers (the
+  ignores-Regeneration half was long in).
+- **Identical weapons merge.** Nine "1× Suit-Plasma" export lines become one "9×" group with
+  one roll — no more phantom "multiplied weapons" or triple melee volleys.
+- **New army-book rules:** Caster Group (the unit casts with X = alive bearers), Spell
+  Accumulator (a token battery casters within 12″ may drain), Spell Conduit (cast as if
+  standing at the conduit), Precision Spotter (mark on 4+, attackers spend markers for +X).
+
+### Added — transports
+- **The AI uses transports** (official solo rules): it fills them at deployment, and cargo
+  disembarks toward the enemy on its first activation.
+- **Cursor placement on unload:** the formation hangs as a ghost at your mouse (R rotates,
+  6″ ring shows legality), click places, ESC keeps the unit inside.
+- **Embark/disembark follow the book:** embarking consumes the unit's activation (the label
+  says so), unloading is an Advance exit with the shot window open, no in-and-out in one
+  round, and you pick WHICH transport when several are in reach.
+
+### Added — spells
+- **Multi-target spells collect YOUR clicks** ("1 of up to 2 picked — click more or
+  right-click to cast") — the engine never chooses a target for you.
+
+### Fixed
+- A reform is movement: arranging models in a running solo game can no longer gain free
+  inches toward the enemy (offenders clamp at their old distance, logged).
+- Ambush arrivals count the WHOLE unit (a placed jetpack leader with the squad still on the
+  tray no longer vanishes into silence) and name what is missing; >9″ violations are logged.
+- A refused shot names WHO blocks the lane — including your own units (only the shooter's
+  own unit is see-through, GF p.5).
+- Reserve drags from the tray no longer log phantom marches ("moves 155″").
+- The Map Tool's load dialog is a real Open dialog (no more "Save" wording + overwrite ask).
+- MP: activation lines name the player; "Start Deployment" is hidden in multiplayer rooms
+  (and no longer crashes); a solo controller surviving into hosting can never drive a
+  human's slot.
+
 ## [0.3.10.1-alpha] — 2026-07-29
 
 Hotfix wave from the first days of community play — thank you for the reports and the logs!
