@@ -129,6 +129,9 @@ var ai_slot: int = 2
 ## Units held back by their Ambush rule during deploy_army — they arrive at the start of round 2
 ## following the same deployment rules (goal 003 P1: arrive_ambush_reserve wires the arrival).
 var ambush_reserve: Array = []
+## Battle-log line the LAST reserve arrival owes (Ambush Beacon applied / a nearby beacon that did not
+## apply); "" when the arrival was plain. The presentation layer prints it — the controller never logs.
+var last_arrival_note: String = ""
 ## Deploy context stashed by deploy_army so the round-2 ambush arrival reuses the same objectives +
 ## terrain classification (goal 003 P1).
 var _deploy_objectives: Array = []
@@ -7099,6 +7102,249 @@ static func repel_ambush_dist_m(enemy: GameUnit) -> float:
 	return float(RulesRegistry.unit_param(enemy, "Repel Ambushers", "min_dist_in", REPEL_AMBUSHERS_DIST_IN)) * INCHES_TO_METERS
 
 
+# === Ambush variants, wave 1 (army-book rules, GF 3.5.2 / registry-tuned) ======================
+#
+# EXACT rule names everywhere below. GameUnit.has_special_rule matches by PREFIX, and both
+# "Ambush Beacon" and "Ambush Re-Deployment" begin with "Ambush" — so the prefix reader answered
+# true for their carriers and unit_has_ambush pulled them off the table into reserve, although
+# both deploy NORMALLY (the Ferocious / Reanimation prefix lesson).
+const RULE_AMBUSH := "Ambush"
+const RULE_INFILTRATE := "Infiltrate"
+const RULE_AMBUSH_BEACON := "Ambush Beacon"
+const RULE_RAPID_AMBUSH := "Rapid Ambush"
+const RULE_AMBUSH_REDEPLOY := "Ambush Re-Deployment"
+
+
+## Whether `gu` carries EXACTLY `rule_name` — on its own rule line or through an item/upgrade grant.
+## (The import folds granted rules into special_rules; the item_grants read is belt-and-braces for
+## lists that predate that folding.) Ratings are stripped, so "Ambush(2)" still matches "Ambush".
+static func unit_carries_rule(gu: GameUnit, rule_name: String) -> bool:
+	if gu == null or rule_name.is_empty():
+		return false
+	for r in gu.get_special_rules():
+		var n: String = (str((r as Dictionary).get("name", "")) if r is Dictionary else str(r))
+		if RulesRegistry.base_rule_name(n) == rule_name:
+			return true
+	for granted_list in (gu.unit_properties.get("item_grants", {}) as Dictionary).values():
+		for granted in granted_list:
+			if RulesRegistry.base_rule_name(str(granted)) == rule_name:
+				return true
+	return false
+
+
+# --- Ambush Beacon ---------------------------------------------------------------------------
+# Official text: "Friendly units using Ambush may ignore distance restrictions from enemies if they
+# are deployed within 6" of this model."
+# MAINTAINER RULING: "distance restrictions" is PLURAL — inside the circle EVERY enemy distance
+# restriction falls away, the base 9" (3" Infiltrate) arrival ring AND an enemy's Repel Ambushers
+# 12". The waiver is keyed to the beacon MODEL, not to its unit.
+const AMBUSH_BEACON_RADIUS_IN := 6.0
+## A beacon this close to a spot that did NOT get the waiver is still NAMED (rules-must-log: a
+## silently unapplied rule reads exactly like a broken one).
+const AMBUSH_BEACON_NOTICE_IN := 12.0
+const BEACON_EPS_M := 0.0005   # 0.5 mm ruler tolerance so "within 6\"" is not lost to float noise
+
+
+## Waiver radius (metres) a beacon carrier projects — registry-tuned (params carry beacon_in = 6).
+static func beacon_radius_m(carrier: GameUnit) -> float:
+	return float(RulesRegistry.unit_param(carrier, RULE_AMBUSH_BEACON, "beacon_in",
+		AMBUSH_BEACON_RADIUS_IN)) * INCHES_TO_METERS
+
+
+## Every live beacon MODEL of `slot` that stands ON the table: [{pos: Vector2, radius_m, unit}].
+## A carrier still held in Ambush reserve, or riding inside a transport, projects nothing — it is not
+## on the table and the rule measures from the model. NOTE: an upgrade is recorded per UNIT (item
+## grants carry no model index), so every model of a carrier projects the circle; for the usual
+## single-model beacon carrier that is exact, for a squad it is the honest over-approximation.
+func beacon_points(slot: int) -> Array:
+	var out: Array = []
+	if army_manager == null:
+		return out
+	for u in army_manager.get_game_units_for_player(slot):
+		var gu := u as GameUnit
+		if gu == null or gu.get_alive_count() <= 0 or unit_in_reserve(gu):
+			continue
+		if not unit_carries_rule(gu, RULE_AMBUSH_BEACON):
+			continue
+		if army_manager.transport_of(gu) != null:
+			continue
+		var r := beacon_radius_m(gu)
+		for m in gu.get_alive_models():
+			var mi := m as ModelInstance
+			if mi != null and mi.node != null and is_instance_valid(mi.node):
+				var p := mi.node.global_position
+				out.append({"pos": Vector2(p.x, p.z), "radius_m": r, "unit": gu.get_name()})
+	return out
+
+
+## PURE: the NEAREST beacon to `pos` — {name, dist_in, radius_in, covered}; {} when there is none.
+## `covered` is the waiver itself: the position lies within that beacon's radius.
+static func beacon_cover(pos: Vector2, beacons: Array) -> Dictionary:
+	var best: Dictionary = {}
+	var best_d := INF
+	for b in beacons:
+		var bd := b as Dictionary
+		var d: float = pos.distance_to(bd["pos"] as Vector2)
+		if d >= best_d:
+			continue
+		best_d = d
+		var r := float(bd.get("radius_m", AMBUSH_BEACON_RADIUS_IN * INCHES_TO_METERS))
+		best = {"name": str(bd.get("unit", "beacon")), "dist_in": d / INCHES_TO_METERS,
+			"radius_in": r / INCHES_TO_METERS, "covered": d <= r + BEACON_EPS_M}
+	return best
+
+
+## PURE: gap (inches) from `pos` to the nearest enemy entry of an arrival's `enemy_positions` list
+## (Vector2 or {pos, pad_m} — the pad is the enemy model's base radius, so this is edge-true). INF
+## when the list is empty. Used for the beacon log line ("lands X.X\" from the enemy").
+static func nearest_enemy_gap_in(pos: Vector2, enemy_positions: Array) -> float:
+	var best := INF
+	for e in enemy_positions:
+		var p: Vector2 = (e as Dictionary)["pos"] if e is Dictionary else (e as Vector2)
+		var pad: float = float((e as Dictionary).get("pad_m", 0.0)) if e is Dictionary else 0.0
+		best = minf(best, maxf(0.0, pos.distance_to(p) - pad))
+	return best if best == INF else best / INCHES_TO_METERS
+
+
+# --- Rapid Ambush ----------------------------------------------------------------------------
+# Official text: "Counts as having Ambush, but may be deployed at the start of any round, including
+# the first." MAINTAINER RULING: the AI plays this by the book and MAY arrive in round 1 — a
+# specific army rule beats the general solo guideline "reserves arrive from round 2".
+
+## The EARLIEST round a reserve unit may arrive in: 1 with Rapid Ambush, 2 for base Ambush /
+## Infiltrate (GF/AoF v3.5.1 p.13 "any round after the first").
+static func ambush_earliest_round(gu: GameUnit) -> int:
+	return 1 if unit_carries_rule(gu, RULE_RAPID_AMBUSH) else 2
+
+
+## Whether a held reserve unit may arrive in `round_number` RIGHT NOW. An Ambush Re-Deployment unit
+## carries an exact return date (ambush_return_round) and arrives in THAT round only — not earlier
+## ("at the beginning of the next round") and not later (it is not a fresh reserve choice).
+static func may_arrive_this_round(gu: GameUnit, round_number: int) -> bool:
+	if gu == null:
+		return false
+	var due := int(gu.unit_properties.get("ambush_return_round", 0))
+	if due > 0:
+		return round_number == due
+	return round_number >= ambush_earliest_round(gu)
+
+
+## How many of the AI's held reserves could arrive in `round_number` (the round-start gate: with
+## nothing eligible the whole arrival beat is skipped instead of logging an empty pass).
+func ambush_reserve_ready(round_number: int) -> int:
+	var n := 0
+	for u in ambush_reserve:
+		var gu := u as GameUnit
+		if gu != null and gu.get_alive_count() > 0 and may_arrive_this_round(gu, round_number):
+			n += 1
+	return n
+
+
+## How many of the HUMAN's held reserves could arrive in `round_number` (same gate, other side).
+func human_reserve_ready(round_number: int) -> int:
+	var n := 0
+	for u in human_reserve_units():
+		if may_arrive_this_round(u as GameUnit, round_number):
+			n += 1
+	return n
+
+
+# --- Ambush Re-Deployment --------------------------------------------------------------------
+# Official text: "Once per game, when a unit where all models have this rule ends its activation, you
+# may immediately remove it from the table (dropping any objectives it might hold within 1"), and
+# deploy it as if it had Ambush at the beginning of the next round."
+
+## The AI's threat band for the withdraw decision: an enemy this close can charge it next round.
+const AMBUSH_REDEPLOY_THREAT_IN := 12.0
+## An objective this close counts as held/contested by the unit — walking off it throws the mission.
+const AMBUSH_REDEPLOY_OBJECTIVE_IN := 3.0
+
+
+## Whether every model of `gu` — attached heroes included — carries Ambush Re-Deployment. A joined
+## hero WITHOUT the rule locks the whole unit out ("a unit where ALL models have this rule").
+static func unit_all_models_ambush_redeploy(gu: GameUnit) -> bool:
+	if gu == null or not unit_carries_rule(gu, RULE_AMBUSH_REDEPLOY):
+		return false
+	if gu.has_method("get_attached_heroes"):
+		for h in gu.get_attached_heroes():
+			var hero := h as GameUnit
+			if hero != null and hero.get_alive_count() > 0 and not unit_carries_rule(hero, RULE_AMBUSH_REDEPLOY):
+				return false
+	return true
+
+
+## Whether `gu` may use its Ambush Re-Deployment right now: the rule on every model, alive, on the
+## table, and the once-per-game use still unspent.
+static func can_ambush_redeploy(gu: GameUnit) -> bool:
+	if gu == null or gu.is_destroyed() or gu.get_alive_count() <= 0:
+		return false
+	if bool(gu.unit_properties.get("ambush_redeploy_used", false)) or unit_in_reserve(gu):
+		return false
+	if gu.has_method("is_attached") and gu.is_attached():
+		return false   # an attached hero has no activation of its own — its host decides
+	return unit_all_models_ambush_redeploy(gu)
+
+
+## PURE AI policy (documented heuristic, deliberately simple): withdraw when the unit is NOT sitting
+## on a marker it would hand over, and it is under pressure — Shaken, or an enemy inside the 12"
+## charge band. Holding ground beats a re-entry, and a safe unit gains nothing by leaving.
+static func ambush_redeploy_ai_wants(nearest_enemy_in: float, holds_objective: bool, shaken: bool) -> bool:
+	if holds_objective:
+		return false
+	return shaken or nearest_enemy_in <= AMBUSH_REDEPLOY_THREAT_IN
+
+
+## The AI's withdraw decision for `gu` with the board's real inputs:
+## {use, nearest_enemy_in, holds_objective, shaken, why}.
+func ambush_redeploy_ai_decision(gu: GameUnit) -> Dictionary:
+	var gap := INF
+	var enemy := _nearest_enemy_of(gu)
+	if enemy != null:
+		gap = nearest_melee_gap_in(gu, enemy)
+	var holds := false
+	var centre := unit_centre(gu)
+	for o in _deploy_objectives:
+		if Vector2(centre.x, centre.z).distance_to(o as Vector2) <= AMBUSH_REDEPLOY_OBJECTIVE_IN * INCHES_TO_METERS:
+			holds = true
+			break
+	var use := ambush_redeploy_ai_wants(gap, holds, gu.is_shaken)
+	var why := "no pressure — staying"
+	if holds:
+		why = "holds a marker within %d\" — staying" % int(AMBUSH_REDEPLOY_OBJECTIVE_IN)
+	elif use:
+		why = "Shaken — leaving" if gu.is_shaken else "enemy %.1f\" away (charge band) — leaving" % gap
+	return {"use": use, "nearest_enemy_in": gap, "holds_objective": holds, "shaken": gu.is_shaken, "why": why}
+
+
+## Execute the withdrawal: the unit leaves the table into Ambush reserve and is DUE back at the start
+## of the next round (arrive_one_ambush_unit honours ambush_return_round exactly). The once-per-game
+## use is burned here. Returns the round the unit is due back in, or 0 when it may not use the rule.
+##
+## Carried objective markers: the rule says "dropping any objectives it might hold within 1\"" — our
+## missions only ever have STATIC markers seized at round end (seize_objectives), never carried ones,
+## so there is nothing to drop. TODO: when carry-the-relic missions ship, release the carried marker
+## here before the unit leaves.
+##
+## Transports: the cargo travels with its transport. The existing reserve machinery already carries
+## it — an embarked unit is inside the hull (not on the table) and only the transport holds a reserve
+## flag — so the once-per-game use rides on the rule-bearing unit and the cargo simply comes along.
+func ambush_redeploy_withdraw(gu: GameUnit, round_no: int) -> int:
+	if not can_ambush_redeploy(gu):
+		return 0
+	gu.unit_properties["ambush_redeploy_used"] = true
+	gu.unit_properties["ambush_reserve"] = true
+	var due: int = round_no + 1
+	gu.unit_properties["ambush_return_round"] = due
+	gu.unit_properties.erase("ambush_arrived_round")   # a fresh arrival re-stamps the objective lock
+	if int(gu.unit_properties.get("player_id", 0)) == ai_slot and not ambush_reserve.has(gu):
+		ambush_reserve.append(gu)   # the AI's paced arrival list is its own truth (human side: the flag)
+	record_decision({"kind": "deploy", "unit": gu.get_name(),
+		"rule": "Ambush Re-Deployment: once per game, at the end of its activation the unit leaves the table and returns as if it had Ambush next round",
+		"candidates": [], "chosen": "withdraw", "why": "re-deployment withdrawal",
+		"data": {"round": round_no, "returns_round": due}})
+	return due
+
+
 ## OPR Ambush (GF/AoF Advanced Rules v3.5.1 p.13): reserved units arrive at the start of ANY round after
 ## the first, placed by the same deploy rules (near the nearest objective, avoiding blocked terrain,
 ## reusing the context stashed by deploy_army) but strictly MORE THAN 9" from any enemy. A unit with no
@@ -7106,12 +7352,12 @@ static func repel_ambush_dist_m(enemy: GameUnit) -> float:
 ## Batch form (kept for headless tests): loops the paced per-unit arrival. `arrival_zone` is the whole
 ## table; `enemy_positions` are enemy unit centres in table XZ. Returns {arrived (count), arrived_units,
 ## still_reserved}.
-func arrive_ambush_reserve(arrival_zone: Rect2, enemy_positions: Array) -> Dictionary:
+func arrive_ambush_reserve(arrival_zone: Rect2, enemy_positions: Array, beacons: Array = []) -> Dictionary:
 	var occupied: Array = []
 	var round_no: int = army_manager.current_round if army_manager != null else 1
 	var arrived: Array = []
 	while true:
-		var u := arrive_one_ambush_unit(arrival_zone, enemy_positions, occupied, round_no)
+		var u := arrive_one_ambush_unit(arrival_zone, enemy_positions, occupied, round_no, beacons)
 		if u == null:
 			break
 		arrived.append(u)
@@ -7129,7 +7375,8 @@ func arrive_ambush_reserve(arrival_zone: Rect2, enemy_positions: Array) -> Dicti
 ## `occupied` accumulates placed footprints across calls (seeded once with the enemies' 9" no-go rings), so
 ## successive arrivals don't stack. Returns the arrived unit, or null when no remaining reserve unit fits
 ## right now (those stay reserved for a later round).
-func arrive_one_ambush_unit(arrival_zone: Rect2, enemy_positions: Array, occupied: Array, round_no: int) -> GameUnit:
+func arrive_one_ambush_unit(arrival_zone: Rect2, enemy_positions: Array, occupied: Array, round_no: int,
+		beacons: Array = []) -> GameUnit:
 	# NOTE (Bug 26): the enemy no-go rings are NO LONGER pre-seeded here at a fixed 9" — they are added
 	# per-unit inside _try_place_reserve_unit at that unit's own ring (3" Infiltrate / 9" Ambush). `occupied`
 	# now carries only ALREADY-PLACED unit footprints across calls.
@@ -7139,10 +7386,12 @@ func arrive_one_ambush_unit(arrival_zone: Rect2, enemy_positions: Array, occupie
 		var unit: GameUnit = u
 		if unit == null or unit.get_alive_count() <= 0:
 			continue   # a reserve unit destroyed before arrival is simply gone
-		if arrived != null:
+		if arrived != null or not may_arrive_this_round(unit, round_no):
+			# One arrival per call (the caller paces each), and a unit whose earliest round has not come
+			# (base Ambush in round 1) or whose Re-Deployment return date is a different round waits.
 			remaining.append(unit)
-			continue   # one arrival per call (the caller paces each) — keep the rest reserved
-		if _try_place_reserve_unit(unit, arrival_zone, occupied, round_no, enemy_positions):
+			continue
+		if _try_place_reserve_unit(unit, arrival_zone, occupied, round_no, enemy_positions, beacons):
 			arrived = unit
 		else:
 			remaining.append(unit)   # no legal spot this round — hold for a later one (p.13)
@@ -7156,8 +7405,14 @@ func arrive_one_ambush_unit(arrival_zone: Rect2, enemy_positions: Array, occupie
 ## flag (activatable this round), stamps its arrival round (no seize/contest this round), appends its
 ## footprint to `occupied`, records the decision, and returns true. Returns false (the unit stays reserved)
 ## when no legal spot exists right now. Shared by the AI's paced arrival and the human's guided arrival.
+##
+## Ambush Beacon: `beacons` are the arriving side's own live beacon models (beacon_points). Their
+## circles are tried FIRST and WITHOUT the enemy rings — that is the whole waiver, and trying them
+## first is what makes the AI actually PLAY a rule it owns instead of only being allowed to. The
+## normal ringed search stays the fallback. `last_arrival_note` carries the caller's battle-log line.
 func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Array, round_no: int,
-		enemy_positions: Array = []) -> bool:
+		enemy_positions: Array = [], beacons: Array = []) -> bool:
+	last_arrival_note = ""
 	var no_block := func(_p: Vector2) -> bool: return false
 	var ignores_terrain: bool = unit.has_special_rule("Strider") or unit.has_special_rule("Flying")
 	var blocked: Callable = _deploy_blocked_flying if ignores_terrain else _deploy_blocked_normal
@@ -7166,6 +7421,31 @@ func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Arra
 	var radius := _deploy_footprint_radius(unit)
 	var footprint := _deploy_footprint_offsets(unit)   # per-model footprint (finding 1)
 	var base_r := _deploy_base_radius(_deploy_models(unit))
+	# Ambush Beacon pass: land inside a friendly beacon's circle and EVERY enemy distance restriction is
+	# waived (maintainer ruling — "distance restrictions", plural: the 9"/3" ring AND Repel Ambushers'
+	# 12"), so the search runs against `occupied` alone (already-placed footprints / live bases). A box
+	# corner outside the circle is rejected: only a spot truly within the radius is waived.
+	for b in beacons:
+		var bd := b as Dictionary
+		var bpos := bd["pos"] as Vector2
+		var brad := float(bd.get("radius_m", AMBUSH_BEACON_RADIUS_IN * INCHES_TO_METERS))
+		var bzone := Rect2(bpos - Vector2(brad, brad), Vector2(brad * 2.0, brad * 2.0)).intersection(arrival_zone)
+		if bzone.size.x <= 0.0 or bzone.size.y <= 0.0:
+			continue
+		var bspot := AiDeployment.best_spot(bzone, _deploy_objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r)
+		if bspot == Vector2.INF or bspot.distance_to(bpos) > brad + BEACON_EPS_M:
+			continue
+		_finish_reserve_arrival(unit, bspot, occupied, radius, round_no)
+		var gap_in := nearest_enemy_gap_in(bspot, enemy_positions)
+		last_arrival_note = "Ambush Beacon: %s lands %s from the enemy — distance restrictions waived (within %d\" of %s)" % [
+			unit.get_name(), ("%.1f\"" % gap_in if gap_in < INF else "clear"),
+			int(round(brad / INCHES_TO_METERS)), str(bd.get("unit", "the beacon"))]
+		record_decision({"kind": "deploy", "unit": unit.get_name(),
+			"rule": "Ambush Beacon: friendly Ambushers deployed within %d\" of this model ignore distance restrictions from enemies" % int(round(brad / INCHES_TO_METERS)),
+			"candidates": [], "chosen": "beacon drop", "why": "ambush arrival inside a friendly beacon circle",
+			"data": {"round": round_no, "x_m": bspot.x, "z_m": bspot.y, "beacon": str(bd.get("unit", "")),
+				"enemy_gap_in": (gap_in if gap_in < INF else -1.0)}})
+		return true
 	# Bug 26: this unit's enemy no-go rings at ITS OWN arrival distance (3" Infiltrate / 9" Ambush) —
 	# added on top of the already-placed footprints in `occupied` so a mixed reserve arrives correctly.
 	# Repel Ambushers (grill round 2 cut B): an enemy entry may be a Dictionary {pos, min_dist_m} —
@@ -7187,16 +7467,30 @@ func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Arra
 	var spot := AiDeployment.best_spot(arrival_zone, _deploy_objectives, search_occupied, radius, blocked, 0.025, radius, footprint, base_r)
 	if spot == Vector2.INF:
 		return false
-	_place_unit_at(unit, spot)
-	occupied.append({"pos": spot, "radius": radius})
-	unit.unit_properties["ambush_reserve"] = false          # on the table now → activatable this round
-	unit.unit_properties["ambush_arrived_round"] = round_no  # can't seize/contest objectives this round
+	_finish_reserve_arrival(unit, spot, occupied, radius, round_no)
 	var min_in: int = roundi(_reserve_min_enemy_dist_m(unit) / INCHES_TO_METERS)
+	# A beacon that stood near the chosen spot and did NOT apply is NAMED — a rule that quietly does
+	# nothing reads exactly like a broken one (rules-must-log).
+	var near := beacon_cover(spot, beacons)
+	if not near.is_empty() and not bool(near["covered"]) and float(near["dist_in"]) <= AMBUSH_BEACON_NOTICE_IN:
+		last_arrival_note = "Ambush Beacon: not used — %s landed %.1f\" from %s (the waiver needs %d\" or less)" % [
+			unit.get_name(), float(near["dist_in"]), str(near["name"]), int(round(float(near["radius_in"])))]
 	record_decision({"kind": "deploy", "unit": unit.get_name(),
 		"rule": "GF/AoF v3.5.1 p.13 Ambush (Infiltrate = 3\"): arrive start of a round after the first, >%d\" from enemies" % min_in,
 		"candidates": [], "chosen": "", "why": "ambush/infiltrate arrival (does not consume its activation)",
 		"data": {"round": round_no, "x_m": spot.x, "z_m": spot.y, "min_enemy_in": min_in}})
 	return true
+
+
+## The shared tail of every reserve arrival: place the unit, book its footprint, clear the reserve flag
+## (activatable this round — arriving from Ambush is DEPLOYMENT, not an activation) and stamp the
+## arrival round (no seizing/contesting this round). Re-Deployment's return date is spent here.
+func _finish_reserve_arrival(unit: GameUnit, spot: Vector2, occupied: Array, radius: float, round_no: int) -> void:
+	_place_unit_at(unit, spot)
+	occupied.append({"pos": spot, "radius": radius})
+	unit.unit_properties["ambush_reserve"] = false
+	unit.unit_properties["ambush_arrived_round"] = round_no
+	unit.unit_properties.erase("ambush_return_round")
 
 
 # === Human Ambush reserves (field-test finding 5 — the game must ASK) ========================
@@ -7240,20 +7534,21 @@ func set_aside_human_ambush() -> Array:
 ## B12 root (test game 2, "Ich wurde nicht abgefragt"): Ambush granted by an UPGRADE lives in
 ## item_grants, not in the unit's direct special_rules — has_special_rule missed it, so the unit was
 ## never set aside and the round-2 prompt had nothing to ask about. Direct rule OR item-granted.
+##
+## Wave 1 of the Ambush variants: the names are matched EXACTLY. has_special_rule matches by PREFIX,
+## so an "Ambush Beacon" or "Ambush Re-Deployment" carrier passed this gate and was set aside off the
+## table although both deploy normally. Rapid Ambush is the one true alias — "counts as having
+## Ambush" — and only its arrival ROUND differs (ambush_earliest_round).
 static func unit_has_ambush(gu: GameUnit) -> bool:
 	if gu == null:
 		return false
-	if gu.has_special_rule("Ambush") or gu.has_special_rule("Infiltrate"):
+	if unit_carries_rule(gu, RULE_AMBUSH) or unit_carries_rule(gu, RULE_INFILTRATE) \
+			or unit_carries_rule(gu, RULE_RAPID_AMBUSH):
 		return true
-	for granted_list in (gu.unit_properties.get("item_grants", {}) as Dictionary).values():
-		for granted in granted_list:
-			var base := str(granted).split("(")[0].strip_edges()
-			if base == "Ambush" or base == "Infiltrate":
-				return true
 	# Coverage wave (resolver audit): Ambush DATA aliases ("counts_as": Ambushing Piercing Shot …).
-	for e in RulesRegistry.unit_rules_of_primitive(gu, "Ambush") + RulesRegistry.unit_rules_of_primitive(gu, "Infiltrate"):
+	for e in RulesRegistry.unit_rules_of_primitive(gu, RULE_AMBUSH) + RulesRegistry.unit_rules_of_primitive(gu, RULE_INFILTRATE):
 		var ed := e as Dictionary
-		if str(ed["name"]) != "Ambush" and str(ed["name"]) != "Infiltrate" \
+		if str(ed["name"]) != RULE_AMBUSH and str(ed["name"]) != RULE_INFILTRATE \
 				and not str((ed.get("params", {}) as Dictionary).get("counts_as", "")).is_empty():
 			return true
 	return false
@@ -7293,19 +7588,23 @@ func occupied_from_live_bases() -> Array:
 
 ## Should the game PROMPT the human to deploy Ambush reserves? GF/AoF v3.5.1 p.13: reserve units MAY be
 ## deployed at the start of ANY round after the first. Pure decision so the trigger is unit-testable.
-static func should_prompt_human_ambush(round_number: int, undeployed_count: int) -> bool:
-	return round_number >= 2 and undeployed_count > 0
+## `rapid_count` are the held reserves carrying Rapid Ambush ("may be deployed at the start of any
+## round, INCLUDING THE FIRST") — with one of those the round-1 prompt is owed too.
+static func should_prompt_human_ambush(round_number: int, undeployed_count: int, rapid_count: int = 0) -> bool:
+	if undeployed_count <= 0:
+		return false
+	return round_number >= 2 or rapid_count > 0
 
 
 ## Guided arrival of ONE human Ambush-reserve unit (finding 5): seed `occupied` with the AI enemies' 9"
 ## no-go rings and place the unit >9" from them, near an objective, terrain-legal — the same legal core as
 ## the AI arrival. Returns true if placed (the caller reveals + syncs the unit). GF/AoF v3.5.1 p.13.
 func arrive_human_reserve_unit(unit: GameUnit, arrival_zone: Rect2, enemy_positions: Array,
-		occupied: Array, round_no: int) -> bool:
+		occupied: Array, round_no: int, beacons: Array = []) -> bool:
 	if unit == null or unit.get_alive_count() <= 0 or not unit_in_reserve(unit):
 		return false
 	# Bug 26: pass enemy_positions through so the ring uses the unit's own distance (3" Infiltrate / 9").
-	return _try_place_reserve_unit(unit, arrival_zone, occupied, round_no, enemy_positions)
+	return _try_place_reserve_unit(unit, arrival_zone, occupied, round_no, enemy_positions, beacons)
 
 
 const DEPLOY_SPACING_M := 0.04   # compact deployment grid: model-centre spacing (~1.6", coherent)

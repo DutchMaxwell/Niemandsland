@@ -986,6 +986,10 @@ func _solo_activate_one_ai() -> GameUnit:
 		await _solo_shooting_morale(unit, alive_before_dangerous, _solo_owner_label(unit), wounds_before_dangerous)
 	if unit != null:
 		await _solo_try_precision_spot(unit)   # wave B: once per activation
+	# Ambush Re-Deployment fires "when a unit ... ENDS its activation" — the very last beat, after
+	# every attack and follow-up step, so the unit leaves with everything it did already resolved.
+	if unit != null and not unit.is_destroyed():
+		await _solo_try_ambush_redeploy(unit)
 	return unit
 
 
@@ -1014,6 +1018,7 @@ func _solo_ensure_playing_phase() -> void:
 			and "game_phase" in opr_army_manager and int(opr_army_manager.game_phase) == 0:
 		opr_army_manager.start_game()
 		_solo_run_redeployment()
+		_solo_begin_rapid_ambush_round_one()
 
 
 ## Re-Deployment at the game-start transition (wave 7): the AI counter-deploys up to two
@@ -1039,6 +1044,111 @@ func _solo_run_redeployment() -> void:
 				"Re-Deployment: you may remove up to two of yours and deploy them again now (%s)" % ", ".join(yours), false)
 
 
+## Rapid Ambush (army-book: "Counts as having Ambush, but may be deployed at the start of any round,
+## INCLUDING THE FIRST") — the round-1 arrival beat. It is a ROUND-START event, not a deployment step:
+## it runs AFTER regular deployment AND after the Scout phase, so a carrier can never buy an extra
+## slot in the deployment alternation. MAINTAINER RULING: the AI plays it by the book and may arrive
+## in round 1 — the specific army rule beats the general solo guideline "reserves arrive from round 2".
+## The arrival itself stays voluntary ("may"): the AI takes it when the placement search finds a legal
+## landing spot and otherwise waits, exactly like every other reserve.
+##
+## The beat is a coroutine started from a SYNCHRONOUS seam (the same fire-and-forget pattern
+## _solo_deploy_phase_advance already uses for _solo_pump), so it holds `_solo_ai_busy` for its
+## duration: the pump's own guard then returns early while reserves are still landing, and the flag is
+## released below together with the opener the round owes.
+var _solo_rapid_round_one_done := false
+
+
+func _solo_begin_rapid_ambush_round_one() -> void:
+	if _solo_rapid_round_one_done or solo_controller == null:
+		return
+	_solo_rapid_round_one_done = true
+	if solo_controller.ambush_reserve_ready(1) <= 0 and solo_controller.human_reserve_ready(1) <= 0:
+		return   # no Rapid Ambush on either side — no beat and no log noise
+	# B12 alternation opener: "starting with the player that activates next" — round 1's first turn
+	# belongs to the roll-off winner (GF v3.5.1 p.7), which is what this flag encodes.
+	if _solo_deploy_fsm.has("winner_is_ai"):
+		_solo_ai_took_last_activation = not bool(_solo_deploy_fsm.get("winner_is_ai", false))
+	_solo_ai_busy = true
+	_solo_rapid_ambush_round_one()
+
+
+func _solo_rapid_ambush_round_one() -> void:
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Rapid Ambush: reserves may arrive at the start of round 1 (after deployment and the Scout phase)", true)
+	await _solo_alternate_ambush_arrivals(1)
+	# "May" cuts both ways: a carrier that found no worthwhile landing spot simply waits — named, so
+	# the passed-up arrival is not silent (rules-must-log).
+	var waiting: PackedStringArray = []
+	if solo_controller != null:
+		for u in solo_controller.ambush_reserve:
+			var gu := u as GameUnit
+			if gu != null and gu.get_alive_count() > 0 \
+					and SoloController.unit_carries_rule(gu, SoloController.RULE_RAPID_AMBUSH):
+				waiting.append(gu.get_name())
+	if not waiting.is_empty() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Rapid Ambush: %s waits for a later round — no legal round-1 landing spot (the rule is a 'may')" % ", ".join(waiting), true)
+	_solo_ai_busy = false
+	if _solo_pending_replies > 0:
+		await _solo_pump()
+
+
+## Ambush Re-Deployment (army-book upgrade — official text: "Once per game, when a unit where all
+## models have this rule ends its activation, you may immediately remove it from the table (dropping
+## any objectives it might hold within 1\"), and deploy it as if it had Ambush at the beginning of the
+## next round."): the END-OF-ACTIVATION door, open to both sides. The AI decides by its documented
+## heuristic (SoloController.ambush_redeploy_ai_wants: leave when under pressure and not sitting on a
+## marker); the human is ASKED, because the rule is a "may". Returns true when the unit left the table.
+func _solo_try_ambush_redeploy(gu: GameUnit) -> bool:
+	if solo_controller == null or opr_army_manager == null or not SoloController.can_ambush_redeploy(gu):
+		return false
+	var is_ai: bool = _solo_is_ai_unit(gu)
+	if is_ai:
+		var decision: Dictionary = solo_controller.ambush_redeploy_ai_decision(gu)
+		if not bool(decision["use"]):
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL,
+					"Ambush Re-Deployment: %s keeps its once-per-game use — %s" % [
+						gu.get_name(), str(decision["why"])], true)
+			return false
+	else:
+		if _solo_batch:
+			return false   # headless sweeps never answer a dialog — the human simply declines
+		var dlg := ConfirmationDialog.new()
+		dlg.title = "Ambush Re-Deployment"
+		dlg.dialog_text = "%s has ended its activation.\nRemove it from the table now (once per game) and bring it back from Ambush at the start of round %d?" % [
+			gu.get_name(), opr_army_manager.current_round + 1]
+		dlg.ok_button_text = "Withdraw"
+		dlg.get_cancel_button().text = "Stay on the table"
+		add_child(dlg)
+		var yes: bool = await _solo_await_confirm(dlg)
+		dlg.queue_free()
+		if not yes:
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL,
+					"Ambush Re-Deployment: %s stays on the table — its once-per-game use is still open" % gu.get_name(), false)
+			return false
+	return _solo_ambush_redeploy_execute(gu)
+
+
+## The withdrawal itself (decision already taken): the unit leaves the table into Ambush reserve with
+## an exact return date. Split from the prompt so the mechanics are drivable without a dialog.
+func _solo_ambush_redeploy_execute(gu: GameUnit) -> bool:
+	if solo_controller == null or opr_army_manager == null:
+		return false
+	var due: int = solo_controller.ambush_redeploy_withdraw(gu, opr_army_manager.current_round)
+	if due <= 0:
+		return false
+	_solo_set_unit_visible(gu, false)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Ambush Re-Deployment: %s leaves the table (once per game) and returns at the start of round %d" % [
+				gu.get_name(), due], _solo_is_ai_unit(gu))
+	return true
+
+
 func _on_solo_human_activated(gu: GameUnit) -> void:
 	# The first solo activation IS the game start (see _solo_ensure_playing_phase), so it faces the same
 	# deployment gate as the Start-Game button — otherwise activating a unit is a second, button-free way
@@ -1060,6 +1170,9 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	# Resolver wave A — Reckless Piercing: YOUR unit's activation roll fires here (auto-opt-in with
 	# its log line, the Unpredictable precedent: resolution-integrated, both sides automatic).
 	await _solo_apply_reckless_piercing(gu)
+	# Ambush Re-Deployment: YOUR unit's activation ends here (the activation marker IS the declaration),
+	# so this is where the once-per-game "may" is offered — before the AI answers with its reply.
+	await _solo_try_ambush_redeploy(gu)
 	_solo_ai_took_last_activation = false   # the human just took an activation (finding 7: round-opener tracking)
 	_solo_pending_replies += 1
 	await _solo_pump()
@@ -1320,6 +1433,7 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 	_solo_ai_busy = true
 	_solo_game_finished = false
 	var opener: int = first_opener if (first_opener == 1 or first_opener == 2) else 1
+	await _solo_both_ai_rapid_round_one()   # Rapid Ambush may land before round 1's first activation
 	while not _solo_game_finished:
 		var round_no: int = opr_army_manager.current_round
 		if round_no >= 2:
@@ -1390,6 +1504,8 @@ func _solo_side_has_eligible(slot: int) -> bool:
 
 ## Both-AI round-start bookkeeping (round ≥2): Battleborn Shaken-recovery for every side, then Ambush
 ## reserve arrivals for each AI side (the arrival's >9" check reads the OTHER side as the enemy).
+## Rapid Ambush carriers already came in during round 1 (_solo_both_ai_rapid_round_one) — the arrival
+## gate keeps every other reserve waiting for round 2, so this pass is unchanged for them.
 func _solo_both_ai_round_start(round_number: int) -> void:
 	await _solo_battleborn_recovery()
 	if round_number >= 2:
@@ -1397,6 +1513,19 @@ func _solo_both_ai_round_start(round_number: int) -> void:
 			_solo_set_active_side(slot)
 			# The alternator degrades to AI-only arrivals here (the "human" slot is AI → no prompts).
 			await _solo_alternate_ambush_arrivals(round_number)
+
+
+## The self-play twin of _solo_begin_rapid_ambush_round_one: with both sides on the AI, round 1's
+## Rapid Ambush arrivals run for each slot before the first activation. Nothing to hold or pump here —
+## the arena driver awaits this directly.
+func _solo_both_ai_rapid_round_one() -> void:
+	if solo_controller == null:
+		return
+	for slot in [1, 2]:
+		_solo_set_active_side(slot)
+		if solo_controller.ambush_reserve_ready(1) <= 0:
+			continue
+		await _solo_alternate_ambush_arrivals(1)
 
 
 ## Read NML_BOTH_AI / NML_AI_P1 / NML_AI_P2 / NML_AI_SEED from the environment and, when NML_BOTH_AI is set,
@@ -1967,6 +2096,7 @@ func _solo_deploy_pick_side(swap: bool) -> void:
 ## Build the zones from the chosen AI edge, queue the AI army (main + scout queues), set the
 ## reserves aside on BOTH sides, and start the MAIN phase with the roll-off winner's placement.
 func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
+	_solo_rapid_round_one_done = false   # a fresh game owes its round-1 Rapid Ambush beat again
 	var w: float = float(_solo_deploy_fsm.get("w", 0.0))
 	var d: float = float(_solo_deploy_fsm.get("d", 0.0))
 	var depth: float = float(_solo_deploy_fsm.get("depth", 0.3048))
@@ -6243,7 +6373,10 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 	"Versatile Attack",
 	# Army-book: Reanimation (+ its carrier upgrade Reanimation Aura) — models/wounds return on
 	# activation, one die per missing wound, each 5+ buys one back.
-	"Reanimation", "Reanimation Aura", "Caster Group", "Spell Accumulator"]
+	"Reanimation", "Reanimation Aura", "Caster Group", "Spell Accumulator",
+	# Ambush variants wave 1: Beacon (6" waiver on every enemy distance restriction), Rapid Ambush
+	# (arrives from round 1), Ambush Re-Deployment (once per game, off the table and back next round).
+	"Ambush Beacon", "Rapid Ambush", "Ambush Re-Deployment"]
 
 ## The SOLO_MODELED_RULES subset that ALSO steers the AI's behaviour choices (not only the dice math):
 ## targeting overlays (AP/Deadly/Takedown — Solo v3.5.0 p.2), Hold overlays (Relentless/Artillery/
@@ -6260,7 +6393,10 @@ const SOLO_DECISION_RULES: Array = ["AP", "Deadly", "Takedown", "Relentless", "A
 	# bands), Banner (charge-risk EV), Sergeant/Shred/Armor (EV inputs), Limited (profile availability).
 	"Shred", "Indirect", "Banner", "Musician", "Sergeant", "Limited", "Armor",
 	"Versatile Attack",   # >9" AP(+1)/+1-to-hit mode choice steers the shoot EV
-	"Reanimation"]        # restores BEFORE the action, so the returned models are in the move plan
+	"Reanimation",        # restores BEFORE the action, so the returned models are in the move plan
+	# Ambush variants wave 1: all three steer WHERE and WHEN a reserve lands, and whether a unit
+	# leaves the table at the end of its activation.
+	"Ambush Beacon", "Rapid Ambush", "Ambush Re-Deployment"]
 
 
 ## The modeled-rule tokens for a unit's game system — mechanics-map-derived (wave 5), constant fallback.
@@ -8290,16 +8426,22 @@ func _solo_alternate_ambush_arrivals(round_number: int) -> void:
 	var human_waiting: Dictionary = {}   # instance_id → true ("Keep waiting" — not re-asked this round)
 	var ai_stuck := false                # no legal spot for any AI reserve right now
 	while true:
-		var ai_has: bool = not ai_stuck and not solo_controller.ambush_reserve.is_empty()
+		# Rapid Ambush / Ambush Re-Deployment: only reserves whose OWN arrival round is this one are
+		# offered (base Ambush waits for round 2; a re-deploying unit is due back on an exact round).
+		var ai_has: bool = not ai_stuck and solo_controller.ambush_reserve_ready(round_number) > 0
 		var human_pool: Array = []
 		if not human_is_ai:
 			for u in solo_controller.human_reserve_units():
-				if not human_waiting.has((u as GameUnit).get_instance_id()):
-					human_pool.append(u)
+				var hu := u as GameUnit
+				if not human_waiting.has(hu.get_instance_id()) and SoloController.may_arrive_this_round(hu, round_number):
+					human_pool.append(hu)
 		if not ai_has and human_pool.is_empty():
 			break
 		if ai_turn and ai_has:
-			var unit: GameUnit = solo_controller.arrive_one_ambush_unit(arrival_zone, ai_enemies, occupied, round_number)
+			# Ambush Beacon: the arriving side's OWN live beacon models (recomputed each beat — a beacon
+			# that just walked in counts). The controller tries their circles first, waiver and all.
+			var ai_beacons: Array = solo_controller.beacon_points(solo_controller.ai_slot)
+			var unit: GameUnit = solo_controller.arrive_one_ambush_unit(arrival_zone, ai_enemies, occupied, round_number, ai_beacons)
 			if unit == null:
 				ai_stuck = true
 			else:
@@ -8309,6 +8451,7 @@ func _solo_alternate_ambush_arrivals(round_number: int) -> void:
 				if battle_log != null:
 					battle_log.log_event(BattleLog.Category.GENERAL,
 						"AI Ambush: %s arrives — near an objective, >9\" from your units, clear of all standing bases" % unit.get_name(), true)
+					_solo_log_ambush_variant_lines(unit, round_number, true)
 				await _solo_pace_attention()
 		elif not ai_turn and not human_pool.is_empty():
 			var placed: Array = await _solo_ambush_human_turn(round_number, human_pool)
@@ -8322,15 +8465,42 @@ func _solo_alternate_ambush_arrivals(round_number: int) -> void:
 		ai_turn = not ai_turn
 	if is_instance_valid(_solo_toast):
 		_solo_toast.visible = false
-	var held_ai: int = solo_controller.ambush_reserve.size()
+	var held_ai: int = solo_controller.ambush_reserve_ready(round_number)
 	if held_ai > 0 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			"AI Ambush: %d unit(s) held back — no clear spot (may arrive a later round)" % held_ai, true)
-	var held_h: int = solo_controller.human_reserve_units().size()
+	var held_h: int = solo_controller.human_reserve_ready(round_number)
 	if held_h > 0 and not human_is_ai and battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			"%d of your Ambush unit(s) stay in reserve — you'll be asked again next round." % held_h, false)
 	_solo_flush_dev()
+
+
+## The variant lines an arrival owes (rules-must-log — a rule that silently does nothing reads exactly
+## like a broken one): the Ambush Beacon waiver (or a nearby beacon that did NOT apply), the round-1
+## Rapid Ambush exception, and the note that a transport's cargo rode in with it.
+func _solo_log_ambush_variant_lines(unit: GameUnit, round_number: int, ai_side: bool) -> void:
+	if battle_log == null or unit == null or solo_controller == null:
+		return
+	var note: String = solo_controller.last_arrival_note
+	if not note.is_empty():
+		battle_log.log_event(BattleLog.Category.GENERAL, note, ai_side)
+	if round_number < 2 and SoloController.unit_carries_rule(unit, SoloController.RULE_RAPID_AMBUSH):
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Rapid Ambush: %s arrives at the start of round 1 (base Ambush allows round 2+)" % unit.get_name(), ai_side)
+	# Transport cargo travels inside the hull and lands with it — including in round 1 behind Rapid
+	# Ambush. Rules-legal, but it must be visible that a whole package just appeared.
+	if opr_army_manager != null and opr_army_manager.has_method("transport_capacity") \
+			and opr_army_manager.transport_capacity(unit) > 0:
+		var cargo: PackedStringArray = []
+		for u in opr_army_manager.get_all_game_units():
+			var gu := u as GameUnit
+			if gu != null and gu.get_alive_count() > 0 and opr_army_manager.transport_of(gu) == unit:
+				cargo.append(gu.get_name())
+		if not cargo.is_empty():
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"%s arrives with its cargo aboard (%s) — it may disembark this round" % [
+					unit.get_name(), ", ".join(cargo)], ai_side)
 
 
 ## The enemy no-go entries of `enemy_slot`'s standing units — PER MODEL, base-edge-true (maintainer
@@ -8363,7 +8533,17 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 	for u in pool:
 		names.append((u as GameUnit).get_name())
 	var outcome: Array = []
-	_solo_deploy_ui_show("Ambush — round %d: place ONE reserve unit from the tray (>9\" from enemies), then hand over.\nIn reserve: %s" % [round_number, ", ".join(names)],
+	# Ambush Beacon: name the circles that waive the 9" (and an enemy's Repel Ambushers 12") so the
+	# player can use his own rule — the arrival distance stays his measure (honor system).
+	var beacon_hint := ""
+	for b in solo_controller.beacon_points(solo_controller.human_slot):
+		var bd := b as Dictionary
+		if not beacon_hint.contains(str(bd["unit"])):
+			beacon_hint += ("" if beacon_hint.is_empty() else ", ") + str(bd["unit"])
+	if not beacon_hint.is_empty():
+		beacon_hint = "\nAmbush Beacon: within 6\" of %s no enemy distance restriction applies." % beacon_hint
+	_solo_deploy_ui_show("Ambush — round %d: place ONE reserve unit from the tray (>9\" from enemies), then hand over.\nIn reserve: %s%s" % [
+			round_number, ", ".join(names), beacon_hint],
 		"✓ Unit placed", func() -> void: outcome.append("placed"),
 		"None this round — keep waiting", func() -> void: outcome.append("wait"))
 	while outcome.is_empty():
@@ -8394,10 +8574,13 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 			var gu := g as GameUnit
 			gu.unit_properties["ambush_reserve"] = false
 			gu.unit_properties["ambush_arrived_round"] = opr_army_manager.current_round
+			gu.unit_properties.erase("ambush_return_round")   # a Re-Deployment return date is spent
 			_solo_set_unit_visible(gu, true)
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.GENERAL,
 					"You deploy %s from Ambush reserve (>9\" from enemies) — it may act this round, no seizing (GF v3.5.1 p.13)" % gu.get_name(), false)
+			solo_controller.last_arrival_note = ""   # the human placed by hand — only the checks below speak
+			_solo_log_ambush_variant_lines(gu, round_number, false)
 			_solo_warn_ambush_proximity(gu)
 	elif battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "Your Ambush reserve keeps waiting this round", false)
@@ -8457,9 +8640,74 @@ func _solo_warn_ambush_proximity(gu: GameUnit) -> void:
 		if eu == null or eu.get_alive_count() <= 0 or SoloController.unit_in_reserve(eu):
 			continue
 		worst = minf(worst, solo_controller.nearest_melee_gap_in(gu, eu))
-	if worst < 9.0:
+	if worst >= 9.0:
+		return
+	# Ambush Beacon (maintainer ruling): inside a friendly beacon's 6" EVERY enemy distance restriction
+	# falls away — the 9" ring and an enemy's Repel Ambushers 12" alike. A unit counts as deployed
+	# within 6" when ANY of its models is (the usual OPR "within X" reading for a unit). The waiver
+	# gets its own line instead of the warning — silence would look like the check simply missed it.
+	var cover := _solo_beacon_cover_of(gu)
+	if not cover.is_empty():
 		battle_log.log_event(BattleLog.Category.GENERAL,
-			"⚠ %s stands %.1f\" from an enemy — Ambush arrivals must be >9\" away (GF v3.5.1 p.13); nudge it out (or house-rule it)" % [gu.get_name(), worst], false)
+			"Ambush Beacon: %s lands %.1f\" from the enemy — distance restrictions waived (within %d\" of %s)" % [
+				gu.get_name(), worst, int(round(float(cover["radius_in"]))), str(cover["name"])], false)
+		return
+	# A beacon that stood close by and did NOT reach is named in the same breath — otherwise the rule
+	# looks broken rather than simply out of range.
+	var near := _solo_nearest_beacon_of(gu)
+	var beacon_note := ""
+	if not near.is_empty() and float(near["dist_in"]) <= SoloController.AMBUSH_BEACON_NOTICE_IN:
+		beacon_note = " — Ambush Beacon not used: %s is %.1f\" away (the waiver needs %d\" or less)" % [
+			str(near["name"]), float(near["dist_in"]), int(round(float(near["radius_in"])))]
+	battle_log.log_event(BattleLog.Category.GENERAL,
+		"⚠ %s stands %.1f\" from an enemy — Ambush arrivals must be >9\" away (GF v3.5.1 p.13); nudge it out (or house-rule it)%s" % [
+			gu.get_name(), worst, beacon_note], false)
+
+
+## The friendly beacon covering `gu` ({} when none): ANY alive model of the unit inside a beacon
+## circle of its OWN side puts the whole unit "within 6\" of this model".
+func _solo_beacon_cover_of(gu: GameUnit) -> Dictionary:
+	for cover in _solo_beacon_reads_of(gu):
+		if bool((cover as Dictionary)["covered"]):
+			return cover
+	return {}
+
+
+## The NEAREST friendly beacon to any model of `gu` ({} when the side has none) — covered or not.
+func _solo_nearest_beacon_of(gu: GameUnit) -> Dictionary:
+	var best: Dictionary = {}
+	for cover in _solo_beacon_reads_of(gu):
+		var c := cover as Dictionary
+		if best.is_empty() or float(c["dist_in"]) < float(best["dist_in"]):
+			best = c
+	return best
+
+
+## One beacon_cover read per alive model of `gu` (attached heroes included) against its OWN side's
+## beacons. The two readers above pick the covering / the nearest one from it.
+func _solo_beacon_reads_of(gu: GameUnit) -> Array:
+	var out: Array = []
+	if solo_controller == null or gu == null:
+		return out
+	var beacons: Array = solo_controller.beacon_points(int(gu.unit_properties.get("player_id", 0)))
+	if beacons.is_empty():
+		return out
+	var chain: Array = [gu]
+	if gu.has_method("get_attached_heroes"):
+		chain.append_array(gu.get_attached_heroes())
+	for c in chain:
+		var member := c as GameUnit
+		if member == null:
+			continue
+		for m in member.get_alive_models():
+			var mi := m as ModelInstance
+			if mi == null or mi.node == null or not is_instance_valid(mi.node):
+				continue
+			var p := mi.node.global_position
+			var cover: Dictionary = SoloController.beacon_cover(Vector2(p.x, p.z), beacons)
+			if not cover.is_empty():
+				out.append(cover)
+	return out
 
 
 ## OPR: Fatigue lasts only until the end of the round — clear it from EVERY unit (both sides, heroes

@@ -14,6 +14,8 @@
   "Aircraft",
   "Ambush",
   "Ambush Aura",
+  "Ambush Beacon",
+  "Ambush Re-Deployment",
   "Ambushing Piercing Shot",
   "Armor",
   "Artillery",
@@ -242,6 +244,7 @@
   "Rapid Advance",
   "Rapid Advance Aura",
   "Rapid Advance Buff",
+  "Rapid Ambush",
   "Rapid Blink",
   "Rapid Blink Boost",
   "Rapid Blink Boost Aura",
@@ -2774,9 +2777,12 @@
   },
   "dao_union": {
    "Ambush Beacon": {
-    "primitive": null,
+    "primitive": "Ambush",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "beacon_in": 6
+    }
    },
    "Counter-Attack": {
     "primitive": "Counter",
@@ -3075,9 +3081,12 @@
     }
    },
    "Rapid Ambush": {
-    "primitive": null,
+    "primitive": "Ambush",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "arrive_from_round": 1
+    }
    },
    "Rapid Rush": {
     "primitive": "Rapid Rush",
@@ -3437,9 +3446,12 @@
     }
    },
    "Rapid Ambush": {
-    "primitive": null,
+    "primitive": "Ambush",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "arrive_from_round": 1
+    }
    },
    "Rapid Rush": {
     "primitive": "Rapid Rush",
@@ -3733,9 +3745,13 @@
   },
   "elven_jesters": {
    "Ambush Re-Deployment": {
-    "primitive": null,
+    "primitive": "Ambush",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "re_reserve": true,
+     "uses_per_game": 1
+    }
    },
    "Counter-Attack": {
     "primitive": "Counter",
@@ -3891,9 +3907,12 @@
   },
   "eternal_dynasty": {
    "Ambush Beacon": {
-    "primitive": null,
+    "primitive": "Ambush",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "beacon_in": 6
+    }
    },
    "Bounding": {
     "primitive": "Bounding",
@@ -7892,9 +7911,12 @@
   },
   "saurian_starhost": {
    "Ambush Beacon": {
-    "primitive": null,
+    "primitive": "Ambush",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "beacon_in": 6
+    }
    },
    "Bounding": {
     "primitive": "Bounding",
