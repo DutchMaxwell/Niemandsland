@@ -891,14 +891,18 @@ func _solo_activate_one_ai() -> GameUnit:
 			# A HOLD has no move goal — the arrow printed the TREE's target while the weapon overlay could
 			# still retarget the volley ("holds (→ Battle Brothers)" then "fires at Destroyers", Windows
 			# playtest bug 7). The shot line right after names the real target; narrate the hold plainly.
-			battle_log.log_event(BattleLog.Category.MOVEMENT, "%s holds its position" % unit.get_name(), true)
+			battle_log.log_event(BattleLog.Category.MOVEMENT, "%s holds its position" % unit.get_name(), true,
+				solo_controller.plain_reason_for(unit) if solo_controller != null else "")
 		else:
 			# Community #164: when the official not-activated-first key walked past a NEARER
 			# enemy that already acted, say why — the by-the-book pick reads irrational silent.
 			var acts_soon: String = " — hits it before it acts" \
 				if bool(report.get("target_acts_soon", false)) and not bool(report.get("to_objective", false)) else ""
+			# Release-pass find: solo AI units never write an 'activated' line — the stage-3
+			# expandable reasoning rides THIS narration line instead (click ▸ / hover).
 			battle_log.log_event(BattleLog.Category.MOVEMENT, "%s %s (→ %s)%s" % [
-				unit.get_name(), AiDecision.action_name(int(report.get("action", 0))), goal_label, acts_soon], true)
+				unit.get_name(), AiDecision.action_name(int(report.get("action", 0))), goal_label, acts_soon], true,
+				solo_controller.plain_reason_for(unit) if solo_controller != null else "")
 	_solo_log_unmodeled_rules(unit)   # once-per-session visibility of rules the automation skips
 	if target != null:
 		_solo_log_unmodeled_rules(target)
@@ -3066,6 +3070,12 @@ func _solo_expire_spell_tokens() -> void:
 		var tu: GameUnit = (e as Dictionary).get("unit")
 		if tu != null and is_instance_valid(tu) and not tu.is_destroyed():
 			radial_menu_controller.remove_library_token(tu, str((e as Dictionary).get("token")))
+			# Release-pass find: a buff that never fired evaporated in silence — the player
+			# could not tell whether Shred ever applied. Name the unused expiry.
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL,
+					"\"%s\" on %s expires with the round — it was never consumed" % [
+					str((e as Dictionary).get("token")), tu.get_name()], true)
 	_solo_spell_tokens_active.clear()
 
 
@@ -6534,6 +6544,17 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 		return false
 	match SoloController.targeting_route(event):
 		SoloController.TargetingRoute.CANCEL:
+			# Release-pass find (#226): stranding in the second-pick phase killed the whole
+			# attack — right-click now falls back to "everything at the first target".
+			if _solo_target_mode.has("split_first"):
+				var fb_attacker: GameUnit = _solo_target_mode.get("unit")
+				var fb_target: GameUnit = _solo_target_mode.get("split_first")
+				_solo_end_targeting()
+				if battle_log != null:
+					battle_log.log_event(BattleLog.Category.GENERAL,
+						"Split fire abandoned — everything fires at %s" % fb_target.get_name())
+				_run_human_attack(fb_attacker, fb_target, false)
+				return true
 			# #227: with picks pending, right-click means "cast with these" (early finish).
 			if _solo_target_mode.has("cast_entry") \
 					and not (_solo_target_mode.get("cast_picked", []) as Array).is_empty():
@@ -6561,8 +6582,14 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				var cvalid: Array = _solo_target_mode.get("cast_valid", [])
 				if not cvalid.has(target):
 					if battle_log != null:
-						battle_log.log_event(BattleLog.Category.GENERAL,
-							"%s is not a legal target (side, range or line of sight)" % target.get_name())
+						# Release-pass find: clicking an ALREADY-PICKED unit said "not a legal
+						# target" — the maintainer read it as a targeting bug.
+						if (_solo_target_mode.get("cast_picked", []) as Array).has(target):
+							battle_log.log_event(BattleLog.Category.GENERAL,
+								"%s is already picked — click another target or right-click to cast" % target.get_name())
+						else:
+							battle_log.log_event(BattleLog.Category.GENERAL,
+								"%s is not a legal target (side, range or line of sight)" % target.get_name())
 					return true
 				var centry: Dictionary = _solo_target_mode.get("cast_entry", {})
 				var cmember: GameUnit = _solo_target_mode.get("cast_member")
@@ -6930,6 +6957,21 @@ func _solo_split_or_attack(attacker: GameUnit, target: GameUnit, melee: bool) ->
 ## headless/batch, or when nothing is checked.
 func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionary:
 	if _solo_batch or DisplayServer.get_name() == "headless":
+		return {"split": false}
+	# Release-pass find: the split ask must not open when NO second legal target exists —
+	# the second-pick phase would strand (the maintainer's game: everything else was
+	# blocked by terrain). One validate-scan over the other enemies decides.
+	var second_exists := false
+	for e0 in opr_army_manager.get_all_game_units():
+		var eu0 := e0 as GameUnit
+		if eu0 == null or eu0 == target_a or eu0.get_alive_count() <= 0 or SoloController.unit_in_reserve(eu0):
+			continue
+		if int(eu0.unit_properties.get("player_id", 0)) == int(attacker.unit_properties.get("player_id", 0)):
+			continue
+		if _solo_validate_target(attacker, eu0, false) == "":
+			second_exists = true
+			break
+	if not second_exists:
 		return {"split": false}
 	var dist := solo_controller.nearest_melee_gap_in(attacker, target_a)
 	var names: Array = []

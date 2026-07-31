@@ -245,6 +245,19 @@ func _build_ui() -> void:
 			GraphicsSettings.save_settings())
 	vbox.add_child(trails_cb)
 
+	# Show Rule Texts (transparency stage 2): the floats' discoverable switch — the
+	# maintainer's release pass could not find the toggle because only the setting existed.
+	var floats_cb := CheckButton.new()
+	floats_cb.text = "Show Rule Texts at the Table"
+	floats_cb.button_pressed = GraphicsSettings.show_rule_floats
+	floats_cb.toggled.connect(func(on: bool) -> void:
+		GraphicsSettings.show_rule_floats = on
+		GraphicsSettings.save_settings()
+		var rf := get_node_or_null("/root/Main/FloatingRuleText")
+		if rf != null:
+			rf.enabled = on)
+	vbox.add_child(floats_cb)
+
 	# Enforce Movement Limit (path-painting "dry brush"): Strict = a movement drag hard-stops
 	# at the model's max legal band; off = Casual (free drag). DEFAULT ON. Persisted. Movement
 	# only — shooting and other actions are never gated. English-only, like the rest of the UI.
