@@ -35,6 +35,7 @@ func test_interactive_activation_ticks_at_least_one_frame() -> void:
 	var before: int = Engine.get_process_frames()
 	await _main._solo_activate_one_ai()
 	assert_int(Engine.get_process_frames() - before).is_greater_equal(1)
+	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads
 
 
 func test_batch_activation_stays_frame_free() -> void:
@@ -43,4 +44,5 @@ func test_batch_activation_stays_frame_free() -> void:
 	_main._solo_batch = true
 	var before: int = Engine.get_process_frames()
 	await _main._solo_activate_one_ai()
-	assert_int(Engine.get_process_frames() - before).is_equal(0)
+	assert_int(Engine.get_process_frames() - before).is_equal(0)   # measured BEFORE settle() pumps any
+	await E2EBoot.settle(get_tree())   # the activation's trailing bookkeeping, before gdUnit reads
