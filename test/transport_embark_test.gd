@@ -202,6 +202,7 @@ func test_reserve_transport_is_offered_only_during_deployment() -> void:
 	var radial: RadialMenuController = auto_free(RadialMenuController.new())
 	radial.army_manager = _mgr
 	_mgr.game_phase = OPRArmyManager.GamePhase.DEPLOYMENT
-	assert_object(radial._embark_target_for(squad)).is_same(apc)
+	# Two-truck-choice wave: the singular helper became _embark_targets_for (Array).
+	assert_array(radial._embark_targets_for(squad)).contains([apc])
 	_mgr.game_phase = OPRArmyManager.GamePhase.PLAYING
-	assert_object(radial._embark_target_for(squad)).is_null()
+	assert_array(radial._embark_targets_for(squad)).is_empty()
