@@ -253,6 +253,7 @@
   "Rending",
   "Rending in Melee",
   "Rending in Melee Aura",
+  "Rending when Shooting",
   "Rending when Shooting Aura",
   "Repel Ambushers",
   "Resistance",
@@ -336,7 +337,9 @@
   "Unpredictable Shooter",
   "Unpredictable Shooter Aura",
   "Unstoppable",
+  "Unstoppable in Melee",
   "Unstoppable in Melee Aura",
+  "Unstoppable when Shooting",
   "Unstoppable when Shooting Aura",
   "Unwieldy",
   "Utility Buff",
@@ -760,6 +763,16 @@
     "melee_only": true
    }
   },
+  "Rending when Shooting": {
+   "primitive": "Rending",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "on6_ap": 4,
+    "bypass_regen": true,
+    "shooting_only": true
+   }
+  },
   "Scout": {
    "primitive": "Scout",
    "rated": false,
@@ -851,6 +864,24 @@
    "primitive": "Unstoppable",
    "rated": false,
    "book_version": "3.5.1"
+  },
+  "Unstoppable in Melee": {
+   "primitive": "Lacerate",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bypass_regen": true,
+    "melee_only": true
+   }
+  },
+  "Unstoppable when Shooting": {
+   "primitive": "Lacerate",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bypass_regen": true,
+    "shooting_only": true
+   }
   }
  },
  "factions": {
@@ -1529,6 +1560,16 @@
      "bypass_regen": true
     }
    },
+   "Hit & Run Fighter": {
+    "primitive": "Hit & Run Fighter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true,
+     "after": "melee"
+    }
+   },
    "Hit & Run Fighter Aura": {
     "primitive": null,
     "rated": false,
@@ -1650,7 +1691,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    }
   },
@@ -2817,7 +2859,7 @@
     "book_version": "3.5.3",
     "params": {
      "advance_mod": 2,
-     "rush_mod": 2,
+     "rush_mod": 4,
      "uses_per_game": 1
     }
    },
@@ -2827,7 +2869,7 @@
     "book_version": "3.5.3",
     "params": {
      "advance_mod": 2,
-     "rush_mod": 2,
+     "rush_mod": 4,
      "uses_per_game": 1,
      "aura_expand": true,
      "max_picks": 3,
@@ -3535,7 +3577,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Steadfast": {
@@ -4043,7 +4086,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Strafing": {
@@ -4576,7 +4620,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Strafing": {
@@ -5042,7 +5087,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Repel Ambushers": {
@@ -5577,7 +5623,7 @@
     "book_version": "3.5.3",
     "params": {
      "advance_mod": 2,
-     "rush_mod": 2,
+     "rush_mod": 4,
      "uses_per_game": 1
     }
    },
@@ -5587,7 +5633,7 @@
     "book_version": "3.5.3",
     "params": {
      "advance_mod": 2,
-     "rush_mod": 2,
+     "rush_mod": 4,
      "uses_per_game": 1,
      "aura_expand": true,
      "max_picks": 3,

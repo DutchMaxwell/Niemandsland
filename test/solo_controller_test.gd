@@ -2417,6 +2417,63 @@ func test_reanimation_plan_fills_the_living_before_it_raises_the_dead() -> void:
 	assert_int(over_spent).is_equal(SoloController.reanimation_pool(u))
 
 
+func test_reanimation_candidates_list_what_a_success_can_buy() -> void:
+	# NML-924: the owner's click prompt and the "is there a choice at all?" gate read this list.
+	# A casualty is worth its full wounds_max (one success buys it back, the rest heal it up), a
+	# living wounded model its missing wounds, an untouched model nothing.
+	var u := _reanim_unit(2, "Bots", [[3, 1], [1, 0], [3, 0], [1, 1]])
+	u.unit_properties["special_rules"] = ["Reanimation"]
+	var cands := SoloController.reanimation_candidates(u)
+	assert_int(cands.size()) \
+		.override_failure_message("the untouched trooper must not be offered as a target") \
+		.is_equal(3)
+	assert_object((cands[0] as Dictionary)["model"]).is_equal(u.models[0])
+	assert_int(int((cands[0] as Dictionary)["capacity"])).is_equal(2)
+	assert_bool(bool((cands[0] as Dictionary)["revive"])).is_false()
+	assert_int(int((cands[1] as Dictionary)["capacity"])).is_equal(1)
+	assert_bool(bool((cands[1] as Dictionary)["revive"])).is_true()
+	assert_int(int((cands[2] as Dictionary)["capacity"])) \
+		.override_failure_message("a dead Tough(3) can absorb three successes, not one") \
+		.is_equal(3)
+	# A unit at full strength offers nothing at all.
+	var fresh := _reanim_unit(2, "Fresh", [[3, 3], [1, 1]])
+	fresh.unit_properties["special_rules"] = ["Reanimation"]
+	assert_array(SoloController.reanimation_candidates(fresh)).is_empty()
+
+
+func test_reanimation_pick_step_spends_one_success_per_click() -> void:
+	# NML-924, the cast_pick_step pattern: ONE click of the owner's allocation, pure.
+	var u := _reanim_unit(2, "Bots", [[3, 1], [1, 0], [1, 1]])
+	var wounded := u.models[0] as ModelInstance
+	var fallen := u.models[1] as ModelInstance
+	var healthy := u.models[2] as ModelInstance
+	# A casualty: this success is the one that puts it back on the table.
+	var s1 := SoloController.reanimation_pick_step(2, fallen)
+	assert_bool(bool(s1["spent"])).is_true()
+	assert_bool(bool(s1["revive"])) \
+		.override_failure_message("the first success on a casualty is the revive — the placement rule hangs off it") \
+		.is_true()
+	assert_int(int(s1["left"])).is_equal(1)
+	assert_bool(bool(s1["done"])).is_false()
+	# A living wounded model: a plain heal, and the last success ends the allocation.
+	var s2 := SoloController.reanimation_pick_step(1, wounded)
+	assert_bool(bool(s2["spent"])).is_true()
+	assert_bool(bool(s2["revive"])).is_false()
+	assert_int(int(s2["left"])).is_equal(0)
+	assert_bool(bool(s2["done"])).is_true()
+	# A model at full health buys nothing — and says why, so the click is never a silent no-op.
+	var s3 := SoloController.reanimation_pick_step(2, healthy)
+	assert_bool(bool(s3["spent"])).is_false()
+	assert_int(int(s3["left"])) \
+		.override_failure_message("a refused click must not eat a success") \
+		.is_equal(2)
+	assert_str(str(s3["reason"])).is_not_empty()
+	# Degenerate inputs never spend anything either.
+	assert_bool(bool(SoloController.reanimation_pick_step(0, fallen)["spent"])).is_false()
+	assert_bool(bool(SoloController.reanimation_pick_step(0, fallen)["done"])).is_true()
+	assert_bool(bool(SoloController.reanimation_pick_step(2, null)["spent"])).is_false()
+
+
 ## Belt-and-braces gate (#215). The planner is axis-correct now, but _finalize_placement is the LAST seam
 ## before a plan becomes real model positions, and it used to clamp only its OWN correction candidates —
 ## an incoming plan was taken on trust. It now clamps the incoming plan per axis and says so once.

@@ -150,6 +150,7 @@
   "Increased Shooting Range Mark",
   "Indirect",
   "Indirect Mark",
+  "Indirect when Shooting",
   "Indirect when Shooting Aura",
   "Infected",
   "Infected Boost",
@@ -272,6 +273,7 @@
   "Rending Mark",
   "Rending in Melee",
   "Rending in Melee Aura",
+  "Rending when Shooting",
   "Rending when Shooting Aura",
   "Repel Ambushers",
   "Resistance",
@@ -361,6 +363,7 @@
   "Unstoppable Mark",
   "Unstoppable in Melee",
   "Unstoppable in Melee Aura",
+  "Unstoppable when Shooting",
   "Unstoppable when Shooting Aura",
   "Unwieldy",
   "Unwieldy Debuff",
@@ -720,6 +723,18 @@
     "hold_and_shoot": true
    }
   },
+  "Indirect when Shooting": {
+   "primitive": "Indirect",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "moved_hit_penalty": 1,
+    "ignores_cover": true,
+    "ignores_los": true,
+    "hold_and_shoot": true,
+    "shooting_only": true
+   }
+  },
   "Limited": {
    "primitive": "Limited",
    "rated": false,
@@ -784,6 +799,16 @@
     "on6_ap": 4,
     "bypass_regen": true,
     "melee_only": true
+   }
+  },
+  "Rending when Shooting": {
+   "primitive": "Rending",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "on6_ap": 4,
+    "bypass_regen": true,
+    "shooting_only": true
    }
   },
   "Scout": {
@@ -902,6 +927,15 @@
    "params": {
     "bypass_regen": true,
     "melee_only": true
+   }
+  },
+  "Unstoppable when Shooting": {
+   "primitive": "Lacerate",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bypass_regen": true,
+    "shooting_only": true
    }
   }
  },
@@ -1168,7 +1202,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Stealth Buff": {
@@ -1242,7 +1277,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    }
   },
@@ -1381,7 +1417,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Versatile Attack": {
@@ -1521,9 +1558,13 @@
     }
    },
    "Increased Shooting Range Aura": {
-    "primitive": null,
+    "primitive": "Royal Legion",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 6,
+     "charge_mod": 0
+    }
    },
    "Piercing Assault": {
     "primitive": "Piercing Assault",
@@ -1639,7 +1680,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    }
   },
@@ -1784,7 +1826,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Versatile Attack": {
@@ -2003,7 +2046,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Versatile Attack": {
@@ -2453,9 +2497,13 @@
     "book_version": "3.5.3"
    },
    "Increased Shooting Range Aura": {
-    "primitive": null,
+    "primitive": "Royal Legion",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 6,
+     "charge_mod": 0
+    }
    },
    "Melee Shrouding": {
     "primitive": "Melee Shrouding",
@@ -2747,7 +2795,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Vanguard": {
@@ -3156,7 +3205,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Versatile Attack": {
@@ -3201,9 +3251,13 @@
     "book_version": "3.5.3"
    },
    "Increased Shooting Range Aura": {
-    "primitive": null,
+    "primitive": "Royal Legion",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 6,
+     "charge_mod": 0
+    }
    },
    "Infiltrate": {
     "primitive": "Infiltrate",
@@ -3654,9 +3708,13 @@
     "book_version": "3.5.3"
    },
    "Precision Fighter Aura": {
-    "primitive": null,
+    "primitive": "Shot Modifier",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "melee_only": true
+    }
    },
    "Rapid Advance": {
     "primitive": "Rapid Advance",
@@ -3874,9 +3932,13 @@
     "book_version": "3.5.3"
    },
    "Precision Fighter Aura": {
-    "primitive": null,
+    "primitive": "Shot Modifier",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "melee_only": true
+    }
    },
    "Quick": {
     "primitive": "Quick",
@@ -4234,9 +4296,13 @@
     "book_version": "3.5.3"
    },
    "Increased Shooting Range Aura": {
-    "primitive": null,
+    "primitive": "Royal Legion",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 6,
+     "charge_mod": 0
+    }
    },
    "Piercing Spotter": {
     "primitive": "Piercing Tag",
@@ -4314,7 +4380,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Stealth Aura": {
@@ -4547,7 +4614,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Repel Ambushers": {
@@ -4702,14 +4770,22 @@
     }
    },
    "Precision Fighter Aura": {
-    "primitive": null,
+    "primitive": "Shot Modifier",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "melee_only": true
+    }
    },
    "Precision Shooter Aura": {
-    "primitive": null,
+    "primitive": "Shot Modifier",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "phase": "shoot"
+    }
    },
    "Protected": {
     "primitive": "Regeneration",
@@ -4789,7 +4865,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Stealth Aura": {
@@ -5077,9 +5154,13 @@
     }
    },
    "Precision Fighter Aura": {
-    "primitive": null,
+    "primitive": "Shot Modifier",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "melee_only": true
+    }
    },
    "Precision Tag": {
     "primitive": "Utility Buff",
@@ -5392,7 +5473,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Versatile Attack": {
@@ -5611,7 +5693,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Versatile Attack": {
@@ -6099,9 +6182,13 @@
     "book_version": "3.5.3"
    },
    "Precision Charge Aura": {
-    "primitive": null,
+    "primitive": "Shot Modifier",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "when": "charge"
+    }
    },
    "Protected": {
     "primitive": "Regeneration",
@@ -6149,7 +6236,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Repel Ambushers": {
@@ -6192,7 +6280,7 @@
     "book_version": "3.5.3",
     "params": {
      "advance_mod": 2,
-     "rush_mod": 2,
+     "rush_mod": 4,
      "uses_per_game": 1
     }
    },
@@ -6609,7 +6697,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Versatile Attack": {
@@ -6738,9 +6827,13 @@
     "book_version": "3.5.3"
    },
    "Precision Shooter Aura": {
-    "primitive": null,
+    "primitive": "Shot Modifier",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "phase": "shoot"
+    }
    },
    "Predator": {
     "primitive": "Surge",
@@ -6943,7 +7036,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Guerrilla": {
@@ -7514,7 +7608,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Strafing": {
@@ -7739,7 +7834,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Surge": {
@@ -8332,7 +8428,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Versatile Reach": {
@@ -8534,7 +8631,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Versatile Reach": {
@@ -8722,7 +8820,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Versatile Attack": {
@@ -8950,7 +9049,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Versatile Attack": {
@@ -9546,7 +9646,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "effect": "fatigue"
+     "effect": "fatigue",
+     "needs_los": true
     }
    },
    "Furious Aura": {
