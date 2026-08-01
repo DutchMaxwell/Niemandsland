@@ -58,7 +58,18 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   coherency with a model that was *not* restored, otherwise the success expires (with its own log
   line). The rule reaches the table through the hero upgrade *Reanimation Aura*, and it ends when
   its carrier falls — the battle log says so. Shaken units stay idle and do not reanimate.
-  Allocation is automatic in v1 for both sides; letting the owner click each restore is a follow-up.
+- **You allocate your own Reanimation successes by clicking.** The rule's restores used to be handed
+  out for you — living wounded first, then the cheapest casualty. A fine default and a poor
+  decision-maker: getting a Tough elite back on its feet instead of topping two wounds up is often
+  the whole activation, and OPR gives that call to the owner. After the roll your side gets a click
+  mode, the same principle the wound allocation follows: **left-click a wounded model** to heal one
+  wound there, **left-click a fallen model's ring** to bring it back, **right-click** to hand the
+  rest to the automatic allocation. A casualty has no model to click — a regiment one is hidden in
+  its block, a loose one is parked on the army tray — so every casualty that *can* return wears a
+  marker ring at its return spot, and that ring is the click target. A strip counts the successes
+  down, every click writes its own log line, and a click that buys nothing (a model already at full
+  health) says why instead of doing nothing. The prompt only appears where the choice can change
+  something, and NACHTMAHR keeps allocating its own restores by its own plan.
 - **The combat stage covers melee and spells.** The central card that already paced the shooting
   volleys now walks a charge — Charge, Counter, Impact, one card per strike wave, Melee result,
   Morale, Consolidation — and a cast: Cast, Cast roll, Effect (one Effect card per target). Both
@@ -92,6 +103,15 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   coherency, range and line of sight following the wrong one. The real position now follows the
   restore message over the ordinary move channel, the same correction a ghost-placed disembark
   already sends.
+- **A reanimated regiment model comes back in its rank, not beside the block.** The restore placed
+  every returning model itself — it looked for a free spot in coherency with a survivor and stood the
+  model there. For a loose skirmish model that is right; a regiment model belongs to its movement
+  tray, and the block had *already* closed its ranks around the returning model when the coherency
+  spot was written on top of it. The rank model was then standing a good 2″ outside its own block.
+  The other client never saw it: it re-ranks the block from the restore message, which is exactly
+  what the rules say should happen — so the two screens disagreed. Regiment returners are now left to
+  their block on both sides, and a returning rank model can no longer "find nowhere to stand": a
+  block always has a rank for it, even when every spot around it is occupied.
 - **Defense modifiers follow their own wording against spell damage.** A blessing that gives "+1 to
   defense rolls" did nothing the moment the wound came from a spell: the spell path saved at the bare
   Armor-adjusted Defense and silently dropped every active modifier. The block step of the core rules
@@ -101,6 +121,14 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   and marker bonuses carry over; Shielded ("hits that are not from spells"), Cover ("from shooting")
   and the Guarded/Versatile/Sturdy family ("shot or charged from over 9″") stay out. The battle log
   names both halves — what applied, and what did not apply and why.
+- **The save log names the rule that actually gave the bonus.** Every attack — your volley, the AI's
+  volley and the melee strike phase — announced its whole Defense bonus as one line, "*<unit>* is
+  Shielded: +1 Defense". That was true while Shielded was the only thing that could raise the number;
+  since defense modifiers became a shared seam a growth marker or a spell token raises the same
+  number, and the line then credited a rule the unit does not even carry. Each contribution now
+  writes its own line under its own name, at the Defense the dice really roll — and a hex that
+  cancels a bonus no longer erases both from the log: the buff and the hex are named separately, so
+  a rule can neither claim what it did not do nor fall silent.
 - **Aircraft -12″ now bites on YOUR volley too (#231).** Picking the target already measured the
   shrunk reach, but once the shot was declared each weapon was gated at its printed range — so a
   24″ gun still rolled dice at an aircraft 20″ away whenever a longer weapon in the same unit kept

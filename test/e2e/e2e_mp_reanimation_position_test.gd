@@ -98,7 +98,7 @@ func test_the_ring_spot_travels_not_the_fall_point(timeout := 120000) -> void:
 	var u := _bots_with_blocked_fall_point()
 	var back := u.models[1] as ModelInstance
 	var fell: Vector3 = _fall_point(back)
-	_main._solo_resolve_reanimation(u, 1, 5, 1)
+	await _main._solo_resolve_reanimation(u, 1, 5, 1)
 	assert_bool(back.is_alive) \
 		.override_failure_message("fixture check: the success must actually restore the model") \
 		.is_true()
@@ -127,7 +127,7 @@ func test_the_wounds_message_goes_first(timeout := 120000) -> void:
 	# Order is load-bearing: the wounds message is what un-parks the model on the peer (and drops
 	# it on the fall point). A correction that arrives BEFORE it would be overwritten.
 	var u := _bots_with_blocked_fall_point()
-	_main._solo_resolve_reanimation(u, 1, 5, 1)
+	await _main._solo_resolve_reanimation(u, 1, 5, 1)
 	var kinds: Array = []
 	for e in _fake.sent:
 		kinds.append(str((e as Dictionary)["kind"]))
@@ -146,7 +146,7 @@ func test_solo_without_peers_sends_nothing_and_still_stands_the_model_up(timeout
 	var u := _bots_with_blocked_fall_point()
 	var back := u.models[1] as ModelInstance
 	var fell: Vector3 = _fall_point(back)
-	_main._solo_resolve_reanimation(u, 1, 5, 1)
+	await _main._solo_resolve_reanimation(u, 1, 5, 1)
 	assert_bool(back.is_alive).is_true()
 	assert_float(back.node.global_position.distance_to(fell)) \
 		.override_failure_message("solo placement changed with the MP fix") \
