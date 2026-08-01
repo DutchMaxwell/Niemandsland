@@ -7,6 +7,29 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Fixed
+- **"Unload" was missing from the transport's radial menu.** Loading a unit into a transport *is* that
+  unit's move action, so its activation is spent for the round — and the rulebook is right that it may
+  not then also climb back out ("units can't both embark/disembark as part of the same activation").
+  The menu enforced that by simply **dropping the entry**: no option, no reason, nothing. Load a squad
+  in round 1 and the transport's menu had no Unload at all, which reads as a broken game rather than as
+  a rule. The entry stays now — greyed, labelled *"Unload X — already activated"*, with a tooltip that
+  names the rule and says the unit can exit next round. Nothing about what is *allowed* changed.
+- **A destroyed transport's cargo skipped the dangerous terrain test on the AI's side.** The rule gives
+  a wrecked transport's passengers three consequences at once: they take a dangerous terrain test, they
+  are Shaken, and they must be placed fully within 6″ of the transport before it is removed. Shaken and
+  the 6″ placement were carried out; the dice were left in the player's hand — the same deal every other
+  dangerous terrain test in the game gives you. But NACHTMAHR has no hand, so for an AI-owned unit the
+  test was never taken by anyone and the rule quietly did not apply. The engine rolls that side now, on
+  the real dice tray, with the same per-model/Tough(X) count the movement path uses (deferred a beat, so
+  it can never land inside the roll that killed the transport). The battle-log line also **quotes** the
+  rule and names all three consequences in order, so the dice you are still asked for read as the rule's
+  demand instead of the app's.
+- **The AI's explanation faded out before you could read it.** NACHTMAHR's attribution and outcome
+  messages — which unit it picked, what it shot, what the roll did to whom — vanished on a six-second
+  timer while the AI still held the turn, so there was no way to study them. They stay up now until the
+  next event replaces them or you click them away. Plain operational notices (export path, autosave, a
+  refused button) keep their fade: they report on the app, not on the game, and they repeat on demand.
+  A **Settings** toggle ("AI Explanations Stay Up", on by default) hands the old fade back.
 - **Nine aura families granted a rule that resolved nowhere (army-book).** An army-book "*X* Aura" reads
   "this model and its unit get *X*", and the import expands it by writing the bare name *X* onto the unit.
   That only does something if *X* actually resolves — and for nine families nothing did, in either of the

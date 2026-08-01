@@ -127,6 +127,7 @@ var _movement_cap_buttons: Dictionary = {}  # MovementCap mode -> Button (the "M
 var _success_target: int = DiceRules.TARGET_NONE
 var _success_modifier: int = 0
 var _next_roll_owner: String = ""   # attribution for the next tray roll ("AI (…)"); empty = "You" (goal 001)
+var _solo_tray_busy: bool = false   # NML-954: a _solo_tray_roll is in flight — the tray is exclusive
 var _next_roll_purpose: String = ""   # what the roll is about — tray label + MP context (community #170)
 var _next_roll_kind: String = "attack"   # Bug 16: "defense" words the dice-log line as "defends … blocks"
 var _target_buttons: Array[Button] = []
@@ -314,6 +315,7 @@ var _solo_arena_trace: bool = OS.get_environment("NML_AI_TRACE") == "1"
 var _solo_toast: Label = null                # transient AI-action attribution/outcome toast
 var _solo_live_announce: Array = []          # announce rings/line currently on the board (leak sweep)
 var _solo_toast_gen: int = 0   # generation token so an auto-hide never blanks a newer toast
+var _solo_toast_sticky: bool = false   # NML-955: this toast is an AI EXPLANATION — no timer, click to dismiss
 var _solo_unmodeled_logged: Dictionary = {}  # rule name -> true: once-per-session unmodeled-rule notes
 # === AI ARENA — native both-AI mode + per-side difficulty (see SoloDifficulty) ===
 var _solo_both_ai: bool = false              # BOTH sides are AI: combat auto-resolves, the game runs unattended
@@ -573,6 +575,8 @@ func _ready() -> void:
 	opr_army_manager.spawn_progress.connect(_on_army_spawn_progress)
 	# Game phase (deployment -> playing): one seam for the trail-chalk gate + the Start-Game/Ready UI.
 	opr_army_manager.game_phase_changed.connect(_on_game_phase_changed)
+	# NML-954: the first of a destroyed Transport's three consequences — the cargo's dangerous test.
+	opr_army_manager.transport_cargo_spilled.connect(_on_transport_spill_dangerous)
 
 	# Set army_manager reference on SaveManager for GameUnit serialization
 	save_manager.army_manager = opr_army_manager
@@ -1525,6 +1529,8 @@ func _solo_pump() -> void:
 # FPS text in the field-test screenshots. All three lanes now stack BELOW that band.
 const STATUS_LANE_BANNER := 92
 const STATUS_LANE_TOAST := 116
+## How long a plain OPERATIONAL notice stays up (NML-955 keeps AI explanations off this timer).
+const SOLO_TOAST_HIDE_S := 6.0
 const STATUS_LANE_PEER := 140
 
 
@@ -2554,7 +2560,7 @@ func _solo_deploy_ai_turn() -> void:
 	_solo_focus_on_unit(unit)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL, "NACHTMAHR deploys %s — your turn" % unit.get_name(), true)
-	_solo_show_toast("NACHTMAHR deploys %s — your turn" % unit.get_name())
+	_solo_show_explain("NACHTMAHR deploys %s — your turn" % unit.get_name())
 	_solo_deploy_show_human_turn()
 
 
@@ -6657,6 +6663,50 @@ func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 	# still shoots this turn.
 
 
+## NML-954 — the destroyed-transport spill's DICE half. GF v3.5.1 Transport: "When a transport is
+## destroyed, units inside must take a dangerous terrain test, are Shaken, and must be placed fully
+## within 6\" of the transport before it's removed." Shaken and the 6" placement are carried out by
+## OPRArmyManager._spill_destroyed_transport; the TEST was left to the player's hand — which is the
+## same deal every other dangerous terrain test in the game gives you, and the battle-log line asks
+## for it. But NACHTMAHR has no hand: an AI-owned unit rolled NOTHING, so for that side the rule's
+## first consequence simply never applied. The engine rolls that side here, on the real tray, with
+## the same p.12 count the movement path uses.
+##
+## WHY DEFERRED. The spill fires from inside set_loose_model_dead — i.e. in the middle of the wound
+## resolution that killed the transport, while _solo_tray_roll owns the tray (it saves and restores
+## the player's count/target around its await). Rolling inline would land a second roll inside the
+## first and hand both the wrong faces. So the dice count is taken NOW (before anything else can
+## change the unit) and the roll waits for the tray to come free.
+func _on_transport_spill_dangerous(_transport: GameUnit, spilled: Array) -> void:
+	if solo_controller == null or dice_roller_control == null:
+		return
+	# The spill also fires on a guest replaying the host's model deaths (network_manager relays them
+	# through the same set_loose_model_dead). Only ONE side may roll, or the two tables disagree
+	# about the wounds — the host owns the dice, as it owns every other AI resolution.
+	if network_manager != null and network_manager.is_multiplayer_active() and not network_manager.is_host:
+		return
+	var pending: Array = []
+	for u in spilled:
+		var unit := u as GameUnit
+		if unit == null or not _solo_is_ai_unit(unit):
+			continue   # your cargo: the dice stay yours, and the log line asks for them by name
+		var dice: int = OPRArmyManager.dangerous_dice_for(unit)
+		if dice > 0:
+			pending.append([unit, dice])
+	if pending.is_empty():
+		return
+	while _solo_tray_busy:
+		await get_tree().process_frame
+	for p in pending:
+		var unit := (p as Array)[0] as GameUnit
+		if unit == null or unit.is_destroyed():
+			continue
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"%s takes its Dangerous Terrain test after the wreck (GF v3.5.1 Transport / p.12)" % unit.get_name(), true)
+		await _run_ai_dangerous(unit, int((p as Array)[1]))
+
+
 ## Alive models of the unit INCLUDING its attached heroes (a unit is destroyed only when both are gone).
 ## Shared truth in SoloController.combined_alive — the battle log's destroyed-check counts the SAME pool.
 func _solo_combined_alive(unit: GameUnit) -> int:
@@ -6667,6 +6717,7 @@ func _solo_combined_alive(unit: GameUnit) -> int:
 ## then restore the player's previous tray settings.
 func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: String = "attack",
 		purpose: String = "") -> Array:
+	_solo_tray_busy = true   # NML-954: the ONE tray is exclusive — see _on_transport_spill_dangerous
 	_next_roll_kind = roll_kind   # Bug 16: the dice-log line words saves as "defends … blocks"
 	# Community #170: the tray names WHAT is being rolled. High-value sites pass a specific
 	# purpose; the fallback synthesizes an honest generic one so no roll shows a bare tray.
@@ -6710,6 +6761,7 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 	_success_target = prev_target
 	_success_modifier = prev_modifier
 	_update_success_controls_display()
+	_solo_tray_busy = false
 	return faces
 
 
@@ -6900,7 +6952,7 @@ func _solo_show_attack_announce(shooter: GameUnit, target: GameUnit, verb: Strin
 	im.surface_end()
 	add_child(line)
 	nodes.append(line)
-	_solo_show_toast("%s %s %s" % [shooter.get_name(), verb, target.get_name()])
+	_solo_show_explain("%s %s %s" % [shooter.get_name(), verb, target.get_name()])
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT, "%s %s %s" % [shooter.get_name(), verb, target.get_name()], true)
 	_solo_live_announce = nodes   # sweep target if the caller's cleanup never runs
@@ -6990,7 +7042,9 @@ func _solo_spawn_fire_vector(attacker: GameUnit, target: GameUnit, label_text: S
 ## `auto_hide_s` > 0 fades the toast on its own (UI audit 2026-07-24: only _solo_show_outcome ever
 ## hid it, so a plain notice — export path, autosave, "no AI lists" — stayed on screen until the
 ## next combat outcome happened to overwrite it). Callers that manage their own hide pass 0.0.
-func _solo_show_toast(text: String, auto_hide_s: float = 6.0) -> void:
+##
+## `explain` marks the toast as an AI EXPLANATION (NML-955) — see _solo_show_explain.
+func _solo_show_toast(text: String, auto_hide_s: float = SOLO_TOAST_HIDE_S, explain: bool = false) -> void:
 	if not is_instance_valid(_solo_toast):
 		_solo_toast = Label.new()
 		_solo_toast.name = "SoloActionToast"
@@ -7000,12 +7054,54 @@ func _solo_show_toast(text: String, auto_hide_s: float = 6.0) -> void:
 		_solo_toast.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 		_solo_toast.add_theme_constant_override("outline_size", 4)
 		_solo_toast.set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP, Control.PRESET_MODE_MINSIZE, STATUS_LANE_TOAST)
+		_solo_toast.gui_input.connect(_on_solo_toast_gui_input)
 		$UI.add_child(_solo_toast)
 	_solo_toast.text = text
 	_solo_toast.visible = true
 	_solo_toast_gen += 1
+	# A sticky toast is the only one that may take the mouse: it has to be clickable to be
+	# dismissible, and it must not eat clicks in the moments it is only a passing notice. It floats
+	# in the status lane over the expanded battle-log panel, so it can cover a line the player wants
+	# to click — the first click there clears the toast and the second reaches what was underneath.
+	_solo_toast_sticky = explain and auto_hide_s <= 0.0
+	_solo_toast.mouse_filter = Control.MOUSE_FILTER_STOP if _solo_toast_sticky else Control.MOUSE_FILTER_IGNORE
+	_solo_toast.tooltip_text = "NACHTMAHR's reasoning — click to dismiss" if _solo_toast_sticky else ""
 	if auto_hide_s > 0.0:
 		_solo_toast_autohide(_solo_toast_gen, auto_hide_s)
+
+
+## NML-955 — an AI EXPLANATION stays up until the next event replaces it or the player clicks it
+## away. Maintainer, live test: "Das ERKLÄRUNGSfenster der KI sollte dauerhaft angezeigt werden und
+## nicht einfach ausgeblendet. So kann ich es gar nicht wirklich studieren."
+##
+## WHERE THE LINE RUNS. An explanation is the game talking about the GAME — which unit NACHTMAHR
+## picked, what it shot, what the roll did to whom. It is evidence the player is meant to study, it
+## arrives while the AI holds the turn (so he cannot pause it himself), and it is gone the moment it
+## fades. A plain notice is the game talking about the APP — the export path, an autosave, a refused
+## button, a missing AI list. Those are acknowledgements, they repeat on demand, and leaving them
+## nailed to the top of the screen is what the 2026-07-24 UI audit had to clean up. So explanations
+## go sticky, notices keep the 6 s fade.
+func _solo_show_explain(text: String) -> void:
+	_solo_show_toast(text, 0.0 if GraphicsSettings.ai_explain_persistent else SOLO_TOAST_HIDE_S, true)
+
+
+## Click on a sticky AI explanation = dismiss it (the toast is only mouse-visible while sticky).
+func _on_solo_toast_gui_input(event: InputEvent) -> void:
+	var mb := event as InputEventMouseButton
+	if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT or not _solo_toast_sticky:
+		return
+	_solo_hide_toast(true)
+	_solo_toast.accept_event()   # the same click must not fall through and pick a model behind it
+
+
+## Take the toast down. `force` also clears a sticky AI explanation (a dismiss click); without it a
+## sticky explanation survives phase-boundary clears, which is the whole point of NML-955.
+func _solo_hide_toast(force: bool = false) -> void:
+	if not is_instance_valid(_solo_toast) or (_solo_toast_sticky and not force):
+		return
+	_solo_toast.visible = false
+	_solo_toast_sticky = false
+	_solo_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
 ## Hide the toast after `secs` — but only if no NEWER toast has replaced it meanwhile (generation
@@ -7013,16 +7109,17 @@ func _solo_show_toast(text: String, auto_hide_s: float = 6.0) -> void:
 func _solo_toast_autohide(gen: int, secs: float) -> void:
 	await get_tree().create_timer(secs).timeout
 	if gen == _solo_toast_gen and is_instance_valid(_solo_toast):
-		_solo_toast.visible = false
+		_solo_hide_toast()
 
 
-## OUTCOME phase: show the result summary as a toast + hold it readable, then hide.
+## OUTCOME phase: show the result summary as a toast + hold it readable. NML-955: the summary IS the
+## explanation ("X: 4 hits → 2 wounds land — Y loses 1 model"), so it now stays after the hold and is
+## replaced by the next event instead of blanking the screen the player was reading.
 func _solo_show_outcome(text: String) -> void:
-	_solo_show_toast(text, 0.0)   # this path times its own hide via the pace hold
+	_solo_show_explain(text)
 	if not _solo_stage_active():   # pacing grill: the stage's Result phase carries this hold
 		await _solo_pace_hold(SoloController.Pace.OUTCOME)
-	if is_instance_valid(_solo_toast):
-		_solo_toast.visible = false
+	_solo_hide_toast()
 
 
 ## EXECUTE phase for movement: the models GLIDE along their REAL planner routes (never teleport — the
@@ -9528,7 +9625,7 @@ func _solo_alternate_ambush_arrivals(round_number: int) -> void:
 			else:
 				_solo_set_unit_visible(unit, true)   # reveal — this arrival is its ONE placement (finding 4)
 				_solo_focus_on_unit(unit)
-				_solo_show_toast("%s ambushes in from reserve" % unit.get_name())
+				_solo_show_explain("%s ambushes in from reserve" % unit.get_name())
 				if battle_log != null:
 					battle_log.log_event(BattleLog.Category.GENERAL,
 						"AI Ambush: %s arrives — near an objective, >9\" from your units, clear of all standing bases" % unit.get_name(), true)
@@ -9544,8 +9641,7 @@ func _solo_alternate_ambush_arrivals(round_number: int) -> void:
 					occupied.append({"pos": Vector2(solo_controller.unit_centre(g as GameUnit).x,
 						solo_controller.unit_centre(g as GameUnit).z), "radius": 0.05})
 		ai_turn = not ai_turn
-	if is_instance_valid(_solo_toast):
-		_solo_toast.visible = false
+	_solo_hide_toast()   # NML-955: the phase-boundary clear leaves a sticky AI explanation standing
 	var held_ai: int = solo_controller.ambush_reserve_ready(round_number)
 	if held_ai > 0 and battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,

@@ -2388,11 +2388,21 @@ func _append_transport_items(game_unit: GameUnit, context: Dictionary, items: Ar
 		context["cargo_units"] = cargo
 		for i in range(cargo.size()):
 			var cu := cargo[i] as GameUnit
+			var cname := str(cu.unit_properties.get("name", "unit"))
+			# NML-953 — the entry used to VANISH here. #209 is right that a cargo unit which already
+			# spent its move action may not also hop out this round (GF v3.5.1 p.15: "can't both
+			# embark/disembark as part of the same activation"), but it was enforced by a bare
+			# `continue`: no entry, no reason, nothing. And loading IS the cargo's move action, so the
+			# maintainer's own test sequence — embark in round 1 (TC-039), then unload (TC-040) —
+			# always lands in this branch: "unload steht nicht im radial menü". A refusal the player
+			# cannot see reads as a broken game, so the entry stays, greyed, and says why.
 			if economy and cu.is_activated:
-				continue   # #209: its move action is spent — no second activation this round
+				items.append(RadialMenu.RadialMenuItem.new("unload_cargo_%d" % i,
+					"Unload %s — already activated" % cname, "▢", false,
+					"%s has already used its activation this round — embarking IS its move action, and a unit can't both embark and disembark in one activation (GF v3.5.1 p.15). It can exit next round." % cname))
+				continue
 			items.append(RadialMenu.RadialMenuItem.new("unload_cargo_%d" % i,
-				"Unload %s%s" % [str(cu.unit_properties.get("name", "unit")),
-					" — its move action (may shoot after)" if economy else ""], "▢", true,
+				"Unload %s%s" % [cname, " — its move action (may shoot after)" if economy else ""], "▢", true,
 				"Disembark this unit — an Advance exit: place fully within 6\", the shot window stays open (GF v3.5.1 p.7/p.15)"))
 
 
@@ -2628,8 +2638,14 @@ func _transport_log(msg: String) -> void:
 
 
 ## NML-105 — the destroyed-transport spill's VISIBLE half (state happened in the army manager):
-## Shaken marker + MP marker broadcast per spilled unit, and the rules-must-log line naming the
-## player's remaining dice duty (the dangerous-terrain test stays a hand roll in sandbox play).
+## Shaken marker + MP marker broadcast per spilled unit, and the rules-must-log line.
+##
+## NML-954: the maintainer asked why the game makes HIM roll the dangerous terrain test. It does,
+## and it is right to — but the old line only ordered the roll without saying which rule ordered
+## it, so the demand read as a quirk of the app instead of as the first of the rule's three. The
+## line now QUOTES Transport and names all three consequences in the order the rule lists them,
+## and it says who rolls: NACHTMAHR's own cargo is rolled by the engine (nobody else can), yours
+## stays in your hand like every other dangerous terrain test in the game.
 func _on_transport_cargo_spilled(transport: GameUnit, spilled: Array) -> void:
 	for u in spilled:
 		var unit := u as GameUnit
@@ -2638,5 +2654,18 @@ func _on_transport_cargo_spilled(transport: GameUnit, spilled: Array) -> void:
 		_update_shaken_markers(unit)
 		if network_manager:
 			network_manager.broadcast_unit_marker(unit, "ShakenMarker", true)
-		_transport_log("%s is destroyed — %s spills out: placed within 6\", is SHAKEN; take a Dangerous Terrain test now (GF v3.5.1 Transport)" % [
-			str(transport.unit_properties.get("name", "transport")), str(unit.unit_properties.get("name", "unit"))])
+		var dice_duty := "NACHTMAHR rolls its test now (one die per model, Tough(X) rolls X — p.12)" \
+			if _is_ai_unit(unit) else "take a Dangerous Terrain test now (one die per model, Tough(X) rolls X, a 1 wounds — p.12)"
+		_transport_log(("%s is destroyed — GF v3.5.1 Transport: \"units inside must take a dangerous terrain test, " \
+			+ "are Shaken, and must be placed fully within 6\" of the transport before it's removed\". " \
+			+ "%s: placed fully within 6\" of the wreck, is SHAKEN, %s") % [
+			str(transport.unit_properties.get("name", "transport")),
+			str(unit.unit_properties.get("name", "unit")), dice_duty])
+
+
+## Whether a unit belongs to the solo AI — asked through the same /root/Main hop
+## _activation_economy_on() uses, so this controller keeps knowing nothing about solo internals.
+func _is_ai_unit(unit: GameUnit) -> bool:
+	var main_node := get_node_or_null("/root/Main")
+	return main_node != null and main_node.has_method("_solo_is_ai_unit") \
+			and bool(main_node._solo_is_ai_unit(unit))
