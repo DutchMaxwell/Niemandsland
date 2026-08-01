@@ -4113,6 +4113,45 @@ static func reanimation_plan(unit: GameUnit, successes: int) -> Array:
 	return plan
 
 
+## NML-924 — what a Reanimation success may be spent on RIGHT NOW, in reanimation_models order:
+## [{model, revive, capacity}]. `capacity` is how many successes that model can still absorb — a
+## casualty is worth its full wounds_max (one success buys it back, further ones heal it up), a living
+## wounded model its missing wounds. Two readers: the owner's click prompt draws its targets from this,
+## and the "does the owner get a choice at all?" gate counts it. Empty = nothing left to restore.
+static func reanimation_candidates(unit: GameUnit) -> Array:
+	var out: Array = []
+	for m in reanimation_models(unit):
+		var mi := m as ModelInstance
+		if mi == null:
+			continue
+		if not mi.is_alive:
+			out.append({"model": mi, "revive": true, "capacity": maxi(mi.wounds_max, 1)})
+			continue
+		var gap: int = mi.wounds_max - mi.wounds_current
+		if gap > 0:
+			out.append({"model": mi, "revive": false, "capacity": gap})
+	return out
+
+
+## NML-924 — ONE click of the owner's Reanimation allocation: spend a single success on `choice`.
+## The cast_pick_step pattern — PURE (it reads the model's own wound fields and nothing else), so every
+## branch of the allocation is reachable in a test without a scene, a camera or a die.
+##
+## Returns {"spent", "revive", "left", "done", "reason"}. A click that buys nothing comes back with
+## `spent` false and a `reason` the caller can log (rules-must-log: a refusal that says nothing reads
+## like a broken click); `revive` marks the success that puts a casualty back on the table, which is
+## the one the placement rule ("in coherency with non-restored models") applies to.
+static func reanimation_pick_step(left: int, choice: ModelInstance) -> Dictionary:
+	if left <= 0:
+		return {"spent": false, "revive": false, "left": 0, "done": true, "reason": "no successes left"}
+	if choice == null:
+		return {"spent": false, "revive": false, "left": left, "done": false, "reason": "not a model of this unit"}
+	if choice.is_alive and choice.wounds_current >= maxi(choice.wounds_max, 1):
+		return {"spent": false, "revive": false, "left": left, "done": false, "reason": "it is at full health"}
+	var rest: int = left - 1
+	return {"spent": true, "revive": not choice.is_alive, "left": rest, "done": rest <= 0, "reason": ""}
+
+
 ## Whether a model belongs to a Hero unit (the plan's first priority band).
 static func _reanimation_is_hero(model: ModelInstance) -> bool:
 	if model == null or not (model.unit is GameUnit):

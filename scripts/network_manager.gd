@@ -36,6 +36,9 @@ signal remote_objective_owner_updated(index: int, owner: int)
 signal remote_token_defined(token_name: String, color: Color, is_counter: bool, effect: String)
 signal remote_token_edited(old_name: String, new_name: String, color: Color, effect: String)
 signal remote_casts_updated(game_unit: GameUnit)
+## NML-929 — a unit's full active spell/buff modifier record list changed on a peer. `records` is
+## raw wire data: the receiver normalises it before installing anything.
+signal remote_spell_mods_updated(game_unit: GameUnit, records: Array)
 signal remote_sort_table_received
 signal remote_unit_deleted(game_unit: GameUnit)
 signal remote_round_advanced()
@@ -64,6 +67,17 @@ const VERSION_HANDSHAKE_TIMEOUT: float = 8.0
 ## Sentinel for slot_to_peer: the slot is RESERVED to its token but currently has no
 ## live peer (the occupant dropped; a rejoin with the same token reclaims it).
 const SLOT_RESERVED_PEER: int = 0
+
+## NML-927 — the unit_properties keys that broadcast_unit_property / sync_unit_property may carry.
+## unit_properties is the game's general-purpose bag: it also holds ownership (player_id), the army
+## list entry, the model spec and the faction folder. A peer must never be able to write an
+## ARBITRARY key into it from the wire, so both directions are gated on this list. Adding a key here
+## is a deliberate act — it says "this number is rules-relevant, invisible, and both tables need it".
+const SYNCABLE_UNIT_PROPERTIES: PackedStringArray = [
+	"spot_markers",     # Precision Spotter marks (int). The token on the table is a plain boolean.
+	"spell_move_mod",   # {advance, rush} — the NET spell movement delta the move bands read.
+	"spell_range_mod",  # int — the NET spell shooting-range delta every volley/plan site reads.
+]
 
 var peer: ENetMultiplayerPeer = null
 var is_host: bool = false
@@ -987,6 +1001,38 @@ func sync_unit_marker_value(unit_id: String, marker_name: String, value: int) ->
 		remote_unit_marker_value_updated.emit(game_unit, marker_name, value)
 
 
+## RPC: apply a HIDDEN per-unit state delta (see broadcast_unit_property). `value == null` erases
+## the key. Deliberately emits NO signal: every reader of these keys is a PURE reader that asks
+## unit_properties at the moment it needs the number (move_bands_for_props, shooting_range_bonus,
+## the spotter's to-hit seam), so there is nothing to refresh when one arrives — and the visible
+## halves that DO need a refresh (the "Spotted" token) travel on the marker channel already.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_unit_property(unit_id: String, key: String, value: Variant) -> void:
+	if not army_manager or not SYNCABLE_UNIT_PROPERTIES.has(key):
+		return
+
+	var game_unit = army_manager.get_game_unit_by_id(unit_id)
+	if game_unit:
+		if value == null:
+			game_unit.unit_properties.erase(key)
+		else:
+			game_unit.unit_properties[key] = value
+
+
+## RPC: adopt a unit's full active spell/buff modifier record list (see broadcast_spell_mods).
+## Unlike sync_unit_property this DOES emit: the records drive side effects main owns (the granted
+## rule overlay on special_rules, the props stamps), so main has to be told rather than polled.
+## The payload is untrusted — main normalises it before installing anything.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_spell_mods(unit_id: String, records: Array) -> void:
+	if not army_manager:
+		return
+
+	var game_unit = army_manager.get_game_unit_by_id(unit_id)
+	if game_unit:
+		remote_spell_mods_updated.emit(game_unit, records)
+
+
 ## RPC: Sync a mission objective's owner (any peer can capture objectives).
 @rpc("any_peer", "call_remote", "reliable")
 func sync_objective_owner(index: int, owner_id: int) -> void:
@@ -1153,6 +1199,42 @@ func broadcast_model_marker_value(model: ModelInstance, marker_name: String, val
 func broadcast_unit_marker_value(game_unit: GameUnit, marker_name: String, value: int) -> void:
 	if is_multiplayer_active() and game_unit:
 		_remote_call("sync_unit_marker_value", [game_unit.unit_id, marker_name, value], 0)
+
+
+## NML-927 — broadcast a HIDDEN per-unit state delta: a unit_properties key that carries a NUMBER
+## the rules read, but has no counter token of its own to ride the marker channel. `value == null`
+## means "erase the key".
+##
+## WHY IT IS ITS OWN CALL AND NOT broadcast_unit_marker_value. The marker channel addresses a
+## RENDERED counter token by name and only ever carries an int; these keys are invisible state and
+## one of them is a Dictionary. Squeezing them through the marker call would either put a phantom
+## counter on the peer's table or lose the payload.
+##
+## WIRE FORMAT: unchanged. Like every other sync_* call this goes through _remote_call, i.e. one
+## more handler NAME inside the existing {"m": …, "a": […]} command envelope — no new protocol and
+## no new channel. A peer that predates the handler fails the has_method() test in _on_raw_command
+## and ignores the frame instead of erroring.
+func broadcast_unit_property(game_unit: GameUnit, key: String, value: Variant) -> void:
+	if not is_multiplayer_active() or game_unit == null:
+		return
+	if not SYNCABLE_UNIT_PROPERTIES.has(key):
+		push_warning("[Net] refusing to broadcast unlisted unit property '%s'" % key)
+		return
+	_remote_call("sync_unit_property", [game_unit.unit_id, key, value], 0)
+
+
+## NML-929 — broadcast a unit's FULL list of active spell/buff modifier records (the F4/NML-006
+## machinery: hit/defense/casting/morale modifiers, the "+X″ range/advance/rush" deltas and granted
+## rules). Same channel and the same shape as broadcast_unit_property above — one more handler name
+## in the existing command envelope, wire format unchanged.
+##
+## FULL REPLACE, not add/remove deltas. The lists are tiny (a unit carries one or two records), a
+## single exchange can spend several at once, and a replace is IDEMPOTENT: a duplicated or reordered
+## frame cannot leave the two tables holding different modifiers, which is the entire point.
+func broadcast_spell_mods(game_unit: GameUnit, records: Array) -> void:
+	if not is_multiplayer_active() or game_unit == null:
+		return
+	_remote_call("sync_spell_mods", [game_unit.unit_id, records], 0)
 
 
 ## Broadcast a mission objective owner change (any peer may capture).

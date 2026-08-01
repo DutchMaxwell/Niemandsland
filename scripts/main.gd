@@ -262,7 +262,7 @@ var _solo_interactive_grade: String = "nachtmahr"  # the ONE grade (NML-211): NA
                                                   # → the naive baseline AI (no position solver, no knobs).
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
 var _solo_target_mode: Dictionary = {}       # {unit, melee} while the player picks an attack target (P8)
-var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, outcome} while a Takedown pick awaits a model click
+var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, outcome, spots} while a Takedown / wound / Reanimation pick awaits a model click
 # TC-023 (Takedown, GF v3.5.1 p.14 "resolved as if it was a unit of [1]"): while this holds the picked
 # model, the shared target-side readers answer for THAT MODEL ALONE — its own unit's rules (the joined
 # chain's other members neither grant nor withhold them) and its own cover square (the other models
@@ -319,6 +319,10 @@ var _solo_unmodeled_logged: Dictionary = {}  # rule name -> true: once-per-sessi
 var _solo_both_ai: bool = false              # BOTH sides are AI: combat auto-resolves, the game runs unattended
 var _solo_spell_tokens_active: Array = []    # spell tokens placed this round [{unit, token}] — expire at round end
 var _solo_spell_mods := {}                   # instance_id -> [{spell, hit_mod, def_mod, scope}] — MECHANICAL token effects (wave: spells F3)
+## NML-929: true while this client is ADOPTING state a peer sent. The adoption runs the ordinary
+## local writers (grant overlay, props stamps), and those broadcast — without this flag the frame
+## would bounce straight back at its sender.
+var _mp_applying_remote_state: bool = false
 var _solo_difficulty_grades: Dictionary = {} # player-slot -> SoloDifficulty preset name (the graded arena)
 var _solo_arena_seed: int = 0                # game-level base seed for the reproducible difficulty knob draws
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
@@ -464,6 +468,7 @@ func _ready() -> void:
 	network_manager.remote_token_defined.connect(_on_remote_token_defined)
 	network_manager.remote_token_edited.connect(_on_remote_token_edited)
 	network_manager.remote_casts_updated.connect(_on_remote_casts_updated)
+	network_manager.remote_spell_mods_updated.connect(_on_remote_spell_mods_updated)
 	network_manager.remote_unit_deleted.connect(_on_remote_unit_deleted)
 	network_manager.remote_round_advanced.connect(_on_remote_round_advanced)
 
@@ -1396,7 +1401,13 @@ func _solo_delayed_action_line(gu: GameUnit, opponent_left: int, own_left: int) 
 ## The AI's half, asked ONCE per owed reply, BEFORE a unit is picked (the choice belongs in the
 ## chooser — see SoloController.delayed_action_pass_choice). Returns true when the AI passed, in
 ## which case the caller must not also activate.
-func _solo_ai_delayed_action_pass() -> bool:
+##
+## `advance_replies` selects the ALTERNATION the pass hands the turn on in. The human-facing pump
+## runs on `_solo_pending_replies`, so its pass spends the owed reply (the default). The both-AI
+## arena driver runs its OWN one-for-one alternation (_solo_run_both_ai_round flips `side` itself)
+## and never reads that counter — moving it there would leave a stale debt behind for a session
+## that later goes back to a human opponent, so the arena passes `false` and flips its own side.
+func _solo_ai_delayed_action_pass(advance_replies: bool = true) -> bool:
 	if solo_controller == null or opr_army_manager == null:
 		return false
 	var choice: Dictionary = solo_controller.delayed_action_pass_choice()
@@ -1404,7 +1415,8 @@ func _solo_ai_delayed_action_pass() -> bool:
 	if passer == null:
 		return false
 	SoloController.delayed_action_stamp(passer, opr_army_manager.current_round)
-	_solo_pass_turn(solo_controller.ai_slot)
+	if advance_replies:
+		_solo_pass_turn(solo_controller.ai_slot)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			_solo_delayed_action_line(passer, int(choice["opponent_left"]), int(choice["own_left"])),
@@ -1740,6 +1752,10 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 ## One both-AI round: alternate one activation per side (OPR one-for-one), starting with `opener`, until both
 ## sides are out of eligible units. A wiped/exhausted side is skipped so the other plays out its tail. Returns
 ## the side that took the LAST activation (0 if none acted) — the caller derives the next round's opener.
+##
+## The alternation carries the PASS step (Delayed Action / "Pass Turn", wave 5) exactly like the human-facing
+## pump does. Without it the self-play ladder measures an AI that is not allowed to use a rule the shipped
+## game gives it, so every number the ladder produces is taken next to the real game rather than in it.
 func _solo_run_both_ai_round(opener: int) -> int:
 	var side: int = opener
 	var last_side := 0
@@ -1754,6 +1770,21 @@ func _solo_run_both_ai_round(opener: int) -> int:
 			break
 		var act: int = side if side_has else other
 		_solo_set_active_side(act)
+		# Delayed Action (Pass Turn): the side whose turn it REALLY is may decline to activate — the turn
+		# goes to the opponent and no unit is spent. Guarded on `act == side`: when they differ, `side` is
+		# exhausted and `other` is playing out its tail, and the rule's "the opponent has MORE units left to
+		# activate than you" can never stand for a side facing an empty pool. The pass moves NO reply counter
+		# (this driver owns its own alternation — see _solo_ai_delayed_action_pass), and it deliberately
+		# leaves `last_side` alone: a pass is not an activation, and the next round's opener rule reads the
+		# last ACTIVATION (finding 7). Termination is the rule's own two guards — strictly-more is
+		# antisymmetric, so two sides can never pass at each other, and the once-per-round carrier stamp
+		# bounds the passes per round by the number of carriers.
+		if act == side and _solo_ai_delayed_action_pass(false):
+			if _solo_arena_trace:
+				printerr("[ARENA] R%d act#%d side P%d passes the turn (Delayed Action)" % [
+					opr_army_manager.current_round, guard, act])
+			side = other
+			continue
 		if _solo_arena_trace:
 			printerr("[ARENA] R%d act#%d side P%d …" % [opr_army_manager.current_round, guard, act])
 		var unit: GameUnit = await _solo_activate_one_ai()
@@ -2775,14 +2806,13 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	var wounds_before: int = _solo_unit_wounds_now(target)
 	var models_before: int = _solo_combined_alive(target)
 	# Armor(X) (wave 5, army-book upgrade: "counts as having Defense X+") sets the working Defense,
-	# then Shielded (+1 Defense, army-book rule) covers every hit; Cover (GF v3.5.1 p.11) is ignored
-	# by Blast and by Indirect (wave 5: "ignores cover from sight obstructions").
+	# then every Defense contribution of the parts seam folds in (Shielded and its data aliases,
+	# growth markers, spell tokens — each NAMED in the log, NML-932); Cover (GF v3.5.1 p.11) is
+	# ignored by Blast and by Indirect (wave 5: "ignores cover from sight obstructions").
 	_solo_log_armor(target)
 	var dist_in: float = MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 	var base_defense: int = _solo_defense_vs(target)
-	if base_defense != _solo_armored_defense(target) and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
-			target.get_name(), base_defense], true)
+	_solo_log_defense_parts(target, AiCombatMath.HIT_SOURCE_SHOOTING, base_defense, true)
 	# Guarded / Versatile Defense's def-half ("+1 to defense rolls" when shot from over 9" away) folds
 	# into the base Defense every shot of this volley saves at; Cover then stacks on top (floored 2+).
 	var over9_rule := _solo_over9_defense_rule(target)
@@ -3289,6 +3319,7 @@ func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary
 	# deltas onto the props stamps — every existing engine read then honours them.
 	_solo_apply_grant(tu, rec)
 	_solo_refresh_spell_stamps(tu)
+	_broadcast_spell_mods(tu)   # NML-929: the record itself rides the wire, not just its stamps
 	if battle_log != null:
 		var hd: PackedStringArray = []
 		if rec["hit_mod"] != 0:
@@ -3391,14 +3422,11 @@ func _solo_refresh_spell_stamps(tu: GameUnit) -> void:
 		rng += int((rd as Dictionary).get("range_in", 0))
 	for u in chain:
 		var gu := u as GameUnit
-		if adv == 0 and rush == 0:
-			gu.unit_properties.erase("spell_move_mod")
-		else:
-			gu.unit_properties["spell_move_mod"] = {"advance": adv, "rush": rush}
-		if rng == 0:
-			gu.unit_properties.erase("spell_range_mod")
-		else:
-			gu.unit_properties["spell_range_mod"] = rng
+		# NML-927: the stamps are read by BOTH clients (the peer draws its own charge reach and
+		# range rings off them), so every restamp is a wire delta — see _sync_unit_property.
+		_sync_unit_property(gu, "spell_move_mod",
+			null if (adv == 0 and rush == 0) else {"advance": adv, "rush": rush})
+		_sync_unit_property(gu, "spell_range_mod", null if rng == 0 else rng)
 
 
 ## Active spell hit-modifier for a striking member (its own tokens + its host's — a joined hero
@@ -3484,6 +3512,7 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool) -> void:
 	if records.is_empty():
 		_solo_spell_mods.erase(key)
 	_solo_refresh_spell_stamps(uu)   # NML-006: stamps follow the surviving records
+	_broadcast_spell_mods(uu)   # NML-929: the CONSUMPTION has to travel too, or the peer keeps the buff
 
 
 ## NML-006 — the event-specific once-consumers (casting after the cast die, morale after the test
@@ -3502,6 +3531,7 @@ func _solo_expire_spell_tokens() -> void:
 	# NML-006: revert the mechanical side effects FIRST (grant overlays off, props stamps erased) —
 	# also on the no-controller path, so headless/batch rounds never leak a granted rule or stamp.
 	var affected: Array = []
+	var expired_owners: Array = []   # NML-929: record owners whose list changed — the peer needs it
 	for key in _solo_spell_mods.keys():
 		var keep: Array = []
 		for rd in (_solo_spell_mods[key] as Array):
@@ -3511,19 +3541,27 @@ func _solo_expire_spell_tokens() -> void:
 				keep.append(rd)
 				continue
 			_solo_revoke_grant(rd as Dictionary)
+		var owner := instance_from_id(int(key)) as GameUnit
+		if owner != null and is_instance_valid(owner) \
+				and keep.size() != (_solo_spell_mods[key] as Array).size():
+			expired_owners.append(owner)
 		if keep.is_empty():
 			_solo_spell_mods.erase(key)
 		else:
 			_solo_spell_mods[key] = keep
 			continue
-		var u := instance_from_id(int(key)) as GameUnit
-		if u != null and is_instance_valid(u):
-			for cu in _solo_joined_chain(u):
+		if owner != null and is_instance_valid(owner):
+			for cu in _solo_joined_chain(owner):
 				if not affected.has(cu):
 					affected.append(cu)
 	for cu in affected:
-		(cu as GameUnit).unit_properties.erase("spell_move_mod")
-		(cu as GameUnit).unit_properties.erase("spell_range_mod")
+		_sync_unit_property(cu as GameUnit, "spell_move_mod", null)   # NML-927: the expiry travels too
+		_sync_unit_property(cu as GameUnit, "spell_range_mod", null)
+	# NML-929: the round boundary is driven per client (_on_solo_round_advanced is gated on this
+	# client having an AI slot at all), so an expiry that only happened here would leave the peer
+	# holding a modifier the round has ended. The full-replace frame settles it either way.
+	for owner in expired_owners:
+		_broadcast_spell_mods(owner as GameUnit)
 	if radial_menu_controller == null:
 		_solo_spell_tokens_active.clear()
 		return
@@ -3817,7 +3855,16 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		var member_dist: float = dist_in
 		if not melee and enemy != null and solo_controller != null:
 			member_dist = _solo_nearest_model_gap_in(member, enemy, dist_in)
-		var profiles: Array = AiShooting.melee_profiles(weapons) if melee else AiShooting.profiles_in_range(weapons, member_dist)
+		# NML-929 — the SHOOTER-SIDE bonus belongs on this gate too: Royal Legion's +4" and the spell
+		# range tokens (both through SoloController.shooting_range_bonus) are what _solo_validate_target
+		# measured when it let the player DECLARE the shot, and what the AI volley folds into each shot's
+		# reach. Without it here a boosted shooter declared a legal target and this gate then dropped
+		# every profile — the volley ended without a die and without a word. Order is the AI's
+		# (`"reach": base_range + range_bonus` → shrink): the bonus rides the PRINTED range, the
+		# target-side shrink applies to the sum.
+		var range_bonus: int = 0 if melee else SoloController.shooting_range_bonus(member)
+		var profiles: Array = AiShooting.melee_profiles(weapons) if melee \
+			else AiShooting.profiles_in_range(weapons, maxf(member_dist - float(range_bonus), 0.0))
 		# #231 — TARGET-SIDE reach shrinks re-gate each profile at the SAME nearest-model distance the
 		# plain range gate used: Aircraft (-12", GF v3.5.1) AND Ranged Shrouding (-6" min 6"). Both ride
 		# the one SoloController.effective_shoot_reach_in seam the AI volley already measured with — this
@@ -3825,7 +3872,8 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		# whenever a longer weapon kept the target legal.
 		if not melee and enemy != null:
 			profiles = profiles.filter(func(p) -> bool:
-				return SoloController.effective_shoot_reach_in(float((p as Dictionary).get("range", 0)), enemy) >= member_dist)
+				return SoloController.effective_shoot_reach_in(
+					float((p as Dictionary).get("range", 0)) + float(range_bonus), enemy) >= member_dist)
 		if profiles.is_empty():
 			continue
 		var max_models: int = member.models.size()
@@ -3862,10 +3910,12 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			# have range + LOS at ITS OWN range; melee scales by the models within 2" strike reach (p.9).
 			# #231: "its own range" is the EFFECTIVE one — against an Aircraft (-12") or a Ranged
 			# Shrouding target the rear models drop out of the count, exactly as on the AI volley.
+			# NML-929: and the boosted one — with Royal Legion / a spell range token the REAR models
+			# come back into the count, at the same reach the declaration was judged with.
 			var count: int = melee_count
 			if not melee:
 				count = _solo_sighted_count(member, enemy,
-					int(SoloController.effective_shoot_reach_in(float(prof.get("range", 0)), enemy)),
+					int(SoloController.effective_shoot_reach_in(float(prof.get("range", 0)) + float(range_bonus), enemy)),
 					bool(prof.get("indirect", false))) if enemy != null else member.get_alive_count()
 			# X2 (test game 2, B15): a dead bearer's weapon dies with it. Special weapons (fewer copies
 			# than models) are pinned to specific models by EquipmentDistributor — fire per-copy attacks
@@ -4202,14 +4252,36 @@ func _solo_try_reanimation(unit: GameUnit) -> void:
 	for f in faces:
 		if DiceRules.is_success(int(f), target, 0):
 			successes += 1
-	_solo_resolve_reanimation(unit, pool, target, successes)
+	await _solo_resolve_reanimation(unit, pool, target, successes)
 
 
 ## Apply + narrate a finished Reanimation roll. Split from the roll on purpose: the dice are the one
 ## part that cannot be asserted, so every log line and every allocation is reachable with fixed
 ## successes (rules-must-log doctrine — a silently correct rule reads like a broken one).
+##
+## NML-924: on YOUR side the successes are spent by CLICKING (the #172 principle — the owner allocates,
+## the engine does not choose for you). The prompt runs BETWEEN the dice and the restores; whatever is
+## left when you right-click falls through to the v1 automatic allocation, which the AI, batch mode and
+## the self-play harness use unchanged. `anchors` and `taken` are captured ONCE here and shared by both
+## halves, so a model you just clicked back can never anchor the next one (the rule's "coherency with
+## NON-restored models") and two returns can never claim the same spot.
 func _solo_resolve_reanimation(unit: GameUnit, pool: int, target: int, successes: int) -> void:
-	var result: Dictionary = _solo_apply_reanimation(unit, successes)
+	if unit == null:
+		return
+	var anchors: Array = _solo_reanimation_anchors(unit)
+	var taken: Array = []
+	var clicked := {"models": 0, "wounds": 0, "unplaceable": 0}
+	var left := successes
+	if _solo_reanimation_choice_matters(unit, successes):
+		left = await _solo_prompt_reanimation_allocation(unit, successes, anchors, taken, clicked)
+	var auto: Dictionary = _solo_apply_reanimation(unit, left, anchors, taken)
+	var result := {
+		"models": int(clicked["models"]) + int(auto.get("models", 0)),
+		"wounds": int(clicked["wounds"]) + int(auto.get("wounds", 0)),
+		"unplaceable": int(clicked["unplaceable"]) + int(auto.get("unplaceable", 0)),
+		"wounds_now": _solo_unit_wounds_now(unit),
+		"wounds_max": _solo_unit_wounds_max(unit),
+	}
 	if battle_log == null:
 		return
 	var ai: bool = _solo_is_ai_unit(unit)
@@ -4245,12 +4317,24 @@ func _solo_reanimation_aura_end(unit: GameUnit) -> void:
 		_solo_is_ai_unit(unit))
 
 
-## Spend `successes` on the unit — the allocation plan (SoloController.reanimation_plan) applied
-## through the SAME revive/heal seams the manual wound workflow uses (wound marker, regiment reform,
-## MP broadcast). A casualty only comes back where it can stand in coherency with a model that was
-## NOT restored in this activation; a success with nowhere legal to put its model simply expires.
+## The rule's "non-restored models": everything the chain has standing BEFORE this activation spends a
+## single success. Captured ONCE per activation and shared by the owner's click phase and the automatic
+## remainder — otherwise a model that was just restored would anchor the next one and the coherency
+## requirement would bootstrap itself out of thin air.
+func _solo_reanimation_anchors(unit: GameUnit) -> Array:
+	var anchors: Array = []
+	for m in SoloController.reanimation_models(unit):
+		if (m as ModelInstance).is_alive:
+			anchors.append(m)
+	return anchors
+
+
+## Spend `successes` on the unit AUTOMATICALLY — the v1 allocation plan (SoloController.reanimation_plan)
+## landed through _solo_apply_reanimation_entry. This is what the AI, batch mode, the self-play harness
+## and the remainder of an owner's click phase all run. `anchors`/`taken` come from the caller when a
+## click phase already spent part of the roll (empty = this call owns the whole activation).
 ## Returns {models, wounds, unplaceable, wounds_now, wounds_max}.
-func _solo_apply_reanimation(unit: GameUnit, successes: int) -> Dictionary:
+func _solo_apply_reanimation(unit: GameUnit, successes: int, anchors: Array = [], taken: Array = []) -> Dictionary:
 	var out := {"models": 0, "wounds": 0, "unplaceable": 0, "wounds_now": 0, "wounds_max": 0}
 	if unit == null:
 		return out
@@ -4259,51 +4343,339 @@ func _solo_apply_reanimation(unit: GameUnit, successes: int) -> Dictionary:
 		out["wounds_max"] = _solo_unit_wounds_max(unit)
 		return out
 	var plan: Array = SoloController.reanimation_plan(unit, successes)
-	# The anchors: every model that is ALIVE right now, i.e. was not restored by this activation.
-	var anchors: Array = []
-	for m in SoloController.reanimation_models(unit):
-		if (m as ModelInstance).is_alive:
-			anchors.append(m)
-	var taken: Array = []   # [{p: Vector3, r: float}] — spots this activation already claimed
+	var anchor_set: Array = anchors if not anchors.is_empty() else _solo_reanimation_anchors(unit)
 	for step in plan:
 		var entry := step as Dictionary
-		var model := entry["model"] as ModelInstance
-		var wounds := int(entry["wounds"])
-		if not bool(entry["revive"]):
-			model.heal(wounds)
-			out["wounds"] = int(out["wounds"]) + wounds
-			if radial_menu_controller != null:
-				radial_menu_controller._update_wound_marker(model)
-			if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
-				network_manager.broadcast_model_wounds(model)
-			continue
-		var spot: Vector3 = _solo_reanimation_spot(model, anchors, taken)
-		if spot == Vector3.INF:
+		# v1 rule, unchanged: an automatic success with nowhere legal to put its model EXPIRES.
+		if not _solo_apply_reanimation_entry(unit, entry["model"] as ModelInstance, int(entry["wounds"]),
+				bool(entry["revive"]), anchor_set, taken, out):
 			out["unplaceable"] = int(out["unplaceable"]) + 1
-			continue
-		if radial_menu_controller != null:
-			radial_menu_controller._revive_single_model(model, unit)
-		else:
-			model.reset_wounds()
-		# Wound currency: the model returns with the ONE wound its first success bought, plus every
-		# further wound spent on it — never at full health unless the dice paid for it.
-		model.wounds_current = clampi(wounds, 1, maxi(model.wounds_max, 1))
-		model.is_alive = true
-		if model.node != null and is_instance_valid(model.node):
-			model.node.global_position = spot
-		taken.append({"p": spot, "r": _solo_base_radius(model)})
-		out["models"] = int(out["models"]) + 1
-		out["wounds"] = int(out["wounds"]) + maxi(wounds - 1, 0)
+	out["wounds_now"] = _solo_unit_wounds_now(unit)
+	out["wounds_max"] = _solo_unit_wounds_max(unit)
+	return out
+
+
+## Land ONE allocation entry — `wounds` successes spent on `model`, `revive` when the first of them
+## buys a casualty back — through the SAME seams the manual wound workflow uses (wound marker, regiment
+## reform, MP broadcast, position correction). Shared by the automatic plan and by every owner click,
+## so a clicked restore and an automatic one are indistinguishable to the rest of the game.
+##
+## `anchors` are the models that were alive before this activation (the rule's "non-restored models");
+## `taken` collects the spots this activation already claimed and is carried across the click phase and
+## the automatic remainder, so two returns can never share a spot.
+##
+## Returns true when the entry actually landed. A revive with nowhere legal to stand returns FALSE and
+## changes nothing — the caller decides what that means: the automatic plan lets the success expire
+## (v1 behaviour), a click keeps it in the owner's hand to spend somewhere else.
+func _solo_apply_reanimation_entry(unit: GameUnit, model: ModelInstance, wounds: int, revive: bool,
+		anchors: Array, taken: Array, out: Dictionary) -> bool:
+	if model == null or wounds <= 0:
+		return false
+	if not revive:
+		model.heal(wounds)
+		out["wounds"] = int(out["wounds"]) + wounds
 		if radial_menu_controller != null:
 			radial_menu_controller._update_wound_marker(model)
 		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
 			network_manager.broadcast_model_wounds(model)
-		# ORDER MATTERS: the wounds message above un-parks the model on the peer (at the spot where
-		# it FELL); only then does the correction below put it where the placer actually stood it.
-		_broadcast_restored_position(model)
-	out["wounds_now"] = _solo_unit_wounds_now(unit)
-	out["wounds_max"] = _solo_unit_wounds_max(unit)
+		return true
+	# NML-933 — a REGIMENT member gets NO spot of its own. It lives under its tray, and its place
+	# is the rank the block hands it: the revive seam below re-ranks the whole block from the
+	# unit's alive models (radial_menu_controller._reform_regiment_for_model →
+	# RegimentTray.reform_from_unit), which is the AoF:R rank-removal/-return the manual wound
+	# workflow already uses. Writing a coherency ring spot on top of that set a world position on
+	# a node parented to the tray — the returning rank model teleported OUT of its own block.
+	# The MP peer never had the defect: it only receives the wounds message and re-ranks from it,
+	# so host and guest disagreed. #267 made exactly this decision for the wire (a regiment
+	# member's position is not broadcast, the block is re-ranked instead); this is its local half,
+	# and the two halves are now symmetric. The coherency gate is skipped with the spot: a block
+	# ALWAYS has a rank for a returning model, so it can never be "unplaceable".
+	var in_regiment: bool = model.node != null and is_instance_valid(model.node) \
+			and model.node.has_meta(RegimentTray.MEMBER_META)
+	var spot := Vector3.INF
+	if not in_regiment:
+		spot = _solo_reanimation_spot(model, anchors, taken)
+		if spot == Vector3.INF:
+			return false
+	if radial_menu_controller != null:
+		radial_menu_controller._revive_single_model(model, unit)
+	else:
+		model.reset_wounds()
+	# Wound currency: the model returns with the ONE wound its first success bought, plus every
+	# further wound spent on it — never at full health unless the dice paid for it.
+	model.wounds_current = clampi(wounds, 1, maxi(model.wounds_max, 1))
+	model.is_alive = true
+	if not in_regiment:
+		if model.node != null and is_instance_valid(model.node):
+			model.node.global_position = spot
+		taken.append({"p": spot, "r": _solo_base_radius(model)})
+	out["models"] = int(out["models"]) + 1
+	out["wounds"] = int(out["wounds"]) + maxi(wounds - 1, 0)
+	if radial_menu_controller != null:
+		radial_menu_controller._update_wound_marker(model)
+	if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
+		network_manager.broadcast_model_wounds(model)
+	# ORDER MATTERS: the wounds message above un-parks the model on the peer (at the spot where
+	# it FELL); only then does the correction below put it where the placer actually stood it.
+	_broadcast_restored_position(model)
+	return true
+
+
+## NML-924 — does the OWNER get to allocate this roll by hand? The #172 gates, read for Reanimation:
+## an interactive solo HUMAN unit only (never the AI's own — NACHTMAHR keeps its deterministic plan),
+## never batch/harness (headless would deadlock on a click that never comes — the self-play runs
+## depend on this), never both-AI, and never MP, where the acting peer cannot drive the prompt. On top
+## of that the choice has to be able to MATTER: with one candidate, or with enough successes to fill
+## every candidate to the brim, the allocation has no decision in it and the automatic plan is right.
+func _solo_reanimation_choice_matters(unit: GameUnit, successes: int) -> bool:
+	if unit == null or successes <= 0:
+		return false
+	if _solo_batch or _solo_both_ai or _solo_is_ai_unit(unit):
+		return false
+	if network_manager != null and network_manager.is_multiplayer_active():
+		return false
+	var candidates: Array = SoloController.reanimation_candidates(unit)
+	if candidates.size() <= 1:
+		return false
+	var capacity := 0
+	for c in candidates:
+		capacity += int((c as Dictionary)["capacity"])
+	return successes < capacity
+
+
+## NML-924 — the click TARGETS a fallen model offers. A casualty has no body to click: a regiment
+## casualty is hidden with its collider off (AoF:R rank removal), a loose one is parked desaturated on
+## its owner's army tray, i.e. nowhere near the battlefield. So each one that CAN come back gets a
+## candidate ring at the place it would come back to, and the ring is the click target
+## (_solo_spawn_picked_ring, the same marker a picked cast target wears).
+##
+## The ring marks the RETURN, not a promise of a millimetre: the real placement runs through
+## _solo_apply_reanimation_entry with the activation's own claim list, so a later pick that would
+## collide is moved on by the placer. A regiment member's ring sits on its slot in the block, which is
+## where the reform stands it again. Returns [{unit, index, p, r}] — `unit`/`index` address the model
+## the same way the Takedown pick does.
+func _solo_reanimation_pick_spots(unit: GameUnit, anchors: Array) -> Array:
+	var out: Array = []
+	var probe: Array = []   # spot probe only — the real placer keeps its own claim list
+	for m in SoloController.reanimation_models(unit):
+		var mi := m as ModelInstance
+		if mi == null or mi.is_alive or mi.node == null or not is_instance_valid(mi.node):
+			continue
+		var p := Vector3.INF
+		if mi.node.has_meta(RegimentTray.MEMBER_META):
+			p = mi.node.global_position
+		else:
+			p = _solo_reanimation_spot(mi, anchors, probe)
+		if p == Vector3.INF:
+			continue   # nowhere legal to stand — no ring, so it cannot be clicked either
+		var r: float = _solo_base_radius(mi)
+		probe.append({"p": p, "r": r})
+		out.append({"unit": mi.unit, "index": mi.model_index, "p": p, "r": r})
 	return out
+
+
+## NML-927 — write a HIDDEN per-unit state (`value == null` erases it) AND push the delta to the
+## peers in the same breath.
+##
+## THE DEFECT THIS SEAM EXISTS FOR. Three rules-relevant NUMBERS live in unit_properties and never
+## left the acting client: the Precision Spotter mark count ("spot_markers" — only its boolean
+## "Spotted" token rode the marker channel, so the peer saw THAT a unit was marked but never how
+## OFTEN, and a partial removal was invisible), and the two spell stamps ("spell_move_mod" /
+## "spell_range_mod") that the movement bands and every shooting-range read consume. Each one is
+## read by the OPPONENT's client too — the defender rolls its own saves, measures its own charge
+## reach and draws its own range rings — so a number that stays local is two tables disagreeing
+## about the same unit.
+##
+## Every write to those keys goes through here. The broadcast is skipped when the value did not
+## actually change, so the repeated restamps (_solo_refresh_spell_stamps runs on every record,
+## every consumption and every expiry) do not turn into wire traffic.
+func _sync_unit_property(gu: GameUnit, key: String, value: Variant) -> void:
+	if gu == null:
+		return
+	if value == null:
+		if not gu.unit_properties.has(key):
+			return
+		gu.unit_properties.erase(key)
+	else:
+		if gu.unit_properties.has(key) and gu.unit_properties[key] == value:
+			return
+		gu.unit_properties[key] = value
+	if _mp_applying_remote_state:
+		return   # NML-929: state we are ADOPTING must not be echoed back at its sender
+	if network_manager == null or not network_manager.has_method("broadcast_unit_property"):
+		return
+	if not network_manager.is_multiplayer_active():
+		return
+	network_manager.broadcast_unit_property(gu, key, value)
+## NML-924 — the owner spends the roll by CLICKING (#172's principle: the owner allocates, the engine
+## does not choose for you). LMB on a living wounded model of the chain heals one wound THERE, LMB
+## inside a fallen model's candidate ring brings THAT model back, RMB or the strip button hands the
+## rest to the automatic allocation. Every click — and every click that buys nothing — writes its own
+## battle-log line, and the strip carries the "N left" counter.
+##
+## Each success is applied IMMEDIATELY through the shared entry seam, so the table answers the click at
+## once and the automatic remainder plans against the state the clicks actually produced.
+## Returns the successes still unspent (0 when every one of them was clicked).
+func _solo_prompt_reanimation_allocation(unit: GameUnit, successes: int, anchors: Array,
+		taken: Array, out: Dictionary) -> int:
+	var spots: Array = _solo_reanimation_pick_spots(unit, anchors)
+	var rings: Array = []
+	for s in spots:
+		rings.append(_solo_spawn_picked_ring((s as Dictionary)["p"]))
+	_solo_model_pick = {"unit": unit, "chain": SoloController.reanimation_members(unit),
+		"recommended": {}, "outcome": [], "spots": spots}
+	var outcome: Array = _solo_model_pick["outcome"]
+	var skipped: Array = []
+	var left := successes
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Reanimation: %s allocates %d success%s — CLICK a wounded model or a fallen model's ring; right-click allocates the rest" % [
+			unit.get_name(), successes, ("" if successes == 1 else "es")], false)
+	_solo_deploy_ui_show(_solo_reanimation_strip_text(unit, left),
+		"Auto-allocate the rest", func() -> void: skipped.append(true))
+	while left > 0:
+		while outcome.is_empty() and skipped.is_empty() and not _solo_model_pick.is_empty():
+			await get_tree().process_frame
+		if not skipped.is_empty() or _solo_model_pick.is_empty():
+			break
+		var pick := outcome.pop_back() as Dictionary
+		var pu := pick.get("unit") as GameUnit
+		if pu == null:
+			break   # RMB: the empty recommended pick means "allocate the rest automatically"
+		var idx := int(pick.get("index", -1))
+		if idx < 0 or idx >= pu.models.size():
+			continue
+		var mi: ModelInstance = pu.models[idx]
+		var step: Dictionary = SoloController.reanimation_pick_step(left, mi)
+		if not bool(step["spent"]):
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"Reanimation: that model takes no restore — %s (%d left)" % [str(step["reason"]), left], false)
+			continue
+		var revive := bool(step["revive"])
+		if not _solo_apply_reanimation_entry(unit, mi, 1, revive, anchors, taken, out):
+			# The success stays in the owner's hand — only the automatic plan lets one expire.
+			_solo_drop_reanimation_ring(spots, rings, pu, idx)
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"Reanimation: that model has nowhere legal to stand — coherency to non-restored models missing (%d left)" % left,
+					false)
+			continue
+		left = int(step["left"])
+		if revive:
+			_solo_drop_reanimation_ring(spots, rings, pu, idx)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"Reanimation: you %s on %s — %d success%s left" % [
+				("restore a fallen model" if revive else "heal one wound"), unit.get_name(),
+				left, ("" if left == 1 else "es")], false)
+		if left > 0:
+			_solo_deploy_ui_show(_solo_reanimation_strip_text(unit, left),
+				"Auto-allocate the rest", func() -> void: skipped.append(true))
+	for rn in rings:
+		if rn is Node and is_instance_valid(rn):
+			(rn as Node).queue_free()
+	_solo_deploy_ui_hide()
+	_solo_model_pick = {}
+	if left > 0 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Reanimation: the remaining %d success%s allocated automatically" % [
+			left, (" is" if left == 1 else "es are")], false)
+	return left
+
+
+## The click strip's line — the "N left" counter the player reads while allocating.
+func _solo_reanimation_strip_text(unit: GameUnit, left: int) -> String:
+	return "Reanimation — %d success%s left for %s: click a wounded model, or a fallen model's ring." % [
+		left, ("" if left == 1 else "es"), unit.get_name()]
+
+
+## Take a candidate ring off the table once its model is back (or turned out to have nowhere to
+## stand). `spots` is the very array _solo_model_pick holds, so dropping the entry also retires the
+## click target — the same ring can never be spent twice.
+func _solo_drop_reanimation_ring(spots: Array, rings: Array, unit: GameUnit, index: int) -> void:
+	for i in range(spots.size() - 1, -1, -1):
+		var sd := spots[i] as Dictionary
+		if sd["unit"] != unit or int(sd["index"]) != index:
+			continue
+		if i < rings.size():
+			var rn = rings[i]
+			if rn is Node and is_instance_valid(rn):
+				(rn as Node).queue_free()
+			rings.remove_at(i)
+		spots.remove_at(i)
+		return
+
+
+## NML-929 — push a unit's full active spell/buff modifier record list to the peers.
+##
+## THE DEFECT THIS EXISTS FOR. The Utility-Buff giver family (Precision Shooter Buff, Furious Buff,
+## Entrenched Buff, …) lands its effect as an F4 once-mod RECORD — the same machinery spell tokens
+## use. Those records never rode the wire, so _solo_apply_utility_buffs refused to run for a human
+## player in a live multiplayer game at all (the guard that this wave removes): a modifier on one
+## client's dice and not the other's is worse than a rule that does nothing. The records are read by
+## BOTH sides — the buffed unit's own attacks are rolled by its owner, but a defense or
+## attackers-beneficiary record is read by the OPPONENT rolling into it.
+##
+## `granted_to` is stripped: it holds LOCAL instance ids, meaningless on another machine. The
+## receiver recomputes its own from the rule name (_on_remote_spell_mods_updated).
+func _broadcast_spell_mods(uu: GameUnit) -> void:
+	if uu == null or _mp_applying_remote_state:
+		return
+	if network_manager == null or not network_manager.has_method("broadcast_spell_mods"):
+		return
+	if not network_manager.is_multiplayer_active():
+		return
+	var wire: Array = []
+	for rd in _solo_spell_mods.get(uu.get_instance_id(), []):
+		var out: Dictionary = (rd as Dictionary).duplicate()
+		out.erase("granted_to")
+		wire.append(out)
+	network_manager.broadcast_spell_mods(uu, wire)
+
+
+## NML-929 — adopt a peer's spell/buff record list for one unit. Full replace (see
+## NetworkManager.broadcast_spell_mods): the local grants come off, the arriving records go on, and
+## the grant overlay plus the props stamps are recomputed from them. Everything runs under
+## _mp_applying_remote_state so nothing this produces is sent straight back.
+##
+## The payload is UNTRUSTED wire data, so each record is rebuilt field by field with the types the
+## readers expect — a peer cannot smuggle a key into the record dictionaries this way.
+func _on_remote_spell_mods_updated(gu: GameUnit, records: Array) -> void:
+	if gu == null:
+		return
+	var key := gu.get_instance_id()
+	_mp_applying_remote_state = true
+	for rd in _solo_spell_mods.get(key, []):
+		_solo_revoke_grant(rd as Dictionary)   # our own grant bookkeeping, our own instance ids
+	var adopted: Array = []
+	for r in records:
+		if not (r is Dictionary):
+			continue
+		var src := r as Dictionary
+		var rec := {
+			"spell": str(src.get("spell", "")),
+			"hit_mod": int(src.get("hit_mod", 0)),
+			"def_mod": int(src.get("def_mod", 0)),
+			"casting_mod": int(src.get("casting_mod", 0)),
+			"morale_mod": int(src.get("morale_mod", 0)),
+			"range_in": int(src.get("range_in", 0)),
+			"advance_in": int(src.get("advance_in", 0)),
+			"rush_in": int(src.get("rush_in", 0)),
+			"grants_rule": str(src.get("grants_rule", "")),
+			"scope": str(src.get("scope", "")),
+			"beneficiary": str(src.get("beneficiary", "")),
+			"duration": str(src.get("duration", "round")),
+		}
+		adopted.append(rec)
+	if adopted.is_empty():
+		_solo_spell_mods.erase(key)
+	else:
+		_solo_spell_mods[key] = adopted
+		for rec in adopted:
+			_solo_apply_grant(gu, rec as Dictionary)
+	_solo_refresh_spell_stamps(gu)
+	_mp_applying_remote_state = false
 
 
 ## Push a restored model's REAL table position to the peers.
@@ -4675,6 +5047,30 @@ func _solo_defense_parts(target: GameUnit, source: String) -> Array:
 		parts.append({"group": DEF_PART_TOKEN, "name": str(rdd.get("spell", "")),
 			"bonus": int(rdd.get("def_mod", 0)), "clause": str(rdd.get("scope", "")), "applies": true})
 	return parts
+
+
+## rules-must-log for NML-932: the ATTACK save steps name every Defense contribution they folded in,
+## each with ITS OWN rule's name — the same single truth (_solo_defense_parts) the arithmetic reads.
+##
+## What was wrong: before #264 a composite Defense could only come from one rule, so all three attack
+## sites printed that rule's name for whatever the difference turned out to be ("<unit> is Shielded:
+## +1 Defense"). Since the parts seam a growth marker or a spell token raises the very same number,
+## and the line then credited a rule the unit does not even carry — while a SECOND contribution
+## disappeared into the sum, and a hex that cancelled a bonus made the whole line vanish (#224: a
+## silent rule reads exactly like a missing one). One line per contribution fixes all three.
+##
+## `defense` is the FINAL working Defense the caller is about to save at, so the numbers a player
+## reads are the numbers the dice see. `ai` keeps each call site's own log-side flag.
+func _solo_log_defense_parts(target: GameUnit, source: String, defense: int, ai: bool) -> void:
+	if battle_log == null or target == null:
+		return
+	for p in _solo_defense_parts(target, source):
+		var pd := p as Dictionary
+		var bonus := int(pd["bonus"])
+		if bonus == 0 or not bool(pd["applies"]):
+			continue
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s is %s: %+d Defense (saves on %d+)" % [
+			target.get_name(), str(pd["name"]), bonus, defense], ai)
 
 
 ## rules-must-log for NML-104: the spell save step NAMES both halves. What DOES apply gets a line —
@@ -5075,9 +5471,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	var human_defends: bool = not _solo_is_ai_unit(defender)
 	_solo_log_armor(defender)   # Armor(X) "counts as Defense X+" (wave 5) — folded into _solo_defense_vs
 	var defense: int = _solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE)
-	if defense != _solo_armored_defense(defender) and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
-			defender.get_name(), defense], true)
+	_solo_log_defense_parts(defender, AiCombatMath.HIT_SOURCE_MELEE, defense, true)   # NML-932: each part by name
 	# Guarded / Versatile Defense's def-half: charged from over 9" away → +1 Defense for this melee's
 	# saves. Fires where the charge distance is KNOWN (AI charges pass their pre-charge gap); the
 	# human's manual charge distance is untracked (charge_from_in stays 0), the Versatile precedent.
@@ -7878,6 +8272,8 @@ func _unhandled_input(event: InputEvent) -> void:
 ## B5 (test game 2, decided: Ziel-MODELL-Pick): while a Takedown pick is active, LMB on an alive
 ## model of the pick's unit chooses IT; right-click takes the recommended model. Returns true when
 ## the event was consumed (every mouse press is, so a stray click can't fall through to the table).
+## NML-924 adds one fallback for the Reanimation allocation: when the ray hits no live model, a
+## candidate RING under the cursor picks the fallen model it stands for (see _solo_ring_pick_at).
 func _solo_model_pick_input(event: InputEvent) -> bool:
 	var mb := event as InputEventMouseButton
 	if mb == null or not mb.pressed:
@@ -7903,7 +8299,46 @@ func _solo_model_pick_input(event: InputEvent) -> bool:
 		var mi := (col as Node).get_meta("model_instance") as ModelInstance
 		if mi != null and mi.is_alive and chain.has(mi.unit):
 			outcome.append({"unit": mi.unit, "index": mi.model_index})
+			return true
+	# NML-924: a FALLEN model has no body to click (a regiment casualty is hidden with its collider
+	# off, a loose one is parked on the army tray), so the candidate RING at its return spot is the
+	# click target. Only the Reanimation prompt fills "spots" — for the Takedown and wound picks this
+	# is a no-op, and their behaviour is untouched.
+	var ring_pick: Dictionary = _solo_ring_pick_at(mb.position)
+	if not ring_pick.is_empty():
+		outcome.append(ring_pick)
 	return true
+
+
+## Which candidate ring the cursor is over: the camera ray meets the ring's own ground plane and the
+## nearest ring whose disc contains that point wins. The rings carry no collider (they are drawn
+## markers), so this cannot be a physics raycast — and it must not be, because the model the ring
+## stands for has no collider either. Returns {} when the click landed on bare table.
+const REANIM_RING_PICK_RADIUS_M := 0.075   # the drawn ring's outer radius — you click what you see
+
+func _solo_ring_pick_at(screen_pos: Vector2) -> Dictionary:
+	var spots: Array = _solo_model_pick.get("spots", [])
+	if spots.is_empty():
+		return {}
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return {}
+	var origin: Vector3 = camera.project_ray_origin(screen_pos)
+	var dir: Vector3 = camera.project_ray_normal(screen_pos)
+	var best: Dictionary = {}
+	var best_d := INF
+	for s in spots:
+		var sd := s as Dictionary
+		var p: Vector3 = sd["p"]
+		var ground := Plane(Vector3.UP, p.y)
+		var where = ground.intersects_ray(origin, dir)
+		if where == null:
+			continue
+		var d: float = Vector2((where as Vector3).x - p.x, (where as Vector3).z - p.z).length()
+		if d <= REANIM_RING_PICK_RADIUS_M and d < best_d:
+			best_d = d
+			best = {"unit": sd["unit"], "index": sd["index"]}
+	return best
 
 
 ## "" when the target is attackable, else the human-readable reason. Shooting validity is PER MODEL
@@ -8327,7 +8762,7 @@ func _solo_try_precision_spot(unit: GameUnit) -> void:
 ## token on the target, log + float (rules-must-log).
 func _solo_place_spot_marker(spotter: GameUnit, target: GameUnit) -> void:
 	var n := int(target.unit_properties.get("spot_markers", 0)) + 1
-	target.unit_properties["spot_markers"] = n
+	_sync_unit_property(target, "spot_markers", n)   # NML-927: the COUNT rides the wire, not just the token
 	if radial_menu_controller != null and radial_menu_controller.token_library != null:
 		if not radial_menu_controller.token_library.has("Spotted"):
 			radial_menu_controller.token_library.define("Spotted", Color(1.0, 0.55, 0.15), false,
@@ -8350,11 +8785,13 @@ func _solo_consume_spot_markers(target: GameUnit, count: int = -1) -> int:
 	if take <= 0:
 		return 0
 	if take >= sm:
-		target.unit_properties.erase("spot_markers")
+		_sync_unit_property(target, "spot_markers", null)
 		if radial_menu_controller != null:
 			radial_menu_controller.remove_library_token(target, "Spotted")
 	else:
-		target.unit_properties["spot_markers"] = sm - take
+		# NML-927: a PARTIAL removal leaves the "Spotted" token standing, so the marker channel
+		# carries nothing at all — the remaining count is the only thing that tells the peer.
+		_sync_unit_property(target, "spot_markers", sm - take)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Precision Spotter: %d marker%s removed — +%d to hit this volley%s" % [
@@ -8544,6 +8981,62 @@ func _solo_log_reach_shrink(attacker: GameUnit, target: GameUnit) -> void:
 		target.get_name(), ", ".join(locked)], true)
 
 
+## NML-929 — rules-must-log's POSITIVE case, the mirror of _solo_log_reach_shrink: a weapon that fires
+## PAST the range printed on its card reads as a bug exactly like one that silently stops firing. So the
+## bonus is NAMED (Royal Legion / a spell range token), and so are the profiles it — and only it — lifts
+## into reach. Measured through the same base-edge distance and the same effective_shoot_reach_in seam
+## the per-weapon gate in _solo_attack_groups uses, so the line can never promise a shot the gate refuses.
+func _solo_log_range_bonus(attacker: GameUnit, target: GameUnit) -> void:
+	if battle_log == null or attacker == null or target == null:
+		return
+	var members: Array = [attacker]
+	if attacker.has_method("get_attached_heroes"):
+		members = members + attacker.get_attached_heroes()
+	for mm in members:
+		var member := mm as GameUnit
+		if member == null or member.get_alive_count() == 0 or member.source_type != "opr" \
+				or not (member.source_data is OPRApiClient.OPRUnit):
+			continue
+		var bonus_in: int = SoloController.shooting_range_bonus(member)
+		if bonus_in <= 0:
+			continue
+		# The bonus has two sources behind the one seam (wave 4 rule + NML-006 spell stamp) — name what
+		# is actually in play, so the player can tell a permanent rule from a token that will expire.
+		var spell_in: int = int(member.unit_properties.get("spell_range_mod", 0))
+		var causes: PackedStringArray = []
+		if bonus_in - spell_in > 0:
+			# Coverage wave: the family also arrives as DATA aliases (Lustbound …) — name the rule the
+			# player's own book prints, never the primitive we happen to file it under.
+			var rule_name := "Royal Legion"
+			if not member.has_special_rule("Royal Legion"):
+				for e in RulesRegistry.unit_rules_of_primitive(member, "Royal Legion"):
+					var alias := str((e as Dictionary).get("name", ""))
+					if not alias.is_empty() and alias != "Royal Legion":
+						rule_name = alias
+						break
+			causes.append("%s +%d\"" % [rule_name, bonus_in - spell_in])
+		if spell_in > 0:
+			causes.append("spell +%d\"" % spell_in)
+		# Profiles that reach ONLY because of the bonus: out of reach at the printed range, in reach with it.
+		var gap: float = _solo_nearest_model_gap_in(member, target, INF)
+		var lifted: PackedStringArray = []
+		for p in AiShooting.profiles_in_range((member.source_data as OPRApiClient.OPRUnit).weapons,
+				maxf(gap - float(bonus_in), 0.0)):
+			var printed := float((p as Dictionary).get("range", 0))
+			if SoloController.effective_shoot_reach_in(printed, target) >= gap:
+				continue   # reaches on its own — the bonus lifted nothing
+			if SoloController.effective_shoot_reach_in(printed + float(bonus_in), target) < gap:
+				continue   # still short even boosted — _solo_log_reach_shrink owns that line
+			var pname := str((p as Dictionary).get("name", "?"))
+			if not lifted.has(pname):
+				lifted.append(pname)
+		if lifted.is_empty():
+			continue
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"%s: %s shooting range — %s reaches %s past its printed range" % [
+			member.get_name(), " + ".join(causes), ", ".join(lifted), target.get_name()], true)
+
+
 func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Array = [], skip_named: bool = false) -> void:
 	_solo_stage_begin("%s fires at %s" % [attacker.get_name(), target.get_name()])
 	# B11: ONE measuring truth — the shot distance (feeding the >9" Versatile/Guarded gates and the
@@ -8553,18 +9046,20 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		dist = MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 	# B11: range penalties against THIS target are NAMED, never silently folded into the gate.
 	_solo_log_reach_shrink(attacker, target)
+	# NML-929: … and the positive half — a weapon reaching PAST its printed range says which rule
+	# granted it (the gate honours the bonus, so the log must too).
+	_solo_log_range_bonus(attacker, target)
 	var target_alive_before: int = target.get_alive_count()   # post-shooting morale (goal 003 P1)
 	var target_wounds_before: int = _solo_unit_wounds_now(target)
 	var regenable := 0
 	var regen_proof := 0
-	# Armor(X) (wave 5) sets the working Defense, then Shielded (+1 Defense, army-book rule) covers
-	# every hit; Cover (+1 Defense majority-in-cover, GF v3.5.1 p.11) is shooting-only and ignored by
+	# Armor(X) (wave 5) sets the working Defense, then every Defense contribution of the parts seam
+	# folds in (Shielded and its data aliases, growth markers, spell tokens — each NAMED in the log,
+	# NML-932); Cover (+1 Defense majority-in-cover, GF v3.5.1 p.11) is shooting-only and ignored by
 	# Blast and Indirect (wave 5).
 	_solo_log_armor(target)
 	var shielded_def: int = _solo_defense_vs(target)
-	if shielded_def != _solo_armored_defense(target) and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
-			target.get_name(), shielded_def], true)
+	_solo_log_defense_parts(target, AiCombatMath.HIT_SOURCE_SHOOTING, shielded_def, true)
 	# Guarded / Versatile Defense's def-half: the human shooting from over 9" honours the +1 Defense
 	# too — both directions read the same rule (the shot distance is known here).
 	var h_over9 := _solo_over9_defense_rule(target)
@@ -12392,6 +12887,15 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# Re-park loose models the host had killed (needs the trays above), so a late-joiner sees the
 	# same greyed casualties on the tray, not live draggable models (G4).
 	save_manager._restore_dead_parking_after_load()
+	# NML-928: and the same for models that are EMBARKED. The state (embarked_in / cargo_unit_ids /
+	# embark_return_spots) rides unit_properties and therefore arrives with the sync, but the node
+	# "embarked" meta and the tray slot are RUNTIME and have to be rebuilt — save_manager.load_game()
+	# does that one line after its dead-parking call, and this path simply never did. A late-joiner
+	# was left with cargo whose models had no meta: the radial menu offered them the ordinary unit
+	# actions instead of the single legal one (disembark), and their tray slots were never claimed,
+	# so the next casualty parked on top of them.
+	if opr_army_manager != null:
+		opr_army_manager.restore_embarked_after_load()
 
 	save_manager.end_restore()
 	network_manager.broadcast_peer_busy(false)  # join load done — release the other peers' gate
@@ -14752,12 +15256,11 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 	if solo_controller == null or opr_army_manager == null or unit == null:
 		return
 	if not _solo_is_ai_unit(unit):
-		# SOLO ONLY for now. The effect lands as a once-mod record + grant overlay, and that record
-		# does not ride the wire — applying it in a live multiplayer game would put a modifier on
-		# one client's dice and not the other's. Wiring the buff family into the MP sync is its own
-		# ticket; until then the human path is exactly as wide as the AI path has always been.
-		if network_manager != null and network_manager.is_multiplayer_active():
-			return
+		# NML-929: this used to bail out in a live multiplayer game. The effect lands as a once-mod
+		# record + grant overlay, and that record did not ride the wire — applying it would have put
+		# a modifier on one client's dice and not the other's, which is worse than a rule that does
+		# nothing. The records now travel (_broadcast_spell_mods on every record, consumption and
+		# expiry), so the human path is as wide in multiplayer as it is offline.
 		if int(unit.unit_properties.get("utility_buff_round", -1)) == opr_army_manager.current_round:
 			return
 		unit.unit_properties["utility_buff_round"] = opr_army_manager.current_round
