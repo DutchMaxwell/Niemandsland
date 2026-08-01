@@ -4182,8 +4182,9 @@ func _solo_reanimation_aura_end(unit: GameUnit) -> void:
 
 ## Spend `successes` on the unit — the allocation plan (SoloController.reanimation_plan) applied
 ## through the SAME revive/heal seams the manual wound workflow uses (wound marker, regiment reform,
-## MP broadcast). A casualty only comes back where it can stand in coherency with a model that was
-## NOT restored in this activation; a success with nowhere legal to put its model simply expires.
+## MP broadcast). A LOOSE casualty only comes back where it can stand in coherency with a model that
+## was NOT restored in this activation; a success with nowhere legal to put its model simply expires.
+## A REGIMENT member has no spot of its own — its place is the block's rank (NML-933, see below).
 ## Returns {models, wounds, unplaceable, wounds_now, wounds_max}.
 func _solo_apply_reanimation(unit: GameUnit, successes: int) -> Dictionary:
 	var out := {"models": 0, "wounds": 0, "unplaceable": 0, "wounds_now": 0, "wounds_max": 0}
@@ -4212,10 +4213,25 @@ func _solo_apply_reanimation(unit: GameUnit, successes: int) -> Dictionary:
 			if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
 				network_manager.broadcast_model_wounds(model)
 			continue
-		var spot: Vector3 = _solo_reanimation_spot(model, anchors, taken)
-		if spot == Vector3.INF:
-			out["unplaceable"] = int(out["unplaceable"]) + 1
-			continue
+		# NML-933 — a REGIMENT member gets NO spot of its own. It lives under its tray, and its place
+		# is the rank the block hands it: the revive seam below re-ranks the whole block from the
+		# unit's alive models (radial_menu_controller._reform_regiment_for_model →
+		# RegimentTray.reform_from_unit), which is the AoF:R rank-removal/-return the manual wound
+		# workflow already uses. Writing a coherency ring spot on top of that set a world position on
+		# a node parented to the tray — the returning rank model teleported OUT of its own block.
+		# The MP peer never had the defect: it only receives the wounds message and re-ranks from it,
+		# so host and guest disagreed. #267 made exactly this decision for the wire (a regiment
+		# member's position is not broadcast, the block is re-ranked instead); this is its local half,
+		# and the two halves are now symmetric. The coherency gate is skipped with the spot: a block
+		# ALWAYS has a rank for a returning model, so it can never be "unplaceable".
+		var in_regiment: bool = model.node != null and is_instance_valid(model.node) \
+				and model.node.has_meta(RegimentTray.MEMBER_META)
+		var spot := Vector3.INF
+		if not in_regiment:
+			spot = _solo_reanimation_spot(model, anchors, taken)
+			if spot == Vector3.INF:
+				out["unplaceable"] = int(out["unplaceable"]) + 1
+				continue
 		if radial_menu_controller != null:
 			radial_menu_controller._revive_single_model(model, unit)
 		else:
@@ -4224,9 +4240,10 @@ func _solo_apply_reanimation(unit: GameUnit, successes: int) -> Dictionary:
 		# further wound spent on it — never at full health unless the dice paid for it.
 		model.wounds_current = clampi(wounds, 1, maxi(model.wounds_max, 1))
 		model.is_alive = true
-		if model.node != null and is_instance_valid(model.node):
-			model.node.global_position = spot
-		taken.append({"p": spot, "r": _solo_base_radius(model)})
+		if not in_regiment:
+			if model.node != null and is_instance_valid(model.node):
+				model.node.global_position = spot
+			taken.append({"p": spot, "r": _solo_base_radius(model)})
 		out["models"] = int(out["models"]) + 1
 		out["wounds"] = int(out["wounds"]) + maxi(wounds - 1, 0)
 		if radial_menu_controller != null:
