@@ -719,6 +719,14 @@ func _ready() -> void:
 				func(_object_count: int) -> void: _tutorial_board_loaded = true, CONNECT_ONE_SHOT)
 			save_manager.load_failed.connect(
 				func(_error: String) -> void: _tutorial_board_loaded = true, CONNECT_ONE_SHOT)
+		# A silent-but-correct tutorial entry reads as broken: a tester needs to be able to
+		# answer "which tutorial did I just get?" from inside the game, not from the source.
+		if battle_log != null:
+			var lesson_part := "lesson %s" % _tutorial_start_lesson if not _tutorial_start_lesson.is_empty() else "resume"
+			var board_part := TutorialDirector.BOARD_PATH.get_file() if _tutorial_board_pending else "none"
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Tutorial started: T1 tool track, %d chapters (%s) — board %s" % [
+					TutorialFlow.build_tool_track().size(), lesson_part, board_part])
 
 	# Check if a saved battle should be loaded (from startup menu)
 	var pending_load := ProjectSettings.get_setting("niemandsland/pending_load_path", "") as String
