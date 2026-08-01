@@ -58,7 +58,18 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   coherency with a model that was *not* restored, otherwise the success expires (with its own log
   line). The rule reaches the table through the hero upgrade *Reanimation Aura*, and it ends when
   its carrier falls — the battle log says so. Shaken units stay idle and do not reanimate.
-  Allocation is automatic in v1 for both sides; letting the owner click each restore is a follow-up.
+- **You allocate your own Reanimation successes by clicking.** The rule's restores used to be handed
+  out for you — living wounded first, then the cheapest casualty. A fine default and a poor
+  decision-maker: getting a Tough elite back on its feet instead of topping two wounds up is often
+  the whole activation, and OPR gives that call to the owner. After the roll your side gets a click
+  mode, the same principle the wound allocation follows: **left-click a wounded model** to heal one
+  wound there, **left-click a fallen model's ring** to bring it back, **right-click** to hand the
+  rest to the automatic allocation. A casualty has no model to click — a regiment one is hidden in
+  its block, a loose one is parked on the army tray — so every casualty that *can* return wears a
+  marker ring at its return spot, and that ring is the click target. A strip counts the successes
+  down, every click writes its own log line, and a click that buys nothing (a model already at full
+  health) says why instead of doing nothing. The prompt only appears where the choice can change
+  something, and NACHTMAHR keeps allocating its own restores by its own plan.
 - **The combat stage covers melee and spells.** The central card that already paced the shooting
   volleys now walks a charge — Charge, Counter, Impact, one card per strike wave, Melee result,
   Morale, Consolidation — and a cast: Cast, Cast roll, Effect (one Effect card per target). Both

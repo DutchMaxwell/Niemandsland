@@ -95,7 +95,7 @@ func test_a_regiment_returner_stands_in_its_block_rank(timeout := 120000) -> voi
 	var u := _bots("Legion", 6)
 	var tray := _form_block(u, 3)
 	var back := _drop_rank_model(u, tray, 5, 0)
-	_main._solo_resolve_reanimation(u, 1, 5, 1)
+	await _main._solo_resolve_reanimation(u, 1, 5, 1)
 	assert_bool(back.is_alive) \
 		.override_failure_message("fixture check: the success must actually restore the model") \
 		.is_true()
@@ -148,7 +148,7 @@ func test_a_loose_returner_still_takes_its_coherency_spot(timeout := 120000) -> 
 	back.node.global_position = (u.models[0] as ModelInstance).node.global_position
 	_main.opr_army_manager.set_loose_model_dead(back.node, 2, true, u.unit_id)
 	var fell: Vector3 = (back.node.get_meta("revive_transform") as Transform3D).origin
-	_main._solo_resolve_reanimation(u, 1, 5, 1)
+	await _main._solo_resolve_reanimation(u, 1, 5, 1)
 	assert_bool(back.is_alive).is_true()
 	assert_float(back.node.global_position.distance_to(fell)) \
 		.override_failure_message("a loose model whose fall point is blocked must still be moved to a ring spot") \

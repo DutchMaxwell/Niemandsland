@@ -262,7 +262,7 @@ var _solo_interactive_grade: String = "nachtmahr"  # the ONE grade (NML-211): NA
                                                   # → the naive baseline AI (no position solver, no knobs).
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
 var _solo_target_mode: Dictionary = {}       # {unit, melee} while the player picks an attack target (P8)
-var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, outcome} while a Takedown pick awaits a model click
+var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, outcome, spots} while a Takedown / wound / Reanimation pick awaits a model click
 # TC-023 (Takedown, GF v3.5.1 p.14 "resolved as if it was a unit of [1]"): while this holds the picked
 # model, the shared target-side readers answer for THAT MODEL ALONE — its own unit's rules (the joined
 # chain's other members neither grant nor withhold them) and its own cover square (the other models
@@ -4137,14 +4137,36 @@ func _solo_try_reanimation(unit: GameUnit) -> void:
 	for f in faces:
 		if DiceRules.is_success(int(f), target, 0):
 			successes += 1
-	_solo_resolve_reanimation(unit, pool, target, successes)
+	await _solo_resolve_reanimation(unit, pool, target, successes)
 
 
 ## Apply + narrate a finished Reanimation roll. Split from the roll on purpose: the dice are the one
 ## part that cannot be asserted, so every log line and every allocation is reachable with fixed
 ## successes (rules-must-log doctrine — a silently correct rule reads like a broken one).
+##
+## NML-924: on YOUR side the successes are spent by CLICKING (the #172 principle — the owner allocates,
+## the engine does not choose for you). The prompt runs BETWEEN the dice and the restores; whatever is
+## left when you right-click falls through to the v1 automatic allocation, which the AI, batch mode and
+## the self-play harness use unchanged. `anchors` and `taken` are captured ONCE here and shared by both
+## halves, so a model you just clicked back can never anchor the next one (the rule's "coherency with
+## NON-restored models") and two returns can never claim the same spot.
 func _solo_resolve_reanimation(unit: GameUnit, pool: int, target: int, successes: int) -> void:
-	var result: Dictionary = _solo_apply_reanimation(unit, successes)
+	if unit == null:
+		return
+	var anchors: Array = _solo_reanimation_anchors(unit)
+	var taken: Array = []
+	var clicked := {"models": 0, "wounds": 0, "unplaceable": 0}
+	var left := successes
+	if _solo_reanimation_choice_matters(unit, successes):
+		left = await _solo_prompt_reanimation_allocation(unit, successes, anchors, taken, clicked)
+	var auto: Dictionary = _solo_apply_reanimation(unit, left, anchors, taken)
+	var result := {
+		"models": int(clicked["models"]) + int(auto.get("models", 0)),
+		"wounds": int(clicked["wounds"]) + int(auto.get("wounds", 0)),
+		"unplaceable": int(clicked["unplaceable"]) + int(auto.get("unplaceable", 0)),
+		"wounds_now": _solo_unit_wounds_now(unit),
+		"wounds_max": _solo_unit_wounds_max(unit),
+	}
 	if battle_log == null:
 		return
 	var ai: bool = _solo_is_ai_unit(unit)
@@ -4180,13 +4202,24 @@ func _solo_reanimation_aura_end(unit: GameUnit) -> void:
 		_solo_is_ai_unit(unit))
 
 
-## Spend `successes` on the unit — the allocation plan (SoloController.reanimation_plan) applied
-## through the SAME revive/heal seams the manual wound workflow uses (wound marker, regiment reform,
-## MP broadcast). A LOOSE casualty only comes back where it can stand in coherency with a model that
-## was NOT restored in this activation; a success with nowhere legal to put its model simply expires.
-## A REGIMENT member has no spot of its own — its place is the block's rank (NML-933, see below).
+## The rule's "non-restored models": everything the chain has standing BEFORE this activation spends a
+## single success. Captured ONCE per activation and shared by the owner's click phase and the automatic
+## remainder — otherwise a model that was just restored would anchor the next one and the coherency
+## requirement would bootstrap itself out of thin air.
+func _solo_reanimation_anchors(unit: GameUnit) -> Array:
+	var anchors: Array = []
+	for m in SoloController.reanimation_models(unit):
+		if (m as ModelInstance).is_alive:
+			anchors.append(m)
+	return anchors
+
+
+## Spend `successes` on the unit AUTOMATICALLY — the v1 allocation plan (SoloController.reanimation_plan)
+## landed through _solo_apply_reanimation_entry. This is what the AI, batch mode, the self-play harness
+## and the remainder of an owner's click phase all run. `anchors`/`taken` come from the caller when a
+## click phase already spent part of the roll (empty = this call owns the whole activation).
 ## Returns {models, wounds, unplaceable, wounds_now, wounds_max}.
-func _solo_apply_reanimation(unit: GameUnit, successes: int) -> Dictionary:
+func _solo_apply_reanimation(unit: GameUnit, successes: int, anchors: Array = [], taken: Array = []) -> Dictionary:
 	var out := {"models": 0, "wounds": 0, "unplaceable": 0, "wounds_now": 0, "wounds_max": 0}
 	if unit == null:
 		return out
@@ -4195,67 +4228,235 @@ func _solo_apply_reanimation(unit: GameUnit, successes: int) -> Dictionary:
 		out["wounds_max"] = _solo_unit_wounds_max(unit)
 		return out
 	var plan: Array = SoloController.reanimation_plan(unit, successes)
-	# The anchors: every model that is ALIVE right now, i.e. was not restored by this activation.
-	var anchors: Array = []
-	for m in SoloController.reanimation_models(unit):
-		if (m as ModelInstance).is_alive:
-			anchors.append(m)
-	var taken: Array = []   # [{p: Vector3, r: float}] — spots this activation already claimed
+	var anchor_set: Array = anchors if not anchors.is_empty() else _solo_reanimation_anchors(unit)
 	for step in plan:
 		var entry := step as Dictionary
-		var model := entry["model"] as ModelInstance
-		var wounds := int(entry["wounds"])
-		if not bool(entry["revive"]):
-			model.heal(wounds)
-			out["wounds"] = int(out["wounds"]) + wounds
-			if radial_menu_controller != null:
-				radial_menu_controller._update_wound_marker(model)
-			if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
-				network_manager.broadcast_model_wounds(model)
-			continue
-		# NML-933 — a REGIMENT member gets NO spot of its own. It lives under its tray, and its place
-		# is the rank the block hands it: the revive seam below re-ranks the whole block from the
-		# unit's alive models (radial_menu_controller._reform_regiment_for_model →
-		# RegimentTray.reform_from_unit), which is the AoF:R rank-removal/-return the manual wound
-		# workflow already uses. Writing a coherency ring spot on top of that set a world position on
-		# a node parented to the tray — the returning rank model teleported OUT of its own block.
-		# The MP peer never had the defect: it only receives the wounds message and re-ranks from it,
-		# so host and guest disagreed. #267 made exactly this decision for the wire (a regiment
-		# member's position is not broadcast, the block is re-ranked instead); this is its local half,
-		# and the two halves are now symmetric. The coherency gate is skipped with the spot: a block
-		# ALWAYS has a rank for a returning model, so it can never be "unplaceable".
-		var in_regiment: bool = model.node != null and is_instance_valid(model.node) \
-				and model.node.has_meta(RegimentTray.MEMBER_META)
-		var spot := Vector3.INF
-		if not in_regiment:
-			spot = _solo_reanimation_spot(model, anchors, taken)
-			if spot == Vector3.INF:
-				out["unplaceable"] = int(out["unplaceable"]) + 1
-				continue
-		if radial_menu_controller != null:
-			radial_menu_controller._revive_single_model(model, unit)
-		else:
-			model.reset_wounds()
-		# Wound currency: the model returns with the ONE wound its first success bought, plus every
-		# further wound spent on it — never at full health unless the dice paid for it.
-		model.wounds_current = clampi(wounds, 1, maxi(model.wounds_max, 1))
-		model.is_alive = true
-		if not in_regiment:
-			if model.node != null and is_instance_valid(model.node):
-				model.node.global_position = spot
-			taken.append({"p": spot, "r": _solo_base_radius(model)})
-		out["models"] = int(out["models"]) + 1
-		out["wounds"] = int(out["wounds"]) + maxi(wounds - 1, 0)
+		# v1 rule, unchanged: an automatic success with nowhere legal to put its model EXPIRES.
+		if not _solo_apply_reanimation_entry(unit, entry["model"] as ModelInstance, int(entry["wounds"]),
+				bool(entry["revive"]), anchor_set, taken, out):
+			out["unplaceable"] = int(out["unplaceable"]) + 1
+	out["wounds_now"] = _solo_unit_wounds_now(unit)
+	out["wounds_max"] = _solo_unit_wounds_max(unit)
+	return out
+
+
+## Land ONE allocation entry — `wounds` successes spent on `model`, `revive` when the first of them
+## buys a casualty back — through the SAME seams the manual wound workflow uses (wound marker, regiment
+## reform, MP broadcast, position correction). Shared by the automatic plan and by every owner click,
+## so a clicked restore and an automatic one are indistinguishable to the rest of the game.
+##
+## `anchors` are the models that were alive before this activation (the rule's "non-restored models");
+## `taken` collects the spots this activation already claimed and is carried across the click phase and
+## the automatic remainder, so two returns can never share a spot.
+##
+## Returns true when the entry actually landed. A revive with nowhere legal to stand returns FALSE and
+## changes nothing — the caller decides what that means: the automatic plan lets the success expire
+## (v1 behaviour), a click keeps it in the owner's hand to spend somewhere else.
+func _solo_apply_reanimation_entry(unit: GameUnit, model: ModelInstance, wounds: int, revive: bool,
+		anchors: Array, taken: Array, out: Dictionary) -> bool:
+	if model == null or wounds <= 0:
+		return false
+	if not revive:
+		model.heal(wounds)
+		out["wounds"] = int(out["wounds"]) + wounds
 		if radial_menu_controller != null:
 			radial_menu_controller._update_wound_marker(model)
 		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
 			network_manager.broadcast_model_wounds(model)
-		# ORDER MATTERS: the wounds message above un-parks the model on the peer (at the spot where
-		# it FELL); only then does the correction below put it where the placer actually stood it.
-		_broadcast_restored_position(model)
-	out["wounds_now"] = _solo_unit_wounds_now(unit)
-	out["wounds_max"] = _solo_unit_wounds_max(unit)
+		return true
+	# NML-933 — a REGIMENT member gets NO spot of its own. It lives under its tray, and its place
+	# is the rank the block hands it: the revive seam below re-ranks the whole block from the
+	# unit's alive models (radial_menu_controller._reform_regiment_for_model →
+	# RegimentTray.reform_from_unit), which is the AoF:R rank-removal/-return the manual wound
+	# workflow already uses. Writing a coherency ring spot on top of that set a world position on
+	# a node parented to the tray — the returning rank model teleported OUT of its own block.
+	# The MP peer never had the defect: it only receives the wounds message and re-ranks from it,
+	# so host and guest disagreed. #267 made exactly this decision for the wire (a regiment
+	# member's position is not broadcast, the block is re-ranked instead); this is its local half,
+	# and the two halves are now symmetric. The coherency gate is skipped with the spot: a block
+	# ALWAYS has a rank for a returning model, so it can never be "unplaceable".
+	var in_regiment: bool = model.node != null and is_instance_valid(model.node) \
+			and model.node.has_meta(RegimentTray.MEMBER_META)
+	var spot := Vector3.INF
+	if not in_regiment:
+		spot = _solo_reanimation_spot(model, anchors, taken)
+		if spot == Vector3.INF:
+			return false
+	if radial_menu_controller != null:
+		radial_menu_controller._revive_single_model(model, unit)
+	else:
+		model.reset_wounds()
+	# Wound currency: the model returns with the ONE wound its first success bought, plus every
+	# further wound spent on it — never at full health unless the dice paid for it.
+	model.wounds_current = clampi(wounds, 1, maxi(model.wounds_max, 1))
+	model.is_alive = true
+	if not in_regiment:
+		if model.node != null and is_instance_valid(model.node):
+			model.node.global_position = spot
+		taken.append({"p": spot, "r": _solo_base_radius(model)})
+	out["models"] = int(out["models"]) + 1
+	out["wounds"] = int(out["wounds"]) + maxi(wounds - 1, 0)
+	if radial_menu_controller != null:
+		radial_menu_controller._update_wound_marker(model)
+	if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
+		network_manager.broadcast_model_wounds(model)
+	# ORDER MATTERS: the wounds message above un-parks the model on the peer (at the spot where
+	# it FELL); only then does the correction below put it where the placer actually stood it.
+	_broadcast_restored_position(model)
+	return true
+
+
+## NML-924 — does the OWNER get to allocate this roll by hand? The #172 gates, read for Reanimation:
+## an interactive solo HUMAN unit only (never the AI's own — NACHTMAHR keeps its deterministic plan),
+## never batch/harness (headless would deadlock on a click that never comes — the self-play runs
+## depend on this), never both-AI, and never MP, where the acting peer cannot drive the prompt. On top
+## of that the choice has to be able to MATTER: with one candidate, or with enough successes to fill
+## every candidate to the brim, the allocation has no decision in it and the automatic plan is right.
+func _solo_reanimation_choice_matters(unit: GameUnit, successes: int) -> bool:
+	if unit == null or successes <= 0:
+		return false
+	if _solo_batch or _solo_both_ai or _solo_is_ai_unit(unit):
+		return false
+	if network_manager != null and network_manager.is_multiplayer_active():
+		return false
+	var candidates: Array = SoloController.reanimation_candidates(unit)
+	if candidates.size() <= 1:
+		return false
+	var capacity := 0
+	for c in candidates:
+		capacity += int((c as Dictionary)["capacity"])
+	return successes < capacity
+
+
+## NML-924 — the click TARGETS a fallen model offers. A casualty has no body to click: a regiment
+## casualty is hidden with its collider off (AoF:R rank removal), a loose one is parked desaturated on
+## its owner's army tray, i.e. nowhere near the battlefield. So each one that CAN come back gets a
+## candidate ring at the place it would come back to, and the ring is the click target
+## (_solo_spawn_picked_ring, the same marker a picked cast target wears).
+##
+## The ring marks the RETURN, not a promise of a millimetre: the real placement runs through
+## _solo_apply_reanimation_entry with the activation's own claim list, so a later pick that would
+## collide is moved on by the placer. A regiment member's ring sits on its slot in the block, which is
+## where the reform stands it again. Returns [{unit, index, p, r}] — `unit`/`index` address the model
+## the same way the Takedown pick does.
+func _solo_reanimation_pick_spots(unit: GameUnit, anchors: Array) -> Array:
+	var out: Array = []
+	var probe: Array = []   # spot probe only — the real placer keeps its own claim list
+	for m in SoloController.reanimation_models(unit):
+		var mi := m as ModelInstance
+		if mi == null or mi.is_alive or mi.node == null or not is_instance_valid(mi.node):
+			continue
+		var p := Vector3.INF
+		if mi.node.has_meta(RegimentTray.MEMBER_META):
+			p = mi.node.global_position
+		else:
+			p = _solo_reanimation_spot(mi, anchors, probe)
+		if p == Vector3.INF:
+			continue   # nowhere legal to stand — no ring, so it cannot be clicked either
+		var r: float = _solo_base_radius(mi)
+		probe.append({"p": p, "r": r})
+		out.append({"unit": mi.unit, "index": mi.model_index, "p": p, "r": r})
 	return out
+
+
+## NML-924 — the owner spends the roll by CLICKING (#172's principle: the owner allocates, the engine
+## does not choose for you). LMB on a living wounded model of the chain heals one wound THERE, LMB
+## inside a fallen model's candidate ring brings THAT model back, RMB or the strip button hands the
+## rest to the automatic allocation. Every click — and every click that buys nothing — writes its own
+## battle-log line, and the strip carries the "N left" counter.
+##
+## Each success is applied IMMEDIATELY through the shared entry seam, so the table answers the click at
+## once and the automatic remainder plans against the state the clicks actually produced.
+## Returns the successes still unspent (0 when every one of them was clicked).
+func _solo_prompt_reanimation_allocation(unit: GameUnit, successes: int, anchors: Array,
+		taken: Array, out: Dictionary) -> int:
+	var spots: Array = _solo_reanimation_pick_spots(unit, anchors)
+	var rings: Array = []
+	for s in spots:
+		rings.append(_solo_spawn_picked_ring((s as Dictionary)["p"]))
+	_solo_model_pick = {"unit": unit, "chain": SoloController.reanimation_members(unit),
+		"recommended": {}, "outcome": [], "spots": spots}
+	var outcome: Array = _solo_model_pick["outcome"]
+	var skipped: Array = []
+	var left := successes
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Reanimation: %s allocates %d success%s — CLICK a wounded model or a fallen model's ring; right-click allocates the rest" % [
+			unit.get_name(), successes, ("" if successes == 1 else "es")], false)
+	_solo_deploy_ui_show(_solo_reanimation_strip_text(unit, left),
+		"Auto-allocate the rest", func() -> void: skipped.append(true))
+	while left > 0:
+		while outcome.is_empty() and skipped.is_empty() and not _solo_model_pick.is_empty():
+			await get_tree().process_frame
+		if not skipped.is_empty() or _solo_model_pick.is_empty():
+			break
+		var pick := outcome.pop_back() as Dictionary
+		var pu := pick.get("unit") as GameUnit
+		if pu == null:
+			break   # RMB: the empty recommended pick means "allocate the rest automatically"
+		var idx := int(pick.get("index", -1))
+		if idx < 0 or idx >= pu.models.size():
+			continue
+		var mi: ModelInstance = pu.models[idx]
+		var step: Dictionary = SoloController.reanimation_pick_step(left, mi)
+		if not bool(step["spent"]):
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"Reanimation: that model takes no restore — %s (%d left)" % [str(step["reason"]), left], false)
+			continue
+		var revive := bool(step["revive"])
+		if not _solo_apply_reanimation_entry(unit, mi, 1, revive, anchors, taken, out):
+			# The success stays in the owner's hand — only the automatic plan lets one expire.
+			_solo_drop_reanimation_ring(spots, rings, pu, idx)
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"Reanimation: that model has nowhere legal to stand — coherency to non-restored models missing (%d left)" % left,
+					false)
+			continue
+		left = int(step["left"])
+		if revive:
+			_solo_drop_reanimation_ring(spots, rings, pu, idx)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT,
+				"Reanimation: you %s on %s — %d success%s left" % [
+				("restore a fallen model" if revive else "heal one wound"), unit.get_name(),
+				left, ("" if left == 1 else "es")], false)
+		if left > 0:
+			_solo_deploy_ui_show(_solo_reanimation_strip_text(unit, left),
+				"Auto-allocate the rest", func() -> void: skipped.append(true))
+	for rn in rings:
+		if rn is Node and is_instance_valid(rn):
+			(rn as Node).queue_free()
+	_solo_deploy_ui_hide()
+	_solo_model_pick = {}
+	if left > 0 and battle_log != null:
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"Reanimation: the remaining %d success%s allocated automatically" % [
+			left, (" is" if left == 1 else "es are")], false)
+	return left
+
+
+## The click strip's line — the "N left" counter the player reads while allocating.
+func _solo_reanimation_strip_text(unit: GameUnit, left: int) -> String:
+	return "Reanimation — %d success%s left for %s: click a wounded model, or a fallen model's ring." % [
+		left, ("" if left == 1 else "es"), unit.get_name()]
+
+
+## Take a candidate ring off the table once its model is back (or turned out to have nowhere to
+## stand). `spots` is the very array _solo_model_pick holds, so dropping the entry also retires the
+## click target — the same ring can never be spent twice.
+func _solo_drop_reanimation_ring(spots: Array, rings: Array, unit: GameUnit, index: int) -> void:
+	for i in range(spots.size() - 1, -1, -1):
+		var sd := spots[i] as Dictionary
+		if sd["unit"] != unit or int(sd["index"]) != index:
+			continue
+		if i < rings.size():
+			var rn = rings[i]
+			if rn is Node and is_instance_valid(rn):
+				(rn as Node).queue_free()
+			rings.remove_at(i)
+		spots.remove_at(i)
+		return
 
 
 ## Push a restored model's REAL table position to the peers.
@@ -7809,6 +8010,8 @@ func _unhandled_input(event: InputEvent) -> void:
 ## B5 (test game 2, decided: Ziel-MODELL-Pick): while a Takedown pick is active, LMB on an alive
 ## model of the pick's unit chooses IT; right-click takes the recommended model. Returns true when
 ## the event was consumed (every mouse press is, so a stray click can't fall through to the table).
+## NML-924 adds one fallback for the Reanimation allocation: when the ray hits no live model, a
+## candidate RING under the cursor picks the fallen model it stands for (see _solo_ring_pick_at).
 func _solo_model_pick_input(event: InputEvent) -> bool:
 	var mb := event as InputEventMouseButton
 	if mb == null or not mb.pressed:
@@ -7834,7 +8037,46 @@ func _solo_model_pick_input(event: InputEvent) -> bool:
 		var mi := (col as Node).get_meta("model_instance") as ModelInstance
 		if mi != null and mi.is_alive and chain.has(mi.unit):
 			outcome.append({"unit": mi.unit, "index": mi.model_index})
+			return true
+	# NML-924: a FALLEN model has no body to click (a regiment casualty is hidden with its collider
+	# off, a loose one is parked on the army tray), so the candidate RING at its return spot is the
+	# click target. Only the Reanimation prompt fills "spots" — for the Takedown and wound picks this
+	# is a no-op, and their behaviour is untouched.
+	var ring_pick: Dictionary = _solo_ring_pick_at(mb.position)
+	if not ring_pick.is_empty():
+		outcome.append(ring_pick)
 	return true
+
+
+## Which candidate ring the cursor is over: the camera ray meets the ring's own ground plane and the
+## nearest ring whose disc contains that point wins. The rings carry no collider (they are drawn
+## markers), so this cannot be a physics raycast — and it must not be, because the model the ring
+## stands for has no collider either. Returns {} when the click landed on bare table.
+const REANIM_RING_PICK_RADIUS_M := 0.075   # the drawn ring's outer radius — you click what you see
+
+func _solo_ring_pick_at(screen_pos: Vector2) -> Dictionary:
+	var spots: Array = _solo_model_pick.get("spots", [])
+	if spots.is_empty():
+		return {}
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return {}
+	var origin: Vector3 = camera.project_ray_origin(screen_pos)
+	var dir: Vector3 = camera.project_ray_normal(screen_pos)
+	var best: Dictionary = {}
+	var best_d := INF
+	for s in spots:
+		var sd := s as Dictionary
+		var p: Vector3 = sd["p"]
+		var ground := Plane(Vector3.UP, p.y)
+		var where = ground.intersects_ray(origin, dir)
+		if where == null:
+			continue
+		var d: float = Vector2((where as Vector3).x - p.x, (where as Vector3).z - p.z).length()
+		if d <= REANIM_RING_PICK_RADIUS_M and d < best_d:
+			best_d = d
+			best = {"unit": sd["unit"], "index": sd["index"]}
+	return best
 
 
 ## "" when the target is attackable, else the human-readable reason. Shooting validity is PER MODEL
