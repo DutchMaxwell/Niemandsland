@@ -2721,12 +2721,37 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 	var own_left: int = maxi(tokens - threshold, 0)
 	if own_left > 0:
 		helpers.insert(0, {"unit": member, "tokens": own_left})
+	# The boost decision states its own reason in the decision log (AI policy — no battle-log line:
+	# nothing here is a rule the player must be shown, only how the AI priced its tokens).
+	# A cast this chain cannot price ("castable" status, or a rule grant spell_modifier_delta does
+	# not model) is NOT treated as worthless here: the AI has already paid the spell's tokens, so
+	# the effect is worth landing — boost_value_of prices it just high enough to buy the one token
+	# that lifts it out of the coin flip, and never a second.
+	var boost_value := AiSpell.boost_value_of(chosen_ev)
+	var boost_pool := 0
+	var boost_why := "no boost: this difficulty never spends helper tokens"
+	if spend_boosts:
+		boost_why = "no boost: no payable token in 18\" LoS"
 	if spend_boosts and not helpers.is_empty():
-		var pool := 0
 		for h in helpers:
-			pool += int((h as Dictionary)["tokens"])
-		boost = AiSpell.plan_boost(chosen_ev, pool)
+			boost_pool += int((h as Dictionary)["tokens"])
+		boost = AiSpell.plan_boost(boost_value, boost_pool)
 		boost_sources = _draw_aura_tokens(helpers, boost)
+		if boost > 0:
+			# Name the reason PRECISELY: the coin-flip clause only gets the credit when the plain
+			# token floor would have bought nothing — i.e. the FIRST token's marginal EV sits under
+			# it. A fat cast (5 wounds) boosts on the ordinary floor and must not read as one.
+			var p_unboosted := AiSpell.cast_success_chance(0, 0, base_target)
+			var first_gain := (AiSpell.cast_success_chance(1, 0, base_target) - p_unboosted) * boost_value
+			if chosen_ev <= 0.0:
+				boost_why = "coin-flip boost on an unpriced effect: the spell's tokens are already paid, so the cast is worth landing"
+			elif p_unboosted <= AiSpell.COIN_FLIP_P and first_gain <= AiSpell.TOKEN_VALUE_EPS:
+				boost_why = ("coin-flip boost: at %.0f%% any positive marginal EV beats holding the token"
+					% (p_unboosted * 100.0))
+			else:
+				boost_why = "boost: marginal EV per token above the token floor"
+		else:
+			boost_why = "no boost: the next token's marginal EV stays under the token floor"
 	# — Interference (the enemy's officially-open counter-choice): auto-planned ONLY in both-AI mode
 	#   (the defending AI spends deterministically); in human-vs-AI main prompts the human instead. —
 	var interference := 0
@@ -2759,6 +2784,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 		"why": ("ev-best pick" if ev_best_pick else ("skip 0-EV" if skip_zero_ev and chosen_ev > 0.0 else "official D3+X cycle")),
 		"data": {"d3": d3, "caster_x": caster_x, "targets": ", ".join(PackedStringArray(target_names)),
 			"ev": chosen_ev, "boost": boost, "interference": interference, "p_cast": p_cast,
+			"boost_pool": boost_pool, "boost_why": boost_why,
 			"tokens_before": tokens_before, "tokens_after": member.casts_current}})
 	var target_units: Array = []
 	for t in chosen_targets:
