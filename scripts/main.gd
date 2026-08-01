@@ -319,6 +319,10 @@ var _solo_unmodeled_logged: Dictionary = {}  # rule name -> true: once-per-sessi
 var _solo_both_ai: bool = false              # BOTH sides are AI: combat auto-resolves, the game runs unattended
 var _solo_spell_tokens_active: Array = []    # spell tokens placed this round [{unit, token}] — expire at round end
 var _solo_spell_mods := {}                   # instance_id -> [{spell, hit_mod, def_mod, scope}] — MECHANICAL token effects (wave: spells F3)
+## NML-929: true while this client is ADOPTING state a peer sent. The adoption runs the ordinary
+## local writers (grant overlay, props stamps), and those broadcast — without this flag the frame
+## would bounce straight back at its sender.
+var _mp_applying_remote_state: bool = false
 var _solo_difficulty_grades: Dictionary = {} # player-slot -> SoloDifficulty preset name (the graded arena)
 var _solo_arena_seed: int = 0                # game-level base seed for the reproducible difficulty knob draws
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
@@ -464,7 +468,9 @@ func _ready() -> void:
 	network_manager.remote_token_defined.connect(_on_remote_token_defined)
 	network_manager.remote_token_edited.connect(_on_remote_token_edited)
 	network_manager.remote_casts_updated.connect(_on_remote_casts_updated)
+	network_manager.remote_spell_mods_updated.connect(_on_remote_spell_mods_updated)
 	network_manager.remote_unit_deleted.connect(_on_remote_unit_deleted)
+	network_manager.remote_unit_created.connect(_on_remote_unit_created)
 	network_manager.remote_round_advanced.connect(_on_remote_round_advanced)
 
 	# Connect presence signals
@@ -1396,7 +1402,13 @@ func _solo_delayed_action_line(gu: GameUnit, opponent_left: int, own_left: int) 
 ## The AI's half, asked ONCE per owed reply, BEFORE a unit is picked (the choice belongs in the
 ## chooser — see SoloController.delayed_action_pass_choice). Returns true when the AI passed, in
 ## which case the caller must not also activate.
-func _solo_ai_delayed_action_pass() -> bool:
+##
+## `advance_replies` selects the ALTERNATION the pass hands the turn on in. The human-facing pump
+## runs on `_solo_pending_replies`, so its pass spends the owed reply (the default). The both-AI
+## arena driver runs its OWN one-for-one alternation (_solo_run_both_ai_round flips `side` itself)
+## and never reads that counter — moving it there would leave a stale debt behind for a session
+## that later goes back to a human opponent, so the arena passes `false` and flips its own side.
+func _solo_ai_delayed_action_pass(advance_replies: bool = true) -> bool:
 	if solo_controller == null or opr_army_manager == null:
 		return false
 	var choice: Dictionary = solo_controller.delayed_action_pass_choice()
@@ -1404,7 +1416,8 @@ func _solo_ai_delayed_action_pass() -> bool:
 	if passer == null:
 		return false
 	SoloController.delayed_action_stamp(passer, opr_army_manager.current_round)
-	_solo_pass_turn(solo_controller.ai_slot)
+	if advance_replies:
+		_solo_pass_turn(solo_controller.ai_slot)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			_solo_delayed_action_line(passer, int(choice["opponent_left"]), int(choice["own_left"])),
@@ -1740,6 +1753,10 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 ## One both-AI round: alternate one activation per side (OPR one-for-one), starting with `opener`, until both
 ## sides are out of eligible units. A wiped/exhausted side is skipped so the other plays out its tail. Returns
 ## the side that took the LAST activation (0 if none acted) — the caller derives the next round's opener.
+##
+## The alternation carries the PASS step (Delayed Action / "Pass Turn", wave 5) exactly like the human-facing
+## pump does. Without it the self-play ladder measures an AI that is not allowed to use a rule the shipped
+## game gives it, so every number the ladder produces is taken next to the real game rather than in it.
 func _solo_run_both_ai_round(opener: int) -> int:
 	var side: int = opener
 	var last_side := 0
@@ -1754,6 +1771,21 @@ func _solo_run_both_ai_round(opener: int) -> int:
 			break
 		var act: int = side if side_has else other
 		_solo_set_active_side(act)
+		# Delayed Action (Pass Turn): the side whose turn it REALLY is may decline to activate — the turn
+		# goes to the opponent and no unit is spent. Guarded on `act == side`: when they differ, `side` is
+		# exhausted and `other` is playing out its tail, and the rule's "the opponent has MORE units left to
+		# activate than you" can never stand for a side facing an empty pool. The pass moves NO reply counter
+		# (this driver owns its own alternation — see _solo_ai_delayed_action_pass), and it deliberately
+		# leaves `last_side` alone: a pass is not an activation, and the next round's opener rule reads the
+		# last ACTIVATION (finding 7). Termination is the rule's own two guards — strictly-more is
+		# antisymmetric, so two sides can never pass at each other, and the once-per-round carrier stamp
+		# bounds the passes per round by the number of carriers.
+		if act == side and _solo_ai_delayed_action_pass(false):
+			if _solo_arena_trace:
+				printerr("[ARENA] R%d act#%d side P%d passes the turn (Delayed Action)" % [
+					opr_army_manager.current_round, guard, act])
+			side = other
+			continue
 		if _solo_arena_trace:
 			printerr("[ARENA] R%d act#%d side P%d …" % [opr_army_manager.current_round, guard, act])
 		var unit: GameUnit = await _solo_activate_one_ai()
@@ -2705,7 +2737,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			if bool(prof.get("limited", false)) and solo_controller.is_limited_used(member, prof):
 				continue
 			if RulesRegistry.unit_rule_active(member, "Shred") \
-					or not RulesRegistry.unit_rules_of_primitive(member, "Shred").is_empty():
+					or _solo_shred_facet_applies(member, base_range):
 				prof["shred"] = true
 			member_profiles.append(prof)
 			# `reach` (target validity + per-model sighting) includes the unit's range bonus, so a Royal
@@ -3288,6 +3320,7 @@ func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary
 	# deltas onto the props stamps — every existing engine read then honours them.
 	_solo_apply_grant(tu, rec)
 	_solo_refresh_spell_stamps(tu)
+	_broadcast_spell_mods(tu)   # NML-929: the record itself rides the wire, not just its stamps
 	if battle_log != null:
 		var hd: PackedStringArray = []
 		if rec["hit_mod"] != 0:
@@ -3480,6 +3513,7 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool) -> void:
 	if records.is_empty():
 		_solo_spell_mods.erase(key)
 	_solo_refresh_spell_stamps(uu)   # NML-006: stamps follow the surviving records
+	_broadcast_spell_mods(uu)   # NML-929: the CONSUMPTION has to travel too, or the peer keeps the buff
 
 
 ## NML-006 — the event-specific once-consumers (casting after the cast die, morale after the test
@@ -3498,6 +3532,7 @@ func _solo_expire_spell_tokens() -> void:
 	# NML-006: revert the mechanical side effects FIRST (grant overlays off, props stamps erased) —
 	# also on the no-controller path, so headless/batch rounds never leak a granted rule or stamp.
 	var affected: Array = []
+	var expired_owners: Array = []   # NML-929: record owners whose list changed — the peer needs it
 	for key in _solo_spell_mods.keys():
 		var keep: Array = []
 		for rd in (_solo_spell_mods[key] as Array):
@@ -3507,19 +3542,27 @@ func _solo_expire_spell_tokens() -> void:
 				keep.append(rd)
 				continue
 			_solo_revoke_grant(rd as Dictionary)
+		var owner := instance_from_id(int(key)) as GameUnit
+		if owner != null and is_instance_valid(owner) \
+				and keep.size() != (_solo_spell_mods[key] as Array).size():
+			expired_owners.append(owner)
 		if keep.is_empty():
 			_solo_spell_mods.erase(key)
 		else:
 			_solo_spell_mods[key] = keep
 			continue
-		var u := instance_from_id(int(key)) as GameUnit
-		if u != null and is_instance_valid(u):
-			for cu in _solo_joined_chain(u):
+		if owner != null and is_instance_valid(owner):
+			for cu in _solo_joined_chain(owner):
 				if not affected.has(cu):
 					affected.append(cu)
 	for cu in affected:
 		_sync_unit_property(cu as GameUnit, "spell_move_mod", null)   # NML-927: the expiry travels too
 		_sync_unit_property(cu as GameUnit, "spell_range_mod", null)
+	# NML-929: the round boundary is driven per client (_on_solo_round_advanced is gated on this
+	# client having an AI slot at all), so an expiry that only happened here would leave the peer
+	# holding a modifier the round has ended. The full-replace frame settles it either way.
+	for owner in expired_owners:
+		_broadcast_spell_mods(owner as GameUnit)
 	if radial_menu_controller == null:
 		_solo_spell_tokens_active.clear()
 		return
@@ -3845,7 +3888,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		# Unit-level grant (wave 5); coverage wave: DATA aliases (Warbound, Infected) via the
 		# generic primitive layer — same facet, same dice.
 		var member_shred: bool = RulesRegistry.unit_rule_active(member, "Shred") \
-			or not RulesRegistry.unit_rules_of_primitive(member, "Shred").is_empty()
+			or _solo_shred_facet_applies(member, 0)
 		for p in profiles:
 			var prof := (p as Dictionary).duplicate()
 			# Wave 5 Limited (core v3.5.1: once per game): an expended profile no longer fights.
@@ -4027,6 +4070,71 @@ static func blast_log_text(x: int, hits: int, boosted: int, models_in_target: in
 ## AiEv.unit_rating reader (one truth between the dice resolution and the EV metric).
 func _solo_unit_rating(unit: GameUnit, rule_name: String) -> int:
 	return AiEv.unit_rating(unit, rule_name)
+
+
+# === NML-937: Retaliate, per carrier and per wound (v3.5.3) ===================================
+
+## Hits one carrier's Retaliate throws back FOR EACH wound it took. v3.5.3 states the scale in the
+## text ("the attacker takes X hits per wound taken"), and the registry carries it as `hits_per_wound`:
+## the string "X" means "the rule's own rating" (Retaliate(3) → 3 hits per wound), a number means a
+## fixed count regardless of the rating. Fallback = the rating, i.e. the shipped wave-7 hardcoding —
+## a missing/param-less map keeps the old behaviour byte-identical.
+func _solo_retaliate_hits_per_wound(unit: GameUnit) -> int:
+	var rating: int = maxi(1, _solo_unit_rating(unit, "Retaliate"))
+	var raw: Variant = RulesRegistry.unit_param(unit, "Retaliate", "hits_per_wound", rating)
+	if raw is String:
+		var s := (raw as String).strip_edges()
+		return maxi(int(s), 1) if s.is_valid_int() else rating
+	if raw is int or raw is float:
+		return maxi(int(raw), 1)
+	return rating
+
+
+## The remaining wound pool of ONE unit's own models (alive models' wounds_current). Regiments keep
+## wounds_current in sync with the pooled counter (apply_regiment_wounds), so the same sum covers
+## loose units and regiments.
+func _solo_unit_wound_pool(unit: GameUnit) -> int:
+	if unit == null or not is_instance_valid(unit):
+		return 0
+	var n := 0
+	for m in unit.models:
+		var mi := m as ModelInstance
+		if mi != null and mi.is_alive:
+			n += maxi(mi.wounds_current, 0)
+	return n
+
+
+## Snapshot of every joined-chain member's wound pool: [{"unit", "pool"}]. Taken BEFORE wounds land,
+## diffed after — that diff is how many wounds each member of the chain actually TOOK.
+func _solo_wound_pools(unit: GameUnit) -> Array:
+	var out: Array = []
+	for c in _solo_joined_chain(unit):
+		var cu := c as GameUnit
+		if cu != null:
+			out.append({"unit": cu, "pool": _solo_unit_wound_pool(cu)})
+	return out
+
+
+## NML-241 — the Retaliate tally, PER CHAIN MEMBER. The wave-7 gate asked the defending unit alone and
+## multiplied by every wound the whole chain took, so a MIXED chain both over-triggered (a non-carrier
+## hero soaking wounds inside a Retaliate squad still lashed back) and under-triggered (a Retaliate
+## hero joined to a plain squad never did). Each member now answers for its OWN wounds with its OWN
+## hits_per_wound. Returns {"hits", "detail"} — detail is the rules-must-log breakdown.
+func _solo_retaliate_hits(pools_before: Array) -> Dictionary:
+	var hits := 0
+	var parts: Array = []
+	for p in pools_before:
+		var pd := p as Dictionary
+		var cu := pd.get("unit") as GameUnit
+		if cu == null or not is_instance_valid(cu) or not RulesRegistry.unit_rule_active(cu, "Retaliate"):
+			continue
+		var took: int = maxi(int(pd.get("pool", 0)) - _solo_unit_wound_pool(cu), 0)
+		if took <= 0:
+			continue
+		var per: int = _solo_retaliate_hits_per_wound(cu)
+		hits += per * took
+		parts.append("%s: %d wound%s × %d" % [cu.get_name(), took, ("" if took == 1 else "s"), per])
+	return {"hits": hits, "detail": ", ".join(PackedStringArray(parts))}
 
 
 ## A weapon profile with Thrust's charge AP bonus folded in (GF/AoF v3.5.1 p.14: "+1 to hit rolls and
@@ -4393,6 +4501,8 @@ func _sync_unit_property(gu: GameUnit, key: String, value: Variant) -> void:
 		if gu.unit_properties.has(key) and gu.unit_properties[key] == value:
 			return
 		gu.unit_properties[key] = value
+	if _mp_applying_remote_state:
+		return   # NML-929: state we are ADOPTING must not be echoed back at its sender
 	if network_manager == null or not network_manager.has_method("broadcast_unit_property"):
 		return
 	if not network_manager.is_multiplayer_active():
@@ -4496,6 +4606,77 @@ func _solo_drop_reanimation_ring(spots: Array, rings: Array, unit: GameUnit, ind
 			rings.remove_at(i)
 		spots.remove_at(i)
 		return
+
+
+## NML-929 — push a unit's full active spell/buff modifier record list to the peers.
+##
+## THE DEFECT THIS EXISTS FOR. The Utility-Buff giver family (Precision Shooter Buff, Furious Buff,
+## Entrenched Buff, …) lands its effect as an F4 once-mod RECORD — the same machinery spell tokens
+## use. Those records never rode the wire, so _solo_apply_utility_buffs refused to run for a human
+## player in a live multiplayer game at all (the guard that this wave removes): a modifier on one
+## client's dice and not the other's is worse than a rule that does nothing. The records are read by
+## BOTH sides — the buffed unit's own attacks are rolled by its owner, but a defense or
+## attackers-beneficiary record is read by the OPPONENT rolling into it.
+##
+## `granted_to` is stripped: it holds LOCAL instance ids, meaningless on another machine. The
+## receiver recomputes its own from the rule name (_on_remote_spell_mods_updated).
+func _broadcast_spell_mods(uu: GameUnit) -> void:
+	if uu == null or _mp_applying_remote_state:
+		return
+	if network_manager == null or not network_manager.has_method("broadcast_spell_mods"):
+		return
+	if not network_manager.is_multiplayer_active():
+		return
+	var wire: Array = []
+	for rd in _solo_spell_mods.get(uu.get_instance_id(), []):
+		var out: Dictionary = (rd as Dictionary).duplicate()
+		out.erase("granted_to")
+		wire.append(out)
+	network_manager.broadcast_spell_mods(uu, wire)
+
+
+## NML-929 — adopt a peer's spell/buff record list for one unit. Full replace (see
+## NetworkManager.broadcast_spell_mods): the local grants come off, the arriving records go on, and
+## the grant overlay plus the props stamps are recomputed from them. Everything runs under
+## _mp_applying_remote_state so nothing this produces is sent straight back.
+##
+## The payload is UNTRUSTED wire data, so each record is rebuilt field by field with the types the
+## readers expect — a peer cannot smuggle a key into the record dictionaries this way.
+func _on_remote_spell_mods_updated(gu: GameUnit, records: Array) -> void:
+	if gu == null:
+		return
+	var key := gu.get_instance_id()
+	_mp_applying_remote_state = true
+	for rd in _solo_spell_mods.get(key, []):
+		_solo_revoke_grant(rd as Dictionary)   # our own grant bookkeeping, our own instance ids
+	var adopted: Array = []
+	for r in records:
+		if not (r is Dictionary):
+			continue
+		var src := r as Dictionary
+		var rec := {
+			"spell": str(src.get("spell", "")),
+			"hit_mod": int(src.get("hit_mod", 0)),
+			"def_mod": int(src.get("def_mod", 0)),
+			"casting_mod": int(src.get("casting_mod", 0)),
+			"morale_mod": int(src.get("morale_mod", 0)),
+			"range_in": int(src.get("range_in", 0)),
+			"advance_in": int(src.get("advance_in", 0)),
+			"rush_in": int(src.get("rush_in", 0)),
+			"grants_rule": str(src.get("grants_rule", "")),
+			"scope": str(src.get("scope", "")),
+			"beneficiary": str(src.get("beneficiary", "")),
+			"duration": str(src.get("duration", "round")),
+		}
+		adopted.append(rec)
+	if adopted.is_empty():
+		_solo_spell_mods.erase(key)
+	else:
+		_solo_spell_mods[key] = adopted
+		for rec in adopted:
+			_solo_apply_grant(gu, rec as Dictionary)
+	_solo_refresh_spell_stamps(gu)
+	_mp_applying_remote_state = false
 
 
 ## Push a restored model's REAL table position to the peers.
@@ -4974,7 +5155,11 @@ static func _solo_join_note(a: String, b: String) -> String:
 ## Artillery (+1 shooting >9" / −2 shot at >9") and Evasive (−1, any attack) — GF/AoF v3.5.1 p.13/14 +
 ## the army-book Evasive text. Returns {"mod": int, "note": String}; the math is the tested
 ## AiCombatMath.shooting_hit_modifier / melee_hit_modifier.
-func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: float, melee: bool) -> Dictionary:
+## `charging` is only ever true on the melee branch and only where the caller KNOWS the strike came out
+## of a charge (the melee strike phase does); it gates the charge-scoped hit bonuses ("Precision Charge
+## Aura"). Defaulted false, so the shooting and preview call sites are unchanged.
+func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: float, melee: bool,
+		charging: bool = false) -> Dictionary:
 	var evasive: bool = _solo_rule_on_all_models(target, "Evasive")
 	if not evasive:
 		# Coverage wave (resolver audit): Evasive DATA aliases (Changebound Boost & kin — "enemies
@@ -5023,10 +5208,16 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 			mm = -alias_pen
 			base_note = "%s -%d" % [alias_name, alias_pen]
 		# Coverage wave: all-attacks Shot Modifiers (Grounded Precision) reach melee too.
+		# Dead-aura wave: so do the MELEE-scoped ones. "Good Fighter" / "Precision Fighter Aura" grant
+		# "+1 to hit in melee" (melee_only) and "Precision Charge Aura" grants it on a charge (when:
+		# charge) — the melee branch used to demand `all_attacks`, so those bonuses never reached the
+		# melee they are printed for, while the shooting branch below applied them to every shot.
 		if shooter_member != null:
 			for e in RulesRegistry.unit_rules_of_primitive(shooter_member, "Shot Modifier"):
 				var sp3: Dictionary = (e as Dictionary).get("params", {})
-				if not bool(sp3.get("all_attacks", false)):
+				var charge_only3 := str(sp3.get("when", "")) == "charge"
+				if not (bool(sp3.get("all_attacks", false)) or bool(sp3.get("melee_only", false)) \
+						or (charge_only3 and charging)):
 					continue
 				if float(sp3.get("terrain_within_in", 0.0)) > 0.0 and not _solo_majority_in_cover(shooter_member):
 					continue
@@ -5081,6 +5272,11 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	if shooter_member != null:
 		for e in RulesRegistry.unit_rules_of_primitive(shooter_member, "Shot Modifier"):
 			var sp2: Dictionary = (e as Dictionary).get("params", {})
+			# Dead-aura wave: a melee-scoped or charge-scoped hit bonus is not a shooting bonus. Both
+			# already ship in the skirmish books ("Precision Fighter Aura" melee_only, "Precision Charge
+			# Aura" when: charge) and both were being added to every shot.
+			if bool(sp2.get("melee_only", false)) or str(sp2.get("when", "")) == "charge":
+				continue
 			var gate2 := float(sp2.get("over_in", 0.0))
 			if gate2 > 0.0 and dist_in <= gate2:
 				continue
@@ -5301,7 +5497,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): charged from over 9\" — +1 Defense (saves on %d+)" % [
 				defender.get_name(), m_over9, defense], true)
-	var mod_info: Dictionary = _solo_hit_mod_info(striker, defender, 0.0, true)
+	var mod_info: Dictionary = _solo_hit_mod_info(striker, defender, 0.0, true, charging)
 	# Wave-4 Unpredictable Fighter (Mummified, melee-only) and the generic Unpredictable ("when
 	# attacking" — the same die, shooting AND melee): ONE die per melee for the whole unit —
 	# 1-3 → AP(+1) on its melee weapons, 4-6 → +1 to hit (fatigue's unmodified-6-only overrides the +1).
@@ -5489,33 +5685,38 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 							regen_proof += bt_w
 						else:
 							regenable += bt_w
+	# NML-241/NML-937: the Retaliate tally is measured PER CHAIN MEMBER, so the wound pools are
+	# snapshotted BEFORE the wounds land — the diff is "what THIS member actually took".
+	# UNCHANGED PRE-EXISTING GAP (own ticket): Deadly(X) wounds land inside the weapon loop ABOVE, so
+	# they sit outside this window exactly as they sat outside the old `landed_on_defender` count —
+	# a Deadly melee weapon still triggers no Retaliate. Moving the snapshot in front of the loop is
+	# the fix, and it needs its own proof.
+	var pools_before: Array = _solo_wound_pools(defender)
 	var landed_on_defender := 0
 	if regenable + regen_proof > 0:
 		landed_on_defender = await _solo_land_wounds(defender, regenable, regen_proof)
-	# Retaliate(X) — wave 7. Army-book glossary, verbatim (GF army books v3.5.2; NOT in the GF/AoF
-	# Advanced core rules): "Retaliate: When this model takes a wound in melee, the attacker takes
-	# X hits." The rx*wounds step below is the standard per-triggering-event READING of that text
-	# (each wound taken fires the trigger once), not a quote. Hits resolve AFTER the wounds landed
-	# (post-Regeneration = wounds actually TAKEN), saved at the striker's Shielded-adjusted Defense,
-	# no AP (not a weapon), NON-chaining (retaliation wounds never trigger the striker's own
-	# Retaliate). Wounds credit the DEFENDER's melee tally via _solo_take_retaliate_credit.
-	# KNOWN EDGE (own ticket): the gate is UNIT-level, so a MIXED unit (only some models carry
-	# Retaliate) over-triggers on wounds landed on non-carriers — per-model accounting is a
-	# follow-up wave; TC-043 deliberately tests an all-carrier unit where unit==model level.
-	if landed_on_defender > 0 and _solo_combined_alive(striker) > 0 \
-			and RulesRegistry.unit_rule_active(defender, "Retaliate"):
-		var rx: int = maxi(1, _solo_unit_rating(defender, "Retaliate"))
-		var rhits: int = rx * landed_on_defender
-		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT,
-				"Retaliate(%d): %s lashes back — %d hit%s (%d per wound taken)" % [
-				rx, defender.get_name(), rhits, ("" if rhits == 1 else "s"), rx], true)
-		var rprofile: Dictionary = {"name": "Retaliate", "ap": 0, "deadly": 0, "rules": []}
-		var rw: int = await _solo_resolve_saves(defender, striker, "Retaliate", [], rhits,
-			_solo_defense_vs(striker, AiCombatMath.HIT_SOURCE_MELEE), rprofile, not _solo_is_ai_unit(striker), true)
-		if rw > 0:
-			await _solo_land_wounds(striker, rw, 0)
-			_solo_retaliate_credit += rw
+	# Retaliate(X) — wave 7, re-proven against the v3.5.3 army-book wording (NML-937): "When this
+	# model takes a wound in melee, the attacker takes X hits PER WOUND TAKEN". v3.5.2 fired the
+	# trigger once per wound event; v3.5.3 states the scale explicitly, and the registry carries it
+	# as the `hits_per_wound` knob ("X" = the rule's own rating) — read by _solo_retaliate_hits.
+	# Hits resolve AFTER the wounds landed (post-Regeneration = wounds actually TAKEN), saved at the
+	# striker's Shielded-adjusted Defense, no AP (not a weapon), NON-chaining (retaliation wounds
+	# never trigger the striker's own Retaliate). Wounds credit the DEFENDER's melee tally via
+	# _solo_take_retaliate_credit.
+	if landed_on_defender > 0 and _solo_combined_alive(striker) > 0:
+		var rt: Dictionary = _solo_retaliate_hits(pools_before)
+		var rhits: int = int(rt.get("hits", 0))
+		if rhits > 0:
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"Retaliate: %s lashes back — %d hit%s (%s)" % [
+					defender.get_name(), rhits, ("" if rhits == 1 else "s"), str(rt.get("detail", ""))], true)
+			var rprofile: Dictionary = {"name": "Retaliate", "ap": 0, "deadly": 0, "rules": []}
+			var rw: int = await _solo_resolve_saves(defender, striker, "Retaliate", [], rhits,
+				_solo_defense_vs(striker, AiCombatMath.HIT_SOURCE_MELEE), rprofile, not _solo_is_ai_unit(striker), true)
+			if rw > 0:
+				await _solo_land_wounds(striker, rw, 0)
+				_solo_retaliate_credit += rw
 	# Resolver wave A — Deathstrike / Self-Destruct death-half: models killed by THIS phase's
 	# strikes lash out at the striker (X hits per fallen carrier, Retaliate-style saves).
 	await _solo_deathstrike_hits(defender, striker, alive_before_phase)
@@ -5746,7 +5947,11 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 	# window is PURELY SYNCHRONOUS — the flag is down again long before the save tray awaits.
 	_solo_takedown_solo = solo
 	# Fortified (defender): incoming hits count as AP(-1), to a min. of AP(0).
-	if _solo_rule_on_all_models(defender, "Fortified"):
+	# NML-937 — the prefix trap (the "Reanimation Aura" lesson): has_special_rule matches by PREFIX,
+	# so a "Fortified Growth" carrier answered TRUE here and collected the flat reduction on top of
+	# its own marker one. The base rule needs its EXACT name; the alias loop below keeps naming the
+	# family members it means.
+	if AiEv.has_exact_rule(defender, "Fortified") and _solo_rule_on_all_models(defender, "Fortified"):
 		var ap_before := ap
 		ap = AiCombatMath.fortified_ap(ap, true)
 		# Maintainer live-test finding: the silent reduction read as "rule not working" — say it
@@ -5775,6 +5980,18 @@ func _solo_save_batch(striker: GameUnit, defender: GameUnit, weapon_name: String
 					n, defender.get_name(), ap, apb, base_defense + ap], true)
 				_solo_rule_float(defender, "%s AP(%d)" % [n, ap], Color(0.55, 0.85, 1.0))
 			break
+	# NML-937 — Fortified Growth: the growth family's own AP reduction ("enemy AP counts as -1 per
+	# two markers, min AP(0)"). It composes with a Fortified above rather than replacing it: two
+	# different rules, two different clauses. rules-must-log — a save that silently lands one better
+	# reads as broken dice, not as a rule.
+	var fg: Dictionary = _solo_growth_incoming_ap(defender)
+	if not fg.is_empty():
+		var fg_before := ap
+		ap = maxi(ap + int(fg["delta"]), int(fg["min_ap"]))
+		if ap < fg_before and battle_log != null:
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s takes the hits at AP(%d) instead of AP(%d) — saves on %d+" % [
+				str(fg["name"]), defender.get_name(), ap, fg_before, base_defense + ap], true)
+			_solo_rule_float(defender, "%s AP(%d)" % [str(fg["name"]), ap], Color(0.55, 0.85, 1.0))
 	_solo_takedown_solo = {}   # TC-023: window closed — everything below awaits
 	var save_faces: Array
 	if human_defends:
@@ -6263,6 +6480,17 @@ func _solo_on6_ap_bonus(profile: Dictionary, striker: GameUnit) -> int:
 	return 0
 
 
+## Whether any unit-level rule of the Shred family applies to a profile of this reach (0 = melee).
+## Dead-aura wave: the two stamps used to accept ANY Shred-primitive rule, so "Shred in Melee" also
+## shredded when shooting and "Shred when Shooting" also shredded in melee — both halves are printed
+## rules in all five core books, so both leaks were live.
+func _solo_shred_facet_applies(member: GameUnit, profile_range: int) -> bool:
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Shred"):
+		if AiEv.facet_applies((e as Dictionary).get("params", {}), profile_range):
+			return true
+	return false
+
+
 func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 	var system := RulesRegistry.system_of_unit(attacker)
 	var faction := RulesRegistry.faction_of_unit(attacker)
@@ -6273,14 +6501,15 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 		# Registry-driven Regeneration bypass (e.g. Disintegrate "Ignores Regeneration"), system-scoped;
 		# the explicit name checks above remain the byte-identical fallback when the map is absent.
 		# Coverage wave (skeptic flag): melee_only bypass entries ("Ignores Regeneration in Melee")
-		# never fire on ranged profiles.
+		# never fire on ranged profiles. Dead-aura wave: and the shooting half is gated the same way,
+		# so "Unstoppable when Shooting" does not cut through Regeneration in melee.
 		var bp: Dictionary = RulesRegistry.lookup(system, faction, RulesRegistry.base_rule_name(s)).get("params", {})
 		if bool(bp.get("bypass_regen", false)):
-			if bool(bp.get("melee_only", false)) and int(profile.get("range", 0)) > 0:
+			if not AiEv.facet_applies(bp, int(profile.get("range", 0))):
 				continue
 			return true
 	# Coverage wave: unit-level bypass aliases via the primitive layer ("Ignores Regeneration in
-	# Melee" sits on the MODEL, not the weapon) — melee_only respected per profile.
+	# Melee" sits on the MODEL, not the weapon) — melee_only and shooting_only respected per profile.
 	if attacker != null:
 		for e in RulesRegistry.unit_rules_of_primitive(attacker, "Lacerate"):
 			var ed := e as Dictionary
@@ -6288,10 +6517,14 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 				continue
 			var p2: Dictionary = ed.get("params", {})
 			if bool(p2.get("bypass_regen", false)):
-				if bool(p2.get("melee_only", false)) and int(profile.get("range", 0)) > 0:
+				if not AiEv.facet_applies(p2, int(profile.get("range", 0))):
 					continue
 				return true
-	return attacker != null and attacker.has_special_rule("Unstoppable")
+	# EXACT name (the Ferocious lesson): has_special_rule matches by PREFIX, so the plain-Unstoppable
+	# fallback also answered for "Unstoppable in Melee" / "Unstoppable when Shooting" — which is how
+	# both half-variants cut through Regeneration in BOTH halves no matter what their gate said — and
+	# for "Unstoppable Mark", a mark that is put on the ENEMY and never was the bearer's own rule.
+	return attacker != null and AiEv.has_exact_rule(attacker, "Unstoppable")
 
 
 ## The unit's per-model Tough value (majority) parsed from its special rules; 1 when it has no Tough.
@@ -7064,7 +7297,12 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 	"Extended Buff Range", "Coordinate",
 	# Wave 5: Delayed Action through the new "Pass Turn" primitive — once per round a carrier may
 	# pass its turn instead of activating while the opponent has strictly more units left.
-	"Delayed Action", "Pass Turn"]
+	"Delayed Action", "Pass Turn",
+	# Dead-aura wave: the base rules the "X Aura" carriers grant. They resolve through primitives that
+	# were already automated (Shred / Rending / Lacerate / Indirect / Hit & Run Fighter) — only the
+	# named entry was missing, which is why the granted name resolved nowhere.
+	"Shred when Shooting", "Rending when Shooting", "Unstoppable in Melee", "Unstoppable when Shooting",
+	"Indirect when Shooting", "Hit & Run Fighter"]
 
 ## The SOLO_MODELED_RULES subset that ALSO steers the AI's behaviour choices (not only the dice math):
 ## targeting overlays (AP/Deadly/Takedown — Solo v3.5.0 p.2), Hold overlays (Relentless/Artillery/
@@ -12686,6 +12924,15 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# Re-park loose models the host had killed (needs the trays above), so a late-joiner sees the
 	# same greyed casualties on the tray, not live draggable models (G4).
 	save_manager._restore_dead_parking_after_load()
+	# NML-928: and the same for models that are EMBARKED. The state (embarked_in / cargo_unit_ids /
+	# embark_return_spots) rides unit_properties and therefore arrives with the sync, but the node
+	# "embarked" meta and the tray slot are RUNTIME and have to be rebuilt — save_manager.load_game()
+	# does that one line after its dead-parking call, and this path simply never did. A late-joiner
+	# was left with cargo whose models had no meta: the radial menu offered them the ordinary unit
+	# actions instead of the single legal one (disembark), and their tray slots were never claimed,
+	# so the next casualty parked on top of them.
+	if opr_army_manager != null:
+		opr_army_manager.restore_embarked_after_load()
 
 	save_manager.end_restore()
 	network_manager.broadcast_peer_busy(false)  # join load done — release the other peers' gate
@@ -14862,6 +15109,25 @@ func _on_remote_unit_deleted(game_unit: GameUnit) -> void:
 		radial_menu_controller.unit_deleted.emit(game_unit)
 
 
+## A unit another player's rule created mid-game has just been built here. A unit that simply
+## APPEARS on the table reads like a bug, so it says where it came from: silent-correct is the one
+## thing the log may never be. The acting client writes its own line when the rule fires; this is
+## the other side of the table being told.
+func _on_remote_unit_created(game_unit: GameUnit, origin: String) -> void:
+	if battle_log == null or game_unit == null:
+		return
+	var reason: String = {
+		"reinforcement": "Reinforcement",
+		"split": "Split",
+		"spawn": "Spawn",
+	}.get(origin, "")
+	var unit_name: String = str(game_unit.unit_properties.get("name", "A unit"))
+	var text: String = "%s joined the battle" % unit_name
+	if not reason.is_empty():
+		text += " (%s)" % reason
+	battle_log.log_event(BattleLog.Category.GENERAL, text)
+
+
 # === Coverage wave (2026-07-23): the Utility-Buff family — "once per activation, before attacking" ===
 
 ## Best legal target for a utility buff/debuff. kind: "friendly" / "friendly_caster" /
@@ -15046,12 +15312,11 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 	if solo_controller == null or opr_army_manager == null or unit == null:
 		return
 	if not _solo_is_ai_unit(unit):
-		# SOLO ONLY for now. The effect lands as a once-mod record + grant overlay, and that record
-		# does not ride the wire — applying it in a live multiplayer game would put a modifier on
-		# one client's dice and not the other's. Wiring the buff family into the MP sync is its own
-		# ticket; until then the human path is exactly as wide as the AI path has always been.
-		if network_manager != null and network_manager.is_multiplayer_active():
-			return
+		# NML-929: this used to bail out in a live multiplayer game. The effect lands as a once-mod
+		# record + grant overlay, and that record did not ride the wire — applying it would have put
+		# a modifier on one client's dice and not the other's, which is worse than a rule that does
+		# nothing. The records now travel (_broadcast_spell_mods on every record, consumption and
+		# expiry), so the human path is as wide in multiplayer as it is offline.
 		if int(unit.unit_properties.get("utility_buff_round", -1)) == opr_army_manager.current_round:
 			return
 		unit.unit_properties["utility_buff_round"] = opr_army_manager.current_round
@@ -15538,7 +15803,7 @@ func _solo_growth_round_start() -> void:
 		return
 	for u in opr_army_manager.get_all_game_units():
 		var gu := u as GameUnit
-		if gu == null or gu.get_alive_count() == 0 or gu.is_shaken or SoloController.unit_in_reserve(gu):
+		if gu == null or gu.get_alive_count() == 0 or SoloController.unit_in_reserve(gu):
 			continue
 		if gu.has_method("is_attached") and gu.is_attached():
 			continue
@@ -15551,11 +15816,22 @@ func _solo_growth_round_start() -> void:
 			var key := "growth_%s" % n.to_snake_case()
 			var cur := int(gu.unit_properties.get(key, 0))
 			var cap := int(sp.get("max_markers", 4))
+			# v3.5.3: Shaken BLOCKS the round's marker, it no longer removes the ones already earned —
+			# so the skip sits here (per carrier, after the state is read) and says so, instead of
+			# skipping the unit wholesale in silence (rules-must-log: a blocked tick is a rule at work).
+			if gu.is_shaken:
+				if battle_log != null:
+					battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s is Shaken — no marker this round (keeps %d/%d)" % [
+						n, gu.get_name(), cur, cap], _solo_is_ai_unit(gu))
+				continue
 			if cur < cap:
 				gu.unit_properties[key] = cur + 1
 				if battle_log != null:
 					battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s gains a marker (%d/%d)" % [
 						n, gu.get_name(), cur + 1, cap], _solo_is_ai_unit(gu))
+			elif battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s is at the cap — no further marker (%d/%d)" % [
+					n, gu.get_name(), cur, cap], _solo_is_ai_unit(gu))
 
 
 ## On-kill accrual (Defensive Frenzy: "place one marker when it fully destroys an enemy unit").
@@ -15585,26 +15861,61 @@ func _solo_growth_defense_parts(unit: GameUnit) -> Array:
 	var parts: Array = []
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Growth Markers"):
 		var ed := e as Dictionary
-		var sp: Dictionary = ed.get("params", {})
-		var per := int(sp.get("defense_per_marker", 0))
-		if per <= 0:
-			continue
-		var bonus: int = per * _solo_growth_markers(unit, str(ed["name"]))
+		var bonus: int = _growth_facet_bonus(ed.get("params", {}), "defense",
+			_solo_growth_markers(unit, str(ed["name"])))
 		if bonus > 0:
 			parts.append({"name": str(ed["name"]), "bonus": bonus})
 	return parts
 
 
-## Attack-side growth bonuses: {"ap": int, "hit": int} (Piercing/Precision Growth: per two markers).
+## One growth facet's bonus for `markers`, in BOTH registry generations (NML-937). The older books
+## grant "+1 per marker" (`<facet>_per_marker`, 2-marker cap, earned on a kill); the v3.5.3 Growth
+## rework grants "+1 per TWO markers" (`<facet>_per_two`, 4-marker cap, earned at round start).
+## Reading only one shape silently zeroed the other half of the family: Defensive Growth
+## (defense_per_two) granted no Defense at all, Piercing/Precision Frenzy (ap/hit_per_marker) no
+## AP/hit. The registry is the truth, so both keys count — a rule carries exactly one of them.
+static func _growth_facet_bonus(params: Dictionary, facet: String, markers: int) -> int:
+	if markers <= 0:
+		return 0
+	return int(params.get("%s_per_marker" % facet, 0)) * markers \
+		+ int(params.get("%s_per_two" % facet, 0)) * int(markers / 2)
+
+
+## Attack-side growth bonuses: {"ap": int, "hit": int} (Piercing/Precision Growth per two markers,
+## Piercing/Precision Frenzy per marker).
 func _solo_growth_attack_bonus(unit: GameUnit) -> Dictionary:
 	var out := {"ap": 0, "hit": 0}
 	for e in RulesRegistry.unit_rules_of_primitive(unit, "Growth Markers"):
 		var ed := e as Dictionary
 		var sp: Dictionary = ed.get("params", {})
-		var pairs: int = _solo_growth_markers(unit, str(ed["name"])) / 2
-		out["ap"] += int(sp.get("ap_per_two", 0)) * pairs
-		out["hit"] += int(sp.get("hit_per_two", 0)) * pairs
+		var markers: int = _solo_growth_markers(unit, str(ed["name"]))
+		out["ap"] += _growth_facet_bonus(sp, "ap", markers)
+		out["hit"] += _growth_facet_bonus(sp, "hit", markers)
 	return out
+
+
+## Fortified Growth (v3.5.3): "enemy AP counts as -1 per two markers, to a minimum of AP(0)" — the
+## Fortified primitive's marker-driven sister, carried by the registry as `enemy_ap_per_two` (a
+## NEGATIVE delta on the attacker's AP) plus `min_ap`. Returns {"name", "delta", "min_ap"} of the
+## strongest such rule the defender carries, or {} — nothing to apply.
+func _solo_growth_incoming_ap(defender: GameUnit) -> Dictionary:
+	var best: Dictionary = {}
+	for e in RulesRegistry.unit_rules_of_primitive(defender, "Growth Markers"):
+		var ed := e as Dictionary
+		var sp: Dictionary = ed.get("params", {})
+		var n := str(ed["name"])
+		var per := int(sp.get("enemy_ap_per_two", 0))
+		if per >= 0:
+			continue
+		# "all models have this rule" is a UNIT trigger, exactly like Fortified's own gate.
+		if bool(sp.get("all_models", false)) and not _solo_rule_on_all_models(defender, n):
+			continue
+		var delta: int = per * int(_solo_growth_markers(defender, n) / 2)
+		if delta >= 0:
+			continue
+		if best.is_empty() or delta < int(best["delta"]):
+			best = {"name": n, "delta": delta, "min_ap": int(sp.get("min_ap", 0))}
+	return best
 
 
 ## Coverage wave — Storm Attack family (chaos "Storm of X": "Once per game, when this model is

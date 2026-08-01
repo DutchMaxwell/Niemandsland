@@ -6,6 +6,33 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Fixed
+- **Nine aura families granted a rule that resolved nowhere (army-book).** An army-book "*X* Aura" reads
+  "this model and its unit get *X*", and the import expands it by writing the bare name *X* onto the unit.
+  That only does something if *X* actually resolves — and for nine families nothing did, in either of the
+  two ways it can: the aura entry carried no mechanic of its own, and no rule of that name existed for the
+  carrier's book. **66 book entries across all five game systems** promised an ability the table never saw:
+  *Shred when Shooting*, *Rending when Shooting*, *Unstoppable in Melee*, *Unstoppable when Shooting*,
+  *Precision Fighter*, *Precision Shooter*, *Precision Charge*, *Increased Shooting Range* and
+  *Hit & Run Fighter*. They resolve now, each through the mechanic its printed text describes — extra
+  wounds on a blocked 1, AP(+4) on unmodified 6s, wounds that ignore Regeneration, +1 to hit, +6″ range,
+  the 3″ step out of melee — so every one of them writes the battle-log line its primitive already wrote
+  for the books that had it. A standing test now fails if any future aura ships granting a dead name.
+- **A rule printed for one half of the game no longer fires in the other.** Rules carry a
+  melee-or-shooting gate in their data, but the engine read the shooting half in exactly **one** place, so
+  everywhere else the gate was silently one-directional. *Shred in Melee* also shredded when shooting and
+  *Shred when Shooting* also shredded in melee; *Predator Shooter* spawned its extra attack in melee;
+  *Good Fighter* and *Precision Fighter Aura* added their "+1 to hit **in melee**" to every **shot** while
+  never reaching the melee they are printed for, and *Precision Charge Aura* paid out on every shot instead
+  of on a charge. Both halves are now the same question asked by one function, and the charge-scoped bonus
+  is handed the charge it needs. The skirmish books shipped two of these live, so this is a fix you can
+  feel, not only a guard for the new data.
+- **"Unstoppable" no longer cuts through Regeneration for rules that merely start with the word.** The
+  Regeneration-bypass fallback matched unit rules by *prefix*, so *Unstoppable in Melee* and *Unstoppable
+  when Shooting* bypassed Regeneration in **both** halves whatever their gate said — and *Unstoppable
+  Mark*, which is a mark you put on the **enemy**, bypassed it for its bearer. The fallback matches the
+  exact name now (the same "Ferocious lesson" the other rule checks already learned).
+
 ### Added
 - **Extended Buff Range (army-book).** A unit standing within 24″ of a friendly unit that carries
   the same rule *and* holds a Hero can be picked by that Hero's within-12″ buff rules as if it were
@@ -78,8 +105,37 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   compared, Fear(X) shifted them, and a unit tested morale with no line explaining why. The battle
   log now names both tallies (with the Fear-adjusted value where it differs) and who lost — and a
   charge you declare gets its own opening line, like the AI's always had.
+- **A unit created mid-game rides the wire (multiplayer).** Until now the only way a unit reached
+  the other side of the table was the whole-army batch at import time, so the rules that make a unit
+  *during* a game — Reinforcement, Split, Spawn — had nowhere to send it. They now have their own
+  one-shot message: the unit, its models and their positions arrive on every peer as the same unit,
+  with the same identity, built through the same load path a save file uses. Delivering the same
+  creation twice still yields one unit, a creation that lands in the middle of an army import queues
+  behind it instead of tearing it up, and a player who rejoins gets the created unit with everything
+  else. The network id stays inside the creating player's own numbering band, so a guest's Split
+  resolves immediately instead of waiting on the host, and a peer that tries to create in someone
+  else's band is refused and says so in the log.
 
 ### Fixed
+- **Five army-book rules now really play by their printed wording.** Five knobs of the rules data
+  (*hits per wound*, *placement dice*, *arrival distance*, *army cap*, *Defense per two markers*)
+  were read by no code at all, so whether the rules they describe played by the current books was
+  an untested assumption. Two of them did not. A boosted blink/step upgrade (*Rapid Blink Boost*,
+  *Wave-Step Boost*) placed its models within **D3″** instead of **2D3″**, and a unit that carried
+  both the base rule and its upgrade could even use the weaker one. *Defensive Growth* granted **no
+  Defense at all**: its markers were only counted in the older "+1 per marker" shape, while the
+  current books grant "+1 per **two** markers". The same blind spot silently disabled *Piercing
+  Frenzy* / *Precision Frenzy* (per marker) and *Fortified Growth*, whose "enemy AP −1 per two
+  markers" now reaches the save roll and says so in the log — while a *Fortified Growth* carrier no
+  longer also collects the plain *Fortified* reduction just because the name starts the same way.
+  *Retaliate(X)* keeps its "X hits per wound taken" scale but counts the wounds **per unit of a
+  joined chain**: a hero without the rule no longer feeds his squad's retaliation, and a hero who
+  has it finally lashes back for his own wounds. *Infiltrate*'s "over 3″" arrival ring and the
+  *Inquisitorial Agent* / *Martial Prowess* cap of one third of the carriers per round were already
+  right and are now read from the data as well, so a book that changes them changes the game.
+  Growth markers tick at the **start** of a round, cap at **4**, and a Shaken unit is **blocked**
+  from gaining one instead of losing its whole pile — the blocked tick and the reached cap each get
+  their own battle-log line.
 - **Your buff-giver rules finally do something.** The whole "once per activation, before attacking"
   buff family (*Precision Shooter Buff*, *Furious Buff*, *Entrenched Buff*, *No Retreat Buff*, …)
   bailed out on anything that was not an AI unit, so a human player's buff was dead data — no token,
@@ -88,6 +144,13 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   is automatic for v1 and every application is named in the log; choosing the target by click is a
   follow-up. Skirmish books whose text says "pick up to **4** friendly units" now really pick up to
   four instead of one, and a rule that finds no legal target says so instead of failing silently.
+- **…and they work in multiplayer too.** That wave shipped with one deliberate hole: in a live
+  multiplayer game the buff family was switched off for human players, because the modifier it
+  places did not travel. Half a modifier is worse than none — your dice would have read the buff
+  and your opponent's, rolling into the same unit, would not. The modifiers now travel: when the
+  buff is placed, when it is spent, and when it expires. The switch is gone, so a *Precision Shooter
+  Buff* or an *Entrenched Buff* does the same thing against a human opponent as it does against
+  NACHTMAHR. Spell tokens ride the same channel, so their modifiers stay in step as well.
 - **Spotter marks and spell buffs count the same on both screens.** Three numbers the rules read
   lived only on the client that produced them. *Precision Spotter* marks: the peer got the
   "Spotted" token but never the **count**, so it could not tell one mark from three — and removing
@@ -97,6 +160,13 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   distance, drew the unbuffed range ring, and their client never learned the buff had expired. All
   three now travel as a small state delta over the existing sync channel, so both tables agree
   about a bonus that is still on the table. Older clients ignore the message instead of erroring.
+- **Joining a game with loaded transports no longer loses the passengers.** Cargo is remembered in
+  two halves: *which* unit sits in *which* transport, and the parked models on the tray. Loading a
+  saved game rebuilt both; joining or rejoining a running multiplayer game rebuilt only the first.
+  The joining player therefore got passengers the game no longer recognised as passengers —
+  right-clicking one offered the ordinary move/wound/marker actions instead of the single legal
+  action (disembark), and because their tray slots were never claimed the next casualty parked on
+  top of them. The join now runs the same restore step the load path has always run.
 - **A reanimated model stands in the same place on both screens.** The message that brings a model
   back carries wounds and alive/dead, but no position — so the other client rebuilt the spot itself
   and put the model back where it fell. That is not always where it now stands: when the fall point
