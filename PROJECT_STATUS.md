@@ -64,15 +64,27 @@ computed per model from the base edge — walls and intervening units block, woo
 area terrain (see in and out, never through), containers block hard — so ruler, sight fan and
 engine always agree.
 
-**Not automated (named, not hidden)** — seven rule names are **not** resolved by the game and
+**Not automated (named, not hidden)** — six rule names are **not** resolved by the game and
 are named in full rather than hidden behind an "…": the cross-unit caster aura (**Extended Buff
 Range**), the rules that create or return units (**Spawn**, **Split**, **Reinforcement**) and the
-movement / deployment set (**Coordinate**, **Delayed Action**, **Traversal**). The per-unit notice
+movement / deployment pair (**Coordinate**, **Traversal**). The per-unit notice
 in the battle log names the ones your list actually contains, so you can apply them by hand.
 Everything else in the books is modeled — including plain *Re-Deployment*, *Grounded
-Reinforcement*, *Reanimation*, *Caster Group*, *Spell Accumulator* and all three Ambush variants
-(see below). The follow-up resolver waves are post-release work (see
+Reinforcement*, *Reanimation*, *Caster Group*, *Spell Accumulator*, *Delayed Action* and all three
+Ambush variants (see below). The follow-up resolver waves are post-release work (see
 [`docs/ROADMAP.md`](docs/ROADMAP.md)).
+
+**Delayed Action — passing a turn** — *"Once per round, if your opponent has more units left to
+activate than you, then this model's unit may pass its turn instead of activating (may still be
+activated later)."* A carrier's radial menu gains a **Pass** entry: the turn goes to your opponent
+and the unit stays available for later in the same round. The entry is offered whenever the unit
+carries the rule and, when the condition does not hold, refused *with the counts it measured*
+rather than quietly hidden. Units waiting in Ambush reserve are off the table and do not count as
+"left to activate"; the once-per-round limit binds the carrier, so a second carrier still has its
+own pass. NACHTMAHR uses the rule too — it passes when its most valuable un-activated unit sits
+inside the reach of an enemy that has not committed yet, and the developer log says why. Under the
+hood this is a general **Pass Turn** step in the alternation, so the optional *Combat Hesitation*
+module (the same mechanic behind a dice roll) has a foundation to land on.
 
 **Ambush variants** — **Ambush Beacon** waives *every* enemy distance restriction (the 9″/3″
 arrival ring and an enemy's *Repel Ambushers* 12″ alike) for a reserve that lands within 6″ of the

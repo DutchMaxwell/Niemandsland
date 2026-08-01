@@ -382,6 +382,8 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_solo_begin_cast(context)
 		"solo_spot":
 			_solo_begin_spot(context)
+		"solo_pass":
+			_solo_begin_pass(context)
 		"select_unit":
 			_select_entire_unit(context)
 		"wounds":
@@ -624,6 +626,15 @@ func _solo_begin_spot(context: Dictionary) -> void:
 	var main_node := get_node_or_null("/root/Main")
 	if unit != null and main_node != null and main_node.has_method("solo_begin_spot"):
 		main_node.call("solo_begin_spot", unit)
+
+
+## Delayed Action / "Pass Turn" (wave 5). Deliberately NOT routed through _toggle_activation: a pass
+## must leave the unit un-activated ("may still be activated later"), so main owns the whole step.
+func _solo_begin_pass(context: Dictionary) -> void:
+	var unit := _get_game_unit_from_context(context)
+	var main_node := get_node_or_null("/root/Main")
+	if unit != null and main_node != null and main_node.has_method("solo_begin_pass"):
+		main_node.call("solo_begin_pass", unit)
 
 
 func _get_game_unit_from_context(context: Dictionary) -> GameUnit:

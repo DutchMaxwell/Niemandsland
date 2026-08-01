@@ -7,6 +7,21 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **Delayed Action — you can pass a turn now (army-book).** *"Once per round, if your opponent has
+  more units left to activate than you, then this model's unit may pass its turn instead of
+  activating (may still be activated later)."* With 73 occurrences across 21 books and all five
+  game systems this was the largest rule the automation still left to you. A carrier's radial menu
+  gains a **Pass** entry: the turn goes to your opponent and the unit stays available for later in
+  the same round — nothing about it is marked spent. The entry is offered on every carrier and
+  never hidden when the condition fails; an illegal pass is refused *with the counts it measured*
+  ("your opponent has 2 units left to activate, you have 2 …"), because a rule that vanishes from
+  the menu reads exactly like a missing rule. Units waiting in Ambush reserve are off the table and
+  do not count as "left to activate", and the once-per-round limit binds the carrier, not the army,
+  so a second carrier still has its own pass. NACHTMAHR plays the rule as well: it passes when its
+  most valuable un-activated unit stands inside the reach of an enemy that has not committed yet,
+  and the developer log carries the reason. Underneath it is a general **Pass Turn** step in the
+  alternation — the optional *Combat Hesitation* module (the same mechanic behind a dice roll) now
+  has a foundation to land on.
 - **The three Ambush variants (army-book).** *Ambush Beacon*: a reserve that lands within 6″ of a
   friendly beacon model ignores **every** enemy distance restriction — the 9″ (3″ Infiltrate)
   arrival ring *and* an enemy's *Repel Ambushers* 12″. The AI actively hunts for those circles

@@ -1035,3 +1035,78 @@ round gate, the all-models/once-per-game gates, the AI policy) and `test/e2e/e2e
 `ambush_earliest_round` pinned to 2 → both Rapid cases fail; the exact return date relaxed to `>=` → the
 return case fails; the hero clause dropped → the all-models case fails; exact matching reverted to the prefix
 reader → the detection cases fail.
+
+## Delayed Action — wave 5, and the "Pass Turn" primitive (2026-08-01)
+
+Official text, **word-identical in all 21 army books that carry it** (73 occurrences across all five game
+systems — the largest single rule the automation still left to the player):
+
+> *"Once per round, if your opponent has more units left to activate than you, then this model's unit may
+> pass its turn instead of activating (may still be activated later)."*
+
+**The primitive, not the rule, is the deliverable.** Until now an activation could only ever be *spent*
+(`GameUnit.activate()`), so "pass your turn but keep the unit" had no seam at all. The registry entry
+therefore carries `primitive: "Pass Turn"` with `params {uses_per_round: 1, requires_opponent_surplus: true}`
+in all 21 books, and Delayed Action is its first **user** — because the rulebook has a second one: the
+optional fog-of-war module **Combat Hesitation** (GF Advanced Rules v3.5.1 p.41) is the same mechanic behind
+a dice roll. The export tool lists the rule in `SHIPPED_PLANNED` while the registry status is still `planned`.
+
+**The seam.** `main._solo_pass_turn(slot)` moves the alternation bookkeeping (`_solo_pending_replies`) on and
+**nothing else** — no `activate()`, no `notify_activated`, no `is_activated` write, which is precisely the
+rule's "may still be activated later". `_solo_ai_took_last_activation` is deliberately not written: it
+records who took the last *activation* for the round-opener rule, and a pass is not one. It cannot go stale
+either — a pass is legal only while the other side has strictly more units left, so that side still owes an
+activation and the round can never end on a pass.
+
+**Two termination guards, both mandatory, both proven red.**
+
+1. *Strictly more* (`delayed_action_surplus`). The condition is antisymmetric — `opponent > own` for one side
+   is `own >= opponent` for the other — so it can never hold for both sides at once, and mutual passing is
+   structurally impossible. Equality refuses. Relaxing it to `>=` turns the pure symmetry case (the whole
+   0..7 square) and the e2e equal-counts case red.
+2. *A per-carrier round stamp* (`unit_properties["delayed_action_round"]`, the `spotted_round` pattern). One
+   carrier cannot pass the same round twice. Removing it turns the e2e double-pass case red.
+
+**Maintainer rulings, each with its own test.**
+
+- **Reserve units do not count.** "Units left to activate" reads like the core rule's "left on the
+  battlefield": a unit still held in Ambush reserve is off the table. Both sides of the comparison go through
+  `eligible_units_for()` → `is_eligible()`, which already refuses reserve units — verified rather than
+  assumed, with the e2e ROT flip (the same ambusher on the table *does* tip the balance).
+- **"Once per round" binds the carrier unit**, exactly as the wording says ("this model's unit"). There is no
+  army cap; a second carrier still has its own pass. The strict-surplus condition is the natural brake — each
+  pass costs the opponent one activation, so the surplus shrinks on its own.
+- **An open second activation is invisible.** A Second Wind / Inquisitorial Agent carrier counts only while
+  it is un-activated; `spend_second_wind()` clears `is_activated` at the moment the second turn is granted,
+  so an open-but-unspent second activation never inflates the balance.
+
+**Your side.** The radial menu gains a **Pass** entry on every carrier (unit or joined hero — the
+`_spotter_member_of` reading). It is *not* hidden when the condition fails: per the transparency doctrine
+(#224) an illegal pass is refused with the measured numbers ("your opponent has 2 units left to activate, you
+have 2 — the rule needs them to have MORE than you"), plus its own reasons for a spent carrier and for a unit
+that has already activated. That last branch is also what makes "you have 0 units left" unreachable: with
+nothing of yours left to activate, your carrier is one of the activated ones.
+
+**NACHTMAHR's side.** The decision sits in the activation **chooser**
+(`SoloController.delayed_action_pass_choice`), not in a resolver — passing *is* the activation choice. The
+heuristic is deliberately small and explainable: pass when the condition stands **and** the delay buys
+something, i.e. our most valuable un-activated unit (points, models as fallback) stands within an
+un-activated enemy's reach (the larger of its shooting range and its Rush/Charge band) **and** line of sight.
+Otherwise activate normally. Both branches write a decision record, so the dev lane can always say why the
+rule did or did not fire. The AI can only pass on a REPLY step — a TAIL step means the human side is empty,
+and 0 is never "more".
+
+**Logs.** Application (both sides, one wording): `Delayed Action: <unit> passes the turn — the opponent has
+<n> units left to activate, you have <m> (<unit> may still be activated later)`. Refusals:
+`Delayed Action: <unit> may not pass — <reason>`. The AI's decline is a decision record, not a battle-log
+line (it is a non-event for the player, and the dev lane carries the reasoning).
+
+**Tests.** `test/solo_controller_test.gd` — 6 pure cases (the antisymmetry square, the per-carrier stamp,
+every refusal branch including the unreachable `own_left == 0`, carrier detection incl. the joined hero and
+the prefix ROT case, the reach+LOS threat test, the worth proxy). `test/rules_registry_test.gd` — the emitted
+maps resolve `Pass Turn` + both params per game system, and `Delayed Action` leaves the manual list.
+`test/e2e/e2e_delayed_action_test.gd` — 8 cases on the real `main.tscn`: the pass hands the turn over and the
+unit still activates later; the double pass is refused while a second carrier's is not; equal counts are
+refused (with the one-more-enemy ROT flip); the round still ends with nobody acting twice; the AI passes to
+wait out an uncommitted threat and declines when there is none; a reserve unit does not tip the balance (with
+its on-the-table ROT flip); the radial offers the entry and an activated unit is refused.
