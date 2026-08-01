@@ -2909,6 +2909,12 @@ func _aura_casters(slot: int, caster_unit: GameUnit, exclude: GameUnit) -> Array
 					or not RulesRegistry.unit_rules_of_primitive(member, "Spell Accumulator").is_empty()
 			if (not member.is_caster() and not is_battery) or member.casts_current <= 0:
 				continue
+			# NML-936 (v3.5.3 audit): "Friendly casters may only use this rule if this unit isn't
+			# Shaken". The battery's own params carried that condition all along, but nothing read
+			# it — a Shaken battery kept feeding everyone else's spells. Only the lending the
+			# BATTERY rule grants is blocked; a real caster's own tokens are not this rule's.
+			if not member.is_caster() and is_battery and not lending_blocked_by_shaken(member).is_empty():
+				continue
 			seen[member.get_instance_id()] = true
 			var d := MoveIntent.distance_inches(from, unit_centre(member if member.models.size() > 0 else cu))
 			if d > (SPELL_ACCUMULATOR_REACH_IN if (is_battery and not member.is_caster()) else aura_in):
@@ -2918,6 +2924,46 @@ func _aura_casters(slot: int, caster_unit: GameUnit, exclude: GameUnit) -> Array
 			out.append({"unit": member, "tokens": member.casts_current, "d": d})
 	out.sort_custom(func(a, b) -> bool:
 		return float((a as Dictionary)["d"]) < float((b as Dictionary)["d"]))
+	return out
+
+
+## NML-936 (v3.5.3 audit) — the token-lending rule that is DEAD on `member` because it is Shaken
+## ("Friendly casters may only use this rule if this unit isn't Shaken"). Returns the blocking
+## rule's NAME so a caller can name the refusal in the battle log, or "" when nothing blocks it.
+## The pool builder and the log read this one predicate, so the line can never drift from the pool.
+static func lending_blocked_by_shaken(member: GameUnit) -> String:
+	if member == null or not member.is_shaken:
+		return ""
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Spell Accumulator"):
+		var ed := e as Dictionary
+		if bool((ed.get("params", {}) as Dictionary).get("requires_not_shaken", false)):
+			return str(ed["name"])
+	return ""
+
+
+## NML-936 — every token battery of `slot` whose stock the pool refuses because the unit is
+## Shaken, as [{unit, rule}]. main names them in the battle log so a boost that came out smaller
+## than expected is answerable from the log instead of looking like a bug.
+func shaken_lenders(slot: int) -> Array:
+	var out: Array = []
+	if army_manager == null:
+		return out
+	for c in army_manager.get_game_units_for_player(slot):
+		var cu := c as GameUnit
+		if cu == null or cu.is_destroyed() or unit_in_reserve(cu):
+			continue
+		var members: Array = [cu]
+		if cu.has_method("get_attached_heroes"):
+			members = members + cu.get_attached_heroes()
+		for m in members:
+			var member := m as GameUnit
+			if member == null or member.get_alive_count() == 0 or member.casts_current <= 0:
+				continue
+			if member.is_caster():
+				continue
+			var rule := lending_blocked_by_shaken(member)
+			if not rule.is_empty():
+				out.append({"unit": member, "rule": rule})
 	return out
 
 

@@ -1997,7 +1997,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Strafing": {
@@ -2621,7 +2622,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Unstoppable in Melee Aura": {
@@ -3687,7 +3689,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Slayer": {
@@ -3708,7 +3711,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Steadfast": {
@@ -4082,7 +4086,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Strafing": {
@@ -4502,7 +4507,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Strafing": {
@@ -5303,7 +5309,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Speed Debuff": {
@@ -5324,7 +5331,7 @@
     "book_version": "3.5.3",
     "params": {
      "advance_mod": 2,
-     "rush_mod": 2,
+     "rush_mod": 4,
      "uses_per_game": 1
     }
    },
@@ -5403,7 +5410,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Infiltrate": {
@@ -5935,7 +5943,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Stealth Aura": {
@@ -6503,7 +6512,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "effect": "fatigue"
+     "effect": "fatigue",
+     "needs_los": true
     }
    },
    "Furious Aura": {
@@ -7070,7 +7080,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    }
   },
@@ -7509,7 +7520,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "effect": "fatigue"
+     "effect": "fatigue",
+     "needs_los": true
     }
    },
    "Grounded Protection": {

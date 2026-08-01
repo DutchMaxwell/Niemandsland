@@ -3023,19 +3023,31 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 	# casting rolls (the position-proxy half is a registry-noted approximation).
 	if solo_controller != null and opr_army_manager != null:
 		var cpid := int(caster.unit_properties.get("player_id", 0))
+		_solo_log_shaken_lenders(cpid)
 		for u in opr_army_manager.get_game_units_for_player(cpid):
 			var cu := u as GameUnit
-			if cu == null or cu == caster or cu.get_alive_count() == 0 or cu.is_shaken or SoloController.unit_in_reserve(cu):
+			if cu == null or cu == caster or cu.get_alive_count() == 0 or SoloController.unit_in_reserve(cu):
 				continue
 			var found := false
 			for e in RulesRegistry.unit_rules_of_primitive(cu, "Spell Conduit"):
 				var sp: Dictionary = (e as Dictionary).get("params", {})
 				var d := MoveIntent.distance_inches(solo_controller.unit_centre(cu), solo_controller.unit_centre(caster))
-				if d <= float(sp.get("range_in", 12.0)):
-					casting_mod += int(sp.get("casting_mod", 1))
-					cast_mod_notes.append("%s %+d" % [str((e as Dictionary)["name"]), int(sp.get("casting_mod", 1))])
-					found = true
-					break
+				if d > float(sp.get("range_in", 12.0)):
+					continue
+				# NML-936 (v3.5.3 audit): "Friendly casters may only use this rule if this unit isn't
+				# Shaken" — the condition now comes from the rule's own params instead of a blanket
+				# hardcoded skip, and an in-range conduit that is sitting it out says so (rules-must-log)
+				# instead of vanishing from the sum without a word.
+				if bool(sp.get("requires_not_shaken", true)) and cu.is_shaken:
+					if battle_log != null:
+						battle_log.log_event(BattleLog.Category.COMBAT,
+							"%s: %s is Shaken — its conduit does not help %s cast" % [
+								str((e as Dictionary)["name"]), cu.get_name(), caster.get_name()], true)
+					continue
+				casting_mod += int(sp.get("casting_mod", 1))
+				cast_mod_notes.append("%s %+d" % [str((e as Dictionary)["name"]), int(sp.get("casting_mod", 1))])
+				found = true
+				break
 			if found:
 				break
 	if casting_mod != 0:
@@ -3256,6 +3268,20 @@ func _solo_place_spell_tokens(spell_name: String, targets: Array, effect: Dictio
 					"\"%s\" token placed on %s (%s)" % [spell_name, tu.get_name(),
 					"persists until it applies" if lasts_once else "expires at the end of the round"], true)
 		_solo_record_spell_mod(tu, spell_name, effect)
+
+
+## NML-936 (v3.5.3 audit, rules-must-log) — name every spell-token battery that stayed out of
+## `slot`'s casting pool because it is Shaken ("Friendly casters may only use this rule if this
+## unit isn't Shaken"). Reads the very predicate the pool filters on, so the line cannot drift.
+func _solo_log_shaken_lenders(slot: int) -> void:
+	if battle_log == null or solo_controller == null:
+		return
+	for e in solo_controller.shaken_lenders(slot):
+		var ed := e as Dictionary
+		var lender := ed["unit"] as GameUnit
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"%s: %s is Shaken — its tokens do not feed friendly casters" % [
+				str(ed["rule"]), lender.get_name()], slot == solo_controller.ai_slot)
 
 
 ## MECHANICAL token effect (maintainer 2026-07-22: buff/debuff tokens were decoration — the real
@@ -3549,6 +3575,7 @@ func _solo_expire_spell_tokens() -> void:
 ## interference total; the tokens are spent from the nearest eligible caster and MP-synced.
 func _solo_prompt_interference(caster: GameUnit, caster_unit: GameUnit, spell_name: String,
 		base_target: int = AiSpell.CAST_BASE_TARGET, boost: int = 0, target_label: String = "") -> int:
+	_solo_log_shaken_lenders(solo_controller.human_slot)
 	var helpers: Array = solo_controller._aura_casters(solo_controller.human_slot, caster_unit, null)
 	if helpers.is_empty():
 		return 0
@@ -7560,6 +7587,7 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 			spell_name, targets.size(), _solo_cast_target_label(targets)])
 	# BOOST tableau (own helpers in 18" LoS; the member's remaining tokens count via the pool).
 	var boost := 0
+	_solo_log_shaken_lenders(solo_controller.human_slot)
 	var helpers: Array = solo_controller._aura_casters(solo_controller.human_slot, unit, null)
 	var pool := 0
 	for h in helpers:
@@ -7580,6 +7608,7 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 	# AI COUNTER-INTERFERENCE (decided default: shown AFTER the player commits — rules-sequential,
 	# no leak): the AI's 18"-LoS pool spends per the marginal calculus, value-proxied by the cost.
 	var interference := 0
+	_solo_log_shaken_lenders(solo_controller.ai_slot)
 	var ai_helpers: Array = solo_controller._aura_casters(solo_controller.ai_slot, unit, null)
 	var ai_pool := 0
 	for h in ai_helpers:
@@ -15041,6 +15070,16 @@ func _solo_apply_vs_marks(attacker: GameUnit, target: GameUnit, dist_in: float) 
 			if int(member.unit_properties.get("vs_mark_round", -1)) == opr_army_manager.current_round:
 				continue   # once per activation — at most one activation per round (Second Wind aside)
 			if dist_in > float(sp.get("range_in", 18.0)):
+				continue
+			# NML-936 (v3.5.3 audit): the printed rule picks its enemy "within 18\" IN LINE OF SIGHT",
+			# but only the range was ever measured — so a Mark landed on a unit standing behind a solid
+			# wall and the attack got the extra rule for free. Sight is judged by the same test the
+			# shooting path uses. `needs_los` may waive it from the data; the printed default requires it.
+			if bool(sp.get("needs_los", true)) and not _solo_has_los(member, target):
+				if battle_log != null:
+					battle_log.log_event(BattleLog.Category.COMBAT,
+						"%s: %s has no target in sight — %s is not marked and the rule is not applied" % [
+							n, member.get_name(), target.get_name()], _solo_is_ai_unit(member))
 				continue
 			member.unit_properties["vs_mark_round"] = opr_army_manager.current_round
 			var base := n.trim_suffix(" Mark")

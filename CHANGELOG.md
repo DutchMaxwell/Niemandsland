@@ -69,6 +69,22 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   charge you declare gets its own opening line, like the AI's always had.
 
 ### Fixed
+- **A Mark cannot be put on a target you cannot see.** The "once per activation, before attacking,
+  pick one enemy unit within 18″ **in line of sight**" Marks (*Unstoppable*, *Relentless*, *Rending*,
+  *Furious*, *Unpredictable Fighter*) only ever measured the 18″ — so the mark landed on a unit
+  standing behind a solid wall and the attack got the extra rule for free. Sight is now checked with
+  the same test the shooting path uses, and a mark that finds nothing in sight says so in the log
+  instead of quietly applying. *Fatigue Debuff* prints the same clause and already went through a
+  resolver that checks sight; its data now says so too.
+- **Speed Feat gives the +4″ it prints.** The rule reads "+2″ when using Advance actions and **+4″**
+  when using Rush/Charge actions", but the mechanics data said +2″/+2″ — so NACHTMAHR threw away 2″
+  every time it spent its once-per-game push, and the charge it had lined up came up short.
+- **A Shaken caster-support unit really stops helping.** Both *Spell Accumulator* and *Spell Conduit*
+  print "Friendly casters may only use this rule if this unit isn't Shaken". The accumulator's
+  condition was in the data but read by nobody, so a Shaken token battery kept feeding everyone
+  else's spells; the conduit's condition was hardcoded in one place and missing from the data
+  entirely. Both now come from the rule itself, and a support unit that is sitting out because it is
+  Shaken is named in the battle log instead of silently contributing nothing.
 - **Your buff-giver rules finally do something.** The whole "once per activation, before attacking"
   buff family (*Precision Shooter Buff*, *Furious Buff*, *Entrenched Buff*, *No Retreat Buff*, …)
   bailed out on anything that was not an AI unit, so a human player's buff was dead data — no token,
