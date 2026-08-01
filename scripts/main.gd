@@ -2775,14 +2775,13 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	var wounds_before: int = _solo_unit_wounds_now(target)
 	var models_before: int = _solo_combined_alive(target)
 	# Armor(X) (wave 5, army-book upgrade: "counts as having Defense X+") sets the working Defense,
-	# then Shielded (+1 Defense, army-book rule) covers every hit; Cover (GF v3.5.1 p.11) is ignored
-	# by Blast and by Indirect (wave 5: "ignores cover from sight obstructions").
+	# then every Defense contribution of the parts seam folds in (Shielded and its data aliases,
+	# growth markers, spell tokens — each NAMED in the log, NML-932); Cover (GF v3.5.1 p.11) is
+	# ignored by Blast and by Indirect (wave 5: "ignores cover from sight obstructions").
 	_solo_log_armor(target)
 	var dist_in: float = MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 	var base_defense: int = _solo_defense_vs(target)
-	if base_defense != _solo_armored_defense(target) and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
-			target.get_name(), base_defense], true)
+	_solo_log_defense_parts(target, AiCombatMath.HIT_SOURCE_SHOOTING, base_defense, true)
 	# Guarded / Versatile Defense's def-half ("+1 to defense rolls" when shot from over 9" away) folds
 	# into the base Defense every shot of this volley saves at; Cover then stacks on top (floored 2+).
 	var over9_rule := _solo_over9_defense_rule(target)
@@ -4624,6 +4623,30 @@ func _solo_defense_parts(target: GameUnit, source: String) -> Array:
 	return parts
 
 
+## rules-must-log for NML-932: the ATTACK save steps name every Defense contribution they folded in,
+## each with ITS OWN rule's name — the same single truth (_solo_defense_parts) the arithmetic reads.
+##
+## What was wrong: before #264 a composite Defense could only come from one rule, so all three attack
+## sites printed that rule's name for whatever the difference turned out to be ("<unit> is Shielded:
+## +1 Defense"). Since the parts seam a growth marker or a spell token raises the very same number,
+## and the line then credited a rule the unit does not even carry — while a SECOND contribution
+## disappeared into the sum, and a hex that cancelled a bonus made the whole line vanish (#224: a
+## silent rule reads exactly like a missing one). One line per contribution fixes all three.
+##
+## `defense` is the FINAL working Defense the caller is about to save at, so the numbers a player
+## reads are the numbers the dice see. `ai` keeps each call site's own log-side flag.
+func _solo_log_defense_parts(target: GameUnit, source: String, defense: int, ai: bool) -> void:
+	if battle_log == null or target == null:
+		return
+	for p in _solo_defense_parts(target, source):
+		var pd := p as Dictionary
+		var bonus := int(pd["bonus"])
+		if bonus == 0 or not bool(pd["applies"]):
+			continue
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s is %s: %+d Defense (saves on %d+)" % [
+			target.get_name(), str(pd["name"]), bonus, defense], ai)
+
+
 ## rules-must-log for NML-104: the spell save step NAMES both halves. What DOES apply gets a line —
 ## a save that silently lands one better (or one worse) reads as broken dice, not as a rule. What does
 ## NOT apply gets a negative line: the modifiers whose own text is limited to attacks are exactly the
@@ -5022,9 +5045,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	var human_defends: bool = not _solo_is_ai_unit(defender)
 	_solo_log_armor(defender)   # Armor(X) "counts as Defense X+" (wave 5) — folded into _solo_defense_vs
 	var defense: int = _solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE)
-	if defense != _solo_armored_defense(defender) and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
-			defender.get_name(), defense], true)
+	_solo_log_defense_parts(defender, AiCombatMath.HIT_SOURCE_MELEE, defense, true)   # NML-932: each part by name
 	# Guarded / Versatile Defense's def-half: charged from over 9" away → +1 Defense for this melee's
 	# saves. Fires where the charge distance is KNOWN (AI charges pass their pre-charge gap); the
 	# human's manual charge distance is untracked (charge_from_in stays 0), the Versatile precedent.
@@ -8542,14 +8563,13 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	var target_wounds_before: int = _solo_unit_wounds_now(target)
 	var regenable := 0
 	var regen_proof := 0
-	# Armor(X) (wave 5) sets the working Defense, then Shielded (+1 Defense, army-book rule) covers
-	# every hit; Cover (+1 Defense majority-in-cover, GF v3.5.1 p.11) is shooting-only and ignored by
+	# Armor(X) (wave 5) sets the working Defense, then every Defense contribution of the parts seam
+	# folds in (Shielded and its data aliases, growth markers, spell tokens — each NAMED in the log,
+	# NML-932); Cover (+1 Defense majority-in-cover, GF v3.5.1 p.11) is shooting-only and ignored by
 	# Blast and Indirect (wave 5).
 	_solo_log_armor(target)
 	var shielded_def: int = _solo_defense_vs(target)
-	if shielded_def != _solo_armored_defense(target) and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
-			target.get_name(), shielded_def], true)
+	_solo_log_defense_parts(target, AiCombatMath.HIT_SOURCE_SHOOTING, shielded_def, true)
 	# Guarded / Versatile Defense's def-half: the human shooting from over 9" honours the +1 Defense
 	# too — both directions read the same rule (the shot distance is known here).
 	var h_over9 := _solo_over9_defense_rule(target)

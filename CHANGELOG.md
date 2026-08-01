@@ -94,6 +94,14 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   and marker bonuses carry over; Shielded ("hits that are not from spells"), Cover ("from shooting")
   and the Guarded/Versatile/Sturdy family ("shot or charged from over 9″") stay out. The battle log
   names both halves — what applied, and what did not apply and why.
+- **The save log names the rule that actually gave the bonus.** Every attack — your volley, the AI's
+  volley and the melee strike phase — announced its whole Defense bonus as one line, "*<unit>* is
+  Shielded: +1 Defense". That was true while Shielded was the only thing that could raise the number;
+  since defense modifiers became a shared seam a growth marker or a spell token raises the same
+  number, and the line then credited a rule the unit does not even carry. Each contribution now
+  writes its own line under its own name, at the Defense the dice really roll — and a hex that
+  cancels a bonus no longer erases both from the log: the buff and the hex are named separately, so
+  a rule can neither claim what it did not do nor fall silent.
 - **Aircraft -12″ now bites on YOUR volley too (#231).** Picking the target already measured the
   shrunk reach, but once the shot was declared each weapon was gated at its printed range — so a
   24″ gun still rolled dice at an aircraft 20″ away whenever a longer weapon in the same unit kept
