@@ -1110,3 +1110,78 @@ unit still activates later; the double pass is refused while a second carrier's 
 refused (with the one-more-enemy ROT flip); the round still ends with nobody acting twice; the AI passes to
 wait out an uncommitted threat and declines when there is none; a reserve unit does not tip the balance (with
 its on-the-table ROT flip); the radial offers the entry and an activated unit is refused.
+
+## Dead aura families — a granted rule that resolved nowhere (NML-931, 2026-08-01)
+
+**The shape of the bug.** An army-book "*X* Aura" reads "this model and its unit get *X*".
+`OPRArmyManager._expand_auras` (via `AiEv.aura_granted_rules`) implements that by stamping the bare
+name *X* onto the unit's `special_rules`. Nothing else happens — the aura is not a mechanic, it is a
+delivery mechanism. So the ability only reaches the table if *X* **resolves**, and there are exactly
+two ways it can:
+
+- **pattern A** — the aura entry itself carries a primitive (`Courage Aura` → `Banner`), or
+- **pattern B** — a rule named exactly *X* resolves for the SAME `(system, faction)` through the
+  registry's faction→common fallback (`Shred when Shooting Aura` → core `Shred when Shooting`).
+
+Nine families satisfied **neither**: `primitive: null` on the aura *and* no rule of that name in the
+carrier's book or its core. The unit was handed a string, and every consumer looked it up, found
+nothing, and moved on — silently. 66 book entries across all five game systems.
+
+**What each family got.**
+
+| Family | Entries | Pattern | Resolves through |
+|---|--:|---|---|
+| Shred when Shooting | 12 | B — core entry in `aof`/`aofr` | `Shred` + `shooting_only` |
+| Rending when Shooting | 12 | B — new core entry, all five systems | `Rending` `on6_ap 4` + `shooting_only` |
+| Unstoppable in Melee | 4 | B — core entry restored in `aofs` | `Lacerate` + `melee_only` |
+| Precision Fighter Aura | 8 | A | `Shot Modifier` `hit_bonus 1` + `melee_only` |
+| Precision Shooter Aura | 4 | A | `Shot Modifier` `hit_bonus 1` + `phase shoot` |
+| Precision Charge Aura | 3 | A | `Shot Modifier` `hit_bonus 1` + `when charge` |
+| Increased Shooting Range Aura | 10 | A | `Royal Legion` `range_bonus_in 6`, `charge_mod 0` |
+| Indirect when Shooting | 1 | B — core entry in `gf` | `Indirect` + `shooting_only` |
+| Hit & Run Fighter | 1 | B — base rule row in `aofs/crazed_zealots` | `Hit & Run Fighter` `move_in 3` |
+| *(borderline)* Unstoppable when Shooting | 11 | B — new core entry, all five systems | `Lacerate` + `shooting_only` |
+
+The skirmish books (`gff`, `aofs`) already carried the pattern-A copies, which is what made the
+gap visible: the same aura worked in one system and did nothing in another. The full-scale books print
+"this model and its unit get …", so their entries take only the mechanic params — the
+`aura_expand`/`max_picks`/`lost_if_bearer_killed` knobs encode the skirmish books' "up to 3 picked
+units" wording and would be wrong there.
+
+**The engine half — a gate that only ever pointed one way.** Rules carry `melee_only` / `shooting_only`
+in their params, but `shooting_only` was read in exactly ONE place in the whole engine
+(`AiEv.stamp_sergeant`'s Rending loop). Everywhere else a shooting-gated rule fired in melee, and the
+stamps outside that loop honoured neither half. Three of those leaks were already live before this
+wave:
+
+- `Shred in Melee` shredded when shooting, `Shred when Shooting` shredded in melee (both are core rules
+  in all five books);
+- `Predator Shooter` (Surge + `shooting_only`) spawned its extra attack in melee;
+- `Good Fighter` / `Precision Fighter Aura` (`melee_only`) added their +1 to every **shot** and never
+  reached melee — the melee branch demanded `all_attacks` — and `Precision Charge Aura`
+  (`when: charge`) was a permanent +1 to shooting.
+
+Both halves are now one function, `AiEv.facet_applies(params, profile_range)`, used by the Surge and
+Rending stamps, both Shred stamps and both Regeneration-bypass loops. `_solo_hit_mod_info` gained an
+optional `charging` flag (passed by `_solo_melee_strike_phase`, which knows) so the charge-scoped
+bonus fires on the charge it is printed for and nowhere else.
+
+**One more prefix bug.** `_solo_ignores_regen`'s fallback asked `has_special_rule("Unstoppable")`,
+which matches by **prefix** — so `Unstoppable in Melee` and `Unstoppable when Shooting` bypassed
+Regeneration in both halves regardless of their gate, and `Unstoppable Mark` (a mark placed on the
+**enemy**) bypassed it for its bearer. It matches the exact name now, the same lesson
+`AiEv.has_exact_rule` already exists for.
+
+**Tests.** `test/dead_aura_families_test.gd` — 13 pure cases: the granted rule resolves per family, the
+range bonus reaches `SoloController.shooting_range_bonus` (+6″), the Rending facet lands on the shooting
+profile and stays off the melee one (and its melee sibling mirrors it), the shared gate answers both
+halves, and **`test_no_aura_grants_a_rule_that_resolves_nowhere`** is the standing net — it walks every
+aura entry of every book in all five systems and fails if one grants a name that resolves nowhere.
+`test/e2e/e2e_dead_aura_effects_test.gd` — 5 cases on the real `main.tscn`, measuring the three effects
+that live inside `main.gd` itself (the Shred facet, the Regeneration bypass, the to-hit modifier), each
+asserted in BOTH halves of the game.
+
+**Still open, deliberately.** Three aura families need a mechanic that does not exist yet, so they are a
+separate wave and are listed in `KNOWN_OPEN` in the test: **Thrust in Melee** (9), **Piercing Fighter**
+(7), **Piercing Shooter** (5) — 21 entries. The second test, `test_the_known_open_families_are_still_
+exactly_three`, fails if one of them starts resolving, which forces the list to be kept honest.

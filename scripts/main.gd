@@ -2705,7 +2705,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			if bool(prof.get("limited", false)) and solo_controller.is_limited_used(member, prof):
 				continue
 			if RulesRegistry.unit_rule_active(member, "Shred") \
-					or not RulesRegistry.unit_rules_of_primitive(member, "Shred").is_empty():
+					or _solo_shred_facet_applies(member, base_range):
 				prof["shred"] = true
 			member_profiles.append(prof)
 			# `reach` (target validity + per-model sighting) includes the unit's range bonus, so a Royal
@@ -3848,7 +3848,7 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		# Unit-level grant (wave 5); coverage wave: DATA aliases (Warbound, Infected) via the
 		# generic primitive layer — same facet, same dice.
 		var member_shred: bool = RulesRegistry.unit_rule_active(member, "Shred") \
-			or not RulesRegistry.unit_rules_of_primitive(member, "Shred").is_empty()
+			or _solo_shred_facet_applies(member, 0)
 		for p in profiles:
 			var prof := (p as Dictionary).duplicate()
 			# Wave 5 Limited (core v3.5.1: once per game): an expended profile no longer fights.
@@ -4745,7 +4745,11 @@ static func _solo_join_note(a: String, b: String) -> String:
 ## Artillery (+1 shooting >9" / −2 shot at >9") and Evasive (−1, any attack) — GF/AoF v3.5.1 p.13/14 +
 ## the army-book Evasive text. Returns {"mod": int, "note": String}; the math is the tested
 ## AiCombatMath.shooting_hit_modifier / melee_hit_modifier.
-func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: float, melee: bool) -> Dictionary:
+## `charging` is only ever true on the melee branch and only where the caller KNOWS the strike came out
+## of a charge (the melee strike phase does); it gates the charge-scoped hit bonuses ("Precision Charge
+## Aura"). Defaulted false, so the shooting and preview call sites are unchanged.
+func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: float, melee: bool,
+		charging: bool = false) -> Dictionary:
 	var evasive: bool = _solo_rule_on_all_models(target, "Evasive")
 	if not evasive:
 		# Coverage wave (resolver audit): Evasive DATA aliases (Changebound Boost & kin — "enemies
@@ -4794,10 +4798,16 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 			mm = -alias_pen
 			base_note = "%s -%d" % [alias_name, alias_pen]
 		# Coverage wave: all-attacks Shot Modifiers (Grounded Precision) reach melee too.
+		# Dead-aura wave: so do the MELEE-scoped ones. "Good Fighter" / "Precision Fighter Aura" grant
+		# "+1 to hit in melee" (melee_only) and "Precision Charge Aura" grants it on a charge (when:
+		# charge) — the melee branch used to demand `all_attacks`, so those bonuses never reached the
+		# melee they are printed for, while the shooting branch below applied them to every shot.
 		if shooter_member != null:
 			for e in RulesRegistry.unit_rules_of_primitive(shooter_member, "Shot Modifier"):
 				var sp3: Dictionary = (e as Dictionary).get("params", {})
-				if not bool(sp3.get("all_attacks", false)):
+				var charge_only3 := str(sp3.get("when", "")) == "charge"
+				if not (bool(sp3.get("all_attacks", false)) or bool(sp3.get("melee_only", false)) \
+						or (charge_only3 and charging)):
 					continue
 				if float(sp3.get("terrain_within_in", 0.0)) > 0.0 and not _solo_majority_in_cover(shooter_member):
 					continue
@@ -4852,6 +4862,11 @@ func _solo_hit_mod_info(shooter_member: GameUnit, target: GameUnit, dist_in: flo
 	if shooter_member != null:
 		for e in RulesRegistry.unit_rules_of_primitive(shooter_member, "Shot Modifier"):
 			var sp2: Dictionary = (e as Dictionary).get("params", {})
+			# Dead-aura wave: a melee-scoped or charge-scoped hit bonus is not a shooting bonus. Both
+			# already ship in the skirmish books ("Precision Fighter Aura" melee_only, "Precision Charge
+			# Aura" when: charge) and both were being added to every shot.
+			if bool(sp2.get("melee_only", false)) or str(sp2.get("when", "")) == "charge":
+				continue
 			var gate2 := float(sp2.get("over_in", 0.0))
 			if gate2 > 0.0 and dist_in <= gate2:
 				continue
@@ -5072,7 +5087,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s (%s): charged from over 9\" — +1 Defense (saves on %d+)" % [
 				defender.get_name(), m_over9, defense], true)
-	var mod_info: Dictionary = _solo_hit_mod_info(striker, defender, 0.0, true)
+	var mod_info: Dictionary = _solo_hit_mod_info(striker, defender, 0.0, true, charging)
 	# Wave-4 Unpredictable Fighter (Mummified, melee-only) and the generic Unpredictable ("when
 	# attacking" — the same die, shooting AND melee): ONE die per melee for the whole unit —
 	# 1-3 → AP(+1) on its melee weapons, 4-6 → +1 to hit (fatigue's unmodified-6-only overrides the +1).
@@ -6034,6 +6049,17 @@ func _solo_on6_ap_bonus(profile: Dictionary, striker: GameUnit) -> int:
 	return 0
 
 
+## Whether any unit-level rule of the Shred family applies to a profile of this reach (0 = melee).
+## Dead-aura wave: the two stamps used to accept ANY Shred-primitive rule, so "Shred in Melee" also
+## shredded when shooting and "Shred when Shooting" also shredded in melee — both halves are printed
+## rules in all five core books, so both leaks were live.
+func _solo_shred_facet_applies(member: GameUnit, profile_range: int) -> bool:
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Shred"):
+		if AiEv.facet_applies((e as Dictionary).get("params", {}), profile_range):
+			return true
+	return false
+
+
 func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 	var system := RulesRegistry.system_of_unit(attacker)
 	var faction := RulesRegistry.faction_of_unit(attacker)
@@ -6044,14 +6070,15 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 		# Registry-driven Regeneration bypass (e.g. Disintegrate "Ignores Regeneration"), system-scoped;
 		# the explicit name checks above remain the byte-identical fallback when the map is absent.
 		# Coverage wave (skeptic flag): melee_only bypass entries ("Ignores Regeneration in Melee")
-		# never fire on ranged profiles.
+		# never fire on ranged profiles. Dead-aura wave: and the shooting half is gated the same way,
+		# so "Unstoppable when Shooting" does not cut through Regeneration in melee.
 		var bp: Dictionary = RulesRegistry.lookup(system, faction, RulesRegistry.base_rule_name(s)).get("params", {})
 		if bool(bp.get("bypass_regen", false)):
-			if bool(bp.get("melee_only", false)) and int(profile.get("range", 0)) > 0:
+			if not AiEv.facet_applies(bp, int(profile.get("range", 0))):
 				continue
 			return true
 	# Coverage wave: unit-level bypass aliases via the primitive layer ("Ignores Regeneration in
-	# Melee" sits on the MODEL, not the weapon) — melee_only respected per profile.
+	# Melee" sits on the MODEL, not the weapon) — melee_only and shooting_only respected per profile.
 	if attacker != null:
 		for e in RulesRegistry.unit_rules_of_primitive(attacker, "Lacerate"):
 			var ed := e as Dictionary
@@ -6059,10 +6086,14 @@ func _solo_ignores_regen(attacker: GameUnit, profile: Dictionary) -> bool:
 				continue
 			var p2: Dictionary = ed.get("params", {})
 			if bool(p2.get("bypass_regen", false)):
-				if bool(p2.get("melee_only", false)) and int(profile.get("range", 0)) > 0:
+				if not AiEv.facet_applies(p2, int(profile.get("range", 0))):
 					continue
 				return true
-	return attacker != null and attacker.has_special_rule("Unstoppable")
+	# EXACT name (the Ferocious lesson): has_special_rule matches by PREFIX, so the plain-Unstoppable
+	# fallback also answered for "Unstoppable in Melee" / "Unstoppable when Shooting" — which is how
+	# both half-variants cut through Regeneration in BOTH halves no matter what their gate said — and
+	# for "Unstoppable Mark", a mark that is put on the ENEMY and never was the bearer's own rule.
+	return attacker != null and AiEv.has_exact_rule(attacker, "Unstoppable")
 
 
 ## The unit's per-model Tough value (majority) parsed from its special rules; 1 when it has no Tough.
@@ -6835,7 +6866,12 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 	"Extended Buff Range", "Coordinate",
 	# Wave 5: Delayed Action through the new "Pass Turn" primitive — once per round a carrier may
 	# pass its turn instead of activating while the opponent has strictly more units left.
-	"Delayed Action", "Pass Turn"]
+	"Delayed Action", "Pass Turn",
+	# Dead-aura wave: the base rules the "X Aura" carriers grant. They resolve through primitives that
+	# were already automated (Shred / Rending / Lacerate / Indirect / Hit & Run Fighter) — only the
+	# named entry was missing, which is why the granted name resolved nowhere.
+	"Shred when Shooting", "Rending when Shooting", "Unstoppable in Melee", "Unstoppable when Shooting",
+	"Indirect when Shooting", "Hit & Run Fighter"]
 
 ## The SOLO_MODELED_RULES subset that ALSO steers the AI's behaviour choices (not only the dice math):
 ## targeting overlays (AP/Deadly/Takedown — Solo v3.5.0 p.2), Hold overlays (Relentless/Artillery/
