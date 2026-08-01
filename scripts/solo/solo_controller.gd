@@ -2721,8 +2721,14 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 		boost = AiSpell.plan_boost(chosen_ev, boost_pool)
 		boost_sources = _draw_aura_tokens(helpers, boost)
 		if boost > 0:
+			# Name the reason PRECISELY: the coin-flip clause only gets the credit when the plain
+			# token floor would have bought nothing — i.e. the FIRST token's marginal EV sits under
+			# it. A fat cast (5 wounds) boosts on the ordinary floor and must not read as one.
+			var p_unboosted := AiSpell.cast_success_chance(0, 0, base_target)
+			var first_gain := (AiSpell.cast_success_chance(1, 0, base_target) - p_unboosted) * maxf(chosen_ev, 0.0)
 			boost_why = ("coin-flip boost: at %.0f%% any positive marginal EV beats holding the token"
-				% (AiSpell.COIN_FLIP_P * 100.0)) if AiSpell.cast_success_chance(0, 0, base_target) <= AiSpell.COIN_FLIP_P \
+				% (p_unboosted * 100.0)) \
+				if p_unboosted <= AiSpell.COIN_FLIP_P and first_gain <= AiSpell.TOKEN_VALUE_EPS \
 				else "boost: marginal EV per token above the token floor"
 		else:
 			boost_why = "no boost: the next token's marginal EV stays under the token floor"
