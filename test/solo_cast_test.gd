@@ -87,8 +87,12 @@ func test_official_d3x_pick_is_deterministic_and_legal() -> void:
 			expected = names[idx]
 			break
 	assert_str(str(plan.get("name", ""))).is_equal(expected)
-	# The attempt's cost is SPENT at plan time (v3.5.1: spend, then roll — one try per spell).
-	assert_int(caster.casts_current).is_equal(2 - int(plan.get("threshold", 0)))
+	# The attempt's cost is SPENT at plan time (v3.5.1: spend, then roll — one try per spell), plus
+	# whatever the caster then put on the roll itself: with no helper in the aura its OWN leftover
+	# token is the boost pool (v3.5.1 "may spend any number of spell tokens"), and a lone caster on
+	# a 4+ now buys that token rather than re-rolling the coin flip.
+	assert_int(caster.casts_current).is_equal(2 - int(plan.get("threshold", 0)) - int(plan.get("boost", 0)))
+	assert_int(caster.casts_current).is_greater_equal(0)
 	assert_int(int(plan.get("target_num", 0))).is_between(2, 6)
 	# The decision is recorded with the official citation and the candidate list.
 	var rec := _last_record(solo, "cast")
@@ -123,6 +127,30 @@ func test_no_valid_spell_holds_tokens() -> void:
 	assert_bool(plan.is_empty()).is_true()
 	assert_int(caster.casts_current).is_equal(1)
 	assert_bool(_last_record(solo, "cast_skip").is_empty()).is_false()
+
+
+func test_an_unpriced_cast_still_happens_and_still_buys_its_coin_flip_token() -> void:
+	# The D5 audit case, on a real board: the only enemy sits 25" away — out of reach of every
+	# damage/debuff spell — so the cycle's only valid picks are the two friendly buffs, whose
+	# effects this EV chain cannot price (0.0). The cast must STILL happen (a 0.0 here means
+	# "not modelled", not "worthless") — and it must still buy the one token that lifts it off the
+	# 4+, which is exactly what the audit found it failing to do.
+	var caster := _unit(2, [Vector3(0, 0, 0)], "Mage", ["Caster(3)"])
+	caster.initialize_caster_points()
+	var enemy := _unit(1, [Vector3(25.0 * IN2M, 0, 0)], "FarSpears")
+	var helper := _unit(2, [Vector3(2.0 * IN2M, 0, 0)], "Adept", ["Caster(2)"])
+	helper.initialize_caster_points()
+	var solo := _controller([caster, enemy, helper])
+	solo.difficulty_seed = 99
+	solo.set_difficulty(2, SoloDifficulty.for_grade("kriegsherr", 99))
+	solo._rng.seed = 7
+	var plan := solo._plan_member_cast(caster, caster)
+	assert_bool(plan.is_empty()).is_false()
+	assert_float(float(plan.get("ev", -1.0))).is_equal_approx(0.0, 0.0001)   # unpriced, not skipped
+	assert_int(int(plan.get("boost", 0))).is_equal(1)                        # off the coin flip …
+	assert_int(int(plan.get("target_num", 0))).is_equal(3)                   # … 4+ becomes 3+
+	var rec := _last_record(solo, "cast")
+	assert_str(str((rec.get("data", {}) as Dictionary).get("boost_why", ""))).contains("unpriced")
 
 
 func test_unknown_faction_stays_manual() -> void:
@@ -277,6 +305,9 @@ func test_both_ai_arena_smoke_casters_actually_cast() -> void:
 			var data: Dictionary = (rec as Dictionary).get("data", {})
 			assert_bool(data.has("d3") and data.has("boost") and data.has("interference") \
 				and data.has("p_cast") and data.has("tokens_before")).is_true()
+			# Every cast states WHY it took (or left) the boost — the decision log is the AI's
+			# explanation seam (an AI policy, not a rule: no battle-log line is owed here).
+			assert_str(str(data.get("boost_why", ""))).is_not_empty()
 	assert_int(cast_recs).is_greater(0)
 
 
