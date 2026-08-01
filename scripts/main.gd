@@ -1401,7 +1401,13 @@ func _solo_delayed_action_line(gu: GameUnit, opponent_left: int, own_left: int) 
 ## The AI's half, asked ONCE per owed reply, BEFORE a unit is picked (the choice belongs in the
 ## chooser — see SoloController.delayed_action_pass_choice). Returns true when the AI passed, in
 ## which case the caller must not also activate.
-func _solo_ai_delayed_action_pass() -> bool:
+##
+## `advance_replies` selects the ALTERNATION the pass hands the turn on in. The human-facing pump
+## runs on `_solo_pending_replies`, so its pass spends the owed reply (the default). The both-AI
+## arena driver runs its OWN one-for-one alternation (_solo_run_both_ai_round flips `side` itself)
+## and never reads that counter — moving it there would leave a stale debt behind for a session
+## that later goes back to a human opponent, so the arena passes `false` and flips its own side.
+func _solo_ai_delayed_action_pass(advance_replies: bool = true) -> bool:
 	if solo_controller == null or opr_army_manager == null:
 		return false
 	var choice: Dictionary = solo_controller.delayed_action_pass_choice()
@@ -1409,7 +1415,8 @@ func _solo_ai_delayed_action_pass() -> bool:
 	if passer == null:
 		return false
 	SoloController.delayed_action_stamp(passer, opr_army_manager.current_round)
-	_solo_pass_turn(solo_controller.ai_slot)
+	if advance_replies:
+		_solo_pass_turn(solo_controller.ai_slot)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			_solo_delayed_action_line(passer, int(choice["opponent_left"]), int(choice["own_left"])),
@@ -1745,6 +1752,10 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 ## One both-AI round: alternate one activation per side (OPR one-for-one), starting with `opener`, until both
 ## sides are out of eligible units. A wiped/exhausted side is skipped so the other plays out its tail. Returns
 ## the side that took the LAST activation (0 if none acted) — the caller derives the next round's opener.
+##
+## The alternation carries the PASS step (Delayed Action / "Pass Turn", wave 5) exactly like the human-facing
+## pump does. Without it the self-play ladder measures an AI that is not allowed to use a rule the shipped
+## game gives it, so every number the ladder produces is taken next to the real game rather than in it.
 func _solo_run_both_ai_round(opener: int) -> int:
 	var side: int = opener
 	var last_side := 0
@@ -1759,6 +1770,21 @@ func _solo_run_both_ai_round(opener: int) -> int:
 			break
 		var act: int = side if side_has else other
 		_solo_set_active_side(act)
+		# Delayed Action (Pass Turn): the side whose turn it REALLY is may decline to activate — the turn
+		# goes to the opponent and no unit is spent. Guarded on `act == side`: when they differ, `side` is
+		# exhausted and `other` is playing out its tail, and the rule's "the opponent has MORE units left to
+		# activate than you" can never stand for a side facing an empty pool. The pass moves NO reply counter
+		# (this driver owns its own alternation — see _solo_ai_delayed_action_pass), and it deliberately
+		# leaves `last_side` alone: a pass is not an activation, and the next round's opener rule reads the
+		# last ACTIVATION (finding 7). Termination is the rule's own two guards — strictly-more is
+		# antisymmetric, so two sides can never pass at each other, and the once-per-round carrier stamp
+		# bounds the passes per round by the number of carriers.
+		if act == side and _solo_ai_delayed_action_pass(false):
+			if _solo_arena_trace:
+				printerr("[ARENA] R%d act#%d side P%d passes the turn (Delayed Action)" % [
+					opr_army_manager.current_round, guard, act])
+			side = other
+			continue
 		if _solo_arena_trace:
 			printerr("[ARENA] R%d act#%d side P%d …" % [opr_army_manager.current_round, guard, act])
 		var unit: GameUnit = await _solo_activate_one_ai()
