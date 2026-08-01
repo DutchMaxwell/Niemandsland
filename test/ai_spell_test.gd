@@ -338,3 +338,113 @@ func test_mods_for_legacy_roles_ignore_nml006_records() -> void:
 	# Die F4-Rollen (hit/def) sehen die neuen Encoding-Arten nicht — Regressionsschutz.
 	assert_int(AiSpell.mods_for(_mods_nml006(), "attacker_own", true).size()).is_equal(0)
 	assert_int(AiSpell.mods_for(_mods_nml006(), "defense", false).size()).is_equal(0)
+
+
+# === grant_facet — the facet a granted rule name maps to (GRANT_FACETS + its scope suffixes) ===
+
+func test_grant_facet_maps_only_the_facets_the_ev_chain_reads() -> void:
+	# Every GRANT_FACETS entry names a facet profile_ev already reads for a NATIVE weapon rule — a
+	# granted rule is worth exactly what that facet is worth, no extra valuation invented here.
+	assert_str(AiSpell.grant_facet("Furious")).is_equal("furious")
+	assert_str(AiSpell.grant_facet("Relentless")).is_equal("relentless")
+	assert_str(AiSpell.grant_facet("Rending")).is_equal("rending")
+	assert_str(AiSpell.grant_facet("Surge")).is_equal("surge")
+	assert_str(AiSpell.grant_facet("Indirect")).is_equal("indirect")
+	assert_str(AiSpell.grant_facet("Shred")).is_equal("shred")
+	assert_str(AiSpell.grant_facet("Bane")).is_equal("bane")
+	# Scope suffixes ("Bane in Melee", "Indirect when Shooting" — the data's own encoding) resolve to
+	# the SAME facet: it is still the same rule, just textually scoped.
+	assert_str(AiSpell.grant_facet("Bane when Shooting")).is_equal("bane")
+	assert_str(AiSpell.grant_facet("Bane in Melee")).is_equal("bane")
+	assert_str(AiSpell.grant_facet("Indirect when Shooting")).is_equal("indirect")
+	# Unpriced names return "" EXACTLY — the honest boundary: "<X> Boost" is an UPGRADE rule (only
+	# fires when the bearer already has the base rule; its facets are dice-path-only), "<X> Aura"
+	# grants to OTHER units (a different effect), and the rest simply have no term in profile_ev.
+	for grant_name in ["Primal Boost", "Ferocious Boost", "Devout Boost", "Hit & Run Fighter Aura",
+			"Unstoppable", "Quick Shot", "Evasive", "Melee Evasion", "Steadfast", "Regeneration", ""]:
+		assert_str(AiSpell.grant_facet(grant_name)).is_equal("")
+
+
+# === P3 grants — each priced via the SAME facet a native weapon rule with the same name reads ===
+
+func test_spell_modifier_delta_furious_is_worth_a_sixth_of_the_attacks_on_a_charge() -> void:
+	# Furious (GF/AoF v3.5.1 p.14): melee AND charging only, +1 hit per unmodified 6.
+	# 6 attacks × P(hit 4+)=0.5 → 3 hits; Furious adds attacks/6 = 1 hit → 4; each unsaved at Def4+ =
+	# 0.5 → 2.0 vs the un-granted baseline 1.5 → delta 0.5.
+	var att := {"quality": 4}
+	var def_ctx := {"defense": 4}
+	var delta := AiSpell.spell_modifier_delta(_profiles(), att, def_ctx,
+		{"grants_rule": "Furious"}, false, 0.0, true)
+	assert_float(delta).is_equal_approx(0.5, EPS)
+	# RED FLIP: Furious needs a CHARGE — the same grant on a non-charging melee swing buys nothing.
+	var not_charging := AiSpell.spell_modifier_delta(_profiles(), att, def_ctx,
+		{"grants_rule": "Furious"}, false, 0.0, false)
+	assert_float(not_charging).is_equal(0.0)
+	# RED FLIP: Furious needs MELEE — granting it on a shooting profile never reaches the facet read.
+	var ranged_profiles := [{"attacks": 6, "range": 18, "ap": 0}]
+	var shooting := AiSpell.spell_modifier_delta(ranged_profiles, att, def_ctx,
+		{"grants_rule": "Furious"}, true, 12.0)
+	assert_float(shooting).is_equal(0.0)
+
+
+func test_spell_modifier_delta_relentless_only_over_nine_inches() -> void:
+	# Relentless (v3.5.1 p.14): shooting only, +1 hit per unmodified 6, but ONLY over 9".
+	# 4 attacks × 0.5 = 2 hits; +4/6 bonus hits, each unsaved at Def4+ = 0.5 → delta = (4/6) × 0.5.
+	var ranged_profiles := [{"attacks": 4, "range": 18, "ap": 0}]
+	var att := {"quality": 4}
+	var def_ctx := {"defense": 4}
+	var delta := AiSpell.spell_modifier_delta(ranged_profiles, att, def_ctx,
+		{"grants_rule": "Relentless"}, true, 12.0)
+	assert_float(delta).is_equal_approx(1.0 / 3.0, EPS)
+	# RED FLIP: at 6" (not "over" 9") the bonus never triggers — the grant is worth exactly 0.
+	var close := AiSpell.spell_modifier_delta(ranged_profiles, att, def_ctx,
+		{"grants_rule": "Relentless"}, true, 6.0)
+	assert_float(close).is_equal(0.0)
+	# RED FLIP: Relentless is shooting-only — granting it on the melee side is worth exactly 0.
+	var melee := AiSpell.spell_modifier_delta(_profiles(), att, def_ctx,
+		{"grants_rule": "Relentless"}, false, 0.0, false)
+	assert_float(melee).is_equal(0.0)
+
+
+func test_spell_modifier_delta_surge_is_unconditional_and_rending_upgrades_the_sixes() -> void:
+	var att := {"quality": 4}
+	var def_ctx := {"defense": 4}
+	# Surge (v3.5.1 p.14): +1 hit per unmodified 6, UNCONDITIONAL — unlike Furious, no charge needed.
+	var surge := AiSpell.spell_modifier_delta(_profiles(), att, def_ctx,
+		{"grants_rule": "Surge"}, false, 0.0, false)
+	assert_float(surge).is_equal_approx(0.5, EPS)
+	# Rending (v3.5.1 p.14): unmodified 6s to hit get AP(+4) — a positive delta even without a charge.
+	var rending := AiSpell.spell_modifier_delta(_profiles(), att, def_ctx,
+		{"grants_rule": "Rending"}, false, 0.0, false)
+	assert_bool(rending > 0.0).is_true()
+
+
+func test_spell_modifier_delta_indirect_is_worth_the_targets_cover() -> void:
+	# Indirect (wave 5: the target's Cover does not apply to the volley) is worth exactly the save
+	# swing Cover would have bought the defender (Def4+ → 3+): delta = 1/3 of the volley's hits.
+	var ranged_profiles := [{"attacks": 4, "range": 18, "ap": 0}]
+	var att := {"quality": 4}
+	var covered := {"defense": 4, "in_cover": true}
+	var delta := AiSpell.spell_modifier_delta(ranged_profiles, att, covered,
+		{"grants_rule": "Indirect"}, true, 12.0)
+	assert_float(delta).is_equal_approx(1.0 / 3.0, EPS)
+	# RED FLIP: with no Cover to ignore in the first place, Indirect has nothing to buy — exactly 0.
+	var uncovered := {"defense": 4, "in_cover": false}
+	var no_cover := AiSpell.spell_modifier_delta(ranged_profiles, att, uncovered,
+		{"grants_rule": "Indirect"}, true, 12.0)
+	assert_float(no_cover).is_equal(0.0)
+
+
+func test_spell_modifier_delta_upgrade_and_defensive_grants_stay_at_zero() -> void:
+	# The honest boundary (grant_facet's documented refusals): each of these needs its OWN valuation
+	# and is priced at exactly 0 here, never invented.
+	var att := {"quality": 4}
+	var def_ctx := {"defense": 4}
+	# Primal Boost is an UPGRADE rule: its surge_attack_low facet is read only by the dice path in
+	# scripts/main.gd, never by AiEv.profile_ev — so this chain cannot price it.
+	# Unstoppable / Quick Shot / Evasive / Steadfast / Regeneration: defensive/movement grants with
+	# no term in profile_ev at all — needs its own valuation, not a reused facet.
+	for grant in ["Primal Boost", "Unstoppable", "Quick Shot", "Evasive", "Steadfast", "Regeneration"]:
+		var delta := AiSpell.spell_modifier_delta(_profiles(), att, def_ctx,
+			{"grants_rule": grant}, false, 0.0, true)
+		assert_float(delta).is_equal(0.0)
