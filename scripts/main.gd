@@ -2775,14 +2775,13 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	var wounds_before: int = _solo_unit_wounds_now(target)
 	var models_before: int = _solo_combined_alive(target)
 	# Armor(X) (wave 5, army-book upgrade: "counts as having Defense X+") sets the working Defense,
-	# then Shielded (+1 Defense, army-book rule) covers every hit; Cover (GF v3.5.1 p.11) is ignored
-	# by Blast and by Indirect (wave 5: "ignores cover from sight obstructions").
+	# then every Defense contribution of the parts seam folds in (Shielded and its data aliases,
+	# growth markers, spell tokens — each NAMED in the log, NML-932); Cover (GF v3.5.1 p.11) is
+	# ignored by Blast and by Indirect (wave 5: "ignores cover from sight obstructions").
 	_solo_log_armor(target)
 	var dist_in: float = MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 	var base_defense: int = _solo_defense_vs(target)
-	if base_defense != _solo_armored_defense(target) and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
-			target.get_name(), base_defense], true)
+	_solo_log_defense_parts(target, AiCombatMath.HIT_SOURCE_SHOOTING, base_defense, true)
 	# Guarded / Versatile Defense's def-half ("+1 to defense rolls" when shot from over 9" away) folds
 	# into the base Defense every shot of this volley saves at; Cover then stacks on top (floored 2+).
 	var over9_rule := _solo_over9_defense_rule(target)
@@ -3817,7 +3816,16 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		var member_dist: float = dist_in
 		if not melee and enemy != null and solo_controller != null:
 			member_dist = _solo_nearest_model_gap_in(member, enemy, dist_in)
-		var profiles: Array = AiShooting.melee_profiles(weapons) if melee else AiShooting.profiles_in_range(weapons, member_dist)
+		# NML-929 — the SHOOTER-SIDE bonus belongs on this gate too: Royal Legion's +4" and the spell
+		# range tokens (both through SoloController.shooting_range_bonus) are what _solo_validate_target
+		# measured when it let the player DECLARE the shot, and what the AI volley folds into each shot's
+		# reach. Without it here a boosted shooter declared a legal target and this gate then dropped
+		# every profile — the volley ended without a die and without a word. Order is the AI's
+		# (`"reach": base_range + range_bonus` → shrink): the bonus rides the PRINTED range, the
+		# target-side shrink applies to the sum.
+		var range_bonus: int = 0 if melee else SoloController.shooting_range_bonus(member)
+		var profiles: Array = AiShooting.melee_profiles(weapons) if melee \
+			else AiShooting.profiles_in_range(weapons, maxf(member_dist - float(range_bonus), 0.0))
 		# #231 — TARGET-SIDE reach shrinks re-gate each profile at the SAME nearest-model distance the
 		# plain range gate used: Aircraft (-12", GF v3.5.1) AND Ranged Shrouding (-6" min 6"). Both ride
 		# the one SoloController.effective_shoot_reach_in seam the AI volley already measured with — this
@@ -3825,7 +3833,8 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 		# whenever a longer weapon kept the target legal.
 		if not melee and enemy != null:
 			profiles = profiles.filter(func(p) -> bool:
-				return SoloController.effective_shoot_reach_in(float((p as Dictionary).get("range", 0)), enemy) >= member_dist)
+				return SoloController.effective_shoot_reach_in(
+					float((p as Dictionary).get("range", 0)) + float(range_bonus), enemy) >= member_dist)
 		if profiles.is_empty():
 			continue
 		var max_models: int = member.models.size()
@@ -3862,10 +3871,12 @@ func _solo_attack_groups(unit: GameUnit, dist_in: float, melee: bool, enemy: Gam
 			# have range + LOS at ITS OWN range; melee scales by the models within 2" strike reach (p.9).
 			# #231: "its own range" is the EFFECTIVE one — against an Aircraft (-12") or a Ranged
 			# Shrouding target the rear models drop out of the count, exactly as on the AI volley.
+			# NML-929: and the boosted one — with Royal Legion / a spell range token the REAR models
+			# come back into the count, at the same reach the declaration was judged with.
 			var count: int = melee_count
 			if not melee:
 				count = _solo_sighted_count(member, enemy,
-					int(SoloController.effective_shoot_reach_in(float(prof.get("range", 0)), enemy)),
+					int(SoloController.effective_shoot_reach_in(float(prof.get("range", 0)) + float(range_bonus), enemy)),
 					bool(prof.get("indirect", false))) if enemy != null else member.get_alive_count()
 			# X2 (test game 2, B15): a dead bearer's weapon dies with it. Special weapons (fewer copies
 			# than models) are pinned to specific models by EquipmentDistributor — fire per-copy attacks
@@ -4629,6 +4640,30 @@ func _solo_defense_parts(target: GameUnit, source: String) -> Array:
 	return parts
 
 
+## rules-must-log for NML-932: the ATTACK save steps name every Defense contribution they folded in,
+## each with ITS OWN rule's name — the same single truth (_solo_defense_parts) the arithmetic reads.
+##
+## What was wrong: before #264 a composite Defense could only come from one rule, so all three attack
+## sites printed that rule's name for whatever the difference turned out to be ("<unit> is Shielded:
+## +1 Defense"). Since the parts seam a growth marker or a spell token raises the very same number,
+## and the line then credited a rule the unit does not even carry — while a SECOND contribution
+## disappeared into the sum, and a hex that cancelled a bonus made the whole line vanish (#224: a
+## silent rule reads exactly like a missing one). One line per contribution fixes all three.
+##
+## `defense` is the FINAL working Defense the caller is about to save at, so the numbers a player
+## reads are the numbers the dice see. `ai` keeps each call site's own log-side flag.
+func _solo_log_defense_parts(target: GameUnit, source: String, defense: int, ai: bool) -> void:
+	if battle_log == null or target == null:
+		return
+	for p in _solo_defense_parts(target, source):
+		var pd := p as Dictionary
+		var bonus := int(pd["bonus"])
+		if bonus == 0 or not bool(pd["applies"]):
+			continue
+		battle_log.log_event(BattleLog.Category.COMBAT, "%s is %s: %+d Defense (saves on %d+)" % [
+			target.get_name(), str(pd["name"]), bonus, defense], ai)
+
+
 ## rules-must-log for NML-104: the spell save step NAMES both halves. What DOES apply gets a line —
 ## a save that silently lands one better (or one worse) reads as broken dice, not as a rule. What does
 ## NOT apply gets a negative line: the modifiers whose own text is limited to attacks are exactly the
@@ -5027,9 +5062,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	var human_defends: bool = not _solo_is_ai_unit(defender)
 	_solo_log_armor(defender)   # Armor(X) "counts as Defense X+" (wave 5) — folded into _solo_defense_vs
 	var defense: int = _solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE)
-	if defense != _solo_armored_defense(defender) and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
-			defender.get_name(), defense], true)
+	_solo_log_defense_parts(defender, AiCombatMath.HIT_SOURCE_MELEE, defense, true)   # NML-932: each part by name
 	# Guarded / Versatile Defense's def-half: charged from over 9" away → +1 Defense for this melee's
 	# saves. Fires where the charge distance is KNOWN (AI charges pass their pre-charge gap); the
 	# human's manual charge distance is untracked (charge_from_in stays 0), the Versatile precedent.
@@ -8475,6 +8508,62 @@ func _solo_log_reach_shrink(attacker: GameUnit, target: GameUnit) -> void:
 		target.get_name(), ", ".join(locked)], true)
 
 
+## NML-929 — rules-must-log's POSITIVE case, the mirror of _solo_log_reach_shrink: a weapon that fires
+## PAST the range printed on its card reads as a bug exactly like one that silently stops firing. So the
+## bonus is NAMED (Royal Legion / a spell range token), and so are the profiles it — and only it — lifts
+## into reach. Measured through the same base-edge distance and the same effective_shoot_reach_in seam
+## the per-weapon gate in _solo_attack_groups uses, so the line can never promise a shot the gate refuses.
+func _solo_log_range_bonus(attacker: GameUnit, target: GameUnit) -> void:
+	if battle_log == null or attacker == null or target == null:
+		return
+	var members: Array = [attacker]
+	if attacker.has_method("get_attached_heroes"):
+		members = members + attacker.get_attached_heroes()
+	for mm in members:
+		var member := mm as GameUnit
+		if member == null or member.get_alive_count() == 0 or member.source_type != "opr" \
+				or not (member.source_data is OPRApiClient.OPRUnit):
+			continue
+		var bonus_in: int = SoloController.shooting_range_bonus(member)
+		if bonus_in <= 0:
+			continue
+		# The bonus has two sources behind the one seam (wave 4 rule + NML-006 spell stamp) — name what
+		# is actually in play, so the player can tell a permanent rule from a token that will expire.
+		var spell_in: int = int(member.unit_properties.get("spell_range_mod", 0))
+		var causes: PackedStringArray = []
+		if bonus_in - spell_in > 0:
+			# Coverage wave: the family also arrives as DATA aliases (Lustbound …) — name the rule the
+			# player's own book prints, never the primitive we happen to file it under.
+			var rule_name := "Royal Legion"
+			if not member.has_special_rule("Royal Legion"):
+				for e in RulesRegistry.unit_rules_of_primitive(member, "Royal Legion"):
+					var alias := str((e as Dictionary).get("name", ""))
+					if not alias.is_empty() and alias != "Royal Legion":
+						rule_name = alias
+						break
+			causes.append("%s +%d\"" % [rule_name, bonus_in - spell_in])
+		if spell_in > 0:
+			causes.append("spell +%d\"" % spell_in)
+		# Profiles that reach ONLY because of the bonus: out of reach at the printed range, in reach with it.
+		var gap: float = _solo_nearest_model_gap_in(member, target, INF)
+		var lifted: PackedStringArray = []
+		for p in AiShooting.profiles_in_range((member.source_data as OPRApiClient.OPRUnit).weapons,
+				maxf(gap - float(bonus_in), 0.0)):
+			var printed := float((p as Dictionary).get("range", 0))
+			if SoloController.effective_shoot_reach_in(printed, target) >= gap:
+				continue   # reaches on its own — the bonus lifted nothing
+			if SoloController.effective_shoot_reach_in(printed + float(bonus_in), target) < gap:
+				continue   # still short even boosted — _solo_log_reach_shrink owns that line
+			var pname := str((p as Dictionary).get("name", "?"))
+			if not lifted.has(pname):
+				lifted.append(pname)
+		if lifted.is_empty():
+			continue
+		battle_log.log_event(BattleLog.Category.COMBAT,
+			"%s: %s shooting range — %s reaches %s past its printed range" % [
+			member.get_name(), " + ".join(causes), ", ".join(lifted), target.get_name()], true)
+
+
 func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Array = [], skip_named: bool = false) -> void:
 	_solo_stage_begin("%s fires at %s" % [attacker.get_name(), target.get_name()])
 	# B11: ONE measuring truth — the shot distance (feeding the >9" Versatile/Guarded gates and the
@@ -8484,18 +8573,20 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		dist = MoveIntent.distance_inches(solo_controller.unit_centre(attacker), solo_controller.unit_centre(target))
 	# B11: range penalties against THIS target are NAMED, never silently folded into the gate.
 	_solo_log_reach_shrink(attacker, target)
+	# NML-929: … and the positive half — a weapon reaching PAST its printed range says which rule
+	# granted it (the gate honours the bonus, so the log must too).
+	_solo_log_range_bonus(attacker, target)
 	var target_alive_before: int = target.get_alive_count()   # post-shooting morale (goal 003 P1)
 	var target_wounds_before: int = _solo_unit_wounds_now(target)
 	var regenable := 0
 	var regen_proof := 0
-	# Armor(X) (wave 5) sets the working Defense, then Shielded (+1 Defense, army-book rule) covers
-	# every hit; Cover (+1 Defense majority-in-cover, GF v3.5.1 p.11) is shooting-only and ignored by
+	# Armor(X) (wave 5) sets the working Defense, then every Defense contribution of the parts seam
+	# folds in (Shielded and its data aliases, growth markers, spell tokens — each NAMED in the log,
+	# NML-932); Cover (+1 Defense majority-in-cover, GF v3.5.1 p.11) is shooting-only and ignored by
 	# Blast and Indirect (wave 5).
 	_solo_log_armor(target)
 	var shielded_def: int = _solo_defense_vs(target)
-	if shielded_def != _solo_armored_defense(target) and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT, "%s is Shielded: +1 Defense (saves on %d+)" % [
-			target.get_name(), shielded_def], true)
+	_solo_log_defense_parts(target, AiCombatMath.HIT_SOURCE_SHOOTING, shielded_def, true)
 	# Guarded / Versatile Defense's def-half: the human shooting from over 9" honours the +1 Defense
 	# too — both directions read the same rule (the shot distance is known here).
 	var h_over9 := _solo_over9_defense_rule(target)
