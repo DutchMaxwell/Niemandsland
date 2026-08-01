@@ -1156,6 +1156,22 @@ static func _target_key_compare(a: Dictionary, b: Dictionary) -> int:
 	return int(a.get("band", 0)) - int(b.get("band", 0))
 
 
+## How many D3 a Bounding-family placement rolls (NML-937). v3.5.3 raised the boosted blink/step
+## upgrades from "within D3\"" to "within 2D3\"", and the registry carries that as `dice_count`
+## (the GF/GFF books) or as the "NdM" shape in `place_die` (the AoF books) — both are read here, so
+## the number of dice is DATA. 1 when neither key is present: the pre-3.5.3 single die, i.e. a
+## missing map leaves the shipped behaviour byte-identical.
+static func bounding_dice_count(params: Dictionary) -> int:
+	if params.has("dice_count"):
+		return maxi(int(params["dice_count"]), 1)
+	var pd := str(params.get("place_die", "")).to_lower()
+	if pd.contains("d"):
+		var head := pd.get_slice("d", 0).strip_edges()
+		if head.is_valid_int():
+			return maxi(int(head), 1)
+	return 1
+
+
 ## One activation by the FULL official OPR Solo & Co-Op v3.5.0 decision tree (goal 003 P3 — the sim's brain
 ## wired into the real game). Classify the archetype, pick the nearest un-activated enemy AND the nearest
 ## objective this side does not control, build the tree context, resolve the action toward the objective or
@@ -1212,30 +1228,48 @@ func _act(unit: GameUnit) -> Dictionary:
 	# RNG — the placement precedes any tray-visible action — and lands in the decision record.
 	var bounding_rule := ""
 	var bounding_plus := 1
+	var bounding_dice := 1
 	if RulesRegistry.unit_rule_active(unit, "Bounding"):
 		bounding_rule = "Bounding"
 		bounding_plus = int(RulesRegistry.unit_param(unit, "Bounding", "place_d3_plus", 1))
+		bounding_dice = bounding_dice_count(RulesRegistry.lookup(RulesRegistry.system_of_unit(unit),
+			RulesRegistry.faction_of_unit(unit), "Bounding").get("params", {}))
 	else:
 		# Coverage wave: DATA aliases (Wolfborn, Rapid Blink — "place all models within D3\"", the
-		# +0 form) via the generic primitive layer.
+		# +0 form) via the generic primitive layer. NML-937: a unit that carries BOTH the base rule
+		# and its boosted upgrade (Rapid Blink + Rapid Blink Boost, Wave-Step + Wave-Step Boost) must
+		# use the UPGRADE — the first alias in rule order used to win, which could pick the weaker
+		# leg — so the family is scanned for the longest placement (dice ×2 average, plus the flat).
+		var best_reach := -1.0
 		for e in RulesRegistry.unit_rules_of_primitive(unit, "Bounding"):
 			var ed := e as Dictionary
 			if str(ed["name"]) == "Bounding":
 				continue
-			bounding_rule = str(ed["name"])
-			bounding_plus = int((ed.get("params", {}) as Dictionary).get("place_d3_plus", 0))
-			break
+			var sp: Dictionary = ed.get("params", {})
+			var d := bounding_dice_count(sp)
+			var p := int(sp.get("place_d3_plus", 0))
+			var reach := float(d) * 2.0 + float(p)
+			if reach > best_reach:
+				best_reach = reach
+				bounding_rule = str(ed["name"])
+				bounding_plus = p
+				bounding_dice = d
 	if not bounding_rule.is_empty():
-		var bounding_in := float(_rng.randi_range(1, 3) + bounding_plus)
+		var bounding_in := float(bounding_plus)
+		for _d in bounding_dice:
+			bounding_in += float(_rng.randi_range(1, 3))
 		advance += bounding_in
 		rush += bounding_in
 		charge_reach += bounding_in
+		var die_text := "%s%s" % ["%dD3" % bounding_dice if bounding_dice > 1 else "D3",
+			("+%d" % bounding_plus if bounding_plus > 0 else "")]
 		record_decision({"kind": "move", "unit": unit.get_name(),
-			"rule": "%s: on activation the unit may be placed within D3%s\" — valued as a bonus on every move band" % [
-				bounding_rule, ("+%d" % bounding_plus if bounding_plus > 0 else "")],
+			"rule": "%s: on activation the unit may be placed within %s\" — valued as a bonus on every move band" % [
+				bounding_rule, die_text],
 			"candidates": [], "chosen": "+%.0f\" bands" % bounding_in, "why": "bounding placement",
-			"data": {"bonus_in": bounding_in, "rule": bounding_rule}})
-		(report["rule_notes"] as Array).append("%s: rolled %.0f\" — every move band +%.0f\" this activation" % [bounding_rule, bounding_in, bounding_in])
+			"data": {"bonus_in": bounding_in, "rule": bounding_rule, "dice": bounding_dice, "plus": bounding_plus}})
+		(report["rule_notes"] as Array).append("%s: rolled %.0f\" of %s\" — every move band +%.0f\" this activation" % [
+			bounding_rule, bounding_in, die_text, bounding_in])
 	# Coverage wave: Speed Feat family — once per GAME, +2\"/+2\" on one move (registry aliases of
 	# Quick carrying uses_per_game). NACHTMAHR spends it in the last two rounds' first move (the
 	# endgame push, where an extra 2\" buys arrivals), logged + recorded; the flag pins the once.
@@ -4077,6 +4111,45 @@ static func reanimation_plan(unit: GameUnit, successes: int) -> Array:
 			left -= top
 			(entry as Dictionary)["wounds"] = int((entry as Dictionary)["wounds"]) + top
 	return plan
+
+
+## NML-924 — what a Reanimation success may be spent on RIGHT NOW, in reanimation_models order:
+## [{model, revive, capacity}]. `capacity` is how many successes that model can still absorb — a
+## casualty is worth its full wounds_max (one success buys it back, further ones heal it up), a living
+## wounded model its missing wounds. Two readers: the owner's click prompt draws its targets from this,
+## and the "does the owner get a choice at all?" gate counts it. Empty = nothing left to restore.
+static func reanimation_candidates(unit: GameUnit) -> Array:
+	var out: Array = []
+	for m in reanimation_models(unit):
+		var mi := m as ModelInstance
+		if mi == null:
+			continue
+		if not mi.is_alive:
+			out.append({"model": mi, "revive": true, "capacity": maxi(mi.wounds_max, 1)})
+			continue
+		var gap: int = mi.wounds_max - mi.wounds_current
+		if gap > 0:
+			out.append({"model": mi, "revive": false, "capacity": gap})
+	return out
+
+
+## NML-924 — ONE click of the owner's Reanimation allocation: spend a single success on `choice`.
+## The cast_pick_step pattern — PURE (it reads the model's own wound fields and nothing else), so every
+## branch of the allocation is reachable in a test without a scene, a camera or a die.
+##
+## Returns {"spent", "revive", "left", "done", "reason"}. A click that buys nothing comes back with
+## `spent` false and a `reason` the caller can log (rules-must-log: a refusal that says nothing reads
+## like a broken click); `revive` marks the success that puts a casualty back on the table, which is
+## the one the placement rule ("in coherency with non-restored models") applies to.
+static func reanimation_pick_step(left: int, choice: ModelInstance) -> Dictionary:
+	if left <= 0:
+		return {"spent": false, "revive": false, "left": 0, "done": true, "reason": "no successes left"}
+	if choice == null:
+		return {"spent": false, "revive": false, "left": left, "done": false, "reason": "not a model of this unit"}
+	if choice.is_alive and choice.wounds_current >= maxi(choice.wounds_max, 1):
+		return {"spent": false, "revive": false, "left": left, "done": false, "reason": "it is at full health"}
+	var rest: int = left - 1
+	return {"spent": true, "revive": not choice.is_alive, "left": rest, "done": rest <= 0, "reason": ""}
 
 
 ## Whether a model belongs to a Hero unit (the plan's first priority band).
@@ -7434,8 +7507,14 @@ const INFILTRATE_MIN_ENEMY_DIST_M := 0.0762   # Bug 26 (army-book Infiltrate, AP
 
 
 ## Per-unit Ambush-arrival no-go radius from enemies: 3" for Infiltrate, 9" for plain Ambush (Bug 26).
+## NML-937: the 3" is DATA now — v3.5.3's "may be deployed anywhere over 3\" away from enemy units"
+## rides the registry's `min_enemy_dist_in`, so a book that ever moves the ring moves it here too.
+## The constant stays as the fallback, which keeps a missing map byte-identical to the shipped 3".
 func _reserve_min_enemy_dist_m(unit: GameUnit) -> float:
-	return INFILTRATE_MIN_ENEMY_DIST_M if unit.has_special_rule("Infiltrate") else AMBUSH_MIN_ENEMY_DIST_M
+	if unit == null or not unit.has_special_rule(RULE_INFILTRATE):
+		return AMBUSH_MIN_ENEMY_DIST_M
+	var fallback_in := INFILTRATE_MIN_ENEMY_DIST_M / INCHES_TO_METERS
+	return float(RulesRegistry.unit_param(unit, RULE_INFILTRATE, "min_enemy_dist_in", fallback_in)) * INCHES_TO_METERS
 
 
 ## Vanguard's forward push: candidate spots along the toward-table-centre line at 100/75/50/25% of the
@@ -8215,6 +8294,10 @@ func forced_straight_move(unit: GameUnit, dir: Vector2, dist_in: float) -> float
 ## fight value; null when none/cap reached.
 var _second_wind_round_uses := {}   # round -> uses this round
 
+## v3.5.3's army cap DENOMINATOR (3 = one third of the carriers, rounded up; the pre-3.5.3 books
+## said half). Only the fallback — the live value comes from the registry's `army_cap_fraction`.
+const SECOND_WIND_CAP_FRACTION := 3
+
 
 func second_wind_candidate() -> GameUnit:
 	if army_manager == null:
@@ -8223,15 +8306,24 @@ func second_wind_candidate() -> GameUnit:
 	var carriers := 0
 	var best: GameUnit = null
 	var best_v := -1.0
+	# NML-937: the per-round army cap is DATA — v3.5.3 cut the second activation from half the army
+	# to ONE THIRD, and the registry says so with `army_cap_fraction` (the DENOMINATOR: 3 = a third,
+	# 2 = the old half). The largest denominator any carrier NAMES wins, i.e. the most restrictive
+	# book in a mixed force; the constant only steps in when no carrier names one at all, so a
+	# missing map keeps the shipped third — and a map that says 2 is not overruled by the fallback.
+	var frac := 0
 	for u in army_manager.get_game_units_for_player(ai_slot):
 		var gu := u as GameUnit
 		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
 			continue
 		if gu.has_method("is_attached") and gu.is_attached():
 			continue
-		if RulesRegistry.unit_rules_of_primitive(gu, "Second Wind").is_empty():
+		var sw: Array = RulesRegistry.unit_rules_of_primitive(gu, "Second Wind")
+		if sw.is_empty():
 			continue
 		carriers += 1
+		for e in sw:
+			frac = maxi(frac, int(((e as Dictionary).get("params", {}) as Dictionary).get("army_cap_fraction", 0)))
 		if bool(gu.unit_properties.get("second_wind_used", false)) or not gu.is_activated:
 			continue
 		var v := _plan_ev_of(gu) + float(gu.get_alive_count()) * 0.1
@@ -8240,7 +8332,9 @@ func second_wind_candidate() -> GameUnit:
 			best = gu
 	if best == null:
 		return null
-	var cap: int = int(ceil(float(carriers) / 3.0))
+	if frac <= 0:
+		frac = SECOND_WIND_CAP_FRACTION
+	var cap: int = int(ceil(float(carriers) / float(frac)))
 	if int(_second_wind_round_uses.get(round_no, 0)) >= cap:
 		return null
 	return best

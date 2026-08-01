@@ -85,7 +85,18 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   coherency with a model that was *not* restored, otherwise the success expires (with its own log
   line). The rule reaches the table through the hero upgrade *Reanimation Aura*, and it ends when
   its carrier falls — the battle log says so. Shaken units stay idle and do not reanimate.
-  Allocation is automatic in v1 for both sides; letting the owner click each restore is a follow-up.
+- **You allocate your own Reanimation successes by clicking.** The rule's restores used to be handed
+  out for you — living wounded first, then the cheapest casualty. A fine default and a poor
+  decision-maker: getting a Tough elite back on its feet instead of topping two wounds up is often
+  the whole activation, and OPR gives that call to the owner. After the roll your side gets a click
+  mode, the same principle the wound allocation follows: **left-click a wounded model** to heal one
+  wound there, **left-click a fallen model's ring** to bring it back, **right-click** to hand the
+  rest to the automatic allocation. A casualty has no model to click — a regiment one is hidden in
+  its block, a loose one is parked on the army tray — so every casualty that *can* return wears a
+  marker ring at its return spot, and that ring is the click target. A strip counts the successes
+  down, every click writes its own log line, and a click that buys nothing (a model already at full
+  health) says why instead of doing nothing. The prompt only appears where the choice can change
+  something, and NACHTMAHR keeps allocating its own restores by its own plan.
 - **The combat stage covers melee and spells.** The central card that already paced the shooting
   volleys now walks a charge — Charge, Counter, Impact, one card per strike wave, Melee result,
   Morale, Consolidation — and a cast: Cast, Cast roll, Effect (one Effect card per target). Both
@@ -96,6 +107,25 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   charge you declare gets its own opening line, like the AI's always had.
 
 ### Fixed
+- **Five army-book rules now really play by their printed wording.** Five knobs of the rules data
+  (*hits per wound*, *placement dice*, *arrival distance*, *army cap*, *Defense per two markers*)
+  were read by no code at all, so whether the rules they describe played by the current books was
+  an untested assumption. Two of them did not. A boosted blink/step upgrade (*Rapid Blink Boost*,
+  *Wave-Step Boost*) placed its models within **D3″** instead of **2D3″**, and a unit that carried
+  both the base rule and its upgrade could even use the weaker one. *Defensive Growth* granted **no
+  Defense at all**: its markers were only counted in the older "+1 per marker" shape, while the
+  current books grant "+1 per **two** markers". The same blind spot silently disabled *Piercing
+  Frenzy* / *Precision Frenzy* (per marker) and *Fortified Growth*, whose "enemy AP −1 per two
+  markers" now reaches the save roll and says so in the log — while a *Fortified Growth* carrier no
+  longer also collects the plain *Fortified* reduction just because the name starts the same way.
+  *Retaliate(X)* keeps its "X hits per wound taken" scale but counts the wounds **per unit of a
+  joined chain**: a hero without the rule no longer feeds his squad's retaliation, and a hero who
+  has it finally lashes back for his own wounds. *Infiltrate*'s "over 3″" arrival ring and the
+  *Inquisitorial Agent* / *Martial Prowess* cap of one third of the carriers per round were already
+  right and are now read from the data as well, so a book that changes them changes the game.
+  Growth markers tick at the **start** of a round, cap at **4**, and a Shaken unit is **blocked**
+  from gaining one instead of losing its whole pile — the blocked tick and the reached cap each get
+  their own battle-log line.
 - **Your buff-giver rules finally do something.** The whole "once per activation, before attacking"
   buff family (*Precision Shooter Buff*, *Furious Buff*, *Entrenched Buff*, *No Retreat Buff*, …)
   bailed out on anything that was not an AI unit, so a human player's buff was dead data — no token,
@@ -104,6 +134,29 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   is automatic for v1 and every application is named in the log; choosing the target by click is a
   follow-up. Skirmish books whose text says "pick up to **4** friendly units" now really pick up to
   four instead of one, and a rule that finds no legal target says so instead of failing silently.
+- **…and they work in multiplayer too.** That wave shipped with one deliberate hole: in a live
+  multiplayer game the buff family was switched off for human players, because the modifier it
+  places did not travel. Half a modifier is worse than none — your dice would have read the buff
+  and your opponent's, rolling into the same unit, would not. The modifiers now travel: when the
+  buff is placed, when it is spent, and when it expires. The switch is gone, so a *Precision Shooter
+  Buff* or an *Entrenched Buff* does the same thing against a human opponent as it does against
+  NACHTMAHR. Spell tokens ride the same channel, so their modifiers stay in step as well.
+- **Spotter marks and spell buffs count the same on both screens.** Three numbers the rules read
+  lived only on the client that produced them. *Precision Spotter* marks: the peer got the
+  "Spotted" token but never the **count**, so it could not tell one mark from three — and removing
+  only *some* of them leaves that token on the table, which means the other player saw no change at
+  all while your to-hit bonus had already been spent. The same for the movement and shooting-range
+  deltas a speed or range spell stamps on a unit: your opponent kept measuring the unbuffed
+  distance, drew the unbuffed range ring, and their client never learned the buff had expired. All
+  three now travel as a small state delta over the existing sync channel, so both tables agree
+  about a bonus that is still on the table. Older clients ignore the message instead of erroring.
+- **Joining a game with loaded transports no longer loses the passengers.** Cargo is remembered in
+  two halves: *which* unit sits in *which* transport, and the parked models on the tray. Loading a
+  saved game rebuilt both; joining or rejoining a running multiplayer game rebuilt only the first.
+  The joining player therefore got passengers the game no longer recognised as passengers —
+  right-clicking one offered the ordinary move/wound/marker actions instead of the single legal
+  action (disembark), and because their tray slots were never claimed the next casualty parked on
+  top of them. The join now runs the same restore step the load path has always run.
 - **A reanimated model stands in the same place on both screens.** The message that brings a model
   back carries wounds and alive/dead, but no position — so the other client rebuilt the spot itself
   and put the model back where it fell. That is not always where it now stands: when the fall point
