@@ -994,6 +994,10 @@ func _solo_activate_one_ai() -> GameUnit:
 	# every attack and follow-up step, so the unit leaves with everything it did already resolved.
 	if unit != null and not unit.is_destroyed():
 		await _solo_try_ambush_redeploy(unit)
+	# Coordinate fires at the same end-of-activation moment and may pull a SECOND AI unit straight
+	# into play. It rides this activation's reply, so the alternation count never moves.
+	if unit != null:
+		await _solo_try_coordinate_ai(unit)
 	return unit
 
 
@@ -1153,6 +1157,158 @@ func _solo_ambush_redeploy_execute(gu: GameUnit) -> bool:
 	return true
 
 
+# === Wave 4 — Coordinate ("At the end of this unit's activation, another friendly unit within 12"
+# that hasn't activated yet may be activated immediately. May not be used if this unit was activated
+# via Coordinate.") =============================================================================
+#
+# SECOND user of the extra-activation seam Second Wind opened, but at a different moment: Second
+# Wind buys its activation when the ROUND would end, Coordinate hands one off at the end of the
+# BEARER'S activation. Both sides get it — the AI picks by the activation-payoff evaluation, the
+# player is asked with candidate rings and a target click (ESC declines).
+
+## The Coordinate receiver whose activation the AI's owed reply is waiting behind (0 = none). Held
+## as an instance id so a freed unit can never resurrect the hold.
+var _solo_coordinate_hold_id: int = 0
+
+
+## Whether an open hand-off is still holding the alternation. Self-releasing: the receiver having
+## acted, died or left the table all end the wait, so no code path can strand the pump.
+func _solo_coordinate_hold_active() -> bool:
+	if _solo_coordinate_hold_id == 0:
+		return false
+	var recv := instance_from_id(_solo_coordinate_hold_id) as GameUnit
+	if recv == null or not is_instance_valid(recv) or recv.is_destroyed() \
+			or recv.is_activated or SoloController.unit_in_reserve(recv):
+		_solo_coordinate_hold_id = 0
+		return false
+	return true
+
+
+## The player took the hand-off and then activated a DIFFERENT unit: the "may" goes unused. Said out
+## loud and released, so the held reply is delivered instead of waiting forever.
+func _solo_coordinate_release_if_bypassed(activating: GameUnit) -> void:
+	if not _solo_coordinate_hold_active():
+		return
+	var recv := instance_from_id(_solo_coordinate_hold_id) as GameUnit
+	if recv == activating:
+		return
+	_solo_coordinate_hold_id = 0
+	if recv != null and is_instance_valid(recv):
+		recv.unit_properties.erase("activated_via_coordinate")
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Coordinate: the hand-off to %s lapses — %s activated instead" % [
+					recv.get_name(), activating.get_name() if activating != null else "another unit"])
+
+
+## One battle-log line per refused hand-off — the three reasons SoloController.coordinate_refusal
+## names. A rule that quietly does nothing reads exactly like a broken one.
+func _solo_log_coordinate_refusal(bearer: GameUnit, refusal: String) -> void:
+	if battle_log == null or bearer == null:
+		return
+	var ai_side := _solo_is_ai_unit(bearer)
+	match refusal:
+		"dead":
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Coordinate: %s did not survive its own activation — no hand-off" % bearer.get_name(), ai_side)
+		"chain":
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Coordinate: %s was itself activated via Coordinate — the chain stops here" % bearer.get_name(), ai_side)
+		"none":
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Coordinate: %s finds no un-activated friendly unit within %.0f\" — the hand-off lapses" % [
+					bearer.get_name(), SoloController.coordinate_range_of(bearer)], ai_side)
+
+
+## Shared gate: "" when `bearer` may hand off right now, otherwise the refusal key (already logged).
+func _solo_coordinate_gate(bearer: GameUnit) -> String:
+	if solo_controller == null or bearer == null or not SoloController.carries_coordinate(bearer):
+		return "no-rule"
+	var refusal := SoloController.coordinate_refusal(not bearer.is_destroyed(),
+		bearer.was_activated_via_coordinate(), solo_controller.coordinate_candidates(bearer).size())
+	if refusal != "":
+		_solo_log_coordinate_refusal(bearer, refusal)
+	return refusal
+
+
+## NACHTMAHR's hand-off: pick the most valuable un-activated friend in range and activate it inside
+## the SAME beat — the receiver rides the bearer's reply, so the alternation count is untouched
+## (_solo_activate_one_ai is called directly, not through the pump).
+func _solo_try_coordinate_ai(bearer: GameUnit) -> void:
+	if not _solo_is_ai_unit(bearer) or _solo_coordinate_gate(bearer) != "":
+		return
+	var receiver: GameUnit = solo_controller.coordinate_candidate(bearer)
+	if receiver == null:
+		return
+	var gap: float = solo_controller.nearest_melee_gap_in(bearer, receiver)
+	solo_controller.coordinate_hand_off(receiver)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Coordinate: %s hands off to %s (%.1f\") — %s activates immediately" % [
+				bearer.get_name(), receiver.get_name(), gap, receiver.get_name()], true)
+	await _solo_activate_one_ai()
+
+
+## YOUR hand-off: candidate rings + a target click, the solo_begin_spot pattern (no radial, the
+## prompt arrives on its own at the end of the activation; ESC / right-click declines). Returns true
+## when the offer is open and now owns the activation flow.
+func _solo_try_coordinate_human(bearer: GameUnit) -> bool:
+	if _solo_is_ai_unit(bearer) or _solo_coordinate_gate(bearer) != "":
+		return false
+	var cands: Array = solo_controller.coordinate_candidates(bearer)
+	if _solo_batch:
+		# Headless sweeps click no ring and answer no prompt — the "may" simply goes unused. Tests
+		# drive the decision through _solo_coordinate_pick / _solo_coordinate_decline directly.
+		return false
+	var rings: Array = []
+	for c in cands:
+		rings.append(_solo_spawn_pulse_ring(solo_controller.unit_centre(c), Color(0.4, 0.85, 1.0)))
+	_solo_target_mode = {"unit": bearer, "coordinate": true, "coord_valid": cands, "cast_rings": rings}
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Coordinate: %s may hand its activation to one of %d friendly units within %.0f\" — click one (ESC declines)" % [
+				bearer.get_name(), cands.size(), SoloController.coordinate_range_of(bearer)])
+	return true
+
+
+## Coordinate-mode click: one pick, and the receiver is the next unit the player plays.
+func _solo_coordinate_click(target: GameUnit) -> void:
+	var bearer: GameUnit = _solo_target_mode.get("unit")
+	if not (_solo_target_mode.get("coord_valid", []) as Array).has(target):
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"%s cannot take the hand-off (already activated, in reserve, or over %.0f\")" % [
+					target.get_name(), SoloController.coordinate_range_of(bearer)])
+		return
+	_solo_end_targeting()
+	await _solo_coordinate_pick(bearer, target)
+
+
+## The hand-off itself (decision already taken). Split from the prompt so the mechanics are drivable
+## without a click. The receiver is STAMPED now, not when it activates: the player activates it by
+## their own click later, and the stamp is what stops it handing off again and what keeps the reply
+## bookkeeping honest.
+func _solo_coordinate_pick(bearer: GameUnit, receiver: GameUnit) -> void:
+	if bearer == null or receiver == null:
+		return
+	receiver.mark_activated_via_coordinate()
+	_solo_coordinate_hold_id = receiver.get_instance_id()
+	if battle_log != null:
+		var gap: float = solo_controller.nearest_melee_gap_in(bearer, receiver)
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Coordinate: %s hands off to %s (%.1f\") — %s activates immediately" % [
+				bearer.get_name(), receiver.get_name(), gap, receiver.get_name()])
+	await _solo_finish_human_activation(bearer)
+
+
+## The player waved the offer away (ESC / right-click): the activation ends normally.
+func _solo_coordinate_decline(bearer: GameUnit) -> void:
+	if battle_log != null and bearer != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Coordinate: %s declines the hand-off — its activation ends here" % bearer.get_name())
+	await _solo_finish_human_activation(bearer)
+
+
 func _on_solo_human_activated(gu: GameUnit) -> void:
 	# The first solo activation IS the game start (see _solo_ensure_playing_phase), so it faces the same
 	# deployment gate as the Start-Game button — otherwise activating a unit is a second, button-free way
@@ -1171,14 +1327,38 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 		await _solo_pump()
 		return
 	_solo_replied_ids[gu.get_instance_id()] = true
+	# Coordinate: an open hand-off the player walked away from (they activated somebody ELSE) is
+	# forfeited here rather than left to stall the AI's owed reply.
+	_solo_coordinate_release_if_bypassed(gu)
 	# Resolver wave A — Reckless Piercing: YOUR unit's activation roll fires here (auto-opt-in with
 	# its log line, the Unpredictable precedent: resolution-integrated, both sides automatic).
 	await _solo_apply_reckless_piercing(gu)
+	# Wave 4 side fix, second door: a unit that never declared an attack still gets its
+	# once-per-activation Utility Buff (round-stamped, so a unit that already bought it at the
+	# attack door is untouched).
+	await _solo_apply_utility_buffs(gu)
 	# Ambush Re-Deployment: YOUR unit's activation ends here (the activation marker IS the declaration),
 	# so this is where the once-per-game "may" is offered — before the AI answers with its reply.
 	await _solo_try_ambush_redeploy(gu)
+	# Coordinate ("At the end of this unit's activation…"): the hand-off offer is the LAST beat, and
+	# when the player takes it the AI's reply is booked but HELD until the coordinated unit has
+	# acted — "activated immediately" means nothing slips in between.
+	if _solo_try_coordinate_human(gu):
+		return   # the open offer owns the flow; its pick/decline finishes the activation
+	await _solo_finish_human_activation(gu)
+
+
+## The tail of a human activation: the AI's owed reply and the alternation pump. Split out because
+## Coordinate reaches it from three places (offer declined, hand-off taken, no offer at all).
+##
+## ALTERNATION BOOKKEEPING — the one thing Coordinate must not break: a coordinated unit is the
+## SECOND activation riding ONE hand-off, so the pair owes exactly ONE AI reply. Booking a second
+## one would push _solo_pending_replies past the human's real activation count and
+## SoloController.alternation_next would hand the AI two answers in a row.
+func _solo_finish_human_activation(gu: GameUnit) -> void:
 	_solo_ai_took_last_activation = false   # the human just took an activation (finding 7: round-opener tracking)
-	_solo_pending_replies += 1
+	if gu == null or not gu.was_activated_via_coordinate():
+		_solo_pending_replies += 1
 	await _solo_pump()
 
 
@@ -1187,6 +1367,11 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 ## non-blocking "NACHTMAHR is taking its turn" banner so the player stays oriented.
 func _solo_pump() -> void:
 	if solo_controller == null or _solo_ai_busy:
+		return
+	# Coordinate: the receiver activates IMMEDIATELY — the AI's owed reply waits behind it. The
+	# hold releases itself the moment the receiver has acted (or died / left the table), so an
+	# abandoned hand-off can never strand the alternation.
+	if _solo_coordinate_hold_active():
 		return
 	# #196 belt-and-braces at the ONE place AI turns run: a controller whose ai_slot a
 	# human peer occupies (survivor of a solo session that rolled into hosting) never acts.
@@ -6504,7 +6689,10 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 	"Reanimation", "Reanimation Aura", "Caster Group", "Spell Accumulator",
 	# Ambush variants wave 1: Beacon (6" waiver on every enemy distance restriction), Rapid Ambush
 	# (arrives from round 1), Ambush Re-Deployment (once per game, off the table and back next round).
-	"Ambush Beacon", "Rapid Ambush", "Ambush Re-Deployment"]
+	"Ambush Beacon", "Rapid Ambush", "Ambush Re-Deployment",
+	# Wave 4: Extended Buff Range (one-hop 24" relay for a Hero's 12" friendly picks, spells
+	# excluded) and Coordinate (end-of-activation hand-off to an un-activated friend within 12").
+	"Extended Buff Range", "Coordinate"]
 
 ## The SOLO_MODELED_RULES subset that ALSO steers the AI's behaviour choices (not only the dice math):
 ## targeting overlays (AP/Deadly/Takedown — Solo v3.5.0 p.2), Hold overlays (Relentless/Artillery/
@@ -6524,7 +6712,10 @@ const SOLO_DECISION_RULES: Array = ["AP", "Deadly", "Takedown", "Relentless", "A
 	"Reanimation",        # restores BEFORE the action, so the returned models are in the move plan
 	# Ambush variants wave 1: all three steer WHERE and WHEN a reserve lands, and whether a unit
 	# leaves the table at the end of its activation.
-	"Ambush Beacon", "Rapid Ambush", "Ambush Re-Deployment"]
+	"Ambush Beacon", "Rapid Ambush", "Ambush Re-Deployment",
+	# Wave 4: Coordinate picks WHICH unit acts next (activation order); Extended Buff Range decides
+	# WHICH friend a buff lands on.
+	"Extended Buff Range", "Coordinate"]
 
 
 ## The modeled-rule tokens for a unit's game system — mechanics-map-derived (wave 5), constant fallback.
@@ -7119,6 +7310,10 @@ func solo_begin_targeting(unit: GameUnit, melee: bool) -> void:
 		solo_begin_cast(unit)
 		return
 	_ensure_solo_controller()
+	# Wave 4 side fix: the Utility-Buff family is "once per activation, BEFORE attacking" — for the
+	# human that moment is declaring the attack. Round-stamped inside, so the second door
+	# (_on_solo_human_activated, for a unit that never attacks) cannot apply it twice.
+	await _solo_apply_utility_buffs(unit)
 	_solo_target_mode = {"unit": unit, "melee": melee}
 	if not melee and range_ring_controller != null and range_ring_controller.has_method("show_spell_preview"):
 		var weapons: Array = _solo_all_weapons(unit)
@@ -7175,6 +7370,8 @@ func solo_begin_cast(unit: GameUnit) -> void:
 		return
 	var cands: Array = solo_controller.spell_candidates(unit, entry,
 		solo_controller.human_slot, solo_controller.ai_slot)
+	# Wave 4: name the ONE thing Extended Buff Range does not do, at the moment it would matter.
+	_solo_log_ebr_spell_exclusion(unit, str(entry.get("name", "?")), float(entry.get("range_in", 0)), cands)
 	if cands.is_empty():
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL, "%s: no legal target for %s in %s\" + line of sight" % [
@@ -7311,6 +7508,13 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 				_solo_end_targeting()
 				_run_human_cast(eattacker, ecmember, ecentry, epicked)
 				return true
+			# Coordinate: ESC / right-click is the "may" declined — the activation still has to end
+			# properly (the AI is owed its reply), so it goes through the decline path.
+			if _solo_target_mode.has("coordinate"):
+				var cb: GameUnit = _solo_target_mode.get("unit")
+				_solo_end_targeting()
+				_solo_coordinate_decline(cb)
+				return true
 			_solo_end_targeting()
 			return true
 		SoloController.TargetingRoute.TRACK:
@@ -7326,6 +7530,12 @@ func _solo_targeting_input(event: InputEvent) -> bool:
 			if _solo_target_mode.has("spot"):
 				if target != null:
 					_solo_spot_click(target)
+				return true
+			# Coordinate hand-off: the click picks a FRIENDLY receiver from the precomputed legal
+			# set, so the AI-only target filter further down must not run.
+			if _solo_target_mode.has("coordinate"):
+				if target != null:
+					_solo_coordinate_click(target)
 				return true
 			if _solo_target_mode.has("cast_entry"):
 				if target != null:
@@ -14181,15 +14391,43 @@ func _on_remote_unit_deleted(game_unit: GameUnit) -> void:
 ## Best legal target for a utility buff/debuff. kind: "friendly" / "friendly_caster" /
 ## "friendly_artillery" / "enemy". Value proxy: the biggest unit benefits (or suffers) most.
 func _solo_utility_target(bearer: GameUnit, kind: String, range_in: float, needs_los: bool) -> GameUnit:
-	if solo_controller == null or opr_army_manager == null:
-		return null
+	var picks := _solo_utility_targets(bearer, kind, range_in, needs_los, 1)
+	return picks[0] as GameUnit if not picks.is_empty() else null
+
+
+## Wave 4: the relay bookkeeping of the LAST _solo_utility_targets() call — {target -> {relay, gap_in}}
+## for every pick that only became legal through Extended Buff Range, so the caller can name the rule
+## in its log line. Rebuilt per call; never read across calls.
+var _solo_ebr_relays: Dictionary = {}
+
+
+## Up to `max_targets` legal targets for a utility buff/debuff, best value first. The Skirmish books
+## print the same buff family as "pick up to 4 friendly units" while GF/AoF print "pick one" — that
+## is a params difference (max_targets), not a second rule.
+##
+## WAVE 4 — Extended Buff Range rides on the ONE range line here. A candidate beyond `range_in` is
+## still legal when the relay clause applies (see SoloController.ebr_relay_ok). The waiver is bound
+## to the utility-buff pick specifically — friendly side, at the printed 12" pick range — because
+## that is exactly what the rule extends: "special rules that allow it to pick friendly units within
+## 12" (except for spells)". Spells never reach this function at all (they run through
+## SoloController.spell_candidates), and enemy-side marks/debuffs are not "friendly units", so both
+## stay at their own printed range.
+func _solo_utility_targets(bearer: GameUnit, kind: String, range_in: float, needs_los: bool,
+		max_targets: int = 1) -> Array:
+	_solo_ebr_relays = {}
+	if solo_controller == null or opr_army_manager == null or bearer == null:
+		return []
 	var own_slot := int(bearer.unit_properties.get("player_id", solo_controller.ai_slot))
 	var enemy := kind == "enemy"
 	var slot: int = own_slot
 	if enemy:
 		slot = solo_controller.human_slot if own_slot == solo_controller.ai_slot else solo_controller.ai_slot
-	var best: GameUnit = null
-	var best_v := -1.0
+	# The relay unit is the BUFFING HERO'S OWN unit: the rule hands the extended reach to "that
+	# Hero" — the one inside the friendly unit that carries Extended Buff Range — so a joined hero
+	# relays through its host. Exactly ONE hop: the extended pick may not itself become a new relay.
+	var relay: GameUnit = _solo_combat_unit(bearer)
+	var ebr_open: bool = kind == "friendly" and is_equal_approx(range_in, SoloController.EBR_PICK_RANGE_IN)
+	var scored: Array = []
 	for u in opr_army_manager.get_game_units_for_player(slot):
 		var gu := u as GameUnit
 		if gu == null or gu.get_alive_count() == 0 or SoloController.unit_in_reserve(gu):
@@ -14201,23 +14439,146 @@ func _solo_utility_target(bearer: GameUnit, kind: String, range_in: float, needs
 		if kind == "friendly_artillery" and not gu.has_special_rule("Artillery"):
 			continue
 		var d := MoveIntent.distance_inches(solo_controller.unit_centre(bearer), solo_controller.unit_centre(gu))
+		var relayed_gap := -1.0
 		if d > range_in:
-			continue
+			if not ebr_open or gu == relay:
+				continue
+			relayed_gap = _solo_ebr_relay_gap(relay, gu)
+			if relayed_gap < 0.0:
+				continue
 		if needs_los and not _solo_has_los(bearer, gu):
 			continue
 		var v := float(gu.get_alive_count()) + float(_solo_unit_tough(gu))
-		if v > best_v:
-			best_v = v
-			best = gu
-	return best
+		scored.append({"unit": gu, "value": v, "relay_gap": relayed_gap})
+	scored.sort_custom(func(a, b): return float(a["value"]) > float(b["value"]))
+	var out: Array = []
+	for row in scored:
+		if out.size() >= maxi(max_targets, 1):
+			break
+		var gu := (row as Dictionary)["unit"] as GameUnit
+		out.append(gu)
+		if float((row as Dictionary)["relay_gap"]) >= 0.0:
+			_solo_ebr_relays[gu] = {"relay": relay, "gap_in": float((row as Dictionary)["relay_gap"])}
+	return out
+
+
+## Extended Buff Range: the BASE-EDGE gap from the relay unit to `target` when the relay clause is
+## satisfied, or -1 when it is not. Edge-measured on purpose — at 24" a centre reading is off by
+## most of a vehicle oval, and the house rule is that ruler and engine agree (24" link, then the
+## hero's own 12" pick is waived for this target).
+func _solo_ebr_relay_gap(relay: GameUnit, target: GameUnit) -> float:
+	if solo_controller == null or relay == null or target == null:
+		return -1.0
+	var params := SoloController.ebr_params_of(target)
+	if params.is_empty():
+		return -1.0   # the TARGET must carry the rule itself — it is "this unit" in the wording
+	var gap: float = solo_controller.nearest_melee_gap_in(relay, target)
+	var ok := SoloController.ebr_relay_ok(true, SoloController.unit_carries_ebr(relay),
+		solo_controller.ebr_relay_has_hero(relay, float(params["hero_link_in"])),
+		gap, float(params["relay_range_in"]))
+	return gap if ok else -1.0
+
+
+## Rules-must-log, negative half: the NEAREST friendly Extended Buff Range carrier that the buff did
+## NOT reach, with the clause that failed. A silently missing relay reads exactly like a broken rule,
+## which is the whole reason this line exists. One line per resolver call — the nearest carrier is
+## the one the player was looking at.
+func _solo_log_ebr_refusals(member: GameUnit, picks: Array, range_in: float) -> void:
+	if battle_log == null or solo_controller == null or opr_army_manager == null:
+		return
+	var relay: GameUnit = _solo_combat_unit(member)
+	var slot := int(member.unit_properties.get("player_id", solo_controller.ai_slot))
+	var worst: GameUnit = null
+	var worst_gap := INF
+	for u in opr_army_manager.get_game_units_for_player(slot):
+		var gu := u as GameUnit
+		if gu == null or gu == relay or gu.get_alive_count() == 0 or SoloController.unit_in_reserve(gu):
+			continue
+		if gu.has_method("is_attached") and gu.is_attached():
+			continue
+		if picks.has(gu) or SoloController.ebr_params_of(gu).is_empty():
+			continue
+		var d := MoveIntent.distance_inches(solo_controller.unit_centre(member), solo_controller.unit_centre(gu))
+		if d <= range_in:
+			continue   # it was in normal range anyway — the relay had nothing to do
+		var gap: float = solo_controller.nearest_melee_gap_in(relay, gu)
+		if gap < worst_gap:
+			worst_gap = gap
+			worst = gu
+	if worst == null:
+		return
+	var params := SoloController.ebr_params_of(worst)
+	var hero_link := float(params["hero_link_in"])
+	var relay_range := float(params["relay_range_in"])
+	var why := ""
+	if not SoloController.unit_carries_ebr(relay):
+		why = "%s does not carry the rule itself" % relay.get_name()
+	elif not solo_controller.ebr_relay_has_hero(relay, hero_link):
+		why = ("no living Hero within %.0f\" of %s" % [hero_link, relay.get_name()]) if hero_link > 0.0 \
+			else "no living Hero in %s" % relay.get_name()
+	elif worst_gap > relay_range:
+		why = "the link is %.1f\", over the %.0f\" limit" % [worst_gap, relay_range]
+	else:
+		return   # the relay held; the target was skipped for another reason (value/LOS)
+	battle_log.log_event(BattleLog.Category.COMBAT,
+		"%s: %s cannot reach %s — %s (no relay, the %.0f\" pick stands)" % [
+			SoloController.RULE_EXTENDED_BUFF_RANGE, member.get_name(), worst.get_name(), why, range_in],
+		_solo_is_ai_unit(member))
+
+
+## Rules-must-log, spell half: Extended Buff Range explicitly does NOT extend spells ("except for
+## spells"), so a friendly carrier sitting outside the spell's own range stays illegal. Said out
+## loud at the cast door, because "the buff reached it but my spell will not" is exactly the
+## situation a player would otherwise read as a bug.
+func _solo_log_ebr_spell_exclusion(caster: GameUnit, spell_name: String, range_in: float, cands: Array) -> void:
+	if battle_log == null or solo_controller == null or opr_army_manager == null or caster == null:
+		return
+	var relay: GameUnit = _solo_combat_unit(caster)
+	if not SoloController.unit_carries_ebr(relay):
+		return
+	var slot := int(caster.unit_properties.get("player_id", 0))
+	for u in opr_army_manager.get_game_units_for_player(slot):
+		var gu := u as GameUnit
+		if gu == null or gu == relay or gu.get_alive_count() == 0 or SoloController.unit_in_reserve(gu):
+			continue
+		if cands.has(gu) or SoloController.ebr_params_of(gu).is_empty():
+			continue
+		if _solo_ebr_relay_gap(relay, gu) < 0.0:
+			continue   # the relay would not have applied anyway — nothing to explain
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"%s: %s stays out of reach for %s — the relay excludes spells (%.0f\" unchanged)" % [
+				SoloController.RULE_EXTENDED_BUFF_RANGE, gu.get_name(), spell_name, range_in],
+			_solo_is_ai_unit(caster))
+		return
 
 
 ## Apply every Utility-Buff rule the activating unit (incl. heroes) carries: the effect lands as an
 ## F4 once-mod record (the SAME machinery spell tokens use — hit/casting/morale readers + consume
 ## + logs, one truth). Re-Position Artillery instead shifts a friendly Artillery unit without LOS.
+##
+## WAVE 4 SIDE FIX — this resolver used to bail on `not _solo_is_ai_unit(unit)`, so the whole
+## buff-GIVER family was NACHTMAHR-only: a human player's Precision Shooter Buff / Furious Buff /
+## Entrenched Buff simply never happened. It now runs for both sides. The human's v1 is an AUTO
+## target pick (same value proxy the AI uses) with its own log line — picking the target by click
+## is a follow-up; every application is named in the log, so nothing happens silently.
+##
+## The human reaches this from TWO doors ("once per activation, before attacking"): declaring an
+## attack (solo_begin_targeting) and, for a unit that never attacks, completing its activation. The
+## round stamp keeps that to ONE application per unit per round — the same guard Reanimation and
+## Reckless Piercing use.
 func _solo_apply_utility_buffs(unit: GameUnit) -> void:
-	if solo_controller == null or opr_army_manager == null or unit == null or not _solo_is_ai_unit(unit):
+	if solo_controller == null or opr_army_manager == null or unit == null:
 		return
+	if not _solo_is_ai_unit(unit):
+		# SOLO ONLY for now. The effect lands as a once-mod record + grant overlay, and that record
+		# does not ride the wire — applying it in a live multiplayer game would put a modifier on
+		# one client's dice and not the other's. Wiring the buff family into the MP sync is its own
+		# ticket; until then the human path is exactly as wide as the AI path has always been.
+		if network_manager != null and network_manager.is_multiplayer_active():
+			return
+		if int(unit.unit_properties.get("utility_buff_round", -1)) == opr_army_manager.current_round:
+			return
+		unit.unit_properties["utility_buff_round"] = opr_army_manager.current_round
 	var members: Array = [unit]
 	if unit.has_method("get_attached_heroes"):
 		members = members + unit.get_attached_heroes()
@@ -14249,26 +14610,53 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 								"%s: %s re-positions %s up to %.0f\" (no firing lane)" % [n, member.get_name(), arty.get_name(), moved], true)
 				continue
 			var kind := str(sp.get("target", "friendly"))
-			var tgt := _solo_utility_target(member, kind, range_in, bool(sp.get("needs_los", false)))
-			if tgt == null:
+			# Skirmish books print this family as "pick up to 4"; GF/AoF print "pick one" — data,
+			# not code (params.max_targets, defaulting to the one-target wording).
+			var picks := _solo_utility_targets(member, kind, range_in,
+				bool(sp.get("needs_los", false)), int(sp.get("max_targets", 1)))
+			var relays: Dictionary = _solo_ebr_relays.duplicate()
+			# The negative half of the transparency deal, BEFORE the empty-pick exit: a friendly
+			# carrier that stayed out of reach because the relay clause did not hold is named too.
+			if kind == "friendly" and is_equal_approx(range_in, SoloController.EBR_PICK_RANGE_IN):
+				_solo_log_ebr_refusals(member, picks, range_in)
+			if picks.is_empty():
+				# Transparency wave: a silent `continue` reads like a broken rule. Say that the
+				# rule fired and found nobody.
+				if battle_log != null:
+					battle_log.log_event(BattleLog.Category.COMBAT,
+						"%s: %s finds no legal target within %.0f\" — the buff is not applied this activation" % [
+							n, member.get_name(), range_in], _solo_is_ai_unit(unit))
 				continue
-			var modifier := {"hit_mod": int(sp.get("hit_mod", 0)), "casting_mod": int(sp.get("casting_mod", 0)),
-				"morale_mod": int(sp.get("morale_mod", 0))}
-			# Wave 4 recon find: the buff data carries its own scope ("shooting"/"melee" —
-			# Precision Shooter/Fighter Buff) and AiSpell.mods_for honours it, but this record
-			# hard-coded "" — a shooting-only +1 silently applied in melee too.
-			_solo_record_spell_mod(tgt, n, {"modifier": modifier,
-				"grants_rule": str(sp.get("grants_rule", "")), "scope": str(sp.get("scope", "")),
-				"beneficiary": "",
-				"duration": ("once" if bool(sp.get("once", true)) else "round")})
-			if battle_log != null:
-				var bits: PackedStringArray = []
-				if modifier["hit_mod"] != 0: bits.append("%+d to hit" % modifier["hit_mod"])
-				if modifier["casting_mod"] != 0: bits.append("%+d casting" % modifier["casting_mod"])
-				if modifier["morale_mod"] != 0: bits.append("%+d morale" % modifier["morale_mod"])
-				if not str(sp.get("grants_rule", "")).is_empty(): bits.append("grants %s" % str(sp.get("grants_rule", "")))
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s → %s (%s, once)" % [
-					n, member.get_name(), tgt.get_name(), ", ".join(bits)], true)
+			var ai_side := _solo_is_ai_unit(unit)
+			for t in picks:
+				var tgt := t as GameUnit
+				var modifier := {"hit_mod": int(sp.get("hit_mod", 0)), "casting_mod": int(sp.get("casting_mod", 0)),
+					"morale_mod": int(sp.get("morale_mod", 0))}
+				# Wave 4 recon find: the buff data carries its own scope ("shooting"/"melee" —
+				# Precision Shooter/Fighter Buff) and AiSpell.mods_for honours it, but this record
+				# hard-coded "" — a shooting-only +1 silently applied in melee too.
+				_solo_record_spell_mod(tgt, n, {"modifier": modifier,
+					"grants_rule": str(sp.get("grants_rule", "")), "scope": str(sp.get("scope", "")),
+					"beneficiary": "",
+					"duration": ("once" if bool(sp.get("once", true)) else "round")})
+				if battle_log != null:
+					var bits: PackedStringArray = []
+					if modifier["hit_mod"] != 0: bits.append("%+d to hit" % modifier["hit_mod"])
+					if modifier["casting_mod"] != 0: bits.append("%+d casting" % modifier["casting_mod"])
+					if modifier["morale_mod"] != 0: bits.append("%+d morale" % modifier["morale_mod"])
+					if not str(sp.get("grants_rule", "")).is_empty(): bits.append("grants %s" % str(sp.get("grants_rule", "")))
+					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s → %s (%s, once)" % [
+						n, member.get_name(), tgt.get_name(), ", ".join(bits)], ai_side)
+				# Rules-must-log: the reach that only existed because of the relay gets its own line.
+				if relays.has(tgt) and battle_log != null:
+					var info: Dictionary = relays[tgt]
+					var ep := SoloController.ebr_params_of(tgt)
+					battle_log.log_event(BattleLog.Category.COMBAT,
+						"%s: %s reaches %s at %.1f\" — relayed via %s (%.0f\" link, the %.0f\" pick is waived)" % [
+							SoloController.RULE_EXTENDED_BUFF_RANGE, member.get_name(), tgt.get_name(),
+							float(info["gap_in"]), (info["relay"] as GameUnit).get_name(),
+							float(ep.get("relay_range_in", SoloController.EBR_RELAY_RANGE_IN)),
+							float(ep.get("pick_range_in", SoloController.EBR_PICK_RANGE_IN))], ai_side)
 
 
 ## Bridge unit-level rule GRANTS (spell/mark overlays, NML-006) onto a weapon profile's parsed

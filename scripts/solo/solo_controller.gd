@@ -518,53 +518,7 @@ func _select_unit_lookahead(pool: Array) -> GameUnit:
 	var scores: Array = []
 	for u in pool:
 		var unit := u as GameUnit
-		var score := 0.0
-		var weapons := _unit_weapons(unit)
-		var bands: Dictionary = move_bands_for_unit(unit, movement_range)
-		var advance := float(bands.get("advance", 6))
-		var rush := float(bands.get("rush", 12))
-		var shoot_range := AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)
-		var centre := unit_centre(unit)
-		var profiles := AiEv.stamp_sergeant(filter_limited(unit, AiShooting.profiles_in_range(weapons, 0.0)), unit)
-		var us := AiEv.ctx_for(unit, false, 0)
-		for e in army_manager.get_game_units_for_player(human_slot):
-			var enemy := e as GameUnit
-			if enemy == null or enemy.get_alive_count() <= 0 or unit_in_reserve(enemy):
-				continue
-			if enemy.has_method("is_attached") and enemy.is_attached():
-				continue
-			var dist := MoveIntent.distance_inches(centre, unit_centre(enemy)) - target_range_penalty_in(enemy)
-			# DENIAL weighting (ladder round 1 lesson: raw best-payoff-first measured ~0 vs the official
-			# pick): the REAL value of choosing the activation order is tempo — hit targets that have NOT
-			# acted yet (a kill denies their activation outright), and FINISH damaged units (a dead unit
-			# contributes nothing; a hurt one still fights). Both multiply the immediate EV.
-			var denial := 1.0
-			if not enemy.is_activated:
-				denial *= 1.4                              # kill/cripple it BEFORE it acts
-			if enemy.get_alive_count() < enemy.models.size():
-				denial *= 1.25                             # finishing damaged units converts EV into removals
-			# albtraum v2 (avoid_overkill): payoff against a target is capped at what its pool can still
-			# absorb after this round's claims — an on-expectation-dead enemy contributes no payoff, so
-			# the activation order stops burning early activations on corpses-to-be.
-			var pool_cap := INF
-			var diff_k := active_difficulty()
-			if diff_k != null and diff_k.avoids_overkill():
-				pool_cap = maxf(0.0, remaining_pool(enemy))
-			if shoot_range > 0 and dist - advance <= float(shoot_range) and not profiles.is_empty():
-				var them := AiEv.ctx_for(enemy, majority_in_cover(enemy), 0)
-				score = maxf(score, minf(AiEv.shoot_ev(profiles, us, them, maxf(dist - advance, 0.0)), pool_cap) * denial)
-			var gap := nearest_melee_gap_in(unit, enemy)
-			if gap <= melee_shroud_charge_in(rush, enemy) and not is_aircraft(enemy):
-				var melee := AiEv.stamp_sergeant(filter_limited(unit, AiShooting.melee_profiles(weapons)), unit)
-				if not melee.is_empty():
-					var their_melee := AiEv.stamp_sergeant(filter_limited(enemy, AiShooting.melee_profiles(_unit_weapons(enemy))), enemy)
-					var them2 := AiEv.ctx_for(enemy, false, 0)
-					score = maxf(score, minf(AiEv.charge_score(melee, us, their_melee, them2), pool_cap) * denial)
-		var obj := _nearest_uncontrolled_objective(centre, unit)
-		if obj != NO_OBJECTIVE:
-			var od := MoveIntent.distance_inches(centre, obj)
-			if od <= rush + OBJECTIVE_CONTROL_IN:
-				score += OBJ_SEIZE_WORTH * (2.0 if _is_final_round() else 1.0)
+		var score := activation_payoff(unit)
 		scores.append({"name": unit.get_name(), "ev": snappedf(score, 0.01)})   # record contract: {name, ev} (line ~179)
 		if score > best_score + 0.001:
 			best_score = score
@@ -574,6 +528,263 @@ func _select_unit_lookahead(pool: Array) -> GameUnit:
 		"candidates": scores, "chosen": best.get_name() if best != null else "?",
 		"why": "activation-order lookahead", "data": {"best_score": snappedf(best_score, 0.01)}})
 	return best if best != null else pool[0]
+
+
+## ONE unit's immediate activation payoff, in expected-wounds currency — the lookahead's per-unit
+## score, extracted so a SECOND consumer can ask the same question. Wave 4: Coordinate's AI policy
+## ("activate the most valuable un-activated friend within 12\"") is exactly that question, and the
+## maintainer's brief asks for the existing evaluation rather than a private heuristic. Pure reads
+## only, no state change — extraction is behaviour-identical for _select_unit_lookahead.
+func activation_payoff(unit: GameUnit) -> float:
+	if unit == null or army_manager == null:
+		return 0.0
+	var score := 0.0
+	var weapons := _unit_weapons(unit)
+	var bands: Dictionary = move_bands_for_unit(unit, movement_range)
+	var advance := float(bands.get("advance", 6))
+	var rush := float(bands.get("rush", 12))
+	var shoot_range := AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)
+	var centre := unit_centre(unit)
+	var profiles := AiEv.stamp_sergeant(filter_limited(unit, AiShooting.profiles_in_range(weapons, 0.0)), unit)
+	var us := AiEv.ctx_for(unit, false, 0)
+	for e in army_manager.get_game_units_for_player(human_slot):
+		var enemy := e as GameUnit
+		if enemy == null or enemy.get_alive_count() <= 0 or unit_in_reserve(enemy):
+			continue
+		if enemy.has_method("is_attached") and enemy.is_attached():
+			continue
+		var dist := MoveIntent.distance_inches(centre, unit_centre(enemy)) - target_range_penalty_in(enemy)
+		# DENIAL weighting (ladder round 1 lesson: raw best-payoff-first measured ~0 vs the official
+		# pick): the REAL value of choosing the activation order is tempo — hit targets that have NOT
+		# acted yet (a kill denies their activation outright), and FINISH damaged units (a dead unit
+		# contributes nothing; a hurt one still fights). Both multiply the immediate EV.
+		var denial := 1.0
+		if not enemy.is_activated:
+			denial *= 1.4                              # kill/cripple it BEFORE it acts
+		if enemy.get_alive_count() < enemy.models.size():
+			denial *= 1.25                             # finishing damaged units converts EV into removals
+		# albtraum v2 (avoid_overkill): payoff against a target is capped at what its pool can still
+		# absorb after this round's claims — an on-expectation-dead enemy contributes no payoff, so
+		# the activation order stops burning early activations on corpses-to-be.
+		var pool_cap := INF
+		var diff_k := active_difficulty()
+		if diff_k != null and diff_k.avoids_overkill():
+			pool_cap = maxf(0.0, remaining_pool(enemy))
+		if shoot_range > 0 and dist - advance <= float(shoot_range) and not profiles.is_empty():
+			var them := AiEv.ctx_for(enemy, majority_in_cover(enemy), 0)
+			score = maxf(score, minf(AiEv.shoot_ev(profiles, us, them, maxf(dist - advance, 0.0)), pool_cap) * denial)
+		var gap := nearest_melee_gap_in(unit, enemy)
+		if gap <= melee_shroud_charge_in(rush, enemy) and not is_aircraft(enemy):
+			var melee := AiEv.stamp_sergeant(filter_limited(unit, AiShooting.melee_profiles(weapons)), unit)
+			if not melee.is_empty():
+				var their_melee := AiEv.stamp_sergeant(filter_limited(enemy, AiShooting.melee_profiles(_unit_weapons(enemy))), enemy)
+				var them2 := AiEv.ctx_for(enemy, false, 0)
+				score = maxf(score, minf(AiEv.charge_score(melee, us, their_melee, them2), pool_cap) * denial)
+	var obj := _nearest_uncontrolled_objective(centre, unit)
+	if obj != NO_OBJECTIVE:
+		var od := MoveIntent.distance_inches(centre, obj)
+		if od <= rush + OBJECTIVE_CONTROL_IN:
+			score += OBJ_SEIZE_WORTH * (2.0 if _is_final_round() else 1.0)
+	return score
+
+
+# === Wave 4 — Coordinate (army-book upgrade, HDF / Human Empire, all five systems) ===============
+#
+# Official text: "At the end of this unit's activation, another friendly unit within 12" that
+# hasn't activated yet may be activated immediately. May not be used if this unit was activated
+# via Coordinate."
+#
+# MAINTAINER RULINGS baked in here:
+#   • a bearer that DIED during its own activation hands nothing off (no ghost order),
+#   • reserve units are invisible to the hand-off (no target — the unit_in_reserve exclusion that
+#     is_eligible() already owns),
+#   • ANTI-CHAIN: a unit activated via Coordinate may not hand off again, so at most TWO
+#     activations ever ride one hand-off.
+
+const RULE_COORDINATE := "Coordinate"
+const COORDINATE_RANGE_IN := 12.0
+
+
+## Pure refusal reason for a Coordinate hand-off — "" when it may proceed. Kept free of any board
+## state so the three refusals are red/green testable without a table (the log lines quote them).
+##   "dead"  — the bearer did not survive its own activation
+##   "chain" — the bearer was ITSELF activated via Coordinate ("May not be used …")
+##   "none"  — nobody legal within range
+static func coordinate_refusal(bearer_alive: bool, bearer_via_coordinate: bool, candidates: int) -> String:
+	if not bearer_alive:
+		return "dead"
+	if bearer_via_coordinate:
+		return "chain"
+	if candidates <= 0:
+		return "none"
+	return ""
+
+
+## The Coordinate reach of a bearer, in inches (registry param, 12" fallback).
+static func coordinate_range_of(bearer: GameUnit) -> float:
+	for e in RulesRegistry.unit_rules_of_primitive(bearer, RULE_COORDINATE):
+		return float(((e as Dictionary).get("params", {}) as Dictionary).get("range_in", COORDINATE_RANGE_IN))
+	return COORDINATE_RANGE_IN
+
+
+## Whether `bearer` carries Coordinate for its own (system, faction) — the data gate.
+static func carries_coordinate(bearer: GameUnit) -> bool:
+	return not RulesRegistry.unit_rules_of_primitive(bearer, RULE_COORDINATE).is_empty()
+
+
+## Every friendly unit that may take the hand-off from `bearer`: same side, still eligible to
+## activate (is_eligible already excludes activated / destroyed / attached / reserve / parked
+## cargo) and within the rule's range measured BASE EDGE to base edge — never centre-to-centre,
+## the house measurement truth (a 12" reading off a vehicle oval's centre is simply wrong).
+func coordinate_candidates(bearer: GameUnit) -> Array:
+	var out: Array = []
+	if bearer == null or army_manager == null or bearer.is_destroyed():
+		return out
+	var range_in := coordinate_range_of(bearer)
+	var slot := int(bearer.unit_properties.get("player_id", 0))
+	for u in eligible_units_for(slot):
+		var gu := u as GameUnit
+		if gu == null or gu == bearer:
+			continue
+		if nearest_melee_gap_in(bearer, gu) <= range_in:
+			out.append(gu)
+	return out
+
+
+## The AI's Coordinate pick: the most valuable un-activated friend in range, valued by the SAME
+## activation-payoff evaluation the activation-order lookahead uses (maintainer brief). Ties break
+## on the deterministic candidate order, so a seeded run reproduces. null when nobody is legal.
+## Writes one decision record so the dev lane can explain the hand-off.
+func coordinate_candidate(bearer: GameUnit) -> GameUnit:
+	var cands := coordinate_candidates(bearer)
+	if cands.is_empty():
+		return null
+	var best: GameUnit = null
+	var best_v := -1.0
+	var scores: Array = []
+	for c in cands:
+		var gu := c as GameUnit
+		var v := activation_payoff(gu) + float(gu.get_alive_count()) * 0.1
+		scores.append({"name": gu.get_name(), "ev": snappedf(v, 0.01)})
+		if v > best_v + 0.001:
+			best_v = v
+			best = gu
+	if best == null:
+		best = cands[0] as GameUnit
+	record_decision({"kind": "coordinate", "unit": bearer.get_name(),
+		"rule": "Coordinate: at the end of this unit's activation another un-activated friendly unit within %d\" may activate immediately" % int(coordinate_range_of(bearer)),
+		"candidates": scores, "chosen": best.get_name(),
+		"why": "hand the activation to the highest immediate payoff in range",
+		"data": {"best_score": snappedf(best_v, 0.01)}})
+	return best
+
+
+## Force the NEXT AI activation onto `unit` (the Coordinate receiver) and stamp its hand-off
+## marker. The forced pick bypasses the seeded section draw on purpose — the rule names the unit,
+## the D6 does not — and consumes no RNG, so the rest of the seeded stream is untouched.
+func coordinate_hand_off(unit: GameUnit) -> void:
+	if unit == null:
+		return
+	unit.mark_activated_via_coordinate()
+	_peeked_unit = unit
+
+
+# === Wave 4 — Extended Buff Range (army-book upgrade, HDF / Human Empire, all five systems) =====
+#
+# GF / AoF / AoFR: "If this unit is within 24" of another friendly unit with this rule that has a
+# Hero in it, then that Hero may use special rules that allow it to pick friendly units within 12"
+# (except for spells) on this unit as if it was in range."
+# GFF / AoFS print the same rule with "that is within 6" of a friendly Hero" instead — a data
+# difference (params.hero_link_in), not a second code path.
+#
+# MAINTAINER RULINGS baked in here:
+#   • ONE living carrier model is enough for "a unit with this rule"; when the last carrier dies
+#     the unit stops relaying (the unit-level rule read follows the unit's live models),
+#   • EXACTLY ONE HOP — never a daisy chain. The registry's old "daisy-chain" note was an
+#     over-reading and is corrected with this wave.
+
+const RULE_EXTENDED_BUFF_RANGE := "Extended Buff Range"
+const EBR_RELAY_RANGE_IN := 24.0
+const EBR_PICK_RANGE_IN := 12.0
+
+
+## Pure relay predicate — the whole rule in one line, so each clause is red/green testable without
+## a table. `relay_gap_in` is measured BASE EDGE to base edge (see coordinate_candidates for why).
+static func ebr_relay_ok(target_carries_rule: bool, relay_carries_rule: bool,
+		relay_has_hero: bool, relay_gap_in: float, relay_range_in: float) -> bool:
+	return target_carries_rule and relay_carries_rule and relay_has_hero \
+		and relay_gap_in <= relay_range_in
+
+
+## Whether `unit` counts as "a unit with this rule": ANY living member of its joined chain carries
+## Extended Buff Range for its own (system, faction). Maintainer ruling 1 — one living radio
+## operator is enough, and the unit loses the relay when its last carrier dies. Item-granted
+## carriers ride along: RulesRegistry.unit_rules_of_primitive reads item_grants too. HONEST
+## APPROXIMATION (same one the Ambush Beacon documents): the import records grants per UNIT, not
+## per model index, so an item-granted rule lives as long as the unit does.
+static func unit_carries_ebr(unit: GameUnit) -> bool:
+	if unit == null:
+		return false
+	for m in joined_chain_of(unit):
+		var gu := m as GameUnit
+		if gu.get_alive_count() > 0 \
+				and not RulesRegistry.unit_rules_of_primitive(gu, RULE_EXTENDED_BUFF_RANGE).is_empty():
+			return true
+	return false
+
+
+## The living joined unit (host + attached heroes, deduped) — the same chain main._solo_joined_chain
+## walks, as a static so the pure rule readers above need no main.
+static func joined_chain_of(unit: GameUnit) -> Array:
+	var out: Array = []
+	if unit == null:
+		return out
+	var cands: Array = [unit]
+	if unit.has_method("get_attached_to"):
+		cands.append(unit.get_attached_to())
+	if unit.has_method("get_attached_heroes"):
+		cands.append_array(unit.get_attached_heroes())
+	for c in cands:
+		var gu := c as GameUnit
+		if gu != null and is_instance_valid(gu) and not out.has(gu):
+			out.append(gu)
+	return out
+
+
+## Whether the relay unit satisfies the rule's HERO clause. hero_link_in == 0 (GF/AoF/AoFR) means
+## the Hero must be IN the unit; hero_link_in > 0 (GFF/AoFS skirmish wording) means any friendly
+## Hero standing within that many inches of the relay unit will do. Dead heroes never count.
+func ebr_relay_has_hero(relay: GameUnit, hero_link_in: float) -> bool:
+	if relay == null:
+		return false
+	for m in joined_chain_of(relay):
+		var gu := m as GameUnit
+		if gu.get_alive_count() > 0 and gu.is_hero():
+			return true
+	if hero_link_in <= 0.0 or army_manager == null:
+		return false
+	var slot := int(relay.unit_properties.get("player_id", 0))
+	for u in army_manager.get_game_units_for_player(slot):
+		var gu2 := u as GameUnit
+		if gu2 == null or gu2 == relay or gu2.get_alive_count() <= 0 or unit_in_reserve(gu2):
+			continue
+		if not gu2.is_hero():
+			continue
+		if nearest_melee_gap_in(relay, gu2) <= hero_link_in:
+			return true
+	return false
+
+
+## The Extended Buff Range params of a unit (its own entry, so the skirmish books' hero_link_in
+## rides along), with the printed GF numbers as fallback.
+static func ebr_params_of(unit: GameUnit) -> Dictionary:
+	for e in RulesRegistry.unit_rules_of_primitive(unit, RULE_EXTENDED_BUFF_RANGE):
+		var p: Dictionary = (e as Dictionary).get("params", {})
+		return {"relay_range_in": float(p.get("relay_range_in", EBR_RELAY_RANGE_IN)),
+			"pick_range_in": float(p.get("pick_range_in", EBR_PICK_RANGE_IN)),
+			"hero_link_in": float(p.get("hero_link_in", 0.0)),
+			"excludes_spells": bool(p.get("excludes_spells", true))}
+	return {}
 
 
 ## TC-081 (maintainer 31.07.): cargo that activates BEFORE its ride has moved throws the

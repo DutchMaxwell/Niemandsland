@@ -64,15 +64,31 @@ computed per model from the base edge — walls and intervening units block, woo
 area terrain (see in and out, never through), containers block hard — so ruler, sight fan and
 engine always agree.
 
-**Not automated (named, not hidden)** — seven rule names are **not** resolved by the game and
-are named in full rather than hidden behind an "…": the cross-unit caster aura (**Extended Buff
-Range**), the rules that create or return units (**Spawn**, **Split**, **Reinforcement**) and the
-movement / deployment set (**Coordinate**, **Delayed Action**, **Traversal**). The per-unit notice
-in the battle log names the ones your list actually contains, so you can apply them by hand.
-Everything else in the books is modeled — including plain *Re-Deployment*, *Grounded
-Reinforcement*, *Reanimation*, *Caster Group*, *Spell Accumulator* and all three Ambush variants
-(see below). The follow-up resolver waves are post-release work (see
-[`docs/ROADMAP.md`](docs/ROADMAP.md)).
+**Not automated (named, not hidden)** — five rule names are **not** resolved by the game and
+are named in full rather than hidden behind an "…": the rules that create or return units
+(**Spawn**, **Split**, **Reinforcement**) and the remaining movement set (**Delayed Action**,
+**Traversal**). The per-unit notice in the battle log names the ones your list actually contains,
+so you can apply them by hand. Everything else in the books is modeled — including plain
+*Re-Deployment*, *Grounded Reinforcement*, *Reanimation*, *Caster Group*, *Spell Accumulator*, all
+three Ambush variants and now *Extended Buff Range* + *Coordinate* (see below). The follow-up
+resolver waves are post-release work (see [`docs/ROADMAP.md`](docs/ROADMAP.md)).
+
+**Extended Buff Range & Coordinate** — a unit within 24″ of a friendly unit that carries
+**Extended Buff Range** *and* holds a Hero can be picked by that Hero's within-12″ buff rules as if
+it were in range; the link is measured base edge to base edge, it is exactly **one hop** (never a
+chain), and it explicitly does **not** extend spells — every one of those decisions writes its own
+battle-log line, the refusals included. The skirmish books print the same rule with "within 6″ of a
+friendly Hero" instead of "has a Hero in it", which is a data difference, not a second rule.
+**Coordinate** lets a unit hand its activation to an un-activated friend within 12″ at the end of
+its own activation: NACHTMAHR picks the most valuable friend in range, you get candidate rings and a
+target click (ESC declines). The receiver activates immediately, a unit that was activated that way
+may not hand off again, and the pair still owes the opponent exactly one activation.
+
+**Buff-giver rules now work for you too** — the "once per activation, before attacking" buff family
+(*Precision Shooter Buff*, *Furious Buff*, *Entrenched Buff*, …) used to resolve for the AI only, so
+a human player's buff simply never happened. It now runs on both sides; your target is picked
+automatically for v1 and every application is named in the log. Skirmish books that print "pick up
+to 4 friendly units" now really pick up to four.
 
 **Ambush variants** — **Ambush Beacon** waives *every* enemy distance restriction (the 9″/3″
 arrival ring and an enemy's *Repel Ambushers* 12″ alike) for a reserve that lands within 6″ of the

@@ -47,6 +47,7 @@
   "Changebound",
   "Changebound Boost",
   "Changebound Boost Aura",
+  "Coordinate",
   "Counter",
   "Counter in Melee",
   "Counter-Attack",
@@ -80,6 +81,7 @@
   "Ethereal",
   "Evasive",
   "Evasive Aura",
+  "Extended Buff Range",
   "Fast",
   "Fast Aura",
   "Fatigue",
@@ -4116,9 +4118,14 @@
     }
    },
    "Coordinate": {
-    "primitive": null,
+    "primitive": "Coordinate",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "range_in": 12.0,
+     "activates_friendly": true,
+     "no_chain": true
+    }
    },
    "Crack": {
     "primitive": "Crack",
@@ -4141,9 +4148,16 @@
     }
    },
    "Extended Buff Range": {
-    "primitive": null,
+    "primitive": "Extended Buff Range",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "relay_range_in": 24.0,
+     "pick_range_in": 12.0,
+     "requires_hero": true,
+     "excludes_spells": true,
+     "hero_link_in": 0.0
+    }
    },
    "Fortified": {
     "primitive": "Fortified",

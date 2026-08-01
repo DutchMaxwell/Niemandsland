@@ -280,16 +280,35 @@ func is_attached() -> bool:
 
 # ===== Activation =====
 
-## Activates this unit for the current round.
-func activate(round_number: int) -> void:
+## Activates this unit for the current round. `via_coordinate` stamps the Coordinate hand-off
+## marker (army-book "Coordinate": "May not be used if this unit was activated via Coordinate") —
+## see mark_activated_via_coordinate() for why the stamp may also land BEFORE the activation.
+func activate(round_number: int, via_coordinate: bool = false) -> void:
 	is_activated = true
 	activation_round = round_number
+	if via_coordinate:
+		mark_activated_via_coordinate()
 
 	# Attached heroes activate together
 	for hero in get_attached_heroes():
 		if hero is GameUnit:
 			hero.is_activated = true
 			hero.activation_round = round_number
+
+
+## Coordinate (army-book upgrade): this unit's next activation IS the hand-off from another unit's
+## Coordinate, so it may not hand off again ("May not be used if this unit was activated via
+## Coordinate"). The stamp is set at HAND-OFF time, not at activation time, because the two sides
+## reach the activation differently: the AI activates the receiver immediately inside the same
+## beat, while a human receiver activates later by their own click. One marker, one truth; the
+## round reset clears it.
+func mark_activated_via_coordinate() -> void:
+	unit_properties["activated_via_coordinate"] = true
+
+
+## Whether this unit's current activation came from another unit's Coordinate (chain guard).
+func was_activated_via_coordinate() -> bool:
+	return bool(unit_properties.get("activated_via_coordinate", false))
 
 
 ## The exact inverse of activate(), attached heroes included. It lives next to activate() on purpose:
@@ -300,15 +319,18 @@ func activate(round_number: int) -> void:
 func deactivate() -> void:
 	is_activated = false
 	activation_round = 0
+	unit_properties.erase("activated_via_coordinate")   # the inverse of activate(via_coordinate)
 	for hero in get_attached_heroes():
 		if hero is GameUnit:
 			hero.is_activated = false
 			hero.activation_round = 0
 
 
-## Resets activation state for a new round.
+## Resets activation state for a new round. The Coordinate hand-off marker is a PER-ROUND stamp
+## (a unit coordinated in round 2 may hand off again in round 3), so it dies with the round.
 func reset_activation() -> void:
 	is_activated = false
+	unit_properties.erase("activated_via_coordinate")
 
 
 ## Resets unit status, wounds, markers and model visibility to import state.
@@ -321,6 +343,7 @@ func reset_to_import_state() -> void:
 	is_fatigued = false
 	is_shaken = false
 	activation_round = 0
+	unit_properties.erase("activated_via_coordinate")
 
 	# Reset caster points
 	reset_caster_points()

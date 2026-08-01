@@ -2479,3 +2479,177 @@ func test_gate_stays_quiet_when_the_plan_is_already_on_the_board() -> void:
 	var gated: Array = solo._finalize_placement(ai, models, [Vector3(0.3, 0, 0.2)], [planned], false, null, [])
 	assert_float(SoloController._xz_dist_m(gated[0] as Vector3, planned)).is_less(0.001)
 	assert_int(solo.board_clamp_notes.size()).is_equal(0)   # no news, no line
+
+
+# === Wave 4 — Extended Buff Range + Coordinate ===================================================
+
+## Stamp a unit as belonging to a book that actually fields the wave-4 rules, so the SYSTEM-SCOPED
+## registry gate (RulesRegistry) resolves them. The maps are generated from the local registry into
+## assets/solo/, so this also proves the shipped data — not only the code.
+func _hdf(u: GameUnit, rules: Array) -> GameUnit:
+	u.unit_properties["game_system"] = "gf"
+	u.unit_properties["faction_folder"] = "human_defense_force"
+	u.unit_properties["special_rules"] = rules
+	return u
+
+
+## _unit() derives its id from (player, model count), so same-shaped fixtures COLLIDE in
+## OPRArmyManager.game_units (a Dictionary keyed by unit_id) and silently vanish. Wave-4 fixtures
+## name themselves.
+func _named(u: GameUnit, id: String) -> GameUnit:
+	u.unit_id = id
+	u.unit_properties["name"] = id
+	return u
+
+
+## The relay clause, one line at a time. Each clause is the ONLY thing that changes between the
+## green case and its red neighbour — so a resolver that stopped reading one of them fails here.
+func test_ebr_relay_needs_the_rule_on_both_sides_a_hero_and_the_link() -> void:
+	# green: target carries the rule, relay carries it and holds a Hero, 20" link inside 24"
+	assert_bool(SoloController.ebr_relay_ok(true, true, true, 20.0, 24.0)).is_true()
+	# rot 1 — the TARGET does not carry the rule ("If THIS UNIT is within 24\" of another friendly
+	# unit with this rule"): the waiver is not a general aura.
+	assert_bool(SoloController.ebr_relay_ok(false, true, true, 20.0, 24.0)).is_false()
+	# rot 2 — the relay unit does not carry the rule ("ANOTHER friendly unit WITH THIS RULE").
+	assert_bool(SoloController.ebr_relay_ok(true, false, true, 20.0, 24.0)).is_false()
+	# rot 3 — no living Hero in/near the relay unit ("that has a Hero in it").
+	assert_bool(SoloController.ebr_relay_ok(true, true, false, 20.0, 24.0)).is_false()
+	# rot 4 — over the link range; and the boundary is inclusive ("within 24\"").
+	assert_bool(SoloController.ebr_relay_ok(true, true, true, 24.01, 24.0)).is_false()
+	assert_bool(SoloController.ebr_relay_ok(true, true, true, 24.0, 24.0)).is_true()
+
+
+## "One living radio operator is enough" (maintainer ruling 1) — and when the last carrier dies the
+## unit stops relaying. Also proves the data gate: the rule only resolves for a book that fields it.
+func test_unit_carries_ebr_reads_the_live_chain_and_the_book() -> void:
+	var relay := _hdf(_unit(2, [Vector3.ZERO, Vector3(0.05, 0, 0)]), ["Extended Buff Range"])
+	assert_bool(SoloController.unit_carries_ebr(relay)).is_true()
+	# One dead model, one alive: the unit still carries it.
+	(relay.models[0] as ModelInstance).is_alive = false
+	assert_bool(SoloController.unit_carries_ebr(relay)).is_true()
+	# rot — the LAST carrier dies: the relay status goes with it.
+	(relay.models[1] as ModelInstance).is_alive = false
+	assert_bool(SoloController.unit_carries_ebr(relay)).is_false()
+	# rot — the same models in a book that does NOT field the rule resolve to nothing (system-scoped
+	# registry gate, no cross-book bleed).
+	var other := _unit(2, [Vector3.ZERO])
+	other.unit_properties["game_system"] = "gf"
+	other.unit_properties["faction_folder"] = "alien_hives"
+	other.unit_properties["special_rules"] = ["Extended Buff Range"]
+	assert_bool(SoloController.unit_carries_ebr(other)).is_false()
+	# A JOINED hero carrying the rule makes its host a relay (the chain, not the host model list).
+	var host := _unit(2, [Vector3(0.2, 0, 0)])
+	host.unit_properties["game_system"] = "gf"
+	host.unit_properties["faction_folder"] = "human_defense_force"
+	assert_bool(SoloController.unit_carries_ebr(host)).is_false()
+	var hero := _hdf(_unit(2, [Vector3(0.21, 0, 0)]), ["Hero", "Extended Buff Range"])
+	host.unit_properties["attached_heroes"] = [hero]
+	assert_bool(SoloController.unit_carries_ebr(host)).is_true()
+
+
+## The shipped registry params, per system: GF/AoF/AoFR want the Hero IN the relay unit
+## (hero_link_in 0), the two skirmish books print "within 6\" of a friendly Hero" instead.
+func test_ebr_params_carry_the_skirmish_hero_link() -> void:
+	var gf := _hdf(_unit(2, [Vector3.ZERO]), ["Extended Buff Range"])
+	var p := SoloController.ebr_params_of(gf)
+	assert_float(float(p["relay_range_in"])).is_equal_approx(24.0, 0.001)
+	assert_float(float(p["pick_range_in"])).is_equal_approx(12.0, 0.001)
+	assert_float(float(p["hero_link_in"])).is_equal_approx(0.0, 0.001)
+	assert_bool(bool(p["excludes_spells"])).is_true()
+	var skirmish := _unit(2, [Vector3.ZERO])
+	skirmish.unit_properties["game_system"] = "gff"
+	skirmish.unit_properties["faction_folder"] = "human_defense_force"
+	skirmish.unit_properties["special_rules"] = ["Extended Buff Range"]
+	assert_float(float(SoloController.ebr_params_of(skirmish)["hero_link_in"])) \
+		.override_failure_message("the skirmish books link the Hero at 6\", not inside the unit") \
+		.is_equal_approx(6.0, 0.001)
+	# rot — a unit without the rule has no params at all (nothing to waive).
+	assert_bool(SoloController.ebr_params_of(_unit(2, [Vector3.ZERO])).is_empty()).is_true()
+
+
+## The hero clause on the live table: inside the unit (GF) vs within 6" of it (skirmish).
+func test_ebr_relay_has_hero_reads_the_unit_then_the_six_inch_link() -> void:
+	var m := 0.0254
+	var relay := _named(_hdf(_unit(2, [Vector3.ZERO]), ["Extended Buff Range"]), "Relay")
+	var hero := _named(_hdf(_unit(2, [Vector3(4.0 * m, 0, 0)]), ["Hero"]), "Commander")
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {relay.unit_id: relay, hero.unit_id: hero}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	# GF wording (hero_link_in 0): a Hero standing 4" away is NOT "in" the unit.
+	assert_bool(solo.ebr_relay_has_hero(relay, 0.0)).is_false()
+	# Skirmish wording: the same Hero within 6" satisfies the clause.
+	assert_bool(solo.ebr_relay_has_hero(relay, 6.0)).is_true()
+	# rot — push him past 6" and the skirmish clause fails too.
+	(hero.models[0] as ModelInstance).node.global_position = Vector3(8.0 * m, 0, 0)
+	assert_bool(solo.ebr_relay_has_hero(relay, 6.0)).is_false()
+	# A hero JOINED to the relay satisfies the GF wording.
+	relay.unit_properties["attached_heroes"] = [hero]
+	assert_bool(solo.ebr_relay_has_hero(relay, 0.0)).is_true()
+	# rot — a DEAD hero never counts.
+	(hero.models[0] as ModelInstance).is_alive = false
+	assert_bool(solo.ebr_relay_has_hero(relay, 0.0)).is_false()
+
+
+## Coordinate's three refusals, as pure logic: dead bearer, chain, empty range.
+func test_coordinate_refusal_names_the_reason() -> void:
+	assert_str(SoloController.coordinate_refusal(true, false, 2)).is_equal("")
+	assert_str(SoloController.coordinate_refusal(false, false, 2)).is_equal("dead")   # maintainer ruling 2
+	assert_str(SoloController.coordinate_refusal(true, true, 2)).is_equal("chain")    # anti-chain clause
+	assert_str(SoloController.coordinate_refusal(true, false, 0)).is_equal("none")
+	# A dead bearer outranks everything else — nothing hands off from a wiped unit.
+	assert_str(SoloController.coordinate_refusal(false, true, 0)).is_equal("dead")
+
+
+## The live candidate filter: same side, not yet activated, not attached, not in reserve, and the
+## 12" measured BASE EDGE to base edge.
+func test_coordinate_candidates_filter_side_activation_reserve_and_edge_range() -> void:
+	var m := 0.0254
+	var bearer := _named(_hdf(_unit(2, [Vector3.ZERO]), ["Coordinate"]), "Comms Team")
+	var near := _named(_unit(2, [Vector3(8.0 * m, 0, 0)]), "Riflemen")   # 8" away — in
+	var far := _named(_unit(2, [Vector3(20.0 * m, 0, 0)]), "Snipers")    # 20" away — out
+	var foe := _named(_unit(1, [Vector3(6.0 * m, 0, 0)]), "Raiders")     # enemy, never a candidate
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {bearer.unit_id: bearer, near.unit_id: near, far.unit_id: far, foe.unit_id: foe}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+
+	assert_bool(SoloController.carries_coordinate(bearer)).is_true()
+	assert_float(SoloController.coordinate_range_of(bearer)).is_equal_approx(12.0, 0.001)
+	var cands := solo.coordinate_candidates(bearer)
+	assert_int(cands.size()).is_equal(1)
+	assert_bool(cands.has(near)).override_failure_message("the 8\" friend is the only legal receiver").is_true()
+	assert_bool(cands.has(far)).override_failure_message("20\" is outside the printed 12\"").is_false()
+	assert_bool(cands.has(foe)).override_failure_message("\"another FRIENDLY unit\" — never the enemy").is_false()
+	assert_bool(cands.has(bearer)).override_failure_message("\"ANOTHER friendly unit\" — never itself").is_false()
+
+	# rot — the candidate has already activated ("that hasn't activated yet").
+	near.activate(1)
+	assert_int(solo.coordinate_candidates(bearer).size()).is_equal(0)
+	near.reset_activation()
+	assert_int(solo.coordinate_candidates(bearer).size()).is_equal(1)
+	# rot — maintainer ruling 3: a reserve unit is invisible to the hand-off.
+	near.unit_properties["ambush_reserve"] = true
+	assert_int(solo.coordinate_candidates(bearer).size()).is_equal(0)
+	near.unit_properties.erase("ambush_reserve")
+	# rot — a dead bearer offers nothing at all.
+	(bearer.models[0] as ModelInstance).is_alive = false
+	assert_int(solo.coordinate_candidates(bearer).size()).is_equal(0)
+
+
+## The round reset owns the hand-off marker: a unit coordinated in one round may hand off in the next.
+func test_coordinate_marker_is_a_per_round_stamp() -> void:
+	var u := _unit(2, [Vector3.ZERO])
+	assert_bool(u.was_activated_via_coordinate()).is_false()
+	u.activate(1, true)
+	assert_bool(u.was_activated_via_coordinate()).is_true()
+	u.reset_activation()
+	assert_bool(u.was_activated_via_coordinate()) \
+		.override_failure_message("a stamp that survives the round would mute Coordinate forever").is_false()
+	# deactivate() is the exact inverse of activate() — it clears the stamp too.
+	u.activate(2, true)
+	u.deactivate()
+	assert_bool(u.was_activated_via_coordinate()).is_false()

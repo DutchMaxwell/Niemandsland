@@ -336,6 +336,13 @@ SHIPPED_PLANNED = {
     "Ambush Beacon",
     "Rapid Ambush",
     "Ambush Re-Deployment",
+    # Wave 4 (2026-08-01). Both carry mechanic.primitive + their own params in the registry
+    # ("Extended Buff Range" {relay_range_in, pick_range_in, requires_hero, excludes_spells,
+    # hero_link_in} and "Coordinate" {range_in, no_chain}); only the "planned" status kept
+    # nulling them. The resolvers ship with this wave (main._solo_utility_targets' relay waiver
+    # and SoloController.coordinate_candidates / main._solo_try_coordinate_*).
+    "Extended Buff Range",
+    "Coordinate",
 }
 
 # Primitives that only exist in SOME systems' books: the bridging table above is
