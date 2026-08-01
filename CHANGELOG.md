@@ -77,6 +77,13 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   is automatic for v1 and every application is named in the log; choosing the target by click is a
   follow-up. Skirmish books whose text says "pick up to **4** friendly units" now really pick up to
   four instead of one, and a rule that finds no legal target says so instead of failing silently.
+- **…and they work in multiplayer too.** That wave shipped with one deliberate hole: in a live
+  multiplayer game the buff family was switched off for human players, because the modifier it
+  places did not travel. Half a modifier is worse than none — your dice would have read the buff
+  and your opponent's, rolling into the same unit, would not. The modifiers now travel: when the
+  buff is placed, when it is spent, and when it expires. The switch is gone, so a *Precision Shooter
+  Buff* or an *Entrenched Buff* does the same thing against a human opponent as it does against
+  NACHTMAHR. Spell tokens ride the same channel, so their modifiers stay in step as well.
 - **Spotter marks and spell buffs count the same on both screens.** Three numbers the rules read
   lived only on the client that produced them. *Precision Spotter* marks: the peer got the
   "Spotted" token but never the **count**, so it could not tell one mark from three — and removing

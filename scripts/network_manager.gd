@@ -36,6 +36,9 @@ signal remote_objective_owner_updated(index: int, owner: int)
 signal remote_token_defined(token_name: String, color: Color, is_counter: bool, effect: String)
 signal remote_token_edited(old_name: String, new_name: String, color: Color, effect: String)
 signal remote_casts_updated(game_unit: GameUnit)
+## NML-929 — a unit's full active spell/buff modifier record list changed on a peer. `records` is
+## raw wire data: the receiver normalises it before installing anything.
+signal remote_spell_mods_updated(game_unit: GameUnit, records: Array)
 signal remote_sort_table_received
 signal remote_unit_deleted(game_unit: GameUnit)
 signal remote_round_advanced()
@@ -1016,6 +1019,20 @@ func sync_unit_property(unit_id: String, key: String, value: Variant) -> void:
 			game_unit.unit_properties[key] = value
 
 
+## RPC: adopt a unit's full active spell/buff modifier record list (see broadcast_spell_mods).
+## Unlike sync_unit_property this DOES emit: the records drive side effects main owns (the granted
+## rule overlay on special_rules, the props stamps), so main has to be told rather than polled.
+## The payload is untrusted — main normalises it before installing anything.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_spell_mods(unit_id: String, records: Array) -> void:
+	if not army_manager:
+		return
+
+	var game_unit = army_manager.get_game_unit_by_id(unit_id)
+	if game_unit:
+		remote_spell_mods_updated.emit(game_unit, records)
+
+
 ## RPC: Sync a mission objective's owner (any peer can capture objectives).
 @rpc("any_peer", "call_remote", "reliable")
 func sync_objective_owner(index: int, owner_id: int) -> void:
@@ -1204,6 +1221,20 @@ func broadcast_unit_property(game_unit: GameUnit, key: String, value: Variant) -
 		push_warning("[Net] refusing to broadcast unlisted unit property '%s'" % key)
 		return
 	_remote_call("sync_unit_property", [game_unit.unit_id, key, value], 0)
+
+
+## NML-929 — broadcast a unit's FULL list of active spell/buff modifier records (the F4/NML-006
+## machinery: hit/defense/casting/morale modifiers, the "+X″ range/advance/rush" deltas and granted
+## rules). Same channel and the same shape as broadcast_unit_property above — one more handler name
+## in the existing command envelope, wire format unchanged.
+##
+## FULL REPLACE, not add/remove deltas. The lists are tiny (a unit carries one or two records), a
+## single exchange can spend several at once, and a replace is IDEMPOTENT: a duplicated or reordered
+## frame cannot leave the two tables holding different modifiers, which is the entire point.
+func broadcast_spell_mods(game_unit: GameUnit, records: Array) -> void:
+	if not is_multiplayer_active() or game_unit == null:
+		return
+	_remote_call("sync_spell_mods", [game_unit.unit_id, records], 0)
 
 
 ## Broadcast a mission objective owner change (any peer may capture).
