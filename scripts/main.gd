@@ -319,6 +319,10 @@ var _solo_unmodeled_logged: Dictionary = {}  # rule name -> true: once-per-sessi
 var _solo_both_ai: bool = false              # BOTH sides are AI: combat auto-resolves, the game runs unattended
 var _solo_spell_tokens_active: Array = []    # spell tokens placed this round [{unit, token}] — expire at round end
 var _solo_spell_mods := {}                   # instance_id -> [{spell, hit_mod, def_mod, scope}] — MECHANICAL token effects (wave: spells F3)
+## NML-929: true while this client is ADOPTING state a peer sent. The adoption runs the ordinary
+## local writers (grant overlay, props stamps), and those broadcast — without this flag the frame
+## would bounce straight back at its sender.
+var _mp_applying_remote_state: bool = false
 var _solo_difficulty_grades: Dictionary = {} # player-slot -> SoloDifficulty preset name (the graded arena)
 var _solo_arena_seed: int = 0                # game-level base seed for the reproducible difficulty knob draws
 var pinned_rulers: Node = null  # PinnedRulers (persistent shared measurements)
@@ -464,6 +468,7 @@ func _ready() -> void:
 	network_manager.remote_token_defined.connect(_on_remote_token_defined)
 	network_manager.remote_token_edited.connect(_on_remote_token_edited)
 	network_manager.remote_casts_updated.connect(_on_remote_casts_updated)
+	network_manager.remote_spell_mods_updated.connect(_on_remote_spell_mods_updated)
 	network_manager.remote_unit_deleted.connect(_on_remote_unit_deleted)
 	network_manager.remote_round_advanced.connect(_on_remote_round_advanced)
 
@@ -3288,6 +3293,7 @@ func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary
 	# deltas onto the props stamps — every existing engine read then honours them.
 	_solo_apply_grant(tu, rec)
 	_solo_refresh_spell_stamps(tu)
+	_broadcast_spell_mods(tu)   # NML-929: the record itself rides the wire, not just its stamps
 	if battle_log != null:
 		var hd: PackedStringArray = []
 		if rec["hit_mod"] != 0:
@@ -3390,14 +3396,11 @@ func _solo_refresh_spell_stamps(tu: GameUnit) -> void:
 		rng += int((rd as Dictionary).get("range_in", 0))
 	for u in chain:
 		var gu := u as GameUnit
-		if adv == 0 and rush == 0:
-			gu.unit_properties.erase("spell_move_mod")
-		else:
-			gu.unit_properties["spell_move_mod"] = {"advance": adv, "rush": rush}
-		if rng == 0:
-			gu.unit_properties.erase("spell_range_mod")
-		else:
-			gu.unit_properties["spell_range_mod"] = rng
+		# NML-927: the stamps are read by BOTH clients (the peer draws its own charge reach and
+		# range rings off them), so every restamp is a wire delta — see _sync_unit_property.
+		_sync_unit_property(gu, "spell_move_mod",
+			null if (adv == 0 and rush == 0) else {"advance": adv, "rush": rush})
+		_sync_unit_property(gu, "spell_range_mod", null if rng == 0 else rng)
 
 
 ## Active spell hit-modifier for a striking member (its own tokens + its host's — a joined hero
@@ -3483,6 +3486,7 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool) -> void:
 	if records.is_empty():
 		_solo_spell_mods.erase(key)
 	_solo_refresh_spell_stamps(uu)   # NML-006: stamps follow the surviving records
+	_broadcast_spell_mods(uu)   # NML-929: the CONSUMPTION has to travel too, or the peer keeps the buff
 
 
 ## NML-006 — the event-specific once-consumers (casting after the cast die, morale after the test
@@ -3501,6 +3505,7 @@ func _solo_expire_spell_tokens() -> void:
 	# NML-006: revert the mechanical side effects FIRST (grant overlays off, props stamps erased) —
 	# also on the no-controller path, so headless/batch rounds never leak a granted rule or stamp.
 	var affected: Array = []
+	var expired_owners: Array = []   # NML-929: record owners whose list changed — the peer needs it
 	for key in _solo_spell_mods.keys():
 		var keep: Array = []
 		for rd in (_solo_spell_mods[key] as Array):
@@ -3510,19 +3515,27 @@ func _solo_expire_spell_tokens() -> void:
 				keep.append(rd)
 				continue
 			_solo_revoke_grant(rd as Dictionary)
+		var owner := instance_from_id(int(key)) as GameUnit
+		if owner != null and is_instance_valid(owner) \
+				and keep.size() != (_solo_spell_mods[key] as Array).size():
+			expired_owners.append(owner)
 		if keep.is_empty():
 			_solo_spell_mods.erase(key)
 		else:
 			_solo_spell_mods[key] = keep
 			continue
-		var u := instance_from_id(int(key)) as GameUnit
-		if u != null and is_instance_valid(u):
-			for cu in _solo_joined_chain(u):
+		if owner != null and is_instance_valid(owner):
+			for cu in _solo_joined_chain(owner):
 				if not affected.has(cu):
 					affected.append(cu)
 	for cu in affected:
-		(cu as GameUnit).unit_properties.erase("spell_move_mod")
-		(cu as GameUnit).unit_properties.erase("spell_range_mod")
+		_sync_unit_property(cu as GameUnit, "spell_move_mod", null)   # NML-927: the expiry travels too
+		_sync_unit_property(cu as GameUnit, "spell_range_mod", null)
+	# NML-929: the round boundary is driven per client (_on_solo_round_advanced is gated on this
+	# client having an AI slot at all), so an expiry that only happened here would leave the peer
+	# holding a modifier the round has ended. The full-replace frame settles it either way.
+	for owner in expired_owners:
+		_broadcast_spell_mods(owner as GameUnit)
 	if radial_menu_controller == null:
 		_solo_spell_tokens_active.clear()
 		return
@@ -4370,6 +4383,39 @@ func _solo_reanimation_pick_spots(unit: GameUnit, anchors: Array) -> Array:
 	return out
 
 
+## NML-927 — write a HIDDEN per-unit state (`value == null` erases it) AND push the delta to the
+## peers in the same breath.
+##
+## THE DEFECT THIS SEAM EXISTS FOR. Three rules-relevant NUMBERS live in unit_properties and never
+## left the acting client: the Precision Spotter mark count ("spot_markers" — only its boolean
+## "Spotted" token rode the marker channel, so the peer saw THAT a unit was marked but never how
+## OFTEN, and a partial removal was invisible), and the two spell stamps ("spell_move_mod" /
+## "spell_range_mod") that the movement bands and every shooting-range read consume. Each one is
+## read by the OPPONENT's client too — the defender rolls its own saves, measures its own charge
+## reach and draws its own range rings — so a number that stays local is two tables disagreeing
+## about the same unit.
+##
+## Every write to those keys goes through here. The broadcast is skipped when the value did not
+## actually change, so the repeated restamps (_solo_refresh_spell_stamps runs on every record,
+## every consumption and every expiry) do not turn into wire traffic.
+func _sync_unit_property(gu: GameUnit, key: String, value: Variant) -> void:
+	if gu == null:
+		return
+	if value == null:
+		if not gu.unit_properties.has(key):
+			return
+		gu.unit_properties.erase(key)
+	else:
+		if gu.unit_properties.has(key) and gu.unit_properties[key] == value:
+			return
+		gu.unit_properties[key] = value
+	if _mp_applying_remote_state:
+		return   # NML-929: state we are ADOPTING must not be echoed back at its sender
+	if network_manager == null or not network_manager.has_method("broadcast_unit_property"):
+		return
+	if not network_manager.is_multiplayer_active():
+		return
+	network_manager.broadcast_unit_property(gu, key, value)
 ## NML-924 — the owner spends the roll by CLICKING (#172's principle: the owner allocates, the engine
 ## does not choose for you). LMB on a living wounded model of the chain heals one wound THERE, LMB
 ## inside a fallen model's candidate ring brings THAT model back, RMB or the strip button hands the
@@ -4468,6 +4514,77 @@ func _solo_drop_reanimation_ring(spots: Array, rings: Array, unit: GameUnit, ind
 			rings.remove_at(i)
 		spots.remove_at(i)
 		return
+
+
+## NML-929 — push a unit's full active spell/buff modifier record list to the peers.
+##
+## THE DEFECT THIS EXISTS FOR. The Utility-Buff giver family (Precision Shooter Buff, Furious Buff,
+## Entrenched Buff, …) lands its effect as an F4 once-mod RECORD — the same machinery spell tokens
+## use. Those records never rode the wire, so _solo_apply_utility_buffs refused to run for a human
+## player in a live multiplayer game at all (the guard that this wave removes): a modifier on one
+## client's dice and not the other's is worse than a rule that does nothing. The records are read by
+## BOTH sides — the buffed unit's own attacks are rolled by its owner, but a defense or
+## attackers-beneficiary record is read by the OPPONENT rolling into it.
+##
+## `granted_to` is stripped: it holds LOCAL instance ids, meaningless on another machine. The
+## receiver recomputes its own from the rule name (_on_remote_spell_mods_updated).
+func _broadcast_spell_mods(uu: GameUnit) -> void:
+	if uu == null or _mp_applying_remote_state:
+		return
+	if network_manager == null or not network_manager.has_method("broadcast_spell_mods"):
+		return
+	if not network_manager.is_multiplayer_active():
+		return
+	var wire: Array = []
+	for rd in _solo_spell_mods.get(uu.get_instance_id(), []):
+		var out: Dictionary = (rd as Dictionary).duplicate()
+		out.erase("granted_to")
+		wire.append(out)
+	network_manager.broadcast_spell_mods(uu, wire)
+
+
+## NML-929 — adopt a peer's spell/buff record list for one unit. Full replace (see
+## NetworkManager.broadcast_spell_mods): the local grants come off, the arriving records go on, and
+## the grant overlay plus the props stamps are recomputed from them. Everything runs under
+## _mp_applying_remote_state so nothing this produces is sent straight back.
+##
+## The payload is UNTRUSTED wire data, so each record is rebuilt field by field with the types the
+## readers expect — a peer cannot smuggle a key into the record dictionaries this way.
+func _on_remote_spell_mods_updated(gu: GameUnit, records: Array) -> void:
+	if gu == null:
+		return
+	var key := gu.get_instance_id()
+	_mp_applying_remote_state = true
+	for rd in _solo_spell_mods.get(key, []):
+		_solo_revoke_grant(rd as Dictionary)   # our own grant bookkeeping, our own instance ids
+	var adopted: Array = []
+	for r in records:
+		if not (r is Dictionary):
+			continue
+		var src := r as Dictionary
+		var rec := {
+			"spell": str(src.get("spell", "")),
+			"hit_mod": int(src.get("hit_mod", 0)),
+			"def_mod": int(src.get("def_mod", 0)),
+			"casting_mod": int(src.get("casting_mod", 0)),
+			"morale_mod": int(src.get("morale_mod", 0)),
+			"range_in": int(src.get("range_in", 0)),
+			"advance_in": int(src.get("advance_in", 0)),
+			"rush_in": int(src.get("rush_in", 0)),
+			"grants_rule": str(src.get("grants_rule", "")),
+			"scope": str(src.get("scope", "")),
+			"beneficiary": str(src.get("beneficiary", "")),
+			"duration": str(src.get("duration", "round")),
+		}
+		adopted.append(rec)
+	if adopted.is_empty():
+		_solo_spell_mods.erase(key)
+	else:
+		_solo_spell_mods[key] = adopted
+		for rec in adopted:
+			_solo_apply_grant(gu, rec as Dictionary)
+	_solo_refresh_spell_stamps(gu)
+	_mp_applying_remote_state = false
 
 
 ## Push a restored model's REAL table position to the peers.
@@ -8533,7 +8650,7 @@ func _solo_try_precision_spot(unit: GameUnit) -> void:
 ## token on the target, log + float (rules-must-log).
 func _solo_place_spot_marker(spotter: GameUnit, target: GameUnit) -> void:
 	var n := int(target.unit_properties.get("spot_markers", 0)) + 1
-	target.unit_properties["spot_markers"] = n
+	_sync_unit_property(target, "spot_markers", n)   # NML-927: the COUNT rides the wire, not just the token
 	if radial_menu_controller != null and radial_menu_controller.token_library != null:
 		if not radial_menu_controller.token_library.has("Spotted"):
 			radial_menu_controller.token_library.define("Spotted", Color(1.0, 0.55, 0.15), false,
@@ -8556,11 +8673,13 @@ func _solo_consume_spot_markers(target: GameUnit, count: int = -1) -> int:
 	if take <= 0:
 		return 0
 	if take >= sm:
-		target.unit_properties.erase("spot_markers")
+		_sync_unit_property(target, "spot_markers", null)
 		if radial_menu_controller != null:
 			radial_menu_controller.remove_library_token(target, "Spotted")
 	else:
-		target.unit_properties["spot_markers"] = sm - take
+		# NML-927: a PARTIAL removal leaves the "Spotted" token standing, so the marker channel
+		# carries nothing at all — the remaining count is the only thing that tells the peer.
+		_sync_unit_property(target, "spot_markers", sm - take)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Precision Spotter: %d marker%s removed — +%d to hit this volley%s" % [
@@ -15025,12 +15144,11 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 	if solo_controller == null or opr_army_manager == null or unit == null:
 		return
 	if not _solo_is_ai_unit(unit):
-		# SOLO ONLY for now. The effect lands as a once-mod record + grant overlay, and that record
-		# does not ride the wire — applying it in a live multiplayer game would put a modifier on
-		# one client's dice and not the other's. Wiring the buff family into the MP sync is its own
-		# ticket; until then the human path is exactly as wide as the AI path has always been.
-		if network_manager != null and network_manager.is_multiplayer_active():
-			return
+		# NML-929: this used to bail out in a live multiplayer game. The effect lands as a once-mod
+		# record + grant overlay, and that record did not ride the wire — applying it would have put
+		# a modifier on one client's dice and not the other's, which is worse than a rule that does
+		# nothing. The records now travel (_broadcast_spell_mods on every record, consumption and
+		# expiry), so the human path is as wide in multiplayer as it is offline.
 		if int(unit.unit_properties.get("utility_buff_round", -1)) == opr_army_manager.current_round:
 			return
 		unit.unit_properties["utility_buff_round"] = opr_army_manager.current_round
