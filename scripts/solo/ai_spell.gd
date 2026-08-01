@@ -37,17 +37,18 @@ const AURA_RANGE_IN: float = 18.0
 ## not a rule value: a token held is a future cast's currency).
 const TOKEN_VALUE_EPS: float = 0.05
 
-## The expected-wounds floor a cast must clear before an EV-DRIVEN difficulty pays tokens for it
-## (a documented convention, not a rule value — the SHOOT_EV_FLOOR reasoning of NML-007 applied to
-## spells, with its own constant because the currency differs: a volley costs an Advance, a cast
-## costs spell tokens). Priced at exactly one token (TOKEN_VALUE_EPS): an attempt worth less than
-## the cheapest thing a token can buy is worse than holding that token for the next cast. The
-## officially-scripted difficulties (Rekrut/default) ignore this floor — their D3+X cycle IS the
-## rule and casts the first valid spell whatever it is worth.
-const CAST_EV_FLOOR: float = TOKEN_VALUE_EPS
-
 ## At or below this cast chance the boost economy drops its opportunity-cost floor (see plan_boost).
 const COIN_FLIP_P: float = 0.5
+
+## The stand-in value of an effect this EV chain cannot price at all — the "castable"-status spells
+## and every rule grant outside spell_modifier_delta's visible set (a Steadfast or Primal Boost
+## grant computes to 0.0 not because it is worthless but because nothing here models it). A cast
+## the AI has already decided to pay tokens for asserts SOME value; pricing it at a token nudge
+## keeps that assertion honest in one direction only — strictly positive, and small enough to stay
+## under the token floor's break-even (6 × TOKEN_VALUE_EPS = 0.3 wounds), so the coin-flip clause
+## in plan_boost buys exactly the one token that lifts the cast out of 50/50 and never a second.
+## It is NOT a claim about what the spell is worth: it must never be used to COMPARE spells.
+const UNPRICED_EFFECT_VALUE: float = 0.01
 
 ## Probability of one specific d6 face (the on-6 facet expectation, mirrors AiEv.SIX_P).
 const SIX_P := 1.0 / 6.0
@@ -291,10 +292,10 @@ static func plan_boost(effect_value: float, available: int, interference_tokens:
 	return boost
 
 
-## Whether a cast is worth the tokens it costs at all — the EV-floor gate the EV-driven difficulties
-## apply to their pick (see CAST_EV_FLOOR). Pure so the policy is testable without a table.
-static func cast_is_worthwhile(effect_value: float, floor_value: float = CAST_EV_FLOOR) -> bool:
-	return effect_value >= floor_value
+## The value plan_boost should price a chosen cast at: its computed EV, or — when this chain could
+## not price the effect at all — the unpriced stand-in above. Pure, so the policy is testable.
+static func boost_value_of(effect_value: float) -> float:
+	return effect_value if effect_value > 0.0 else UNPRICED_EFFECT_VALUE
 
 
 ## F4/NML-006 — pure once-mod filtering for the DICE path (mirrors the exporter's encoding, tested):

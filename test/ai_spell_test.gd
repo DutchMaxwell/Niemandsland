@@ -217,19 +217,21 @@ func test_plan_boost_takes_the_boost_a_coin_flip_can_afford() -> void:
 	assert_int(AiSpell.plan_boost(0.2, 4, 1)).is_equal(2)
 
 
-func test_cast_ev_floor_rejects_the_worthless_cast() -> void:
-	# The cast EV floor is priced at exactly one spell token (the boost economy's own unit): an
-	# attempt worth less than the cheapest thing a token buys is worse than holding the token.
-	assert_float(AiSpell.CAST_EV_FLOOR).is_equal_approx(AiSpell.TOKEN_VALUE_EPS, EPS)
-	# A cast the EV chain values at nothing is not worth its tokens (the "castable"-status buffs the
-	# audit caught: ev 0.0, cast anyway, 4 rounds running).
-	assert_bool(AiSpell.cast_is_worthwhile(0.0)).is_false()
-	assert_bool(AiSpell.cast_is_worthwhile(0.049)).is_false()
-	assert_bool(AiSpell.cast_is_worthwhile(-1.0)).is_false()
-	# Everything with a real payoff passes — including the small ones the boost clause then lifts.
-	assert_bool(AiSpell.cast_is_worthwhile(AiSpell.CAST_EV_FLOOR)).is_true()
-	assert_bool(AiSpell.cast_is_worthwhile(0.278)).is_true()
-	assert_bool(AiSpell.cast_is_worthwhile(6.0)).is_true()
+func test_unpriced_effect_buys_exactly_one_token_out_of_the_coin_flip() -> void:
+	# An effect this chain cannot price (a "castable"-status spell, or a rule grant outside
+	# spell_modifier_delta's visible set) reads as 0.0 — which is NOT the same as worthless. The
+	# stand-in keeps it strictly positive …
+	assert_float(AiSpell.boost_value_of(0.0)).is_equal_approx(AiSpell.UNPRICED_EFFECT_VALUE, EPS)
+	assert_float(AiSpell.boost_value_of(-2.0)).is_equal_approx(AiSpell.UNPRICED_EFFECT_VALUE, EPS)
+	# … and never overrides a real number.
+	assert_float(AiSpell.boost_value_of(0.278)).is_equal_approx(0.278, EPS)
+	# It must stay under the token floor's break-even (6 × 0.05 = 0.3 wounds), so it buys ONE token
+	# at the coin flip and stops the moment the cast is out of it — never a spending spree.
+	assert_bool(AiSpell.UNPRICED_EFFECT_VALUE > 0.0).is_true()
+	assert_bool(AiSpell.UNPRICED_EFFECT_VALUE < 6.0 * AiSpell.TOKEN_VALUE_EPS).is_true()
+	assert_int(AiSpell.plan_boost(AiSpell.boost_value_of(0.0), 6)).is_equal(1)
+	# Above the coin flip it buys nothing at all: an unpriced cast at 3+ keeps its tokens.
+	assert_int(AiSpell.plan_boost(AiSpell.boost_value_of(0.0), 6, 0, 3)).is_equal(0)
 
 
 func test_plan_interference_mirrors_the_calculus() -> void:

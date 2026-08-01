@@ -2615,14 +2615,6 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 	# EV-best castable spell (the same die-replacement licence as the targeting tie-break).
 	var skip_zero_ev: bool = diff != null and diff.rule_exploitation > 0.0 and not diff.exploits_rules()
 	var ev_best_pick: bool = diff != null and diff.exploits_rules()
-	# The EV floor further down may only bite when this caster HAS something measurable to hold its
-	# tokens for: a list whose every entry is "castable"-status carries no EV in this chain, and a
-	# floor over it would mute the caster for the whole game instead of trading up.
-	var has_modeled_spell := false
-	for s in spells:
-		if str((s as Dictionary).get("status", "")) == "modeled":
-			has_modeled_spell = true
-			break
 	var candidates_rec: Array = []
 	var chosen: Dictionary = {}
 	var chosen_targets: Array = []
@@ -2661,7 +2653,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 			fallback_ev = ev
 			if not skip_zero_ev and not ev_best_pick:
 				break   # official: the FIRST valid spell in cycle order is cast
-		if skip_zero_ev and AiSpell.cast_is_worthwhile(ev) and chosen.is_empty():
+		if skip_zero_ev and ev > 0.0 and chosen.is_empty():
 			chosen = entry
 			chosen_targets = targets
 			chosen_ev = ev
@@ -2680,20 +2672,6 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 			"candidates": candidates_rec, "chosen": "hold tokens", "why": "no castable spell",
 			"data": {"d3": d3, "caster_x": caster_x, "tokens": tokens}})
 		return {}
-	# — The cast EV floor (the NML-007 SHOOT_EV_FLOOR reasoning, own constant AiSpell.CAST_EV_FLOOR):
-	#   an EV-driven difficulty does not pay tokens for a pick this chain values at nothing. The
-	#   ladder always MEANT this ("Veteran cycles past valid-but-worthless spells") — but when the
-	#   cycle found nothing better, the fallback above silently reinstated the worthless pick and the
-	#   0-EV spell was cast anyway (the D5 audit finding: ev 0.0 casts on a flat 50%). Holding is the
-	#   better trade: the tokens keep accumulating (cap 6) and boost the next measurable cast. —
-	if (skip_zero_ev or ev_best_pick) and has_modeled_spell and not AiSpell.cast_is_worthwhile(chosen_ev):
-		record_decision({"kind": "cast_skip", "unit": member.get_name(),
-			"rule": "Cast EV floor (AI policy, not a rule): a cast worth less than one spell token (%.2f expected wounds) is not worth the tokens it costs — hold them for a measurable cast" % AiSpell.CAST_EV_FLOOR,
-			"candidates": candidates_rec, "chosen": "hold tokens", "why": "below the cast EV floor",
-			"data": {"d3": d3, "caster_x": caster_x, "tokens": tokens,
-				"best": str(chosen.get("name", "?")), "ev": chosen_ev,
-				"ev_floor": AiSpell.CAST_EV_FLOOR}})
-		return {}
 	# — Token economy (officially open — the EV heuristics fill it): boost from OTHER friendly casters
 	#   within 18" LoS (+1 each), gated by the difficulty's spend_boosts (default sharp AI spends). —
 	var threshold := int(chosen.get("threshold", 0))
@@ -2711,6 +2689,11 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 		helpers.insert(0, {"unit": member, "tokens": own_left})
 	# The boost decision states its own reason in the decision log (AI policy — no battle-log line:
 	# nothing here is a rule the player must be shown, only how the AI priced its tokens).
+	# A cast this chain cannot price ("castable" status, or a rule grant spell_modifier_delta does
+	# not model) is NOT treated as worthless here: the AI has already paid the spell's tokens, so
+	# the effect is worth landing — boost_value_of prices it just high enough to buy the one token
+	# that lifts it out of the coin flip, and never a second.
+	var boost_value := AiSpell.boost_value_of(chosen_ev)
 	var boost_pool := 0
 	var boost_why := "no boost: this difficulty never spends helper tokens"
 	if spend_boosts:
@@ -2718,18 +2701,21 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 	if spend_boosts and not helpers.is_empty():
 		for h in helpers:
 			boost_pool += int((h as Dictionary)["tokens"])
-		boost = AiSpell.plan_boost(chosen_ev, boost_pool)
+		boost = AiSpell.plan_boost(boost_value, boost_pool)
 		boost_sources = _draw_aura_tokens(helpers, boost)
 		if boost > 0:
 			# Name the reason PRECISELY: the coin-flip clause only gets the credit when the plain
 			# token floor would have bought nothing — i.e. the FIRST token's marginal EV sits under
 			# it. A fat cast (5 wounds) boosts on the ordinary floor and must not read as one.
 			var p_unboosted := AiSpell.cast_success_chance(0, 0, base_target)
-			var first_gain := (AiSpell.cast_success_chance(1, 0, base_target) - p_unboosted) * maxf(chosen_ev, 0.0)
-			boost_why = ("coin-flip boost: at %.0f%% any positive marginal EV beats holding the token"
-				% (p_unboosted * 100.0)) \
-				if p_unboosted <= AiSpell.COIN_FLIP_P and first_gain <= AiSpell.TOKEN_VALUE_EPS \
-				else "boost: marginal EV per token above the token floor"
+			var first_gain := (AiSpell.cast_success_chance(1, 0, base_target) - p_unboosted) * boost_value
+			if chosen_ev <= 0.0:
+				boost_why = "coin-flip boost on an unpriced effect: the spell's tokens are already paid, so the cast is worth landing"
+			elif p_unboosted <= AiSpell.COIN_FLIP_P and first_gain <= AiSpell.TOKEN_VALUE_EPS:
+				boost_why = ("coin-flip boost: at %.0f%% any positive marginal EV beats holding the token"
+					% (p_unboosted * 100.0))
+			else:
+				boost_why = "boost: marginal EV per token above the token floor"
 		else:
 			boost_why = "no boost: the next token's marginal EV stays under the token floor"
 	# — Interference (the enemy's officially-open counter-choice): auto-planned ONLY in both-AI mode
@@ -2761,7 +2747,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 	record_decision({"kind": "cast", "unit": member.get_name(),
 		"rule": "Solo v3.5.0 'Caster' (D3+X, cycle-to-valid) + Caster(X) v3.5.1 (4+, boost/interference 18\" LoS)",
 		"candidates": candidates_rec, "chosen": str(chosen.get("name", "?")),
-		"why": ("ev-best pick" if ev_best_pick else ("skip 0-EV" if skip_zero_ev and AiSpell.cast_is_worthwhile(chosen_ev) else "official D3+X cycle")),
+		"why": ("ev-best pick" if ev_best_pick else ("skip 0-EV" if skip_zero_ev and chosen_ev > 0.0 else "official D3+X cycle")),
 		"data": {"d3": d3, "caster_x": caster_x, "targets": ", ".join(PackedStringArray(target_names)),
 			"ev": chosen_ev, "boost": boost, "interference": interference, "p_cast": p_cast,
 			"boost_pool": boost_pool, "boost_why": boost_why,
