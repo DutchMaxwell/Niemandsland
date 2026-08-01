@@ -588,7 +588,12 @@ func _deserialize_object(data: Dictionary) -> bool:
 				# instead of spawning a duplicate (restore_game_unit_state only sets metas/pos).
 				if net_id >= 0 and object_manager.has_method("find_by_network_id"):
 					var existing: Node3D = object_manager.find_by_network_id(net_id)
-					if is_instance_valid(existing):
+					# ...but ONLY onto a node that is going to survive. load_game() empties the table
+					# with queue_free(), so for the rest of that frame the OLD models are still
+					# children AND still is_instance_valid — rebinding onto one of those hands the
+					# restored unit a node that dies at the end of the frame. Found by the runtime
+					# unit's save/load test: every model came back "valid" and was freed a frame later.
+					if is_instance_valid(existing) and not existing.is_queued_for_deletion():
 						restore_game_unit_state(existing, game_unit_id, model_idx)
 						return true
 				var loaded = _loaded_game_units[game_unit_id]

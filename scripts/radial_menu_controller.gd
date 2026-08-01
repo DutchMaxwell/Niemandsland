@@ -315,6 +315,10 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 				var solo_items := RadialMenu.solo_combat_items(game_unit)
 				for si in range(solo_items.size()):
 					items.insert(si, solo_items[si])
+			# Reinforcement reaches the model-menu path too: a DESTROYED carrier has no full-unit
+			# selection left, only its parked casualties — and that is exactly when the rule fires.
+			if game_unit != null:
+				items.append_array(RadialMenu.reinforcement_items(game_unit))
 			_append_transport_items(game_unit, context, items)
 	elif UnitUtils.is_terrain(first_obj):
 		context["terrain"] = first_obj
@@ -384,6 +388,8 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_solo_begin_spot(context)
 		"solo_pass":
 			_solo_begin_pass(context)
+		"reinforce":
+			_begin_reinforcement(context)
 		"select_unit":
 			_select_entire_unit(context)
 		"wounds":
@@ -626,6 +632,16 @@ func _solo_begin_spot(context: Dictionary) -> void:
 	var main_node := get_node_or_null("/root/Main")
 	if unit != null and main_node != null and main_node.has_method("solo_begin_spot"):
 		main_node.call("solo_begin_spot", unit)
+
+
+## Reinforcement (army-book v3.5.3): the owner takes the unit off the table as destroyed and is
+## promised a fresh copy next round. main owns the whole step — the refusal reason, the casualty
+## seam and the arrival beat all live there.
+func _begin_reinforcement(context: Dictionary) -> void:
+	var unit := _get_game_unit_from_context(context)
+	var main_node := get_node_or_null("/root/Main")
+	if unit != null and main_node != null and main_node.has_method("solo_begin_reinforcement"):
+		main_node.call("solo_begin_reinforcement", unit)
 
 
 ## Delayed Action / "Pass Turn" (wave 5). Deliberately NOT routed through _toggle_activation: a pass
@@ -2544,9 +2560,10 @@ func _begin_disembark_ghost(unit: GameUnit) -> void:
 		var w: float = main_node.table.table_size.x * 0.3048
 		var dd: float = main_node.table.table_size.y * 0.3048
 		bounds = Rect2(-w / 2.0, -dd / 2.0, w, dd)
+	var zone_c: Vector3 = t_model.node.global_position
 	var ghost := PlacementGhost.new()
 	add_child(ghost)
-	ghost.begin(shape, t_model.node.global_position, zone_m, blockers, bounds,
+	ghost.begin(shape, PlacementGhost.circle_zone(zone_c, zone_m), blockers, bounds,
 		func(positions: Array) -> void: _disembark_unit(unit, positions),
 		func() -> void: _transport_log("%s stays inside %s (placement cancelled)" % [
 			str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))]))

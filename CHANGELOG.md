@@ -34,6 +34,21 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   exact name now (the same "Ferocious lesson" the other rule checks already learned).
 
 ### Added
+- **Reinforcement (army-book).** A unit whose models all carry the rule may, while it is Shaken or once
+  it is fully destroyed, be removed from the table as destroyed; a fresh copy — full starting size, its
+  bought upgrades intact, wounds and Shaken reset — is placed at the start of the next round, right after
+  the Ambush arrivals. The copy goes down fully within 12″ of any table edge, including the enemy's — the
+  book names no minimum distance from enemies here, and neither do we. It cannot seize or contest
+  objectives on the round it arrives, but it activates that round exactly like an Ambush arrival. An
+  attached hero that does not itself carry the rule blocks it, and the battle log names the hero. The
+  returning copy really loses the rule — it is gone from its unit card, not tracked as an invisible
+  "already used" flag. When the edge strip is too crowded, as many models as legally fit are placed and
+  the rest are forfeit, with their own log line. Every application and every refusal writes its own
+  battle-log line. Under it sits the game's first **runtime unit factory**: until now a unit could only
+  come into existence while an army was being imported, which is why the rules that create units were
+  the last ones left unautomated. A unit born mid-game is now a full citizen — it gets its card in the
+  dock, it survives a save with its models where you left them, and it takes its turn in the
+  alternation like any other.
 - **Extended Buff Range (army-book).** A unit standing within 24″ of a friendly unit that carries
   the same rule *and* holds a Hero can be picked by that Hero's within-12″ buff rules as if it were
   in range. The link is measured **base edge to base edge** like the ruler (at 24″ a centre reading
@@ -117,6 +132,12 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   else's band is refused and says so in the log.
 
 ### Fixed
+- **A unit that was loaded back could be handed a model that had just been deleted.** Loading a save
+  clears the table, but the old models only really die at the end of that frame — and the loader, which
+  reuses an already-standing model when it recognises its id, kept recognising those. The restored unit
+  then owned models that vanished a frame later. It now only reuses a model that is actually going to
+  survive. Found by the new runtime-unit save/load test, and it applies to every save, not just to
+  units that arrive mid-game.
 - **A Mark cannot be put on a target you cannot see.** The "once per activation, before attacking,
   pick one enemy unit within 18″ **in line of sight**" Marks (*Unstoppable*, *Relentless*, *Rending*,
   *Furious*, *Unpredictable Fighter*) only ever measured the 18″ — so the mark landed on a unit
