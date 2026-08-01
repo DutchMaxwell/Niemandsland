@@ -7329,7 +7329,7 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 	# (Shaken or fully destroyed) and a fresh copy placed within 12" of any table edge at the
 	# start of the next round, after Ambush arrivals; can't seize/contest objectives that round,
 	# and the new copy loses the rule.
-	"Reinforcement"]
+	"Reinforcement",
 	# Dead-aura wave: the base rules the "X Aura" carriers grant. They resolve through primitives that
 	# were already automated (Shred / Rending / Lacerate / Indirect / Hit & Run Fighter) — only the
 	# named entry was missing, which is why the granted name resolved nowhere.
