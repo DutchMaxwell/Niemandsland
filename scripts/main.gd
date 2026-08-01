@@ -290,13 +290,36 @@ var _solo_los_cache: Dictionary = {}         # {target_id, count, at} — thrott
 const SOLO_GAME_ROUNDS := 4                  # OPR standard match length (rounds)
 const SOLO_AI_TAIL_DELAY_S := 1.2            # readable pause between the AI's unprompted tail activations
 const SOLO_DEPLOY_WALL_CLEARANCE_M := 0.02   # a deploy sample point within 2 cm (~0.8") of a container/ruin wall is blocked (finding 1)
-var _solo_pending_replies: int = 0           # human activations still owed one AI answer (alternation)
-var _solo_replied_ids: Dictionary = {}       # unit instance ids whose activation already earned the AI's reply
-                                             # THIS round (round 7, finding 5: re-toggling a unit's activation
-                                             # marker must never grant the AI a second answer)
-var _solo_ai_took_last_activation: bool = true  # who took the LAST activation of the current round (finding 7:
-                                             # drives who OPENS the next round — the OTHER side, never back-to-back).
-                                             # Init true so round 1 opens with the human (the default deployment order).
+## NML-949 — the match-level rule store (OPRArmyManager.rule_state). Falls back to a local
+## dictionary before the army manager exists (early boot) so the properties below never
+## null-crash; that fallback is pre-game state and is never saved.
+var _rule_state_fallback: Dictionary = {}
+func _rule_state() -> Dictionary:
+	return opr_army_manager.rule_state if opr_army_manager != null else _rule_state_fallback
+
+## Human activations still owed one AI answer (alternation). NML-949: in the match rule state —
+## a reload mid-round used to zero the debt and let the human finish the round uncontested.
+var _solo_pending_replies: int:
+	get: return int(_rule_state().get("pending_replies", 0))
+	set(value): _rule_state()["pending_replies"] = value
+
+## unit_id -> true for units whose activation already earned the AI's reply THIS round
+## (finding 5: re-toggling an activation marker must never grant a second answer).
+## NML-949: keyed by unit_id, NOT instance_id — instance ids are meaningless after a load.
+var _solo_replied_ids: Dictionary:
+	get:
+		if not _rule_state().has("replied_ids"):
+			_rule_state()["replied_ids"] = {}
+		return _rule_state()["replied_ids"]
+	set(value): _rule_state()["replied_ids"] = value
+
+## Who took the LAST activation of the current round (finding 7): drives who OPENS the next
+## round — the OTHER side, never back-to-back. Defaults true so round 1 opens with the human.
+## NML-949: stored in the match rule state, not on this node — a mid-round save/rejoin used to
+## drop it back to the class default and hand the next round's opener to the wrong side.
+var _solo_ai_took_last_activation: bool:
+	get: return bool(_rule_state().get("ai_took_last_activation", true))
+	set(value): _rule_state()["ai_took_last_activation"] = value
 var _solo_ai_busy: bool = false              # an AI activation chain is running (guards re-entry)
 var _solo_game_finished: bool = false        # summary shown after SOLO_GAME_ROUNDS — no further auto-advance
 var _solo_ai_banner: Label = null            # non-blocking "NACHTMAHR is taking its turn…" banner during the tail
@@ -1064,7 +1087,11 @@ func _solo_run_redeployment() -> void:
 ## _solo_deploy_phase_advance already uses for _solo_pump), so it holds `_solo_ai_busy` for its
 ## duration: the pump's own guard then returns early while reserves are still landing, and the flag is
 ## released below together with the opener the round owes.
-var _solo_rapid_round_one_done := false
+## NML-949: today only accidentally safe because a foreign game_phase gate hides it; loosen that
+## gate and it becomes exploitable — so it persists like the rest.
+var _solo_rapid_round_one_done: bool:
+	get: return bool(_rule_state().get("rapid_round_one_done", false))
+	set(value): _rule_state()["rapid_round_one_done"] = value
 
 
 func _solo_begin_rapid_ambush_round_one() -> void:
@@ -1323,10 +1350,10 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	# un-marking and re-marking a unit (a mis-click fix, or re-marking after an attack) re-emitted
 	# unit_activated and queued the AI a SECOND answer for the same activation — the alternation then ran
 	# ahead of the human ("unrecognized activations"). The pump still runs so the state machine drains.
-	if _solo_replied_ids.has(gu.get_instance_id()):
+	if _solo_replied_ids.has(gu.unit_id):
 		await _solo_pump()
 		return
-	_solo_replied_ids[gu.get_instance_id()] = true
+	_solo_replied_ids[gu.unit_id] = true
 	# Coordinate: an open hand-off the player walked away from (they activated somebody ELSE) is
 	# forfeited here rather than left to stall the AI's owed reply.
 	_solo_coordinate_release_if_bypassed(gu)
@@ -2029,7 +2056,7 @@ func _ensure_solo_controller() -> void:
 	if solo_controller == null:
 		solo_controller = SoloController.new()
 		add_child(solo_controller)
-		_solo_pending_replies = 0
+		_solo_pending_replies = 0   # a NEW AI designation starts its alternation debt at zero
 		_solo_game_finished = false
 		var human_slot: int = 1 if ai_slot != 1 else 2
 		solo_controller.setup(opr_army_manager, network_manager, movement_range_controller, human_slot, ai_slot)
@@ -3225,6 +3252,83 @@ func _solo_announce_spell_effect(caster: GameUnit, spell_name: String, effect: D
 			"Note: spell effects other than damage are not auto-applied — apply \"%s\" manually" % spell_name, true)
 
 
+## NML-949 — the durable half of the spell bookkeeping. `_solo_spell_mods` is keyed by
+## instance_id and `_solo_spell_tokens_active` holds live GameUnit refs; neither means anything
+## after a load or an MP rejoin, so both are mirrored per unit into unit_properties (the pattern
+## every other once-per-game flag already follows) with `granted_to` translated to unit_ids.
+## Without this the expiry loop woke up with an empty work set: the placed token stayed on the
+## table forever and its mechanical effect was gone without a word in the log.
+const SOLO_SPELL_RECORDS_KEY := "spell_records"
+const SOLO_SPELL_TOKENS_KEY := "spell_tokens"
+
+func _solo_mirror_spell_state() -> void:
+	if opr_army_manager == null:
+		return
+	for u in opr_army_manager.get_all_game_units():
+		var gu := u as GameUnit
+		if gu == null:
+			continue
+		var recs: Array = []
+		for rd in _solo_spell_mods.get(gu.get_instance_id(), []):
+			var out: Dictionary = (rd as Dictionary).duplicate(true)
+			var ids: Array = []
+			for gid in out.get("granted_to", []):
+				var g := instance_from_id(int(gid)) as GameUnit
+				if g != null and is_instance_valid(g):
+					ids.append(g.unit_id)
+			out["granted_to"] = ids   # unit_ids: the only identity that survives a save
+			recs.append(out)
+		if recs.is_empty():
+			gu.unit_properties.erase(SOLO_SPELL_RECORDS_KEY)
+		else:
+			gu.unit_properties[SOLO_SPELL_RECORDS_KEY] = recs
+		var toks: Array = []
+		for e in _solo_spell_tokens_active:
+			if (e as Dictionary).get("unit") == gu:
+				toks.append({"token": str((e as Dictionary).get("token", "")),
+					"once": bool((e as Dictionary).get("once", false))})
+		if toks.is_empty():
+			gu.unit_properties.erase(SOLO_SPELL_TOKENS_KEY)
+		else:
+			gu.unit_properties[SOLO_SPELL_TOKENS_KEY] = toks
+
+
+## NML-949 — rebuild the in-memory spell bookkeeping from unit_properties after a load or an
+## MP full-state push, so the round-end expiry has its work set back: the granted rules come
+## off again, the stamps clear, and the token leaves the table.
+func solo_rehydrate_spell_state() -> void:
+	if opr_army_manager == null:
+		return
+	_solo_spell_mods.clear()
+	_solo_spell_tokens_active.clear()
+	var by_id: Dictionary = {}
+	for u in opr_army_manager.get_all_game_units():
+		var gu := u as GameUnit
+		if gu != null:
+			by_id[gu.unit_id] = gu
+	for u in opr_army_manager.get_all_game_units():
+		var gu := u as GameUnit
+		if gu == null:
+			continue
+		var recs: Array = gu.unit_properties.get(SOLO_SPELL_RECORDS_KEY, [])
+		if not recs.is_empty():
+			var live: Array = []
+			for rd in recs:
+				var out: Dictionary = (rd as Dictionary).duplicate(true)
+				var ids: Array = []
+				for uid in out.get("granted_to", []):
+					var g := by_id.get(str(uid)) as GameUnit
+					if g != null:
+						ids.append(g.get_instance_id())
+				out["granted_to"] = ids
+				live.append(out)
+			_solo_spell_mods[gu.get_instance_id()] = live
+		for t in gu.unit_properties.get(SOLO_SPELL_TOKENS_KEY, []):
+			_solo_spell_tokens_active.append({"unit": gu,
+				"token": str((t as Dictionary).get("token", "")),
+				"once": bool((t as Dictionary).get("once", false))})
+
+
 ## Wave 6b — a successful lingering-effect cast PLACES the derived library token on every target
 ## (green buff / red debuff). NML-206 (maintainer live test: a successful buff produced NO token
 ## and NO effect): the token library only knows spells derived at army import — a missing entry
@@ -3312,6 +3416,7 @@ func _solo_record_spell_mod(tu: GameUnit, spell_name: String, effect: Dictionary
 			spell_name, tu.get_name(), ", ".join(parts),
 			(" (%s only)" % rec["scope"]) if not str(rec["scope"]).is_empty() else "",
 			("applies ONCE" if str(rec["duration"]) == "once" else "until end of round")], true)
+	_solo_mirror_spell_state()   # NML-949: durable half of the record kept in step
 
 
 ## NML-006 — the live joined-unit chain of a token bearer (bearer + host + joined heroes, deduped):
@@ -3483,6 +3588,7 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool) -> void:
 	if records.is_empty():
 		_solo_spell_mods.erase(key)
 	_solo_refresh_spell_stamps(uu)   # NML-006: stamps follow the surviving records
+	_solo_mirror_spell_state()   # NML-949: durable half of the record kept in step
 
 
 ## NML-006 — the event-specific once-consumers (casting after the cast die, morale after the test
@@ -3498,6 +3604,12 @@ func _solo_spend_once_kind(member: GameUnit, roles: Array) -> void:
 
 ## Round boundary: every spell token placed this round comes off again (and syncs the removal).
 func _solo_expire_spell_tokens() -> void:
+	# NML-949 belt-and-braces: the expiry is the ONE place that must never run on an empty
+	# work set — an empty set here is what left a placed token on the table forever. If the
+	# in-memory bookkeeping is gone but the units still carry their records (any load path,
+	# including one added later that forgets to call the rehydrate), rebuild it first.
+	if _solo_spell_mods.is_empty() and _solo_spell_tokens_active.is_empty():
+		solo_rehydrate_spell_state()
 	# NML-006: revert the mechanical side effects FIRST (grant overlays off, props stamps erased) —
 	# also on the no-controller path, so headless/batch rounds never leak a granted rule or stamp.
 	var affected: Array = []
@@ -3525,6 +3637,7 @@ func _solo_expire_spell_tokens() -> void:
 		(cu as GameUnit).unit_properties.erase("spell_range_mod")
 	if radial_menu_controller == null:
 		_solo_spell_tokens_active.clear()
+		_solo_mirror_spell_state()   # NML-949: durable half of the record kept in step
 		return
 	var carried: Array = []
 	for e in _solo_spell_tokens_active:
@@ -3541,6 +3654,7 @@ func _solo_expire_spell_tokens() -> void:
 					"\"%s\" on %s expires with the round — it was never consumed" % [
 					str((e as Dictionary).get("token")), tu.get_name()], true)
 	_solo_spell_tokens_active = carried
+	_solo_mirror_spell_state()   # NML-949: durable half of the record kept in step
 
 
 ## The human's resist prompt (v3.5.1 interference: enemy models with tokens within 18" LoS of the
@@ -12247,6 +12361,7 @@ func _on_load_completed(object_count: int) -> void:
 	# PLAYING with trails live; a setup save resumes in DEPLOYMENT).
 	_sync_move_trails_deployment()
 	_update_game_phase_ui()
+	solo_rehydrate_spell_state()   # NML-949: rebuild the spell bookkeeping the units carried in
 
 	# Sync to multiplayer clients if hosting
 	if network_manager.is_host and network_manager.connected_peers.size() > 0:
@@ -12405,6 +12520,7 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	save_manager._restore_hero_attachments_after_load()
 	save_manager._restore_markers_after_load()
 	save_manager._restore_regiments_after_load()
+	solo_rehydrate_spell_state()   # NML-949: rebuild the spell bookkeeping the units carried in
 
 	# Recreate each army's tray (the platform it stands on) — the join state carries units +
 	# models but not the tray, so a late-joiner would otherwise see floating models with no
@@ -12939,6 +13055,7 @@ func _on_remote_army_complete(player_id: int, rule_descriptions: Dictionary) -> 
 	save_manager._restore_hero_attachments_after_load()
 	save_manager._restore_markers_after_load()
 	save_manager._restore_regiments_after_load()
+	solo_rehydrate_spell_state()   # NML-949: rebuild the spell bookkeeping the units carried in
 
 	save_manager.end_restore()
 	network_manager.broadcast_peer_busy(false)  # army built — release the other peers' gate

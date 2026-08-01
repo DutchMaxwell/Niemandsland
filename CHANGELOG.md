@@ -69,6 +69,26 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   charge you declare gets its own opening line, like the AI's always had.
 
 ### Fixed
+- **Loading a battle no longer hands back rules you already spent.** Five pieces of rule
+  bookkeeping lived only in memory, so loading a save, rejoining a multiplayer room — or simply
+  changing which slot NACHTMAHR plays — quietly reset them to their starting values. A **Limited**
+  weapon is once per *game*, but a reloaded battle re-armed every one you had already fired. The
+  **Second Wind** cap of one third of the carriers *per round* dropped back to zero, so a round
+  could grant more second activations than it may. The rule that the side which took the last
+  activation does **not** open the next round fell back to its default, letting a save taken just
+  before a round ends decide the opener. The alternation debt — how many answers the AI still owes
+  you — was zeroed, so you could finish the round unopposed. And the once-per-game *Re-Deployment*
+  and round-one *Rapid Ambush* beats came back around. All five now travel with the battle: the
+  per-unit ones ride with their unit, the match-level ones ride in the saved game state, and both
+  reach a rejoining player over the same channel.
+- **A spell token stops being immortal decoration after a load.** Spell tokens are drawn from the
+  models they sit on, so they survived a save — but the bookkeeping that *removes* them did not.
+  After loading, the round-end sweep woke up with nothing to do: the token stayed on the table for
+  the rest of the game while its actual effect (the to-hit, defence, casting and morale modifiers)
+  had already vanished without a word in the log. Worse, the load path used to scrub granted spell
+  rules wholesale, which also deleted the effects the rules explicitly keep *until they apply*.
+  The mechanical record now persists with the unit, so a round-duration buff ends exactly when the
+  round ends and an apply-once buff waits, as written, until it fires.
 - **Your buff-giver rules finally do something.** The whole "once per activation, before attacking"
   buff family (*Precision Shooter Buff*, *Furious Buff*, *Entrenched Buff*, *No Retreat Buff*, …)
   bailed out on anything that was not an AI unit, so a human player's buff was dead data — no token,
