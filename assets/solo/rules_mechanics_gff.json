@@ -270,6 +270,7 @@
   "Rending",
   "Rending in Melee",
   "Rending in Melee Aura",
+  "Rending when Shooting",
   "Rending when Shooting Aura",
   "Repel Ambushers",
   "Resistance",
@@ -359,6 +360,7 @@
   "Unstoppable",
   "Unstoppable in Melee",
   "Unstoppable in Melee Aura",
+  "Unstoppable when Shooting",
   "Unstoppable when Shooting Aura",
   "Unwieldy",
   "Unwieldy Debuff",
@@ -767,6 +769,16 @@
     "melee_only": true
    }
   },
+  "Rending when Shooting": {
+   "primitive": "Rending",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "on6_ap": 4,
+    "bypass_regen": true,
+    "shooting_only": true
+   }
+  },
   "Scout": {
    "primitive": "Scout",
    "rated": false,
@@ -883,6 +895,15 @@
    "params": {
     "bypass_regen": true,
     "melee_only": true
+   }
+  },
+  "Unstoppable when Shooting": {
+   "primitive": "Lacerate",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bypass_regen": true,
+    "shooting_only": true
    }
   }
  },
