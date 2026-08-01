@@ -80,6 +80,25 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   charge you declare gets its own opening line, like the AI's always had.
 
 ### Fixed
+- **Five army-book rules now really play by their printed wording.** Five knobs of the rules data
+  (*hits per wound*, *placement dice*, *arrival distance*, *army cap*, *Defense per two markers*)
+  were read by no code at all, so whether the rules they describe played by the current books was
+  an untested assumption. Two of them did not. A boosted blink/step upgrade (*Rapid Blink Boost*,
+  *Wave-Step Boost*) placed its models within **D3″** instead of **2D3″**, and a unit that carried
+  both the base rule and its upgrade could even use the weaker one. *Defensive Growth* granted **no
+  Defense at all**: its markers were only counted in the older "+1 per marker" shape, while the
+  current books grant "+1 per **two** markers". The same blind spot silently disabled *Piercing
+  Frenzy* / *Precision Frenzy* (per marker) and *Fortified Growth*, whose "enemy AP −1 per two
+  markers" now reaches the save roll and says so in the log — while a *Fortified Growth* carrier no
+  longer also collects the plain *Fortified* reduction just because the name starts the same way.
+  *Retaliate(X)* keeps its "X hits per wound taken" scale but counts the wounds **per unit of a
+  joined chain**: a hero without the rule no longer feeds his squad's retaliation, and a hero who
+  has it finally lashes back for his own wounds. *Infiltrate*'s "over 3″" arrival ring and the
+  *Inquisitorial Agent* / *Martial Prowess* cap of one third of the carriers per round were already
+  right and are now read from the data as well, so a book that changes them changes the game.
+  Growth markers tick at the **start** of a round, cap at **4**, and a Shaken unit is **blocked**
+  from gaining one instead of losing its whole pile — the blocked tick and the reached cap each get
+  their own battle-log line.
 - **Your buff-giver rules finally do something.** The whole "once per activation, before attacking"
   buff family (*Precision Shooter Buff*, *Furious Buff*, *Entrenched Buff*, *No Retreat Buff*, …)
   bailed out on anything that was not an AI unit, so a human player's buff was dead data — no token,
