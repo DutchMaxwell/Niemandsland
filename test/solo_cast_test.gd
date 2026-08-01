@@ -125,6 +125,41 @@ func test_no_valid_spell_holds_tokens() -> void:
 	assert_bool(_last_record(solo, "cast_skip").is_empty()).is_false()
 
 
+func test_ev_floor_holds_the_tokens_when_the_best_pick_is_worthless() -> void:
+	# The D5 audit case, on a real board: the only enemy sits 25" away — out of reach of every
+	# damage/debuff spell — so the cycle's only valid picks are the two friendly buffs, and on a
+	# weaponless target both are worth exactly nothing in this EV chain. An EV-driven grade holds
+	# its tokens and says so; they accumulate and pay for a measurable cast later.
+	var caster := _unit(2, [Vector3(0, 0, 0)], "Mage", ["Caster(3)"])
+	caster.initialize_caster_points()
+	var enemy := _unit(1, [Vector3(25.0 * IN2M, 0, 0)], "FarSpears")
+	var solo := _controller([caster, enemy])
+	solo.difficulty_seed = 99
+	solo.set_difficulty(2, SoloDifficulty.for_grade("kriegsherr", 99))
+	solo._rng.seed = 7
+	assert_bool(solo._plan_member_cast(caster, caster).is_empty()).is_true()
+	assert_int(caster.casts_current).is_equal(3)     # nothing spent
+	var skip := _last_record(solo, "cast_skip")
+	assert_str(str(skip.get("why", ""))).is_equal("below the cast EV floor")
+	assert_float(float((skip.get("data", {}) as Dictionary).get("ev", -1.0))).is_equal_approx(0.0, 0.0001)
+	assert_bool((skip.get("data", {}) as Dictionary).has("ev_floor")).is_true()
+
+
+func test_ev_floor_is_the_grade_not_the_board() -> void:
+	# The RED half of the test above: the SAME worthless board, without an EV-driven grade. The
+	# official Solo v3.5.0 cycle is the rule at Rekrut/default — it casts the first valid spell
+	# whatever it is worth, and the tokens go. So the hold above is the POLICY, not an empty board.
+	var caster := _unit(2, [Vector3(0, 0, 0)], "Mage", ["Caster(3)"])
+	caster.initialize_caster_points()
+	var enemy := _unit(1, [Vector3(25.0 * IN2M, 0, 0)], "FarSpears")
+	var solo := _controller([caster, enemy])
+	solo._rng.seed = 7
+	var plan := solo._plan_member_cast(caster, caster)
+	assert_bool(plan.is_empty()).is_false()
+	assert_int(caster.casts_current).is_less(3)
+	assert_float(float(plan.get("ev", -1.0))).is_equal_approx(0.0, 0.0001)
+
+
 func test_unknown_faction_stays_manual() -> void:
 	# No committed spell data for the (system, faction) → the honest fallback: no automated cast,
 	# tokens held, the gap recorded (casting stays a manual action, exactly as before wave 6).
@@ -277,6 +312,9 @@ func test_both_ai_arena_smoke_casters_actually_cast() -> void:
 			var data: Dictionary = (rec as Dictionary).get("data", {})
 			assert_bool(data.has("d3") and data.has("boost") and data.has("interference") \
 				and data.has("p_cast") and data.has("tokens_before")).is_true()
+			# Every cast states WHY it took (or left) the boost — the decision log is the AI's
+			# explanation seam (an AI policy, not a rule: no battle-log line is owed here).
+			assert_str(str(data.get("boost_why", ""))).is_not_empty()
 	assert_int(cast_recs).is_greater(0)
 
 

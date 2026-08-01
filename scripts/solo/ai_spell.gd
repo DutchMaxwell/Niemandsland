@@ -37,6 +37,18 @@ const AURA_RANGE_IN: float = 18.0
 ## not a rule value: a token held is a future cast's currency).
 const TOKEN_VALUE_EPS: float = 0.05
 
+## The expected-wounds floor a cast must clear before an EV-DRIVEN difficulty pays tokens for it
+## (a documented convention, not a rule value — the SHOOT_EV_FLOOR reasoning of NML-007 applied to
+## spells, with its own constant because the currency differs: a volley costs an Advance, a cast
+## costs spell tokens). Priced at exactly one token (TOKEN_VALUE_EPS): an attempt worth less than
+## the cheapest thing a token can buy is worse than holding that token for the next cast. The
+## officially-scripted difficulties (Rekrut/default) ignore this floor — their D3+X cycle IS the
+## rule and casts the first valid spell whatever it is worth.
+const CAST_EV_FLOOR: float = TOKEN_VALUE_EPS
+
+## At or below this cast chance the boost economy drops its opportunity-cost floor (see plan_boost).
+const COIN_FLIP_P: float = 0.5
+
 ## Probability of one specific d6 face (the on-6 facet expectation, mirrors AiEv.SIX_P).
 const SIX_P := 1.0 / 6.0
 
@@ -258,16 +270,31 @@ static func official_pick_order(list_size: int, d3: int, caster_x: int) -> Array
 ## helper tokens in 18" LoS: spend while the NEXT token's marginal EV — [P(boost+1) − P(boost)] ×
 ## effect_value — exceeds the opportunity-cost floor (TOKEN_VALUE_EPS per token, the documented
 ## wave-6 convention). The [2,6] clamp naturally stops the spend once the roll can't improve.
+##
+## COIN-FLIP CLAUSE: while the cast is still at or below COIN_FLIP_P, the floor drops to zero and
+## ANY positive marginal gain buys the token. The floor prices a HELD token against the cast it
+## would boost LATER — but a later cast starts on the same unboosted 4+, so a token held to lift a
+## future coin flip cannot be worth more than the same token lifting THIS coin flip. Keeping the
+## floor there made the AI re-roll 50/50 casts with payable tokens in hand (the D5 audit finding);
+## above the coin flip the token is genuinely optional again and the floor applies as before.
 static func plan_boost(effect_value: float, available: int, interference_tokens: int = 0,
 		base_target: int = CAST_BASE_TARGET, min_gain: float = TOKEN_VALUE_EPS) -> int:
 	var boost := 0
 	while boost < available:
+		var p_now := cast_success_chance(boost, interference_tokens, base_target)
 		var gain := (cast_success_chance(boost + 1, interference_tokens, base_target)
-			- cast_success_chance(boost, interference_tokens, base_target)) * maxf(effect_value, 0.0)
-		if gain <= min_gain:
+			- p_now) * maxf(effect_value, 0.0)
+		var floor_now: float = 0.0 if p_now <= COIN_FLIP_P else min_gain
+		if gain <= floor_now:
 			break
 		boost += 1
 	return boost
+
+
+## Whether a cast is worth the tokens it costs at all — the EV-floor gate the EV-driven difficulties
+## apply to their pick (see CAST_EV_FLOOR). Pure so the policy is testable without a table.
+static func cast_is_worthwhile(effect_value: float, floor_value: float = CAST_EV_FLOOR) -> bool:
+	return effect_value >= floor_value
 
 
 ## F4/NML-006 — pure once-mod filtering for the DICE path (mirrors the exporter's encoding, tested):

@@ -194,8 +194,42 @@ func test_plan_boost_spends_while_marginal_ev_exceeds_floor() -> void:
 	# A worthless effect never buys a token; an empty pool never spends.
 	assert_int(AiSpell.plan_boost(0.0, 4)).is_equal(0)
 	assert_int(AiSpell.plan_boost(3.0, 0)).is_equal(0)
-	# A marginal effect below the floor (6 × 0.05 = 0.3 wounds) holds the tokens.
-	assert_int(AiSpell.plan_boost(0.2, 4)).is_equal(0)
+	# ABOVE the coin flip the opportunity-cost floor still holds the tokens: a 3+ cast (2/3) worth
+	# 0.2 wounds gains 0.033 per token — under the 0.05 floor, so nothing is spent.
+	assert_int(AiSpell.plan_boost(0.2, 4, 0, 3)).is_equal(0)
+
+
+func test_plan_boost_takes_the_boost_a_coin_flip_can_afford() -> void:
+	# THE D5 CASE (audit ab935: Toxin Mist ev 0.278, p_cast 0.500, boost 0, 2 tokens still in hand).
+	# On the unboosted 4+ the marginal gain is 0.2/6 = 0.033 — under the old flat floor, so the AI
+	# re-rolled a coin flip with a payable token in its pocket. The coin-flip clause buys it.
+	assert_int(AiSpell.plan_boost(0.2, 1)).is_equal(1)
+	# It stops the moment the cast is out of the coin flip: at 3+ (2/3) the floor applies again.
+	assert_int(AiSpell.plan_boost(0.2, 4)).is_equal(1)
+	# Marginal utility must still be POSITIVE — a worthless cast buys nothing, coin flip or not …
+	assert_int(AiSpell.plan_boost(0.0, 4)).is_equal(0)
+	# … and no token is invented: what the aura cannot pay, the caster cannot spend.
+	assert_int(AiSpell.plan_boost(0.2, 0)).is_equal(0)
+	# A cast that is already 5/6 (2+ base) gains nothing from another token — the clamp stops it.
+	assert_int(AiSpell.plan_boost(3.0, 4, 0, 2)).is_equal(0)
+	# Interfered down to 5+ (1/3): the tokens dig back OUT of the hole — to the coin flip and one
+	# past it — and stop where the floor takes over again.
+	assert_int(AiSpell.plan_boost(0.2, 4, 1)).is_equal(2)
+
+
+func test_cast_ev_floor_rejects_the_worthless_cast() -> void:
+	# The cast EV floor is priced at exactly one spell token (the boost economy's own unit): an
+	# attempt worth less than the cheapest thing a token buys is worse than holding the token.
+	assert_float(AiSpell.CAST_EV_FLOOR).is_equal_approx(AiSpell.TOKEN_VALUE_EPS, EPS)
+	# A cast the EV chain values at nothing is not worth its tokens (the "castable"-status buffs the
+	# audit caught: ev 0.0, cast anyway, 4 rounds running).
+	assert_bool(AiSpell.cast_is_worthwhile(0.0)).is_false()
+	assert_bool(AiSpell.cast_is_worthwhile(0.049)).is_false()
+	assert_bool(AiSpell.cast_is_worthwhile(-1.0)).is_false()
+	# Everything with a real payoff passes — including the small ones the boost clause then lifts.
+	assert_bool(AiSpell.cast_is_worthwhile(AiSpell.CAST_EV_FLOOR)).is_true()
+	assert_bool(AiSpell.cast_is_worthwhile(0.278)).is_true()
+	assert_bool(AiSpell.cast_is_worthwhile(6.0)).is_true()
 
 
 func test_plan_interference_mirrors_the_calculus() -> void:
