@@ -3251,6 +3251,12 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# the per-model overlap push would break the block (regiments plan as a rigid body, not individual models).
 	var gate_shortened := false
 	var band_clamp_models := 0
+	# NML-935 (boxed play): the band the unit was actually GRANTED for this move — after the p.11
+	# difficult cap and the stall escalation, before the gate-collapse ladder starts cutting it down.
+	# The ladder shortens because the STRAIGHT lane has no legal end state; that says nothing about how
+	# far the unit may legally walk SIDEWAYS, so the lateral escape below measures itself against this
+	# number rather than against the ladder's remnant (see there).
+	var granted_reach := reach
 	if not _is_regiment(unit):
 		var planned_m := _achieved_m(positions, new_positions)   # pre-gate displacement, post-trim
 		# NML-230 Breach A: hand the gate per-model displacement budgets (band slack after the walked
@@ -3309,6 +3315,14 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			# Torn at every reach FROM A COHERENT START → the unit HOLDS: movement never CREATES a tear
 			# (GF v3.5.1 p.7 — the maintainer's live-test invariant). A unit that already started torn
 			# keeps its best-effort move instead (freezing it forever would be worse than the tear).
+			#
+			# NML-935 measured this seam and deliberately left it alone. Deferring the hold past the
+			# lateral escape below — so a rotated goal could settle the tear — was built and run over
+			# the 9 fixed seeds: it rescued ZERO units, left the same four frozen for whole games
+			# (t61002 Operators/Elite Operators, t61008 Rebels/Strikers), and made things slightly
+			# worse by spending the per-round sidestep budget the working escape needs (8 of 19 holds
+			# then reported no budget left). Unproven mechanism — not shipped. The tear itself needs
+			# its own diagnosis: these units plan 1-4" and the gate tears them at every reach.
 			if not best_coherent and start_coherent:
 				record_decision({"kind": "move", "unit": unit.get_name(),
 					"rule": "Coherency invariant: every reach retry ended torn (gate/wall-clamp debt) — hold instead",
@@ -3338,12 +3352,17 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	# walled on all sides by friendly/enemy bases accepts the stub instead of burning replans.
 	# Big bases always get the escape (few of them, scarce maneuver room); small-base hordes draw from
 	# the per-round budget so a pileup can't blow up runtime (stub-fix fluidity trade — see the const).
+	# NML-935: BOTH the probe and the sweep measure themselves against the GRANTED band, not against
+	# `reach` — which the gate-collapse ladder may have cut to a quarter. That starved the escape by
+	# exactly the amount it was needed: a unit whose 14" advance collapsed to 3.5" probed for lateral
+	# room at 1.75" (inside its own friendly wall by construction), found none, and stubbed. The
+	# straight lane being jammed is not a reason to walk a shorter distance sideways.
 	var sidestep_allowed: bool = is_big_base or _sidestep_budget > 0
 	if not _is_regiment(unit) and not allow_contact \
-			and reach >= 2.0 \
+			and granted_reach >= 2.0 \
 			and _achieved_m(positions, new_positions) < BOXED_ACHIEVED_IN * INCHES_TO_METERS \
 			and sidestep_allowed \
-			and _has_lateral_room(unit, models, positions, reach):
+			and _has_lateral_room(unit, models, positions, granted_reach):
 		if not is_big_base:
 			_sidestep_budget -= 1
 		var anchor := MoveIntent.anchor_of(positions)
@@ -3362,9 +3381,9 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 					var rotated := to_goal.rotated(deg_to_rad(float(mag) * float(side)))
 					var goal4 := Vector3(anchor.x + rotated.x, goal.y, anchor.z + rotated.y)
 					var t4: Array = []
-					var p4 := _plan_move(unit, models, positions, _clamp_to_bounds(goal4), reach,
+					var p4 := _plan_move(unit, models, positions, _clamp_to_bounds(goal4), granted_reach,
 						allow_contact, avoid, avoid_dangerous, t4, charge_target)
-					var b4 := reach * INCHES_TO_METERS
+					var b4 := granted_reach * INCHES_TO_METERS
 					for i in range(mini(t4.size(), p4.size())):
 						var leg4 := t4[i] as Array
 						if MovementPlanner.polyline_length(leg4) > b4 + 0.0005:
@@ -3374,7 +3393,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 								var fin4 := cut4.back() as Vector3
 								p4[i] = Vector3(fin4.x, (p4[i] as Vector3).y, fin4.z)
 					p4 = _finalize_placement(unit, models, positions, p4, allow_contact, charge_target,
-						_gate_disp_caps_m(t4, trail_radii_m, reach, ignores_difficult))
+						_gate_disp_caps_m(t4, trail_radii_m, granted_reach, ignores_difficult))
 					var a4 := _achieved_m(positions, p4)
 					var c4 := _config_coherent_world(models, p4, chain_in)
 					# Lexicographic: a coherent sidestep beats a torn one at any distance; within a
@@ -3397,6 +3416,9 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			if boxed_repositioned:
 				new_positions = best_pos2
 				trails = best_trails2
+				# The escape walked the GRANTED band, so that is the budget this move actually had —
+				# the record must say so, and the distance-truth caps below measure against it.
+				reach = granted_reach
 	# Flying ignores terrain effects whilst moving (p.13) — no Dangerous tests for its crossings. Counted on
 	# the ROUTE (pre-gate endpoints of the CHOSEN plan): the model still traversed those cells even if the
 	# gate nudges its rest spot.
