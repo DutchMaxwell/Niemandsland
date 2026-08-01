@@ -2365,7 +2365,15 @@ func _append_transport_items(game_unit: GameUnit, context: Dictionary, items: Ar
 		return
 	var targets := _embark_targets_for(game_unit)
 	var economy := _activation_economy_on()
-	if not targets.is_empty() and not (economy and game_unit.is_activated):
+	# NML-953, the same defect on the other side of the door: a unit that already acted may not also
+	# climb IN — right, and the whole Embark block used to disappear for it, so a transport standing
+	# right there simply offered nothing. Greyed with the reason instead, and ONE entry rather than
+	# one per vehicle: the refusal is about this unit, not about which truck it would have picked.
+	if not targets.is_empty() and economy and game_unit.is_activated:
+		items.append(RadialMenu.RadialMenuItem.new("embark_spent",
+			"Embark — already activated", "▣", false,
+			"%s has already used its activation this round, and embarking is a move action (GF v3.5.1 p.15). It can board next round." % str(game_unit.unit_properties.get("name", "This unit"))))
+	elif not targets.is_empty():
 		context["embark_targets"] = targets
 		for ti in range(targets.size()):
 			var target := targets[ti] as GameUnit

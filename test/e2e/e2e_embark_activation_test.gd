@@ -212,6 +212,28 @@ func test_a_spent_cargo_keeps_a_greyed_unload_entry(timeout := 120000) -> void:
 	assert_str(str(it.tooltip)).contains("p.15")
 
 
+func test_a_spent_unit_keeps_a_greyed_embark_entry(timeout := 120000) -> void:
+	# The same defect on the other side of the door: with its activation spent the unit may not
+	# board either, and the whole Embark block used to vanish — a transport standing right in front
+	# of it offered nothing at all.
+	_solo_playing_on()
+	var tc := _truck_and_cargo()
+	(tc[1] as GameUnit).activate(1)
+	var items: Array = []
+	_main.radial_menu_controller._append_transport_items(tc[1], {}, items)
+	var found = null
+	for it in items:
+		if str(it.id).begins_with("embark"):
+			found = it
+	assert_object(found) \
+		.override_failure_message("the Embark entry VANISHED for a unit whose activation is spent — no option, no reason") \
+		.is_not_null()
+	if found == null:
+		return
+	assert_bool(bool(found.enabled)).is_false()
+	assert_str(str(found.tooltip)).contains("p.15")
+
+
 # ===== NML-954 — a destroyed transport owes its cargo all THREE consequences =====
 
 ## Kill the transport's only model through the real dead-parking choke point, the way a lethal

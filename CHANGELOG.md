@@ -13,7 +13,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   The menu enforced that by simply **dropping the entry**: no option, no reason, nothing. Load a squad
   in round 1 and the transport's menu had no Unload at all, which reads as a broken game rather than as
   a rule. The entry stays now — greyed, labelled *"Unload X — already activated"*, with a tooltip that
-  names the rule and says the unit can exit next round. Nothing about what is *allowed* changed.
+  names the rule and says the unit can exit next round. The same silent hide sat on the other side
+  of the door — a unit that had already acted got no **Embark** entry either, so a transport parked
+  right in front of it offered nothing at all; that one is greyed and explained now too. Nothing
+  about what is *allowed* changed.
 - **A destroyed transport's cargo skipped the dangerous terrain test on the AI's side.** The rule gives
   a wrecked transport's passengers three consequences at once: they take a dangerous terrain test, they
   are Shaken, and they must be placed fully within 6″ of the transport before it is removed. Shaken and
