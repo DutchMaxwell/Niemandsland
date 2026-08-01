@@ -66,6 +66,7 @@
   "Defense Buff",
   "Defense Debuff",
   "Defensive Frenzy",
+  "Delayed Action",
   "Destroyer",
   "Destroyer Boost",
   "Destroyer Boost Aura",
@@ -174,6 +175,7 @@
   "Ossified",
   "Ossified Boost",
   "Ossified Boost Aura",
+  "Pass Turn",
   "Piercing Assault",
   "Piercing Assault Aura",
   "Piercing Assault Buff",
@@ -402,6 +404,7 @@
   "Mend",
   "Musician",
   "No Retreat",
+  "Pass Turn",
   "Piercing Assault",
   "Piercing Hunter",
   "Precise",
@@ -2831,9 +2834,13 @@
     }
    },
    "Delayed Action": {
-    "primitive": null,
+    "primitive": "Pass Turn",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "uses_per_round": 1,
+     "requires_opponent_surplus": true
+    }
    },
    "Fortified": {
     "primitive": "Fortified",
@@ -2898,9 +2905,13 @@
     }
    },
    "Delayed Action": {
-    "primitive": null,
+    "primitive": "Pass Turn",
     "rated": false,
-    "book_version": "3.5.2"
+    "book_version": "3.5.2",
+    "params": {
+     "uses_per_round": 1,
+     "requires_opponent_surplus": true
+    }
    },
    "Fortified": {
     "primitive": "Fortified",
@@ -2937,9 +2948,13 @@
     }
    },
    "Delayed Action": {
-    "primitive": null,
+    "primitive": "Pass Turn",
     "rated": false,
-    "book_version": "3.5.2"
+    "book_version": "3.5.2",
+    "params": {
+     "uses_per_round": 1,
+     "requires_opponent_surplus": true
+    }
    },
    "Fortified": {
     "primitive": "Fortified",
@@ -3022,9 +3037,13 @@
     }
    },
    "Delayed Action": {
-    "primitive": null,
+    "primitive": "Pass Turn",
     "rated": false,
-    "book_version": "3.5.2"
+    "book_version": "3.5.2",
+    "params": {
+     "uses_per_round": 1,
+     "requires_opponent_surplus": true
+    }
    },
    "Fortified": {
     "primitive": "Fortified",
@@ -3096,9 +3115,13 @@
     }
    },
    "Delayed Action": {
-    "primitive": null,
+    "primitive": "Pass Turn",
     "rated": false,
-    "book_version": "3.5.2"
+    "book_version": "3.5.2",
+    "params": {
+     "uses_per_round": 1,
+     "requires_opponent_surplus": true
+    }
    },
    "Fortified": {
     "primitive": "Fortified",

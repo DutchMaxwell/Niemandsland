@@ -416,3 +416,40 @@ func test_wave_a_unit_primitive_resolution() -> void:
 	var rr := RulesRegistry.unit_rules_of_primitive(r, "Ravage")
 	assert_int(rr.size()).is_equal(1)
 	assert_str(str(((rr[0] as Dictionary).get("params", {}) as Dictionary).get("trigger", ""))).is_equal("post_melee_move")
+
+
+## Wave 5 — Delayed Action rides the NEW "Pass Turn" primitive (the alternation's pass step;
+## Combat Hesitation, GF Advanced v3.5.1 p.41, is the dice-gated sister of the same primitive).
+## The rule sits in 21 books across all five game systems with word-identical text, so the emitted
+## maps are checked per system, not once: a system that lost the entry would silently drop the rule
+## back onto the manual list for a whole game line.
+func test_delayed_action_resolves_through_the_pass_turn_primitive() -> void:
+	var cases: Array = [
+		["gf", "human_inquisition"],
+		["gf", "titan_lords"],
+		["gff", "city_runners"],
+		["aof", "giant_tribes"],
+		["aofr", "giant_tribes"],
+		["aofs", "hired_guards"],
+	]
+	for c in cases:
+		var entry := RulesRegistry.lookup(str(c[0]), str(c[1]), "Delayed Action")
+		assert_str(str(entry.get("primitive", ""))) \
+			.override_failure_message("%s/%s lost the Pass Turn primitive" % [c[0], c[1]]).is_equal("Pass Turn")
+		var params: Dictionary = entry.get("params", {})
+		assert_str(str(params.get("uses_per_round")).trim_suffix(".0")) \
+			.override_failure_message("%s/%s: uses_per_round" % [c[0], c[1]]).is_equal("1")
+		assert_bool(bool(params.get("requires_opponent_surplus", false))) \
+			.override_failure_message("%s/%s: requires_opponent_surplus" % [c[0], c[1]]).is_true()
+	# The alias seam every resolver queries, and the modeled/decision sets that stop the battle log
+	# from calling the rule manual work.
+	var u := _unit_with(["Delayed Action"], "gf", "human_inquisition")
+	assert_int(RulesRegistry.unit_rules_of_primitive(u, "Pass Turn").size()).is_equal(1)
+	for system in ["gf", "gff", "aof", "aofs", "aofr"]:
+		assert_array(RulesRegistry.modeled_tokens(system)) \
+			.override_failure_message("%s still lists Delayed Action as manual work" % system) \
+			.contains(["Delayed Action", "Pass Turn"])
+		assert_array(RulesRegistry.decision_tokens(system)) \
+			.override_failure_message("%s does not count the pass as a decision" % system) \
+			.contains(["Pass Turn"])
+	RulesRegistry.reset_cache()

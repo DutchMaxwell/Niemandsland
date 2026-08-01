@@ -461,6 +461,12 @@ static func solo_combat_items(game_unit: GameUnit = null) -> Array[RadialMenuIte
 	if game_unit != null and _spotter_member_of(game_unit) != null:
 		out.append(RadialMenuItem.new("solo_spot", "Spot", "◎", true,
 			"Precision Spotter: pick an enemy within 36\" line of sight — on 4+ a marker lands; attackers may remove markers for +1 to hit each"))
+	# Delayed Action (wave 5) — the "Pass Turn" primitive. Offered on every carrier, NEVER hidden when
+	# the condition happens to fail: an entry that vanishes reads like a missing rule, so an illegal
+	# pass is refused in the battle log with the measured counts instead (#224 transparency doctrine).
+	if game_unit != null and SoloController.delayed_action_member_of(game_unit) != null:
+		out.append(RadialMenuItem.new("solo_pass", "Pass", "⏸", true,
+			"Delayed Action: pass this turn instead of activating — legal once per round while your opponent has more units left to activate than you; the unit may still be activated later"))
 	return out
 
 

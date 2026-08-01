@@ -87,28 +87,16 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
     shipped long before the data said so. **Extended Buff Range shipped** (wave 4): a Hero's
     within-12″ buff rules reach a friendly carrier up to 24″ away (base edge to base edge) through
     exactly one relay hop, spells excluded, every application and refusal logged. _M–L_
-  - **Wave C — movement / deployment:** **Delayed Action**, **Traversal**. The three
+  - **Wave C — movement / deployment:** **Traversal**. **Delayed Action shipped** (wave 5): the new "Pass Turn" primitive — once per round a carrier may pass the turn while the opponent has strictly more units left, every pass and refusal logged. The three
     **Ambush variants shipped** (wave 1): *Ambush Beacon* waives every enemy distance restriction
     within 6″ of the beacon model, *Rapid Ambush* arrives from round 1 as a round-start beat, and
     *Ambush Re-Deployment* takes a unit off the table once per game and brings it back exactly one
     round later. **Coordinate shipped** (wave 4): the hand-off activates an un-activated friend
     within 12″ immediately, never chains past two activations, and leaves the alternation ledger
     untouched. _M_
-- **Selectable AI difficulty grades** — `0.3.10.0-alpha` ships exactly one grade (NACHTMAHR at full
-  strength); the difficulty selector is out of the solo panel and every legacy grade name maps to it.
-  Bringing weaker personas back means re-validating each knob set on the self-play ladder so a lower
-  grade is *weaker but never illegal* — the AI must keep playing by the book and never cheat at any
-  grade. _M_
-- **Transports — stage 2 (AI doctrine)** — stage 1 (state, capacity, embark/disembark, destruction
-  spill, MP sync, save 1.7) shipped in `0.3.10.0-alpha`; the AI side of the official Solo & Co-Op
-  doctrine is open: seeded random loading at deployment, the transport activating before its cargo in
-  round 1, the mandatory disembark on the cargo's first activation (with a log line when it is not
-  possible), and transports as targets in the AI's target/EV selection. _M_
-- **Co-op vs the AI** — solo is single-player today: one human against NACHTMAHR. Co-op means two or
-  more humans sharing a side against the AI over the existing relay — the AI turn has to run
-  host-authoritatively and its dice, prompts and battle-log lines have to reach every guest identically,
-  including a mid-game reconnect. _L_
-
+  notice names them. The complete remainder is **six rule names** (everything else in the books is
+  modeled — plain *Re-Deployment*, *Grounded Reinforcement*, *Reanimation*, *Caster Group*, *Spell
+  Accumulator*, *Delayed Action* and all three Ambush variants included):
 ### Alpha-feedback batch (accepted 2026-07-01) — sorted Now vs soon
 
 > **✅ Shipped in `0.3.7.2-alpha`:** dice-log live-scroll, deployment-zone colour flip, cursor/avatar

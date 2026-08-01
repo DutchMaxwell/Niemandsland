@@ -2653,3 +2653,114 @@ func test_coordinate_marker_is_a_per_round_stamp() -> void:
 	u.activate(2, true)
 	u.deactivate()
 	assert_bool(u.was_activated_via_coordinate()).is_false()
+
+# === Wave 5 — "Pass Turn" primitive + Delayed Action =========================================
+#
+# "Once per round, if your opponent has more units left to activate than you, then this model's
+#  unit may pass its turn instead of activating (may still be activated later)."
+# (word-identical in all 21 army books that carry it; 73 occurrences across all five systems)
+
+
+## TERMINATION GUARD (a), proven symmetrically: the condition is STRICTLY more, so it can never be
+## true for both sides at once. Without that, two carriers could pass each other forever and the
+## round would never end. The equality case is the one that closes the loop — it must refuse BOTH.
+func test_delayed_action_surplus_is_strict_and_never_holds_for_both_sides() -> void:
+	assert_bool(SoloController.delayed_action_surplus(4, 3)).is_true()
+	assert_bool(SoloController.delayed_action_surplus(1, 0)).is_true()
+	# Equal counts: NOBODY may pass — the >= reading would let both sides pass in turn forever.
+	assert_bool(SoloController.delayed_action_surplus(3, 3)) \
+		.override_failure_message("equal counts must refuse — '>=' is the endless-pass bug") \
+		.is_false()
+	assert_bool(SoloController.delayed_action_surplus(0, 0)).is_false()
+	assert_bool(SoloController.delayed_action_surplus(2, 5)).is_false()
+	# The whole small-number square: the two directions are never true together.
+	for a in range(0, 8):
+		for b in range(0, 8):
+			assert_bool(SoloController.delayed_action_surplus(a, b) and SoloController.delayed_action_surplus(b, a)) \
+				.override_failure_message("both sides could pass at %d vs %d — mutual passing never terminates" % [a, b]) \
+				.is_false()
+
+
+## TERMINATION GUARD (b): "once per round" is stamped on the CARRIER UNIT (maintainer ruling: the
+## wording binds "this model's unit", there is no army cap), so a carrier cannot pass twice in the
+## same round — and the stamp expires with the round.
+func test_delayed_action_stamp_is_per_carrier_and_per_round() -> void:
+	var a := _unit(1, [Vector3.ZERO])
+	var b := _unit(1, [Vector3(0.1, 0, 0)])
+	assert_bool(SoloController.delayed_action_used_this_round(a, 2)).is_false()
+	SoloController.delayed_action_stamp(a, 2)
+	assert_bool(SoloController.delayed_action_used_this_round(a, 2)).is_true()
+	# Ruling 2: no army-wide cap — a SECOND carrier may still pass in the same round.
+	assert_bool(SoloController.delayed_action_used_this_round(b, 2)).is_false()
+	# The stamp is a round number, not a flag: round 3 re-opens the rule for the same carrier.
+	assert_bool(SoloController.delayed_action_used_this_round(a, 3)).is_false()
+	assert_bool(SoloController.delayed_action_used_this_round(null, 2)).is_false()
+
+
+## Every refusal names its own reason (transparency doctrine: the radial entry stays visible, so the
+## log has to explain the "no"). "" means the pass is legal.
+func test_delayed_action_refusal_names_the_measured_reason() -> void:
+	assert_str(SoloController.delayed_action_refusal(true, false, false, 4, 3)) \
+		.override_failure_message("a legal pass must not be refused") \
+		.is_empty()
+	assert_str(SoloController.delayed_action_refusal(false, false, false, 4, 3)).contains("no model in the unit has Delayed Action")
+	assert_str(SoloController.delayed_action_refusal(true, true, false, 4, 3)).contains("already activated this round")
+	assert_str(SoloController.delayed_action_refusal(true, false, true, 4, 3)).contains("once per round")
+	var equal := SoloController.delayed_action_refusal(true, false, false, 3, 3)
+	assert_str(equal).contains("opponent has 3 units left to activate, you have 3")
+	assert_str(equal).contains("MORE than you")
+	# Precedence: the once-per-round stamp is reported even when the surplus is missing too, so the
+	# player learns the rule is spent rather than blaming the counts.
+	assert_str(SoloController.delayed_action_refusal(true, false, true, 3, 3)).contains("once per round")
+	# "own_left == 0" is not a case the caller has to special-case: with nothing of yours left to
+	# activate, YOUR carrier is one of the activated units — the already-activated branch refuses
+	# before the counts are ever compared. (Proven, not assumed — the spec asked for exactly this.)
+	assert_str(SoloController.delayed_action_refusal(true, true, false, 5, 0)) \
+		.override_failure_message("a pass must never be the activation a side no longer has") \
+		.contains("already activated this round")
+
+
+## The carrier lookup reads the unit AND a joined hero (the Precision-Spotter reading), and it
+## matches the rule EXACTLY — has_special_rule() is a prefix match, so a "Delayed" probe must not
+## answer for something else (the Ferocious/Reanimation prefix lesson).
+func test_delayed_action_member_of_reads_the_unit_and_its_joined_hero() -> void:
+	var plain := _unit(1, [Vector3.ZERO])
+	assert_object(SoloController.delayed_action_member_of(plain)).is_null()
+	assert_object(SoloController.delayed_action_member_of(null)).is_null()
+	var carrier := _unit(1, [Vector3.ZERO])
+	carrier.unit_properties["special_rules"] = ["Delayed Action"]
+	assert_object(SoloController.delayed_action_member_of(carrier)).is_equal(carrier)
+	# A joined hero brings the rule to its host unit.
+	var host := _unit(1, [Vector3.ZERO])
+	var hero := _unit(1, [Vector3(0.03, 0, 0)])
+	hero.unit_properties["special_rules"] = ["Hero", "Delayed Action"]
+	host.unit_properties["attached_heroes"] = [hero]
+	assert_object(SoloController.delayed_action_member_of(host)).is_equal(hero)
+	# ROT case: a near-miss name must NOT match (exact base-name reading, not a prefix).
+	var decoy := _unit(1, [Vector3.ZERO])
+	decoy.unit_properties["special_rules"] = ["Delayed Action Beacon"]
+	assert_object(SoloController.delayed_action_member_of(decoy)) \
+		.override_failure_message("prefix matching would make any 'Delayed Action…' rule a carrier") \
+		.is_null()
+
+
+## The AI's threat test needs BOTH reach and sight — either alone is not a threat worth a turn.
+func test_delayed_action_threat_needs_reach_and_line_of_sight() -> void:
+	assert_bool(SoloController.delayed_action_threatened(8.0, 12.0, true)).is_true()
+	assert_bool(SoloController.delayed_action_threatened(12.0, 12.0, true)).is_true()   # exactly at reach
+	assert_bool(SoloController.delayed_action_threatened(12.1, 12.0, true)).is_false()
+	assert_bool(SoloController.delayed_action_threatened(8.0, 12.0, false)) \
+		.override_failure_message("a blind enemy is no reason to delay") \
+		.is_false()
+	assert_bool(SoloController.delayed_action_threatened(0.0, 0.0, true)).is_false()   # no weapons, no move
+
+
+## The pass worth used to pick the unit the delay protects: points when the list has them, model
+## count for hand-built fixtures.
+func test_delayed_action_worth_prefers_points_over_model_count() -> void:
+	var cheap := _unit(1, [Vector3.ZERO, Vector3(0.1, 0, 0), Vector3(0.2, 0, 0)])
+	var dear := _unit(1, [Vector3.ZERO])
+	dear.unit_properties["cost"] = 220
+	assert_float(SoloController.delayed_action_worth(cheap)).is_equal_approx(3.0, 0.001)
+	assert_float(SoloController.delayed_action_worth(dear)).is_equal_approx(220.0, 0.001)
+	assert_float(SoloController.delayed_action_worth(null)).is_equal_approx(0.0, 0.001)

@@ -343,6 +343,12 @@ SHIPPED_PLANNED = {
     # and SoloController.coordinate_candidates / main._solo_try_coordinate_*).
     "Extended Buff Range",
     "Coordinate",
+    # Wave 5 (2026-08-01). 73 occurrences across 21 books and all five systems — the largest single
+    # open rule. The registry entry carries primitive "Pass Turn" (the alternation's new pass step;
+    # Combat Hesitation, GF Advanced v3.5.1 p.41, is the dice-gated sister of the same primitive)
+    # plus {uses_per_round, requires_opponent_surplus}; only the "planned" status kept nulling it.
+    # Resolvers: SoloController.delayed_action_* / main._solo_pass_turn.
+    "Delayed Action",
 }
 
 # Primitives that only exist in SOME systems' books: the bridging table above is
