@@ -5517,6 +5517,204 @@ static func pending_replies_at_round_start(ai_opens: bool) -> int:
 	return 1 if ai_opens else 0
 
 
+# === PRIMITIVE "Pass Turn" + its first user, Delayed Action ====================================
+#
+# THE PRIMITIVE. "Pass Turn" is the missing step in the alternation: the side whose turn it is
+# declines to activate, the turn goes to the opponent, and NOTHING about any unit changes — the
+# unit that passed is still un-activated and may take its turn later in the same round. Until now
+# an activation could only ever be SPENT (GameUnit.activate()), so there was no way to model this.
+# It is a primitive rather than a one-off because the rulebook has a second user: the optional
+# fog-of-war module Combat Hesitation (GF Advanced Rules v3.5.1 p.41) is the same mechanic behind a
+# dice roll. The alternation bookkeeping lives in main (see _solo_pass_turn); everything that can
+# be decided without touching the tree is here, pure and unit-testable.
+#
+# THE USER. Delayed Action, word-identical in all 21 army books that carry it:
+#   "Once per round, if your opponent has more units left to activate than you, then this model's
+#    unit may pass its turn instead of activating (may still be activated later)."
+#
+# MAINTAINER RULINGS baked in below:
+#   1. "units left to activate" = units left ON THE TABLE. A unit still held in Ambush reserve does
+#      not count — is_eligible() already refuses reserve units, so both sides of the comparison are
+#      read through it (verified: is_eligible → unit_in_reserve → false).
+#   2. "Once per round" binds the CARRIER UNIT, exactly as the wording says ("this model's unit").
+#      There is no army-wide cap; several carriers may each pass once in the same round. The strict
+#      surplus condition is the natural brake.
+#   3. A unit sitting on an OPEN second activation (Second Wind / Inquisitorial Agent) counts only
+#      while it is un-activated. spend_second_wind() clears is_activated at the moment the second
+#      turn is granted, so an open-but-unspent second activation is invisible in the balance —
+#      which is what is_eligible() reports anyway.
+const RULE_DELAYED_ACTION := "Delayed Action"
+## The registry primitive both users share. Delayed Action is the free version, Combat Hesitation
+## (p.41, not shipped) the dice-gated one.
+const PRIMITIVE_PASS_TURN := "Pass Turn"
+## unit_properties stamp carrying the round this carrier already passed in (the spotted_round pattern).
+const DELAYED_ACTION_STAMP := "delayed_action_round"
+
+
+## "if your opponent has more units left to activate than you" — STRICTLY more.
+##
+## TERMINATION GUARD (a). The condition is antisymmetric: opponent > own for one side is exactly
+## own >= opponent for the other, so it can NEVER be true for both sides at the same instant. Two
+## carriers can therefore not pass each other back and forth forever, and a pass always ends with
+## the opponent actually activating. Equality refuses — that is the guard, not a rounding detail.
+static func delayed_action_surplus(opponent_left: int, own_left: int) -> bool:
+	return opponent_left > own_left
+
+
+## TERMINATION GUARD (b). "Once per round" per carrier unit (ruling 2): a carrier that already
+## passed this round activates normally instead, so one carrier cannot pass a round into a loop.
+static func delayed_action_used_this_round(gu: GameUnit, round_no: int) -> bool:
+	return gu != null and int(gu.unit_properties.get(DELAYED_ACTION_STAMP, -1)) == round_no
+
+
+## Stamp the carrier as having spent its once-per-round pass.
+static func delayed_action_stamp(gu: GameUnit, round_no: int) -> void:
+	if gu != null:
+		gu.unit_properties[DELAYED_ACTION_STAMP] = round_no
+
+
+## The member (the unit itself or a joined hero) that carries Delayed Action, or null. "This model's
+## unit" — one model with the rule is enough, and a joined hero brings it to its host, the same
+## reading _spotter_member_of / _caster_member_of use for the other per-model radial rules.
+static func delayed_action_member_of(gu: GameUnit) -> GameUnit:
+	if gu == null:
+		return null
+	var members: Array = [gu]
+	if gu.has_method("get_attached_heroes"):
+		members = members + gu.get_attached_heroes()
+	for m in members:
+		var mu := m as GameUnit
+		if mu == null or mu.get_alive_count() <= 0:
+			continue
+		if unit_carries_rule(mu, RULE_DELAYED_ACTION) \
+				or not RulesRegistry.unit_rules_of_primitive(mu, PRIMITIVE_PASS_TURN).is_empty():
+			return mu
+	return null
+
+
+## The verdict on one pass attempt. "" = the pass is legal; anything else is the REASON it is not,
+## ready to be printed. Transparency doctrine (#224): the radial entry is offered even when the
+## rule cannot be used right now, and the refusal explains itself instead of vanishing from the menu.
+## `own_left` never reaches 0 on a legal pass, and this is where that is enforced rather than assumed:
+## with no units left to activate, the carrier itself must be one of the activated ones, and the
+## already-activated branch refuses. A pass REPLACES an activation, it cannot follow one.
+static func delayed_action_refusal(has_carrier: bool, already_activated: bool, already_passed: bool,
+		opponent_left: int, own_left: int) -> String:
+	if not has_carrier:
+		return "no model in the unit has Delayed Action"
+	if already_activated:
+		return "it has already activated this round — a pass replaces an activation, it cannot follow one"
+	if already_passed:
+		return "it already passed a turn this round — Delayed Action is once per round"
+	if not delayed_action_surplus(opponent_left, own_left):
+		return "your opponent has %d units left to activate, you have %d — the rule needs them to have MORE than you" % [
+			opponent_left, own_left]
+	return ""
+
+
+## Whether an enemy that has NOT activated yet can reach `gap_in` inches with `reach_in` (the larger
+## of its shooting range and its Rush/Charge band) while seeing the target. The AI's pass heuristic
+## rests on exactly this: pure, so the threat call is testable without a table.
+static func delayed_action_threatened(gap_in: float, reach_in: float, has_los: bool) -> bool:
+	return has_los and reach_in > 0.0 and gap_in <= reach_in
+
+
+## How far `gu` can hurt something THIS activation: the larger of its shooting range and its
+## Rush/Charge band (the same bands the decision tree moves on). Used only as a threat radius.
+func delayed_action_reach_in(gu: GameUnit) -> float:
+	if gu == null:
+		return 0.0
+	var bands: Dictionary = move_bands_for_unit(gu, movement_range)
+	var shoot := float(AiArchetype.max_range_inches(_unit_weapons(gu)) + shooting_range_bonus(gu))
+	return maxf(float(bands.get("rush", 12)), shoot)
+
+
+## The unit's worth for the pass heuristic: its points, falling back to model count for fixtures and
+## hand-built lists that carry no cost (the same cost-or-models weighting the separation pass uses).
+static func delayed_action_worth(gu: GameUnit) -> float:
+	if gu == null:
+		return 0.0
+	return float(gu.get_cost()) if gu.get_cost() > 0 else float(gu.get_alive_count())
+
+
+## THE AI SIDE, decided in the activation CHOOSER — passing IS the activation choice, so it cannot
+## live in a resolver that runs after a unit was already picked and moved.
+##
+## The heuristic, deliberately small and explainable: pass when the rule's condition stands AND the
+## pass actually buys something — our most valuable un-activated unit stands inside the reach of an
+## enemy unit that has NOT activated yet and can see it. Then making the opponent commit that unit
+## first is worth a turn; otherwise the AI activates normally. Both branches leave a decision record,
+## so the dev lane can always say why the rule did or did not fire.
+##
+## Returns {"unit": GameUnit|null, "why": String, "opponent_left": int, "own_left": int}. `unit` is
+## the carrier that passes, null when the AI activates instead.
+func delayed_action_pass_choice() -> Dictionary:
+	var own_pool := eligible_ai_units()
+	var opp_pool := eligible_units_for(human_slot)
+	var out := {"unit": null, "why": "", "opponent_left": opp_pool.size(), "own_left": own_pool.size()}
+	if army_manager == null:
+		return out
+	var round_no := _current_round()
+	# Guard (b) up front: carriers that have not spent their once-per-round pass yet. With no
+	# carrier there is nothing to decide and nothing to say — the rule is simply not in this army.
+	var carriers: Array = []
+	for u in own_pool:
+		var gu := u as GameUnit
+		if delayed_action_member_of(gu) != null and not delayed_action_used_this_round(gu, round_no):
+			carriers.append(gu)
+	if carriers.is_empty():
+		return out
+	# Guard (a): strictly more. own_pool always holds at least the carrier, so own_left >= 1 here —
+	# the AI can never pass away the last activation it owes (there is no carrier when own_left is 0).
+	if not delayed_action_surplus(opp_pool.size(), own_pool.size()):
+		out["why"] = "the opponent does not have more units left to activate"
+		record_decision({"kind": "pick", "unit": (carriers[0] as GameUnit).get_name(),
+			"rule": "Delayed Action: once per round, if your opponent has more units left to activate than you, this unit may pass its turn instead of activating",
+			"candidates": [], "chosen": "activates normally", "why": "condition not met — no surplus",
+			"data": {"opponent_left": opp_pool.size(), "own_left": own_pool.size()}})
+		return out
+	# The prize: our most valuable un-activated unit — the one a pass is meant to protect.
+	var prize: GameUnit = null
+	var prize_worth := -1.0
+	for u in own_pool:
+		var w := delayed_action_worth(u as GameUnit)
+		if w > prize_worth:
+			prize_worth = w
+			prize = u as GameUnit
+	# Is it under threat from an enemy that has not committed yet? eligible_units_for() IS the
+	# "not yet activated" pool, so no separate activation test is needed here.
+	var threat: GameUnit = null
+	var threat_gap := 0.0
+	for e in opp_pool:
+		var eu := e as GameUnit
+		var gap := nearest_melee_gap_in(eu, prize)
+		if delayed_action_threatened(gap, delayed_action_reach_in(eu), _has_los(eu, prize)):
+			threat = eu
+			threat_gap = gap
+			break
+	if threat == null:
+		out["why"] = "nothing of ours is under threat from an enemy that has yet to act"
+		record_decision({"kind": "pick", "unit": (carriers[0] as GameUnit).get_name(),
+			"rule": "Delayed Action: pass only when the delay buys something — otherwise the tempo is thrown away",
+			"candidates": [], "chosen": "activates normally", "why": "no threat to wait out",
+			"data": {"opponent_left": opp_pool.size(), "own_left": own_pool.size(),
+				"prize": prize.get_name() if prize != null else "?"}})
+		return out
+	# The threatened unit delays itself when it carries the rule; otherwise the first carrier does.
+	var passer: GameUnit = carriers[0] as GameUnit
+	if carriers.has(prize):
+		passer = prize
+	out["unit"] = passer
+	out["why"] = "%s is within %.1f\" of %s, which has not activated yet" % [
+		prize.get_name(), threat_gap, threat.get_name()]
+	record_decision({"kind": "pick", "unit": passer.get_name(),
+		"rule": "Delayed Action: once per round, if your opponent has more units left to activate than you, this unit may pass its turn instead of activating (may still be activated later)",
+		"candidates": [], "chosen": "passes the turn", "why": "waits out a threat that has yet to commit",
+		"data": {"opponent_left": opp_pool.size(), "own_left": own_pool.size(),
+			"prize": prize.get_name(), "threat": threat.get_name(), "gap_in": snappedf(threat_gap, 0.1)}})
+	return out
+
+
 ## X1 (test game 2, double-shoot exploit): a RESOLVED human attack always completes that unit's
 ## activation — survivors and wiped attackers alike. The old rule (finding 5) auto-completed only
 ## wiped units; a surviving shooter stayed un-activated, so the radial happily offered a second

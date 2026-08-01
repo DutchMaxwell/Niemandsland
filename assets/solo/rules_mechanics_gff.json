@@ -77,6 +77,7 @@
   "Defensive Frenzy",
   "Defensive Growth",
   "Defensive Growth Aura",
+  "Delayed Action",
   "Destructive",
   "Devout",
   "Devout Boost",
@@ -188,6 +189,7 @@
   "No Retreat",
   "No Retreat Aura",
   "No Retreat Buff",
+  "Pass Turn",
   "Piercing Assault",
   "Piercing Assault Aura",
   "Piercing Fighter Aura",
@@ -410,6 +412,7 @@
   "Mend",
   "Musician",
   "No Retreat",
+  "Pass Turn",
   "Piercing Assault",
   "Piercing Hunter",
   "Precise",
@@ -2439,9 +2442,13 @@
     }
    },
    "Delayed Action": {
-    "primitive": null,
+    "primitive": "Pass Turn",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "uses_per_round": 1,
+     "requires_opponent_surplus": true
+    }
    },
    "Hit & Run": {
     "primitive": "Hit & Run",
@@ -4949,9 +4956,13 @@
     "book_version": "3.5.3"
    },
    "Delayed Action": {
-    "primitive": null,
+    "primitive": "Pass Turn",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "uses_per_round": 1,
+     "requires_opponent_surplus": true
+    }
    },
    "Evasive": {
     "primitive": "Evasive",
@@ -8157,9 +8168,13 @@
     "book_version": "3.5.3"
    },
    "Delayed Action": {
-    "primitive": null,
+    "primitive": "Pass Turn",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "uses_per_round": 1,
+     "requires_opponent_surplus": true
+    }
    },
    "Flying Aura": {
     "primitive": null,

@@ -64,6 +64,7 @@
   "Defense",
   "Defense Debuff",
   "Defensive Frenzy",
+  "Delayed Action",
   "Destroyer",
   "Destroyer Boost",
   "Destroyer Boost Aura",
@@ -173,6 +174,7 @@
   "Ossified",
   "Ossified Boost",
   "Ossified Boost Aura",
+  "Pass Turn",
   "Piercing Assault",
   "Piercing Assault Aura",
   "Piercing Assault Buff",
@@ -399,6 +401,7 @@
   "Mend",
   "Musician",
   "No Retreat",
+  "Pass Turn",
   "Piercing Assault",
   "Piercing Hunter",
   "Precise",
@@ -4055,9 +4058,13 @@
   },
   "hired_guards": {
    "Delayed Action": {
-    "primitive": null,
+    "primitive": "Pass Turn",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "uses_per_round": 1,
+     "requires_opponent_surplus": true
+    }
    },
    "Disintegrate": {
     "primitive": "Disintegrate",
@@ -7616,9 +7623,13 @@
     }
    },
    "Delayed Action": {
-    "primitive": null,
+    "primitive": "Pass Turn",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "uses_per_round": 1,
+     "requires_opponent_surplus": true
+    }
    },
    "Furious Aura": {
     "primitive": null,

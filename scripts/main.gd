@@ -1182,6 +1182,90 @@ func _on_solo_human_activated(gu: GameUnit) -> void:
 	await _solo_pump()
 
 
+# === PRIMITIVE "Pass Turn" + Delayed Action (wave 5) ==========================================
+#
+## The PASS STEP the alternation never had. Until now an activation could only be SPENT
+## (GameUnit.activate()), so "pass your turn but keep the unit" was unmodellable. This moves the
+## ALTERNATION BOOKKEEPING on and nothing else: no unit is marked activated, notify_activated never
+## fires, no is_activated flag is touched — which is exactly the rule's promise that the unit "may
+## still be activated later".
+##
+## `_solo_ai_took_last_activation` is deliberately NOT written here: it records who took the last
+## ACTIVATION of a round for the opener rule (finding 7), and a pass is not an activation. It cannot
+## go stale either — a pass is only legal while the OTHER side has STRICTLY more units left, so that
+## side still has at least one activation to make and the round can never end on a pass.
+##
+## Bookkeeping only, no await: the caller pumps (the human path below; the AI path is already inside
+## the pump loop, where a second pump call would re-enter).
+func _solo_pass_turn(slot: int) -> void:
+	if solo_controller == null:
+		return
+	if slot == solo_controller.ai_slot:
+		_solo_pending_replies = maxi(_solo_pending_replies - 1, 0)   # the owed reply is spent on the pass
+	else:
+		_solo_pending_replies += 1   # the human's turn is over — the AI owes exactly one answer
+
+
+## The battle-log line for an applied pass. One wording for both sides (the `%s` names who passed);
+## the counts are the ones the condition was actually measured on, not a re-derivation.
+func _solo_delayed_action_line(gu: GameUnit, opponent_left: int, own_left: int) -> String:
+	return "Delayed Action: %s passes the turn — the opponent has %d units left to activate, you have %d (%s may still be activated later)" % [
+		gu.get_name(), opponent_left, own_left, gu.get_name()]
+
+
+## The AI's half, asked ONCE per owed reply, BEFORE a unit is picked (the choice belongs in the
+## chooser — see SoloController.delayed_action_pass_choice). Returns true when the AI passed, in
+## which case the caller must not also activate.
+func _solo_ai_delayed_action_pass() -> bool:
+	if solo_controller == null or opr_army_manager == null:
+		return false
+	var choice: Dictionary = solo_controller.delayed_action_pass_choice()
+	var passer: GameUnit = choice.get("unit") as GameUnit
+	if passer == null:
+		return false
+	SoloController.delayed_action_stamp(passer, opr_army_manager.current_round)
+	_solo_pass_turn(solo_controller.ai_slot)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			_solo_delayed_action_line(passer, int(choice["opponent_left"]), int(choice["own_left"])),
+			true, str(choice.get("why", "")))
+	return true
+
+
+## YOUR half — the radial's "Pass" entry on a Delayed Action carrier. The entry is OFFERED whenever
+## the unit carries the rule, never hidden when the condition happens to fail: a rule that silently
+## disappears from the menu reads exactly like a missing rule (#224 transparency doctrine), so an
+## illegal pass is answered with the measured reason instead.
+func solo_begin_pass(unit: GameUnit) -> void:
+	if unit == null or solo_controller == null or opr_army_manager == null:
+		return
+	var u: GameUnit = _solo_combat_unit(unit)   # a joined hero passes with its host unit
+	if u == null or _solo_is_ai_unit(u):
+		return
+	if _deployment_gate_refuses_start():
+		return   # the gate writes its own refusal line
+	_solo_ensure_playing_phase()
+	if not _solo_alternation_ready(u):
+		return
+	var round_no: int = opr_army_manager.current_round
+	var own_left: int = solo_controller.eligible_units_for(solo_controller.human_slot).size()
+	var opponent_left: int = solo_controller.eligible_units_for(solo_controller.ai_slot).size()
+	var refusal: String = SoloController.delayed_action_refusal(
+		SoloController.delayed_action_member_of(u) != null, u.is_activated,
+		SoloController.delayed_action_used_this_round(u, round_no), opponent_left, own_left)
+	if not refusal.is_empty():
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Delayed Action: %s may not pass — %s" % [u.get_name(), refusal])
+		return
+	SoloController.delayed_action_stamp(u, round_no)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			_solo_delayed_action_line(u, opponent_left, own_left))
+	_solo_pass_turn(solo_controller.human_slot)
+	await _solo_pump()
+
+
 ## Drive the alternation state machine until it waits for the human or the round ends. TAIL activations
 ## (the AI playing out its remaining units unprompted) run with a readable pause between them and a
 ## non-blocking "NACHTMAHR is taking its turn" banner so the player stays oriented.
@@ -1205,6 +1289,12 @@ func _solo_pump() -> void:
 			solo_controller.eligible_units_for(solo_controller.human_slot).size(),
 			solo_controller.eligible_ai_units().size())
 		if step == SoloController.AltStep.REPLY:
+			# Delayed Action (Pass Turn): the AI may answer a human turn with a PASS instead of an
+			# activation. Only here, never in TAIL — TAIL means the human side is empty, and the
+			# rule needs the OPPONENT to have strictly more units left, which 0 can never be. The
+			# `continue` re-reads the machine: with the reply spent it now says WAIT for the human.
+			if _solo_ai_delayed_action_pass():
+				continue
 			_solo_pending_replies -= 1
 			var replied: GameUnit = await _solo_activate_one_ai()
 			_solo_flush_dev()
@@ -6504,7 +6594,10 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 	"Reanimation", "Reanimation Aura", "Caster Group", "Spell Accumulator",
 	# Ambush variants wave 1: Beacon (6" waiver on every enemy distance restriction), Rapid Ambush
 	# (arrives from round 1), Ambush Re-Deployment (once per game, off the table and back next round).
-	"Ambush Beacon", "Rapid Ambush", "Ambush Re-Deployment"]
+	"Ambush Beacon", "Rapid Ambush", "Ambush Re-Deployment",
+	# Wave 5: Delayed Action through the new "Pass Turn" primitive — once per round a carrier may
+	# pass its turn instead of activating while the opponent has strictly more units left.
+	"Delayed Action", "Pass Turn"]
 
 ## The SOLO_MODELED_RULES subset that ALSO steers the AI's behaviour choices (not only the dice math):
 ## targeting overlays (AP/Deadly/Takedown — Solo v3.5.0 p.2), Hold overlays (Relentless/Artillery/
@@ -6524,7 +6617,10 @@ const SOLO_DECISION_RULES: Array = ["AP", "Deadly", "Takedown", "Relentless", "A
 	"Reanimation",        # restores BEFORE the action, so the returned models are in the move plan
 	# Ambush variants wave 1: all three steer WHERE and WHEN a reserve lands, and whether a unit
 	# leaves the table at the end of its activation.
-	"Ambush Beacon", "Rapid Ambush", "Ambush Re-Deployment"]
+	"Ambush Beacon", "Rapid Ambush", "Ambush Re-Deployment",
+	# Wave 5: Delayed Action IS an activation-order decision — the AI weighs the pass against an
+	# activation in the chooser, so it belongs in the decision-aware set.
+	"Delayed Action", "Pass Turn"]
 
 
 ## The modeled-rule tokens for a unit's game system — mechanics-map-derived (wave 5), constant fallback.
