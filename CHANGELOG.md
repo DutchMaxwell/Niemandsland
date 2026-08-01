@@ -69,6 +69,18 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   charge you declare gets its own opening line, like the AI's always had.
 
 ### Fixed
+- **Rule events reach the other player's battle log.** Only movement lines ever travelled between
+  clients. Every other line the rules engine writes — a passed turn, a *Coordinate* hand-off, an
+  Ambush arrival or withdrawal, an *Extended Buff Range* refusal — was written locally and stopped
+  there, so on the opponent's screen a rule that had been applied perfectly correctly read exactly
+  like a rule that was missing. The passed turn is the clearest case: it moves nothing and activates
+  nothing, so the line *is* the whole event, and without it the opponent watched the AI answer a turn
+  that never appeared in their record. Rule applications and rule refusals now travel; the lines that
+  do **not** are the ones another channel already delivers (movement, activations, dice, casualties —
+  routing those would print them twice), the AI's internal reasoning dumps, and prompts aimed at
+  whoever is holding the mouse. Two of the newly travelling lines also work in a plain
+  human-vs-human room: the reform honour-system notice, and the reason a unit just jumped back to
+  where it started after an undo.
 - **Your buff-giver rules finally do something.** The whole "once per activation, before attacking"
   buff family (*Precision Shooter Buff*, *Furious Buff*, *Entrenched Buff*, *No Retreat Buff*, …)
   bailed out on anything that was not an AI unit, so a human player's buff was dead data — no token,

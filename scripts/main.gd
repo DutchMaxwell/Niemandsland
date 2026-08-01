@@ -1083,7 +1083,7 @@ func _solo_begin_rapid_ambush_round_one() -> void:
 
 func _solo_rapid_ambush_round_one() -> void:
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"Rapid Ambush: reserves may arrive at the start of round 1 (after deployment and the Scout phase)", true)
 	await _solo_alternate_ambush_arrivals(1)
 	# "May" cuts both ways: a carrier that found no worthwhile landing spot simply waits — named, so
@@ -1096,7 +1096,7 @@ func _solo_rapid_ambush_round_one() -> void:
 					and SoloController.unit_carries_rule(gu, SoloController.RULE_RAPID_AMBUSH):
 				waiting.append(gu.get_name())
 	if not waiting.is_empty() and battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"Rapid Ambush: %s waits for a later round — no legal round-1 landing spot (the rule is a 'may')" % ", ".join(waiting), true)
 	_solo_ai_busy = false
 	if _solo_pending_replies > 0:
@@ -1117,7 +1117,7 @@ func _solo_try_ambush_redeploy(gu: GameUnit) -> bool:
 		var decision: Dictionary = solo_controller.ambush_redeploy_ai_decision(gu)
 		if not bool(decision["use"]):
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.GENERAL,
+				_log_rule_event(BattleLog.Category.GENERAL,
 					"Ambush Re-Deployment: %s keeps its once-per-game use — %s" % [
 						gu.get_name(), str(decision["why"])], true)
 			return false
@@ -1135,7 +1135,7 @@ func _solo_try_ambush_redeploy(gu: GameUnit) -> bool:
 		dlg.queue_free()
 		if not yes:
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.GENERAL,
+				_log_rule_event(BattleLog.Category.GENERAL,
 					"Ambush Re-Deployment: %s stays on the table — its once-per-game use is still open" % gu.get_name(), false)
 			return false
 	return _solo_ambush_redeploy_execute(gu)
@@ -1151,7 +1151,7 @@ func _solo_ambush_redeploy_execute(gu: GameUnit) -> bool:
 		return false
 	_solo_set_unit_visible(gu, false)
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"Ambush Re-Deployment: %s leaves the table (once per game) and returns at the start of round %d" % [
 				gu.get_name(), due], _solo_is_ai_unit(gu))
 	return true
@@ -1196,7 +1196,7 @@ func _solo_coordinate_release_if_bypassed(activating: GameUnit) -> void:
 	if recv != null and is_instance_valid(recv):
 		recv.unit_properties.erase("activated_via_coordinate")
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"Coordinate: the hand-off to %s lapses — %s activated instead" % [
 					recv.get_name(), activating.get_name() if activating != null else "another unit"])
 
@@ -1209,13 +1209,13 @@ func _solo_log_coordinate_refusal(bearer: GameUnit, refusal: String) -> void:
 	var ai_side := _solo_is_ai_unit(bearer)
 	match refusal:
 		"dead":
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"Coordinate: %s did not survive its own activation — no hand-off" % bearer.get_name(), ai_side)
 		"chain":
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"Coordinate: %s was itself activated via Coordinate — the chain stops here" % bearer.get_name(), ai_side)
 		"none":
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"Coordinate: %s finds no un-activated friendly unit within %.0f\" — the hand-off lapses" % [
 					bearer.get_name(), SoloController.coordinate_range_of(bearer)], ai_side)
 
@@ -1243,7 +1243,7 @@ func _solo_try_coordinate_ai(bearer: GameUnit) -> void:
 	var gap: float = solo_controller.nearest_melee_gap_in(bearer, receiver)
 	solo_controller.coordinate_hand_off(receiver)
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"Coordinate: %s hands off to %s (%.1f\") — %s activates immediately" % [
 				bearer.get_name(), receiver.get_name(), gap, receiver.get_name()], true)
 	await _solo_activate_one_ai()
@@ -1295,7 +1295,7 @@ func _solo_coordinate_pick(bearer: GameUnit, receiver: GameUnit) -> void:
 	_solo_coordinate_hold_id = receiver.get_instance_id()
 	if battle_log != null:
 		var gap: float = solo_controller.nearest_melee_gap_in(bearer, receiver)
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"Coordinate: %s hands off to %s (%.1f\") — %s activates immediately" % [
 				bearer.get_name(), receiver.get_name(), gap, receiver.get_name()])
 	await _solo_finish_human_activation(bearer)
@@ -1304,7 +1304,7 @@ func _solo_coordinate_pick(bearer: GameUnit, receiver: GameUnit) -> void:
 ## The player waved the offer away (ESC / right-click): the activation ends normally.
 func _solo_coordinate_decline(bearer: GameUnit) -> void:
 	if battle_log != null and bearer != null:
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"Coordinate: %s declines the hand-off — its activation ends here" % bearer.get_name())
 	await _solo_finish_human_activation(bearer)
 
@@ -1406,7 +1406,7 @@ func _solo_ai_delayed_action_pass() -> bool:
 	SoloController.delayed_action_stamp(passer, opr_army_manager.current_round)
 	_solo_pass_turn(solo_controller.ai_slot)
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			_solo_delayed_action_line(passer, int(choice["opponent_left"]), int(choice["own_left"])),
 			true, str(choice.get("why", "")))
 	return true
@@ -1435,12 +1435,12 @@ func solo_begin_pass(unit: GameUnit) -> void:
 		SoloController.delayed_action_used_this_round(u, round_no), opponent_left, own_left)
 	if not refusal.is_empty():
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"Delayed Action: %s may not pass — %s" % [u.get_name(), refusal])
 		return
 	SoloController.delayed_action_stamp(u, round_no)
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			_solo_delayed_action_line(u, opponent_left, own_left))
 	_solo_pass_turn(solo_controller.human_slot)
 	await _solo_pump()
@@ -8991,7 +8991,7 @@ func _solo_alternate_ambush_arrivals(round_number: int) -> void:
 				_solo_focus_on_unit(unit)
 				_solo_show_toast("%s ambushes in from reserve" % unit.get_name())
 				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.GENERAL,
+					_log_rule_event(BattleLog.Category.GENERAL,
 						"AI Ambush: %s arrives — near an objective, >9\" from your units, clear of all standing bases" % unit.get_name(), true)
 					_solo_log_ambush_variant_lines(unit, round_number, true)
 				await _solo_pace_attention()
@@ -9009,11 +9009,11 @@ func _solo_alternate_ambush_arrivals(round_number: int) -> void:
 		_solo_toast.visible = false
 	var held_ai: int = solo_controller.ambush_reserve_ready(round_number)
 	if held_ai > 0 and battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"AI Ambush: %d unit(s) held back — no clear spot (may arrive a later round)" % held_ai, true)
 	var held_h: int = solo_controller.human_reserve_ready(round_number)
 	if held_h > 0 and not human_is_ai and battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"%d of your Ambush unit(s) stay in reserve — you'll be asked again next round." % held_h, false)
 	_solo_flush_dev()
 
@@ -9026,9 +9026,9 @@ func _solo_log_ambush_variant_lines(unit: GameUnit, round_number: int, ai_side: 
 		return
 	var note: String = solo_controller.last_arrival_note
 	if not note.is_empty():
-		battle_log.log_event(BattleLog.Category.GENERAL, note, ai_side)
+		_log_rule_event(BattleLog.Category.GENERAL, note, ai_side)
 	if round_number < 2 and SoloController.unit_carries_rule(unit, SoloController.RULE_RAPID_AMBUSH):
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"Rapid Ambush: %s arrives at the start of round 1 (base Ambush allows round 2+)" % unit.get_name(), ai_side)
 	# Transport cargo travels inside the hull and lands with it — including in round 1 behind Rapid
 	# Ambush. Rules-legal, but it must be visible that a whole package just appeared.
@@ -9040,7 +9040,7 @@ func _solo_log_ambush_variant_lines(unit: GameUnit, round_number: int, ai_side: 
 			if gu != null and gu.get_alive_count() > 0 and opr_army_manager.transport_of(gu) == unit:
 				cargo.append(gu.get_name())
 		if not cargo.is_empty():
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"%s arrives with its cargo aboard (%s) — it may disembark this round" % [
 					unit.get_name(), ", ".join(cargo)], ai_side)
 
@@ -9119,13 +9119,13 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 			gu.unit_properties.erase("ambush_return_round")   # a Re-Deployment return date is spent
 			_solo_set_unit_visible(gu, true)
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.GENERAL,
+				_log_rule_event(BattleLog.Category.GENERAL,
 					"You deploy %s from Ambush reserve (>9\" from enemies) — it may act this round, no seizing (GF v3.5.1 p.13)" % gu.get_name(), false)
 			solo_controller.last_arrival_note = ""   # the human placed by hand — only the checks below speak
 			_solo_log_ambush_variant_lines(gu, round_number, false)
 			_solo_warn_ambush_proximity(gu)
 	elif battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL, "Your Ambush reserve keeps waiting this round", false)
+		_log_rule_event(BattleLog.Category.GENERAL, "Your Ambush reserve keeps waiting this round", false)
 	_solo_deploy_ui_hide()
 	return placed
 
@@ -9190,7 +9190,7 @@ func _solo_warn_ambush_proximity(gu: GameUnit) -> void:
 	# gets its own line instead of the warning — silence would look like the check simply missed it.
 	var cover := _solo_beacon_cover_of(gu)
 	if not cover.is_empty():
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"Ambush Beacon: %s lands %.1f\" from the enemy — distance restrictions waived (within %d\" of %s)" % [
 				gu.get_name(), worst, int(round(float(cover["radius_in"]))), str(cover["name"])], false)
 		return
@@ -9201,7 +9201,7 @@ func _solo_warn_ambush_proximity(gu: GameUnit) -> void:
 	if not near.is_empty() and float(near["dist_in"]) <= SoloController.AMBUSH_BEACON_NOTICE_IN:
 		beacon_note = " — Ambush Beacon not used: %s is %.1f\" away (the waiver needs %d\" or less)" % [
 			str(near["name"]), float(near["dist_in"]), int(round(float(near["radius_in"])))]
-	battle_log.log_event(BattleLog.Category.GENERAL,
+	_log_rule_event(BattleLog.Category.GENERAL,
 		"⚠ %s stands %.1f\" from an enemy — Ambush arrivals must be >9\" away (GF v3.5.1 p.13); nudge it out (or house-rule it)%s" % [
 			gu.get_name(), worst, beacon_note], false)
 
@@ -10474,6 +10474,8 @@ func _setup_battle_log() -> void:
 	if network_manager != null:
 		if network_manager.has_signal("remote_move_log_received"):
 			network_manager.remote_move_log_received.connect(_log_move_summaries)
+		if network_manager.has_signal("remote_log_event_received"):
+			network_manager.remote_log_event_received.connect(_on_remote_log_event)
 		if network_manager.has_signal("remote_round_advanced"):
 			network_manager.remote_round_advanced.connect(
 				func() -> void: battle_log.on_round_advanced(opr_army_manager.current_round))
@@ -10618,6 +10620,52 @@ func _on_battle_log_dropped(moves: Array) -> void:
 	# (release-test finding C3: only own movements were logged).
 	if network_manager != null and network_manager.is_multiplayer_active():
 		network_manager.broadcast_move_log(summaries)
+
+
+## Write a RULES line into the battle log and send it to the other peers (NML-946).
+##
+## WHY A CHANNEL AT ALL. The battle log is meant to be a shared record: battle_log's on_* seams exist
+## so both sides derive identical lines from the same synced command, which is why moves, activations,
+## dice, the round and casualties need no wire traffic of their own. That design holds only for events
+## that produce a command. A rule RESOLVED on one client alone produces none — so its line has nowhere
+## to come from on the other side, and the opponent reads a correctly applied rule as a missing one.
+## That is the direct contradiction of "every applied rule owes a log line", sitting on the network
+## card rather than in the rules.
+##
+## WHICH LINES TRAVEL. Exactly those that NAME A RULE APPLIED OR REFUSED at a point the opponent
+## cannot observe. Two exclusions, and they are the whole discipline:
+##
+##   1. ALREADY CARRIED — anything a channel already delivers. Movement summaries ride sync_move_log,
+##      activations ride remote_activation_updated, dice ride the dice channel (main already learned
+##      that a second hook double-logs), the round ride remote_round_advanced, wounds/destroyed/parked
+##      come from the army manager's own signals on both sides. Routing any of those would print the
+##      line twice. This is why the per-roll hit/save/wound narration is NOT here: it belongs to the
+##      dice the peer already receives.
+##   2. NOT AN EVENT — diagnosis. The AI decision records, the rule-inventory and unmodeled-rules
+##      dumps (a report on the LOCAL army data), the hit-modifier notes folded into a dice line the
+##      peer already gets, and the toasts/echo lines that answer the clicking player. These explain a
+##      choice rather than name an event; shipping them turns the opponent's log into a debug console.
+##
+## The entry travels whole — category, text, the `ai` flag and the transparency `detail` — so the
+## receiving panel filters and expands it exactly like the local one. AI reasoning attached to a rule
+## event rides along, because the local player already reads it and a peer human is not a different
+## class of observer; AI reasoning that is not attached to an event lives at sites this never routes.
+##
+## Sites that stay local simply keep calling battle_log.log_event directly.
+func _log_rule_event(category: int, text: String, ai: bool = false, detail: String = "") -> void:
+	if battle_log == null or text.is_empty():
+		return
+	battle_log.log_event(category, text, ai, detail)
+	if network_manager != null and network_manager.has_method("broadcast_log_event"):
+		network_manager.broadcast_log_event(category, text, ai, detail)
+
+
+## A rules line from a peer. Written straight into the log — never re-broadcast, or two clients would
+## bounce the same line at each other forever.
+func _on_remote_log_event(category: int, text: String, ai: bool, detail: String) -> void:
+	if battle_log == null or text.is_empty():
+		return
+	battle_log.log_event(category, text, ai, detail)
 
 
 ## Write per-unit movement summaries into the battle log — same lines for local and remote movers.
@@ -14724,7 +14772,7 @@ func _solo_log_ebr_refusals(member: GameUnit, picks: Array, range_in: float) -> 
 		why = "the link is %.1f\", over the %.0f\" limit" % [worst_gap, relay_range]
 	else:
 		return   # the relay held; the target was skipped for another reason (value/LOS)
-	battle_log.log_event(BattleLog.Category.COMBAT,
+	_log_rule_event(BattleLog.Category.COMBAT,
 		"%s: %s cannot reach %s — %s (no relay, the %.0f\" pick stands)" % [
 			SoloController.RULE_EXTENDED_BUFF_RANGE, member.get_name(), worst.get_name(), why, range_in],
 		_solo_is_ai_unit(member))
@@ -14749,7 +14797,7 @@ func _solo_log_ebr_spell_exclusion(caster: GameUnit, spell_name: String, range_i
 			continue
 		if _solo_ebr_relay_gap(relay, gu) < 0.0:
 			continue   # the relay would not have applied anyway — nothing to explain
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"%s: %s stays out of reach for %s — the relay excludes spells (%.0f\" unchanged)" % [
 				SoloController.RULE_EXTENDED_BUFF_RANGE, gu.get_name(), spell_name, range_in],
 			_solo_is_ai_unit(caster))
@@ -14810,7 +14858,7 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 						var moved := solo_controller.forced_straight_move(arty,
 							Vector2(b.x - a.x, b.z - a.z), float(sp.get("reposition_in", 9.0)))
 						if moved > 0.0 and battle_log != null:
-							battle_log.log_event(BattleLog.Category.MOVEMENT,
+							_log_rule_event(BattleLog.Category.MOVEMENT,
 								"%s: %s re-positions %s up to %.0f\" (no firing lane)" % [n, member.get_name(), arty.get_name(), moved], true)
 				continue
 			var kind := str(sp.get("target", "friendly"))
@@ -14827,7 +14875,7 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 				# Transparency wave: a silent `continue` reads like a broken rule. Say that the
 				# rule fired and found nobody.
 				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.COMBAT,
+					_log_rule_event(BattleLog.Category.COMBAT,
 						"%s: %s finds no legal target within %.0f\" — the buff is not applied this activation" % [
 							n, member.get_name(), range_in], _solo_is_ai_unit(unit))
 				continue
@@ -14849,13 +14897,13 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 					if modifier["casting_mod"] != 0: bits.append("%+d casting" % modifier["casting_mod"])
 					if modifier["morale_mod"] != 0: bits.append("%+d morale" % modifier["morale_mod"])
 					if not str(sp.get("grants_rule", "")).is_empty(): bits.append("grants %s" % str(sp.get("grants_rule", "")))
-					battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s → %s (%s, once)" % [
+					_log_rule_event(BattleLog.Category.COMBAT, "%s: %s → %s (%s, once)" % [
 						n, member.get_name(), tgt.get_name(), ", ".join(bits)], ai_side)
 				# Rules-must-log: the reach that only existed because of the relay gets its own line.
 				if relays.has(tgt) and battle_log != null:
 					var info: Dictionary = relays[tgt]
 					var ep := SoloController.ebr_params_of(tgt)
-					battle_log.log_event(BattleLog.Category.COMBAT,
+					_log_rule_event(BattleLog.Category.COMBAT,
 						"%s: %s reaches %s at %.1f\" — relayed via %s (%.0f\" link, the %.0f\" pick is waived)" % [
 							SoloController.RULE_EXTENDED_BUFF_RANGE, member.get_name(), tgt.get_name(),
 							float(info["gap_in"]), (info["relay"] as GameUnit).get_name(),
