@@ -77,6 +77,13 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   is automatic for v1 and every application is named in the log; choosing the target by click is a
   follow-up. Skirmish books whose text says "pick up to **4** friendly units" now really pick up to
   four instead of one, and a rule that finds no legal target says so instead of failing silently.
+- **Joining a game with loaded transports no longer loses the passengers.** Cargo is remembered in
+  two halves: *which* unit sits in *which* transport, and the parked models on the tray. Loading a
+  saved game rebuilt both; joining or rejoining a running multiplayer game rebuilt only the first.
+  The joining player therefore got passengers the game no longer recognised as passengers —
+  right-clicking one offered the ordinary move/wound/marker actions instead of the single legal
+  action (disembark), and because their tray slots were never claimed the next casualty parked on
+  top of them. The join now runs the same restore step the load path has always run.
 - **A reanimated model stands in the same place on both screens.** The message that brings a model
   back carries wounds and alive/dead, but no position — so the other client rebuilt the spot itself
   and put the model back where it fell. That is not always where it now stands: when the fall point

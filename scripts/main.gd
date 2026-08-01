@@ -12306,6 +12306,15 @@ func _rpc_sync_game_state(state: Dictionary) -> void:
 	# Re-park loose models the host had killed (needs the trays above), so a late-joiner sees the
 	# same greyed casualties on the tray, not live draggable models (G4).
 	save_manager._restore_dead_parking_after_load()
+	# NML-928: and the same for models that are EMBARKED. The state (embarked_in / cargo_unit_ids /
+	# embark_return_spots) rides unit_properties and therefore arrives with the sync, but the node
+	# "embarked" meta and the tray slot are RUNTIME and have to be rebuilt — save_manager.load_game()
+	# does that one line after its dead-parking call, and this path simply never did. A late-joiner
+	# was left with cargo whose models had no meta: the radial menu offered them the ordinary unit
+	# actions instead of the single legal one (disembark), and their tray slots were never claimed,
+	# so the next casualty parked on top of them.
+	if opr_army_manager != null:
+		opr_army_manager.restore_embarked_after_load()
 
 	save_manager.end_restore()
 	network_manager.broadcast_peer_busy(false)  # join load done — release the other peers' gate
