@@ -85,6 +85,15 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   coherency, range and line of sight following the wrong one. The real position now follows the
   restore message over the ordinary move channel, the same correction a ghost-placed disembark
   already sends.
+- **A reanimated regiment model comes back in its rank, not beside the block.** The restore placed
+  every returning model itself — it looked for a free spot in coherency with a survivor and stood the
+  model there. For a loose skirmish model that is right; a regiment model belongs to its movement
+  tray, and the block had *already* closed its ranks around the returning model when the coherency
+  spot was written on top of it. The rank model was then standing a good 2″ outside its own block.
+  The other client never saw it: it re-ranks the block from the restore message, which is exactly
+  what the rules say should happen — so the two screens disagreed. Regiment returners are now left to
+  their block on both sides, and a returning rank model can no longer "find nowhere to stand": a
+  block always has a rank for it, even when every spot around it is occupied.
 - **Defense modifiers follow their own wording against spell damage.** A blessing that gives "+1 to
   defense rolls" did nothing the moment the wound came from a spell: the spell path saved at the bare
   Armor-adjusted Defense and silently dropped every active modifier. The block step of the core rules
