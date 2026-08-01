@@ -99,6 +99,21 @@ static func has_exact_rule(unit: GameUnit, rule: String) -> bool:
 	return false
 
 
+## THE melee/shooting gate of a unit-level facet — one truth for every stamp that reads the registry's
+## `melee_only` / `shooting_only` params. `profile_range` is the weapon profile's reach in inches, so 0
+## means a melee profile. A rule with neither flag applies to both halves, as it always did.
+## Dead-aura wave: `shooting_only` used to be read in exactly ONE place in the whole engine (the Rending
+## loop in stamp_sergeant), so every other stamp let a shooting-gated rule fire in melee — and no stamp
+## outside stamp_sergeant honoured `melee_only` either, so "Shred in Melee" / "Good Fighter" fired when
+## shooting. Both halves are the same question, so they are now the same function.
+static func facet_applies(params: Dictionary, profile_range: int) -> bool:
+	if bool(params.get("melee_only", false)) and profile_range > 0:
+		return false
+	if bool(params.get("shooting_only", false)) and profile_range <= 0:
+		return false
+	return true
+
+
 ## Rating X of a unit-level "Name(X)" special rule (0 if absent) — type-safe against label-only shapes
 ## (the wave-1 _rule_to_string lesson).
 static func unit_rating(unit: GameUnit, rule_name: String) -> int:
@@ -203,7 +218,9 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 			continue   # upgrade entries (Devout Boost) ride the base facet below, never stamp alone
 		for fp in profiles:
 			var fpd := fp as Dictionary
-			if bool(sp.get("melee_only", false)) and int(fpd.get("range", 0)) > 0:
+			# Dead-aura wave: the shooting half of the gate was missing here, so "Predator Shooter"
+			# (Surge, shooting_only) also spawned its extra attack in melee.
+			if not facet_applies(sp, int(fpd.get("range", 0))):
 				continue
 			if bool(sp.get("extra_attack", false)):
 				fpd["surge_attack"] = true
@@ -234,9 +251,7 @@ static func stamp_sergeant(profiles: Array, unit: GameUnit) -> Array:
 		var spr: Dictionary = edr.get("params", {})
 		for fp in profiles:
 			var fpd := fp as Dictionary
-			if bool(spr.get("melee_only", false)) and int(fpd.get("range", 0)) > 0:
-				continue
-			if bool(spr.get("shooting_only", false)) and int(fpd.get("range", 0)) <= 0:
+			if not facet_applies(spr, int(fpd.get("range", 0))):
 				continue
 			fpd["rending"] = true
 	# Coverage wave: cover-ignore facet (unit-level "Ignores Cover when shooting" and kin — the

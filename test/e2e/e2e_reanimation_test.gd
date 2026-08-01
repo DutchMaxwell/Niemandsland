@@ -105,7 +105,7 @@ func test_activation_rolls_the_missing_wounds_and_stamps_the_round() -> void:
 
 func test_successes_bring_models_back_in_coherency_and_log_the_line() -> void:
 	var u := _bots("Bots", 4, 2)
-	_main._solo_resolve_reanimation(u, 2, 5, 2)
+	await _main._solo_resolve_reanimation(u, 2, 5, 2)
 	assert_int(u.get_alive_count()) \
 		.override_failure_message("two successes must return both casualties") \
 		.is_equal(4)
@@ -125,7 +125,7 @@ func test_living_wounds_are_topped_up_before_the_dead_come_back() -> void:
 	var u := _bots("Elites", 3, 1, 3)
 	(u.models[0] as ModelInstance).wounds_current = 1   # 2 wounds missing on a living Tough(3)
 	assert_int(SoloController.reanimation_pool(u)).is_equal(2 + 3)
-	_main._solo_resolve_reanimation(u, 5, 5, 2)
+	await _main._solo_resolve_reanimation(u, 5, 5, 2)
 	assert_int((u.models[0] as ModelInstance).wounds_current) \
 		.override_failure_message("living wounded are filled first (v1 automatic allocation)") \
 		.is_equal(3)
@@ -190,7 +190,7 @@ func test_a_success_with_nowhere_legal_to_stand_expires_with_its_line() -> void:
 			var ang: float = TAU * float(k) / 16.0
 			wall_spots.append(Vector3(anchor.x + cos(ang) * dist, anchor.y, anchor.z + sin(ang) * dist))
 	_reg(E2EBoot.make_unit(_main, 1, "Wall", wall_spots))
-	_main._solo_resolve_reanimation(u, 1, 5, 1)
+	await _main._solo_resolve_reanimation(u, 1, 5, 1)
 	assert_bool((u.models[1] as ModelInstance).is_alive) \
 		.override_failure_message("no coherent spot → the model stays down") \
 		.is_false()
