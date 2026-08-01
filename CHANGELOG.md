@@ -69,6 +69,17 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   charge you declare gets its own opening line, like the AI's always had.
 
 ### Fixed
+- **A unit that leaves the table leaves it on both screens.** *Ambush Re-Deployment* takes a unit off
+  the table for a round, and that withdrawal never left the client that did the arithmetic — there is
+  no visibility message for unit models at all. The opponent kept a unit standing that the acting
+  side had already booked as gone: visible, measurable, shootable, chargeable, and counted by every
+  scan that is supposed to skip reserves. The two halves of the game even contradicted each other,
+  because model visibility *does* travel in the state sync — so the ghost vanished the moment that
+  peer rejoined. The withdrawal, the AI's ambush arrival and your own placement from reserve now all
+  ride the wire from the one place that flips a unit's presence, and the reserve flag travels with
+  them: hiding the models alone still left the opponent's targeting offering a unit that is not
+  there. This affects any networked room with a designated AI slot — for the AI's units and for
+  yours.
 - **Your buff-giver rules finally do something.** The whole "once per activation, before attacking"
   buff family (*Precision Shooter Buff*, *Furious Buff*, *Entrenched Buff*, *No Retreat Buff*, …)
   bailed out on anything that was not an AI unit, so a human player's buff was dead data — no token,
