@@ -6,6 +6,33 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Fixed
+- **Nine aura families granted a rule that resolved nowhere (army-book).** An army-book "*X* Aura" reads
+  "this model and its unit get *X*", and the import expands it by writing the bare name *X* onto the unit.
+  That only does something if *X* actually resolves — and for nine families nothing did, in either of the
+  two ways it can: the aura entry carried no mechanic of its own, and no rule of that name existed for the
+  carrier's book. **66 book entries across all five game systems** promised an ability the table never saw:
+  *Shred when Shooting*, *Rending when Shooting*, *Unstoppable in Melee*, *Unstoppable when Shooting*,
+  *Precision Fighter*, *Precision Shooter*, *Precision Charge*, *Increased Shooting Range* and
+  *Hit & Run Fighter*. They resolve now, each through the mechanic its printed text describes — extra
+  wounds on a blocked 1, AP(+4) on unmodified 6s, wounds that ignore Regeneration, +1 to hit, +6″ range,
+  the 3″ step out of melee — so every one of them writes the battle-log line its primitive already wrote
+  for the books that had it. A standing test now fails if any future aura ships granting a dead name.
+- **A rule printed for one half of the game no longer fires in the other.** Rules carry a
+  melee-or-shooting gate in their data, but the engine read the shooting half in exactly **one** place, so
+  everywhere else the gate was silently one-directional. *Shred in Melee* also shredded when shooting and
+  *Shred when Shooting* also shredded in melee; *Predator Shooter* spawned its extra attack in melee;
+  *Good Fighter* and *Precision Fighter Aura* added their "+1 to hit **in melee**" to every **shot** while
+  never reaching the melee they are printed for, and *Precision Charge Aura* paid out on every shot instead
+  of on a charge. Both halves are now the same question asked by one function, and the charge-scoped bonus
+  is handed the charge it needs. The skirmish books shipped two of these live, so this is a fix you can
+  feel, not only a guard for the new data.
+- **"Unstoppable" no longer cuts through Regeneration for rules that merely start with the word.** The
+  Regeneration-bypass fallback matched unit rules by *prefix*, so *Unstoppable in Melee* and *Unstoppable
+  when Shooting* bypassed Regeneration in **both** halves whatever their gate said — and *Unstoppable
+  Mark*, which is a mark you put on the **enemy**, bypassed it for its bearer. The fallback matches the
+  exact name now (the same "Ferocious lesson" the other rule checks already learned).
+
 ### Added
 - **Extended Buff Range (army-book).** A unit standing within 24″ of a friendly unit that carries
   the same rule *and* holds a Hero can be picked by that Hero's within-12″ buff rules as if it were
