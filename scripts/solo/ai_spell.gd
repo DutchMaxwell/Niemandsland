@@ -41,6 +41,49 @@ const TOKEN_VALUE_EPS: float = 0.05
 const SIX_P := 1.0 / 6.0
 
 
+## Grant name → the ATTACK-side profile facet AiEv.profile_ev already reads for it. This table adds
+## NO valuation of its own: every entry names a facet with an existing consumer in the EV chain, so a
+## granted rule is worth exactly what the same facet is worth when a weapon carries it natively.
+##   bane       — defender re-rolls unmodified Defense 6s        (ai_ev.gd, block_chance)
+##   shred      — +1 wound per unmodified Defense 1              (ai_ev.gd)
+##   furious    — +1 hit per unmodified 6, melee AND charging     (ai_ev.gd "furious")
+##   relentless — +1 hit per unmodified 6, shooting over 9"       (ai_ev.gd "relentless")
+##   rending    — unmodified 6s to hit get AP(+4)                 (ai_ev.gd "rending" → on6_ap)
+##   surge      — +1 hit per unmodified 6, unconditional          (ai_ev.gd "surge")
+##   indirect   — the target's Cover does not apply to the volley (ai_ev.gd "indirect")
+## MIRROR: tools/spells_mechanics_export.py EV_GRANT_BASES gates which spells reach this function at
+## all (status "modeled"). The two lists must stay identical — a name here that is missing there is
+## dead code, a name there that is missing here exports a mechanic worth a flat 0.
+const GRANT_FACETS := {
+	"Bane": "bane",
+	"Shred": "shred",
+	"Furious": "furious",
+	"Relentless": "relentless",
+	"Rending": "rending",
+	"Surge": "surge",
+	"Indirect": "indirect",
+}
+
+
+## The facet a granted rule name maps to, or "" when the EV chain cannot price it (honest 0).
+## Accepts the data's scope suffixes ("Bane in Melee", "Indirect when Shooting") — the same rule.
+## REFUSED on purpose:
+##   "<X> Boost" — an UPGRADE rule (Primal Boost, Devout Boost, …). It only fires when the bearer
+##                 ALREADY has its base rule, and its facets (surge_attack_low, surge_low) are read
+##                 solely by the dice path in main.gd — AiEv.profile_ev has no term for them, so
+##                 pricing one would mean inventing an extra-attack valuation, not reusing a facet.
+##   "<X> Aura"  — grants the rule to OTHER units, not the target; a different effect entirely.
+static func grant_facet(grant: String) -> String:
+	var g := grant.strip_edges()
+	if g.is_empty() or g.ends_with(" Boost") or g.ends_with(" Aura"):
+		return ""
+	for base in GRANT_FACETS:
+		var b := str(base)
+		if g == b or g.begins_with(b + " in ") or g.begins_with(b + " when "):
+			return str(GRANT_FACETS[base])
+	return ""
+
+
 # ===== P1 — cast probability =====
 
 ## The cast roll target after boost/interference (v3.5.1: +1 per friendly token, -1 per enemy token,
@@ -187,9 +230,13 @@ static func spell_damage_ev(hits: int, def_ctx: Dictionary, facets: Dictionary =
 ##   effect.modifier.hit_mod  — ±N to hit rolls (folds into the profile_ev to-hit composition via
 ##                              the att ctx "spell_hit_mod" seam),
 ##   effect.modifier.def_mod  — ±N to defense rolls (a save target N better/worse, clamped [2,6]),
-##   effect.grants_rule       — Bane / Shred (the EV-visible profile facets; scope-gated),
-##   anything else            — 0.0 (movement/range/morale/casting modifiers carry no EV in this
-##                              chain yet — the honest wave-6 boundary, logged as such).
+##   effect.grants_rule       — every name in GRANT_FACETS (the profile facets profile_ev already
+##                              reads: Bane / Shred / Furious / Relentless / Rending / Surge /
+##                              Indirect); scope-gated, and each worth exactly what the same facet
+##                              is worth on a weapon that carries it natively,
+##   anything else            — 0.0 (movement/range/morale/casting modifiers, defensive grants and
+##                              the "<X> Boost" upgrade rules carry no EV in this chain — the honest
+##                              boundary: none of them has a term in profile_ev to reuse).
 ## `ranged` picks the shoot_ev (at dist_in) vs melee_ev (charging) side; a scoped effect that does
 ## not apply to that side ("in melee" vs a shooting evaluation) is worth 0 by definition.
 static func spell_modifier_delta(profiles: Array, att: Dictionary, def_ctx: Dictionary,
@@ -215,8 +262,8 @@ static func spell_modifier_delta(profiles: Array, att: Dictionary, def_ctx: Dict
 		def2["defense"] = clampi(int(def_ctx.get("defense", 4)) - int(modifier["def_mod"]),
 			AiCombatMath.BEST_HIT_TARGET, AiCombatMath.UNMODIFIED_SIX)
 		changed = true
-	if grant.begins_with("Bane") or grant == "Shred":
-		var flag := "bane" if grant.begins_with("Bane") else "shred"
+	var flag := grant_facet(grant)
+	if not flag.is_empty():
 		profiles2 = []
 		for p in profiles:
 			var copy := (p as Dictionary).duplicate()

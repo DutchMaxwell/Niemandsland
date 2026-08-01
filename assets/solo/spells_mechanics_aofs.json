@@ -506,7 +506,13 @@
       "duration": "once",
       "beneficiary": "attackers"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Surge"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Wrath of the Huntress",
@@ -1025,7 +1031,13 @@
       "duration": "once",
       "beneficiary": "attackers"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Indirect when Shooting"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Blazing Starlight",
@@ -2079,7 +2091,13 @@
       "duration": "once",
       "beneficiary": "attackers"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Relentless"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Rune of Insanity",
@@ -3207,7 +3225,13 @@
       "duration": "once",
       "beneficiary": "attackers"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Relentless"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Deadly Whirlwind",
@@ -3638,7 +3662,13 @@
       "scope": "melee",
       "beneficiary": "attackers"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Rending"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Iron Burst",
@@ -3766,7 +3796,13 @@
       "duration": "once",
       "beneficiary": "attackers"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Furious"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Bone Breaker",
@@ -4975,7 +5011,13 @@
       "scope": "shooting",
       "beneficiary": "attackers"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Indirect"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Piercing Vines",
