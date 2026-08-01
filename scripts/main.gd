@@ -464,6 +464,7 @@ func _ready() -> void:
 	network_manager.remote_model_marker_updated.connect(_on_remote_model_marker_updated)
 	network_manager.remote_unit_marker_value_updated.connect(_on_remote_unit_marker_value_updated)
 	network_manager.remote_model_marker_value_updated.connect(_on_remote_model_marker_value_updated)
+	network_manager.remote_unit_visibility_updated.connect(_on_remote_unit_visibility_updated)
 	network_manager.remote_objective_owner_updated.connect(_on_remote_objective_owner_updated)
 	network_manager.remote_token_defined.connect(_on_remote_token_defined)
 	network_manager.remote_token_edited.connect(_on_remote_token_edited)
@@ -2633,9 +2634,24 @@ func _sandbox_terrain_shapes() -> Array:
 	return shapes
 
 
-## Show/hide every model node of a unit (incl. attached heroes). Keeps Ambush reserve units off the table
-## until they arrive; the arrival step reveals them (findings 3/4).
+## Show/hide every model node of a unit (incl. attached heroes) AND tell the other peers. Keeps Ambush
+## reserve units off the table until they arrive; the arrival step reveals them (findings 3/4).
+##
+## NML-945 — the broadcast sits INSIDE the choke point rather than at the three call sites (the
+## Re-Deployment withdrawal, the AI's ambush arrival, the human's placement from reserve), so every
+## flip is covered by construction and a fourth site cannot forget it. A unit that leaves the table
+## for one client only is still standing there for the other: visible, measurable, shootable,
+## chargeable, and counted by every reserve-filtered scan. A reveal that stayed local was just as
+## bad the other way round — the unit came back on one table and stayed gone on the other.
 func _solo_set_unit_visible(unit: GameUnit, vis: bool) -> void:
+	_apply_unit_visible(unit, vis)
+	if unit != null and network_manager != null and network_manager.has_method("broadcast_unit_visible"):
+		network_manager.broadcast_unit_visible(unit, vis)
+
+
+## The LOCAL half of the flip, split out so a peer's message can be applied without echoing it
+## straight back onto the wire.
+func _apply_unit_visible(unit: GameUnit, vis: bool) -> void:
 	if unit == null:
 		return
 	var members: Array = [unit]
@@ -15391,6 +15407,22 @@ func _on_remote_unit_marker_value_updated(game_unit: GameUnit, marker_name: Stri
 func _on_remote_model_marker_value_updated(model: ModelInstance, marker_name: String, value: int) -> void:
 	if radial_menu_controller and model:
 		radial_menu_controller.set_model_marker_value(model, marker_name, value)
+
+
+## Called when a remote peer takes a unit off the table (Ambush Re-Deployment) or brings it back from
+## reserve. NML-945: the models follow, and so does the reserve flag — without the flag this client
+## keeps offering the unit as a target (nearest_human_unit, best_shoot_target_now), keeps counting it
+## for the activation pools and the Coordinate hand-off, and keeps measuring to a unit that is not
+## there. Applying it through _apply_unit_visible (not _solo_set_unit_visible) is what stops the
+## message echoing back to the sender.
+##
+## Deliberately writes NO battle-log line: the rule's own line is a log-channel concern, and writing
+## one here as well would print it twice on any peer that has both.
+func _on_remote_unit_visibility_updated(game_unit: GameUnit, is_visible: bool, in_reserve: bool) -> void:
+	if game_unit == null:
+		return
+	game_unit.unit_properties["ambush_reserve"] = in_reserve
+	_apply_unit_visible(game_unit, is_visible)
 
 
 ## Called when a remote peer captures/recolors a mission objective.
