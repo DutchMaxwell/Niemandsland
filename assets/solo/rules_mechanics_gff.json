@@ -57,6 +57,7 @@
   "Clan Warrior",
   "Clan Warrior Boost",
   "Clan Warrior Boost Aura",
+  "Coordinate",
   "Counter",
   "Counter-Attack",
   "Counter-Attack Aura",
@@ -88,6 +89,7 @@
   "Entrenched Buff",
   "Evasive",
   "Evasive Aura",
+  "Extended Buff Range",
   "Fanatic",
   "Fast",
   "Fast Aura",
@@ -4729,9 +4731,14 @@
     }
    },
    "Coordinate": {
-    "primitive": null,
+    "primitive": "Coordinate",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "range_in": 12.0,
+     "activates_friendly": true,
+     "no_chain": true
+    }
    },
    "Crack": {
     "primitive": "Crack",
@@ -4749,13 +4756,21 @@
      "grants_rule": "Entrenched",
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    },
    "Extended Buff Range": {
-    "primitive": null,
+    "primitive": "Extended Buff Range",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "relay_range_in": 24.0,
+     "pick_range_in": 12.0,
+     "requires_hero": true,
+     "excludes_spells": true,
+     "hero_link_in": 6.0
+    }
    },
    "Good Shot": {
     "primitive": "Shot Modifier",
@@ -4818,7 +4833,8 @@
      "grants_rule": "No Retreat",
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    },
    "Precision Shooter Buff": {
@@ -4850,7 +4866,8 @@
      "grants_rule": "Rapid Advance",
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    },
    "Regeneration Aura": {
@@ -4925,7 +4942,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "max_targets": 4
     }
    },
    "Courage Aura": {
@@ -6355,7 +6373,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "max_targets": 4
     }
    },
    "Ranged Slayer": {

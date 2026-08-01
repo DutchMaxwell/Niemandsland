@@ -7,6 +7,24 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [Unreleased]
 
 ### Added
+- **Extended Buff Range (army-book).** A unit standing within 24″ of a friendly unit that carries
+  the same rule *and* holds a Hero can be picked by that Hero's within-12″ buff rules as if it were
+  in range. The link is measured **base edge to base edge** like the ruler (at 24″ a centre reading
+  is off by most of a vehicle oval), it is exactly **one hop** — never a daisy chain — and it does
+  **not** extend spells, which keep their own printed range. One living carrier model is enough to
+  relay, and the unit stops relaying when its last carrier dies. The skirmish books print "within 6″
+  of a friendly Hero" instead of "has a Hero in it"; that is a data difference, not a second rule.
+  Every reach, every refused reach (which clause failed) and the spell exclusion write their own
+  battle-log line.
+- **Coordinate (army-book).** At the end of its activation a carrier may hand the activation to an
+  un-activated friendly unit within 12″, which then activates immediately. NACHTMAHR picks the most
+  valuable friend in range using the same activation-payoff evaluation its activation-order
+  lookahead uses (and records why); you get candidate rings and a target click, with ESC declining.
+  A unit that was itself activated via Coordinate may not hand off again, a bearer that did not
+  survive its own activation hands nothing off, and units still held in reserve are invisible to the
+  hand-off. The pair still owes the opponent exactly **one** activation — the alternation never
+  slips. Hand-off, declined hand-off, stopped chain, dead bearer and "nobody in range" each get
+  their own log line.
 - **Delayed Action — you can pass a turn now (army-book).** *"Once per round, if your opponent has
   more units left to activate than you, then this model's unit may pass its turn instead of
   activating (may still be activated later)."* With 73 occurrences across 21 books and all five
@@ -51,6 +69,14 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   charge you declare gets its own opening line, like the AI's always had.
 
 ### Fixed
+- **Your buff-giver rules finally do something.** The whole "once per activation, before attacking"
+  buff family (*Precision Shooter Buff*, *Furious Buff*, *Entrenched Buff*, *No Retreat Buff*, …)
+  bailed out on anything that was not an AI unit, so a human player's buff was dead data — no token,
+  no line, nothing. It now resolves on both sides, at the moment you declare an attack (or at the
+  end of the activation for a unit that never attacks), exactly once per activation. Target picking
+  is automatic for v1 and every application is named in the log; choosing the target by click is a
+  follow-up. Skirmish books whose text says "pick up to **4** friendly units" now really pick up to
+  four instead of one, and a rule that finds no legal target says so instead of failing silently.
 - **A reanimated model stands in the same place on both screens.** The message that brings a model
   back carries wounds and alive/dead, but no position — so the other client rebuilt the spot itself
   and put the model back where it fell. That is not always where it now stands: when the fall point

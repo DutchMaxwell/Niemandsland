@@ -45,6 +45,7 @@
   "Changebound",
   "Changebound Boost",
   "Changebound Boost Aura",
+  "Coordinate",
   "Counter",
   "Counter in Melee",
   "Counter-Attack",
@@ -82,6 +83,7 @@
   "Exotic Gear",
   "Exotic Gear Boost",
   "Exotic Gear Boost Aura",
+  "Extended Buff Range",
   "Fast",
   "Fast Aura",
   "Fatigue",
@@ -1753,7 +1755,8 @@
      "grants_rule": "Piercing Assault",
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    },
    "Piercing Frenzy": {
@@ -2222,7 +2225,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "max_targets": 4
     }
    },
    "Precision Spotter": {
@@ -2729,7 +2733,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "max_targets": 4
     }
    },
    "Precision Fighter Aura": {
@@ -3112,7 +3117,8 @@
      "hit_mod": 1,
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    },
    "Quick": {
@@ -3547,7 +3553,8 @@
      "grants_rule": "Steadfast",
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    },
    "Swift": {
@@ -4183,7 +4190,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "max_targets": 4
     }
    },
    "Repel Ambushers": {
@@ -4274,9 +4282,14 @@
     }
    },
    "Coordinate": {
-    "primitive": null,
+    "primitive": "Coordinate",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "range_in": 12.0,
+     "activates_friendly": true,
+     "no_chain": true
+    }
    },
    "Crack": {
     "primitive": "Crack",
@@ -4287,9 +4300,16 @@
     }
    },
    "Extended Buff Range": {
-    "primitive": null,
+    "primitive": "Extended Buff Range",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "relay_range_in": 24.0,
+     "pick_range_in": 12.0,
+     "requires_hero": true,
+     "excludes_spells": true,
+     "hero_link_in": 6.0
+    }
    },
    "Furious Buff": {
     "primitive": "Utility Buff",
@@ -4299,7 +4319,8 @@
      "grants_rule": "Furious",
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    },
    "Hold the Line": {
@@ -4328,7 +4349,8 @@
      "grants_rule": "Hold the Line Boost",
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    },
    "Precision Fighting Mark": {
@@ -4340,7 +4362,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "max_targets": 4
     }
    },
    "Precision Shooter Buff": {
@@ -4372,7 +4395,8 @@
      "grants_rule": "Rapid Rush",
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    },
    "Regeneration Aura": {
@@ -4437,7 +4461,8 @@
      "grants_rule": "Angelic Blessing Boost",
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    },
    "Deathstrike": {
@@ -4591,7 +4616,8 @@
      "grants_rule": "Versatile Attack",
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    }
   },
@@ -5532,7 +5558,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "max_targets": 4
     }
    },
    "Speed Feat": {
@@ -7696,7 +7723,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "max_targets": 4
     }
    },
    "Relentless Aura": {
@@ -7779,7 +7807,8 @@
      "grants_rule": "Cursed Undead Boost",
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    },
    "Disintegrate": {
@@ -8459,7 +8488,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "max_targets": 4
     }
    },
    "Teleport": {

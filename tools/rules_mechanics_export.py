@@ -336,6 +336,13 @@ SHIPPED_PLANNED = {
     "Ambush Beacon",
     "Rapid Ambush",
     "Ambush Re-Deployment",
+    # Wave 4 (2026-08-01). Both carry mechanic.primitive + their own params in the registry
+    # ("Extended Buff Range" {relay_range_in, pick_range_in, requires_hero, excludes_spells,
+    # hero_link_in} and "Coordinate" {range_in, no_chain}); only the "planned" status kept
+    # nulling them. The resolvers ship with this wave (main._solo_utility_targets' relay waiver
+    # and SoloController.coordinate_candidates / main._solo_try_coordinate_*).
+    "Extended Buff Range",
+    "Coordinate",
     # Wave 5 (2026-08-01). 73 occurrences across 21 books and all five systems — the largest single
     # open rule. The registry entry carries primitive "Pass Turn" (the alternation's new pass step;
     # Combat Hesitation, GF Advanced v3.5.1 p.41, is the dice-gated sister of the same primitive)
