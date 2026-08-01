@@ -3391,14 +3391,11 @@ func _solo_refresh_spell_stamps(tu: GameUnit) -> void:
 		rng += int((rd as Dictionary).get("range_in", 0))
 	for u in chain:
 		var gu := u as GameUnit
-		if adv == 0 and rush == 0:
-			gu.unit_properties.erase("spell_move_mod")
-		else:
-			gu.unit_properties["spell_move_mod"] = {"advance": adv, "rush": rush}
-		if rng == 0:
-			gu.unit_properties.erase("spell_range_mod")
-		else:
-			gu.unit_properties["spell_range_mod"] = rng
+		# NML-927: the stamps are read by BOTH clients (the peer draws its own charge reach and
+		# range rings off them), so every restamp is a wire delta — see _sync_unit_property.
+		_sync_unit_property(gu, "spell_move_mod",
+			null if (adv == 0 and rush == 0) else {"advance": adv, "rush": rush})
+		_sync_unit_property(gu, "spell_range_mod", null if rng == 0 else rng)
 
 
 ## Active spell hit-modifier for a striking member (its own tokens + its host's — a joined hero
@@ -3522,8 +3519,8 @@ func _solo_expire_spell_tokens() -> void:
 				if not affected.has(cu):
 					affected.append(cu)
 	for cu in affected:
-		(cu as GameUnit).unit_properties.erase("spell_move_mod")
-		(cu as GameUnit).unit_properties.erase("spell_range_mod")
+		_sync_unit_property(cu as GameUnit, "spell_move_mod", null)   # NML-927: the expiry travels too
+		_sync_unit_property(cu as GameUnit, "spell_range_mod", null)
 	if radial_menu_controller == null:
 		_solo_spell_tokens_active.clear()
 		return
@@ -4239,6 +4236,39 @@ func _solo_apply_reanimation(unit: GameUnit, successes: int) -> Dictionary:
 	out["wounds_now"] = _solo_unit_wounds_now(unit)
 	out["wounds_max"] = _solo_unit_wounds_max(unit)
 	return out
+
+
+## NML-927 — write a HIDDEN per-unit state (`value == null` erases it) AND push the delta to the
+## peers in the same breath.
+##
+## THE DEFECT THIS SEAM EXISTS FOR. Three rules-relevant NUMBERS live in unit_properties and never
+## left the acting client: the Precision Spotter mark count ("spot_markers" — only its boolean
+## "Spotted" token rode the marker channel, so the peer saw THAT a unit was marked but never how
+## OFTEN, and a partial removal was invisible), and the two spell stamps ("spell_move_mod" /
+## "spell_range_mod") that the movement bands and every shooting-range read consume. Each one is
+## read by the OPPONENT's client too — the defender rolls its own saves, measures its own charge
+## reach and draws its own range rings — so a number that stays local is two tables disagreeing
+## about the same unit.
+##
+## Every write to those keys goes through here. The broadcast is skipped when the value did not
+## actually change, so the repeated restamps (_solo_refresh_spell_stamps runs on every record,
+## every consumption and every expiry) do not turn into wire traffic.
+func _sync_unit_property(gu: GameUnit, key: String, value: Variant) -> void:
+	if gu == null:
+		return
+	if value == null:
+		if not gu.unit_properties.has(key):
+			return
+		gu.unit_properties.erase(key)
+	else:
+		if gu.unit_properties.has(key) and gu.unit_properties[key] == value:
+			return
+		gu.unit_properties[key] = value
+	if network_manager == null or not network_manager.has_method("broadcast_unit_property"):
+		return
+	if not network_manager.is_multiplayer_active():
+		return
+	network_manager.broadcast_unit_property(gu, key, value)
 
 
 ## Push a restored model's REAL table position to the peers.
@@ -8241,7 +8271,7 @@ func _solo_try_precision_spot(unit: GameUnit) -> void:
 ## token on the target, log + float (rules-must-log).
 func _solo_place_spot_marker(spotter: GameUnit, target: GameUnit) -> void:
 	var n := int(target.unit_properties.get("spot_markers", 0)) + 1
-	target.unit_properties["spot_markers"] = n
+	_sync_unit_property(target, "spot_markers", n)   # NML-927: the COUNT rides the wire, not just the token
 	if radial_menu_controller != null and radial_menu_controller.token_library != null:
 		if not radial_menu_controller.token_library.has("Spotted"):
 			radial_menu_controller.token_library.define("Spotted", Color(1.0, 0.55, 0.15), false,
@@ -8264,11 +8294,13 @@ func _solo_consume_spot_markers(target: GameUnit, count: int = -1) -> int:
 	if take <= 0:
 		return 0
 	if take >= sm:
-		target.unit_properties.erase("spot_markers")
+		_sync_unit_property(target, "spot_markers", null)
 		if radial_menu_controller != null:
 			radial_menu_controller.remove_library_token(target, "Spotted")
 	else:
-		target.unit_properties["spot_markers"] = sm - take
+		# NML-927: a PARTIAL removal leaves the "Spotted" token standing, so the marker channel
+		# carries nothing at all — the remaining count is the only thing that tells the peer.
+		_sync_unit_property(target, "spot_markers", sm - take)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.COMBAT,
 			"Precision Spotter: %d marker%s removed — +%d to hit this volley%s" % [
