@@ -465,6 +465,7 @@ func _ready() -> void:
 	network_manager.remote_token_edited.connect(_on_remote_token_edited)
 	network_manager.remote_casts_updated.connect(_on_remote_casts_updated)
 	network_manager.remote_unit_deleted.connect(_on_remote_unit_deleted)
+	network_manager.remote_unit_created.connect(_on_remote_unit_created)
 	network_manager.remote_round_advanced.connect(_on_remote_round_advanced)
 
 	# Connect presence signals
@@ -14588,6 +14589,25 @@ func _on_remote_casts_updated(game_unit: GameUnit) -> void:
 func _on_remote_unit_deleted(game_unit: GameUnit) -> void:
 	if radial_menu_controller:
 		radial_menu_controller.unit_deleted.emit(game_unit)
+
+
+## A unit another player's rule created mid-game has just been built here. A unit that simply
+## APPEARS on the table reads like a bug, so it says where it came from: silent-correct is the one
+## thing the log may never be. The acting client writes its own line when the rule fires; this is
+## the other side of the table being told.
+func _on_remote_unit_created(game_unit: GameUnit, origin: String) -> void:
+	if battle_log == null or game_unit == null:
+		return
+	var reason: String = {
+		"reinforcement": "Reinforcement",
+		"split": "Split",
+		"spawn": "Spawn",
+	}.get(origin, "")
+	var unit_name: String = str(game_unit.unit_properties.get("name", "A unit"))
+	var text: String = "%s joined the battle" % unit_name
+	if not reason.is_empty():
+		text += " (%s)" % reason
+	battle_log.log_event(BattleLog.Category.GENERAL, text)
 
 
 # === Coverage wave (2026-07-23): the Utility-Buff family — "once per activation, before attacking" ===
