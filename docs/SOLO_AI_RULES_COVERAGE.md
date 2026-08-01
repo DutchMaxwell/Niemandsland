@@ -1110,3 +1110,55 @@ unit still activates later; the double pass is refused while a second carrier's 
 refused (with the one-more-enemy ROT flip); the round still ends with nobody acting twice; the AI passes to
 wait out an uncommitted threat and declines when there is none; a reserve unit does not tip the balance (with
 its on-the-table ROT flip); the radial offers the entry and an activated unit is refused.
+
+## Reinforcement — army-book rule, and the runtime unit factory (2026-08-01)
+
+Official text, **byte-identical in all 12 army books that carry it** (Ratmen Clans, Soul Snatcher Cults,
+Worker Unions, Volcanic Dwarves, Merchant Unions — across GF/GFF/AoF/AoFS/AoFR):
+
+> *"When a unit where all models have this rule is Shaken or fully destroyed, you may remove it from the
+> table as destroyed and place a new copy of it fully within 12" of any table edge at the beginning of the
+> next round after Ambushers have been deployed. Units that deploy via Reinforcement can't seize or contest
+> objectives on the round they deploy, and this rule doesn't apply to the new copy of the unit."*
+
+The registry entry carries `primitive: "Reinforcement"` with
+`params {trigger: shaken_or_destroyed, redeploy: table_edge, within_in: 12,
+timing: next_round_after_ambush, no_objective_on_arrival: true, once: true}` in all 12 books; the derived
+maps (`assets/solo/rules_mechanics_*.json`) resolve it for every faction that fields it, and it joins the
+`modeled` token list for all five game systems.
+
+**Why this rule needed a factory, not just a resolver.** Every rule so far mutated a unit that already
+existed. Reinforcement's copy is a *new* unit born mid-game — the first time that has ever had to be true —
+so the wave had to prove three things that had never been exercised: the unit dock rebuilds for a
+unit that wasn't there at army-spawn time, a mid-game unit survives save/load (parented under
+`object_manager`, in the `"selectable"` group, with the metas the save walker requires), and the round-start
+alternation picks it up in the same pass that reads eligibility.
+
+**The mechanic.** `SoloController.reinforcement_offered` / `reinforcement_refusal` gate the owner's radial
+**Reinforce** entry — refused out loud (never silently) while the unit is neither Shaken nor destroyed, or
+while a joined hero does not itself carry the rule (the "all models" quantifier includes attached heroes).
+`main.solo_begin_reinforcement` removes the unit as destroyed and stamps the promise;
+`main._reinforcement_arrivals(round_number)` resolves it at the next round's start, **after** the Ambush
+alternation (`_solo_round_start` awaits the ambush beat first, then the reinforcement beat, so the rule's own
+ordering clause is structural, not a convention). The copy is full starting size with its bought upgrades and
+item grants intact, wounds and Shaken reset — and `SoloController.reinforcement_copy_rules` strips
+"Reinforcement" from its profile before the unit is built, so the rule is genuinely gone from the unit card
+and the source data, not tracked as a hidden "already used" flag.
+
+**Placement.** `SoloController.reinforcement_shape` / `reinforcement_spots` / `reinforcement_spot_in_strip`
+search the full 12″ table-edge strip on **every** edge, including the enemy's — the book names no minimum
+distance from enemies here (unlike Ambush's 9″ ring), so the search must not invent one. As many models as
+legally fit are placed; a crowded strip places the survivors and forfeits the rest, with its own battle-log
+line, and if not one model fits the promise carries over to a later round rather than being silently
+dropped. An arriving copy cannot seize or contest objectives that round (reusing the Ambush objective-lock
+stamp) but **does** activate normally in the alternation, exactly like an Ambush arrival.
+
+**Tests.** `test/e2e/e2e_reinforcement_test.gd` proves the wiring on the real `main.tscn`: the factory builds
+a complete unit (card, save/load survival, model-position round-trip) and refuses a half-built one; the offer
+stands for as long as the unit is Shaken; a joined hero without the rule blocks the offer out loud, naming
+the hero; the returning copy really loses the rule (from both the live rule list and the source profile,
+while its bought upgrade *does* come back, and the original unit's own profile is left untouched); every
+model of the copy lands inside the 12″ strip; every table edge is legal including the one facing the enemy;
+the arriving copy is locked out of objectives but is eligible to activate; a crowded edge places what fits
+and forfeits the rest with its own log line; the arrival beat runs inside round-start before eligibility is
+read; and a promise survives a save taken before the copy arrives.

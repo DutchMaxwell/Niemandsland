@@ -6835,7 +6835,12 @@ const SOLO_MODELED_RULES: Array = ["AP", "Tough", "Deadly", "Takedown", "Relentl
 	"Extended Buff Range", "Coordinate",
 	# Wave 5: Delayed Action through the new "Pass Turn" primitive — once per round a carrier may
 	# pass its turn instead of activating while the opponent has strictly more units left.
-	"Delayed Action", "Pass Turn"]
+	"Delayed Action", "Pass Turn",
+	# Army-book: Reinforcement — a unit where all models carry it may be pulled off the table
+	# (Shaken or fully destroyed) and a fresh copy placed within 12" of any table edge at the
+	# start of the next round, after Ambush arrivals; can't seize/contest objectives that round,
+	# and the new copy loses the rule.
+	"Reinforcement"]
 
 ## The SOLO_MODELED_RULES subset that ALSO steers the AI's behaviour choices (not only the dice math):
 ## targeting overlays (AP/Deadly/Takedown — Solo v3.5.0 p.2), Hold overlays (Relentless/Artillery/
@@ -8901,6 +8906,266 @@ func _solo_round_start(round_number: int) -> void:
 	# with no clear spot in round 2 gets another chance later. B12: players ALTERNATE placing them.
 	if round_number >= 2:
 		await _solo_alternate_ambush_arrivals(round_number)
+	# Reinforcement copies land AFTER the Ambushers, exactly as the rule orders it ("at the beginning
+	# of the next round AFTER Ambushers have been deployed"). Awaited like the ambush beat, so every
+	# arrival is on the table before _solo_end_round takes its one-shot eligibility read.
+	await _reinforcement_arrivals(round_number)
+	# ...and only then does NACHTMAHR decide which of ITS carriers step off the table this round; a
+	# copy that just returned is never re-offered (it no longer has the rule).
+	_solo_reinforcement_ai_offers()
+
+
+# === Reinforcement (army-book v3.5.3) ==========================================================
+# The rule text and the maintainer's readings live on SoloController's Reinforcement block; this is
+# the wiring: the owner's radial entry, the sacrifice, and the round-start arrival beat.
+
+## The radial "Reinforce" entry. A carrier that cannot use the rule right now is REFUSED WITH THE
+## REASON, never silently — an entry that does nothing reads exactly like a broken rule (#224).
+func solo_begin_reinforcement(unit: GameUnit) -> void:
+	if unit == null or opr_army_manager == null:
+		return
+	var ai: bool = _solo_is_ai_unit(unit)
+	var reason: String = SoloController.reinforcement_refusal(unit)
+	if not reason.is_empty():
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Reinforcement: not now — %s" % reason, ai)
+		_show_toast("Reinforcement: %s" % reason)
+		return
+	_reinforcement_sacrifice(unit)
+
+
+## "You may remove it from the table as destroyed." Every model dies through the SAME casualty seam
+## manual play uses (tray parking, wound tokens, MP broadcast), and the unit is stamped with the round
+## its copy is due. The stamp rides in unit_properties, so a save taken between the sacrifice and the
+## arrival carries the promise with it — no separate pending-queue schema to keep in sync.
+func _reinforcement_sacrifice(unit: GameUnit) -> void:
+	var ai: bool = _solo_is_ai_unit(unit)
+	var pid: int = int(unit.unit_properties.get("player_id", 0))
+	var round_no: int = opr_army_manager.current_round
+	var was_shaken: bool = unit.is_shaken
+
+	# A joined hero is his own GameUnit. The rule removes THE UNIT and returns a copy of THE UNIT, so
+	# the hero is detached and stays standing rather than being deleted along with his hosts.
+	for h in unit.get_attached_heroes().duplicate():
+		var hero := h as GameUnit
+		if hero == null:
+			continue
+		EquipmentDistributor.detach_hero(hero)
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Reinforcement: %s is detached — %s leaves the table without him" % [
+					hero.get_name(), unit.get_name()], ai)
+
+	var wounds: int = 0
+	for m in unit.get_alive_models():
+		wounds += maxi((m as ModelInstance).wounds_current, 1)
+	if wounds > 0:
+		_solo_wound_models(unit, wounds, pid)
+	# The unit left the table: its Shaken/Fatigue state goes with it (the copy arrives fresh).
+	unit.is_shaken = false
+	unit.is_fatigued = false
+	if radial_menu_controller != null:
+		radial_menu_controller._update_shaken_markers(unit)
+		radial_menu_controller._update_fatigued_markers(unit)
+
+	var due: int = SoloController.reinforcement_arrival_round(round_no)
+	unit.unit_properties["reinforcement_due_round"] = due
+	if battle_log != null:
+		# Which of the rule's two triggers fired is named, so the log reads as a decision, not an event.
+		var trigger: String = " while Shaken" if was_shaken else " (it was already destroyed)"
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Reinforcement: %s is removed from the table as destroyed%s — a fresh copy arrives within 12\" of a table edge at the start of round %d" % [
+				unit.get_name(), trigger, due], ai)
+
+
+## NACHTMAHR's side of the offer. The human clicks the radial entry; the AI reviews its own carriers
+## at round start and takes the deal whenever the rule may fire — a Shaken or destroyed unit is worth
+## far more as a fresh full-strength copy than as a marker on the table, and the rule costs nothing.
+## Deterministic (no dice, no knobs): every eligible carrier steps off.
+func _solo_reinforcement_ai_offers() -> void:
+	if opr_army_manager == null or solo_controller == null:
+		return
+	for u in opr_army_manager.get_all_game_units():
+		var gu := u as GameUnit
+		if gu == null or not _solo_is_ai_unit(gu):
+			continue
+		if not SoloController.reinforcement_offered(gu):
+			continue
+		if not SoloController.reinforcement_refusal(gu).is_empty():
+			continue
+		_reinforcement_sacrifice(gu)
+
+
+## The round-start beat, immediately AFTER the Ambush arrivals ("at the beginning of the next round
+## after Ambushers have been deployed"). Every promised copy lands here, both sides.
+func _reinforcement_arrivals(round_number: int) -> void:
+	if opr_army_manager == null:
+		return
+	var due: Array = SoloController.reinforcement_due(opr_army_manager.get_all_game_units(), round_number)
+	for u in due:
+		await _reinforcement_arrive_one(u as GameUnit, round_number)
+
+
+## Put one promised copy on the table. Builds an INDEPENDENT profile from the original's own
+## OPRUnit — so every bought upgrade comes back — strips the rule from it, and hands it to the
+## runtime unit factory.
+func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
+	if original == null or opr_army_manager == null:
+		return
+	var ai: bool = _solo_is_ai_unit(original)
+	var pid: int = int(original.unit_properties.get("player_id", 0))
+	var src: OPRApiClient.OPRUnit = original.source_data as OPRApiClient.OPRUnit
+	if src == null:
+		# Nothing to copy from (a hand-built or legacy unit). Say so instead of failing mutely.
+		original.unit_properties.erase("reinforcement_due_round")
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Reinforcement: %s cannot return — its army profile is not available" % original.get_name(), ai)
+		return
+
+	# "A new copy of it": full starting size, bought upgrades intact, wounds and Shaken reset (a fresh
+	# GameUnit is unwounded by construction). "This rule doesn't apply to the new copy" — so it really
+	# leaves the profile, and with it the unit card.
+	var profile_unit: OPRApiClient.OPRUnit = src.duplicate_unit()
+	profile_unit.special_rules.assign(SoloController.reinforcement_copy_rules(profile_unit.special_rules))
+
+	var radii: Array = []
+	for i in range(profile_unit.size):
+		radii.append(_reinforcement_model_radius(original, i))
+	var spots: Array = await _reinforcement_pick_spots(original, radii, ai)
+	if spots.is_empty():
+		# No legal spot anywhere in the strip — keep the promise for a later round rather than
+		# swallowing it, and say why nothing happened.
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Reinforcement: %s cannot return this round — no free spot within 12\" of any table edge" % original.get_name(), ai)
+		return
+
+	var forfeited: int = maxi(profile_unit.size - spots.size(), 0)
+	if forfeited > 0:
+		# Maintainer decision (the Reanimation pattern): place what legally fits, forfeit the rest —
+		# with a line, never a silent short unit.
+		profile_unit.size = spots.size()
+	# The copy is its own unit from here on: it must not be mistaken for the original by anything
+	# that keys on the Army Forge selection id (hero joins, combined halves).
+	profile_unit.selection_id = ""
+	profile_unit.join_to_unit = ""
+
+	var copy: GameUnit = opr_army_manager.create_runtime_unit({
+		"opr_unit": profile_unit,
+		"faction_folder": str(original.unit_properties.get("faction_folder", "")),
+		"rule_descriptions": original.unit_properties.get("rule_descriptions", {}),
+		"display_suffix": str(original.unit_properties.get("display_suffix", "")),
+	}, pid, spots, "reinforcement")
+	if copy == null:
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Reinforcement: %s could not be rebuilt" % original.get_name(), ai)
+		return
+
+	# The promise is kept — and it is kept ONCE. The original keeps a visible spent stamp; the copy
+	# simply no longer carries the rule.
+	original.unit_properties.erase("reinforcement_due_round")
+	original.unit_properties["reinforcement_spent"] = true
+	# "Can't seize or contest objectives on the round they deploy" — the SAME stamp an Ambush arrival
+	# uses, so _solo_auto_seize's existing lock covers this rule for free.
+	copy.unit_properties["ambush_arrived_round"] = round_number
+
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Reinforcement: %s returns with %d model(s) within 12\" of a table edge — it cannot seize or contest objectives this round" % [
+				copy.get_name(), copy.models.size()], ai)
+		if forfeited > 0:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Reinforcement: only %d of %d models fit inside the 12\" edge strip — %d forfeited" % [
+					spots.size(), src.size, forfeited], ai)
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Reinforcement: the returning %s does not have Reinforcement — the rule does not apply to the new copy" % copy.get_name(), ai)
+	if solo_controller != null and _solo_alternation_active():
+		_solo_focus_on_unit(copy)
+
+
+## A model's base radius for the arrival formation, read off the ORIGINAL unit's model of the same
+## index (a weapon team's bigger base comes back the same size). Falls back to the unit's own base.
+func _reinforcement_model_radius(original: GameUnit, index: int) -> float:
+	if original != null and index < original.models.size():
+		var mi := original.models[index] as ModelInstance
+		if mi != null:
+			return SoloController.model_base_radius_m(mi)
+	return SeparationChecker.DEFAULT_BASE_RADIUS_M
+
+
+## Where the copy lands. The AI (and every headless run) takes the deterministic automatic search;
+## a human gets the placement ghost over the 12" edge strip and may cancel out of it back onto that
+## same automatic spot — the copy always arrives, the player only chooses where.
+func _reinforcement_pick_spots(original: GameUnit, radii: Array, ai: bool) -> Array:
+	var trect: Rect2 = _table_rect()
+	if trect.size == Vector2.ZERO:
+		return []
+	var margin_m: float = SoloController.REINFORCEMENT_EDGE_IN * 0.0254
+	var blockers: Array = _reinforcement_blockers(original)
+	var prefer: Vector3 = _reinforcement_prefer_point(original, trect)
+	var step_m: float = OPRArmyManager.INCHES_TO_METERS
+	var auto_spots: Array = SoloController.reinforcement_spots(radii, trect, margin_m, blockers, prefer, step_m)
+	if ai or DisplayServer.get_name() == "headless" or auto_spots.is_empty():
+		return auto_spots
+	return await _reinforcement_human_ghost(original, radii, trect, margin_m, blockers, auto_spots)
+
+
+## Every standing base that a returning model may not overlap. The original's own parked casualties
+## are excluded: they sit on the army tray, not on the table.
+func _reinforcement_blockers(original: GameUnit) -> Array:
+	var blockers: Array = []
+	for g in opr_army_manager.get_all_game_units():
+		var gu := g as GameUnit
+		if gu == null or gu == original or SoloController.unit_in_reserve(gu):
+			continue
+		for m in gu.get_alive_models():
+			var mi := m as ModelInstance
+			if mi.node != null and is_instance_valid(mi.node) and not bool(mi.node.get_meta("embarked", false)):
+				blockers.append({"p": mi.node.global_position, "r": SoloController.model_base_radius_m(mi)})
+	return blockers
+
+
+## The point the automatic search sorts its candidate slots by: the owner's own table half, so a copy
+## comes back behind its own lines unless that half is full. Every edge stays legal — the rule allows
+## any of them, this only decides which legal slot is picked first.
+func _reinforcement_prefer_point(original: GameUnit, trect: Rect2) -> Vector3:
+	var pid: int = int(original.unit_properties.get("player_id", 0))
+	var own_side: float = trect.position.y + trect.size.y * (0.05 if pid == 1 else 0.95)
+	return Vector3(trect.position.x + trect.size.x * 0.5, 0.0, own_side)
+
+
+## The human's placement ghost over the edge strip. Cancelling (ESC / right-click) does not abort the
+## arrival — the rule gives no option to decline once the copy is due — it falls back to the automatic
+## spot, with a line saying so.
+func _reinforcement_human_ghost(original: GameUnit, radii: Array, trect: Rect2, margin_m: float,
+		blockers: Array, auto_spots: Array) -> Array:
+	var shape: Array = SoloController.reinforcement_shape(radii, OPRArmyManager.BASE_EDGE_GAP_M)
+	if shape.is_empty():
+		return auto_spots
+	var ghost := PlacementGhost.new()
+	add_child(ghost)
+	var chosen: Array = []
+	var done: bool = false
+	ghost.begin(shape, PlacementGhost.edge_strip_zone(margin_m), blockers, trect,
+		func(positions: Array) -> void:
+			chosen = positions
+			done = true,
+		func() -> void:
+			done = true)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"Reinforcement: place %s within 12\" of any table edge — R rotates, Esc drops it at the first legal spot" % original.get_name(), false)
+	while not done:
+		await get_tree().process_frame
+	if chosen.is_empty():
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Reinforcement: placement cancelled — %s returns at the first legal edge spot" % original.get_name(), false)
+		return auto_spots
+	return chosen
 
 
 ## Round-start Shaken recovery — wave-4 Battleborn (army-book rule, Battle Brothers) and the quick-win
@@ -9908,6 +10173,9 @@ func _do_next_round() -> void:
 		undo_manager.expire_move_takebacks()   # #162: round advance ends every activation
 	if network_manager:
 		network_manager.broadcast_round_advance()
+	# Hotseat/MP has no automated round-start sequence, but Reinforcement is not a Solo rule — a copy
+	# promised in the last round must still arrive here, or the rule would silently do nothing off Solo.
+	await _reinforcement_arrivals(opr_army_manager.current_round if opr_army_manager else 1)
 
 
 ## A remote peer advanced the round (the RPC already advanced our state).
@@ -14405,6 +14673,10 @@ func _init_radial_menu() -> void:
 
 	# Connect army_spawned signal to initialize caster markers for imported units
 	opr_army_manager.army_spawned.connect(_on_army_spawned_init_caster_markers)
+	# A unit created MID-GAME (Reinforcement, and the Spawn/Split family behind it) needs the exact
+	# same HUD treatment. The dock only ever rebuilt on army_spawned, so without this a runtime unit
+	# was on the table but had no card and no markers.
+	opr_army_manager.runtime_unit_created.connect(_on_runtime_unit_created)
 
 
 ## Handle context menu request from object manager
@@ -14432,6 +14704,19 @@ func _on_army_spawned_init_caster_markers(army: OPRApiClient.OPRArmy, _models: A
 			radial_menu_controller.initialize_special_weapon_rings_for_unit(game_unit)
 
 	# Refresh the bottom unit-card dock with the newly spawned army.
+	if unit_dock != null:
+		unit_dock.rebuild()
+
+
+## A unit was created at runtime (OPRArmyManager.create_runtime_unit). Give it everything an
+## imported unit gets from _on_army_spawned_init_caster_markers — markers, rings, and a dock card.
+func _on_runtime_unit_created(game_unit: GameUnit, _origin: String) -> void:
+	if game_unit == null:
+		return
+	if radial_menu_controller != null:
+		radial_menu_controller.initialize_caster_marker_for_unit(game_unit)
+		radial_menu_controller.initialize_status_markers_for_unit(game_unit)
+		radial_menu_controller.initialize_special_weapon_rings_for_unit(game_unit)
 	if unit_dock != null:
 		unit_dock.rebuild()
 
