@@ -1156,6 +1156,22 @@ static func _target_key_compare(a: Dictionary, b: Dictionary) -> int:
 	return int(a.get("band", 0)) - int(b.get("band", 0))
 
 
+## How many D3 a Bounding-family placement rolls (NML-937). v3.5.3 raised the boosted blink/step
+## upgrades from "within D3\"" to "within 2D3\"", and the registry carries that as `dice_count`
+## (the GF/GFF books) or as the "NdM" shape in `place_die` (the AoF books) — both are read here, so
+## the number of dice is DATA. 1 when neither key is present: the pre-3.5.3 single die, i.e. a
+## missing map leaves the shipped behaviour byte-identical.
+static func bounding_dice_count(params: Dictionary) -> int:
+	if params.has("dice_count"):
+		return maxi(int(params["dice_count"]), 1)
+	var pd := str(params.get("place_die", "")).to_lower()
+	if pd.contains("d"):
+		var head := pd.get_slice("d", 0).strip_edges()
+		if head.is_valid_int():
+			return maxi(int(head), 1)
+	return 1
+
+
 ## One activation by the FULL official OPR Solo & Co-Op v3.5.0 decision tree (goal 003 P3 — the sim's brain
 ## wired into the real game). Classify the archetype, pick the nearest un-activated enemy AND the nearest
 ## objective this side does not control, build the tree context, resolve the action toward the objective or
@@ -1212,30 +1228,48 @@ func _act(unit: GameUnit) -> Dictionary:
 	# RNG — the placement precedes any tray-visible action — and lands in the decision record.
 	var bounding_rule := ""
 	var bounding_plus := 1
+	var bounding_dice := 1
 	if RulesRegistry.unit_rule_active(unit, "Bounding"):
 		bounding_rule = "Bounding"
 		bounding_plus = int(RulesRegistry.unit_param(unit, "Bounding", "place_d3_plus", 1))
+		bounding_dice = bounding_dice_count(RulesRegistry.lookup(RulesRegistry.system_of_unit(unit),
+			RulesRegistry.faction_of_unit(unit), "Bounding").get("params", {}))
 	else:
 		# Coverage wave: DATA aliases (Wolfborn, Rapid Blink — "place all models within D3\"", the
-		# +0 form) via the generic primitive layer.
+		# +0 form) via the generic primitive layer. NML-937: a unit that carries BOTH the base rule
+		# and its boosted upgrade (Rapid Blink + Rapid Blink Boost, Wave-Step + Wave-Step Boost) must
+		# use the UPGRADE — the first alias in rule order used to win, which could pick the weaker
+		# leg — so the family is scanned for the longest placement (dice ×2 average, plus the flat).
+		var best_reach := -1.0
 		for e in RulesRegistry.unit_rules_of_primitive(unit, "Bounding"):
 			var ed := e as Dictionary
 			if str(ed["name"]) == "Bounding":
 				continue
-			bounding_rule = str(ed["name"])
-			bounding_plus = int((ed.get("params", {}) as Dictionary).get("place_d3_plus", 0))
-			break
+			var sp: Dictionary = ed.get("params", {})
+			var d := bounding_dice_count(sp)
+			var p := int(sp.get("place_d3_plus", 0))
+			var reach := float(d) * 2.0 + float(p)
+			if reach > best_reach:
+				best_reach = reach
+				bounding_rule = str(ed["name"])
+				bounding_plus = p
+				bounding_dice = d
 	if not bounding_rule.is_empty():
-		var bounding_in := float(_rng.randi_range(1, 3) + bounding_plus)
+		var bounding_in := float(bounding_plus)
+		for _d in bounding_dice:
+			bounding_in += float(_rng.randi_range(1, 3))
 		advance += bounding_in
 		rush += bounding_in
 		charge_reach += bounding_in
+		var die_text := "%s%s" % ["%dD3" % bounding_dice if bounding_dice > 1 else "D3",
+			("+%d" % bounding_plus if bounding_plus > 0 else "")]
 		record_decision({"kind": "move", "unit": unit.get_name(),
-			"rule": "%s: on activation the unit may be placed within D3%s\" — valued as a bonus on every move band" % [
-				bounding_rule, ("+%d" % bounding_plus if bounding_plus > 0 else "")],
+			"rule": "%s: on activation the unit may be placed within %s\" — valued as a bonus on every move band" % [
+				bounding_rule, die_text],
 			"candidates": [], "chosen": "+%.0f\" bands" % bounding_in, "why": "bounding placement",
-			"data": {"bonus_in": bounding_in, "rule": bounding_rule}})
-		(report["rule_notes"] as Array).append("%s: rolled %.0f\" — every move band +%.0f\" this activation" % [bounding_rule, bounding_in, bounding_in])
+			"data": {"bonus_in": bounding_in, "rule": bounding_rule, "dice": bounding_dice, "plus": bounding_plus}})
+		(report["rule_notes"] as Array).append("%s: rolled %.0f\" of %s\" — every move band +%.0f\" this activation" % [
+			bounding_rule, bounding_in, die_text, bounding_in])
 	# Coverage wave: Speed Feat family — once per GAME, +2\"/+2\" on one move (registry aliases of
 	# Quick carrying uses_per_game). NACHTMAHR spends it in the last two rounds' first move (the
 	# endgame push, where an extra 2\" buys arrivals), logged + recorded; the flag pins the once.
@@ -2687,12 +2721,37 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 	var own_left: int = maxi(tokens - threshold, 0)
 	if own_left > 0:
 		helpers.insert(0, {"unit": member, "tokens": own_left})
+	# The boost decision states its own reason in the decision log (AI policy — no battle-log line:
+	# nothing here is a rule the player must be shown, only how the AI priced its tokens).
+	# A cast this chain cannot price ("castable" status, or a rule grant spell_modifier_delta does
+	# not model) is NOT treated as worthless here: the AI has already paid the spell's tokens, so
+	# the effect is worth landing — boost_value_of prices it just high enough to buy the one token
+	# that lifts it out of the coin flip, and never a second.
+	var boost_value := AiSpell.boost_value_of(chosen_ev)
+	var boost_pool := 0
+	var boost_why := "no boost: this difficulty never spends helper tokens"
+	if spend_boosts:
+		boost_why = "no boost: no payable token in 18\" LoS"
 	if spend_boosts and not helpers.is_empty():
-		var pool := 0
 		for h in helpers:
-			pool += int((h as Dictionary)["tokens"])
-		boost = AiSpell.plan_boost(chosen_ev, pool)
+			boost_pool += int((h as Dictionary)["tokens"])
+		boost = AiSpell.plan_boost(boost_value, boost_pool)
 		boost_sources = _draw_aura_tokens(helpers, boost)
+		if boost > 0:
+			# Name the reason PRECISELY: the coin-flip clause only gets the credit when the plain
+			# token floor would have bought nothing — i.e. the FIRST token's marginal EV sits under
+			# it. A fat cast (5 wounds) boosts on the ordinary floor and must not read as one.
+			var p_unboosted := AiSpell.cast_success_chance(0, 0, base_target)
+			var first_gain := (AiSpell.cast_success_chance(1, 0, base_target) - p_unboosted) * boost_value
+			if chosen_ev <= 0.0:
+				boost_why = "coin-flip boost on an unpriced effect: the spell's tokens are already paid, so the cast is worth landing"
+			elif p_unboosted <= AiSpell.COIN_FLIP_P and first_gain <= AiSpell.TOKEN_VALUE_EPS:
+				boost_why = ("coin-flip boost: at %.0f%% any positive marginal EV beats holding the token"
+					% (p_unboosted * 100.0))
+			else:
+				boost_why = "boost: marginal EV per token above the token floor"
+		else:
+			boost_why = "no boost: the next token's marginal EV stays under the token floor"
 	# — Interference (the enemy's officially-open counter-choice): auto-planned ONLY in both-AI mode
 	#   (the defending AI spends deterministically); in human-vs-AI main prompts the human instead. —
 	var interference := 0
@@ -2725,6 +2784,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 		"why": ("ev-best pick" if ev_best_pick else ("skip 0-EV" if skip_zero_ev and chosen_ev > 0.0 else "official D3+X cycle")),
 		"data": {"d3": d3, "caster_x": caster_x, "targets": ", ".join(PackedStringArray(target_names)),
 			"ev": chosen_ev, "boost": boost, "interference": interference, "p_cast": p_cast,
+			"boost_pool": boost_pool, "boost_why": boost_why,
 			"tokens_before": tokens_before, "tokens_after": member.casts_current}})
 	var target_units: Array = []
 	for t in chosen_targets:
@@ -2909,6 +2969,12 @@ func _aura_casters(slot: int, caster_unit: GameUnit, exclude: GameUnit) -> Array
 					or not RulesRegistry.unit_rules_of_primitive(member, "Spell Accumulator").is_empty()
 			if (not member.is_caster() and not is_battery) or member.casts_current <= 0:
 				continue
+			# NML-936 (v3.5.3 audit): "Friendly casters may only use this rule if this unit isn't
+			# Shaken". The battery's own params carried that condition all along, but nothing read
+			# it — a Shaken battery kept feeding everyone else's spells. Only the lending the
+			# BATTERY rule grants is blocked; a real caster's own tokens are not this rule's.
+			if not member.is_caster() and is_battery and not lending_blocked_by_shaken(member).is_empty():
+				continue
 			seen[member.get_instance_id()] = true
 			var d := MoveIntent.distance_inches(from, unit_centre(member if member.models.size() > 0 else cu))
 			if d > (SPELL_ACCUMULATOR_REACH_IN if (is_battery and not member.is_caster()) else aura_in):
@@ -2918,6 +2984,46 @@ func _aura_casters(slot: int, caster_unit: GameUnit, exclude: GameUnit) -> Array
 			out.append({"unit": member, "tokens": member.casts_current, "d": d})
 	out.sort_custom(func(a, b) -> bool:
 		return float((a as Dictionary)["d"]) < float((b as Dictionary)["d"]))
+	return out
+
+
+## NML-936 (v3.5.3 audit) — the token-lending rule that is DEAD on `member` because it is Shaken
+## ("Friendly casters may only use this rule if this unit isn't Shaken"). Returns the blocking
+## rule's NAME so a caller can name the refusal in the battle log, or "" when nothing blocks it.
+## The pool builder and the log read this one predicate, so the line can never drift from the pool.
+static func lending_blocked_by_shaken(member: GameUnit) -> String:
+	if member == null or not member.is_shaken:
+		return ""
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Spell Accumulator"):
+		var ed := e as Dictionary
+		if bool((ed.get("params", {}) as Dictionary).get("requires_not_shaken", false)):
+			return str(ed["name"])
+	return ""
+
+
+## NML-936 — every token battery of `slot` whose stock the pool refuses because the unit is
+## Shaken, as [{unit, rule}]. main names them in the battle log so a boost that came out smaller
+## than expected is answerable from the log instead of looking like a bug.
+func shaken_lenders(slot: int) -> Array:
+	var out: Array = []
+	if army_manager == null:
+		return out
+	for c in army_manager.get_game_units_for_player(slot):
+		var cu := c as GameUnit
+		if cu == null or cu.is_destroyed() or unit_in_reserve(cu):
+			continue
+		var members: Array = [cu]
+		if cu.has_method("get_attached_heroes"):
+			members = members + cu.get_attached_heroes()
+		for m in members:
+			var member := m as GameUnit
+			if member == null or member.get_alive_count() == 0 or member.casts_current <= 0:
+				continue
+			if member.is_caster():
+				continue
+			var rule := lending_blocked_by_shaken(member)
+			if not rule.is_empty():
+				out.append({"unit": member, "rule": rule})
 	return out
 
 
@@ -4079,11 +4185,240 @@ static func reanimation_plan(unit: GameUnit, successes: int) -> Array:
 	return plan
 
 
+## NML-924 — what a Reanimation success may be spent on RIGHT NOW, in reanimation_models order:
+## [{model, revive, capacity}]. `capacity` is how many successes that model can still absorb — a
+## casualty is worth its full wounds_max (one success buys it back, further ones heal it up), a living
+## wounded model its missing wounds. Two readers: the owner's click prompt draws its targets from this,
+## and the "does the owner get a choice at all?" gate counts it. Empty = nothing left to restore.
+static func reanimation_candidates(unit: GameUnit) -> Array:
+	var out: Array = []
+	for m in reanimation_models(unit):
+		var mi := m as ModelInstance
+		if mi == null:
+			continue
+		if not mi.is_alive:
+			out.append({"model": mi, "revive": true, "capacity": maxi(mi.wounds_max, 1)})
+			continue
+		var gap: int = mi.wounds_max - mi.wounds_current
+		if gap > 0:
+			out.append({"model": mi, "revive": false, "capacity": gap})
+	return out
+
+
+## NML-924 — ONE click of the owner's Reanimation allocation: spend a single success on `choice`.
+## The cast_pick_step pattern — PURE (it reads the model's own wound fields and nothing else), so every
+## branch of the allocation is reachable in a test without a scene, a camera or a die.
+##
+## Returns {"spent", "revive", "left", "done", "reason"}. A click that buys nothing comes back with
+## `spent` false and a `reason` the caller can log (rules-must-log: a refusal that says nothing reads
+## like a broken click); `revive` marks the success that puts a casualty back on the table, which is
+## the one the placement rule ("in coherency with non-restored models") applies to.
+static func reanimation_pick_step(left: int, choice: ModelInstance) -> Dictionary:
+	if left <= 0:
+		return {"spent": false, "revive": false, "left": 0, "done": true, "reason": "no successes left"}
+	if choice == null:
+		return {"spent": false, "revive": false, "left": left, "done": false, "reason": "not a model of this unit"}
+	if choice.is_alive and choice.wounds_current >= maxi(choice.wounds_max, 1):
+		return {"spent": false, "revive": false, "left": left, "done": false, "reason": "it is at full health"}
+	var rest: int = left - 1
+	return {"spent": true, "revive": not choice.is_alive, "left": rest, "done": rest <= 0, "reason": ""}
+
+
 ## Whether a model belongs to a Hero unit (the plan's first priority band).
 static func _reanimation_is_hero(model: ModelInstance) -> bool:
 	if model == null or not (model.unit is GameUnit):
 		return false
 	return (model.unit as GameUnit).is_hero()
+
+
+# === Reinforcement (army-book, v3.5.3 — byte-identical in all 12 books that field it) ===========
+# "When a unit where all models have this rule is Shaken or fully destroyed, you may remove it from
+# the table as destroyed and place a new copy of it fully within 12" of any table edge at the
+# beginning of the next round after Ambushers have been deployed. Units that deploy via Reinforcement
+# can't seize or contest objectives on the round they deploy, and this rule doesn't apply to the new
+# copy of the unit."
+#
+# Maintainer readings pinned here so they are not re-litigated at each call site:
+#  - "IS Shaken", not "becomes Shaken": the offer stands for as long as the unit is Shaken.
+#  - The landing zone is LITERAL — 12" of ANY edge, the enemy's included. The book names a minimum
+#    distance from enemies for Ambush and deliberately does not here, so neither do we.
+#  - "all models have this rule": a joined hero is one of the unit's models, so a hero without the
+#    rule blocks it — loudly, with a log line, never silently.
+#  - The copy loses the rule for real (gone from special_rules, gone from the unit card), rather than
+#    being tracked as an invisible "already used" flag.
+
+const REINFORCEMENT_RULE := "Reinforcement"
+## The landing strip: the copy must stand FULLY within this many inches of some table edge.
+const REINFORCEMENT_EDGE_IN := 12.0
+
+## The chain that must ALL carry the rule: the unit plus every attached hero.
+static func reinforcement_chain(unit: GameUnit) -> Array:
+	if unit == null:
+		return []
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h is GameUnit:
+				chain.append(h)
+	return chain
+
+
+## Whether the rule is present on the unit at all — the gate for SHOWING the radial entry. A carrier
+## that cannot use it right now still shows the entry and is refused with a reason (#224 transparency:
+## an entry that vanishes reads exactly like a missing rule).
+static func reinforcement_offered(unit: GameUnit) -> bool:
+	return has_exact_rule(unit, REINFORCEMENT_RULE)
+
+
+## "" when the rule may fire on `unit` right now; otherwise the reason, ready to be logged verbatim.
+## Pure: everything it reads sits on the GameUnit.
+static func reinforcement_refusal(unit: GameUnit) -> String:
+	if unit == null:
+		return "no unit"
+	if not has_exact_rule(unit, REINFORCEMENT_RULE):
+		return "%s does not have Reinforcement" % unit.get_name()
+	# "a unit where ALL MODELS have this rule" — a joined hero counts as one of them.
+	for member in reinforcement_chain(unit):
+		var m := member as GameUnit
+		if m == null or m == unit:
+			continue
+		if not has_exact_rule(m, REINFORCEMENT_RULE):
+			return "%s is joined to %s, who does not have Reinforcement — \"all models have this rule\" is not met" % [
+				unit.get_name(), m.get_name()]
+	if reinforcement_due_round(unit) > 0:
+		return "%s already left the table — its copy is on the way" % unit.get_name()
+	if bool(unit.unit_properties.get("reinforcement_spent", false)):
+		return "%s has already used Reinforcement" % unit.get_name()
+	# "is Shaken or fully destroyed" — the offer stands for as long as the unit IS Shaken.
+	if not unit.is_shaken and not unit.is_destroyed():
+		return "%s is neither Shaken nor destroyed" % unit.get_name()
+	return ""
+
+
+## The round the copy of a unit sacrificed in `round_no` arrives in: "the beginning of the NEXT round".
+static func reinforcement_arrival_round(round_no: int) -> int:
+	return round_no + 1
+
+
+## The round `unit` is waiting for its copy in, or -1 when it is not waiting.
+static func reinforcement_due_round(unit: GameUnit) -> int:
+	if unit == null:
+		return -1
+	return int(unit.unit_properties.get("reinforcement_due_round", -1))
+
+
+## Every unit whose copy is due at the beginning of `round_no` (or earlier — a copy that found no
+## room at all keeps its date rather than evaporating). Stable order: registration order.
+static func reinforcement_due(all_units: Array, round_no: int) -> Array:
+	var out: Array = []
+	for u in all_units:
+		var gu := u as GameUnit
+		if gu == null:
+			continue
+		var due: int = reinforcement_due_round(gu)
+		if due > 0 and due <= round_no:
+			out.append(gu)
+	return out
+
+
+## The returning copy's special rules: the same list, with Reinforcement removed. "This rule doesn't
+## apply to the new copy" — so it leaves the card, which is what the player actually reads.
+static func reinforcement_copy_rules(rules: Array) -> Array:
+	var out: Array = []
+	for r in rules:
+		var n := str(r) if r is String else str((r as Dictionary).get("name", ""))
+		if n.strip_edges() == REINFORCEMENT_RULE:
+			continue
+		out.append(r)
+	return out
+
+
+## The arrival formation as cursor-relative offsets — one row, edge to edge with the standard gap,
+## centred on the cursor. Feeds both the human's placement ghost and the automatic spot search, so
+## the two never disagree about the unit's footprint. `radii` are the models' base radii in metres.
+static func reinforcement_shape(radii: Array, gap_m: float) -> Array:
+	var shape: Array = []
+	if radii.is_empty():
+		return shape
+	var width: float = 0.0
+	for i in radii.size():
+		width += float(radii[i]) * 2.0
+		if i > 0:
+			width += gap_m
+	var cursor: float = -width * 0.5
+	for i in radii.size():
+		var r: float = float(radii[i])
+		cursor += r
+		shape.append({"off": Vector2(cursor, 0.0), "r": r})
+		cursor += r + gap_m
+	return shape
+
+
+## Whether a base of radius `r` centred at `p` stands FULLY on the table AND FULLY within `margin_m`
+## of at least one table edge. Kept here as well as in PlacementGhost.zone_contains so the automatic
+## path and the interactive ghost are provably measuring the same strip (both are pinned by tests).
+static func reinforcement_spot_in_strip(p: Vector3, r: float, table: Rect2, margin_m: float) -> bool:
+	if p.x - r < table.position.x or p.x + r > table.end.x:
+		return false
+	if p.z - r < table.position.y or p.z + r > table.end.y:
+		return false
+	# "Fully within m of edge E" = the point of the base FARTHEST from E is still within m of E.
+	return (p.x + r) - table.position.x <= margin_m \
+		or table.end.x - (p.x - r) <= margin_m \
+		or (p.z + r) - table.position.y <= margin_m \
+		or table.end.y - (p.z - r) <= margin_m
+
+
+## The automatic landing spots for a returning copy — the AI's arrival and the human's fallback when
+## he cancels the placement ghost. Walks a deterministic lattice over the whole 12" border strip,
+## orders it by distance to `prefer`, and greedily takes the first free slot per model.
+## `blockers` are [{p: Vector3, r: float}] (every standing base). Returns one position per PLACED
+## model, in model order — SHORTER than `radii` when the strip is too crowded, which is the caller's
+## cue to forfeit the rest with a log line rather than refusing the whole arrival.
+static func reinforcement_spots(radii: Array, table: Rect2, margin_m: float, blockers: Array,
+		prefer: Vector3, step_m: float) -> Array:
+	var out: Array = []
+	if radii.is_empty() or step_m <= 0.0:
+		return out
+	var taken: Array = []
+	for i in radii.size():
+		var r: float = float(radii[i])
+		var best: Vector3 = Vector3.INF
+		var best_d: float = INF
+		# The lattice is generated per model because the legal band depends on the model's own radius.
+		var x: float = table.position.x + r
+		while x <= table.end.x - r + 0.0001:
+			var z: float = table.position.y + r
+			while z <= table.end.y - r + 0.0001:
+				var p := Vector3(x, 0.0, z)
+				if reinforcement_spot_in_strip(p, r, table, margin_m):
+					var free := true
+					for b in blockers:
+						var bd := b as Dictionary
+						var bp: Vector3 = bd["p"]
+						if Vector2(p.x, p.z).distance_to(Vector2(bp.x, bp.z)) < r + float(bd["r"]):
+							free = false
+							break
+					if free:
+						for t in taken:
+							var td := t as Dictionary
+							var tp: Vector3 = td["p"]
+							if Vector2(p.x, p.z).distance_to(Vector2(tp.x, tp.z)) < r + float(td["r"]):
+								free = false
+								break
+					if free:
+						var d: float = Vector2(p.x, p.z).distance_squared_to(Vector2(prefer.x, prefer.z))
+						# Ties break on the lattice walk order, so the same board always answers the same.
+						if d < best_d:
+							best_d = d
+							best = p
+				z += step_m
+			x += step_m
+		if best == Vector3.INF:
+			break   # the strip is full — the remaining models are forfeit (caller logs it)
+		out.append(best)
+		taken.append({"p": best, "r": r})
+	return out
 
 
 ## Total model count of a unit INCLUDING its attached heroes (the denominator shown next to
@@ -7434,8 +7769,14 @@ const INFILTRATE_MIN_ENEMY_DIST_M := 0.0762   # Bug 26 (army-book Infiltrate, AP
 
 
 ## Per-unit Ambush-arrival no-go radius from enemies: 3" for Infiltrate, 9" for plain Ambush (Bug 26).
+## NML-937: the 3" is DATA now — v3.5.3's "may be deployed anywhere over 3\" away from enemy units"
+## rides the registry's `min_enemy_dist_in`, so a book that ever moves the ring moves it here too.
+## The constant stays as the fallback, which keeps a missing map byte-identical to the shipped 3".
 func _reserve_min_enemy_dist_m(unit: GameUnit) -> float:
-	return INFILTRATE_MIN_ENEMY_DIST_M if unit.has_special_rule("Infiltrate") else AMBUSH_MIN_ENEMY_DIST_M
+	if unit == null or not unit.has_special_rule(RULE_INFILTRATE):
+		return AMBUSH_MIN_ENEMY_DIST_M
+	var fallback_in := INFILTRATE_MIN_ENEMY_DIST_M / INCHES_TO_METERS
+	return float(RulesRegistry.unit_param(unit, RULE_INFILTRATE, "min_enemy_dist_in", fallback_in)) * INCHES_TO_METERS
 
 
 ## Vanguard's forward push: candidate spots along the toward-table-centre line at 100/75/50/25% of the
@@ -8215,6 +8556,10 @@ func forced_straight_move(unit: GameUnit, dir: Vector2, dist_in: float) -> float
 ## fight value; null when none/cap reached.
 var _second_wind_round_uses := {}   # round -> uses this round
 
+## v3.5.3's army cap DENOMINATOR (3 = one third of the carriers, rounded up; the pre-3.5.3 books
+## said half). Only the fallback — the live value comes from the registry's `army_cap_fraction`.
+const SECOND_WIND_CAP_FRACTION := 3
+
 
 func second_wind_candidate() -> GameUnit:
 	if army_manager == null:
@@ -8223,15 +8568,24 @@ func second_wind_candidate() -> GameUnit:
 	var carriers := 0
 	var best: GameUnit = null
 	var best_v := -1.0
+	# NML-937: the per-round army cap is DATA — v3.5.3 cut the second activation from half the army
+	# to ONE THIRD, and the registry says so with `army_cap_fraction` (the DENOMINATOR: 3 = a third,
+	# 2 = the old half). The largest denominator any carrier NAMES wins, i.e. the most restrictive
+	# book in a mixed force; the constant only steps in when no carrier names one at all, so a
+	# missing map keeps the shipped third — and a map that says 2 is not overruled by the fallback.
+	var frac := 0
 	for u in army_manager.get_game_units_for_player(ai_slot):
 		var gu := u as GameUnit
 		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
 			continue
 		if gu.has_method("is_attached") and gu.is_attached():
 			continue
-		if RulesRegistry.unit_rules_of_primitive(gu, "Second Wind").is_empty():
+		var sw: Array = RulesRegistry.unit_rules_of_primitive(gu, "Second Wind")
+		if sw.is_empty():
 			continue
 		carriers += 1
+		for e in sw:
+			frac = maxi(frac, int(((e as Dictionary).get("params", {}) as Dictionary).get("army_cap_fraction", 0)))
 		if bool(gu.unit_properties.get("second_wind_used", false)) or not gu.is_activated:
 			continue
 		var v := _plan_ev_of(gu) + float(gu.get_alive_count()) * 0.1
@@ -8240,7 +8594,9 @@ func second_wind_candidate() -> GameUnit:
 			best = gu
 	if best == null:
 		return null
-	var cap: int = int(ceil(float(carriers) / 3.0))
+	if frac <= 0:
+		frac = SECOND_WIND_CAP_FRACTION
+	var cap: int = int(ceil(float(carriers) / float(frac)))
 	if int(_second_wind_round_uses.get(round_no, 0)) >= cap:
 		return null
 	return best

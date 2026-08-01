@@ -88,9 +88,34 @@ MOD_KEYS = {"hit": "hit_mod", "defense": "def_mod",
 # maps commit the same category of names).
 WEAPON_RULE_RE = re.compile(r"^[A-Z][A-Za-z'’ -]{0,30}(\(\+?\d+\))?$")
 
-# Grant names the solo EV layer can actually value (profile facets exist for
-# them). Everything else is still castable data, but its EV contribution is 0.
-EV_GRANTS = {"Bane", "Bane in Melee", "Bane when Shooting", "Shred"}
+# Grant names the solo EV layer can actually value: each one names an ATTACK-side
+# profile facet that AiEv.profile_ev ALREADY reads, so the granted rule is worth
+# exactly what the same facet is worth on a weapon carrying it natively. No new
+# valuation model — see scripts/solo/ai_spell.gd GRANT_FACETS, which MUST list the
+# same names (a name here that is missing there exports a mechanic worth a flat 0).
+#
+# Deliberately NOT here (each would need a valuation this chain does not have):
+#   defensive grants (Evasive, Melee Evasion, Regeneration, Stealth, Fortified,
+#     Resistance, Fearless, Shielded, ...) — a buff is valued as the delta on the
+#     BEARER'S OWN attack; survivability has no channel in that model;
+#   "<X> Boost" upgrade rules (Primal Boost, Devout Boost, Changebound Boost, ...)
+#     — they only fire when the bearer already has the base rule, and their facets
+#     (surge_attack_low, surge_low) are read solely by the dice path in main.gd;
+#   action-economy rules (Quick Shot, Rapid Rush, Teleport, Flying, Steadfast)
+#     — positioning / morale value, no term in profile_ev.
+EV_GRANT_BASES = ("Bane", "Shred", "Furious", "Relentless", "Rending", "Surge", "Indirect")
+
+
+def ev_grant(name: str) -> bool:
+    """True when a granted rule NAME maps to a profile facet the EV chain reads.
+    Accepts the data's scope suffixes ("Bane when Shooting", "Indirect when
+    Shooting"). "<X> Boost" (upgrade) and "<X> Aura" (grants to OTHERS) are
+    different effects than their base name suggests and never qualify."""
+    n = name.strip()
+    if not n or n.endswith(" Boost") or n.endswith(" Aura"):
+        return False
+    return any(n == b or n.startswith(b + " in ") or n.startswith(b + " when ")
+               for b in EV_GRANT_BASES)
 
 # --- hygiene ---------------------------------------------------------------
 
@@ -222,7 +247,7 @@ def mechanic_for(effect: dict) -> dict | None:
             return {"primitive": "spell_modifier_delta", "params": dict(modifier)}
         return None
     grant = effect.get("grants_rule", "")
-    if grant in EV_GRANTS:
+    if ev_grant(grant):
         return {"primitive": "spell_modifier_delta",
                 "params": {"grants_rule": grant}}
     return None
