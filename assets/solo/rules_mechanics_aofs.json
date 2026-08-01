@@ -252,6 +252,7 @@
   "Rending",
   "Rending in Melee",
   "Rending in Melee Aura",
+  "Rending when Shooting",
   "Rending when Shooting Aura",
   "Repel Ambushers",
   "Resistance",
@@ -335,7 +336,9 @@
   "Unpredictable Shooter",
   "Unpredictable Shooter Aura",
   "Unstoppable",
+  "Unstoppable in Melee",
   "Unstoppable in Melee Aura",
+  "Unstoppable when Shooting",
   "Unstoppable when Shooting Aura",
   "Unwieldy",
   "Utility Buff",
@@ -759,6 +762,16 @@
     "melee_only": true
    }
   },
+  "Rending when Shooting": {
+   "primitive": "Rending",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "on6_ap": 4,
+    "bypass_regen": true,
+    "shooting_only": true
+   }
+  },
   "Scout": {
    "primitive": "Scout",
    "rated": false,
@@ -850,6 +863,24 @@
    "primitive": "Unstoppable",
    "rated": false,
    "book_version": "3.5.1"
+  },
+  "Unstoppable in Melee": {
+   "primitive": "Lacerate",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bypass_regen": true,
+    "melee_only": true
+   }
+  },
+  "Unstoppable when Shooting": {
+   "primitive": "Lacerate",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bypass_regen": true,
+    "shooting_only": true
+   }
   }
  },
  "factions": {
@@ -1526,6 +1557,16 @@
      "condition": "vs_armor",
      "threshold": 3,
      "bypass_regen": true
+    }
+   },
+   "Hit & Run Fighter": {
+    "primitive": "Hit & Run Fighter",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "move_in": 3.0,
+     "per_round": true,
+     "after": "melee"
     }
    },
    "Hit & Run Fighter Aura": {
