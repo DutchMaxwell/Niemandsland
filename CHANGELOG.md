@@ -105,6 +105,16 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   compared, Fear(X) shifted them, and a unit tested morale with no line explaining why. The battle
   log now names both tallies (with the Fear-adjusted value where it differs) and who lost — and a
   charge you declare gets its own opening line, like the AI's always had.
+- **A unit created mid-game rides the wire (multiplayer).** Until now the only way a unit reached
+  the other side of the table was the whole-army batch at import time, so the rules that make a unit
+  *during* a game — Reinforcement, Split, Spawn — had nowhere to send it. They now have their own
+  one-shot message: the unit, its models and their positions arrive on every peer as the same unit,
+  with the same identity, built through the same load path a save file uses. Delivering the same
+  creation twice still yields one unit, a creation that lands in the middle of an army import queues
+  behind it instead of tearing it up, and a player who rejoins gets the created unit with everything
+  else. The network id stays inside the creating player's own numbering band, so a guest's Split
+  resolves immediately instead of waiting on the host, and a peer that tries to create in someone
+  else's band is refused and says so in the log.
 
 ### Fixed
 - **Five army-book rules now really play by their printed wording.** Five knobs of the rules data
