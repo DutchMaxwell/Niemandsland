@@ -204,6 +204,9 @@ var _tutorial_director: TutorialDirector = null
 var _tutorial_start_lesson: String = ""       # chapter-picker lesson id ("" = assessment/resume flow)
 var _tutorial_board_pending: bool = false     # the bundled tutorial board was queued on the pending-load path
 var _tutorial_board_loaded: bool = false      # its load finished (load_completed/load_failed fired)
+var _autosave_controller: AutosaveController = null   # kept so a Game School lesson can pause it
+var _scenario_mode: bool = false              # Game School: a bundled lesson scenario is being loaded
+var _scenario_loader: ScenarioLoader = null   # holds the paused-autosave + captured-table lesson state
 var _host_free_move_check: CheckButton = null   # "Move all models" — host-operated, session-wide
 var _host_tools_box: VBoxContainer = null   # host-only tools; hidden offline / in solo
 var _room_code_button: Button = null          # permanent room-code display in the left bar (click = copy)
@@ -612,6 +615,7 @@ func _ready() -> void:
 	autosave.name = "AutosaveController"
 	add_child(autosave)
 	autosave.setup(save_manager, opr_army_manager, object_manager, network_manager)
+	_autosave_controller = autosave
 	autosave.autosaved.connect(func(path: String) -> void:
 		_show_toast("Autosaved — %s" % path.get_file())
 		if battle_log != null:
@@ -756,6 +760,33 @@ func _ready() -> void:
 				"Tutorial started: T1 tool track, %d chapters (%s) — board %s" % [
 					TutorialFlow.build_tool_track().size(), lesson_part, board_part])
 
+	# Game School (startup menu -> GAME SCHOOL -> chapter): read-and-clear the runtime-only flags
+	# (never persisted to project.godot, exactly like tutorial_mode / harness_mode), then feed the
+	# picked chapter's bundled .nml into the NORMAL pending-load path below — so a lesson starts
+	# through the SAME load path as a save-load (migration chain + signals).
+	var scenario_mode: bool = ProjectSettings.get_setting("niemandsland/scenario_mode", false)
+	if scenario_mode:
+		ProjectSettings.set_setting("niemandsland/scenario_mode", false)
+		var scenario_path := str(ProjectSettings.get_setting("niemandsland/scenario_path", ""))
+		var scenario_chapter := str(ProjectSettings.get_setting("niemandsland/scenario_chapter", ""))
+		ProjectSettings.set_setting("niemandsland/scenario_path", "")
+		ProjectSettings.set_setting("niemandsland/scenario_chapter", "")
+		if not scenario_path.is_empty() and FileAccess.file_exists(scenario_path) \
+				and str(ProjectSettings.get_setting("niemandsland/pending_load_path", "")).is_empty():
+			_scenario_mode = true  # skips the table-size chooser + intro (see the harness short-circuit)
+			ProjectSettings.set_setting("niemandsland/pending_load_path", scenario_path)
+			# Pause autosave for the whole lesson so the lesson table can NEVER overwrite the player's
+			# real rotating save slots — the sharpest isolation hazard. ScenarioLoader owns the pause
+			# (and captures the table for a future in-scene restore; the finale/in-game launch that
+			# uses restore is out of this foundation wave).
+			_scenario_loader = ScenarioLoader.new()
+			_scenario_loader.setup(save_manager, _autosave_controller, move_trails)
+			_scenario_loader.begin_lesson()
+			# Provisional completion: opening a chapter marks it done (still replayable). Per-chapter
+			# step-gates will replace this once the maintainer's hand-built lessons land.
+			save_manager.load_completed.connect(
+				func(_object_count: int) -> void: _mark_scenario_chapter_done(scenario_chapter), CONNECT_ONE_SHOT)
+
 	# Check if a saved battle should be loaded (from startup menu)
 	var pending_load := ProjectSettings.get_setting("niemandsland/pending_load_path", "") as String
 	if not pending_load.is_empty():
@@ -786,8 +817,9 @@ func _ready() -> void:
 	# cinematic intro and drop straight onto a live, RPC-capable table. Inert in normal play.
 	var harness_mode: bool = ProjectSettings.get_setting("niemandsland/harness_mode", false)
 	# The tutorial reuses the harness seam: skip the chooser + intro, open a prepared table
-	# (its board load — queued above — provides the table size), then run the director.
-	if harness_mode or _tutorial_mode:
+	# (its board load — queued above — provides the table size), then run the director. A Game
+	# School scenario load skips the chooser + intro the same way (its board provides the size).
+	if harness_mode or _tutorial_mode or _scenario_mode:
 		if not joining_client and pending_load.is_empty():
 			_set_table_size(DEFAULT_TABLE_SIZE_FEET)
 		call_deferred("_on_intro_finished")
@@ -13321,6 +13353,13 @@ func _on_save_file_selected(path: String) -> void:
 
 ## Load file selected
 func _on_load_file_selected(path: String) -> void:
+	# Loading a REAL save from inside a Game-School lesson LEAVES the lesson: the autosave pause is
+	# scoped to lesson state only. Review caught the leak — begin_lesson() paused autosave and nothing
+	# on this in-scene path ever lifted it, so a player who loaded their own battle mid-lesson played
+	# on with a dead safety net (no periodic saves, no round snapshots) until the next scene change.
+	if _scenario_loader != null and not path.begins_with(ScenarioLoader.SCENARIO_DIR):
+		_scenario_loader.leave_lesson_for_external_load()
+		_scenario_mode = false
 	var error = await save_manager.load_game(path)
 	if error != OK:
 		push_error("Failed to load game: %d" % error)
@@ -14304,6 +14343,17 @@ func _start_tutorial() -> void:
 		"terrain_mode_btn": _terrain_mode_btn,
 	})
 	_tutorial_director.begin(progress, _tutorial_start_lesson)
+
+
+## Game School: mark a chapter completed once its bundled scenario finished loading. Provisional
+## (opening = done, still replayable) until per-chapter step-gates ship with the hand-built lessons.
+func _mark_scenario_chapter_done(chapter_id: String) -> void:
+	if chapter_id.is_empty():
+		return
+	var progress := SpielschuleProgress.new()
+	progress.load_from_disk()
+	progress.mark_completed(chapter_id)
+	progress.save_to_disk()
 
 
 ## A lesson finished (played through or skipped) — quick, non-blocking confirmation.

@@ -60,6 +60,17 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   exact name now (the same "Ferocious lesson" the other rule checks already learned).
 
 ### Added
+- **Game School — the foundation (work in progress).** A second, separate way into learning the game,
+  next to the existing tutorial: a scenario loader that builds a lesson from a prepared table file, a
+  chapter list, and a first-run hint that can be dismissed for good. Chapter 1 loads a placeholder
+  table; every other chapter shows *"Szenario folgt"* and is disabled until its table exists, so the
+  menu never promises a lesson it cannot deliver. Nothing about a lesson touches your autosave slots.
+  **Both entries in the start menu now say what they are** — `TUTORIAL (KLASSISCH)` is the existing
+  tool track and stays exactly as it was; `SPIELSCHULE (IN ARBEIT)` is the new one, and the label says
+  plainly that it is unfinished. That naming is the fix for a real confusion: while testing, the two
+  entries sat one under the other, both saying "TUTORIAL", and the tester clicked the old one while
+  reporting on the new one. The battle log now also names, on the first line, which course was loaded,
+  so the question "which tutorial did I just get?" can be answered from inside the game.
 - **Reinforcement (army-book).** A unit whose models all carry the rule may, while it is Shaken or once
   it is fully destroyed, be removed from the table as destroyed; a fresh copy — full starting size, its
   bought upgrades intact, wounds and Shaken reset — is placed at the start of the next round, right after

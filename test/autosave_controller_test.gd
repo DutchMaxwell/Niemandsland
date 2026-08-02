@@ -51,3 +51,13 @@ func test_gate_debounces_bursts() -> void:
 	assert_bool(AutosaveController.should_autosave(false, false, false, true, gap_ms)).is_true()
 	# -1 = never autosaved yet — always allowed.
 	assert_bool(AutosaveController.should_autosave(false, false, false, true, -1)).is_true()
+
+
+func test_gate_blocks_while_a_game_school_lesson_is_paused() -> void:
+	# The sharpest Game School isolation hazard: a periodic tick / round advance DURING a lesson would
+	# snapshot the LESSON table into the player's real save slots. `paused` overrides an otherwise
+	# perfectly autosaveable state.
+	assert_bool(AutosaveController.should_autosave(false, false, false, true, -1, true)).is_false()
+	# Absent (default false) leaves the existing behaviour untouched.
+	assert_bool(AutosaveController.should_autosave(false, false, false, true, -1, false)).is_true()
+	assert_bool(AutosaveController.should_autosave(false, false, false, true, -1)).is_true()

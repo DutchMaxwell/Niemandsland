@@ -27,6 +27,10 @@ var _object_manager: Node = null
 var _network_manager: Node = null
 var _last_autosave_msec: int = -1
 var _timer: Timer = null
+## Paused for the whole duration of a Game School lesson: a lesson table must NEVER autosave into
+## the player's real rotating save slots (that would overwrite their game). The restore lock only
+## covers the brief begin/end_restore window, not the lesson lifetime — so this is a separate gate.
+var _lesson_paused: bool = false
 
 
 func setup(save_manager: Node, army_manager: Node, object_manager: Node, network_manager: Node) -> void:
@@ -59,10 +63,24 @@ static func pick_slot(slot_times: Dictionary, slots: int = SLOTS) -> int:
 	return best_slot
 
 
+## Pause/resume autosave for a Game School lesson. Also stops the periodic timer so a tick can't
+## even attempt a write mid-lesson (the round-advance hook is gated by `_lesson_paused` too).
+func set_lesson_paused(paused: bool) -> void:
+	_lesson_paused = paused
+	if _timer != null:
+		if paused:
+			_timer.stop()
+		elif is_inside_tree():
+			_timer.start()
+
+
 ## PURE: the full gate — every reason NOT to autosave in one testable place.
 ## `in_mp_session` = a live multiplayer session exists; `is_host` only matters then.
+## `paused` = a Game School lesson is running (a lesson table must never hit the real save slots).
 static func should_autosave(in_mp_session: bool, is_host: bool, restore_in_flight: bool,
-		has_content: bool, msec_since_last: int) -> bool:
+		has_content: bool, msec_since_last: int, paused: bool = false) -> bool:
+	if paused:
+		return false
 	if restore_in_flight or not has_content:
 		return false
 	if in_mp_session and not is_host:
@@ -94,7 +112,7 @@ func _try_autosave(reason: String) -> void:
 	if _save_manager == null:
 		return
 	var since: int = -1 if _last_autosave_msec < 0 else (Time.get_ticks_msec() - _last_autosave_msec)
-	if not should_autosave(_in_mp_session(), _is_host(), _restore_in_flight(), _has_content(), since):
+	if not should_autosave(_in_mp_session(), _is_host(), _restore_in_flight(), _has_content(), since, _lesson_paused):
 		return
 	var path := next_slot_path(SaveManager.get_default_save_dir())
 	var err: Error = _save_manager.save_game(path)

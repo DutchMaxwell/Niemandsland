@@ -31,7 +31,7 @@ func test_menu_has_expected_buttons() -> void:
 			buttons.append(child)
 
 	# Continue/Start/Tutorial/Host/Join/Browse/Load/ReportProblem/Credits/Exit; CONTINUE may be hidden.
-	assert_that(buttons.size()).is_equal(10)
+	assert_that(buttons.size()).is_equal(11)   # +1: the GAME SCHOOL entry (Spielschule wave 1)
 
 
 func test_continue_button_hidden_without_save() -> void:
@@ -236,28 +236,86 @@ func test_diorama_rebuild_shows_loading_overlay() -> void:
 	assert_that(is_instance_valid(_menu._loading_overlay)).is_true()
 
 
-## ===== Tutorial entry contract =====
-## Pins the ONE menu entry into the tutorial and the flags main.gd reads from it — the
-## seam a future duplicate/half-wired entry or a renamed flag would silently break.
+## ===== Teaching-entry contract =====
+## Pins WHICH menu entries teach, what each is called, and where each one leads — the seam
+## a future duplicate/half-wired entry or a renamed flag would silently break.
 
-func test_exactly_one_tutorial_entry_exists() -> void:
-	# A second, half-wired tutorial entry next to the old one is exactly how a tester
-	# ends up in the wrong tutorial — so the menu must expose exactly one.
+## The teaching entries, by NODE name (stable) -> the words their label must carry (E3b).
+## Node names, not labels, are the identity here: a label is copy and will be reworded, and
+## the previous version of this test keyed on the word "TUTORIAL" alone — which is exactly
+## how it would have gone green again the moment the second entry stopped saying "TUTORIAL".
+const TEACHING_ENTRIES := {
+	"TutorialBtn": ["TUTORIAL", "KLASSISCH"],
+	"SpielschuleBtn": ["SPIELSCHULE", "IN ARBEIT"],
+}
+
+## Words that mark a button as leading into teaching content. Any button carrying one of
+## these must be a known entry above — that is what catches a THIRD entry appearing quietly.
+const TEACHING_WORDS := ["TUTORIAL", "SPIELSCHULE", "FEUERTAUFE", "LEHRGANG", "SCHULE"]
+
+
+func test_both_teaching_entries_exist_and_say_which_is_which() -> void:
+	# TC-058: a tester clicked "TUTORIAL" expecting the Game School and landed in the old
+	# tool track, because the two entries stood one under the other and neither said what
+	# it was. E3b's answer is that BOTH are named — no entry is hidden, none is silently
+	# rerouted. This test is what keeps that true.
 	#
-	# DELIBERATE CANARY. The Game School branch adds a SECOND entry, "FEUERTAUFE —
-	# TUTORIAL", directly below this one, so landing it turns this test red ON PURPOSE.
-	# When that happens, do not just bump the number: assert BOTH entries by name and
-	# pin each one's distinct target, so which button leads where stays machine-checked.
+	# It used to be a canary that demanded exactly ONE entry, red on purpose the moment the
+	# Game School landed. That moment is now: the canary fired (2 matches instead of 1) and
+	# is replaced here by the contract it asked for — both entries asserted by name, each
+	# with its own label and its own handler.
 	var menu_buttons := _menu.find_child("MenuButtons", true, false) as VBoxContainer
 	assert_that(menu_buttons).is_not_null()
-	var matches: Array[Button] = []
+
+	var found: Array[String] = []
 	for child in menu_buttons.get_children():
-		if child is Button:
-			var btn := child as Button
-			if btn.text.to_upper().contains("TUTORIAL") or btn.name.contains("Tutorial"):
-				matches.append(btn)
-	assert_that(matches.size()).is_equal(1)
-	assert_that(matches[0].name).is_equal("TutorialBtn")
+		if not (child is Button):
+			continue
+		var btn := child as Button
+		var label := btn.text.to_upper()
+		var teaches := false
+		for word in TEACHING_WORDS:
+			if label.contains(word) or btn.name.to_upper().contains(word):
+				teaches = true
+				break
+		if not teaches:
+			continue
+		# A teaching entry the contract does not know about is the TC-058 failure mode
+		# returning under a new name — fail here rather than let it stand unlabelled.
+		assert_that(TEACHING_ENTRIES.has(btn.name)).override_failure_message(
+			"Unknown teaching entry '%s' (label '%s') — add it to TEACHING_ENTRIES and say what it is."
+			% [btn.name, btn.text]).is_true()
+		found.append(btn.name)
+
+	# Every known entry present, exactly once, and nothing else teaching.
+	found.sort()
+	var expected: Array[String] = []
+	for key in TEACHING_ENTRIES.keys():
+		expected.append(str(key))
+	expected.sort()
+	assert_that(found).is_equal(expected)
+
+	# Each label carries its own distinguishing words — that is the whole point of E3b.
+	for name in TEACHING_ENTRIES.keys():
+		var btn := _menu.find_child(str(name), true, false) as Button
+		assert_that(btn).is_not_null()
+		for word in TEACHING_ENTRIES[name]:
+			assert_that(btn.text.to_upper()).contains(str(word))
+
+
+func test_each_teaching_entry_has_its_own_handler() -> void:
+	# The two entries must not share a handler: that would be the silent reroute E3 forbids.
+	var tut := _menu.find_child("TutorialBtn", true, false) as Button
+	var school := _menu.find_child("SpielschuleBtn", true, false) as Button
+	assert_that(tut).is_not_null()
+	assert_that(school).is_not_null()
+	assert_that(_menu.has_method("_on_tutorial_pressed")).is_true()
+	assert_that(_menu.has_method("_on_spielschule_pressed")).is_true()
+	assert_that(tut.pressed.is_connected(_menu._on_tutorial_pressed)).is_true()
+	assert_that(school.pressed.is_connected(_menu._on_spielschule_pressed)).is_true()
+	# Cross-wiring check: neither button may also carry the other's handler.
+	assert_that(tut.pressed.is_connected(_menu._on_spielschule_pressed)).is_false()
+	assert_that(school.pressed.is_connected(_menu._on_tutorial_pressed)).is_false()
 
 
 func test_tutorial_button_label_and_handler() -> void:
