@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## The Game School start-menu ENTRY exists in scenes/startup_menu.tscn, right after the Tutorial
-## entry, as a MenuListButton reading "SPIELSCHULE (IN ARBEIT)". Instantiate-only (never in tree) so
+## entry, as a MenuListButton reading "FEUERTAUFE (IN ARBEIT)". Instantiate-only (never in tree) so
 ## this asserts what the .tscn stores — what a future .tscn edit would break — without running the
 ## menu's heavy _ready() (diorama build, music, attract mode). Same pattern as ui_click_ownership_test.
 
@@ -21,10 +21,16 @@ func test_game_school_entry_exists_and_is_a_menu_list_button() -> void:
 	# E3b (01.08.): the label used to read "FEUERTAUFE — TUTORIAL" and sat directly under an entry
 	# reading "TUTORIAL" — which is how TC-058 ended up reporting the new course from inside the old
 	# one. Both entries say what they are now, and this one says plainly that it is unfinished.
-	# The course keeps its name; only the MENU LABEL changed. "Feuertaufe" lives on in the chapter
-	# content, and the finale is still "Ins Niemandsland — face NACHTMAHR".
+	#
+	# CORRECTED 02.08.: E3b's first pass dropped the word TUTORIAL but also replaced the course's
+	# NAME with "SPIELSCHULE" — and that name was never the course's. "Spielschule" is the INTERNAL
+	# working name (see scripts/spielschule.gd, class_name Spielschule, the node name above); the
+	# display name the maintainer fixed on 28.07. is FEUERTAUFE, a proper noun that is never
+	# translated and never abbreviated, like Niemandsland and NACHTMAHR. Removing the ambiguous word
+	# was right; renaming the course to its own scaffolding was not. Node name stays SpielschuleBtn
+	# on purpose — node names are identity and internal, labels are copy.
 	# The counterpart assertion for the other entry is in test/startup_menu_test.gd.
-	assert_str((btn as Button).text).is_equal("SPIELSCHULE (IN ARBEIT)")
+	assert_str((btn as Button).text).is_equal("FEUERTAUFE (IN ARBEIT)")
 
 
 func test_game_school_entry_sits_right_after_the_tutorial_entry() -> void:
