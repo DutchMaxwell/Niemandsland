@@ -265,7 +265,13 @@ class MoveTakebackAction extends UndoableAction:
 		if _net != null and _net.is_multiplayer_active():
 			_net.broadcast_move_trails_undo(_owner_slot, unit_key, _drop_id)
 		if _log != null:
-			_log.log_event(BattleLog.Category.MOVEMENT, "%s takes back its move" % _unit_name, false)
+			# NML-946: the positions travel (above), the REASON did not — the opponent watched a unit
+			# jump back to where it started with nothing in the log to explain it. One of the two
+			# rules lines that reach a plain human-vs-human room.
+			var line := "%s takes back its move" % _unit_name
+			_log.log_event(BattleLog.Category.MOVEMENT, line, false)
+			if _net != null and _net.has_method("broadcast_log_event"):
+				_net.broadcast_log_event(BattleLog.Category.MOVEMENT, line, false, "")
 
 
 ## Rotates a set of objects between recorded start and end Y rotations (radians).

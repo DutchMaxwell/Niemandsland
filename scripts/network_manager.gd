@@ -821,6 +821,30 @@ func sync_move_log(summaries: Array) -> void:
 	remote_move_log_received.emit(summaries)
 
 
+## NML-946 — one finished battle-log line that the other peers cannot derive for themselves.
+signal remote_log_event_received(category: int, text: String, ai: bool, detail: String)
+
+
+## Broadcast a rules line (see main._log_rule_event for WHICH lines travel and why).
+##
+## Deliberately a SECOND pair beside broadcast_move_log rather than a generalisation of it. The move
+## pair ships per-unit movement DATA that each receiver renders into its own line; this one ships a
+## line that is already written. And renaming the move pair would have silently dropped every
+## movement line on any peer that predates the rename — the has_method() dispatch in _on_raw_command
+## is what makes an unknown handler harmless, and that cuts both ways.
+func broadcast_log_event(category: int, text: String, ai: bool = false, detail: String = "") -> void:
+	if not is_multiplayer_active() or text.is_empty():
+		return
+	if not _validate_rpc_ready("broadcast_log_event"):
+		return
+	_remote_call("sync_log_event", [category, text, ai, detail], 0)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func sync_log_event(category: int, text: String, ai: bool = false, detail: String = "") -> void:
+	remote_log_event_received.emit(int(category), str(text), bool(ai), str(detail))
+
+
 ## RPC: Move multiple objects in one message. Format: [id, x, y, z, id, x, y, z, ...]
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func move_objects_batch_networked(batch: Array) -> void:

@@ -132,6 +132,18 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   else's band is refused and says so in the log.
 
 ### Fixed
+- **Rule events reach the other player's battle log.** Only movement lines ever travelled between
+  clients. Every other line the rules engine writes — a passed turn, a *Coordinate* hand-off, an
+  Ambush arrival or withdrawal, an *Extended Buff Range* refusal — was written locally and stopped
+  there, so on the opponent's screen a rule that had been applied perfectly correctly read exactly
+  like a rule that was missing. The passed turn is the clearest case: it moves nothing and activates
+  nothing, so the line *is* the whole event, and without it the opponent watched the AI answer a turn
+  that never appeared in their record. Rule applications and rule refusals now travel; the lines that
+  do **not** are the ones another channel already delivers (movement, activations, dice, casualties —
+  routing those would print them twice), the AI's internal reasoning dumps, and prompts aimed at
+  whoever is holding the mouse. Two of the newly travelling lines also work in a plain
+  human-vs-human room: the reform honour-system notice, and the reason a unit just jumped back to
+  where it started after an undo.
 - **Loading a battle no longer hands back rules you already spent.** Five pieces of rule
   bookkeeping lived only in memory, so loading a save, rejoining a multiplayer room — or simply
   changing which slot NACHTMAHR plays — quietly reset them to their starting values. A **Limited**
