@@ -2417,6 +2417,63 @@ func test_reanimation_plan_fills_the_living_before_it_raises_the_dead() -> void:
 	assert_int(over_spent).is_equal(SoloController.reanimation_pool(u))
 
 
+func test_reanimation_candidates_list_what_a_success_can_buy() -> void:
+	# NML-924: the owner's click prompt and the "is there a choice at all?" gate read this list.
+	# A casualty is worth its full wounds_max (one success buys it back, the rest heal it up), a
+	# living wounded model its missing wounds, an untouched model nothing.
+	var u := _reanim_unit(2, "Bots", [[3, 1], [1, 0], [3, 0], [1, 1]])
+	u.unit_properties["special_rules"] = ["Reanimation"]
+	var cands := SoloController.reanimation_candidates(u)
+	assert_int(cands.size()) \
+		.override_failure_message("the untouched trooper must not be offered as a target") \
+		.is_equal(3)
+	assert_object((cands[0] as Dictionary)["model"]).is_equal(u.models[0])
+	assert_int(int((cands[0] as Dictionary)["capacity"])).is_equal(2)
+	assert_bool(bool((cands[0] as Dictionary)["revive"])).is_false()
+	assert_int(int((cands[1] as Dictionary)["capacity"])).is_equal(1)
+	assert_bool(bool((cands[1] as Dictionary)["revive"])).is_true()
+	assert_int(int((cands[2] as Dictionary)["capacity"])) \
+		.override_failure_message("a dead Tough(3) can absorb three successes, not one") \
+		.is_equal(3)
+	# A unit at full strength offers nothing at all.
+	var fresh := _reanim_unit(2, "Fresh", [[3, 3], [1, 1]])
+	fresh.unit_properties["special_rules"] = ["Reanimation"]
+	assert_array(SoloController.reanimation_candidates(fresh)).is_empty()
+
+
+func test_reanimation_pick_step_spends_one_success_per_click() -> void:
+	# NML-924, the cast_pick_step pattern: ONE click of the owner's allocation, pure.
+	var u := _reanim_unit(2, "Bots", [[3, 1], [1, 0], [1, 1]])
+	var wounded := u.models[0] as ModelInstance
+	var fallen := u.models[1] as ModelInstance
+	var healthy := u.models[2] as ModelInstance
+	# A casualty: this success is the one that puts it back on the table.
+	var s1 := SoloController.reanimation_pick_step(2, fallen)
+	assert_bool(bool(s1["spent"])).is_true()
+	assert_bool(bool(s1["revive"])) \
+		.override_failure_message("the first success on a casualty is the revive — the placement rule hangs off it") \
+		.is_true()
+	assert_int(int(s1["left"])).is_equal(1)
+	assert_bool(bool(s1["done"])).is_false()
+	# A living wounded model: a plain heal, and the last success ends the allocation.
+	var s2 := SoloController.reanimation_pick_step(1, wounded)
+	assert_bool(bool(s2["spent"])).is_true()
+	assert_bool(bool(s2["revive"])).is_false()
+	assert_int(int(s2["left"])).is_equal(0)
+	assert_bool(bool(s2["done"])).is_true()
+	# A model at full health buys nothing — and says why, so the click is never a silent no-op.
+	var s3 := SoloController.reanimation_pick_step(2, healthy)
+	assert_bool(bool(s3["spent"])).is_false()
+	assert_int(int(s3["left"])) \
+		.override_failure_message("a refused click must not eat a success") \
+		.is_equal(2)
+	assert_str(str(s3["reason"])).is_not_empty()
+	# Degenerate inputs never spend anything either.
+	assert_bool(bool(SoloController.reanimation_pick_step(0, fallen)["spent"])).is_false()
+	assert_bool(bool(SoloController.reanimation_pick_step(0, fallen)["done"])).is_true()
+	assert_bool(bool(SoloController.reanimation_pick_step(2, null)["spent"])).is_false()
+
+
 ## Belt-and-braces gate (#215). The planner is axis-correct now, but _finalize_placement is the LAST seam
 ## before a plan becomes real model positions, and it used to clamp only its OWN correction candidates —
 ## an incoming plan was taken on trust. It now clamps the incoming plan per axis and says so once.
@@ -2764,3 +2821,337 @@ func test_delayed_action_worth_prefers_points_over_model_count() -> void:
 	assert_float(SoloController.delayed_action_worth(cheap)).is_equal_approx(3.0, 0.001)
 	assert_float(SoloController.delayed_action_worth(dear)).is_equal_approx(220.0, 0.001)
 	assert_float(SoloController.delayed_action_worth(null)).is_equal_approx(0.0, 0.001)
+
+
+# === Reinforcement (army-book, v3.5.3) — the pure halves ======================================
+# "When a unit where all models have this rule is Shaken or fully destroyed, you may remove it
+# from the table as destroyed and place a new copy of it fully within 12" of any table edge at the
+# beginning of the next round after Ambushers have been deployed..." Mirrors the maintainer
+# readings pinned at the top of the SoloController block: IS Shaken (not becomes), the strip is
+# ANY edge including the enemy's, a joined hero without the rule blocks the whole chain, and
+# reinforcement_copy_rules is an exact-name strip (never a prefix match).
+
+
+## A single-model carrier in the "may fire" baseline: has Reinforcement, alive, not shaken, no
+## stamps. Each refusal test below tweaks exactly one axis away from this baseline.
+func _reinforce_carrier(name: String) -> GameUnit:
+	var u := _unit(2, [Vector3(0.03, 0, 0)])
+	u.unit_id = "reinforce_%s" % name
+	u.unit_properties["name"] = name
+	u.unit_properties["special_rules"] = ["Reinforcement"]
+	return u
+
+
+func test_reinforcement_may_fire_while_the_unit_is_shaken() -> void:
+	var carrier := _reinforce_carrier("Shaken")
+	carrier.is_shaken = true
+	assert_str(SoloController.reinforcement_refusal(carrier)).is_equal("")
+
+
+func test_reinforcement_may_fire_when_the_carrier_is_fully_destroyed() -> void:
+	var carrier := _reinforce_carrier("Wiped")
+	for m in carrier.models:
+		(m as ModelInstance).is_alive = false
+	assert_bool(carrier.is_destroyed()).is_true()   # fixture check
+	assert_str(SoloController.reinforcement_refusal(carrier)).is_equal("")
+
+
+func test_reinforcement_refuses_a_healthy_unshaken_carrier() -> void:
+	var carrier := _reinforce_carrier("Healthy")
+	assert_str(SoloController.reinforcement_refusal(carrier)) \
+		.override_failure_message("the offer is pinned to 'the unit IS Shaken', never 'becomes " + \
+			"Shaken' — a healthy, unshaken carrier must be refused with THIS reason, not silently " + \
+			"allowed to fire, and not refused for some other reason") \
+		.contains("neither Shaken nor destroyed")
+
+
+func test_reinforcement_refuses_a_unit_without_the_rule() -> void:
+	var no_rule := _unit(2, [Vector3(0.03, 0, 0)])
+	assert_str(SoloController.reinforcement_refusal(no_rule)).contains("does not have Reinforcement")
+
+
+func test_reinforcement_is_blocked_by_a_joined_hero_without_the_rule() -> void:
+	var carrier := _reinforce_carrier("Squad")
+	carrier.is_shaken = true
+	var hero := _unit(2, [Vector3(0.06, 0, 0)])
+	hero.unit_properties["special_rules"] = ["Hero"]
+	carrier.unit_properties["attached_heroes"] = [hero]
+	assert_str(SoloController.reinforcement_refusal(carrier)).contains("all models have this rule")
+
+
+func test_reinforcement_fires_when_the_joined_hero_also_carries_the_rule() -> void:
+	var carrier := _reinforce_carrier("Squad")
+	carrier.is_shaken = true
+	var hero := _unit(2, [Vector3(0.06, 0, 0)])
+	hero.unit_properties["special_rules"] = ["Hero", "Reinforcement"]
+	carrier.unit_properties["attached_heroes"] = [hero]
+	assert_str(SoloController.reinforcement_refusal(carrier)).is_equal("")
+
+
+func test_reinforcement_refuses_a_carrier_already_stamped_due() -> void:
+	var carrier := _reinforce_carrier("EnRoute")
+	carrier.unit_properties["reinforcement_due_round"] = 3
+	assert_str(SoloController.reinforcement_refusal(carrier)).contains("already left the table")
+
+
+func test_reinforcement_refuses_a_carrier_that_already_used_reinforcement() -> void:
+	var carrier := _reinforce_carrier("Spent")
+	carrier.unit_properties["reinforcement_spent"] = true
+	assert_str(SoloController.reinforcement_refusal(carrier)).contains("already used")
+
+
+func test_reinforcement_refusal_on_a_null_unit_does_not_crash() -> void:
+	assert_str(SoloController.reinforcement_refusal(null)).is_not_empty()
+
+
+# ===== reinforcement_offered — the radial-entry gate (#224 transparency: shown even when refused) =====
+
+func test_reinforcement_offered_true_for_a_carrier() -> void:
+	assert_bool(SoloController.reinforcement_offered(_reinforce_carrier("Carrier"))).is_true()
+
+
+func test_reinforcement_offered_false_for_a_non_carrier() -> void:
+	var plain := _unit(2, [Vector3(0.03, 0, 0)])
+	assert_bool(SoloController.reinforcement_offered(plain)).is_false()
+
+
+func test_reinforcement_offer_is_exact_name_not_prefix() -> void:
+	# A same-family rule name ("Grounded Reinforcement") must not register as the Reinforcement
+	# carrier gate — reinforcement_offered has to compare the FULL rule name, not merely check
+	# whether "Reinforcement" appears as a prefix/substring of what the unit actually carries.
+	# GameUnit.has_special_rule is the prefix-based reader used elsewhere in this file; the offer
+	# gate must go through the exact-name reader instead.
+	var decoy := _unit(2, [Vector3(0.03, 0, 0)])
+	decoy.unit_properties["special_rules"] = ["Grounded Reinforcement"]
+	assert_bool(SoloController.reinforcement_offered(decoy)) \
+		.override_failure_message("'Grounded Reinforcement' is not 'Reinforcement' — the exact-name gate must say no") \
+		.is_false()
+
+
+# ===== reinforcement_copy_rules — "this rule doesn't apply to the new copy" ====================
+
+func test_reinforcement_copy_rules_strips_only_the_exact_rule() -> void:
+	var stripped: Array = SoloController.reinforcement_copy_rules(["Tough(3)", "Reinforcement", "Fearless"])
+	assert_array(stripped).has_size(2)
+	assert_array(stripped).not_contains(["Reinforcement"])
+	assert_array(stripped).contains_exactly(["Tough(3)", "Fearless"])
+
+
+func test_reinforcement_copy_rules_leaves_a_list_without_the_rule_unchanged() -> void:
+	var unchanged: Array = SoloController.reinforcement_copy_rules(["Tough(3)", "Fearless"])
+	assert_array(unchanged).contains_exactly(["Tough(3)", "Fearless"])
+
+
+func test_reinforcement_copy_rules_survives_a_same_family_decoy() -> void:
+	# "Grounded Reinforcement" is not "Reinforcement" — the strip is exact-name, so the decoy must
+	# come through untouched; only the exact rule leaves the card.
+	var kept: Array = SoloController.reinforcement_copy_rules(["Grounded Reinforcement", "Reinforcement"])
+	assert_array(kept).contains_exactly(["Grounded Reinforcement"])
+
+
+# ===== reinforcement_arrival_round / reinforcement_due =========================================
+
+func test_reinforcement_arrival_round_is_the_next_round() -> void:
+	assert_int(SoloController.reinforcement_arrival_round(3)).is_equal(4)
+
+
+func test_reinforcement_due_returns_only_the_unit_due_at_this_round() -> void:
+	var due_2 := _unit(2, [Vector3(0.03, 0, 0)])
+	due_2.unit_id = "due_2"
+	due_2.unit_properties["reinforcement_due_round"] = 2
+	var due_5 := _unit(2, [Vector3(0.06, 0, 0)])
+	due_5.unit_id = "due_5"
+	due_5.unit_properties["reinforcement_due_round"] = 5
+	var unstamped := _unit(2, [Vector3(0.09, 0, 0)])
+	unstamped.unit_id = "unstamped"
+	var result := SoloController.reinforcement_due([due_2, due_5, unstamped], 3)
+	assert_array(result).contains_same_exactly([due_2])
+
+
+func test_reinforcement_due_keeps_a_stale_date_that_found_no_room() -> void:
+	# "or earlier" — a copy that found no room at all on its own due round keeps its date rather
+	# than evaporating, so it is still picked up on a LATER round's check.
+	var due_1 := _unit(2, [Vector3(0.03, 0, 0)])
+	due_1.unit_id = "due_1"
+	due_1.unit_properties["reinforcement_due_round"] = 1
+	var due_5 := _unit(2, [Vector3(0.06, 0, 0)])
+	due_5.unit_id = "due_5b"
+	due_5.unit_properties["reinforcement_due_round"] = 5
+	var result := SoloController.reinforcement_due([due_1, due_5], 4)
+	assert_array(result).contains_same_exactly([due_1])
+
+
+# ===== reinforcement_spot_in_strip / reinforcement_spots / reinforcement_shape =================
+# The landing-strip geometry. Table: Rect2 position (-4ft, -6ft), size (8ft, 12ft) — a board
+# centred on the origin (1ft = 0.3048m), matching the literal numbers pinned by the spec so these
+# tests read the same geometry the maintainer measured by hand. margin_m is the 12" strip; r is a
+# 32mm round base.
+
+func _reinforce_table() -> Rect2:
+	return Rect2(-1.2192, -1.8288, 2.4384, 3.6576)
+
+
+const REINFORCE_MARGIN_M := 12.0 * 0.0254
+const REINFORCE_R := 0.016
+
+
+func test_reinforcement_strip_accepts_every_table_edge() -> void:
+	var table := _reinforce_table()
+	var r := REINFORCE_R
+	var m := REINFORCE_MARGIN_M
+	# Each point sits centred on the OTHER axis (x=0 or z=0) so only the ONE edge under test is
+	# close enough to matter — the rule names ANY edge, the enemy's included, so none may be
+	# privileged over the others.
+	var left := Vector3(table.position.x + r + 0.05, 0, 0)
+	var right := Vector3(table.end.x - r - 0.05, 0, 0)
+	var near := Vector3(0, 0, table.position.y + r + 0.05)
+	var far := Vector3(0, 0, table.end.y - r - 0.05)
+	assert_bool(SoloController.reinforcement_spot_in_strip(left, r, table, m)) \
+		.override_failure_message("left edge must be a legal landing strip").is_true()
+	assert_bool(SoloController.reinforcement_spot_in_strip(right, r, table, m)) \
+		.override_failure_message("right edge must be a legal landing strip").is_true()
+	assert_bool(SoloController.reinforcement_spot_in_strip(near, r, table, m)) \
+		.override_failure_message("near edge must be a legal landing strip").is_true()
+	assert_bool(SoloController.reinforcement_spot_in_strip(far, r, table, m)) \
+		.override_failure_message("far edge must be a legal landing strip").is_true()
+
+
+func test_reinforcement_strip_accepts_a_base_just_inside_twelve_inches_of_the_edge() -> void:
+	var table := _reinforce_table()
+	var r := REINFORCE_R
+	var m := REINFORCE_MARGIN_M
+	# Boundary x where (p.x + r) - table.position.x == margin_m exactly; z=0 keeps every other
+	# edge far out of range, so ONLY the 12" boundary on the left edge is under test.
+	var boundary_x: float = table.position.x + m - r
+	var just_inside := Vector3(boundary_x - 0.0015, 0, 0)
+	assert_bool(SoloController.reinforcement_spot_in_strip(just_inside, r, table, m)).is_true()
+
+
+func test_reinforcement_strip_rejects_a_base_just_past_twelve_inches_of_the_edge() -> void:
+	var table := _reinforce_table()
+	var r := REINFORCE_R
+	var m := REINFORCE_MARGIN_M
+	var boundary_x: float = table.position.x + m - r
+	# Only 3mm further in than the accepted point above — pins the 12" LINE itself, not some
+	# looser neighbourhood around it.
+	var just_past := Vector3(boundary_x + 0.0015, 0, 0)
+	assert_bool(SoloController.reinforcement_spot_in_strip(just_past, r, table, m)).is_false()
+
+
+func test_reinforcement_strip_rejects_the_table_centre() -> void:
+	var table := _reinforce_table()
+	assert_bool(SoloController.reinforcement_spot_in_strip(Vector3.ZERO, REINFORCE_R, table, REINFORCE_MARGIN_M)).is_false()
+
+
+func test_reinforcement_strip_rejects_a_base_hanging_off_the_table() -> void:
+	var table := _reinforce_table()
+	var r := REINFORCE_R
+	# 1mm past the left edge: trivially "within 12 inches of that edge", but the base's own extent
+	# is off the table — the strip requires FULLY on the table AND fully within the margin.
+	var hanging := Vector3(table.position.x - 0.001, 0, 0)
+	assert_bool(SoloController.reinforcement_spot_in_strip(hanging, r, table, REINFORCE_MARGIN_M)) \
+		.override_failure_message("off-table must lose even though it is well inside 12\" of the edge") \
+		.is_false()
+
+
+func test_reinforcement_strip_accepts_a_corner() -> void:
+	var table := _reinforce_table()
+	var r := REINFORCE_R
+	var corner := Vector3(table.position.x + r + 0.01, 0, table.position.y + r + 0.01)
+	assert_bool(SoloController.reinforcement_spot_in_strip(corner, r, table, REINFORCE_MARGIN_M)).is_true()
+
+
+func test_reinforcement_spots_returns_one_legal_non_overlapping_position_per_model() -> void:
+	var table := _reinforce_table()
+	var radii: Array = [REINFORCE_R, REINFORCE_R, REINFORCE_R]
+	var prefer := Vector3(table.position.x + REINFORCE_R + 0.05, 0, 0)   # hugging the left edge
+	var result := SoloController.reinforcement_spots(radii, table, REINFORCE_MARGIN_M, [], prefer, 0.0254)
+	# (1) one position per requested model
+	assert_array(result).has_size(3)
+	# (2) every position is a legal landing spot
+	for p in result:
+		assert_bool(SoloController.reinforcement_spot_in_strip(p, REINFORCE_R, table, REINFORCE_MARGIN_M)) \
+			.override_failure_message("every returned spot must itself be a legal strip position").is_true()
+	# (3) no two returned models stand closer than the sum of their radii
+	for i in result.size():
+		for j in range(i + 1, result.size()):
+			var pi: Vector3 = result[i]
+			var pj: Vector3 = result[j]
+			var min_gap: float = float(radii[i]) + float(radii[j])
+			assert_float(Vector2(pi.x, pi.z).distance_to(Vector2(pj.x, pj.z))) \
+				.override_failure_message("models %d and %d overlap" % [i, j]) \
+				.is_greater_equal(min_gap)
+
+
+func test_reinforcement_spots_are_deterministic() -> void:
+	var table := _reinforce_table()
+	var radii: Array = [REINFORCE_R, REINFORCE_R, REINFORCE_R]
+	var prefer := Vector3(table.position.x + REINFORCE_R + 0.05, 0, 0)
+	var blockers: Array = [{"p": Vector3(0.2, 0, 0.2), "r": REINFORCE_R}]
+	var first := SoloController.reinforcement_spots(radii, table, REINFORCE_MARGIN_M, blockers, prefer, 0.0254)
+	var second := SoloController.reinforcement_spots(radii, table, REINFORCE_MARGIN_M, blockers, prefer, 0.0254)
+	assert_array(first).has_size(3)
+	assert_array(first).is_equal(second)
+
+
+## "Platznot": a tiny table blanketed with blockers has no room for every requested model. The
+## returned array is SHORTER than the request — the caller's cue to forfeit the rest with a log
+## line rather than refusing the whole arrival.
+func test_reinforcement_spots_returns_fewer_than_requested_when_the_strip_is_crowded() -> void:
+	var tiny := Rect2(-0.2, -0.2, 0.4, 0.4)
+	var huge_margin := 10.0   # bigger than the whole board -> the entire table counts as "strip"
+	var blockers: Array = []
+	var step := 0.05   # keep-out zone (model r + blocker r = 0.066) beats the grid diagonal (~0.035)
+	var x := -0.25
+	while x <= 0.25:
+		var z := -0.25
+		while z <= 0.25:
+			blockers.append({"p": Vector3(x, 0, z), "r": 0.05})
+			z += step
+		x += step
+	var radii: Array = [REINFORCE_R, REINFORCE_R, REINFORCE_R]
+	var result := SoloController.reinforcement_spots(radii, tiny, huge_margin, blockers, Vector3.ZERO, 0.0254)
+	assert_int(result.size()).is_less(radii.size())
+	assert_int(result.size()).is_greater_equal(0)
+	for p in result:
+		assert_bool(SoloController.reinforcement_spot_in_strip(p, REINFORCE_R, tiny, huge_margin)).is_true()
+
+
+func test_reinforcement_spots_with_no_models_returns_empty() -> void:
+	var table := _reinforce_table()
+	var result := SoloController.reinforcement_spots([], table, REINFORCE_MARGIN_M, [], Vector3.ZERO, 0.0254)
+	assert_array(result).is_empty()
+
+
+func test_reinforcement_spots_route_around_a_blocker_on_the_preferred_slot() -> void:
+	var table := _reinforce_table()
+	var r := REINFORCE_R
+	var prefer := Vector3(table.position.x + r + 0.05, 0, 0)
+	var blockers: Array = [{"p": prefer, "r": r}]   # sits exactly on the otherwise-preferred slot
+	var result := SoloController.reinforcement_spots([r], table, REINFORCE_MARGIN_M, blockers, prefer, 0.0254)
+	assert_array(result).has_size(1)
+	var placed: Vector3 = result[0]
+	assert_float(Vector2(placed.x, placed.z).distance_to(Vector2(prefer.x, prefer.z))) \
+		.override_failure_message("the placed model must not overlap the blocker sitting on the preferred slot") \
+		.is_greater_equal(r + r)
+
+
+func test_reinforcement_shape_centres_the_row_and_spaces_by_radius_plus_gap() -> void:
+	var radii: Array = [0.016, 0.016, 0.016]
+	var gap := 0.008
+	var shape := SoloController.reinforcement_shape(radii, gap)
+	assert_array(shape).has_size(3)
+	var sum_x := 0.0
+	for entry in shape:
+		sum_x += float(((entry as Dictionary)["off"] as Vector2).x)
+	assert_float(sum_x / shape.size()) \
+		.override_failure_message("the row must be centred on zero").is_equal_approx(0.0, 1e-6)
+	for i in range(1, shape.size()):
+		var prev_off: Vector2 = (shape[i - 1] as Dictionary)["off"]
+		var cur_off: Vector2 = (shape[i] as Dictionary)["off"]
+		var expected_gap: float = float(radii[i - 1]) + gap + float(radii[i])
+		assert_float(cur_off.x - prev_off.x) \
+			.override_failure_message("adjacent entries %d/%d must sit exactly r_a+gap+r_b apart" % [i - 1, i]) \
+			.is_equal_approx(expected_gap, 1e-9)
+	for i in shape.size():
+		assert_float(float((shape[i] as Dictionary)["r"])).is_equal_approx(float(radii[i]), 1e-9)

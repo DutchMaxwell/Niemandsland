@@ -107,6 +107,42 @@ class OPRUnit:
 	## regiment mode downstream; carried so it survives into GameUnit.unit_properties.
 	var game_system: String = ""
 
+	## An INDEPENDENT copy of this profile — every field, with the arrays/dictionaries/weapons deep
+	## copied, so mutating the copy (dropping a special rule, shrinking size) never reaches back into
+	## the original. to_dict()/from_dict() cannot stand in for this: they carry only the display subset
+	## a card needs, not the identity, upgrade and base fields a SPAWNED unit is built from.
+	## Used by every rule that puts a fresh copy of an existing unit on the table (Reinforcement).
+	func duplicate_unit() -> OPRUnit:
+		var u := OPRUnit.new()
+		u.id = id
+		u.selection_id = selection_id
+		u.combined = combined
+		u.join_to_unit = join_to_unit
+		u.name = name
+		u.size = size
+		u.cost = cost
+		u.quality = quality
+		u.defense = defense
+		u.equipment.assign(equipment.duplicate())
+		u.equipment_items = equipment_items.duplicate(true)
+		u.special_rules.assign(special_rules.duplicate())
+		u.item_grants = item_grants.duplicate(true)
+		for w in weapons:
+			u.weapons.append(OPRWeapon.from_dict(w.to_dict()))
+		u.custom_name = custom_name
+		u.upgrades.assign(upgrades.duplicate())
+		u.base_size_round = base_size_round
+		u.base_size_square = base_size_square
+		u.base_is_oval = base_is_oval
+		u.base_is_square = base_is_square
+		u.base_width_mm = base_width_mm
+		u.base_depth_mm = base_depth_mm
+		u.base_from_tough = base_from_tough
+		u.mount_base = mount_base.duplicate(true)
+		u.mount_name = mount_name
+		u.game_system = game_system
+		return u
+
 	func get_display_name() -> String:
 		if not custom_name.is_empty():
 			return custom_name

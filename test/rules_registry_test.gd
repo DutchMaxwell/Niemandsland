@@ -453,3 +453,97 @@ func test_delayed_action_resolves_through_the_pass_turn_primitive() -> void:
 			.override_failure_message("%s does not count the pass as a decision" % system) \
 			.contains(["Pass Turn"])
 	RulesRegistry.reset_cache()
+
+
+## v3.5.3 audit (NML-936) — Speed Feat prints TWO different numbers: "+2\" when using Advance
+## actions and +4\" when using Rush/Charge actions". The map encoded +2/+2, so the AI threw away
+## 2\" every time it spent its once-per-game push (scripts/solo/solo_controller.gd reads
+## advance_mod / rush_mod straight from these params). Every carrier of the rule — the plain rule
+## and the aura that grants it — must read 2 / 4.
+const SPEED_FEAT_ADVANCE_MOD: int = 2
+const SPEED_FEAT_RUSH_MOD: int = 4
+
+func test_speed_feat_grants_the_printed_two_and_four_inches() -> void:
+	RulesRegistry.reset_cache()
+	var checked := 0
+	for system in RulesRegistry.SYSTEMS:
+		var factions: Dictionary = (RulesRegistry.map_for(str(system)) as Dictionary).get("factions", {})
+		for faction in factions.keys():
+			var rules: Dictionary = factions[faction]
+			for name in rules.keys():
+				if not str(name).begins_with("Speed Feat"):
+					continue
+				var params: Dictionary = (rules[name] as Dictionary).get("params", {})
+				if not params.has("rush_mod"):
+					continue   # the aura carriers that only expand the pick list carry no numbers
+				checked += 1
+				assert_int(int(params.get("advance_mod", 0))) \
+					.override_failure_message("%s/%s/%s: advance_mod" % [system, faction, name]) \
+					.is_equal(SPEED_FEAT_ADVANCE_MOD)
+				assert_int(int(params.get("rush_mod", 0))) \
+					.override_failure_message("%s/%s/%s: rush_mod (the printed rule says +4\")" % [
+						system, faction, name]) \
+					.is_equal(SPEED_FEAT_RUSH_MOD)
+	# A silent zero would make the loop above pass without asserting anything.
+	assert_int(checked).override_failure_message("no Speed Feat entry carries move numbers").is_greater(9)
+	RulesRegistry.reset_cache()
+
+
+## v3.5.3 audit (NML-936) — `book_version` is UPSTREAM PROVENANCE, not our encoding's version: the
+## exporter copies each army book's own `versionString` verbatim. Twelve books are still published
+## at 3.5.2 upstream, so their entries carry a 3.5.2 stamp even though the mechanics we encode for
+## them are identical to their 3.5.3 sibling books (proved below). This test pins that divergence so
+## it can never drift silently — and so nobody ever gates a MECHANIC on this field: gate on params.
+const LAGGING_BOOKS: Array = [
+	["aof", "giant_tribes_change_disciples"], ["aof", "giant_tribes_lust_disciples"],
+	["aof", "giant_tribes_plague_disciples"], ["aof", "giant_tribes_war_disciples"],
+	["aofr", "giant_tribes_change_disciples"], ["aofr", "giant_tribes_lust_disciples"],
+	["aofr", "giant_tribes_plague_disciples"], ["aofr", "giant_tribes_war_disciples"],
+	["gf", "titan_lords_change_disciples"], ["gf", "titan_lords_lust_disciples"],
+	["gf", "titan_lords_plague_disciples"], ["gf", "titan_lords_war_disciples"],
+]
+
+func test_only_the_known_upstream_lagging_books_carry_a_stale_version_stamp() -> void:
+	RulesRegistry.reset_cache()
+	var expected := {}
+	for b in LAGGING_BOOKS:
+		expected["%s/%s" % [str((b as Array)[0]), str((b as Array)[1])]] = true
+	var found := {}
+	for system in RulesRegistry.SYSTEMS:
+		var factions: Dictionary = (RulesRegistry.map_for(str(system)) as Dictionary).get("factions", {})
+		for faction in factions.keys():
+			var rules: Dictionary = factions[faction]
+			for name in rules.keys():
+				var stamp := str((rules[name] as Dictionary).get("book_version", ""))
+				if stamp != "3.5.3":
+					found["%s/%s" % [system, faction]] = true
+					assert_str(stamp) \
+						.override_failure_message("%s/%s/%s: unexpected stamp" % [system, faction, name]) \
+						.is_equal("3.5.2")
+	assert_array(found.keys()).override_failure_message(
+		"the set of books stamped below 3.5.3 changed — re-check the audit before editing this list") \
+		.contains_exactly_in_any_order(expected.keys())
+	RulesRegistry.reset_cache()
+
+
+func test_the_lagging_books_encode_the_same_mechanics_as_their_current_siblings() -> void:
+	# The stamp lags; the ENCODING does not. Warbound / Warbound Boost is the pair the audit flagged:
+	# byte-identical params in the 3.5.2-stamped sub-book and its 3.5.3 parent book.
+	RulesRegistry.reset_cache()
+	var pairs: Array = [
+		["aof", "giant_tribes_war_disciples", "war_disciples"],
+		["aofr", "giant_tribes_war_disciples", "war_disciples"],
+		["gf", "titan_lords_war_disciples", "war_disciples"],
+	]
+	for p in pairs:
+		for rule_name in ["Warbound", "Warbound Boost"]:
+			var lagging := RulesRegistry.lookup(str((p as Array)[0]), str((p as Array)[1]), rule_name)
+			var current := RulesRegistry.lookup(str((p as Array)[0]), str((p as Array)[2]), rule_name)
+			assert_str(str(lagging.get("primitive", ""))) \
+				.override_failure_message("%s/%s/%s: primitive" % [p[0], p[1], rule_name]) \
+				.is_equal(str(current.get("primitive", "")))
+			assert_str(JSON.stringify(lagging.get("params", {}))) \
+				.override_failure_message("%s/%s/%s: params drifted from the 3.5.3 sibling" % [
+					p[0], p[1], rule_name]) \
+				.is_equal(JSON.stringify(current.get("params", {})))
+	RulesRegistry.reset_cache()
