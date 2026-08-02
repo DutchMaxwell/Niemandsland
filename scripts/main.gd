@@ -9738,7 +9738,7 @@ func solo_begin_reinforcement(unit: GameUnit) -> void:
 	var reason: String = SoloController.reinforcement_refusal(unit)
 	if not reason.is_empty():
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"Reinforcement: not now — %s" % reason, ai)
 		_show_toast("Reinforcement: %s" % reason)
 		return
@@ -9763,7 +9763,7 @@ func _reinforcement_sacrifice(unit: GameUnit) -> void:
 			continue
 		EquipmentDistributor.detach_hero(hero)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"Reinforcement: %s is detached — %s leaves the table without him" % [
 					hero.get_name(), unit.get_name()], ai)
 
@@ -9784,7 +9784,7 @@ func _reinforcement_sacrifice(unit: GameUnit) -> void:
 	if battle_log != null:
 		# Which of the rule's two triggers fired is named, so the log reads as a decision, not an event.
 		var trigger: String = " while Shaken" if was_shaken else " (it was already destroyed)"
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"Reinforcement: %s is removed from the table as destroyed%s — a fresh copy arrives within 12\" of a table edge at the start of round %d" % [
 				unit.get_name(), trigger, due], ai)
 
@@ -9830,7 +9830,7 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 		# Nothing to copy from (a hand-built or legacy unit). Say so instead of failing mutely.
 		original.unit_properties.erase("reinforcement_due_round")
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"Reinforcement: %s cannot return — its army profile is not available" % original.get_name(), ai)
 		return
 
@@ -9848,7 +9848,7 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 		# No legal spot anywhere in the strip — keep the promise for a later round rather than
 		# swallowing it, and say why nothing happened.
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"Reinforcement: %s cannot return this round — no free spot within 12\" of any table edge" % original.get_name(), ai)
 		return
 
@@ -9870,7 +9870,7 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 	}, pid, spots, "reinforcement")
 	if copy == null:
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"Reinforcement: %s could not be rebuilt" % original.get_name(), ai)
 		return
 
@@ -9883,14 +9883,14 @@ func _reinforcement_arrive_one(original: GameUnit, round_number: int) -> void:
 	copy.unit_properties["ambush_arrived_round"] = round_number
 
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"Reinforcement: %s returns with %d model(s) within 12\" of a table edge — it cannot seize or contest objectives this round" % [
 				copy.get_name(), copy.models.size()], ai)
 		if forfeited > 0:
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"Reinforcement: only %d of %d models fit inside the 12\" edge strip — %d forfeited" % [
 					spots.size(), src.size, forfeited], ai)
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"Reinforcement: the returning %s does not have Reinforcement — the rule does not apply to the new copy" % copy.get_name(), ai)
 	if solo_controller != null and _solo_alternation_active():
 		_solo_focus_on_unit(copy)
