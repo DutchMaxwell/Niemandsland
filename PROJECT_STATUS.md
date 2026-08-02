@@ -64,9 +64,9 @@ computed per model from the base edge — walls and intervening units block, woo
 area terrain (see in and out, never through), containers block hard — so ruler, sight fan and
 engine always agree.
 
-**Not automated (named, not hidden)** — four rule names are **not** resolved by the game and
+**Not automated (named, not hidden)** — three rule names are **not** resolved by the game and
 are named in full rather than hidden behind an "…": the rules that create or return units
-(**Spawn**, **Split**, **Reinforcement**) and one movement rule (**Traversal**). The per-unit
+(**Spawn**, **Split**) and one movement rule (**Traversal**). The per-unit
 notice in the battle log names the ones your list actually contains, so you can apply them by
 hand at the table.
 

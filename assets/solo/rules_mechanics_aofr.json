@@ -245,6 +245,7 @@
   "Regeneration Aura",
   "Regeneration Buff",
   "Regenerative Strength",
+  "Reinforcement",
   "Relentless",
   "Relentless Aura",
   "Relentless Mark",
@@ -253,6 +254,7 @@
   "Rending Mark",
   "Rending in Melee",
   "Rending in Melee Aura",
+  "Rending when Shooting",
   "Rending when Shooting Aura",
   "Repel Ambushers",
   "Resistance",
@@ -282,6 +284,7 @@
   "Shred Mark",
   "Shred in Melee",
   "Shred in Melee Aura",
+  "Shred when Shooting",
   "Shred when Shooting Aura",
   "Slayer",
   "Slayer Mark",
@@ -335,6 +338,7 @@
   "Unstoppable Mark",
   "Unstoppable in Melee",
   "Unstoppable in Melee Aura",
+  "Unstoppable when Shooting",
   "Unstoppable when Shooting Aura",
   "Unwieldy",
   "Unwieldy Debuff",
@@ -758,6 +762,16 @@
     "melee_only": true
    }
   },
+  "Rending when Shooting": {
+   "primitive": "Rending",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "on6_ap": 4,
+    "bypass_regen": true,
+    "shooting_only": true
+   }
+  },
   "Scout": {
    "primitive": "Scout",
    "rated": false,
@@ -779,6 +793,15 @@
    "params": {
     "extra_wound_per_save_one": 1,
     "melee_only": true
+   }
+  },
+  "Shred when Shooting": {
+   "primitive": "Shred",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "extra_wound_per_save_one": 1,
+    "shooting_only": true
    }
   },
   "Slow": {
@@ -857,6 +880,15 @@
    "params": {
     "bypass_regen": true,
     "melee_only": true
+   }
+  },
+  "Unstoppable when Shooting": {
+   "primitive": "Lacerate",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bypass_regen": true,
+    "shooting_only": true
    }
   }
  },
@@ -971,9 +1003,13 @@
     "book_version": "3.5.3"
    },
    "Precision Shooter Aura": {
-    "primitive": null,
+    "primitive": "Shot Modifier",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "phase": "shoot"
+    }
    },
    "Precision Tag": {
     "primitive": "Utility Buff",
@@ -1997,7 +2033,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Strafing": {
@@ -2377,9 +2414,13 @@
     }
    },
    "Precision Charge Aura": {
-    "primitive": null,
+    "primitive": "Shot Modifier",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "when": "charge"
+    }
    },
    "Precision Frenzy": {
     "primitive": "Growth Markers",
@@ -2621,7 +2662,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Unstoppable in Melee Aura": {
@@ -3495,9 +3537,13 @@
     }
    },
    "Precision Fighter Aura": {
-    "primitive": null,
+    "primitive": "Shot Modifier",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "melee_only": true
+    }
    },
    "Regeneration Aura": {
     "primitive": "Regeneration",
@@ -3626,9 +3672,13 @@
     "book_version": "3.5.3"
    },
    "Increased Shooting Range Aura": {
-    "primitive": null,
+    "primitive": "Royal Legion",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 6,
+     "charge_mod": 0
+    }
    },
    "Melee Shrouding": {
     "primitive": "Melee Shrouding",
@@ -3687,7 +3737,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Slayer": {
@@ -3708,7 +3759,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Steadfast": {
@@ -4082,7 +4134,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Strafing": {
@@ -4502,7 +4555,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Strafing": {
@@ -5303,7 +5357,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Speed Debuff": {
@@ -5324,7 +5379,7 @@
     "book_version": "3.5.3",
     "params": {
      "advance_mod": 2,
-     "rush_mod": 2,
+     "rush_mod": 4,
      "uses_per_game": 1
     }
    },
@@ -5403,7 +5458,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    },
    "Infiltrate": {
@@ -5834,9 +5890,13 @@
     }
    },
    "Increased Shooting Range Aura": {
-    "primitive": null,
+    "primitive": "Royal Legion",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 6,
+     "charge_mod": 0
+    }
    },
    "Melee Slayer": {
     "primitive": "Melee Slayer",
@@ -5850,9 +5910,13 @@
     }
    },
    "Precision Fighter Aura": {
-    "primitive": null,
+    "primitive": "Shot Modifier",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "melee_only": true
+    }
    },
    "Precision Fighter Buff": {
     "primitive": "Utility Buff",
@@ -5875,9 +5939,17 @@
     }
    },
    "Reinforcement": {
-    "primitive": null,
+    "primitive": "Reinforcement",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "trigger": "shaken_or_destroyed",
+     "redeploy": "table_edge",
+     "within_in": 12,
+     "timing": "next_round_after_ambush",
+     "no_objective_on_arrival": true,
+     "once": true
+    }
    },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
@@ -5935,7 +6007,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Stealth Aura": {
@@ -6503,7 +6576,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "effect": "fatigue"
+     "effect": "fatigue",
+     "needs_los": true
     }
    },
    "Furious Aura": {
@@ -6949,9 +7023,13 @@
     }
    },
    "Increased Shooting Range Aura": {
-    "primitive": null,
+    "primitive": "Royal Legion",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "range_bonus_in": 6,
+     "charge_mod": 0
+    }
    },
    "Melee Evasion": {
     "primitive": "Melee Evasion",
@@ -7070,7 +7148,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true
+     "vs_target": true,
+     "needs_los": true
     }
    }
   },
@@ -7509,7 +7588,8 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "effect": "fatigue"
+     "effect": "fatigue",
+     "needs_los": true
     }
    },
    "Grounded Protection": {
@@ -7595,9 +7675,17 @@
     "book_version": "3.5.3"
    },
    "Reinforcement": {
-    "primitive": null,
+    "primitive": "Reinforcement",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "trigger": "shaken_or_destroyed",
+     "redeploy": "table_edge",
+     "within_in": 12,
+     "timing": "next_round_after_ambush",
+     "no_objective_on_arrival": true,
+     "once": true
+    }
    },
    "Shielded": {
     "primitive": "Shielded",

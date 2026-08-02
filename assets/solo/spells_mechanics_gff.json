@@ -724,7 +724,13 @@
       "grants_rule": "Furious",
       "duration": "once"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Furious"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Heavenly Lance",
@@ -853,7 +859,13 @@
       "grants_rule": "Furious",
       "duration": "once"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Furious"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Heavenly Lance",
@@ -2818,7 +2830,13 @@
       "duration": "once",
       "beneficiary": "attackers"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Relentless"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Searing Burst",
@@ -2949,7 +2967,13 @@
       "duration": "once",
       "beneficiary": "attackers"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Relentless"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Searing Burst",
@@ -4008,7 +4032,13 @@
       "duration": "once",
       "beneficiary": "attackers"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Relentless"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Searing Burst",
@@ -4178,7 +4208,13 @@
       "scope": "melee",
       "beneficiary": "attackers"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Rending"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Crackling Bolt",
@@ -4800,7 +4836,13 @@
       "duration": "once",
       "beneficiary": "attackers"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Furious"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Wave of Discord",
@@ -4898,7 +4940,13 @@
       "scope": "shooting",
       "beneficiary": "attackers"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Indirect"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Piercing Bots",
@@ -5070,7 +5118,13 @@
       "grants_rule": "Furious",
       "duration": "once"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Furious"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Piranha Curse",
@@ -5155,7 +5209,13 @@
       "grants_rule": "Relentless",
       "duration": "once"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Relentless"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Stinger Blast",
@@ -5237,7 +5297,13 @@
       "duration": "once",
       "beneficiary": "attackers"
      },
-     "status": "castable"
+     "mechanic": {
+      "primitive": "spell_modifier_delta",
+      "params": {
+       "grants_rule": "Surge"
+      }
+     },
+     "status": "modeled"
     },
     {
      "name": "Taser Shock",

@@ -1110,3 +1110,129 @@ unit still activates later; the double pass is refused while a second carrier's 
 refused (with the one-more-enemy ROT flip); the round still ends with nobody acting twice; the AI passes to
 wait out an uncommitted threat and declines when there is none; a reserve unit does not tip the balance (with
 its on-the-table ROT flip); the radial offers the entry and an activated unit is refused.
+
+## Reinforcement — army-book rule, and the runtime unit factory (2026-08-01)
+
+Official text, **byte-identical in all 12 army books that carry it** (Ratmen Clans, Soul Snatcher Cults,
+Worker Unions, Volcanic Dwarves, Merchant Unions — across GF/GFF/AoF/AoFS/AoFR):
+
+> *"When a unit where all models have this rule is Shaken or fully destroyed, you may remove it from the
+> table as destroyed and place a new copy of it fully within 12" of any table edge at the beginning of the
+> next round after Ambushers have been deployed. Units that deploy via Reinforcement can't seize or contest
+> objectives on the round they deploy, and this rule doesn't apply to the new copy of the unit."*
+
+The registry entry carries `primitive: "Reinforcement"` with
+`params {trigger: shaken_or_destroyed, redeploy: table_edge, within_in: 12,
+timing: next_round_after_ambush, no_objective_on_arrival: true, once: true}` in all 12 books; the derived
+maps (`assets/solo/rules_mechanics_*.json`) resolve it for every faction that fields it, and it joins the
+`modeled` token list for all five game systems.
+
+**Why this rule needed a factory, not just a resolver.** Every rule so far mutated a unit that already
+existed. Reinforcement's copy is a *new* unit born mid-game — the first time that has ever had to be true —
+so the wave had to prove three things that had never been exercised: the unit dock rebuilds for a
+unit that wasn't there at army-spawn time, a mid-game unit survives save/load (parented under
+`object_manager`, in the `"selectable"` group, with the metas the save walker requires), and the round-start
+alternation picks it up in the same pass that reads eligibility.
+
+**The mechanic.** `SoloController.reinforcement_offered` / `reinforcement_refusal` gate the owner's radial
+**Reinforce** entry — refused out loud (never silently) while the unit is neither Shaken nor destroyed, or
+while a joined hero does not itself carry the rule (the "all models" quantifier includes attached heroes).
+`main.solo_begin_reinforcement` removes the unit as destroyed and stamps the promise;
+`main._reinforcement_arrivals(round_number)` resolves it at the next round's start, **after** the Ambush
+alternation (`_solo_round_start` awaits the ambush beat first, then the reinforcement beat, so the rule's own
+ordering clause is structural, not a convention). The copy is full starting size with its bought upgrades and
+item grants intact, wounds and Shaken reset — and `SoloController.reinforcement_copy_rules` strips
+"Reinforcement" from its profile before the unit is built, so the rule is genuinely gone from the unit card
+and the source data, not tracked as a hidden "already used" flag.
+
+**Placement.** `SoloController.reinforcement_shape` / `reinforcement_spots` / `reinforcement_spot_in_strip`
+search the full 12″ table-edge strip on **every** edge, including the enemy's — the book names no minimum
+distance from enemies here (unlike Ambush's 9″ ring), so the search must not invent one. As many models as
+legally fit are placed; a crowded strip places the survivors and forfeits the rest, with its own battle-log
+line, and if not one model fits the promise carries over to a later round rather than being silently
+dropped. An arriving copy cannot seize or contest objectives that round (reusing the Ambush objective-lock
+stamp) but **does** activate normally in the alternation, exactly like an Ambush arrival.
+
+**Tests.** `test/e2e/e2e_reinforcement_test.gd` proves the wiring on the real `main.tscn`: the factory builds
+a complete unit (card, save/load survival, model-position round-trip) and refuses a half-built one; the offer
+stands for as long as the unit is Shaken; a joined hero without the rule blocks the offer out loud, naming
+the hero; the returning copy really loses the rule (from both the live rule list and the source profile,
+while its bought upgrade *does* come back, and the original unit's own profile is left untouched); every
+model of the copy lands inside the 12″ strip; every table edge is legal including the one facing the enemy;
+the arriving copy is locked out of objectives but is eligible to activate; a crowded edge places what fits
+and forfeits the rest with its own log line; the arrival beat runs inside round-start before eligibility is
+read; and a promise survives a save taken before the copy arrives.
+## Dead aura families — a granted rule that resolved nowhere (NML-931, 2026-08-01)
+
+**The shape of the bug.** An army-book "*X* Aura" reads "this model and its unit get *X*".
+`OPRArmyManager._expand_auras` (via `AiEv.aura_granted_rules`) implements that by stamping the bare
+name *X* onto the unit's `special_rules`. Nothing else happens — the aura is not a mechanic, it is a
+delivery mechanism. So the ability only reaches the table if *X* **resolves**, and there are exactly
+two ways it can:
+
+- **pattern A** — the aura entry itself carries a primitive (`Courage Aura` → `Banner`), or
+- **pattern B** — a rule named exactly *X* resolves for the SAME `(system, faction)` through the
+  registry's faction→common fallback (`Shred when Shooting Aura` → core `Shred when Shooting`).
+
+Nine families satisfied **neither**: `primitive: null` on the aura *and* no rule of that name in the
+carrier's book or its core. The unit was handed a string, and every consumer looked it up, found
+nothing, and moved on — silently. 66 book entries across all five game systems.
+
+**What each family got.**
+
+| Family | Entries | Pattern | Resolves through |
+|---|--:|---|---|
+| Shred when Shooting | 12 | B — core entry in `aof`/`aofr` | `Shred` + `shooting_only` |
+| Rending when Shooting | 12 | B — new core entry, all five systems | `Rending` `on6_ap 4` + `shooting_only` |
+| Unstoppable in Melee | 4 | B — core entry restored in `aofs` | `Lacerate` + `melee_only` |
+| Precision Fighter Aura | 8 | A | `Shot Modifier` `hit_bonus 1` + `melee_only` |
+| Precision Shooter Aura | 4 | A | `Shot Modifier` `hit_bonus 1` + `phase shoot` |
+| Precision Charge Aura | 3 | A | `Shot Modifier` `hit_bonus 1` + `when charge` |
+| Increased Shooting Range Aura | 10 | A | `Royal Legion` `range_bonus_in 6`, `charge_mod 0` |
+| Indirect when Shooting | 1 | B — core entry in `gf` | `Indirect` + `shooting_only` |
+| Hit & Run Fighter | 1 | B — base rule row in `aofs/crazed_zealots` | `Hit & Run Fighter` `move_in 3` |
+| *(borderline)* Unstoppable when Shooting | 11 | B — new core entry, all five systems | `Lacerate` + `shooting_only` |
+
+The skirmish books (`gff`, `aofs`) already carried the pattern-A copies, which is what made the
+gap visible: the same aura worked in one system and did nothing in another. The full-scale books print
+"this model and its unit get …", so their entries take only the mechanic params — the
+`aura_expand`/`max_picks`/`lost_if_bearer_killed` knobs encode the skirmish books' "up to 3 picked
+units" wording and would be wrong there.
+
+**The engine half — a gate that only ever pointed one way.** Rules carry `melee_only` / `shooting_only`
+in their params, but `shooting_only` was read in exactly ONE place in the whole engine
+(`AiEv.stamp_sergeant`'s Rending loop). Everywhere else a shooting-gated rule fired in melee, and the
+stamps outside that loop honoured neither half. Three of those leaks were already live before this
+wave:
+
+- `Shred in Melee` shredded when shooting, `Shred when Shooting` shredded in melee (both are core rules
+  in all five books);
+- `Predator Shooter` (Surge + `shooting_only`) spawned its extra attack in melee;
+- `Good Fighter` / `Precision Fighter Aura` (`melee_only`) added their +1 to every **shot** and never
+  reached melee — the melee branch demanded `all_attacks` — and `Precision Charge Aura`
+  (`when: charge`) was a permanent +1 to shooting.
+
+Both halves are now one function, `AiEv.facet_applies(params, profile_range)`, used by the Surge and
+Rending stamps, both Shred stamps and both Regeneration-bypass loops. `_solo_hit_mod_info` gained an
+optional `charging` flag (passed by `_solo_melee_strike_phase`, which knows) so the charge-scoped
+bonus fires on the charge it is printed for and nowhere else.
+
+**One more prefix bug.** `_solo_ignores_regen`'s fallback asked `has_special_rule("Unstoppable")`,
+which matches by **prefix** — so `Unstoppable in Melee` and `Unstoppable when Shooting` bypassed
+Regeneration in both halves regardless of their gate, and `Unstoppable Mark` (a mark placed on the
+**enemy**) bypassed it for its bearer. It matches the exact name now, the same lesson
+`AiEv.has_exact_rule` already exists for.
+
+**Tests.** `test/dead_aura_families_test.gd` — 13 pure cases: the granted rule resolves per family, the
+range bonus reaches `SoloController.shooting_range_bonus` (+6″), the Rending facet lands on the shooting
+profile and stays off the melee one (and its melee sibling mirrors it), the shared gate answers both
+halves, and **`test_no_aura_grants_a_rule_that_resolves_nowhere`** is the standing net — it walks every
+aura entry of every book in all five systems and fails if one grants a name that resolves nowhere.
+`test/e2e/e2e_dead_aura_effects_test.gd` — 5 cases on the real `main.tscn`, measuring the three effects
+that live inside `main.gd` itself (the Shred facet, the Regeneration bypass, the to-hit modifier), each
+asserted in BOTH halves of the game.
+
+**Still open, deliberately.** Three aura families need a mechanic that does not exist yet, so they are a
+separate wave and are listed in `KNOWN_OPEN` in the test: **Thrust in Melee** (9), **Piercing Fighter**
+(7), **Piercing Shooter** (5) — 21 entries. The second test, `test_the_known_open_families_are_still_
+exactly_three`, fails if one of them starts resolving, which forces the list to be kept honest.

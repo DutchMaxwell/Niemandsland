@@ -1199,49 +1199,76 @@ func _get_tray_position_and_bounds(player_id: int) -> Dictionary:
 	return {"position": pos, "bounds": bounds}
 
 
-## Spawn a single unit with all its models
-func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: Color, name_suffix: String = "", player_id: int = 1, army: OPRApiClient.OPRArmy = null) -> Array[Node3D]:
-	var models: Array[Node3D] = []
-	# Use unit's base diameter + constant edge gap for spacing (prevents overlap)
-	var edge_gap = BASE_EDGE_GAP_M
-	var spacing = unit.get_base_diameter_meters() + edge_gap
+## The unit's OPR-suggested base long axis in mm — the baseline a per-model Tough upgrade enlarges.
+func _unit_base_long_mm(unit: OPRApiClient.OPRUnit) -> int:
+	return int(max(unit.base_width_mm, unit.base_depth_mm)) if (unit.base_is_oval or unit.base_is_square) else unit.base_size_round
 
-	# Get faction folder for GLB model lookup
-	var faction_folder = army.faction_folder if army else ""
 
-	# Per-model base sizing: a weapon-team / upgrade that raises a model's Tough above the squad
-	# baseline gets a bigger base (derived from the SAME distribution distribute() applies, so the
-	# bigger base lands on the exact carrier model). Plain models keep the unit base unchanged.
+## Per-model base long axis (mm) for every model of `unit`. A weapon-team / Tough upgrade raises the
+## carrier's base above the squad baseline; plain models return the unit base unchanged. Derived from
+## the SAME distribution distribute() applies, so the bigger base lands on the exact carrier model.
+func _model_base_longs(unit: OPRApiClient.OPRUnit) -> Array:
 	var loadout := EquipmentDistributor.build_loadout(unit)
 	var toughs := EquipmentDistributor.per_model_toughs(unit.size, loadout, unit.special_rules)
+	var unit_base_long := _unit_base_long_mm(unit)
+	var out: Array = []
+	for i in range(unit.size):
+		out.append(model_base_long_mm(unit_base_long, int(toughs[i])))
+	return out
+
+
+## The army-import row layout: one model per position, left to right from `spawn_pos`. Plain units keep
+## the original fixed diameter spacing (byte-for-byte unchanged); a unit with an enlarged carrier base
+## switches to edge-to-edge spacing so the bigger model sits clear.
+func _row_layout_positions(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3) -> Array:
+	var edge_gap := BASE_EDGE_GAP_M
+	var spacing := unit.get_base_diameter_meters() + edge_gap
+	var unit_base_long := _unit_base_long_mm(unit)
+	var model_longs := _model_base_longs(unit)
+	var any_enlarged := false
+	for ml in model_longs:
+		if int(ml) > unit_base_long:
+			any_enlarged = true
+	var out: Array = []
+	var cursor_x := spawn_pos.x
+	for i in range(unit.size):
+		if any_enlarged:
+			if i > 0:
+				cursor_x += (int(model_longs[i - 1]) * 0.5 + int(model_longs[i]) * 0.5) * 0.001 + edge_gap
+			out.append(Vector3(cursor_x, spawn_pos.y, spawn_pos.z))
+		else:
+			out.append(Vector3(spawn_pos.x + i * spacing, spawn_pos.y, spawn_pos.z))
+	return out
+
+
+## Build one unit's model NODES at the given world positions and hang them under object_manager with
+## the full contract every downstream system reads: slot-namespaced network_id, the four groups
+## (selectable / miniature / opr_unit / unit), and the opr_unit / opr_player_id metas. Shared by the
+## army-import spawner and the runtime factory, so a runtime-created unit can never drift from an
+## imported one. Stops at the shorter of `unit.size` and `positions.size()`.
+func _build_unit_model_nodes(unit: OPRApiClient.OPRUnit, faction_folder: String, player_color: Color,
+		name_suffix: String, player_id: int, positions: Array) -> Array[Node3D]:
+	var models: Array[Node3D] = []
+	if object_manager == null:
+		push_warning("OPRArmyManager: no object_manager — cannot build unit models")
+		return models
+	var loadout := EquipmentDistributor.build_loadout(unit)
 	# Per-model loadout labels → pre-baked variant model resolution (I2). The mount upgrade is folded
 	# into the carrier (model 0) so it contributes a variant slug like any weapon (a composed mount bake
 	# resolves as `<hero>#<weapon>+<mountslug>`); mountless units are byte-unchanged.
 	var labels_per_model := _labels_with_mount(EquipmentDistributor.per_model_labels(unit.size, loadout), unit.mount_name)
-	var unit_base_long := int(max(unit.base_width_mm, unit.base_depth_mm)) if (unit.base_is_oval or unit.base_is_square) else unit.base_size_round
-	var model_longs: Array = []
+	var unit_base_long := _unit_base_long_mm(unit)
+	var model_longs := _model_base_longs(unit)
 	var any_enlarged := false
-	for i in range(unit.size):
-		var ml := model_base_long_mm(unit_base_long, int(toughs[i]))
-		model_longs.append(ml)
-		if ml > unit_base_long:
+	for ml in model_longs:
+		if int(ml) > unit_base_long:
 			any_enlarged = true
 
 	# Mount/vehicle upgrade (Combat Bike, ...): fuzzy-pick a faction mount GLB once for the leader
 	# model (model 0). "" when the unit has no mount or no matching faction GLB (keeps the foot model).
 	var mount_glb: String = _find_mount_glb_name(unit.mount_name, faction_folder)
-	var cursor_x := spawn_pos.x
-	for i in range(unit.size):
-		var model_pos: Vector3
-		if any_enlarged:
-			# Edge-to-edge spacing so a bigger model sits clear — only when sizes actually differ.
-			if i > 0:
-				cursor_x += (int(model_longs[i - 1]) * 0.5 + int(model_longs[i]) * 0.5) * 0.001 + edge_gap
-			model_pos = Vector3(cursor_x, spawn_pos.y, spawn_pos.z)
-		else:
-			# Plain units unchanged byte-for-byte: original fixed diameter spacing.
-			model_pos = Vector3(spawn_pos.x + i * spacing, spawn_pos.y, spawn_pos.z)
-
+	for i in range(mini(unit.size, positions.size())):
+		var model_pos: Vector3 = positions[i]
 		var override_mm: int = int(model_longs[i]) if any_enlarged else 0
 		# Model resolution order (go-live): pre-baked loadout VARIANT first — a composed mount bake
 		# (`<hero>#<weapon>+<mountslug>`) resolves here because the mount folds a slug into the carrier's
@@ -1272,6 +1299,15 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 			model.set_meta("opr_player_id", player_id)
 
 			models.append(model)
+	return models
+
+
+## Spawn a single unit with all its models
+func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: Color, name_suffix: String = "", player_id: int = 1, army: OPRApiClient.OPRArmy = null) -> Array[Node3D]:
+	# Get faction folder for GLB model lookup
+	var faction_folder = army.faction_folder if army else ""
+	var models: Array[Node3D] = _build_unit_model_nodes(unit, faction_folder, player_color, name_suffix,
+		player_id, _row_layout_positions(unit, spawn_pos))
 
 	# NEW: Create GameUnit wrapper with ModelInstances
 	if not models.is_empty():
@@ -1301,6 +1337,106 @@ func _spawn_unit(unit: OPRApiClient.OPRUnit, spawn_pos: Vector3, player_color: C
 				model_instance.import_rotation = model_instance.node.rotation
 
 	return models
+
+
+# === Runtime unit factory =====================================================================
+# Until now a unit could only come into existence during army IMPORT (_spawn_unit, reachable only
+# with a parsed OPRApiClient.OPRUnit and an OPRArmy) or be rebuilt from a save
+# (create_model_from_properties, visuals only — no GameUnit, no mappings). Rules that CREATE a unit
+# mid-game (Reinforcement, and the Spawn/Split family behind it) had nowhere to go. This is that
+# door: one call, everything registered, no half-built unit anywhere.
+
+## A unit created mid-game landed in the world. Emitted AFTER every mapping is in place, so a
+## listener may immediately look the unit up by id. main.gd hangs the HUD work off this (the unit
+## dock only ever rebuilt on army_spawned, so a runtime unit was invisible without it).
+signal runtime_unit_created(game_unit: GameUnit, origin: String)
+
+## Create a fully-fledged unit at runtime and put it on the table.
+##
+## `profile` describes WHAT to build:
+##   "opr_unit"          OPRApiClient.OPRUnit — required. The caller owns it; pass an INDEPENDENT
+##                       instance (OPRUnit.duplicate_unit()) whenever it derives from a live unit,
+##                       or the two share special_rules/weapons and mutating one mutates the other.
+##   "faction_folder"    String — drives GLB/ctex resolution. "" falls back to the player's army.
+##   "rule_descriptions" Dictionary — army-level rule texts; "" / missing falls back to the session map.
+##   "display_suffix"    String — the " (2)" disambiguator shown on the card and in node names.
+##   "player_color"      Color — optional; defaults to the player's army colour.
+## `positions` are world positions, one per model, in model order. Fewer positions than the unit's
+## size builds a SMALLER unit (the caller decides what to do about the difference — Reinforcement
+## forfeits the rest with a log line). `origin` is a provenance stamp ("reinforcement" / "split" /
+## "spawn") that rides in unit_properties together with the round it was created in.
+##
+## Returns the new GameUnit, or null when nothing could be built.
+func create_runtime_unit(profile: Dictionary, player_id: int, positions: Array, origin: String) -> GameUnit:
+	var unit: OPRApiClient.OPRUnit = profile.get("opr_unit") as OPRApiClient.OPRUnit
+	if unit == null:
+		push_warning("OPRArmyManager.create_runtime_unit: profile has no opr_unit")
+		return null
+	if positions.is_empty():
+		push_warning("OPRArmyManager.create_runtime_unit: no positions for '%s'" % unit.name)
+		return null
+	if object_manager == null:
+		push_warning("OPRArmyManager.create_runtime_unit: no object_manager")
+		return null
+
+	var army: OPRApiClient.OPRArmy = armies.get(player_id)
+	var faction_folder: String = str(profile.get("faction_folder", ""))
+	if faction_folder.is_empty() and army != null:
+		faction_folder = army.faction_folder
+	var descriptions: Dictionary = profile.get("rule_descriptions", {}) as Dictionary
+	if descriptions.is_empty():
+		descriptions = (army.rule_descriptions if army != null else rule_descriptions)
+	var name_suffix: String = str(profile.get("display_suffix", ""))
+	var player_color: Color = profile.get("player_color", army_color(player_id, Color.GRAY))
+
+	# The model nodes go through the SAME builder the army import uses: identical variant/ctex/mount
+	# resolution, identical network_id namespacing, identical groups + metas. That sameness is the
+	# whole point — save/load and MP read those and cannot tell the two paths apart.
+	var models: Array[Node3D] = _build_unit_model_nodes(unit, faction_folder, player_color,
+		name_suffix, player_id, positions)
+	if models.is_empty():
+		push_warning("OPRArmyManager.create_runtime_unit: no models built for '%s'" % unit.name)
+		return null
+
+	var game_unit: GameUnit = EquipmentDistributor.create_from_opr_unit(unit, models, player_id, descriptions)
+	game_unit.unit_properties["display_suffix"] = name_suffix
+	game_unit.unit_properties["faction_folder"] = faction_folder
+	# Provenance: which rule put this unit on the table, and when. Rides in unit_properties, so it
+	# survives save/load and the MP unit payload without a schema of its own.
+	game_unit.unit_properties["origin"] = origin
+	game_unit.unit_properties["origin_round"] = current_round
+
+	# Every mapping the import path fills — _spawn_unit fills two of them, spawn_army() the other
+	# three. A runtime unit that misses any of these is a half-citizen: invisible to the dock,
+	# dropped by the save, or leaked when the army is cleared.
+	unit_to_game_unit[unit] = game_unit
+	game_units[game_unit.unit_id] = game_unit
+	var typed_models: Array[Node3D] = []
+	typed_models.assign(models)
+	unit_to_models[unit] = typed_models
+	for model in models:
+		model_to_unit[model] = unit
+		model.set_meta("unit_suffix", name_suffix)
+	# Join the owner's army so clear_army() frees these models too (otherwise they outlive their
+	# army as orphans under object_manager).
+	if army != null and not army.units.has(unit):
+		army.units.append(unit)
+
+	# Where "Sort Table" puts it back: its arrival spot, at table height.
+	for model_instance in game_unit.models:
+		if model_instance != null and model_instance.node != null and is_instance_valid(model_instance.node):
+			var resting_pos: Vector3 = model_instance.node.global_position
+			resting_pos.y = 0.0
+			model_instance.import_position = resting_pos
+			model_instance.import_rotation = model_instance.node.rotation
+
+	# Multiplayer: the peer-side channel is built separately — call it only when it exists, so this
+	# path stays usable (and testable) without it.
+	if network_manager != null and network_manager.has_method("broadcast_unit_created"):
+		network_manager.call("broadcast_unit_created", game_unit)
+
+	runtime_unit_created.emit(game_unit, origin)
+	return game_unit
 
 
 ## Create a visual model for a unit (GLB model if available, otherwise placeholder)
