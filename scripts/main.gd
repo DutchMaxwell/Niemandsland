@@ -3161,7 +3161,7 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 				# instead of vanishing from the sum without a word.
 				if bool(sp.get("requires_not_shaken", true)) and cu.is_shaken:
 					if battle_log != null:
-						battle_log.log_event(BattleLog.Category.COMBAT,
+						_log_rule_event(BattleLog.Category.COMBAT,
 							"%s: %s is Shaken — its conduit does not help %s cast" % [
 								str((e as Dictionary)["name"]), cu.get_name(), caster.get_name()], true)
 					continue
@@ -3477,7 +3477,7 @@ func _solo_log_shaken_lenders(slot: int) -> void:
 	for e in solo_controller.shaken_lenders(slot):
 		var ed := e as Dictionary
 		var lender := ed["unit"] as GameUnit
-		battle_log.log_event(BattleLog.Category.COMBAT,
+		_log_rule_event(BattleLog.Category.COMBAT,
 			"%s: %s is Shaken — its tokens do not feed friendly casters" % [
 				str(ed["rule"]), lender.get_name()], slot == solo_controller.ai_slot)
 
@@ -16504,16 +16504,16 @@ func _solo_growth_round_start() -> void:
 			# skipping the unit wholesale in silence (rules-must-log: a blocked tick is a rule at work).
 			if gu.is_shaken:
 				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s is Shaken — no marker this round (keeps %d/%d)" % [
+					_log_rule_event(BattleLog.Category.GENERAL, "%s: %s is Shaken — no marker this round (keeps %d/%d)" % [
 						n, gu.get_name(), cur, cap], _solo_is_ai_unit(gu))
 				continue
 			if cur < cap:
 				gu.unit_properties[key] = cur + 1
 				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s gains a marker (%d/%d)" % [
+					_log_rule_event(BattleLog.Category.GENERAL, "%s: %s gains a marker (%d/%d)" % [
 						n, gu.get_name(), cur + 1, cap], _solo_is_ai_unit(gu))
 			elif battle_log != null:
-				battle_log.log_event(BattleLog.Category.GENERAL, "%s: %s is at the cap — no further marker (%d/%d)" % [
+				_log_rule_event(BattleLog.Category.GENERAL, "%s: %s is at the cap — no further marker (%d/%d)" % [
 					n, gu.get_name(), cur, cap], _solo_is_ai_unit(gu))
 
 
@@ -16533,7 +16533,7 @@ func _solo_growth_on_kill(attacker: GameUnit) -> void:
 		if cur < cap:
 			attacker.unit_properties[key] = cur + 1
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s gains a marker for the kill (%d/%d)" % [
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s gains a marker for the kill (%d/%d)" % [
 					n, attacker.get_name(), cur + 1, cap], _solo_is_ai_unit(attacker))
 
 
