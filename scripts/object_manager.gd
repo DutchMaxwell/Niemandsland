@@ -91,6 +91,9 @@ const SORT_ANIM_RESTING_Y: float = 0.0  # Table surface height for all models
 
 # Drag distance tracking
 var _drag_start_positions: Dictionary = {}  # Object -> start position mapping
+# #162: pre-drag yaw per object — auto-face rewrites rotation.y on drop; the take-back
+# must restore the ORIGINAL facing.
+var _drag_start_rotations: Dictionary = {}
 var _hover_hint_obj: Node3D = null  # last emitted hover_changed target (dedupe)
 var _drag_anchor_position: Vector3 = Vector3.ZERO  # Primary drag anchor point
 var _drag_grab_world: Vector3 = Vector3.ZERO  # Cursor table position at grab (preserves grab offset)
@@ -607,9 +610,12 @@ func _foreign_owner_slot(obj: Node) -> int:
 		return 0
 	# Solo (goal 001): a designated AI army is never "foreign" — the human owns the physical table and
 	# may always adjust the AI's models (this is also the future co-op path: the AI army has no peer).
+	# #196: unless a connected human actually SITS on that slot — then the designation is void
+	# and the ownership lock protects the human like any other player.
 	var main_node := get_node_or_null("/root/Main")
 	if main_node != null and main_node.get("solo_ai_slots") is Dictionary \
-			and (main_node.get("solo_ai_slots") as Dictionary).has(owner):
+			and (main_node.get("solo_ai_slots") as Dictionary).has(owner) \
+			and not _network_manager.slot_has_human_peer(owner):
 		return 0
 	var my_slot: int = _network_manager.get_my_player_slot()
 	# Fail open while our own slot is still pending (0, the sub-second window right after
@@ -1192,6 +1198,7 @@ func _start_dragging(screen_pos: Vector2) -> void:
 		_hover_hint_obj = null
 		hover_changed.emit(null)
 	_drag_start_positions.clear()
+	_drag_start_rotations.clear()
 
 	# Measure-on-pickup ghost (UX polish): capture the origin silhouettes BEFORE the lift,
 	# so the ghost shows the true pre-drag pose (what ESC returns to).
@@ -1202,6 +1209,7 @@ func _start_dragging(screen_pos: Vector2) -> void:
 	for obj in movable:
 		if is_instance_valid(obj):
 			_drag_start_positions[obj] = obj.global_position
+			_drag_start_rotations[obj] = obj.rotation.y
 			# For rigid bodies, make them kinematic while dragging
 			if obj is RigidBody3D:
 				obj.freeze = true
@@ -1312,6 +1320,9 @@ func _stop_dragging() -> void:
 		# collinear noise simplified — never re-routed), its measured arc length ("arc_in") and the
 		# base half-width ("radius_m") — main.gd commits these as visible trails + ledger entries.
 		var base_path: PackedVector2Array = MoveLedger.simplify(_drag_path_points)
+		# ONE drop identity for this physical drop (#162): shared by the trail commit, the
+		# ledger entries, the MP messages and the take-back, so an undo can find them all.
+		var drop_id: int = Time.get_ticks_msec()
 		var moves: Array = []
 		for obj in _selected_objects:
 			if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
@@ -1327,7 +1338,10 @@ func _stop_dragging() -> void:
 						MoveLedger.translated(base_path, offset), Vector2(end.x, end.z))
 				moves.append({"node": obj, "from": start, "to": end, "inches": inches,
 						"path": path, "arc_in": MoveLedger.length_inches(path),
-						"radius_m": _trail_radius_for(obj)})
+						"radius_m": _trail_radius_for(obj),
+						"drop_id": drop_id,
+						"from_raw": _drag_start_positions[obj],
+						"from_rot": float(_drag_start_rotations.get(obj, obj.rotation.y))})
 		# The live ribbons hand over to the committed trails (drawn by main's
 		# selection_dropped handler below, in the same frame).
 		if move_trails != null:
@@ -1342,6 +1356,7 @@ func _stop_dragging() -> void:
 	_move_broadcast_timer = 0.0
 	_coherency_update_timer = 0.0
 	_drag_start_positions.clear()
+	_drag_start_rotations.clear()
 	_drag_anchor_position = Vector3.ZERO
 	_drag_anchor_object = null
 	_drag_path_points = PackedVector2Array()
@@ -1604,6 +1619,7 @@ func _cancel_drag() -> void:
 	_move_broadcast_timer = 0.0
 	_coherency_update_timer = 0.0
 	_drag_start_positions.clear()
+	_drag_start_rotations.clear()
 	_drag_anchor_position = Vector3.ZERO
 	_drag_anchor_object = null
 	_drag_path_points = PackedVector2Array()
@@ -1649,6 +1665,16 @@ func _trail_radius_for(obj: Node3D) -> float:
 		return 0.0
 	var shape := SeparationChecker.shape_for_model(model)
 	return shape.bounding_radius() if shape != null else 0.0
+
+
+## #191 — the retrace ERASER band for the current drag (metres): the anchor's own ribbon
+## half-width, so walking the cursor back anywhere inside the already-painted chalk refunds
+## the budget ("still on your own path"). A human hand never re-walks a line to ±0.25", so
+## the ledger's pixel-sized default made corrections cost triple; the ribbon IS the visual
+## contract of where the base travelled, so it is also the honest eraser band. Floored at
+## the ledger default for non-painting drags (no ribbon to stay inside).
+func _retrace_tolerance_m() -> float:
+	return maxf(MoveLedger.RETRACE_TOLERANCE_M, _trail_radius_for(_drag_anchor_object))
 
 
 ## A regiment moves as ONE block: its ribbon spans the member bases across the tray's
@@ -1705,6 +1731,11 @@ func _record_move_for_undo() -> void:
 	var moved: bool = false
 	for obj in _selected_objects:
 		if not is_instance_valid(obj) or not _drag_start_positions.has(obj):
+			continue
+		# #162: trail-painting unit models get a MoveTakebackAction from main's
+		# selection_dropped handler instead (position + facing + chalk + ledger + log in
+		# ONE entry) — pushing a plain MoveAction too would make Ctrl+Z need two presses.
+		if _trail_radius_for(obj) > 0.0:
 			continue
 		var start_pos: Vector3 = _drag_start_positions[obj]
 		# Final resting height: static bodies settle on the ground surface beneath the
@@ -2136,7 +2167,7 @@ func _update_drag(screen_pos: Vector2) -> void:
 		if have_path:
 			var desired := Vector2(_drag_anchor_position.x + delta_xz.x, _drag_anchor_position.z + delta_xz.z)
 			# Erase whatever the cursor walked back over (refunds budget), keeping the path sparse.
-			var committed := MoveLedger.retrace(_drag_path_points, desired)
+			var committed := MoveLedger.retrace(_drag_path_points, desired, _retrace_tolerance_m())
 			head = desired
 			if _strict_cap_meters > 0.0:
 				var used_m := MoveLedger.length_meters(committed)
@@ -4044,6 +4075,11 @@ func arrange_selected_in_rows(num_rows: int) -> void:
 	if objects.size() < 2:
 		return
 
+	# #192: remember the pre-reform positions — the no-gain clamp measures against them.
+	var before_reform: Array = []
+	for obj in objects:
+		before_reform.append(obj.global_position)
+
 	var count = objects.size()
 	var cols = ceili(float(count) / num_rows)
 
@@ -4071,6 +4107,7 @@ func arrange_selected_in_rows(num_rows: int) -> void:
 				)
 			idx += 1
 
+	_reform_no_gain_clamp(objects, before_reform)
 	_broadcast_arrange_positions(objects)
 	arrangement_applied.emit("rows")
 
@@ -4081,6 +4118,11 @@ func arrange_selected_arrow() -> void:
 	var objects: Array[Node3D] = _movable_selection()  # own-only in MP; all live in single-player
 	if objects.size() < 2:
 		return
+
+	# #192: remember the pre-reform positions — the no-gain clamp measures against them.
+	var before_reform: Array = []
+	for obj in objects:
+		before_reform.append(obj.global_position)
 
 	var count = objects.size()
 
@@ -4125,8 +4167,101 @@ func arrange_selected_arrow() -> void:
 		row += 1
 		row_count += 1
 
+	_reform_no_gain_clamp(objects, before_reform)
 	_broadcast_arrange_positions(objects)
 	arrangement_applied.emit("arrow")
+
+
+## #192 (grilled 2026-07-30): in a running SOLO game a reform IS movement — no model may end
+## closer to ANY enemy than it stood (the free-inches exploit: move, then arrange forward).
+## Offenders are CLAMPED back along their reform path to their old enemy distance (slight
+## deformation beats a blocked grip); the count is logged. Multiplayer stays honor-system
+## with a visibility line; sandbox play is untouched.
+func _reform_no_gain_clamp(objects: Array[Node3D], old_positions: Array) -> void:
+	var main_node := get_node_or_null("/root/Main")
+	if main_node == null or objects.is_empty() or old_positions.size() != objects.size():
+		return
+	var solo_running: bool = main_node.has_method("_solo_alternation_active") \
+			and main_node._solo_alternation_active() \
+			and main_node.get("opr_army_manager") != null \
+			and not main_node.opr_army_manager.is_deployment_phase()
+	var mp_running: bool = _network_manager != null and _network_manager.is_multiplayer_active()
+	if not solo_running and not mp_running:
+		return
+	var own_pid := 0
+	if objects[0].has_meta("game_unit"):
+		var gu0 = objects[0].get_meta("game_unit")
+		if gu0 != null and "unit_properties" in gu0:
+			own_pid = int(gu0.unit_properties.get("player_id", 0))
+	if own_pid <= 0 or main_node.get("opr_army_manager") == null:
+		return
+	# Enemy model positions + radii (alive, on table).
+	var foes: Array = []
+	for u in main_node.opr_army_manager.get_all_game_units():
+		if u == null or int(u.unit_properties.get("player_id", 0)) == own_pid:
+			continue
+		if SoloController.unit_in_reserve(u):
+			continue
+		for m in u.get_alive_models():
+			var mi := m as ModelInstance
+			if mi != null and mi.node != null and is_instance_valid(mi.node):
+				var s := SeparationChecker.shape_for_model(mi)
+				foes.append({"pos": mi.node.global_position, "r": (s.bounding_radius() if s != null else 0.016)})
+	if foes.is_empty():
+		return
+	var clamped := 0
+	var max_gain_m := 0.0
+	for i in objects.size():
+		var obj := objects[i]
+		if not is_instance_valid(obj):
+			continue
+		var own_r := _trail_radius_for(obj)
+		if own_r <= 0.0:
+			own_r = 0.016
+		var old_d := _nearest_foe_gap_m(old_positions[i] as Vector3, own_r, foes)
+		var new_d := _nearest_foe_gap_m(obj.global_position, own_r, foes)
+		if new_d >= old_d - 0.0005:
+			continue
+		max_gain_m = maxf(max_gain_m, old_d - new_d)
+		if not solo_running:
+			continue   # MP: honor system — measured, named below, never forced
+		# Clamp: binary search along old→new for the farthest point keeping the old distance.
+		var a: Vector3 = old_positions[i] as Vector3
+		var b := obj.global_position
+		var lo := 0.0
+		var hi := 1.0
+		for _step in range(18):
+			var mid := (lo + hi) * 0.5
+			if _nearest_foe_gap_m(a.lerp(b, mid), own_r, foes) >= old_d - 0.0005:
+				lo = mid
+			else:
+				hi = mid
+		obj.global_position = a.lerp(b, lo)
+		clamped += 1
+	var log_node = main_node.get("battle_log")
+	if solo_running and clamped > 0 and log_node != null:
+		log_node.log_event(log_node.Category.MOVEMENT,
+			"Reform: %d model%s clamped at enemy distance — a reform is movement, no free inches" % [
+				clamped, ("" if clamped == 1 else "s")], false)
+	elif mp_running and not solo_running and max_gain_m > 0.0127 and log_node != null:
+		# NML-946: the only rules line in the game that exists ONLY in multiplayer — and it stayed on
+		# the reforming client, so the player whose units the gain was made toward never read it. It
+		# goes through main's rules-line channel; the honour system needs both sides to see the notice.
+		var reform_line: String = "Reform gains up to %.1f\" toward the enemy — reforms are movement (measure it like one)" % (
+			max_gain_m / 0.0254)
+		if main_node.has_method("_log_rule_event"):
+			main_node._log_rule_event(log_node.Category.MOVEMENT, reform_line, false)
+		else:
+			log_node.log_event(log_node.Category.MOVEMENT, reform_line, false)
+
+
+## Smallest base-edge gap (metres) from a point-model of radius `own_r` to any foe entry.
+func _nearest_foe_gap_m(pos: Vector3, own_r: float, foes: Array) -> float:
+	var best := INF
+	for f in foes:
+		var fd := f as Dictionary
+		best = minf(best, pos.distance_to(fd["pos"] as Vector3) - own_r - float(fd["r"]))
+	return best
 
 
 ## Average (X,Z) of the selection's current positions — the anchor the arrange formations centre on.

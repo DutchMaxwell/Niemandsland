@@ -171,6 +171,35 @@ func test_genuine_detour_is_preserved_not_erased() -> void:
 	assert_float(MoveLedger.length_inches(path)).is_greater(9.0)
 
 
+## #191 — the community "counts as 12 instead of 4" drag: out 4", walk back by HAND
+## (~0.3" wobble, far above sampling noise), out 4" again.
+const HAND_RETURN := [Vector2(0, 0), Vector2(1, 0), Vector2(2, 0), Vector2(3, 0), Vector2(4, 0),
+		Vector2(3.4, 0.3), Vector2(2.7, -0.3), Vector2(2.2, 0.3), Vector2(1.6, -0.3),
+		Vector2(1.1, 0.3), Vector2(0.4, -0.2), Vector2(0.1, 0.05),
+		Vector2(1, 0), Vector2(2, 0), Vector2(3, 0), Vector2(4, 0)]
+
+
+func _drag_tol(points_in: Array, tol_m: float) -> PackedVector2Array:
+	var path := PackedVector2Array()
+	for p in points_in:
+		path = MoveLedger.extend_path(path, (p as Vector2) * INCH, tol_m)
+	return path
+
+
+func test_hand_wobble_return_never_refunds_at_the_pixel_floor() -> void:
+	# Precondition that gives the #191 fix its teeth: at the 0.25" floor the hand-walked
+	# return is NOT recognised — the correction really did cost near-triple (the report).
+	var path := _drag_tol(HAND_RETURN, MoveLedger.RETRACE_TOLERANCE_M)
+	assert_float(MoveLedger.length_inches(path)).is_greater(9.0)
+
+
+func test_hand_wobble_return_refunds_inside_the_ribbon_band() -> void:
+	# #191 fix semantics: with the eraser widened to a 32 mm base's ribbon half-width
+	# (0.016 m ≈ 0.63"), the same hand walk refunds and the net drag measures ~one 4" lane.
+	var path := _drag_tol(HAND_RETURN, 0.016)
+	assert_float(MoveLedger.length_inches(path)).is_less(6.0)
+
+
 func test_extend_from_empty_seeds_the_start() -> void:
 	var path := MoveLedger.extend_path(PackedVector2Array(), _p(1, 1))
 	assert_int(path.size()).is_equal(1)

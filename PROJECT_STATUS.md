@@ -1,6 +1,6 @@
 # Niemandsland — Status & Roadmap
 
-**Version:** 0.3.10.0-alpha *(public alpha — forward-looking backlog in [`docs/ROADMAP.md`](docs/ROADMAP.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
+**Version:** 0.3.10.1-alpha *(public alpha — forward-looking backlog in [`docs/ROADMAP.md`](docs/ROADMAP.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
 
 This is the single source of truth for what works, what's in progress, and what's
 planned. Architecture details live in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md);
@@ -33,7 +33,10 @@ fatigue applies to both sides, the loser tests morale up to Rout, and pile-in pl
 up-to-3″ consolidation wait for your input instead of locking the board. Casualties are
 removed per model (plain models before special-weapon / equipment / Tough bearers, outside-in
 so the chain does not tear); Takedown model picks, Deadly multiplication and Regeneration ask
-the human player where they land.
+the human player where they land. When **your** unit takes wounds and the choice can matter
+(a Tough model or mixed loadouts in the unit), the game asks you to **allocate them by
+clicking** — LMB places one wound on the model under the cursor, RMB auto-allocates the
+rest; the AI keeps allocating its own by value.
 
 **Solo — casting, both sides** — **Cast** in the radial menu opens the spell list with token
 costs and effect text, marks legal targets with pulsing rings (green friendly / yellow enemy),
@@ -61,21 +64,56 @@ computed per model from the base edge — walls and intervening units block, woo
 area terrain (see in and out, never through), containers block hard — so ruler, sight fan and
 engine always agree.
 
-**Not automated (named, not hidden)** — thirteen rule names are **not** resolved by the game and
-are named in full rather than hidden behind an "…": the cross-unit caster economy (**Spell
-Accumulator**, **Caster Group**, **Extended Buff Range**), the rules that create or return units
-(**Spawn**, **Split**, **Reinforcement**, **Reanimation**) and the movement / deployment set
-(**Coordinate**, **Delayed Action**, **Traversal**, **Ambush Beacon**, **Ambush Re-Deployment**,
-**Rapid Ambush**). The per-unit notice in the battle log names the ones your list actually
-contains, so you can apply them by hand. Everything else in the books is modeled — note that
-plain *Re-Deployment* and *Grounded Reinforcement* **are** automated; only the two Ambush
-variants above are not. The follow-up resolver waves are post-release work (see
-[`docs/ROADMAP.md`](docs/ROADMAP.md)).
+**Not automated (named, not hidden)** — three rule names are **not** resolved by the game and
+are named in full rather than hidden behind an "…": the rules that create or return units
+(**Spawn**, **Split**) and one movement rule (**Traversal**). The per-unit
+notice in the battle log names the ones your list actually contains, so you can apply them by
+hand at the table.
+
+**Extended Buff Range & Coordinate** — a unit within 24″ of a friendly unit that carries
+**Extended Buff Range** *and* holds a Hero can be picked by that Hero's within-12″ buff rules as if
+it were in range; the link is measured base edge to base edge, it is exactly **one hop** (never a
+chain), and it explicitly does **not** extend spells — every one of those decisions writes its own
+battle-log line, the refusals included. The skirmish books print the same rule with "within 6″ of a
+friendly Hero" instead of "has a Hero in it", which is a data difference, not a second rule.
+**Coordinate** lets a unit hand its activation to an un-activated friend within 12″ at the end of
+its own activation: NACHTMAHR picks the most valuable friend in range, you get candidate rings and a
+target click (ESC declines). The receiver activates immediately, a unit that was activated that way
+may not hand off again, and the pair still owes the opponent exactly one activation.
+
+**Buff-giver rules now work for you too** — the "once per activation, before attacking" buff family
+(*Precision Shooter Buff*, *Furious Buff*, *Entrenched Buff*, …) used to resolve for the AI only, so
+a human player's buff simply never happened. It now runs on both sides; your target is picked
+automatically for v1 and every application is named in the log. Skirmish books that print "pick up
+to 4 friendly units" now really pick up to four.
+**Delayed Action — passing a turn** — *"Once per round, if your opponent has more units left to
+activate than you, then this model's unit may pass its turn instead of activating (may still be
+activated later)."* A carrier's radial menu gains a **Pass** entry: the turn goes to your opponent
+and the unit stays available for later in the same round. The entry is offered whenever the unit
+carries the rule and, when the condition does not hold, refused *with the counts it measured*
+rather than quietly hidden. Units waiting in Ambush reserve are off the table and do not count as
+"left to activate"; the once-per-round limit binds the carrier, so a second carrier still has its
+own pass. NACHTMAHR uses the rule too — it passes when its most valuable un-activated unit sits
+inside the reach of an enemy that has not committed yet, and the developer log says why. Under the
+hood this is a general **Pass Turn** step in the alternation, so the optional *Combat Hesitation*
+module (the same mechanic behind a dice roll) has a foundation to land on.
+
+**Ambush variants** — **Ambush Beacon** waives *every* enemy distance restriction (the 9″/3″
+arrival ring and an enemy's *Repel Ambushers* 12″ alike) for a reserve that lands within 6″ of the
+beacon model; the AI actively looks for those circles, and your own arrivals get the waiver instead
+of the honour-system warning. **Rapid Ambush** arrives from round 1 — after deployment and the
+Scout phase, as a round-start beat, so it never buys an extra deployment slot. **Ambush
+Re-Deployment** lets a unit whose models all carry it leave the table once per game at the end of
+its activation and return, as if from Ambush, at the start of the *next* round exactly. Every one
+of them writes its own battle-log line — including when a beacon stood close by and did *not*
+apply.
 
 **Transports (stage 1)** — units embark and unload through the radial menu with book-exact
 capacity, disembark into an automatic 6″ formation, and a destroyed transport spills its cargo
-with a Shaken marker. The whole embark state syncs in multiplayer and persists in saves
-(`SAVE_VERSION` 1.7, with a migration step).
+with a Shaken marker. An **Ambush transport can load during deployment** ("Embark (reserve)"
+in the radial while both wait in reserve) — the whole package arrives together from round 2.
+The whole embark state syncs in multiplayer and persists in saves (`SAVE_VERSION` 1.7, with a
+migration step).
 
 **Battle log & play aids** — a collapsible event log narrates the game (moves with the real
 traveled distance, who rolled what and the faces, wounds, kills, revives, round changes and
@@ -137,7 +175,11 @@ and clicking a trail reports its distance. A **1″ spacing** layer shows proxim
 (red enemy / orange friendly), snaps to base contact and forbids overlapping drops (own
 units too). An **opt-in "dry-brush" movement cap** (default on) hard-stops the drag at
 the selected action band (Advance ~6″ / Rush-Charge ~12″, Fast/aura-aware); backtracking
-refunds the budget. A **game-phase gate** frames setup vs play (Deployment → *Start Game*
+refunds the budget — the eraser band is the model's own chalk-ribbon width, so hand-walked
+corrections actually refund (a genuine detour wider than the base still counts in full).
+**`Ctrl`+`Z` takes a finished move back**: position, facing, chalk trail and the inch proof
+all revert, synced to the other player; the window closes when dice hit the tray or the
+next activation begins (a take-back is final — it never enters the redo stack). A **game-phase gate** frames setup vs play (Deployment → *Start Game*
 → Playing, with a multiplayer ready-sync and save/load persistence); trails auto-suppress
 during deployment. Trail-visibility and movement-cap toggles persist in settings. For
 **your own** models this is UX/measurement only — no move is resolved or forced; you still
@@ -148,7 +190,12 @@ the same measured, base-width corridors with a distance label.
 **Multiplayer** — ENet over LAN and over the internet via the WebSocket relay
 ([`relay/`](relay/README.md)); full state sync (models, terrain, rotation, table
 size) with batch RPCs; shared dice log; player avatars/cursors; multiplayer
-save/load. **Player names** (entered in Host/Join, persisted, host-authoritative
+save/load. A **slot a connected human occupies is never driven by the solo
+automation** (hard guard since 0.3.10.1 — human-vs-human play is manual dice, as
+designed; the roster shows "P2: NACHTMAHR" only for genuinely AI-designated
+slots). **Deployment-zone geometry is host-authoritative** and synced on join;
+"Show Deployment Zones" and "Flip Zone Colours" are per-player view preferences
+(strictly local). **Player names** (entered in Host/Join, persisted, host-authoritative
 sync) appear in the dice log, on avatars and in a connected-player **roster**;
 an **in-game chat** panel (Enter to type, Esc to return — typing freezes camera
 and object shortcuts). A **version handshake** on join rejects mismatched clients

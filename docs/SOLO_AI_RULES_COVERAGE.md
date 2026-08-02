@@ -987,3 +987,252 @@ slice only checks END positions), the friend's REAL intended target (nearest-ene
 screening/bodyguard behaviour (cheap units interposing against charges), focus-fire target pooling,
 terrain-anchored roles (holding cover/choke points), and any multi-unit lookahead. The natural home
 for these is an EV term over candidate end positions rather than more goal post-processing.
+
+---
+
+## Ambush variants — wave 1 (2026-07-31)
+
+The three army-book variants of the Ambush reserve, all registry-driven (`assets/solo/rules_mechanics_*.json`
+carry `primitive: "Ambush"` plus their own params — `beacon_in`, `arrive_from_round`, `re_reserve` /
+`uses_per_game`; the export tool now lists them in `SHIPPED_PLANNED`).
+
+1. **Ambush Beacon** — official text: *"Friendly units using Ambush may ignore distance restrictions from
+   enemies if they are deployed within 6" of this model."* **Maintainer ruling:** "distance restrictions" is
+   plural, so inside the circle **every** enemy distance restriction falls away — the 9″ (3″ Infiltrate)
+   arrival ring *and* an enemy's *Repel Ambushers* 12″. The waiver is keyed to the beacon **model**
+   (`SoloController.beacon_points` walks the carrier's live, on-table, non-embarked models). The arrival
+   search tries the beacon circles **first**, without the enemy rings (`_try_place_reserve_unit`) — otherwise
+   the AI would own the rule and never play it. The human side is the same truth from the other end:
+   `_solo_warn_ambush_proximity` prints the waiver line instead of the ">9″" complaint. A beacon that stood
+   within 12″ of the chosen spot and did **not** apply is named too (rules-must-log).
+2. **Rapid Ambush** — *"Counts as having Ambush, but may be deployed at the start of any round, including the
+   first."* `unit_has_ambush` carries it as the one true alias (set-aside paths unchanged);
+   `ambush_earliest_round` returns 1 for carriers, 2 for everyone else. **Maintainer ruling:** the AI may
+   arrive in round 1 — the specific army rule beats the general solo guideline. The round-1 beat
+   (`_solo_begin_rapid_ambush_round_one`) is a **round-start event**, run after regular deployment *and* the
+   Scout phase, so it can never buy an extra slot in the deployment alternation. It stays voluntary: a
+   carrier with no legal landing spot simply waits, and says so. `ambush_arrived_round` is stamped for a
+   round-1 arrival too, so the no-seizing clause holds.
+3. **Ambush Re-Deployment** — *"Once per game, when a unit where all models have this rule ends its
+   activation, you may immediately remove it from the table … and deploy it as if it had Ambush at the
+   beginning of the next round."* Both directions are new: the **withdrawal** hangs on the end of the
+   activation (`_solo_try_ambush_redeploy`, AI and human), the **return** is an exact date
+   (`ambush_return_round`, honoured by `may_arrive_this_round` — that round, not earlier, not later). The
+   "all models" quantifier includes joined heroes: a hero without the rule locks the unit out. AI heuristic
+   (documented, deliberately simple, in the decision log): leave when under pressure — Shaken, or an enemy
+   inside the 12″ charge band — and never off a marker within 3″. Carried objective markers are a no-op in
+   our missions (only static, round-end-seized markers exist); the TODO for carry-the-relic missions sits on
+   `ambush_redeploy_withdraw`. A transport takes its cargo along on the existing reserve machinery.
+
+**Prefix lesson, again.** `GameUnit.has_special_rule` matches by PREFIX, so *"Ambush Beacon"* and
+*"Ambush Re-Deployment"* both answered true to `"Ambush"` — their carriers were set aside off the table
+although both deploy normally. All three rules are matched by EXACT base name (`unit_carries_rule`, direct
+rules + item grants).
+
+**Tests.** `test/solo_controller_test.gd` (pure: exact detection, `beacon_cover`, `nearest_enemy_gap_in`, the
+round gate, the all-models/once-per-game gates, the AI policy) and `test/e2e/e2e_ambush_variants_test.gd`
+(11 cases on the real `main.tscn`). Documented red flips: beacon pass disabled → both beacon cases fail;
+`ambush_earliest_round` pinned to 2 → both Rapid cases fail; the exact return date relaxed to `>=` → the
+return case fails; the hero clause dropped → the all-models case fails; exact matching reverted to the prefix
+reader → the detection cases fail.
+
+## Delayed Action — wave 5, and the "Pass Turn" primitive (2026-08-01)
+
+Official text, **word-identical in all 21 army books that carry it** (73 occurrences across all five game
+systems — the largest single rule the automation still left to the player):
+
+> *"Once per round, if your opponent has more units left to activate than you, then this model's unit may
+> pass its turn instead of activating (may still be activated later)."*
+
+**The primitive, not the rule, is the deliverable.** Until now an activation could only ever be *spent*
+(`GameUnit.activate()`), so "pass your turn but keep the unit" had no seam at all. The registry entry
+therefore carries `primitive: "Pass Turn"` with `params {uses_per_round: 1, requires_opponent_surplus: true}`
+in all 21 books, and Delayed Action is its first **user** — because the rulebook has a second one: the
+optional fog-of-war module **Combat Hesitation** (GF Advanced Rules v3.5.1 p.41) is the same mechanic behind
+a dice roll. The export tool lists the rule in `SHIPPED_PLANNED` while the registry status is still `planned`.
+
+**The seam.** `main._solo_pass_turn(slot)` moves the alternation bookkeeping (`_solo_pending_replies`) on and
+**nothing else** — no `activate()`, no `notify_activated`, no `is_activated` write, which is precisely the
+rule's "may still be activated later". `_solo_ai_took_last_activation` is deliberately not written: it
+records who took the last *activation* for the round-opener rule, and a pass is not one. It cannot go stale
+either — a pass is legal only while the other side has strictly more units left, so that side still owes an
+activation and the round can never end on a pass.
+
+**Two termination guards, both mandatory, both proven red.**
+
+1. *Strictly more* (`delayed_action_surplus`). The condition is antisymmetric — `opponent > own` for one side
+   is `own >= opponent` for the other — so it can never hold for both sides at once, and mutual passing is
+   structurally impossible. Equality refuses. Relaxing it to `>=` turns the pure symmetry case (the whole
+   0..7 square) and the e2e equal-counts case red.
+2. *A per-carrier round stamp* (`unit_properties["delayed_action_round"]`, the `spotted_round` pattern). One
+   carrier cannot pass the same round twice. Removing it turns the e2e double-pass case red.
+
+**Maintainer rulings, each with its own test.**
+
+- **Reserve units do not count.** "Units left to activate" reads like the core rule's "left on the
+  battlefield": a unit still held in Ambush reserve is off the table. Both sides of the comparison go through
+  `eligible_units_for()` → `is_eligible()`, which already refuses reserve units — verified rather than
+  assumed, with the e2e ROT flip (the same ambusher on the table *does* tip the balance).
+- **"Once per round" binds the carrier unit**, exactly as the wording says ("this model's unit"). There is no
+  army cap; a second carrier still has its own pass. The strict-surplus condition is the natural brake — each
+  pass costs the opponent one activation, so the surplus shrinks on its own.
+- **An open second activation is invisible.** A Second Wind / Inquisitorial Agent carrier counts only while
+  it is un-activated; `spend_second_wind()` clears `is_activated` at the moment the second turn is granted,
+  so an open-but-unspent second activation never inflates the balance.
+
+**Your side.** The radial menu gains a **Pass** entry on every carrier (unit or joined hero — the
+`_spotter_member_of` reading). It is *not* hidden when the condition fails: per the transparency doctrine
+(#224) an illegal pass is refused with the measured numbers ("your opponent has 2 units left to activate, you
+have 2 — the rule needs them to have MORE than you"), plus its own reasons for a spent carrier and for a unit
+that has already activated. That last branch is also what makes "you have 0 units left" unreachable: with
+nothing of yours left to activate, your carrier is one of the activated ones.
+
+**NACHTMAHR's side.** The decision sits in the activation **chooser**
+(`SoloController.delayed_action_pass_choice`), not in a resolver — passing *is* the activation choice. The
+heuristic is deliberately small and explainable: pass when the condition stands **and** the delay buys
+something, i.e. our most valuable un-activated unit (points, models as fallback) stands within an
+un-activated enemy's reach (the larger of its shooting range and its Rush/Charge band) **and** line of sight.
+Otherwise activate normally. Both branches write a decision record, so the dev lane can always say why the
+rule did or did not fire. The AI can only pass on a REPLY step — a TAIL step means the human side is empty,
+and 0 is never "more".
+
+**Logs.** Application (both sides, one wording): `Delayed Action: <unit> passes the turn — the opponent has
+<n> units left to activate, you have <m> (<unit> may still be activated later)`. Refusals:
+`Delayed Action: <unit> may not pass — <reason>`. The AI's decline is a decision record, not a battle-log
+line (it is a non-event for the player, and the dev lane carries the reasoning).
+
+**Tests.** `test/solo_controller_test.gd` — 6 pure cases (the antisymmetry square, the per-carrier stamp,
+every refusal branch including the unreachable `own_left == 0`, carrier detection incl. the joined hero and
+the prefix ROT case, the reach+LOS threat test, the worth proxy). `test/rules_registry_test.gd` — the emitted
+maps resolve `Pass Turn` + both params per game system, and `Delayed Action` leaves the manual list.
+`test/e2e/e2e_delayed_action_test.gd` — 8 cases on the real `main.tscn`: the pass hands the turn over and the
+unit still activates later; the double pass is refused while a second carrier's is not; equal counts are
+refused (with the one-more-enemy ROT flip); the round still ends with nobody acting twice; the AI passes to
+wait out an uncommitted threat and declines when there is none; a reserve unit does not tip the balance (with
+its on-the-table ROT flip); the radial offers the entry and an activated unit is refused.
+
+## Reinforcement — army-book rule, and the runtime unit factory (2026-08-01)
+
+Official text, **byte-identical in all 12 army books that carry it** (Ratmen Clans, Soul Snatcher Cults,
+Worker Unions, Volcanic Dwarves, Merchant Unions — across GF/GFF/AoF/AoFS/AoFR):
+
+> *"When a unit where all models have this rule is Shaken or fully destroyed, you may remove it from the
+> table as destroyed and place a new copy of it fully within 12" of any table edge at the beginning of the
+> next round after Ambushers have been deployed. Units that deploy via Reinforcement can't seize or contest
+> objectives on the round they deploy, and this rule doesn't apply to the new copy of the unit."*
+
+The registry entry carries `primitive: "Reinforcement"` with
+`params {trigger: shaken_or_destroyed, redeploy: table_edge, within_in: 12,
+timing: next_round_after_ambush, no_objective_on_arrival: true, once: true}` in all 12 books; the derived
+maps (`assets/solo/rules_mechanics_*.json`) resolve it for every faction that fields it, and it joins the
+`modeled` token list for all five game systems.
+
+**Why this rule needed a factory, not just a resolver.** Every rule so far mutated a unit that already
+existed. Reinforcement's copy is a *new* unit born mid-game — the first time that has ever had to be true —
+so the wave had to prove three things that had never been exercised: the unit dock rebuilds for a
+unit that wasn't there at army-spawn time, a mid-game unit survives save/load (parented under
+`object_manager`, in the `"selectable"` group, with the metas the save walker requires), and the round-start
+alternation picks it up in the same pass that reads eligibility.
+
+**The mechanic.** `SoloController.reinforcement_offered` / `reinforcement_refusal` gate the owner's radial
+**Reinforce** entry — refused out loud (never silently) while the unit is neither Shaken nor destroyed, or
+while a joined hero does not itself carry the rule (the "all models" quantifier includes attached heroes).
+`main.solo_begin_reinforcement` removes the unit as destroyed and stamps the promise;
+`main._reinforcement_arrivals(round_number)` resolves it at the next round's start, **after** the Ambush
+alternation (`_solo_round_start` awaits the ambush beat first, then the reinforcement beat, so the rule's own
+ordering clause is structural, not a convention). The copy is full starting size with its bought upgrades and
+item grants intact, wounds and Shaken reset — and `SoloController.reinforcement_copy_rules` strips
+"Reinforcement" from its profile before the unit is built, so the rule is genuinely gone from the unit card
+and the source data, not tracked as a hidden "already used" flag.
+
+**Placement.** `SoloController.reinforcement_shape` / `reinforcement_spots` / `reinforcement_spot_in_strip`
+search the full 12″ table-edge strip on **every** edge, including the enemy's — the book names no minimum
+distance from enemies here (unlike Ambush's 9″ ring), so the search must not invent one. As many models as
+legally fit are placed; a crowded strip places the survivors and forfeits the rest, with its own battle-log
+line, and if not one model fits the promise carries over to a later round rather than being silently
+dropped. An arriving copy cannot seize or contest objectives that round (reusing the Ambush objective-lock
+stamp) but **does** activate normally in the alternation, exactly like an Ambush arrival.
+
+**Tests.** `test/e2e/e2e_reinforcement_test.gd` proves the wiring on the real `main.tscn`: the factory builds
+a complete unit (card, save/load survival, model-position round-trip) and refuses a half-built one; the offer
+stands for as long as the unit is Shaken; a joined hero without the rule blocks the offer out loud, naming
+the hero; the returning copy really loses the rule (from both the live rule list and the source profile,
+while its bought upgrade *does* come back, and the original unit's own profile is left untouched); every
+model of the copy lands inside the 12″ strip; every table edge is legal including the one facing the enemy;
+the arriving copy is locked out of objectives but is eligible to activate; a crowded edge places what fits
+and forfeits the rest with its own log line; the arrival beat runs inside round-start before eligibility is
+read; and a promise survives a save taken before the copy arrives.
+## Dead aura families — a granted rule that resolved nowhere (NML-931, 2026-08-01)
+
+**The shape of the bug.** An army-book "*X* Aura" reads "this model and its unit get *X*".
+`OPRArmyManager._expand_auras` (via `AiEv.aura_granted_rules`) implements that by stamping the bare
+name *X* onto the unit's `special_rules`. Nothing else happens — the aura is not a mechanic, it is a
+delivery mechanism. So the ability only reaches the table if *X* **resolves**, and there are exactly
+two ways it can:
+
+- **pattern A** — the aura entry itself carries a primitive (`Courage Aura` → `Banner`), or
+- **pattern B** — a rule named exactly *X* resolves for the SAME `(system, faction)` through the
+  registry's faction→common fallback (`Shred when Shooting Aura` → core `Shred when Shooting`).
+
+Nine families satisfied **neither**: `primitive: null` on the aura *and* no rule of that name in the
+carrier's book or its core. The unit was handed a string, and every consumer looked it up, found
+nothing, and moved on — silently. 66 book entries across all five game systems.
+
+**What each family got.**
+
+| Family | Entries | Pattern | Resolves through |
+|---|--:|---|---|
+| Shred when Shooting | 12 | B — core entry in `aof`/`aofr` | `Shred` + `shooting_only` |
+| Rending when Shooting | 12 | B — new core entry, all five systems | `Rending` `on6_ap 4` + `shooting_only` |
+| Unstoppable in Melee | 4 | B — core entry restored in `aofs` | `Lacerate` + `melee_only` |
+| Precision Fighter Aura | 8 | A | `Shot Modifier` `hit_bonus 1` + `melee_only` |
+| Precision Shooter Aura | 4 | A | `Shot Modifier` `hit_bonus 1` + `phase shoot` |
+| Precision Charge Aura | 3 | A | `Shot Modifier` `hit_bonus 1` + `when charge` |
+| Increased Shooting Range Aura | 10 | A | `Royal Legion` `range_bonus_in 6`, `charge_mod 0` |
+| Indirect when Shooting | 1 | B — core entry in `gf` | `Indirect` + `shooting_only` |
+| Hit & Run Fighter | 1 | B — base rule row in `aofs/crazed_zealots` | `Hit & Run Fighter` `move_in 3` |
+| *(borderline)* Unstoppable when Shooting | 11 | B — new core entry, all five systems | `Lacerate` + `shooting_only` |
+
+The skirmish books (`gff`, `aofs`) already carried the pattern-A copies, which is what made the
+gap visible: the same aura worked in one system and did nothing in another. The full-scale books print
+"this model and its unit get …", so their entries take only the mechanic params — the
+`aura_expand`/`max_picks`/`lost_if_bearer_killed` knobs encode the skirmish books' "up to 3 picked
+units" wording and would be wrong there.
+
+**The engine half — a gate that only ever pointed one way.** Rules carry `melee_only` / `shooting_only`
+in their params, but `shooting_only` was read in exactly ONE place in the whole engine
+(`AiEv.stamp_sergeant`'s Rending loop). Everywhere else a shooting-gated rule fired in melee, and the
+stamps outside that loop honoured neither half. Three of those leaks were already live before this
+wave:
+
+- `Shred in Melee` shredded when shooting, `Shred when Shooting` shredded in melee (both are core rules
+  in all five books);
+- `Predator Shooter` (Surge + `shooting_only`) spawned its extra attack in melee;
+- `Good Fighter` / `Precision Fighter Aura` (`melee_only`) added their +1 to every **shot** and never
+  reached melee — the melee branch demanded `all_attacks` — and `Precision Charge Aura`
+  (`when: charge`) was a permanent +1 to shooting.
+
+Both halves are now one function, `AiEv.facet_applies(params, profile_range)`, used by the Surge and
+Rending stamps, both Shred stamps and both Regeneration-bypass loops. `_solo_hit_mod_info` gained an
+optional `charging` flag (passed by `_solo_melee_strike_phase`, which knows) so the charge-scoped
+bonus fires on the charge it is printed for and nowhere else.
+
+**One more prefix bug.** `_solo_ignores_regen`'s fallback asked `has_special_rule("Unstoppable")`,
+which matches by **prefix** — so `Unstoppable in Melee` and `Unstoppable when Shooting` bypassed
+Regeneration in both halves regardless of their gate, and `Unstoppable Mark` (a mark placed on the
+**enemy**) bypassed it for its bearer. It matches the exact name now, the same lesson
+`AiEv.has_exact_rule` already exists for.
+
+**Tests.** `test/dead_aura_families_test.gd` — 13 pure cases: the granted rule resolves per family, the
+range bonus reaches `SoloController.shooting_range_bonus` (+6″), the Rending facet lands on the shooting
+profile and stays off the melee one (and its melee sibling mirrors it), the shared gate answers both
+halves, and **`test_no_aura_grants_a_rule_that_resolves_nowhere`** is the standing net — it walks every
+aura entry of every book in all five systems and fails if one grants a name that resolves nowhere.
+`test/e2e/e2e_dead_aura_effects_test.gd` — 5 cases on the real `main.tscn`, measuring the three effects
+that live inside `main.gd` itself (the Shred facet, the Regeneration bypass, the to-hit modifier), each
+asserted in BOTH halves of the game.
+
+**Still open, deliberately.** Three aura families need a mechanic that does not exist yet, so they are a
+separate wave and are listed in `KNOWN_OPEN` in the test: **Thrust in Melee** (9), **Piercing Fighter**
+(7), **Piercing Shooter** (5) — 21 entries. The second test, `test_the_known_open_families_are_still_
+exactly_three`, fails if one of them starts resolving, which forces the list to be kept honest.

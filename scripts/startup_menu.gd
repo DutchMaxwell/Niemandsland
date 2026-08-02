@@ -265,12 +265,18 @@ func _on_tutorial_pressed() -> void:
 	_show_tutorial_picker(progress, track)
 
 
-## Set the runtime-only tutorial flags (read-and-cleared in main.gd, never persisted to
-## project.godot, mirroring harness_mode) and open the prepared table. An empty lesson id
-## means "resume": the director runs assessment/first-incomplete logic itself.
-func _launch_tutorial(lesson_id: String) -> void:
+## Arm the runtime-only tutorial flags that main.gd reads in _ready(). Split out of
+## _launch_tutorial so the entry contract (which flags, which values) is testable
+## without the scene swap. Never persisted to project.godot, mirroring harness_mode.
+func _arm_tutorial_flags(lesson_id: String) -> void:
 	ProjectSettings.set_setting("niemandsland/tutorial_mode", true)
 	ProjectSettings.set_setting("niemandsland/tutorial_lesson", lesson_id)
+
+
+## Open the prepared table for a guided tutorial run. An empty lesson id means "resume":
+## the director runs assessment/first-incomplete logic itself.
+func _launch_tutorial(lesson_id: String) -> void:
+	_arm_tutorial_flags(lesson_id)
 	_transition_to_game()
 
 

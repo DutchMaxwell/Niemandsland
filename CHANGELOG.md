@@ -6,6 +6,443 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 
 ## [Unreleased]
 
+### Fixed
+- **"Unload" was missing from the transport's radial menu.** Loading a unit into a transport *is* that
+  unit's move action, so its activation is spent for the round — and the rulebook is right that it may
+  not then also climb back out ("units can't both embark/disembark as part of the same activation").
+  The menu enforced that by simply **dropping the entry**: no option, no reason, nothing. Load a squad
+  in round 1 and the transport's menu had no Unload at all, which reads as a broken game rather than as
+  a rule. The entry stays now — greyed, labelled *"Unload X — already activated"*, with a tooltip that
+  names the rule and says the unit can exit next round. The same silent hide sat on the other side
+  of the door — a unit that had already acted got no **Embark** entry either, so a transport parked
+  right in front of it offered nothing at all; that one is greyed and explained now too. Nothing
+  about what is *allowed* changed.
+- **A destroyed transport's cargo skipped the dangerous terrain test on the AI's side.** The rule gives
+  a wrecked transport's passengers three consequences at once: they take a dangerous terrain test, they
+  are Shaken, and they must be placed fully within 6″ of the transport before it is removed. Shaken and
+  the 6″ placement were carried out; the dice were left in the player's hand — the same deal every other
+  dangerous terrain test in the game gives you. But NACHTMAHR has no hand, so for an AI-owned unit the
+  test was never taken by anyone and the rule quietly did not apply. The engine rolls that side now, on
+  the real dice tray, with the same per-model/Tough(X) count the movement path uses (deferred a beat, so
+  it can never land inside the roll that killed the transport). The battle-log line also **quotes** the
+  rule and names all three consequences in order, so the dice you are still asked for read as the rule's
+  demand instead of the app's.
+- **The AI's explanation faded out before you could read it.** NACHTMAHR's attribution and outcome
+  messages — which unit it picked, what it shot, what the roll did to whom — vanished on a six-second
+  timer while the AI still held the turn, so there was no way to study them. They stay up now until the
+  next event replaces them or you click them away. Plain operational notices (export path, autosave, a
+  refused button) keep their fade: they report on the app, not on the game, and they repeat on demand.
+  A **Settings** toggle ("AI Explanations Stay Up", on by default) hands the old fade back.
+- **Nine aura families granted a rule that resolved nowhere (army-book).** An army-book "*X* Aura" reads
+  "this model and its unit get *X*", and the import expands it by writing the bare name *X* onto the unit.
+  That only does something if *X* actually resolves — and for nine families nothing did, in either of the
+  two ways it can: the aura entry carried no mechanic of its own, and no rule of that name existed for the
+  carrier's book. **66 book entries across all five game systems** promised an ability the table never saw:
+  *Shred when Shooting*, *Rending when Shooting*, *Unstoppable in Melee*, *Unstoppable when Shooting*,
+  *Precision Fighter*, *Precision Shooter*, *Precision Charge*, *Increased Shooting Range* and
+  *Hit & Run Fighter*. They resolve now, each through the mechanic its printed text describes — extra
+  wounds on a blocked 1, AP(+4) on unmodified 6s, wounds that ignore Regeneration, +1 to hit, +6″ range,
+  the 3″ step out of melee — so every one of them writes the battle-log line its primitive already wrote
+  for the books that had it. A standing test now fails if any future aura ships granting a dead name.
+- **A rule printed for one half of the game no longer fires in the other.** Rules carry a
+  melee-or-shooting gate in their data, but the engine read the shooting half in exactly **one** place, so
+  everywhere else the gate was silently one-directional. *Shred in Melee* also shredded when shooting and
+  *Shred when Shooting* also shredded in melee; *Predator Shooter* spawned its extra attack in melee;
+  *Good Fighter* and *Precision Fighter Aura* added their "+1 to hit **in melee**" to every **shot** while
+  never reaching the melee they are printed for, and *Precision Charge Aura* paid out on every shot instead
+  of on a charge. Both halves are now the same question asked by one function, and the charge-scoped bonus
+  is handed the charge it needs. The skirmish books shipped two of these live, so this is a fix you can
+  feel, not only a guard for the new data.
+- **"Unstoppable" no longer cuts through Regeneration for rules that merely start with the word.** The
+  Regeneration-bypass fallback matched unit rules by *prefix*, so *Unstoppable in Melee* and *Unstoppable
+  when Shooting* bypassed Regeneration in **both** halves whatever their gate said — and *Unstoppable
+  Mark*, which is a mark you put on the **enemy**, bypassed it for its bearer. The fallback matches the
+  exact name now (the same "Ferocious lesson" the other rule checks already learned).
+
+### Added
+- **Reinforcement (army-book).** A unit whose models all carry the rule may, while it is Shaken or once
+  it is fully destroyed, be removed from the table as destroyed; a fresh copy — full starting size, its
+  bought upgrades intact, wounds and Shaken reset — is placed at the start of the next round, right after
+  the Ambush arrivals. The copy goes down fully within 12″ of any table edge, including the enemy's — the
+  book names no minimum distance from enemies here, and neither do we. It cannot seize or contest
+  objectives on the round it arrives, but it activates that round exactly like an Ambush arrival. An
+  attached hero that does not itself carry the rule blocks it, and the battle log names the hero. The
+  returning copy really loses the rule — it is gone from its unit card, not tracked as an invisible
+  "already used" flag. When the edge strip is too crowded, as many models as legally fit are placed and
+  the rest are forfeit, with their own log line. Every application and every refusal writes its own
+  battle-log line. Under it sits the game's first **runtime unit factory**: until now a unit could only
+  come into existence while an army was being imported, which is why the rules that create units were
+  the last ones left unautomated. A unit born mid-game is now a full citizen — it gets its card in the
+  dock, it survives a save with its models where you left them, and it takes its turn in the
+  alternation like any other.
+- **Extended Buff Range (army-book).** A unit standing within 24″ of a friendly unit that carries
+  the same rule *and* holds a Hero can be picked by that Hero's within-12″ buff rules as if it were
+  in range. The link is measured **base edge to base edge** like the ruler (at 24″ a centre reading
+  is off by most of a vehicle oval), it is exactly **one hop** — never a daisy chain — and it does
+  **not** extend spells, which keep their own printed range. One living carrier model is enough to
+  relay, and the unit stops relaying when its last carrier dies. The skirmish books print "within 6″
+  of a friendly Hero" instead of "has a Hero in it"; that is a data difference, not a second rule.
+  Every reach, every refused reach (which clause failed) and the spell exclusion write their own
+  battle-log line.
+- **Coordinate (army-book).** At the end of its activation a carrier may hand the activation to an
+  un-activated friendly unit within 12″, which then activates immediately. NACHTMAHR picks the most
+  valuable friend in range using the same activation-payoff evaluation its activation-order
+  lookahead uses (and records why); you get candidate rings and a target click, with ESC declining.
+  A unit that was itself activated via Coordinate may not hand off again, a bearer that did not
+  survive its own activation hands nothing off, and units still held in reserve are invisible to the
+  hand-off. The pair still owes the opponent exactly **one** activation — the alternation never
+  slips. Hand-off, declined hand-off, stopped chain, dead bearer and "nobody in range" each get
+  their own log line.
+- **Delayed Action — you can pass a turn now (army-book).** *"Once per round, if your opponent has
+  more units left to activate than you, then this model's unit may pass its turn instead of
+  activating (may still be activated later)."* With 73 occurrences across 21 books and all five
+  game systems this was the largest rule the automation still left to you. A carrier's radial menu
+  gains a **Pass** entry: the turn goes to your opponent and the unit stays available for later in
+  the same round — nothing about it is marked spent. The entry is offered on every carrier and
+  never hidden when the condition fails; an illegal pass is refused *with the counts it measured*
+  ("your opponent has 2 units left to activate, you have 2 …"), because a rule that vanishes from
+  the menu reads exactly like a missing rule. Units waiting in Ambush reserve are off the table and
+  do not count as "left to activate", and the once-per-round limit binds the carrier, not the army,
+  so a second carrier still has its own pass. NACHTMAHR plays the rule as well: it passes when its
+  most valuable un-activated unit stands inside the reach of an enemy that has not committed yet,
+  and the developer log carries the reason. Underneath it is a general **Pass Turn** step in the
+  alternation — the optional *Combat Hesitation* module (the same mechanic behind a dice roll) now
+  has a foundation to land on.
+- **The three Ambush variants (army-book).** *Ambush Beacon*: a reserve that lands within 6″ of a
+  friendly beacon model ignores **every** enemy distance restriction — the 9″ (3″ Infiltrate)
+  arrival ring *and* an enemy's *Repel Ambushers* 12″. The AI actively hunts for those circles
+  instead of merely being allowed to use them, and on your side the honour-system ">9″" warning
+  gives way to the waiver line. *Rapid Ambush*: carriers may arrive at the start of round 1 — run
+  as a round-start beat after deployment **and** the Scout phase, so it can never buy an extra slot
+  in the deployment alternation, and still voluntary ("may"). *Ambush Re-Deployment*: a unit whose
+  models all carry it may leave the table once per game at the end of its activation and comes back
+  from Ambush at the start of the **next** round, exactly that one — you are asked, the AI decides
+  by a documented heuristic (leave under pressure, never off a marker it holds). Every application
+  *and* every non-application writes its own battle-log line, including a beacon that stood within
+  12″ and did not apply.
+- **Reanimation (army-book).** A unit whose models all carry the rule rolls one die per missing
+  model/wound when it activates; every 5+ brings one wound back — the first wound of a casualty
+  puts the model back on the table, further wounds heal it up. Returned models must be placed in
+  coherency with a model that was *not* restored, otherwise the success expires (with its own log
+  line). The rule reaches the table through the hero upgrade *Reanimation Aura*, and it ends when
+  its carrier falls — the battle log says so. Shaken units stay idle and do not reanimate.
+- **You allocate your own Reanimation successes by clicking.** The rule's restores used to be handed
+  out for you — living wounded first, then the cheapest casualty. A fine default and a poor
+  decision-maker: getting a Tough elite back on its feet instead of topping two wounds up is often
+  the whole activation, and OPR gives that call to the owner. After the roll your side gets a click
+  mode, the same principle the wound allocation follows: **left-click a wounded model** to heal one
+  wound there, **left-click a fallen model's ring** to bring it back, **right-click** to hand the
+  rest to the automatic allocation. A casualty has no model to click — a regiment one is hidden in
+  its block, a loose one is parked on the army tray — so every casualty that *can* return wears a
+  marker ring at its return spot, and that ring is the click target. A strip counts the successes
+  down, every click writes its own log line, and a click that buys nothing (a model already at full
+  health) says why instead of doing nothing. The prompt only appears where the choice can change
+  something, and NACHTMAHR keeps allocating its own restores by its own plan.
+- **The combat stage covers melee and spells.** The central card that already paced the shooting
+  volleys now walks a charge — Charge, Counter, Impact, one card per strike wave, Melee result,
+  Morale, Consolidation — and a cast: Cast, Cast roll, Effect (one Effect card per target). Both
+  sides use it, and it stays solo-only, skippable by click and inert in batch sweeps.
+- **The melee verdict says itself.** Who won a melee was decided silently: the tallies were
+  compared, Fear(X) shifted them, and a unit tested morale with no line explaining why. The battle
+  log now names both tallies (with the Fear-adjusted value where it differs) and who lost — and a
+  charge you declare gets its own opening line, like the AI's always had.
+- **A unit created mid-game rides the wire (multiplayer).** Until now the only way a unit reached
+  the other side of the table was the whole-army batch at import time, so the rules that make a unit
+  *during* a game — Reinforcement, Split, Spawn — had nowhere to send it. They now have their own
+  one-shot message: the unit, its models and their positions arrive on every peer as the same unit,
+  with the same identity, built through the same load path a save file uses. Delivering the same
+  creation twice still yields one unit, a creation that lands in the middle of an army import queues
+  behind it instead of tearing it up, and a player who rejoins gets the created unit with everything
+  else. The network id stays inside the creating player's own numbering band, so a guest's Split
+  resolves immediately instead of waiting on the host, and a peer that tries to create in someone
+  else's band is refused and says so in the log.
+
+### Fixed
+- **Rule events reach the other player's battle log.** Only movement lines ever travelled between
+  clients. Every other line the rules engine writes — a passed turn, a *Coordinate* hand-off, an
+  Ambush arrival or withdrawal, an *Extended Buff Range* refusal — was written locally and stopped
+  there, so on the opponent's screen a rule that had been applied perfectly correctly read exactly
+  like a rule that was missing. The passed turn is the clearest case: it moves nothing and activates
+  nothing, so the line *is* the whole event, and without it the opponent watched the AI answer a turn
+  that never appeared in their record. Rule applications and rule refusals now travel; the lines that
+  do **not** are the ones another channel already delivers (movement, activations, dice, casualties —
+  routing those would print them twice), the AI's internal reasoning dumps, and prompts aimed at
+  whoever is holding the mouse. Two of the newly travelling lines also work in a plain
+  human-vs-human room: the reform honour-system notice, and the reason a unit just jumped back to
+  where it started after an undo.
+- **Loading a battle no longer hands back rules you already spent.** Five pieces of rule
+  bookkeeping lived only in memory, so loading a save, rejoining a multiplayer room — or simply
+  changing which slot NACHTMAHR plays — quietly reset them to their starting values. A **Limited**
+  weapon is once per *game*, but a reloaded battle re-armed every one you had already fired. The
+  **Second Wind** cap of one third of the carriers *per round* dropped back to zero, so a round
+  could grant more second activations than it may. The rule that the side which took the last
+  activation does **not** open the next round fell back to its default, letting a save taken just
+  before a round ends decide the opener. The alternation debt — how many answers the AI still owes
+  you — was zeroed, so you could finish the round unopposed. And the once-per-game *Re-Deployment*
+  and round-one *Rapid Ambush* beats came back around. All five now travel with the battle: the
+  per-unit ones ride with their unit, the match-level ones ride in the saved game state, and both
+  reach a rejoining player over the same channel.
+- **A spell token stops being immortal decoration after a load.** Spell tokens are drawn from the
+  models they sit on, so they survived a save — but the bookkeeping that *removes* them did not.
+  After loading, the round-end sweep woke up with nothing to do: the token stayed on the table for
+  the rest of the game while its actual effect (the to-hit, defence, casting and morale modifiers)
+  had already vanished without a word in the log. Worse, the load path used to scrub granted spell
+  rules wholesale, which also deleted the effects the rules explicitly keep *until they apply*.
+  The mechanical record now persists with the unit, so a round-duration buff ends exactly when the
+  round ends and an apply-once buff waits, as written, until it fires. This holds for a buff that
+  arrived from the other player too, not only for one cast on your own screen.
+- **A unit that leaves the table leaves it on both screens.** *Ambush Re-Deployment* takes a unit off
+  the table for a round, and that withdrawal never left the client that did the arithmetic — there is
+  no visibility message for unit models at all. The opponent kept a unit standing that the acting
+  side had already booked as gone: visible, measurable, shootable, chargeable, and counted by every
+  scan that is supposed to skip reserves. The two halves of the game even contradicted each other,
+  because model visibility *does* travel in the state sync — so the ghost vanished the moment that
+  peer rejoined. The withdrawal, the AI's ambush arrival and your own placement from reserve now all
+  ride the wire from the one place that flips a unit's presence, and the reserve flag travels with
+  them: hiding the models alone still left the opponent's targeting offering a unit that is not
+  there. This affects any networked room with a designated AI slot — for the AI's units and for
+  yours.
+- **A unit that was loaded back could be handed a model that had just been deleted.** Loading a save
+  clears the table, but the old models only really die at the end of that frame — and the loader, which
+  reuses an already-standing model when it recognises its id, kept recognising those. The restored unit
+  then owned models that vanished a frame later. It now only reuses a model that is actually going to
+  survive. Found by the new runtime-unit save/load test, and it applies to every save, not just to
+  units that arrive mid-game.
+- **A Mark cannot be put on a target you cannot see.** The "once per activation, before attacking,
+  pick one enemy unit within 18″ **in line of sight**" Marks (*Unstoppable*, *Relentless*, *Rending*,
+  *Furious*, *Unpredictable Fighter*) only ever measured the 18″ — so the mark landed on a unit
+  standing behind a solid wall and the attack got the extra rule for free. Sight is now checked with
+  the same test the shooting path uses, and a mark that finds nothing in sight says so in the log
+  instead of quietly applying. *Fatigue Debuff* prints the same clause and already went through a
+  resolver that checks sight; its data now says so too.
+- **Speed Feat gives the +4″ it prints.** The rule reads "+2″ when using Advance actions and **+4″**
+  when using Rush/Charge actions", but the mechanics data said +2″/+2″ — so NACHTMAHR threw away 2″
+  every time it spent its once-per-game push, and the charge it had lined up came up short.
+- **A Shaken caster-support unit really stops helping.** Both *Spell Accumulator* and *Spell Conduit*
+  print "Friendly casters may only use this rule if this unit isn't Shaken". The accumulator's
+  condition was in the data but read by nobody, so a Shaken token battery kept feeding everyone
+  else's spells; the conduit's condition was hardcoded in one place and missing from the data
+  entirely. Both now come from the rule itself, and a support unit that is sitting out because it is
+  Shaken is named in the battle log instead of silently contributing nothing.
+- **Five army-book rules now really play by their printed wording.** Five knobs of the rules data
+  (*hits per wound*, *placement dice*, *arrival distance*, *army cap*, *Defense per two markers*)
+  were read by no code at all, so whether the rules they describe played by the current books was
+  an untested assumption. Two of them did not. A boosted blink/step upgrade (*Rapid Blink Boost*,
+  *Wave-Step Boost*) placed its models within **D3″** instead of **2D3″**, and a unit that carried
+  both the base rule and its upgrade could even use the weaker one. *Defensive Growth* granted **no
+  Defense at all**: its markers were only counted in the older "+1 per marker" shape, while the
+  current books grant "+1 per **two** markers". The same blind spot silently disabled *Piercing
+  Frenzy* / *Precision Frenzy* (per marker) and *Fortified Growth*, whose "enemy AP −1 per two
+  markers" now reaches the save roll and says so in the log — while a *Fortified Growth* carrier no
+  longer also collects the plain *Fortified* reduction just because the name starts the same way.
+  *Retaliate(X)* keeps its "X hits per wound taken" scale but counts the wounds **per unit of a
+  joined chain**: a hero without the rule no longer feeds his squad's retaliation, and a hero who
+  has it finally lashes back for his own wounds. *Infiltrate*'s "over 3″" arrival ring and the
+  *Inquisitorial Agent* / *Martial Prowess* cap of one third of the carriers per round were already
+  right and are now read from the data as well, so a book that changes them changes the game.
+  Growth markers tick at the **start** of a round, cap at **4**, and a Shaken unit is **blocked**
+  from gaining one instead of losing its whole pile — the blocked tick and the reached cap each get
+  their own battle-log line.
+- **Your buff-giver rules finally do something.** The whole "once per activation, before attacking"
+  buff family (*Precision Shooter Buff*, *Furious Buff*, *Entrenched Buff*, *No Retreat Buff*, …)
+  bailed out on anything that was not an AI unit, so a human player's buff was dead data — no token,
+  no line, nothing. It now resolves on both sides, at the moment you declare an attack (or at the
+  end of the activation for a unit that never attacks), exactly once per activation. Target picking
+  is automatic for v1 and every application is named in the log; choosing the target by click is a
+  follow-up. Skirmish books whose text says "pick up to **4** friendly units" now really pick up to
+  four instead of one, and a rule that finds no legal target says so instead of failing silently.
+- **…and they work in multiplayer too.** That wave shipped with one deliberate hole: in a live
+  multiplayer game the buff family was switched off for human players, because the modifier it
+  places did not travel. Half a modifier is worse than none — your dice would have read the buff
+  and your opponent's, rolling into the same unit, would not. The modifiers now travel: when the
+  buff is placed, when it is spent, and when it expires. The switch is gone, so a *Precision Shooter
+  Buff* or an *Entrenched Buff* does the same thing against a human opponent as it does against
+  NACHTMAHR. Spell tokens ride the same channel, so their modifiers stay in step as well.
+- **Spotter marks and spell buffs count the same on both screens.** Three numbers the rules read
+  lived only on the client that produced them. *Precision Spotter* marks: the peer got the
+  "Spotted" token but never the **count**, so it could not tell one mark from three — and removing
+  only *some* of them leaves that token on the table, which means the other player saw no change at
+  all while your to-hit bonus had already been spent. The same for the movement and shooting-range
+  deltas a speed or range spell stamps on a unit: your opponent kept measuring the unbuffed
+  distance, drew the unbuffed range ring, and their client never learned the buff had expired. All
+  three now travel as a small state delta over the existing sync channel, so both tables agree
+  about a bonus that is still on the table. Older clients ignore the message instead of erroring.
+- **Joining a game with loaded transports no longer loses the passengers.** Cargo is remembered in
+  two halves: *which* unit sits in *which* transport, and the parked models on the tray. Loading a
+  saved game rebuilt both; joining or rejoining a running multiplayer game rebuilt only the first.
+  The joining player therefore got passengers the game no longer recognised as passengers —
+  right-clicking one offered the ordinary move/wound/marker actions instead of the single legal
+  action (disembark), and because their tray slots were never claimed the next casualty parked on
+  top of them. The join now runs the same restore step the load path has always run.
+- **A reanimated model stands in the same place on both screens.** The message that brings a model
+  back carries wounds and alive/dead, but no position — so the other client rebuilt the spot itself
+  and put the model back where it fell. That is not always where it now stands: when the fall point
+  is blocked, the placer moves the model to a free ring position beside a survivor, and that choice
+  never left the acting client. Host and guest then showed the same model in two places, with
+  coherency, range and line of sight following the wrong one. The real position now follows the
+  restore message over the ordinary move channel, the same correction a ghost-placed disembark
+  already sends.
+- **A reanimated regiment model comes back in its rank, not beside the block.** The restore placed
+  every returning model itself — it looked for a free spot in coherency with a survivor and stood the
+  model there. For a loose skirmish model that is right; a regiment model belongs to its movement
+  tray, and the block had *already* closed its ranks around the returning model when the coherency
+  spot was written on top of it. The rank model was then standing a good 2″ outside its own block.
+  The other client never saw it: it re-ranks the block from the restore message, which is exactly
+  what the rules say should happen — so the two screens disagreed. Regiment returners are now left to
+  their block on both sides, and a returning rank model can no longer "find nowhere to stand": a
+  block always has a rank for it, even when every spot around it is occupied.
+- **Defense modifiers follow their own wording against spell damage.** A blessing that gives "+1 to
+  defense rolls" did nothing the moment the wound came from a spell: the spell path saved at the bare
+  Armor-adjusted Defense and silently dropped every active modifier. The block step of the core rules
+  is source-neutral ("roll one die for every hit that the unit has taken"), and OPR names spells
+  explicitly whenever a rule means them — so a modifier now applies to spell damage unless its own
+  text limits it. Generic buffs count, hexes bite (a "-1 to defense rolls" worsens a spell save too)
+  and marker bonuses carry over; Shielded ("hits that are not from spells"), Cover ("from shooting")
+  and the Guarded/Versatile/Sturdy family ("shot or charged from over 9″") stay out. The battle log
+  names both halves — what applied, and what did not apply and why.
+- **The save log names the rule that actually gave the bonus.** Every attack — your volley, the AI's
+  volley and the melee strike phase — announced its whole Defense bonus as one line, "*<unit>* is
+  Shielded: +1 Defense". That was true while Shielded was the only thing that could raise the number;
+  since defense modifiers became a shared seam a growth marker or a spell token raises the same
+  number, and the line then credited a rule the unit does not even carry. Each contribution now
+  writes its own line under its own name, at the Defense the dice really roll — and a hex that
+  cancels a bonus no longer erases both from the log: the buff and the hex are named separately, so
+  a rule can neither claim what it did not do nor fall silent.
+- **Aircraft -12″ now bites on YOUR volley too (#231).** Picking the target already measured the
+  shrunk reach, but once the shot was declared each weapon was gated at its printed range — so a
+  24″ gun still rolled dice at an aircraft 20″ away whenever a longer weapon in the same unit kept
+  the target legal, and rear models counted as "in range" that were not. Both now measure the
+  effective reach, exactly like the AI's volley always did. The battle log names the weapons the
+  penalty locks out instead of letting them vanish from the dice.
+
+## [0.3.11.0-alpha] — 2026-07-31
+
+The community-feedback wave: rules the book always had, and a table that finally SHOWS its work.
+
+### Added — the table explains itself
+- **Rules announce at the table.** Every applied rule rises as a small text from the affected
+  unit — "Blast ×3 → 6", "Artillery +1", "Surge +1", "Guardian AP(0)" — stagger-cascaded so
+  full volleys stay readable, colored by kind, toggleable in Settings. The battle log stays
+  the archive; the moment lives on the table.
+- **Rules also say when they DON'T apply.** "Artillery: no +1 (target within 9″)", "Stealth:
+  no -1 (within 9″)" — two testers independently reported correctly-silent rules as bugs;
+  now the non-application is named too.
+- **NACHTMAHR explains itself.** While the AI acts, the banner narrates each decision in one
+  plain sentence ("rushes toward the objective (17″ away)"); afterwards every AI line in the
+  battle log expands on click (▸) and shows its reasoning as a tooltip.
+- **The targeting hover names reach penalties** ("· reach 12″ (Aircraft -12″)").
+- **Split fire declares before it rolls.** Each declared target wears a ring plus a
+  firing-vector line naming the weapons staying on it; only the explicit "Fire!" button
+  commits the dice, and Cancel (right-click/ESC) frees the unit — nothing was spent.
+- **Combat holds on a stage card.** Declaration, per-weapon rolls, Result and Morale each
+  get a central card with every rule line — auto-advancing on a beat (adjustable in
+  Settings), click the card to skip ahead, Space pauses to read, ◂/▸ browse back through
+  the running activation.
+
+### Added — combat & rules
+- **Split fire (GF p.8).** Multi-weapon units may fire at up to two targets: checkbox per
+  weapon after the first pick, both targets declared before any dice.
+- **Unstoppable completed.** A core-rules audit (all 33 GF v3.5.1 core rules) found exactly
+  one missing half: Unstoppable now also ignores all negative to-hit modifiers (the
+  ignores-Regeneration half was long in).
+- **Identical weapons merge.** Nine "1× Suit-Plasma" export lines become one "9×" group with
+  one roll — no more phantom "multiplied weapons" or triple melee volleys.
+- **New army-book rules:** Caster Group (the unit casts with X = alive bearers), Spell
+  Accumulator (a token battery casters within 12″ may drain), Spell Conduit (cast as if
+  standing at the conduit), Precision Spotter (mark on 4+, attackers spend markers for +X).
+- **Precision Spotter is a radial action.** Spot picks one enemy within 36″ line of sight
+  yourself and rolls to mark it (4+, a visible token); before your to-hit roll, a dialog
+  lets you spend 0..N markers at +1 each, and partial removal leaves the rest lying on
+  the target.
+
+### Added — transports
+- **The AI uses transports** (official solo rules): it fills them at deployment, and cargo
+  disembarks toward the enemy on its first activation.
+- **Cursor placement on unload:** the formation hangs as a ghost at your mouse (R rotates,
+  6″ ring shows legality), click places, ESC keeps the unit inside.
+- **Embark/disembark follow the book:** embarking consumes the unit's activation (the label
+  says so), unloading is an Advance exit with the shot window open, no in-and-out in one
+  round, and you pick WHICH transport when several are in reach.
+
+### Added — spells
+- **Multi-target spells collect YOUR clicks** ("1 of up to 2 picked — click more or
+  right-click to cast") — the engine never chooses a target for you.
+- **Cast picks are visible and reversible.** Every picked target wears a solid ring,
+  distinct from the pulsing candidate markers, and clicking a picked unit again takes
+  the pick back instead of refusing it.
+
+### Fixed
+- A reform is movement: arranging models in a running solo game can no longer gain free
+  inches toward the enemy (offenders clamp at their old distance, logged).
+- Ambush arrivals count the WHOLE unit (a placed jetpack leader with the squad still on the
+  tray no longer vanishes into silence) and name what is missing; >9″ violations are logged.
+- A refused shot names WHO blocks the lane — including your own units (only the shooter's
+  own unit is see-through, GF p.5).
+- Reserve drags from the tray no longer log phantom marches ("moves 155″").
+- The Map Tool's load dialog is a real Open dialog (no more "Save" wording + overwrite ask).
+- MP: activation lines name the player; "Start Deployment" is hidden in multiplayer rooms
+  (and no longer crashes); a solo controller surviving into hosting can never drive a
+  human's slot.
+- Spell markers no longer expire by a blanket round-end rule — the spell's own wording
+  decides: "next time …" persists until it applies, "until the end of …" and unrecognized
+  wording still expire with the round (GF v3.5.1 has no blanket duration rule).
+- The AI's cargo waits for its transport before disembarking: riding inside a transport
+  that hasn't acted yet no longer burns the mandatory first-activation exit at the
+  deployment spot, and cargo inside a reserve transport stays off the table with it.
+
+## [0.3.10.1-alpha] — 2026-07-29
+
+Hotfix wave from the first days of community play — thank you for the reports and the logs!
+
+### Fixed — multiplayer
+- **A human's slot is never NACHTMAHR's.** In a human-vs-human room the solo automation could
+  hijack the second player's army ("activated (AI)", auto-rolled defenses, whole AI turns).
+  Hard guard at the core: a slot a connected human occupies is never automation-driven, the
+  implicit "P2 is the AI" solo default no longer applies in multiplayer, joining strips a stale
+  AI designation (logged), and the Solo panel / AI-Opponent dialog refuse occupied slots. The
+  player roster now shows "P2: NACHTMAHR" rows, so who-is-what is readable at a glance. (#196)
+- **Deployment zones work for guests and stop flashing.** Zone geometry is host-authoritative
+  and synced on join; "Show Deployment Zones" and "Flip Zone Colours" are per-player view
+  preferences now (strictly local) — the broadcast ping-pong that made both peers' zones flash
+  permanently is gone, and a guest's Map Tool can no longer wipe the host's zones. (#194, #195)
+- "Room code copied" is a toast now, not a battle-log entry per click.
+
+### Fixed — measuring & movement
+- **Mid-drag corrections refund.** Walking a model back along its painted path erases and
+  refunds anywhere inside the chalk ribbon — "out 4″, back, out 4″ again" measures ~4″ now,
+  not 12″. The taut-path principle is untouched: a genuine detour still counts in full. (#191)
+- **Sub-inch AI moves snap into place** instead of gliding almost invisibly. (NML-224)
+- **Readable chalk inch stamps**: fixed reference size, black outline, and they linger a beat
+  after the trail fades. (NML-234)
+
+### Added
+- **Movement take-back (Ctrl+Z).** Undo a finished move — position, facing, chalk trail and
+  the inch proof all revert, synced in multiplayer. The window closes when dice hit the tray
+  or the next activation begins. (#162)
+- **You allocate wounds by clicking.** When your unit takes wounds and the choice matters,
+  pick the models yourself — full OPR freedom, including Tough stacking. (#172)
+- **Ambush transports can load during deployment** — reserve the transport, put cargo inside,
+  the whole package arrives together from round 2. (#160)
+- **The dice tray names what a roll is about** ("to hit", "morale", …). (#170)
+- **The deployment control box is draggable**, and its default spot auto-avoids the unit dock
+  so it never hides your cards. (#159)
+- **Round-advance texts name the round they move onto.** (#161)
+
+### Fixed — rules & solo
+- **Indirect fire without line of sight works for human players too** — the targeting path
+  completes the rule and logs it. (#182)
+- **Surge announces its on-6 bonus hits** — a "2 hits" tray resolving as 3 wounds now says
+  why. The last silent on-6 branch. (#193)
+- **Blast always writes its multiplier line** (with the model cap noted), and 7+ defense
+  saves say "only a natural 6 saves". (#169, #173)
+- **Deploying an Ambush-capable unit directly counts as choosing not to ambush** — no stuck
+  reserve prompt. (#187)
+- **A model on a container sees over its own edge — and can be seen.** (#171)
+- **The AI explains when it passes a nearer enemy that already acted**, and its denial trips
+  say DENY in the plan line. (#164)
+- **The AI turn keeps the frame loop alive** — no more OS "not responding" while NACHTMAHR
+  thinks. (#163)
+
 ## [0.3.10.0-alpha] — 2026-07-27
 
 ### Added — Solo mode

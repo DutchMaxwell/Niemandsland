@@ -315,6 +315,10 @@ func open_menu(screen_position: Vector2, selected_objects: Array) -> void:
 				var solo_items := RadialMenu.solo_combat_items(game_unit)
 				for si in range(solo_items.size()):
 					items.insert(si, solo_items[si])
+			# Reinforcement reaches the model-menu path too: a DESTROYED carrier has no full-unit
+			# selection left, only its parked casualties — and that is exactly when the rule fires.
+			if game_unit != null:
+				items.append_array(RadialMenu.reinforcement_items(game_unit))
 			_append_transport_items(game_unit, context, items)
 	elif UnitUtils.is_terrain(first_obj):
 		context["terrain"] = first_obj
@@ -358,7 +362,19 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		var cargo_list: Array = context.get("cargo_units", [])
 		var ci := int(action_id.trim_prefix("unload_cargo_"))
 		if ci >= 0 and ci < cargo_list.size():
-			_disembark_unit(cargo_list[ci] as GameUnit)
+			_solo_activation_rules(cargo_list[ci] as GameUnit)
+			_begin_disembark_ghost(cargo_list[ci] as GameUnit)
+		return
+
+	# Embark entries are per-TRANSPORT ("embark_<index>") — with several reachable transports
+	# the player picks the vehicle, mirroring the per-cargo unload list (maintainer find).
+	if action_id.begins_with("embark_"):
+		var embark_list: Array = context.get("embark_targets", [])
+		var ei := int(action_id.trim_prefix("embark_"))
+		if ei >= 0 and ei < embark_list.size():
+			context["embark_target"] = embark_list[ei]
+			_solo_activation_rules(_get_game_unit_from_context(context))
+			_embark_unit(context)
 		return
 
 	match action_id:
@@ -368,6 +384,12 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_solo_begin_targeting(context, true)
 		"solo_cast":
 			_solo_begin_cast(context)
+		"solo_spot":
+			_solo_begin_spot(context)
+		"solo_pass":
+			_solo_begin_pass(context)
+		"reinforce":
+			_begin_reinforcement(context)
 		"select_unit":
 			_select_entire_unit(context)
 		"wounds":
@@ -396,9 +418,8 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 			_revive_unit_dead(context)
 		"revive_selected":
 			_revive_selected_dead(context)
-		"embark":
-			_embark_unit(context)
 		"disembark":
+			_solo_activation_rules(context.get("disembark_unit") as GameUnit)
 			_disembark_unit(context.get("disembark_unit") as GameUnit)
 		"delete_unit":
 			_delete_unit(context)
@@ -531,6 +552,9 @@ func _toggle_activation(context: Dictionary) -> void:
 		_update_activated_markers(game_unit)
 		unit_deactivated.emit(game_unit)
 	else:
+		# The manual toggle is the catch-all activation door (free dragging has none) — the
+		# activation-triggered rules get their shot before the unit counts as spent.
+		_solo_activation_rules(game_unit)
 		game_unit.activate(1)
 		_update_activated_markers(game_unit)
 		unit_activated.emit(game_unit)
@@ -576,6 +600,19 @@ func _solo_combat_available(game_unit: GameUnit) -> bool:
 	return bool(main_node.call("solo_combat_available", game_unit)) if main_node.has_method("solo_combat_available") else false
 
 
+## PRE-hook for activation-triggered solo rules (Reanimation): the doors that START a unit's
+## activation without going through main's own combat entries — the manual activation toggle and the
+## transport embark/disembark actions — announce the activation here first. main owns the round stamp,
+## so whichever door opens first is the only one that rolls. Fire-and-forget: the tray roll drives
+## itself, the door's own action continues immediately.
+func _solo_activation_rules(unit: GameUnit) -> void:
+	if unit == null:
+		return
+	var main_node := get_node_or_null("/root/Main")
+	if main_node != null and main_node.has_method("_solo_try_reanimation"):
+		main_node.call("_solo_try_reanimation", unit)
+
+
 func _solo_begin_targeting(context: Dictionary, melee: bool) -> void:
 	var unit := _get_game_unit_from_context(context)
 	var main_node := get_node_or_null("/root/Main")
@@ -588,6 +625,32 @@ func _solo_begin_cast(context: Dictionary) -> void:
 	var main_node := get_node_or_null("/root/Main")
 	if unit != null and main_node != null and main_node.has_method("solo_begin_cast"):
 		main_node.call("solo_begin_cast", unit)
+
+
+func _solo_begin_spot(context: Dictionary) -> void:
+	var unit := _get_game_unit_from_context(context)
+	var main_node := get_node_or_null("/root/Main")
+	if unit != null and main_node != null and main_node.has_method("solo_begin_spot"):
+		main_node.call("solo_begin_spot", unit)
+
+
+## Reinforcement (army-book v3.5.3): the owner takes the unit off the table as destroyed and is
+## promised a fresh copy next round. main owns the whole step — the refusal reason, the casualty
+## seam and the arrival beat all live there.
+func _begin_reinforcement(context: Dictionary) -> void:
+	var unit := _get_game_unit_from_context(context)
+	var main_node := get_node_or_null("/root/Main")
+	if unit != null and main_node != null and main_node.has_method("solo_begin_reinforcement"):
+		main_node.call("solo_begin_reinforcement", unit)
+
+
+## Delayed Action / "Pass Turn" (wave 5). Deliberately NOT routed through _toggle_activation: a pass
+## must leave the unit un-activated ("may still be activated later"), so main owns the whole step.
+func _solo_begin_pass(context: Dictionary) -> void:
+	var unit := _get_game_unit_from_context(context)
+	var main_node := get_node_or_null("/root/Main")
+	if unit != null and main_node != null and main_node.has_method("solo_begin_pass"):
+		main_node.call("solo_begin_pass", unit)
 
 
 func _get_game_unit_from_context(context: Dictionary) -> GameUnit:
@@ -2316,34 +2379,82 @@ const EMBARK_REACH_M := 0.0254   # 1"
 func _append_transport_items(game_unit: GameUnit, context: Dictionary, items: Array) -> void:
 	if army_manager == null or game_unit == null:
 		return
-	var target := _embark_target_for(game_unit)
-	if target != null:
-		context["embark_target"] = target
-		items.append(RadialMenu.RadialMenuItem.new("embark", "Embark", "▣", true,
-			"Embark into %s — a model of this unit has reached it (GF v3.5.1 Transport)" % str(target.unit_properties.get("name", "transport"))))
+	var targets := _embark_targets_for(game_unit)
+	var economy := _activation_economy_on()
+	# NML-953, the same defect on the other side of the door: a unit that already acted may not also
+	# climb IN — right, and the whole Embark block used to disappear for it, so a transport standing
+	# right there simply offered nothing. Greyed with the reason instead, and ONE entry rather than
+	# one per vehicle: the refusal is about this unit, not about which truck it would have picked.
+	if not targets.is_empty() and economy and game_unit.is_activated:
+		items.append(RadialMenu.RadialMenuItem.new("embark_spent",
+			"Embark — already activated", "▣", false,
+			"%s has already used its activation this round, and embarking is a move action (GF v3.5.1 p.15). It can board next round." % str(game_unit.unit_properties.get("name", "This unit"))))
+	elif not targets.is_empty():
+		context["embark_targets"] = targets
+		for ti in range(targets.size()):
+			var target := targets[ti] as GameUnit
+			var tname := str(target.unit_properties.get("name", "transport"))
+			if bool(target.unit_properties.get("ambush_reserve", false)):
+				# S1.5 (community #160): loading a transport that waits in Ambush reserve — the
+				# unit deploys INSIDE and arrives with it.
+				items.append(RadialMenu.RadialMenuItem.new("embark_%d" % ti,
+					"Load into %s (reserve)" % tname, "▣", true,
+					"Load into %s in Ambush reserve — the unit deploys inside and arrives with it (GF v3.5.1 Transport)" % tname))
+			else:
+				# #209: in a solo game embarking IS the unit's move action — the label says so
+				# up front, the click is the confirmation. One entry per reachable transport:
+				# the player picks the vehicle (maintainer find).
+				items.append(RadialMenu.RadialMenuItem.new("embark_%d" % ti,
+					"Embark: %s%s" % [tname, " — ends this unit's activation" if economy else ""], "▣", true,
+					"Embark into %s — any move action; only one model needs to reach it (GF v3.5.1 p.15 Transport)" % tname))
 	var cargo: Array = army_manager.cargo_units(game_unit)
 	if not cargo.is_empty():
 		context["cargo_units"] = cargo
 		for i in range(cargo.size()):
+			var cu := cargo[i] as GameUnit
+			var cname := str(cu.unit_properties.get("name", "unit"))
+			# NML-953 — the entry used to VANISH here. #209 is right that a cargo unit which already
+			# spent its move action may not also hop out this round (GF v3.5.1 p.15: "can't both
+			# embark/disembark as part of the same activation"), but it was enforced by a bare
+			# `continue`: no entry, no reason, nothing. And loading IS the cargo's move action, so the
+			# maintainer's own test sequence — embark in round 1 (TC-039), then unload (TC-040) —
+			# always lands in this branch: "unload steht nicht im radial menü". A refusal the player
+			# cannot see reads as a broken game, so the entry stays, greyed, and says why.
+			if economy and cu.is_activated:
+				items.append(RadialMenu.RadialMenuItem.new("unload_cargo_%d" % i,
+					"Unload %s — already activated" % cname, "▢", false,
+					"%s has already used its activation this round — embarking IS its move action, and a unit can't both embark and disembark in one activation (GF v3.5.1 p.15). It can exit next round." % cname))
+				continue
 			items.append(RadialMenu.RadialMenuItem.new("unload_cargo_%d" % i,
-				"Unload %s" % str((cargo[i] as GameUnit).unit_properties.get("name", "unit")), "▢", true,
-				"Disembark this unit (GF v3.5.1 Transport: fully within 6\")"))
+				"Unload %s%s" % [cname, " — its move action (may shoot after)" if economy else ""], "▢", true,
+				"Disembark this unit — an Advance exit: place fully within 6\", the shot window stays open (GF v3.5.1 p.7/p.15)"))
 
 
 ## The transport this unit could embark into RIGHT NOW: same player, capacity gate ok, reached.
-func _embark_target_for(unit: GameUnit) -> GameUnit:
+## S1.5 (community #160): during DEPLOYMENT the reach gate has a second door — a friendly
+## transport set aside in AMBUSH RESERVE may be loaded without table reach ("Transports may
+## deploy with units inside" / "units inside Transports are deployed at the same time as the
+## Transport", GF v3.5.1 p.15): a reserve transport parks on the tray, so no table-reach is
+## ever possible. Deployment-ONLY: in play, a reserve-embark would be a free un-deploy.
+func _embark_targets_for(unit: GameUnit) -> Array:
+	var out: Array = []
 	if army_manager == null or unit == null or army_manager.transport_of(unit) != null:
-		return null
+		return out
 	var pid := int(unit.unit_properties.get("player_id", 0))
+	var deploying: bool = army_manager.is_deployment_phase()
 	for t in army_manager.get_game_units_for_player(pid):
 		var tr := t as GameUnit
 		if tr == unit or army_manager.transport_capacity(tr) <= 0:
 			continue
 		if not bool(army_manager.can_embark(unit, tr).get("ok", false)):
 			continue
+		# ALL candidates, not the first hit — with two trucks in reach the player picks
+		# the vehicle (maintainer find), mirroring the per-cargo unload list.
 		if _joined_gap_to_m(unit, tr) <= EMBARK_REACH_M:
-			return tr
-	return null
+			out.append(tr)
+		elif deploying and bool(tr.unit_properties.get("ambush_reserve", false)):
+			out.append(tr)
+	return out
 
 
 ## Smallest base-edge gap (metres) between any alive model of `unit`'s joined chain and any
@@ -2382,25 +2493,168 @@ func _embark_unit(context: Dictionary) -> void:
 	if not bool(gate.get("ok", false)):
 		_transport_log("%s cannot embark: %s" % [str(unit.unit_properties.get("name", "unit")), str(gate.get("reason", ""))])
 		return
+	if not _transport_activation_open(unit, "embark"):
+		return
+	# #209 (p.15): "units can't both embark/disembark as part of the same activation" — an
+	# Advance-exit leaves the unit unactivated (shot window open), so the same-round
+	# re-embark needs its own gate.
+	if _activation_economy_on() and army_manager != null \
+			and int(unit.unit_properties.get("disembarked_round", -1)) == army_manager.current_round:
+		_transport_log("%s disembarked this round — it can't embark again (one move action per activation, GF v3.5.1 p.15)" % str(unit.unit_properties.get("name", "unit")))
+		return
 	if army_manager.set_unit_embarked(unit, tr, true):
 		if network_manager:
 			network_manager.broadcast_unit_embark(unit.unit_id, tr.unit_id, true)
 		_transport_log("%s embarks into %s (%d/%d spaces used) — GF v3.5.1 Transport" % [
 			str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport")),
 			army_manager.transport_used_spaces(tr), army_manager.transport_capacity(tr)])
+		_consume_transport_activation(unit, "embark")
 
 
-func _disembark_unit(unit: GameUnit) -> void:
+## #210 (grilled 2026-07-30): the radial "Unload" opens the cursor-placement ghost — the
+## unit's formation hangs at the mouse (R rotates, LMB commits inside the 6" zone, RMB/ESC
+## keeps it inside). Headless/batch (tests, harness, AI) fall through to the direct placer.
+func _begin_disembark_ghost(unit: GameUnit) -> void:
 	if unit == null or army_manager == null:
 		return
 	var tr := army_manager.transport_of(unit)
 	if tr == null:
 		return
-	if army_manager.set_unit_embarked(unit, null, false):
+	if not _transport_activation_open(unit, "disembark"):
+		return
+	if DisplayServer.get_name() == "headless":
+		_disembark_unit(unit)
+		return
+	var spots: Array = army_manager.disembark_positions(tr, unit)
+	if spots.is_empty():
+		_disembark_unit(unit)   # no legal formation — the direct path owns its fallback chain
+		return
+	# The auto-formation as a cursor-relative SHAPE (chain order = assignment order).
+	var centroid := Vector3.ZERO
+	for p in spots:
+		centroid += p as Vector3
+	centroid /= float(spots.size())
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		chain.append_array(unit.get_attached_heroes())
+	var radii: Array = []
+	for c in chain:
+		var member := c as GameUnit
+		if member == null:
+			continue
+		for m in member.get_alive_models():
+			var sh := SeparationChecker.shape_for_model(m as ModelInstance)
+			radii.append(sh.bounding_radius() if sh != null else SeparationChecker.DEFAULT_BASE_RADIUS_M)
+	var shape: Array = []
+	for i in range(mini(spots.size(), radii.size())):
+		var sp := spots[i] as Vector3
+		shape.append({"off": Vector2(sp.x - centroid.x, sp.z - centroid.z), "r": radii[i]})
+	# Zone + blockers + bounds for the live validation.
+	var t_model: ModelInstance = null
+	for tm in tr.get_alive_models():
+		if (tm as ModelInstance).node != null and is_instance_valid((tm as ModelInstance).node):
+			t_model = tm as ModelInstance
+			break
+	if t_model == null:
+		_disembark_unit(unit)
+		return
+	var t_shape := SeparationChecker.shape_for_model(t_model)
+	var t_r: float = t_shape.bounding_radius() if t_shape != null else SeparationChecker.DEFAULT_BASE_RADIUS_M
+	var zone_m: float = OPRArmyManager.DISEMBARK_ZONE_IN * 0.0254 + t_r
+	var blockers: Array = []
+	for g in army_manager.get_all_game_units():
+		var gu := g as GameUnit
+		if gu == null or chain.has(gu) or SoloController.unit_in_reserve(gu):
+			continue
+		for m2 in gu.get_alive_models():
+			var mi2 := m2 as ModelInstance
+			if mi2.node != null and is_instance_valid(mi2.node) and not bool(mi2.node.get_meta("embarked", false)):
+				var s2 := SeparationChecker.shape_for_model(mi2)
+				blockers.append({"p": mi2.node.global_position,
+					"r": (s2.bounding_radius() if s2 != null else SeparationChecker.DEFAULT_BASE_RADIUS_M)})
+	var bounds := Rect2(-1000.0, -1000.0, 2000.0, 2000.0)
+	var main_node := get_node_or_null("/root/Main")
+	if main_node != null and main_node.get("table") != null:
+		var w: float = main_node.table.table_size.x * 0.3048
+		var dd: float = main_node.table.table_size.y * 0.3048
+		bounds = Rect2(-w / 2.0, -dd / 2.0, w, dd)
+	var zone_c: Vector3 = t_model.node.global_position
+	var ghost := PlacementGhost.new()
+	add_child(ghost)
+	ghost.begin(shape, PlacementGhost.circle_zone(zone_c, zone_m), blockers, bounds,
+		func(positions: Array) -> void: _disembark_unit(unit, positions),
+		func() -> void: _transport_log("%s stays inside %s (placement cancelled)" % [
+			str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))]))
+
+
+func _disembark_unit(unit: GameUnit, override_spots: Array = []) -> void:
+	if unit == null or army_manager == null:
+		return
+	var tr := army_manager.transport_of(unit)
+	if tr == null:
+		return
+	if not _transport_activation_open(unit, "disembark"):
+		return
+	if army_manager.set_unit_embarked(unit, null, false, Vector3.INF, override_spots):
 		if network_manager:
 			network_manager.broadcast_unit_embark(unit.unit_id, tr.unit_id, false)
-		_transport_log("%s disembarks from %s — GF v3.5.1 Transport" % [
-			str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))])
+			# #210: a ghost-placed exit uses PLAYER spots — the remote side auto-placed on the
+			# embark message, so correct it with the real positions (same path a drag syncs).
+			if not override_spots.is_empty() and network_manager.is_multiplayer_active():
+				var sync_chain: Array = [unit]
+				if unit.has_method("get_attached_heroes"):
+					sync_chain.append_array(unit.get_attached_heroes())
+				for c in sync_chain:
+					var member := c as GameUnit
+					if member == null:
+						continue
+					for m in member.get_alive_models():
+						var n: Node3D = (m as ModelInstance).node
+						if n != null and is_instance_valid(n) and n.has_meta("network_id"):
+							network_manager.broadcast_move(n.get_meta("network_id"), n.global_position)
+		# #209 correction (maintainer rules check): exiting is "any move action" (p.15) and an
+		# ADVANCE may shoot after moving (p.7) — so the exit leaves the shot window OPEN. The
+		# activation ends the normal way (the shot, or the player's hand-over); what the round
+		# forbids is embarking again (gate above). Only the exit round is stamped here.
+		if _activation_economy_on():
+			unit.unit_properties["disembarked_round"] = army_manager.current_round
+			_transport_log("%s disembarks from %s (Advance exit, fully within 6\") — it may still shoot this activation (GF v3.5.1 p.7/p.15)" % [
+				str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))])
+		else:
+			_transport_log("%s disembarks from %s — GF v3.5.1 Transport" % [
+				str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))])
+
+
+## #209 — whether a solo game's activation economy is running. Embark/disembark are "any move
+## action" then (GF v3.5.1 p.15), so they consume the acting unit's activation; in the free
+## sandbox (and during deployment's reserve loading) nothing is consumed, like dice and rulers.
+func _activation_economy_on() -> bool:
+	if army_manager != null and army_manager.is_deployment_phase():
+		return false
+	var main_node := get_node_or_null("/root/Main")
+	return main_node != null and main_node.has_method("_solo_alternation_active") \
+			and main_node._solo_alternation_active()
+
+
+## The unit may still spend its activation on a transport move (#209). Refusal is logged —
+## a silently dead menu entry reads as a bug.
+func _transport_activation_open(unit: GameUnit, verb: String) -> bool:
+	if not _activation_economy_on() or not unit.is_activated:
+		return true
+	_transport_log("%s has already activated this round — %s is a move action (GF v3.5.1 p.15)" % [
+		str(unit.unit_properties.get("name", "unit")), verb])
+	return false
+
+
+## #209 — the transport move WAS the unit's activation: mark it, say it, and hand over (the
+## same unit_activated signal the attack flow emits, so the AI's reply turn runs).
+func _consume_transport_activation(unit: GameUnit, verb: String) -> void:
+	if not _activation_economy_on() or unit.is_activated:
+		return
+	unit.activate(army_manager.current_round if army_manager != null else 1)
+	_transport_log("%s spends its activation to %s (any move action — GF v3.5.1 p.15)" % [
+		str(unit.unit_properties.get("name", "unit")), verb])
+	unit_activated.emit(unit)
 
 
 func _transport_log(msg: String) -> void:
@@ -2409,8 +2663,14 @@ func _transport_log(msg: String) -> void:
 
 
 ## NML-105 — the destroyed-transport spill's VISIBLE half (state happened in the army manager):
-## Shaken marker + MP marker broadcast per spilled unit, and the rules-must-log line naming the
-## player's remaining dice duty (the dangerous-terrain test stays a hand roll in sandbox play).
+## Shaken marker + MP marker broadcast per spilled unit, and the rules-must-log line.
+##
+## NML-954: the maintainer asked why the game makes HIM roll the dangerous terrain test. It does,
+## and it is right to — but the old line only ordered the roll without saying which rule ordered
+## it, so the demand read as a quirk of the app instead of as the first of the rule's three. The
+## line now QUOTES Transport and names all three consequences in the order the rule lists them,
+## and it says who rolls: NACHTMAHR's own cargo is rolled by the engine (nobody else can), yours
+## stays in your hand like every other dangerous terrain test in the game.
 func _on_transport_cargo_spilled(transport: GameUnit, spilled: Array) -> void:
 	for u in spilled:
 		var unit := u as GameUnit
@@ -2419,5 +2679,18 @@ func _on_transport_cargo_spilled(transport: GameUnit, spilled: Array) -> void:
 		_update_shaken_markers(unit)
 		if network_manager:
 			network_manager.broadcast_unit_marker(unit, "ShakenMarker", true)
-		_transport_log("%s is destroyed — %s spills out: placed within 6\", is SHAKEN; take a Dangerous Terrain test now (GF v3.5.1 Transport)" % [
-			str(transport.unit_properties.get("name", "transport")), str(unit.unit_properties.get("name", "unit"))])
+		var dice_duty := "NACHTMAHR rolls its test now (one die per model, Tough(X) rolls X — p.12)" \
+			if _is_ai_unit(unit) else "take a Dangerous Terrain test now (one die per model, Tough(X) rolls X, a 1 wounds — p.12)"
+		_transport_log(("%s is destroyed — GF v3.5.1 Transport: \"units inside must take a dangerous terrain test, " \
+			+ "are Shaken, and must be placed fully within 6\" of the transport before it's removed\". " \
+			+ "%s: placed fully within 6\" of the wreck, is SHAKEN, %s") % [
+			str(transport.unit_properties.get("name", "transport")),
+			str(unit.unit_properties.get("name", "unit")), dice_duty])
+
+
+## Whether a unit belongs to the solo AI — asked through the same /root/Main hop
+## _activation_economy_on() uses, so this controller keeps knowing nothing about solo internals.
+func _is_ai_unit(unit: GameUnit) -> bool:
+	var main_node := get_node_or_null("/root/Main")
+	return main_node != null and main_node.has_method("_solo_is_ai_unit") \
+			and bool(main_node._solo_is_ai_unit(unit))

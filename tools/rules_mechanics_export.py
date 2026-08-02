@@ -72,6 +72,8 @@ PRIMITIVE_PARAMS = {
     "Artillery": {"shooter_hit_bonus": 1, "target_hit_penalty": 2, "over_in": 9.0, "hold_only": True},
     "Immobile": {"hold_only": True},
     "Regeneration": {"ignore_target": 5},
+    # Reanimation (army-book): one die per missing model/wound at activation, each 5+ restores one.
+    "Reanimation": {"restore_target": 5, "coherency_required": True},
     "Self-Repair": {"ignore_target": 6, "all_models": True},
     # Resistance (AoF/GF army-book rule — official Army Forge text: "When a unit where all
     # models have this rule takes wounds, roll one die for each. On a 6+ it is ignored. If the
@@ -313,6 +315,40 @@ WAVE5_PRIMITIVES = {
     "Strafing": "Strafing",
     # AI plausibility wave 1: Aircraft (system-scoped below — GF only).
     "Aircraft": "Aircraft",
+    # 2026-07-31: Reanimation — on activation, roll one die per missing model/wound; each 5+ buys one
+    # back (coherency-gated placement). Its carrier upgrade "Reanimation Aura" stays an aura-grant
+    # entry: the import expands it onto the unit, which then answers to this primitive.
+    "Reanimation": "Reanimation",
+}
+
+# Rules the registry still files as "planned" (mechanic documented, no resolver) whose resolver has
+# SINCE shipped in the game. Without this bridge entry_for() would keep nulling the primitive and the
+# rule would stay listed as manual work in the battle log's inventory. Same seam as WAVE5_PRIMITIVES:
+# the registry sync tool clears these when it next re-runs.
+SHIPPED_PLANNED = {
+    "Reanimation",
+    "Caster Group",
+    "Spell Accumulator",
+    # Ambush variants, wave 1 (2026-07-31). All three already carry mechanic.primitive "Ambush"
+    # plus their own params in the registry ({beacon_in}, {arrive_from_round}, {re_reserve,
+    # uses_per_game}) — only the "planned" status kept nulling them. The resolvers ship with this
+    # wave (SoloController.beacon_cover / may_arrive_this_round / ambush_redeploy_withdraw).
+    "Ambush Beacon",
+    "Rapid Ambush",
+    "Ambush Re-Deployment",
+    # Wave 4 (2026-08-01). Both carry mechanic.primitive + their own params in the registry
+    # ("Extended Buff Range" {relay_range_in, pick_range_in, requires_hero, excludes_spells,
+    # hero_link_in} and "Coordinate" {range_in, no_chain}); only the "planned" status kept
+    # nulling them. The resolvers ship with this wave (main._solo_utility_targets' relay waiver
+    # and SoloController.coordinate_candidates / main._solo_try_coordinate_*).
+    "Extended Buff Range",
+    "Coordinate",
+    # Wave 5 (2026-08-01). 73 occurrences across 21 books and all five systems — the largest single
+    # open rule. The registry entry carries primitive "Pass Turn" (the alternation's new pass step;
+    # Combat Hesitation, GF Advanced v3.5.1 p.41, is the dice-gated sister of the same primitive)
+    # plus {uses_per_round, requires_opponent_surplus}; only the "planned" status kept nulling it.
+    # Resolvers: SoloController.delayed_action_* / main._solo_pass_turn.
+    "Delayed Action",
 }
 
 # Primitives that only exist in SOME systems' books: the bridging table above is
@@ -370,7 +406,7 @@ def entry_for(system: str, rule: dict, book_version: str) -> dict:
     primitive = mech.get("primitive") or WAVE5_PRIMITIVES.get(name)
     # Coverage wave: a "planned" entry documents the intended mechanic but has NO resolver yet —
     # it must NOT emit as automated (the manual notice stays visible until the resolver ships).
-    if rule.get("status") == "planned":
+    if rule.get("status") == "planned" and name not in SHIPPED_PLANNED:
         primitive = None
     allowed_systems = SYSTEM_SCOPED_PRIMITIVES.get(name)
     if allowed_systems is not None and system not in allowed_systems:

@@ -76,28 +76,28 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   onboarding items live in **Ideas**. _S–M_
 - **Solo rules automation — resolver waves B + C** — `0.3.10.0-alpha` automates hundreds of rules; the
   families that need their own resolver step are honestly still manual, and the per-unit battle-log
-  notice names them. The complete remainder is **thirteen rule names** (everything else in the books is
-  modeled — plain *Re-Deployment* and *Grounded Reinforcement* included):
-  - **Wave B — caster economy + unit creation:** **Spell Accumulator**, **Caster Group**, **Extended
-    Buff Range**, **Spawn**, **Split**, **Reinforcement**, **Reanimation**. These create, return or
-    re-point units, so they touch the AI's round plan, not just the dice. _M–L_
-  - **Wave C — movement / deployment:** **Coordinate**, **Delayed Action**, **Traversal**, **Ambush
-    Beacon**, **Ambush Re-Deployment**, **Rapid Ambush**. _M_
-- **Selectable AI difficulty grades** — `0.3.10.0-alpha` ships exactly one grade (NACHTMAHR at full
-  strength); the difficulty selector is out of the solo panel and every legacy grade name maps to it.
-  Bringing weaker personas back means re-validating each knob set on the self-play ladder so a lower
-  grade is *weaker but never illegal* — the AI must keep playing by the book and never cheat at any
-  grade. _M_
-- **Transports — stage 2 (AI doctrine)** — stage 1 (state, capacity, embark/disembark, destruction
-  spill, MP sync, save 1.7) shipped in `0.3.10.0-alpha`; the AI side of the official Solo & Co-Op
-  doctrine is open: seeded random loading at deployment, the transport activating before its cargo in
-  round 1, the mandatory disembark on the cargo's first activation (with a log line when it is not
-  possible), and transports as targets in the AI's target/EV selection. _M_
-- **Co-op vs the AI** — solo is single-player today: one human against NACHTMAHR. Co-op means two or
-  more humans sharing a side against the AI over the existing relay — the AI turn has to run
-  host-authoritatively and its dice, prompts and battle-log lines have to reach every guest identically,
-  including a mid-game reconnect. _L_
-
+  notice names them. The complete remainder is **three rule names** (everything else in the books is
+  modeled — plain *Re-Deployment*, *Grounded Reinforcement*, *Reanimation*, *Reinforcement*,
+  *Caster Group*, *Spell Accumulator*, all three Ambush variants and the wave-4 pair included):
+  - **Wave B — caster economy + unit creation:** **Spawn**, **Split**. These
+    create, return or
+    re-point units, so they touch the AI's round plan, not just the dice. **Reanimation** shipped:
+    models and wounds return on activation (one die per missing wound, 5+, coherency-gated);
+    **Reinforcement** shipped: a unit where every model carries the rule can be pulled off the table
+    as destroyed while Shaken or once fully destroyed, and a full-strength copy returns within 12″ of
+    any table edge at the start of the next round (after Ambush arrivals), unable to seize or contest
+    objectives that round and stripped of the rule. **Caster Group** and **Spell Accumulator** were
+    bridged into the registry — their engine code had shipped long before the data said so.
+    **Extended Buff Range shipped** (wave 4): a Hero's
+    within-12″ buff rules reach a friendly carrier up to 24″ away (base edge to base edge) through
+    exactly one relay hop, spells excluded, every application and refusal logged. _M–L_
+  - **Wave C — movement / deployment:** **Traversal**. **Delayed Action shipped** (wave 5): the new "Pass Turn" primitive — once per round a carrier may pass the turn while the opponent has strictly more units left, every pass and refusal logged. The three
+    **Ambush variants shipped** (wave 1): *Ambush Beacon* waives every enemy distance restriction
+    within 6″ of the beacon model, *Rapid Ambush* arrives from round 1 as a round-start beat, and
+    *Ambush Re-Deployment* takes a unit off the table once per game and brings it back exactly one
+    round later. **Coordinate shipped** (wave 4): the hand-off activates an un-activated friend
+    within 12″ immediately, never chains past two activations, and leaves the alternation ledger
+    untouched. _M_
 ### Alpha-feedback batch (accepted 2026-07-01) — sorted Now vs soon
 
 > **✅ Shipped in `0.3.7.2-alpha`:** dice-log live-scroll, deployment-zone colour flip, cursor/avatar
@@ -229,7 +229,21 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 
 ## ✅ Recently shipped
 
-See [`CHANGELOG.md`](../CHANGELOG.md). **`0.3.10.0-alpha`:** the solo update — **NACHTMAHR**, the built-in
+See [`CHANGELOG.md`](../CHANGELOG.md).
+
+**`0.3.10.1-alpha` (2026-07-29):** the community hotfix wave from the first days of public play —
+**multiplayer**: a slot a connected human occupies can never be driven by the solo automation
+([#196](../../issues/196)); deployment zones reach the guest and stop flashing (geometry host-synced,
+visibility/colour-flip strictly local, [#194](../../issues/194)/[#195](../../issues/195)). **Movement**:
+`Ctrl`+`Z` **movement take-back** (position, facing, chalk + inch proof, MP-synced, [#162](../../issues/162));
+mid-drag corrections refund inside your own chalk ribbon ([#191](../../issues/191)). **Solo**: click-based
+**wound allocation** when the choice matters ([#172](../../issues/172)); Ambush transports load cargo during
+deployment ([#160](../../issues/160)); Indirect fire without LOS for human players ([#182](../../issues/182));
+Surge/Blast/7+-save log lines ([#193](../../issues/193)/[#169](../../issues/169)/[#173](../../issues/173));
+the AI turn keeps the frame loop alive ([#163](../../issues/163)); the dice tray names what each roll is
+about ([#170](../../issues/170)); draggable deployment control box ([#159](../../issues/159)).
+
+**`0.3.10.0-alpha`:** the solo update — **NACHTMAHR**, the built-in
 opponent (rules-based, deterministic, fully offline; one difficulty, full strength) with alternating
 activations, its own objective-marker scoring, round plans and look-ahead activation ordering, and a
 battle log that explains every decision; the **AI Opponent** button (NACHTMAHR brings its own list —

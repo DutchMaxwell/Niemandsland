@@ -245,6 +245,46 @@ func _build_ui() -> void:
 			GraphicsSettings.save_settings())
 	vbox.add_child(trails_cb)
 
+	# Show Rule Texts (transparency stage 2): the floats' discoverable switch — the
+	# maintainer's release pass could not find the toggle because only the setting existed.
+	var floats_cb := CheckButton.new()
+	floats_cb.text = "Show Rule Texts at the Table"
+	floats_cb.button_pressed = GraphicsSettings.show_rule_floats
+	floats_cb.toggled.connect(func(on: bool) -> void:
+		GraphicsSettings.show_rule_floats = on
+		GraphicsSettings.save_settings()
+		var rf := get_node_or_null("/root/Main/FloatingRuleText")
+		if rf != null:
+			rf.enabled = on)
+	vbox.add_child(floats_cb)
+
+	# Pacing grill 31.07.: the combat stage's discoverable switch + its beat length.
+	var stage_cb := CheckButton.new()
+	stage_cb.text = "Combat Stage (paces the resolution)"
+	stage_cb.button_pressed = GraphicsSettings.show_combat_stage
+	stage_cb.toggled.connect(func(on: bool) -> void:
+		GraphicsSettings.show_combat_stage = on
+		GraphicsSettings.save_settings())
+	vbox.add_child(stage_cb)
+	var beat_row := HBoxContainer.new()
+	beat_row.add_theme_constant_override("separation", 8)
+	var beat := HSlider.new()
+	beat.min_value = 1.0
+	beat.max_value = 6.0
+	beat.step = 0.5
+	beat.value = GraphicsSettings.combat_stage_hold_s
+	beat.custom_minimum_size = Vector2(140, 0)
+	beat.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	beat_row.add_child(beat)
+	var beat_lbl := Label.new()
+	beat_lbl.text = "Stage beat: %.1fs" % GraphicsSettings.combat_stage_hold_s
+	beat_row.add_child(beat_lbl)
+	beat.value_changed.connect(func(v: float) -> void:
+		GraphicsSettings.combat_stage_hold_s = v
+		beat_lbl.text = "Stage beat: %.1fs" % v
+		GraphicsSettings.save_settings())
+	vbox.add_child(beat_row)
+
 	# Enforce Movement Limit (path-painting "dry brush"): Strict = a movement drag hard-stops
 	# at the model's max legal band; off = Casual (free drag). DEFAULT ON. Persisted. Movement
 	# only — shooting and other actions are never gated. English-only, like the rest of the UI.
@@ -256,6 +296,18 @@ func _build_ui() -> void:
 		GraphicsSettings.enforce_movement_limit = on
 		GraphicsSettings.save_settings())
 	vbox.add_child(limit_cb)
+
+	# NML-955: AI EXPLANATION toasts (which unit NACHTMAHR picked, what it shot, what the roll did)
+	# stay up until the next event replaces them or you click them away. DEFAULT ON. Persisted.
+	# Operational notices (export path, autosave) always fade — this switch does not reach them.
+	var explain_cb := CheckButton.new()
+	explain_cb.text = "AI Explanations Stay Up"
+	explain_cb.tooltip_text = "On: NACHTMAHR's explanation stays on screen until the next event replaces it or you click it away. Off: it fades after a few seconds. Operational notices (export path, autosave) always fade."
+	explain_cb.button_pressed = GraphicsSettings.ai_explain_persistent
+	explain_cb.toggled.connect(func(on: bool) -> void:
+		GraphicsSettings.ai_explain_persistent = on
+		GraphicsSettings.save_settings())
+	vbox.add_child(explain_cb)
 
 
 ## UI Scale slider (content_scale_factor) — reachability/HiDPI. Bound to GraphicsSettings.

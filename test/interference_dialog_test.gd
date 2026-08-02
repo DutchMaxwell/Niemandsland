@@ -17,3 +17,9 @@ func test_boost_preview_improves_target() -> void:
 	assert_str(InterferenceDialog.format_preview_boost(4, 0, 2)).is_equal("Cast roll: 4+ → 2+   (success 50% → 83%)")
 	# Gegen bekannte Interferenz 1: Boost 1 stellt 5+ zurück auf 4+.
 	assert_str(InterferenceDialog.format_preview_boost(4, 1, 1)).is_equal("Cast roll: 5+ → 4+   (success 33% → 50%)")
+
+# ===== Spotter UX (maintainer 31.07.) — the spot mode's preview line =====
+
+func test_spot_preview_names_the_hit_bonus() -> void:
+	assert_str(InterferenceDialog.format_preview_spot(2)).is_equal("+2 to hit on this volley")
+	assert_str(InterferenceDialog.format_preview_spot(0)).contains("markers stay")

@@ -4,6 +4,16 @@ extends GdUnitTestSuite
 ## human unit by its Advance distance and is marked activated.
 
 
+## NML-902 — this suite asserts EXACT planner geometry (e.g. the hero-carry offset), and
+## MovementPlanner.fast_planner is a process-wide STATIC that main._ensure_solo_controller
+## flips to true. Any e2e suite that boots the real scene earlier in the same run would
+## otherwise leak the bounded planner in here and shift the numbers (~1.8 cm on the hero
+## slide). Pin the statics this suite depends on — order-independence is the suite's job.
+func before_test() -> void:
+	MovementPlanner.fast_planner = false
+	MovementPlanner.fast_planner_guard = MovementPlanner.FAST_PLANNER_GUARD
+
+
 func test_nearest_index_picks_the_closest_table_plane() -> void:
 	var from := Vector3.ZERO
 	assert_int(SoloController.nearest_index(from, [Vector3(10, 0, 0), Vector3(1, 0, 0), Vector3(5, 0, 0)])).is_equal(1)
@@ -90,9 +100,14 @@ func test_targeting_prefers_a_not_yet_activated_human_over_a_nearer_activated_on
 	add_child(solo)
 	solo.setup(army, null, null, 1, 2)
 	assert_object(solo.nearest_human_unit(ai)).is_equal(far_fresh)
+	# Community #164 narration flag: this pick walked PAST a nearer already-activated enemy —
+	# exactly the case the battle log must explain ("hits it before it acts").
+	assert_bool(solo.last_target_passed_activated).is_true()
 	# If ALL humans are activated, fall back to the nearest.
 	far_fresh.is_activated = true
 	assert_object(solo.nearest_human_unit(ai)).is_equal(near_active)
+	# Plain nearest pick: no passed-enemy story, the tag must stay silent.
+	assert_bool(solo.last_target_passed_activated).is_false()
 
 
 func test_run_ai_turn_activates_every_eligible_ai_unit() -> void:
@@ -118,6 +133,7 @@ func test_ambush_reserve_arrives_round_two_and_empties() -> void:
 	var ambusher := _unit(2, [Vector3(3, 0, 3)])        # held in reserve (staging position)
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
 	army.game_units = {enemy.unit_id: enemy, ambusher.unit_id: ambusher}
+	army.current_round = 2   # base Ambush arrives from round 2 (p.13) — the arrival gate reads this
 
 	var solo: SoloController = auto_free(SoloController.new())
 	add_child(solo)
@@ -142,6 +158,7 @@ func test_repel_ambushers_pushes_the_arrival_ring_to_12_inches() -> void:
 	var ambusher := _unit(2, [Vector3(3, 0, 3)])
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
 	army.game_units = {enemy.unit_id: enemy, ambusher.unit_id: ambusher}
+	army.current_round = 2
 	var solo: SoloController = auto_free(SoloController.new())
 	add_child(solo)
 	solo.setup(army, null, null, 1, 2)
@@ -197,6 +214,140 @@ func test_seize_objectives_skips_ambush_units_on_their_arrival_round() -> void:
 	assert_int(int((SoloController.seize_objectives(locked, obj, [0])["owners"] as Array)[0])).is_equal(0)
 	var free: Array = [{"player": 2, "shaken": false, "ambush_locked": false, "positions": [Vector3(0, 0, 0)]}]
 	assert_int(int((SoloController.seize_objectives(free, obj, [0])["owners"] as Array)[0])).is_equal(2)
+
+
+# === Ambush variants, wave 1 (Ambush Beacon / Rapid Ambush / Ambush Re-Deployment) ============
+
+const INCH_M := 0.0254
+
+
+## The prefix trap that made this wave necessary: GameUnit.has_special_rule matches by PREFIX, so a
+## beacon or re-deployment carrier answered TRUE to "Ambush" and unit_has_ambush pulled it off the
+## table into reserve although both deploy normally. unit_carries_rule matches EXACTLY.
+func test_rule_detection_is_exact_and_rapid_ambush_is_the_only_alias() -> void:
+	var beacon := _unit(2, [Vector3.ZERO])
+	beacon.unit_properties["special_rules"] = ["Ambush Beacon"]
+	assert_bool(beacon.has_special_rule("Ambush")) \
+		.override_failure_message("fixture check — the prefix reader must still answer true here") \
+		.is_true()
+	assert_bool(SoloController.unit_carries_rule(beacon, "Ambush")).is_false()
+	assert_bool(SoloController.unit_carries_rule(beacon, SoloController.RULE_AMBUSH_BEACON)).is_true()
+	assert_bool(SoloController.unit_has_ambush(beacon)) \
+		.override_failure_message("a beacon carrier deploys NORMALLY — it must never be set aside") \
+		.is_false()
+
+	var redeploy := _unit(2, [Vector3.ZERO])
+	redeploy.unit_properties["special_rules"] = ["Ambush Re-Deployment"]
+	assert_bool(SoloController.unit_has_ambush(redeploy)) \
+		.override_failure_message("Re-Deployment carriers deploy normally and leave LATER") \
+		.is_false()
+
+	# Rapid Ambush "counts as having Ambush" — the one true alias, item-granted included.
+	var rapid := _unit(2, [Vector3.ZERO])
+	rapid.unit_properties["special_rules"] = ["Rapid Ambush"]
+	assert_bool(SoloController.unit_has_ambush(rapid)).is_true()
+	var granted := _unit(2, [Vector3.ZERO])
+	granted.unit_properties["item_grants"] = {"Teleport Relay": ["Rapid Ambush"]}
+	assert_bool(SoloController.unit_has_ambush(granted)).is_true()
+	# Ratings are stripped, plain Ambush still counts.
+	var plain := _unit(2, [Vector3.ZERO])
+	plain.unit_properties["special_rules"] = ["Ambush", "Tough(3)"]
+	assert_bool(SoloController.unit_has_ambush(plain)).is_true()
+
+
+## Ambush Beacon (maintainer ruling): within 6" of the beacon MODEL every enemy distance restriction
+## falls away. The pure predicate is the whole waiver — nearest beacon wins, 6" is inclusive.
+func test_beacon_cover_waives_inside_six_inches_only() -> void:
+	var beacons: Array = [{"pos": Vector2.ZERO, "radius_m": 6.0 * INCH_M, "unit": "Relay"}]
+	var inside: Dictionary = SoloController.beacon_cover(Vector2(5.0 * INCH_M, 0.0), beacons)
+	assert_bool(bool(inside["covered"])).is_true()
+	assert_str(str(inside["name"])).is_equal("Relay")
+	assert_float(float(inside["dist_in"])).is_equal_approx(5.0, 0.01)
+	# ROT-Beweis: one inch further out and the SAME machinery refuses the waiver.
+	var outside: Dictionary = SoloController.beacon_cover(Vector2(7.0 * INCH_M, 0.0), beacons)
+	assert_bool(bool(outside["covered"])) \
+		.override_failure_message("7\" is outside the 6\" circle — the waiver must not apply") \
+		.is_false()
+	# Exactly on the rim still counts ("within 6\"").
+	assert_bool(bool(SoloController.beacon_cover(Vector2(6.0 * INCH_M, 0.0), beacons)["covered"])).is_true()
+	# No beacon at all: {} — the caller keeps the normal rings.
+	assert_bool(SoloController.beacon_cover(Vector2.ZERO, []).is_empty()).is_true()
+	# Two beacons: the NEAREST one is reported (it decides the waiver and names the log line).
+	var two: Array = [{"pos": Vector2(1.0, 0.0), "radius_m": 6.0 * INCH_M, "unit": "Far"},
+		{"pos": Vector2(2.0 * INCH_M, 0.0), "radius_m": 6.0 * INCH_M, "unit": "Near"}]
+	assert_str(str(SoloController.beacon_cover(Vector2.ZERO, two)["name"])).is_equal("Near")
+
+
+## The beacon log line names the real distance to the enemy — measured base-edge true (pad_m).
+func test_nearest_enemy_gap_is_edge_true_and_infinite_without_enemies() -> void:
+	var entries: Array = [{"pos": Vector2(10.0 * INCH_M, 0.0), "pad_m": 1.0 * INCH_M}]
+	assert_float(SoloController.nearest_enemy_gap_in(Vector2.ZERO, entries)).is_equal_approx(9.0, 0.01)
+	assert_float(SoloController.nearest_enemy_gap_in(Vector2.ZERO, [Vector2(4.0 * INCH_M, 0.0)])).is_equal_approx(4.0, 0.01)
+	assert_bool(is_inf(SoloController.nearest_enemy_gap_in(Vector2.ZERO, []))).is_true()
+
+
+## Rapid Ambush ("may be deployed at the start of any round, including the first") vs base Ambush
+## (round 2+), and Ambush Re-Deployment's EXACT return date.
+func test_arrival_round_gate_reads_rapid_ambush_and_the_return_date() -> void:
+	var plain := _unit(2, [Vector3.ZERO])
+	plain.unit_properties["special_rules"] = ["Ambush"]
+	assert_int(SoloController.ambush_earliest_round(plain)).is_equal(2)
+	assert_bool(SoloController.may_arrive_this_round(plain, 1)) \
+		.override_failure_message("base Ambush may NOT arrive in round 1 (GF/AoF v3.5.1 p.13)") \
+		.is_false()
+	assert_bool(SoloController.may_arrive_this_round(plain, 2)).is_true()
+
+	var rapid := _unit(2, [Vector3.ZERO])
+	rapid.unit_properties["special_rules"] = ["Rapid Ambush"]
+	assert_int(SoloController.ambush_earliest_round(rapid)).is_equal(1)
+	assert_bool(SoloController.may_arrive_this_round(rapid, 1)).is_true()
+	assert_bool(SoloController.may_arrive_this_round(rapid, 3)).is_true()
+
+	# "deploy it ... at the beginning of the NEXT round": exactly that round, not earlier, not later.
+	var back := _unit(2, [Vector3.ZERO])
+	back.unit_properties["special_rules"] = ["Rapid Ambush"]   # even a rapid carrier waits for its date
+	back.unit_properties["ambush_return_round"] = 3
+	assert_bool(SoloController.may_arrive_this_round(back, 2)).is_false()
+	assert_bool(SoloController.may_arrive_this_round(back, 3)).is_true()
+	assert_bool(SoloController.may_arrive_this_round(back, 4)) \
+		.override_failure_message("the return date is exact — a missed round does not become a free choice") \
+		.is_false()
+
+
+## "a unit where ALL models have this rule" — a joined hero without it locks the whole unit out.
+func test_ambush_redeployment_needs_the_rule_on_every_model_and_once_per_game() -> void:
+	var jesters := _unit(2, [Vector3.ZERO, Vector3(0.05, 0, 0)])
+	jesters.unit_properties["special_rules"] = ["Ambush Re-Deployment"]
+	assert_bool(SoloController.unit_all_models_ambush_redeploy(jesters)).is_true()
+	assert_bool(SoloController.can_ambush_redeploy(jesters)).is_true()
+
+	var hero := _unit(2, [Vector3(0.1, 0, 0)])
+	hero.unit_properties["special_rules"] = ["Hero"]
+	jesters.unit_properties["attached_heroes"] = [hero]
+	assert_bool(SoloController.unit_all_models_ambush_redeploy(jesters)) \
+		.override_failure_message("a joined hero WITHOUT the rule breaks the 'all models' quantifier") \
+		.is_false()
+	assert_bool(SoloController.can_ambush_redeploy(jesters)).is_false()
+	# The same hero WITH the rule re-opens it.
+	hero.unit_properties["special_rules"] = ["Hero", "Ambush Re-Deployment"]
+	assert_bool(SoloController.can_ambush_redeploy(jesters)).is_true()
+
+	# Once per game, and never while already off the table.
+	jesters.unit_properties["ambush_redeploy_used"] = true
+	assert_bool(SoloController.can_ambush_redeploy(jesters)).is_false()
+	jesters.unit_properties["ambush_redeploy_used"] = false
+	jesters.unit_properties["ambush_reserve"] = true
+	assert_bool(SoloController.can_ambush_redeploy(jesters)).is_false()
+
+
+## The AI's documented withdraw heuristic: leave when under pressure, never off a held marker.
+func test_ambush_redeployment_ai_policy_leaves_under_pressure_but_never_off_a_marker() -> void:
+	assert_bool(SoloController.ambush_redeploy_ai_wants(6.0, false, false)).is_true()    # enemy in the charge band
+	assert_bool(SoloController.ambush_redeploy_ai_wants(30.0, false, true)).is_true()    # Shaken far away
+	assert_bool(SoloController.ambush_redeploy_ai_wants(30.0, false, false)).is_false()  # safe → stay
+	assert_bool(SoloController.ambush_redeploy_ai_wants(2.0, true, true)) \
+		.override_failure_message("walking off a held marker throws the mission — never worth it") \
+		.is_false()
 
 
 ## Field-test finding 6: cover feeds the EV from REAL terrain, not a constant. majority_in_cover reads the
@@ -664,6 +815,20 @@ func test_presentation_start_positions_returns_route_starts() -> void:
 	assert_array(S.presentation_start_positions([])).is_empty()
 
 
+func test_should_snap_move_only_below_one_inch_and_only_when_allowed() -> void:
+	var S := SoloController
+	var inch: float = S.INCHES_TO_METERS
+	# Sub-inch kite steps snap (NML-224 visual): just under the threshold → snap.
+	assert_bool(S.should_snap_move(0.9 * inch, true)).is_true()
+	# At and above the threshold the move must GLIDE — ordinary advances stay animated.
+	assert_bool(S.should_snap_move(1.0 * inch, true)).is_false()
+	assert_bool(S.should_snap_move(6.0 * inch, true)).is_false()
+	# NML-208: pile-in/consolidation callers forbid snapping even for sub-inch arcs.
+	assert_bool(S.should_snap_move(0.5 * inch, false)).is_false()
+	# Degenerate zero-length input never snaps into an animation problem either way.
+	assert_bool(S.should_snap_move(0.0, true)).is_true()
+
+
 # === Human Ambush reserves (field-test finding 5: the game must ASK) ===
 
 func test_should_prompt_human_ambush_only_from_round_two_with_reserves() -> void:
@@ -672,6 +837,10 @@ func test_should_prompt_human_ambush_only_from_round_two_with_reserves() -> void
 	assert_bool(S.should_prompt_human_ambush(2, 0)).is_false()   # round 2 but nothing held
 	assert_bool(S.should_prompt_human_ambush(2, 1)).is_true()    # round 2 with a reserve → ASK
 	assert_bool(S.should_prompt_human_ambush(4, 3)).is_true()    # any later round too
+	# Rapid Ambush ("including the first"): a round-1 prompt is owed as soon as ONE carrier waits —
+	# but only for the carrier, and never with an empty reserve.
+	assert_bool(S.should_prompt_human_ambush(1, 2, 1)).is_true()
+	assert_bool(S.should_prompt_human_ambush(1, 0, 1)).is_false()
 
 
 func test_set_aside_human_ambush_marks_only_the_humans_ambush_units() -> void:
@@ -1864,3 +2033,1125 @@ func test_gate_nudge_never_stretches_a_trail_past_the_band() -> void:
 	# resolvable for free: the mover stayed within its slack circle around the planned endpoint.
 	assert_bool(solo._gate_clamped_models.size() > 0).is_true()
 	assert_float(SoloController._xz_dist_m(gated[0] as Vector3, planned) / m).is_less_equal(SoloController.GATE_SLACK_EPS_IN + 0.02)
+
+
+func test_embarked_cargo_is_not_eligible_for_activation() -> void:
+	# S1.5 (community #160): cargo parked inside a transport must neither be activatable nor
+	# count toward the round-over check — a phantom eligible unit would stall the alternation
+	# forever (the round waits for an activation nobody can perform).
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	human.unit_id = "human"
+	var apc := _unit(2, [Vector3(0.5, 0, 0)])
+	apc.unit_id = "apc"
+	var cargo := _unit(2, [Vector3(0.6, 0, 0)])
+	cargo.unit_id = "cargo"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, apc.unit_id: apc, cargo.unit_id: cargo}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_int(solo.eligible_ai_units().size()).is_equal(2)
+	# #230 update: the AI's OWN cargo stays eligible — its activation IS the mandatory
+	# first-activation disembark (official Solo rules p.58)…
+	cargo.unit_properties["embarked_in"] = "apc"   # parked inside the APC (state layer)
+	assert_int(solo.eligible_ai_units().size()).is_equal(2)
+	assert_bool(solo.is_eligible(cargo)).is_true()
+	# …while HUMAN cargo keeps the S1.5 exclusion (it exits via the radial; phantom
+	# eligibility would stall the round-over check forever).
+	var h_cargo := _unit(1, [Vector3(0.1, 0, 0)])
+	h_cargo.unit_id = "h_cargo"
+	army.game_units["h_cargo"] = h_cargo
+	h_cargo.unit_properties["embarked_in"] = "apc"
+	assert_bool(solo.is_eligible(h_cargo)).is_false()
+
+
+func test_cargo_defers_until_its_transport_has_acted() -> void:
+	# TC-081 (maintainer 31.07.): activating cargo before its ride moved wastes the lift —
+	# the mandatory first-activation disembark would exit at the deployment spot.
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	human.unit_id = "human"
+	var apc := _unit(2, [Vector3(0.5, 0, 0)])
+	apc.unit_id = "apc"
+	var cargo := _unit(2, [Vector3(0.6, 0, 0)])
+	cargo.unit_id = "cargo"
+	cargo.unit_properties["embarked_in"] = "apc"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, apc.unit_id: apc, cargo.unit_id: cargo}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	# Both are eligible, but the pick must be the TRANSPORT — deterministically, despite the
+	# D6-section randomness, because the deferral leaves it alone in the pool.
+	assert_object(solo._select_ai_unit([apc, cargo])) \
+		.override_failure_message("TC-081 — cargo must wait: the un-activated transport has to act first") \
+		.is_same(apc)
+	# The wait is explainable: one decision record names it.
+	var waits := 0
+	for r in solo.decision_log:
+		if str((r as Dictionary).get("chosen", "")).begins_with("waits inside"):
+			waits += 1
+	assert_int(waits).is_equal(1)
+	# Once the transport has acted, the cargo is next in line.
+	apc.is_activated = true
+	assert_bool(solo._cargo_should_wait_for_ride(cargo)).is_false()
+	assert_object(solo._select_ai_unit([cargo])).is_same(cargo)
+
+
+func test_cargo_deferral_never_stalls_when_only_cargo_is_left() -> void:
+	var apc := _unit(2, [Vector3(0.5, 0, 0)])
+	apc.unit_id = "apc"
+	var cargo := _unit(2, [Vector3(0.6, 0, 0)])
+	cargo.unit_id = "cargo"
+	cargo.unit_properties["embarked_in"] = "apc"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {apc.unit_id: apc, cargo.unit_id: cargo}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	# The ride is gone mid-round: the deferral must yield, not stall the alternation.
+	for m in apc.models:
+		(m as ModelInstance).is_alive = false
+	assert_bool(solo._cargo_should_wait_for_ride(cargo)).is_false()
+	assert_object(solo._select_ai_unit([cargo])).is_same(cargo)
+
+
+func test_cargo_of_a_reserve_transport_is_off_table_with_it() -> void:
+	# TC-081 side-fix: cargo rides its transport's reserve (S1.5) — while the ride is set
+	# aside, the cargo must not be activatable (it would disembark at tray coordinates).
+	var apc := _unit(2, [Vector3(0.5, 0, 0)])
+	apc.unit_id = "apc"
+	var cargo := _unit(2, [Vector3(0.6, 0, 0)])
+	cargo.unit_id = "cargo"
+	cargo.unit_properties["embarked_in"] = "apc"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {apc.unit_id: apc, cargo.unit_id: cargo}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	apc.unit_properties["ambush_reserve"] = true
+	assert_bool(solo.is_eligible(cargo)) \
+		.override_failure_message("cargo of a reserve transport leaked into the eligible pool") \
+		.is_false()
+	apc.unit_properties.erase("ambush_reserve")
+	assert_bool(solo.is_eligible(cargo)).is_true()
+
+
+# ===== Stage 3 (transparency): plain-language reasoning =====
+
+func test_plain_action_sentence_reads_like_a_sentence() -> void:
+	var rec := {"kind": "action", "unit": "Raptor Riders", "chosen": "rushes", "why": "decision tree",
+		"data": {"objective": true, "obj_dist_in": 16.7, "enemy_dist_in": 17.4}}
+	assert_str(SoloController.plain_action_sentence(rec)).is_equal("rushes toward the objective (17\" away)")
+	var rec2 := {"kind": "action", "chosen": "advances", "why": "flank: firing position with range and line of sight",
+		"data": {"enemy_dist_in": 12.3}}
+	var s2 := SoloController.plain_action_sentence(rec2)
+	assert_str(s2).contains("advances at the enemy (12\")")
+	assert_str(s2).contains("— flank: firing position")
+
+
+func test_plain_reason_for_finds_the_units_newest_action() -> void:
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	var u := _unit(2, [Vector3.ZERO])
+	u.unit_properties["name"] = "Gators"
+	solo.decision_log.append({"kind": "action", "unit": "Gators", "chosen": "holds", "why": "decision tree", "data": {}})
+	solo.decision_log.append({"kind": "action", "unit": "Others", "chosen": "rushes", "why": "decision tree", "data": {}})
+	assert_str(solo.plain_reason_for(u)).is_equal("holds")
+
+
+# ===== #227 — pick-up-to-N spell targets are the player's clicks =====
+
+func test_cast_pick_step_collects_until_count_or_dry() -> void:
+	var a := _unit(2, [Vector3.ZERO])
+	var b := _unit(2, [Vector3.ZERO])
+	var c := _unit(2, [Vector3.ZERO])
+	var s1: Dictionary = SoloController.cast_pick_step([], 2, [a, b, c], a)
+	assert_bool(bool(s1["done"])) \
+		.override_failure_message("#227 — one pick of a pick-two spell already casts: the engine would choose the 2nd target again") \
+		.is_false()
+	assert_int((s1["picked"] as Array).size()).is_equal(1)
+	assert_bool((s1["valid"] as Array).has(a)).is_false()
+	var s2: Dictionary = SoloController.cast_pick_step(s1["picked"], 2, s1["valid"], b)
+	assert_bool(bool(s2["done"])).is_true()
+	assert_int((s2["picked"] as Array).size()).is_equal(2)
+	# The legal set running dry finishes early even below the count.
+	var s3: Dictionary = SoloController.cast_pick_step([], 3, [c], c)
+	assert_bool(bool(s3["done"])).is_true()
+
+
+func test_cast_pick_step_reclick_takes_the_pick_back() -> void:
+	# Maintainer UX (31.07.): re-clicking a picked unit UNPICKS it — back to the valid pool,
+	# never auto-casting.
+	var a := _unit(2, [Vector3.ZERO])
+	var b := _unit(2, [Vector3.ZERO])
+	var s1: Dictionary = SoloController.cast_pick_step([a], 2, [b], a)
+	assert_bool(bool(s1.get("unpicked", false))) \
+		.override_failure_message("re-click on a picked unit must report unpicked=true, not add it twice") \
+		.is_true()
+	assert_bool(bool(s1["done"])).is_false()
+	assert_array(s1["picked"] as Array).is_empty()
+	assert_bool((s1["valid"] as Array).has(a)).is_true()
+	assert_bool((s1["valid"] as Array).has(b)).is_true()
+	# A fresh pick reports unpicked=false so the caller can tell the branches apart.
+	var s2: Dictionary = SoloController.cast_pick_step([], 2, [a, b], a)
+	assert_bool(bool(s2.get("unpicked", true))).is_false()
+
+
+# ===== Maintainer rules check (31.07.) — spell marker duration comes from the spell text =====
+
+func test_spell_text_next_time_wording_persists_until_it_applies() -> void:
+	assert_bool(SoloController.spell_text_lasts_once(
+		"Target enemy unit gets -1 to hit next time it attacks.")).is_true()
+	assert_bool(SoloController.spell_text_lasts_once(
+		"Target friendly unit gets Poison the next time the effect would apply.")).is_true()
+
+
+func test_spell_text_until_end_of_round_expires_with_it() -> void:
+	assert_bool(SoloController.spell_text_lasts_once(
+		"Target friendly unit gets +1 to defense rolls until the end of the round.")).is_false()
+	# "until the end of" beats a "next time" fragment in the same text.
+	assert_bool(SoloController.spell_text_lasts_once(
+		"Until the end of the round, enemies get -1 next time they shoot.")).is_false()
+
+
+func test_spell_text_unrecognized_wording_defaults_to_round() -> void:
+	assert_bool(SoloController.spell_text_lasts_once("Target enemy unit takes 8 hits.")).is_false()
+
+
+# ===== NML-216 wave B — Caster Group =====
+
+func test_caster_group_unit_is_a_caster_sized_by_alive_models() -> void:
+	var u := _unit(2, [Vector3.ZERO, Vector3(0.05, 0, 0), Vector3(0.1, 0, 0)])
+	u.unit_properties["special_rules"] = ["Caster Group"]
+	assert_bool(u.is_caster()).is_true()
+	assert_int(u.get_caster_value()).is_equal(3)
+	u.initialize_caster_points()
+	assert_int(u.casts_current).is_equal(3)
+	# A dead bearer shrinks X; the round grant RESETS (unspent tokens are lost — no banking).
+	(u.models[2] as ModelInstance).is_alive = false
+	u.casts_current = 1
+	u.add_round_caster_points()
+	assert_int(u.casts_current) \
+		.override_failure_message("Caster Group must reset to the ALIVE bearer count (got %d)" % u.casts_current) \
+		.is_equal(2)
+
+
+func test_spell_accumulator_is_a_battery_not_a_caster() -> void:
+	# Wave B: stores X tokens/round (accumulating, cap 6) but never casts itself.
+	var u := _unit(2, [Vector3.ZERO])
+	u.unit_properties["special_rules"] = ["Spell Accumulator(2)"]
+	assert_bool(u.is_caster()).is_false()
+	assert_int(u.get_caster_value()).is_equal(2)
+	u.initialize_caster_points()
+	assert_int(u.casts_current).is_equal(2)
+	u.add_round_caster_points()
+	assert_int(u.casts_current).is_equal(4)   # accumulates toward the cap of 6
+
+
+func test_accumulator_joins_the_token_pool_within_12() -> void:
+	var caster := _unit(2, [Vector3.ZERO])
+	caster.unit_id = "caster"
+	caster.unit_properties["special_rules"] = ["Caster(2)"]
+	caster.initialize_caster_points()
+	var battery := _unit(2, [Vector3(10.0 * 0.0254, 0, 0)])   # 10" away
+	battery.unit_id = "battery"
+	battery.unit_properties["special_rules"] = ["Spell Accumulator(3)"]
+	battery.initialize_caster_points()
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {caster.unit_id: caster, battery.unit_id: battery}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var pool := solo._aura_casters(2, caster, caster)
+	var names: Array = []
+	for h in pool:
+		names.append(((h as Dictionary)["unit"] as GameUnit).unit_id)
+	assert_bool(names.has("battery")) \
+		.override_failure_message("Spell Accumulator within 12\" must lend its tokens (pool: %s)" % str(names)) \
+		.is_true()
+
+
+func test_spell_conduit_extends_the_cast_origin() -> void:
+	# Wave B: a friendly conduit within 12" of the caster is an alternative origin — a
+	# target beyond the caster's own reach but inside the conduit's becomes legal.
+	var caster := _unit(2, [Vector3.ZERO])
+	caster.unit_id = "caster"
+	caster.unit_properties["special_rules"] = ["Caster(2)"]
+	var conduit := _unit(2, [Vector3(8.0 * 0.0254, 0, 0)])
+	conduit.unit_id = "conduit"
+	conduit.unit_properties["special_rules"] = ["Spell Conduit"]
+	var far_foe := _unit(1, [Vector3(19.0 * 0.0254, 0, 0)])   # ~19" from caster, ~11" from conduit
+	far_foe.unit_id = "far_foe"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {caster.unit_id: caster, conduit.unit_id: conduit, far_foe.unit_id: far_foe}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var entry := {"target": {"side": "enemy"}, "range_in": 12.0}
+	var with_conduit := solo.spell_candidates(caster, entry, 2, 1)
+	assert_bool(with_conduit.has(far_foe)) \
+		.override_failure_message("Spell Conduit must extend the cast origin (candidates: %d)" % with_conduit.size()) \
+		.is_true()
+	# Without the rule the same geometry is out of reach.
+	conduit.unit_properties["special_rules"] = []
+	assert_bool(solo.spell_candidates(caster, entry, 2, 1).has(far_foe)).is_false()
+
+
+# === Reanimation (army-book, Robot Legions 3.5.2) — the pure halves =========================
+# "When a unit where all models have this rule is activated, roll as many dice as the max. number of
+# models/wounds it could restore. For each 5+ you may restore one model/wound." The rule reaches the
+# table only through the hero upgrade "Reanimation Aura" ("This model and its unit get Reanimation").
+
+
+## A unit whose models carry the given [max, current] wound pairs; current <= 0 means the model is dead.
+func _reanim_unit(pid: int, unit_name: String, wounds: Array) -> GameUnit:
+	var u := GameUnit.new()
+	u.unit_id = "reanim_%s" % unit_name
+	u.unit_properties = {"player_id": pid, "name": unit_name, "quality": 4, "defense": 4}
+	for i in wounds.size():
+		var pair: Array = wounds[i]
+		var m := ModelInstance.new()
+		m.model_index = i
+		m.unit = u
+		m.wounds_max = int(pair[0])
+		m.wounds_current = int(pair[1])
+		m.is_alive = m.wounds_current > 0
+		var n := Node3D.new()
+		add_child(n)
+		n.global_position = Vector3(0.03 * i, 0, 0)
+		m.node = n
+		u.models.append(m)
+	return u
+
+
+func test_reanimation_pool_counts_wounds_not_models() -> void:
+	# Wound currency (maintainer reading): a dead Tough(3) is worth THREE dice, a living model missing
+	# two wounds two, an untouched model none.
+	var u := _reanim_unit(2, "Bots", [[3, 0], [3, 1], [1, 1], [1, 0]])
+	u.unit_properties["special_rules"] = ["Reanimation"]
+	assert_int(SoloController.reanimation_pool(u)).is_equal(3 + 2 + 0 + 1)
+	# Full strength = no dice at all.
+	var fresh := _reanim_unit(2, "Fresh", [[3, 3], [1, 1]])
+	fresh.unit_properties["special_rules"] = ["Reanimation"]
+	assert_int(SoloController.reanimation_pool(fresh)).is_equal(0)
+	# Without the rule there is nothing to roll for, however battered the unit is.
+	var plain := _reanim_unit(2, "Plain", [[3, 0], [1, 0]])
+	assert_int(SoloController.reanimation_pool(plain)).is_equal(0)
+
+
+func test_reanimation_gate_never_prefix_matches_the_aura() -> void:
+	# GameUnit.has_special_rule is PREFIX based, so "Reanimation Aura" answers true for "Reanimation".
+	# The carrier gate must not — otherwise a fallen Re-Animator would keep reanimating his unit.
+	var aura_only := _reanim_unit(2, "AuraOnly", [[1, 1]])
+	aura_only.unit_properties["special_rules"] = ["Reanimation Aura"]
+	assert_bool(aura_only.has_special_rule("Reanimation")) \
+		.override_failure_message("fixture check: the prefix reader is expected to say yes here") \
+		.is_true()
+	assert_bool(SoloController.has_exact_rule(aura_only, "Reanimation")) \
+		.override_failure_message("the exact reader must tell 'Reanimation' from 'Reanimation Aura'") \
+		.is_false()
+
+
+func test_reanimation_aura_dies_with_its_carrier() -> void:
+	# The import expands "X Aura" onto the unit AND stamps the provenance; an aura-granted rule may
+	# only work while a living carrier is attached.
+	var host := _reanim_unit(2, "Host", [[1, 0], [1, 1]])
+	host.unit_properties["special_rules"] = ["Reanimation"]
+	host.unit_properties["aura_granted"] = ["Reanimation"]
+	var hero := _reanim_unit(2, "ReAnimator", [[3, 3]])
+	hero.unit_properties["special_rules"] = ["Hero", "Reanimation Aura", "Reanimation"]
+	hero.unit_properties["aura_granted"] = ["Reanimation"]
+	host.unit_properties["attached_heroes"] = [hero]
+	assert_int(SoloController.reanimation_members(host).size()) \
+		.override_failure_message("a living carrier projects the rule over the whole chain") \
+		.is_equal(2)
+	# The Re-Animator falls: the unit keeps the imported rule NAME but loses the rule.
+	(hero.models[0] as ModelInstance).is_alive = false
+	(hero.models[0] as ModelInstance).wounds_current = 0
+	assert_bool(SoloController.reanimation_members(host).is_empty()) \
+		.override_failure_message("an aura-granted rule must not outlive its carrier") \
+		.is_true()
+	assert_object(SoloController.reanimation_aura_carrier(host, false)).is_equal(hero)
+	assert_object(SoloController.reanimation_aura_carrier(host, true)).is_null()
+	# A unit that owns the rule itself is untouched by the carrier's death.
+	host.unit_properties["aura_granted"] = []
+	assert_bool(SoloController.reanimation_members(host).is_empty()).is_false()
+
+
+func test_reanimation_plan_fills_the_living_before_it_raises_the_dead() -> void:
+	# Priority: living wounded first (hero before rank and file, biggest gap first), then casualties
+	# cheapest-first at one wound each, then the returned models are healed up.
+	var u := _reanim_unit(2, "Bots", [[3, 1], [1, 0], [3, 0], [1, 1]])
+	u.unit_properties["special_rules"] = ["Reanimation"]
+	# Two successes: both go into the living Tough model's gap, nobody comes back yet.
+	var two := SoloController.reanimation_plan(u, 2)
+	assert_int(two.size()).is_equal(1)
+	assert_object((two[0] as Dictionary)["model"]).is_equal(u.models[0])
+	assert_int(int((two[0] as Dictionary)["wounds"])).is_equal(2)
+	assert_bool(bool((two[0] as Dictionary)["revive"])).is_false()
+	# Three: the third buys the CHEAPEST casualty back (the Tough(1) trooper, not the Tough(3) elite).
+	var three := SoloController.reanimation_plan(u, 3)
+	assert_int(three.size()).is_equal(2)
+	assert_object((three[1] as Dictionary)["model"]).is_equal(u.models[1])
+	assert_bool(bool((three[1] as Dictionary)["revive"])).is_true()
+	assert_int(int((three[1] as Dictionary)["wounds"])).is_equal(1)
+	# Six: both casualties are back and the Tough(3) one is healed up with what is left.
+	var six := SoloController.reanimation_plan(u, 6)
+	var restored := 0
+	var spent := 0
+	for step in six:
+		spent += int((step as Dictionary)["wounds"])
+		if bool((step as Dictionary)["revive"]):
+			restored += 1
+	assert_int(restored).is_equal(2)
+	assert_int(spent).is_equal(6)
+	# The plan never spends more than the unit's own shortfall (pool = 2 + 1 + 3 = 6).
+	var overkill := SoloController.reanimation_plan(u, 99)
+	var over_spent := 0
+	for step in overkill:
+		over_spent += int((step as Dictionary)["wounds"])
+	assert_int(over_spent).is_equal(SoloController.reanimation_pool(u))
+
+
+func test_reanimation_candidates_list_what_a_success_can_buy() -> void:
+	# NML-924: the owner's click prompt and the "is there a choice at all?" gate read this list.
+	# A casualty is worth its full wounds_max (one success buys it back, the rest heal it up), a
+	# living wounded model its missing wounds, an untouched model nothing.
+	var u := _reanim_unit(2, "Bots", [[3, 1], [1, 0], [3, 0], [1, 1]])
+	u.unit_properties["special_rules"] = ["Reanimation"]
+	var cands := SoloController.reanimation_candidates(u)
+	assert_int(cands.size()) \
+		.override_failure_message("the untouched trooper must not be offered as a target") \
+		.is_equal(3)
+	assert_object((cands[0] as Dictionary)["model"]).is_equal(u.models[0])
+	assert_int(int((cands[0] as Dictionary)["capacity"])).is_equal(2)
+	assert_bool(bool((cands[0] as Dictionary)["revive"])).is_false()
+	assert_int(int((cands[1] as Dictionary)["capacity"])).is_equal(1)
+	assert_bool(bool((cands[1] as Dictionary)["revive"])).is_true()
+	assert_int(int((cands[2] as Dictionary)["capacity"])) \
+		.override_failure_message("a dead Tough(3) can absorb three successes, not one") \
+		.is_equal(3)
+	# A unit at full strength offers nothing at all.
+	var fresh := _reanim_unit(2, "Fresh", [[3, 3], [1, 1]])
+	fresh.unit_properties["special_rules"] = ["Reanimation"]
+	assert_array(SoloController.reanimation_candidates(fresh)).is_empty()
+
+
+func test_reanimation_pick_step_spends_one_success_per_click() -> void:
+	# NML-924, the cast_pick_step pattern: ONE click of the owner's allocation, pure.
+	var u := _reanim_unit(2, "Bots", [[3, 1], [1, 0], [1, 1]])
+	var wounded := u.models[0] as ModelInstance
+	var fallen := u.models[1] as ModelInstance
+	var healthy := u.models[2] as ModelInstance
+	# A casualty: this success is the one that puts it back on the table.
+	var s1 := SoloController.reanimation_pick_step(2, fallen)
+	assert_bool(bool(s1["spent"])).is_true()
+	assert_bool(bool(s1["revive"])) \
+		.override_failure_message("the first success on a casualty is the revive — the placement rule hangs off it") \
+		.is_true()
+	assert_int(int(s1["left"])).is_equal(1)
+	assert_bool(bool(s1["done"])).is_false()
+	# A living wounded model: a plain heal, and the last success ends the allocation.
+	var s2 := SoloController.reanimation_pick_step(1, wounded)
+	assert_bool(bool(s2["spent"])).is_true()
+	assert_bool(bool(s2["revive"])).is_false()
+	assert_int(int(s2["left"])).is_equal(0)
+	assert_bool(bool(s2["done"])).is_true()
+	# A model at full health buys nothing — and says why, so the click is never a silent no-op.
+	var s3 := SoloController.reanimation_pick_step(2, healthy)
+	assert_bool(bool(s3["spent"])).is_false()
+	assert_int(int(s3["left"])) \
+		.override_failure_message("a refused click must not eat a success") \
+		.is_equal(2)
+	assert_str(str(s3["reason"])).is_not_empty()
+	# Degenerate inputs never spend anything either.
+	assert_bool(bool(SoloController.reanimation_pick_step(0, fallen)["spent"])).is_false()
+	assert_bool(bool(SoloController.reanimation_pick_step(0, fallen)["done"])).is_true()
+	assert_bool(bool(SoloController.reanimation_pick_step(2, null)["spent"])).is_false()
+
+
+## Belt-and-braces gate (#215). The planner is axis-correct now, but _finalize_placement is the LAST seam
+## before a plan becomes real model positions, and it used to clamp only its OWN correction candidates —
+## an incoming plan was taken on trust. It now clamps the incoming plan per axis and says so once.
+func _table_stub(feet: Vector2) -> Node:
+	var scr := GDScript.new()
+	scr.source_code = "extends Node\nvar table_size := Vector2(%f, %f)\n" % [feet.x, feet.y]
+	scr.reload()
+	var t := Node.new()
+	t.set_script(scr)
+	t.add_to_group("table")
+	add_child(t)
+	return t
+
+
+func test_gate_clamps_an_off_table_plan_back_onto_the_board() -> void:
+	var m := 0.0254
+	auto_free(_table_stub(TableSizeDialog.FEET_6X4))   # 72" x 48": half-extents 36" x 24"
+	var ai := _unit(2, [Vector3.ZERO])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var models: Array = ai.get_alive_models()
+	# THE #215 SHAPE: x sits comfortably on the board, z is ~19" past the SHORT edge — exactly what the
+	# folded scalar bound used to wave through (it believed the short axis ran to 72", too).
+	var start := Vector3(0.2, 0, 0.5)
+	var planned := Vector3(0.2, 0, 1.10)
+	var gated: Array = solo._finalize_placement(ai, models, [start], [planned], false, null, [])
+	var out: Vector3 = gated[0]
+	var half_x: float = TableSizeDialog.FEET_6X4.x * 0.3048 * 0.5
+	var half_z: float = TableSizeDialog.FEET_6X4.y * 0.3048 * 0.5
+	assert_float(absf(out.z)).override_failure_message(
+		"z=%.3f m still off the 48\" axis" % out.z).is_less_equal(half_z)
+	assert_float(absf(out.x)).is_less_equal(half_x)
+	# The untouched axis stays put — the clamp is per axis, not a wholesale pull toward the centre.
+	assert_float(out.x).is_equal_approx(0.2, 0.001)
+	# The correction is ANNOUNCED (a silent fix reads like a broken game; the reporter of #215 should
+	# see it in the battle log, which main drains from here).
+	assert_int(solo.board_clamp_notes.size()).is_equal(1)
+	# Read the note defensively so a regression fails as an ASSERTION, not as an index error.
+	var note: String = str(solo.board_clamp_notes[0]) if not solo.board_clamp_notes.is_empty() else ""
+	assert_str(note).contains("clamped to the table edge")
+	assert_str(note).contains(ai.get_name())
+	assert_float(SoloController._xz_dist_m(out, planned) / m).is_greater(1.0)   # it really moved
+
+
+func test_gate_stays_quiet_when_the_plan_is_already_on_the_board() -> void:
+	auto_free(_table_stub(TableSizeDialog.FEET_6X4))
+	var ai := _unit(2, [Vector3.ZERO])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {ai.unit_id: ai}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	var models: Array = ai.get_alive_models()
+	var planned := Vector3(0.3, 0, 0.4)   # well inside 36" x 24"
+	var gated: Array = solo._finalize_placement(ai, models, [Vector3(0.3, 0, 0.2)], [planned], false, null, [])
+	assert_float(SoloController._xz_dist_m(gated[0] as Vector3, planned)).is_less(0.001)
+	assert_int(solo.board_clamp_notes.size()).is_equal(0)   # no news, no line
+
+
+# === Wave 4 — Extended Buff Range + Coordinate ===================================================
+
+## Stamp a unit as belonging to a book that actually fields the wave-4 rules, so the SYSTEM-SCOPED
+## registry gate (RulesRegistry) resolves them. The maps are generated from the local registry into
+## assets/solo/, so this also proves the shipped data — not only the code.
+func _hdf(u: GameUnit, rules: Array) -> GameUnit:
+	u.unit_properties["game_system"] = "gf"
+	u.unit_properties["faction_folder"] = "human_defense_force"
+	u.unit_properties["special_rules"] = rules
+	return u
+
+
+## _unit() derives its id from (player, model count), so same-shaped fixtures COLLIDE in
+## OPRArmyManager.game_units (a Dictionary keyed by unit_id) and silently vanish. Wave-4 fixtures
+## name themselves.
+func _named(u: GameUnit, id: String) -> GameUnit:
+	u.unit_id = id
+	u.unit_properties["name"] = id
+	return u
+
+
+## The relay clause, one line at a time. Each clause is the ONLY thing that changes between the
+## green case and its red neighbour — so a resolver that stopped reading one of them fails here.
+func test_ebr_relay_needs_the_rule_on_both_sides_a_hero_and_the_link() -> void:
+	# green: target carries the rule, relay carries it and holds a Hero, 20" link inside 24"
+	assert_bool(SoloController.ebr_relay_ok(true, true, true, 20.0, 24.0)).is_true()
+	# rot 1 — the TARGET does not carry the rule ("If THIS UNIT is within 24\" of another friendly
+	# unit with this rule"): the waiver is not a general aura.
+	assert_bool(SoloController.ebr_relay_ok(false, true, true, 20.0, 24.0)).is_false()
+	# rot 2 — the relay unit does not carry the rule ("ANOTHER friendly unit WITH THIS RULE").
+	assert_bool(SoloController.ebr_relay_ok(true, false, true, 20.0, 24.0)).is_false()
+	# rot 3 — no living Hero in/near the relay unit ("that has a Hero in it").
+	assert_bool(SoloController.ebr_relay_ok(true, true, false, 20.0, 24.0)).is_false()
+	# rot 4 — over the link range; and the boundary is inclusive ("within 24\"").
+	assert_bool(SoloController.ebr_relay_ok(true, true, true, 24.01, 24.0)).is_false()
+	assert_bool(SoloController.ebr_relay_ok(true, true, true, 24.0, 24.0)).is_true()
+
+
+## "One living radio operator is enough" (maintainer ruling 1) — and when the last carrier dies the
+## unit stops relaying. Also proves the data gate: the rule only resolves for a book that fields it.
+func test_unit_carries_ebr_reads_the_live_chain_and_the_book() -> void:
+	var relay := _hdf(_unit(2, [Vector3.ZERO, Vector3(0.05, 0, 0)]), ["Extended Buff Range"])
+	assert_bool(SoloController.unit_carries_ebr(relay)).is_true()
+	# One dead model, one alive: the unit still carries it.
+	(relay.models[0] as ModelInstance).is_alive = false
+	assert_bool(SoloController.unit_carries_ebr(relay)).is_true()
+	# rot — the LAST carrier dies: the relay status goes with it.
+	(relay.models[1] as ModelInstance).is_alive = false
+	assert_bool(SoloController.unit_carries_ebr(relay)).is_false()
+	# rot — the same models in a book that does NOT field the rule resolve to nothing (system-scoped
+	# registry gate, no cross-book bleed).
+	var other := _unit(2, [Vector3.ZERO])
+	other.unit_properties["game_system"] = "gf"
+	other.unit_properties["faction_folder"] = "alien_hives"
+	other.unit_properties["special_rules"] = ["Extended Buff Range"]
+	assert_bool(SoloController.unit_carries_ebr(other)).is_false()
+	# A JOINED hero carrying the rule makes its host a relay (the chain, not the host model list).
+	var host := _unit(2, [Vector3(0.2, 0, 0)])
+	host.unit_properties["game_system"] = "gf"
+	host.unit_properties["faction_folder"] = "human_defense_force"
+	assert_bool(SoloController.unit_carries_ebr(host)).is_false()
+	var hero := _hdf(_unit(2, [Vector3(0.21, 0, 0)]), ["Hero", "Extended Buff Range"])
+	host.unit_properties["attached_heroes"] = [hero]
+	assert_bool(SoloController.unit_carries_ebr(host)).is_true()
+
+
+## The shipped registry params, per system: GF/AoF/AoFR want the Hero IN the relay unit
+## (hero_link_in 0), the two skirmish books print "within 6\" of a friendly Hero" instead.
+func test_ebr_params_carry_the_skirmish_hero_link() -> void:
+	var gf := _hdf(_unit(2, [Vector3.ZERO]), ["Extended Buff Range"])
+	var p := SoloController.ebr_params_of(gf)
+	assert_float(float(p["relay_range_in"])).is_equal_approx(24.0, 0.001)
+	assert_float(float(p["pick_range_in"])).is_equal_approx(12.0, 0.001)
+	assert_float(float(p["hero_link_in"])).is_equal_approx(0.0, 0.001)
+	assert_bool(bool(p["excludes_spells"])).is_true()
+	var skirmish := _unit(2, [Vector3.ZERO])
+	skirmish.unit_properties["game_system"] = "gff"
+	skirmish.unit_properties["faction_folder"] = "human_defense_force"
+	skirmish.unit_properties["special_rules"] = ["Extended Buff Range"]
+	assert_float(float(SoloController.ebr_params_of(skirmish)["hero_link_in"])) \
+		.override_failure_message("the skirmish books link the Hero at 6\", not inside the unit") \
+		.is_equal_approx(6.0, 0.001)
+	# rot — a unit without the rule has no params at all (nothing to waive).
+	assert_bool(SoloController.ebr_params_of(_unit(2, [Vector3.ZERO])).is_empty()).is_true()
+
+
+## The hero clause on the live table: inside the unit (GF) vs within 6" of it (skirmish).
+func test_ebr_relay_has_hero_reads_the_unit_then_the_six_inch_link() -> void:
+	var m := 0.0254
+	var relay := _named(_hdf(_unit(2, [Vector3.ZERO]), ["Extended Buff Range"]), "Relay")
+	var hero := _named(_hdf(_unit(2, [Vector3(4.0 * m, 0, 0)]), ["Hero"]), "Commander")
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {relay.unit_id: relay, hero.unit_id: hero}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	# GF wording (hero_link_in 0): a Hero standing 4" away is NOT "in" the unit.
+	assert_bool(solo.ebr_relay_has_hero(relay, 0.0)).is_false()
+	# Skirmish wording: the same Hero within 6" satisfies the clause.
+	assert_bool(solo.ebr_relay_has_hero(relay, 6.0)).is_true()
+	# rot — push him past 6" and the skirmish clause fails too.
+	(hero.models[0] as ModelInstance).node.global_position = Vector3(8.0 * m, 0, 0)
+	assert_bool(solo.ebr_relay_has_hero(relay, 6.0)).is_false()
+	# A hero JOINED to the relay satisfies the GF wording.
+	relay.unit_properties["attached_heroes"] = [hero]
+	assert_bool(solo.ebr_relay_has_hero(relay, 0.0)).is_true()
+	# rot — a DEAD hero never counts.
+	(hero.models[0] as ModelInstance).is_alive = false
+	assert_bool(solo.ebr_relay_has_hero(relay, 0.0)).is_false()
+
+
+## Coordinate's three refusals, as pure logic: dead bearer, chain, empty range.
+func test_coordinate_refusal_names_the_reason() -> void:
+	assert_str(SoloController.coordinate_refusal(true, false, 2)).is_equal("")
+	assert_str(SoloController.coordinate_refusal(false, false, 2)).is_equal("dead")   # maintainer ruling 2
+	assert_str(SoloController.coordinate_refusal(true, true, 2)).is_equal("chain")    # anti-chain clause
+	assert_str(SoloController.coordinate_refusal(true, false, 0)).is_equal("none")
+	# A dead bearer outranks everything else — nothing hands off from a wiped unit.
+	assert_str(SoloController.coordinate_refusal(false, true, 0)).is_equal("dead")
+
+
+## The live candidate filter: same side, not yet activated, not attached, not in reserve, and the
+## 12" measured BASE EDGE to base edge.
+func test_coordinate_candidates_filter_side_activation_reserve_and_edge_range() -> void:
+	var m := 0.0254
+	var bearer := _named(_hdf(_unit(2, [Vector3.ZERO]), ["Coordinate"]), "Comms Team")
+	var near := _named(_unit(2, [Vector3(8.0 * m, 0, 0)]), "Riflemen")   # 8" away — in
+	var far := _named(_unit(2, [Vector3(20.0 * m, 0, 0)]), "Snipers")    # 20" away — out
+	var foe := _named(_unit(1, [Vector3(6.0 * m, 0, 0)]), "Raiders")     # enemy, never a candidate
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {bearer.unit_id: bearer, near.unit_id: near, far.unit_id: far, foe.unit_id: foe}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+
+	assert_bool(SoloController.carries_coordinate(bearer)).is_true()
+	assert_float(SoloController.coordinate_range_of(bearer)).is_equal_approx(12.0, 0.001)
+	var cands := solo.coordinate_candidates(bearer)
+	assert_int(cands.size()).is_equal(1)
+	assert_bool(cands.has(near)).override_failure_message("the 8\" friend is the only legal receiver").is_true()
+	assert_bool(cands.has(far)).override_failure_message("20\" is outside the printed 12\"").is_false()
+	assert_bool(cands.has(foe)).override_failure_message("\"another FRIENDLY unit\" — never the enemy").is_false()
+	assert_bool(cands.has(bearer)).override_failure_message("\"ANOTHER friendly unit\" — never itself").is_false()
+
+	# rot — the candidate has already activated ("that hasn't activated yet").
+	near.activate(1)
+	assert_int(solo.coordinate_candidates(bearer).size()).is_equal(0)
+	near.reset_activation()
+	assert_int(solo.coordinate_candidates(bearer).size()).is_equal(1)
+	# rot — maintainer ruling 3: a reserve unit is invisible to the hand-off.
+	near.unit_properties["ambush_reserve"] = true
+	assert_int(solo.coordinate_candidates(bearer).size()).is_equal(0)
+	near.unit_properties.erase("ambush_reserve")
+	# rot — a dead bearer offers nothing at all.
+	(bearer.models[0] as ModelInstance).is_alive = false
+	assert_int(solo.coordinate_candidates(bearer).size()).is_equal(0)
+
+
+## The round reset owns the hand-off marker: a unit coordinated in one round may hand off in the next.
+func test_coordinate_marker_is_a_per_round_stamp() -> void:
+	var u := _unit(2, [Vector3.ZERO])
+	assert_bool(u.was_activated_via_coordinate()).is_false()
+	u.activate(1, true)
+	assert_bool(u.was_activated_via_coordinate()).is_true()
+	u.reset_activation()
+	assert_bool(u.was_activated_via_coordinate()) \
+		.override_failure_message("a stamp that survives the round would mute Coordinate forever").is_false()
+	# deactivate() is the exact inverse of activate() — it clears the stamp too.
+	u.activate(2, true)
+	u.deactivate()
+	assert_bool(u.was_activated_via_coordinate()).is_false()
+
+# === Wave 5 — "Pass Turn" primitive + Delayed Action =========================================
+#
+# "Once per round, if your opponent has more units left to activate than you, then this model's
+#  unit may pass its turn instead of activating (may still be activated later)."
+# (word-identical in all 21 army books that carry it; 73 occurrences across all five systems)
+
+
+## TERMINATION GUARD (a), proven symmetrically: the condition is STRICTLY more, so it can never be
+## true for both sides at once. Without that, two carriers could pass each other forever and the
+## round would never end. The equality case is the one that closes the loop — it must refuse BOTH.
+func test_delayed_action_surplus_is_strict_and_never_holds_for_both_sides() -> void:
+	assert_bool(SoloController.delayed_action_surplus(4, 3)).is_true()
+	assert_bool(SoloController.delayed_action_surplus(1, 0)).is_true()
+	# Equal counts: NOBODY may pass — the >= reading would let both sides pass in turn forever.
+	assert_bool(SoloController.delayed_action_surplus(3, 3)) \
+		.override_failure_message("equal counts must refuse — '>=' is the endless-pass bug") \
+		.is_false()
+	assert_bool(SoloController.delayed_action_surplus(0, 0)).is_false()
+	assert_bool(SoloController.delayed_action_surplus(2, 5)).is_false()
+	# The whole small-number square: the two directions are never true together.
+	for a in range(0, 8):
+		for b in range(0, 8):
+			assert_bool(SoloController.delayed_action_surplus(a, b) and SoloController.delayed_action_surplus(b, a)) \
+				.override_failure_message("both sides could pass at %d vs %d — mutual passing never terminates" % [a, b]) \
+				.is_false()
+
+
+## TERMINATION GUARD (b): "once per round" is stamped on the CARRIER UNIT (maintainer ruling: the
+## wording binds "this model's unit", there is no army cap), so a carrier cannot pass twice in the
+## same round — and the stamp expires with the round.
+func test_delayed_action_stamp_is_per_carrier_and_per_round() -> void:
+	var a := _unit(1, [Vector3.ZERO])
+	var b := _unit(1, [Vector3(0.1, 0, 0)])
+	assert_bool(SoloController.delayed_action_used_this_round(a, 2)).is_false()
+	SoloController.delayed_action_stamp(a, 2)
+	assert_bool(SoloController.delayed_action_used_this_round(a, 2)).is_true()
+	# Ruling 2: no army-wide cap — a SECOND carrier may still pass in the same round.
+	assert_bool(SoloController.delayed_action_used_this_round(b, 2)).is_false()
+	# The stamp is a round number, not a flag: round 3 re-opens the rule for the same carrier.
+	assert_bool(SoloController.delayed_action_used_this_round(a, 3)).is_false()
+	assert_bool(SoloController.delayed_action_used_this_round(null, 2)).is_false()
+
+
+## Every refusal names its own reason (transparency doctrine: the radial entry stays visible, so the
+## log has to explain the "no"). "" means the pass is legal.
+func test_delayed_action_refusal_names_the_measured_reason() -> void:
+	assert_str(SoloController.delayed_action_refusal(true, false, false, 4, 3)) \
+		.override_failure_message("a legal pass must not be refused") \
+		.is_empty()
+	assert_str(SoloController.delayed_action_refusal(false, false, false, 4, 3)).contains("no model in the unit has Delayed Action")
+	assert_str(SoloController.delayed_action_refusal(true, true, false, 4, 3)).contains("already activated this round")
+	assert_str(SoloController.delayed_action_refusal(true, false, true, 4, 3)).contains("once per round")
+	var equal := SoloController.delayed_action_refusal(true, false, false, 3, 3)
+	assert_str(equal).contains("opponent has 3 units left to activate, you have 3")
+	assert_str(equal).contains("MORE than you")
+	# Precedence: the once-per-round stamp is reported even when the surplus is missing too, so the
+	# player learns the rule is spent rather than blaming the counts.
+	assert_str(SoloController.delayed_action_refusal(true, false, true, 3, 3)).contains("once per round")
+	# "own_left == 0" is not a case the caller has to special-case: with nothing of yours left to
+	# activate, YOUR carrier is one of the activated units — the already-activated branch refuses
+	# before the counts are ever compared. (Proven, not assumed — the spec asked for exactly this.)
+	assert_str(SoloController.delayed_action_refusal(true, true, false, 5, 0)) \
+		.override_failure_message("a pass must never be the activation a side no longer has") \
+		.contains("already activated this round")
+
+
+## The carrier lookup reads the unit AND a joined hero (the Precision-Spotter reading), and it
+## matches the rule EXACTLY — has_special_rule() is a prefix match, so a "Delayed" probe must not
+## answer for something else (the Ferocious/Reanimation prefix lesson).
+func test_delayed_action_member_of_reads_the_unit_and_its_joined_hero() -> void:
+	var plain := _unit(1, [Vector3.ZERO])
+	assert_object(SoloController.delayed_action_member_of(plain)).is_null()
+	assert_object(SoloController.delayed_action_member_of(null)).is_null()
+	var carrier := _unit(1, [Vector3.ZERO])
+	carrier.unit_properties["special_rules"] = ["Delayed Action"]
+	assert_object(SoloController.delayed_action_member_of(carrier)).is_equal(carrier)
+	# A joined hero brings the rule to its host unit.
+	var host := _unit(1, [Vector3.ZERO])
+	var hero := _unit(1, [Vector3(0.03, 0, 0)])
+	hero.unit_properties["special_rules"] = ["Hero", "Delayed Action"]
+	host.unit_properties["attached_heroes"] = [hero]
+	assert_object(SoloController.delayed_action_member_of(host)).is_equal(hero)
+	# ROT case: a near-miss name must NOT match (exact base-name reading, not a prefix).
+	var decoy := _unit(1, [Vector3.ZERO])
+	decoy.unit_properties["special_rules"] = ["Delayed Action Beacon"]
+	assert_object(SoloController.delayed_action_member_of(decoy)) \
+		.override_failure_message("prefix matching would make any 'Delayed Action…' rule a carrier") \
+		.is_null()
+
+
+## The AI's threat test needs BOTH reach and sight — either alone is not a threat worth a turn.
+func test_delayed_action_threat_needs_reach_and_line_of_sight() -> void:
+	assert_bool(SoloController.delayed_action_threatened(8.0, 12.0, true)).is_true()
+	assert_bool(SoloController.delayed_action_threatened(12.0, 12.0, true)).is_true()   # exactly at reach
+	assert_bool(SoloController.delayed_action_threatened(12.1, 12.0, true)).is_false()
+	assert_bool(SoloController.delayed_action_threatened(8.0, 12.0, false)) \
+		.override_failure_message("a blind enemy is no reason to delay") \
+		.is_false()
+	assert_bool(SoloController.delayed_action_threatened(0.0, 0.0, true)).is_false()   # no weapons, no move
+
+
+## The pass worth used to pick the unit the delay protects: points when the list has them, model
+## count for hand-built fixtures.
+func test_delayed_action_worth_prefers_points_over_model_count() -> void:
+	var cheap := _unit(1, [Vector3.ZERO, Vector3(0.1, 0, 0), Vector3(0.2, 0, 0)])
+	var dear := _unit(1, [Vector3.ZERO])
+	dear.unit_properties["cost"] = 220
+	assert_float(SoloController.delayed_action_worth(cheap)).is_equal_approx(3.0, 0.001)
+	assert_float(SoloController.delayed_action_worth(dear)).is_equal_approx(220.0, 0.001)
+	assert_float(SoloController.delayed_action_worth(null)).is_equal_approx(0.0, 0.001)
+
+
+# === Reinforcement (army-book, v3.5.3) — the pure halves ======================================
+# "When a unit where all models have this rule is Shaken or fully destroyed, you may remove it
+# from the table as destroyed and place a new copy of it fully within 12" of any table edge at the
+# beginning of the next round after Ambushers have been deployed..." Mirrors the maintainer
+# readings pinned at the top of the SoloController block: IS Shaken (not becomes), the strip is
+# ANY edge including the enemy's, a joined hero without the rule blocks the whole chain, and
+# reinforcement_copy_rules is an exact-name strip (never a prefix match).
+
+
+## A single-model carrier in the "may fire" baseline: has Reinforcement, alive, not shaken, no
+## stamps. Each refusal test below tweaks exactly one axis away from this baseline.
+func _reinforce_carrier(name: String) -> GameUnit:
+	var u := _unit(2, [Vector3(0.03, 0, 0)])
+	u.unit_id = "reinforce_%s" % name
+	u.unit_properties["name"] = name
+	u.unit_properties["special_rules"] = ["Reinforcement"]
+	return u
+
+
+func test_reinforcement_may_fire_while_the_unit_is_shaken() -> void:
+	var carrier := _reinforce_carrier("Shaken")
+	carrier.is_shaken = true
+	assert_str(SoloController.reinforcement_refusal(carrier)).is_equal("")
+
+
+func test_reinforcement_may_fire_when_the_carrier_is_fully_destroyed() -> void:
+	var carrier := _reinforce_carrier("Wiped")
+	for m in carrier.models:
+		(m as ModelInstance).is_alive = false
+	assert_bool(carrier.is_destroyed()).is_true()   # fixture check
+	assert_str(SoloController.reinforcement_refusal(carrier)).is_equal("")
+
+
+func test_reinforcement_refuses_a_healthy_unshaken_carrier() -> void:
+	var carrier := _reinforce_carrier("Healthy")
+	assert_str(SoloController.reinforcement_refusal(carrier)) \
+		.override_failure_message("the offer is pinned to 'the unit IS Shaken', never 'becomes " + \
+			"Shaken' — a healthy, unshaken carrier must be refused with THIS reason, not silently " + \
+			"allowed to fire, and not refused for some other reason") \
+		.contains("neither Shaken nor destroyed")
+
+
+func test_reinforcement_refuses_a_unit_without_the_rule() -> void:
+	var no_rule := _unit(2, [Vector3(0.03, 0, 0)])
+	assert_str(SoloController.reinforcement_refusal(no_rule)).contains("does not have Reinforcement")
+
+
+func test_reinforcement_is_blocked_by_a_joined_hero_without_the_rule() -> void:
+	var carrier := _reinforce_carrier("Squad")
+	carrier.is_shaken = true
+	var hero := _unit(2, [Vector3(0.06, 0, 0)])
+	hero.unit_properties["special_rules"] = ["Hero"]
+	carrier.unit_properties["attached_heroes"] = [hero]
+	assert_str(SoloController.reinforcement_refusal(carrier)).contains("all models have this rule")
+
+
+func test_reinforcement_fires_when_the_joined_hero_also_carries_the_rule() -> void:
+	var carrier := _reinforce_carrier("Squad")
+	carrier.is_shaken = true
+	var hero := _unit(2, [Vector3(0.06, 0, 0)])
+	hero.unit_properties["special_rules"] = ["Hero", "Reinforcement"]
+	carrier.unit_properties["attached_heroes"] = [hero]
+	assert_str(SoloController.reinforcement_refusal(carrier)).is_equal("")
+
+
+func test_reinforcement_refuses_a_carrier_already_stamped_due() -> void:
+	var carrier := _reinforce_carrier("EnRoute")
+	carrier.unit_properties["reinforcement_due_round"] = 3
+	assert_str(SoloController.reinforcement_refusal(carrier)).contains("already left the table")
+
+
+func test_reinforcement_refuses_a_carrier_that_already_used_reinforcement() -> void:
+	var carrier := _reinforce_carrier("Spent")
+	carrier.unit_properties["reinforcement_spent"] = true
+	assert_str(SoloController.reinforcement_refusal(carrier)).contains("already used")
+
+
+func test_reinforcement_refusal_on_a_null_unit_does_not_crash() -> void:
+	assert_str(SoloController.reinforcement_refusal(null)).is_not_empty()
+
+
+# ===== reinforcement_offered — the radial-entry gate (#224 transparency: shown even when refused) =====
+
+func test_reinforcement_offered_true_for_a_carrier() -> void:
+	assert_bool(SoloController.reinforcement_offered(_reinforce_carrier("Carrier"))).is_true()
+
+
+func test_reinforcement_offered_false_for_a_non_carrier() -> void:
+	var plain := _unit(2, [Vector3(0.03, 0, 0)])
+	assert_bool(SoloController.reinforcement_offered(plain)).is_false()
+
+
+func test_reinforcement_offer_is_exact_name_not_prefix() -> void:
+	# A same-family rule name ("Grounded Reinforcement") must not register as the Reinforcement
+	# carrier gate — reinforcement_offered has to compare the FULL rule name, not merely check
+	# whether "Reinforcement" appears as a prefix/substring of what the unit actually carries.
+	# GameUnit.has_special_rule is the prefix-based reader used elsewhere in this file; the offer
+	# gate must go through the exact-name reader instead.
+	var decoy := _unit(2, [Vector3(0.03, 0, 0)])
+	decoy.unit_properties["special_rules"] = ["Grounded Reinforcement"]
+	assert_bool(SoloController.reinforcement_offered(decoy)) \
+		.override_failure_message("'Grounded Reinforcement' is not 'Reinforcement' — the exact-name gate must say no") \
+		.is_false()
+
+
+# ===== reinforcement_copy_rules — "this rule doesn't apply to the new copy" ====================
+
+func test_reinforcement_copy_rules_strips_only_the_exact_rule() -> void:
+	var stripped: Array = SoloController.reinforcement_copy_rules(["Tough(3)", "Reinforcement", "Fearless"])
+	assert_array(stripped).has_size(2)
+	assert_array(stripped).not_contains(["Reinforcement"])
+	assert_array(stripped).contains_exactly(["Tough(3)", "Fearless"])
+
+
+func test_reinforcement_copy_rules_leaves_a_list_without_the_rule_unchanged() -> void:
+	var unchanged: Array = SoloController.reinforcement_copy_rules(["Tough(3)", "Fearless"])
+	assert_array(unchanged).contains_exactly(["Tough(3)", "Fearless"])
+
+
+func test_reinforcement_copy_rules_survives_a_same_family_decoy() -> void:
+	# "Grounded Reinforcement" is not "Reinforcement" — the strip is exact-name, so the decoy must
+	# come through untouched; only the exact rule leaves the card.
+	var kept: Array = SoloController.reinforcement_copy_rules(["Grounded Reinforcement", "Reinforcement"])
+	assert_array(kept).contains_exactly(["Grounded Reinforcement"])
+
+
+# ===== reinforcement_arrival_round / reinforcement_due =========================================
+
+func test_reinforcement_arrival_round_is_the_next_round() -> void:
+	assert_int(SoloController.reinforcement_arrival_round(3)).is_equal(4)
+
+
+func test_reinforcement_due_returns_only_the_unit_due_at_this_round() -> void:
+	var due_2 := _unit(2, [Vector3(0.03, 0, 0)])
+	due_2.unit_id = "due_2"
+	due_2.unit_properties["reinforcement_due_round"] = 2
+	var due_5 := _unit(2, [Vector3(0.06, 0, 0)])
+	due_5.unit_id = "due_5"
+	due_5.unit_properties["reinforcement_due_round"] = 5
+	var unstamped := _unit(2, [Vector3(0.09, 0, 0)])
+	unstamped.unit_id = "unstamped"
+	var result := SoloController.reinforcement_due([due_2, due_5, unstamped], 3)
+	assert_array(result).contains_same_exactly([due_2])
+
+
+func test_reinforcement_due_keeps_a_stale_date_that_found_no_room() -> void:
+	# "or earlier" — a copy that found no room at all on its own due round keeps its date rather
+	# than evaporating, so it is still picked up on a LATER round's check.
+	var due_1 := _unit(2, [Vector3(0.03, 0, 0)])
+	due_1.unit_id = "due_1"
+	due_1.unit_properties["reinforcement_due_round"] = 1
+	var due_5 := _unit(2, [Vector3(0.06, 0, 0)])
+	due_5.unit_id = "due_5b"
+	due_5.unit_properties["reinforcement_due_round"] = 5
+	var result := SoloController.reinforcement_due([due_1, due_5], 4)
+	assert_array(result).contains_same_exactly([due_1])
+
+
+# ===== reinforcement_spot_in_strip / reinforcement_spots / reinforcement_shape =================
+# The landing-strip geometry. Table: Rect2 position (-4ft, -6ft), size (8ft, 12ft) — a board
+# centred on the origin (1ft = 0.3048m), matching the literal numbers pinned by the spec so these
+# tests read the same geometry the maintainer measured by hand. margin_m is the 12" strip; r is a
+# 32mm round base.
+
+func _reinforce_table() -> Rect2:
+	return Rect2(-1.2192, -1.8288, 2.4384, 3.6576)
+
+
+const REINFORCE_MARGIN_M := 12.0 * 0.0254
+const REINFORCE_R := 0.016
+
+
+func test_reinforcement_strip_accepts_every_table_edge() -> void:
+	var table := _reinforce_table()
+	var r := REINFORCE_R
+	var m := REINFORCE_MARGIN_M
+	# Each point sits centred on the OTHER axis (x=0 or z=0) so only the ONE edge under test is
+	# close enough to matter — the rule names ANY edge, the enemy's included, so none may be
+	# privileged over the others.
+	var left := Vector3(table.position.x + r + 0.05, 0, 0)
+	var right := Vector3(table.end.x - r - 0.05, 0, 0)
+	var near := Vector3(0, 0, table.position.y + r + 0.05)
+	var far := Vector3(0, 0, table.end.y - r - 0.05)
+	assert_bool(SoloController.reinforcement_spot_in_strip(left, r, table, m)) \
+		.override_failure_message("left edge must be a legal landing strip").is_true()
+	assert_bool(SoloController.reinforcement_spot_in_strip(right, r, table, m)) \
+		.override_failure_message("right edge must be a legal landing strip").is_true()
+	assert_bool(SoloController.reinforcement_spot_in_strip(near, r, table, m)) \
+		.override_failure_message("near edge must be a legal landing strip").is_true()
+	assert_bool(SoloController.reinforcement_spot_in_strip(far, r, table, m)) \
+		.override_failure_message("far edge must be a legal landing strip").is_true()
+
+
+func test_reinforcement_strip_accepts_a_base_just_inside_twelve_inches_of_the_edge() -> void:
+	var table := _reinforce_table()
+	var r := REINFORCE_R
+	var m := REINFORCE_MARGIN_M
+	# Boundary x where (p.x + r) - table.position.x == margin_m exactly; z=0 keeps every other
+	# edge far out of range, so ONLY the 12" boundary on the left edge is under test.
+	var boundary_x: float = table.position.x + m - r
+	var just_inside := Vector3(boundary_x - 0.0015, 0, 0)
+	assert_bool(SoloController.reinforcement_spot_in_strip(just_inside, r, table, m)).is_true()
+
+
+func test_reinforcement_strip_rejects_a_base_just_past_twelve_inches_of_the_edge() -> void:
+	var table := _reinforce_table()
+	var r := REINFORCE_R
+	var m := REINFORCE_MARGIN_M
+	var boundary_x: float = table.position.x + m - r
+	# Only 3mm further in than the accepted point above — pins the 12" LINE itself, not some
+	# looser neighbourhood around it.
+	var just_past := Vector3(boundary_x + 0.0015, 0, 0)
+	assert_bool(SoloController.reinforcement_spot_in_strip(just_past, r, table, m)).is_false()
+
+
+func test_reinforcement_strip_rejects_the_table_centre() -> void:
+	var table := _reinforce_table()
+	assert_bool(SoloController.reinforcement_spot_in_strip(Vector3.ZERO, REINFORCE_R, table, REINFORCE_MARGIN_M)).is_false()
+
+
+func test_reinforcement_strip_rejects_a_base_hanging_off_the_table() -> void:
+	var table := _reinforce_table()
+	var r := REINFORCE_R
+	# 1mm past the left edge: trivially "within 12 inches of that edge", but the base's own extent
+	# is off the table — the strip requires FULLY on the table AND fully within the margin.
+	var hanging := Vector3(table.position.x - 0.001, 0, 0)
+	assert_bool(SoloController.reinforcement_spot_in_strip(hanging, r, table, REINFORCE_MARGIN_M)) \
+		.override_failure_message("off-table must lose even though it is well inside 12\" of the edge") \
+		.is_false()
+
+
+func test_reinforcement_strip_accepts_a_corner() -> void:
+	var table := _reinforce_table()
+	var r := REINFORCE_R
+	var corner := Vector3(table.position.x + r + 0.01, 0, table.position.y + r + 0.01)
+	assert_bool(SoloController.reinforcement_spot_in_strip(corner, r, table, REINFORCE_MARGIN_M)).is_true()
+
+
+func test_reinforcement_spots_returns_one_legal_non_overlapping_position_per_model() -> void:
+	var table := _reinforce_table()
+	var radii: Array = [REINFORCE_R, REINFORCE_R, REINFORCE_R]
+	var prefer := Vector3(table.position.x + REINFORCE_R + 0.05, 0, 0)   # hugging the left edge
+	var result := SoloController.reinforcement_spots(radii, table, REINFORCE_MARGIN_M, [], prefer, 0.0254)
+	# (1) one position per requested model
+	assert_array(result).has_size(3)
+	# (2) every position is a legal landing spot
+	for p in result:
+		assert_bool(SoloController.reinforcement_spot_in_strip(p, REINFORCE_R, table, REINFORCE_MARGIN_M)) \
+			.override_failure_message("every returned spot must itself be a legal strip position").is_true()
+	# (3) no two returned models stand closer than the sum of their radii
+	for i in result.size():
+		for j in range(i + 1, result.size()):
+			var pi: Vector3 = result[i]
+			var pj: Vector3 = result[j]
+			var min_gap: float = float(radii[i]) + float(radii[j])
+			assert_float(Vector2(pi.x, pi.z).distance_to(Vector2(pj.x, pj.z))) \
+				.override_failure_message("models %d and %d overlap" % [i, j]) \
+				.is_greater_equal(min_gap)
+
+
+func test_reinforcement_spots_are_deterministic() -> void:
+	var table := _reinforce_table()
+	var radii: Array = [REINFORCE_R, REINFORCE_R, REINFORCE_R]
+	var prefer := Vector3(table.position.x + REINFORCE_R + 0.05, 0, 0)
+	var blockers: Array = [{"p": Vector3(0.2, 0, 0.2), "r": REINFORCE_R}]
+	var first := SoloController.reinforcement_spots(radii, table, REINFORCE_MARGIN_M, blockers, prefer, 0.0254)
+	var second := SoloController.reinforcement_spots(radii, table, REINFORCE_MARGIN_M, blockers, prefer, 0.0254)
+	assert_array(first).has_size(3)
+	assert_array(first).is_equal(second)
+
+
+## "Platznot": a tiny table blanketed with blockers has no room for every requested model. The
+## returned array is SHORTER than the request — the caller's cue to forfeit the rest with a log
+## line rather than refusing the whole arrival.
+func test_reinforcement_spots_returns_fewer_than_requested_when_the_strip_is_crowded() -> void:
+	var tiny := Rect2(-0.2, -0.2, 0.4, 0.4)
+	var huge_margin := 10.0   # bigger than the whole board -> the entire table counts as "strip"
+	var blockers: Array = []
+	var step := 0.05   # keep-out zone (model r + blocker r = 0.066) beats the grid diagonal (~0.035)
+	var x := -0.25
+	while x <= 0.25:
+		var z := -0.25
+		while z <= 0.25:
+			blockers.append({"p": Vector3(x, 0, z), "r": 0.05})
+			z += step
+		x += step
+	var radii: Array = [REINFORCE_R, REINFORCE_R, REINFORCE_R]
+	var result := SoloController.reinforcement_spots(radii, tiny, huge_margin, blockers, Vector3.ZERO, 0.0254)
+	assert_int(result.size()).is_less(radii.size())
+	assert_int(result.size()).is_greater_equal(0)
+	for p in result:
+		assert_bool(SoloController.reinforcement_spot_in_strip(p, REINFORCE_R, tiny, huge_margin)).is_true()
+
+
+func test_reinforcement_spots_with_no_models_returns_empty() -> void:
+	var table := _reinforce_table()
+	var result := SoloController.reinforcement_spots([], table, REINFORCE_MARGIN_M, [], Vector3.ZERO, 0.0254)
+	assert_array(result).is_empty()
+
+
+func test_reinforcement_spots_route_around_a_blocker_on_the_preferred_slot() -> void:
+	var table := _reinforce_table()
+	var r := REINFORCE_R
+	var prefer := Vector3(table.position.x + r + 0.05, 0, 0)
+	var blockers: Array = [{"p": prefer, "r": r}]   # sits exactly on the otherwise-preferred slot
+	var result := SoloController.reinforcement_spots([r], table, REINFORCE_MARGIN_M, blockers, prefer, 0.0254)
+	assert_array(result).has_size(1)
+	var placed: Vector3 = result[0]
+	assert_float(Vector2(placed.x, placed.z).distance_to(Vector2(prefer.x, prefer.z))) \
+		.override_failure_message("the placed model must not overlap the blocker sitting on the preferred slot") \
+		.is_greater_equal(r + r)
+
+
+func test_reinforcement_shape_centres_the_row_and_spaces_by_radius_plus_gap() -> void:
+	var radii: Array = [0.016, 0.016, 0.016]
+	var gap := 0.008
+	var shape := SoloController.reinforcement_shape(radii, gap)
+	assert_array(shape).has_size(3)
+	var sum_x := 0.0
+	for entry in shape:
+		sum_x += float(((entry as Dictionary)["off"] as Vector2).x)
+	assert_float(sum_x / shape.size()) \
+		.override_failure_message("the row must be centred on zero").is_equal_approx(0.0, 1e-6)
+	for i in range(1, shape.size()):
+		var prev_off: Vector2 = (shape[i - 1] as Dictionary)["off"]
+		var cur_off: Vector2 = (shape[i] as Dictionary)["off"]
+		var expected_gap: float = float(radii[i - 1]) + gap + float(radii[i])
+		assert_float(cur_off.x - prev_off.x) \
+			.override_failure_message("adjacent entries %d/%d must sit exactly r_a+gap+r_b apart" % [i - 1, i]) \
+			.is_equal_approx(expected_gap, 1e-9)
+	for i in shape.size():
+		assert_float(float((shape[i] as Dictionary)["r"])).is_equal_approx(float(radii[i]), 1e-9)

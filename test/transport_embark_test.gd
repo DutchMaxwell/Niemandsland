@@ -170,3 +170,39 @@ func test_restore_after_load_reparks_and_spots_survive_the_save() -> void:
 	# And the state still unwinds cleanly after the restore.
 	assert_bool(_mgr.set_unit_embarked(squad, null, false)).is_true()
 	assert_bool(squad.unit_properties.has("embark_return_spots")).is_false()
+
+
+# ===== S1.5 (community #160): loading an AMBUSH transport during deployment =====
+
+func test_embark_clears_the_cargos_own_ambush_reserve() -> void:
+	# Cargo rides its TRANSPORT's reserve — never its own. A unit flagged for Ambush that
+	# embarks must lose the flag, or both arrival loops would ALSO place it on the table
+	# (double arrival); the transport keeps its reserve and carries the cargo inside.
+	var apc := _unit("apc", 1, ["Transport(6)", "Ambush"])
+	var squad := _unit("squad", 3, ["Ambush"])
+	squad.unit_properties["ambush_reserve"] = true
+	apc.unit_properties["ambush_reserve"] = true
+	assert_bool(_mgr.set_unit_embarked(squad, apc, true)).is_true()
+	assert_bool(bool(squad.unit_properties.get("ambush_reserve", false))).is_false()
+	assert_bool(bool(apc.unit_properties.get("ambush_reserve", false))).is_true()
+	assert_object(_mgr.transport_of(squad)).is_same(apc)
+
+
+func test_reserve_transport_is_offered_only_during_deployment() -> void:
+	# The radial's embark resolver: a transport waiting in Ambush reserve is loadable WITHOUT
+	# the 1" table reach while deploying ("Transports may deploy with units inside") — and
+	# NOT in play, where a reserve-embark would be a free un-deploy teleport.
+	var apc := _unit("apc", 1, ["Transport(6)"])
+	apc.unit_properties["ambush_reserve"] = true
+	var squad := _unit("squad", 3, [])
+	# The squad stands far from the (tray-parked) transport — the 1" reach path must NOT
+	# fire; only the reserve door may offer the embark.
+	for m in squad.models:
+		(m as ModelInstance).node.global_position = Vector3(2.0, 0, 0)
+	var radial: RadialMenuController = auto_free(RadialMenuController.new())
+	radial.army_manager = _mgr
+	_mgr.game_phase = OPRArmyManager.GamePhase.DEPLOYMENT
+	# Two-truck-choice wave: the singular helper became _embark_targets_for (Array).
+	assert_array(radial._embark_targets_for(squad)).contains([apc])
+	_mgr.game_phase = OPRArmyManager.GamePhase.PLAYING
+	assert_array(radial._embark_targets_for(squad)).is_empty()

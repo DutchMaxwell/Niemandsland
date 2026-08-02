@@ -32,10 +32,18 @@ signal remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, add:
 signal remote_model_marker_updated(model: ModelInstance, marker_name: String, add: bool, color: Color, value: int)
 signal remote_unit_marker_value_updated(game_unit: GameUnit, marker_name: String, value: int)
 signal remote_model_marker_value_updated(model: ModelInstance, marker_name: String, value: int)
+## NML-945 — a whole unit LEFT the table (Ambush Re-Deployment) or came back from reserve. Carries
+## the reserve flag alongside the visibility: on this side the two are separate state (the model
+## nodes vs. unit_properties) that nothing keeps in lockstep, so a peer deriving one from the other
+## would invent an invariant the local game does not enforce.
+signal remote_unit_visibility_updated(game_unit: GameUnit, is_visible: bool, in_reserve: bool)
 signal remote_objective_owner_updated(index: int, owner: int)
 signal remote_token_defined(token_name: String, color: Color, is_counter: bool, effect: String)
 signal remote_token_edited(old_name: String, new_name: String, color: Color, effect: String)
 signal remote_casts_updated(game_unit: GameUnit)
+## NML-929 — a unit's full active spell/buff modifier record list changed on a peer. `records` is
+## raw wire data: the receiver normalises it before installing anything.
+signal remote_spell_mods_updated(game_unit: GameUnit, records: Array)
 signal remote_sort_table_received
 signal remote_unit_deleted(game_unit: GameUnit)
 signal remote_round_advanced()
@@ -64,6 +72,17 @@ const VERSION_HANDSHAKE_TIMEOUT: float = 8.0
 ## Sentinel for slot_to_peer: the slot is RESERVED to its token but currently has no
 ## live peer (the occupant dropped; a rejoin with the same token reclaims it).
 const SLOT_RESERVED_PEER: int = 0
+
+## NML-927 — the unit_properties keys that broadcast_unit_property / sync_unit_property may carry.
+## unit_properties is the game's general-purpose bag: it also holds ownership (player_id), the army
+## list entry, the model spec and the faction folder. A peer must never be able to write an
+## ARBITRARY key into it from the wire, so both directions are gated on this list. Adding a key here
+## is a deliberate act — it says "this number is rules-relevant, invisible, and both tables need it".
+const SYNCABLE_UNIT_PROPERTIES: PackedStringArray = [
+	"spot_markers",     # Precision Spotter marks (int). The token on the table is a plain boolean.
+	"spell_move_mod",   # {advance, rush} — the NET spell movement delta the move bands read.
+	"spell_range_mod",  # int — the NET spell shooting-range delta every volley/plan site reads.
+]
 
 var peer: ENetMultiplayerPeer = null
 var is_host: bool = false
@@ -182,6 +201,10 @@ func disconnect_game() -> void:
 	_next_slot = 2
 	_my_assigned_slot = 0
 	_last_connection_status = -1
+	# A mid-game creation whose build was abandoned by the drop would otherwise keep its unit_id
+	# flagged forever and refuse the same unit after a re-sync (same reason save_manager has
+	# reset_restore_lock).
+	_units_created_in_flight.clear()
 	print("[Network] === DISCONNECTED ===")
 
 
@@ -741,6 +764,27 @@ func sync_move_trails(owner_slot: int, unit_id: String, unit_name: String,
 					radius, round_num, drop_id)
 
 
+## #162 — a peer TOOK BACK a move: mirror the take-back so the drop's chalk + inch
+## stamp + ledger proof vanish here too. The models' snap-back rides the ordinary
+## broadcast_move/broadcast_rotation messages the take-back action already sends.
+func broadcast_move_trails_undo(owner_slot: int, unit_id: String, drop_id: int) -> void:
+	if not is_multiplayer_active():
+		return
+	if not _validate_rpc_ready("broadcast_move_trails_undo"):
+		return
+	_remote_call("sync_move_trails_undo", [owner_slot, unit_id, drop_id], 0)
+
+
+## RPC: remove ONE drop's trail visuals + ledger entries (#162). Same keying as
+## sync_move_trails (owner_slot + unit_id + drop_id travel verbatim both ways).
+@rpc("any_peer", "call_remote", "reliable")
+func sync_move_trails_undo(owner_slot: int, unit_id: String, drop_id: int) -> void:
+	var trails := get_node_or_null("/root/Main/MoveTrails")
+	if trails == null or not trails.has_method("undo_drop"):
+		return
+	trails.undo_drop(owner_slot, unit_id, drop_id)
+
+
 ## Helper to broadcast movement to all peers
 func broadcast_move(object_id: int, pos: Vector3) -> void:
 	if not is_multiplayer_active():
@@ -775,6 +819,30 @@ func broadcast_move_log(summaries: Array) -> void:
 @rpc("any_peer", "call_remote", "reliable")
 func sync_move_log(summaries: Array) -> void:
 	remote_move_log_received.emit(summaries)
+
+
+## NML-946 — one finished battle-log line that the other peers cannot derive for themselves.
+signal remote_log_event_received(category: int, text: String, ai: bool, detail: String)
+
+
+## Broadcast a rules line (see main._log_rule_event for WHICH lines travel and why).
+##
+## Deliberately a SECOND pair beside broadcast_move_log rather than a generalisation of it. The move
+## pair ships per-unit movement DATA that each receiver renders into its own line; this one ships a
+## line that is already written. And renaming the move pair would have silently dropped every
+## movement line on any peer that predates the rename — the has_method() dispatch in _on_raw_command
+## is what makes an unknown handler harmless, and that cuts both ways.
+func broadcast_log_event(category: int, text: String, ai: bool = false, detail: String = "") -> void:
+	if not is_multiplayer_active() or text.is_empty():
+		return
+	if not _validate_rpc_ready("broadcast_log_event"):
+		return
+	_remote_call("sync_log_event", [category, text, ai, detail], 0)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func sync_log_event(category: int, text: String, ai: bool = false, detail: String = "") -> void:
+	remote_log_event_received.emit(int(category), str(text), bool(ai), str(detail))
 
 
 ## RPC: Move multiple objects in one message. Format: [id, x, y, z, id, x, y, z, ...]
@@ -966,6 +1034,54 @@ func sync_unit_marker_value(unit_id: String, marker_name: String, value: int) ->
 		remote_unit_marker_value_updated.emit(game_unit, marker_name, value)
 
 
+## RPC: Mirror a whole unit's presence on the table — every model node of the unit and of the heroes
+## joined to it, plus the Ambush reserve flag that goes with it.
+##
+## NML-945 — deliberately NOT sync_object_visibility: that one addresses ONE node by network_id among
+## ObjectManager's DIRECT children (a regiment member lives under its tray and is unreachable there)
+## and stamps the "deleted" meta, which is the delete/undo semantics for terrain and TTS props. A
+## unit withdrawn into reserve is not deleted, and it is a unit, not a node.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_unit_visible(unit_id: String, is_visible: bool, in_reserve: bool) -> void:
+	if not army_manager:
+		return
+	var game_unit = army_manager.get_game_unit_by_id(unit_id)
+	if game_unit:
+		remote_unit_visibility_updated.emit(game_unit, is_visible, in_reserve)
+
+
+## RPC: apply a HIDDEN per-unit state delta (see broadcast_unit_property). `value == null` erases
+## the key. Deliberately emits NO signal: every reader of these keys is a PURE reader that asks
+## unit_properties at the moment it needs the number (move_bands_for_props, shooting_range_bonus,
+## the spotter's to-hit seam), so there is nothing to refresh when one arrives — and the visible
+## halves that DO need a refresh (the "Spotted" token) travel on the marker channel already.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_unit_property(unit_id: String, key: String, value: Variant) -> void:
+	if not army_manager or not SYNCABLE_UNIT_PROPERTIES.has(key):
+		return
+
+	var game_unit = army_manager.get_game_unit_by_id(unit_id)
+	if game_unit:
+		if value == null:
+			game_unit.unit_properties.erase(key)
+		else:
+			game_unit.unit_properties[key] = value
+
+
+## RPC: adopt a unit's full active spell/buff modifier record list (see broadcast_spell_mods).
+## Unlike sync_unit_property this DOES emit: the records drive side effects main owns (the granted
+## rule overlay on special_rules, the props stamps), so main has to be told rather than polled.
+## The payload is untrusted — main normalises it before installing anything.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_spell_mods(unit_id: String, records: Array) -> void:
+	if not army_manager:
+		return
+
+	var game_unit = army_manager.get_game_unit_by_id(unit_id)
+	if game_unit:
+		remote_spell_mods_updated.emit(game_unit, records)
+
+
 ## RPC: Sync a mission objective's owner (any peer can capture objectives).
 @rpc("any_peer", "call_remote", "reliable")
 func sync_objective_owner(index: int, owner_id: int) -> void:
@@ -1132,6 +1248,53 @@ func broadcast_model_marker_value(model: ModelInstance, marker_name: String, val
 func broadcast_unit_marker_value(game_unit: GameUnit, marker_name: String, value: int) -> void:
 	if is_multiplayer_active() and game_unit:
 		_remote_call("sync_unit_marker_value", [game_unit.unit_id, marker_name, value], 0)
+
+
+## Broadcast a unit's presence on the table (NML-945). The reserve flag is read HERE, at send time,
+## so callers keep the plain two-argument shape while the wire still states both facts outright.
+func broadcast_unit_visible(game_unit: GameUnit, is_visible: bool) -> void:
+	if not is_multiplayer_active() or game_unit == null:
+		return
+	if not _validate_rpc_ready("broadcast_unit_visible"):
+		return
+	var in_reserve: bool = bool(game_unit.unit_properties.get("ambush_reserve", false))
+	_remote_call("sync_unit_visible", [game_unit.unit_id, is_visible, in_reserve], 0)
+
+
+## NML-927 — broadcast a HIDDEN per-unit state delta: a unit_properties key that carries a NUMBER
+## the rules read, but has no counter token of its own to ride the marker channel. `value == null`
+## means "erase the key".
+##
+## WHY IT IS ITS OWN CALL AND NOT broadcast_unit_marker_value. The marker channel addresses a
+## RENDERED counter token by name and only ever carries an int; these keys are invisible state and
+## one of them is a Dictionary. Squeezing them through the marker call would either put a phantom
+## counter on the peer's table or lose the payload.
+##
+## WIRE FORMAT: unchanged. Like every other sync_* call this goes through _remote_call, i.e. one
+## more handler NAME inside the existing {"m": …, "a": […]} command envelope — no new protocol and
+## no new channel. A peer that predates the handler fails the has_method() test in _on_raw_command
+## and ignores the frame instead of erroring.
+func broadcast_unit_property(game_unit: GameUnit, key: String, value: Variant) -> void:
+	if not is_multiplayer_active() or game_unit == null:
+		return
+	if not SYNCABLE_UNIT_PROPERTIES.has(key):
+		push_warning("[Net] refusing to broadcast unlisted unit property '%s'" % key)
+		return
+	_remote_call("sync_unit_property", [game_unit.unit_id, key, value], 0)
+
+
+## NML-929 — broadcast a unit's FULL list of active spell/buff modifier records (the F4/NML-006
+## machinery: hit/defense/casting/morale modifiers, the "+X″ range/advance/rush" deltas and granted
+## rules). Same channel and the same shape as broadcast_unit_property above — one more handler name
+## in the existing command envelope, wire format unchanged.
+##
+## FULL REPLACE, not add/remove deltas. The lists are tiny (a unit carries one or two records), a
+## single exchange can spend several at once, and a replace is IDEMPOTENT: a duplicated or reordered
+## frame cannot leave the two tables holding different modifiers, which is the entire point.
+func broadcast_spell_mods(game_unit: GameUnit, records: Array) -> void:
+	if not is_multiplayer_active() or game_unit == null:
+		return
+	_remote_call("sync_spell_mods", [game_unit.unit_id, records], 0)
 
 
 ## Broadcast a mission objective owner change (any peer may capture).
@@ -1533,6 +1696,19 @@ func seated_slots() -> Array:
 	return slots
 
 
+## #196 — whether a CONNECTED human occupies this player slot right now. The solo automation
+## must never act for such a slot, whatever a (stale) AI designation claims. Works on host
+## AND guest: peer_to_slot is host-authoritative and mirrored to guests via the slot-table
+## pushes; entries are erased on disconnect, so a vacated slot honestly reads unoccupied.
+func slot_has_human_peer(slot: int) -> bool:
+	if slot <= 0 or not is_multiplayer_active():
+		return false
+	for p in peer_to_slot:
+		if int(peer_to_slot[p]) == slot:
+			return true
+	return false
+
+
 ## Host-side: are ALL seated players ready? True only when every seated slot's flag is set.
 func all_players_ready() -> bool:
 	for s in seated_slots():
@@ -1719,6 +1895,328 @@ func broadcast_army_batched(
 	await get_tree().create_timer(ARMY_BATCH_DELAY_MS / 1000.0).timeout
 	if _validate_rpc_ready("broadcast_army_complete"):
 		_remote_call("sync_army_complete", [player_id, rule_descriptions], 0)
+
+
+# ===== Runtime Unit Creation (Reinforcement / Split / Spawn) =====
+#
+# The army batch above only ever runs at IMPORT time: a whole roster, announced by a header and
+# closed by a complete. The unit-creating rules make a single unit in the MIDDLE of a game, with
+# no roster around it, so they get their own one-shot message instead of a one-unit batch (a
+# header/complete pair would drag the loading overlay and the presence pause across a Split).
+#
+# ---------------------------------------------------------------------------------------------
+# WHO MINTS THE network_id — the decision this channel rests on.
+#
+# An OPR-owned network_id is `slot * OPR_NET_ID_SLOT_STRIDE + counter` (opr_army_manager.gd:406).
+# The SLOT is the durable, host-assigned identity: monotonic, never recycled within a session,
+# and occupied by at most one peer at a time. The stride therefore already partitions the id
+# space into per-slot bands that no two slots can ever share — network_id_namespace_test.gd
+# pins exactly that. The low counter is client-local, but it is only ever the LOW half of an id.
+#
+# So the collision the restore-lock warns about (main.gd:12712-12715) is a LOCAL one: two builds
+# on ONE client mutating the shared _object_counter and _loaded_game_units at the same time. It
+# is not a distributed allocation race, and it is not cured by routing allocation through the
+# host.
+#
+# Hence: authority is per BAND, not per session. A peer may mint ids in a band it owns —
+# a guest in its own slot, the host additionally in every slot no live peer occupies (AI players,
+# seats nobody joined). A guest whose Split fires resolves it immediately in its own band; no
+# request/grant round trip, so no correlation ids, no pending-creation state to reconcile after a
+# reconnect, and no failure mode where the rule stalls because the host is busy rebuilding an
+# army. The host round trip would buy nothing the stride does not already give us, and it would
+# put a network wait inside a rules resolution.
+#
+# What the round trip WOULD have caught is a peer creating in someone else's band, so that is
+# checked directly and refused loudly (may_create_units_for_slot below) instead of being made
+# structurally impossible at the cost of a latency hop.
+#
+# The receiver additionally water-marks its bare low counter from every unit it takes in, exactly
+# as the army batch does (main.gd:12920-12935), so a band stays monotone even when its ownership
+# moved (host imported for slot 2 before the guest holding slot 2 joined).
+# ---------------------------------------------------------------------------------------------
+
+## A unit was created mid-game on a remote peer and is now built here. `origin` is the rule that
+## made it ("reinforcement" / "split" / "spawn" / "" when unstated) so the log can name it.
+signal remote_unit_created(game_unit: GameUnit, origin: String)
+
+## Wire-format version of a unit-created payload. Bumped when the envelope's meaning changes; the
+## receiver refuses a version it does not know rather than half-building a unit.
+const UNIT_CREATED_WIRE_VERSION: int = 1
+
+## unit_ids whose creation is being built right now. Model spawning awaits (GLB downloads, frame
+## yields), so the units_dict registration that _deserialize_object performs lands only at the END
+## of a build; a duplicate delivery arriving inside that window would sail past a plain
+## game_units.has() check and build the unit twice. This is the guard for that window; the
+## game_units check covers everything after it.
+var _units_created_in_flight: Dictionary = {}   # Dictionary[String, bool]
+
+
+## Are we the session host? A seam over multiplayer.is_server() so the band rule below can be
+## driven from BOTH roles in a test — a real guest needs a real socket pair, which no unit-level
+## suite can stand up, and the guest branch is the half that must not be taken on trust.
+func _is_session_host() -> bool:
+	return multiplayer.is_server()
+
+
+## Whether THIS peer may mint OPR network_ids in `slot`'s band — see the block comment above.
+## Outside a session everything is ours. In a session: our own slot always; for the host also
+## every slot no live peer occupies. A guest cannot see slot_to_peer (host-only), and does not
+## need to: it owns exactly one band.
+func may_create_units_for_slot(slot: int) -> bool:
+	if slot <= 0:
+		return false
+	if not is_multiplayer_active():
+		return true
+	if slot == get_my_player_slot():
+		return true
+	if _is_session_host():
+		return not slot_has_human_peer(slot)
+	return false
+
+
+## Serialize a mid-game unit for the wire: the unit itself (same shape the army batch and the save
+## file use — to_dict plus model_positions plus the AoF:R tray) and one serialized object per live
+## model, so the receiver can rebuild the models through the ordinary load path.
+##
+## Public because the SENDER side has to be assertable without a socket: a test builds the payload,
+## feeds it to sync_unit_created and compares the rebuilt unit against the original.
+func build_unit_created_payload(unit: GameUnit, origin: String = "") -> Dictionary:
+	if unit == null:
+		return {}
+	var main := get_node_or_null("/root/Main")
+	var sm = main.save_manager if main != null else null
+
+	var unit_dict: Dictionary = unit.to_dict()
+	var model_positions: Array = []
+	var objects: Array = []
+	for model in unit.models:
+		if model.node != null and is_instance_valid(model.node):
+			model_positions.append({
+				"position": [model.node.global_position.x, 0.0, model.node.global_position.z],
+				"rotation": [model.node.rotation_degrees.x, model.node.rotation_degrees.y, model.node.rotation_degrees.z],
+				"visible": model.node.visible
+			})
+			if sm != null:
+				var obj_data: Dictionary = sm._serialize_object(model.node)
+				if not obj_data.is_empty():
+					objects.append(obj_data)
+		else:
+			model_positions.append(null)
+	unit_dict["model_positions"] = model_positions
+
+	# AoF:R — a unit that was formed into a movement tray ships the block too, exactly as the army
+	# broadcast does (game_unit.to_dict() omits it).
+	if army_manager != null and army_manager.regiments.has(unit.unit_id):
+		var reg = army_manager.regiments[unit.unit_id]
+		if reg != null and is_instance_valid(reg.tray):
+			unit_dict["regiment"] = reg.to_dict()
+
+	return {
+		"v": UNIT_CREATED_WIRE_VERSION,
+		"unit": unit_dict,
+		"objects": objects,
+		"player_id": int(unit.unit_properties.get("player_id", 0)),
+		"origin": origin,
+	}
+
+
+## Broadcast a unit a rule just created mid-game to every peer. Called by the local factory
+## (OPRArmyManager.create_runtime_unit) AFTER the unit stands on the table, so the payload carries
+## the real model positions and the ids this peer minted.
+##
+## Silent outside a session. Refuses — loudly — when this peer is not the authority for the unit's
+## band, because the ids in that payload would then be somebody else's to hand out.
+func broadcast_unit_created(unit: GameUnit, origin: String = "") -> void:
+	if unit == null:
+		return
+	if not is_multiplayer_active():
+		return
+	var slot: int = int(unit.unit_properties.get("player_id", 0))
+	if not may_create_units_for_slot(slot):
+		push_warning("[Network] Refusing to broadcast a unit created for slot %d — this peer is not that band's id authority (unit '%s')" % [slot, unit.unit_id])
+		return
+	if not _validate_rpc_ready("broadcast_unit_created"):
+		return
+	var payload: Dictionary = build_unit_created_payload(unit, origin)
+	if payload.is_empty():
+		return
+	print("[Network] Unit created mid-game -> wire: '%s' (slot %d, %d models, origin='%s')" % [
+		str(unit.unit_properties.get("name", "?")), slot, payload.get("objects", []).size(), origin])
+	_remote_call("sync_unit_created", [payload], 0)
+
+
+## RPC: build a unit another peer created mid-game.
+##
+## IDEMPOTENT on unit_id (which is `unix_time + "_" + randi()`, game_unit.gd:557 — unique across
+## peers without coordination): an already-known or currently-building unit is dropped. The model
+## layer has its own second net underneath, find_by_network_id in save_manager._deserialize_object,
+## which rebinds a duplicate model instead of doubling it.
+##
+## Takes the RESTORE LOCK for the whole build. A creation that lands in the middle of an army batch
+## therefore queues behind it instead of racing it: both paths mutate _loaded_game_units and
+## _object_counter, and that is precisely the interleave the lock exists for.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_unit_created(payload: Dictionary) -> void:
+	var sender := _get_sender()
+	if int(payload.get("v", 0)) != UNIT_CREATED_WIRE_VERSION:
+		push_warning("[Network] Ignoring unit-created from peer %d: wire version %s, expected %d" % [
+			sender, str(payload.get("v", "?")), UNIT_CREATED_WIRE_VERSION])
+		return
+	var unit_dict: Dictionary = payload.get("unit", {})
+	var unit_id: String = str(unit_dict.get("unit_id", ""))
+	if unit_id.is_empty():
+		return
+	if _units_created_in_flight.has(unit_id):
+		print("[Network] Unit-created '%s' from peer %d ignored — already building it" % [unit_id, sender])
+		return
+	if army_manager != null and army_manager.game_units.has(unit_id):
+		print("[Network] Unit-created '%s' from peer %d ignored — already here" % [unit_id, sender])
+		return
+
+	var main := get_node_or_null("/root/Main")
+	if main == null or army_manager == null or main.save_manager == null:
+		return
+	_units_created_in_flight[unit_id] = true
+	await _build_created_unit(unit_dict, payload.get("objects", []), str(payload.get("origin", "")), main)
+	_units_created_in_flight.erase(unit_id)
+
+
+## The build itself, split out so the in-flight guard is released on every exit path.
+func _build_created_unit(unit_dict: Dictionary, objects: Array, origin: String, main: Node) -> void:
+	var sm = main.save_manager
+	var om = main.object_manager
+	var unit_id: String = str(unit_dict.get("unit_id", ""))
+
+	# Serialize against a concurrent army build / join state-sync — same mutex, same reason.
+	await sm.begin_restore()
+
+	# Water-mark the BARE low counter (strip the slot band) before anything allocates, so an id we
+	# mint later can never land on one this payload already carries.
+	if om != null:
+		var max_counter: int = om._object_counter
+		for obj_data in objects:
+			if obj_data is Dictionary:
+				var nid := int((obj_data as Dictionary).get("network_id", 0))
+				var c := (nid % OPRArmyManager.OPR_NET_ID_SLOT_STRIDE) if nid >= OPRArmyManager.OPR_NET_ID_SLOT_STRIDE else nid
+				if c > max_counter:
+					max_counter = c
+		om._object_counter = max_counter
+
+	var built: GameUnit = null
+	# Prefer the local factory when this build has it, so both peers construct the unit through the
+	# very same code. The WIRE stays authoritative for identity — the factory mints its own unit_id
+	# and network_ids, which would leave the two tables unable to address each other's models — so
+	# the factory's output is re-stamped with the transmitted ids, and any factory that does not
+	# hand back a usable unit falls through to the load path below.
+	if army_manager.has_method("create_runtime_unit"):
+		built = _build_via_runtime_factory(unit_dict, objects, origin)
+
+	if built == null:
+		# The proven load path: GameUnit.from_dict into save_manager's staging dict, then the ordinary
+		# object deserializer builds every model through create_model_from_properties, stamps the
+		# transmitted network_id and wires node <-> model <-> unit (restore_game_unit_state also
+		# registers the unit in army_manager.game_units).
+		var game_unit := GameUnit.from_dict(unit_dict)
+		if game_unit == null:
+			sm.end_restore()
+			return
+		# ADDITIVE on purpose: _deserialize_game_units() clears the staging dict, which would drop an
+		# army build that is queued behind us.
+		sm._loaded_game_units[unit_id] = {
+			"game_unit": game_unit,
+			"model_positions": unit_dict.get("model_positions", []),
+			"regiment": unit_dict.get("regiment", null)
+		}
+		# The models of a mid-game unit are usually already cached (a reinforcement is the same
+		# profile as its source), but a spawned creature may be a first sighting.
+		await _ensure_models_for_created_unit(unit_dict, objects)
+		await sm._deserialize_objects(objects)
+		built = army_manager.get_game_unit_by_id(unit_id)
+		# A unit whose models all failed to build must not linger half-registered.
+		if built == null:
+			army_manager.game_units[unit_id] = game_unit
+			built = game_unit
+		var reg_data = unit_dict.get("regiment", null)
+		if reg_data != null and army_manager.has_method("restore_regiment"):
+			army_manager.restore_regiment(
+				built,
+				int(reg_data.get("frontage", 5)),
+				sm._array_to_vector3(reg_data.get("tray_pos", [0, 0, 0])),
+				float(reg_data.get("tray_rot_y", 0.0)),
+				int(reg_data.get("wounds_taken", 0)),
+				int(reg_data.get("network_id", -1))
+			)
+
+	sm.end_restore()
+	if built == null:
+		return
+	print("[Network] Built mid-game unit '%s' (%d models, origin='%s')" % [
+		str(unit_dict.get("unit_properties", {}).get("name", "?")), objects.size(), origin])
+	remote_unit_created.emit(built, origin)
+
+
+## Run the local runtime factory and re-stamp the wire's identity onto what it produced. Returns
+## null when the factory is absent or gave back something unusable, so the caller falls back.
+func _build_via_runtime_factory(unit_dict: Dictionary, objects: Array, origin: String) -> GameUnit:
+	var props: Dictionary = unit_dict.get("unit_properties", {})
+	var player_id: int = int(props.get("player_id", 1))
+	var positions: Array = []
+	for entry in unit_dict.get("model_positions", []):
+		if entry is Dictionary:
+			# A payload is remote input: read it defensively rather than indexing it. A short or
+			# malformed position array must not take the receiver down.
+			var raw = (entry as Dictionary).get("position", [])
+			if raw is Array and (raw as Array).size() >= 3:
+				positions.append(Vector3(float(raw[0]), 0.0, float(raw[2])))
+			else:
+				positions.append(Vector3.ZERO)
+	var made = army_manager.create_runtime_unit(props, player_id, positions, origin)
+	var unit := made as GameUnit
+	if unit == null or unit.models.is_empty():
+		return null
+	# Identity from the wire, not from this peer's counters.
+	var minted_id: String = unit.unit_id
+	var wire_id: String = str(unit_dict.get("unit_id", ""))
+	if minted_id != wire_id:
+		army_manager.game_units.erase(minted_id)
+		unit.unit_id = wire_id
+	army_manager.game_units[wire_id] = unit
+	# Each model takes the network_id its counterpart carries, matched by model_index.
+	var id_by_index: Dictionary = {}
+	for obj_data in objects:
+		if obj_data is Dictionary:
+			id_by_index[int((obj_data as Dictionary).get("model_index", 0))] = int((obj_data as Dictionary).get("network_id", 0))
+	for i in unit.models.size():
+		var node = unit.models[i].node
+		if node != null and is_instance_valid(node) and id_by_index.has(i):
+			node.set_meta("network_id", int(id_by_index[i]))
+	return unit
+
+
+## Download the GLBs a created unit needs before its models are spawned, so they come up as real
+## models rather than placeholders. Mirrors the army batch's single ensure_models call.
+func _ensure_models_for_created_unit(unit_dict: Dictionary, objects: Array) -> void:
+	if army_manager == null or army_manager.model_library == null:
+		return
+	var props: Dictionary = unit_dict.get("unit_properties", {})
+	var faction: String = str(props.get("faction_folder", ""))
+	if faction.is_empty():
+		return
+	var specs: Array = []
+	var seen: Dictionary = {}
+	var unit_name: String = str(props.get("name", ""))
+	if not unit_name.is_empty():
+		seen[unit_name] = true
+		specs.append({"faction": faction, "unit_name": unit_name})
+	# Variant-reworked factions key on the RESOLVED per-model glb_name, not the unit name.
+	for obj_data in objects:
+		if obj_data is Dictionary:
+			var key: String = str((obj_data as Dictionary).get("glb_name", ""))
+			if not key.is_empty() and not seen.has(key):
+				seen[key] = true
+				specs.append({"faction": faction, "unit_name": key})
+	if not specs.is_empty():
+		await army_manager.model_library.ensure_models(specs)
 
 
 # ===== TTS Terrain Synchronization =====

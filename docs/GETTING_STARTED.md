@@ -61,6 +61,7 @@ NACHTMAHR is a rules-based, deterministic game AI (no LLM, no neural net) that r
 | Rotate | `R` |
 | Delete | `Del` / `Backspace` |
 | Copy / Paste / Duplicate | `Ctrl`+`C` / `V` / `D` |
+| Take back the last finished move | `Ctrl`+`Z` (until dice roll / next activation) |
 | Arrange selected (rows) | `1`–`9` |
 | Arrange selected (arrow) | `A` |
 

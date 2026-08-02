@@ -280,16 +280,35 @@ func is_attached() -> bool:
 
 # ===== Activation =====
 
-## Activates this unit for the current round.
-func activate(round_number: int) -> void:
+## Activates this unit for the current round. `via_coordinate` stamps the Coordinate hand-off
+## marker (army-book "Coordinate": "May not be used if this unit was activated via Coordinate") —
+## see mark_activated_via_coordinate() for why the stamp may also land BEFORE the activation.
+func activate(round_number: int, via_coordinate: bool = false) -> void:
 	is_activated = true
 	activation_round = round_number
+	if via_coordinate:
+		mark_activated_via_coordinate()
 
 	# Attached heroes activate together
 	for hero in get_attached_heroes():
 		if hero is GameUnit:
 			hero.is_activated = true
 			hero.activation_round = round_number
+
+
+## Coordinate (army-book upgrade): this unit's next activation IS the hand-off from another unit's
+## Coordinate, so it may not hand off again ("May not be used if this unit was activated via
+## Coordinate"). The stamp is set at HAND-OFF time, not at activation time, because the two sides
+## reach the activation differently: the AI activates the receiver immediately inside the same
+## beat, while a human receiver activates later by their own click. One marker, one truth; the
+## round reset clears it.
+func mark_activated_via_coordinate() -> void:
+	unit_properties["activated_via_coordinate"] = true
+
+
+## Whether this unit's current activation came from another unit's Coordinate (chain guard).
+func was_activated_via_coordinate() -> bool:
+	return bool(unit_properties.get("activated_via_coordinate", false))
 
 
 ## The exact inverse of activate(), attached heroes included. It lives next to activate() on purpose:
@@ -300,15 +319,18 @@ func activate(round_number: int) -> void:
 func deactivate() -> void:
 	is_activated = false
 	activation_round = 0
+	unit_properties.erase("activated_via_coordinate")   # the inverse of activate(via_coordinate)
 	for hero in get_attached_heroes():
 		if hero is GameUnit:
 			hero.is_activated = false
 			hero.activation_round = 0
 
 
-## Resets activation state for a new round.
+## Resets activation state for a new round. The Coordinate hand-off marker is a PER-ROUND stamp
+## (a unit coordinated in round 2 may hand off again in round 3), so it dies with the round.
 func reset_activation() -> void:
 	is_activated = false
+	unit_properties.erase("activated_via_coordinate")
 
 
 ## Resets unit status, wounds, markers and model visibility to import state.
@@ -321,6 +343,7 @@ func reset_to_import_state() -> void:
 	is_fatigued = false
 	is_shaken = false
 	activation_round = 0
+	unit_properties.erase("activated_via_coordinate")
 
 	# Reset caster points
 	reset_caster_points()
@@ -343,7 +366,9 @@ func reset_to_import_state() -> void:
 
 ## Checks if this unit has the Caster special rule.
 func is_caster() -> bool:
-	return has_special_rule("Caster")
+	# NML-216 wave B: Caster Group makes the unit a caster too ("pick one model with this
+	# rule to have Caster(X)" — in our unit-level token model the unit carries the pool).
+	return has_special_rule("Caster") or has_special_rule("Caster Group")
 
 
 ## Gets the Caster(X) value from special rules.
@@ -363,6 +388,23 @@ func get_caster_value() -> int:
 			var end = rule_name.find(")")
 			if start > 0 and end > start:
 				return int(rule_name.substr(start, end - start))
+	# NML-216 wave B — Caster Group (army-book): "pick one model with this rule to have
+	# Caster(X), where X is the total number of models with this rule in this unit. If the
+	# model is killed, pick another and transfer all spell tokens" — our tokens live on the
+	# UNIT, so the transfer is inherent; X follows the ALIVE count (re-evaluated per grant).
+	if has_special_rule("Caster Group"):
+		return maxi(get_alive_count(), 0)
+	# Wave B — Spell Accumulator(X): "gets X accumulator tokens at the start of each round,
+	# but can't hold more than 6" — a token BATTERY: it stores via the same casts machinery
+	# (accumulating grant, cap 6) but is_caster() stays false (it never casts itself;
+	# neighbours within 12" spend its stock — see the pool builder).
+	for r2 in rules:
+		var rn := str(r2 if r2 is String else (r2 as Dictionary).get("name", "")) if (r2 is String or r2 is Dictionary) else ""
+		if rn.begins_with("Spell Accumulator("):
+			var s2 := rn.find("(") + 1
+			var e2 := rn.find(")")
+			if s2 > 0 and e2 > s2:
+				return int(rn.substr(s2, e2 - s2))
 	return 0
 
 
@@ -376,6 +418,12 @@ func initialize_caster_points() -> void:
 
 ## Adds caster points for a new round (accumulates, capped at 6).
 func add_round_caster_points() -> void:
+	if has_special_rule("Caster Group"):
+		# Wave B: "the caster loses all unspent spell tokens at the end of the round" — the
+		# grant RESETS to the current bearer count instead of accumulating.
+		casts_per_round = get_caster_value()
+		casts_current = casts_per_round
+		return
 	if casts_per_round > 0:
 		casts_current = mini(casts_current + casts_per_round, CASTER_POINTS_CAP)
 

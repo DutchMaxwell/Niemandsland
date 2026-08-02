@@ -23,7 +23,7 @@ static func profiles_in_range(weapons: Array, dist_in: float) -> Array:
 		if attacks <= 0:
 			continue
 		out.append(_profile(w, attacks, rng_in))
-	return out
+	return merge_identical(out)
 
 
 ## NML-002: the unit's Strafing weapon profiles (fired ONLY by the move-through trigger).
@@ -50,7 +50,45 @@ static func melee_profiles(weapons: Array) -> Array:
 		if attacks <= 0:
 			continue
 		out.append(_profile(w, attacks, 0))
+	return merge_identical(out)
+
+
+## #217 — identical weapon entries merge into ONE profile (summed attacks + count). Army
+## Forge exports per-pick lines (a 3-suit unit with 3 plasma each = NINE "count 1" entries),
+## which fired as nine one-die volleys and read as "multiplied weapons"; the aggregated
+## export form (one "count 3" entry) is the long-proven path, so merging normalizes to it —
+## one card group, one roll, one log line ("fired simultaneously", GF v3.5.1 p.8).
+## Per-identity rules keep their own profiles: Limited (once-per-game bookkeeping) and
+## Takedown (its model pick) never merge.
+static func merge_identical(profiles: Array) -> Array:
+	var out: Array = []
+	var index := {}   # signature -> position in out
+	for p in profiles:
+		var pd := p as Dictionary
+		if bool(pd.get("limited", false)) or bool(pd.get("takedown", false)):
+			out.append(pd)
+			continue
+		var sig := _merge_signature(pd)
+		if index.has(sig):
+			var t: Dictionary = out[index[sig]]
+			t["attacks"] = int(t.get("attacks", 0)) + int(pd.get("attacks", 0))
+			t["count"] = int(t.get("count", 1)) + int(pd.get("count", 1))
+		else:
+			index[sig] = out.size()
+			out.append(pd.duplicate())
 	return out
+
+
+## Everything except the summable fields, deterministically stringified.
+static func _merge_signature(p: Dictionary) -> String:
+	var keys := p.keys()
+	keys.sort()
+	var parts := PackedStringArray()
+	for k in keys:
+		if str(k) == "attacks" or str(k) == "count":
+			continue
+		parts.append("%s=%s" % [str(k), str(p[k])])
+	return ";".join(parts)
 
 
 ## Build one profile dict from a weapon, its resolved total attacks, and its range (inches).
@@ -89,6 +127,9 @@ static func _profile(w: Variant, attacks: int, range_in: int) -> Dictionary:
 		# weapon rule (168×/10 factions), so aliasing it here is the single biggest coverage down-payment.
 		"bane": _has_rule(w, "Bane") or _has_rule(w, "Lacerate"),
 		"thrust": _has_rule(w, "Thrust"),
+		# Core-book audit (maintainer 30.07.): the Regeneration-bypass half of Unstoppable was
+		# long modeled — the "ignores all negative modifiers to this weapon" half needs the flag.
+		"unstoppable": _has_rule(w, "Unstoppable"),
 		# Wave-3 (GF/AoF v3.5.1 p.13): Counter — the weapon strikes first when its bearer is charged and
 		# reduces the charger's Impact rolls; drives the strike-first phase + the Counter-last activation.
 		"counter": _has_rule(w, "Counter"),

@@ -234,3 +234,58 @@ func test_diorama_rebuild_shows_loading_overlay() -> void:
 	_menu._on_diorama_rebuild_started()
 	assert_that(_menu._loading_overlay).is_not_null()
 	assert_that(is_instance_valid(_menu._loading_overlay)).is_true()
+
+
+## ===== Tutorial entry contract =====
+## Pins the ONE menu entry into the tutorial and the flags main.gd reads from it — the
+## seam a future duplicate/half-wired entry or a renamed flag would silently break.
+
+func test_exactly_one_tutorial_entry_exists() -> void:
+	# A second, half-wired tutorial entry next to the old one is exactly how a tester
+	# ends up in the wrong tutorial — so the menu must expose exactly one.
+	#
+	# DELIBERATE CANARY. The Game School branch adds a SECOND entry, "FEUERTAUFE —
+	# TUTORIAL", directly below this one, so landing it turns this test red ON PURPOSE.
+	# When that happens, do not just bump the number: assert BOTH entries by name and
+	# pin each one's distinct target, so which button leads where stays machine-checked.
+	var menu_buttons := _menu.find_child("MenuButtons", true, false) as VBoxContainer
+	assert_that(menu_buttons).is_not_null()
+	var matches: Array[Button] = []
+	for child in menu_buttons.get_children():
+		if child is Button:
+			var btn := child as Button
+			if btn.text.to_upper().contains("TUTORIAL") or btn.name.contains("Tutorial"):
+				matches.append(btn)
+	assert_that(matches.size()).is_equal(1)
+	assert_that(matches[0].name).is_equal("TutorialBtn")
+
+
+func test_tutorial_button_label_and_handler() -> void:
+	var btn := _menu.find_child("TutorialBtn", true, false) as Button
+	assert_that(btn).is_not_null()
+	assert_that(btn.text).contains("TUTORIAL")
+	assert_that(_menu.has_method("_on_tutorial_pressed")).is_true()
+	assert_that(btn.pressed.is_connected(_menu._on_tutorial_pressed)).is_true()
+
+
+func test_tutorial_entry_arms_the_flags_main_reads() -> void:
+	# _arm_tutorial_flags is called directly instead of _launch_tutorial because the
+	# latter also swaps the scene, which this suite must not trigger.
+	var saved_mode: bool = ProjectSettings.get_setting("niemandsland/tutorial_mode", false)
+	var saved_lesson: String = ProjectSettings.get_setting("niemandsland/tutorial_lesson", "")
+	_menu._arm_tutorial_flags("T-04")
+	var armed_mode: bool = ProjectSettings.get_setting("niemandsland/tutorial_mode", false)
+	var armed_lesson: String = ProjectSettings.get_setting("niemandsland/tutorial_lesson", "")
+	# Restore BEFORE asserting: these settings are process-global, and a failing assertion
+	# would otherwise abort the test with tutorial_mode still armed and poison later suites.
+	ProjectSettings.set_setting("niemandsland/tutorial_mode", saved_mode)
+	ProjectSettings.set_setting("niemandsland/tutorial_lesson", saved_lesson)
+	assert_that(armed_mode).is_equal(true)
+	assert_that(armed_lesson).is_equal("T-04")
+
+
+func test_tutorial_entry_targets_the_bundled_board() -> void:
+	# This is the board the single TUTORIAL entry routes to; if a future entry points
+	# elsewhere this suite must speak.
+	assert_that(TutorialDirector.BOARD_PATH).is_equal("res://assets/tutorial/tutorial_board.nml")
+	assert_that(FileAccess.file_exists(TutorialDirector.BOARD_PATH)).is_true()

@@ -14,6 +14,8 @@
   "Aircraft",
   "Ambush",
   "Ambush Aura",
+  "Ambush Beacon",
+  "Ambush Re-Deployment",
   "Ambushing Piercing Shot",
   "Armor",
   "Artillery",
@@ -46,6 +48,7 @@
   "Brutal Fighter",
   "Brute Courage",
   "Caster",
+  "Caster Group",
   "Casting Buff",
   "Casting Debuff",
   "Changebound",
@@ -54,6 +57,7 @@
   "Clan Warrior",
   "Clan Warrior Boost",
   "Clan Warrior Boost Aura",
+  "Coordinate",
   "Counter",
   "Counter-Attack",
   "Counter-Attack Aura",
@@ -74,6 +78,7 @@
   "Defensive Frenzy",
   "Defensive Growth",
   "Defensive Growth Aura",
+  "Delayed Action",
   "Destructive",
   "Devout",
   "Devout Boost",
@@ -84,6 +89,7 @@
   "Entrenched Buff",
   "Evasive",
   "Evasive Aura",
+  "Extended Buff Range",
   "Fanatic",
   "Fast",
   "Fast Aura",
@@ -185,6 +191,7 @@
   "No Retreat",
   "No Retreat Aura",
   "No Retreat Buff",
+  "Pass Turn",
   "Piercing Assault",
   "Piercing Assault Aura",
   "Piercing Fighter Aura",
@@ -241,6 +248,7 @@
   "Rapid Advance",
   "Rapid Advance Aura",
   "Rapid Advance Buff",
+  "Rapid Ambush",
   "Rapid Blink",
   "Rapid Blink Boost",
   "Rapid Blink Boost Aura",
@@ -251,16 +259,19 @@
   "Rapid Rush Aura",
   "Ravage",
   "Re-Deployment",
+  "Reanimation",
   "Reanimation Aura",
   "Regeneration",
   "Regeneration Aura",
   "Regeneration Buff",
+  "Reinforcement",
   "Relentless",
   "Relentless Aura",
   "Reliable",
   "Rending",
   "Rending in Melee",
   "Rending in Melee Aura",
+  "Rending when Shooting",
   "Rending when Shooting Aura",
   "Repel Ambushers",
   "Resistance",
@@ -306,6 +317,7 @@
   "Sniper REMOVE",
   "Speed Feat",
   "Speed Feat Aura",
+  "Spell Accumulator",
   "Spell Conduit",
   "Steadfast",
   "Steadfast Aura",
@@ -349,6 +361,7 @@
   "Unstoppable",
   "Unstoppable in Melee",
   "Unstoppable in Melee Aura",
+  "Unstoppable when Shooting",
   "Unstoppable when Shooting Aura",
   "Unwieldy",
   "Unwieldy Debuff",
@@ -404,6 +417,7 @@
   "Mend",
   "Musician",
   "No Retreat",
+  "Pass Turn",
   "Piercing Assault",
   "Piercing Hunter",
   "Precise",
@@ -414,6 +428,7 @@
   "Rapid Rush",
   "Ravage",
   "Re-Deployment",
+  "Reanimation",
   "Regeneration",
   "Relentless",
   "Reliable",
@@ -755,6 +770,16 @@
     "melee_only": true
    }
   },
+  "Rending when Shooting": {
+   "primitive": "Rending",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "on6_ap": 4,
+    "bypass_regen": true,
+    "shooting_only": true
+   }
+  },
   "Scout": {
    "primitive": "Scout",
    "rated": false,
@@ -872,14 +897,26 @@
     "bypass_regen": true,
     "melee_only": true
    }
+  },
+  "Unstoppable when Shooting": {
+   "primitive": "Lacerate",
+   "rated": false,
+   "book_version": "3.5.1",
+   "params": {
+    "bypass_regen": true,
+    "shooting_only": true
+   }
   }
  },
  "factions": {
   "alien_hives": {
    "Caster Group": {
-    "primitive": null,
+    "primitive": "Caster",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "pooled": true
+    }
    },
    "Destructive": {
     "primitive": "Destructive",
@@ -1055,7 +1092,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Stealth Buff": {
@@ -1523,7 +1561,7 @@
     "book_version": "3.5.3",
     "params": {
      "advance_mod": 2,
-     "rush_mod": 2,
+     "rush_mod": 4,
      "uses_per_game": 1
     }
    },
@@ -1533,7 +1571,7 @@
     "book_version": "3.5.3",
     "params": {
      "advance_mod": 2,
-     "rush_mod": 2,
+     "rush_mod": 4,
      "uses_per_game": 1,
      "aura_expand": true,
      "max_picks": 3,
@@ -1743,7 +1781,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    }
   },
@@ -2429,9 +2468,13 @@
     }
    },
    "Delayed Action": {
-    "primitive": null,
+    "primitive": "Pass Turn",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "uses_per_round": 1,
+     "requires_opponent_surplus": true
+    }
    },
    "Hit & Run": {
     "primitive": "Hit & Run",
@@ -2767,9 +2810,12 @@
   },
   "dao_union": {
    "Ambush Beacon": {
-    "primitive": null,
+    "primitive": "Ambush",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "beacon_in": 6
+    }
    },
    "Counter-Attack": {
     "primitive": "Counter",
@@ -3068,9 +3114,12 @@
     }
    },
    "Rapid Ambush": {
-    "primitive": null,
+    "primitive": "Ambush",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "arrive_from_round": 1
+    }
    },
    "Rapid Rush": {
     "primitive": "Rapid Rush",
@@ -3430,9 +3479,12 @@
     }
    },
    "Rapid Ambush": {
-    "primitive": null,
+    "primitive": "Ambush",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "arrive_from_round": 1
+    }
    },
    "Rapid Rush": {
     "primitive": "Rapid Rush",
@@ -3726,9 +3778,13 @@
   },
   "elven_jesters": {
    "Ambush Re-Deployment": {
-    "primitive": null,
+    "primitive": "Ambush",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "re_reserve": true,
+     "uses_per_game": 1
+    }
    },
    "Counter-Attack": {
     "primitive": "Counter",
@@ -3884,9 +3940,12 @@
   },
   "eternal_dynasty": {
    "Ambush Beacon": {
-    "primitive": null,
+    "primitive": "Ambush",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "beacon_in": 6
+    }
    },
    "Bounding": {
     "primitive": "Bounding",
@@ -4487,9 +4546,12 @@
     }
    },
    "Caster Group": {
-    "primitive": null,
+    "primitive": "Caster",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "pooled": true
+    }
    },
    "Crack": {
     "primitive": "Crack",
@@ -4641,7 +4703,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Stealth Aura": {
@@ -4693,9 +4756,14 @@
     }
    },
    "Coordinate": {
-    "primitive": null,
+    "primitive": "Coordinate",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "range_in": 12.0,
+     "activates_friendly": true,
+     "no_chain": true
+    }
    },
    "Crack": {
     "primitive": "Crack",
@@ -4713,13 +4781,21 @@
      "grants_rule": "Entrenched",
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    },
    "Extended Buff Range": {
-    "primitive": null,
+    "primitive": "Extended Buff Range",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "relay_range_in": 24.0,
+     "pick_range_in": 12.0,
+     "requires_hero": true,
+     "excludes_spells": true,
+     "hero_link_in": 6.0
+    }
    },
    "Good Shot": {
     "primitive": "Shot Modifier",
@@ -4782,7 +4858,8 @@
      "grants_rule": "No Retreat",
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    },
    "Precision Shooter Buff": {
@@ -4814,7 +4891,8 @@
      "grants_rule": "Rapid Advance",
      "range_in": 12,
      "target": "friendly",
-     "once": true
+     "once": true,
+     "max_targets": 4
     }
    },
    "Regeneration Aura": {
@@ -4873,9 +4951,12 @@
     }
    },
    "Caster Group": {
-    "primitive": null,
+    "primitive": "Caster",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "pooled": true
+    }
    },
    "Casting Debuff": {
     "primitive": "Utility Buff",
@@ -4886,7 +4967,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "max_targets": 4
     }
    },
    "Courage Aura": {
@@ -4917,9 +4999,13 @@
     "book_version": "3.5.3"
    },
    "Delayed Action": {
-    "primitive": null,
+    "primitive": "Pass Turn",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "uses_per_round": 1,
+     "requires_opponent_surplus": true
+    }
    },
    "Evasive": {
     "primitive": "Evasive",
@@ -5074,9 +5160,15 @@
     }
    },
    "Spell Accumulator": {
-    "primitive": null,
+    "primitive": "Spell Accumulator",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "tokens_per_round": "X",
+     "max_tokens": 6,
+     "share_range_in": 12,
+     "requires_not_shaken": true
+    }
    },
    "Spell Conduit": {
     "primitive": "Spell Conduit",
@@ -5084,7 +5176,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Stealth Aura": {
@@ -6306,7 +6399,8 @@
      "range_in": 18,
      "target": "enemy",
      "once": true,
-     "needs_los": true
+     "needs_los": true,
+     "max_targets": 4
     }
    },
    "Ranged Slayer": {
@@ -6735,7 +6829,7 @@
     "book_version": "3.5.3",
     "params": {
      "advance_mod": 2,
-     "rush_mod": 2,
+     "rush_mod": 4,
      "uses_per_game": 1
     }
    },
@@ -6745,7 +6839,7 @@
     "book_version": "3.5.3",
     "params": {
      "advance_mod": 2,
-     "rush_mod": 2,
+     "rush_mod": 4,
      "uses_per_game": 1,
      "aura_expand": true,
      "max_picks": 3,
@@ -7451,9 +7545,17 @@
     }
    },
    "Reinforcement": {
-    "primitive": null,
+    "primitive": "Reinforcement",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "trigger": "shaken_or_destroyed",
+     "redeploy": "table_edge",
+     "within_in": 12,
+     "timing": "next_round_after_ambush",
+     "no_objective_on_arrival": true,
+     "once": true
+    }
    },
    "Scurry": {
     "primitive": "Quick",
@@ -7778,9 +7880,15 @@
     }
    },
    "Reanimation": {
-    "primitive": null,
+    "primitive": "Reanimation",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "trigger": "activation",
+     "restore_target": 5,
+     "restores": "models_and_wounds",
+     "coherency_required": true
+    }
    },
    "Reanimation Aura": {
     "primitive": null,
@@ -7867,9 +7975,12 @@
   },
   "saurian_starhost": {
    "Ambush Beacon": {
-    "primitive": null,
+    "primitive": "Ambush",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "beacon_in": 6
+    }
    },
    "Bounding": {
     "primitive": "Bounding",
@@ -8063,7 +8174,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Strafing": {
@@ -8110,9 +8222,13 @@
     "book_version": "3.5.3"
    },
    "Delayed Action": {
-    "primitive": null,
+    "primitive": "Pass Turn",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "uses_per_round": 1,
+     "requires_opponent_surplus": true
+    }
    },
    "Flying Aura": {
     "primitive": null,
@@ -8585,9 +8701,17 @@
     }
    },
    "Reinforcement": {
-    "primitive": null,
+    "primitive": "Reinforcement",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "trigger": "shaken_or_destroyed",
+     "redeploy": "table_edge",
+     "within_in": 12,
+     "timing": "next_round_after_ambush",
+     "no_objective_on_arrival": true,
+     "once": true
+    }
    },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
@@ -8615,7 +8739,8 @@
     "book_version": "3.5.3",
     "params": {
      "range_in": 12,
-     "casting_mod": 1
+     "casting_mod": 1,
+     "requires_not_shaken": true
     }
    },
    "Surge": {
@@ -9694,9 +9819,17 @@
     "book_version": "3.5.3"
    },
    "Reinforcement": {
-    "primitive": null,
+    "primitive": "Reinforcement",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "trigger": "shaken_or_destroyed",
+     "redeploy": "table_edge",
+     "within_in": 12,
+     "timing": "next_round_after_ambush",
+     "no_objective_on_arrival": true,
+     "once": true
+    }
    },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
@@ -9864,9 +9997,15 @@
     }
    },
    "Spell Accumulator": {
-    "primitive": null,
+    "primitive": "Spell Accumulator",
     "rated": true,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "tokens_per_round": "X",
+     "max_tokens": 6,
+     "share_range_in": 12,
+     "requires_not_shaken": true
+    }
    },
    "Split": {
     "primitive": null,

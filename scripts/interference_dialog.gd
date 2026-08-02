@@ -24,6 +24,11 @@ static func format_preview(base_target: int, boost: int, interference: int) -> S
 		roundi(AiSpell.cast_success_chance(boost, interference, base_target) * 100.0)]
 
 
+## PURE: the spot-marker preview (Spotter UX, maintainer 31.07.) — markers removed = +X to hit.
+static func format_preview_spot(count: int) -> String:
+	return "+%d to hit on this volley" % count if count > 0 else "no bonus — markers stay on the target"
+
+
 ## PURE: the boost-side preview (spell wave F2) — the player's own cast improving with tokens.
 static func format_preview_boost(base_target: int, interference: int, boost: int) -> String:
 	var before := AiSpell.cast_target(0, interference, base_target)
@@ -60,14 +65,22 @@ func ask(caster_name: String, spell_name: String, target_label: String,
 	box.add_theme_constant_override("separation", 8)
 	margin.add_child(box)
 	var title := Label.new()
-	title.text = "Enemy spell!" if _mode == "interfere" else "Boost your cast?"
+	title.text = "Enemy spell!" if _mode == "interfere" \
+		else ("Spotted target!" if _mode == "spot" else "Boost your cast?")
 	title.add_theme_font_size_override("font_size", 18)
 	box.add_child(title)
 	var info := Label.new()
-	info.text = ("%s is casting %s at %s.\nSpell tokens in 18\" line of sight: %d — each spent token gives -1 to the cast roll." % [
-		caster_name, spell_name, target_label, _pool]) if _mode == "interfere" else \
-		("%s casts %s at %s.\nFriendly spell tokens in 18\" line of sight: %d — each spent token gives +1 to the cast roll." % [
-		caster_name, spell_name, target_label, _pool])
+	if _mode == "interfere":
+		info.text = "%s is casting %s at %s.\nSpell tokens in 18\" line of sight: %d — each spent token gives -1 to the cast roll." % [
+			caster_name, spell_name, target_label, _pool]
+	elif _mode == "spot":
+		# Spotter UX (maintainer 31.07.): removing the target's spot markers is the ATTACKER's
+		# choice, caster-points style — each removed marker is +1 to hit this volley.
+		info.text = "%s attacks %s.\nSpot markers on the target: %d — each removed marker gives +1 to hit this volley." % [
+			caster_name, target_label, _pool]
+	else:
+		info.text = "%s casts %s at %s.\nFriendly spell tokens in 18\" line of sight: %d — each spent token gives +1 to the cast roll." % [
+			caster_name, spell_name, target_label, _pool]
 	box.add_child(info)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
@@ -95,7 +108,8 @@ func ask(caster_name: String, spell_name: String, target_label: String,
 	ok.custom_minimum_size = Vector2(180, 36)
 	buttons.add_child(ok)
 	var no := Button.new()
-	no.text = "No interference" if _mode == "interfere" else "No boost"
+	no.text = "No interference" if _mode == "interfere" \
+		else ("Leave markers" if _mode == "spot" else "No boost")
 	no.custom_minimum_size = Vector2(140, 36)
 	buttons.add_child(no)
 	minus.pressed.connect(func() -> void: _set_count(_count - 1, ok))
@@ -113,12 +127,19 @@ func ask(caster_name: String, spell_name: String, target_label: String,
 func _set_count(v: int, ok: Button) -> void:
 	_count = clampi(v, 0, _pool)
 	if _count_label != null:
-		_count_label.text = "%d token%s" % [_count, "" if _count == 1 else "s"]
+		_count_label.text = "%d %s" % [_count, ("marker" if _count == 1 else "markers") if _mode == "spot" \
+			else ("token" if _count == 1 else "tokens")]
 	if _preview_label != null:
-		_preview_label.text = format_preview(_base_target, _boost, _count) if _mode == "interfere" \
-			else format_preview_boost(_base_target, _boost, _count)
+		if _mode == "interfere":
+			_preview_label.text = format_preview(_base_target, _boost, _count)
+		elif _mode == "spot":
+			_preview_label.text = format_preview_spot(_count)
+		else:
+			_preview_label.text = format_preview_boost(_base_target, _boost, _count)
 	if ok != null:
 		if _mode == "interfere":
 			ok.text = "Interfere (-%d)" % _count if _count > 0 else "Confirm (no tokens)"
+		elif _mode == "spot":
+			ok.text = "Remove %d (+%d to hit)" % [_count, _count] if _count > 0 else "Attack without markers"
 		else:
 			ok.text = "Boost (+%d)" % _count if _count > 0 else "Cast without boost"

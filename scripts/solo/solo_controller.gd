@@ -14,6 +14,9 @@ extends Node
 signal ai_unit_activated(unit: GameUnit)   # emitted after the AI moves + activates a unit (for UI/log)
 
 const BOUNDS_MARGIN_M := 0.02   # keep models a hair inside the table edge
+## #215: only a clamp that actually MOVED a model (> 1 cm) is worth a battle-log line — the routine
+## margin nudge at the very edge is not news.
+const BOARD_CLAMP_NOTE_EPS_M := 0.01
 const INCHES_TO_METERS := 0.0254
 const OBJECTIVE_CONTROL_IN := 3.0   # OPR objective seize/hold radius (Solo & Co-Op v3.5.0 p.6)
 const CONTACT_IN := 2.0             # centre-to-centre "in melee" distance a charge closes to
@@ -129,6 +132,9 @@ var ai_slot: int = 2
 ## Units held back by their Ambush rule during deploy_army — they arrive at the start of round 2
 ## following the same deployment rules (goal 003 P1: arrive_ambush_reserve wires the arrival).
 var ambush_reserve: Array = []
+## Battle-log line the LAST reserve arrival owes (Ambush Beacon applied / a nearby beacon that did not
+## apply); "" when the arrival was plain. The presentation layer prints it — the controller never logs.
+var last_arrival_note: String = ""
 ## Deploy context stashed by deploy_army so the round-2 ambush arrival reuses the same objectives +
 ## terrain classification (goal 003 P1).
 var _deploy_objectives: Array = []
@@ -137,11 +143,14 @@ var _deploy_blocked_flying: Callable = Callable()
 ## What the last activate_next_ai_unit did: {unit, target, action, can_shoot, dist_in} — main reads it
 ## to resolve shooting (P3) and the charge melee (P4).
 var last_report: Dictionary = {}
+## Pick already drawn by peek_next_ai_unit(), waiting to be consumed by activate_next_ai_unit().
+var _peeked_unit: GameUnit = null
 ## Per-model routes of the last AI move: Array of {model: ModelInstance, path: Array[Vector3] (world
 ## waypoints, start … final), radius_m: float (the model's base radius — the swept-corridor half-width)}.
 ## The presentation layer replays them as glide animation + base-width corridors; purely observational —
 ## positions are applied/broadcast before this is read.
 var last_move_paths: Array = []
+var _cargo_wait_logged: Dictionary = {}   # TC-081: one "waits inside" record per unit+round
 ## Flow order (MODEL indices, nearest-to-destination first) of the last loose AI move — the sequential
 ## per-model flow (field-test round 6, finding 7). last_move_paths is reordered into this order so the
 ## presentation glides each model individually in the order it filed to its slot. Empty for a regiment / a
@@ -154,6 +163,10 @@ var last_dangerous_dice: int = 0   # Bug 23: Tough-weighted dice for the move's 
 ## NML-230: model indices whose gate correction was clamped to the band slack during the LAST
 ## _finalize_placement call — the accepted gate call's count feeds the one-line battle log.
 var _gate_clamped_models: Dictionary = {}
+## #215: one line per activation whose planned positions had to be pulled back onto the table. main
+## prints these to the battle log (its single printing point, next to the rule notes) — a silent
+## correction reads like a broken game, and the reporter of #215 should see the fix work.
+var board_clamp_notes: Array = []
 ## Limited weapons already fired this game (wave 5, core v3.5.1: "may only be used once per game").
 ## Key: "<unit_id>::<weapon name>" (limited_key). Tracked for EVERY unit — AI and human — since both
 ## resolve through the shared profile paths; lives with the controller (one game = one controller).
@@ -331,6 +344,20 @@ func is_eligible(unit) -> bool:
 	# (the AI activated a not-yet-arrived unit); arrival then read as if it had already spent its turn.
 	if unit_in_reserve(u):
 		return false
+	# Embarked cargo is parked off-table inside its transport (S1.5, community #160). The
+	# HUMAN's cargo can never be auto-activated (it exits via the radial; phantom eligibility
+	# would stall the round-over check forever) — but #230 makes the AI's OWN cargo eligible:
+	# its activation IS the mandatory first-activation disembark (official Solo rules p.58).
+	if army_manager != null:
+		var tr := army_manager.transport_of(u)
+		if tr != null:
+			if int(u.unit_properties.get("player_id", 0)) != ai_slot:
+				return false
+			# TC-081 side-fix: cargo inside a RESERVE transport is off the table WITH it
+			# (S1.5: "it rides its transport's reserve and arrives inside it") — activating
+			# it would disembark at tray coordinates.
+			if unit_in_reserve(tr):
+				return false
 	return not (u.has_method("is_attached") and u.is_attached())
 
 
@@ -348,7 +375,9 @@ func mark_activated(unit) -> void:
 
 
 func reset_round() -> void:
-	pass   # OPRArmyManager.advance_round() already clears activation flags for the whole table
+	# OPRArmyManager.advance_round() already clears activation flags for the whole table; only the
+	# unconsumed activation peek is ours to drop (a new round re-draws the pick).
+	_peeked_unit = null
 
 
 # === AI turn ===
@@ -369,14 +398,17 @@ func run_ai_turn() -> int:
 ## A Shaken unit's activation is an IDLE (no move/attack) reported as {"idle_shaken": true}; the caller
 ## clears the Shaken state through its marker/broadcast seam. Returns the unit, or null when none left.
 func activate_next_ai_unit() -> GameUnit:
-	var eligible := eligible_ai_units()
-	if eligible.is_empty():
-		return null
-	var unit := _select_ai_unit(eligible)
+	var unit := _take_peeked_unit()
+	if unit == null:
+		var eligible := eligible_ai_units()
+		if eligible.is_empty():
+			return null
+		unit = _select_ai_unit(eligible)
 	if unit == null:
 		return null
 	_activation_seq += 1   # monotonic per-activation index for the deterministic difficulty draws
 	last_move_paths = []   # cleared per activation — HOLD / Shaken idle replays nothing
+	board_clamp_notes = []   # #215: per-activation, drained by main into the battle log
 	if unit.is_shaken:
 		# OPR (p.10): a Shaken unit spends its activation idle, which lets it recover. An AIRCRAFT still
 		# makes its MANDATORY straight move first (GF v3.5.1: the move happens even Shaken, and it does
@@ -390,6 +422,12 @@ func activate_next_ai_unit() -> GameUnit:
 			last_report = {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
 				"toward": AiDecision.Toward.ENEMY, "shoot": false, "can_shoot": false,
 				"dist_in": INF, "dangerous_models": 0, "idle_shaken": true}
+	elif army_manager != null and army_manager.transport_of(unit) != null:
+		# #230 (official Solo rules p.58): "units inside must always disembark on their
+		# first activation (if possible)" — the exit is an Advance move action (#209
+		# semantics), so the shot window stays open; Shaken cargo idles inside (rules
+		# priority: Shaken forbids actions — the branch above wins).
+		last_report = _act_disembark(unit)
 	else:
 		last_report = _act(unit)
 	mark_activated(unit)
@@ -399,6 +437,51 @@ func activate_next_ai_unit() -> GameUnit:
 		turn_manager.notify_activated(unit)
 	ai_unit_activated.emit(unit)
 	return unit
+
+
+## The unit the NEXT activate_next_ai_unit() will take, WITHOUT resolving its activation. Rules that
+## trigger "when a unit is activated" and need the real dice tray (Reanimation) have to fire before
+## the decision tree plans the move — otherwise a restored model would stand where its unit no longer
+## is. The pick is CACHED, so the following activate_next_ai_unit() consumes it instead of drawing a
+## second time: the seeded selection stream stays byte-identical to a run without any peek.
+func peek_next_ai_unit() -> GameUnit:
+	if _peeked_unit != null and is_eligible(_peeked_unit):
+		return _peeked_unit
+	_peeked_unit = null
+	var eligible := eligible_ai_units()
+	if eligible.is_empty():
+		return null
+	_peeked_unit = _select_ai_unit(eligible)
+	return _peeked_unit
+
+
+## Consume a cached peek (null when there is none, or when the peeked unit stopped being eligible).
+func _take_peeked_unit() -> GameUnit:
+	var unit := _peeked_unit
+	_peeked_unit = null
+	return unit if unit != null and is_eligible(unit) else null
+
+
+## #230 — the cargo's first activation: exit toward the nearest enemy (auto-formation,
+## fully within 6\" — the placer owns legality), then the normal volley machinery may fire
+## (main re-gates range + LOS as ever). No legal exit spot → the unit holds inside.
+func _act_disembark(unit: GameUnit) -> Dictionary:
+	var tr: GameUnit = army_manager.transport_of(unit)
+	var foe := _nearest_enemy_of(unit)
+	var toward: Vector3 = unit_centre(foe) if foe != null else Vector3.INF
+	var ok: bool = army_manager.set_unit_embarked(unit, null, false, toward)
+	record_decision({"kind": "mission", "unit": unit.get_name(),
+		"rule": "Official Solo rules p.58: units inside transports always disembark on their first activation (if possible); the exit is an Advance move action — the shot window stays open",
+		"candidates": [],
+		"chosen": ("disembarks from %s" % (tr.get_name() if tr != null else "transport")) if ok else "no room — stays inside",
+		"why": "cargo first-activation disembark" if ok else "no legal exit spot", "data": {}})
+	if not ok or foe == null:
+		return {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
+			"toward": AiDecision.Toward.ENEMY, "shoot": false, "can_shoot": false,
+			"dist_in": INF, "dangerous_models": 0}
+	return {"unit": unit, "target": foe, "action": AiDecision.Action.ADVANCE,
+		"toward": AiDecision.Toward.ENEMY, "shoot": true, "can_shoot": true,
+		"dist_in": nearest_melee_gap_in(unit, foe), "dangerous_models": 0}
 
 
 func eligible_ai_units() -> Array:
@@ -435,53 +518,7 @@ func _select_unit_lookahead(pool: Array) -> GameUnit:
 	var scores: Array = []
 	for u in pool:
 		var unit := u as GameUnit
-		var score := 0.0
-		var weapons := _unit_weapons(unit)
-		var bands: Dictionary = move_bands_for_unit(unit, movement_range)
-		var advance := float(bands.get("advance", 6))
-		var rush := float(bands.get("rush", 12))
-		var shoot_range := AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)
-		var centre := unit_centre(unit)
-		var profiles := AiEv.stamp_sergeant(filter_limited(unit, AiShooting.profiles_in_range(weapons, 0.0)), unit)
-		var us := AiEv.ctx_for(unit, false, 0)
-		for e in army_manager.get_game_units_for_player(human_slot):
-			var enemy := e as GameUnit
-			if enemy == null or enemy.get_alive_count() <= 0 or unit_in_reserve(enemy):
-				continue
-			if enemy.has_method("is_attached") and enemy.is_attached():
-				continue
-			var dist := MoveIntent.distance_inches(centre, unit_centre(enemy)) - target_range_penalty_in(enemy)
-			# DENIAL weighting (ladder round 1 lesson: raw best-payoff-first measured ~0 vs the official
-			# pick): the REAL value of choosing the activation order is tempo — hit targets that have NOT
-			# acted yet (a kill denies their activation outright), and FINISH damaged units (a dead unit
-			# contributes nothing; a hurt one still fights). Both multiply the immediate EV.
-			var denial := 1.0
-			if not enemy.is_activated:
-				denial *= 1.4                              # kill/cripple it BEFORE it acts
-			if enemy.get_alive_count() < enemy.models.size():
-				denial *= 1.25                             # finishing damaged units converts EV into removals
-			# albtraum v2 (avoid_overkill): payoff against a target is capped at what its pool can still
-			# absorb after this round's claims — an on-expectation-dead enemy contributes no payoff, so
-			# the activation order stops burning early activations on corpses-to-be.
-			var pool_cap := INF
-			var diff_k := active_difficulty()
-			if diff_k != null and diff_k.avoids_overkill():
-				pool_cap = maxf(0.0, remaining_pool(enemy))
-			if shoot_range > 0 and dist - advance <= float(shoot_range) and not profiles.is_empty():
-				var them := AiEv.ctx_for(enemy, majority_in_cover(enemy), 0)
-				score = maxf(score, minf(AiEv.shoot_ev(profiles, us, them, maxf(dist - advance, 0.0)), pool_cap) * denial)
-			var gap := nearest_melee_gap_in(unit, enemy)
-			if gap <= melee_shroud_charge_in(rush, enemy) and not is_aircraft(enemy):
-				var melee := AiEv.stamp_sergeant(filter_limited(unit, AiShooting.melee_profiles(weapons)), unit)
-				if not melee.is_empty():
-					var their_melee := AiEv.stamp_sergeant(filter_limited(enemy, AiShooting.melee_profiles(_unit_weapons(enemy))), enemy)
-					var them2 := AiEv.ctx_for(enemy, false, 0)
-					score = maxf(score, minf(AiEv.charge_score(melee, us, their_melee, them2), pool_cap) * denial)
-		var obj := _nearest_uncontrolled_objective(centre, unit)
-		if obj != NO_OBJECTIVE:
-			var od := MoveIntent.distance_inches(centre, obj)
-			if od <= rush + OBJECTIVE_CONTROL_IN:
-				score += OBJ_SEIZE_WORTH * (2.0 if _is_final_round() else 1.0)
+		var score := activation_payoff(unit)
 		scores.append({"name": unit.get_name(), "ev": snappedf(score, 0.01)})   # record contract: {name, ev} (line ~179)
 		if score > best_score + 0.001:
 			best_score = score
@@ -493,7 +530,295 @@ func _select_unit_lookahead(pool: Array) -> GameUnit:
 	return best if best != null else pool[0]
 
 
+## ONE unit's immediate activation payoff, in expected-wounds currency — the lookahead's per-unit
+## score, extracted so a SECOND consumer can ask the same question. Wave 4: Coordinate's AI policy
+## ("activate the most valuable un-activated friend within 12\"") is exactly that question, and the
+## maintainer's brief asks for the existing evaluation rather than a private heuristic. Pure reads
+## only, no state change — extraction is behaviour-identical for _select_unit_lookahead.
+func activation_payoff(unit: GameUnit) -> float:
+	if unit == null or army_manager == null:
+		return 0.0
+	var score := 0.0
+	var weapons := _unit_weapons(unit)
+	var bands: Dictionary = move_bands_for_unit(unit, movement_range)
+	var advance := float(bands.get("advance", 6))
+	var rush := float(bands.get("rush", 12))
+	var shoot_range := AiArchetype.max_range_inches(weapons) + shooting_range_bonus(unit)
+	var centre := unit_centre(unit)
+	var profiles := AiEv.stamp_sergeant(filter_limited(unit, AiShooting.profiles_in_range(weapons, 0.0)), unit)
+	var us := AiEv.ctx_for(unit, false, 0)
+	for e in army_manager.get_game_units_for_player(human_slot):
+		var enemy := e as GameUnit
+		if enemy == null or enemy.get_alive_count() <= 0 or unit_in_reserve(enemy):
+			continue
+		if enemy.has_method("is_attached") and enemy.is_attached():
+			continue
+		var dist := MoveIntent.distance_inches(centre, unit_centre(enemy)) - target_range_penalty_in(enemy)
+		# DENIAL weighting (ladder round 1 lesson: raw best-payoff-first measured ~0 vs the official
+		# pick): the REAL value of choosing the activation order is tempo — hit targets that have NOT
+		# acted yet (a kill denies their activation outright), and FINISH damaged units (a dead unit
+		# contributes nothing; a hurt one still fights). Both multiply the immediate EV.
+		var denial := 1.0
+		if not enemy.is_activated:
+			denial *= 1.4                              # kill/cripple it BEFORE it acts
+		if enemy.get_alive_count() < enemy.models.size():
+			denial *= 1.25                             # finishing damaged units converts EV into removals
+		# albtraum v2 (avoid_overkill): payoff against a target is capped at what its pool can still
+		# absorb after this round's claims — an on-expectation-dead enemy contributes no payoff, so
+		# the activation order stops burning early activations on corpses-to-be.
+		var pool_cap := INF
+		var diff_k := active_difficulty()
+		if diff_k != null and diff_k.avoids_overkill():
+			pool_cap = maxf(0.0, remaining_pool(enemy))
+		if shoot_range > 0 and dist - advance <= float(shoot_range) and not profiles.is_empty():
+			var them := AiEv.ctx_for(enemy, majority_in_cover(enemy), 0)
+			score = maxf(score, minf(AiEv.shoot_ev(profiles, us, them, maxf(dist - advance, 0.0)), pool_cap) * denial)
+		var gap := nearest_melee_gap_in(unit, enemy)
+		if gap <= melee_shroud_charge_in(rush, enemy) and not is_aircraft(enemy):
+			var melee := AiEv.stamp_sergeant(filter_limited(unit, AiShooting.melee_profiles(weapons)), unit)
+			if not melee.is_empty():
+				var their_melee := AiEv.stamp_sergeant(filter_limited(enemy, AiShooting.melee_profiles(_unit_weapons(enemy))), enemy)
+				var them2 := AiEv.ctx_for(enemy, false, 0)
+				score = maxf(score, minf(AiEv.charge_score(melee, us, their_melee, them2), pool_cap) * denial)
+	var obj := _nearest_uncontrolled_objective(centre, unit)
+	if obj != NO_OBJECTIVE:
+		var od := MoveIntent.distance_inches(centre, obj)
+		if od <= rush + OBJECTIVE_CONTROL_IN:
+			score += OBJ_SEIZE_WORTH * (2.0 if _is_final_round() else 1.0)
+	return score
+
+
+# === Wave 4 — Coordinate (army-book upgrade, HDF / Human Empire, all five systems) ===============
+#
+# Official text: "At the end of this unit's activation, another friendly unit within 12" that
+# hasn't activated yet may be activated immediately. May not be used if this unit was activated
+# via Coordinate."
+#
+# MAINTAINER RULINGS baked in here:
+#   • a bearer that DIED during its own activation hands nothing off (no ghost order),
+#   • reserve units are invisible to the hand-off (no target — the unit_in_reserve exclusion that
+#     is_eligible() already owns),
+#   • ANTI-CHAIN: a unit activated via Coordinate may not hand off again, so at most TWO
+#     activations ever ride one hand-off.
+
+const RULE_COORDINATE := "Coordinate"
+const COORDINATE_RANGE_IN := 12.0
+
+
+## Pure refusal reason for a Coordinate hand-off — "" when it may proceed. Kept free of any board
+## state so the three refusals are red/green testable without a table (the log lines quote them).
+##   "dead"  — the bearer did not survive its own activation
+##   "chain" — the bearer was ITSELF activated via Coordinate ("May not be used …")
+##   "none"  — nobody legal within range
+static func coordinate_refusal(bearer_alive: bool, bearer_via_coordinate: bool, candidates: int) -> String:
+	if not bearer_alive:
+		return "dead"
+	if bearer_via_coordinate:
+		return "chain"
+	if candidates <= 0:
+		return "none"
+	return ""
+
+
+## The Coordinate reach of a bearer, in inches (registry param, 12" fallback).
+static func coordinate_range_of(bearer: GameUnit) -> float:
+	for e in RulesRegistry.unit_rules_of_primitive(bearer, RULE_COORDINATE):
+		return float(((e as Dictionary).get("params", {}) as Dictionary).get("range_in", COORDINATE_RANGE_IN))
+	return COORDINATE_RANGE_IN
+
+
+## Whether `bearer` carries Coordinate for its own (system, faction) — the data gate.
+static func carries_coordinate(bearer: GameUnit) -> bool:
+	return not RulesRegistry.unit_rules_of_primitive(bearer, RULE_COORDINATE).is_empty()
+
+
+## Every friendly unit that may take the hand-off from `bearer`: same side, still eligible to
+## activate (is_eligible already excludes activated / destroyed / attached / reserve / parked
+## cargo) and within the rule's range measured BASE EDGE to base edge — never centre-to-centre,
+## the house measurement truth (a 12" reading off a vehicle oval's centre is simply wrong).
+func coordinate_candidates(bearer: GameUnit) -> Array:
+	var out: Array = []
+	if bearer == null or army_manager == null or bearer.is_destroyed():
+		return out
+	var range_in := coordinate_range_of(bearer)
+	var slot := int(bearer.unit_properties.get("player_id", 0))
+	for u in eligible_units_for(slot):
+		var gu := u as GameUnit
+		if gu == null or gu == bearer:
+			continue
+		if nearest_melee_gap_in(bearer, gu) <= range_in:
+			out.append(gu)
+	return out
+
+
+## The AI's Coordinate pick: the most valuable un-activated friend in range, valued by the SAME
+## activation-payoff evaluation the activation-order lookahead uses (maintainer brief). Ties break
+## on the deterministic candidate order, so a seeded run reproduces. null when nobody is legal.
+## Writes one decision record so the dev lane can explain the hand-off.
+func coordinate_candidate(bearer: GameUnit) -> GameUnit:
+	var cands := coordinate_candidates(bearer)
+	if cands.is_empty():
+		return null
+	var best: GameUnit = null
+	var best_v := -1.0
+	var scores: Array = []
+	for c in cands:
+		var gu := c as GameUnit
+		var v := activation_payoff(gu) + float(gu.get_alive_count()) * 0.1
+		scores.append({"name": gu.get_name(), "ev": snappedf(v, 0.01)})
+		if v > best_v + 0.001:
+			best_v = v
+			best = gu
+	if best == null:
+		best = cands[0] as GameUnit
+	record_decision({"kind": "coordinate", "unit": bearer.get_name(),
+		"rule": "Coordinate: at the end of this unit's activation another un-activated friendly unit within %d\" may activate immediately" % int(coordinate_range_of(bearer)),
+		"candidates": scores, "chosen": best.get_name(),
+		"why": "hand the activation to the highest immediate payoff in range",
+		"data": {"best_score": snappedf(best_v, 0.01)}})
+	return best
+
+
+## Force the NEXT AI activation onto `unit` (the Coordinate receiver) and stamp its hand-off
+## marker. The forced pick bypasses the seeded section draw on purpose — the rule names the unit,
+## the D6 does not — and consumes no RNG, so the rest of the seeded stream is untouched.
+func coordinate_hand_off(unit: GameUnit) -> void:
+	if unit == null:
+		return
+	unit.mark_activated_via_coordinate()
+	_peeked_unit = unit
+
+
+# === Wave 4 — Extended Buff Range (army-book upgrade, HDF / Human Empire, all five systems) =====
+#
+# GF / AoF / AoFR: "If this unit is within 24" of another friendly unit with this rule that has a
+# Hero in it, then that Hero may use special rules that allow it to pick friendly units within 12"
+# (except for spells) on this unit as if it was in range."
+# GFF / AoFS print the same rule with "that is within 6" of a friendly Hero" instead — a data
+# difference (params.hero_link_in), not a second code path.
+#
+# MAINTAINER RULINGS baked in here:
+#   • ONE living carrier model is enough for "a unit with this rule"; when the last carrier dies
+#     the unit stops relaying (the unit-level rule read follows the unit's live models),
+#   • EXACTLY ONE HOP — never a daisy chain. The registry's old "daisy-chain" note was an
+#     over-reading and is corrected with this wave.
+
+const RULE_EXTENDED_BUFF_RANGE := "Extended Buff Range"
+const EBR_RELAY_RANGE_IN := 24.0
+const EBR_PICK_RANGE_IN := 12.0
+
+
+## Pure relay predicate — the whole rule in one line, so each clause is red/green testable without
+## a table. `relay_gap_in` is measured BASE EDGE to base edge (see coordinate_candidates for why).
+static func ebr_relay_ok(target_carries_rule: bool, relay_carries_rule: bool,
+		relay_has_hero: bool, relay_gap_in: float, relay_range_in: float) -> bool:
+	return target_carries_rule and relay_carries_rule and relay_has_hero \
+		and relay_gap_in <= relay_range_in
+
+
+## Whether `unit` counts as "a unit with this rule": ANY living member of its joined chain carries
+## Extended Buff Range for its own (system, faction). Maintainer ruling 1 — one living radio
+## operator is enough, and the unit loses the relay when its last carrier dies. Item-granted
+## carriers ride along: RulesRegistry.unit_rules_of_primitive reads item_grants too. HONEST
+## APPROXIMATION (same one the Ambush Beacon documents): the import records grants per UNIT, not
+## per model index, so an item-granted rule lives as long as the unit does.
+static func unit_carries_ebr(unit: GameUnit) -> bool:
+	if unit == null:
+		return false
+	for m in joined_chain_of(unit):
+		var gu := m as GameUnit
+		if gu.get_alive_count() > 0 \
+				and not RulesRegistry.unit_rules_of_primitive(gu, RULE_EXTENDED_BUFF_RANGE).is_empty():
+			return true
+	return false
+
+
+## The living joined unit (host + attached heroes, deduped) — the same chain main._solo_joined_chain
+## walks, as a static so the pure rule readers above need no main.
+static func joined_chain_of(unit: GameUnit) -> Array:
+	var out: Array = []
+	if unit == null:
+		return out
+	var cands: Array = [unit]
+	if unit.has_method("get_attached_to"):
+		cands.append(unit.get_attached_to())
+	if unit.has_method("get_attached_heroes"):
+		cands.append_array(unit.get_attached_heroes())
+	for c in cands:
+		var gu := c as GameUnit
+		if gu != null and is_instance_valid(gu) and not out.has(gu):
+			out.append(gu)
+	return out
+
+
+## Whether the relay unit satisfies the rule's HERO clause. hero_link_in == 0 (GF/AoF/AoFR) means
+## the Hero must be IN the unit; hero_link_in > 0 (GFF/AoFS skirmish wording) means any friendly
+## Hero standing within that many inches of the relay unit will do. Dead heroes never count.
+func ebr_relay_has_hero(relay: GameUnit, hero_link_in: float) -> bool:
+	if relay == null:
+		return false
+	for m in joined_chain_of(relay):
+		var gu := m as GameUnit
+		if gu.get_alive_count() > 0 and gu.is_hero():
+			return true
+	if hero_link_in <= 0.0 or army_manager == null:
+		return false
+	var slot := int(relay.unit_properties.get("player_id", 0))
+	for u in army_manager.get_game_units_for_player(slot):
+		var gu2 := u as GameUnit
+		if gu2 == null or gu2 == relay or gu2.get_alive_count() <= 0 or unit_in_reserve(gu2):
+			continue
+		if not gu2.is_hero():
+			continue
+		if nearest_melee_gap_in(relay, gu2) <= hero_link_in:
+			return true
+	return false
+
+
+## The Extended Buff Range params of a unit (its own entry, so the skirmish books' hero_link_in
+## rides along), with the printed GF numbers as fallback.
+static func ebr_params_of(unit: GameUnit) -> Dictionary:
+	for e in RulesRegistry.unit_rules_of_primitive(unit, RULE_EXTENDED_BUFF_RANGE):
+		var p: Dictionary = (e as Dictionary).get("params", {})
+		return {"relay_range_in": float(p.get("relay_range_in", EBR_RELAY_RANGE_IN)),
+			"pick_range_in": float(p.get("pick_range_in", EBR_PICK_RANGE_IN)),
+			"hero_link_in": float(p.get("hero_link_in", 0.0)),
+			"excludes_spells": bool(p.get("excludes_spells", true))}
+	return {}
+
+
+## TC-081 (maintainer 31.07.): cargo that activates BEFORE its ride has moved throws the
+## ride away — the mandatory first-activation disembark (p.58) would exit at the deploy
+## spot. True while the transport is alive, same-side and still un-activated this round.
+func _cargo_should_wait_for_ride(u: GameUnit) -> bool:
+	if u == null or army_manager == null:
+		return false
+	var tr: GameUnit = army_manager.transport_of(u)
+	if tr == null or tr.is_destroyed() or tr.is_activated:
+		return false
+	return int(tr.unit_properties.get("player_id", 0)) == int(u.unit_properties.get("player_id", 0))
+
+
 func _select_ai_unit(eligible: Array) -> GameUnit:
+	# TC-081: defer embarked cargo while its transport has not acted — the transport sits in
+	# the same pool, so it always comes first; the deferral yields when ONLY cargo is left
+	# (never a stall). One decision record per unit and round keeps it explainable.
+	var undeferred: Array = []
+	for u0 in eligible:
+		var cu := u0 as GameUnit
+		if _cargo_should_wait_for_ride(cu):
+			var rkey := "%s#%d" % [cu.get_name(), army_manager.current_round if army_manager != null else 0]
+			if not _cargo_wait_logged.has(rkey):
+				_cargo_wait_logged[rkey] = true
+				var wtr: GameUnit = army_manager.transport_of(cu)
+				record_decision({"kind": "mission", "unit": cu.get_name(),
+					"rule": "cargo activates after its transport — disembarking before the ride moves wastes the lift (TC-081)",
+					"candidates": [], "chosen": "waits inside %s" % (wtr.get_name() if wtr != null else "transport"),
+					"why": "transport has not acted yet", "data": {}})
+			continue
+		undeferred.append(u0)
+	if not undeferred.is_empty():
+		eligible = undeferred
 	var fresh: Array = []
 	var shaken: Array = []
 	for u in eligible:
@@ -641,7 +966,15 @@ func best_shoot_target_now(ai_unit: GameUnit) -> GameUnit:
 	return best
 
 
+## True when the LAST nearest_human_unit pick walked past a strictly nearer enemy because
+## that enemy had already acted (the official not-activated-first key, Solo v3.5.0 p.2).
+## Community #164: this is the by-the-book choice that READS irrational without a reason —
+## the battle log tags exactly these picks. Transient: valid right after the call.
+var last_target_passed_activated: bool = false
+
+
 func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
+	last_target_passed_activated = false
 	if army_manager == null:
 		return null
 	var from := unit_centre(ai_unit)
@@ -707,6 +1040,15 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 			# ARENA: the difficulty knobs shape which of the (equally legal) tied targets is taken.
 			chosen = _difficulty_target_pick(ai_unit, tied, diff)
 			why = "ev tie-break (%s)" % diff.grade_name
+	# The official key can walk PAST a nearer enemy that has already acted — the surprising
+	# case the battle log must explain (community #164). Exact test: the chosen target has
+	# not acted yet AND a strictly nearer band exists — that nearer candidate must have been
+	# activated, else it would have won the key itself.
+	if not bool(chosen["activated"]):
+		for c in cands:
+			if int((c as Dictionary)["band"]) < int(chosen["band"]):
+				last_target_passed_activated = true
+				break
 	var rec_cands: Array = []
 	for t in tied:
 		var td := t as Dictionary
@@ -719,7 +1061,8 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 	record_decision({"kind": "target", "unit": ai_unit.get_name(),
 		"rule": "Solo v3.5.0 p.2: nearest valid target, not-activated first",
 		"candidates": rec_cands, "chosen": (chosen["unit"] as GameUnit).get_name(), "why": why,
-		"data": {"considered": cands.size(), "dist_in": float(chosen["d"])}})
+		"data": {"considered": cands.size(), "dist_in": float(chosen["d"]),
+			"passed_nearer_activated": last_target_passed_activated}})
 	return chosen["unit"] as GameUnit
 
 
@@ -813,6 +1156,22 @@ static func _target_key_compare(a: Dictionary, b: Dictionary) -> int:
 	return int(a.get("band", 0)) - int(b.get("band", 0))
 
 
+## How many D3 a Bounding-family placement rolls (NML-937). v3.5.3 raised the boosted blink/step
+## upgrades from "within D3\"" to "within 2D3\"", and the registry carries that as `dice_count`
+## (the GF/GFF books) or as the "NdM" shape in `place_die` (the AoF books) — both are read here, so
+## the number of dice is DATA. 1 when neither key is present: the pre-3.5.3 single die, i.e. a
+## missing map leaves the shipped behaviour byte-identical.
+static func bounding_dice_count(params: Dictionary) -> int:
+	if params.has("dice_count"):
+		return maxi(int(params["dice_count"]), 1)
+	var pd := str(params.get("place_die", "")).to_lower()
+	if pd.contains("d"):
+		var head := pd.get_slice("d", 0).strip_edges()
+		if head.is_valid_int():
+			return maxi(int(head), 1)
+	return 1
+
+
 ## One activation by the FULL official OPR Solo & Co-Op v3.5.0 decision tree (goal 003 P3 — the sim's brain
 ## wired into the real game). Classify the archetype, pick the nearest un-activated enemy AND the nearest
 ## objective this side does not control, build the tree context, resolve the action toward the objective or
@@ -838,11 +1197,17 @@ func _act(unit: GameUnit) -> Dictionary:
 	var target_unit := nearest_human_unit(unit)
 	if target_unit == null:
 		return report
+	# Capture the passed-a-nearer-enemy flag BEFORE _commander_apply may re-query targets and
+	# clobber the transient member (community #164 narration).
+	var base_target := target_unit
+	var acts_soon := last_target_passed_activated
 	# COMMANDER (Stage 3, Part B): a graded standing order. For a close-and-fight role it PERSISTS the target
 	# across rounds so the unit keeps closing on ONE enemy instead of re-chasing the momentary nearest (the
 	# idle monster). Returns the default target unchanged for the null-AI / non-driven roles (byte-identical).
 	target_unit = _commander_apply(unit, target_unit)
 	report["target"] = target_unit
+	# A commander-persisted target is a different reason — it must not inherit the stale tag.
+	report["target_acts_soon"] = acts_soon and target_unit == base_target
 	var weapons := _unit_weapons(unit)
 	var bands: Dictionary = move_bands_for_unit(unit, movement_range)
 	var advance := float(bands.get("advance", 6))
@@ -863,30 +1228,48 @@ func _act(unit: GameUnit) -> Dictionary:
 	# RNG — the placement precedes any tray-visible action — and lands in the decision record.
 	var bounding_rule := ""
 	var bounding_plus := 1
+	var bounding_dice := 1
 	if RulesRegistry.unit_rule_active(unit, "Bounding"):
 		bounding_rule = "Bounding"
 		bounding_plus = int(RulesRegistry.unit_param(unit, "Bounding", "place_d3_plus", 1))
+		bounding_dice = bounding_dice_count(RulesRegistry.lookup(RulesRegistry.system_of_unit(unit),
+			RulesRegistry.faction_of_unit(unit), "Bounding").get("params", {}))
 	else:
 		# Coverage wave: DATA aliases (Wolfborn, Rapid Blink — "place all models within D3\"", the
-		# +0 form) via the generic primitive layer.
+		# +0 form) via the generic primitive layer. NML-937: a unit that carries BOTH the base rule
+		# and its boosted upgrade (Rapid Blink + Rapid Blink Boost, Wave-Step + Wave-Step Boost) must
+		# use the UPGRADE — the first alias in rule order used to win, which could pick the weaker
+		# leg — so the family is scanned for the longest placement (dice ×2 average, plus the flat).
+		var best_reach := -1.0
 		for e in RulesRegistry.unit_rules_of_primitive(unit, "Bounding"):
 			var ed := e as Dictionary
 			if str(ed["name"]) == "Bounding":
 				continue
-			bounding_rule = str(ed["name"])
-			bounding_plus = int((ed.get("params", {}) as Dictionary).get("place_d3_plus", 0))
-			break
+			var sp: Dictionary = ed.get("params", {})
+			var d := bounding_dice_count(sp)
+			var p := int(sp.get("place_d3_plus", 0))
+			var reach := float(d) * 2.0 + float(p)
+			if reach > best_reach:
+				best_reach = reach
+				bounding_rule = str(ed["name"])
+				bounding_plus = p
+				bounding_dice = d
 	if not bounding_rule.is_empty():
-		var bounding_in := float(_rng.randi_range(1, 3) + bounding_plus)
+		var bounding_in := float(bounding_plus)
+		for _d in bounding_dice:
+			bounding_in += float(_rng.randi_range(1, 3))
 		advance += bounding_in
 		rush += bounding_in
 		charge_reach += bounding_in
+		var die_text := "%s%s" % ["%dD3" % bounding_dice if bounding_dice > 1 else "D3",
+			("+%d" % bounding_plus if bounding_plus > 0 else "")]
 		record_decision({"kind": "move", "unit": unit.get_name(),
-			"rule": "%s: on activation the unit may be placed within D3%s\" — valued as a bonus on every move band" % [
-				bounding_rule, ("+%d" % bounding_plus if bounding_plus > 0 else "")],
+			"rule": "%s: on activation the unit may be placed within %s\" — valued as a bonus on every move band" % [
+				bounding_rule, die_text],
 			"candidates": [], "chosen": "+%.0f\" bands" % bounding_in, "why": "bounding placement",
-			"data": {"bonus_in": bounding_in, "rule": bounding_rule}})
-		(report["rule_notes"] as Array).append("%s: rolled %.0f\" — every move band +%.0f\" this activation" % [bounding_rule, bounding_in, bounding_in])
+			"data": {"bonus_in": bounding_in, "rule": bounding_rule, "dice": bounding_dice, "plus": bounding_plus}})
+		(report["rule_notes"] as Array).append("%s: rolled %.0f\" of %s\" — every move band +%.0f\" this activation" % [
+			bounding_rule, bounding_in, die_text, bounding_in])
 	# Coverage wave: Speed Feat family — once per GAME, +2\"/+2\" on one move (registry aliases of
 	# Quick carrying uses_per_game). NACHTMAHR spends it in the last two rounds' first move (the
 	# endgame push, where an extra 2\" buys arrivals), logged + recorded; the flag pins the once.
@@ -2338,12 +2721,37 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 	var own_left: int = maxi(tokens - threshold, 0)
 	if own_left > 0:
 		helpers.insert(0, {"unit": member, "tokens": own_left})
+	# The boost decision states its own reason in the decision log (AI policy — no battle-log line:
+	# nothing here is a rule the player must be shown, only how the AI priced its tokens).
+	# A cast this chain cannot price ("castable" status, or a rule grant spell_modifier_delta does
+	# not model) is NOT treated as worthless here: the AI has already paid the spell's tokens, so
+	# the effect is worth landing — boost_value_of prices it just high enough to buy the one token
+	# that lifts it out of the coin flip, and never a second.
+	var boost_value := AiSpell.boost_value_of(chosen_ev)
+	var boost_pool := 0
+	var boost_why := "no boost: this difficulty never spends helper tokens"
+	if spend_boosts:
+		boost_why = "no boost: no payable token in 18\" LoS"
 	if spend_boosts and not helpers.is_empty():
-		var pool := 0
 		for h in helpers:
-			pool += int((h as Dictionary)["tokens"])
-		boost = AiSpell.plan_boost(chosen_ev, pool)
+			boost_pool += int((h as Dictionary)["tokens"])
+		boost = AiSpell.plan_boost(boost_value, boost_pool)
 		boost_sources = _draw_aura_tokens(helpers, boost)
+		if boost > 0:
+			# Name the reason PRECISELY: the coin-flip clause only gets the credit when the plain
+			# token floor would have bought nothing — i.e. the FIRST token's marginal EV sits under
+			# it. A fat cast (5 wounds) boosts on the ordinary floor and must not read as one.
+			var p_unboosted := AiSpell.cast_success_chance(0, 0, base_target)
+			var first_gain := (AiSpell.cast_success_chance(1, 0, base_target) - p_unboosted) * boost_value
+			if chosen_ev <= 0.0:
+				boost_why = "coin-flip boost on an unpriced effect: the spell's tokens are already paid, so the cast is worth landing"
+			elif p_unboosted <= AiSpell.COIN_FLIP_P and first_gain <= AiSpell.TOKEN_VALUE_EPS:
+				boost_why = ("coin-flip boost: at %.0f%% any positive marginal EV beats holding the token"
+					% (p_unboosted * 100.0))
+			else:
+				boost_why = "boost: marginal EV per token above the token floor"
+		else:
+			boost_why = "no boost: the next token's marginal EV stays under the token floor"
 	# — Interference (the enemy's officially-open counter-choice): auto-planned ONLY in both-AI mode
 	#   (the defending AI spends deterministically); in human-vs-AI main prompts the human instead. —
 	var interference := 0
@@ -2376,6 +2784,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 		"why": ("ev-best pick" if ev_best_pick else ("skip 0-EV" if skip_zero_ev and chosen_ev > 0.0 else "official D3+X cycle")),
 		"data": {"d3": d3, "caster_x": caster_x, "targets": ", ".join(PackedStringArray(target_names)),
 			"ev": chosen_ev, "boost": boost, "interference": interference, "p_cast": p_cast,
+			"boost_pool": boost_pool, "boost_why": boost_why,
 			"tokens_before": tokens_before, "tokens_after": member.casts_current}})
 	var target_units: Array = []
 	for t in chosen_targets:
@@ -2405,6 +2814,20 @@ func spell_candidates(unit: GameUnit, entry: Dictionary, own_slot: int, other_sl
 	var range_in := float(entry.get("range_in", 0))
 	var pool_slot: int = own_slot if side == "friendly" else other_slot
 	var from := unit_centre(unit)
+	# Wave B — Spell Conduit (army-book): "casters within 12\" that are from other friendly
+	# units may cast spells as if they were in this model's position" — every friendly
+	# conduit bearer within 12\" of the caster is an ALTERNATIVE origin for range + sight.
+	# No conduits on the table → origins = [caster] and the walk below is byte-identical.
+	var origins: Array = [unit]
+	for c0 in army_manager.get_game_units_for_player(own_slot):
+		var co := c0 as GameUnit
+		if co == null or co == unit or co.is_destroyed() or unit_in_reserve(co):
+			continue
+		if not (co.has_special_rule("Spell Conduit") \
+				or not RulesRegistry.unit_rules_of_primitive(co, "Spell Conduit").is_empty()):
+			continue
+		if nearest_melee_gap_in(unit, co) <= SPELL_ACCUMULATOR_REACH_IN:
+			origins.append(co)
 	var out: Array = []
 	for c in army_manager.get_game_units_for_player(pool_slot):
 		var cu := c as GameUnit
@@ -2414,10 +2837,15 @@ func spell_candidates(unit: GameUnit, entry: Dictionary, own_slot: int, other_sl
 			continue   # a joined hero is part of its host unit — the unit is the target
 		# NML-206: range is measured BASE EDGE to base edge (nearest models), not centre-to-centre —
 		# the centre reading rejected legal targets on wide units (maintainer live-test finding).
-		if cu != unit and nearest_melee_gap_in(unit, cu) > range_in:
-			continue
-		if cu != unit and not _has_los(unit, cu):
-			continue   # LoS from the caster's unit (own unit is trivially in sight)
+		if cu != unit:
+			var reachable := false
+			for o in origins:
+				var ou := o as GameUnit
+				if cu == ou or (nearest_melee_gap_in(ou, cu) <= range_in and _has_los(ou, cu)):
+					reachable = true
+					break
+			if not reachable:
+				continue
 		out.append(cu)
 	return out
 
@@ -2510,6 +2938,8 @@ func _modifier_value_on_attack(cand: GameUnit, effect: Dictionary, flip_sides: b
 ## `caster_unit`, in line of sight (v3.5.1: "Models within 18\" in line of sight of the caster's
 ## unit may spend any number of spell tokens"). `exclude` drops the casting member itself (the ±1
 ## comes from OTHER models). Returns [{unit, tokens}] nearest-first (a deterministic draw order).
+const SPELL_ACCUMULATOR_REACH_IN := 12.0   # wave B: the battery's own lend radius
+
 func _aura_casters(slot: int, caster_unit: GameUnit, exclude: GameUnit) -> Array:
 	var aura_in := float(RulesRegistry.unit_param(caster_unit, "Caster", "aura_in", AiSpell.AURA_RANGE_IN))
 	var from := unit_centre(caster_unit)
@@ -2532,17 +2962,68 @@ func _aura_casters(slot: int, caster_unit: GameUnit, exclude: GameUnit) -> Array
 				continue
 			if seen.has(member.get_instance_id()):
 				continue
-			if not member.is_caster() or member.casts_current <= 0:
+			# Wave B — Spell Accumulator: a token battery joins the pool too ("casters from
+			# other friendly units within 12\" may spend this model's accumulator tokens as
+			# if they were their own"); its reach is the rule's own 12\", not the caster aura.
+			var is_battery: bool = member.has_special_rule("Spell Accumulator") \
+					or not RulesRegistry.unit_rules_of_primitive(member, "Spell Accumulator").is_empty()
+			if (not member.is_caster() and not is_battery) or member.casts_current <= 0:
+				continue
+			# NML-936 (v3.5.3 audit): "Friendly casters may only use this rule if this unit isn't
+			# Shaken". The battery's own params carried that condition all along, but nothing read
+			# it — a Shaken battery kept feeding everyone else's spells. Only the lending the
+			# BATTERY rule grants is blocked; a real caster's own tokens are not this rule's.
+			if not member.is_caster() and is_battery and not lending_blocked_by_shaken(member).is_empty():
 				continue
 			seen[member.get_instance_id()] = true
 			var d := MoveIntent.distance_inches(from, unit_centre(member if member.models.size() > 0 else cu))
-			if d > aura_in:
+			if d > (SPELL_ACCUMULATOR_REACH_IN if (is_battery and not member.is_caster()) else aura_in):
 				continue
 			if cu != caster_unit and not _has_los(caster_unit, cu):
 				continue
 			out.append({"unit": member, "tokens": member.casts_current, "d": d})
 	out.sort_custom(func(a, b) -> bool:
 		return float((a as Dictionary)["d"]) < float((b as Dictionary)["d"]))
+	return out
+
+
+## NML-936 (v3.5.3 audit) — the token-lending rule that is DEAD on `member` because it is Shaken
+## ("Friendly casters may only use this rule if this unit isn't Shaken"). Returns the blocking
+## rule's NAME so a caller can name the refusal in the battle log, or "" when nothing blocks it.
+## The pool builder and the log read this one predicate, so the line can never drift from the pool.
+static func lending_blocked_by_shaken(member: GameUnit) -> String:
+	if member == null or not member.is_shaken:
+		return ""
+	for e in RulesRegistry.unit_rules_of_primitive(member, "Spell Accumulator"):
+		var ed := e as Dictionary
+		if bool((ed.get("params", {}) as Dictionary).get("requires_not_shaken", false)):
+			return str(ed["name"])
+	return ""
+
+
+## NML-936 — every token battery of `slot` whose stock the pool refuses because the unit is
+## Shaken, as [{unit, rule}]. main names them in the battle log so a boost that came out smaller
+## than expected is answerable from the log instead of looking like a bug.
+func shaken_lenders(slot: int) -> Array:
+	var out: Array = []
+	if army_manager == null:
+		return out
+	for c in army_manager.get_game_units_for_player(slot):
+		var cu := c as GameUnit
+		if cu == null or cu.is_destroyed() or unit_in_reserve(cu):
+			continue
+		var members: Array = [cu]
+		if cu.has_method("get_attached_heroes"):
+			members = members + cu.get_attached_heroes()
+		for m in members:
+			var member := m as GameUnit
+			if member == null or member.get_alive_count() == 0 or member.casts_current <= 0:
+				continue
+			if member.is_caster():
+				continue
+			var rule := lending_blocked_by_shaken(member)
+			if not rule.is_empty():
+				out.append({"unit": member, "rule": rule})
 	return out
 
 
@@ -3243,14 +3724,18 @@ func _spacing_zones_world(unit: GameUnit, own_radius_m: float, charge_target: Ga
 ## Sample the REAL overlay into the planner's typed 3" cell grid (inch frame). Returns
 ## {"grid": {Vector2i: TerrainType}, "avoid": {Vector2i: true}} — Impassable cells are always avoided;
 ## Difficult cells only when the route should go around them (solo overlay p.57).
-func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool, avoid_dangerous: bool = false) -> Dictionary:
+func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool, avoid_dangerous: bool = false,
+		board_y_in: float = 0.0) -> Dictionary:
 	var grid := {}
 	var avoid := {}
 	if not terrain_type_at.is_valid():
 		return {"grid": grid, "avoid": avoid}
-	var n := maxi(1, int(ceil(board_in / TerrainRules.CELL_IN)))
-	for cy in range(n):
-		for cx in range(n):
+	# Per-axis cell counts (#215): a square sweep over a rectangular table samples phantom ground past
+	# the short edge and misses none of the real board only by accident. board_y_in <= 0 means square.
+	var nx := maxi(1, int(ceil(board_in / TerrainRules.CELL_IN)))
+	var ny := maxi(1, int(ceil((board_y_in if board_y_in > 0.0 else board_in) / TerrainRules.CELL_IN)))
+	for cy in range(ny):
+		for cx in range(nx):
 			var centre_in := Vector2((float(cx) + 0.5) * TerrainRules.CELL_IN, (float(cy) + 0.5) * TerrainRules.CELL_IN)
 			var world := centre_in * INCHES_TO_METERS - off
 			var t: int = int(terrain_type_at.call(Vector3(world.x, 0.0, world.y)))
@@ -3282,7 +3767,7 @@ func _terrain_grid_in(board_in: float, off: Vector2, avoid_difficult: bool, avoi
 ## centre). Sampled over the move AABB only (the _forbid_cells_in pattern); ADDITIVE — the coarse
 ## 3" avoid set and its consumers stay untouched, this feeds the planner's fine checks.
 func _avoid_fine_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Vector2,
-		clearance_m: float, avoid_difficult: bool, avoid_dangerous: bool) -> Dictionary:
+		clearance_m: float, avoid_difficult: bool, avoid_dangerous: bool, board_y_in: float = 0.0) -> Dictionary:
 	var fine := {}
 	if not terrain_type_at.is_valid() or mpos.is_empty():
 		return fine
@@ -3300,11 +3785,13 @@ func _avoid_fine_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Ve
 	lo -= Vector2(margin, margin)
 	hi += Vector2(margin, margin)
 	var cell: float = MovementPlanner.PLAN_CELL_IN
-	var n := maxi(1, int(ceil(board_in / cell)))
-	var cx0 := clampi(int(floor(lo.x / cell)), 0, n - 1)
-	var cx1 := clampi(int(floor(hi.x / cell)), 0, n - 1)
-	var cy0 := clampi(int(floor(lo.y / cell)), 0, n - 1)
-	var cy1 := clampi(int(floor(hi.y / cell)), 0, n - 1)
+	# Per-axis cell counts (#215); board_y_in <= 0 means a square board.
+	var nx := maxi(1, int(ceil(board_in / cell)))
+	var ny := maxi(1, int(ceil((board_y_in if board_y_in > 0.0 else board_in) / cell)))
+	var cx0 := clampi(int(floor(lo.x / cell)), 0, nx - 1)
+	var cx1 := clampi(int(floor(hi.x / cell)), 0, nx - 1)
+	var cy0 := clampi(int(floor(lo.y / cell)), 0, ny - 1)
+	var cy1 := clampi(int(floor(hi.y / cell)), 0, ny - 1)
 	var pred := func(t: int) -> bool:
 		# CONTAINER handled by the exact wall channel (container wave) — cells only for areas.
 		return (avoid_difficult and TerrainRules.is_difficult(t)) \
@@ -3318,7 +3805,8 @@ func _avoid_fine_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Ve
 	return fine
 
 
-func _forbid_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Vector2, own_r_m: float) -> Dictionary:
+func _forbid_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Vector2, own_r_m: float,
+		board_y_in: float = 0.0) -> Dictionary:
 	var forbid := {}
 	if not terrain_type_at.is_valid() or mpos.is_empty():
 		return forbid
@@ -3336,11 +3824,13 @@ func _forbid_cells_in(mpos: Array, mdelta: Vector2, board_in: float, off: Vector
 	lo -= Vector2(margin, margin)
 	hi += Vector2(margin, margin)
 	var cell: float = MovementPlanner.PLAN_CELL_IN
-	var n := maxi(1, int(ceil(board_in / cell)))
-	var cx0 := clampi(int(floor(lo.x / cell)), 0, n - 1)
-	var cx1 := clampi(int(floor(hi.x / cell)), 0, n - 1)
-	var cy0 := clampi(int(floor(lo.y / cell)), 0, n - 1)
-	var cy1 := clampi(int(floor(hi.y / cell)), 0, n - 1)
+	# Per-axis cell counts (#215); board_y_in <= 0 means a square board.
+	var nx := maxi(1, int(ceil(board_in / cell)))
+	var ny := maxi(1, int(ceil((board_y_in if board_y_in > 0.0 else board_in) / cell)))
+	var cx0 := clampi(int(floor(lo.x / cell)), 0, nx - 1)
+	var cx1 := clampi(int(floor(hi.x / cell)), 0, nx - 1)
+	var cy0 := clampi(int(floor(lo.y / cell)), 0, ny - 1)
+	var cy1 := clampi(int(floor(hi.y / cell)), 0, ny - 1)
 	for cy in range(cy0, cy1 + 1):
 		for cx in range(cx0, cx1 + 1):
 			var centre_in := Vector2((float(cx) + 0.5) * cell, (float(cy) + 0.5) * cell)
@@ -3526,6 +4016,411 @@ static func combined_alive(unit: GameUnit) -> int:
 	return n
 
 
+# === Reanimation (army-book, Robot Legions 3.5.2) ===========================================
+# Official text: "When a unit where all models have this rule is activated, roll as many dice as the
+# max. number of models/wounds it could restore. For each 5+ you may restore one model/wound. Note
+# that new models may only be restored if they can be placed in coherency with non-restored models."
+# The rule reaches the table ONLY through the hero upgrade "Reanimation Aura" ("This model and its
+# unit get Reanimation"), which the army import expands onto the unit + every attached hero.
+#
+# The three pure halves live here so they are testable without the scene: who carries the rule right
+# now, how big the die pool is, and how the successes are spent. main.gd owns the tray roll, the
+# placement and the log lines.
+
+const REANIMATION_RULE := "Reanimation"
+const REANIMATION_AURA := "Reanimation Aura"
+## Each 5+ restores one model or one wound (registry-parametrised in main).
+const REANIMATION_TARGET := 5
+
+
+## Exact-name rule check — NEVER GameUnit.has_special_rule here: that one is PREFIX based, so a unit
+## carrying only "Reanimation Aura" would answer true for "Reanimation" and the aura could never end.
+static func has_exact_rule(unit: GameUnit, rule_name: String) -> bool:
+	if unit == null:
+		return false
+	for r in unit.get_special_rules():
+		var n := str(r) if r is String else str((r as Dictionary).get("name", ""))
+		if n.strip_edges() == rule_name:
+			return true
+	return false
+
+
+## Whether `rule_name` sits on `unit` only because an aura carrier granted it at import
+## (OPRArmyManager._expand_auras stamps the provenance). An aura-granted rule dies with its carrier;
+## a rule the unit owns itself does not.
+static func rule_is_aura_granted(unit: GameUnit, rule_name: String) -> bool:
+	if unit == null:
+		return false
+	return (unit.unit_properties.get("aura_granted", []) as Array).has(rule_name)
+
+
+## The chain (unit + attached heroes) whose models Reanimation may restore RIGHT NOW.
+## A LIVING aura carrier projects the rule over the whole chain ("this model and its unit"); without
+## one, only members that own the base rule themselves qualify — so a fallen Re-Animator takes the
+## rule with him even though the import stamped "Reanimation" onto the unit. Empty = no reanimation.
+static func reanimation_members(unit: GameUnit) -> Array:
+	if unit == null:
+		return []
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h is GameUnit:
+				chain.append(h)
+	for c in chain:
+		var member := c as GameUnit
+		if member != null and member.get_alive_count() > 0 and has_exact_rule(member, REANIMATION_AURA):
+			return chain
+	var out: Array = []
+	for c in chain:
+		var member := c as GameUnit
+		if member != null and has_exact_rule(member, REANIMATION_RULE) \
+				and not rule_is_aura_granted(member, REANIMATION_RULE):
+			out.append(member)
+	return out
+
+
+## A member that carries the aura (alive when `alive_only`) — the carrier named in the aura-ends line.
+static func reanimation_aura_carrier(unit: GameUnit, alive_only: bool) -> GameUnit:
+	if unit == null:
+		return null
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h is GameUnit:
+				chain.append(h)
+	for c in chain:
+		var member := c as GameUnit
+		if member == null or not has_exact_rule(member, REANIMATION_AURA):
+			continue
+		if alive_only and member.get_alive_count() <= 0:
+			continue
+		return member
+	return null
+
+
+## "The max. number of models/wounds it could restore" — maintainer reading (2026-07-31): the WOUND
+## is the currency. A dead model is worth its full wounds_max (a Tough(3) casualty = 3 dice), a living
+## wounded model its missing wounds. One die per missing wound, no cap beyond the unit's own shortfall.
+static func reanimation_pool(unit: GameUnit) -> int:
+	var n := 0
+	for m in reanimation_models(unit):
+		var mi := m as ModelInstance
+		if mi.is_alive:
+			n += maxi(mi.wounds_max - mi.wounds_current, 0)
+		else:
+			n += maxi(mi.wounds_max, 1)
+	return n
+
+
+## Every model of the carrying chain, in a stable order (chain order, then model order).
+static func reanimation_models(unit: GameUnit) -> Array:
+	var out: Array = []
+	for c in reanimation_members(unit):
+		var member := c as GameUnit
+		if member == null:
+			continue
+		for m in member.models:
+			if m is ModelInstance:
+				out.append(m)
+	return out
+
+
+## How `successes` restores are spent — v1 is AUTOMATIC for both sides (owner-click allocation is a
+## follow-up ticket). Priority (maintainer decision): top the LIVING wounded up first (heroes before
+## rank and file, most-wounded first), then bring casualties back cheapest-first (a Tough(1) trooper
+## before a Tough(3) elite) at one wound each, and only then heal the returned models up.
+## Returns [{model: ModelInstance, wounds: int, revive: bool}] — deterministic, never over-spending.
+static func reanimation_plan(unit: GameUnit, successes: int) -> Array:
+	var left := maxi(successes, 0)
+	var plan: Array = []
+	if left <= 0:
+		return plan
+	var models: Array = reanimation_models(unit)
+	# Phase A — living wounded, topped up. Heroes first, then the biggest gap; index breaks ties so
+	# the same board always produces the same allocation.
+	var wounded: Array = []
+	for i in models.size():
+		var mi := models[i] as ModelInstance
+		if mi.is_alive and mi.wounds_current < mi.wounds_max:
+			wounded.append({"model": mi, "i": i, "gap": mi.wounds_max - mi.wounds_current,
+				"hero": 1 if _reanimation_is_hero(mi) else 0})
+	wounded.sort_custom(func(a, b):
+		if int(a["hero"]) != int(b["hero"]):
+			return int(a["hero"]) > int(b["hero"])
+		if int(a["gap"]) != int(b["gap"]):
+			return int(a["gap"]) > int(b["gap"])
+		return int(a["i"]) < int(b["i"]))
+	for w in wounded:
+		if left <= 0:
+			break
+		var take: int = mini(int(w["gap"]), left)
+		left -= take
+		plan.append({"model": w["model"], "wounds": take, "revive": false})
+	# Phase B/C — casualties: one wound buys the model back, further wounds heal it up.
+	var dead: Array = []
+	for i in models.size():
+		var mi := models[i] as ModelInstance
+		if not mi.is_alive:
+			dead.append({"model": mi, "i": i, "cost": maxi(mi.wounds_max, 1)})
+	dead.sort_custom(func(a, b):
+		if int(a["cost"]) != int(b["cost"]):
+			return int(a["cost"]) < int(b["cost"])
+		return int(a["i"]) < int(b["i"]))
+	var revived: Array = []
+	for d in dead:
+		if left <= 0:
+			break
+		left -= 1
+		var entry := {"model": d["model"], "wounds": 1, "revive": true}
+		plan.append(entry)
+		revived.append(entry)
+	for entry in revived:
+		if left <= 0:
+			break
+		var mi := (entry as Dictionary)["model"] as ModelInstance
+		var top: int = mini(maxi(mi.wounds_max, 1) - 1, left)
+		if top > 0:
+			left -= top
+			(entry as Dictionary)["wounds"] = int((entry as Dictionary)["wounds"]) + top
+	return plan
+
+
+## NML-924 — what a Reanimation success may be spent on RIGHT NOW, in reanimation_models order:
+## [{model, revive, capacity}]. `capacity` is how many successes that model can still absorb — a
+## casualty is worth its full wounds_max (one success buys it back, further ones heal it up), a living
+## wounded model its missing wounds. Two readers: the owner's click prompt draws its targets from this,
+## and the "does the owner get a choice at all?" gate counts it. Empty = nothing left to restore.
+static func reanimation_candidates(unit: GameUnit) -> Array:
+	var out: Array = []
+	for m in reanimation_models(unit):
+		var mi := m as ModelInstance
+		if mi == null:
+			continue
+		if not mi.is_alive:
+			out.append({"model": mi, "revive": true, "capacity": maxi(mi.wounds_max, 1)})
+			continue
+		var gap: int = mi.wounds_max - mi.wounds_current
+		if gap > 0:
+			out.append({"model": mi, "revive": false, "capacity": gap})
+	return out
+
+
+## NML-924 — ONE click of the owner's Reanimation allocation: spend a single success on `choice`.
+## The cast_pick_step pattern — PURE (it reads the model's own wound fields and nothing else), so every
+## branch of the allocation is reachable in a test without a scene, a camera or a die.
+##
+## Returns {"spent", "revive", "left", "done", "reason"}. A click that buys nothing comes back with
+## `spent` false and a `reason` the caller can log (rules-must-log: a refusal that says nothing reads
+## like a broken click); `revive` marks the success that puts a casualty back on the table, which is
+## the one the placement rule ("in coherency with non-restored models") applies to.
+static func reanimation_pick_step(left: int, choice: ModelInstance) -> Dictionary:
+	if left <= 0:
+		return {"spent": false, "revive": false, "left": 0, "done": true, "reason": "no successes left"}
+	if choice == null:
+		return {"spent": false, "revive": false, "left": left, "done": false, "reason": "not a model of this unit"}
+	if choice.is_alive and choice.wounds_current >= maxi(choice.wounds_max, 1):
+		return {"spent": false, "revive": false, "left": left, "done": false, "reason": "it is at full health"}
+	var rest: int = left - 1
+	return {"spent": true, "revive": not choice.is_alive, "left": rest, "done": rest <= 0, "reason": ""}
+
+
+## Whether a model belongs to a Hero unit (the plan's first priority band).
+static func _reanimation_is_hero(model: ModelInstance) -> bool:
+	if model == null or not (model.unit is GameUnit):
+		return false
+	return (model.unit as GameUnit).is_hero()
+
+
+# === Reinforcement (army-book, v3.5.3 — byte-identical in all 12 books that field it) ===========
+# "When a unit where all models have this rule is Shaken or fully destroyed, you may remove it from
+# the table as destroyed and place a new copy of it fully within 12" of any table edge at the
+# beginning of the next round after Ambushers have been deployed. Units that deploy via Reinforcement
+# can't seize or contest objectives on the round they deploy, and this rule doesn't apply to the new
+# copy of the unit."
+#
+# Maintainer readings pinned here so they are not re-litigated at each call site:
+#  - "IS Shaken", not "becomes Shaken": the offer stands for as long as the unit is Shaken.
+#  - The landing zone is LITERAL — 12" of ANY edge, the enemy's included. The book names a minimum
+#    distance from enemies for Ambush and deliberately does not here, so neither do we.
+#  - "all models have this rule": a joined hero is one of the unit's models, so a hero without the
+#    rule blocks it — loudly, with a log line, never silently.
+#  - The copy loses the rule for real (gone from special_rules, gone from the unit card), rather than
+#    being tracked as an invisible "already used" flag.
+
+const REINFORCEMENT_RULE := "Reinforcement"
+## The landing strip: the copy must stand FULLY within this many inches of some table edge.
+const REINFORCEMENT_EDGE_IN := 12.0
+
+## The chain that must ALL carry the rule: the unit plus every attached hero.
+static func reinforcement_chain(unit: GameUnit) -> Array:
+	if unit == null:
+		return []
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h is GameUnit:
+				chain.append(h)
+	return chain
+
+
+## Whether the rule is present on the unit at all — the gate for SHOWING the radial entry. A carrier
+## that cannot use it right now still shows the entry and is refused with a reason (#224 transparency:
+## an entry that vanishes reads exactly like a missing rule).
+static func reinforcement_offered(unit: GameUnit) -> bool:
+	return has_exact_rule(unit, REINFORCEMENT_RULE)
+
+
+## "" when the rule may fire on `unit` right now; otherwise the reason, ready to be logged verbatim.
+## Pure: everything it reads sits on the GameUnit.
+static func reinforcement_refusal(unit: GameUnit) -> String:
+	if unit == null:
+		return "no unit"
+	if not has_exact_rule(unit, REINFORCEMENT_RULE):
+		return "%s does not have Reinforcement" % unit.get_name()
+	# "a unit where ALL MODELS have this rule" — a joined hero counts as one of them.
+	for member in reinforcement_chain(unit):
+		var m := member as GameUnit
+		if m == null or m == unit:
+			continue
+		if not has_exact_rule(m, REINFORCEMENT_RULE):
+			return "%s is joined to %s, who does not have Reinforcement — \"all models have this rule\" is not met" % [
+				unit.get_name(), m.get_name()]
+	if reinforcement_due_round(unit) > 0:
+		return "%s already left the table — its copy is on the way" % unit.get_name()
+	if bool(unit.unit_properties.get("reinforcement_spent", false)):
+		return "%s has already used Reinforcement" % unit.get_name()
+	# "is Shaken or fully destroyed" — the offer stands for as long as the unit IS Shaken.
+	if not unit.is_shaken and not unit.is_destroyed():
+		return "%s is neither Shaken nor destroyed" % unit.get_name()
+	return ""
+
+
+## The round the copy of a unit sacrificed in `round_no` arrives in: "the beginning of the NEXT round".
+static func reinforcement_arrival_round(round_no: int) -> int:
+	return round_no + 1
+
+
+## The round `unit` is waiting for its copy in, or -1 when it is not waiting.
+static func reinforcement_due_round(unit: GameUnit) -> int:
+	if unit == null:
+		return -1
+	return int(unit.unit_properties.get("reinforcement_due_round", -1))
+
+
+## Every unit whose copy is due at the beginning of `round_no` (or earlier — a copy that found no
+## room at all keeps its date rather than evaporating). Stable order: registration order.
+static func reinforcement_due(all_units: Array, round_no: int) -> Array:
+	var out: Array = []
+	for u in all_units:
+		var gu := u as GameUnit
+		if gu == null:
+			continue
+		var due: int = reinforcement_due_round(gu)
+		if due > 0 and due <= round_no:
+			out.append(gu)
+	return out
+
+
+## The returning copy's special rules: the same list, with Reinforcement removed. "This rule doesn't
+## apply to the new copy" — so it leaves the card, which is what the player actually reads.
+static func reinforcement_copy_rules(rules: Array) -> Array:
+	var out: Array = []
+	for r in rules:
+		var n := str(r) if r is String else str((r as Dictionary).get("name", ""))
+		if n.strip_edges() == REINFORCEMENT_RULE:
+			continue
+		out.append(r)
+	return out
+
+
+## The arrival formation as cursor-relative offsets — one row, edge to edge with the standard gap,
+## centred on the cursor. Feeds both the human's placement ghost and the automatic spot search, so
+## the two never disagree about the unit's footprint. `radii` are the models' base radii in metres.
+static func reinforcement_shape(radii: Array, gap_m: float) -> Array:
+	var shape: Array = []
+	if radii.is_empty():
+		return shape
+	var width: float = 0.0
+	for i in radii.size():
+		width += float(radii[i]) * 2.0
+		if i > 0:
+			width += gap_m
+	var cursor: float = -width * 0.5
+	for i in radii.size():
+		var r: float = float(radii[i])
+		cursor += r
+		shape.append({"off": Vector2(cursor, 0.0), "r": r})
+		cursor += r + gap_m
+	return shape
+
+
+## Whether a base of radius `r` centred at `p` stands FULLY on the table AND FULLY within `margin_m`
+## of at least one table edge. Kept here as well as in PlacementGhost.zone_contains so the automatic
+## path and the interactive ghost are provably measuring the same strip (both are pinned by tests).
+static func reinforcement_spot_in_strip(p: Vector3, r: float, table: Rect2, margin_m: float) -> bool:
+	if p.x - r < table.position.x or p.x + r > table.end.x:
+		return false
+	if p.z - r < table.position.y or p.z + r > table.end.y:
+		return false
+	# "Fully within m of edge E" = the point of the base FARTHEST from E is still within m of E.
+	return (p.x + r) - table.position.x <= margin_m \
+		or table.end.x - (p.x - r) <= margin_m \
+		or (p.z + r) - table.position.y <= margin_m \
+		or table.end.y - (p.z - r) <= margin_m
+
+
+## The automatic landing spots for a returning copy — the AI's arrival and the human's fallback when
+## he cancels the placement ghost. Walks a deterministic lattice over the whole 12" border strip,
+## orders it by distance to `prefer`, and greedily takes the first free slot per model.
+## `blockers` are [{p: Vector3, r: float}] (every standing base). Returns one position per PLACED
+## model, in model order — SHORTER than `radii` when the strip is too crowded, which is the caller's
+## cue to forfeit the rest with a log line rather than refusing the whole arrival.
+static func reinforcement_spots(radii: Array, table: Rect2, margin_m: float, blockers: Array,
+		prefer: Vector3, step_m: float) -> Array:
+	var out: Array = []
+	if radii.is_empty() or step_m <= 0.0:
+		return out
+	var taken: Array = []
+	for i in radii.size():
+		var r: float = float(radii[i])
+		var best: Vector3 = Vector3.INF
+		var best_d: float = INF
+		# The lattice is generated per model because the legal band depends on the model's own radius.
+		var x: float = table.position.x + r
+		while x <= table.end.x - r + 0.0001:
+			var z: float = table.position.y + r
+			while z <= table.end.y - r + 0.0001:
+				var p := Vector3(x, 0.0, z)
+				if reinforcement_spot_in_strip(p, r, table, margin_m):
+					var free := true
+					for b in blockers:
+						var bd := b as Dictionary
+						var bp: Vector3 = bd["p"]
+						if Vector2(p.x, p.z).distance_to(Vector2(bp.x, bp.z)) < r + float(bd["r"]):
+							free = false
+							break
+					if free:
+						for t in taken:
+							var td := t as Dictionary
+							var tp: Vector3 = td["p"]
+							if Vector2(p.x, p.z).distance_to(Vector2(tp.x, tp.z)) < r + float(td["r"]):
+								free = false
+								break
+					if free:
+						var d: float = Vector2(p.x, p.z).distance_squared_to(Vector2(prefer.x, prefer.z))
+						# Ties break on the lattice walk order, so the same board always answers the same.
+						if d < best_d:
+							best_d = d
+							best = p
+				z += step_m
+			x += step_m
+		if best == Vector3.INF:
+			break   # the strip is full — the remaining models are forfeit (caller logs it)
+		out.append(best)
+		taken.append({"p": best, "r": r})
+	return out
+
+
 ## Total model count of a unit INCLUDING its attached heroes (the denominator shown next to
 ## combined_alive in log lines — "(alive/total)" must count the same pool on both sides).
 static func combined_total(unit: GameUnit) -> int:
@@ -3606,14 +4501,17 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 		_fill_straight_trails(world_trails, positions, rigid)
 		return rigid   # a regiment moves as its rigid tray block — no individual steering
 	# Map world XZ (metres, centred at 0) into the planner's non-negative inch frame: shift by the table
-	# half-extents, then divide by the inch scale. board_in is the larger table extent in inches.
+	# half-extents, then divide by the inch scale. BOTH extents travel (#215): this used to fold the two
+	# axes into one scalar via maxf(half.x, half.y), so on the shipped 6x4 ft table (72"x48") the planner
+	# was told the short axis also ran to 72" and happily routed models up to 24" past the table edge.
 	# FLYING ignores walls while moving (GF v3.5.1) — planning around ruin walls both wasted movement
 	# and fed the gate's wall clamp spurious reverts (live-test Bug 20: the torn winged unit). The
 	# REST legality (not ending inside a container) stays with the terrain projection, which is exact.
 	var walls_world: Array = [] if unit.has_special_rule("Flying") else _walls_world()
 	var half := _table_half_extents()
 	var off := Vector2(half.x, half.y)
-	var board_in: float = (maxf(half.x, half.y) * 2.0) / INCHES_TO_METERS
+	var board_in: float = (half.x * 2.0) / INCHES_TO_METERS      # X extent (long side on a 6x4)
+	var board_y_in: float = (half.y * 2.0) / INCHES_TO_METERS    # Y extent (short side on a 6x4)
 	var mpos: Array = []
 	for p in positions:
 		mpos.append((Vector2((p as Vector3).x, (p as Vector3).z) + off) / INCHES_TO_METERS)
@@ -3627,7 +4525,8 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	# for EVERY other unit (p.7; on a Charge the target is body-only); difficult/impassable cells to
 	# route around (p.57 overlay).
 	var own_r_m := _move_base_radius_m(models)
-	var opts := {"clearance": own_r_m / INCHES_TO_METERS + CLEARANCE_EPS_IN}
+	var opts := {"clearance": own_r_m / INCHES_TO_METERS + CLEARANCE_EPS_IN,
+		"board_y_in": board_y_in}   # the planner's second axis; without it every bound would be square
 	var zones_in: Array = []
 	for z in _spacing_zones_world(unit, own_r_m, charge_target if allow_contact else null):
 		var zd := z as Dictionary
@@ -3635,11 +4534,11 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 			"r": float(zd["r"]) / INCHES_TO_METERS})
 	if not zones_in.is_empty():
 		opts["zones"] = zones_in
-	var sampled := _terrain_grid_in(board_in, off, avoid_difficult, avoid_dangerous)
+	var sampled := _terrain_grid_in(board_in, off, avoid_difficult, avoid_dangerous, board_y_in)
 	opts["avoid_cells"] = sampled["avoid"]
 	if avoid_difficult or avoid_dangerous:
 		# Fine, base-radius-inflated avoidance so the routed BASE EDGE clears the terrain too.
-		opts["avoid_fine"] = _avoid_fine_cells_in(mpos, mdelta, board_in, off, own_r_m, avoid_difficult, avoid_dangerous)
+		opts["avoid_fine"] = _avoid_fine_cells_in(mpos, mdelta, board_in, off, own_r_m, avoid_difficult, avoid_dangerous, board_y_in)
 	# Unified-solver inputs (real-game path only): the presence of "radii" selects the C-space / Theta* /
 	# funnel + unified-constraint-solver pipeline inside plan_unit_step. SoloSim never sets it, so its
 	# steer+A* path and the mirror-fairness oracle stay byte-identical. radii = per-model base radius (inches)
@@ -3650,7 +4549,7 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	for m in models:
 		radii_in.append(model_base_radius_m(m as ModelInstance) / INCHES_TO_METERS)
 	opts["radii"] = radii_in
-	opts["forbid_cells"] = _forbid_cells_in(mpos, mdelta, board_in, off, own_r_m)
+	opts["forbid_cells"] = _forbid_cells_in(mpos, mdelta, board_in, off, own_r_m, board_y_in)
 	# NML-230 Breach B: hand the planner the p.11 cap so EVERY generated polyline that enters difficult
 	# terrain is trimmed to 6" at the source — the gate-collapse-ladder and boxed/sidestep replans (and
 	# the solver's projections) bypass the unit-wide pre-plan reach clamp in _execute_move, which only
@@ -3794,6 +4693,18 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	_gate_clamped_models = {}
 	if n == 0:
 		return cfg
+	# BELT AND BRACES (#215). The planner is axis-correct now, but this gate is the LAST seam before a plan
+	# becomes real positions, and it only ever clamped its OWN correction candidates — an incoming plan was
+	# taken on trust. Clamp it per axis FIRST, so no future planner regression can put a model off the table
+	# again, and every later correction starts from a legal configuration. Same rule the rest of the
+	# controller applies (_clamp_to_bounds keeps models a hair inside the edge).
+	var clamped_by_m := 0.0
+	for i in range(cfg.size()):
+		var inb := _clamp_to_bounds(cfg[i] as Vector3)
+		clamped_by_m = maxf(clamped_by_m, _xz_dist_m(inb, cfg[i] as Vector3))
+		cfg[i] = inb
+	if clamped_by_m > BOARD_CLAMP_NOTE_EPS_M:
+		board_clamp_notes.append("AI path clamped to the table edge (%s)" % unit.get_name())
 	var gate_flying := unit.has_special_rule("Flying")   # Bug 20: wall clamp must not revert legal fly-overs
 	var obstacles := _external_obstacle_shapes(unit)
 	# NML-230 Breach A: the gate's physical corrections (terrain projection + overlap push + straggler
@@ -4822,6 +5733,17 @@ static func counter_models_of(unit: GameUnit) -> int:
 ## Append one structured decision record (see decision_log). Ring-buffered: the oldest record is
 ## dropped past DECISION_LOG_CAP, so an undrained buffer stays bounded in long games. A configured
 ## decision_sink sees every record first (lossless — the harness capture is not subject to eviction).
+## Idempotent round-plan primer (community #163): builds — or returns the cached — whole-
+## army round plan so the async drivers pay the round-start compute on its OWN frame
+## instead of compounding it onto the first unit's activation burst. The plan is cached
+## per (round, slot) and its inputs (unit positions, objective ownership) do not change
+## between round start and the first activation, so priming early yields the identical
+## plan the first activation would have built lazily. No-op without a graded difficulty.
+func prime_round_plan() -> void:
+	if active_difficulty() != null:
+		_plan_for_round()
+
+
 func record_decision(rec: Dictionary) -> void:
 	if decision_sink.is_valid():
 		decision_sink.call(rec)
@@ -4860,6 +5782,72 @@ func drain_decisions() -> Array:
 
 ## Render one decision record as a battle-log line — the ONLY place record fields become formatted
 ## strings (zero formatting cost while the dev toggle is off). Pure + static (testable).
+## #227 — one click of a pick-up-to-N spell: append the target, drop it from the legal
+## set, report whether the cast is ready (all N picked, or the set ran dry). Pure.
+static func cast_pick_step(picked: Array, want: int, valid: Array, target) -> Dictionary:
+	# Maintainer UX (31.07.): re-clicking an ALREADY-PICKED unit takes the pick BACK (toggle,
+	# not refusal) — the unit returns to the valid pool and the cast never auto-completes here.
+	if picked.has(target):
+		var p0 := picked.duplicate()
+		p0.erase(target)
+		var v0 := valid.duplicate()
+		if not v0.has(target):
+			v0.append(target)
+		return {"picked": p0, "valid": v0, "done": false, "unpicked": true}
+	var p2 := picked.duplicate()
+	p2.append(target)
+	var v2 := valid.duplicate()
+	v2.erase(target)
+	return {"picked": p2, "valid": v2, "done": p2.size() >= maxi(want, 1) or v2.is_empty(),
+		"unpicked": false}
+
+
+## Maintainer rules check (31.07.): a spell marker's duration comes from the spell's OWN text.
+## "next time ..." wording persists until the effect applies; "until the end of ..." — and any
+## unrecognized wording — expires with the round (the safe old behavior).
+static func spell_text_lasts_once(text: String) -> bool:
+	var t := text.to_lower()
+	if t.find("until the end of") >= 0:
+		return false
+	return t.find("next time") >= 0
+
+
+## Stage 3 (transparency, grilled 2026-07-30): the unit's newest decision as ONE plain
+## sentence — the live banner and the expandable log line speak this, not the raw record.
+func plain_reason_for(unit: GameUnit) -> String:
+	if unit == null:
+		return ""
+	for i in range(decision_log.size() - 1, -1, -1):
+		var r := decision_log[i] as Dictionary
+		if str(r.get("unit", "")) != unit.get_name():
+			continue
+		var kind := str(r.get("kind", ""))
+		if kind == "action":
+			return plain_action_sentence(r)
+		if kind in ["commander", "position", "flank", "kite_guard", "mission", "yield_lof"]:
+			var why := str(r.get("why", ""))
+			if not why.is_empty() and why != "decision tree":
+				return why
+	return ""
+
+
+## The 'action' record as a sentence: verb + destination + distance (+ a non-generic why).
+static func plain_action_sentence(r: Dictionary) -> String:
+	var bits := PackedStringArray()
+	var chosen := str(r.get("chosen", ""))
+	if not chosen.is_empty():
+		bits.append(chosen)
+	var d: Dictionary = r.get("data", {})
+	if bool(d.get("objective", false)) and float(d.get("obj_dist_in", 0.0)) > 0.0:
+		bits.append("toward the objective (%.0f\" away)" % float(d.get("obj_dist_in", 0.0)))
+	elif float(d.get("enemy_dist_in", 0.0)) > 0.0:
+		bits.append("at the enemy (%.0f\")" % float(d.get("enemy_dist_in", 0.0)))
+	var why := str(r.get("why", ""))
+	if not why.is_empty() and why != "decision tree":
+		bits.append("— " + why)
+	return " ".join(bits)
+
+
 static func render_decision(rec: Dictionary) -> String:
 	var parts: PackedStringArray = ["AI [%s] %s" % [str(rec.get("kind", "?")), str(rec.get("unit", "?"))]]
 	var rule := str(rec.get("rule", ""))
@@ -4928,15 +5916,28 @@ static func limited_key(unit: GameUnit, profile: Dictionary) -> String:
 	return "%s::%s" % [unit.unit_id if unit != null else "?", str(profile.get("name", "?"))]
 
 
-## Whether this unit's Limited profile is already spent.
+## Whether this unit's Limited profile is already spent. NML-949: the unit's own props are
+## the durable record — the controller dict is a session cache and is rebuilt (slot change,
+## a human taking the AI slot) and lost on a load, which used to re-arm every spent weapon.
 func is_limited_used(unit: GameUnit, profile: Dictionary) -> bool:
-	return limited_used.has(limited_key(unit, profile))
+	if limited_used.has(limited_key(unit, profile)):
+		return true
+	if unit == null:
+		return false
+	return (unit.unit_properties.get("limited_used", []) as Array).has(str(profile.get("name", "?")))
 
 
 ## Mark a Limited profile spent (called after its dice actually rolled) + a dev-mode decision record —
 ## the once-per-game state is a DECISION input (an expended weapon stops shaping targeting/EV).
 func mark_limited_used(unit: GameUnit, profile: Dictionary) -> void:
 	limited_used[limited_key(unit, profile)] = true
+	if unit != null:
+		# NML-949: durable half of the record — travels with the unit into the save and the MP state.
+		var spent: Array = unit.unit_properties.get("limited_used", [])
+		var wname := str(profile.get("name", "?"))
+		if not spent.has(wname):
+			spent.append(wname)
+		unit.unit_properties["limited_used"] = spent
 	record_decision({"kind": "action", "unit": unit.get_name() if unit != null else "?",
 		"rule": "Limited (core v3.5.1): may only be used once per game",
 		"candidates": [], "chosen": str(profile.get("name", "?")), "why": "limited weapon expended",
@@ -5073,6 +6074,204 @@ static func ai_opens_next_round(ai_took_last_activation: bool, human_has_units: 
 ## strict one-for-one alternation (GF/AoF v3.5.1 "Rounds, Turns & Activations"). Returns 1 iff the AI opens.
 static func pending_replies_at_round_start(ai_opens: bool) -> int:
 	return 1 if ai_opens else 0
+
+
+# === PRIMITIVE "Pass Turn" + its first user, Delayed Action ====================================
+#
+# THE PRIMITIVE. "Pass Turn" is the missing step in the alternation: the side whose turn it is
+# declines to activate, the turn goes to the opponent, and NOTHING about any unit changes — the
+# unit that passed is still un-activated and may take its turn later in the same round. Until now
+# an activation could only ever be SPENT (GameUnit.activate()), so there was no way to model this.
+# It is a primitive rather than a one-off because the rulebook has a second user: the optional
+# fog-of-war module Combat Hesitation (GF Advanced Rules v3.5.1 p.41) is the same mechanic behind a
+# dice roll. The alternation bookkeeping lives in main (see _solo_pass_turn); everything that can
+# be decided without touching the tree is here, pure and unit-testable.
+#
+# THE USER. Delayed Action, word-identical in all 21 army books that carry it:
+#   "Once per round, if your opponent has more units left to activate than you, then this model's
+#    unit may pass its turn instead of activating (may still be activated later)."
+#
+# MAINTAINER RULINGS baked in below:
+#   1. "units left to activate" = units left ON THE TABLE. A unit still held in Ambush reserve does
+#      not count — is_eligible() already refuses reserve units, so both sides of the comparison are
+#      read through it (verified: is_eligible → unit_in_reserve → false).
+#   2. "Once per round" binds the CARRIER UNIT, exactly as the wording says ("this model's unit").
+#      There is no army-wide cap; several carriers may each pass once in the same round. The strict
+#      surplus condition is the natural brake.
+#   3. A unit sitting on an OPEN second activation (Second Wind / Inquisitorial Agent) counts only
+#      while it is un-activated. spend_second_wind() clears is_activated at the moment the second
+#      turn is granted, so an open-but-unspent second activation is invisible in the balance —
+#      which is what is_eligible() reports anyway.
+const RULE_DELAYED_ACTION := "Delayed Action"
+## The registry primitive both users share. Delayed Action is the free version, Combat Hesitation
+## (p.41, not shipped) the dice-gated one.
+const PRIMITIVE_PASS_TURN := "Pass Turn"
+## unit_properties stamp carrying the round this carrier already passed in (the spotted_round pattern).
+const DELAYED_ACTION_STAMP := "delayed_action_round"
+
+
+## "if your opponent has more units left to activate than you" — STRICTLY more.
+##
+## TERMINATION GUARD (a). The condition is antisymmetric: opponent > own for one side is exactly
+## own >= opponent for the other, so it can NEVER be true for both sides at the same instant. Two
+## carriers can therefore not pass each other back and forth forever, and a pass always ends with
+## the opponent actually activating. Equality refuses — that is the guard, not a rounding detail.
+static func delayed_action_surplus(opponent_left: int, own_left: int) -> bool:
+	return opponent_left > own_left
+
+
+## TERMINATION GUARD (b). "Once per round" per carrier unit (ruling 2): a carrier that already
+## passed this round activates normally instead, so one carrier cannot pass a round into a loop.
+static func delayed_action_used_this_round(gu: GameUnit, round_no: int) -> bool:
+	return gu != null and int(gu.unit_properties.get(DELAYED_ACTION_STAMP, -1)) == round_no
+
+
+## Stamp the carrier as having spent its once-per-round pass.
+static func delayed_action_stamp(gu: GameUnit, round_no: int) -> void:
+	if gu != null:
+		gu.unit_properties[DELAYED_ACTION_STAMP] = round_no
+
+
+## The member (the unit itself or a joined hero) that carries Delayed Action, or null. "This model's
+## unit" — one model with the rule is enough, and a joined hero brings it to its host, the same
+## reading _spotter_member_of / _caster_member_of use for the other per-model radial rules.
+static func delayed_action_member_of(gu: GameUnit) -> GameUnit:
+	if gu == null:
+		return null
+	var members: Array = [gu]
+	if gu.has_method("get_attached_heroes"):
+		members = members + gu.get_attached_heroes()
+	for m in members:
+		var mu := m as GameUnit
+		if mu == null or mu.get_alive_count() <= 0:
+			continue
+		if unit_carries_rule(mu, RULE_DELAYED_ACTION) \
+				or not RulesRegistry.unit_rules_of_primitive(mu, PRIMITIVE_PASS_TURN).is_empty():
+			return mu
+	return null
+
+
+## The verdict on one pass attempt. "" = the pass is legal; anything else is the REASON it is not,
+## ready to be printed. Transparency doctrine (#224): the radial entry is offered even when the
+## rule cannot be used right now, and the refusal explains itself instead of vanishing from the menu.
+## `own_left` never reaches 0 on a legal pass, and this is where that is enforced rather than assumed:
+## with no units left to activate, the carrier itself must be one of the activated ones, and the
+## already-activated branch refuses. A pass REPLACES an activation, it cannot follow one.
+static func delayed_action_refusal(has_carrier: bool, already_activated: bool, already_passed: bool,
+		opponent_left: int, own_left: int) -> String:
+	if not has_carrier:
+		return "no model in the unit has Delayed Action"
+	if already_activated:
+		return "it has already activated this round — a pass replaces an activation, it cannot follow one"
+	if already_passed:
+		return "it already passed a turn this round — Delayed Action is once per round"
+	if not delayed_action_surplus(opponent_left, own_left):
+		return "your opponent has %d units left to activate, you have %d — the rule needs them to have MORE than you" % [
+			opponent_left, own_left]
+	return ""
+
+
+## Whether an enemy that has NOT activated yet can reach `gap_in` inches with `reach_in` (the larger
+## of its shooting range and its Rush/Charge band) while seeing the target. The AI's pass heuristic
+## rests on exactly this: pure, so the threat call is testable without a table.
+static func delayed_action_threatened(gap_in: float, reach_in: float, has_los: bool) -> bool:
+	return has_los and reach_in > 0.0 and gap_in <= reach_in
+
+
+## How far `gu` can hurt something THIS activation: the larger of its shooting range and its
+## Rush/Charge band (the same bands the decision tree moves on). Used only as a threat radius.
+func delayed_action_reach_in(gu: GameUnit) -> float:
+	if gu == null:
+		return 0.0
+	var bands: Dictionary = move_bands_for_unit(gu, movement_range)
+	var shoot := float(AiArchetype.max_range_inches(_unit_weapons(gu)) + shooting_range_bonus(gu))
+	return maxf(float(bands.get("rush", 12)), shoot)
+
+
+## The unit's worth for the pass heuristic: its points, falling back to model count for fixtures and
+## hand-built lists that carry no cost (the same cost-or-models weighting the separation pass uses).
+static func delayed_action_worth(gu: GameUnit) -> float:
+	if gu == null:
+		return 0.0
+	return float(gu.get_cost()) if gu.get_cost() > 0 else float(gu.get_alive_count())
+
+
+## THE AI SIDE, decided in the activation CHOOSER — passing IS the activation choice, so it cannot
+## live in a resolver that runs after a unit was already picked and moved.
+##
+## The heuristic, deliberately small and explainable: pass when the rule's condition stands AND the
+## pass actually buys something — our most valuable un-activated unit stands inside the reach of an
+## enemy unit that has NOT activated yet and can see it. Then making the opponent commit that unit
+## first is worth a turn; otherwise the AI activates normally. Both branches leave a decision record,
+## so the dev lane can always say why the rule did or did not fire.
+##
+## Returns {"unit": GameUnit|null, "why": String, "opponent_left": int, "own_left": int}. `unit` is
+## the carrier that passes, null when the AI activates instead.
+func delayed_action_pass_choice() -> Dictionary:
+	var own_pool := eligible_ai_units()
+	var opp_pool := eligible_units_for(human_slot)
+	var out := {"unit": null, "why": "", "opponent_left": opp_pool.size(), "own_left": own_pool.size()}
+	if army_manager == null:
+		return out
+	var round_no := _current_round()
+	# Guard (b) up front: carriers that have not spent their once-per-round pass yet. With no
+	# carrier there is nothing to decide and nothing to say — the rule is simply not in this army.
+	var carriers: Array = []
+	for u in own_pool:
+		var gu := u as GameUnit
+		if delayed_action_member_of(gu) != null and not delayed_action_used_this_round(gu, round_no):
+			carriers.append(gu)
+	if carriers.is_empty():
+		return out
+	# Guard (a): strictly more. own_pool always holds at least the carrier, so own_left >= 1 here —
+	# the AI can never pass away the last activation it owes (there is no carrier when own_left is 0).
+	if not delayed_action_surplus(opp_pool.size(), own_pool.size()):
+		out["why"] = "the opponent does not have more units left to activate"
+		record_decision({"kind": "pick", "unit": (carriers[0] as GameUnit).get_name(),
+			"rule": "Delayed Action: once per round, if your opponent has more units left to activate than you, this unit may pass its turn instead of activating",
+			"candidates": [], "chosen": "activates normally", "why": "condition not met — no surplus",
+			"data": {"opponent_left": opp_pool.size(), "own_left": own_pool.size()}})
+		return out
+	# The prize: our most valuable un-activated unit — the one a pass is meant to protect.
+	var prize: GameUnit = null
+	var prize_worth := -1.0
+	for u in own_pool:
+		var w := delayed_action_worth(u as GameUnit)
+		if w > prize_worth:
+			prize_worth = w
+			prize = u as GameUnit
+	# Is it under threat from an enemy that has not committed yet? eligible_units_for() IS the
+	# "not yet activated" pool, so no separate activation test is needed here.
+	var threat: GameUnit = null
+	var threat_gap := 0.0
+	for e in opp_pool:
+		var eu := e as GameUnit
+		var gap := nearest_melee_gap_in(eu, prize)
+		if delayed_action_threatened(gap, delayed_action_reach_in(eu), _has_los(eu, prize)):
+			threat = eu
+			threat_gap = gap
+			break
+	if threat == null:
+		out["why"] = "nothing of ours is under threat from an enemy that has yet to act"
+		record_decision({"kind": "pick", "unit": (carriers[0] as GameUnit).get_name(),
+			"rule": "Delayed Action: pass only when the delay buys something — otherwise the tempo is thrown away",
+			"candidates": [], "chosen": "activates normally", "why": "no threat to wait out",
+			"data": {"opponent_left": opp_pool.size(), "own_left": own_pool.size(),
+				"prize": prize.get_name() if prize != null else "?"}})
+		return out
+	# The threatened unit delays itself when it carries the rule; otherwise the first carrier does.
+	var passer: GameUnit = carriers[0] as GameUnit
+	if carriers.has(prize):
+		passer = prize
+	out["unit"] = passer
+	out["why"] = "%s is within %.1f\" of %s, which has not activated yet" % [
+		prize.get_name(), threat_gap, threat.get_name()]
+	record_decision({"kind": "pick", "unit": passer.get_name(),
+		"rule": "Delayed Action: once per round, if your opponent has more units left to activate than you, this unit may pass its turn instead of activating (may still be activated later)",
+		"candidates": [], "chosen": "passes the turn", "why": "waits out a threat that has yet to commit",
+		"data": {"opponent_left": opp_pool.size(), "own_left": own_pool.size(),
+			"prize": prize.get_name(), "threat": threat.get_name(), "gap_in": snappedf(threat_gap, 0.1)}})
+	return out
 
 
 ## X1 (test game 2, double-shoot exploit): a RESOLVED human attack always completes that unit's
@@ -5274,6 +6473,7 @@ const PACE_ANNOUNCE_S := 1.0            # attribution hold before anything happe
 const PACE_OUTCOME_S := 1.8             # result summary hold after a combat resolves
 const PACE_DICE_SETTLE_BUFFER_S := 0.6  # extra beat after the tray reports physical rest
 const PACE_MOVE_SPEED_M_S := 0.20       # animated model speed (~8"/s — readable, not sluggish)
+const PACE_SNAP_MAX_IN := 1.0           # sub-inch repositioning snaps into place instead of gliding
 const PACE_TRAIL_FADE_S := 2.0          # movement trail ribbons fade out over this long
 const PACE_FAST_SCALE := 0.15           # fast-forward multiplier on every fixed hold
 ## Activation-choreography attention beat (maintainer's explicit staging, field-test finding 7): the fixed
@@ -5308,6 +6508,15 @@ static func pace_seconds(phase: int, fast: bool) -> float:
 ## attacks. Static + pure so the staging is unit-testable and the Fast-AI compression is provable.
 static func pace_attention_seconds(fast: bool) -> float:
 	return PACE_ATTENTION_S * (PACE_FAST_SCALE if fast else 1.0)
+
+
+## Sub-inch kite steps SNAP into place instead of glide-animating (NML-224, visual only —
+## the decision logic is untouched): true when even the LONGEST model arc of the move stays
+## under PACE_SNAP_MAX_IN. Callers whose moves must stay visibly animated regardless of
+## distance — pile-in and consolidation, where a teleport read as "nothing happened"
+## (NML-208) — pass allow_snap=false. Static + pure so the threshold is unit-testable.
+static func should_snap_move(longest_arc_m: float, allow_snap: bool) -> bool:
+	return allow_snap and longest_arc_m < PACE_SNAP_MAX_IN * INCHES_TO_METERS
 
 
 ## The per-model ROUTE-START positions from a published last_move_paths list (each entry {model, path,
@@ -5961,10 +7170,36 @@ func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, bloc
 	_deploy_blocked_flying = blocked_flying
 	_deploy_alt = {"queue": [], "scout_queue": [], "deployed": 0, "seed": seed_value,
 		"blocked_normal": blocked_normal, "blocked_flying": blocked_flying}
+	# #230 (official Solo rules p.58): "the AI must always place random units in each
+	# [transport], trying to fill up its cargo limit" — filled BEFORE the queue build, so
+	# cargo rides its transport (S1.5) instead of deploying as its own drop. Lists without
+	# transports draw NOTHING here — the rng sequence (and every existing seed) is untouched.
+	var fill_transports: Array = []
+	var fill_pool: Array = []
+	for u0 in army_manager.get_game_units_for_player(ai_slot):
+		if u0 == null or u0.get_alive_count() <= 0 or (u0.has_method("is_attached") and u0.is_attached()):
+			continue
+		if army_manager.transport_capacity(u0) > 0:
+			fill_transports.append(u0)
+		elif army_manager.transport_of(u0) == null:
+			fill_pool.append(u0)
+	for tr0 in fill_transports:
+		var tries: Array = fill_pool.duplicate()
+		while not tries.is_empty():
+			var pick: GameUnit = tries.pop_at(rng.randi_range(0, tries.size() - 1))
+			if bool(army_manager.can_embark(pick, tr0).get("ok", false)) \
+					and army_manager.set_unit_embarked(pick, tr0, true):
+				fill_pool.erase(pick)
+				record_decision({"kind": "mission", "unit": tr0.get_name(),
+					"rule": "Official Solo rules p.58: the AI fills each transport with random units up to its cargo limit",
+					"candidates": [], "chosen": "loads %s" % pick.get_name(),
+					"why": "transport fill at deployment", "data": {}})
 	var all_units: Array = []
 	for u in army_manager.get_game_units_for_player(ai_slot):
 		# Attached heroes deploy WITH their host unit (coherency!), never as their own drop.
-		if u != null and u.get_alive_count() > 0 and not (u.has_method("is_attached") and u.is_attached()):
+		# #230: embarked cargo rides its transport — never its own drop.
+		if u != null and u.get_alive_count() > 0 and not (u.has_method("is_attached") and u.is_attached()) \
+				and army_manager.transport_of(u) == null:
 			all_units.append(u)
 	if all_units.is_empty():
 		return 0
@@ -5981,7 +7216,9 @@ func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, bloc
 		# Infiltrate (Bug 26) "counts as having Ambush" → same reserve/round-2 arrival as Ambush, only its
 		# arrival ring is 3" not 9" (handled per-unit at arrival via _reserve_min_enemy_dist_m).
 		# B12: item-granted Ambush/Scout count too (has_special_rule alone missed upgrade grants).
-		var is_ambush: bool = unit_has_ambush(u)
+		# S1.5 (community #160): embarked cargo is never independently set aside — it rides
+		# its transport's reserve and arrives inside it.
+		var is_ambush: bool = unit_has_ambush(u) and army_manager.transport_of(u) == null
 		flags.append({"id": i, "scout": unit_has_scout(u), "ambush": is_ambush})
 		if is_ambush:
 			u.unit_properties["ambush_reserve"] = true   # held off-table → not activatable until it arrives
@@ -6328,7 +7565,19 @@ func _deploy_spot_free(cand: Vector3, r: float, moving: ModelInstance) -> bool:
 ## a model the shift lands in forbidden terrain is nudged out individually (rare — deployment already avoids
 ## terrain). Regiments keep their rigid tray. Uses the REAL base shapes the audit measures.
 var _deploy_zone_of := {}   # unit -> Rect2 (world XZ): the zone this unit MUST stay inside through cleanup
-var _redeploy_done := false           # Re-Deployment executed for this game (once per game)
+## Re-Deployment executed for this game (once per game). NML-949: today only accidentally safe
+## because a foreign game_phase gate hides it; loosen that gate and it becomes exploitable — so
+## it persists like the rest. Kept in the match rule state, not on this node, since the
+## controller is rebuilt on an AI-slot change and dropped on a load.
+var _redeploy_done: bool:
+	get:
+		var rs: Dictionary = army_manager.rule_state if army_manager != null else _rule_state_fallback
+		return bool(rs.get("redeploy_done", false))
+	set(value):
+		if army_manager != null:
+			army_manager.rule_state["redeploy_done"] = value
+		else:
+			_rule_state_fallback["redeploy_done"] = value
 const REDEPLOY_MIN_GAIN_IN := 3.0     # re-place only when the new spot is at least this much nearer a marker
 
 
@@ -6545,8 +7794,14 @@ const INFILTRATE_MIN_ENEMY_DIST_M := 0.0762   # Bug 26 (army-book Infiltrate, AP
 
 
 ## Per-unit Ambush-arrival no-go radius from enemies: 3" for Infiltrate, 9" for plain Ambush (Bug 26).
+## NML-937: the 3" is DATA now — v3.5.3's "may be deployed anywhere over 3\" away from enemy units"
+## rides the registry's `min_enemy_dist_in`, so a book that ever moves the ring moves it here too.
+## The constant stays as the fallback, which keeps a missing map byte-identical to the shipped 3".
 func _reserve_min_enemy_dist_m(unit: GameUnit) -> float:
-	return INFILTRATE_MIN_ENEMY_DIST_M if unit.has_special_rule("Infiltrate") else AMBUSH_MIN_ENEMY_DIST_M
+	if unit == null or not unit.has_special_rule(RULE_INFILTRATE):
+		return AMBUSH_MIN_ENEMY_DIST_M
+	var fallback_in := INFILTRATE_MIN_ENEMY_DIST_M / INCHES_TO_METERS
+	return float(RulesRegistry.unit_param(unit, RULE_INFILTRATE, "min_enemy_dist_in", fallback_in)) * INCHES_TO_METERS
 
 
 ## Vanguard's forward push: candidate spots along the toward-table-centre line at 100/75/50/25% of the
@@ -6655,6 +7910,249 @@ static func repel_ambush_dist_m(enemy: GameUnit) -> float:
 	return float(RulesRegistry.unit_param(enemy, "Repel Ambushers", "min_dist_in", REPEL_AMBUSHERS_DIST_IN)) * INCHES_TO_METERS
 
 
+# === Ambush variants, wave 1 (army-book rules, GF 3.5.2 / registry-tuned) ======================
+#
+# EXACT rule names everywhere below. GameUnit.has_special_rule matches by PREFIX, and both
+# "Ambush Beacon" and "Ambush Re-Deployment" begin with "Ambush" — so the prefix reader answered
+# true for their carriers and unit_has_ambush pulled them off the table into reserve, although
+# both deploy NORMALLY (the Ferocious / Reanimation prefix lesson).
+const RULE_AMBUSH := "Ambush"
+const RULE_INFILTRATE := "Infiltrate"
+const RULE_AMBUSH_BEACON := "Ambush Beacon"
+const RULE_RAPID_AMBUSH := "Rapid Ambush"
+const RULE_AMBUSH_REDEPLOY := "Ambush Re-Deployment"
+
+
+## Whether `gu` carries EXACTLY `rule_name` — on its own rule line or through an item/upgrade grant.
+## (The import folds granted rules into special_rules; the item_grants read is belt-and-braces for
+## lists that predate that folding.) Ratings are stripped, so "Ambush(2)" still matches "Ambush".
+static func unit_carries_rule(gu: GameUnit, rule_name: String) -> bool:
+	if gu == null or rule_name.is_empty():
+		return false
+	for r in gu.get_special_rules():
+		var n: String = (str((r as Dictionary).get("name", "")) if r is Dictionary else str(r))
+		if RulesRegistry.base_rule_name(n) == rule_name:
+			return true
+	for granted_list in (gu.unit_properties.get("item_grants", {}) as Dictionary).values():
+		for granted in granted_list:
+			if RulesRegistry.base_rule_name(str(granted)) == rule_name:
+				return true
+	return false
+
+
+# --- Ambush Beacon ---------------------------------------------------------------------------
+# Official text: "Friendly units using Ambush may ignore distance restrictions from enemies if they
+# are deployed within 6" of this model."
+# MAINTAINER RULING: "distance restrictions" is PLURAL — inside the circle EVERY enemy distance
+# restriction falls away, the base 9" (3" Infiltrate) arrival ring AND an enemy's Repel Ambushers
+# 12". The waiver is keyed to the beacon MODEL, not to its unit.
+const AMBUSH_BEACON_RADIUS_IN := 6.0
+## A beacon this close to a spot that did NOT get the waiver is still NAMED (rules-must-log: a
+## silently unapplied rule reads exactly like a broken one).
+const AMBUSH_BEACON_NOTICE_IN := 12.0
+const BEACON_EPS_M := 0.0005   # 0.5 mm ruler tolerance so "within 6\"" is not lost to float noise
+
+
+## Waiver radius (metres) a beacon carrier projects — registry-tuned (params carry beacon_in = 6).
+static func beacon_radius_m(carrier: GameUnit) -> float:
+	return float(RulesRegistry.unit_param(carrier, RULE_AMBUSH_BEACON, "beacon_in",
+		AMBUSH_BEACON_RADIUS_IN)) * INCHES_TO_METERS
+
+
+## Every live beacon MODEL of `slot` that stands ON the table: [{pos: Vector2, radius_m, unit}].
+## A carrier still held in Ambush reserve, or riding inside a transport, projects nothing — it is not
+## on the table and the rule measures from the model. NOTE: an upgrade is recorded per UNIT (item
+## grants carry no model index), so every model of a carrier projects the circle; for the usual
+## single-model beacon carrier that is exact, for a squad it is the honest over-approximation.
+func beacon_points(slot: int) -> Array:
+	var out: Array = []
+	if army_manager == null:
+		return out
+	for u in army_manager.get_game_units_for_player(slot):
+		var gu := u as GameUnit
+		if gu == null or gu.get_alive_count() <= 0 or unit_in_reserve(gu):
+			continue
+		if not unit_carries_rule(gu, RULE_AMBUSH_BEACON):
+			continue
+		if army_manager.transport_of(gu) != null:
+			continue
+		var r := beacon_radius_m(gu)
+		for m in gu.get_alive_models():
+			var mi := m as ModelInstance
+			if mi != null and mi.node != null and is_instance_valid(mi.node):
+				var p := mi.node.global_position
+				out.append({"pos": Vector2(p.x, p.z), "radius_m": r, "unit": gu.get_name()})
+	return out
+
+
+## PURE: the NEAREST beacon to `pos` — {name, dist_in, radius_in, covered}; {} when there is none.
+## `covered` is the waiver itself: the position lies within that beacon's radius.
+static func beacon_cover(pos: Vector2, beacons: Array) -> Dictionary:
+	var best: Dictionary = {}
+	var best_d := INF
+	for b in beacons:
+		var bd := b as Dictionary
+		var d: float = pos.distance_to(bd["pos"] as Vector2)
+		if d >= best_d:
+			continue
+		best_d = d
+		var r := float(bd.get("radius_m", AMBUSH_BEACON_RADIUS_IN * INCHES_TO_METERS))
+		best = {"name": str(bd.get("unit", "beacon")), "dist_in": d / INCHES_TO_METERS,
+			"radius_in": r / INCHES_TO_METERS, "covered": d <= r + BEACON_EPS_M}
+	return best
+
+
+## PURE: gap (inches) from `pos` to the nearest enemy entry of an arrival's `enemy_positions` list
+## (Vector2 or {pos, pad_m} — the pad is the enemy model's base radius, so this is edge-true). INF
+## when the list is empty. Used for the beacon log line ("lands X.X\" from the enemy").
+static func nearest_enemy_gap_in(pos: Vector2, enemy_positions: Array) -> float:
+	var best := INF
+	for e in enemy_positions:
+		var p: Vector2 = (e as Dictionary)["pos"] if e is Dictionary else (e as Vector2)
+		var pad: float = float((e as Dictionary).get("pad_m", 0.0)) if e is Dictionary else 0.0
+		best = minf(best, maxf(0.0, pos.distance_to(p) - pad))
+	return best if best == INF else best / INCHES_TO_METERS
+
+
+# --- Rapid Ambush ----------------------------------------------------------------------------
+# Official text: "Counts as having Ambush, but may be deployed at the start of any round, including
+# the first." MAINTAINER RULING: the AI plays this by the book and MAY arrive in round 1 — a
+# specific army rule beats the general solo guideline "reserves arrive from round 2".
+
+## The EARLIEST round a reserve unit may arrive in: 1 with Rapid Ambush, 2 for base Ambush /
+## Infiltrate (GF/AoF v3.5.1 p.13 "any round after the first").
+static func ambush_earliest_round(gu: GameUnit) -> int:
+	return 1 if unit_carries_rule(gu, RULE_RAPID_AMBUSH) else 2
+
+
+## Whether a held reserve unit may arrive in `round_number` RIGHT NOW. An Ambush Re-Deployment unit
+## carries an exact return date (ambush_return_round) and arrives in THAT round only — not earlier
+## ("at the beginning of the next round") and not later (it is not a fresh reserve choice).
+static func may_arrive_this_round(gu: GameUnit, round_number: int) -> bool:
+	if gu == null:
+		return false
+	var due := int(gu.unit_properties.get("ambush_return_round", 0))
+	if due > 0:
+		return round_number == due
+	return round_number >= ambush_earliest_round(gu)
+
+
+## How many of the AI's held reserves could arrive in `round_number` (the round-start gate: with
+## nothing eligible the whole arrival beat is skipped instead of logging an empty pass).
+func ambush_reserve_ready(round_number: int) -> int:
+	var n := 0
+	for u in ambush_reserve:
+		var gu := u as GameUnit
+		if gu != null and gu.get_alive_count() > 0 and may_arrive_this_round(gu, round_number):
+			n += 1
+	return n
+
+
+## How many of the HUMAN's held reserves could arrive in `round_number` (same gate, other side).
+func human_reserve_ready(round_number: int) -> int:
+	var n := 0
+	for u in human_reserve_units():
+		if may_arrive_this_round(u as GameUnit, round_number):
+			n += 1
+	return n
+
+
+# --- Ambush Re-Deployment --------------------------------------------------------------------
+# Official text: "Once per game, when a unit where all models have this rule ends its activation, you
+# may immediately remove it from the table (dropping any objectives it might hold within 1"), and
+# deploy it as if it had Ambush at the beginning of the next round."
+
+## The AI's threat band for the withdraw decision: an enemy this close can charge it next round.
+const AMBUSH_REDEPLOY_THREAT_IN := 12.0
+## An objective this close counts as held/contested by the unit — walking off it throws the mission.
+const AMBUSH_REDEPLOY_OBJECTIVE_IN := 3.0
+
+
+## Whether every model of `gu` — attached heroes included — carries Ambush Re-Deployment. A joined
+## hero WITHOUT the rule locks the whole unit out ("a unit where ALL models have this rule").
+static func unit_all_models_ambush_redeploy(gu: GameUnit) -> bool:
+	if gu == null or not unit_carries_rule(gu, RULE_AMBUSH_REDEPLOY):
+		return false
+	if gu.has_method("get_attached_heroes"):
+		for h in gu.get_attached_heroes():
+			var hero := h as GameUnit
+			if hero != null and hero.get_alive_count() > 0 and not unit_carries_rule(hero, RULE_AMBUSH_REDEPLOY):
+				return false
+	return true
+
+
+## Whether `gu` may use its Ambush Re-Deployment right now: the rule on every model, alive, on the
+## table, and the once-per-game use still unspent.
+static func can_ambush_redeploy(gu: GameUnit) -> bool:
+	if gu == null or gu.is_destroyed() or gu.get_alive_count() <= 0:
+		return false
+	if bool(gu.unit_properties.get("ambush_redeploy_used", false)) or unit_in_reserve(gu):
+		return false
+	if gu.has_method("is_attached") and gu.is_attached():
+		return false   # an attached hero has no activation of its own — its host decides
+	return unit_all_models_ambush_redeploy(gu)
+
+
+## PURE AI policy (documented heuristic, deliberately simple): withdraw when the unit is NOT sitting
+## on a marker it would hand over, and it is under pressure — Shaken, or an enemy inside the 12"
+## charge band. Holding ground beats a re-entry, and a safe unit gains nothing by leaving.
+static func ambush_redeploy_ai_wants(nearest_enemy_in: float, holds_objective: bool, shaken: bool) -> bool:
+	if holds_objective:
+		return false
+	return shaken or nearest_enemy_in <= AMBUSH_REDEPLOY_THREAT_IN
+
+
+## The AI's withdraw decision for `gu` with the board's real inputs:
+## {use, nearest_enemy_in, holds_objective, shaken, why}.
+func ambush_redeploy_ai_decision(gu: GameUnit) -> Dictionary:
+	var gap := INF
+	var enemy := _nearest_enemy_of(gu)
+	if enemy != null:
+		gap = nearest_melee_gap_in(gu, enemy)
+	var holds := false
+	var centre := unit_centre(gu)
+	for o in _deploy_objectives:
+		if Vector2(centre.x, centre.z).distance_to(o as Vector2) <= AMBUSH_REDEPLOY_OBJECTIVE_IN * INCHES_TO_METERS:
+			holds = true
+			break
+	var use := ambush_redeploy_ai_wants(gap, holds, gu.is_shaken)
+	var why := "no pressure — staying"
+	if holds:
+		why = "holds a marker within %d\" — staying" % int(AMBUSH_REDEPLOY_OBJECTIVE_IN)
+	elif use:
+		why = "Shaken — leaving" if gu.is_shaken else "enemy %.1f\" away (charge band) — leaving" % gap
+	return {"use": use, "nearest_enemy_in": gap, "holds_objective": holds, "shaken": gu.is_shaken, "why": why}
+
+
+## Execute the withdrawal: the unit leaves the table into Ambush reserve and is DUE back at the start
+## of the next round (arrive_one_ambush_unit honours ambush_return_round exactly). The once-per-game
+## use is burned here. Returns the round the unit is due back in, or 0 when it may not use the rule.
+##
+## Carried objective markers: the rule says "dropping any objectives it might hold within 1\"" — our
+## missions only ever have STATIC markers seized at round end (seize_objectives), never carried ones,
+## so there is nothing to drop. TODO: when carry-the-relic missions ship, release the carried marker
+## here before the unit leaves.
+##
+## Transports: the cargo travels with its transport. The existing reserve machinery already carries
+## it — an embarked unit is inside the hull (not on the table) and only the transport holds a reserve
+## flag — so the once-per-game use rides on the rule-bearing unit and the cargo simply comes along.
+func ambush_redeploy_withdraw(gu: GameUnit, round_no: int) -> int:
+	if not can_ambush_redeploy(gu):
+		return 0
+	gu.unit_properties["ambush_redeploy_used"] = true
+	gu.unit_properties["ambush_reserve"] = true
+	var due: int = round_no + 1
+	gu.unit_properties["ambush_return_round"] = due
+	gu.unit_properties.erase("ambush_arrived_round")   # a fresh arrival re-stamps the objective lock
+	if int(gu.unit_properties.get("player_id", 0)) == ai_slot and not ambush_reserve.has(gu):
+		ambush_reserve.append(gu)   # the AI's paced arrival list is its own truth (human side: the flag)
+	record_decision({"kind": "deploy", "unit": gu.get_name(),
+		"rule": "Ambush Re-Deployment: once per game, at the end of its activation the unit leaves the table and returns as if it had Ambush next round",
+		"candidates": [], "chosen": "withdraw", "why": "re-deployment withdrawal",
+		"data": {"round": round_no, "returns_round": due}})
+	return due
+
+
 ## OPR Ambush (GF/AoF Advanced Rules v3.5.1 p.13): reserved units arrive at the start of ANY round after
 ## the first, placed by the same deploy rules (near the nearest objective, avoiding blocked terrain,
 ## reusing the context stashed by deploy_army) but strictly MORE THAN 9" from any enemy. A unit with no
@@ -6662,12 +8160,12 @@ static func repel_ambush_dist_m(enemy: GameUnit) -> float:
 ## Batch form (kept for headless tests): loops the paced per-unit arrival. `arrival_zone` is the whole
 ## table; `enemy_positions` are enemy unit centres in table XZ. Returns {arrived (count), arrived_units,
 ## still_reserved}.
-func arrive_ambush_reserve(arrival_zone: Rect2, enemy_positions: Array) -> Dictionary:
+func arrive_ambush_reserve(arrival_zone: Rect2, enemy_positions: Array, beacons: Array = []) -> Dictionary:
 	var occupied: Array = []
 	var round_no: int = army_manager.current_round if army_manager != null else 1
 	var arrived: Array = []
 	while true:
-		var u := arrive_one_ambush_unit(arrival_zone, enemy_positions, occupied, round_no)
+		var u := arrive_one_ambush_unit(arrival_zone, enemy_positions, occupied, round_no, beacons)
 		if u == null:
 			break
 		arrived.append(u)
@@ -6685,7 +8183,8 @@ func arrive_ambush_reserve(arrival_zone: Rect2, enemy_positions: Array) -> Dicti
 ## `occupied` accumulates placed footprints across calls (seeded once with the enemies' 9" no-go rings), so
 ## successive arrivals don't stack. Returns the arrived unit, or null when no remaining reserve unit fits
 ## right now (those stay reserved for a later round).
-func arrive_one_ambush_unit(arrival_zone: Rect2, enemy_positions: Array, occupied: Array, round_no: int) -> GameUnit:
+func arrive_one_ambush_unit(arrival_zone: Rect2, enemy_positions: Array, occupied: Array, round_no: int,
+		beacons: Array = []) -> GameUnit:
 	# NOTE (Bug 26): the enemy no-go rings are NO LONGER pre-seeded here at a fixed 9" — they are added
 	# per-unit inside _try_place_reserve_unit at that unit's own ring (3" Infiltrate / 9" Ambush). `occupied`
 	# now carries only ALREADY-PLACED unit footprints across calls.
@@ -6695,10 +8194,12 @@ func arrive_one_ambush_unit(arrival_zone: Rect2, enemy_positions: Array, occupie
 		var unit: GameUnit = u
 		if unit == null or unit.get_alive_count() <= 0:
 			continue   # a reserve unit destroyed before arrival is simply gone
-		if arrived != null:
+		if arrived != null or not may_arrive_this_round(unit, round_no):
+			# One arrival per call (the caller paces each), and a unit whose earliest round has not come
+			# (base Ambush in round 1) or whose Re-Deployment return date is a different round waits.
 			remaining.append(unit)
-			continue   # one arrival per call (the caller paces each) — keep the rest reserved
-		if _try_place_reserve_unit(unit, arrival_zone, occupied, round_no, enemy_positions):
+			continue
+		if _try_place_reserve_unit(unit, arrival_zone, occupied, round_no, enemy_positions, beacons):
 			arrived = unit
 		else:
 			remaining.append(unit)   # no legal spot this round — hold for a later one (p.13)
@@ -6712,8 +8213,14 @@ func arrive_one_ambush_unit(arrival_zone: Rect2, enemy_positions: Array, occupie
 ## flag (activatable this round), stamps its arrival round (no seize/contest this round), appends its
 ## footprint to `occupied`, records the decision, and returns true. Returns false (the unit stays reserved)
 ## when no legal spot exists right now. Shared by the AI's paced arrival and the human's guided arrival.
+##
+## Ambush Beacon: `beacons` are the arriving side's own live beacon models (beacon_points). Their
+## circles are tried FIRST and WITHOUT the enemy rings — that is the whole waiver, and trying them
+## first is what makes the AI actually PLAY a rule it owns instead of only being allowed to. The
+## normal ringed search stays the fallback. `last_arrival_note` carries the caller's battle-log line.
 func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Array, round_no: int,
-		enemy_positions: Array = []) -> bool:
+		enemy_positions: Array = [], beacons: Array = []) -> bool:
+	last_arrival_note = ""
 	var no_block := func(_p: Vector2) -> bool: return false
 	var ignores_terrain: bool = unit.has_special_rule("Strider") or unit.has_special_rule("Flying")
 	var blocked: Callable = _deploy_blocked_flying if ignores_terrain else _deploy_blocked_normal
@@ -6722,6 +8229,31 @@ func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Arra
 	var radius := _deploy_footprint_radius(unit)
 	var footprint := _deploy_footprint_offsets(unit)   # per-model footprint (finding 1)
 	var base_r := _deploy_base_radius(_deploy_models(unit))
+	# Ambush Beacon pass: land inside a friendly beacon's circle and EVERY enemy distance restriction is
+	# waived (maintainer ruling — "distance restrictions", plural: the 9"/3" ring AND Repel Ambushers'
+	# 12"), so the search runs against `occupied` alone (already-placed footprints / live bases). A box
+	# corner outside the circle is rejected: only a spot truly within the radius is waived.
+	for b in beacons:
+		var bd := b as Dictionary
+		var bpos := bd["pos"] as Vector2
+		var brad := float(bd.get("radius_m", AMBUSH_BEACON_RADIUS_IN * INCHES_TO_METERS))
+		var bzone := Rect2(bpos - Vector2(brad, brad), Vector2(brad * 2.0, brad * 2.0)).intersection(arrival_zone)
+		if bzone.size.x <= 0.0 or bzone.size.y <= 0.0:
+			continue
+		var bspot := AiDeployment.best_spot(bzone, _deploy_objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r)
+		if bspot == Vector2.INF or bspot.distance_to(bpos) > brad + BEACON_EPS_M:
+			continue
+		_finish_reserve_arrival(unit, bspot, occupied, radius, round_no)
+		var gap_in := nearest_enemy_gap_in(bspot, enemy_positions)
+		last_arrival_note = "Ambush Beacon: %s lands %s from the enemy — distance restrictions waived (within %d\" of %s)" % [
+			unit.get_name(), ("%.1f\"" % gap_in if gap_in < INF else "clear"),
+			int(round(brad / INCHES_TO_METERS)), str(bd.get("unit", "the beacon"))]
+		record_decision({"kind": "deploy", "unit": unit.get_name(),
+			"rule": "Ambush Beacon: friendly Ambushers deployed within %d\" of this model ignore distance restrictions from enemies" % int(round(brad / INCHES_TO_METERS)),
+			"candidates": [], "chosen": "beacon drop", "why": "ambush arrival inside a friendly beacon circle",
+			"data": {"round": round_no, "x_m": bspot.x, "z_m": bspot.y, "beacon": str(bd.get("unit", "")),
+				"enemy_gap_in": (gap_in if gap_in < INF else -1.0)}})
+		return true
 	# Bug 26: this unit's enemy no-go rings at ITS OWN arrival distance (3" Infiltrate / 9" Ambush) —
 	# added on top of the already-placed footprints in `occupied` so a mixed reserve arrives correctly.
 	# Repel Ambushers (grill round 2 cut B): an enemy entry may be a Dictionary {pos, min_dist_m} —
@@ -6743,16 +8275,30 @@ func _try_place_reserve_unit(unit: GameUnit, arrival_zone: Rect2, occupied: Arra
 	var spot := AiDeployment.best_spot(arrival_zone, _deploy_objectives, search_occupied, radius, blocked, 0.025, radius, footprint, base_r)
 	if spot == Vector2.INF:
 		return false
-	_place_unit_at(unit, spot)
-	occupied.append({"pos": spot, "radius": radius})
-	unit.unit_properties["ambush_reserve"] = false          # on the table now → activatable this round
-	unit.unit_properties["ambush_arrived_round"] = round_no  # can't seize/contest objectives this round
+	_finish_reserve_arrival(unit, spot, occupied, radius, round_no)
 	var min_in: int = roundi(_reserve_min_enemy_dist_m(unit) / INCHES_TO_METERS)
+	# A beacon that stood near the chosen spot and did NOT apply is NAMED — a rule that quietly does
+	# nothing reads exactly like a broken one (rules-must-log).
+	var near := beacon_cover(spot, beacons)
+	if not near.is_empty() and not bool(near["covered"]) and float(near["dist_in"]) <= AMBUSH_BEACON_NOTICE_IN:
+		last_arrival_note = "Ambush Beacon: not used — %s landed %.1f\" from %s (the waiver needs %d\" or less)" % [
+			unit.get_name(), float(near["dist_in"]), str(near["name"]), int(round(float(near["radius_in"])))]
 	record_decision({"kind": "deploy", "unit": unit.get_name(),
 		"rule": "GF/AoF v3.5.1 p.13 Ambush (Infiltrate = 3\"): arrive start of a round after the first, >%d\" from enemies" % min_in,
 		"candidates": [], "chosen": "", "why": "ambush/infiltrate arrival (does not consume its activation)",
 		"data": {"round": round_no, "x_m": spot.x, "z_m": spot.y, "min_enemy_in": min_in}})
 	return true
+
+
+## The shared tail of every reserve arrival: place the unit, book its footprint, clear the reserve flag
+## (activatable this round — arriving from Ambush is DEPLOYMENT, not an activation) and stamp the
+## arrival round (no seizing/contesting this round). Re-Deployment's return date is spent here.
+func _finish_reserve_arrival(unit: GameUnit, spot: Vector2, occupied: Array, radius: float, round_no: int) -> void:
+	_place_unit_at(unit, spot)
+	occupied.append({"pos": spot, "radius": radius})
+	unit.unit_properties["ambush_reserve"] = false
+	unit.unit_properties["ambush_arrived_round"] = round_no
+	unit.unit_properties.erase("ambush_return_round")
 
 
 # === Human Ambush reserves (field-test finding 5 — the game must ASK) ========================
@@ -6785,6 +8331,8 @@ func set_aside_human_ambush() -> Array:
 			continue
 		if gu.has_method("is_attached") and gu.is_attached():
 			continue
+		if army_manager.transport_of(gu) != null:
+			continue   # S1.5 (community #160): embarked cargo rides its transport's reserve
 		if unit_has_ambush(gu):
 			gu.unit_properties["ambush_reserve"] = true
 			out.append(gu)
@@ -6794,20 +8342,21 @@ func set_aside_human_ambush() -> Array:
 ## B12 root (test game 2, "Ich wurde nicht abgefragt"): Ambush granted by an UPGRADE lives in
 ## item_grants, not in the unit's direct special_rules — has_special_rule missed it, so the unit was
 ## never set aside and the round-2 prompt had nothing to ask about. Direct rule OR item-granted.
+##
+## Wave 1 of the Ambush variants: the names are matched EXACTLY. has_special_rule matches by PREFIX,
+## so an "Ambush Beacon" or "Ambush Re-Deployment" carrier passed this gate and was set aside off the
+## table although both deploy normally. Rapid Ambush is the one true alias — "counts as having
+## Ambush" — and only its arrival ROUND differs (ambush_earliest_round).
 static func unit_has_ambush(gu: GameUnit) -> bool:
 	if gu == null:
 		return false
-	if gu.has_special_rule("Ambush") or gu.has_special_rule("Infiltrate"):
+	if unit_carries_rule(gu, RULE_AMBUSH) or unit_carries_rule(gu, RULE_INFILTRATE) \
+			or unit_carries_rule(gu, RULE_RAPID_AMBUSH):
 		return true
-	for granted_list in (gu.unit_properties.get("item_grants", {}) as Dictionary).values():
-		for granted in granted_list:
-			var base := str(granted).split("(")[0].strip_edges()
-			if base == "Ambush" or base == "Infiltrate":
-				return true
 	# Coverage wave (resolver audit): Ambush DATA aliases ("counts_as": Ambushing Piercing Shot …).
-	for e in RulesRegistry.unit_rules_of_primitive(gu, "Ambush") + RulesRegistry.unit_rules_of_primitive(gu, "Infiltrate"):
+	for e in RulesRegistry.unit_rules_of_primitive(gu, RULE_AMBUSH) + RulesRegistry.unit_rules_of_primitive(gu, RULE_INFILTRATE):
 		var ed := e as Dictionary
-		if str(ed["name"]) != "Ambush" and str(ed["name"]) != "Infiltrate" \
+		if str(ed["name"]) != RULE_AMBUSH and str(ed["name"]) != RULE_INFILTRATE \
 				and not str((ed.get("params", {}) as Dictionary).get("counts_as", "")).is_empty():
 			return true
 	return false
@@ -6847,19 +8396,23 @@ func occupied_from_live_bases() -> Array:
 
 ## Should the game PROMPT the human to deploy Ambush reserves? GF/AoF v3.5.1 p.13: reserve units MAY be
 ## deployed at the start of ANY round after the first. Pure decision so the trigger is unit-testable.
-static func should_prompt_human_ambush(round_number: int, undeployed_count: int) -> bool:
-	return round_number >= 2 and undeployed_count > 0
+## `rapid_count` are the held reserves carrying Rapid Ambush ("may be deployed at the start of any
+## round, INCLUDING THE FIRST") — with one of those the round-1 prompt is owed too.
+static func should_prompt_human_ambush(round_number: int, undeployed_count: int, rapid_count: int = 0) -> bool:
+	if undeployed_count <= 0:
+		return false
+	return round_number >= 2 or rapid_count > 0
 
 
 ## Guided arrival of ONE human Ambush-reserve unit (finding 5): seed `occupied` with the AI enemies' 9"
 ## no-go rings and place the unit >9" from them, near an objective, terrain-legal — the same legal core as
 ## the AI arrival. Returns true if placed (the caller reveals + syncs the unit). GF/AoF v3.5.1 p.13.
 func arrive_human_reserve_unit(unit: GameUnit, arrival_zone: Rect2, enemy_positions: Array,
-		occupied: Array, round_no: int) -> bool:
+		occupied: Array, round_no: int, beacons: Array = []) -> bool:
 	if unit == null or unit.get_alive_count() <= 0 or not unit_in_reserve(unit):
 		return false
 	# Bug 26: pass enemy_positions through so the ring uses the unit's own distance (3" Infiltrate / 9").
-	return _try_place_reserve_unit(unit, arrival_zone, occupied, round_no, enemy_positions)
+	return _try_place_reserve_unit(unit, arrival_zone, occupied, round_no, enemy_positions, beacons)
 
 
 const DEPLOY_SPACING_M := 0.04   # compact deployment grid: model-centre spacing (~1.6", coherent)
@@ -7026,25 +8579,63 @@ func forced_straight_move(unit: GameUnit, dir: Vector2, dist_in: float) -> float
 ## carrier unit may activate a SECOND time in a round (fatigue cleared); army cap = one third of
 ## the carriers (rounded up) per round. Candidate = the not-yet-used carrier with the best
 ## fight value; null when none/cap reached.
-var _second_wind_round_uses := {}   # round -> uses this round
+## Second Wind army cap per round (round key -> uses). NML-949: kept in the match rule state,
+## not on this node — the controller is rebuilt on an AI-slot change and dropped on a load,
+## which reset the cap to zero and allowed more Second Winds than the round permits.
+## String keys: this dictionary goes through JSON, which has no integer keys.
+var _second_wind_round_uses: Dictionary:
+	get:
+		var rs: Dictionary = army_manager.rule_state if army_manager != null else _rule_state_fallback
+		if not rs.has("second_wind_round_uses"):
+			rs["second_wind_round_uses"] = {}
+		return rs["second_wind_round_uses"]
+	set(value):
+		if army_manager != null:
+			army_manager.rule_state["second_wind_round_uses"] = value
+		else:
+			_rule_state_fallback["second_wind_round_uses"] = value
+
+var _rule_state_fallback: Dictionary = {}   # pre-setup only (no army_manager yet)
+
+
+## NML-949: the Second Wind army cap is keyed by the match's ACTUAL round counter
+## (army_manager.current_round), not by `_current_round()` — that reads round_provider, which is
+## wired by main for the (unrelated) final-round objective urgency and reads 0 whenever it is not
+## injected (headless/unit tests included). A round-scoped cap that can never tell rounds apart
+## outside a full Main is not testable and not correct, so it goes straight to army_manager.
+func _second_wind_round_no() -> int:
+	return army_manager.current_round if army_manager != null else _current_round()
+
+## v3.5.3's army cap DENOMINATOR (3 = one third of the carriers, rounded up; the pre-3.5.3 books
+## said half). Only the fallback — the live value comes from the registry's `army_cap_fraction`.
+const SECOND_WIND_CAP_FRACTION := 3
 
 
 func second_wind_candidate() -> GameUnit:
 	if army_manager == null:
 		return null
-	var round_no := _current_round()
+	var round_no := _second_wind_round_no()
 	var carriers := 0
 	var best: GameUnit = null
 	var best_v := -1.0
+	# NML-937: the per-round army cap is DATA — v3.5.3 cut the second activation from half the army
+	# to ONE THIRD, and the registry says so with `army_cap_fraction` (the DENOMINATOR: 3 = a third,
+	# 2 = the old half). The largest denominator any carrier NAMES wins, i.e. the most restrictive
+	# book in a mixed force; the constant only steps in when no carrier names one at all, so a
+	# missing map keeps the shipped third — and a map that says 2 is not overruled by the fallback.
+	var frac := 0
 	for u in army_manager.get_game_units_for_player(ai_slot):
 		var gu := u as GameUnit
 		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
 			continue
 		if gu.has_method("is_attached") and gu.is_attached():
 			continue
-		if RulesRegistry.unit_rules_of_primitive(gu, "Second Wind").is_empty():
+		var sw: Array = RulesRegistry.unit_rules_of_primitive(gu, "Second Wind")
+		if sw.is_empty():
 			continue
 		carriers += 1
+		for e in sw:
+			frac = maxi(frac, int(((e as Dictionary).get("params", {}) as Dictionary).get("army_cap_fraction", 0)))
 		if bool(gu.unit_properties.get("second_wind_used", false)) or not gu.is_activated:
 			continue
 		var v := _plan_ev_of(gu) + float(gu.get_alive_count()) * 0.1
@@ -7053,15 +8644,18 @@ func second_wind_candidate() -> GameUnit:
 			best = gu
 	if best == null:
 		return null
-	var cap: int = int(ceil(float(carriers) / 3.0))
-	if int(_second_wind_round_uses.get(round_no, 0)) >= cap:
+	if frac <= 0:
+		frac = SECOND_WIND_CAP_FRACTION
+	var cap: int = int(ceil(float(carriers) / float(frac)))
+	# NML-949: String round key — the counter now rides a save, and JSON has no integer keys.
+	if int(_second_wind_round_uses.get(str(round_no), 0)) >= cap:
 		return null
 	return best
 
 
 func spend_second_wind(unit: GameUnit) -> String:
-	var round_no := _current_round()
-	_second_wind_round_uses[round_no] = int(_second_wind_round_uses.get(round_no, 0)) + 1
+	var round_no := _second_wind_round_no()
+	_second_wind_round_uses[str(round_no)] = int(_second_wind_round_uses.get(str(round_no), 0)) + 1
 	unit.unit_properties["second_wind_used"] = true
 	unit.is_activated = false
 	unit.is_fatigued = false   # "stops being fatigued when activated for the second time"

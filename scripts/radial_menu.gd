@@ -456,7 +456,33 @@ static func solo_combat_items(game_unit: GameUnit = null) -> Array[RadialMenuIte
 	# spell picker -> target -> boost -> automatic resolution.
 	if game_unit != null and _caster_member_of(game_unit) != null:
 		out.append(RadialMenuItem.new("solo_cast", "Cast", "✦", true, "Cast a spell — pick it, pick a target, boost, auto-resolved"))
+	# Spotter UX (maintainer 31.07.): Precision Spotter is a radial action — the player picks
+	# the target (book: "pick one enemy unit within 36\" and in line of sight"), 4+ marks it.
+	if game_unit != null and _spotter_member_of(game_unit) != null:
+		out.append(RadialMenuItem.new("solo_spot", "Spot", "◎", true,
+			"Precision Spotter: pick an enemy within 36\" line of sight — on 4+ a marker lands; attackers may remove markers for +1 to hit each"))
+	# Delayed Action (wave 5) — the "Pass Turn" primitive. Offered on every carrier, NEVER hidden when
+	# the condition happens to fail: an entry that vanishes reads like a missing rule, so an illegal
+	# pass is refused in the battle log with the measured counts instead (#224 transparency doctrine).
+	if game_unit != null and SoloController.delayed_action_member_of(game_unit) != null:
+		out.append(RadialMenuItem.new("solo_pass", "Pass", "⏸", true,
+			"Delayed Action: pass this turn instead of activating — legal once per round while your opponent has more units left to activate than you; the unit may still be activated later"))
 	return out
+
+
+## The member (unit itself or a joined hero) bearing Precision Spotter, or null.
+static func _spotter_member_of(game_unit: GameUnit) -> GameUnit:
+	var members: Array = [game_unit]
+	if game_unit.has_method("get_attached_heroes"):
+		members = members + game_unit.get_attached_heroes()
+	for m in members:
+		var mu := m as GameUnit
+		if mu == null or mu.get_alive_count() <= 0:
+			continue
+		if mu.has_special_rule("Precision Spotter") \
+				or not RulesRegistry.unit_rules_of_primitive(mu, "Precision Spotter").is_empty():
+			return mu
+	return null
 
 
 ## The unit member (unit itself or a joined hero) that can pay for a cast right now, or null.
@@ -473,11 +499,24 @@ static func _caster_member_of(game_unit: GameUnit) -> GameUnit:
 	return null
 
 
+## The owner's Reinforcement entry (army-book v3.5.3). Offered on every carrier and NEVER hidden when
+## the rule cannot fire right now — an entry that vanishes reads exactly like a missing rule, so an
+## impossible sacrifice is refused with its reason in the battle log instead (#224). Not gated on solo:
+## the rule belongs to the army book, not to NACHTMAHR.
+static func reinforcement_items(game_unit: GameUnit) -> Array[RadialMenuItem]:
+	var out: Array[RadialMenuItem] = []
+	if game_unit != null and SoloController.reinforcement_offered(game_unit):
+		out.append(RadialMenuItem.new("reinforce", "Reinforce", "⟲", true,
+			"Reinforcement: while this unit IS Shaken — or once it is fully destroyed — remove it from the table as destroyed; a fresh copy of it returns within 12\" of any table edge at the start of the next round, after the Ambushers. The copy cannot seize objectives that round and does not have the rule."))
+	return out
+
+
 static func create_unit_menu(game_unit: GameUnit, solo_combat: bool = false) -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
 
 	if solo_combat:
 		items.append_array(solo_combat_items(game_unit))
+	items.append_array(reinforcement_items(game_unit))
 
 	var activate_icon = "-" if game_unit.is_activated else "+"
 	var activate_tooltip = "Mark unit as not activated" if game_unit.is_activated else "Mark unit as activated this round"

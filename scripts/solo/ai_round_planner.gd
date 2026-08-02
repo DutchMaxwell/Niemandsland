@@ -6,8 +6,12 @@ extends RefCounted
 ## decided each activation LOCALLY, so nobody promised arrivals and everybody stacked lanes.
 ##
 ## solve(p) assigns every own unit ONE task for the round:
-##   {"kind": "seize", "marker": i, "arrive_round": r, "lane": k}   — go take marker i, arrival is
-##                                                                    FEASIBLE within the rounds left
+##   {"kind": "seize", "marker": i, "arrive_round": r, "lane": k,
+##    "deny": bool}                                                 — go take marker i, arrival is
+##                                                                    FEASIBLE within the rounds left;
+##                                                                    deny=true: the marker is ENEMY-
+##                                                                    HELD, the trip walks INTO the
+##                                                                    fight to flip/contest it
 ##   {"kind": "fight"}                                              — no worthwhile/feasible marker:
 ##                                                                    the decision tree fights on
 ## Deterministic (stable sorts, index tie-breaks), side-effect free, fully unit-testable. The log
@@ -105,7 +109,10 @@ static func solve(p: Dictionary) -> Dictionary:
 		tasks[key] = {"kind": "seize", "marker": mi,
 			# Arrival = the round whose LAST march completes the trip (need 0 or 1 → this round).
 			"arrive_round": int(p.get("current_round", 1)) + maxi(int(pd["need"]) - 1, 0),
-			"lane": taken}
+			"lane": taken,
+			# DENY = the target is enemy-held (TC-019 visibility): without the tag the plan line
+			# was byte-identical for a free-marker trip and a denial trip — denial fired unseen.
+			"deny": int(pd["enemy_near"]) > 0}
 	for u in units:
 		var key2 := str((u as Dictionary).get("key", ""))
 		if not tasks.has(key2):
@@ -120,7 +127,10 @@ static func solve(p: Dictionary) -> Dictionary:
 		var key3 := str(ud.get("key", ""))
 		var t: Dictionary = tasks.get(key3, {})
 		if str(t.get("kind", "")) == "seize":
-			parts.append("%s → marker %d (arrives R%d)" % [str(ud.get("name", key3)), int(t["marker"]), int(t["arrive_round"])])
+			# Enemy-held targets say DENY (rules-must-log): the maintainer must be able to SEE
+			# denial fire in the battle log instead of reading a generic marker trip.
+			parts.append("%s → %smarker %d (arrives R%d)" % [str(ud.get("name", key3)),
+				"DENY " if bool(t.get("deny", false)) else "", int(t["marker"]), int(t["arrive_round"])])
 	var log_line := ("NACHTMAHR plan R%d: everyone fights — no feasible marker trip" % int(p.get("current_round", 1))) \
 		if parts.is_empty() else "NACHTMAHR plan R%d: %s — everyone else fights" % [
 		int(p.get("current_round", 1)), ", ".join(parts)]

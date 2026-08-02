@@ -92,6 +92,16 @@ static func model_base_radius_m(model: ModelInstance) -> float:
 static func units_block_line(from_pos: Vector2, to_pos: Vector2,
 		from_height: int, to_height: int,
 		blockers: Array[Blocker], exclude_units: Array[int]) -> bool:
+	return first_blocking_unit_key(from_pos, to_pos, from_height, to_height,
+		blockers, exclude_units) != 0
+
+
+## #205 — the same walk, but it reports WHO: the first blocking unit's key (0 = the lane is
+## clear). The refusal message names the blocker off this, so a rules-correct "no line of
+## sight" stops reading like a bug when the player's OWN other unit is what stands in the way.
+static func first_blocking_unit_key(from_pos: Vector2, to_pos: Vector2,
+		from_height: int, to_height: int,
+		blockers: Array[Blocker], exclude_units: Array[int]) -> int:
 	var closed_gap_m := CLOSED_GAP_INCHES * INCHES_TO_METERS
 
 	# Per-unit grouping for the gap-closure pass below.
@@ -103,7 +113,7 @@ static func units_block_line(from_pos: Vector2, to_pos: Vector2,
 		if blocker.height < from_height or blocker.height < to_height:
 			continue  # both endpoints see over it
 		if segment_intersects_circle(from_pos, to_pos, blocker.pos, blocker.radius):
-			return true
+			return blocker.unit_key
 		if not by_unit.has(blocker.unit_key):
 			by_unit[blocker.unit_key] = []
 		by_unit[blocker.unit_key].append(blocker)
@@ -123,8 +133,8 @@ static func units_block_line(from_pos: Vector2, to_pos: Vector2,
 				if mini(a.height, b.height) < from_height or mini(a.height, b.height) < to_height:
 					continue
 				if segments_intersect(from_pos, to_pos, a.pos, b.pos):
-					return true
-	return false
+					return unit_key
+	return 0
 
 
 ## True if the segment from->to passes through (or touches) the circle.

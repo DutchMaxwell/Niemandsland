@@ -116,3 +116,56 @@ func test_hazardous_profile_gets_ap4_floor_and_flag() -> void:
 	assert_int(int(better[0]["ap"])).is_equal(5)
 	var plain := AiShooting.profiles_in_range([_w("Rifle", 18, 2, 1, [])], 12.0)
 	assert_bool(bool(plain[0]["hazardous"])).is_false()
+
+
+# ===== #217 — identical weapon entries merge into one profile =====
+
+func test_identical_per_pick_entries_merge_into_one_volley() -> void:
+	# The DAO battlesuit export: three "count 1" copies of the same weapon per pick. One
+	# profile, summed dice — the aggregated-export form the engine always handled.
+	var weapons: Array = [
+		_w("Suit-Plasma", 18, 2, 1, ["AP(2)"]),
+		_w("Suit-Plasma", 18, 2, 1, ["AP(2)"]),
+		_w("Suit-Plasma", 18, 2, 1, ["AP(2)"]),
+	]
+	var profiles := AiShooting.profiles_in_range(weapons, 12.0)
+	assert_int(profiles.size()) \
+		.override_failure_message("#217 — identical per-pick entries stayed separate: they card-list and fire as N copies") \
+		.is_equal(1)
+	assert_int(int(profiles[0]["attacks"])).is_equal(6)
+	assert_int(int(profiles[0]["count"])).is_equal(3)
+
+
+func test_different_profiles_never_merge() -> void:
+	var profiles := AiShooting.profiles_in_range([
+		_w("Plasma", 18, 2, 1, ["AP(2)"]),
+		_w("Plasma", 18, 2, 1, ["AP(4)"]),   # same name, different AP — distinct
+	], 12.0)
+	assert_int(profiles.size()).is_equal(2)
+
+
+func test_limited_copies_keep_their_own_bookkeeping() -> void:
+	var profiles := AiShooting.profiles_in_range([
+		_w("Missile", 24, 1, 1, ["Limited"]),
+		_w("Missile", 24, 1, 1, ["Limited"]),
+	], 12.0)
+	assert_int(profiles.size()).is_equal(2)   # once-per-game marks stay per weapon
+
+
+func test_identical_melee_weapons_merge_too() -> void:
+	var profiles := AiShooting.melee_profiles([
+		_w("Heavy CCW", 0, 2, 1, ["AP(1)"]),
+		_w("Heavy CCW", 0, 2, 1, ["AP(1)"]),
+		_w("Heavy CCW", 0, 2, 1, ["AP(1)"]),
+	])
+	assert_int(profiles.size()).is_equal(1)
+	assert_int(int(profiles[0]["attacks"])).is_equal(6)
+
+
+func test_unstoppable_flag_reaches_the_profile() -> void:
+	# Core-book audit (2026-07-30): the negative-modifier half of Unstoppable was missing —
+	# the profile flag is the gate both volley resolvers clamp on.
+	var profiles := AiShooting.profiles_in_range([_w("Doom Cannon", 24, 2, 1, ["AP(2)", "Unstoppable"])], 12.0)
+	assert_bool(bool(profiles[0]["unstoppable"])).is_true()
+	var plain := AiShooting.profiles_in_range([_w("Rifle", 24, 1, 1, [])], 12.0)
+	assert_bool(bool(plain[0].get("unstoppable", false))).is_false()
