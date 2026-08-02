@@ -680,3 +680,67 @@ func test_the_growth_kill_marker_travels(timeout := 120000) -> void:
 		.override_failure_message("the kill marker stayed local — the opponent sees the kill but not what it earned (sent: %s)" % str(_sent_lines())) \
 		.is_equal(1)
 	await E2EBoot.settle(get_tree())
+
+
+# === 11. NML-957 — the two Shaken spell-support lines (#292) ===================================
+#
+# Both say the same thing in different words: a unit that WOULD have helped a cast is sitting this
+# one out because it is Shaken. Without them the opponent sees a spell come out smaller than its
+# own arithmetic predicts and has nothing to check it against — the shape of a bug, not of a rule.
+#
+# The cast half reuses the fixture of e2e_shaken_conduit_test.gd (a caster plus a conduit 6" away,
+# driven through the REAL _solo_resolve_one_cast in batch mode) — but on the SHIPPED map rather
+# than an injected one: that suite injects requires_not_shaken: false to pin the opposite branch,
+# and here the real human_inquisition entry already carries requires_not_shaken: true.
+
+
+## A Shaken human-slot unit carrying one registry-resolved rule. game_system is stated rather than
+## left to default, because the mechanics map is per system and a silent default is the kind of
+## thing that makes a fixture pass for the wrong reason.
+func _shaken_rule_unit(unit_name: String, rule: String, primitive: String, at: Vector3) -> GameUnit:
+	var u := _register(1, unit_name, at)
+	u.unit_properties["game_system"] = "gf"
+	u.unit_properties["faction_folder"] = "human_inquisition"
+	u.unit_properties["special_rules"] = [rule]
+	u.is_shaken = true
+	assert_array(RulesRegistry.unit_rules_of_primitive(u, primitive)) \
+		.override_failure_message("fixture check: human_inquisition/%s does not resolve to %s" % [rule, primitive]) \
+		.is_not_empty()
+	return u
+
+
+## The token battery that refuses to lend. Its stock is invisible to the opponent, so a boost that
+## came out short looks like arithmetic that does not add up.
+func test_the_shaken_lender_line_travels(timeout := 120000) -> void:
+	var lender := _shaken_rule_unit("Token Battery", "Spell Accumulator", "Spell Accumulator", HUMAN_LINE)
+	lender.casts_current = 1
+	assert_array(_main.solo_controller.shaken_lenders(1)) \
+		.override_failure_message("fixture check: the lender must be refused by the pool (non-caster, casts_current > 0, Shaken)") \
+		.is_not_empty()
+	_main._solo_log_shaken_lenders(1)
+	assert_int(_logged_containing("its tokens do not feed friendly casters")) \
+		.override_failure_message("fixture check: the refusal must be written locally:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("its tokens do not feed friendly casters")) \
+		.override_failure_message("the refusal stayed local — the opponent's boost is short with nothing to explain it (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## The conduit that does not lend its +1. Fires inside the real cast, so the line is produced by the
+## same code path a game produces it from — not by calling the logger directly.
+func test_the_shaken_conduit_line_travels(timeout := 120000) -> void:
+	var caster := _register(1, "Hierarch", HUMAN_LINE)
+	var conduit := _shaken_rule_unit("Conduit", "Spell Conduit", "Spell Conduit",
+		HUMAN_LINE + Vector3(6.0 * OPRArmyManager.INCHES_TO_METERS, 0.0, 0.0))
+	# A self-targeted, deliberately inert buff: the conduit sweep runs before the die roll, so the
+	# spell's own effect is irrelevant to what is asserted here.
+	await _main._solo_resolve_one_cast({"caster": caster, "caster_unit": caster, "name": "Test Buff",
+		"spell": {"effect": {"kind": "buff"}}, "targets": [caster], "boost": 0, "interference": 0})
+	assert_int(_logged_containing("%s is Shaken — its conduit does not help" % conduit.get_name())) \
+		.override_failure_message("fixture check: the conduit must be skipped for being Shaken:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("its conduit does not help")) \
+		.override_failure_message("the skipped conduit stayed local — the opponent's cast is missing a +1 for no stated reason (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
