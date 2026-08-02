@@ -60,6 +60,21 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   exact name now (the same "Ferocious lesson" the other rule checks already learned).
 
 ### Added
+- **Reinforcement (army-book).** A unit whose models all carry the rule may, while it is Shaken or once
+  it is fully destroyed, be removed from the table as destroyed; a fresh copy — full starting size, its
+  bought upgrades intact, wounds and Shaken reset — is placed at the start of the next round, right after
+  the Ambush arrivals. The copy goes down fully within 12″ of any table edge, including the enemy's — the
+  book names no minimum distance from enemies here, and neither do we. It cannot seize or contest
+  objectives on the round it arrives, but it activates that round exactly like an Ambush arrival. An
+  attached hero that does not itself carry the rule blocks it, and the battle log names the hero. The
+  returning copy really loses the rule — it is gone from its unit card, not tracked as an invisible
+  "already used" flag. When the edge strip is too crowded, as many models as legally fit are placed and
+  the rest are forfeit, with their own log line. Every application and every refusal writes its own
+  battle-log line. Under it sits the game's first **runtime unit factory**: until now a unit could only
+  come into existence while an army was being imported, which is why the rules that create units were
+  the last ones left unautomated. A unit born mid-game is now a full citizen — it gets its card in the
+  dock, it survives a save with its models where you left them, and it takes its turn in the
+  alternation like any other.
 - **Extended Buff Range (army-book).** A unit standing within 24″ of a friendly unit that carries
   the same rule *and* holds a Hero can be picked by that Hero's within-12″ buff rules as if it were
   in range. The link is measured **base edge to base edge** like the ruler (at 24″ a centre reading
@@ -143,6 +158,56 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   else's band is refused and says so in the log.
 
 ### Fixed
+- **Rule events reach the other player's battle log.** Only movement lines ever travelled between
+  clients. Every other line the rules engine writes — a passed turn, a *Coordinate* hand-off, an
+  Ambush arrival or withdrawal, an *Extended Buff Range* refusal — was written locally and stopped
+  there, so on the opponent's screen a rule that had been applied perfectly correctly read exactly
+  like a rule that was missing. The passed turn is the clearest case: it moves nothing and activates
+  nothing, so the line *is* the whole event, and without it the opponent watched the AI answer a turn
+  that never appeared in their record. Rule applications and rule refusals now travel; the lines that
+  do **not** are the ones another channel already delivers (movement, activations, dice, casualties —
+  routing those would print them twice), the AI's internal reasoning dumps, and prompts aimed at
+  whoever is holding the mouse. Two of the newly travelling lines also work in a plain
+  human-vs-human room: the reform honour-system notice, and the reason a unit just jumped back to
+  where it started after an undo.
+- **Loading a battle no longer hands back rules you already spent.** Five pieces of rule
+  bookkeeping lived only in memory, so loading a save, rejoining a multiplayer room — or simply
+  changing which slot NACHTMAHR plays — quietly reset them to their starting values. A **Limited**
+  weapon is once per *game*, but a reloaded battle re-armed every one you had already fired. The
+  **Second Wind** cap of one third of the carriers *per round* dropped back to zero, so a round
+  could grant more second activations than it may. The rule that the side which took the last
+  activation does **not** open the next round fell back to its default, letting a save taken just
+  before a round ends decide the opener. The alternation debt — how many answers the AI still owes
+  you — was zeroed, so you could finish the round unopposed. And the once-per-game *Re-Deployment*
+  and round-one *Rapid Ambush* beats came back around. All five now travel with the battle: the
+  per-unit ones ride with their unit, the match-level ones ride in the saved game state, and both
+  reach a rejoining player over the same channel.
+- **A spell token stops being immortal decoration after a load.** Spell tokens are drawn from the
+  models they sit on, so they survived a save — but the bookkeeping that *removes* them did not.
+  After loading, the round-end sweep woke up with nothing to do: the token stayed on the table for
+  the rest of the game while its actual effect (the to-hit, defence, casting and morale modifiers)
+  had already vanished without a word in the log. Worse, the load path used to scrub granted spell
+  rules wholesale, which also deleted the effects the rules explicitly keep *until they apply*.
+  The mechanical record now persists with the unit, so a round-duration buff ends exactly when the
+  round ends and an apply-once buff waits, as written, until it fires. This holds for a buff that
+  arrived from the other player too, not only for one cast on your own screen.
+- **A unit that leaves the table leaves it on both screens.** *Ambush Re-Deployment* takes a unit off
+  the table for a round, and that withdrawal never left the client that did the arithmetic — there is
+  no visibility message for unit models at all. The opponent kept a unit standing that the acting
+  side had already booked as gone: visible, measurable, shootable, chargeable, and counted by every
+  scan that is supposed to skip reserves. The two halves of the game even contradicted each other,
+  because model visibility *does* travel in the state sync — so the ghost vanished the moment that
+  peer rejoined. The withdrawal, the AI's ambush arrival and your own placement from reserve now all
+  ride the wire from the one place that flips a unit's presence, and the reserve flag travels with
+  them: hiding the models alone still left the opponent's targeting offering a unit that is not
+  there. This affects any networked room with a designated AI slot — for the AI's units and for
+  yours.
+- **A unit that was loaded back could be handed a model that had just been deleted.** Loading a save
+  clears the table, but the old models only really die at the end of that frame — and the loader, which
+  reuses an already-standing model when it recognises its id, kept recognising those. The restored unit
+  then owned models that vanished a frame later. It now only reuses a model that is actually going to
+  survive. Found by the new runtime-unit save/load test, and it applies to every save, not just to
+  units that arrive mid-game.
 - **A Mark cannot be put on a target you cannot see.** The "once per activation, before attacking,
   pick one enemy unit within 18″ **in line of sight**" Marks (*Unstoppable*, *Relentless*, *Rending*,
   *Furious*, *Unpredictable Fighter*) only ever measured the 18″ — so the mark landed on a unit

@@ -4244,9 +4244,15 @@ func _reform_no_gain_clamp(objects: Array[Node3D], old_positions: Array) -> void
 			"Reform: %d model%s clamped at enemy distance — a reform is movement, no free inches" % [
 				clamped, ("" if clamped == 1 else "s")], false)
 	elif mp_running and not solo_running and max_gain_m > 0.0127 and log_node != null:
-		log_node.log_event(log_node.Category.MOVEMENT,
-			"Reform gains up to %.1f\" toward the enemy — reforms are movement (measure it like one)" % (
-				max_gain_m / 0.0254), false)
+		# NML-946: the only rules line in the game that exists ONLY in multiplayer — and it stayed on
+		# the reforming client, so the player whose units the gain was made toward never read it. It
+		# goes through main's rules-line channel; the honour system needs both sides to see the notice.
+		var reform_line: String = "Reform gains up to %.1f\" toward the enemy — reforms are movement (measure it like one)" % (
+			max_gain_m / 0.0254)
+		if main_node.has_method("_log_rule_event"):
+			main_node._log_rule_event(log_node.Category.MOVEMENT, reform_line, false)
+		else:
+			log_node.log_event(log_node.Category.MOVEMENT, reform_line, false)
 
 
 ## Smallest base-edge gap (metres) from a point-model of radius `own_r` to any foe entry.

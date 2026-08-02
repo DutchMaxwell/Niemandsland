@@ -4231,6 +4231,196 @@ static func _reanimation_is_hero(model: ModelInstance) -> bool:
 	return (model.unit as GameUnit).is_hero()
 
 
+# === Reinforcement (army-book, v3.5.3 — byte-identical in all 12 books that field it) ===========
+# "When a unit where all models have this rule is Shaken or fully destroyed, you may remove it from
+# the table as destroyed and place a new copy of it fully within 12" of any table edge at the
+# beginning of the next round after Ambushers have been deployed. Units that deploy via Reinforcement
+# can't seize or contest objectives on the round they deploy, and this rule doesn't apply to the new
+# copy of the unit."
+#
+# Maintainer readings pinned here so they are not re-litigated at each call site:
+#  - "IS Shaken", not "becomes Shaken": the offer stands for as long as the unit is Shaken.
+#  - The landing zone is LITERAL — 12" of ANY edge, the enemy's included. The book names a minimum
+#    distance from enemies for Ambush and deliberately does not here, so neither do we.
+#  - "all models have this rule": a joined hero is one of the unit's models, so a hero without the
+#    rule blocks it — loudly, with a log line, never silently.
+#  - The copy loses the rule for real (gone from special_rules, gone from the unit card), rather than
+#    being tracked as an invisible "already used" flag.
+
+const REINFORCEMENT_RULE := "Reinforcement"
+## The landing strip: the copy must stand FULLY within this many inches of some table edge.
+const REINFORCEMENT_EDGE_IN := 12.0
+
+## The chain that must ALL carry the rule: the unit plus every attached hero.
+static func reinforcement_chain(unit: GameUnit) -> Array:
+	if unit == null:
+		return []
+	var chain: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h is GameUnit:
+				chain.append(h)
+	return chain
+
+
+## Whether the rule is present on the unit at all — the gate for SHOWING the radial entry. A carrier
+## that cannot use it right now still shows the entry and is refused with a reason (#224 transparency:
+## an entry that vanishes reads exactly like a missing rule).
+static func reinforcement_offered(unit: GameUnit) -> bool:
+	return has_exact_rule(unit, REINFORCEMENT_RULE)
+
+
+## "" when the rule may fire on `unit` right now; otherwise the reason, ready to be logged verbatim.
+## Pure: everything it reads sits on the GameUnit.
+static func reinforcement_refusal(unit: GameUnit) -> String:
+	if unit == null:
+		return "no unit"
+	if not has_exact_rule(unit, REINFORCEMENT_RULE):
+		return "%s does not have Reinforcement" % unit.get_name()
+	# "a unit where ALL MODELS have this rule" — a joined hero counts as one of them.
+	for member in reinforcement_chain(unit):
+		var m := member as GameUnit
+		if m == null or m == unit:
+			continue
+		if not has_exact_rule(m, REINFORCEMENT_RULE):
+			return "%s is joined to %s, who does not have Reinforcement — \"all models have this rule\" is not met" % [
+				unit.get_name(), m.get_name()]
+	if reinforcement_due_round(unit) > 0:
+		return "%s already left the table — its copy is on the way" % unit.get_name()
+	if bool(unit.unit_properties.get("reinforcement_spent", false)):
+		return "%s has already used Reinforcement" % unit.get_name()
+	# "is Shaken or fully destroyed" — the offer stands for as long as the unit IS Shaken.
+	if not unit.is_shaken and not unit.is_destroyed():
+		return "%s is neither Shaken nor destroyed" % unit.get_name()
+	return ""
+
+
+## The round the copy of a unit sacrificed in `round_no` arrives in: "the beginning of the NEXT round".
+static func reinforcement_arrival_round(round_no: int) -> int:
+	return round_no + 1
+
+
+## The round `unit` is waiting for its copy in, or -1 when it is not waiting.
+static func reinforcement_due_round(unit: GameUnit) -> int:
+	if unit == null:
+		return -1
+	return int(unit.unit_properties.get("reinforcement_due_round", -1))
+
+
+## Every unit whose copy is due at the beginning of `round_no` (or earlier — a copy that found no
+## room at all keeps its date rather than evaporating). Stable order: registration order.
+static func reinforcement_due(all_units: Array, round_no: int) -> Array:
+	var out: Array = []
+	for u in all_units:
+		var gu := u as GameUnit
+		if gu == null:
+			continue
+		var due: int = reinforcement_due_round(gu)
+		if due > 0 and due <= round_no:
+			out.append(gu)
+	return out
+
+
+## The returning copy's special rules: the same list, with Reinforcement removed. "This rule doesn't
+## apply to the new copy" — so it leaves the card, which is what the player actually reads.
+static func reinforcement_copy_rules(rules: Array) -> Array:
+	var out: Array = []
+	for r in rules:
+		var n := str(r) if r is String else str((r as Dictionary).get("name", ""))
+		if n.strip_edges() == REINFORCEMENT_RULE:
+			continue
+		out.append(r)
+	return out
+
+
+## The arrival formation as cursor-relative offsets — one row, edge to edge with the standard gap,
+## centred on the cursor. Feeds both the human's placement ghost and the automatic spot search, so
+## the two never disagree about the unit's footprint. `radii` are the models' base radii in metres.
+static func reinforcement_shape(radii: Array, gap_m: float) -> Array:
+	var shape: Array = []
+	if radii.is_empty():
+		return shape
+	var width: float = 0.0
+	for i in radii.size():
+		width += float(radii[i]) * 2.0
+		if i > 0:
+			width += gap_m
+	var cursor: float = -width * 0.5
+	for i in radii.size():
+		var r: float = float(radii[i])
+		cursor += r
+		shape.append({"off": Vector2(cursor, 0.0), "r": r})
+		cursor += r + gap_m
+	return shape
+
+
+## Whether a base of radius `r` centred at `p` stands FULLY on the table AND FULLY within `margin_m`
+## of at least one table edge. Kept here as well as in PlacementGhost.zone_contains so the automatic
+## path and the interactive ghost are provably measuring the same strip (both are pinned by tests).
+static func reinforcement_spot_in_strip(p: Vector3, r: float, table: Rect2, margin_m: float) -> bool:
+	if p.x - r < table.position.x or p.x + r > table.end.x:
+		return false
+	if p.z - r < table.position.y or p.z + r > table.end.y:
+		return false
+	# "Fully within m of edge E" = the point of the base FARTHEST from E is still within m of E.
+	return (p.x + r) - table.position.x <= margin_m \
+		or table.end.x - (p.x - r) <= margin_m \
+		or (p.z + r) - table.position.y <= margin_m \
+		or table.end.y - (p.z - r) <= margin_m
+
+
+## The automatic landing spots for a returning copy — the AI's arrival and the human's fallback when
+## he cancels the placement ghost. Walks a deterministic lattice over the whole 12" border strip,
+## orders it by distance to `prefer`, and greedily takes the first free slot per model.
+## `blockers` are [{p: Vector3, r: float}] (every standing base). Returns one position per PLACED
+## model, in model order — SHORTER than `radii` when the strip is too crowded, which is the caller's
+## cue to forfeit the rest with a log line rather than refusing the whole arrival.
+static func reinforcement_spots(radii: Array, table: Rect2, margin_m: float, blockers: Array,
+		prefer: Vector3, step_m: float) -> Array:
+	var out: Array = []
+	if radii.is_empty() or step_m <= 0.0:
+		return out
+	var taken: Array = []
+	for i in radii.size():
+		var r: float = float(radii[i])
+		var best: Vector3 = Vector3.INF
+		var best_d: float = INF
+		# The lattice is generated per model because the legal band depends on the model's own radius.
+		var x: float = table.position.x + r
+		while x <= table.end.x - r + 0.0001:
+			var z: float = table.position.y + r
+			while z <= table.end.y - r + 0.0001:
+				var p := Vector3(x, 0.0, z)
+				if reinforcement_spot_in_strip(p, r, table, margin_m):
+					var free := true
+					for b in blockers:
+						var bd := b as Dictionary
+						var bp: Vector3 = bd["p"]
+						if Vector2(p.x, p.z).distance_to(Vector2(bp.x, bp.z)) < r + float(bd["r"]):
+							free = false
+							break
+					if free:
+						for t in taken:
+							var td := t as Dictionary
+							var tp: Vector3 = td["p"]
+							if Vector2(p.x, p.z).distance_to(Vector2(tp.x, tp.z)) < r + float(td["r"]):
+								free = false
+								break
+					if free:
+						var d: float = Vector2(p.x, p.z).distance_squared_to(Vector2(prefer.x, prefer.z))
+						# Ties break on the lattice walk order, so the same board always answers the same.
+						if d < best_d:
+							best_d = d
+							best = p
+				z += step_m
+			x += step_m
+		if best == Vector3.INF:
+			break   # the strip is full — the remaining models are forfeit (caller logs it)
+		out.append(best)
+		taken.append({"p": best, "r": r})
+	return out
+
+
 ## Total model count of a unit INCLUDING its attached heroes (the denominator shown next to
 ## combined_alive in log lines — "(alive/total)" must count the same pool on both sides).
 static func combined_total(unit: GameUnit) -> int:
@@ -5726,15 +5916,28 @@ static func limited_key(unit: GameUnit, profile: Dictionary) -> String:
 	return "%s::%s" % [unit.unit_id if unit != null else "?", str(profile.get("name", "?"))]
 
 
-## Whether this unit's Limited profile is already spent.
+## Whether this unit's Limited profile is already spent. NML-949: the unit's own props are
+## the durable record — the controller dict is a session cache and is rebuilt (slot change,
+## a human taking the AI slot) and lost on a load, which used to re-arm every spent weapon.
 func is_limited_used(unit: GameUnit, profile: Dictionary) -> bool:
-	return limited_used.has(limited_key(unit, profile))
+	if limited_used.has(limited_key(unit, profile)):
+		return true
+	if unit == null:
+		return false
+	return (unit.unit_properties.get("limited_used", []) as Array).has(str(profile.get("name", "?")))
 
 
 ## Mark a Limited profile spent (called after its dice actually rolled) + a dev-mode decision record —
 ## the once-per-game state is a DECISION input (an expended weapon stops shaping targeting/EV).
 func mark_limited_used(unit: GameUnit, profile: Dictionary) -> void:
 	limited_used[limited_key(unit, profile)] = true
+	if unit != null:
+		# NML-949: durable half of the record — travels with the unit into the save and the MP state.
+		var spent: Array = unit.unit_properties.get("limited_used", [])
+		var wname := str(profile.get("name", "?"))
+		if not spent.has(wname):
+			spent.append(wname)
+		unit.unit_properties["limited_used"] = spent
 	record_decision({"kind": "action", "unit": unit.get_name() if unit != null else "?",
 		"rule": "Limited (core v3.5.1): may only be used once per game",
 		"candidates": [], "chosen": str(profile.get("name", "?")), "why": "limited weapon expended",
@@ -7362,7 +7565,19 @@ func _deploy_spot_free(cand: Vector3, r: float, moving: ModelInstance) -> bool:
 ## a model the shift lands in forbidden terrain is nudged out individually (rare — deployment already avoids
 ## terrain). Regiments keep their rigid tray. Uses the REAL base shapes the audit measures.
 var _deploy_zone_of := {}   # unit -> Rect2 (world XZ): the zone this unit MUST stay inside through cleanup
-var _redeploy_done := false           # Re-Deployment executed for this game (once per game)
+## Re-Deployment executed for this game (once per game). NML-949: today only accidentally safe
+## because a foreign game_phase gate hides it; loosen that gate and it becomes exploitable — so
+## it persists like the rest. Kept in the match rule state, not on this node, since the
+## controller is rebuilt on an AI-slot change and dropped on a load.
+var _redeploy_done: bool:
+	get:
+		var rs: Dictionary = army_manager.rule_state if army_manager != null else _rule_state_fallback
+		return bool(rs.get("redeploy_done", false))
+	set(value):
+		if army_manager != null:
+			army_manager.rule_state["redeploy_done"] = value
+		else:
+			_rule_state_fallback["redeploy_done"] = value
 const REDEPLOY_MIN_GAIN_IN := 3.0     # re-place only when the new spot is at least this much nearer a marker
 
 
@@ -8364,7 +8579,32 @@ func forced_straight_move(unit: GameUnit, dir: Vector2, dist_in: float) -> float
 ## carrier unit may activate a SECOND time in a round (fatigue cleared); army cap = one third of
 ## the carriers (rounded up) per round. Candidate = the not-yet-used carrier with the best
 ## fight value; null when none/cap reached.
-var _second_wind_round_uses := {}   # round -> uses this round
+## Second Wind army cap per round (round key -> uses). NML-949: kept in the match rule state,
+## not on this node — the controller is rebuilt on an AI-slot change and dropped on a load,
+## which reset the cap to zero and allowed more Second Winds than the round permits.
+## String keys: this dictionary goes through JSON, which has no integer keys.
+var _second_wind_round_uses: Dictionary:
+	get:
+		var rs: Dictionary = army_manager.rule_state if army_manager != null else _rule_state_fallback
+		if not rs.has("second_wind_round_uses"):
+			rs["second_wind_round_uses"] = {}
+		return rs["second_wind_round_uses"]
+	set(value):
+		if army_manager != null:
+			army_manager.rule_state["second_wind_round_uses"] = value
+		else:
+			_rule_state_fallback["second_wind_round_uses"] = value
+
+var _rule_state_fallback: Dictionary = {}   # pre-setup only (no army_manager yet)
+
+
+## NML-949: the Second Wind army cap is keyed by the match's ACTUAL round counter
+## (army_manager.current_round), not by `_current_round()` — that reads round_provider, which is
+## wired by main for the (unrelated) final-round objective urgency and reads 0 whenever it is not
+## injected (headless/unit tests included). A round-scoped cap that can never tell rounds apart
+## outside a full Main is not testable and not correct, so it goes straight to army_manager.
+func _second_wind_round_no() -> int:
+	return army_manager.current_round if army_manager != null else _current_round()
 
 ## v3.5.3's army cap DENOMINATOR (3 = one third of the carriers, rounded up; the pre-3.5.3 books
 ## said half). Only the fallback — the live value comes from the registry's `army_cap_fraction`.
@@ -8374,7 +8614,7 @@ const SECOND_WIND_CAP_FRACTION := 3
 func second_wind_candidate() -> GameUnit:
 	if army_manager == null:
 		return null
-	var round_no := _current_round()
+	var round_no := _second_wind_round_no()
 	var carriers := 0
 	var best: GameUnit = null
 	var best_v := -1.0
@@ -8407,14 +8647,15 @@ func second_wind_candidate() -> GameUnit:
 	if frac <= 0:
 		frac = SECOND_WIND_CAP_FRACTION
 	var cap: int = int(ceil(float(carriers) / float(frac)))
-	if int(_second_wind_round_uses.get(round_no, 0)) >= cap:
+	# NML-949: String round key — the counter now rides a save, and JSON has no integer keys.
+	if int(_second_wind_round_uses.get(str(round_no), 0)) >= cap:
 		return null
 	return best
 
 
 func spend_second_wind(unit: GameUnit) -> String:
-	var round_no := _current_round()
-	_second_wind_round_uses[round_no] = int(_second_wind_round_uses.get(round_no, 0)) + 1
+	var round_no := _second_wind_round_no()
+	_second_wind_round_uses[str(round_no)] = int(_second_wind_round_uses.get(str(round_no), 0)) + 1
 	unit.unit_properties["second_wind_used"] = true
 	unit.is_activated = false
 	unit.is_fatigued = false   # "stops being fatigued when activated for the second time"

@@ -264,6 +264,7 @@
   "Regeneration",
   "Regeneration Aura",
   "Regeneration Buff",
+  "Reinforcement",
   "Relentless",
   "Relentless Aura",
   "Reliable",
@@ -7544,9 +7545,17 @@
     }
    },
    "Reinforcement": {
-    "primitive": null,
+    "primitive": "Reinforcement",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "trigger": "shaken_or_destroyed",
+     "redeploy": "table_edge",
+     "within_in": 12,
+     "timing": "next_round_after_ambush",
+     "no_objective_on_arrival": true,
+     "once": true
+    }
    },
    "Scurry": {
     "primitive": "Quick",
@@ -8692,9 +8701,17 @@
     }
    },
    "Reinforcement": {
-    "primitive": null,
+    "primitive": "Reinforcement",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "trigger": "shaken_or_destroyed",
+     "redeploy": "table_edge",
+     "within_in": 12,
+     "timing": "next_round_after_ambush",
+     "no_objective_on_arrival": true,
+     "once": true
+    }
    },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
@@ -9802,9 +9819,17 @@
     "book_version": "3.5.3"
    },
    "Reinforcement": {
-    "primitive": null,
+    "primitive": "Reinforcement",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "trigger": "shaken_or_destroyed",
+     "redeploy": "table_edge",
+     "within_in": 12,
+     "timing": "next_round_after_ambush",
+     "no_objective_on_arrival": true,
+     "once": true
+    }
    },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
