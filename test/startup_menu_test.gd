@@ -246,7 +246,7 @@ func test_diorama_rebuild_shows_loading_overlay() -> void:
 ## how it would have gone green again the moment the second entry stopped saying "TUTORIAL".
 const TEACHING_ENTRIES := {
 	"TutorialBtn": ["TUTORIAL", "KLASSISCH"],
-	"SpielschuleBtn": ["SPIELSCHULE", "IN ARBEIT"],
+	"SpielschuleBtn": ["FEUERTAUFE", "IN ARBEIT"],
 }
 
 ## Words that mark a button as leading into teaching content. Any button carrying one of
