@@ -518,3 +518,81 @@ func test_the_copy_loses_the_rule_line_travels(timeout := 120000) -> void:
 		.override_failure_message("the opponent cannot tell the returned unit is spent — they may expect a second sacrifice (sent: %s)" % str(_sent_lines())) \
 		.is_equal(1)
 	await E2EBoot.settle(get_tree())
+
+
+## The crowded strip from e2e_reinforcement_test.gd:391, made selectable: every legal spot in the 12"
+## band blanketed with standing enemies. Fully closed produces "no free spot"; leaving one small
+## window open produces the forfeit line instead. That test accepts either outcome — a red proof has
+## to pick one, so the window is the switch.
+func _blanket_edge_strip(window: Rect2 = Rect2()) -> void:
+	var trect: Rect2 = _main._table_rect()
+	var margin: float = SoloController.REINFORCEMENT_EDGE_IN * OPRArmyManager.INCHES_TO_METERS
+	var step: float = 0.9 * OPRArmyManager.INCHES_TO_METERS
+	var wall: Array = []
+	var x: float = trect.position.x
+	while x <= trect.end.x:
+		var z: float = trect.position.y
+		while z <= trect.end.y:
+			if SoloController.reinforcement_spot_in_strip(Vector3(x, 0.0, z), 0.016, trect, margin) \
+					and not (window.size != Vector2.ZERO and window.has_point(Vector2(x, z))):
+				wall.append(Vector3(x, 0.0, z))
+			z += step
+		x += step
+	var blockers := E2EBoot.make_unit(_main, 2, "Wall", wall)
+	_main.opr_army_manager.game_units[blockers.unit_id] = blockers
+	for m in blockers.models:
+		(m as ModelInstance).wounds_max = 1
+		(m as ModelInstance).wounds_current = 1
+
+
+## Nowhere legal to stand. The promise is KEPT for a later round rather than swallowed — but on the
+## opponent's screen the due round simply passes with nothing happening and no reason given.
+func test_the_no_free_spot_line_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 3)
+	_blanket_edge_strip()
+	await _main._reinforcement_arrive_one(u, 3)
+	assert_int(_logged_containing("no free spot within 12\"")) \
+		.override_failure_message("fixture check: the strip must be fully blocked:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("no free spot within 12\"")) \
+		.override_failure_message("the due round passed silently on the opponent's screen (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## Place what fits, forfeit the rest — the maintainer's Reanimation pattern. A short unit that says
+## nothing looks to the opponent exactly like a unit that lost models to shooting they missed.
+func test_the_forfeit_line_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 4)
+	var inch: float = OPRArmyManager.INCHES_TO_METERS
+	var trect: Rect2 = _main._table_rect()
+	# A slot, not a square. Two 25 mm bases need ~1.3" between centres and the same to the wall, so a
+	# 1.6" square holds nothing at all (measured: it produced "no free spot"). 4.0" × 2.6" leaves one
+	# row with room for one or two models — never the whole four.
+	_blanket_edge_strip(Rect2(trect.position, Vector2(4.0 * inch, 2.6 * inch)))
+	await _main._reinforcement_arrive_one(u, 3)
+	assert_int(_logged_containing("forfeited")) \
+		.override_failure_message("fixture check: the window must fit some but not all of the unit:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("forfeited")) \
+		.override_failure_message("models were forfeited silently as far as the opponent is concerned (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## The factory's last remaining null path at this point in the arrival (opr_army_manager.gd:1370-1399).
+## Nothing appears and nothing explains it — the one case where the opponent cannot even see that the
+## rule was attempted.
+func test_the_rebuild_failure_line_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 2)
+	var om: Node = _main.opr_army_manager.object_manager
+	_main.opr_army_manager.object_manager = null
+	await _main._reinforcement_arrive_one(u, 3)
+	_main.opr_army_manager.object_manager = om
+	assert_int(_logged_containing("could not be rebuilt")) \
+		.override_failure_message("fixture check: the factory must fail here:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("could not be rebuilt")) \
+		.override_failure_message("the copy failed to build and the opponent is told nothing at all (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
