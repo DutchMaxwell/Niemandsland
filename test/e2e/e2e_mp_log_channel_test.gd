@@ -302,3 +302,109 @@ func test_an_empty_line_is_not_put_on_the_wire(timeout := 120000) -> void:
 	assert_int(_main.battle_log.entries().size()) \
 		.override_failure_message("an empty frame from a peer added a blank row to the log") \
 		.is_equal(before)
+
+
+# === 8. NML-961 — the placement ghost could not end its own wait ===============================
+#
+# _reinforcement_human_ghost opened a PlacementGhost and then waited on a local `done` flag that its
+# two callbacks set. A GDScript lambda captures locals BY VALUE, so both callbacks wrote to a copy
+# and the loop `while not done: await get_tree().process_frame` never exited. The ghost is only
+# opened for a HUMAN unit in a non-headless game (main.gd:9921), so in play the player placed or
+# cancelled, the ghost freed itself, and the round never started — a silent freeze with no error
+# line. These two cases were written as the log-channel proof for the two lines that stay local
+# (exclusion 3, a prompt aimed at the hand holding the mouse) and hit gdUnit's 120 s timeout
+# instead. They are the red-green proof for the fix: both must pass, and pass FAST — a case that
+# takes the full timeout means the loop is still spinning.
+
+
+## A REAL OPRUnit profile: a runtime unit is built from one. Same shape as
+## e2e_reinforcement_test.gd::_profile.
+func _profile(unit_name: String, size: int, rules: Array) -> OPRApiClient.OPRUnit:
+	var u := OPRApiClient.OPRUnit.new()
+	u.name = unit_name
+	u.size = size
+	u.quality = 4
+	u.defense = 4
+	u.cost = 130
+	u.base_size_round = 25
+	u.base_width_mm = 25
+	u.base_depth_mm = 25
+	u.game_system = "gf"
+	for r in rules:
+		u.special_rules.append(str(r))
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Rusty Blade"
+	w.attacks = 2
+	u.weapons.append(w)
+	return u
+
+
+## A carrier standing on the table, built through the runtime factory rather than the lightweight
+## fixture above: only a factory-built unit carries the metas the rule's own code reads back.
+func _carrier(unit_name: String, count: int, pid: int = 1) -> GameUnit:
+	var positions: Array = []
+	for i in count:
+		positions.append(Vector3(float(i) * 1.2 * OPRArmyManager.INCHES_TO_METERS, 0.0, 0.0))
+	var u: GameUnit = _main.opr_army_manager.create_runtime_unit({
+		"opr_unit": _profile(unit_name, count, ["Tough(1)", "Reinforcement"]),
+		"faction_folder": "ratmen_clans",
+	}, pid, positions, "spawn")
+	assert_object(u).override_failure_message("fixture check: the carrier was not built").is_not_null()
+	return u
+
+
+## EXCLUSION 3 — the placement ghost. Headless _reinforcement_pick_spots skips the ghost entirely
+## (main.gd:9921), so the human half is driven directly, exactly as it runs in a windowed game. The
+## cancel is armed on a tree timer BEFORE the coroutine is awaited: calling an async function
+## without await drops gdUnit's -d run into an interactive debug prompt that never returns.
+func _drive_placement_ghost(u: GameUnit) -> void:
+	var trect: Rect2 = _main._table_rect()
+	var margin_m: float = SoloController.REINFORCEMENT_EDGE_IN * OPRArmyManager.INCHES_TO_METERS
+	var radii: Array = []
+	for i in u.models.size():
+		radii.append(_main._reinforcement_model_radius(u, i))
+	var blockers: Array = _main._reinforcement_blockers(u)
+	var prefer: Vector3 = _main._reinforcement_prefer_point(u, trect)
+	var auto_spots: Array = SoloController.reinforcement_spots(radii, trect, margin_m, blockers,
+		prefer, OPRArmyManager.INCHES_TO_METERS)
+	assert_array(auto_spots) \
+		.override_failure_message("fixture check: no automatic spot, so the ghost is never opened") \
+		.is_not_empty()
+	get_tree().create_timer(0.2).timeout.connect(_cancel_open_ghost)
+	await _main._reinforcement_human_ghost(u, radii, trect, margin_m, blockers, auto_spots)
+
+
+## What ESC does: PlacementGhost._finish(false) -> the cancel callable -> the awaiting loop ends.
+func _cancel_open_ghost() -> void:
+	for c in _main.get_children():
+		if c is PlacementGhost:
+			(c as PlacementGhost)._finish(false)
+			return
+
+
+## "R rotates, Esc drops it" names two keys on one keyboard. Broadcasting it would tell the opponent
+## to press keys that do nothing on their machine.
+func test_the_placement_prompt_stays_local(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 2)
+	await _drive_placement_ghost(u)
+	assert_int(_logged_containing("R rotates, Esc drops it")) \
+		.override_failure_message("fixture check: the prompt must be written locally:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("R rotates, Esc drops it")) \
+		.override_failure_message("a keyboard prompt for the local hand was broadcast to the opponent (sent: %s)" % str(_sent_lines())) \
+		.is_equal(0)
+	await E2EBoot.settle(get_tree())
+
+
+## The cancel answer to that same prompt: the copy still arrives, only at the automatic spot. It is
+## the mis-click correction of exclusion 3, one screen wide.
+func test_the_cancelled_placement_line_stays_local(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 2)
+	await _drive_placement_ghost(u)
+	assert_int(_logged_containing("placement cancelled")) \
+		.override_failure_message("fixture check: the cancel must be answered locally:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("placement cancelled")) \
+		.override_failure_message("a mis-click correction aimed at the local hand was broadcast (sent: %s)" % str(_sent_lines())) \
+		.is_equal(0)
+	await E2EBoot.settle(get_tree())
