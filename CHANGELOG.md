@@ -151,7 +151,8 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   had already vanished without a word in the log. Worse, the load path used to scrub granted spell
   rules wholesale, which also deleted the effects the rules explicitly keep *until they apply*.
   The mechanical record now persists with the unit, so a round-duration buff ends exactly when the
-  round ends and an apply-once buff waits, as written, until it fires.
+  round ends and an apply-once buff waits, as written, until it fires. This holds for a buff that
+  arrived from the other player too, not only for one cast on your own screen.
 - **A unit that leaves the table leaves it on both screens.** *Ambush Re-Deployment* takes a unit off
   the table for a round, and that withdrawal never left the client that did the arithmetic — there is
   no visibility message for unit models at all. The opponent kept a unit standing that the acting

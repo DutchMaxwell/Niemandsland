@@ -209,3 +209,31 @@ func test_an_apply_once_spell_is_not_silently_scrubbed_by_a_save(timeout := 1200
 	assert_bool(t2.unit_properties.has("spell_move_mod")) \
 		.override_failure_message("an apply-once spell persists until it applies (maintainer rules check 31.07.). The save path scrubbed it instead — the player's buff vanished in silence.") \
 		.is_true()
+
+
+# === B6 — a record that arrived over the WIRE persists too [state 1, third half] ================
+#
+# The merge with main brings a FOURTH writer of `_solo_spell_mods` that neither branch had on its
+# own: `_on_remote_spell_mods_updated` (main.gd:4802), the NML-929 receiver. It was written before
+# the durable mirror existed, so it fills the in-memory store and stops there. On the peer that
+# ADOPTED the records, a save therefore carries the granted rule but not the bookkeeping that takes
+# it off again — B4's defect exactly, reached through multiplayer instead of through a local cast.
+func test_a_wire_adopted_spell_record_still_expires_after_a_reload(timeout := 120000) -> void:
+	var tgt := E2EBoot.make_unit(_main, 1, "Blessed", [Vector3.ZERO])
+	_main.opr_army_manager.game_units[tgt.unit_id] = tgt
+
+	# The REAL receive path, in the wire shape the sender produces (_broadcast_spell_mods strips
+	# `granted_to` — it holds instance ids, which mean nothing on the receiving machine).
+	_main._on_remote_spell_mods_updated(tgt, [{
+		"spell": "Wire Buff", "grants_rule": "Poison", "duration": "round", "def_mod": 1}])
+
+	assert_bool((tgt.unit_properties.get("special_rules", []) as Array).has("Poison (spell)")) \
+		.override_failure_message("fixture: the adopted wire record never granted its rule, so this test would pass for the wrong reason") \
+		.is_true()
+
+	var back: Array = _reload([tgt])
+	_main._solo_expire_spell_tokens()   # round end
+
+	assert_bool(((back[0] as GameUnit).unit_properties.get("special_rules", []) as Array).has("Poison (spell)")) \
+		.override_failure_message("a record that arrived over the wire is kept in RAM only: the peer that adopted it saves the granted rule but not the bookkeeping that removes it, so after a reload the buff never ends.") \
+		.is_false()

@@ -4833,6 +4833,10 @@ func _on_remote_spell_mods_updated(gu: GameUnit, records: Array) -> void:
 		for rec in adopted:
 			_solo_apply_grant(gu, rec as Dictionary)
 	_solo_refresh_spell_stamps(gu)
+	# NML-949: the wire is the FOURTH writer of _solo_spell_mods, and the durable half has to
+	# follow here too — otherwise the peer that adopted a record saves the granted rule without
+	# the bookkeeping that removes it again, and the buff never ends after a reload.
+	_solo_mirror_spell_state()
 	_mp_applying_remote_state = false
 
 
