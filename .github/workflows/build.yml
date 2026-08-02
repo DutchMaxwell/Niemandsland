@@ -32,7 +32,7 @@ jobs:
         run: |
           godot --headless --path . \
             -s -d res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
-            --ignoreHeadlessMode -a res://test
+            --ignoreHeadlessMode -c -a res://test
 
   relay-tests:
     name: Relay tests

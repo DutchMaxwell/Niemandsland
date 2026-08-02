@@ -292,7 +292,10 @@ func _serialize_game_state() -> Dictionary:
 		# push (host -> joining/reconnecting guest) since that path reuses this serializer.
 		"game_phase": army_manager.game_phase if army_manager else OPRArmyManager.GamePhase.DEPLOYMENT,
 		"current_player": 1,  # No turn-order system yet; players track this themselves
-		"token_library": lib
+		"token_library": lib,
+		# NML-949: match-level rule bookkeeping (once-per-game / per-round counters that are
+		# not per-unit). Carried on the MP full-state push too, since that reuses this serializer.
+		"rule_state": army_manager.rule_state.duplicate(true) if army_manager else {}
 	}
 
 
@@ -588,7 +591,12 @@ func _deserialize_object(data: Dictionary) -> bool:
 				# instead of spawning a duplicate (restore_game_unit_state only sets metas/pos).
 				if net_id >= 0 and object_manager.has_method("find_by_network_id"):
 					var existing: Node3D = object_manager.find_by_network_id(net_id)
-					if is_instance_valid(existing):
+					# ...but ONLY onto a node that is going to survive. load_game() empties the table
+					# with queue_free(), so for the rest of that frame the OLD models are still
+					# children AND still is_instance_valid — rebinding onto one of those hands the
+					# restored unit a node that dies at the end of the frame. Found by the runtime
+					# unit's save/load test: every model came back "valid" and was freed a frame later.
+					if is_instance_valid(existing) and not existing.is_queued_for_deletion():
 						restore_game_unit_state(existing, game_unit_id, model_idx)
 						return true
 				var loaded = _loaded_game_units[game_unit_id]
@@ -889,6 +897,12 @@ func _deserialize_game_state(state_data: Dictionary) -> void:
 		# with units on the table is a game in progress, so default those to PLAYING (not DEPLOYMENT,
 		# which would wrongly suppress the move-trail chalk on a resumed game).
 		army_manager.set_game_phase(int(state_data.get("game_phase", OPRArmyManager.GamePhase.PLAYING)))
+		# NML-949: restore the match-level rule bookkeeping. The key is OPTIONAL and deliberately
+		# owes no SAVE_VERSION bump: a save written before this change simply has no "rule_state",
+		# and an empty store IS the old all-fresh behaviour, so there is nothing to migrate. An
+		# older build reading a newer save ignores the key for the same reason.
+		var rs: Variant = state_data.get("rule_state", {})
+		army_manager.rule_state = (rs as Dictionary).duplicate(true) if rs is Dictionary else {}
 	# current_player is not restored: there is no turn-order system yet.
 	# Restore the custom-token library before markers re-render so colors/effects resolve.
 	if radial_menu_controller and radial_menu_controller.token_library:
@@ -944,16 +958,11 @@ func _restore_hero_attachments_after_load() -> void:
 	for game_unit in army_manager.get_all_game_units():
 		var props: Dictionary = game_unit.unit_properties
 
-		# NML-006: spell tokens do not survive a save, so their mechanical side effects must not
-		# either — strip suffix-marked granted rules (main.gd SOLO_SPELL_GRANT_SUFFIX) and the
-		# speed/range props stamps; otherwise a mid-round save would freeze a once-buff forever.
-		var rules: Array = props.get("special_rules", [])
-		var kept: Array = rules.filter(func(r) -> bool:
-			return not (r is String and (r as String).ends_with(" (spell)")))
-		if kept.size() != rules.size():
-			props["special_rules"] = kept
-		props.erase("spell_move_mod")
-		props.erase("spell_range_mod")
+		# NML-949: the spell grants and the speed/range stamps are no longer scrubbed here.
+		# The mechanical records now persist with the unit (main.gd SOLO_SPELL_RECORDS_KEY), so
+		# the round-end expiry gets its work set back after a load and removes them properly —
+		# scrubbing would instead have deleted the "persists until it applies" effects the book
+		# explicitly keeps across rounds.
 
 		var attached_to_id = props.get("attached_to", "")
 		if attached_to_id is String:

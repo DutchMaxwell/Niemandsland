@@ -333,3 +333,125 @@ func test_parse_unit_from_list_falls_back_to_derived_without_base() -> void:
 	assert_bool(unit.base_is_oval).is_true()
 	assert_int(unit.base_width_mm).is_equal(52)
 	assert_int(unit.base_depth_mm).is_equal(90)
+
+
+# ===== OPRUnit.duplicate_unit() INDEPENDENCE (Reinforcement: the returning copy of a unit must =====
+# ===== not be able to corrupt the original it was cloned from) ===============================
+
+func _duplicate_unit_fixture() -> OPRApiClient.OPRUnit:
+	var u := OPRApiClient.OPRUnit.new()
+	u.name = "Iron Guard"
+	u.size = 5
+	u.quality = 4
+	u.defense = 3
+	u.cost = 120
+	u.special_rules = ["Tough(3)", "Reinforcement"]
+	u.equipment = ["Shield"]
+	u.upgrades = ["Clan Backup"]
+	u.item_grants = {"Combat Shield": ["Shielded"]}
+	u.equipment_items = [{"name": "Relay", "count": 1}]
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Rifle"
+	w.range_value = 24
+	w.attacks = 1
+	w.special_rules = ["AP(1)"]
+	u.weapons = [w]
+	u.mount_name = "War Bike"
+	u.mount_base = [true, 60, 35]
+	u.base_size_round = 32
+	u.base_is_oval = false
+	u.base_width_mm = 32
+	u.base_depth_mm = 32
+	u.base_from_tough = false
+	u.custom_name = "The Hammers"
+	u.game_system = "gf"
+	return u
+
+
+func test_duplicate_unit_copies_every_field() -> void:
+	# Guard against a forgotten field: this deliberately lists EVERY field on OPRUnit (see the
+	# class body in opr_api_client.gd) rather than reflecting over the object, so a field someone
+	# adds later and forgets to wire into duplicate_unit() shows up here as a silent equality gap
+	# instead of staying invisible.
+	var u := _duplicate_unit_fixture()
+	var c := u.duplicate_unit()
+	# scalars, asserted individually
+	assert_str(c.name).is_equal(u.name)
+	assert_int(c.size).is_equal(u.size)
+	assert_int(c.quality).is_equal(u.quality)
+	assert_int(c.defense).is_equal(u.defense)
+	assert_int(c.cost).is_equal(u.cost)
+	assert_int(c.base_size_round).is_equal(u.base_size_round)
+	assert_bool(c.base_is_oval).is_equal(u.base_is_oval)
+	assert_int(c.base_width_mm).is_equal(u.base_width_mm)
+	assert_int(c.base_depth_mm).is_equal(u.base_depth_mm)
+	assert_bool(c.base_from_tough).is_equal(u.base_from_tough)
+	assert_str(c.mount_name).is_equal(u.mount_name)
+	assert_str(c.game_system).is_equal(u.game_system)
+	assert_str(c.custom_name).is_equal(u.custom_name)
+	# array/dict CONTENTS
+	assert_array(c.special_rules).contains_exactly(["Tough(3)", "Reinforcement"])
+	assert_array(c.equipment).contains_exactly(["Shield"])
+	assert_array(c.upgrades).contains_exactly(["Clan Backup"])
+	assert_dict(c.item_grants).is_equal({"Combat Shield": ["Shielded"]})
+	assert_array(c.equipment_items).is_equal([{"name": "Relay", "count": 1}])
+	assert_array(c.mount_base).is_equal([true, 60, 35])
+	assert_int(c.weapons.size()).is_equal(1)
+	assert_str(c.weapons[0].name).is_equal("Rifle")
+	assert_int(c.weapons[0].range_value).is_equal(24)
+	assert_int(c.weapons[0].attacks).is_equal(1)
+	assert_array(c.weapons[0].special_rules).contains_exactly(["AP(1)"])
+
+
+func test_duplicate_unit_special_rules_are_independent() -> void:
+	var u := _duplicate_unit_fixture()
+	var c := u.duplicate_unit()
+	c.special_rules.erase("Reinforcement")
+	assert_array(c.special_rules).not_contains(["Reinforcement"])
+	assert_array(u.special_rules) \
+		.override_failure_message("erasing a rule from the COPY must not touch the ORIGINAL's list") \
+		.contains(["Reinforcement"])
+
+
+func test_duplicate_unit_size_is_independent() -> void:
+	var u := _duplicate_unit_fixture()
+	var c := u.duplicate_unit()
+	c.size = 99
+	assert_int(u.size) \
+		.override_failure_message("changing the copy's size must not touch the original's") \
+		.is_equal(5)
+
+
+func test_duplicate_unit_container_fields_are_independent() -> void:
+	var u := _duplicate_unit_fixture()
+	var c := u.duplicate_unit()
+	c.item_grants["Combat Shield"] = ["Poisoned"]
+	c.item_grants["New Item"] = ["New Rule"]
+	c.equipment_items.append({"name": "Extra", "count": 2})
+	c.upgrades.append("Extra Upgrade")
+	c.mount_base[1] = 999
+	assert_dict(u.item_grants) \
+		.override_failure_message("mutating the copy's item_grants must not touch the original's") \
+		.is_equal({"Combat Shield": ["Shielded"]})
+	assert_array(u.equipment_items) \
+		.override_failure_message("mutating the copy's equipment_items must not touch the original's") \
+		.is_equal([{"name": "Relay", "count": 1}])
+	assert_array(u.upgrades) \
+		.override_failure_message("mutating the copy's upgrades must not touch the original's") \
+		.contains_exactly(["Clan Backup"])
+	assert_array(u.mount_base) \
+		.override_failure_message("mutating the copy's mount_base must not touch the original's") \
+		.is_equal([true, 60, 35])
+
+
+func test_duplicate_unit_deep_copies_weapons() -> void:
+	# The weapons array is rebuilt via OPRWeapon.from_dict(w.to_dict()) rather than referencing
+	# the original OPRWeapon objects — so a mutation on the copy's weapon must never reach the
+	# original's weapon.
+	var u := _duplicate_unit_fixture()
+	var c := u.duplicate_unit()
+	c.weapons[0].special_rules.append("Deadly(3)")
+	assert_array(u.weapons[0].special_rules) \
+		.override_failure_message("the WEAPONS must be deep-copied, not shared references") \
+		.contains_exactly(["AP(1)"])
+	assert_array(c.weapons[0].special_rules).contains_exactly(["AP(1)", "Deadly(3)"])
