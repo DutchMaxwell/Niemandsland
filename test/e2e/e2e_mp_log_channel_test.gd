@@ -596,3 +596,87 @@ func test_the_rebuild_failure_line_travels(timeout := 120000) -> void:
 		.override_failure_message("the copy failed to build and the opponent is told nothing at all (sent: %s)" % str(_sent_lines())) \
 		.is_equal(1)
 	await E2EBoot.settle(get_tree())
+
+
+# === 10. NML-957 — the Growth Markers wave (#285) ==============================================
+#
+# Markers accrue silently on the opponent's screen: the carrier's Defense (or AP, or hits) climbs
+# round by round with nothing in their log to answer for it. Decision D1 settled the edge case —
+# the ORDINARY tick travels as well as the two refusals, because an opponent who reads only the
+# exceptions never sees the rule that makes them exceptions.
+#
+# Reachability needs no cast and no full round: _solo_growth_round_start() walks the live units
+# itself and _solo_growth_on_kill(u) takes its carrier directly. The cap case reaches the cap by
+# calling round-start repeatedly rather than by writing the counter key, so the test never has to
+# guess how "Defensive Growth" spells its unit_properties key.
+
+
+## A growth carrier. faction_folder is the part that makes the registry resolve the rule: without it
+## the lookup falls back to the system's common section, which carries no Growth Markers entry at
+## all, and the loop body under test never runs. The rule names are the shipped ones from
+## assets/solo/rules_mechanics_gf.json — an invented name resolves to nothing and passes silently.
+func _growth_unit(unit_name: String, faction: String, rule: String) -> GameUnit:
+	var u := _register(1, unit_name, HUMAN_LINE)
+	u.unit_properties["faction_folder"] = faction
+	u.unit_properties["special_rules"] = [rule]
+	assert_array(RulesRegistry.unit_rules_of_primitive(u, "Growth Markers")) \
+		.override_failure_message("fixture check: %s/%s does not resolve to Growth Markers" % [faction, rule]) \
+		.is_not_empty()
+	return u
+
+
+## D1 — the ordinary tick. It is exactly as unobservable as the two refusals below: the marker is a
+## number in unit_properties, and the Defense it buys only shows up inside someone else's dice roll.
+func test_the_growth_marker_tick_travels(timeout := 120000) -> void:
+	_growth_unit("Inquisitors", "human_inquisition", "Defensive Growth")
+	_main._solo_growth_round_start()
+	assert_int(_logged_containing("gains a marker (1/4)")) \
+		.override_failure_message("fixture check: the marker must actually be placed:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("gains a marker (1/4)")) \
+		.override_failure_message("the tick stayed local — the opponent watches Defense climb with no rule behind it (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## v3.5.3: Shaken BLOCKS this round's marker and keeps the earned ones. A refusal, and the only
+## record that the round was skipped on purpose rather than forgotten.
+func test_the_growth_shaken_block_travels(timeout := 120000) -> void:
+	var u := _growth_unit("Inquisitors", "human_inquisition", "Defensive Growth")
+	u.is_shaken = true
+	_main._solo_growth_round_start()
+	assert_int(_logged_containing("no marker this round (keeps 0/4)")) \
+		.override_failure_message("fixture check: Shaken must block the tick:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("no marker this round (keeps 0/4)")) \
+		.override_failure_message("a blocked tick stayed local — indistinguishable from a rule that stopped working (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## At max_markers the rule stops giving. Without the line the opponent sees the climb simply end.
+func test_the_growth_cap_line_travels(timeout := 120000) -> void:
+	_growth_unit("Inquisitors", "human_inquisition", "Defensive Growth")
+	for _i in 5:
+		_main._solo_growth_round_start()
+	assert_int(_logged_containing("is at the cap — no further marker (4/4)")) \
+		.override_failure_message("fixture check: five round-starts must run one past the cap of 4:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("is at the cap — no further marker (4/4)")) \
+		.override_failure_message("the cap refusal stayed local — the opponent sees the climb stop for no stated reason (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## D1 again, on the other accrual path: a marker placed for destroying an enemy unit. The kill is
+## visible to the opponent; that it also bought a marker is not.
+func test_the_growth_kill_marker_travels(timeout := 120000) -> void:
+	var u := _growth_unit("Guild Miners", "dwarf_guilds", "Precision Frenzy")
+	_main._solo_growth_on_kill(u)
+	assert_int(_logged_containing("gains a marker for the kill (1/2)")) \
+		.override_failure_message("fixture check: the kill must place a marker:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("gains a marker for the kill (1/2)")) \
+		.override_failure_message("the kill marker stayed local — the opponent sees the kill but not what it earned (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
