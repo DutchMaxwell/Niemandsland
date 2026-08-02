@@ -1,7 +1,6 @@
 extends GdUnitTestSuite
 ## The Game School start-menu ENTRY exists in scenes/startup_menu.tscn, right after the Tutorial
-## entry, as a MenuListButton reading "FEUERTAUFE — TUTORIAL" (maintainer naming, 28.07.: the course
-## is your baptism of fire; the finale is "Ins Niemandsland — face NACHTMAHR"). Instantiate-only (never in tree) so
+## entry, as a MenuListButton reading "SPIELSCHULE (IN ARBEIT)". Instantiate-only (never in tree) so
 ## this asserts what the .tscn stores — what a future .tscn edit would break — without running the
 ## menu's heavy _ready() (diorama build, music, attract mode). Same pattern as ui_click_ownership_test.
 
@@ -19,7 +18,13 @@ func test_game_school_entry_exists_and_is_a_menu_list_button() -> void:
 		.override_failure_message("startup_menu.tscn must carry a SpielschuleBtn in the MenuButtons column") \
 		.is_not_null()
 	assert_bool(btn is MenuListButton).is_true()
-	assert_str((btn as Button).text).is_equal("FEUERTAUFE — TUTORIAL")
+	# E3b (01.08.): the label used to read "FEUERTAUFE — TUTORIAL" and sat directly under an entry
+	# reading "TUTORIAL" — which is how TC-058 ended up reporting the new course from inside the old
+	# one. Both entries say what they are now, and this one says plainly that it is unfinished.
+	# The course keeps its name; only the MENU LABEL changed. "Feuertaufe" lives on in the chapter
+	# content, and the finale is still "Ins Niemandsland — face NACHTMAHR".
+	# The counterpart assertion for the other entry is in test/startup_menu_test.gd.
+	assert_str((btn as Button).text).is_equal("SPIELSCHULE (IN ARBEIT)")
 
 
 func test_game_school_entry_sits_right_after_the_tutorial_entry() -> void:
