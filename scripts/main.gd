@@ -9957,18 +9957,22 @@ func _reinforcement_human_ghost(original: GameUnit, radii: Array, trect: Rect2, 
 		return auto_spots
 	var ghost := PlacementGhost.new()
 	add_child(ghost)
+	# A GDScript lambda captures a local BY VALUE, so `done = true` inside these two callbacks would
+	# write to a copy and the wait loop below would never end — the round would never start (NML-961).
+	# A captured object may be MUTATED, so the flag lives in a dictionary and the array is filled in
+	# place instead of being reassigned.
 	var chosen: Array = []
-	var done: bool = false
+	var state := {"done": false}
 	ghost.begin(shape, PlacementGhost.edge_strip_zone(margin_m), blockers, trect,
 		func(positions: Array) -> void:
-			chosen = positions
-			done = true,
+			chosen.assign(positions)
+			state["done"] = true,
 		func() -> void:
-			done = true)
+			state["done"] = true)
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.GENERAL,
 			"Reinforcement: place %s within 12\" of any table edge — R rotates, Esc drops it at the first legal spot" % original.get_name(), false)
-	while not done:
+	while not state["done"]:
 		await get_tree().process_frame
 	if chosen.is_empty():
 		if battle_log != null:

@@ -127,6 +127,7 @@ _internal/
 /MODEL_FORGE_EXTRACTION.md
 
 # internal working docs — never commit
+AGENTS.md
 CLAUDE.md
 HANDOFF_*.md
 HANDOVER*.md
