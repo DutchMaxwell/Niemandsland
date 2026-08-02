@@ -32,6 +32,11 @@ signal remote_unit_marker_updated(game_unit: GameUnit, marker_name: String, add:
 signal remote_model_marker_updated(model: ModelInstance, marker_name: String, add: bool, color: Color, value: int)
 signal remote_unit_marker_value_updated(game_unit: GameUnit, marker_name: String, value: int)
 signal remote_model_marker_value_updated(model: ModelInstance, marker_name: String, value: int)
+## NML-945 — a whole unit LEFT the table (Ambush Re-Deployment) or came back from reserve. Carries
+## the reserve flag alongside the visibility: on this side the two are separate state (the model
+## nodes vs. unit_properties) that nothing keeps in lockstep, so a peer deriving one from the other
+## would invent an invariant the local game does not enforce.
+signal remote_unit_visibility_updated(game_unit: GameUnit, is_visible: bool, in_reserve: bool)
 signal remote_objective_owner_updated(index: int, owner: int)
 signal remote_token_defined(token_name: String, color: Color, is_counter: bool, effect: String)
 signal remote_token_edited(old_name: String, new_name: String, color: Color, effect: String)
@@ -816,6 +821,30 @@ func sync_move_log(summaries: Array) -> void:
 	remote_move_log_received.emit(summaries)
 
 
+## NML-946 — one finished battle-log line that the other peers cannot derive for themselves.
+signal remote_log_event_received(category: int, text: String, ai: bool, detail: String)
+
+
+## Broadcast a rules line (see main._log_rule_event for WHICH lines travel and why).
+##
+## Deliberately a SECOND pair beside broadcast_move_log rather than a generalisation of it. The move
+## pair ships per-unit movement DATA that each receiver renders into its own line; this one ships a
+## line that is already written. And renaming the move pair would have silently dropped every
+## movement line on any peer that predates the rename — the has_method() dispatch in _on_raw_command
+## is what makes an unknown handler harmless, and that cuts both ways.
+func broadcast_log_event(category: int, text: String, ai: bool = false, detail: String = "") -> void:
+	if not is_multiplayer_active() or text.is_empty():
+		return
+	if not _validate_rpc_ready("broadcast_log_event"):
+		return
+	_remote_call("sync_log_event", [category, text, ai, detail], 0)
+
+
+@rpc("any_peer", "call_remote", "reliable")
+func sync_log_event(category: int, text: String, ai: bool = false, detail: String = "") -> void:
+	remote_log_event_received.emit(int(category), str(text), bool(ai), str(detail))
+
+
 ## RPC: Move multiple objects in one message. Format: [id, x, y, z, id, x, y, z, ...]
 @rpc("any_peer", "call_remote", "unreliable_ordered")
 func move_objects_batch_networked(batch: Array) -> void:
@@ -1003,6 +1032,22 @@ func sync_unit_marker_value(unit_id: String, marker_name: String, value: int) ->
 	var game_unit = army_manager.get_game_unit_by_id(unit_id)
 	if game_unit:
 		remote_unit_marker_value_updated.emit(game_unit, marker_name, value)
+
+
+## RPC: Mirror a whole unit's presence on the table — every model node of the unit and of the heroes
+## joined to it, plus the Ambush reserve flag that goes with it.
+##
+## NML-945 — deliberately NOT sync_object_visibility: that one addresses ONE node by network_id among
+## ObjectManager's DIRECT children (a regiment member lives under its tray and is unreachable there)
+## and stamps the "deleted" meta, which is the delete/undo semantics for terrain and TTS props. A
+## unit withdrawn into reserve is not deleted, and it is a unit, not a node.
+@rpc("any_peer", "call_remote", "reliable")
+func sync_unit_visible(unit_id: String, is_visible: bool, in_reserve: bool) -> void:
+	if not army_manager:
+		return
+	var game_unit = army_manager.get_game_unit_by_id(unit_id)
+	if game_unit:
+		remote_unit_visibility_updated.emit(game_unit, is_visible, in_reserve)
 
 
 ## RPC: apply a HIDDEN per-unit state delta (see broadcast_unit_property). `value == null` erases
@@ -1203,6 +1248,17 @@ func broadcast_model_marker_value(model: ModelInstance, marker_name: String, val
 func broadcast_unit_marker_value(game_unit: GameUnit, marker_name: String, value: int) -> void:
 	if is_multiplayer_active() and game_unit:
 		_remote_call("sync_unit_marker_value", [game_unit.unit_id, marker_name, value], 0)
+
+
+## Broadcast a unit's presence on the table (NML-945). The reserve flag is read HERE, at send time,
+## so callers keep the plain two-argument shape while the wire still states both facts outright.
+func broadcast_unit_visible(game_unit: GameUnit, is_visible: bool) -> void:
+	if not is_multiplayer_active() or game_unit == null:
+		return
+	if not _validate_rpc_ready("broadcast_unit_visible"):
+		return
+	var in_reserve: bool = bool(game_unit.unit_properties.get("ambush_reserve", false))
+	_remote_call("sync_unit_visible", [game_unit.unit_id, is_visible, in_reserve], 0)
 
 
 ## NML-927 — broadcast a HIDDEN per-unit state delta: a unit_properties key that carries a NUMBER

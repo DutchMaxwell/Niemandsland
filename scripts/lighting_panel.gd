@@ -297,6 +297,18 @@ func _build_ui() -> void:
 		GraphicsSettings.save_settings())
 	vbox.add_child(limit_cb)
 
+	# NML-955: AI EXPLANATION toasts (which unit NACHTMAHR picked, what it shot, what the roll did)
+	# stay up until the next event replaces them or you click them away. DEFAULT ON. Persisted.
+	# Operational notices (export path, autosave) always fade — this switch does not reach them.
+	var explain_cb := CheckButton.new()
+	explain_cb.text = "AI Explanations Stay Up"
+	explain_cb.tooltip_text = "On: NACHTMAHR's explanation stays on screen until the next event replaces it or you click it away. Off: it fades after a few seconds. Operational notices (export path, autosave) always fade."
+	explain_cb.button_pressed = GraphicsSettings.ai_explain_persistent
+	explain_cb.toggled.connect(func(on: bool) -> void:
+		GraphicsSettings.ai_explain_persistent = on
+		GraphicsSettings.save_settings())
+	vbox.add_child(explain_cb)
+
 
 ## UI Scale slider (content_scale_factor) — reachability/HiDPI. Bound to GraphicsSettings.
 func _add_ui_scale_slider(parent: Control) -> void:

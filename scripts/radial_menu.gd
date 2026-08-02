@@ -499,11 +499,24 @@ static func _caster_member_of(game_unit: GameUnit) -> GameUnit:
 	return null
 
 
+## The owner's Reinforcement entry (army-book v3.5.3). Offered on every carrier and NEVER hidden when
+## the rule cannot fire right now — an entry that vanishes reads exactly like a missing rule, so an
+## impossible sacrifice is refused with its reason in the battle log instead (#224). Not gated on solo:
+## the rule belongs to the army book, not to NACHTMAHR.
+static func reinforcement_items(game_unit: GameUnit) -> Array[RadialMenuItem]:
+	var out: Array[RadialMenuItem] = []
+	if game_unit != null and SoloController.reinforcement_offered(game_unit):
+		out.append(RadialMenuItem.new("reinforce", "Reinforce", "⟲", true,
+			"Reinforcement: while this unit IS Shaken — or once it is fully destroyed — remove it from the table as destroyed; a fresh copy of it returns within 12\" of any table edge at the start of the next round, after the Ambushers. The copy cannot seize objectives that round and does not have the rule."))
+	return out
+
+
 static func create_unit_menu(game_unit: GameUnit, solo_combat: bool = false) -> Array[RadialMenuItem]:
 	var items: Array[RadialMenuItem] = []
 
 	if solo_combat:
 		items.append_array(solo_combat_items(game_unit))
+	items.append_array(reinforcement_items(game_unit))
 
 	var activate_icon = "-" if game_unit.is_activated else "+"
 	var activate_tooltip = "Mark unit as not activated" if game_unit.is_activated else "Mark unit as activated this round"

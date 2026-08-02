@@ -76,15 +76,19 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
   onboarding items live in **Ideas**. _S–M_
 - **Solo rules automation — resolver waves B + C** — `0.3.10.0-alpha` automates hundreds of rules; the
   families that need their own resolver step are honestly still manual, and the per-unit battle-log
-  notice names them. The complete remainder is **five rule names** (everything else in the books is
-  modeled — plain *Re-Deployment*, *Grounded Reinforcement*, *Reanimation*, *Caster Group*, *Spell
-  Accumulator*, all three Ambush variants and the wave-4 pair included):
-  - **Wave B — caster economy + unit creation:** **Spawn**, **Split**, **Reinforcement**. These
+  notice names them. The complete remainder is **three rule names** (everything else in the books is
+  modeled — plain *Re-Deployment*, *Grounded Reinforcement*, *Reanimation*, *Reinforcement*,
+  *Caster Group*, *Spell Accumulator*, all three Ambush variants and the wave-4 pair included):
+  - **Wave B — caster economy + unit creation:** **Spawn**, **Split**. These
     create, return or
     re-point units, so they touch the AI's round plan, not just the dice. **Reanimation** shipped:
     models and wounds return on activation (one die per missing wound, 5+, coherency-gated);
-    **Caster Group** and **Spell Accumulator** were bridged into the registry — their engine code had
-    shipped long before the data said so. **Extended Buff Range shipped** (wave 4): a Hero's
+    **Reinforcement** shipped: a unit where every model carries the rule can be pulled off the table
+    as destroyed while Shaken or once fully destroyed, and a full-strength copy returns within 12″ of
+    any table edge at the start of the next round (after Ambush arrivals), unable to seize or contest
+    objectives that round and stripped of the rule. **Caster Group** and **Spell Accumulator** were
+    bridged into the registry — their engine code had shipped long before the data said so.
+    **Extended Buff Range shipped** (wave 4): a Hero's
     within-12″ buff rules reach a friendly carrier up to 24″ away (base edge to base edge) through
     exactly one relay hop, spells excluded, every application and refusal logged. _M–L_
   - **Wave C — movement / deployment:** **Traversal**. **Delayed Action shipped** (wave 5): the new "Pass Turn" primitive — once per round a carrier may pass the turn while the opponent has strictly more units left, every pass and refusal logged. The three
@@ -94,9 +98,6 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
     round later. **Coordinate shipped** (wave 4): the hand-off activates an un-activated friend
     within 12″ immediately, never chains past two activations, and leaves the alternation ledger
     untouched. _M_
-  notice names them. The complete remainder is **six rule names** (everything else in the books is
-  modeled — plain *Re-Deployment*, *Grounded Reinforcement*, *Reanimation*, *Caster Group*, *Spell
-  Accumulator*, *Delayed Action* and all three Ambush variants included):
 ### Alpha-feedback batch (accepted 2026-07-01) — sorted Now vs soon
 
 > **✅ Shipped in `0.3.7.2-alpha`:** dice-log live-scroll, deployment-zone colour flip, cursor/avatar
