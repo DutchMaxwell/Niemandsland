@@ -163,6 +163,131 @@ func test_deployment_reserve_loading_stays_free(timeout := 120000) -> void:
 	assert_bool((tc[1] as GameUnit).is_activated).is_false()
 
 
+# ===== NML-953 — an Unload the player cannot see reads as a broken game =====
+
+## The "unload_cargo_<idx>" entry out of a built item list, or null.
+func _unload_item(items: Array, idx: int):
+	for it in items:
+		if str(it.id) == "unload_cargo_%d" % idx:
+			return it
+	return null
+
+
+func test_unload_is_offered_while_the_cargo_still_has_its_activation() -> void:
+	# CONTROL, declared before the red one: with the cargo's move action still open the entry is
+	# there and clickable. Without this the red test below could pass on a fixture that never
+	# produces an Unload entry at all.
+	_solo_playing_on()
+	var tc := _truck_and_cargo()
+	_main.opr_army_manager.set_unit_embarked(tc[1], tc[0], true)
+	var items: Array = []
+	_main.radial_menu_controller._append_transport_items(tc[0], {}, items)
+	var it = _unload_item(items, 0)
+	assert_object(it).is_not_null()
+	assert_bool(bool(it.enabled)).is_true()
+
+
+func test_a_spent_cargo_keeps_a_greyed_unload_entry(timeout := 120000) -> void:
+	# NML-953, the maintainer's own sequence: TC-039 embarks in round 1, TC-040 then opens the
+	# transport's radial to unload — and "unload steht nicht im radial menü". Loading IS the cargo's
+	# move action (#209), so its activation is spent in that same round and the entry was dropped by
+	# a bare `continue`: no entry, no reason, nothing. Refusing is right; refusing invisibly is not.
+	_solo_playing_on()
+	var tc := _truck_and_cargo()
+	_main.radial_menu_controller._embark_unit({"game_unit": tc[1], "embark_target": tc[0]})
+	await _runner.simulate_frames(2)
+	assert_bool((tc[1] as GameUnit).is_activated).is_true()   # the premise of the find
+	var items: Array = []
+	_main.radial_menu_controller._append_transport_items(tc[0], {}, items)
+	var it = _unload_item(items, 0)
+	assert_object(it) \
+		.override_failure_message("NML-953 — the Unload entry VANISHED for a cargo unit whose activation is spent: the player sees neither the option nor a reason") \
+		.is_not_null()
+	if it == null:
+		return   # the failure above is recorded; dereferencing null would abort the whole run
+	assert_bool(bool(it.enabled)) \
+		.override_failure_message("the refused entry must be GREYED, not clickable (GF v3.5.1 p.15 forbids the second move action)") \
+		.is_false()
+	assert_str(str(it.label)).contains("already activated")
+	assert_str(str(it.tooltip)).contains("p.15")
+
+
+func test_a_spent_unit_keeps_a_greyed_embark_entry(timeout := 120000) -> void:
+	# The same defect on the other side of the door: with its activation spent the unit may not
+	# board either, and the whole Embark block used to vanish — a transport standing right in front
+	# of it offered nothing at all.
+	_solo_playing_on()
+	var tc := _truck_and_cargo()
+	(tc[1] as GameUnit).activate(1)
+	var items: Array = []
+	_main.radial_menu_controller._append_transport_items(tc[1], {}, items)
+	var found = null
+	for it in items:
+		if str(it.id).begins_with("embark"):
+			found = it
+	assert_object(found) \
+		.override_failure_message("the Embark entry VANISHED for a unit whose activation is spent — no option, no reason") \
+		.is_not_null()
+	if found == null:
+		return
+	assert_bool(bool(found.enabled)).is_false()
+	assert_str(str(found.tooltip)).contains("p.15")
+
+
+# ===== NML-954 — a destroyed transport owes its cargo all THREE consequences =====
+
+## Kill the transport's only model through the real dead-parking choke point, the way a lethal
+## wound does — which is what fires the spill.
+func _wreck(truck: GameUnit, pid: int) -> void:
+	var m := truck.models[0] as ModelInstance
+	m.node.set_meta("model_instance", m)
+	m.is_alive = false
+	_main.opr_army_manager.set_loose_model_dead(m.node, pid, true, truck.unit_id)
+
+
+func test_the_spill_line_quotes_the_rule_and_names_all_three(timeout := 120000) -> void:
+	# The maintainer asked why the game makes HIM roll the dangerous terrain test. It is the rule's
+	# first consequence — but the old line only ordered the roll, so it read as an app quirk. The
+	# line quotes Transport now and names all three consequences.
+	_solo_playing_on()
+	var tc := _truck_and_cargo()
+	_main.opr_army_manager.set_unit_embarked(tc[1], tc[0], true)
+	_wreck(tc[0], 1)
+	await _runner.simulate_frames(2)
+	assert_bool((tc[1] as GameUnit).is_shaken).is_true()
+	var text := _log_text()
+	assert_str(text) \
+		.override_failure_message("NML-954 — the spill line does not QUOTE the rule that demands the dice: %s" % text) \
+		.contains("must take a dangerous terrain test")
+	assert_str(text).contains("are Shaken")
+	# The quote must render as the rulebook prints it — no stray escape backslash in the log.
+	assert_str(text).contains("must be placed fully within 6\" of the transport before it's removed\"")
+	assert_str(text).contains("placed fully within 6\"")
+	assert_str(text).contains("take a Dangerous Terrain test now")   # YOUR cargo: YOUR dice
+	await E2EBoot.settle(get_tree())
+
+
+func test_the_ai_cargo_actually_takes_the_dangerous_test(timeout := 120000) -> void:
+	# NML-954, the real rules gap: the S1 note left the dangerous-terrain DICE "in the player's
+	# hand". For YOUR cargo that is the same deal every other dangerous terrain test in the game
+	# gives you. For NACHTMAHR's cargo there is no hand — nobody rolled, so the rule's first
+	# consequence never applied to the AI side at all.
+	_solo_playing_on()
+	_main._solo_batch = true   # tray faces without the physics settle
+	var truck := E2EBoot.make_unit(_main, 2, "AI Truck", [Vector3.ZERO])
+	truck.unit_properties["special_rules"] = ["Transport(6)"]
+	var grunts := E2EBoot.make_unit(_main, 2, "AI Grunts", [Vector3(0.04, 0, 0)])
+	for u in [truck, grunts]:
+		_main.opr_army_manager.game_units[u.unit_id] = u
+	assert_bool(_main.opr_army_manager.set_unit_embarked(grunts, truck, true)).is_true()
+	_wreck(truck, 2)
+	await _runner.simulate_frames(12)
+	assert_str(_log_text()) \
+		.override_failure_message("NML-954 — NACHTMAHR's cargo climbed out of the wreck without the Dangerous Terrain test the rule demands") \
+		.contains("takes its Dangerous Terrain test")
+	await E2EBoot.settle(get_tree())
+
+
 # ===== #230 — AI transport doctrine (official Solo rules p.58) =====
 
 func test_ai_deploy_fills_its_transport() -> void:

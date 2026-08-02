@@ -3118,8 +3118,9 @@ func disembark_positions(transport: GameUnit, unit: GameUnit, exit_toward: Vecto
 ## fully within 6\" of the transport before it's removed"). Every cargo unit disembarks at the
 ## transport's last TABLE spot (the placer reads the parked model's revive_transform) and its
 ## is_shaken flag is set; the radial controller rides transport_cargo_spilled for the marker,
-## the MP broadcast and the battle-log line. The dangerous-terrain DICE stay the player's hand
-## in sandbox play (the solo AI automates the roll on its side, wave S2).
+## the MP broadcast and the battle-log line. The dangerous-terrain DICE stay YOUR hand in sandbox
+## play (the log line asks for the roll) — NML-954: for an AI-owned unit nobody was asking, so main
+## now rolls that side on the real tray off this same signal.
 signal transport_cargo_spilled(transport: GameUnit, spilled: Array)
 func _spill_destroyed_transport(tr: GameUnit) -> void:
 	if tr == null or transport_capacity(tr) <= 0 or not tr.is_destroyed():
@@ -3135,6 +3136,20 @@ func _spill_destroyed_transport(tr: GameUnit) -> void:
 			spilled.append(unit)
 	if not spilled.is_empty():
 		transport_cargo_spilled.emit(tr, spilled)
+
+
+## NML-954 — how many dice a unit's dangerous terrain test rolls (GF v3.5.1 p.12: one test per
+## affected model, and a Tough(X) model "rolls as many dice as its Tough value"). Same count the
+## movement path builds into report["dangerous_dice"] (SoloController.last_dangerous_dice), pulled
+## out here so the destroyed-transport spill asks the rule the same question the move does.
+## The unit's OWN alive models only — a joined hero is its own GameUnit and takes its own test.
+static func dangerous_dice_for(unit: GameUnit) -> int:
+	if unit == null:
+		return 0
+	var dice := 0
+	for m in unit.get_alive_models():
+		dice += maxi(1, int((m as ModelInstance).wounds_max))
+	return dice
 
 
 ## NML-105 save restore: re-park the models of every unit that LOADED as embarked. The STATE

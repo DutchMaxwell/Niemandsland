@@ -53,6 +53,12 @@ var combat_stage_hold_s: float = 2.5
 ## "Enforce Movement Limit" toggle. Movement only — never gates shooting or other actions.
 var enforce_movement_limit: bool = true
 
+## NML-955 — AI EXPLANATION toasts (which unit NACHTMAHR picked, what it shot, what the roll did)
+## stay on screen until the next event replaces them or you click them away, instead of fading after
+## six seconds. The maintainer could not study them otherwise. Plain operational notices (export
+## path, autosave, a refused button) keep their fade either way — this switch does not touch them.
+var ai_explain_persistent: bool = true
+
 # Preset configurations - optimized for tabletop gaming performance
 const PRESETS = {
 	QualityPreset.PERFORMANCE: {
@@ -351,6 +357,7 @@ func save_settings() -> void:
 	config.set_value("graphics", "show_combat_stage", show_combat_stage)
 	config.set_value("graphics", "combat_stage_hold_s", combat_stage_hold_s)
 	config.set_value("graphics", "enforce_movement_limit", enforce_movement_limit)
+	config.set_value("graphics", "ai_explain_persistent", ai_explain_persistent)
 	config.save("user://graphics_settings.cfg")
 
 
@@ -373,3 +380,4 @@ func load_settings() -> void:
 	show_combat_stage = config.get_value("graphics", "show_combat_stage", true)
 	combat_stage_hold_s = float(config.get_value("graphics", "combat_stage_hold_s", 2.5))
 	enforce_movement_limit = config.get_value("graphics", "enforce_movement_limit", true)
+	ai_explain_persistent = config.get_value("graphics", "ai_explain_persistent", true)
