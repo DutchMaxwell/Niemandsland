@@ -408,3 +408,61 @@ func test_the_cancelled_placement_line_stays_local(timeout := 120000) -> void:
 		.override_failure_message("a mis-click correction aimed at the local hand was broadcast (sent: %s)" % str(_sent_lines())) \
 		.is_equal(0)
 	await E2EBoot.settle(get_tree())
+
+
+# === 9. NML-957 — the Reinforcement wave (#286), sacrifice side ================================
+#
+# The channel above exists, but the Reinforcement block never joined it: its lines still go through
+# battle_log.log_event, so on the opponent's screen a whole unit walks off the table in silence. The
+# inventory decided line by line which of them travel; the three cases here are the sacrifice side
+# (the refusal, the detached hero, the removal itself) and must be RED until the call sites are
+# re-routed.
+
+
+## The radial entry refuses with the reason. Nothing moves, so the line IS the whole event — an
+## opponent without it cannot tell a rule that declined from a rule that is broken.
+func test_the_reinforcement_refusal_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 3)
+	u.is_shaken = false
+	_main.solo_begin_reinforcement(u)
+	assert_int(_logged_containing("Reinforcement: not now")) \
+		.override_failure_message("fixture check: the entry must be refused locally:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("Reinforcement: not now")) \
+		.override_failure_message("the refusal stayed local — the opponent reads a declined rule as a missing one (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## The rule removes THE UNIT and returns a copy of THE UNIT, so a joined hero is detached and stays
+## standing. Without the line the opponent's hero is suddenly alone in the open for no stated reason.
+func test_the_hero_detach_line_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 3)
+	u.is_shaken = true
+	var hero := _register(1, "Warlord", Vector3(0.1, 0.0, 0.0), 1)
+	hero.unit_properties["special_rules"] = ["Hero", "Reinforcement"]
+	EquipmentDistributor.attach_hero_to_unit(hero, u)
+	_main.solo_begin_reinforcement(u)
+	assert_int(_logged_containing("Warlord is detached")) \
+		.override_failure_message("fixture check: the hero must actually be detached:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("Warlord is detached")) \
+		.override_failure_message("the detach line stayed local — the opponent's hero is left standing alone with no reason (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## "Removed from the table as destroyed" plus the round the copy is due. The models die through the
+## casualty seam, which the peer does see — but which of the rule's two triggers fired, and that a
+## fresh copy is coming in a named round, exists nowhere except this line.
+func test_the_sacrifice_line_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 3)
+	u.is_shaken = true
+	_main.solo_begin_reinforcement(u)
+	assert_int(_logged_containing("is removed from the table as destroyed")) \
+		.override_failure_message("fixture check: the unit must actually leave the table:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("is removed from the table as destroyed")) \
+		.override_failure_message("the announced arrival round never left this client — the opponent watches a unit die and learns nothing about the copy (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
