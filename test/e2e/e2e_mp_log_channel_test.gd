@@ -466,3 +466,55 @@ func test_the_sacrifice_line_travels(timeout := 120000) -> void:
 		.override_failure_message("the announced arrival round never left this client — the opponent watches a unit die and learns nothing about the copy (sent: %s)" % str(_sent_lines())) \
 		.is_equal(1)
 	await E2EBoot.settle(get_tree())
+
+
+# === 9. NML-957 — the Reinforcement wave, ARRIVAL side ========================================
+#
+# The sacrifice above is only half the rule: rounds later the copy is due, and _reinforcement_arrive_one
+# either delivers it or says why it cannot. Every one of those lines describes something the opponent
+# cannot derive from what they see — a unit appearing is state they get, but WHY it is short, or why
+# nothing appeared at all, exists only here. The three cases below need no fixture beyond the carrier;
+# the crowded-strip cases follow in their own step.
+
+
+## No source_data means nothing to copy from — a hand-built or legacy unit. The opponent sees the
+## promise silently expire; without the line they cannot tell a refused rule from a broken one.
+func test_the_missing_profile_line_travels(timeout := 120000) -> void:
+	var u := _register(1, "Legacy Rats", Vector3(0.2, 0.0, 0.1), 2)
+	u.unit_properties["reinforcement_due_round"] = 2
+	await _main._reinforcement_arrive_one(u, 2)
+	assert_int(_logged_containing("cannot return — its army profile is not available")) \
+		.override_failure_message("fixture check: this unit must have no source_data:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("cannot return — its army profile is not available")) \
+		.override_failure_message("the opponent's promised copy never arrives and no reason is given (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## The arrival itself, with the objective lock the rule imposes. The models appearing is state the peer
+## receives — that they may not seize this round is a rule the peer cannot see anywhere else.
+func test_the_arrival_line_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 3)
+	await _main._reinforcement_arrive_one(u, 3)
+	assert_int(_logged_containing("cannot seize or contest objectives this round")) \
+		.override_failure_message("fixture check: the copy must actually arrive:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("cannot seize or contest objectives this round")) \
+		.override_failure_message("the opponent sees models appear and never learns they are locked off the objectives (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## "This rule doesn't apply to the new copy" — the copy cannot sacrifice itself again. Nothing on the
+## table shows a rule missing from a card, so this is the only place the peer can learn it is spent.
+func test_the_copy_loses_the_rule_line_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 3)
+	await _main._reinforcement_arrive_one(u, 3)
+	assert_int(_logged_containing("does not have Reinforcement — the rule does not apply to the new copy")) \
+		.override_failure_message("fixture check: the copy must be built and stripped of the rule:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("does not have Reinforcement — the rule does not apply to the new copy")) \
+		.override_failure_message("the opponent cannot tell the returned unit is spent — they may expect a second sacrifice (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
