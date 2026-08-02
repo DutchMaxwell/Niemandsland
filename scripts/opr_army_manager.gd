@@ -174,6 +174,15 @@ var current_round: int = 1
 enum GamePhase { DEPLOYMENT, PLAYING }
 var game_phase: int = GamePhase.DEPLOYMENT
 
+## NML-949 — match-level RULE state that is not per-unit: once-per-game / per-round
+## bookkeeping that used to live only in Main or in the SoloController and was therefore
+## lost on a load, on an MP rejoin, and on every controller rebuild (AI-slot change,
+## a human taking over an AI slot). It lives HERE because OPRArmyManager outlives the
+## controller and is already the thing save_manager serializes match state from.
+## Keys are Strings and values JSON-safe: this dictionary is written verbatim into the
+## save and onto the MP full-state push.
+var rule_state: Dictionary = {}
+
 ## Army trays by player
 var army_trays: Dictionary = {}  # player_id -> Node3D
 
@@ -2200,6 +2209,7 @@ func clear_all() -> void:
 	_scene_cache.clear()  # release parsed PackedScenes; rebuilt lazily on next spawn
 	current_round = 1
 	game_phase = GamePhase.DEPLOYMENT  # a fresh/cleared table is back in deployment
+	rule_state.clear()   # a fresh table owes every once-per-game rule again
 
 
 ## Clear army for a specific player

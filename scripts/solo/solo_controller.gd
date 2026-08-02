@@ -5916,15 +5916,28 @@ static func limited_key(unit: GameUnit, profile: Dictionary) -> String:
 	return "%s::%s" % [unit.unit_id if unit != null else "?", str(profile.get("name", "?"))]
 
 
-## Whether this unit's Limited profile is already spent.
+## Whether this unit's Limited profile is already spent. NML-949: the unit's own props are
+## the durable record — the controller dict is a session cache and is rebuilt (slot change,
+## a human taking the AI slot) and lost on a load, which used to re-arm every spent weapon.
 func is_limited_used(unit: GameUnit, profile: Dictionary) -> bool:
-	return limited_used.has(limited_key(unit, profile))
+	if limited_used.has(limited_key(unit, profile)):
+		return true
+	if unit == null:
+		return false
+	return (unit.unit_properties.get("limited_used", []) as Array).has(str(profile.get("name", "?")))
 
 
 ## Mark a Limited profile spent (called after its dice actually rolled) + a dev-mode decision record —
 ## the once-per-game state is a DECISION input (an expended weapon stops shaping targeting/EV).
 func mark_limited_used(unit: GameUnit, profile: Dictionary) -> void:
 	limited_used[limited_key(unit, profile)] = true
+	if unit != null:
+		# NML-949: durable half of the record — travels with the unit into the save and the MP state.
+		var spent: Array = unit.unit_properties.get("limited_used", [])
+		var wname := str(profile.get("name", "?"))
+		if not spent.has(wname):
+			spent.append(wname)
+		unit.unit_properties["limited_used"] = spent
 	record_decision({"kind": "action", "unit": unit.get_name() if unit != null else "?",
 		"rule": "Limited (core v3.5.1): may only be used once per game",
 		"candidates": [], "chosen": str(profile.get("name", "?")), "why": "limited weapon expended",
@@ -7552,7 +7565,19 @@ func _deploy_spot_free(cand: Vector3, r: float, moving: ModelInstance) -> bool:
 ## a model the shift lands in forbidden terrain is nudged out individually (rare — deployment already avoids
 ## terrain). Regiments keep their rigid tray. Uses the REAL base shapes the audit measures.
 var _deploy_zone_of := {}   # unit -> Rect2 (world XZ): the zone this unit MUST stay inside through cleanup
-var _redeploy_done := false           # Re-Deployment executed for this game (once per game)
+## Re-Deployment executed for this game (once per game). NML-949: today only accidentally safe
+## because a foreign game_phase gate hides it; loosen that gate and it becomes exploitable — so
+## it persists like the rest. Kept in the match rule state, not on this node, since the
+## controller is rebuilt on an AI-slot change and dropped on a load.
+var _redeploy_done: bool:
+	get:
+		var rs: Dictionary = army_manager.rule_state if army_manager != null else _rule_state_fallback
+		return bool(rs.get("redeploy_done", false))
+	set(value):
+		if army_manager != null:
+			army_manager.rule_state["redeploy_done"] = value
+		else:
+			_rule_state_fallback["redeploy_done"] = value
 const REDEPLOY_MIN_GAIN_IN := 3.0     # re-place only when the new spot is at least this much nearer a marker
 
 
@@ -8554,7 +8579,32 @@ func forced_straight_move(unit: GameUnit, dir: Vector2, dist_in: float) -> float
 ## carrier unit may activate a SECOND time in a round (fatigue cleared); army cap = one third of
 ## the carriers (rounded up) per round. Candidate = the not-yet-used carrier with the best
 ## fight value; null when none/cap reached.
-var _second_wind_round_uses := {}   # round -> uses this round
+## Second Wind army cap per round (round key -> uses). NML-949: kept in the match rule state,
+## not on this node — the controller is rebuilt on an AI-slot change and dropped on a load,
+## which reset the cap to zero and allowed more Second Winds than the round permits.
+## String keys: this dictionary goes through JSON, which has no integer keys.
+var _second_wind_round_uses: Dictionary:
+	get:
+		var rs: Dictionary = army_manager.rule_state if army_manager != null else _rule_state_fallback
+		if not rs.has("second_wind_round_uses"):
+			rs["second_wind_round_uses"] = {}
+		return rs["second_wind_round_uses"]
+	set(value):
+		if army_manager != null:
+			army_manager.rule_state["second_wind_round_uses"] = value
+		else:
+			_rule_state_fallback["second_wind_round_uses"] = value
+
+var _rule_state_fallback: Dictionary = {}   # pre-setup only (no army_manager yet)
+
+
+## NML-949: the Second Wind army cap is keyed by the match's ACTUAL round counter
+## (army_manager.current_round), not by `_current_round()` — that reads round_provider, which is
+## wired by main for the (unrelated) final-round objective urgency and reads 0 whenever it is not
+## injected (headless/unit tests included). A round-scoped cap that can never tell rounds apart
+## outside a full Main is not testable and not correct, so it goes straight to army_manager.
+func _second_wind_round_no() -> int:
+	return army_manager.current_round if army_manager != null else _current_round()
 
 ## v3.5.3's army cap DENOMINATOR (3 = one third of the carriers, rounded up; the pre-3.5.3 books
 ## said half). Only the fallback — the live value comes from the registry's `army_cap_fraction`.
@@ -8564,7 +8614,7 @@ const SECOND_WIND_CAP_FRACTION := 3
 func second_wind_candidate() -> GameUnit:
 	if army_manager == null:
 		return null
-	var round_no := _current_round()
+	var round_no := _second_wind_round_no()
 	var carriers := 0
 	var best: GameUnit = null
 	var best_v := -1.0
@@ -8597,14 +8647,15 @@ func second_wind_candidate() -> GameUnit:
 	if frac <= 0:
 		frac = SECOND_WIND_CAP_FRACTION
 	var cap: int = int(ceil(float(carriers) / float(frac)))
-	if int(_second_wind_round_uses.get(round_no, 0)) >= cap:
+	# NML-949: String round key — the counter now rides a save, and JSON has no integer keys.
+	if int(_second_wind_round_uses.get(str(round_no), 0)) >= cap:
 		return null
 	return best
 
 
 func spend_second_wind(unit: GameUnit) -> String:
-	var round_no := _current_round()
-	_second_wind_round_uses[round_no] = int(_second_wind_round_uses.get(round_no, 0)) + 1
+	var round_no := _second_wind_round_no()
+	_second_wind_round_uses[str(round_no)] = int(_second_wind_round_uses.get(str(round_no), 0)) + 1
 	unit.unit_properties["second_wind_used"] = true
 	unit.is_activated = false
 	unit.is_fatigued = false   # "stops being fatigued when activated for the second time"
