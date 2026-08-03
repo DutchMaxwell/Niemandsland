@@ -1004,7 +1004,7 @@ func _solo_activate_one_ai() -> GameUnit:
 	# rolls its TOUGH value in dice (GF v3.5.1 p.12); each 1 wounds the unit.
 	var dangerous_models: int = int(report.get("dangerous_models", 0))
 	var dangerous_dice: int = int(report.get("dangerous_dice", dangerous_models))
-	var alive_before_dangerous: int = unit.get_alive_count()
+	var alive_before_dangerous: int = SoloController.combined_alive(unit)   # NML-966: combined for the morale trigger
 	var wounds_before_dangerous: int = _solo_unit_wounds_now(unit)
 	if dangerous_dice > 0:
 		await _run_ai_dangerous(unit, dangerous_dice)
@@ -2889,7 +2889,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 					"alive": 1, "max": 1, "reach": 9999.0, "profile": tp})
 	shots.sort_custom(func(a, b) -> bool:
 		return _solo_shot_priority(a as Dictionary) > _solo_shot_priority(b as Dictionary))
-	var alive_before: int = target.get_alive_count()
+	var alive_before: int = SoloController.combined_alive(target)   # NML-966: trigger reads combined
 	var wounds_before: int = _solo_unit_wounds_now(target)
 	var models_before: int = _solo_combined_alive(target)
 	# Armor(X) (wave 5, army-book upgrade: "counts as having Defense X+") sets the working Defense,
@@ -2929,6 +2929,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	await _solo_stage_phase("Declaration", SoloController.Pace.ANNOUNCE)
 	var regenable := 0
 	var regen_proof := 0
+	var landed_extra := 0   # NML-966 gap B: Deadly/Takedown wounds landed outside the regen pool
 	var total_hits := 0
 	var total_caused := 0
 	# Unpredictable (generic army-book rule — "when attacking": the SHOOTING leg; the wave-4 melee-only
@@ -3051,15 +3052,15 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			# (p.14) — this also fixes book weapons carrying both (the multiply was silently dropped).
 			var td_w: int = w * maxi(int(profile.get("deadly", 0)), 1)
 			if _solo_ignores_regen(member, profile):
-				await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, 0, td_w)
+				landed_extra += await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, 0, td_w)
 			else:
-				await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, td_w, 0)
+				landed_extra += await _solo_land_takedown_wounds(target, str(profile.get("name", "?")), td_pick, td_w, 0)
 		elif is_deadly and w > 0:
 			# Deadly (GF v3.5.1 p.14): each unsaved wound ×X on one model, no carry-over.
 			if _solo_ignores_regen(member, profile):
-				await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w)
+				landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), 0, w)
 			else:
-				await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0)
+				landed_extra += await _solo_land_deadly_wounds(target, str(profile.get("name", "?")), int(profile.get("deadly", 0)), w, 0)
 		elif _solo_ignores_regen(member, profile):
 			regen_proof += w
 		else:
@@ -3077,7 +3078,9 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		landed, ("" if landed == 1 else "s"), target.get_name(),
 		models_before - _solo_combined_alive(target), ("" if models_before - _solo_combined_alive(target) == 1 else "s")])
 	await _solo_stage_phase("Result")
-	if landed > 0:
+	# NML-966 gap B: Deadly/Takedown wounds bypass the regen pool and never reached `landed` —
+	# a Deadly-only volley silently skipped the half-strength morale test. landed_extra counts them in.
+	if landed + landed_extra > 0:
 		await _solo_shooting_morale(target, alive_before, _solo_owner_label(target), wounds_before)
 		await _solo_stage_phase("Morale")
 	_solo_stage_end()
@@ -3239,7 +3242,7 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 	var hits := int(effect.get("hits", 0))
 	if hits <= 0:
 		return
-	var alive_before: int = target.get_alive_count()
+	var alive_before: int = SoloController.combined_alive(target)   # NML-966: trigger reads combined
 	var wounds_before: int = _solo_unit_wounds_now(target)
 	var models_before: int = _solo_combined_alive(target)
 	var hazardous: bool = _solo_spell_has_rule(effect, "Hazardous")
@@ -5101,7 +5104,7 @@ func _solo_apply_breath_attack(unit: GameUnit) -> void:
 			battle_log.log_event(BattleLog.Category.COMBAT, "Breath Attack: %s rolls %d — fizzles (needs %d+)" % [
 				unit.get_name(), int(face[0]), trigger], true)
 		return
-	var alive_before: int = btarget.get_alive_count()
+	var alive_before: int = SoloController.combined_alive(btarget)   # NML-966: trigger reads combined
 	var wounds_before: int = _solo_unit_wounds_now(btarget)
 	var bhits: int = maxi(mini(blast_x, _solo_combined_alive(btarget)), 1)
 	if battle_log != null:
@@ -7955,6 +7958,9 @@ func _solo_consolidate_melee(charger: GameUnit, defender: GameUnit) -> void:
 ## less must test morale — this trigger was missing entirely (morale only ran after melee). Compares the
 ## unit's own alive count before vs after the volley; `owner` attributes the tray roll (the AI rolls for
 ## its own units, "You" for the human's). No-op if the unit was wiped or took no casualties.
+## NML-966: the multi-model trigger now counts the COMBINED chain (unit + attached heroes), the same
+## basis `_solo_below_half_strength` already used for the outcome — wounds clicked onto a joined hero
+## used to be invisible here because the trigger counted the unit's own models only.
 func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wounds_before: int = -1) -> void:
 	if unit == null:
 		return
@@ -7971,7 +7977,7 @@ func _solo_shooting_morale(unit: GameUnit, alive_before: int, owner: String, wou
 					unit.get_name(), wounds_now, _solo_unit_wounds_start(unit)], true)
 			await _solo_morale_test(unit, owner)
 		return
-	if AiCombatMath.should_test_shooting_morale(alive_before, unit.get_alive_count(), unit.models.size()):
+	if AiCombatMath.should_test_shooting_morale(alive_before, SoloController.combined_alive(unit), SoloController.combined_total(unit)):
 		await _solo_morale_test(unit, owner)
 
 
@@ -9388,7 +9394,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	# NML-929: … and the positive half — a weapon reaching PAST its printed range says which rule
 	# granted it (the gate honours the bonus, so the log must too).
 	_solo_log_range_bonus(attacker, target)
-	var target_alive_before: int = target.get_alive_count()   # post-shooting morale (goal 003 P1)
+	var target_alive_before: int = SoloController.combined_alive(target)   # NML-966: combined for the morale trigger
 	var target_wounds_before: int = _solo_unit_wounds_now(target)
 	var regenable := 0
 	var regen_proof := 0
