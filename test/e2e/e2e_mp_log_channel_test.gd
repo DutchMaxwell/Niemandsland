@@ -898,3 +898,68 @@ func test_the_unit_created_frame_carries_its_origin(timeout := 120000) -> void:
 		.override_failure_message("the unit-created frame lost its origin — the receiver's '(Reinforcement)' suffix stays dead code (origins on the wire: %s)" % str(origins)) \
 		.contains(["reinforcement"])
 	await E2EBoot.settle(get_tree())
+
+
+# === 14. NML-963 — G5: rule notes carry their channel decision at creation =====================
+
+## The one borderline the NML-960 audit could not one-word-route: main's single printing point
+## prints MANY note kinds from solo_controller. G5: every note carries a `travels` flag from its
+## producer. The Versatile Reach note is the ONE STAYS note — a solver decision record (EV
+## numbers, exclusion 2); the chosen consequence (charge or shots) is visible anyway.
+func test_the_versatile_reach_note_is_created_unflagged(timeout := 120000) -> void:
+	_register(1, "Grenzer", HUMAN_LINE, 1)
+	var vr := _register(2, "Sturmbruder", HUMAN_LINE + Vector3(0.343, 0.0, 0.0), 1)
+	vr.unit_properties["special_rules"] = ["Versatile Reach"]
+	vr.unit_properties["game_system"] = "gf"
+	vr.unit_properties["faction_folder"] = "battle_brothers"
+	var opr := OPRApiClient.OPRUnit.new()
+	var sword := OPRApiClient.OPRWeapon.new()
+	sword.name = "Sword"
+	sword.range_value = 0
+	sword.attacks = 2
+	var ws: Array[OPRApiClient.OPRWeapon] = [sword]
+	opr.weapons = ws
+	vr.source_type = "opr"
+	vr.source_data = opr
+	var gap: float = _main.solo_controller.nearest_melee_gap_in(vr, _main.opr_army_manager.game_units["e2e_p1_Grenzer"])
+	assert_bool(gap > 12.0 and gap <= 14.0) \
+		.override_failure_message("fixture: the gap (%.2f\") must sit in the +2\" unlock window (12, 14]" % gap) \
+		.is_true()
+
+	var report: Dictionary = _main.solo_controller._act(vr)
+
+	var vr_notes: Array = []
+	for n in report.get("rule_notes", []):
+		var text := str((n as Dictionary).get("text", "")) if n is Dictionary else str(n)
+		if text.begins_with("Versatile Reach:"):
+			vr_notes.append(n)
+	assert_int(vr_notes.size()) \
+		.override_failure_message("fixture: the unlock window must produce exactly one Versatile Reach note (notes: %s)" % str(report.get("rule_notes", []))) \
+		.is_equal(1)
+	assert_bool(vr_notes[0] is Dictionary) \
+		.override_failure_message("G5: a rule note carries its channel decision at creation — {text, travels}") \
+		.is_true()
+	assert_bool(bool((vr_notes[0] as Dictionary).get("travels", true))) \
+		.override_failure_message("the Versatile Reach note is a solver decision record (exclusion 2) — it must be created travels=false") \
+		.is_false()
+	await E2EBoot.settle(get_tree())
+
+
+## The printing point routes ONLY flagged notes: a travels=true note goes through the #291 door
+## (local line + wire frame), a travels=false note and a legacy plain string stay local.
+func test_the_printing_point_routes_only_flagged_notes(timeout := 120000) -> void:
+	_main._print_rule_notes({"rule_notes": [
+		{"text": "Teleport: +3\" on Advance/Charge, +6\" on Rush this activation", "travels": true},
+		{"text": "Versatile Reach: +2\" charge picked (charge EV 1.00 vs shoot EV 0.50)", "travels": false},
+		"legacy plain-string note"]})
+	for text in ["Teleport: +3\"", "Versatile Reach:", "legacy plain-string note"]:
+		assert_int(_logged_containing(str(text))) \
+			.override_failure_message("every note keeps its LOCAL line — '%s' is missing:\n%s" % [text, _log_text()]) \
+			.is_equal(1)
+	assert_int(_sent_containing("Teleport: +3\"")) \
+		.override_failure_message("the flagged note never left this client — an invisible band bonus stays unexplained on the other screen (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	assert_int(_sent_lines().size()) \
+		.override_failure_message("only the FLAGGED note may travel — the decision record or the legacy string leaked onto the wire (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())

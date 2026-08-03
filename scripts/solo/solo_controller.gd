@@ -1178,10 +1178,17 @@ static func bounding_dice_count(params: Dictionary) -> int:
 ## the enemy, and execute a terrain-aware move (Difficult halves, walls are steered around, Dangerous is
 ## surfaced for main to roll on the real dice tray). Reports {unit, target, action, toward, shoot, can_shoot,
 ## dist_in, dangerous_models} so main resolves shooting / the charge melee / the Dangerous test with real dice.
+## G5 (NML-963): every rule note carries its channel decision at creation. `travels` marks a
+## rule applied or refused at a point the opponent cannot observe (#291 yardstick) — main's
+## printing point routes exactly those through the MP log channel; the rest stay local.
+static func _rule_note(report: Dictionary, text: String, travels: bool) -> void:
+	(report["rule_notes"] as Array).append({"text": text, "travels": travels})
+
+
 func _act(unit: GameUnit) -> Dictionary:
 	var report := {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
 		"toward": AiDecision.Toward.ENEMY, "shoot": false, "can_shoot": false, "dist_in": INF, "dangerous_models": 0,
-		"rule_notes": []}   # maintainer policy: every applied special rule surfaces in the battle log
+		"rule_notes": []}   # {text, travels} entries — maintainer policy: every applied special rule surfaces in the battle log
 	if alive_positions(unit).is_empty():
 		return report
 	# Aircraft (GF v3.5.1, system-scoped): mandatory straight Advance on an EV-picked strafing lane —
@@ -1268,8 +1275,8 @@ func _act(unit: GameUnit) -> Dictionary:
 				bounding_rule, die_text],
 			"candidates": [], "chosen": "+%.0f\" bands" % bounding_in, "why": "bounding placement",
 			"data": {"bonus_in": bounding_in, "rule": bounding_rule, "dice": bounding_dice, "plus": bounding_plus}})
-		(report["rule_notes"] as Array).append("%s: rolled %.0f\" of %s\" — every move band +%.0f\" this activation" % [
-			bounding_rule, bounding_in, die_text, bounding_in])
+		_rule_note(report, "%s: rolled %.0f\" of %s\" — every move band +%.0f\" this activation" % [
+			bounding_rule, bounding_in, die_text, bounding_in], true)   # seeded-RNG roll, no tray — travels
 	# Coverage wave: Speed Feat family — once per GAME, +2\"/+2\" on one move (registry aliases of
 	# Quick carrying uses_per_game). NACHTMAHR spends it in the last two rounds' first move (the
 	# endgame push, where an extra 2\" buys arrivals), logged + recorded; the flag pins the once.
@@ -1294,7 +1301,7 @@ func _act(unit: GameUnit) -> Dictionary:
 				str(edq["name"]), adv_b, rush_b],
 			"candidates": [], "chosen": "use now", "why": "once-per-game speed feat (endgame)",
 			"data": {"advance_bonus": adv_b, "rush_bonus": rush_b}})
-		(report["rule_notes"] as Array).append("%s: once-per-game move bonus spent (+%.0f\"/+%.0f\")" % [str(edq["name"]), adv_b, rush_b])
+		_rule_note(report, "%s: once-per-game move bonus spent (+%.0f\"/+%.0f\")" % [str(edq["name"]), adv_b, rush_b], true)   # once-per-game spend — travels
 	# Teleport (cut C — "once per activation, before attacking, place this model within 3\" of its
 	# position on Advance/Charge actions, or within 6\" on Rush actions"): the same band valuation —
 	# +3" Advance/Charge, +6" Rush (once per activation by construction).
@@ -1312,7 +1319,7 @@ func _act(unit: GameUnit) -> Dictionary:
 		rush += t_rush
 		charge_reach += t_adv
 		if t_adv != 0.0 or t_rush != 0.0:
-			(report["rule_notes"] as Array).append("%s: +%.0f\" on Advance/Charge, +%.0f\" on Rush this activation" % [tele_rule, t_adv, t_rush])
+			_rule_note(report, "%s: +%.0f\" on Advance/Charge, +%.0f\" on Rush this activation" % [tele_rule, t_adv, t_rush], true)   # invisible band bonus — travels
 	var centre := unit_centre(unit)
 	var tcentre := unit_centre(target_unit)
 	var enemy_dist := MoveIntent.distance_inches(centre, tcentre)
@@ -1391,8 +1398,8 @@ func _act(unit: GameUnit) -> Dictionary:
 				boosted.append(bp)
 			var shoot_ev := AiEv.shoot_ev(boosted, us, them, maxf(enemy_dist - advance, 0.0))
 			vr_charge_better = charge_ev > shoot_ev
-			(report["rule_notes"] as Array).append("Versatile Reach: %s (charge EV %.2f vs shoot EV %.2f)" % [
-				("+2\" charge picked" if vr_charge_better else "+4\" range picked"), charge_ev, shoot_ev])
+			_rule_note(report, "Versatile Reach: %s (charge EV %.2f vs shoot EV %.2f)" % [
+				("+2\" charge picked" if vr_charge_better else "+4\" range picked"), charge_ev, shoot_ev], false)   # solver decision record (exclusion 2) — stays
 			record_decision({"kind": "move", "unit": unit.get_name(),
 				"rule": "Versatile Reach: pick one — EV judge between the +2\"-unlocked charge and +4\"-range shooting after an Advance",
 				"candidates": [{"mode": "charge", "ev": snappedf(charge_ev, 0.01)}, {"mode": "range", "ev": snappedf(shoot_ev, 0.01)}],
@@ -1413,8 +1420,8 @@ func _act(unit: GameUnit) -> Dictionary:
 	# charge gate below measures against this target, so the denial folds into the band once, here.
 	var charge_band := melee_shroud_charge_in(charge_reach, target_unit)
 	if charge_band < charge_reach and charge_gap <= charge_reach and charge_gap > charge_band:
-		(report["rule_notes"] as Array).append("Melee Shrouding: %s denies the charge — band %.0f\" instead of %.0f\" (gap %.1f\")" % [
-			target_unit.get_name(), charge_band, charge_reach, charge_gap])
+		_rule_note(report, "Melee Shrouding: %s denies the charge — band %.0f\" instead of %.0f\" (gap %.1f\")" % [
+			target_unit.get_name(), charge_band, charge_reach, charge_gap], true)   # dice-less refusal — travels
 	# Bug 22 (PDF p.11): a charge needing more than the 6" difficult cap whose every corridor to the
 	# target crosses difficult terrain would be CAPPED SHORT — it is no legal intent, so the tree never
 	# sees it as available (the wasted "charge falls short" activations from the live tests).
@@ -1740,7 +1747,7 @@ func _act(unit: GameUnit) -> Dictionary:
 		and shoot_range > 0 and d2 <= float(shoot_range) \
 		and (_has_los(unit, target_unit) or has_indirect_ranged(weapons))
 	if bool(report["can_shoot"]) and quick_shot and action == AiDecision.Action.RUSH:
-		(report["rule_notes"] as Array).append("Quick Shot: shoots after its Rush action")
+		_rule_note(report, "Quick Shot: shoots after its Rush action", true)   # explains otherwise-impossible shots — travels
 	# POST-MOVE RETARGET (Bug 27/28): a HOLD/ADVANCE always MAY shoot (OPR) — so if the decided target is
 	# now out of range/LOS (or the objective-advance never set do_shoot), but the unit can still hit ANOTHER
 	# enemy from here, shoot that one instead of wasting the volley. A Quick Shot unit's RUSH may shoot
@@ -1763,7 +1770,7 @@ func _act(unit: GameUnit) -> Dictionary:
 			# B2/B6 transparency (test games 1+2, "Einheiten advancen aber schießen nicht"): a unit
 			# WITH ranged weapons that ends its move without any shot names the reason in the log —
 			# a silent no-shot reads like a bug (rules-must-log). Feeds the D7 detector.
-			(report["rule_notes"] as Array).append("%s: no shot — %s" % [unit.get_name(), _no_shot_reason(unit, shoot_range)])
+			_rule_note(report, "%s: no shot — %s" % [unit.get_name(), _no_shot_reason(unit, shoot_range)], true)   # missing-dice explanation — travels
 	# Wave 6 — Caster(X): the official Solo v3.5.0 procedure casts AFTER moving, BEFORE attacking, so
 	# the cast plan is drawn from the post-move geometry here; main resolves the cast rolls on the real
 	# dice tray before the shooting/melee it already resolves (spells are ADDITIONAL to the attack).

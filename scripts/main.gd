@@ -933,11 +933,8 @@ func _solo_activate_one_ai() -> GameUnit:
 	if radial_menu_controller != null:
 		radial_menu_controller._update_activated_markers(unit)
 	var report: Dictionary = solo_controller.last_report
-	# Maintainer policy (2026-07-19): every applied special rule surfaces in the battle log —
-	# the controller collects the notes, this is the one printing point.
+	_print_rule_notes(report)
 	if battle_log != null:
-		for note in report.get("rule_notes", []):
-			battle_log.log_event(BattleLog.Category.COMBAT, str(note), true)
 		# #215: the placement gate pulled a planned position back onto the table — say so. A silent
 		# correction reads like a broken game to the player watching the move.
 		for note in solo_controller.board_clamp_notes:
@@ -11747,6 +11744,24 @@ func _on_remote_log_event(category: int, text: String, ai: bool, detail: String)
 	if battle_log == null or text.is_empty():
 		return
 	battle_log.log_event(category, text, ai, detail)
+
+
+## Maintainer policy (2026-07-19): every applied special rule surfaces in the battle log — the
+## controller collects the notes, this is the ONE printing point for them. G5 (NML-963): each
+## note carries a `travels` flag from its producer — flagged notes go through the #291 door
+## (local line + wire), everything else keeps the plain local write.
+func _print_rule_notes(report: Dictionary) -> void:
+	if battle_log == null:
+		return
+	for note in report.get("rule_notes", []):
+		if note is Dictionary:
+			var text := str((note as Dictionary).get("text", ""))
+			if bool((note as Dictionary).get("travels", false)):
+				_log_rule_event(BattleLog.Category.COMBAT, text, true)
+			else:
+				battle_log.log_event(BattleLog.Category.COMBAT, text, true)
+		else:
+			battle_log.log_event(BattleLog.Category.COMBAT, str(note), true)
 
 
 ## Write per-unit movement summaries into the battle log — same lines for local and remote movers.
