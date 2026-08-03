@@ -749,14 +749,15 @@ func test_the_shaken_conduit_line_travels(timeout := 120000) -> void:
 # === 12. NML-957 — the two transport lines (#292) ==============================================
 #
 # The wreck. OPRArmyManager._spill_destroyed_transport carries the STATE (Shaken + the 6"
-# placement, both already broadcast as markers) — but the two LINES that name the rule stayed
-# local. The opponent watches Shaken cargo appear around a vanished transport and dice roll for
-# it, with the rule that did all of it named on one screen only.
+# placement, both already broadcast as markers). The step-6 duplication audit showed the spill is
+# REPLAYED on the peer (wounds sync → set_loose_model_dead → _spill_destroyed_transport), so the
+# wreck line is generated on BOTH machines by state replay — a broadcast copy would arrive twice
+# (exclusion 1). Only the dice line travels: its host guard keeps it to one machine.
 
 
-## Guard for the D2 hop, declared before the red cases: the wreck handler must survive Main being
-## unreachable (a bare controller outside the tree — no battle_log, no network, no /root/Main).
-## Green by design: it pins the get_node_or_null pattern, it does not prove a routed line.
+## Guard, declared before the red cases: the wreck handler must survive Main being unreachable
+## (a bare controller outside the tree — no battle_log, no network, no /root/Main). It pins the
+## bare-controller safety; the D2 hop it once covered goes away in step 6b, the safety stays.
 func test_the_wreck_line_without_main_does_not_crash(timeout := 120000) -> void:
 	var lone: RadialMenuController = auto_free(RadialMenuController.new())
 	var transport := GameUnit.new()
@@ -769,10 +770,10 @@ func test_the_wreck_line_without_main_does_not_crash(timeout := 120000) -> void:
 		.is_equal(0)
 
 
-## The rule-quote half (radial_menu_controller._on_transport_cargo_spilled). It must NOT ride
-## _transport_log: that helper also serves the activation line, which exclusion 1 keeps local.
-## The owner-dependent ending travels unchanged (D3) — the sentence's subject is the named unit.
-func test_the_wreck_spill_line_travels(timeout := 120000) -> void:
+## The rule-quote half (radial_menu_controller._on_transport_cargo_spilled) STAYS local
+## (exclusion 1): both machines replay the spill through the wounds sync, so each side writes
+## its own copy — a broadcast copy arrives twice. The D3 wording ruling stands for that line.
+func test_the_wreck_spill_line_stays_local(timeout := 120000) -> void:
 	var transport := _register(1, "Warwagon", HUMAN_LINE)
 	var cargo := _register(1, "Grenzer", HUMAN_LINE + Vector3(0.0, 0.0, 0.12))
 	_main.radial_menu_controller._on_transport_cargo_spilled(transport, [cargo])
@@ -780,8 +781,8 @@ func test_the_wreck_spill_line_travels(timeout := 120000) -> void:
 		.override_failure_message("fixture check: the wreck line must be written locally:\n%s" % _log_text()) \
 		.is_equal(1)
 	assert_int(_sent_containing("units inside must take a dangerous terrain test")) \
-		.override_failure_message("the wreck line stayed local — the opponent sees Shaken cargo appear around a vanished transport with no rule named (sent: %s)" % str(_sent_lines())) \
-		.is_equal(1)
+		.override_failure_message("the wreck line went on the wire — both machines replay the spill, so a broadcast copy arrives twice on every screen (sent: %s)" % str(_sent_lines())) \
+		.is_equal(0)
 	await E2EBoot.settle(get_tree())
 
 
