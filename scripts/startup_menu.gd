@@ -338,7 +338,7 @@ func _on_spielschule_pressed() -> void:
 	progress.load_from_disk()
 
 	var dialog := AcceptDialog.new()
-	dialog.title = "Game School"
+	dialog.title = "FEUERTAUFE"
 	dialog.ok_button_text = "CLOSE"
 
 	var vbox := VBoxContainer.new()
@@ -422,8 +422,8 @@ func _maybe_show_spielschule_hint() -> void:
 	progress.save_to_disk()
 
 	var dialog := AcceptDialog.new()
-	dialog.title = "New: Game School"
-	dialog.dialog_text = "New here? GAME SCHOOL walks you through the game in short, replayable lessons.\n\nFind it in the menu whenever you like."
+	dialog.title = "New: FEUERTAUFE"
+	dialog.dialog_text = "New here? FEUERTAUFE walks you through the game in short, replayable lessons.\n\nFind it in the menu whenever you like."
 	dialog.ok_button_text = "GOT IT"
 	add_child(dialog)
 	dialog.popup_centered()

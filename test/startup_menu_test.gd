@@ -347,3 +347,26 @@ func test_tutorial_entry_targets_the_bundled_board() -> void:
 	# elsewhere this suite must speak.
 	assert_that(TutorialDirector.BOARD_PATH).is_equal("res://assets/tutorial/tutorial_board.nml")
 	assert_that(FileAccess.file_exists(TutorialDirector.BOARD_PATH)).is_true()
+
+
+func test_feuertaufe_dialog_carries_display_name() -> void:
+	# NML-964: the Game School dialog's working name ("Spielschule"/"Game School") must not
+	# leak to players — the display name is FEUERTAUFE. Does NOT call
+	# _maybe_show_spielschule_hint, which persists a hint-seen flag to user://.
+	_menu._on_spielschule_pressed()
+
+	var dialog: AcceptDialog = null
+	for child in _menu.get_children():
+		if child is AcceptDialog:
+			dialog = child as AcceptDialog
+			break
+	assert_that(dialog).is_not_null()
+
+	var vbox := dialog.get_child(0) as VBoxContainer
+	var intro := vbox.get_child(0) as Label
+
+	assert_str(dialog.title).is_equal("FEUERTAUFE")
+	assert_str(dialog.title).not_contains("Game School")
+	assert_str(intro.text).not_contains("Game School")
+
+	dialog.queue_free()
