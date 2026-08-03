@@ -1643,7 +1643,9 @@ func test_vanguard_pushes_forward_out_of_the_deploy_zone() -> void:
 
 ## Maintainer policy (2026-07-19): every applied special rule surfaces in the battle log. The
 ## controller's report carries `rule_notes`; main prints them. Teleport is the reference case —
-## active on the acting unit → exactly one note naming the band bonuses.
+## active on the acting unit → exactly one note naming the band bonuses. G5 (NML-963): a note
+## is {text, travels} — Teleport is an invisible band bonus, so it is flagged to travel to the
+## opponent's log.
 func test_rule_notes_carry_teleport_on_activation() -> void:
 	var human := _unit(1, [Vector3(0, 0, 0)])
 	var ai := _unit(2, [Vector3(0.5, 0, 0)])
@@ -1661,7 +1663,14 @@ func test_rule_notes_carry_teleport_on_activation() -> void:
 	assert_object(solo.activate_next_ai_unit()).is_equal(ai)
 	var notes: Array = solo.last_report.get("rule_notes", [])
 	assert_int(notes.size()).is_equal(1)
-	assert_str(str(notes[0])).contains("Teleport")
+	assert_bool(notes[0] is Dictionary) \
+		.override_failure_message("G5: a rule note carries its channel decision at creation — {text, travels}") \
+		.is_true()
+	var note: Dictionary = notes[0]
+	assert_str(str(note.get("text", ""))).contains("Teleport")
+	assert_bool(bool(note.get("travels", false))) \
+		.override_failure_message("Teleport is an invisible band bonus — the note must be flagged to travel") \
+		.is_true()
 	# A plain unit produces NO notes (no noise in the log).
 	human.is_activated = false
 	var plain := _unit(2, [Vector3(0.6, 0, 0)])

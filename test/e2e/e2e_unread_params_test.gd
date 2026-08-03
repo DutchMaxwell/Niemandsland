@@ -255,7 +255,8 @@ func test_a_boosted_blink_rolls_two_d3_and_says_so() -> void:
 	var notes: Array = report.get("rule_notes", [])
 	var joined := ""
 	for n in notes:
-		joined += str(n) + "\n"
+		# G5 (NML-963): notes are {text, travels}; read the text either way.
+		joined += (str((n as Dictionary).get("text", "")) if n is Dictionary else str(n)) + "\n"
 	assert_str(joined) \
 		.override_failure_message("the boosted blink must place within 2D3\", not D3\":\n%s" % joined) \
 		.contains("Rapid Blink Boost: rolled %d\" of 2D3\"" % (d1 + d2))
