@@ -6876,7 +6876,7 @@ func _on_transport_spill_dangerous(_transport: GameUnit, spilled: Array) -> void
 		if unit == null or unit.is_destroyed():
 			continue
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT,
+			_log_rule_event(BattleLog.Category.COMBAT,
 				"%s takes its Dangerous Terrain test after the wreck (GF v3.5.1 Transport / p.12)" % unit.get_name(), true)
 		await _run_ai_dangerous(unit, int((p as Array)[1]))
 
