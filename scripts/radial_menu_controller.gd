@@ -2681,11 +2681,14 @@ func _on_transport_cargo_spilled(transport: GameUnit, spilled: Array) -> void:
 			network_manager.broadcast_unit_marker(unit, "ShakenMarker", true)
 		var dice_duty := "NACHTMAHR rolls its test now (one die per model, Tough(X) rolls X — p.12)" \
 			if _is_ai_unit(unit) else "take a Dangerous Terrain test now (one die per model, Tough(X) rolls X, a 1 wounds — p.12)"
-		_transport_log(("%s is destroyed — GF v3.5.1 Transport: \"units inside must take a dangerous terrain test, " \
+		var msg := ("%s is destroyed — GF v3.5.1 Transport: \"units inside must take a dangerous terrain test, " \
 			+ "are Shaken, and must be placed fully within 6\" of the transport before it's removed\". " \
 			+ "%s: placed fully within 6\" of the wreck, is SHAKEN, %s") % [
 			str(transport.unit_properties.get("name", "transport")),
-			str(unit.unit_properties.get("name", "unit")), dice_duty])
+			str(unit.unit_properties.get("name", "unit")), dice_duty]
+		# NML-957 step 6: this line stays LOCAL — both machines replay the spill through the
+		# wounds sync, so a broadcast copy would arrive twice on every screen (exclusion 1).
+		_transport_log(msg)
 
 
 ## Whether a unit belongs to the solo AI — asked through the same /root/Main hop

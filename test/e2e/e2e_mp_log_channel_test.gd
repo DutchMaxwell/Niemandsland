@@ -408,3 +408,396 @@ func test_the_cancelled_placement_line_stays_local(timeout := 120000) -> void:
 		.override_failure_message("a mis-click correction aimed at the local hand was broadcast (sent: %s)" % str(_sent_lines())) \
 		.is_equal(0)
 	await E2EBoot.settle(get_tree())
+
+
+# === 9. NML-957 — the Reinforcement wave (#286), sacrifice side ================================
+#
+# The channel above exists, but the Reinforcement block never joined it: its lines still go through
+# battle_log.log_event, so on the opponent's screen a whole unit walks off the table in silence. The
+# inventory decided line by line which of them travel; the three cases here are the sacrifice side
+# (the refusal, the detached hero, the removal itself) and must be RED until the call sites are
+# re-routed.
+
+
+## The radial entry refuses with the reason. Nothing moves, so the line IS the whole event — an
+## opponent without it cannot tell a rule that declined from a rule that is broken.
+func test_the_reinforcement_refusal_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 3)
+	u.is_shaken = false
+	_main.solo_begin_reinforcement(u)
+	assert_int(_logged_containing("Reinforcement: not now")) \
+		.override_failure_message("fixture check: the entry must be refused locally:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("Reinforcement: not now")) \
+		.override_failure_message("the refusal stayed local — the opponent reads a declined rule as a missing one (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## The rule removes THE UNIT and returns a copy of THE UNIT, so a joined hero is detached and stays
+## standing. Without the line the opponent's hero is suddenly alone in the open for no stated reason.
+func test_the_hero_detach_line_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 3)
+	u.is_shaken = true
+	var hero := _register(1, "Warlord", Vector3(0.1, 0.0, 0.0), 1)
+	hero.unit_properties["special_rules"] = ["Hero", "Reinforcement"]
+	EquipmentDistributor.attach_hero_to_unit(hero, u)
+	_main.solo_begin_reinforcement(u)
+	assert_int(_logged_containing("Warlord is detached")) \
+		.override_failure_message("fixture check: the hero must actually be detached:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("Warlord is detached")) \
+		.override_failure_message("the detach line stayed local — the opponent's hero is left standing alone with no reason (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## "Removed from the table as destroyed" plus the round the copy is due. The models die through the
+## casualty seam, which the peer does see — but which of the rule's two triggers fired, and that a
+## fresh copy is coming in a named round, exists nowhere except this line.
+func test_the_sacrifice_line_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 3)
+	u.is_shaken = true
+	_main.solo_begin_reinforcement(u)
+	assert_int(_logged_containing("is removed from the table as destroyed")) \
+		.override_failure_message("fixture check: the unit must actually leave the table:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("is removed from the table as destroyed")) \
+		.override_failure_message("the announced arrival round never left this client — the opponent watches a unit die and learns nothing about the copy (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+# === 9. NML-957 — the Reinforcement wave, ARRIVAL side ========================================
+#
+# The sacrifice above is only half the rule: rounds later the copy is due, and _reinforcement_arrive_one
+# either delivers it or says why it cannot. Every one of those lines describes something the opponent
+# cannot derive from what they see — a unit appearing is state they get, but WHY it is short, or why
+# nothing appeared at all, exists only here. The three cases below need no fixture beyond the carrier;
+# the crowded-strip cases follow in their own step.
+
+
+## No source_data means nothing to copy from — a hand-built or legacy unit. The opponent sees the
+## promise silently expire; without the line they cannot tell a refused rule from a broken one.
+func test_the_missing_profile_line_travels(timeout := 120000) -> void:
+	var u := _register(1, "Legacy Rats", Vector3(0.2, 0.0, 0.1), 2)
+	u.unit_properties["reinforcement_due_round"] = 2
+	await _main._reinforcement_arrive_one(u, 2)
+	assert_int(_logged_containing("cannot return — its army profile is not available")) \
+		.override_failure_message("fixture check: this unit must have no source_data:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("cannot return — its army profile is not available")) \
+		.override_failure_message("the opponent's promised copy never arrives and no reason is given (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## The arrival itself, with the objective lock the rule imposes. The models appearing is state the peer
+## receives — that they may not seize this round is a rule the peer cannot see anywhere else.
+func test_the_arrival_line_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 3)
+	await _main._reinforcement_arrive_one(u, 3)
+	assert_int(_logged_containing("cannot seize or contest objectives this round")) \
+		.override_failure_message("fixture check: the copy must actually arrive:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("cannot seize or contest objectives this round")) \
+		.override_failure_message("the opponent sees models appear and never learns they are locked off the objectives (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## "This rule doesn't apply to the new copy" — the copy cannot sacrifice itself again. Nothing on the
+## table shows a rule missing from a card, so this is the only place the peer can learn it is spent.
+func test_the_copy_loses_the_rule_line_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 3)
+	await _main._reinforcement_arrive_one(u, 3)
+	assert_int(_logged_containing("does not have Reinforcement — the rule does not apply to the new copy")) \
+		.override_failure_message("fixture check: the copy must be built and stripped of the rule:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("does not have Reinforcement — the rule does not apply to the new copy")) \
+		.override_failure_message("the opponent cannot tell the returned unit is spent — they may expect a second sacrifice (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## The crowded strip from e2e_reinforcement_test.gd:391, made selectable: every legal spot in the 12"
+## band blanketed with standing enemies. Fully closed produces "no free spot"; leaving one small
+## window open produces the forfeit line instead. That test accepts either outcome — a red proof has
+## to pick one, so the window is the switch.
+func _blanket_edge_strip(window: Rect2 = Rect2()) -> void:
+	var trect: Rect2 = _main._table_rect()
+	var margin: float = SoloController.REINFORCEMENT_EDGE_IN * OPRArmyManager.INCHES_TO_METERS
+	var step: float = 0.9 * OPRArmyManager.INCHES_TO_METERS
+	var wall: Array = []
+	var x: float = trect.position.x
+	while x <= trect.end.x:
+		var z: float = trect.position.y
+		while z <= trect.end.y:
+			if SoloController.reinforcement_spot_in_strip(Vector3(x, 0.0, z), 0.016, trect, margin) \
+					and not (window.size != Vector2.ZERO and window.has_point(Vector2(x, z))):
+				wall.append(Vector3(x, 0.0, z))
+			z += step
+		x += step
+	var blockers := E2EBoot.make_unit(_main, 2, "Wall", wall)
+	_main.opr_army_manager.game_units[blockers.unit_id] = blockers
+	for m in blockers.models:
+		(m as ModelInstance).wounds_max = 1
+		(m as ModelInstance).wounds_current = 1
+
+
+## Nowhere legal to stand. The promise is KEPT for a later round rather than swallowed — but on the
+## opponent's screen the due round simply passes with nothing happening and no reason given.
+func test_the_no_free_spot_line_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 3)
+	_blanket_edge_strip()
+	await _main._reinforcement_arrive_one(u, 3)
+	assert_int(_logged_containing("no free spot within 12\"")) \
+		.override_failure_message("fixture check: the strip must be fully blocked:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("no free spot within 12\"")) \
+		.override_failure_message("the due round passed silently on the opponent's screen (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## Place what fits, forfeit the rest — the maintainer's Reanimation pattern. A short unit that says
+## nothing looks to the opponent exactly like a unit that lost models to shooting they missed.
+func test_the_forfeit_line_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 4)
+	var inch: float = OPRArmyManager.INCHES_TO_METERS
+	var trect: Rect2 = _main._table_rect()
+	# A slot, not a square. Two 25 mm bases need ~1.3" between centres and the same to the wall, so a
+	# 1.6" square holds nothing at all (measured: it produced "no free spot"). 4.0" × 2.6" leaves one
+	# row with room for one or two models — never the whole four.
+	_blanket_edge_strip(Rect2(trect.position, Vector2(4.0 * inch, 2.6 * inch)))
+	await _main._reinforcement_arrive_one(u, 3)
+	assert_int(_logged_containing("forfeited")) \
+		.override_failure_message("fixture check: the window must fit some but not all of the unit:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("forfeited")) \
+		.override_failure_message("models were forfeited silently as far as the opponent is concerned (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## The factory's last remaining null path at this point in the arrival (opr_army_manager.gd:1370-1399).
+## Nothing appears and nothing explains it — the one case where the opponent cannot even see that the
+## rule was attempted.
+func test_the_rebuild_failure_line_travels(timeout := 120000) -> void:
+	var u := _carrier("Clan Rats", 2)
+	var om: Node = _main.opr_army_manager.object_manager
+	_main.opr_army_manager.object_manager = null
+	await _main._reinforcement_arrive_one(u, 3)
+	_main.opr_army_manager.object_manager = om
+	assert_int(_logged_containing("could not be rebuilt")) \
+		.override_failure_message("fixture check: the factory must fail here:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("could not be rebuilt")) \
+		.override_failure_message("the copy failed to build and the opponent is told nothing at all (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+# === 10. NML-957 — the Growth Markers wave (#285) ==============================================
+#
+# Markers accrue silently on the opponent's screen: the carrier's Defense (or AP, or hits) climbs
+# round by round with nothing in their log to answer for it. Decision D1 settled the edge case —
+# the ORDINARY tick travels as well as the two refusals, because an opponent who reads only the
+# exceptions never sees the rule that makes them exceptions.
+#
+# Reachability needs no cast and no full round: _solo_growth_round_start() walks the live units
+# itself and _solo_growth_on_kill(u) takes its carrier directly. The cap case reaches the cap by
+# calling round-start repeatedly rather than by writing the counter key, so the test never has to
+# guess how "Defensive Growth" spells its unit_properties key.
+
+
+## A growth carrier. faction_folder is the part that makes the registry resolve the rule: without it
+## the lookup falls back to the system's common section, which carries no Growth Markers entry at
+## all, and the loop body under test never runs. The rule names are the shipped ones from
+## assets/solo/rules_mechanics_gf.json — an invented name resolves to nothing and passes silently.
+func _growth_unit(unit_name: String, faction: String, rule: String) -> GameUnit:
+	var u := _register(1, unit_name, HUMAN_LINE)
+	u.unit_properties["faction_folder"] = faction
+	u.unit_properties["special_rules"] = [rule]
+	assert_array(RulesRegistry.unit_rules_of_primitive(u, "Growth Markers")) \
+		.override_failure_message("fixture check: %s/%s does not resolve to Growth Markers" % [faction, rule]) \
+		.is_not_empty()
+	return u
+
+
+## D1 — the ordinary tick. It is exactly as unobservable as the two refusals below: the marker is a
+## number in unit_properties, and the Defense it buys only shows up inside someone else's dice roll.
+func test_the_growth_marker_tick_travels(timeout := 120000) -> void:
+	_growth_unit("Inquisitors", "human_inquisition", "Defensive Growth")
+	_main._solo_growth_round_start()
+	assert_int(_logged_containing("gains a marker (1/4)")) \
+		.override_failure_message("fixture check: the marker must actually be placed:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("gains a marker (1/4)")) \
+		.override_failure_message("the tick stayed local — the opponent watches Defense climb with no rule behind it (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## v3.5.3: Shaken BLOCKS this round's marker and keeps the earned ones. A refusal, and the only
+## record that the round was skipped on purpose rather than forgotten.
+func test_the_growth_shaken_block_travels(timeout := 120000) -> void:
+	var u := _growth_unit("Inquisitors", "human_inquisition", "Defensive Growth")
+	u.is_shaken = true
+	_main._solo_growth_round_start()
+	assert_int(_logged_containing("no marker this round (keeps 0/4)")) \
+		.override_failure_message("fixture check: Shaken must block the tick:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("no marker this round (keeps 0/4)")) \
+		.override_failure_message("a blocked tick stayed local — indistinguishable from a rule that stopped working (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## At max_markers the rule stops giving. Without the line the opponent sees the climb simply end.
+func test_the_growth_cap_line_travels(timeout := 120000) -> void:
+	_growth_unit("Inquisitors", "human_inquisition", "Defensive Growth")
+	for _i in 5:
+		_main._solo_growth_round_start()
+	assert_int(_logged_containing("is at the cap — no further marker (4/4)")) \
+		.override_failure_message("fixture check: five round-starts must run one past the cap of 4:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("is at the cap — no further marker (4/4)")) \
+		.override_failure_message("the cap refusal stayed local — the opponent sees the climb stop for no stated reason (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## D1 again, on the other accrual path: a marker placed for destroying an enemy unit. The kill is
+## visible to the opponent; that it also bought a marker is not.
+func test_the_growth_kill_marker_travels(timeout := 120000) -> void:
+	var u := _growth_unit("Guild Miners", "dwarf_guilds", "Precision Frenzy")
+	_main._solo_growth_on_kill(u)
+	assert_int(_logged_containing("gains a marker for the kill (1/2)")) \
+		.override_failure_message("fixture check: the kill must place a marker:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("gains a marker for the kill (1/2)")) \
+		.override_failure_message("the kill marker stayed local — the opponent sees the kill but not what it earned (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+# === 11. NML-957 — the two Shaken spell-support lines (#292) ===================================
+#
+# Both say the same thing in different words: a unit that WOULD have helped a cast is sitting this
+# one out because it is Shaken. Without them the opponent sees a spell come out smaller than its
+# own arithmetic predicts and has nothing to check it against — the shape of a bug, not of a rule.
+#
+# The cast half reuses the fixture of e2e_shaken_conduit_test.gd (a caster plus a conduit 6" away,
+# driven through the REAL _solo_resolve_one_cast in batch mode) — but on the SHIPPED map rather
+# than an injected one: that suite injects requires_not_shaken: false to pin the opposite branch,
+# and here the real human_inquisition entry already carries requires_not_shaken: true.
+
+
+## A Shaken human-slot unit carrying one registry-resolved rule. game_system is stated rather than
+## left to default, because the mechanics map is per system and a silent default is the kind of
+## thing that makes a fixture pass for the wrong reason.
+func _shaken_rule_unit(unit_name: String, rule: String, primitive: String, at: Vector3) -> GameUnit:
+	var u := _register(1, unit_name, at)
+	u.unit_properties["game_system"] = "gf"
+	u.unit_properties["faction_folder"] = "human_inquisition"
+	u.unit_properties["special_rules"] = [rule]
+	u.is_shaken = true
+	assert_array(RulesRegistry.unit_rules_of_primitive(u, primitive)) \
+		.override_failure_message("fixture check: human_inquisition/%s does not resolve to %s" % [rule, primitive]) \
+		.is_not_empty()
+	return u
+
+
+## The token battery that refuses to lend. Its stock is invisible to the opponent, so a boost that
+## came out short looks like arithmetic that does not add up.
+func test_the_shaken_lender_line_travels(timeout := 120000) -> void:
+	var lender := _shaken_rule_unit("Token Battery", "Spell Accumulator", "Spell Accumulator", HUMAN_LINE)
+	lender.casts_current = 1
+	assert_array(_main.solo_controller.shaken_lenders(1)) \
+		.override_failure_message("fixture check: the lender must be refused by the pool (non-caster, casts_current > 0, Shaken)") \
+		.is_not_empty()
+	_main._solo_log_shaken_lenders(1)
+	assert_int(_logged_containing("its tokens do not feed friendly casters")) \
+		.override_failure_message("fixture check: the refusal must be written locally:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("its tokens do not feed friendly casters")) \
+		.override_failure_message("the refusal stayed local — the opponent's boost is short with nothing to explain it (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## The conduit that does not lend its +1. Fires inside the real cast, so the line is produced by the
+## same code path a game produces it from — not by calling the logger directly.
+func test_the_shaken_conduit_line_travels(timeout := 120000) -> void:
+	var caster := _register(1, "Hierarch", HUMAN_LINE)
+	var conduit := _shaken_rule_unit("Conduit", "Spell Conduit", "Spell Conduit",
+		HUMAN_LINE + Vector3(6.0 * OPRArmyManager.INCHES_TO_METERS, 0.0, 0.0))
+	# A self-targeted, deliberately inert buff: the conduit sweep runs before the die roll, so the
+	# spell's own effect is irrelevant to what is asserted here.
+	await _main._solo_resolve_one_cast({"caster": caster, "caster_unit": caster, "name": "Test Buff",
+		"spell": {"effect": {"kind": "buff"}}, "targets": [caster], "boost": 0, "interference": 0})
+	assert_int(_logged_containing("%s is Shaken — its conduit does not help" % conduit.get_name())) \
+		.override_failure_message("fixture check: the conduit must be skipped for being Shaken:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("its conduit does not help")) \
+		.override_failure_message("the skipped conduit stayed local — the opponent's cast is missing a +1 for no stated reason (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+# === 12. NML-957 — the two transport lines (#292) ==============================================
+#
+# The wreck. OPRArmyManager._spill_destroyed_transport carries the STATE (Shaken + the 6"
+# placement, both already broadcast as markers). The step-6 duplication audit showed the spill is
+# REPLAYED on the peer (wounds sync → set_loose_model_dead → _spill_destroyed_transport), so the
+# wreck line is generated on BOTH machines by state replay — a broadcast copy would arrive twice
+# (exclusion 1). Only the dice line travels: its host guard keeps it to one machine.
+
+
+## Guard, declared before the red cases: the wreck handler must survive Main being unreachable
+## (a bare controller outside the tree — no battle_log, no network, no /root/Main). It pins the
+## bare-controller safety; the D2 hop it once covered goes away in step 6b, the safety stays.
+func test_the_wreck_line_without_main_does_not_crash(timeout := 120000) -> void:
+	var lone: RadialMenuController = auto_free(RadialMenuController.new())
+	var transport := GameUnit.new()
+	transport.unit_properties["name"] = "Warwagon"
+	var cargo := GameUnit.new()
+	cargo.unit_properties["name"] = "Grenzer"
+	lone._on_transport_cargo_spilled(transport, [cargo])
+	assert_int(_sent_containing("units inside must take a dangerous terrain test")) \
+		.override_failure_message("a controller with no Main put a line on the wire — the hop must fail silent") \
+		.is_equal(0)
+
+
+## The rule-quote half (radial_menu_controller._on_transport_cargo_spilled) STAYS local
+## (exclusion 1): both machines replay the spill through the wounds sync, so each side writes
+## its own copy — a broadcast copy arrives twice. The D3 wording ruling stands for that line.
+func test_the_wreck_spill_line_stays_local(timeout := 120000) -> void:
+	var transport := _register(1, "Warwagon", HUMAN_LINE)
+	var cargo := _register(1, "Grenzer", HUMAN_LINE + Vector3(0.0, 0.0, 0.12))
+	_main.radial_menu_controller._on_transport_cargo_spilled(transport, [cargo])
+	assert_int(_logged_containing("units inside must take a dangerous terrain test")) \
+		.override_failure_message("fixture check: the wreck line must be written locally:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("units inside must take a dangerous terrain test")) \
+		.override_failure_message("the wreck line went on the wire — both machines replay the spill, so a broadcast copy arrives twice on every screen (sent: %s)" % str(_sent_lines())) \
+		.is_equal(0)
+	await E2EBoot.settle(get_tree())
+
+
+## The dice half (main._on_transport_spill_dangerous): the host announces NACHTMAHR's dangerous
+## terrain test before rolling it. Only the host may roll (the guard at the top drops guests), so
+## the test states the host role instead of inheriting the FakeNet default.
+func test_the_wreck_dangerous_test_line_travels(timeout := 120000) -> void:
+	_fake.is_host = true
+	var transport := _register(2, "Rumbler", AI_LINE)
+	var cargo := _register(2, "Nachtzehrer", AI_LINE + Vector3(0.0, 0.0, 0.12))
+	await _main._on_transport_spill_dangerous(transport, [cargo])
+	assert_int(_logged_containing("takes its Dangerous Terrain test after the wreck")) \
+		.override_failure_message("fixture check: the dice line must be written locally:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("takes its Dangerous Terrain test after the wreck")) \
+		.override_failure_message("the dice line stayed local — the opponent sees NACHTMAHR's cargo lose wounds to dice that were never announced (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
