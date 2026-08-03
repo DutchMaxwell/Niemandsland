@@ -2686,11 +2686,9 @@ func _on_transport_cargo_spilled(transport: GameUnit, spilled: Array) -> void:
 			+ "%s: placed fully within 6\" of the wreck, is SHAKEN, %s") % [
 			str(transport.unit_properties.get("name", "transport")),
 			str(unit.unit_properties.get("name", "unit")), dice_duty]
-		var main_node := get_node_or_null("/root/Main")
-		if main_node != null and main_node.has_method("_log_rule_event"):
-			main_node.call("_log_rule_event", BattleLog.Category.MOVEMENT, msg, false)
-		else:
-			_transport_log(msg)
+		# NML-957 step 6: this line stays LOCAL — both machines replay the spill through the
+		# wounds sync, so a broadcast copy would arrive twice on every screen (exclusion 1).
+		_transport_log(msg)
 
 
 ## Whether a unit belongs to the solo AI — asked through the same /root/Main hop
