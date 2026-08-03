@@ -744,3 +744,59 @@ func test_the_shaken_conduit_line_travels(timeout := 120000) -> void:
 		.override_failure_message("the skipped conduit stayed local — the opponent's cast is missing a +1 for no stated reason (sent: %s)" % str(_sent_lines())) \
 		.is_equal(1)
 	await E2EBoot.settle(get_tree())
+
+
+# === 12. NML-957 — the two transport lines (#292) ==============================================
+#
+# The wreck. OPRArmyManager._spill_destroyed_transport carries the STATE (Shaken + the 6"
+# placement, both already broadcast as markers) — but the two LINES that name the rule stayed
+# local. The opponent watches Shaken cargo appear around a vanished transport and dice roll for
+# it, with the rule that did all of it named on one screen only.
+
+
+## Guard for the D2 hop, declared before the red cases: the wreck handler must survive Main being
+## unreachable (a bare controller outside the tree — no battle_log, no network, no /root/Main).
+## Green by design: it pins the get_node_or_null pattern, it does not prove a routed line.
+func test_the_wreck_line_without_main_does_not_crash(timeout := 120000) -> void:
+	var lone: RadialMenuController = auto_free(RadialMenuController.new())
+	var transport := GameUnit.new()
+	transport.unit_properties["name"] = "Warwagon"
+	var cargo := GameUnit.new()
+	cargo.unit_properties["name"] = "Grenzer"
+	lone._on_transport_cargo_spilled(transport, [cargo])
+	assert_int(_sent_containing("units inside must take a dangerous terrain test")) \
+		.override_failure_message("a controller with no Main put a line on the wire — the hop must fail silent") \
+		.is_equal(0)
+
+
+## The rule-quote half (radial_menu_controller._on_transport_cargo_spilled). It must NOT ride
+## _transport_log: that helper also serves the activation line, which exclusion 1 keeps local.
+## The owner-dependent ending travels unchanged (D3) — the sentence's subject is the named unit.
+func test_the_wreck_spill_line_travels(timeout := 120000) -> void:
+	var transport := _register(1, "Warwagon", HUMAN_LINE)
+	var cargo := _register(1, "Grenzer", HUMAN_LINE + Vector3(0.0, 0.0, 0.12))
+	_main.radial_menu_controller._on_transport_cargo_spilled(transport, [cargo])
+	assert_int(_logged_containing("units inside must take a dangerous terrain test")) \
+		.override_failure_message("fixture check: the wreck line must be written locally:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("units inside must take a dangerous terrain test")) \
+		.override_failure_message("the wreck line stayed local — the opponent sees Shaken cargo appear around a vanished transport with no rule named (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## The dice half (main._on_transport_spill_dangerous): the host announces NACHTMAHR's dangerous
+## terrain test before rolling it. Only the host may roll (the guard at the top drops guests), so
+## the test states the host role instead of inheriting the FakeNet default.
+func test_the_wreck_dangerous_test_line_travels(timeout := 120000) -> void:
+	_fake.is_host = true
+	var transport := _register(2, "Rumbler", AI_LINE)
+	var cargo := _register(2, "Nachtzehrer", AI_LINE + Vector3(0.0, 0.0, 0.12))
+	await _main._on_transport_spill_dangerous(transport, [cargo])
+	assert_int(_logged_containing("takes its Dangerous Terrain test after the wreck")) \
+		.override_failure_message("fixture check: the dice line must be written locally:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("takes its Dangerous Terrain test after the wreck")) \
+		.override_failure_message("the dice line stayed local — the opponent sees NACHTMAHR's cargo lose wounds to dice that were never announced (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
