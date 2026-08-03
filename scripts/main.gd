@@ -956,7 +956,7 @@ func _solo_activate_one_ai() -> GameUnit:
 			radial_menu_controller.card_toggle_shaken(unit)
 			_solo_mirror_shaken(unit)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL, "%s spends its activation idle — recovers from Shaken" % unit.get_name(), true)
+			_log_rule_event(BattleLog.Category.GENERAL, "%s spends its activation idle — recovers from Shaken" % unit.get_name(), true)
 		return unit
 	var target: GameUnit = report.get("target")
 	if battle_log != null and bool(report.get("aircraft", false)):
@@ -1094,7 +1094,7 @@ func _solo_ensure_playing_phase() -> void:
 		_solo_deploy_fsm["phase"] = "done"
 		_solo_deploy_ui_hide()
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"The battle begins — NACHTMAHR deploys its remaining units", true)
 	if opr_army_manager != null and opr_army_manager.has_method("start_game") \
 			and "game_phase" in opr_army_manager and int(opr_army_manager.game_phase) == 0:
@@ -1111,7 +1111,7 @@ func _solo_run_redeployment() -> void:
 	for r in solo_controller.redeployment_pass():
 		var rd := r as Dictionary
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.MOVEMENT,
+			_log_rule_event(BattleLog.Category.MOVEMENT,
 				"Re-Deployment: %s is removed and deployed again (%.1f\" nearer a marker) — GF v3.5.1" % [
 				(rd["unit"] as GameUnit).get_name(), float(rd["gain_in"])], true)
 	if battle_log != null and opr_army_manager != null:
@@ -1720,7 +1720,7 @@ func _solo_after_activation() -> void:
 	if sw != null:
 		var sw_rule := solo_controller.spend_second_wind(sw)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"%s: %s activates a SECOND time this round (once per game — fatigue cleared)" % [sw_rule, sw.get_name()], true)
 		await _solo_pump()
 		return
@@ -2076,11 +2076,11 @@ func _solo_show_game_summary() -> void:
 	else:
 		verdict = win_a if human_held > ai_held else (win_b if ai_held > human_held else "Draw")
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL, "=== GAME OVER — %d rounds played ===" % SOLO_GAME_ROUNDS, true)
+		_log_rule_event(BattleLog.Category.GENERAL, "=== GAME OVER — %d rounds played ===" % SOLO_GAME_ROUNDS, true)
 		if not objectives.is_empty():
-			battle_log.log_event(BattleLog.Category.GENERAL, "Objectives — %s: %d · %s: %d · neutral: %d" % [
+			_log_rule_event(BattleLog.Category.GENERAL, "Objectives — %s: %d · %s: %d · neutral: %d" % [
 				side_a_label, human_held, side_b_label, ai_held, neutral], true)
-		battle_log.log_event(BattleLog.Category.GENERAL, verdict, true)
+		_log_rule_event(BattleLog.Category.GENERAL, verdict, true)
 	var dlg := AcceptDialog.new()
 	dlg.title = "Game over"
 	var obj_block: String = ("Objectives held:\n  %s: %d\n  %s: %d\n  Neutral: %d\n\n" % [
@@ -2283,7 +2283,7 @@ func _on_solo_deploy_pressed() -> void:
 		"blocked_flying": blocked_flying, "seed": seed_value, "w": w, "d": d, "depth": depth,
 		"human_placed": {}, "outcome": []}
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"Deployment roll-off: you %d — NACHTMAHR %d. The winner picks a table edge and deploys first (GF v3.5.1) [seed %d]" % [
 			you_roll, ai_roll, seed_value], false)
 	if ai_roll > you_roll:
@@ -2292,7 +2292,7 @@ func _on_solo_deploy_pressed() -> void:
 		# NACHTMAHR won: it leaves the player his own drawn zone and takes the opposite one.
 		var ai_neg_z := not _solo_human_zone_is_neg_z()
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"NACHTMAHR wins %d:%d — it takes the far edge and deploys first" % [ai_roll, you_roll], true)
 		await _solo_deploy_begin_side(ai_neg_z)
 	else:
@@ -2473,7 +2473,7 @@ func _solo_deploy_pick_side(swap: bool) -> void:
 	if terrain_overlay != null and terrain_overlay.has_method("set_deployment_colors_flipped"):
 		terrain_overlay.set_deployment_colors_flipped(swap)
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"You take the %s zone — NACHTMAHR deploys in the other one" % ("far" if swap else "near"), true)
 	await _solo_deploy_begin_side(swap)
 
@@ -2498,7 +2498,7 @@ func _solo_deploy_begin_side(ai_neg_z: bool) -> void:
 		var reserve_names: PackedStringArray = []
 		for u in solo_controller.ambush_reserve:
 			reserve_names.append((u as GameUnit).get_name())
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"AI Ambush reserve (stays on the tray until it arrives): %s" % ", ".join(reserve_names), true)
 	var set_aside: Array = solo_controller.set_aside_human_ambush()
 	if not set_aside.is_empty() and battle_log != null:
@@ -2662,12 +2662,12 @@ func _solo_deploy_phase_advance() -> void:
 		_solo_deploy_fsm["phase"] = "done"
 		_solo_deploy_ui_hide()
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL, "Deployment complete — the battle begins", true)
+			_log_rule_event(BattleLog.Category.GENERAL, "Deployment complete — the battle begins", true)
 		_solo_ensure_playing_phase()
 		# GF v3.5.1 p.7: "the player that won the deployment roll-off takes the first turn."
 		if bool(_solo_deploy_fsm.get("winner_is_ai", false)):
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.GENERAL,
+				_log_rule_event(BattleLog.Category.GENERAL,
 					"NACHTMAHR won the roll-off — it takes the first turn", true)
 			_solo_pending_replies = maxi(_solo_pending_replies, 1)
 			_solo_pump()
@@ -3122,7 +3122,7 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 			targets.append(tu)
 	if targets.is_empty():
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT,
+			_log_rule_event(BattleLog.Category.COMBAT,
 				"%s's %s fizzles — no target remains" % [caster.get_name(), spell_name], true)
 		# Stage seam: the fizzle exits early and still closes its card.
 		await _solo_stage_phase("Cast")
@@ -3346,7 +3346,7 @@ func _solo_announce_spell_effect(caster: GameUnit, spell_name: String, effect: D
 	if effect_text.is_empty():
 		var grant := str(effect.get("grants_rule", ""))
 		effect_text = ("grants %s (once)" % grant) if not grant.is_empty() else "see the faction's spell list"
-	battle_log.log_event(BattleLog.Category.COMBAT, "%s takes effect on %s: %s" % [
+	_log_rule_event(BattleLog.Category.COMBAT, "%s takes effect on %s: %s" % [
 		spell_name, ", ".join(names), effect_text], true)
 	# When the spell has a derived library token, _solo_place_spell_tokens applies it right after
 	# this announce — only spells WITHOUT a token still need the manual-application note.
@@ -3462,7 +3462,7 @@ func _solo_place_spell_tokens(spell_name: String, targets: Array, effect: Dictio
 			var lasts_once: bool = bool(effect.get("once", false))
 			_solo_spell_tokens_active.append({"unit": tu, "token": spell_name, "once": lasts_once})
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.GENERAL,
+				_log_rule_event(BattleLog.Category.GENERAL,
 					"\"%s\" token placed on %s (%s)" % [spell_name, tu.get_name(),
 					"persists until it applies" if lasts_once else "expires at the end of the round"], true)
 		_solo_record_spell_mod(tu, spell_name, effect)
@@ -3701,7 +3701,7 @@ func _solo_spend_once_mods(uu: GameUnit, roles: Array, melee: bool) -> void:
 			if (e as Dictionary).get("unit") == uu and str((e as Dictionary).get("token")) == spell:
 				_solo_spell_tokens_active.erase(e)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT,
+			_log_rule_event(BattleLog.Category.COMBAT,
 				"\"%s\" on %s is consumed (applies once)" % [spell, uu.get_name()], true)
 	if records.is_empty():
 		_solo_spell_mods.erase(key)
@@ -3778,7 +3778,7 @@ func _solo_expire_spell_tokens() -> void:
 			# Release-pass find: a buff that never fired evaporated in silence — the player
 			# could not tell whether Shred ever applied. Name the unused expiry.
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.GENERAL,
+				_log_rule_event(BattleLog.Category.GENERAL,
 					"\"%s\" on %s expires with the round — it was never consumed" % [
 					str((e as Dictionary).get("token")), tu.get_name()], true)
 	_solo_spell_tokens_active = carried
@@ -3817,7 +3817,7 @@ func _solo_prompt_interference(caster: GameUnit, caster_unit: GameUnit, spell_na
 			network_manager.broadcast_unit_casts(payer)
 		payers.append("%s ×%d" % [payer.get_name(), take])
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT,
+		_log_rule_event(BattleLog.Category.COMBAT,
 			"Interference: %s spend%s %d token%s — the cast roll worsens to %d+" % [
 			", ".join(payers), ("s" if payers.size() == 1 else ""), spent, ("" if spent == 1 else "s"),
 			AiSpell.cast_target(boost, spent, base_target)], true)
@@ -4439,7 +4439,7 @@ func _solo_try_reanimation(unit: GameUnit) -> void:
 		# The Shaken activation stays idle (GF v3.5.1 p.10) — stamped so no later door retries it.
 		unit.unit_properties["reanimated_round"] = opr_army_manager.current_round
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL,
+			_log_rule_event(BattleLog.Category.GENERAL,
 				"Reanimation: %s does not reanimate — Shaken (activation stays idle)" % unit.get_name(),
 				_solo_is_ai_unit(unit))
 		return
@@ -4496,7 +4496,7 @@ func _solo_resolve_reanimation(unit: GameUnit, pool: int, target: int, successes
 			unit.get_name(), pool, target, successes, ("" if successes == 1 else "es"),
 			models_back, wounds_back, int(result.get("wounds_now", 0)), int(result.get("wounds_max", 0))], ai)
 	if int(result.get("unplaceable", 0)) > 0:
-		battle_log.log_event(BattleLog.Category.COMBAT,
+		_log_rule_event(BattleLog.Category.COMBAT,
 			"Reanimation: %d successes but only %d models placeable — coherency to non-restored models missing" % [
 				successes, models_back], ai)
 	if models_back > 0 or wounds_back > 0:
@@ -4516,7 +4516,7 @@ func _solo_reanimation_aura_end(unit: GameUnit) -> void:
 	if carrier == null or carrier.get_alive_count() > 0:
 		return
 	unit.unit_properties["reanimation_aura_ended"] = true
-	battle_log.log_event(BattleLog.Category.COMBAT,
+	_log_rule_event(BattleLog.Category.COMBAT,
 		"Reanimation Aura ends — %s has fallen; %s loses Reanimation" % [carrier.get_name(), unit.get_name()],
 		_solo_is_ai_unit(unit))
 
@@ -5611,7 +5611,7 @@ func _solo_vengeance_on_destroyed(dead: GameUnit, destroyer: GameUnit) -> void:
 	var host := _solo_joined_chain(destroyer)[0] as GameUnit
 	host.unit_properties["vengeance_markers"] = int(host.unit_properties.get("vengeance_markers", 0)) + markers
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT,
+		_log_rule_event(BattleLog.Category.COMBAT,
 			"%s: %s falls — %d Vengeance marker%s on %s (its enemies get +1 to hit per marker)" % [
 			rule_name, dead.get_name(), markers, ("" if markers == 1 else "s"), destroyer.get_name()], true)
 
@@ -5932,7 +5932,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 	# melee-weapon profile in reach). Surface it on the FULL strike so both combatants' resolution is shown;
 	# the Counter-only / non-Counter sub-phases legitimately roll nothing when the unit lacks those weapons.
 	if not struck_any and filter == SoloStrike.ALL and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT,
+		_log_rule_event(BattleLog.Category.COMBAT,
 			"%s has no melee weapons in reach — no strikes (GF/AoF v3.5.1 p.9)" % striker.get_name(),
 			_solo_is_ai_unit(striker))
 	if struck_any:
@@ -6007,7 +6007,7 @@ func _solo_confirm_strike_back(defender: GameUnit, charger: GameUnit, counter_fi
 	dlg.queue_free()
 	# B3: the choice ALWAYS gets its log line — a silent "Hold" read like a swallowed input.
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT,
+		_log_rule_event(BattleLog.Category.COMBAT,
 			("%s strikes back" % defender.get_name()) if strike else
 			("%s holds — no strike back" % defender.get_name()), false)
 	return strike
@@ -6039,7 +6039,7 @@ func _solo_charge_impact(charger: GameUnit, defender: GameUnit, human_defends: b
 	var heavy_dice: int = hx * models - heavy_cut
 	var dice: int = AiCombatMath.impact_total_dice(x, models, counter_models - heavy_cut)
 	if counter_models > 0 and battle_log != null and (x + hx) * models > 0:
-		battle_log.log_event(BattleLog.Category.COMBAT, "Counter: %s loses %d Impact roll%s" % [
+		_log_rule_event(BattleLog.Category.COMBAT, "Counter: %s loses %d Impact roll%s" % [
 			charger.get_name(), counter_models, ("" if counter_models == 1 else "s")], true)
 	var impact_defense: int = AiCombatMath.guarded_defense(_solo_defense_vs(defender, AiCombatMath.HIT_SOURCE_MELEE),
 		not _solo_over9_defense_rule(defender).is_empty() and charge_from_in > AiCombatMath.LONG_RANGE_IN)
@@ -7735,7 +7735,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var gap_in: float = solo_controller.nearest_melee_gap_in(unit, target)
 	if gap_in > MELEE_ENGAGE_IN:
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s's charge falls short (%.1f\")" % [unit.get_name(), gap_in], true)
+			_log_rule_event(BattleLog.Category.COMBAT, "%s's charge falls short (%.1f\")" % [unit.get_name(), gap_in], true)
 		# Stage seam: an early exit still closes its phase boundary — the falls-short line gets
 		# its own card instead of bleeding into the next activation.
 		await _solo_stage_phase("Charge")
@@ -7745,7 +7745,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	var snapped_ai: float = solo_controller.snap_charge(unit, target, solo_controller.last_move_remaining_in())
 	if snapped_ai < 0.0:
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT,
+			_log_rule_event(BattleLog.Category.COMBAT,
 				"%s's charge falls short (%.1f\" gap, move budget spent) — GF v3.5.1 p.8 'as close as possible'" % [unit.get_name(), -snapped_ai], true)
 		await _solo_stage_phase("Charge")
 		_solo_stage_end()
@@ -7822,7 +7822,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 					if _solo_attack_groups(target, 0.0, true, unit).is_empty():
 						strike_back = 0
 						if battle_log != null:
-							battle_log.log_event(BattleLog.Category.COMBAT,
+							_log_rule_event(BattleLog.Category.COMBAT,
 								"%s has no melee weapons — cannot strike back (GF v3.5.1)" % target.get_name(), defender_is_ai)
 					else:
 						strike_back = 1 if defender_is_ai or await _solo_confirm_strike_back(target, unit, false) else 0
@@ -8038,7 +8038,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 		# stays Shaken (field-test finding 8: a Shaken unit was rolling — and could pass — a repeat test).
 		result = AiCombatMath.morale_result_shaken(below_half and melee)
 		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT,
+			_log_rule_event(BattleLog.Category.COMBAT,
 				"%s is already Shaken — automatically fails morale (GF/AoF v3.5.1 p.10)" % unit.get_name(), true)
 	else:
 		# Banner (wave 5, system-scoped params via RulesRegistry: +1 to morale test rolls; the GFF/AoFS
@@ -8365,7 +8365,7 @@ func _run_human_cast(unit: GameUnit, member: GameUnit, entry: Dictionary, picked
 				for i in range(int(dd["tokens"])):
 					payer.spend_caster_points(1)
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT,
+				_log_rule_event(BattleLog.Category.COMBAT,
 					"NACHTMAHR interferes with %d token%s — your cast roll worsens to %d+" % [
 					interference, ("" if interference == 1 else "s"),
 					AiSpell.cast_target(boost, interference, AiSpell.CAST_BASE_TARGET)], true)
@@ -9112,7 +9112,7 @@ func _solo_place_spot_marker(spotter: GameUnit, target: GameUnit) -> void:
 		if n == 1:
 			radial_menu_controller.apply_library_token(target, "Spotted")
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT,
+		_log_rule_event(BattleLog.Category.COMBAT,
 			"Precision Spotter: %s marks %s (%d marker%s — attackers may remove markers for +1 to hit each)" % [
 			spotter.get_name(), target.get_name(), n, ("" if n == 1 else "s")], _solo_is_ai_unit(spotter))
 	_solo_rule_float(target, "Spotted!", Color(1.0, 0.6, 0.9))
@@ -9135,7 +9135,7 @@ func _solo_consume_spot_markers(target: GameUnit, count: int = -1) -> int:
 		# carries nothing at all — the remaining count is the only thing that tells the peer.
 		_sync_unit_property(target, "spot_markers", sm - take)
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT,
+		_log_rule_event(BattleLog.Category.COMBAT,
 			"Precision Spotter: %d marker%s removed — +%d to hit this volley%s" % [
 			take, ("" if take == 1 else "s"), take,
 			(" (%d remain%s)" % [sm - take, ("s" if sm - take == 1 else "")]) if take < sm else ""], true)
@@ -9318,7 +9318,7 @@ func _solo_log_reach_shrink(attacker: GameUnit, target: GameUnit) -> void:
 				locked.append(pname)
 	if locked.is_empty():
 		return
-	battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s out of reach against %s — %s not fired" % [
+	_log_rule_event(BattleLog.Category.COMBAT, "%s: %s out of reach against %s — %s not fired" % [
 		attacker.get_name(), ("Aircraft -12\"" if aircraft else "Ranged Shrouding"),
 		target.get_name(), ", ".join(locked)], true)
 
@@ -9571,7 +9571,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 	# A volley where every profile scaled to zero (or none was in range) used to end SILENTLY — the player's
 	# click looked ignored and he retried in vain (round 7, finding 5: the "unrecognized" shooting attempts).
 	if not fired_any and battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT,
+		_log_rule_event(BattleLog.Category.COMBAT,
 			"%s has no weapon in range of %s — no shots" % [attacker.get_name(), target.get_name()], true)
 	await _solo_land_wounds(target, regenable, regen_proof)
 	if _solo_combined_alive(target) <= 0:
@@ -10492,7 +10492,7 @@ func _solo_hero_carries_on(target: GameUnit) -> void:
 			if hu.is_fatigued:
 				radial_menu_controller._update_fatigued_markers(hu)
 		if (hu.is_shaken or hu.is_fatigued) and battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT,
+			_log_rule_event(BattleLog.Category.COMBAT,
 				"%s fights on alone — carries the unit's %s (GF v3.5.1 p.14)" % [hu.get_name(),
 				("Shaken + Fatigue" if hu.is_shaken and hu.is_fatigued else ("Shaken" if hu.is_shaken else "Fatigue"))], true)
 
@@ -12450,7 +12450,7 @@ func _solo_release_slot_to_human(slot: int) -> void:
 	_refresh_solo_panel.call_deferred()
 	_rebuild_roster()
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.GENERAL,
+		_log_rule_event(BattleLog.Category.GENERAL,
 			"P%d is a human player now — NACHTMAHR releases the slot" % slot)
 
 
@@ -16116,7 +16116,7 @@ func _solo_takedown_bonus_groups(unit: GameUnit, melee: bool) -> Array:
 			member.unit_properties[flag] = true
 			var sp: Dictionary = ed.get("params", {})
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT,
+				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s makes one extra attack at Quality %d+ with AP(%d), Deadly(3), Takedown (once per game)" % [
 					n, member.get_name(), int(sp.get("extra_attack_q", 2)), int(sp.get("ap", 2))], true)
 			out.append({"name": member.get_name(), "quality": int(sp.get("extra_attack_q", 2)),
@@ -16216,7 +16216,7 @@ func _solo_self_destruct_post_melee(unit: GameUnit, enemy: GameUnit) -> void:
 			var x := maxi(int(ed.get("rating", 0)), 1)
 			var hits := x * alive
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT,
+				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s detonates after the melee — destroyed; %s takes %d hit%s" % [
 					n, member.get_name(), enemy.get_name(), hits, ("" if hits == 1 else "s")], true)
 			await _solo_apply_wounds(member, 9999)   # "it is immediately killed" — all surviving carriers
@@ -16258,14 +16258,14 @@ func _solo_apply_vs_marks(attacker: GameUnit, target: GameUnit, dist_in: float) 
 			# shooting path uses. `needs_los` may waive it from the data; the printed default requires it.
 			if bool(sp.get("needs_los", true)) and not _solo_has_los(member, target):
 				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.COMBAT,
+					_log_rule_event(BattleLog.Category.COMBAT,
 						"%s: %s has no target in sight — %s is not marked and the rule is not applied" % [
 							n, member.get_name(), target.get_name()], _solo_is_ai_unit(member))
 				continue
 			member.unit_properties["vs_mark_round"] = opr_army_manager.current_round
 			var base := n.trim_suffix(" Mark")
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s marks %s — %s applies to this attack" % [
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s marks %s — %s applies to this attack" % [
 					n, member.get_name(), target.get_name(), base], true)
 			_solo_record_spell_mod(attacker, n, {"grants_rule": base, "scope": "", "beneficiary": "",
 				"duration": "once"})
@@ -16294,13 +16294,13 @@ func _solo_apply_reckless_piercing(unit: GameUnit) -> void:
 			for cm in _solo_joined_chain(unit):
 				(cm as GameUnit).unit_properties["reckless_ap_round"] = opr_army_manager.current_round
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT,
+				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s rolls %d — weapons get AP(+1) until the end of the round" % [n, unit.get_name(), face], true)
 		else:
 			for cm in _solo_joined_chain(unit):
 				(cm as GameUnit).unit_properties["reckless_backfire_round"] = opr_army_manager.current_round
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT,
+				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s rolls a 1 — enemies get AP(+1) against it until the end of the round" % [n, unit.get_name()], true)
 		break
 
@@ -16359,7 +16359,7 @@ func _solo_apply_mind_control(unit: GameUnit) -> void:
 				for cm in _solo_joined_chain(tgt):
 					(cm as GameUnit).is_fatigued = true
 				if battle_log != null:
-					battle_log.log_event(BattleLog.Category.COMBAT,
+					_log_rule_event(BattleLog.Category.COMBAT,
 						"%s: %s is FATIGUED (melee hits only on unmodified 6s)" % [n, tgt.get_name()], true)
 				continue
 			# Displace away from the marker the target is nearest to (denial), else away from us.
@@ -16400,7 +16400,7 @@ func _solo_apply_piercing_tag(unit: GameUnit) -> void:
 			var markers: int = maxi(int((e as Dictionary).get("rating", 0)), 1)
 			tgt.unit_properties["piercing_tag_markers"] = int(tgt.unit_properties.get("piercing_tag_markers", 0)) + markers
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT,
+				_log_rule_event(BattleLog.Category.COMBAT,
 					"%s: %s places %d marker%s on %s — friendly attackers may spend them for +AP" % [
 					n, member.get_name(), markers, ("" if markers == 1 else "s"), tgt.get_name()], true)
 
@@ -16415,7 +16415,7 @@ func _solo_spend_piercing_tag(target: GameUnit) -> int:
 		return 0
 	target.unit_properties["piercing_tag_markers"] = 0
 	if battle_log != null:
-		battle_log.log_event(BattleLog.Category.COMBAT,
+		_log_rule_event(BattleLog.Category.COMBAT,
 			"Piercing Tag: %d marker%s spent — +AP(%d) on this volley" % [markers, ("" if markers == 1 else "s"), markers], true)
 	return markers
 
@@ -16645,7 +16645,7 @@ func _solo_apply_storm_attack(unit: GameUnit) -> void:
 				if int(f) >= trigger:
 					successes += 1
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s unleashes the storm — %d of %d dice hit (once per game)" % [
+				_log_rule_event(BattleLog.Category.COMBAT, "%s: %s unleashes the storm — %d of %d dice hit (once per game)" % [
 					n, bu.get_name(), successes, dice], true)
 			var facet := str(sp.get("facet", "ap1"))
 			var profile := {"name": n, "attacks": int(sp.get("hits", 3)),

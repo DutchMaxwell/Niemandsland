@@ -50,6 +50,10 @@ class FakeNet extends "res://scripts/network_manager.gd":
 		sent.append({"m": method, "a": args})
 	func slot_has_human_peer(_slot: int) -> bool:
 		return false
+	func get_my_peer_id() -> int:
+		return 1   # outside the tree `multiplayer` is null — the harness peer acts as the host id
+	func get_my_player_slot() -> int:
+		return 1   # same reason: the real body asks multiplayer.is_server()
 
 var _runner: GdUnitSceneRunner
 var _main: Node
@@ -800,4 +804,97 @@ func test_the_wreck_dangerous_test_line_travels(timeout := 120000) -> void:
 	assert_int(_sent_containing("takes its Dangerous Terrain test after the wreck")) \
 		.override_failure_message("the dice line stayed local — the opponent sees NACHTMAHR's cargo lose wounds to dice that were never announced (sent: %s)" % str(_sent_lines())) \
 		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+# === 13. NML-962 — the routing wave from the NML-960 audit =====================================
+#
+# The audit (~/nml-mission/nml960_audit.md) classified all 228 still-local log_event sites
+# against the #291 selection rule: 51 travel, 176 stay, decisions G1-G5. The door is the same
+# _log_rule_event for every routed site, so one drivable representative per FAMILY pins that the
+# family actually reaches it: token lifecycle, dice-less refusal, room event (G4), and the
+# radial transport application via the D2 hop.
+
+
+## Marker/token lifecycle family (D1: the ordinary tick travels). The token state syncs
+## silently as spell mods — the STORY of a buff that evaporates unconsumed does not exist on
+## the peer's screen unless the line travels.
+func test_the_token_expiry_line_travels(timeout := 120000) -> void:
+	var tu := _register(1, "Grenzer", HUMAN_LINE)
+	_main._solo_spell_tokens_active = [{"unit": tu, "token": "Shred", "once": false}]
+	_main._solo_expire_spell_tokens()
+	assert_int(_logged_containing("\"Shred\" on Grenzer expires with the round")) \
+		.override_failure_message("fixture check: the expiry must be written locally:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("\"Shred\" on Grenzer expires with the round")) \
+		.override_failure_message("the token expiry stayed local — the peer holds a buff story that ended silently (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## Dice-less refusal family. A rolled morale test is exclusion 1 (the peer sees the tray roll);
+## the auto-fail has NO roll — without the line the opponent cannot tell a refused test from a
+## missing one. The dice-backed twin ("fails morale — Shaken") must keep staying local.
+func test_the_shaken_autofail_morale_line_travels(timeout := 120000) -> void:
+	var u := _register(2, "Nachtzehrer", AI_LINE)
+	u.is_shaken = true
+	await _main._solo_morale_test(u, "NACHTMAHR")
+	assert_int(_logged_containing("is already Shaken — automatically fails morale")) \
+		.override_failure_message("fixture check: the auto-fail must be applied locally:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("is already Shaken — automatically fails morale")) \
+		.override_failure_message("the dice-less auto-fail stayed local — no roll reaches the peer, so the refusal is invisible (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## Room-event family (G4). The slot state travels through the lobby, the STORY does not: on the
+## other screens NACHTMAHR just stops acting, which reads as a hang.
+func test_the_slot_release_line_travels(timeout := 120000) -> void:
+	_main._solo_release_slot_to_human(2)
+	assert_int(_logged_containing("is a human player now — NACHTMAHR releases the slot")) \
+		.override_failure_message("fixture check: the release must be written locally:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("is a human player now — NACHTMAHR releases the slot")) \
+		.override_failure_message("the slot release stayed local — the room watches NACHTMAHR go silent with no reason given (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	await E2EBoot.settle(get_tree())
+
+
+## Radial transport family via the D2 hop (never through _transport_log — that helper serves
+## STAYS lines). The embark application names capacity the peer cannot see; the activation-spend
+## line next door is exclusion 1 (activation channel) and must keep staying local.
+func test_the_embark_line_travels(timeout := 120000) -> void:
+	var tr := _register(1, "Warwagon", HUMAN_LINE)
+	tr.unit_properties["special_rules"] = ["Transport(11)"]
+	var unit := _register(1, "Grenzer", HUMAN_LINE + Vector3(0.0, 0.0, 0.12))
+	_main.radial_menu_controller._embark_unit({"game_unit": unit, "embark_target": tr})
+	assert_int(_logged_containing("Grenzer embarks into Warwagon")) \
+		.override_failure_message("fixture check: the embark must be applied locally:\n%s" % _log_text()) \
+		.is_equal(1)
+	assert_int(_sent_containing("Grenzer embarks into Warwagon")) \
+		.override_failure_message("the embark stayed local — the peer watches a unit vanish into a transport with no line (sent: %s)" % str(_sent_lines())) \
+		.is_equal(1)
+	assert_int(_sent_containing("spends its activation to")) \
+		.override_failure_message("the activation-spend line went on the wire — that one is exclusion 1 (activation channel) and stays local (sent: %s)" % str(_sent_lines())) \
+		.is_equal(0)
+	await E2EBoot.settle(get_tree())
+
+
+## NML-957 step-6 side finding, folded into this wave: opr_army_manager dropped the `origin`
+## argument on the wire, so the receiver's "(Reinforcement)" suffix mapping was dead code — the
+## peer always read the bare "joined the battle" line.
+func test_the_unit_created_frame_carries_its_origin(timeout := 120000) -> void:
+	_fake.is_host = true
+	_main.opr_army_manager.network_manager = _fake
+	var u := _carrier("Clan Rats", 3)
+	await _main._reinforcement_arrive_one(u, 3)
+	var origins: Array = []
+	for e in _fake.sent:
+		var frame: Dictionary = e as Dictionary
+		if str(frame.get("m", "")) == "sync_unit_created":
+			origins.append(str(((frame.get("a", []) as Array)[0] as Dictionary).get("origin", "")))
+	assert_array(origins) \
+		.override_failure_message("the unit-created frame lost its origin — the receiver's '(Reinforcement)' suffix stays dead code (origins on the wire: %s)" % str(origins)) \
+		.contains(["reinforcement"])
 	await E2EBoot.settle(get_tree())

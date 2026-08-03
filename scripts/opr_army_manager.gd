@@ -1433,7 +1433,7 @@ func create_runtime_unit(profile: Dictionary, player_id: int, positions: Array, 
 	# Multiplayer: the peer-side channel is built separately — call it only when it exists, so this
 	# path stays usable (and testable) without it.
 	if network_manager != null and network_manager.has_method("broadcast_unit_created"):
-		network_manager.call("broadcast_unit_created", game_unit)
+		network_manager.call("broadcast_unit_created", game_unit, origin)
 
 	runtime_unit_created.emit(game_unit, origin)
 	return game_unit

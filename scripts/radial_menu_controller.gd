@@ -787,7 +787,7 @@ func _delete_unit(context: Dictionary) -> void:
 	if army_manager != null and army_manager.transport_capacity(game_unit) > 0:
 		for cu in army_manager.cargo_units(game_unit):
 			if army_manager.set_unit_embarked(cu as GameUnit, null, false):
-				_transport_log("%s is unloaded (transport removed from the table)" % str((cu as GameUnit).unit_properties.get("name", "unit")))
+				_travel_transport_log("%s is unloaded (transport removed from the table)" % str((cu as GameUnit).unit_properties.get("name", "unit")))
 
 	# A LOOSE unit is not destroyed permanently: every model is parked (desaturated) on the tray,
 	# revivable as a whole by right-clicking any of them. A regiment keeps the old permanent delete.
@@ -2505,7 +2505,7 @@ func _embark_unit(context: Dictionary) -> void:
 	if army_manager.set_unit_embarked(unit, tr, true):
 		if network_manager:
 			network_manager.broadcast_unit_embark(unit.unit_id, tr.unit_id, true)
-		_transport_log("%s embarks into %s (%d/%d spaces used) — GF v3.5.1 Transport" % [
+		_travel_transport_log("%s embarks into %s (%d/%d spaces used) — GF v3.5.1 Transport" % [
 			str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport")),
 			army_manager.transport_used_spaces(tr), army_manager.transport_capacity(tr)])
 		_consume_transport_activation(unit, "embark")
@@ -2618,10 +2618,10 @@ func _disembark_unit(unit: GameUnit, override_spots: Array = []) -> void:
 		# forbids is embarking again (gate above). Only the exit round is stamped here.
 		if _activation_economy_on():
 			unit.unit_properties["disembarked_round"] = army_manager.current_round
-			_transport_log("%s disembarks from %s (Advance exit, fully within 6\") — it may still shoot this activation (GF v3.5.1 p.7/p.15)" % [
+			_travel_transport_log("%s disembarks from %s (Advance exit, fully within 6\") — it may still shoot this activation (GF v3.5.1 p.7/p.15)" % [
 				str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))])
 		else:
-			_transport_log("%s disembarks from %s — GF v3.5.1 Transport" % [
+			_travel_transport_log("%s disembarks from %s — GF v3.5.1 Transport" % [
 				str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))])
 
 
@@ -2660,6 +2660,23 @@ func _consume_transport_activation(unit: GameUnit, verb: String) -> void:
 func _transport_log(msg: String) -> void:
 	if battle_log != null:
 		battle_log.log_event(BattleLog.Category.MOVEMENT, msg, false)
+
+
+## NML-962: a transport APPLICATION the opponent must read (embark, disembark, unload) goes
+## through main's #291 channel. _transport_log above stays the local-only door for the prompt
+## lines and for the lines other channels already carry (activation spend, the wreck replay) —
+## never re-route it. The hop climbs to the channel owner and fails silent without one (bare
+## controller — the wreck guard test pins that).
+func _travel_transport_log(msg: String) -> void:
+	var n: Node = self
+	while n != null and not n.has_method("_log_rule_event"):
+		n = n.get_parent()
+	if n == null:
+		n = get_node_or_null("/root/Main")
+	if n != null and n.has_method("_log_rule_event"):
+		n._log_rule_event(BattleLog.Category.MOVEMENT, msg, false)
+		return
+	_transport_log(msg)
 
 
 ## NML-105 — the destroyed-transport spill's VISIBLE half (state happened in the army manager):
