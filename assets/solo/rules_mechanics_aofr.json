@@ -176,6 +176,7 @@
   "Ossified Boost",
   "Ossified Boost Aura",
   "Pass Turn",
+  "Phase Through",
   "Piercing Assault",
   "Piercing Assault Aura",
   "Piercing Assault Buff",
@@ -326,6 +327,7 @@
   "Thrust in Melee Aura",
   "Tough",
   "Transport",
+  "Traversal",
   "Unique",
   "Unmovable",
   "Unpredictable",
@@ -2841,9 +2843,14 @@
     }
    },
    "Traversal": {
-    "primitive": null,
+    "primitive": "Phase Through",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "through_friendly": true,
+     "through_enemy": true,
+     "must_end_clear": true
+    }
    },
    "Unpredictable": {
     "primitive": "Unpredictable",
@@ -3426,9 +3433,14 @@
     "book_version": "3.5.3"
    },
    "Traversal": {
-    "primitive": null,
+    "primitive": "Phase Through",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "through_friendly": true,
+     "through_enemy": true,
+     "must_end_clear": true
+    }
    },
    "Unpredictable Fighter": {
     "primitive": "Unpredictable Fighter",
