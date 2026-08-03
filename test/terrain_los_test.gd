@@ -130,6 +130,7 @@ func test_container_hard_blocks_even_when_endpoints_share_the_zone() -> void:
 const BOX_HE := Vector2(0.0762, 0.0381)   # 6x3" half-extents in metres
 const ON_TOP := Vector3(0, 0.0635, 0)     # model on the box top (container height 2.5" = 0.0635 m)
 const GROUND_OUT := Vector3(0.5, 0, 0)
+const ROOF_DROP_Y := 0.0615               # NML-965: real in-game drop height for a model placed ON a container roof
 
 
 func _with_box(o: Node3D, c: Vector2 = Vector2.ZERO, yaw: float = 0.0) -> void:
@@ -140,6 +141,20 @@ func _with_box(o: Node3D, c: Vector2 = Vector2.ZERO, yaw: float = 0.0) -> void:
 	for i in range(4):
 		o._blocker_edges.append([k[i], k[(i + 1) % 4]])
 	o._blocker_obbs.append({"c": c, "he": BOX_HE, "yaw": yaw})
+
+
+## NML-965: a real map-layout container ALSO paints its footprint into grid_cells
+## (terrain_prefabs.gd -> map_layout.gd), independent of the OBB _with_box records above.
+## Sample the SAME box rectangle finely enough to hit every cell it truly overlaps, so
+## grid_cells and the OBB describe one consistent box (like a real spawned container).
+func _paint_box_cells(o: Node3D, c: Vector2 = Vector2.ZERO, he: Vector2 = BOX_HE) -> void:
+	var steps := 6
+	for ix in range(steps):
+		var fx: float = lerp(-he.x, he.x, (float(ix) + 0.5) / float(steps))
+		for iz in range(steps):
+			var fz: float = lerp(-he.y, he.y, (float(iz) + 0.5) / float(steps))
+			var cell: Vector2i = o.world_to_cell(Vector3(c.x + fx, 0.0, c.y + fz))
+			o.grid_cells[cell] = OverlayScript.TerrainType.CONTAINER
 
 
 func test_model_on_container_sees_out_and_is_seen() -> void:
@@ -164,6 +179,41 @@ func test_only_the_box_you_stand_on_is_exempt() -> void:
 	_with_box(o)                       # the box the model stands on (at the origin)
 	_with_box(o, Vector2(0.3, 0.0))    # another box in the line of fire
 	assert_bool(o.has_line_of_sight(ON_TOP, GROUND_OUT, 2, 2)).is_false()
+
+
+## === NML-965: the OBB roof-exemption above (~terrain_overlay.gd:1200-1214) skips the box a model
+##     stands on, but real map-layout containers ALSO paint their footprint as CONTAINER cells into
+##     grid_cells (terrain_prefabs.gd -> map_layout.gd), and the quarter-cell grid walk further down
+##     in has_line_of_sight() (~1239-1249) is NOT elevation-aware. Declared BEFORE the RED test below:
+##     gdUnit 4.6 headless silently drops tests declared after a failing one. ===
+
+func test_ground_line_through_container_cells_still_blocks() -> void:
+	# Control (must stay GREEN): paint the box's real footprint into grid_cells too. Neither
+	# endpoint is elevated, so terrain still hard-blocks -- pins the invariant NML-965's fix
+	# must not break (ground-vs-ground stays byte-identical).
+	var o := _overlay()
+	_with_box(o)
+	_paint_box_cells(o)
+	assert_bool(o.has_line_of_sight(Vector3(-0.5, 0, 0), GROUND_OUT, 2, 2)).is_false()
+
+
+func test_roof_model_sees_out_over_container_cells() -> void:
+	# RED: same box, same painted footprint cells. A model standing on the roof (real in-game
+	# drop height 0.0615 m > the 0.03175 m on_top_y threshold) is exempted from the OBB check
+	# (it stands on this very box) but CONTAINER is not AREA terrain (terrain_is_area == false),
+	# so the grid walk's own-footprint cell still hard-blocks (height 5 >= Height 2). EXPECTED TO
+	# FAIL until the grid walk gets the same standing-on-your-own-box exemption as the OBB path.
+	var o := _overlay()
+	_with_box(o)
+	_paint_box_cells(o)
+	var roof := Vector3(0.0, ROOF_DROP_Y, 0.0)
+	# Geometric precondition: the roof model's own cell really is a painted CONTAINER cell --
+	# otherwise this test would pass for the wrong reason (no cell on the line left to block).
+	assert_int(o.grid_cells[o.world_to_cell(roof)]).is_equal(OverlayScript.TerrainType.CONTAINER)
+	assert_bool(o.has_line_of_sight(roof, GROUND_OUT, 2, 2)).is_true()
+	# Reciprocity matters equally (#171: "and is seen") -- checked in the SAME test to dodge the
+	# discovery-order trap above.
+	assert_bool(o.has_line_of_sight(GROUND_OUT, roof, 2, 2)).is_true()
 
 
 ## === Base-aware zone membership (_zone_for_base): a model is IN terrain its BASE overlaps (GF v3.5.1),

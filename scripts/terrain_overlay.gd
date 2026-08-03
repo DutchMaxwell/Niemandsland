@@ -1198,6 +1198,8 @@ func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_
 	# still blocks. Ground models (y ≈ 0) never reach the exemption, so ground-vs-ground
 	# stays byte-identical.
 	var bh := terrain_height_category(TerrainType.CONTAINER)
+	var from_box: Dictionary = {}
+	var to_box: Dictionary = {}
 	if bh >= from_height and bh >= to_height:
 		var a2 := Vector2(from_pos.x, from_pos.z)
 		var b2 := Vector2(to_pos.x, to_pos.z)
@@ -1209,6 +1211,10 @@ func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_
 			var oyaw := float(od["yaw"])
 			var from_on := from_pos.y > on_top_y and TerrainRules.point_in_obb(a2, oc, ohe, oyaw)
 			var to_on := to_pos.y > on_top_y and TerrainRules.point_in_obb(b2, oc, ohe, oyaw)
+			if from_on:
+				from_box = {"c": oc, "he": ohe, "yaw": oyaw}
+			if to_on:
+				to_box = {"c": oc, "he": ohe, "yaw": oyaw}
 			if from_on or to_on:
 				continue   # the endpoint stands on THIS box — it sees over its own edge
 			if TerrainRules.segment_intersects_obb(a2, b2, oc, ohe, oyaw):
@@ -1237,12 +1243,20 @@ func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_
 	if span < 0.02:
 		return true
 	for i in range(1, steps):  # skip the exact endpoints
-		var cell := world_to_cell(from_pos.lerp(to_pos, float(i) / float(steps)))
+		var sample_pos := from_pos.lerp(to_pos, float(i) / float(steps))
+		var cell := world_to_cell(sample_pos)
 		var ttype: int = grid_cells.get(cell, TerrainType.NONE)
 		if not terrain_blocks_los(ttype):
 			continue
 		if terrain_is_area(ttype) and (from_zone.has(cell) or to_zone.has(cell)):
 			continue  # area terrain: you see IN/OUT of your own zone — just not through someone else's
+		# NML-965: the box you stand on does not block your own line — the OBB
+		# exemption above must survive the cell walk, since map-layout containers
+		# also paint CONTAINER cells that this walk otherwise treats as unconditional.
+		if ttype == TerrainType.CONTAINER and (not from_box.is_empty() or not to_box.is_empty()):
+			var p2 := Vector2(sample_pos.x, sample_pos.z)
+			if (not from_box.is_empty() and TerrainRules.point_in_obb(p2, from_box["c"], from_box["he"], from_box["yaw"])) or (not to_box.is_empty() and TerrainRules.point_in_obb(p2, to_box["c"], to_box["he"], to_box["yaw"])):
+				continue
 		var th := terrain_height_category(ttype)
 		if th >= from_height and th >= to_height:
 			return false
