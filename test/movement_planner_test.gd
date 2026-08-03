@@ -932,3 +932,55 @@ func test_theta_star_never_routes_through_the_phantom_strip() -> void:
 			{"reach_closest": true, "board_y_in": size.y})
 		for w in route:
 			_assert_on_board(w as Vector2, size, name, "theta* waypoint")
+
+
+# === zones_rest_only (planned opt, NOT YET IMPLEMENTED — RED) ================================
+# Planned semantics: opts["zones_rest_only"] == true lets a route pass THROUGH unit-spacing zones
+# (opts["zones"]) — only the REST constraint stays: no endpoint may ever end inside a zone circle. Today
+# the key is unknown and silently ignored, so zones still block the route exactly as without the flag.
+
+func test_zones_rest_only_routes_through_units() -> void:
+	# A continuous band of 10 overlapping zone circles (r=3", centres 5" apart) spans the WHOLE 48" board
+	# width at y=20 — no way around within the board, only a route straight THROUGH is geometrically
+	# possible. zones_rest_only should let that route cross; today it does not, so both runs stop identically
+	# south of the band.
+	var zones: Array = []
+	for i in range(10):
+		zones.append({"c": Vector2(2.5 + i * 5.0, 20.0), "r": 3.0})
+	var start: Array = [Vector2(24, 5)]
+	var delta := Vector2(0, 30)
+	var goal: Vector2 = start[0] + delta
+	var radii := [0.5]
+	# Control: zones (no flag) block the route as today — the unit is stopped well south of the band.
+	var blocked := MovementPlanner.plan_unit_step(start, delta, [], {}, false, 48.0, [],
+		{"zones": zones, "radii": radii})
+	assert_float((blocked[0] as Vector2).distance_to(goal)).is_greater(10.0)
+	# Flag run: zones_rest_only should let the unit cross the band and end near the goal. This is the
+	# assertion that MUST fail today — the unknown option is ignored, so the wall still blocks it.
+	var routed := MovementPlanner.plan_unit_step(start, delta, [], {}, false, 48.0, [],
+		{"zones": zones, "zones_rest_only": true, "radii": radii})
+	assert_float((routed[0] as Vector2).distance_to(goal)).is_less(3.0)
+
+
+func test_zones_rest_only_still_never_ends_inside_a_zone() -> void:
+	# Same blocking band, PLUS the goal itself sits inside its own no-go circle (an enemy unit camped on the
+	# objective). zones_rest_only must still forbid ending inside ANY zone (the rest rule) while letting the
+	# route cross the band to approach it. Today the option is unknown, so the unit never even reaches the
+	# goal's zone — it stays trivially outside every circle without the rest rule ever being exercised.
+	var zones: Array = []
+	for i in range(10):
+		zones.append({"c": Vector2(2.5 + i * 5.0, 20.0), "r": 3.0})
+	var start: Array = [Vector2(24, 5)]
+	var delta := Vector2(0, 30)
+	var goal: Vector2 = start[0] + delta
+	zones.append({"c": goal, "r": 3.0})   # the goal itself sits inside a no-go circle
+	var radii := [0.5]
+	var opts := {"zones": zones, "zones_rest_only": true, "radii": radii}
+	var out := MovementPlanner.plan_unit_step(start, delta, [], {}, false, 48.0, [], opts)
+	# (a) Rest rule holds: the endpoint never ends inside ANY zone circle (including the goal's own).
+	for z in zones:
+		var zd := z as Dictionary
+		assert_float((out[0] as Vector2).distance_to(zd["c"] as Vector2)).is_greater_equal(float(zd["r"]) - 0.01)
+	# (b) Real progress: the unit still gets close to the goal's zone despite the band. RED today — the
+	# band still blocks the route entirely, so the unit stays ~17" short, nowhere near the goal.
+	assert_float((out[0] as Vector2).distance_to(goal)).is_less(6.0)

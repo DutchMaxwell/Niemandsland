@@ -158,6 +158,8 @@ static func path_crosses_wall(a: Vector2, b: Vector2, walls: Array) -> bool:
 #                 when the route should go AROUND it — GF v3.5.1 solo overlay p.57: AI units "must always
 #                 move around" difficult terrain — plus Impassable cells). A model already inside an
 #                 avoided cell may step freely (escape allowed).
+#   zones_rest_only : bool — default false. When true, unit-spacing zones are ignored for ROUTING
+#                 only; rest-position legality (1" spacing at rest) still uses opts["zones"].
 
 ## Distance from point p to segment a→b.
 static func point_seg_distance(p: Vector2, a: Vector2, b: Vector2) -> float:
@@ -1042,7 +1044,7 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 			return da < db
 		return a < b)
 	var base_clearance: float = float(opts.get("clearance", 0.0))
-	var base_zones: Array = opts.get("zones", [])
+	var base_zones: Array = [] if bool(opts.get("zones_rest_only", false)) else opts.get("zones", [])
 	# PERF (sweep-only, gated on fast_planner): cull spacing zones to those a reach-bounded route is likely to
 	# touch. theta_star's step_blocked scans EVERY zone per grid edge, so at large games (~90 enemy zones) the
 	# per-model search cost is ~O(cells × zones). A zone farther than this unit's move budget (+ its own radius

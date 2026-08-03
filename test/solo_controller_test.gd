@@ -1680,6 +1680,46 @@ func test_rule_notes_carry_teleport_on_activation() -> void:
 	assert_int((solo.last_report.get("rule_notes", []) as Array).size()).is_equal(0)
 
 
+## NML-938 -- Traversal ("may move through friendly and enemy units") is registry-gated the same way
+## as Teleport: system+faction scoped via RulesRegistry.unit_rule_active. Goblins field it in
+## AoF-Skirmish. RED until the mechanics map's `primitive` moves off null (data fix, next step).
+func test_traversal_resolves_for_goblins_aofs() -> void:
+	var gob := _unit(2, [Vector3(0.2, 0, 0)])
+	gob.unit_properties["special_rules"] = ["Traversal"]
+	gob.unit_properties["game_system"] = "aofs"
+	gob.unit_properties["faction_folder"] = "goblins"
+	assert_bool(RulesRegistry.unit_rule_active(gob, "Traversal")).is_true()
+
+
+## NML-938 -- Traversal carries the same rule-note contract as Teleport (maintainer policy: every
+## applied special rule surfaces in the battle log). Goblins/AoF-Skirmish fixture as above, plus a
+## human unit in reach so the activation resolves a move. RED until _act wires the Traversal note
+## (next step).
+func test_rule_notes_carry_traversal_on_move() -> void:
+	var human := _unit(1, [Vector3(0, 0, 0)])
+	var gob := _unit(2, [Vector3(0.5, 0, 0)])
+	gob.unit_properties["special_rules"] = ["Traversal"]
+	gob.unit_properties["game_system"] = "aofs"
+	gob.unit_properties["faction_folder"] = "goblins"
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {human.unit_id: human, gob.unit_id: gob}
+	army.current_round = 1
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_object(solo.activate_next_ai_unit()).is_equal(gob)
+	var notes: Array = solo.last_report.get("rule_notes", [])
+	var traversal_note := {"text": "", "travels": false}
+	for n in notes:
+		if str((n as Dictionary).get("text", "")).contains("Traversal"):
+			traversal_note = n
+			break
+	assert_str(str(traversal_note.get("text", ""))).contains("Traversal")
+	assert_bool(bool(traversal_note.get("travels", false))) \
+		.override_failure_message("Traversal is a move-through rule — the note must be flagged to travel") \
+		.is_true()
+
+
 # === Testspiel-Welle 3 (2026-07-22) ===
 
 ## Der Charge-Snap ist BEWEGUNG: das Restbudget = Budget minus längster Einzelmodell-Bogen.

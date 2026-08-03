@@ -1743,6 +1743,14 @@ func _act(unit: GameUnit) -> Dictionary:
 	report["dist_in"] = d2
 	report["charge_from_in"] = enemy_dist   # pre-move distance — the Versatile Attack >9" melee-charge gate
 	report["moved"] = action != AiDecision.Action.HOLD   # Indirect's -1 to hit fires when shooting after moving
+	# Traversal (army-book: "May move through friendly and enemy units"): the move itself crossed bases
+	# the planner/gate would otherwise have routed around or clamped — that is invisible to the opponent,
+	# so it travels. Terrain and the rest-position spacing rule are both still enforced (unlike Flying),
+	# which is a local clarification, not a hidden decision — those two notes stay local.
+	if is_traversal(unit) and bool(report["moved"]):
+		_rule_note(report, "Traversal: moves through friendly and enemy units", true)   # invisible move-through — travels
+		_rule_note(report, "Traversal: terrain is NOT ignored (unlike Flying)", false)   # local clarification — no travel
+		_rule_note(report, "Traversal: may not end inside another unit — end stays clear", false)   # local clarification — no travel
 	report["can_shoot"] = (do_shoot or (quick_shot and action == AiDecision.Action.RUSH)) \
 		and shoot_range > 0 and d2 <= float(shoot_range) \
 		and (_has_los(unit, target_unit) or has_indirect_ranged(weapons))
@@ -2294,6 +2302,8 @@ func _charge_capped_by_difficult(unit: GameUnit, from: Vector3, to: Vector3, gap
 ## clear of every OTHER unit's model bases (point-distance only, no planning). True = worth the sweep;
 ## false = the unit is walled in, accept the stub. Own-unit models are ignored (they move WITH it).
 func _has_lateral_room(unit: GameUnit, models: Array, positions: Array, reach_in: float) -> bool:
+	if is_traversal(unit):
+		return true   # Traversal moves through other units' bases — the sweep is never boxed in by them
 	var anchor := MoveIntent.anchor_of(positions)
 	var probe: float = reach_in * 0.5 * INCHES_TO_METERS
 	var own_r := _move_base_radius_m(models)
@@ -3958,6 +3968,13 @@ static func is_aircraft(unit: GameUnit) -> bool:
 	return unit != null and RulesRegistry.unit_rule_active(unit, "Aircraft")
 
 
+## Whether the unit may move through friendly and enemy units — system-scoped (Goblins/Ghostly
+## Undead, aof/aofs/aofr): the committed mechanics maps resolve this only where the army books
+## print the rule (Traversal: "May move through friendly and enemy units").
+static func is_traversal(unit: GameUnit) -> bool:
+	return unit != null and RulesRegistry.unit_rule_active(unit, "Traversal")
+
+
 ## Range penalty (inches) a shooter suffers when targeting `target` — the Aircraft rule reduces every
 ## enemy's range against it (system-scoped data; 0 for anything that is not an aircraft).
 static func target_range_penalty_in(target: GameUnit) -> float:
@@ -4563,6 +4580,8 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 			"r": float(zd["r"]) / INCHES_TO_METERS})
 	if not zones_in.is_empty():
 		opts["zones"] = zones_in
+	if is_traversal(unit):
+		opts["zones_rest_only"] = true   # Traversal: unit-spacing zones stop blocking the ROUTE; rest legality stays strict
 	var sampled := _terrain_grid_in(board_in, off, avoid_difficult, avoid_dangerous, board_y_in)
 	opts["avoid_cells"] = sampled["avoid"]
 	if avoid_difficult or avoid_dangerous:
@@ -4735,6 +4754,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	if clamped_by_m > BOARD_CLAMP_NOTE_EPS_M:
 		board_clamp_notes.append("AI path clamped to the table edge (%s)" % unit.get_name())
 	var gate_flying := unit.has_special_rule("Flying")   # Bug 20: wall clamp must not revert legal fly-overs
+	var gate_traversal := is_traversal(unit)   # Traversal: the gate chord may cut through another unit's base; walls/terrain still clamp
 	var obstacles := _external_obstacle_shapes(unit)
 	# NML-230 Breach A: the gate's physical corrections (terrain projection + overlap push + straggler
 	# pull) share ONE per-model displacement budget — the band slack the walked route left over
@@ -4786,7 +4806,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 				if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
 			if not _config_coherent_world(models, cfg, charge_chain):
 				_pull_stragglers_coherent_world(models, cfg, obstacles, charge_chain)
-		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, obstacles)   # charge: contact reached; single model: done
+		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, gate_traversal, obstacles)   # charge: contact reached; single model: done
 	# (coherency) If the unit is coherent AND overlap-free, keep the full move. Otherwise shorten the whole
 	# move back along its taut line toward the coherent, overlap-free START until BOTH hold — the unit began
 	# legal, so a legal factor always exists (t = 0), and the search takes the largest one (GF/AoF v3.5.1 p.7:
@@ -4796,7 +4816,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 		if CoherencyChecker.is_skirmish_system(unit) else CoherencyChecker.MAX_CHAIN_DISTANCE_INCHES
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
 			and _config_terrain_clear(models, cfg):
-		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, obstacles)
+		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, gate_traversal, obstacles)
 	# MINIMAL per-model coherency repair FIRST (field-test round 6 findings 2/3): pull only the stragglers into
 	# the coherent set, leaving the models that advanced correctly at their FULL move. The whole-unit shorten
 	# below blends the ENTIRE unit back toward the start, which systematically under-moved the advance (and so
@@ -4807,8 +4827,8 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 	_pull_stragglers_coherent_world(models, cfg, obstacles, max_chain, planned_world if not caps.is_empty() else [], caps)
 	if _config_coherent_world(models, cfg, max_chain) and _config_overlap_free(models, cfg, obstacles) \
 			and _config_terrain_clear(models, cfg):
-		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, obstacles)
-	return _clamp_gate_walls(planned_world, _shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain), models, gate_flying, obstacles)
+		return _clamp_gate_walls(planned_world, cfg, models, gate_flying, gate_traversal, obstacles)
+	return _clamp_gate_walls(planned_world, _shorten_world_to_legal(start_world, cfg, models, obstacles, max_chain), models, gate_flying, gate_traversal, obstacles)
 
 
 ## GATE CLAMP on the placement gate (watch-loop bug 12a; bases: NML-009): the gate's own displacements —
@@ -4821,7 +4841,7 @@ func _finalize_placement(unit: GameUnit, models: Array, start_world: Array, plan
 ## its planned (route-true, legal) endpoint. The residual overlap/coherency debt is the caller ladder's
 ## to settle at a shorter reach — route truth wins.
 func _clamp_gate_walls(planned_world: Array, cfg: Array, models: Array = [], flying: bool = false,
-		obstacles: Array = []) -> Array:
+		traversal: bool = false, obstacles: Array = []) -> Array:
 	if flying:
 		return cfg   # Flying crosses walls legally (GF v3.5.1) — a wall-crossing gate push is no tunnel
 	var walls := _rest_walls()
@@ -4844,8 +4864,8 @@ func _clamp_gate_walls(planned_world: Array, cfg: Array, models: Array = [], fly
 				cfg[i] = a
 				clamped = true
 				break
-		if not clamped and gate_chord_crosses_base(a2, b2, r_m, obstacles):
-			cfg[i] = a
+		if not clamped and not traversal and gate_chord_crosses_base(a2, b2, r_m, obstacles):
+			cfg[i] = a   # Traversal: a base-crossing chord is legal (walls above still clamped it)
 	return cfg
 
 

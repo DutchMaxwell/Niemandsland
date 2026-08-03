@@ -349,6 +349,10 @@ SHIPPED_PLANNED = {
     # plus {uses_per_round, requires_opponent_surplus}; only the "planned" status kept nulling it.
     # Resolvers: SoloController.delayed_action_* / main._solo_pass_turn.
     "Delayed Action",
+    # NML-938 Traversal wave (2026-08-03). Already carries mechanic.primitive "Phase Through" plus
+    # {through_friendly, through_enemy, must_end_clear} in the registry; only the "planned" status
+    # kept nulling it. Resolver ships with this wave (MovementPlanner phase-through pathing).
+    "Traversal",
 }
 
 # Primitives that only exist in SOME systems' books: the bridging table above is
