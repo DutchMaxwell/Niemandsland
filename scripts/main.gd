@@ -9165,8 +9165,12 @@ func _solo_offer_spot_markers(attacker: GameUnit, target: GameUnit) -> int:
 ## model and roll one die, on a 4+ place a marker on it") — once per activation,
 ## round-stamped. Candidates get pulse rings; the click rolls in the tray.
 func solo_begin_spot(unit: GameUnit) -> void:
-	if unit == null or solo_controller == null or opr_army_manager == null:
+	if unit == null:
 		return
+	_ensure_solo_controller()   # NML-967: build the controller before refusing (mirror ~2198), not a silent bail
+	if solo_controller == null or opr_army_manager == null:
+		return
+	unit = _solo_combat_unit(unit)   # NML-967: a joined hero's spot belongs to its host unit
 	if int(unit.unit_properties.get("spotted_round", -1)) == opr_army_manager.current_round:
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL,
@@ -9176,18 +9180,24 @@ func solo_begin_spot(unit: GameUnit) -> void:
 	await _solo_try_reanimation(unit)
 	var own_pid: int = int(unit.unit_properties.get("player_id", 0))
 	var cands: Array = []
+	var blocked_eu: GameUnit = null   # NML-967: nearest in-range refusal, named in the empty-set log
 	for e in opr_army_manager.get_all_game_units():
 		var eu := e as GameUnit
 		if eu == null or eu.get_alive_count() <= 0 or SoloController.unit_in_reserve(eu):
 			continue
 		if int(eu.unit_properties.get("player_id", 0)) == own_pid:
 			continue
-		if solo_controller.nearest_melee_gap_in(unit, eu) <= 36.0 and _solo_has_los(unit, eu):
-			cands.append(eu)
+		if solo_controller.nearest_melee_gap_in(unit, eu) <= 36.0:
+			# NML-967: per-model shooting truth, not the unit-centre-only _solo_has_los.
+			if _solo_sighted_count(unit, eu, 36) > 0:
+				cands.append(eu)
+			elif blocked_eu == null:
+				blocked_eu = eu
 	if cands.is_empty():
 		if battle_log != null:
+			var why: String = _solo_los_refusal_detail(unit, blocked_eu) if blocked_eu != null else ""
 			battle_log.log_event(BattleLog.Category.GENERAL,
-				"%s: no enemy within 36\" line of sight to spot" % unit.get_name())
+				"%s: no enemy within 36\" line of sight to spot%s" % [unit.get_name(), why])
 		return
 	var rings: Array = []
 	for cu in cands:
@@ -9202,6 +9212,7 @@ func solo_begin_spot(unit: GameUnit) -> void:
 ## Spot-mode click: one pick, one tray roll. The once-per-activation stamp burns on the
 ## PICK (not on opening the mode — a cancel must not cost the spot).
 func _solo_spot_click(target: GameUnit) -> void:
+	target = _solo_combat_unit(target)   # NML-967: mirror _solo_pick_unit_at's hero-to-host resolution
 	var spotter: GameUnit = _solo_target_mode.get("unit")
 	if not (_solo_target_mode.get("spot_valid", []) as Array).has(target):
 		if battle_log != null:
