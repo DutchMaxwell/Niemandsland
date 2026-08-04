@@ -2,92 +2,73 @@ class_name SightFan
 extends RefCounted
 ## Pure sight+range fan geometry (maintainer sketch 2026-07-16): the region a unit can SEE AND SHOOT,
 ## computed per model and rendered as the union — the player's "what is a legitimate target" overlay.
-## Semantics MIRROR the engine's terrain LOS (terrain_overlay.has_line_of_sight + TerrainRules): rays start
-## at the BASE EDGE (OPR measures from the closest base point), walls stop a ray exactly at the segment hit,
-## solid CONTAINER blocks at entry, and AREA terrain (forest/ruins) is see-INTO-not-THROUGH — a ray may
-## traverse its ORIGIN's own contiguous blocking zone (see out), may enter ONE further blocking zone
-## (targets inside are visible — "Ziele mit Deckung") and ends at that zone's far edge ("Ziele die nicht
-## gesehen werden" beyond). Pure + headless-testable; the renderer unions the per-model polygons.
+## VOLUMETRIC since the elevation program (Phase A): every ray asks the SAME truth the dice ask
+## (VolumetricLos over terrain_overlay.los_volumes()), so the yellow overlay and the shooting gate can
+## never disagree again. The old raymarch owned its own copy of the see-in/out zone rules and was blind
+## to height — a model standing on a container roof got no fan at all (NML-968).
+## Pure + headless-testable; the renderer unions the per-model polygons.
 
 const RAYS := 180
 const STEP_M := 0.0381   # half a 3" terrain cell — the same granularity the engine's LOS march uses
 const REFINE_ITERS := 4  # bisection per stopped ray: 0.0381m / 2^4 ≈ 2.4mm — kills the stair-stepping
                          # at zone boundaries (field-test Bug 15) for 4 extra samples per blocked ray
 
-enum Refine { IMPASSABLE, ZONE_START, ZONE_END }
+## The height (INCHES above the table) the fan assumes a TARGET stands at: the fan answers "would a model
+## standing here be visible", and 1" is the smallest official model height. A display aid — the real
+## shooting query uses each real target's own height.
+const TARGET_EYE_IN := 1.0
 
 
-## One model's fan polygon (closed ring, one vertex per ray). `origin`/`base_r`/`range_m` in world metres
-## (table XZ); `walls` = [[Vector2 a, Vector2 b], ...]; `terrain_type_at` = Callable(Vector2) -> int
-## (TerrainRules.TerrainType). `range_m` is measured FROM THE BASE EDGE.
-static func fan_polygon(origin: Vector2, base_r: float, range_m: float, walls: Array,
-		terrain_type_at: Callable, rays: int = RAYS) -> PackedVector2Array:
+## One model's fan polygon (closed ring, one vertex per ray). `eye` is the model's EYE in world metres —
+## its flat position carrying the height it really looks from (standing y + model height), so a model on
+## a container roof looks OVER its box instead of being walled in by it. `volumes` are the terrain volumes
+## of terrain_overlay.los_volumes(). `range_m` is measured FROM THE BASE EDGE.
+static func fan_polygon(eye: Vector3, base_r: float, range_m: float, volumes: Array,
+		rays: int = RAYS) -> PackedVector2Array:
 	var poly := PackedVector2Array()
-	var origin_blocking := _blocks_area(int(terrain_type_at.call(origin)))
+	var origin := Vector2(eye.x, eye.z)
 	for k in range(rays):
 		var ang := TAU * float(k) / float(rays)
 		var dir := Vector2(cos(ang), sin(ang))
 		var start := origin + dir * base_r
-		var max_d := range_m
-		for w in walls:   # exact wall hit — the fan edge lies ON the wall, like the sketch's shadow tangents
-			var hit = Geometry2D.segment_intersects_segment(start, start + dir * max_d, w[0] as Vector2, w[1] as Vector2)
-			if hit != null:
-				max_d = minf(max_d, ((hit as Vector2) - start).length())
-		poly.append(start + dir * _terrain_limited(start, dir, max_d, origin_blocking, terrain_type_at))
+		poly.append(start + dir * _sight_limited(eye, start, dir, range_m, volumes))
 	return poly
 
 
-## March one ray against the terrain grid: how far (metres) is visible along `dir` from `start`.
-static func _terrain_limited(start: Vector2, dir: Vector2, max_d: float, origin_blocking: bool,
-		terrain_type_at: Callable) -> float:
-	var in_origin_zone := origin_blocking   # contiguous blocking run the ORIGIN stands in — free to see out of
-	var in_foreign := false                 # the ONE foreign blocking zone a ray may see INTO
-	var entered_foreign := false
+## March one ray: how far (metres) along `dir` a target would still be visible from `eye`. The ray stops
+## at the FIRST blocked sample — what lies beyond a shadow is dropped, so the polygon keeps the single
+## boundary the renderer fills.
+static func _sight_limited(eye: Vector3, start: Vector2, dir: Vector2, max_d: float,
+		volumes: Array) -> float:
 	var d := 0.0
 	while d < max_d - 0.0001:
 		var next_d := minf(d + STEP_M, max_d)
-		var t := int(terrain_type_at.call(start + dir * next_d))
-		if TerrainRules.is_impassable(t):
-			# solid CONTAINER: blocks at entry, no see-into — refine the entry point (Bug 15)
-			return _refine_boundary(start, dir, d, next_d, terrain_type_at, Refine.IMPASSABLE)
-		var blocking := _blocks_area(t)
-		if in_origin_zone:
-			if not blocking:
-				in_origin_zone = false   # left the own zone — open ground ahead
-		elif in_foreign:
-			if not blocking:
-				# far edge of the seen-into zone: beyond is "not seen" — refine the exit point
-				return _refine_boundary(start, dir, d, next_d, terrain_type_at, Refine.ZONE_END)
-		else:
-			if blocking:
-				if entered_foreign:
-					# a SECOND foreign zone would be "through" the first — stop right before it
-					return _refine_boundary(start, dir, d, next_d, terrain_type_at, Refine.ZONE_START)
-				entered_foreign = true
-				in_foreign = true
+		if _blocked(eye, start + dir * next_d, volumes):
+			return _refine_boundary(eye, start, dir, d, next_d, volumes)
 		d = next_d
 	return max_d
 
 
-## Bisect the exact stop distance inside (lo, hi]: at `lo` the ray was still running, at `hi` the
-## stop condition held. 4 iterations narrow the STEP_M quantisation to ~2.4mm so adjacent rays stop
-## on the SAME terrain edge instead of different march steps (the fuzzy/jagged fan borders).
-## Display-only refinement: the trigger condition is re-tested, not the full zone state machine —
-## sub-step slivers of a different terrain class are beyond the overlay's resolution anyway.
-static func _refine_boundary(start: Vector2, dir: Vector2, lo: float, hi: float,
-		terrain_type_at: Callable, mode: int) -> float:
+## The ONE sight truth, asked for a single ray sample: can `eye` see a model standing at the flat point
+## `p`? Terrain only — other units' bases are not part of the range overlay.
+static func _blocked(eye: Vector3, p: Vector2, volumes: Array) -> bool:
+	var target_y := TARGET_EYE_IN * VolumetricLos.INCHES_TO_METERS
+	# W4.18 RED STUB: the y-blind fan of today — every ray is fired from table level, whatever height
+	# the model really stands at. W4.18 GREEN replaces this with the eye's own height.
+	var eye_y := target_y
+	return not VolumetricLos.has_los(
+		{"c": Vector2(eye.x, eye.z), "r": 0.0, "y0": eye_y, "y1": eye_y},
+		{"c": p, "r": 0.0, "y0": 0.0, "y1": target_y}, volumes)
+
+
+## Bisect the exact stop distance inside (lo, hi]: at `lo` the ray was still running, at `hi` the sight
+## was blocked. 4 iterations narrow the STEP_M quantisation to ~2.4mm so adjacent rays stop on the SAME
+## terrain edge instead of different march steps (the fuzzy/jagged fan borders, field-test Bug 15).
+static func _refine_boundary(eye: Vector3, start: Vector2, dir: Vector2, lo: float, hi: float,
+		volumes: Array) -> float:
 	for _i in range(REFINE_ITERS):
 		var mid := (lo + hi) * 0.5
-		var t := int(terrain_type_at.call(start + dir * mid))
-		var stopped := false
-		match mode:
-			Refine.IMPASSABLE:
-				stopped = TerrainRules.is_impassable(t)
-			Refine.ZONE_START:
-				stopped = _blocks_area(t)
-			Refine.ZONE_END:
-				stopped = not _blocks_area(t)
-		if stopped:
+		if _blocked(eye, start + dir * mid, volumes):
 			hi = mid
 		else:
 			lo = mid
@@ -119,9 +100,3 @@ static func union_fans(polys: Array) -> Array:
 		if not merged_any:
 			acc.append(poly)
 	return acc
-
-
-## AREA terrain that blocks through-sight for the fan (mirrors terrain_overlay.terrain_blocks_los minus the
-## solid CONTAINER, which _terrain_limited hard-stops separately).
-static func _blocks_area(t: int) -> bool:
-	return t == TerrainRules.TerrainType.RUINS or t == TerrainRules.TerrainType.FOREST
