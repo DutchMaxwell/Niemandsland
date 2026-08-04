@@ -49,11 +49,11 @@ func _covers(vol: Dictionary, p: Vector2) -> bool:
 	return not vol.is_empty() and VolumetricLos.point_in_footprint(p, vol)
 
 
-func _paint(o: Node3D, cells: Array, terrain_type: int) -> void:
+func _paint(o: Node3D, cells: Array, terrain_type: int, rot_deg: float = 0.0) -> void:
 	var data := {}
 	for c: Vector2i in cells:
 		data[c] = terrain_type
-	o.update_overlay(data, TABLE, 0.0)
+	o.update_overlay(data, TABLE, rot_deg)
 
 
 func _container_at(o: Node3D, cell: Vector2i) -> void:
@@ -164,3 +164,21 @@ func test_surface_y_at_reports_the_container_roof() -> void:
 	assert_float(o.surface_y_at(_centre(o, MID))) \
 		.is_equal_approx(OverlayScript.CONTAINER_HEIGHT_INCHES * K, 1e-9)
 	assert_float(o.surface_y_at(_centre(o, MID + Vector2i(0, 2)))).is_equal_approx(0.0, 1e-9)
+
+
+func test_a_rotated_painted_grid_keeps_its_own_cell_frame() -> void:
+	# The map layout's rotation slider turns the painted grid against the world, so a zone's cells are
+	# keyed in the GRID's frame and the volume carries its yaw. Probed on a cell 5 rows out from the
+	# table centre: 30 degrees moves it ~8.6", far more than one cell diagonal, so the two frames
+	# cannot be confused. Without the yaw the sight truth would look terrain up in the wrong place.
+	var o := _overlay()
+	var far_cell := MID + Vector2i(0, 5)
+	_paint(o, [MID + Vector2i(0, 4), far_cell], OverlayScript.TerrainType.FOREST, 30.0)
+	var z := _one_of_kind(o, "cells")
+	assert_float(float(z.get("yaw", NONE))).is_equal_approx(deg_to_rad(30.0), 1e-9)
+	assert_bool(_covers(z, _centre(o, far_cell))).is_true()
+	# The SAME cell's un-rotated position is now bare table — the zone travelled with the grid.
+	var dims: Vector2i = o._calculate_grid_dims(TABLE)
+	var flat: Vector3 = o._cell_to_world(float(far_cell.x), float(far_cell.y), dims,
+		OverlayScript.GRID_SIZE_INCHES * K, 0.0)
+	assert_bool(_covers(z, Vector2(flat.x, flat.z))).is_false()
