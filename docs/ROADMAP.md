@@ -22,6 +22,16 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
+- **`0.3.11.0-alpha` — in final sighting, tag pending.** The community wave, collected on `main`
+  since `0.3.10.1`: the rules-automation push (Reanimation with click-allocation, Reinforcement on a
+  runtime unit factory, Extended Buff Range, Coordinate, Delayed Action — you can pass a turn now —
+  the three Ambush variants, nine healed aura families, Traversal), **split fire**, the **Precision
+  Spotter** radial action, the **combat stage** (paced volleys, melee and casts on a central card),
+  the **multiplayer rule log** (the opponent reads the same rule lines, 67 routed), the **FEUERTAUFE**
+  learning-course foundation (work in progress, clearly labelled), transparency floats, and the
+  release small-items wave (spotting laser visible on the card, Spot bonus named in the To-hit
+  breakdown, the ruler agrees with roof-height sight, Unstoppable clamps in melee). Full detail in
+  the `CHANGELOG`. _L_
 - **`0.3.10.0-alpha` shipped — the solo update.** The headline is **NACHTMAHR**, the built-in
   opponent: a rules-based, deterministic game AI (no LLM, no neural net) that runs entirely offline and
   plays the official OPR solo decision trees. Mark any imported army as AI-controlled, or let the **AI

@@ -4,9 +4,135 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
-## [Unreleased]
+## [0.3.11.0-alpha] — 2026-08-04
 
 ### Fixed
+- **The spotting laser was invisible equipment.** Three models of a squad buy Spotting Lasers and the
+  unit card showed nothing: not the item, not its rule. An upgrade only a *subset* of the models buys
+  never enters the unit's rule list — it lives as an item grant and on the carriers' own loadouts, and
+  the card deliberately hides item-granted rules behind the granting item's tooltip. Only the item
+  itself was never listed, so both halves vanished. This hit every granting upgrade, not just the
+  laser — a Weapon Team and its Tough(3) disappeared the same way. The card lists the item now (its
+  granted rule stays where it belongs, in the item's tooltip), and the models that bought it carry it
+  on their base ring — equipment is always a bought upgrade, so the strict-minority test that guards
+  base weapons no longer hides a 3-of-5 purchase.
+- **The To-hit breakdown now names a spent Spot marker.** Removing markers from a spotted target
+  really did buy the +1s — the threshold said 2+ and the tokens vanished — but the line that explains
+  the number ("Good Shot +1, Targeting Visor +1 → hits on 2+") never mentioned them, so the paid
+  bonus read as a free one and the removal read as loss. Both volley paths now fold the spend into
+  the breakdown as "Spotted +X", and the line appears even when the marker is the only modifier.
+- **The ruler no longer calls a legal roof cast blocked.** Since the container-roof fix, a unit
+  standing on a container sees over its own box and its shot or spell resolves — but the measuring
+  line still painted itself red first. The drawn line hugs the table for readability, and the verdict
+  asked the sight check with those flattened points, so the roof exemption never fired for the
+  display. The verdict now reads the measured objects' real heights (the drawn line stays where it
+  was); ground-to-ground measures are untouched.
+- **An Unstoppable melee weapon now really ignores the penalties.** The rule strips negative to-hit
+  modifiers from its weapon's rolls, and both shooting paths honoured that — but the melee strike
+  composed an Evasive defender's -1 into an Unstoppable weapon's roll silently, one worse than the
+  book says, with no line in the log. The same clamp now sits in the strike phase and writes the same
+  "negative to-hit modifiers ignored" line. Fatigue is not a modifier and still forces unmodified 6s.
+- **Precision Spotter's "Spot" could be clicked, but no target could be picked.** The action fired and
+  then nothing happened: every click after it just selected a unit the ordinary way — no marker, no
+  roll, no refusal, no line in the log. The wiring from the wheel to the click was intact; the search
+  for legal targets in front of it was not. It asked a coarse question — one line from the centre of
+  your unit to the centre of the enemy, terrain only — while the shooting it feeds asks a far more
+  careful one, per model and with the real base widths. A single clipped centre line was enough to
+  leave the candidate list empty, and the action then bailed out **before** arming the click, which is
+  why the following click fell through to normal selection. Spot now uses the same sight the volley
+  uses, so an enemy your unit can shoot at is an enemy your unit can mark. When nothing really is in
+  sight, the log names the nearest enemy in range and what blocked it, instead of the action quietly
+  doing nothing.
+- **A unit standing on a container roof was blind again.** Climbing onto a container is supposed to let
+  a unit see over what stands around it, and that exemption exists — but it was undone a few steps
+  later. A container from the map layout also paints its footprint into the flat grid that the sight
+  line walks across, and that walk knows nothing about height: the very first sample of the line lands
+  inside the shooter's *own* container, reads it as a solid obstacle and refuses the shot. A model on
+  the roof therefore measured exactly like a model standing in front of the container. The walk now
+  remembers which box an elevated model is standing on and steps over that one box's cells only; every
+  other terrain type, every other box and every ground-to-ground line measure byte for byte as before.
+  One caveat when you retest it: judge it by whether the **shot resolves**. The drawn sight fan still
+  ignores height and will keep painting the old, cut-off picture until that surface is rebuilt.
+- **A unit shot below half strength sometimes took no morale test.** Two independent holes let the test
+  slip past. First the counting basis: when you allocate wounds by clicking, they may legally land on a
+  hero attached to the unit — but the trigger that asks "is this unit below half strength?" counted
+  only the unit's own models, while the rule that decides the outcome counts the whole joined chain. A
+  wound clicked onto the hero was invisible to the trigger. Second the dice path: a volley made
+  entirely of Deadly or Takedown hits produces no wounds on the ordinary damage path at all, and the
+  morale hook was gated on exactly that count — so a missile launcher could take half a unit off the
+  table and ask for nothing. Both now read the same combined chain and the same total, so the test
+  comes when the rule says it comes. A unit with no hero attached behaves exactly as before.
+- **A fresh install warned about sound files it had just downloaded correctly.** On a first boot the
+  start menu builds two separate audio libraries — the menu music and the diorama's war ambience — and
+  both went after the same nine files in the same frame. They also shared the same temporary file while
+  downloading, so the two downloads wrote into each other: whichever finished first filed its file away,
+  and the loser then checksummed a file that had vanished or was garbled and reported a mismatch, nine
+  or ten warnings per cold start. It could leave a sound uncached altogether, and the loser's still-open
+  handle kept writing into the file that had already been verified. A download is claimed once now: a
+  second asker waits for the first and then simply uses the finished file. A cold boot fetches each file
+  exactly once, at half the bandwidth, and says nothing — because nothing is wrong.
+- **Placing a returning Reinforcement unit by hand froze the round.** The placement ghost opened
+  correctly and took your click (or your cancel) correctly, and then the game simply stopped: the step
+  waiting for you to finish was watching a *copy* of the flag its own buttons set, so nothing you could
+  do would ever end that wait. Because reinforcement arrivals are resolved inside the round-start
+  sequence, the whole round stalled there — no error, no message, just a table that never took its next
+  turn. The wait now watches the value the buttons really change. Only that one placement was built this
+  way; every other wait in the game was already fine.
+- **The AI stopped freezing in place when it boxed itself in.** Once the planner learned where the table
+  really ends, a unit penned in behind its own line could no longer escape across the edge — so it did
+  nothing at all instead: whole units declared a Rush toward an objective 25″ away and then held their
+  ground, round after round. The escape hatch built for exactly that situation, a sideways step out of
+  the crush, was starved by the very collapse it exists to rescue. When the straight path forward finds
+  no legal end spot, the planner retries at half, then a quarter of the distance — and the sidestep
+  inherited that leftover, so a unit granted 14″ probed for room at 1.75″, which is inside its own
+  formation by construction, found none and gave up. A blocked lane straight ahead says nothing about
+  how far a unit may walk sideways, so the sidestep now measures against the band the unit was actually
+  granted. No rule value changed; boxed-in units get out of their own way instead of standing still.
+- **NACHTMAHR knew what a fireball is worth, but not a blessing.** Its spell evaluation could price 765
+  of the 1356 spells in the books; the other 591 — almost everything that *grants* a special rule —
+  came out worth exactly zero. A Furious or a Rending blessing was therefore worth the same to the AI
+  as casting nothing: the sharp grades never picked one, and Veteran, which skips zero-value casts,
+  actively refused them. Six more grant families are priced now, each by the same yardstick the AI
+  already applies to a weapon that carries the rule natively — Furious, Relentless, Rending, Surge and
+  both Indirect forms are worth exactly the extra wounds they buy, with no new evaluation model and no
+  invented number. What is still unpriced is named rather than hidden: defensive grants (a buff is
+  measured as a delta on its target's own attack, and survivability has no channel in that chain yet),
+  action-economy grants like Unstoppable or Quick Shot, and the "Boost" upgrades that only fire when the
+  base rule is already on the model.
+- **A caster on a coin flip now spends the token that buys the cast.** Every casting token was weighed
+  against one flat floor, and the first token is only ever worth a sixth of the spell's value — so for
+  any spell below a certain value it bought "nothing" on paper, and the caster rolled its straight 50/50
+  with two payable tokens still in hand. That floor prices a *held* token against some later cast; but a
+  later cast starts on the same unboosted roll, so a token held for a future coin flip cannot be worth
+  more than the same token lifting this one. At or below an even chance the floor drops to zero and any
+  positive gain buys the token; above it, the old floor applies unchanged. Casters that used to sit on
+  their tokens for a whole game now spend them where the roll is genuinely on the edge.
+- **A shooting-range bonus let you declare the shot and then dropped every weapon.** Royal Legion's +4″
+  and the spell tokens that extend shooting range were counted when the game judged whether a target may
+  be declared at all — and then forgotten by the gate that decides which of your weapons actually fire,
+  which measured the printed range only. A boosted shooter could legally pick a target 26″ away with a
+  24″ rifle, and the volley then ended **without a die and without a word**. That is the same silent
+  refusal already closed from the target's side (Aircraft, Ranged Shrouding); this is the shooter's side
+  of it. The bonus now rides the single place that answers "how far does this weapon reach" — the
+  pre-filter, the per-weapon filter and the per-model sighting — in the AI's order: printed range plus
+  bonus first, any shrink applied to the sum. The battle log names the rule that granted the reach and
+  the weapons it lifts into range, because a gun firing past the number printed on its card reads like a
+  bug just as much as one that stops firing for no stated reason.
+- **The AI walked off the short edge of a 6×4 table (#215).** The movement planner was told the board
+  size as a single number, and the caller handed it the longer side — so on the standard 6×4 ft table it
+  believed the short axis ran to 72″ instead of 48″, a phantom strip of 72″×24″ of open ground past the
+  edge. The search did not merely tolerate those cells, it routed **through** them: units cut corners
+  across ground that is not there and came to rest off the table, up to 24″ past the edge in the worst
+  case. Both axes are measured separately now, from the route search down to the terrain sampling, and a
+  final gate clamps any plan that still points off the board before it becomes real positions — with a
+  battle-log line naming the unit, because a silent correction reads exactly like a broken game. A
+  square table measures exactly as it did before.
+- **The rules inventory called two automated rules manual.** *Caster Group* (the unit casts with as many
+  spells as it has living bearers) and *Spell Accumulator* (the token battery casters within 12″ may
+  draw from) have been running in the engine since they were built, but their entries in the rules data
+  still carried no mechanic — so the inventory the battle log prints at the start of a game kept listing
+  them under "NOT automated (apply manually)" and asked you to do by hand what the game was already
+  doing for you. The data now says what the engine does.
 - **"Unload" was missing from the transport's radial menu.** Loading a unit into a transport *is* that
   unit's move action, so its activation is spent for the round — and the rulebook is right that it may
   not then also climb back out ("units can't both embark/disembark as part of the same activation").
@@ -59,7 +185,18 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   Mark*, which is a mark you put on the **enemy**, bypassed it for its bearer. The fallback matches the
   exact name now (the same "Ferocious lesson" the other rule checks already learned).
 
-### Added
+### Added — rules automation & pacing
+- **Traversal (army-book).** *"May move through friendly and enemy units"* — the last rule of the
+  automation campaign that had never been built. A carrier's route may now run straight through bases,
+  friendly and enemy alike, instead of squeezing around the wall of bodies in front of it. Terrain is
+  **not** waived: unlike Flying, a Traversal mover still stops at walls and impassable ground, and it
+  still has to end its move in a legal spot with the ordinary spacing to everything around it — the rule
+  is about the way there, not about where you stand at the end. NACHTMAHR plans with it, and each of the
+  three outcomes writes its own battle-log line: the rule applying, terrain still blocking despite it,
+  and the end position still having to be clear. Goblins and Ghostly Undead carry it in the fantasy
+  books. Two honest limits: a ranked regiment's tray slides as one block and plans no route, so the rule
+  has no effect there yet, and your own hand-dragged moves are not gated on units in the way to begin
+  with, so nothing changes on that side.
 - **FEUERTAUFE — the foundation (work in progress).** A second, separate way into learning the game,
   next to the existing tutorial: a scenario loader that builds a lesson from a prepared table file, a
   chapter list, and a first-run hint that can be dismissed for good. Chapter 1 loads a placeholder
@@ -70,7 +207,9 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   plainly that it is unfinished. That naming is the fix for a real confusion: while testing, the two
   entries sat one under the other, both saying "TUTORIAL", and the tester clicked the old one while
   reporting on the new one. The battle log now also names, on the first line, which course was loaded,
-  so the question "which tutorial did I just get?" can be answered from inside the game.
+  so the question "which tutorial did I just get?" can be answered from inside the game. The chapter
+  list and the first-start hint had kept the internal working name a while longer, still announcing a
+  "Game School"; they say FEUERTAUFE now too, so the course has exactly one name wherever you meet it.
 - **Reinforcement (army-book).** A unit whose models all carry the rule may, while it is Shaken or once
   it is fully destroyed, be removed from the table as destroyed; a fresh copy — full starting size, its
   bought upgrades intact, wounds and Shaken reset — is placed at the start of the next round, right after
@@ -168,7 +307,7 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   resolves immediately instead of waiting on the host, and a peer that tries to create in someone
   else's band is refused and says so in the log.
 
-### Fixed
+### Fixed — multiplayer & rules state
 - **Rule events reach the other player's battle log.** Only movement lines ever travelled between
   clients. Every other line the rules engine writes — a passed turn, a *Coordinate* hand-off, an
   Ambush arrival or withdrawal, an *Extended Buff Range* refusal — was written locally and stopped
@@ -180,7 +319,15 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   routing those would print them twice), the AI's internal reasoning dumps, and prompts aimed at
   whoever is holding the mouse. Two of the newly travelling lines also work in a plain
   human-vs-human room: the reform honour-system notice, and the reason a unit just jumped back to
-  where it started after an undo.
+  where it started after an undo. A follow-up audit then read **every** battle-log line that was still
+  written locally — all 228 of them — against that same yardstick and put the 67 it names on the wire:
+  the whole Reinforcement story, growth markers ticking, blocked and capped, dice-less refusals such as
+  an already-Shaken unit auto-failing its morale or a charge falling short, the place/spend/expire life
+  of every marker and token, once-per-game spends, the deployment story end to end, and embark,
+  disembark and unload. Each line that deliberately stays local carries a written reason, so the split
+  is a decision on record instead of an oversight — and the rule notes the AI prints now carry their
+  own routing decision from the moment they are written, because that one printing point mixes kinds
+  that must travel with kinds that must not.
 - **Loading a battle no longer hands back rules you already spent.** Five pieces of rule
   bookkeeping lived only in memory, so loading a save, rejoining a multiplayer room — or simply
   changing which slot NACHTMAHR plays — quietly reset them to their starting values. A **Limited**
@@ -261,7 +408,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   end of the activation for a unit that never attacks), exactly once per activation. Target picking
   is automatic for v1 and every application is named in the log; choosing the target by click is a
   follow-up. Skirmish books whose text says "pick up to **4** friendly units" now really pick up to
-  four instead of one, and a rule that finds no legal target says so instead of failing silently.
+  four instead of one, and a rule that finds no legal target says so instead of failing silently. A
+  buff printed for one half of the game also stops leaking into the other: the token it leaves on the
+  unit records the scope its own rule prints, so a *Precision Shooter Buff*'s +1 no longer helps in
+  melee as well.
 - **…and they work in multiplayer too.** That wave shipped with one deliberate hole: in a live
   multiplayer game the buff family was switched off for human players, because the modifier it
   places did not travel. Half a modifier is worse than none — your dice would have read the buff
@@ -325,8 +475,6 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
   the target legal, and rear models counted as "in range" that were not. Both now measure the
   effective reach, exactly like the AI's volley always did. The battle log names the weapons the
   penalty locks out instead of letting them vanish from the dice.
-
-## [0.3.11.0-alpha] — 2026-07-31
 
 The community-feedback wave: rules the book always had, and a table that finally SHOWS its work.
 
