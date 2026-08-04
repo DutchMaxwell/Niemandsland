@@ -4,6 +4,22 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [0.3.11.1-alpha] — 2026-08-04
+
+### Fixed
+- **Once-per-game move feats no longer count twice.** A unit with Speed Feat (an Orc War
+  Banner's gift) advanced a measured 10" and then shot: the rule's "+2\" Advance / +4\" Rush"
+  text was baked permanently into its move bands AND granted again by the once-per-game spend —
+  6 base + 2 + 2. Such texts stay out of the permanent bands now (the same guard the pick-one
+  rules already had); the bonus arrives exactly once, in the activation that spends it, and the
+  spend line in the log names the unit. This also trims the move rings, which previewed the
+  inflated band. (NML-982)
+- **Split fire no longer offers a dead model's weapon.** A heavy weapon team down to one model
+  still listed all three guns in the split-fire ask; picking a dead gun would roll zero dice and
+  silently waste the split. The ask now lists only weapons with living bearers — and a unit with
+  a single living weapon left gets no split ask at all (one gun cannot split). The dice were
+  always right; only the ask lied. (NML-983)
+
 ## [0.3.11.0-alpha] — 2026-08-04
 
 ### Fixed
