@@ -87,6 +87,23 @@ static func segment_hits_cyl(a: Vector3, b: Vector3, vol: Dictionary) -> bool:
 	return segment_intersects_circle(Vector2(p.x, p.z), Vector2(q.x, q.z), vol["c"], float(vol["r"]))
 
 
+# === The sight query ===
+# A model cylinder is {"c":Vector2,"r":float,"y0":float,"y1":float} — its base footprint extruded from
+# where it stands to its own height. The eye sits at the TOP CENTRE and LOS is ONE segment eye->eye
+# (G1): no multi-sample visibility, partial-visibility nuance is intentionally dropped.
+
+## Eye point of a model cylinder: the centre of its top disc.
+static func eye(_cyl: Dictionary) -> Vector3:
+	return Vector3.ZERO
+
+
+## True if the model `from_cyl` can see `to_cyl`. `volumes` are terrain volumes (see above), `blockers`
+## are other models as cylinders, `exclude` holds the unit keys that never block their own sight line.
+static func has_los(_from_cyl: Dictionary, _to_cyl: Dictionary, _volumes: Array = [],
+		_blockers: Array = [], _exclude: Array = []) -> bool:
+	return true
+
+
 ## True if the flat segment from->to passes through (or touches) the circle. Own copy so the module keeps
 ## no dependency on the 2D ladder in los_rules.gd, which this program retires.
 static func segment_intersects_circle(from_pt: Vector2, to_pt: Vector2, centre: Vector2, radius: float) -> bool:

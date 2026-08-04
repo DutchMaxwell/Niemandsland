@@ -21,6 +21,26 @@ func _cyl(cx_in: float, cz_in: float, r_in: float, y0_in: float, y1_in: float) -
 		"y0": y0_in * K, "y1": y1_in * K, "solid": true}
 
 
+func _area(box_or_cells: Dictionary) -> Dictionary:
+	box_or_cells["solid"] = false
+	return box_or_cells
+
+
+func _cells(ids: Array, y0_in: float, y1_in: float) -> Dictionary:
+	var cells := {}
+	for id: Vector2i in ids:
+		cells[id] = true
+	return {"kind": "cells", "cells": cells, "cell_size": TerrainRules.CELL_IN * K,
+		"y0": y0_in * K, "y1": y1_in * K, "solid": true}
+
+
+## A model as the module sees it: base footprint extruded from where it stands to its own height.
+func _model(x_in: float, z_in: float, stand_y_in: float, base_mm: float) -> Dictionary:
+	var h := VolumetricLos.height_in_for_base_mm(base_mm)
+	return {"c": Vector2(x_in, z_in) * K, "r": base_mm * 0.5 * 0.001,
+		"y0": stand_y_in * K, "y1": (stand_y_in + h) * K}
+
+
 func test_base_height_table_matches_the_official_volumetric_sizes() -> void:
 	# P1: the height of a model is a function of its BASE, never of its mesh (meshes are optional
 	# per-client content — a mesh-derived height would desync multiplayer).
@@ -59,3 +79,60 @@ func test_cylinder_volume_is_clipped_by_its_y_slab_before_the_2d_test() -> void:
 	assert_bool(VolumetricLos.segment_hits_cyl(_p(-6, 1, 0), _p(6, 1, 0), cyl)).is_true()
 	assert_bool(VolumetricLos.segment_hits_cyl(_p(-6, 3, 0), _p(6, 3, 0), cyl)).is_false()
 	assert_bool(VolumetricLos.segment_hits_cyl(_p(-6, 0, 0), _p(6, 12, 0), cyl)).is_false()
+
+
+func test_the_eye_is_the_cylinder_top_centre() -> void:
+	# Standing on a 2" ledge on a 32 mm base (1.25" tall) -> the eye sits at 3.25".
+	var m := _model(4.0, 6.0, 2.0, 32.0)
+	assert_vector(VolumetricLos.eye(m)).is_equal_approx(Vector3(4.0, 3.25, 6.0) * K, Vector3.ONE * 0.0001)
+
+
+func test_solid_container_blocks_the_ground_line_but_not_the_line_over_it() -> void:
+	var container := [_box(0.0, 0.0, 3.0, 1.5, 0.0, 2.5)]   # 6x3", 2.5" tall
+	var ground_a := _model(-10.0, 0.0, 0.0, 25.0)           # eye 1"
+	var ground_b := _model(10.0, 0.0, 0.0, 25.0)
+	assert_bool(VolumetricLos.has_los(ground_a, ground_b, container)).is_false()
+	# The same target seen from a 6" tower: the line clears the 2.5" roof -> no more phantom block.
+	var tower := _model(-10.0, 0.0, 6.0, 25.0)              # eye 7"
+	assert_bool(VolumetricLos.has_los(tower, ground_b, container)).is_true()
+
+
+func test_a_floor_slab_between_two_storeys_blocks() -> void:
+	# The second storey's floor is a thin solid plate at 3" — it hides the ground floor beyond it.
+	var slab := [_box(0.0, 0.0, 6.0, 6.0, 2.75, 3.0)]
+	var upstairs := _model(0.0, 0.0, 3.0, 25.0)             # eye 4"
+	var downstairs := _model(10.0, 0.0, 0.0, 25.0)          # eye 1"
+	assert_bool(VolumetricLos.has_los(upstairs, downstairs, slab)).is_false()
+
+
+func test_area_volume_is_seen_over_into_and_out_of_but_not_through() -> void:
+	# P4: forests/ruins are AREA terrain — see in and out, not through. 3.4" tall.
+	var forest := [_area(_box(0.0, 0.0, 3.0, 3.0, 0.0, 3.4))]
+	var ground_a := _model(-10.0, 0.0, 0.0, 25.0)
+	var ground_b := _model(10.0, 0.0, 0.0, 25.0)
+	assert_bool(VolumetricLos.has_los(ground_a, ground_b, forest)).is_false()      # through: blocked
+	var inside := _model(0.0, 0.0, 0.0, 25.0)
+	assert_bool(VolumetricLos.has_los(ground_a, inside, forest)).is_true()         # into: clear
+	assert_bool(VolumetricLos.has_los(inside, ground_b, forest)).is_true()         # out of: clear
+	# A 6" tower shooting a ground target past a NEARBY forest: the line stays above 3.4" over the trees.
+	var near_forest := [_area(_box(-6.0, 0.0, 1.5, 3.0, 0.0, 3.4))]
+	assert_bool(VolumetricLos.has_los(_model(-10.0, 0.0, 6.0, 25.0), ground_b, near_forest)).is_true()
+
+
+func test_painted_cell_zones_block_solid_and_area_the_same_way() -> void:
+	# Grid-painted zones are one cells-volume per zone; cell (0,0) covers 0..3" in x and z.
+	var solid_zone := [_cells([Vector2i(0, 0)], 0.0, 2.5)]
+	var a := _model(-5.0, 1.5, 0.0, 25.0)
+	var b := _model(8.0, 1.5, 0.0, 25.0)
+	assert_bool(VolumetricLos.has_los(a, b, solid_zone)).is_false()
+	assert_bool(VolumetricLos.has_los(_model(-5.0, 1.5, 6.0, 25.0), b, solid_zone)).is_true()   # over it
+	var area_zone := [_area(_cells([Vector2i(0, 0)], 0.0, 3.4))]
+	assert_bool(VolumetricLos.has_los(a, b, area_zone)).is_false()                              # through
+	assert_bool(VolumetricLos.has_los(a, _model(1.5, 1.5, 0.0, 25.0), area_zone)).is_true()     # into
+
+
+func test_an_empty_table_and_touching_models_are_always_clear() -> void:
+	assert_bool(VolumetricLos.has_los(_model(-10.0, 0.0, 0.0, 25.0), _model(10.0, 0.0, 0.0, 25.0))).is_true()
+	# Span under 2 cm: two models all but on top of each other see each other even inside a solid volume.
+	var container := [_box(0.0, 0.0, 3.0, 1.5, 0.0, 2.5)]
+	assert_bool(VolumetricLos.has_los(_model(0.0, 0.0, 0.0, 25.0), _model(0.2, 0.0, 0.0, 25.0), container)).is_true()
