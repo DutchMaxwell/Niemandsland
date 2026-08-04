@@ -199,6 +199,14 @@ func wall_segments_world() -> Array:
 	return out
 
 
+## The prop's walkable floor slabs as world-space volume data (elevation program, Phase A):
+## {c, he, yaw, y0, y1} in metres, one per L arm of every storey ABOVE the table. The volumetric
+## sight truth folds these in as thin solid boxes, so a model on the top floor cannot see the floor
+## below THROUGH the platform it is standing on.
+func floor_slabs_world() -> Array:
+	return []
+
+
 # === Private: colliders ===
 
 ## Two walkable arm slabs per storey (an L), each top at the walkable surface, shrinking toward

@@ -247,3 +247,75 @@ func test_biome_hazard_model_map() -> void:
 	assert_str(str(m.get("jungle_", ""))).is_equal("carnivore_plant")
 	assert_bool(m.has("")).is_false()         # grassland → procedural mine
 	assert_bool(m.has("desert_")).is_false()  # desert → procedural mine
+
+
+# ===== 3D volume registry: shelf pieces feed the volumetric sight truth (NML-972) =====
+
+const OverlayScript := preload("res://scripts/terrain_overlay.gd")
+
+
+## An overlay (never added to the tree, so _ready() stays out of it) fed a fixed shelf-piece list.
+func _overlay_fed(shapes: Array) -> Node3D:
+	var o: Node3D = auto_free(OverlayScript.new())
+	o.sandbox_shapes_provider = func() -> Array: return shapes
+	return o
+
+
+func _shape(terrain_type: int, footprint: Vector2, slabs: Array) -> Dictionary:
+	return {"type": terrain_type, "c": Vector2.ZERO, "he": footprint * INCHES_TO_METERS * 0.5,
+		"yaw": 0.0, "slabs": slabs}
+
+
+func _boxes(o: Node3D, solid: bool) -> Array:
+	var out: Array = []
+	var volumes: Array = o.los_volumes()
+	for v: Dictionary in volumes:
+		if String(v.get("kind", "box")) == "box" and bool(v.get("solid", true)) == solid:
+			out.append(v)
+	return out
+
+
+func _tops_inches(volumes: Array) -> Array:
+	var out: Array = []
+	for v: Dictionary in volumes:
+		var top: float = snappedf(float(v.get("y1", 0.0)) / INCHES_TO_METERS, 0.001)
+		if not out.has(top):
+			out.append(top)
+	out.sort()
+	return out
+
+
+func test_multi_storey_ruin_exposes_a_floor_slab_per_arm_above_the_table() -> void:
+	# Floors at 3" and 6" are real platforms a mini stands on, so they are real slabs in the sight
+	# truth; the ground floor IS the table and never blocks. Two arms per storey (the L) -> 4 slabs.
+	var prop := _prop("ruin_large_3f", ObjectManager.SandboxPropKind.RUIN, Vector2(9, 6), [0.0, 3.0, 6.0])
+	var slabs: Array = prop.floor_slabs_world()
+	assert_int(slabs.size()).is_equal(4)
+	assert_array(_tops_inches(slabs)).is_equal([3.0, 6.0])
+	for s: Dictionary in slabs:
+		# Thin: the platform's REAL collider thickness, so slab and collider cannot disagree.
+		assert_float(float(s["y1"]) - float(s["y0"])) \
+			.is_equal_approx(SandboxTerrainProp.FLOOR_THICKNESS_M, 1e-9)
+
+
+func test_overlay_folds_shelf_floor_slabs_in_as_solid_boxes() -> void:
+	var prop := _prop("ruin_large_3f", ObjectManager.SandboxPropKind.RUIN, Vector2(9, 6), [0.0, 3.0, 6.0])
+	var o := _overlay_fed([_shape(OverlayScript.TerrainType.RUINS, Vector2(9, 6), prop.floor_slabs_world())])
+	var solids := _boxes(o, true)
+	assert_int(solids.size()).is_equal(4)
+	assert_array(_tops_inches(solids)).is_equal([3.0, 6.0])
+
+
+func test_shelf_ruin_hull_is_area_terrain_six_inches_tall() -> void:
+	# The piece itself stays AREA terrain (see in/out, not through) at the two-storey ruin height.
+	var o := _overlay_fed([_shape(OverlayScript.TerrainType.RUINS, Vector2(9, 6), [])])
+	var areas := _boxes(o, false)
+	assert_int(areas.size()).is_equal(1)
+	assert_array(_tops_inches(areas)).is_equal([OverlayScript.RUIN_ZONE_HEIGHT_INCHES])
+
+
+func test_shelf_forest_hull_is_area_terrain_of_tree_height() -> void:
+	var o := _overlay_fed([_shape(OverlayScript.TerrainType.FOREST, Vector2(6, 6), [])])
+	var areas := _boxes(o, false)
+	assert_int(areas.size()).is_equal(1)
+	assert_array(_tops_inches(areas)).is_equal([OverlayScript.TREE_HEIGHT_INCHES])
