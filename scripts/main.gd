@@ -8975,10 +8975,22 @@ func _solo_split_fire_offer_names(attacker: GameUnit, target_a: GameUnit) -> Arr
 	var dist := solo_controller.nearest_melee_gap_in(attacker, target_a)
 	var names: Array = []
 	for grp in _solo_attack_groups(attacker, dist, false, target_a):
+		var member := (grp as Dictionary).get("member") as GameUnit
 		for p in (grp as Dictionary).get("profiles", []):
-			var n := str((p as Dictionary).get("name", ""))
-			if not n.is_empty() and not names.has(n):
-				names.append(n)
+			var pd := p as Dictionary
+			var n := str(pd.get("name", ""))
+			if n.is_empty() or names.has(n):
+				continue
+			# NML-983: a specialist weapon whose every pinned bearer is dead is not offered — its
+			# volley rolls zero dice (alive_bearers_of, the X2/B15 truth). The check is bearer-based,
+			# not attacks-based: a living weapon merely without sight of THIS target stays offered
+			# (splitting it to the other target is exactly what the ask is for). Units without
+			# per-model loadout data (-1) keep every name — ratio scaling can still fire them.
+			var copies: int = maxi(int(pd.get("count", 1)), 1)
+			if member != null and copies < member.models.size() \
+					and SoloController.alive_bearers_of(member, n) == 0:
+				continue
+			names.append(n)
 	return names
 
 
