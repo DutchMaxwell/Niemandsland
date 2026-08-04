@@ -68,6 +68,17 @@ func test_minority_equipment_is_special() -> void:
 	assert_array(unit.get_special_equipment_names(unit.models[1])).is_empty()
 
 
+func test_bought_equipment_stays_special_even_at_majority_count() -> void:
+	# NML-969: 3 of 5 models bought a Spotting Laser. EQUIPMENT only ever reaches a model as a bought
+	# upgrade (never as the leftover of a base-weapon swap), so the strict-minority test that guards
+	# WEAPONS must not hide it — the carriers must still name it on their base ring.
+	var unit := _unit_with_weapons([["Rifle"], ["Rifle"], ["Rifle"], ["Rifle"], ["Rifle"]])
+	for i in range(3):
+		unit.models[i].properties["equipment"] = ["Spotting Laser"]
+	assert_array(unit.get_special_equipment_names(unit.models[0])).contains_exactly(["Spotting Laser"])
+	assert_array(unit.get_special_equipment_names(unit.models[4])).is_empty()
+
+
 func test_ring_has_one_segment_per_special_item() -> void:
 	var controller = auto_free(RadialControllerScript.new())
 	var unit := _unit_with_weapons([["Rifle", "Shredding Gun", "Gauntlets"], ["Rifle"], ["Rifle"]])

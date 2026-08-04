@@ -187,20 +187,26 @@ func _loadout_carrier_counts() -> Dictionary:
 	return carriers
 
 
-## Returns a model's SPECIAL loadout: weapons/equipment carried by only a strict
-## MINORITY of the unit (carriers * 2 <= unit size). This flags genuine specials
-## (a 1-of-10 Flamer, a Banner, a Sergeant's gear) while NOT flagging a base
-## weapon whose count was merely reduced by a swap (e.g. 9-of-10). Order/dedup
-## preserved (weapons first, then equipment). Single-model units return [].
+## Returns a model's SPECIAL loadout: every piece of non-weapon EQUIPMENT it carries,
+## plus the WEAPONS carried by only a strict MINORITY of the unit (carriers * 2 <= unit
+## size). The minority test exists to keep a base weapon whose count was merely reduced
+## by a swap (e.g. 9-of-10) off the ring — a weapons-only concern. Equipment only ever
+## reaches a model as a BOUGHT upgrade (a subset loadout item), so it is always special;
+## gating it by the same minority test hid a 3-of-5 Spotting Laser from its carriers
+## (NML-969). Order/dedup preserved (weapons first, then equipment). Single-model units
+## return [].
 func get_special_equipment_names(model: ModelInstance) -> Array[String]:
 	var result: Array[String] = []
 	var n := models.size()
 	if n <= 1:
 		return result
 
+	var is_equipment: Dictionary = {}
+	for e in model.get_equipment():
+		is_equipment[str(e)] = true
 	var carriers := _loadout_carrier_counts()
 	for item_name in _model_loadout_names(model):
-		if carriers.get(item_name, 0) * 2 <= n:
+		if is_equipment.has(item_name) or carriers.get(item_name, 0) * 2 <= n:
 			result.append(item_name)
 	return result
 
