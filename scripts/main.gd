@@ -3157,7 +3157,10 @@ func _solo_resolve_one_cast(cast: Dictionary) -> void:
 			var found := false
 			for e in RulesRegistry.unit_rules_of_primitive(cu, "Spell Conduit"):
 				var sp: Dictionary = (e as Dictionary).get("params", {})
-				var d := MoveIntent.distance_inches(solo_controller.unit_centre(cu), solo_controller.unit_centre(caster))
+				# NML-981: measured base edge to base edge (nearest models) like every other ranged
+				# check — the unit-centre reading denied legal conduits on wide bases (the AI's
+				# conduit-origin sweep already measures edges; NML-206 precedent).
+				var d := solo_controller.nearest_melee_gap_in(cu, caster)
 				if d > float(sp.get("range_in", 12.0)):
 					continue
 				# NML-936 (v3.5.3 audit): "Friendly casters may only use this rule if this unit isn't
