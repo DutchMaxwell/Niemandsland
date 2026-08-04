@@ -359,3 +359,39 @@ func test_ruler_verdict_stands_a_roof_point_on_the_container() -> void:
 			"the terrain grid with fixed Asgard height categories, so a measure taken ON a container roof " +
 			"paints red across the very box the shot flies over (object_manager._measure_los_blocked).") \
 		.is_false()
+
+
+# =====================================================================================
+# NML-972 (elevation program, Phase A / W5.23b) — a measured Aircraft is never hidden.
+# =====================================================================================
+# P6 (GF Advanced Rules v3.5.1 p.13): an Aircraft is abstract. Its base is transparent to
+# sight and it is always visible, wherever it hovers — the shooting gate has said so since
+# W4.21b. The ruler's endpoint cylinders never carried the flag, so measuring TO a flyer
+# parked behind a container still painted red while the dice happily allowed the shot.
+
+
+## A measured endpoint that is an Aircraft model (meta on the node, exactly like a real mini).
+func _aircraft_endpoint() -> Node3D:
+	var unit := GameUnit.new()
+	unit.unit_properties = {"special_rules": ["Aircraft"]}
+	var model := ModelInstance.new()
+	model.unit = unit
+	var node: Node3D = auto_free(Node3D.new())
+	node.set_meta("model_instance", model)
+	return node
+
+
+func test_ruler_verdict_never_hides_an_aircraft_behind_terrain() -> void:
+	_om.terrain_overlay = _overlay_with_container_band()
+	var flyer := _aircraft_endpoint()
+	# Fixture precondition: the rule really resolves, so a green run cannot be a false pass.
+	assert_bool(SoloController.is_aircraft(_om._object_model_instance(flyer).unit)) \
+		.override_failure_message("fixture broken: the Aircraft rule did not resolve for the measured endpoint") \
+		.is_true()
+	_om.set("_measure_end_object", flyer)
+	var blocked: bool = _om._measure_los_blocked(Vector3(-0.40, 0.02, 0.0), Vector3(0.50, 0.02, 0.0))
+	assert_bool(blocked) \
+		.override_failure_message("NML-972 — the ruler hides an Aircraft behind terrain: its endpoint cylinders " +
+			"carry no is_aircraft flag, so the measure line goes red across a container the dice shoot straight " +
+			"over (object_manager._measure_cylinder).") \
+		.is_false()
