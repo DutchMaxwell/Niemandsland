@@ -22,6 +22,13 @@ enum TerrainType { NONE = 0, RUINS = 1, FOREST = 2, CONTAINER = 3, DANGEROUS = 4
 const CELL_IN := 3.0    # == terrain_overlay.GRID_SIZE_INCHES: one terrain cell is 3"x3"
 const BLOCKER_HEIGHT := 5   # Height category of a LOS-blocking zone (terrain_overlay.terrain_height_category)
 
+# Real 3D dimensions (elevation program, Phase A): terrain heights are per-piece DATA, so a future hill
+# or tower only has to declare its own number. Same values terrain_overlay builds its volumes from — a
+# container is 2.5" of real box, a wood 3.4" of trunk and crown, a shelf ruin two 3" storeys.
+const CONTAINER_HEIGHT_INCHES := 2.5
+const FOREST_HEIGHT_INCHES := 3.4
+const RUIN_ZONE_HEIGHT_INCHES := 6.0
+
 
 # === Type predicates (identical to terrain_overlay's classification) ===
 
@@ -32,6 +39,19 @@ static func blocks_los(t: int) -> bool:
 ## Asgard Height category of a terrain type (blockers are Height 5; open ground = 0).
 static func height_category(t: int) -> int:
 	return BLOCKER_HEIGHT if blocks_los(t) else 0
+
+
+## REAL height (INCHES) of a terrain type as a 3D volume — what the volumetric sight truth extrudes each
+## painted zone to (0 = never a volume: open ground, dangerous ground).
+static func volume_height_inches(t: int) -> float:
+	match t:
+		TerrainType.CONTAINER:
+			return CONTAINER_HEIGHT_INCHES
+		TerrainType.FOREST:
+			return FOREST_HEIGHT_INCHES
+		TerrainType.RUINS:
+			return RUIN_ZONE_HEIGHT_INCHES
+	return 0.0
 
 
 static func gives_cover(t: int) -> bool:

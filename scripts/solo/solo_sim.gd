@@ -39,6 +39,33 @@ const MELEE_REACH_IN := 2.0   # OPR melee (p.9 "Who Can Strike"): only models wi
 const OBJECTIVE_CONTROL_IN := 3.0
 const DEFAULT_ROUNDS := 4
 const MODEL_HEIGHT := 1   # every sim model is ground infantry (Height 1); tall/vehicle heights are a follow-up
+const MODEL_BASE_MM := 32.0   # the volumetric twin: every sim model stands on the infantry standard base
+
+
+# === Volumetric line of sight (elevation program, Phase A — the twin of the game's registry) ===
+
+## One-board cache: the sight query below runs per candidate enemy, the build behind it only when the
+## board changes. The sim plays one board at a time, so a single entry keeps it honest.
+static var _los_volumes_cache: Dictionary = {}
+
+
+## The sim's terrain grid as VolumetricLos volumes, in METRES (the module's unit — the sim converts at
+## this boundary and nowhere else). ONE cells volume per CONTIGUOUS zone: a merged one would let a model
+## see out of a foreign wood. Each zone is extruded to its type's real height, so the headless twin and
+## the game read the very same geometry.
+static func terrain_los_volumes(_terrain: Dictionary) -> Array:
+	return []
+
+
+## The twin's sight query: inches in (the sim's unit), the ONE volumetric truth out. Sim models stand on
+## the table and are infantry-based; Phase B teaches the sim to climb, and only their y0 changes here.
+static func terrain_has_los(terrain: Dictionary, from_in: Vector2, to_in: Vector2) -> bool:
+	var k := VolumetricLos.INCHES_TO_METERS
+	var h: float = VolumetricLos.height_in_for_base_mm(MODEL_BASE_MM) * k
+	return VolumetricLos.has_los(
+		{"c": from_in * k, "r": 0.0, "y0": 0.0, "y1": h},
+		{"c": to_in * k, "r": 0.0, "y0": 0.0, "y1": h},
+		terrain_los_volumes(terrain))
 
 ## Substrings of special-rule names the COMBAT MATH actually models. Any rule a unit carries that matches
 ## none of these is logged once per game (unknown-rule visibility) — see docs/SOLO_AI_RULES_COVERAGE.md.

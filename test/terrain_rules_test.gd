@@ -165,3 +165,83 @@ func test_segment_intersects_obb_edges_and_containment() -> void:
 	assert_bool(TerrainRules.segment_intersects_obb(Vector2(15, 22.0), Vector2(25, 22.0), c, he, 0.0)).is_false()
 	# Endpunkt IN der Box: zählt als Schnitt (Area-Skip regelt see-in/out beim Aufrufer).
 	assert_bool(TerrainRules.segment_intersects_obb(Vector2(20, 20), Vector2(30, 20), c, he, 0.0)).is_true()
+
+
+# =====================================================================================
+# NML-972 (elevation program, Phase A / W3.15) — the sim twin on the volumetric truth.
+# =====================================================================================
+# The headless simulator ran its own flat copy of the terrain walk (TerrainRules.
+# has_line_of_sight with Asgard height categories). It now asks the SAME primitive the
+# game asks (VolumetricLos) against volumes built from its own grid — inches converted to
+# metres at that one boundary. These cases are the old twin cases ported over: the sight
+# verdicts must not move on flat ground, and the last pair is what only the new truth can
+# answer at all.
+#
+# Board note: a 3" grid, so cell (5,5) covers x,y in [15,18) and its centre is (16.5,16.5).
+
+const ROOF_IN := TerrainRules.CONTAINER_HEIGHT_INCHES   # standing on a container's roof
+
+
+## The volumetric verdict for two points, in the sim's inches, at their standing heights.
+func _sees(terrain: Dictionary, from_in: Vector2, to_in: Vector2,
+		from_stand_in := 0.0, to_stand_in := 0.0) -> bool:
+	var k := VolumetricLos.INCHES_TO_METERS
+	var h: float = VolumetricLos.height_in_for_base_mm(SoloSim.MODEL_BASE_MM) * k
+	return VolumetricLos.has_los(
+		{"c": from_in * k, "r": 0.0, "y0": from_stand_in * k, "y1": (from_stand_in * k) + h},
+		{"c": to_in * k, "r": 0.0, "y0": to_stand_in * k, "y1": (to_stand_in * k) + h},
+		SoloSim.terrain_los_volumes(terrain))
+
+
+func test_twin_open_field_and_solid_pieces_keep_their_verdicts() -> void:
+	assert_bool(SoloSim.terrain_has_los({}, Vector2(5, 5), Vector2(40, 40))) \
+		.override_failure_message("an empty board blocks nothing").is_true()
+	var box := {Vector2i(5, 5): T.CONTAINER}
+	assert_bool(SoloSim.terrain_has_los(box, Vector2(10, 16.5), Vector2(25, 16.5))) \
+		.override_failure_message("NML-972 — the sim twin sees straight through a solid container: its grid " +
+			"never reaches the volume registry the volumetric truth reads.") \
+		.is_false()
+	# Solid pieces have no see-in/out exception: even both endpoints on the box stay blocked.
+	var wall := {Vector2i(5, 5): T.CONTAINER, Vector2i(6, 5): T.CONTAINER, Vector2i(7, 5): T.CONTAINER}
+	assert_bool(SoloSim.terrain_has_los(wall, Vector2(16.5, 16.5), Vector2(22, 16.5))) \
+		.override_failure_message("NML-972 — a solid container must hard-block even inside its own footprint") \
+		.is_false()
+	# The short-line hole stays shut (container wave): 2.9" straight through a blocking cell.
+	var short_box := {Vector2i(1, 0): T.CONTAINER}
+	assert_bool(SoloSim.terrain_has_los(short_box, Vector2(2.6, 1.5), Vector2(5.5, 1.5))) \
+		.override_failure_message("NML-972 — a short line THROUGH a container cell must still be blocked") \
+		.is_false()
+	assert_bool(SoloSim.terrain_has_los(short_box, Vector2(2.6, 4.6), Vector2(5.5, 4.6))) \
+		.override_failure_message("the same short line on open ground is free").is_true()
+
+
+func test_twin_area_terrain_keeps_see_in_out_not_through() -> void:
+	var wood := {Vector2i(5, 5): T.FOREST}
+	assert_bool(SoloSim.terrain_has_los(wood, Vector2(16.5, 16.5), Vector2(25, 16.5))) \
+		.override_failure_message("you see OUT of the wood you stand in").is_true()
+	var ruin := {Vector2i(5, 5): T.RUINS}
+	assert_bool(SoloSim.terrain_has_los(ruin, Vector2(10, 16.5), Vector2(25, 16.5))) \
+		.override_failure_message("NML-972 — the sim twin sees straight THROUGH a ruin to a far-side target") \
+		.is_false()
+	assert_bool(SoloSim.terrain_has_los(ruin, Vector2(16.5, 16.5), Vector2(25, 16.5))) \
+		.override_failure_message("you see out of the ruin you stand in").is_true()
+	assert_bool(SoloSim.terrain_has_los(ruin, Vector2(25, 16.5), Vector2(16.5, 16.5))) \
+		.override_failure_message("and into it, from outside").is_true()
+	# Depth boundary: a 3-cell-deep ruin. A target inside the FAR cell is visible, one just beyond is not.
+	var deep := {Vector2i(5, 5): T.RUINS, Vector2i(6, 5): T.RUINS, Vector2i(7, 5): T.RUINS}
+	assert_bool(SoloSim.terrain_has_los(deep, Vector2(6, 16.5), Vector2(22, 16.5))) \
+		.override_failure_message("see-in has no depth cap — the far cell of the zone is still visible").is_true()
+	assert_bool(SoloSim.terrain_has_los(deep, Vector2(6, 16.5), Vector2(28, 16.5))) \
+		.override_failure_message("NML-972 — a line all the way THROUGH the zone to open ground beyond is blocked") \
+		.is_false()
+
+
+func test_twin_reads_real_heights_so_a_roof_looks_over_the_box() -> void:
+	# What only the volumetric twin can answer: the container is 2.5" of real height, not a category.
+	var box := {Vector2i(5, 5): T.CONTAINER}
+	assert_bool(_sees(box, Vector2(16.5, 16.5), Vector2(25, 16.5))) \
+		.override_failure_message("control: at table level the same box must still block") \
+		.is_false()
+	assert_bool(_sees(box, Vector2(16.5, 16.5), Vector2(25, 16.5), ROOF_IN, 0.0)) \
+		.override_failure_message("NML-972 — standing ON the 2.5\" container must look over its own edge") \
+		.is_true()
