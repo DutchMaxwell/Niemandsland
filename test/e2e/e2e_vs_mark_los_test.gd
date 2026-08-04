@@ -216,3 +216,60 @@ func test_the_ai_los_checker_sees_from_a_container_roof() -> void:
 			"table floor: it hands its two points to the flat grid walk with fixed height categories, so " +
 			"the AI can never see a firing position ON a container as one (main.gd:2154).") \
 		.is_true()
+
+
+# =====================================================================================
+# NML-971 / W4.21 — the hover line's colour and geometry read the SAME one query.
+# =====================================================================================
+# The line drawn to a hovered target is display only, and display that argues with the dice
+# is worse than no display. Its colour and its "n/N sight" label are ONE number —
+# _solo_hover_sighted_count, which rides the migrated per-model volumetric query (or, while a
+# cast is aimed, the cast gate's own candidate set: e2e_indirect_targeting_test) — and its
+# geometry hangs off solo_controller.unit_centre, which carries the models' real standing
+# height. These cases pin both ends against the container patch above: no second sight or
+# range source may creep back into the visual path.
+
+## The shooter of _shooter_and_ground_target, armed with one long gun so only SIGHT can
+## decide the hover count (the range gate is the same flat measure it always was, G3).
+func _armed_rooftop_shooter(shooter_y: float) -> Array:
+	var pair := _shooter_and_ground_target(shooter_y)
+	var shooter := pair[0] as GameUnit
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "Long Gun"
+	w.range_value = 36
+	w.attacks = 1
+	w.count = 1
+	var src := OPRApiClient.OPRUnit.new()
+	var ws: Array[OPRApiClient.OPRWeapon] = [w]
+	src.weapons = ws
+	shooter.source_type = "opr"
+	shooter.source_data = src
+	return pair
+
+
+func test_the_hover_line_stays_red_for_a_ground_shooter() -> void:
+	# CONTROL — the same gun behind the same box: the line must still count zero, so the
+	# elevated case below cannot pass on a broken fixture.
+	_container_patch(_main.terrain_overlay)
+	var pair := _armed_rooftop_shooter(0.0)
+	assert_int(_main._solo_hover_sighted_count(pair[0] as GameUnit, pair[1] as GameUnit)) \
+		.override_failure_message("control fixture: a ground shooter behind a solid container must draw a red line") \
+		.is_equal(0)
+
+
+func test_the_hover_line_reads_the_volumetric_truth_and_hangs_at_the_real_height() -> void:
+	_container_patch(_main.terrain_overlay)
+	var pair := _armed_rooftop_shooter(2.5 * 0.0254)
+	var shooter := pair[0] as GameUnit
+	var target := pair[1] as GameUnit
+	assert_int(_main._solo_hover_sighted_count(shooter, target)) \
+		.override_failure_message("NML-971 — the hover line disagrees with the gate: its count must come from " +
+			"the ONE migrated query (main.gd _solo_hover_sighted_count), never from a second sight or range source.") \
+		.is_greater(0)
+	assert_int(_main._solo_sighted_count(shooter, target, 36)) \
+		.override_failure_message("the hover count and the shooting gate must be the same number") \
+		.is_equal(_main._solo_hover_sighted_count(shooter, target))
+	# The drawn line's endpoints are unit_centre + 4 cm — so on the roof it starts 2.5" up.
+	assert_float(_main.solo_controller.unit_centre(shooter).y) \
+		.override_failure_message("the drawn line's geometry must carry the shooter's real standing height") \
+		.is_equal_approx(2.5 * 0.0254, 0.001)
