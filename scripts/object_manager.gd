@@ -2580,23 +2580,9 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 	# Check LOS along the path, height-aware per the Asgard standard: a terrain zone
 	# between the two points blocks only if its Height >= BOTH endpoints' Height and
 	# neither endpoint stands inside that zone (you see in/out of your own zone).
-	var los_blocked = false
-	if terrain_overlay and terrain_overlay.has_method("has_line_of_sight"):
-		var from_height := _object_height_category(_measure_start_object)
-		var to_height := _object_height_category(_measure_end_object)
-		# Base radii keep the ruler consistent with the engine's base-aware terrain-zone LOS (a model whose
-		# base overlaps a forest/ruin edge sees in/out — the ruler must not show red where the volley fires).
-		var from_model := _object_model_instance(_measure_start_object)
-		var to_model := _object_model_instance(_measure_end_object)
-		var from_r: float = LosRules.model_base_radius_m(from_model) if from_model else 0.0
-		var to_r: float = LosRules.model_base_radius_m(to_model) if to_model else 0.0
-		if not terrain_overlay.has_line_of_sight(from_pos, to_pos, from_height, to_height, from_r, to_r):
-			los_blocked = true
-			line_color = Color.RED  # Change line to red if LOS is blocked
-		# Units block sight lines too (Asgard: formation Height, <1" gaps closed).
-		elif _units_block_measure_line(from_pos, to_pos, from_height, to_height):
-			los_blocked = true
-			line_color = Color.RED
+	var los_blocked: bool = _measure_los_blocked(from_pos, to_pos)
+	if los_blocked:
+		line_color = Color.RED  # Change line to red if LOS is blocked
 
 	var mat = _measure_line.material_override as StandardMaterial3D
 	if mat:
@@ -2630,6 +2616,25 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 	_measure_last_distance = distance_inches
 	_measure_last_blocked = los_blocked
 	_measure_has_value = true
+
+
+## The measure line's LOS verdict, factored out of the draw path so it is testable
+## headless. Terrain first (height-aware Asgard walk), then units as blockers.
+func _measure_los_blocked(from_pos: Vector3, to_pos: Vector3) -> bool:
+	if not (terrain_overlay and terrain_overlay.has_method("has_line_of_sight")):
+		return false
+	var from_height := _object_height_category(_measure_start_object)
+	var to_height := _object_height_category(_measure_end_object)
+	# Base radii keep the ruler consistent with the engine's base-aware terrain-zone LOS (a model whose
+	# base overlaps a forest/ruin edge sees in/out — the ruler must not show red where the volley fires).
+	var from_model := _object_model_instance(_measure_start_object)
+	var to_model := _object_model_instance(_measure_end_object)
+	var from_r: float = LosRules.model_base_radius_m(from_model) if from_model else 0.0
+	var to_r: float = LosRules.model_base_radius_m(to_model) if to_model else 0.0
+	if not terrain_overlay.has_line_of_sight(from_pos, to_pos, from_height, to_height, from_r, to_r):
+		return true
+	# Units block sight lines too (Asgard: formation Height, <1" gaps closed).
+	return _units_block_measure_line(from_pos, to_pos, from_height, to_height)
 
 
 ## Asgard Height category (1-6) of a measured endpoint's object, read from its
