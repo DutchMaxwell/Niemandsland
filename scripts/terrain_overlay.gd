@@ -395,6 +395,10 @@ var _blocker_obbs: Array = []
 ## KI sie in Bewegung, Cover und Sichtlinien sieht (Maintainer 2026-07-22: "Gelände, das nicht
 ## durch den Map-Layouter generiert wird, mit berücksichtigen").
 var sandbox_shapes_provider: Callable = Callable()
+## Cached registered part of the 3D volume registry (see los_volumes) — it is read on every sight
+## query, so it is built once per registration instead of per query.
+var _los_volumes_static: Array = []
+var _los_volumes_dirty := true
 
 
 func _sandbox_shapes() -> Array:
@@ -467,6 +471,7 @@ func update_overlay(cells_data: Dictionary, table_size: Vector2, grid_rotation: 
 
 	# Store grid_cells for terrain lookup
 	self.grid_cells = cells_data
+	_los_volumes_dirty = true
 
 	# Update deployment zones when table size changes
 	_update_deployment_zones()
@@ -1274,13 +1279,124 @@ func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_
 
 ## Every piece of terrain this overlay knows about, as VolumetricLos volume dicts in world metres —
 ## the ONE feed the volumetric sight truth reads, so sight math and sight visuals cannot drift apart.
+## The registered part (containers, walls, painted zones) is CACHED and dropped by every registration
+## site; the freely placed sandbox pieces move between frames, so they are folded in live.
 func los_volumes() -> Array:
-	return []
+	if _los_volumes_dirty:
+		_los_volumes_static = _build_los_volumes()
+		_los_volumes_dirty = false
+	var live := _sandbox_volumes()
+	return _los_volumes_static if live.is_empty() else _los_volumes_static + live
 
 
-## Height (metres) of the surface a model standing at the flat world point `p` would stand on.
-func surface_y_at(_p: Vector2) -> float:
+## Height (metres) of the surface a model standing at the flat world point `p` would stand on: a
+## container roof, else the table. Hypothetical AI spots and the ruler get their standing height here.
+func surface_y_at(p: Vector2) -> float:
+	return VolumetricLos.surface_y_at(p, los_volumes())
+
+
+## Real height (INCHES) of a terrain type as a 3D volume — the per-piece DATA the elevation program
+## rests on, so a future hill or tower only has to declare its own height here (0 = never a volume).
+func terrain_volume_height_inches(terrain_type: int) -> float:
+	match terrain_type:
+		TerrainType.FOREST:
+			return TREE_HEIGHT_INCHES
+		TerrainType.RUINS:
+			return RUIN_ZONE_HEIGHT_INCHES
+		TerrainType.CONTAINER:
+			return CONTAINER_HEIGHT_INCHES
 	return 0.0
+
+
+func _build_los_volumes() -> Array:
+	var out: Array = []
+	var k := INCHES_TO_METERS
+	# Placed containers: the exact recorded 6x3 OBB, extruded to its real 2.5" height.
+	for ob in _blocker_obbs:
+		var od := ob as Dictionary
+		out.append({"kind": "box", "c": od["c"], "he": od["he"], "yaw": float(od["yaw"]),
+			"y0": 0.0, "y1": CONTAINER_HEIGHT_INCHES * k, "solid": true})
+	out.append_array(_wall_volumes())
+	out.append_array(_zone_volumes())
+	return out
+
+
+## Ruin walls as thin upright slabs of their real dimensions (2.5" tall, 0.25" thick) — the same
+## placement math the physical wall bodies use, so a line clears in the math exactly where it looks clear.
+func _wall_volumes() -> Array:
+	var out: Array = []
+	if _last_wall_segments.is_empty():
+		return out
+	var cell_size := GRID_SIZE_INCHES * INCHES_TO_METERS
+	var dims := _calculate_grid_dims(_last_wall_table_size)
+	var rot := deg_to_rad(_last_wall_rotation)
+	for segment in _last_wall_segments:
+		var placement := _segment_world_placement(segment, dims, cell_size, rot,
+			_last_wall_rotation, _last_wall_table_size)
+		if placement.is_empty():
+			continue
+		var pos: Vector3 = placement["position"]
+		var along: Vector3 = placement["along_dir"]
+		var half_len: float = float(segment.get("length_inches", GRID_SIZE_INCHES)) * INCHES_TO_METERS * 0.5
+		out.append({"kind": "box", "c": Vector2(pos.x, pos.z),
+			"he": Vector2(half_len, WALL_THICKNESS_INCHES * INCHES_TO_METERS * 0.5),
+			"yaw": atan2(-along.z, along.x),   # node rotation.y convention: local +X -> (cos, -sin)
+			"y0": 0.0, "y1": WALL_HEIGHT_INCHES * INCHES_TO_METERS, "solid": true})
+	return out
+
+
+## Grid-painted terrain: ONE cells volume per contiguous zone (the see-in/out rule keys on the whole
+## zone, so a merged one would let a model see out of a FOREIGN wood). Cells are keyed in the grid's own
+## frame and carry its yaw, so a rotated table stays exact. Dangerous ground is Open and never appears.
+func _zone_volumes() -> Array:
+	var out: Array = []
+	if grid_cells.is_empty():
+		return out
+	var cell_size := GRID_SIZE_INCHES * INCHES_TO_METERS
+	var dims := _calculate_grid_dims(table_size_feet)
+	var rot := deg_to_rad(grid_rotation_degrees)
+	for zone in _terrain_zones(grid_cells):
+		var ttype: int = zone["type"]
+		if not terrain_blocks_los(ttype):
+			continue
+		var cells := {}
+		for c: Vector2i in zone["cells"]:
+			# NML-965 double-block trap: a placed container paints its cells AND registers its box.
+			# The box is the truth (it alone has a roof to stand on) — its ground drops out here.
+			if ttype == TerrainType.CONTAINER:
+				var w := _cell_to_world(float(c.x), float(c.y), dims, cell_size, rot)
+				if _covered_by_blocker_obb(Vector2(w.x, w.z)):
+					continue
+			cells[Vector2i(c.x - dims.x / 2, c.y - dims.y / 2)] = true
+		if cells.is_empty():
+			continue
+		out.append({"kind": "cells", "cells": cells, "cell_size": cell_size, "yaw": rot, "y0": 0.0,
+			"y1": terrain_volume_height_inches(ttype) * INCHES_TO_METERS,
+			"solid": not terrain_is_area(ttype)})
+	return out
+
+
+## NML-001: freely placed shelf pieces as boxes of their own type's height. Live (not cached) — the
+## player can drag them around between frames.
+func _sandbox_volumes() -> Array:
+	var out: Array = []
+	for s in _sandbox_shapes():
+		var sd := s as Dictionary
+		var st := int(sd["type"])
+		if not terrain_blocks_los(st):
+			continue
+		out.append({"kind": "box", "c": sd["c"], "he": sd["he"], "yaw": float(sd["yaw"]), "y0": 0.0,
+			"y1": terrain_volume_height_inches(st) * INCHES_TO_METERS,
+			"solid": not terrain_is_area(st)})
+	return out
+
+
+func _covered_by_blocker_obb(p: Vector2) -> bool:
+	for ob in _blocker_obbs:
+		var od := ob as Dictionary
+		if TerrainRules.point_in_obb(p, od["c"], od["he"], float(od["yaw"])):
+			return true
+	return false
 
 
 ## Compact, always-visible Asgard effect label for a terrain type (empty for NONE).
@@ -1746,6 +1862,7 @@ func update_wall_models(wall_segments: Array, t_size: Vector2, rot_deg: float) -
 	_last_wall_segments = wall_segments
 	_last_wall_table_size = t_size
 	_last_wall_rotation = rot_deg
+	_los_volumes_dirty = true
 	var use_shell := _ruin_panels_ready()
 	if not use_shell and not wall_segments.is_empty():
 		_request_ruin_panels()
@@ -2710,6 +2827,7 @@ func _clear_wall_instances() -> void:
 func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> void:
 	_blocker_edges.clear()
 	_blocker_obbs.clear()
+	_los_volumes_dirty = true
 	_clear_placed_objects()
 
 	# Remember the layout so a finishing panel download can upgrade fallback trees in

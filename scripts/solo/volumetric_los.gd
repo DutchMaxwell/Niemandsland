@@ -223,9 +223,19 @@ static func segment_hits_cells(a: Vector3, b: Vector3, vol: Dictionary) -> bool:
 		var y := lerpf(a.y, b.y, t)
 		if y < y0 - Y_EPS_M or y > y1 + Y_EPS_M:
 			continue   # the line passes over (or under) the zone at this sample
-		if cells.has(TerrainRules.cell_of(a2.lerp(b2, t), cell_size)):
+		if cells.has(cells_key(a2.lerp(b2, t), vol)):
 			return true
 	return false
+
+
+## The cell a flat world point falls into, in the zone's OWN grid frame. A table's painted grid can be
+## ROTATED against the world (the map layout's rotation slider), so the point is rotated back by the
+## volume's `yaw` first; yaw 0 — the default, and what the headless simulator's grid uses — is the
+## world-aligned case and skips the rotation entirely.
+static func cells_key(p: Vector2, vol: Dictionary) -> Vector2i:
+	var yaw := float(vol.get("yaw", 0.0))
+	var q := p if is_zero_approx(yaw) else p.rotated(-yaw)
+	return TerrainRules.cell_of(q, float(vol["cell_size"]))
 
 
 ## True if `p` stands inside `vol`'s footprint AND at or below its top — the endpoint-in-zone test the
@@ -242,7 +252,7 @@ static func point_in_footprint(p: Vector2, vol: Dictionary) -> bool:
 		"cyl":
 			return p.distance_to(vol["c"]) <= float(vol["r"])
 		"cells":
-			return (vol["cells"] as Dictionary).has(TerrainRules.cell_of(p, float(vol["cell_size"])))
+			return (vol["cells"] as Dictionary).has(cells_key(p, vol))
 		_:
 			return TerrainRules.point_in_obb(p, vol["c"], vol["he"], float(vol["yaw"]))
 
