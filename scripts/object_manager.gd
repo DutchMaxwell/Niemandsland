@@ -2642,13 +2642,16 @@ func _measure_los_blocked(from_pos: Vector3, to_pos: Vector3) -> bool:
 
 ## One measured endpoint as a VolumetricLos model cylinder: it stands on the surface the
 ## overlay reports for its spot (container roof, else the table) and is as tall as its base
-## says. A plain table point counts as an infantry model on the standard base.
+## says. A plain table point counts as an infantry model on the standard base. An AIRCRAFT
+## endpoint carries its flag (P6, GF p.13): a flyer is abstract and always visible, so a
+## line measured TO one is clear — the same answer the shooting gate gives.
 func _measure_cylinder(pos: Vector3, obj: Node3D, volumes: Array) -> Dictionary:
 	var flat := Vector2(pos.x, pos.z)
 	var model := _object_model_instance(obj)
 	var r: float = VolumetricLos.model_base_radius_m(model) if model else 0.0
 	var y0 := VolumetricLos.surface_y_at(flat, volumes)
-	return {"c": flat, "r": r, "y0": y0, "y1": y0 + _measure_model_height_m(model)}
+	return {"c": flat, "r": r, "y0": y0, "y1": y0 + _measure_model_height_m(model),
+		"is_aircraft": model != null and SoloController.is_aircraft(model.unit)}
 
 
 ## Every alive model on the table as a blocker cylinder — the same shape the shooting gate
