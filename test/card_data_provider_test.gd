@@ -89,6 +89,41 @@ func test_rule_tooltip_cascades_referenced_rules_and_item_grants() -> void:
 	assert_array(d["rules_list"]).contains_exactly(["Caster(2)", "Combat Shield"])
 
 
+## NML-969: an upgrade only a SUBSET of the models bought (Spotting Laser -> Precision Spotter) lives in
+## the unit's ITEM data, never in special_rules. Since the card hides a granted rule (it is reached through
+## the granting item's tooltip), leaving the item itself off the list showed NOTHING about the upgrade.
+func test_subset_item_upgrade_is_listed_on_the_card() -> void:
+	var dock: UnitDock = auto_free(UnitDock.new())
+	var u := GameUnit.new()
+	u.unit_properties = {"name": "Spotter Squad", "cost": 130, "quality": 4, "defense": 4,
+		"special_rules": ["Good Shot", "Scout", "Precision Spotter"],
+		"item_grants": {"Spotting Laser": ["Precision Spotter"]}}
+	for i in range(5):
+		var m := ModelInstance.new()
+		m.is_alive = true
+		if i < 3:
+			m.properties["equipment"] = ["Spotting Laser"]   # the three models that bought it
+		u.models.append(m)
+	var d: Dictionary = dock._card_data(u)
+	# The item is on the card, its granted rule stays hidden behind the item's tooltip cascade.
+	assert_array(d["rules_list"]).contains(["Spotting Laser"])
+	assert_bool(("Precision Spotter" as Variant) in (d["rules_list"] as Array)).is_false()
+
+
+## An item carried by EVERY model is already in special_rules; it must be listed once, not twice.
+func test_unit_wide_item_is_not_listed_twice() -> void:
+	var dock: UnitDock = auto_free(UnitDock.new())
+	var u := GameUnit.new()
+	u.unit_properties = {"name": "Shield Guard", "cost": 90, "quality": 4, "defense": 4,
+		"special_rules": ["Combat Shield", "Shielded"],
+		"item_grants": {"Combat Shield": ["Shielded"]}}
+	var m := ModelInstance.new()
+	m.is_alive = true
+	u.models.append(m)
+	var d: Dictionary = dock._card_data(u)
+	assert_array(d["rules_list"]).contains_exactly(["Combat Shield"])
+
+
 func _weapon(nm: String, rng: int, atk: int, count: int, rules: Array) -> OPRApiClient.OPRWeapon:
 	var w := OPRApiClient.OPRWeapon.new()
 	w.name = nm

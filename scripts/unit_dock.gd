@@ -459,6 +459,14 @@ func _card_data(unit: GameUnit) -> Dictionary:
 		if not nm.is_empty() and not granted_by_item.has(nm) and not seen_rules.has(nm):
 			seen_rules[nm] = true
 			data["rules_list"].append(nm)
+	# The upgrade ITEMS themselves (NML-969): an item only a SUBSET of the models bought (a Spotting
+	# Laser, a Weapon Team) never reaches special_rules — it lives in item_grants and on the carriers'
+	# per-model equipment. Its granted rule is hidden by the loop above, so without this the card showed
+	# NOTHING about the upgrade. Appended, so a unit-wide item keeps its position in the rule line.
+	for item_name in _unit_item_names(unit):
+		if not seen_rules.has(item_name):
+			seen_rules[item_name] = true
+			data["rules_list"].append(item_name)
 	# spells (casters): {name, threshold, effect} from the army glossary, for the hoverable spell list.
 	if unit.is_caster() and army_manager != null and army_manager.has_method("get_spells_for_unit"):
 		data["spells"] = army_manager.get_spells_for_unit(unit)
@@ -639,6 +647,23 @@ func _referenced_rules_text(text: String, exclude: String) -> String:
 		if not d.is_empty():
 			out += "\n\n%s — %s" % [rname, d]
 	return out
+
+
+## Every upgrade ITEM a unit carries, from sources that survive save/load + MP sync: the granting items
+## (item_grants keys, unit_properties) plus the distinct equipment its models actually carry (model
+## properties). So a loaded or remotely-synced unit lists the same items as a freshly imported one.
+func _unit_item_names(unit: GameUnit) -> Array[String]:
+	var names: Array[String] = []
+	for it in _item_grants_of(unit):
+		var nm := str(it)
+		if not nm.is_empty() and nm not in names:
+			names.append(nm)
+	for m in unit.models:
+		for e in m.get_equipment():
+			var en := str(e)
+			if not en.is_empty() and en not in names:
+				names.append(en)
+	return names
 
 
 ## item → granted rules for a unit, read from unit_properties so the cascade survives save/load + MP
