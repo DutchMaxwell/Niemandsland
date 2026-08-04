@@ -273,3 +273,34 @@ func test_the_hover_line_reads_the_volumetric_truth_and_hangs_at_the_real_height
 	assert_float(_main.solo_controller.unit_centre(shooter).y) \
 		.override_failure_message("the drawn line's geometry must carry the shooter's real standing height") \
 		.is_equal_approx(2.5 * 0.0254, 0.001)
+
+
+# =====================================================================================
+# P6 / W4.21b — an Aircraft target is always visible.
+# =====================================================================================
+# GF v3.5.1 p.13 keeps Aircraft abstract: their base is transparent to line of sight and they
+# have no altitude coordinate, so nothing on the table can hide one. VolumetricLos carries that
+# branch, but production never flagged the TARGET cylinder as an aircraft, so the branch was
+# unwired — the old flat walk had the same gap, which is why this is a known wrong rather than
+# a regression. The fixture is the ground control above: a shooter standing in the container's
+# own footprint sees nothing at all — except a flyer.
+
+func test_an_aircraft_target_is_visible_from_inside_the_container() -> void:
+	_container_patch(_main.terrain_overlay)
+	var pair := _shooter_and_ground_target(0.0)
+	var shooter := pair[0] as GameUnit
+	var flyer := pair[1] as GameUnit
+	flyer.unit_properties["special_rules"] = ["Aircraft"]
+	assert_bool(SoloController.is_aircraft(flyer)) \
+		.override_failure_message("fixture broken: the Aircraft rule did not resolve for the target") \
+		.is_true()
+	assert_int(_main._solo_sighted_count(shooter, flyer, 36)) \
+		.override_failure_message("P6 — an Aircraft is abstract and always visible (GF v3.5.1 p.13), but the " +
+			"per-model shooting query hides it behind terrain: the TARGET cylinder built in " +
+			"main.gd _solo_true_los_callable never carries the is_aircraft flag VolumetricLos looks for.") \
+		.is_greater(0)
+	assert_bool(_main._solo_has_los(shooter, flyer)) \
+		.override_failure_message("P6 — the unit-centre sight test (melee display, breath, spell targeting) " +
+			"hides an Aircraft behind terrain too: main.gd _solo_has_los builds its target cylinder without " +
+			"the is_aircraft flag.") \
+		.is_true()
