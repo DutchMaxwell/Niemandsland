@@ -1,7 +1,8 @@
 extends GdUnitTestSuite
-## TerrainRules is the pure, shared terrain model (grid of typed 3" cells) that the sim uses now and
-## terrain_overlay.gd delegates to at integration. These prove its classification, line-of-sight (copied
-## from terrain_overlay), cover majority and path checks — the geometry the sim's terrain rules ride on.
+## TerrainRules is the pure, shared terrain model (grid of typed 3" cells) the sim and terrain_overlay
+## both read. These prove its classification, its real per-type HEIGHTS, cover majority and path checks —
+## the geometry the sim's terrain rules ride on. Its own 2D line-of-sight walk was retired in W5.22;
+## the sight cases below all ask the one volumetric truth instead.
 
 const T := TerrainRules.TerrainType
 
@@ -31,58 +32,12 @@ func test_cell_and_terrain_at_map_inches_to_cells() -> void:
 	assert_int(TerrainRules.terrain_at(grid, Vector2(1.0, 1.0))).is_equal(int(T.NONE))
 
 
-func test_open_field_never_blocks_los() -> void:
-	assert_bool(TerrainRules.has_line_of_sight({}, Vector2(5, 5), Vector2(40, 40), 1, 1)).is_true()
-
-
-func test_container_between_two_points_blocks_los() -> void:
-	# A container at cell (5,5) sits on the horizontal line y=16.5 between x=10 and x=25.
-	var grid := {Vector2i(5, 5): T.CONTAINER}
-	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(10, 16.5), Vector2(25, 16.5), 1, 1)).is_false()
-
-
-func test_you_see_out_of_your_own_forest_zone() -> void:
-	# Endpoint standing INSIDE the forest zone can still see out of it (own-zone exception).
-	var grid := {Vector2i(5, 5): T.FOREST}
-	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(16.5, 16.5), Vector2(25, 16.5), 1, 1)).is_true()
-
-
 func test_area_terrain_predicate() -> void:
 	# Forests + Ruins are AREA terrain (see in/out, not through); solid Containers are NOT (hard-block).
 	assert_bool(TerrainRules.is_area_terrain(T.RUINS)).is_true()
 	assert_bool(TerrainRules.is_area_terrain(T.FOREST)).is_true()
 	assert_bool(TerrainRules.is_area_terrain(T.CONTAINER)).is_false()
 	assert_bool(TerrainRules.is_area_terrain(T.DANGEROUS)).is_false()
-
-
-func test_ruins_between_two_points_block_los() -> void:
-	# Ruins are area terrain (GF/AoF v3.5.1 p.12, applied to ruins per maintainer correction to round-4): a
-	# line drawn straight THROUGH a ruin to a far-side target on open ground is blocked (see in/out, NOT through).
-	var grid := {Vector2i(5, 5): T.RUINS}
-	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(10, 16.5), Vector2(25, 16.5), 1, 1)).is_false()
-
-
-func test_you_see_into_and_out_of_your_own_ruin_zone() -> void:
-	# A shooter/target standing INSIDE a ruin sees in and out of it (own-zone exception, like a forest).
-	var grid := {Vector2i(5, 5): T.RUINS}
-	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(16.5, 16.5), Vector2(25, 16.5), 1, 1)).is_true()
-	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(25, 16.5), Vector2(16.5, 16.5), 1, 1)).is_true()
-
-
-func test_deep_area_zone_target_inside_visible_but_beyond_blocked() -> void:
-	# Depth boundary: a 3-cell-deep ruin (cells 5,6,7 on row 5 = x in [15,24)). A target INSIDE the far cell
-	# (x=22, cell 7) is visible (see-in, no depth cap), but a target just BEYOND the zone (x=28, open) is
-	# blocked (the line passed all the way through). The boundary is the zone perimeter, not an inch depth.
-	var grid := {Vector2i(5, 5): T.RUINS, Vector2i(6, 5): T.RUINS, Vector2i(7, 5): T.RUINS}
-	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(6, 16.5), Vector2(22, 16.5), 1, 1)).is_true()
-	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(6, 16.5), Vector2(28, 16.5), 1, 1)).is_false()
-
-
-func test_container_hard_blocks_even_when_endpoints_share_the_zone() -> void:
-	# Solid Containers are NOT area terrain: the see-in/out zone exception does not apply. Even with both
-	# endpoints on the container's own cell, it still hard-blocks (contrast the forest own-zone exception).
-	var grid := {Vector2i(5, 5): T.CONTAINER, Vector2i(6, 5): T.CONTAINER, Vector2i(7, 5): T.CONTAINER}
-	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(16.5, 16.5), Vector2(22, 16.5), 1, 1)).is_false()
 
 
 func test_majority_in_cover_needs_a_strict_majority() -> void:
@@ -134,16 +89,6 @@ func test_base_in_terrain_triggers_on_any_partial_overlap() -> void:
 	assert_bool(TerrainRules.is_forbidden_rest(T.CONTAINER)).is_true()
 
 
-## Container-Welle: das Kurzstrecken-Loch ist zu — auch eine kurze Linie DURCH eine Blocker-Zelle
-## blockt (alte Halbzell-Abtastung gab jede Spanne unter einer Zelle bedingungslos frei).
-func test_short_line_through_blocking_cell_is_blocked() -> void:
-	var grid := {Vector2i(1, 0): TerrainRules.TerrainType.CONTAINER}
-	# 2.9"-Linie mittig durch die Container-Zelle (x 3..6): alt = steps<2 → immer frei.
-	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(2.6, 1.5), Vector2(5.5, 1.5), 1, 1)).is_false()
-	# Gleiche kurze Linie auf freiem Boden: frei.
-	assert_bool(TerrainRules.has_line_of_sight(grid, Vector2(2.6, 4.6), Vector2(5.5, 4.6), 1, 1)).is_true()
-
-
 # === NML-001: pure OBB-Helfer für frei platzierte Shelf-Terrain-Stücke ===
 
 func test_point_in_rotated_obb() -> void:
@@ -170,9 +115,9 @@ func test_segment_intersects_obb_edges_and_containment() -> void:
 # =====================================================================================
 # NML-972 (elevation program, Phase A / W3.15) — the sim twin on the volumetric truth.
 # =====================================================================================
-# The headless simulator ran its own flat copy of the terrain walk (TerrainRules.
-# has_line_of_sight with Asgard height categories). It now asks the SAME primitive the
-# game asks (VolumetricLos) against volumes built from its own grid — inches converted to
+# The headless simulator ran its own flat copy of the terrain walk (a 2D cell walk with
+# Asgard height categories, retired in W5.22). It now asks the SAME primitive the game
+# asks (VolumetricLos) against volumes built from its own grid — inches converted to
 # metres at that one boundary. These cases are the old twin cases ported over: the sight
 # verdicts must not move on flat ground, and the last pair is what only the new truth can
 # answer at all.

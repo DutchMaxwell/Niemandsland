@@ -4037,10 +4037,9 @@ func _solo_los_blockers(exclude_a: GameUnit, exclude_b: GameUnit) -> Array:
 	return out
 
 
-## Representative base radius (metres) of a unit — the LARGEST of its alive models — for the base-aware
-## terrain-zone LOS test (GF/AoF v3.5.1: a model is IN terrain its base overlaps, so an edge-standing model
-## still sees in/out). Max, so a big model straddling a forest edge is caught. terrain_overlay._zone_for_base
-## does the PRECISE perimeter-overlap test (the earlier coarse version over-granted; reverted 888c66e).
+## Representative base radius (metres) of a unit — the LARGEST of its alive models — so the sight cylinder
+## the query builds is as wide as the unit's biggest base. Max, so a big model straddling a forest edge is
+## the one that speaks for the unit.
 func _solo_unit_base_radius_m(unit: GameUnit) -> float:
 	if unit == null:
 		return 0.0

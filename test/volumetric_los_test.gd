@@ -95,6 +95,14 @@ func test_solid_container_blocks_the_ground_line_but_not_the_line_over_it() -> v
 	# The same target seen from a 6" tower: the line clears the 2.5" roof -> no more phantom block.
 	var tower := _model(-10.0, 0.0, 6.0, 25.0)              # eye 7"
 	assert_bool(VolumetricLos.has_los(tower, ground_b, container)).is_true()
+	# W5.22 port (from the retired terrain_los_test "only the box you stand on is exempt"): the old walk
+	# needed an explicit roof EXEMPTION so a model on a container was not walled in by its own box. There
+	# is no exemption any more — geometry alone answers — but the invariant that exemption protected must
+	# survive: a SECOND container in the line of fire still blocks the elevated shooter.
+	var roof := _model(0.0, 0.0, 2.5, 25.0)                 # standing on the 2.5" box: eye 3.5"
+	assert_bool(VolumetricLos.has_los(roof, ground_b, container)).is_true()   # its own box never blocks it
+	var second := container + [_box(5.0, 0.0, 3.0, 1.5, 0.0, 2.5)]
+	assert_bool(VolumetricLos.has_los(roof, ground_b, second)).is_false()
 
 
 func test_a_floor_slab_between_two_storeys_blocks() -> void:

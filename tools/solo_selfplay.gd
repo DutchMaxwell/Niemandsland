@@ -469,16 +469,14 @@ func _audit_overlaps(main: Node, round_no: int) -> void:
 
 
 ## LOS audit: the AI declared a shot; verify the shooter's unit centre actually has line of sight to the
-## target's unit centre through the real overlay (the coarse fallback LOS main wires; per-model LOS gates
-## the real decision, so a centre-LOS miss here is only a soft signal, tagged as such).
+## target's unit centre through the game's OWN sight truth — main._solo_has_los, the same volumetric
+## unit-centre query the coarse fallback uses (per-model LOS gates the real decision, so a centre-LOS
+## miss here is only a soft signal, tagged as such).
 func _audit_shooting_los(main: Node, shooter, target, round_no: int) -> void:
 	var overlay: Node = main.terrain_overlay
-	if overlay == null or not overlay.has_method("has_line_of_sight"):
+	if overlay == null or not overlay.has_method("los_volumes"):
 		return
-	var solo: Node = main.solo_controller
-	var from: Vector3 = solo.unit_centre(shooter)
-	var to: Vector3 = solo.unit_centre(target)
-	if not overlay.has_line_of_sight(from, to, 1, 1):
+	if not main._solo_has_los(shooter, target):
 		_flag(round_no, "shoot_without_centre_los", shooter.get_name(),
 			"declared a shot at %s but unit-centre LOS is blocked (per-model LOS may still clear it)" % target.get_name())
 
