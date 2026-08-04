@@ -1,6 +1,6 @@
 # Niemandsland — Status & Roadmap
 
-**Version:** 0.3.10.1-alpha *(public alpha — forward-looking backlog in [`docs/ROADMAP.md`](docs/ROADMAP.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
+**Version:** 0.3.11.0-alpha *(public alpha — forward-looking backlog in [`docs/ROADMAP.md`](docs/ROADMAP.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
 
 This is the single source of truth for what works, what's in progress, and what's
 planned. Architecture details live in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md);
@@ -64,11 +64,23 @@ computed per model from the base edge — walls and intervening units block, woo
 area terrain (see in and out, never through), containers block hard — so ruler, sight fan and
 engine always agree.
 
-**Not automated (named, not hidden)** — three rule names are **not** resolved by the game and
-are named in full rather than hidden behind an "…": the rules that create or return units
-(**Spawn**, **Split**) and one movement rule (**Traversal**). The per-unit
-notice in the battle log names the ones your list actually contains, so you can apply them by
-hand at the table.
+**Solo — the 0.3.11 wave in play** — **Reanimation** rolls on activation and you allocate its
+restores by clicking; **Reinforcement** returns a destroyed unit as a fresh copy on the game's
+first runtime unit factory (a unit born mid-game gets its card, survives saves and takes its
+turn in the alternation); **Delayed Action** lets a carrier pass its turn; **split fire**
+declares weapon groups at a second target with visible rings and an explicit Fire! button;
+**Precision Spotter** is a radial action whose markers attackers spend for their +1s (named in
+the To-hit breakdown); the **combat stage** paces volleys, melee and casts on a central card
+(a click skips ahead); and in multiplayer the **rule log rides the wire** — your opponent reads
+the same audited rule lines you do.
+
+**Not automated (named, not hidden)** — the battle log opens every game with the AI rule
+inventory, and any rule name the automation does not resolve is named per unit rather than
+hidden behind an "…". The last three holdouts of the automation campaign — the unit-creating
+rules (**Spawn**, **Split**) and the movement rule (**Traversal**) — resolve since `0.3.11.0`.
+A small army-book flavour residue remains without effect (three aura families and a few
+conditional-AP legs, tracked on the board as NML-931); a standing guard test pins the healed
+set so no future book ships a dead grant unnoticed.
 
 **Extended Buff Range & Coordinate** — a unit within 24″ of a friendly unit that carries
 **Extended Buff Range** *and* holds a Hero can be picked by that Hero's within-12″ buff rules as if
