@@ -131,3 +131,56 @@ func test_a_mark_does_not_reach_a_target_behind_a_wall() -> void:
 	assert_str(_log_text()) \
 		.override_failure_message("NML-936 — no logged line refuses the Mark for lack of sight (log:\n%s)" % _log_text()) \
 		.contains("sight")
+
+
+# =====================================================================================
+# NML-972 (elevation program, Phase A / W3.11) — the SHOOTING truth reads real heights.
+# =====================================================================================
+# The shooting gate walked the terrain GRID at ground level and compared Asgard height
+# CATEGORIES, so a model standing on a 2.5" container roof was walled in by the very box
+# it stood on: the sight line's own elevation was never part of the question. The
+# volumetric truth (VolumetricLos) makes the line a real 3D segment from eye to eye, so a
+# shooter on the roof looks OVER the container's near edge at the ground beyond it.
+#
+# The patch below is painted between x = -0.38 m and x = -0.08 m, the shooter stands on it
+# at x = -0.30 m and the target is at x = +0.30 m. The eye-to-eye line only sinks below the
+# 2.5" roof at the halfway point (x = 0), which is well past the patch's far edge — so it
+# clears the box geometrically, not by any exemption.
+
+## A solid CONTAINER patch painted on the lane, covering the shooter's half of it only.
+## The cache the volume registry keeps is dropped by hand: painting straight into
+## grid_cells (the synthetic-terrain idiom of this directory) skips every registration seam.
+func _container_patch(o: Node3D) -> void:
+	for i in range(31):
+		var t := float(i) / 30.0
+		var p := Vector3(-0.34, 0.0, 0.0).lerp(Vector3(-0.12, 0.0, 0.0), t)
+		o.grid_cells[o.world_to_cell(p)] = o.TerrainType.CONTAINER
+	o._los_volumes_dirty = true
+
+
+## Shooter (player 1) and target (player 2) on the patch lane; `shooter_y` lifts the shooter
+## onto the container roof (2.5") or leaves it on the table.
+func _shooter_and_ground_target(shooter_y: float) -> Array:
+	var shooter := E2EBoot.make_unit(_main, 1, "Rooftop", [Vector3(-0.30, shooter_y, 0.0)])
+	var target := E2EBoot.make_unit(_main, 2, "Grounded", [Vector3(0.30, 0.0, 0.0)])
+	return [shooter, target]
+
+
+func test_a_ground_shooter_stays_blocked_by_the_container() -> void:
+	# CONTROL — same fixture at table level: the patch is solid and must keep blocking, before
+	# and after the migration. If this ever goes green the RED below proves nothing.
+	_container_patch(_main.terrain_overlay)
+	var pair := _shooter_and_ground_target(0.0)
+	assert_int(_main._solo_sighted_count(pair[0] as GameUnit, pair[1] as GameUnit, 36)) \
+		.override_failure_message("control fixture: a GROUND shooter must not see through a solid container") \
+		.is_equal(0)
+
+
+func test_a_shooter_on_a_container_sees_the_ground_target_beyond_it() -> void:
+	_container_patch(_main.terrain_overlay)
+	var pair := _shooter_and_ground_target(2.5 * 0.0254)
+	assert_int(_main._solo_sighted_count(pair[0] as GameUnit, pair[1] as GameUnit, 36)) \
+		.override_failure_message("NML-972 — a shooter standing ON the 2.5\" container roof still counts as " +
+			"blind: the shooting gate walks the terrain grid at ground level and compares height " +
+			"CATEGORIES, so the line's own elevation never enters the test (main.gd _solo_true_los_callable).") \
+		.is_greater(0)
