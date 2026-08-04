@@ -163,6 +163,12 @@ func test_a_model_in_the_lane_blocks_and_is_named() -> void:
 		blockers, [])).is_equal(7)
 	# The shooter's and the target's own unit never block their line.
 	assert_bool(VolumetricLos.has_los(a, b, [], blockers, [7])).is_true()
+	# W5.23 port (retired unit_los_blocker_test): a lane that passes BESIDE the model reports 0 —
+	# the refusal message must not name a blocker when there is none.
+	var past := _model(-10.0, 4.0, 0.0, 25.0)
+	var past_b := _model(10.0, 4.0, 0.0, 25.0)
+	assert_int(VolumetricLos.first_blocking_unit_key(VolumetricLos.eye(past), VolumetricLos.eye(past_b),
+		blockers, [])).is_equal(0)
 
 
 func test_geometry_decides_who_sees_over_whom_no_height_ladder() -> void:
@@ -183,6 +189,26 @@ func test_a_closed_gap_in_a_unit_is_a_wall_a_tall_eye_still_clears() -> void:
 	# The wall is only as tall as the shorter of the pair (2"): two 3" models see over it.
 	assert_bool(VolumetricLos.has_los(_model(-10.0, 0.0, 0.0, 60.0), _model(10.0, 0.0, 0.0, 60.0),
 		[], pair)).is_true()
+	# W5.23 ports (retired unit_los_blocker_test) — the two ways a gap stays OPEN:
+	# a gap of 1" or more inside one unit is a real gap the line threads,
+	var wide := [_blocker(0.0, -2.5, 50.0, 7), _blocker(0.0, 2.5, 50.0, 7)]
+	assert_bool(VolumetricLos.has_los(_model(-10.0, 0.0, 0.0, 25.0), _model(10.0, 0.0, 0.0, 25.0),
+		[], wide)).is_true()
+	# and a narrow gap between models of DIFFERENT units never closes at all (it is per-unit).
+	var strangers := [_blocker(0.0, -1.2, 50.0, 7), _blocker(0.0, 1.2, 50.0, 9)]
+	assert_bool(VolumetricLos.has_los(_model(-10.0, 0.0, 0.0, 25.0), _model(10.0, 0.0, 0.0, 25.0),
+		[], strangers)).is_true()
+
+
+## W5.23 port (retired unit_los_blocker_test): the flat segment-vs-circle helper every cylinder test
+## rests on. It must hit only what the segment really reaches — not what merely lies on its infinite line.
+func test_segment_circle_helper_hits_only_what_it_reaches() -> void:
+	var c := Vector2(0, 0)
+	var r := 0.016   # 32 mm round base
+	assert_bool(VolumetricLos.segment_intersects_circle(Vector2(-1, 0), Vector2(1, 0), c, r)).is_true()
+	assert_bool(VolumetricLos.segment_intersects_circle(Vector2(-1, 0.5), Vector2(1, 0.5), c, r)).is_false()
+	# The segment ENDS before the circle: on the same line, but out of reach.
+	assert_bool(VolumetricLos.segment_intersects_circle(Vector2(-1, 0), Vector2(-0.5, 0), c, r)).is_false()
 
 
 func test_aircraft_are_transparent_and_always_visible() -> void:

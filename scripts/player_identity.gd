@@ -2,7 +2,7 @@ class_name PlayerIdentity
 extends RefCounted
 ## The local player's chosen display name: sanitization, a peer-id fallback and
 ## persistence to user://. Pure/static where it can be (mirrors DiceRules /
-## LosRules) so the name rules are trivially testable; only load/save touch disk.
+## VolumetricLos) so the name rules are trivially testable; only load/save touch disk.
 
 # === Constants ===
 

@@ -16,7 +16,7 @@ extends GdUnitTestSuite
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 
 const IN2M := 0.0254
-## Both fixture units sit on the default base (LosRules.DEFAULT_BASE_RADIUS_M = 0.016 m), and every
+## Both fixture units sit on the default base (VolumetricLos.DEFAULT_BASE_RADIUS_M = 0.016 m), and every
 ## range gate measures base-EDGE to base-edge (B11), so a centre offset carries both radii on top.
 const EDGE_SLACK_IN := 2.0 * 0.016 / IN2M
 

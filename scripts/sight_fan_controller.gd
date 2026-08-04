@@ -48,7 +48,7 @@ func show_fan_for(unit: GameUnit, overlay: Node, ranges_in: Array, table_bounds:
 		# The EYE, not the footprint: where the model really stands (node y — a container roof lifts it)
 		# plus its own volumetric height. The base radius doubles as the official base size in mm
 		# (radius m x 2 x 1000), the one input that table takes.
-		var base_r := LosRules.model_base_radius_m(m as ModelInstance)
+		var base_r := VolumetricLos.model_base_radius_m(m as ModelInstance)
 		var eye_y: float = node.global_position.y \
 			+ VolumetricLos.height_in_for_base_mm(base_r * 2000.0) * VolumetricLos.INCHES_TO_METERS
 		emitters.append({"eye": Vector3(node.global_position.x, eye_y, node.global_position.z),

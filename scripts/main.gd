@@ -4090,24 +4090,6 @@ func _solo_unit_los_height_m(unit: GameUnit) -> float:
 	return h
 
 
-## Representative Asgard Height of a unit (the tallest of its alive models incl. attached heroes; H2
-## infantry default): a taller unit sees over smaller blockers, matching LosRules.units_block_line.
-func _solo_unit_los_height(unit: GameUnit) -> int:
-	var h: int = LosRules.HEIGHT_INFANTRY
-	if unit == null:
-		return h
-	var members: Array = [unit]
-	if unit.has_method("get_attached_heroes"):
-		members = members + unit.get_attached_heroes()
-	for mm in members:
-		var member := mm as GameUnit
-		if member == null:
-			continue
-		for m in member.get_alive_models():
-			h = maxi(h, LosRules.model_height_category(m))
-	return h
-
-
 ## Weapon groups for a combat activation: the unit's own profiles at its Quality PLUS each attached hero's
 ## profiles at the hero's Quality — a joined hero fights WITH its unit (field-test lock). Each profile's
 ## attack count is SCALED so dead models no longer attack (goal 003 P3, mirrors the sim fix): shooting scales

@@ -2646,7 +2646,7 @@ func _measure_los_blocked(from_pos: Vector3, to_pos: Vector3) -> bool:
 func _measure_cylinder(pos: Vector3, obj: Node3D, volumes: Array) -> Dictionary:
 	var flat := Vector2(pos.x, pos.z)
 	var model := _object_model_instance(obj)
-	var r: float = LosRules.model_base_radius_m(model) if model else 0.0
+	var r: float = VolumetricLos.model_base_radius_m(model) if model else 0.0
 	var y0 := VolumetricLos.surface_y_at(flat, volumes)
 	return {"c": flat, "r": r, "y0": y0, "y1": y0 + _measure_model_height_m(model)}
 
@@ -2662,7 +2662,7 @@ func _measure_blockers() -> Array:
 		if model == null or not model.is_alive:
 			continue  # custom minis without an OPR profile carry no base; dead ones are only hidden
 		var pos: Vector3 = (node as Node3D).global_position
-		out.append({"c": Vector2(pos.x, pos.z), "r": LosRules.model_base_radius_m(model),
+		out.append({"c": Vector2(pos.x, pos.z), "r": VolumetricLos.model_base_radius_m(model),
 			"y0": pos.y, "y1": pos.y + _measure_model_height_m(model),
 			"unit_key": model.unit.get_instance_id() if model.unit else node.get_instance_id(),
 			"is_aircraft": SoloController.is_aircraft(model.unit)})
@@ -2672,7 +2672,7 @@ func _measure_blockers() -> Array:
 ## Volumetric height (metres) of a measured model off the official base-size table — the base
 ## radius doubles as the base size in mm (radius m x 2 x 1000). Table points get the standard base.
 func _measure_model_height_m(model: ModelInstance) -> float:
-	var radius_m: float = LosRules.model_base_radius_m(model) if model else LosRules.DEFAULT_BASE_RADIUS_M
+	var radius_m: float = VolumetricLos.model_base_radius_m(model) if model else VolumetricLos.DEFAULT_BASE_RADIUS_M
 	return VolumetricLos.height_in_for_base_mm(radius_m * 2000.0) * VolumetricLos.INCHES_TO_METERS
 
 

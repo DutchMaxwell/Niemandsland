@@ -55,6 +55,32 @@ static func oval_effective_mm(width_mm: float, depth_mm: float) -> float:
 	return (width_mm + depth_mm) * 0.5
 
 
+## Fallback base radius (16 mm = half a 32 mm round base) for models without unit data.
+const DEFAULT_BASE_RADIUS_M := 0.016
+
+## MEAN base radius (metres) of a model — the radius the sight CYLINDER is built from. Round bases use
+## their real radius, ovals their mean semi-axis (a circle is close enough for a sight footprint, and it
+## matches how oval_effective_mm feeds the height table). Falls back to half a 32 mm base without unit
+## data. Moved here from the retired los_rules.gd in W5.23, semantics unchanged.
+##
+## NOTE the deliberate difference from SoloController.model_base_radius_m: that one CIRCUMSCRIBES the
+## base (the movement/separation clearance radius, which must never under-report) — this one averages.
+static func model_base_radius_m(model: ModelInstance) -> float:
+	if model == null or model.unit == null:
+		return DEFAULT_BASE_RADIUS_M
+	var game_unit = model.unit
+	if game_unit.unit_properties == null:
+		return DEFAULT_BASE_RADIUS_M
+	# Use the model's ACTUAL base (a per-model Tough upgrade enlarges it; mesh stays natural).
+	var model_tough := int(model.properties.get("tough", 0)) if model.properties else 0
+	var props: Dictionary = OPRArmyManager.effective_base_props(game_unit.unit_properties, model_tough)
+	if props.get("base_is_oval", false):
+		var width_mm: float = props.get("base_width_mm", 32)
+		var depth_mm: float = props.get("base_depth_mm", 32)
+		return (width_mm + depth_mm) / 4.0 * 0.001
+	return float(props.get("base_size_round", 32)) / 2.0 * 0.001
+
+
 # === Segment vs. volume (slab-clip first, then the flat 2D test) ===
 # A volume is an upright prism: a 2D footprint extruded between y0 and y1 (metres). The exact test is
 # therefore "clip the segment's t-range by the y-slab [y0,y1], then run the existing 2D footprint test on

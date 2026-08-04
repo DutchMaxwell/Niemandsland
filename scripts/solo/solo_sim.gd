@@ -38,7 +38,6 @@ const SPACING_IN := 1.0   # OPR (p.7): non-charging models must stay over 1" fro
 const MELEE_REACH_IN := 2.0   # OPR melee (p.9 "Who Can Strike"): only models within 2" of an enemy model strike
 const OBJECTIVE_CONTROL_IN := 3.0
 const DEFAULT_ROUNDS := 4
-const MODEL_HEIGHT := 1   # every sim model is ground infantry (Height 1); tall/vehicle heights are a follow-up
 const MODEL_BASE_MM := 32.0   # the volumetric twin: every sim model stands on the infantry standard base
 
 
