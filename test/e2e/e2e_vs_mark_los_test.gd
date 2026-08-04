@@ -184,3 +184,35 @@ func test_a_shooter_on_a_container_sees_the_ground_target_beyond_it() -> void:
 			"blind: the shooting gate walks the terrain grid at ground level and compares height " +
 			"CATEGORIES, so the line's own elevation never enters the test (main.gd _solo_true_los_callable).") \
 		.is_greater(0)
+
+
+# =====================================================================================
+# NML-972 / W3.14 — the AI's positional sight checker.
+# =====================================================================================
+# solo_controller.los_checker answers "could something standing HERE see something standing
+# THERE" for spots no model occupies yet — the endpoint of a candidate move, an anchor, a
+# hypothetical firing position. The y it is handed is therefore meaningless (callers pass the
+# unit's current centre height, or none at all), which is exactly why the closure has to stand
+# its own query on the table: overlay.surface_y_at gives the height the drop probe would place
+# a model at, so a candidate spot on a container roof is judged FROM the roof.
+
+func test_the_ai_los_checker_stands_a_ground_query_on_the_table() -> void:
+	# CONTROL — both spots are open ground on either side of the patch: still blocked, before and
+	# after. Without this the elevated case below could pass on an empty registry.
+	_container_patch(_main.terrain_overlay)
+	var checker: Callable = _main.solo_controller.los_checker
+	assert_bool(bool(checker.call(Vector3(-0.45, 0.0, 0.0), Vector3(0.30, 0.0, 0.0)))) \
+		.override_failure_message("control fixture: two ground spots across a solid container must not see each other") \
+		.is_false()
+
+
+func test_the_ai_los_checker_sees_from_a_container_roof() -> void:
+	_container_patch(_main.terrain_overlay)
+	var checker: Callable = _main.solo_controller.los_checker
+	# The same XZ pair as the shooting case above — the FROM spot lies on the painted patch, so a
+	# model placed there would stand 2.5" up and look over the box's far edge.
+	assert_bool(bool(checker.call(Vector3(-0.30, 0.0, 0.0), Vector3(0.30, 0.0, 0.0)))) \
+		.override_failure_message("NML-972 — the AI's sight checker judges every candidate spot from the " +
+			"table floor: it hands its two points to the flat grid walk with fixed height categories, so " +
+			"the AI can never see a firing position ON a container as one (main.gd:2154).") \
+		.is_true()
