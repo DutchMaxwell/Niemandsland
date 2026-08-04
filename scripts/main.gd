@@ -2150,14 +2150,28 @@ func _ensure_solo_controller() -> void:
 		MovementPlanner.fast_planner_guard = MovementPlanner.FAST_PLANNER_GUARD
 		# (difficulty is applied by the _solo_apply_difficulty() call at the end of this function — the ONE
 		# application point, so a recreated controller can never lose its grades.)
-		# Terrain line of sight for the shooting decision (coarse unit-centre fallback for headless tests).
+		# Terrain line of sight for the AI's POSITIONAL thinking (coarse point-to-point fallback for
+		# headless tests). The points are hypothetical spots — a candidate move endpoint, an anchor —
+		# so the y that comes in carries no meaning and the closure stands its own query on the table:
+		# surface_y_at is the height the drop probe would place a model at (a container roof, a ruin
+		# floor), and the eye sits an infantry model's height above it. So the AI can finally judge a
+		# firing position ON a piece as one. G3: this answers "can it see", never "how far".
 		solo_controller.los_checker = func(from_pos: Vector3, to_pos: Vector3) -> bool:
-			if terrain_overlay == null or not terrain_overlay.has_method("has_line_of_sight"):
+			if terrain_overlay == null or not terrain_overlay.has_method("los_volumes"):
 				return true
-			return terrain_overlay.has_line_of_sight(from_pos, to_pos, 1, 1)
+			var volumes: Array = terrain_overlay.los_volumes()
+			var a := Vector2(from_pos.x, from_pos.z)
+			var b := Vector2(to_pos.x, to_pos.z)
+			var ay: float = VolumetricLos.surface_y_at(a, volumes)
+			var by: float = VolumetricLos.surface_y_at(b, volumes)
+			var h: float = VolumetricLos.height_in_for_base_mm(SOLO_LOS_DEFAULT_BASE_MM) * VolumetricLos.INCHES_TO_METERS
+			return VolumetricLos.has_los({"c": a, "r": 0.0, "y0": ay, "y1": ay + h},
+				{"c": b, "r": 0.0, "y0": by, "y1": by + h}, volumes)
 		# GEOMETRIC PER-MODEL line of sight for the AI's shoot decision — terrain + walls + other units'
 		# bases (GF/AoF v3.5.1 p.5/p.8), the SAME truth the shooting resolution uses (findings 2/6/11). An
-		# unbounded range makes this a pure LOS test; the decision gates range separately.
+		# unbounded range makes this a pure LOS test; the decision gates range separately. It rides the
+		# volumetric migration for free: _solo_sighted_count is the migrated per-model query, so the AI
+		# already judges real heights here — and keeps the per-model reading NML-967 insisted on.
 		solo_controller.unit_los_checker = func(s: GameUnit, t: GameUnit) -> bool:
 			return _solo_sighted_count(s, t, SOLO_LOS_UNBOUNDED_RANGE_IN) > 0
 		# Real terrain / walls / objectives feed the shared pure modules (decide_solo, MovementPlanner,
