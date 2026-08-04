@@ -53,11 +53,8 @@ static func _sight_limited(eye: Vector3, start: Vector2, dir: Vector2, max_d: fl
 ## `p`? Terrain only — other units' bases are not part of the range overlay.
 static func _blocked(eye: Vector3, p: Vector2, volumes: Array) -> bool:
 	var target_y := TARGET_EYE_IN * VolumetricLos.INCHES_TO_METERS
-	# W4.18 RED STUB: the y-blind fan of today — every ray is fired from table level, whatever height
-	# the model really stands at. W4.18 GREEN replaces this with the eye's own height.
-	var eye_y := target_y
 	return not VolumetricLos.has_los(
-		{"c": Vector2(eye.x, eye.z), "r": 0.0, "y0": eye_y, "y1": eye_y},
+		{"c": Vector2(eye.x, eye.z), "r": 0.0, "y0": eye.y, "y1": eye.y},
 		{"c": p, "r": 0.0, "y0": 0.0, "y1": target_y}, volumes)
 
 
