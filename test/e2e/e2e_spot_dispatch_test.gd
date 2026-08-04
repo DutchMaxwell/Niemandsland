@@ -182,3 +182,86 @@ func test_spot_dispatch_arms_when_shooting_truth_sees_the_target(timeout := 1200
 	assert_int(int(spotter.unit_properties.get("spotted_round", -1))) \
 		.override_failure_message("NML-967 — the pick did not land") \
 		.is_equal(_main.opr_army_manager.current_round)
+
+
+# =====================================================================================
+# NML-972 (elevation program, Phase A / W3.12) — the two consumers that inherit the
+# migrated sight truth, pinned as REGRESSION CONTROLS.
+# =====================================================================================
+# Spot and Breath Attack never call the sight primitive themselves: Spot runs the per-model
+# shooting truth (_solo_sighted_count, main.gd:9270) and Breath the unit-centre one
+# (_solo_has_los, main.gd:5100). Both were migrated to VolumetricLos in W3.11, so both cases
+# below must be green here — a red one means a consumer still holds a private, flat sight
+# query of its own.
+#
+# The second half of the deal is G3: only SIGHT went 3D. The 36" spot reach stays a FLAT
+# top-down measurement, so standing on a roof must not shorten (or lengthen) it by one inch.
+
+const ROOF_M := 2.5 * INCH        # a container roof: what the spotter stands on
+const FLOOR_2_M := 3.0 * INCH     # a shelf ruin's first upper storey
+
+
+## A solid CONTAINER patch on the spotter's half of the lane (x = -0.38 … -0.08 m), painted
+## straight into the grid like the fixtures above. The volume registry caches its registered
+## part, and painting by hand passes every registration seam — so drop the cache by hand.
+func _container_patch(o: Node3D) -> void:
+	for i in range(31):
+		var t := float(i) / 30.0
+		var p := Vector3(-0.34, 0.0, 0.0).lerp(Vector3(-0.12, 0.0, 0.0), t)
+		o.grid_cells[o.world_to_cell(p)] = o.TerrainType.CONTAINER
+	o._los_volumes_dirty = true
+
+
+## A two-storey ruin standing at the origin: an AREA hull (see in/out, not through) with one
+## walkable floor slab at 3". Fed through the same sandbox_shapes_provider seam main.gd fills
+## from the real shelf props, so the registry builds exactly the volumes it builds in play.
+func _shelf_ruin_with_floor(o: Node3D) -> void:
+	o.sandbox_shapes_provider = func() -> Array:
+		return [{"type": int(TerrainRules.TerrainType.RUINS), "c": Vector2.ZERO,
+			"he": Vector2(0.2, 0.2), "yaw": 0.0,
+			"slabs": [{"c": Vector2.ZERO, "he": Vector2(0.2, 0.2), "yaw": 0.0,
+				"y0": FLOOR_2_M - 0.0025, "y1": FLOOR_2_M}]}]
+
+
+func test_a_spotter_on_a_container_spots_over_it_and_the_36_inch_reach_stays_flat() -> void:
+	_container_patch(_main.terrain_overlay)
+	var spotter := _armed_unit(1, "Roofeyes", [Vector3(-0.30, ROOF_M, 0.0)], 36)
+	spotter.unit_properties["special_rules"] = ["Precision Spotter"]
+	var target := _armed_unit(2, "Grounded", [Vector3(0.30, 0.0, 0.0)], 36)
+
+	# G3 — the reach is measured FLAT: the same pair, once from the roof and once from the
+	# table, must be exactly as far apart. Only SIGHT learned about height.
+	var gap_up: float = _main.solo_controller.nearest_melee_gap_in(spotter, target)
+	(spotter.models[0] as ModelInstance).node.global_position = Vector3(-0.30, 0.0, 0.0)
+	var gap_flat: float = _main.solo_controller.nearest_melee_gap_in(spotter, target)
+	(spotter.models[0] as ModelInstance).node.global_position = Vector3(-0.30, ROOF_M, 0.0)
+	assert_float(gap_up) \
+		.override_failure_message("G3 — the spot reach must stay a FLAT measurement: %.3f\" from the roof vs %.3f\" from the table" % [gap_up, gap_flat]) \
+		.is_equal_approx(gap_flat, 0.001)
+
+	_press_spot(spotter)
+	assert_bool(_main._solo_target_mode.has("spot")) \
+		.override_failure_message(("NML-972 — a spotter standing ON the container found no target beyond it: " +
+			"the spot scan runs the per-model shooting truth, which W3.11 put on VolumetricLos. Log:\n%s") % _log_text()) \
+		.is_true()
+	if not _main._solo_target_mode.has("spot"):
+		return
+	assert_array(_main._solo_target_mode.get("spot_valid", [])) \
+		.override_failure_message("NML-972 — armed, but the enemy the roof looks down on is not on offer") \
+		.contains([target])
+
+
+func test_breath_sight_is_blocked_by_the_floor_a_model_stands_on() -> void:
+	# The gate main.gd:5100 runs before a Breath Attack picks its target. Inside a ruin both
+	# models are in the same AREA piece (see in/out of your own zone), so ONLY the floor slab
+	# between the storeys can refuse this — which is exactly the elevation claim.
+	var upper := _armed_unit(1, "Upstairs", [Vector3(0.05, FLOOR_2_M, 0.05)], 12)
+	var lower := _armed_unit(2, "Downstairs", [Vector3(-0.05, 0.0, -0.05)], 12)
+	assert_bool(_main._solo_has_los(upper, lower)) \
+		.override_failure_message("control fixture: with no ruin on the table the pair must see each other") \
+		.is_true()
+	_shelf_ruin_with_floor(_main.terrain_overlay)
+	assert_bool(_main._solo_has_los(upper, lower)) \
+		.override_failure_message("NML-972 — Breath Attack reaches THROUGH the floor slab the upper model " +
+			"stands on: the unit-centre sight gate is not reading the 3D volume registry.") \
+		.is_false()
