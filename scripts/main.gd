@@ -3960,32 +3960,37 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ign
 ## terrain (GF/AoF v3.5.1 p.12, applied per maintainer correction to field-test round-4, which over-corrected
 ## ruins to fully see-through): a model sees into/out of ruins but a line drawn THROUGH them to a far-side
 ## target is blocked — exactly like a forest. Their low walls also block MOVEMENT (the movement planner treats
-## them as impassable). Blocker list + endpoint heights are built ONCE per pair; the returned Callable(sp, tp)
-## is what SoloController.sighted_models runs per shooter-model × target-model pair (findings 2/6/11).
+## them as impassable). VOLUMETRIC since the elevation program (GF Advanced Rules v3.5.1 p.56, "alternative
+## method"): every model is a CYLINDER standing where it really stands (height from its base size), every
+## terrain piece is a 3D VOLUME of its real dimensions, and the query is ONE segment eye→eye — so a model on
+## a container roof simply looks OVER the box, and the old height-CATEGORY ladder is gone (geometry decides).
+## Terrain volumes come from the overlay's registry, other units' models from _solo_los_blockers; both are
+## built ONCE per pair, and the returned Callable(sp, tp) is what SoloController.sighted_models runs per
+## shooter-model × target-model pair (findings 2/6/11). Ranged DISTANCE stays flat top-down (G3) — this
+## Callable only answers "can it see", never "how far".
 func _solo_true_los_callable(shooter: GameUnit, target: GameUnit) -> Callable:
 	var overlay := terrain_overlay
-	var blockers: Array[LosRules.Blocker] = _solo_los_blockers(shooter, target)
-	var from_h: int = _solo_unit_los_height(shooter)
-	var to_h: int = _solo_unit_los_height(target)
-	var from_r: float = _solo_unit_base_radius_m(shooter)   # base-aware terrain zones (precise perimeter test in
-	var to_r: float = _solo_unit_base_radius_m(target)      # _zone_for_base): an edge-standing model sees in/out
+	var volumes: Array = overlay.los_volumes() if overlay != null and overlay.has_method("los_volumes") else []
+	var blockers: Array = _solo_los_blockers(shooter, target)
+	var from_h: float = _solo_unit_los_height_m(shooter)   # tallest alive model's volumetric height (P1)
+	var to_h: float = _solo_unit_los_height_m(target)
+	var from_r: float = _solo_unit_base_radius_m(shooter)
+	var to_r: float = _solo_unit_base_radius_m(target)
 	return func(sp: Vector3, tp: Vector3) -> bool:
-		if overlay != null and overlay.has_method("has_line_of_sight") \
-				and not overlay.has_line_of_sight(sp, tp, from_h, to_h, from_r, to_r):
-			return false   # (a) blocking terrain (area Forest/Ruins — see in/out, not through; Container hard-blocks)
-		var a2 := Vector2(sp.x, sp.z)
-		var b2 := Vector2(tp.x, tp.z)
 		# Blockers already exclude the shooter's and target's own units, so no per-call exclude list is needed.
-		if not blockers.is_empty() and LosRules.units_block_line(a2, b2, from_h, to_h, blockers, ([] as Array[int])):
-			return false   # (b) another unit's base (perimeter of other units)
-		return true
+		return VolumetricLos.has_los(
+			{"c": Vector2(sp.x, sp.z), "r": from_r, "y0": sp.y, "y1": sp.y + from_h},
+			{"c": Vector2(tp.x, tp.z), "r": to_r, "y0": tp.y, "y1": tp.y + to_h},
+			volumes, blockers, [])
 
 
-## Every OTHER unit's alive models as LOS blockers (LosRules.Blocker: base circle + Asgard Height + a
-## per-unit key for the <1" gap-closure). The shooter's and the target's own units — and their attached
-## heroes — are excluded (p.5: you always see through your own unit and can always see the target).
-func _solo_los_blockers(exclude_a: GameUnit, exclude_b: GameUnit) -> Array[LosRules.Blocker]:
-	var out: Array[LosRules.Blocker] = []
+## Every OTHER unit's alive models as VolumetricLos blocker cylinders: the base circle where the model
+## really stands, its own height off the base table, a per-unit key for the <1" gap-closure and the
+## Aircraft flag (an Aircraft flies high — its base blocks no line of sight, GF v3.5.1 p.13). The shooter's
+## and the target's own units — and their attached heroes — are excluded (p.5: you always see through your
+## own unit and can always see the target).
+func _solo_los_blockers(exclude_a: GameUnit, exclude_b: GameUnit) -> Array:
+	var out: Array = []
 	if opr_army_manager == null:
 		return out
 	var excluded := {}
@@ -4001,15 +4006,16 @@ func _solo_los_blockers(exclude_a: GameUnit, exclude_b: GameUnit) -> Array[LosRu
 		var gu := g as GameUnit
 		if gu == null or excluded.has(gu.get_instance_id()) or SoloController.unit_in_reserve(gu):
 			continue   # a reserve unit is off-table — it blocks no sight lines (findings 3/4)
-		if SoloController.is_aircraft(gu):
-			continue   # an Aircraft flies high — only the model counts; its base blocks no line of sight (GF v3.5.1)
 		var key: int = gu.get_instance_id()
+		var air: bool = SoloController.is_aircraft(gu)
 		for m in gu.get_alive_models():
 			var node: Node3D = (m as ModelInstance).node
 			if node == null or not is_instance_valid(node):
 				continue
-			out.append(LosRules.Blocker.new(Vector2(node.global_position.x, node.global_position.z),
-				SoloController.model_base_radius_m(m), LosRules.model_height_category(m), key))
+			var pos: Vector3 = node.global_position
+			out.append({"c": Vector2(pos.x, pos.z), "r": SoloController.model_base_radius_m(m),
+				"y0": pos.y, "y1": pos.y + _solo_model_los_height_m(m),
+				"unit_key": key, "is_aircraft": air})
 	return out
 
 
@@ -4024,6 +4030,47 @@ func _solo_unit_base_radius_m(unit: GameUnit) -> float:
 	for m in unit.get_alive_models():
 		r = maxf(r, SoloController.model_base_radius_m(m))
 	return r
+
+
+## Fallback base (32 mm, the infantry standard) for models the army data has no base for.
+const SOLO_LOS_DEFAULT_BASE_MM := 32.0
+
+
+## Round-equivalent base size (mm) of a model — ovals feed in the mean of their two axes. Same source as
+## the base radius (a per-model Tough upgrade enlarges the REAL base, the mesh stays natural).
+static func _solo_model_base_mm(model: ModelInstance) -> float:
+	if model == null or model.unit == null or model.unit.unit_properties == null:
+		return SOLO_LOS_DEFAULT_BASE_MM
+	var model_tough: int = int(model.properties.get("tough", 0)) if model.properties else 0
+	var props: Dictionary = OPRArmyManager.effective_base_props(model.unit.unit_properties, model_tough)
+	if props.get("base_is_oval", false):
+		return VolumetricLos.oval_effective_mm(float(props.get("base_width_mm", SOLO_LOS_DEFAULT_BASE_MM)),
+			float(props.get("base_depth_mm", SOLO_LOS_DEFAULT_BASE_MM)))
+	return float(props.get("base_size_round", SOLO_LOS_DEFAULT_BASE_MM))
+
+
+## Volumetric height (METRES) of one model, off the official base-size table (P1) — never from mesh
+## bounds: meshes are optional per-client CDN content, so a mesh-derived height would desync multiplayer.
+static func _solo_model_los_height_m(model: ModelInstance) -> float:
+	return VolumetricLos.height_in_for_base_mm(_solo_model_base_mm(model)) * VolumetricLos.INCHES_TO_METERS
+
+
+## Representative volumetric height (METRES) of a unit: its TALLEST alive model incl. attached heroes —
+## the same "the biggest model speaks for the unit" reading the height categories used, in real inches.
+func _solo_unit_los_height_m(unit: GameUnit) -> float:
+	var h: float = VolumetricLos.height_in_for_base_mm(SOLO_LOS_DEFAULT_BASE_MM) * VolumetricLos.INCHES_TO_METERS
+	if unit == null:
+		return h
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for mm in members:
+		var member := mm as GameUnit
+		if member == null:
+			continue
+		for m in member.get_alive_models():
+			h = maxf(h, _solo_model_los_height_m(m))
+	return h
 
 
 ## Representative Asgard Height of a unit (the tallest of its alive models incl. attached heroes; H2
@@ -8775,13 +8822,17 @@ func _solo_los_refusal_detail(shooter: GameUnit, target: GameUnit) -> String:
 				best = d
 				bp = sp
 				bq = tp
-	if terrain_overlay != null and terrain_overlay.has_method("has_line_of_sight") \
-			and not terrain_overlay.has_line_of_sight(bp, bq, _solo_unit_los_height(shooter),
-				_solo_unit_los_height(target), _solo_unit_base_radius_m(shooter), _solo_unit_base_radius_m(target)):
+	# The same volumetric query the gate itself ran, split in two so the refusal can name WHICH of the
+	# two things stands in the way: first terrain alone, then the other units' bases.
+	var s_eye := Vector3(bp.x, bp.y + _solo_unit_los_height_m(shooter), bp.z)
+	var t_eye := Vector3(bq.x, bq.y + _solo_unit_los_height_m(target), bq.z)
+	var s_cyl := {"c": Vector2(bp.x, bp.z), "r": _solo_unit_base_radius_m(shooter), "y0": bp.y, "y1": s_eye.y}
+	var t_cyl := {"c": Vector2(bq.x, bq.z), "r": _solo_unit_base_radius_m(target), "y0": bq.y, "y1": t_eye.y}
+	if terrain_overlay != null and terrain_overlay.has_method("los_volumes") \
+			and not VolumetricLos.has_los(s_cyl, t_cyl, terrain_overlay.los_volumes()):
 		return " — nearest lane blocked by terrain"
-	var key: int = LosRules.first_blocking_unit_key(Vector2(bp.x, bp.z), Vector2(bq.x, bq.z),
-		_solo_unit_los_height(shooter), _solo_unit_los_height(target),
-		_solo_los_blockers(shooter, target), ([] as Array[int]))
+	var key: int = VolumetricLos.first_blocking_unit_key(s_eye, t_eye,
+		_solo_los_blockers(shooter, target), [])
 	if key != 0:
 		var bu := instance_from_id(key) as GameUnit
 		if bu != null:
@@ -8792,13 +8843,19 @@ func _solo_los_refusal_detail(shooter: GameUnit, target: GameUnit) -> String:
 
 
 func _solo_has_los(a: GameUnit, b: GameUnit) -> bool:
-	if terrain_overlay == null or not terrain_overlay.has_method("has_line_of_sight"):
+	if terrain_overlay == null or not terrain_overlay.has_method("los_volumes"):
 		return true
-	# NML-005 step 3: the REAL unit height categories (same source as the shooting path) instead
-	# of the old hardcoded 1/1 — melee display and breath targeting now judge like the dice do
-	# (a tall walker sees over what a trooper cannot, and vice versa).
-	return terrain_overlay.has_line_of_sight(solo_controller.unit_centre(a), solo_controller.unit_centre(b),
-		_solo_unit_los_height(a), _solo_unit_los_height(b))
+	# NML-005 step 3: the REAL unit heights (same source as the shooting path) instead of the old
+	# hardcoded 1/1 — melee display, breath and spell targeting judge like the dice do. Volumetric
+	# since the elevation program: the unit's anchor carries its real standing height, so a unit up on
+	# a container roof looks over what a unit on the table cannot. Terrain only, as before — the
+	# per-model shooting truth is the one that also weighs other units' bases.
+	var ca: Vector3 = solo_controller.unit_centre(a)
+	var cb: Vector3 = solo_controller.unit_centre(b)
+	return VolumetricLos.has_los(
+		{"c": Vector2(ca.x, ca.z), "r": _solo_unit_base_radius_m(a), "y0": ca.y, "y1": ca.y + _solo_unit_los_height_m(a)},
+		{"c": Vector2(cb.x, cb.z), "r": _solo_unit_base_radius_m(b), "y0": cb.y, "y1": cb.y + _solo_unit_los_height_m(b)},
+		terrain_overlay.los_volumes())
 
 
 ## The unit's weapons incl. attached heroes' (range ring + validation read the combined reach).
