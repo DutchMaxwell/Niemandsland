@@ -103,3 +103,96 @@ func test_headless_offer_keeps_take_all_policy() -> void:
 	var got: int = await _main._solo_offer_spot_markers(attacker, target)
 	assert_int(got).is_equal(2)
 	assert_int(int(target.unit_properties.get("spot_markers", 0))).is_equal(0)
+
+
+## A shooter whose OPR source carries one ranged weapon — the shape _solo_attack_groups reads
+## (mirrors _armed in e2e_range_bonus_volley_test.gd).
+func _armed(pid: int, unit_name: String, positions: Array, weapons: Array) -> GameUnit:
+	var u := _reg(E2EBoot.make_unit(_main, pid, unit_name, positions))
+	var i := 0
+	for m in u.models:
+		(m as ModelInstance).model_index = i
+		i += 1
+	var ws: Array[OPRApiClient.OPRWeapon] = []
+	for wd in weapons:
+		var d := wd as Dictionary
+		var w := OPRApiClient.OPRWeapon.new()
+		w.name = str(d.get("name", "Gun"))
+		w.range_value = int(d.get("range", 24))
+		w.attacks = int(d.get("attacks", 2))
+		w.count = int(d.get("count", 1))
+		ws.append(w)
+	var src := OPRApiClient.OPRUnit.new()
+	src.weapons = ws
+	u.source_type = "opr"
+	u.source_data = src
+	return u
+
+
+## The AI volley makes the HUMAN roll their own saves (`_solo_prompt_saves` spins frames on a
+## ConfirmationDialog) — press OK for the absent player, the morale suite's pump pattern.
+func _arm_save_pump() -> void:
+	var pump := Timer.new()
+	pump.name = "NML970Pump"
+	pump.wait_time = 0.02
+	pump.one_shot = false
+	get_tree().root.add_child(pump)   # freed by free_stray_root_nodes in after_test
+	pump.timeout.connect(func() -> void:
+		if _main == null or not is_instance_valid(_main):
+			return
+		for c in _main.get_children():
+			var dlg := c as AcceptDialog
+			if dlg != null and dlg.title == "Incoming fire!":
+				dlg.confirmed.emit())
+	pump.start()
+
+
+## ONE AI shot in the shape `_run_ai_shooting` builds (mirrors _shots in e2e_volley_morale_test.gd).
+func _shots(attacker: GameUnit, weapon_name: String, attacks: int, range_in: int) -> Array:
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = weapon_name
+	w.range_value = range_in
+	w.attacks = attacks
+	w.count = 1
+	var profiles: Array = AiShooting.profiles_in_range([w], 0.0)
+	return [{"member": attacker, "quality": attacker.get_quality(),
+		"alive": attacker.get_alive_count(), "max": attacker.models.size(),
+		"reach": range_in, "profile": profiles[0]}]
+
+
+func test_human_to_hit_line_names_the_spent_spot_bonus(timeout := 120000) -> void:
+	# NML-970: the marker spend is visible (the token vanishes) and the threshold proves it
+	# counted — but the To-hit breakdown never NAMED it. Transparency doctrine: every applied
+	# bonus writes its label.
+	var spotter := _spotter(Vector3.ZERO)
+	var attacker := _armed(1, "Guns", [Vector3(0, 0, 5.0 * INCH)],
+		[{"name": "Rifle", "range": 24, "attacks": 2}])
+	var target := _reg(E2EBoot.make_unit(_main, 2, "Marked", [Vector3(10.0 * INCH, 0, 0)]))
+	_main._solo_place_spot_marker(spotter, target)
+	_main._solo_place_spot_marker(spotter, target)
+	_main._solo_batch = true
+	await _main._run_human_shooting(attacker, target)
+	assert_str(_log_text()) \
+		.override_failure_message("NML-970 — the volley consumed 2 markers but the To-hit line never named the bonus:\n%s" % _log_text()) \
+		.contains("Spotted +2")
+
+
+func test_ai_to_hit_line_names_the_spot_bonus_too(timeout := 120000) -> void:
+	# The AI's volley spends markers through the same arithmetic — its breakdown owes the
+	# same label (rules-must-log holds for both sides).
+	# The spotter stands OFF the firing lane — a third unit on the segment would block the
+	# per-model sighting (unit-as-blocker LOS) and the volley would roll nothing.
+	var eyes := _reg(E2EBoot.make_unit(_main, 2, "Eyes", [Vector3(0, 0, 8.0 * INCH)]))
+	eyes.unit_properties["special_rules"] = ["Precision Spotter"]
+	var ai := _armed(2, "Sturm", [Vector3.ZERO], [{"name": "Autogun", "range": 24, "attacks": 2}])
+	# Four models so two attacks can never WIPE the unit — the volley must end on the dice,
+	# not wander into the destruction bookkeeping this case is not about.
+	var target := _reg(E2EBoot.make_unit(_main, 1, "Marked", [Vector3(10.0 * INCH, 0, -1.0 * INCH),
+		Vector3(10.0 * INCH, 0, 0), Vector3(10.0 * INCH, 0, 1.0 * INCH), Vector3(10.0 * INCH, 0, 2.0 * INCH)]))
+	_main._solo_place_spot_marker(eyes, target)
+	_main._solo_batch = true
+	_arm_save_pump()
+	await _main._solo_resolve_ai_volley(ai, target, _shots(ai, "Autogun", 2, 24), false)
+	assert_str(_log_text()) \
+		.override_failure_message("NML-970 — the AI volley consumed a marker but its To-hit line never named the bonus:\n%s" % _log_text()) \
+		.contains("Spotted +1")

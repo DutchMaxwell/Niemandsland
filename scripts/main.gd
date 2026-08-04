@@ -2988,7 +2988,12 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 				int(RulesRegistry.unit_param(member, "Indirect", "moved_hit_penalty", AiCombatMath.INDIRECT_MOVED_HIT_PENALTY)))
 			mod_info = {"mod": int(mod_info.get("mod", 0)) + indirect_mod,
 				"note": _solo_join_note(str(mod_info.get("note", "")), "Indirect moved %d" % indirect_mod)}
-		var ai_mod: int = int(mod_info.get("mod", 0)) + upr_hit + ai_spot_hit
+		# NML-970: spent Spot markers fold INTO the note — the To-hit breakdown must name
+		# every bonus it counts, not only apply it (transparency doctrine).
+		if ai_spot_hit != 0:
+			mod_info = {"mod": int(mod_info.get("mod", 0)) + ai_spot_hit,
+				"note": _solo_join_note(str(mod_info.get("note", "")), "Spotted +%d" % ai_spot_hit)}
+		var ai_mod: int = int(mod_info.get("mod", 0)) + upr_hit
 		if bool(profile.get("unstoppable", false)) and ai_mod < 0:
 			ai_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
 			if battle_log != null:
@@ -9511,7 +9516,11 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 					"note": _solo_join_note(str(p_mod.get("note", "")), "Indirect moved %d" % ind_mod)}
 			# Reliable sets the Quality (2+), THEN the roll modifiers apply (GF v3.5.1 p.14: "Reliable only
 			# changes the Quality value, so the roll can still be modified").
-			var h_mod: int = int(p_mod.get("mod", 0)) + upr_hit + spot_hit
+			# NML-970: the human volley folds its Spot spend into the note the same way.
+			if spot_hit != 0:
+				p_mod = {"mod": int(p_mod.get("mod", 0)) + spot_hit,
+					"note": _solo_join_note(str(p_mod.get("note", "")), "Spotted +%d" % spot_hit)}
+			var h_mod: int = int(p_mod.get("mod", 0)) + upr_hit
 			if bool(profile.get("unstoppable", false)) and h_mod < 0:
 				h_mod = 0   # Unstoppable (GF v3.5.1 p.15): ignores all negative modifiers to this weapon
 				if battle_log != null:
