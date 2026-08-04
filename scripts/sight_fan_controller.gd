@@ -24,25 +24,17 @@ func clear_fan() -> void:
 
 
 ## Show the fan for `unit`: per alive model a base-edge ray fan at `range_in` (inches, measured from the
-## base edge), merged into the unit's summed region. `overlay` provides walls + the terrain grid (the same
-## truth the engine LOS uses); absent pieces degrade gracefully (no walls / open ground).
+## base edge), merged into the unit's summed region. `overlay` publishes the 3D terrain volumes — the
+## very truth the shooting gate reads (NML-005: eine LoS-Wahrheit); an absent overlay degrades
+## gracefully to an open table.
 func show_fan_for(unit: GameUnit, overlay: Node, ranges_in: Array, table_bounds: Rect2 = Rect2()) -> void:
 	clear_fan()
 	if unit == null or ranges_in.is_empty():
 		return
 	_bounds = table_bounds
-	# NML-005 (eine LoS-Wahrheit): the fan cuts ONLY at LOS-blocking edges (container OBBs) —
-	# ruin walls are movement obstacles, not sight rules; their see-into/not-through AREA
-	# semantics lives in the terrain march below, exactly like the engine's has_line_of_sight.
-	var walls: Array = []
-	if overlay != null and overlay.has_method("get_blocker_edges_world"):
-		walls = overlay.get_blocker_edges_world()
-	elif overlay != null and overlay.has_method("get_wall_segments_world"):
-		walls = overlay.get_wall_segments_world()
-	var ttype := func(p: Vector2) -> int:
-		if overlay != null and overlay.has_method("get_terrain_at_world_position"):
-			return int(overlay.get_terrain_at_world_position(Vector3(p.x, 0.0, p.y)))
-		return int(TerrainRules.TerrainType.NONE)
+	var volumes: Array = []
+	if overlay != null and overlay.has_method("los_volumes"):
+		volumes = overlay.los_volumes()
 	# Bands per DISTINCT WEAPON RANGE of the unit, each emanating from ALL model bases: in OPR weapons
 	# belong to the UNIT (which mini carries the flamer is the player's choice), so per-model attribution
 	# would be fiction — the truthful read is "strong yellow: every weapon bites here; pale: only the
@@ -53,8 +45,14 @@ func show_fan_for(unit: GameUnit, overlay: Node, ranges_in: Array, table_bounds:
 		var node: Node3D = (m as ModelInstance).node
 		if node == null or not is_instance_valid(node):
 			continue
-		emitters.append({"origin": Vector2(node.global_position.x, node.global_position.z),
-			"base_r": LosRules.model_base_radius_m(m as ModelInstance)})
+		# The EYE, not the footprint: where the model really stands (node y — a container roof lifts it)
+		# plus its own volumetric height. The base radius doubles as the official base size in mm
+		# (radius m x 2 x 1000), the one input that table takes.
+		var base_r := LosRules.model_base_radius_m(m as ModelInstance)
+		var eye_y: float = node.global_position.y \
+			+ VolumetricLos.height_in_for_base_mm(base_r * 2000.0) * VolumetricLos.INCHES_TO_METERS
+		emitters.append({"eye": Vector3(node.global_position.x, eye_y, node.global_position.z),
+			"base_r": base_r})
 	if emitters.is_empty():
 		return
 	var bands: Array = ranges_in.duplicate()
@@ -66,7 +64,7 @@ func show_fan_for(unit: GameUnit, overlay: Node, ranges_in: Array, table_bounds:
 		var fill: Color = BAND_FILLS[bands.size() - 1 - bi]   # longest palest, shortest strongest
 		var polys: Array = []
 		for e in emitters:
-			polys.append(SightFan.fan_polygon(e["origin"], e["base_r"], float(bands[bi]) * 0.0254, walls, ttype))
+			polys.append(SightFan.fan_polygon(e["eye"], e["base_r"], float(bands[bi]) * 0.0254, volumes))
 		for poly in SightFan.union_fans(polys):
 			_add_region(poly as PackedVector2Array, fill)
 
