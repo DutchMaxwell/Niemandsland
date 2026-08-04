@@ -18,6 +18,14 @@ const INCHES_TO_METERS := 0.0254
 ## Sight lines shorter than this are always clear: nothing fits between two all-but-touching models.
 const MIN_SPAN_M := 0.02
 
+## Gaps narrower than this between two models of the SAME unit count as closed (tournament standard).
+const CLOSED_GAP_INCHES := 1.0
+
+## Height tolerance for slab tests. Vector3 carries 32-bit floats while the volume dicts hold 64-bit
+## ones, so "the eye is exactly as high as this volume's top" — the everyday case of two equally tall
+## models on flat ground — must not flip on rounding noise. 1e-6 m is 0.00004": invisible to the rules.
+const Y_EPS_M := 1e-6
+
 ## Official volumetric model heights as Vector2(base size in mm, model height in inches). Sizes between
 ## two rows interpolate LINEARLY; anything below the first / above the last row clamps to it.
 const BASE_HEIGHT_TABLE := [
@@ -60,11 +68,13 @@ static func oval_effective_mm(width_mm: float, depth_mm: float) -> float:
 ## volume). Boundaries count as inside: two equally tall models on flat ground look each other in the eye
 ## exactly at the top of an equally tall blocker, and that line IS blocked.
 static func slab_t_range(a: Vector3, b: Vector3, y0: float, y1: float) -> Vector2:
+	var lo := y0 - Y_EPS_M
+	var hi := y1 + Y_EPS_M
 	var dy := b.y - a.y
 	if absf(dy) < 1e-9:
-		return Vector2(0.0, 1.0) if (a.y >= y0 and a.y <= y1) else Vector2(1.0, 0.0)
-	var t_a := (y0 - a.y) / dy
-	var t_b := (y1 - a.y) / dy
+		return Vector2(0.0, 1.0) if (a.y >= lo and a.y <= hi) else Vector2(1.0, 0.0)
+	var t_a := (lo - a.y) / dy
+	var t_b := (hi - a.y) / dy
 	return Vector2(maxf(0.0, minf(t_a, t_b)), minf(1.0, maxf(t_a, t_b)))
 
 
@@ -104,11 +114,15 @@ static func eye(cyl: Dictionary) -> Vector3:
 ## True if the model `from_cyl` can see `to_cyl`. `volumes` are terrain volumes (see above), `blockers`
 ## are other models as cylinders, `exclude` holds the unit keys that never block their own sight line.
 static func has_los(from_cyl: Dictionary, to_cyl: Dictionary, volumes: Array = [],
-		_blockers: Array = [], _exclude: Array = []) -> bool:
+		blockers: Array = [], exclude: Array = []) -> bool:
 	var a := eye(from_cyl)
 	var b := eye(to_cyl)
 	if a.distance_to(b) < MIN_SPAN_M:
 		return true   # all but the same spot: nothing can stand between them
+	if bool(to_cyl.get("is_aircraft", false)):
+		return true   # P6: an aircraft is abstract — always visible, wherever it hovers
+	if first_blocking_unit_key(a, b, blockers, exclude) != 0:
+		return false
 	for vol: Dictionary in volumes:
 		if not segment_hits_volume(a, b, vol):
 			continue
@@ -125,15 +139,59 @@ static func has_los(from_cyl: Dictionary, to_cyl: Dictionary, volumes: Array = [
 ## refusal can name the blocker. Blockers are model cylinders plus "unit_key" and "is_aircraft"; a unit
 ## never blocks its own sight line (`exclude` carries the shooter's and the target's key). Geometry alone
 ## decides — a taller eye simply passes over a shorter cylinder, there is no height ladder any more.
-static func first_blocking_unit_key(_a: Vector3, _b: Vector3, _blockers: Array, _exclude: Array) -> int:
+static func first_blocking_unit_key(a: Vector3, b: Vector3, blockers: Array, exclude: Array) -> int:
+	var by_unit: Dictionary = {}   # Dictionary[int, Array] for the closed-gap pass below
+	for bl: Dictionary in blockers:
+		var key := int(bl.get("unit_key", 0))
+		if exclude.has(key) or bool(bl.get("is_aircraft", false)):
+			continue   # own/target unit, and aircraft bases are transparent (P6)
+		if segment_hits_cyl(a, b, bl):
+			return key
+		if not by_unit.has(key):
+			by_unit[key] = []
+		by_unit[key].append(bl)
+
+	# Closed-gap pass: a gap of less than 1" between two models of the SAME unit counts as closed, so the
+	# line cannot thread between them. In 3D the wall is only as tall as the shorter of the pair.
+	var closed_gap_m := CLOSED_GAP_INCHES * INCHES_TO_METERS
+	var a2 := Vector2(a.x, a.z)
+	var b2 := Vector2(b.x, b.z)
+	for key: int in by_unit:
+		var models: Array = by_unit[key]
+		for i: int in models.size():
+			for j: int in range(i + 1, models.size()):
+				var m: Dictionary = models[i]
+				var n: Dictionary = models[j]
+				var mc: Vector2 = m["c"]
+				var nc: Vector2 = n["c"]
+				if mc.distance_to(nc) - float(m["r"]) - float(n["r"]) >= closed_gap_m:
+					continue
+				var hit = Geometry2D.segment_intersects_segment(a2, b2, mc, nc)
+				if hit == null:
+					continue
+				var seg := b2 - a2
+				var t := 0.0
+				if seg.length_squared() > 0.0:
+					t = clampf(((hit as Vector2) - a2).dot(seg) / seg.length_squared(), 0.0, 1.0)
+				if lerpf(a.y, b.y, t) < minf(float(m["y1"]), float(n["y1"])):
+					return key
 	return 0
 
 
 ## Height (metres) of the walkable surface at the flat point `p`: the top of the tallest SOLID volume
 ## whose footprint contains it (container roof, floor slab), else the table at 0. The AI checker and the
 ## ruler place hypothetical models with this, so their eyes match a real model's drop-probe placement.
-static func surface_y_at(_p: Vector2, _volumes: Array) -> float:
-	return 0.0
+static func surface_y_at(p: Vector2, volumes: Array) -> float:
+	var y := 0.0
+	for vol: Dictionary in volumes:
+		if not bool(vol.get("solid", true)):
+			continue   # area terrain is ground you walk in, not a surface you stand on top of
+		var top := float(vol["y1"])
+		if top <= y:
+			continue
+		if point_in_footprint(p, vol):
+			y = top
+	return y
 
 
 ## Dispatch: does the segment a->b touch this volume, whatever kind it is?
@@ -163,7 +221,7 @@ static func segment_hits_cells(a: Vector3, b: Vector3, vol: Dictionary) -> bool:
 	for i in range(1, steps):
 		var t := float(i) / float(steps)
 		var y := lerpf(a.y, b.y, t)
-		if y < y0 or y > y1:
+		if y < y0 - Y_EPS_M or y > y1 + Y_EPS_M:
 			continue   # the line passes over (or under) the zone at this sample
 		if cells.has(TerrainRules.cell_of(a2.lerp(b2, t), cell_size)):
 			return true
@@ -173,16 +231,20 @@ static func segment_hits_cells(a: Vector3, b: Vector3, vol: Dictionary) -> bool:
 ## True if `p` stands inside `vol`'s footprint AND at or below its top — the endpoint-in-zone test the
 ## area rule keys on (a model on a 6" roof is NOT "in" the 3.4" forest below it).
 static func point_inside_volume(p: Vector3, vol: Dictionary) -> bool:
-	if p.y > float(vol["y1"]):
+	if p.y > float(vol["y1"]) + Y_EPS_M:
 		return false
-	var p2 := Vector2(p.x, p.z)
+	return point_in_footprint(Vector2(p.x, p.z), vol)
+
+
+## True if the flat point `p` lies in the volume's footprint, height ignored.
+static func point_in_footprint(p: Vector2, vol: Dictionary) -> bool:
 	match String(vol.get("kind", "box")):
 		"cyl":
-			return p2.distance_to(vol["c"]) <= float(vol["r"])
+			return p.distance_to(vol["c"]) <= float(vol["r"])
 		"cells":
-			return (vol["cells"] as Dictionary).has(TerrainRules.cell_of(p2, float(vol["cell_size"])))
+			return (vol["cells"] as Dictionary).has(TerrainRules.cell_of(p, float(vol["cell_size"])))
 		_:
-			return TerrainRules.point_in_obb(p2, vol["c"], vol["he"], float(vol["yaw"]))
+			return TerrainRules.point_in_obb(p, vol["c"], vol["he"], float(vol["yaw"]))
 
 
 ## True if the flat segment from->to passes through (or touches) the circle. Own copy so the module keeps
