@@ -2620,9 +2620,16 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 
 ## The measure line's LOS verdict, factored out of the draw path so it is testable
 ## headless. Terrain first (height-aware Asgard walk), then units as blockers.
+## NML-971: the DRAWN line is flattened to table level, but the verdict must read the
+## measured objects' REAL heights — the roof exemption (NML-965) needs the true y of a
+## model standing ON a container, or the ruler paints red where the cast resolves.
 func _measure_los_blocked(from_pos: Vector3, to_pos: Vector3) -> bool:
 	if not (terrain_overlay and terrain_overlay.has_method("has_line_of_sight")):
 		return false
+	if _measure_start_object != null:
+		from_pos.y = _measure_start_object.global_position.y
+	if _measure_end_object != null:
+		to_pos.y = _measure_end_object.global_position.y
 	var from_height := _object_height_category(_measure_start_object)
 	var to_height := _object_height_category(_measure_end_object)
 	# Base radii keep the ruler consistent with the engine's base-aware terrain-zone LOS (a model whose
