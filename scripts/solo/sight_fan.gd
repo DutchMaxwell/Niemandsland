@@ -13,9 +13,9 @@ const STEP_M := 0.0381   # half a 3" terrain cell — the same granularity the e
 const REFINE_ITERS := 4  # bisection per stopped ray: 0.0381m / 2^4 ≈ 2.4mm — kills the stair-stepping
                          # at zone boundaries (field-test Bug 15) for 4 extra samples per blocked ray
 
-## The height (INCHES above the table) the fan assumes a TARGET stands at: the fan answers "would a model
-## standing here be visible", and 1" is the smallest official model height. A display aid — the real
-## shooting query uses each real target's own height.
+## The height (INCHES above the SURFACE at that spot) the fan assumes a TARGET stands at: the fan answers
+## "would a model standing here be visible", and 1" is the smallest official model height. A display aid —
+## the real shooting query uses each real target's own height.
 const TARGET_EYE_IN := 1.0
 
 
@@ -50,12 +50,15 @@ static func _sight_limited(eye: Vector3, start: Vector2, dir: Vector2, max_d: fl
 
 
 ## The ONE sight truth, asked for a single ray sample: can `eye` see a model standing at the flat point
-## `p`? Terrain only — other units' bases are not part of the range overlay.
+## `p`? The assumed target STANDS on whatever surface is there — a container roof carries models, so the
+## question at that spot is "can I see someone up there", not "can I see into the box". Terrain only:
+## other units' bases are not part of the range overlay.
 static func _blocked(eye: Vector3, p: Vector2, volumes: Array) -> bool:
-	var target_y := TARGET_EYE_IN * VolumetricLos.INCHES_TO_METERS
+	var ground := VolumetricLos.surface_y_at(p, volumes)
 	return not VolumetricLos.has_los(
 		{"c": Vector2(eye.x, eye.z), "r": 0.0, "y0": eye.y, "y1": eye.y},
-		{"c": p, "r": 0.0, "y0": 0.0, "y1": target_y}, volumes)
+		{"c": p, "r": 0.0, "y0": ground, "y1": ground + TARGET_EYE_IN * VolumetricLos.INCHES_TO_METERS},
+		volumes)
 
 
 ## Bisect the exact stop distance inside (lo, hi]: at `lo` the ray was still running, at `hi` the sight
