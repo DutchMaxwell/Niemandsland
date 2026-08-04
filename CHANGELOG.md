@@ -7,6 +7,10 @@ separately (`SAVE_VERSION` in `save_manager.gd`).
 ## [0.3.11.0-alpha] — 2026-08-04
 
 ### Fixed
+- **Spell Conduit measures like the ruler now.** The +1-to-casting check read unit centre to
+  unit centre while every other ranged check — and your measuring tape — reads base edge to
+  base edge, so a conduit on a wide base lost its legal +1 (the AI's own conduit sweep already
+  measured edges). One measuring convention everywhere. (NML-981)
 - **The spotting laser was invisible equipment.** Three models of a squad buy Spotting Lasers and the
   unit card showed nothing: not the item, not its rule. An upgrade only a *subset* of the models buys
   never enters the unit's rule list — it lives as an item grant and on the carriers' own loadouts, and
