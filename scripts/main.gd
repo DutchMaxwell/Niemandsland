@@ -5805,8 +5805,16 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 			# only changes the Quality value, so the roll can still be modified", p.14); fatigue (unmodified-6-
 			# only) overrides every to-hit modifier.
 			var strike_quality: int = AiCombatMath.reliable_quality(base_quality, bool(profile.get("reliable", false)))
+			# NML-974: Unstoppable clamps the NEGATIVE sum in melee exactly as both volley
+			# paths do (GF v3.5.1 p.15 "this weapon" — both halves). Fatigue is not a
+			# modifier (unmodified-6-only) and stays above the clamp.
+			var m_mod: int = int(p_mod.get("mod", 0)) + uf_hit
+			if bool(profile.get("unstoppable", false)) and m_mod < 0:
+				m_mod = 0
+				if battle_log != null:
+					battle_log.log_event(BattleLog.Category.COMBAT, "Unstoppable: negative to-hit modifiers ignored", true)
 			var to_hit: int = 6 if fatigued else AiCombatMath.modified_hit_target(
-				AiCombatMath.thrust_to_hit(strike_quality, bool(profile.get("thrust", false))), int(p_mod.get("mod", 0)) + uf_hit)
+				AiCombatMath.thrust_to_hit(strike_quality, bool(profile.get("thrust", false))), m_mod)
 			# Versatile Attack (army-book): on a charge from over 9" the AI picks the EV-better of +1 to hit
 			# or AP(+1) for this weapon — the SAME chooser as the shooting facet + the EV metric. Fatigue
 			# (unmodified-6-only) overrides the +1-to-hit part; the AP(+1) part still folds in below.
