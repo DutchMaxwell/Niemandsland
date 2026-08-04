@@ -120,6 +120,11 @@ const CONTAINER_LENGTH_INCHES := 6.0
 const CONTAINER_DEPTH_INCHES := 3.0
 const CONTAINER_HEIGHT_INCHES := 2.5
 
+## Height of a grid-painted RUINS zone for the 3D volume registry (elevation program, Phase A).
+## Painted ruins stand for the two-storey shelf ruins whose upper floor sits at 6", so that is how
+## tall the zone is: a model on a 6" roof looks over it, a model on the ground does not.
+const RUIN_ZONE_HEIGHT_INCHES := 6.0
+
 const MINE_BOTTOM_RADIUS_INCHES := 0.7
 const MINE_TOP_RADIUS_INCHES := 0.3
 const MINE_HEIGHT_INCHES := 0.5
@@ -1261,6 +1266,21 @@ func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_
 		if th >= from_height and th >= to_height:
 			return false
 	return true
+
+
+# ==============================================================================
+# 3D VOLUME REGISTRY (elevation program, Phase A)
+# ==============================================================================
+
+## Every piece of terrain this overlay knows about, as VolumetricLos volume dicts in world metres —
+## the ONE feed the volumetric sight truth reads, so sight math and sight visuals cannot drift apart.
+func los_volumes() -> Array:
+	return []
+
+
+## Height (metres) of the surface a model standing at the flat world point `p` would stand on.
+func surface_y_at(_p: Vector2) -> float:
+	return 0.0
 
 
 ## Compact, always-visible Asgard effect label for a terrain type (empty for NONE).
