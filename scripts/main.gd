@@ -8957,12 +8957,8 @@ func _solo_update_los_line(screen_pos: Vector2) -> void:
 		var now := Time.get_ticks_msec()
 		if str(_solo_los_cache.get("target_id", "")) != hovered.unit_id \
 				or now - int(_solo_los_cache.get("at", 0)) > SOLO_LOS_REFRESH_MS:
-			var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
-			# #182: the hover feedback judges like the legality gate — an Indirect gun must
-			# not show a red "0/N sight" line over a perfectly legal target.
 			_solo_los_cache = {"target_id": hovered.unit_id, "at": now,
-				"count": _solo_sighted_count(attacker, hovered, rng_in,
-					SoloController.has_indirect_ranged(_solo_all_weapons(attacker)))}
+				"count": _solo_hover_sighted_count(attacker, hovered)}
 		sighted = int(_solo_los_cache.get("count", 0))
 	var color := Color(0.2, 0.9, 0.3) if sighted > 0 else Color(0.95, 0.25, 0.2)
 	var from := solo_controller.unit_centre(attacker) + Vector3(0, 0.04, 0)
@@ -8993,6 +8989,17 @@ func _solo_update_los_line(screen_pos: Vector2) -> void:
 		_solo_los_label.visible = true
 	elif _solo_los_label != null and is_instance_valid(_solo_los_label):
 		_solo_los_label.visible = false
+
+
+## How many of `attacker`'s models the HOVER FEEDBACK counts as able to reach `hovered` — the ONE
+## number behind the drawn line's colour and its "n/N sight" label. Factored out of
+## _solo_update_los_line so a headless test can ask it without a mouse (same reason _solo_cast_click
+## is factored). #182: the feedback judges like the legality gate — an Indirect gun must not show a
+## red "0/N sight" line over a perfectly legal target.
+func _solo_hover_sighted_count(attacker: GameUnit, hovered: GameUnit) -> int:
+	var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
+	return _solo_sighted_count(attacker, hovered, rng_in,
+		SoloController.has_indirect_ranged(_solo_all_weapons(attacker)))
 
 
 ## Resolve the player's declared attack — the mirror of the AI flow: your groups (unit + heroes, own
