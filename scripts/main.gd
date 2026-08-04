@@ -8968,6 +8968,20 @@ func _solo_split_or_attack(attacker: GameUnit, target: GameUnit, melee: bool) ->
 ## The split dialog: one checkbox per distinct ranged weapon; checked weapons fire at a
 ## SECOND target of your choice, the rest at the first. No dialog for single-weapon units,
 ## headless/batch, or when nothing is checked.
+## The weapon names the split-fire ask may offer: every distinct in-range profile of the attacker
+## (and its attached heroes) against `target_a`. Extracted from the dialog so the offer list is
+## testable headless (the dialog itself bypasses in headless runs).
+func _solo_split_fire_offer_names(attacker: GameUnit, target_a: GameUnit) -> Array:
+	var dist := solo_controller.nearest_melee_gap_in(attacker, target_a)
+	var names: Array = []
+	for grp in _solo_attack_groups(attacker, dist, false, target_a):
+		for p in (grp as Dictionary).get("profiles", []):
+			var n := str((p as Dictionary).get("name", ""))
+			if not n.is_empty() and not names.has(n):
+				names.append(n)
+	return names
+
+
 func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionary:
 	if _solo_batch or DisplayServer.get_name() == "headless":
 		return {"split": false}
@@ -8986,13 +9000,7 @@ func _solo_offer_split_fire(attacker: GameUnit, target_a: GameUnit) -> Dictionar
 			break
 	if not second_exists:
 		return {"split": false}
-	var dist := solo_controller.nearest_melee_gap_in(attacker, target_a)
-	var names: Array = []
-	for grp in _solo_attack_groups(attacker, dist, false, target_a):
-		for p in (grp as Dictionary).get("profiles", []):
-			var n := str((p as Dictionary).get("name", ""))
-			if not n.is_empty() and not names.has(n):
-				names.append(n)
+	var names: Array = _solo_split_fire_offer_names(attacker, target_a)
 	if names.size() < 2:
 		return {"split": false}
 	var dlg := ConfirmationDialog.new()
