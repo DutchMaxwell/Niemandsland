@@ -136,3 +136,63 @@ func test_an_empty_table_and_touching_models_are_always_clear() -> void:
 	# Span under 2 cm: two models all but on top of each other see each other even inside a solid volume.
 	var container := [_box(0.0, 0.0, 3.0, 1.5, 0.0, 2.5)]
 	assert_bool(VolumetricLos.has_los(_model(0.0, 0.0, 0.0, 25.0), _model(0.2, 0.0, 0.0, 25.0), container)).is_true()
+
+
+## A model as a LOS blocker: its cylinder plus the unit it belongs to and the aircraft flag.
+func _blocker(x_in: float, z_in: float, base_mm: float, unit_key: int, aircraft := false) -> Dictionary:
+	var d := _model(x_in, z_in, 0.0, base_mm)
+	d["unit_key"] = unit_key
+	d["is_aircraft"] = aircraft
+	return d
+
+
+func test_a_model_in_the_lane_blocks_and_is_named() -> void:
+	var blockers := [_blocker(0.0, 0.0, 50.0, 7)]          # 50 mm base -> 2" tall
+	var a := _model(-10.0, 0.0, 0.0, 25.0)                 # eye 1"
+	var b := _model(10.0, 0.0, 0.0, 25.0)
+	assert_bool(VolumetricLos.has_los(a, b, [], blockers)).is_false()
+	assert_int(VolumetricLos.first_blocking_unit_key(VolumetricLos.eye(a), VolumetricLos.eye(b),
+		blockers, [])).is_equal(7)
+	# The shooter's and the target's own unit never block their line.
+	assert_bool(VolumetricLos.has_los(a, b, [], blockers, [7])).is_true()
+
+
+func test_geometry_decides_who_sees_over_whom_no_height_ladder() -> void:
+	var blockers := [_blocker(0.0, 0.0, 25.0, 7)]          # 25 mm base -> 1" tall
+	var target := _model(10.0, 0.0, 0.0, 25.0)
+	# A 60 mm model (3" tall) looks straight over the 1" model in between.
+	assert_bool(VolumetricLos.has_los(_model(-10.0, 0.0, 0.0, 60.0), target, [], blockers)).is_true()
+	# Another 1" model does not: eye and blocker top are the same height, so the line is blocked.
+	assert_bool(VolumetricLos.has_los(_model(-10.0, 0.0, 0.0, 25.0), target, [], blockers)).is_false()
+
+
+func test_a_closed_gap_in_a_unit_is_a_wall_a_tall_eye_still_clears() -> void:
+	# Two 50 mm models of ONE unit, 0.43" of air between their bases: under 1" counts as closed, so the
+	# line is blocked even though it threads BETWEEN the two bases.
+	var pair := [_blocker(0.0, -1.2, 50.0, 7), _blocker(0.0, 1.2, 50.0, 7)]
+	assert_bool(VolumetricLos.has_los(_model(-10.0, 0.0, 0.0, 25.0), _model(10.0, 0.0, 0.0, 25.0),
+		[], pair)).is_false()
+	# The wall is only as tall as the shorter of the pair (2"): two 3" models see over it.
+	assert_bool(VolumetricLos.has_los(_model(-10.0, 0.0, 0.0, 60.0), _model(10.0, 0.0, 0.0, 60.0),
+		[], pair)).is_true()
+
+
+func test_aircraft_are_transparent_and_always_visible() -> void:
+	# P6 (GF p.13): an aircraft's base is abstract — it never blocks...
+	var flyers := [_blocker(0.0, 0.0, 50.0, 7, true)]
+	var a := _model(-10.0, 0.0, 0.0, 25.0)
+	assert_bool(VolumetricLos.has_los(a, _model(10.0, 0.0, 0.0, 25.0), [], flyers)).is_true()
+	# ...and it is always visible itself, even behind a solid container.
+	var flyer := _model(10.0, 0.0, 0.0, 25.0)
+	flyer["is_aircraft"] = true
+	assert_bool(VolumetricLos.has_los(a, flyer, [_box(0.0, 0.0, 3.0, 1.5, 0.0, 2.5)])).is_true()
+
+
+func test_surface_y_at_reports_the_tallest_solid_footprint() -> void:
+	var vols := [_box(0.0, 0.0, 3.0, 1.5, 0.0, 2.5),          # container roof at 2.5"
+		_box(0.0, 20.0, 6.0, 6.0, 2.75, 3.0),                 # second-storey floor slab at 3"
+		_area(_box(20.0, 0.0, 3.0, 3.0, 0.0, 3.4))]           # forest: standable ground, not a floor
+	assert_float(VolumetricLos.surface_y_at(Vector2(0.0, 0.0), vols)).is_equal_approx(2.5 * K, 0.0001)
+	assert_float(VolumetricLos.surface_y_at(Vector2(0.0, 20.0) * K, vols)).is_equal_approx(3.0 * K, 0.0001)
+	assert_float(VolumetricLos.surface_y_at(Vector2(20.0, 0.0) * K, vols)).is_equal_approx(0.0, 0.0001)
+	assert_float(VolumetricLos.surface_y_at(Vector2(50.0, 50.0) * K, vols)).is_equal_approx(0.0, 0.0001)

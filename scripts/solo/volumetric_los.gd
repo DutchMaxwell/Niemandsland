@@ -121,6 +121,21 @@ static func has_los(from_cyl: Dictionary, to_cyl: Dictionary, volumes: Array = [
 	return true
 
 
+## The unit key of the first model standing in the sight line (0 = the lane is clear), so a rules-correct
+## refusal can name the blocker. Blockers are model cylinders plus "unit_key" and "is_aircraft"; a unit
+## never blocks its own sight line (`exclude` carries the shooter's and the target's key). Geometry alone
+## decides — a taller eye simply passes over a shorter cylinder, there is no height ladder any more.
+static func first_blocking_unit_key(_a: Vector3, _b: Vector3, _blockers: Array, _exclude: Array) -> int:
+	return 0
+
+
+## Height (metres) of the walkable surface at the flat point `p`: the top of the tallest SOLID volume
+## whose footprint contains it (container roof, floor slab), else the table at 0. The AI checker and the
+## ruler place hypothetical models with this, so their eyes match a real model's drop-probe placement.
+static func surface_y_at(_p: Vector2, _volumes: Array) -> float:
+	return 0.0
+
+
 ## Dispatch: does the segment a->b touch this volume, whatever kind it is?
 static func segment_hits_volume(a: Vector3, b: Vector3, vol: Dictionary) -> bool:
 	match String(vol.get("kind", "box")):
