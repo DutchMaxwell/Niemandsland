@@ -3990,11 +3990,15 @@ func _solo_true_los_callable(shooter: GameUnit, target: GameUnit) -> Callable:
 	var to_h: float = _solo_unit_los_height_m(target)
 	var from_r: float = _solo_unit_base_radius_m(shooter)
 	var to_r: float = _solo_unit_base_radius_m(target)
+	# P6: an Aircraft is abstract (GF v3.5.1 p.13) — no altitude coordinate, base transparent to sight,
+	# so nothing on the table hides one. The flag lets the primitive answer that for the TARGET, the
+	# mirror of the blocker flag _solo_los_blockers already sets.
+	var to_air: bool = SoloController.is_aircraft(target)
 	return func(sp: Vector3, tp: Vector3) -> bool:
 		# Blockers already exclude the shooter's and target's own units, so no per-call exclude list is needed.
 		return VolumetricLos.has_los(
 			{"c": Vector2(sp.x, sp.z), "r": from_r, "y0": sp.y, "y1": sp.y + from_h},
-			{"c": Vector2(tp.x, tp.z), "r": to_r, "y0": tp.y, "y1": tp.y + to_h},
+			{"c": Vector2(tp.x, tp.z), "r": to_r, "y0": tp.y, "y1": tp.y + to_h, "is_aircraft": to_air},
 			volumes, blockers, [])
 
 
@@ -8868,7 +8872,8 @@ func _solo_has_los(a: GameUnit, b: GameUnit) -> bool:
 	var cb: Vector3 = solo_controller.unit_centre(b)
 	return VolumetricLos.has_los(
 		{"c": Vector2(ca.x, ca.z), "r": _solo_unit_base_radius_m(a), "y0": ca.y, "y1": ca.y + _solo_unit_los_height_m(a)},
-		{"c": Vector2(cb.x, cb.z), "r": _solo_unit_base_radius_m(b), "y0": cb.y, "y1": cb.y + _solo_unit_los_height_m(b)},
+		{"c": Vector2(cb.x, cb.z), "r": _solo_unit_base_radius_m(b), "y0": cb.y, "y1": cb.y + _solo_unit_los_height_m(b),
+			"is_aircraft": SoloController.is_aircraft(b)},   # P6: an Aircraft is never hidden by terrain
 		terrain_overlay.los_volumes())
 
 
