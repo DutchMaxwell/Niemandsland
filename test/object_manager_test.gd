@@ -312,3 +312,50 @@ func test_strict_cap_meters_resolves_per_selected_action() -> void:
 	assert_float(float(_om._compute_strict_cap_meters())).is_equal_approx(12.0 * _CAP_INCH, 0.0005)
 
 	GraphicsSettings.enforce_movement_limit = was
+
+
+# =====================================================================================
+# NML-972 (elevation program, Phase A / W4.20) — the ruler's LOS verdict reads real heights.
+# =====================================================================================
+# The measure line's verdict walked the terrain grid top-down and compared Asgard height
+# CATEGORIES, so the elevation of the measured line itself never entered the question: a point
+# on a container roof was judged from the table floor and the ruler painted red across the very
+# box a model up there shoots over. The verdict now stands both endpoints on the surface the
+# overlay reports for their spot and asks the ONE volumetric truth.
+
+const _OverlayScript := preload("res://scripts/terrain_overlay.gd")
+const _RULER_TABLE := Vector2(6, 4)   # feet
+
+
+## A headless overlay (no add_child, exactly like terrain_overlay_test / los_volumes_test) carrying a
+## painted CONTAINER band from x = -0.20 m to x = 0.00 m across the measuring lane. Painting straight
+## into grid_cells skips every registration seam, so the volume cache is dropped by hand.
+func _overlay_with_container_band() -> Node3D:
+	var o: Node3D = auto_free(_OverlayScript.new())
+	o.table_size_feet = _RULER_TABLE
+	for i in range(21):
+		var x: float = -0.20 + 0.20 * float(i) / 20.0
+		o.grid_cells[o.world_to_cell(Vector3(x, 0.0, 0.0))] = _OverlayScript.TerrainType.CONTAINER
+	o._los_volumes_dirty = true
+	return o
+
+
+func test_ruler_verdict_keeps_a_ground_line_through_the_container_blocked() -> void:
+	# CONTROL — a table-level measurement across the same band must stay red, before and after.
+	_om.terrain_overlay = _overlay_with_container_band()
+	var blocked: bool = _om._measure_los_blocked(Vector3(-0.40, 0.02, 0.0), Vector3(0.50, 0.02, 0.0))
+	assert_bool(blocked) \
+		.override_failure_message("control fixture: a ground-to-ground measure across a container must stay blocked") \
+		.is_true()
+
+
+func test_ruler_verdict_stands_a_roof_point_on_the_container() -> void:
+	_om.terrain_overlay = _overlay_with_container_band()
+	# The start sits on the band's far cells — a model measuring from there stands 2.5" up and looks
+	# over the box's far edge, exactly like the shooting gate already judges it.
+	var blocked: bool = _om._measure_los_blocked(Vector3(-0.01, 0.02, 0.0), Vector3(0.50, 0.02, 0.0))
+	assert_bool(blocked) \
+		.override_failure_message("NML-972 — the ruler judges every measurement from the table floor: it walks " +
+			"the terrain grid with fixed Asgard height categories, so a measure taken ON a container roof " +
+			"paints red across the very box the shot flies over (object_manager._measure_los_blocked).") \
+		.is_false()
