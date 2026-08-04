@@ -15,6 +15,9 @@ extends RefCounted
 
 const INCHES_TO_METERS := 0.0254
 
+## Sight lines shorter than this are always clear: nothing fits between two all-but-touching models.
+const MIN_SPAN_M := 0.02
+
 ## Official volumetric model heights as Vector2(base size in mm, model height in inches). Sizes between
 ## two rows interpolate LINEARLY; anything below the first / above the last row clamps to it.
 const BASE_HEIGHT_TABLE := [
@@ -93,15 +96,78 @@ static func segment_hits_cyl(a: Vector3, b: Vector3, vol: Dictionary) -> bool:
 # (G1): no multi-sample visibility, partial-visibility nuance is intentionally dropped.
 
 ## Eye point of a model cylinder: the centre of its top disc.
-static func eye(_cyl: Dictionary) -> Vector3:
-	return Vector3.ZERO
+static func eye(cyl: Dictionary) -> Vector3:
+	var c: Vector2 = cyl["c"]
+	return Vector3(c.x, float(cyl["y1"]), c.y)
 
 
 ## True if the model `from_cyl` can see `to_cyl`. `volumes` are terrain volumes (see above), `blockers`
 ## are other models as cylinders, `exclude` holds the unit keys that never block their own sight line.
-static func has_los(_from_cyl: Dictionary, _to_cyl: Dictionary, _volumes: Array = [],
+static func has_los(from_cyl: Dictionary, to_cyl: Dictionary, volumes: Array = [],
 		_blockers: Array = [], _exclude: Array = []) -> bool:
+	var a := eye(from_cyl)
+	var b := eye(to_cyl)
+	if a.distance_to(b) < MIN_SPAN_M:
+		return true   # all but the same spot: nothing can stand between them
+	for vol: Dictionary in volumes:
+		if not segment_hits_volume(a, b, vol):
+			continue
+		if bool(vol.get("solid", true)):
+			return false   # solid pieces hard-block, own zone or not
+		# P4 area terrain: see INTO and OUT OF the zone you are in, just not through someone else's.
+		if point_inside_volume(a, vol) or point_inside_volume(b, vol):
+			continue
+		return false
 	return true
+
+
+## Dispatch: does the segment a->b touch this volume, whatever kind it is?
+static func segment_hits_volume(a: Vector3, b: Vector3, vol: Dictionary) -> bool:
+	match String(vol.get("kind", "box")):
+		"cyl":
+			return segment_hits_cyl(a, b, vol)
+		"cells":
+			return segment_hits_cells(a, b, vol)
+		_:
+			return segment_hits_box(a, b, vol)
+
+
+## Grid-painted zone: the quarter-cell walk (min 4 steps, exact endpoints skipped) of the flat model,
+## with the segment's interpolated height tested against the zone's slab at every sample.
+static func segment_hits_cells(a: Vector3, b: Vector3, vol: Dictionary) -> bool:
+	var cells: Dictionary = vol["cells"]
+	var cell_size := float(vol["cell_size"])
+	var y0 := float(vol["y0"])
+	var y1 := float(vol["y1"])
+	var a2 := Vector2(a.x, a.z)
+	var b2 := Vector2(b.x, b.z)
+	var span := a2.distance_to(b2)
+	if span < MIN_SPAN_M:
+		return false
+	var steps := maxi(int(ceil(span / (cell_size * 0.25))), 4)
+	for i in range(1, steps):
+		var t := float(i) / float(steps)
+		var y := lerpf(a.y, b.y, t)
+		if y < y0 or y > y1:
+			continue   # the line passes over (or under) the zone at this sample
+		if cells.has(TerrainRules.cell_of(a2.lerp(b2, t), cell_size)):
+			return true
+	return false
+
+
+## True if `p` stands inside `vol`'s footprint AND at or below its top — the endpoint-in-zone test the
+## area rule keys on (a model on a 6" roof is NOT "in" the 3.4" forest below it).
+static func point_inside_volume(p: Vector3, vol: Dictionary) -> bool:
+	if p.y > float(vol["y1"]):
+		return false
+	var p2 := Vector2(p.x, p.z)
+	match String(vol.get("kind", "box")):
+		"cyl":
+			return p2.distance_to(vol["c"]) <= float(vol["r"])
+		"cells":
+			return (vol["cells"] as Dictionary).has(TerrainRules.cell_of(p2, float(vol["cell_size"])))
+		_:
+			return TerrainRules.point_in_obb(p2, vol["c"], vol["he"], float(vol["yaw"]))
 
 
 ## True if the flat segment from->to passes through (or touches) the circle. Own copy so the module keeps
