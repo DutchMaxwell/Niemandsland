@@ -1388,6 +1388,12 @@ func _sandbox_volumes() -> Array:
 		out.append({"kind": "box", "c": sd["c"], "he": sd["he"], "yaw": float(sd["yaw"]), "y0": 0.0,
 			"y1": terrain_volume_height_inches(st) * INCHES_TO_METERS,
 			"solid": not terrain_is_area(st)})
+		# A multi-storey piece also carries its walkable platforms: thin SOLID slabs inside the
+		# area hull, so floor-to-floor sight is blocked by the very floor the model stands on.
+		for slab in sd.get("slabs", []):
+			var sl := slab as Dictionary
+			out.append({"kind": "box", "c": sl["c"], "he": sl["he"], "yaw": float(sl["yaw"]),
+				"y0": float(sl["y0"]), "y1": float(sl["y1"]), "solid": true})
 	return out
 
 

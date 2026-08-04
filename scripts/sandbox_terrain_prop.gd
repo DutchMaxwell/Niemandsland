@@ -203,8 +203,22 @@ func wall_segments_world() -> Array:
 ## {c, he, yaw, y0, y1} in metres, one per L arm of every storey ABOVE the table. The volumetric
 ## sight truth folds these in as thin solid boxes, so a model on the top floor cannot see the floor
 ## below THROUGH the platform it is standing on.
+## Same geometry as _build_floor_colliders(), so the slab a mini stands on and the slab a sight line
+## stops at can never disagree.
 func floor_slabs_world() -> Array:
-	return []
+	var out: Array = []
+	var xf := global_transform
+	var yaw := global_rotation.y
+	for i in range(floor_heights_inches.size()):
+		if float(floor_heights_inches[i]) <= 0.0:
+			continue   # the ground floor IS the table: nothing to see through
+		var l := _l_params(i)
+		var y := float(l["top"]) - FLOOR_THICKNESS_M * 0.5
+		for arm: Array in [[float(l["lx"]), float(l["arm"])], [float(l["arm"]), float(l["lz"])]]:
+			var c := xf * Vector3(float(l["ax"]) + arm[0] * 0.5, y, float(l["az"]) + arm[1] * 0.5)
+			out.append({"c": Vector2(c.x, c.z), "he": Vector2(arm[0] * 0.5, arm[1] * 0.5), "yaw": yaw,
+				"y0": c.y - FLOOR_THICKNESS_M * 0.5, "y1": c.y + FLOOR_THICKNESS_M * 0.5})
+	return out
 
 
 # === Private: colliders ===

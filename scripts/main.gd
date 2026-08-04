@@ -2698,8 +2698,11 @@ func _sandbox_terrain_shapes() -> Array:
 			ttype = TerrainRules.TerrainType.DANGEROUS
 		if ttype == TerrainRules.TerrainType.NONE:
 			continue
+		# NML-972: a multi-storey shelf ruin also hands over its walkable floor slabs, so the 3D
+		# volume registry can block sight through a platform a model is standing on.
+		var slabs: Array = node.call("floor_slabs_world") if node.has_method("floor_slabs_world") else []
 		shapes.append({"type": int(ttype), "c": Vector2(node.global_position.x, node.global_position.z),
-			"he": fp * in2m * 0.5, "yaw": node.global_rotation.y})
+			"he": fp * in2m * 0.5, "yaw": node.global_rotation.y, "slabs": slabs})
 	_sandbox_shapes_cache = {"frame": f, "shapes": shapes}
 	return shapes
 
