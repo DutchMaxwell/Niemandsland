@@ -8997,6 +8997,14 @@ func _solo_update_los_line(screen_pos: Vector2) -> void:
 ## is factored). #182: the feedback judges like the legality gate — an Indirect gun must not show a
 ## red "0/N sight" line over a perfectly legal target.
 func _solo_hover_sighted_count(attacker: GameUnit, hovered: GameUnit) -> int:
+	# NML-971 D2: while a CAST is aimed the line must answer the SPELL's question, not the gun's.
+	# The candidates were built once — spell range (flat, G3) plus the volumetric sight truth — so
+	# the line reads that very set instead of re-deriving a verdict from the weapon's range, which
+	# painted a red "no sight" line over targets the cast gate had already accepted.
+	if _solo_target_mode.has("cast_entry"):
+		var legal: Array = (_solo_target_mode.get("cast_valid", []) as Array) \
+			+ (_solo_target_mode.get("cast_picked", []) as Array)
+		return _solo_combined_alive(attacker) if legal.has(hovered) else 0
 	var rng_in: int = AiArchetype.max_range_inches(_solo_all_weapons(attacker))
 	return _solo_sighted_count(attacker, hovered, rng_in,
 		SoloController.has_indirect_ranged(_solo_all_weapons(attacker)))
