@@ -405,10 +405,18 @@ static func mods_for(records: Array, role: String, melee: bool, source: String =
 ## NML-987 — the granted rule names a target's spell-mod records hand to whoever shoots at (or
 ## charges into) that target, i.e. only records with `beneficiary == "attackers"` and a non-empty
 ## `grants_rule`. Order-preserving so the caller can log them in the sequence they were placed.
-## STUB: returns []. Filled in step 3; the regression suite pins the shape.
 static func attacker_grants_from_target(records: Array) -> PackedStringArray:
-	var _unused := records   # placate the unused-parameter warning during the red phase
-	return PackedStringArray()
+	var out := PackedStringArray()
+	for rd in records:
+		if typeof(rd) != TYPE_DICTIONARY:
+			continue
+		if str(rd.get("beneficiary", "")) != "attackers":
+			continue
+		var rule := str(rd.get("grants_rule", ""))
+		if rule.is_empty():
+			continue
+		out.append(rule)
+	return out
 
 
 ## Interference tokens the OTHER side should spend against an announced cast worth `effect_value`
