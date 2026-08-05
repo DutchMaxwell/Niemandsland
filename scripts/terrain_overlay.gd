@@ -14,7 +14,6 @@ extends Node3D
 const INCHES_TO_METERS := 0.0254
 const GRID_SIZE_INCHES := 3.0
 const FINE_GRID_SIZE_INCHES := 1.0  # 1" grid for custom zone editing
-const BASE_ZONE_SAMPLES := 12       # base-perimeter samples for the base-in-area-terrain LOS test (see _zone_for_base)
 
 ## Height offset above table to prevent z-fighting (2mm)
 const Z_FIGHT_OFFSET := 0.002
@@ -94,8 +93,11 @@ const DEPLOYMENT_COLORS := {
 # PROCEDURAL TERRAIN PROP DIMENSIONS (inches)
 # ==============================================================================
 # All terrain props (walls, trees, containers, dangerous hazards) are built from
-# primitive meshes with the shared holographic material. The rulebook "Height 5"
-# is a line-of-sight category, NOT a physical mesh height.
+# primitive meshes with the shared holographic material. Since the elevation program
+# these ARE the sight heights: the volume registry extrudes every piece to the very
+# number its mesh is built from, so what the table looks like is what the rules measure.
+# The per-TYPE heights are declared once in the pure module (TerrainRules) and only
+# aliased here — one wood is 3.4" tall in the mesh, in the registry and in the editor.
 
 const WALL_HEIGHT_INCHES := 2.5
 const WALL_THICKNESS_INCHES := 0.25
@@ -110,7 +112,7 @@ const TREE_CROWN_RADIUS_INCHES := 1.0
 ## alpha-scissor quads showing a keyed tree photo — organic from every angle, with a
 ## deterministic per-tree variant / size / facing so all clients match. The procedural
 ## trunk+cone above stays as the offline fallback.
-const TREE_HEIGHT_INCHES := 3.4  # billboard height at 100% (trunk+crown of the fallback)
+const TREE_HEIGHT_INCHES := TerrainRules.FOREST_HEIGHT_INCHES  # billboard height at 100% (trunk+crown of the fallback)
 const TREE_SCALE_MIN := 0.75
 const TREE_SCALE_MAX := 1.25
 const TREE_CROWN_CAP_FRAC := 0.68  # crown-cap quad height (the crown's widest point)
@@ -118,7 +120,12 @@ const TREE_MODEL_MIN_DEPTH_RATIO := 0.05  # thinner GLBs are degenerate "relief"
 
 const CONTAINER_LENGTH_INCHES := 6.0
 const CONTAINER_DEPTH_INCHES := 3.0
-const CONTAINER_HEIGHT_INCHES := 2.5
+const CONTAINER_HEIGHT_INCHES := TerrainRules.CONTAINER_HEIGHT_INCHES
+
+## Height of a grid-painted RUINS zone for the 3D volume registry (elevation program, Phase A).
+## Painted ruins stand for the two-storey shelf ruins whose upper floor sits at 6", so that is how
+## tall the zone is: a model on a 6" roof looks over it, a model on the ground does not.
+const RUIN_ZONE_HEIGHT_INCHES := TerrainRules.RUIN_ZONE_HEIGHT_INCHES
 
 const MINE_BOTTOM_RADIUS_INCHES := 0.7
 const MINE_TOP_RADIUS_INCHES := 0.3
@@ -390,6 +397,10 @@ var _blocker_obbs: Array = []
 ## KI sie in Bewegung, Cover und Sichtlinien sieht (Maintainer 2026-07-22: "Gelände, das nicht
 ## durch den Map-Layouter generiert wird, mit berücksichtigen").
 var sandbox_shapes_provider: Callable = Callable()
+## Cached registered part of the 3D volume registry (see los_volumes) — it is read on every sight
+## query, so it is built once per registration instead of per query.
+var _los_volumes_static: Array = []
+var _los_volumes_dirty := true
 
 
 func _sandbox_shapes() -> Array:
@@ -462,6 +473,7 @@ func update_overlay(cells_data: Dictionary, table_size: Vector2, grid_rotation: 
 
 	# Store grid_cells for terrain lookup
 	self.grid_cells = cells_data
+	_los_volumes_dirty = true
 
 	# Update deployment zones when table size changes
 	_update_deployment_zones()
@@ -1112,7 +1124,7 @@ func world_to_cell(world_pos: Vector3) -> Vector2i:
 ## of forests, but not through them". Ruins are AREA terrain too (maintainer correction to field-test round-4,
 ## which over-corrected them to fully see-through): a model sees INTO and OUT OF ruins, but a line passing all
 ## the way THROUGH them to a target beyond is blocked — exactly like a forest. FOREST and RUINS therefore both
-## block here and rely on the has_line_of_sight() zone rule for the see-in/out exception. CONTAINERS are solid
+## block here and rely on the volume registry's AREA flag for the see-in/out exception. CONTAINERS are solid
 ## "Impassable + Blocking" buildings and hard-block LOS outright (no see-in/out). Dangerous terrain is Open and
 ## never blocks.
 func terrain_blocks_los(terrain_type: int) -> bool:
@@ -1123,157 +1135,162 @@ func terrain_blocks_los(terrain_type: int) -> bool:
 
 ## AREA terrain (Forests + Ruins): you can see INTO and OUT OF it, but not completely THROUGH it (GF/AoF
 ## v3.5.1 p.12). Solid blockers (Containers = Impassable + Blocking buildings) are NOT area terrain — they
-## hard-block, so the see-in/out zone exception in has_line_of_sight() does not apply to them.
+## hard-block, so the see-in/out exception never applies to them. This is the `solid` flag every volume
+## the registry publishes carries.
 func terrain_is_area(terrain_type: int) -> bool:
 	return terrain_type == TerrainType.FOREST or terrain_type == TerrainType.RUINS
 
 
-## Asgard Height category of a terrain type (blockers are Height 5; open = 0).
-func terrain_height_category(terrain_type: int) -> int:
-	return 5 if terrain_blocks_los(terrain_type) else 0
+# ==============================================================================
+# 3D VOLUME REGISTRY (elevation program, Phase A)
+# ==============================================================================
+
+## Every piece of terrain this overlay knows about, as VolumetricLos volume dicts in world metres —
+## the ONE feed the volumetric sight truth reads, so sight math and sight visuals cannot drift apart.
+## The registered part (containers, walls, painted zones) is CACHED and dropped by every registration
+## site; the freely placed sandbox pieces move between frames, so they are folded in live.
+func los_volumes() -> Array:
+	if _los_volumes_dirty:
+		_los_volumes_static = _build_los_volumes()
+		_los_volumes_dirty = false
+	var live := _sandbox_volumes()
+	return _los_volumes_static if live.is_empty() else _los_volumes_static + live
 
 
-## The AREA-terrain zone(s) a model's BASE occupies, for the see-in/out rule. If the centre cell is area
-## terrain, that zone. Otherwise the base PERIMETER is sampled at `radius_m`: a sample landing in a FOREST/RUIN
-## cell means the base genuinely OVERLAPS that zone, so an edge-standing model (centre just outside) counts as
-## INSIDE it (GF/AoF v3.5.1: a model is IN terrain if ANY part of its base overlaps it). PRECISE — a model
-## whose base does not reach the terrain is NOT included (the earlier coarse cell-radius merge over-granted:
-## models merely NEAR terrain saw in/out + through). radius_m == 0 keeps exact centre-cell behaviour.
-func _zone_for_base(pos: Vector3, radius_m: float) -> Dictionary:
-	var centre_cell := world_to_cell(pos)
-	var zone := _flood_fill_zone(centre_cell)
-	# Perimeter-scan whenever the CENTRE itself is not in AREA terrain — open ground OR non-area terrain
-	# (e.g. a model on Dangerous ground at a forest edge): the base can still overlap the adjacent zone.
-	# Merging is safe — the LOS exception only consults crossed cells that ARE area terrain.
-	if radius_m <= 0.0 or terrain_is_area(grid_cells.get(centre_cell, TerrainType.NONE)):
-		return zone
-	for i in range(BASE_ZONE_SAMPLES):
-		var ang := TAU * float(i) / float(BASE_ZONE_SAMPLES)
-		var edge := pos + Vector3(cos(ang) * radius_m, 0.0, sin(ang) * radius_m)
-		var nb := world_to_cell(edge)
-		if terrain_is_area(grid_cells.get(nb, TerrainType.NONE)) and not zone.has(nb):
-			for c in _flood_fill_zone(nb):
-				zone[c] = true
-	return zone
+## Height (metres) of the surface a model standing at the flat world point `p` would stand on: a
+## container roof, else the table. Hypothetical AI spots and the ruler get their standing height here.
+func surface_y_at(p: Vector2) -> float:
+	return VolumetricLos.surface_y_at(p, los_volumes())
 
 
-## All cells of the contiguous same-type terrain zone containing `start_cell`
-## (4-connected). Empty set if start_cell holds no terrain.
-func _flood_fill_zone(start_cell: Vector2i) -> Dictionary:
-	var result := {}
-	var ttype: int = grid_cells.get(start_cell, TerrainType.NONE)
-	if ttype == TerrainType.NONE:
-		return result
-	var stack: Array[Vector2i] = [start_cell]
-	result[start_cell] = true
-	while not stack.is_empty():
-		var c: Vector2i = stack.pop_back()
-		for nb in [Vector2i(c.x + 1, c.y), Vector2i(c.x - 1, c.y), Vector2i(c.x, c.y + 1), Vector2i(c.x, c.y - 1)]:
-			if not result.has(nb) and grid_cells.get(nb, TerrainType.NONE) == ttype:
-				result[nb] = true
-				stack.append(nb)
-	return result
+## Real height (INCHES) of a terrain type as a 3D volume — the per-piece DATA the elevation program
+## rests on, so a future hill or tower only has to declare its own height here (0 = never a volume).
+func terrain_volume_height_inches(terrain_type: int) -> float:
+	match terrain_type:
+		TerrainType.FOREST:
+			return TREE_HEIGHT_INCHES
+		TerrainType.RUINS:
+			return RUIN_ZONE_HEIGHT_INCHES
+		TerrainType.CONTAINER:
+			return CONTAINER_HEIGHT_INCHES
+	return 0.0
 
 
-## Top-down Asgard line-of-sight between two world points. A blocking terrain zone
-## the line crosses blocks LOS only when (a) for AREA terrain (Forests + Ruins) neither
-## endpoint stands inside that same zone ("see in/out, not through" — a target INSIDE the
-## zone or a shooter looking OUT is visible, but a line passing all the way through to a
-## target beyond is blocked); solid CONTAINERS skip this exception and hard-block. AND
-## (b) the zone's Height is >= BOTH endpoints' Height categories (otherwise the taller one
-## sees over it). Dangerous terrain never blocks. Heights are Asgard categories 1-6 (see LosRules).
-func has_line_of_sight(from_pos: Vector3, to_pos: Vector3, from_height: int, to_height: int, from_radius_m: float = 0.0, to_radius_m: float = 0.0) -> bool:
-	if grid_cells.is_empty():
-		return true
-	var from_zone := _zone_for_base(from_pos, from_radius_m)
-	var to_zone := _zone_for_base(to_pos, to_radius_m)
-	var span := Vector2(to_pos.x - from_pos.x, to_pos.z - from_pos.z).length()
+func _build_los_volumes() -> Array:
+	var out: Array = []
+	var k := INCHES_TO_METERS
+	# Placed containers: the exact recorded 6x3 OBB, extruded to its real 2.5" height.
+	for ob in _blocker_obbs:
+		var od := ob as Dictionary
+		out.append({"kind": "box", "c": od["c"], "he": od["he"], "yaw": float(od["yaw"]),
+			"y0": 0.0, "y1": CONTAINER_HEIGHT_INCHES * k, "solid": true})
+	out.append_array(_wall_volumes())
+	out.append_array(_zone_volumes())
+	return out
+
+
+## Ruin walls as thin upright slabs of their real dimensions (2.5" tall, 0.25" thick) — the same
+## placement math the physical wall bodies use, so a line clears in the math exactly where it looks clear.
+func _wall_volumes() -> Array:
+	var out: Array = []
+	if _last_wall_segments.is_empty():
+		return out
 	var cell_size := GRID_SIZE_INCHES * INCHES_TO_METERS
-	# Container blockers: EXACT segment test against the recorded 6x3 OBBs (container wave —
-	# the sampled cell walk let lines slip through corners and granted every span under 1.5").
-	# Same height rule as cells: the box (category 5) blocks unless BOTH endpoints see over it.
-	# Community #171: an endpoint STANDING ON a container (elevated y, XZ inside that box's
-	# footprint) sees out over its own edge — and is seen — instead of being walled in by the
-	# very box it stands on. Only the box under the model is exempt; every other container
-	# still blocks. Ground models (y ≈ 0) never reach the exemption, so ground-vs-ground
-	# stays byte-identical.
-	var bh := terrain_height_category(TerrainType.CONTAINER)
-	var from_box: Dictionary = {}
-	var to_box: Dictionary = {}
-	if bh >= from_height and bh >= to_height:
-		var a2 := Vector2(from_pos.x, from_pos.z)
-		var b2 := Vector2(to_pos.x, to_pos.z)
-		var on_top_y := CONTAINER_HEIGHT_INCHES * INCHES_TO_METERS * 0.5
-		for ob in _blocker_obbs:
-			var od := ob as Dictionary
-			var oc: Vector2 = od["c"]
-			var ohe: Vector2 = od["he"]
-			var oyaw := float(od["yaw"])
-			var from_on := from_pos.y > on_top_y and TerrainRules.point_in_obb(a2, oc, ohe, oyaw)
-			var to_on := to_pos.y > on_top_y and TerrainRules.point_in_obb(b2, oc, ohe, oyaw)
-			if from_on:
-				from_box = {"c": oc, "he": ohe, "yaw": oyaw}
-			if to_on:
-				to_box = {"c": oc, "he": ohe, "yaw": oyaw}
-			if from_on or to_on:
-				continue   # the endpoint stands on THIS box — it sees over its own edge
-			if TerrainRules.segment_intersects_obb(a2, b2, oc, ohe, oyaw):
-				return false
-	# NML-001: shelf pieces block like their terrain type — AREA semantics (forest/ruin: you see
-	# in/out of the piece an endpoint stands in, never through a foreign one), same height rule.
-	var sa := Vector2(from_pos.x, from_pos.z)
-	var sb := Vector2(to_pos.x, to_pos.z)
+	var dims := _calculate_grid_dims(_last_wall_table_size)
+	var rot := deg_to_rad(_last_wall_rotation)
+	for segment in _last_wall_segments:
+		var placement := _segment_world_placement(segment, dims, cell_size, rot,
+			_last_wall_rotation, _last_wall_table_size)
+		if placement.is_empty():
+			continue
+		var pos: Vector3 = placement["position"]
+		var along: Vector3 = placement["along_dir"]
+		var half_len: float = float(segment.get("length_inches", GRID_SIZE_INCHES)) * INCHES_TO_METERS * 0.5
+		out.append({"kind": "box", "c": Vector2(pos.x, pos.z),
+			"he": Vector2(half_len, WALL_THICKNESS_INCHES * INCHES_TO_METERS * 0.5),
+			"yaw": atan2(-along.z, along.x),   # node rotation.y convention: local +X -> (cos, -sin)
+			"y0": 0.0, "y1": WALL_HEIGHT_INCHES * INCHES_TO_METERS, "solid": true})
+	return out
+
+
+## Grid-painted terrain: ONE cells volume per contiguous zone (the see-in/out rule keys on the whole
+## zone, so a merged one would let a model see out of a FOREIGN wood). Cells are keyed in the grid's own
+## frame and carry its yaw, so a rotated table stays exact. Dangerous ground is Open and never appears.
+func _zone_volumes() -> Array:
+	var out: Array = []
+	if grid_cells.is_empty():
+		return out
+	var cell_size := GRID_SIZE_INCHES * INCHES_TO_METERS
+	var dims := _calculate_grid_dims(table_size_feet)
+	var rot := deg_to_rad(grid_rotation_degrees)
+	for zone in _terrain_zones(grid_cells):
+		var ttype: int = zone["type"]
+		if not terrain_blocks_los(ttype):
+			continue
+		var cells := {}
+		for c: Vector2i in zone["cells"]:
+			# NML-965 double-block trap: a placed container paints its cells AND registers its box.
+			# The box is the truth (it alone has a roof to stand on) — its ground drops out here.
+			if ttype == TerrainType.CONTAINER:
+				var w := _cell_to_world(float(c.x), float(c.y), dims, cell_size, rot)
+				if _covered_by_blocker_obb(Vector2(w.x, w.z)):
+					continue
+			cells[Vector2i(c.x - dims.x / 2, c.y - dims.y / 2)] = true
+		if cells.is_empty():
+			continue
+		out.append({"kind": "cells", "cells": cells, "cell_size": cell_size, "yaw": rot, "y0": 0.0,
+			"y1": terrain_volume_height_inches(ttype) * INCHES_TO_METERS,
+			"solid": not terrain_is_area(ttype)})
+	return out
+
+
+## NML-001: freely placed shelf pieces as boxes of their own type's height. Live (not cached) — the
+## player can drag them around between frames.
+func _sandbox_volumes() -> Array:
+	var out: Array = []
 	for s in _sandbox_shapes():
 		var sd := s as Dictionary
 		var st := int(sd["type"])
 		if not terrain_blocks_los(st):
 			continue
-		var sh := terrain_height_category(st)
-		if not (sh >= from_height and sh >= to_height):
-			continue
-		var from_in := TerrainRules.point_in_obb(sa, sd["c"], sd["he"], float(sd["yaw"]))
-		var to_in := TerrainRules.point_in_obb(sb, sd["c"], sd["he"], float(sd["yaw"]))
-		if terrain_is_area(st) and (from_in or to_in):
-			continue
-		if TerrainRules.segment_intersects_obb(sa, sb, sd["c"], sd["he"], float(sd["yaw"])):
-			return false
-	# Quarter-cell sampling (0.75") with a guaranteed midpoint: the old half-cell walk skipped
-	# corners and every span under one cell entirely.
-	var steps := maxi(int(ceil(span / (cell_size * 0.25))), 4)
-	if span < 0.02:
-		return true
-	for i in range(1, steps):  # skip the exact endpoints
-		var sample_pos := from_pos.lerp(to_pos, float(i) / float(steps))
-		var cell := world_to_cell(sample_pos)
-		var ttype: int = grid_cells.get(cell, TerrainType.NONE)
-		if not terrain_blocks_los(ttype):
-			continue
-		if terrain_is_area(ttype) and (from_zone.has(cell) or to_zone.has(cell)):
-			continue  # area terrain: you see IN/OUT of your own zone — just not through someone else's
-		# NML-965: the box you stand on does not block your own line — the OBB
-		# exemption above must survive the cell walk, since map-layout containers
-		# also paint CONTAINER cells that this walk otherwise treats as unconditional.
-		if ttype == TerrainType.CONTAINER and (not from_box.is_empty() or not to_box.is_empty()):
-			var p2 := Vector2(sample_pos.x, sample_pos.z)
-			if (not from_box.is_empty() and TerrainRules.point_in_obb(p2, from_box["c"], from_box["he"], from_box["yaw"])) or (not to_box.is_empty() and TerrainRules.point_in_obb(p2, to_box["c"], to_box["he"], to_box["yaw"])):
-				continue
-		var th := terrain_height_category(ttype)
-		if th >= from_height and th >= to_height:
-			return false
-	return true
+		out.append({"kind": "box", "c": sd["c"], "he": sd["he"], "yaw": float(sd["yaw"]), "y0": 0.0,
+			"y1": terrain_volume_height_inches(st) * INCHES_TO_METERS,
+			"solid": not terrain_is_area(st)})
+		# A multi-storey piece also carries its walkable platforms: thin SOLID slabs inside the
+		# area hull, so floor-to-floor sight is blocked by the very floor the model stands on.
+		for slab in sd.get("slabs", []):
+			var sl := slab as Dictionary
+			out.append({"kind": "box", "c": sl["c"], "he": sl["he"], "yaw": float(sl["yaw"]),
+				"y0": float(sl["y0"]), "y1": float(sl["y1"]), "solid": true})
+	return out
 
 
-## Compact, always-visible Asgard effect label for a terrain type (empty for NONE).
+func _covered_by_blocker_obb(p: Vector2) -> bool:
+	for ob in _blocker_obbs:
+		var od := ob as Dictionary
+		if TerrainRules.point_in_obb(p, od["c"], od["he"], float(od["yaw"])):
+			return true
+	return false
+
+
+## The piece's REAL height for a battlefield label — `6" tall`, the same wording the map editor's
+## terrain tooltips use. It replaces the old Asgard category "Height 5", which said nothing about
+## what a model can actually see over and which the volumetric sight truth no longer uses at all.
+func _height_label(terrain_type: int) -> String:
+	return "%s\" tall" % String.num(terrain_volume_height_inches(terrain_type), 1).trim_suffix(".0")
+
+
+## Compact, always-visible effect label for a terrain type (empty for NONE).
 ## Players read it to apply Cover/Difficult/Dangerous etc. themselves.
 ## Three stacked lines for a terrain zone: Type / Height / Special Rules (English).
 func _terrain_effect_label(terrain_type: int) -> String:
 	match terrain_type:
 		TerrainType.RUINS:
-			return "Ruins\nHeight 5\nCover, Blocks LoS (see in/out)"
+			return "Ruins\n%s\nCover, Blocks LoS (see in/out)" % _height_label(terrain_type)
 		TerrainType.FOREST:
-			return "Forest\nHeight 5\nDifficult, Cover, Blocks LoS"
+			return "Forest\n%s\nDifficult, Cover, Blocks LoS" % _height_label(terrain_type)
 		TerrainType.CONTAINER:
-			return "Container\nHeight 5\nImpassable, Blocks LoS"
+			return "Container\n%s\nImpassable, Blocks LoS" % _height_label(terrain_type)
 		TerrainType.DANGEROUS:
 			return "Dangerous\nGround\nDangerous Terrain"
 	return ""
@@ -1726,6 +1743,7 @@ func update_wall_models(wall_segments: Array, t_size: Vector2, rot_deg: float) -
 	_last_wall_segments = wall_segments
 	_last_wall_table_size = t_size
 	_last_wall_rotation = rot_deg
+	_los_volumes_dirty = true
 	var use_shell := _ruin_panels_ready()
 	if not use_shell and not wall_segments.is_empty():
 		_request_ruin_panels()
@@ -2690,6 +2708,7 @@ func _clear_wall_instances() -> void:
 func update_placed_objects(objects: Array, t_size: Vector2, rot_deg: float) -> void:
 	_blocker_edges.clear()
 	_blocker_obbs.clear()
+	_los_volumes_dirty = true
 	_clear_placed_objects()
 
 	# Remember the layout so a finishing panel download can upgrade fallback trees in

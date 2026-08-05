@@ -7,7 +7,7 @@ extends RefCounted
 ## OPR GF/AoF Core Rules v3.5.1, p.1 "Quality Tests": "Roll one six-sided die,
 ## and if you score the model's quality value or higher, then it counts as a
 ## success." Defense rolls work the same way against the Defense value (p.1
-## "Shooting"). Pure/static so it is trivially testable (see LosRules).
+## "Shooting"). Pure/static so it is trivially testable, with no scene dependency.
 
 # === Constants ===
 

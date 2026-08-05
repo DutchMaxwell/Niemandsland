@@ -11,9 +11,9 @@ signal layout_updated(grid_cells: Dictionary, table_size: Vector2, rotation: flo
 # Terrain types with their properties
 enum TerrainType {
 	NONE,
-	RUINS,      # Height 5, Cover + Walls Impassable, can see in/out but not through
-	FOREST,     # Height 5, Difficult + Cover, can see in/out but not through
-	CONTAINER,  # Height 5, Impassable + Blocking, can fly over but not land
+	RUINS,      # 6" tall, Cover + Walls Impassable, can see in/out but not through
+	FOREST,     # 3.4" tall, Difficult + Cover, can see in/out but not through
+	CONTAINER,  # 2.5" tall, Impassable + Blocking, can fly over but not land
 	DANGEROUS   # Open, Dangerous (Minefields, Acid, Radiation)
 }
 
@@ -33,10 +33,14 @@ const TERRAIN_NAMES := {
 	TerrainType.DANGEROUS: "Dangerous"
 }
 
+## Elevation program: the tooltips name each piece's REAL height in inches instead of the old Asgard
+## height CATEGORY. Every piece used to read "Height 5", which said nothing about what a model on the
+## table can actually see over — and the sight truth no longer uses categories at all. The numbers come
+## from TerrainRules.volume_height_inches, the one place the heights are declared.
 const TERRAIN_DESCRIPTIONS := {
-	TerrainType.RUINS: "Height 5, Cover\nWalls: Impassable (blue lines)\nCan see in/out, not through",
-	TerrainType.FOREST: "Height 5, Difficult + Cover\nCan see in/out, not through",
-	TerrainType.CONTAINER: "Height 5, Impassable + Blocking\nCan fly over, cannot land",
+	TerrainType.RUINS: "6\" tall, Cover\nWalls: Impassable (blue lines)\nCan see in/out, not through",
+	TerrainType.FOREST: "3.4\" tall, Difficult + Cover\nCan see in/out, not through",
+	TerrainType.CONTAINER: "2.5\" tall, Impassable + Blocking\nCan fly over, cannot land",
 	TerrainType.DANGEROUS: "Open, Dangerous\n(Minefields/Acid/Radiation)"
 }
 

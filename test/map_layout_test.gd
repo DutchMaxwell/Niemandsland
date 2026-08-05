@@ -116,3 +116,27 @@ func test_find_objective_near_position() -> void:
 	assert_int(ml._find_objective_near_position(Vector2(12.0, 10.0))).is_equal(-1)  # too far
 	ml.mission_objectives.assign([])
 	assert_int(ml._find_objective_near_position(Vector2.ZERO)).is_equal(-1)         # none placed
+
+
+# ===== Terrain tooltips: real heights, not Asgard height categories (NML-972) =====
+
+## The map editor's terrain buttons used to describe every blocking piece as "Height 5" — a category
+## that told a player nothing about what a model on the table can actually see over, and that the
+## volumetric sight truth stopped using entirely. Each tooltip now names the piece's REAL height, and
+## this pins those numbers to TerrainRules.volume_height_inches, the one place they are declared.
+func test_terrain_tooltips_name_real_heights_not_categories() -> void:
+	var T = MapLayoutScript.TerrainType
+	var expected := {
+		T.RUINS: TerrainRules.RUIN_ZONE_HEIGHT_INCHES,
+		T.FOREST: TerrainRules.FOREST_HEIGHT_INCHES,
+		T.CONTAINER: TerrainRules.CONTAINER_HEIGHT_INCHES,
+	}
+	for t: int in expected:
+		var text: String = str(MapLayoutScript.TERRAIN_DESCRIPTIONS.get(t, ""))
+		var inches: String = String.num(float(expected[t]), 1).trim_suffix(".0")
+		assert_str(text) \
+			.override_failure_message("NML-972 — the %s tooltip still reports an Asgard height CATEGORY: %s" % [str(t), text]) \
+			.not_contains("Height 5")
+		assert_str(text) \
+			.override_failure_message("NML-972 — the %s tooltip must name its real height (%s\"): %s" % [str(t), inches, text]) \
+			.contains("%s\"" % inches)

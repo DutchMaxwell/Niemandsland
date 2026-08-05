@@ -1287,7 +1287,7 @@ static func _segment_cost(a: Vector2, b: Vector2, grid: Dictionary, opts: Dictio
 ## True if the straight segment a→b is NOT traversable in configuration space: it shaves an inflated wall,
 ## crosses a no-go zone (step_blocked owns those, base-aware), or its interior touches a hard-blocked
 ## terrain cell. Endpoints are excluded from the terrain sampling (the search validates nodes on expansion),
-## mirroring TerrainRules.has_line_of_sight — so a route may START in a hard cell and escape it.
+## the same convention the sight walk uses — so a route may START in a hard cell and escape it.
 static func _cspace_blocked(a: Vector2, b: Vector2, walls: Array, grid: Dictionary, opts: Dictionary) -> bool:
 	if step_blocked(a, b, walls, opts):
 		return true

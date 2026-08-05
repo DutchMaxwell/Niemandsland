@@ -3,15 +3,16 @@ extends RefCounted
 ## Pure, headless terrain rules for the Solo-AI — the SAME model the real game's terrain_overlay.gd uses:
 ## a grid of typed cells (Dictionary[Vector2i -> TerrainType], 3" cells). This module is unit-agnostic
 ## (works in inches for the simulator, metres for the game), has NO scene/mesh/physics dependency, and
-## copies terrain_overlay's classification + line-of-sight algorithm verbatim. So both the headless
-## simulator (now) and terrain_overlay (at game-integration, P3, by delegating to it) share ONE source of
-## truth for LOS + Cover + Difficult + Dangerous — exactly the way AiDecision is shared for the decision
-## trees. Do not fork the semantics here from terrain_overlay.gd.
+## owns the classification + the real per-type HEIGHTS terrain_overlay's prop constants alias. So the
+## headless simulator and terrain_overlay share ONE source of truth for Cover + Difficult + Dangerous +
+## how tall each piece is — exactly the way AiDecision is shared for the decision trees. Do not fork the
+## semantics here from terrain_overlay.gd. LINE OF SIGHT is no longer here: since the elevation program
+## there is exactly one sight truth, the volumetric VolumetricLos, which both sides feed from this data.
 ##
 ## Terrain effects (GF Advanced Rules v3.5.1 p.11-12; mirrors terrain_overlay._terrain_effect_label):
-##   RUINS      Cover, Blocks LoS (area — see in/out, not through)  (Height 5)
-##   FOREST     Difficult, Cover, Blocks LoS (area — see in/out, not through)  (Height 5)
-##   CONTAINER  Impassable, Blocks LoS (solid — hard-block)         (Height 5)
+##   RUINS      Cover, Blocks LoS (area — see in/out, not through)  (6" tall)
+##   FOREST     Difficult, Cover, Blocks LoS (area — see in/out, not through)  (3.4" tall)
+##   CONTAINER  Impassable, Blocks LoS (solid — hard-block)         (2.5" tall)
 ##   DANGEROUS  Dangerous Terrain                                   (Ground)
 ## RUINS and FOREST are AREA terrain (p.12 "see into and out of forests, but not through them" — the
 ## maintainer applies the same to ruins); a sight line is only blocked when it passes all the way THROUGH
@@ -20,7 +21,14 @@ extends RefCounted
 enum TerrainType { NONE = 0, RUINS = 1, FOREST = 2, CONTAINER = 3, DANGEROUS = 4 }
 
 const CELL_IN := 3.0    # == terrain_overlay.GRID_SIZE_INCHES: one terrain cell is 3"x3"
-const BLOCKER_HEIGHT := 5   # Height category of a LOS-blocking zone (terrain_overlay.terrain_height_category)
+
+# Real 3D dimensions (elevation program, Phase A): terrain heights are per-piece DATA, so a future hill
+# or tower only has to declare its own number. THE source — terrain_overlay's prop constants alias these,
+# so a container is 2.5" of real box in the mesh, in the volume registry and in the editor's tooltip
+# alike; a wood is 3.4" of trunk and crown, a shelf ruin two 3" storeys.
+const CONTAINER_HEIGHT_INCHES := 2.5
+const FOREST_HEIGHT_INCHES := 3.4
+const RUIN_ZONE_HEIGHT_INCHES := 6.0
 
 
 # === Type predicates (identical to terrain_overlay's classification) ===
@@ -29,9 +37,17 @@ static func blocks_los(t: int) -> bool:
 	return t == TerrainType.RUINS or t == TerrainType.FOREST or t == TerrainType.CONTAINER
 
 
-## Asgard Height category of a terrain type (blockers are Height 5; open ground = 0).
-static func height_category(t: int) -> int:
-	return BLOCKER_HEIGHT if blocks_los(t) else 0
+## REAL height (INCHES) of a terrain type as a 3D volume — what the volumetric sight truth extrudes each
+## painted zone to (0 = never a volume: open ground, dangerous ground).
+static func volume_height_inches(t: int) -> float:
+	match t:
+		TerrainType.CONTAINER:
+			return CONTAINER_HEIGHT_INCHES
+		TerrainType.FOREST:
+			return FOREST_HEIGHT_INCHES
+		TerrainType.RUINS:
+			return RUIN_ZONE_HEIGHT_INCHES
+	return 0.0
 
 
 static func gives_cover(t: int) -> bool:
@@ -40,7 +56,7 @@ static func gives_cover(t: int) -> bool:
 
 ## AREA terrain (Forests + Ruins): you see INTO and OUT OF it, but not completely THROUGH it (GF/AoF v3.5.1
 ## p.12). Containers are solid Impassable+Blocking buildings — NOT area terrain, so they hard-block LOS and
-## the see-in/out zone exception in has_line_of_sight() does not apply to them.
+## the see-in/out zone exception never applies to them (they publish a SOLID volume).
 static func is_area_terrain(t: int) -> bool:
 	return t == TerrainType.RUINS or t == TerrainType.FOREST
 
@@ -158,38 +174,6 @@ static func flood_fill_zone(grid_cells: Dictionary, start_cell: Vector2i) -> Dic
 				result[nb] = true
 				stack.append(nb)
 	return result
-
-
-# === Line of sight (top-down; copied from terrain_overlay.has_line_of_sight, 2D) ===
-
-## True if `from_pt` can see `to_pt`. A blocking zone the line crosses blocks LOS only when (a) for AREA
-## terrain (Forests + Ruins) neither endpoint stands inside that same zone ("see in/out of your own zone,
-## not through someone else's"); solid CONTAINERS skip this exception and hard-block. AND (b) the zone's
-## Height >= BOTH endpoints' Height categories. Points and cell_size share one unit (inches in the sim,
-## metres in the game).
-static func has_line_of_sight(grid_cells: Dictionary, from_pt: Vector2, to_pt: Vector2,
-		from_h: int, to_h: int, cell_size: float = CELL_IN) -> bool:
-	if grid_cells.is_empty():
-		return true
-	var from_zone := flood_fill_zone(grid_cells, cell_of(from_pt, cell_size))
-	var to_zone := flood_fill_zone(grid_cells, cell_of(to_pt, cell_size))
-	var span := from_pt.distance_to(to_pt)
-	# Quarter-cell sampling with a guaranteed midpoint (container wave — mirrors the overlay
-	# copy): the old half-cell walk skipped corners and granted every span under one cell.
-	var steps := maxi(int(ceil(span / (cell_size * 0.25))), 4)
-	if span < 0.02:
-		return true
-	for i in range(1, steps):   # skip the exact endpoints
-		var cell := cell_of(from_pt.lerp(to_pt, float(i) / float(steps)), cell_size)
-		var ttype: int = int(grid_cells.get(cell, TerrainType.NONE))
-		if not blocks_los(ttype):
-			continue
-		if is_area_terrain(ttype) and (from_zone.has(cell) or to_zone.has(cell)):
-			continue   # area terrain: you see IN/OUT of your own zone — just not through someone else's
-		var th := height_category(ttype)
-		if th >= from_h and th >= to_h:
-			return false
-	return true
 
 
 # === Cover & movement helpers (built on the same grid) ===

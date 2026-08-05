@@ -2279,15 +2279,16 @@ func _start_measuring(screen_pos: Vector2) -> void:
 	if result:
 		_is_measuring = true
 		# If hit an object, store reference and mark as snapped
+		# The endpoint keeps its REAL height (NML-972): the ruler measures FLAT (G3 — the label is a
+		# top-down distance), but the drawn line has to hang where the thing really is, or a measure
+		# from a container roof draws through the box it is taken from.
 		if result.collider.is_in_group("selectable"):
 			_measure_start_object = result.collider
 			_measure_start_position = result.collider.global_position
-			_measure_start_position.y = 0.02  # Slightly above table for visibility
 			_measure_start_snapped = true
 		else:
 			_measure_start_object = null
 			_measure_start_position = result.position
-			_measure_start_position.y = 0.02
 			_measure_start_snapped = false
 
 		# Create measurement line and label
@@ -2397,16 +2398,15 @@ func _get_measure_end_position(screen_pos: Vector2) -> Variant:
 	if result:
 		# If hit a selectable object, snap to its base position
 		if result.collider.is_in_group("selectable"):
-			var obj_pos = result.collider.global_position
 			return {
-				"position": Vector3(obj_pos.x, 0.02, obj_pos.z),
+				"position": result.collider.global_position,   # real height (NML-972), see _start_measuring
 				"snapped": true,
 				"object": result.collider
 			}
 		else:
 			# Hit table or other surface - use that point
 			return {
-				"position": Vector3(result.position.x, 0.02, result.position.z),
+				"position": result.position,
 				"snapped": false,
 				"object": null
 			}
@@ -2482,8 +2482,8 @@ func _get_edge_position(obj: Node3D, obj_center: Vector3, target_pos: Vector3) -
 	# Get edge distance in this direction (handles oval bases)
 	var edge_dist = _get_edge_distance_in_direction(obj, dir.x, dir.z)
 
-	# Edge point is center + direction * edge_distance
-	var edge_pos = Vector3(obj_center.x + dir.x * edge_dist, 0.02, obj_center.z + dir.z * edge_dist)
+	# Edge point is center + direction * edge_distance, at the object's own height (NML-972)
+	var edge_pos = Vector3(obj_center.x + dir.x * edge_dist, obj_center.y, obj_center.z + dir.z * edge_dist)
 	return edge_pos
 
 
@@ -2550,23 +2550,25 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 	_measure_line.visible = true
 	_measure_label.visible = true
 
-	# Create a thin flat box as line (horizontal on XZ plane)
+	# NML-972: the line SPANS the two real heights (a measure from a container roof slopes down to
+	# the ground) — only the LABEL stays the flat top-down distance, which is what the rules measure.
+	var span = to_pos - from_pos
 	var line_mesh = BoxMesh.new()
-	line_mesh.size = Vector3(length, 0.001, 0.002)  # Length along X, 1mm height, 2mm depth
+	line_mesh.size = Vector3(span.length(), 0.001, 0.002)  # Length along X, 1mm height, 2mm depth
 
 	_measure_line.mesh = line_mesh
 
-	# Position at midpoint, just above table surface
+	# Position at midpoint, just above the line's own height
 	var midpoint = (from_pos + to_pos) / 2
-	midpoint.y = 0.005  # 0.5cm above table
-	_measure_line.global_position = midpoint
-
-	# Rotate to align with direction (rotation around Y axis)
-	var angle = atan2(direction.x, direction.z)
-	_measure_line.rotation = Vector3(0, angle + PI/2, 0)
+	midpoint.y += 0.005  # 0.5cm clear of the surface
+	# Aim local +X along the span; a near-vertical line falls back to a forward reference axis.
+	var axis_x = span.normalized()
+	var reference = Vector3.UP if absf(axis_x.dot(Vector3.UP)) < 0.999 else Vector3.FORWARD
+	var axis_z = axis_x.cross(reference).normalized()
+	_measure_line.global_transform = Transform3D(Basis(axis_x, axis_z.cross(axis_x), axis_z), midpoint)
 
 	# Update label position (at midpoint, above line)
-	_measure_label.global_position = Vector3(midpoint.x, 0.02, midpoint.z)  # 2cm above table
+	_measure_label.global_position = Vector3(midpoint.x, midpoint.y + 0.015, midpoint.z)
 	_measure_label.text = "%.1f\"" % distance_inches
 
 	# Rotate label to align with measurement line direction
@@ -2577,9 +2579,7 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 	# Update line material color (green if both ends snapped, yellow otherwise)
 	var line_color = Color.GREEN if both_snapped else Color.YELLOW
 
-	# Check LOS along the path, height-aware per the Asgard standard: a terrain zone
-	# between the two points blocks only if its Height >= BOTH endpoints' Height and
-	# neither endpoint stands inside that zone (you see in/out of your own zone).
+	# Check LOS along the path — the ONE volumetric truth (see _measure_los_blocked).
 	var los_blocked: bool = _measure_los_blocked(from_pos, to_pos)
 	if los_blocked:
 		line_color = Color.RED  # Change line to red if LOS is blocked
@@ -2602,7 +2602,7 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 		_measure_los_warning.text = "🚫"  # Blocked symbol
 		_measure_los_warning.modulate = Color.RED
 		# Position slightly higher than other labels
-		_measure_los_warning.global_position = Vector3(midpoint.x, 0.08, midpoint.z)
+		_measure_los_warning.global_position = Vector3(midpoint.x, midpoint.y + 0.075, midpoint.z)
 	else:
 		if _measure_los_warning:
 			_measure_los_warning.visible = false
@@ -2619,36 +2619,64 @@ func _update_measure_line(from_pos: Vector3, to_pos: Vector3, distance_inches: f
 
 
 ## The measure line's LOS verdict, factored out of the draw path so it is testable
-## headless. Terrain first (height-aware Asgard walk), then units as blockers.
-## NML-971: the DRAWN line is flattened to table level, but the verdict must read the
-## measured objects' REAL heights — the roof exemption (NML-965) needs the true y of a
-## model standing ON a container, or the ruler paints red where the cast resolves.
+## headless. ONE query: the volumetric sight truth the dice themselves ask (VolumetricLos
+## over terrain_overlay's 3D registry), with every other model on the table as a blocker
+## cylinder. NML-971/NML-972: both endpoints stand on the surface the overlay reports for
+## their spot, so a measurement taken on a container roof looks OVER the box instead of
+## painting red across it — the old flat walk compared Asgard height categories and could
+## not use a height at all.
 func _measure_los_blocked(from_pos: Vector3, to_pos: Vector3) -> bool:
-	if not (terrain_overlay and terrain_overlay.has_method("has_line_of_sight")):
+	if not (terrain_overlay and terrain_overlay.has_method("los_volumes")):
 		return false
-	if _measure_start_object != null:
-		from_pos.y = _measure_start_object.global_position.y
-	if _measure_end_object != null:
-		to_pos.y = _measure_end_object.global_position.y
-	var from_height := _object_height_category(_measure_start_object)
-	var to_height := _object_height_category(_measure_end_object)
-	# Base radii keep the ruler consistent with the engine's base-aware terrain-zone LOS (a model whose
-	# base overlaps a forest/ruin edge sees in/out — the ruler must not show red where the volley fires).
-	var from_model := _object_model_instance(_measure_start_object)
-	var to_model := _object_model_instance(_measure_end_object)
-	var from_r: float = LosRules.model_base_radius_m(from_model) if from_model else 0.0
-	var to_r: float = LosRules.model_base_radius_m(to_model) if to_model else 0.0
-	if not terrain_overlay.has_line_of_sight(from_pos, to_pos, from_height, to_height, from_r, to_r):
-		return true
-	# Units block sight lines too (Asgard: formation Height, <1" gaps closed).
-	return _units_block_measure_line(from_pos, to_pos, from_height, to_height)
+	var volumes: Array = terrain_overlay.los_volumes()
+	var exclude: Array = []
+	for endpoint: Node3D in [_measure_start_object, _measure_end_object]:
+		var endpoint_model := _object_model_instance(endpoint)
+		if endpoint_model and endpoint_model.unit:
+			exclude.append(endpoint_model.unit.get_instance_id())
+	return not VolumetricLos.has_los(
+		_measure_cylinder(from_pos, _measure_start_object, volumes),
+		_measure_cylinder(to_pos, _measure_end_object, volumes),
+		volumes, _measure_blockers(), exclude)
 
 
-## Asgard Height category (1-6) of a measured endpoint's object, read from its
-## ModelInstance meta. Table points / non-model objects default to infantry (2).
-func _object_height_category(obj: Node3D) -> int:
+## One measured endpoint as a VolumetricLos model cylinder: it stands on the surface the
+## overlay reports for its spot (container roof, else the table) and is as tall as its base
+## says. A plain table point counts as an infantry model on the standard base. An AIRCRAFT
+## endpoint carries its flag (P6, GF p.13): a flyer is abstract and always visible, so a
+## line measured TO one is clear — the same answer the shooting gate gives.
+func _measure_cylinder(pos: Vector3, obj: Node3D, volumes: Array) -> Dictionary:
+	var flat := Vector2(pos.x, pos.z)
 	var model := _object_model_instance(obj)
-	return LosRules.model_height_category(model) if model else LosRules.HEIGHT_INFANTRY
+	var r: float = VolumetricLos.model_base_radius_m(model) if model else 0.0
+	var y0 := VolumetricLos.surface_y_at(flat, volumes)
+	return {"c": flat, "r": r, "y0": y0, "y1": y0 + _measure_model_height_m(model),
+		"is_aircraft": model != null and SoloController.is_aircraft(model.unit)}
+
+
+## Every alive model on the table as a blocker cylinder — the same shape the shooting gate
+## builds (real standing height, per-unit key for the <1" gap closure, Aircraft transparent).
+func _measure_blockers() -> Array:
+	var out: Array = []
+	for node: Node in get_tree().get_nodes_in_group("miniature"):
+		if not (node is Node3D) or not is_instance_valid(node):
+			continue
+		var model := _object_model_instance(node as Node3D)
+		if model == null or not model.is_alive:
+			continue  # custom minis without an OPR profile carry no base; dead ones are only hidden
+		var pos: Vector3 = (node as Node3D).global_position
+		out.append({"c": Vector2(pos.x, pos.z), "r": VolumetricLos.model_base_radius_m(model),
+			"y0": pos.y, "y1": pos.y + _measure_model_height_m(model),
+			"unit_key": model.unit.get_instance_id() if model.unit else node.get_instance_id(),
+			"is_aircraft": SoloController.is_aircraft(model.unit)})
+	return out
+
+
+## Volumetric height (metres) of a measured model off the official base-size table — the base
+## radius doubles as the base size in mm (radius m x 2 x 1000). Table points get the standard base.
+func _measure_model_height_m(model: ModelInstance) -> float:
+	var radius_m: float = VolumetricLos.model_base_radius_m(model) if model else VolumetricLos.DEFAULT_BASE_RADIUS_M
+	return VolumetricLos.height_in_for_base_mm(radius_m * 2000.0) * VolumetricLos.INCHES_TO_METERS
 
 
 ## The ModelInstance attached to a measured object (meta on the node or its
@@ -2662,41 +2690,6 @@ func _object_model_instance(obj: Node3D) -> ModelInstance:
 			if model is ModelInstance:
 				return model
 	return null
-
-
-## Unit-as-LOS-blocker check for the measure line (Asgard, display-only): every
-## OPR model on the table blocks at its Height; <1" gaps inside a unit count as
-## closed. The units at the measure line's endpoints never block their own line.
-func _units_block_measure_line(from_pos: Vector3, to_pos: Vector3,
-		from_height: int, to_height: int) -> bool:
-	var exclude_units: Array[int] = []
-	for endpoint: Node3D in [_measure_start_object, _measure_end_object]:
-		var endpoint_model := _object_model_instance(endpoint)
-		if endpoint_model and endpoint_model.unit:
-			exclude_units.append(endpoint_model.unit.get_instance_id())
-
-	var blockers: Array[LosRules.Blocker] = []
-	for node: Node in get_tree().get_nodes_in_group("miniature"):
-		if not (node is Node3D) or not is_instance_valid(node):
-			continue
-		var model := _object_model_instance(node as Node3D)
-		if model == null:
-			continue  # custom minis without an OPR profile carry no Height
-		if not model.is_alive:
-			continue  # dead models are only hidden, not freed — they must not block line of sight
-		# Models without a unit block alone, keyed by their own node id (no
-		# gap-closure partner, never excludable via a unit).
-		var unit_key: int = model.unit.get_instance_id() if model.unit else node.get_instance_id()
-		var pos_3d := (node as Node3D).global_position
-		blockers.append(LosRules.Blocker.new(
-			Vector2(pos_3d.x, pos_3d.z),
-			LosRules.model_base_radius_m(model),
-			LosRules.model_height_category(model),
-			unit_key))
-
-	return LosRules.units_block_line(
-		Vector2(from_pos.x, from_pos.z), Vector2(to_pos.x, to_pos.z),
-		from_height, to_height, blockers, exclude_units)
 
 
 # ==============================================================================

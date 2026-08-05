@@ -746,8 +746,8 @@ func test_sighted_models_gates_per_model_behind_a_blocker() -> void:
 	for x in range(8, 16):
 		grid.erase(Vector2i(x, 1))
 	var los := func(a: Vector3, b: Vector3) -> bool:
-		return TerrainRules.has_line_of_sight(grid,
-			Vector2(a.x, a.z) / 0.0254, Vector2(b.x, b.z) / 0.0254, 1, 1)
+		return SoloSim.terrain_has_los(grid,
+			Vector2(a.x, a.z) / 0.0254, Vector2(b.x, b.z) / 0.0254)
 	var m := 0.0254
 	var shooters := [Vector3(2 * m, 0, 0), Vector3(5 * m, 0, 0), Vector3(26 * m, 0, 0), Vector3(29 * m, 0, 0)]
 	var targets := [Vector3(2 * m, 0, 12 * m), Vector3(26 * m, 0, 12 * m)]

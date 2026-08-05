@@ -38,7 +38,54 @@ const SPACING_IN := 1.0   # OPR (p.7): non-charging models must stay over 1" fro
 const MELEE_REACH_IN := 2.0   # OPR melee (p.9 "Who Can Strike"): only models within 2" of an enemy model strike
 const OBJECTIVE_CONTROL_IN := 3.0
 const DEFAULT_ROUNDS := 4
-const MODEL_HEIGHT := 1   # every sim model is ground infantry (Height 1); tall/vehicle heights are a follow-up
+const MODEL_BASE_MM := 32.0   # the volumetric twin: every sim model stands on the infantry standard base
+
+
+# === Volumetric line of sight (elevation program, Phase A — the twin of the game's registry) ===
+
+## One-board cache: the sight query below runs per candidate enemy, the build behind it only when the
+## board changes. The sim plays one board at a time, so a single entry keeps it honest.
+static var _los_volumes_cache: Dictionary = {}
+
+
+## The sim's terrain grid as VolumetricLos volumes, in METRES (the module's unit — the sim converts at
+## this boundary and nowhere else). ONE cells volume per CONTIGUOUS zone: a merged one would let a model
+## see out of a foreign wood. Each zone is extruded to its type's real height, so the headless twin and
+## the game read the very same geometry.
+static func terrain_los_volumes(terrain: Dictionary) -> Array:
+	if terrain.is_empty():
+		return []
+	var key: int = terrain.hash()
+	if _los_volumes_cache.has(key):
+		return _los_volumes_cache[key]
+	var k := VolumetricLos.INCHES_TO_METERS
+	var out: Array = []
+	var seen: Dictionary = {}
+	for cell: Vector2i in terrain:
+		var ttype: int = int(terrain[cell])
+		if seen.has(cell) or not TerrainRules.blocks_los(ttype):
+			continue
+		var cells: Dictionary = {}
+		for c: Vector2i in TerrainRules.flood_fill_zone(terrain, cell):
+			seen[c] = true
+			cells[c] = true
+		out.append({"kind": "cells", "cells": cells, "cell_size": TerrainRules.CELL_IN * k, "yaw": 0.0,
+			"y0": 0.0, "y1": TerrainRules.volume_height_inches(ttype) * k,
+			"solid": not TerrainRules.is_area_terrain(ttype)})
+	_los_volumes_cache = {key: out}
+	return out
+
+
+## The twin's sight query: inches in (the sim's unit), the ONE volumetric truth out. Sim models stand on
+## the table and are infantry-based; Phase B teaches the sim to climb, and only their y0 changes here.
+static func terrain_has_los(terrain: Dictionary, from_in: Vector2, to_in: Vector2) -> bool:
+	var k := VolumetricLos.INCHES_TO_METERS
+	var h: float = VolumetricLos.height_in_for_base_mm(MODEL_BASE_MM) * k
+	return VolumetricLos.has_los(
+		{"c": from_in * k, "r": 0.0, "y0": 0.0, "y1": h},
+		{"c": to_in * k, "r": 0.0, "y0": 0.0, "y1": h},
+		terrain_los_volumes(terrain))
+
 
 ## Substrings of special-rule names the COMBAT MATH actually models. Any rule a unit carries that matches
 ## none of these is logged once per game (unknown-rule visibility) — see docs/SOLO_AI_RULES_COVERAGE.md.
@@ -672,8 +719,7 @@ static func _pick_overlay_target(unit: Dictionary, units: Array, max_range: floa
 		var d: float = up.distance_to(e["pos"])
 		if d > max_range:
 			continue
-		if not terrain.is_empty() \
-				and not TerrainRules.has_line_of_sight(terrain, up, e["pos"], MODEL_HEIGHT, MODEL_HEIGHT):
+		if not terrain.is_empty() and not terrain_has_los(terrain, up, e["pos"]):
 			continue
 		cands.append(_target_descriptor(e, d, terrain))
 		refs.append(e)
@@ -1044,8 +1090,7 @@ static func _pick_target(unit: Dictionary, units: Array, max_range: float,
 		var d: float = up.distance_to(e["pos"])
 		if d > max_range:
 			continue
-		if require_los and not terrain.is_empty() \
-				and not TerrainRules.has_line_of_sight(terrain, up, e["pos"], MODEL_HEIGHT, MODEL_HEIGHT):
+		if require_los and not terrain.is_empty() and not terrain_has_los(terrain, up, e["pos"]):
 			continue   # a shot needs clear line of sight (Ruins/Forest/Container block it)
 		if d < best_any_d:
 			best_any_d = d
