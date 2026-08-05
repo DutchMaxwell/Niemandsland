@@ -54,3 +54,29 @@ func test_mixed_records_return_only_attacker_grants_in_order() -> void:
 
 func test_empty_records_yield_empty_list() -> void:
 	assert_array(AiSpell.attacker_grants_from_target([])).is_empty()
+
+
+func test_attacker_grant_source_names_the_spell_that_placed_the_rule() -> void:
+	# Origin-tag helper for the "Relentless: +N hit(s)" log line — when Relentless landed via a
+	# target's Foresight token (not the shooter's own weapon), the log must name the source spell
+	# so the player sees WHY the extra hits arrived. Case-insensitive on the rule side because
+	# callers pass either "Relentless" (rule name) or "relentless" (profile flag).
+	var mods := [
+		_record("Evasive", "target", {"spell": "Silver Shield"}),
+		_record("Relentless", "attackers", {"spell": "Calculated Foresight"}),
+	]
+	assert_str(AiSpell.attacker_grant_source(mods, "Relentless")) \
+		.is_equal("Calculated Foresight")
+	assert_str(AiSpell.attacker_grant_source(mods, "relentless")) \
+		.is_equal("Calculated Foresight")
+
+
+func test_attacker_grant_source_returns_empty_when_no_match() -> void:
+	# No matching attackers-side grant → empty string; the caller then omits the origin tag and
+	# logs the plain Relentless line. Also: a target-beneficiary grant with the SAME rule name
+	# must not leak (defensive Relentless on the bearer is not the shooter's Foresight).
+	assert_str(AiSpell.attacker_grant_source([], "Relentless")).is_equal("")
+	var only_target := [_record("Relentless", "target", {"spell": "Confused Aura"})]
+	assert_str(AiSpell.attacker_grant_source(only_target, "Relentless")).is_equal("")
+	var mods := [_record("Unstoppable", "attackers", {"spell": "Unstoppable Aura"})]
+	assert_str(AiSpell.attacker_grant_source(mods, "Relentless")).is_equal("")

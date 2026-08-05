@@ -402,6 +402,24 @@ static func mods_for(records: Array, role: String, melee: bool, source: String =
 	return out
 
 
+## NML-987 (rules-must-log follow-up) — the SPELL name that granted a given rule to attackers on
+## this target (first match in placement order, case-insensitive on the rule side to survive
+## "Relentless"/"relentless" callers). Empty string if the target does not grant the rule that
+## way — the caller then omits the origin tag and logs the plain Relentless line as before.
+static func attacker_grant_source(records: Array, rule_name: String) -> String:
+	if rule_name.is_empty():
+		return ""
+	var needle := rule_name.to_lower()
+	for rd in records:
+		if typeof(rd) != TYPE_DICTIONARY:
+			continue
+		if str(rd.get("beneficiary", "")) != "attackers":
+			continue
+		if str(rd.get("grants_rule", "")).to_lower() == needle:
+			return str(rd.get("spell", ""))
+	return ""
+
+
 ## NML-987 — the granted rule names a target's spell-mod records hand to whoever shoots at (or
 ## charges into) that target, i.e. only records with `beneficiary == "attackers"` and a non-empty
 ## `grants_rule`. Order-preserving so the caller can log them in the sequence they were placed.
