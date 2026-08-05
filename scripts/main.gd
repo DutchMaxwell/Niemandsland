@@ -15167,8 +15167,18 @@ func _on_game_phase_changed(_phase: int) -> void:
 ## The host broadcast the authoritative game phase (host applies it here too). Apply it to the army
 ## manager; the game_phase_changed seam then updates the trails + UI on this peer.
 func _on_remote_game_phase_changed(phase: int) -> void:
-	if opr_army_manager != null:
-		opr_army_manager.set_game_phase(phase)
+	if opr_army_manager == null:
+		return
+	var was_deploying: bool = opr_army_manager.is_deployment_phase()
+	opr_army_manager.set_game_phase(phase)
+	# #322 — repeat the manual-play notice ONCE at the deployment→playing flip, where the "nothing
+	# moves forward" confusion actually strikes. Toast for the moment, log line for the record.
+	if was_deploying and not opr_army_manager.is_deployment_phase() \
+			and network_manager != null and network_manager.is_multiplayer_active():
+		_show_toast("Round 1 — multiplayer is manual: take turns like at a real table")
+		if battle_log != null:
+			battle_log.log_event(BattleLog.Category.GENERAL,
+				"Multiplayer is manual play — no automation drives the turns; alternate activations like at a real table", true)
 
 
 ## Host-side ready tally changed (a player readied/un-readied). Refresh the waiting readout.
@@ -15204,7 +15214,11 @@ func _update_game_phase_ui() -> void:
 				_game_phase_status_label.text = "Waiting for other player…"
 				_game_phase_status_label.visible = true
 			else:
-				_game_phase_status_label.visible = false
+				# #322 — multiplayer is manual-first BY DESIGN, but nothing said so, and new MP
+				# pairs read the quiet post-Ready table as a hang. The notice stands for the whole
+				# MP deployment so it is read BEFORE both players are waiting on each other.
+				_game_phase_status_label.text = "Multiplayer is manual play — deploy, ready up,\nthen take turns like at a real table (no automation)"
+				_game_phase_status_label.visible = true
 	else:
 		_start_game_button.text = "Start Game"
 		_start_game_button.tooltip_text = "Begin round 1 — deployment is done."
