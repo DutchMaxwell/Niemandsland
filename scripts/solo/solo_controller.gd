@@ -1301,7 +1301,7 @@ func _act(unit: GameUnit) -> Dictionary:
 				str(edq["name"]), adv_b, rush_b],
 			"candidates": [], "chosen": "use now", "why": "once-per-game speed feat (endgame)",
 			"data": {"advance_bonus": adv_b, "rush_bonus": rush_b}})
-		_rule_note(report, "%s: once-per-game move bonus spent (+%.0f\"/+%.0f\")" % [str(edq["name"]), adv_b, rush_b], true)   # once-per-game spend — travels
+		_rule_note(report, "%s: %s spends its once-per-game move bonus (+%.0f\"/+%.0f\")" % [str(edq["name"]), unit.get_name(), adv_b, rush_b], true)   # once-per-game spend — travels
 	# Teleport (cut C — "once per activation, before attacking, place this model within 3\" of its
 	# position on Advance/Charge actions, or within 6\" on Rush actions"): the same band valuation —
 	# +3" Advance/Charge, +6" Rush (once per activation by construction).

@@ -212,6 +212,12 @@ static func move_modifier_from_description(description: String) -> Dictionary:
 	# ("+2\" when using Advance or Rush actions") says "or" but never "either", so it still accrues.
 	if description.to_lower().contains("either"):
 		return result
+	# ONCE-PER-GAME feats never accrue either (NML-982, measured as an exact 10" advance in a
+	# maintainer game): "Once per game, … +2\" when using Advance … +4\" when using Rush" (Speed
+	# Feat) is SPENT by the solo layer at activation (registry uses_per_game) — baking its inches
+	# into the band double-counts the bonus. The registry pass keeps its own uses_per_game skip.
+	if description.to_lower().contains("once per game"):
+		return result
 	var re := RegEx.new()
 	if re.compile("([+-]\\d+)\\s*[\"”]") != OK:
 		return result

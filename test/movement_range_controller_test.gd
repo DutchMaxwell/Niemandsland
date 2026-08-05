@@ -116,6 +116,36 @@ func test_parse_modifier_pick_one_rules_never_accrue() -> void:
 		.is_equal(0)
 
 
+func test_parse_modifier_once_per_game_feats_never_accrue() -> void:
+	# NML-982, measured in a maintainer game (autosave diff: EXACTLY 10.00" on an 8" advance):
+	# Speed Feat is a once-per-game SPEND — the solo layer grants its +2/+4 at activation via the
+	# registry's uses_per_game. Baking the description's inches into the permanent bands too made
+	# the unit move 6 base + 2 permanent + 2 spend = 10" and then shoot. Like the pick-one guard
+	# (NML-230), such text must contribute ZERO to the permanent bands.
+	var d := "Once per game, when this unit moves and all its models have this rule, you may " \
+		+ "use this rule so that they move +2\" when using Advance actions and +4\" when using " \
+		+ "Rush and Charge actions."
+	var mod := MovementRangeController.move_modifier_from_description(d)
+	assert_int(mod["advance"]) \
+		.override_failure_message("a once-per-game feat accrued into the ADVANCE band — the 10\"-advance double count (NML-982)") \
+		.is_equal(0)
+	assert_int(mod["rush"]) \
+		.override_failure_message("a once-per-game feat accrued into the RUSH band (NML-982)") \
+		.is_equal(0)
+
+
+func test_move_bands_once_per_game_feat_stays_out_of_bands() -> void:
+	# The bands-level half of NML-982: with the feat's description present, the permanent bands
+	# stay the plain 6/12 — the +2/+4 belongs to the activation that spends it, nowhere else.
+	var b := _controller().move_bands_for_props({
+		"special_rules": ["Speed Feat"],
+		"rule_descriptions": {"Speed Feat": "Once per game, when this unit moves and all its " \
+			+ "models have this rule, you may use this rule so that they move +2\" when using " \
+			+ "Advance actions and +4\" when using Rush and Charge actions."}})
+	assert_int(b["advance"]).is_equal(6)
+	assert_int(b["rush"]).is_equal(12)
+
+
 func test_parse_modifier_both_bands_or_still_accrues() -> void:
 	# The counter-case guarding B10: ONE modifier naming both actions with a plain "or" (no "either")
 	# is NOT a pick-one — it applies to both bands, permanently. The pick-one guard must not eat it.

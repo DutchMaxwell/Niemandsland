@@ -86,3 +86,51 @@ func test_a_shaken_spell_conduit_is_named_in_the_log(timeout := 240000) -> void:
 			"instead of reading the param; log:\n%s)" % _log_text()) \
 		.contains("+1 to casting rolls")
 	await E2EBoot.settle(get_tree())
+
+
+## NML-981 — the 12" is measured base edge to base edge (nearest models), like every other
+## ranged check (the AI's own conduit-origin sweep + NML-206 precedent). Two 60 mm bases
+## 13" apart at the CENTRES stand only ~10.6" apart at the EDGES — in range by the book;
+## the old unit-centre reading denied that legal +1. The 15" pair guards the other
+## direction: ~12.6" at the edges stays out.
+func _caster_and_wide_conduit(centre_gap_in: float) -> GameUnit:
+	var caster := E2EBoot.make_unit(_main, 1, "Caster", [Vector3.ZERO])
+	caster.unit_properties["game_system"] = "gf"
+	caster.unit_properties["faction_folder"] = "testfac"
+	caster.unit_properties["base_size_round"] = 60
+	_main.opr_army_manager.game_units[caster.unit_id] = caster
+	var conduit := E2EBoot.make_unit(_main, 1, "Conduit", [Vector3(centre_gap_in * INCH, 0, 0)])
+	conduit.unit_properties["game_system"] = "gf"
+	conduit.unit_properties["faction_folder"] = "testfac"
+	conduit.unit_properties["base_size_round"] = 60
+	conduit.unit_properties["special_rules"] = ["Spell Conduit"]
+	_main.opr_army_manager.game_units[conduit.unit_id] = conduit
+	return caster
+
+
+func _run_inert_cast(caster: GameUnit) -> void:
+	var cast := {"caster": caster, "caster_unit": caster, "name": "Test Buff",
+		"spell": {"effect": {"kind": "buff"}}, "targets": [caster], "boost": 0, "interference": 0}
+	await _main._solo_resolve_one_cast(cast)
+
+
+func test_a_wide_based_conduit_at_13in_centres_gives_the_plus_one(timeout := 240000) -> void:
+	_inject_conduit_map()
+	var caster := _caster_and_wide_conduit(13.0)
+	await _run_inert_cast(caster)
+	assert_str(_log_text()) \
+		.override_failure_message("NML-981 — 60 mm pair, 13\" at the centres = ~10.6\" at the " +
+			"edges: IN range by the book, but the unit-centre reading denies the +1 (log:\n%s)" % _log_text()) \
+		.contains("+1 to casting rolls")
+	await E2EBoot.settle(get_tree())
+
+
+func test_a_pair_beyond_12in_at_the_edges_stays_out_of_range(timeout := 240000) -> void:
+	_inject_conduit_map()
+	var caster := _caster_and_wide_conduit(15.0)
+	await _run_inert_cast(caster)
+	assert_str(_log_text()) \
+		.override_failure_message("NML-981 guard — 60 mm pair, 15\" centres = ~12.6\" edges: " +
+			"OUT of range, no conduit bonus may appear (log:\n%s)" % _log_text()) \
+		.not_contains("+1 to casting rolls")
+	await E2EBoot.settle(get_tree())
