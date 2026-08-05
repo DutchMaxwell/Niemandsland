@@ -70,12 +70,18 @@ func test_futility_floor_separates_tank_from_infantry() -> void:
 	assert_bool(sc.melee_futile_against(grunts, infantry)).is_false()
 
 
-func test_unit_without_melee_profiles_is_trivially_futile() -> void:
+func test_unit_without_melee_profiles_is_not_gated() -> void:
+	# Missing melee data proves nothing (battery regression 2026-08-05: the weaponless MELEE-archetype
+	# fixture in solo_controller_test must keep charging to base contact). The gate refuses only what
+	# the data AFFIRMATIVELY shows is hopeless — no profiles → not futile, pre-patch behavior.
 	var arty := _unit(2, [Vector3.ZERO], [], "Battery")
 	_arm(arty, [{"name": "Gun", "range": 30, "attacks": 2, "rules": []}])
 	var infantry := _unit(1, [Vector3(10.0 * IN2M, 0, 0)], [], "Infantry")
 	var sc := _controller([arty, infantry])
-	assert_bool(sc.melee_futile_against(arty, infantry)).is_true()
+	assert_bool(sc.melee_futile_against(arty, infantry)).is_false()
+	var bare := _unit(2, [Vector3.ZERO], [], "Bare")   # no loadout data at all
+	var sc2 := _controller([bare, _unit(1, [Vector3(10.0 * IN2M, 0, 0)], ["Tough(15)"], "Tank2", 3, 2)])
+	assert_bool(sc2.melee_futile_against(bare, sc2.army_manager.game_units.values()[1])).is_false()
 
 
 ## The retarget helper: with the tank NEAREST and hurtable infantry farther out, the pure melee

@@ -1194,14 +1194,16 @@ const FUTILE_CHARGE_EV := 0.2
 
 ## True when `unit`'s best charge into `target_unit` computes under the futility floor (sergeant-
 ## stamped, limited-filtered melee profiles — the same context the Versatile Reach EV judge uses).
-## A unit with NO melee profiles is trivially futile (nothing to charge with).
+## A unit with NO melee profiles is NOT gated: missing loadout data proves nothing (test fixtures
+## and data-less imports charge exactly as before — the same missing-data discipline as the
+## split-fire bearer fix). The gate refuses only what the data AFFIRMATIVELY shows is hopeless.
 func melee_futile_against(unit: GameUnit, target_unit: GameUnit) -> bool:
 	if target_unit == null:
 		return true
 	var our_melee: Array = AiEv.stamp_sergeant(
 		filter_limited(unit, AiShooting.melee_profiles(_unit_weapons(unit))), unit)
 	if our_melee.is_empty():
-		return true
+		return false
 	var us := AiEv.ctx_for(unit, false, 0)
 	var them := AiEv.ctx_for(target_unit, majority_in_cover(target_unit), counter_models_of(target_unit))
 	return AiEv.melee_ev(our_melee, us, them, true) < FUTILE_CHARGE_EV
