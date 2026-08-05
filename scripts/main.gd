@@ -2967,7 +2967,7 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 	for s in shots:
 		var shot := s as Dictionary
 		var member := shot["member"] as GameUnit
-		var profile := _solo_bridge_granted_flags(member, shot["profile"] as Dictionary)
+		var profile := _solo_bridge_granted_flags(member, shot["profile"] as Dictionary, target)
 		# Per-model shooting (GF v3.5.1 p.8 "Who Can Shoot") decides the dice count FIRST, so a shot that
 		# scales to nothing leaves before any rule fires on it (it also keeps the Takedown pick below out
 		# of volleys that never roll). Indirect (wave 5) targets as if in line of sight — its per-model
@@ -4242,9 +4242,16 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 		var rel_bonus: int = AiCombatMath.relentless_bonus_hits(faces, dist_in)
 		if rel_bonus > 0 and battle_log != null:
 			# Rules-must-log (wave A): the bonus used to land silently — a "1 hit" line that reads
-			# "2 hits" without explanation looks broken, not Relentless.
-			battle_log.log_event(BattleLog.Category.COMBAT, "Relentless: +%d hit%s (unmodified 6s)" % [
-				rel_bonus, ("" if rel_bonus == 1 else "s")], true)
+			# "2 hits" without explanation looks broken, not Relentless. NML-987 origin tag: when the
+			# Relentless flag came in from the target's attackers-side spell grant (Foresight, ...),
+			# the log line names the source spell + the target so the flip is not orphaned by a
+			# silent consume of the token elsewhere.
+			var origin_spell := str(profile.get("_relentless_from_spell", ""))
+			var origin_tag := ""
+			if not origin_spell.is_empty() and target != null:
+				origin_tag = " — from %s on %s" % [origin_spell, target.get_name()]
+			battle_log.log_event(BattleLog.Category.COMBAT, "Relentless: +%d hit%s (unmodified 6s)%s" % [
+				rel_bonus, ("" if rel_bonus == 1 else "s"), origin_tag], true)
 			_solo_rule_float(target, "Relentless +%d" % rel_bonus)
 		hits += rel_bonus
 	if bool(profile.get("surge", false)):
@@ -5824,7 +5831,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 		var base_quality: int = int(group.get("quality", 4))
 		var fatigued: bool = bool(group.get("fatigued", false))
 		for p in group.get("profiles", []):
-			var profile := _solo_bridge_granted_flags(group.get("member"), p as Dictionary)
+			var profile := _solo_bridge_granted_flags(group.get("member"), p as Dictionary, defender)
 			if int(profile.get("attacks", 0)) <= 0:
 				continue
 			if filter == SoloStrike.COUNTER_ONLY and not bool(profile.get("counter", false)):
@@ -9581,7 +9588,7 @@ func _run_human_shooting(attacker: GameUnit, target: GameUnit, split_names: Arra
 		var base_quality: int = int(group.get("quality", 4))
 		var mod_info: Dictionary = _solo_hit_mod_info(group.get("member"), target, dist, false)
 		for p in group.get("profiles", []):
-			var profile := _solo_bridge_granted_flags(group.get("member"), p as Dictionary)
+			var profile := _solo_bridge_granted_flags(group.get("member"), p as Dictionary, target)
 			if int(profile.get("attacks", 0)) <= 0:
 				continue
 			# #226 SPLIT FIRE (GF v3.5.1 p.8): with a split declared, this volley only rolls
@@ -16224,8 +16231,12 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 ## flags: a unit granted Relentless/Furious/Rending fights as if its weapons carried the rule —
 ## the hit/save readers are profile-flag based, the overlay is unit-level. No double counting
 ## (bridged only when the flag is not already set); the readers' own gates (charging, range,
-## unmodified 6s) still decide whether anything fires.
-func _solo_bridge_granted_flags(unit: GameUnit, profile: Dictionary) -> Dictionary:
+## unmodified 6s) still decide whether anything fires. NML-987: when a `target` is given, every
+## flag-shaped rule (AiSpell.BRIDGE_FLAGS: relentless/furious/rending/surge/bane/shred/
+## unstoppable) also folds in from that target's `beneficiary: "attackers"` spell records
+## (Calculated Foresight → Relentless, Unstoppable Aura, ...) — the bridge is the seam that
+## lets the shooter/charger see the enemy's attackers-side grants.
+func _solo_bridge_granted_flags(unit: GameUnit, profile: Dictionary, target: GameUnit = null) -> Dictionary:
 	if unit == null:
 		return profile
 	var out := profile
@@ -16235,6 +16246,15 @@ func _solo_bridge_granted_flags(unit: GameUnit, profile: Dictionary) -> Dictiona
 			if out == profile:
 				out = profile.duplicate()
 			out[flag] = true
+	if target != null and _solo_spell_mods.has(target.get_instance_id()):
+		var records := _solo_spell_mods[target.get_instance_id()] as Array
+		for rule_name in AiSpell.attacker_grants_from_target(records):
+			var flag := AiSpell.bridge_flag_for(str(rule_name))
+			if not flag.is_empty() and not bool(out.get(flag, false)):
+				if out == profile:
+					out = profile.duplicate()
+				out[flag] = true
+				out["_" + flag + "_from_spell"] = AiSpell.attacker_grant_source(records, rule_name)
 	return out
 
 

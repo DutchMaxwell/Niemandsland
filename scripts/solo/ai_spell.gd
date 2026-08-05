@@ -402,6 +402,69 @@ static func mods_for(records: Array, role: String, melee: bool, source: String =
 	return out
 
 
+## NML-987 — grant name → the attack-path PROFILE FLAG the shooter-seam bridge may set for it.
+## Only rules whose flag is actually read after target commitment belong here (relentless/furious/
+## rending/surge in the extra-hits pass, bane/shred in the save-wound path, unstoppable in the
+## negative-modifier clamp — all read from the per-volley profile in main.gd). REFUSED on purpose:
+##   Quick Shot / Slayer / Rapid Charge / Unwieldy / Piercing Fighter / Unpredictable * — unit-level
+##     rules with their own read paths; a flag would silently do nothing.
+##   Indirect — read at TARGETING time (sighting/cover), before the volley's target is committed;
+##     bridging it per-target is a chicken-egg and needs its own seam.
+## Scope suffixes ("Bane in Melee", "X when Shooting") name the same rule and map identically —
+## the flag's own reader gates melee/shooting anyway.
+const BRIDGE_FLAGS := {
+	"Relentless": "relentless", "Furious": "furious", "Rending": "rending",
+	"Surge": "surge", "Bane": "bane", "Shred": "shred", "Unstoppable": "unstoppable",
+}
+
+
+## The profile flag the shooter-seam bridge may set for a granted rule ("" = not bridgeable).
+static func bridge_flag_for(grant: String) -> String:
+	var g := grant.strip_edges()
+	if g.is_empty():
+		return ""
+	for base in BRIDGE_FLAGS:
+		var b := str(base)
+		if g == b or g.begins_with(b + " in ") or g.begins_with(b + " when "):
+			return str(BRIDGE_FLAGS[base])
+	return ""
+
+
+## NML-987 (rules-must-log follow-up) — the SPELL name that granted a given rule to attackers on
+## this target (first match in placement order, case-insensitive on the rule side to survive
+## "Relentless"/"relentless" callers). Empty string if the target does not grant the rule that
+## way — the caller then omits the origin tag and logs the plain Relentless line as before.
+static func attacker_grant_source(records: Array, rule_name: String) -> String:
+	if rule_name.is_empty():
+		return ""
+	var needle := rule_name.to_lower()
+	for rd in records:
+		if typeof(rd) != TYPE_DICTIONARY:
+			continue
+		if str(rd.get("beneficiary", "")) != "attackers":
+			continue
+		if str(rd.get("grants_rule", "")).to_lower() == needle:
+			return str(rd.get("spell", ""))
+	return ""
+
+
+## NML-987 — the granted rule names a target's spell-mod records hand to whoever shoots at (or
+## charges into) that target, i.e. only records with `beneficiary == "attackers"` and a non-empty
+## `grants_rule`. Order-preserving so the caller can log them in the sequence they were placed.
+static func attacker_grants_from_target(records: Array) -> PackedStringArray:
+	var out := PackedStringArray()
+	for rd in records:
+		if typeof(rd) != TYPE_DICTIONARY:
+			continue
+		if str(rd.get("beneficiary", "")) != "attackers":
+			continue
+		var rule := str(rd.get("grants_rule", ""))
+		if rule.is_empty():
+			continue
+		out.append(rule)
+	return out
+
+
 ## Interference tokens the OTHER side should spend against an announced cast worth `effect_value`
 ## to it (the same marginal calculus, mirrored: spend while the P-reduction per token times the
 ## effect's value exceeds the floor). `boost` is the caster side's already-committed boost.
