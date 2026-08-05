@@ -1185,6 +1185,54 @@ static func _rule_note(report: Dictionary, text: String, travels: bool) -> void:
 	(report["rule_notes"] as Array).append({"text": text, "travels": travels})
 
 
+## #321 — the futility floor: a charge expected to deal fewer wounds than this is no plan, it is a
+## wasted activation walking into counter-strikes (community log: Q6 melee vs a Tough-15 Def-2 tank,
+## ~0.08 expected wounds a charge, rushed at for three rounds). Value in expected wounds; ordinary
+## infantry-vs-infantry charges sit far above it (a 10-man 4+/4+ trade computes to ~2.5).
+const FUTILE_CHARGE_EV := 0.2
+
+
+## True when `unit`'s best charge into `target_unit` computes under the futility floor (sergeant-
+## stamped, limited-filtered melee profiles — the same context the Versatile Reach EV judge uses).
+## A unit with NO melee profiles is trivially futile (nothing to charge with).
+func melee_futile_against(unit: GameUnit, target_unit: GameUnit) -> bool:
+	if target_unit == null:
+		return true
+	var our_melee: Array = AiEv.stamp_sergeant(
+		filter_limited(unit, AiShooting.melee_profiles(_unit_weapons(unit))), unit)
+	if our_melee.is_empty():
+		return true
+	var us := AiEv.ctx_for(unit, false, 0)
+	var them := AiEv.ctx_for(target_unit, majority_in_cover(target_unit), counter_models_of(target_unit))
+	return AiEv.melee_ev(our_melee, us, them, true) < FUTILE_CHARGE_EV
+
+
+## The nearest living enemy this unit's melee CAN plausibly hurt (same exclusions as
+## nearest_human_unit: reserves, joined heroes, aircraft for melee-only units). Null when every
+## enemy is beyond the floor — the caller then keeps its original target (contest beats idle).
+func nearest_hurtable_enemy(unit: GameUnit) -> GameUnit:
+	if army_manager == null:
+		return null
+	var from := unit_centre(unit)
+	var best: GameUnit = null
+	var best_d := INF
+	for h in army_manager.get_game_units_for_player(enemy_slot_of(unit)):
+		var hu := h as GameUnit
+		if hu == null or hu.is_destroyed() or unit_in_reserve(hu):
+			continue
+		if hu.has_method("is_attached") and hu.is_attached():
+			continue
+		if is_aircraft(hu):
+			continue   # unchargeable (GF v3.5.1)
+		if melee_futile_against(unit, hu):
+			continue
+		var d := MoveIntent.distance_inches(from, unit_centre(hu))
+		if d < best_d:
+			best_d = d
+			best = hu
+	return best
+
+
 func _act(unit: GameUnit) -> Dictionary:
 	var report := {"unit": unit, "target": null, "action": AiDecision.Action.HOLD,
 		"toward": AiDecision.Toward.ENEMY, "shoot": false, "can_shoot": false, "dist_in": INF, "dangerous_models": 0,
@@ -1212,6 +1260,22 @@ func _act(unit: GameUnit) -> Dictionary:
 	# across rounds so the unit keeps closing on ONE enemy instead of re-chasing the momentary nearest (the
 	# idle monster). Returns the default target unchanged for the null-AI / non-driven roles (byte-identical).
 	target_unit = _commander_apply(unit, target_unit)
+	# #321 — a PURE MELEE unit pointed at a target it cannot plausibly hurt (Q6 hands vs a Tough-15
+	# Def-2 tank: ~0.08 expected wounds a charge) walks rounds toward a fight it can never win. When a
+	# hurtable enemy exists, close on the nearest of THOSE instead. Ranged/hybrid units keep the target
+	# (they shoot it or tie it up by choice); with no alternative the melee unit keeps it too (contest
+	# is better than idle).
+	if AiShooting.profiles_in_range(_unit_weapons(unit), 0.0).is_empty() \
+			and melee_futile_against(unit, target_unit):
+		var alt := nearest_hurtable_enemy(unit)
+		if alt != null and alt != target_unit:
+			_rule_note(report, "%s: retargets %s — %s is beyond its melee (under %.1f expected wounds a charge)" % [
+				unit.get_name(), alt.get_name(), target_unit.get_name(), FUTILE_CHARGE_EV], true)
+			record_decision({"kind": "target", "unit": unit.get_name(),
+				"rule": "#321 futile-melee retarget: a pure melee unit never closes on a target under the futility floor while a hurtable enemy exists",
+				"candidates": [], "chosen": alt.get_name(), "why": "futile melee target",
+				"data": {"dropped": target_unit.get_name(), "floor_ev": FUTILE_CHARGE_EV}})
+			target_unit = alt
 	report["target"] = target_unit
 	# A commander-persisted target is a different reason — it must not inherit the stale tag.
 	report["target_acts_soon"] = acts_soon and target_unit == base_target
@@ -1435,13 +1499,22 @@ func _act(unit: GameUnit) -> Dictionary:
 	# move-and-shoot band is its RUSH distance, so the tree, the solver and the post-move gates all
 	# measure the same working reach.
 	var quick_shot: bool = unit.has_special_rule("Quick Shot") and RulesRegistry.unit_rule_active(unit, "Quick Shot")
+	# #321 rules-must-log: an in-range charge the futility floor refuses gets its own line — a unit
+	# standing next to an enemy and NOT charging must name why, or it reads as a stuck AI.
+	var charge_futile := melee_futile_against(unit, target_unit)
+	if charge_futile and charge_gap <= charge_band and not target_is_aircraft and not charge_capped:
+		_rule_note(report, "%s: no charge on %s — its melee cannot plausibly hurt it (under %.1f expected wounds)" % [
+			unit.get_name(), target_unit.get_name(), FUTILE_CHARGE_EV], true)
 	var ctx := {
 		"arch": archetype, "objective": has_obj, "in_way": has_obj and _enemy_in_way(centre, obj_pos),
 		"obj_in_advance": obj_dist <= advance + OBJECTIVE_CONTROL_IN,
 		"obj_in_rush": obj_dist <= rush + OBJECTIVE_CONTROL_IN,
 		# An Aircraft can't be charged (GF v3.5.1) — the tree must never see it "in charge range".
 		# Bug 22: nor a target only reachable through difficult terrain past the 6" cap.
-		"enemy_in_charge": charge_gap <= charge_band and not target_is_aircraft and not charge_capped,
+		# #321: nor a target the unit's melee cannot plausibly hurt — the charge would be a wasted
+		# activation walking into counter-strikes (the futility floor, rule-noted above).
+		"enemy_in_charge": charge_gap <= charge_band and not target_is_aircraft and not charge_capped \
+			and not charge_futile,
 		"shoot_after_advance": shoot_range > 0 and (enemy_dist - (rush if quick_shot else advance)) <= float(shoot_range),
 	}
 	var dec := AiDecision.decide_solo(ctx)
