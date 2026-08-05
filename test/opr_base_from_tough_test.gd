@@ -115,6 +115,51 @@ func test_fallback_leaves_normal_infantry() -> void:
 	assert_int(unit.base_size_round).is_equal(25)
 
 
+## NML-993 — a name that carries BOTH a walker keyword ("knight") and a vehicle keyword ("APC")
+## must classify as a VEHICLE, not a walker. Rationale: an APC (Armoured Personnel Carrier) is a
+## wide-track transport, not a tall biped; the walker ladder would leave the base way too small.
+## The exact community report: "knight brothers APC undersized" (Deviantee, 2026-08-05 discord).
+func test_fallback_knight_brothers_apc_is_vehicle_not_walker() -> void:
+	var unit := OPRApiClient.OPRUnit.new()
+	unit.name = "Knight Brothers APC"
+	unit.size = 1
+	unit.special_rules = ["Tough(6)"]
+	unit.base_size_round = 32
+	OPRApiClient._apply_tough_base_fallback(unit)
+	assert_bool(unit.base_is_oval).is_true()   # NOT a round walker
+	assert_int(unit.base_width_mm).is_equal(52)
+	assert_int(unit.base_depth_mm).is_equal(90)
+
+
+## Other ambiguous-name combinations — the "vehicle keyword wins" rule must be general, not a
+## one-off for the APC case.
+func test_fallback_vehicle_keyword_beats_walker_keyword() -> void:
+	for name in ["Knight-pattern Transport", "Sentinel Carrier", "Mech Buggy", "Exo Tank"]:
+		var unit := OPRApiClient.OPRUnit.new()
+		unit.name = name
+		unit.size = 1
+		unit.special_rules = ["Tough(9)"]
+		unit.base_size_round = 32
+		OPRApiClient._apply_tough_base_fallback(unit)
+		assert_bool(unit.base_is_oval).is_true()   # vehicle ladder at T9: 70x105
+		assert_int(unit.base_width_mm).is_equal(70)
+		assert_int(unit.base_depth_mm).is_equal(105)
+
+
+## Non-ambiguous walker names STAY walkers (regression guard — the new vehicle-first check must
+## not swallow legitimate walkers just because they share letters with a vehicle keyword).
+func test_fallback_pure_walker_still_walker() -> void:
+	for name in ["Assault Walker", "Battle Mech", "Iron Dreadnought"]:
+		var unit := OPRApiClient.OPRUnit.new()
+		unit.name = name
+		unit.size = 1
+		unit.special_rules = ["Tough(9)"]
+		unit.base_size_round = 32
+		OPRApiClient._apply_tough_base_fallback(unit)
+		assert_bool(unit.base_is_oval).is_false()
+		assert_int(unit.base_size_round).is_equal(60)   # walker ladder T9 → 60
+
+
 func test_usable_base_value() -> void:
 	# Army Forge sends "none" for models without a recommendation -> not usable.
 	assert_bool(OPRApiClient._is_usable_base_value("none")).is_false()
