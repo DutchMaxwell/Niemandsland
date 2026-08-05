@@ -402,6 +402,34 @@ static func mods_for(records: Array, role: String, melee: bool, source: String =
 	return out
 
 
+## NML-987 — grant name → the attack-path PROFILE FLAG the shooter-seam bridge may set for it.
+## Only rules whose flag is actually read after target commitment belong here (relentless/furious/
+## rending/surge in the extra-hits pass, bane/shred in the save-wound path, unstoppable in the
+## negative-modifier clamp — all read from the per-volley profile in main.gd). REFUSED on purpose:
+##   Quick Shot / Slayer / Rapid Charge / Unwieldy / Piercing Fighter / Unpredictable * — unit-level
+##     rules with their own read paths; a flag would silently do nothing.
+##   Indirect — read at TARGETING time (sighting/cover), before the volley's target is committed;
+##     bridging it per-target is a chicken-egg and needs its own seam.
+## Scope suffixes ("Bane in Melee", "X when Shooting") name the same rule and map identically —
+## the flag's own reader gates melee/shooting anyway.
+const BRIDGE_FLAGS := {
+	"Relentless": "relentless", "Furious": "furious", "Rending": "rending",
+	"Surge": "surge", "Bane": "bane", "Shred": "shred", "Unstoppable": "unstoppable",
+}
+
+
+## The profile flag the shooter-seam bridge may set for a granted rule ("" = not bridgeable).
+static func bridge_flag_for(grant: String) -> String:
+	var g := grant.strip_edges()
+	if g.is_empty():
+		return ""
+	for base in BRIDGE_FLAGS:
+		var b := str(base)
+		if g == b or g.begins_with(b + " in ") or g.begins_with(b + " when "):
+			return str(BRIDGE_FLAGS[base])
+	return ""
+
+
 ## NML-987 (rules-must-log follow-up) — the SPELL name that granted a given rule to attackers on
 ## this target (first match in placement order, case-insensitive on the rule side to survive
 ## "Relentless"/"relentless" callers). Empty string if the target does not grant the rule that

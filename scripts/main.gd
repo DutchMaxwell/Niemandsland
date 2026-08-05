@@ -16156,10 +16156,11 @@ func _solo_apply_utility_buffs(unit: GameUnit) -> void:
 ## flags: a unit granted Relentless/Furious/Rending fights as if its weapons carried the rule —
 ## the hit/save readers are profile-flag based, the overlay is unit-level. No double counting
 ## (bridged only when the flag is not already set); the readers' own gates (charging, range,
-## unmodified 6s) still decide whether anything fires. NML-987: when a `target` is given, the
-## same three flags also fold in from that target's `beneficiary: "attackers"` spell records
-## (Calculated Foresight → Relentless, Unpredictable Fighter, Unstoppable Aura, ...) — the
-## bridge is the seam that lets the shooter/charger see the enemy's attackers-side grants.
+## unmodified 6s) still decide whether anything fires. NML-987: when a `target` is given, every
+## flag-shaped rule (AiSpell.BRIDGE_FLAGS: relentless/furious/rending/surge/bane/shred/
+## unstoppable) also folds in from that target's `beneficiary: "attackers"` spell records
+## (Calculated Foresight → Relentless, Unstoppable Aura, ...) — the bridge is the seam that
+## lets the shooter/charger see the enemy's attackers-side grants.
 func _solo_bridge_granted_flags(unit: GameUnit, profile: Dictionary, target: GameUnit = null) -> Dictionary:
 	if unit == null:
 		return profile
@@ -16173,8 +16174,8 @@ func _solo_bridge_granted_flags(unit: GameUnit, profile: Dictionary, target: Gam
 	if target != null and _solo_spell_mods.has(target.get_instance_id()):
 		var records := _solo_spell_mods[target.get_instance_id()] as Array
 		for rule_name in AiSpell.attacker_grants_from_target(records):
-			var flag := str(rule_name).to_lower()
-			if flag in ["relentless", "furious", "rending"] and not bool(out.get(flag, false)):
+			var flag := AiSpell.bridge_flag_for(str(rule_name))
+			if not flag.is_empty() and not bool(out.get(flag, false)):
 				if out == profile:
 					out = profile.duplicate()
 				out[flag] = true

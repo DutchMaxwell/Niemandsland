@@ -71,6 +71,29 @@ func test_attacker_grant_source_names_the_spell_that_placed_the_rule() -> void:
 		.is_equal("Calculated Foresight")
 
 
+func test_bridge_flag_covers_every_flag_shaped_family_member() -> void:
+	# The full `beneficiary: "attackers"` family sweep (2026-08-05) found these grant names with a
+	# profile-flag read in the attack path. Each must map to its flag; scope suffixes ("Bane in
+	# Melee", "Indirect when Shooting") name the SAME rule and must map identically.
+	assert_str(AiSpell.bridge_flag_for("Relentless")).is_equal("relentless")
+	assert_str(AiSpell.bridge_flag_for("Furious")).is_equal("furious")
+	assert_str(AiSpell.bridge_flag_for("Rending")).is_equal("rending")
+	assert_str(AiSpell.bridge_flag_for("Surge")).is_equal("surge")
+	assert_str(AiSpell.bridge_flag_for("Bane")).is_equal("bane")
+	assert_str(AiSpell.bridge_flag_for("Bane in Melee")).is_equal("bane")
+	assert_str(AiSpell.bridge_flag_for("Shred")).is_equal("shred")
+	assert_str(AiSpell.bridge_flag_for("Unstoppable")).is_equal("unstoppable")
+
+
+func test_bridge_flag_refuses_rules_with_other_read_paths() -> void:
+	# These family members are NOT profile flags in the attack path (unit-level rules, targeting-
+	# time reads). Bridging them as flags would silently do nothing — the honest answer is "":
+	# they stay visibly unfixed until their own seam lands (follow-up issue).
+	for name in ["Quick Shot", "Slayer", "Rapid Charge", "Unwieldy", "Piercing Fighter",
+			"Unpredictable Fighter", "Unpredictable Shooter", "Indirect", "Indirect when Shooting", ""]:
+		assert_str(AiSpell.bridge_flag_for(name)).is_equal("")
+
+
 func test_attacker_grant_source_returns_empty_when_no_match() -> void:
 	# No matching attackers-side grant → empty string; the caller then omits the origin tag and
 	# logs the plain Relentless line. Also: a target-beneficiary grant with the SAME rule name
