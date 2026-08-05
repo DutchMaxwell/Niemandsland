@@ -524,6 +524,11 @@ static func _tough_from_rules(rules: Array) -> int:
 
 ## Keyword heuristics for sizing a bracketless big single model when Army Forge gives no base.
 ## Matched against the lower-cased unit name. Curated — extend per faction as needed.
+## NML-993 — VEHICLE_KEYWORDS are checked FIRST because vehicle-heavy names ("APC", "tank",
+## "transport", ...) commonly collide with walker-shaped words ("knight-pattern APC", "sentinel
+## carrier"). Without the priority the walker ladder would size a wide-track transport like a
+## tall biped — the community-reported "knight brothers APC undersized" bug.
+const VEHICLE_KEYWORDS: Array[String] = ["apc", "tank", "transport", "carrier", "hover", "chariot", "buggy"]
 const WALKER_KEYWORDS: Array[String] = ["walker", "mech", "dreadnought", "sentinel", "war-suit", "warsuit", "exo", "knight", "suit"]
 const ARTILLERY_KEYWORDS: Array[String] = ["artillery", "cannon", "mortar", "howitzer", "battery", "ballista", "catapult", "bombard"]
 const MONSTER_KEYWORDS: Array[String] = ["dragon", "beast", "monster", "wyrm", "behemoth", "daemon", "demon", "hive", "kraken", "hydra", "giant", "ogre", "troll"]
@@ -579,6 +584,11 @@ static func _classify_big_model(unit: OPRUnit, tough: int) -> String:
 	if unit.size > 1:
 		return ""
 	var n := unit.name.to_lower()
+	# NML-993 — vehicle keywords WIN over walker keywords for ambiguous names.
+	# A "Knight Brothers APC" is a wide-track transport, not a knight-walker.
+	for kw in VEHICLE_KEYWORDS:
+		if kw in n:
+			return "vehicle"
 	for kw in WALKER_KEYWORDS:
 		if kw in n:
 			return "walker"
@@ -597,11 +607,19 @@ static func _classify_big_model(unit: OPRUnit, tough: int) -> String:
 ## Tough) and assign an OPR-standard base — ROUND for walkers / monsters / infantry, OVAL for
 ## vehicles / artillery. Tough drives the SIZE WITHIN a type, not the type itself (Tough is
 ## durability, not footprint). Never shrinks below an existing larger base.
+##
+## NML-994 — every fallback classification prints its decision so future "unit X is
+## oversized/undersized" reports can name the classifier's actual verdict instead of guessing.
+## The line goes to push_warning (not print) so it's visible in the editor console without
+## drowning the game log. Skipped when the fallback is a no-op (small infantry / heroes).
 static func _apply_tough_base_fallback(unit: OPRUnit) -> void:
 	var tough := _tough_from_rules(unit.special_rules)
 	if tough < 3:
 		return  # normal infantry / heroes — keep the default base
-	match _classify_big_model(unit, tough):
+	var verdict := _classify_big_model(unit, tough)
+	push_warning("OPRBaseFallback: '%s' (size=%d, tough=%d) → %s" % [
+		unit.name, unit.size, tough, (verdict if not verdict.is_empty() else "large-infantry")])
+	match verdict:
 		"vehicle":
 			var v := _vehicle_base_mm(tough)
 			_set_oval_base(unit, int(v[0]), int(v[1]))
