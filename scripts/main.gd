@@ -4193,9 +4193,16 @@ func _solo_hits(faces: Array, to_hit: int, profile: Dictionary, dist_in: float, 
 		var rel_bonus: int = AiCombatMath.relentless_bonus_hits(faces, dist_in)
 		if rel_bonus > 0 and battle_log != null:
 			# Rules-must-log (wave A): the bonus used to land silently — a "1 hit" line that reads
-			# "2 hits" without explanation looks broken, not Relentless.
-			battle_log.log_event(BattleLog.Category.COMBAT, "Relentless: +%d hit%s (unmodified 6s)" % [
-				rel_bonus, ("" if rel_bonus == 1 else "s")], true)
+			# "2 hits" without explanation looks broken, not Relentless. NML-987 origin tag: when the
+			# Relentless flag came in from the target's attackers-side spell grant (Foresight, ...),
+			# the log line names the source spell + the target so the flip is not orphaned by a
+			# silent consume of the token elsewhere.
+			var origin_spell := str(profile.get("_relentless_from_spell", ""))
+			var origin_tag := ""
+			if not origin_spell.is_empty() and target != null:
+				origin_tag = " — from %s on %s" % [origin_spell, target.get_name()]
+			battle_log.log_event(BattleLog.Category.COMBAT, "Relentless: +%d hit%s (unmodified 6s)%s" % [
+				rel_bonus, ("" if rel_bonus == 1 else "s"), origin_tag], true)
 			_solo_rule_float(target, "Relentless +%d" % rel_bonus)
 		hits += rel_bonus
 	if bool(profile.get("surge", false)):
@@ -16171,6 +16178,7 @@ func _solo_bridge_granted_flags(unit: GameUnit, profile: Dictionary, target: Gam
 				if out == profile:
 					out = profile.duplicate()
 				out[flag] = true
+				out["_" + flag + "_from_spell"] = AiSpell.attacker_grant_source(records, rule_name)
 	return out
 
 
