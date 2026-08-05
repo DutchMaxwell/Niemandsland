@@ -259,11 +259,12 @@ func _run() -> void:
 			break
 		battle_log.on_round_advanced(round_no)
 		printerr("[SELFPLAY] ===== ROUND %d =====" % round_no)
-		# Ambush arrivals at the start of any round after the first (both sides).
+		# Ambush arrivals at the start of any round after the first — the game's own ALTERNATING
+		# placement (B12, GF v3.5.1 p.13) replaced the old per-slot _solo_arrive_ambush; the stale
+		# call made this await hang the whole harness. Both slots are AI here, so the per-unit
+		# human prompt never fires headless.
 		if round_no > 1:
-			for slot in [1, 2]:
-				_set_sides(solo, slot)
-				await main._solo_arrive_ambush()
+			await main._solo_alternate_ambush_arrivals(round_no)
 		if round_no == 2:
 			await _screenshot("%s_round2.png" % _out_name)
 		await _play_round(main, solo, round_no)
