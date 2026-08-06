@@ -317,3 +317,53 @@ func _last_record(solo: SoloController, kind: String) -> Dictionary:
 		if str(rec.get("kind", "")) == kind:
 			return rec
 	return {}
+
+
+# === #320 — a HOLDING caster surfaces its reason as a rule note (battle log), not only telemetry ===
+# Community playtest 2026-08-05: a full 4-round game with ZERO AI cast lines reads as "the AI
+# cannot cast" — whether the truth was "no caster in the list", "no tokens", or "no valid target".
+# The hold note makes the three cases distinguishable from a real dead branch in every future log.
+
+
+func test_holding_caster_with_no_tokens_writes_a_rule_note() -> void:
+	var caster := _unit(2, [Vector3.ZERO], "Mage", ["Caster(2)", "Hero", "Tough(3)"])
+	caster.initialize_caster_points()
+	caster.casts_current = 0   # manually drained — the silent hold path of the community game
+	var enemy := _unit(1, [Vector3(8.0 * IN2M, 0, 0)], "Spears")
+	var solo := _controller([caster, enemy])
+	var report := {"rule_notes": []}
+	assert_array(solo._plan_casts(caster, report)).is_empty()
+	var texts := PackedStringArray()
+	for n in report["rule_notes"]:
+		texts.append(str((n as Dictionary).get("text", "")))
+	assert_str("\n".join(texts)).contains("Mage holds its spell tokens")
+	assert_str("\n".join(texts)).contains("no spell tokens")
+
+
+func test_holding_caster_without_spell_data_writes_a_rule_note() -> void:
+	# A faction with no committed spell map (hold case 2): the note names the manual-casting gap.
+	var caster := _unit(2, [Vector3.ZERO], "Shaman", ["Caster(1)", "Hero", "Tough(3)"],
+		"gf", "no_such_faction")
+	caster.initialize_caster_points()
+	var enemy := _unit(1, [Vector3(8.0 * IN2M, 0, 0)], "Spears")
+	var solo := _controller([caster, enemy])
+	var report := {"rule_notes": []}
+	assert_array(solo._plan_casts(caster, report)).is_empty()
+	var texts := PackedStringArray()
+	for n in report["rule_notes"]:
+		texts.append(str((n as Dictionary).get("text", "")))
+	assert_str("\n".join(texts)).contains("Shaman holds its spell tokens")
+	assert_str("\n".join(texts)).contains("no spell data")
+
+
+func test_casting_caster_writes_no_hold_note() -> void:
+	# Spam guard: a caster that DOES cast must not also claim to hold.
+	var caster := _unit(2, [Vector3.ZERO], "Mage", ["Caster(2)", "Hero", "Tough(3)"])
+	caster.initialize_caster_points()
+	var enemy := _unit(1, [Vector3(8.0 * IN2M, 0, 0)], "Spears")
+	var solo := _controller([caster, enemy])
+	solo._rng.seed = 42
+	var report := {"rule_notes": []}
+	assert_array(solo._plan_casts(caster, report)).is_not_empty()
+	for n in report["rule_notes"]:
+		assert_str(str((n as Dictionary).get("text", ""))).not_contains("holds its spell tokens")

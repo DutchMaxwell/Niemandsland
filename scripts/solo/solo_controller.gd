@@ -1782,7 +1782,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	# Wave 6 — Caster(X): the official Solo v3.5.0 procedure casts AFTER moving, BEFORE attacking, so
 	# the cast plan is drawn from the post-move geometry here; main resolves the cast rolls on the real
 	# dice tray before the shooting/melee it already resolves (spells are ADDITIONAL to the attack).
-	var casts := _plan_casts(unit)
+	var casts := _plan_casts(unit, report)
 	if not casts.is_empty():
 		report["casts"] = casts
 	_book_attack_claims(unit, report)
@@ -1853,7 +1853,7 @@ func _act_regroup(unit: GameUnit, report: Dictionary) -> Dictionary:
 		if retgt != null:
 			report["target"] = retgt
 			report["can_shoot"] = true
-	var casts := _plan_casts(unit)
+	var casts := _plan_casts(unit, report)
 	if not casts.is_empty():
 		report["casts"] = casts
 	return report
@@ -1897,7 +1897,7 @@ func _act_aircraft(unit: GameUnit, report: Dictionary) -> Dictionary:
 	# decided target may be out of arc — fire on whatever it CAN now reach.
 	if not bool(report["can_shoot"]) and shoot_range > 0 and best_shoot_target_now(unit) != null:
 		report["can_shoot"] = true
-	var casts := _plan_casts(unit)
+	var casts := _plan_casts(unit, report)
 	if not casts.is_empty():
 		report["casts"] = casts
 	_book_attack_claims(unit, report)
@@ -2621,7 +2621,7 @@ var auto_interference: bool = false
 ## the officially-open choices (which target, boost/interference tokens). Spell tokens are SPENT here
 ## (the official cost is paid on the ATTEMPT, before rolling); main rolls the 4+ cast die on the real
 ## tray and applies the effect. Every decision is recorded (kind "cast" / "cast_skip").
-func _plan_casts(unit: GameUnit) -> Array:
+func _plan_casts(unit: GameUnit, report: Dictionary = {}) -> Array:
 	var casts: Array = []
 	if army_manager == null:
 		return casts
@@ -2634,18 +2634,26 @@ func _plan_casts(unit: GameUnit) -> Array:
 			continue
 		if not RulesRegistry.unit_rule_active(member, "Caster"):
 			continue   # system-scoped gate: the rule only fires where the book fields it
-		var plan := _plan_member_cast(unit, member)
+		var hold: Array = []
+		var plan := _plan_member_cast(unit, member, hold)
 		if not plan.is_empty():
 			casts.append(plan)
+		elif not hold.is_empty() and not report.is_empty():
+			# #320 rules-must-log — a caster that HOLDS said so only in dev telemetry; a whole game
+			# without one AI cast line reads as "the AI can't cast", not as N legitimate holds.
+			_rule_note(report, "%s holds its spell tokens — %s" % [member.get_name(), str(hold[0])], true)
 	return casts
 
 
 ## The one cast attempt of a single caster member: D3+X over the faction's BOOK-ORDERED spell list,
 ## cycle to the first valid spell (official); target + token economy filled by EV. Returns {} when
 ## the caster holds (no valid spell / no spell data), with the decision recorded either way.
-func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
+## #320: `hold_out` (optional) receives ONE human-readable reason string on every hold path, so the
+## caller can surface the decision in the battle log — a silent hold reads as a broken cast layer.
+func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -> Dictionary:
 	var tokens: int = member.casts_current
 	if tokens <= 0:
+		hold_out.append("no spell tokens left this round")
 		return {}
 	var spells := SpellsRegistry.spells_for_unit(member)
 	if spells.is_empty():
@@ -2656,6 +2664,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 			"candidates": [], "chosen": "hold tokens", "why": "no spell map",
 			"data": {"tokens": tokens, "system": RulesRegistry.system_of_unit(member),
 				"faction": RulesRegistry.faction_of_unit(member)}})
+		hold_out.append("no spell data for this faction — casting stays manual")
 		return {}
 	var caster_x: int = member.get_caster_value()
 	var d3: int = _rng.randi_range(1, 3)
@@ -2722,6 +2731,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit) -> Dictionary:
 			"rule": "Solo v3.5.0 'Caster': D3+X pick, cycle-to-valid — no valid spell, don't cast",
 			"candidates": candidates_rec, "chosen": "hold tokens", "why": "no castable spell",
 			"data": {"d3": d3, "caster_x": caster_x, "tokens": tokens}})
+		hold_out.append("no castable spell (out of range, unaffordable, or not yet modeled)")
 		return {}
 	# — Token economy (officially open — the EV heuristics fill it): boost from OTHER friendly casters
 	#   within 18" LoS (+1 each), gated by the difficulty's spend_boosts (default sharp AI spends). —
