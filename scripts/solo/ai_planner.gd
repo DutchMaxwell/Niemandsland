@@ -11,6 +11,68 @@ extends RefCounted
 const RETREAT_GOAL_IN := 100.0   # far marker; the band clamp turns it into one move away
 
 
+## The 1-ply pick (plan D5): roll every candidate of every un-activated unit
+## of `player` through BattleSim.resolve, score the outcome in mission
+## currency, and return the best (unit, action) pair — WHICH unit activates
+## is part of the pick. Pure and deterministic: dict order is capture order,
+## ties keep the first seen. A shaken unit only gets its recovery hold.
+static func plan(state: Dictionary, player: int) -> Dictionary:
+	var base := AiMissionEval.score(state, player)
+	var best := {}
+	var runner := {}
+	for key in state["units"]:
+		var su: Dictionary = state["units"][key]
+		if int(su["player"]) != player or bool(su["activated"]) or int(su["alive"]) <= 0:
+			continue
+		var cands: Array = [{"unit": key, "kind": AiDecision.Action.HOLD}] \
+			if bool(su.get("shaken", false)) else candidates(state, str(key))
+		for action in cands:
+			var s := AiMissionEval.score(BattleSim.resolve(state, action), player)
+			var cand := {"unit_key": str(key), "action": action, "score": s}
+			if best.is_empty() or s > float(best["score"]):
+				runner = best
+				best = cand
+			elif runner.is_empty() or s > float(runner["score"]):
+				runner = cand
+	if best.is_empty():
+		return {"used": false}
+	return {"used": true, "unit_key": best["unit_key"], "action": best["action"],
+		"intent": _intent(state, best, runner, base),
+		"expectation": {"before": base, "after": float(best["score"])},
+		"runner_up": runner}
+
+
+static func _intent(state: Dictionary, best: Dictionary, runner: Dictionary,
+		base: float) -> String:
+	var txt := "%s: %s — win %.2f → %.2f" % [_name_of(state, str(best["unit_key"])),
+		_describe(state, best["action"]), base, float(best["score"])]
+	if not runner.is_empty():
+		txt += "; over %s: %s (%.2f)" % [_name_of(state, str(runner["unit_key"])),
+			_describe(state, runner["action"]), float(runner["score"])]
+	return txt
+
+
+static func _describe(state: Dictionary, action: Dictionary) -> String:
+	var kind := int(action.get("kind", AiDecision.Action.HOLD))
+	if kind == AiDecision.Action.CHARGE:
+		return "charge %s" % _name_of(state, str(action["charge"]))
+	if kind == AiDecision.Action.RUSH:
+		var obs: Array = state["objectives"]
+		for i in range(obs.size()):
+			if (obs[i] as Dictionary)["pos"] == action.get("dest"):
+				return "rush objective %d" % (i + 1)
+		return "rush"
+	if kind == AiDecision.Action.ADVANCE:
+		return "fall back"
+	if action.has("shoot"):
+		return "hold and shoot %s" % _name_of(state, str(action["shoot"]))
+	return "hold"
+
+
+static func _name_of(state: Dictionary, key: String) -> String:
+	return ((state["units"][key] as Dictionary)["unit"] as GameUnit).get_name()
+
+
 static func candidates(state: Dictionary, key: String) -> Array:
 	var su: Dictionary = state["units"][key]
 	var out: Array = [{"unit": key, "kind": AiDecision.Action.HOLD}]
