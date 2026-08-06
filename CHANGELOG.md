@@ -4,6 +4,41 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [0.3.12.0-alpha] — 2026-08-06
+
+### Added
+- **Line of sight respects height now (Elevation, Phase A).** Every sight question — can this
+  unit see that one, is it in cover, what does the sight fan show — flows through one volumetric
+  check that knows how tall things are, instead of several flat-map approximations that could
+  disagree with each other. Hills, ruins and walls block by their actual shape, and the AI and
+  the human previews read the same truth. (NML-972; closes NML-968)
+
+### Fixed
+- **The AI no longer charges what it cannot hurt.** Community playtest, three rounds in a row:
+  fist-swinging infantry rushed a Tough(15), 2+-save battle tank for near-zero expected wounds a
+  charge, wasting every activation. Before charging or chasing, the AI now compares its expected
+  melee wounds against a floor; a hopeless target is refused, and a pure melee unit walks toward
+  the nearest enemy it CAN hurt instead — both decisions say so in the battle log. Missing melee
+  data proves nothing and never triggers the gate. (#321)
+- **The AI commits to its movement targets.** Units no longer flip-flop between two similar
+  targets round after round, bleeding walking distance: once chosen, a target is kept unless a
+  new one is clearly better (dies, becomes unreachable, or beats the old one by a real margin) —
+  and the hold is noted in the battle log. (#319)
+- **A holding AI caster says why.** When the AI's caster does nothing in its activation — no
+  tokens yet, nothing castable in reach, no spell data — that silence now surfaces as a battle-log
+  note instead of looking like a dead feature. (The silent community game had a simpler cause:
+  that bundled AI list contains no caster at all — tracked as #328.) (#320)
+- **Attacker-side spell buffs finally reach the attacker.** Calculated Foresight's token was
+  consumed with a clean log line, but the promised re-rolls never happened: the grant was read on
+  the wrong side of the shot. Buffs that aid the ATTACKER now ride along into the attack they
+  boost. (NML-987)
+- **Vehicle silhouettes win the base-size guess again.** A unit whose keywords said both
+  "vehicle" and "walker" fell into the walker branch and got a man-sized base; vehicle keywords
+  outrank walker keywords in the fallback now. (NML-993)
+- **Multiplayer says out loud that it is manual play.** A persistent status line during
+  deployment and a toast at the flip make clear that multiplayer resolves by hand — dice,
+  measuring and honesty between players — so nobody waits for an automation that is not there. (#322)
+
 ## [0.3.11.1-alpha] — 2026-08-04
 
 ### Fixed
