@@ -1185,6 +1185,49 @@ static func _rule_note(report: Dictionary, text: String, travels: bool) -> void:
 	(report["rule_notes"] as Array).append({"text": text, "travels": travels})
 
 
+## #319 — movement-commitment hysteresis: a NON-driven unit (the commander only persists targets
+## for close-and-fight roles) re-picked "the nearest enemy" fresh every activation, so units
+## oscillated between similar-distance targets round after round (community log: Iron Veterans
+## rushing a different thing five activations straight). The committed target is kept unless the
+## fresh pick is MEANINGFULLY closer — under this factor of the committed target's distance.
+const STICKY_SWITCH_FACTOR := 0.8
+
+## unit_id -> the unit_id of the movement target committed at its last activation.
+var _move_commitments: Dictionary = {}
+
+
+## The commitment filter: keep last activation's movement target over a same-ish-distance fresh
+## pick; release it when it died, left the table, or the fresh pick is meaningfully closer. The
+## caller stores the FINAL pick (after the futility retarget) back into the commitment.
+func _sticky_move_target(unit: GameUnit, new_target: GameUnit, report: Dictionary) -> GameUnit:
+	if new_target == null:
+		_move_commitments.erase(unit.unit_id)
+		return null
+	var prev_id := str(_move_commitments.get(unit.unit_id, ""))
+	if prev_id == "" or prev_id == new_target.unit_id or army_manager == null:
+		return new_target
+	var prev: GameUnit = null
+	for h in army_manager.get_game_units_for_player(enemy_slot_of(unit)):
+		var hu := h as GameUnit
+		if hu != null and hu.unit_id == prev_id:
+			prev = hu
+			break
+	if prev == null or prev.is_destroyed() or unit_in_reserve(prev):
+		return new_target   # commitment released — the target is gone
+	var from := unit_centre(unit)
+	var d_new := MoveIntent.distance_inches(from, unit_centre(new_target))
+	var d_prev := MoveIntent.distance_inches(from, unit_centre(prev))
+	if d_new < d_prev * STICKY_SWITCH_FACTOR:
+		return new_target   # meaningfully closer — a real reason to switch
+	_rule_note(report, "%s: stays on %s — %s is not meaningfully closer (%.1f\" vs %.1f\")" % [
+		unit.get_name(), prev.get_name(), new_target.get_name(), d_new, d_prev], true)
+	record_decision({"kind": "target", "unit": unit.get_name(),
+		"rule": "#319 commitment hysteresis: keep the committed movement target unless the fresh nearest is meaningfully closer (under %.0f%% of the committed distance)" % (STICKY_SWITCH_FACTOR * 100.0),
+		"candidates": [], "chosen": prev.get_name(), "why": "committed target held",
+		"data": {"fresh": new_target.get_name(), "d_fresh_in": snappedf(d_new, 0.1), "d_committed_in": snappedf(d_prev, 0.1)}})
+	return prev
+
+
 ## #321 — the futility floor: a charge expected to deal fewer wounds than this is no plan, it is a
 ## wasted activation walking into counter-strikes (community log: Q6 melee vs a Tough-15 Def-2 tank,
 ## ~0.08 expected wounds a charge, rushed at for three rounds). Value in expected wounds; ordinary
@@ -1262,6 +1305,10 @@ func _act(unit: GameUnit) -> Dictionary:
 	# across rounds so the unit keeps closing on ONE enemy instead of re-chasing the momentary nearest (the
 	# idle monster). Returns the default target unchanged for the null-AI / non-driven roles (byte-identical).
 	target_unit = _commander_apply(unit, target_unit)
+	# #319 — commitment hysteresis AFTER the commander (driven roles carry their own persistence and
+	# come out unchanged: prev == chosen), BEFORE the futility retarget (a futile commitment must
+	# still be dropped). The FINAL pick is committed below, after every filter has spoken.
+	target_unit = _sticky_move_target(unit, target_unit, report)
 	# #321 — a PURE MELEE unit pointed at a target it cannot plausibly hurt (Q6 hands vs a Tough-15
 	# Def-2 tank: ~0.08 expected wounds a charge) walks rounds toward a fight it can never win. When a
 	# hurtable enemy exists, close on the nearest of THOSE instead. Ranged/hybrid units keep the target
@@ -1278,6 +1325,7 @@ func _act(unit: GameUnit) -> Dictionary:
 				"candidates": [], "chosen": alt.get_name(), "why": "futile melee target",
 				"data": {"dropped": target_unit.get_name(), "floor_ev": FUTILE_CHARGE_EV}})
 			target_unit = alt
+	_move_commitments[unit.unit_id] = target_unit.unit_id   # #319: commit the final pick
 	report["target"] = target_unit
 	# A commander-persisted target is a different reason — it must not inherit the stale tag.
 	report["target_acts_soon"] = acts_soon and target_unit == base_target
