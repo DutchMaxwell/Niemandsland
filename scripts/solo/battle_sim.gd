@@ -53,8 +53,78 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			delta = delta.normalized() * reach_m
 		for i in range(positions.size()):
 			positions[i] = (positions[i] as Vector3) + delta
+	var shoot_key := str(action.get("shoot", ""))
+	if shoot_key != "" and next["units"].has(shoot_key) \
+			and (kind == AiDecision.Action.HOLD or kind == AiDecision.Action.ADVANCE):
+		var tu: Dictionary = next["units"][shoot_key]
+		var d := dist_in(positions, tu["positions"])
+		_apply_expected_wounds(tu, AiEv.shoot_ev(_profiles_of(su, false, d),
+			_ctx_of(su), _ctx_of(tu), d))
+	var charge_key := str(action.get("charge", ""))
+	if kind == AiDecision.Action.CHARGE and charge_key != "" and next["units"].has(charge_key):
+		var tu: Dictionary = next["units"][charge_key]
+		if dist_in(positions, tu["positions"]) <= CONTACT_IN:
+			_apply_expected_wounds(tu, AiEv.melee_ev(_profiles_of(su, true),
+				_ctx_of(su), _ctx_of(tu), true))
+			su["fatigued"] = true
+			if int(tu["alive"]) > 0:   # survivors strike back, already survivor-scaled
+				_apply_expected_wounds(su, AiEv.melee_ev(_profiles_of(tu, true),
+					_ctx_of(tu), _ctx_of(su), false))
 	su["activated"] = true
 	return next
+
+
+const CONTACT_IN := 1.0
+
+## Nearest-model gap between two snapshot position arrays, inches.
+static func dist_in(a: Array, b: Array) -> float:
+	var best := INF
+	for pa in a:
+		for pb in b:
+			best = minf(best, ((pa as Vector3) - (pb as Vector3)).length())
+	return best / IN2M
+
+
+## AiEv context sourced from the SNAPSHOT's dynamic layer, not the live models.
+static func _ctx_of(su: Dictionary) -> Dictionary:
+	var ctx := AiEv.ctx_for(su["unit"], bool(su.get("in_cover", false)))
+	ctx["models"] = int(su["alive"])
+	return ctx
+
+
+## Weapon profiles with attacks scaled to the snapshot's survivors (dead models
+## stop attacking — mirrors effective_attacks in the real path). Limited-weapon
+## usage tracking is NOT modelled yet (v0; noted for the parity wave).
+static func _profiles_of(su: Dictionary, melee: bool, d := 0.0) -> Array:
+	var u: GameUnit = su["unit"]
+	var weapons: Array = []
+	if u.source_type == "opr" and u.source_data is OPRApiClient.OPRUnit:
+		weapons = (u.source_data as OPRApiClient.OPRUnit).weapons
+	var profiles: Array = AiShooting.melee_profiles(weapons) if melee \
+		else AiShooting.profiles_in_range(weapons, d)
+	var out: Array = []
+	for p in AiEv.stamp_sergeant(profiles, u):
+		var q := (p as Dictionary).duplicate()
+		q["attacks"] = SoloController.effective_attacks(int(q.get("attacks", 0)),
+			int(su["alive"]), u.models.size())
+		out.append(q)
+	return out
+
+
+## Expected unsaved wounds land on the snapshot: floored to whole wounds, then
+## filled model by model in array order (v0 — casualty_order parity is step 3).
+static func _apply_expected_wounds(tu: Dictionary, ev: float) -> void:
+	var left := int(floor(ev))
+	var wounds: Array = tu["wounds"]
+	var positions: Array = tu["positions"]
+	while left > 0 and not wounds.is_empty():
+		var take: int = mini(left, int(wounds[0]))
+		wounds[0] = int(wounds[0]) - take
+		left -= take
+		if int(wounds[0]) <= 0:
+			wounds.remove_at(0)
+			positions.remove_at(0)
+	tu["alive"] = positions.size()
 
 
 static func capture(army: OPRArmyManager, objectives_provider: Callable = Callable(),
