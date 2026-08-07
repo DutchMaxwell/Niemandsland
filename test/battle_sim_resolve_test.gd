@@ -151,6 +151,28 @@ func test_move_restamps_cover_from_the_terrain_probe() -> void:
 	assert_bool((frozen["units"]["Grunts"] as Dictionary)["in_cover"]).is_true()
 
 
+## Danger term: every living enemy replies once with its best-EV shot. Rifle
+## Q4 vs Def4 at 12": 4 * 0.5 * 0.5 = 1.0 expected wound on the open target;
+## the covered twin (save 3+) is only worth 0.67, so the open one is picked.
+## Blocking the open target's sight line shifts the reply to the covered one;
+## blind to both = no threat at all.
+func test_reply_threat_picks_best_visible_target() -> void:
+	var enemy := _armed(1, [Vector3.ZERO], "Enemy", [{"name": "Rifle", "range": 24}])
+	var open := _armed(2, [Vector3(12.0 * IN2M, 0, 0)], "Open", [{"name": "CCW", "range": 0}])
+	var covered := _armed(2, [Vector3(0, 0, 12.0 * IN2M)], "Covered", [{"name": "CCW", "range": 0}])
+	var state := _capture([enemy, open, covered])
+	(state["units"]["Covered"] as Dictionary)["in_cover"] = true
+	var threat := BattleSim.reply_threat(state, 2)
+	assert_that(threat.keys()).is_equal(["Open"])
+	assert_float(threat["Open"]).is_equal_approx(1.0, 0.001)
+	(state["units"]["Enemy"] as Dictionary)["los"] = {"Open": false, "Covered": true}
+	threat = BattleSim.reply_threat(state, 2)
+	assert_that(threat.keys()).is_equal(["Covered"])
+	assert_float(threat["Covered"]).is_equal_approx(2.0 / 3.0, 0.001)
+	(state["units"]["Enemy"] as Dictionary)["los"] = {"Open": false, "Covered": false}
+	assert_that(BattleSim.reply_threat(state, 2)).is_equal({})
+
+
 ## Charge into Tough(3): 1.0 expected wound drains the pool (3 -> 2), no kill.
 ## The survivor strikes back with the same fists -> the 1W charger dies; the
 ## charge marks the actor fatigued on the clone.

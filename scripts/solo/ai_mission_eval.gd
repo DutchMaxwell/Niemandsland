@@ -11,22 +11,27 @@ extends RefCounted
 const DISCOUNT := 0.5   # presence halves per future round still needed to arrive
 
 
-static func score(state: Dictionary, player: int) -> float:
+## `incoming` (danger term): my_unit_key -> expected reply wounds
+## (BattleSim.reply_threat); each mapped unit projects with that strength
+## already shot off. Empty map = pre-danger behaviour, byte-identical.
+static func score(state: Dictionary, player: int, incoming: Dictionary = {}) -> float:
 	var objectives: Array = state["objectives"]
 	if objectives.is_empty():
 		return 0.5
 	var total := 0.0
 	for o in objectives:
-		total += _objective_p(state, o as Dictionary, player)
+		total += _objective_p(state, o as Dictionary, player, incoming)
 	return total / objectives.size()
 
 
-static func _objective_p(state: Dictionary, obj: Dictionary, player: int) -> float:
+static func _objective_p(state: Dictionary, obj: Dictionary, player: int,
+		incoming: Dictionary = {}) -> float:
 	var mine := 0.0
 	var theirs := 0.0
 	for key in state["units"]:
 		var su: Dictionary = state["units"][key]
-		var presence := _presence(state, su, obj["pos"] as Vector3)
+		var presence := _presence(state, su, obj["pos"] as Vector3,
+			float(incoming.get(str(key), 0.0)))
 		if int(su["player"]) == player:
 			mine += presence
 		else:
@@ -43,7 +48,8 @@ static func _objective_p(state: Dictionary, obj: Dictionary, player: int) -> flo
 ## Dead units project nothing; a shaken unit pays one recovery activation
 ## first (it can neither seize nor contest until it idles — same rule the
 ## seize verdict applies today, read as a projection).
-static func _presence(state: Dictionary, su: Dictionary, obj_pos: Vector3) -> float:
+static func _presence(state: Dictionary, su: Dictionary, obj_pos: Vector3,
+		threat := 0.0) -> float:
 	if int(su["alive"]) <= 0:
 		return 0.0
 	var d := INF
@@ -63,4 +69,4 @@ static func _presence(state: Dictionary, su: Dictionary, obj_pos: Vector3) -> fl
 	var strength := 0.0
 	for w in su["wounds"]:
 		strength += float(w)
-	return strength * pow(DISCOUNT, needed)
+	return maxf(strength - threat, 0.0) * pow(DISCOUNT, needed)

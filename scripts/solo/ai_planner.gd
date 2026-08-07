@@ -17,7 +17,7 @@ const RETREAT_GOAL_IN := 100.0   # far marker; the band clamp turns it into one 
 ## is part of the pick. Pure and deterministic: dict order is capture order,
 ## ties keep the first seen. A shaken unit only gets its recovery hold.
 static func plan(state: Dictionary, player: int) -> Dictionary:
-	var base := AiMissionEval.score(state, player)
+	var base := AiMissionEval.score(state, player, BattleSim.reply_threat(state, player))
 	var best := {}
 	var runner := {}
 	for key in state["units"]:
@@ -27,7 +27,8 @@ static func plan(state: Dictionary, player: int) -> Dictionary:
 		var cands: Array = [{"unit": key, "kind": AiDecision.Action.HOLD}] \
 			if bool(su.get("shaken", false)) else candidates(state, str(key))
 		for action in cands:
-			var s := AiMissionEval.score(BattleSim.resolve(state, action), player)
+			var next := BattleSim.resolve(state, action)
+			var s := AiMissionEval.score(next, player, BattleSim.reply_threat(next, player))
 			var cand := {"unit_key": str(key), "action": action, "score": s}
 			if best.is_empty() or s > float(best["score"]):
 				runner = best

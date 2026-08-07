@@ -80,6 +80,22 @@ func test_shaken_holder_pays_the_recovery_round() -> void:
 	assert_float(AiMissionEval.score(state, 1)).is_equal_approx(0.5, 0.0001)
 
 
+## Danger term: expected reply wounds shrink a unit's projected hold strength
+## (floored at 0); an empty map is byte-identical to the pre-danger score.
+func test_incoming_threat_discounts_presence_and_floors_at_zero() -> void:
+	var state := _state([
+		_unit(1, [Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)], "Holder"),
+		_unit(2, [Vector3(8.0 * IN2M, 0, 0), Vector3(9.0 * IN2M, 0, 0)], "Approacher"),
+	], [Vector3.ZERO], [0])
+	var clean := AiMissionEval.score(state, 1)
+	assert_float(AiMissionEval.score(state, 1, {})).is_equal(clean)
+	var hurt := AiMissionEval.score(state, 1, {"Holder": 1.0})
+	assert_float(hurt).is_less(clean)
+	# threat >= strength: the holder projects nothing; only the approacher is left
+	assert_float(AiMissionEval.score(state, 1, {"Holder": 99.0})) \
+		.is_equal_approx(0.0, 0.0001)
+
+
 func test_no_objectives_is_even() -> void:
 	var state := _state([_unit(1, [Vector3.ZERO], "Solo")], [], [])
 	assert_float(AiMissionEval.score(state, 1)).is_equal_approx(0.5, 0.0001)

@@ -126,6 +126,33 @@ static func _profiles_of(su: Dictionary, melee: bool, d := 0.0) -> Array:
 	return out
 
 
+## Expected wounds the enemy's shooting REPLY takes off `player`'s units:
+## every living enemy activates once and shoots its best-EV visible target.
+## Returns my_unit_key -> expected incoming wounds. V0 simplifications,
+## documented: shooting only (no charge reply), capture-time sight lines,
+## already-activated enemies still count (they reply next round).
+static func reply_threat(state: Dictionary, player: int) -> Dictionary:
+	var incoming := {}
+	for ek in state["units"]:
+		var eu: Dictionary = state["units"][ek]
+		if int(eu["player"]) == player or int(eu["alive"]) <= 0:
+			continue
+		var best_key := ""
+		var best_ev := 0.0
+		for mk in state["units"]:
+			var mu: Dictionary = state["units"][mk]
+			if int(mu["player"]) != player or int(mu["alive"]) <= 0 or not sees(eu, str(mk)):
+				continue
+			var d := dist_in(eu["positions"], mu["positions"])
+			var ev := AiEv.shoot_ev(_profiles_of(eu, false, d), _ctx_of(eu), _ctx_of(mu), d)
+			if ev > best_ev:
+				best_ev = ev
+				best_key = str(mk)
+		if best_key != "":
+			incoming[best_key] = float(incoming.get(best_key, 0.0)) + best_ev
+	return incoming
+
+
 ## Expected unsaved wounds land on the snapshot: floored to whole wounds, then
 ## filled model by model in array order (v0 — casualty_order parity is step 3).
 static func _apply_expected_wounds(tu: Dictionary, ev: float) -> void:
