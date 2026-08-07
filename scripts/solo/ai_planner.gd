@@ -43,6 +43,79 @@ static func plan(state: Dictionary, player: int) -> Dictionary:
 		"runner_up": runner}
 
 
+## R1 (round-rollout search): play the rest of the ROUND out after `first_action`
+## by `me` — sides alternate as in the real rule, a dry side lets the other play
+## its tail, every step is the cheap-policy greedy pick. Returns the end-of-round
+## state; the CALLER prices it with the rich leaf (eval + reply_threat). Pure and
+## deterministic. The guard only backstops a logic error, it never binds: one
+## round has at most units-many activations.
+static func rollout(state: Dictionary, first_action: Dictionary, me: int) -> Dictionary:
+	var cur := BattleSim.resolve(state, first_action)
+	var turn := _other_player(state, me)
+	var guard: int = (state["units"] as Dictionary).size() + 2
+	while guard > 0:
+		guard -= 1
+		var a := _policy_step(cur, turn)
+		if a.is_empty():
+			turn = _other_player(cur, turn)
+			a = _policy_step(cur, turn)
+			if a.is_empty():
+				break
+		cur = BattleSim.resolve(cur, a)
+		turn = _other_player(cur, turn)
+	return cur
+
+
+## Rollout policy, one step: the best restricted move of `player`'s un-activated
+## units by the CHEAP leaf (mission eval WITHOUT reply pricing). {} when dry.
+static func _policy_step(state: Dictionary, player: int) -> Dictionary:
+	var best := {}
+	var best_s := -INF
+	for key in state["units"]:
+		var su: Dictionary = state["units"][key]
+		if int(su["player"]) != player or bool(su["activated"]) or int(su["alive"]) <= 0:
+			continue
+		for action in _policy_candidates(state, str(key)):
+			var s := AiMissionEval.score(BattleSim.resolve(state, action), player)
+			if s > best_s:
+				best_s = s
+				best = action
+	return best
+
+
+## Restricted candidate set for rollout steps (cheap on purpose): hold with the
+## best-EV shoot when one exists, plus one rush to the nearest objective. A
+## shaken unit only gets its recovery hold — same rule plan() applies.
+static func _policy_candidates(state: Dictionary, key: String) -> Array:
+	var su: Dictionary = state["units"][key]
+	if bool(su.get("shaken", false)):
+		return [{"unit": key, "kind": AiDecision.Action.HOLD}]
+	var hold := {"unit": key, "kind": AiDecision.Action.HOLD}
+	var shoot := _best_shoot(state, key)
+	if shoot != "":
+		hold["shoot"] = shoot
+	var out: Array = [hold]
+	var best_d := INF
+	var dest := Vector3.ZERO
+	for o in state["objectives"]:
+		var d := ((o as Dictionary)["pos"] as Vector3 - _centre(su)).length()
+		if d < best_d:
+			best_d = d
+			dest = (o as Dictionary)["pos"]
+	if best_d < INF:
+		out.append({"unit": key, "kind": AiDecision.Action.RUSH, "dest": dest})
+	return out
+
+
+## The other side's player id, read from the units (any enemy of `player`).
+static func _other_player(state: Dictionary, player: int) -> int:
+	for key in state["units"]:
+		var p := int((state["units"][key] as Dictionary)["player"])
+		if p != player:
+			return p
+	return player
+
+
 static func _intent(state: Dictionary, best: Dictionary, runner: Dictionary,
 		base: float) -> String:
 	var txt := "%s: %s — win %.2f → %.2f" % [_name_of(state, str(best["unit_key"])),
