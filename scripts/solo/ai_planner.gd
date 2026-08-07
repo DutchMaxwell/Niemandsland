@@ -157,6 +157,13 @@ static func _policy_candidates(state: Dictionary, key: String) -> Array:
 			dest = (o as Dictionary)["pos"]
 	if best_d < INF:
 		out.append({"unit": key, "kind": AiDecision.Action.RUSH, "dest": dest})
+	# Counter-charges exist in the mental game too (diagnosis 07.08.: without
+	# this, a committed unit could never be punished in the rollout, so early
+	# commitment looked free). Same futility-gated pick plan() uses.
+	var charge := _best_charge(state, key)
+	if charge != "":
+		out.append({"unit": key, "kind": AiDecision.Action.CHARGE,
+			"dest": _centre(state["units"][charge]), "charge": charge})
 	return out
 
 

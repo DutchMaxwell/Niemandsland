@@ -101,3 +101,22 @@ func test_plan_with_rollout_baits_before_committing() -> void:
 ## top_k <= 0 is the safety valve: byte-identical degrade to plan().
 func test_top_k_zero_degrades_to_plain_plan() -> void:
 	assert_that(AiPlanner.plan_with_rollout(_state(), 2, 0)).is_equal(AiPlanner.plan(_state(), 2))
+
+
+## Diagnosis 07.08.: the mental game must be able to PUNISH commitment. A
+## squad rushing the marker lands inside the brute's charge reach — in the
+## rollout the brute counter-charges and the squad bleeds. Without charges in
+## the policy the commit would look free (that bug drove real round-1 losses).
+func test_rollout_opponent_counter_charges_commitment() -> void:
+	var brute := _armed(1, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)],
+		"Brute", [{"name": "Claws", "range": 0, "attacks": 12}])
+	var squad := _armed(2, [Vector3(22.0 * IN2M, 0, 0), Vector3(23.0 * IN2M, 0, 0),
+		Vector3(24.0 * IN2M, 0, 0), Vector3(25.0 * IN2M, 0, 0)],
+		"Squad", [{"name": "CCW", "range": 0}])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Brute": brute, "Squad": squad}
+	var state := BattleSim.capture(army, func() -> Array: return [Vector3(10.0 * IN2M, 0, 0)],
+		func(_i: int) -> int: return 0, 1, 4)
+	var end := AiPlanner.rollout(state,
+		{"unit": "Squad", "kind": AiDecision.Action.RUSH, "dest": Vector3(10.0 * IN2M, 0, 0)}, 2)
+	assert_int(int((end["units"]["Squad"] as Dictionary)["alive"])) 		.override_failure_message("the brute must counter-charge the committed squad in the rollout") 		.is_less(4)
