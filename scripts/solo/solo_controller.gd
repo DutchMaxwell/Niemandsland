@@ -1696,7 +1696,29 @@ func _act(unit: GameUnit) -> Dictionary:
 	# default null-AI path and the SoloSim oracle never enter it (byte-identical). Charges/holds untouched.
 	var solver_goal := NO_OBJECTIVE
 	var solver_used := false
-	if (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) and _position_solver_active():
+	# STEP-6 PLANNER HOOK (NML-995, plan D6): the 1-ply mission planner overrides the whole tree
+	# decision (action, target, shot, destination) when its preset is live; the position solver and
+	# the Wave-1 single-hooks below are subsumed and skipped. {} keeps everything byte-identical.
+	var planner_used := false
+	if _planner_active():
+		var pl := _solve_planner(unit)
+		if bool(pl.get("used", false)):
+			planner_used = true
+			action = int(pl["action"])
+			do_shoot = bool(pl["shoot"])
+			dec["toward"] = int(pl["toward"])
+			action_why = str(pl["why"])
+			var ptarget := pl.get("target", null) as GameUnit
+			if ptarget != null and ptarget != target_unit:
+				target_unit = ptarget
+				report["target"] = target_unit
+				tcentre = unit_centre(target_unit)
+				enemy_dist = MoveIntent.distance_inches(centre, tcentre)
+			if pl.has("goal"):
+				solver_used = true
+				solver_goal = pl["goal"]
+			_rule_note(report, str(pl["why"]), false)
+	if not planner_used and (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) and _position_solver_active():
 		var sol := _solve_position(unit, target_unit, weapons, archetype, advance, rush, obj_pos, has_obj, int(dec["toward"]), do_shoot)
 		if bool(sol.get("used", false)):
 			solver_used = true
@@ -2576,6 +2598,59 @@ func _flank_goal(unit: GameUnit, target: GameUnit, range_in: float, advance_in: 
 ## opts-pattern discipline). Headless unit tests without injected LOS also fall through untouched.
 func _position_solver_active() -> bool:
 	return active_difficulty() != null and (los_checker.is_valid() or unit_los_checker.is_valid())
+
+
+## Whether THIS activation routes through the 1-ply mission planner (NML-995, plan D6). Only the
+## PLANNER_V0 preset sets the flag — null-AI, NACHTMAHR and the SoloSim oracle never enter (the
+## check is the only new code on their paths, so they stay byte-identical).
+func _planner_active() -> bool:
+	var diff := active_difficulty()
+	return diff != null and diff.planner
+
+
+## The planner as a position-solver-style overlay: capture the LIVE game into a BattleSim state,
+## constrain the pick to THIS unit (every other own unit is marked activated on the captured copy,
+## so plan() chooses only among its actions), and map the winning action onto the solver-adoption
+## shape. {} ⇒ the caller keeps the decision-tree plan byte-identically. Emits the "planner"
+## explainability record (intent sentence + expectation numbers + runner-up).
+func _solve_planner(unit: GameUnit) -> Dictionary:
+	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
+		_current_round(), maxi(game_rounds, _current_round()))
+	var unit_key := ""
+	for k in state["units"]:
+		if (state["units"][k] as Dictionary)["unit"] == unit:
+			unit_key = str(k)
+			break
+	if unit_key == "":
+		return {}
+	var me: int = int((state["units"][unit_key] as Dictionary)["player"])
+	for k in state["units"]:
+		var su: Dictionary = state["units"][k]
+		if str(k) != unit_key and int(su["player"]) == me:
+			su["activated"] = true
+	var pick := AiPlanner.plan(state, me)
+	if not bool(pick.get("used", false)) or str(pick["unit_key"]) != unit_key:
+		return {}
+	var act: Dictionary = pick["action"]
+	var kind := int(act.get("kind", AiDecision.Action.HOLD))
+	var exp: Dictionary = pick["expectation"]
+	var runner: Dictionary = pick.get("runner_up", {})
+	record_decision({"kind": "planner", "unit": unit.get_name(),
+		"rule": "PLANNER_V0 (NML-995): every candidate action rolled through the parity-bound BattleSim and scored as projected win probability",
+		"candidates": [], "chosen": AiDecision.action_name(kind),
+		"why": str(pick["intent"]),
+		"data": {"win_before": float(exp["before"]), "win_after": float(exp["after"]),
+			"runner_up_score": float(runner.get("score", -1.0))}})
+	var out := {"used": true, "action": kind, "shoot": act.has("shoot"),
+		"toward": AiDecision.Toward.OBJECTIVE if kind == AiDecision.Action.RUSH \
+			else AiDecision.Toward.ENEMY,
+		"why": str(pick["intent"])}
+	if act.has("dest"):
+		out["goal"] = act["dest"]
+	var victim_key := str(act.get("charge", act.get("shoot", "")))
+	if victim_key != "" and state["units"].has(victim_key):
+		out["target"] = (state["units"][victim_key] as Dictionary)["unit"]
+	return out
 
 
 ## Difficulty → position-band width: the ev_noise knob finally gets a real surface (POSITION choice). A
@@ -6006,7 +6081,7 @@ func plain_reason_for(unit: GameUnit) -> String:
 		var kind := str(r.get("kind", ""))
 		if kind == "action":
 			return plain_action_sentence(r)
-		if kind in ["commander", "position", "flank", "kite_guard", "mission", "yield_lof"]:
+		if kind in ["commander", "position", "flank", "kite_guard", "mission", "yield_lof", "planner"]:
 			var why := str(r.get("why", ""))
 			if not why.is_empty() and why != "decision tree":
 				return why
