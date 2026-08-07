@@ -151,6 +151,7 @@ var _peeked_unit: GameUnit = null
 ## positions are applied/broadcast before this is read.
 var last_move_paths: Array = []
 var _cargo_wait_logged: Dictionary = {}   # TC-081: one "waits inside" record per unit+round
+var _planner_intent: Dictionary = {}      # R3: rollout pick cached unit->act (consumed by _solve_planner)
 ## Flow order (MODEL indices, nearest-to-destination first) of the last loose AI move — the sequential
 ## per-model flow (field-test round 6, finding 7). last_move_paths is reordered into this order so the
 ## presentation glides each model individually in the order it filed to its slot. Empty for a regiment / a
@@ -2629,13 +2630,23 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 		var su: Dictionary = state["units"][k]
 		if int(su["player"]) == me and not pool.has(su["unit"]):
 			su["activated"] = true
-	var pick := AiPlanner.plan(state, me)
+	var pick := AiPlanner.plan_with_rollout(state, me)
 	if not bool(pick.get("used", false)):
 		return null
 	var chosen: GameUnit = (state["units"][pick["unit_key"]] as Dictionary)["unit"]
+	# R3: the rollout decided unit AND action together — cache the intent so
+	# _solve_planner executes it instead of re-deriving 1-ply (which would
+	# undo the tempo choice). Target keys resolve to refs NOW, at pick time.
+	var act: Dictionary = pick["action"]
+	var victim_key := str(act.get("charge", act.get("shoot", "")))
+	_planner_intent = {"unit": chosen, "round": _current_round(), "action": act,
+		"target": (state["units"][victim_key] as Dictionary)["unit"] \
+			if victim_key != "" and state["units"].has(victim_key) else null,
+		"why": str(pick["intent"]), "expectation": pick["expectation"]}
 	record_decision({"kind": "planner", "unit": chosen.get_name(),
-		"rule": "PLANNER_V0 unit pick (NML-995): plan() ranks every eligible unit's best action in win probability; the winner activates first",
-		"candidates": [], "chosen": "activates next", "why": str(pick["intent"]), "data": {}})
+		"rule": "PLANNER_V0 unit pick (NML-995): the round is played out for the best openers; the strongest end-of-round position activates first",
+		"candidates": [], "chosen": "activates next", "why": str(pick["intent"]),
+		"data": {"kept_back": int(pick.get("waits", 0))}})
 	return chosen
 
 
@@ -2645,6 +2656,33 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 ## shape. {} ⇒ the caller keeps the decision-tree plan byte-identically. Emits the "planner"
 ## explainability record (intent sentence + expectation numbers + runner-up).
 func _solve_planner(unit: GameUnit) -> Dictionary:
+	# R3: execute the rollout intent when it is still valid (same unit, same
+	# round, target still alive) — re-deriving 1-ply here would undo the tempo
+	# choice the unit pick just made. Any mismatch falls through to the re-plan.
+	if not _planner_intent.is_empty() and _planner_intent["unit"] == unit \
+			and int(_planner_intent["round"]) == _current_round():
+		var cached: Dictionary = _planner_intent
+		_planner_intent = {}
+		var tgt: GameUnit = cached["target"]
+		if tgt == null or not tgt.get_alive_models().is_empty():
+			var cact: Dictionary = cached["action"]
+			var ckind := int(cact.get("kind", AiDecision.Action.HOLD))
+			var cexp: Dictionary = cached["expectation"]
+			record_decision({"kind": "planner", "unit": unit.get_name(),
+				"rule": "PLANNER_V0 (NML-995): executes the round-rollout intent decided at the unit pick",
+				"candidates": [], "chosen": AiDecision.action_name(ckind),
+				"why": str(cached["why"]),
+				"data": {"win_before": float(cexp["before"]), "win_after": float(cexp["after"])}})
+			var cout := {"used": true, "action": ckind, "shoot": cact.has("shoot"),
+				"toward": AiDecision.Toward.OBJECTIVE if ckind == AiDecision.Action.RUSH \
+					else AiDecision.Toward.ENEMY,
+				"why": str(cached["why"])}
+			if cact.has("dest"):
+				cout["goal"] = cact["dest"]
+			if tgt != null:
+				cout["target"] = tgt
+			return cout
+	_planner_intent = {}
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
 		terrain_type_at)

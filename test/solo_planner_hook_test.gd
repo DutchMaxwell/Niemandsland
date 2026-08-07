@@ -114,3 +114,37 @@ func test_tree_paths_stay_planner_free() -> void:
 			sc.set_difficulty(2, SoloDifficulty.for_grade(preset))
 		sc._act(sc.army_manager.game_units["Taker"])
 		assert_that(_kinds(sc)).not_contains(["planner"])
+
+
+## R3: the rollout intent decided at the unit pick is EXECUTED, not re-derived.
+## Last-round gunline fixture (the R2 discriminator through the controller):
+## the pick opens with the bait and keeps the striker back; _solve_planner
+## consumes exactly that intent (the "kept back" suffix only exists on rollout
+## intents — a 1-ply re-plan can never produce it). A mismatched unit falls
+## back to the re-plan without the suffix.
+func test_rollout_intent_is_executed_not_rederived() -> void:
+	var gunner := _unit(1, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)], "Gunner")
+	(gunner.source_data as OPRApiClient.OPRUnit).weapons[0].range_value = 36
+	(gunner.source_data as OPRApiClient.OPRUnit).weapons[0].attacks = 12
+	var striker := _unit(2, [Vector3(42.0 * IN2M, 0, 0), Vector3(43.0 * IN2M, 0, 0),
+		Vector3(44.0 * IN2M, 0, 0), Vector3(45.0 * IN2M, 0, 0)], "Striker")
+	var screamer := _unit(2, [Vector3(60.0 * IN2M, 0, 30.0 * IN2M)], "Screamer")
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Gunner": gunner, "Striker": striker, "Screamer": screamer}
+	army.current_round = 4
+	var sc: SoloController = auto_free(SoloController.new())
+	add_child(sc)
+	sc.setup(army, null, null, 1, 2)
+	sc.game_rounds = 4
+	sc.objectives_provider = func() -> Array: return [Vector3(30.0 * IN2M, 0, 0)]
+	sc.objective_owner_of = func(_i: int) -> int: return 0
+	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
+	var picked := sc._select_ai_unit([striker, screamer])
+	assert_object(picked).is_same(screamer)
+	var sol := sc._solve_planner(picked)
+	assert_bool(sol.get("used", false)).is_true()
+	assert_str(str(sol["why"])).contains("kept back")
+	# cache consumed: a second solve for another unit re-plans without the suffix
+	var again := sc._solve_planner(striker)
+	if bool(again.get("used", false)):
+		assert_str(str(again["why"])).not_contains("kept back")
