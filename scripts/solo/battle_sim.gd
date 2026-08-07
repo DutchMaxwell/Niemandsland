@@ -37,6 +37,7 @@ static func clone_state(state: Dictionary) -> Dictionary:
 static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 	var next := clone_state(state)
 	var su: Dictionary = next["units"][action["unit"]]
+	var was_shaken := bool(su.get("shaken", false))
 	var kind: int = int(action.get("kind", AiDecision.Action.HOLD))
 	var bands := SoloController.move_bands_for_unit(su["unit"], null)
 	var band_in := 0.0
@@ -64,8 +65,11 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			and (kind == AiDecision.Action.HOLD or kind == AiDecision.Action.ADVANCE):
 		var tu: Dictionary = next["units"][shoot_key]
 		var d := dist_in(positions, tu["positions"])
+		var alive_before := int(tu["alive"])
+		var wounds_before := _wounds_left(tu)
 		_apply_expected_wounds(tu, AiEv.shoot_ev(_profiles_of(su, false, d),
 			_ctx_of(su), _ctx_of(tu), d))
+		_expected_shooting_morale(tu, alive_before, wounds_before)
 	var charge_key := str(action.get("charge", ""))
 	if kind == AiDecision.Action.CHARGE and charge_key != "" and next["units"].has(charge_key):
 		var tu: Dictionary = next["units"][charge_key]
@@ -76,6 +80,10 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			if int(tu["alive"]) > 0:   # survivors strike back, already survivor-scaled
 				_apply_expected_wounds(su, AiEv.melee_ev(_profiles_of(tu, true),
 					_ctx_of(tu), _ctx_of(su), false))
+	# Shaken recovery (p.10): the idle activation clears Shaken — the recovery
+	# hold plan()/the rollout policy hand a shaken unit buys next round back.
+	if was_shaken and kind == AiDecision.Action.HOLD and shoot_key == "":
+		su["shaken"] = false
 	su["activated"] = true
 	return next
 
@@ -167,6 +175,54 @@ static func _apply_expected_wounds(tu: Dictionary, ev: float) -> void:
 			wounds.remove_at(0)
 			positions.remove_at(0)
 	tu["alive"] = positions.size()
+
+
+## Wounds left across the snapshot's alive models (the p.10 tough-wounds scale).
+static func _wounds_left(su: Dictionary) -> int:
+	var total := 0
+	for w in su["wounds"]:
+		total += int(w)
+	return total
+
+
+## At-or-below-half ON THE SNAPSHOT (GF v3.5.1 p.10): single-model units measure
+## tough WOUNDS against the model's max, multi-model units measure alive models
+## against starting size. Joined-hero chains are separate snapshot units (v0 gap).
+static func _below_half(su: Dictionary) -> bool:
+	var u: GameUnit = su["unit"]
+	if u.models.size() == 1:
+		return AiCombatMath.at_or_below_half(_wounds_left(su),
+			(u.models[0] as ModelInstance).wounds_max)
+	return AiCombatMath.at_or_below_half(int(su["alive"]), u.models.size())
+
+
+## The EXPECTED morale outcome, deterministically: Shaken always fails (p.10);
+## otherwise the quality target's fail chance, halved by the Fearless re-roll
+## (advanced p.13), fails when it reaches 50% — Q4+ crowds break, Q3 elites and
+## Fearless hold. Banner/Fear/spell mods are v0 gaps, noted for the parity wave.
+static func _morale_fails_expected(su: Dictionary) -> bool:
+	if bool(su.get("shaken", false)):
+		return true
+	var u: GameUnit = su["unit"]
+	var fail_p := float(AiCombatMath.morale_target(u.get_quality(), 0) - 1) / 6.0
+	if u.has_special_rule("Fearless"):
+		fail_p *= 0.5
+	return fail_p >= 0.5
+
+
+## Post-volley morale (parity wave step 2, mirrors main.gd's PDF-verified flow):
+## casualties this volley AND now at/below half => test; a shooting fail is
+## SHAKEN, never a Rout (Rout exists only in melee — playtest bug 9).
+static func _expected_shooting_morale(tu: Dictionary, alive_before: int, wounds_before: int) -> void:
+	var u: GameUnit = tu["unit"]
+	if u.models.size() == 1:
+		if int(tu["alive"]) > 0 and _wounds_left(tu) < wounds_before and _below_half(tu) \
+				and _morale_fails_expected(tu):
+			tu["shaken"] = true
+		return
+	if AiCombatMath.should_test_shooting_morale(alive_before, int(tu["alive"]), u.models.size()) \
+			and _morale_fails_expected(tu):
+		tu["shaken"] = true
 
 
 static func capture(army: OPRArmyManager, objectives_provider: Callable = Callable(),

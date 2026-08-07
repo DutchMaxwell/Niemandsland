@@ -210,3 +210,68 @@ func test_resolve_spends_activation_on_the_clone_only() -> void:
 	assert_bool((next["units"]["Grunts"] as Dictionary)["activated"]).is_true()
 	assert_bool((state["units"]["Grunts"] as Dictionary)["activated"]).is_false()
 	assert_that(_centre(state)).is_equal(Vector3(0.5 * IN2M, 0, 0))
+
+
+# === Morale in expectation (parity wave step 2a, NML-995) ===
+
+## Hand-computed: 8 attacks Q4 (hit 0.5) into Def4 (unsaved 0.5) = 2.0 wounds
+## -> 2 of 4 models die -> at half. Q4's fail chance (50%) breaks in
+## expectation; Q3 (33%) and Fearless-Q4 (25%) hold. Rout never — shooting
+## fails are SHAKEN only (playtest bug 9).
+func test_shooting_to_half_shakes_q4_but_not_q3_or_fearless() -> void:
+	for cfg in [[4, [], true], [3, [], false], [4, ["Fearless"], false]]:
+		var shooter := _armed(2, [Vector3.ZERO], "Shooter",
+			[{"name": "Rifle", "range": 24, "attacks": 8}])
+		var squad_pos: Array = []
+		for i in range(4):
+			squad_pos.append(Vector3((12.0 + i) * IN2M, 0, 0))
+		var squad := _armed(1, squad_pos, "Squad", [{"name": "Rifle", "range": 24}], cfg[1])
+		squad.unit_properties["quality"] = cfg[0]
+		var state := _capture([shooter, squad])
+		var next := BattleSim.resolve(state,
+			{"unit": "Shooter", "kind": AiDecision.Action.HOLD, "shoot": "Squad"})
+		var sq: Dictionary = next["units"]["Squad"]
+		assert_int(int(sq["alive"])).is_equal(2)
+		assert_bool(bool(sq.get("shaken", false))).override_failure_message(
+			"Q%d rules=%s expected shaken=%s" % [cfg[0], cfg[1], cfg[2]]).is_equal(cfg[2])
+		assert_bool(bool((state["units"]["Squad"] as Dictionary).get("shaken", false))).is_false()
+
+
+## A volley that leaves the squad ABOVE half (1 of 4 dead) never tests — no
+## shaken flag even for Q4 (the p.10 trigger needs casualties AND <= half).
+func test_shooting_above_half_never_tests() -> void:
+	var shooter := _armed(2, [Vector3.ZERO], "Shooter", [{"name": "Rifle", "range": 24}])
+	var squad_pos: Array = []
+	for i in range(4):
+		squad_pos.append(Vector3((12.0 + i) * IN2M, 0, 0))
+	var squad := _armed(1, squad_pos, "Squad", [{"name": "Rifle", "range": 24}])
+	var next := BattleSim.resolve(_capture([shooter, squad]),
+		{"unit": "Shooter", "kind": AiDecision.Action.HOLD, "shoot": "Squad"})
+	var sq: Dictionary = next["units"]["Squad"]
+	assert_int(int(sq["alive"])).is_equal(3)
+	assert_bool(bool(sq.get("shaken", false))).is_false()
+
+
+## Single-model units measure morale in TOUGH WOUNDS (p.10): a Tough(6) hero
+## shot from 6 to 3 wounds is at half its tough value and shakes at Q4.
+func test_single_model_tough_tests_on_the_wounds_scale() -> void:
+	var shooter := _armed(2, [Vector3.ZERO], "Shooter",
+		[{"name": "Cannon", "range": 24, "attacks": 12}])
+	var hero := _armed(1, [Vector3(12.0 * IN2M, 0, 0)], "Hero",
+		[{"name": "Rifle", "range": 24}], ["Tough(6)"], 6)
+	(hero.models[0] as ModelInstance).wounds_max = 6
+	var next := BattleSim.resolve(_capture([shooter, hero]),
+		{"unit": "Shooter", "kind": AiDecision.Action.HOLD, "shoot": "Hero"})
+	var h: Dictionary = next["units"]["Hero"]
+	assert_int(int(h["wounds"][0])).is_equal(3)
+	assert_bool(bool(h.get("shaken", false))).is_true()
+
+
+## Shaken recovery (p.10): the bare recovery hold clears Shaken on the clone —
+## the mental game no longer treats a shaken unit as shaken forever.
+func test_hold_recovers_shaken_on_the_clone() -> void:
+	var state := _state_with_grunts()
+	(state["units"]["Grunts"] as Dictionary)["shaken"] = true
+	var next := BattleSim.resolve(state, {"unit": "Grunts", "kind": AiDecision.Action.HOLD})
+	assert_bool(bool((next["units"]["Grunts"] as Dictionary)["shaken"])).is_false()
+	assert_bool(bool((state["units"]["Grunts"] as Dictionary)["shaken"])).is_true()
