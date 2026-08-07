@@ -61,6 +61,10 @@ var _knob_records: Array = []           # full records of kind roll_off / diffic
 # result JSON aggregates them into the acceptance metrics (median achieved/band on open-field moves,
 # aimless sub-inch moves, large-base stall streaks, aircraft lane compliance).
 var _move_records: Array = []           # {side, round, unit, why, data} for every kind == "move"
+# Planner calibration capture (parity wave, NML-995): every planner record's expectation numbers, per
+# side — calib_pairs() folds them into per-round-boundary (predicted, measured) pairs, the parity
+# wave's progress meter (the mental model was ~0.2 too optimistic early; watch this gap shrink).
+var _calib_records: Array = []          # {side, round, before, after} for planner records carrying win_before
 
 # Showcase capture (capture= / NML_AI_CAPTURE) — board PNGs + full battle log + verbatim decisions.
 var _capture_dir := ""                  # empty => captures off (the ladder default)
@@ -277,6 +281,10 @@ func _run() -> void:
 			annotated["side"] = side
 			annotated["round"] = int(army_manager.current_round)
 			_knob_records.append(annotated)
+		if kind == "planner" and (rec.get("data", {}) as Dictionary).has("win_before"):
+			var d: Dictionary = rec["data"]
+			_calib_records.append({"side": side, "round": int(army_manager.current_round),
+				"before": float(d["win_before"]), "after": float(d["win_after"])})
 		if kind == "move":
 			_move_records.append({"side": side, "round": int(army_manager.current_round),
 				"unit": str(rec.get("unit", "?")), "why": str(rec.get("why", "")),
@@ -445,8 +453,13 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 		"decision_counts": _stringify_keys(_decision_counts),
 		"knob_records": _knob_records,
 		"move_usage": _move_usage_summary(),
+		"planner_calib": calib_pairs(_calib_records),
 		"duration_sec": duration_sec,
 	}
+	for c in result["planner_calib"]:
+		printerr("[ARENA] planner_calib P%d round %d->%d: predicted %.3f measured %.3f gap %+.3f" % [
+			int(c["side"]), int(c["from_round"]), int(c["to_round"]),
+			float(c["predicted"]), float(c["measured"]), float(c["gap"])])
 	if _out_dir.is_empty():
 		_out_dir = OS.get_environment("HOME").path_join("selfplay_out")
 	DirAccess.make_dir_recursive_absolute(_out_dir)
@@ -459,6 +472,26 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 	f.store_string(JSON.stringify(result, "  "))
 	f.close()
 	printerr("[ARENA] result JSON: %s" % path)
+
+
+## Planner calibration pairs (parity wave, NML-995): fold the per-activation expectation records into
+## per-round-boundary comparisons. For each side, the LAST record of round N carries the planner's
+## end-of-round forecast ("after"); the FIRST record of round N+1 carries the freshly measured position
+## ("before"). Their gap (measured - predicted) is the mental model's calibration error — the number the
+## sim-parity work must shrink before deeper search can pay. Records must be in arrival order (they are:
+## the sink appends). Pure and static so the pairing is unit-testable without a game.
+static func calib_pairs(records: Array) -> Array:
+	var prev := {}   # side(int) → last record seen for that side
+	var pairs: Array = []
+	for r in records:
+		var side: int = int(r["side"])
+		if prev.has(side) and int(r["round"]) > int((prev[side] as Dictionary)["round"]):
+			var p: Dictionary = prev[side]
+			pairs.append({"side": side, "from_round": int(p["round"]), "to_round": int(r["round"]),
+				"predicted": float(p["after"]), "measured": float(r["before"]),
+				"gap": float(r["before"]) - float(p["after"])})
+		prev[side] = r
+	return pairs
 
 
 ## Movement plausibility metrics (AI plausibility wave 1), aggregated per side from every MOVE record:
