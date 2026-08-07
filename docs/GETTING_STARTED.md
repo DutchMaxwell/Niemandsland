@@ -18,6 +18,23 @@ Niemandsland is a 3D tabletop sandbox for [OnePageRules](https://onepagerules.co
 2. Make the binary executable if needed: `chmod +x Niemandsland.x86_64`
 3. Run `./Niemandsland.x86_64` (the `.pck` file must stay in the same directory).
 
+**macOS**
+
+1. Download the latest release from the [Releases](../../releases) page and unzip it.
+2. Run `Niemandsland.app`.
+
+The build is ad-hoc signed but **not notarized** (no Apple Developer account), so macOS won't
+open it on a double-click. **Right-click the app → Open**, then confirm. If macOS still says the
+app *"is damaged and can't be opened"* (older builds, or a strict quarantine), clear the download
+flag once in **Terminal** and open it:
+
+```bash
+xattr -dr com.apple.quarantine /path/to/Niemandsland.app
+open /path/to/Niemandsland.app
+```
+
+This is expected for an unnotarized app — the file is not actually damaged.
+
 The start menu shows the version number. The first line of the log reads `[Boot] Niemandsland <version> build <hash>` — use this when reporting bugs.
 
 ---
@@ -38,7 +55,7 @@ To play a full game against the built-in AI opponent:
 
 1. Give NACHTMAHR an army — either **import a second list** and tick **AI-controlled (Solo)**, or press **AI Opponent** and let NACHTMAHR bring one of its own pre-built lists (pick a faction and 1000–3000 pts; the list is fetched from the asset CDN and cached for offline play).
 2. Follow the **guided deployment**: a roll-off decides who picks a table edge and deploys first, then both sides place units alternately with explicit hand-over clicks (Scout, Ambush and Infiltrate reserves are handled for you).
-3. On **Start Game**, play alternates unit by unit. You act through the **radial menu** — **Shoot**, **Fight**, **Cast** — with real dice in the tray for both sides; NACHTMAHR takes its own activations, and **every applied rule writes a battle-log line** so you can follow (and audit) each decision. The thirteen rules the automation does not cover yet are named per unit in the log for you to apply by hand.
+3. On **Start Game**, play alternates unit by unit. You act through the **radial menu** — **Shoot**, **Fight**, **Cast** — with real dice in the tray for both sides; NACHTMAHR takes its own activations, and **every applied rule writes a battle-log line** so you can follow (and audit) each decision. The remaining uncovered special rules are a small residue; the battle log names any rule it applies (or asks for manual handling) per unit, so you can apply the rest by hand.
 
 NACHTMAHR is a rules-based, deterministic game AI (no LLM, no neural net) that runs entirely offline and never cheats. One difficulty ships (full strength); see [`KNOWN_ISSUES.md`](KNOWN_ISSUES.md) for the solo caveats.
 
@@ -93,7 +110,8 @@ Each model appears on the table with its base size, wound counter, and status to
 
 ## Multiplayer
 
-Multiplayer supports **2 players** over LAN or the internet. Both players must run the **same version** — the version handshake will reject a mismatch.
+Multiplayer is **manual play** — no rules automation; alternate activations like at a real table.
+It supports **2 players** over LAN or the internet. Both players must run the **same version** — the version handshake will reject a mismatch.
 
 **Host a game**
 

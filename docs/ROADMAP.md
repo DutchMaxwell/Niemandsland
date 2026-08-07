@@ -22,16 +22,14 @@ planned and where ideas go. For what already works see
 
 ## 🔨 Now (in progress)
 
-- **`0.3.11.0-alpha` — in final sighting, tag pending.** The community wave, collected on `main`
-  since `0.3.10.1`: the rules-automation push (Reanimation with click-allocation, Reinforcement on a
-  runtime unit factory, Extended Buff Range, Coordinate, Delayed Action — you can pass a turn now —
-  the three Ambush variants, nine healed aura families, Traversal), **split fire**, the **Precision
-  Spotter** radial action, the **combat stage** (paced volleys, melee and casts on a central card),
-  the **multiplayer rule log** (the opponent reads the same rule lines, 67 routed), the **FEUERTAUFE**
-  learning-course foundation (work in progress, clearly labelled), transparency floats, and the
-  release small-items wave (spotting laser visible on the card, Spot bonus named in the To-hit
-  breakdown, the ruler agrees with roof-height sight, Unstoppable clamps in melee). Full detail in
-  the `CHANGELOG`. _L_
+- **Elevation — Phase B (sight-fan performance follow-up).** Phase A shipped the single volumetric
+  line-of-sight truth in `0.3.12.0-alpha` — every sight question resolves through one 3D eye-to-eye
+  check (`VolumetricLos`) shared by the ruler, the sight fan, the engine and the AI. Phase B is a
+  performance pass on the sight fan's own drawn overlay, so it can walk that same volumetric truth
+  on wide tables without a frame-cost regression. _M_
+- **Solo-AI planner substrate.** A snapshot + expectation-resolver layer for the AI's round planning
+  is being built and measured arena-side (headless self-play) — groundwork for future planning
+  quality, not a new difficulty grade or a rewrite of NACHTMAHR's decisions. _M_
 - **`0.3.10.0-alpha` shipped — the solo update.** The headline is **NACHTMAHR**, the built-in
   opponent: a rules-based, deterministic game AI (no LLM, no neural net) that runs entirely offline and
   plays the official OPR solo decision trees. Mark any imported army as AI-controlled, or let the **AI
@@ -240,6 +238,35 @@ validated, so the rest waits for **alpha feedback** or the **Beta** cycle.
 ## ✅ Recently shipped
 
 See [`CHANGELOG.md`](../CHANGELOG.md).
+
+**`0.3.12.0-alpha` (2026-08-06):** **Elevation, Phase A** — every sight question (can this unit
+see that one, is it in cover, what does the sight fan show) now flows through one volumetric
+line-of-sight check (`VolumetricLos`) instead of several flat-map approximations that could
+disagree; hills, ruins and walls block by their actual shape, and the AI and the human previews
+read the same truth (NML-972, closes NML-968). **AI**: melee never charges or chases a target it
+cannot hurt — an expected-wounds floor gates the charge, either way logged
+([#321](../../issues/321)); movement targets get commitment hysteresis so units stop flip-flopping
+between similar targets round after round ([#319](../../issues/319)); a holding caster now says
+why it did nothing ([#320](../../issues/320)); attacker-side spell buffs (e.g. Calculated
+Foresight) finally reach the attack they were meant to boost (NML-987); a vehicle-and-walker
+keyword clash resolves to the vehicle base size again (NML-993). **Multiplayer**: a persistent
+status line and a toast make clear that multiplayer is manual play — no rules automation
+([#322](../../issues/322)).
+
+**`0.3.11.1-alpha` (2026-08-04):** hotfix — a once-per-game move feat (e.g. Speed Feat) no longer
+doubled its Advance/Rush bonus into the unit's permanent move bands (NML-982); split fire no
+longer offers a dead model's weapon on a heavy-weapon team down to one surviving gunner (NML-983).
+
+**`0.3.11.0-alpha` (2026-08-04):** the community wave collected on `main` since `0.3.10.1` — the
+rules-automation push (Reanimation with click-allocation, Reinforcement on a runtime unit factory,
+Extended Buff Range, Coordinate, Delayed Action — you can pass a turn now — the three Ambush
+variants, nine healed aura families, Traversal), **split fire**, the **Precision Spotter** radial
+action, the **combat stage** (paced volleys, melee and casts on a central card), the
+**multiplayer rule log** (the opponent reads the same rule lines, 67 routed), the **FEUERTAUFE**
+learning-course foundation (work in progress, clearly labelled), transparency floats, and a
+release small-items wave (spotting laser visible on the card, Spot bonus named in the To-hit
+breakdown, the ruler agrees with roof-height sight, Unstoppable clamps in melee). Full detail in
+the `CHANGELOG`.
 
 **`0.3.10.1-alpha` (2026-07-29):** the community hotfix wave from the first days of public play —
 **multiplayer**: a slot a connected human occupies can never be driven by the solo automation

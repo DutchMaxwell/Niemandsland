@@ -1,6 +1,6 @@
 # Niemandsland — Status & Roadmap
 
-**Version:** 0.3.11.0-alpha *(public alpha — forward-looking backlog in [`docs/ROADMAP.md`](docs/ROADMAP.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
+**Version:** 0.3.12.0-alpha *(public alpha — forward-looking backlog in [`docs/ROADMAP.md`](docs/ROADMAP.md))* · **Engine:** Godot 4.6 · **Branch:** `main`
 
 This is the single source of truth for what works, what's in progress, and what's
 planned. Architecture details live in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md);
@@ -60,9 +60,10 @@ book-wide**. **Every applied rule writes its own battle-log line** (a silently-c
 reads like a broken one), and any rule the automation does *not* cover is named per unit in the
 log. Measurement has a single truth: shooting gates, charge reach, melee reach, spell range and
 objective control all measure **base edge to base edge** like the ruler, and line of sight is
-computed per model from the base edge — walls and intervening units block, woods and ruins are
-area terrain (see in and out, never through), containers block hard — so ruler, sight fan and
-engine always agree.
+**one volumetric truth** (`VolumetricLos`, `scripts/solo/volumetric_los.gd`): every model is a
+cylinder whose height comes off the official base-size table, every terrain piece is a real 3D
+volume, and a sight query is a single 3D eye-to-eye segment — so the ruler's verdict, the sight
+fan, the engine and the AI can never disagree.
 
 **Solo — the 0.3.11 wave in play** — **Reanimation** rolls on activation and you allocate its
 restores by clicking; **Reinforcement** returns a destroyed unit as a fresh copy on the game's
@@ -73,6 +74,19 @@ declares weapon groups at a second target with visible rings and an explicit Fir
 the To-hit breakdown); the **combat stage** paces volleys, melee and casts on a central card
 (a click skips ahead); and in multiplayer the **rule log rides the wire** — your opponent reads
 the same audited rule lines you do.
+
+**Solo — the 0.3.12 wave** — **Elevation, Phase A** replaced several flat-map line-of-sight
+approximations with one volumetric truth (`VolumetricLos`) shared by the ruler, the sight fan, the
+engine and the AI; hills, ruins and walls now block by their actual shape. A **futile-charge gate**
+stops melee from charging or chasing a target it cannot hurt — an expected-wounds floor gates the
+decision, and either outcome writes its own battle-log line. **Movement-target commitment** adds
+hysteresis so a unit no longer flip-flops between two similar targets round after round; the hold
+is noted in the log. A **holding AI caster now says why** — no tokens, nothing castable in reach,
+or no spell data all surface as an explicit note instead of looking like nothing happened.
+**Attacker-side spell grants** (buffs that aid the attacker, e.g. Calculated Foresight) now reach
+the attack they were meant to boost, instead of being consumed with no effect. And the
+**vehicle-vs-walker base-size fallback** picks the vehicle base again when a unit's keywords claim
+both — walker keywords no longer win the tie-break by accident.
 
 **Not automated (named, not hidden)** — the battle log opens every game with the AI rule
 inventory, and any rule name the automation does not resolve is named per unit rather than
@@ -163,12 +177,13 @@ place via `table.set_biome`: grassland (default), desert (fine adobe + cacti) an
 tundra (snowed stone/conifers/containers); volcanic/jungle/urban still use the default
 set. **Terrain reference aids (Asgard tournament standard, display only)**:
 always-visible effect labels per terrain zone (Cover / Difficult / Dangerous /
-Impassable / Height) and height-aware top-down line-of-sight in the measure tool
-(`los_rules.gd` Height categories + per-zone flood fill in `terrain_overlay.gd`;
-a 🚫 marker on the measure line when LOS is blocked). **Units also block sight
-lines** (Asgard: a model blocks at its Height when ≥ both endpoints' Height, and
-gaps under 1″ inside a unit count as closed; the endpoint units never block their
-own line — `LosRules.units_block_line`). In a **human-vs-human** game the players apply
+Impassable / Height) and height-aware line-of-sight in the measure tool — since `0.3.12` this
+runs on the same **volumetric** truth as everything else (`VolumetricLos`,
+`scripts/solo/volumetric_los.gd`): every model is a cylinder whose height comes off the official
+base-size table, every terrain piece is a real 3D volume, and a sight query is one 3D eye-to-eye
+segment (a 🚫 marker on the measure line when LOS is blocked). **Units also block sight lines**:
+a model blocks the line when it stands tall enough to, gaps under 1″ inside a unit count as
+closed, and a unit never blocks its own line. In a **human-vs-human** game the players apply
 the effects themselves — terrain has **no automated movement/cover/damage effects**
 there, by design. In a **solo** game the same pieces are rules-active for both sides
 (line of sight, cover, difficult and dangerous ground — `scripts/solo/terrain_rules.gd`).
@@ -323,15 +338,16 @@ and `hero_attachment_dialog.gd` never existed as separate files — that logic l
 
 ## Tests
 
-gdUnit4: **1,709 tests green** across **160 suites** in `test/` (incl. `coherency_checker`,
+gdUnit4: **~2,270 tests green** across **234 suites** in `test/` (incl. `coherency_checker`,
 `save_manager`, `startup_menu`, `internet_lobby`, `relay_multiplayer_peer`, `network_manager` /
 `network_version_handshake`, `dice_rules`, `player_identity`, the movement/spacing
 suites `separation_checker` / `separation_resolver` / `separation_zone`, `move_ledger` /
 `move_trails`, `game_phase`, `object_manager`, the guided-tutorial flow, and the solo
 suites — `solo_controller`, `turn_manager`, `movement_planner`, `ai_decision` /
 `ai_targeting` / `ai_position` / `ai_round_planner` / `ai_combat_math` / `ai_spell`,
-`rules_registry`, `spells_registry`, `terrain_rules`, `sight_fan`, `transport_state` /
-`transport_embark`, `autosave_controller`). A small **end-to-end layer** (`test/e2e/`)
+`rules_registry`, `spells_registry`, `terrain_rules`, `sight_fan`, `volumetric_los`,
+`los_volumes`, `transport_state` / `transport_embark`, `autosave_controller`). The
+**end-to-end layer** (`test/e2e/`, **54 suites**)
 boots the real `scenes/main.tscn` and drives the real menu / deployment-gate / click-ownership
 / battle-log-export / AI-path-label flows that unit tests skip. Python: `relay/test_relay_server.py`
 (67 green). How to run: [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md). Coverage of the

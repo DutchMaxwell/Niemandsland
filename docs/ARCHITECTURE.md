@@ -39,8 +39,10 @@ layout that `AudioManager` builds on — load-bearing, not clutter; do not move 
 - `selectable_object.gd` — per-object selection behaviour.
 
 **Measurement & display aids** (local, display-only)
-- `los_rules.gd` — Asgard-standard line-of-sight height helpers (H1–H6); pure/static; powers
-  the units-as-LoS-blockers option.
+- `volumetric_los.gd` (`VolumetricLos`) — the single line-of-sight truth: every model is a
+  cylinder off the official base-size table, every terrain piece is a real 3D volume, and a sight
+  query is one 3D eye-to-eye segment. Pure/static, no scene/mesh/physics dependency; shared by the
+  ruler, the sight fan, the engine and the AI (elevation program, Phase A).
 - `pinned_ruler.gd` / `pinned_rulers.gd` — persistent shared rulers (pin with P; replicated to
   all clients, including late-joiners).
 - `range_ring_controller.gd` — per-model base-edge range rings (G cycles 3″–24″).
@@ -128,20 +130,22 @@ ruleset (the old root-level `ai_*.gd` / `battle_simulator.gd` were removed and *
   impassable barriers, dangerous terrain routed around, and individual models steered while the
   unit is held in coherency; `move_intent.gd` (`MoveIntent`) is the planned-move value type.
 - `terrain_rules.gd` (`TerrainRules`) — applies Cover / Difficult / Dangerous / Impassable / LoS
-  to the AI's moves and rolls (the solo-only mechanical terrain the sandbox only *shows*).
+  to the AI's moves and rolls (the solo-only mechanical terrain the sandbox only *shows*); sight
+  itself resolves through `VolumetricLos`.
 - `rules_registry.gd` (`RulesRegistry`) — per-game-system special-rule values (a rule name means
   different things in GF / GFF / AoF / AoFS / AoFR), driving automatic resolution for both sides.
 - `spells_registry.gd` (`SpellsRegistry`) — spell definitions, token costs and the mechanical
   buff/debuff effects that feed the real dice / rings / target checks.
 - `sight_fan.gd` (`SightFan`) — per-model, base-edge line-of-sight + weapon-range geometry (also
-  the source for the `F`-key sight fan, presented by `sight_fan_controller.gd`).
+  the source for the `F`-key sight fan, presented by `sight_fan_controller.gd`); sight resolves
+  through `VolumetricLos`.
 - `transport_state.gd` (`TransportState`) — embark / capacity / disembark-formation / destruction-
   spill state (see [Save format](#save-format-nml)).
 - `solo_difficulty.gd` (`SoloDifficulty`) — the single shipped grade (full strength); every legacy
   grade name resolves to it. `solo_sim.gd` (`SoloSim`) is the headless self-play harness that runs
   the same pure modules for balance/regression proofs.
 
-**Play aids & dialogs (new in `0.3.10.0`)**
+**Play aids & dialogs**
 - `spell_picker_dialog.gd` (`SpellPickerDialog`) / `interference_dialog.gd` (`InterferenceDialog`)
   — the human cast flow: pick a spell (cost + live effect text), and one modal tableau to spend
   tokens interfering with an enemy cast (live odds before you confirm). Code-built, awaitable.
