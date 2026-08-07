@@ -41,7 +41,7 @@ func _armed(pid: int, positions: Array, uid: String, weapons: Array) -> GameUnit
 ## wounds). My Striker starts 12" behind the marker — OUT of range until it
 ## rushes on. My Screamer is a worthless far-away single model (the cheap
 ## opener). Round 1 of 4.
-func _state() -> Dictionary:
+func _state(round_no := 1, rounds_total := 4) -> Dictionary:
 	var gunner := _armed(1, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)],
 		"Gunner", [{"name": "LongRifle", "range": 36, "attacks": 12}])
 	var striker := _armed(2, [Vector3(42.0 * IN2M, 0, 0), Vector3(43.0 * IN2M, 0, 0),
@@ -52,7 +52,7 @@ func _state() -> Dictionary:
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
 	army.game_units = {"Gunner": gunner, "Striker": striker, "Screamer": screamer}
 	return BattleSim.capture(army, func() -> Array: return [Vector3(30.0 * IN2M, 0, 0)],
-		func(_i: int) -> int: return 0, 1, 4)
+		func(_i: int) -> int: return 0, round_no, rounds_total)
 
 
 func _leaf(state: Dictionary, me: int) -> float:
@@ -82,3 +82,22 @@ func test_rollout_activates_everyone_and_leaves_input_untouched() -> void:
 			.override_failure_message("%s must have activated by round end" % k).is_true()
 	for k in state["units"]:
 		assert_bool((state["units"][k] as Dictionary)["activated"]).is_false()
+
+
+## R2, the pick-level discriminator ON THE LAST ROUND (endgame commit timing):
+## the 1-ply plan() rushes the striker straight onto the marker into the
+## waiting gunline; plan_with_rollout opens with the bait so the striker
+## commits AFTER the gunline spent its activation.
+func test_plan_with_rollout_baits_before_committing() -> void:
+	var greedy := AiPlanner.plan(_state(4, 4), 2)
+	assert_str(str(greedy["unit_key"])).is_equal("Striker")
+	assert_int(int((greedy["action"] as Dictionary)["kind"])).is_equal(AiDecision.Action.RUSH)
+	var pick := AiPlanner.plan_with_rollout(_state(4, 4), 2)
+	assert_str(str(pick["unit_key"])).is_equal("Screamer")
+	assert_int(int(pick["waits"])).is_equal(1)   # the striker is deliberately kept back
+	assert_float(float((pick["expectation"] as Dictionary)["after"])) 		.is_greater(float((AiPlanner.plan_with_rollout(_state(4, 4), 2, 1)["expectation"] as Dictionary)["after"]))
+
+
+## top_k <= 0 is the safety valve: byte-identical degrade to plan().
+func test_top_k_zero_degrades_to_plain_plan() -> void:
+	assert_that(AiPlanner.plan_with_rollout(_state(), 2, 0)).is_equal(AiPlanner.plan(_state(), 2))

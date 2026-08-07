@@ -43,6 +43,59 @@ static func plan(state: Dictionary, player: int) -> Dictionary:
 		"runner_up": runner}
 
 
+const ROLLOUT_TOP_K := 6   # rollout budget: only this many 1-ply-best openers get played out
+
+
+## R2 (round-rollout search): rank every (unit, action) pair 1-ply with the
+## rich leaf exactly like plan(), keep the TOP_K, play each survivor's round
+## out and take the best END-OF-ROUND rich-leaf score. top_k <= 0 degrades to
+## plan() byte-identically (the safety valve and the red-green seam).
+## Deterministic: prefilter ties keep capture order (explicit index tiebreak).
+static func plan_with_rollout(state: Dictionary, player: int,
+		top_k: int = ROLLOUT_TOP_K) -> Dictionary:
+	if top_k <= 0:
+		return plan(state, player)
+	var base := AiMissionEval.score(state, player, BattleSim.reply_threat(state, player))
+	var scored: Array = []
+	for key in state["units"]:
+		var su: Dictionary = state["units"][key]
+		if int(su["player"]) != player or bool(su["activated"]) or int(su["alive"]) <= 0:
+			continue
+		var cands: Array = [{"unit": key, "kind": AiDecision.Action.HOLD}] \
+			if bool(su.get("shaken", false)) else candidates(state, str(key))
+		for action in cands:
+			var next := BattleSim.resolve(state, action)
+			scored.append({"unit_key": str(key), "action": action, "idx": scored.size(),
+				"score": AiMissionEval.score(next, player, BattleSim.reply_threat(next, player))})
+	if scored.is_empty():
+		return {"used": false}
+	scored.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		if float(a["score"]) != float(b["score"]):
+			return float(a["score"]) > float(b["score"])
+		return int(a["idx"]) < int(b["idx"]))
+	var best := {}
+	var runner := {}
+	for cand in scored.slice(0, mini(top_k, scored.size())):
+		var end := rollout(state, cand["action"], player)
+		var rs := AiMissionEval.score(end, player, BattleSim.reply_threat(end, player))
+		var rolled := {"unit_key": cand["unit_key"], "action": cand["action"], "score": rs}
+		if best.is_empty() or rs > float(best["score"]):
+			runner = best
+			best = rolled
+		elif runner.is_empty() or rs > float(runner["score"]):
+			runner = rolled
+	var waits := 0
+	for key in state["units"]:
+		var su: Dictionary = state["units"][key]
+		if int(su["player"]) == player and not bool(su["activated"]) \
+				and int(su["alive"]) > 0 and str(key) != str(best["unit_key"]):
+			waits += 1
+	return {"used": true, "unit_key": best["unit_key"], "action": best["action"],
+		"intent": _intent(state, best, runner, base) + " (round played out; %d own kept back)" % waits,
+		"expectation": {"before": base, "after": float(best["score"])},
+		"runner_up": runner, "waits": waits}
+
+
 ## R1 (round-rollout search): play the rest of the ROUND out after `first_action`
 ## by `me` — sides alternate as in the real rule, a dry side lets the other play
 ## its tail, every step is the cheap-policy greedy pick. Returns the end-of-round
