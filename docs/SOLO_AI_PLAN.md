@@ -325,12 +325,12 @@ layer so a watching MP guest still sees the AI's moves. Layers:
 5. **Combat** — MVP: declare + highlight, human resolves. Phase 2: auto-resolve.
 6. **Objective rule** (new, small) — auto-evaluate the "more units within 3\"" control test.
 
-### EXISTS vs MISSING (from the codebase inventory)
+### EXISTS vs MISSING (historical inventory, 2026-06-30 — kept as a design record)
 | Capability | Status | Where |
 |---|---|---|
 | Unit/model stats + live wounds | **EXISTS** | `game_unit.gd`, `model_instance.gd`, `opr_api_client.gd` (`OPRUnit`/`OPRWeapon`, `range_value==0 ⇒ melee`) |
 | Apply-wound / kill primitives | **EXISTS** | `model_instance.gd:apply_damage`, `regiment.gd` pooled wounds, wound-action path |
-| LoS (models + terrain) | **EXISTS** | `los_rules.gd:units_block_line`, `terrain_overlay.gd:has_line_of_sight` |
+| LoS (models + terrain) | **EXISTS** | `VolumetricLos` (`scripts/solo/volumetric_los.gd`), `terrain_overlay.gd:has_line_of_sight` |
 | Range/move constants + distance | **EXISTS** | `movement_range_controller.gd` (Advance 6"/Rush 12" + rule modifiers), `range_ring_controller.gd`, `INCHES_TO_METERS` |
 | Objective positions + ownership state | **EXISTS** | `map_layout.gd:mission_objectives`, `terrain_overlay.gd:set/get_objective_owner`, 3" seize-ring geometry |
 | Round counter + activation flags | **EXISTS (state only)** | `game_unit.gd:is_activated/activate`, `opr_army_manager.gd:advance_round` |

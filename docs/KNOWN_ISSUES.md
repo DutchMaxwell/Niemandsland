@@ -10,13 +10,15 @@ not there yet and what to watch for. The full done / in-progress / planned break
 - **No rules automation between two humans.** In a local or multiplayer game against another
   person the simulator **shows, it does not decide.** It presents ranges, coherency, movement
   bands and unit state, but it does **not** resolve turns, shooting, melee or morale, and
-  **terrain has no gameplay effect** there (it's visual + line-of-sight only). You play the
-  game; the table assists.
+  **terrain has no gameplay effect** there (it's visual + line-of-sight only) — though since
+  `0.3.12` the measure tool's own LOS verdict is volumetric and height-aware in every mode. You
+  play the game; the table assists.
 - **Solo against NACHTMAHR is the exception.** When an army is AI-controlled the game does
   resolve activations, dice, wounds, morale, terrain effects and hundreds of special rules for
   both sides (see [`../PROJECT_STATUS.md`](../PROJECT_STATUS.md)). Solo is **alpha**: one
-  difficulty (full strength), single-player only (no co-op), English-only UI, and thirteen rule
-  names are still manual — the battle log names the ones your list contains.
+  difficulty (full strength), single-player only (no co-op), English-only UI, and a small residue
+  of special rules is still manual — the battle log names any rule it applies (or asks for
+  manual handling).
 - **OPR army data is loaded live, not bundled.** Army import calls the **Army Forge API** at
   runtime — you need an internet connection to import, and stats are never redistributed.
 - **3D models are delivered on demand.** The first time you use a faction, its models download

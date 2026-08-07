@@ -18,6 +18,15 @@ jobs:
         run: |
           if [ -d assets/ai_lists ]; then
             echo "::error::assets/ai_lists/ must not be committed — AI opponent lists are delivered via the asset CDN"; exit 1; fi
+      - name: Docs version matches the engine (truth-pass guard)
+        run: |
+          V=$(grep -oP 'config/version="\K[^"]+' project.godot)
+          if [ -z "$V" ]; then echo "::error::config/version not found in project.godot"; exit 1; fi
+          B="${V//-/--}"
+          if ! grep -q "Status-${B}-orange" README.md; then
+            echo "::error::README status badge does not say ${V} — docs lag the engine; run the truth pass (README Release checklist)"; exit 1; fi
+          if ! grep -qF "**Version:** ${V}" PROJECT_STATUS.md; then
+            echo "::error::PROJECT_STATUS.md version header does not say ${V} — docs lag the engine"; exit 1; fi
       - name: No private patterns (secret-provided)
         env:
           FORBIDDEN: ${{ secrets.FORBIDDEN_PATTERNS }}

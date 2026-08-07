@@ -282,21 +282,26 @@ class CoherencyResult:
         valid = false
 ```
 
-Another example — `LosRules.Blocker` (`los_rules.gd`):
+Another example — `BaseShape` (`separation_checker.gd`):
 
 ```gdscript
-class Blocker:
-    var pos: Vector2
-    var radius: float
-    var height: int
-    var unit_key: int
+class BaseShape:
+    enum Kind { ROUND, OVAL, RECT }
 
-    func _init(p_pos: Vector2, p_radius: float, p_height: int, p_unit_key: int) -> void:
-        pos = p_pos
-        radius = p_radius
-        height = p_height
-        unit_key = p_unit_key
+    var kind: int = Kind.ROUND
+    var center: Vector2 = Vector2.ZERO   # world XZ (metres)
+    var yaw: float = 0.0                  # rotation about world Y (radians); OVAL/RECT only
+    var radius: float = 0.0             # ROUND: base radius (metres)
+    var semi_x: float = 0.0            # OVAL/RECT: half-extent along local X (metres)
+    var semi_z: float = 0.0            # OVAL/RECT: half-extent along local Z (metres)
 ```
+
+The rule has a deliberate exception: `volumetric_los.gd` (`VolumetricLos`, the single
+line-of-sight truth) represents model cylinders and terrain volumes as plain `Dictionary`
+records, not typed classes — documented in the module itself, because they are a shared data feed
+(`terrain_overlay.gd`'s `los_volumes()` registry) crossing a module boundary where a loose,
+serializable shape is the simpler contract. Prefer a typed class for state your own code owns; a
+dictionary can be the right call for a data feed shared across a boundary like that one.
 
 ---
 

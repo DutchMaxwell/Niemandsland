@@ -287,7 +287,7 @@ without rule-coverage claims; see the commit series and `docs/SOLO_AI_PLAN.md`.)
 
 ## Wave 4 — army-book weapon/unit rules IMPLEMENTED (real game, 2026-07-10)
 
-Every special rule across the three 0.3.9 field books is now mechanically applied, not just inventoried
+Every special rule across the three field books is now mechanically applied, not just inventoried
 (the maintainer's directive: "ALL rules the unit has … the AI must notice AND apply"). Source of truth is
 the official Army Forge rule TEXT embedded in each book's `specialRules` (the wave-3 precedent); core-PDF
 rules are verified against the PDFs. Same discipline as waves 1–3 — a pure `AiCombatMath`/profile helper,
@@ -737,6 +737,12 @@ a symmetric board, deploys both sides, runs the graded match).
 
 ### The knobs (`scripts/solo/solo_difficulty.gd`)
 
+> **Historical design record.** This section documents the knob machinery in full — four preset
+> knob-vectors (Rekrut / Veteran / Kriegsherr / Albtraum) built for a graded arena. The shipped
+> game exposes exactly **one** difficulty; every one of those grade names resolves to the same
+> single strength, NACHTMAHR, today. Kept as a record of how the knobs work, for whenever
+> selectable grades ship.
+
 All in `[0,1]` unless noted; every seeded draw is a PURE hash of explicit integer parts (base seed · acting
 side · monotonic activation index · unit-name hash · per-knob salt) — no shared RNG, no `Math.random`-style
 nondeterminism. Same seed + same preset ⇒ identical "mistakes".
@@ -776,7 +782,7 @@ preset knob-vectors:
 
 **Per-side grading** (the maintainer's graded-arena requirement) is set with a difficulty per slot
 (`SoloController.set_difficulty(slot, …)`, indexed by the acting side, flips with `ai_slot`), e.g. `NML_AI_P1=
-rekrut NML_AI_P2=kriegsherr`. Tests: `solo_difficulty_test.gd` (10) + `solo_arena_test.gd` (6), incl. the
+nachtmahr NML_AI_P2=nachtmahr` (the only grade name the shipped game resolves today). Tests: `solo_difficulty_test.gd` (10) + `solo_arena_test.gd` (6), incl. the
 headless both-AI game-completion driver.
 
 ## Wave 5 — rules-registry wiring + top-breadth primitives (real game, 2026-07-13)
@@ -897,10 +903,11 @@ Def 2-3+ and regen-bypass) against the CONCRETE defender; unknown facets are con
   (`TOKEN_VALUE_EPS = 0.05` wounds/token); interference mirrors it on the defending side.
 - Tokens are SPENT at plan time (the official cost is paid on the attempt, before the roll);
   MP-synced via the existing `broadcast_unit_casts` seam.
-- Difficulty ladder (same axis as all knobs, never illegal): Rekrut/default = the official D3+X
-  first-valid; Veteran = D3+X but cycles past 0-EV spells; Kriegsherr/Albtraum = EV-best castable
-  spell (the same die-replacement licence as the targeting tie-break) + the marginal boost spend
-  (`SoloDifficulty.spend_boosts`, the pre-built gate).
+- Difficulty ladder (same axis as all knobs, never illegal — historical design record, see the
+  note under **AI ARENA** above; every grade name resolves to NACHTMAHR today): Rekrut/default =
+  the official D3+X first-valid; Veteran = D3+X but cycles past 0-EV spells; Kriegsherr/Albtraum =
+  EV-best castable spell (the same die-replacement licence as the targeting tie-break) + the
+  marginal boost spend (`SoloDifficulty.spend_boosts`, the pre-built gate).
 - Dev-mode records for EVERY decision: kind `cast` (candidate list with thresholds/EVs/validity,
   the D3, the chosen spell/targets, boost + interference token counts, p_cast, tokens before/after)
   and kind `cast_skip` (why the caster held).

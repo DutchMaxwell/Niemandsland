@@ -9,9 +9,9 @@ Fantasy). Built in Godot.
      (§ Release checklist); never hardcode a version elsewhere in the UI. -->
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Godot](https://img.shields.io/badge/Godot-4.6-blue.svg)](https://godotengine.org/)
-[![Status](https://img.shields.io/badge/Status-0.3.11.0--alpha-orange.svg)]()
+[![Status](https://img.shields.io/badge/Status-0.3.12.0--alpha-orange.svg)]()
 
-> **Status: public alpha (`0.3.11.0`).** The tabletop sandbox, OPR army import, multiplayer
+> **Status: public alpha (`0.3.12.0`).** The tabletop sandbox, OPR army import, multiplayer
 > and the 3D-model pipeline work. **Solo play against the built-in AI opponent (NACHTMAHR)**
 > resolves turns, combat, spells and terrain effects automatically; human-vs-human multiplayer
 > is still a manual-rules sandbox. See [`PROJECT_STATUS.md`](PROJECT_STATUS.md) for the honest
@@ -29,9 +29,9 @@ What the code actually does today:
   Deployment is a click-guided rulebook flow (roll-off, alternating placement, scouts, ambush
   arrivals), and you shoot, fight and cast through the radial menu with real dice in the tray.
   Hundreds of special rules resolve automatically across all five systems, and **every applied
-  rule writes its own battle-log line**; the thirteen rule names the automation does not cover yet
-  are named in full in [`PROJECT_STATUS.md`](PROJECT_STATUS.md) and listed per unit in the log, so
-  you can apply them by hand. When your unit takes wounds and the choice matters (Tough models,
+  rule writes its own battle-log line** — the remaining uncovered special rules are a small
+  residue, and the battle log names any rule it applies (or asks for manual handling) per unit, so
+  you can apply the rest by hand. When your unit takes wounds and the choice matters (Tough models,
   mixed loadouts), **you allocate them by clicking** — LMB places one wound, RMB auto-allocates
   the rest. One difficulty (full strength) — selectable grades are on the roadmap.
 - **3D tabletop** — variable table sizes (4×4, 6×4, custom), orbit/pan/zoom camera.
@@ -45,7 +45,9 @@ What the code actually does today:
 - **Map layout editor** — top-down 3″ grid, terrain pieces (ruins / forest /
   container / dangerous), front-line + custom-polygon deployment zones, objectives,
   auto-generate, 3D overlay, save/load layouts. (In solo mode terrain is rules-active — line of
-  sight, cover, difficult / dangerous ground; in the sandbox and in multiplayer it stays visual.)
+  sight, cover, difficult / dangerous ground; in the sandbox and in multiplayer it stays visual —
+  though since `0.3.12` the measure tool's own LOS verdict is volumetric and height-aware in
+  every mode.)
 - **OPR units** — import Army Forge lists via the OPR API, per-model wounds, caster
   points, unit coherency check + visualizer, radial context menu, a bottom unit-card
   dock (the whole army as live stat cards) plus an in-game battle log (exportable to a
@@ -53,7 +55,9 @@ What the code actually does today:
   and transports (embark / unload with book-exact capacity, saved and MP-synced).
 - **Sight & range fan** — press `F` on a selected unit to see exactly what it can legally see
   and shoot: walls cast shadows, woods are seen into but not through, one band per weapon range.
-  It also appears on its own for every AI volley.
+  Since `0.3.12` the fan is **height-aware**: it resolves through the same volumetric line of sight
+  as the engine, so the fan and the dice can no longer disagree. It also appears on its own for
+  every AI volley.
 - **Movement & trails** — drag a model to paint a base-width "chalk" trail (**Path
   Painting**); the ruler and battle log report the actual traveled path (arc), while
   weapon/charge range stays straight-line. Walking the cursor back inside your own chalk
@@ -64,9 +68,10 @@ What the code actually does today:
   opt-in "dry-brush" cap stops the drag at the selected action band (Advance ~6″ /
   Rush-Charge ~12″). A Deployment → **Start Game** → Playing phase gate (with an MP
   ready-sync) frames setup vs play.
-- **Multiplayer** — ENet over LAN, or over the internet via a WebSocket relay
-  (see [`relay/`](relay/README.md)); full state sync (models, terrain, table size),
-  shared dice log, player avatars/cursors, save/load, and a deployment ready-sync.
+- **Multiplayer** — manual play: no rules automation, alternate activations like at a real table.
+  ENet over LAN, or over the internet via a WebSocket relay (see [`relay/`](relay/README.md));
+  full state sync (models, terrain, table size), shared dice log, player avatars/cursors,
+  save/load, and a deployment ready-sync.
 - **Import / export** — Army Forge (OPR) list import; `.nml` save format with OS file
   association, plus autosave (every 5 minutes and at round changes, three rotating slots
   offered in CONTINUE).
