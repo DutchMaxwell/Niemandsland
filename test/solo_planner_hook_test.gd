@@ -65,6 +65,25 @@ func test_gate_only_opens_for_the_planner_preset() -> void:
 	assert_bool(sc._planner_active()).is_true()
 
 
+## Unit pick: with the planner on, the marker-taker beats a far idler for the
+## next activation regardless of pool order — no seeded draw, one "planner"
+## record. Off-preset (NACHTMAHR) the pick must NOT come from the planner.
+func test_planner_picks_which_unit_activates() -> void:
+	var sc := _controller()
+	var idler := _unit(2, [Vector3(60.0 * IN2M, 0, 60.0 * IN2M)], "Idler")
+	sc.army_manager.game_units["Idler"] = idler
+	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
+	var taker: GameUnit = sc.army_manager.game_units["Taker"]
+	assert_object(sc._select_ai_unit([idler, taker])).is_same(taker)
+	assert_that(_kinds(sc)).contains(["planner"])
+	var sc2 := _controller()
+	var idler2 := _unit(2, [Vector3(60.0 * IN2M, 0, 60.0 * IN2M)], "Idler")
+	sc2.army_manager.game_units["Idler"] = idler2
+	sc2.set_difficulty(2, SoloDifficulty.for_grade("nachtmahr"))
+	sc2._select_ai_unit([idler2, sc2.army_manager.game_units["Taker"]])
+	assert_that(_kinds(sc2)).not_contains(["planner"])
+
+
 func test_solve_planner_maps_pick_to_adoption_shape() -> void:
 	var sc := _controller()
 	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))

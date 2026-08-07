@@ -829,6 +829,14 @@ func _select_ai_unit(eligible: Array) -> GameUnit:
 	var pool: Array = fresh if not fresh.is_empty() else shaken
 	if pool.size() == 1:
 		return pool[0]
+	# PLANNER_V0 (NML-995): WHICH unit activates becomes part of the pick — plan()
+	# ranks every pool unit's best action in mission currency. Sits above the
+	# ALBTRAUM lookahead (the planner difficulty subsumes it); consumes no RNG,
+	# so a null fallback leaves the seeded draw byte-identical.
+	if _planner_active():
+		var planned := _planner_pick_unit(pool)
+		if planned != null:
+			return planned
 	# ALBTRAUM LOOKAHEAD (the grade's first REAL engine differentiator — before this, albtraum ==
 	# kriegsherr): instead of the official random D6-section pick, evaluate every eligible unit's IMMEDIATE
 	# activation value (best shoot/charge EV + objective-seize worth, final-round weighted) and activate
@@ -2606,6 +2614,29 @@ func _position_solver_active() -> bool:
 func _planner_active() -> bool:
 	var diff := active_difficulty()
 	return diff != null and diff.planner
+
+
+## PLANNER_V0 unit pick (NML-995): plan() ranges over the WHOLE eligible pool at
+## once — everything of ours outside the pool is marked activated on the captured
+## copy, so the winning (unit, action) pair decides who activates next instead of
+## the tree's seeded section draw. null → the caller keeps its draw untouched.
+func _planner_pick_unit(pool: Array) -> GameUnit:
+	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
+		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
+		terrain_type_at)
+	var me: int = int((pool[0] as GameUnit).unit_properties.get("player_id", 0))
+	for k in state["units"]:
+		var su: Dictionary = state["units"][k]
+		if int(su["player"]) == me and not pool.has(su["unit"]):
+			su["activated"] = true
+	var pick := AiPlanner.plan(state, me)
+	if not bool(pick.get("used", false)):
+		return null
+	var chosen: GameUnit = (state["units"][pick["unit_key"]] as Dictionary)["unit"]
+	record_decision({"kind": "planner", "unit": chosen.get_name(),
+		"rule": "PLANNER_V0 unit pick (NML-995): plan() ranks every eligible unit's best action in win probability; the winner activates first",
+		"candidates": [], "chosen": "activates next", "why": str(pick["intent"]), "data": {}})
+	return chosen
 
 
 ## The planner as a position-solver-style overlay: capture the LIVE game into a BattleSim state,
