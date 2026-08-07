@@ -129,7 +129,7 @@ static func _apply_expected_wounds(tu: Dictionary, ev: float) -> void:
 
 static func capture(army: OPRArmyManager, objectives_provider: Callable = Callable(),
 		objective_owner_of: Callable = Callable(), round_no: int = 1,
-		rounds_total: int = 4) -> Dictionary:
+		rounds_total: int = 4, cover_of: Callable = Callable()) -> Dictionary:
 	var units := {}
 	for uid in army.game_units:
 		var u: GameUnit = army.game_units[uid]
@@ -145,6 +145,7 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 			"positions": positions,
 			"alive": positions.size(),
 			"wounds": wounds,
+			"in_cover": bool(cover_of.call(u)) if cover_of.is_valid() else false,
 			"shaken": u.is_shaken,
 			"fatigued": u.is_fatigued,
 			"activated": u.is_activated,

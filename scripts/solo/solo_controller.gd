@@ -2615,7 +2615,7 @@ func _planner_active() -> bool:
 ## explainability record (intent sentence + expectation numbers + runner-up).
 func _solve_planner(unit: GameUnit) -> Dictionary:
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
-		_current_round(), maxi(game_rounds, _current_round()))
+		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover)
 	var unit_key := ""
 	for k in state["units"]:
 		if (state["units"][k] as Dictionary)["unit"] == unit:

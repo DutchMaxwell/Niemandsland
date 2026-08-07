@@ -59,6 +59,19 @@ func test_capture_maps_units_flags_and_objectives() -> void:
 	assert_that((state["objectives"][1] as Dictionary)["owner"]).is_equal(1)
 
 
+## T1: cover_of stamps per-unit in_cover at capture time; no callable keeps
+## the pre-T1 default (false) byte-identically.
+func test_capture_stamps_in_cover_via_cover_of() -> void:
+	var grunts := _unit(1, [Vector3.ZERO], "Grunts")
+	var tank := _unit(2, [Vector3(10.0 * IN2M, 0, 0)], "Tank")
+	var army := _army([grunts, tank])
+	var state := BattleSim.capture(army, Callable(), Callable(), 1, 4,
+		func(u: GameUnit) -> bool: return u.unit_id == "Grunts")
+	assert_bool((state["units"]["Grunts"] as Dictionary)["in_cover"]).is_true()
+	assert_bool((state["units"]["Tank"] as Dictionary)["in_cover"]).is_false()
+	assert_bool((BattleSim.capture(army)["units"]["Grunts"] as Dictionary)["in_cover"]).is_false()
+
+
 func test_snapshot_is_a_copy_in_both_directions() -> void:
 	var grunts := _unit(2, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0)], "Grunts")
 	var army := _army([grunts])
