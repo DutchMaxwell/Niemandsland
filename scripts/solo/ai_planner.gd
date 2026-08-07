@@ -73,9 +73,22 @@ static func plan_with_rollout(state: Dictionary, player: int,
 		if float(a["score"]) != float(b["score"]):
 			return float(a["score"]) > float(b["score"])
 		return int(a["idx"]) < int(b["idx"]))
+	# Coverage guarantee (diagnosis 07.08.): WHICH unit opens is the whole
+	# question, but bait moves rank low 1-ply and never survived a global
+	# TOP_K cut. Every un-activated unit gets its best candidate rolled out;
+	# the global TOP_K adds depth on the leaders.
+	var pool: Array = []
+	var covered := {}
+	for cand in scored:
+		if not covered.has(cand["unit_key"]):
+			covered[cand["unit_key"]] = true
+			pool.append(cand)
+	for cand in scored.slice(0, mini(top_k, scored.size())):
+		if not pool.has(cand):
+			pool.append(cand)
 	var best := {}
 	var runner := {}
-	for cand in scored.slice(0, mini(top_k, scored.size())):
+	for cand in pool:
 		var end := rollout(state, cand["action"], player)
 		var rs := AiMissionEval.score(end, player, BattleSim.reply_threat(end, player))
 		var rolled := {"unit_key": cand["unit_key"], "action": cand["action"], "score": rs}
@@ -93,7 +106,7 @@ static func plan_with_rollout(state: Dictionary, player: int,
 	return {"used": true, "unit_key": best["unit_key"], "action": best["action"],
 		"intent": _intent(state, best, runner, base) + " (round played out; %d own kept back)" % waits,
 		"expectation": {"before": base, "after": float(best["score"])},
-		"runner_up": runner, "waits": waits}
+		"runner_up": runner, "waits": waits, "rolled_units": covered.keys()}
 
 
 ## R1 (round-rollout search): play the rest of the ROUND out after `first_action`

@@ -95,7 +95,9 @@ func test_plan_with_rollout_baits_before_committing() -> void:
 	var pick := AiPlanner.plan_with_rollout(_state(4, 4), 2)
 	assert_str(str(pick["unit_key"])).is_equal("Screamer")
 	assert_int(int(pick["waits"])).is_equal(1)   # the striker is deliberately kept back
-	assert_float(float((pick["expectation"] as Dictionary)["after"])) 		.is_greater(float((AiPlanner.plan_with_rollout(_state(4, 4), 2, 1)["expectation"] as Dictionary)["after"]))
+	# coverage guarantee: even the tiny budget finds the same bait line now
+	assert_float(float((pick["expectation"] as Dictionary)["after"])) \
+		.is_equal_approx(float((AiPlanner.plan_with_rollout(_state(4, 4), 2, 1)["expectation"] as Dictionary)["after"]), 0.0001)
 
 
 ## top_k <= 0 is the safety valve: byte-identical degrade to plan().
@@ -120,3 +122,14 @@ func test_rollout_opponent_counter_charges_commitment() -> void:
 	var end := AiPlanner.rollout(state,
 		{"unit": "Squad", "kind": AiDecision.Action.RUSH, "dest": Vector3(10.0 * IN2M, 0, 0)}, 2)
 	assert_int(int((end["units"]["Squad"] as Dictionary)["alive"])) 		.override_failure_message("the brute must counter-charge the committed squad in the rollout") 		.is_less(4)
+
+
+## Coverage guarantee: every un-activated unit gets a rollout even when the
+## global TOP_K budget is 1 — bait moves rank low 1-ply and must never be
+## prefiltered out of the tempo search.
+func test_every_unit_is_rolled_out_even_with_tiny_top_k() -> void:
+	var pick := AiPlanner.plan_with_rollout(_state(4, 4), 2, 1)
+	var rolled: Array = pick["rolled_units"]
+	rolled.sort()
+	assert_that(rolled).is_equal(["Screamer", "Striker"])
+	assert_str(str(pick["unit_key"])).is_equal("Screamer")   # the bait wins despite top_k=1
