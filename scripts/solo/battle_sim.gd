@@ -23,8 +23,11 @@ static func clone_state(state: Dictionary) -> Dictionary:
 	var objectives: Array = []
 	for o in state["objectives"]:
 		objectives.append((o as Dictionary).duplicate())
-	return {"round": state["round"], "rounds_total": state["rounds_total"],
+	var out := {"round": state["round"], "rounds_total": state["rounds_total"],
 		"units": units, "objectives": objectives}
+	if state.has("terrain_at"):
+		out["terrain_at"] = state["terrain_at"]
+	return out
 
 
 ## Resolves one activation IN EXPECTATION on a cloned state and returns it.
@@ -53,6 +56,9 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			delta = delta.normalized() * reach_m
 		for i in range(positions.size()):
 			positions[i] = (positions[i] as Vector3) + delta
+		var terrain_at: Callable = next.get("terrain_at", Callable())
+		if terrain_at.is_valid():   # T2b: the mover's cover follows it (unit-centre probe, v0)
+			su["in_cover"] = TerrainRules.gives_cover(int(terrain_at.call(centre + delta)))
 	var shoot_key := str(action.get("shoot", ""))
 	if shoot_key != "" and next["units"].has(shoot_key) and sees(su, shoot_key) \
 			and (kind == AiDecision.Action.HOLD or kind == AiDecision.Action.ADVANCE):
@@ -139,7 +145,7 @@ static func _apply_expected_wounds(tu: Dictionary, ev: float) -> void:
 static func capture(army: OPRArmyManager, objectives_provider: Callable = Callable(),
 		objective_owner_of: Callable = Callable(), round_no: int = 1,
 		rounds_total: int = 4, cover_of: Callable = Callable(),
-		los_of: Callable = Callable()) -> Dictionary:
+		los_of: Callable = Callable(), terrain_at: Callable = Callable()) -> Dictionary:
 	var units := {}
 	for uid in army.game_units:
 		var u: GameUnit = army.game_units[uid]
@@ -178,9 +184,12 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 				"pos": objs[i],
 				"owner": int(objective_owner_of.call(i)) if objective_owner_of.is_valid() else 0,
 			})
-	return {
+	var state := {
 		"round": round_no,
 		"rounds_total": rounds_total,
 		"units": units,
 		"objectives": objectives,
 	}
+	if terrain_at.is_valid():   # absent key = pre-T2b snapshot, byte-identical
+		state["terrain_at"] = terrain_at
+	return state

@@ -129,6 +129,28 @@ func test_resolve_gates_shooting_on_captured_los() -> void:
 	assert_int(int((BattleSim.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(3)
 
 
+## T2b: a mover's in_cover follows it through the rollout — stamped from the
+## terrain probe at the NEW unit centre; without a probe the captured flag
+## stays frozen (pre-T2b behaviour).
+func test_move_restamps_cover_from_the_terrain_probe() -> void:
+	var state := _state_with_grunts()
+	# forest patch around x = 6", nothing anywhere else
+	(state as Dictionary)["terrain_at"] = func(p: Vector3) -> int:
+		return TerrainRules.TerrainType.FOREST \
+			if absf(p.x / IN2M - 6.0) < 2.0 and absf(p.z) < 2.0 * IN2M else TerrainRules.TerrainType.NONE
+	var into := BattleSim.resolve(state, {"unit": "Grunts",
+		"kind": AiDecision.Action.ADVANCE, "dest": Vector3(6.0 * IN2M, 0, 0)})
+	assert_bool((into["units"]["Grunts"] as Dictionary)["in_cover"]).is_true()
+	var out := BattleSim.resolve(into, {"unit": "Grunts",
+		"kind": AiDecision.Action.RUSH, "dest": Vector3(30.0 * IN2M, 0, 0)})
+	assert_bool((out["units"]["Grunts"] as Dictionary)["in_cover"]).is_false()
+	state.erase("terrain_at")
+	(state["units"]["Grunts"] as Dictionary)["in_cover"] = true
+	var frozen := BattleSim.resolve(state, {"unit": "Grunts",
+		"kind": AiDecision.Action.RUSH, "dest": Vector3(30.0 * IN2M, 0, 0)})
+	assert_bool((frozen["units"]["Grunts"] as Dictionary)["in_cover"]).is_true()
+
+
 ## Charge into Tough(3): 1.0 expected wound drains the pool (3 -> 2), no kill.
 ## The survivor strikes back with the same fists -> the 1W charger dies; the
 ## charge marks the actor fatigued on the clone.
