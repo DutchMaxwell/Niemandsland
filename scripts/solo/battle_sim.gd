@@ -54,7 +54,7 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 		for i in range(positions.size()):
 			positions[i] = (positions[i] as Vector3) + delta
 	var shoot_key := str(action.get("shoot", ""))
-	if shoot_key != "" and next["units"].has(shoot_key) \
+	if shoot_key != "" and next["units"].has(shoot_key) and sees(su, shoot_key) \
 			and (kind == AiDecision.Action.HOLD or kind == AiDecision.Action.ADVANCE):
 		var tu: Dictionary = next["units"][shoot_key]
 		var d := dist_in(positions, tu["positions"])
@@ -75,6 +75,15 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 
 
 const CONTACT_IN := 1.0
+
+## Snapshot LOS: no matrix (no los_of wired at capture) = everyone sees
+## everyone, byte-identical to pre-T2. V0 approximation, documented: the
+## matrix is CAPTURE-TIME — a unit moved during a rollout keeps its captured
+## sight lines (exact for hold+shoot, approximate after moves).
+static func sees(su: Dictionary, other_key: String) -> bool:
+	if not su.has("los"):
+		return true
+	return bool((su["los"] as Dictionary).get(other_key, true))
 
 ## Nearest-model gap between two snapshot position arrays, inches.
 static func dist_in(a: Array, b: Array) -> float:
@@ -129,7 +138,8 @@ static func _apply_expected_wounds(tu: Dictionary, ev: float) -> void:
 
 static func capture(army: OPRArmyManager, objectives_provider: Callable = Callable(),
 		objective_owner_of: Callable = Callable(), round_no: int = 1,
-		rounds_total: int = 4, cover_of: Callable = Callable()) -> Dictionary:
+		rounds_total: int = 4, cover_of: Callable = Callable(),
+		los_of: Callable = Callable()) -> Dictionary:
 	var units := {}
 	for uid in army.game_units:
 		var u: GameUnit = army.game_units[uid]
@@ -151,6 +161,15 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 			"activated": u.is_activated,
 			"casts": u.casts_current,
 		}
+	if los_of.is_valid():
+		for k in units:
+			var su: Dictionary = units[k]
+			var matrix := {}
+			for ok in units:
+				var other: Dictionary = units[ok]
+				if int(other["player"]) != int(su["player"]):
+					matrix[ok] = bool(los_of.call(su["unit"], other["unit"]))
+			su["los"] = matrix
 	var objectives: Array = []
 	if objectives_provider.is_valid():
 		var objs: Variant = objectives_provider.call()

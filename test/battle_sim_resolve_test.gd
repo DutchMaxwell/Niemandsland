@@ -113,6 +113,22 @@ func test_shoot_kills_by_expectation_and_cover_saves() -> void:
 	assert_int(int((BattleSim.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(4)
 
 
+## T2: a walled pair (captured LOS false) never trades wounds in expectation —
+## resolve leaves the target untouched; the same shot with LOS lands as before.
+func test_resolve_gates_shooting_on_captured_los() -> void:
+	var shooter := _armed(2, [Vector3.ZERO], "Shooter", [{"name": "Rifle", "range": 24}])
+	var targets: Array = []
+	for i in range(4):
+		targets.append(Vector3((12.0 + i) * IN2M, 0, 0))
+	var squad := _armed(1, targets, "Squad", [{"name": "Rifle", "range": 24}])
+	var state := _capture([shooter, squad])
+	(state["units"]["Shooter"] as Dictionary)["los"] = {"Squad": false}
+	var action := {"unit": "Shooter", "kind": AiDecision.Action.HOLD, "shoot": "Squad"}
+	assert_int(int((BattleSim.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(4)
+	(state["units"]["Shooter"] as Dictionary)["los"] = {"Squad": true}
+	assert_int(int((BattleSim.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(3)
+
+
 ## Charge into Tough(3): 1.0 expected wound drains the pool (3 -> 2), no kill.
 ## The survivor strikes back with the same fists -> the 1W charger dies; the
 ## charge marks the actor fatigued on the clone.

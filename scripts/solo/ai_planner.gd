@@ -118,6 +118,8 @@ static func _best_shoot(state: Dictionary, key: String) -> String:
 	var best := ""
 	var best_ev := 0.0
 	for ek in _enemy_keys(state, key):
+		if not BattleSim.sees(su, str(ek)):
+			continue
 		var tu: Dictionary = state["units"][ek]
 		var d := BattleSim.dist_in(su["positions"], tu["positions"])
 		var ev := AiEv.shoot_ev(BattleSim._profiles_of(su, false, d),

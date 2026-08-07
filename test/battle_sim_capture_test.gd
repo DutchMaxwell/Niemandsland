@@ -72,6 +72,22 @@ func test_capture_stamps_in_cover_via_cover_of() -> void:
 	assert_bool((BattleSim.capture(army)["units"]["Grunts"] as Dictionary)["in_cover"]).is_false()
 
 
+## T2: los_of stamps a capture-time enemy-pair matrix; allies never appear in
+## it; no callable leaves the key out entirely (= all-true, pre-T2 behaviour).
+func test_capture_stamps_enemy_los_matrix() -> void:
+	var a := _unit(1, [Vector3.ZERO], "A")
+	var b := _unit(2, [Vector3(10.0 * IN2M, 0, 0)], "B")
+	var c := _unit(2, [Vector3(20.0 * IN2M, 0, 0)], "C")
+	var army := _army([a, b, c])
+	var state := BattleSim.capture(army, Callable(), Callable(), 1, 4, Callable(),
+		func(_u: GameUnit, t: GameUnit) -> bool: return t.unit_id != "C")
+	assert_that((state["units"]["A"] as Dictionary)["los"]).is_equal({"B": true, "C": false})
+	assert_that((state["units"]["B"] as Dictionary)["los"]).is_equal({"A": true})
+	assert_bool(BattleSim.sees(state["units"]["A"], "B")).is_true()
+	assert_bool(BattleSim.sees(state["units"]["A"], "C")).is_false()
+	assert_bool((BattleSim.capture(army)["units"]["A"] as Dictionary).has("los")).is_false()
+
+
 func test_snapshot_is_a_copy_in_both_directions() -> void:
 	var grunts := _unit(2, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0)], "Grunts")
 	var army := _army([grunts])

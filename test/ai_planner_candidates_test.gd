@@ -73,6 +73,23 @@ func test_best_shoot_picks_the_softer_target() -> void:
 	assert_str(str((shoots[0] as Dictionary)["shoot"])).is_equal("Soft")
 
 
+## T2: a blind target (captured LOS false) never becomes the shoot candidate —
+## the pick falls to the seen one; both blind kills the shoot action entirely.
+func test_best_shoot_skips_blind_targets() -> void:
+	var shooter := _armed(2, [Vector3.ZERO], "Shooter", [{"name": "Rifle", "range": 24}])
+	var near := _armed(1, [Vector3(12.0 * IN2M, 0, 0)], "Near", [{"name": "CCW", "range": 0}])
+	var far := _armed(1, [Vector3(0, 0, 18.0 * IN2M)], "Far", [{"name": "CCW", "range": 0}])
+	var state := _state([shooter, near, far])
+	(state["units"]["Shooter"] as Dictionary)["los"] = {"Near": false, "Far": true}
+	var shoots := AiPlanner.candidates(state, "Shooter") \
+		.filter(func(c: Dictionary) -> bool: return c.has("shoot"))
+	assert_int(shoots.size()).is_equal(1)
+	assert_str(str((shoots[0] as Dictionary)["shoot"])).is_equal("Far")
+	(state["units"]["Shooter"] as Dictionary)["los"] = {"Near": false, "Far": false}
+	assert_int(AiPlanner.candidates(state, "Shooter") \
+		.filter(func(c: Dictionary) -> bool: return c.has("shoot")).size()).is_equal(0)
+
+
 ## Q6 fists vs a 2+ save: 4 * 1/6 * 1/6 = 0.11 expected wounds — under the
 ## live futile bar, so the tank must NEVER be a charge candidate. The 5+
 ## save ogre (0.44) is. Removing the ogre removes the charge entirely.
