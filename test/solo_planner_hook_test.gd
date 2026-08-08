@@ -136,6 +136,7 @@ func test_rollout_intent_is_executed_not_rederived() -> void:
 	add_child(sc)
 	sc.setup(army, null, null, 1, 2)
 	sc.game_rounds = 4
+	sc.round_provider = func() -> int: return 4   # last round — R6's horizon must clamp here
 	sc.objectives_provider = func() -> Array: return [Vector3(30.0 * IN2M, 0, 0)]
 	sc.objective_owner_of = func(_i: int) -> int: return 0
 	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))

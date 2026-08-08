@@ -109,16 +109,25 @@ static func plan_with_rollout(state: Dictionary, player: int,
 		"runner_up": runner, "waits": waits, "rolled_units": covered.keys()}
 
 
-## R1 (round-rollout search): play the rest of the ROUND out after `first_action`
-## by `me` — sides alternate as in the real rule, a dry side lets the other play
-## its tail, every step is the cheap-policy greedy pick. Returns the end-of-round
-## state; the CALLER prices it with the rich leaf (eval + reply_threat). Pure and
-## deterministic. The guard only backstops a logic error, it never binds: one
-## round has at most units-many activations.
-static func rollout(state: Dictionary, first_action: Dictionary, me: int) -> Dictionary:
+const ROLLOUT_HORIZON_ROUNDS := 2   # R6: a move's price only shows NEXT round — round 1 alone is a movement round
+
+
+## R1+R6 (round-rollout search): play the rest of the ROUND out after
+## `first_action` by `me` — sides alternate as in the real rule, a dry side
+## lets the other play its tail, every step is the cheap-policy greedy pick —
+## and then keep playing INTO the following round(s) up to `horizon_rounds`
+## (R6: the step-4 calibration proved the round-1 leaf is blind — imagined
+## round 1 holds almost no combat, so every opener scored alike; the
+## consequences land in round 2, which the mind must now watch). Returns the
+## horizon-end state; the CALLER prices it with the rich leaf (eval +
+## reply_threat). Pure and deterministic. horizon_rounds = 1 is the pre-R6
+## single-round rollout, byte-identical (the safety valve and test seam).
+static func rollout(state: Dictionary, first_action: Dictionary, me: int,
+		horizon_rounds: int = ROLLOUT_HORIZON_ROUNDS) -> Dictionary:
 	var cur := BattleSim.resolve(state, first_action)
 	var turn := _other_player(state, me)
-	var guard: int = (state["units"] as Dictionary).size() + 2
+	var rounds_left := maxi(horizon_rounds, 1)
+	var guard: int = ((state["units"] as Dictionary).size() + 2) * rounds_left
 	while guard > 0:
 		guard -= 1
 		var a := _policy_step(cur, turn)
@@ -126,10 +135,39 @@ static func rollout(state: Dictionary, first_action: Dictionary, me: int) -> Dic
 			turn = _other_player(cur, turn)
 			a = _policy_step(cur, turn)
 			if a.is_empty():
-				break
+				rounds_left -= 1
+				if rounds_left <= 0 or int(cur["round"]) >= int(cur["rounds_total"]):
+					break
+				turn = _cross_round(cur)
+				continue
 		cur = BattleSim.resolve(cur, a)
 		turn = _other_player(cur, turn)
 	return cur
+
+
+## R6: cross the round boundary INSIDE the mental game — round counter up,
+## everyone un-activated, fatigue gone (p.9: it lasts until the end of the
+## round; Shaken persists — its recovery is the idle activation the policy
+## already hands out). Returns the imagined new round's opener: under strict
+## alternation the side with fewer alive units finished its activations first
+## and opens the next round (GF v3.5.1 p.4); a tie opens with the lower slot
+## (v0 approximation, deterministic). Mutates `cur` in place — it is the
+## rollout's private clone chain, never a caller's state.
+static func _cross_round(cur: Dictionary) -> int:
+	cur["round"] = int(cur["round"]) + 1
+	var counts := {}
+	for k in cur["units"]:
+		var su: Dictionary = cur["units"][k]
+		su["activated"] = false
+		su["fatigued"] = false
+		if int(su["alive"]) > 0:
+			counts[int(su["player"])] = int(counts.get(int(su["player"]), 0)) + 1
+	var players: Array = counts.keys()
+	players.sort()
+	if players.size() == 2 and int(counts[players[0]]) != int(counts[players[1]]):
+		return int(players[0]) if int(counts[players[0]]) < int(counts[players[1]]) \
+			else int(players[1])
+	return int(players[0]) if not players.is_empty() else 0
 
 
 ## Rollout policy, one step: the best restricted move of `player`'s un-activated

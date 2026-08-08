@@ -64,8 +64,8 @@ func test_rollout_prefers_the_cheap_opener() -> void:
 	var commit := {"unit": "Striker", "kind": AiDecision.Action.RUSH,
 		"dest": Vector3(30.0 * IN2M, 0, 0)}
 	var bait := {"unit": "Screamer", "kind": AiDecision.Action.HOLD}
-	var end_commit := AiPlanner.rollout(state, commit, 2)
-	var end_bait := AiPlanner.rollout(state, bait, 2)
+	var end_commit := AiPlanner.rollout(state, commit, 2, 1)   # horizon 1: this test pins IN-round tempo
+	var end_bait := AiPlanner.rollout(state, bait, 2, 1)
 	# committing first: the un-activated gunline replies into the striker
 	assert_int(int((end_commit["units"]["Striker"] as Dictionary)["alive"])).is_equal(1)
 	# baiting first: the gunline must commit before the striker enters range
@@ -76,7 +76,7 @@ func test_rollout_prefers_the_cheap_opener() -> void:
 func test_rollout_activates_everyone_and_leaves_input_untouched() -> void:
 	var state := _state()
 	var end := AiPlanner.rollout(state,
-		{"unit": "Screamer", "kind": AiDecision.Action.HOLD}, 2)
+		{"unit": "Screamer", "kind": AiDecision.Action.HOLD}, 2, 1)   # horizon 1: pins the single-round contract
 	for k in end["units"]:
 		assert_bool((end["units"][k] as Dictionary)["activated"]) \
 			.override_failure_message("%s must have activated by round end" % k).is_true()
@@ -133,3 +133,47 @@ func test_every_unit_is_rolled_out_even_with_tiny_top_k() -> void:
 	rolled.sort()
 	assert_that(rolled).is_equal(["Screamer", "Striker"])
 	assert_str(str(pick["unit_key"])).is_equal("Screamer")   # the bait wins despite top_k=1
+
+
+# === R6: cross-round horizon (parity wave depth rung, NML-995) ===
+
+## The default rollout now plays INTO the following round: the returned state
+## carries round 2 with every unit activation-spent again (round 2 was played
+## to its end); the explicit horizon 1 stays on round 1 (the safety valve);
+## the input state is never touched.
+func test_rollout_default_horizon_crosses_into_the_next_round() -> void:
+	var state := _state()
+	var bait := {"unit": "Screamer", "kind": AiDecision.Action.HOLD}
+	var end := AiPlanner.rollout(state, bait, 2)
+	assert_int(int(end["round"])).is_equal(2)
+	for k in end["units"]:
+		if int((end["units"][k] as Dictionary)["alive"]) > 0:
+			assert_bool((end["units"][k] as Dictionary)["activated"]).is_true()
+	assert_int(int(AiPlanner.rollout(state, bait, 2, 1)["round"])).is_equal(1)
+	assert_int(int(state["round"])).is_equal(1)
+
+
+## The horizon never invents rounds past the game: on the last round the
+## default rollout ends exactly there.
+func test_horizon_stops_at_game_end() -> void:
+	var end := AiPlanner.rollout(_state(4, 4),
+		{"unit": "Screamer", "kind": AiDecision.Action.HOLD}, 2)
+	assert_int(int(end["round"])).is_equal(4)
+
+
+## _cross_round: round counter up, activation + fatigue wiped, and the OPENER
+## of the imagined new round is the side that finished first — the one with
+## fewer alive units under strict alternation (here: player 1 with its single
+## gunline vs player 2's two units).
+func test_cross_round_resets_flags_and_hands_the_opener_to_the_smaller_side() -> void:
+	var state := _state()
+	for k in state["units"]:
+		var su: Dictionary = state["units"][k]
+		su["activated"] = true
+		su["fatigued"] = true
+	var opener := AiPlanner._cross_round(state)
+	assert_int(int(state["round"])).is_equal(2)
+	assert_int(opener).is_equal(1)
+	for k in state["units"]:
+		assert_bool((state["units"][k] as Dictionary)["activated"]).is_false()
+		assert_bool((state["units"][k] as Dictionary)["fatigued"]).is_false()
