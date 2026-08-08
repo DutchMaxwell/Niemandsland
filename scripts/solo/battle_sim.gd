@@ -164,10 +164,16 @@ static func reply_threat(state: Dictionary, player: int) -> Dictionary:
 	return incoming
 
 
-## Expected unsaved wounds land on the snapshot: floored to whole wounds, then
-## filled model by model in array order (v0 — casualty_order parity is step 3).
+## Expected unsaved wounds land on the snapshot, filled model by model in array
+## order (v0 — casualty_order parity is a later step). Fractional carry (parity
+## wave step 4): the sub-wound remainder stays on the TARGET and joins the next
+## volley instead of being floored away per hit — a rollout's aggregate damage
+## now matches the sum of expectations, not the sum of floors (the sim killed
+## systematically less than reality; calib meter step 3 ranked this suspect #1).
 static func _apply_expected_wounds(tu: Dictionary, ev: float) -> void:
-	var left := int(floor(ev))
+	var pool := float(tu.get("wound_frac", 0.0)) + ev
+	var left := int(floor(pool))
+	tu["wound_frac"] = pool - left
 	var wounds: Array = tu["wounds"]
 	var positions: Array = tu["positions"]
 	while left > 0 and not wounds.is_empty():

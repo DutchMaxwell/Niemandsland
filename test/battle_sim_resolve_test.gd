@@ -326,3 +326,26 @@ func test_melee_tie_tests_nobody() -> void:
 	assert_bool(bool((next["units"]["B"] as Dictionary).get("shaken", false))).is_false()
 	assert_int(int((next["units"]["B"] as Dictionary)["alive"])).is_equal(1)
 	assert_bool(bool((next["units"]["A"] as Dictionary)["fatigued"])).is_true()
+
+
+# === Fractional wound carry (parity wave step 4, NML-995) ===
+
+## Hand-computed: 2 attacks Q4 into Def4 = 0.5 expected wounds — the old
+## per-volley floor() erased it forever. With the carry the remainder stays on
+## the target: the second half-wound volley claims the model (4 -> 3).
+func test_fractional_wounds_carry_across_volleys() -> void:
+	var a := _armed(2, [Vector3.ZERO], "A", [{"name": "Pistol", "range": 24, "attacks": 2}])
+	var b := _armed(2, [Vector3(IN2M, 0, 0)], "B", [{"name": "Pistol", "range": 24, "attacks": 2}])
+	var pos: Array = []
+	for i in range(4):
+		pos.append(Vector3((12.0 + i) * IN2M, 0, 0))
+	var squad := _armed(1, pos, "Squad", [{"name": "Rifle", "range": 24}])
+	var state := _capture([a, b, squad])
+	var s1 := BattleSim.resolve(state, {"unit": "A", "kind": AiDecision.Action.HOLD, "shoot": "Squad"})
+	var sq1: Dictionary = s1["units"]["Squad"]
+	assert_int(int(sq1["alive"])).is_equal(4)
+	assert_float(float(sq1.get("wound_frac", 0.0))).is_equal_approx(0.5, 0.001)
+	var s2 := BattleSim.resolve(s1, {"unit": "B", "kind": AiDecision.Action.HOLD, "shoot": "Squad"})
+	assert_int(int((s2["units"]["Squad"] as Dictionary)["alive"])).is_equal(3)
+	# The input state never carries the side effect (clone contract).
+	assert_float(float((state["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_equal_approx(0.0, 0.001)
