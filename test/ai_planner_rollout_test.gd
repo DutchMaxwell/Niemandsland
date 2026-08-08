@@ -177,3 +177,33 @@ func test_cross_round_resets_flags_and_hands_the_opener_to_the_smaller_side() ->
 	for k in state["units"]:
 		assert_bool((state["units"][k] as Dictionary)["activated"]).is_false()
 		assert_bool((state["units"][k] as Dictionary)["fatigued"]).is_false()
+
+
+# === R7: discounted multi-round leaf (NML-995) ===
+
+## rollout_boundaries returns one true round-end per horizon round (rounds 1
+## then 2), the last entry IS rollout()'s result, and horizon 1 yields exactly
+## the single round-end.
+func test_rollout_boundaries_one_state_per_round() -> void:
+	var state := _state()
+	var bait := {"unit": "Screamer", "kind": AiDecision.Action.HOLD}
+	var ends := AiPlanner.rollout_boundaries(state, bait, 2)
+	assert_int(ends.size()).is_equal(2)
+	assert_int(int((ends[0] as Dictionary)["round"])).is_equal(1)
+	assert_int(int((ends[1] as Dictionary)["round"])).is_equal(2)
+	assert_float(_leaf(ends[1], 2)).is_equal_approx(_leaf(AiPlanner.rollout(state, bait, 2), 2), 0.0001)
+	var flat := AiPlanner.rollout_boundaries(state, bait, 2, 1)
+	assert_int(flat.size()).is_equal(1)
+	assert_int(int((flat[0] as Dictionary)["round"])).is_equal(1)
+
+
+## The blend is the normalized geometric discount: one state = its plain leaf;
+## two states = (l1 + 0.5*l2) / 1.5 — the current round keeps the 2/3
+## majority, the imagined round refines instead of outvoting.
+func test_blend_score_discounts_the_deeper_round() -> void:
+	var near := _state()
+	var far := AiPlanner.rollout(near, {"unit": "Screamer", "kind": AiDecision.Action.HOLD}, 2, 1)
+	var l1 := _leaf(near, 2)
+	var l2 := _leaf(far, 2)
+	assert_float(AiPlanner._blend_score([near], 2)).is_equal_approx(l1, 0.0001)
+	assert_float(AiPlanner._blend_score([near, far], 2)).is_equal_approx((l1 + 0.5 * l2) / 1.5, 0.0001)

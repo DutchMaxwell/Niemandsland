@@ -89,8 +89,7 @@ static func plan_with_rollout(state: Dictionary, player: int,
 	var best := {}
 	var runner := {}
 	for cand in pool:
-		var end := rollout(state, cand["action"], player)
-		var rs := AiMissionEval.score(end, player, BattleSim.reply_threat(end, player))
+		var rs := _blend_score(rollout_boundaries(state, cand["action"], player), player)
 		var rolled := {"unit_key": cand["unit_key"], "action": cand["action"], "score": rs}
 		if best.is_empty() or rs > float(best["score"]):
 			runner = best
@@ -124,6 +123,17 @@ const ROLLOUT_HORIZON_ROUNDS := 2   # R6: a move's price only shows NEXT round �
 ## single-round rollout, byte-identical (the safety valve and test seam).
 static func rollout(state: Dictionary, first_action: Dictionary, me: int,
 		horizon_rounds: int = ROLLOUT_HORIZON_ROUNDS) -> Dictionary:
+	var ends := rollout_boundaries(state, first_action, me, horizon_rounds)
+	return ends[ends.size() - 1]
+
+
+## R7: the same playout, but returning the state AT EVERY round boundary of
+## the horizon (index 0 = end of the current round, last = horizon end) — the
+## caller prices each boundary and blends. The boundary snapshot is taken
+## BEFORE _cross_round mutates the walker, so every entry is a true round-end.
+static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: int,
+		horizon_rounds: int = ROLLOUT_HORIZON_ROUNDS) -> Array:
+	var out: Array = []
 	var cur := BattleSim.resolve(state, first_action)
 	var turn := _other_player(state, me)
 	var rounds_left := maxi(horizon_rounds, 1)
@@ -135,14 +145,37 @@ static func rollout(state: Dictionary, first_action: Dictionary, me: int,
 			turn = _other_player(cur, turn)
 			a = _policy_step(cur, turn)
 			if a.is_empty():
+				out.append(cur)
 				rounds_left -= 1
 				if rounds_left <= 0 or int(cur["round"]) >= int(cur["rounds_total"]):
-					break
+					return out
+				cur = BattleSim.clone_state(cur)
 				turn = _cross_round(cur)
 				continue
 		cur = BattleSim.resolve(cur, a)
 		turn = _other_player(cur, turn)
-	return cur
+	out.append(cur)   # guard backstop only — a logic error, never the rule path
+	return out
+
+
+const DEPTH_DISCOUNT := 0.5   # R7: each further imagined round carries half the previous one's vote
+
+
+## R7: price a rollout's round boundaries as ONE number — geometric depth
+## discount, normalized. The current round's certainty keeps the majority
+## share (2/3 at horizon 2); the imagined next round REFINES instead of
+## outvoting. Direct answer to the R6 measurement: full-weight round-2
+## leaves lifted the opener (first seat win ever) but wrecked the
+## responder's tail certainty (3.5/4 -> 1.0/4 on the same seeds).
+static func _blend_score(ends: Array, player: int) -> float:
+	var total := 0.0
+	var weights := 0.0
+	var w := 1.0
+	for end in ends:
+		total += w * AiMissionEval.score(end, player, BattleSim.reply_threat(end, player))
+		weights += w
+		w *= DEPTH_DISCOUNT
+	return total / weights
 
 
 ## R6: cross the round boundary INSIDE the mental game — round counter up,
