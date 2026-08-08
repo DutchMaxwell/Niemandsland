@@ -74,12 +74,15 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 	if kind == AiDecision.Action.CHARGE and charge_key != "" and next["units"].has(charge_key):
 		var tu: Dictionary = next["units"][charge_key]
 		if dist_in(positions, tu["positions"]) <= CONTACT_IN:
+			var tu_before := _wounds_left(tu)
+			var su_before := _wounds_left(su)
 			_apply_expected_wounds(tu, AiEv.melee_ev(_profiles_of(su, true),
 				_ctx_of(su), _ctx_of(tu), true))
 			su["fatigued"] = true
 			if int(tu["alive"]) > 0:   # survivors strike back, already survivor-scaled
 				_apply_expected_wounds(su, AiEv.melee_ev(_profiles_of(tu, true),
 					_ctx_of(tu), _ctx_of(su), false))
+			_expected_melee_morale(su, su_before, tu, tu_before)
 	# Shaken recovery (p.10): the idle activation clears Shaken — the recovery
 	# hold plan()/the rollout policy hand a shaken unit buys next round back.
 	if was_shaken and kind == AiDecision.Action.HOLD and shoot_key == "":
@@ -223,6 +226,25 @@ static func _expected_shooting_morale(tu: Dictionary, alive_before: int, wounds_
 	if AiCombatMath.should_test_shooting_morale(alive_before, int(tu["alive"]), u.models.size()) \
 			and _morale_fails_expected(tu):
 		tu["shaken"] = true
+
+
+## Melee morale (p.10 via main.gd's flow): the side that dealt FEWER wounds
+## tests (tie = nobody); an expected fail at/below half is a ROUT — the loser
+## leaves the board. Fear's comparison bonus is a v0 gap, noted.
+static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionary, tu_before: int) -> void:
+	var dealt_by_su := tu_before - _wounds_left(tu)
+	var dealt_by_tu := su_before - _wounds_left(su)
+	if dealt_by_su == dealt_by_tu:
+		return
+	var loser: Dictionary = tu if dealt_by_su > dealt_by_tu else su
+	if int(loser["alive"]) <= 0 or not _morale_fails_expected(loser):
+		return
+	if _below_half(loser):
+		(loser["wounds"] as Array).clear()
+		(loser["positions"] as Array).clear()
+		loser["alive"] = 0
+	else:
+		loser["shaken"] = true
 
 
 static func capture(army: OPRArmyManager, objectives_provider: Callable = Callable(),

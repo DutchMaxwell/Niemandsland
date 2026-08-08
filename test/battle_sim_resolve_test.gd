@@ -275,3 +275,54 @@ func test_hold_recovers_shaken_on_the_clone() -> void:
 	var next := BattleSim.resolve(state, {"unit": "Grunts", "kind": AiDecision.Action.HOLD})
 	assert_bool(bool((next["units"]["Grunts"] as Dictionary)["shaken"])).is_false()
 	assert_bool(bool((state["units"]["Grunts"] as Dictionary)["shaken"])).is_true()
+
+
+# === Melee morale in expectation (parity wave step 2b, NML-995) ===
+
+## Hand-computed: 4 attacks Q4 into Def4 = 1.0 wound -> 1 of 2 victims dies
+## (at half); the club's 1 attack strikes back for 0.25 -> floored to none.
+## Loser (fewer wounds dealt) tests, Q4 fails at/below half => ROUT — the
+## unit leaves the board. The winner stands untouched.
+func test_melee_loser_at_half_routs_winner_stands() -> void:
+	var brutes := _armed(2, [Vector3.ZERO], "Brutes", [{"name": "Fists", "range": 0}])
+	var victims := _armed(1, [Vector3(8.0 * IN2M, 0, 0), Vector3(9.0 * IN2M, 0, 0)],
+		"Victims", [{"name": "Club", "range": 0, "attacks": 1}])
+	var next := BattleSim.resolve(_capture([brutes, victims]),
+		{"unit": "Brutes", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(8.0 * IN2M, 0, 0), "charge": "Victims"})
+	var v: Dictionary = next["units"]["Victims"]
+	assert_int(int(v["alive"])).is_equal(0)
+	assert_int((v["positions"] as Array).size()).is_equal(0)
+	var b: Dictionary = next["units"]["Brutes"]
+	assert_int(int(b["alive"])).is_equal(1)
+	assert_bool(bool(b.get("shaken", false))).is_false()
+
+
+## The same loss ABOVE half (1 of 4 dead) is only SHAKEN — Rout needs half or
+## less even in melee.
+func test_melee_loser_above_half_is_shaken() -> void:
+	var brutes := _armed(2, [Vector3.ZERO], "Brutes", [{"name": "Fists", "range": 0}])
+	var pos: Array = []
+	for i in range(4):
+		pos.append(Vector3((8.0 + i) * IN2M, 0, 0))
+	var victims := _armed(1, pos, "Victims", [{"name": "Club", "range": 0, "attacks": 1}])
+	var next := BattleSim.resolve(_capture([brutes, victims]),
+		{"unit": "Brutes", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(8.0 * IN2M, 0, 0), "charge": "Victims"})
+	var v: Dictionary = next["units"]["Victims"]
+	assert_int(int(v["alive"])).is_equal(3)
+	assert_bool(bool(v.get("shaken", false))).is_true()
+
+
+## A wound-for-wound tie (here: 0 vs 0 — both clubs floor to nothing) tests
+## nobody; the charge still fatigues the charger.
+func test_melee_tie_tests_nobody() -> void:
+	var a := _armed(2, [Vector3.ZERO], "A", [{"name": "Club", "range": 0, "attacks": 1}])
+	var b := _armed(1, [Vector3(8.0 * IN2M, 0, 0)], "B", [{"name": "Club", "range": 0, "attacks": 1}])
+	var next := BattleSim.resolve(_capture([a, b]),
+		{"unit": "A", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(8.0 * IN2M, 0, 0), "charge": "B"})
+	assert_bool(bool((next["units"]["A"] as Dictionary).get("shaken", false))).is_false()
+	assert_bool(bool((next["units"]["B"] as Dictionary).get("shaken", false))).is_false()
+	assert_int(int((next["units"]["B"] as Dictionary)["alive"])).is_equal(1)
+	assert_bool(bool((next["units"]["A"] as Dictionary)["fatigued"])).is_true()
