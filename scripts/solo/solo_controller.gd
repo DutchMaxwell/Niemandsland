@@ -7578,7 +7578,14 @@ func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, bloc
 		if is_ambush:
 			u.unit_properties["ambush_reserve"] = true   # held off-table → not activatable until it arrives
 			ambush_reserve.append(u)
-	_deploy_zone_of.clear()   # Bug 8: the overlap cleanup constrains each unit to ITS recorded zone
+	# NML-1003 (audit): same both-AI shape as NML-1002 — clear only OUR side's
+	# zone records (Re-Deployment carriers of the FIRST deployer kept theirs).
+	var kept_zones := {}
+	for zk in _deploy_zone_of:
+		var zu := zk as GameUnit
+		if zu != null and int(zu.unit_properties.get("player_id", 0)) != ai_slot:
+			kept_zones[zk] = _deploy_zone_of[zk]
+	_deploy_zone_of = kept_zones   # Bug 8: the overlap cleanup constrains each unit to ITS recorded zone
 	_redeploy_done = false    # Re-Deployment (wave 7) fires once, at the game-start transition
 	# Forward-edge doctrine: the zone edge toward the table centre — every metre behind it is
 	# first-turn movement given away (A/B-gated scoring term in AiDeployment.best_spot).

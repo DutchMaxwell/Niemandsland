@@ -1812,6 +1812,10 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 				_solo_game_finished = true
 				_solo_show_game_summary()
 			break
+		# NML-1003: round-end bookkeeping the single-AI driver runs in
+		# _solo_end_round — fatigue ends with the round, spell tokens expire.
+		_solo_reset_all_fatigue()
+		_solo_expire_spell_tokens()
 		opr_army_manager.advance_round()
 		_refresh_round_visuals()
 		if network_manager != null:
@@ -1889,12 +1893,23 @@ func _solo_side_has_eligible(slot: int) -> bool:
 ## Rapid Ambush carriers already came in during round 1 (_solo_both_ai_rapid_round_one) — the arrival
 ## gate keeps every other reserve waiting for round 2, so this pass is unchanged for them.
 func _solo_both_ai_round_start(round_number: int) -> void:
+	# NML-1003 (audit 10.08.): this path had DRIFTED from the canonical
+	# single-AI round start — the overkill ledger, marker runners and the
+	# sidestep budget were never reset, growth never ticked, Reinforcement
+	# copies never returned. Keep this list in lockstep with _solo_round_start.
+	if solo_controller != null:
+		solo_controller.reset_round_claims()
+	_solo_growth_round_start()
 	await _solo_battleborn_recovery()
 	if round_number >= 2:
 		for slot in [1, 2]:
 			_solo_set_active_side(slot)
 			# The alternator degrades to AI-only arrivals here (the "human" slot is AI → no prompts).
 			await _solo_alternate_ambush_arrivals(round_number)
+	await _reinforcement_arrivals(round_number)
+	for slot in [1, 2]:
+		_solo_set_active_side(slot)
+		_solo_reinforcement_ai_offers()
 
 
 ## The self-play twin of _solo_begin_rapid_ambush_round_one: with both sides on the AI, round 1's
