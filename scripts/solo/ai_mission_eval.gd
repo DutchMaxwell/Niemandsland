@@ -12,19 +12,22 @@ const DISCOUNT := 0.5   # presence halves per future round still needed to arriv
 
 
 # === E4 (eval-tuning wave): the FITTED eval ===
-## Provenance: eval_fit.py --gd over selfplay_out/eval_data_v1 — 300 farm
+## Provenance (v1.1): eval_fit.py over selfplay_out/eval_data_v1 — 300 farm
 ## games (planner_v0 vs albtraum, both orders, seeds 1-75), 1180 labeled
-## round-start positions; holdout test AUC 0.929, round-1-only AUC 0.907.
-## Raw-space logistic weights (standardization folded in). Re-fit = re-run
-## the tool and replace this block; never hand-edit numbers.
+## round-start positions. MINIMAL 9-feature model (my/their_units, wounds and
+## my_incoming pruned: near-constant on round starts, their fitted signs were
+## collinearity artifacts that extrapolate catastrophically in-search — "enemy
+## losing units lowers my score"); holdout test AUC 0.927, round-1-only 0.889,
+## every remaining sign doctrine-sane. Re-fit = re-run the tool and replace
+## this block; never hand-edit numbers.
 const FIT_W := {
-	"my_incoming": 0.097222, "my_unactivated": 0.738885, "my_units": -0.549964,
-	"my_wounds": 0.016974, "obj_owned_mine": 0.384703, "obj_owned_theirs": -0.111727,
-	"presence_mine": 0.070416, "presence_theirs": -0.063847, "round_frac": -0.550355,
-	"tail_mine": 0.162490, "tail_theirs": -0.255218, "their_unactivated": -1.288218,
-	"their_units": 0.578704, "their_wounds": -0.011167,
+	"my_unactivated": 0.197778, "obj_owned_mine": 0.426892,
+	"obj_owned_theirs": -0.139651, "presence_mine": 0.076984,
+	"presence_theirs": -0.043494, "round_frac": 0.011243,
+	"tail_mine": 0.324710, "tail_theirs": -0.349962,
+	"their_unactivated": -0.842275,
 }
-const FIT_B := 2.507512
+const FIT_B := 2.166971
 
 ## Routes every score() call through the fitted eval — set per planner pick by
 ## the controller from the difficulty preset (planner_v1). Static on purpose:
