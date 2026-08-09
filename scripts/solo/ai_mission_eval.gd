@@ -41,6 +41,24 @@ const FIT_W := {
 	"their_unactivated": -0.399604,
 }
 const FIT_B := -0.314616
+## Research seam: the PREVIOUS weight set (v2, outcome-labels) selectable via
+## NML_FIT_WEIGHTS=v2 — both sets were tuned on CONTAMINATED games, the clean
+## ladder re-ranks them.
+const FIT_W_V2 := {
+	"my_unactivated": 0.708979, "obj_owned_mine": 0.327349,
+	"obj_owned_theirs": -0.290469, "presence_mine": 0.062309,
+	"presence_theirs": -0.041864, "round_frac": 0.763686,
+	"tail_mine": 0.134124, "tail_theirs": -0.336638,
+	"their_unactivated": -0.564309,
+}
+const FIT_B_V2 := -0.472502
+static var _wsel := ""   # lazy env cache
+
+
+static func _weights() -> Array:
+	if _wsel == "":
+		_wsel = "v2" if OS.get_environment("NML_FIT_WEIGHTS") == "v2" else "v4"
+	return [FIT_W_V2, FIT_B_V2] if _wsel == "v2" else [FIT_W, FIT_B]
 
 ## Routes every score() call through the fitted eval — set per planner pick by
 ## the controller from the difficulty preset (planner_v1). Static on purpose:
@@ -121,9 +139,10 @@ static func _score_fit(state: Dictionary, player: int, incoming: Dictionary) -> 
 		for k in view["units"]:
 			(view["units"][k] as Dictionary)["activated"] = false
 	var f := features(view, player, incoming)
-	var z := float(FIT_B)
-	for k in FIT_W:
-		z += float(FIT_W[k]) * float(f.get(k, 0.0))
+	var wb := _weights()
+	var z := float(wb[1])
+	for k in wb[0]:
+		z += float((wb[0] as Dictionary)[k]) * float(f.get(k, 0.0))
 	return 1.0 / (1.0 + exp(-clampf(z, -30.0, 30.0)))
 
 

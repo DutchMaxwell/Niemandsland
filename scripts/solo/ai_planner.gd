@@ -124,6 +124,14 @@ static func plan_with_rollout(state: Dictionary, player: int,
 
 
 const ROLLOUT_HORIZON_ROUNDS := 2   # R6: a move's price only shows NEXT round — round 1 alone is a movement round
+static var _hz := 0   # research seam: NML_HORIZON overrides (lazy; <=0 = unread)
+
+
+static func horizon() -> int:
+	if _hz <= 0:
+		var e := OS.get_environment("NML_HORIZON")
+		_hz = clampi(int(e), 1, 3) if e != "" else ROLLOUT_HORIZON_ROUNDS
+	return _hz
 
 
 ## R1+R6 (round-rollout search): play the rest of the ROUND out after
@@ -137,7 +145,7 @@ const ROLLOUT_HORIZON_ROUNDS := 2   # R6: a move's price only shows NEXT round �
 ## reply_threat). Pure and deterministic. horizon_rounds = 1 is the pre-R6
 ## single-round rollout, byte-identical (the safety valve and test seam).
 static func rollout(state: Dictionary, first_action: Dictionary, me: int,
-		horizon_rounds: int = ROLLOUT_HORIZON_ROUNDS) -> Dictionary:
+		horizon_rounds: int = -1) -> Dictionary:
 	var ends := rollout_boundaries(state, first_action, me, horizon_rounds)
 	return ends[ends.size() - 1]
 
@@ -147,7 +155,9 @@ static func rollout(state: Dictionary, first_action: Dictionary, me: int,
 ## caller prices each boundary and blends. The boundary snapshot is taken
 ## BEFORE _cross_round mutates the walker, so every entry is a true round-end.
 static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: int,
-		horizon_rounds: int = ROLLOUT_HORIZON_ROUNDS) -> Array:
+		horizon_rounds: int = -1) -> Array:
+	if horizon_rounds <= 0:
+		horizon_rounds = horizon()   # research seam; default = R6's 2
 	var out: Array = []
 	var cur := BattleSim.resolve(state, first_action)
 	var turn := _other_player(state, me)
@@ -182,6 +192,13 @@ const DEPTH_DISCOUNT := 0.5   # R7: each further imagined round carries half the
 ## best RESPONDER (78%) and a weak opener. The controller sets this per pick:
 ## true = our side opened the current round.
 static var opener_seat := false
+static var _seat_env := -1   # research seam: NML_SEAT_DEPTH=off disables the opener mode (lazy env)
+
+
+static func seat_depth_enabled() -> bool:
+	if _seat_env < 0:
+		_seat_env = 0 if OS.get_environment("NML_SEAT_DEPTH") == "off" else 1
+	return _seat_env == 1
 
 
 ## R7/D: price a rollout's round boundaries as ONE number. Responder seat:
@@ -190,7 +207,7 @@ static var opener_seat := false
 ## boundary alone votes — an opener's move only shows its worth after the
 ## enemy's full reply, so the deep look must be allowed to outvote.
 static func _blend_score(ends: Array, player: int) -> float:
-	if opener_seat:
+	if opener_seat and seat_depth_enabled():
 		var last: Dictionary = ends[ends.size() - 1]
 		return AiMissionEval.score(last, player, BattleSim.reply_threat(last, player))
 	var total := 0.0
