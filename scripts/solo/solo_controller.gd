@@ -7555,7 +7555,17 @@ func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, bloc
 		for i in groups[g]:
 			section_of[int(i)] = int(sections[g])
 	var flags: Array = []
-	ambush_reserve.clear()
+	# Both-AI games share ONE controller: a side's (re-)begin may only reset
+	# ITS OWN reserve. The unconditional clear() silently deleted the FIRST
+	# deployer's Ambush units from every both-AI game (they stayed hidden and
+	# non-activatable forever) — the campaign's whole "opener seat penalty"
+	# was largely this missing unit, not game structure (NML-1002).
+	var kept_reserve: Array = []
+	for u0 in ambush_reserve:
+		var gu0 := u0 as GameUnit
+		if gu0 != null and int(gu0.unit_properties.get("player_id", 0)) != ai_slot:
+			kept_reserve.append(gu0)
+	ambush_reserve = kept_reserve
 	for i in range(all_units.size()):
 		var u: GameUnit = all_units[i]
 		# Infiltrate (Bug 26) "counts as having Ambush" → same reserve/round-2 arrival as Ambush, only its
@@ -8388,6 +8398,8 @@ func ambush_reserve_ready(round_number: int) -> int:
 	var n := 0
 	for u in ambush_reserve:
 		var gu := u as GameUnit
+		if gu != null and int(gu.unit_properties.get("player_id", 0)) != ai_slot:
+			continue   # NML-1002: both-AI shares the array — count the ACTIVE side only
 		if gu != null and gu.get_alive_count() > 0 and may_arrive_this_round(gu, round_number):
 			n += 1
 	return n
@@ -8536,6 +8548,9 @@ func arrive_one_ambush_unit(arrival_zone: Rect2, enemy_positions: Array, occupie
 	var remaining: Array = []
 	var arrived: GameUnit = null
 	for u in ambush_reserve:
+		if u is GameUnit and int((u as GameUnit).unit_properties.get("player_id", 0)) != ai_slot:
+			remaining.append(u)   # NML-1002: the other side's reserve waits for ITS beat
+			continue
 		var unit: GameUnit = u
 		if unit == null or unit.get_alive_count() <= 0:
 			continue   # a reserve unit destroyed before arrival is simply gone

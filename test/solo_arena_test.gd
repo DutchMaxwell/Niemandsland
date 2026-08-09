@@ -287,3 +287,37 @@ func test_calib_pairs_without_a_boundary_is_empty() -> void:
 	assert_array(ArenaMatch.calib_pairs([])).is_empty()
 	assert_array(ArenaMatch.calib_pairs([
 		_calib(1, 2, 0.5, 0.6), _calib(1, 2, 0.6, 0.7)])).is_empty()
+
+
+# === NML-1002: first deployer's Ambush reserve must survive the second begin ===
+
+## Both-AI games share one controller: side 1 deploys (its Ambush unit goes
+## to reserve), then side 2's deploy_begin runs — before the fix that begin
+## wiped side 1's reserve, deleting the unit from the game. Now the reserve
+## is side-scoped: begin clears only its own entries, ready() counts only the
+## active side.
+func test_second_deploy_begin_keeps_first_sides_ambush_reserve() -> void:
+	var a1 := _unit(1, [Vector3(0, 0, 0)], "A1")
+	a1.unit_properties["special_rules"] = ["Ambush"]
+	var a2 := _unit(1, [Vector3(0.3, 0, 0)], "A2")
+	var b1 := _unit(2, [Vector3(0, 0, 1.0)], "B1")
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(_army([a1, a2, b1]), null, null, 1, 2)
+	var zone1 := Rect2(Vector2(-1, -1), Vector2(2, 0.3))
+	var zone2 := Rect2(Vector2(-1, 0.7), Vector2(2, 0.3))
+	var none := func(_p: Vector2) -> bool: return false
+	solo.ai_slot = 1
+	solo.human_slot = 2
+	solo.deploy_army(zone1, [], none, none, 7)
+	assert_int(solo.ambush_reserve.size()).override_failure_message(
+		"side 1's Ambush unit must be reserved").is_equal(1)
+	solo.ai_slot = 2
+	solo.human_slot = 1
+	solo.deploy_army(zone2, [], none, none, 8)
+	assert_int(solo.ambush_reserve.size()).override_failure_message(
+		"side 2's begin must NOT wipe side 1's reserve").is_equal(1)
+	assert_int(solo.ambush_reserve_ready(2)).override_failure_message(
+		"ready() counts only the ACTIVE side (slot 2 has no reserves)").is_equal(0)
+	solo.ai_slot = 1
+	assert_int(solo.ambush_reserve_ready(2)).is_equal(1)
