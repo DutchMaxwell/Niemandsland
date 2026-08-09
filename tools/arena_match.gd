@@ -308,6 +308,18 @@ func _run() -> void:
 	# so the winner is reproducible per seed): the winner deploys FIRST and takes round 1's first turn.
 	var opener: int = solo.roll_off()
 	printerr("[ARENA] roll-off: P%d wins — deploys first, opens round 1 (official rule)" % opener)
+	# RESEARCH KNOBS (NML-995 seat decomposition, env-gated, ladder-inert when
+	# unset): decouple the roll-off's two prizes — NML_DEPLOY_FIRST forces who
+	# deploys first (counter-deploy edge), NML_OPEN_FIRST forces who takes
+	# round 1's first activation. Measures how much of the opener-seat penalty
+	# is DEPLOYMENT vs TEMPO.
+	var deploy_first := opener
+	if OS.get_environment("NML_DEPLOY_FIRST") != "":
+		deploy_first = clampi(int(OS.get_environment("NML_DEPLOY_FIRST")), 1, 2)
+	if OS.get_environment("NML_OPEN_FIRST") != "":
+		opener = clampi(int(OS.get_environment("NML_OPEN_FIRST")), 1, 2)
+	if deploy_first != opener or OS.get_environment("NML_DEPLOY_FIRST") != "":
+		printerr("[ARENA] RESEARCH decouple: P%d deploys first, P%d opens round 1" % [deploy_first, opener])
 
 	# Production AI deployment for BOTH sides into their 12" front-line zones, in roll-off order. The
 	# per-side deployment seed stays attached to the SLOT (seed+slot), so a side's deployment is identical
@@ -316,7 +328,7 @@ func _run() -> void:
 	var objectives_v2: Array = []
 	for o in objectives:
 		objectives_v2.append(Vector2((o as Vector3).x, (o as Vector3).z))
-	var deploy_order: Array = [1, 2] if opener == 1 else [2, 1]
+	var deploy_order: Array = [1, 2] if deploy_first == 1 else [2, 1]
 	for slot in deploy_order:
 		_deploy_side(main, solo, table, terrain_overlay, int(slot), objectives_v2, _seed + int(slot))
 	await process_frame
