@@ -299,3 +299,21 @@ func test_rich_policy_step_avoids_the_gun_the_cheap_one_walks_into() -> void:
 	var rich := AiPlanner._policy_step(state, 2, true)
 	assert_bool(int(rich.get("kind", -1)) == AiDecision.Action.RUSH).override_failure_message(
 		"rich step must NOT rush into the 12\"-gun's reply").is_false()
+
+
+# === D-wave: seat-aware leaf weighting (NML-995) ===
+
+## Opener seat: the LAST boundary alone votes (R6 mode — proven best opener
+## seat); responder seat keeps the discounted blend (R7 — proven best
+## responder). The static must default to responder mode.
+func test_seat_aware_blend_last_boundary_votes_alone_for_the_opener() -> void:
+	var near := _state()
+	var far := AiPlanner.rollout(near, {"unit": "Screamer", "kind": AiDecision.Action.HOLD}, 2, 1)
+	var l1 := _leaf(near, 2)
+	var l2 := _leaf(far, 2)
+	assert_bool(AiPlanner.opener_seat).is_false()
+	AiPlanner.opener_seat = true
+	var deep := AiPlanner._blend_score([near, far], 2)
+	AiPlanner.opener_seat = false
+	assert_float(deep).is_equal_approx(l2, 0.0001)
+	assert_float(AiPlanner._blend_score([near, far], 2)).is_equal_approx((l1 + 0.5 * l2) / 1.5, 0.0001)

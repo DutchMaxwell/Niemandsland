@@ -152,6 +152,7 @@ var _peeked_unit: GameUnit = null
 var last_move_paths: Array = []
 var _cargo_wait_logged: Dictionary = {}   # TC-081: one "waits inside" record per unit+round
 var _planner_intent: Dictionary = {}      # R3: rollout pick cached unit->act (consumed by _solve_planner)
+var _round_first_slot: Dictionary = {}    # D-wave: round -> slot that activated FIRST (seat detection)
 ## Flow order (MODEL indices, nearest-to-destination first) of the last loose AI move — the sequential
 ## per-model flow (field-test round 6, finding 7). last_move_paths is reordered into this order so the
 ## presentation glides each model individually in the order it filed to its slot. Empty for a regiment / a
@@ -408,6 +409,8 @@ func activate_next_ai_unit() -> GameUnit:
 	if unit == null:
 		return null
 	_activation_seq += 1   # monotonic per-activation index for the deterministic difficulty draws
+	if not _round_first_slot.has(_current_round()):
+		_round_first_slot[_current_round()] = ai_slot   # D-wave: this round's opener
 	last_move_paths = []   # cleared per activation — HOLD / Shaken idle replays nothing
 	board_clamp_notes = []   # #215: per-activation, drained by main into the battle log
 	if unit.is_shaken:
@@ -2624,6 +2627,9 @@ func _planner_active() -> bool:
 func _planner_pick_unit(pool: Array) -> GameUnit:
 	var diff := active_difficulty()
 	AiMissionEval.fit_mode = diff != null and diff.eval_fit   # E4: leaf choice per preset
+	# D-wave: seat-aware depth — opener when OUR side made this round's first
+	# activation (or nobody acted yet, i.e. we are about to open it).
+	AiPlanner.opener_seat = int(_round_first_slot.get(_current_round(), ai_slot)) == int(ai_slot)
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
 		terrain_type_at)

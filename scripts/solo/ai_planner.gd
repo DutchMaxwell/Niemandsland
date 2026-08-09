@@ -176,13 +176,23 @@ static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: 
 const DEPTH_DISCOUNT := 0.5   # R7: each further imagined round carries half the previous one's vote
 
 
-## R7: price a rollout's round boundaries as ONE number — geometric depth
-## discount, normalized. The current round's certainty keeps the majority
-## share (2/3 at horizon 2); the imagined next round REFINES instead of
-## outvoting. Direct answer to the R6 measurement: full-weight round-2
-## leaves lifted the opener (first seat win ever) but wrecked the
-## responder's tail certainty (3.5/4 -> 1.0/4 on the same seeds).
+## D-wave: seat-aware leaf weighting. The A/B ledger proved the two depth
+## modes own opposite seats — last-boundary voting (R6) was the best OPENER
+## ever (12.5% seat) and the worst responder; the discount blend (R7) is the
+## best RESPONDER (78%) and a weak opener. The controller sets this per pick:
+## true = our side opened the current round.
+static var opener_seat := false
+
+
+## R7/D: price a rollout's round boundaries as ONE number. Responder seat:
+## geometric depth discount, normalized — the current round's certainty keeps
+## the 2/3 majority, the imagined next round refines. Opener seat: the LAST
+## boundary alone votes — an opener's move only shows its worth after the
+## enemy's full reply, so the deep look must be allowed to outvote.
 static func _blend_score(ends: Array, player: int) -> float:
+	if opener_seat:
+		var last: Dictionary = ends[ends.size() - 1]
+		return AiMissionEval.score(last, player, BattleSim.reply_threat(last, player))
 	var total := 0.0
 	var weights := 0.0
 	var w := 1.0
