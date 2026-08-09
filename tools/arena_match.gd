@@ -65,8 +65,7 @@ var _move_records: Array = []           # {side, round, unit, why, data} for eve
 # side — calib_pairs() folds them into per-round-boundary (predicted, measured) pairs, the parity
 # wave's progress meter (the mental model was ~0.2 too optimistic early; watch this gap shrink).
 var _calib_records: Array = []          # {side, round, before, after} for planner records carrying win_before
-var _position_rows: Array = []          # E1: {side, round, features} — first planner pick per side+round
-var _position_seen: Dictionary = {}     # side_round keys already logged into _position_rows
+var _position_rows: Array = []          # E1/E6: {side, round, seq, features} — EVERY planner pick
 
 # Showcase capture (capture= / NML_AI_CAPTURE) — board PNGs + full battle log + verbatim decisions.
 var _capture_dir := ""                  # empty => captures off (the ladder default)
@@ -288,14 +287,13 @@ func _run() -> void:
 			_calib_records.append({"side": side, "round": int(army_manager.current_round),
 				"before": float(d["win_before"]), "after": float(d["win_after"])})
 		if kind == "planner" and (rec.get("data", {}) as Dictionary).has("features"):
-			# E1 (eval-tuning wave): first pick per (side, round) = the fresh
-			# round-start position; its features + the final winner become one
-			# labeled training row for the offline eval fit.
-			var fkey := "%d_%d" % [side, int(army_manager.current_round)]
-			if not _position_seen.has(fkey):
-				_position_seen[fkey] = true
-				_position_rows.append({"side": side, "round": int(army_manager.current_round),
-					"features": (rec["data"] as Dictionary)["features"]})
+			# E1/E6 (eval-tuning wave): EVERY planner pick logs its position
+			# (E6 — per-activation granularity; round-level TD was too coarse
+			# to isolate a move's consequence, the controllable features
+			# zeroed out). seq = arrival order, the offline TD chains on it.
+			_position_rows.append({"side": side, "round": int(army_manager.current_round),
+				"seq": _position_rows.size(),
+				"features": (rec["data"] as Dictionary)["features"]})
 		if kind == "move":
 			_move_records.append({"side": side, "round": int(army_manager.current_round),
 				"unit": str(rec.get("unit", "?")), "why": str(rec.get("why", "")),
