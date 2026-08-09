@@ -12,7 +12,14 @@ const DISCOUNT := 0.5   # presence halves per future round still needed to arriv
 
 
 # === E4 (eval-tuning wave): the FITTED eval ===
-## Provenance (v2 RESTORED 10.08.): v3 (sign-constrained refit on
+## Provenance (v4, per-activation TD): eval_fit TD pass over eval_data_v3
+## (300 games, 2826 PER-PICK rows, chained per side by seq; LAM=0.7,
+## doctrine sign priors). FIRST fit where the move-controllable features
+## carry real, correctly-signed weight: my_charge_exposed -0.29 std,
+## their_charge_exposed +0.26, cover_mine +0.07 — round-level labels never
+## could (credit too coarse). Outcome-AUC 0.891 (TD trades a little pure
+## prediction for controllability). Prior note (v2 RESTORED 10.08.): v3
+## (sign-constrained refit on
 ## eval_data_v2) measured 40.0% vs v2's 43.0% — same-structure refits
 ## oscillate within noise; v2 stays until a structure-level change (per-
 ## activation TD) earns its A/B. Original v3 note follows for the record.
@@ -25,13 +32,15 @@ const DISCOUNT := 0.5   # presence halves per future round still needed to arriv
 ## Their value needs consequence-aware training targets (TD) — next rung.
 ## Re-fit = re-run the tool and replace this block; never hand-edit numbers.
 const FIT_W := {
-	"my_unactivated": 0.708979, "obj_owned_mine": 0.327349,
-	"obj_owned_theirs": -0.290469, "presence_mine": 0.062309,
-	"presence_theirs": -0.041864, "round_frac": 0.763686,
-	"tail_mine": 0.134124, "tail_theirs": -0.336638,
-	"their_unactivated": -0.564309,
+	"cover_mine": 0.121087, "cover_theirs": -0.012749,
+	"my_charge_exposed": -0.210523, "my_unactivated": 0.421878,
+	"obj_owned_mine": 0.287398, "obj_owned_theirs": -0.235846,
+	"presence_mine": 0.084934, "presence_theirs": -0.059456,
+	"round_frac": 0.626817, "tail_mine": 0.125123,
+	"tail_theirs": -0.192551, "their_charge_exposed": 0.214182,
+	"their_unactivated": -0.399604,
 }
-const FIT_B := -0.472502
+const FIT_B := -0.314616
 
 ## Routes every score() call through the fitted eval — set per planner pick by
 ## the controller from the difficulty preset (planner_v1). Static on purpose:
