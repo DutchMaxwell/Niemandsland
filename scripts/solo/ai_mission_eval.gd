@@ -131,9 +131,15 @@ static func features(state: Dictionary, player: int, incoming: Dictionary = {}) 
 		"my_wounds": 0.0, "their_wounds": 0.0, "my_units": 0.0, "their_units": 0.0,
 		"my_unactivated": 0.0, "their_unactivated": 0.0, "my_incoming": 0.0,
 		"presence_mine": 0.0, "presence_theirs": 0.0, "tail_mine": 0.0, "tail_theirs": 0.0,
-		"obj_owned_mine": 0.0, "obj_owned_theirs": 0.0}
+		"obj_owned_mine": 0.0, "obj_owned_theirs": 0.0,
+		# E5 — move-CONTROLLABLE structure (the earlier fits were dominated by
+		# uncontrollable context; a controller needs gradients its move can move):
+		"cover_mine": 0.0, "cover_theirs": 0.0,
+		"my_charge_exposed": 0.0, "their_charge_exposed": 0.0,
+		"my_incoming_max": 0.0}
 	for v in incoming.values():
 		f["my_incoming"] += float(v)
+		f["my_incoming_max"] = maxf(float(f["my_incoming_max"]), float(v))
 	for key in state["units"]:
 		var su: Dictionary = state["units"][key]
 		if int(su["alive"]) <= 0:
@@ -146,6 +152,18 @@ static func features(state: Dictionary, player: int, incoming: Dictionary = {}) 
 		f["my_units" if mine else "their_units"] += 1.0
 		if not bool(su.get("activated", false)):
 			f["my_unactivated" if mine else "their_unactivated"] += 1.0
+		if bool(su.get("in_cover", false)):
+			f["cover_mine" if mine else "cover_theirs"] += 1.0
+		# Charge exposure: any hostile unit's nearest model within rush+contact
+		# of this unit's nearest model — the R8 safety geometry as a feature.
+		for ok in state["units"]:
+			var ou: Dictionary = state["units"][ok]
+			if int(ou["player"]) == int(su["player"]) or int(ou["alive"]) <= 0:
+				continue
+			var oreach := float(SoloController.move_bands_for_unit(ou["unit"], null).get("rush", 12)) 				+ BattleSim.CONTACT_IN
+			if BattleSim.dist_in(su["positions"], ou["positions"]) <= oreach:
+				f["my_charge_exposed" if mine else "their_charge_exposed"] += 1.0
+				break
 		var rush := float(SoloController.move_bands_for_unit(su["unit"], null).get("rush", 12))
 		for o in state["objectives"]:
 			var d := INF

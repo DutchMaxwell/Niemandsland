@@ -202,3 +202,27 @@ func test_blend_ratio_mixes_hand_and_fit_exactly() -> void:
 	assert_float(mixed).is_equal_approx(0.75 * hand + 0.25 * fit, 0.0001)
 	assert_float(AiMissionEval.fit_blend()).is_equal_approx(0.5, 0.0001)
 	AiMissionEval._blend = -1.0
+
+
+
+# === E5: move-controllable features (NML-995) ===
+
+## Charge exposure uses the R8 geometry (rush 12 + 1 contact, nearest model):
+## a squad 10" from the enemy counts exposed, at 20" it does not; cover flags
+## count per unit; the focus load is the largest single incoming entry.
+func test_e5_features_exposure_cover_and_focus() -> void:
+	var brute := _unit(1, [Vector3.ZERO], "Brute")
+	var near := _unit(2, [Vector3(10.0 * IN2M, 0, 0)], "Near")
+	var far := _unit(2, [Vector3(20.0 * IN2M, 0, 0)], "Far")
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Brute": brute, "Near": near, "Far": far}
+	var state := BattleSim.capture(army, func() -> Array: return [Vector3.ZERO],
+		func(_i: int) -> int: return 0, 1, 4)
+	(state["units"]["Near"] as Dictionary)["in_cover"] = true
+	var f := AiMissionEval.features(state, 2, {"Near": 1.5, "Far": 0.5})
+	assert_float(float(f.get("my_charge_exposed", -1.0))).is_equal_approx(1.0, 0.001)
+	assert_float(float(f.get("their_charge_exposed", -1.0))).is_equal_approx(1.0, 0.001)
+	assert_float(float(f.get("cover_mine", -1.0))).is_equal_approx(1.0, 0.001)
+	assert_float(float(f.get("cover_theirs", -1.0))).is_equal_approx(0.0, 0.001)
+	assert_float(float(f.get("my_incoming_max", -1.0))).is_equal_approx(1.5, 0.001)
+	assert_float(float(f.get("my_incoming", -1.0))).is_equal_approx(2.0, 0.001)
