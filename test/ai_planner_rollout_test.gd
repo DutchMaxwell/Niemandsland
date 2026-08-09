@@ -207,3 +207,72 @@ func test_blend_score_discounts_the_deeper_round() -> void:
 	var l2 := _leaf(far, 2)
 	assert_float(AiPlanner._blend_score([near], 2)).is_equal_approx(l1, 0.0001)
 	assert_float(AiPlanner._blend_score([near, far], 2)).is_equal_approx((l1 + 0.5 * l2) / 1.5, 0.0001)
+
+
+# === R8: the patient advance (opener diagnosis, NML-995) ===
+
+## Tier 1: gun reach = 36 + 6 advance = 42" — from 50" walk the full 6" (ends
+## 44", safe), from 45" clamp at 2.5". Tier 2 (gun safety already lost):
+## charge reach = rush 12" + 1" contact = 13" — from 40" walk the full 6",
+## from 17.2" clamp at 4.0" (13.2" > 13"). Inside charge reach (10"): no
+## patient candidate.
+func test_safe_advance_walks_up_but_stays_outside_threat_reach() -> void:
+	var gunner := _armed(1, [Vector3.ZERO], "Gunner", [{"name": "LongRifle", "range": 36}])
+	for cfg in [[50.0, 6.0], [45.0, 2.5], [40.0, 6.0], [17.2, 4.0], [10.0, -1.0]]:
+		var mine := _armed(2, [Vector3(float(cfg[0]) * IN2M, 0, 0)], "Mine", [{"name": "CCW", "range": 0}])
+		var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+		army.game_units = {"Gunner": gunner, "Mine": mine}
+		var state := BattleSim.capture(army, func() -> Array: return [Vector3.ZERO],
+			func(_i: int) -> int: return 0, 1, 4)
+		var cand := AiPlanner._safe_advance(state, "Mine")
+		if float(cfg[1]) < 0.0:
+			assert_bool(cand.is_empty()).override_failure_message(
+				"inside reach at %s\" must yield no patient candidate" % cfg[0]).is_true()
+			continue
+		assert_bool(cand.is_empty()).override_failure_message(
+			"from %s\" a patient candidate must exist" % cfg[0]).is_false()
+		if cand.is_empty():
+			continue
+		assert_int(int(cand["kind"])).is_equal(AiDecision.Action.ADVANCE)
+		var walked: float = (float(cfg[0]) * IN2M - (cand["dest"] as Vector3).x) / IN2M
+		assert_float(walked).override_failure_message(
+			"from %s\" expected %s\" walked, got %s" % [cfg[0], cfg[1], walked]).is_equal_approx(float(cfg[1]), 0.01)
+
+
+## The rollout's self-model can now imagine patience: the policy candidate set
+## of a safe far unit contains the clamped ADVANCE.
+func test_policy_candidates_include_the_patient_advance() -> void:
+	var gunner := _armed(1, [Vector3.ZERO], "Gunner", [{"name": "LongRifle", "range": 36}])
+	var mine := _armed(2, [Vector3(50.0 * IN2M, 0, 0)], "Mine", [{"name": "CCW", "range": 0}])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Gunner": gunner, "Mine": mine}
+	var state := BattleSim.capture(army, func() -> Array: return [Vector3.ZERO],
+		func(_i: int) -> int: return 0, 1, 4)
+	var kinds: Array = []
+	for c in AiPlanner._policy_candidates(state, "Mine"):
+		kinds.append(int((c as Dictionary)["kind"]))
+	assert_bool(kinds.has(AiDecision.Action.ADVANCE)).override_failure_message(
+		"policy candidates must contain the patient ADVANCE, got kinds %s" % [kinds]).is_true()
+
+
+## The patient candidate must SURVIVE the 1-ply prefilter (same lesson as the
+## bait coverage): rushing at the brute's marker ends inside its charge reach
+## and gets mauled in the playout; the clamped advance stays uncharged. With
+## top_k=1 the rush wins 1-ply — only a pool guarantee lets patience win the
+## blend.
+func test_patient_advance_survives_the_prefilter_and_wins() -> void:
+	var brute := _armed(1, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)],
+		"Brute", [{"name": "Claws", "range": 0, "attacks": 12}])
+	var squad := _armed(2, [Vector3(17.2 * IN2M, 0, 0), Vector3(18.2 * IN2M, 0, 0),
+		Vector3(19.2 * IN2M, 0, 0), Vector3(20.2 * IN2M, 0, 0)],
+		"Squad", [{"name": "CCW", "range": 0}])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Brute": brute, "Squad": squad}
+	var state := BattleSim.capture(army, func() -> Array: return [Vector3.ZERO],
+		func(_i: int) -> int: return 0, 1, 4)
+	var pick := AiPlanner.plan_with_rollout(state, 2, 1)
+	assert_bool(bool(pick.get("used", false))).is_true()
+	var act: Dictionary = pick["action"]
+	assert_bool(bool(act.get("patient", false))).override_failure_message(
+		"expected the PATIENT advance to win, got kind=%d dest=%s" % [
+		int(act.get("kind", -1)), str(act.get("dest", "?"))]).is_true()

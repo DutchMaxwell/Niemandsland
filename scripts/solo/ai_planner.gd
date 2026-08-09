@@ -79,17 +79,32 @@ static func plan_with_rollout(state: Dictionary, player: int,
 	# the global TOP_K adds depth on the leaders.
 	var pool: Array = []
 	var covered := {}
+	var patient_of := {}
 	for cand in scored:
 		if not covered.has(cand["unit_key"]):
 			covered[cand["unit_key"]] = true
 			pool.append(cand)
+		if bool((cand["action"] as Dictionary).get("patient", false)) \
+				and not patient_of.has(cand["unit_key"]):
+			patient_of[cand["unit_key"]] = cand
 	for cand in scored.slice(0, mini(top_k, scored.size())):
 		if not pool.has(cand):
 			pool.append(cand)
+	# R8 pool guarantee (same lesson as the per-unit coverage): the PATIENT
+	# advance ranks low 1-ply by construction (it forgoes the marker), so the
+	# prefilter would starve it before it ever got played out — every unit's
+	# patient candidate enters the pool and lets the blend judge it.
+	for k in patient_of:
+		if not pool.has(patient_of[k]):
+			pool.append(patient_of[k])
 	var best := {}
 	var runner := {}
 	for cand in pool:
 		var rs := _blend_score(rollout_boundaries(state, cand["action"], player), player)
+		if OS.get_environment("NML_PLAN_DUMP") == "1":   # diagnosis-only; ladder silent without it
+			printerr("[PLAN] R%d %s kind=%d 1ply=%.4f rolled=%.4f" % [int(state["round"]),
+				str(cand["unit_key"]), int((cand["action"] as Dictionary).get("kind", -1)),
+				float(cand["score"]), rs])
 		var rolled := {"unit_key": cand["unit_key"], "action": cand["action"], "score": rs}
 		if best.is_empty() or rs > float(best["score"]):
 			runner = best
@@ -248,7 +263,97 @@ static func _policy_candidates(state: Dictionary, key: String) -> Array:
 	if charge != "":
 		out.append({"unit": key, "kind": AiDecision.Action.CHARGE,
 			"dest": _centre(state["units"][charge]), "charge": charge})
+	var patient := _safe_advance(state, key)
+	if not patient.is_empty():
+		out.append(patient)
 	return out
+
+
+## R8 (opener diagnosis 09.08., seed-1 capture): the PATIENT advance — toward
+## the nearest objective, with the goal clamped to the strongest safety still
+## available (tier 1: outside every gun's reach; tier 2: outside every charge
+## reach). This makes the tree's opening (walk up, do NOT overextend)
+## imaginable: before it, every future the rollout could picture rushed onto
+## markers into unspent guns, so the search could only ever pick the least-bad
+## overextension — the planner opened at 8% against a 25% structural par.
+## {} when even charge safety is already lost (rush/retreat own that regime)
+## or when there is nothing to walk toward.
+static func _safe_advance(state: Dictionary, key: String) -> Dictionary:
+	var su: Dictionary = state["units"][key]
+	var centre := _centre(su)
+	var best_d := INF
+	var goal := Vector3.ZERO
+	for o in state["objectives"]:
+		var d := ((o as Dictionary)["pos"] as Vector3 - centre).length()
+		if d < best_d:
+			best_d = d
+			goal = (o as Dictionary)["pos"]
+	if best_d == INF or best_d < 0.001:
+		return {}
+	var dir := (goal - centre).normalized()
+	var band_m := float(SoloController.move_bands_for_unit(su["unit"], null).get("advance", 6)) \
+		* BattleSim.IN2M
+	# Two safety tiers: (1) outside EVERYTHING (range + advance, or rush) —
+	# rarely available on a 72x48 board where front lines start ~24" apart;
+	# (2) fallback: outside every CHARGE reach (rush band) — "midfield,
+	# unbound": guns that already cover the whole board reach you anyway, but
+	# nobody gets to charge you and you stand short of the marker scrum.
+	# Distances are NEAREST MODEL to nearest model (charges and range checks
+	# resolve that way — centre maths under-reads the danger by both units'
+	# formation spread), and the charge reach carries the contact allowance.
+	var full: Array = []
+	var charge_only: Array = []
+	for ek in _enemy_keys(state, key):
+		var eu: Dictionary = state["units"][ek]
+		if int(eu["alive"]) <= 0:
+			continue
+		var u: GameUnit = eu["unit"]
+		var w: Array = []
+		if u.source_type == "opr" and u.source_data is OPRApiClient.OPRUnit:
+			w = (u.source_data as OPRApiClient.OPRUnit).weapons
+		var bands := SoloController.move_bands_for_unit(u, null)
+		var charge_in := float(bands.get("rush", 12)) + BattleSim.CONTACT_IN
+		full.append({"positions": eu["positions"], "reach": maxf(
+			float(AiArchetype.max_range_inches(w)) + float(bands.get("advance", 6)),
+			charge_in) * BattleSim.IN2M})
+		charge_only.append({"positions": eu["positions"], "reach": charge_in * BattleSim.IN2M})
+	if full.is_empty():
+		return {}
+	var positions: Array = su["positions"]
+	for threats in [full, charge_only]:
+		var inside := false
+		for e in threats:
+			if _gap_m(positions, Vector3.ZERO, e["positions"]) <= float(e["reach"]):
+				inside = true
+				break
+		if inside:
+			continue   # this tier's safety is already lost — try the weaker tier
+		# Farthest point along the line that stays safe — half-inch grid, deterministic.
+		var step := 0.5 * BattleSim.IN2M
+		var best_t := 0.0
+		var t := step
+		while t <= band_m + 0.0001:
+			var safe := true
+			for e in threats:
+				if _gap_m(positions, dir * t, e["positions"]) <= float(e["reach"]):
+					safe = false
+					break
+			if safe:
+				best_t = t
+			t += step
+		if best_t > 0.001:
+			return {"unit": key, "kind": AiDecision.Action.ADVANCE,
+				"dest": centre + dir * best_t, "patient": true}
+	return {}
+
+
+## Smallest model-to-model distance (metres) after shifting `a` by `offset`.
+static func _gap_m(a: Array, offset: Vector3, b: Array) -> float:
+	var best := INF
+	for pa in a:
+		for pb in b:
+			best = minf(best, ((pa as Vector3) + offset - (pb as Vector3)).length())
+	return best
 
 
 ## The other side's player id, read from the units (any enemy of `player`).
@@ -310,6 +415,9 @@ static func candidates(state: Dictionary, key: String) -> Array:
 		if away.length() > 0.001:
 			out.append({"unit": key, "kind": AiDecision.Action.ADVANCE,
 				"dest": _centre(su) + away.normalized() * RETREAT_GOAL_IN * BattleSim.IN2M})
+	var patient := _safe_advance(state, key)
+	if not patient.is_empty():
+		out.append(patient)
 	return out
 
 
