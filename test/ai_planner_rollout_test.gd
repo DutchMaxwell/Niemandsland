@@ -317,3 +317,20 @@ func test_seat_aware_blend_last_boundary_votes_alone_for_the_opener() -> void:
 	AiPlanner.opener_seat = false
 	assert_float(deep).is_equal_approx(l2, 0.0001)
 	assert_float(AiPlanner._blend_score([near, far], 2)).is_equal_approx((l1 + 0.5 * l2) / 1.5, 0.0001)
+
+
+## Opener-doctrine probe: each arm produces its forced round-1 shape — rush
+## aims at the nearest marker, hold stands, screen sends the CHEAPEST unit
+## first, patient safe-advances. plan()-shaped result so the pick path can
+## consume it unchanged.
+func test_doctrine_pick_arms() -> void:
+	var state := _state()
+	var rush := AiPlanner.doctrine_pick(state, 2, "rush")
+	assert_int(int((rush["action"] as Dictionary)["kind"])).is_equal(AiDecision.Action.RUSH)
+	var hold := AiPlanner.doctrine_pick(state, 2, "hold")
+	assert_int(int((hold["action"] as Dictionary)["kind"])).is_equal(AiDecision.Action.HOLD)
+	var screen := AiPlanner.doctrine_pick(state, 2, "screen")
+	assert_str(str(screen["unit_key"])).is_equal("Screamer")   # 1 wound < striker's 4
+	var patient := AiPlanner.doctrine_pick(state, 2, "patient")
+	var pk := int((patient["action"] as Dictionary)["kind"])
+	assert_bool(pk == AiDecision.Action.ADVANCE or pk == AiDecision.Action.HOLD).is_true()

@@ -372,6 +372,77 @@ static func _gap_m(a: Array, offset: Vector3, b: Array) -> float:
 	return best
 
 
+## Opener-doctrine probe (research knob, NML-995): forces the OPENER's
+## round-1 macro-plan so the seat's policy space can be MEASURED directly
+## (4 arms x 50 farm games) instead of iterated blindly through the eval.
+## Arms: "patient" (every unit safe-advances, hold when boxed), "rush"
+## (nearest marker — the pathological control arm), "screen" (the cheapest
+## unit rushes the center first, everyone else patient), "hold" (the full
+## null-move: cede round 1 entirely, keep the army for the responder
+## rounds). Returns a plan()-shaped pick; {} lets the caller fall through
+## to the normal search. Only the controller's env gate ever calls this.
+static func doctrine_pick(state: Dictionary, player: int, doctrine: String) -> Dictionary:
+	var first_key := ""
+	var cheapest := ""
+	var cheapest_w := INF
+	var any_own_acted := false
+	for key in state["units"]:
+		var su: Dictionary = state["units"][key]
+		if int(su["player"]) != player or int(su["alive"]) <= 0:
+			continue
+		if bool(su["activated"]):
+			any_own_acted = true
+			continue
+		if first_key == "":
+			first_key = str(key)
+		var wsum := 0.0
+		for w in su["wounds"]:
+			wsum += float(w)
+		if wsum < cheapest_w:
+			cheapest_w = wsum
+			cheapest = str(key)
+	if first_key == "":
+		return {}
+	var key := first_key
+	var act := {}
+	match doctrine:
+		"rush":
+			var best_d := INF
+			var dest := Vector3.ZERO
+			var su: Dictionary = state["units"][key]
+			for o in state["objectives"]:
+				var d := ((o as Dictionary)["pos"] as Vector3 - _centre(su)).length()
+				if d < best_d:
+					best_d = d
+					dest = (o as Dictionary)["pos"]
+			act = {"unit": key, "kind": AiDecision.Action.RUSH, "dest": dest}
+		"hold":
+			act = {"unit": key, "kind": AiDecision.Action.HOLD}
+		"screen":
+			if not any_own_acted:
+				key = cheapest
+				var mid := Vector3.ZERO
+				for o in state["objectives"]:
+					mid += (o as Dictionary)["pos"] as Vector3
+				if not state["objectives"].is_empty():
+					mid /= state["objectives"].size()
+				act = {"unit": key, "kind": AiDecision.Action.RUSH, "dest": mid}
+			else:
+				act = _safe_advance(state, key)
+				if act.is_empty():
+					act = {"unit": key, "kind": AiDecision.Action.HOLD}
+		"patient", _:
+			act = _safe_advance(state, key)
+			if act.is_empty():
+				act = {"unit": key, "kind": AiDecision.Action.HOLD}
+	if not act.has("unit"):
+		act["unit"] = key
+	var base := AiMissionEval.score(state, player, BattleSim.reply_threat(state, player))
+	return {"used": true, "unit_key": str(act["unit"]), "action": act,
+		"intent": "opener doctrine '%s' (research probe)" % doctrine,
+		"expectation": {"before": base, "after": base}, "waits": 0, "rolled_units": []}
+
+
 ## The other side's player id, read from the units (any enemy of `player`).
 static func _other_player(state: Dictionary, player: int) -> int:
 	for key in state["units"]:

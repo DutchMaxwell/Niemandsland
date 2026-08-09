@@ -2638,7 +2638,12 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 		var su: Dictionary = state["units"][k]
 		if int(su["player"]) == me and not pool.has(su["unit"]):
 			su["activated"] = true
-	var pick := AiPlanner.plan_with_rollout(state, me)
+	var pick := {}
+	var doct := OS.get_environment("NML_OPENER_DOCTRINE")
+	if doct != "" and AiPlanner.opener_seat and _current_round() == 1:
+		pick = AiPlanner.doctrine_pick(state, me, doct)   # research probe, env-gated
+	if not bool(pick.get("used", false)):
+		pick = AiPlanner.plan_with_rollout(state, me)
 	if not bool(pick.get("used", false)):
 		return null
 	var chosen: GameUnit = (state["units"][pick["unit_key"]] as Dictionary)["unit"]
