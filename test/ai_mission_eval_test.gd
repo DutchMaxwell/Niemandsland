@@ -99,3 +99,37 @@ func test_incoming_threat_discounts_presence_and_floors_at_zero() -> void:
 func test_no_objectives_is_even() -> void:
 	var state := _state([_unit(1, [Vector3.ZERO], "Solo")], [], [])
 	assert_float(AiMissionEval.score(state, 1)).is_equal_approx(0.5, 0.0001)
+
+
+# === E1: feature vector for the offline eval fit (NML-995) ===
+
+## Hand-computed on a two-unit state (marker at the enemy Gunner): my Squad
+## (4x1W, 12" rush) sits 20" out — beyond control ring + rush, so tail_mine
+## stays 0 and its presence carries a 2-move discount; the enemy Gunner (3x1W)
+## holds the ring: tail_theirs 1, full presence 3. Ownership: marker owned by
+## the enemy counts once. The incoming map lands in my_incoming and thins my
+## presence.
+func test_features_hand_computed_two_unit_state() -> void:
+	var gunner := _unit(1, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)], "Gunner")
+	var squad_pos: Array = []
+	for i in range(4):
+		squad_pos.append(Vector3((20.0 + i) * IN2M, 0, 0))
+	var squad := _unit(2, squad_pos, "Squad")
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Gunner": gunner, "Squad": squad}
+	var state := BattleSim.capture(army, func() -> Array: return [Vector3.ZERO],
+		func(_i: int) -> int: return 1, 2, 4)
+	var f := AiMissionEval.features(state, 2, {"Squad": 1.0})
+	assert_float(float(f.get("round_frac", -999.0))).is_equal_approx(0.5, 0.001)
+	assert_float(float(f.get("my_wounds", -999.0))).is_equal_approx(4.0, 0.001)
+	assert_float(float(f.get("their_wounds", -999.0))).is_equal_approx(3.0, 0.001)
+	assert_float(float(f.get("my_units", -999.0))).is_equal_approx(1.0, 0.001)
+	assert_float(float(f.get("their_unactivated", -999.0))).is_equal_approx(1.0, 0.001)
+	assert_float(float(f.get("my_incoming", -999.0))).is_equal_approx(1.0, 0.001)
+	assert_float(float(f.get("tail_mine", -999.0))).is_equal_approx(0.0, 0.001)
+	assert_float(float(f.get("tail_theirs", -999.0))).is_equal_approx(1.0, 0.001)
+	assert_float(float(f.get("obj_owned_theirs", -999.0))).is_equal_approx(1.0, 0.001)
+	assert_float(float(f.get("obj_owned_mine", -999.0))).is_equal_approx(0.0, 0.001)
+	# presence: squad 20" out, ring 3", rush 12 -> needed 2 -> (4-1)*0.25
+	assert_float(float(f.get("presence_mine", -999.0))).is_equal_approx(0.75, 0.001)
+	assert_float(float(f.get("presence_theirs", -999.0))).is_equal_approx(3.0, 0.001)

@@ -65,6 +65,8 @@ var _move_records: Array = []           # {side, round, unit, why, data} for eve
 # side — calib_pairs() folds them into per-round-boundary (predicted, measured) pairs, the parity
 # wave's progress meter (the mental model was ~0.2 too optimistic early; watch this gap shrink).
 var _calib_records: Array = []          # {side, round, before, after} for planner records carrying win_before
+var _position_rows: Array = []          # E1: {side, round, features} — first planner pick per side+round
+var _position_seen: Dictionary = {}     # side_round keys already logged into _position_rows
 
 # Showcase capture (capture= / NML_AI_CAPTURE) — board PNGs + full battle log + verbatim decisions.
 var _capture_dir := ""                  # empty => captures off (the ladder default)
@@ -285,6 +287,15 @@ func _run() -> void:
 			var d: Dictionary = rec["data"]
 			_calib_records.append({"side": side, "round": int(army_manager.current_round),
 				"before": float(d["win_before"]), "after": float(d["win_after"])})
+		if kind == "planner" and (rec.get("data", {}) as Dictionary).has("features"):
+			# E1 (eval-tuning wave): first pick per (side, round) = the fresh
+			# round-start position; its features + the final winner become one
+			# labeled training row for the offline eval fit.
+			var fkey := "%d_%d" % [side, int(army_manager.current_round)]
+			if not _position_seen.has(fkey):
+				_position_seen[fkey] = true
+				_position_rows.append({"side": side, "round": int(army_manager.current_round),
+					"features": (rec["data"] as Dictionary)["features"]})
 		if kind == "move":
 			_move_records.append({"side": side, "round": int(army_manager.current_round),
 				"unit": str(rec.get("unit", "?")), "why": str(rec.get("why", "")),
@@ -454,6 +465,7 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 		"knob_records": _knob_records,
 		"move_usage": _move_usage_summary(),
 		"planner_calib": calib_pairs(_calib_records),
+		"planner_positions": _position_rows,
 		"duration_sec": duration_sec,
 	}
 	for c in result["planner_calib"]:

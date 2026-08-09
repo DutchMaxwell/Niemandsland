@@ -43,6 +43,51 @@ static func _objective_p(state: Dictionary, obj: Dictionary, player: int,
 	return mine / (mine + theirs)
 
 
+## E1 (eval-tuning wave): the eval's RAW FEATURE VECTOR for a state, from
+## `player`'s perspective — the offline fit's input, logged per planner round
+## boundary by the arena. Flat name->float, all cheap, all explainable. The
+## tail_* counts are the material of the proven seat effect (who can still
+## act near a marker decides its seize); the eval itself cannot see them yet.
+static func features(state: Dictionary, player: int, incoming: Dictionary = {}) -> Dictionary:
+	var f := {"round_frac": float(state["round"]) / maxf(float(state["rounds_total"]), 1.0),
+		"my_wounds": 0.0, "their_wounds": 0.0, "my_units": 0.0, "their_units": 0.0,
+		"my_unactivated": 0.0, "their_unactivated": 0.0, "my_incoming": 0.0,
+		"presence_mine": 0.0, "presence_theirs": 0.0, "tail_mine": 0.0, "tail_theirs": 0.0,
+		"obj_owned_mine": 0.0, "obj_owned_theirs": 0.0}
+	for v in incoming.values():
+		f["my_incoming"] += float(v)
+	for key in state["units"]:
+		var su: Dictionary = state["units"][key]
+		if int(su["alive"]) <= 0:
+			continue
+		var mine := int(su["player"]) == player
+		var wounds := 0.0
+		for w in su["wounds"]:
+			wounds += float(w)
+		f["my_wounds" if mine else "their_wounds"] += wounds
+		f["my_units" if mine else "their_units"] += 1.0
+		if not bool(su.get("activated", false)):
+			f["my_unactivated" if mine else "their_unactivated"] += 1.0
+		var rush := float(SoloController.move_bands_for_unit(su["unit"], null).get("rush", 12))
+		for o in state["objectives"]:
+			var d := INF
+			for p in su["positions"]:
+				d = minf(d, ((p as Vector3) - ((o as Dictionary)["pos"] as Vector3)).length())
+			d /= BattleSim.IN2M
+			f["presence_mine" if mine else "presence_theirs"] += _presence(state, su,
+				(o as Dictionary)["pos"] as Vector3, float(incoming.get(str(key), 0.0)))
+			if not bool(su.get("activated", false)) and not bool(su.get("shaken", false)) \
+					and d <= SoloController.OBJECTIVE_CONTROL_IN + rush:
+				f["tail_mine" if mine else "tail_theirs"] += 1.0
+	for o in state["objectives"]:
+		var owner := int((o as Dictionary).get("owner", 0))
+		if owner == player:
+			f["obj_owned_mine"] += 1.0
+		elif owner != 0:
+			f["obj_owned_theirs"] += 1.0
+	return f
+
+
 ## Projected hold strength of ONE unit at ONE objective: its remaining wounds,
 ## discounted per future activation it still needs to reach the control ring.
 ## Dead units project nothing; a shaken unit pays one recovery activation

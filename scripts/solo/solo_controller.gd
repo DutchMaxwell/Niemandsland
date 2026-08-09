@@ -2646,7 +2646,10 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	record_decision({"kind": "planner", "unit": chosen.get_name(),
 		"rule": "PLANNER_V0 unit pick (NML-995): the round is played out for the best openers; the strongest end-of-round position activates first",
 		"candidates": [], "chosen": "activates next", "why": str(pick["intent"]),
-		"data": {"kept_back": int(pick.get("waits", 0))}})
+		"data": {"kept_back": int(pick.get("waits", 0)),
+			# E1 (eval-tuning wave): the position's raw feature vector — the
+			# arena logs the first per (side, round) as offline-fit input.
+			"features": AiMissionEval.features(state, me, BattleSim.reply_threat(state, me))}})
 	return chosen
 
 
