@@ -133,3 +133,49 @@ func test_features_hand_computed_two_unit_state() -> void:
 	# presence: squad 20" out, ring 3", rush 12 -> needed 2 -> (4-1)*0.25
 	assert_float(float(f.get("presence_mine", -999.0))).is_equal_approx(0.75, 0.001)
 	assert_float(float(f.get("presence_theirs", -999.0))).is_equal_approx(3.0, 0.001)
+
+
+# === E4: fitted eval (NML-995) ===
+
+## fit_mode routes score() through the fitted logistic: values live in (0,1),
+## and MORE enemy unactivated activations must LOWER my score (the fit's
+## dominant danger signal, w=-1.29). fit_mode false stays the hand eval.
+func test_fit_mode_scores_and_fears_the_enemy_tail() -> void:
+	var gunner := _unit(1, [Vector3.ZERO], "Gunner")
+	var extra := _unit(1, [Vector3(2.0 * IN2M, 0, 0)], "Extra")
+	var squad := _unit(2, [Vector3(20.0 * IN2M, 0, 0)], "Squad")
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Gunner": gunner, "Extra": extra, "Squad": squad}
+	var state := BattleSim.capture(army, func() -> Array: return [Vector3.ZERO],
+		func(_i: int) -> int: return 0, 2, 4)
+	var hand := AiMissionEval.score(state, 2)
+	AiMissionEval.fit_mode = true
+	var fit_full := AiMissionEval.score(state, 2)
+	(state["units"]["Extra"] as Dictionary)["activated"] = true
+	var fit_less_tail := AiMissionEval.score(state, 2)
+	AiMissionEval.fit_mode = false
+	assert_float(fit_full).is_between(0.0001, 0.9999)
+	assert_bool(abs(fit_full - hand) > 0.0001).override_failure_message(
+		"fit eval must actually differ from the hand eval").is_true()
+	assert_float(fit_less_tail).override_failure_message(
+		"one enemy activation SPENT must RAISE my fitted score").is_greater(fit_full)
+
+
+## A finished round (everyone activated, round < total) is scored as the NEXT
+## round's fresh start — identical to manually building that fresh state.
+func test_fit_scores_round_end_as_next_round_start() -> void:
+	var gunner := _unit(1, [Vector3.ZERO], "Gunner")
+	var squad := _unit(2, [Vector3(20.0 * IN2M, 0, 0)], "Squad")
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Gunner": gunner, "Squad": squad}
+	var spent := BattleSim.capture(army, func() -> Array: return [Vector3.ZERO],
+		func(_i: int) -> int: return 0, 1, 4)
+	for k in spent["units"]:
+		(spent["units"][k] as Dictionary)["activated"] = true
+	var fresh := BattleSim.capture(army, func() -> Array: return [Vector3.ZERO],
+		func(_i: int) -> int: return 0, 2, 4)
+	AiMissionEval.fit_mode = true
+	var a := AiMissionEval.score(spent, 2)
+	var b := AiMissionEval.score(fresh, 2)
+	AiMissionEval.fit_mode = false
+	assert_float(a).is_equal_approx(b, 0.0001)

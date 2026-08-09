@@ -2622,6 +2622,8 @@ func _planner_active() -> bool:
 ## copy, so the winning (unit, action) pair decides who activates next instead of
 ## the tree's seeded section draw. null → the caller keeps its draw untouched.
 func _planner_pick_unit(pool: Array) -> GameUnit:
+	var diff := active_difficulty()
+	AiMissionEval.fit_mode = diff != null and diff.eval_fit   # E4: leaf choice per preset
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
 		terrain_type_at)
@@ -2659,6 +2661,8 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 ## shape. {} ⇒ the caller keeps the decision-tree plan byte-identically. Emits the "planner"
 ## explainability record (intent sentence + expectation numbers + runner-up).
 func _solve_planner(unit: GameUnit) -> Dictionary:
+	var sp_diff := active_difficulty()
+	AiMissionEval.fit_mode = sp_diff != null and sp_diff.eval_fit   # E4: leaf choice per preset
 	# R3: execute the rollout intent when it is still valid (same unit, same
 	# round, target still alive) — re-deriving 1-ply here would undo the tempo
 	# choice the unit pick just made. Any mismatch falls through to the re-plan.
