@@ -330,7 +330,8 @@ func _run() -> void:
 		objectives_v2.append(Vector2((o as Vector3).x, (o as Vector3).z))
 	var deploy_order: Array = [1, 2] if deploy_first == 1 else [2, 1]
 	for slot in deploy_order:
-		_deploy_side(main, solo, table, terrain_overlay, int(slot), objectives_v2, _seed + int(slot))
+		_deploy_side(main, solo, table, terrain_overlay, int(slot), objectives_v2, _seed + int(slot),
+			int(slot) == deploy_first)
 	await process_frame
 	# Deployment board BEFORE the dice re-seed below, so the capture's frame ticks cannot leak into
 	# the dice stream (seed(_dice_seed) resets the global RNG right after either way).
@@ -615,7 +616,7 @@ func _import_and_spawn(main: Node, army_manager: Node, fixture: String, player_i
 	return true
 
 
-func _deploy_side(main: Node, solo: Node, table: Node, terrain_overlay: Node, slot: int, objectives_v2: Array, seed_value: int) -> void:
+func _deploy_side(main: Node, solo: Node, table: Node, terrain_overlay: Node, slot: int, objectives_v2: Array, seed_value: int, first := false) -> void:
 	solo.ai_slot = slot
 	solo.human_slot = 2 if slot == 1 else 1
 	var w: float = table.table_size.x * 0.3048
@@ -623,6 +624,21 @@ func _deploy_side(main: Node, solo: Node, table: Node, terrain_overlay: Node, sl
 	var depth: float = 12.0 * IN2M
 	var zmin: float = (-d / 2.0) if slot == 1 else (d / 2.0 - depth)
 	var zone := Rect2(Vector2(-w / 2.0, zmin), Vector2(w, depth))
+	# RESEARCH KNOB (NML-995 deploy decomposition): restrict the FIRST
+	# deployer's zone — the counter-deploy probe's arms. Env-gated, inert
+	# when unset. back = the strip's rear half (table-edge side); left/right
+	# = one width half (flank refuse).
+	var zd := OS.get_environment("NML_FIRST_DEPLOY_ZONE")
+	if first and zd != "":
+		match zd:
+			"back":
+				zone = Rect2(Vector2(zone.position.x, zmin if slot == 1 else zmin + depth / 2.0),
+					Vector2(w, depth / 2.0))
+			"left":
+				zone = Rect2(Vector2(-w / 2.0, zmin), Vector2(w / 2.0, depth))
+			"right":
+				zone = Rect2(Vector2(0.0, zmin), Vector2(w / 2.0, depth))
+		printerr("[ARENA] RESEARCH first-deploy zone '%s' for P%d" % [zd, slot])
 	var space = terrain_overlay.get_world_3d().direct_space_state if terrain_overlay != null else null
 	var probe := PhysicsShapeQueryParameters3D.new()
 	var probe_shape := SphereShape3D.new()
