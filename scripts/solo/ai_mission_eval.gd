@@ -41,9 +41,21 @@ static var fit_mode := false
 ## `incoming` (danger term): my_unit_key -> expected reply wounds
 ## (BattleSim.reply_threat); each mapped unit projects with that strength
 ## already shot off. Empty map = pre-danger behaviour, byte-identical.
+const FIT_BLEND := 0.5   # E4.2: fitted share; the hand eval keeps the move gradient
+
+
 static func score(state: Dictionary, player: int, incoming: Dictionary = {}) -> float:
 	if fit_mode:
-		return _score_fit(state, player, incoming)
+		# E4.2 blend: pure fit played WORSE than the hand eval (v1.1 A/B 37%
+		# vs 40.5%) — a strong outcome PREDICTOR was a weak move CONTROLLER
+		# (its dominant signals are not move-controllable). The blend keeps
+		# the hand eval's sensitivity to material/position and adds the
+		# fit's seat/tempo context (tail counts at the next-round view).
+		return (1.0 - FIT_BLEND) * _score_hand(state, player, incoming) 			+ FIT_BLEND * _score_fit(state, player, incoming)
+	return _score_hand(state, player, incoming)
+
+
+static func _score_hand(state: Dictionary, player: int, incoming: Dictionary = {}) -> float:
 	var objectives: Array = state["objectives"]
 	if objectives.is_empty():
 		return 0.5
