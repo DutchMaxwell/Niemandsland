@@ -44,6 +44,14 @@ static func plan(state: Dictionary, player: int) -> Dictionary:
 
 
 const ROLLOUT_TOP_K := 6   # rollout budget: only this many 1-ply-best openers get played out
+static var _tk := 0   # research seam: NML_TOP_K overrides (lazy; <=0 = unread)
+
+
+static func top_k_default() -> int:
+	if _tk <= 0:
+		var e := OS.get_environment("NML_TOP_K")
+		_tk = clampi(int(e), 1, 32) if e != "" else ROLLOUT_TOP_K
+	return _tk
 
 
 ## R2 (round-rollout search): rank every (unit, action) pair 1-ply with the
@@ -52,7 +60,9 @@ const ROLLOUT_TOP_K := 6   # rollout budget: only this many 1-ply-best openers g
 ## plan() byte-identically (the safety valve and the red-green seam).
 ## Deterministic: prefilter ties keep capture order (explicit index tiebreak).
 static func plan_with_rollout(state: Dictionary, player: int,
-		top_k: int = ROLLOUT_TOP_K) -> Dictionary:
+		top_k: int = -1) -> Dictionary:
+	if top_k == -1:
+		top_k = top_k_default()   # research seam; default = the const
 	if top_k <= 0:
 		return plan(state, player)
 	var base := AiMissionEval.score(state, player, BattleSim.reply_threat(state, player))
