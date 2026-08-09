@@ -155,10 +155,10 @@ static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: 
 	var guard: int = ((state["units"] as Dictionary).size() + 2) * rounds_left
 	while guard > 0:
 		guard -= 1
-		var a := _policy_step(cur, turn)
+		var a := _policy_step(cur, turn, turn == me)   # R9: own side steps danger-aware
 		if a.is_empty():
 			turn = _other_player(cur, turn)
-			a = _policy_step(cur, turn)
+			a = _policy_step(cur, turn, turn == me)
 			if a.is_empty():
 				out.append(cur)
 				rounds_left -= 1
@@ -219,8 +219,12 @@ static func _cross_round(cur: Dictionary) -> int:
 
 
 ## Rollout policy, one step: the best restricted move of `player`'s un-activated
-## units by the CHEAP leaf (mission eval WITHOUT reply pricing). {} when dry.
-static func _policy_step(state: Dictionary, player: int) -> Dictionary:
+## units. The OPPONENT is imagined with the CHEAP leaf (mission eval WITHOUT
+## reply pricing — greedy is a conservative enemy model); OUR OWN side steps
+## with the RICH leaf (R9: the danger-blind cheap leaf marched the imagined
+## own army into the same overextension on every line, so patience could
+## never look better than rushing). {} when dry.
+static func _policy_step(state: Dictionary, player: int, rich := false) -> Dictionary:
 	var best := {}
 	var best_s := -INF
 	for key in state["units"]:
@@ -228,7 +232,9 @@ static func _policy_step(state: Dictionary, player: int) -> Dictionary:
 		if int(su["player"]) != player or bool(su["activated"]) or int(su["alive"]) <= 0:
 			continue
 		for action in _policy_candidates(state, str(key)):
-			var s := AiMissionEval.score(BattleSim.resolve(state, action), player)
+			var next := BattleSim.resolve(state, action)
+			var s := AiMissionEval.score(next, player, BattleSim.reply_threat(next, player)) \
+				if rich else AiMissionEval.score(next, player)
 			if s > best_s:
 				best_s = s
 				best = action

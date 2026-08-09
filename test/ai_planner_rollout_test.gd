@@ -276,3 +276,26 @@ func test_patient_advance_survives_the_prefilter_and_wins() -> void:
 	assert_bool(bool(act.get("patient", false))).override_failure_message(
 		"expected the PATIENT advance to win, got kind=%d dest=%s" % [
 		int(act.get("kind", -1)), str(act.get("dest", "?"))]).is_true()
+
+
+# === R9: danger-aware self-model (NML-995) ===
+
+## A 12"-gun watches the marker. The CHEAP policy step (danger-blind) rushes
+## our squad toward the marker into gun range; the RICH step prices the
+## shooting reply and keeps the squad out of it. The self-model must use the
+## rich step — otherwise every imagined future overextends our own army.
+func test_rich_policy_step_avoids_the_gun_the_cheap_one_walks_into() -> void:
+	var gunner := _armed(1, [Vector3.ZERO], "Gunner", [{"name": "ShortGun", "range": 12, "attacks": 8}])
+	var squad := _armed(2, [Vector3(19.0 * IN2M, 0, 0), Vector3(20.0 * IN2M, 0, 0),
+		Vector3(21.0 * IN2M, 0, 0), Vector3(22.0 * IN2M, 0, 0)],
+		"Squad", [{"name": "CCW", "range": 0}])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Gunner": gunner, "Squad": squad}
+	var state := BattleSim.capture(army, func() -> Array: return [Vector3.ZERO],
+		func(_i: int) -> int: return 0, 1, 4)
+	var cheap := AiPlanner._policy_step(state, 2)
+	assert_int(int(cheap.get("kind", -1))).override_failure_message(
+		"cheap step should rush the marker (danger-blind)").is_equal(AiDecision.Action.RUSH)
+	var rich := AiPlanner._policy_step(state, 2, true)
+	assert_bool(int(rich.get("kind", -1)) == AiDecision.Action.RUSH).override_failure_message(
+		"rich step must NOT rush into the 12\"-gun's reply").is_false()
