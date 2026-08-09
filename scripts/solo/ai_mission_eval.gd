@@ -41,7 +41,18 @@ static var fit_mode := false
 ## `incoming` (danger term): my_unit_key -> expected reply wounds
 ## (BattleSim.reply_threat); each mapped unit projects with that strength
 ## already shot off. Empty map = pre-danger behaviour, byte-identical.
-const FIT_BLEND := 0.5   # E4.2: fitted share; the hand eval keeps the move gradient
+const FIT_BLEND_DEFAULT := 0.5   # E4.2: fitted share; the hand eval keeps the move gradient
+
+## Measurement seam: NML_FIT_BLEND overrides the fitted share for sweep runs
+## (read once per process; the ladder without the env is byte-identical to
+## the committed default). Cache -1 = unread.
+static var _blend := -1.0
+
+static func fit_blend() -> float:
+	if _blend < 0.0:
+		var e := OS.get_environment("NML_FIT_BLEND")
+		_blend = clampf(float(e), 0.0, 1.0) if e != "" else FIT_BLEND_DEFAULT
+	return _blend
 
 
 static func score(state: Dictionary, player: int, incoming: Dictionary = {}) -> float:
@@ -51,7 +62,8 @@ static func score(state: Dictionary, player: int, incoming: Dictionary = {}) -> 
 		# (its dominant signals are not move-controllable). The blend keeps
 		# the hand eval's sensitivity to material/position and adds the
 		# fit's seat/tempo context (tail counts at the next-round view).
-		return (1.0 - FIT_BLEND) * _score_hand(state, player, incoming) 			+ FIT_BLEND * _score_fit(state, player, incoming)
+		var fb := fit_blend()
+		return (1.0 - fb) * _score_hand(state, player, incoming) 			+ fb * _score_fit(state, player, incoming)
 	return _score_hand(state, player, incoming)
 
 

@@ -179,3 +179,26 @@ func test_fit_scores_round_end_as_next_round_start() -> void:
 	var b := AiMissionEval.score(fresh, 2)
 	AiMissionEval.fit_mode = false
 	assert_float(a).is_equal_approx(b, 0.0001)
+
+
+## The blend ratio is a measurement seam: the score is exactly the convex mix
+## of hand and fit at the active ratio (checked at 0.25), and the default
+## without the env override stays 0.5.
+func test_blend_ratio_mixes_hand_and_fit_exactly() -> void:
+	var gunner := _unit(1, [Vector3.ZERO], "Gunner")
+	var squad := _unit(2, [Vector3(20.0 * IN2M, 0, 0)], "Squad")
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Gunner": gunner, "Squad": squad}
+	var state := BattleSim.capture(army, func() -> Array: return [Vector3.ZERO],
+		func(_i: int) -> int: return 0, 2, 4)
+	var hand := AiMissionEval.score(state, 2)
+	AiMissionEval.fit_mode = true
+	AiMissionEval._blend = 1.0
+	var fit := AiMissionEval.score(state, 2)
+	AiMissionEval._blend = 0.25
+	var mixed := AiMissionEval.score(state, 2)
+	AiMissionEval._blend = -1.0   # back to lazy env/default resolution
+	AiMissionEval.fit_mode = false
+	assert_float(mixed).is_equal_approx(0.75 * hand + 0.25 * fit, 0.0001)
+	assert_float(AiMissionEval.fit_blend()).is_equal_approx(0.5, 0.0001)
+	AiMissionEval._blend = -1.0
