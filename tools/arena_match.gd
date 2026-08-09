@@ -65,6 +65,7 @@ var _move_records: Array = []           # {side, round, unit, why, data} for eve
 # side — calib_pairs() folds them into per-round-boundary (predicted, measured) pairs, the parity
 # wave's progress meter (the mental model was ~0.2 too optimistic early; watch this gap shrink).
 var _calib_records: Array = []          # {side, round, before, after} for planner records carrying win_before
+var _unit_activations: Dictionary = {}  # slot -> {unit_name: activation count} (log-linter input)
 var _position_rows: Array = []          # E1/E6: {side, round, seq, features} — EVERY planner pick
 
 # Showcase capture (capture= / NML_AI_CAPTURE) — board PNGs + full battle log + verbatim decisions.
@@ -266,6 +267,17 @@ func _run() -> void:
 	# settled; tools/tactic_audit.py counts those lines as d9. Measurement only — no decision is touched.
 	solo.ai_unit_activated.connect(func(u) -> void:
 		OffboardAudit.audit_and_log(main.get("table"), battle_log, u, "after activation"))
+	# Eval-method hardening (10.08.): per-unit activation counts into the result
+	# JSON — the log linter's food. A unit alive at game end with ZERO
+	# activations is the NML-1002 anomaly class (stolen/stuck units) and must
+	# never again hide inside aggregate winrates.
+	solo.ai_unit_activated.connect(func(u) -> void:
+		if u == null:
+			return
+		var slot := int(u.unit_properties.get("player_id", 0))
+		var by: Dictionary = _unit_activations.get(slot, {})
+		by[str(u.get_name())] = int(by.get(str(u.get_name()), 0)) + 1
+		_unit_activations[slot] = by)
 	solo.decision_sink = func(rec: Dictionary) -> void:
 		var side: int = int(solo.ai_slot)
 		var kind := str(rec.get("kind", "?"))
@@ -477,6 +489,7 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 		"move_usage": _move_usage_summary(),
 		"planner_calib": calib_pairs(_calib_records),
 		"planner_positions": _position_rows,
+		"unit_activations": _stringify_keys(_unit_activations),
 		"duration_sec": duration_sec,
 	}
 	for c in result["planner_calib"]:
