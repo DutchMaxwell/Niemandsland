@@ -12,7 +12,12 @@ const DISCOUNT := 0.5   # presence halves per future round still needed to arriv
 
 
 # === E4 (eval-tuning wave): the FITTED eval ===
-## Provenance (v4, per-activation TD): eval_fit TD pass over eval_data_v3
+## Provenance (v5, FAIR data): per-activation TD (LAM 0.7, sign priors) over
+## eval_data_fair — the first weights learned from UNCONTAMINATED games
+## (NML-1002/1003 fixed, symmetric varied maps; 200 games, 2191 rows,
+## outcome-AUC 0.768 — fair games are honestly harder to predict). Every
+## controllable feature carries doctrine-signed weight (cover +/-, exposure -,
+## focus load -). Prior note (v4, per-activation TD): eval_fit TD pass over eval_data_v3
 ## (300 games, 2826 PER-PICK rows, chained per side by seq; LAM=0.7,
 ## doctrine sign priors). FIRST fit where the move-controllable features
 ## carry real, correctly-signed weight: my_charge_exposed -0.29 std,
@@ -32,15 +37,15 @@ const DISCOUNT := 0.5   # presence halves per future round still needed to arriv
 ## Their value needs consequence-aware training targets (TD) — next rung.
 ## Re-fit = re-run the tool and replace this block; never hand-edit numbers.
 const FIT_W := {
-	"cover_mine": 0.121087, "cover_theirs": -0.012749,
-	"my_charge_exposed": -0.210523, "my_unactivated": 0.421878,
-	"obj_owned_mine": 0.287398, "obj_owned_theirs": -0.235846,
-	"presence_mine": 0.084934, "presence_theirs": -0.059456,
-	"round_frac": 0.626817, "tail_mine": 0.125123,
-	"tail_theirs": -0.192551, "their_charge_exposed": 0.214182,
-	"their_unactivated": -0.399604,
+	"cover_mine": 0.035692, "cover_theirs": -0.076642,
+	"my_charge_exposed": -0.068216, "my_incoming_max": -0.023399,
+	"my_unactivated": 0.367830, "obj_owned_mine": 0.377221,
+	"obj_owned_theirs": -0.353979, "presence_mine": 0.055253,
+	"presence_theirs": -0.051763, "round_frac": 0.407864,
+	"tail_mine": 0.105240, "tail_theirs": -0.074944,
+	"their_charge_exposed": 0.011016, "their_unactivated": -0.408513,
 }
-const FIT_B := -0.314616
+const FIT_B := 0.194617
 ## Research seam: the PREVIOUS weight set (v2, outcome-labels) selectable via
 ## NML_FIT_WEIGHTS=v2 — both sets were tuned on CONTAMINATED games, the clean
 ## ladder re-ranks them.
