@@ -12,11 +12,7 @@ const DISCOUNT := 0.5   # presence halves per future round still needed to arriv
 
 
 # === E4 (eval-tuning wave): the FITTED eval ===
-## Provenance (v6, self-play turn 2 on FAIR data): per-activation TD (LAM
-## 0.7, sign priors) over the POOLED fair set — eval_data_fair (200 games,
-## default config) + champ_data (100 games played by the hz1+v5 champion),
-## 3297 rows. Exposure penalty strengthened (-0.11), all signs doctrine-sane.
-## Prior note (v5, FAIR data): per-activation TD (LAM 0.7, sign priors) over
+## Provenance (v5, FAIR data): per-activation TD (LAM 0.7, sign priors) over
 ## eval_data_fair — the first weights learned from UNCONTAMINATED games
 ## (NML-1002/1003 fixed, symmetric varied maps; 200 games, 2191 rows,
 ## outcome-AUC 0.768 — fair games are honestly harder to predict). Every
@@ -41,14 +37,15 @@ const DISCOUNT := 0.5   # presence halves per future round still needed to arriv
 ## Their value needs consequence-aware training targets (TD) — next rung.
 ## Re-fit = re-run the tool and replace this block; never hand-edit numbers.
 const FIT_W := {
-	"cover_mine": 0.058588, "cover_theirs": -0.038570,
-	"my_charge_exposed": -0.108174, "my_unactivated": 0.359114,
-	"obj_owned_mine": 0.358870, "obj_owned_theirs": -0.404729,
-	"presence_mine": 0.057221, "presence_theirs": -0.056538,
-	"round_frac": 0.541434, "tail_mine": 0.112133,
-	"tail_theirs": -0.093375, "their_unactivated": -0.377329,
+	"cover_mine": 0.035692, "cover_theirs": -0.076642,
+	"my_charge_exposed": -0.068216, "my_incoming_max": -0.023399,
+	"my_unactivated": 0.367830, "obj_owned_mine": 0.377221,
+	"obj_owned_theirs": -0.353979, "presence_mine": 0.055253,
+	"presence_theirs": -0.051763, "round_frac": 0.407864,
+	"tail_mine": 0.105240, "tail_theirs": -0.074944,
+	"their_charge_exposed": 0.011016, "their_unactivated": -0.408513,
 }
-const FIT_B := 0.124227
+const FIT_B := 0.194617
 ## Research seam: the PREVIOUS weight set (v2, outcome-labels) selectable via
 ## NML_FIT_WEIGHTS=v2 — both sets were tuned on CONTAMINATED games, the clean
 ## ladder re-ranks them.
