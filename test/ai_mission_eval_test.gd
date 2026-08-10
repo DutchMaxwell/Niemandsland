@@ -235,3 +235,10 @@ func test_feature_value_supports_product_terms() -> void:
 	assert_float(AiMissionEval._feature_value(f, "tail_mine")).is_equal_approx(2.0, 0.0001)
 	assert_float(AiMissionEval._feature_value(f, "tail_mine*round_frac")).is_equal_approx(1.0, 0.0001)
 	assert_float(AiMissionEval._feature_value(f, "missing*round_frac")).is_equal_approx(0.0, 0.0001)
+
+
+## E8: ratio keys "a/b" normalise by force size (denominator floored at 1).
+func test_feature_value_supports_ratio_terms() -> void:
+	var f := {"tail_mine": 3.0, "my_units": 6.0, "my_wounds": 0.0}
+	assert_float(AiMissionEval._feature_value(f, "tail_mine/my_units")).is_equal_approx(0.5, 0.0001)
+	assert_float(AiMissionEval._feature_value(f, "tail_mine/my_wounds")).is_equal_approx(3.0, 0.0001)

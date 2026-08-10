@@ -151,12 +151,16 @@ static func _score_fit(state: Dictionary, player: int, incoming: Dictionary) -> 
 	return 1.0 / (1.0 + exp(-clampf(z, -30.0, 30.0)))
 
 
-## E7: a weight key may be a PRODUCT term "a*b" (offline-chosen interaction);
-## its value is the product of the two logged base features.
+## E7/E8: a weight key may be a PRODUCT "a*b" or a RATIO "a/b" (size
+## normalisation — absolute sums break across 1000/1500/2000-point armies;
+## fractions of the own force do not). Denominator floors at 1.
 static func _feature_value(f: Dictionary, key: String) -> float:
 	if key.contains("*"):
 		var parts := key.split("*")
 		return float(f.get(parts[0], 0.0)) * float(f.get(parts[1], 0.0))
+	if key.contains("/"):
+		var parts := key.split("/")
+		return float(f.get(parts[0], 0.0)) / maxf(float(f.get(parts[1], 0.0)), 1.0)
 	return float(f.get(key, 0.0))
 
 
