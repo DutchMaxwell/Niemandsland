@@ -144,6 +144,11 @@ func _seize(state: Dictionary, objectives: Array, owners: Array) -> void:
 			owners[i] = 2
 		elif near1 > 0:
 			owners[i] = 0
+		# S3 fix: write ownership back into the STATE — features/eval read the
+		# objectives' owner field, which otherwise stays 0 all game (S3-light
+		# found obj_owned_* frozen at zero in every core position).
+		if i < (state["objectives"] as Array).size():
+			((state["objectives"] as Array)[i] as Dictionary)["owner"] = owners[i]
 
 
 ## Lightweight GameUnits from an Army-Forge list JSON — the test-fixture
