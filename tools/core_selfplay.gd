@@ -110,6 +110,12 @@ func _pick_for(state: Dictionary, player: int) -> Dictionary:
 			break
 	if not has_pool:
 		return {}
+	# S2: NML_CORE_ACTOR=policy plays the cheap greedy policy instead of the
+	# full planner — volume data generation (states + outcomes) at a fraction
+	# of the cost; planner remains the default for quality data.
+	if OS.get_environment("NML_CORE_ACTOR") == "policy":
+		var a := AiPlanner._policy_step(state, player, true)
+		return {} if a.is_empty() else {"used": true, "action": a}
 	var pick := AiPlanner.plan_with_rollout(state, player)
 	return pick if bool(pick.get("used", false)) else {}
 
