@@ -77,11 +77,11 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			var tu_before := _wounds_left(tu)
 			var su_before := _wounds_left(su)
 			_apply_expected_wounds(tu, AiEv.melee_ev(_profiles_of(su, true),
-				_ctx_of(su), _ctx_of(tu), true))
+				_ctx_of(su, true), _ctx_of(tu), true))
 			su["fatigued"] = true
 			if int(tu["alive"]) > 0:   # survivors strike back, already survivor-scaled
 				_apply_expected_wounds(su, AiEv.melee_ev(_profiles_of(tu, true),
-					_ctx_of(tu), _ctx_of(su), false))
+					_ctx_of(tu, true), _ctx_of(su), false))
 			_expected_melee_morale(su, su_before, tu, tu_before)
 	# Shaken recovery (p.10): the idle activation clears Shaken — the recovery
 	# hold plan()/the rollout policy hand a shaken unit buys next round back.
@@ -112,9 +112,14 @@ static func dist_in(a: Array, b: Array) -> float:
 
 
 ## AiEv context sourced from the SNAPSHOT's dynamic layer, not the live models.
-static func _ctx_of(su: Dictionary) -> Dictionary:
+## `melee`: a FATIGUED unit hits only on unmodified 6s in melee (GF v3.5.1
+## p.9) — approximated as Quality 6 for the EV; shooting is unaffected. The
+## EV layer itself is fatigue-blind, so the snapshot flag must be priced here.
+static func _ctx_of(su: Dictionary, melee := false) -> Dictionary:
 	var ctx := AiEv.ctx_for(su["unit"], bool(su.get("in_cover", false)))
 	ctx["models"] = int(su["alive"])
+	if melee and bool(su.get("fatigued", false)):
+		ctx["quality"] = 6
 	return ctx
 
 

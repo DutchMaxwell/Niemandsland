@@ -349,3 +349,26 @@ func test_fractional_wounds_carry_across_volleys() -> void:
 	assert_int(int((s2["units"]["Squad"] as Dictionary)["alive"])).is_equal(3)
 	# The input state never carries the side effect (clone contract).
 	assert_float(float((state["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_equal_approx(0.0, 0.001)
+
+
+## Fatigue prices into the imagined melee (GF p.9: fatigued units hit only on
+## unmodified 6s): the SAME charge that kills one victim fresh (4 attacks Q4
+## -> 1.0 expected wound) kills nobody when the charger is already fatigued
+## (4 x 1/6 x 1/2 = 0.33, carried but under one wound).
+func test_fatigued_charger_hits_only_on_sixes_in_expectation() -> void:
+	var grunts := _armed(2, [Vector3.ZERO], "Grunts", [{"name": "CCW", "range": 0}])
+	var squad := _armed(1, [Vector3(8.0 * IN2M, 0, 0), Vector3(9.0 * IN2M, 0, 0)],
+		"Squad", [{"name": "Club", "range": 0, "attacks": 1}])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Grunts": grunts, "Squad": squad}
+	var state := BattleSim.capture(army, func() -> Array: return [Vector3.ZERO],
+		func(_i: int) -> int: return 0, 1, 4)
+	var charge := {"unit": "Grunts", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(8.0 * IN2M, 0, 0), "charge": "Squad"}
+	var fresh := BattleSim.resolve(state, charge)
+	# fresh: 1 kill drops the pair to half, the loser fails morale and ROUTS (2b)
+	assert_int(int((fresh["units"]["Squad"] as Dictionary)["alive"])).is_equal(0)
+	(state["units"]["Grunts"] as Dictionary)["fatigued"] = true
+	var tired := BattleSim.resolve(state, charge)
+	assert_int(int((tired["units"]["Squad"] as Dictionary)["alive"])).override_failure_message(
+		"a fatigued charger must not kill in expectation").is_equal(2)
