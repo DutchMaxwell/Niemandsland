@@ -43,6 +43,8 @@ static func clone_state(state: Dictionary) -> Dictionary:
 		"units": units, "objectives": objectives}
 	if state.has("terrain_at"):
 		out["terrain_at"] = state["terrain_at"]
+	if state.has("los_blocked"):
+		out["los_blocked"] = state["los_blocked"]
 	return out
 
 
@@ -80,16 +82,17 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 	if shoot_key != "" and next["units"].has(shoot_key) and sees(su, shoot_key) \
 			and (kind == AiDecision.Action.HOLD or kind == AiDecision.Action.ADVANCE):
 		var tu: Dictionary = next["units"][shoot_key]
-		var d := dist_in(positions, tu["positions"])
-		var alive_before := int(tu["alive"])
-		var wounds_before := _wounds_left(tu)
-		var volley := AiEv.shoot_ev(_profiles_of(su, false, d), _ctx_of(su), _ctx_of(tu), d)
-		var sp := spell_ev_of(su, tu, d)
-		if float(sp["ev"]) > 0.0:
-			volley += float(sp["ev"])
-			su["casts"] = int(su.get("casts", 0)) - int(sp["cost"])
-		_apply_expected_wounds(tu, volley)
-		_expected_shooting_morale(tu, alive_before, wounds_before)
+		if _los_clear(next, su, tu):
+			var d := dist_in(positions, tu["positions"])
+			var alive_before := int(tu["alive"])
+			var wounds_before := _wounds_left(tu)
+			var volley := AiEv.shoot_ev(_profiles_of(su, false, d), _ctx_of(su), _ctx_of(tu), d)
+			var sp := spell_ev_of(su, tu, d)
+			if float(sp["ev"]) > 0.0:
+				volley += float(sp["ev"])
+				su["casts"] = int(su.get("casts", 0)) - int(sp["cost"])
+			_apply_expected_wounds(tu, volley)
+			_expected_shooting_morale(tu, alive_before, wounds_before)
 	var charge_key := str(action.get("charge", ""))
 	if kind == AiDecision.Action.CHARGE and charge_key != "" and next["units"].has(charge_key):
 		var tu: Dictionary = next["units"][charge_key]
@@ -117,6 +120,27 @@ const CONTACT_IN := 1.0
 ## everyone, byte-identical to pre-T2. V0 approximation, documented: the
 ## matrix is CAPTURE-TIME — a unit moved during a rollout keeps its captured
 ## sight lines (exact for hold+shoot, approximate after moves).
+## Dynamic LOS: a state-level `los_blocked` callable probes CURRENT unit
+## centres — needed by the core runner, where resolve moves units across whole
+## games and a capture-time matrix would go stale. Engine snapshots do not
+## carry the callable, so their behaviour is unchanged.
+static func _los_clear(state: Dictionary, su: Dictionary, tu: Dictionary) -> bool:
+	var lb: Callable = state.get("los_blocked", Callable())
+	if not lb.is_valid():
+		return true
+	return not bool(lb.call(_centre_of(su), _centre_of(tu)))
+
+
+static func _centre_of(su: Dictionary) -> Vector3:
+	var c := Vector3.ZERO
+	var ps: Array = su["positions"]
+	if ps.is_empty():
+		return c
+	for p in ps:
+		c += p as Vector3
+	return c / ps.size()
+
+
 static func sees(su: Dictionary, other_key: String) -> bool:
 	if not su.has("los"):
 		return true
@@ -217,7 +241,8 @@ static func reply_threat(state: Dictionary, player: int) -> Dictionary:
 		var best_ev := 0.0
 		for mk in state["units"]:
 			var mu: Dictionary = state["units"][mk]
-			if int(mu["player"]) != player or int(mu["alive"]) <= 0 or not sees(eu, str(mk)):
+			if int(mu["player"]) != player or int(mu["alive"]) <= 0 or not sees(eu, str(mk)) \
+					or not _los_clear(state, eu, mu):
 				continue
 			var d := dist_in(eu["positions"], mu["positions"])
 			var ev := AiEv.shoot_ev(_profiles_of(eu, false, d), _ctx_of(eu), _ctx_of(mu), d) \

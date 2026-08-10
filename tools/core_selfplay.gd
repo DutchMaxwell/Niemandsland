@@ -31,6 +31,14 @@ var _out := ""
 
 func _initialize() -> void:
 	_parse_args()
+	# Script-mode quirk: during _initialize the root window is NOT yet inside
+	# the tree, so add_child'ed nodes never enter it and every Node3D position
+	# write fails SILENTLY (all units sat at the origin — the S3 gate's whole
+	# "melee ball" cluster). Start on the first process frame instead.
+	process_frame.connect(_run_all, CONNECT_ONE_SHOT)
+
+
+func _run_all() -> void:
 	var t0 := Time.get_ticks_msec()
 	var played := 0
 	for g in range(_games):
@@ -52,7 +60,7 @@ func _play_one(game_seed: int) -> void:
 		printerr("[CORE] FATAL: empty army (%s / %s)" % [_army1, _army2])
 		quit(1)
 		return
-	var objectives := [Vector3(-18.0 * IN2M, 0, 0), Vector3.ZERO, Vector3(18.0 * IN2M, 0, 0)]
+	var objectives := [Vector3(-16.0 * IN2M, 0, 0), Vector3.ZERO, Vector3(16.0 * IN2M, 0, 0)]
 	var patches := _gen_terrain(rng)   # S3: symmetric cover islands
 	_deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng, patches)
 	_deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng, patches)
@@ -164,12 +172,15 @@ func _units_from_list(path: String, player: int) -> Array:
 		return []
 	var out: Array = []
 	var uidx := 0
-	# S3 v2: attached heroes become their OWN lightweight units — the engine
-	# snapshot counts joined selections separately (round-1 my_units == number
-	# of selections), so folding them into the host undercounted armies.
+	# Engine unit accounting (verified on round-1 snapshots): COMBINED pairs
+	# (combined:true + joinToUnit) merge into ONE unit with pooled models and
+	# weapons; attached HEROES (combined:false + joinToUnit) stay separate.
 	var raw: Array = (data as Dictionary).get("units", [])
+	var by_sel := {}
 	for u in raw:
 		var ud := u as Dictionary
+		if ud.get("joinToUnit") and bool(ud.get("combined", false)):
+			continue   # folded into its partner in the second pass
 		var gu := GameUnit.new()
 		gu.unit_id = "p%d_%d_%s" % [player, uidx, str(ud.get("id", uidx))]
 		uidx += 1
@@ -181,33 +192,53 @@ func _units_from_list(path: String, player: int) -> Array:
 		gu.unit_properties = {"player_id": player, "name": str(ud.get("name", "Unit")),
 			"quality": int(ud.get("quality", 4)), "defense": int(ud.get("defense", 4)),
 			"special_rules": rules}
-		var opr := OPRApiClient.OPRUnit.new()
-		for w in ud.get("weapons", []):
-			var wd := w as Dictionary
-			var ow := OPRApiClient.OPRWeapon.new()
-			ow.name = str(wd.get("name", "W"))
-			ow.range_value = int(wd.get("range", 0))
-			ow.attacks = int(wd.get("attacks", 1))
-			ow.count = maxi(int(wd.get("count", 1)), 1)
-			opr.weapons.append(ow)
 		gu.source_type = "opr"
-		gu.source_data = opr
-		var tough := 1
-		for r in rules:
-			if str(r).begins_with("Tough("):
-				tough = maxi(int(str(r).trim_prefix("Tough(").trim_suffix(")")), 1)
-		for _m in range(int(ud.get("size", 1))):
-			var mi := ModelInstance.new()
-			mi.is_alive = true
-			mi.wounds_current = tough
-			mi.wounds_max = tough
-			mi.unit = gu
-			var n := Node3D.new()
-			root.add_child(n)
-			mi.node = n
-			gu.models.append(mi)
+		gu.source_data = OPRApiClient.OPRUnit.new()
+		_append_selection(gu, ud)
+		by_sel[str(ud.get("selectionId", ""))] = gu
 		out.append(gu)
+	for u in raw:
+		var ud := u as Dictionary
+		if not (ud.get("joinToUnit") and bool(ud.get("combined", false))):
+			continue
+		var host: GameUnit = by_sel.get(str(ud["joinToUnit"]), null)
+		if host != null:
+			_append_selection(host, ud)
+		else:
+			printerr("[CORE] WARN: combined partner %s not found" % str(ud["joinToUnit"]))
 	return out
+
+
+## Adds one selection's models (with their Tough pools) and weapons to a unit —
+## used for the base selection and again for its combined partner.
+func _append_selection(gu: GameUnit, ud: Dictionary) -> void:
+	for w in ud.get("weapons", []):
+		var wd := w as Dictionary
+		var ow := OPRApiClient.OPRWeapon.new()
+		ow.name = str(wd.get("name", "W"))
+		ow.range_value = int(wd.get("range", 0))
+		ow.attacks = int(wd.get("attacks", 1))
+		ow.count = maxi(int(wd.get("count", 1)), 1)
+		for wr in wd.get("specialRules", []):
+			var wl := str((wr as Dictionary).get("label", (wr as Dictionary).get("name", "")))
+			if wl != "":
+				ow.special_rules.append(wl)
+		(gu.source_data as OPRApiClient.OPRUnit).weapons.append(ow)
+	var tough := 1
+	for r in ud.get("rules", []):
+		var rl := str((r as Dictionary).get("label", (r as Dictionary).get("name", "")))
+		if rl.begins_with("Tough("):
+			tough = maxi(int(rl.trim_prefix("Tough(").trim_suffix(")")), 1)
+	for _m in range(int(ud.get("size", 1))):
+		var mi := ModelInstance.new()
+		mi.is_alive = true
+		mi.wounds_current = tough
+		mi.wounds_max = tough
+		mi.unit = gu
+		var n := Node3D.new()
+		root.add_child(n)
+		mi.node = n
+		gu.models.append(mi)
 
 
 ## S3: 12"-deep ZONE deployment — units spread across width AND depth (the
@@ -218,17 +249,11 @@ func _deploy_zone(units: Array, z0_in: float, depth_in: float, rng: RandomNumber
 	for i in range(n):
 		var gu: GameUnit = units[i]
 		var x0 := (-TABLE_W_IN / 2.0 + 8.0) + (TABLE_W_IN - 16.0) * (float(i) + 0.5) / float(n)
-		# Engine doctrine deploys into cover when available — mirror it: probe a
-		# few candidate spots in this unit's slot and prefer one inside terrain.
+		# Plain random spot in the zone slot: measured per-round engine profile
+		# (round-1 cover 0.31 of ~4.4 units) matches the islands' natural overlap
+		# with the zone — active cover-seeking overshot it 5x.
 		var best_x := x0 + rng.randf_range(-3.0, 3.0)
 		var best_z := z0_in + rng.randf_range(1.0, depth_in - 3.0)
-		for _try in range(5):
-			var cx := x0 + rng.randf_range(-4.0, 4.0)
-			var cz := z0_in + rng.randf_range(1.0, depth_in - 3.0)
-			if _terrain_type_at(patches, Vector3(cx * IN2M, 0, cz * IN2M)) != TerrainRules.TerrainType.NONE:
-				best_x = cx
-				best_z = cz
-				break
 		for m in range(gu.models.size()):
 			(gu.models[m] as ModelInstance).node.global_position = Vector3(
 				(best_x + float(m % 5)) * IN2M, 0.0, (best_z + float(m / 5)) * IN2M)
@@ -238,10 +263,10 @@ func _deploy_zone(units: Array, z0_in: float, depth_in: float, rng: RandomNumber
 ## neither side owns better ground. Returned as [{pos: Vector3, r: float}].
 func _gen_terrain(rng: RandomNumberGenerator) -> Array:
 	var patches: Array = []
-	for _i in range(5):
+	for _i in range(3):
 		var x := rng.randf_range(-TABLE_W_IN / 2.0 + 8.0, TABLE_W_IN / 2.0 - 8.0)
 		var z := rng.randf_range(1.0, TABLE_D_IN / 2.0 - 2.0)
-		var r := rng.randf_range(4.0, 6.0)
+		var r := rng.randf_range(4.0, 5.0)
 		patches.append({"pos": Vector3(x * IN2M, 0, z * IN2M), "r": r * IN2M})
 		patches.append({"pos": Vector3(-x * IN2M, 0, -z * IN2M), "r": r * IN2M})
 	return patches
@@ -277,8 +302,22 @@ func _capture(all_units: Array, objectives: Array, patches: Array) -> Dictionary
 		if alive == 0:
 			return false
 		return TerrainRules.gives_cover(_terrain_type_at(patches, c / alive))
-	return BattleSim.capture(army, func() -> Array: return objs,
+	# Dynamic LOS: forests block sight THROUGH them (2" line samples); a unit
+	# standing inside forest can still shoot out / be shot (it has cover).
+	var los_blocked := func(a: Vector3, b: Vector3) -> bool:
+		if _terrain_type_at(patches, a) != TerrainRules.TerrainType.NONE \
+				or _terrain_type_at(patches, b) != TerrainRules.TerrainType.NONE:
+			return false
+		var steps := int(ceilf((b - a).length() / (2.0 * IN2M)))
+		for i in range(1, steps):
+			if _terrain_type_at(patches, a.lerp(b, float(i) / steps)) \
+					== TerrainRules.TerrainType.FOREST:
+				return true
+		return false
+	var st := BattleSim.capture(army, func() -> Array: return objs,
 		func(_i: int) -> int: return 0, 1, ROUNDS, cover_of, Callable(), terrain_at)
+	st["los_blocked"] = los_blocked
+	return st
 
 
 func _write_result(game_seed: int, owners: Array, positions_log: Array) -> void:

@@ -129,6 +129,26 @@ func test_resolve_gates_shooting_on_captured_los() -> void:
 	assert_int(int((BattleSim.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(3)
 
 
+## Dynamic LOS: a state-level los_blocked callable gates shooting AND the reply
+## threat by CURRENT centres (core runner: units move for whole games, so the
+## capture-time matrix can't serve); it must also survive clone_state.
+func test_dynamic_los_callable_blocks_shot_and_reply() -> void:
+	var shooter := _armed(2, [Vector3.ZERO], "Shooter", [{"name": "Rifle", "range": 24}])
+	var targets: Array = []
+	for i in range(4):
+		targets.append(Vector3((12.0 + i) * IN2M, 0, 0))
+	var squad := _armed(1, targets, "Squad", [{"name": "Rifle", "range": 24}])
+	var state := _capture([shooter, squad])
+	var action := {"unit": "Shooter", "kind": AiDecision.Action.HOLD, "shoot": "Squad"}
+	state["los_blocked"] = func(_a: Vector3, _b: Vector3) -> bool: return true
+	assert_int(int((BattleSim.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(4)
+	assert_that(BattleSim.reply_threat(state, 1).is_empty()).is_true()
+	assert_that(BattleSim.clone_state(state).has("los_blocked")).is_true()
+	state["los_blocked"] = func(_a: Vector3, _b: Vector3) -> bool: return false
+	assert_int(int((BattleSim.resolve(state, action)["units"]["Squad"] as Dictionary)["alive"])).is_equal(3)
+	assert_that(BattleSim.reply_threat(state, 1).is_empty()).is_false()
+
+
 ## T2b: a mover's in_cover follows it through the rollout — stamped from the
 ## terrain probe at the NEW unit centre; without a probe the captured flag
 ## stays frozen (pre-T2b behaviour).
