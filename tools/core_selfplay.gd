@@ -53,9 +53,10 @@ func _play_one(game_seed: int) -> void:
 		quit(1)
 		return
 	var objectives := [Vector3(-18.0 * IN2M, 0, 0), Vector3.ZERO, Vector3(18.0 * IN2M, 0, 0)]
-	_deploy_line(units1, -TABLE_D_IN / 2.0 + 6.0, rng)
-	_deploy_line(units2, TABLE_D_IN / 2.0 - 6.0, rng)
-	var state := _capture(units1 + units2, objectives)
+	var patches := _gen_terrain(rng)   # S3: symmetric cover islands
+	_deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng, patches)
+	_deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng, patches)
+	var state := _capture(units1 + units2, objectives, patches)
 	var owners := [0, 0, 0]
 	var opener := 1 if rng.randi_range(1, 6) >= rng.randi_range(1, 6) else 2
 	var positions_log: Array = []
@@ -66,6 +67,7 @@ func _play_one(game_seed: int) -> void:
 			su["activated"] = false
 			su["fatigued"] = false
 		opener = _play_round(state, opener, rng, positions_log, round_no)
+		state = _last_state   # adopt the played round (resolve works on clones)
 		_seize(state, objectives, owners)
 	_write_result(game_seed, owners, positions_log)
 
@@ -162,10 +164,12 @@ func _units_from_list(path: String, player: int) -> Array:
 		return []
 	var out: Array = []
 	var uidx := 0
-	for u in (data as Dictionary).get("units", []):
+	# S3 v2: attached heroes become their OWN lightweight units — the engine
+	# snapshot counts joined selections separately (round-1 my_units == number
+	# of selections), so folding them into the host undercounted armies.
+	var raw: Array = (data as Dictionary).get("units", [])
+	for u in raw:
 		var ud := u as Dictionary
-		if ud.get("joinToUnit"):
-			continue   # v0: attached heroes skipped (documented)
 		var gu := GameUnit.new()
 		gu.unit_id = "p%d_%d_%s" % [player, uidx, str(ud.get("id", uidx))]
 		uidx += 1
@@ -206,19 +210,53 @@ func _units_from_list(path: String, player: int) -> Array:
 	return out
 
 
-## Facing-line deployment: units spread along the width at the given z line.
-func _deploy_line(units: Array, z_in: float, rng: RandomNumberGenerator) -> void:
+## S3: 12"-deep ZONE deployment — units spread across width AND depth (the
+## naive single line doubled charge-exposure density vs engine positions).
+func _deploy_zone(units: Array, z0_in: float, depth_in: float, rng: RandomNumberGenerator,
+		patches: Array = []) -> void:
 	var n := units.size()
 	for i in range(n):
 		var gu: GameUnit = units[i]
 		var x0 := (-TABLE_W_IN / 2.0 + 8.0) + (TABLE_W_IN - 16.0) * (float(i) + 0.5) / float(n)
-		var jitter := rng.randf_range(-2.0, 2.0)
+		# Engine doctrine deploys into cover when available — mirror it: probe a
+		# few candidate spots in this unit's slot and prefer one inside terrain.
+		var best_x := x0 + rng.randf_range(-3.0, 3.0)
+		var best_z := z0_in + rng.randf_range(1.0, depth_in - 3.0)
+		for _try in range(5):
+			var cx := x0 + rng.randf_range(-4.0, 4.0)
+			var cz := z0_in + rng.randf_range(1.0, depth_in - 3.0)
+			if _terrain_type_at(patches, Vector3(cx * IN2M, 0, cz * IN2M)) != TerrainRules.TerrainType.NONE:
+				best_x = cx
+				best_z = cz
+				break
 		for m in range(gu.models.size()):
 			(gu.models[m] as ModelInstance).node.global_position = Vector3(
-				(x0 + jitter + float(m % 5)) * IN2M, 0.0, (z_in + float(m / 5)) * IN2M)
+				(best_x + float(m % 5)) * IN2M, 0.0, (best_z + float(m / 5)) * IN2M)
 
 
-func _capture(all_units: Array, objectives: Array) -> Dictionary:
+## S3: point-symmetric cover islands (forest-class), radius 4", mirrored so
+## neither side owns better ground. Returned as [{pos: Vector3, r: float}].
+func _gen_terrain(rng: RandomNumberGenerator) -> Array:
+	var patches: Array = []
+	for _i in range(5):
+		var x := rng.randf_range(-TABLE_W_IN / 2.0 + 8.0, TABLE_W_IN / 2.0 - 8.0)
+		var z := rng.randf_range(1.0, TABLE_D_IN / 2.0 - 2.0)
+		var r := rng.randf_range(4.0, 6.0)
+		patches.append({"pos": Vector3(x * IN2M, 0, z * IN2M), "r": r * IN2M})
+		patches.append({"pos": Vector3(-x * IN2M, 0, -z * IN2M), "r": r * IN2M})
+	return patches
+
+
+static func _terrain_type_at(patches: Array, pos: Vector3) -> int:
+	for pt in patches:
+		var d: Dictionary = pt
+		var p: Vector3 = d["pos"]
+		if Vector2(pos.x - p.x, pos.z - p.z).length() <= float(d["r"]):
+			return TerrainRules.TerrainType.FOREST
+	return TerrainRules.TerrainType.NONE
+
+
+func _capture(all_units: Array, objectives: Array, patches: Array) -> Dictionary:
 	var army := OPRArmyManager.new()
 	root.add_child(army)
 	var gu := {}
@@ -227,8 +265,20 @@ func _capture(all_units: Array, objectives: Array) -> Dictionary:
 	army.game_units = gu
 	army.current_round = 1
 	var objs := objectives.duplicate()
+	var terrain_at := func(pos: Vector3) -> int: return _terrain_type_at(patches, pos)
+	var cover_of := func(u: GameUnit) -> bool:
+		var c := Vector3.ZERO
+		var alive := 0
+		for m in u.models:
+			var mi := m as ModelInstance
+			if mi != null and mi.is_alive and mi.node != null:
+				c += mi.node.global_position
+				alive += 1
+		if alive == 0:
+			return false
+		return TerrainRules.gives_cover(_terrain_type_at(patches, c / alive))
 	return BattleSim.capture(army, func() -> Array: return objs,
-		func(_i: int) -> int: return 0, 1, ROUNDS)
+		func(_i: int) -> int: return 0, 1, ROUNDS, cover_of, Callable(), terrain_at)
 
 
 func _write_result(game_seed: int, owners: Array, positions_log: Array) -> void:
