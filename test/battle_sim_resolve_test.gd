@@ -372,3 +372,25 @@ func test_fatigued_charger_hits_only_on_sixes_in_expectation() -> void:
 	var tired := BattleSim.resolve(state, charge)
 	assert_int(int((tired["units"]["Squad"] as Dictionary)["alive"])).override_failure_message(
 		"a fatigued charger must not kill in expectation").is_equal(2)
+
+
+# === Spells in expectation (parity wave, NML-995) ===
+
+## Pure core: a modeled 1-token damage spell (3 hits, AP4-ish facets) in range
+## yields success-chance x damage EV; out of range or too expensive yields 0;
+## unmodeled entries never count.
+func test_spell_ev_core_ranges_tokens_and_status() -> void:
+	var spells := [
+		{"name": "Zap", "threshold": 1, "range_in": 18,
+			"effect": {"kind": "damage", "hits": 3, "weapon_rules": []},
+			"target": {"count": 1}, "status": "modeled"},
+		{"name": "Ghost", "threshold": 1, "range_in": 48,
+			"effect": {"kind": "damage", "hits": 9, "weapon_rules": []},
+			"target": {"count": 1}, "status": "unmodeled"},
+	]
+	var def_ctx := {"quality": 4, "defense": 4, "tough": 1, "models": 4}
+	var hit := BattleSim._spell_ev_from(spells, 2, def_ctx, 12.0)
+	assert_float(float(hit["ev"])).is_greater(0.0)
+	assert_int(int(hit["cost"])).is_equal(1)
+	assert_float(float(BattleSim._spell_ev_from(spells, 2, def_ctx, 30.0)["ev"])).is_equal_approx(0.0, 0.0001)
+	assert_float(float(BattleSim._spell_ev_from(spells, 0, def_ctx, 12.0)["ev"])).is_equal_approx(0.0, 0.0001)

@@ -67,8 +67,12 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 		var d := dist_in(positions, tu["positions"])
 		var alive_before := int(tu["alive"])
 		var wounds_before := _wounds_left(tu)
-		_apply_expected_wounds(tu, AiEv.shoot_ev(_profiles_of(su, false, d),
-			_ctx_of(su), _ctx_of(tu), d))
+		var volley := AiEv.shoot_ev(_profiles_of(su, false, d), _ctx_of(su), _ctx_of(tu), d)
+		var sp := spell_ev_of(su, tu, d)
+		if float(sp["ev"]) > 0.0:
+			volley += float(sp["ev"])
+			su["casts"] = int(su.get("casts", 0)) - int(sp["cost"])
+		_apply_expected_wounds(tu, volley)
 		_expected_shooting_morale(tu, alive_before, wounds_before)
 	var charge_key := str(action.get("charge", ""))
 	if kind == AiDecision.Action.CHARGE and charge_key != "" and next["units"].has(charge_key):
@@ -142,6 +146,46 @@ static func _profiles_of(su: Dictionary, melee: bool, d := 0.0) -> Array:
 	return out
 
 
+## Spell EV (parity wave; ladder-v3 evidence: the caster faction scored
+## 19-27%): the best affordable DAMAGE spell of `su` against `tu` at
+## distance d — cast-success chance x damage EV. v0 scope, documented:
+## damage spells only (buffs/debuffs later), unit-level tokens (attached-
+## hero tokens not yet visible to the snapshot), no boost/interference.
+## Returns {"ev": float, "cost": int}; zeros when nothing castable.
+static func spell_ev_of(su: Dictionary, tu: Dictionary, d: float) -> Dictionary:
+	var tokens := int(su.get("casts", 0))
+	if tokens <= 0:
+		return {"ev": 0.0, "cost": 0}
+	var u: GameUnit = su["unit"]
+	if u == null or not u.has_method("is_caster") or not u.is_caster():
+		return {"ev": 0.0, "cost": 0}
+	return _spell_ev_from(SpellsRegistry.spells_for_unit(u), tokens, _ctx_of(tu), d)
+
+
+## Pure core (unit-independent, testable): best damage-spell EV from a spell
+## list given tokens, defender context and distance in inches.
+static func _spell_ev_from(spells: Array, tokens: int, def_ctx: Dictionary, d: float) -> Dictionary:
+	var best_ev := 0.0
+	var best_cost := 0
+	for e in spells:
+		var entry := e as Dictionary
+		if str(entry.get("status", "unmodeled")) == "unmodeled":
+			continue
+		var eff: Dictionary = entry.get("effect", {})
+		if str(eff.get("kind", "")) != "damage":
+			continue
+		var threshold := int(entry.get("threshold", 1))
+		if threshold > tokens or d > float(entry.get("range_in", 0)) + 0.001:
+			continue
+		var hits := int(eff.get("hits", 0)) * maxi(int((entry.get("target", {}) as Dictionary).get("count", 1)), 1)
+		var facets := AiSpell.spell_facets(eff.get("weapon_rules", []))
+		var ev := AiSpell.cast_success_chance(0, 0) * AiSpell.spell_damage_ev(hits, def_ctx, facets)
+		if ev > best_ev:
+			best_ev = ev
+			best_cost = threshold
+	return {"ev": best_ev, "cost": best_cost}
+
+
 ## Expected wounds the enemy's shooting REPLY takes off `player`'s units:
 ## every living enemy activates once and shoots its best-EV visible target.
 ## Returns my_unit_key -> expected incoming wounds. V0 simplifications,
@@ -160,7 +204,8 @@ static func reply_threat(state: Dictionary, player: int) -> Dictionary:
 			if int(mu["player"]) != player or int(mu["alive"]) <= 0 or not sees(eu, str(mk)):
 				continue
 			var d := dist_in(eu["positions"], mu["positions"])
-			var ev := AiEv.shoot_ev(_profiles_of(eu, false, d), _ctx_of(eu), _ctx_of(mu), d)
+			var ev := AiEv.shoot_ev(_profiles_of(eu, false, d), _ctx_of(eu), _ctx_of(mu), d) \
+				+ float(spell_ev_of(eu, mu, d)["ev"])   # magic is part of the reply
 			if ev > best_ev:
 				best_ev = ev
 				best_key = str(mk)
