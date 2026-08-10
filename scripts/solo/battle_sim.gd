@@ -10,6 +10,22 @@ extends RefCounted
 
 const IN2M := 0.0254
 
+## CORE track S1: when set, expected wounds round STOCHASTICALLY (mean-
+## preserving: the fraction becomes a probability) instead of carrying a
+## fractional ledger — full games get outcome variance without per-die
+## simulation (that is S4). Set only via resolve_stochastic().
+static var stochastic_rng: RandomNumberGenerator = null
+
+
+## One activation with stochastic rounding (core self-play games).
+static func resolve_stochastic(state: Dictionary, action: Dictionary,
+		rng: RandomNumberGenerator) -> Dictionary:
+	stochastic_rng = rng
+	var out := resolve(state, action)
+	stochastic_rng = null
+	return out
+
+
 
 ## Deep-copies the DYNAMIC layers (positions/wounds/flags/objective owners);
 ## GameUnit refs stay shared — they are read-only by contract.
@@ -223,7 +239,12 @@ static func reply_threat(state: Dictionary, player: int) -> Dictionary:
 static func _apply_expected_wounds(tu: Dictionary, ev: float) -> void:
 	var pool := float(tu.get("wound_frac", 0.0)) + ev
 	var left := int(floor(pool))
-	tu["wound_frac"] = pool - left
+	if stochastic_rng != null:
+		if stochastic_rng.randf() < pool - left:
+			left += 1
+		tu["wound_frac"] = 0.0
+	else:
+		tu["wound_frac"] = pool - left
 	var wounds: Array = tu["wounds"]
 	var positions: Array = tu["positions"]
 	while left > 0 and not wounds.is_empty():
