@@ -147,8 +147,17 @@ static func _score_fit(state: Dictionary, player: int, incoming: Dictionary) -> 
 	var wb := _weights()
 	var z := float(wb[1])
 	for k in wb[0]:
-		z += float((wb[0] as Dictionary)[k]) * float(f.get(k, 0.0))
+		z += float((wb[0] as Dictionary)[k]) * _feature_value(f, str(k))
 	return 1.0 / (1.0 + exp(-clampf(z, -30.0, 30.0)))
+
+
+## E7: a weight key may be a PRODUCT term "a*b" (offline-chosen interaction);
+## its value is the product of the two logged base features.
+static func _feature_value(f: Dictionary, key: String) -> float:
+	if key.contains("*"):
+		var parts := key.split("*")
+		return float(f.get(parts[0], 0.0)) * float(f.get(parts[1], 0.0))
+	return float(f.get(key, 0.0))
 
 
 static func _all_activated(state: Dictionary) -> bool:

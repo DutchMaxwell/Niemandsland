@@ -226,3 +226,12 @@ func test_e5_features_exposure_cover_and_focus() -> void:
 	assert_float(float(f.get("cover_theirs", -1.0))).is_equal_approx(0.0, 0.001)
 	assert_float(float(f.get("my_incoming_max", -1.0))).is_equal_approx(1.5, 0.001)
 	assert_float(float(f.get("my_incoming", -1.0))).is_equal_approx(2.0, 0.001)
+
+
+## E7: weight keys may be product terms "a*b" — the value is the product of
+## the two base features; plain keys stay plain.
+func test_feature_value_supports_product_terms() -> void:
+	var f := {"tail_mine": 2.0, "round_frac": 0.5}
+	assert_float(AiMissionEval._feature_value(f, "tail_mine")).is_equal_approx(2.0, 0.0001)
+	assert_float(AiMissionEval._feature_value(f, "tail_mine*round_frac")).is_equal_approx(1.0, 0.0001)
+	assert_float(AiMissionEval._feature_value(f, "missing*round_frac")).is_equal_approx(0.0, 0.0001)
