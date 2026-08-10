@@ -12,7 +12,12 @@ const DISCOUNT := 0.5   # presence halves per future round still needed to arriv
 
 
 # === E4 (eval-tuning wave): the FITTED eval ===
-## Provenance (v5, FAIR data): per-activation TD (LAM 0.7, sign priors) over
+## Provenance (v8, SIZE-NORMALISED): ratio features (force-relative — the
+## ladder-v3 size collapse showed absolutes leave their trained range on
+## 1500/2000pt armies) fitted per-activation TD (LAM .7, sign priors) over
+## the FULL pooled fair corpus (1100 games incl. mixed sizes, 11575 rows).
+## Every controllable carries doctrine-signed weight as a fraction of the
+## own force. Prior (v5): per-activation TD (LAM 0.7, sign priors) over
 ## eval_data_fair — the first weights learned from UNCONTAMINATED games
 ## (NML-1002/1003 fixed, symmetric varied maps; 200 games, 2191 rows,
 ## outcome-AUC 0.768 — fair games are honestly harder to predict). Every
@@ -37,15 +42,15 @@ const DISCOUNT := 0.5   # presence halves per future round still needed to arriv
 ## Their value needs consequence-aware training targets (TD) — next rung.
 ## Re-fit = re-run the tool and replace this block; never hand-edit numbers.
 const FIT_W := {
-	"cover_mine": 0.035692, "cover_theirs": -0.076642,
-	"my_charge_exposed": -0.068216, "my_incoming_max": -0.023399,
-	"my_unactivated": 0.367830, "obj_owned_mine": 0.377221,
-	"obj_owned_theirs": -0.353979, "presence_mine": 0.055253,
-	"presence_theirs": -0.051763, "round_frac": 0.407864,
-	"tail_mine": 0.105240, "tail_theirs": -0.074944,
-	"their_charge_exposed": 0.011016, "their_unactivated": -0.408513,
+	"presence_mine/my_wounds": 0.878619, "presence_theirs/their_wounds": -0.866414,
+	"tail_mine/my_units": 0.009734, "tail_theirs/their_units": -0.019579,
+	"my_unactivated/my_units": 1.569704, "their_unactivated/their_units": -1.862250,
+	"my_incoming/my_wounds": -1.048846, "cover_mine/my_units": 0.285064,
+	"cover_theirs/their_units": -0.714390, "my_charge_exposed/my_units": -0.672654,
+	"their_charge_exposed/their_units": 0.227429, "obj_owned_mine": 0.483178,
+	"obj_owned_theirs": -0.459405, "round_frac": 0.838045,
 }
-const FIT_B := 0.194617
+const FIT_B := 0.144714
 ## Research seam: the PREVIOUS weight set (v2, outcome-labels) selectable via
 ## NML_FIT_WEIGHTS=v2 — both sets were tuned on CONTAMINATED games, the clean
 ## ladder re-ranks them.
