@@ -98,10 +98,19 @@ static func _net() -> Dictionary:
 
 
 ## Forward pass: standardize the ratio inputs, one tanh layer, sigmoid out.
+## A JSON carrying "w" instead of "W1" is an EXACT linear model (the value-
+## distillation finding: the teacher's rollout values are near-linearly
+## recoverable — a linear student ships without any net arithmetic).
 static func _score_net(f: Dictionary, net: Dictionary) -> float:
 	var keys: Array = net["keys"]
 	var mu: Array = net["mu"]
 	var sd: Array = net["sd"]
+	if net.has("w"):
+		var wl: Array = net["w"]
+		var zl := float(net.get("b", 0.0))
+		for i in range(keys.size()):
+			zl += float(wl[i]) * (_feature_value(f, str(keys[i])) - float(mu[i])) / maxf(float(sd[i]), 1e-6)
+		return 1.0 / (1.0 + exp(-clampf(zl, -30.0, 30.0)))
 	var w1: Array = net["W1"]
 	var b1: Array = net["b1"]
 	var w2: Array = net["W2"]

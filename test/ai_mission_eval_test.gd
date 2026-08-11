@@ -328,3 +328,14 @@ func test_net_override_forward_pass() -> void:
 	assert_float(net).is_equal_approx(1.0 / (1.0 + exp(-2.0)), 0.0001)
 	assert_bool(absf(lin - net) > 0.0001).is_true()
 	assert_float(AiMissionEval._score_fit(state, 1, {})).is_equal_approx(lin, 0.000001)
+
+
+## Linear value-model JSONs ("w"/"b" keys) score EXACTLY linearly through the
+## net loader — hand-computed sigmoid, and clearing restores the default path.
+func test_linear_value_model_override() -> void:
+	var state := _state([_unit(1, [Vector3.ZERO], "A")], [Vector3.ZERO], [0])
+	AiMissionEval._net_override = {"keys": ["round_frac"], "mu": [0.0], "sd": [1.0],
+		"w": [2.0], "b": 0.5}
+	var got: float = AiMissionEval._score_fit(state, 1, {})
+	AiMissionEval._net_override = {}
+	assert_float(got).is_equal_approx(1.0 / (1.0 + exp(-(2.0 * 0.25 + 0.5))), 0.0001)
