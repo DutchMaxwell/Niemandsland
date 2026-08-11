@@ -70,6 +70,52 @@ static func _weights() -> Array:
 		_wsel = "v2" if OS.get_environment("NML_FIT_WEIGHTS") == "v2" else "v4"
 	return [FIT_W_V2, FIT_B_V2] if _wsel == "v2" else [FIT_W, FIT_B]
 
+
+## Net v1 (evaluation offensive): a tiny fitted MLP replaces the linear
+## formula when NML_FIT_WEIGHTS=net and NML_NET_PATH points at the exported
+## weights JSON (eval_net.py). Cached once per process; tests inject via
+## _net_override. Falls back to the linear weights when absent/invalid.
+static var _net_override: Dictionary = {}
+static var _net_cache: Dictionary = {}
+static var _net_tried := false
+
+
+static func _net() -> Dictionary:
+	if not _net_override.is_empty():
+		return _net_override
+	if _net_tried:
+		return _net_cache
+	_net_tried = true
+	if OS.get_environment("NML_FIT_WEIGHTS") != "net":
+		return _net_cache
+	var path := OS.get_environment("NML_NET_PATH")
+	if path == "":
+		return _net_cache
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if parsed is Dictionary and (parsed as Dictionary).has("W1"):
+		_net_cache = parsed
+	return _net_cache
+
+
+## Forward pass: standardize the ratio inputs, one tanh layer, sigmoid out.
+static func _score_net(f: Dictionary, net: Dictionary) -> float:
+	var keys: Array = net["keys"]
+	var mu: Array = net["mu"]
+	var sd: Array = net["sd"]
+	var w1: Array = net["W1"]
+	var b1: Array = net["b1"]
+	var w2: Array = net["W2"]
+	var xs: Array = []
+	for i in range(keys.size()):
+		xs.append((_feature_value(f, str(keys[i])) - float(mu[i])) / maxf(float(sd[i]), 1e-6))
+	var z := float(net["b2"])
+	for j in range(w2.size()):
+		var a := float((b1 as Array)[j])
+		for i in range(xs.size()):
+			a += float(xs[i]) * float(((w1 as Array)[i] as Array)[j])
+		z += float(w2[j]) * tanh(a)
+	return 1.0 / (1.0 + exp(-clampf(z, -30.0, 30.0)))
+
 ## Routes every score() call through the fitted eval — set per planner pick by
 ## the controller from the difficulty preset (planner_v1). Static on purpose:
 ## the planner's whole static call tree (blend, policy, prefilter) switches
@@ -149,6 +195,9 @@ static func _score_fit(state: Dictionary, player: int, incoming: Dictionary) -> 
 		for k in view["units"]:
 			(view["units"][k] as Dictionary)["activated"] = false
 	var f := features(view, player, incoming)
+	var net := _net()
+	if not net.is_empty():
+		return _score_net(f, net)
 	var wb := _weights()
 	var z := float(wb[1])
 	for k in wb[0]:

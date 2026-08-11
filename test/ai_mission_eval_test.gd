@@ -312,3 +312,19 @@ func test_near_half_counts_the_cliff_edge() -> void:
 	(state["units"]["Squad"] as Dictionary)["wounds"] = [5, 5]   # full strength
 	var f2 := AiMissionEval.features(state, 1, {})
 	assert_float(float(f2["my_near_half"])).is_equal(0.0)
+
+
+## Net v1: an injected known-weight net must produce the hand-computed
+## sigmoid and differ from the linear formula; clearing the override
+## restores the linear path (the check can fail in both directions).
+func test_net_override_forward_pass() -> void:
+	var state := _state([_unit(1, [Vector3.ZERO], "A"),
+		_unit(2, [Vector3(30.0 * IN2M, 0, 0)], "B")], [Vector3.ZERO], [0])
+	var lin: float = AiMissionEval._score_fit(state, 1, {})
+	AiMissionEval._net_override = {"keys": ["round_frac"], "mu": [0.0], "sd": [1.0],
+		"W1": [[0.0]], "b1": [0.0], "W2": [0.0], "b2": 2.0}
+	var net: float = AiMissionEval._score_fit(state, 1, {})
+	AiMissionEval._net_override = {}
+	assert_float(net).is_equal_approx(1.0 / (1.0 + exp(-2.0)), 0.0001)
+	assert_bool(absf(lin - net) > 0.0001).is_true()
+	assert_float(AiMissionEval._score_fit(state, 1, {})).is_equal_approx(lin, 0.000001)
