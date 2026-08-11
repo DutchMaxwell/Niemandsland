@@ -2665,7 +2665,7 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 			# Feature wave: stamp off-table reserves so the deploy state is a
 			# visible signal (the rollout itself never changes it).
 			"features": AiMissionEval.features(_with_reserves(state), me,
-				BattleSim.reply_threat(state, me))}})
+				BattleSim.reply_threat(state, me), true)}})
 	return chosen
 
 

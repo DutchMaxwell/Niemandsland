@@ -182,7 +182,13 @@ static func _all_activated(state: Dictionary) -> bool:
 ## boundary by the arena. Flat name->float, all cheap, all explainable. The
 ## tail_* counts are the material of the proven seat effect (who can still
 ## act near a marker decides its seize); the eval itself cannot see them yet.
-static func features(state: Dictionary, player: int, incoming: Dictionary = {}) -> Dictionary:
+## `rich` gates the feature-wave signals that cost real work (mirror
+## reply_threat + melee magnitudes): true at the two LOGGING sites (training
+## data), false in the eval hot path. A/B probes measured no regression from
+## the wave, but the gate keeps eval cost independent of future signal growth;
+## flip to live (with pair-EV memoisation) when the net eval needs them.
+static func features(state: Dictionary, player: int, incoming: Dictionary = {},
+		rich := false) -> Dictionary:
 	var f := {"round_frac": float(state["round"]) / maxf(float(state["rounds_total"]), 1.0),
 		"my_wounds": 0.0, "their_wounds": 0.0, "my_units": 0.0, "their_units": 0.0,
 		"my_unactivated": 0.0, "their_unactivated": 0.0, "my_incoming": 0.0,
@@ -207,8 +213,9 @@ static func features(state: Dictionary, player: int, incoming: Dictionary = {}) 
 	for v in incoming.values():
 		f["my_incoming"] += float(v)
 		f["my_incoming_max"] = maxf(float(f["my_incoming_max"]), float(v))
-	for v in BattleSim.reply_threat(state, 3 - player).values():
-		f["their_incoming"] += float(v)
+	if rich:
+		for v in BattleSim.reply_threat(state, 3 - player).values():
+			f["their_incoming"] += float(v)
 	for key in state["units"]:
 		var su: Dictionary = state["units"][key]
 		if int(su["alive"]) <= 0:
@@ -248,7 +255,10 @@ static func features(state: Dictionary, player: int, incoming: Dictionary = {}) 
 			var oreach := float(SoloController.move_bands_for_unit(ou["unit"], null).get("rush", 12)) 				+ BattleSim.CONTACT_IN
 			if BattleSim.dist_in(su["positions"], ou["positions"]) <= oreach:
 				exposed = true
-				worst_melee = maxf(worst_melee, BattleSim.melee_threat(ou, su))
+				if rich:
+					worst_melee = maxf(worst_melee, BattleSim.melee_threat(ou, su))
+				else:
+					break   # pre-wave behaviour: the binary flag is enough
 		if exposed:
 			f["my_charge_exposed" if mine else "their_charge_exposed"] += 1.0
 			f["my_melee_in" if mine else "their_melee_in"] += worst_melee

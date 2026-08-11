@@ -261,7 +261,7 @@ func test_feature_wave_mirror_counts_and_reserves() -> void:
 	(state["units"]["Theirs"] as Dictionary)["shaken"] = true
 	(state["units"]["Mine"] as Dictionary)["fatigued"] = true
 	state["reserves"] = {1: 2, 2: 0}
-	var f := AiMissionEval.features(state, 1, {})
+	var f := AiMissionEval.features(state, 1, {}, true)
 	assert_float(float(f["their_incoming"])).is_greater(0.0)   # my rifle projects onto them
 	assert_float(float(f["their_shaken"])).is_equal(1.0)
 	assert_float(float(f["my_shaken"])).is_equal(0.0)
@@ -269,7 +269,7 @@ func test_feature_wave_mirror_counts_and_reserves() -> void:
 	assert_float(float(f["my_reserve"])).is_equal(2.0)
 	assert_float(float(f["their_reserve"])).is_equal(0.0)
 	# Counter-probe: seen from side 2 the mirror threat is MY rifle's absence.
-	var f2 := AiMissionEval.features(state, 2, {})
+	var f2 := AiMissionEval.features(state, 2, {}, true)
 	assert_float(float(f2["their_incoming"])).is_equal(0.0)   # side 2 has no ranged weapon
 	assert_float(float(f2["my_reserve"])).is_equal(0.0)
 
@@ -288,13 +288,13 @@ func test_melee_magnitude_tracks_the_worst_charger() -> void:
 	bopr.weapons.append(bw)
 	var target := _unit(1, [Vector3.ZERO], "Target")
 	var near := _state([target, brute], [Vector3.ZERO], [0])
-	var fn := AiMissionEval.features(near, 1, {})
+	var fn := AiMissionEval.features(near, 1, {}, true)
 	assert_float(float(fn["my_charge_exposed"])).is_equal(1.0)
 	assert_float(float(fn["my_melee_in"])).is_greater(0.0)
 	for m in brute.models:
 		(m as ModelInstance).node.global_position = Vector3(40.0 * IN2M, 0, 0)
 	var far := _state([target, brute], [Vector3.ZERO], [0])
-	var ff := AiMissionEval.features(far, 1, {})
+	var ff := AiMissionEval.features(far, 1, {}, true)
 	assert_float(float(ff["my_charge_exposed"])).is_equal(0.0)
 	assert_float(float(ff["my_melee_in"])).is_equal(0.0)
 
