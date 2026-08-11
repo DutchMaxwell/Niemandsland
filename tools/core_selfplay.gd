@@ -334,6 +334,8 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array) -> void:
 		winner = "p1" if p1 > p2 else "p2"
 	var result := {"schema": 1, "tool": "core_selfplay", "seed": game_seed,
 		"dice_seed": game_seed, "grades": {"p1": "planner_core", "p2": "planner_core"},
+		"mission": {"family": "face_off", "name": "duel", "rounds": ROUNDS,
+			"deployment": "zone12", "symmetric": true, "objective_count": 3, "packs": []},
 		"armies": {"p1": _army1, "p2": _army2}, "opener": 0,
 		"objectives": {"p1": p1, "p2": p2, "neutral": owners.size() - p1 - p2},
 		"winner": winner, "planner_positions": positions_log, "planner_calib": []}

@@ -473,6 +473,13 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 		"dice_seed": _dice_seed,
 		"grades": {"p1": _p1_grade, "p2": _p2_grade},
 		"armies": {"p1": _army1, "p2": _army2},
+		# Table-config descriptor (GF Advanced v3.5.1 foresight): today every
+		# ladder game is the same table — but stamping it NOW keeps every
+		# corpus filterable/mixable once missions, deployments and rule packs
+		# rotate. Values must always state what was ACTUALLY played.
+		"mission": {"family": "face_off", "name": "duel", "rounds": 4,
+			"deployment": "front_line", "symmetric": _symmetric,
+			"objective_count": _objective_count, "packs": []},
 		"opener": opener,
 		"rounds_played": int(army_manager.current_round),
 		"objectives": objectives,
