@@ -192,10 +192,23 @@ static func features(state: Dictionary, player: int, incoming: Dictionary = {}) 
 		# uncontrollable context; a controller needs gradients its move can move):
 		"cover_mine": 0.0, "cover_theirs": 0.0,
 		"my_charge_exposed": 0.0, "their_charge_exposed": 0.0,
-		"my_incoming_max": 0.0}
+		"my_incoming_max": 0.0,
+		# Feature wave (net stage): raw signals a nonlinear eval will need —
+		# what is never logged can never be learned.
+		"their_incoming": 0.0,               # MY projected fire onto them (mirror)
+		"my_melee_in": 0.0, "their_melee_in": 0.0,   # expected charge damage, magnitude
+		"my_near_half": 0.0, "their_near_half": 0.0, # units close to the morale half-line
+		"my_shaken": 0.0, "their_shaken": 0.0,
+		"my_fatigued": 0.0, "their_fatigued": 0.0,
+		# Deploy state (reserves/ambushers still off-table): read from an optional
+		# state key the controller stamps; the rollout never changes it.
+		"my_reserve": float((state.get("reserves", {}) as Dictionary).get(player, 0)),
+		"their_reserve": float((state.get("reserves", {}) as Dictionary).get(3 - player, 0))}
 	for v in incoming.values():
 		f["my_incoming"] += float(v)
 		f["my_incoming_max"] = maxf(float(f["my_incoming_max"]), float(v))
+	for v in BattleSim.reply_threat(state, 3 - player).values():
+		f["their_incoming"] += float(v)
 	for key in state["units"]:
 		var su: Dictionary = state["units"][key]
 		if int(su["alive"]) <= 0:
@@ -210,16 +223,35 @@ static func features(state: Dictionary, player: int, incoming: Dictionary = {}) 
 			f["my_unactivated" if mine else "their_unactivated"] += 1.0
 		if bool(su.get("in_cover", false)):
 			f["cover_mine" if mine else "cover_theirs"] += 1.0
+		if bool(su.get("shaken", false)):
+			f["my_shaken" if mine else "their_shaken"] += 1.0
+		if bool(su.get("fatigued", false)):
+			f["my_fatigued" if mine else "their_fatigued"] += 1.0
+		# Morale proximity: a unit just ABOVE half strength flips to testing
+		# range with the next casualty wave — the eval should see the cliff.
+		var wounds_max := 0.0
+		for m in (su["unit"] as GameUnit).models:
+			wounds_max += float(m.wounds_max)
+		if wounds_max > 0.0 and wounds > wounds_max * 0.5 and wounds <= wounds_max * 0.7:
+			f["my_near_half" if mine else "their_near_half"] += 1.0
 		# Charge exposure: any hostile unit's nearest model within rush+contact
 		# of this unit's nearest model — the R8 safety geometry as a feature.
+		# Feature wave: additionally the MAGNITUDE (worst single charger's
+		# expected melee damage), because a grot mob and an ogre block are
+		# not the same threat.
+		var exposed := false
+		var worst_melee := 0.0
 		for ok in state["units"]:
 			var ou: Dictionary = state["units"][ok]
 			if int(ou["player"]) == int(su["player"]) or int(ou["alive"]) <= 0:
 				continue
 			var oreach := float(SoloController.move_bands_for_unit(ou["unit"], null).get("rush", 12)) 				+ BattleSim.CONTACT_IN
 			if BattleSim.dist_in(su["positions"], ou["positions"]) <= oreach:
-				f["my_charge_exposed" if mine else "their_charge_exposed"] += 1.0
-				break
+				exposed = true
+				worst_melee = maxf(worst_melee, BattleSim.melee_threat(ou, su))
+		if exposed:
+			f["my_charge_exposed" if mine else "their_charge_exposed"] += 1.0
+			f["my_melee_in" if mine else "their_melee_in"] += worst_melee
 		var rush := float(SoloController.move_bands_for_unit(su["unit"], null).get("rush", 12))
 		for o in state["objectives"]:
 			var d := INF

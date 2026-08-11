@@ -2662,8 +2662,25 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 		"data": {"kept_back": int(pick.get("waits", 0)),
 			# E1 (eval-tuning wave): the position's raw feature vector — the
 			# arena logs the first per (side, round) as offline-fit input.
-			"features": AiMissionEval.features(state, me, BattleSim.reply_threat(state, me))}})
+			# Feature wave: stamp off-table reserves so the deploy state is a
+			# visible signal (the rollout itself never changes it).
+			"features": AiMissionEval.features(_with_reserves(state), me,
+				BattleSim.reply_threat(state, me))}})
 	return chosen
+
+
+## Feature wave: annotate a captured state with per-side off-table reserve
+## counts (ambushers waiting to arrive). Read-only stamp for features().
+func _with_reserves(state: Dictionary) -> Dictionary:
+	var counts := {1: 0, 2: 0}
+	for u in ambush_reserve:
+		var gu := u as GameUnit
+		if gu != null and not gu.is_destroyed():
+			var side := int(gu.unit_properties.get("player_id", 0))
+			if counts.has(side):
+				counts[side] = int(counts[side]) + 1
+	state["reserves"] = counts
+	return state
 
 
 ## The planner as a position-solver-style overlay: capture the LIVE game into a BattleSim state,

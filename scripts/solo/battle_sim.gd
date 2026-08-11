@@ -186,6 +186,14 @@ static func _profiles_of(su: Dictionary, melee: bool, d := 0.0) -> Array:
 	return out
 
 
+## Expected melee damage `tu` would take from `su` charging RIGHT NOW —
+## survivor-scaled profiles, fatigue/cover contexts. The feature wave's
+## magnitude signal: a grot mob and an ogre block threaten very differently,
+## which the binary charge-exposure count cannot see.
+static func melee_threat(su: Dictionary, tu: Dictionary) -> float:
+	return AiEv.melee_ev(_profiles_of(su, true), _ctx_of(su, true), _ctx_of(tu), true)
+
+
 ## Spell EV (parity wave; ladder-v3 evidence: the caster faction scored
 ## 19-27%): the best affordable DAMAGE spell of `su` against `tu` at
 ## distance d — cast-success chance x damage EV. v0 scope, documented:

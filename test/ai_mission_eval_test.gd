@@ -242,3 +242,73 @@ func test_feature_value_supports_ratio_terms() -> void:
 	var f := {"tail_mine": 3.0, "my_units": 6.0, "my_wounds": 0.0}
 	assert_float(AiMissionEval._feature_value(f, "tail_mine/my_units")).is_equal_approx(0.5, 0.0001)
 	assert_float(AiMissionEval._feature_value(f, "tail_mine/my_wounds")).is_equal_approx(3.0, 0.0001)
+
+
+## Feature wave (net stage): the mirror threat, state counters and reserve
+## stamp — each asserted in both directions so the check can fail.
+func test_feature_wave_mirror_counts_and_reserves() -> void:
+	var mine := _unit(1, [Vector3.ZERO], "Mine")
+	var mopr := OPRApiClient.OPRUnit.new()
+	var mw := OPRApiClient.OPRWeapon.new()
+	mw.name = "Rifle"
+	mw.range_value = 24
+	mw.attacks = 2
+	mine.source_type = "opr"
+	mine.source_data = mopr
+	mopr.weapons.append(mw)
+	var theirs := _unit(2, [Vector3(14.0 * IN2M, 0, 0)], "Theirs")
+	var state := _state([mine, theirs], [Vector3.ZERO], [0])
+	(state["units"]["Theirs"] as Dictionary)["shaken"] = true
+	(state["units"]["Mine"] as Dictionary)["fatigued"] = true
+	state["reserves"] = {1: 2, 2: 0}
+	var f := AiMissionEval.features(state, 1, {})
+	assert_float(float(f["their_incoming"])).is_greater(0.0)   # my rifle projects onto them
+	assert_float(float(f["their_shaken"])).is_equal(1.0)
+	assert_float(float(f["my_shaken"])).is_equal(0.0)
+	assert_float(float(f["my_fatigued"])).is_equal(1.0)
+	assert_float(float(f["my_reserve"])).is_equal(2.0)
+	assert_float(float(f["their_reserve"])).is_equal(0.0)
+	# Counter-probe: seen from side 2 the mirror threat is MY rifle's absence.
+	var f2 := AiMissionEval.features(state, 2, {})
+	assert_float(float(f2["their_incoming"])).is_equal(0.0)   # side 2 has no ranged weapon
+	assert_float(float(f2["my_reserve"])).is_equal(0.0)
+
+
+## Melee magnitude: an armed charger in reach raises my_melee_in; out of
+## reach it contributes nothing (and the binary exposure flag matches).
+func test_melee_magnitude_tracks_the_worst_charger() -> void:
+	var brute := _unit(2, [Vector3(8.0 * IN2M, 0, 0)], "Brute")
+	var bopr := OPRApiClient.OPRUnit.new()
+	var bw := OPRApiClient.OPRWeapon.new()
+	bw.name = "Claws"
+	bw.range_value = 0
+	bw.attacks = 6
+	brute.source_type = "opr"
+	brute.source_data = bopr
+	bopr.weapons.append(bw)
+	var target := _unit(1, [Vector3.ZERO], "Target")
+	var near := _state([target, brute], [Vector3.ZERO], [0])
+	var fn := AiMissionEval.features(near, 1, {})
+	assert_float(float(fn["my_charge_exposed"])).is_equal(1.0)
+	assert_float(float(fn["my_melee_in"])).is_greater(0.0)
+	for m in brute.models:
+		(m as ModelInstance).node.global_position = Vector3(40.0 * IN2M, 0, 0)
+	var far := _state([target, brute], [Vector3.ZERO], [0])
+	var ff := AiMissionEval.features(far, 1, {})
+	assert_float(float(ff["my_charge_exposed"])).is_equal(0.0)
+	assert_float(float(ff["my_melee_in"])).is_equal(0.0)
+
+
+## Morale proximity: just above half strength counts as near-half; full
+## strength does not.
+func test_near_half_counts_the_cliff_edge() -> void:
+	var squad := _unit(1, [Vector3.ZERO, Vector3(IN2M, 0, 0)], "Squad")
+	for m in squad.models:
+		(m as ModelInstance).wounds_max = 5
+	var state := _state([squad], [Vector3.ZERO], [0])
+	(state["units"]["Squad"] as Dictionary)["wounds"] = [5, 1]   # 6 of 10 = 60%
+	var f := AiMissionEval.features(state, 1, {})
+	assert_float(float(f["my_near_half"])).is_equal(1.0)
+	(state["units"]["Squad"] as Dictionary)["wounds"] = [5, 5]   # full strength
+	var f2 := AiMissionEval.features(state, 1, {})
+	assert_float(float(f2["my_near_half"])).is_equal(0.0)
