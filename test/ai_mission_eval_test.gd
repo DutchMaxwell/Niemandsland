@@ -339,3 +339,24 @@ func test_linear_value_model_override() -> void:
 	var got: float = AiMissionEval._score_fit(state, 1, {})
 	AiMissionEval._net_override = {}
 	assert_float(got).is_equal_approx(1.0 / (1.0 + exp(-(2.0 * 0.25 + 0.5))), 0.0001)
+
+
+## Loader path (the box counter-probe found this): a LINEAR JSON ("w"/"b")
+## must load through _net() from disk — the earlier W1-only gate silently
+## rejected it and fell back to v8.
+func test_net_loader_accepts_linear_json_from_disk() -> void:
+	var path := "user://test_glasses.json"
+	var fa := FileAccess.open(path, FileAccess.WRITE)
+	fa.store_string(JSON.stringify({"keys": ["round_frac"], "mu": [0.0], "sd": [1.0],
+		"w": [1.0], "b": 0.0}))
+	fa.close()
+	OS.set_environment("NML_FIT_WEIGHTS", "net")
+	OS.set_environment("NML_NET_PATH", ProjectSettings.globalize_path(path))
+	AiMissionEval._net_cache = {}
+	AiMissionEval._net_tried = false
+	var n := AiMissionEval._net()
+	OS.set_environment("NML_FIT_WEIGHTS", "")
+	OS.set_environment("NML_NET_PATH", "")
+	AiMissionEval._net_cache = {}
+	AiMissionEval._net_tried = false
+	assert_bool(n.has("w")).is_true()

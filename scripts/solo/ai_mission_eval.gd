@@ -92,7 +92,8 @@ static func _net() -> Dictionary:
 	if path == "":
 		return _net_cache
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
-	if parsed is Dictionary and (parsed as Dictionary).has("W1"):
+	if parsed is Dictionary \
+			and ((parsed as Dictionary).has("W1") or (parsed as Dictionary).has("w")):
 		_net_cache = parsed
 	return _net_cache
 
