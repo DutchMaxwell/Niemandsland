@@ -2660,6 +2660,10 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 		"rule": "PLANNER_V0 unit pick (NML-995): the round is played out for the best openers; the strongest end-of-round position activates first",
 		"candidates": [], "chosen": "activates next", "why": str(pick["intent"]),
 		"data": {"kept_back": int(pick.get("waits", 0)),
+			# Distillation v2: the planner's OWN win estimate for THIS position
+			# (expectation.before) — the per-position teacher value the round-
+			# coarse planner_calib join cannot provide.
+			"value": float((pick.get("expectation", {}) as Dictionary).get("before", -1.0)),
 			# E1 (eval-tuning wave): the position's raw feature vector — the
 			# arena logs the first per (side, round) as offline-fit input.
 			# Feature wave: stamp off-table reserves so the deploy state is a

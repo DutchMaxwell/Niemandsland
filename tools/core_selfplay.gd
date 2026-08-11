@@ -99,6 +99,7 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 			turn = other
 		positions_log.append({"side": turn, "round": round_no,
 			"seq": positions_log.size(),
+			"value": float((pick.get("expectation", {}) as Dictionary).get("before", -1.0)),
 			"features": AiMissionEval.features(state, turn, BattleSim.reply_threat(state, turn), true)})
 		state = BattleSim.resolve_stochastic(state, pick["action"], rng)
 		last_side = turn
