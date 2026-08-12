@@ -305,6 +305,7 @@ func _run() -> void:
 			# zeroed out). seq = arrival order, the offline TD chains on it.
 			_position_rows.append({"side": side, "round": int(army_manager.current_round),
 				"seq": _position_rows.size(),
+				"leaf": bool((rec["data"] as Dictionary).get("leaf", false)),
 				"value": float((rec["data"] as Dictionary).get("value", -1.0)),
 				"features": (rec["data"] as Dictionary)["features"]})
 		if kind == "move":

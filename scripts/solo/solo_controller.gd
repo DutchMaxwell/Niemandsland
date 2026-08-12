@@ -2670,6 +2670,16 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 			# visible signal (the rollout itself never changes it).
 			"features": AiMissionEval.features(_with_reserves(state), me,
 				BattleSim.reply_threat(state, me), true)}})
+	# Leaf row (glasses v4): the winning candidate's horizon-end state — the
+	# distribution the leaf eval actually judges. Same record kind, flagged.
+	var leaf: Dictionary = AiPlanner._last_leaf_state
+	if not leaf.is_empty():
+		record_decision({"kind": "planner", "unit": chosen.get_name(),
+			"rule": "leaf row: winning candidate's horizon-end position (training data)",
+			"candidates": [], "chosen": "", "why": "leaf",
+			"data": {"leaf": true,
+				"features": AiMissionEval.features(_with_reserves(leaf), me,
+					BattleSim.reply_threat(leaf, me), true)}})
 	return chosen
 
 

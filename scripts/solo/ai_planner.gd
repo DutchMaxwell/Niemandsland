@@ -61,6 +61,7 @@ static func top_k_default() -> int:
 ## Deterministic: prefilter ties keep capture order (explicit index tiebreak).
 static func plan_with_rollout(state: Dictionary, player: int,
 		top_k: int = -1) -> Dictionary:
+	_last_leaf_state = {}
 	if top_k == -1:
 		top_k = top_k_default()   # research seam; default = the const
 	if top_k <= 0:
@@ -110,7 +111,8 @@ static func plan_with_rollout(state: Dictionary, player: int,
 	var best := {}
 	var runner := {}
 	for cand in pool:
-		var rs := _blend_score(rollout_boundaries(state, cand["action"], player), player)
+		var ends := rollout_boundaries(state, cand["action"], player)
+		var rs := _blend_score(ends, player)
 		if OS.get_environment("NML_PLAN_DUMP") == "1":   # diagnosis-only; ladder silent without it
 			printerr("[PLAN] R%d %s kind=%d 1ply=%.4f rolled=%.4f" % [int(state["round"]),
 				str(cand["unit_key"]), int((cand["action"] as Dictionary).get("kind", -1)),
@@ -119,6 +121,8 @@ static func plan_with_rollout(state: Dictionary, player: int,
 		if best.is_empty() or rs > float(best["score"]):
 			runner = best
 			best = rolled
+			if not ends.is_empty():
+				_last_leaf_state = ends[ends.size() - 1]
 		elif runner.is_empty() or rs > float(runner["score"]):
 			runner = rolled
 	var waits := 0
@@ -161,6 +165,12 @@ static func rollout(state: Dictionary, first_action: Dictionary, me: int,
 
 
 ## R7: the same playout, but returning the state AT EVERY round boundary of
+## Leaf-row seam (glasses v4): the WINNING candidate's horizon-end state —
+## the exact distribution the leaf eval judges. The controller logs it as a
+## training row; reset per pick, {} when the rollout path did not run.
+static var _last_leaf_state: Dictionary = {}
+
+
 ## the horizon (index 0 = end of the current round, last = horizon end) — the
 ## caller prices each boundary and blends. The boundary snapshot is taken
 ## BEFORE _cross_round mutates the walker, so every entry is a true round-end.
