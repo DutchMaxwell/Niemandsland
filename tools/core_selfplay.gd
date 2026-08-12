@@ -74,7 +74,7 @@ func _play_one(game_seed: int) -> void:
 			var su: Dictionary = state["units"][k]
 			su["activated"] = false
 			su["fatigued"] = false
-		opener = _play_round(state, opener, rng, positions_log, round_no)
+		opener = _play_round(state, opener, rng, positions_log, round_no, game_seed)
 		state = _last_state   # adopt the played round (resolve works on clones)
 		_seize(state, objectives, owners)
 	_write_result(game_seed, owners, positions_log)
@@ -84,7 +84,7 @@ func _play_one(game_seed: int) -> void:
 ## tail to the other). Returns the NEXT round's opener (finished-first rule:
 ## the side that did NOT take the last activation opens).
 func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
-		positions_log: Array, round_no: int) -> int:
+		positions_log: Array, round_no: int, game_seed: int) -> int:
 	var turn := opener
 	var last_side := 0
 	var guard: int = (state["units"] as Dictionary).size() * 2 + 4
@@ -97,11 +97,23 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 			if pick.is_empty():
 				break
 			turn = other
-		positions_log.append({"side": turn, "round": round_no,
+		var row := {"side": turn, "round": round_no,
 			"seq": positions_log.size(),
 			"value": float((pick.get("expectation", {}) as Dictionary).get("before", -1.0)),
 			"features": AiMissionEval.features(state, turn, BattleSim.reply_threat(state, turn), true),
-			"board": _board_rows(state)})
+			"board": _board_rows(state)}
+		# E0b (controller-proxy pairs for E2): resolve the CHOSEN and the
+		# REJECTED candidate on clones and log both end boards. A log-only
+		# rng keeps the game's dice stream untouched (determinism per seed).
+		var ru: Dictionary = pick.get("runner_up", {})
+		if not ru.is_empty() and ru.has("action"):
+			var lrng := RandomNumberGenerator.new()
+			lrng.seed = game_seed * 100000 + positions_log.size()
+			var b_ch := _board_rows(BattleSim.resolve_stochastic(state, pick["action"], lrng))
+			lrng.seed = game_seed * 100000 + positions_log.size() + 50000
+			row["pair"] = {"chosen": b_ch,
+				"runner": _board_rows(BattleSim.resolve_stochastic(state, ru["action"], lrng))}
+		positions_log.append(row)
 		state = BattleSim.resolve_stochastic(state, pick["action"], rng)
 		last_side = turn
 		turn = 2 if turn == 1 else 1
