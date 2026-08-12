@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "comment": "Mission catalog v1 (grill 2026-08-12, D1-D4): the four placement-only Face-Off missions. One catalog feeds game selection AND ladder rotation. Wording is our own; rules follow the official advanced missions. marker count is an int or a dice term like 'd3+2'; placement modes: alternate (players place outside zones, min_gap apart), quarter_centres, deploy_zone_centres, table_centre.",
+  "missions": {
+    "duel": {
+      "family": "face_off",
+      "rounds": 4,
+      "scoring": "end",
+      "deployment": "front_line",
+      "markers": {"count": "d3+2", "placement": "alternate", "min_gap_in": 9, "outside_zones_in": 9}
+    },
+    "seize_ground": {
+      "family": "face_off",
+      "rounds": 4,
+      "scoring": "end",
+      "deployment": "front_line",
+      "markers": {"count": 4, "placement": "quarter_centres"}
+    },
+    "breakthrough": {
+      "family": "face_off",
+      "rounds": 4,
+      "scoring": "end",
+      "deployment": "front_line",
+      "markers": {"count": 2, "placement": "deploy_zone_centres"}
+    },
+    "king_of_the_hill": {
+      "family": "face_off",
+      "rounds": 4,
+      "scoring": "end",
+      "deployment": "front_line",
+      "markers": {"count": 1, "placement": "table_centre"}
+    }
+  }
+}
