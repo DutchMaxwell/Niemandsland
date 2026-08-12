@@ -493,6 +493,7 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 			"p1": SoloDifficulty.for_grade(_p1_grade, _seed).to_dict(),
 			"p2": SoloDifficulty.for_grade(_p2_grade, _seed).to_dict(),
 		},
+		"search_knobs": search_knobs(),
 		"decision_counts": _stringify_keys(_decision_counts),
 		"knob_records": _knob_records,
 		"move_usage": _move_usage_summary(),
@@ -517,6 +518,25 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 	f.store_string(JSON.stringify(result, "  "))
 	f.close()
 	printerr("[ARENA] result JSON: %s" % path)
+
+
+## Search-knob provenance (12.08. morning quake): a result dir must PROVE which
+## search configuration produced it — the phantom reference survived because
+## runs differed only in env vars nobody recorded. Stamped are the EFFECTIVE
+## values (the lazy accessors resolve env + default, exactly what the game
+## consumed); net_loaded is the boot-time load probe's permanent record.
+static func search_knobs() -> Dictionary:
+	var fw := OS.get_environment("NML_FIT_WEIGHTS").strip_edges()
+	var net_loaded := fw == "net" and not AiMissionEval._net().is_empty()
+	return {
+		"top_k": AiPlanner.top_k_default(),
+		"horizon": AiPlanner.horizon(),
+		"seat_depth": AiPlanner.seat_depth_enabled(),
+		"fit_weights": "net" if net_loaded else ("v2" if fw == "v2" else "v4"),
+		"fit_blend": AiMissionEval.fit_blend(),
+		"net_path": OS.get_environment("NML_NET_PATH"),
+		"net_loaded": net_loaded,
+	}
 
 
 ## Planner calibration pairs (parity wave, NML-995): fold the per-activation expectation records into
@@ -760,6 +780,21 @@ func _parse_config() -> void:
 			printerr("[ARENA] FATAL: unknown grade '%s' — refusing the silent nachtmahr fallback" % g)
 			quit(1)
 			return
+
+	# Same silent-fallback class, eval side: a typo'd NML_FIT_WEIGHTS used to
+	# select v4 quietly, and a net request whose weights file is missing or
+	# unparseable used to fall back to the linear eval quietly (the "verify
+	# the net actually loaded" box probe, now enforced at boot instead).
+	var fw := OS.get_environment("NML_FIT_WEIGHTS").strip_edges()
+	if not (fw in ["", "v2", "v4", "net"]):
+		printerr("[ARENA] FATAL: unknown NML_FIT_WEIGHTS '%s' (allowed: v2, v4, net)" % fw)
+		quit(1)
+		return
+	if fw == "net" and AiMissionEval._net().is_empty():
+		printerr("[ARENA] FATAL: NML_FIT_WEIGHTS=net but no loadable model at NML_NET_PATH '%s'"
+				% OS.get_environment("NML_NET_PATH"))
+		quit(1)
+		return
 
 func _env_or(key: String, fallback: String) -> String:
 	var v := OS.get_environment(key).strip_edges()
