@@ -751,6 +751,14 @@ func _parse_config() -> void:
 	if not _dice_seed_explicit:
 		_dice_seed = _seed
 
+	# Label-bug class EXTERMINATED (three silent-fallback incidents): an
+	# unknown grade no longer plays nachtmahr quietly — it dies loudly.
+	for g in [_p1_grade, _p2_grade]:
+		if not SoloDifficulty.PRESETS.has(str(g).strip_edges().to_lower()) \
+				and not SoloDifficulty.LEGACY_GRADE_ALIASES.has(str(g).strip_edges().to_lower()):
+			printerr("[ARENA] FATAL: unknown grade '%s' — refusing the silent nachtmahr fallback" % g)
+			quit(1)
+			return
 
 func _env_or(key: String, fallback: String) -> String:
 	var v := OS.get_environment(key).strip_edges()
