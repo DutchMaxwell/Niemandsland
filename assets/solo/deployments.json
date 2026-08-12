@@ -1,0 +1,48 @@
+{
+  "schema": 1,
+  "comment": "Deployment catalog v1 (grill 2026-08-12, D4): the six standard-family Face-Off deployment styles; only the standard family ships in v1. Zones are polygons in centered table inches (table 72x48, x in [-36,36], z in [-24,24]); player 1 owns the z-negative side. Every zone is a list of polygons (list of list of [x,z] pairs), even where one polygon suffices, so multi-part zones like disordered share the same shape as the rest. Wording is our own; geometry follows the official standard-style diagrams.",
+  "styles": {
+    "front_line": {
+      "family": "standard",
+      "zones": {
+        "1": [[[-36,-24],[36,-24],[36,-12],[-36,-12]]],
+        "2": [[[-36,12],[36,12],[36,24],[-36,24]]]
+      }
+    },
+    "ground_war": {
+      "family": "standard",
+      "zones": {
+        "1": [[[-36,-24],[-12,-24],[-12,24],[-36,24]]],
+        "2": [[[12,-24],[36,-24],[36,24],[12,24]]]
+      }
+    },
+    "side_battle": {
+      "family": "standard",
+      "zones": {
+        "1": [[[-36,-24],[18,-24],[-36,6]]],
+        "2": [[[36,24],[-18,24],[36,-6]]]
+      }
+    },
+    "disordered": {
+      "family": "standard",
+      "zones": {
+        "1": [[[-36,24],[-36,0],[0,24]],[[36,24],[0,24],[36,0]]],
+        "2": [[[-36,-24],[0,-24],[-36,0]],[[36,-24],[36,0],[0,-24]]]
+      }
+    },
+    "spearhead": {
+      "family": "standard",
+      "zones": {
+        "1": [[[-36,-24],[-36,24],[-12,0]]],
+        "2": [[[36,-24],[36,24],[12,0]]]
+      }
+    },
+    "opposing_forces": {
+      "family": "standard",
+      "zones": {
+        "1": [[[-36,0],[-12,0],[-12,24],[-36,24]]],
+        "2": [[[12,-24],[36,-24],[36,0],[12,0]]]
+      }
+    }
+  }
+}
