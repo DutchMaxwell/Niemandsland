@@ -100,7 +100,8 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 		positions_log.append({"side": turn, "round": round_no,
 			"seq": positions_log.size(),
 			"value": float((pick.get("expectation", {}) as Dictionary).get("before", -1.0)),
-			"features": AiMissionEval.features(state, turn, BattleSim.reply_threat(state, turn), true)})
+			"features": AiMissionEval.features(state, turn, BattleSim.reply_threat(state, turn), true),
+			"board": _board_rows(state)})
 		state = BattleSim.resolve_stochastic(state, pick["action"], rng)
 		last_side = turn
 		turn = 2 if turn == 1 else 1
@@ -110,6 +111,30 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 
 
 var _last_state: Dictionary = {}
+
+
+## E0 (encoder corpus): raw board state per logged pick — one row
+## [player, x_in, z_in, alive, wounds_left, shaken] per LIVING unit, unit
+## centre in table inches. The ratio features compress the position away;
+## a position net needs the position. Always on — a silent opt-in knob is
+## how phantoms start.
+func _board_rows(state: Dictionary) -> Array:
+	var rows: Array = []
+	for k in state["units"]:
+		var su: Dictionary = state["units"][k]
+		if int(su["alive"]) <= 0:
+			continue
+		var c := Vector3.ZERO
+		for p in su["positions"]:
+			c += p as Vector3
+		c /= float((su["positions"] as Array).size())
+		var wl := 0
+		for w in su["wounds"]:
+			wl += int(w)
+		rows.append([int(su["player"]), snappedf(c.x / IN2M, 0.1),
+			snappedf(c.z / IN2M, 0.1), int(su["alive"]), wl,
+			1 if bool(su.get("shaken", false)) else 0])
+	return rows
 
 
 func _pick_for(state: Dictionary, player: int) -> Dictionary:
