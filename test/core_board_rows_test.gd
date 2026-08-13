@@ -156,4 +156,4 @@ func test_v5_sparse_rule_pairs_from_vocab() -> void:
 	# unknown rule is collected loudly, never silently dropped
 	gu.unit_properties["special_rules"] = ["Frobnicate(2)"]
 	CoreSelfplay._board_rows(st)
-	assert_bool(CoreSelfplay.unknown_rules.has("Frobnicate")).is_true()
+	assert_bool(BattleSim.unknown_rules.has("Frobnicate")).is_true()

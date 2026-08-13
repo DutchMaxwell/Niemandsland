@@ -17,6 +17,142 @@ const IN2M := 0.0254
 static var stochastic_rng: RandomNumberGenerator = null
 
 
+# === Encoder board rows (v5 schema, NML-995) ==================================
+# ONE canonical source for the position-net input, used by BOTH the factory
+# (core_selfplay corpus) and the in-game encoder eval — a fork here would let
+# training and play drift apart silently. Unit rows:
+# [player, x_in, z_in, alive, wounds_left, shaken, fatigued, activated,
+#  range_max_in, attacks_total, quality, defense, shoot_ev12, melee_ev,
+#  6 flag rules, n_rule_pairs, (slot, value)*n] — objective rows are
+# [3, x, z, owner, 0*17]. Rules reach the corpus via the committed append-only
+# vocabulary (unit slots 0-199, weapon 200-299); unknown rules are collected
+# LOUDLY in `unknown_rules` (slot assignment only ever happens centrally).
+
+const EV_REF_DIST_IN := 12.0
+const FLAG_RULES: Array[String] = ["Fearless", "Ambush", "Flying", "Stealth", "Furious", "Regeneration"]
+const RULE_VOCAB_PATH := "res://data/encoder_rule_vocab_v1.json"
+static var _vocab_unit: Dictionary = {}
+static var _vocab_weapon: Dictionary = {}
+static var _vocab_loaded := false
+static var unknown_rules: Dictionary = {}
+
+
+static func _load_vocab() -> void:
+	if _vocab_loaded:
+		return
+	_vocab_loaded = true
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(RULE_VOCAB_PATH))
+	if data is Dictionary:
+		var ul: Array = data.get("unit", [])
+		for i in ul.size():
+			_vocab_unit[str(ul[i])] = i
+		var wl: Array = data.get("weapon", [])
+		for i in wl.size():
+			_vocab_weapon[str(wl[i])] = 200 + i
+	else:
+		push_warning("BattleSim: rule vocab unreadable at %s" % RULE_VOCAB_PATH)
+
+
+## "Tough(3)" / {name:"Tough", rating:3} -> ["Tough", 3]
+static func _parse_rule(r: Variant) -> Array:
+	if r is Dictionary:
+		return [str(r.get("name", "")).strip_edges(), int(r.get("rating", 0))]
+	var s := str(r).strip_edges()
+	var m := RegEx.create_from_string("^(.*?)\\s*\\((\\d+)\\)\\s*$").search(s)
+	if m != null:
+		return [m.get_string(1), int(m.get_string(2))]
+	return [s, 0]
+
+
+static func _rule_pairs(gu: Variant, od: OPRApiClient.OPRUnit) -> Array:
+	_load_vocab()
+	var vals := {}
+	for r in gu.get_special_rules():
+		var pr := _parse_rule(r)
+		if pr[0] == "":
+			continue
+		if _vocab_unit.has(pr[0]):
+			var slot: int = _vocab_unit[pr[0]]
+			vals[slot] = maxi(int(vals.get(slot, 0)), int(pr[1]) if pr[1] > 0 else 1)
+		elif not unknown_rules.has(pr[0]):
+			unknown_rules[pr[0]] = true
+			push_warning("BattleSim: UNKNOWN unit rule '%s' — not in vocab, stamped into result" % pr[0])
+	for w in od.weapons:
+		for r in w.special_rules:
+			var pr := _parse_rule(r)
+			if pr[0] == "":
+				continue
+			if _vocab_weapon.has(pr[0]):
+				var slot: int = _vocab_weapon[pr[0]]
+				vals[slot] = maxi(int(vals.get(slot, 0)), maxi(int(pr[1]), 1))
+			elif not unknown_rules.has(pr[0]):
+				unknown_rules[pr[0]] = true
+				push_warning("BattleSim: UNKNOWN weapon rule '%s' — not in vocab, stamped into result" % pr[0])
+	var out: Array = []
+	var slots := vals.keys()
+	slots.sort()
+	for s in slots:
+		out.append(int(s))
+		out.append(int(vals[s]))
+	return out
+
+
+static func board_rows(state: Dictionary) -> Array:
+	var rows: Array = []
+	for k in state["units"]:
+		var su: Dictionary = state["units"][k]
+		if int(su["alive"]) <= 0:
+			continue
+		var c := Vector3.ZERO
+		for p in su["positions"]:
+			c += p as Vector3
+		c /= float((su["positions"] as Array).size())
+		var wl := 0
+		for w in su["wounds"]:
+			wl += int(w)
+		var rmax := 0
+		var atk := 0
+		var q := 0
+		var d := 0
+		var sev := 0.0
+		var mev := 0.0
+		var flags := [0, 0, 0, 0, 0, 0]
+		var pairs: Array = []
+		var gu: Variant = su.get("unit")
+		if gu != null and gu.get("source_data") is OPRApiClient.OPRUnit:
+			var od: OPRApiClient.OPRUnit = gu.source_data
+			q = od.quality
+			d = od.defense
+			for w in od.weapons:
+				rmax = maxi(rmax, w.range_value)
+				atk += w.attacks * maxi(w.count, 1)
+			var att: Dictionary = AiEv.ctx_for(gu)
+			sev = snappedf(AiEv.shoot_ev(AiShooting.profiles_in_range(od.weapons, EV_REF_DIST_IN),
+				att, AiEv.NEUTRAL_DEFENDER.duplicate(), EV_REF_DIST_IN), 0.01)
+			mev = snappedf(AiEv.melee_ev(AiShooting.melee_profiles(od.weapons),
+				att, AiEv.NEUTRAL_DEFENDER.duplicate(), true), 0.01)
+			for i in FLAG_RULES.size():
+				if gu.has_special_rule(FLAG_RULES[i]):
+					flags[i] = 1
+			pairs = _rule_pairs(gu, od)
+		var row: Array = [int(su["player"]), snappedf(c.x / IN2M, 0.1),
+			snappedf(c.z / IN2M, 0.1), int(su["alive"]), wl,
+			1 if bool(su.get("shaken", false)) else 0,
+			1 if bool(su.get("fatigued", false)) else 0,
+			1 if bool(su.get("activated", false)) else 0,
+			rmax, atk, q, d, sev, mev,
+			flags[0], flags[1], flags[2], flags[3], flags[4], flags[5],
+			pairs.size() / 2]
+		row.append_array(pairs)
+		rows.append(row)
+	for o in state.get("objectives", []):
+		var op: Vector3 = (o as Dictionary)["pos"]
+		rows.append([3, snappedf(op.x / IN2M, 0.1), snappedf(op.z / IN2M, 0.1),
+			int((o as Dictionary).get("owner", 0)),
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	return rows
+
+
 ## One activation with stochastic rounding (core self-play games).
 static func resolve_stochastic(state: Dictionary, action: Dictionary,
 		rng: RandomNumberGenerator) -> Dictionary:

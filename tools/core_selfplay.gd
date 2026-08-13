@@ -21,83 +21,12 @@ const IN2M := 0.0254
 const TABLE_W_IN := 72.0
 const TABLE_D_IN := 48.0
 const ROUNDS := 4
-## v4 encoder rows: reference distance for the precomputed shooting EV and
-## the declared-rule flag order (columns 14-19).
-const EV_REF_DIST_IN := 12.0
-const FLAG_RULES: Array[String] = ["Fearless", "Ambush", "Flying", "Stealth", "Furious", "Regeneration"]
-## v5: EVERY declared rule reaches the corpus via the committed, append-only
-## vocabulary (unit slots 0-199, weapon slots 200-299). Rows append sparse
-## pairs [n, slot, value, ...] after column 19 — implemented rules also feed
-## the EVs, unimplemented ones at least become learnable signals. A rule the
-## vocab does not know is logged LOUDLY and stamped into the result JSON
-## (slot assignment happens centrally at collect time, never per box — two
-## boxes must not invent diverging slots).
-const RULE_VOCAB_PATH := "res://data/encoder_rule_vocab_v1.json"
-static var _vocab_unit: Dictionary = {}
-static var _vocab_weapon: Dictionary = {}
-static var _vocab_loaded := false
-static var unknown_rules: Dictionary = {}
+## Board rows moved to BattleSim.board_rows (ONE canonical source for factory
+## and in-game encoder — NML-995 v5). Kept here as thin delegates so the
+## existing tests and call sites stay valid.
+static func _board_rows(state: Dictionary) -> Array:
+	return BattleSim.board_rows(state)
 
-
-static func _load_vocab() -> void:
-	if _vocab_loaded:
-		return
-	_vocab_loaded = true
-	var txt := FileAccess.get_file_as_string(RULE_VOCAB_PATH)
-	var data: Variant = JSON.parse_string(txt)
-	if data is Dictionary:
-		var ul: Array = data.get("unit", [])
-		for i in ul.size():
-			_vocab_unit[str(ul[i])] = i
-		var wl: Array = data.get("weapon", [])
-		for i in wl.size():
-			_vocab_weapon[str(wl[i])] = 200 + i
-	else:
-		push_warning("core_selfplay: rule vocab unreadable at %s" % RULE_VOCAB_PATH)
-
-
-## "Tough(3)" / {name:"Tough", rating:3} -> ["Tough", 3]
-static func _parse_rule(r: Variant) -> Array:
-	if r is Dictionary:
-		return [str(r.get("name", "")).strip_edges(), int(r.get("rating", 0))]
-	var s := str(r).strip_edges()
-	var m := RegEx.create_from_string("^(.*?)\\s*\\((\\d+)\\)\\s*$").search(s)
-	if m != null:
-		return [m.get_string(1), int(m.get_string(2))]
-	return [s, 0]
-
-
-static func _rule_pairs(gu: Variant, od: OPRApiClient.OPRUnit) -> Array:
-	_load_vocab()
-	var vals := {}
-	for r in gu.get_special_rules():
-		var pr := _parse_rule(r)
-		if pr[0] == "":
-			continue
-		if _vocab_unit.has(pr[0]):
-			var slot: int = _vocab_unit[pr[0]]
-			vals[slot] = maxi(int(vals.get(slot, 0)), int(pr[1]) if pr[1] > 0 else 1)
-		elif not unknown_rules.has(pr[0]):
-			unknown_rules[pr[0]] = true
-			push_warning("core_selfplay: UNKNOWN unit rule '%s' — not in vocab, stamped into result" % pr[0])
-	for w in od.weapons:
-		for r in w.special_rules:
-			var pr := _parse_rule(r)
-			if pr[0] == "":
-				continue
-			if _vocab_weapon.has(pr[0]):
-				var slot: int = _vocab_weapon[pr[0]]
-				vals[slot] = maxi(int(vals.get(slot, 0)), maxi(int(pr[1]), 1))
-			elif not unknown_rules.has(pr[0]):
-				unknown_rules[pr[0]] = true
-				push_warning("core_selfplay: UNKNOWN weapon rule '%s' — not in vocab, stamped into result" % pr[0])
-	var out: Array = []
-	var slots := vals.keys()
-	slots.sort()
-	for s in slots:
-		out.append(int(s))
-		out.append(int(vals[s]))
-	return out
 
 var _army1 := ""
 var _army2 := ""
@@ -202,74 +131,6 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 var _last_state: Dictionary = {}
 
 
-## E0/E1b/v3 (encoder corpus): raw board state per logged pick. Unit rows are
-## [player, x_in, z_in, alive, wounds_left, shaken, fatigued, activated,
-##  range_max_in, attacks_total, quality, defense] per LIVING unit (centre in
-## table inches; stat line from the OPRUnit source, zeros when unreadable —
-## v3: a point on a table says nothing about WHAT it can do, and the day's
-## measurements showed input information, not capacity, is the bottleneck).
-## Every mission objective adds [3, x_in, z_in, owner, 0,0,0,0, 0,0,0,0] —
-## marker 3 in the player slot, owner (0 neutral / 1 / 2) in the alive slot.
-## Always on — a silent opt-in knob is how phantoms start.
-static func _board_rows(state: Dictionary) -> Array:
-	var rows: Array = []
-	for k in state["units"]:
-		var su: Dictionary = state["units"][k]
-		if int(su["alive"]) <= 0:
-			continue
-		var c := Vector3.ZERO
-		for p in su["positions"]:
-			c += p as Vector3
-		c /= float((su["positions"] as Array).size())
-		var wl := 0
-		for w in su["wounds"]:
-			wl += int(w)
-		var rmax := 0
-		var atk := 0
-		var q := 0
-		var d := 0
-		var sev := 0.0
-		var mev := 0.0
-		var flags := [0, 0, 0, 0, 0, 0]
-		var gu: Variant = su.get("unit")
-		if gu != null and gu.get("source_data") is OPRApiClient.OPRUnit:
-			var od: OPRApiClient.OPRUnit = gu.source_data
-			q = od.quality
-			d = od.defense
-			for w in od.weapons:
-				rmax = maxi(rmax, w.range_value)
-				atk += w.attacks * maxi(w.count, 1)
-			# v4: the RULEBOOK, pre-digested — expected wounds vs the neutral
-			# reference target via the exact, parity-tested combat math (AP,
-			# Deadly, Blast etc. are priced in), plus the loudest unit rules
-			# as declared flags. The net gets rule CONSEQUENCES, not prose.
-			var att: Dictionary = AiEv.ctx_for(gu)
-			sev = snappedf(AiEv.shoot_ev(AiShooting.profiles_in_range(od.weapons, EV_REF_DIST_IN),
-				att, AiEv.NEUTRAL_DEFENDER.duplicate(), EV_REF_DIST_IN), 0.01)
-			mev = snappedf(AiEv.melee_ev(AiShooting.melee_profiles(od.weapons),
-				att, AiEv.NEUTRAL_DEFENDER.duplicate(), true), 0.01)
-			for i in FLAG_RULES.size():
-				if gu.has_special_rule(FLAG_RULES[i]):
-					flags[i] = 1
-		var pairs: Array = []
-		if gu != null and gu.get("source_data") is OPRApiClient.OPRUnit:
-			pairs = _rule_pairs(gu, gu.source_data)
-		var row: Array = [int(su["player"]), snappedf(c.x / IN2M, 0.1),
-			snappedf(c.z / IN2M, 0.1), int(su["alive"]), wl,
-			1 if bool(su.get("shaken", false)) else 0,
-			1 if bool(su.get("fatigued", false)) else 0,
-			1 if bool(su.get("activated", false)) else 0,
-			rmax, atk, q, d, sev, mev,
-			flags[0], flags[1], flags[2], flags[3], flags[4], flags[5],
-			pairs.size() / 2]
-		row.append_array(pairs)
-		rows.append(row)
-	for o in state.get("objectives", []):
-		var op: Vector3 = (o as Dictionary)["pos"]
-		rows.append([3, snappedf(op.x / IN2M, 0.1), snappedf(op.z / IN2M, 0.1),
-			int((o as Dictionary).get("owner", 0)),
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
-	return rows
 
 
 func _pick_for(state: Dictionary, player: int) -> Dictionary:
@@ -493,7 +354,7 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array) -> void:
 	if p1 != p2:
 		winner = "p1" if p1 > p2 else "p2"
 	var result := {"schema": 1, "board_schema": 5, "rule_vocab": "v1b",
-		"unknown_rules": unknown_rules.keys(),
+		"unknown_rules": BattleSim.unknown_rules.keys(),
 		"tool": "core_selfplay", "seed": game_seed,
 		"dice_seed": game_seed, "grades": {"p1": "planner_core", "p2": "planner_core"},
 		"mission": {"family": "face_off", "name": "duel", "rounds": ROUNDS,
