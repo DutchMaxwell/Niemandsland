@@ -442,3 +442,19 @@ func test_fortified_ap_reduces_incoming_ap_min_zero() -> void:
 	assert_int(AiCombatMath.fortified_ap(1, true)).is_equal(0)
 	assert_int(AiCombatMath.fortified_ap(0, true)).is_equal(0)   # min 0
 	assert_int(AiCombatMath.fortified_ap(3, false)).is_equal(3)  # not fortified -> unchanged
+
+
+## #314 — the to-hit breakdown must print whenever ANY rule spoke, even at NET 0:
+## Artillery +1 + "Indirect moved -1" cancelled to 0 and the old mod==0 guard
+## swallowed both lines — the applied bonus read as nondeterministic in the log,
+## and the #224 "no +1" transparency lines vanished the same way.
+func test_hit_mod_worth_logging_prints_cancelled_modifiers() -> void:
+	assert_bool(AiCombatMath.hit_mod_worth_logging(0, "Artillery +1, Indirect moved -1")).is_true()
+	assert_bool(AiCombatMath.hit_mod_worth_logging(0, "Artillery: no +1 (target within 9\")")).is_true()
+	assert_bool(AiCombatMath.hit_mod_worth_logging(1, "Artillery +1")).is_true()
+
+
+## Unmodified shots stay silent — no note, no net modifier, no line (spam guard).
+func test_hit_mod_worth_logging_stays_silent_without_notes() -> void:
+	assert_bool(AiCombatMath.hit_mod_worth_logging(0, "")).is_false()
+	assert_bool(AiCombatMath.hit_mod_worth_logging(0, "   ")).is_false()
