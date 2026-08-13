@@ -26,7 +26,7 @@ const ROUNDS := 4
 const EV_REF_DIST_IN := 12.0
 const FLAG_RULES: Array[String] = ["Fearless", "Ambush", "Flying", "Stealth", "Furious", "Regeneration"]
 ## v5: EVERY declared rule reaches the corpus via the committed, append-only
-## vocabulary (unit slots 0-99, weapon slots 100-199). Rows append sparse
+## vocabulary (unit slots 0-199, weapon slots 200-299). Rows append sparse
 ## pairs [n, slot, value, ...] after column 19 — implemented rules also feed
 ## the EVs, unimplemented ones at least become learnable signals. A rule the
 ## vocab does not know is logged LOUDLY and stamped into the result JSON
@@ -51,7 +51,7 @@ static func _load_vocab() -> void:
 			_vocab_unit[str(ul[i])] = i
 		var wl: Array = data.get("weapon", [])
 		for i in wl.size():
-			_vocab_weapon[str(wl[i])] = 100 + i
+			_vocab_weapon[str(wl[i])] = 200 + i
 	else:
 		push_warning("core_selfplay: rule vocab unreadable at %s" % RULE_VOCAB_PATH)
 
@@ -492,7 +492,7 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array) -> void:
 	var winner := "draw"
 	if p1 != p2:
 		winner = "p1" if p1 > p2 else "p2"
-	var result := {"schema": 1, "board_schema": 5, "rule_vocab": "v1",
+	var result := {"schema": 1, "board_schema": 5, "rule_vocab": "v1b",
 		"unknown_rules": unknown_rules.keys(),
 		"tool": "core_selfplay", "seed": game_seed,
 		"dice_seed": game_seed, "grades": {"p1": "planner_core", "p2": "planner_core"},

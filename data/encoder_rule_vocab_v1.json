@@ -1,6 +1,6 @@
 {
  "version": 2,
- "comment": "Encoder rule vocabulary v2 (NML-995): built from ALL 43 CDN factions x sizes (210 lists). Slot order APPEND-ONLY; new rules get the next slot centrally at collect time. Unit slots 0-99, weapon slots 100-199 in board rows.",
+ "comment": "Encoder rule vocabulary v2 (NML-995): built from ALL 43 CDN factions x sizes (210 lists). Slot order APPEND-ONLY; new rules get the next slot centrally at collect time. Unit slots 0-199, weapon slots 200-299 (v1b fix: 128 unit rules overflowed the old 0-99 range) in board rows.",
  "unit": [
   "Agile",
   "Aircraft",

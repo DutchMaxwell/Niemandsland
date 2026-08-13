@@ -129,7 +129,7 @@ func test_v5_sparse_rule_pairs_from_vocab() -> void:
 	var vocab: Dictionary = JSON.parse_string(
 		FileAccess.get_file_as_string("res://data/encoder_rule_vocab_v1.json"))
 	var tough_slot: int = (vocab["unit"] as Array).find("Tough")
-	var deadly_slot: int = 100 + (vocab["weapon"] as Array).find("Deadly")
+	var deadly_slot: int = 200 + (vocab["weapon"] as Array).find("Deadly")
 	var ou := OPRApiClient.OPRUnit.new()
 	ou.quality = 4
 	ou.defense = 4
