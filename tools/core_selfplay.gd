@@ -25,6 +25,79 @@ const ROUNDS := 4
 ## the declared-rule flag order (columns 14-19).
 const EV_REF_DIST_IN := 12.0
 const FLAG_RULES: Array[String] = ["Fearless", "Ambush", "Flying", "Stealth", "Furious", "Regeneration"]
+## v5: EVERY declared rule reaches the corpus via the committed, append-only
+## vocabulary (unit slots 0-99, weapon slots 100-199). Rows append sparse
+## pairs [n, slot, value, ...] after column 19 — implemented rules also feed
+## the EVs, unimplemented ones at least become learnable signals. A rule the
+## vocab does not know is logged LOUDLY and stamped into the result JSON
+## (slot assignment happens centrally at collect time, never per box — two
+## boxes must not invent diverging slots).
+const RULE_VOCAB_PATH := "res://data/encoder_rule_vocab_v1.json"
+static var _vocab_unit: Dictionary = {}
+static var _vocab_weapon: Dictionary = {}
+static var _vocab_loaded := false
+static var unknown_rules: Dictionary = {}
+
+
+static func _load_vocab() -> void:
+	if _vocab_loaded:
+		return
+	_vocab_loaded = true
+	var txt := FileAccess.get_file_as_string(RULE_VOCAB_PATH)
+	var data: Variant = JSON.parse_string(txt)
+	if data is Dictionary:
+		var ul: Array = data.get("unit", [])
+		for i in ul.size():
+			_vocab_unit[str(ul[i])] = i
+		var wl: Array = data.get("weapon", [])
+		for i in wl.size():
+			_vocab_weapon[str(wl[i])] = 100 + i
+	else:
+		push_warning("core_selfplay: rule vocab unreadable at %s" % RULE_VOCAB_PATH)
+
+
+## "Tough(3)" / {name:"Tough", rating:3} -> ["Tough", 3]
+static func _parse_rule(r: Variant) -> Array:
+	if r is Dictionary:
+		return [str(r.get("name", "")).strip_edges(), int(r.get("rating", 0))]
+	var s := str(r).strip_edges()
+	var m := RegEx.create_from_string("^(.*?)\\s*\\((\\d+)\\)\\s*$").search(s)
+	if m != null:
+		return [m.get_string(1), int(m.get_string(2))]
+	return [s, 0]
+
+
+static func _rule_pairs(gu: Variant, od: OPRApiClient.OPRUnit) -> Array:
+	_load_vocab()
+	var vals := {}
+	for r in gu.get_special_rules():
+		var pr := _parse_rule(r)
+		if pr[0] == "":
+			continue
+		if _vocab_unit.has(pr[0]):
+			var slot: int = _vocab_unit[pr[0]]
+			vals[slot] = maxi(int(vals.get(slot, 0)), int(pr[1]) if pr[1] > 0 else 1)
+		elif not unknown_rules.has(pr[0]):
+			unknown_rules[pr[0]] = true
+			push_warning("core_selfplay: UNKNOWN unit rule '%s' — not in vocab, stamped into result" % pr[0])
+	for w in od.weapons:
+		for r in w.special_rules:
+			var pr := _parse_rule(r)
+			if pr[0] == "":
+				continue
+			if _vocab_weapon.has(pr[0]):
+				var slot: int = _vocab_weapon[pr[0]]
+				vals[slot] = maxi(int(vals.get(slot, 0)), maxi(int(pr[1]), 1))
+			elif not unknown_rules.has(pr[0]):
+				unknown_rules[pr[0]] = true
+				push_warning("core_selfplay: UNKNOWN weapon rule '%s' — not in vocab, stamped into result" % pr[0])
+	var out: Array = []
+	var slots := vals.keys()
+	slots.sort()
+	for s in slots:
+		out.append(int(s))
+		out.append(int(vals[s]))
+	return out
 
 var _army1 := ""
 var _army2 := ""
@@ -178,18 +251,24 @@ static func _board_rows(state: Dictionary) -> Array:
 			for i in FLAG_RULES.size():
 				if gu.has_special_rule(FLAG_RULES[i]):
 					flags[i] = 1
-		rows.append([int(su["player"]), snappedf(c.x / IN2M, 0.1),
+		var pairs: Array = []
+		if gu != null and gu.get("source_data") is OPRApiClient.OPRUnit:
+			pairs = _rule_pairs(gu, gu.source_data)
+		var row: Array = [int(su["player"]), snappedf(c.x / IN2M, 0.1),
 			snappedf(c.z / IN2M, 0.1), int(su["alive"]), wl,
 			1 if bool(su.get("shaken", false)) else 0,
 			1 if bool(su.get("fatigued", false)) else 0,
 			1 if bool(su.get("activated", false)) else 0,
 			rmax, atk, q, d, sev, mev,
-			flags[0], flags[1], flags[2], flags[3], flags[4], flags[5]])
+			flags[0], flags[1], flags[2], flags[3], flags[4], flags[5],
+			pairs.size() / 2]
+		row.append_array(pairs)
+		rows.append(row)
 	for o in state.get("objectives", []):
 		var op: Vector3 = (o as Dictionary)["pos"]
 		rows.append([3, snappedf(op.x / IN2M, 0.1), snappedf(op.z / IN2M, 0.1),
 			int((o as Dictionary).get("owner", 0)),
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 	return rows
 
 
@@ -413,7 +492,9 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array) -> void:
 	var winner := "draw"
 	if p1 != p2:
 		winner = "p1" if p1 > p2 else "p2"
-	var result := {"schema": 1, "tool": "core_selfplay", "seed": game_seed,
+	var result := {"schema": 1, "board_schema": 5, "rule_vocab": "v1",
+		"unknown_rules": unknown_rules.keys(),
+		"tool": "core_selfplay", "seed": game_seed,
 		"dice_seed": game_seed, "grades": {"p1": "planner_core", "p2": "planner_core"},
 		"mission": {"family": "face_off", "name": "duel", "rounds": ROUNDS,
 			"deployment": "zone12", "symmetric": true, "objective_count": 3, "packs": []},
