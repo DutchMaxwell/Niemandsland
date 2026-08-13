@@ -8,6 +8,7 @@ extends RefCounted
 ## M2a ships the model only; game/arena consumers arrive in later steps.
 
 const CATALOG_PATH: String = "res://assets/solo/deployments.json"
+const IN2M := 0.0254   # catalog polygons are centered table inches; the table is metres
 
 ## Built-in fallback == today's one implicit deployment style, stated as data.
 const FRONT_LINE: Dictionary = {
@@ -72,3 +73,13 @@ static func in_zone(style: Dictionary, player: int, p: Vector2) -> bool:
 		if Geometry2D.is_point_in_polygon(p, pts):
 			return true
 	return false
+
+
+## M2b — the zone as a WORLD-SPACE probe: Callable(Vector2 metres) -> bool
+## over `player`'s polygons of style `id`. The deploy machinery treats
+## "outside the zone" like blocking terrain, so the spot search polygon-
+## checks every candidate base. Conversion to catalog inches happens here.
+static func zone_test(id: String, player: int) -> Callable:
+	var style := get_style(id)
+	return func(p_m: Vector2) -> bool:
+		return in_zone(style, player, p_m / IN2M)

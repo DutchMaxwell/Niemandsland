@@ -7524,8 +7524,8 @@ static func _axis_scale(start: float, d: float, limit: float) -> float:
 ## `zone` = the AI deployment zone in table XZ; `objectives` = XZ points; `blocked_normal` /
 ## `blocked_flying` classify terrain for ground vs Strider/Flying units. Seeded → reproducible.
 ## Returns {deployed, reserved, seed}.
-func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int) -> Dictionary:
-	deploy_begin(zone, objectives, blocked_normal, blocked_flying, seed_value)
+func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int, zone_test: Callable = Callable()) -> Dictionary:
+	deploy_begin(zone, objectives, blocked_normal, blocked_flying, seed_value, zone_test)
 	return deploy_remaining()
 
 
@@ -7535,11 +7535,15 @@ func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, block
 ## when the human is out of units). Same rng draw order as the old all-at-once deploy_army, so a
 ## fixed seed still produces byte-identical placements.
 var _deploy_alt := {}   # {"zone", "queue", "all_units", "section_of", "occupied", "deployed", "seed", "forward_y", "blocked_normal", "blocked_flying"}
+# M2b — arbitrary deployment zones: optional probe Callable(Vector2 world metres) -> bool
+# (DeploymentCatalog.zone_test). Invalid = today's rect-only deployment, byte-identical.
+var _deploy_zone_test := Callable()
 
 
-func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int) -> int:
+func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int, zone_test: Callable = Callable()) -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
+	_deploy_zone_test = zone_test
 	# Stash the context so the round-2 ambush arrival reuses the same objectives + terrain rules.
 	_deploy_objectives = objectives
 	_deploy_blocked_normal = blocked_normal
@@ -7704,6 +7708,16 @@ func _deploy_place_id(id: int) -> GameUnit:
 	var base_r := _deploy_base_radius(_deploy_models(unit))
 	var ignores_terrain: bool = unit.has_special_rule("Strider") or unit.has_special_rule("Flying")
 	var blocked := blocked_flying if ignores_terrain else blocked_normal
+	var terrain_only := blocked   # Vanguard pushes measure TERRAIN only (may leave the zone by rule)
+	# M2b — arbitrary deployment zones: outside the polygon counts as BLOCKED ground, so the
+	# spot search zone-checks every candidate base inside the rect section. v0 limits, named:
+	# scouts stay rect-only (their 12" forward band is legal past the zone by rule) and the
+	# overlap-cleanup reshift stays rect-only. Invalid callable = today's path, byte-identical.
+	if not is_scout and _deploy_zone_test.is_valid():
+		var ztest := _deploy_zone_test
+		blocked = func(p: Vector2) -> bool:
+			return not bool(ztest.call(p)) \
+				or (terrain_only.is_valid() and bool(terrain_only.call(p)))
 	var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y)
 	var spot_why := "best legal spot toward nearest objective (section, forward-edge doctrine)"
 	# Wall-bisect retries (bug 12c): a spot whose formation grid a wall cuts in half is vetoed by
@@ -7739,7 +7753,7 @@ func _deploy_place_id(id: int) -> GameUnit:
 	# makes it moot in practice — documented edge).
 	if RulesRegistry.unit_rule_active(unit, "Vanguard") \
 			or not RulesRegistry.unit_rules_of_primitive(unit, "Vanguard").is_empty():
-		var v_spot := _vanguard_push(unit, spot, zone, occupied, blocked, radius, footprint, base_r)
+		var v_spot := _vanguard_push(unit, spot, zone, occupied, terrain_only, radius, footprint, base_r)
 		if v_spot != spot:
 			_place_unit_at(unit, v_spot)
 			_deploy_zone_of.erase(unit)   # the pushed spot MAY legally leave the zone
