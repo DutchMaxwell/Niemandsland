@@ -21,6 +21,10 @@ const IN2M := 0.0254
 const TABLE_W_IN := 72.0
 const TABLE_D_IN := 48.0
 const ROUNDS := 4
+## v4 encoder rows: reference distance for the precomputed shooting EV and
+## the declared-rule flag order (columns 14-19).
+const EV_REF_DIST_IN := 12.0
+const FLAG_RULES: Array[String] = ["Fearless", "Ambush", "Flying", "Stealth", "Furious", "Regeneration"]
 
 var _army1 := ""
 var _army2 := ""
@@ -151,6 +155,9 @@ static func _board_rows(state: Dictionary) -> Array:
 		var atk := 0
 		var q := 0
 		var d := 0
+		var sev := 0.0
+		var mev := 0.0
+		var flags := [0, 0, 0, 0, 0, 0]
 		var gu: Variant = su.get("unit")
 		if gu != null and gu.get("source_data") is OPRApiClient.OPRUnit:
 			var od: OPRApiClient.OPRUnit = gu.source_data
@@ -159,16 +166,30 @@ static func _board_rows(state: Dictionary) -> Array:
 			for w in od.weapons:
 				rmax = maxi(rmax, w.range_value)
 				atk += w.attacks * maxi(w.count, 1)
+			# v4: the RULEBOOK, pre-digested — expected wounds vs the neutral
+			# reference target via the exact, parity-tested combat math (AP,
+			# Deadly, Blast etc. are priced in), plus the loudest unit rules
+			# as declared flags. The net gets rule CONSEQUENCES, not prose.
+			var att: Dictionary = AiEv.ctx_for(gu)
+			sev = snappedf(AiEv.shoot_ev(AiShooting.profiles_in_range(od.weapons, EV_REF_DIST_IN),
+				att, AiEv.NEUTRAL_DEFENDER.duplicate(), EV_REF_DIST_IN), 0.01)
+			mev = snappedf(AiEv.melee_ev(AiShooting.melee_profiles(od.weapons),
+				att, AiEv.NEUTRAL_DEFENDER.duplicate(), true), 0.01)
+			for i in FLAG_RULES.size():
+				if gu.has_special_rule(FLAG_RULES[i]):
+					flags[i] = 1
 		rows.append([int(su["player"]), snappedf(c.x / IN2M, 0.1),
 			snappedf(c.z / IN2M, 0.1), int(su["alive"]), wl,
 			1 if bool(su.get("shaken", false)) else 0,
 			1 if bool(su.get("fatigued", false)) else 0,
 			1 if bool(su.get("activated", false)) else 0,
-			rmax, atk, q, d])
+			rmax, atk, q, d, sev, mev,
+			flags[0], flags[1], flags[2], flags[3], flags[4], flags[5]])
 	for o in state.get("objectives", []):
 		var op: Vector3 = (o as Dictionary)["pos"]
 		rows.append([3, snappedf(op.x / IN2M, 0.1), snappedf(op.z / IN2M, 0.1),
-			int((o as Dictionary).get("owner", 0)), 0, 0, 0, 0, 0, 0, 0, 0])
+			int((o as Dictionary).get("owner", 0)),
+			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 	return rows
 
 
