@@ -93,7 +93,11 @@ static func _net() -> Dictionary:
 		return _net_cache
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 	if parsed is Dictionary \
-			and ((parsed as Dictionary).has("W1") or (parsed as Dictionary).has("w")):
+			and ((parsed as Dictionary).has("W1") or (parsed as Dictionary).has("w") \
+			or (parsed as Dictionary).has("unit_w1")):
+		if (parsed as Dictionary).has("unit_w1") \
+				and not _encoder_selftest_ok(parsed as Dictionary):
+			return _net_cache
 		_net_cache = parsed
 	return _net_cache
 
@@ -125,6 +129,135 @@ static func _score_net(f: Dictionary, net: Dictionary) -> float:
 			a += float(xs[i]) * float(((w1 as Array)[i] as Array)[j])
 		z += float(w2[j]) * tanh(a)
 	return 1.0 / (1.0 + exp(-clampf(z, -30.0, 30.0)))
+
+## Position ENCODER (tournament hook): a JSON carrying "unit_w1" scores from
+## the raw board rows (BattleSim.board_rows — the same canonical source the
+## training corpus logs), not the 30 features alone. Canonicalisation mirrors
+## netlab canon10 SCHEMA=21 EXACTLY: mine-flag perspective, 180-degree
+## rotation for player 2, /30-style norms, sparse rule pairs densified via
+## the slot mapping SHIPPED INSIDE the weights JSON. Weight matrices are
+## exported [in][out] (torch transposed).
+static func _score_encoder(state: Dictionary, player: int, f: Dictionary,
+		net: Dictionary) -> float:
+	var keys: Array = net["keys"]
+	var mu: Array = net["mu"]
+	var sd: Array = net["sd"]
+	var xs: Array = []
+	for i in range(keys.size()):
+		xs.append((_feature_value(f, str(keys[i])) - float(mu[i])) / maxf(float(sd[i]), 1e-6))
+	var crows := _encoder_canon(BattleSim.board_rows(state), player,
+		net["slots"] as Dictionary)
+	return _encoder_forward(crows, xs, net)
+
+
+static func _encoder_canon(rows: Array, side: int, slots: Dictionary) -> Array:
+	var dense_n: int = slots.size()
+	var out: Array = []
+	for r0 in rows:
+		var u: Array = r0
+		var x := float(u[1])
+		var z := float(u[2])
+		if side == 2:
+			x = -x
+			z = -z
+		var row: Array = []
+		if int(u[0]) == 3:
+			var owner := int(u[3])
+			var rel := 1.0 if owner == side else (-1.0 if owner != 0 else 0.0)
+			row = [0.0, x / 30.0, z / 30.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, rel]
+			for i in range(12 + 2 * dense_n):
+				row.append(0.0)
+		else:
+			row = [1.0 if int(u[0]) == side else 0.0, x / 30.0, z / 30.0,
+				float(u[3]) / 10.0, float(u[4]) / 10.0,
+				float(u[5]), float(u[6]), float(u[7]), 0.0, 0.0,
+				float(u[8]) / 30.0, float(u[9]) / 20.0,
+				float(u[10]) / 6.0, float(u[11]) / 6.0,
+				float(u[12]) / 5.0, float(u[13]) / 5.0,
+				float(u[14]), float(u[15]), float(u[16]),
+				float(u[17]), float(u[18]), float(u[19])]
+			var dense: Array = []
+			dense.resize(2 * dense_n)
+			dense.fill(0.0)
+			for k in range(int(u[20])):
+				var di: Variant = slots.get(str(int(u[21 + 2 * k])))
+				if di != null:
+					dense[2 * int(di)] = 1.0
+					dense[2 * int(di) + 1] = float(u[22 + 2 * k]) / 6.0
+			row.append_array(dense)
+		out.append(row)
+	return out
+
+
+## One dense layer with relu, weights [in][out].
+static func _lin_relu(x: Array, w: Array, b: Array) -> Array:
+	var out: Array = []
+	for j in range(b.size()):
+		var acc := float(b[j])
+		for i in range(x.size()):
+			acc += float(x[i]) * float((w[i] as Array)[j])
+		out.append(maxf(acc, 0.0))
+	return out
+
+
+static func _encoder_forward(crows: Array, xs: Array, net: Dictionary) -> float:
+	var h: int = (net["unit_b1"] as Array).size()
+	var pools: Array = []
+	var counts := [0.0, 0.0, 0.0]
+	for pi in range(3):
+		var zero: Array = []
+		zero.resize(h)
+		zero.fill(0.0)
+		pools.append(zero)
+	for row in crows:
+		var emb := _lin_relu(_lin_relu(row as Array,
+			net["unit_w1"] as Array, net["unit_b1"] as Array),
+			net["unit_w2"] as Array, net["unit_b2"] as Array)
+		var is_obj: bool = float((row as Array)[8]) > 0.5
+		var pi := 2 if is_obj else (0 if float((row as Array)[0]) > 0.5 else 1)
+		counts[pi] += 1.0
+		for j in range(h):
+			(pools[pi] as Array)[j] = float((pools[pi] as Array)[j]) + float(emb[j])
+	var parts: Array = []
+	for pi in range(3):
+		var cdiv: float = maxf(float(counts[pi]), 1.0)
+		for j in range(h):
+			parts.append(float((pools[pi] as Array)[j]) / cdiv)
+	for pi in range(3):
+		parts.append(float(counts[pi]) / 10.0)
+	parts.append_array(xs)
+	var a := _lin_relu(parts, net["head_w1"] as Array, net["head_b1"] as Array)
+	var hw2: Array = net["head_w2"]
+	var zz := float(net["head_b2"])
+	for j in range(hw2.size()):
+		zz += float(hw2[j]) * float(a[j])
+	return 1.0 / (1.0 + exp(-clampf(zz, -30.0, 30.0)))
+
+
+## Loader gate: every encoder JSON MUST carry a selftest block
+## {board, side, features, expected} (exported from a real holdout row);
+## the forward is recomputed here and a |diff| > 1e-4 REJECTS the net —
+## a silently drifted canonicalisation must never score games.
+static func _encoder_selftest_ok(net: Dictionary) -> bool:
+	if not (net.get("selftest") is Dictionary):
+		push_error("encoder net rejected: selftest block missing")
+		return false
+	var st: Dictionary = net["selftest"]
+	var mu: Array = net["mu"]
+	var sd: Array = net["sd"]
+	var fv: Array = st["features"]
+	var xs: Array = []
+	for i in range(fv.size()):
+		xs.append((float(fv[i]) - float(mu[i])) / maxf(float(sd[i]), 1e-6))
+	var crows := _encoder_canon(st["board"] as Array, int(st["side"]),
+		net["slots"] as Dictionary)
+	var got := _encoder_forward(crows, xs, net)
+	if absf(got - float(st["expected"])) > 1e-4:
+		push_error("encoder net rejected: selftest %.6f != expected %.6f"
+			% [got, float(st["expected"])])
+		return false
+	return true
+
 
 ## Routes every score() call through the fitted eval — set per planner pick by
 ## the controller from the difficulty preset (planner_v1). Static on purpose:
@@ -207,6 +340,8 @@ static func _score_fit(state: Dictionary, player: int, incoming: Dictionary) -> 
 	var f := features(view, player, incoming)
 	var net := _net()
 	if not net.is_empty():
+		if net.has("unit_w1"):
+			return _score_encoder(view, player, f, net)
 		return _score_net(f, net)
 	var wb := _weights()
 	var z := float(wb[1])

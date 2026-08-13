@@ -360,3 +360,104 @@ func test_net_loader_accepts_linear_json_from_disk() -> void:
 	AiMissionEval._net_cache = {}
 	AiMissionEval._net_tried = false
 	assert_bool(n.has("w")).is_true()
+
+
+## --- Stage B: position-encoder scoring (tournament hook) -----------------
+
+
+func _zero_mat(rows: int, cols: int) -> Array:
+	var m: Array = []
+	for i in range(rows):
+		var r: Array = []
+		r.resize(cols)
+		r.fill(0.0)
+		m.append(r)
+	return m
+
+
+## Tiny hand-computed encoder: unit h0 = relu(mine_flag + x/30), h1 = obj
+## flag; head reads mine-pool h0 + round_frac. in_dim 24 = 22 + one vocab
+## slot. Identity second unit layer.
+func _tiny_encoder() -> Dictionary:
+	var uw1 := _zero_mat(24, 2)
+	(uw1[0] as Array)[0] = 1.0
+	(uw1[1] as Array)[0] = 1.0
+	(uw1[8] as Array)[1] = 1.0
+	var hw1 := _zero_mat(10, 1)
+	(hw1[0] as Array)[0] = 1.0
+	(hw1[9] as Array)[0] = 1.0
+	return {"keys": ["round_frac"], "mu": [0.0], "sd": [1.0],
+		"slots": {"0": 0},
+		"unit_w1": uw1, "unit_b1": [0.0, 0.0],
+		"unit_w2": [[1.0, 0.0], [0.0, 1.0]], "unit_b2": [0.0, 0.0],
+		"head_w1": hw1, "head_b1": [0.0],
+		"head_w2": [1.0], "head_b2": 0.0}
+
+
+## Both perspectives hand-computed: side 1 pools its unit at x=+6" (0.2),
+## side 2 sees its unit 180-degree ROTATED to x=-3" (-0.1) — the two
+## outputs pin perspective flag and rotation together (without the flip
+## side 2 would score sigmoid(1.35), not sigmoid(1.15)).
+func test_encoder_override_scores_both_perspectives() -> void:
+	var state := _state([_unit(1, [Vector3(6.0 * IN2M, 0, 0)], "A"),
+		_unit(2, [Vector3(3.0 * IN2M, 0, 0)], "B")], [Vector3.ZERO], [0])
+	AiMissionEval._net_override = _tiny_encoder()
+	var p1: float = AiMissionEval._score_fit(state, 1, {})
+	var p2: float = AiMissionEval._score_fit(state, 2, {})
+	AiMissionEval._net_override = {}
+	assert_float(p1).is_equal_approx(1.0 / (1.0 + exp(-1.45)), 0.0001)
+	assert_float(p2).is_equal_approx(1.0 / (1.0 + exp(-1.15)), 0.0001)
+
+
+## Canonicalisation parity with netlab canon10 SCHEMA=21: norms, flag
+## passthrough, sparse pairs -> dense via the shipped slot map (unknown
+## slot SKIPPED, matching python .get), marker owner relative to side.
+func test_encoder_canon_matches_canon10() -> void:
+	var unit_row: Array = [1, 6.0, 3.0, 3, 2, 1, 0, 1, 24, 10, 4, 5,
+		2.5, 1.5, 1, 0, 0, 1, 0, 0, 2, 0, 3, 205, 2]
+	var marker_row: Array = [3, 6.0, 0.0, 2,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+	var slots := {"0": 0, "205": 1}
+	var c := AiMissionEval._encoder_canon([unit_row, marker_row], 1, slots)
+	var cu: Array = c[0]
+	assert_int(cu.size()).is_equal(26)
+	assert_float(float(cu[1])).is_equal_approx(0.2, 0.000001)   # x 6/30
+	assert_float(float(cu[3])).is_equal_approx(0.3, 0.000001)   # alive 3/10
+	assert_float(float(cu[10])).is_equal_approx(0.8, 0.000001)  # range 24/30
+	assert_float(float(cu[13])).is_equal_approx(5.0 / 6.0, 0.000001)
+	assert_float(float(cu[16])).is_equal(1.0)                   # flag u14 passthrough
+	assert_float(float(cu[19])).is_equal(1.0)                   # flag u17 passthrough
+	assert_float(float(cu[22])).is_equal(1.0)                   # slot 0 present
+	assert_float(float(cu[23])).is_equal_approx(0.5, 0.000001)  # value 3/6
+	assert_float(float(cu[24])).is_equal(1.0)                   # slot 205 present
+	assert_float(float(cu[25])).is_equal_approx(2.0 / 6.0, 0.000001)
+	var cm: Array = c[1]
+	assert_float(float(cm[8])).is_equal(1.0)
+	assert_float(float(cm[9])).is_equal(-1.0)                   # enemy-owned marker
+	var c2 := AiMissionEval._encoder_canon([unit_row], 2, slots)
+	assert_float(float((c2[0] as Array)[1])).is_equal_approx(-0.2, 0.000001)
+	var cx := AiMissionEval._encoder_canon(
+		[[1, 0.0, 0.0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0.0, 0.0,
+		0, 0, 0, 0, 0, 0, 1, 7, 4]], 1, slots)
+	assert_float(float((cx[0] as Array)[22])).is_equal(0.0)     # unknown slot 7
+	assert_float(float((cx[0] as Array)[24])).is_equal(0.0)
+
+
+## The mandatory selftest gate: a matching block passes, a drifted
+## expectation REJECTS the net (the check can fail).
+func test_encoder_selftest_gate() -> void:
+	var net := _tiny_encoder()
+	var board: Array = [
+		[1, 6.0, 0.0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0.0, 0.0,
+			0, 0, 0, 0, 0, 0, 0],
+		[2, 3.0, 0.0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0.0, 0.0,
+			0, 0, 0, 0, 0, 0, 0],
+		[3, 0.0, 0.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]
+	net["selftest"] = {"board": board, "side": 1, "features": [0.25],
+		"expected": 1.0 / (1.0 + exp(-1.45))}
+	assert_bool(AiMissionEval._encoder_selftest_ok(net)).is_true()
+	net["selftest"] = {"board": board, "side": 1, "features": [0.25],
+		"expected": 1.0 / (1.0 + exp(-1.45)) + 0.01}
+	assert_bool(AiMissionEval._encoder_selftest_ok(net)).is_false()
+	net.erase("selftest")
+	assert_bool(AiMissionEval._encoder_selftest_ok(net)).is_false()
