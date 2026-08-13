@@ -125,12 +125,14 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 var _last_state: Dictionary = {}
 
 
-## E0 (encoder corpus): raw board state per logged pick — one row
-## [player, x_in, z_in, alive, wounds_left, shaken] per LIVING unit, unit
-## centre in table inches. The ratio features compress the position away;
-## a position net needs the position. Always on — a silent opt-in knob is
-## how phantoms start.
-func _board_rows(state: Dictionary) -> Array:
+## E0/E1b (encoder corpus): raw board state per logged pick. Unit rows are
+## [player, x_in, z_in, alive, wounds_left, shaken, fatigued, activated]
+## per LIVING unit (centre in table inches); every mission objective adds
+## [3, x_in, z_in, owner, 0, 0, 0, 0] — marker 3 in the player slot, owner
+## (0 neutral / 1 / 2) in the alive slot. A game is DECIDED on objectives,
+## so a position net must see them (E1 ran flag-blind and still won — E1b
+## closes the gap). Always on — a silent opt-in knob is how phantoms start.
+static func _board_rows(state: Dictionary) -> Array:
 	var rows: Array = []
 	for k in state["units"]:
 		var su: Dictionary = state["units"][k]
@@ -145,7 +147,13 @@ func _board_rows(state: Dictionary) -> Array:
 			wl += int(w)
 		rows.append([int(su["player"]), snappedf(c.x / IN2M, 0.1),
 			snappedf(c.z / IN2M, 0.1), int(su["alive"]), wl,
-			1 if bool(su.get("shaken", false)) else 0])
+			1 if bool(su.get("shaken", false)) else 0,
+			1 if bool(su.get("fatigued", false)) else 0,
+			1 if bool(su.get("activated", false)) else 0])
+	for o in state.get("objectives", []):
+		var op: Vector3 = (o as Dictionary)["pos"]
+		rows.append([3, snappedf(op.x / IN2M, 0.1), snappedf(op.z / IN2M, 0.1),
+			int((o as Dictionary).get("owner", 0)), 0, 0, 0, 0])
 	return rows
 
 
