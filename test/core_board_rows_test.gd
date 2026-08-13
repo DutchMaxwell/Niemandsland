@@ -1,9 +1,11 @@
 extends GdUnitTestSuite
-## E1b board-row schema (NML-995): the encoder corpus must carry mission
-## objectives and the full unit status. Unit rows are 8 columns
-## [player, x_in, z_in, alive, wounds_left, shaken, fatigued, activated];
-## each objective adds a row [3, x_in, z_in, owner, 0, 0, 0, 0] — marker 3
-## in the player slot, owner (0 neutral / 1 / 2) in the alive slot.
+## E1b/v3 board-row schema (NML-995): the encoder corpus must carry mission
+## objectives, full unit status AND the unit stat line. Unit rows are 12
+## columns [player, x_in, z_in, alive, wounds_left, shaken, fatigued,
+## activated, range_max_in, attacks_total, quality, defense]; each objective
+## adds [3, x_in, z_in, owner, 0,0,0,0, 0,0,0,0] — marker 3 in the player
+## slot, owner (0 neutral / 1 / 2) in the alive slot. Units without a
+## readable OPRUnit stat line fall back to zeros in columns 9-12.
 
 const IN2M := 0.0254
 
@@ -33,7 +35,7 @@ func test_unit_rows_carry_full_status() -> void:
 	var units := rows.filter(func(r: Variant) -> bool: return int(r[0]) != 3)
 	assert_int(units.size()).is_equal(2)  # dead unit excluded
 	for r in units:
-		assert_int((r as Array).size()).is_equal(8)
+		assert_int((r as Array).size()).is_equal(12)
 	var a: Array = units.filter(func(r: Variant) -> bool: return int(r[0]) == 1)[0]
 	# [player, x, z, alive, wounds, shaken, fatigued, activated]
 	assert_float(a[1]).is_equal_approx(11.0, 0.11)  # centre of 10/12 in
@@ -52,7 +54,39 @@ func test_objective_rows_present_with_owner() -> void:
 	var rows: Array = CoreSelfplay._board_rows(_state())
 	var objs := rows.filter(func(r: Variant) -> bool: return int(r[0]) == 3)
 	assert_int(objs.size()).is_equal(2)
+	for r in objs:
+		assert_int((r as Array).size()).is_equal(12)
 	var owned: Array = objs.filter(func(r: Variant) -> bool: return int(r[3]) == 2)
 	assert_int(owned.size()).is_equal(1)
 	assert_float(owned[0][1]).is_equal_approx(16.0, 0.11)
 	assert_float(owned[0][2]).is_equal_approx(0.0, 0.11)
+
+
+func test_stat_line_from_opr_unit() -> void:
+	var ou := OPRApiClient.OPRUnit.new()
+	ou.quality = 3
+	ou.defense = 5
+	var w1 := OPRApiClient.OPRWeapon.new()
+	w1.range_value = 24
+	w1.attacks = 2
+	w1.count = 5
+	var w2 := OPRApiClient.OPRWeapon.new()
+	w2.range_value = 0   # melee
+	w2.attacks = 3
+	w2.count = 1
+	ou.weapons = [w1, w2]
+	var gu: GameUnit = auto_free(GameUnit.new())
+	gu.source_data = ou
+	var st := _state()
+	(st["units"]["p1_a"] as Dictionary)["unit"] = gu
+	var rows: Array = CoreSelfplay._board_rows(st)
+	var a: Array = rows.filter(func(r: Variant) -> bool: return int(r[0]) == 1)[0]
+	# [.., range_max, attacks_total, quality, defense]
+	assert_int(int(a[8])).is_equal(24)
+	assert_int(int(a[9])).is_equal(13)  # 2*5 + 3*1
+	assert_int(int(a[10])).is_equal(3)
+	assert_int(int(a[11])).is_equal(5)
+	# unit without stat line falls back to zeros
+	var b: Array = rows.filter(func(r: Variant) -> bool: return int(r[0]) == 2)[0]
+	assert_int(int(b[8])).is_equal(0)
+	assert_int(int(b[11])).is_equal(0)

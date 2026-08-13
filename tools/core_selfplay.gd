@@ -125,13 +125,15 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 var _last_state: Dictionary = {}
 
 
-## E0/E1b (encoder corpus): raw board state per logged pick. Unit rows are
-## [player, x_in, z_in, alive, wounds_left, shaken, fatigued, activated]
-## per LIVING unit (centre in table inches); every mission objective adds
-## [3, x_in, z_in, owner, 0, 0, 0, 0] — marker 3 in the player slot, owner
-## (0 neutral / 1 / 2) in the alive slot. A game is DECIDED on objectives,
-## so a position net must see them (E1 ran flag-blind and still won — E1b
-## closes the gap). Always on — a silent opt-in knob is how phantoms start.
+## E0/E1b/v3 (encoder corpus): raw board state per logged pick. Unit rows are
+## [player, x_in, z_in, alive, wounds_left, shaken, fatigued, activated,
+##  range_max_in, attacks_total, quality, defense] per LIVING unit (centre in
+## table inches; stat line from the OPRUnit source, zeros when unreadable —
+## v3: a point on a table says nothing about WHAT it can do, and the day's
+## measurements showed input information, not capacity, is the bottleneck).
+## Every mission objective adds [3, x_in, z_in, owner, 0,0,0,0, 0,0,0,0] —
+## marker 3 in the player slot, owner (0 neutral / 1 / 2) in the alive slot.
+## Always on — a silent opt-in knob is how phantoms start.
 static func _board_rows(state: Dictionary) -> Array:
 	var rows: Array = []
 	for k in state["units"]:
@@ -145,15 +147,28 @@ static func _board_rows(state: Dictionary) -> Array:
 		var wl := 0
 		for w in su["wounds"]:
 			wl += int(w)
+		var rmax := 0
+		var atk := 0
+		var q := 0
+		var d := 0
+		var gu: Variant = su.get("unit")
+		if gu != null and gu.get("source_data") is OPRApiClient.OPRUnit:
+			var od: OPRApiClient.OPRUnit = gu.source_data
+			q = od.quality
+			d = od.defense
+			for w in od.weapons:
+				rmax = maxi(rmax, w.range_value)
+				atk += w.attacks * maxi(w.count, 1)
 		rows.append([int(su["player"]), snappedf(c.x / IN2M, 0.1),
 			snappedf(c.z / IN2M, 0.1), int(su["alive"]), wl,
 			1 if bool(su.get("shaken", false)) else 0,
 			1 if bool(su.get("fatigued", false)) else 0,
-			1 if bool(su.get("activated", false)) else 0])
+			1 if bool(su.get("activated", false)) else 0,
+			rmax, atk, q, d])
 	for o in state.get("objectives", []):
 		var op: Vector3 = (o as Dictionary)["pos"]
 		rows.append([3, snappedf(op.x / IN2M, 0.1), snappedf(op.z / IN2M, 0.1),
-			int((o as Dictionary).get("owner", 0)), 0, 0, 0, 0])
+			int((o as Dictionary).get("owner", 0)), 0, 0, 0, 0, 0, 0, 0, 0])
 	return rows
 
 
