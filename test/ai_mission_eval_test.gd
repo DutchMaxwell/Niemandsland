@@ -461,3 +461,29 @@ func test_encoder_selftest_gate() -> void:
 	assert_bool(AiMissionEval._encoder_selftest_ok(net)).is_false()
 	net.erase("selftest")
 	assert_bool(AiMissionEval._encoder_selftest_ok(net)).is_false()
+
+
+## NML-1005 — the embedding cache must be INVISIBLE in the numbers: cold and
+## warm scores match the hand-computed uncached truth exactly; a poisoned
+## cache entry CHANGES the score (proves the cache is really consumed — the
+## check can fail); swapping the net object flushes the poison.
+func test_encoder_embedding_cache_identity_and_poison() -> void:
+	var state := _state([_unit(1, [Vector3(6.0 * IN2M, 0, 0)], "A"),
+		_unit(2, [Vector3(3.0 * IN2M, 0, 0)], "B")], [Vector3.ZERO], [0])
+	AiMissionEval._net_override = _tiny_encoder()
+	var truth := 1.0 / (1.0 + exp(-1.45))
+	var cold: float = AiMissionEval._score_fit(state, 1, {})
+	var warm: float = AiMissionEval._score_fit(state, 1, {})
+	assert_float(cold).is_equal_approx(truth, 0.0001)
+	assert_float(warm).is_equal(cold)
+	assert_bool(AiMissionEval._emb_cache.size() > 0).is_true()
+	var poison_key: String = ""
+	for k in AiMissionEval._emb_cache:
+		poison_key = k
+		break
+	AiMissionEval._emb_cache[poison_key] = [9.0, 9.0]
+	var poisoned: float = AiMissionEval._score_fit(state, 1, {})
+	assert_bool(absf(poisoned - truth) > 0.0001).is_true()
+	AiMissionEval._net_override = _tiny_encoder()   # NEW dict object -> flush
+	assert_float(AiMissionEval._score_fit(state, 1, {})).is_equal_approx(truth, 0.0001)
+	AiMissionEval._net_override = {}

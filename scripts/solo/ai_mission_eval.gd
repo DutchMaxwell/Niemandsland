@@ -145,9 +145,65 @@ static func _score_encoder(state: Dictionary, player: int, f: Dictionary,
 	var xs: Array = []
 	for i in range(keys.size()):
 		xs.append((_feature_value(f, str(keys[i])) - float(mu[i])) / maxf(float(sd[i]), 1e-6))
-	var crows := _encoder_canon(BattleSim.board_rows(state), player,
-		net["slots"] as Dictionary)
-	return _encoder_forward(crows, xs, net)
+	return _encoder_score_cached(BattleSim.board_rows(state), player, xs, net)
+
+
+## NML-1005 — unit-embedding cache: between two candidate evaluations only the
+## mover's (and a combat target's) rows change, so per-row embeddings are
+## memoised on the RAW row + side (the 94.5%-of-runtime part, measured).
+## Key salt: the cache belongs to ONE net object — any swap (test override,
+## reload) clears it via is_same identity. The selftest path stays UNCACHED
+## (_encoder_forward) on purpose: it is the ground truth the cache is
+## checked against.
+static var _emb_cache: Dictionary = {}
+static var _emb_net: Dictionary = {}
+
+
+static func _encoder_score_cached(rows: Array, side: int, xs: Array,
+		net: Dictionary) -> float:
+	if not is_same(_emb_net, net):
+		_emb_cache = {}
+		_emb_net = net
+	var slots: Dictionary = net["slots"]
+	var h: int = (net["unit_b1"] as Array).size()
+	var pools: Array = []
+	var counts := [0.0, 0.0, 0.0]
+	for pi in range(3):
+		var zero: Array = []
+		zero.resize(h)
+		zero.fill(0.0)
+		pools.append(zero)
+	for r0 in rows:
+		var u: Array = r0
+		var key := "%d|%s" % [side, str(u)]
+		var emb: Variant = _emb_cache.get(key)
+		if emb == null:
+			var crow: Array = _encoder_canon([u], side, slots)[0]
+			emb = _lin_relu(_lin_relu(crow,
+				net["unit_w1"] as Array, net["unit_b1"] as Array),
+				net["unit_w2"] as Array, net["unit_b2"] as Array)
+			if _emb_cache.size() >= 8192:
+				_emb_cache = {}
+			_emb_cache[key] = emb
+		var is_obj: bool = int(u[0]) == 3
+		var pi := 2 if is_obj else (0 if int(u[0]) == side else 1)
+		counts[pi] += 1.0
+		for j in range(h):
+			(pools[pi] as Array)[j] = float((pools[pi] as Array)[j]) + float((emb as Array)[j])
+	var parts: Array = []
+	for pi in range(3):
+		var cdiv: float = maxf(float(counts[pi]), 1.0)
+		for j in range(h):
+			parts.append(float((pools[pi] as Array)[j]) / cdiv)
+	for pi in range(3):
+		parts.append(float(counts[pi]) / 10.0)
+	parts.append_array(xs)
+	var a := _lin_relu(parts, net["head_w1"] as Array, net["head_b1"] as Array)
+	var hw2: Array = net["head_w2"]
+	var zz := float(net["head_b2"])
+	for j in range(hw2.size()):
+		zz += float(hw2[j]) * float(a[j])
+	return 1.0 / (1.0 + exp(-clampf(zz, -30.0, 30.0)))
 
 
 static func _encoder_canon(rows: Array, side: int, slots: Dictionary) -> Array:
