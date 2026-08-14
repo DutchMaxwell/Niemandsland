@@ -97,6 +97,20 @@ static func _rule_pairs(gu: Variant, od: OPRApiClient.OPRUnit) -> Array:
 	return out
 
 
+## Judge-bench sidecar: for each LIVING unit — same filter and order as
+## board_rows — its index in the units-dict key order (the game's roster
+## order). Logged NEXT TO the rows, never inside them: the v5 number format
+## stays untouched, tooling maps rows back to roster names via these ints.
+static func board_row_indices(state: Dictionary) -> Array:
+	var out: Array = []
+	var i := 0
+	for k in state["units"]:
+		if int((state["units"][k] as Dictionary)["alive"]) > 0:
+			out.append(i)
+		i += 1
+	return out
+
+
 static func board_rows(state: Dictionary) -> Array:
 	var rows: Array = []
 	for k in state["units"]:

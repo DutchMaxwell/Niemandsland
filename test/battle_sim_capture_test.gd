@@ -100,3 +100,19 @@ func test_snapshot_is_a_copy_in_both_directions() -> void:
 	grunts.models[1].is_alive = false          # ...and later scene changes
 	assert_int(int((BattleSim.capture(army)["units"]["Grunts"] as Dictionary)["alive"])).is_equal(1)
 	assert_int(g["alive"]).is_equal(2)
+
+
+## NML-1006 sidecar: board_row_indices mirrors board_rows' living-filter and
+## order — a dead unit keeps its roster SLOT (index gap) but vanishes from
+## the list, so per-board ids always map into the game-long roster.
+func test_board_row_indices_skip_dead_but_keep_slots() -> void:
+	var a := _unit(1, [Vector3.ZERO], "A")
+	var b := _unit(1, [Vector3(1.0 * IN2M, 0, 0)], "B")
+	var c := _unit(2, [Vector3(2.0 * IN2M, 0, 0)], "C")
+	var state := BattleSim.capture(_army([a, b, c]),
+		func() -> Array: return [], func(_i: int) -> int: return 0, 1, 4)
+	assert_array(BattleSim.board_row_indices(state)).is_equal([0, 1, 2])
+	(state["units"]["B"] as Dictionary)["alive"] = 0
+	assert_array(BattleSim.board_row_indices(state)).is_equal([0, 2])
+	assert_int(BattleSim.board_rows(state).size()) \
+		.is_equal(BattleSim.board_row_indices(state).size())

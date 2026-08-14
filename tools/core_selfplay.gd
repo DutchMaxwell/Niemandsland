@@ -107,7 +107,12 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 			"seq": positions_log.size(),
 			"value": float((pick.get("expectation", {}) as Dictionary).get("before", -1.0)),
 			"features": AiMissionEval.features(state, turn, BattleSim.reply_threat(state, turn), true),
-			"board": _board_rows(state)}
+			"board": _board_rows(state),
+			# Judge-bench sidecars (NML-1006): roster indices per row + the
+			# planner's ORIGINAL intent sentence — next to the rows, never in
+			# them (v5 number format untouched).
+			"ids": BattleSim.board_row_indices(state),
+			"intent": str(pick.get("intent", ""))}
 		# E0b (controller-proxy pairs for E2): resolve the CHOSEN and the
 		# REJECTED candidate on clones and log both end boards. A log-only
 		# rng keeps the game's dice stream untouched (determinism per seed).
@@ -115,10 +120,13 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 		if not ru.is_empty() and ru.has("action"):
 			var lrng := RandomNumberGenerator.new()
 			lrng.seed = game_seed * 100000 + positions_log.size()
-			var b_ch := _board_rows(BattleSim.resolve_stochastic(state, pick["action"], lrng))
+			var st_ch := BattleSim.resolve_stochastic(state, pick["action"], lrng)
 			lrng.seed = game_seed * 100000 + positions_log.size() + 50000
-			row["pair"] = {"chosen": b_ch,
-				"runner": _board_rows(BattleSim.resolve_stochastic(state, ru["action"], lrng))}
+			var st_ru := BattleSim.resolve_stochastic(state, ru["action"], lrng)
+			row["pair"] = {"chosen": _board_rows(st_ch),
+				"runner": _board_rows(st_ru),
+				"chosen_ids": BattleSim.board_row_indices(st_ch),
+				"runner_ids": BattleSim.board_row_indices(st_ru)}
 		positions_log.append(row)
 		state = BattleSim.resolve_stochastic(state, pick["action"], rng)
 		last_side = turn
@@ -129,6 +137,17 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 
 
 var _last_state: Dictionary = {}
+
+
+## Judge-bench sidecar: unit display names in the units-dict key order —
+## clone_state preserves that order, and dead units keep their slot, so the
+## per-board "ids" indices map into this list for the whole game.
+func _roster_names() -> Array:
+	var out: Array = []
+	for k in _last_state.get("units", {}):
+		var gu: Variant = (_last_state["units"][k] as Dictionary).get("unit")
+		out.append(str(gu.get_name()) if gu != null else str(k))
+	return out
 
 
 
@@ -361,7 +380,8 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array) -> void:
 			"deployment": "zone12", "symmetric": true, "objective_count": 3, "packs": []},
 		"armies": {"p1": _army1, "p2": _army2}, "opener": 0,
 		"objectives": {"p1": p1, "p2": p2, "neutral": owners.size() - p1 - p2},
-		"winner": winner, "planner_positions": positions_log, "planner_calib": []}
+		"winner": winner, "planner_positions": positions_log, "planner_calib": [],
+		"roster": _roster_names()}
 	if _out != "":
 		DirAccess.make_dir_recursive_absolute(_out)
 		var f := FileAccess.open(_out.path_join("core_s%d.json" % game_seed), FileAccess.WRITE)
