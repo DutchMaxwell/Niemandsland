@@ -144,13 +144,22 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 			if not forked and rp_count >= round_no and not owners.is_empty():
 				forked = true
 				var frng := RandomNumberGenerator.new()
-				frng.seed = game_seed * 1000003 + positions_log.size()
-				var cpts := _fork_playout(state, pick["action"], turn, round_no,
-					owners, objectives, frng)
-				frng.seed = game_seed * 1000003 + positions_log.size() + 500011
-				var rpts := _fork_playout(state, ru["action"], turn, round_no,
-					owners, objectives, frng)
-				row["fork"] = {"chosen_pts": cpts, "runner_pts": rpts}
+				# NML_FORK_SALT shifts ONLY the fork dice (label-noise probes:
+				# same game, re-diced playouts). Unset = 0 = byte-identical.
+				var fsalt := int(OS.get_environment("NML_FORK_SALT"))
+				# Label-noise fix (probe 14.08.: single playouts flip sign in
+				# 3 of 4 forks under re-dicing): THREE playouts per branch,
+				# training label = the mean delta; per-run points stay logged.
+				var c_runs: Array = []
+				var r_runs: Array = []
+				for rep in range(3):
+					frng.seed = game_seed * 1000003 + positions_log.size() 						+ rep * 70001 + fsalt
+					c_runs.append(_fork_playout(state, pick["action"], turn,
+						round_no, owners, objectives, frng))
+					frng.seed = game_seed * 1000003 + positions_log.size() 						+ 500011 + rep * 70001 + fsalt
+					r_runs.append(_fork_playout(state, ru["action"], turn,
+						round_no, owners, objectives, frng))
+				row["fork"] = {"chosen_runs": c_runs, "runner_runs": r_runs}
 		positions_log.append(row)
 		state = BattleSim.resolve_stochastic(state, pick["action"], rng)
 		last_side = turn
