@@ -67,10 +67,14 @@ func _play_one(game_seed: int) -> void:
 		quit(1)
 		return
 	var objectives := [Vector3(-16.0 * IN2M, 0, 0), Vector3.ZERO, Vector3(16.0 * IN2M, 0, 0)]
-	var patches := _gen_terrain(rng)   # S3: symmetric cover islands
-	_deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng, patches)
-	_deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng, patches)
-	var state := _capture(units1 + units2, objectives, patches)
+	# Realism wave (maintainer 14.08.): the REAL symmetric map layouter is the
+	# one terrain source for table and school. NOTE the old _gen_terrain drew 9
+	# values from the game rng — its removal starts a new world era anyway
+	# (result stamp school_world=2 keeps corpora separate).
+	_world = SchoolTerrain.generate(game_seed)
+	_deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng)
+	_deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng)
+	var state := _capture(units1 + units2, objectives, _world)
 	var owners := [0, 0, 0]
 	var opener := 1 if rng.randi_range(1, 6) >= rng.randi_range(1, 6) else 2
 	var positions_log: Array = []
@@ -157,6 +161,7 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 
 
 var _last_state: Dictionary = {}
+var _world: Dictionary = {}
 
 
 ## Judge-bench sidecar: unit display names in the units-dict key order —
@@ -377,8 +382,7 @@ func _append_selection(gu: GameUnit, ud: Dictionary) -> void:
 
 ## S3: 12"-deep ZONE deployment — units spread across width AND depth (the
 ## naive single line doubled charge-exposure density vs engine positions).
-func _deploy_zone(units: Array, z0_in: float, depth_in: float, rng: RandomNumberGenerator,
-		patches: Array = []) -> void:
+func _deploy_zone(units: Array, z0_in: float, depth_in: float, rng: RandomNumberGenerator) -> void:
 	var n := units.size()
 	for i in range(n):
 		var gu: GameUnit = units[i]
@@ -393,29 +397,7 @@ func _deploy_zone(units: Array, z0_in: float, depth_in: float, rng: RandomNumber
 				(best_x + float(m % 5)) * IN2M, 0.0, (best_z + float(m / 5)) * IN2M)
 
 
-## S3: point-symmetric cover islands (forest-class), radius 4", mirrored so
-## neither side owns better ground. Returned as [{pos: Vector3, r: float}].
-func _gen_terrain(rng: RandomNumberGenerator) -> Array:
-	var patches: Array = []
-	for _i in range(3):
-		var x := rng.randf_range(-TABLE_W_IN / 2.0 + 8.0, TABLE_W_IN / 2.0 - 8.0)
-		var z := rng.randf_range(1.0, TABLE_D_IN / 2.0 - 2.0)
-		var r := rng.randf_range(4.0, 5.0)
-		patches.append({"pos": Vector3(x * IN2M, 0, z * IN2M), "r": r * IN2M})
-		patches.append({"pos": Vector3(-x * IN2M, 0, -z * IN2M), "r": r * IN2M})
-	return patches
-
-
-static func _terrain_type_at(patches: Array, pos: Vector3) -> int:
-	for pt in patches:
-		var d: Dictionary = pt
-		var p: Vector3 = d["pos"]
-		if Vector2(pos.x - p.x, pos.z - p.z).length() <= float(d["r"]):
-			return TerrainRules.TerrainType.FOREST
-	return TerrainRules.TerrainType.NONE
-
-
-func _capture(all_units: Array, objectives: Array, patches: Array) -> Dictionary:
+func _capture(all_units: Array, objectives: Array, world: Dictionary) -> Dictionary:
 	var army := OPRArmyManager.new()
 	root.add_child(army)
 	var gu := {}
@@ -424,7 +406,7 @@ func _capture(all_units: Array, objectives: Array, patches: Array) -> Dictionary
 	army.game_units = gu
 	army.current_round = 1
 	var objs := objectives.duplicate()
-	var terrain_at := func(pos: Vector3) -> int: return _terrain_type_at(patches, pos)
+	var terrain_at := func(pos: Vector3) -> int: return SchoolTerrain.type_at(world, pos)
 	var cover_of := func(u: GameUnit) -> bool:
 		var c := Vector3.ZERO
 		var alive := 0
@@ -435,19 +417,11 @@ func _capture(all_units: Array, objectives: Array, patches: Array) -> Dictionary
 				alive += 1
 		if alive == 0:
 			return false
-		return TerrainRules.gives_cover(_terrain_type_at(patches, c / alive))
-	# Dynamic LOS: forests block sight THROUGH them (2" line samples); a unit
-	# standing inside forest can still shoot out / be shot (it has cover).
+		return TerrainRules.gives_cover(SchoolTerrain.type_at(world, c / alive))
+	# Dynamic LOS from the real layout: ruins/containers/woods block sight
+	# THROUGH them; endpoint cells are exempt (inside sees out, is seen).
 	var los_blocked := func(a: Vector3, b: Vector3) -> bool:
-		if _terrain_type_at(patches, a) != TerrainRules.TerrainType.NONE \
-				or _terrain_type_at(patches, b) != TerrainRules.TerrainType.NONE:
-			return false
-		var steps := int(ceilf((b - a).length() / (2.0 * IN2M)))
-		for i in range(1, steps):
-			if _terrain_type_at(patches, a.lerp(b, float(i) / steps)) \
-					== TerrainRules.TerrainType.FOREST:
-				return true
-		return false
+		return SchoolTerrain.los_blocked(world, a, b)
 	var st := BattleSim.capture(army, func() -> Array: return objs,
 		func(_i: int) -> int: return 0, 1, ROUNDS, cover_of, Callable(), terrain_at)
 	st["los_blocked"] = los_blocked
@@ -466,6 +440,7 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array) -> void:
 	if p1 != p2:
 		winner = "p1" if p1 > p2 else "p2"
 	var result := {"schema": 1, "board_schema": 5, "rule_vocab": "v1b",
+		"school_world": 2, "terrain": _world.get("pieces", []),
 		"unknown_rules": BattleSim.unknown_rules.keys(),
 		"tool": "core_selfplay", "seed": game_seed,
 		"dice_seed": game_seed, "grades": {"p1": "planner_core", "p2": "planner_core"},
