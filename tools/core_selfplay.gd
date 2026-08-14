@@ -208,16 +208,19 @@ func _fork_playout(pre_state: Dictionary, action: Dictionary, turn: int,
 
 
 ## Bare alternation loop for fork playouts (mirrors _play_round's turn logic).
+## Continuations use the CHEAP greedy policy, not the full planner: both
+## branches get the SAME continuation brain, so the outcome DELTA stays a
+## fair comparison — and the fork overhead drops from ~6x to near-free.
 func _fork_run_activations(state: Dictionary, turn: int,
 		frng: RandomNumberGenerator) -> Dictionary:
 	var last := 0
 	var guard: int = (state["units"] as Dictionary).size() * 2 + 4
 	while guard > 0:
 		guard -= 1
-		var pick := _pick_for(state, turn)
+		var pick := _fork_pick(state, turn)
 		if pick.is_empty():
 			var other := 2 if turn == 1 else 1
-			pick = _pick_for(state, other)
+			pick = _fork_pick(state, other)
 			if pick.is_empty():
 				break
 			turn = other
@@ -225,6 +228,16 @@ func _fork_run_activations(state: Dictionary, turn: int,
 		last = turn
 		turn = 2 if turn == 1 else 1
 	return {"state": state, "last": last}
+
+
+## Fork-continuation pick: cheap policy step only (see _fork_run_activations).
+func _fork_pick(state: Dictionary, player: int) -> Dictionary:
+	for k in state["units"]:
+		var su: Dictionary = state["units"][k]
+		if int(su["player"]) == player and not bool(su["activated"]) and int(su["alive"]) > 0:
+			var a := AiPlanner._policy_step(state, player, true)
+			return {} if a.is_empty() else {"action": a}
+	return {}
 
 
 func _pick_for(state: Dictionary, player: int) -> Dictionary:
