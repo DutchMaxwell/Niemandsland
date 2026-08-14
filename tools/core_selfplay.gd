@@ -80,7 +80,8 @@ func _play_one(game_seed: int) -> void:
 			var su: Dictionary = state["units"][k]
 			su["activated"] = false
 			su["fatigued"] = false
-		opener = _play_round(state, opener, rng, positions_log, round_no, game_seed)
+		opener = _play_round(state, opener, rng, positions_log, round_no, game_seed,
+			owners, objectives)
 		state = _last_state   # adopt the played round (resolve works on clones)
 		_seize(state, objectives, owners)
 	_write_result(game_seed, owners, positions_log)
@@ -90,9 +91,12 @@ func _play_one(game_seed: int) -> void:
 ## tail to the other). Returns the NEXT round's opener (finished-first rule:
 ## the side that did NOT take the last activation opens).
 func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
-		positions_log: Array, round_no: int, game_seed: int) -> int:
+		positions_log: Array, round_no: int, game_seed: int,
+		owners: Array = [], objectives: Array = []) -> int:
 	var turn := opener
 	var last_side := 0
+	var forked := false
+	var rp_count := 0
 	var guard: int = (state["units"] as Dictionary).size() * 2 + 4
 	while guard > 0:
 		guard -= 1
@@ -127,6 +131,22 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 				"runner": _board_rows(st_ru),
 				"chosen_ids": BattleSim.board_row_indices(st_ch),
 				"runner_ids": BattleSim.board_row_indices(st_ru)}
+			# E2-v2 fork counterfactuals (maintainer decisions 14.08.: ONE fork
+			# per round, played to GAME END): the round's round_no-th runner-
+			# bearing pick forks — both branches play out on clones under a
+			# fork-local rng; the game's dice stream stays untouched. The
+			# outcome DELTA is the first true decision label in the corpus.
+			rp_count += 1
+			if not forked and rp_count >= round_no and not owners.is_empty():
+				forked = true
+				var frng := RandomNumberGenerator.new()
+				frng.seed = game_seed * 1000003 + positions_log.size()
+				var cpts := _fork_playout(state, pick["action"], turn, round_no,
+					owners, objectives, frng)
+				frng.seed = game_seed * 1000003 + positions_log.size() + 500011
+				var rpts := _fork_playout(state, ru["action"], turn, round_no,
+					owners, objectives, frng)
+				row["fork"] = {"chosen_pts": cpts, "runner_pts": rpts}
 		positions_log.append(row)
 		state = BattleSim.resolve_stochastic(state, pick["action"], rng)
 		last_side = turn
@@ -152,6 +172,61 @@ func _roster_names() -> Array:
 
 
 
+## E2-v2: play ONE branch (the given action from the given pre-pick state) to
+## GAME END on clones and return the final marker points per side. Bare twin
+## of the _play_round/_play_one loops WITHOUT logging, forks or _last_state —
+## uses _seize_on (never the main loop's _last_state override).
+func _fork_playout(pre_state: Dictionary, action: Dictionary, turn: int,
+		round_no: int, owners0: Array, objectives: Array,
+		frng: RandomNumberGenerator) -> Dictionary:
+	var owners := owners0.duplicate()
+	var state := BattleSim.resolve_stochastic(pre_state, action, frng)
+	var next_turn := 2 if turn == 1 else 1
+	var res := _fork_run_activations(state, next_turn, frng)
+	state = res["state"]
+	var opener: int = (2 if int(res["last"]) == 1 else 1) if int(res["last"]) != 0 else next_turn
+	_seize_on(state, objectives, owners)
+	for r in range(round_no + 1, ROUNDS + 1):
+		state["round"] = r
+		for k in state["units"]:
+			var su: Dictionary = state["units"][k]
+			su["activated"] = false
+			su["fatigued"] = false
+		res = _fork_run_activations(state, opener, frng)
+		state = res["state"]
+		if int(res["last"]) != 0:
+			opener = 2 if int(res["last"]) == 1 else 1
+		_seize_on(state, objectives, owners)
+	var p1 := 0
+	var p2 := 0
+	for o in owners:
+		if int(o) == 1:
+			p1 += 1
+		elif int(o) == 2:
+			p2 += 1
+	return {"p1": p1, "p2": p2}
+
+
+## Bare alternation loop for fork playouts (mirrors _play_round's turn logic).
+func _fork_run_activations(state: Dictionary, turn: int,
+		frng: RandomNumberGenerator) -> Dictionary:
+	var last := 0
+	var guard: int = (state["units"] as Dictionary).size() * 2 + 4
+	while guard > 0:
+		guard -= 1
+		var pick := _pick_for(state, turn)
+		if pick.is_empty():
+			var other := 2 if turn == 1 else 1
+			pick = _pick_for(state, other)
+			if pick.is_empty():
+				break
+			turn = other
+		state = BattleSim.resolve_stochastic(state, pick["action"], frng)
+		last = turn
+		turn = 2 if turn == 1 else 1
+	return {"state": state, "last": last}
+
+
 func _pick_for(state: Dictionary, player: int) -> Dictionary:
 	var has_pool := false
 	for k in state["units"]:
@@ -174,7 +249,12 @@ func _pick_for(state: Dictionary, player: int) -> Dictionary:
 ## Round-end seize (persistence rule): majority of non-shaken alive units
 ## within 3" wins the marker; both near => neutral; nobody near keeps owner.
 func _seize(state: Dictionary, objectives: Array, owners: Array) -> void:
-	state = _last_state if not _last_state.is_empty() else state
+	_seize_on(_last_state if not _last_state.is_empty() else state, objectives, owners)
+
+
+## Seize on EXACTLY the given state — the fork playouts (E2-v2) score their
+## own cloned worlds; the _last_state override above is main-loop-only.
+func _seize_on(state: Dictionary, objectives: Array, owners: Array) -> void:
 	for i in range(objectives.size()):
 		var near1 := 0
 		var near2 := 0
