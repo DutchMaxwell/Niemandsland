@@ -822,10 +822,12 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 		owners.append(int((o as Dictionary).get("owner", 0)))
 	var state := BattleSim.resolve_stochastic(state0, action, prng)
 	var turn := 2 if player == 1 else 1
+	var vp := [0, 0]
 	var res := _playout_round_tail(state, turn, prng)
 	state = res["state"]
 	var opener: int = (2 if int(res["last"]) == 1 else 1) if int(res["last"]) != 0 else turn
 	BattleSim.playout_seize(state, owners)
+	BattleSim.vp_round_add(owners, vp)
 	var rounds_total := int(state.get("rounds_total", 4))
 	for r in range(int(state0.get("round", 1)) + 1, rounds_total + 1):
 		state["round"] = r
@@ -838,14 +840,11 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 		if int(res["last"]) != 0:
 			opener = 2 if int(res["last"]) == 1 else 1
 		BattleSim.playout_seize(state, owners)
-	var p1 := 0
-	var p2 := 0
-	for o in owners:
-		if int(o) == 1:
-			p1 += 1
-		elif int(o) == 2:
-			p2 += 1
-	return {"p1": p1, "p2": p2}
+		BattleSim.vp_round_add(owners, vp)
+	BattleSim.vp_end_bonus(owners, vp)
+	# NML-1008: the currency is cumulative VPs (1/marker/round + end bonus),
+	# NOT the final marker count — early-round control counts, per the book.
+	return {"p1": vp[0], "p2": vp[1]}
 
 
 ## Cheap-policy alternation until the round runs dry (official one-for-one;

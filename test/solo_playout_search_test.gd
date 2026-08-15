@@ -51,7 +51,7 @@ func test_playout_discriminates_toward_vs_away() -> void:
 		"dest": Vector3(20.0 * IN2M, 0, 0)}
 	var pt := AiPlanner.full_playout(state, toward, 1, _rng(5))
 	var pa := AiPlanner.full_playout(state, away, 1, _rng(5))
-	assert_int(int(pt["p1"])).is_equal(1)
+	assert_int(int(pt["p1"])).is_equal(3)   # NML-1008: VP currency (R3+R4+end bonus)
 	assert_int(int(pa["p1"])).is_equal(0)
 
 
@@ -108,3 +108,27 @@ func test_playout_arbitration_fires_on_close_top2() -> void:
 	assert_bool(pick.get("used", false)).is_true()
 	assert_int(AiPlanner.playout_arbitrations).is_greater_equal(1)
 	assert_str(str(pick.get("intent", ""))).contains("[playout")
+
+
+## NML-1008 — VPs decide, not the final tableau: holding rounds 1-3 must
+## outscore a last-round steal. Ledger arithmetic pinned directly.
+func test_vp_ledger_rewards_early_control() -> void:
+	var vp := [0, 0]
+	BattleSim.vp_round_add([1, 1, 0], vp)   # R1: A holds 2
+	BattleSim.vp_round_add([1, 1, 0], vp)   # R2: A holds 2
+	BattleSim.vp_round_add([1, 1, 0], vp)   # R3: A holds 2
+	BattleSim.vp_round_add([2, 2, 2], vp)   # R4: B steals everything
+	BattleSim.vp_end_bonus([2, 2, 2], vp)   # end bonus goes to B
+	assert_int(int(vp[0])).is_equal(6)
+	assert_int(int(vp[1])).is_equal(4)
+	assert_bool(vp[0] > vp[1]).is_true()    # end-state counting would call B the winner
+
+
+## The playout verdict carries the VP currency: rushing the only marker in
+## round 3 yields 2 VP (R3+R4 control) + end bonus = 3 for the mover's side.
+func test_playout_returns_cumulative_vp() -> void:
+	var state := _state([_unit(1, [Vector3(8.0 * IN2M, 0, 0)], "Runner")])
+	var act := {"unit": "Runner", "kind": AiDecision.Action.RUSH, "dest": Vector3.ZERO}
+	var pts := AiPlanner.full_playout(state, act, 1, _rng(5))
+	assert_int(int(pts["p1"])).is_equal(3)
+	assert_int(int(pts["p2"])).is_equal(0)

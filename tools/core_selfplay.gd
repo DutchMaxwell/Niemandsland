@@ -76,6 +76,7 @@ func _play_one(game_seed: int) -> void:
 	_deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng)
 	var state := _capture(units1 + units2, objectives, _world)
 	var owners := [0, 0, 0]
+	var vp := [0, 0]   # NML-1008: cumulative VPs, 1/marker at each round end
 	var opener := 1 if rng.randi_range(1, 6) >= rng.randi_range(1, 6) else 2
 	var positions_log: Array = []
 	for round_no in range(1, ROUNDS + 1):
@@ -88,7 +89,9 @@ func _play_one(game_seed: int) -> void:
 			owners, objectives)
 		state = _last_state   # adopt the played round (resolve works on clones)
 		_seize(state, objectives, owners)
-	_write_result(game_seed, owners, positions_log)
+		BattleSim.vp_round_add(owners, vp)
+	BattleSim.vp_end_bonus(owners, vp)
+	_write_result(game_seed, owners, positions_log, vp)
 
 
 ## Alternate single activations (official one-for-one; a dry side passes the
@@ -194,12 +197,14 @@ func _fork_playout(pre_state: Dictionary, action: Dictionary, turn: int,
 		round_no: int, owners0: Array, objectives: Array,
 		frng: RandomNumberGenerator) -> Dictionary:
 	var owners := owners0.duplicate()
+	var vp := [0, 0]
 	var state := BattleSim.resolve_stochastic(pre_state, action, frng)
 	var next_turn := 2 if turn == 1 else 1
 	var res := _fork_run_activations(state, next_turn, frng)
 	state = res["state"]
 	var opener: int = (2 if int(res["last"]) == 1 else 1) if int(res["last"]) != 0 else next_turn
 	_seize_on(state, objectives, owners)
+	BattleSim.vp_round_add(owners, vp)
 	for r in range(round_no + 1, ROUNDS + 1):
 		state["round"] = r
 		for k in state["units"]:
@@ -211,14 +216,10 @@ func _fork_playout(pre_state: Dictionary, action: Dictionary, turn: int,
 		if int(res["last"]) != 0:
 			opener = 2 if int(res["last"]) == 1 else 1
 		_seize_on(state, objectives, owners)
-	var p1 := 0
-	var p2 := 0
-	for o in owners:
-		if int(o) == 1:
-			p1 += 1
-		elif int(o) == 2:
-			p2 += 1
-	return {"p1": p1, "p2": p2}
+		BattleSim.vp_round_add(owners, vp)
+	BattleSim.vp_end_bonus(owners, vp)
+	# NML-1008: fork labels speak VP — early-round control counts.
+	return {"p1": vp[0], "p2": vp[1]}
 
 
 ## Bare alternation loop for fork playouts (mirrors _play_round's turn logic).
@@ -447,7 +448,8 @@ func _capture(all_units: Array, objectives: Array, world: Dictionary) -> Diction
 	return st
 
 
-func _write_result(game_seed: int, owners: Array, positions_log: Array) -> void:
+func _write_result(game_seed: int, owners: Array, positions_log: Array,
+		vp: Array = []) -> void:
 	var p1 := 0
 	var p2 := 0
 	for o in owners:
@@ -455,9 +457,13 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array) -> void:
 			p1 += 1
 		elif int(o) == 2:
 			p2 += 1
+	# NML-1008: the WINNER is decided by cumulative VPs (book rule); the
+	# final marker counts stay logged for reference.
+	var vp1: int = int(vp[0]) if vp.size() == 2 else p1
+	var vp2: int = int(vp[1]) if vp.size() == 2 else p2
 	var winner := "draw"
-	if p1 != p2:
-		winner = "p1" if p1 > p2 else "p2"
+	if vp1 != vp2:
+		winner = "p1" if vp1 > vp2 else "p2"
 	var result := {"schema": 1, "board_schema": 5, "rule_vocab": "v1c",
 		"school_world": 2, "terrain": _world.get("pieces", []),
 		"unknown_rules": BattleSim.unknown_rules.keys(),
@@ -467,6 +473,7 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array) -> void:
 			"deployment": "zone12", "symmetric": true, "objective_count": 3, "packs": []},
 		"armies": {"p1": _army1, "p2": _army2}, "opener": 0,
 		"objectives": {"p1": p1, "p2": p2, "neutral": owners.size() - p1 - p2},
+		"vp": {"p1": vp1, "p2": vp2}, "scoring": "round_vp",
 		"winner": winner, "planner_positions": positions_log, "planner_calib": [],
 		"roster": _roster_names()}
 	if _out != "":

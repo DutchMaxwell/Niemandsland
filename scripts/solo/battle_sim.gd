@@ -216,6 +216,32 @@ static func playout_seize(state: Dictionary, owners: Array) -> void:
 		(objs[i] as Dictionary)["owner"] = int(owners[i])
 
 
+## NML-1008 (GF Advanced v3.5.1): cumulative VICTORY POINTS — at the end of
+## each round 1 VP per controlled marker; at game end +1 VP for controlling
+## more markers. The maintainer's D2 curve ("markers gain value steadily")
+## is this rule; every scoring consumer switches to this currency.
+static func vp_round_add(owners: Array, vp: Array) -> void:
+	for o in owners:
+		if int(o) == 1:
+			vp[0] += 1
+		elif int(o) == 2:
+			vp[1] += 1
+
+
+static func vp_end_bonus(owners: Array, vp: Array) -> void:
+	var m1 := 0
+	var m2 := 0
+	for o in owners:
+		if int(o) == 1:
+			m1 += 1
+		elif int(o) == 2:
+			m2 += 1
+	if m1 > m2:
+		vp[0] += 1
+	elif m2 > m1:
+		vp[1] += 1
+
+
 ## One activation with stochastic rounding (core self-play games).
 static func resolve_stochastic(state: Dictionary, action: Dictionary,
 		rng: RandomNumberGenerator) -> Dictionary:
