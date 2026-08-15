@@ -48,6 +48,8 @@ var _dice_seed_explicit := false
 var _layout_seed := LAYOUT_SEED         # terrain autogen seed; layout_seed= varies the board per game (fairness probes)
 var _symmetric := false                 # symmetric=1: point-symmetric terrain (tuning runs)
 var _objective_count := 3               # objectives=5: five point-symmetric markers
+var _mission_id := ""                   # NML_MISSION: play a catalog mission (M5); empty = legacy centre-line tuning board
+var _objectives_placed := 0             # what actually reached the overlay — the stamp states played truth, not intent
 var _batch := true                      # headless sweeps: instant (non-physics) dice + zero pacing holds; batch=0 forces the physics tray
 var _army1 := P1_FIXTURE
 var _army2 := P2_FIXTURE
@@ -224,6 +226,21 @@ func _run() -> void:
 	if _objective_count == 5:
 		# 5 point-symmetric markers >=9" apart (tuning-run mission): centre + two symmetric pairs.
 		objectives_in = [Vector2(0.0, 0.0), Vector2(-16.0, 6.0), Vector2(16.0, -6.0), Vector2(-8.0, -8.0), Vector2(8.0, 8.0)]
+	if not _mission_id.is_empty():
+		# Missions wave M5: the ladder plays a CATALOG mission — markers resolve via
+		# the M3 placement modes. Duel's 'alternate' resolves to [] by design (hand
+		# placement has no headless equivalent), so NML_MISSION=duel keeps the
+		# centre-line approximation above and stays comparable with legacy runs.
+		var mission := MissionCatalog.get_mission(_mission_id)
+		var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))
+		var resolved := MissionCatalog.marker_positions(mission, style,
+			table.table_size.x * 12.0, table.table_size.y * 12.0)
+		if not resolved.is_empty():
+			objectives_in = []
+			for rp in resolved:
+				objectives_in.append(rp as Vector2)
+		printerr("[ARENA] mission '%s': placement=%s markers=%d (catalog-resolved)" % [_mission_id,
+			str((mission.get("markers", {}) as Dictionary).get("placement", "?")), objectives_in.size()])
 	var obj_world: Array = []
 	for o in objectives_in:
 		obj_world.append(Vector3((o as Vector2).x * IN2M, 0.0, (o as Vector2).y * IN2M))
@@ -242,7 +259,8 @@ func _run() -> void:
 			printerr("[ARENA] FATAL: objective #%d OFF TABLE at (%.3f, %.3f) m" % [oi + 1, op.x, op.z])
 			quit(1)
 			return
-	printerr("[ARENA] objectives on table: %d (centre-line spread, all within bounds)" % placed.size())
+	_objectives_placed = placed.size()
+	printerr("[ARENA] objectives on table: %d (all within bounds)" % placed.size())
 
 	# Arm native both-AI with the graded sides, then wire the controller for the whole board.
 	main.set_both_ai(true, _p1_grade, _p2_grade, _seed)
@@ -462,6 +480,18 @@ func _write_capture_outputs() -> void:
 				_move_trail_dump.size(), _move_trail_walls.size(), _capture_dir.path_join("moves.json")])
 
 
+## The played-truth mission descriptor: catalog-backed when NML_MISSION picked a
+## mission, the historical duel stamp otherwise. objective_count is the overlay's
+## own count, never the requested one — values state what was ACTUALLY played.
+func _mission_stamp() -> Dictionary:
+	var mid := _mission_id if not _mission_id.is_empty() else "duel"
+	var m := MissionCatalog.get_mission(mid)
+	return {"family": str(m.get("family", "face_off")), "name": mid,
+		"rounds": int(m.get("rounds", 4)), "scoring": str(m.get("scoring", "end")),
+		"deployment": str(m.get("deployment", "front_line")), "symmetric": _symmetric,
+		"objective_count": _objectives_placed, "packs": []}
+
+
 ## The per-game result artifact the ladder tooling aggregates: identity (grades/seeds/armies/sides),
 ## the roll-off + opener, the objective score + winner, survivors, the knob presets, per-side decision
 ## counts, and the verbatim difficulty/roll-off records (the monotonicity-diagnosis evidence).
@@ -474,13 +504,9 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 		"dice_seed": _dice_seed,
 		"grades": {"p1": _p1_grade, "p2": _p2_grade},
 		"armies": {"p1": _army1, "p2": _army2},
-		# Table-config descriptor (GF Advanced v3.5.1 foresight): today every
-		# ladder game is the same table — but stamping it NOW keeps every
-		# corpus filterable/mixable once missions, deployments and rule packs
-		# rotate. Values must always state what was ACTUALLY played.
-		"mission": {"family": "face_off", "name": "duel", "rounds": 4,
-			"deployment": "front_line", "symmetric": _symmetric,
-			"objective_count": _objective_count, "packs": []},
+		# Table-config descriptor (GF Advanced v3.5.1 foresight): keeps every
+		# corpus filterable/mixable across missions, deployments and rule packs.
+		"mission": _mission_stamp(),
 		"opener": opener,
 		"rounds_played": int(army_manager.current_round),
 		"objectives": objectives,
@@ -774,6 +800,15 @@ func _parse_config() -> void:
 			_objective_count = int(a.substr(11))
 	if not _dice_seed_explicit:
 		_dice_seed = _seed
+
+	# Same loud-fallback doctrine as grades/nets: a typo'd NML_MISSION quietly
+	# playing duel would mislabel a whole tournament (the label-bug class).
+	_mission_id = OS.get_environment("NML_MISSION").strip_edges().to_lower()
+	if not _mission_id.is_empty() and not MissionCatalog.mission_ids().has(_mission_id):
+		printerr("[ARENA] FATAL: unknown NML_MISSION '%s' (catalog: %s) — refusing a mislabeled run" % [
+			_mission_id, str(MissionCatalog.mission_ids())])
+		quit(1)
+		return
 
 	# Label-bug class EXTERMINATED (three silent-fallback incidents): an
 	# unknown grade no longer plays nachtmahr quietly — it dies loudly.
