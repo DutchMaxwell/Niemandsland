@@ -143,3 +143,29 @@ func test_second_wave_candidate_offers() -> void:
 		if str((c as Dictionary).get("wave", "")) != "":
 			w2 = c
 	assert_str(str(w2.get("wave", ""))).is_equal("idle reserve moves up")
+
+
+## D22 — the safe line prefers COVER over raw progress: with a cover patch
+## short of the farthest safe point, the patient advance stops IN the
+## cover; without terrain knowledge it walks to the farthest safe point.
+func test_safe_line_prefers_cover_stop() -> void:
+	var runner := _armed(1, [Vector3(-20.0 * IN2M, 0, 0)], "Runner", [])
+	var foe := _armed(2, [Vector3(30.0 * IN2M, 0, 0)], "Foe",
+		[{"name": "Gun", "range": 4, "attacks": 1}])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Runner": runner, "Foe": foe}
+	var cover_centre := -16.5   # forest cell SHORT of the max-advance point
+	var terrain_at := func(p: Vector3) -> int:
+		return TerrainRules.TerrainType.FOREST \
+			if absf(p.x / IN2M - cover_centre) <= 1.5 else TerrainRules.TerrainType.NONE
+	var state := BattleSim.capture(army, func() -> Array: return [Vector3(20.0 * IN2M, 0, 0)],
+		func(_i: int) -> int: return 0, 1, 4, Callable(), Callable(), terrain_at)
+	var plain := BattleSim.capture(army, func() -> Array: return [Vector3(20.0 * IN2M, 0, 0)],
+		func(_i: int) -> int: return 0, 1, 4)
+	var with_cover := AiPlanner._safe_advance(state, "Runner")
+	var without := AiPlanner._safe_advance(plain, "Runner")
+	assert_bool(not with_cover.is_empty() and not without.is_empty()).is_true()
+	var x_cov: float = (with_cover["dest"] as Vector3).x / IN2M
+	var x_plain: float = (without["dest"] as Vector3).x / IN2M
+	assert_float(x_cov).is_between(cover_centre - 1.6, cover_centre + 1.6)
+	assert_bool(x_plain > x_cov + 1.0).is_true()

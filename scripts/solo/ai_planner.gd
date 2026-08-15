@@ -9,6 +9,8 @@ extends RefCounted
 
 
 const RETREAT_GOAL_IN := 100.0   # far marker; the band clamp turns it into one move away
+const SAFE_LINE_COVER_BONUS_IN := 6.0    # D22: a covered stop outbids 6" of open progress
+const SAFE_LINE_OPEN_LINE_PENALTY_IN := 2.0   # D22: each open fire line beyond the first costs 2"
 
 
 ## The 1-ply pick (plan D5): roll every candidate of every un-activated unit
@@ -452,9 +454,12 @@ static func _safe_advance(state: Dictionary, key: String) -> Dictionary:
 				break
 		if inside:
 			continue   # this tier's safety is already lost — try the weaker tier
-		# Farthest point along the line that stays safe — half-inch grid, deterministic.
+		# D22 (grill 15.08.): among SAFE points, progress is no longer the only
+		# currency — cover earns a bonus and every OPEN enemy fire line beyond
+		# the first costs (his four criteria; marker direction is inherent).
+		# Safety stays a half-inch grid; scoring probes the safe frontier.
 		var step := 0.5 * BattleSim.IN2M
-		var best_t := 0.0
+		var safe_ts: Array = []
 		var t := step
 		while t <= band_m + 0.0001:
 			var safe := true
@@ -463,8 +468,35 @@ static func _safe_advance(state: Dictionary, key: String) -> Dictionary:
 					safe = false
 					break
 			if safe:
-				best_t = t
+				safe_ts.append(t)
 			t += step
+		if safe_ts.is_empty():
+			continue
+		var terrain_at: Callable = state.get("terrain_at", Callable())
+		var los_blocked: Callable = state.get("los_blocked", Callable())
+		var frontier: Array = safe_ts.slice(maxi(safe_ts.size() - 8, 0))
+		var best_t := 0.0
+		var best_sc := -INF
+		for ft in frontier:
+			var pnt: Vector3 = centre + dir * float(ft)
+			var sc := float(ft) / BattleSim.IN2M
+			if terrain_at.is_valid() \
+					and TerrainRules.gives_cover(int(terrain_at.call(pnt))):
+				sc += SAFE_LINE_COVER_BONUS_IN
+			if los_blocked.is_valid():
+				var open_lines := 0
+				for ek2 in _enemy_keys(state, key):
+					var eu2: Dictionary = state["units"][ek2]
+					if int(eu2["alive"]) <= 0:
+						continue
+					if not bool(los_blocked.call(_centre(eu2), pnt)):
+						open_lines += 1
+					if open_lines >= 4:
+						break
+				sc -= SAFE_LINE_OPEN_LINE_PENALTY_IN * maxf(open_lines - 1, 0)
+			if sc > best_sc:
+				best_sc = sc
+				best_t = float(ft)
 		if best_t > 0.001:
 			return {"unit": key, "kind": AiDecision.Action.ADVANCE,
 				"dest": centre + dir * best_t, "patient": true}
