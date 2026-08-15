@@ -132,6 +132,12 @@ static func plan_with_rollout(state: Dictionary, player: int,
 	for k in patient_of:
 		if not pool.has(patient_of[k]):
 			pool.append(patient_of[k])
+	# D23 pool guarantee (same starving risk as the patient advance): every
+	# unit's second-wave candidate reaches the rollout, ranked or not.
+	for cand in scored:
+		if str((cand["action"] as Dictionary).get("wave", "")) != "" \
+				and not pool.has(cand):
+			pool.append(cand)
 	var best := {}
 	var runner := {}
 	for cand in pool:
@@ -607,7 +613,85 @@ static func candidates(state: Dictionary, key: String) -> Array:
 	var patient := _safe_advance(state, key)
 	if not patient.is_empty():
 		out.append(patient)
+	var wave := _second_wave(state, key)
+	if not wave.is_empty():
+		out.append(wave)
 	return out
+
+
+## D21/D23 (grill 15.08.) — the SECOND WAVE: a follow-up move toward where
+## it is needed. Offered when a friendly unit CONTESTS a marker (enemy in
+## the same 3" ring), when a friend is battered (below half or shaken),
+## and ALWAYS for idle rear units (nearest far marker then). The stop
+## point is support distance: NEXT round's rush reaches the goal — arrive
+## ready, not spent. Timing (D6) weighs the VALUE downstream, never gates
+## the offer (his explicit non-pick).
+static func _second_wave(state: Dictionary, key: String) -> Dictionary:
+	var su: Dictionary = state["units"][key]
+	var centre := _centre(su)
+	var me := int(su["player"])
+	var goal := Vector3.INF
+	var why := ""
+	var best_d := INF
+	for o in state["objectives"]:
+		var op: Vector3 = (o as Dictionary)["pos"]
+		var friend_in := false
+		var enemy_in := false
+		for fk in state["units"]:
+			var fu: Dictionary = state["units"][fk]
+			if int(fu["alive"]) <= 0 or str(fk) == key:
+				continue
+			var near := false
+			for pp in fu["positions"]:
+				if ((pp as Vector3) - op).length() <= 3.0 * BattleSim.IN2M:
+					near = true
+					break
+			if near:
+				if int(fu["player"]) == me:
+					friend_in = true
+				else:
+					enemy_in = true
+		if friend_in and enemy_in:
+			var d := (op - centre).length()
+			if d < best_d:
+				best_d = d
+				goal = op
+				why = "contested marker"
+	if goal == Vector3.INF:
+		for fk in state["units"]:
+			var fu: Dictionary = state["units"][fk]
+			if str(fk) == key or int(fu["player"]) != me or int(fu["alive"]) <= 0:
+				continue
+			if bool(fu.get("shaken", false)) or _below_half(fu):
+				var fc := _centre(fu)
+				var d2 := (fc - centre).length()
+				if d2 > 4.0 * BattleSim.IN2M and d2 < best_d:
+					best_d = d2
+					goal = fc
+					why = "battered friend"
+	if goal == Vector3.INF:
+		for o in state["objectives"]:
+			var d3 := ((o as Dictionary)["pos"] as Vector3 - centre).length()
+			if d3 / BattleSim.IN2M > 9.0 and d3 < best_d:
+				best_d = d3
+				goal = (o as Dictionary)["pos"]
+				why = "idle reserve moves up"
+	if goal == Vector3.INF:
+		return {}
+	var rush_in := float(SoloController.move_bands_for_unit(su["unit"], null).get("rush", 12))
+	var dist_in := (goal - centre).length() / BattleSim.IN2M
+	if dist_in <= 0.001:
+		return {}
+	var stop_in := maxf(dist_in - (rush_in + 2.0), 0.0)
+	var dest: Vector3 = goal - (goal - centre).normalized() * stop_in * BattleSim.IN2M
+	return {"unit": key, "kind": AiDecision.Action.ADVANCE, "dest": dest,
+		"wave": why}
+
+
+static func _below_half(su: Dictionary) -> bool:
+	# v0: model count against the snapshot's position slots (conservative —
+	# when slots track only the living, only 'shaken' triggers the wave).
+	return int(su["alive"]) * 2 <= (su["positions"] as Array).size()
 
 
 static func _centre(su: Dictionary) -> Vector3:

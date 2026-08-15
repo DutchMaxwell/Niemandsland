@@ -55,7 +55,7 @@ func test_hold_plus_one_rush_per_objective_without_enemies() -> void:
 	var state := _state([_armed(2, [Vector3.ZERO], "Grunts",
 		[{"name": "CCW", "range": 0}])], objectives)
 	var cands := AiPlanner.candidates(state, "Grunts")
-	assert_int(cands.size()).is_equal(3)   # no threat: no shoot, charge or retreat
+	assert_int(cands.size()).is_equal(4)   # no threat: no shoot/charge/retreat; +1 second-wave move-up (D23)
 	assert_int(_of_kind(cands, AiDecision.Action.HOLD).size()).is_equal(1)
 	var rushes := _of_kind(cands, AiDecision.Action.RUSH)
 	assert_that(rushes.map(func(c: Dictionary) -> Vector3: return c["dest"])).is_equal(objectives)
@@ -116,3 +116,30 @@ func test_retreat_points_away_from_the_nearest_threat() -> void:
 		AiDecision.Action.ADVANCE)
 	assert_int(advances.size()).is_equal(1)
 	assert_float(((advances[0] as Dictionary)["dest"] as Vector3).x).is_less(0.0)
+
+
+## D21/D23 — the second wave: a rear unit gets a follow-up candidate toward
+## a CONTESTED marker (friend and enemy in the ring), stopping at support
+## distance (next round's rush reaches it); with nothing contested and no
+## battered friend, an idle rear unit still gets its move-up offer.
+func test_second_wave_candidate_offers() -> void:
+	var holder := _armed(1, [Vector3(1.0 * IN2M, 0, 0)], "Holder", [])
+	var raider := _armed(2, [Vector3(2.0 * IN2M, 0, 0)], "Raider", [])
+	var rear := _armed(1, [Vector3(-30.0 * IN2M, 0, 0)], "Rear", [])
+	var state := _state([holder, raider, rear], [Vector3.ZERO])
+	var cands := AiPlanner.candidates(state, "Rear")
+	var wave := {}
+	for c in cands:
+		if str((c as Dictionary).get("wave", "")) != "":
+			wave = c
+	assert_str(str(wave.get("wave", ""))).is_equal("contested marker")
+	var stop_in: float = ((wave["dest"] as Vector3) - Vector3.ZERO).length() / IN2M
+	assert_float(stop_in).is_between(10.0, 20.0)   # 30" out, rush 12+2 => stop ~16" from goal
+	# no contest, no battered friend -> idle reserve still moves up
+	var lone := _armed(1, [Vector3(-30.0 * IN2M, 0, 0)], "Lone", [])
+	var state2 := _state([lone], [Vector3.ZERO])
+	var w2 := {}
+	for c in AiPlanner.candidates(state2, "Lone"):
+		if str((c as Dictionary).get("wave", "")) != "":
+			w2 = c
+	assert_str(str(w2.get("wave", ""))).is_equal("idle reserve moves up")
