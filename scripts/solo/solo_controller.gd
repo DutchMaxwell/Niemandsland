@@ -2627,6 +2627,7 @@ func _planner_active() -> bool:
 func _planner_pick_unit(pool: Array) -> GameUnit:
 	var diff := active_difficulty()
 	AiMissionEval.fit_mode = diff != null and diff.eval_fit   # E4: leaf choice per preset
+	AiPlanner.playout_search = diff != null and diff.playout_search   # S-wave: per preset
 	# D-wave: seat-aware depth — opener when OUR side made this round's first
 	# activation (or nobody acted yet, i.e. we are about to open it).
 	AiPlanner.opener_seat = int(_round_first_slot.get(_current_round(), ai_slot)) == int(ai_slot)
@@ -2705,6 +2706,7 @@ func _with_reserves(state: Dictionary) -> Dictionary:
 func _solve_planner(unit: GameUnit) -> Dictionary:
 	var sp_diff := active_difficulty()
 	AiMissionEval.fit_mode = sp_diff != null and sp_diff.eval_fit   # E4: leaf choice per preset
+	AiPlanner.playout_search = sp_diff != null and sp_diff.playout_search   # S-wave: per preset
 	# R3: execute the rollout intent when it is still valid (same unit, same
 	# round, target still alive) — re-deriving 1-ply here would undo the tempo
 	# choice the unit pick just made. Any mismatch falls through to the re-plan.

@@ -59,6 +59,15 @@ static func top_k_default() -> int:
 ## out and take the best END-OF-ROUND rich-leaf score. top_k <= 0 degrades to
 ## plan() byte-identically (the safety valve and the red-green seam).
 ## Deterministic: prefilter ties keep capture order (explicit index tiebreak).
+## S-wave knobs (grill 15.08.): playout arbitration fires only when the
+## blend sees the top-2 CLOSE; the playout verdict then decides outright.
+static var playout_search := false   # set per pick from the difficulty preset
+static var playout_arbitrations := 0  # test/diagnosis counter: how often playouts fired
+static var playout_close_margin := 0.02   # blend-score gap that counts as "close" (knob)
+const PLAYOUT_DECIDE_MARGIN := 0.5   # mean marker-delta that settles it
+const PLAYOUT_CAP := 7               # max playouts per branch
+
+
 static func plan_with_rollout(state: Dictionary, player: int,
 		top_k: int = -1) -> Dictionary:
 	_last_leaf_state = {}
@@ -125,6 +134,38 @@ static func plan_with_rollout(state: Dictionary, player: int,
 				_last_leaf_state = ends[ends.size() - 1]
 		elif runner.is_empty() or rs > float(runner["score"]):
 			runner = rolled
+	# S-wave PS2 (D17/D19): on a CLOSE top-2 the playout DECIDES — adaptive
+	# escalation (3 playouts each, +2 while tied, hard cap), deterministic
+	# prng per state+branch. playout_search=false = byte-identical pick.
+	var playout_note := ""
+	if playout_search and not runner.is_empty() \
+			and absf(float(best["score"]) - float(runner["score"])) < playout_close_margin:
+		playout_arbitrations += 1
+		var sig := _playout_sig(state, player)
+		var n := 3
+		var sum_b := 0.0
+		var sum_r := 0.0
+		var done := 0
+		while n <= PLAYOUT_CAP:
+			for i in range(done, n):
+				var rb := RandomNumberGenerator.new()
+				rb.seed = sig * 31 + i * 2
+				var pb := full_playout(state, best["action"], player, rb)
+				sum_b += float(pb["p1"] - pb["p2"]) * (1.0 if player == 1 else -1.0)
+				var rr := RandomNumberGenerator.new()
+				rr.seed = sig * 31 + i * 2 + 1
+				var pr := full_playout(state, runner["action"], player, rr)
+				sum_r += float(pr["p1"] - pr["p2"]) * (1.0 if player == 1 else -1.0)
+			done = n
+			if absf(sum_b - sum_r) / float(n) >= PLAYOUT_DECIDE_MARGIN:
+				break
+			n += 2
+		if sum_r > sum_b:
+			var tmp := best
+			best = runner
+			runner = tmp
+		playout_note = " [playout %d/side: %.2f vs %.2f -> %s]" % [done,
+			maxf(sum_b, sum_r) / done, minf(sum_b, sum_r) / done, str(best["unit_key"])]
 	var waits := 0
 	for key in state["units"]:
 		var su: Dictionary = state["units"][key]
@@ -132,7 +173,7 @@ static func plan_with_rollout(state: Dictionary, player: int,
 				and int(su["alive"]) > 0 and str(key) != str(best["unit_key"]):
 			waits += 1
 	return {"used": true, "unit_key": best["unit_key"], "action": best["action"],
-		"intent": _intent(state, best, runner, base) + " (round played out; %d own kept back)" % waits,
+		"intent": _intent(state, best, runner, base) + " (round played out; %d own kept back)" % waits + playout_note,
 		"expectation": {"before": base, "after": float(best["score"])},
 		"runner_up": runner, "waits": waits, "rolled_units": covered.keys()}
 
@@ -621,6 +662,13 @@ static func _nearest_enemy(state: Dictionary, key: String) -> String:
 # calls the planner PLAYS ITS CANDIDATES OUT instead of judging: cheap
 # policy for both sides (D18), playout verdict decides (D19). Local rng
 # only — the game's dice stream is never touched.
+
+
+## Deterministic per-state seed for playout prngs: same position + same
+## player = same dice, so the pick is reproducible (A/B and replay safe).
+static func _playout_sig(state: Dictionary, player: int) -> int:
+	return hash("%d:%d:%s" % [int(state.get("round", 0)), player,
+		str(BattleSim.board_rows(state))])
 
 
 ## Play ONE branch to game end under the cheap policy; returns final marker

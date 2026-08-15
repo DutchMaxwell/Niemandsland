@@ -64,3 +64,47 @@ func test_playout_is_deterministic_per_seed_and_leaves_state_alone() -> void:
 	var b := AiPlanner.full_playout(state, act, 1, _rng(11))
 	assert_that(a).is_equal(b)
 	assert_str(JSON.stringify(BattleSim.board_rows(state))).is_equal(before)
+
+
+## PS2: with playout_search OFF the pick is byte-identical to today; ON, a
+## CLOSE top-2 gets arbitrated by playouts and the verdict may flip the
+## pick. Fixture: two units, one marker each side of the runner — the blend
+## sees near-equal moves; the playout knows only one marker is holdable.
+func test_playout_arbitration_flag_off_is_identity() -> void:
+	var state := _state([_unit(1, [Vector3(8.0 * IN2M, 0, 0)], "Runner"),
+		_unit(2, [Vector3(-20.0 * IN2M, 0, 10.0 * IN2M)], "Foe")])
+	AiPlanner.playout_search = false
+	var a := AiPlanner.plan_with_rollout(state, 1)
+	var b := AiPlanner.plan_with_rollout(state, 1)
+	assert_that(a).is_equal(b)
+	AiPlanner.playout_search = true
+	var c := AiPlanner.plan_with_rollout(state, 1)
+	AiPlanner.playout_search = false
+	assert_bool(c.get("used", false)).is_true()
+	# determinism WITH playouts too
+	AiPlanner.playout_search = true
+	var d := AiPlanner.plan_with_rollout(state, 1)
+	AiPlanner.playout_search = false
+	assert_that(c).is_equal(d)
+
+
+## PS2 firing proof: a runner exactly between two markers makes the top-2
+## genuinely close — the arbitration MUST fire (counter moves). Shrinking
+## the close-margin to zero must silence it (mutation check lives on the
+## const; here we pin the fixture actually exercising the path).
+func test_playout_arbitration_fires_on_close_top2() -> void:
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	var runner := _unit(1, [Vector3.ZERO], "Runner")
+	army.game_units = {"Runner": runner}
+	var state := BattleSim.capture(army,
+		func() -> Array: return [Vector3(-8.0 * IN2M, 0, 0), Vector3(8.0 * IN2M, 0, 0)],
+		func(_i: int) -> int: return 0, 3, 4)
+	AiPlanner.playout_search = true
+	AiPlanner.playout_close_margin = 0.30   # force the close-branch for the path pin
+	AiPlanner.playout_arbitrations = 0
+	var pick := AiPlanner.plan_with_rollout(state, 1)
+	AiPlanner.playout_search = false
+	AiPlanner.playout_close_margin = 0.02
+	assert_bool(pick.get("used", false)).is_true()
+	assert_int(AiPlanner.playout_arbitrations).is_greater_equal(1)
+	assert_str(str(pick.get("intent", ""))).contains("[playout")

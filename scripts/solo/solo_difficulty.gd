@@ -79,6 +79,7 @@ const PRESETS := {
 	# E4 (eval-tuning wave): planner_v0 with the FITTED eval as the leaf — the
 	# arena A/B pair for "did the data-derived value function beat the hand one".
 	"planner_v1": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "eval_fit": true},
+	"planner_v2": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "eval_fit": true, "playout_search": true},
 }
 
 ## Legacy grade names (old harness scripts, saved arena invocations, docs) all resolve to
@@ -99,6 +100,7 @@ var avoid_overkill: bool = false   # albtraum v2: focus fire caps at the target'
 var endgame_convergence: bool = false   # albtraum v2: last-two-rounds marker runs + one-runner-per-marker spread
 var planner: bool = false   # PLANNER_V0: route activations through the 1-ply mission planner overlay
 var eval_fit: bool = false  # E4: planner leaves score with the FITTED eval (planner_v1)
+var playout_search: bool = false  # S-wave: close top-2 arbitrated by full playouts (planner_v2)
 
 ## The game-level base seed folded into every deterministic draw (reproducibility across a rating run).
 var base_seed: int = 0
