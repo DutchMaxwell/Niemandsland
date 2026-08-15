@@ -59,6 +59,11 @@ var _out_dir := ""
 # verbatim knob/roll-off records the ladder's monotonicity diagnosis reads ("which knob failed to bite").
 var _decision_counts: Dictionary = {}   # side(int) → {kind(String): count}
 var _knob_records: Array = []           # full records of kind roll_off / difficulty (+side/round annotation)
+# P0 menu-coverage probe (NML-1009, NML_MENU_PROBE=1): per action class, how many
+# of the TREE's activations the planner's candidate menu can express. The move
+# histogram buckets the miss distance in 3" steps — "how far off the menu was".
+var _menu_probe: Dictionary = {}        # class(String) → {n, covered, loose}
+var _menu_miss_hist: Dictionary = {}    # 3"-bucket(String) → count (movement only)
 # Movement plausibility capture (AI plausibility wave 1): every MOVE record's numbers, per side — the
 # result JSON aggregates them into the acceptance metrics (median achieved/band on open-field moves,
 # aimless sub-inch moves, large-base stall streaks, aircraft lane compliance).
@@ -307,6 +312,17 @@ func _run() -> void:
 		var by_kind: Dictionary = _decision_counts.get(side, {})
 		by_kind[kind] = int(by_kind.get(kind, 0)) + 1
 		_decision_counts[side] = by_kind
+		if kind == "menu_probe":
+			var md: Dictionary = rec.get("data", {})
+			var cls := str(md.get("class", "?"))
+			var by: Dictionary = _menu_probe.get(cls, {"n": 0, "covered": 0, "loose": 0})
+			by["n"] = int(by["n"]) + 1
+			by["covered"] = int(by["covered"]) + (1 if bool(md.get("covered", false)) else 0)
+			by["loose"] = int(by["loose"]) + (1 if bool(md.get("loose", false)) else 0)
+			_menu_probe[cls] = by
+			if cls == "move":
+				var bucket := str(int(floor(maxf(float(md.get("best_in", 0.0)), 0.0) / 3.0)) * 3)
+				_menu_miss_hist[bucket] = int(_menu_miss_hist.get(bucket, 0)) + 1
 		if kind == "roll_off" or kind == "difficulty":
 			var annotated := rec.duplicate(true)
 			annotated["side"] = side
@@ -521,6 +537,8 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 		},
 		"search_knobs": search_knobs(),
 		"decision_counts": _stringify_keys(_decision_counts),
+		"menu_probe": _menu_probe,
+		"menu_miss_hist": _menu_miss_hist,
 		"knob_records": _knob_records,
 		"move_usage": _move_usage_summary(),
 		"planner_calib": calib_pairs(_calib_records),

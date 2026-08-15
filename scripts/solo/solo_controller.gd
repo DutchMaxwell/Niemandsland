@@ -1855,6 +1855,15 @@ func _act(unit: GameUnit) -> Dictionary:
 			"candidates": [], "chosen": "HOLD and shoot in place",
 			"why": "kite would abandon a held objective under threat",
 			"data": {"final_round": _is_final_round()}})
+	# P0 MENU-COVERAGE PROBE (NML-1009, env-gated NML_MENU_PROBE=1): the tree's
+	# activation is settled HERE — action, destination and victim are final and
+	# nothing has moved yet, so the board still matches what the planner would
+	# have seen. Pure measurement: it only records.
+	if _menu_probe_on() and not planner_used:
+		var kite: bool = action == AiDecision.Action.ADVANCE and not to_obj and not to_flank \
+			and shoot_range > 0 and enemy_dist <= float(shoot_range)
+		_menu_probe(unit, action, goal, target_unit, do_shoot,
+			(rush if action == AiDecision.Action.RUSH else advance), kite)
 	var dang := 0
 	match action:
 		AiDecision.Action.RUSH:
@@ -2696,6 +2705,61 @@ func _with_reserves(state: Dictionary) -> Dictionary:
 				counts[side] = int(counts[side]) + 1
 	state["reserves"] = counts
 	return state
+
+
+## P0 MENU-COVERAGE PROBE (NML-1009, Plan B v2): before we clone the tree we
+## measure whether the planner's candidate menu can EXPRESS what the tree
+## plays. Env-gated (NML_MENU_PROBE=1) because it captures the board a second
+## time per activation; it only records — no decision reads it.
+static var _menu_probe_env := -1
+func _menu_probe_on() -> bool:
+	if _menu_probe_env == -1:
+		_menu_probe_env = 1 if OS.get_environment("NML_MENU_PROBE") == "1" else 0
+	return _menu_probe_env == 1
+
+
+func _menu_probe(unit: GameUnit, action: int, goal: Vector3, target_unit: GameUnit,
+		do_shoot: bool, band_in: float, kite: bool) -> void:
+	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
+		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
+		terrain_type_at)
+	var key := _state_key_of(state, unit)
+	if key == "":
+		# Never lose an activation silently (the ledger must close against the
+		# "action" record count): an unmappable actor is its own class.
+		record_decision({"kind": "menu_probe", "unit": unit.get_name(),
+			"rule": "P0 (NML-1009): actor not in the captured board", "candidates": [],
+			"chosen": "not measured", "why": "unmapped",
+			"data": {"class": "unmapped", "covered": false, "loose": false,
+				"best_in": -1.0, "menu": 0}})
+		return
+	var victim := _state_key_of(state, target_unit)
+	var eff_goal := goal
+	if kite and target_unit != null:
+		# The kite moves AWAY from its target: hand over the real direction, or
+		# the probe reads a retreat as a walk into the enemy's face.
+		var centre := unit_centre(unit)
+		var away := centre - unit_centre(target_unit)
+		if away.length() > 0.001:
+			eff_goal = centre + away.normalized() * band_in * INCHES_TO_METERS
+	var cov := AiPlanner.menu_covers(state, key, {"kind": action, "goal": eff_goal,
+		"band_m": band_in * INCHES_TO_METERS,
+		"shoot": victim if do_shoot and action == AiDecision.Action.HOLD else "",
+		"charge": victim if action == AiDecision.Action.CHARGE else ""})
+	record_decision({"kind": "menu_probe", "unit": unit.get_name(),
+		"rule": "P0 (NML-1009): is the teacher's move even on the planner's candidate menu?",
+		"candidates": [], "chosen": ("on the menu" if bool(cov["covered"]) else "not offered"),
+		"why": str(cov["class"]), "data": cov})
+
+
+## The captured state's key for a live unit ("" when it is not on the board).
+func _state_key_of(state: Dictionary, unit: GameUnit) -> String:
+	if unit == null:
+		return ""
+	for k in state["units"]:
+		if (state["units"][k] as Dictionary)["unit"] == unit:
+			return str(k)
+	return ""
 
 
 ## The planner as a position-solver-style overlay: capture the LIVE game into a BattleSim state,
