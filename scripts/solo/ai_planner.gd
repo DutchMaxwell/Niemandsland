@@ -651,6 +651,66 @@ static func candidates(state: Dictionary, key: String) -> Array:
 	return out
 
 
+## P0 MENU-COVERAGE PROBE (Plan B v2, 15.08.): can this menu even EXPRESS the
+## move the TEACHER (the decision tree) just chose? Measurement only — nothing
+## here decides anything. `move` is the tree's settled activation:
+##   kind    : AiDecision.Action (KITE arrives normalised to ADVANCE)
+##   goal    : the point it moved toward (movement kinds only)
+##   band_m  : the reach it actually used — BOTH sides are clamped to it, so a
+##             candidate's 100"-convention retreat goal compares as the step it
+##             would really produce, not as a point off the table
+##   shoot / charge : victim keys ("" = none)
+## Hold and charge match on the VICTIM (picking the same target is part of
+## expressing the move); movement matches on where the unit ends up: covered =
+## within the 3" seize ring (same spot for mission purposes), loose = within
+## one Advance. best_in = -1 when distance does not apply.
+const MENU_COVER_IN := 3.0
+const MENU_LOOSE_IN := 6.0
+
+static func menu_covers(state: Dictionary, key: String, move: Dictionary) -> Dictionary:
+	var cands := candidates(state, key)
+	var kind := int(move.get("kind", AiDecision.Action.HOLD))
+	if kind == AiDecision.Action.KITE:
+		kind = AiDecision.Action.ADVANCE
+	var out := {"menu": cands.size(), "covered": false, "loose": false,
+		"best_in": -1.0, "class": "hold"}
+	if kind == AiDecision.Action.CHARGE or kind == AiDecision.Action.HOLD:
+		out["class"] = "charge" if kind == AiDecision.Action.CHARGE else "hold"
+		var field := "charge" if kind == AiDecision.Action.CHARGE else "shoot"
+		for c in cands:
+			if int((c as Dictionary)["kind"]) == kind \
+					and str((c as Dictionary).get(field, "")) == str(move.get(field, "")):
+				out["covered"] = true
+				out["loose"] = true
+				break
+		return out
+	out["class"] = "move"
+	var centre := _centre(state["units"][key])
+	var band := maxf(float(move.get("band_m", 0.0)), 0.0)
+	var goal_pt := _clamp_to_band(centre, move.get("goal", centre), band)
+	var best := INF
+	for c in cands:
+		var cd: Dictionary = c
+		if not cd.has("dest") or int(cd["kind"]) == AiDecision.Action.CHARGE:
+			continue
+		var d := (_clamp_to_band(centre, cd["dest"], band) - goal_pt).length() / BattleSim.IN2M
+		best = minf(best, d)
+	if best < INF:
+		out["best_in"] = best
+		out["covered"] = best <= MENU_COVER_IN
+		out["loose"] = best <= MENU_LOOSE_IN
+	return out
+
+
+## The step a goal really produces: the band clamp BattleSim.resolve applies.
+static func _clamp_to_band(centre: Vector3, goal: Vector3, band_m: float) -> Vector3:
+	var away := goal - centre
+	var d := away.length()
+	if d <= band_m or d <= 0.001:
+		return goal
+	return centre + away / d * band_m
+
+
 ## D21/D23 (grill 15.08.) — the SECOND WAVE: a follow-up move toward where
 ## it is needed. Offered when a friendly unit CONTESTS a marker (enemy in
 ## the same 3" ring), when a friend is battered (below half or shaken),
