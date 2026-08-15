@@ -64,6 +64,14 @@ static func top_k_default() -> int:
 static var playout_search := false   # set per pick from the difficulty preset
 static var playout_arbitrations := 0  # test/diagnosis counter: how often playouts fired
 static var _po_t0 := 0
+## Continuation leaf for playouts: rich (reply-threat aware, 238ms/step on
+## 8v8) vs cheap (31ms — 7.6x faster, same brain for BOTH branches so the
+## comparison stays fair). Env seam NML_PLAYOUT_RICH=0 flips an arena arm.
+static var _po_rich := -1
+static func playout_rich() -> bool:
+	if _po_rich == -1:
+		_po_rich = 0 if OS.get_environment("NML_PLAYOUT_RICH") == "0" else 1
+	return _po_rich == 1
 static var playout_close_margin := 0.02   # blend-score gap that counts as "close" (knob)
 const PLAYOUT_DECIDE_MARGIN := 0.5   # mean marker-delta that settles it
 const PLAYOUT_CAP := 7               # max playouts per branch
@@ -744,5 +752,5 @@ static func _playout_pick(state: Dictionary, player: int) -> Dictionary:
 		var su: Dictionary = state["units"][k]
 		if int(su["player"]) == player and not bool(su["activated"]) \
 				and int(su["alive"]) > 0:
-			return _policy_step(state, player, true)
+			return _policy_step(state, player, playout_rich())
 	return {}
