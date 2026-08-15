@@ -320,6 +320,14 @@ func _units_from_list(path: String, player: int) -> Array:
 		return []
 	var out: Array = []
 	var uidx := 0
+	# v1c (v5.1): the registry resolves spell books via faction_folder +
+	# game_system — factory lists carry the faction in their FILENAME
+	# ({faction}_{points}.json) and the system in the list json.
+	var faction := path.get_file().get_basename()
+	var us := faction.rfind("_")
+	if us > 0:
+		faction = faction.substr(0, us)
+	var gsys := str((data as Dictionary).get("gameSystem", "gf"))
 	# Engine unit accounting (verified on round-1 snapshots): COMBINED pairs
 	# (combined:true + joinToUnit) merge into ONE unit with pooled models and
 	# weapons; attached HEROES (combined:false + joinToUnit) stay separate.
@@ -340,6 +348,8 @@ func _units_from_list(path: String, player: int) -> Array:
 		gu.unit_properties = {"player_id": player, "name": str(ud.get("name", "Unit")),
 			"quality": int(ud.get("quality", 4)), "defense": int(ud.get("defense", 4)),
 			"special_rules": rules}
+		gu.unit_properties["faction_folder"] = faction
+		gu.unit_properties["game_system"] = gsys
 		gu.source_type = "opr"
 		gu.source_data = OPRApiClient.OPRUnit.new()
 		_append_selection(gu, ud)
@@ -448,7 +458,7 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array) -> void:
 	var winner := "draw"
 	if p1 != p2:
 		winner = "p1" if p1 > p2 else "p2"
-	var result := {"schema": 1, "board_schema": 5, "rule_vocab": "v1b",
+	var result := {"schema": 1, "board_schema": 5, "rule_vocab": "v1c",
 		"school_world": 2, "terrain": _world.get("pieces", []),
 		"unknown_rules": BattleSim.unknown_rules.keys(),
 		"tool": "core_selfplay", "seed": game_seed,

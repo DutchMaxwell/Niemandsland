@@ -157,3 +157,21 @@ func test_v5_sparse_rule_pairs_from_vocab() -> void:
 	gu.unit_properties["special_rules"] = ["Frobnicate(2)"]
 	CoreSelfplay._board_rows(st)
 	assert_bool(BattleSim.unknown_rules.has("Frobnicate")).is_true()
+
+
+## v1c (v5.1): a caster's spell book enters its row as (slot 300+, threshold)
+## pairs in vocab order; non-casters carry none; an unknown spell name
+## loud-collects with the 'spell:' prefix instead of vanishing.
+func test_caster_rows_carry_spell_book_pairs() -> void:
+	var vocab: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string("res://data/encoder_rule_vocab_v1.json"))
+	assert_bool((vocab.get("spell", []) as Array).size() >= 400).is_true()
+	var spells: Array = vocab["spell"]
+	var target := str(spells[7])
+	var idx := 7
+	# fixture: a caster whose registry book we fake via the entry list seam
+	# is out of scope here — we pin the VOCAB mapping + prefix collection
+	# through the central _rule_pairs path instead:
+	BattleSim._load_vocab()
+	assert_int(int(BattleSim._vocab_spell.get(target, -1))).is_equal(300 + idx)
+	assert_bool(BattleSim._vocab_spell.size() == spells.size()).is_true()

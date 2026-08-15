@@ -33,6 +33,7 @@ const FLAG_RULES: Array[String] = ["Fearless", "Ambush", "Flying", "Stealth", "F
 const RULE_VOCAB_PATH := "res://data/encoder_rule_vocab_v1.json"
 static var _vocab_unit: Dictionary = {}
 static var _vocab_weapon: Dictionary = {}
+static var _vocab_spell: Dictionary = {}   # v1c: spell book namespace, slots 300+
 static var _vocab_loaded := false
 static var unknown_rules: Dictionary = {}
 
@@ -49,6 +50,9 @@ static func _load_vocab() -> void:
 		var wl: Array = data.get("weapon", [])
 		for i in wl.size():
 			_vocab_weapon[str(wl[i])] = 200 + i
+		var sl: Array = data.get("spell", [])
+		for i in sl.size():
+			_vocab_spell[str(sl[i])] = 300 + i
 	else:
 		push_warning("BattleSim: rule vocab unreadable at %s" % RULE_VOCAB_PATH)
 
@@ -88,6 +92,20 @@ static func _rule_pairs(gu: Variant, od: OPRApiClient.OPRUnit) -> Array:
 			elif not unknown_rules.has(pr[0]):
 				unknown_rules[pr[0]] = true
 				push_warning("BattleSim: UNKNOWN weapon rule '%s' — not in vocab, stamped into result" % pr[0])
+	# v1c (v5.1): a caster's SPELL BOOK enters the row — (slot 300+, threshold)
+	# per known spell; unknown spell names loud-collect exactly like rules.
+	if gu.has_method("is_caster") and gu.is_caster():
+		for sp in SpellsRegistry.spells_for_unit(gu):
+			var spd := sp as Dictionary
+			var sn := str(spd.get("name", "")).strip_edges()
+			if sn == "":
+				continue
+			if _vocab_spell.has(sn):
+				var slot: int = _vocab_spell[sn]
+				vals[slot] = maxi(int(vals.get(slot, 0)), maxi(int(spd.get("threshold", 0)), 1))
+			elif not unknown_rules.has("spell:" + sn):
+				unknown_rules["spell:" + sn] = true
+				push_warning("BattleSim: UNKNOWN spell '%s' — not in vocab, stamped into result" % sn)
 	var out: Array = []
 	var slots := vals.keys()
 	slots.sort()
