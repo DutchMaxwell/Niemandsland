@@ -75,10 +75,10 @@ static func playout_rich() -> bool:
 static var playout_close_margin := 0.02   # blend-score gap that counts as "close" (knob)
 static var _po_margin_env := -1.0
 static func close_margin() -> float:
-	if _po_margin_env < 0.0:
+	if _po_margin_env == -1.0:
 		var e := OS.get_environment("NML_PLAYOUT_MARGIN")
-		_po_margin_env = float(e) if e.is_valid_float() else playout_close_margin
-	return _po_margin_env
+		_po_margin_env = float(e) if e.is_valid_float() else -2.0   # -2 = no env
+	return _po_margin_env if _po_margin_env >= 0.0 else playout_close_margin
 const PLAYOUT_DECIDE_MARGIN := 0.5   # mean marker-delta that settles it
 const PLAYOUT_CAP := 7               # max playouts per branch
 
