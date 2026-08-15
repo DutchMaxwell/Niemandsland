@@ -6,7 +6,7 @@ extends GdUnitTestSuite
 const IN2M := 0.0254
 
 
-func _armed(pid: int, pos: Vector3, uid: String, weapon_range: int) -> GameUnit:
+func _armed(pid: int, pos: Vector3, uid: String, weapon_range: int, melee := false) -> GameUnit:
 	var u := GameUnit.new()
 	u.unit_id = uid
 	u.unit_properties = {"player_id": pid, "name": uid, "quality": 4,
@@ -27,6 +27,13 @@ func _armed(pid: int, pos: Vector3, uid: String, weapon_range: int) -> GameUnit:
 	ow.attacks = 4
 	ow.count = 1
 	opr.weapons.append(ow)
+	if melee:
+		var cc := OPRApiClient.OPRWeapon.new()
+		cc.name = "CCW"
+		cc.range_value = 0
+		cc.attacks = 4
+		cc.count = 1
+		opr.weapons.append(cc)
 	u.source_type = "opr"
 	u.source_data = opr
 	return u
@@ -90,3 +97,21 @@ func test_the_retreat_goal_compares_as_the_step_it_produces() -> void:
 		"goal": Vector3(0, 0, -6.0 * IN2M), "band_m": 6.0 * IN2M})
 	assert_str(str(cov["class"])).is_equal("move")
 	assert_bool(cov["covered"]).is_true()
+
+
+func test_the_wide_teacher_menu_offers_every_target() -> void:
+	# P0b: the narrow menu carries ONE shoot target and ONE charge victim, so a
+	# teacher who picks another one could never be labelled. The wide menu adds
+	# the rest — measured ceiling, not a guess (P0 wave: hold 65%, charge 56%).
+	var state := _state([_armed(2, Vector3.ZERO, "Grunts", 24, true),
+		_armed(1, Vector3(0, 0, 10.0 * IN2M), "Foe", 0),
+		_armed(1, Vector3(0, 0, 12.0 * IN2M), "Other", 0)])
+	var narrow := AiPlanner.candidates(state, "Grunts")
+	var wide := AiPlanner.candidates_wide(state, "Grunts")
+	assert_int(wide.size()).is_greater(narrow.size())
+	assert_int(wide.filter(func(c: Dictionary) -> bool: return c.has("shoot")).size()).is_equal(2)
+	assert_int(wide.filter(func(c: Dictionary) -> bool: return c.has("charge")).size()).is_equal(2)
+	var shot := AiPlanner._best_shoot(state, "Grunts")
+	var mv := {"kind": AiDecision.Action.HOLD, "shoot": "Foe" if shot != "Foe" else "Other"}
+	assert_bool(AiPlanner.menu_covers(state, "Grunts", mv)["covered"]).is_false()
+	assert_bool(AiPlanner.menu_covers(state, "Grunts", mv, true)["covered"]).is_true()

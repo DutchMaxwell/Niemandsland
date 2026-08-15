@@ -2742,10 +2742,16 @@ func _menu_probe(unit: GameUnit, action: int, goal: Vector3, target_unit: GameUn
 		var away := centre - unit_centre(target_unit)
 		if away.length() > 0.001:
 			eff_goal = centre + away.normalized() * band_in * INCHES_TO_METERS
-	var cov := AiPlanner.menu_covers(state, key, {"kind": action, "goal": eff_goal,
-		"band_m": band_in * INCHES_TO_METERS,
+	var mv := {"kind": action, "goal": eff_goal, "band_m": band_in * INCHES_TO_METERS,
 		"shoot": victim if do_shoot and action == AiDecision.Action.HOLD else "",
-		"charge": victim if action == AiDecision.Action.CHARGE else ""})
+		"charge": victim if action == AiDecision.Action.CHARGE else ""}
+	var cov := AiPlanner.menu_covers(state, key, mv)
+	# P0b: the SAME move against the wide teacher menu — the pair is the
+	# red-green of the widening (narrow = the RED reading, measured 15.08.).
+	var wide := AiPlanner.menu_covers(state, key, mv, true)
+	cov["covered_wide"] = bool(wide["covered"])
+	cov["loose_wide"] = bool(wide["loose"])
+	cov["menu_wide"] = int(wide["menu"])
 	record_decision({"kind": "menu_probe", "unit": unit.get_name(),
 		"rule": "P0 (NML-1009): is the teacher's move even on the planner's candidate menu?",
 		"candidates": [], "chosen": ("on the menu" if bool(cov["covered"]) else "not offered"),

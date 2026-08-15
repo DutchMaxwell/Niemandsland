@@ -315,10 +315,13 @@ func _run() -> void:
 		if kind == "menu_probe":
 			var md: Dictionary = rec.get("data", {})
 			var cls := str(md.get("class", "?"))
-			var by: Dictionary = _menu_probe.get(cls, {"n": 0, "covered": 0, "loose": 0})
+			var by: Dictionary = _menu_probe.get(cls, {"n": 0, "covered": 0, "loose": 0,
+				"covered_wide": 0, "loose_wide": 0, "menu_sum": 0, "menu_wide_sum": 0})
 			by["n"] = int(by["n"]) + 1
-			by["covered"] = int(by["covered"]) + (1 if bool(md.get("covered", false)) else 0)
-			by["loose"] = int(by["loose"]) + (1 if bool(md.get("loose", false)) else 0)
+			for f in ["covered", "loose", "covered_wide", "loose_wide"]:
+				by[f] = int(by.get(f, 0)) + (1 if bool(md.get(f, false)) else 0)
+			by["menu_sum"] = int(by.get("menu_sum", 0)) + int(md.get("menu", 0))
+			by["menu_wide_sum"] = int(by.get("menu_wide_sum", 0)) + int(md.get("menu_wide", 0))
 			_menu_probe[cls] = by
 			if cls == "move":
 				var bucket := str(int(floor(maxf(float(md.get("best_in", 0.0)), 0.0) / 3.0)) * 3)

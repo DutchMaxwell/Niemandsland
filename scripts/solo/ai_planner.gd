@@ -651,6 +651,40 @@ static func candidates(state: Dictionary, key: String) -> Array:
 	return out
 
 
+## The TEACHER menu (P0b, NML-1009). P0 measured where the narrow menu cannot
+## express the tree: it offers exactly ONE shoot target (_best_shoot) and ONE
+## charge victim (_best_charge, futile-gated), and the tree picks a different
+## one in a third of its holds and nearly half of its charges — those
+## activations could never carry an imitation label. So the teacher menu adds
+## every OTHER target: one hold+shoot per enemy the unit can legally see, one
+## charge per living enemy (no futile bar here — the clone learns what the
+## teacher DOES; doctrine filters belong on top, not in the transcript).
+## The LIVE planner keeps candidates() byte-identical: it pays a full rollout
+## per candidate, while the clone scores one with a single net forward.
+static func candidates_wide(state: Dictionary, key: String) -> Array:
+	var out := candidates(state, key)
+	var su: Dictionary = state["units"][key]
+	var seen_shoot := {}
+	var seen_charge := {}
+	for c in out:
+		var cd: Dictionary = c
+		if cd.has("shoot"):
+			seen_shoot[str(cd["shoot"])] = true
+		if cd.has("charge"):
+			seen_charge[str(cd["charge"])] = true
+	var ours: Array = BattleSim._profiles_of(su, true)
+	for ek in _enemy_keys(state, key):
+		var tu: Dictionary = state["units"][ek]
+		if int(tu["alive"]) <= 0:
+			continue
+		if not seen_shoot.has(str(ek)) and BattleSim.sees(su, str(ek)):
+			out.append({"unit": key, "kind": AiDecision.Action.HOLD, "shoot": str(ek)})
+		if not seen_charge.has(str(ek)) and not ours.is_empty():
+			out.append({"unit": key, "kind": AiDecision.Action.CHARGE,
+				"dest": _centre(tu), "charge": str(ek)})
+	return out
+
+
 ## P0 MENU-COVERAGE PROBE (Plan B v2, 15.08.): can this menu even EXPRESS the
 ## move the TEACHER (the decision tree) just chose? Measurement only — nothing
 ## here decides anything. `move` is the tree's settled activation:
@@ -667,8 +701,9 @@ static func candidates(state: Dictionary, key: String) -> Array:
 const MENU_COVER_IN := 3.0
 const MENU_LOOSE_IN := 6.0
 
-static func menu_covers(state: Dictionary, key: String, move: Dictionary) -> Dictionary:
-	var cands := candidates(state, key)
+static func menu_covers(state: Dictionary, key: String, move: Dictionary,
+		wide := false) -> Dictionary:
+	var cands := candidates_wide(state, key) if wide else candidates(state, key)
 	var kind := int(move.get("kind", AiDecision.Action.HOLD))
 	if kind == AiDecision.Action.KITE:
 		kind = AiDecision.Action.ADVANCE
