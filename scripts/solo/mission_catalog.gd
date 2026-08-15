@@ -67,3 +67,36 @@ static func marker_count(mission: Dictionary, rng: RandomNumberGenerator) -> int
 		return rng.randi_range(1, 3) + int(s.substr(3))
 	push_warning("[MISSIONS] bad marker count spec '%s' — using d3+2" % s)
 	return rng.randi_range(1, 3) + 2
+
+
+## M3 — AUTOMATIC marker placement (grill 2026-08-12 D2): resolves the
+## catalog's placement mode into centered table-inch positions. 'alternate'
+## (Duel) returns [] on purpose — the players' hand-placement flow stays.
+## deploy_zone_centres asks the DEPLOYMENT style for its zones (centroid of
+## each player's first polygon), so Breakthrough follows whatever zones the
+## game actually uses — one source, no drift.
+static func marker_positions(mission: Dictionary, deployment_style: Dictionary,
+		table_w_in := 72.0, table_d_in := 48.0) -> Array:
+	var mode := str((mission.get("markers", {}) as Dictionary).get("placement", "alternate"))
+	match mode:
+		"quarter_centres":
+			return [Vector2(-table_w_in / 4.0, -table_d_in / 4.0),
+				Vector2(table_w_in / 4.0, -table_d_in / 4.0),
+				Vector2(-table_w_in / 4.0, table_d_in / 4.0),
+				Vector2(table_w_in / 4.0, table_d_in / 4.0)]
+		"deploy_zone_centres":
+			var out: Array = []
+			for pk in ["1", "2"]:
+				var polys: Variant = (deployment_style.get("zones", {}) as Dictionary).get(pk)
+				if polys is Array and not (polys as Array).is_empty():
+					var c := Vector2.ZERO
+					var n := 0
+					for xz in (polys as Array)[0]:
+						c += Vector2(float(xz[0]), float(xz[1]))
+						n += 1
+					if n > 0:
+						out.append(c / float(n))
+			return out
+		"table_centre":
+			return [Vector2.ZERO]
+	return []   # 'alternate' and unknown modes: hand placement flow

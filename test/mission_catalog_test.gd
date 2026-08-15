@@ -47,3 +47,23 @@ func test_marker_count_is_deterministic_per_seed_and_in_range() -> void:
 		MissionCatalog.get_mission("king_of_the_hill"), rng)).is_equal(1)
 	assert_int(MissionCatalog.marker_count(
 		MissionCatalog.get_mission("seize_ground"), rng)).is_equal(4)
+
+
+## M3: automatic placement modes resolve to book positions; Duel's
+## 'alternate' stays a hand-placement flow (empty list by contract).
+func test_marker_positions_modes() -> void:
+	var style := DeploymentCatalog.get_style("front_line")
+	var sg := MissionCatalog.get_mission("seize_ground")
+	var q := MissionCatalog.marker_positions(sg, style)
+	assert_int(q.size()).is_equal(4)
+	assert_that(q[0]).is_equal(Vector2(-18.0, -12.0))
+	assert_that(q[3]).is_equal(Vector2(18.0, 12.0))
+	var bt := MissionCatalog.get_mission("breakthrough")
+	var z := MissionCatalog.marker_positions(bt, style)
+	assert_int(z.size()).is_equal(2)
+	assert_that(z[0]).is_equal(Vector2(0.0, -18.0))
+	assert_that(z[1]).is_equal(Vector2(0.0, 18.0))
+	var koth := MissionCatalog.get_mission("king_of_the_hill")
+	assert_that(MissionCatalog.marker_positions(koth, style)).is_equal([Vector2.ZERO])
+	var duel := MissionCatalog.get_mission("duel")
+	assert_that(MissionCatalog.marker_positions(duel, style)).is_equal([])
