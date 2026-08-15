@@ -141,3 +141,16 @@ func test_the_matched_index_is_the_training_label() -> void:
 		"band_m": 12.0 * IN2M})
 	assert_bool(miss["covered"]).is_false()
 	assert_int(miss["idx"]).is_equal(-1)
+
+
+func test_the_wide_menu_can_express_a_march_at_the_enemy() -> void:
+	# Measured on the box (king_of_the_hill, ONE marker): the narrow menu is
+	# marker-shaped, so movement coverage collapsed to 36%. The teacher menu
+	# carries the tree's other destination — the enemy itself.
+	var foe := _armed(1, Vector3(0, 0, 30.0 * IN2M), "Foe", 0)
+	var state := _state([_armed(2, Vector3.ZERO, "Grunts", 0), foe],
+		[Vector3(20.0 * IN2M, 0, 0)])
+	var mv := {"kind": AiDecision.Action.RUSH, "goal": Vector3(0, 0, 30.0 * IN2M),
+		"band_m": 12.0 * IN2M}
+	assert_bool(AiPlanner.menu_covers(state, "Grunts", mv)["covered"]).is_false()
+	assert_bool(AiPlanner.menu_covers(state, "Grunts", mv, true)["covered"]).is_true()

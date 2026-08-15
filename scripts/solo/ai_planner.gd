@@ -682,6 +682,12 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 		if not seen_charge.has(str(ek)) and not ours.is_empty():
 			out.append({"unit": key, "kind": AiDecision.Action.CHARGE,
 				"dest": _centre(tu), "charge": str(ek)})
+		# Movement toward the ENEMY — the whole narrow menu is marker-shaped, so
+		# on a ONE-marker mission it collapsed: measured on the box, movement
+		# coverage fell from 83.6% (three markers) to 36.4% (king_of_the_hill).
+		# The tree's other destination has always been "at that unit over there".
+		out.append({"unit": key, "kind": AiDecision.Action.RUSH,
+			"dest": _centre(tu), "at": str(ek)})
 	return out
 
 
