@@ -167,6 +167,37 @@ static func board_rows(state: Dictionary) -> Array:
 	return rows
 
 
+## S-wave (playout search): round-end marker seize on a SIM STATE — the
+## exact rule the factory's fork labels were scored with (majority of
+## non-shaken living units within 3", both sides near = neutral, nobody
+## near keeps the owner). Mutates `owners` AND writes ownership back into
+## the state's objective dicts (eval/features read them).
+static func playout_seize(state: Dictionary, owners: Array) -> void:
+	var objs: Array = state.get("objectives", [])
+	for i in range(objs.size()):
+		var op: Vector3 = (objs[i] as Dictionary)["pos"]
+		var near1 := 0
+		var near2 := 0
+		for k in state["units"]:
+			var su: Dictionary = state["units"][k]
+			if int(su["alive"]) <= 0 or bool(su.get("shaken", false)):
+				continue
+			for p in su["positions"]:
+				if ((p as Vector3) - op).length() <= 3.0 * IN2M:
+					if int(su["player"]) == 1:
+						near1 += 1
+					else:
+						near2 += 1
+					break
+		if near1 > near2:
+			owners[i] = 1
+		elif near2 > near1:
+			owners[i] = 2
+		elif near1 > 0:
+			owners[i] = 0
+		(objs[i] as Dictionary)["owner"] = int(owners[i])
+
+
 ## One activation with stochastic rounding (core self-play games).
 static func resolve_stochastic(state: Dictionary, action: Dictionary,
 		rng: RandomNumberGenerator) -> Dictionary:

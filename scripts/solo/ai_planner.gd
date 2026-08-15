@@ -612,3 +612,79 @@ static func _nearest_enemy(state: Dictionary, key: String) -> String:
 			best_d = d
 			best = str(ek)
 	return best
+
+
+# === S-wave: playout search (grill 15.08., D16-D19) ==========================
+# The triple-chance finding: no static judge (planner eval 51.4%, fork-net
+# 52.9%, maintainer 53%) reads clear fork outcomes from the position — but
+# the cheap-policy playout REPRODUCES them (98.2% split-half). So on close
+# calls the planner PLAYS ITS CANDIDATES OUT instead of judging: cheap
+# policy for both sides (D18), playout verdict decides (D19). Local rng
+# only — the game's dice stream is never touched.
+
+
+## Play ONE branch to game end under the cheap policy; returns final marker
+## points {"p1": int, "p2": int}. Twin of the factory's fork playout — same
+## seize rule (BattleSim.playout_seize), so search verdicts and fork labels
+## speak the same currency.
+static func full_playout(state0: Dictionary, action: Dictionary, player: int,
+		prng: RandomNumberGenerator) -> Dictionary:
+	var owners: Array = []
+	for o in state0.get("objectives", []):
+		owners.append(int((o as Dictionary).get("owner", 0)))
+	var state := BattleSim.resolve_stochastic(state0, action, prng)
+	var turn := 2 if player == 1 else 1
+	var res := _playout_round_tail(state, turn, prng)
+	state = res["state"]
+	var opener: int = (2 if int(res["last"]) == 1 else 1) if int(res["last"]) != 0 else turn
+	BattleSim.playout_seize(state, owners)
+	var rounds_total := int(state.get("rounds_total", 4))
+	for r in range(int(state0.get("round", 1)) + 1, rounds_total + 1):
+		state["round"] = r
+		for k in state["units"]:
+			var su: Dictionary = state["units"][k]
+			su["activated"] = false
+			su["fatigued"] = false
+		res = _playout_round_tail(state, opener, prng)
+		state = res["state"]
+		if int(res["last"]) != 0:
+			opener = 2 if int(res["last"]) == 1 else 1
+		BattleSim.playout_seize(state, owners)
+	var p1 := 0
+	var p2 := 0
+	for o in owners:
+		if int(o) == 1:
+			p1 += 1
+		elif int(o) == 2:
+			p2 += 1
+	return {"p1": p1, "p2": p2}
+
+
+## Cheap-policy alternation until the round runs dry (official one-for-one;
+## a dry side passes the tail). Returns {"state", "last"}.
+static func _playout_round_tail(state: Dictionary, turn: int,
+		prng: RandomNumberGenerator) -> Dictionary:
+	var last := 0
+	var guard: int = (state["units"] as Dictionary).size() * 2 + 4
+	while guard > 0:
+		guard -= 1
+		var a := _playout_pick(state, turn)
+		if a.is_empty():
+			var other := 2 if turn == 1 else 1
+			a = _playout_pick(state, other)
+			if a.is_empty():
+				break
+			turn = other
+		state = BattleSim.resolve_stochastic(state, a, prng)
+		last = turn
+		turn = 2 if turn == 1 else 1
+	return {"state": state, "last": last}
+
+
+static func _playout_pick(state: Dictionary, player: int) -> Dictionary:
+	for k in state["units"]:
+		var su: Dictionary = state["units"][k]
+		if int(su["player"]) == player and not bool(su["activated"]) \
+				and int(su["alive"]) > 0:
+			return _policy_step(state, player, true)
+	return {}
