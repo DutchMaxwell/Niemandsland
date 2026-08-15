@@ -841,10 +841,20 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 			opener = 2 if int(res["last"]) == 1 else 1
 		BattleSim.playout_seize(state, owners)
 		BattleSim.vp_round_add(owners, vp)
-	BattleSim.vp_end_bonus(owners, vp)
-	# NML-1008: the currency is cumulative VPs (1/marker/round + end bonus),
-	# NOT the final marker count — early-round control counts, per the book.
-	return {"p1": vp[0], "p2": vp[1]}
+	# NML-1008 CORRECTED (record check 15.08. evening): our v1 missions are
+	# FACE-OFF = END-scored per book AND per grill D4 (12.08.); the VP
+	# ledger above stays armed for the PROGRESSIVE wave (mission-driven).
+	if str(state0.get("scoring", "end")) == "round_vp":
+		BattleSim.vp_end_bonus(owners, vp)
+		return {"p1": vp[0], "p2": vp[1]}
+	var p1 := 0
+	var p2 := 0
+	for o in owners:
+		if int(o) == 1:
+			p1 += 1
+		elif int(o) == 2:
+			p2 += 1
+	return {"p1": p1, "p2": p2}
 
 
 ## Cheap-policy alternation until the round runs dry (official one-for-one;

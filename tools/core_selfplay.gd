@@ -217,9 +217,15 @@ func _fork_playout(pre_state: Dictionary, action: Dictionary, turn: int,
 			opener = 2 if int(res["last"]) == 1 else 1
 		_seize_on(state, objectives, owners)
 		BattleSim.vp_round_add(owners, vp)
-	BattleSim.vp_end_bonus(owners, vp)
-	# NML-1008: fork labels speak VP — early-round control counts.
-	return {"p1": vp[0], "p2": vp[1]}
+	# CORRECTED: fork labels score like the mission — END for Face-Off.
+	var fp1 := 0
+	var fp2 := 0
+	for o in owners:
+		if int(o) == 1:
+			fp1 += 1
+		elif int(o) == 2:
+			fp2 += 1
+	return {"p1": fp1, "p2": fp2}
 
 
 ## Bare alternation loop for fork playouts (mirrors _play_round's turn logic).
@@ -461,9 +467,11 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array,
 	# final marker counts stay logged for reference.
 	var vp1: int = int(vp[0]) if vp.size() == 2 else p1
 	var vp2: int = int(vp[1]) if vp.size() == 2 else p2
+	# CORRECTED (record check 15.08.): Face-Off (our duel) is END-scored
+	# (book + grill D4 12.08.); vp stays logged for the progressive wave.
 	var winner := "draw"
-	if vp1 != vp2:
-		winner = "p1" if vp1 > vp2 else "p2"
+	if p1 != p2:
+		winner = "p1" if p1 > p2 else "p2"
 	var result := {"schema": 1, "board_schema": 5, "rule_vocab": "v1c",
 		"school_world": 2, "terrain": _world.get("pieces", []),
 		"unknown_rules": BattleSim.unknown_rules.keys(),
@@ -473,7 +481,7 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array,
 			"deployment": "zone12", "symmetric": true, "objective_count": 3, "packs": []},
 		"armies": {"p1": _army1, "p2": _army2}, "opener": 0,
 		"objectives": {"p1": p1, "p2": p2, "neutral": owners.size() - p1 - p2},
-		"vp": {"p1": vp1, "p2": vp2}, "scoring": "round_vp",
+		"vp": {"p1": vp1, "p2": vp2}, "scoring": "end",
 		"winner": winner, "planner_positions": positions_log, "planner_calib": [],
 		"roster": _roster_names()}
 	if _out != "":
