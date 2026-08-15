@@ -63,6 +63,7 @@ static func top_k_default() -> int:
 ## blend sees the top-2 CLOSE; the playout verdict then decides outright.
 static var playout_search := false   # set per pick from the difficulty preset
 static var playout_arbitrations := 0  # test/diagnosis counter: how often playouts fired
+static var _po_t0 := 0
 static var playout_close_margin := 0.02   # blend-score gap that counts as "close" (knob)
 const PLAYOUT_DECIDE_MARGIN := 0.5   # mean marker-delta that settles it
 const PLAYOUT_CAP := 7               # max playouts per branch
@@ -138,9 +139,15 @@ static func plan_with_rollout(state: Dictionary, player: int,
 	# escalation (3 playouts each, +2 while tied, hard cap), deterministic
 	# prng per state+branch. playout_search=false = byte-identical pick.
 	var playout_note := ""
+	if OS.get_environment("NML_PLAN_DUMP") == "1" and not runner.is_empty():
+		printerr("[GAP] R%d best=%s %.4f runner=%s %.4f gap=%.4f search=%s" % [
+			int(state["round"]), str(best["unit_key"]), float(best["score"]),
+			str(runner["unit_key"]), float(runner["score"]),
+			absf(float(best["score"]) - float(runner["score"])), str(playout_search)])
 	if playout_search and not runner.is_empty() \
 			and absf(float(best["score"]) - float(runner["score"])) < playout_close_margin:
 		playout_arbitrations += 1
+		_po_t0 = Time.get_ticks_msec()
 		var sig := _playout_sig(state, player)
 		var n := 3
 		var sum_b := 0.0
@@ -160,6 +167,9 @@ static func plan_with_rollout(state: Dictionary, player: int,
 			if absf(sum_b - sum_r) / float(n) >= PLAYOUT_DECIDE_MARGIN:
 				break
 			n += 2
+		if OS.get_environment("NML_PLAN_DUMP") == "1":
+			printerr("[PLAYOUT] fired n=%d/side dt_ms=%d sums %.1f vs %.1f swap=%s" % [
+				done, Time.get_ticks_msec() - _po_t0, sum_b, sum_r, str(sum_r > sum_b)])
 		if sum_r > sum_b:
 			var tmp := best
 			best = runner

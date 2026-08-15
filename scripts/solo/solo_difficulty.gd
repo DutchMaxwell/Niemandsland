@@ -129,6 +129,7 @@ static func for_grade(name: String, p_base_seed: int = 0) -> SoloDifficulty:
 	d.endgame_convergence = bool(preset.get("endgame_convergence", false))
 	d.planner = bool(preset.get("planner", false))
 	d.eval_fit = bool(preset.get("eval_fit", false))
+	d.playout_search = bool(preset.get("playout_search", false))
 	d.base_seed = p_base_seed
 	return d
 
