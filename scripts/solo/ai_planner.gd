@@ -703,20 +703,30 @@ const MENU_LOOSE_IN := 6.0
 
 static func menu_covers(state: Dictionary, key: String, move: Dictionary,
 		wide := false) -> Dictionary:
-	var cands := candidates_wide(state, key) if wide else candidates(state, key)
+	return menu_covers_in(candidates_wide(state, key) if wide else candidates(state, key),
+		state, key, move)
+
+
+## Same answer against an ALREADY BUILT menu — P1 logs the menu itself next to
+## the teacher's index, and building it twice per activation is pure cost.
+## "idx" is WHICH candidate matched (-1 = none): that index IS the imitation
+## label the clone trains on.
+static func menu_covers_in(cands: Array, state: Dictionary, key: String,
+		move: Dictionary) -> Dictionary:
 	var kind := int(move.get("kind", AiDecision.Action.HOLD))
 	if kind == AiDecision.Action.KITE:
 		kind = AiDecision.Action.ADVANCE
 	var out := {"menu": cands.size(), "covered": false, "loose": false,
-		"best_in": -1.0, "class": "hold"}
+		"best_in": -1.0, "class": "hold", "idx": -1}
 	if kind == AiDecision.Action.CHARGE or kind == AiDecision.Action.HOLD:
 		out["class"] = "charge" if kind == AiDecision.Action.CHARGE else "hold"
 		var field := "charge" if kind == AiDecision.Action.CHARGE else "shoot"
-		for c in cands:
-			if int((c as Dictionary)["kind"]) == kind \
-					and str((c as Dictionary).get(field, "")) == str(move.get(field, "")):
+		for i in range(cands.size()):
+			var c: Dictionary = cands[i]
+			if int(c["kind"]) == kind and str(c.get(field, "")) == str(move.get(field, "")):
 				out["covered"] = true
 				out["loose"] = true
+				out["idx"] = i
 				break
 		return out
 	out["class"] = "move"
@@ -724,16 +734,21 @@ static func menu_covers(state: Dictionary, key: String, move: Dictionary,
 	var band := maxf(float(move.get("band_m", 0.0)), 0.0)
 	var goal_pt := _clamp_to_band(centre, move.get("goal", centre), band)
 	var best := INF
-	for c in cands:
-		var cd: Dictionary = c
+	var best_i := -1
+	for i in range(cands.size()):
+		var cd: Dictionary = cands[i]
 		if not cd.has("dest") or int(cd["kind"]) == AiDecision.Action.CHARGE:
 			continue
 		var d := (_clamp_to_band(centre, cd["dest"], band) - goal_pt).length() / BattleSim.IN2M
-		best = minf(best, d)
+		if d < best:
+			best = d
+			best_i = i
 	if best < INF:
 		out["best_in"] = best
 		out["covered"] = best <= MENU_COVER_IN
 		out["loose"] = best <= MENU_LOOSE_IN
+		if bool(out["covered"]):
+			out["idx"] = best_i
 	return out
 
 

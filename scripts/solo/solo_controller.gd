@@ -2714,7 +2714,9 @@ func _with_reserves(state: Dictionary) -> Dictionary:
 static var _menu_probe_env := -1
 func _menu_probe_on() -> bool:
 	if _menu_probe_env == -1:
-		_menu_probe_env = 1 if OS.get_environment("NML_MENU_PROBE") == "1" else 0
+		# NML_TEACHER_ROWS implies the probe: the rows are built from its work.
+		_menu_probe_env = 1 if (OS.get_environment("NML_MENU_PROBE") == "1"
+			or OS.get_environment("NML_TEACHER_ROWS") == "1") else 0
 	return _menu_probe_env == 1
 
 
@@ -2748,14 +2750,55 @@ func _menu_probe(unit: GameUnit, action: int, goal: Vector3, target_unit: GameUn
 	var cov := AiPlanner.menu_covers(state, key, mv)
 	# P0b: the SAME move against the wide teacher menu — the pair is the
 	# red-green of the widening (narrow = the RED reading, measured 15.08.).
-	var wide := AiPlanner.menu_covers(state, key, mv, true)
+	var cands := AiPlanner.candidates_wide(state, key)
+	var wide := AiPlanner.menu_covers_in(cands, state, key, mv)
 	cov["covered_wide"] = bool(wide["covered"])
 	cov["loose_wide"] = bool(wide["loose"])
 	cov["menu_wide"] = int(wide["menu"])
+	if _teacher_rows_on():
+		_teacher_row(state, key, cands, wide, str(cov["class"]))
 	record_decision({"kind": "menu_probe", "unit": unit.get_name(),
 		"rule": "P0 (NML-1009): is the teacher's move even on the planner's candidate menu?",
 		"candidates": [], "chosen": ("on the menu" if bool(cov["covered"]) else "not offered"),
 		"why": str(cov["class"]), "data": cov})
+
+
+## P1 (NML-1009): one IMITATION ROW per teacher activation — the position the
+## net reads, the menu it chooses from, and WHICH entry the teacher took. Rows
+## with teacher = -1 (the P0 miss class) are written too: dropping them would
+## quietly flatter the corpus. Gated separately from the probe because the
+## rows are large (NML_TEACHER_ROWS=1).
+static var _teacher_rows_env := -1
+func _teacher_rows_on() -> bool:
+	if _teacher_rows_env == -1:
+		_teacher_rows_env = 1 if OS.get_environment("NML_TEACHER_ROWS") == "1" else 0
+	return _teacher_rows_env == 1
+
+
+func _teacher_row(state: Dictionary, key: String, cands: Array, cov: Dictionary,
+		cls: String) -> void:
+	var row_of := {}   # unit key → board row index (BattleSim.board_rows order)
+	var i := 0
+	for k in state["units"]:
+		if int((state["units"][k] as Dictionary)["alive"]) > 0:
+			row_of[str(k)] = i
+			i += 1
+	var menu: Array = []
+	for c in cands:
+		var cd: Dictionary = c
+		var dest: Vector3 = cd.get("dest", Vector3.ZERO)
+		var victim := str(cd.get("charge", cd.get("shoot", "")))
+		menu.append({"kind": int(cd["kind"]),
+			"dest_x": snappedf(dest.x / INCHES_TO_METERS, 0.1),
+			"dest_z": snappedf(dest.z / INCHES_TO_METERS, 0.1),
+			"victim_row": int(row_of.get(victim, -1)),
+			"unit_row": int(row_of.get(key, -1))})
+	record_decision({"kind": "teacher_row", "unit": str(key),
+		"rule": "P1 (NML-1009): the teacher's pick, the menu it came from, and the position it was made in",
+		"candidates": [], "chosen": str(int(cov.get("idx", -1))), "why": cls,
+		"data": {"side": int(ai_slot), "round": _current_round(), "class": cls,
+			"teacher": int(cov.get("idx", -1)), "menu": menu,
+			"board": BattleSim.board_rows(state)}})
 
 
 ## The captured state's key for a live unit ("" when it is not on the board).

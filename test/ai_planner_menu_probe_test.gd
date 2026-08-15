@@ -115,3 +115,29 @@ func test_the_wide_teacher_menu_offers_every_target() -> void:
 	var mv := {"kind": AiDecision.Action.HOLD, "shoot": "Foe" if shot != "Foe" else "Other"}
 	assert_bool(AiPlanner.menu_covers(state, "Grunts", mv)["covered"]).is_false()
 	assert_bool(AiPlanner.menu_covers(state, "Grunts", mv, true)["covered"]).is_true()
+
+
+func test_the_matched_index_is_the_training_label() -> void:
+	# P1: "which entry did the teacher take" IS the label the clone learns, so
+	# the index must point at the matching candidate, not merely say "yes".
+	var state := _state([_armed(2, Vector3.ZERO, "Grunts", 24, true),
+		_armed(1, Vector3(0, 0, 10.0 * IN2M), "Foe", 0),
+		_armed(1, Vector3(0, 0, 12.0 * IN2M), "Other", 0)],
+		[Vector3(20.0 * IN2M, 0, 0)])
+	var cands := AiPlanner.candidates_wide(state, "Grunts")
+	var hold := AiPlanner.menu_covers_in(cands, state, "Grunts",
+		{"kind": AiDecision.Action.HOLD, "shoot": "Other"})
+	assert_int(hold["idx"]).is_greater_equal(0)
+	assert_str(str((cands[int(hold["idx"])] as Dictionary).get("shoot", ""))).is_equal("Other")
+	var rush := AiPlanner.menu_covers_in(cands, state, "Grunts",
+		{"kind": AiDecision.Action.RUSH, "goal": Vector3(20.0 * IN2M, 0, 0),
+		"band_m": 12.0 * IN2M})
+	assert_int(rush["idx"]).is_greater_equal(0)
+	assert_int(int((cands[int(rush["idx"])] as Dictionary)["kind"])).is_equal(AiDecision.Action.RUSH)
+	# an unexpressible move carries no label at all — sideways, where neither a
+	# marker nor the retreat line points (straight back IS the retreat candidate)
+	var miss := AiPlanner.menu_covers_in(cands, state, "Grunts",
+		{"kind": AiDecision.Action.RUSH, "goal": Vector3(-40.0 * IN2M, 0, 0),
+		"band_m": 12.0 * IN2M})
+	assert_bool(miss["covered"]).is_false()
+	assert_int(miss["idx"]).is_equal(-1)

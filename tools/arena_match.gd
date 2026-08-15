@@ -64,6 +64,7 @@ var _knob_records: Array = []           # full records of kind roll_off / diffic
 # histogram buckets the miss distance in 3" steps — "how far off the menu was".
 var _menu_probe: Dictionary = {}        # class(String) → {n, covered, loose}
 var _menu_miss_hist: Dictionary = {}    # 3"-bucket(String) → count (movement only)
+var _teacher_rows: Array = []           # P1 imitation rows (NML_TEACHER_ROWS=1)
 # Movement plausibility capture (AI plausibility wave 1): every MOVE record's numbers, per side — the
 # result JSON aggregates them into the acceptance metrics (median achieved/band on open-field moves,
 # aimless sub-inch moves, large-base stall streaks, aircraft lane compliance).
@@ -312,6 +313,13 @@ func _run() -> void:
 		var by_kind: Dictionary = _decision_counts.get(side, {})
 		by_kind[kind] = int(by_kind.get(kind, 0)) + 1
 		_decision_counts[side] = by_kind
+		if kind == "teacher_row":
+			# P1 imitation corpus (NML_TEACHER_ROWS=1): board + menu + the
+			# teacher's index, one row per tree activation. seq = arrival order.
+			var tr: Dictionary = (rec.get("data", {}) as Dictionary).duplicate(true)
+			tr["seq"] = _teacher_rows.size()
+			tr["unit"] = str(rec.get("unit", ""))
+			_teacher_rows.append(tr)
 		if kind == "menu_probe":
 			var md: Dictionary = rec.get("data", {})
 			var cls := str(md.get("class", "?"))
@@ -541,6 +549,7 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 		"search_knobs": search_knobs(),
 		"decision_counts": _stringify_keys(_decision_counts),
 		"menu_probe": _menu_probe,
+		"teacher_rows": _teacher_rows,
 		"menu_miss_hist": _menu_miss_hist,
 		"knob_records": _knob_records,
 		"move_usage": _move_usage_summary(),
