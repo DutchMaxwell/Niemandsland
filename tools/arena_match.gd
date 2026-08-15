@@ -536,6 +536,9 @@ static func search_knobs() -> Dictionary:
 		"fit_blend": AiMissionEval.fit_blend(),
 		"net_path": OS.get_environment("NML_NET_PATH"),
 		"net_loaded": net_loaded,
+		"playout_rich": AiPlanner.playout_rich(),
+		"playout_margin": AiPlanner.close_margin(),
+		"playout_fired": AiPlanner.playout_arbitrations,
 	}
 
 

@@ -73,6 +73,12 @@ static func playout_rich() -> bool:
 		_po_rich = 0 if OS.get_environment("NML_PLAYOUT_RICH") == "0" else 1
 	return _po_rich == 1
 static var playout_close_margin := 0.02   # blend-score gap that counts as "close" (knob)
+static var _po_margin_env := -1.0
+static func close_margin() -> float:
+	if _po_margin_env < 0.0:
+		var e := OS.get_environment("NML_PLAYOUT_MARGIN")
+		_po_margin_env = float(e) if e.is_valid_float() else playout_close_margin
+	return _po_margin_env
 const PLAYOUT_DECIDE_MARGIN := 0.5   # mean marker-delta that settles it
 const PLAYOUT_CAP := 7               # max playouts per branch
 
@@ -153,7 +159,7 @@ static func plan_with_rollout(state: Dictionary, player: int,
 			str(runner["unit_key"]), float(runner["score"]),
 			absf(float(best["score"]) - float(runner["score"])), str(playout_search)])
 	if playout_search and not runner.is_empty() \
-			and absf(float(best["score"]) - float(runner["score"])) < playout_close_margin:
+			and absf(float(best["score"]) - float(runner["score"])) < close_margin():
 		playout_arbitrations += 1
 		_po_t0 = Time.get_ticks_msec()
 		var sig := _playout_sig(state, player)
