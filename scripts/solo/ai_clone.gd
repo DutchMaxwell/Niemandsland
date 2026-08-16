@@ -72,14 +72,35 @@ static func set_net(n: Dictionary) -> void:
 
 ## The action tuples the trainer sees — ONE source for the corpus writer and
 ## for play, so what the clone scores is what it learned.
+## SEEN_NEAREST: how many of the nearest enemies have a clear line to this
+## destination. Grill D5: the check itself stays REAL (the game's own
+## point-to-point LOS), only its SCOPE is cut — nearest few, a count instead of
+## a list. LOS is symmetric, so the same number answers "who sees me there" and
+## "whom could I see from there". -1 = no LOS source wired.
+const LOS_NEAREST := 3
+
 static func menu_tuples(state: Dictionary, key: String, cands: Array,
-		terrain_at := Callable()) -> Array:
+		terrain_at := Callable(), los_at := Callable()) -> Array:
 	var row_of := {}
 	var i := 0
 	for k in state["units"]:
 		if int((state["units"][k] as Dictionary)["alive"]) > 0:
 			row_of[str(k)] = i
 			i += 1
+	# the nearest few enemies, once per activation rather than per candidate
+	var me := int((state["units"][key] as Dictionary)["player"])
+	var foes: Array = []
+	if los_at.is_valid():
+		var mine := _centre_of(state["units"][key])
+		for k in state["units"]:
+			var su: Dictionary = state["units"][k]
+			if int(su["player"]) == me or int(su["alive"]) <= 0:
+				continue
+			var fc := _centre_of(su)
+			foes.append({"pos": fc, "d": (fc - mine).length()})
+		foes.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			return float(a["d"]) < float(b["d"]))
+		foes = foes.slice(0, mini(LOS_NEAREST, foes.size()))
 	var out: Array = []
 	for c in cands:
 		var cd: Dictionary = c
@@ -93,12 +114,18 @@ static func menu_tuples(state: Dictionary, key: String, cands: Array,
 		var cover := -1
 		if terrain_at.is_valid():
 			cover = 1 if TerrainRules.gives_cover(int(terrain_at.call(dest))) else 0
+		var seen := -1
+		if los_at.is_valid():
+			seen = 0
+			for f in foes:
+				if bool(los_at.call(dest, (f as Dictionary)["pos"])):
+					seen += 1
 		out.append({"kind": int(cd["kind"]),
 			"dest_x": snappedf(dest.x / BattleSim.IN2M, 0.1),
 			"dest_z": snappedf(dest.z / BattleSim.IN2M, 0.1),
 			"victim_row": int(row_of.get(victim, -1)),
 			"unit_row": int(row_of.get(key, -1)),
-			"cover": cover})
+			"cover": cover, "seen": seen, "seen_of": foes.size()})
 	return out
 
 
@@ -243,6 +270,14 @@ static func selftest_ok(n: Dictionary) -> bool:
 			printerr("[CLONE] selftest mismatch at %d: %.6f vs %.6f" % [i, got[i], want[i]])
 			return false
 	return true
+
+
+static func _centre_of(su: Dictionary) -> Vector3:
+	var c := Vector3.ZERO
+	var ps: Array = su["positions"]
+	for p in ps:
+		c += p as Vector3
+	return c / maxf(float(ps.size()), 1.0)
 
 
 static func _add_into(pool: Array, emb: Array) -> void:
