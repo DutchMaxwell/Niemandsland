@@ -1711,25 +1711,32 @@ func _act(unit: GameUnit) -> Dictionary:
 	# STEP-6 PLANNER HOOK (NML-995, plan D6): the 1-ply mission planner overrides the whole tree
 	# decision (action, target, shot, destination) when its preset is live; the position solver and
 	# the Wave-1 single-hooks below are subsumed and skipped. {} keeps everything byte-identical.
+	# CLONE HOOK (NML-1009, Plan B v2 P4): with a policy loaded (NML_CLONE_PATH)
+	# the clone replaces the MOVE and nothing else — WHICH unit acts stays the
+	# tree's section draw, because that is all the imitation corpus ever taught.
+	# No policy loaded => {} => byte-identical tree.
 	var planner_used := false
+	var pl := {}
 	if _planner_active():
-		var pl := _solve_planner(unit)
-		if bool(pl.get("used", false)):
-			planner_used = true
-			action = int(pl["action"])
-			do_shoot = bool(pl["shoot"])
-			dec["toward"] = int(pl["toward"])
-			action_why = str(pl["why"])
-			var ptarget := pl.get("target", null) as GameUnit
-			if ptarget != null and ptarget != target_unit:
-				target_unit = ptarget
-				report["target"] = target_unit
-				tcentre = unit_centre(target_unit)
-				enemy_dist = MoveIntent.distance_inches(centre, tcentre)
-			if pl.has("goal"):
-				solver_used = true
-				solver_goal = pl["goal"]
-			_rule_note(report, str(pl["why"]), false)
+		pl = _solve_planner(unit)
+	elif _clone_active():
+		pl = _solve_clone(unit)
+	if bool(pl.get("used", false)):
+		planner_used = true
+		action = int(pl["action"])
+		do_shoot = bool(pl["shoot"])
+		dec["toward"] = int(pl["toward"])
+		action_why = str(pl["why"])
+		var ptarget := pl.get("target", null) as GameUnit
+		if ptarget != null and ptarget != target_unit:
+			target_unit = ptarget
+			report["target"] = target_unit
+			tcentre = unit_centre(target_unit)
+			enemy_dist = MoveIntent.distance_inches(centre, tcentre)
+		if pl.has("goal"):
+			solver_used = true
+			solver_goal = pl["goal"]
+		_rule_note(report, str(pl["why"]), false)
 	if not planner_used and (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) and _position_solver_active():
 		var sol := _solve_position(unit, target_unit, weapons, archetype, advance, rush, obj_pos, has_obj, int(dec["toward"]), do_shoot)
 		if bool(sol.get("used", false)):
@@ -2761,6 +2768,50 @@ func _menu_probe(unit: GameUnit, action: int, goal: Vector3, target_unit: GameUn
 		"rule": "P0 (NML-1009): is the teacher's move even on the planner's candidate menu?",
 		"candidates": [], "chosen": ("on the menu" if bool(cov["covered"]) else "not offered"),
 		"why": str(cov["class"]), "data": cov})
+
+
+## P4 (NML-1009): is a clone policy loaded? Env-driven (NML_CLONE_PATH), and a
+## net whose selftest disagrees with its trainer is refused, so "loaded" always
+## means "provably the brain that was trained".
+func _clone_active() -> bool:
+	return not AiClone.net().is_empty()
+
+
+## The clone's move for THIS unit: score the wide menu, take the argmax, and
+## hand it back in the same shape the planner overlay uses.
+func _solve_clone(unit: GameUnit) -> Dictionary:
+	var net := AiClone.net()
+	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
+		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
+		terrain_type_at)
+	var key := _state_key_of(state, unit)
+	if key == "":
+		return {}
+	var cands := AiPlanner.candidates_wide(state, key)
+	var menu := AiClone.menu_tuples(state, key, cands)
+	var sc := AiClone.scores(net, BattleSim.board_rows(state), int(ai_slot), menu)
+	if sc.size() != cands.size() or sc.is_empty():
+		return {}
+	var best := 0
+	for i in range(1, sc.size()):
+		if float(sc[i]) > float(sc[best]):
+			best = i
+	var act: Dictionary = cands[best]
+	var kind := int(act["kind"])
+	record_decision({"kind": "clone", "unit": unit.get_name(),
+		"rule": "CLONE (NML-1009): the move the teacher would most likely have played, scored over the whole menu",
+		"candidates": [], "chosen": AiDecision.action_name(kind),
+		"why": "learned from the tree", "data": {"menu": menu.size(),
+			"score": float(sc[best]), "runner_up": float(sc[best - 1 if best > 0 else mini(1, sc.size() - 1)])}})
+	var out := {"used": true, "action": kind, "shoot": act.has("shoot"),
+		"toward": AiDecision.Toward.OBJECTIVE if kind == AiDecision.Action.RUSH \
+			else AiDecision.Toward.ENEMY, "why": "learned from the tree"}
+	if act.has("dest"):
+		out["goal"] = act["dest"]
+	var victim_key := str(act.get("charge", act.get("shoot", "")))
+	if victim_key != "" and (state["units"] as Dictionary).has(victim_key):
+		out["target"] = (state["units"][victim_key] as Dictionary)["unit"]
+	return out
 
 
 ## P1 (NML-1009): one IMITATION ROW per teacher activation — the position the
