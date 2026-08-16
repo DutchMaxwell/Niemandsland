@@ -2763,7 +2763,7 @@ func _menu_probe(unit: GameUnit, action: int, goal: Vector3, target_unit: GameUn
 	cov["loose_wide"] = bool(wide["loose"])
 	cov["menu_wide"] = int(wide["menu"])
 	if _teacher_rows_on():
-		_teacher_row(state, key, cands, wide, str(cov["class"]))
+		_teacher_row(state, key, cands, int(wide.get("idx", -1)), str(cov["class"]))
 	record_decision({"kind": "menu_probe", "unit": unit.get_name(),
 		"rule": "P0 (NML-1009): is the teacher's move even on the planner's candidate menu?",
 		"candidates": [], "chosen": ("on the menu" if bool(cov["covered"]) else "not offered"),
@@ -2801,6 +2801,29 @@ func _solve_clone(unit: GameUnit) -> Dictionary:
 	for i in range(1, sc.size()):
 		if float(sc[i]) > float(sc[best]):
 			best = i
+	# AMPLIFIER (NML_CLONE_SEARCH=k, the Gen-1 rung): the policy PROPOSES, the
+	# simulation DECIDES. Roll out only the k best-liked candidates and keep the
+	# one that scores highest in mission currency — cheaper than the planner's
+	# broad rollout (k instead of the whole menu) and pointed at the moves a
+	# teacher-like player would actually consider. k <= 1 = pure Gen-0 argmax.
+	var k := int(OS.get_environment("NML_CLONE_SEARCH"))
+	if k > 1:
+		var order: Array = []
+		for i in range(sc.size()):
+			order.append(i)
+		order.sort_custom(func(x: int, y: int) -> bool: return float(sc[x]) > float(sc[y]))
+		var top: Array = order.slice(0, mini(k, order.size()))
+		var best_score := -INF
+		for i in top:
+			var next := BattleSim.resolve(state, cands[i])
+			var s := AiMissionEval.score(next, int(ai_slot), BattleSim.reply_threat(next, int(ai_slot)))
+			if s > best_score:
+				best_score = s
+				best = i
+	if _teacher_rows_on():
+		# EXPERT ITERATION: what the amplified clone chose is the training
+		# signal for the NEXT generation — the same row shape as the teacher's.
+		_teacher_row(state, key, cands, best, "clone")
 	var act: Dictionary = cands[best]
 	var kind := int(act["kind"])
 	record_decision({"kind": "clone", "unit": unit.get_name(),
@@ -2831,16 +2854,16 @@ func _teacher_rows_on() -> bool:
 	return _teacher_rows_env == 1
 
 
-func _teacher_row(state: Dictionary, key: String, cands: Array, cov: Dictionary,
+func _teacher_row(state: Dictionary, key: String, cands: Array, idx: int,
 		cls: String) -> void:
 	# ONE source for the tuples (AiClone.menu_tuples): what the corpus records
 	# must be exactly what the clone later scores in play.
 	var menu := AiClone.menu_tuples(state, key, cands)
 	record_decision({"kind": "teacher_row", "unit": str(key),
 		"rule": "P1 (NML-1009): the teacher's pick, the menu it came from, and the position it was made in",
-		"candidates": [], "chosen": str(int(cov.get("idx", -1))), "why": cls,
+		"candidates": [], "chosen": str(idx), "why": cls,
 		"data": {"side": int(ai_slot), "round": _current_round(), "class": cls,
-			"teacher": int(cov.get("idx", -1)), "menu": menu,
+			"teacher": idx, "menu": menu,
 			"board": BattleSim.board_rows(state)}})
 
 
