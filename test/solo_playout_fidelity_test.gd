@@ -200,3 +200,68 @@ func test_one_side_alone_in_the_ring_still_seizes_it() -> void:
 	var table: Array = SoloController.seize_objectives(
 		[_row(1, a_pos), _row(1, b_pos), _row(2, far_pos)], [Vector3.ZERO], [0])["owners"]
 	assert_int(int(table[0])).is_equal(1)
+
+
+# (e) THE SEIZE RULE, MEASURED THE BOOK'S WAY -------------------------------
+# Added 16.08. under the ruling that the simulator follows the rulebook and
+# deviations are not permitted. Each of these was a real divergence: the sim
+# measured centre-to-centre in 3D and knew nothing of aircraft or ambush.
+
+func _at(pid: int, x_in: float, y_in: float, z_in: float, uid: String,
+		rules: Array = []) -> GameUnit:
+	var u := _unit(pid, [Vector3(x_in * IN2M, y_in * IN2M, z_in * IN2M)], uid)
+	(u.unit_properties as Dictionary)["special_rules"] = rules
+	return u
+
+
+func _owner(state: Dictionary) -> int:
+	var owners := [0]
+	BattleSim.playout_seize(state, owners)
+	return int(owners[0])
+
+
+func test_the_ring_is_measured_from_the_base_edge_not_the_model_centre() -> void:
+	# A base radius is 0.016 m ~ 0.63". A centre at 3.5" is outside a 3" ring
+	# measured centre-to-centre, and INSIDE it measured from the base edge —
+	# which is how the book measures (SoloController, bug 11).
+	var s := _state([_at(1, 3.5, 0, 0, "Edge")], [Vector3.ZERO], 1, 4)
+	assert_int(_owner(s)).is_equal(1)
+	# and far enough out that even the base edge misses, nobody seizes
+	assert_int(_owner(_state([_at(1, 4.5, 0, 0, "Far")], [Vector3.ZERO], 1, 4))).is_equal(0)
+
+
+func test_height_does_not_push_a_unit_out_of_the_ring() -> void:
+	# MoveIntent.distance_inches ignores y. A model on a 10" ledge directly
+	# above the marker holds it; a 3D measure would have thrown it out.
+	var s := _state([_at(1, 0, 10.0, 0, "Ledge")], [Vector3.ZERO], 1, 4)
+	assert_int(_owner(s)).is_equal(1)
+
+
+func test_an_aircraft_can_neither_seize_nor_contest() -> void:
+	var alone := _state([_at(1, 0.5, 0, 0, "Jet", ["Aircraft"])], [Vector3.ZERO], 1, 4)
+	assert_int(_owner(alone)).is_equal(0)          # cannot seize
+	# and it cannot CONTEST either: the ground unit keeps the marker
+	var contest := _state([_at(1, 0.5, 0, 0, "Jet", ["Aircraft"]),
+		_at(2, 0.5, 0, 1.0, "Boots")], [Vector3.ZERO], 1, 4)
+	assert_int(_owner(contest)).is_equal(2)
+
+
+func test_a_unit_that_arrived_from_ambush_this_round_cannot_seize_yet() -> void:
+	var u := _at(1, 0.5, 0, 0, "Dropper")
+	(u.unit_properties as Dictionary)["ambush_arrived_round"] = 2
+	assert_int(_owner(_state([u], [Vector3.ZERO], 2, 4))).is_equal(0)   # arrived THIS round
+	# the lock expires with the round — capture stores the ROUND, not a boolean
+	assert_int(_owner(_state([u], [Vector3.ZERO], 3, 4))).is_equal(1)
+
+
+func test_the_sim_and_the_game_agree_on_all_of_it() -> void:
+	# The contract is agreement with the game's own function, not with numbers
+	# typed into a test. Same tableau, both implementations, same answer.
+	var pos := [Vector3(3.5 * IN2M, 0, 0)]
+	var s := _state([_at(1, 3.5, 0, 0, "Edge")], [Vector3.ZERO], 1, 4)
+	var table: Array = SoloController.seize_objectives(
+		[{"player": 1, "positions": pos,
+			"radii": [SeparationChecker.DEFAULT_BASE_RADIUS_M]}],
+		[Vector3.ZERO], [0])["owners"]
+	assert_int(_owner(s)).is_equal(int(table[0]))
+	assert_int(int(table[0])).is_equal(1)

@@ -194,10 +194,12 @@ static func board_rows(state: Dictionary) -> Array:
 ## near = neutral" when the code only did that on an exact TIE. Anything
 ## scored with the old rule — including the factory's fork labels — was
 ## scored against a game that does not exist.
-## STILL DIVERGENT, and each one needs data capture() does not carry yet:
-## the book measures from the BASE EDGE (centre distance minus base radius)
-## while this measures model centres; and it excludes AIRCRAFT and units
-## that arrived from AMBUSH this round, which the sim state has no flags for.
+## Measured the book's way since 16.08.: from the BASE EDGE and HORIZONTALLY
+## (MoveIntent.distance_inches ignores height), excluding AIRCRAFT and units
+## that arrived from AMBUSH in the current round. capture() carries the base
+## radii, the aircraft flag and the ambush arrival ROUND for it — the round
+## rather than a precomputed boolean, because a playout advances rounds and
+## the lock has to expire with them.
 ## Mutates `owners` AND writes ownership back into the state's objective
 ## dicts (eval/features read them).
 static func playout_seize(state: Dictionary, owners: Array) -> void:
@@ -217,11 +219,25 @@ static func playout_seize(state: Dictionary, owners: Array) -> void:
 			var su: Dictionary = state["units"][k]
 			if int(su["alive"]) <= 0 or bool(su.get("shaken", false)):
 				continue          # Shaken units can neither seize nor contest
+			if bool(su.get("aircraft", false)):
+				continue          # an Aircraft never can (GF v3.5.1)
+			if int(su.get("ambush_arrived_round", -1)) == int(state.get("round", 1)):
+				continue          # arrived from Ambush THIS round (GF/AoF v3.5.1 p.13)
 			var pid := int(su["player"])
 			if sides.has(pid):
 				continue
-			for p in su["positions"]:
-				if ((p as Vector3) - op).length() <= 3.0 * IN2M:
+			var radii: Array = su.get("radii", [])
+			var ps: Array = su["positions"]
+			for pi in range(ps.size()):
+				# BASE EDGE and HORIZONTALLY, exactly as MoveIntent.distance_inches
+				# measures for the real check: centre distance minus this model's
+				# base radius, height ignored. A 3D centre-to-centre measure is a
+				# tighter ring than the book's and on elevated terrain it is a
+				# different ring altogether.
+				var dp: Vector3 = (ps[pi] as Vector3) - op
+				var d_in := Vector3(dp.x, 0.0, dp.z).length() / IN2M
+				var r_in: float = (float(radii[pi]) / IN2M) if pi < radii.size() else 0.0
+				if d_in - r_in <= SoloController.OBJECTIVE_CONTROL_IN + 0.001:
 					sides[pid] = true
 					break
 		if sides.size() == 1:
@@ -275,6 +291,9 @@ static func clone_state(state: Dictionary) -> Dictionary:
 		var su: Dictionary = (state["units"][key] as Dictionary).duplicate()
 		su["positions"] = (su["positions"] as Array).duplicate()
 		su["wounds"] = (su["wounds"] as Array).duplicate()
+		# radii are mutated alongside positions when a model dies, so they must
+		# be copied like them — a shared array would let one rollout edit another
+		su["radii"] = (su.get("radii", []) as Array).duplicate()
 		units[key] = su
 	var objectives: Array = []
 	for o in state["objectives"]:
@@ -527,6 +546,9 @@ static func _apply_expected_wounds(tu: Dictionary, ev: float) -> void:
 		if int(wounds[0]) <= 0:
 			wounds.remove_at(0)
 			positions.remove_at(0)
+			var rr: Array = tu.get("radii", [])
+			if not rr.is_empty():
+				rr.remove_at(0)   # stays aligned with positions or the base-edge measure lies
 	tu["alive"] = positions.size()
 
 
@@ -592,6 +614,7 @@ static func _expected_melee_morale(su: Dictionary, su_before: int, tu: Dictionar
 	if _below_half(loser):
 		(loser["wounds"] as Array).clear()
 		(loser["positions"] as Array).clear()
+		(loser.get("radii", []) as Array).clear()
 		loser["alive"] = 0
 	else:
 		loser["shaken"] = true
@@ -606,12 +629,26 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 		var u: GameUnit = army.game_units[uid]
 		var positions: Array = []
 		var wounds: Array = []
+		var radii: Array = []
 		for m in u.models:
 			if m.is_alive and m.node != null:
 				positions.append(m.node.global_position)
 				wounds.append(m.wounds_current)
+				# BASE RADIUS per living model, aligned with positions: the book
+				# measures a marker from the closest point of the BASE, not from
+				# the model's centre (a 25mm model whose centre is at 3.4" still
+				# holds the marker). Without this the sim's ring is a base
+				# radius too tight and it scores a rule the game does not have.
+				radii.append(SoloController.model_base_radius_m(m as ModelInstance))
 		units[uid] = {
 			"unit": u,
+			"radii": radii,
+			# Neither can seize or contest: an Aircraft ever, a unit that
+			# arrived from Ambush in the CURRENT round (GF/AoF v3.5.1 p.13).
+			# The arrival ROUND is captured, not a precomputed boolean, because
+			# a playout advances rounds and the lock has to expire with them.
+			"aircraft": SoloController.is_aircraft(u),
+			"ambush_arrived_round": int(u.unit_properties.get("ambush_arrived_round", -1)),
 			"player": int(u.unit_properties.get("player_id", 0)),
 			"positions": positions,
 			"alive": positions.size(),
