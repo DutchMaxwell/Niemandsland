@@ -548,6 +548,7 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 		},
 		"search_knobs": search_knobs(),
 		"decision_counts": _stringify_keys(_decision_counts),
+		"clone": clone_stamp(),
 		"menu_probe": _menu_probe,
 		"teacher_rows": _teacher_rows,
 		"menu_miss_hist": _menu_miss_hist,
@@ -581,6 +582,20 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 ## runs differed only in env vars nobody recorded. Stamped are the EFFECTIVE
 ## values (the lazy accessors resolve env + default, exactly what the game
 ## consumed); net_loaded is the boot-time load probe's permanent record.
+## What the CLONE actually did in THIS game — never what the environment asked
+## for. A box running a repo older than the knob ignores it silently, and the
+## run then reproduces the previous experiment while looking like a new one
+## (cost me a 45-minute wave, 16.08.). Absent stamp = old build: the scorers
+## refuse such a run instead of averaging it in.
+static func clone_stamp() -> Dictionary:
+	var want := OS.get_environment("NML_CLONE_PATH").strip_edges()
+	var k := OS.get_environment("NML_CLONE_SEARCH").strip_edges()
+	return {"requested": want, "loaded": not AiClone.net().is_empty(),
+		"search": int(k) if k.is_valid_int() else 0,
+		"seat": OS.get_environment("NML_CLONE_SIDE").strip_edges(),
+		"stamp_version": 1}
+
+
 static func search_knobs() -> Dictionary:
 	var fw := OS.get_environment("NML_FIT_WEIGHTS").strip_edges()
 	var net_loaded := fw == "net" and not AiMissionEval._net().is_empty()
