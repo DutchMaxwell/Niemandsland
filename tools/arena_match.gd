@@ -590,6 +590,15 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 static func clone_stamp() -> Dictionary:
 	var want := OS.get_environment("NML_CLONE_PATH").strip_edges()
 	var k := OS.get_environment("NML_CLONE_SEARCH").strip_edges()
+	var p1 := OS.get_environment("NML_CLONE_P1").strip_edges()
+	var p2 := OS.get_environment("NML_CLONE_P2").strip_edges()
+	if p1 != "" or p2 != "":
+		return {"requested": want, "p1": p1, "p2": p2,
+			"loaded": not AiClone.net_for(1).is_empty() or not AiClone.net_for(2).is_empty(),
+			"loaded_p1": not AiClone.net_for(1).is_empty(),
+			"loaded_p2": not AiClone.net_for(2).is_empty(),
+			"search": int(k) if k.is_valid_int() else 0,
+			"seat": OS.get_environment("NML_CLONE_SIDE").strip_edges(), "stamp_version": 1}
 	return {"requested": want, "loaded": not AiClone.net().is_empty(),
 		"search": int(k) if k.is_valid_int() else 0,
 		"seat": OS.get_environment("NML_CLONE_SIDE").strip_edges(),

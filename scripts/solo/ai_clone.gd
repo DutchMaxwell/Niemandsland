@@ -19,6 +19,7 @@ const DEST_Z_SCALE := 24.0
 
 static var _net_cache: Dictionary = {}
 static var _tried := false
+static var _seat_nets: Dictionary = {}   # seat(int) → weights, for net-vs-net
 
 
 ## Loaded once from NML_CLONE_PATH; {} = no clone, callers keep their own brain.
@@ -26,18 +27,34 @@ static func net() -> Dictionary:
 	if _tried:
 		return _net_cache
 	_tried = true
-	var path := OS.get_environment("NML_CLONE_PATH").strip_edges()
+	_net_cache = _load(OS.get_environment("NML_CLONE_PATH").strip_edges())
+	return _net_cache
+
+
+## The policy for ONE seat: NML_CLONE_P1 / NML_CLONE_P2 put a DIFFERENT net in
+## each chair, which is how a generation is judged against its predecessor
+## (paired, same seeds, same activation order). Falls back to the single-net
+## NML_CLONE_PATH, so every earlier run keeps working unchanged.
+static func net_for(seat: int) -> Dictionary:
+	if _seat_nets.has(seat):
+		return _seat_nets[seat]
+	var path := OS.get_environment("NML_CLONE_P%d" % seat).strip_edges()
+	var loaded := _load(path) if path != "" else net()
+	_seat_nets[seat] = loaded
+	return loaded
+
+
+static func _load(path: String) -> Dictionary:
 	if path == "":
-		return _net_cache
+		return {}
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 	if not (parsed is Dictionary) or not (parsed as Dictionary).has("row_w1"):
 		printerr("[CLONE] FATAL: no policy weights at '%s'" % path)
-		return _net_cache
+		return {}
 	if not selftest_ok(parsed as Dictionary):
 		printerr("[CLONE] FATAL: policy selftest FAILED — refusing to steer with a drifted net")
-		return _net_cache
-	_net_cache = parsed
-	return _net_cache
+		return {}
+	return parsed
 
 
 ## Test seam: install weights without touching the environment.

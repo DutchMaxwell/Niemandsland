@@ -2779,13 +2779,13 @@ func _clone_active() -> bool:
 	var seat := OS.get_environment("NML_CLONE_SIDE").strip_edges()
 	if seat.is_valid_int() and int(seat) != int(ai_slot):
 		return false
-	return not AiClone.net().is_empty()
+	return not AiClone.net_for(int(ai_slot)).is_empty()
 
 
 ## The clone's move for THIS unit: score the wide menu, take the argmax, and
 ## hand it back in the same shape the planner overlay uses.
 func _solve_clone(unit: GameUnit) -> Dictionary:
-	var net := AiClone.net()
+	var net := AiClone.net_for(int(ai_slot))
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
 		terrain_type_at)
