@@ -2777,22 +2777,9 @@ func _teacher_rows_on() -> bool:
 
 func _teacher_row(state: Dictionary, key: String, cands: Array, cov: Dictionary,
 		cls: String) -> void:
-	var row_of := {}   # unit key → board row index (BattleSim.board_rows order)
-	var i := 0
-	for k in state["units"]:
-		if int((state["units"][k] as Dictionary)["alive"]) > 0:
-			row_of[str(k)] = i
-			i += 1
-	var menu: Array = []
-	for c in cands:
-		var cd: Dictionary = c
-		var dest: Vector3 = cd.get("dest", Vector3.ZERO)
-		var victim := str(cd.get("charge", cd.get("shoot", "")))
-		menu.append({"kind": int(cd["kind"]),
-			"dest_x": snappedf(dest.x / INCHES_TO_METERS, 0.1),
-			"dest_z": snappedf(dest.z / INCHES_TO_METERS, 0.1),
-			"victim_row": int(row_of.get(victim, -1)),
-			"unit_row": int(row_of.get(key, -1))})
+	# ONE source for the tuples (AiClone.menu_tuples): what the corpus records
+	# must be exactly what the clone later scores in play.
+	var menu := AiClone.menu_tuples(state, key, cands)
 	record_decision({"kind": "teacher_row", "unit": str(key),
 		"rule": "P1 (NML-1009): the teacher's pick, the menu it came from, and the position it was made in",
 		"candidates": [], "chosen": str(int(cov.get("idx", -1))), "why": cls,
