@@ -2784,6 +2784,19 @@ func _terrain_meter_on() -> bool:
 	return _meter_env == 1
 
 
+## THE `shot` FIELD READS report["can_shoot"], NOT report["shoot"] (16.08.): the two brains
+## fill "shoot" with answers to DIFFERENT questions — the tree writes "this unit fires"
+## (do_shoot), the clone/planner overlay writes "the chosen menu entry carried a shoot key"
+## (act.has("shoot")). Measured: tree 37.1% did-shoot per activation, clone 1.8-3.6%, and the
+## 3.6% is exactly the rate at which a picked entry carries that key — the two readings were
+## never comparable, so the meter could not serve as an acceptance criterion.
+## "can_shoot" is the ONE post-move gate BOTH brains flow through (_act re-gates range + line
+## of sight from the settled position, and the Bug-27/28 retarget opens it even when the plan
+## said no), and it is the exact predicate every driver fires on (main._solo_activate_one_ai
+## and tools/solo_selfplay: can_shoot ⇒ _run_ai_shooting). A meter reading the planner's
+## intention keeps drifting from what happens on the table; this one reads the trigger.
+## Residual (named, not hidden): _run_ai_shooting can still find no per-weapon target at
+## resolution time, so "shot" is "the volley was opened", one step short of "dice rolled".
 func _terrain_meter(unit: GameUnit, report: Dictionary) -> void:
 	if not _terrain_meter_on() or unit == null or unit.is_destroyed():
 		return
@@ -2808,7 +2821,7 @@ func _terrain_meter(unit: GameUnit, report: Dictionary) -> void:
 		"rule": "Behaviour meters (grill D9): cover, fire, exposure, terrain use — the acceptance test that is not a winrate",
 		"candidates": [], "chosen": "in cover" if in_cover else "in the open",
 		"why": "after activation",
-		"data": {"in_cover": in_cover, "shot": bool(report.get("shoot", false)),
+		"data": {"in_cover": in_cover, "shot": bool(report.get("can_shoot", false)),
 			"exposed_to": exposed, "terrain": terrain,
 			"in_terrain": terrain > 0}})
 
