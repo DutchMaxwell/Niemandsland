@@ -953,10 +953,32 @@ static func _playout_sig(state: Dictionary, player: int) -> int:
 		str(BattleSim.board_rows(state))])
 
 
-## Play ONE branch to game end under the cheap policy; returns final marker
-## points {"p1": int, "p2": int}. Twin of the factory's fork playout — same
-## seize rule (BattleSim.playout_seize), so search verdicts and fork labels
-## speak the same currency.
+## Hard round cap — INSURANCE, not a rule. A playout that never returns does
+## not fail the arena, it HANGS it, so a nonsense rounds_total (corrupt save,
+## synthetic state, a future mission with a broken descriptor) is clamped
+## here. Real missions run 4-6 rounds, so the cap only ever binds on a broken
+## state — and it binds VISIBLY, through rounds_played.
+const PLAYOUT_MAX_ROUNDS := 12
+
+
+## Play ONE branch to game end under the cheap policy, reported in the ARENA's
+## vocabulary so a played-out game and a real tools/arena_match.gd game are a
+## DIRECT comparison (that comparison is the fidelity gate):
+##   "p1" / "p2"     : mission-currency points — final markers for Face-Off's
+##                     END scoring, cumulative VPs when the state carries
+##                     scoring="round_vp" (unchanged; the search reads these)
+##   "vp"            : {"p1","p2"} the full VP ledger incl. the book's end bonus
+##   "objectives"    : {"p1","p2","neutral"} final marker owners
+##   "survivors"     : {"p1","p2"} living models per side at game end
+##   "rounds_played" : the round number the game ended in (arena_match reports
+##                     army_manager.current_round — same meaning)
+##   "winner"        : "p1" | "p2" | "draw" (arena_match's rule: points decide;
+##                     a board with NO markers falls back to survivors)
+## Twin of the factory's fork playout — same seize rule
+## (BattleSim.playout_seize), so search verdicts and fork labels speak the same
+## currency. `prng` is a LOCAL generator: a playout never reads or advances the
+## game's dice stream (the global RNG), so replaying a game through it cannot
+## change the game it is measuring.
 static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 		prng: RandomNumberGenerator) -> Dictionary:
 	var owners: Array = []
@@ -970,8 +992,10 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 	var opener: int = (2 if int(res["last"]) == 1 else 1) if int(res["last"]) != 0 else turn
 	BattleSim.playout_seize(state, owners)
 	BattleSim.vp_round_add(owners, vp)
-	var rounds_total := int(state.get("rounds_total", 4))
-	for r in range(int(state0.get("round", 1)) + 1, rounds_total + 1):
+	var round0 := int(state0.get("round", 1))
+	var rounds_total: int = mini(int(state.get("rounds_total", 4)),
+		round0 + PLAYOUT_MAX_ROUNDS - 1)
+	for r in range(round0 + 1, rounds_total + 1):
 		state["round"] = r
 		for k in state["units"]:
 			var su: Dictionary = state["units"][k]
@@ -984,11 +1008,11 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 		BattleSim.playout_seize(state, owners)
 		BattleSim.vp_round_add(owners, vp)
 	# NML-1008 CORRECTED (record check 15.08. evening): our v1 missions are
-	# FACE-OFF = END-scored per book AND per grill D4 (12.08.); the VP
-	# ledger above stays armed for the PROGRESSIVE wave (mission-driven).
-	if str(state0.get("scoring", "end")) == "round_vp":
-		BattleSim.vp_end_bonus(owners, vp)
-		return {"p1": vp[0], "p2": vp[1]}
+	# FACE-OFF = END-scored per book AND per grill D4 (12.08.); the VP ledger
+	# is always closed out (book: +1 for holding more markers at game end) and
+	# stays armed for the PROGRESSIVE wave, but WHICH currency decides is the
+	# mission's business.
+	BattleSim.vp_end_bonus(owners, vp)
 	var p1 := 0
 	var p2 := 0
 	for o in owners:
@@ -996,7 +1020,39 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 			p1 += 1
 		elif int(o) == 2:
 			p2 += 1
-	return {"p1": p1, "p2": p2}
+	var alive1 := 0
+	var alive2 := 0
+	for k in state["units"]:
+		var su: Dictionary = state["units"][k]
+		if int(su["player"]) == 1:
+			alive1 += int(su["alive"])
+		elif int(su["player"]) == 2:
+			alive2 += int(su["alive"])
+	var round_vp := str(state0.get("scoring", "end")) == "round_vp"
+	var pts1: int = int(vp[0]) if round_vp else p1
+	var pts2: int = int(vp[1]) if round_vp else p2
+	var winner := "draw"
+	if pts1 != pts2:
+		winner = "p1" if pts1 > pts2 else "p2"
+	elif owners.is_empty() and alive1 != alive2:
+		winner = "p1" if alive1 > alive2 else "p2"
+	return {"p1": pts1, "p2": pts2,
+		"vp": {"p1": int(vp[0]), "p2": int(vp[1])},
+		"objectives": {"p1": p1, "p2": p2, "neutral": owners.size() - p1 - p2},
+		"survivors": {"p1": alive1, "p2": alive2},
+		"rounds_played": maxi(rounds_total, round0),
+		"winner": winner}
+
+
+## Seed-taking twin: the same playout with its LOCAL generator built here, so
+## a caller only ever has to name a number. Same state + same seed = the same
+## game, every time — the reproducibility the fidelity replay and every A/B
+## rest on.
+static func full_playout_seeded(state0: Dictionary, action: Dictionary,
+		player: int, playout_seed: int) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = playout_seed
+	return full_playout(state0, action, player, rng)
 
 
 ## Cheap-policy alternation until the round runs dry (official one-for-one;
