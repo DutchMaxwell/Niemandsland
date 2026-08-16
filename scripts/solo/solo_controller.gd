@@ -2774,6 +2774,11 @@ func _menu_probe(unit: GameUnit, action: int, goal: Vector3, target_unit: GameUn
 ## net whose selftest disagrees with its trainer is refused, so "loaded" always
 ## means "provably the brain that was trained".
 func _clone_active() -> bool:
+	# NML_CLONE_SIDE=1|2 confines the clone to ONE seat — the P4 gate needs the
+	# tree in the other chair, and both-AI runs share this controller.
+	var seat := OS.get_environment("NML_CLONE_SIDE").strip_edges()
+	if seat.is_valid_int() and int(seat) != int(ai_slot):
+		return false
 	return not AiClone.net().is_empty()
 
 
