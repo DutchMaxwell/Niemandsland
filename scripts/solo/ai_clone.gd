@@ -106,7 +106,7 @@ static func scores(net_in: Dictionary, board: Array, side: int, menu: Array) -> 
 	var svec := _lin_relu(parts, net_in["state_w1"], net_in["state_b1"])
 	var out: Array = []
 	for a in menu:
-		var av := _lin_relu(action_vec(a as Dictionary, board.size()),
+		var av := _lin_relu(action_vec(a as Dictionary, board, side),
 			net_in["act_w1"], net_in["act_b1"])
 		var cat: Array = svec.duplicate()
 		cat.append_array(av)
@@ -120,21 +120,71 @@ static func scores(net_in: Dictionary, board: Array, side: int, menu: Array) -> 
 
 
 ## The compact action description, byte-for-byte the trainer's action_vec().
-static func action_vec(a: Dictionary, board_len: int) -> Array:
+static func action_vec(a: Dictionary, board: Array, side: int) -> Array:
 	var kinds := 5
 	var v: Array = []
-	v.resize(kinds + 5)
+	v.resize(kinds + 5 + GEO_DIM)
 	v.fill(0.0)
 	var k := int(a.get("kind", 0))
 	if k >= 0 and k < kinds:
 		v[k] = 1.0
-	var span := float(maxi(board_len, 1))
+	var span := float(maxi(board.size(), 1))
 	v[kinds + 0] = float(a.get("dest_x", 0.0)) / DEST_X_SCALE
 	v[kinds + 1] = float(a.get("dest_z", 0.0)) / DEST_Z_SCALE
 	v[kinds + 2] = 1.0 if int(a.get("victim_row", -1)) >= 0 else 0.0
 	v[kinds + 3] = float(int(a.get("victim_row", -1))) / span
 	v[kinds + 4] = float(int(a.get("unit_row", -1))) / span
+	var geo := geo_vec(a, board, side)
+	for i in range(GEO_DIM):
+		v[kinds + 5 + i] = float(geo[i])
 	return v
+
+
+## Where the move ENDS relative to what matters — markers, the enemy, my own
+## line, and whether the move closes or opens those gaps. Without these the
+## policy is unlearnable: absolute destinations against a POOLED board cannot
+## express "this spot sits on a marker" (measured — the absolute-only tuple
+## scored exactly what always-guess-the-commonest-index scores).
+const GEO_DIM := 8
+
+static func geo_vec(a: Dictionary, board: Array, side: int) -> Array:
+	var ur := int(a.get("unit_row", -1))
+	var ax := 0.0
+	var az := 0.0
+	if ur >= 0 and ur < board.size():
+		ax = float((board[ur] as Array)[1])
+		az = float((board[ur] as Array)[2])
+	var dx := float(a.get("dest_x", 0.0))
+	var dz := float(a.get("dest_z", 0.0))
+	if int(a.get("kind", 0)) == 0:   # HOLD carries no destination: it stays put
+		dx = ax
+		dz = az
+	var m_d := _near(board, "marker", side, ur, dx, dz)
+	var m_now := _near(board, "marker", side, ur, ax, az)
+	var f_d := _near(board, "foe", side, ur, dx, dz)
+	var f_now := _near(board, "foe", side, ur, ax, az)
+	return [sqrt((dx - ax) * (dx - ax) + (dz - az) * (dz - az)) / 12.0,
+		m_d / 12.0, 1.0 if m_d <= 3.0 else 0.0, (m_now - m_d) / 12.0,
+		f_d / 12.0, (f_now - f_d) / 12.0,
+		_near(board, "friend", side, ur, dx, dz) / 12.0,
+		1.0 if f_d <= 1.0 else 0.0]
+
+
+static func _near(board: Array, kind: String, side: int, actor_row: int,
+		x: float, z: float) -> float:
+	var best := 99.0
+	for i in range(board.size()):
+		var r: Array = board[i]
+		var c0 := int(float(r[0]))
+		if kind == "marker" and c0 != 3:
+			continue
+		if kind == "foe" and (c0 == 3 or c0 == side):
+			continue
+		if kind == "friend" and (c0 != side or i == actor_row):
+			continue
+		var d := sqrt((float(r[1]) - x) * (float(r[1]) - x) + (float(r[2]) - z) * (float(r[2]) - z))
+		best = minf(best, d)
+	return best
 
 
 ## Recompute the shipped selftest row; any mismatch means the two brains drifted.

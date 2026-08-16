@@ -33,8 +33,8 @@ func test_a_drifted_net_is_refused() -> void:
 func test_menu_tuples_speak_the_trainer_s_language() -> void:
 	var st: Dictionary = _fixture()["selftest"]
 	var a: Dictionary = (st["menu"] as Array)[0]
-	var v := AiClone.action_vec(a, (st["board"] as Array).size())
-	assert_int(v.size()).is_equal(10)
+	var v := AiClone.action_vec(a, st["board"] as Array, int(st["side"]))
+	assert_int(v.size()).is_equal(18)
 	assert_float(float(v[int(a["kind"])])).is_equal(1.0)
 	assert_float(float(v[5])).is_equal_approx(float(a["dest_x"]) / 36.0, 1e-6)
 	assert_float(float(v[7])).is_equal(1.0 if int(a["victim_row"]) >= 0 else 0.0)
