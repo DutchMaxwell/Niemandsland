@@ -51,6 +51,13 @@ static func _load(path: String) -> Dictionary:
 	if not (parsed is Dictionary) or not (parsed as Dictionary).has("row_w1"):
 		printerr("[CLONE] FATAL: no policy weights at '%s'" % path)
 		return {}
+	# A net trained on a different action vector must never quietly steer: the
+	# selftest would catch it, but say WHY rather than reporting a mismatch.
+	var dim := int((parsed as Dictionary).get("act_dim", 5 + 5 + GEO_DIM + 1))
+	if dim != 5 + 5 + GEO_DIM and dim != 5 + 5 + GEO_DIM + 1:
+		printerr("[CLONE] FATAL: policy wants a %d-wide action vector; this build can serve %d or %d"
+			% [dim, 5 + 5 + GEO_DIM, 5 + 5 + GEO_DIM + 1])
+		return {}
 	if not selftest_ok(parsed as Dictionary):
 		printerr("[CLONE] FATAL: policy selftest FAILED — refusing to steer with a drifted net")
 		return {}
@@ -65,7 +72,8 @@ static func set_net(n: Dictionary) -> void:
 
 ## The action tuples the trainer sees — ONE source for the corpus writer and
 ## for play, so what the clone scores is what it learned.
-static func menu_tuples(state: Dictionary, key: String, cands: Array) -> Array:
+static func menu_tuples(state: Dictionary, key: String, cands: Array,
+		terrain_at := Callable()) -> Array:
 	var row_of := {}
 	var i := 0
 	for k in state["units"]:
@@ -77,11 +85,20 @@ static func menu_tuples(state: Dictionary, key: String, cands: Array) -> Array:
 		var cd: Dictionary = c
 		var dest: Vector3 = cd.get("dest", Vector3.ZERO)
 		var victim := str(cd.get("charge", cd.get("shoot", "")))
+		# TERRAIN WAVE (16.08.): does this destination stand in COVER? Five
+		# probes said the ceiling is what the net sees, and terrain is the one
+		# thing it has never seen — while the simulator has known it all along
+		# (BattleSim carries in_cover and moves it with the mover). One point
+		# query per candidate; -1 = no terrain source wired (unit tests).
+		var cover := -1
+		if terrain_at.is_valid():
+			cover = 1 if TerrainRules.gives_cover(int(terrain_at.call(dest))) else 0
 		out.append({"kind": int(cd["kind"]),
 			"dest_x": snappedf(dest.x / BattleSim.IN2M, 0.1),
 			"dest_z": snappedf(dest.z / BattleSim.IN2M, 0.1),
 			"victim_row": int(row_of.get(victim, -1)),
-			"unit_row": int(row_of.get(key, -1))})
+			"unit_row": int(row_of.get(key, -1)),
+			"cover": cover})
 	return out
 
 
@@ -121,9 +138,10 @@ static func scores(net_in: Dictionary, board: Array, side: int, menu: Array) -> 
 		for j in range(h):
 			parts.append(float((pools[p] as Array)[j]) / div)
 	var svec := _lin_relu(parts, net_in["state_w1"], net_in["state_b1"])
+	var wide_act := int(net_in.get("act_dim", 5 + 5 + GEO_DIM + 1)) == 5 + 5 + GEO_DIM + 1
 	var out: Array = []
 	for a in menu:
-		var av := _lin_relu(action_vec(a as Dictionary, board, side),
+		var av := _lin_relu(action_vec(a as Dictionary, board, side, wide_act),
 			net_in["act_w1"], net_in["act_b1"])
 		var cat: Array = svec.duplicate()
 		cat.append_array(av)
@@ -137,10 +155,10 @@ static func scores(net_in: Dictionary, board: Array, side: int, menu: Array) -> 
 
 
 ## The compact action description, byte-for-byte the trainer's action_vec().
-static func action_vec(a: Dictionary, board: Array, side: int) -> Array:
+static func action_vec(a: Dictionary, board: Array, side: int, with_cover := true) -> Array:
 	var kinds := 5
 	var v: Array = []
-	v.resize(kinds + 5 + GEO_DIM)
+	v.resize(kinds + 5 + GEO_DIM + (1 if with_cover else 0))
 	v.fill(0.0)
 	var k := int(a.get("kind", 0))
 	if k >= 0 and k < kinds:
@@ -154,6 +172,13 @@ static func action_vec(a: Dictionary, board: Array, side: int) -> Array:
 	var geo := geo_vec(a, board, side)
 	for i in range(GEO_DIM):
 		v[kinds + 5 + i] = float(geo[i])
+	# Cover at the destination: 1 in cover, 0 in the open, 0.5 = unknown (no
+	# terrain source wired). A net trained BEFORE the terrain wave carries
+	# act_dim 18 and must be scored with the vector it learned — the width
+	# follows the NET, so both generations stay playable side by side.
+	if with_cover:
+		var cv := int(a.get("cover", -1))
+		v[kinds + 5 + GEO_DIM] = 0.5 if cv < 0 else float(cv)
 	return v
 
 

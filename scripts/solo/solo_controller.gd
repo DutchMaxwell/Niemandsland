@@ -2793,7 +2793,7 @@ func _solve_clone(unit: GameUnit) -> Dictionary:
 	if key == "":
 		return {}
 	var cands := AiPlanner.candidates_wide(state, key)
-	var menu := AiClone.menu_tuples(state, key, cands)
+	var menu := AiClone.menu_tuples(state, key, cands, terrain_type_at)
 	var sc := AiClone.scores(net, BattleSim.board_rows(state), int(ai_slot), menu)
 	if sc.size() != cands.size() or sc.is_empty():
 		return {}
@@ -2858,7 +2858,7 @@ func _teacher_row(state: Dictionary, key: String, cands: Array, idx: int,
 		cls: String) -> void:
 	# ONE source for the tuples (AiClone.menu_tuples): what the corpus records
 	# must be exactly what the clone later scores in play.
-	var menu := AiClone.menu_tuples(state, key, cands)
+	var menu := AiClone.menu_tuples(state, key, cands, terrain_type_at)
 	record_decision({"kind": "teacher_row", "unit": str(key),
 		"rule": "P1 (NML-1009): the teacher's pick, the menu it came from, and the position it was made in",
 		"candidates": [], "chosen": str(idx), "why": cls,
