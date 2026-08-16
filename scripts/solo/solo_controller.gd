@@ -439,6 +439,7 @@ func activate_next_ai_unit() -> GameUnit:
 		network_manager.broadcast_unit_activation(unit)
 	if turn_manager != null:
 		turn_manager.notify_activated(unit)
+	_terrain_meter(unit, last_report)
 	ai_unit_activated.emit(unit)
 	return unit
 
@@ -2768,6 +2769,48 @@ func _menu_probe(unit: GameUnit, action: int, goal: Vector3, target_unit: GameUn
 		"rule": "P0 (NML-1009): is the teacher's move even on the planner's candidate menu?",
 		"candidates": [], "chosen": ("on the menu" if bool(cov["covered"]) else "not offered"),
 		"why": str(cov["class"]), "data": cov})
+
+
+## THE BEHAVIOUR METERS (terrain grill D9, 16.08.): the maintainer's own
+## acceptance test, and it deliberately contains no winrate — "would I, watching
+## the table, say it uses terrain properly?". Four numbers per activation:
+## does it END IN COVER, did it SHOOT, how many enemies have a clear lane to it
+## afterwards, and did it enter terrain at all. Env-gated (NML_TERRAIN_METER=1)
+## because the lane count costs one LOS check per enemy. Measurement only.
+static var _meter_env := -1
+func _terrain_meter_on() -> bool:
+	if _meter_env == -1:
+		_meter_env = 1 if OS.get_environment("NML_TERRAIN_METER") == "1" else 0
+	return _meter_env == 1
+
+
+func _terrain_meter(unit: GameUnit, report: Dictionary) -> void:
+	if not _terrain_meter_on() or unit == null or unit.is_destroyed():
+		return
+	var in_cover := majority_in_cover(unit)
+	var terrain := -1
+	if terrain_type_at.is_valid():
+		terrain = int(terrain_type_at.call(unit_centre(unit)))
+	var exposed := 0
+	if army_manager == null:
+		return
+	for other in army_manager.get_game_units_for_player(enemy_slot_of(unit)):
+		var gu := other as GameUnit
+		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
+			continue
+		var rng := AiArchetype.max_range_inches(_unit_weapons(gu)) + shooting_range_bonus(gu)
+		if rng <= 0:
+			continue
+		if MoveIntent.distance_inches(unit_centre(gu), unit_centre(unit)) <= float(rng) \
+				and _has_los(gu, unit):
+			exposed += 1
+	record_decision({"kind": "terrain_meter", "unit": unit.get_name(),
+		"rule": "Behaviour meters (grill D9): cover, fire, exposure, terrain use — the acceptance test that is not a winrate",
+		"candidates": [], "chosen": "in cover" if in_cover else "in the open",
+		"why": "after activation",
+		"data": {"in_cover": in_cover, "shot": bool(report.get("shoot", false)),
+			"exposed_to": exposed, "terrain": terrain,
+			"in_terrain": terrain > 0}})
 
 
 ## P4 (NML-1009): is a clone policy loaded? Env-driven (NML_CLONE_PATH), and a

@@ -65,6 +65,11 @@ var _knob_records: Array = []           # full records of kind roll_off / diffic
 var _menu_probe: Dictionary = {}        # class(String) → {n, covered, loose}
 var _menu_miss_hist: Dictionary = {}    # 3"-bucket(String) → count (movement only)
 var _teacher_rows: Array = []           # P1 imitation rows (NML_TEACHER_ROWS=1)
+# Behaviour meters (terrain grill D9, NML_TERRAIN_METER=1): the maintainer's
+# acceptance test, deliberately winrate-free — per side, how often an
+# activation ends in cover, actually shoots, ends exposed to enemy lanes, and
+# enters terrain at all. These are the BEFORE values the terrain wave moves.
+var _meters: Dictionary = {}            # side(int) -> {n, cover, shot, terrain, exposed_sum, exposed_max}
 # Movement plausibility capture (AI plausibility wave 1): every MOVE record's numbers, per side — the
 # result JSON aggregates them into the acceptance metrics (median achieved/band on open-field moves,
 # aimless sub-inch moves, large-base stall streaks, aircraft lane compliance).
@@ -313,6 +318,17 @@ func _run() -> void:
 		var by_kind: Dictionary = _decision_counts.get(side, {})
 		by_kind[kind] = int(by_kind.get(kind, 0)) + 1
 		_decision_counts[side] = by_kind
+		if kind == "terrain_meter":
+			var td: Dictionary = rec.get("data", {})
+			var mt: Dictionary = _meters.get(side, {"n": 0, "cover": 0, "shot": 0,
+				"terrain": 0, "exposed_sum": 0, "exposed_max": 0})
+			mt["n"] = int(mt["n"]) + 1
+			mt["cover"] = int(mt["cover"]) + (1 if bool(td.get("in_cover", false)) else 0)
+			mt["shot"] = int(mt["shot"]) + (1 if bool(td.get("shot", false)) else 0)
+			mt["terrain"] = int(mt["terrain"]) + (1 if bool(td.get("in_terrain", false)) else 0)
+			mt["exposed_sum"] = int(mt["exposed_sum"]) + int(td.get("exposed_to", 0))
+			mt["exposed_max"] = maxi(int(mt["exposed_max"]), int(td.get("exposed_to", 0)))
+			_meters[side] = mt
 		if kind == "teacher_row":
 			# P1 imitation corpus (NML_TEACHER_ROWS=1): board + menu + the
 			# teacher's index, one row per tree activation. seq = arrival order.
@@ -549,6 +565,7 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 		"search_knobs": search_knobs(),
 		"decision_counts": _stringify_keys(_decision_counts),
 		"clone": clone_stamp(),
+		"meters": _stringify_keys(_meters),
 		"menu_probe": _menu_probe,
 		"teacher_rows": _teacher_rows,
 		"menu_miss_hist": _menu_miss_hist,
