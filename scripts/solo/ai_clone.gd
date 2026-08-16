@@ -165,10 +165,10 @@ static func scores(net_in: Dictionary, board: Array, side: int, menu: Array) -> 
 		for j in range(h):
 			parts.append(float((pools[p] as Array)[j]) / div)
 	var svec := _lin_relu(parts, net_in["state_w1"], net_in["state_b1"])
-	var wide_act := int(net_in.get("act_dim", 5 + 5 + GEO_DIM + 1)) == 5 + 5 + GEO_DIM + 1
+	var extras := extras_for(int(net_in.get("act_dim", 5 + 5 + GEO_DIM + 1)))
 	var out: Array = []
 	for a in menu:
-		var av := _lin_relu(action_vec(a as Dictionary, board, side, wide_act),
+		var av := _lin_relu(action_vec(a as Dictionary, board, side, extras),
 			net_in["act_w1"], net_in["act_b1"])
 		var cat: Array = svec.duplicate()
 		cat.append_array(av)
@@ -181,11 +181,18 @@ static func scores(net_in: Dictionary, board: Array, side: int, menu: Array) -> 
 	return out
 
 
+## How many terrain slots a net of this width carries: 0 = pre-terrain (18),
+## 1 = cover (19), 2 = cover + sight (20). Every net stays playable in one
+## build because the vector FOLLOWS THE NET instead of the other way round.
+static func extras_for(act_dim: int) -> int:
+	return clampi(act_dim - (5 + 5 + GEO_DIM), 0, 2)
+
+
 ## The compact action description, byte-for-byte the trainer's action_vec().
-static func action_vec(a: Dictionary, board: Array, side: int, with_cover := true) -> Array:
+static func action_vec(a: Dictionary, board: Array, side: int, extras := 2) -> Array:
 	var kinds := 5
 	var v: Array = []
-	v.resize(kinds + 5 + GEO_DIM + (1 if with_cover else 0))
+	v.resize(kinds + 5 + GEO_DIM + clampi(extras, 0, 2))
 	v.fill(0.0)
 	var k := int(a.get("kind", 0))
 	if k >= 0 and k < kinds:
@@ -203,9 +210,21 @@ static func action_vec(a: Dictionary, board: Array, side: int, with_cover := tru
 	# terrain source wired). A net trained BEFORE the terrain wave carries
 	# act_dim 18 and must be scored with the vector it learned — the width
 	# follows the NET, so both generations stay playable side by side.
-	if with_cover:
+	var ex := clampi(extras, 0, 2)
+	if ex >= 1:
 		var cv := int(a.get("cover", -1))
 		v[kinds + 5 + GEO_DIM] = 0.5 if cv < 0 else float(cv)
+	# Sight at the destination: the SHARE of the nearest enemies that hold a
+	# lane onto it (0 = nobody sees me, 1 = all of them), 0.5 = unknown. A
+	# share, not a count, so the number means the same whatever the army size.
+	# Measured on the 10-game probe: the teacher takes an UNSEEN spot in 24.3%
+	# of his moves while 31.0% of the offered ones are unseen — he trades being
+	# seen for being able to shoot, so the sign here is his, not our guess.
+	if ex >= 2:
+		var sn := int(a.get("seen", -1))
+		var of := int(a.get("seen_of", 0))
+		v[kinds + 5 + GEO_DIM + 1] = 0.5 if sn < 0 else (0.0 if of <= 0 \
+			else float(sn) / float(of))
 	return v
 
 
