@@ -53,10 +53,16 @@ static func _load(path: String) -> Dictionary:
 		return {}
 	# A net trained on a different action vector must never quietly steer: the
 	# selftest would catch it, but say WHY rather than reporting a mismatch.
-	var dim := int((parsed as Dictionary).get("act_dim", 5 + 5 + GEO_DIM + 1))
-	if dim != 5 + 5 + GEO_DIM and dim != 5 + 5 + GEO_DIM + 1:
-		printerr("[CLONE] FATAL: policy wants a %d-wide action vector; this build can serve %d or %d"
-			% [dim, 5 + 5 + GEO_DIM, 5 + 5 + GEO_DIM + 1])
+	# The servable widths are exactly the ones extras_for can build — say it in
+	# terms of that function, so widening the vector can never again leave this
+	# gate behind. (It did on 16.08.: action_vec learned width 20, this guard
+	# still said "18 or 19", and every terrain net was refused at load. The
+	# parity tests were green throughout — they test the VECTOR, not the gate.)
+	var base := 5 + 5 + GEO_DIM
+	var dim := int((parsed as Dictionary).get("act_dim", base + 1))
+	if dim < base or dim != base + extras_for(dim):
+		printerr("[CLONE] FATAL: policy wants a %d-wide action vector; this build can serve %d..%d"
+			% [dim, base, base + 2])
 		return {}
 	if not selftest_ok(parsed as Dictionary):
 		printerr("[CLONE] FATAL: policy selftest FAILED — refusing to steer with a drifted net")

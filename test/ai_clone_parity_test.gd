@@ -62,6 +62,20 @@ func test_the_vector_width_follows_the_net_not_the_build() -> void:
 	assert_int(AiClone.extras_for(5)).is_equal(0)       # never negative
 
 
+func test_the_loader_serves_every_width_the_vector_can_build() -> void:
+	# The gate and the vector must agree BY CONSTRUCTION. On 16.08. they did
+	# not: action_vec could build 20, the loader still admitted only 18 and 19,
+	# and every terrain net was silently refused at load while these very
+	# tests stayed green — because they tested the vector and nobody tested
+	# the gate. A width the vector can build must be a width the loader takes.
+	var base := 5 + 5 + AiClone.GEO_DIM
+	for dim in [base, base + 1, base + 2]:
+		assert_int(base + AiClone.extras_for(dim)).is_equal(dim)
+	# and a width we genuinely cannot serve must still be refused
+	for bad in [base - 1, base + 3]:
+		assert_int(base + AiClone.extras_for(bad)).is_not_equal(bad)
+
+
 func test_sight_is_a_share_not_a_count() -> void:
 	# Two of four enemies holding a lane must read the same as one of two —
 	# the number has to mean the same thing whatever the army size.
