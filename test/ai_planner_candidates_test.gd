@@ -210,8 +210,55 @@ func test_a_move_that_shoots_is_labelled_to_a_candidate_that_shoots() -> void:
 	var picked: Dictionary = cands[int(got["idx"])]
 	assert_str(str(picked.get("shoot", ""))).is_equal("Foe")
 	assert_bool(bool(got["shot_kept"])).is_true()
-	# a move with NO shot must still match on destination alone, unchanged
+	# a move with NO shot must still match on destination alone, unchanged —
+	# and it must NOT claim a shot was "kept". That claim was the vacuous
+	# reading this instrument shipped with (17.08.).
 	var plain := {"kind": AiDecision.Action.ADVANCE, "goal": Vector3(20.0 * IN2M, 0, 0),
 		"band_m": 20.0 * IN2M}
-	assert_bool(bool(AiPlanner.menu_covers_in(cands, state, "Shooter", plain)["shot_kept"])).is_true()
+	var plain_got := AiPlanner.menu_covers_in(cands, state, "Shooter", plain)
+	assert_bool(bool(plain_got["covered"])).is_true()
+	assert_bool(bool(plain_got["had_shot"])).is_false()
+	assert_bool(bool(plain_got["shot_kept"])).is_false()
 
+
+
+## THE SEAM, not the part (17.08.). The 16.08. commit added the shot-preference
+## in menu_covers_in and a test that hand-built {"kind": ADVANCE, "shoot": ...}
+## — a move dictionary the PRODUCTION caller could not produce, because
+## _menu_probe gated the recorded shot on `action == HOLD`. The test was green
+## and the fix was dead. These pin the writer itself.
+func test_the_recorded_move_keeps_its_shot_when_the_unit_advanced() -> void:
+	# advancing and firing is the teacher's most common combined move: the label
+	# must carry the victim, or the clone can never learn it exists
+	assert_str(SoloController.label_shoot_for(
+		AiDecision.Action.ADVANCE, "Foe", true)).is_equal("Foe")
+	assert_str(SoloController.label_shoot_for(
+		AiDecision.Action.HOLD, "Foe", true)).is_equal("Foe")
+	# not firing means no victim, whatever the action
+	assert_str(SoloController.label_shoot_for(
+		AiDecision.Action.ADVANCE, "Foe", false)).is_equal("")
+	# a charge's victim belongs in the "charge" field, never in "shoot"
+	assert_str(SoloController.label_shoot_for(
+		AiDecision.Action.CHARGE, "Foe", true)).is_equal("")
+	assert_str(SoloController.label_shoot_for(
+		AiDecision.Action.RUSH, "", true)).is_equal("")
+
+
+func test_shot_kept_is_not_true_when_there_was_no_shot_to_keep() -> void:
+	# The instrument built to make the loss VISIBLE reported 100% kept on a
+	# corpus that kept none — `want_shoot == "" or ...` is true by default.
+	# A ratio without its denominator is not a measurement.
+	var shooter := _armed(2, [Vector3.ZERO], "Shooter", [{"name": "Rifle", "range": 24}])
+	var foe := _armed(1, [Vector3(20.0 * IN2M, 0, 0)], "Foe", [{"name": "CCW", "range": 0}])
+	var state := _state([shooter, foe])
+	var cands := AiPlanner.candidates_wide(state, "Shooter")
+	var no_shot := AiPlanner.menu_covers_in(cands, state, "Shooter",
+		{"kind": AiDecision.Action.ADVANCE, "goal": Vector3(20.0 * IN2M, 0, 0),
+		"band_m": 20.0 * IN2M})
+	assert_bool(bool(no_shot["had_shot"])).is_false()
+	assert_bool(bool(no_shot["shot_kept"])).is_false()   # nothing to keep is NOT "kept"
+	var with_shot := AiPlanner.menu_covers_in(cands, state, "Shooter",
+		{"kind": AiDecision.Action.ADVANCE, "goal": Vector3(20.0 * IN2M, 0, 0),
+		"band_m": 20.0 * IN2M, "shoot": "Foe"})
+	assert_bool(bool(with_shot["had_shot"])).is_true()
+	assert_bool(bool(with_shot["shot_kept"])).is_true()

@@ -774,7 +774,15 @@ static func menu_covers_in(cands: Array, state: Dictionary, key: String,
 	if shot_i >= 0 and shot_best <= MENU_COVER_IN:
 		best = shot_best
 		best_i = shot_i
-	out["shot_kept"] = want_shoot == "" or shot_i == best_i
+	# HONEST, not vacuous. This read `want_shoot == "" or shot_i == best_i`, which
+	# short-circuits to TRUE exactly when the shot is being dropped — it reported
+	# "100% kept" on a corpus that kept none of them, because production could
+	# never set want_shoot at all (fixed 17.08. in SoloController.label_shoot_for).
+	# An instrument built to make a loss visible must not be true when there is
+	# nothing to lose: `had_shot` is the denominator, and without it the ratio
+	# has no meaning.
+	out["had_shot"] = want_shoot != ""
+	out["shot_kept"] = shot_i >= 0 and shot_i == best_i
 	if best < INF:
 		out["best_in"] = best
 		out["covered"] = best <= MENU_COVER_IN

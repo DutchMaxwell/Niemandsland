@@ -366,6 +366,20 @@ func is_eligible(unit) -> bool:
 ## Whether a unit is still HELD in Ambush reserve (off-table, not yet arrived — GF/AoF v3.5.1 p.13). The
 ## single truth used everywhere a reserve unit must be invisible to the game: activation eligibility,
 ## movement/LOS obstacles, and target validity. Field-test finding 3: a reserve unit leaked into play.
+## Which victim the TEACHER'S RECORDED MOVE fired at — "" when it did not fire.
+## Lifted out of _menu_probe on 17.08. so the seam is testable at all: it used
+## to be an expression buried in a scene-bound method, it read
+## `do_shoot and action == HOLD`, and that quietly threw away the shot of every
+## move that fired WHILE ADVANCING. Measured consequence: the teacher fires in
+## 39.4% of activations and the transcript admitted a shoot-capable action in
+## 13.7%, so the clone could not learn the teacher's most common combined move.
+## A CHARGE's victim rides in the separate "charge" field; only shooting here.
+static func label_shoot_for(action: int, victim: String, do_shoot: bool) -> String:
+	if not do_shoot or victim == "" or action == AiDecision.Action.CHARGE:
+		return ""
+	return victim
+
+
 static func unit_in_reserve(u: GameUnit) -> bool:
 	return u != null and bool(u.unit_properties.get("ambush_reserve", false))
 
@@ -2753,7 +2767,7 @@ func _menu_probe(unit: GameUnit, action: int, goal: Vector3, target_unit: GameUn
 		if away.length() > 0.001:
 			eff_goal = centre + away.normalized() * band_in * INCHES_TO_METERS
 	var mv := {"kind": action, "goal": eff_goal, "band_m": band_in * INCHES_TO_METERS,
-		"shoot": victim if do_shoot and action == AiDecision.Action.HOLD else "",
+		"shoot": label_shoot_for(action, victim, do_shoot),
 		"charge": victim if action == AiDecision.Action.CHARGE else ""}
 	var cov := AiPlanner.menu_covers(state, key, mv)
 	# P0b: the SAME move against the wide teacher menu — the pair is the
