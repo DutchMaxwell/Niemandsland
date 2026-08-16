@@ -185,33 +185,48 @@ static func board_rows(state: Dictionary) -> Array:
 	return rows
 
 
-## S-wave (playout search): round-end marker seize on a SIM STATE — the
-## exact rule the factory's fork labels were scored with (majority of
-## non-shaken living units within 3", both sides near = neutral, nobody
-## near keeps the owner). Mutates `owners` AND writes ownership back into
-## the state's objective dicts (eval/features read them).
+## Round-end marker seize on a SIM STATE — THE BOOK'S RULE, identical to
+## SoloController.seize_objectives: one side inside the 3" ring seizes it,
+## BOTH sides near makes it NEUTRAL, nobody near leaves the owner alone.
+## Shaken units neither seize nor contest.
+## Corrected 16.08. It used to award the marker to the MAJORITY of units,
+## which is not a rule this game has, and the old docstring said "both sides
+## near = neutral" when the code only did that on an exact TIE. Anything
+## scored with the old rule — including the factory's fork labels — was
+## scored against a game that does not exist.
+## STILL DIVERGENT, and each one needs data capture() does not carry yet:
+## the book measures from the BASE EDGE (centre distance minus base radius)
+## while this measures model centres; and it excludes AIRCRAFT and units
+## that arrived from AMBUSH this round, which the sim state has no flags for.
+## Mutates `owners` AND writes ownership back into the state's objective
+## dicts (eval/features read them).
 static func playout_seize(state: Dictionary, owners: Array) -> void:
 	var objs: Array = state.get("objectives", [])
 	for i in range(objs.size()):
 		var op: Vector3 = (objs[i] as Dictionary)["pos"]
-		var near1 := 0
-		var near2 := 0
+		# SIDES PRESENT, NOT BODIES PRESENT. Until 16.08. this counted units and
+		# gave the marker to the majority — a rule the game does not have. The
+		# book (and SoloController.seize_objectives) says: one side near seizes
+		# it, BOTH sides near makes it NEUTRAL, nobody near leaves the owner as
+		# it was. The old version paid for crowding a contested marker, which
+		# scores exactly nothing on the table, so a policy trained in here would
+		# have learned to do the worthless thing well. The simulator follows the
+		# rulebook; deviations are not permitted (maintainer, 16.08.).
+		var sides := {}
 		for k in state["units"]:
 			var su: Dictionary = state["units"][k]
 			if int(su["alive"]) <= 0 or bool(su.get("shaken", false)):
+				continue          # Shaken units can neither seize nor contest
+			var pid := int(su["player"])
+			if sides.has(pid):
 				continue
 			for p in su["positions"]:
 				if ((p as Vector3) - op).length() <= 3.0 * IN2M:
-					if int(su["player"]) == 1:
-						near1 += 1
-					else:
-						near2 += 1
+					sides[pid] = true
 					break
-		if near1 > near2:
-			owners[i] = 1
-		elif near2 > near1:
-			owners[i] = 2
-		elif near1 > 0:
+		if sides.size() == 1:
+			owners[i] = int(sides.keys()[0])
+		elif sides.size() > 1:
 			owners[i] = 0
 		(objs[i] as Dictionary)["owner"] = int(owners[i])
 

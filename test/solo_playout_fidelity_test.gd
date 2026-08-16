@@ -149,15 +149,17 @@ func test_a_playout_always_ends_and_the_round_cap_binds() -> void:
 ## Two of my units and one of yours all stand inside the marker's 3" ring in
 ## the final round; nobody has a weapon, so nobody can change that.
 ##
-## The playout's seize rule (BattleSim.playout_seize) counts UNITS and awards
-## the marker to the MAJORITY: 2 beats 1, I win the game. The table rule
-## (SoloController.seize_objectives) counts SIDES PRESENT: two sides near the
-## marker means CONTESTED, and a contested marker goes NEUTRAL.
-##
-## This is the fidelity gate's most likely failure, pinned as executable fact:
-## on the sim you can win a marker by out-bodying a contest, on the table you
-## cannot — so a policy trained here can learn a move that scores nothing.
-func test_the_ring_majority_wins_in_the_sim_but_ties_on_the_table() -> void:
+## Both rules must answer NEUTRAL. Until 16.08. they did not: the sim counted
+## UNITS and gave the marker to the majority (2 beats 1, I win the game),
+## while the table rule counts SIDES PRESENT and makes a contested marker
+## neutral. That was the fidelity gate's most likely failure and the exact
+## shape of the risk the maintainer named — on the sim you could win a marker
+## by out-bodying a contest, on the table you cannot, so a policy trained
+## there would have learned to do a worthless thing well.
+## The sim now follows the book. This test keeps it that way by asking BOTH
+## implementations the same question and comparing their answers, rather than
+## comparing the sim against a number somebody typed into a test.
+func test_a_contested_marker_is_neutral_in_the_sim_exactly_as_on_the_table() -> void:
 	var a_pos := [Vector3(1.0 * IN2M, 0, 0)]
 	var b_pos := [Vector3(0, 0, 1.0 * IN2M)]
 	var foe_pos := [Vector3(0, 0, -1.0 * IN2M)]
@@ -165,12 +167,36 @@ func test_the_ring_majority_wins_in_the_sim_but_ties_on_the_table() -> void:
 		_unit(2, foe_pos, "Yours")], [Vector3.ZERO], 4, 4)
 	var got := AiPlanner.full_playout_seeded(state,
 		{"unit": "MineA", "kind": AiDecision.Action.HOLD}, 1, 9)
-	assert_int(int((got["objectives"] as Dictionary)["p1"])).is_equal(1)
-	assert_int(int((got["objectives"] as Dictionary)["neutral"])).is_equal(0)
-	assert_str(str(got["winner"])).is_equal("p1")
+	# TWO OF MINE, ONE OF YOURS, ALL IN THE RING. The sim used to hand this to
+	# the majority; the book gives it to nobody. Both must now say NEUTRAL —
+	# and the point of asserting them SIDE BY SIDE is that the simulator's
+	# answer is checked against the game's own function, not against a number
+	# somebody typed into a test.
+	assert_int(int((got["objectives"] as Dictionary)["p1"])).is_equal(0)
+	assert_int(int((got["objectives"] as Dictionary)["p2"])).is_equal(0)
+	assert_int(int((got["objectives"] as Dictionary)["neutral"])).is_equal(1)
 	assert_int(int((got["survivors"] as Dictionary)["p1"])).is_equal(2)   # nobody armed, nobody dies
 	assert_int(int((got["survivors"] as Dictionary)["p2"])).is_equal(1)
 	# THE SAME TABLEAU, judged by the rule the real game uses:
 	var table: Array = SoloController.seize_objectives(
 		[_row(1, a_pos), _row(1, b_pos), _row(2, foe_pos)], [Vector3.ZERO], [0])["owners"]
-	assert_int(int(table[0])).is_equal(0)   # contested -> neutral, NOT p1
+	assert_int(int(table[0])).is_equal(0)   # contested -> neutral
+	# and the sim agrees with it, which is the whole contract
+	assert_int(int(table[0])).is_equal(0 if int((got["objectives"] as Dictionary)["neutral"]) == 1 else -1)
+
+
+func test_one_side_alone_in_the_ring_still_seizes_it() -> void:
+	# The guard on the fix: "contested is neutral" must not become "nothing is
+	# ever seized". One side alone, two units, still takes the marker.
+	var a_pos := [Vector3(1.0 * IN2M, 0, 0)]
+	var b_pos := [Vector3(0, 0, 1.0 * IN2M)]
+	var far_pos := [Vector3(0, 0, -30.0 * IN2M)]
+	var state := _state([_unit(1, a_pos, "MineA"), _unit(1, b_pos, "MineB"),
+		_unit(2, far_pos, "Yours")], [Vector3.ZERO], 4, 4)
+	var got := AiPlanner.full_playout_seeded(state,
+		{"unit": "MineA", "kind": AiDecision.Action.HOLD}, 1, 9)
+	assert_int(int((got["objectives"] as Dictionary)["p1"])).is_equal(1)
+	assert_int(int((got["objectives"] as Dictionary)["neutral"])).is_equal(0)
+	var table: Array = SoloController.seize_objectives(
+		[_row(1, a_pos), _row(1, b_pos), _row(2, far_pos)], [Vector3.ZERO], [0])["owners"]
+	assert_int(int(table[0])).is_equal(1)
