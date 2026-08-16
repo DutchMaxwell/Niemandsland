@@ -688,6 +688,16 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 		# The tree's other destination has always been "at that unit over there".
 		out.append({"unit": key, "kind": AiDecision.Action.RUSH,
 			"dest": _centre(tu), "at": str(ek)})
+		# ADVANCE **and** SHOOT — the action this menu could never express
+		# (measured 16.08.): a shoot target only ever hung on HOLD, so the
+		# learned policy could fire only by standing still. It stood still in
+		# 3.5% of activations and rushed in 85%, and clone-vs-clone games ended
+		# with a median 62 survivors against tree-vs-tree's 54 — it moved and
+		# stopped fighting. Advance keeps the shot window open (Rush does not),
+		# so this is the move the tree makes constantly and the clone never saw.
+		if BattleSim.sees(su, str(ek)):
+			out.append({"unit": key, "kind": AiDecision.Action.ADVANCE,
+				"dest": _centre(tu), "shoot": str(ek)})
 	return out
 
 
@@ -739,8 +749,15 @@ static func menu_covers_in(cands: Array, state: Dictionary, key: String,
 	var centre := _centre(state["units"][key])
 	var band := maxf(float(move.get("band_m", 0.0)), 0.0)
 	var goal_pt := _clamp_to_band(centre, move.get("goal", centre), band)
+	# A move that also FIRES is only truly expressed by a candidate that fires at
+	# the SAME target. Matching on the destination alone silently dropped half of
+	# the teacher's decision — that is how a corpus full of "advance and shoot"
+	# taught a clone to advance and never shoot (measured 16.08.).
+	var want_shoot := str(move.get("shoot", ""))
 	var best := INF
 	var best_i := -1
+	var shot_best := INF
+	var shot_i := -1
 	for i in range(cands.size()):
 		var cd: Dictionary = cands[i]
 		if not cd.has("dest") or int(cd["kind"]) == AiDecision.Action.CHARGE:
@@ -749,6 +766,15 @@ static func menu_covers_in(cands: Array, state: Dictionary, key: String,
 		if d < best:
 			best = d
 			best_i = i
+		if want_shoot != "" and str(cd.get("shoot", "")) == want_shoot and d < shot_best:
+			shot_best = d
+			shot_i = i
+	# Prefer the candidate that also carries the shot, but only when it really
+	# lands where the teacher went — a matching target is not worth a wrong spot.
+	if shot_i >= 0 and shot_best <= MENU_COVER_IN:
+		best = shot_best
+		best_i = shot_i
+	out["shot_kept"] = want_shoot == "" or shot_i == best_i
 	if best < INF:
 		out["best_in"] = best
 		out["covered"] = best <= MENU_COVER_IN

@@ -109,7 +109,20 @@ func test_the_wide_teacher_menu_offers_every_target() -> void:
 	var narrow := AiPlanner.candidates(state, "Grunts")
 	var wide := AiPlanner.candidates_wide(state, "Grunts")
 	assert_int(wide.size()).is_greater(narrow.size())
-	assert_int(wide.filter(func(c: Dictionary) -> bool: return c.has("shoot")).size()).is_equal(2)
+	# EVERY TARGET is what this pins — not a candidate count. Since 16.08. each
+	# enemy is offered twice: stand-and-shoot AND advance-and-shoot (the move the
+	# action space could not express at all, which taught the clone to rush and
+	# never fire). Counting candidates would have to be relaxed every time a way
+	# of engaging is added; counting distinct TARGETS says what the name says.
+	var shot_at := {}
+	for c in wide:
+		if (c as Dictionary).has("shoot"):
+			shot_at[str((c as Dictionary)["shoot"])] = true
+	assert_int(shot_at.size()).is_equal(2)
+	assert_int(wide.filter(func(c: Dictionary) -> bool:
+		return c.has("shoot") and int(c["kind"]) == AiDecision.Action.HOLD).size()).is_equal(2)
+	assert_int(wide.filter(func(c: Dictionary) -> bool:
+		return c.has("shoot") and int(c["kind"]) == AiDecision.Action.ADVANCE).size()).is_equal(2)
 	assert_int(wide.filter(func(c: Dictionary) -> bool: return c.has("charge")).size()).is_equal(2)
 	var shot := AiPlanner._best_shoot(state, "Grunts")
 	var mv := {"kind": AiDecision.Action.HOLD, "shoot": "Foe" if shot != "Foe" else "Other"}

@@ -169,3 +169,49 @@ func test_safe_line_prefers_cover_stop() -> void:
 	var x_plain: float = (without["dest"] as Vector3).x / IN2M
 	assert_float(x_cov).is_between(cover_centre - 1.6, cover_centre + 1.6)
 	assert_bool(x_plain > x_cov + 1.0).is_true()
+
+
+## THE LOSSY SEAM (16.08.): shooting only ever hung on HOLD, so "advance and
+## shoot" — the move the tree makes constantly — was neither offerable nor
+## recordable. The clone could fire only by standing still, stood still in 3.5%
+## of activations, and its games ended with a median 62 survivors against the
+## tree's 54. These two tests pin BOTH halves: the menu must OFFER the move, and
+## the transcript must LABEL it to that candidate instead of a bare advance.
+func test_the_wide_menu_offers_advance_and_shoot() -> void:
+	var shooter := _armed(2, [Vector3.ZERO], "Shooter", [{"name": "Rifle", "range": 24}])
+	var foe := _armed(1, [Vector3(20.0 * IN2M, 0, 0)], "Foe", [{"name": "CCW", "range": 0}])
+	var wide := AiPlanner.candidates_wide(_state([shooter, foe]), "Shooter")
+	var moving_shots := wide.filter(func(c: Dictionary) -> bool:
+		return int(c["kind"]) == AiDecision.Action.ADVANCE and c.has("shoot"))
+	assert_int(moving_shots.size()).is_greater(0)
+	if moving_shots.is_empty():
+		return          # fail cleanly — indexing an empty menu crashes the runner
+	assert_str(str((moving_shots[0] as Dictionary)["shoot"])).is_equal("Foe")
+	# and the narrow LIVE menu stays byte-identical — this is a transcript
+	# change, not a change to what the planner rolls out
+	var narrow := AiPlanner.candidates(_state([shooter, foe]), "Shooter")
+	assert_int(narrow.filter(func(c: Dictionary) -> bool:
+		return int(c["kind"]) == AiDecision.Action.ADVANCE and c.has("shoot")).size()).is_equal(0)
+
+
+func test_a_move_that_shoots_is_labelled_to_a_candidate_that_shoots() -> void:
+	var shooter := _armed(2, [Vector3.ZERO], "Shooter", [{"name": "Rifle", "range": 24}])
+	var foe := _armed(1, [Vector3(20.0 * IN2M, 0, 0)], "Foe", [{"name": "CCW", "range": 0}])
+	var state := _state([shooter, foe])
+	var cands := AiPlanner.candidates_wide(state, "Shooter")
+	# the teacher advanced toward the foe AND fired at it
+	var move := {"kind": AiDecision.Action.ADVANCE, "goal": Vector3(20.0 * IN2M, 0, 0),
+		"band_m": 20.0 * IN2M, "shoot": "Foe"}
+	var got := AiPlanner.menu_covers_in(cands, state, "Shooter", move)
+	assert_bool(bool(got["covered"])).is_true()
+	assert_int(int(got["idx"])).is_greater_equal(0)
+	if int(got["idx"]) < 0:
+		return          # fail cleanly rather than index the menu with -1
+	var picked: Dictionary = cands[int(got["idx"])]
+	assert_str(str(picked.get("shoot", ""))).is_equal("Foe")
+	assert_bool(bool(got["shot_kept"])).is_true()
+	# a move with NO shot must still match on destination alone, unchanged
+	var plain := {"kind": AiDecision.Action.ADVANCE, "goal": Vector3(20.0 * IN2M, 0, 0),
+		"band_m": 20.0 * IN2M}
+	assert_bool(bool(AiPlanner.menu_covers_in(cands, state, "Shooter", plain)["shot_kept"])).is_true()
+
