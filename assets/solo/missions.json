@@ -29,6 +29,38 @@
       "scoring": "end",
       "deployment": "front_line",
       "markers": {"count": 1, "placement": "table_centre"}
+    },
+    "pitched_battle": {
+      "family": "progressive",
+      "rounds": 4,
+      "scoring": "round_vp",
+      "vp": {"majority": "end"},
+      "deployment": "front_line",
+      "markers": {"count": "d3+2", "placement": "alternate", "min_gap_in": 9, "outside_zones_in": 9}
+    },
+    "domination": {
+      "family": "progressive",
+      "rounds": 4,
+      "scoring": "round_vp",
+      "vp": {"majority": "round"},
+      "deployment": "front_line",
+      "markers": {"count": 4, "placement": "quarter_centres"}
+    },
+    "headquarters": {
+      "family": "progressive",
+      "rounds": 4,
+      "scoring": "round_vp",
+      "vp": {"majority": "end"},
+      "deployment": "front_line",
+      "markers": {"count": 2, "placement": "deploy_zone_front", "edge_in": 12}
+    },
+    "mosh_pit": {
+      "family": "progressive",
+      "rounds": 4,
+      "scoring": "round_vp",
+      "vp": {"majority": "none", "first_seize": true},
+      "deployment": "front_line",
+      "markers": {"count": 1, "placement": "table_centre"}
     }
   }
 }

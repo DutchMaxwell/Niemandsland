@@ -11,9 +11,33 @@ func before_test() -> void:
 	MissionCatalog.reset_cache()
 
 
-func test_catalog_lists_the_v1_four() -> void:
+func test_catalog_lists_the_v2_eight() -> void:
+	# v1 four Face-Off + the four carry-free Progressive missions (NML-1010
+	# W2); Capture & Hold and Demolition wait for the carry/destroy wave.
 	assert_that(MissionCatalog.mission_ids()).is_equal(
-		["breakthrough", "duel", "king_of_the_hill", "seize_ground"])
+		["breakthrough", "domination", "duel", "headquarters",
+		"king_of_the_hill", "mosh_pit", "pitched_battle", "seize_ground"])
+
+
+## W2 — the progressive entries carry the book's scoring flavours and reuse
+## the proven placements (HQ shares breakthrough's 12" line by contract).
+func test_progressive_missions_carry_book_flavours() -> void:
+	var style := DeploymentCatalog.get_style("front_line")
+	var pb := MissionCatalog.get_mission("pitched_battle")
+	assert_str(str(pb["scoring"])).is_equal("round_vp")
+	assert_str(str((pb.get("vp", {}) as Dictionary).get("majority", ""))).is_equal("end")
+	assert_that(MissionCatalog.marker_positions(pb, style)).is_equal([])
+	var dom := MissionCatalog.get_mission("domination")
+	assert_str(str((dom.get("vp", {}) as Dictionary).get("majority", ""))).is_equal("round")
+	assert_int(MissionCatalog.marker_positions(dom, style).size()).is_equal(4)
+	var hq := MissionCatalog.get_mission("headquarters")
+	assert_str(str((hq.get("vp", {}) as Dictionary).get("majority", ""))).is_equal("end")
+	assert_that(MissionCatalog.marker_positions(hq, style)).is_equal(
+		[Vector2(0.0, -12.0), Vector2(0.0, 12.0)])
+	var mp := MissionCatalog.get_mission("mosh_pit")
+	assert_str(str((mp.get("vp", {}) as Dictionary).get("majority", ""))).is_equal("none")
+	assert_bool(bool((mp.get("vp", {}) as Dictionary).get("first_seize", false))).is_true()
+	assert_that(MissionCatalog.marker_positions(mp, style)).is_equal([Vector2.ZERO])
 
 
 func test_duel_matches_todays_live_constants() -> void:
