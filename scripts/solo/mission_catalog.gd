@@ -84,7 +84,14 @@ static func marker_positions(mission: Dictionary, deployment_style: Dictionary,
 				Vector2(table_w_in / 4.0, -table_d_in / 4.0),
 				Vector2(-table_w_in / 4.0, table_d_in / 4.0),
 				Vector2(table_w_in / 4.0, table_d_in / 4.0)]
-		"deploy_zone_centres":
+		"deploy_zone_centres", "deploy_zone_front":
+			# 'deploy_zone_front' (Breakthrough/Headquarters): zone centre
+			# across the width, but a fixed distance from the player's table
+			# edge in depth — the book's 12" line is the zone FRONT on a
+			# standard 12" zone. The centroid variant sits ~6" deeper and
+			# bred 87-90% structural draws (measured 17.08. on 650
+			# games/mission).
+			var edge_in := float((mission.get("markers", {}) as Dictionary).get("edge_in", 12.0))
 			var out: Array = []
 			for pk in ["1", "2"]:
 				var polys: Variant = (deployment_style.get("zones", {}) as Dictionary).get(pk)
@@ -95,7 +102,10 @@ static func marker_positions(mission: Dictionary, deployment_style: Dictionary,
 						c += Vector2(float(xz[0]), float(xz[1]))
 						n += 1
 					if n > 0:
-						out.append(c / float(n))
+						c /= float(n)
+						if mode == "deploy_zone_front":
+							c.y = signf(c.y) * (table_d_in / 2.0 - edge_in)
+						out.append(c)
 			return out
 		"table_centre":
 			return [Vector2.ZERO]

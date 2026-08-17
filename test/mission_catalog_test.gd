@@ -61,8 +61,11 @@ func test_marker_positions_modes() -> void:
 	var bt := MissionCatalog.get_mission("breakthrough")
 	var z := MissionCatalog.marker_positions(bt, style)
 	assert_int(z.size()).is_equal(2)
-	assert_that(z[0]).is_equal(Vector2(0.0, -18.0))
-	assert_that(z[1]).is_equal(Vector2(0.0, 18.0))
+	# the book puts the marker 12" from the table edge (the zone FRONT on a
+	# standard 12" zone), not on the zone centroid 6" deeper — the centroid
+	# variant bred 87-90% structural draws in the corpus
+	assert_that(z[0]).is_equal(Vector2(0.0, -12.0))
+	assert_that(z[1]).is_equal(Vector2(0.0, 12.0))
 	var koth := MissionCatalog.get_mission("king_of_the_hill")
 	assert_that(MissionCatalog.marker_positions(koth, style)).is_equal([Vector2.ZERO])
 	var duel := MissionCatalog.get_mission("duel")
