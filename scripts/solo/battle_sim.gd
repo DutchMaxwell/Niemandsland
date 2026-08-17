@@ -273,6 +273,30 @@ static func vp_end_bonus(owners: Array, vp: Array) -> void:
 		vp[1] += 1
 
 
+## NML-1010 W2 — one entry point for every round_vp mission flavour, so the
+## live game, the arena and the planner playout all speak the same book:
+## flavour.majority = "end" (default; Pitched Battle/Capture&Hold/HQ pay the
+## majority bonus once at game end), "round" (Domination pays it EVERY
+## round), or "none" (Mosh Pit). flavour.first_seize pays 1 VP the FIRST
+## time either side controls a marker (Mosh Pit); memo carries that flag
+## across rounds (memo.first_seizer = 0 until claimed).
+static func vp_score_round(owners: Array, vp: Array, flavour: Dictionary, memo: Dictionary) -> void:
+	vp_round_add(owners, vp)
+	if str(flavour.get("majority", "end")) == "round":
+		vp_end_bonus(owners, vp)
+	if bool(flavour.get("first_seize", false)) and int(memo.get("first_seizer", 0)) == 0:
+		for o in owners:
+			if int(o) == 1 or int(o) == 2:
+				memo["first_seizer"] = int(o)
+				vp[int(o) - 1] += 1
+				break
+
+
+static func vp_score_end(owners: Array, vp: Array, flavour: Dictionary) -> void:
+	if str(flavour.get("majority", "end")) == "end":
+		vp_end_bonus(owners, vp)
+
+
 ## One activation with stochastic rounding (core self-play games).
 static func resolve_stochastic(state: Dictionary, action: Dictionary,
 		rng: RandomNumberGenerator) -> Dictionary:

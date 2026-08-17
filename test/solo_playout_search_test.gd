@@ -124,6 +124,47 @@ func test_vp_ledger_rewards_early_control() -> void:
 	assert_bool(vp[0] > vp[1]).is_true()    # end-state counting would call B the winner
 
 
+## NML-1010 W2 — mission flavours of the VP ledger, pinned to the book:
+## Domination pays the majority bonus EVERY round; Mosh Pit pays a one-time
+## first-seize bonus and no end bonus; the default flavour is byte-for-byte
+## the v1 ledger (majority at the end only).
+func test_vp_flavour_domination_majority_each_round() -> void:
+	var vp := [0, 0]
+	var memo := {}
+	var fl := {"majority": "round"}
+	BattleSim.vp_score_round([1, 1, 1, 0], vp, fl, memo)   # A holds 3 -> +3 +1 majority
+	BattleSim.vp_score_round([1, 1, 2, 2], vp, fl, memo)   # 2:2 -> no majority bonus
+	BattleSim.vp_score_end([1, 1, 2, 2], vp, fl)           # majority=round: end pays nothing
+	assert_int(int(vp[0])).is_equal(6)
+	assert_int(int(vp[1])).is_equal(2)
+
+
+func test_vp_flavour_mosh_pit_first_seize_once() -> void:
+	var vp := [0, 0]
+	var memo := {}
+	var fl := {"majority": "none", "first_seize": true}
+	BattleSim.vp_score_round([0], vp, fl, memo)   # R1: nobody on the hill
+	BattleSim.vp_score_round([1], vp, fl, memo)   # R2: A seizes first -> +1 +1
+	BattleSim.vp_score_round([2], vp, fl, memo)   # R3: B takes it -> +1 only
+	BattleSim.vp_score_round([1], vp, fl, memo)   # R4: A again -> +1 only
+	BattleSim.vp_score_end([1], vp, fl)           # mosh pit has no end bonus
+	assert_int(int(vp[0])).is_equal(3)
+	assert_int(int(vp[1])).is_equal(1)
+
+
+func test_vp_flavour_default_is_the_v1_ledger() -> void:
+	var vp := [0, 0]
+	var memo := {}
+	var fl := {}
+	BattleSim.vp_score_round([1, 1, 0], vp, fl, memo)
+	BattleSim.vp_score_round([1, 1, 0], vp, fl, memo)
+	BattleSim.vp_score_round([1, 1, 0], vp, fl, memo)
+	BattleSim.vp_score_round([2, 2, 2], vp, fl, memo)
+	BattleSim.vp_score_end([2, 2, 2], vp, fl)
+	assert_int(int(vp[0])).is_equal(6)
+	assert_int(int(vp[1])).is_equal(4)
+
+
 ## Mission-driven currency: the SAME playout speaks END points for Face-Off
 ## and cumulative VPs when the state carries scoring=round_vp (progressive
 ## wave, prepared).
