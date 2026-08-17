@@ -1807,6 +1807,7 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 		if last_side != 0:
 			opener = 2 if last_side == 1 else 1
 		_solo_auto_seize()
+		_solo_book_mission_vp(round_no >= SOLO_GAME_ROUNDS)
 		if round_no >= SOLO_GAME_ROUNDS:
 			if not _solo_game_finished:
 				_solo_game_finished = true
@@ -1948,24 +1949,32 @@ func _solo_init_arena_from_env() -> void:
 ## round gets to activate first") — the side that did NOT take the last activation opens the next round, so
 ## a side can never take a round's last activation AND the next round's first (field-test finding 7: the AI
 ## activated back-to-back across the boundary because the old round-parity opener ignored who went last).
+## NML-1010 W2 — book the mission VP for the round that just ended, right
+## after the official seize/contest step. Called by BOTH round drivers —
+## the single-AI _solo_end_round AND the both-AI arena loop, which close
+## their rounds independently (the probe game that booked nothing found
+## exactly this seam). final pays the end bonus exactly once. Logged to the
+## battle log AND stderr so a silent ledger can never pass for a broken one.
+func _solo_book_mission_vp(final: bool) -> void:
+	if SoloController.mission_scoring != "round_vp":
+		return
+	var vp_owners: Array = terrain_overlay.get_objective_owners() \
+		if terrain_overlay != null and terrain_overlay.has_method("get_objective_owners") else []
+	BattleSim.vp_score_round(vp_owners, SoloController.mission_vp,
+		SoloController.mission_vp_flavour, SoloController.mission_vp_memo)
+	if final:
+		BattleSim.vp_score_end(vp_owners, SoloController.mission_vp,
+			SoloController.mission_vp_flavour)
+	var line := "Mission VP after round %d: P1 %d — P2 %d" % [opr_army_manager.current_round,
+		int(SoloController.mission_vp[0]), int(SoloController.mission_vp[1])]
+	printerr("[MISSION] " + line)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, line, true)
+
+
 func _solo_end_round() -> void:
 	_solo_auto_seize()
-	# NML-1010 W2 — progressive missions: book the round's VP right after the
-	# official seize/contest step, every round including the last; the end
-	# bonus pays exactly once when the game closes. Logged per round so a
-	# silent ledger can never masquerade as a broken one.
-	if SoloController.mission_scoring == "round_vp":
-		var vp_owners: Array = terrain_overlay.get_objective_owners() \
-			if terrain_overlay != null and terrain_overlay.has_method("get_objective_owners") else []
-		BattleSim.vp_score_round(vp_owners, SoloController.mission_vp,
-			SoloController.mission_vp_flavour, SoloController.mission_vp_memo)
-		if opr_army_manager.current_round >= SOLO_GAME_ROUNDS:
-			BattleSim.vp_score_end(vp_owners, SoloController.mission_vp,
-				SoloController.mission_vp_flavour)
-		if battle_log != null:
-			battle_log.log_event(BattleLog.Category.GENERAL,
-				"Mission VP after round %d: P1 %d — P2 %d" % [opr_army_manager.current_round,
-				int(SoloController.mission_vp[0]), int(SoloController.mission_vp[1])], true)
+	_solo_book_mission_vp(opr_army_manager.current_round >= SOLO_GAME_ROUNDS)
 	if opr_army_manager.current_round >= SOLO_GAME_ROUNDS:
 		if not _solo_game_finished:
 			_solo_game_finished = true
