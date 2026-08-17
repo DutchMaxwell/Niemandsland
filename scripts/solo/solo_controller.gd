@@ -19,6 +19,22 @@ const BOUNDS_MARGIN_M := 0.02   # keep models a hair inside the table edge
 const BOARD_CLAMP_NOTE_EPS_M := 0.01
 const INCHES_TO_METERS := 0.0254
 const OBJECTIVE_CONTROL_IN := 3.0   # OPR objective seize/hold radius (Solo & Co-Op v3.5.0 p.6)
+
+## NML-1010 W2 — the live mission-VP ledger (progressive missions). Statics
+## so the arena harness, main's round-end bookkeeping and BattleSim.capture
+## all read the same account without plumbing a node reference through four
+## seams; "end" keeps every existing consumer byte-identical.
+static var mission_scoring: String = "end"
+static var mission_vp_flavour: Dictionary = {}
+static var mission_vp: Array = [0, 0]
+static var mission_vp_memo: Dictionary = {}
+
+
+static func mission_reset(scoring: String, flavour: Dictionary) -> void:
+	mission_scoring = scoring
+	mission_vp_flavour = flavour
+	mission_vp = [0, 0]
+	mission_vp_memo = {}
 const CONTACT_IN := 2.0             # centre-to-centre "in melee" distance a charge closes to
 const MELEE_REACH_IN := 2.0         # OPR "Who Can Strike" (GF Advanced Rules v3.5.1 p.9): only models within 2" strike
 const BASE_CONTACT_IN := 1.0        # nominal centre-to-centre gap of two standard ~25 mm bases at contact (~1")

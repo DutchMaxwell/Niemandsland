@@ -243,6 +243,11 @@ func _run() -> void:
 		# placement has no headless equivalent), so NML_MISSION=duel keeps the
 		# centre-line approximation above and stays comparable with legacy runs.
 		var mission := MissionCatalog.get_mission(_mission_id)
+		# NML-1010 W2: arm the live VP ledger with the mission's scoring —
+		# "end" for Face-Off keeps every consumer as before; round_vp switches
+		# main's round-end bookkeeping, the planner state and the winner call.
+		SoloController.mission_reset(str(mission.get("scoring", "end")),
+			(mission.get("vp", {}) as Dictionary))
 		var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))
 		var resolved := MissionCatalog.marker_positions(mission, style,
 			table.table_size.x * 12.0, table.table_size.y * 12.0)
@@ -445,7 +450,14 @@ func _run() -> void:
 		else:
 			neutral += 1
 	var winner := "draw"
-	if p1 != p2:
+	var vp1: int = int(SoloController.mission_vp[0])
+	var vp2: int = int(SoloController.mission_vp[1])
+	if SoloController.mission_scoring == "round_vp":
+		# NML-1010 W2: progressive missions are decided by the VP ledger main
+		# booked every round (end bonus included) — most VPs wins, ties draw.
+		if vp1 != vp2:
+			winner = "p1" if vp1 > vp2 else "p2"
+	elif p1 != p2:
 		winner = "p1" if p1 > p2 else "p2"
 	elif owners.is_empty():
 		# No markers (not the ladder board): documented fallback — surviving models decide, ties draw.
@@ -453,10 +465,11 @@ func _run() -> void:
 		var a2: int = int(main._solo_side_alive(2))
 		if a1 != a2:
 			winner = "p1" if a1 > a2 else "p2"
-	printerr("[ARENA] RESULT seed=%d dice=%d P1(%s) objectives=%d P2(%s) objectives=%d → %s" % [
-		_seed, _dice_seed, _p1_grade, p1, _p2_grade, p2, winner])
+	printerr("[ARENA] RESULT seed=%d dice=%d P1(%s) objectives=%d P2(%s) objectives=%d vp=%d:%d → %s" % [
+		_seed, _dice_seed, _p1_grade, p1, _p2_grade, p2, vp1, vp2, winner])
 	_write_result_json(main, army_manager, opener, winner,
-		{"p1": p1, "p2": p2, "neutral": neutral}, float(Time.get_ticks_msec() - t0) / 1000.0)
+		{"p1": p1, "p2": p2, "neutral": neutral, "vp1": vp1, "vp2": vp2},
+		float(Time.get_ticks_msec() - t0) / 1000.0)
 	_write_capture_outputs()
 	quit(0)
 

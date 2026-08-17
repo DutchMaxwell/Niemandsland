@@ -994,12 +994,20 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 		owners.append(int((o as Dictionary).get("owner", 0)))
 	var state := BattleSim.resolve_stochastic(state0, action, prng)
 	var turn := 2 if player == 1 else 1
+	# NML-1010 W2: the playout continues the LIVE ledger (a playout that
+	# counts only remaining-round VP can call an already-won game lost) and
+	# speaks the mission's flavour; empty flavour = the v1 end-majority rule.
 	var vp := [0, 0]
+	var vp_live: Variant = state0.get("vp")
+	if vp_live is Array and (vp_live as Array).size() == 2:
+		vp = [int(vp_live[0]), int(vp_live[1])]
+	var vp_flavour: Dictionary = state0.get("vp_flavour", {}) as Dictionary
+	var vp_memo: Dictionary = (state0.get("vp_memo", {}) as Dictionary).duplicate()
 	var res := _playout_round_tail(state, turn, prng)
 	state = res["state"]
 	var opener: int = (2 if int(res["last"]) == 1 else 1) if int(res["last"]) != 0 else turn
 	BattleSim.playout_seize(state, owners)
-	BattleSim.vp_round_add(owners, vp)
+	BattleSim.vp_score_round(owners, vp, vp_flavour, vp_memo)
 	var round0 := int(state0.get("round", 1))
 	var rounds_total: int = mini(int(state.get("rounds_total", 4)),
 		round0 + PLAYOUT_MAX_ROUNDS - 1)
@@ -1014,13 +1022,13 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 		if int(res["last"]) != 0:
 			opener = 2 if int(res["last"]) == 1 else 1
 		BattleSim.playout_seize(state, owners)
-		BattleSim.vp_round_add(owners, vp)
+		BattleSim.vp_score_round(owners, vp, vp_flavour, vp_memo)
 	# NML-1008 CORRECTED (record check 15.08. evening): our v1 missions are
 	# FACE-OFF = END-scored per book AND per grill D4 (12.08.); the VP ledger
 	# is always closed out (book: +1 for holding more markers at game end) and
 	# stays armed for the PROGRESSIVE wave, but WHICH currency decides is the
-	# mission's business.
-	BattleSim.vp_end_bonus(owners, vp)
+	# mission's business. W2: the flavour now picks end/round/none majority.
+	BattleSim.vp_score_end(owners, vp, vp_flavour)
 	var p1 := 0
 	var p2 := 0
 	for o in owners:

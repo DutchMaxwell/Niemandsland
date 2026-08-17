@@ -705,7 +705,15 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 		"rounds_total": rounds_total,
 		"units": units,
 		"objectives": objectives,
+		# NML-1010 W2: the planner's playout must speak the mission's currency
+		# AND start from the LIVE ledger — a playout that counts only the
+		# remaining rounds' VP can call a game "lost" that is already won.
+		"scoring": SoloController.mission_scoring,
 	}
+	if SoloController.mission_scoring == "round_vp":
+		state["vp"] = [int(SoloController.mission_vp[0]), int(SoloController.mission_vp[1])]
+		state["vp_flavour"] = SoloController.mission_vp_flavour
+		state["vp_memo"] = SoloController.mission_vp_memo.duplicate()
 	if terrain_at.is_valid():   # absent key = pre-T2b snapshot, byte-identical
 		state["terrain_at"] = terrain_at
 	return state
