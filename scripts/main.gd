@@ -5683,7 +5683,8 @@ func _solo_vengeance_on_destroyed(dead: GameUnit, destroyer: GameUnit) -> void:
 ## Battle-log line naming an applied to-hit modifier and the resulting threshold (transparency: the tray
 ## shows the modified target, this line explains WHY). Silent when the net modifier is zero.
 func _solo_log_hit_mod(info: Dictionary, target: GameUnit, to_hit: int) -> void:
-	if int(info.get("mod", 0)) == 0 or battle_log == null:
+	if battle_log == null or not AiCombatMath.hit_mod_worth_logging(
+			int(info.get("mod", 0)), str(info.get("note", ""))):
 		return
 	battle_log.log_event(BattleLog.Category.COMBAT, "To-hit vs %s: %s → hits on %d+" % [
 		target.get_name(), str(info.get("note", "")), to_hit], true)

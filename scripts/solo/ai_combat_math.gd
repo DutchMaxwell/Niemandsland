@@ -528,6 +528,15 @@ static func at_or_below_half(alive: int, total: int) -> bool:
 
 
 ## OPR rule gap (goal 003 P1): a unit tests morale after SHOOTING only if it took casualties this volley
+## #314 — a to-hit breakdown is worth logging whenever ANY rule spoke, not only when the NET
+## modifier survives: Artillery +1 cancelling against "Indirect moved -1" (or Stealth -1) used
+## to net 0 and silently swallow BOTH lines — the applied bonus looked nondeterministic to the
+## tester, and the #224 "no +1 (within 9\")" transparency lines vanished the same way.
+## rules-must-log doctrine: silent-correct reads as broken.
+static func hit_mod_worth_logging(mod: int, note: String) -> bool:
+	return mod != 0 or not note.strip_edges().is_empty()
+
+
 ## AND is now at half strength or less. Pure predicate behind the solo shooting-morale trigger. A wiped
 ## unit (alive_now <= 0) is gone, not routed here; no casualties (alive_now unchanged) → no test.
 static func should_test_shooting_morale(alive_before: int, alive_now: int, total: int) -> bool:
