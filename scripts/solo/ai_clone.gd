@@ -291,10 +291,18 @@ static func selftest_ok(n: Dictionary) -> bool:
 	if got.size() != want.size():
 		return false
 	for i in range(got.size()):
-		if absf(float(got[i]) - float(want[i])) > SELFTEST_TOL:
+		if not score_close(float(got[i]), float(want[i])):
 			printerr("[CLONE] selftest mismatch at %d: %.6f vs %.6f" % [i, got[i], want[i]])
 			return false
 	return true
+
+
+## Absolute + relative tolerance: a confident net legitimately exports
+## scores around 4e4, where float32 cannot even hold the 3rd decimal — pure
+## rounding must pass, genuine weight drift (orders of magnitude larger)
+## must keep failing. Measured trigger: 41151.166128 vs 41151.167969.
+static func score_close(got: float, want: float) -> bool:
+	return absf(got - want) <= SELFTEST_TOL + absf(want) * 1e-6
 
 
 static func _centre_of(su: Dictionary) -> Vector3:

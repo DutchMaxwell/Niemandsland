@@ -30,6 +30,18 @@ func test_a_drifted_net_is_refused() -> void:
 	assert_bool(AiClone.selftest_ok(bent)).is_false()
 
 
+## NML-1010 night finding: a confident net exports scores around 41k, where
+## float32 itself cannot hold the 3rd decimal — the wv00s duel lost all 120
+## games to "selftest mismatch at 0: 41151.166128 vs 41151.167969". The
+## tolerance must scale with the magnitude (float rounding is not drift)
+## while genuine drift keeps failing.
+func test_score_close_scales_with_magnitude() -> void:
+	assert_bool(AiClone.score_close(41151.166128, 41151.167969)).is_true()
+	assert_bool(AiClone.score_close(0.809998, 0.810000)).is_true()
+	assert_bool(AiClone.score_close(41151.0, 41160.0)).is_false()
+	assert_bool(AiClone.score_close(0.80, 0.82)).is_false()
+
+
 func test_menu_tuples_speak_the_trainer_s_language() -> void:
 	var st: Dictionary = _fixture()["selftest"]
 	var a: Dictionary = (st["menu"] as Array)[0]
