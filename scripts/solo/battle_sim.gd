@@ -386,12 +386,23 @@ static func clone_state(state: Dictionary) -> Dictionary:
 	var objectives: Array = []
 	for o in state["objectives"]:
 		objectives.append((o as Dictionary).duplicate())
+	# W3: marker mission state must be COPIED per rollout — shared dicts would
+	# let one playout's destructions leak into its siblings and the live game.
+	var markers_meta: Array = []
+	for mk in state.get("markers_meta", []):
+		markers_meta.append((mk as Dictionary).duplicate())
 	var out := {"round": state["round"], "rounds_total": state["rounds_total"],
 		"units": units, "objectives": objectives}
 	if state.has("terrain_at"):
 		out["terrain_at"] = state["terrain_at"]
 	if state.has("los_blocked"):
 		out["los_blocked"] = state["los_blocked"]
+	if state.has("markers_meta"):
+		out["markers_meta"] = markers_meta
+		out["destroy_seq"] = [int((state.get("destroy_seq", [0]) as Array)[0])]
+	for kf in ["scoring", "vp", "vp_flavour", "vp_memo"]:
+		if state.has(kf):
+			out[kf] = state[kf]
 	return out
 
 
@@ -778,6 +789,14 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 		state["vp"] = [int(SoloController.mission_vp[0]), int(SoloController.mission_vp[1])]
 		state["vp_flavour"] = SoloController.mission_vp_flavour
 		state["vp_memo"] = SoloController.mission_vp_memo.duplicate()
+	if not SoloController.mission_markers.is_empty():
+		# W3: playouts must know owned/destructible markers AND the live
+		# destruction state, or they optimise a mission that no longer exists.
+		var mm: Array = []
+		for mk in SoloController.mission_markers:
+			mm.append((mk as Dictionary).duplicate())
+		state["markers_meta"] = mm
+		state["destroy_seq"] = [int(SoloController.mission_destroy_seq[0])]
 	if terrain_at.is_valid():   # absent key = pre-T2b snapshot, byte-identical
 		state["terrain_at"] = terrain_at
 	return state

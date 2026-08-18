@@ -246,8 +246,17 @@ func _run() -> void:
 		# NML-1010 W2: arm the live VP ledger with the mission's scoring —
 		# "end" for Face-Off keeps every consumer as before; round_vp switches
 		# main's round-end bookkeeping, the planner state and the winner call.
+		var mmeta: Array = []
+		if bool((mission.get("markers", {}) as Dictionary).get("owned", false)):
+			# deploy_zone_front resolves [P1's, P2's] in zone order — the
+			# owned_by convention rides that order (index + 1).
+			var mc := int((mission.get("markers", {}) as Dictionary).get("count", 2))
+			for mi in range(mc):
+				mmeta.append({"owned_by": mi + 1,
+					"destructible": bool((mission.get("markers", {}) as Dictionary).get("destructible", false)),
+					"destroyed": false, "destroyed_seq": 0})
 		SoloController.mission_reset(str(mission.get("scoring", "end")),
-			(mission.get("vp", {}) as Dictionary))
+			(mission.get("vp", {}) as Dictionary), mmeta)
 		var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))
 		var resolved := MissionCatalog.marker_positions(mission, style,
 			table.table_size.x * 12.0, table.table_size.y * 12.0)
@@ -452,7 +461,10 @@ func _run() -> void:
 	var winner := "draw"
 	var vp1: int = int(SoloController.mission_vp[0])
 	var vp2: int = int(SoloController.mission_vp[1])
-	if SoloController.mission_scoring == "round_vp":
+	if SoloController.mission_scoring == "sabotage":
+		# W3: destroy theirs, keep yours — anything else is a draw.
+		winner = BattleSim.sabotage_winner(SoloController.mission_markers)
+	elif SoloController.mission_scoring == "round_vp":
 		# NML-1010 W2: progressive missions are decided by the VP ledger main
 		# booked every round (end bonus included) — most VPs wins, ties draw.
 		if vp1 != vp2:
@@ -468,7 +480,9 @@ func _run() -> void:
 	printerr("[ARENA] RESULT seed=%d dice=%d P1(%s) objectives=%d P2(%s) objectives=%d vp=%d:%d → %s" % [
 		_seed, _dice_seed, _p1_grade, p1, _p2_grade, p2, vp1, vp2, winner])
 	_write_result_json(main, army_manager, opener, winner,
-		{"p1": p1, "p2": p2, "neutral": neutral, "vp1": vp1, "vp2": vp2},
+		{"p1": p1, "p2": p2, "neutral": neutral, "vp1": vp1, "vp2": vp2,
+			"markers_destroyed": SoloController.mission_markers.map(
+				func(mk: Variant) -> bool: return bool((mk as Dictionary).get("destroyed", false)))},
 		float(Time.get_ticks_msec() - t0) / 1000.0)
 	_write_capture_outputs()
 	quit(0)

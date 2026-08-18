@@ -30,11 +30,20 @@ static var mission_vp: Array = [0, 0]
 static var mission_vp_memo: Dictionary = {}
 
 
-static func mission_reset(scoring: String, flavour: Dictionary) -> void:
+## W3: per-marker mission state ({owned_by, destructible, destroyed,
+## destroyed_seq}) + the destruction sequence counter (one-element array so
+## BattleSim.apply_destroy_step can advance it by reference).
+static var mission_markers: Array = []
+static var mission_destroy_seq: Array = [0]
+
+
+static func mission_reset(scoring: String, flavour: Dictionary, markers: Array = []) -> void:
 	mission_scoring = scoring
 	mission_vp_flavour = flavour
 	mission_vp = [0, 0]
 	mission_vp_memo = {}
+	mission_markers = markers
+	mission_destroy_seq = [0]
 const CONTACT_IN := 2.0             # centre-to-centre "in melee" distance a charge closes to
 const MELEE_REACH_IN := 2.0         # OPR "Who Can Strike" (GF Advanced Rules v3.5.1 p.9): only models within 2" strike
 const BASE_CONTACT_IN := 1.0        # nominal centre-to-centre gap of two standard ~25 mm bases at contact (~1")

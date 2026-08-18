@@ -1007,7 +1007,9 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 	state = res["state"]
 	var opener: int = (2 if int(res["last"]) == 1 else 1) if int(res["last"]) != 0 else turn
 	BattleSim.playout_seize(state, owners)
-	BattleSim.vp_score_round(owners, vp, vp_flavour, vp_memo)
+	if state.has("markers_meta"):
+		BattleSim.apply_destroy_step(state["markers_meta"], owners, state["destroy_seq"])
+	BattleSim.vp_score_round(owners, vp, vp_flavour, vp_memo, state.get("markers_meta", []))
 	var round0 := int(state0.get("round", 1))
 	var rounds_total: int = mini(int(state.get("rounds_total", 4)),
 		round0 + PLAYOUT_MAX_ROUNDS - 1)
@@ -1022,7 +1024,9 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 		if int(res["last"]) != 0:
 			opener = 2 if int(res["last"]) == 1 else 1
 		BattleSim.playout_seize(state, owners)
-		BattleSim.vp_score_round(owners, vp, vp_flavour, vp_memo)
+		if state.has("markers_meta"):
+			BattleSim.apply_destroy_step(state["markers_meta"], owners, state["destroy_seq"])
+		BattleSim.vp_score_round(owners, vp, vp_flavour, vp_memo, state.get("markers_meta", []))
 	# NML-1008 CORRECTED (record check 15.08. evening): our v1 missions are
 	# FACE-OFF = END-scored per book AND per grill D4 (12.08.); the VP ledger
 	# is always closed out (book: +1 for holding more markers at game end) and
@@ -1047,6 +1051,12 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 	var round_vp := str(state0.get("scoring", "end")) == "round_vp"
 	var pts1: int = int(vp[0]) if round_vp else p1
 	var pts2: int = int(vp[1]) if round_vp else p2
+	if str(state0.get("scoring", "end")) == "sabotage":
+		# W3: the playout speaks sabotage's own goal — destroy theirs, keep
+		# yours — so the planner optimises the mission that is actually played.
+		var sw := BattleSim.sabotage_winner(state.get("markers_meta", []))
+		pts1 = 1 if sw == "p1" else 0
+		pts2 = 1 if sw == "p2" else 0
 	var winner := "draw"
 	if pts1 != pts2:
 		winner = "p1" if pts1 > pts2 else "p2"

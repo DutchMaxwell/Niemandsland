@@ -11,12 +11,27 @@ func before_test() -> void:
 	MissionCatalog.reset_cache()
 
 
-func test_catalog_lists_the_v2_eight() -> void:
-	# v1 four Face-Off + the four carry-free Progressive missions (NML-1010
-	# W2); Capture & Hold and Demolition wait for the carry/destroy wave.
+func test_catalog_lists_the_v3_ten() -> void:
+	# v1 four Face-Off + four carry-free Progressive (W2) + the two
+	# destroy-marker missions (W3); the carry pair waits for its wave.
 	assert_that(MissionCatalog.mission_ids()).is_equal(
-		["breakthrough", "domination", "duel", "headquarters",
-		"king_of_the_hill", "mosh_pit", "pitched_battle", "seize_ground"])
+		["breakthrough", "demolition", "domination", "duel", "headquarters",
+		"king_of_the_hill", "mosh_pit", "pitched_battle", "sabotage",
+		"seize_ground"])
+
+
+## W3 — the destroy-marker pair carries owned/destructible flags and the
+## demolition VP mode; sabotage scores by its own end verdict.
+func test_destroy_missions_carry_book_flags() -> void:
+	var sab := MissionCatalog.get_mission("sabotage")
+	assert_str(str(sab["scoring"])).is_equal("sabotage")
+	var smk: Dictionary = sab["markers"]
+	assert_bool(bool(smk.get("owned", false))).is_true()
+	assert_bool(bool(smk.get("destructible", false))).is_true()
+	var dem := MissionCatalog.get_mission("demolition")
+	assert_str(str(dem["scoring"])).is_equal("round_vp")
+	assert_str(str((dem.get("vp", {}) as Dictionary).get("mode", ""))).is_equal("demolition")
+	assert_bool(bool((dem["markers"] as Dictionary).get("owned", false))).is_true()
 
 
 ## W2 — the progressive entries carry the book's scoring flavours and reuse

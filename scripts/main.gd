@@ -1956,12 +1956,28 @@ func _solo_init_arena_from_env() -> void:
 ## exactly this seam). final pays the end bonus exactly once. Logged to the
 ## battle log AND stderr so a silent ledger can never pass for a broken one.
 func _solo_book_mission_vp(final: bool) -> void:
-	if SoloController.mission_scoring != "round_vp":
+	var has_markers: bool = not SoloController.mission_markers.is_empty()
+	if SoloController.mission_scoring != "round_vp" and not has_markers:
 		return
 	var vp_owners: Array = terrain_overlay.get_objective_owners() \
 		if terrain_overlay != null and terrain_overlay.has_method("get_objective_owners") else []
+	if has_markers:
+		# W3: owned markers the enemy alone holds are destroyed BEFORE any
+		# scoring — the destruction is the round-end event (book order).
+		var destroyed: Array = BattleSim.apply_destroy_step(
+			SoloController.mission_markers, vp_owners, SoloController.mission_destroy_seq)
+		for ev in destroyed:
+			var owner_side := int((SoloController.mission_markers[int((ev as Dictionary)["index"])] as Dictionary).get("owned_by", 0))
+			var dline := "Mission marker of P%d DESTROYED by P%d (round %d)" % [
+				owner_side, int((ev as Dictionary)["destroyed_by"]), opr_army_manager.current_round]
+			printerr("[MISSION] " + dline)
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL, dline, true)
+	if SoloController.mission_scoring != "round_vp":
+		return
 	BattleSim.vp_score_round(vp_owners, SoloController.mission_vp,
-		SoloController.mission_vp_flavour, SoloController.mission_vp_memo)
+		SoloController.mission_vp_flavour, SoloController.mission_vp_memo,
+		SoloController.mission_markers)
 	if final:
 		BattleSim.vp_score_end(vp_owners, SoloController.mission_vp,
 			SoloController.mission_vp_flavour)
