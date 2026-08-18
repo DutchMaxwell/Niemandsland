@@ -176,3 +176,53 @@ func test_playout_currency_follows_mission_scoring() -> void:
 	state["scoring"] = "round_vp"
 	var vp_pts := AiPlanner.full_playout(state, act, 1, _rng(5))
 	assert_int(int(vp_pts["p1"])).is_equal(3)
+
+
+## NML-1010 W3 — destructible/owned markers, pinned to the book and the
+## maintainer's table clarification (17.08.): Demolition's revenge VP starts
+## IN the round the enemy marker falls (own already dead) and repeats every
+## round after; destroying first and losing one's own later earns nothing;
+## same-round ties break by destruction sequence.
+func test_destroy_step_kills_enemy_held_owned_markers() -> void:
+	var markers := [
+		{"owned_by": 1, "destructible": true, "destroyed": false, "destroyed_seq": 0},
+		{"owned_by": 2, "destructible": true, "destroyed": false, "destroyed_seq": 0}]
+	var events: Array = BattleSim.apply_destroy_step(markers, [2, 2], [0])
+	assert_int(events.size()).is_equal(1)          # only P1's marker falls (enemy 2 holds it)
+	assert_bool(bool(markers[0]["destroyed"])).is_true()
+	assert_bool(bool(markers[1]["destroyed"])).is_false()   # own holder never destroys it
+	BattleSim.apply_destroy_step(markers, [0, 0], [1])      # contested/neutral: nothing happens
+	assert_bool(bool(markers[1]["destroyed"])).is_false()
+
+
+func test_demolition_revenge_pays_from_event_round_onward() -> void:
+	var m := [
+		{"owned_by": 1, "destructible": true, "destroyed": true, "destroyed_seq": 1},
+		{"owned_by": 2, "destructible": true, "destroyed": false, "destroyed_seq": 0}]
+	var vp := [0, 0]
+	BattleSim.vp_score_round([0, 2], vp, {"mode": "demolition"}, {}, m)   # R2: own dead, no revenge yet
+	assert_that(vp).is_equal([0, 1])               # only P2 scores own-alive
+	m[1]["destroyed"] = true; m[1]["destroyed_seq"] = 2                   # R3: P1 destroys P2's marker
+	BattleSim.vp_score_round([0, 0], vp, {"mode": "demolition"}, {}, m)   # revenge pays THIS round
+	BattleSim.vp_score_round([0, 0], vp, {"mode": "demolition"}, {}, m)   # and every round after
+	assert_that(vp).is_equal([2, 1])
+
+
+func test_demolition_destroy_first_lose_later_earns_nothing() -> void:
+	var m := [
+		{"owned_by": 1, "destructible": true, "destroyed": true, "destroyed_seq": 2},
+		{"owned_by": 2, "destructible": true, "destroyed": true, "destroyed_seq": 1}]
+	var vp := [0, 0]
+	BattleSim.vp_score_round([0, 0], vp, {"mode": "demolition"}, {}, m)
+	BattleSim.vp_score_round([0, 0], vp, {"mode": "demolition"}, {}, m)
+	assert_that(vp).is_equal([0, 2])   # P2's own fell FIRST (seq 1 < 2): P2 gets revenge, P1 gets nothing
+
+
+func test_sabotage_winner_matrix() -> void:
+	var alive := func(o1: bool, o2: bool) -> Array: return [
+		{"owned_by": 1, "destructible": true, "destroyed": not o1, "destroyed_seq": 0},
+		{"owned_by": 2, "destructible": true, "destroyed": not o2, "destroyed_seq": 0}]
+	assert_str(BattleSim.sabotage_winner(alive.call(true, false))).is_equal("p1")
+	assert_str(BattleSim.sabotage_winner(alive.call(false, true))).is_equal("p2")
+	assert_str(BattleSim.sabotage_winner(alive.call(true, true))).is_equal("draw")
+	assert_str(BattleSim.sabotage_winner(alive.call(false, false))).is_equal("draw")

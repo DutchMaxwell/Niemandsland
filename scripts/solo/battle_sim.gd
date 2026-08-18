@@ -280,7 +280,31 @@ static func vp_end_bonus(owners: Array, vp: Array) -> void:
 ## round), or "none" (Mosh Pit). flavour.first_seize pays 1 VP the FIRST
 ## time either side controls a marker (Mosh Pit); memo carries that flag
 ## across rounds (memo.first_seizer = 0 until claimed).
-static func vp_score_round(owners: Array, vp: Array, flavour: Dictionary, memo: Dictionary) -> void:
+static func vp_score_round(owners: Array, vp: Array, flavour: Dictionary, memo: Dictionary, markers: Array = []) -> void:
+	if str(flavour.get("mode", "")) == "demolition":
+		# Demolition (book + maintainer 17.08.): 1 VP per round while the OWN
+		# marker stands; once BOTH are gone, the side whose marker fell FIRST
+		# collects the revenge VP from the event round onward — destroying
+		# first and losing later earns nothing.
+		for side in [1, 2]:
+			var own_alive := false
+			var own_seq := 0
+			var enemy_destroyed := false
+			var enemy_seq := 0
+			for mk in markers:
+				var mo: Dictionary = mk
+				var ob := int(mo.get("owned_by", 0))
+				if ob == side:
+					own_alive = not bool(mo.get("destroyed", false))
+					own_seq = int(mo.get("destroyed_seq", 0))
+				elif ob == 3 - side:
+					enemy_destroyed = bool(mo.get("destroyed", false))
+					enemy_seq = int(mo.get("destroyed_seq", 0))
+			if own_alive:
+				vp[side - 1] += 1
+			elif enemy_destroyed and own_seq < enemy_seq:
+				vp[side - 1] += 1
+		return
 	vp_round_add(owners, vp)
 	if str(flavour.get("majority", "end")) == "round":
 		vp_end_bonus(owners, vp)
@@ -295,6 +319,46 @@ static func vp_score_round(owners: Array, vp: Array, flavour: Dictionary, memo: 
 static func vp_score_end(owners: Array, vp: Array, flavour: Dictionary) -> void:
 	if str(flavour.get("majority", "end")) == "end":
 		vp_end_bonus(owners, vp)
+
+
+## NML-1010 W3 — destructible OWNED markers (Sabotage, Demolition). An owned
+## marker that the ENEMY alone holds at round end is destroyed on the spot
+## and never scores again; the sequence counter orders same-round losses
+## (the maintainer's Demolition tiebreak). markers entries: {owned_by:int,
+## destructible:bool, destroyed:bool, destroyed_seq:int}. owners[i] is
+## zeroed for a destroyed marker so no later scorer counts a ghost.
+static func apply_destroy_step(markers: Array, owners: Array, seq: Array) -> Array:
+	var events: Array = []
+	for i in range(markers.size()):
+		var mk: Dictionary = markers[i]
+		if not bool(mk.get("destructible", false)) or bool(mk.get("destroyed", false)):
+			continue
+		var owner_side := int(mk.get("owned_by", 0))
+		if owner_side <= 0 or i >= owners.size():
+			continue
+		if int(owners[i]) == 3 - owner_side:
+			mk["destroyed"] = true
+			seq[0] = int(seq[0]) + 1
+			mk["destroyed_seq"] = int(seq[0])
+			owners[i] = 0
+			events.append({"index": i, "destroyed_by": 3 - owner_side})
+	return events
+
+
+## Sabotage end verdict (book): you win by destroying the enemy's marker
+## WHILST keeping your own intact — anything else is a draw.
+static func sabotage_winner(markers: Array) -> String:
+	var alive := {1: false, 2: false}
+	for mk in markers:
+		var mo: Dictionary = mk
+		var side := int(mo.get("owned_by", 0))
+		if side == 1 or side == 2:
+			alive[side] = not bool(mo.get("destroyed", false))
+	if alive[1] and not alive[2]:
+		return "p1"
+	if alive[2] and not alive[1]:
+		return "p2"
+	return "draw"
 
 
 ## One activation with stochastic rounding (core self-play games).
