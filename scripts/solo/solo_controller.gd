@@ -2901,7 +2901,13 @@ func _solve_clone(unit: GameUnit) -> Dictionary:
 	# one that scores highest in mission currency — cheaper than the planner's
 	# broad rollout (k instead of the whole menu) and pointed at the moves a
 	# teacher-like player would actually consider. k <= 1 = pure Gen-0 argmax.
-	var k := int(OS.get_environment("NML_CLONE_SEARCH"))
+	# amplifier A/B (18.08.): NML_CLONE_SEARCH_P<slot> overrides per seat so
+	# the SAME net can play searched vs bare against itself — the improvement-
+	# operator experiment. Fallback: the global knob, unchanged behaviour.
+	var k_env := OS.get_environment("NML_CLONE_SEARCH_P%d" % int(ai_slot))
+	if k_env == "":
+		k_env = OS.get_environment("NML_CLONE_SEARCH")
+	var k := int(k_env)
 	if k > 1:
 		var order: Array = []
 		for i in range(sc.size()):
