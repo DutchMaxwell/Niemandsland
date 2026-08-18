@@ -357,10 +357,50 @@ static func _score_hand(state: Dictionary, player: int, incoming: Dictionary = {
 	var objectives: Array = state["objectives"]
 	if objectives.is_empty():
 		return 0.5
+	# NML-1010 W3b — destroy missions get their OWN currency. The generic
+	# control average gives camping a flat 0.5 (home marker ~1, enemy marker
+	# ~0) and every step away from home costs more than it earns abroad — the
+	# four-game probe drew 100% because of exactly this. Here the score is
+	# my grip on THEIR marker minus their grip on MINE, destroyed states
+	# locked at 1/0 — attacking is finally worth something.
+	var mm: Array = state.get("markers_meta", [])
+	if not mm.is_empty() and _is_destroy_mission(state):
+		var att := 0.0
+		var deff := 0.0
+		for i in range(mini(objectives.size(), mm.size())):
+			var meta: Dictionary = mm[i]
+			var ob := int(meta.get("owned_by", 0))
+			if ob == 0:
+				continue
+			if bool(meta.get("destroyed", false)):
+				if ob == player:
+					deff = 1.0
+				else:
+					att = 1.0
+				continue
+			var pctrl := _objective_p(state, objectives[i] as Dictionary, player, incoming)
+			if ob == player:
+				deff = 1.0 - pctrl
+			else:
+				att = pctrl
+		# Initiative doctrine: with mirrored forces, attack gain and home loss
+		# cancel exactly and the whole map scores a flat 0.5 — nobody moves
+		# (the four-draw probe). Weighting defence at 0.8 makes breaking the
+		# stalemate worth something while a lost home marker still hurts.
+		return clampf(0.5 + 0.5 * (att - DESTROY_DEFENCE_WEIGHT * deff), 0.0, 1.0)
 	var total := 0.0
 	for o in objectives:
 		total += _objective_p(state, o as Dictionary, player, incoming)
 	return total / objectives.size()
+
+
+const DESTROY_DEFENCE_WEIGHT := 0.8
+
+
+static func _is_destroy_mission(state: Dictionary) -> bool:
+	if str(state.get("scoring", "")) == "sabotage":
+		return true
+	return str((state.get("vp_flavour", {}) as Dictionary).get("mode", "")) == "demolition"
 
 
 static func _objective_p(state: Dictionary, obj: Dictionary, player: int,

@@ -226,3 +226,33 @@ func test_sabotage_winner_matrix() -> void:
 	assert_str(BattleSim.sabotage_winner(alive.call(false, true))).is_equal("p2")
 	assert_str(BattleSim.sabotage_winner(alive.call(true, true))).is_equal("draw")
 	assert_str(BattleSim.sabotage_winner(alive.call(false, false))).is_equal("draw")
+
+
+## NML-1010 W3b — the eval heart speaks destroy missions: the probe showed
+## four straight structural draws because the generic control average gives
+## camping a flat 0.5 and no gradient toward the enemy's marker. Pinned:
+## standing NEXT TO the enemy marker must outscore camping at home; a
+## destroyed enemy marker locks success, a lost own marker locks failure;
+## states WITHOUT marker meta keep the old arithmetic to the byte.
+func test_destroy_mission_eval_rewards_the_attacker() -> void:
+	var mk := func() -> Array: return [
+		{"owned_by": 1, "destructible": true, "destroyed": false, "destroyed_seq": 0},
+		{"owned_by": 2, "destructible": true, "destroyed": false, "destroyed_seq": 0}]
+	var objs := func() -> Array: return [Vector3(-12.0 * IN2M, 0, 0), Vector3(12.0 * IN2M, 0, 0)]
+	var build := func(raider_x_in: float) -> Dictionary:
+		var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+		var raider := _unit(1, [Vector3(raider_x_in * IN2M, 0, 0)], "Raider")
+		var camper := _unit(2, [Vector3(12.0 * IN2M, 0, 0)], "Camper")
+		army.game_units = {"Raider": raider, "Camper": camper}
+		return BattleSim.capture(army, objs, func(_i: int) -> int: return 0, 2, 4)
+	SoloController.mission_reset("sabotage", {}, mk.call())
+	var near: Dictionary = build.call(10.0)    # beside THEIR marker
+	var home: Dictionary = build.call(-12.0)   # camping at own marker
+	assert_bool(AiMissionEval.score(near, 1) > AiMissionEval.score(home, 1)).is_true()
+	var won: Array = mk.call(); (won[1] as Dictionary)["destroyed"] = true
+	SoloController.mission_reset("sabotage", {}, won)
+	assert_bool(AiMissionEval.score(build.call(10.0), 1) >= 0.7).is_true()
+	var lost: Array = mk.call(); (lost[0] as Dictionary)["destroyed"] = true
+	SoloController.mission_reset("sabotage", {}, lost)
+	assert_bool(AiMissionEval.score(build.call(10.0), 1) <= 0.35).is_true()
+	SoloController.mission_reset("end", {})
