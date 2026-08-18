@@ -114,5 +114,41 @@ func test_board_row_indices_skip_dead_but_keep_slots() -> void:
 	assert_array(BattleSim.board_row_indices(state)).is_equal([0, 1, 2])
 	(state["units"]["B"] as Dictionary)["alive"] = 0
 	assert_array(BattleSim.board_row_indices(state)).is_equal([0, 2])
+	# board_rows = unit rows (mirrored by the index sidecar) + non-unit rows
+	# (objective rows and, since input v1, the ONE game-state row).
 	assert_int(BattleSim.board_rows(state).size()) \
-		.is_equal(BattleSim.board_row_indices(state).size())
+		.is_equal(BattleSim.board_row_indices(state).size() + 1)
+
+
+## NML-1012 input v1 — the GAME-STATE row: the net played blind to round,
+## score and scoring mode (unit stats were already in the rows; this was the
+## real remaining blindfold). One type-4 row carries [4, round, rounds_total,
+## vp1, vp2, scoring_code, majority_code, first_seize] and rides the existing
+## row trunk — no trainer change, every consumer sees it via board_rows.
+func test_board_rows_carry_the_game_state_row() -> void:
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	SoloController.mission_reset("round_vp", {"majority": "round"})
+	SoloController.mission_vp = [3, 1]
+	var state := BattleSim.capture(army, func() -> Array: return [Vector3.ZERO],
+		func(_i: int) -> int: return 0, 2, 4)
+	var rows := BattleSim.board_rows(state)
+	var gs: Array = []
+	for r in rows:
+		if int((r as Array)[0]) == 4:
+			gs = r
+	assert_bool(gs.is_empty()).is_false()
+	assert_int(int(gs[1])).is_equal(2)    # round
+	assert_int(int(gs[2])).is_equal(4)    # rounds_total
+	assert_int(int(gs[3])).is_equal(3)    # vp1
+	assert_int(int(gs[4])).is_equal(1)    # vp2
+	assert_int(int(gs[5])).is_equal(1)    # scoring_code: round_vp
+	assert_int(int(gs[6])).is_equal(2)    # majority_code: round
+	SoloController.mission_reset("end", {})
+	var plain := BattleSim.board_rows(BattleSim.capture(army,
+		func() -> Array: return [Vector3.ZERO], func(_i: int) -> int: return 0, 1, 4))
+	var gs2: Array = []
+	for r in plain:
+		if int((r as Array)[0]) == 4:
+			gs2 = r
+	assert_bool(gs2.is_empty()).is_false()
+	assert_int(int(gs2[5])).is_equal(0)   # scoring_code: end

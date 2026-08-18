@@ -182,6 +182,25 @@ static func board_rows(state: Dictionary) -> Array:
 		rows.append([3, snappedf(op.x / IN2M, 0.1), snappedf(op.z / IN2M, 0.1),
 			int((o as Dictionary).get("owner", 0)),
 			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+	# NML-1012 input v1 — the GAME-STATE row (type 4): round, rounds left,
+	# the VP standing and the scoring semantics. The unit stats were already
+	# rich; THIS was the net's real blindfold — no endgame sense, no idea
+	# whether it is ahead, no clue which currency the mission pays.
+	var fl: Dictionary = state.get("vp_flavour", {})
+	var sc := str(state.get("scoring", "end"))
+	var sc_code := 0
+	if sc == "round_vp":
+		sc_code = 1
+	elif sc == "sabotage":
+		sc_code = 2
+	var mj := str(fl.get("majority", "end"))
+	var mj_code := 0 if mj == "none" else (1 if mj == "end" else 2)
+	var vp_live: Array = state.get("vp", [0, 0])
+	rows.append([4, int(state.get("round", 1)), int(state.get("rounds_total", 4)),
+		int(vp_live[0]) if vp_live.size() == 2 else 0,
+		int(vp_live[1]) if vp_live.size() == 2 else 0,
+		sc_code, mj_code, 1 if bool(fl.get("first_seize", false)) else 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 	return rows
 
 
