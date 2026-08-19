@@ -499,6 +499,16 @@ func eligible_units_for(slot: int) -> Array:
 	return out
 
 
+## #315: resolve the roll-off side pick RELATIVE to the zones the table is drawing
+## right now. The flip state persists across games in a session — an absolute
+## "swap == ai_neg_z" shortcut handed the player the exact zone he clicked away
+## from whenever the previous game left the colours flipped. Pure math, one truth
+## for the AI edge and the drawn-colour flip (flipped == human on +Z).
+static func deploy_side_resolve(human_neg_z_now: bool, swap: bool) -> Dictionary:
+	var human_neg_z_after := (not human_neg_z_now) if swap else human_neg_z_now
+	return {"ai_neg_z": not human_neg_z_after, "flipped": not human_neg_z_after}
+
+
 ## The official unit pick: Shaken last; then D6 → 2 table sections split along the AI's deployment edge
 ## (west/east half by centre X), rotating to the other section when the rolled one has no eligible unit;
 ## then a random eligible unit in that section (seeded _rng → reproducible), with the section's Counter
