@@ -17,7 +17,7 @@ extends RefCounted
 ## split-fire (core rules p.8: "you may split a unit's attacks between different targets by weapon type").
 ## Pure + deterministic (headless-testable per the solo test conventions).
 
-enum Overlay { NONE, AP, DEADLY, TAKEDOWN }
+enum Overlay { NONE, AP, DEADLY, TAKEDOWN, BLAST }
 
 
 ## The dominant targeting overlay implied by one weapon's special rules. A weapon can carry several (e.g.
@@ -28,6 +28,7 @@ static func weapon_overlay(special_rules: Array) -> Overlay:
 	var has_ap := false
 	var has_deadly := false
 	var has_takedown := false
+	var has_blast := false
 	for r in special_rules:
 		var s := str(r).strip_edges()
 		if s.begins_with("Takedown"):
@@ -36,12 +37,20 @@ static func weapon_overlay(special_rules: Array) -> Overlay:
 			has_deadly = true
 		elif s.begins_with("AP"):
 			has_ap = true
+		elif s.begins_with("Blast"):
+			has_blast = true
 	if has_takedown:
 		return Overlay.TAKEDOWN
 	if has_deadly:
 		return Overlay.DEADLY
 	if has_ap:
 		return Overlay.AP
+	# #339 house overlay (the book's p.2 set stops at the three above): Blast(X)
+	# multiplies each hit by min(X, models in target) — a Blast volley pointed at a
+	# single model wastes the rule, so the pick prefers the fuller unit. Lowest
+	# priority: any book overlay on the same weapon outranks it.
+	if has_blast:
+		return Overlay.BLAST
 	return Overlay.NONE
 
 
@@ -57,6 +66,8 @@ static func weapon_overlay(special_rules: Array) -> Overlay:
 ##   single_tough    : bool   — single-model unit WITH Tough (Deadly overlay: first)
 ##   has_tough       : bool   — carries Tough (Deadly overlay: second)
 ##   remaining_tough : int    — total remaining Tough pool (Deadly tie: lowest first)
+##   blast_pref      : int    — min(Blast X, remaining models) (#339 Blast overlay: highest
+##                              first — beyond-cap models add nothing, so they must not pull)
 ## Deterministic: on a full tie the earliest (lowest-index) candidate wins.
 static func best_index(candidates: Array, overlay: int) -> int:
 	if candidates.is_empty():
@@ -105,6 +116,8 @@ static func _key(c: Dictionary, overlay: int) -> Array:
 		Overlay.TAKEDOWN:
 			var tier := 0 if bool(c.get("is_hero", false)) else (1 if bool(c.get("has_upgrade", false)) else 2)
 			return [float(tier), -float(c.get("upgrade_cost", 0))] + base   # heroes, then costed upgrades
+		Overlay.BLAST:
+			return [-float(c.get("blast_pref", 0))] + base   # fullest unit first, capped at X (#339)
 		_:
 			return base
 
