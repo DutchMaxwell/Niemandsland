@@ -564,6 +564,9 @@ static func create_embarked_model_menu(transport_name: String) -> Array[RadialMe
 	var items: Array[RadialMenuItem] = []
 	items.append(RadialMenuItem.new("disembark", "Disembark", "▢", true,
 		"Leave %s (GF v3.5.1 Transport: the unit is placed fully within 6\")" % transport_name))
+	# #338: staying inside is a legal choice — it spends the activation so the round can close.
+	items.append(RadialMenuItem.new("stay_embarked", "Stay aboard", "▣", true,
+		"Spend the activation inside %s — the unit stays embarked this round" % transport_name))
 	return items
 
 
