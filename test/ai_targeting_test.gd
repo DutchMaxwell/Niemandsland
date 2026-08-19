@@ -23,7 +23,7 @@ func test_weapon_overlay_detects_each_rule() -> void:
 	assert_int(AiTargeting.weapon_overlay(["Deadly(3)"])).is_equal(AiTargeting.Overlay.DEADLY)
 	assert_int(AiTargeting.weapon_overlay(["Takedown"])).is_equal(AiTargeting.Overlay.TAKEDOWN)
 	assert_int(AiTargeting.weapon_overlay([])).is_equal(AiTargeting.Overlay.NONE)
-	assert_int(AiTargeting.weapon_overlay(["Blast(3)"])).is_equal(AiTargeting.Overlay.NONE)
+	assert_int(AiTargeting.weapon_overlay(["Blast(3)"])).is_equal(AiTargeting.Overlay.BLAST)   # #339 house overlay
 
 
 func test_weapon_overlay_precedence_takedown_over_deadly_over_ap() -> void:
