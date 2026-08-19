@@ -32,7 +32,7 @@ func _state() -> Dictionary:
 
 func test_unit_rows_carry_full_status() -> void:
 	var rows: Array = CoreSelfplay._board_rows(_state())
-	var units := rows.filter(func(r: Variant) -> bool: return int(r[0]) != 3)
+	var units := rows.filter(func(r: Variant) -> bool: return int(r[0]) == 1 or int(r[0]) == 2)   # NML-1012: rows also carry objective (3) and game-state (4) lines now
 	assert_int(units.size()).is_equal(2)  # dead unit excluded
 	for r in units:
 		assert_int((r as Array).size()).is_equal(21)

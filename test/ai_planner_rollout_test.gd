@@ -55,6 +55,14 @@ func _state(round_no := 1, rounds_total := 4) -> Dictionary:
 		func(_i: int) -> int: return 0, round_no, rounds_total)
 
 
+## CI order-dependence (17.08. wave): solo_controller:2689 sets
+## AiPlanner.opener_seat on every planner activation and never resets it —
+## production is safe (re-set before every real pick), but THIS suite reads
+## _blend_score directly, so it must own the static's documented default.
+func before_test() -> void:
+	AiPlanner.opener_seat = false
+
+
 func _leaf(state: Dictionary, me: int) -> float:
 	return AiMissionEval.score(state, me, BattleSim.reply_threat(state, me))
 
