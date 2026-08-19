@@ -421,6 +421,8 @@ func _on_action_selected(action_id: String, context: Dictionary) -> void:
 		"disembark":
 			_solo_activation_rules(context.get("disembark_unit") as GameUnit)
 			_disembark_unit(context.get("disembark_unit") as GameUnit)
+		"stay_embarked":
+			_stay_embarked(context.get("disembark_unit") as GameUnit)
 		"delete_unit":
 			_delete_unit(context)
 		"delete_terrain":
@@ -2655,6 +2657,20 @@ func _consume_transport_activation(unit: GameUnit, verb: String) -> void:
 	_transport_log("%s spends its activation to %s (any move action — GF v3.5.1 p.15)" % [
 		str(unit.unit_properties.get("name", "unit")), verb])
 	unit_activated.emit(unit)
+
+
+## #338: the passenger spends its activation INSIDE the transport — the legal "do
+## nothing, stay embarked" choice. Same economy door as every transport move; outside
+## a running game there is nothing to spend and the click just gets its feedback line.
+func _stay_embarked(unit: GameUnit) -> void:
+	if unit == null or army_manager == null or army_manager.transport_of(unit) == null:
+		return
+	if not _transport_activation_open(unit, "stay aboard"):
+		return
+	if _activation_economy_on():
+		_consume_transport_activation(unit, "stay aboard")
+	else:
+		_transport_log("%s stays aboard" % str(unit.unit_properties.get("name", "unit")))
 
 
 func _transport_log(msg: String) -> void:

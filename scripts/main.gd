@@ -326,6 +326,7 @@ var _solo_ai_took_last_activation: bool:
 	set(value): _rule_state()["ai_took_last_activation"] = value
 var _solo_ai_busy: bool = false              # an AI activation chain is running (guards re-entry)
 var _solo_game_finished: bool = false        # summary shown after SOLO_GAME_ROUNDS — no further auto-advance
+var _solo_cargo_hint_round: int = -1         # #338: passengers-left hint printed once per round
 var _solo_ai_banner: Label = null            # non-blocking "NACHTMAHR is taking its turn…" banner during the tail
 var _solo_dream_overlay: Control = null      # centred "NACHTMAHR dreams…" + spinner while the AI computes
 var _ai_opponent_btn: Button = null          # "AI Opponent" — NACHTMAHR builds its own army
@@ -1710,6 +1711,15 @@ func _solo_after_activation() -> void:
 	if not solo_controller.eligible_units_for(solo_controller.human_slot).is_empty():
 		return
 	if not solo_controller.eligible_ai_units().is_empty():
+		return
+	# #338: embarked HUMAN cargo is not in the eligible pool (nothing may auto-activate
+	# it) but it still owns an activation — disembark or stay aboard. The round waits
+	# for that choice; the hint tells the player why nothing advances.
+	if not solo_controller.human_cargo_pending().is_empty():
+		if _solo_cargo_hint_round != opr_army_manager.current_round:
+			_solo_cargo_hint_round = opr_army_manager.current_round
+			_log_rule_event(BattleLog.Category.GENERAL,
+				"Only embarked passengers are left this round — click a passenger to disembark, or pick 'Stay aboard' to spend its activation inside (GF v3.5.1 p.15)", true)
 		return
 	# Coverage wave — Second Wind (Inquisitorial Agent / Martial Prowess): before the round closes,
 	# a carrier may buy a SECOND activation (once per game, 1/3-of-carriers cap per round).

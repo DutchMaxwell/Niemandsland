@@ -232,8 +232,8 @@ func test_a_joined_passenger_opens_the_disembark_menu(timeout := 180000) -> void
 	for it in rmc.radial_menu._items:
 		ids.append(str(it.id))
 	assert_array(ids) \
-		.override_failure_message("the disembark menu must offer exactly the one legal action (items: %s)" % str(ids)) \
-		.is_equal(["disembark"])
+		.override_failure_message("the embarked menu must offer exactly the two legal actions (items: %s)" % str(ids)) \
+		.is_equal(["disembark", "stay_embarked"])
 	assert_str(str(rmc.radial_menu._items[0].tooltip) if not rmc.radial_menu._items.is_empty() else "") \
 		.contains(truck_name)
 	rmc.radial_menu.close()

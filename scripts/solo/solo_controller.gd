@@ -509,6 +509,27 @@ static func deploy_side_resolve(human_neg_z_now: bool, swap: bool) -> Dictionary
 	return {"ai_neg_z": not human_neg_z_after, "flipped": not human_neg_z_after}
 
 
+## #338: HUMAN cargo that still owns an activation this round — alive, not activated,
+## embarked in an ON-TABLE transport. Deliberately NOT part of is_eligible: nothing may
+## ever auto-activate it (it acts through the radial — disembark, or "Stay aboard").
+## The round-over check waits on this list instead of closing the round over it.
+func human_cargo_pending() -> Array:
+	var out: Array = []
+	if army_manager == null:
+		return out
+	for u in army_manager.get_game_units_for_player(human_slot):
+		var gu := u as GameUnit
+		if gu == null or gu.is_activated or gu.is_destroyed():
+			continue
+		if gu.has_method("is_attached") and gu.is_attached():
+			continue
+		var tr: GameUnit = army_manager.transport_of(gu)
+		if tr == null or unit_in_reserve(tr):
+			continue
+		out.append(gu)
+	return out
+
+
 ## The official unit pick: Shaken last; then D6 → 2 table sections split along the AI's deployment edge
 ## (west/east half by centre X), rotating to the other section when the rolled one has no eligible unit;
 ## then a random eligible unit in that section (seeded _rng → reproducible), with the section's Counter
