@@ -1641,6 +1641,21 @@ func _act(unit: GameUnit) -> Dictionary:
 	if charge_futile and charge_gap <= charge_band and not target_is_aircraft and not charge_capped:
 		_rule_note(report, "%s: no charge on %s — its melee cannot plausibly hurt it (under %.1f expected wounds)" % [
 			unit.get_name(), target_unit.get_name(), FUTILE_CHARGE_EV], true)
+	# #316: the router already skirts Dangerous when a detour exists — this gate covers the
+	# FORCED crossing, where the only corridors all pay the minefield toll. If the expected
+	# toll >= the charge's expected value, the charge is off the menu, and the log says why.
+	var charge_toll_blocked := false
+	if charge_gap <= charge_band and not target_is_aircraft and not charge_capped and not charge_futile:
+		var toll: Dictionary = charge_dangerous_toll(unit, target_unit, centre, tcentre)
+		charge_toll_blocked = bool(toll["refused"])
+		if charge_toll_blocked:
+			_rule_note(report, "%s: no charge on %s — every corridor crosses DANGEROUS ground and the expected toll (%.1f wounds) eats the charge's value (EV %.1f)" % [
+				unit.get_name(), target_unit.get_name(), float(toll["toll"]), float(toll["cev"])], true)
+			record_decision({"kind": "mission", "unit": unit.get_name(),
+				"rule": "#316 dangerous toll: forced minefield crossing prices in (p.12: one die per wound, 1s wound) — toll >= charge EV refuses the charge",
+				"candidates": [], "chosen": "charge unavailable (dangerous toll)",
+				"why": "dangerous-toll charge refusal",
+				"data": {"toll_ev": snappedf(float(toll["toll"]), 0.01), "charge_ev": snappedf(float(toll["cev"]), 0.01)}})
 	var ctx := {
 		"arch": archetype, "objective": has_obj, "in_way": has_obj and _enemy_in_way(centre, obj_pos),
 		"obj_in_advance": obj_dist <= advance + OBJECTIVE_CONTROL_IN,
@@ -1650,7 +1665,7 @@ func _act(unit: GameUnit) -> Dictionary:
 		# #321: nor a target the unit's melee cannot plausibly hurt — the charge would be a wasted
 		# activation walking into counter-strikes (the futility floor, rule-noted above).
 		"enemy_in_charge": charge_gap <= charge_band and not target_is_aircraft and not charge_capped \
-			and not charge_futile,
+			and not charge_futile and not charge_toll_blocked,
 		"shoot_after_advance": shoot_range > 0 and (enemy_dist - (rush if quick_shot else advance)) <= float(shoot_range),
 	}
 	var dec := AiDecision.decide_solo(ctx)
@@ -2528,7 +2543,13 @@ func _charge_capped_by_difficult(unit: GameUnit, from: Vector3, to: Vector3, gap
 	# but whose base-width grazes difficult ground WILL be capped, so the tree must not call the
 	# charge available (the honest falls-short from the field validation, seed 21002 R2).
 	var probe_r := _move_base_radius_m(_moving_models(unit))
-	if not _path_crosses_terrain(from, to, TerrainRules.PathCheck.DIFFICULT, probe_r):
+	return _corridor_forced_through(from, to, TerrainRules.PathCheck.DIFFICULT, probe_r)
+
+
+## Shared corridor probe (#316 extraction — the difficult cap's exact geometry): the straight
+## line AND both 4"-offset detours cross `check` terrain -> the move cannot skirt it.
+func _corridor_forced_through(from: Vector3, to: Vector3, check: int, probe_r: float) -> bool:
+	if not _path_crosses_terrain(from, to, check, probe_r):
 		return false
 	var dirv := Vector2(to.x - from.x, to.z - from.z)
 	if dirv.length() < 0.001:
@@ -2538,10 +2559,39 @@ func _charge_capped_by_difficult(unit: GameUnit, from: Vector3, to: Vector3, gap
 	for side in [1.0, -1.0]:
 		var off := perp * (4.0 * INCHES_TO_METERS) * float(side)
 		var m2 := Vector3(mid.x + off.x, mid.y, mid.z + off.y)
-		if not _path_crosses_terrain(from, m2, TerrainRules.PathCheck.DIFFICULT, probe_r) \
-				and not _path_crosses_terrain(m2, to, TerrainRules.PathCheck.DIFFICULT, probe_r):
+		if not _path_crosses_terrain(from, m2, check, probe_r) \
+				and not _path_crosses_terrain(m2, to, check, probe_r):
 			return false
 	return true
+
+
+## #316: refuse a charge whose EVERY corridor crosses DANGEROUS ground when the expected
+## toll matches or beats the charge's own expected value — walking in would be a net gift.
+## Toll (p.12, Bug 23 weighting): one die per wound of every crossing model, a 1 wounds ->
+## expected toll = dice/6, in the SAME expected-wounds currency charge_score speaks. Only
+## Flying ignores Dangerous (Strider does not — GF/AoF v3.5.1 p.13/p.14). Pure reads;
+## returns {refused, toll, cev} so the caller can log honest numbers.
+func charge_dangerous_toll(unit: GameUnit, target_unit: GameUnit, from: Vector3, to: Vector3) -> Dictionary:
+	var out := {"refused": false, "toll": 0.0, "cev": 0.0}
+	if unit == null or target_unit == null or unit.has_special_rule("Flying"):
+		return out
+	var models := _moving_models(unit)
+	var probe_r := _move_base_radius_m(models)
+	if not _corridor_forced_through(from, to, TerrainRules.PathCheck.DANGEROUS, probe_r):
+		return out
+	var dice := 0
+	for m in models:
+		dice += maxi(1, int((m as ModelInstance).wounds_max))
+	out["toll"] = float(dice) / 6.0
+	var us := AiEv.ctx_for(unit, false, 0)
+	var them := AiEv.ctx_for(target_unit, majority_in_cover(target_unit), counter_models_of(target_unit))
+	var our_melee: Array = AiEv.stamp_sergeant(
+		filter_limited(unit, AiShooting.melee_profiles(_unit_weapons(unit))), unit)
+	var their_melee: Array = AiEv.stamp_sergeant(
+		filter_limited(target_unit, AiShooting.melee_profiles(_unit_weapons(target_unit))), target_unit)
+	out["cev"] = AiEv.charge_score(our_melee, us, their_melee, them)
+	out["refused"] = float(out["toll"]) >= float(out["cev"])
+	return out
 
 
 ## CHEAP boxed-in probe (stub-fix runtime guard): is there open lateral room the sidestep sweep could
