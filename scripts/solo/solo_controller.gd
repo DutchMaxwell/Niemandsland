@@ -1174,7 +1174,10 @@ func _overlay_descriptor(td: Dictionary) -> Dictionary:
 		"in_cover": majority_in_cover(hu), "defense": hu.get_defense(),
 		"is_hero": hu.has_special_rule("Hero"), "has_upgrade": false, "upgrade_cost": 0,
 		"single_tough": alive == 1 and tough > 1, "has_tough": tough > 1,
-		"remaining_tough": tough * alive}
+		"remaining_tough": tough * alive,
+		# #339: the unit-level tie path has no single weapon profile, so the Blast
+		# overlay stays neutral here (0 for every candidate = the base key decides).
+		"blast_pref": 0}
 
 
 ## Official target ordering: not-yet-activated before activated, then the nearer 1" distance band.

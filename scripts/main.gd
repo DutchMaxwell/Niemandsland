@@ -3921,6 +3921,8 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 			"defense": _solo_armored_defense(hu), "is_hero": hu.is_hero(), "has_upgrade": false, "upgrade_cost": 0,
 			"single_tough": hu.models.size() == 1 and tough > 1, "has_tough": tough > 1,
 			"remaining_tough": hu.get_alive_count() * tough,
+			# #339: the Blast overlay's currency — models the multiplier actually reaches.
+			"blast_pref": mini(maxi(int(profile.get("blast", 0)), 0), _solo_combined_alive(hu)),
 		})
 		refs.append(hu)
 		dists.append(dist)
