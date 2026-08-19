@@ -639,6 +639,10 @@ static func clone_stamp() -> Dictionary:
 	if p1 != "" or p2 != "":
 		var k1 := OS.get_environment("NML_CLONE_SEARCH_P1").strip_edges()
 		var k2 := OS.get_environment("NML_CLONE_SEARCH_P2").strip_edges()
+		# Turn 4: the DEEP-TEACHER knob is corpus identity — a depth-2 book must
+		# never be mistaken for a 1-ply one, so the stamp carries it (gate food).
+		var dg := OS.get_environment("NML_CLONE_SEARCH_DEPTH").strip_edges()
+		var dt := OS.get_environment("NML_CLONE_SEARCH_DEEP_TOP").strip_edges()
 		return {"requested": want, "p1": p1, "p2": p2,
 			"loaded": not AiClone.net_for(1).is_empty() or not AiClone.net_for(2).is_empty(),
 			"loaded_p1": not AiClone.net_for(1).is_empty(),
@@ -646,11 +650,15 @@ static func clone_stamp() -> Dictionary:
 			"search": int(k) if k.is_valid_int() else 0,
 			"search_p1": int(k1) if k1.is_valid_int() else (int(k) if k.is_valid_int() else 0),
 			"search_p2": int(k2) if k2.is_valid_int() else (int(k) if k.is_valid_int() else 0),
-			"seat": OS.get_environment("NML_CLONE_SIDE").strip_edges(), "stamp_version": 1}
+			"depth": int(dg) if dg.is_valid_int() else 0,
+			"deep_top": int(dt) if dt.is_valid_int() else (8 if dg.is_valid_int() and int(dg) > 0 else 0),
+			"seat": OS.get_environment("NML_CLONE_SIDE").strip_edges(), "stamp_version": 2}
+	var dg2 := OS.get_environment("NML_CLONE_SEARCH_DEPTH").strip_edges()
 	return {"requested": want, "loaded": not AiClone.net().is_empty(),
 		"search": int(k) if k.is_valid_int() else 0,
+		"depth": int(dg2) if dg2.is_valid_int() else 0,
 		"seat": OS.get_environment("NML_CLONE_SIDE").strip_edges(),
-		"stamp_version": 1}
+		"stamp_version": 2}
 
 
 static func search_knobs() -> Dictionary:

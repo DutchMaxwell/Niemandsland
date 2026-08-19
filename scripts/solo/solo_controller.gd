@@ -2955,6 +2955,36 @@ func _solve_clone(unit: GameUnit) -> Dictionary:
 			if s > best_score:
 				best_score = s
 				best = i
+		# DEEP TEACHER (turn 4, NML_CLONE_SEARCH_DEPTH=r): the 1-ply pass above is
+		# only the SORTER now — the best DEEP_TOP candidates get a bounded PLAYOUT
+		# to the round horizon (AiPlanner.rollout_boundaries — the planner's own
+		# machinery, deterministic policy steps) and a LOCAL discount blend prices
+		# the boundaries. Deliberately not _blend_score: that consults the
+		# opener_seat static, and today's CI leak taught us what statics in a
+		# scoring identity cost. depth=0 (default) leaves the block above as the
+		# whole verdict — byte-identical to every corpus before turn 4.
+		var d_env := OS.get_environment("NML_CLONE_SEARCH_DEPTH_P%d" % int(ai_slot))
+		if d_env == "":
+			d_env = OS.get_environment("NML_CLONE_SEARCH_DEPTH")
+		var depth := int(d_env)
+		if depth > 0:
+			var m_env := OS.get_environment("NML_CLONE_SEARCH_DEEP_TOP")
+			var deep_top: int = maxi(int(m_env) if m_env != "" else 8, 2)
+			var deep: Array = top.slice(0, mini(deep_top, top.size()))
+			var best_deep := -INF
+			for i in deep:
+				var ends: Array = AiPlanner.rollout_boundaries(state, cands[i], int(ai_slot), depth)
+				var total := 0.0
+				var weights := 0.0
+				var w := 1.0
+				for e in ends:
+					total += w * AiMissionEval.score(e, int(ai_slot), BattleSim.reply_threat(e, int(ai_slot)))
+					weights += w
+					w *= 0.5
+				var ds := total / maxf(weights, 0.0001)
+				if ds > best_deep:
+					best_deep = ds
+					best = i
 	if _teacher_rows_on():
 		# EXPERT ITERATION: what the amplified clone chose is the training
 		# signal for the NEXT generation — the same row shape as the teacher's.
