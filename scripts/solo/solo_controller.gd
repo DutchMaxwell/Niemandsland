@@ -499,6 +499,16 @@ func eligible_units_for(slot: int) -> Array:
 	return out
 
 
+## #315: resolve the roll-off side pick RELATIVE to the zones the table is drawing
+## right now. The flip state persists across games in a session — an absolute
+## "swap == ai_neg_z" shortcut handed the player the exact zone he clicked away
+## from whenever the previous game left the colours flipped. Pure math, one truth
+## for the AI edge and the drawn-colour flip (flipped == human on +Z).
+static func deploy_side_resolve(human_neg_z_now: bool, swap: bool) -> Dictionary:
+	var human_neg_z_after := (not human_neg_z_now) if swap else human_neg_z_now
+	return {"ai_neg_z": not human_neg_z_after, "flipped": not human_neg_z_after}
+
+
 ## #338: HUMAN cargo that still owns an activation this round — alive, not activated,
 ## embarked in an ON-TABLE transport. Deliberately NOT part of is_eligible: nothing may
 ## ever auto-activate it (it acts through the radial — disembark, or "Stay aboard").
