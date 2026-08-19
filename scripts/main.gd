@@ -1817,11 +1817,16 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 		if last_side != 0:
 			opener = 2 if last_side == 1 else 1
 		_solo_auto_seize()
+		_solo_book_mission_vp(round_no >= SOLO_GAME_ROUNDS)
 		if round_no >= SOLO_GAME_ROUNDS:
 			if not _solo_game_finished:
 				_solo_game_finished = true
 				_solo_show_game_summary()
 			break
+		# NML-1003: round-end bookkeeping the single-AI driver runs in
+		# _solo_end_round — fatigue ends with the round, spell tokens expire.
+		_solo_reset_all_fatigue()
+		_solo_expire_spell_tokens()
 		opr_army_manager.advance_round()
 		_refresh_round_visuals()
 		if network_manager != null:
@@ -1899,12 +1904,23 @@ func _solo_side_has_eligible(slot: int) -> bool:
 ## Rapid Ambush carriers already came in during round 1 (_solo_both_ai_rapid_round_one) — the arrival
 ## gate keeps every other reserve waiting for round 2, so this pass is unchanged for them.
 func _solo_both_ai_round_start(round_number: int) -> void:
+	# NML-1003 (audit 10.08.): this path had DRIFTED from the canonical
+	# single-AI round start — the overkill ledger, marker runners and the
+	# sidestep budget were never reset, growth never ticked, Reinforcement
+	# copies never returned. Keep this list in lockstep with _solo_round_start.
+	if solo_controller != null:
+		solo_controller.reset_round_claims()
+	_solo_growth_round_start()
 	await _solo_battleborn_recovery()
 	if round_number >= 2:
 		for slot in [1, 2]:
 			_solo_set_active_side(slot)
 			# The alternator degrades to AI-only arrivals here (the "human" slot is AI → no prompts).
 			await _solo_alternate_ambush_arrivals(round_number)
+	await _reinforcement_arrivals(round_number)
+	for slot in [1, 2]:
+		_solo_set_active_side(slot)
+		_solo_reinforcement_ai_offers()
 
 
 ## The self-play twin of _solo_begin_rapid_ambush_round_one: with both sides on the AI, round 1's
@@ -1943,8 +1959,48 @@ func _solo_init_arena_from_env() -> void:
 ## round gets to activate first") — the side that did NOT take the last activation opens the next round, so
 ## a side can never take a round's last activation AND the next round's first (field-test finding 7: the AI
 ## activated back-to-back across the boundary because the old round-parity opener ignored who went last).
+## NML-1010 W2 — book the mission VP for the round that just ended, right
+## after the official seize/contest step. Called by BOTH round drivers —
+## the single-AI _solo_end_round AND the both-AI arena loop, which close
+## their rounds independently (the probe game that booked nothing found
+## exactly this seam). final pays the end bonus exactly once. Logged to the
+## battle log AND stderr so a silent ledger can never pass for a broken one.
+func _solo_book_mission_vp(final: bool) -> void:
+	var has_markers: bool = not SoloController.mission_markers.is_empty()
+	if SoloController.mission_scoring != "round_vp" and not has_markers:
+		return
+	var vp_owners: Array = terrain_overlay.get_objective_owners() \
+		if terrain_overlay != null and terrain_overlay.has_method("get_objective_owners") else []
+	if has_markers:
+		# W3: owned markers the enemy alone holds are destroyed BEFORE any
+		# scoring — the destruction is the round-end event (book order).
+		var destroyed: Array = BattleSim.apply_destroy_step(
+			SoloController.mission_markers, vp_owners, SoloController.mission_destroy_seq)
+		for ev in destroyed:
+			var owner_side := int((SoloController.mission_markers[int((ev as Dictionary)["index"])] as Dictionary).get("owned_by", 0))
+			var dline := "Mission marker of P%d DESTROYED by P%d (round %d)" % [
+				owner_side, int((ev as Dictionary)["destroyed_by"]), opr_army_manager.current_round]
+			printerr("[MISSION] " + dline)
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.GENERAL, dline, true)
+	if SoloController.mission_scoring != "round_vp":
+		return
+	BattleSim.vp_score_round(vp_owners, SoloController.mission_vp,
+		SoloController.mission_vp_flavour, SoloController.mission_vp_memo,
+		SoloController.mission_markers)
+	if final:
+		BattleSim.vp_score_end(vp_owners, SoloController.mission_vp,
+			SoloController.mission_vp_flavour)
+	var line := "Mission VP after round %d: P1 %d — P2 %d" % [opr_army_manager.current_round,
+		int(SoloController.mission_vp[0]), int(SoloController.mission_vp[1])]
+	printerr("[MISSION] " + line)
+	if battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL, line, true)
+
+
 func _solo_end_round() -> void:
 	_solo_auto_seize()
+	_solo_book_mission_vp(opr_army_manager.current_round >= SOLO_GAME_ROUNDS)
 	if opr_army_manager.current_round >= SOLO_GAME_ROUNDS:
 		if not _solo_game_finished:
 			_solo_game_finished = true

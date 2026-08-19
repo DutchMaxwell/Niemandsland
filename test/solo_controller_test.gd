@@ -368,6 +368,27 @@ func test_majority_in_cover_reads_real_terrain() -> void:
 	assert_bool(solo.majority_in_cover(unit)).is_false()
 
 
+## T1 parity: the snapshot's in_cover stamp and the live checker read the SAME
+## terrain truth — whatever majority_in_cover says at capture time is what the
+## planner's sim gets, in both polarities.
+func test_capture_in_cover_matches_live_majority_in_cover() -> void:
+	var unit := _unit(1, [Vector3(0, 0, 0), Vector3(0.1, 0, 0), Vector3(5, 0, 5)])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {unit.unit_id: unit}
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	solo.terrain_type_at = func(p: Vector3) -> int:
+		return TerrainRules.TerrainType.FOREST if Vector2(p.x, p.z).length() < 1.0 else TerrainRules.TerrainType.NONE
+	var covered := BattleSim.capture(army, Callable(), Callable(), 1, 4, solo.majority_in_cover)
+	assert_bool((covered["units"][unit.unit_id] as Dictionary)["in_cover"]) \
+		.is_equal(solo.majority_in_cover(unit)).is_true()
+	unit.models[1].node.global_position = Vector3(5, 0, 5)   # majority leaves the woods
+	var open := BattleSim.capture(army, Callable(), Callable(), 1, 4, solo.majority_in_cover)
+	assert_bool((open["units"][unit.unit_id] as Dictionary)["in_cover"]) \
+		.is_equal(solo.majority_in_cover(unit)).is_false()
+
+
 ## TC-023 (Takedown, GF v3.5.1 p.14): the attack "is resolved as if it was a unit of [1]" and "other models
 ## in the target's unit don't block line of sight or provide cover to the target model in the unit" — so the
 ## SNIPED model's own square decides its save, never the unit's majority. Both directions of the maintainer's

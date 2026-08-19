@@ -19,6 +19,31 @@ const BOUNDS_MARGIN_M := 0.02   # keep models a hair inside the table edge
 const BOARD_CLAMP_NOTE_EPS_M := 0.01
 const INCHES_TO_METERS := 0.0254
 const OBJECTIVE_CONTROL_IN := 3.0   # OPR objective seize/hold radius (Solo & Co-Op v3.5.0 p.6)
+
+## NML-1010 W2 — the live mission-VP ledger (progressive missions). Statics
+## so the arena harness, main's round-end bookkeeping and BattleSim.capture
+## all read the same account without plumbing a node reference through four
+## seams; "end" keeps every existing consumer byte-identical.
+static var mission_scoring: String = "end"
+static var mission_vp_flavour: Dictionary = {}
+static var mission_vp: Array = [0, 0]
+static var mission_vp_memo: Dictionary = {}
+
+
+## W3: per-marker mission state ({owned_by, destructible, destroyed,
+## destroyed_seq}) + the destruction sequence counter (one-element array so
+## BattleSim.apply_destroy_step can advance it by reference).
+static var mission_markers: Array = []
+static var mission_destroy_seq: Array = [0]
+
+
+static func mission_reset(scoring: String, flavour: Dictionary, markers: Array = []) -> void:
+	mission_scoring = scoring
+	mission_vp_flavour = flavour
+	mission_vp = [0, 0]
+	mission_vp_memo = {}
+	mission_markers = markers
+	mission_destroy_seq = [0]
 const CONTACT_IN := 2.0             # centre-to-centre "in melee" distance a charge closes to
 const MELEE_REACH_IN := 2.0         # OPR "Who Can Strike" (GF Advanced Rules v3.5.1 p.9): only models within 2" strike
 const BASE_CONTACT_IN := 1.0        # nominal centre-to-centre gap of two standard ~25 mm bases at contact (~1")
@@ -151,6 +176,8 @@ var _peeked_unit: GameUnit = null
 ## positions are applied/broadcast before this is read.
 var last_move_paths: Array = []
 var _cargo_wait_logged: Dictionary = {}   # TC-081: one "waits inside" record per unit+round
+var _planner_intent: Dictionary = {}      # R3: rollout pick cached unit->act (consumed by _solve_planner)
+var _round_first_slot: Dictionary = {}    # D-wave: round -> slot that activated FIRST (seat detection)
 ## Flow order (MODEL indices, nearest-to-destination first) of the last loose AI move — the sequential
 ## per-model flow (field-test round 6, finding 7). last_move_paths is reordered into this order so the
 ## presentation glides each model individually in the order it filed to its slot. Empty for a regiment / a
@@ -364,6 +391,20 @@ func is_eligible(unit) -> bool:
 ## Whether a unit is still HELD in Ambush reserve (off-table, not yet arrived — GF/AoF v3.5.1 p.13). The
 ## single truth used everywhere a reserve unit must be invisible to the game: activation eligibility,
 ## movement/LOS obstacles, and target validity. Field-test finding 3: a reserve unit leaked into play.
+## Which victim the TEACHER'S RECORDED MOVE fired at — "" when it did not fire.
+## Lifted out of _menu_probe on 17.08. so the seam is testable at all: it used
+## to be an expression buried in a scene-bound method, it read
+## `do_shoot and action == HOLD`, and that quietly threw away the shot of every
+## move that fired WHILE ADVANCING. Measured consequence: the teacher fires in
+## 39.4% of activations and the transcript admitted a shoot-capable action in
+## 13.7%, so the clone could not learn the teacher's most common combined move.
+## A CHARGE's victim rides in the separate "charge" field; only shooting here.
+static func label_shoot_for(action: int, victim: String, do_shoot: bool) -> String:
+	if not do_shoot or victim == "" or action == AiDecision.Action.CHARGE:
+		return ""
+	return victim
+
+
 static func unit_in_reserve(u: GameUnit) -> bool:
 	return u != null and bool(u.unit_properties.get("ambush_reserve", false))
 
@@ -407,6 +448,8 @@ func activate_next_ai_unit() -> GameUnit:
 	if unit == null:
 		return null
 	_activation_seq += 1   # monotonic per-activation index for the deterministic difficulty draws
+	if not _round_first_slot.has(_current_round()):
+		_round_first_slot[_current_round()] = ai_slot   # D-wave: this round's opener
 	last_move_paths = []   # cleared per activation — HOLD / Shaken idle replays nothing
 	board_clamp_notes = []   # #215: per-activation, drained by main into the battle log
 	if unit.is_shaken:
@@ -435,6 +478,7 @@ func activate_next_ai_unit() -> GameUnit:
 		network_manager.broadcast_unit_activation(unit)
 	if turn_manager != null:
 		turn_manager.notify_activated(unit)
+	_terrain_meter(unit, last_report)
 	ai_unit_activated.emit(unit)
 	return unit
 
@@ -860,6 +904,14 @@ func _select_ai_unit(eligible: Array) -> GameUnit:
 	var pool: Array = fresh if not fresh.is_empty() else shaken
 	if pool.size() == 1:
 		return pool[0]
+	# PLANNER_V0 (NML-995): WHICH unit activates becomes part of the pick — plan()
+	# ranks every pool unit's best action in mission currency. Sits above the
+	# ALBTRAUM lookahead (the planner difficulty subsumes it); consumes no RNG,
+	# so a null fallback leaves the seeded draw byte-identical.
+	if _planner_active():
+		var planned := _planner_pick_unit(pool)
+		if planned != null:
+			return planned
 	# ALBTRAUM LOOKAHEAD (the grade's first REAL engine differentiator — before this, albtraum ==
 	# kriegsherr): instead of the official random D6-section pick, evaluate every eligible unit's IMMEDIATE
 	# activation value (best shoot/charge EV + objective-seize worth, final-round weighted) and activate
@@ -1730,7 +1782,36 @@ func _act(unit: GameUnit) -> Dictionary:
 	# default null-AI path and the SoloSim oracle never enter it (byte-identical). Charges/holds untouched.
 	var solver_goal := NO_OBJECTIVE
 	var solver_used := false
-	if (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) and _position_solver_active():
+	# STEP-6 PLANNER HOOK (NML-995, plan D6): the 1-ply mission planner overrides the whole tree
+	# decision (action, target, shot, destination) when its preset is live; the position solver and
+	# the Wave-1 single-hooks below are subsumed and skipped. {} keeps everything byte-identical.
+	# CLONE HOOK (NML-1009, Plan B v2 P4): with a policy loaded (NML_CLONE_PATH)
+	# the clone replaces the MOVE and nothing else — WHICH unit acts stays the
+	# tree's section draw, because that is all the imitation corpus ever taught.
+	# No policy loaded => {} => byte-identical tree.
+	var planner_used := false
+	var pl := {}
+	if _planner_active():
+		pl = _solve_planner(unit)
+	elif _clone_active():
+		pl = _solve_clone(unit)
+	if bool(pl.get("used", false)):
+		planner_used = true
+		action = int(pl["action"])
+		do_shoot = bool(pl["shoot"])
+		dec["toward"] = int(pl["toward"])
+		action_why = str(pl["why"])
+		var ptarget := pl.get("target", null) as GameUnit
+		if ptarget != null and ptarget != target_unit:
+			target_unit = ptarget
+			report["target"] = target_unit
+			tcentre = unit_centre(target_unit)
+			enemy_dist = MoveIntent.distance_inches(centre, tcentre)
+		if pl.has("goal"):
+			solver_used = true
+			solver_goal = pl["goal"]
+		_rule_note(report, str(pl["why"]), false)
+	if not planner_used and (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) and _position_solver_active():
 		var sol := _solve_position(unit, target_unit, weapons, archetype, advance, rush, obj_pos, has_obj, int(dec["toward"]), do_shoot)
 		if bool(sol.get("used", false)):
 			solver_used = true
@@ -1855,6 +1936,15 @@ func _act(unit: GameUnit) -> Dictionary:
 			"candidates": [], "chosen": "HOLD and shoot in place",
 			"why": "kite would abandon a held objective under threat",
 			"data": {"final_round": _is_final_round()}})
+	# P0 MENU-COVERAGE PROBE (NML-1009, env-gated NML_MENU_PROBE=1): the tree's
+	# activation is settled HERE — action, destination and victim are final and
+	# nothing has moved yet, so the board still matches what the planner would
+	# have seen. Pure measurement: it only records.
+	if _menu_probe_on() and not planner_used:
+		var kite: bool = action == AiDecision.Action.ADVANCE and not to_obj and not to_flank \
+			and shoot_range > 0 and enemy_dist <= float(shoot_range)
+		_menu_probe(unit, action, goal, target_unit, do_shoot,
+			(rush if action == AiDecision.Action.RUSH else advance), kite)
 	var dang := 0
 	match action:
 		AiDecision.Action.RUSH:
@@ -2610,6 +2700,392 @@ func _flank_goal(unit: GameUnit, target: GameUnit, range_in: float, advance_in: 
 ## opts-pattern discipline). Headless unit tests without injected LOS also fall through untouched.
 func _position_solver_active() -> bool:
 	return active_difficulty() != null and (los_checker.is_valid() or unit_los_checker.is_valid())
+
+
+## Whether THIS activation routes through the 1-ply mission planner (NML-995, plan D6). Only the
+## PLANNER_V0 preset sets the flag — null-AI, NACHTMAHR and the SoloSim oracle never enter (the
+## check is the only new code on their paths, so they stay byte-identical).
+func _planner_active() -> bool:
+	var diff := active_difficulty()
+	return diff != null and diff.planner
+
+
+## PLANNER_V0 unit pick (NML-995): plan() ranges over the WHOLE eligible pool at
+## once — everything of ours outside the pool is marked activated on the captured
+## copy, so the winning (unit, action) pair decides who activates next instead of
+## the tree's seeded section draw. null → the caller keeps its draw untouched.
+func _planner_pick_unit(pool: Array) -> GameUnit:
+	var diff := active_difficulty()
+	AiMissionEval.fit_mode = diff != null and diff.eval_fit   # E4: leaf choice per preset
+	AiPlanner.playout_search = diff != null and diff.playout_search   # S-wave: per preset
+	# D-wave: seat-aware depth — opener when OUR side made this round's first
+	# activation (or nobody acted yet, i.e. we are about to open it).
+	AiPlanner.opener_seat = int(_round_first_slot.get(_current_round(), ai_slot)) == int(ai_slot)
+	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
+		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
+		terrain_type_at)
+	var me: int = int((pool[0] as GameUnit).unit_properties.get("player_id", 0))
+	for k in state["units"]:
+		var su: Dictionary = state["units"][k]
+		if int(su["player"]) == me and not pool.has(su["unit"]):
+			su["activated"] = true
+	var pick := {}
+	var doct := OS.get_environment("NML_OPENER_DOCTRINE")
+	if doct != "" and AiPlanner.opener_seat and _current_round() == 1:
+		pick = AiPlanner.doctrine_pick(state, me, doct)   # research probe, env-gated
+	if not bool(pick.get("used", false)):
+		pick = AiPlanner.plan_with_rollout(state, me)
+	if not bool(pick.get("used", false)):
+		return null
+	var chosen: GameUnit = (state["units"][pick["unit_key"]] as Dictionary)["unit"]
+	# R3: the rollout decided unit AND action together — cache the intent so
+	# _solve_planner executes it instead of re-deriving 1-ply (which would
+	# undo the tempo choice). Target keys resolve to refs NOW, at pick time.
+	var act: Dictionary = pick["action"]
+	var victim_key := str(act.get("charge", act.get("shoot", "")))
+	_planner_intent = {"unit": chosen, "round": _current_round(), "action": act,
+		"target": (state["units"][victim_key] as Dictionary)["unit"] \
+			if victim_key != "" and state["units"].has(victim_key) else null,
+		"why": str(pick["intent"]), "expectation": pick["expectation"]}
+	record_decision({"kind": "planner", "unit": chosen.get_name(),
+		"rule": "PLANNER_V0 unit pick (NML-995): the round is played out for the best openers; the strongest end-of-round position activates first",
+		"candidates": [], "chosen": "activates next", "why": str(pick["intent"]),
+		"data": {"kept_back": int(pick.get("waits", 0)),
+			# Distillation v2: the planner's OWN win estimate for THIS position
+			# (expectation.before) — the per-position teacher value the round-
+			# coarse planner_calib join cannot provide.
+			"value": float((pick.get("expectation", {}) as Dictionary).get("before", -1.0)),
+			# E1 (eval-tuning wave): the position's raw feature vector — the
+			# arena logs the first per (side, round) as offline-fit input.
+			# Feature wave: stamp off-table reserves so the deploy state is a
+			# visible signal (the rollout itself never changes it).
+			"features": AiMissionEval.features(_with_reserves(state), me,
+				BattleSim.reply_threat(state, me), true)}})
+	# Leaf row (glasses v4): the winning candidate's horizon-end state — the
+	# distribution the leaf eval actually judges. Same record kind, flagged.
+	var leaf: Dictionary = AiPlanner._last_leaf_state
+	if not leaf.is_empty():
+		record_decision({"kind": "planner", "unit": chosen.get_name(),
+			"rule": "leaf row: winning candidate's horizon-end position (training data)",
+			"candidates": [], "chosen": "", "why": "leaf",
+			"data": {"leaf": true,
+				"features": AiMissionEval.features(_with_reserves(leaf), me,
+					BattleSim.reply_threat(leaf, me), true)}})
+	return chosen
+
+
+## Feature wave: annotate a captured state with per-side off-table reserve
+## counts (ambushers waiting to arrive). Read-only stamp for features().
+func _with_reserves(state: Dictionary) -> Dictionary:
+	var counts := {1: 0, 2: 0}
+	for u in ambush_reserve:
+		var gu := u as GameUnit
+		if gu != null and not gu.is_destroyed():
+			var side := int(gu.unit_properties.get("player_id", 0))
+			if counts.has(side):
+				counts[side] = int(counts[side]) + 1
+	state["reserves"] = counts
+	return state
+
+
+## P0 MENU-COVERAGE PROBE (NML-1009, Plan B v2): before we clone the tree we
+## measure whether the planner's candidate menu can EXPRESS what the tree
+## plays. Env-gated (NML_MENU_PROBE=1) because it captures the board a second
+## time per activation; it only records — no decision reads it.
+static var _menu_probe_env := -1
+func _menu_probe_on() -> bool:
+	if _menu_probe_env == -1:
+		# NML_TEACHER_ROWS implies the probe: the rows are built from its work.
+		_menu_probe_env = 1 if (OS.get_environment("NML_MENU_PROBE") == "1"
+			or OS.get_environment("NML_TEACHER_ROWS") == "1") else 0
+	return _menu_probe_env == 1
+
+
+func _menu_probe(unit: GameUnit, action: int, goal: Vector3, target_unit: GameUnit,
+		do_shoot: bool, band_in: float, kite: bool) -> void:
+	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
+		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
+		terrain_type_at)
+	var key := _state_key_of(state, unit)
+	if key == "":
+		# Never lose an activation silently (the ledger must close against the
+		# "action" record count): an unmappable actor is its own class.
+		record_decision({"kind": "menu_probe", "unit": unit.get_name(),
+			"rule": "P0 (NML-1009): actor not in the captured board", "candidates": [],
+			"chosen": "not measured", "why": "unmapped",
+			"data": {"class": "unmapped", "covered": false, "loose": false,
+				"best_in": -1.0, "menu": 0}})
+		return
+	var victim := _state_key_of(state, target_unit)
+	var eff_goal := goal
+	if kite and target_unit != null:
+		# The kite moves AWAY from its target: hand over the real direction, or
+		# the probe reads a retreat as a walk into the enemy's face.
+		var centre := unit_centre(unit)
+		var away := centre - unit_centre(target_unit)
+		if away.length() > 0.001:
+			eff_goal = centre + away.normalized() * band_in * INCHES_TO_METERS
+	var mv := {"kind": action, "goal": eff_goal, "band_m": band_in * INCHES_TO_METERS,
+		"shoot": label_shoot_for(action, victim, do_shoot),
+		"charge": victim if action == AiDecision.Action.CHARGE else ""}
+	var cov := AiPlanner.menu_covers(state, key, mv)
+	# P0b: the SAME move against the wide teacher menu — the pair is the
+	# red-green of the widening (narrow = the RED reading, measured 15.08.).
+	var cands := AiPlanner.candidates_wide(state, key)
+	var wide := AiPlanner.menu_covers_in(cands, state, key, mv)
+	cov["covered_wide"] = bool(wide["covered"])
+	cov["loose_wide"] = bool(wide["loose"])
+	cov["menu_wide"] = int(wide["menu"])
+	if _teacher_rows_on():
+		_teacher_row(state, key, cands, int(wide.get("idx", -1)), str(cov["class"]))
+	record_decision({"kind": "menu_probe", "unit": unit.get_name(),
+		"rule": "P0 (NML-1009): is the teacher's move even on the planner's candidate menu?",
+		"candidates": [], "chosen": ("on the menu" if bool(cov["covered"]) else "not offered"),
+		"why": str(cov["class"]), "data": cov})
+
+
+## THE BEHAVIOUR METERS (terrain grill D9, 16.08.): the maintainer's own
+## acceptance test, and it deliberately contains no winrate — "would I, watching
+## the table, say it uses terrain properly?". Four numbers per activation:
+## does it END IN COVER, did it SHOOT, how many enemies have a clear lane to it
+## afterwards, and did it enter terrain at all. Env-gated (NML_TERRAIN_METER=1)
+## because the lane count costs one LOS check per enemy. Measurement only.
+static var _meter_env := -1
+func _terrain_meter_on() -> bool:
+	if _meter_env == -1:
+		_meter_env = 1 if OS.get_environment("NML_TERRAIN_METER") == "1" else 0
+	return _meter_env == 1
+
+
+## THE `shot` FIELD READS report["can_shoot"], NOT report["shoot"] (16.08.): the two brains
+## fill "shoot" with answers to DIFFERENT questions — the tree writes "this unit fires"
+## (do_shoot), the clone/planner overlay writes "the chosen menu entry carried a shoot key"
+## (act.has("shoot")). Measured: tree 37.1% did-shoot per activation, clone 1.8-3.6%, and the
+## 3.6% is exactly the rate at which a picked entry carries that key — the two readings were
+## never comparable, so the meter could not serve as an acceptance criterion.
+## "can_shoot" is the ONE post-move gate BOTH brains flow through (_act re-gates range + line
+## of sight from the settled position, and the Bug-27/28 retarget opens it even when the plan
+## said no), and it is the exact predicate every driver fires on (main._solo_activate_one_ai
+## and tools/solo_selfplay: can_shoot ⇒ _run_ai_shooting). A meter reading the planner's
+## intention keeps drifting from what happens on the table; this one reads the trigger.
+## Residual (named, not hidden): _run_ai_shooting can still find no per-weapon target at
+## resolution time, so "shot" is "the volley was opened", one step short of "dice rolled".
+func _terrain_meter(unit: GameUnit, report: Dictionary) -> void:
+	if not _terrain_meter_on() or unit == null or unit.is_destroyed():
+		return
+	var in_cover := majority_in_cover(unit)
+	var terrain := -1
+	if terrain_type_at.is_valid():
+		terrain = int(terrain_type_at.call(unit_centre(unit)))
+	var exposed := 0
+	if army_manager == null:
+		return
+	for other in army_manager.get_game_units_for_player(enemy_slot_of(unit)):
+		var gu := other as GameUnit
+		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
+			continue
+		var rng := AiArchetype.max_range_inches(_unit_weapons(gu)) + shooting_range_bonus(gu)
+		if rng <= 0:
+			continue
+		if MoveIntent.distance_inches(unit_centre(gu), unit_centre(unit)) <= float(rng) \
+				and _has_los(gu, unit):
+			exposed += 1
+	record_decision({"kind": "terrain_meter", "unit": unit.get_name(),
+		"rule": "Behaviour meters (grill D9): cover, fire, exposure, terrain use — the acceptance test that is not a winrate",
+		"candidates": [], "chosen": "in cover" if in_cover else "in the open",
+		"why": "after activation",
+		"data": {"in_cover": in_cover, "shot": bool(report.get("can_shoot", false)),
+			"exposed_to": exposed, "terrain": terrain,
+			"in_terrain": terrain > 0}})
+
+
+## P4 (NML-1009): is a clone policy loaded? Env-driven (NML_CLONE_PATH), and a
+## net whose selftest disagrees with its trainer is refused, so "loaded" always
+## means "provably the brain that was trained".
+func _clone_active() -> bool:
+	# NML_CLONE_SIDE=1|2 confines the clone to ONE seat — the P4 gate needs the
+	# tree in the other chair, and both-AI runs share this controller.
+	var seat := OS.get_environment("NML_CLONE_SIDE").strip_edges()
+	if seat.is_valid_int() and int(seat) != int(ai_slot):
+		return false
+	return not AiClone.net_for(int(ai_slot)).is_empty()
+
+
+## The clone's move for THIS unit: score the wide menu, take the argmax, and
+## hand it back in the same shape the planner overlay uses.
+func _solve_clone(unit: GameUnit) -> Dictionary:
+	var net := AiClone.net_for(int(ai_slot))
+	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
+		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
+		terrain_type_at)
+	var key := _state_key_of(state, unit)
+	if key == "":
+		return {}
+	var cands := AiPlanner.candidates_wide(state, key)
+	var menu := AiClone.menu_tuples(state, key, cands, terrain_type_at, los_checker)
+	var sc := AiClone.scores(net, BattleSim.board_rows(state), int(ai_slot), menu)
+	if sc.size() != cands.size() or sc.is_empty():
+		return {}
+	var best := 0
+	for i in range(1, sc.size()):
+		if float(sc[i]) > float(sc[best]):
+			best = i
+	# AMPLIFIER (NML_CLONE_SEARCH=k, the Gen-1 rung): the policy PROPOSES, the
+	# simulation DECIDES. Roll out only the k best-liked candidates and keep the
+	# one that scores highest in mission currency — cheaper than the planner's
+	# broad rollout (k instead of the whole menu) and pointed at the moves a
+	# teacher-like player would actually consider. k <= 1 = pure Gen-0 argmax.
+	# amplifier A/B (18.08.): NML_CLONE_SEARCH_P<slot> overrides per seat so
+	# the SAME net can play searched vs bare against itself — the improvement-
+	# operator experiment. Fallback: the global knob, unchanged behaviour.
+	var k_env := OS.get_environment("NML_CLONE_SEARCH_P%d" % int(ai_slot))
+	if k_env == "":
+		k_env = OS.get_environment("NML_CLONE_SEARCH")
+	var k := int(k_env)
+	if k > 1:
+		var order: Array = []
+		for i in range(sc.size()):
+			order.append(i)
+		order.sort_custom(func(x: int, y: int) -> bool: return float(sc[x]) > float(sc[y]))
+		var top: Array = order.slice(0, mini(k, order.size()))
+		var best_score := -INF
+		for i in top:
+			var next := BattleSim.resolve(state, cands[i])
+			var s := AiMissionEval.score(next, int(ai_slot), BattleSim.reply_threat(next, int(ai_slot)))
+			if s > best_score:
+				best_score = s
+				best = i
+	if _teacher_rows_on():
+		# EXPERT ITERATION: what the amplified clone chose is the training
+		# signal for the NEXT generation — the same row shape as the teacher's.
+		_teacher_row(state, key, cands, best, "clone")
+	var act: Dictionary = cands[best]
+	var kind := int(act["kind"])
+	record_decision({"kind": "clone", "unit": unit.get_name(),
+		"rule": "CLONE (NML-1009): the move the teacher would most likely have played, scored over the whole menu",
+		"candidates": [], "chosen": AiDecision.action_name(kind),
+		"why": "learned from the tree", "data": {"menu": menu.size(),
+			"score": float(sc[best]), "runner_up": float(sc[best - 1 if best > 0 else mini(1, sc.size() - 1)])}})
+	var out := {"used": true, "action": kind, "shoot": act.has("shoot"),
+		"toward": AiDecision.Toward.OBJECTIVE if kind == AiDecision.Action.RUSH \
+			else AiDecision.Toward.ENEMY, "why": "learned from the tree"}
+	if act.has("dest"):
+		out["goal"] = act["dest"]
+	var victim_key := str(act.get("charge", act.get("shoot", "")))
+	if victim_key != "" and (state["units"] as Dictionary).has(victim_key):
+		out["target"] = (state["units"][victim_key] as Dictionary)["unit"]
+	return out
+
+
+## P1 (NML-1009): one IMITATION ROW per teacher activation — the position the
+## net reads, the menu it chooses from, and WHICH entry the teacher took. Rows
+## with teacher = -1 (the P0 miss class) are written too: dropping them would
+## quietly flatter the corpus. Gated separately from the probe because the
+## rows are large (NML_TEACHER_ROWS=1).
+static var _teacher_rows_env := -1
+func _teacher_rows_on() -> bool:
+	if _teacher_rows_env == -1:
+		_teacher_rows_env = 1 if OS.get_environment("NML_TEACHER_ROWS") == "1" else 0
+	return _teacher_rows_env == 1
+
+
+func _teacher_row(state: Dictionary, key: String, cands: Array, idx: int,
+		cls: String) -> void:
+	# ONE source for the tuples (AiClone.menu_tuples): what the corpus records
+	# must be exactly what the clone later scores in play.
+	var menu := AiClone.menu_tuples(state, key, cands, terrain_type_at, los_checker)
+	record_decision({"kind": "teacher_row", "unit": str(key),
+		"rule": "P1 (NML-1009): the teacher's pick, the menu it came from, and the position it was made in",
+		"candidates": [], "chosen": str(idx), "why": cls,
+		"data": {"side": int(ai_slot), "round": _current_round(), "class": cls,
+			"teacher": idx, "menu": menu,
+			"board": BattleSim.board_rows(state)}})
+
+
+## The captured state's key for a live unit ("" when it is not on the board).
+func _state_key_of(state: Dictionary, unit: GameUnit) -> String:
+	if unit == null:
+		return ""
+	for k in state["units"]:
+		if (state["units"][k] as Dictionary)["unit"] == unit:
+			return str(k)
+	return ""
+
+
+## The planner as a position-solver-style overlay: capture the LIVE game into a BattleSim state,
+## constrain the pick to THIS unit (every other own unit is marked activated on the captured copy,
+## so plan() chooses only among its actions), and map the winning action onto the solver-adoption
+## shape. {} ⇒ the caller keeps the decision-tree plan byte-identically. Emits the "planner"
+## explainability record (intent sentence + expectation numbers + runner-up).
+func _solve_planner(unit: GameUnit) -> Dictionary:
+	var sp_diff := active_difficulty()
+	AiMissionEval.fit_mode = sp_diff != null and sp_diff.eval_fit   # E4: leaf choice per preset
+	AiPlanner.playout_search = sp_diff != null and sp_diff.playout_search   # S-wave: per preset
+	# R3: execute the rollout intent when it is still valid (same unit, same
+	# round, target still alive) — re-deriving 1-ply here would undo the tempo
+	# choice the unit pick just made. Any mismatch falls through to the re-plan.
+	if not _planner_intent.is_empty() and _planner_intent["unit"] == unit \
+			and int(_planner_intent["round"]) == _current_round():
+		var cached: Dictionary = _planner_intent
+		_planner_intent = {}
+		var tgt: GameUnit = cached["target"]
+		if tgt == null or not tgt.get_alive_models().is_empty():
+			var cact: Dictionary = cached["action"]
+			var ckind := int(cact.get("kind", AiDecision.Action.HOLD))
+			var cexp: Dictionary = cached["expectation"]
+			record_decision({"kind": "planner", "unit": unit.get_name(),
+				"rule": "PLANNER_V0 (NML-995): executes the round-rollout intent decided at the unit pick",
+				"candidates": [], "chosen": AiDecision.action_name(ckind),
+				"why": str(cached["why"]),
+				"data": {"win_before": float(cexp["before"]), "win_after": float(cexp["after"])}})
+			var cout := {"used": true, "action": ckind, "shoot": cact.has("shoot"),
+				"toward": AiDecision.Toward.OBJECTIVE if ckind == AiDecision.Action.RUSH \
+					else AiDecision.Toward.ENEMY,
+				"why": str(cached["why"])}
+			if cact.has("dest"):
+				cout["goal"] = cact["dest"]
+			if tgt != null:
+				cout["target"] = tgt
+			return cout
+	_planner_intent = {}
+	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
+		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
+		terrain_type_at)
+	var unit_key := ""
+	for k in state["units"]:
+		if (state["units"][k] as Dictionary)["unit"] == unit:
+			unit_key = str(k)
+			break
+	if unit_key == "":
+		return {}
+	var me: int = int((state["units"][unit_key] as Dictionary)["player"])
+	for k in state["units"]:
+		var su: Dictionary = state["units"][k]
+		if str(k) != unit_key and int(su["player"]) == me:
+			su["activated"] = true
+	var pick := AiPlanner.plan(state, me)
+	if not bool(pick.get("used", false)) or str(pick["unit_key"]) != unit_key:
+		return {}
+	var act: Dictionary = pick["action"]
+	var kind := int(act.get("kind", AiDecision.Action.HOLD))
+	var exp: Dictionary = pick["expectation"]
+	var runner: Dictionary = pick.get("runner_up", {})
+	record_decision({"kind": "planner", "unit": unit.get_name(),
+		"rule": "PLANNER_V0 (NML-995): every candidate action rolled through the parity-bound BattleSim and scored as projected win probability",
+		"candidates": [], "chosen": AiDecision.action_name(kind),
+		"why": str(pick["intent"]),
+		"data": {"win_before": float(exp["before"]), "win_after": float(exp["after"]),
+			"runner_up_score": float(runner.get("score", -1.0))}})
+	var out := {"used": true, "action": kind, "shoot": act.has("shoot"),
+		"toward": AiDecision.Toward.OBJECTIVE if kind == AiDecision.Action.RUSH \
+			else AiDecision.Toward.ENEMY,
+		"why": str(pick["intent"])}
+	if act.has("dest"):
+		out["goal"] = act["dest"]
+	var victim_key := str(act.get("charge", act.get("shoot", "")))
+	if victim_key != "" and state["units"].has(victim_key):
+		out["target"] = (state["units"][victim_key] as Dictionary)["unit"]
+	return out
 
 
 ## Difficulty → position-band width: the ev_noise knob finally gets a real surface (POSITION choice). A
@@ -6040,7 +6516,7 @@ func plain_reason_for(unit: GameUnit) -> String:
 		var kind := str(r.get("kind", ""))
 		if kind == "action":
 			return plain_action_sentence(r)
-		if kind in ["commander", "position", "flank", "kite_guard", "mission", "yield_lof"]:
+		if kind in ["commander", "position", "flank", "kite_guard", "mission", "yield_lof", "planner"]:
 			var why := str(r.get("why", ""))
 			if not why.is_empty() and why != "decision tree":
 				return why
@@ -7364,8 +7840,8 @@ static func _axis_scale(start: float, d: float, limit: float) -> float:
 ## `zone` = the AI deployment zone in table XZ; `objectives` = XZ points; `blocked_normal` /
 ## `blocked_flying` classify terrain for ground vs Strider/Flying units. Seeded → reproducible.
 ## Returns {deployed, reserved, seed}.
-func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int) -> Dictionary:
-	deploy_begin(zone, objectives, blocked_normal, blocked_flying, seed_value)
+func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int, zone_test: Callable = Callable()) -> Dictionary:
+	deploy_begin(zone, objectives, blocked_normal, blocked_flying, seed_value, zone_test)
 	return deploy_remaining()
 
 
@@ -7375,11 +7851,15 @@ func deploy_army(zone: Rect2, objectives: Array, blocked_normal: Callable, block
 ## when the human is out of units). Same rng draw order as the old all-at-once deploy_army, so a
 ## fixed seed still produces byte-identical placements.
 var _deploy_alt := {}   # {"zone", "queue", "all_units", "section_of", "occupied", "deployed", "seed", "forward_y", "blocked_normal", "blocked_flying"}
+# M2b — arbitrary deployment zones: optional probe Callable(Vector2 world metres) -> bool
+# (DeploymentCatalog.zone_test). Invalid = today's rect-only deployment, byte-identical.
+var _deploy_zone_test := Callable()
 
 
-func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int) -> int:
+func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, blocked_flying: Callable, seed_value: int, zone_test: Callable = Callable()) -> int:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
+	_deploy_zone_test = zone_test
 	# Stash the context so the round-2 ambush arrival reuses the same objectives + terrain rules.
 	_deploy_objectives = objectives
 	_deploy_blocked_normal = blocked_normal
@@ -7426,7 +7906,17 @@ func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, bloc
 		for i in groups[g]:
 			section_of[int(i)] = int(sections[g])
 	var flags: Array = []
-	ambush_reserve.clear()
+	# Both-AI games share ONE controller: a side's (re-)begin may only reset
+	# ITS OWN reserve. The unconditional clear() silently deleted the FIRST
+	# deployer's Ambush units from every both-AI game (they stayed hidden and
+	# non-activatable forever) — the campaign's whole "opener seat penalty"
+	# was largely this missing unit, not game structure (NML-1002).
+	var kept_reserve: Array = []
+	for u0 in ambush_reserve:
+		var gu0 := u0 as GameUnit
+		if gu0 != null and int(gu0.unit_properties.get("player_id", 0)) != ai_slot:
+			kept_reserve.append(gu0)
+	ambush_reserve = kept_reserve
 	for i in range(all_units.size()):
 		var u: GameUnit = all_units[i]
 		# Infiltrate (Bug 26) "counts as having Ambush" → same reserve/round-2 arrival as Ambush, only its
@@ -7439,7 +7929,14 @@ func deploy_begin(zone: Rect2, objectives: Array, blocked_normal: Callable, bloc
 		if is_ambush:
 			u.unit_properties["ambush_reserve"] = true   # held off-table → not activatable until it arrives
 			ambush_reserve.append(u)
-	_deploy_zone_of.clear()   # Bug 8: the overlap cleanup constrains each unit to ITS recorded zone
+	# NML-1003 (audit): same both-AI shape as NML-1002 — clear only OUR side's
+	# zone records (Re-Deployment carriers of the FIRST deployer kept theirs).
+	var kept_zones := {}
+	for zk in _deploy_zone_of:
+		var zu := zk as GameUnit
+		if zu != null and int(zu.unit_properties.get("player_id", 0)) != ai_slot:
+			kept_zones[zk] = _deploy_zone_of[zk]
+	_deploy_zone_of = kept_zones   # Bug 8: the overlap cleanup constrains each unit to ITS recorded zone
 	_redeploy_done = false    # Re-Deployment (wave 7) fires once, at the game-start transition
 	# Forward-edge doctrine: the zone edge toward the table centre — every metre behind it is
 	# first-turn movement given away (A/B-gated scoring term in AiDeployment.best_spot).
@@ -7527,6 +8024,16 @@ func _deploy_place_id(id: int) -> GameUnit:
 	var base_r := _deploy_base_radius(_deploy_models(unit))
 	var ignores_terrain: bool = unit.has_special_rule("Strider") or unit.has_special_rule("Flying")
 	var blocked := blocked_flying if ignores_terrain else blocked_normal
+	var terrain_only := blocked   # Vanguard pushes measure TERRAIN only (may leave the zone by rule)
+	# M2b — arbitrary deployment zones: outside the polygon counts as BLOCKED ground, so the
+	# spot search zone-checks every candidate base inside the rect section. v0 limits, named:
+	# scouts stay rect-only (their 12" forward band is legal past the zone by rule) and the
+	# overlap-cleanup reshift stays rect-only. Invalid callable = today's path, byte-identical.
+	if not is_scout and _deploy_zone_test.is_valid():
+		var ztest := _deploy_zone_test
+		blocked = func(p: Vector2) -> bool:
+			return not bool(ztest.call(p)) \
+				or (terrain_only.is_valid() and bool(terrain_only.call(p)))
 	var spot := AiDeployment.best_spot(sec, objectives, occupied, radius, blocked, 0.025, radius, footprint, base_r, forward_y)
 	var spot_why := "best legal spot toward nearest objective (section, forward-edge doctrine)"
 	# Wall-bisect retries (bug 12c): a spot whose formation grid a wall cuts in half is vetoed by
@@ -7562,7 +8069,7 @@ func _deploy_place_id(id: int) -> GameUnit:
 	# makes it moot in practice — documented edge).
 	if RulesRegistry.unit_rule_active(unit, "Vanguard") \
 			or not RulesRegistry.unit_rules_of_primitive(unit, "Vanguard").is_empty():
-		var v_spot := _vanguard_push(unit, spot, zone, occupied, blocked, radius, footprint, base_r)
+		var v_spot := _vanguard_push(unit, spot, zone, occupied, terrain_only, radius, footprint, base_r)
 		if v_spot != spot:
 			_place_unit_at(unit, v_spot)
 			_deploy_zone_of.erase(unit)   # the pushed spot MAY legally leave the zone
@@ -8259,6 +8766,8 @@ func ambush_reserve_ready(round_number: int) -> int:
 	var n := 0
 	for u in ambush_reserve:
 		var gu := u as GameUnit
+		if gu != null and int(gu.unit_properties.get("player_id", 0)) != ai_slot:
+			continue   # NML-1002: both-AI shares the array — count the ACTIVE side only
 		if gu != null and gu.get_alive_count() > 0 and may_arrive_this_round(gu, round_number):
 			n += 1
 	return n
@@ -8407,6 +8916,9 @@ func arrive_one_ambush_unit(arrival_zone: Rect2, enemy_positions: Array, occupie
 	var remaining: Array = []
 	var arrived: GameUnit = null
 	for u in ambush_reserve:
+		if u is GameUnit and int((u as GameUnit).unit_properties.get("player_id", 0)) != ai_slot:
+			remaining.append(u)   # NML-1002: the other side's reserve waits for ITS beat
+			continue
 		var unit: GameUnit = u
 		if unit == null or unit.get_alive_count() <= 0:
 			continue   # a reserve unit destroyed before arrival is simply gone

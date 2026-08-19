@@ -244,3 +244,80 @@ func test_activation_counter_is_monotonic_for_deterministic_draws() -> void:
 	assert_int(solo._activation_seq).is_equal(0)
 	solo.activate_next_ai_unit()
 	assert_int(solo._activation_seq).is_equal(1)
+
+
+# === Planner calibration pairing (parity wave, NML-995) ===
+
+const ArenaMatch := preload("res://tools/arena_match.gd")
+
+
+func _calib(side: int, round_no: int, before: float, after: float) -> Dictionary:
+	return {"side": side, "round": round_no, "before": before, "after": after}
+
+
+func test_calib_pairs_last_forecast_meets_first_measurement_per_side() -> void:
+	# Round 1 has two picks (the boundary must use the LAST one's forecast); round 2's FIRST pick
+	# carries the measurement. Side 2 interleaves and must pair independently of side 1.
+	var pairs: Array = ArenaMatch.calib_pairs([
+		_calib(1, 1, 0.50, 0.55),
+		_calib(2, 1, 0.50, 0.48),
+		_calib(1, 1, 0.52, 0.40),   # last side-1 record of round 1 → its forecast
+		_calib(1, 2, 0.21, 0.30),   # first side-1 record of round 2 → its measurement
+		_calib(1, 2, 0.35, 0.36),   # later round-2 record must NOT re-pair
+		_calib(2, 3, 0.60, 0.70),   # side 2 jumps 1→3: still one boundary pair
+	])
+	assert_int(pairs.size()).is_equal(2)
+	var p1: Dictionary = pairs[0]
+	assert_int(int(p1["side"])).is_equal(1)
+	assert_int(int(p1["from_round"])).is_equal(1)
+	assert_int(int(p1["to_round"])).is_equal(2)
+	assert_float(float(p1["predicted"])).is_equal_approx(0.40, 0.0001)
+	assert_float(float(p1["measured"])).is_equal_approx(0.21, 0.0001)
+	assert_float(float(p1["gap"])).is_equal_approx(-0.19, 0.0001)
+	var p2: Dictionary = pairs[1]
+	assert_int(int(p2["side"])).is_equal(2)
+	assert_int(int(p2["from_round"])).is_equal(1)
+	assert_int(int(p2["to_round"])).is_equal(3)
+	assert_float(float(p2["predicted"])).is_equal_approx(0.48, 0.0001)
+	assert_float(float(p2["measured"])).is_equal_approx(0.60, 0.0001)
+
+
+func test_calib_pairs_without_a_boundary_is_empty() -> void:
+	# All records in one round (and an empty stream): nothing to compare, nothing invented.
+	assert_array(ArenaMatch.calib_pairs([])).is_empty()
+	assert_array(ArenaMatch.calib_pairs([
+		_calib(1, 2, 0.5, 0.6), _calib(1, 2, 0.6, 0.7)])).is_empty()
+
+
+# === NML-1002: first deployer's Ambush reserve must survive the second begin ===
+
+## Both-AI games share one controller: side 1 deploys (its Ambush unit goes
+## to reserve), then side 2's deploy_begin runs — before the fix that begin
+## wiped side 1's reserve, deleting the unit from the game. Now the reserve
+## is side-scoped: begin clears only its own entries, ready() counts only the
+## active side.
+func test_second_deploy_begin_keeps_first_sides_ambush_reserve() -> void:
+	var a1 := _unit(1, [Vector3(0, 0, 0)], "A1")
+	a1.unit_properties["special_rules"] = ["Ambush"]
+	var a2 := _unit(1, [Vector3(0.3, 0, 0)], "A2")
+	var b1 := _unit(2, [Vector3(0, 0, 1.0)], "B1")
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(_army([a1, a2, b1]), null, null, 1, 2)
+	var zone1 := Rect2(Vector2(-1, -1), Vector2(2, 0.3))
+	var zone2 := Rect2(Vector2(-1, 0.7), Vector2(2, 0.3))
+	var none := func(_p: Vector2) -> bool: return false
+	solo.ai_slot = 1
+	solo.human_slot = 2
+	solo.deploy_army(zone1, [], none, none, 7)
+	assert_int(solo.ambush_reserve.size()).override_failure_message(
+		"side 1's Ambush unit must be reserved").is_equal(1)
+	solo.ai_slot = 2
+	solo.human_slot = 1
+	solo.deploy_army(zone2, [], none, none, 8)
+	assert_int(solo.ambush_reserve.size()).override_failure_message(
+		"side 2's begin must NOT wipe side 1's reserve").is_equal(1)
+	assert_int(solo.ambush_reserve_ready(2)).override_failure_message(
+		"ready() counts only the ACTIVE side (slot 2 has no reserves)").is_equal(0)
+	solo.ai_slot = 1
+	assert_int(solo.ambush_reserve_ready(2)).is_equal(1)

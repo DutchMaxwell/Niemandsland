@@ -72,6 +72,14 @@ const _UNIT_RESOLUTION := 1000000
 ## weaker personas later is a matter of adding presets, not code.
 const PRESETS := {
 	"nachtmahr": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true},
+	# PLANNER_V0 (NML-995, plan D6): NACHTMAHR knobs plus the 1-ply mission planner overlay in
+	# SoloController._solve_planner. WORKING name for the arena A/B — no interactive exposure
+	# before the measurement gate (>=55% vs the tree), and never a display name.
+	"planner_v0": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true},
+	# E4 (eval-tuning wave): planner_v0 with the FITTED eval as the leaf — the
+	# arena A/B pair for "did the data-derived value function beat the hand one".
+	"planner_v1": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "eval_fit": true},
+	"planner_v2": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "eval_fit": true, "playout_search": true},
 }
 
 ## Legacy grade names (old harness scripts, saved arena invocations, docs) all resolve to
@@ -90,6 +98,9 @@ var persistence: float = 1.0
 var lookahead: bool = false
 var avoid_overkill: bool = false   # albtraum v2: focus fire caps at the target's wound pool (claims ledger)
 var endgame_convergence: bool = false   # albtraum v2: last-two-rounds marker runs + one-runner-per-marker spread
+var planner: bool = false   # PLANNER_V0: route activations through the 1-ply mission planner overlay
+var eval_fit: bool = false  # E4: planner leaves score with the FITTED eval (planner_v1)
+var playout_search: bool = false  # S-wave: close top-2 arbitrated by full playouts (planner_v2)
 
 ## The game-level base seed folded into every deterministic draw (reproducibility across a rating run).
 var base_seed: int = 0
@@ -116,6 +127,9 @@ static func for_grade(name: String, p_base_seed: int = 0) -> SoloDifficulty:
 	d.lookahead = bool(preset["lookahead"])
 	d.avoid_overkill = bool(preset.get("avoid_overkill", false))
 	d.endgame_convergence = bool(preset.get("endgame_convergence", false))
+	d.planner = bool(preset.get("planner", false))
+	d.eval_fit = bool(preset.get("eval_fit", false))
+	d.playout_search = bool(preset.get("playout_search", false))
 	d.base_seed = p_base_seed
 	return d
 
@@ -129,7 +143,8 @@ static func grade_names() -> Array:
 func to_dict() -> Dictionary:
 	return {"grade": grade_name, "ev_noise": ev_noise, "rule_exploitation": rule_exploitation,
 		"mission_focus": mission_focus, "coordination": coordination, "persistence": persistence,
-		"lookahead": lookahead, "avoid_overkill": avoid_overkill, "endgame_convergence": endgame_convergence}
+		"lookahead": lookahead, "avoid_overkill": avoid_overkill, "endgame_convergence": endgame_convergence,
+		"planner": planner, "eval_fit": eval_fit}
 
 
 ## Whether this grade plays the ENDGAME MARKER MATH (albtraum v2): from the second-to-last round a

@@ -1,0 +1,264 @@
+extends GdUnitTestSuite
+## Phase-1 step 5a: AiPlanner.candidates — the tactical points the planner
+## will roll out (plan D3). Hold always; hold+shoot only with a best-EV
+## target; one rush per objective; charge only on a HURTABLE target (live
+## futile-charge bar); one retreat point away from the nearest threat.
+
+const IN2M := 0.0254
+
+
+func _armed(pid: int, positions: Array, uid: String, weapons: Array,
+		rules: Array = [], wounds_now := 1, quality := 4, defense := 4) -> GameUnit:
+	var u := GameUnit.new()
+	u.unit_id = uid
+	u.unit_properties = {"player_id": pid, "name": uid, "quality": quality,
+		"defense": defense, "special_rules": rules}
+	for p in positions:
+		var m := ModelInstance.new()
+		m.is_alive = true
+		m.wounds_current = wounds_now
+		m.unit = u
+		var n := Node3D.new()
+		add_child(n)
+		n.global_position = p
+		m.node = n
+		u.models.append(m)
+	var opr := OPRApiClient.OPRUnit.new()
+	for w in weapons:
+		var ow := OPRApiClient.OPRWeapon.new()
+		ow.name = str((w as Dictionary).get("name", "W"))
+		ow.range_value = int((w as Dictionary).get("range", 0))
+		ow.attacks = int((w as Dictionary).get("attacks", 4))
+		ow.count = 1
+		opr.weapons.append(ow)
+	u.source_type = "opr"
+	u.source_data = opr
+	return u
+
+
+func _state(units: Array, objectives: Array = []) -> Dictionary:
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	var gu := {}
+	for u in units:
+		gu[(u as GameUnit).unit_id] = u
+	army.game_units = gu
+	return BattleSim.capture(army, func() -> Array: return objectives,
+		func(_i: int) -> int: return 0)
+
+
+func _of_kind(cands: Array, kind: int) -> Array:
+	return cands.filter(func(c: Dictionary) -> bool: return int(c["kind"]) == kind)
+
+
+func test_hold_plus_one_rush_per_objective_without_enemies() -> void:
+	var objectives := [Vector3(10.0 * IN2M, 0, 0), Vector3(0, 0, 10.0 * IN2M)]
+	var state := _state([_armed(2, [Vector3.ZERO], "Grunts",
+		[{"name": "CCW", "range": 0}])], objectives)
+	var cands := AiPlanner.candidates(state, "Grunts")
+	assert_int(cands.size()).is_equal(4)   # no threat: no shoot/charge/retreat; +1 second-wave move-up (D23)
+	assert_int(_of_kind(cands, AiDecision.Action.HOLD).size()).is_equal(1)
+	var rushes := _of_kind(cands, AiDecision.Action.RUSH)
+	assert_that(rushes.map(func(c: Dictionary) -> Vector3: return c["dest"])).is_equal(objectives)
+
+
+func test_best_shoot_picks_the_softer_target() -> void:
+	var shooter := _armed(2, [Vector3.ZERO], "Shooter", [{"name": "Rifle", "range": 24}])
+	var hard := _armed(1, [Vector3(12.0 * IN2M, 0, 0)], "Hard",
+		[{"name": "CCW", "range": 0}], [], 1, 4, 2)
+	var soft := _armed(1, [Vector3(0, 0, 12.0 * IN2M)], "Soft",
+		[{"name": "CCW", "range": 0}], [], 1, 4, 5)
+	var cands := AiPlanner.candidates(_state([shooter, hard, soft]), "Shooter")
+	var shoots := cands.filter(func(c: Dictionary) -> bool: return c.has("shoot"))
+	assert_int(shoots.size()).is_equal(1)
+	assert_str(str((shoots[0] as Dictionary)["shoot"])).is_equal("Soft")
+
+
+## T2: a blind target (captured LOS false) never becomes the shoot candidate —
+## the pick falls to the seen one; both blind kills the shoot action entirely.
+func test_best_shoot_skips_blind_targets() -> void:
+	var shooter := _armed(2, [Vector3.ZERO], "Shooter", [{"name": "Rifle", "range": 24}])
+	var near := _armed(1, [Vector3(12.0 * IN2M, 0, 0)], "Near", [{"name": "CCW", "range": 0}])
+	var far := _armed(1, [Vector3(0, 0, 18.0 * IN2M)], "Far", [{"name": "CCW", "range": 0}])
+	var state := _state([shooter, near, far])
+	(state["units"]["Shooter"] as Dictionary)["los"] = {"Near": false, "Far": true}
+	var shoots := AiPlanner.candidates(state, "Shooter") \
+		.filter(func(c: Dictionary) -> bool: return c.has("shoot"))
+	assert_int(shoots.size()).is_equal(1)
+	assert_str(str((shoots[0] as Dictionary)["shoot"])).is_equal("Far")
+	(state["units"]["Shooter"] as Dictionary)["los"] = {"Near": false, "Far": false}
+	assert_int(AiPlanner.candidates(state, "Shooter") \
+		.filter(func(c: Dictionary) -> bool: return c.has("shoot")).size()).is_equal(0)
+
+
+## Q6 fists vs a 2+ save: 4 * 1/6 * 1/6 = 0.11 expected wounds — under the
+## live futile bar, so the tank must NEVER be a charge candidate. The 5+
+## save ogre (0.44) is. Removing the ogre removes the charge entirely.
+func test_charge_only_on_a_hurtable_target() -> void:
+	var grunts := _armed(2, [Vector3.ZERO], "Grunts",
+		[{"name": "Fists", "range": 0}], [], 1, 6, 4)
+	var tank := _armed(1, [Vector3(6.0 * IN2M, 0, 0)], "Tank",
+		[{"name": "CCW", "range": 0}], ["Tough(6)"], 6, 4, 2)
+	var ogre := _armed(1, [Vector3(0, 0, 6.0 * IN2M)], "Ogre",
+		[{"name": "CCW", "range": 0}], ["Tough(3)"], 3, 4, 5)
+	var charges := _of_kind(AiPlanner.candidates(_state([grunts, tank, ogre]), "Grunts"),
+		AiDecision.Action.CHARGE)
+	assert_int(charges.size()).is_equal(1)
+	assert_str(str((charges[0] as Dictionary)["charge"])).is_equal("Ogre")
+	var without_ogre := AiPlanner.candidates(_state([grunts, tank]), "Grunts")
+	assert_int(_of_kind(without_ogre, AiDecision.Action.CHARGE).size()).is_equal(0)
+
+
+func test_retreat_points_away_from_the_nearest_threat() -> void:
+	var grunts := _armed(2, [Vector3.ZERO], "Grunts", [{"name": "CCW", "range": 0}])
+	var near := _armed(1, [Vector3(5.0 * IN2M, 0, 0)], "Near", [{"name": "CCW", "range": 0}])
+	var far := _armed(1, [Vector3(-20.0 * IN2M, 0, 0)], "Far", [{"name": "CCW", "range": 0}])
+	var advances := _of_kind(AiPlanner.candidates(_state([grunts, near, far]), "Grunts"),
+		AiDecision.Action.ADVANCE)
+	assert_int(advances.size()).is_equal(1)
+	assert_float(((advances[0] as Dictionary)["dest"] as Vector3).x).is_less(0.0)
+
+
+## D21/D23 — the second wave: a rear unit gets a follow-up candidate toward
+## a CONTESTED marker (friend and enemy in the ring), stopping at support
+## distance (next round's rush reaches it); with nothing contested and no
+## battered friend, an idle rear unit still gets its move-up offer.
+func test_second_wave_candidate_offers() -> void:
+	var holder := _armed(1, [Vector3(1.0 * IN2M, 0, 0)], "Holder", [])
+	var raider := _armed(2, [Vector3(2.0 * IN2M, 0, 0)], "Raider", [])
+	var rear := _armed(1, [Vector3(-30.0 * IN2M, 0, 0)], "Rear", [])
+	var state := _state([holder, raider, rear], [Vector3.ZERO])
+	var cands := AiPlanner.candidates(state, "Rear")
+	var wave := {}
+	for c in cands:
+		if str((c as Dictionary).get("wave", "")) != "":
+			wave = c
+	assert_str(str(wave.get("wave", ""))).is_equal("contested marker")
+	var stop_in: float = ((wave["dest"] as Vector3) - Vector3.ZERO).length() / IN2M
+	assert_float(stop_in).is_between(10.0, 20.0)   # 30" out, rush 12+2 => stop ~16" from goal
+	# no contest, no battered friend -> idle reserve still moves up
+	var lone := _armed(1, [Vector3(-30.0 * IN2M, 0, 0)], "Lone", [])
+	var state2 := _state([lone], [Vector3.ZERO])
+	var w2 := {}
+	for c in AiPlanner.candidates(state2, "Lone"):
+		if str((c as Dictionary).get("wave", "")) != "":
+			w2 = c
+	assert_str(str(w2.get("wave", ""))).is_equal("idle reserve moves up")
+
+
+## D22 — the safe line prefers COVER over raw progress: with a cover patch
+## short of the farthest safe point, the patient advance stops IN the
+## cover; without terrain knowledge it walks to the farthest safe point.
+func test_safe_line_prefers_cover_stop() -> void:
+	var runner := _armed(1, [Vector3(-20.0 * IN2M, 0, 0)], "Runner", [])
+	var foe := _armed(2, [Vector3(30.0 * IN2M, 0, 0)], "Foe",
+		[{"name": "Gun", "range": 4, "attacks": 1}])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Runner": runner, "Foe": foe}
+	var cover_centre := -16.5   # forest cell SHORT of the max-advance point
+	var terrain_at := func(p: Vector3) -> int:
+		return TerrainRules.TerrainType.FOREST \
+			if absf(p.x / IN2M - cover_centre) <= 1.5 else TerrainRules.TerrainType.NONE
+	var state := BattleSim.capture(army, func() -> Array: return [Vector3(20.0 * IN2M, 0, 0)],
+		func(_i: int) -> int: return 0, 1, 4, Callable(), Callable(), terrain_at)
+	var plain := BattleSim.capture(army, func() -> Array: return [Vector3(20.0 * IN2M, 0, 0)],
+		func(_i: int) -> int: return 0, 1, 4)
+	var with_cover := AiPlanner._safe_advance(state, "Runner")
+	var without := AiPlanner._safe_advance(plain, "Runner")
+	assert_bool(not with_cover.is_empty() and not without.is_empty()).is_true()
+	var x_cov: float = (with_cover["dest"] as Vector3).x / IN2M
+	var x_plain: float = (without["dest"] as Vector3).x / IN2M
+	assert_float(x_cov).is_between(cover_centre - 1.6, cover_centre + 1.6)
+	assert_bool(x_plain > x_cov + 1.0).is_true()
+
+
+## THE LOSSY SEAM (16.08.): shooting only ever hung on HOLD, so "advance and
+## shoot" — the move the tree makes constantly — was neither offerable nor
+## recordable. The clone could fire only by standing still, stood still in 3.5%
+## of activations, and its games ended with a median 62 survivors against the
+## tree's 54. These two tests pin BOTH halves: the menu must OFFER the move, and
+## the transcript must LABEL it to that candidate instead of a bare advance.
+func test_the_wide_menu_offers_advance_and_shoot() -> void:
+	var shooter := _armed(2, [Vector3.ZERO], "Shooter", [{"name": "Rifle", "range": 24}])
+	var foe := _armed(1, [Vector3(20.0 * IN2M, 0, 0)], "Foe", [{"name": "CCW", "range": 0}])
+	var wide := AiPlanner.candidates_wide(_state([shooter, foe]), "Shooter")
+	var moving_shots := wide.filter(func(c: Dictionary) -> bool:
+		return int(c["kind"]) == AiDecision.Action.ADVANCE and c.has("shoot"))
+	assert_int(moving_shots.size()).is_greater(0)
+	if moving_shots.is_empty():
+		return          # fail cleanly — indexing an empty menu crashes the runner
+	assert_str(str((moving_shots[0] as Dictionary)["shoot"])).is_equal("Foe")
+	# and the narrow LIVE menu stays byte-identical — this is a transcript
+	# change, not a change to what the planner rolls out
+	var narrow := AiPlanner.candidates(_state([shooter, foe]), "Shooter")
+	assert_int(narrow.filter(func(c: Dictionary) -> bool:
+		return int(c["kind"]) == AiDecision.Action.ADVANCE and c.has("shoot")).size()).is_equal(0)
+
+
+func test_a_move_that_shoots_is_labelled_to_a_candidate_that_shoots() -> void:
+	var shooter := _armed(2, [Vector3.ZERO], "Shooter", [{"name": "Rifle", "range": 24}])
+	var foe := _armed(1, [Vector3(20.0 * IN2M, 0, 0)], "Foe", [{"name": "CCW", "range": 0}])
+	var state := _state([shooter, foe])
+	var cands := AiPlanner.candidates_wide(state, "Shooter")
+	# the teacher advanced toward the foe AND fired at it
+	var move := {"kind": AiDecision.Action.ADVANCE, "goal": Vector3(20.0 * IN2M, 0, 0),
+		"band_m": 20.0 * IN2M, "shoot": "Foe"}
+	var got := AiPlanner.menu_covers_in(cands, state, "Shooter", move)
+	assert_bool(bool(got["covered"])).is_true()
+	assert_int(int(got["idx"])).is_greater_equal(0)
+	if int(got["idx"]) < 0:
+		return          # fail cleanly rather than index the menu with -1
+	var picked: Dictionary = cands[int(got["idx"])]
+	assert_str(str(picked.get("shoot", ""))).is_equal("Foe")
+	assert_bool(bool(got["shot_kept"])).is_true()
+	# a move with NO shot must still match on destination alone, unchanged —
+	# and it must NOT claim a shot was "kept". That claim was the vacuous
+	# reading this instrument shipped with (17.08.).
+	var plain := {"kind": AiDecision.Action.ADVANCE, "goal": Vector3(20.0 * IN2M, 0, 0),
+		"band_m": 20.0 * IN2M}
+	var plain_got := AiPlanner.menu_covers_in(cands, state, "Shooter", plain)
+	assert_bool(bool(plain_got["covered"])).is_true()
+	assert_bool(bool(plain_got["had_shot"])).is_false()
+	assert_bool(bool(plain_got["shot_kept"])).is_false()
+
+
+
+## THE SEAM, not the part (17.08.). The 16.08. commit added the shot-preference
+## in menu_covers_in and a test that hand-built {"kind": ADVANCE, "shoot": ...}
+## — a move dictionary the PRODUCTION caller could not produce, because
+## _menu_probe gated the recorded shot on `action == HOLD`. The test was green
+## and the fix was dead. These pin the writer itself.
+func test_the_recorded_move_keeps_its_shot_when_the_unit_advanced() -> void:
+	# advancing and firing is the teacher's most common combined move: the label
+	# must carry the victim, or the clone can never learn it exists
+	assert_str(SoloController.label_shoot_for(
+		AiDecision.Action.ADVANCE, "Foe", true)).is_equal("Foe")
+	assert_str(SoloController.label_shoot_for(
+		AiDecision.Action.HOLD, "Foe", true)).is_equal("Foe")
+	# not firing means no victim, whatever the action
+	assert_str(SoloController.label_shoot_for(
+		AiDecision.Action.ADVANCE, "Foe", false)).is_equal("")
+	# a charge's victim belongs in the "charge" field, never in "shoot"
+	assert_str(SoloController.label_shoot_for(
+		AiDecision.Action.CHARGE, "Foe", true)).is_equal("")
+	assert_str(SoloController.label_shoot_for(
+		AiDecision.Action.RUSH, "", true)).is_equal("")
+
+
+func test_shot_kept_is_not_true_when_there_was_no_shot_to_keep() -> void:
+	# The instrument built to make the loss VISIBLE reported 100% kept on a
+	# corpus that kept none — `want_shoot == "" or ...` is true by default.
+	# A ratio without its denominator is not a measurement.
+	var shooter := _armed(2, [Vector3.ZERO], "Shooter", [{"name": "Rifle", "range": 24}])
+	var foe := _armed(1, [Vector3(20.0 * IN2M, 0, 0)], "Foe", [{"name": "CCW", "range": 0}])
+	var state := _state([shooter, foe])
+	var cands := AiPlanner.candidates_wide(state, "Shooter")
+	var no_shot := AiPlanner.menu_covers_in(cands, state, "Shooter",
+		{"kind": AiDecision.Action.ADVANCE, "goal": Vector3(20.0 * IN2M, 0, 0),
+		"band_m": 20.0 * IN2M})
+	assert_bool(bool(no_shot["had_shot"])).is_false()
+	assert_bool(bool(no_shot["shot_kept"])).is_false()   # nothing to keep is NOT "kept"
+	var with_shot := AiPlanner.menu_covers_in(cands, state, "Shooter",
+		{"kind": AiDecision.Action.ADVANCE, "goal": Vector3(20.0 * IN2M, 0, 0),
+		"band_m": 20.0 * IN2M, "shoot": "Foe"})
+	assert_bool(bool(with_shot["had_shot"])).is_true()
+	assert_bool(bool(with_shot["shot_kept"])).is_true()

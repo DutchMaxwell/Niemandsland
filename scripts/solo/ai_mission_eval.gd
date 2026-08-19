@@ -1,0 +1,601 @@
+class_name AiMissionEval
+extends RefCounted
+## Planner phase-1 step 4: a P(win) proxy in [0,1] over a BattleSim state.
+## Per objective, both sides project CONTROL over the remaining rounds — band
+## reachability times surviving strength — and the objective's probability is
+## the soft ratio of the projections; the state score is the mean over all
+## objectives. Wounds enter ONLY via the strength projection (plan decision).
+## Weights are hand-tuned v0; the arena A/B is the judge, not intuition.
+
+
+const DISCOUNT := 0.5   # presence halves per future round still needed to arrive
+
+
+# === E4 (eval-tuning wave): the FITTED eval ===
+## Provenance (v8, SIZE-NORMALISED): ratio features (force-relative — the
+## ladder-v3 size collapse showed absolutes leave their trained range on
+## 1500/2000pt armies) fitted per-activation TD (LAM .7, sign priors) over
+## the FULL pooled fair corpus (1100 games incl. mixed sizes, 11575 rows).
+## Every controllable carries doctrine-signed weight as a fraction of the
+## own force. Prior (v5): per-activation TD (LAM 0.7, sign priors) over
+## eval_data_fair — the first weights learned from UNCONTAMINATED games
+## (NML-1002/1003 fixed, symmetric varied maps; 200 games, 2191 rows,
+## outcome-AUC 0.768 — fair games are honestly harder to predict). Every
+## controllable feature carries doctrine-signed weight (cover +/-, exposure -,
+## focus load -). Prior note (v4, per-activation TD): eval_fit TD pass over eval_data_v3
+## (300 games, 2826 PER-PICK rows, chained per side by seq; LAM=0.7,
+## doctrine sign priors). FIRST fit where the move-controllable features
+## carry real, correctly-signed weight: my_charge_exposed -0.29 std,
+## their_charge_exposed +0.26, cover_mine +0.07 — round-level labels never
+## could (credit too coarse). Outcome-AUC 0.891 (TD trades a little pure
+## prediction for controllability). Prior note (v2 RESTORED 10.08.): v3
+## (sign-constrained refit on
+## eval_data_v2) measured 40.0% vs v2's 43.0% — same-structure refits
+## oscillate within noise; v2 stays until a structure-level change (per-
+## activation TD) earns its A/B. Original v3 note follows for the record.
+## (v3, self-play round 3): SIGN-CONSTRAINED fit over eval_data_v2
+## (300 games of the v2 stack, 1188 rows, 19 logged features); holdout test
+## AUC 0.941. Doctrine signs enforced by projected gradient — under the
+## constraint the data pushed ALL four E5 controllable features to ~zero
+## (cover, charge exposure, focus load): observational outcomes carry no
+## causal-direction signal for them, exactly the predictor!=controller trap.
+## Their value needs consequence-aware training targets (TD) — next rung.
+## Re-fit = re-run the tool and replace this block; never hand-edit numbers.
+const FIT_W := {
+	"presence_mine/my_wounds": 0.878619, "presence_theirs/their_wounds": -0.866414,
+	"tail_mine/my_units": 0.009734, "tail_theirs/their_units": -0.019579,
+	"my_unactivated/my_units": 1.569704, "their_unactivated/their_units": -1.862250,
+	"my_incoming/my_wounds": -1.048846, "cover_mine/my_units": 0.285064,
+	"cover_theirs/their_units": -0.714390, "my_charge_exposed/my_units": -0.672654,
+	"their_charge_exposed/their_units": 0.227429, "obj_owned_mine": 0.483178,
+	"obj_owned_theirs": -0.459405, "round_frac": 0.838045,
+}
+const FIT_B := 0.144714
+## Research seam: the PREVIOUS weight set (v2, outcome-labels) selectable via
+## NML_FIT_WEIGHTS=v2 — both sets were tuned on CONTAMINATED games, the clean
+## ladder re-ranks them.
+const FIT_W_V2 := {
+	"my_unactivated": 0.708979, "obj_owned_mine": 0.327349,
+	"obj_owned_theirs": -0.290469, "presence_mine": 0.062309,
+	"presence_theirs": -0.041864, "round_frac": 0.763686,
+	"tail_mine": 0.134124, "tail_theirs": -0.336638,
+	"their_unactivated": -0.564309,
+}
+const FIT_B_V2 := -0.472502
+static var _wsel := ""   # lazy env cache
+
+
+static func _weights() -> Array:
+	if _wsel == "":
+		_wsel = "v2" if OS.get_environment("NML_FIT_WEIGHTS") == "v2" else "v4"
+	return [FIT_W_V2, FIT_B_V2] if _wsel == "v2" else [FIT_W, FIT_B]
+
+
+## Net v1 (evaluation offensive): a tiny fitted MLP replaces the linear
+## formula when NML_FIT_WEIGHTS=net and NML_NET_PATH points at the exported
+## weights JSON (eval_net.py). Cached once per process; tests inject via
+## _net_override. Falls back to the linear weights when absent/invalid.
+static var _net_override: Dictionary = {}
+static var _net_cache: Dictionary = {}
+static var _net_tried := false
+
+
+static func _net() -> Dictionary:
+	if not _net_override.is_empty():
+		return _net_override
+	if _net_tried:
+		return _net_cache
+	_net_tried = true
+	if OS.get_environment("NML_FIT_WEIGHTS") != "net":
+		return _net_cache
+	var path := OS.get_environment("NML_NET_PATH")
+	if path == "":
+		return _net_cache
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	if parsed is Dictionary \
+			and ((parsed as Dictionary).has("W1") or (parsed as Dictionary).has("w") \
+			or (parsed as Dictionary).has("unit_w1")):
+		if (parsed as Dictionary).has("unit_w1") \
+				and not _encoder_selftest_ok(parsed as Dictionary):
+			return _net_cache
+		_net_cache = parsed
+	return _net_cache
+
+
+## Forward pass: standardize the ratio inputs, one tanh layer, sigmoid out.
+## A JSON carrying "w" instead of "W1" is an EXACT linear model (the value-
+## distillation finding: the teacher's rollout values are near-linearly
+## recoverable — a linear student ships without any net arithmetic).
+static func _score_net(f: Dictionary, net: Dictionary) -> float:
+	var keys: Array = net["keys"]
+	var mu: Array = net["mu"]
+	var sd: Array = net["sd"]
+	if net.has("w"):
+		var wl: Array = net["w"]
+		var zl := float(net.get("b", 0.0))
+		for i in range(keys.size()):
+			zl += float(wl[i]) * (_feature_value(f, str(keys[i])) - float(mu[i])) / maxf(float(sd[i]), 1e-6)
+		return 1.0 / (1.0 + exp(-clampf(zl, -30.0, 30.0)))
+	var w1: Array = net["W1"]
+	var b1: Array = net["b1"]
+	var w2: Array = net["W2"]
+	var xs: Array = []
+	for i in range(keys.size()):
+		xs.append((_feature_value(f, str(keys[i])) - float(mu[i])) / maxf(float(sd[i]), 1e-6))
+	var z := float(net["b2"])
+	for j in range(w2.size()):
+		var a := float((b1 as Array)[j])
+		for i in range(xs.size()):
+			a += float(xs[i]) * float(((w1 as Array)[i] as Array)[j])
+		z += float(w2[j]) * tanh(a)
+	return 1.0 / (1.0 + exp(-clampf(z, -30.0, 30.0)))
+
+## Position ENCODER (tournament hook): a JSON carrying "unit_w1" scores from
+## the raw board rows (BattleSim.board_rows — the same canonical source the
+## training corpus logs), not the 30 features alone. Canonicalisation mirrors
+## netlab canon10 SCHEMA=21 EXACTLY: mine-flag perspective, 180-degree
+## rotation for player 2, /30-style norms, sparse rule pairs densified via
+## the slot mapping SHIPPED INSIDE the weights JSON. Weight matrices are
+## exported [in][out] (torch transposed).
+static func _score_encoder(state: Dictionary, player: int, f: Dictionary,
+		net: Dictionary) -> float:
+	var keys: Array = net["keys"]
+	var mu: Array = net["mu"]
+	var sd: Array = net["sd"]
+	var xs: Array = []
+	for i in range(keys.size()):
+		xs.append((_feature_value(f, str(keys[i])) - float(mu[i])) / maxf(float(sd[i]), 1e-6))
+	return _encoder_score_cached(BattleSim.board_rows(state), player, xs, net)
+
+
+## NML-1005 — unit-embedding cache: between two candidate evaluations only the
+## mover's (and a combat target's) rows change, so per-row embeddings are
+## memoised on the RAW row + side (the 94.5%-of-runtime part, measured).
+## Key salt: the cache belongs to ONE net object — any swap (test override,
+## reload) clears it via is_same identity. The selftest path stays UNCACHED
+## (_encoder_forward) on purpose: it is the ground truth the cache is
+## checked against.
+static var _emb_cache: Dictionary = {}
+static var _emb_net: Dictionary = {}
+
+
+static func _encoder_score_cached(rows: Array, side: int, xs: Array,
+		net: Dictionary) -> float:
+	if not is_same(_emb_net, net):
+		_emb_cache = {}
+		_emb_net = net
+	var slots: Dictionary = net["slots"]
+	var h: int = (net["unit_b1"] as Array).size()
+	var pools: Array = []
+	var counts := [0.0, 0.0, 0.0]
+	for pi in range(3):
+		var zero: Array = []
+		zero.resize(h)
+		zero.fill(0.0)
+		pools.append(zero)
+	for r0 in rows:
+		var u: Array = r0
+		var key := "%d|%s" % [side, str(u)]
+		var emb: Variant = _emb_cache.get(key)
+		if emb == null:
+			var crow: Array = _encoder_canon([u], side, slots)[0]
+			emb = _lin_relu(_lin_relu(crow,
+				net["unit_w1"] as Array, net["unit_b1"] as Array),
+				net["unit_w2"] as Array, net["unit_b2"] as Array)
+			if _emb_cache.size() >= 8192:
+				_emb_cache = {}
+			_emb_cache[key] = emb
+		var is_obj: bool = int(u[0]) == 3
+		var pi := 2 if is_obj else (0 if int(u[0]) == side else 1)
+		counts[pi] += 1.0
+		for j in range(h):
+			(pools[pi] as Array)[j] = float((pools[pi] as Array)[j]) + float((emb as Array)[j])
+	var parts: Array = []
+	for pi in range(3):
+		var cdiv: float = maxf(float(counts[pi]), 1.0)
+		for j in range(h):
+			parts.append(float((pools[pi] as Array)[j]) / cdiv)
+	for pi in range(3):
+		parts.append(float(counts[pi]) / 10.0)
+	parts.append_array(xs)
+	var a := _lin_relu(parts, net["head_w1"] as Array, net["head_b1"] as Array)
+	var hw2: Array = net["head_w2"]
+	var zz := float(net["head_b2"])
+	for j in range(hw2.size()):
+		zz += float(hw2[j]) * float(a[j])
+	return 1.0 / (1.0 + exp(-clampf(zz, -30.0, 30.0)))
+
+
+static func _encoder_canon(rows: Array, side: int, slots: Dictionary) -> Array:
+	var dense_n: int = slots.size()
+	var out: Array = []
+	for r0 in rows:
+		var u: Array = r0
+		var x := float(u[1])
+		var z := float(u[2])
+		if side == 2:
+			x = -x
+			z = -z
+		var row: Array = []
+		if int(u[0]) == 3:
+			var owner := int(u[3])
+			var rel := 1.0 if owner == side else (-1.0 if owner != 0 else 0.0)
+			row = [0.0, x / 30.0, z / 30.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, rel]
+			for i in range(12 + 2 * dense_n):
+				row.append(0.0)
+		else:
+			row = [1.0 if int(u[0]) == side else 0.0, x / 30.0, z / 30.0,
+				float(u[3]) / 10.0, float(u[4]) / 10.0,
+				float(u[5]), float(u[6]), float(u[7]), 0.0, 0.0,
+				float(u[8]) / 30.0, float(u[9]) / 20.0,
+				float(u[10]) / 6.0, float(u[11]) / 6.0,
+				float(u[12]) / 5.0, float(u[13]) / 5.0,
+				float(u[14]), float(u[15]), float(u[16]),
+				float(u[17]), float(u[18]), float(u[19])]
+			var dense: Array = []
+			dense.resize(2 * dense_n)
+			dense.fill(0.0)
+			for k in range(int(u[20])):
+				var di: Variant = slots.get(str(int(u[21 + 2 * k])))
+				if di != null:
+					dense[2 * int(di)] = 1.0
+					dense[2 * int(di) + 1] = float(u[22 + 2 * k]) / 6.0
+			row.append_array(dense)
+		out.append(row)
+	return out
+
+
+## One dense layer with relu, weights [in][out].
+static func _lin_relu(x: Array, w: Array, b: Array) -> Array:
+	var out: Array = []
+	for j in range(b.size()):
+		var acc := float(b[j])
+		for i in range(x.size()):
+			acc += float(x[i]) * float((w[i] as Array)[j])
+		out.append(maxf(acc, 0.0))
+	return out
+
+
+static func _encoder_forward(crows: Array, xs: Array, net: Dictionary) -> float:
+	var h: int = (net["unit_b1"] as Array).size()
+	var pools: Array = []
+	var counts := [0.0, 0.0, 0.0]
+	for pi in range(3):
+		var zero: Array = []
+		zero.resize(h)
+		zero.fill(0.0)
+		pools.append(zero)
+	for row in crows:
+		var emb := _lin_relu(_lin_relu(row as Array,
+			net["unit_w1"] as Array, net["unit_b1"] as Array),
+			net["unit_w2"] as Array, net["unit_b2"] as Array)
+		var is_obj: bool = float((row as Array)[8]) > 0.5
+		var pi := 2 if is_obj else (0 if float((row as Array)[0]) > 0.5 else 1)
+		counts[pi] += 1.0
+		for j in range(h):
+			(pools[pi] as Array)[j] = float((pools[pi] as Array)[j]) + float(emb[j])
+	var parts: Array = []
+	for pi in range(3):
+		var cdiv: float = maxf(float(counts[pi]), 1.0)
+		for j in range(h):
+			parts.append(float((pools[pi] as Array)[j]) / cdiv)
+	for pi in range(3):
+		parts.append(float(counts[pi]) / 10.0)
+	parts.append_array(xs)
+	var a := _lin_relu(parts, net["head_w1"] as Array, net["head_b1"] as Array)
+	var hw2: Array = net["head_w2"]
+	var zz := float(net["head_b2"])
+	for j in range(hw2.size()):
+		zz += float(hw2[j]) * float(a[j])
+	return 1.0 / (1.0 + exp(-clampf(zz, -30.0, 30.0)))
+
+
+## Loader gate: every encoder JSON MUST carry a selftest block
+## {board, side, features, expected} (exported from a real holdout row);
+## the forward is recomputed here and a |diff| > 1e-4 REJECTS the net —
+## a silently drifted canonicalisation must never score games.
+static func _encoder_selftest_ok(net: Dictionary) -> bool:
+	if not (net.get("selftest") is Dictionary):
+		push_error("encoder net rejected: selftest block missing")
+		return false
+	var st: Dictionary = net["selftest"]
+	var mu: Array = net["mu"]
+	var sd: Array = net["sd"]
+	var fv: Array = st["features"]
+	var xs: Array = []
+	for i in range(fv.size()):
+		xs.append((float(fv[i]) - float(mu[i])) / maxf(float(sd[i]), 1e-6))
+	var crows := _encoder_canon(st["board"] as Array, int(st["side"]),
+		net["slots"] as Dictionary)
+	var got := _encoder_forward(crows, xs, net)
+	if absf(got - float(st["expected"])) > 1e-4:
+		push_error("encoder net rejected: selftest %.6f != expected %.6f"
+			% [got, float(st["expected"])])
+		return false
+	return true
+
+
+## Routes every score() call through the fitted eval — set per planner pick by
+## the controller from the difficulty preset (planner_v1). Static on purpose:
+## the planner's whole static call tree (blend, policy, prefilter) switches
+## without threading a parameter. CAVEAT: process-global — two PLANNER presets
+## with different eval modes in ONE game would fight over it (the arena pairs
+## a planner side against a tree side, so this never binds today).
+static var fit_mode := false
+
+
+## `incoming` (danger term): my_unit_key -> expected reply wounds
+## (BattleSim.reply_threat); each mapped unit projects with that strength
+## already shot off. Empty map = pre-danger behaviour, byte-identical.
+const FIT_BLEND_DEFAULT := 0.5   # E4.2: fitted share; the hand eval keeps the move gradient
+
+## Measurement seam: NML_FIT_BLEND overrides the fitted share for sweep runs
+## (read once per process; the ladder without the env is byte-identical to
+## the committed default). Cache -1 = unread.
+static var _blend := -1.0
+
+static func fit_blend() -> float:
+	if _blend < 0.0:
+		var e := OS.get_environment("NML_FIT_BLEND")
+		_blend = clampf(float(e), 0.0, 1.0) if e != "" else FIT_BLEND_DEFAULT
+	return _blend
+
+
+static func score(state: Dictionary, player: int, incoming: Dictionary = {}) -> float:
+	if fit_mode:
+		# E4.2 blend: pure fit played WORSE than the hand eval (v1.1 A/B 37%
+		# vs 40.5%) — a strong outcome PREDICTOR was a weak move CONTROLLER
+		# (its dominant signals are not move-controllable). The blend keeps
+		# the hand eval's sensitivity to material/position and adds the
+		# fit's seat/tempo context (tail counts at the next-round view).
+		var fb := fit_blend()
+		return (1.0 - fb) * _score_hand(state, player, incoming) 			+ fb * _score_fit(state, player, incoming)
+	return _score_hand(state, player, incoming)
+
+
+static func _score_hand(state: Dictionary, player: int, incoming: Dictionary = {}) -> float:
+	var objectives: Array = state["objectives"]
+	if objectives.is_empty():
+		return 0.5
+	# NML-1010 W3b — destroy missions get their OWN currency. The generic
+	# control average gives camping a flat 0.5 (home marker ~1, enemy marker
+	# ~0) and every step away from home costs more than it earns abroad — the
+	# four-game probe drew 100% because of exactly this. Here the score is
+	# my grip on THEIR marker minus their grip on MINE, destroyed states
+	# locked at 1/0 — attacking is finally worth something.
+	var mm: Array = state.get("markers_meta", [])
+	if not mm.is_empty() and _is_destroy_mission(state):
+		var att := 0.0
+		var deff := 0.0
+		for i in range(mini(objectives.size(), mm.size())):
+			var meta: Dictionary = mm[i]
+			var ob := int(meta.get("owned_by", 0))
+			if ob == 0:
+				continue
+			if bool(meta.get("destroyed", false)):
+				if ob == player:
+					deff = 1.0
+				else:
+					att = 1.0
+				continue
+			var pctrl := _objective_p(state, objectives[i] as Dictionary, player, incoming)
+			if ob == player:
+				deff = 1.0 - pctrl
+			else:
+				att = pctrl
+		# Initiative doctrine: with mirrored forces, attack gain and home loss
+		# cancel exactly and the whole map scores a flat 0.5 — nobody moves
+		# (the four-draw probe). Weighting defence at 0.8 makes breaking the
+		# stalemate worth something while a lost home marker still hurts.
+		return clampf(0.5 + 0.5 * (att - DESTROY_DEFENCE_WEIGHT * deff), 0.0, 1.0)
+	var total := 0.0
+	for o in objectives:
+		total += _objective_p(state, o as Dictionary, player, incoming)
+	return total / objectives.size()
+
+
+const DESTROY_DEFENCE_WEIGHT := 0.8
+
+
+static func _is_destroy_mission(state: Dictionary) -> bool:
+	if str(state.get("scoring", "")) == "sabotage":
+		return true
+	return str((state.get("vp_flavour", {}) as Dictionary).get("mode", "")) == "demolition"
+
+
+static func _objective_p(state: Dictionary, obj: Dictionary, player: int,
+		incoming: Dictionary = {}) -> float:
+	var mine := 0.0
+	var theirs := 0.0
+	for key in state["units"]:
+		var su: Dictionary = state["units"][key]
+		var presence := _presence(state, su, obj["pos"] as Vector3,
+			float(incoming.get(str(key), 0.0)))
+		if int(su["player"]) == player:
+			mine += presence
+		else:
+			theirs += presence
+	if mine + theirs <= 0.0:
+		# Nobody can ever get there — ownership persists (seize_objectives rule).
+		var owner := int(obj.get("owner", 0))
+		return 0.5 if owner == 0 else (1.0 if owner == player else 0.0)
+	return mine / (mine + theirs)
+
+
+## E4: logistic P(win) over the raw features. A FINISHED round is scored as
+## the NEXT round's fresh start (flags cleared, round+1) — that is the
+## distribution the fit was trained on, and it restores the tail/seat signal
+## a spent round hides (rollout leaves are exactly round ends).
+static func _score_fit(state: Dictionary, player: int, incoming: Dictionary) -> float:
+	var view := state
+	if int(state["round"]) < int(state["rounds_total"]) and _all_activated(state):
+		view = BattleSim.clone_state(state)
+		view["round"] = int(view["round"]) + 1
+		for k in view["units"]:
+			(view["units"][k] as Dictionary)["activated"] = false
+	var f := features(view, player, incoming)
+	var net := _net()
+	if not net.is_empty():
+		if net.has("unit_w1"):
+			return _score_encoder(view, player, f, net)
+		return _score_net(f, net)
+	var wb := _weights()
+	var z := float(wb[1])
+	for k in wb[0]:
+		z += float((wb[0] as Dictionary)[k]) * _feature_value(f, str(k))
+	return 1.0 / (1.0 + exp(-clampf(z, -30.0, 30.0)))
+
+
+## E7/E8: a weight key may be a PRODUCT "a*b" or a RATIO "a/b" (size
+## normalisation — absolute sums break across 1000/1500/2000-point armies;
+## fractions of the own force do not). Denominator floors at 1.
+static func _feature_value(f: Dictionary, key: String) -> float:
+	if key.contains("*"):
+		var parts := key.split("*")
+		return float(f.get(parts[0], 0.0)) * float(f.get(parts[1], 0.0))
+	if key.contains("/"):
+		var parts := key.split("/")
+		return float(f.get(parts[0], 0.0)) / maxf(float(f.get(parts[1], 0.0)), 1.0)
+	return float(f.get(key, 0.0))
+
+
+static func _all_activated(state: Dictionary) -> bool:
+	for k in state["units"]:
+		var su: Dictionary = state["units"][k]
+		if int(su["alive"]) > 0 and not bool(su.get("activated", false)):
+			return false
+	return true
+
+
+## E1 (eval-tuning wave): the eval's RAW FEATURE VECTOR for a state, from
+## `player`'s perspective — the offline fit's input, logged per planner round
+## boundary by the arena. Flat name->float, all cheap, all explainable. The
+## tail_* counts are the material of the proven seat effect (who can still
+## act near a marker decides its seize); the eval itself cannot see them yet.
+## `rich` gates the feature-wave signals that cost real work (mirror
+## reply_threat + melee magnitudes): true at the two LOGGING sites (training
+## data), false in the eval hot path. A/B probes measured no regression from
+## the wave, but the gate keeps eval cost independent of future signal growth;
+## flip to live (with pair-EV memoisation) when the net eval needs them.
+static func features(state: Dictionary, player: int, incoming: Dictionary = {},
+		rich := false) -> Dictionary:
+	var f := {"round_frac": float(state["round"]) / maxf(float(state["rounds_total"]), 1.0),
+		"my_wounds": 0.0, "their_wounds": 0.0, "my_units": 0.0, "their_units": 0.0,
+		"my_unactivated": 0.0, "their_unactivated": 0.0, "my_incoming": 0.0,
+		"presence_mine": 0.0, "presence_theirs": 0.0, "tail_mine": 0.0, "tail_theirs": 0.0,
+		"obj_owned_mine": 0.0, "obj_owned_theirs": 0.0,
+		# E5 — move-CONTROLLABLE structure (the earlier fits were dominated by
+		# uncontrollable context; a controller needs gradients its move can move):
+		"cover_mine": 0.0, "cover_theirs": 0.0,
+		"my_charge_exposed": 0.0, "their_charge_exposed": 0.0,
+		"my_incoming_max": 0.0,
+		# Feature wave (net stage): raw signals a nonlinear eval will need —
+		# what is never logged can never be learned.
+		"their_incoming": 0.0,               # MY projected fire onto them (mirror)
+		"my_melee_in": 0.0, "their_melee_in": 0.0,   # expected charge damage, magnitude
+		"my_near_half": 0.0, "their_near_half": 0.0, # units close to the morale half-line
+		"my_shaken": 0.0, "their_shaken": 0.0,
+		"my_fatigued": 0.0, "their_fatigued": 0.0,
+		# Deploy state (reserves/ambushers still off-table): read from an optional
+		# state key the controller stamps; the rollout never changes it.
+		"my_reserve": float((state.get("reserves", {}) as Dictionary).get(player, 0)),
+		"their_reserve": float((state.get("reserves", {}) as Dictionary).get(3 - player, 0))}
+	for v in incoming.values():
+		f["my_incoming"] += float(v)
+		f["my_incoming_max"] = maxf(float(f["my_incoming_max"]), float(v))
+	if rich:
+		for v in BattleSim.reply_threat(state, 3 - player).values():
+			f["their_incoming"] += float(v)
+	for key in state["units"]:
+		var su: Dictionary = state["units"][key]
+		if int(su["alive"]) <= 0:
+			continue
+		var mine := int(su["player"]) == player
+		var wounds := 0.0
+		for w in su["wounds"]:
+			wounds += float(w)
+		f["my_wounds" if mine else "their_wounds"] += wounds
+		f["my_units" if mine else "their_units"] += 1.0
+		if not bool(su.get("activated", false)):
+			f["my_unactivated" if mine else "their_unactivated"] += 1.0
+		if bool(su.get("in_cover", false)):
+			f["cover_mine" if mine else "cover_theirs"] += 1.0
+		if bool(su.get("shaken", false)):
+			f["my_shaken" if mine else "their_shaken"] += 1.0
+		if bool(su.get("fatigued", false)):
+			f["my_fatigued" if mine else "their_fatigued"] += 1.0
+		# Morale proximity: a unit just ABOVE half strength flips to testing
+		# range with the next casualty wave — the eval should see the cliff.
+		var wounds_max := 0.0
+		for m in (su["unit"] as GameUnit).models:
+			wounds_max += float(m.wounds_max)
+		if wounds_max > 0.0 and wounds > wounds_max * 0.5 and wounds <= wounds_max * 0.7:
+			f["my_near_half" if mine else "their_near_half"] += 1.0
+		# Charge exposure: any hostile unit's nearest model within rush+contact
+		# of this unit's nearest model — the R8 safety geometry as a feature.
+		# Feature wave: additionally the MAGNITUDE (worst single charger's
+		# expected melee damage), because a grot mob and an ogre block are
+		# not the same threat.
+		var exposed := false
+		var worst_melee := 0.0
+		for ok in state["units"]:
+			var ou: Dictionary = state["units"][ok]
+			if int(ou["player"]) == int(su["player"]) or int(ou["alive"]) <= 0:
+				continue
+			var oreach := float(SoloController.move_bands_for_unit(ou["unit"], null).get("rush", 12)) 				+ BattleSim.CONTACT_IN
+			if BattleSim.dist_in(su["positions"], ou["positions"]) <= oreach:
+				exposed = true
+				if rich:
+					worst_melee = maxf(worst_melee, BattleSim.melee_threat(ou, su))
+				else:
+					break   # pre-wave behaviour: the binary flag is enough
+		if exposed:
+			f["my_charge_exposed" if mine else "their_charge_exposed"] += 1.0
+			f["my_melee_in" if mine else "their_melee_in"] += worst_melee
+		var rush := float(SoloController.move_bands_for_unit(su["unit"], null).get("rush", 12))
+		for o in state["objectives"]:
+			var d := INF
+			for p in su["positions"]:
+				d = minf(d, ((p as Vector3) - ((o as Dictionary)["pos"] as Vector3)).length())
+			d /= BattleSim.IN2M
+			f["presence_mine" if mine else "presence_theirs"] += _presence(state, su,
+				(o as Dictionary)["pos"] as Vector3, float(incoming.get(str(key), 0.0)))
+			if not bool(su.get("activated", false)) and not bool(su.get("shaken", false)) \
+					and d <= SoloController.OBJECTIVE_CONTROL_IN + rush:
+				f["tail_mine" if mine else "tail_theirs"] += 1.0
+	for o in state["objectives"]:
+		var owner := int((o as Dictionary).get("owner", 0))
+		if owner == player:
+			f["obj_owned_mine"] += 1.0
+		elif owner != 0:
+			f["obj_owned_theirs"] += 1.0
+	return f
+
+
+## Projected hold strength of ONE unit at ONE objective: its remaining wounds,
+## discounted per future activation it still needs to reach the control ring.
+## Dead units project nothing; a shaken unit pays one recovery activation
+## first (it can neither seize nor contest until it idles — same rule the
+## seize verdict applies today, read as a projection).
+static func _presence(state: Dictionary, su: Dictionary, obj_pos: Vector3,
+		threat := 0.0) -> float:
+	if int(su["alive"]) <= 0:
+		return 0.0
+	var d := INF
+	for p in su["positions"]:
+		d = minf(d, ((p as Vector3) - obj_pos).length())
+	d /= BattleSim.IN2M
+	var rush := float(SoloController.move_bands_for_unit(su["unit"], null).get("rush", 12))
+	var needed := 0
+	if d > SoloController.OBJECTIVE_CONTROL_IN:
+		needed = int(ceil((d - SoloController.OBJECTIVE_CONTROL_IN) / maxf(rush, 1.0)))
+	if bool(su.get("shaken", false)):
+		needed += 1
+	var moves_left: int = int(state["rounds_total"]) - int(state["round"]) \
+		+ (0 if bool(su.get("activated", false)) else 1)
+	if needed > moves_left:
+		return 0.0
+	var strength := 0.0
+	for w in su["wounds"]:
+		strength += float(w)
+	return maxf(strength - threat, 0.0) * pow(DISCOUNT, needed)
