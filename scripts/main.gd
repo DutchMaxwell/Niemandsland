@@ -2481,12 +2481,17 @@ func _solo_human_zone_is_neg_z() -> bool:
 ## pick now flips the DRAWN zones as well, so what the player sees and where the AI goes are one
 ## and the same thing. `swap` = the human takes the other zone; the AI always takes the leftover.
 func _solo_deploy_pick_side(swap: bool) -> void:
+	# #315: 'swap' is relative to the zones the table is DRAWING right now — the flip
+	# state survives into the next game of a session, so the absolute shortcut
+	# (swap == ai_neg_z) sent the player into the exact zone he clicked away from.
+	# One pure resolver owns the mapping for the AI edge AND the drawn colours.
+	var side: Dictionary = SoloController.deploy_side_resolve(_solo_human_zone_is_neg_z(), swap)
 	if terrain_overlay != null and terrain_overlay.has_method("set_deployment_colors_flipped"):
-		terrain_overlay.set_deployment_colors_flipped(swap)
+		terrain_overlay.set_deployment_colors_flipped(bool(side["flipped"]))
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.GENERAL,
-			"You take the %s zone — NACHTMAHR deploys in the other one" % ("far" if swap else "near"), true)
-	await _solo_deploy_begin_side(swap)
+			"You %s — NACHTMAHR deploys in the other one" % ("take the other zone" if swap else "keep your zone"), true)
+	await _solo_deploy_begin_side(bool(side["ai_neg_z"]))
 
 
 ## Build the zones from the chosen AI edge, queue the AI army (main + scout queues), set the
