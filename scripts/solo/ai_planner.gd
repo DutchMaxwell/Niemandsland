@@ -321,13 +321,34 @@ static func _blend_score(ends: Array, player: int) -> float:
 ## and opens the next round (GF v3.5.1 p.4); a tie opens with the lower slot
 ## (v0 approximation, deterministic). Mutates `cur` in place — it is the
 ## rollout's private clone chain, never a caller's state.
+## W-P1 round-cycle (coverage table 20.08.): everything the game refreshes at
+## a round start that the imagined rounds ran WITHOUT. Spell tokens refill
+## (game_unit.add_round_caster_points — Caster Group resets to bearer count,
+## plain casters accumulate to the cap) and Battleborn/Steadfast clears Shaken
+## for free (main.gd round-start pass; deterministic playout grants the 4+ —
+## binary state, and the idle-recovery path still serves everyone else).
+static func _round_start_refresh(su: Dictionary) -> void:
+	su["activated"] = false
+	su["fatigued"] = false
+	var gu: GameUnit = su["unit"]
+	if gu == null:
+		return
+	if gu.has_special_rule("Caster Group"):
+		su["casts"] = int(su["alive"])
+	elif int(gu.casts_per_round) > 0:
+		su["casts"] = mini(int(su.get("casts", 0)) + int(gu.casts_per_round),
+			GameUnit.CASTER_POINTS_CAP)
+	if bool(su.get("shaken", false)) and (RulesRegistry.unit_rule_active(gu, "Battleborn")
+			or RulesRegistry.unit_rule_active(gu, "Steadfast")):
+		su["shaken"] = false
+
+
 static func _cross_round(cur: Dictionary) -> int:
 	cur["round"] = int(cur["round"]) + 1
 	var counts := {}
 	for k in cur["units"]:
 		var su: Dictionary = cur["units"][k]
-		su["activated"] = false
-		su["fatigued"] = false
+		_round_start_refresh(su)
 		if int(su["alive"]) > 0:
 			counts[int(su["player"])] = int(counts.get(int(su["player"]), 0)) + 1
 	var players: Array = counts.keys()
@@ -1024,9 +1045,7 @@ static func full_playout(state0: Dictionary, action: Dictionary, player: int,
 	for r in range(round0 + 1, rounds_total + 1):
 		state["round"] = r
 		for k in state["units"]:
-			var su: Dictionary = state["units"][k]
-			su["activated"] = false
-			su["fatigued"] = false
+			_round_start_refresh(state["units"][k])
 		res = _playout_round_tail(state, opener, prng)
 		state = res["state"]
 		if int(res["last"]) != 0:
