@@ -1825,6 +1825,15 @@ func _act(unit: GameUnit) -> Dictionary:
 		if pl.has("goal"):
 			solver_used = true
 			solver_goal = pl["goal"]
+		# NML-1020 (parity-workflow bycatch): the hook just adopted a plan OVER the
+		# tree's Immobile/Artillery override — the book allows Hold ONLY (p.13 /
+		# solo p.57). Re-gate here: the shot survives, the move dies loudly.
+		if forces_hold(unit.get_special_rules()) and action != AiDecision.Action.HOLD:
+			action = AiDecision.Action.HOLD
+			do_shoot = shoot_range > 0
+			solver_used = false
+			action_why = "Immobile/Artillery hold-only (re-gated over the adopted plan)"
+			_rule_note(report, "%s: the adopted plan wanted to MOVE an Immobile/Artillery unit — re-gated to Hold (GF v3.5.1 p.13/p.57)" % unit.get_name(), true)
 		_rule_note(report, str(pl["why"]), false)
 	if not planner_used and (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) and _position_solver_active():
 		var sol := _solve_position(unit, target_unit, weapons, archetype, advance, rush, obj_pos, has_obj, int(dec["toward"]), do_shoot)

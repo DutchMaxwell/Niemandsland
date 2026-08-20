@@ -629,6 +629,10 @@ static func candidates(state: Dictionary, key: String) -> Array:
 	var shoot := _best_shoot(state, key)
 	if shoot != "":
 		out.append({"unit": key, "kind": AiDecision.Action.HOLD, "shoot": shoot})
+	# NML-1020 lab half: Immobile/Artillery may only Hold (p.13/p.57) — the menu
+	# for carriers ends here, so no playout can ever imagine them moving.
+	if SoloController.forces_hold((su["unit"] as GameUnit).get_special_rules()):
+		return out
 	for o in state["objectives"]:
 		out.append({"unit": key, "kind": AiDecision.Action.RUSH,
 			"dest": (o as Dictionary)["pos"]})
@@ -664,6 +668,10 @@ static func candidates(state: Dictionary, key: String) -> Array:
 static func candidates_wide(state: Dictionary, key: String) -> Array:
 	var out := candidates(state, key)
 	var su: Dictionary = state["units"][key]
+	# NML-1020 lab half: the base menu is already hold-only for Immobile/
+	# Artillery — the wide builder must not append moves back.
+	if SoloController.forces_hold((su["unit"] as GameUnit).get_special_rules()):
+		return out
 	var seen_shoot := {}
 	var seen_charge := {}
 	for c in out:
