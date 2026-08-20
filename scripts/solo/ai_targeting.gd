@@ -115,7 +115,12 @@ static func _key(c: Dictionary, overlay: int) -> Array:
 			return [float(cls), rt] + base   # single-Tough, then Tough (lowest remaining), then the rest
 		Overlay.TAKEDOWN:
 			var tier := 0 if bool(c.get("is_hero", false)) else (1 if bool(c.get("has_upgrade", false)) else 2)
-			return [float(tier), -float(c.get("upgrade_cost", 0))] + base   # heroes, then costed upgrades
+			# #317: behind the book's hero/upgrade tiers, a sniper hunts KILLABLE
+			# targets — softest armour first (higher Defense number = worse save),
+			# then the smaller remaining wound pool. Without this the tier-2 field
+			# degenerated to bare nearest and a Tough(15)/2+ tank soaked the shot.
+			return [float(tier), -float(c.get("upgrade_cost", 0)),
+				-float(c.get("defense", 4)), float(c.get("remaining_tough", 1))] + base
 		Overlay.BLAST:
 			return [-float(c.get("blast_pref", 0))] + base   # fullest unit first, capped at X (#339)
 		_:
