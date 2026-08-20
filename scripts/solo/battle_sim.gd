@@ -434,7 +434,7 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 	var su: Dictionary = next["units"][action["unit"]]
 	var was_shaken := bool(su.get("shaken", false))
 	var kind: int = int(action.get("kind", AiDecision.Action.HOLD))
-	var bands := SoloController.move_bands_for_unit(su["unit"], null)
+	var bands := SoloController.sim_move_bands(su["unit"])
 	var band_in := 0.0
 	if kind == AiDecision.Action.ADVANCE:
 		band_in = float(bands.get("advance", 6))

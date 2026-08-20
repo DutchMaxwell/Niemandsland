@@ -4685,6 +4685,19 @@ static func shooting_range_bonus(unit: GameUnit) -> int:
 ## Musician move-action bonus (inches) for a unit (wave 5, system-scoped): +1" on move actions when the
 ## unit carries Musician AND its book fields the rule (RulesRegistry gate — the GFF/AoFS picked-units
 ## variant still grants the bearer's own move; the pick facet is manual). 0.0 otherwise.
+## W-P1 parity (coverage table 20.08.): THE band truth for the LAB. The game
+## applies the Musician +1" inside _act() on top of move_bands_for_unit — the
+## seven sim sites read the raw bands and were 1" short for carriers. One
+## wrapper, one future seam for further band-affecting rules.
+static func sim_move_bands(unit: GameUnit) -> Dictionary:
+	var bands: Dictionary = move_bands_for_unit(unit, null).duplicate()
+	var bonus := musician_move_bonus_in(unit)
+	if bonus > 0.0:
+		bands["advance"] = float(bands.get("advance", 6)) + bonus
+		bands["rush"] = float(bands.get("rush", 12)) + bonus
+	return bands
+
+
 static func musician_move_bonus_in(unit: GameUnit) -> float:
 	if unit == null or not RulesRegistry.unit_rule_active(unit, "Musician"):
 		return 0.0

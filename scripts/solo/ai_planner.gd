@@ -417,7 +417,7 @@ static func _safe_advance(state: Dictionary, key: String) -> Dictionary:
 	if best_d == INF or best_d < 0.001:
 		return {}
 	var dir := (goal - centre).normalized()
-	var band_m := float(SoloController.move_bands_for_unit(su["unit"], null).get("advance", 6)) \
+	var band_m := float(SoloController.sim_move_bands(su["unit"]).get("advance", 6)) \
 		* BattleSim.IN2M
 	# Two safety tiers: (1) outside EVERYTHING (range + advance, or rush) —
 	# rarely available on a 72x48 board where front lines start ~24" apart;
@@ -437,7 +437,7 @@ static func _safe_advance(state: Dictionary, key: String) -> Dictionary:
 		var w: Array = []
 		if u.source_type == "opr" and u.source_data is OPRApiClient.OPRUnit:
 			w = (u.source_data as OPRApiClient.OPRUnit).weapons
-		var bands := SoloController.move_bands_for_unit(u, null)
+		var bands := SoloController.sim_move_bands(u)
 		var charge_in := float(bands.get("rush", 12)) + BattleSim.CONTACT_IN
 		full.append({"positions": eu["positions"], "reach": maxf(
 			float(AiArchetype.max_range_inches(w)) + float(bands.get("advance", 6)),
@@ -868,7 +868,7 @@ static func _second_wave(state: Dictionary, key: String) -> Dictionary:
 				why = "idle reserve moves up"
 	if goal == Vector3.INF:
 		return {}
-	var rush_in := float(SoloController.move_bands_for_unit(su["unit"], null).get("rush", 12))
+	var rush_in := float(SoloController.sim_move_bands(su["unit"]).get("rush", 12))
 	var dist_in := (goal - centre).length() / BattleSim.IN2M
 	if dist_in <= 0.001:
 		return {}
