@@ -482,6 +482,9 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			if int(tu["alive"]) > 0:   # survivors strike back, already survivor-scaled
 				_apply_expected_wounds(su, AiEv.melee_ev(_profiles_of(tu, true),
 					_ctx_of(tu, true), _ctx_of(su), false))
+				# W-P1 parity (p.9): striking back fatigues the DEFENDER too — the
+				# game stamps both sides, the sim only ever stamped the charger.
+				tu["fatigued"] = true
 			_expected_melee_morale(su, su_before, tu, tu_before)
 	# Shaken recovery (p.10): the idle activation clears Shaken — the recovery
 	# hold plan()/the rollout policy hand a shaken unit buys next round back.
@@ -539,8 +542,10 @@ static func dist_in(a: Array, b: Array) -> float:
 static func _ctx_of(su: Dictionary, melee := false) -> Dictionary:
 	var ctx := AiEv.ctx_for(su["unit"], bool(su.get("in_cover", false)))
 	ctx["models"] = int(su["alive"])
+	# W-P1 parity: the flag rides the ctx — profile_ev hard-sets the natural-6
+	# target itself (the old quality=6 approximation still let modifiers move it).
 	if melee and bool(su.get("fatigued", false)):
-		ctx["quality"] = 6
+		ctx["fatigued"] = true
 	return ctx
 
 
@@ -554,11 +559,33 @@ static func _profiles_of(su: Dictionary, melee: bool, d := 0.0) -> Array:
 		weapons = (u.source_data as OPRApiClient.OPRUnit).weapons
 	var profiles: Array = AiShooting.melee_profiles(weapons) if melee \
 		else AiShooting.profiles_in_range(weapons, d)
+	# W-P1 parity: UNIT-level striker rules reach the dice in the game
+	# (main.gd:6396/6852/6880 weapon-OR-unit fallback) but the profile flags
+	# only ever read the weapon. Same DOOR as the game: prefix scan of the
+	# unit's special_rules (the registry gate would demand faction data the
+	# game's own fallback never asks for).
+	var u_bane := false
+	var u_rending := false
+	var u_unstop := false
+	for r in u.get_special_rules():
+		var rs := str(r).strip_edges()
+		if rs.begins_with("Bane") or rs.begins_with("Lacerate"):
+			u_bane = true
+		elif rs.begins_with("Rending"):
+			u_rending = true
+		elif rs.begins_with("Unstoppable") and not rs.contains(" in ") and not rs.contains(" when "):
+			u_unstop = true
 	var out: Array = []
 	for p in AiEv.stamp_sergeant(profiles, u):
 		var q := (p as Dictionary).duplicate()
 		q["attacks"] = SoloController.effective_attacks(int(q.get("attacks", 0)),
 			int(su["alive"]), u.models.size())
+		if u_bane:
+			q["bane"] = true
+		if u_rending:
+			q["rending"] = true
+		if u_unstop:
+			q["unstoppable"] = true
 		out.append(q)
 	return out
 

@@ -332,10 +332,16 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	# — To-hit target: the same composition as _solo_melee_strike_phase / the shooting volleys —
 	var target: int
 	if melee:
-		target = AiCombatMath.thrust_to_hit(quality, charging and bool(profile.get("thrust", false)))
-		target = AiCombatMath.modified_hit_target(target,
-			AiCombatMath.melee_hit_modifier(bool(def_ctx.get("evasive", false)),
-				bool(def_ctx.get("melee_evasion", false))) + spell_mod)
+		if bool(att.get("fatigued", false)):
+			# Fatigue (p.9, W-P1 parity): hits ONLY on unmodified 6 — a hard target
+			# outside the modifier pipeline (the old quality=6 approximation still
+			# let modifiers move it, which the dice never do).
+			target = 6
+		else:
+			target = AiCombatMath.thrust_to_hit(quality, charging and bool(profile.get("thrust", false)))
+			target = AiCombatMath.modified_hit_target(target,
+				AiCombatMath.melee_hit_modifier(bool(def_ctx.get("evasive", false)),
+					bool(def_ctx.get("melee_evasion", false))) + spell_mod)
 	else:
 		target = AiCombatMath.reliable_quality(quality, bool(profile.get("reliable", false)))
 		target = AiCombatMath.modified_hit_target(target, AiCombatMath.shooting_hit_modifier(dist_in,
@@ -410,9 +416,11 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	#   +hits/6, NOT Deadly-multiplied (mirrors the dice path's save-step reading) —
 	if bool(profile.get("shred", false)):
 		unsaved += hits * SIX_P
-	# — Regeneration family (5+ Regeneration / 6+ Self-Repair ignores; only Bane/Rending bypass it — the
-	#   _solo_ignores_regen rule. Destructive does NOT bypass, so its wounds are reduced here too) —
-	if bool(def_ctx.get("regeneration", false)) and not (bane or bool(profile.get("rending", false))):
+	# — Regeneration family (5+ Regeneration / 6+ Self-Repair ignores; Bane/Rending/UNSTOPPABLE bypass
+	#   it — main.gd:6772/6852, W-P1 parity fix: the unstoppable flag was parsed but never read here.
+	#   Destructive does NOT bypass, so its wounds are reduced here too) —
+	if bool(def_ctx.get("regeneration", false)) and not (bane or bool(profile.get("rending", false)) \
+			or bool(profile.get("unstoppable", false))):
 		unsaved *= 1.0 - AiCombatMath.success_chance(int(def_ctx.get("regen_target", REGENERATION_TARGET)))
 	return unsaved
 
