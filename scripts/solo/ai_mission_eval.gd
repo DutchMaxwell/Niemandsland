@@ -542,7 +542,7 @@ static func features(state: Dictionary, player: int, incoming: Dictionary = {},
 			var ou: Dictionary = state["units"][ok]
 			if int(ou["player"]) == int(su["player"]) or int(ou["alive"]) <= 0:
 				continue
-			var oreach := float(SoloController.move_bands_for_unit(ou["unit"], null).get("rush", 12)) 				+ BattleSim.CONTACT_IN
+			var oreach := float(SoloController.sim_move_bands(ou["unit"]).get("rush", 12)) 				+ BattleSim.CONTACT_IN
 			if BattleSim.dist_in(su["positions"], ou["positions"]) <= oreach:
 				exposed = true
 				if rich:
@@ -552,7 +552,7 @@ static func features(state: Dictionary, player: int, incoming: Dictionary = {},
 		if exposed:
 			f["my_charge_exposed" if mine else "their_charge_exposed"] += 1.0
 			f["my_melee_in" if mine else "their_melee_in"] += worst_melee
-		var rush := float(SoloController.move_bands_for_unit(su["unit"], null).get("rush", 12))
+		var rush := float(SoloController.sim_move_bands(su["unit"]).get("rush", 12))
 		for o in state["objectives"]:
 			var d := INF
 			for p in su["positions"]:
@@ -585,7 +585,7 @@ static func _presence(state: Dictionary, su: Dictionary, obj_pos: Vector3,
 	for p in su["positions"]:
 		d = minf(d, ((p as Vector3) - obj_pos).length())
 	d /= BattleSim.IN2M
-	var rush := float(SoloController.move_bands_for_unit(su["unit"], null).get("rush", 12))
+	var rush := float(SoloController.sim_move_bands(su["unit"]).get("rush", 12))
 	var needed := 0
 	if d > SoloController.OBJECTIVE_CONTROL_IN:
 		needed = int(ceil((d - SoloController.OBJECTIVE_CONTROL_IN) / maxf(rush, 1.0)))
