@@ -3225,3 +3225,60 @@ func test_reinforcement_shape_centres_the_row_and_spaces_by_radius_plus_gap() ->
 			.is_equal_approx(expected_gap, 1e-9)
 	for i in shape.size():
 		assert_float(float((shape[i] as Dictionary)["r"])).is_equal_approx(float(radii[i]), 1e-9)
+
+
+func test_bearer_scaled_attacks_gates_the_ai_volley() -> void:
+	# NML-1025 (body campaign): the AI volley fired dead bearers' weapons — the
+	# X2/B15 bearer gate existed only on the human path. The shared helper must
+	# kill a dead specialist's shot, keep ratio scaling for base weapons, and
+	# fall back to the ratio when a unit has no per-model loadout data.
+	var u := _unit(1, [Vector3.ZERO, Vector3(0.1, 0, 0), Vector3(0.2, 0, 0)])
+	EquipmentDistributor.distribute(u, [
+		{"name": "Rifle", "attacks": 1, "count": 3, "specialRules": []},
+		{"name": "Fusion Gun", "attacks": 2, "count": 1, "specialRules": []},
+	], [])
+	u.models[0].is_alive = false   # the fusion bearer dies (limited items fill from model 0)
+	assert_int(SoloController.bearer_scaled_attacks(u,
+		{"name": "Fusion Gun", "attacks": 2, "count": 1}, 2, 3)).is_equal(0)
+	assert_int(SoloController.bearer_scaled_attacks(u,
+		{"name": "Rifle", "attacks": 3, "count": 3}, 2, 3)) \
+		.is_equal(SoloController.effective_attacks(3, 2, 3))
+	var bare := _unit(1, [Vector3.ZERO, Vector3(0.1, 0, 0)])
+	assert_int(SoloController.bearer_scaled_attacks(bare,
+		{"name": "Gun", "attacks": 4, "count": 1}, 1, 2)) \
+		.is_equal(SoloController.effective_attacks(4, 1, 2))
+
+
+func test_charge_illegal_why_names_rule_violations() -> void:
+	# NML-1026 (body campaign F2): adopted plans carried charges the tree's own
+	# gates refused. ONE legality source: rules gate hard (band incl. shrouding,
+	# aircraft, difficult cap); EV preferences (futility, toll) stay brain-side.
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	var u := _unit(1, [Vector3.ZERO])
+	u.unit_id = "u"; army.game_units["u"] = u
+	var near := _unit(2, [Vector3(0.20, 0, 0)])   # ~7.9" gap: inside a 12" band
+	near.unit_id = "near"; army.game_units["near"] = near
+	var far := _unit(2, [Vector3(1.0, 0, 0)])     # ~39" gap: beyond any band
+	far.unit_id = "far"; army.game_units["far"] = far
+	var plane := _unit(2, [Vector3(0.20, 0, 0.05)])
+	plane.unit_id = "plane"; plane.unit_properties["special_rules"] = ["Aircraft"]
+	army.game_units["plane"] = plane
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	assert_str(solo.charge_illegal_why(u, near, 12.0)).is_equal("")
+	assert_str(solo.charge_illegal_why(u, far, 12.0)).contains("band")
+	assert_str(solo.charge_illegal_why(u, plane, 12.0)).contains("ircraft")
+
+
+func test_rescue_should_fire_covers_the_dead_zone() -> void:
+	# NML-1027 (body campaign F3): a committed distant-goal rush that lost 60%
+	# of its budget to the gate must retry (old rule slept between 25% and
+	# 100%); short-goal moves and healthy deliveries stay untouched.
+	var m := 0.0254
+	assert_bool(SoloController.rescue_should_fire(2.4 * m, 6.0 * m, true, true, 15.0, 6.0)).is_true()
+	assert_bool(SoloController.rescue_should_fire(1.0 * m, 6.0 * m, true, true, 3.0, 6.0)).is_true()
+	assert_bool(SoloController.rescue_should_fire(5.9 * m, 6.0 * m, true, true, 15.0, 6.0)).is_false()
+	assert_bool(SoloController.rescue_should_fire(4.0 * m, 6.0 * m, true, true, 3.0, 6.0)).is_false()
+	assert_bool(SoloController.rescue_should_fire(4.0 * m, 6.0 * m, false, true, 3.0, 6.0)).is_true()
+	assert_bool(SoloController.rescue_should_fire(0.0, 0.0, true, true, 15.0, 6.0)).is_false()
