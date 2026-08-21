@@ -152,3 +152,24 @@ func test_board_rows_carry_the_game_state_row() -> void:
 			gs2 = r
 	assert_bool(gs2.is_empty()).is_false()
 	assert_int(int(gs2[5])).is_equal(0)   # scoring_code: end
+
+
+func test_capture_marks_reserve_units_dormant() -> void:
+	# Arrivals wave S1: a unit still on the tray (ambush_reserve) must enter the
+	# snapshot DORMANT — zero table presence (alive=0, no positions, so every
+	# existing dead-unit guard excludes it from eligibility/targeting/scoring)
+	# while its strength survives in dormant_* for the later arrival step.
+	var amb := _unit(2, [Vector3(30.0 * IN2M, 0, 0)], "Ambushers")
+	amb.unit_properties["ambush_reserve"] = true   # tray node position must NOT leak
+	var tank := _unit(1, [Vector3.ZERO], "Tank")
+	var state := BattleSim.capture(_army([amb, tank]),
+		func() -> Array: return [], func(_i: int) -> int: return 0, 1, 4)
+	var a: Dictionary = state["units"]["Ambushers"]
+	assert_bool(a.get("dormant", false)).is_true()
+	assert_int(a["alive"]).is_equal(0)
+	assert_array(a["positions"]).is_empty()
+	assert_int(a["dormant_models"]).is_equal(1)
+	assert_int(a["earliest_arrival_round"]).is_equal(2)
+	var t: Dictionary = state["units"]["Tank"]
+	assert_bool(t.get("dormant", false)).is_false()
+	assert_int(t["alive"]).is_equal(1)
