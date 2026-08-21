@@ -405,6 +405,17 @@ static func label_shoot_for(action: int, victim: String, do_shoot: bool) -> Stri
 	return victim
 
 
+## NML-1030 (body campaign F5): the honesty alarm. Env-gated contract probe —
+## delivered-vs-decided breaks scream instead of hiding for months. Live games
+## log loudly; the trainings harness may later promote this to an abort.
+static var _honesty_env := -1
+static func honesty_alarm(tag: String, detail: String) -> void:
+	if _honesty_env == -1:
+		_honesty_env = 1 if OS.get_environment("NML_HONESTY_ASSERT") == "1" else 0
+	if _honesty_env == 1:
+		printerr("[HONESTY] %s — %s" % [tag, detail])
+
+
 ## NML-1025 (body campaign F1): ONE attack-scaling truth for every volley
 ## path. A dead bearer's weapon dies with it — special weapons (fewer copies
 ## than models) fire per-copy attacks x LIVING bearers (capped by the sighted
@@ -416,6 +427,9 @@ static func bearer_scaled_attacks(member: GameUnit, profile: Dictionary,
 	if copies < max_models:
 		var bearers: int = alive_bearers_of(member, str(profile.get("name", "")))
 		if bearers >= 0:
+			if bearers == 0:
+				honesty_alarm("dead-weapon volley", "%s tried to fire '%s' with zero living bearers" % [
+					member.get_name(), str(profile.get("name", ""))])
 			var per_copy: int = maxi(int(profile.get("attacks", 0)) / copies, 0)
 			return per_copy * mini(bearers, sighted)
 	return effective_attacks(int(profile.get("attacks", 0)), sighted, max_models)
@@ -1892,6 +1906,8 @@ func _act(unit: GameUnit) -> Dictionary:
 			if charge_deny != "":
 				action = AiDecision.Action.RUSH
 				action_why = "adopted charge re-gated (%s) — rushing instead" % charge_deny
+				honesty_alarm("illegal charge adopted", "%s -> %s: %s" % [
+					unit.get_name(), target_unit.get_name(), charge_deny])
 				_rule_note(report, "%s: the adopted plan declared an illegal charge on %s (%s) — re-gated to Rush (GF v3.5.1 p.9/p.11)" % [
 					unit.get_name(), target_unit.get_name(), charge_deny], true)
 		_rule_note(report, str(pl["why"]), false)
@@ -4411,6 +4427,13 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	for k in _move_extra:
 		move_data[k] = _move_extra[k]
 	_move_extra = {}
+	# F5 probe: a committed distant-goal move that delivered under half its
+	# budget must have a documented gate reason — silence here is the disease.
+	if float(move_data["goal_gap_in"]) > reach \
+			and achieved_arc_m / INCHES_TO_METERS < reach * 0.5:
+		honesty_alarm("move shortfall", "%s delivered %.1f\" of %.1f\" toward a %.1f\"-away goal (%s)" % [
+			unit.get_name(), achieved_arc_m / INCHES_TO_METERS, reach,
+			float(move_data["goal_gap_in"]), why])
 	if band_clamp_models > 0:
 		# NML-230 (rules-must-log): the placement gate's physical correction hit the band-slack cap
 		# this move — ONE line, only when the clamp actually bit; residual overlap/coherency debt (if
