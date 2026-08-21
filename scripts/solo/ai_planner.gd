@@ -247,6 +247,21 @@ static var _last_leaf_state: Dictionary = {}
 ## the horizon (index 0 = end of the current round, last = horizon end) — the
 ## caller prices each boundary and blends. The boundary snapshot is taken
 ## BEFORE _cross_round mutates the walker, so every entry is a true round-end.
+static var _tail_cap_env := {}   # SPEED L2 (NML-1024): lazy per-slot cache
+
+## SPEED L2: cap on simulated activations per rollout. 0/absent = OFF —
+## byte-identical to the uncapped path. Per-seat override so the SAME net can
+## play capped vs uncapped against itself (improvement-operator A/B pattern);
+## the truncated state simply becomes the last boundary the blend prices.
+static func _tail_cap_for(me: int) -> int:
+	if not _tail_cap_env.has(me):
+		var e := OS.get_environment("NML_PLAYOUT_TAIL_CAP_P%d" % me)
+		if e == "":
+			e = OS.get_environment("NML_PLAYOUT_TAIL_CAP")
+		_tail_cap_env[me] = maxi(int(e), 0) if e != "" else 0
+	return int(_tail_cap_env[me])
+
+
 static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: int,
 		horizon_rounds: int = -1) -> Array:
 	if horizon_rounds <= 0:
@@ -256,8 +271,14 @@ static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: 
 	var turn := _other_player(state, me)
 	var rounds_left := maxi(horizon_rounds, 1)
 	var guard: int = ((state["units"] as Dictionary).size() + 2) * rounds_left
+	var tail_cap := _tail_cap_for(me)
+	var steps := 0
 	while guard > 0:
 		guard -= 1
+		if tail_cap > 0 and steps >= tail_cap:
+			out.append(cur)   # truncated: the blend prices this state as-is
+			return out
+		steps += 1
 		var a := _policy_step(cur, turn, turn == me)   # R9: own side steps danger-aware
 		if a.is_empty():
 			turn = _other_player(cur, turn)
