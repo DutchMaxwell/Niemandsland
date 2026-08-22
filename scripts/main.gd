@@ -11024,12 +11024,14 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_L and not event.ctrl_pressed:
 			object_manager.toggle_lock_selected()
 			get_viewport().set_input_as_handled()
-		# Toggle 45° arc quadrants on the SELECTED regiment tray(s) only (F key) -
-		# facing display aid (AoF:R v3.5.1 p.5, no rule). Showing only the selection
-		# keeps the table uncluttered (was: toggle every regiment at once).
+		# Toggle 45° arc quadrants (F key) - facing display aid (AoF:R v3.5.1 p.5,
+		# no rule). Selected regiment tray(s) toggle alone (keeps the table
+		# uncluttered); with no tray selected F must toggle ALL regiments, never
+		# no-op (NML-1033).
 		elif event.keycode == KEY_F and not event.ctrl_pressed and not event.shift_pressed:
 			if opr_army_manager:
-				opr_army_manager.toggle_selected_regiment_arcs(object_manager.get_selected_objects())
+				if opr_army_manager.toggle_selected_regiment_arcs(object_manager.get_selected_objects()) == -1:
+					opr_army_manager.toggle_all_regiment_arcs()
 			get_viewport().set_input_as_handled()
 		# Cycle regiment frontage (Shift+F) - reform to the next width in the cycle
 		# (5 -> 4 -> 3 -> 2 -> 1 -> 5). AoF:R v3.5.1 p.6 "Unit Formations". Only
