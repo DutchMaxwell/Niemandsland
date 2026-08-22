@@ -3296,3 +3296,33 @@ func test_rescue_should_fire_covers_the_dead_zone() -> void:
 	assert_bool(SoloController.rescue_should_fire(4.0 * m, 6.0 * m, true, true, 3.0, 6.0)).is_false()
 	assert_bool(SoloController.rescue_should_fire(4.0 * m, 6.0 * m, false, true, 3.0, 6.0)).is_true()
 	assert_bool(SoloController.rescue_should_fire(0.0, 0.0, true, true, 15.0, 6.0)).is_false()
+
+
+## NML-1041 (match 22.08.): the commander role must follow the SURVIVING chain — a
+## squad whose every gunner died is no ranged line. The printed loadout said "hold
+## fire" and the lone joined sword hero guarded corpses for two rounds.
+func test_commander_role_rederives_from_the_surviving_chain() -> void:
+	var u := _unit(2, [Vector3.ZERO, Vector3(0.025, 0, 0), Vector3(0.05, 0, 0)])
+	var opr := OPRApiClient.OPRUnit.new()
+	var rifle := OPRApiClient.OPRWeapon.new()
+	rifle.name = "Rifle"
+	rifle.range_value = 24
+	rifle.attacks = 3
+	rifle.count = 2
+	var ccw := OPRApiClient.OPRWeapon.new()
+	ccw.name = "CCW"
+	ccw.range_value = 0
+	ccw.attacks = 1
+	ccw.count = 3
+	opr.weapons = [rifle, ccw]
+	u.source_type = "opr"
+	u.source_data = opr
+	u.models[0].properties["weapons"] = [{"name": "Rifle"}, {"name": "CCW"}]
+	u.models[1].properties["weapons"] = [{"name": "Rifle"}, {"name": "CCW"}]
+	u.models[2].properties["weapons"] = [{"name": "CCW"}]
+	var solo: SoloController = auto_free(SoloController.new())
+	assert_int(solo._commander_role(u)).is_equal(SoloController.CmdRole.RANGED_LINE)
+	u.models[0].is_alive = false
+	u.models[1].is_alive = false
+	# both Rifle bearers dead: the survivor is a melee body — the role flips
+	assert_int(solo._commander_role(u)).is_equal(SoloController.CmdRole.CLOSE_AND_FIGHT)

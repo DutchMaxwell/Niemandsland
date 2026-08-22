@@ -2520,14 +2520,48 @@ func _commander_role(unit: GameUnit) -> int:
 		return CmdRole.AIRCRAFT
 	if _unit_has_caster(unit):
 		return CmdRole.CASTER
-	var weapons := _unit_weapons(unit)
+	# NML-1041 (match 22.08.): the role reads the SURVIVING chain, not the printed
+	# loadout — a squad whose every gunner had died kept "ranged line / hold_fire",
+	# and its lone joined sword hero stood watch over corpses for two rounds. A
+	# weapon with zero living bearers does not exist for classification; an empty
+	# host defers to its living attached heroes.
+	var weapons := _living_chain_weapons(unit)
 	if AiShooting.profiles_in_range(weapons, 0.0).is_empty():
-		return CmdRole.CLOSE_AND_FIGHT   # no ranged weapon at all → pure melee
-	if AiEv.classify(weapons, AiEv.ctx_for(unit, false, 0)) == AiArchetype.Type.MELEE:
+		return CmdRole.CLOSE_AND_FIGHT   # no LIVING ranged weapon → pure melee
+	var ctx_unit := unit
+	if unit.get_alive_count() <= 0 and unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h is GameUnit and (h as GameUnit).get_alive_count() > 0:
+				ctx_unit = h
+				break
+	if AiEv.classify(weapons, AiEv.ctx_for(ctx_unit, false, 0)) == AiArchetype.Type.MELEE:
 		return CmdRole.CLOSE_AND_FIGHT
 	if unit.has_special_rule("Fast"):
 		return CmdRole.FLANK
 	return CmdRole.RANGED_LINE
+
+
+## NML-1041: every chain member's weapons whose bearers still breathe. alive_bearers_of
+## returns -1 for missing per-model loadout data — the weapon stays (missing data proves
+## nothing, the volley scaler's discipline); 0 = affirmatively dead → dropped. Members
+## with no living body contribute nothing.
+func _living_chain_weapons(unit: GameUnit) -> Array:
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	var out: Array = []
+	for mem in members:
+		var gm := mem as GameUnit
+		if gm == null or gm.get_alive_count() <= 0:
+			continue
+		for w in _unit_weapons(gm):
+			var ow := w as OPRApiClient.OPRWeapon
+			if ow == null:
+				continue
+			if alive_bearers_of(gm, ow.name) == 0:
+				continue
+			out.append(ow)
+	return out
 
 
 ## The persistent close-and-fight standing order: keep the SAME enemy the unit was closing on (Killzone
