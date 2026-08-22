@@ -7288,12 +7288,27 @@ static func casualty_order(unit: GameUnit) -> Array:
 	if n > 0:
 		cx /= float(n)
 		cz /= float(n)
+	# NML-1034 (match 22.08.): value by weapon COUNT let a Missile Launcher bearer tie a
+	# Rifle body slot-for-slot — the outermost tiebreak then fed the specials to the guns
+	# first (five dead-weapon catches in ONE game). RARITY is the real signal: a weapon
+	# few bodies carry is the one the squad cannot replace.
+	var freq := {}
+	for i in alive:
+		for w in (unit.models[i] as ModelInstance).properties.get("weapons", []) as Array:
+			var wn := str((w as Dictionary).get("name", ""))
+			freq[wn] = int(freq.get(wn, 0)) + 1
+	var rare_cap: int = maxi(alive.size() / 2, 1)
 	var rank := func(idx: int) -> float:
 		var m: ModelInstance = unit.models[idx]
 		var v := float((m.properties.get("weapons", []) as Array).size()) * 2.0 \
 			+ float((m.properties.get("equipment", []) as Array).size()) * 2.0
+		for w in (m.properties.get("weapons", []) as Array):
+			if int(freq.get(str((w as Dictionary).get("name", "")), 0)) <= rare_cap:
+				v += 3.0   # rare weapon: protected like the upgrade it is
+				break      # once per body — rarity marks the bearer, it does not stack
 		if int(m.wounds_max) > base_tough:
-			v += 4.0   # a weapon-team / upgraded-Tough model is the most valuable body
+			v += 8.0   # weapon-team / upgraded-Tough: the TOP rung — above any single
+			           # special bearer (count 2x2 + rare 3 = 7 < 8), ladder intact
 		var d := 0.0
 		var node := m.node
 		if node != null and is_instance_valid(node):

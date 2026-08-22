@@ -1582,6 +1582,20 @@ func test_casualty_order_spares_value_and_removes_from_the_edge() -> void:
 	assert_int(order.find(2)).is_less(order.find(0))
 
 
+## NML-1034 (match 22.08.): EQUAL weapon counts must not hide a special bearer — the
+## Missile Launcher body (2 slots, like every Rifle body) died first whenever it stood
+## outermost, and the squad then fired dead launchers all game. Rarity protects it.
+func test_casualty_order_protects_rare_weapon_bearers_at_equal_count() -> void:
+	var u := _unit(2, [Vector3(-0.30, 0, 0), Vector3(-0.10, 0, 0), Vector3(0.10, 0, 0), Vector3(0.42, 0, 0)])
+	for i in range(3):
+		u.models[i].properties["weapons"] = [{"name": "Rifle"}, {"name": "CCW"}]
+	# the special bearer stands OUTERMOST — exactly the match-day death spot
+	u.models[3].properties["weapons"] = [{"name": "Missile Launcher"}, {"name": "CCW"}]
+	var order := SoloController.casualty_order(u)
+	assert_int(int(order[0])).is_not_equal(3)   # a plain rifle body dies first
+	assert_int(int(order.back())).is_equal(3)   # the launcher bearer is spared longest
+
+
 # === P2: Regroup mandatory action — a casualty-torn unit gathers (GF v3.5.1 p.7) ===
 
 func test_torn_unit_regroups_at_activation_start() -> void:
