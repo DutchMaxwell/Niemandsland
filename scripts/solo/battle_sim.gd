@@ -775,7 +775,18 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 		var positions: Array = []
 		var wounds: Array = []
 		var radii: Array = []
+		# Arrivals S1: a unit still on the tray (Ambush reserve) enters the
+		# snapshot DORMANT — zero table presence (alive=0, so every existing
+		# dead-unit guard already excludes it from eligibility, targeting and
+		# scoring) while its strength survives in dormant_* for the arrival
+		# step. A tray node's position must never leak into the board picture.
+		var dormant := SoloController.unit_in_reserve(u)
+		var dormant_wounds: Array = []
 		for m in u.models:
+			if dormant:
+				if m.is_alive:
+					dormant_wounds.append(m.wounds_current)
+				continue
 			if m.is_alive and m.node != null:
 				positions.append(m.node.global_position)
 				wounds.append(m.wounds_current)
@@ -804,12 +815,23 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 			"activated": u.is_activated,
 			"casts": u.casts_current,
 		}
+		if dormant:
+			var du: Dictionary = units[uid]
+			du["dormant"] = true
+			du["dormant_models"] = dormant_wounds.size()
+			du["dormant_wounds"] = dormant_wounds
+			du["earliest_arrival_round"] = SoloController.ambush_earliest_round(u)
 	if los_of.is_valid():
 		for k in units:
 			var su: Dictionary = units[k]
 			var matrix := {}
+			if su.get("dormant", false):
+				su["los"] = matrix   # a sleeper neither sees nor is probed
+				continue
 			for ok in units:
 				var other: Dictionary = units[ok]
+				if other.get("dormant", false):
+					continue
 				if int(other["player"]) != int(su["player"]):
 					matrix[ok] = bool(los_of.call(su["unit"], other["unit"]))
 			su["los"] = matrix
