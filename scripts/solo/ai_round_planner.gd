@@ -27,6 +27,7 @@ extends RefCounted
 ## }
 
 const SEIZE_RING_IN := 3.0
+const DIFFICULT_CAP_IN := 6.0  # GF v3.5.1 p.11 — mirrors SoloController.DIFFICULT_MOVE_CAP_IN (pure core keeps no controller import)
 const WORTH_FREE := 2.5        # expected-wounds currency: an unheld marker (mirrors OBJ_SEIZE_WORTH)
 const WORTH_ENEMY := 3.5       # flipping an enemy-held marker is a two-point swing
 const TIME_COST_PER_ROUND := 0.6
@@ -53,7 +54,16 @@ static func solve(p: Dictionary) -> Dictionary:
 			if bool(md.get("ai_owned", false)):
 				continue   # already ours — holding is the tree's business, not a trip
 			var travel: float = maxf(MoveIntent.distance_inches(u.get("centre", Vector3.ZERO), md.get("pos", Vector3.ZERO)) - SEIZE_RING_IN, 0.0)
-			var need: int = maxi(int(ceil(travel / band)), 0)
+			# NML-1038 (match 22.08.): a first leg forced through difficult ground yields
+			# 6" (p.11), not the full band — the old promise ("arrives R2") was physically
+			# impossible and the runner stranded short. Later legs assume open ground:
+			# first-order honesty, terrain beyond the current corridor is unknown.
+			var need: int
+			if (u.get("capped_markers", []) as Array).has(int(md.get("index", 0))) and travel > 0.0:
+				var first: float = minf(band, DIFFICULT_CAP_IN)
+				need = 1 if travel <= first else 1 + int(ceil((travel - first) / band))
+			else:
+				need = maxi(int(ceil(travel / band)), 0)
 			# FEASIBILITY PROMISE (the baseline's 82%-short killer): `need` marches happen in rounds
 			# current … current+need−1, so the unit stands on the marker at THAT round's end —
 			# need ≤ rounds_left is feasible. The old gate (need ≤ rounds_left−1) was off by one:

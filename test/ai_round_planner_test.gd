@@ -159,3 +159,26 @@ func test_opportunity_cost_scales_with_the_march_length() -> void:
 		"markers": [_m(0, 30)],
 		"rounds_left": 4, "current_round": 1})
 	assert_str(str((idle["tasks"]["Idle"] as Dictionary).get("kind"))).is_equal("seize")
+
+
+func test_capped_first_leg_pays_the_difficult_toll_in_arrival_math() -> void:
+	# NML-1038 (match 22.08.): a marker 13" out with the corridor forced through
+	# difficult ground is NOT a one-round trip — the first leg yields 6" (p.11).
+	# Uncapped: travel 10" (13-3 ring), band 12 → need 1 → feasible in the last round.
+	# Capped: first leg 6, rest 4 → need 2 → INFEASIBLE with one round left: it fights.
+	var u := _u("Runner", 0, 12.0, 0.0)
+	var free := AiRoundPlanner.solve({
+		"units": [u], "markers": [_m(0, 13)],
+		"rounds_left": 1, "current_round": 4})
+	assert_str(str((free["tasks"]["Runner"] as Dictionary).get("kind"))).is_equal("seize")
+	var capped := u.duplicate(true)
+	capped["capped_markers"] = [0]
+	var held := AiRoundPlanner.solve({
+		"units": [capped], "markers": [_m(0, 13)],
+		"rounds_left": 1, "current_round": 4})
+	assert_str(str((held["tasks"]["Runner"] as Dictionary).get("kind"))).is_equal("fight")
+	# With two rounds left the same capped trip is honest again — arrives R+1.
+	var two := AiRoundPlanner.solve({
+		"units": [capped.duplicate(true)], "markers": [_m(0, 13)],
+		"rounds_left": 2, "current_round": 3})
+	assert_str(str((two["tasks"]["Runner"] as Dictionary).get("kind"))).is_equal("seize")

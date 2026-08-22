@@ -1379,6 +1379,19 @@ func charge_illegal_why(unit: GameUnit, tgt: GameUnit, band_in: float) -> String
 ## search budget on fantasies. Coordinates come from the SIM state (valid for imagined
 ## positions too — the corridor probe takes arbitrary points); unit-static facts
 ## (aircraft, Shrouding, Strider/Flying, base radius) read the live units.
+## NML-1038: the p.11 difficult cap applied to a MOVE-TO-POINT reach test — the
+## urgency/round-planner twin of _charge_capped_by_difficult (match 22.08.: the
+## final-round urgency rushed at a 13" marker the cap held to 6" and stranded
+## 10.4" short — a volley traded for nothing).
+func reach_capped_by_difficult(unit: GameUnit, to: Vector3, dist_in: float) -> bool:
+	if dist_in <= DIFFICULT_MOVE_CAP_IN or dist_in == INF:
+		return false
+	if unit.has_special_rule("Strider") or unit.has_special_rule("Flying"):
+		return false
+	var probe_r := _move_base_radius_m(_moving_models(unit))
+	return _corridor_forced_through(unit_centre(unit), to, TerrainRules.PathCheck.DIFFICULT, probe_r)
+
+
 ## Per-seat gate for net-guided playouts: NML_PLAYOUT_NET_P<slot> wins over the
 ## global NML_PLAYOUT_NET — the same per-seat pattern as the amplifier knobs.
 func _playout_net_gate() -> bool:
@@ -1775,15 +1788,20 @@ func _act(unit: GameUnit) -> Dictionary:
 	# in seize range, when the charge target itself contests that marker (fighting there IS holding it),
 	# or mid-match. Overlays below (Relentless/Immobile hold) keep their precedence.
 	var diff2 := active_difficulty()
+	# NML-1038: urgency must promise only what the legs can deliver — a corridor forced
+	# through difficult ground caps this activation's reach at 6" (p.11).
+	var seize_reach := rush
+	if has_obj and reach_capped_by_difficult(unit, obj_pos, obj_dist):
+		seize_reach = DIFFICULT_MOVE_CAP_IN
 	if _is_final_round() and has_obj and (diff2 == null or diff2.mission_focus >= 1.0) \
 			and int(dec["toward"]) == AiDecision.Toward.ENEMY \
-			and obj_dist <= rush + OBJECTIVE_CONTROL_IN \
+			and obj_dist <= seize_reach + OBJECTIVE_CONTROL_IN \
 			and _nearest_model_gap_to_in(unit, obj_pos) > OBJECTIVE_CONTROL_IN \
 			and not (bool(ctx["enemy_in_charge"]) \
 				and MoveIntent.distance_inches(tcentre, obj_pos) <= OBJECTIVE_CONTROL_IN + CONTACT_IN):
 		action = AiDecision.Action.RUSH
 		do_shoot = false
-		if obj_dist <= advance + OBJECTIVE_CONTROL_IN and bool(ctx["shoot_after_advance"]):
+		if obj_dist <= minf(advance, seize_reach) + OBJECTIVE_CONTROL_IN and bool(ctx["shoot_after_advance"]):
 			action = AiDecision.Action.ADVANCE   # the marker is close enough to seize AND still shoot
 			do_shoot = true
 		dec["toward"] = AiDecision.Toward.OBJECTIVE
@@ -1792,7 +1810,8 @@ func _act(unit: GameUnit) -> Dictionary:
 			"rule": "Final round: only held markers score — a reachable uncontrolled marker outranks a fight that cannot pay off later",
 			"candidates": [], "chosen": AiDecision.action_name(action) + " toward objective",
 			"why": "final-round urgency",
-			"data": {"round": _current_round(), "obj_dist_in": obj_dist, "rush_in": rush}})
+			"data": {"round": _current_round(), "obj_dist_in": obj_dist, "rush_in": rush,
+				"reach_in": seize_reach}})
 	# ENDGAME CONVERGENCE (albtraum v2): the urgency above can only grab markers ALREADY in this
 	# activation's reach — mirror-ladder draws showed 3 of 5 markers ending neutral because nobody
 	# ever STARTED the trip. From the second-to-last round, a unit whose fight this activation is
@@ -6379,16 +6398,6 @@ func _plan_for_round() -> Dictionary:
 	var cached: Dictionary = _round_plans.get(ai_slot, {})
 	if int(cached.get("round", -1)) == rnd:
 		return cached.get("tasks", {})
-	var units_in: Array = []
-	for g in army_manager.get_game_units_for_player(ai_slot):
-		var gu := g as GameUnit
-		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
-			continue
-		if gu.has_method("is_attached") and gu.is_attached():
-			continue
-		units_in.append({"key": gu.unit_id, "name": gu.get_name(), "centre": unit_centre(gu),
-			"band_in": float(move_bands_for_unit(gu, movement_range).get("rush", 12.0)),
-			"ev_best": _plan_ev_of(gu)})
 	var markers_in: Array = []
 	if objectives_provider.is_valid():
 		var objs: Variant = objectives_provider.call()
@@ -6403,6 +6412,25 @@ func _plan_for_round() -> Dictionary:
 				markers_in.append({"index": i, "pos": mpos, "ai_owned": ai_holds,
 					"enemy_owned": enemy_holds,
 					"enemy_near": _units_controlling(mpos, human_slot, null)})
+	var units_in: Array = []
+	for g in army_manager.get_game_units_for_player(ai_slot):
+		var gu := g as GameUnit
+		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
+			continue
+		if gu.has_method("is_attached") and gu.is_attached():
+			continue
+		# NML-1038: markers whose corridor is forced through difficult ground get a
+		# capped FIRST leg in the planner's arrival math (p.11) — data, not a callable,
+		# so the pure core stays pure.
+		var capped: Array = []
+		for m in markers_in:
+			var md: Dictionary = m
+			var d_in := MoveIntent.distance_inches(unit_centre(gu), md["pos"] as Vector3)
+			if reach_capped_by_difficult(gu, md["pos"] as Vector3, d_in):
+				capped.append(int(md["index"]))
+		units_in.append({"key": gu.unit_id, "name": gu.get_name(), "centre": unit_centre(gu),
+			"band_in": float(move_bands_for_unit(gu, movement_range).get("rush", 12.0)),
+			"ev_best": _plan_ev_of(gu), "capped_markers": capped})
 	# game_rounds is 0 until a game configures it (fixtures, casual flows) — the OPR standard is
 	# 4 rounds; without the default every arrival reads infeasible and the whole army "fights".
 	var total_rounds: int = game_rounds if game_rounds > 0 else 4
