@@ -2982,7 +2982,12 @@ func _solve_clone(unit: GameUnit) -> Dictionary:
 		return {}
 	var cands := AiPlanner.candidates_wide(state, key)
 	var menu := AiClone.menu_tuples(state, key, cands, terrain_type_at, los_checker)
+	# SPEED L1 (NML-1024): env-gated phase stopwatch — one line per clone
+	# activation, printed only under NML_CLONE_TIMING=1; off = byte-identical.
+	var _ct_on := OS.get_environment("NML_CLONE_TIMING") == "1"
+	var _ct0 := Time.get_ticks_msec() if _ct_on else 0
 	var sc := AiClone.scores(net, BattleSim.board_rows(state), int(ai_slot), menu)
+	var _ct_net := (Time.get_ticks_msec() - _ct0) if _ct_on else 0
 	if sc.size() != cands.size() or sc.is_empty():
 		return {}
 	var best := 0
@@ -3001,7 +3006,10 @@ func _solve_clone(unit: GameUnit) -> Dictionary:
 	if k_env == "":
 		k_env = OS.get_environment("NML_CLONE_SEARCH")
 	var k := int(k_env)
+	var _ct_k := 0
+	var _ct_deep := 0
 	if k > 1:
+		var _ctk0 := Time.get_ticks_msec() if _ct_on else 0
 		var order: Array = []
 		for i in range(sc.size()):
 			order.append(i)
@@ -3026,7 +3034,10 @@ func _solve_clone(unit: GameUnit) -> Dictionary:
 		if d_env == "":
 			d_env = OS.get_environment("NML_CLONE_SEARCH_DEPTH")
 		var depth := int(d_env)
+		if _ct_on:
+			_ct_k = Time.get_ticks_msec() - _ctk0
 		if depth > 0:
+			var _ctd0 := Time.get_ticks_msec() if _ct_on else 0
 			var m_env := OS.get_environment("NML_CLONE_SEARCH_DEEP_TOP")
 			var deep_top: int = maxi(int(m_env) if m_env != "" else 8, 2)
 			var deep: Array = top.slice(0, mini(deep_top, top.size()))
@@ -3044,6 +3055,12 @@ func _solve_clone(unit: GameUnit) -> Dictionary:
 				if ds > best_deep:
 					best_deep = ds
 					best = i
+			if _ct_on:
+				_ct_deep = Time.get_ticks_msec() - _ctd0
+	if _ct_on:
+		printerr("[CTIME] R%d %s menu=%d net=%dms k=%dms deep=%dms total=%dms" % [
+			int(state.get("round", 0)), key, cands.size(), _ct_net, _ct_k, _ct_deep,
+			Time.get_ticks_msec() - _ct0])
 	if _teacher_rows_on():
 		# EXPERT ITERATION: what the amplified clone chose is the training
 		# signal for the NEXT generation — the same row shape as the teacher's.
