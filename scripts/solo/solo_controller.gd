@@ -423,6 +423,14 @@ static func honesty_alarm(tag: String, detail: String) -> void:
 ## alive/max ratio (alive_bearers_of signals -1 there).
 static func bearer_scaled_attacks(member: GameUnit, profile: Dictionary,
 		sighted: int, max_models: int) -> int:
+	return int(scaled_attacks_report(member, profile, sighted, max_models)["attacks"])
+
+
+## NML-1035: a zero-attack weapon must be loggable, not just droppable — the
+## report carries WHY it stays silent ("silent" is "" when it fires), so the
+## volley caller can write the battle-log line instead of an invisible skip.
+static func scaled_attacks_report(member: GameUnit, profile: Dictionary,
+		sighted: int, max_models: int) -> Dictionary:
 	var copies: int = maxi(int(profile.get("count", 1)), 1)
 	if copies < max_models:
 		var bearers: int = alive_bearers_of(member, str(profile.get("name", "")))
@@ -430,9 +438,16 @@ static func bearer_scaled_attacks(member: GameUnit, profile: Dictionary,
 			if bearers == 0:
 				honesty_alarm("dead-weapon volley", "%s tried to fire '%s' with zero living bearers" % [
 					member.get_name(), str(profile.get("name", ""))])
+				return {"attacks": 0, "silent": "no living bearers"}
 			var per_copy: int = maxi(int(profile.get("attacks", 0)) / copies, 0)
-			return per_copy * mini(bearers, sighted)
-	return effective_attacks(int(profile.get("attacks", 0)), sighted, max_models)
+			var scaled: int = per_copy * mini(bearers, sighted)
+			return {"attacks": scaled, "silent": "" if scaled > 0 else _volley_silence(sighted)}
+	var flat: int = effective_attacks(int(profile.get("attacks", 0)), sighted, max_models)
+	return {"attacks": flat, "silent": "" if flat > 0 else _volley_silence(sighted)}
+
+
+static func _volley_silence(sighted: int) -> String:
+	return "no models in range or sight" if sighted <= 0 else "no attacks"
 
 
 static func unit_in_reserve(u: GameUnit) -> bool:
@@ -1379,6 +1394,19 @@ func charge_illegal_why(unit: GameUnit, tgt: GameUnit, band_in: float) -> String
 ## search budget on fantasies. Coordinates come from the SIM state (valid for imagined
 ## positions too — the corridor probe takes arbitrary points); unit-static facts
 ## (aircraft, Shrouding, Strider/Flying, base radius) read the live units.
+## NML-1038: the p.11 difficult cap applied to a MOVE-TO-POINT reach test — the
+## urgency/round-planner twin of _charge_capped_by_difficult (match 22.08.: the
+## final-round urgency rushed at a 13" marker the cap held to 6" and stranded
+## 10.4" short — a volley traded for nothing).
+func reach_capped_by_difficult(unit: GameUnit, to: Vector3, dist_in: float) -> bool:
+	if dist_in <= DIFFICULT_MOVE_CAP_IN or dist_in == INF:
+		return false
+	if unit.has_special_rule("Strider") or unit.has_special_rule("Flying"):
+		return false
+	var probe_r := _move_base_radius_m(_moving_models(unit))
+	return _corridor_forced_through(unit_centre(unit), to, TerrainRules.PathCheck.DIFFICULT, probe_r)
+
+
 ## Per-seat gate for net-guided playouts: NML_PLAYOUT_NET_P<slot> wins over the
 ## global NML_PLAYOUT_NET — the same per-seat pattern as the amplifier knobs.
 func _playout_net_gate() -> bool:
@@ -1775,15 +1803,20 @@ func _act(unit: GameUnit) -> Dictionary:
 	# in seize range, when the charge target itself contests that marker (fighting there IS holding it),
 	# or mid-match. Overlays below (Relentless/Immobile hold) keep their precedence.
 	var diff2 := active_difficulty()
+	# NML-1038: urgency must promise only what the legs can deliver — a corridor forced
+	# through difficult ground caps this activation's reach at 6" (p.11).
+	var seize_reach := rush
+	if has_obj and reach_capped_by_difficult(unit, obj_pos, obj_dist):
+		seize_reach = DIFFICULT_MOVE_CAP_IN
 	if _is_final_round() and has_obj and (diff2 == null or diff2.mission_focus >= 1.0) \
 			and int(dec["toward"]) == AiDecision.Toward.ENEMY \
-			and obj_dist <= rush + OBJECTIVE_CONTROL_IN \
+			and obj_dist <= seize_reach + OBJECTIVE_CONTROL_IN \
 			and _nearest_model_gap_to_in(unit, obj_pos) > OBJECTIVE_CONTROL_IN \
 			and not (bool(ctx["enemy_in_charge"]) \
 				and MoveIntent.distance_inches(tcentre, obj_pos) <= OBJECTIVE_CONTROL_IN + CONTACT_IN):
 		action = AiDecision.Action.RUSH
 		do_shoot = false
-		if obj_dist <= advance + OBJECTIVE_CONTROL_IN and bool(ctx["shoot_after_advance"]):
+		if obj_dist <= minf(advance, seize_reach) + OBJECTIVE_CONTROL_IN and bool(ctx["shoot_after_advance"]):
 			action = AiDecision.Action.ADVANCE   # the marker is close enough to seize AND still shoot
 			do_shoot = true
 		dec["toward"] = AiDecision.Toward.OBJECTIVE
@@ -1792,7 +1825,8 @@ func _act(unit: GameUnit) -> Dictionary:
 			"rule": "Final round: only held markers score — a reachable uncontrolled marker outranks a fight that cannot pay off later",
 			"candidates": [], "chosen": AiDecision.action_name(action) + " toward objective",
 			"why": "final-round urgency",
-			"data": {"round": _current_round(), "obj_dist_in": obj_dist, "rush_in": rush}})
+			"data": {"round": _current_round(), "obj_dist_in": obj_dist, "rush_in": rush,
+				"reach_in": seize_reach}})
 	# ENDGAME CONVERGENCE (albtraum v2): the urgency above can only grab markers ALREADY in this
 	# activation's reach — mirror-ladder draws showed 3 of 5 markers ending neutral because nobody
 	# ever STARTED the trip. From the second-to-last round, a unit whose fight this activation is
@@ -2501,14 +2535,48 @@ func _commander_role(unit: GameUnit) -> int:
 		return CmdRole.AIRCRAFT
 	if _unit_has_caster(unit):
 		return CmdRole.CASTER
-	var weapons := _unit_weapons(unit)
+	# NML-1041 (match 22.08.): the role reads the SURVIVING chain, not the printed
+	# loadout — a squad whose every gunner had died kept "ranged line / hold_fire",
+	# and its lone joined sword hero stood watch over corpses for two rounds. A
+	# weapon with zero living bearers does not exist for classification; an empty
+	# host defers to its living attached heroes.
+	var weapons := _living_chain_weapons(unit)
 	if AiShooting.profiles_in_range(weapons, 0.0).is_empty():
-		return CmdRole.CLOSE_AND_FIGHT   # no ranged weapon at all → pure melee
-	if AiEv.classify(weapons, AiEv.ctx_for(unit, false, 0)) == AiArchetype.Type.MELEE:
+		return CmdRole.CLOSE_AND_FIGHT   # no LIVING ranged weapon → pure melee
+	var ctx_unit := unit
+	if unit.get_alive_count() <= 0 and unit.has_method("get_attached_heroes"):
+		for h in unit.get_attached_heroes():
+			if h is GameUnit and (h as GameUnit).get_alive_count() > 0:
+				ctx_unit = h
+				break
+	if AiEv.classify(weapons, AiEv.ctx_for(ctx_unit, false, 0)) == AiArchetype.Type.MELEE:
 		return CmdRole.CLOSE_AND_FIGHT
 	if unit.has_special_rule("Fast"):
 		return CmdRole.FLANK
 	return CmdRole.RANGED_LINE
+
+
+## NML-1041: every chain member's weapons whose bearers still breathe. alive_bearers_of
+## returns -1 for missing per-model loadout data — the weapon stays (missing data proves
+## nothing, the volley scaler's discipline); 0 = affirmatively dead → dropped. Members
+## with no living body contribute nothing.
+func _living_chain_weapons(unit: GameUnit) -> Array:
+	var members: Array = [unit]
+	if unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	var out: Array = []
+	for mem in members:
+		var gm := mem as GameUnit
+		if gm == null or gm.get_alive_count() <= 0:
+			continue
+		for w in _unit_weapons(gm):
+			var ow := w as OPRApiClient.OPRWeapon
+			if ow == null:
+				continue
+			if alive_bearers_of(gm, ow.name) == 0:
+				continue
+			out.append(ow)
+	return out
 
 
 ## The persistent close-and-fight standing order: keep the SAME enemy the unit was closing on (Killzone
@@ -6379,16 +6447,6 @@ func _plan_for_round() -> Dictionary:
 	var cached: Dictionary = _round_plans.get(ai_slot, {})
 	if int(cached.get("round", -1)) == rnd:
 		return cached.get("tasks", {})
-	var units_in: Array = []
-	for g in army_manager.get_game_units_for_player(ai_slot):
-		var gu := g as GameUnit
-		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
-			continue
-		if gu.has_method("is_attached") and gu.is_attached():
-			continue
-		units_in.append({"key": gu.unit_id, "name": gu.get_name(), "centre": unit_centre(gu),
-			"band_in": float(move_bands_for_unit(gu, movement_range).get("rush", 12.0)),
-			"ev_best": _plan_ev_of(gu)})
 	var markers_in: Array = []
 	if objectives_provider.is_valid():
 		var objs: Variant = objectives_provider.call()
@@ -6403,6 +6461,25 @@ func _plan_for_round() -> Dictionary:
 				markers_in.append({"index": i, "pos": mpos, "ai_owned": ai_holds,
 					"enemy_owned": enemy_holds,
 					"enemy_near": _units_controlling(mpos, human_slot, null)})
+	var units_in: Array = []
+	for g in army_manager.get_game_units_for_player(ai_slot):
+		var gu := g as GameUnit
+		if gu == null or gu.is_destroyed() or unit_in_reserve(gu):
+			continue
+		if gu.has_method("is_attached") and gu.is_attached():
+			continue
+		# NML-1038: markers whose corridor is forced through difficult ground get a
+		# capped FIRST leg in the planner's arrival math (p.11) — data, not a callable,
+		# so the pure core stays pure.
+		var capped: Array = []
+		for m in markers_in:
+			var md: Dictionary = m
+			var d_in := MoveIntent.distance_inches(unit_centre(gu), md["pos"] as Vector3)
+			if reach_capped_by_difficult(gu, md["pos"] as Vector3, d_in):
+				capped.append(int(md["index"]))
+		units_in.append({"key": gu.unit_id, "name": gu.get_name(), "centre": unit_centre(gu),
+			"band_in": float(move_bands_for_unit(gu, movement_range).get("rush", 12.0)),
+			"ev_best": _plan_ev_of(gu), "capped_markers": capped})
 	# game_rounds is 0 until a game configures it (fixtures, casual flows) — the OPR standard is
 	# 4 rounds; without the default every arrival reads infeasible and the whole army "fights".
 	var total_rounds: int = game_rounds if game_rounds > 0 else 4
@@ -7260,12 +7337,27 @@ static func casualty_order(unit: GameUnit) -> Array:
 	if n > 0:
 		cx /= float(n)
 		cz /= float(n)
+	# NML-1034 (match 22.08.): value by weapon COUNT let a Missile Launcher bearer tie a
+	# Rifle body slot-for-slot — the outermost tiebreak then fed the specials to the guns
+	# first (five dead-weapon catches in ONE game). RARITY is the real signal: a weapon
+	# few bodies carry is the one the squad cannot replace.
+	var freq := {}
+	for i in alive:
+		for w in (unit.models[i] as ModelInstance).properties.get("weapons", []) as Array:
+			var wn := str((w as Dictionary).get("name", ""))
+			freq[wn] = int(freq.get(wn, 0)) + 1
+	var rare_cap: int = maxi(alive.size() / 2, 1)
 	var rank := func(idx: int) -> float:
 		var m: ModelInstance = unit.models[idx]
 		var v := float((m.properties.get("weapons", []) as Array).size()) * 2.0 \
 			+ float((m.properties.get("equipment", []) as Array).size()) * 2.0
+		for w in (m.properties.get("weapons", []) as Array):
+			if int(freq.get(str((w as Dictionary).get("name", "")), 0)) <= rare_cap:
+				v += 3.0   # rare weapon: protected like the upgrade it is
+				break      # once per body — rarity marks the bearer, it does not stack
 		if int(m.wounds_max) > base_tough:
-			v += 4.0   # a weapon-team / upgraded-Tough model is the most valuable body
+			v += 8.0   # weapon-team / upgraded-Tough: the TOP rung — above any single
+			           # special bearer (count 2x2 + rare 3 = 7 < 8), ladder intact
 		var d := 0.0
 		var node := m.node
 		if node != null and is_instance_valid(node):

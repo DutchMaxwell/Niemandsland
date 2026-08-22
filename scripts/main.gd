@@ -266,7 +266,7 @@ var _solo_interactive_grade: String = "nachtmahr"  # the ONE grade (NML-211): NA
                                                   # → the naive baseline AI (no position solver, no knobs).
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
 var _solo_target_mode: Dictionary = {}       # {unit, melee} while the player picks an attack target (P8)
-var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, outcome, spots} while a Takedown / wound / Reanimation pick awaits a model click
+var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, outcome, spots, strip, armed} while a Takedown / wound / Reanimation pick awaits a model click (strip/armed: NML-1040)
 # TC-023 (Takedown, GF v3.5.1 p.14 "resolved as if it was a unit of [1]"): while this holds the picked
 # model, the shared target-side readers answer for THAT MODEL ALONE — its own unit's rules (the joined
 # chain's other members neither grant nor withhold them) and its own cover square (the other models
@@ -2923,6 +2923,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		AiEv.stamp_sergeant(member_profiles, member)
 		AiEv.stamp_conditional_ap(member_profiles, member)   # value Shatter/Tear/Melee Slayer/Disintegrate AP
 	if shots.is_empty():
+		_solo_log_no_volley(unit, report, "no ready ranged weapon")
 		return
 	# Split fire: assign each shot the best target under its weapon overlay, then group shots by target.
 	# Target validity is PER MODEL (GF v3.5.1 p.8): the shot's MEMBER needs a model with range+LOS.
@@ -2937,12 +2938,29 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			groups[tgt.unit_id] = {"target": tgt, "shots": []}
 			order.append(tgt.unit_id)
 		(groups[tgt.unit_id]["shots"] as Array).append(shot)
+	if order.is_empty():
+		# NML-1035: every weapon lost its target (out of range / no LOS) — without a
+		# line the whole activation is invisible (a HOLD with no tree target writes
+		# no movement line either).
+		_solo_log_no_volley(unit, report, "no target in range or sight")
+		return
 	# Indirect (wave 5): "-1 to hit rolls when shooting after moving" — the activation's action says
 	# whether this unit moved before firing (HOLD = it did not).
 	var moved: bool = bool(report.get("moved", false))
 	for id in order:
 		var g := groups[id] as Dictionary
 		await _solo_resolve_ai_volley(unit, g["target"], g["shots"], moved)
+
+
+## NML-1035: a shooting activation that resolves NO volley still writes one COMBAT
+## line naming the reason — and states the hold when the action was a HOLD.
+func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> void:
+	if battle_log == null:
+		return
+	var hold_note: String = " — the unit holds" \
+		if int(report.get("action", 0)) == AiDecision.Action.HOLD else ""
+	battle_log.log_event(BattleLog.Category.COMBAT, "%s: no volley — %s%s" % [
+		unit.get_name(), why, hold_note], true)
 
 
 ## Resolve-first priority of a shot (GF v3.5.1 p.14): Takedown before Deadly before the rest. sort_custom
@@ -3048,8 +3066,14 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
 			bool(profile.get("indirect", false)))
 		# NML-1025: the bearer gate now guards the AI volley too (was human-only).
-		var attacks: int = SoloController.bearer_scaled_attacks(member, profile, sighted, int(shot["max"]))
+		var volley_report: Dictionary = SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"]))
+		var attacks: int = int(volley_report["attacks"])
 		if attacks <= 0:
+			# NML-1035: a neutralized weapon says WHY it stays silent — a volley of
+			# only-silent weapons used to read as "unit never activated".
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s silent — %s" % [
+					member.get_name(), str(profile.get("name", "?")), str(volley_report["silent"])], true)
 			continue
 		# Reliable (GF v3.5.1) sets the Quality (2+); the to-hit roll modifiers (Stealth / Artillery /
 		# Evasive, and Indirect's moved-shooting -1 — wave 5) then apply on top ("Reliable only changes
@@ -6738,8 +6762,12 @@ func _solo_prompt_takedown_model(target: GameUnit, weapon_name: String, recommen
 	# the strip never blocks the board.
 	var skipped: Array = []
 	if not _solo_batch:
+		# NML-1040: the pick dict keeps the strip's base line so the hover/arm readout can rebuild
+		# the label without losing the instruction (see _solo_model_pick_strip_refresh).
+		var strip_text := "Takedown (%s): click the model in %s to snipe." % [weapon_name, target.get_name()]
+		_solo_model_pick["strip"] = strip_text
 		_solo_deploy_ui_show(
-			"Takedown (%s): click the model in %s to snipe." % [weapon_name, target.get_name()],
+			strip_text,
 			"Take the recommended %s" % rec_label,
 			func() -> void: skipped.append(true))
 	while outcome.is_empty() and skipped.is_empty() and not _solo_model_pick.is_empty():
@@ -8767,6 +8795,12 @@ func _unhandled_input(event: InputEvent) -> void:
 ## NML-924 adds one fallback for the Reanimation allocation: when the ray hits no live model, a
 ## candidate RING under the cursor picks the fallen model it stands for (see _solo_ring_pick_at).
 func _solo_model_pick_input(event: InputEvent) -> bool:
+	# NML-1040: the strip names the model under the cursor — without it the click lands blind on
+	# whatever collider the ray meets first (match day: the joined hero, twice, aiming at a trooper).
+	var motion := event as InputEventMouseMotion
+	if motion != null:
+		_solo_model_pick_strip_refresh(_solo_model_under_cursor(motion.position))
+		return false   # motion is never consumed — the camera still needs it
 	var mb := event as InputEventMouseButton
 	if mb == null or not mb.pressed:
 		return false
@@ -8776,22 +8810,22 @@ func _solo_model_pick_input(event: InputEvent) -> bool:
 		return true
 	if mb.button_index != MOUSE_BUTTON_LEFT:
 		return false
-	# TC-023: any model of the JOINED CHAIN counts — an attached hero's ModelInstance belongs to the
-	# HERO's GameUnit, so the old `mi.unit == unit` test silently swallowed the click on him.
-	var chain: Array = _solo_model_pick.get("chain", [])
-	var camera := get_viewport().get_camera_3d()
-	if chain.is_empty() or camera == null:
-		return true
-	var query := PhysicsRayQueryParameters3D.create(
-		camera.project_ray_origin(mb.position),
-		camera.project_ray_origin(mb.position) + camera.project_ray_normal(mb.position) * 100.0)
-	var hit: Dictionary = get_viewport().world_3d.direct_space_state.intersect_ray(query)
-	var col: Object = hit.get("collider")
-	if col is Node and (col as Node).has_meta("model_instance"):
-		var mi := (col as Node).get_meta("model_instance") as ModelInstance
-		if mi != null and mi.is_alive and chain.has(mi.unit):
-			outcome.append({"unit": mi.unit, "index": mi.model_index})
+	var mi := _solo_model_under_cursor(mb.position)
+	if mi != null:
+		# NML-1040: a model OUTSIDE the recommendation's GameUnit is a joined chain hero — his
+		# snipe takes a second confirming click on the same model, never a stray first click.
+		if solo_pick_needs_confirm(_solo_model_pick.get("recommended", {}),
+				_solo_model_pick.get("armed", {}), mi.unit, mi.model_index):
+			_solo_model_pick["armed"] = {"unit": mi.unit, "index": mi.model_index}
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"Takedown pick armed on the %s of %s — click it again to snipe" % [
+					_solo_model_label(mi.unit as GameUnit, mi.model_index),
+					(mi.unit as GameUnit).get_name()], false)
+			_solo_model_pick_strip_refresh(mi)
 			return true
+		outcome.append({"unit": mi.unit, "index": mi.model_index})
+		return true
 	# NML-924: a FALLEN model has no body to click (a regiment casualty is hidden with its collider
 	# off, a loose one is parked on the army tray), so the candidate RING at its return spot is the
 	# click target. Only the Reanimation prompt fills "spots" — for the Takedown and wound picks this
@@ -8800,6 +8834,58 @@ func _solo_model_pick_input(event: InputEvent) -> bool:
 	if not ring_pick.is_empty():
 		outcome.append(ring_pick)
 	return true
+
+
+## NML-1040: arm/confirm gate for the model pick. A click on a model OUTSIDE the recommendation's
+## GameUnit is a joined CHAIN HERO (TC-023 made him clickable — and both match-day takedowns then
+## sniped him by accident), so his pick needs a second confirming click on the same model. Clicks
+## inside the recommended unit and picks WITHOUT a recommendation (wound / Reanimation allocation)
+## stay one-click. Returns true when this click must only ARM the pick, false when it picks outright.
+static func solo_pick_needs_confirm(recommended: Dictionary, armed: Dictionary, unit: Object, index: int) -> bool:
+	var rec_unit: Object = recommended.get("unit") as Object
+	if rec_unit == null or unit == rec_unit:
+		return false
+	return not (armed.get("unit") == unit and int(armed.get("index", -1)) == index)
+
+
+## The alive chain model whose collider sits under the screen point, else null. TC-023: any model
+## of the JOINED CHAIN counts — an attached hero's ModelInstance belongs to the HERO's GameUnit,
+## so a `mi.unit == unit` test would silently swallow the click on him. One raycast shared by the
+## pick click and the NML-1040 hover readout, so both judge the very same collider.
+func _solo_model_under_cursor(screen_pos: Vector2) -> ModelInstance:
+	var chain: Array = _solo_model_pick.get("chain", [])
+	var camera := get_viewport().get_camera_3d()
+	if chain.is_empty() or camera == null:
+		return null
+	var query := PhysicsRayQueryParameters3D.create(
+		camera.project_ray_origin(screen_pos),
+		camera.project_ray_origin(screen_pos) + camera.project_ray_normal(screen_pos) * 100.0)
+	var hit: Dictionary = get_viewport().world_3d.direct_space_state.intersect_ray(query)
+	var col: Object = hit.get("collider")
+	if col is Node and (col as Node).has_meta("model_instance"):
+		var mi := (col as Node).get_meta("model_instance") as ModelInstance
+		if mi != null and mi.is_alive and chain.has(mi.unit):
+			return mi
+	return null
+
+
+## NML-1040: rebuild the pick strip's text from its stored base line plus the armed/hover state.
+## Only the Takedown prompt stores "strip" — the wound/Reanimation strips keep their own text.
+func _solo_model_pick_strip_refresh(hover: ModelInstance) -> void:
+	var base: String = str(_solo_model_pick.get("strip", ""))
+	if base.is_empty() or _solo_deploy_ui_label == null or not is_instance_valid(_solo_deploy_ui_label):
+		return
+	var text := base
+	var armed: Dictionary = _solo_model_pick.get("armed", {})
+	if not armed.is_empty():
+		text += "\nClick again to snipe the %s of %s." % [
+			_solo_model_label(armed.get("unit") as GameUnit, int(armed.get("index", -1))),
+			(armed.get("unit") as GameUnit).get_name()]
+	if hover != null:
+		text += "\nUnder cursor: %s of %s" % [
+			_solo_model_label(hover.unit as GameUnit, hover.model_index),
+			(hover.unit as GameUnit).get_name()]
+	_solo_deploy_ui_label.text = text
 
 
 ## Which candidate ring the cursor is over: the camera ray meets the ring's own ground plane and the
@@ -10938,12 +11024,14 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		elif event.keycode == KEY_L and not event.ctrl_pressed:
 			object_manager.toggle_lock_selected()
 			get_viewport().set_input_as_handled()
-		# Toggle 45° arc quadrants on the SELECTED regiment tray(s) only (F key) -
-		# facing display aid (AoF:R v3.5.1 p.5, no rule). Showing only the selection
-		# keeps the table uncluttered (was: toggle every regiment at once).
+		# Toggle 45° arc quadrants (F key) - facing display aid (AoF:R v3.5.1 p.5,
+		# no rule). Selected regiment tray(s) toggle alone (keeps the table
+		# uncluttered); with no tray selected F must toggle ALL regiments, never
+		# no-op (NML-1033).
 		elif event.keycode == KEY_F and not event.ctrl_pressed and not event.shift_pressed:
 			if opr_army_manager:
-				opr_army_manager.toggle_selected_regiment_arcs(object_manager.get_selected_objects())
+				if opr_army_manager.toggle_selected_regiment_arcs(object_manager.get_selected_objects()) == -1:
+					opr_army_manager.toggle_all_regiment_arcs()
 			get_viewport().set_input_as_handled()
 		# Cycle regiment frontage (Shift+F) - reform to the next width in the cycle
 		# (5 -> 4 -> 3 -> 2 -> 1 -> 5). AoF:R v3.5.1 p.6 "Unit Formations". Only

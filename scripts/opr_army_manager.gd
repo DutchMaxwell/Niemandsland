@@ -513,8 +513,8 @@ func toggle_selected_regiment_arcs(selected: Array) -> int:
 
 
 ## Toggle the front-arc wedges on every regiment block (display only). Returns the new
-## visibility state; the facing arrows stay visible regardless. Retained for the
-## "show all" path (e.g. a future menu action); the F key uses toggle_selected.
+## visibility state; the facing arrows stay visible regardless. The F key falls back
+## to this when the selection holds no regiment tray (NML-1033).
 func toggle_all_regiment_arcs() -> bool:
 	_regiment_arcs_visible = not _regiment_arcs_visible
 	set_all_regiment_arcs_visible(_regiment_arcs_visible)

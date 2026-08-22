@@ -1582,6 +1582,20 @@ func test_casualty_order_spares_value_and_removes_from_the_edge() -> void:
 	assert_int(order.find(2)).is_less(order.find(0))
 
 
+## NML-1034 (match 22.08.): EQUAL weapon counts must not hide a special bearer — the
+## Missile Launcher body (2 slots, like every Rifle body) died first whenever it stood
+## outermost, and the squad then fired dead launchers all game. Rarity protects it.
+func test_casualty_order_protects_rare_weapon_bearers_at_equal_count() -> void:
+	var u := _unit(2, [Vector3(-0.30, 0, 0), Vector3(-0.10, 0, 0), Vector3(0.10, 0, 0), Vector3(0.42, 0, 0)])
+	for i in range(3):
+		u.models[i].properties["weapons"] = [{"name": "Rifle"}, {"name": "CCW"}]
+	# the special bearer stands OUTERMOST — exactly the match-day death spot
+	u.models[3].properties["weapons"] = [{"name": "Missile Launcher"}, {"name": "CCW"}]
+	var order := SoloController.casualty_order(u)
+	assert_int(int(order[0])).is_not_equal(3)   # a plain rifle body dies first
+	assert_int(int(order.back())).is_equal(3)   # the launcher bearer is spared longest
+
+
 # === P2: Regroup mandatory action — a casualty-torn unit gathers (GF v3.5.1 p.7) ===
 
 func test_torn_unit_regroups_at_activation_start() -> void:
@@ -3249,6 +3263,30 @@ func test_bearer_scaled_attacks_gates_the_ai_volley() -> void:
 		.is_equal(SoloController.effective_attacks(4, 1, 2))
 
 
+func test_scaled_attacks_report_names_the_silence_reason() -> void:
+	# NML-1035: fully neutralized volleys wrote NO battle-log line — the maintainer
+	# read a dead-specialist activation as "unit never activated". The report seam
+	# must name WHY a weapon stays silent so main.gd can log the line.
+	var u := _unit(1, [Vector3.ZERO, Vector3(0.1, 0, 0), Vector3(0.2, 0, 0)])
+	EquipmentDistributor.distribute(u, [
+		{"name": "Rifle", "attacks": 1, "count": 3, "specialRules": []},
+		{"name": "Fusion Gun", "attacks": 2, "count": 1, "specialRules": []},
+	], [])
+	u.models[0].is_alive = false   # the fusion bearer dies (limited items fill from model 0)
+	var dead := SoloController.scaled_attacks_report(u,
+		{"name": "Fusion Gun", "attacks": 2, "count": 1}, 2, 3)
+	assert_int(int(dead["attacks"])).is_equal(0)
+	assert_str(str(dead["silent"])).is_equal("no living bearers")
+	var live := SoloController.scaled_attacks_report(u,
+		{"name": "Rifle", "attacks": 3, "count": 3}, 2, 3)
+	assert_int(int(live["attacks"])).is_equal(SoloController.effective_attacks(3, 2, 3))
+	assert_str(str(live["silent"])).is_equal("")
+	var blind := SoloController.scaled_attacks_report(u,
+		{"name": "Rifle", "attacks": 3, "count": 3}, 0, 3)
+	assert_int(int(blind["attacks"])).is_equal(0)
+	assert_str(str(blind["silent"])).is_equal("no models in range or sight")
+
+
 func test_charge_illegal_why_names_rule_violations() -> void:
 	# NML-1026 (body campaign F2): adopted plans carried charges the tree's own
 	# gates refused. ONE legality source: rules gate hard (band incl. shrouding,
@@ -3282,3 +3320,33 @@ func test_rescue_should_fire_covers_the_dead_zone() -> void:
 	assert_bool(SoloController.rescue_should_fire(4.0 * m, 6.0 * m, true, true, 3.0, 6.0)).is_false()
 	assert_bool(SoloController.rescue_should_fire(4.0 * m, 6.0 * m, false, true, 3.0, 6.0)).is_true()
 	assert_bool(SoloController.rescue_should_fire(0.0, 0.0, true, true, 15.0, 6.0)).is_false()
+
+
+## NML-1041 (match 22.08.): the commander role must follow the SURVIVING chain — a
+## squad whose every gunner died is no ranged line. The printed loadout said "hold
+## fire" and the lone joined sword hero guarded corpses for two rounds.
+func test_commander_role_rederives_from_the_surviving_chain() -> void:
+	var u := _unit(2, [Vector3.ZERO, Vector3(0.025, 0, 0), Vector3(0.05, 0, 0)])
+	var opr := OPRApiClient.OPRUnit.new()
+	var rifle := OPRApiClient.OPRWeapon.new()
+	rifle.name = "Rifle"
+	rifle.range_value = 24
+	rifle.attacks = 3
+	rifle.count = 2
+	var ccw := OPRApiClient.OPRWeapon.new()
+	ccw.name = "CCW"
+	ccw.range_value = 0
+	ccw.attacks = 1
+	ccw.count = 3
+	opr.weapons = [rifle, ccw]
+	u.source_type = "opr"
+	u.source_data = opr
+	u.models[0].properties["weapons"] = [{"name": "Rifle"}, {"name": "CCW"}]
+	u.models[1].properties["weapons"] = [{"name": "Rifle"}, {"name": "CCW"}]
+	u.models[2].properties["weapons"] = [{"name": "CCW"}]
+	var solo: SoloController = auto_free(SoloController.new())
+	assert_int(solo._commander_role(u)).is_equal(SoloController.CmdRole.RANGED_LINE)
+	u.models[0].is_alive = false
+	u.models[1].is_alive = false
+	# both Rifle bearers dead: the survivor is a melee body — the role flips
+	assert_int(solo._commander_role(u)).is_equal(SoloController.CmdRole.CLOSE_AND_FIGHT)
