@@ -1379,6 +1379,15 @@ func charge_illegal_why(unit: GameUnit, tgt: GameUnit, band_in: float) -> String
 ## search budget on fantasies. Coordinates come from the SIM state (valid for imagined
 ## positions too — the corridor probe takes arbitrary points); unit-static facts
 ## (aircraft, Shrouding, Strider/Flying, base radius) read the live units.
+## Per-seat gate for net-guided playouts: NML_PLAYOUT_NET_P<slot> wins over the
+## global NML_PLAYOUT_NET — the same per-seat pattern as the amplifier knobs.
+func _playout_net_gate() -> bool:
+	var e := OS.get_environment("NML_PLAYOUT_NET_P%d" % int(ai_slot))
+	if e == "":
+		e = OS.get_environment("NML_PLAYOUT_NET")
+	return e == "1"
+
+
 func charge_candidate_illegal(unit: GameUnit, tgt: GameUnit, gap_in: float,
 		from: Vector3, to: Vector3) -> bool:
 	if is_aircraft(tgt):
@@ -2875,8 +2884,10 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	AiPlanner.playout_search = diff != null and diff.playout_search   # S-wave: per preset
 	# Net-guided playouts (research gate NML_PLAYOUT_NET=1): the loaded clone
 	# steers every imagined activation; OFF or no net = byte-identical heuristics.
+	# NML_PLAYOUT_NET_P<slot> overrides per seat (improvement-operator pattern,
+	# like NML_CLONE_SEARCH_P<slot>) so one process can duel guided vs heuristic.
 	AiPlanner.playout_net = AiClone.net_for(int(ai_slot)) \
-		if OS.get_environment("NML_PLAYOUT_NET") == "1" else {}
+		if _playout_net_gate() else {}
 	# D-wave: seat-aware depth — opener when OUR side made this round's first
 	# activation (or nobody acted yet, i.e. we are about to open it).
 	AiPlanner.opener_seat = int(_round_first_slot.get(_current_round(), ai_slot)) == int(ai_slot)
@@ -3080,7 +3091,7 @@ func _solve_clone(unit: GameUnit) -> Dictionary:
 	var net := AiClone.net_for(int(ai_slot))
 	# Net-guided playouts ride the deep-teacher path too (rollout_boundaries ->
 	# _policy_step reads the static); same research gate, same byte-identical off.
-	AiPlanner.playout_net = net if OS.get_environment("NML_PLAYOUT_NET") == "1" else {}
+	AiPlanner.playout_net = net if _playout_net_gate() else {}
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
 		terrain_type_at)
