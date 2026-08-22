@@ -423,6 +423,14 @@ static func honesty_alarm(tag: String, detail: String) -> void:
 ## alive/max ratio (alive_bearers_of signals -1 there).
 static func bearer_scaled_attacks(member: GameUnit, profile: Dictionary,
 		sighted: int, max_models: int) -> int:
+	return int(scaled_attacks_report(member, profile, sighted, max_models)["attacks"])
+
+
+## NML-1035: a zero-attack weapon must be loggable, not just droppable — the
+## report carries WHY it stays silent ("silent" is "" when it fires), so the
+## volley caller can write the battle-log line instead of an invisible skip.
+static func scaled_attacks_report(member: GameUnit, profile: Dictionary,
+		sighted: int, max_models: int) -> Dictionary:
 	var copies: int = maxi(int(profile.get("count", 1)), 1)
 	if copies < max_models:
 		var bearers: int = alive_bearers_of(member, str(profile.get("name", "")))
@@ -430,9 +438,16 @@ static func bearer_scaled_attacks(member: GameUnit, profile: Dictionary,
 			if bearers == 0:
 				honesty_alarm("dead-weapon volley", "%s tried to fire '%s' with zero living bearers" % [
 					member.get_name(), str(profile.get("name", ""))])
+				return {"attacks": 0, "silent": "no living bearers"}
 			var per_copy: int = maxi(int(profile.get("attacks", 0)) / copies, 0)
-			return per_copy * mini(bearers, sighted)
-	return effective_attacks(int(profile.get("attacks", 0)), sighted, max_models)
+			var scaled: int = per_copy * mini(bearers, sighted)
+			return {"attacks": scaled, "silent": "" if scaled > 0 else _volley_silence(sighted)}
+	var flat: int = effective_attacks(int(profile.get("attacks", 0)), sighted, max_models)
+	return {"attacks": flat, "silent": "" if flat > 0 else _volley_silence(sighted)}
+
+
+static func _volley_silence(sighted: int) -> String:
+	return "no models in range or sight" if sighted <= 0 else "no attacks"
 
 
 static func unit_in_reserve(u: GameUnit) -> bool:

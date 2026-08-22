@@ -2923,6 +2923,7 @@ func _run_ai_shooting(report: Dictionary) -> void:
 		AiEv.stamp_sergeant(member_profiles, member)
 		AiEv.stamp_conditional_ap(member_profiles, member)   # value Shatter/Tear/Melee Slayer/Disintegrate AP
 	if shots.is_empty():
+		_solo_log_no_volley(unit, report, "no ready ranged weapon")
 		return
 	# Split fire: assign each shot the best target under its weapon overlay, then group shots by target.
 	# Target validity is PER MODEL (GF v3.5.1 p.8): the shot's MEMBER needs a model with range+LOS.
@@ -2937,12 +2938,29 @@ func _run_ai_shooting(report: Dictionary) -> void:
 			groups[tgt.unit_id] = {"target": tgt, "shots": []}
 			order.append(tgt.unit_id)
 		(groups[tgt.unit_id]["shots"] as Array).append(shot)
+	if order.is_empty():
+		# NML-1035: every weapon lost its target (out of range / no LOS) — without a
+		# line the whole activation is invisible (a HOLD with no tree target writes
+		# no movement line either).
+		_solo_log_no_volley(unit, report, "no target in range or sight")
+		return
 	# Indirect (wave 5): "-1 to hit rolls when shooting after moving" — the activation's action says
 	# whether this unit moved before firing (HOLD = it did not).
 	var moved: bool = bool(report.get("moved", false))
 	for id in order:
 		var g := groups[id] as Dictionary
 		await _solo_resolve_ai_volley(unit, g["target"], g["shots"], moved)
+
+
+## NML-1035: a shooting activation that resolves NO volley still writes one COMBAT
+## line naming the reason — and states the hold when the action was a HOLD.
+func _solo_log_no_volley(unit: GameUnit, report: Dictionary, why: String) -> void:
+	if battle_log == null:
+		return
+	var hold_note: String = " — the unit holds" \
+		if int(report.get("action", 0)) == AiDecision.Action.HOLD else ""
+	battle_log.log_event(BattleLog.Category.COMBAT, "%s: no volley — %s%s" % [
+		unit.get_name(), why, hold_note], true)
 
 
 ## Resolve-first priority of a shot (GF v3.5.1 p.14): Takedown before Deadly before the rest. sort_custom
@@ -3048,8 +3066,14 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
 			bool(profile.get("indirect", false)))
 		# NML-1025: the bearer gate now guards the AI volley too (was human-only).
-		var attacks: int = SoloController.bearer_scaled_attacks(member, profile, sighted, int(shot["max"]))
+		var volley_report: Dictionary = SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"]))
+		var attacks: int = int(volley_report["attacks"])
 		if attacks <= 0:
+			# NML-1035: a neutralized weapon says WHY it stays silent — a volley of
+			# only-silent weapons used to read as "unit never activated".
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s: %s silent — %s" % [
+					member.get_name(), str(profile.get("name", "?")), str(volley_report["silent"])], true)
 			continue
 		# Reliable (GF v3.5.1) sets the Quality (2+); the to-hit roll modifiers (Stealth / Artillery /
 		# Evasive, and Indirect's moved-shooting -1 — wave 5) then apply on top ("Reliable only changes

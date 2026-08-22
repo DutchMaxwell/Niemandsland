@@ -3263,6 +3263,30 @@ func test_bearer_scaled_attacks_gates_the_ai_volley() -> void:
 		.is_equal(SoloController.effective_attacks(4, 1, 2))
 
 
+func test_scaled_attacks_report_names_the_silence_reason() -> void:
+	# NML-1035: fully neutralized volleys wrote NO battle-log line — the maintainer
+	# read a dead-specialist activation as "unit never activated". The report seam
+	# must name WHY a weapon stays silent so main.gd can log the line.
+	var u := _unit(1, [Vector3.ZERO, Vector3(0.1, 0, 0), Vector3(0.2, 0, 0)])
+	EquipmentDistributor.distribute(u, [
+		{"name": "Rifle", "attacks": 1, "count": 3, "specialRules": []},
+		{"name": "Fusion Gun", "attacks": 2, "count": 1, "specialRules": []},
+	], [])
+	u.models[0].is_alive = false   # the fusion bearer dies (limited items fill from model 0)
+	var dead := SoloController.scaled_attacks_report(u,
+		{"name": "Fusion Gun", "attacks": 2, "count": 1}, 2, 3)
+	assert_int(int(dead["attacks"])).is_equal(0)
+	assert_str(str(dead["silent"])).is_equal("no living bearers")
+	var live := SoloController.scaled_attacks_report(u,
+		{"name": "Rifle", "attacks": 3, "count": 3}, 2, 3)
+	assert_int(int(live["attacks"])).is_equal(SoloController.effective_attacks(3, 2, 3))
+	assert_str(str(live["silent"])).is_equal("")
+	var blind := SoloController.scaled_attacks_report(u,
+		{"name": "Rifle", "attacks": 3, "count": 3}, 0, 3)
+	assert_int(int(blind["attacks"])).is_equal(0)
+	assert_str(str(blind["silent"])).is_equal("no models in range or sight")
+
+
 func test_charge_illegal_why_names_rule_violations() -> void:
 	# NML-1026 (body campaign F2): adopted plans carried charges the tree's own
 	# gates refused. ONE legality source: rules gate hard (band incl. shrouding,
