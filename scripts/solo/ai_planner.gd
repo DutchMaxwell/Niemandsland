@@ -64,6 +64,9 @@ static func top_k_default() -> int:
 ## S-wave knobs (grill 15.08.): playout arbitration fires only when the
 ## blend sees the top-2 CLOSE; the playout verdict then decides outright.
 static var playout_search := false   # set per pick from the difficulty preset
+static var playout_net: Dictionary = {}   # net-guided playouts: the Feldherrenblick
+	# steers every imagined activation ({} = heuristic playouts, byte-identical).
+	# Set per pick by the controller (NML_PLAYOUT_NET research gate).
 static var playout_arbitrations := 0  # test/diagnosis counter: how often playouts fired
 static var _po_t0 := 0
 ## Continuation leaf for playouts: rich (reply-threat aware, 238ms/step on
@@ -387,6 +390,8 @@ static func _cross_round(cur: Dictionary) -> int:
 ## own army into the same overextension on every line, so patience could
 ## never look better than rushing). {} when dry.
 static func _policy_step(state: Dictionary, player: int, rich := false) -> Dictionary:
+	if not playout_net.is_empty():
+		return _policy_step_net(state, player, rich)
 	var best := {}
 	var best_s := -INF
 	for key in state["units"]:
@@ -400,6 +405,49 @@ static func _policy_step(state: Dictionary, player: int, rich := false) -> Dicti
 			if s > best_s:
 				best_s = s
 				best = action
+	return best
+
+
+## Net-guided playout step: the Feldherrenblick chooses each unit's move WITHIN
+## its menu — the exact per-menu distribution it was trained on (cross-menu
+## logits are NOT calibrated, so the net never arbitrates between units).
+## Mission currency then decides ACROSS units on the per-unit picks alone:
+## one resolve per unit instead of units x candidates — smarter AND cheaper.
+static func _policy_step_net(state: Dictionary, player: int, rich := false) -> Dictionary:
+	var board: Array = BattleSim.board_rows(state)
+	var terrain_at: Callable = state.get("terrain_at", Callable())
+	# Review find (workflow 22.08.): without a real los_at the sight feature collapses
+	# to a constant 0.5 across every candidate — erasing exactly the within-menu
+	# discrimination the trained nets carry. The controller stamps its los_checker.
+	var los_at: Callable = state.get("los_at", Callable())
+	var picks: Array = []
+	for key in state["units"]:
+		var su: Dictionary = state["units"][key]
+		if int(su["player"]) != player or bool(su["activated"]) or int(su["alive"]) <= 0:
+			continue
+		var cands := _policy_candidates(state, str(key))
+		if cands.is_empty():
+			continue
+		var pick: Dictionary = cands[0]
+		if cands.size() > 1:
+			var menu := AiClone.menu_tuples(state, str(key), cands, terrain_at, los_at)
+			var sc := AiClone.scores(playout_net, board, player, menu)
+			if sc.size() == cands.size():
+				var bi := 0
+				for i in range(1, sc.size()):
+					if float(sc[i]) > float(sc[bi]):
+						bi = i
+				pick = cands[bi]
+		picks.append(pick)
+	var best := {}
+	var best_s := -INF
+	for action in picks:
+		var next := BattleSim.resolve(state, action)
+		var s := AiMissionEval.score(next, player, BattleSim.reply_threat(next, player)) \
+			if rich else AiMissionEval.score(next, player)
+		if s > best_s:
+			best_s = s
+			best = action
 	return best
 
 
@@ -723,13 +771,21 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 		if cd.has("charge"):
 			seen_charge[str(cd["charge"])] = true
 	var ours: Array = BattleSim._profiles_of(su, true)
+	# Head wave 1 (review find): the TEACHER menu obeys the same charge legality as
+	# _best_charge — before this, teacher rows could label a charge the adoption gate
+	# then refused, so the book taught moves the body never plays.
+	var illegal_cb: Callable = state.get("charge_illegal", Callable())
 	for ek in _enemy_keys(state, key):
 		var tu: Dictionary = state["units"][ek]
 		if int(tu["alive"]) <= 0:
 			continue
 		if not seen_shoot.has(str(ek)) and BattleSim.sees(su, str(ek)):
 			out.append({"unit": key, "kind": AiDecision.Action.HOLD, "shoot": str(ek)})
-		if not seen_charge.has(str(ek)) and not ours.is_empty():
+		if not seen_charge.has(str(ek)) and not ours.is_empty() \
+				and not (illegal_cb.is_valid() and bool(illegal_cb.call(su["unit"], tu["unit"],
+					maxf(BattleSim.dist_in(su["positions"], tu["positions"])
+						- BattleSim.CONTACT_IN, 0.0),
+					_centre(su), _centre(tu)))):
 			out.append({"unit": key, "kind": AiDecision.Action.CHARGE,
 				"dest": _centre(tu), "charge": str(ek)})
 		# Movement toward the ENEMY — the whole narrow menu is marker-shaped, so
@@ -968,10 +1024,24 @@ static func _best_charge(state: Dictionary, key: String) -> String:
 	var ours: Array = BattleSim._profiles_of(su, true)
 	if ours.is_empty():
 		return ""
+	# Head wave 1: the controller hands down its charge-legality truth (aircraft, band
+	# incl. Melee Shrouding, difficult cap) — a victim the rules forbid never enters the
+	# menu, so no rollout wastes budget on it. Absent key (lab tests, old snapshots) =
+	# byte-identical menu.
+	var illegal_cb: Callable = state.get("charge_illegal", Callable())
 	var best := ""
 	var best_score := -INF
 	for ek in _enemy_keys(state, key):
 		var tu: Dictionary = state["units"][ek]
+		if illegal_cb.is_valid() and bool(illegal_cb.call(su["unit"], tu["unit"],
+				maxf(BattleSim.dist_in(su["positions"], tu["positions"])
+					- BattleSim.CONTACT_IN, 0.0),
+				_centre(su), _centre(tu))):
+			# Review find (workflow 22.08.): dist_in is centre-to-centre while the gate's
+			# truth measures base-edge gap — the CONTACT_IN slack is exactly the sim's own
+			# landing rule (post-move centre gap <= CONTACT_IN = melee), so the menu offers
+			# precisely what the sim can execute, no less.
+			continue
 		var us := BattleSim._ctx_of(su)
 		var them := BattleSim._ctx_of(tu)
 		if AiEv.melee_ev(ours, us, them, true) < SoloController.FUTILE_CHARGE_EV:

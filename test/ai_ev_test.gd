@@ -419,3 +419,34 @@ func test_ferocious_stamps_surge_onto_every_profile() -> void:
 	var profs2 := [_rprof()]
 	AiEv.stamp_sergeant(profs2, u2)
 	assert_bool(bool((profs2[0] as Dictionary).get("surge", false))).is_false()
+
+
+func test_ignores_cover_weapon_skips_the_cover_save_in_ev() -> void:
+	# Head wave 1: the dice path grants Ignores Cover the base defense (main.gd save_def gate);
+	# the EV judge must value the same volley the same way — covered target, flagged weapon,
+	# EV equals the open-ground EV and beats the unflagged weapon into the same cover.
+	var covered := {"defense": 4, "tough": 1, "models": 5, "in_cover": true}
+	var open := {"defense": 4, "tough": 1, "models": 5}
+	var flagged: float = AiEv.profile_ev(_rprof({"ignores_cover": true}), ATT, covered, 12.0, false)
+	var plain_covered: float = AiEv.profile_ev(_rprof(), ATT, covered, 12.0, false)
+	var plain_open: float = AiEv.profile_ev(_rprof(), ATT, open, 12.0, false)
+	assert_float(flagged).is_equal_approx(plain_open, 0.0001)
+	assert_bool(flagged > plain_covered).is_true()
+
+
+func test_unstoppable_clamps_negative_hit_modifiers_in_ev() -> void:
+	# Head wave 1: dice clamp the composed situational modifier at 0 for Unstoppable weapons
+	# (main.gd:5946/9712) BEFORE Precise/Versatile. Shooting into Stealth beyond 9" carries −1;
+	# the flagged weapon's EV must equal the no-penalty volley, the unflagged one stays lower.
+	var stealthy := {"defense": 4, "tough": 1, "models": 5, "stealth": true}
+	var plain_def := {"defense": 4, "tough": 1, "models": 5}
+	var clamped: float = AiEv.profile_ev(_rprof({"unstoppable": true}), ATT, stealthy, 12.0, false)
+	var penalized: float = AiEv.profile_ev(_rprof(), ATT, stealthy, 12.0, false)
+	var free: float = AiEv.profile_ev(_rprof({"unstoppable": true}), ATT, plain_def, 12.0, false)
+	assert_float(clamped).is_equal_approx(free, 0.0001)
+	assert_bool(clamped > penalized).is_true()
+	# Melee side: Evasive imposes −1 on the charge — same clamp, same equality.
+	var evasive := {"defense": 4, "tough": 1, "models": 5, "evasive": true}
+	var m_clamped: float = AiEv.profile_ev(_mprof({"unstoppable": true}), ATT, evasive, 0.0, true)
+	var m_free: float = AiEv.profile_ev(_mprof({"unstoppable": true}), ATT, plain_def, 0.0, true)
+	assert_float(m_clamped).is_equal_approx(m_free, 0.0001)

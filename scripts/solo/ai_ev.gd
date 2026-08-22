@@ -339,14 +339,22 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 			target = 6
 		else:
 			target = AiCombatMath.thrust_to_hit(quality, charging and bool(profile.get("thrust", false)))
-			target = AiCombatMath.modified_hit_target(target,
-				AiCombatMath.melee_hit_modifier(bool(def_ctx.get("evasive", false)),
-					bool(def_ctx.get("melee_evasion", false))) + spell_mod)
+			var melee_mod := AiCombatMath.melee_hit_modifier(bool(def_ctx.get("evasive", false)),
+				bool(def_ctx.get("melee_evasion", false))) + spell_mod
+			# Unstoppable (GF v3.5.1 p.15, head wave 1): the dice clamp the composed situational
+			# modifier at 0 BEFORE weapon-own bonuses (Precise/Versatile) — main.gd:5946/9712.
+			# The EV judge never knew, so it under-valued Unstoppable strikes into Evasive targets.
+			if bool(profile.get("unstoppable", false)) and melee_mod < 0:
+				melee_mod = 0
+			target = AiCombatMath.modified_hit_target(target, melee_mod)
 	else:
 		target = AiCombatMath.reliable_quality(quality, bool(profile.get("reliable", false)))
-		target = AiCombatMath.modified_hit_target(target, AiCombatMath.shooting_hit_modifier(dist_in,
+		var shoot_mod := AiCombatMath.shooting_hit_modifier(dist_in,
 			bool(att.get("artillery", false)), bool(def_ctx.get("stealth", false)),
-			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false))) + spell_mod)
+			bool(def_ctx.get("artillery", false)), bool(def_ctx.get("evasive", false))) + spell_mod
+		if bool(profile.get("unstoppable", false)) and shoot_mod < 0:
+			shoot_mod = 0   # same clamp as the melee side; Fatigue stays above it (not a modifier)
+		target = AiCombatMath.modified_hit_target(target, shoot_mod)
 	# — Versatile Attack (army-book): over 9" (shooting), pick the EV-better of +1 to hit or AP(+1) via the
 	#   SAME chooser the dice path calls. hit_mod improves the to-hit here; the ap bonus folds in below —
 	var versatile := {}
@@ -388,7 +396,11 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	# — Saves: Shielded then Cover (shooting only; Blast AND Indirect ignore cover — wave 5 — not
 	#   Shielded) then AP —
 	var defense := AiCombatMath.shielded_defense(int(def_ctx.get("defense", 4)), bool(def_ctx.get("shielded", false)))
-	if not melee and blast <= 1 and not bool(profile.get("indirect", false)):
+	if not melee and blast <= 1 and not bool(profile.get("indirect", false)) \
+			and not bool(profile.get("ignores_cover", false)):
+		# Ignores Cover (head wave 1): the dice path skips the cover save for these weapons
+		# (main.gd:3131/9755) — the EV judge kept charging it, so covered targets looked
+		# tougher to exactly the weapons built to punish them.
 		defense = AiCombatMath.covered_defense(defense, bool(def_ctx.get("in_cover", false)))
 	# Guarded (quick-win batch: "+1 to defense rolls" when shot or charged from over 9" away) — the
 	# SHOOTING side gates on the volley distance here; the charge side lives only in the dice
