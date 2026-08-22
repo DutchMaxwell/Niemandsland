@@ -76,17 +76,18 @@ func test_registered_container_box_is_a_solid_volume_two_and_a_half_inches_tall(
 	assert_bool(_covers(b, _centre(o, MID))).is_true()
 
 
-func test_wall_segments_are_thin_solid_boxes_of_their_real_dimensions() -> void:
-	# Ruin walls are physically 2.5" tall and 0.25" thick — a sight line clears them from above.
+func test_wall_segments_stay_out_of_the_los_registry() -> void:
+	# NML-1028 (body campaign F4, #312 regression): ruins are AREA terrain —
+	# see-in/out-not-through comes from the ZONE volume; the walls are movement
+	# blockers, never sight blockers (the documented rules decision this file's
+	# own :1666 comment records). A 2.5"-tall solid wall in the LOS feed
+	# blinded every model standing inside a ruin. Movement keeps its walls via
+	# get_wall_segments_world — only the SIGHT registry must stay clean.
 	var o := _overlay()
 	o.update_wall_models([{"edge_cell": MID, "edge_side": 0, "wall_key": "w",
 		"length_inches": OverlayScript.GRID_SIZE_INCHES, "sub_position": 0}], TABLE, 0.0)
-	var b := _one_of_kind(o, "box")
-	assert_bool(bool(b.get("solid", false))).is_true()
-	assert_float(float(b.get("y1", NONE))).is_equal_approx(OverlayScript.WALL_HEIGHT_INCHES * K, 1e-9)
-	var he: Vector2 = b.get("he", Vector2.ZERO)
-	assert_float(maxf(he.x, he.y)).is_equal_approx(OverlayScript.GRID_SIZE_INCHES * K * 0.5, 1e-9)
-	assert_float(minf(he.x, he.y)).is_equal_approx(OverlayScript.WALL_THICKNESS_INCHES * K * 0.5, 1e-9)
+	assert_int(_all_of_kind(o, "box").size()).is_equal(0)
+	assert_int(o.get_wall_segments_world().size()).is_greater(0)
 
 
 func test_painted_forest_zone_is_an_area_cells_volume_of_tree_height() -> void:

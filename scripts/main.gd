@@ -3047,7 +3047,8 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		var sighted: int = _solo_sighted_count(member, target,
 			int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target)),
 			bool(profile.get("indirect", false)))
-		var attacks: int = SoloController.effective_attacks(int(profile.get("attacks", 0)), sighted, int(shot["max"]))
+		# NML-1025: the bearer gate now guards the AI volley too (was human-only).
+		var attacks: int = SoloController.bearer_scaled_attacks(member, profile, sighted, int(shot["max"]))
 		if attacks <= 0:
 			continue
 		# Reliable (GF v3.5.1) sets the Quality (2+); the to-hit roll modifiers (Stealth / Artillery /

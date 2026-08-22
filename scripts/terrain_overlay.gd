@@ -1184,7 +1184,13 @@ func _build_los_volumes() -> Array:
 		var od := ob as Dictionary
 		out.append({"kind": "box", "c": od["c"], "he": od["he"], "yaw": float(od["yaw"]),
 			"y0": 0.0, "y1": CONTAINER_HEIGHT_INCHES * k, "solid": true})
-	out.append_array(_wall_volumes())
+	# NML-1028 (body campaign F4, #312 regression): ruin walls are MOVEMENT
+	# blockers, never sight volumes — ruins are AREA terrain, see-in/out-not-
+	# through comes from the zone volume (the rules decision documented at the
+	# wall-exclusion comment below). Registering the 2.5"-solid walls here
+	# blinded every model standing inside a ruin.
+	# (walls deliberately NOT appended — MovementPlanner reads
+	# get_wall_segments_world, untouched by this registry)
 	out.append_array(_zone_volumes())
 	return out
 

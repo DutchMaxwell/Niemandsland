@@ -405,6 +405,36 @@ static func label_shoot_for(action: int, victim: String, do_shoot: bool) -> Stri
 	return victim
 
 
+## NML-1030 (body campaign F5): the honesty alarm. Env-gated contract probe —
+## delivered-vs-decided breaks scream instead of hiding for months. Live games
+## log loudly; the trainings harness may later promote this to an abort.
+static var _honesty_env := -1
+static func honesty_alarm(tag: String, detail: String) -> void:
+	if _honesty_env == -1:
+		_honesty_env = 1 if OS.get_environment("NML_HONESTY_ASSERT") == "1" else 0
+	if _honesty_env == 1:
+		printerr("[HONESTY] %s — %s" % [tag, detail])
+
+
+## NML-1025 (body campaign F1): ONE attack-scaling truth for every volley
+## path. A dead bearer's weapon dies with it — special weapons (fewer copies
+## than models) fire per-copy attacks x LIVING bearers (capped by the sighted
+## count); base weapons and units without per-model loadout data keep the
+## alive/max ratio (alive_bearers_of signals -1 there).
+static func bearer_scaled_attacks(member: GameUnit, profile: Dictionary,
+		sighted: int, max_models: int) -> int:
+	var copies: int = maxi(int(profile.get("count", 1)), 1)
+	if copies < max_models:
+		var bearers: int = alive_bearers_of(member, str(profile.get("name", "")))
+		if bearers >= 0:
+			if bearers == 0:
+				honesty_alarm("dead-weapon volley", "%s tried to fire '%s' with zero living bearers" % [
+					member.get_name(), str(profile.get("name", ""))])
+			var per_copy: int = maxi(int(profile.get("attacks", 0)) / copies, 0)
+			return per_copy * mini(bearers, sighted)
+	return effective_attacks(int(profile.get("attacks", 0)), sighted, max_models)
+
+
 static func unit_in_reserve(u: GameUnit) -> bool:
 	return u != null and bool(u.unit_properties.get("ambush_reserve", false))
 
@@ -1326,6 +1356,39 @@ const FUTILE_CHARGE_EV := 0.2
 ## A unit with NO melee profiles is NOT gated: missing loadout data proves nothing (test fixtures
 ## and data-less imports charge exactly as before — the same missing-data discipline as the
 ## split-fire bearer fix). The gate refuses only what the data AFFIRMATIVELY shows is hopeless.
+## NML-1026 (body campaign F2): ONE charge-legality truth for every adoption
+## path (clone/planner/position solver). Mirrors the tree's RULE gates — band
+## (incl. Melee Shrouding), aircraft, and the p.11 difficult cap. Futility and
+## the dangerous toll are EV PREFERENCES, not legality — the adopting brain may
+## overrule those knowingly; it may never break a rule.
+func charge_illegal_why(unit: GameUnit, tgt: GameUnit, band_in: float) -> String:
+	if is_aircraft(tgt):
+		return "aircraft cannot be charged"
+	var gap := nearest_melee_gap_in(unit, tgt)
+	var band := melee_shroud_charge_in(band_in, tgt)
+	if gap > band:
+		return "out of charge band (%.1f\" > %.1f\")" % [gap, band]
+	if _charge_capped_by_difficult(unit, unit_centre(unit), unit_centre(tgt), gap):
+		return "difficult cap (p.11)"
+	return ""
+
+
+## NML-1027 (body campaign F3): when must the shorter-reach rescue ladder fire?
+## Old rule: only on near-total collapse (<25%) or torn coherency — the 25-100%
+## dead zone let a 6" rush deliver 2" unchallenged (the corpus's 1.6-3.0" band).
+## New: a COMMITTED distant-goal move that lost >20% to the gate also retries.
+static func rescue_should_fire(achieved_m: float, planned_m: float,
+		post_coherent: bool, start_coherent: bool,
+		goal_gap_in: float, reach_in: float) -> bool:
+	if planned_m <= 0.01:
+		return false
+	if achieved_m < planned_m * STALL_REPLAN_FRACTION:
+		return true
+	if not post_coherent and start_coherent:
+		return true
+	return achieved_m < planned_m * 0.8 and goal_gap_in > reach_in
+
+
 func melee_futile_against(unit: GameUnit, target_unit: GameUnit) -> bool:
 	if target_unit == null:
 		return true
@@ -1834,6 +1897,19 @@ func _act(unit: GameUnit) -> Dictionary:
 			solver_used = false
 			action_why = "Immobile/Artillery hold-only (re-gated over the adopted plan)"
 			_rule_note(report, "%s: the adopted plan wanted to MOVE an Immobile/Artillery unit — re-gated to Hold (GF v3.5.1 p.13/p.57)" % unit.get_name(), true)
+		# NML-1026 (body F2): the adopted plan may carry a CHARGE the tree's own
+		# rule gates just refused (they lived tree-side only). Re-gate here; an
+		# illegal charge becomes a RUSH toward the same enemy — the move
+		# survives, the doomed charge dies loudly (rules-must-log).
+		if action == AiDecision.Action.CHARGE and target_unit != null:
+			var charge_deny := charge_illegal_why(unit, target_unit, rush)
+			if charge_deny != "":
+				action = AiDecision.Action.RUSH
+				action_why = "adopted charge re-gated (%s) — rushing instead" % charge_deny
+				honesty_alarm("illegal charge adopted", "%s -> %s: %s" % [
+					unit.get_name(), target_unit.get_name(), charge_deny])
+				_rule_note(report, "%s: the adopted plan declared an illegal charge on %s (%s) — re-gated to Rush (GF v3.5.1 p.9/p.11)" % [
+					unit.get_name(), target_unit.get_name(), charge_deny], true)
 		_rule_note(report, str(pl["why"]), false)
 	if not planner_used and (action == AiDecision.Action.RUSH or action == AiDecision.Action.ADVANCE) and _position_solver_active():
 		var sol := _solve_position(unit, target_unit, weapons, archetype, advance, rush, obj_pos, has_obj, int(dec["toward"]), do_shoot)
@@ -4096,6 +4172,7 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 			new_positions = p2
 			trails = t2
 			avoid = false   # the move goes through — the decision record's label follows suit
+			avoid_dangerous = false   # NML-1027 wave: retries must keep the accepted THROUGH regime
 	# Distance truth (p.7): no model's polyline may exceed the granted budget — the coherency easing is
 	# best-effort and may not stretch a route past its legal length.
 	var budget_m := reach * INCHES_TO_METERS
@@ -4148,15 +4225,15 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 		# settled, and units ended torn apart. The post-gate coherency check now feeds the SAME
 		# shorter-reach ladder as the collapse case; the ladder prefers COHERENT results outright.
 		var post_coherent: bool = _config_coherent_world(models, new_positions, chain_in)
-		if not allow_contact and planned_m > 0.01 \
-				and (_achieved_m(positions, new_positions) < planned_m * STALL_REPLAN_FRACTION \
-					or (not post_coherent and start_coherent)):
+		if not allow_contact and rescue_should_fire(_achieved_m(positions, new_positions),
+				planned_m, post_coherent, start_coherent,
+				MoveIntent.distance_inches(MoveIntent.anchor_of(positions), goal), reach):
 			var best_pos := new_positions
 			var best_trails := trails
 			var best_ach := _achieved_m(positions, new_positions)
 			var best_reach := reach
 			var best_coherent := post_coherent
-			for frac in [0.5, 0.25]:
+			for frac in [0.75, 0.5, 0.25]:   # NML-1027: no rung between 100% and 50% was the dead zone
 				var r3: float = reach * float(frac)
 				var t3: Array = []
 				var p3 := _plan_move(unit, models, positions, goal, r3, allow_contact, avoid, avoid_dangerous, t3, charge_target)
@@ -4367,6 +4444,13 @@ func _execute_move(unit: GameUnit, goal: Vector3, inches: float, allow_contact: 
 	for k in _move_extra:
 		move_data[k] = _move_extra[k]
 	_move_extra = {}
+	# F5 probe: a committed distant-goal move that delivered under half its
+	# budget must have a documented gate reason — silence here is the disease.
+	if float(move_data["goal_gap_in"]) > reach \
+			and achieved_arc_m / INCHES_TO_METERS < reach * 0.5:
+		honesty_alarm("move shortfall", "%s delivered %.1f\" of %.1f\" toward a %.1f\"-away goal (%s)" % [
+			unit.get_name(), achieved_arc_m / INCHES_TO_METERS, reach,
+			float(move_data["goal_gap_in"]), why])
 	if band_clamp_models > 0:
 		# NML-230 (rules-must-log): the placement gate's physical correction hit the band-slack cap
 		# this move — ONE line, only when the clamp actually bit; residual overlap/coherency debt (if
