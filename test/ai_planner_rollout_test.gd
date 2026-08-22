@@ -356,3 +356,50 @@ func test_plan_with_rollout_stashes_the_winning_leaf() -> void:
 	assert_bool(leaf.has("units")).is_true()
 	assert_bool(leaf.has("stale")).is_false()
 	assert_int(int(leaf["round"])).is_greater_equal(int(state["round"]))
+
+
+func test_charge_illegal_callable_filters_the_menu() -> void:
+	# Head wave 1: a controller-provided legality callable removes forbidden charge
+	# victims from the candidate menu; without the key the menu is byte-identical
+	# (lab tests and old snapshots keep their behaviour). Two melee units in easy
+	# reach: baseline menu MUST contain a CHARGE, the always-illegal state none.
+	var a := _armed(1, [Vector3.ZERO], "Brawler", [{"name": "CCW", "range": 0}])
+	var b := _armed(2, [Vector3(3.0 * IN2M, 0, 0)], "Victim", [{"name": "CCW", "range": 0}])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Brawler": a, "Victim": b}
+	var state := BattleSim.capture(army, func() -> Array: return [],
+		func(_i: int) -> int: return 0, 1, 4)
+	var akey := ""
+	for k in state["units"]:
+		if (state["units"][k] as Dictionary)["unit"] == a:
+			akey = str(k)
+	var kinds_plain: Array = AiPlanner.candidates(state, akey).map(
+		func(c: Dictionary) -> int: return int(c["kind"]))
+	assert_bool(kinds_plain.has(AiDecision.Action.CHARGE)).is_true()
+	state["charge_illegal"] = func(_u: GameUnit, _t: GameUnit, _gap: float,
+			_from: Vector3, _to: Vector3) -> bool: return true
+	var kinds_gated: Array = AiPlanner.candidates(state, akey).map(
+		func(c: Dictionary) -> int: return int(c["kind"]))
+	assert_bool(kinds_gated.has(AiDecision.Action.CHARGE)).is_false()
+
+
+func test_net_guided_playout_picks_within_the_menu_and_is_deterministic() -> void:
+	# Net-guided playouts (head wave 1+): with a net loaded, _policy_step routes
+	# through the Feldherrenblick, which chooses WITHIN each unit's candidate menu —
+	# so the result must be one of that unit's own candidates, and two identical
+	# calls must agree (deterministic policy steps are what rollout caching relies
+	# on). playout_net is a static: reset guarded even on assert failure.
+	var net := JSON.parse_string(FileAccess.get_file_as_string(
+		"res://test/data/clone_parity.json")) as Dictionary
+	var state := _state()
+	AiPlanner.playout_net = net
+	var a1: Dictionary = AiPlanner._policy_step(state, 2)
+	var a2: Dictionary = AiPlanner._policy_step(state, 2)
+	AiPlanner.playout_net = {}
+	assert_bool(a1.is_empty()).is_false()
+	assert_str(str(a1)).is_equal(str(a2))
+	var legal := false
+	for c in AiPlanner._policy_candidates(state, str(a1["unit"])):
+		if str(c) == str(a1):
+			legal = true
+	assert_bool(legal).is_true()

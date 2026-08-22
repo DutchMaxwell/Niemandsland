@@ -1373,6 +1373,35 @@ func charge_illegal_why(unit: GameUnit, tgt: GameUnit, band_in: float) -> String
 	return ""
 
 
+## Head wave 1: the same three RULE gates for the planner's IMAGINATION. The adoption
+## re-gate (NML-1026) stopped illegal charges from executing, but the planner kept
+## proposing them (~1.3/game across the cycle-7 book, 1268x difficult cap) and burned
+## search budget on fantasies. Coordinates come from the SIM state (valid for imagined
+## positions too — the corridor probe takes arbitrary points); unit-static facts
+## (aircraft, Shrouding, Strider/Flying, base radius) read the live units.
+## Per-seat gate for net-guided playouts: NML_PLAYOUT_NET_P<slot> wins over the
+## global NML_PLAYOUT_NET — the same per-seat pattern as the amplifier knobs.
+func _playout_net_gate() -> bool:
+	var e := OS.get_environment("NML_PLAYOUT_NET_P%d" % int(ai_slot))
+	if e == "":
+		e = OS.get_environment("NML_PLAYOUT_NET")
+	return e == "1"
+
+
+func charge_candidate_illegal(unit: GameUnit, tgt: GameUnit, gap_in: float,
+		from: Vector3, to: Vector3) -> bool:
+	if is_aircraft(tgt):
+		return true
+	# Review find (workflow 22.08.): the menu's truth is the SIM world — sim_move_bands
+	# (Musician-aware, "THE band truth for the LAB"), not the raw MRC band; a raw band
+	# silently dropped legal Musician/Teleport charges from the AI's imagination. The
+	# adoption re-gate stays the DICE truth for once-per-game boosts the sim cannot land.
+	var band := float(sim_move_bands(unit).get("rush", 12))
+	if gap_in > melee_shroud_charge_in(band, tgt):
+		return true
+	return _charge_capped_by_difficult(unit, from, to, gap_in)
+
+
 ## NML-1027 (body campaign F3): when must the shorter-reach rescue ladder fire?
 ## Old rule: only on near-total collapse (<25%) or torn coherency — the 25-100%
 ## dead zone let a 6" rush deliver 2" unchallenged (the corpus's 1.6-3.0" band).
@@ -2853,12 +2882,20 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	var diff := active_difficulty()
 	AiMissionEval.fit_mode = diff != null and diff.eval_fit   # E4: leaf choice per preset
 	AiPlanner.playout_search = diff != null and diff.playout_search   # S-wave: per preset
+	# Net-guided playouts (research gate NML_PLAYOUT_NET=1): the loaded clone
+	# steers every imagined activation; OFF or no net = byte-identical heuristics.
+	# NML_PLAYOUT_NET_P<slot> overrides per seat (improvement-operator pattern,
+	# like NML_CLONE_SEARCH_P<slot>) so one process can duel guided vs heuristic.
+	AiPlanner.playout_net = AiClone.net_for(int(ai_slot)) \
+		if _playout_net_gate() else {}
 	# D-wave: seat-aware depth — opener when OUR side made this round's first
 	# activation (or nobody acted yet, i.e. we are about to open it).
 	AiPlanner.opener_seat = int(_round_first_slot.get(_current_round(), ai_slot)) == int(ai_slot)
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
 		terrain_type_at)
+	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
+	state["los_at"] = los_checker   # review find: playout tuples need the trained sight feature
 	var me: int = int((pool[0] as GameUnit).unit_properties.get("player_id", 0))
 	for k in state["units"]:
 		var su: Dictionary = state["units"][k]
@@ -2941,6 +2978,8 @@ func _menu_probe(unit: GameUnit, action: int, goal: Vector3, target_unit: GameUn
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
 		terrain_type_at)
+	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
+	state["los_at"] = los_checker   # review find: playout tuples need the trained sight feature
 	var key := _state_key_of(state, unit)
 	if key == "":
 		# Never lose an activation silently (the ledger must close against the
@@ -3050,9 +3089,14 @@ func _clone_active() -> bool:
 ## hand it back in the same shape the planner overlay uses.
 func _solve_clone(unit: GameUnit) -> Dictionary:
 	var net := AiClone.net_for(int(ai_slot))
+	# Net-guided playouts ride the deep-teacher path too (rollout_boundaries ->
+	# _policy_step reads the static); same research gate, same byte-identical off.
+	AiPlanner.playout_net = net if _playout_net_gate() else {}
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
 		terrain_type_at)
+	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
+	state["los_at"] = los_checker   # review find: playout tuples need the trained sight feature
 	var key := _state_key_of(state, unit)
 	if key == "":
 		return {}
@@ -3233,6 +3277,8 @@ func _solve_planner(unit: GameUnit) -> Dictionary:
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
 		terrain_type_at)
+	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
+	state["los_at"] = los_checker   # review find: playout tuples need the trained sight feature
 	var unit_key := ""
 	for k in state["units"]:
 		if (state["units"][k] as Dictionary)["unit"] == unit:

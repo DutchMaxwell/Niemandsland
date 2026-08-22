@@ -414,6 +414,10 @@ static func clone_state(state: Dictionary) -> Dictionary:
 		"units": units, "objectives": objectives}
 	if state.has("terrain_at"):
 		out["terrain_at"] = state["terrain_at"]
+	if state.has("charge_illegal"):   # head wave 1: legality rides every imagined step
+		out["charge_illegal"] = state["charge_illegal"]
+	if state.has("los_at"):   # sight feature for net-guided playout tuples
+		out["los_at"] = state["los_at"]
 	if state.has("los_blocked"):
 		out["los_blocked"] = state["los_blocked"]
 	if state.has("markers_meta"):
