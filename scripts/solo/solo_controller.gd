@@ -8596,6 +8596,8 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 	# EVERY AI-controlled slot, not just the side deploying right now (verification run 4): the SECOND
 	# deploy's overlap cleanup can nudge a FIRST side's model back out of chain — the repair after the
 	# later deploy re-heals both. Human slots are never touched (the player places his own models).
+	# Because the pass crosses slots, each record NAMES its unit's own seat (data.slot) — the acting
+	# slot would book the other side's repairs on the deployer's account.
 	var forced_any := false
 	var ai_slots: Array = difficulty_by_slot.keys()
 	if ai_slots.is_empty():
@@ -8665,14 +8667,15 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 				record_decision({"kind": "deploy", "unit": unit.get_name(),
 					"rule": "Deploy coherency repair: stragglers re-placed into chain range of the unit's largest group (p.7 — a unit never starts torn)",
 					"candidates": [], "chosen": "straggler re-placed", "why": "deploy left a model out of coherency",
-					"data": {"pass": _pass}})
+					"data": {"pass": _pass, "slot": int(unit.unit_properties.get("player_id", 0))}})
 			else:
 				# Nothing placeable — make the failure VISIBLE (audits read this) instead of a silent break.
 				record_decision({"kind": "deploy", "unit": unit.get_name(),
 					"rule": "Deploy coherency repair FAILED: no free linked ring spot for the remaining straggler(s)",
 					"candidates": [], "chosen": "still torn", "why": "deploy repair found no legal spot",
 					"data": {"pass": _pass, "models": ms.size(), "comp": comp.size(),
-						"stragglers": ms.size() - comp.size()}})
+						"stragglers": ms.size() - comp.size(),
+						"slot": int(unit.unit_properties.get("player_id", 0))}})
 				break   # avoid spinning
 	return forced_any
 

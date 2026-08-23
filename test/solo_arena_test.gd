@@ -321,3 +321,43 @@ func test_second_deploy_begin_keeps_first_sides_ambush_reserve() -> void:
 		"ready() counts only the ACTIVE side (slot 2 has no reserves)").is_equal(0)
 	solo.ai_slot = 1
 	assert_int(solo.ambush_reserve_ready(2)).is_equal(1)
+
+
+# === Deploy record honesty: whose account a repair record lands on ===
+
+## deploy_finish() repairs EVERY graded slot, not just the side deploying right now, so the FIRST
+## deployer's finish pass emits coherency-repair records for the OTHER side's units. The harness books
+## a record on the slot the controller was ACTING as, so those repairs landed on the wrong account
+## (measured in a captured rekrut-vs-rekrut game: 8 of 17 deploy records were a P2 unit's repair booked
+## to P1). The record must name the repaired unit's OWN seat.
+func test_deploy_repair_record_names_the_repaired_units_own_seat() -> void:
+	var mine := _unit(1, [Vector3(-0.5, 0, 0.0)], "P1a")
+	var torn := _unit(2, [Vector3(0.5, 0, 0.0), Vector3(0.5, 0, 0.9)], "P2torn")   # ~35" apart — torn
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(_army([mine, torn]), null, null, 1, 2)
+	solo.set_difficulty(1, SoloDifficulty.for_grade("rekrut", 5))
+	solo.set_difficulty(2, SoloDifficulty.for_grade("rekrut", 5))
+	solo.ai_slot = 1          # P1 is the acting side while ITS deploy finishes
+	solo.human_slot = 2
+	var seen: Array = []
+	solo.decision_sink = func(rec: Dictionary) -> void:
+		if str(rec.get("kind", "")) == "deploy" and str(rec.get("unit", "")) == "P2torn":
+			seen.append(rec)
+	solo.deploy_finish()
+	assert_int(seen.size()).override_failure_message(
+		"the repair pass must emit a deploy record for the torn P2 unit").is_greater(0)
+	for rec in seen:
+		assert_int(int((rec["data"] as Dictionary).get("slot", 0))).override_failure_message(
+			"the repair record must carry the repaired unit's own seat").is_equal(2)
+		assert_int(ArenaMatch.honest_side(rec, solo.ai_slot)).override_failure_message(
+			"the harness must book P2's repair on P2, not on the acting slot").is_equal(2)
+
+
+## The side rule for every OTHER record is unchanged: no owner hint ⇒ the acting slot, and a seize still
+## names the marker's new owner (0 = contested/neutral).
+func test_harness_books_records_without_an_owner_hint_on_the_acting_slot() -> void:
+	assert_int(ArenaMatch.honest_side({"kind": "move", "data": {}}, 2)).is_equal(2)
+	assert_int(ArenaMatch.honest_side({"kind": "deploy", "data": {"section": 1}}, 2)).is_equal(2)
+	assert_int(ArenaMatch.honest_side({"kind": "seize", "data": {"owner": 1}}, 2)).is_equal(1)
+	assert_int(ArenaMatch.honest_side({"kind": "seize", "data": {}}, 2)).is_equal(0)

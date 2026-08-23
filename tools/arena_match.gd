@@ -322,13 +322,8 @@ func _run() -> void:
 		by[str(u.get_name())] = int(by.get(str(u.get_name()), 0)) + 1
 		_unit_activations[slot] = by)
 	solo.decision_sink = func(rec: Dictionary) -> void:
-		var side: int = int(solo.ai_slot)
 		var kind := str(rec.get("kind", "?"))
-		# A round-end SEIZE record is an OBJECTIVE ownership event, not an acting side's decision — its
-		# honest side is the marker's new owner (0 = contested/neutral), never whichever slot happened to
-		# take the round's last activation (showcase finding: every seize carried the active slot).
-		if kind == "seize":
-			side = int((rec.get("data", {}) as Dictionary).get("owner", 0))
+		var side: int = honest_side(rec, int(solo.ai_slot))
 		var by_kind: Dictionary = _decision_counts.get(side, {})
 		by_kind[kind] = int(by_kind.get(kind, 0)) + 1
 		_decision_counts[side] = by_kind
@@ -475,6 +470,26 @@ func _run() -> void:
 		float(Time.get_ticks_msec() - t0) / 1000.0)
 	_write_capture_outputs()
 	quit(0)
+
+
+## Whose ACCOUNT a decision record belongs on. Usually the slot the controller was acting as when the
+## record fired (`acting_slot`), but two kinds describe a side that is NOT the acting one:
+##   seize  — a round-end objective ownership event, not an acting side's decision: its honest side is
+##            the marker's new owner (0 = contested/neutral), never whichever slot happened to take the
+##            round's last activation (showcase finding: every seize carried the active slot).
+##   deploy — deploy_finish's coherency repair walks EVERY graded slot, so one side's finish pass emits
+##            repair records for the OTHER side's units (measured, rekrut vs rekrut seed 7: 8 of 17
+##            deploy records were a P2 unit's repair booked to P1). Those records carry the repaired
+##            unit's own seat in data.slot; every other deploy record has no hint and stays on the actor.
+static func honest_side(rec: Dictionary, acting_slot: int) -> int:
+	var data: Dictionary = rec.get("data", {})
+	match str(rec.get("kind", "?")):
+		"seize":
+			return int(data.get("owner", 0))
+		"deploy":
+			if data.has("slot"):
+				return int(data["slot"])
+	return acting_slot
 
 
 # === Showcase capture (capture= / NML_AI_CAPTURE) ===
