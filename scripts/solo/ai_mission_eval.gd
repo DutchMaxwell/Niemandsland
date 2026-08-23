@@ -581,17 +581,27 @@ static func _presence(state: Dictionary, su: Dictionary, obj_pos: Vector3,
 		threat := 0.0) -> float:
 	if int(su["alive"]) <= 0:
 		return 0.0
-	var d := INF
-	for p in su["positions"]:
-		d = minf(d, ((p as Vector3) - obj_pos).length())
-	d /= BattleSim.IN2M
+	# HEAD_QUEUE #13 (rebuilt 23.08.): an Aircraft never holds a marker, so it
+	# must not project presence either — the eval promised a hold the referee
+	# always refused.
+	if bool(su.get("aircraft", false)):
+		return 0.0
+	var rounds_total := int(state["rounds_total"])
+	var round_now := int(state["round"])
+	var arrived_now: bool = int(su.get("ambush_arrived_round", -1)) == round_now
+	if arrived_now and round_now >= rounds_total:
+		return 0.0   # landed in the last round: no round end left where it could hold
+	# HEAD_QUEUE #12: measure like the referee — base edge, horizontally.
+	var d := BattleSim.control_gap_in(su, obj_pos)
 	var rush := float(SoloController.sim_move_bands(su["unit"]).get("rush", 12))
 	var needed := 0
-	if d > SoloController.OBJECTIVE_CONTROL_IN:
+	if d > SoloController.OBJECTIVE_CONTROL_IN + BattleSim.CONTROL_EPS:
 		needed = int(ceil((d - SoloController.OBJECTIVE_CONTROL_IN) / maxf(rush, 1.0)))
+	if arrived_now:
+		needed = maxi(needed, 1)   # p.13: it may act this round, hold only from the next
 	if bool(su.get("shaken", false)):
 		needed += 1
-	var moves_left: int = int(state["rounds_total"]) - int(state["round"]) \
+	var moves_left: int = rounds_total - round_now \
 		+ (0 if bool(su.get("activated", false)) else 1)
 	if needed > moves_left:
 		return 0.0

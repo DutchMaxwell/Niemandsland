@@ -236,34 +236,49 @@ static func playout_seize(state: Dictionary, owners: Array) -> void:
 		var sides := {}
 		for k in state["units"]:
 			var su: Dictionary = state["units"][k]
-			if int(su["alive"]) <= 0 or bool(su.get("shaken", false)):
-				continue          # Shaken units can neither seize nor contest
-			if bool(su.get("aircraft", false)):
-				continue          # an Aircraft never can (GF v3.5.1)
-			if int(su.get("ambush_arrived_round", -1)) == int(state.get("round", 1)):
-				continue          # arrived from Ambush THIS round (GF/AoF v3.5.1 p.13)
+			if not can_hold_marker(su, int(state.get("round", 1))):
+				continue
 			var pid := int(su["player"])
 			if sides.has(pid):
 				continue
-			var radii: Array = su.get("radii", [])
-			var ps: Array = su["positions"]
-			for pi in range(ps.size()):
-				# BASE EDGE and HORIZONTALLY, exactly as MoveIntent.distance_inches
-				# measures for the real check: centre distance minus this model's
-				# base radius, height ignored. A 3D centre-to-centre measure is a
-				# tighter ring than the book's and on elevated terrain it is a
-				# different ring altogether.
-				var dp: Vector3 = (ps[pi] as Vector3) - op
-				var d_in := Vector3(dp.x, 0.0, dp.z).length() / IN2M
-				var r_in: float = (float(radii[pi]) / IN2M) if pi < radii.size() else 0.0
-				if d_in - r_in <= SoloController.OBJECTIVE_CONTROL_IN + 0.001:
-					sides[pid] = true
-					break
+			if control_gap_in(su, op) <= SoloController.OBJECTIVE_CONTROL_IN + CONTROL_EPS:
+				sides[pid] = true
 		if sides.size() == 1:
 			owners[i] = int(sides.keys()[0])
 		elif sides.size() > 1:
 			owners[i] = 0
 		(objs[i] as Dictionary)["owner"] = int(owners[i])
+
+
+## HEAD_QUEUE #12/#13 (rebuilt 23.08.): ONE marker measure for referee AND
+## planner. The nearest BASE EDGE gap in inches, measured HORIZONTALLY — the
+## same way MoveIntent.distance_inches measures for the real check. A 3D
+## centre-to-centre measure is a tighter ring than the book's, and on elevated
+## terrain it is a different ring altogether: a model 2" out on a 5" roof read
+## 5.4" and silently stopped counting as a holder.
+static func control_gap_in(su: Dictionary, obj_pos: Vector3) -> float:
+	var ps: Array = su.get("positions", [])
+	if ps.is_empty():
+		return INF
+	var radii: Array = su.get("radii", [])
+	var best := INF
+	for pi in range(ps.size()):
+		var dp: Vector3 = (ps[pi] as Vector3) - obj_pos
+		var d_in := Vector3(dp.x, 0.0, dp.z).length() / IN2M
+		var r_in: float = (float(radii[pi]) / IN2M) if pi < radii.size() else 0.0
+		best = minf(best, d_in - r_in)
+	return best
+
+
+## The referee's eligibility set — who may hold a marker at a round end at all:
+## alive, not Shaken, not an Aircraft, and not a unit that arrived from Ambush
+## THIS round (GF/AoF v3.5.1 p.13: it may act, it may not seize).
+static func can_hold_marker(su: Dictionary, round_no: int) -> bool:
+	if int(su.get("alive", 0)) <= 0 or bool(su.get("shaken", false)):
+		return false
+	if bool(su.get("aircraft", false)):
+		return false
+	return int(su.get("ambush_arrived_round", -1)) != round_no
 
 
 ## NML-1008 (GF Advanced v3.5.1): cumulative VICTORY POINTS — at the end of
@@ -499,6 +514,7 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 
 
 const CONTACT_IN := 1.0
+const CONTROL_EPS := 0.001   # float guard on the inclusive 3" ring
 
 ## Snapshot LOS: no matrix (no los_of wired at capture) = everyone sees
 ## everyone, byte-identical to pre-T2. V0 approximation, documented: the
