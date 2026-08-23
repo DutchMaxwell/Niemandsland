@@ -339,6 +339,12 @@ var _solo_dev: bool = false                  # developer mode: render the AI's d
 ## Per-activation stderr trace of the both-AI arena loop (env NML_AI_TRACE=1) — the ladder tooling's
 ## progress/stall diagnostic for long unattended headless matches. Off by default: zero output in normal play.
 var _solo_arena_trace: bool = OS.get_environment("NML_AI_TRACE") == "1"
+## Harness seam (arena per-activation captures, NML_CAPTURE_ACTS): awaited AFTER an activation has
+## fully RESOLVED. A screenshot hung on ai_unit_activated instead lands mid-choreography — that signal
+## fires while the controller has already applied the final positions, and _solo_present_move_start()
+## then puts the models BACK at their route start for the glide. Unset in the shipped game: is_valid()
+## is false, nothing is awaited, and not one extra frame or dice draw enters the match.
+var solo_activation_done: Callable = Callable()
 var _solo_toast: Label = null                # transient AI-action attribution/outcome toast
 var _solo_live_announce: Array = []          # announce rings/line currently on the board (leak sweep)
 var _solo_toast_gen: int = 0   # generation token so an auto-hide never blanks a newer toast
@@ -897,7 +903,17 @@ func _run_solo_ai_turn() -> void:
 ## SoloController (official decision tree, terrain, walls), follow with the camera, narrate to the battle
 ## log, then resolve Dangerous tests / shooting / melee with real tray dice. A Shaken unit idles and
 ## recovers instead (OPR p.10). Returns the activated unit, or null when the AI side is done.
+##
+## Thin wrapper so the harness seam fires on EVERY exit path of the body below (Shaken idle and the
+## destroyed-mid-activation returns included), always with the board in its settled end state.
 func _solo_activate_one_ai() -> GameUnit:
+	var done: GameUnit = await _solo_activate_one_ai_body()
+	if done != null and solo_activation_done.is_valid():
+		await solo_activation_done.call(done)
+	return done
+
+
+func _solo_activate_one_ai_body() -> GameUnit:
 	# Community #163: guarantee one OS message-pump tick per unit. A run of HOLD/idle
 	# units used to await NOTHING (the pace/animate awaits are has_move-gated), so the
 	# whole AI side ran as one synchronous burst and Windows flagged the window "not

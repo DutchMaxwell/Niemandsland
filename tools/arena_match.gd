@@ -83,7 +83,10 @@ var _position_rows: Array = []          # E1/E6: {side, round, seq, features} �
 
 # Showcase capture (capture= / NML_AI_CAPTURE) — board PNGs + full battle log + verbatim decisions.
 var _capture_dir := ""                  # empty => captures off (the ladder default)
-var _act_capture: Callable = Callable() # per-activation board capture (NML_CAPTURE_ACTS=1; wired onto ai_unit_activated)
+var _act_capture: Callable = Callable() # per-activation trail dump + queued PNG (NML_CAPTURE_ACTS=1; on ai_unit_activated)
+var _act_capture_png: Callable = Callable() # the queued PNG grab (main.solo_activation_done — the SETTLED board)
+var _act_png_pending := ""              # file name queued by _act_capture, drained by _act_capture_png
+var _act_fan: Node = null               # NML_CAPTURE_FAN overlay, kept alive until the deferred grab
 var _move_trail_dump: Array = []        # per-activation per-model path polylines (the offline wall-audit's input)
 var _move_trail_walls: Array = []       # wall segments (world XZ metres), stashed at the first activation capture
 var _all_decisions: Array = []          # EVERY decision record verbatim, annotated {side, round}
@@ -174,13 +177,13 @@ func _run() -> void:
 				# NML_CAPTURE_FAN=1: draw the activating unit's sight+range fan into the capture — the
 				# watch-loop verification of the fan overlay (I review it against ruins/containers frame by
 				# frame before it ships to the player's selection UI).
-				var fan: Node = null
+				_act_fan = null
 				if OS.get_environment("NML_CAPTURE_FAN") == "1" and u != null:
-					fan = main.get_node_or_null("ArenaFanDebug")
-					if fan == null:
-						fan = SightFanController.new()
-						fan.name = "ArenaFanDebug"
-						main.add_child(fan)
+					_act_fan = main.get_node_or_null("ArenaFanDebug")
+					if _act_fan == null:
+						_act_fan = SightFanController.new()
+						_act_fan.name = "ArenaFanDebug"
+						main.add_child(_act_fan)
 					var solo_ctl: Node = main.get("solo_controller")
 					var fan_ranges: Array = []
 					if solo_ctl != null:
@@ -192,11 +195,22 @@ func _run() -> void:
 					var tbl: Node = main.get("table")
 					var hw: float = (tbl.table_size.x * 0.3048 / 2.0) if tbl != null else 0.0
 					var hd: float = (tbl.table_size.y * 0.3048 / 2.0) if tbl != null else 0.0
-					fan.show_fan_for(u, main.get("terrain_overlay"), fan_ranges,
+					_act_fan.show_fan_for(u, main.get("terrain_overlay"), fan_ranges,
 						Rect2(Vector2(-hw, -hd), Vector2(hw * 2.0, hd * 2.0)))
-				await arena_self._capture_board(main, "act%03d_%s.png" % [act_n[0], unit_tag])
-				if fan != null:
-					fan.clear_fan()
+				# QUEUE the PNG — grabbing here caught the board mid-choreography (measured, seed 7: 6 of
+				# 27 consecutive act PNGs byte-identical, 4 of them with the later unit moving >1"). The
+				# trail dump above stays on this signal: it must read last_move_paths / last_report before
+				# any pile-in or casualty edits them.
+				_act_png_pending = "act%03d_%s.png" % [act_n[0], unit_tag]
+			# Drains the queue once the activation has fully resolved (main.solo_activation_done).
+			_act_capture_png = func(_u) -> void:
+				if _act_png_pending.is_empty():
+					return
+				await arena_self._capture_board(main, _act_png_pending)
+				_act_png_pending = ""
+				if _act_fan != null:
+					_act_fan.clear_fan()
+					_act_fan = null
 		# Full-log collection: the Battle Log panel's data source is a 200-entry ring buffer, so a
 		# whole match overflows it — mirror every entry as it is logged and dump the mirror at the end.
 		battle_log.entry_added.connect(func(entry: Dictionary) -> void: _log_entries.append(entry))
@@ -304,7 +318,8 @@ func _run() -> void:
 		return
 	solo._rng.seed = _seed
 	if _act_capture.is_valid():
-		solo.ai_unit_activated.connect(_act_capture)   # per-activation board PNG (NML_CAPTURE_ACTS=1)
+		solo.ai_unit_activated.connect(_act_capture)   # trail dump + PNG queue (NML_CAPTURE_ACTS=1)
+		main.solo_activation_done = _act_capture_png   # the grab itself, on the settled board
 	# Off-board audit (#215) — ALWAYS on, no env gate: the ladder IS the A/B measurement track, so every
 	# graded game must carry the number. One parseable battle-log line per offending unit right after it
 	# settled; tools/tactic_audit.py counts those lines as d9. Measurement only — no decision is touched.
