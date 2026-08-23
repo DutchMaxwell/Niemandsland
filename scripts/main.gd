@@ -2102,8 +2102,8 @@ func _solo_player_label(pid: int) -> String:
 	return "P%d" % pid
 
 
-## End-of-game summary (goal 003 P2): after SOLO_GAME_ROUNDS the match ends — objectives held per side
-## decide the winner (OPR standard missions; with no markers on the table, surviving models break the tie).
+## End-of-game summary (goal 003 P2): after SOLO_GAME_ROUNDS the match ends — BattleSim.mission_winner
+## names the winner from the mission's OWN currency (NML-1048), never from a second count taken here.
 ## A battle-log block + a results dialog; the table stays as-is (the Next-Round button still works for
 ## anyone playing on).
 func _solo_show_game_summary() -> void:
@@ -2130,26 +2130,40 @@ func _solo_show_game_summary() -> void:
 	var side_b_label: String = _solo_player_label(ai_slot) if _solo_both_ai else "NACHTMAHR"
 	var win_a: String = "%s wins" % side_a_label if _solo_both_ai else "You win — NACHTMAHR yields."
 	var win_b: String = "%s wins" % side_b_label if _solo_both_ai else "NACHTMAHR claims the field."
-	var verdict: String
-	if objectives.is_empty():
-		# No markers on the table: fall back to surviving models (documented tie-break, not an OPR mission).
-		var ai_alive := _solo_side_alive(ai_slot)
-		var human_alive := _solo_total_alive() - ai_alive
-		verdict = win_a if human_alive > ai_alive else (win_b if ai_alive > human_alive else "Draw")
-	else:
-		verdict = win_a if human_held > ai_held else (win_b if ai_held > human_held else "Draw")
+	# NML-1048: the verdict comes from the SAME referee the result JSON uses — BattleSim.mission_winner.
+	# The old line counted the markers still held at the buzzer and never opened the mission VP ledger
+	# _solo_book_mission_vp fills every round, so on the four progressive missions the two drifted apart:
+	# over 633 self-play games, 55 of the 233 round_vp ones named the LOSING side (seed 3003000: board
+	# 1:2 markers, ledger 6:5 VP, referee "p1", summary "P2 wins").
+	var winner_side: String = BattleSim.mission_winner(SoloController.mission_scoring,
+		terrain_overlay.get_objective_owners() if terrain_overlay != null else [],
+		SoloController.mission_vp, SoloController.mission_markers,
+		_solo_side_alive(1), _solo_side_alive(2))   # the referee speaks P1/P2, never "you"/"AI"
+	var human_won: bool = winner_side == ("p%d" % human_slot)
+	var ai_won: bool = winner_side == ("p%d" % ai_slot)
+	var verdict: String = win_a if human_won else (win_b if ai_won else "Draw")
+	# The ledger IS the rule on a progressive mission, so the player has to see it next to the markers.
+	var vp_a: int = int(SoloController.mission_vp[human_slot - 1])
+	var vp_b: int = int(SoloController.mission_vp[ai_slot - 1])
+	var scored_by_vp: bool = SoloController.mission_scoring == "round_vp"
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.GENERAL, "=== GAME OVER — %d rounds played ===" % SOLO_GAME_ROUNDS, true)
 		if not objectives.is_empty():
 			_log_rule_event(BattleLog.Category.GENERAL, "Objectives — %s: %d · %s: %d · neutral: %d" % [
 				side_a_label, human_held, side_b_label, ai_held, neutral], true)
+		if scored_by_vp:
+			_log_rule_event(BattleLog.Category.GENERAL, "Mission VP (decides) — %s: %d · %s: %d" % [
+				side_a_label, vp_a, side_b_label, vp_b], true)
 		_log_rule_event(BattleLog.Category.GENERAL, verdict, true)
 	var dlg := AcceptDialog.new()
 	dlg.title = "Game over"
 	var obj_block: String = ("Objectives held:\n  %s: %d\n  %s: %d\n  Neutral: %d\n\n" % [
 		(side_a_label.capitalize() if not _solo_both_ai else side_a_label), human_held, side_b_label, ai_held, neutral]) \
 		if not objectives.is_empty() else "No objective markers were on the table.\n\n"
-	dlg.dialog_text = "%d rounds played.\n\n%s%s" % [SOLO_GAME_ROUNDS, obj_block, verdict]
+	var vp_block: String = ("Mission VP (decides):\n  %s: %d\n  %s: %d\n\n" % [
+		(side_a_label.capitalize() if not _solo_both_ai else side_a_label), vp_a, side_b_label, vp_b]) \
+		if scored_by_vp else ""
+	dlg.dialog_text = "%d rounds played.\n\n%s%s%s" % [SOLO_GAME_ROUNDS, obj_block, vp_block, verdict]
 	dlg.confirmed.connect(dlg.queue_free)
 	dlg.canceled.connect(dlg.queue_free)
 	if ThemeManager != null:

@@ -395,6 +395,36 @@ static func sabotage_winner(markers: Array) -> String:
 	return "draw"
 
 
+## NML-1048 — THE end-of-game referee, so the verdict the player reads in the
+## summary can never disagree with the one the arena writes into its result:
+## a progressive mission is decided by the round_vp ledger (booked every round
+## by main._solo_book_mission_vp), sabotage by its own destroy verdict, every
+## other mission by the markers held at the end, and a board with no markers
+## at all by surviving models. Returns "p1" / "p2" / "draw". Lifted from
+## tools/arena_match.gd with the branch order intact — re-deciding the 633
+## measured self-play games through it reproduces all 633 recorded winners.
+static func mission_winner(scoring: String, owners: Array, vp: Array,
+		markers: Array, alive1: int, alive2: int) -> String:
+	if scoring == "sabotage":
+		return sabotage_winner(markers)
+	if scoring == "round_vp":
+		var v1: int = int(vp[0]) if vp.size() > 0 else 0
+		var v2: int = int(vp[1]) if vp.size() > 1 else 0
+		return ("p1" if v1 > v2 else "p2") if v1 != v2 else "draw"
+	var p1 := 0
+	var p2 := 0
+	for o in owners:
+		if int(o) == 1:
+			p1 += 1
+		elif int(o) == 2:
+			p2 += 1
+	if p1 != p2:
+		return "p1" if p1 > p2 else "p2"
+	if owners.is_empty() and alive1 != alive2:
+		return "p1" if alive1 > alive2 else "p2"
+	return "draw"
+
+
 ## One activation with stochastic rounding (core self-play games).
 static func resolve_stochastic(state: Dictionary, action: Dictionary,
 		rng: RandomNumberGenerator) -> Dictionary:

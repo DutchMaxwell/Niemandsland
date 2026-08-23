@@ -458,25 +458,14 @@ func _run() -> void:
 			p2 += 1
 		else:
 			neutral += 1
-	var winner := "draw"
 	var vp1: int = int(SoloController.mission_vp[0])
 	var vp2: int = int(SoloController.mission_vp[1])
-	if SoloController.mission_scoring == "sabotage":
-		# W3: destroy theirs, keep yours — anything else is a draw.
-		winner = BattleSim.sabotage_winner(SoloController.mission_markers)
-	elif SoloController.mission_scoring == "round_vp":
-		# NML-1010 W2: progressive missions are decided by the VP ledger main
-		# booked every round (end bonus included) — most VPs wins, ties draw.
-		if vp1 != vp2:
-			winner = "p1" if vp1 > vp2 else "p2"
-	elif p1 != p2:
-		winner = "p1" if p1 > p2 else "p2"
-	elif owners.is_empty():
-		# No markers (not the ladder board): documented fallback — surviving models decide, ties draw.
-		var a1: int = int(main._solo_side_alive(1))
-		var a2: int = int(main._solo_side_alive(2))
-		if a1 != a2:
-			winner = "p1" if a1 > a2 else "p2"
+	# NML-1048: the verdict is no longer computed here. BattleSim.mission_winner is the ONE referee —
+	# the same call main._solo_show_game_summary makes — so the result JSON and the summary the table
+	# reads can never name different sides again (measured: 55 of 233 round_vp games disagreed).
+	var winner: String = BattleSim.mission_winner(SoloController.mission_scoring, owners,
+		SoloController.mission_vp, SoloController.mission_markers,
+		int(main._solo_side_alive(1)), int(main._solo_side_alive(2)))
 	printerr("[ARENA] RESULT seed=%d dice=%d P1(%s) objectives=%d P2(%s) objectives=%d vp=%d:%d → %s" % [
 		_seed, _dice_seed, _p1_grade, p1, _p2_grade, p2, vp1, vp2, winner])
 	_write_result_json(main, army_manager, opener, winner,
