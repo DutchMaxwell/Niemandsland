@@ -775,11 +775,15 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 	# _best_charge — before this, teacher rows could label a charge the adoption gate
 	# then refused, so the book taught moves the body never plays.
 	var illegal_cb: Callable = state.get("charge_illegal", Callable())
+	# NML-1049: the advance band this unit would really cover, for the reach gate below.
+	var advance_in := float(SoloController.sim_move_bands(su["unit"]).get("advance", 6))
 	for ek in _enemy_keys(state, key):
 		var tu: Dictionary = state["units"][ek]
 		if int(tu["alive"]) <= 0:
 			continue
-		if not seen_shoot.has(str(ek)) and BattleSim.sees(su, str(ek)):
+		var gap_in := BattleSim.dist_in(su["positions"], tu["positions"])
+		if not seen_shoot.has(str(ek)) and BattleSim.sees(su, str(ek)) \
+				and _can_shoot_at(su, tu, gap_in):
 			out.append({"unit": key, "kind": AiDecision.Action.HOLD, "shoot": str(ek)})
 		if not seen_charge.has(str(ek)) and not ours.is_empty() \
 				and not (illegal_cb.is_valid() and bool(illegal_cb.call(su["unit"], tu["unit"],
@@ -801,10 +805,32 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 		# with a median 62 survivors against tree-vs-tree's 54 — it moved and
 		# stopped fighting. Advance keeps the shot window open (Rush does not),
 		# so this is the move the tree makes constantly and the clone never saw.
-		if BattleSim.sees(su, str(ek)):
+		# NML-1049: ...but only when the barrel reaches after that advance. The gap
+		# is the OPTIMISTIC one (closing straight in at the full band), so the gate
+		# never removes a shot the move could have set up.
+		if BattleSim.sees(su, str(ek)) \
+				and _can_shoot_at(su, tu, maxf(gap_in - advance_in, 0.0)):
 			out.append({"unit": key, "kind": AiDecision.Action.ADVANCE,
 				"dest": _centre(tu), "shoot": str(ek)})
 	return out
+
+
+## NML-1049 GHOST SHOTS: can `su` put a shot on `tu` from `d_in` inches? The wide
+## menu asked BattleSim.sees() alone — line of sight — so it offered SHOOT to
+## gunless units and to targets far past every barrel: on the 633-game c8 corpus
+## 402 rows ordered a gunless unit to fire, 155 held and shot beyond range, 1328
+## advanced and were still short. The amplifier cannot strip them (an impossible
+## shot scores 0, so hold and hold+ghost-shot tie and the pick is arbitrary), so
+## the menu must gate. The truth used is the one BattleSim.resolve() fires with —
+## profiles_in_range — widened by the unit's range bonus (Royal Legion, spell
+## tokens) so a shot the ENGINE allows never falls out of the teacher's menu, plus
+## the caster's damage spells: for a gunless mage the spell IS the shot.
+## Shooting candidates only — charge, rush and retreat legality are untouched.
+static func _can_shoot_at(su: Dictionary, tu: Dictionary, d_in: float) -> bool:
+	var reach_in := maxf(d_in - float(SoloController.shooting_range_bonus(su["unit"])), 0.0)
+	if not BattleSim._profiles_of(su, false, reach_in).is_empty():
+		return true
+	return float(BattleSim.spell_ev_of(su, tu, d_in)["ev"]) > 0.0
 
 
 ## P0 MENU-COVERAGE PROBE (Plan B v2, 15.08.): can this menu even EXPRESS the
