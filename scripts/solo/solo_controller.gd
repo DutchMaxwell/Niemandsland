@@ -1180,11 +1180,12 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 	var rec_cands: Array = []
 	for t in tied:
 		var td := t as Dictionary
-		# Report a NON-NEGATIVE target EV (field-test finding 2): the charge tie-break score is a NET
-		# dealt-minus-taken utility that can go below zero for an unfavourable matchup, but it is only ever a
-		# ranking key — surfacing a negative "expected wounds" in the dev log is misleading, so the recorded
-		# value is floored at 0. The raw score still drives the ranking above (selection is unchanged).
-		rec_cands.append({"name": (td["unit"] as GameUnit).get_name(), "ev": maxf(0.0, float(td["ev"])),
+		# Record the RAW target EV. The charge tie-break score is a NET dealt-minus-taken utility that goes
+		# below zero for a losing matchup; flooring it at 0 here made "no preference" and "a losing trade"
+		# read identically in the written record — the one field the tie analysis has (stage 1: the record
+		# describes the behaviour, it never shapes it — selection above already ranked these raw values).
+		# The player-facing dev log keeps its own non-negative guard in render_decision (finding 2).
+		rec_cands.append({"name": (td["unit"] as GameUnit).get_name(), "ev": float(td["ev"]),
 			"key": [td["activated"], td["band"]]})
 	record_decision({"kind": "target", "unit": ai_unit.get_name(),
 		"rule": "Solo v3.5.0 p.2: nearest valid target, not-activated first",
