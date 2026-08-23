@@ -308,3 +308,32 @@ func test_out_of_range_standing_still_but_in_range_after_advancing() -> void:
 		return int(c["kind"]) == AiDecision.Action.HOLD and c.has("shoot")).size()).is_equal(0)
 	assert_int(wide.filter(func(c: Dictionary) -> bool:
 		return int(c["kind"]) == AiDecision.Action.ADVANCE and c.has("shoot")).size()).is_equal(1)
+
+
+## Shooting candidates the WIDE menu offers a `rules` unit with a `range_in` gun against
+## one foe `gap_in` away. Bounding/Teleport only resolve through the mechanics map, so
+## the system/faction slugs must be real ones.
+func _wide_shots(uid: String, rules: Array, range_in: int, gap_in: float) -> int:
+	var shooter := _armed(2, [Vector3.ZERO], uid, [{"name": "Gun", "range": range_in}], rules)
+	shooter.unit_properties["game_system"] = "gf"
+	shooter.unit_properties["faction_folder"] = "eternal_dynasty"
+	var foe := _armed(1, [Vector3(gap_in * IN2M, 0, 0)], "Foe", [{"name": "CCW", "range": 0}])
+	return AiPlanner.candidates_wide(_state([shooter, foe]), uid) \
+		.filter(func(c: Dictionary) -> bool: return c.has("shoot")).size()
+
+
+## NML-1049 REWORK: the reach gate must measure the band the LIVE move covers. _act()
+## adds Bounding (D3+1, solo_controller.gd:1583-1597), the once-per-game Speed-Feat
+## family (+2") and Teleport (+3") ON TOP of sim_move_bands and hands THAT longer band
+## to _flank_goal — the one branch that sets ADVANCE+shoot on a target out of range
+## before the move. Gating with the bare 6" band deleted exactly those units' shot: a
+## legal move the teacher really plays, gone from the menu.
+func test_the_reach_gate_measures_the_band_the_live_move_covers() -> void:
+	# 31" - (6" advance + Bounding's worst D3+1 = 4") = 21", inside the 24" gun.
+	assert_int(_wide_shots("Bounder", ["Bounding"], 24, 31.0)).is_equal(1)
+	# 31" - (6" + Teleport's +3") = 22", inside it too.
+	assert_int(_wide_shots("Blinker", ["Teleport"], 24, 31.0)).is_equal(1)
+	# RULE-SCOPED, not a blanket loosening: same gun, same 31", no rule, still gated.
+	assert_int(_wide_shots("Plain", [], 24, 31.0)).is_equal(0)
+	# And the original hole stays shut: not even +4" makes a 12" gun reach 30".
+	assert_int(_wide_shots("Bounder", ["Bounding"], 12, 30.0)).is_equal(0)

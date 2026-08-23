@@ -776,7 +776,11 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 	# then refused, so the book taught moves the body never plays.
 	var illegal_cb: Callable = state.get("charge_illegal", Callable())
 	# NML-1049: the advance band this unit would really cover, for the reach gate below.
-	var advance_in := float(SoloController.sim_move_bands(su["unit"]).get("advance", 6))
+	# sim_move_bands alone is NOT it — _act() still adds Bounding, the Speed-Feat family
+	# and Teleport before handing the band to _flank_goal, the one branch that advances
+	# INTO firing range. Worst case on purpose: never delete a shot the move could set up.
+	var advance_in := float(SoloController.sim_move_bands(su["unit"]).get("advance", 6)) \
+		+ SoloController.max_activation_advance_bonus_in(su["unit"])
 	for ek in _enemy_keys(state, key):
 		var tu: Dictionary = state["units"][ek]
 		if int(tu["alive"]) <= 0:

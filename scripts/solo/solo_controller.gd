@@ -4943,6 +4943,40 @@ static func morale_bonus_of(unit: GameUnit) -> int:
 				continue
 			best = maxi(best, int((ed.get("params", {}) as Dictionary).get("morale_bonus", 0)))
 	return best
+## NML-1049: the LARGEST extra Advance inches an activation can put on top of
+## sim_move_bands — Bounding's placement (worst roll: 3" per die + the flat), the
+## once-per-game Speed-Feat family and Teleport, exactly what _act() adds to
+## `advance` before handing the band to _flank_goal. For REACH GATES only: worst
+## case on purpose, since over-estimating only over-offers while under-estimating
+## silently deletes a legal move. Deliberately NOT folded into sim_move_bands —
+## that is the band the sim EXECUTES with, and these are rolled per activation.
+static func max_activation_advance_bonus_in(unit: GameUnit) -> float:
+	if unit == null:
+		return 0.0
+	var bonus := 0.0
+	if RulesRegistry.unit_rule_active(unit, "Bounding"):
+		bonus += float(bounding_dice_count(RulesRegistry.lookup(RulesRegistry.system_of_unit(unit),
+			RulesRegistry.faction_of_unit(unit), "Bounding").get("params", {}))) * 3.0 \
+			+ float(RulesRegistry.unit_param(unit, "Bounding", "place_d3_plus", 1))
+	else:
+		var best := 0.0
+		for e in RulesRegistry.unit_rules_of_primitive(unit, "Bounding"):
+			var sp: Dictionary = (e as Dictionary).get("params", {})
+			best = maxf(best, float(bounding_dice_count(sp)) * 3.0 + float(sp.get("place_d3_plus", 0)))
+		bonus += best
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Quick"):
+		var spq: Dictionary = (e as Dictionary).get("params", {})
+		if int(spq.get("uses_per_game", 0)) > 0:
+			bonus += maxf(0.0, float(spq.get("advance_mod", 2)))
+	var tele := "Teleport" if RulesRegistry.unit_rule_active(unit, "Teleport") else ""
+	if tele.is_empty():
+		for te in RulesRegistry.unit_rules_of_primitive(unit, "Teleport"):
+			if str((te as Dictionary)["name"]) != "Teleport":
+				tele = str((te as Dictionary)["name"])
+				break
+	if not tele.is_empty():
+		bonus += maxf(0.0, float(RulesRegistry.unit_param(unit, tele, "advance_bonus_in", 3.0)))
+	return bonus
 
 
 # ===== Aircraft (GF Advanced Rules v3.5.1; system-scoped via RulesRegistry — AI plausibility wave 1) =====
