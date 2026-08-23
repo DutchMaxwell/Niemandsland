@@ -2108,6 +2108,10 @@ func _act(unit: GameUnit) -> Dictionary:
 			and shoot_range > 0 and enemy_dist <= float(shoot_range)
 		_menu_probe(unit, action, goal, target_unit, do_shoot,
 			(rush if action == AiDecision.Action.RUSH else advance), kite)
+	# TR (NML-1009): the clone's imitation row is settled by the SAME point —
+	# every re-gate above has spoken and nothing has moved yet, so the row can
+	# carry the action the body is about to play instead of the one it wanted.
+	_flush_teacher_row(action)
 	var dang := 0
 	match action:
 		AiDecision.Action.RUSH:
@@ -3079,7 +3083,7 @@ func _menu_probe(unit: GameUnit, action: int, goal: Vector3, target_unit: GameUn
 	cov["loose_wide"] = bool(wide["loose"])
 	cov["menu_wide"] = int(wide["menu"])
 	if _teacher_rows_on():
-		_teacher_row(state, key, cands, int(wide.get("idx", -1)), str(cov["class"]))
+		record_decision(_teacher_row(state, key, cands, int(wide.get("idx", -1)), str(cov["class"])))
 	record_decision({"kind": "menu_probe", "unit": unit.get_name(),
 		"rule": "P0 (NML-1009): is the teacher's move even on the planner's candidate menu?",
 		"candidates": [], "chosen": ("on the menu" if bool(cov["covered"]) else "not offered"),
@@ -3252,7 +3256,9 @@ func _solve_clone(unit: GameUnit) -> Dictionary:
 	if _teacher_rows_on():
 		# EXPERT ITERATION: what the amplified clone chose is the training
 		# signal for the NEXT generation — the same row shape as the teacher's.
-		_teacher_row(state, key, cands, best, "clone")
+		# TR: held back, not recorded — _act may still re-gate this pick, and
+		# _flush_teacher_row stamps the row with what the body actually plays.
+		_pending_teacher_row = _teacher_row(state, key, cands, best, "clone")
 	var act: Dictionary = cands[best]
 	var kind := int(act["kind"])
 	record_decision({"kind": "clone", "unit": unit.get_name(),
@@ -3283,17 +3289,62 @@ func _teacher_rows_on() -> bool:
 	return _teacher_rows_env == 1
 
 
+## Builds the row; the CALLER decides when it is recorded. The tree probe is
+## already settled when it calls (its own gates spoke long before), so it
+## records at once; the clone holds its row back until _act has re-gated.
 func _teacher_row(state: Dictionary, key: String, cands: Array, idx: int,
-		cls: String) -> void:
+		cls: String) -> Dictionary:
 	# ONE source for the tuples (AiClone.menu_tuples): what the corpus records
 	# must be exactly what the clone later scores in play.
 	var menu := AiClone.menu_tuples(state, key, cands, terrain_type_at, los_checker)
-	record_decision({"kind": "teacher_row", "unit": str(key),
+	return {"kind": "teacher_row", "unit": str(key),
 		"rule": "P1 (NML-1009): the teacher's pick, the menu it came from, and the position it was made in",
 		"candidates": [], "chosen": str(idx), "why": cls,
 		"data": {"side": int(ai_slot), "round": _current_round(), "class": cls,
 			"teacher": idx, "menu": menu,
-			"board": BattleSim.board_rows(state)}})
+			"board": BattleSim.board_rows(state)}}
+
+
+## TR (NML-1009): the clone's row, held back and stamped with the action the
+## BODY plays. _solve_clone writes its argmax; _act's re-gates may then rewrite
+## it (Immobile/Artillery -> Hold, an illegal charge -> Rush), and a row emitted
+## before that teaches the next generation a move the game refused. Re-point at
+## the nearest menu entry of the EXECUTED kind; with none, -1 — the miss class
+## the trainer already drops, which is honest where inventing a label is not.
+var _pending_teacher_row: Dictionary = {}
+func _flush_teacher_row(action: int) -> void:
+	if _pending_teacher_row.is_empty():
+		return
+	var row := _pending_teacher_row
+	_pending_teacher_row = {}
+	var data: Dictionary = row["data"]
+	var menu: Array = data["menu"]
+	var idx := int(data["teacher"])
+	if idx >= 0 and idx < menu.size() and int((menu[idx] as Dictionary)["kind"]) != action:
+		var refused: Dictionary = menu[idx]
+		idx = _nearest_menu_entry(menu, action, float(refused["dest_x"]), float(refused["dest_z"]))
+		data["teacher"] = idx
+		data["regated"] = true
+		data["refused"] = int(refused["kind"])
+		row["chosen"] = str(idx)
+		row["why"] = "%s (re-gated)" % str(row["why"])
+	record_decision(row)
+
+
+## The entry of `kind` whose destination sits closest to (x, z) in inches; -1
+## when the menu holds no such entry at all.
+static func _nearest_menu_entry(menu: Array, kind: int, x: float, z: float) -> int:
+	var best := -1
+	var best_d := INF
+	for i in range(menu.size()):
+		var e: Dictionary = menu[i]
+		if int(e["kind"]) != kind:
+			continue
+		var d := pow(float(e["dest_x"]) - x, 2.0) + pow(float(e["dest_z"]) - z, 2.0)
+		if d < best_d:
+			best_d = d
+			best = i
+	return best
 
 
 ## The captured state's key for a live unit ("" when it is not on the board).
