@@ -272,6 +272,26 @@ func test_shooting_above_half_never_tests() -> void:
 	assert_bool(bool(sq.get("shaken", false))).is_false()
 
 
+## Gap 18a: the Banner the dice path honours (main.gd's morale bonus) has to reach the
+## sim's expected morale too. The SAME volley, twice: a Q4 squad shot to half breaks
+## without a Banner (target 4+ -> 0.5 fail) and holds with one (3+ -> 0.333). The
+## banner-less line is the counter-probe — a merely softened morale would fail it.
+func test_banner_holds_a_q4_squad_that_would_otherwise_break() -> void:
+	for cfg in [[["Banner"], false], [[], true]]:
+		var shooter := _armed(2, [Vector3.ZERO], "Shooter",
+			[{"name": "Rifle", "range": 24, "attacks": 8}])
+		var squad_pos: Array = []
+		for i in range(4):
+			squad_pos.append(Vector3((12.0 + i) * IN2M, 0, 0))
+		var squad := _armed(1, squad_pos, "Squad", [{"name": "Rifle", "range": 24}], cfg[0])
+		var next := BattleSim.resolve(_capture([shooter, squad]),
+			{"unit": "Shooter", "kind": AiDecision.Action.HOLD, "shoot": "Squad"})
+		var sq: Dictionary = next["units"]["Squad"]
+		assert_int(int(sq["alive"])).is_equal(2)
+		assert_bool(bool(sq.get("shaken", false))).override_failure_message(
+			"rules=%s expected shaken=%s" % [cfg[0], cfg[1]]).is_equal(cfg[1])
+
+
 ## Single-model units measure morale in TOUGH WOUNDS (p.10): a Tough(6) hero
 ## shot from 6 to 3 wounds is at half its tough value and shakes at Q4.
 func test_single_model_tough_tests_on_the_wounds_scale() -> void:

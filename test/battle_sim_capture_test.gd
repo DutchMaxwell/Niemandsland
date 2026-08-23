@@ -59,6 +59,19 @@ func test_capture_maps_units_flags_and_objectives() -> void:
 	assert_that((state["objectives"][1] as Dictionary)["owner"]).is_equal(1)
 
 
+## Gap 18a: capture stamps the Banner morale bonus once, so the rollout's morale never
+## has to ask the rules registry again. Plain units stamp 0.
+func test_capture_stamps_the_morale_bonus() -> void:
+	var plain := _unit(1, [Vector3.ZERO], "Plain")
+	var bearer := _unit(2, [Vector3(10.0 * IN2M, 0, 0)], "Bearer")
+	bearer.unit_properties["special_rules"] = ["Banner"]
+	var state := BattleSim.capture(_army([plain, bearer]))
+	var b: Dictionary = state["units"]["Bearer"]
+	assert_bool(b.has("morale_bonus")).is_true()
+	assert_int(int(b.get("morale_bonus", 0))).is_equal(1)
+	assert_int(int((state["units"]["Plain"] as Dictionary).get("morale_bonus", -1))).is_equal(0)
+
+
 ## T1: cover_of stamps per-unit in_cover at capture time; no callable keeps
 ## the pre-T1 default (false) byte-identically.
 func test_capture_stamps_in_cover_via_cover_of() -> void:

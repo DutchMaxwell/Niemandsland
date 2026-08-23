@@ -4919,6 +4919,32 @@ static func musician_move_bonus_in(unit: GameUnit) -> float:
 	return float(RulesRegistry.unit_param(unit, "Musician", "move_bonus_in", AiCombatMath.MUSICIAN_MOVE_BONUS_IN))
 
 
+## Banner's morale-test bonus for a unit (wave 5): +1 when the unit or an attached hero carries Banner
+## AND its book fields the rule for this system (RulesRegistry gate; the bonus value is data with the
+## constant fallback). Coverage wave: DATA aliases of the family (Courage Aura, Hold the Line, Hive
+## Bond, …) resolve through the generic primitive layer — the strongest single bonus applies (rule
+## effects of the same name never stack; different names are one family here, best-of keeps it sane).
+## Gap 18a: moved here from main.gd so the dice path and BattleSim read ONE truth (the sim stamps it
+## at capture time — this walks the registry, far too costly per activation).
+static func morale_bonus_of(unit: GameUnit) -> int:
+	var best := 0
+	var members: Array = [unit]
+	if unit != null and unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for m in members:
+		var member := m as GameUnit
+		if member == null or member.get_alive_count() == 0:
+			continue
+		if RulesRegistry.unit_rule_active(member, "Banner"):
+			best = maxi(best, int(RulesRegistry.unit_param(member, "Banner", "morale_bonus", AiCombatMath.BANNER_MORALE_BONUS)))
+		for e in RulesRegistry.unit_rules_of_primitive(member, "Banner"):
+			var ed := e as Dictionary
+			if str(ed["name"]) == "Banner":
+				continue
+			best = maxi(best, int((ed.get("params", {}) as Dictionary).get("morale_bonus", 0)))
+	return best
+
+
 # ===== Aircraft (GF Advanced Rules v3.5.1; system-scoped via RulesRegistry — AI plausibility wave 1) =====
 
 ## Whether the unit flies as an Aircraft — system-scoped: the rule only fires where the unit's book

@@ -723,12 +723,15 @@ static func _below_half(su: Dictionary) -> bool:
 ## The EXPECTED morale outcome, deterministically: Shaken always fails (p.10);
 ## otherwise the quality target's fail chance, halved by the Fearless re-roll
 ## (advanced p.13), fails when it reaches 50% — Q4+ crowds break, Q3 elites and
-## Fearless hold. Banner/Fear/spell mods are v0 gaps, noted for the parity wave.
+## Fearless hold. Gap 18a: the Banner/attached-hero bonus rides in on the snapshot
+## (capture stamps it) — the default 0 keeps hand-built states byte-identical. Fear
+## and spell mods are still v0 gaps, noted for the parity wave.
 static func _morale_fails_expected(su: Dictionary) -> bool:
 	if bool(su.get("shaken", false)):
 		return true
 	var u: GameUnit = su["unit"]
-	var fail_p := float(AiCombatMath.morale_target(u.get_quality(), 0) - 1) / 6.0
+	var fail_p := float(AiCombatMath.morale_target(u.get_quality(),
+		int(su.get("morale_bonus", 0))) - 1) / 6.0
 	if u.has_special_rule("Fearless"):
 		fail_p *= 0.5
 	return fail_p >= 0.5
@@ -814,6 +817,9 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 			"alive": positions.size(),
 			"wounds": wounds,
 			"in_cover": bool(cover_of.call(u)) if cover_of.is_valid() else false,
+			# Gap 18a: Banner/attached-hero morale bonus, stamped ONCE — the rollout
+			# must never walk the rules registry per activation.
+			"morale_bonus": SoloController.morale_bonus_of(u),
 			"shaken": u.is_shaken,
 			"fatigued": u.is_fatigued,
 			"activated": u.is_activated,

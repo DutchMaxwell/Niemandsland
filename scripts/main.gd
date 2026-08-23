@@ -6542,28 +6542,10 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false) -> Dictionary:
 	return {"target": best, "name": best_name}
 
 
-## Banner's morale-test bonus for a unit (wave 5): +1 when the unit or an attached hero carries Banner
-## AND its book fields the rule for this system (RulesRegistry gate; the bonus value is data with the
-## constant fallback). Coverage wave: DATA aliases of the family (Courage Aura, Hold the Line, Hive
-## Bond, …) resolve through the generic primitive layer — the strongest single bonus applies (rule
-## effects of the same name never stack; different names are one family here, best-of keeps it sane).
+## Banner's morale-test bonus for a unit — gap 18a: the body now lives in
+## SoloController.morale_bonus_of so the dice path and BattleSim share ONE truth.
 func _solo_morale_bonus(unit: GameUnit) -> int:
-	var best := 0
-	var members: Array = [unit]
-	if unit != null and unit.has_method("get_attached_heroes"):
-		members = members + unit.get_attached_heroes()
-	for m in members:
-		var member := m as GameUnit
-		if member == null or member.get_alive_count() == 0:
-			continue
-		if RulesRegistry.unit_rule_active(member, "Banner"):
-			best = maxi(best, int(RulesRegistry.unit_param(member, "Banner", "morale_bonus", AiCombatMath.BANNER_MORALE_BONUS)))
-		for e in RulesRegistry.unit_rules_of_primitive(member, "Banner"):
-			var ed := e as Dictionary
-			if str(ed["name"]) == "Banner":
-				continue
-			best = maxi(best, int((ed.get("params", {}) as Dictionary).get("morale_bonus", 0)))
-	return best
+	return SoloController.morale_bonus_of(unit)
 
 
 ## Apply a resolved wound pair to the defender: Regeneration rolls only against the regen-able bucket
