@@ -345,6 +345,12 @@ var _solo_arena_trace: bool = OS.get_environment("NML_AI_TRACE") == "1"
 ## then puts the models BACK at their route start for the glide. Unset in the shipped game: is_valid()
 ## is false, nothing is awaited, and not one extra frame or dice draw enters the match.
 var solo_activation_done: Callable = Callable()
+## Harness seam (arena round-boundary boards): AWAITED at the END of a both-AI round — after the
+## auto-seize and the round advance, before the next round's first activation. A grab hung on
+## round_advanced instead lands a whole activation late (a signal handler that awaits is fire-and-
+## forget, and the loop runs on while the grab waits for its frame). Unset in the shipped game:
+## is_valid() is false, nothing is awaited. Argument: the round that just ENDED.
+var solo_round_done: Callable = Callable()
 var _solo_toast: Label = null                # transient AI-action attribution/outcome toast
 var _solo_live_announce: Array = []          # announce rings/line currently on the board (leak sweep)
 var _solo_toast_gen: int = 0   # generation token so an auto-hide never blanks a newer toast
@@ -1849,6 +1855,8 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 			network_manager.broadcast_round_advance()
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL, "Round %d begins" % opr_army_manager.current_round, true)
+		if solo_round_done.is_valid():
+			await solo_round_done.call(round_no)   # harness: the board round_no ENDED on, nothing else acting
 	_solo_ai_busy = false
 
 

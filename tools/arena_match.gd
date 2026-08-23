@@ -87,6 +87,7 @@ var _act_capture: Callable = Callable() # per-activation trail dump + queued PNG
 var _act_capture_png: Callable = Callable() # the queued PNG grab (main.solo_activation_done — the SETTLED board)
 var _act_png_pending := ""              # file name queued by _act_capture, drained by _act_capture_png
 var _act_fan: Node = null               # NML_CAPTURE_FAN overlay, kept alive until the deferred grab
+var _act_started := -1                  # activations BEGUN so far — the MOMENT stamp of every capture; -1 = not armed
 var _move_trail_dump: Array = []        # per-activation per-model path polylines (the offline wall-audit's input)
 var _move_trail_walls: Array = []       # wall segments (world XZ metres), stashed at the first activation capture
 var _all_decisions: Array = []          # EVERY decision record verbatim, annotated {side, round}
@@ -125,14 +126,14 @@ func _run() -> void:
 		DirAccess.make_dir_recursive_absolute(_capture_dir)
 		# PER-ACTIVATION board captures (maintainer directive: watch the AI play move by move — the wall-
 		# pathfinding complaints need eyes, not metrics). NML_CAPTURE_ACTS=1 + a real renderer (gamescope
-		# --backend headless): one PNG right after every AI activation applies its move. Fire-and-forget —
-		# under batch=1 a capture may lag ~one activation; fine for a visual route review.
+		# --backend headless): one PNG per AI activation, grabbed once the activation has RESOLVED. Nothing
+		# lags a picture behind its label any more — both grabs hang on awaited seams in the round loop.
 		if OS.get_environment("NML_CAPTURE_ACTS") == "1":
-			var act_n: Array = [0]
+			_act_started = 0
 			var arena_self := self
 			# connected below once `solo` exists (see after _ensure_solo_controller)
 			_act_capture = func(u) -> void:
-				act_n[0] += 1
+				_act_started += 1
 				var unit_tag := str(u.get_name()).to_lower().replace(" ", "_") if u != null else "unit"
 				# PER-MODEL PATH DUMP (maintainer: "nach jeder Modellbewegung — angemessenes Maß"): every
 				# model's planned polyline + base radius, for the offline wall-crossing AUDIT + re-render.
@@ -169,7 +170,7 @@ func _run() -> void:
 								tgt_bases.append([snappedf(tmi.node.global_position.x, 0.0001),
 									snappedf(tmi.node.global_position.z, 0.0001),
 									snappedf(solo_node.model_base_radius_m(tmi), 0.0001)])
-					_move_trail_dump.append({"act": act_n[0], "unit": str(u.get_name()) if u != null else "?", "flying": _fly,
+					_move_trail_dump.append({"act": _act_started, "unit": str(u.get_name()) if u != null else "?", "flying": _fly,
 						"coherent": _coh, "action": int(_rep.get("action", -1)),
 						"target": str(_tgt.get_name()) if _tgt != null else "",
 						"tgt_bases": tgt_bases,
@@ -201,7 +202,7 @@ func _run() -> void:
 				# 27 consecutive act PNGs byte-identical, 4 of them with the later unit moving >1"). The
 				# trail dump above stays on this signal: it must read last_move_paths / last_report before
 				# any pile-in or casualty edits them.
-				_act_png_pending = "act%03d_%s.png" % [act_n[0], unit_tag]
+				_act_png_pending = "act%03d_%s.png" % [_act_started, unit_tag]
 			# Drains the queue once the activation has fully resolved (main.solo_activation_done).
 			_act_capture_png = func(_u) -> void:
 				if _act_png_pending.is_empty():
@@ -214,11 +215,14 @@ func _run() -> void:
 		# Full-log collection: the Battle Log panel's data source is a 200-entry ring buffer, so a
 		# whole match overflows it — mirror every entry as it is logged and dump the mirror at the end.
 		battle_log.entry_added.connect(func(entry: Dictionary) -> void: _log_entries.append(entry))
-		# Round-end boards: advance_round() emits AFTER the round's auto-seize, i.e. exactly at the
-		# round boundary — new_round-1 is the round that just ended (rounds 1..3; the final round has
-		# no advance and is captured after the game returns).
-		army_manager.round_advanced.connect(func(new_round: int) -> void:
-			await _capture_board(main, "round%d.png" % (new_round - 1)))
+		# Round-end boards (rounds 1..3; the final round has no advance and is captured after the game
+		# returns). Hung on round_advanced this landed a whole activation LATE — the handler's await is
+		# fire-and-forget, so the loop played on while the grab waited for its frame (measured, seed 7:
+		# round1/2/3.png were stamped after 8/16/23 activations, i.e. one unit of the NEXT round had
+		# already acted; round2.png carried six round-3 dice rolls). main.solo_round_done is AWAITED by
+		# the round loop, so nothing can act until the board is on disk.
+		main.solo_round_done = func(ended_round: int) -> void:
+			await _capture_board(main, "round%d.png" % ended_round)
 
 	main.set("_solo_fast", true)
 	main.set("_solo_batch", _batch)
@@ -538,7 +542,10 @@ func _capture_board(main: Node, file_name: String) -> void:
 		return
 	var path := _capture_dir.path_join(file_name)
 	if img.save_png(path) == OK:
-		printerr("[ARENA] capture -> %s" % path)
+		# The MOMENT belongs in the record: how many activations had already BEGUN when this frame was
+		# drawn. A picture whose stamp is one ahead of its file name is a picture of the wrong turn.
+		printerr("[ARENA] capture -> %s%s" % [path,
+			(" (after %d activations)" % _act_started) if _act_started >= 0 else ""])
 	else:
 		printerr("[ARENA] capture WRITE FAILED: %s" % path)
 
