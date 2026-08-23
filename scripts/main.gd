@@ -2143,8 +2143,12 @@ func _solo_show_game_summary() -> void:
 	var ai_won: bool = winner_side == ("p%d" % ai_slot)
 	var verdict: String = win_a if human_won else (win_b if ai_won else "Draw")
 	# The ledger IS the rule on a progressive mission, so the player has to see it next to the markers.
-	var vp_a: int = int(SoloController.mission_vp[human_slot - 1])
-	var vp_b: int = int(SoloController.mission_vp[ai_slot - 1])
+	# Read it the way the referee reads it — guarded by size. A ledger shorter than the two seats is a
+	# state BattleSim.mission_winner answers with 0, and a face-off game does not own one at all, so an
+	# unguarded read here would take the whole game-over dialog down over a figure that mission never uses.
+	var ledger: Array = SoloController.mission_vp
+	var vp_a: int = int(ledger[human_slot - 1]) if ledger.size() >= human_slot else 0
+	var vp_b: int = int(ledger[ai_slot - 1]) if ledger.size() >= ai_slot else 0
 	var scored_by_vp: bool = SoloController.mission_scoring == "round_vp"
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.GENERAL, "=== GAME OVER — %d rounds played ===" % SOLO_GAME_ROUNDS, true)

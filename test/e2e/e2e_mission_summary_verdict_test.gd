@@ -100,3 +100,34 @@ func test_face_off_summary_still_decides_by_held_markers() -> void:
 	_main._solo_show_game_summary()
 	await _runner.simulate_frames(2)
 	assert_str(_summary_dialog_text()).contains("NACHTMAHR claims the field.")
+
+
+## GUARD for the branch none of the 633 measured games entered (the corpus holds 0 sabotage games): the
+## summary now asks the mission's OWN destroy verdict (BattleSim.sabotage_winner) instead of counting
+## markers. P1's marker is wrecked, P2's stands — so NACHTMAHR takes the field, where the old marker
+## count saw 1:1 on the table and would have said "Draw".
+func test_sabotage_summary_follows_the_destroy_verdict_not_the_marker_count() -> void:
+	_main._solo_both_ai = false
+	_main.solo_ai_slots = {2: true}
+	_main.terrain_overlay.update_objectives(MARKER_POSITIONS.slice(0, 2), [1, 2])
+	SoloController.mission_reset("sabotage", {}, [
+		{"owned_by": 1, "destroyed": true}, {"owned_by": 2, "destroyed": false}])
+	_main._solo_show_game_summary()
+	await _runner.simulate_frames(2)
+	assert_str(_summary_dialog_text()).contains("NACHTMAHR claims the field.")
+
+
+## REWORK GUARD (NML-1048): BattleSim.mission_winner guards its ledger (vp.size() > 0 / > 1) — the
+## summary that calls it did not, and read mission_vp[0]/[1] unconditionally, BEFORE the round_vp check.
+## A face-off game owns no ledger at all, so a short array there is a state the referee accepts; its
+## caller must not answer it by taking the whole game-over dialog down. Markers 1:2 still crown
+## NACHTMAHR — the verdict the board legitimately names has to reach the table.
+func test_face_off_verdict_survives_a_short_vp_ledger() -> void:
+	_main._solo_both_ai = false
+	_main.solo_ai_slots = {2: true}
+	_main.terrain_overlay.update_objectives(MARKER_POSITIONS, [1, 2, 2])
+	SoloController.mission_reset("end", {})
+	SoloController.mission_vp = []   # the referee tolerates this; its caller must too
+	_main._solo_show_game_summary()
+	await _runner.simulate_frames(2)
+	assert_str(_summary_dialog_text()).contains("NACHTMAHR claims the field.")
