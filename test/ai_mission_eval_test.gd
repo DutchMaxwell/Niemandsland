@@ -516,3 +516,26 @@ func test_aircraft_and_fresh_arrivals_cannot_hold_a_marker() -> void:
 	var landed := {"alive": 1, "shaken": false, "ambush_arrived_round": 2}
 	assert_bool(BattleSim.can_hold_marker(landed, 2)).is_false()   # this round: no
 	assert_bool(BattleSim.can_hold_marker(landed, 3)).is_true()    # next round: yes
+
+
+## HEAD_QUEUE #13: the tail counter is a MARKER forecast — "this unit can still
+## reach the ring this round". So it has to use the referee's eligibility set,
+## not a hand-copied pair of checks. An Aircraft never holds, and a unit that
+## landed from Ambush THIS round may act but may not seize (v3.5.1 p.13); both
+## used to be counted as tail runners, which paid the planner for a hold that
+## the round end would never book. Rows 1 and 4 are the counter-probe, so a
+## gate that is simply always shut cannot pass as a fix.
+func test_tail_uses_the_referees_eligibility_set() -> void:
+	var state := _state([_unit(1, [Vector3(4.0 * IN2M, 0, 0)], "Runner")],
+		[Vector3.ZERO], [0], 2)
+	var su: Dictionary = state["units"]["Runner"]
+	var tail := func() -> float:
+		return float(AiMissionEval.features(state, 1).get("tail_mine", -999.0))
+	assert_float(tail.call()).is_equal_approx(1.0, 0.001)       # 4" out, 12" rush
+	su["aircraft"] = true
+	assert_float(tail.call()).is_equal_approx(0.0, 0.001)
+	su["aircraft"] = false
+	su["ambush_arrived_round"] = 2                              # landed this round
+	assert_float(tail.call()).is_equal_approx(0.0, 0.001)
+	su["ambush_arrived_round"] = 1                              # landed last round
+	assert_float(tail.call()).is_equal_approx(1.0, 0.001)

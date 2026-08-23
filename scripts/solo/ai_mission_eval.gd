@@ -553,15 +553,21 @@ static func features(state: Dictionary, player: int, incoming: Dictionary = {},
 			f["my_charge_exposed" if mine else "their_charge_exposed"] += 1.0
 			f["my_melee_in" if mine else "their_melee_in"] += worst_melee
 		var rush := float(SoloController.sim_move_bands(su["unit"]).get("rush", 12))
+		# HEAD_QUEUE #13: the tail is a marker FORECAST ("can still reach the ring
+		# this round"), so it may only count units the round end would accept as
+		# holders. Ask the referee's one eligibility set instead of hand-copying
+		# its checks — the hand copy knew Shaken and had never heard of Aircraft
+		# or of a unit that landed from Ambush this round (v3.5.1 p.13).
+		var eligible := BattleSim.can_hold_marker(su, int(state["round"]))
 		for o in state["objectives"]:
-			var d := INF
-			for p in su["positions"]:
-				d = minf(d, ((p as Vector3) - ((o as Dictionary)["pos"] as Vector3)).length())
-			d /= BattleSim.IN2M
+			var pos: Vector3 = (o as Dictionary)["pos"] as Vector3
 			f["presence_mine" if mine else "presence_theirs"] += _presence(state, su,
-				(o as Dictionary)["pos"] as Vector3, float(incoming.get(str(key), 0.0)))
-			if not bool(su.get("activated", false)) and not bool(su.get("shaken", false)) \
-					and d <= SoloController.OBJECTIVE_CONTROL_IN + rush:
+				pos, float(incoming.get(str(key), 0.0)))
+			# HEAD_QUEUE #12: and measure that ring like the referee — base edge,
+			# horizontally — not centre-to-centre in 3D.
+			if eligible and not bool(su.get("activated", false)) \
+					and BattleSim.control_gap_in(su, pos) \
+					<= SoloController.OBJECTIVE_CONTROL_IN + rush:
 				f["tail_mine" if mine else "tail_theirs"] += 1.0
 	for o in state["objectives"]:
 		var owner := int((o as Dictionary).get("owner", 0))
