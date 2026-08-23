@@ -1409,6 +1409,13 @@ func reach_capped_by_difficult(unit: GameUnit, to: Vector3, dist_in: float) -> b
 
 ## Per-seat gate for net-guided playouts: NML_PLAYOUT_NET_P<slot> wins over the
 ## global NML_PLAYOUT_NET — the same per-seat pattern as the amplifier knobs.
+## KUGEL per-seat blend: NML_VALUE_BLEND_P<slot> wins over the global knob;
+## -1 means "no seat opinion" so the env default applies (0 = off).
+func _value_blend_for_seat() -> float:
+	var e := OS.get_environment("NML_VALUE_BLEND_P%d" % int(ai_slot)).strip_edges()
+	return float(e) if e != "" else -1.0
+
+
 func _playout_net_gate() -> bool:
 	var e := OS.get_environment("NML_PLAYOUT_NET_P%d" % int(ai_slot))
 	if e == "":
@@ -2956,6 +2963,7 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	# like NML_CLONE_SEARCH_P<slot>) so one process can duel guided vs heuristic.
 	AiPlanner.playout_net = AiClone.net_for(int(ai_slot)) \
 		if _playout_net_gate() else {}
+	AiValue.blend = _value_blend_for_seat()   # KUGEL: per-seat leaf blend
 	# D-wave: seat-aware depth — opener when OUR side made this round's first
 	# activation (or nobody acted yet, i.e. we are about to open it).
 	AiPlanner.opener_seat = int(_round_first_slot.get(_current_round(), ai_slot)) == int(ai_slot)

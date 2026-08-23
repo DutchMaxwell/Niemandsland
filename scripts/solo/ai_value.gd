@@ -22,6 +22,10 @@ const SQUASH_K := 4.0       # steepness below the threshold: win first
 
 static var _net: Dictionary = {}
 static var _tried := false
+## Per-seat blend, set by the controller each pick from NML_VALUE_BLEND_P<slot>
+## (both seats share one process in a duel — an env-only read cannot separate
+## them). Negative = fall back to the global env knob.
+static var blend := -1.0
 
 
 static func net() -> Dictionary:
@@ -116,5 +120,7 @@ static func shaped(m: float) -> float:
 
 ## Blend weight for the value net (NML_VALUE_BLEND, default 0.0 = OFF).
 static func blend_weight() -> float:
+	if blend >= 0.0:
+		return clampf(blend, 0.0, 1.0)
 	var e := OS.get_environment("NML_VALUE_BLEND").strip_edges()
 	return clampf(float(e), 0.0, 1.0) if e != "" else 0.0
