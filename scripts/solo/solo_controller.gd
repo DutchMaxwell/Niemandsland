@@ -90,6 +90,11 @@ const STALL_REPLAN_FRACTION := 0.25
 ## die; the hybrid policy (docs/SOLO_AI_PLAN.md) ranks it by the EV metric instead. A documented
 ## convention, not an official value.
 const TARGET_TIE_BAND_IN := 1.0
+## How many target candidates one 'target' record writes down. Capped so a long enemy line cannot
+## inflate every record: the TIE GROUP stays complete (it is what the EV tie-break ranked), the losing
+## candidates fill the rest in army order. data.considered keeps the true total and data.listed says
+## how many names were written, so a capped record admits it instead of looking like a short list.
+const TARGET_RECORD_CAND_CAP := 8
 
 # --- Aircraft (GF Advanced Rules v3.5.1 special rule; AI plausibility wave 1) ---
 ## Fallback values for the RulesRegistry "Aircraft" params (the committed gf mechanics map carries the
@@ -1177,20 +1182,29 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 			if int((c as Dictionary)["band"]) < int(chosen["band"]):
 				last_target_passed_activated = true
 				break
+	# Write down the SET the official key ranked, not just its winner: a rule that claims "nearest of N"
+	# is neither provable nor refutable while the record names one unit and claims N. The TIE GROUP goes
+	# first (tools/tactic_audit.py looks the chosen name up here, and a same-named also-ran must not
+	# shadow it), then the also-rans. Every entry carries the key it was ranked by, but only a tie-group
+	# member carries an "ev" — the rest were never scored, and a 0.00 would read as a computed verdict.
+	# Record-only: `chosen` was decided above and nothing below feeds back into it.
 	var rec_cands: Array = []
 	for t in tied:
 		var td := t as Dictionary
-		# Record the RAW target EV. The charge tie-break score is a NET dealt-minus-taken utility that goes
-		# below zero for a losing matchup; flooring it at 0 here made "no preference" and "a losing trade"
-		# read identically in the written record — the one field the tie analysis has (stage 1: the record
-		# describes the behaviour, it never shapes it — selection above already ranked these raw values).
-		# The player-facing dev log keeps its own non-negative guard in render_decision (finding 2).
 		rec_cands.append({"name": (td["unit"] as GameUnit).get_name(), "ev": float(td["ev"]),
-			"key": [td["activated"], td["band"]]})
+			"key": [td["activated"], td["band"]], "tied": true})
+	for c in cands:
+		if rec_cands.size() >= TARGET_RECORD_CAND_CAP:
+			break   # capped — the tie group above stays complete, the also-rans fill what is left
+		var cd := c as Dictionary
+		if _target_key_compare(cd, tied[0] as Dictionary) == 0:
+			continue   # already written above as a tie-group member
+		rec_cands.append({"name": (cd["unit"] as GameUnit).get_name(),
+			"key": [cd["activated"], cd["band"]], "tied": false})
 	record_decision({"kind": "target", "unit": ai_unit.get_name(),
 		"rule": "Solo v3.5.0 p.2: nearest valid target, not-activated first",
 		"candidates": rec_cands, "chosen": (chosen["unit"] as GameUnit).get_name(), "why": why,
-		"data": {"considered": cands.size(), "dist_in": float(chosen["d"]),
+		"data": {"considered": cands.size(), "listed": rec_cands.size(), "dist_in": float(chosen["d"]),
 			"passed_nearer_activated": last_target_passed_activated}})
 	return chosen["unit"] as GameUnit
 
@@ -6990,7 +7004,12 @@ static func render_decision(rec: Dictionary) -> String:
 			var cd := c as Dictionary
 			# EV is expected wounds — never render it negative (finding 2): a net charge score below zero is a
 			# ranking artefact, not a real "negative expected damage". Floored here as the final display guard.
-			listed.append("%s EV %.2f" % [str(cd.get("name", "?")), maxf(0.0, float(cd.get("ev", 0.0)))])
+			# An entry WITHOUT an "ev" was never scored (an also-ran outside the tie group): name only, because
+			# printing 0.00 for it would read as a computed verdict.
+			if cd.has("ev"):
+				listed.append("%s EV %.2f" % [str(cd.get("name", "?")), maxf(0.0, float(cd.get("ev", 0.0)))])
+			else:
+				listed.append(str(cd.get("name", "?")))
 		parts.append("options: " + ", ".join(listed))
 	var chosen := str(rec.get("chosen", ""))
 	if not chosen.is_empty():
