@@ -637,14 +637,6 @@ func human_cargo_pending() -> Array:
 const OBJ_SEIZE_WORTH := 2.5   # activation value of seizing a marker, in expected-wounds currency
 const SHOOT_EV_FLOOR := 0.25    # NML-007: a volley under this expected-wounds value never justifies Advance over Rush
 const CHARGE_THREAT_IN := 12.0  # NML-007: standard enemy rush/charge band — the safety margin the EV-floor rush keeps
-const DENIAL_UNACTIVATED := 1.4   # tempo weight: kill it BEFORE it acts and its whole activation is denied
-const DENIAL_DAMAGED := 1.25      # finishing a damaged unit converts EV into actual removals
-## What the lookahead record CITES. The old string promised nothing beyond "highest immediate payoff",
-## while the score weights an un-activated target and doubles a marker in the final round — both
-## provable from the written numbers, neither named, so no audit could check the claim. Formatted from
-## the very constants the score multiplies by, so text and arithmetic cannot drift apart. Stage 1: the
-## record describes the behaviour, it never shapes it.
-const LOOKAHEAD_RULE := "Albtraum lookahead: activate the unit with the highest immediate payoff — shoot/charge EV x%s against a target that has not activated yet (x%s against a damaged one), plus %s for a reachable marker, DOUBLED in the final round — beyond the official random section pick"
 func _select_unit_lookahead(pool: Array) -> GameUnit:
 	var best: GameUnit = null
 	var best_score := -1.0
@@ -657,7 +649,7 @@ func _select_unit_lookahead(pool: Array) -> GameUnit:
 			best_score = score
 			best = unit
 	record_decision({"kind": "lookahead", "unit": best.get_name() if best != null else "?",
-		"rule": LOOKAHEAD_RULE % [DENIAL_UNACTIVATED, DENIAL_DAMAGED, OBJ_SEIZE_WORTH],
+		"rule": "Albtraum lookahead: activate the unit with the highest immediate payoff (shoot/charge EV + marker worth) — beyond the official random section pick",
 		"candidates": scores, "chosen": best.get_name() if best != null else "?",
 		"why": "activation-order lookahead", "data": {"best_score": snappedf(best_score, 0.01)}})
 	return best if best != null else pool[0]
@@ -693,9 +685,9 @@ func activation_payoff(unit: GameUnit) -> float:
 		# contributes nothing; a hurt one still fights). Both multiply the immediate EV.
 		var denial := 1.0
 		if not enemy.is_activated:
-			denial *= DENIAL_UNACTIVATED               # kill/cripple it BEFORE it acts
+			denial *= 1.4                              # kill/cripple it BEFORE it acts
 		if enemy.get_alive_count() < enemy.models.size():
-			denial *= DENIAL_DAMAGED                   # finishing damaged units converts EV into removals
+			denial *= 1.25                             # finishing damaged units converts EV into removals
 		# albtraum v2 (avoid_overkill): payoff against a target is capped at what its pool can still
 		# absorb after this round's claims — an on-expectation-dead enemy contributes no payoff, so
 		# the activation order stops burning early activations on corpses-to-be.
