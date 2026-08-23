@@ -280,40 +280,22 @@ func _pick_for(state: Dictionary, player: int) -> Dictionary:
 	return pick if bool(pick.get("used", false)) else {}
 
 
-## Round-end seize (persistence rule): majority of non-shaken alive units
-## within 3" wins the marker; both near => neutral; nobody near keeps owner.
+## Round-end marker seize — THE ONE referee (BattleSim.playout_seize), which
+## is also the rule the real game runs (SoloController.seize_objectives).
 func _seize(state: Dictionary, objectives: Array, owners: Array) -> void:
 	_seize_on(_last_state if not _last_state.is_empty() else state, objectives, owners)
 
 
 ## Seize on EXACTLY the given state — the fork playouts (E2-v2) score their
 ## own cloned worlds; the _last_state override above is main-loop-only.
-func _seize_on(state: Dictionary, objectives: Array, owners: Array) -> void:
-	for i in range(objectives.size()):
-		var near1 := 0
-		var near2 := 0
-		for k in state["units"]:
-			var su: Dictionary = state["units"][k]
-			if int(su["alive"]) <= 0 or bool(su.get("shaken", false)):
-				continue
-			for p in su["positions"]:
-				if ((p as Vector3) - (objectives[i] as Vector3)).length() <= 3.0 * IN2M:
-					if int(su["player"]) == 1:
-						near1 += 1
-					else:
-						near2 += 1
-					break
-		if near1 > near2:
-			owners[i] = 1
-		elif near2 > near1:
-			owners[i] = 2
-		elif near1 > 0:
-			owners[i] = 0
-		# S3 fix: write ownership back into the STATE — features/eval read the
-		# objectives' owner field, which otherwise stays 0 all game (S3-light
-		# found obj_owned_* frozen at zero in every core position).
-		if i < (state["objectives"] as Array).size():
-			((state["objectives"] as Array)[i] as Dictionary)["owner"] = owners[i]
+## NML gap 11: this used to be a SECOND seize with a rule of its own — it
+## counted BODIES and gave a contested marker to the MAJORITY, the very rule
+## BattleSim dropped on 16.08. Every label this corpus wrote, and every fork
+## branch it scored, was judged against a game that does not exist. It is now
+## a pass-through; the markers come from the state, so `_objectives` is only
+## kept for the call sites (and MUST keep its underscore, project.godot:37).
+static func _seize_on(state: Dictionary, _objectives: Array, owners: Array) -> void:
+	BattleSim.playout_seize(state, owners)
 
 
 ## Lightweight GameUnits from an Army-Forge list JSON — the test-fixture

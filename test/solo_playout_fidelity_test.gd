@@ -13,6 +13,8 @@ extends GdUnitTestSuite
 
 const IN2M := 0.0254
 
+var CoreSelfplay := load("res://tools/core_selfplay.gd")
+
 
 ## Weaponless on purpose (no OPR source data = no weapon profiles): nothing
 ## shoots, charges or dies, so a playout over these fixtures is PURE GEOMETRY
@@ -252,6 +254,32 @@ func test_a_unit_that_arrived_from_ambush_this_round_cannot_seize_yet() -> void:
 	assert_int(_owner(_state([u], [Vector3.ZERO], 2, 4))).is_equal(0)   # arrived THIS round
 	# the lock expires with the round — capture stores the ROUND, not a boolean
 	assert_int(_owner(_state([u], [Vector3.ZERO], 3, 4))).is_equal(1)
+
+
+## Gap 11 — the CORPUS uses the REFEREE. tools/core_selfplay.gd carried a
+## second, older seize of its own: it counted BODIES and handed a contested
+## marker to the MAJORITY, the very rule BattleSim.playout_seize dropped on
+## 16.08. Every training label the corpus has ever written was scored against
+## a game that does not exist, and the fork playouts scored their branches the
+## same wrong way. Two of mine and one of yours in the ring is the shape that
+## separates the two rules: majority says 1, the book says NOBODY.
+func test_the_corpus_seize_is_the_same_referee_as_the_game() -> void:
+	var a_pos := [Vector3(1.0 * IN2M, 0, 0)]
+	var b_pos := [Vector3(0, 0, 1.0 * IN2M)]
+	var foe_pos := [Vector3(0, 0, -1.0 * IN2M)]
+	var s := _state([_unit(1, a_pos, "MineA"), _unit(1, b_pos, "MineB"),
+		_unit(2, foe_pos, "Yours")], [Vector3.ZERO], 4, 4)
+	var owners := [0]
+	CoreSelfplay._seize_on(s, [Vector3.ZERO], owners)
+	assert_int(int(owners[0])).is_equal(0)              # contested -> neutral
+	# the state's objective dict must carry the same answer: features and eval
+	# read the owner from THERE, not from the owners array.
+	assert_int(int(((s["objectives"] as Array)[0] as Dictionary)["owner"])).is_equal(0)
+	# and the corpus is checked against the GAME's own function, not against a
+	# number somebody typed into a test.
+	var table: Array = SoloController.seize_objectives(
+		[_row(1, a_pos), _row(1, b_pos), _row(2, foe_pos)], [Vector3.ZERO], [0])["owners"]
+	assert_int(int(owners[0])).is_equal(int(table[0]))
 
 
 func test_the_sim_and_the_game_agree_on_all_of_it() -> void:
