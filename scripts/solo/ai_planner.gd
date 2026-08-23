@@ -19,7 +19,7 @@ const SAFE_LINE_OPEN_LINE_PENALTY_IN := 2.0   # D22: each open fire line beyond 
 ## is part of the pick. Pure and deterministic: dict order is capture order,
 ## ties keep the first seen. A shaken unit only gets its recovery hold.
 static func plan(state: Dictionary, player: int) -> Dictionary:
-	var base := AiMissionEval.score(state, player, BattleSim.reply_threat(state, player))
+	var base := leaf_score(state, player)
 	var best := {}
 	var runner := {}
 	for key in state["units"]:
@@ -30,7 +30,7 @@ static func plan(state: Dictionary, player: int) -> Dictionary:
 			if bool(su.get("shaken", false)) else candidates(state, str(key))
 		for action in cands:
 			var next := BattleSim.resolve(state, action)
-			var s := AiMissionEval.score(next, player, BattleSim.reply_threat(next, player))
+			var s := leaf_score(next, player)
 			var cand := {"unit_key": str(key), "action": action, "score": s}
 			if best.is_empty() or s > float(best["score"]):
 				runner = best
@@ -95,7 +95,7 @@ static func plan_with_rollout(state: Dictionary, player: int,
 		top_k = top_k_default()   # research seam; default = the const
 	if top_k <= 0:
 		return plan(state, player)
-	var base := AiMissionEval.score(state, player, BattleSim.reply_threat(state, player))
+	var base := leaf_score(state, player)
 	var scored: Array = []
 	for key in state["units"]:
 		var su: Dictionary = state["units"][key]
@@ -106,7 +106,7 @@ static func plan_with_rollout(state: Dictionary, player: int,
 		for action in cands:
 			var next := BattleSim.resolve(state, action)
 			scored.append({"unit_key": str(key), "action": action, "idx": scored.size(),
-				"score": AiMissionEval.score(next, player, BattleSim.reply_threat(next, player))})
+				"score": leaf_score(next, player)})
 	if scored.is_empty():
 		return {"used": false}
 	scored.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
@@ -323,15 +323,31 @@ static func seat_depth_enabled() -> bool:
 ## the 2/3 majority, the imagined next round refines. Opener seat: the LAST
 ## boundary alone votes — an opener's move only shows its worth after the
 ## enemy's full reply, so the deep look must be allowed to outvote.
+## KUGEL seam (NML-1045): ONE leaf estimate for the whole search. Without a
+## value net (or with blend 0) this IS AiMissionEval.score — byte-identical.
+## With one, the hand eval and the net's character-C shaped margin mix; the
+## net sees the SAME state the hand eval scores, so the two never disagree
+## about which position is being judged.
+static func leaf_score(state: Dictionary, player: int) -> float:
+	var hand := AiMissionEval.score(state, player, BattleSim.reply_threat(state, player))
+	var w := AiValue.blend_weight()
+	if w <= 0.0:
+		return hand
+	var m := AiValue.margin(state, player)
+	if is_nan(m):
+		return hand
+	return (1.0 - w) * hand + w * AiValue.shaped(m)
+
+
 static func _blend_score(ends: Array, player: int) -> float:
 	if opener_seat and seat_depth_enabled():
 		var last: Dictionary = ends[ends.size() - 1]
-		return AiMissionEval.score(last, player, BattleSim.reply_threat(last, player))
+		return leaf_score(last, player)
 	var total := 0.0
 	var weights := 0.0
 	var w := 1.0
 	for end in ends:
-		total += w * AiMissionEval.score(end, player, BattleSim.reply_threat(end, player))
+		total += w * leaf_score(end, player)
 		weights += w
 		w *= DEPTH_DISCOUNT
 	return total / weights
@@ -400,7 +416,7 @@ static func _policy_step(state: Dictionary, player: int, rich := false) -> Dicti
 			continue
 		for action in _policy_candidates(state, str(key)):
 			var next := BattleSim.resolve(state, action)
-			var s := AiMissionEval.score(next, player, BattleSim.reply_threat(next, player)) \
+			var s := leaf_score(next, player) \
 				if rich else AiMissionEval.score(next, player)
 			if s > best_s:
 				best_s = s
@@ -667,7 +683,7 @@ static func doctrine_pick(state: Dictionary, player: int, doctrine: String) -> D
 				act = {"unit": key, "kind": AiDecision.Action.HOLD}
 	if not act.has("unit"):
 		act["unit"] = key
-	var base := AiMissionEval.score(state, player, BattleSim.reply_threat(state, player))
+	var base := leaf_score(state, player)
 	return {"used": true, "unit_key": str(act["unit"]), "action": act,
 		"intent": "opener doctrine '%s' (research probe)" % doctrine,
 		"expectation": {"before": base, "after": base}, "waits": 0, "rolled_units": []}
