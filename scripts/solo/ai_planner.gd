@@ -339,37 +339,59 @@ static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: 
 const DEPTH_DISCOUNT := 0.5   # R7: each further imagined round carries half the previous one's vote
 
 
+static var _dd_env := -1.0   # research seam: NML_DEPTH_DISCOUNT overrides the discount (lazy env, <0 = unread)
+
+
+## research seam: NML_DEPTH_DISCOUNT, a float in (0.0, 1.0], overrides the
+## per-round discount; anything empty/junk/out-of-range keeps the default.
+static func depth_discount() -> float:
+	if _dd_env < 0.0:
+		var raw := OS.get_environment("NML_DEPTH_DISCOUNT")
+		_dd_env = DEPTH_DISCOUNT
+		if raw.is_valid_float():
+			var f := raw.to_float()
+			if f > 0.0 and f <= 1.0:
+				_dd_env = f
+	return _dd_env
+
+
 ## D-wave: seat-aware leaf weighting. The A/B ledger proved the two depth
 ## modes own opposite seats — last-boundary voting (R6) was the best OPENER
 ## ever (12.5% seat) and the worst responder; the discount blend (R7) is the
 ## best RESPONDER (78%) and a weak opener. The controller sets this per pick:
 ## true = our side opened the current round.
 static var opener_seat := false
-static var _seat_env := -1   # research seam: NML_SEAT_DEPTH=off disables the opener mode (lazy env)
+static var _seat_env := -1   # research seam: NML_SEAT_DEPTH off/on/inv retunes the vote (lazy env)
 
 
-static func seat_depth_enabled() -> bool:
+## research seam: NML_SEAT_DEPTH — "off"=0 (always discount blend), "inv"=2
+## (swap seats), anything else (incl. unset) = 1, today's default.
+static func seat_mode() -> int:
 	if _seat_env < 0:
-		_seat_env = 0 if OS.get_environment("NML_SEAT_DEPTH") == "off" else 1
-	return _seat_env == 1
+		var raw := OS.get_environment("NML_SEAT_DEPTH")
+		_seat_env = 0 if raw == "off" else (2 if raw == "inv" else 1)
+	return _seat_env
 
 
 ## R7/D: price a rollout's round boundaries as ONE number. Responder seat:
 ## geometric depth discount, normalized — the current round's certainty keeps
 ## the 2/3 majority, the imagined next round refines. Opener seat: the LAST
 ## boundary alone votes — an opener's move only shows its worth after the
-## enemy's full reply, so the deep look must be allowed to outvote.
+## enemy's full reply, so the deep look must be allowed to outvote. Mode 2
+## (inv) swaps which seat gets which treatment; mode 0 (off) never votes last.
 static func _blend_score(ends: Array, player: int) -> float:
-	if opener_seat and seat_depth_enabled():
+	var mode := seat_mode()
+	if (mode == 1 and opener_seat) or (mode == 2 and not opener_seat):
 		var last: Dictionary = ends[ends.size() - 1]
 		return AiMissionEval.score(last, player, BattleSim.reply_threat(last, player))
+	var dd := depth_discount()
 	var total := 0.0
 	var weights := 0.0
 	var w := 1.0
 	for end in ends:
 		total += w * AiMissionEval.score(end, player, BattleSim.reply_threat(end, player))
 		weights += w
-		w *= DEPTH_DISCOUNT
+		w *= dd
 	return total / weights
 
 

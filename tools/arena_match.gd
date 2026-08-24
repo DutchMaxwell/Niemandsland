@@ -693,7 +693,8 @@ static func search_knobs() -> Dictionary:
 	return {
 		"top_k": AiPlanner.top_k_default(),
 		"horizon": AiPlanner.horizon(),
-		"seat_depth": AiPlanner.seat_depth_enabled(),
+		"seat_depth": AiPlanner.seat_mode(),
+		"depth_discount": AiPlanner.depth_discount(),
 		"fit_weights": "net" if net_loaded else ("v2" if fw == "v2" else "v4"),
 		"fit_blend": AiMissionEval.fit_blend(),
 		"net_path": OS.get_environment("NML_NET_PATH"),
