@@ -364,12 +364,14 @@ static var opener_seat := false
 static var _seat_env := -1   # research seam: NML_SEAT_DEPTH off/on/inv retunes the vote (lazy env)
 
 
-## research seam: NML_SEAT_DEPTH — "off"=0 (always discount blend), "inv"=2
-## (swap seats), anything else (incl. unset) = 1, today's default.
+## research seam: NML_SEAT_DEPTH — "on"=1 (pre-U opener last-boundary vote,
+## kept reachable for research), "inv"=2 (swap seats), anything else (incl.
+## unset and "off") = 0, today's default: the U-wave measurement (240
+## mirrored pairs) promoted seat_off — both seats take the discount blend.
 static func seat_mode() -> int:
 	if _seat_env < 0:
 		var raw := OS.get_environment("NML_SEAT_DEPTH")
-		_seat_env = 0 if raw == "off" else (2 if raw == "inv" else 1)
+		_seat_env = 1 if raw == "on" else (2 if raw == "inv" else 0)
 	return _seat_env
 
 

@@ -96,14 +96,20 @@ func after_test() -> void:
 	AiPlanner.new().set("_dd_env", -1.0)
 
 
-## GUARD: with no env set, the blend is unchanged from today — the normalized
-## geometric discount at responder seat (opener_seat=false is the default).
-## This case is expected GREEN both before and after the fix.
+## GUARD: with no env set, BOTH seats now take the discount blend — the
+## U-wave measurement (240 mirrored pairs) promoted seat_off to reference
+## (24.08.), so the pre-U opener last-boundary vote is no longer the default.
+## RED pre-flip (opener_seat=true still got the last-boundary vote under the
+## old default mode 1); GREEN post-flip.
 func test_default_blend_matches_today() -> void:
 	var ends := _ends()
 	var l1 := _leaf(ends[0], 2)
 	var l2 := _leaf(ends[1], 2)
-	assert_float(AiPlanner._blend_score(ends, 2)).is_equal_approx((l1 + 0.5 * l2) / 1.5, 0.0001)
+	var expect := (l1 + 0.5 * l2) / 1.5
+	AiPlanner.opener_seat = false
+	assert_float(AiPlanner._blend_score(ends, 2)).is_equal_approx(expect, 0.0001)
+	AiPlanner.opener_seat = true
+	assert_float(AiPlanner._blend_score(ends, 2)).is_equal_approx(expect, 0.0001)
 
 
 ## NML_SEAT_DEPTH=off: seat_mode() must report 0, and BOTH seats now take the
@@ -120,6 +126,26 @@ func test_seat_depth_off_discounts_both_seats() -> void:
 	assert_float(AiPlanner._blend_score(ends, 2)).is_equal_approx(expect, 0.0001)
 	AiPlanner.opener_seat = true
 	assert_float(AiPlanner._blend_score(ends, 2)).is_equal_approx(expect, 0.0001)
+
+
+## Reachability guard: NML_SEAT_DEPTH=on keeps the pre-U opener last-boundary
+## vote available for research now that the default has moved away from it —
+## seat_mode()==1, opener_seat=true takes the last-boundary vote, opener_seat
+## =false keeps the discount blend. "on" already lands in seat_mode()'s old
+## "else" bucket (value 1) pre-flip, so this case is GREEN both before and
+## after the flip; it exists to prove "on" stays reachable, not to catch a
+## regression.
+func test_seat_depth_on_keeps_opener_vote_reachable() -> void:
+	OS.set_environment("NML_SEAT_DEPTH", "on")
+	AiPlanner._seat_env = -1
+	var ends := _ends()
+	var l1 := _leaf(ends[0], 2)
+	var l2 := _leaf(ends[1], 2)
+	assert_int(int(_dyn("seat_mode"))).is_equal(1)
+	AiPlanner.opener_seat = true
+	assert_float(AiPlanner._blend_score(ends, 2)).is_equal_approx(l2, 0.0001)
+	AiPlanner.opener_seat = false
+	assert_float(AiPlanner._blend_score(ends, 2)).is_equal_approx((l1 + 0.5 * l2) / 1.5, 0.0001)
 
 
 ## NML_SEAT_DEPTH=inv: seat_mode() must report 2, and the seats SWAP —
