@@ -265,6 +265,40 @@ static func _tail_cap_for(me: int) -> int:
 	return int(_tail_cap_env[me])
 
 
+static var _ire_env := -1   # A/B seam: NML_IMAGINED_ROUND_END=off restores the frozen-ledger boundary (lazy env)
+
+
+static func imagined_round_end_enabled() -> bool:
+	if _ire_env < 0:
+		_ire_env = 0 if OS.get_environment("NML_IMAGINED_ROUND_END") == "off" else 1
+	return _ire_env == 1
+
+
+## NML-1051: a TRUE imagined round boundary books the same round end the
+## factory playout (full_playout) books — seize from the final positions, the
+## marker destroy step, then the round's VP — so boundary snapshots stop
+## freezing marker ownership and the ledger at the last REAL round end.
+## vp/vp_memo are REPLACED, never written in place: clone_state hands both
+## down by REFERENCE, so an in-place write would leak into sibling rollouts
+## and the captured live state.
+static func _imagined_round_end(cur: Dictionary) -> void:
+	var owners: Array = []
+	for o in cur.get("objectives", []):
+		owners.append(int((o as Dictionary).get("owner", 0)))
+	BattleSim.playout_seize(cur, owners)
+	if cur.has("markers_meta"):
+		BattleSim.apply_destroy_step(cur["markers_meta"], owners, cur["destroy_seq"])
+	var vp := [0, 0]
+	var vp_live: Variant = cur.get("vp")
+	if vp_live is Array and (vp_live as Array).size() == 2:
+		vp = [int(vp_live[0]), int(vp_live[1])]
+	var vp_memo: Dictionary = (cur.get("vp_memo", {}) as Dictionary).duplicate()
+	BattleSim.vp_score_round(owners, vp, cur.get("vp_flavour", {}) as Dictionary,
+		vp_memo, cur.get("markers_meta", []))
+	cur["vp"] = vp
+	cur["vp_memo"] = vp_memo
+
+
 static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: int,
 		horizon_rounds: int = -1) -> Array:
 	if horizon_rounds <= 0:
@@ -279,7 +313,7 @@ static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: 
 	while guard > 0:
 		guard -= 1
 		if tail_cap > 0 and steps >= tail_cap:
-			out.append(cur)   # truncated: the blend prices this state as-is
+			out.append(cur)   # truncated MID-ROUND: priced as-is, no round-end bookkeeping (NML-1051)
 			return out
 		steps += 1
 		var a := _policy_step(cur, turn, turn == me)   # R9: own side steps danger-aware
@@ -287,6 +321,8 @@ static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: 
 			turn = _other_player(cur, turn)
 			a = _policy_step(cur, turn, turn == me)
 			if a.is_empty():
+				if imagined_round_end_enabled():
+					_imagined_round_end(cur)   # NML-1051: book the round end, THEN snapshot
 				out.append(cur)
 				rounds_left -= 1
 				if rounds_left <= 0 or int(cur["round"]) >= int(cur["rounds_total"]):
