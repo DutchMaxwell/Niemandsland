@@ -3640,6 +3640,18 @@ func _plan_casts(unit: GameUnit, report: Dictionary = {}) -> Array:
 	return casts
 
 
+## The spell-pick procedure a cast record must cite: above Veteran the difficulty ladder REPLACES the
+## official die (see the ladder block below), so the fixed "D3+X, cycle-to-valid" citation described a
+## scan the code had not run since the ladder landed — three of four cast records in the audited game
+## promised it. Stage 1: the record describes the behaviour, it never shapes it.
+static func cast_pick_rule(ev_best_pick: bool, skip_zero_ev: bool) -> String:
+	if ev_best_pick:
+		return "Solo v3.5.0 'Caster', difficulty override: the D3+X roll is recorded but NOT followed — the EV-best castable spell of the whole list is taken"
+	if skip_zero_ev:
+		return "Solo v3.5.0 'Caster', difficulty override: D3+X roll, then the first valid spell in cycle order WITH a real payoff (a valid 0-EV one only as fallback)"
+	return "Solo v3.5.0 'Caster': D3+X roll, then the first valid spell in cycle order"
+
+
 ## The one cast attempt of a single caster member: D3+X over the faction's BOOK-ORDERED spell list,
 ## cycle to the first valid spell (official); target + token economy filled by EV. Returns {} when
 ## the caster holds (no valid spell / no spell data), with the decision recorded either way.
@@ -3723,7 +3735,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -
 		chosen_ev = fallback_ev
 	if chosen.is_empty():
 		record_decision({"kind": "cast_skip", "unit": member.get_name(),
-			"rule": "Solo v3.5.0 'Caster': D3+X pick, cycle-to-valid — no valid spell, don't cast",
+			"rule": cast_pick_rule(ev_best_pick, skip_zero_ev) + " — no valid spell, don't cast",
 			"candidates": candidates_rec, "chosen": "hold tokens", "why": "no castable spell",
 			"data": {"d3": d3, "caster_x": caster_x, "tokens": tokens}})
 		hold_out.append("no castable spell (out of range, unaffordable, or not yet modeled)")
@@ -3801,7 +3813,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -
 	for t in chosen_targets:
 		target_names.append(((t as Dictionary)["unit"] as GameUnit).get_name())
 	record_decision({"kind": "cast", "unit": member.get_name(),
-		"rule": "Solo v3.5.0 'Caster' (D3+X, cycle-to-valid) + Caster(X) v3.5.1 (4+, boost/interference 18\" LoS)",
+		"rule": cast_pick_rule(ev_best_pick, skip_zero_ev) + "; Caster(X) v3.5.1 (4+, boost/interference 18\" LoS)",
 		"candidates": candidates_rec, "chosen": str(chosen.get("name", "?")),
 		"why": ("ev-best pick" if ev_best_pick else ("skip 0-EV" if skip_zero_ev and chosen_ev > 0.0 else "official D3+X cycle")),
 		"data": {"d3": d3, "caster_x": caster_x, "targets": ", ".join(PackedStringArray(target_names)),
