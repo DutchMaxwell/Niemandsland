@@ -30,9 +30,36 @@ jobs:
 
       - name: Run gdUnit4 tests
         run: |
+          set -o pipefail
           godot --headless --path . \
             -s -d res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
-            --ignoreHeadlessMode -c -a res://test
+            --ignoreHeadlessMode -c -a res://test 2>&1 | tee gdunit_output.log
+
+      # gdUnit prints "No test cases found, abort test run!" and exits 0 when a test file
+      # fails to PARSE (syntax error) instead of failing to assert — a broken suite would
+      # otherwise be a silent green on this gate, which every export/release job depends on.
+      # A count check is cheap and can't be fooled by a parse error: fail if gdUnit reports
+      # zero test cases, never prints its final summary, or executed fewer suites than there
+      # are *_test.gd files on disk (recursive, includes test/e2e, test/mp, ...).
+      - name: Verify gdUnit executed the full suite
+        run: |
+          CLEAN=$(sed -r 's/\x1b\[[0-9;]*m//g' gdunit_output.log)
+
+          if grep -q "No test cases found" <<< "$CLEAN"; then
+            echo "::error::gdUnit reported no test cases — a test file likely failed to parse"; exit 1
+          fi
+
+          if ! grep -q "^Overall Summary:" <<< "$CLEAN"; then
+            echo "::error::gdUnit never printed its 'Overall Summary' line — run did not complete normally"; exit 1
+          fi
+
+          EXECUTED=$(grep -oP 'Executed test suites: \(\K[0-9]+' <<< "$CLEAN" | head -1)
+          FILE_COUNT=$(find test -name '*_test.gd' | wc -l)
+          echo "gdUnit executed suites: ${EXECUTED:-<none>} | *_test.gd files on disk: $FILE_COUNT"
+
+          if [ -z "$EXECUTED" ] || [ "$EXECUTED" -lt "$FILE_COUNT" ]; then
+            echo "::error::gdUnit executed $EXECUTED suite(s) but $FILE_COUNT *_test.gd file(s) exist under test/ — some suite(s) never ran"; exit 1
+          fi
 
   relay-tests:
     name: Relay tests
