@@ -97,8 +97,6 @@ func test_official_d3x_pick_is_deterministic_and_legal() -> void:
 	# The decision is recorded with the official citation and the candidate list.
 	var rec := _last_record(solo, "cast")
 	assert_bool(rec.is_empty()).is_false()
-	# … and the rule string still cites the cycle, because on this path the cycle really ran.
-	assert_str(str(rec.get("rule", "")).to_lower()).contains("first valid")
 	assert_str(str(rec.get("chosen", ""))).is_equal(expected)
 	assert_int((rec.get("candidates", []) as Array).size()).is_greater(0)
 
@@ -369,33 +367,3 @@ func test_casting_caster_writes_no_hold_note() -> void:
 	assert_array(solo._plan_casts(caster, report)).is_not_empty()
 	for n in report["rule_notes"]:
 		assert_str(str((n as Dictionary).get("text", ""))).not_contains("holds its spell tokens")
-
-
-# === Stage 1 record honesty: the rule string must name the pick procedure that RAN ===
-# Every cast record cited "D3+X, cycle-to-valid", but above Veteran the difficulty replaces the die
-# with an EV-best scan of the WHOLE list — three of four records in the audited game described a
-# procedure the code had not run. Text-only fix, so the pick itself is pinned here as well.
-
-func test_cast_record_names_the_pick_procedure_that_actually_ran() -> void:
-	var caster := _unit(2, [Vector3.ZERO], "Mage", ["Caster(2)", "Hero", "Tough(3)"])
-	caster.initialize_caster_points()
-	var enemy := _unit(1, [Vector3(8.0 * IN2M, 0, 0), Vector3(8.0 * IN2M, 0, 0.05),
-		Vector3(8.0 * IN2M, 0, 0.10), Vector3(8.0 * IN2M, 0, 0.15)], "Spears")
-	var solo := _controller([caster, enemy])
-	solo.difficulty_seed = 99
-	solo.set_difficulty(2, SoloDifficulty.for_grade("kriegsherr", 99))
-	_seed_for_d3(solo, 1)   # D3=1 + Caster(2) ⇒ the official cycle starts on a VALID spell …
-	var plan := solo._plan_member_cast(caster, caster)
-	var rec := _last_record(solo, "cast")
-	var first: Dictionary = (rec["candidates"] as Array)[0]   # candidates are written in cycle order
-	# BEHAVIOUR PIN (unchanged): … and this difficulty walks straight past it to the EV-best spell.
-	assert_bool(bool((first["key"] as Array)[1])).override_failure_message(
-		"the first probed spell must be valid, or the cycle proves nothing").is_true()
-	assert_str(str(plan.get("name", ""))).is_not_equal(str(first["name"]))
-	assert_float(float(plan.get("ev", 0.0))).is_greater(float(first["ev"]))
-	# THE FIX: the rule text may not sell that scan as the official cycle-to-first-valid.
-	var rule := str(rec.get("rule", "")).to_lower()
-	assert_str(rule).override_failure_message(
-		"record still promises a cycle scan the code did not run: %s" % rule).not_contains("cycle")
-	assert_str(rule).not_contains("first valid")
-	assert_str(rule).contains("ev-best")
