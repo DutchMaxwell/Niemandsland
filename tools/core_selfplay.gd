@@ -353,6 +353,12 @@ func _units_from_list(path: String, player: int) -> Array:
 			_append_selection(host, ud)
 		else:
 			printerr("[CORE] WARN: combined partner %s not found" % str(ud["joinToUnit"]))
+	# NML-1046 M1: grant caster tokens via the SAME shared method the import
+	# path uses (equipment_distributor.gd:394) — no duplicated logic. Must run
+	# AFTER the combined pass above: Caster Group's X is the unit's model
+	# count, and combined halves must already be folded into the host.
+	for built in out:
+		(built as GameUnit).initialize_caster_points()
 	return out
 
 
@@ -454,7 +460,9 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array,
 	var winner := "draw"
 	if p1 != p2:
 		winner = "p1" if p1 > p2 else "p2"
-	var result := {"schema": 1, "board_schema": 5, "rule_vocab": "v1c",
+	# NML-1046 M1: v1c -> v1d — caster-era rows (units now carry granted spell
+	# tokens) must stay distinguishable from pre-fix corpus rows.
+	var result := {"schema": 1, "board_schema": 5, "rule_vocab": "v1d",
 		"school_world": 2, "terrain": _world.get("pieces", []),
 		"unknown_rules": BattleSim.unknown_rules.keys(),
 		"tool": "core_selfplay", "seed": game_seed,

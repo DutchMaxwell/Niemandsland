@@ -464,6 +464,9 @@ func _build_side(specs: Array, player: int, z_edge: float) -> Array:
 			node.global_position = Vector3(base_x + float(m % 5) * 0.03, 0.0, base_z + float(m / 5) * 0.03)
 			mi.node = node
 			unit.models.append(mi)
+		# NML-1046 M1: same hand-built-GameUnit gap as core_selfplay.gd — grant
+		# via the shared method (equipment_distributor.gd:394), after models exist.
+		unit.initialize_caster_points()
 		out.append(unit)
 	return out
 
