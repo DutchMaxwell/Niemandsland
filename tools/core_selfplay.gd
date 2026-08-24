@@ -28,11 +28,43 @@ static func _board_rows(state: Dictionary) -> Array:
 	return BattleSim.board_rows(state)
 
 
+## NML-1046 M2a: magic-cast telemetry seed — per-side granted/caster/spell-book
+## counts computed ONCE from the built rosters (before any activation), plus
+## the empty per-game cast/token counters _play_round fills in as it plays.
+static func _magic_init(units1: Array, units2: Array) -> Dictionary:
+	var magic := {"granted": {"p1": 0, "p2": 0}, "casters": {"p1": 0, "p2": 0},
+		"books_resolved": {"p1": 0, "p2": 0}, "casts": {"p1": 0, "p2": 0},
+		"tokens_spent": {"p1": 0, "p2": 0}}
+	for pair in [["p1", units1], ["p2", units2]]:
+		var key: String = pair[0]
+		for u in (pair[1] as Array):
+			var gu := u as GameUnit
+			magic["granted"][key] = int(magic["granted"][key]) + gu.casts_current
+			if gu.casts_current > 0:
+				magic["casters"][key] = int(magic["casters"][key]) + 1
+				if not SpellsRegistry.spells_for_unit(gu).is_empty():
+					magic["books_resolved"][key] = int(magic["books_resolved"][key]) + 1
+	return magic
+
+
+## Played-actions-only tally: a positive token delta across the ONE resolve at
+## the PLAYED action (core_selfplay.gd:167) IS the one-spell-per-activation
+## cast event (battle_sim.gd:516-519) — the pair/fork resolves in _play_round
+## run on CLONES and never reach this call.
+static func _magic_tally(magic: Dictionary, side_key: String, tokens_before: int,
+		tokens_after: int) -> void:
+	var delta := tokens_before - tokens_after
+	if delta > 0:
+		magic["casts"][side_key] = int(magic["casts"][side_key]) + 1
+		magic["tokens_spent"][side_key] = int(magic["tokens_spent"][side_key]) + delta
+
+
 var _army1 := ""
 var _army2 := ""
 var _seed := 1
 var _games := 1
 var _out := ""
+var _magic: Dictionary = {}
 
 
 func _initialize() -> void:
@@ -66,6 +98,7 @@ func _play_one(game_seed: int) -> void:
 		printerr("[CORE] FATAL: empty army (%s / %s)" % [_army1, _army2])
 		quit(1)
 		return
+	_magic = _magic_init(units1, units2)
 	var objectives := [Vector3(-16.0 * IN2M, 0, 0), Vector3.ZERO, Vector3(16.0 * IN2M, 0, 0)]
 	# Realism wave (maintainer 14.08.): the REAL symmetric map layouter is the
 	# one terrain source for table and school. NOTE the old _gen_terrain drew 9
@@ -164,7 +197,14 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 						round_no, owners, objectives, frng))
 				row["fork"] = {"chosen_runs": c_runs, "runner_runs": r_runs}
 		positions_log.append(row)
+		# NML-1046 M2a: the ONE played apply per activation — the pair/fork
+		# resolves above run on clones and must never feed the magic tally.
+		var ak := str((pick["action"] as Dictionary).get("unit", ""))
+		var casts_before := int((state["units"].get(ak, {}) as Dictionary).get("casts", 0))
 		state = BattleSim.resolve_stochastic(state, pick["action"], rng)
+		if (state["units"] as Dictionary).has(ak):
+			var casts_after := int((state["units"][ak] as Dictionary).get("casts", 0))
+			_magic_tally(_magic, "p%d" % turn, casts_before, casts_after)
 		last_side = turn
 		turn = 2 if turn == 1 else 1
 	# writeback: resolve clones — copy the final round state over the caller's
@@ -473,7 +513,11 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array,
 		"objectives": {"p1": p1, "p2": p2, "neutral": owners.size() - p1 - p2},
 		"vp": {"p1": vp1, "p2": vp2}, "scoring": "end",
 		"winner": winner, "planner_positions": positions_log, "planner_calib": [],
-		"roster": _roster_names()}
+		"roster": _roster_names(),
+		# NML-1046 M2a: per-game cast counter — casts fold silently into the
+		# shoot volley (battle_sim.gd:516-519) without this, so a probe has no
+		# way to measure whether spells are actually firing.
+		"magic": _magic}
 	if _out != "":
 		DirAccess.make_dir_recursive_absolute(_out)
 		var f := FileAccess.open(_out.path_join("core_s%d.json" % game_seed), FileAccess.WRITE)
