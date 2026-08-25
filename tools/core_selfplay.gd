@@ -402,9 +402,69 @@ func _units_from_list(path: String, player: int) -> Array:
 	return out
 
 
+## A weapon PROFILE token always declares attacks and/or range — a rule grant
+## never does — so this flags "A2" (attacks), a `24"` range figure, or a
+## "Range..." field.
+static func _is_weapon_profile_token(token: String) -> bool:
+	var re := RegEx.new()
+	re.compile("^A\\d+$|\\d\"$|^Range\\b")
+	return re.search(token) != null
+
+
+## Rule labels an upgrade OPTION's label grants — the parenthesized tail lists them
+## (e.g. "Archivist (Caster(2))" grants "Caster(2)"; "Champion (Fear, Caster(1))"
+## grants both, split at TOP-LEVEL commas so "Caster(1)"'s own parens stay intact).
+## No parenthesized tail = a plain weapon/item swap, not a rule grant -> empty.
+## NML-1066 guard: a WEAPON-SWAP option also carries a parenthesized tail (its
+## profile, e.g. "Energy Sword (A2, AP(1), Rending)") — if ANY split token looks
+## like a weapon-profile field, the whole label is a swap, not a rule grant, so
+## it must NOT leak stray tokens into unit-wide special_rules (RulesRegistry/AiEv
+## read that array for combat EVs — this harness stays parity-bound).
+static func _rules_in_upgrade_label(label: String) -> Array:
+	var open := label.find("(")
+	var close := label.rfind(")")
+	if open < 0 or close <= open:
+		return []
+	var inner := label.substr(open + 1, close - open - 1)
+	var out: Array = []
+	var depth := 0
+	var start := 0
+	for i in range(inner.length()):
+		var c := inner[i]
+		if c == "(":
+			depth += 1
+		elif c == ")":
+			depth -= 1
+		elif c == "," and depth == 0:
+			var piece := inner.substr(start, i - start).strip_edges()
+			if piece != "":
+				out.append(piece)
+			start = i + 1
+	var last := inner.substr(start).strip_edges()
+	if last != "":
+		out.append(last)
+	for token in out:
+		if _is_weapon_profile_token(token):
+			return []
+	return out
+
+
 ## Adds one selection's models (with their Tough pools) and weapons to a unit —
-## used for the base selection and again for its combined partner.
+## used for the base selection and again for its combined partner, so a
+## combined-in hero's OWN upgrade rules also reach the (shared) host unit.
 func _append_selection(gu: GameUnit, ud: Dictionary) -> void:
+	# NML-1066: rules an upgrade GRANTS (e.g. "Archivist (Caster(2))") never land
+	# in ud["rules"] — the real import path resolves them from the option's typed
+	# "gains" (opr_api_client.gd:850), but this lightweight fixture carries only
+	# the option's label string, so we parse it instead. Must run before
+	# initialize_caster_points() (the loop at the end of _units_from_list) so an
+	# upgrade-granted Caster gets its tokens.
+	var rules: Array = gu.unit_properties.get("special_rules", [])
+	for su in ud.get("selectedUpgrades", []):
+		var option := (su as Dictionary).get("option", {}) as Dictionary
+		for rl in _rules_in_upgrade_label(str(option.get("label", ""))):
+			if rl not in rules:
+				rules.append(rl)
 	for w in ud.get("weapons", []):
 		var wd := w as Dictionary
 		var ow := OPRApiClient.OPRWeapon.new()

@@ -33,6 +33,13 @@ func _unit_spec(id: String, size: int, rules: Array, sel: String = "",
 		"combined": combined}
 
 
+## Adds ONE selectedUpgrades entry (option label only — this fixture format
+## never carries typed "gains", see core_selfplay.gd:_rules_in_upgrade_label).
+func _with_upgrade(spec: Dictionary, option_label: String) -> Dictionary:
+	spec["selectedUpgrades"] = [{"option": {"label": option_label}}]
+	return spec
+
+
 ## (a) A Caster(X) list unit is granted X tokens after the build.
 func test_caster_list_unit_gets_tokens() -> void:
 	var cs: SceneTree = CoreSelfplayScript.new()
@@ -88,4 +95,107 @@ func test_caster_group_tokens_recount_after_casualties() -> void:
 	(unit.models[0] as ModelInstance).is_alive = false
 	unit.initialize_caster_points()
 	assert_int(unit.casts_current).is_equal(3)
+	cs.free()
+
+
+## NML-1066 (a): an UPGRADE-granted Caster (selectedUpgrades option label, not
+## a printed unit rule) must reach the unit and grant its tokens — the real
+## import path resolves this from the option's typed "gains"
+## (opr_api_client.gd:850); the trainer's list fixture only carries the label.
+func test_upgrade_granted_caster_gets_tokens() -> void:
+	var cs: SceneTree = CoreSelfplayScript.new()
+	var path := _write_list([_with_upgrade(
+		_unit_spec("Master Brother", 1, []), "Archivist (Caster(2))")])
+	var units: Array = cs._units_from_list(path, 1)
+	assert_int(units.size()).is_equal(1)
+	assert_int((units[0] as GameUnit).casts_current).is_equal(2)
+	cs.free()
+
+
+## NML-1066 (b): an option label with NO parenthesized tail is a plain
+## weapon/item swap (e.g. "Replace CCW" -> "Iron Sights"), not a rule grant.
+func test_upgrade_option_without_parens_grants_nothing() -> void:
+	var cs: SceneTree = CoreSelfplayScript.new()
+	var path := _write_list([_with_upgrade(
+		_unit_spec("Trooper", 1, []), "Iron Sights")])
+	var units: Array = cs._units_from_list(path, 1)
+	var unit := units[0] as GameUnit
+	assert_int(unit.casts_current).is_equal(0)
+	assert_array(unit.get_special_rules()).is_empty()
+	cs.free()
+
+
+## NML-1066 (c): a printed Caster(1) AND an upgrade-granted "Seer (Caster(2))"
+## both land in special_rules (printed rule first, upgrade rule appended after
+## it), but game_unit.gd:get_caster_value() returns on the FIRST "Caster("
+## match it finds — so the PRINTED value wins, not the higher one. Pinning
+## this actual (first-listed) behavior, not a max/combine that doesn't exist.
+func test_upgrade_caster_alongside_printed_caster_keeps_printed_value() -> void:
+	var cs: SceneTree = CoreSelfplayScript.new()
+	var path := _write_list([_with_upgrade(_unit_spec("Hybrid Caster", 1,
+		[{"name": "Caster", "rating": 1, "label": "Caster(1)"}]), "Seer (Caster(2))")])
+	var units: Array = cs._units_from_list(path, 1)
+	var unit := units[0] as GameUnit
+	assert_int(unit.casts_current).is_equal(1)
+	var rules := unit.get_special_rules()
+	assert_bool(rules.has("Caster(1)")).is_true()
+	assert_bool(rules.has("Caster(2)")).is_true()
+	cs.free()
+
+
+## NML-1066 (d): a multi-rule option label grants EVERY comma-separated rule
+## inside the outer parentheses, e.g. "Champion (Fear, Caster(1))" grants both
+## "Fear" and "Caster(1)" (the inner "(1)" stays part of the Caster label).
+func test_upgrade_multi_rule_label_grants_all_of_them() -> void:
+	var cs: SceneTree = CoreSelfplayScript.new()
+	var path := _write_list([_with_upgrade(
+		_unit_spec("Champion Bearer", 1, []), "Champion (Fear, Caster(1))")])
+	var units: Array = cs._units_from_list(path, 1)
+	var unit := units[0] as GameUnit
+	assert_int(unit.casts_current).is_equal(1)
+	assert_bool(unit.has_special_rule("Fear")).is_true()
+	assert_bool(unit.has_special_rule("Caster(1)")).is_true()
+	cs.free()
+
+
+## NML-1066: the combined-partner second pass (_append_selection at the
+## joinToUnit fold, core_selfplay.gd ~line 393) must ALSO pick up its OWN
+## selectedUpgrades rules onto the shared host — a caster hero folded into a
+## unit via combined:true must not lose its upgrade-granted Caster.
+func test_combined_partner_upgrade_caster_reaches_the_host() -> void:
+	var cs: SceneTree = CoreSelfplayScript.new()
+	var host := _unit_spec("Grunts", 2, [], "hostSel")
+	var partner := _with_upgrade(
+		_unit_spec("Archivist", 1, [], "partnerSel", "hostSel", true), "Archivist (Caster(2))")
+	var path := _write_list([host, partner])
+	var units: Array = cs._units_from_list(path, 1)
+	assert_int(units.size()).is_equal(1)
+	assert_int((units[0] as GameUnit).casts_current).is_equal(2)
+	cs.free()
+
+
+## NML-1066 (e) guard: a WEAPON-SWAP option's label also carries a parenthesized
+## tail (its profile) — "Energy Sword (A2, AP(1), Rending)" must grant NOTHING,
+## not leak "A2"/"AP(1)"/"Rending" into unit-wide special_rules.
+func test_upgrade_weapon_swap_profile_grants_nothing() -> void:
+	var cs: SceneTree = CoreSelfplayScript.new()
+	var path := _write_list([_with_upgrade(
+		_unit_spec("Swordsman", 1, []), "Energy Sword (A2, AP(1), Rending)")])
+	var units: Array = cs._units_from_list(path, 1)
+	var unit := units[0] as GameUnit
+	assert_int(unit.casts_current).is_equal(0)
+	assert_array(unit.get_special_rules()).is_empty()
+	cs.free()
+
+
+## NML-1066 (f) guard: same, for a RANGED weapon profile — the leading `24"`
+## range figure must also void the whole label.
+func test_upgrade_weapon_swap_with_range_grants_nothing() -> void:
+	var cs: SceneTree = CoreSelfplayScript.new()
+	var path := _write_list([_with_upgrade(
+		_unit_spec("Rifleman", 1, []), "Heavy Rifle (24\", A1, AP(1))")])
+	var units: Array = cs._units_from_list(path, 1)
+	var unit := units[0] as GameUnit
+	assert_int(unit.casts_current).is_equal(0)
+	assert_array(unit.get_special_rules()).is_empty()
 	cs.free()
