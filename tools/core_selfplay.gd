@@ -34,7 +34,11 @@ static func _board_rows(state: Dictionary) -> Array:
 static func _magic_init(units1: Array, units2: Array) -> Dictionary:
 	var magic := {"granted": {"p1": 0, "p2": 0}, "casters": {"p1": 0, "p2": 0},
 		"books_resolved": {"p1": 0, "p2": 0}, "casts": {"p1": 0, "p2": 0},
-		"tokens_spent": {"p1": 0, "p2": 0}}
+		"tokens_spent": {"p1": 0, "p2": 0},
+		# NML-1064: eligibility counters — "never eligible" (no tokens, or no
+		# enemy in spell range) vs "eligible but chose not to cast" needs its
+		# own denominator; casts/tokens_spent alone can't tell them apart.
+		"caster_activations": {"p1": 0, "p2": 0}, "in_range_activations": {"p1": 0, "p2": 0}}
 	for pair in [["p1", units1], ["p2", units2]]:
 		var key: String = pair[0]
 		for u in (pair[1] as Array):
@@ -57,6 +61,57 @@ static func _magic_tally(magic: Dictionary, side_key: String, tokens_before: int
 	if delta > 0:
 		magic["casts"][side_key] = int(magic["casts"][side_key]) + 1
 		magic["tokens_spent"][side_key] = int(magic["tokens_spent"][side_key]) + delta
+
+
+## NML-1064 round-start refill — GF v3.5.1 Caster(X): "Gets X spell tokens at
+## the start of each round, but can't hold more than 6" (accumulate+cap-6
+## lives on GameUnit.add_round_caster_points, game_unit.gd:426). The build-
+## time grant (initialize_caster_points, _units_from_list) covers round 1
+## only — the round loop (_play_one) calls this for round_no >= 2.
+static func _refill_round_caster_points(su: Dictionary, magic: Dictionary, side_key: String) -> void:
+	var gu := su.get("unit") as GameUnit
+	if gu == null:
+		return
+	# The sim only ever DECREMENTS su["casts"] (spell_ev_of spends tokens,
+	# battle_sim.gd:519) and never writes back to the GameUnit — sync the
+	# ledger to the sim's spend before granting, or the refill starts from a
+	# stale (too-high) balance.
+	gu.casts_current = int(su.get("casts", 0))
+	var before := gu.casts_current
+	gu.add_round_caster_points()
+	su["casts"] = gu.casts_current
+	magic["granted"][side_key] = int(magic["granted"][side_key]) + (gu.casts_current - before)
+
+
+## NML-1064 eligibility tally — "never eligible" (no tokens, or no living
+## enemy within spell range) vs "eligible but chose not to cast" needs its
+## own denominator; _magic_tally alone (a positive token delta) can't tell
+## them apart. Reads `state` PRE-apply — the same instant _magic_tally reads
+## casts_before at the call site — so the resolve this activation is about
+## to produce never counts here.
+static func _magic_eligibility_tally(magic: Dictionary, side_key: String,
+		state: Dictionary, actor_key: String) -> void:
+	var su: Dictionary = (state["units"] as Dictionary).get(actor_key, {})
+	if int(su.get("casts", 0)) <= 0:
+		return
+	magic["caster_activations"][side_key] = int(magic["caster_activations"][side_key]) + 1
+	var gu := su.get("unit") as GameUnit
+	if gu == null:
+		return
+	var max_range := 0.0
+	for e in SpellsRegistry.spells_for_unit(gu):
+		max_range = maxf(max_range, float((e as Dictionary).get("range_in", 0)))
+	if max_range <= 0.0:
+		return
+	var actor_player := int(su.get("player", 0))
+	var positions: Array = su.get("positions", [])
+	for k in (state["units"] as Dictionary):
+		var ou: Dictionary = state["units"][k]
+		if int(ou.get("player", 0)) == actor_player or int(ou.get("alive", 0)) <= 0:
+			continue
+		if BattleSim.dist_in(positions, ou.get("positions", [])) <= max_range + 0.001:
+			magic["in_range_activations"][side_key] = int(magic["in_range_activations"][side_key]) + 1
+			return
 
 
 var _army1 := ""
@@ -118,6 +173,12 @@ func _play_one(game_seed: int) -> void:
 			var su: Dictionary = state["units"][k]
 			su["activated"] = false
 			su["fatigued"] = false
+			# NML-1064: round 1 keeps the build-time grant (initialize_caster_points,
+			# _units_from_list) -- round 2+ must refill under the real per-round
+			# Caster(X) rule, or every core game after round 1 plays with a dead
+			# spell economy (add_round_caster_points is never called otherwise).
+			if round_no >= 2:
+				_refill_round_caster_points(su, _magic, "p%d" % int(su["player"]))
 		opener = _play_round(state, opener, rng, positions_log, round_no, game_seed,
 			owners, objectives)
 		state = _last_state   # adopt the played round (resolve works on clones)
@@ -201,6 +262,9 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 		# resolves above run on clones and must never feed the magic tally.
 		var ak := str((pick["action"] as Dictionary).get("unit", ""))
 		var casts_before := int((state["units"].get(ak, {}) as Dictionary).get("casts", 0))
+		# NML-1064: eligibility tally reads `state` PRE-apply, the same instant
+		# casts_before above is read.
+		_magic_eligibility_tally(_magic, "p%d" % turn, state, ak)
 		state = BattleSim.resolve_stochastic(state, pick["action"], rng)
 		if (state["units"] as Dictionary).has(ak):
 			var casts_after := int((state["units"][ak] as Dictionary).get("casts", 0))

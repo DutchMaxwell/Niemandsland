@@ -130,3 +130,95 @@ func test_write_result_stamps_the_magic_block() -> void:
 	assert_int(int((magic["tokens_spent"] as Dictionary)["p1"])).is_equal(3)
 	assert_int(int((magic["granted"] as Dictionary)["p1"])).is_equal(3)
 	cs.free()
+
+
+## NML-1064 (a): the round-start refill helper syncs the sim's decremented
+## su["casts"] onto the live GameUnit, calls add_round_caster_points() (the
+## SAME accumulate+cap-6 method the real game calls each round,
+## game_unit.gd:426) and writes the refreshed value back onto BOTH su["casts"]
+## and the GameUnit — a Caster(2) unit that the sim had spent down to 1 token
+## refills to 3 (1 + 2), not back up to the build-time 2.
+func test_refill_round_caster_points_adds_the_per_round_grant() -> void:
+	var cs: SceneTree = CoreSelfplayScript.new()
+	var path := _write_faction_list("battle_brothers",
+		[_unit_spec("Wizard", 1, [{"name": "Caster", "rating": 2, "label": "Caster(2)"}])])
+	var units: Array = cs._units_from_list(path, 1)
+	var gu := units[0] as GameUnit
+	var magic: Dictionary = cs._magic_init(units, [])
+	var su := {"unit": gu, "casts": 1, "player": 1}
+	cs._refill_round_caster_points(su, magic, "p1")
+	assert_int(int(su["casts"])).is_equal(3)
+	assert_int(gu.casts_current).is_equal(3)
+	cs.free()
+
+
+## NML-1064 (b): the same cap the real game enforces (Caster(X): "can't hold
+## more than 6 tokens at once") — 5 unspent tokens plus a Caster(2) refill
+## clamps to 6, not 7.
+func test_refill_round_caster_points_caps_at_six() -> void:
+	var cs: SceneTree = CoreSelfplayScript.new()
+	var path := _write_faction_list("battle_brothers",
+		[_unit_spec("Wizard", 1, [{"name": "Caster", "rating": 2, "label": "Caster(2)"}])])
+	var units: Array = cs._units_from_list(path, 1)
+	var gu := units[0] as GameUnit
+	var magic: Dictionary = cs._magic_init(units, [])
+	var su := {"unit": gu, "casts": 5, "player": 1}
+	cs._refill_round_caster_points(su, magic, "p1")
+	assert_int(int(su["casts"])).is_equal(6)
+	assert_int(gu.casts_current).is_equal(6)
+	cs.free()
+
+
+## NML-1064 (c): a non-caster (casts_per_round stays 0, add_round_caster_points'
+## own guard is a no-op) must stay at 0 tokens through a refill — no duplicated
+## guard logic in the helper, just the method's existing behaviour.
+func test_refill_round_caster_points_leaves_a_non_caster_at_zero() -> void:
+	var cs: SceneTree = CoreSelfplayScript.new()
+	var path := _write_faction_list("no_such_faction",
+		[_unit_spec("Grunts", 5, [{"name": "Tough", "rating": 3, "label": "Tough(3)"}])])
+	var units: Array = cs._units_from_list(path, 1)
+	var gu := units[0] as GameUnit
+	var magic: Dictionary = cs._magic_init(units, [])
+	var su := {"unit": gu, "casts": 0, "player": 1}
+	cs._refill_round_caster_points(su, magic, "p1")
+	assert_int(int(su["casts"])).is_equal(0)
+	assert_int(gu.casts_current).is_equal(0)
+	cs.free()
+
+
+## NML-1064 (d): eligibility counters — "never eligible" (no tokens, or no
+## living enemy within spell range) vs "eligible but chose not to cast" needs
+## its own denominator. A hand-built two-unit state: the actor carries 1 token
+## and a fixture spell book with ONE range_in(12) entry. An enemy at 6" is
+## within range (both counters tick); the SAME actor re-probed against an
+## enemy at 30" is still a caster activation but NOT an in-range one.
+func test_magic_eligibility_tally_counts_caster_and_in_range_activations() -> void:
+	var cs: SceneTree = CoreSelfplayScript.new()
+	SpellsRegistry.reset_cache()
+	var gf_map: Dictionary = (SpellsRegistry.map_for("gf") as Dictionary).duplicate(true)
+	var factions: Dictionary = gf_map.get("factions", {})
+	factions["nml_1064_fixture"] = {"spells": [{"name": "Fixture Bolt", "threshold": 1,
+		"range_in": 12, "target": {"side": "enemy", "count": 1, "kind": "unit"},
+		"effect": {"kind": "damage", "hits": 1}, "status": "modeled"}]}
+	gf_map["factions"] = factions
+	SpellsRegistry._cache["gf"] = gf_map
+	var actor := GameUnit.new()
+	actor.unit_id = "actor"
+	actor.unit_properties = {"player_id": 1, "name": "Actor", "quality": 4, "defense": 4,
+		"special_rules": ["Caster(1)"], "game_system": "gf", "faction_folder": "nml_1064_fixture"}
+	var magic: Dictionary = cs._magic_init([], [])
+	var im: float = CoreSelfplayScript.IN2M
+	var state_near := {"units": {
+		"actor": {"unit": actor, "casts": 1, "player": 1, "alive": 1, "positions": [Vector3.ZERO]},
+		"enemy": {"player": 2, "alive": 1, "positions": [Vector3(6.0 * im, 0, 0)]}}}
+	cs._magic_eligibility_tally(magic, "p1", state_near, "actor")
+	assert_int(int((magic["caster_activations"] as Dictionary)["p1"])).is_equal(1)
+	assert_int(int((magic["in_range_activations"] as Dictionary)["p1"])).is_equal(1)
+	var state_far := {"units": {
+		"actor": {"unit": actor, "casts": 1, "player": 1, "alive": 1, "positions": [Vector3.ZERO]},
+		"enemy": {"player": 2, "alive": 1, "positions": [Vector3(30.0 * im, 0, 0)]}}}
+	cs._magic_eligibility_tally(magic, "p1", state_far, "actor")
+	assert_int(int((magic["caster_activations"] as Dictionary)["p1"])).is_equal(2)
+	assert_int(int((magic["in_range_activations"] as Dictionary)["p1"])).is_equal(1)
+	SpellsRegistry.reset_cache()
+	cs.free()
