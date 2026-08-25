@@ -446,6 +446,8 @@ static func clone_state(state: Dictionary) -> Dictionary:
 		# radii are mutated alongside positions when a model dies, so they must
 		# be copied like them — a shared array would let one rollout edit another
 		su["radii"] = (su.get("radii", []) as Array).duplicate()
+		# A1b-1: "mods" is a snapshot dict, not shared state — a clone owns its own copy.
+		su["mods"] = (su.get("mods", {}) as Dictionary).duplicate()
 		units[key] = su
 	var objectives: Array = []
 	for o in state["objectives"]:
@@ -866,6 +868,10 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 			# Gap 18a: Banner/attached-hero morale bonus, stamped ONCE — the rollout
 			# must never walk the rules registry per activation.
 			"morale_bonus": SoloController.morale_bonus_of(u),
+			# A1b-1: the NET active spell/token hit/def/morale/range/speed deltas, stamped once —
+			# the planner substrate carries the numbers the dice path already applies (not wired
+			# to a consumer yet; that reads the "mods" dict in a later diff).
+			"mods": SoloController.active_mod_net_of(u),
 			"shaken": u.is_shaken,
 			"fatigued": u.is_fatigued,
 			"activated": u.is_activated,

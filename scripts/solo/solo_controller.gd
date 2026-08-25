@@ -5009,6 +5009,42 @@ static func morale_bonus_of(unit: GameUnit) -> int:
 				continue
 			best = maxi(best, int((ed.get("params", {}) as Dictionary).get("morale_bonus", 0)))
 	return best
+
+
+## A1b-1 — NET of a unit's currently active spell/token modifiers, for BattleSim's snapshot.
+## scripts/solo reads the DURABLE mirror (unit.unit_properties["spell_records"], main.gd:3530-3563)
+## rather than main.gd's live _solo_spell_mods — BattleSim runs off a cloned board, no main.gd instance to ask.
+static func active_mod_net_of(unit: GameUnit) -> Dictionary:
+	var net := {"hit": 0, "def": 0, "morale": 0, "range_in": 0.0, "advance": 0.0, "rush": 0.0}
+	if unit == null:
+		return net
+	var records: Array = unit.unit_properties.get("spell_records", [])
+	if records.is_empty():
+		return net
+	# scope ("melee"/"shooting") splits some records and a capture-time snapshot doesn't know
+	# which attack type is coming, so each role is read for both and deduped — the same union
+	# main.gd:5514 uses to name what a defense mod WOULD have given either attack type.
+	var union := func(role: String) -> Array:
+		var seen: Array = []
+		for melee in [false, true]:
+			for rd in AiSpell.mods_for(records, role, melee):
+				if not seen.has(rd):
+					seen.append(rd)
+		return seen
+	for rd in union.call("attacker_own"):
+		net["hit"] += int((rd as Dictionary).get("hit_mod", 0))
+	for rd in union.call("defense"):
+		net["def"] += int((rd as Dictionary).get("def_mod", 0))
+	for rd in union.call("morale"):
+		net["morale"] += int((rd as Dictionary).get("morale_mod", 0))
+	for rd in union.call("range"):
+		net["range_in"] += float((rd as Dictionary).get("range_in", 0))
+	for rd in union.call("speed"):
+		net["advance"] += float((rd as Dictionary).get("advance_in", 0))
+		net["rush"] += float((rd as Dictionary).get("rush_in", 0))
+	return net
+
+
 ## NML-1049: the LARGEST extra Advance inches an activation can put on top of
 ## sim_move_bands — Bounding's placement (worst roll: 3" per die + the flat), the
 ## once-per-game Speed-Feat family and Teleport, exactly what _act() adds to
