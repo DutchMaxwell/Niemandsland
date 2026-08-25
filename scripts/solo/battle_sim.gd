@@ -458,6 +458,8 @@ static func clone_state(state: Dictionary) -> Dictionary:
 		# be copied like them — a shared array would let one rollout edit another
 		su["radii"] = (su.get("radii", []) as Array).duplicate()
 		# A1b-1: "mods" is a snapshot dict, not shared state — a clone owns its own copy.
+		# ("mods_base" is the capture-time reading and is NEVER written after capture,
+		# so the shallow ref the duplicate above carries over is safe to share.)
 		su["mods"] = (su.get("mods", {}) as Dictionary).duplicate()
 		units[key] = su
 	var objectives: Array = []
@@ -470,6 +472,10 @@ static func clone_state(state: Dictionary) -> Dictionary:
 		markers_meta.append((mk as Dictionary).duplicate())
 	var out := {"round": state["round"], "rounds_total": state["rounds_total"],
 		"units": units, "objectives": objectives}
+	# NML-1069: the round's cast log rides the state and must be COPIED, not shared —
+	# a rollout that casts would otherwise stamp its imagined spells into the real game.
+	if state.has("cast_events"):
+		out["cast_events"] = (state["cast_events"] as Array).duplicate()
 	if state.has("terrain_at"):
 		out["terrain_at"] = state["terrain_at"]
 	if state.has("charge_illegal"):   # head wave 1: legality rides every imagined step
@@ -578,6 +584,14 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 		var terrain_at: Callable = next.get("terrain_at", Callable())
 		if terrain_at.is_valid():   # T2b: the mover's cover follows it (unit-centre probe, v0)
 			su["in_cover"] = TerrainRules.gives_cover(int(terrain_at.call(centre + delta)))
+	# NML-1069 — the CAST SUB-PHASE: after the move, before ANY attack, for every
+	# activation (the old cast site was a rider inside the shoot branch below, so a
+	# melee caster never cast at all). stochastic_rng null = expectation path.
+	var cast_event := _cast_phase(next, str(action["unit"]), stochastic_rng)
+	if not cast_event.is_empty():
+		if not next.has("cast_events"):
+			next["cast_events"] = []
+		(next["cast_events"] as Array).append(cast_event)
 	var shoot_key := str(action.get("shoot", ""))
 	if shoot_key != "" and next["units"].has(shoot_key) and sees(su, shoot_key) \
 			and (kind == AiDecision.Action.HOLD or kind == AiDecision.Action.ADVANCE):
@@ -586,12 +600,8 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			var d := dist_in(positions, tu["positions"])
 			var alive_before := int(tu["alive"])
 			var wounds_before := _wounds_left(tu)
-			var volley := AiEv.shoot_ev(_profiles_of(su, false, d), _ctx_of(su), _ctx_of(tu), d)
-			var sp := spell_ev_of(su, tu, d)
-			if float(sp["ev"]) > 0.0:
-				volley += float(sp["ev"])
-				su["casts"] = int(su.get("casts", 0)) - int(sp["cost"])
-			_apply_expected_wounds(tu, volley)
+			_apply_expected_wounds(tu,
+				AiEv.shoot_ev(_profiles_of(su, false, d), _ctx_of(su), _ctx_of(tu), d))
 			_expected_shooting_morale(tu, alive_before, wounds_before)
 	var charge_key := str(action.get("charge", ""))
 	if kind == AiDecision.Action.CHARGE and charge_key != "" and next["units"].has(charge_key):
@@ -753,13 +763,205 @@ static func _spell_ev_from(spells: Array, tokens: int, def_ctx: Dictionary, d: f
 		var threshold := int(entry.get("threshold", 1))
 		if threshold > tokens or d > float(entry.get("range_in", 0)) + 0.001:
 			continue
-		var hits := int(eff.get("hits", 0)) * maxi(int((entry.get("target", {}) as Dictionary).get("count", 1)), 1)
-		var facets := AiSpell.spell_facets(eff.get("weapon_rules", []))
-		var ev := AiSpell.cast_success_chance(0, 0) * AiSpell.spell_damage_ev(hits, def_ctx, facets)
+		var ev := AiSpell.cast_success_chance(0, 0) * _spell_damage_ev_of(entry, def_ctx)
 		if ev > best_ev:
 			best_ev = ev
 			best_cost = threshold
 	return {"ev": best_ev, "cost": best_cost}
+
+
+## Expected wounds ONE spell entry's damage effect puts on a defender context —
+## hits x target count through AiSpell's facet math, no cast chance folded in.
+## The single home of that arithmetic: the EV pricing (_spell_ev_from) and the
+## cast sub-phase both call it, so the two can never drift apart.
+static func _spell_damage_ev_of(entry: Dictionary, def_ctx: Dictionary) -> float:
+	var eff: Dictionary = entry.get("effect", {})
+	if str(eff.get("kind", "")) != "damage":
+		return 0.0
+	var hits := int(eff.get("hits", 0)) \
+		* maxi(int((entry.get("target", {}) as Dictionary).get("count", 1)), 1)
+	return AiSpell.spell_damage_ev(hits, def_ctx, AiSpell.spell_facets(eff.get("weapon_rules", [])))
+
+
+# ===== NML-1069 — the cast sub-phase =========================================
+
+## ONE cast attempt for `actor_key`, resolved on `next` after the move and
+## BEFORE any attack (GF v3.5.1 Caster(X): "at any point before attacking,
+## spend as many tokens as the spell's value to try casting one or more spells
+## ... roll one die, on 4+ resolve the effect on a target in line of sight").
+## Mirrors the engine's official Solo & Co-Op procedure through the SAME helper
+## (solo_controller.gd:3664-3666 -> AiSpell.official_pick_order): D3 + X indexes
+## the faction's BOOK-ORDERED list (start = (D3 + X - 1) % size), then the cycle
+## walks on to the first VALID spell; the tokens are spent ON THE ATTEMPT, the
+## 4+ die decides the effect. The engine's DIFFICULTY LADDER on top of that cycle
+## (Veteran skips 0-EV spells, Kriegsherr/Albtraum replace the die with the
+## EV-best spell) is NOT modelled here — the sim plays the base procedure, the
+## same one the default/Rekrut difficulty plays.
+##
+## `rng` null = the EXPECTATION path (planner rollouts through resolve());
+## non-null = the stochastic path (resolve_stochastic, core self-play).
+##
+## APPROXIMATIONS — all deliberate, all v0, all named here:
+##   * D3 EXPECTATION. With no rng every D3 face is played at weight 1/3 and
+##     its effect applied scaled by that weight (x the 4+ chance). The three
+##     faces may pick three DIFFERENT spells; then all three land, each at a
+##     third of its strength. With an rng exactly the rolled face is played.
+##   * INTEGER TOKEN LEDGER. The trainer counts token DELTAS, so a fractional
+##     spend is not representable. The attempt therefore costs the threshold of
+##     the D3=1 face (the first of three equally likely faces), and the stamped
+##     event names that same spell. With an rng the rolled face pays, exactly.
+##   * BOOST / INTERFERENCE OUT OF SCOPE. cast_success_chance(0, 0) always —
+##     the same 4+ spell_ev_of prices with. The engine's token economy (helper
+##     tokens in 18" LoS) is a later step.
+##   * EFFECT COVERAGE. Damage lands as expected wounds; buff/debuff land as
+##     the six modifier fields the snapshot's "mods" dict carries (hit, def,
+##     morale, range_in, advance, rush — the mapping of main.gd:3652
+##     _solo_record_spell_mod -> SoloController.active_mod_net_of). A spell's
+##     casting_mod and grants_rule have NO snapshot slot: those spells are cast
+##     and paid for, but nothing in the sim feels them yet.
+##   * TARGETS. Damage/debuff pick the living enemy in range with line of sight
+##     whose damage EV is highest (nearest on a tie); a buff always lands on the
+##     CASTER ITSELF — the friendly-unit choice the procedure leaves open, and
+##     multi-target spells (target.count > 1) still resolve on one unit.
+##   * The attempt is not gated on the action kind or on Shaken (the engine
+##     plans a cast for every activation it runs).
+## Returns the cast event {spell, kind, cost, target, p_success}, or {} on a
+## HOLD (no tokens, no caster, no book, no valid spell) — a hold spends nothing.
+static func _cast_phase(next: Dictionary, actor_key: String,
+		rng: RandomNumberGenerator) -> Dictionary:
+	var units: Dictionary = next["units"]
+	if not units.has(actor_key):
+		return {}
+	var su: Dictionary = units[actor_key]
+	var tokens := int(su.get("casts", 0))
+	if tokens <= 0 or int(su.get("alive", 0)) <= 0:
+		return {}
+	var u: GameUnit = su["unit"]
+	if u == null or not u.has_method("is_caster") or not u.is_caster():
+		return {}
+	var spells := SpellsRegistry.spells_for_unit(u)
+	if spells.is_empty():
+		return {}
+	var faces: Array = [1, 2, 3] if rng == null else [rng.randi_range(1, 3)]
+	var weight := 1.0 / float(faces.size())
+	var p_success := AiSpell.cast_success_chance(0, 0)
+	var event := {}
+	for d3 in faces:
+		var pick := _pick_cast(next, su, actor_key, spells, tokens, int(d3), u.get_caster_value())
+		if pick.is_empty():
+			continue
+		var entry: Dictionary = pick["entry"]
+		_apply_cast_effect(next, str(pick["target"]), entry, weight * p_success, rng)
+		if event.is_empty():   # the FIRST face pays and names the attempt (see above)
+			event = {"spell": str(entry.get("name", "?")),
+				"kind": str((entry.get("effect", {}) as Dictionary).get("kind", "")),
+				"cost": int(entry.get("threshold", 0)), "target": str(pick["target"]),
+				"p_success": p_success}
+	if event.is_empty():
+		return {}
+	su["casts"] = maxi(tokens - int(event["cost"]), 0)
+	return event
+
+
+## The official cycle for ONE D3 face: walk official_pick_order and return the
+## first VALID spell as {entry, target}, or {} when the caster must hold.
+## Valid = status not "unmodeled", threshold affordable, and a legal target —
+## a buff takes the caster itself, damage/debuff need a living enemy in range
+## with line of sight (the same sees()/_los_clear seam the shoot branch uses).
+static func _pick_cast(state: Dictionary, su: Dictionary, actor_key: String, spells: Array,
+		tokens: int, d3: int, caster_x: int) -> Dictionary:
+	for idx in AiSpell.official_pick_order(spells.size(), d3, caster_x):
+		var entry := spells[int(idx)] as Dictionary
+		if str(entry.get("status", "unmodeled")) == "unmodeled":
+			continue
+		if int(entry.get("threshold", 0)) > tokens:
+			continue
+		var kind := str((entry.get("effect", {}) as Dictionary).get("kind", ""))
+		if kind == "buff":
+			return {"entry": entry, "target": actor_key}
+		if kind != "damage" and kind != "debuff":
+			continue   # an effect kind the sim has no arithmetic for is not castable here
+		var target_key := _best_spell_target(state, su, entry)
+		if target_key != "":
+			return {"entry": entry, "target": target_key}
+	return {}
+
+
+## The enemy unit a damage/debuff spell should land on: living, on the other
+## side, within range_in of the caster with line of sight, best damage EV first
+## and nearest on a tie (a debuff prices at 0, so it simply takes the nearest).
+static func _best_spell_target(state: Dictionary, su: Dictionary, entry: Dictionary) -> String:
+	var range_in := float(entry.get("range_in", 0))
+	var player := int(su.get("player", 0))
+	var best_key := ""
+	var best_ev := -1.0
+	var best_d := INF
+	for k in state["units"]:
+		var tu: Dictionary = state["units"][k]
+		if int(tu.get("player", 0)) == player or int(tu.get("alive", 0)) <= 0:
+			continue
+		if not sees(su, str(k)) or not _los_clear(state, su, tu):
+			continue
+		var d := dist_in(su["positions"], tu["positions"])
+		if d > range_in + CONTROL_EPS:
+			continue
+		var ev := _spell_damage_ev_of(entry, _ctx_of(tu))
+		if ev > best_ev + CONTROL_EPS or (absf(ev - best_ev) <= CONTROL_EPS and d < best_d):
+			best_ev = ev
+			best_d = d
+			best_key = str(k)
+	return best_key
+
+
+## Land one spell's effect. `scale` is the D3 weight x the 4+ cast chance:
+## damage is applied as that scaled expectation either way (mean-preserving,
+## exactly what _apply_expected_wounds is for), while a modifier is a discrete
+## stamp — the rng path ROLLS it (`scale` is the probability it lands whole),
+## the expectation path adds it scaled. A modifier-less buff/debuff (the
+## grants_rule-only "castable" spells) is cast but leaves no snapshot trace.
+static func _apply_cast_effect(state: Dictionary, target_key: String, entry: Dictionary,
+		scale: float, rng: RandomNumberGenerator) -> void:
+	var tu: Dictionary = (state["units"] as Dictionary).get(target_key, {})
+	if tu.is_empty():
+		return
+	var eff: Dictionary = entry.get("effect", {})
+	if str(eff.get("kind", "")) == "damage":
+		_apply_expected_wounds(tu, scale * _spell_damage_ev_of(entry, _ctx_of(tu)))
+		return
+	var modifier: Dictionary = eff.get("modifier", {})
+	if modifier.is_empty():
+		return
+	var landed := scale
+	if rng != null:
+		landed = 1.0 if rng.randf() < scale else 0.0
+	if landed <= 0.0:
+		return
+	var mods: Dictionary = tu.get("mods", {})
+	if mods.is_empty():
+		mods = {"hit": 0, "def": 0, "morale": 0, "range_in": 0.0, "advance": 0.0, "rush": 0.0}
+		tu["mods"] = mods
+	# Mirrors main.gd:3652 _solo_record_spell_mod as active_mod_net_of reads it back:
+	# a "beneficiary: attackers" record is the ATTACKER's hit/def modifier against this
+	# unit (role "vs_target"), never part of the bearer's own net — the other four
+	# fields carry no beneficiary split there and none here.
+	if str(eff.get("beneficiary", "")) != "attackers":
+		mods["hit"] = float(mods.get("hit", 0)) + landed * float(modifier.get("hit_mod", 0))
+		mods["def"] = float(mods.get("def", 0)) + landed * float(modifier.get("def_mod", 0))
+	mods["morale"] = float(mods.get("morale", 0)) + landed * float(modifier.get("morale_mod", 0))
+	mods["range_in"] = float(mods.get("range_in", 0.0)) + landed * float(modifier.get("range_in", 0))
+	mods["advance"] = float(mods.get("advance", 0.0)) + landed * float(modifier.get("advance_in", 0))
+	mods["rush"] = float(mods.get("rush", 0.0)) + landed * float(modifier.get("rush_in", 0))
+
+
+## Spell modifiers are ROUND-SCOPED ("until the end of the round" — the arena
+## clears them with the tokens in main.gd). Puts every unit back on its
+## CAPTURE-TIME reading, so a new round never inherits the last one's buffs.
+## Called by the trainer's round loop (tools/core_selfplay.gd:_play_one) where
+## `activated`/`fatigued` are cleared.
+static func reset_round_mods(state: Dictionary) -> void:
+	for k in state["units"]:
+		var su: Dictionary = state["units"][k]
+		su["mods"] = (su.get("mods_base", {}) as Dictionary).duplicate()
 
 
 ## Expected wounds the enemy's shooting REPLY takes off `player`'s units:
@@ -944,6 +1146,9 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 			# the planner substrate carries the numbers the dice path already applies (not wired
 			# to a consumer yet; that reads the "mods" dict in a later diff).
 			"mods": SoloController.active_mod_net_of(u),
+			# NML-1069: the same reading kept UNTOUCHED as the round-scope floor —
+			# reset_round_mods restores "mods" to it when a new round starts.
+			"mods_base": SoloController.active_mod_net_of(u),
 			"shaken": u.is_shaken,
 			"fatigued": u.is_fatigued,
 			"activated": u.is_activated,

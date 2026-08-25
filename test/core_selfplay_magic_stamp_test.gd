@@ -1,10 +1,11 @@
 extends GdUnitTestSuite
-## NML-1046 M2a: tools/core_selfplay.gd played spell casts SILENTLY — the cast
-## folds into the shoot volley inside BattleSim.resolve() (battle_sim.gd:516-
-## 519) and the result JSON never carried a counter. This suite drives the
-## three new pieces directly: _magic_init (roster-time granted/caster/book
-## counts), _magic_tally (the played-actions-only per-cast counter) and the
-## "magic" key landing in _write_result's JSON stamp.
+## NML-1046 M2a: tools/core_selfplay.gd played spell casts SILENTLY — back then
+## the cast folded into the shoot volley inside BattleSim.resolve() (a rider
+## NML-1069 replaced with the _cast_phase sub-phase) and the result JSON never
+## carried a counter. This suite drives the pieces directly: _magic_init
+## (roster-time granted/caster/book counts), _magic_tally (the played-actions-
+## only per-cast counter), _spells_by_kind_tally (NML-1069: WHICH kind was
+## cast) and the "magic" key landing in _write_result's JSON stamp.
 ##
 ## Fixture recipe mirrors test/core_selfplay_caster_test.gd: a NON-RUNNING
 ## SceneTree.new() instance of core_selfplay.gd, _units_from_list() parenting
@@ -103,6 +104,23 @@ func test_magic_tally_ignores_a_negative_delta() -> void:
 	cs._magic_tally(magic, "p1", 2, 3)
 	assert_int(int((magic["casts"] as Dictionary)["p1"])).is_equal(0)
 	assert_int(int((magic["tokens_spent"] as Dictionary)["p1"])).is_equal(0)
+	cs.free()
+
+
+## NML-1069: the per-kind split counts ONLY the events this activation added —
+## `from` is the round log's size read pre-apply, so the round's earlier casts
+## (and any kind the ledger does not carry) never double-count.
+func test_spells_by_kind_counts_only_this_activations_events() -> void:
+	var cs: SceneTree = CoreSelfplayScript.new()
+	var magic := {"spells_by_kind": {"p1": {"damage": 0, "buff": 0, "debuff": 0},
+		"p2": {"damage": 0, "buff": 0, "debuff": 0}}}
+	var events := [{"kind": "damage"}, {"kind": "buff"}, {"kind": "debuff"}, {"kind": "???"}]
+	cs._spells_by_kind_tally(magic, "p1", events, 1)
+	var by_kind: Dictionary = (magic["spells_by_kind"] as Dictionary)["p1"]
+	assert_int(int(by_kind["damage"])).is_equal(0)   # index 0 predates this apply
+	assert_int(int(by_kind["buff"])).is_equal(1)
+	assert_int(int(by_kind["debuff"])).is_equal(1)
+	assert_int(int((magic["spells_by_kind"] as Dictionary)["p2"]["buff"])).is_equal(0)
 	cs.free()
 
 

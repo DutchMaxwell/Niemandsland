@@ -38,7 +38,12 @@ static func _magic_init(units1: Array, units2: Array) -> Dictionary:
 		# NML-1064: eligibility counters — "never eligible" (no tokens, or no
 		# enemy in spell range) vs "eligible but chose not to cast" needs its
 		# own denominator; casts/tokens_spent alone can't tell them apart.
-		"caster_activations": {"p1": 0, "p2": 0}, "in_range_activations": {"p1": 0, "p2": 0}}
+		"caster_activations": {"p1": 0, "p2": 0}, "in_range_activations": {"p1": 0, "p2": 0},
+		# NML-1069: WHAT was cast, not just how much was paid — the cast sub-phase
+		# stamps a kind per attempt (battle_sim.gd:_cast_phase), and a corpus that
+		# only ever throws damage spells is a different bug from one that never casts.
+		"spells_by_kind": {"p1": {"damage": 0, "buff": 0, "debuff": 0},
+			"p2": {"damage": 0, "buff": 0, "debuff": 0}}}
 	for pair in [["p1", units1], ["p2", units2]]:
 		var key: String = pair[0]
 		for u in (pair[1] as Array):
@@ -53,7 +58,7 @@ static func _magic_init(units1: Array, units2: Array) -> Dictionary:
 
 ## Played-actions-only tally: a positive token delta across the ONE resolve at
 ## the PLAYED action (core_selfplay.gd:167) IS the one-spell-per-activation
-## cast event (battle_sim.gd:516-519) — the pair/fork resolves in _play_round
+## cast event (battle_sim.gd:_cast_phase) — the pair/fork resolves in _play_round
 ## run on CLONES and never reach this call.
 static func _magic_tally(magic: Dictionary, side_key: String, tokens_before: int,
 		tokens_after: int) -> void:
@@ -61,6 +66,18 @@ static func _magic_tally(magic: Dictionary, side_key: String, tokens_before: int
 	if delta > 0:
 		magic["casts"][side_key] = int(magic["casts"][side_key]) + 1
 		magic["tokens_spent"][side_key] = int(magic["tokens_spent"][side_key]) + delta
+
+
+## NML-1069 companion of _magic_tally: the KINDS the played apply cast. `events`
+## is the round's cast log (state["cast_events"], accumulated across the round),
+## `from` its size read PRE-apply — so only this activation's stamps are counted.
+static func _spells_by_kind_tally(magic: Dictionary, side_key: String, events: Array,
+		from: int) -> void:
+	var by_kind: Dictionary = magic["spells_by_kind"][side_key]
+	for i in range(maxi(from, 0), events.size()):
+		var kind := str((events[i] as Dictionary).get("kind", ""))
+		if by_kind.has(kind):
+			by_kind[kind] = int(by_kind[kind]) + 1
 
 
 ## NML-1064 round-start refill — GF v3.5.1 Caster(X): "Gets X spell tokens at
@@ -72,10 +89,10 @@ static func _refill_round_caster_points(su: Dictionary, magic: Dictionary, side_
 	var gu := su.get("unit") as GameUnit
 	if gu == null:
 		return
-	# The sim only ever DECREMENTS su["casts"] (spell_ev_of spends tokens,
-	# battle_sim.gd:519) and never writes back to the GameUnit — sync the
-	# ledger to the sim's spend before granting, or the refill starts from a
-	# stale (too-high) balance.
+	# The sim only ever DECREMENTS su["casts"] (the cast sub-phase spends the
+	# attempt's tokens, battle_sim.gd:_cast_phase) and never writes back to the
+	# GameUnit — sync the ledger to the sim's spend before granting, or the
+	# refill starts from a stale (too-high) balance.
 	gu.casts_current = int(su.get("casts", 0))
 	var before := gu.casts_current
 	gu.add_round_caster_points()
@@ -169,6 +186,10 @@ func _play_one(game_seed: int) -> void:
 	var positions_log: Array = []
 	for round_no in range(1, ROUNDS + 1):
 		state["round"] = round_no
+		# NML-1069: the round's cast log starts empty, and every spell modifier from
+		# the last round expires with it ("until the end of the round").
+		state["cast_events"] = []
+		BattleSim.reset_round_mods(state)
 		for k in state["units"]:
 			var su: Dictionary = state["units"][k]
 			su["activated"] = false
@@ -262,6 +283,7 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 		# resolves above run on clones and must never feed the magic tally.
 		var ak := str((pick["action"] as Dictionary).get("unit", ""))
 		var casts_before := int((state["units"].get(ak, {}) as Dictionary).get("casts", 0))
+		var events_before := (state.get("cast_events", []) as Array).size()
 		# NML-1064: eligibility tally reads `state` PRE-apply, the same instant
 		# casts_before above is read.
 		_magic_eligibility_tally(_magic, "p%d" % turn, state, ak)
@@ -269,6 +291,8 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 		if (state["units"] as Dictionary).has(ak):
 			var casts_after := int((state["units"][ak] as Dictionary).get("casts", 0))
 			_magic_tally(_magic, "p%d" % turn, casts_before, casts_after)
+		_spells_by_kind_tally(_magic, "p%d" % turn,
+			state.get("cast_events", []), events_before)
 		last_side = turn
 		turn = 2 if turn == 1 else 1
 	# writeback: resolve clones — copy the final round state over the caller's
@@ -638,9 +662,9 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array,
 		"vp": {"p1": vp1, "p2": vp2}, "scoring": "end",
 		"winner": winner, "planner_positions": positions_log, "planner_calib": [],
 		"roster": _roster_names(),
-		# NML-1046 M2a: per-game cast counter — casts fold silently into the
-		# shoot volley (battle_sim.gd:516-519) without this, so a probe has no
-		# way to measure whether spells are actually firing.
+		# NML-1046 M2a: per-game cast counter — without it a probe has no way to
+		# measure whether spells are actually firing (NML-1069 adds the per-kind
+		# split, so "only ever damage" is a different reading from "never casts").
 		"magic": _magic}
 	if _out != "":
 		DirAccess.make_dir_recursive_absolute(_out)
