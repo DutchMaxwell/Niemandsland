@@ -68,6 +68,10 @@ func _init() -> void:
 			matches["neither"] += 1
 			mismatches.append({"node": checked, "kind": "score", "recorded": recorded,
 				"cheap_diff": d_cheap, "rich_diff": d_rich})
+		# M1-2 added "los_pairs" to the recorded form; a REBUILT state carries no
+		# los_blocked Callable, so state_to_plain never writes it and the size
+		# check below would fail every node. Drop the recorded side's copy.
+		(rec["state_after"] as Dictionary).erase("los_pairs")
 		if _plain_eq(BattleSim.state_to_plain(next, false), rec["state_after"]):
 			resolve_exact += 1
 		else:
