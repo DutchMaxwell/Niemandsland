@@ -6974,7 +6974,8 @@ func _digest_unit_key(u: GameUnit) -> String:
 ## in their stored array order, markers sorted) so two runs of the same seeds never diverge on
 ## hash-map ordering alone, only on actual rules state. Positions are model.node.global_position
 ## (Godot world units = metres, solo_controller.gd:7829 "World positions in METRES"), rounded to 0.01
-## via %.2f.
+## via %.2f. y is included at 0.001 m (%.3f) because a spawn-drop animation moves height by only a
+## couple of millimetres — invisible at 0.01 m (found live: golden corpus idx 83, M0-4).
 func state_digest() -> String:
 	var parts: Array[String] = []
 	parts.append("round=%d|seq=%d" % [_current_round(), _activation_seq])
@@ -6993,8 +6994,8 @@ func state_digest() -> String:
 				if model.node and is_instance_valid(model.node) else Vector3.ZERO
 			var mk: Array[String] = model.markers.duplicate()
 			mk.sort()
-			parts.append("  m:al=%d|wo=%d|mk=%s|x=%.2f|z=%.2f" % [
-				int(model.is_alive), model.wounds_current, ", ".join(mk), pos.x, pos.z])
+			parts.append("  m:al=%d|wo=%d|mk=%s|x=%.2f|y=%.3f|z=%.2f" % [
+				int(model.is_alive), model.wounds_current, ", ".join(mk), pos.x, pos.y, pos.z])
 	if objectives_provider.is_valid():
 		var objs: Variant = objectives_provider.call()
 		if objs is Array:
