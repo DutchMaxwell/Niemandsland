@@ -162,6 +162,9 @@ func _run_all() -> void:
 ## One full match: build fresh units, deploy on facing lines, alternate
 ## activations under the official rules, seize at round ends, score markers.
 func _play_one(game_seed: int) -> void:
+	if BattleSim.profile_enabled():
+		BattleSim.profile_reset()
+	var _prof_game_t0 := Time.get_ticks_usec() if BattleSim.profile_enabled() else 0
 	var rng := RandomNumberGenerator.new()
 	rng.seed = game_seed
 	var units1 := _units_from_list(_army1, 1)
@@ -206,7 +209,29 @@ func _play_one(game_seed: int) -> void:
 		_seize(state, objectives, owners)
 		BattleSim.vp_round_add(owners, vp)
 	BattleSim.vp_end_bonus(owners, vp)
-	_write_result(game_seed, owners, positions_log, vp)
+	# NML-1072: env-gated wall-clock split of this game (unset NML_PROFILE =
+	# no timing calls at all above, so this whole block is skipped byte-for-
+	# byte). resolve/clone/spacing/cast run INSIDE plan's search (and the
+	# played/fork resolves outside it) so they overlap with plan and each
+	# other — reported as their own totals, not summed into "other"; other =
+	# total - plan - snapshot (the only two non-overlapping outer buckets).
+	var _prof_summary := {}
+	if BattleSim.profile_enabled():
+		var _prof_total := Time.get_ticks_usec() - _prof_game_t0
+		var _prof_other := _prof_total - int(BattleSim.profile["plan"]) - int(BattleSim.profile["snapshot"])
+		_prof_summary = {"total_usec": _prof_total, "other_usec": _prof_other}
+		for k in BattleSim.profile.keys():
+			_prof_summary[k] = BattleSim.profile[k]
+		printerr(("[CORE] PROFILE total=%.3fs plan=%.3fs(%d) resolve=%.3fs(%d) " +
+			"clone=%.3fs(%d) snapshot=%.3fs(%d) spacing=%.3fs(%d) cast=%.3fs(%d) other=%.3fs") % [
+			_prof_total / 1.0e6, int(BattleSim.profile["plan"]) / 1.0e6, int(BattleSim.profile["plan_n"]),
+			int(BattleSim.profile["resolve"]) / 1.0e6, int(BattleSim.profile["resolve_n"]),
+			int(BattleSim.profile["clone"]) / 1.0e6, int(BattleSim.profile["clone_n"]),
+			int(BattleSim.profile["snapshot"]) / 1.0e6, int(BattleSim.profile["snapshot_n"]),
+			int(BattleSim.profile["spacing"]) / 1.0e6, int(BattleSim.profile["spacing_n"]),
+			int(BattleSim.profile["cast"]) / 1.0e6, int(BattleSim.profile["cast_n"]),
+			_prof_other / 1.0e6])
+	_write_result(game_seed, owners, positions_log, vp, _prof_summary)
 	# NML-1073 M2-0b: close the planner's statics at THIS game's end — the
 	# node-dump stream and, above all, the leaf stash: it holds this game's
 	# state, including the los_blocked lambda bound to the school world, and a
@@ -235,6 +260,7 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 			if pick.is_empty():
 				break
 			turn = other
+		var _prof_sn_t0 := Time.get_ticks_usec() if BattleSim.profile_enabled() else 0
 		var row := {"side": turn, "round": round_no,
 			"seq": positions_log.size(),
 			"value": float((pick.get("expectation", {}) as Dictionary).get("before", -1.0)),
@@ -245,6 +271,9 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 			# them (v5 number format untouched).
 			"ids": BattleSim.board_row_indices(state),
 			"intent": str(pick.get("intent", ""))}
+		if BattleSim.profile_enabled():
+			BattleSim.profile["snapshot"] += Time.get_ticks_usec() - _prof_sn_t0
+			BattleSim.profile["snapshot_n"] += 1
 		# E0b (controller-proxy pairs for E2): resolve the CHOSEN and the
 		# REJECTED candidate on clones and log both end boards. A log-only
 		# rng keeps the game's dice stream untouched (determinism per seed).
@@ -410,7 +439,11 @@ func _pick_for(state: Dictionary, player: int) -> Dictionary:
 	if OS.get_environment("NML_CORE_ACTOR") == "policy":
 		var a := AiPlanner._policy_step(state, player, true)
 		return {} if a.is_empty() else {"used": true, "action": a}
+	var _prof_t0 := Time.get_ticks_usec() if BattleSim.profile_enabled() else 0
 	var pick := AiPlanner.plan_with_rollout(state, player)
+	if BattleSim.profile_enabled():
+		BattleSim.profile["plan"] += Time.get_ticks_usec() - _prof_t0
+		BattleSim.profile["plan_n"] += 1
 	return pick if bool(pick.get("used", false)) else {}
 
 
@@ -637,7 +670,7 @@ func _capture(all_units: Array, objectives: Array, world: Dictionary) -> Diction
 
 
 func _write_result(game_seed: int, owners: Array, positions_log: Array,
-		vp: Array = []) -> void:
+		vp: Array = [], profile_summary: Dictionary = {}) -> void:
 	var p1 := 0
 	var p2 := 0
 	for o in owners:
@@ -672,6 +705,8 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array,
 		# measure whether spells are actually firing (NML-1069 adds the per-kind
 		# split, so "only ever damage" is a different reading from "never casts").
 		"magic": _magic}
+	if not profile_summary.is_empty():   # NML-1072: env-gated (NML_PROFILE=1) only
+		result["profile"] = profile_summary
 	if _out != "":
 		DirAccess.make_dir_recursive_absolute(_out)
 		var f := FileAccess.open(_out.path_join("core_s%d.json" % game_seed), FileAccess.WRITE)
