@@ -26,10 +26,13 @@ pub const DISCOUNT: f64 = 0.5;
 /// `AiMissionEval.DESTROY_DEFENCE_WEIGHT` — ai_mission_eval.gd:410.
 pub const DESTROY_DEFENCE_WEIGHT: f64 = 0.8;
 
-pub use io::{load_nodes, read_nodes, Action, Node, NodeCorpus};
+pub use io::{load_nodes, read_nodes, Action, Node, NodeCorpus, Seams};
 pub use rules::Registries;
 pub use score::{can_hold_marker, control_gap_in, presence, score, Incoming, NO_INCOMING};
-pub use sim::{reply_threat, resolve, Unsupported, ADVANCE, CHARGE, HOLD, RUSH};
+pub use sim::{
+    reply_threat, resolve, Unsupported, ADVANCE, CHARGE, CONTACT_IN, DEFAULT_BASE_RADIUS_M, HOLD,
+    RUSH, SPACING_BISECTIONS, SPACING_SAMPLES, UNIT_SPACING_IN,
+};
 pub use state::{Marker, Mods, Objective, Profile, Profiles, State, Weapon};
 pub use unit::{Unimplemented, UnitStatic};
 

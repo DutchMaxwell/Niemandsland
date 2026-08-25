@@ -1,8 +1,9 @@
 //! `AiCombatMath` (scripts/solo/ai_combat_math.gd) scalar helpers and the
-//! `AiEv` expected-value core (scripts/solo/ai_ev.gd) for SHOOTING.
+//! `AiEv` expected-value core (scripts/solo/ai_ev.gd) — shooting AND melee.
 //!
-//! Melee (`AiEv.melee_ev`, `impact_ev`, `ravage_ev`) is deliberately absent:
-//! `resolve()` only reaches it on a CHARGE, which is plan step M1-3.
+//! The melee half (`AiEv.melee_ev` :485-495, `impact_ev` :512-529, `ravage_ev`
+//! :497-505 and the melee branch of `profile_ev` :330-350) arrived with M1-3;
+//! `resolve()` reaches it only on a CHARGE (battle_sim.gd:631-646).
 
 use crate::unit::{Ctx, ShootProfile};
 
@@ -25,6 +26,12 @@ pub const EVASIVE_HIT_PENALTY: i64 = 1;
 pub const SHIELDED_DEFENSE_BONUS: i64 = 1;
 /// `AiCombatMath.RENDING_AP_BONUS` :45.
 pub const RENDING_AP_BONUS: i64 = 4;
+/// `AiCombatMath.THRUST_TO_HIT_BONUS` :52 — a charging Thrust weapon's +1 to hit.
+pub const THRUST_TO_HIT_BONUS: i64 = 1;
+/// `AiCombatMath.IMPACT_HIT_TARGET` :25 — Impact dice hit on 2+.
+pub const IMPACT_HIT_TARGET: i64 = 2;
+/// `AiCombatMath.RAVAGE_WOUND_TARGET` :284 — a Ravage die wounds on a 6.
+pub const RAVAGE_WOUND_TARGET: i64 = 6;
 /// `AiCombatMath.SHROUD_RANGE_PENALTY_IN` :297 / `SHROUD_FLOOR_IN` :299.
 pub const SHROUD_RANGE_PENALTY_IN: f64 = 6.0;
 pub const SHROUD_FLOOR_IN: f64 = 6.0;
@@ -122,6 +129,35 @@ pub fn fortified_ap(ap: i64, is_fortified: bool) -> i64 {
     } else {
         ap
     }
+}
+
+/// `AiCombatMath.thrust_to_hit` :215-216 — Thrust's +1 to hit while charging,
+/// floored at 2+. Fatigue is handled by the caller (a fatigued unit hits only
+/// on unmodified 6s, so no modifier applies then).
+#[inline]
+pub fn thrust_to_hit(quality: i64, is_charging: bool) -> i64 {
+    if is_charging {
+        (quality - THRUST_TO_HIT_BONUS).max(BEST_HIT_TARGET)
+    } else {
+        quality
+    }
+}
+
+/// `AiCombatMath.melee_hit_modifier` :248-249 — Evasive OR Melee Evasion costs
+/// the striker 1 to hit; the two never stack.
+#[inline]
+pub fn melee_hit_modifier(target_evasive: bool, target_melee_evasion: bool) -> i64 {
+    if target_evasive || target_melee_evasion {
+        -EVASIVE_HIT_PENALTY
+    } else {
+        0
+    }
+}
+
+/// `AiCombatMath.impact_total_dice` :309-310.
+#[inline]
+pub fn impact_total_dice(impact_x: i64, charging_models: i64, counter_models: i64) -> i64 {
+    (impact_x.max(0) * charging_models.max(0) - counter_models.max(0)).max(0)
 }
 
 /// `AiCombatMath.reliable_quality` :379-380.
@@ -224,32 +260,58 @@ pub fn versatile_best_mode(hit_target: i64, defense: i64, ap: i64, bane: bool) -
     }
 }
 
-/// `AiEv.profile_ev` ai_ev.gd:322-437, SHOOTING half (`melee` is always false
-/// here — `charging` therefore never fires either).
+/// `AiEv.profile_ev` ai_ev.gd:322-437 — both halves. `melee` is the GDScript's
+/// own derivation (`profile.range <= 0`, :330), never a caller's opinion;
+/// `charging` only ever reaches it from `melee_ev(.., true)`.
 ///
 /// `attacks` is the survivor-scaled count `BattleSim._profiles_of` writes over
 /// the merged profile (battle_sim.gd:738-739), passed in rather than stored so
 /// the immutable profile table can be shared across every rollout node.
 ///
 /// Not modelled, and not reachable from this call site (each with the GDScript
-/// line that would produce it): `spell_hit_mod` (:331 — `_ctx_of` never sets it),
-/// `cond_ap` (:412 — `AiEv.stamp_conditional_ap` is not called anywhere in the
-/// sim path), and every melee-only branch.
-pub fn profile_ev(p: &ShootProfile, attacks: i64, att: &Ctx, def: &Ctx, dist_in: f64) -> f64 {
+/// line that would produce it): `spell_hit_mod` (:331 — `_ctx_of` never sets it)
+/// and `cond_ap` (:412 — `AiEv.stamp_conditional_ap` is not called anywhere in
+/// the sim path).
+pub fn profile_ev(
+    p: &ShootProfile,
+    attacks: i64,
+    att: &Ctx,
+    def: &Ctx,
+    dist_in: f64,
+    charging: bool,
+) -> f64 {
     let attacks_f = attacks.max(0) as f64;
     if attacks_f <= 0.0 {
         return 0.0;
     }
-    // --- to-hit target (ai_ev.gd:335-357, shooting branch) ---
-    let mut target = reliable_quality(att.quality, p.reliable);
-    let mut shoot_mod = shooting_hit_modifier(dist_in, att.artillery, def.stealth, def.artillery, def.evasive);
-    if p.unstoppable && shoot_mod < 0 {
-        shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.
+    let melee = p.range <= 0;
+    // --- to-hit target (ai_ev.gd:335-357) ---
+    let mut target;
+    if melee {
+        if att.fatigued {
+            // Fatigue (p.9): hits ONLY on an unmodified 6 — a hard target
+            // OUTSIDE the modifier pipeline (ai_ev.gd:336-341).
+            target = 6;
+        } else {
+            target = thrust_to_hit(att.quality, charging && p.thrust);
+            let mut melee_mod = melee_hit_modifier(def.evasive, def.melee_evasion);
+            if p.unstoppable && melee_mod < 0 {
+                melee_mod = 0;
+            }
+            target = modified_hit_target(target, melee_mod);
+        }
+    } else {
+        target = reliable_quality(att.quality, p.reliable);
+        let mut shoot_mod =
+            shooting_hit_modifier(dist_in, att.artillery, def.stealth, def.artillery, def.evasive);
+        if p.unstoppable && shoot_mod < 0 {
+            shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.
+        }
+        target = modified_hit_target(target, shoot_mod);
     }
-    target = modified_hit_target(target, shoot_mod);
     // --- Versatile Attack (ai_ev.gd:361-368) ---
     let mut versatile_ap = 0;
-    if p.versatile_attack && dist_in > LONG_RANGE_IN {
+    if p.versatile_attack && dist_in > LONG_RANGE_IN && (!melee || charging) {
         let choose_def = shielded_defense(def.defense, def.shielded);
         let (hit_mod, ap_mod) = versatile_best_mode(target, choose_def, p.ap, p.bane);
         versatile_ap = ap_mod;
@@ -260,10 +322,15 @@ pub fn profile_ev(p: &ShootProfile, attacks: i64, att: &Ctx, def: &Ctx, dist_in:
     }
     let mut hits = attacks_f * success_chance(target);
     // --- per-unmodified-6 bonus hits (ai_ev.gd:373-385) ---
-    if p.relentless && dist_in > LONG_RANGE_IN {
+    if !melee && p.relentless && dist_in > LONG_RANGE_IN {
         hits += attacks_f * SIX_P;
     }
     if p.surge {
+        hits += attacks_f * SIX_P;
+    }
+    // Furious: the weapon never carries the flag (`AiShooting._profile` sets no
+    // "furious" key), so only the unit-level context can fire it — ai_ev.gd:379.
+    if melee && charging && att.furious {
         hits += attacks_f * SIX_P;
     }
     let sergeant_attacks = p.sergeant_attacks.min(attacks_f as i64) as f64;
@@ -282,11 +349,15 @@ pub fn profile_ev(p: &ShootProfile, attacks: i64, att: &Ctx, def: &Ctx, dist_in:
     }
     six_hits = six_hits.min(hits);
     // --- saves: Shielded, then Cover, then Guarded (ai_ev.gd:403-411) ---
+    // Cover and Guarded are SHOOTING-only reads: melee EV always values at
+    // dist 0, so the charge halves of both live in the dice path only.
     let mut defense = shielded_defense(def.defense, def.shielded);
-    if p.blast <= 1 && !p.indirect && !p.ignores_cover {
+    if !melee && p.blast <= 1 && !p.indirect && !p.ignores_cover {
         defense = covered_defense(defense, def.in_cover);
     }
-    defense = guarded_defense(defense, def.guarded && dist_in > LONG_RANGE_IN);
+    if !melee {
+        defense = guarded_defense(defense, def.guarded && dist_in > LONG_RANGE_IN);
+    }
     let ap = p.ap + versatile_ap;
     let bane = p.bane;
     let fort = def.fortified;
@@ -331,9 +402,77 @@ pub fn shoot_ev(
             p.range as f64
         };
         if reach >= reach_gate && p.range > 0 {
-            total += profile_ev(p, attacks[k], att, def, dist_in);
+            total += profile_ev(p, attacks[k], att, def, dist_in, false);
         }
     }
+    total
+}
+
+/// `AiEv.ravage_ev` ai_ev.gd:497-505 — X dice per ALIVE bearer model, each a
+/// direct wound on a 6; no hit roll, no save, only Regeneration thins it.
+pub fn ravage_ev(att: &Ctx, def: &Ctx) -> f64 {
+    let dice = att.ravage * att.models.max(0);
+    if dice <= 0 {
+        return 0.0;
+    }
+    let mut wounds = dice as f64 * success_chance(RAVAGE_WOUND_TARGET);
+    if def.regeneration {
+        wounds *= 1.0 - success_chance(def.regen_target);
+    }
+    wounds
+}
+
+/// `AiEv.impact_ev` ai_ev.gd:512-529 — the charge's Impact pool (2+ to hit, no
+/// AP) plus the Heavy Impact pool (saves at AP(1)); the defender's Counter
+/// models strip the HEAVY dice first, defender-optimal.
+///
+/// `counter_models` is always 0 in the sim: `BattleSim._ctx_of` calls
+/// `AiEv.ctx_for(unit, in_cover)` and leaves the third argument at its default
+/// (battle_sim.gd:702, ai_ev.gd:135). Modelled anyway so the function is the
+/// GDScript's, not a specialisation of it.
+pub fn impact_ev(att: &Ctx, def: &Ctx) -> f64 {
+    let models = att.models.max(0);
+    let counter = def.counter_models;
+    let heavy_raw = att.heavy_impact * models;
+    let heavy_cut = counter.min(heavy_raw);
+    let heavy_dice = heavy_raw - heavy_cut;
+    let dice = impact_total_dice(att.impact, models, counter - heavy_cut);
+    if dice + heavy_dice <= 0 {
+        return 0.0;
+    }
+    let p_hit = success_chance(IMPACT_HIT_TARGET);
+    let defense = shielded_defense(def.defense, def.shielded);
+    let mut wounds = dice as f64 * p_hit * (1.0 - block_chance(defense, 0, false))
+        + heavy_dice as f64 * p_hit * (1.0 - block_chance(defense, 1, false));
+    if def.regeneration {
+        wounds *= 1.0 - success_chance(def.regen_target);
+    }
+    wounds
+}
+
+/// `AiEv.melee_ev` ai_ev.gd:485-495 — every melee profile strikes (profile
+/// order, additive), then the charge's Impact hits, then Ravage.
+///
+/// `profiles` is the unit's whole merged MELEE set and `attacks[k]` the
+/// survivor-scaled count of `profiles[k]` — the same split as `shoot_ev`, minus
+/// the range filter (every melee profile is range 0, so all of them strike).
+pub fn melee_ev(
+    profiles: &[ShootProfile],
+    attacks: &[i64],
+    att: &Ctx,
+    def: &Ctx,
+    charging: bool,
+) -> f64 {
+    let mut total = 0.0;
+    for (k, p) in profiles.iter().enumerate() {
+        if p.range <= 0 {
+            total += profile_ev(p, attacks[k], att, def, 0.0, charging);
+        }
+    }
+    if charging {
+        total += impact_ev(att, def);
+    }
+    total += ravage_ev(att, def); // every melee turn, not just charges
     total
 }
 

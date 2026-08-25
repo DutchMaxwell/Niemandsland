@@ -142,6 +142,10 @@ fn main() {
     };
     let statics = build_statics(&corpus, &repo_root);
     let n = corpus.nodes.len();
+    println!(
+        "corpus {path}\nseams: spacing={} cast={}  (header line 1, ai_planner.gd:483-489)\n",
+        corpus.seams.spacing, corpus.seams.cast
+    );
 
     // ---------------- GATE A ----------------
     let mut within_9 = 0usize;
@@ -197,7 +201,7 @@ fn main() {
     let mut unsupported: BTreeMap<String, usize> = BTreeMap::new();
     let mut first_bad: Vec<(usize, i64, Vec<String>)> = Vec::new();
     for (i, node) in corpus.nodes.iter().enumerate() {
-        match resolve(&statics, &node.state_before, &node.action, node.cover_dest) {
+        match resolve(&statics, &node.state_before, &node.action, node.cover_dest, corpus.seams) {
             Ok(got) => {
                 let e = per_kind.entry(node.action.kind).or_insert((0, 0));
                 e.0 += 1;
@@ -222,12 +226,16 @@ fn main() {
                     Unsupported::MovedShootLos => {
                         "moved unit also shoots — post-move LOS answer not recorded".to_string()
                     }
+                    Unsupported::CastPhase => {
+                        "corpus recorded with NML_SIM_CAST=1 — cast sub-phase is plan step M1-3b"
+                            .to_string()
+                    }
                 };
                 *unsupported.entry(label).or_insert(0) += 1;
             }
         }
     }
-    println!("\n=== GATE B — resolve parity (HOLD + ADVANCE) ===");
+    println!("\n=== GATE B — resolve parity (all action kinds) ===");
     let mut tot = 0;
     let mut ok = 0;
     for (k, (t, e)) in &per_kind {
@@ -268,6 +276,89 @@ fn main() {
     }
     println!("shoot nodes          {shoot_nodes}, of which {shoot_landed} land expected wounds");
 
+    // Coverage of the M1-3 branches: a green GATE B proves nothing about a
+    // clamp that never bites or a charge that never reaches contact.
+    let mut clamped = 0usize;
+    let mut moved_nodes = 0usize;
+    for node in &corpus.nodes {
+        let Some(&si) = node.state_before.roster.index.get(node.action.unit.as_str()) else {
+            continue;
+        };
+        if node.action.dest.is_none() || node.state_before.positions[si].is_empty() {
+            continue;
+        }
+        if node.action.kind != 1 && node.action.kind != 2 && node.action.kind != 3 {
+            continue;
+        }
+        // A unit the melee wiped has no positions left to measure — a rout is
+        // not a shortened move.
+        let Some(b) = node.state_after.positions[si].first().copied() else {
+            continue;
+        };
+        moved_nodes += 1;
+        // The clamp bit whenever the recorded move fell short of the band-clamped
+        // delta: compare the FIRST model's travel with the unit centre's.
+        let a = node.state_before.positions[si][0];
+        let travelled =
+            ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2) + (b[2] - a[2]).powi(2)).sqrt();
+        let want = {
+            let c: Vec<f64> = (0..3)
+                .map(|k| {
+                    node.state_before.positions[si].iter().map(|p| p[k]).sum::<f64>()
+                        / node.state_before.positions[si].len() as f64
+                })
+                .collect();
+            let d = node.action.dest.unwrap();
+            let raw = ((d[0] - c[0]).powi(2) + (d[1] - c[1]).powi(2) + (d[2] - c[2]).powi(2)).sqrt();
+            let band = if node.action.kind == 1 {
+                node.state_before.profile(si).move_bands.advance
+            } else {
+                node.state_before.profile(si).move_bands.rush
+            };
+            raw.min(band * nml_core::IN2M)
+        };
+        if travelled + 1e-6 < want {
+            clamped += 1;
+        }
+    }
+    println!("move nodes           {moved_nodes}, of which {clamped} were shortened (spacing clamp)");
+
+    let mut charge_nodes = 0usize;
+    let mut contact = 0usize;
+    let mut routs = 0usize;
+    let mut fatigued_new = 0usize;
+    for node in &corpus.nodes {
+        if node.action.kind != 3 {
+            continue;
+        }
+        charge_nodes += 1;
+        let Some(&si) = node.state_before.roster.index.get(node.action.unit.as_str()) else {
+            continue;
+        };
+        let Some(t) = node.action.charge.as_deref() else { continue };
+        let Some(&ti) = node.state_before.roster.index.get(t) else { continue };
+        if node.state_after.wounds[ti] != node.state_before.wounds[ti]
+            || (node.state_after.wound_frac[ti] - node.state_before.wound_frac[ti]).abs() > EPS
+            || (node.state_after.fatigued[si] && !node.state_before.fatigued[si])
+        {
+            contact += 1;
+        }
+        if node.state_after.fatigued[si] && !node.state_before.fatigued[si] {
+            fatigued_new += 1;
+        }
+        for u in [si, ti] {
+            if node.state_after.alive[u] == 0
+                && node.state_before.alive[u] > 0
+                && node.state_after.positions[u].is_empty()
+            {
+                routs += 1;
+            }
+        }
+    }
+    println!(
+        "charge nodes         {charge_nodes}, {contact} reached contact ({fatigued_new} fatigued a charger), {routs} wiped a side"
+    );
+
     // ---------------- unimplemented rules ----------------
     println!("\n=== unimplemented rules (name — reason — units, nodes) ===");
     let mut by_rule: BTreeMap<(String, String), (Vec<usize>, usize)> = BTreeMap::new();
@@ -300,23 +391,30 @@ fn main() {
     }
 
     // ---------------- timing (information; M1-4 owns the benchmark) ----------------
-    let hold: Vec<usize> = (0..n).filter(|&i| corpus.nodes[i].action.kind == 0).collect();
-    if !hold.is_empty() {
+    let mut sink = 0usize;
+    println!();
+    for (label, k) in [("HOLD", 0i64), ("ADVANCE", 1), ("RUSH", 2), ("CHARGE", 3)] {
+        let idx: Vec<usize> = (0..n).filter(|&i| corpus.nodes[i].action.kind == k).collect();
+        if idx.is_empty() {
+            continue;
+        }
         let mut best = f64::INFINITY;
-        let mut sink = 0usize;
         for _ in 0..5 {
             let t0 = Instant::now();
-            for &i in &hold {
+            for &i in &idx {
                 let node = &corpus.nodes[i];
-                if let Ok(s) = resolve(&statics, &node.state_before, &node.action, node.cover_dest) {
-                    sink += s.alive[0] as usize;
+                if let Ok(s) =
+                    resolve(&statics, &node.state_before, &node.action, node.cover_dest, corpus.seams)
+                {
+                    sink += s.alive.len();
                 }
             }
-            let ns = t0.elapsed().as_nanos() as f64 / hold.len() as f64;
-            best = best.min(ns);
+            best = best.min(t0.elapsed().as_nanos() as f64 / idx.len() as f64);
         }
-        println!("\nresolve() HOLD       {best:.0} ns/call ({} nodes, best of 5)", hold.len());
-        let rich: Vec<usize> = (0..n).filter(|&i| corpus.nodes[i].rich).collect();
+        println!("resolve() {label:<8}   {best:.0} ns/call ({} nodes, best of 5)", idx.len());
+    }
+    let rich: Vec<usize> = (0..n).filter(|&i| corpus.nodes[i].rich).collect();
+    if !rich.is_empty() {
         let mut best_t = f64::INFINITY;
         for _ in 0..5 {
             let t0 = Instant::now();
@@ -324,15 +422,12 @@ fn main() {
                 let node = &corpus.nodes[i];
                 sink += reply_threat(&statics, &node.state_after, node.player).len();
             }
-            best_t = best_t.min(t0.elapsed().as_nanos() as f64 / rich.len().max(1) as f64);
+            best_t = best_t.min(t0.elapsed().as_nanos() as f64 / rich.len() as f64);
         }
-        println!(
-            "reply_threat()       {best_t:.0} ns/call ({} rich nodes, best of 5)",
-            rich.len()
-        );
-        if sink == usize::MAX {
-            std::process::exit(3);
-        }
+        println!("reply_threat()       {best_t:.0} ns/call ({} rich nodes, best of 5)", rich.len());
+    }
+    if sink == usize::MAX {
+        std::process::exit(3);
     }
 
     let gate_a = within_9 == n;

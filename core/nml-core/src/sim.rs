@@ -1,21 +1,39 @@
-//! `BattleSim.resolve` (battle_sim.gd:570-652) for HOLD and ADVANCE, and
-//! `BattleSim.reply_threat` (:1003-1024) — the expected reply that prices the
+//! `BattleSim.resolve` (battle_sim.gd:570-652) for every action kind the
+//! rollout policy produces — HOLD, ADVANCE, RUSH, CHARGE — and
+//! `BattleSim.reply_threat` (:1003-1024), the expected reply that prices the
 //! planner's RICH leaf (ai_planner.gd:508-510).
 //!
-//! Both A/B seams are OFF here, matching the recorded corpus: `NML_SIM_SPACING`
-//! unset (no spacing clamp, battle_sim.gd:590-592) and `NML_SIM_CAST` unset, so
-//! the LEGACY spell rider inside the shoot branch runs (:621-628) instead of the
-//! cast sub-phase. RUSH and CHARGE are plan step M1-3.
+//! The two A/B seams are read from the corpus header (`Seams`, ai_planner.gd:
+//! 483-489), never guessed: `spacing` switches the `_spacing_fraction` clamp
+//! (battle_sim.gd:521-563, :590-592) on, `cast` switches the cast sub-phase
+//! (:602-607) on — the latter is plan step M1-3b and is REPORTED, not faked.
+//! With `cast` off the LEGACY spell rider inside the shoot branch runs (:621-628).
 
 use crate::combat::{
-    at_or_below_half, effective_attacks, morale_target, shoot_ev, should_test_shooting_morale,
+    at_or_below_half, effective_attacks, melee_ev, morale_target, shoot_ev,
+    should_test_shooting_morale,
 };
 use crate::geom;
-use crate::io::Action;
+use crate::io::{Action, Seams};
 use crate::spell::spell_ev_of;
 use crate::state::State;
 use crate::unit::{Ctx, UnitStatic};
 use crate::IN2M;
+
+/// `BattleSim.CONTACT_IN` battle_sim.gd:655 — the charge's contact ring.
+pub const CONTACT_IN: f64 = 1.0;
+/// `SoloController.UNIT_SPACING_IN` solo_controller.gd:70 — the no-go buffer
+/// every OTHER unit's models project around themselves.
+pub const UNIT_SPACING_IN: f64 = 1.0;
+/// `SeparationChecker.DEFAULT_BASE_RADIUS_M` separation_checker.gd:81 — the
+/// fallback when a snapshot carries no radius for a model.
+pub const DEFAULT_BASE_RADIUS_M: f64 = 0.016;
+/// The `_spacing_fraction` binary search runs exactly 8 halvings
+/// (battle_sim.gd:552) and the fallback sweep exactly 8 descending samples
+/// (:558-561). Both counts are rule data: they set the granularity of the
+/// clamp, so a different number is a different game.
+pub const SPACING_BISECTIONS: usize = 8;
+pub const SPACING_SAMPLES: usize = 8;
 
 /// `AiDecision.Action` ai_decision.gd:16.
 pub const HOLD: i64 = 0;
@@ -27,7 +45,8 @@ pub const CHARGE: i64 = 3;
 /// count, never silently skipped.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Unsupported {
-    /// RUSH / CHARGE / KITE: move bands + the charge branch, plan step M1-3.
+    /// An action kind outside HOLD/ADVANCE/RUSH/CHARGE — KITE (4) has no
+    /// `resolve` branch of its own in the GDScript either.
     ActionKind(i64),
     /// The action names a unit the state does not carry.
     UnknownUnit,
@@ -36,6 +55,9 @@ pub enum Unsupported {
     /// pre-move state cannot answer that. Never occurs in the recorded corpus
     /// (`_policy_candidates` ai_planner.gd:517-545 pairs a shoot only with HOLD).
     MovedShootLos,
+    /// The corpus was recorded with `NML_SIM_CAST=1`, so `resolve` ran the cast
+    /// sub-phase (battle_sim.gd:856-984) — plan step M1-3b, not this port.
+    CastPhase,
 }
 
 /// `BattleSim._los_clear` battle_sim.gd:666-670, read off the recorded answers.
@@ -140,6 +162,16 @@ fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
     c
 }
 
+/// `BattleSim._ctx_of(su, true)` battle_sim.gd:701-708, MELEE half: the same
+/// context plus the snapshot's fatigue flag, which the EV layer is blind to and
+/// which turns the striker's to-hit into a flat unmodified 6 (p.9).
+#[inline]
+fn ctx_of_melee(us: &UnitStatic, state: &State, i: usize) -> Ctx {
+    let mut c = ctx_of(us, state, i);
+    c.fatigued = state.fatigued[i];
+    c
+}
+
 /// Scratch buffers so a threat sweep allocates once per call, not per pair.
 #[derive(Default)]
 pub struct Scratch {
@@ -161,6 +193,115 @@ fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
         sc.keep.push(i);
         sc.attacks.push(effective_attacks(p.attacks, alive, us.model_count));
     }
+}
+
+/// `BattleSim._profiles_of(su, true)` battle_sim.gd:714-749, MELEE half: every
+/// melee profile strikes (no range gate), each with its survivor-scaled attack
+/// count. Fills `sc.attacks` index-parallel to `us.melee`.
+fn melee_profiles_of(us: &UnitStatic, alive: i64, sc: &mut Scratch) {
+    sc.attacks.clear();
+    for p in &us.melee {
+        sc.attacks.push(effective_attacks(p.attacks, alive, us.model_count));
+    }
+}
+
+/// `BattleSim._expected_melee_morale` battle_sim.gd:1111-1125 — the side that
+/// dealt FEWER wounds tests (a tie means nobody); a fail at or below half is a
+/// ROUT, and the loser leaves the board: wounds, positions and radii cleared,
+/// `alive` 0. `wound_frac` is deliberately NOT cleared — the GDScript leaves it
+/// standing too.
+fn expected_melee_morale(
+    state: &mut State,
+    statics: &[UnitStatic],
+    si: usize,
+    su_before: i64,
+    ti: usize,
+    tu_before: i64,
+) {
+    let dealt_by_su = tu_before - wounds_left(state, ti);
+    let dealt_by_tu = su_before - wounds_left(state, si);
+    if dealt_by_su == dealt_by_tu {
+        return;
+    }
+    let li = if dealt_by_su > dealt_by_tu { ti } else { si };
+    let ul = &statics[state.roster.profile[li]];
+    if state.alive[li] <= 0 || !morale_fails_expected(state, ul, li) {
+        return;
+    }
+    if below_half(state, ul, li) {
+        state.wounds[li].clear();
+        state.positions[li].clear();
+        state.radii[li].clear();
+        state.alive[li] = 0;
+    } else {
+        state.shaken[li] = true;
+    }
+}
+
+/// `BattleSim._spacing_fraction` battle_sim.gd:521-563 — the largest fraction
+/// of `delta` that leaves every mover model clear of every OTHER alive unit's
+/// models (horizontal distance only, the `control_gap_in` convention).
+///
+/// The three-case ladder is load-bearing and reproduced in order: (1) the full
+/// move is legal -> 1.0 regardless of the start; (2) the START is legal -> an
+/// 8-step binary search, which is monotone only from a clear start; (3) both
+/// ends illegal -> 8 descending samples, largest legal wins, else 0.0.
+fn spacing_fraction(state: &State, mi: usize, delta: geom::V3) -> f64 {
+    // `Vector3.length_squared()` — f32, like every other Vector3 read.
+    if delta[0] * delta[0] + delta[1] * delta[1] + delta[2] * delta[2] <= 0.0 {
+        return 1.0;
+    }
+    let buffer_m = UNIT_SPACING_IN * IN2M;
+    let mut obstacles: Vec<(geom::V3, f64)> = Vec::new();
+    for oi in 0..state.units() {
+        if oi == mi {
+            continue;
+        }
+        let radii = &state.radii[oi];
+        for (k, pos) in state.positions[oi].iter().enumerate() {
+            let r = radii.get(k).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
+            obstacles.push((geom::to_f32(*pos), r + buffer_m));
+        }
+    }
+    if obstacles.is_empty() {
+        return 1.0;
+    }
+    let legal = |t: f64| -> bool {
+        let step = geom::mul(delta, t);
+        for (i, own) in state.positions[mi].iter().enumerate() {
+            let own_r = state.radii[mi].get(i).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
+            let q = geom::add(geom::to_f32(*own), step);
+            for (oc, r) in &obstacles {
+                let flat: geom::V3 = [q[0] - oc[0], 0.0, q[2] - oc[2]];
+                if (geom::length(flat) as f64) < r + own_r {
+                    return false;
+                }
+            }
+        }
+        true
+    };
+    if legal(1.0) {
+        return 1.0;
+    }
+    if legal(0.0) {
+        let (mut lo, mut hi) = (0.0f64, 1.0f64);
+        for _ in 0..SPACING_BISECTIONS {
+            let mid = (lo + hi) * 0.5;
+            if legal(mid) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        return lo;
+    }
+    for i in 0..SPACING_SAMPLES {
+        let t = 1.0 - (i as f64) * 0.125;
+        if legal(t) {
+            return t;
+        }
+    }
+    0.0
 }
 
 /// The reply-threat volley of `si` onto `ti`: `AiEv.shoot_ev(...) +
@@ -226,26 +367,36 @@ pub fn reply_threat(statics: &[UnitStatic], state: &State, player: i64) -> Vec<f
     incoming
 }
 
-/// `BattleSim.resolve` battle_sim.gd:570-652, restricted to HOLD and ADVANCE.
+/// `BattleSim.resolve` battle_sim.gd:570-652 — one activation resolved IN
+/// EXPECTATION on a clone, for HOLD, ADVANCE, RUSH and CHARGE.
 ///
 /// `cover_dest` is the recorded terrain answer (the mover's cover at its
 /// destination): the core carries no terrain grid, so the one boolean the
 /// `terrain_at` Callable produces at :595 is supplied, not computed. Everything
-/// else — positions, wounds, radii, flags, casts — is computed here.
+/// else — positions, the spacing clamp, wounds, radii, flags, casts, melee and
+/// morale — is computed here.
+///
+/// `seams` comes from the corpus header, so the port takes the same branch the
+/// recording did. A corpus with `cast` on is REPORTED as unsupported rather
+/// than resolved with the legacy rider, which would silently differ.
 ///
 /// NOTE on the produced state's `los_pairs`: it is the PARENT's matrix, which
 /// goes stale the moment a unit moves. Nothing in this port reads it afterwards
 /// (the parity gate re-reads the recorded matrix of each state), and a chained
-/// `resolve -> reply_threat` in Rust is M1-3 work with the terrain grid.
+/// `resolve -> reply_threat` in Rust needs the terrain grid, which is M1-5 work.
 pub fn resolve(
     statics: &[UnitStatic],
     state: &State,
     action: &Action,
     cover_dest: Option<bool>,
+    seams: Seams,
 ) -> Result<State, Unsupported> {
     let kind = action.kind;
-    if kind != HOLD && kind != ADVANCE {
+    if kind != HOLD && kind != ADVANCE && kind != RUSH && kind != CHARGE {
         return Err(Unsupported::ActionKind(kind));
+    }
+    if seams.cast {
+        return Err(Unsupported::CastPhase);
     }
     let Some(&si) = state.roster.index.get(action.unit.as_str()) else {
         return Err(Unsupported::UnknownUnit);
@@ -254,14 +405,16 @@ pub fn resolve(
     let pi_s = state.roster.profile[si];
     let mut next = state.clone();
     let was_shaken = next.shaken[si];
+    let mut sc = Scratch::default();
 
-    // --- move (battle_sim.gd:575-596); HOLD's band is 0, so only ADVANCE moves ---
+    // --- move (battle_sim.gd:575-596) ---
     // `SoloController.sim_move_bands(su["unit"])` is a pure read of the unit's
-    // rules, flattened into the profile table at capture.
-    let band_in = if kind == ADVANCE {
-        next.profiles.list[pi_s].move_bands.advance
-    } else {
-        0.0
+    // rules (bands + the Musician bonus, solo_controller.gd:4966-4982), flattened
+    // into the profile table at capture; RUSH and CHARGE share the rush band.
+    let band_in = match kind {
+        ADVANCE => next.profiles.list[pi_s].move_bands.advance,
+        RUSH | CHARGE => next.profiles.list[pi_s].move_bands.rush,
+        _ => 0.0,
     };
     let mut moved = false;
     if band_in > 0.0 && action.dest.is_some() && !next.positions[si].is_empty() {
@@ -273,7 +426,11 @@ pub fn resolve(
         if (geom::length(delta) as f64) > reach_m {
             delta = geom::mul(geom::normalized(delta), reach_m);
         }
-        // NML_SIM_SPACING off: no `_spacing_fraction` clamp (battle_sim.gd:590-592).
+        // NML-1068: RUSH and CHARGE share this same translation — one clamp
+        // covers both (battle_sim.gd:590-592).
+        if seams.spacing {
+            delta = geom::mul(delta, spacing_fraction(&next, si, delta));
+        }
         for p in next.positions[si].iter_mut() {
             *p = geom::to_f64(geom::add(geom::to_f32(*p), delta));
         }
@@ -283,8 +440,8 @@ pub fn resolve(
     }
     // NML_SIM_CAST off: no cast sub-phase (battle_sim.gd:602-607).
 
-    // --- shoot (battle_sim.gd:608-630) ---
-    if !shoot_key.is_empty() {
+    // --- shoot (battle_sim.gd:608-630); HOLD and ADVANCE only ---
+    if !shoot_key.is_empty() && (kind == HOLD || kind == ADVANCE) {
         if moved {
             return Err(Unsupported::MovedShootLos);
         }
@@ -293,7 +450,6 @@ pub fn resolve(
                 let d = geom::dist_in(&next.positions[si], &next.positions[ti]);
                 let alive_before = next.alive[ti];
                 let wounds_before = wounds_left(&next, ti);
-                let mut sc = Scratch::default();
                 // Seam OFF: the legacy spell rider (battle_sim.gd:621-628) —
                 // the spell's EV joins the volley and the caster pays its cost.
                 let (volley, sp_cost) = {
@@ -318,6 +474,52 @@ pub fn resolve(
             }
         }
     }
+
+    // --- charge (battle_sim.gd:631-646) ---
+    // No sight check here, only the CONTACT_IN ring measured AFTER the move.
+    if kind == CHARGE {
+        let charge_key = action.charge.clone().unwrap_or_default();
+        let ti = if charge_key.is_empty() {
+            None
+        } else {
+            next.roster.index.get(charge_key.as_str()).copied()
+        };
+        if let Some(ti) = ti {
+            if geom::dist_in(&next.positions[si], &next.positions[ti]) <= CONTACT_IN {
+                let tu_before = wounds_left(&next, ti);
+                let su_before = wounds_left(&next, si);
+                // The charger strikes: charging profiles, its OWN fatigue state
+                // (still the pre-charge one), the defender's plain context.
+                let ev = {
+                    let us = &statics[pi_s];
+                    let ut = &statics[next.roster.profile[ti]];
+                    let att = ctx_of_melee(us, &next, si);
+                    let def = ctx_of(ut, &next, ti);
+                    melee_profiles_of(us, next.alive[si], &mut sc);
+                    melee_ev(&us.melee, &sc.attacks, &att, &def, true)
+                };
+                apply_expected_wounds(&mut next, ti, ev);
+                next.fatigued[si] = true;
+                if next.alive[ti] > 0 {
+                    // Survivors strike back, already survivor-scaled by the
+                    // updated `alive`. W-P1 parity (p.9): the strike-back
+                    // fatigues the DEFENDER too.
+                    let ev_back = {
+                        let ut = &statics[next.roster.profile[ti]];
+                        let us = &statics[pi_s];
+                        let att = ctx_of_melee(ut, &next, ti);
+                        let def = ctx_of(us, &next, si);
+                        melee_profiles_of(ut, next.alive[ti], &mut sc);
+                        melee_ev(&ut.melee, &sc.attacks, &att, &def, false)
+                    };
+                    apply_expected_wounds(&mut next, si, ev_back);
+                    next.fatigued[ti] = true;
+                }
+                expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before);
+            }
+        }
+    }
+
     // --- shaken recovery (battle_sim.gd:648-650) ---
     if was_shaken && kind == HOLD && shoot_key.is_empty() {
         next.shaken[si] = false;

@@ -1,9 +1,11 @@
 //! The per-unit STATIC layer: everything `resolve`/`reply_threat` read off a
 //! live `GameUnit`, resolved once per game.
 //!
-//! Three GDScript functions are folded in here, in their original order:
+//! Four GDScript functions are folded in here, in their original order:
 //!   * `AiShooting.profiles_in_range` ai_shooting.gd:14-26 + `merge_identical`
 //!     :63-77 + `_profile` :90-152 — the ranged weapon profiles;
+//!   * `AiShooting.melee_profiles` :44-56 — the same shape at range 0, minus the
+//!     Strafing filter, which lives in `profiles_in_range` alone;
 //!   * `AiEv.stamp_sergeant` ai_ev.gd:203-274 — the registry-driven facets;
 //!   * `AiEv.ctx_for` ai_ev.gd:135-165 + `_regen_target` :171-177 — the context.
 //!
@@ -35,15 +37,28 @@ pub struct Ctx {
     pub artillery: bool,
     pub furious: bool,
     pub fearless: bool,
+    /// `Impact(X)` / `Heavy Impact(X)` / `Ravage(X)` ratings — read only by the
+    /// melee side (`impact_ev` / `ravage_ev`, ai_ev.gd:497-529).
+    pub impact: i64,
+    pub heavy_impact: i64,
+    pub ravage: i64,
     pub stealth: bool,
     pub evasive: bool,
+    /// `Melee Evasion` — the melee twin of Evasive (ai_ev.gd:150).
+    pub melee_evasion: bool,
     pub fortified: bool,
     pub guarded: bool,
     pub ranged_shrouding: bool,
     pub shielded: bool,
     pub in_cover: bool,
+    /// `AiEv.ctx_for`'s third argument, which `BattleSim._ctx_of` never passes
+    /// (battle_sim.gd:702) — always 0 in the sim, modelled for `impact_ev`.
+    pub counter_models: i64,
     pub regeneration: bool,
     pub regen_target: i64,
+    /// The DYNAMIC melee flag `BattleSim._ctx_of(su, true)` writes over the
+    /// template (battle_sim.gd:705-707): a fatigued striker hits only on 6s.
+    pub fatigued: bool,
 }
 
 /// One merged, stamped weapon profile — `AiShooting._profile` ai_shooting.gd:90-152
@@ -128,6 +143,9 @@ pub struct UnitStatic {
     pub ctx: Ctx,
     /// Merged + stamped RANGED profiles, unfiltered (range > 0, any distance).
     pub shoot: Vec<ShootProfile>,
+    /// Merged + stamped MELEE profiles (range 0) — `AiShooting.melee_profiles`
+    /// ai_shooting.gd:44-56, the set `_profiles_of(su, true)` builds.
+    pub melee: Vec<ShootProfile>,
     pub model_count: i64,
     pub wounds_max: Vec<i64>,
     pub quality: i64,
@@ -345,21 +363,141 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         artillery: has_special_rule(&p.special_rules, "Artillery"),
         furious: has_special_rule(&p.special_rules, "Furious"),
         fearless: has_special_rule(&p.special_rules, "Fearless"),
+        impact: unit_rating(&p.special_rules, "Impact"),
+        heavy_impact: unit_rating(&p.special_rules, "Heavy Impact"),
+        ravage: unit_rating(&p.special_rules, "Ravage"),
         stealth: rule_on_all_models(p, "Stealth"),
         evasive: rule_on_all_models(p, "Evasive"),
+        melee_evasion: rule_on_all_models(p, "Melee Evasion"),
         fortified: rule_on_all_models(p, "Fortified"),
         // Guarded OR Versatile Defense — ai_ev.gd:157-158.
         guarded: rule_on_all_models(p, "Guarded") || rule_on_all_models(p, "Versatile Defense"),
         ranged_shrouding: rule_on_all_models(p, "Ranged Shrouding"),
         shielded: rule_on_all_models(p, "Shielded"),
         in_cover: false,
+        counter_models: 0,
         regeneration: regen_target(reg, p) > 0,
         regen_target: regen_target(reg, p),
+        fatigued: false,
+    }
+}
+
+/// The stamping pass `AiEv.stamp_sergeant` ai_ev.gd:203-291 runs over ONE
+/// profile array. The melee and the ranged set each get their own call in
+/// `BattleSim._profiles_of` (battle_sim.gd:719-720), so it runs twice here too;
+/// the `facet_applies` gates read each profile's own range.
+fn stamp(
+    reg: &mut Registries,
+    p: &Profile,
+    shoot: &mut [ShootProfile],
+    unimplemented: &mut Vec<Unimplemented>,
+) {
+    // 1. Versatile Attack, unit-wide (ai_ev.gd:209-217).
+    if has_special_rule(&p.special_rules, "Versatile Attack")
+        || !rules_of_primitive(reg, p, "Versatile Attack").is_empty()
+    {
+        for sp in shoot.iter_mut() {
+            sp.versatile_attack = true;
+        }
+    }
+    // 2. Ferocious = Surge on every weapon, EXACT match (ai_ev.gd:218-224).
+    if p.special_rules.iter().any(|r| r.trim() == "Ferocious") {
+        for sp in shoot.iter_mut() {
+            sp.surge = true;
+        }
+    }
+    // 3. Surge-family data aliases (ai_ev.gd:225-249). `extra_attack`
+    //    (surge_attack) and the `within_in`/`over_in`/`surge_low` knobs are
+    //    stamped by GDScript but NEVER read by profile_ev, so only the plain
+    //    surge facet is carried; an alias that would set one of the others is
+    //    reported instead of silently dropped.
+    for hit in rules_of_primitive(reg, p, "Surge") {
+        if hit.name == "Surge" || hit.name == "Ferocious" || !hit.upgrades.is_empty() {
+            continue;
+        }
+        if hit.extra_attack {
+            unimplemented.push(Unimplemented {
+                rule: hit.name.clone(),
+                why: "Surge/extra_attack (surge_attack) — stamped by ai_ev.gd:242-244 but not read by profile_ev".into(),
+            });
+            continue;
+        }
+        for sp in shoot.iter_mut() {
+            if facet_applies(hit.melee_only, hit.shooting_only, sp.range) {
+                sp.surge = true;
+            }
+        }
+    }
+    // 3b. Surge UPGRADE entries (ai_ev.gd:250-260) only move surge_low /
+    //     surge_over_in, which profile_ev does not read.
+    for hit in rules_of_primitive(reg, p, "Surge") {
+        if hit.upgrades.is_empty() || !has_exact_rule(&p.special_rules, &hit.upgrades) {
+            continue;
+        }
+        unimplemented.push(Unimplemented {
+            rule: hit.name.clone(),
+            why: "Surge upgrade (surge_low/surge_over_in) — stamped by ai_ev.gd:255-260 but not read by profile_ev".into(),
+        });
+    }
+    // 4. Rending data aliases (ai_ev.gd:261-272).
+    for hit in rules_of_primitive(reg, p, "Rending") {
+        if hit.name == "Rending" {
+            continue;
+        }
+        for sp in shoot.iter_mut() {
+            if facet_applies(hit.melee_only, hit.shooting_only, sp.range) {
+                sp.rending = true;
+            }
+        }
+    }
+    // 5. Cover-ignore facet from the Indirect primitive's alias form (ai_ev.gd:273-281).
+    for hit in rules_of_primitive(reg, p, "Indirect") {
+        if hit.name != "Indirect" && hit.cover_only && hit.ignores_cover {
+            for sp in shoot.iter_mut() {
+                if sp.range > 0 {
+                    sp.ignores_cover = true;
+                }
+            }
+        }
+    }
+    // 6. Sergeant (ai_ev.gd:282-291). Its share reads the LIVE alive count,
+    //    which the static profile does not carry — reported, never guessed.
+    if unit_rule_active(reg, p, "Sergeant") {
+        unimplemented.push(Unimplemented {
+            rule: "Sergeant".into(),
+            why: "sergeant_attacks needs GameUnit.get_alive_count() at the moment of the call (ai_ev.gd:284) — not in the static profile".into(),
+        });
+    }
+}
+
+/// `BattleSim._profiles_of`'s UNIT-level striker scan (battle_sim.gd:722-733):
+/// Bane / Rending / Unstoppable carried by the UNIT reach the dice in the game,
+/// so they are OR-ed onto every profile — prefix scan, no registry gate.
+fn stamp_unit_strikers(p: &Profile, shoot: &mut [ShootProfile]) {
+    let mut u_bane = false;
+    let mut u_rending = false;
+    let mut u_unstop = false;
+    for r in &p.special_rules {
+        let rs = r.trim();
+        if rs.starts_with("Bane") || rs.starts_with("Lacerate") {
+            u_bane = true;
+        } else if rs.starts_with("Rending") {
+            u_rending = true;
+        } else if rs.starts_with("Unstoppable") && !rs.contains(" in ") && !rs.contains(" when ") {
+            u_unstop = true;
+        }
+    }
+    for sp in shoot.iter_mut() {
+        sp.bane |= u_bane;
+        sp.rending |= u_rending;
+        sp.unstoppable |= u_unstop;
     }
 }
 
 impl UnitStatic {
     pub fn build(reg: &mut Registries, p: &Profile) -> UnitStatic {
+        let mut unimplemented: Vec<Unimplemented> = Vec::new();
+
         // --- profiles_in_range(weapons, 0.0): every ranged weapon (ai_shooting.gd:14-26) ---
         let mut raw: Vec<ShootProfile> = Vec::new();
         for w in &p.weapons {
@@ -379,104 +517,34 @@ impl UnitStatic {
             raw.push(base_profile(w, attacks, rng_in));
         }
         let mut shoot = merge_identical(raw);
+        stamp(reg, p, &mut shoot, &mut unimplemented);
+        stamp_unit_strikers(p, &mut shoot);
 
-        // --- stamp_sergeant (ai_ev.gd:203-274) ---
-        let mut unimplemented: Vec<Unimplemented> = Vec::new();
-        // 1. Versatile Attack, unit-wide (ai_ev.gd:209-217).
-        if has_special_rule(&p.special_rules, "Versatile Attack")
-            || !rules_of_primitive(reg, p, "Versatile Attack").is_empty()
-        {
-            for sp in shoot.iter_mut() {
-                sp.versatile_attack = true;
-            }
-        }
-        // 2. Ferocious = Surge on every weapon, EXACT match (ai_ev.gd:218-224).
-        if p.special_rules.iter().any(|r| r.trim() == "Ferocious") {
-            for sp in shoot.iter_mut() {
-                sp.surge = true;
-            }
-        }
-        // 3. Surge-family data aliases (ai_ev.gd:225-249). `extra_attack`
-        //    (surge_attack) and the `within_in`/`over_in`/`surge_low` knobs are
-        //    stamped by GDScript but NEVER read by profile_ev, so only the plain
-        //    surge facet is carried; an alias that would set one of the others is
-        //    reported instead of silently dropped.
-        for hit in rules_of_primitive(reg, p, "Surge") {
-            if hit.name == "Surge" || hit.name == "Ferocious" || !hit.upgrades.is_empty() {
+        // --- melee_profiles(weapons): every range-0 weapon (ai_shooting.gd:44-56).
+        // Strafing is NOT excluded here — that filter lives in profiles_in_range
+        // alone, and a melee weapon never carries the move-through trigger.
+        let mut raw_melee: Vec<ShootProfile> = Vec::new();
+        for w in &p.weapons {
+            if w.range as i64 > 0 {
                 continue;
             }
-            if hit.extra_attack {
-                unimplemented.push(Unimplemented {
-                    rule: hit.name.clone(),
-                    why: "Surge/extra_attack (surge_attack) — stamped by ai_ev.gd:242-244 but not read by profile_ev".into(),
-                });
+            let attacks = w.attacks.max(0) * w.count.max(1);
+            if attacks <= 0 {
                 continue;
             }
-            for sp in shoot.iter_mut() {
-                if facet_applies(hit.melee_only, hit.shooting_only, sp.range) {
-                    sp.surge = true;
-                }
-            }
+            raw_melee.push(base_profile(w, attacks, 0));
         }
-        // 3b. Surge UPGRADE entries (ai_ev.gd:250-260) only move surge_low /
-        //     surge_over_in, which profile_ev does not read.
-        for hit in rules_of_primitive(reg, p, "Surge") {
-            if hit.upgrades.is_empty() || !has_exact_rule(&p.special_rules, &hit.upgrades) {
-                continue;
+        let mut melee = merge_identical(raw_melee);
+        // The same stamping runs on the melee array (`_profiles_of(su, true)`
+        // battle_sim.gd:719-720 takes the identical path); a rule the port
+        // cannot model is reported ONCE, not once per array.
+        let mut melee_unimpl: Vec<Unimplemented> = Vec::new();
+        stamp(reg, p, &mut melee, &mut melee_unimpl);
+        stamp_unit_strikers(p, &mut melee);
+        for u in melee_unimpl {
+            if !unimplemented.contains(&u) {
+                unimplemented.push(u);
             }
-            unimplemented.push(Unimplemented {
-                rule: hit.name.clone(),
-                why: "Surge upgrade (surge_low/surge_over_in) — stamped by ai_ev.gd:255-260 but not read by profile_ev".into(),
-            });
-        }
-        // 4. Rending data aliases (ai_ev.gd:261-272).
-        for hit in rules_of_primitive(reg, p, "Rending") {
-            if hit.name == "Rending" {
-                continue;
-            }
-            for sp in shoot.iter_mut() {
-                if facet_applies(hit.melee_only, hit.shooting_only, sp.range) {
-                    sp.rending = true;
-                }
-            }
-        }
-        // 5. Cover-ignore facet from the Indirect primitive's alias form (ai_ev.gd:273-281).
-        for hit in rules_of_primitive(reg, p, "Indirect") {
-            if hit.name != "Indirect" && hit.cover_only && hit.ignores_cover {
-                for sp in shoot.iter_mut() {
-                    if sp.range > 0 {
-                        sp.ignores_cover = true;
-                    }
-                }
-            }
-        }
-        // 6. Sergeant (ai_ev.gd:282-291). Its share reads the LIVE alive count,
-        //    which the static profile does not carry — reported, never guessed.
-        if unit_rule_active(reg, p, "Sergeant") {
-            unimplemented.push(Unimplemented {
-                rule: "Sergeant".into(),
-                why: "sergeant_attacks needs GameUnit.get_alive_count() at the moment of the call (ai_ev.gd:284) — not in the static profile".into(),
-            });
-        }
-
-        // --- _profiles_of's UNIT-level striker scan (battle_sim.gd:722-733) ---
-        let mut u_bane = false;
-        let mut u_rending = false;
-        let mut u_unstop = false;
-        for r in &p.special_rules {
-            let rs = r.trim();
-            if rs.starts_with("Bane") || rs.starts_with("Lacerate") {
-                u_bane = true;
-            } else if rs.starts_with("Rending") {
-                u_rending = true;
-            } else if rs.starts_with("Unstoppable") && !rs.contains(" in ") && !rs.contains(" when ") {
-                u_unstop = true;
-            }
-        }
-        for sp in shoot.iter_mut() {
-            sp.bane |= u_bane;
-            sp.rending |= u_rending;
-            sp.unstoppable |= u_unstop;
         }
 
         let is_caster = has_special_rule(&p.special_rules, "Caster")
@@ -490,6 +558,7 @@ impl UnitStatic {
         UnitStatic {
             ctx: ctx_for(reg, p),
             shoot,
+            melee,
             model_count: p.model_count,
             wounds_max: p.wounds_max.clone(),
             quality: p.quality,

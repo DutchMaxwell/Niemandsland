@@ -1,25 +1,41 @@
-//! The NML-1073 M1-1/M1-2 gates, pinned on a 200-node fixture.
+//! The NML-1073 M1-1/M1-2/M1-3 gates, pinned on three recorded fixtures.
 //!
-//! Fixture = every 10th node of the 2000-node M1-2 recording
-//! (`~/selfplay_out/m1_2/run1/nodes.jsonl`, 1000pt core_selfplay seed 27,
-//! robot_legions vs blessed_sisters, both A/B seams off). A systematic sample,
-//! not the head: the first 200 nodes are all round 1 and carry no volley that
-//! lands a wound, so a head slice would pin GATE B without ever exercising the
-//! shoot path. Composition: 38 HOLD, 53 ADVANCE, 71 RUSH, 38 CHARGE;
-//! 74 rich-leaf, 126 cheap-leaf; 15 shoot nodes of which 5 land wounds.
+//! All three come from the same 1000pt `core_selfplay` game (seed 27,
+//! robot_legions vs blessed_sisters); they differ only in which A/B seam was
+//! live, and each carries that answer in its own header (`seams`).
+//!
+//!   * `FIXTURE` — every 10th node of the 2000-node M1-2 recording, both seams
+//!     OFF. A systematic sample, not the head: the first 200 nodes are all
+//!     round 1 and carry no volley that lands a wound, so a head slice would
+//!     pin GATE B without ever exercising the shoot path. Composition: 38 HOLD,
+//!     53 ADVANCE, 71 RUSH, 38 CHARGE; 74 rich-leaf, 126 cheap-leaf; 15 shoot
+//!     nodes of which 5 land wounds; 2 charges reach contact.
+//!   * `SPACING` — every 10th node of the spacing-ON recording
+//!     (`NML_SIM_SPACING=1`, the trainer's default going forward): 46 HOLD,
+//!     45 ADVANCE, 50 RUSH, 59 CHARGE, of which 40 movers are SHORTENED by the
+//!     `_spacing_fraction` clamp.
+//!   * `MELEE` — EVERY charge node of the spacing-OFF recording that reached
+//!     contact (35 of 518), not a sample. It has to be a spacing-OFF slice:
+//!     with the clamp on, a legal move always ends at least (own radius + 1" +
+//!     their radius) ~ 2.3" from an enemy model, so no charge can ever get
+//!     inside the 1" CONTACT_IN ring and the melee branch is unreachable.
+//!     Carries 7 routs and 22 newly-shaken units.
 //!
 //! GATE A: `score(state_after, player, incoming)` reproduces the recorded score
 //! on every node, where `incoming` is `reply_threat` computed in Rust for a RICH
 //! leaf and empty for a CHEAP one (`AiPlanner._policy_step` ai_planner.gd:508-510).
 //!
 //! GATE B: `resolve(state_before, action)` reproduces `state_after` field by
-//! field on every HOLD and ADVANCE node. RUSH and CHARGE are reported as
-//! unsupported (plan step M1-3), never silently counted as passes.
+//! field on EVERY node — HOLD, ADVANCE, RUSH and CHARGE. Nothing is silently
+//! skipped: a node the port cannot resolve fails the test by name.
 
-use nml_core::sim::Unsupported;
-use nml_core::{build_statics, load_nodes, read_nodes, reply_threat, resolve, score, State};
+use nml_core::{
+    build_statics, load_nodes, read_nodes, reply_threat, resolve, score, Seams, State,
+};
 
 const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nodes_200.jsonl");
+const SPACING: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nodes_200_spacing.jsonl");
+const MELEE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nodes_melee.jsonl");
 const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 const EPS: f64 = 1e-9;
 
@@ -130,43 +146,143 @@ fn gate_a_reddens_when_the_reply_threat_is_dropped() {
     );
 }
 
-#[test]
-fn gate_b_resolve_reproduces_state_after_on_hold_and_advance() {
-    let corpus = load_nodes(FIXTURE).expect("fixture loads");
+/// GATE B on one fixture: every node resolves and matches, and the per-kind
+/// composition is pinned so a thinned corpus cannot quietly stop testing a branch.
+fn gate_b_on(path: &str, want: [usize; 4]) {
+    let corpus = load_nodes(path).expect("fixture loads");
     let statics = build_statics(&corpus, REPO);
-    let mut hold = (0usize, 0usize);
-    let mut advance = (0usize, 0usize);
-    let mut unsupported = 0usize;
+    let mut per_kind = [(0usize, 0usize); 4];
     for (i, node) in corpus.nodes.iter().enumerate() {
-        match resolve(&statics, &node.state_before, &node.action, node.cover_dest) {
-            Ok(got) => {
-                let slot = if node.action.kind == nml_core::HOLD {
-                    &mut hold
-                } else {
-                    &mut advance
-                };
-                slot.0 += 1;
-                if states_match(&got, &node.state_after) {
-                    slot.1 += 1;
-                } else {
-                    panic!("node #{}: resolve() state does not match state_after", i + 1);
-                }
-            }
-            Err(Unsupported::ActionKind(k)) => {
-                assert!(k == nml_core::RUSH || k == nml_core::CHARGE, "unexpected kind {k}");
-                unsupported += 1;
-            }
-            Err(e) => panic!("node #{}: {e:?}", i + 1),
+        let got = match resolve(
+            &statics,
+            &node.state_before,
+            &node.action,
+            node.cover_dest,
+            corpus.seams,
+        ) {
+            Ok(g) => g,
+            Err(e) => panic!("node #{}: not resolved — {e:?}", i + 1),
+        };
+        let k = node.action.kind as usize;
+        assert!(k < 4, "node #{}: unexpected action kind {k}", i + 1);
+        per_kind[k].0 += 1;
+        if states_match(&got, &node.state_after) {
+            per_kind[k].1 += 1;
+        } else {
+            panic!(
+                "node #{} (kind {}): resolve() state does not match state_after",
+                i + 1,
+                node.action.kind
+            );
         }
     }
-    assert!(hold.0 > 0 && advance.0 > 0, "fixture carries HOLD and ADVANCE nodes");
-    assert_eq!(hold.1, hold.0, "GATE B: every HOLD node exact");
-    assert_eq!(advance.1, advance.0, "GATE B: every ADVANCE node exact");
-    assert_eq!(
-        hold.0 + advance.0 + unsupported,
-        200,
-        "every node is either resolved or reported, none silently skipped"
-    );
+    let totals = [per_kind[0].0, per_kind[1].0, per_kind[2].0, per_kind[3].0];
+    assert_eq!(totals, want, "{path}: fixture composition (HOLD, ADVANCE, RUSH, CHARGE)");
+    for (k, (tot, ok)) in per_kind.iter().enumerate() {
+        assert_eq!(ok, tot, "{path}: GATE B kind {k} — {ok}/{tot} exact");
+    }
+}
+
+#[test]
+fn gate_b_resolve_reproduces_state_after_on_every_kind() {
+    gate_b_on(FIXTURE, [38, 53, 71, 38]);
+}
+
+/// The same gate on the spacing-ON recording: `resolve` must take the clamp
+/// branch because the corpus header says the recording did.
+#[test]
+fn gate_b_spacing_corpus_resolves_every_kind() {
+    let corpus = load_nodes(SPACING).expect("fixture loads");
+    assert!(corpus.seams.spacing, "the spacing fixture records spacing=on");
+    assert!(!corpus.seams.cast, "and cast=off");
+    gate_b_on(SPACING, [46, 45, 50, 59]);
+}
+
+/// Red-green for the clamp: resolving the spacing corpus with the seam OFF must
+/// break exactly the movers the clamp shortened. Without this the spacing gate
+/// could be green on a `resolve` that never clamps, as long as no move was long
+/// enough to bite.
+#[test]
+fn spacing_clamp_is_load_bearing() {
+    let corpus = load_nodes(SPACING).expect("fixture loads");
+    let statics = build_statics(&corpus, REPO);
+    let off = Seams { spacing: false, cast: false };
+    let mut broken = 0usize;
+    for node in &corpus.nodes {
+        let got = resolve(&statics, &node.state_before, &node.action, node.cover_dest, off)
+            .expect("resolves");
+        if !states_match(&got, &node.state_after) {
+            broken += 1;
+        }
+    }
+    assert_eq!(broken, 40, "dropping the clamp must redden exactly the shortened movers");
+}
+
+/// The melee half of the CHARGE branch: every recorded contact, with the
+/// strike, the strike-back, the fatigue stamps, the melee morale and the rout.
+#[test]
+fn gate_b_melee_charges_reproduce_strike_morale_and_rout() {
+    let corpus = load_nodes(MELEE).expect("fixture loads");
+    let statics = build_statics(&corpus, REPO);
+    assert!(!corpus.seams.spacing, "the melee slice is the spacing-OFF recording");
+    let mut contacts = 0usize;
+    let mut routs = 0usize;
+    let mut shaken = 0usize;
+    let mut strike_backs = 0usize;
+    for (i, node) in corpus.nodes.iter().enumerate() {
+        assert_eq!(node.action.kind, nml_core::CHARGE, "the slice is charges only");
+        let got = resolve(
+            &statics,
+            &node.state_before,
+            &node.action,
+            node.cover_dest,
+            corpus.seams,
+        )
+        .expect("resolves");
+        assert!(
+            states_match(&got, &node.state_after),
+            "node #{}: charge does not match state_after",
+            i + 1
+        );
+        let si = got.roster.index[node.action.unit.as_str()];
+        let ti = got.roster.index[node.action.charge.as_deref().expect("charge target")];
+        assert!(got.fatigued[si], "node #{}: the charger is fatigued", i + 1);
+        contacts += 1;
+        if got.fatigued[ti] && !node.state_before.fatigued[ti] {
+            strike_backs += 1;
+        }
+        for u in [si, ti] {
+            if node.state_before.alive[u] > 0 && got.alive[u] == 0 && got.positions[u].is_empty() {
+                routs += 1;
+            } else if got.shaken[u] && !node.state_before.shaken[u] {
+                shaken += 1;
+            }
+        }
+    }
+    assert_eq!(contacts, 35, "every recorded contact");
+    assert_eq!(routs, 7, "melee morale routs a side seven times");
+    assert_eq!(shaken, 22, "and shakes one twenty-two times");
+    assert!(strike_backs > 0, "survivors strike back and fatigue the defender");
+}
+
+/// Red-green for the CHARGE branch: reading the same nodes as a RUSH (same move,
+/// no melee) must break every one of them. Without it the melee gate could be
+/// green on a `resolve` whose charge leg never fires.
+#[test]
+fn the_melee_leg_is_load_bearing() {
+    let corpus = load_nodes(MELEE).expect("fixture loads");
+    let statics = build_statics(&corpus, REPO);
+    let mut broken = 0usize;
+    for node in &corpus.nodes {
+        let mut as_rush = node.action.clone();
+        as_rush.kind = nml_core::RUSH; // same band, same move, no contact check
+        let got = resolve(&statics, &node.state_before, &as_rush, node.cover_dest, corpus.seams)
+            .expect("resolves");
+        if !states_match(&got, &node.state_after) {
+            broken += 1;
+        }
+    }
+    assert_eq!(broken, 35, "every contact node needs the charge leg");
 }
 
 /// Red-green for GATE B's shoot path: GATE B would be green on a `resolve()`
@@ -185,7 +301,9 @@ fn gate_b_shoot_nodes_actually_deal_damage() {
             continue;
         };
         shooters += 1;
-        let Ok(got) = resolve(&statics, &node.state_before, &node.action, node.cover_dest) else {
+        let Ok(got) =
+            resolve(&statics, &node.state_before, &node.action, node.cover_dest, corpus.seams)
+        else {
             continue;
         };
         let ti = node.state_before.roster.index[target];
@@ -210,7 +328,8 @@ fn gate_b_reddens_when_the_cover_answer_is_flipped() {
     for node in corpus.nodes.iter().filter(|n| n.action.kind == nml_core::ADVANCE) {
         let Some(c) = node.cover_dest else { continue };
         moved += 1;
-        let got = resolve(&statics, &node.state_before, &node.action, Some(!c)).expect("resolves");
+        let got = resolve(&statics, &node.state_before, &node.action, Some(!c), corpus.seams)
+            .expect("resolves");
         if !states_match(&got, &node.state_after) {
             flipped += 1;
         }

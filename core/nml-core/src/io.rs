@@ -162,10 +162,25 @@ pub struct Node {
     pub rich: bool,
 }
 
+/// Which A/B seams `resolve()` branched on while the corpus was played —
+/// header line 1's `"seams"` (ai_planner.gd:483-489, added with M1-3).
+/// A corpus recorded before that (the M1-2 one) has no key and defaults to
+/// both OFF, which is what it was probed to be.
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+pub struct Seams {
+    /// `BattleSim.spacing_enabled()` — NML_SIM_SPACING, battle_sim.gd:25-31.
+    #[serde(default)]
+    pub spacing: bool,
+    /// `BattleSim.cast_phase_enabled()` — NML_SIM_CAST, battle_sim.gd:37-42.
+    #[serde(default)]
+    pub cast: bool,
+}
+
 #[derive(Debug)]
 pub struct NodeCorpus {
     pub profiles: Rc<Profiles>,
     pub nodes: Vec<Node>,
+    pub seams: Seams,
 }
 
 /// Builds (or reuses) the roster for one plain state. Every node of one game has
@@ -268,6 +283,8 @@ fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Roster>) -> S
 #[derive(Deserialize)]
 struct Header {
     profiles: Ordered<Profile>,
+    #[serde(default)]
+    seams: Seams,
 }
 
 /// Reads `nodes.jsonl` into the immutable profile table and the node list.
@@ -286,6 +303,7 @@ pub fn read_nodes<R: BufRead>(reader: R, origin: &str) -> Result<NodeCorpus, Str
         .map_err(|e| e.to_string())?;
     let header: Header =
         serde_json::from_str(&head).map_err(|e| format!("{path}:1 profiles header: {e}"))?;
+    let seams = header.seams;
     let mut profiles = Profiles::default();
     for (k, p) in header.profiles.0 {
         profiles.index.insert(k, profiles.list.len());
@@ -313,5 +331,5 @@ pub fn read_nodes<R: BufRead>(reader: R, origin: &str) -> Result<NodeCorpus, Str
             rich: pn.rich,
         });
     }
-    Ok(NodeCorpus { profiles, nodes })
+    Ok(NodeCorpus { profiles, nodes, seams })
 }
