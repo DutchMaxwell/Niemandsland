@@ -28,6 +28,18 @@ static func spacing_enabled() -> bool:
 		_spacing_env = 1 if (raw == "1" or raw == "on") else 0
 	return _spacing_env == 1
 
+## NML-1069 A/B seam: NML_SIM_CAST="1"/"on" makes resolve() run the cast
+## SUB-PHASE (before any attack, every activation); unset/anything else falls
+## back to the legacy shoot-rider (spell_ev_of folded into the shoot volley,
+## verbatim from dabd1da) — byte-identical to today, so the shipped rollouts
+## keep their behaviour until a never-worse A/B promotes the sub-phase.
+static var _cast_env := -1
+static func cast_phase_enabled() -> bool:
+	if _cast_env < 0:
+		var raw := OS.get_environment("NML_SIM_CAST")
+		_cast_env = 1 if (raw == "1" or raw == "on") else 0
+	return _cast_env == 1
+
 # === Encoder board rows (v5 schema, NML-995) ==================================
 # ONE canonical source for the position-net input, used by BOTH the factory
 # (core_selfplay corpus) and the in-game encoder eval — a fork here would let
@@ -587,11 +599,14 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 	# NML-1069 — the CAST SUB-PHASE: after the move, before ANY attack, for every
 	# activation (the old cast site was a rider inside the shoot branch below, so a
 	# melee caster never cast at all). stochastic_rng null = expectation path.
-	var cast_event := _cast_phase(next, str(action["unit"]), stochastic_rng)
-	if not cast_event.is_empty():
-		if not next.has("cast_events"):
-			next["cast_events"] = []
-		(next["cast_events"] as Array).append(cast_event)
+	# A/B seam (cast_phase_enabled): OFF restores the legacy shoot-rider below
+	# instead, so shipped rollouts stay byte-identical until the never-worse A/B.
+	if cast_phase_enabled():
+		var cast_event := _cast_phase(next, str(action["unit"]), stochastic_rng)
+		if not cast_event.is_empty():
+			if not next.has("cast_events"):
+				next["cast_events"] = []
+			(next["cast_events"] as Array).append(cast_event)
 	var shoot_key := str(action.get("shoot", ""))
 	if shoot_key != "" and next["units"].has(shoot_key) and sees(su, shoot_key) \
 			and (kind == AiDecision.Action.HOLD or kind == AiDecision.Action.ADVANCE):
@@ -600,8 +615,18 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			var d := dist_in(positions, tu["positions"])
 			var alive_before := int(tu["alive"])
 			var wounds_before := _wounds_left(tu)
-			_apply_expected_wounds(tu,
-				AiEv.shoot_ev(_profiles_of(su, false, d), _ctx_of(su), _ctx_of(tu), d))
+			if cast_phase_enabled():
+				_apply_expected_wounds(tu,
+					AiEv.shoot_ev(_profiles_of(su, false, d), _ctx_of(su), _ctx_of(tu), d))
+			else:
+				# Seam OFF: the legacy spell rider, verbatim from dabd1da — the
+				# sub-phase above never ran, so casting only happens inside a shoot pick.
+				var volley := AiEv.shoot_ev(_profiles_of(su, false, d), _ctx_of(su), _ctx_of(tu), d)
+				var sp := spell_ev_of(su, tu, d)
+				if float(sp["ev"]) > 0.0:
+					volley += float(sp["ev"])
+					su["casts"] = int(su.get("casts", 0)) - int(sp["cost"])
+				_apply_expected_wounds(tu, volley)
 			_expected_shooting_morale(tu, alive_before, wounds_before)
 	var charge_key := str(action.get("charge", ""))
 	if kind == AiDecision.Action.CHARGE and charge_key != "" and next["units"].has(charge_key):

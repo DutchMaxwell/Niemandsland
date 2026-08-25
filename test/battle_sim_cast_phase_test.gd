@@ -15,8 +15,23 @@ extends GdUnitTestSuite
 ## BattleSim.capture(). The faction slug rides unit_properties["faction_folder"]
 ## — the very key SpellsRegistry indexes the committed spell map by, so a
 ## fixture picks its spell book by CHOOSING the slug, never by stamping spells.
+##
+## NML-1069 A/B seam (NML_SIM_CAST): the sub-phase this file tests only runs
+## with the seam ON, so before_test turns it on for every case below; (g) and
+## (h) turn it back OFF locally to pin the legacy fallback. Cache reset mirrors
+## battle_sim_spacing_test.gd (BattleSim.new().set("_cast_env", -1)).
 
 const IN2M := 0.0254
+
+
+func before_test() -> void:
+	OS.set_environment("NML_SIM_CAST", "1")
+	BattleSim.new().set("_cast_env", -1)
+
+
+func after_test() -> void:
+	OS.set_environment("NML_SIM_CAST", "")
+	BattleSim.new().set("_cast_env", -1)
 
 
 func _unit(pid: int, uid: String, positions: Array, rules: Array = [],
@@ -171,3 +186,39 @@ func test_shaken_caster_casts_nothing() -> void:
 	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(1)
 	assert_array(next.get("cast_events", [])).is_empty()
 	assert_float(float((next["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_equal(0.0)
+
+
+## (g) SEAM OFF: same fixture as (a), a melee caster 3" from an enemy on a
+## plain HOLD — but with NML_SIM_CAST off the sub-phase never runs, and a HOLD
+## has no shoot pick for the legacy rider to ride on. No token spent, no event,
+## no wound: a melee caster on a HOLD never casts under the legacy rule.
+func test_seam_off_the_melee_caster_holds_and_spends_nothing() -> void:
+	OS.set_environment("NML_SIM_CAST", "")
+	BattleSim.new().set("_cast_env", -1)
+	var next := _hold(_melee_caster_state(3.0))
+	var su: Dictionary = next["units"]["Wizard"]
+	assert_int(int(su["casts"])).is_equal(1)
+	assert_array(next.get("cast_events", [])).is_empty()
+	var tu: Dictionary = next["units"]["Squad"]
+	assert_float(float(tu.get("wound_frac", 0.0))).is_equal(0.0)
+
+
+## (h) SEAM OFF with a shoot pick on a target within spell range: the legacy
+## rider (dabd1da) still fires — same fixture as the shooting-caster guard
+## above, just with the sub-phase off. Tokens drop and the target carries
+## expected wounds from the rider's folded-in spell EV; cast_events stays
+## empty because that plumbing belongs to the sub-phase alone, never the rider.
+func test_seam_off_the_legacy_shoot_rider_still_casts() -> void:
+	OS.set_environment("NML_SIM_CAST", "")
+	BattleSim.new().set("_cast_env", -1)
+	var caster := _unit(1, "Wizard", [Vector3.ZERO], ["Caster(1)"], "robot_legions", 1)
+	var foes: Array = []
+	for i in range(4):
+		foes.append(Vector3((3.0 + float(i)) * IN2M, 0, 0))
+	var squad := _unit(2, "Squad", foes)
+	var state := _capture([caster, squad])
+	var next := BattleSim.resolve(state,
+		{"unit": "Wizard", "kind": AiDecision.Action.HOLD, "shoot": "Squad"})
+	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(0)
+	assert_float(float((next["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_greater(0.0)
+	assert_array(next.get("cast_events", [])).is_empty()
