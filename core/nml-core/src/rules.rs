@@ -185,6 +185,27 @@ pub struct Spell {
     pub effect_kind: String,
     pub effect_hits: i64,
     pub weapon_rules: Vec<String>,
+    /// `effect.beneficiary` — "attackers" means the modifier belongs to whoever
+    /// attacks this unit, so it never joins the bearer's own hit/def net
+    /// (battle_sim.gd:971-975, mirroring main.gd:3652).
+    pub beneficiary: String,
+    /// `effect.modifier`. `present` is the GDScript's `modifier.is_empty()`
+    /// test: a NON-empty dict makes the cast a stamp even when every field the
+    /// sim reads is zero (e.g. a `casting_mod`-only debuff).
+    pub modifier: SpellModifier,
+}
+
+/// The six `effect.modifier` fields `BattleSim._apply_cast_effect` reads
+/// (battle_sim.gd:976-982); everything else in that dict is a no-op there.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SpellModifier {
+    pub present: bool,
+    pub hit_mod: f64,
+    pub def_mod: f64,
+    pub morale_mod: f64,
+    pub range_in: f64,
+    pub advance_in: f64,
+    pub rush_in: f64,
 }
 
 /// The registries, loaded once per repo root and cached per system slug.
@@ -310,6 +331,31 @@ fn spell_of(e: &Value) -> Spell {
                     .collect()
             })
             .unwrap_or_default(),
+        beneficiary: eff
+            .and_then(|v| v.get("beneficiary"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        modifier: modifier_of(eff.and_then(|v| v.get("modifier"))),
+    }
+}
+
+fn modifier_of(m: Option<&Value>) -> SpellModifier {
+    let Some(obj) = m.and_then(|v| v.as_object()) else {
+        return SpellModifier::default();
+    };
+    if obj.is_empty() {
+        return SpellModifier::default(); // `modifier.is_empty()` — battle_sim.gd:966
+    }
+    let f = |k: &str| obj.get(k).and_then(|v| v.as_f64()).unwrap_or(0.0);
+    SpellModifier {
+        present: true,
+        hit_mod: f("hit_mod"),
+        def_mod: f("def_mod"),
+        morale_mod: f("morale_mod"),
+        range_in: f("range_in"),
+        advance_in: f("advance_in"),
+        rush_in: f("rush_in"),
     }
 }
 

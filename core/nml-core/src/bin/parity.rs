@@ -108,9 +108,9 @@ fn diff_states(got: &State, want: &State) -> Vec<String> {
     }
     for i in 0..got.units() {
         let (a, b) = (&got.mods[i], &want.mods[i]);
-        if a.hit != b.hit
-            || a.def != b.def
-            || a.morale != b.morale
+        if (a.hit - b.hit).abs() > EPS
+            || (a.def - b.def).abs() > EPS
+            || (a.morale - b.morale).abs() > EPS
             || (a.range_in - b.range_in).abs() > EPS
             || (a.advance - b.advance).abs() > EPS
             || (a.rush - b.rush).abs() > EPS
@@ -201,7 +201,7 @@ fn main() {
     let mut unsupported: BTreeMap<String, usize> = BTreeMap::new();
     let mut first_bad: Vec<(usize, i64, Vec<String>)> = Vec::new();
     for (i, node) in corpus.nodes.iter().enumerate() {
-        match resolve(&statics, &node.state_before, &node.action, node.cover_dest, corpus.seams) {
+        match resolve(&statics, &node.state_before, &node.action, node.cover_dest, corpus.seams, node.cast_los()) {
             Ok(got) => {
                 let e = per_kind.entry(node.action.kind).or_insert((0, 0));
                 e.0 += 1;
@@ -225,10 +225,6 @@ fn main() {
                     Unsupported::UnknownUnit => "action names an unknown unit".to_string(),
                     Unsupported::MovedShootLos => {
                         "moved unit also shoots — post-move LOS answer not recorded".to_string()
-                    }
-                    Unsupported::CastPhase => {
-                        "corpus recorded with NML_SIM_CAST=1 — cast sub-phase is plan step M1-3b"
-                            .to_string()
                     }
                 };
                 *unsupported.entry(label).or_insert(0) += 1;
@@ -404,7 +400,7 @@ fn main() {
             for &i in &idx {
                 let node = &corpus.nodes[i];
                 if let Ok(s) =
-                    resolve(&statics, &node.state_before, &node.action, node.cover_dest, corpus.seams)
+                    resolve(&statics, &node.state_before, &node.action, node.cover_dest, corpus.seams, node.cast_los())
                 {
                     sink += s.alive.len();
                 }

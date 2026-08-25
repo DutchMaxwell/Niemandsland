@@ -6,8 +6,8 @@
 //! The two A/B seams are read from the corpus header (`Seams`, ai_planner.gd:
 //! 483-489), never guessed: `spacing` switches the `_spacing_fraction` clamp
 //! (battle_sim.gd:521-563, :590-592) on, `cast` switches the cast sub-phase
-//! (:602-607) on — the latter is plan step M1-3b and is REPORTED, not faked.
-//! With `cast` off the LEGACY spell rider inside the shoot branch runs (:621-628).
+//! (:602-607) on. With `cast` off the LEGACY spell rider inside the shoot
+//! branch runs instead (:621-628), which is what the shipped rollouts still do.
 
 use crate::combat::{
     at_or_below_half, effective_attacks, melee_ev, morale_target, shoot_ev,
@@ -15,10 +15,11 @@ use crate::combat::{
 };
 use crate::geom;
 use crate::io::{Action, Seams};
-use crate::spell::spell_ev_of;
+use crate::rules::Spell;
+use crate::spell::{cast_success_chance_base, official_pick_order, spell_damage_ev_of, spell_ev_of};
 use crate::state::State;
 use crate::unit::{Ctx, UnitStatic};
-use crate::IN2M;
+use crate::{CONTROL_EPS, IN2M};
 
 /// `BattleSim.CONTACT_IN` battle_sim.gd:655 — the charge's contact ring.
 pub const CONTACT_IN: f64 = 1.0;
@@ -55,9 +56,6 @@ pub enum Unsupported {
     /// pre-move state cannot answer that. Never occurs in the recorded corpus
     /// (`_policy_candidates` ai_planner.gd:517-545 pairs a shoot only with HOLD).
     MovedShootLos,
-    /// The corpus was recorded with `NML_SIM_CAST=1`, so `resolve` ran the cast
-    /// sub-phase (battle_sim.gd:856-984) — plan step M1-3b, not this port.
-    CastPhase,
 }
 
 /// `BattleSim._los_clear` battle_sim.gd:666-670, read off the recorded answers.
@@ -304,6 +302,152 @@ fn spacing_fraction(state: &State, mi: usize, delta: geom::V3) -> f64 {
     0.0
 }
 
+/// `BattleSim._best_spell_target` battle_sim.gd:922-943 — the enemy a
+/// damage/debuff spell lands on: alive, on the other side, inside `range_in`
+/// with line of sight, best damage EV first and NEAREST on a tie. A debuff
+/// prices at 0, so it simply takes the nearest.
+fn best_spell_target(
+    statics: &[UnitStatic],
+    state: &State,
+    si: usize,
+    entry: &Spell,
+    los: &[bool],
+) -> Option<usize> {
+    let player = state.player[si];
+    let mut best: Option<usize> = None;
+    let mut best_ev = -1.0f64;
+    let mut best_d = f64::INFINITY;
+    for ti in 0..state.units() {
+        if state.player[ti] == player || state.alive[ti] <= 0 {
+            continue;
+        }
+        if !state.sees(si, state.key(ti)) || !los[ti] {
+            continue;
+        }
+        let d = geom::dist_in(&state.positions[si], &state.positions[ti]);
+        if d > entry.range_in + CONTROL_EPS {
+            continue;
+        }
+        let ut = &statics[state.roster.profile[ti]];
+        let ev = spell_damage_ev_of(entry, &ctx_of(ut, state, ti));
+        if ev > best_ev + CONTROL_EPS || ((ev - best_ev).abs() <= CONTROL_EPS && d < best_d) {
+            best_ev = ev;
+            best_d = d;
+            best = Some(ti);
+        }
+    }
+    best
+}
+
+/// `BattleSim._pick_cast` battle_sim.gd:903-916 — the official cycle for ONE D3
+/// face: the first spell in `official_pick_order` that is modelled, affordable
+/// and has a legal target. A buff takes the caster itself.
+fn pick_cast(
+    statics: &[UnitStatic],
+    state: &State,
+    si: usize,
+    spells: &[Spell],
+    tokens: i64,
+    d3: i64,
+    caster_x: i64,
+    los: &[bool],
+) -> Option<(usize, usize)> {
+    for idx in official_pick_order(spells.len(), d3, caster_x) {
+        let entry = &spells[idx];
+        if entry.status == "unmodeled" || entry.threshold > tokens {
+            continue;
+        }
+        if entry.effect_kind == "buff" {
+            return Some((idx, si));
+        }
+        if entry.effect_kind != "damage" && entry.effect_kind != "debuff" {
+            continue; // an effect kind the sim has no arithmetic for
+        }
+        if let Some(ti) = best_spell_target(statics, state, si, entry, los) {
+            return Some((idx, ti));
+        }
+    }
+    None
+}
+
+/// `BattleSim._apply_cast_effect` battle_sim.gd:951-982 — damage lands as the
+/// scaled expectation, a modifier as a scaled stamp on the target's `mods`.
+/// The `rng` branch does not exist here: every rollout node is the expectation
+/// path (`stochastic_rng` is null).
+fn apply_cast_effect(
+    statics: &[UnitStatic],
+    state: &mut State,
+    ti: usize,
+    entry: &Spell,
+    scale: f64,
+) {
+    if entry.effect_kind == "damage" {
+        let ut = &statics[state.roster.profile[ti]];
+        let ev = spell_damage_ev_of(entry, &ctx_of(ut, state, ti));
+        apply_expected_wounds(state, ti, scale * ev);
+        return;
+    }
+    let m = entry.modifier;
+    if !m.present {
+        return; // a grants_rule-only "castable" spell leaves no snapshot trace
+    }
+    if scale <= 0.0 {
+        return;
+    }
+    let mods = &mut state.mods[ti];
+    // "beneficiary: attackers" is the ATTACKER's hit/def modifier against this
+    // unit, never part of the bearer's own net — battle_sim.gd:971-975.
+    if entry.beneficiary != "attackers" {
+        mods.hit += scale * m.hit_mod;
+        mods.def += scale * m.def_mod;
+    }
+    mods.morale += scale * m.morale_mod;
+    mods.range_in += scale * m.range_in;
+    mods.advance += scale * m.advance_in;
+    mods.rush += scale * m.rush_in;
+}
+
+/// `BattleSim._cast_phase` battle_sim.gd:856-894 — after the move, before ANY
+/// attack, for EVERY activation (which is the whole point of NML-1069: the old
+/// site rode inside the shoot branch, so a melee caster never cast).
+///
+/// The expectation path walks all three D3 faces at weight 1/3 each, so up to
+/// three effects land at 1/6 scale; the FIRST face that produced a pick names
+/// the attempt and pays for it. `tokens` is read ONCE before the loop, so all
+/// three faces shop with the same purse. Later faces see the state the earlier
+/// ones already damaged — that order is load-bearing.
+fn cast_phase(statics: &[UnitStatic], state: &mut State, si: usize, los: &[bool]) {
+    // p.10: a Shaken unit spends its activation idle and never casts.
+    if state.shaken[si] {
+        return;
+    }
+    let tokens = state.casts[si];
+    if tokens <= 0 || state.alive[si] <= 0 {
+        return;
+    }
+    let pi = state.roster.profile[si];
+    if !statics[pi].is_caster || statics[pi].spells.is_empty() {
+        return;
+    }
+    let spells = statics[pi].spells.clone();
+    let caster_x = state.profile(si).caster_value;
+    let weight = 1.0 / 3.0;
+    let p_success = cast_success_chance_base();
+    let mut cost: Option<i64> = None;
+    for d3 in 1..=3i64 {
+        let Some((idx, ti)) = pick_cast(statics, state, si, &spells, tokens, d3, caster_x, los) else {
+            continue;
+        };
+        apply_cast_effect(statics, state, ti, &spells[idx], weight * p_success);
+        if cost.is_none() {
+            cost = Some(spells[idx].threshold);
+        }
+    }
+    if let Some(c) = cost {
+        state.casts[si] = (tokens - c).max(0);
+    }
+}
+
 /// The reply-threat volley of `si` onto `ti`: `AiEv.shoot_ev(...) +
 /// spell_ev_of(...)["ev"]` — battle_sim.gd:1016-1017, "magic is part of the
 /// reply". Returns (ev, spell token cost); `reply_threat` discards the cost,
@@ -390,13 +534,11 @@ pub fn resolve(
     action: &Action,
     cover_dest: Option<bool>,
     seams: Seams,
+    cast_los: Option<&[bool]>,
 ) -> Result<State, Unsupported> {
     let kind = action.kind;
     if kind != HOLD && kind != ADVANCE && kind != RUSH && kind != CHARGE {
         return Err(Unsupported::ActionKind(kind));
-    }
-    if seams.cast {
-        return Err(Unsupported::CastPhase);
     }
     let Some(&si) = state.roster.index.get(action.unit.as_str()) else {
         return Err(Unsupported::UnknownUnit);
@@ -438,7 +580,19 @@ pub fn resolve(
             next.in_cover[si] = c;
         }
     }
-    // NML_SIM_CAST off: no cast sub-phase (battle_sim.gd:602-607).
+    // --- cast sub-phase (battle_sim.gd:602-607), seam-gated ---
+    // `_best_spell_target` (:930) probes `_los_clear` with the POST-move
+    // centres, which the pre-move `los_pairs` of `state_before` cannot answer —
+    // the same shape of missing input `cover_dest` fixed for terrain. The
+    // caller supplies the caster's row; without one the pre-move matrix is used
+    // and a moved caster's targeting is an approximation.
+    if seams.cast {
+        let row: Vec<bool> = match cast_los {
+            Some(r) => r.to_vec(),
+            None => (0..next.units()).map(|j| los_clear(&next, si, j)).collect(),
+        };
+        cast_phase(statics, &mut next, si, &row);
+    }
 
     // --- shoot (battle_sim.gd:608-630); HOLD and ADVANCE only ---
     if !shoot_key.is_empty() && (kind == HOLD || kind == ADVANCE) {
@@ -450,8 +604,10 @@ pub fn resolve(
                 let d = geom::dist_in(&next.positions[si], &next.positions[ti]);
                 let alive_before = next.alive[ti];
                 let wounds_before = wounds_left(&next, ti);
-                // Seam OFF: the legacy spell rider (battle_sim.gd:621-628) —
-                // the spell's EV joins the volley and the caster pays its cost.
+                // Seam ON: a plain volley — the cast sub-phase above already
+                // ran. Seam OFF: the LEGACY spell rider (battle_sim.gd:621-628),
+                // where the spell's EV joins the volley and the caster pays for
+                // it inside the shoot pick.
                 let (volley, sp_cost) = {
                     let us = &statics[pi_s];
                     let ut = &statics[next.roster.profile[ti]];
@@ -459,12 +615,16 @@ pub fn resolve(
                     let att = ctx_of(us, &next, si);
                     let def = ctx_of(ut, &next, ti);
                     let shooting = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
-                    let (sp_ev, sp_cost) =
-                        spell_ev_of(us.is_caster, &us.spells, next.casts[si], &def, d);
-                    if sp_ev > 0.0 {
-                        (shooting + sp_ev, sp_cost)
-                    } else {
+                    if seams.cast {
                         (shooting, 0)
+                    } else {
+                        let (sp_ev, sp_cost) =
+                            spell_ev_of(us.is_caster, &us.spells, next.casts[si], &def, d);
+                        if sp_ev > 0.0 {
+                            (shooting + sp_ev, sp_cost)
+                        } else {
+                            (shooting, 0)
+                        }
                     }
                 };
                 next.casts[si] -= sp_cost; // 0 unless the spell rider fired

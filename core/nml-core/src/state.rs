@@ -128,14 +128,19 @@ impl Roster {
 
 /// Per-unit modifier snapshot — `mods` is per clone, `mods_base` is the
 /// capture-time reading and is never written (battle_sim.gd:475-479).
+/// All six are FLOATS, not integers: `BattleSim._apply_cast_effect`
+/// (battle_sim.gd:976-982) adds `landed * modifier`, and `landed` is the D3
+/// weight times the cast chance — a third of a half. A snapshot that has never
+/// been cast on carries plain `0`, which is why the M1-2 port could type the
+/// first three as ints and get away with it.
 #[derive(Debug, Clone, Copy, Default, Deserialize)]
 pub struct Mods {
     #[serde(default)]
-    pub hit: i64,
+    pub hit: f64,
     #[serde(default)]
-    pub def: i64,
+    pub def: f64,
     #[serde(default)]
-    pub morale: i64,
+    pub morale: f64,
     #[serde(default)]
     pub range_in: f64,
     #[serde(default)]

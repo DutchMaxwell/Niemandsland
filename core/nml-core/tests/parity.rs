@@ -20,6 +20,11 @@
 //!     their radius) ~ 2.3" from an enemy model, so no charge can ever get
 //!     inside the 1" CONTACT_IN ring and the melee branch is unreachable.
 //!     Carries 7 routs and 22 newly-shaken units.
+//!   * `CAST` — EVERY node of the cast-ON recording (`NML_SIM_CAST=1`, spacing
+//!     also on) whose activation spent a caster token: 93 of 2000, 31 each on
+//!     HOLD, RUSH and CHARGE. That HOLD/RUSH/CHARGE split IS the point of
+//!     NML-1069 — the legacy rider only ever cast inside a shoot pick, so a
+//!     rushing or charging caster never cast at all.
 //!
 //! GATE A: `score(state_after, player, incoming)` reproduces the recorded score
 //! on every node, where `incoming` is `reply_threat` computed in Rust for a RICH
@@ -36,6 +41,7 @@ use nml_core::{
 const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nodes_200.jsonl");
 const SPACING: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nodes_200_spacing.jsonl");
 const MELEE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nodes_melee.jsonl");
+const CAST: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/nodes_cast.jsonl");
 const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 const EPS: f64 = 1e-9;
 
@@ -70,6 +76,18 @@ fn states_match(got: &State, want: &State) -> bool {
     }
     for i in 0..got.units() {
         if (got.wound_frac[i] - want.wound_frac[i]).abs() > EPS {
+            return false;
+        }
+        // `mods` moves only through the cast sub-phase (battle_sim.gd:976-982),
+        // so it has to be compared or the whole modifier half is untested.
+        let (a, b) = (&got.mods[i], &want.mods[i]);
+        if (a.hit - b.hit).abs() > EPS
+            || (a.def - b.def).abs() > EPS
+            || (a.morale - b.morale).abs() > EPS
+            || (a.range_in - b.range_in).abs() > EPS
+            || (a.advance - b.advance).abs() > EPS
+            || (a.rush - b.rush).abs() > EPS
+        {
             return false;
         }
         if got.positions[i].len() != want.positions[i].len() || got.radii[i].len() != want.radii[i].len() {
@@ -159,6 +177,7 @@ fn gate_b_on(path: &str, want: [usize; 4]) {
             &node.action,
             node.cover_dest,
             corpus.seams,
+            node.cast_los(),
         ) {
             Ok(g) => g,
             Err(e) => panic!("node #{}: not resolved — {e:?}", i + 1),
@@ -209,7 +228,7 @@ fn spacing_clamp_is_load_bearing() {
     let off = Seams { spacing: false, cast: false };
     let mut broken = 0usize;
     for node in &corpus.nodes {
-        let got = resolve(&statics, &node.state_before, &node.action, node.cover_dest, off)
+        let got = resolve(&statics, &node.state_before, &node.action, node.cover_dest, off, node.cast_los())
             .expect("resolves");
         if !states_match(&got, &node.state_after) {
             broken += 1;
@@ -237,6 +256,7 @@ fn gate_b_melee_charges_reproduce_strike_morale_and_rout() {
             &node.action,
             node.cover_dest,
             corpus.seams,
+            node.cast_los(),
         )
         .expect("resolves");
         assert!(
@@ -276,7 +296,7 @@ fn the_melee_leg_is_load_bearing() {
     for node in &corpus.nodes {
         let mut as_rush = node.action.clone();
         as_rush.kind = nml_core::RUSH; // same band, same move, no contact check
-        let got = resolve(&statics, &node.state_before, &as_rush, node.cover_dest, corpus.seams)
+        let got = resolve(&statics, &node.state_before, &as_rush, node.cover_dest, corpus.seams, node.cast_los())
             .expect("resolves");
         if !states_match(&got, &node.state_after) {
             broken += 1;
@@ -302,7 +322,7 @@ fn gate_b_shoot_nodes_actually_deal_damage() {
         };
         shooters += 1;
         let Ok(got) =
-            resolve(&statics, &node.state_before, &node.action, node.cover_dest, corpus.seams)
+            resolve(&statics, &node.state_before, &node.action, node.cover_dest, corpus.seams, node.cast_los())
         else {
             continue;
         };
@@ -328,7 +348,7 @@ fn gate_b_reddens_when_the_cover_answer_is_flipped() {
     for node in corpus.nodes.iter().filter(|n| n.action.kind == nml_core::ADVANCE) {
         let Some(c) = node.cover_dest else { continue };
         moved += 1;
-        let got = resolve(&statics, &node.state_before, &node.action, Some(!c), corpus.seams)
+        let got = resolve(&statics, &node.state_before, &node.action, Some(!c), corpus.seams, node.cast_los())
             .expect("resolves");
         if !states_match(&got, &node.state_after) {
             flipped += 1;
@@ -336,6 +356,105 @@ fn gate_b_reddens_when_the_cover_answer_is_flipped() {
     }
     assert!(moved > 0, "fixture carries ADVANCE nodes with a cover answer");
     assert_eq!(flipped, moved, "the cover answer reaches in_cover on every mover");
+}
+
+/// M1-3b: the cast sub-phase. Every recorded token spend, with the spell the
+/// official pick order chose, the target it chose and the damage it dealt.
+#[test]
+fn gate_b_cast_subphase_reproduces_every_recorded_cast() {
+    let corpus = load_nodes(CAST).expect("fixture loads");
+    assert!(corpus.seams.cast, "the cast fixture records cast=on");
+    let statics = build_statics(&corpus, REPO);
+    let mut per_kind = [0usize; 4];
+    let mut spent = 0i64;
+    for (i, node) in corpus.nodes.iter().enumerate() {
+        let got = resolve(
+            &statics,
+            &node.state_before,
+            &node.action,
+            node.cover_dest,
+            corpus.seams,
+            node.cast_los(),
+        )
+        .expect("resolves");
+        assert!(
+            states_match(&got, &node.state_after),
+            "node #{}: cast node does not match state_after",
+            i + 1
+        );
+        per_kind[node.action.kind as usize] += 1;
+        for u in 0..got.units() {
+            spent += node.state_before.casts[u] - got.casts[u];
+        }
+    }
+    assert_eq!(per_kind, [31, 0, 31, 31], "HOLD / ADVANCE / RUSH / CHARGE casts");
+    assert_eq!(spent, 145, "tokens the sub-phase spent across the slice");
+}
+
+/// Red-green for the seam: with `cast` off, `resolve` runs the LEGACY rider
+/// instead (spell EV folded into a shoot pick), so every one of these nodes
+/// must break. Without this the cast gate could be green on a `resolve` that
+/// never enters the sub-phase.
+#[test]
+fn the_cast_subphase_is_load_bearing() {
+    let corpus = load_nodes(CAST).expect("fixture loads");
+    let statics = build_statics(&corpus, REPO);
+    let legacy = Seams { spacing: true, cast: false };
+    let mut broken = 0usize;
+    for node in &corpus.nodes {
+        let got = resolve(
+            &statics,
+            &node.state_before,
+            &node.action,
+            node.cover_dest,
+            legacy,
+            node.cast_los(),
+        )
+        .expect("resolves");
+        if !states_match(&got, &node.state_after) {
+            broken += 1;
+        }
+    }
+    assert_eq!(broken, 93, "the legacy rider reproduces none of the recorded casts");
+}
+
+/// Red-green for the recorded POST-move sight answers: dropping them back to
+/// the pre-move matrix of `state_before` must break the casts that only became
+/// possible after the caster moved. 41 of the 93 do — proof that the answer is
+/// a real input and not decoration.
+#[test]
+fn the_post_move_cast_los_is_a_real_input() {
+    let corpus = load_nodes(CAST).expect("fixture loads");
+    let statics = build_statics(&corpus, REPO);
+    let mut broken = 0usize;
+    for node in &corpus.nodes {
+        let got = resolve(
+            &statics,
+            &node.state_before,
+            &node.action,
+            node.cover_dest,
+            corpus.seams,
+            None, // fall back to state_before's pre-move los_pairs
+        )
+        .expect("resolves");
+        if !states_match(&got, &node.state_after) {
+            broken += 1;
+        }
+    }
+    assert_eq!(broken, 41, "moved casters need the post-move sight answers");
+}
+
+/// `AiSpell.official_pick_order` ai_spell.gd:305-312 — the rotation IS rule
+/// data (the printed list is indexed by D3 + Caster(X), then cycled forward).
+#[test]
+fn the_official_pick_order_rotates_by_d3_plus_caster_value() {
+    use nml_core::spell::official_pick_order;
+    assert_eq!(official_pick_order(6, 1, 0), [0, 1, 2, 3, 4, 5]);
+    assert_eq!(official_pick_order(6, 1, 1), [1, 2, 3, 4, 5, 0]);
+    assert_eq!(official_pick_order(6, 3, 1), [3, 4, 5, 0, 1, 2]);
+    assert_eq!(official_pick_order(4, 3, 3), [1, 2, 3, 0], "wraps");
+    assert_eq!(official_pick_order(6, 9, 0), [2, 3, 4, 5, 0, 1], "the face is clamped to 3");
+    assert!(official_pick_order(0, 1, 0).is_empty());
 }
 
 /// The port must NAME what it does not implement. An empty list here is the
@@ -426,7 +545,7 @@ fn clone_is_deep_where_the_gdscript_clone_is_deep() {
     let mut c = st.clone();
     c.positions[0][0][0] += 1.0;
     c.wounds[0][0] -= 1;
-    c.mods[0].hit += 1;
+    c.mods[0].hit += 1.0;
     assert_ne!(c.positions[0][0][0], st.positions[0][0][0], "positions deep");
     assert_ne!(c.wounds[0][0], st.wounds[0][0], "wounds deep");
     assert_ne!(c.mods[0].hit, st.mods[0].hit, "mods per clone");

@@ -176,6 +176,24 @@ pub struct Seams {
     pub cast: bool,
 }
 
+impl Node {
+    /// The caster's line-of-sight row for the CAST sub-phase — the answers
+    /// `BattleSim._best_spell_target` (battle_sim.gd:930) gets from `_los_clear`
+    /// with the POST-move centres, which `state_before.los_pairs` (a pre-move
+    /// matrix) cannot supply. Read off `state_after.los_pairs`, the same
+    /// recorded-Callable-answer trick `cover_dest` uses for terrain.
+    ///
+    /// CAVEAT, stated rather than hidden: `state_after` is the end of the whole
+    /// activation, so on a node where the cast or a melee removed models the
+    /// centres have moved on again. `None` when the state carries no matrix.
+    pub fn cast_los(&self) -> Option<&[bool]> {
+        let m = self.state_after.los_pairs.as_ref()?;
+        let si = *self.state_after.roster.index.get(self.action.unit.as_str())?;
+        let n = self.state_after.units();
+        m.get(si * n..si * n + n)
+    }
+}
+
 #[derive(Debug)]
 pub struct NodeCorpus {
     pub profiles: Rc<Profiles>,

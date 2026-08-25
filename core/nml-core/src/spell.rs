@@ -134,7 +134,7 @@ pub fn spell_damage_ev(hits: i64, def: &Ctx, f: &Facets) -> f64 {
 }
 
 /// `BattleSim._spell_damage_ev_of` battle_sim.gd:802-809.
-fn spell_damage_ev_of(sp: &Spell, def: &Ctx) -> f64 {
+pub fn spell_damage_ev_of(sp: &Spell, def: &Ctx) -> f64 {
     if sp.effect_kind != "damage" {
         return 0.0;
     }
@@ -174,4 +174,14 @@ pub fn spell_ev_of(is_caster: bool, spells: &[Spell], tokens: i64, def: &Ctx, d:
         return (0.0, 0);
     }
     spell_ev_from(spells, tokens, def, d)
+}
+
+/// `AiSpell.official_pick_order` ai_spell.gd:305-312 — the book list rotated by
+/// the D3 face plus the caster's rating, then walked in order.
+pub fn official_pick_order(list_size: usize, d3: i64, caster_x: i64) -> Vec<usize> {
+    if list_size == 0 {
+        return Vec::new();
+    }
+    let start = ((d3.clamp(1, 3) + caster_x.max(0) - 1) as usize) % list_size;
+    (0..list_size).map(|i| (start + i) % list_size).collect()
 }
