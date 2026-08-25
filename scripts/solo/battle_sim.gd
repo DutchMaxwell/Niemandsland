@@ -40,6 +40,24 @@ static func cast_phase_enabled() -> bool:
 		_cast_env = 1 if (raw == "1" or raw == "on") else 0
 	return _cast_env == 1
 
+## NML-1073 M1-5 seam: NML_CORE="1" routes the rollout node to the Rust core
+## (the NmlCore GDExtension, core/nml_core.gdextension). Rule R1 — the library
+## is OPTIONAL: if it is missing or failed to load the class does not exist and
+## this returns false, so the GDScript path runs unchanged. Rule R2 — DEFAULT
+## OFF: without NML_CORE=1 nothing here is even asked. One warning, once, when
+## the seam was ASKED for and the library is absent; never an error, never a
+## warning on the default path.
+static var _core_env := -1
+static func core_enabled() -> bool:
+	if _core_env < 0:
+		var want := OS.get_environment("NML_CORE") == "1"
+		var have := ClassDB.class_exists("NmlCore")
+		if want and not have:
+			push_warning("[CORE] NML_CORE=1 but the NmlCore GDExtension is not loaded — "
+				+ "the GDScript BattleSim stays in charge (NML-1073 R1).")
+		_core_env = 1 if (want and have) else 0
+	return _core_env == 1
+
 # === Encoder board rows (v5 schema, NML-995) ==================================
 # ONE canonical source for the position-net input, used by BOTH the factory
 # (core_selfplay corpus) and the in-game encoder eval — a fork here would let
