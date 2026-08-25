@@ -32,6 +32,7 @@ func _init() -> void:
 	var passes := 3
 	var out_path := ""
 	var excl_path := ""
+	var skip_path := ""
 	for a in OS.get_cmdline_user_args():
 		var kv := a.split("=", true, 1)
 		if kv.size() != 2:
@@ -42,6 +43,22 @@ func _init() -> void:
 			"passes": passes = int(kv[1])
 			"out": out_path = kv[1]
 			"excl": excl_path = kv[1]
+			"skip": skip_path = kv[1]
+	# Nodes dropped on BOTH sides before anything is timed (1-based corpus line
+	# numbers, one per line) — the C6 set, so the two medians stay over the SAME
+	# node set when the cast-LOS asymmetry is measured out.
+	var skip := {}
+	if skip_path != "":
+		var sf := FileAccess.open(skip_path, FileAccess.READ)
+		if sf == null:
+			printerr("[BENCH] cannot open skip file ", skip_path)
+			quit(1)
+			return
+		while not sf.eof_reached():
+			var t := sf.get_line().strip_edges()
+			if t != "":
+				skip[int(t)] = true
+		sf.close()
 	var f := FileAccess.open(dir.path_join("nodes.jsonl"), FileAccess.READ)
 	if f == null:
 		printerr("[BENCH] cannot open ", dir.path_join("nodes.jsonl"))
@@ -60,6 +77,7 @@ func _init() -> void:
 	var players: PackedInt32Array = PackedInt32Array()
 	var riches: Array = []
 	var recorded: PackedFloat64Array = PackedFloat64Array()
+	var node_ids: PackedInt32Array = PackedInt32Array()
 	var excluded: PackedInt32Array = PackedInt32Array()
 	var line_no := 0
 	while line_no < n and not f.eof_reached():
@@ -73,14 +91,16 @@ func _init() -> void:
 		var action: Dictionary = _rebuild_action((rec as Dictionary)["action"])
 		var sb: Dictionary = (rec as Dictionary)["state_before"]
 		var kind := int(action.get("kind", -1))
-		if kind < 0 or kind > 3 or not (sb["units"] as Dictionary).has(str(action["unit"])):
-			excluded.append(line_no)   # no resolve branch for it — dropped on BOTH sides
+		if kind < 0 or kind > 3 or not (sb["units"] as Dictionary).has(str(action["unit"])) \
+				or skip.has(line_no):
+			excluded.append(line_no)   # no resolve branch for it, or the skip file names it
 			continue
 		states.append(_rebuild_state(sb, units_cache))
 		actions.append(action)
 		players.append(int((rec as Dictionary)["player"]))
 		riches.append(bool((rec as Dictionary).get("rich", false)))
 		recorded.append(float((rec as Dictionary)["score"]))
+		node_ids.append(line_no)
 	f.close()
 	var m := states.size()
 	if m == 0:
@@ -100,8 +120,17 @@ func _init() -> void:
 	var agree := 0
 	var max_diff := 0.0
 	var threat_pairs := 0
+	var cast_nodes := 0
+	var cast_ids: PackedInt32Array = PackedInt32Array()
 	for i in range(m):
 		var nx := BattleSim.resolve(states[i], actions[i])
+		# Firing signal = the TOKEN SPEND (battle_sim.gd:893), because the Rust
+		# port keeps no cast_events and both sides must count the same thing.
+		var _uk := str(actions[i]["unit"])
+		if int((nx["units"][_uk] as Dictionary).get("casts", 0)) \
+				!= int((states[i]["units"][_uk] as Dictionary).get("casts", 0)):
+			cast_nodes += 1
+			cast_ids.append(node_ids[i])
 		var s := 0.0
 		if riches[i]:
 			var inc := BattleSim.reply_threat(nx, players[i])
@@ -212,9 +241,11 @@ func _init() -> void:
 	print("[BENCH] env NML_SIM_SPACING=%s NML_SIM_CAST=%s -> spacing_enabled=%s cast_phase_enabled=%s" \
 		% [OS.get_environment("NML_SIM_SPACING"), OS.get_environment("NML_SIM_CAST"),
 			str(BattleSim.spacing_enabled()), str(BattleSim.cast_phase_enabled())])
+	print("[BENCH] skip_file=%s (%d ids)" % [skip_path, skip.size()])
 	print("[BENCH] nodes_read=%d measured=%d excluded=%d rich=%d" % [line_no, m, excluded.size(), n_rich])
 	print("[BENCH] score agreement with the recording: %d/%d within 1e-6, max diff %.9f" \
 		% [agree, m, max_diff])
+	print("[BENCH] cast sub-phase fired on %d/%d nodes" % [cast_nodes, m])
 	print("[BENCH] LOS-gate check   reply_threat volley pairs that pass sees()+los_clear: %d" % threat_pairs)
 	for i in range(pass_means.size()):
 		print("[BENCH]   pass %d mean %.0f us/node (wall/n)" % [i + 1, pass_means[i]])
@@ -251,9 +282,15 @@ func _init() -> void:
 			of.store_line("score_us %.4f" % t_score)
 			of.store_line("score_agree %d" % agree)
 			of.store_line("threat_pairs %d" % threat_pairs)
+			of.store_line("cast_nodes %d" % cast_nodes)
 			of.store_line("sim_move_bands_us %.4f" % t_bands)
 			of.store_line("sim_move_bands_calls_per_node %.2f" % (float(bands_calls) / float(m)))
 			of.close()
+		var cf := FileAccess.open(out_path + ".castids", FileAccess.WRITE)
+		if cf != null:
+			for i in cast_ids:
+				cf.store_line(str(i))
+			cf.close()
 	if sink == INF:
 		quit(3)
 		return

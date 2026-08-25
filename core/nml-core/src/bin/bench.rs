@@ -279,6 +279,22 @@ fn main() {
         std::process::exit(3);
     }
 
+    // ---- fairness counter: how often the cast sub-phase actually fired ----
+    let mut cast_nodes = 0usize;
+    let mut cast_ids: Vec<usize> = Vec::new();
+    for (k, &i) in idx.iter().enumerate() {
+        // The port does not keep `cast_events` (outside the M1-3 parity
+        // contract), so the firing signal is the TOKEN SPEND — the same one the
+        // GDScript bench counts (battle_sim.gd:893 `su["casts"] = tokens - cost`).
+        let node = &corpus.nodes[i];
+        if let Some(&si) = node.state_before.roster.index.get(node.action.unit.as_str()) {
+            if nexts[k].casts[si] != node.state_before.casts[si] {
+                cast_nodes += 1;
+                cast_ids.push(i + 1);
+            }
+        }
+    }
+
     // ---- fairness counter: how many volley pairs pass the LOS gate ----
     // (the GDScript bench prints the same number; if they differ, the two sides
     // are not doing the same work and the factor is not a factor)
@@ -336,11 +352,14 @@ fn main() {
     p!("  reply_threat        {t_threat:.0}   (rich nodes only, amortised over all)");
     p!("  score               {t_score:.0}");
     p!("  sum of parts        {:.0}", t_resolve + t_threat + t_score);
+    p!("cast sub-phase    fired on {cast_nodes}/{n} nodes");
     p!("LOS-gate check    reply_threat volley pairs that pass sees()+los_clear: {threat_pairs}");
     if sink == f64::MAX {
         std::process::exit(3);
     }
     if !out_path.is_empty() {
         let _ = std::fs::write(&out_path, out);
+        let ids: Vec<String> = cast_ids.iter().map(|i| i.to_string()).collect();
+        let _ = std::fs::write(format!("{out_path}.castids"), ids.join("\n"));
     }
 }
