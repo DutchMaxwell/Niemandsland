@@ -823,16 +823,22 @@ static func _spell_damage_ev_of(entry: Dictionary, def_ctx: Dictionary) -> float
 ##     whose damage EV is highest (nearest on a tie); a buff always lands on the
 ##     CASTER ITSELF — the friendly-unit choice the procedure leaves open, and
 ##     multi-target spells (target.count > 1) still resolve on one unit.
-##   * The attempt is not gated on the action kind or on Shaken (the engine
-##     plans a cast for every activation it runs).
-## Returns the cast event {spell, kind, cost, target, p_success}, or {} on a
-## HOLD (no tokens, no caster, no book, no valid spell) — a hold spends nothing.
+##   * The attempt is not gated on the ACTION KIND — the engine plans a cast for
+##     every activation it runs, Advance/Rush/Charge alike. Shaken IS gated (see
+##     the p.10 check below); that is the one activation the engine skips.
+## Returns the cast event {spell, kind, cost, target, p_success}, or {} on a HOLD
+## (Shaken, no tokens, no caster, no book, no valid spell) — a hold spends nothing.
 static func _cast_phase(next: Dictionary, actor_key: String,
 		rng: RandomNumberGenerator) -> Dictionary:
 	var units: Dictionary = next["units"]
 	if not units.has(actor_key):
 		return {}
 	var su: Dictionary = units[actor_key]
+	# GF v3.5.1 p.10: a Shaken unit spends its activation IDLE and never casts. Same gate the
+	# engine puts at the activation entry (solo_controller.gd:505, which builds the idle report
+	# without ever reaching _plan_casts; the aircraft variant returns at :2311 for the same reason).
+	if bool(su.get("shaken", false)):
+		return {}
 	var tokens := int(su.get("casts", 0))
 	if tokens <= 0 or int(su.get("alive", 0)) <= 0:
 		return {}

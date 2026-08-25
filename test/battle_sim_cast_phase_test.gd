@@ -159,3 +159,15 @@ func test_shooting_caster_casts_once_not_twice() -> void:
 		{"unit": "Wizard", "kind": AiDecision.Action.HOLD, "shoot": "Squad"})
 	assert_int((next.get("cast_events", []) as Array).size()).is_equal(1)
 	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(0)
+
+
+## (f) A SHAKEN caster spends its activation idle and casts nothing (GF v3.5.1
+## p.10). Same fixture as (a) — enemy 3" out, one affordable damage spell — so
+## the only difference is the flag: no token spent, no event, no wound.
+func test_shaken_caster_casts_nothing() -> void:
+	var state := _melee_caster_state(3.0)
+	(state["units"]["Wizard"] as Dictionary)["shaken"] = true
+	var next := _hold(state)
+	assert_int(int((next["units"]["Wizard"] as Dictionary)["casts"])).is_equal(1)
+	assert_array(next.get("cast_events", [])).is_empty()
+	assert_float(float((next["units"]["Squad"] as Dictionary).get("wound_frac", 0.0))).is_equal(0.0)
