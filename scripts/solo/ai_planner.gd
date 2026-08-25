@@ -473,17 +473,22 @@ static func _record_node(before: Dictionary, action: Dictionary, after: Dictiona
 	var f := _node_dump_stream()
 	if f == null or _node_dump_count >= _node_dump_max:
 		return
+	# full_precision=true (JSON.stringify's 4th arg): the M1-0 spec calls for positions at FULL
+	# precision — without this flag Godot truncates doubles to ~15 significant digits on write.
+	# Found during the M1-1 pre-check (coordinator ask): confirmed via round-trip test, but NOT
+	# the cause of that check's 63/200 score mismatches (re-verified unchanged after this fix) —
+	# kept as a real, independent spec-compliance bug; that mismatch's cause is still open.
 	if _node_dump_count == 0:
 		var profiles := {}
 		for key in before["units"]:
 			profiles[str(key)] = BattleSim._unit_profile((before["units"][key] as Dictionary)["unit"])
-		f.store_line(JSON.stringify({"profiles": profiles}))
+		f.store_line(JSON.stringify({"profiles": profiles}, "", true, true))
 	var a := action.duplicate()
 	if a.has("dest"):
 		a["dest"] = BattleSim._plain_vec3(a["dest"])
 	f.store_line(JSON.stringify({"state_before": BattleSim.state_to_plain(before, false),
 		"action": a, "state_after": BattleSim.state_to_plain(after, false),
-		"score": s, "player": player}))
+		"score": s, "player": player}, "", true, true))
 	_node_dump_count += 1
 	if _node_dump_count >= _node_dump_max:
 		f.close()
