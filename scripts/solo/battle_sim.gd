@@ -1281,6 +1281,25 @@ static func state_to_plain(state: Dictionary, with_profile := true) -> Dictionar
 	for k in ["vp", "vp_flavour", "vp_memo", "markers_meta", "destroy_seq"]:
 		if state.has(k):
 			out[k] = state[k]
+	# NML-1073 M1-2: the DYNAMIC sight answers. `_los_clear` (:666) probes the
+	# los_blocked Callable with the CURRENT unit centres, so a plain state that
+	# carries only positions cannot reproduce it — the Rust port would have to
+	# own the terrain grid. Recorded instead as the answers themselves: row i is
+	# one character per unit in iteration order, "1" = `_los_clear(state, i, j)`
+	# is true (line of fire is clear), "0" = blocked. Absent when the state has
+	# no los_blocked seam (then `_los_clear` returns true for every pair).
+	var lb: Callable = state.get("los_blocked", Callable())
+	if lb.is_valid():
+		var centres: Array = []
+		for uid in state["units"]:
+			centres.append(_centre_of(state["units"][uid]))
+		var rows: Array = []
+		for i in range(centres.size()):
+			var row := ""
+			for j in range(centres.size()):
+				row += "0" if bool(lb.call(centres[i], centres[j])) else "1"
+			rows.append(row)
+		out["los_pairs"] = rows
 	return out
 
 
@@ -1322,4 +1341,35 @@ static func _unit_profile(u: GameUnit) -> Dictionary:
 			if not u.models.is_empty() else SeparationChecker.DEFAULT_BASE_RADIUS_M,
 		"game_system": str(u.unit_properties.get("game_system", "")),
 		"faction_folder": str(u.unit_properties.get("faction_folder", "")),
+		# NML-1073 M1-2: the two remaining registry INPUTS the flat rule list
+		# does not carry. `item_grants` feeds RulesRegistry.unit_rules_of_
+		# primitive (rules_registry.gd:167-170, item-granted rules count as the
+		# unit's own); `attached_hero_rules` feeds AiEv.rule_on_all_models
+		# (ai_ev.gd:79-83), which withholds a rule when an ALIVE attached hero
+		# lacks it. Both are read at profile time, so a hero that dies later
+		# keeps voting — the same v0 gap the snapshot's static profile has for
+		# every other live read (documented, not silently dropped).
+		"item_grants": _granted_rules(u),
+		"attached_hero_rules": _attached_hero_rules(u),
 	}
+
+
+## Flattened item-granted rule names, in the iteration order rules_registry.gd:167
+## walks them (`item_grants.values()` then each list in order).
+static func _granted_rules(u: GameUnit) -> Array:
+	var out: Array = []
+	for granted_list in (u.unit_properties.get("item_grants", {}) as Dictionary).values():
+		for granted in granted_list:
+			out.append(str(granted))
+	return out
+
+
+## Special rules of every ALIVE attached hero — the quantifier AiEv.rule_on_all_models
+## (ai_ev.gd:79-83) evaluates before it lets a unit-wide rule fire.
+static func _attached_hero_rules(u: GameUnit) -> Array:
+	var out: Array = []
+	for h in u.get_attached_heroes():
+		var hero := h as GameUnit
+		if hero != null and hero.get_alive_count() > 0:
+			out.append(hero.get_special_rules())
+	return out

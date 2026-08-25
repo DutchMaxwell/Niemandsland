@@ -469,7 +469,7 @@ static func _node_dump_stream() -> FileAccess:
 
 
 static func _record_node(before: Dictionary, action: Dictionary, after: Dictionary,
-		s: float, player: int) -> void:
+		s: float, player: int, rich: bool) -> void:
 	var f := _node_dump_stream()
 	if f == null or _node_dump_count >= _node_dump_max:
 		return
@@ -486,9 +486,21 @@ static func _record_node(before: Dictionary, action: Dictionary, after: Dictiona
 	var a := action.duplicate()
 	if a.has("dest"):
 		a["dest"] = BattleSim._plain_vec3(a["dest"])
-	f.store_line(JSON.stringify({"state_before": BattleSim.state_to_plain(before, false),
+	# NML-1073 M1-2: the TERRAIN answer. resolve() re-probes the mover's cover at
+	# its destination through the terrain_at Callable (battle_sim.gd:594-596) —
+	# a plain state carries no terrain grid, so the answer is recorded as an
+	# input. It is the mover's post-move `in_cover`, which is exactly what that
+	# probe wrote; nothing else in resolve() touches the flag.
+	# NML-1073 M1-2: WHICH leaf priced this node. The rollout policy scores the
+	# planning side with the RICH leaf (score + BattleSim.reply_threat) and the
+	# imagined opponent with the CHEAP one (:508-510) — without the flag the
+	# corpus cannot say which, and a parity check would have to guess by seat.
+	var rec := {"state_before": BattleSim.state_to_plain(before, false),
 		"action": a, "state_after": BattleSim.state_to_plain(after, false),
-		"score": s, "player": player}, "", true, true))
+		"score": s, "player": player, "rich": rich}
+	if a.has("dest") and (after["units"] as Dictionary).has(action["unit"]):
+		rec["cover_dest"] = bool((after["units"][action["unit"]] as Dictionary).get("in_cover", false))
+	f.store_line(JSON.stringify(rec, "", true, true))
 	_node_dump_count += 1
 	if _node_dump_count >= _node_dump_max:
 		f.close()
@@ -513,7 +525,7 @@ static func _policy_step(state: Dictionary, player: int, rich := false) -> Dicti
 			var next := BattleSim.resolve(state, action)
 			var s := AiMissionEval.score(next, player, BattleSim.reply_threat(next, player)) \
 				if rich else AiMissionEval.score(next, player)
-			_record_node(state, action, next, s, player)
+			_record_node(state, action, next, s, player, rich)
 			if s > best_s:
 				best_s = s
 				best = action
