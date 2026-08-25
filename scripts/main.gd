@@ -1835,6 +1835,10 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 		push_warning("[AI ARENA] not ready — import + deploy armies first")
 		return
 	_solo_both_ai = true
+	# The spawn drop is a wall-clock animation of the very y the AI's line of sight reads — settle it
+	# before the first activation or two replicas of one seed start from different eye heights
+	# (NML-1073 M0-4, golden row 83).
+	opr_army_manager.settle_spawn_drop()
 	_ensure_solo_controller()
 	if solo_controller == null:
 		return
