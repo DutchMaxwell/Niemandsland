@@ -1,0 +1,22 @@
+; NML-1073 M1-5 — the OPTIONAL Rust rollout node (crate core/nml-core-godot).
+;
+; Rule R1 of record: this extension is optional. Godot loads it when the library
+; below exists; when it does not, ClassDB has no "NmlCore", BattleSim.core_enabled()
+; returns false and the GDScript path runs unchanged.
+;
+; LINUX x86_64 ONLY for now — the .so is built by hand with
+;   cargo build --release --manifest-path core/nml-core-godot/Cargo.toml
+; and is NOT committed. A Windows .dll (and a macOS .dylib) is a CI/packaging
+; question and stays out until the core ships — rule R3 keeps the release
+; pipeline independent of the Rust job.
+
+[configuration]
+
+entry_symbol = "gdext_rust_init"
+compatibility_minimum = 4.6
+reloadable = false
+
+[libraries]
+
+linux.debug.x86_64 = "res://core/nml-core-godot/target/release/libnml_core_godot.so"
+linux.release.x86_64 = "res://core/nml-core-godot/target/release/libnml_core_godot.so"
