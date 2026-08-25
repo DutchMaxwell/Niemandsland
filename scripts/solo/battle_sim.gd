@@ -1238,3 +1238,88 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 	if terrain_at.is_valid():   # absent key = pre-T2b snapshot, byte-identical
 		state["terrain_at"] = terrain_at
 	return state
+
+
+## NML-1073 M1-0: `state` as plain (JSON-safe) data — the node corpus contract
+## the Rust port replays against. Every DYNAMIC field of capture() verbatim
+## (positions as [x,y,z] full precision), plus one flattened STATIC "profile"
+## per unit — the GameUnit-read data resolve()/score() close over (enumerated
+## at _unit_profile below). One read per unit per call; no cache needed.
+const _UNIT_DYNAMIC := ["alive", "wounds", "radii", "in_cover", "shaken", "fatigued",
+	"activated", "casts", "mods", "mods_base", "aircraft", "ambush_arrived_round",
+	"player", "morale_bonus", "dormant", "dormant_models", "dormant_wounds",
+	"earliest_arrival_round", "wound_frac"]   # wound_frac: _apply_expected_wounds :1039/:1041
+## `with_profile` false skips the per-unit STATIC profile (identical on every
+## node of one game — a recorder that already wrote it once, e.g. NML-1073's
+## nodes.jsonl header line, passes false to save the recompute AND the bytes).
+static func state_to_plain(state: Dictionary, with_profile := true) -> Dictionary:
+	var units := {}
+	for uid in state["units"]:
+		var su: Dictionary = state["units"][uid]
+		var pu := {}
+		for k in _UNIT_DYNAMIC:
+			if su.has(k):
+				pu[k] = su[k]
+		pu["positions"] = _plain_vec3s(su.get("positions", []))
+		if su.has("los"):
+			pu["los"] = su["los"]
+		elif (state.get("los_at", Callable()) as Callable).is_valid():
+			var m := {}
+			for ok in state["units"]:
+				if ok != uid:
+					m[ok] = bool(state["los_at"].call(su["unit"], state["units"][ok]["unit"]))
+			pu["los"] = m
+		if with_profile:
+			pu["profile"] = _unit_profile(su["unit"])
+		units[uid] = pu
+	var out := {"round": state["round"], "rounds_total": state["rounds_total"],
+		"units": units, "scoring": state["scoring"]}
+	var obj: Array = []
+	for o in state.get("objectives", []):
+		obj.append({"pos": _plain_vec3((o as Dictionary)["pos"]), "owner": (o as Dictionary)["owner"]})
+	out["objectives"] = obj
+	for k in ["vp", "vp_flavour", "vp_memo", "markers_meta", "destroy_seq"]:
+		if state.has(k):
+			out[k] = state[k]
+	return out
+
+
+static func _plain_vec3(v: Vector3) -> Array:
+	return [v.x, v.y, v.z]
+
+
+static func _plain_vec3s(a: Array) -> Array:
+	var out: Array = []
+	for v in a:
+		out.append(_plain_vec3(v))
+	return out
+
+
+## The flattened STATIC data resolve/score read off a live GameUnit:
+## _profiles_of :714 (weapons, OPR-only gate mirrored here), _ctx_of/
+## AiEv.ctx_for :701/ai_ev.gd:135 + _below_half :1068 (quality/defense/tough/
+## wounds_max/special_rules), SoloController.sim_move_bands (move_bands),
+## RulesRegistry rules_registry.gd:113/:120 (game_system/faction_folder key
+## its lookups — not in the field-list wording, but read by every rule check).
+static func _unit_profile(u: GameUnit) -> Dictionary:
+	var weapons: Array = []
+	if u.source_type == "opr" and u.source_data is OPRApiClient.OPRUnit:
+		for w in (u.source_data as OPRApiClient.OPRUnit).weapons:
+			weapons.append({"name": w.name, "range": w.range_value, "attacks": w.attacks,
+				"count": w.count, "ap": AiShooting._ap_of(w), "rules": w.special_rules})
+	var wounds_max: Array = []
+	for m in u.models:
+		wounds_max.append((m as ModelInstance).wounds_max)
+	var bands := SoloController.sim_move_bands(u)
+	return {
+		"unit_id": u.unit_id, "name": u.get_name(), "quality": u.get_quality(),
+		"defense": u.get_defense(), "tough": maxi(AiEv.unit_rating(u, "Tough"), 1),
+		"wounds_max": wounds_max, "model_count": u.models.size(), "weapons": weapons,
+		"special_rules": u.get_special_rules(), "caster_value": u.get_caster_value(),
+		"move_bands": {"advance": float(bands.get("advance", 6)),
+			"rush": float(bands.get("rush", 12))},
+		"base_radius": SoloController.model_base_radius_m(u.models[0]) \
+			if not u.models.is_empty() else SeparationChecker.DEFAULT_BASE_RADIUS_M,
+		"game_system": str(u.unit_properties.get("game_system", "")),
+		"faction_folder": str(u.unit_properties.get("faction_folder", "")),
+	}

@@ -443,6 +443,52 @@ static func _cross_round(cur: Dictionary) -> int:
 	return int(players[0]) if not players.is_empty() else 0
 
 
+## NML-1073 M1-0: env NML_NODE_DUMP=<dir> appends every rollout node this loop
+## scores to <dir>/nodes.jsonl (the Rust port's plain-JSON contract). Unset
+## (default) never touches disk: byte-identical rollout. Stream opens ONCE and
+## stays open — one core_selfplay call plays exactly one game. NML_NODE_DUMP_MAX
+## (default 2000) caps the LINE count — a full game's node count is unbounded
+## and blew the shared /tmp quota once already; past the cap the game keeps
+## playing, it just stops writing. Line 1 is {"profiles": {key: profile}} —
+## the STATIC per-unit data, unchanging all game — written ONCE; every node
+## line after it carries only the DYNAMIC layer (state_to_plain(.., false)).
+static var _node_dump_file: FileAccess = null
+static var _node_dump_checked := false
+static var _node_dump_max := 2000
+static var _node_dump_count := 0
+static func _node_dump_stream() -> FileAccess:
+	if not _node_dump_checked:
+		_node_dump_checked = true
+		var dir := OS.get_environment("NML_NODE_DUMP")
+		if dir != "" and DirAccess.dir_exists_absolute(dir):
+			_node_dump_file = FileAccess.open(dir.path_join("nodes.jsonl"), FileAccess.WRITE)
+			var cap := OS.get_environment("NML_NODE_DUMP_MAX")
+			if cap != "":
+				_node_dump_max = maxi(int(cap), 0)
+	return _node_dump_file
+
+
+static func _record_node(before: Dictionary, action: Dictionary, after: Dictionary,
+		s: float, player: int) -> void:
+	var f := _node_dump_stream()
+	if f == null or _node_dump_count >= _node_dump_max:
+		return
+	if _node_dump_count == 0:
+		var profiles := {}
+		for key in before["units"]:
+			profiles[str(key)] = BattleSim._unit_profile((before["units"][key] as Dictionary)["unit"])
+		f.store_line(JSON.stringify({"profiles": profiles}))
+	var a := action.duplicate()
+	if a.has("dest"):
+		a["dest"] = BattleSim._plain_vec3(a["dest"])
+	f.store_line(JSON.stringify({"state_before": BattleSim.state_to_plain(before, false),
+		"action": a, "state_after": BattleSim.state_to_plain(after, false),
+		"score": s, "player": player}))
+	_node_dump_count += 1
+	if _node_dump_count >= _node_dump_max:
+		f.close()
+
+
 ## Rollout policy, one step: the best restricted move of `player`'s un-activated
 ## units. The OPPONENT is imagined with the CHEAP leaf (mission eval WITHOUT
 ## reply pricing — greedy is a conservative enemy model); OUR OWN side steps
@@ -462,6 +508,7 @@ static func _policy_step(state: Dictionary, player: int, rich := false) -> Dicti
 			var next := BattleSim.resolve(state, action)
 			var s := AiMissionEval.score(next, player, BattleSim.reply_threat(next, player)) \
 				if rich else AiMissionEval.score(next, player)
+			_record_node(state, action, next, s, player)
 			if s > best_s:
 				best_s = s
 				best = action
