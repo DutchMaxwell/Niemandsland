@@ -294,6 +294,10 @@ var objective_owner_of: Callable = Callable()
 
 var turn_manager: TurnManager = null
 var _rng := RandomNumberGenerator.new()
+## M0-2 (NML-1073): the controller-side rng tap is ON by default — every _draw_traced() call emits an
+## "rng" decision record alongside the die draw. env NML_TRACE=0 disables it (byte-identical games
+## either way), matching the M0-1 dice-tap guard in main.gd (_solo_dice_trace_enabled).
+var _rng_trace_enabled: bool = OS.get_environment("NML_TRACE") != "0"
 
 # === AI ARENA difficulty (policy knobs; see SoloDifficulty) ===
 ## Per-side difficulty presets: player-slot → SoloDifficulty. Empty ⇒ the DEFAULT AI (the human-vs-AI flow
@@ -977,7 +981,7 @@ func _select_ai_unit(eligible: Array) -> GameUnit:
 			west.append(u)
 		else:
 			east.append(u)
-	var roll_west: bool = _rng.randi_range(1, 6) <= 3
+	var roll_west: bool = _draw_traced(1, 6, "deploy_side") <= 3
 	var section: Array = west if roll_west else east
 	if section.is_empty():
 		section = east if roll_west else west   # rotate to the other section (rule: no eligible unit there)
@@ -1006,7 +1010,7 @@ func _select_ai_unit(eligible: Array) -> GameUnit:
 		if not large.is_empty() and large.size() < section.size():
 			section = large
 			large_first = true
-	var picked: GameUnit = section[_rng.randi_range(0, section.size() - 1)]
+	var picked: GameUnit = section[_draw_traced(0, section.size() - 1, "section_pick")]
 	record_decision({"kind": "pick", "unit": picked.get_name(),
 		"rule": "Solo v3.5.0: D6 section roll, random eligible; Shaken last; Counter last in section (p.57)",
 		"candidates": [], "chosen": picked.get_name(),
@@ -1599,7 +1603,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	if not bounding_rule.is_empty():
 		var bounding_in := float(bounding_plus)
 		for _d in bounding_dice:
-			bounding_in += float(_rng.randi_range(1, 3))
+			bounding_in += float(_draw_traced(1, 3, "bounding_d3"))
 		advance += bounding_in
 		rush += bounding_in
 		charge_reach += bounding_in
@@ -3662,7 +3666,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -
 		hold_out.append("no spell data for this faction — casting stays manual")
 		return {}
 	var caster_x: int = member.get_caster_value()
-	var d3: int = _rng.randi_range(1, 3)
+	var d3: int = _draw_traced(1, 3, "d3")
 	var order: Array = AiSpell.official_pick_order(spells.size(), d3, caster_x)
 	var diff := active_difficulty()
 	# Difficulty ladder (design table): Rekrut/default follow the official D3+X die exactly; Veteran
@@ -6922,6 +6926,16 @@ static func counter_models_of(unit: GameUnit) -> int:
 func prime_round_plan() -> void:
 	if active_difficulty() != null:
 		_plan_for_round()
+
+
+## M0-2 (NML-1073): the controller-side rng tap — draws _rng.randi_range(lo, hi) exactly as every call
+## site below already did, and (when tracing is on) appends an "rng" decision record. Write-only:
+## nothing downstream reads the record back, so the draw itself is unchanged whether tracing is on or off.
+func _draw_traced(lo: int, hi: int, tag: String) -> int:
+	var v: int = _rng.randi_range(lo, hi)
+	if _rng_trace_enabled:
+		record_decision({"kind": "rng", "tag": tag, "value": v, "lo": lo, "hi": hi})
+	return v
 
 
 func record_decision(rec: Dictionary) -> void:
