@@ -339,6 +339,10 @@ var _solo_dev: bool = false                  # developer mode: render the AI's d
 ## Per-activation stderr trace of the both-AI arena loop (env NML_AI_TRACE=1) — the ladder tooling's
 ## progress/stall diagnostic for long unattended headless matches. Off by default: zero output in normal play.
 var _solo_arena_trace: bool = OS.get_environment("NML_AI_TRACE") == "1"
+## M0-1 (NML-1073): the dice tap is ON by default — every _solo_tray_roll() emits a "dice" decision
+## record once faces are known. env NML_TRACE=0 disables it (byte-identical games either way).
+var _solo_dice_trace_enabled: bool = OS.get_environment("NML_TRACE") != "0"
+var _solo_dice_seq: int = 0   # M0-1 (NML-1073): running index stamped on each "dice" decision record
 ## Harness seam (arena per-activation captures, NML_CAPTURE_ACTS): awaited AFTER an activation has
 ## fully RESOLVED. A screenshot hung on ai_unit_activated instead lands mid-choreography — that signal
 ## fires while the controller has already applied the final positions, and _solo_present_move_start()
@@ -7129,6 +7133,13 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 		await dice_roller_control.roll_finnished
 		await _solo_pace_hold(SoloController.Pace.RESOLVE)
 	var faces: Array = _faces_in_order(dice_roller_control.per_dice_result())
+	# M0-1 (NML-1073): tap the tray — one "dice" decision record per roll, both paths above converge
+	# here with `faces` known. Write-only; nothing downstream reads this back, so the roll itself is
+	# unchanged (byte-identical battlelog/moves) whether the tap is on or off.
+	if solo_controller != null and _solo_dice_trace_enabled:
+		_solo_dice_seq += 1
+		solo_controller.record_decision({"kind": "dice", "seq": _solo_dice_seq, "roll_kind": roll_kind,
+			"owner": owner, "target": success_target, "count": count, "faces": faces})
 	_dice_count = prev_count
 	_update_dice_set(prev_count)
 	_success_target = prev_target
