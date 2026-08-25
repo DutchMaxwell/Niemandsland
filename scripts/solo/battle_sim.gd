@@ -16,6 +16,17 @@ const IN2M := 0.0254
 ## simulation (that is S4). Set only via resolve_stochastic().
 static var stochastic_rng: RandomNumberGenerator = null
 
+## NML-1068 A/B seam: NML_SIM_SPACING="1"/"on" makes resolve() honour the
+## unit-spacing no-go rule (mirrors SoloController._spacing_zones_world) when
+## it translates a mover's positions; unset/anything else leaves resolve
+## byte-identical to today — the planner substrate keeps its shipped rollouts
+## until a never-worse A/B promotes the rule.
+static var _spacing_env := -1
+static func spacing_enabled() -> bool:
+	if _spacing_env < 0:
+		var raw := OS.get_environment("NML_SIM_SPACING")
+		_spacing_env = 1 if (raw == "1" or raw == "on") else 0
+	return _spacing_env == 1
 
 # === Encoder board rows (v5 schema, NML-995) ==================================
 # ONE canonical source for the position-net input, used by BOTH the factory
@@ -476,6 +487,64 @@ static func clone_state(state: Dictionary) -> Dictionary:
 	return out
 
 
+## NML-1068: the largest fraction t in [0,1] of `delta` that leaves every mover
+## model clear of every OTHER alive unit's alive models (no-go disc radius =
+## other model radius + UNIT_SPACING_IN + mover model radius, horizontal
+## distance only — the control_gap_in convention). The engine forbids ENDING
+## inside a no-go disc, never merely leaving one — deployment in the trainer
+## has no spacing rule, so a captured state may legally start with units
+## overlapping. (1) t=1 legal -> 1.0, regardless of the start. (2) else, start
+## (t=0) legal -> an 8-step binary search (monotone: legality can only lapse
+## as t grows away from a clear start). (3) else (start AND full move both
+## illegal, no monotone guarantee — the path may cross clear ground) -> a
+## descending 8-point sample t=1.0,0.875,...,0.125, largest legal wins, 0.0 if
+## none are. Radii come from the snapshot, falling back to the shared default
+## base radius when absent.
+static func _spacing_fraction(next: Dictionary, mover_key: String, positions: Array,
+		mover_radii: Array, delta: Vector3) -> float:
+	if delta.length_squared() <= 0.0:
+		return 1.0
+	var buffer_m := SoloController.UNIT_SPACING_IN * IN2M
+	var obstacles: Array = []   # {"c": Vector3, "r": float} per other alive model
+	for key in next["units"]:
+		if key == mover_key:
+			continue
+		var ou: Dictionary = next["units"][key]
+		var o_positions: Array = ou.get("positions", [])
+		var o_radii: Array = ou.get("radii", [])
+		for oi in range(o_positions.size()):
+			var o_r: float = float(o_radii[oi]) if oi < o_radii.size() else SeparationChecker.DEFAULT_BASE_RADIUS_M
+			obstacles.append({"c": o_positions[oi], "r": o_r + buffer_m})
+	if obstacles.is_empty():
+		return 1.0
+	var legal := func(t: float) -> bool:
+		for i in range(positions.size()):
+			var own_r: float = float(mover_radii[i]) if i < mover_radii.size() else SeparationChecker.DEFAULT_BASE_RADIUS_M
+			var p: Vector3 = (positions[i] as Vector3) + delta * t
+			for ob in obstacles:
+				var oc: Vector3 = ob["c"]
+				if Vector3(p.x - oc.x, 0.0, p.z - oc.z).length() < float(ob["r"]) + own_r:
+					return false
+		return true
+	if legal.call(1.0):
+		return 1.0
+	if legal.call(0.0):
+		var lo := 0.0
+		var hi := 1.0
+		for _i in range(8):
+			var mid := (lo + hi) * 0.5
+			if legal.call(mid):
+				lo = mid
+			else:
+				hi = mid
+		return lo
+	for i in range(8):
+		var t: float = 1.0 - float(i) * 0.125
+		if legal.call(t):
+			return t
+	return 0.0
+
+
 ## Resolves one activation IN EXPECTATION on a cloned state and returns it.
 ## action: {"unit": key, "kind": AiDecision.Action, "dest": Vector3 (optional
 ## move goal for the unit centre)}. Movement v0 (plan D4): the whole unit
@@ -501,6 +570,9 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 		var reach_m := band_in * IN2M
 		if delta.length() > reach_m:
 			delta = delta.normalized() * reach_m
+		# NML-1068: RUSH and CHARGE share this same translation — one clamp covers both.
+		if spacing_enabled():
+			delta *= _spacing_fraction(next, action["unit"], positions, su.get("radii", []), delta)
 		for i in range(positions.size()):
 			positions[i] = (positions[i] as Vector3) + delta
 		var terrain_at: Callable = next.get("terrain_at", Callable())
