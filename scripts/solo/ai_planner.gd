@@ -449,9 +449,10 @@ static func _cross_round(cur: Dictionary) -> int:
 ## stays open — one core_selfplay call plays exactly one game. NML_NODE_DUMP_MAX
 ## (default 2000) caps the LINE count — a full game's node count is unbounded
 ## and blew the shared /tmp quota once already; past the cap the game keeps
-## playing, it just stops writing. Line 1 is {"profiles": {key: profile}} —
-## the STATIC per-unit data, unchanging all game — written ONCE; every node
-## line after it carries only the DYNAMIC layer (state_to_plain(.., false)).
+## playing, it just stops writing. Line 1 is {"profiles": {key: profile},
+## "seams": {spacing, cast}} — the STATIC per-unit data plus the A/B seam
+## settings resolve() branched on, unchanging all game — written ONCE; every
+## node line after it carries only the DYNAMIC layer (state_to_plain(.., false)).
 static var _node_dump_file: FileAccess = null
 static var _node_dump_checked := false
 static var _node_dump_max := 2000
@@ -482,7 +483,13 @@ static func _record_node(before: Dictionary, action: Dictionary, after: Dictiona
 		var profiles := {}
 		for key in before["units"]:
 			profiles[str(key)] = BattleSim._unit_profile((before["units"][key] as Dictionary)["unit"])
-		f.store_line(JSON.stringify({"profiles": profiles}, "", true, true))
+		# NML-1073 M1-3: WHICH A/B seams were live while this corpus was played.
+		# resolve() branches on them (battle_sim.gd:590-592 spacing, :604 cast),
+		# so a corpus that does not say which were on cannot be replayed by the
+		# Rust port without guessing — the M1-2 corpus had to be probed for it.
+		f.store_line(JSON.stringify({"profiles": profiles,
+			"seams": {"spacing": BattleSim.spacing_enabled(),
+				"cast": BattleSim.cast_phase_enabled()}}, "", true, true))
 	var a := action.duplicate()
 	if a.has("dest"):
 		a["dest"] = BattleSim._plain_vec3(a["dest"])
