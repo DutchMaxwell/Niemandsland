@@ -343,6 +343,11 @@ var _solo_arena_trace: bool = OS.get_environment("NML_AI_TRACE") == "1"
 ## record once faces are known. env NML_TRACE=0 disables it (byte-identical games either way).
 var _solo_dice_trace_enabled: bool = OS.get_environment("NML_TRACE") != "0"
 var _solo_dice_seq: int = 0   # M0-1 (NML-1073): running index stamped on each "dice" decision record
+## NML-1076 (M0-0c): the tray's OWN RNG, isolated from the global stream cosmetic terrain/prop
+## placement also draws from — a cold asset-cache fetch racing the global stream could shift the
+## dice a seeded game rolls. randomize()d once at startup; arena_match.gd reseeds it deterministically
+## via seed_tray_rng() after deployment (see that call site for why the global seed() call stays too).
+var _tray_rng := RandomNumberGenerator.new()
 ## Harness seam (arena per-activation captures, NML_CAPTURE_ACTS): awaited AFTER an activation has
 ## fully RESOLVED. A screenshot hung on ai_unit_activated instead lands mid-choreography — that signal
 ## fires while the controller has already applied the final positions, and _solo_present_move_start()
@@ -419,6 +424,10 @@ var _import_await_guard := ImportAwaitGuard.new()
 
 
 func _ready() -> void:
+	# NML-1076 (M0-0c): normal play randomizes the tray's own RNG once at startup; the arena
+	# overrides this via seed_tray_rng() after deployment for a reproducible dice stream.
+	_tray_rng.randomize()
+
 	# Debanding dithers the final frame, smoothing the dark space gradient so it shows
 	# no banding "segments".
 	get_viewport().use_debanding = true
@@ -7090,6 +7099,14 @@ func _solo_combined_alive(unit: GameUnit) -> int:
 	return SoloController.combined_alive(unit)
 
 
+## NML-1076 (M0-0c): reseed the tray's own RNG. arena_match.gd calls this after deployment
+## (alongside its global seed(_dice_seed), which stays so cosmetic terrain/prop placement replays
+## as before) so the tray's dice stream no longer shares state with — and can no longer be shifted
+## by — the global RNG cosmetics draw from.
+func seed_tray_rng(seed_value: int) -> void:
+	_tray_rng.seed = seed_value
+
+
 ## One attributed roll in the real dice tray: set count + success target, roll, await, read the faces,
 ## then restore the player's previous tray settings.
 func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: String = "attack",
@@ -7117,13 +7134,14 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 	_update_success_controls_display()
 	_next_roll_owner = owner
 	if _solo_batch:
-		# Headless sweeps: skip the physics settle entirely. Draw fair faces from the SAME global RNG
-		# stream that seeds the physics tray (seed(dice_seed), set post-deploy by the arena), then push
-		# them through show_faces() — which fills per_dice_result() and emits roll_finnished synchronously.
+		# Headless sweeps: skip the physics settle entirely. Draw fair faces from the tray's OWN
+		# RNG (NML-1076/M0-0c: seeded via seed_tray_rng(), set post-deploy by the arena — no longer
+		# the global stream cosmetic terrain/prop placement also draws from), then push them through
+		# show_faces() — which fills per_dice_result() and emits roll_finnished synchronously.
 		# ~20× faster at 2000pts, identical uniform 1-6 distribution, deterministic per dice_seed.
 		var _inst: Array[int] = []
 		for _di in maxi(1, count):
-			_inst.append(randi_range(1, 6))
+			_inst.append(_tray_rng.randi_range(1, 6))
 		dice_roller_control.show_faces(_inst)
 	else:
 		dice_roller_control.roll()

@@ -467,7 +467,11 @@ func _run() -> void:
 	# seed, deployment under its per-slot seeds, AI pick/D3 under solo._rng = seed). The only remaining
 	# global-RNG consumer during the rounds is the dice tray, so re-seeding here isolates "the dice" as an
 	# independent stream: same seed + different dice_seed ⇒ identical board/deploy, different game course.
+	# NML-1076 (M0-0c): the tray now draws from its own RNG (seed_tray_rng), no longer this global one —
+	# seed(_dice_seed) stays so cosmetic terrain/prop placement (which DOES still draw from the global
+	# RNG) replays exactly as before this fix.
 	seed(_dice_seed)
+	main.seed_tray_rng(_dice_seed)
 
 	# Run the whole match unattended to the SOLO_GAME_ROUNDS scoring end, opened by the roll-off winner.
 	army_manager.current_round = 1
