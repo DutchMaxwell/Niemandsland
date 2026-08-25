@@ -59,6 +59,16 @@ pub struct Profile {
     pub game_system: String,
     #[serde(default)]
     pub faction_folder: String,
+    /// Item-granted rule names, flattened in `item_grants.values()` order —
+    /// `RulesRegistry.unit_rules_of_primitive` rules_registry.gd:167-170 counts
+    /// them as the unit's own.
+    #[serde(default)]
+    pub item_grants: Vec<String>,
+    /// The special rules of every ALIVE attached hero — the quantifier
+    /// `AiEv.rule_on_all_models` (ai_ev.gd:79-83) evaluates before a unit-wide
+    /// rule may fire.
+    #[serde(default)]
+    pub attached_hero_rules: Vec<Vec<String>>,
     /// `SoloController.sim_move_bands(unit)` — the only live read left in
     /// `AiMissionEval._presence` (ai_mission_eval.gd:610), static per unit.
     #[serde(default)]
@@ -191,6 +201,13 @@ pub struct State {
     pub mods: Vec<Mods>,
     pub mods_base: Vec<Rc<Mods>>,
     pub los: Vec<Option<Rc<HashMap<String, bool>>>>,
+    /// `BattleSim._los_clear` (battle_sim.gd:666-670) answers for this state, as
+    /// a row-major n x n matrix in capture order: `los_pairs[i * n + j]` is true
+    /// when the line of fire from unit i to unit j is clear. `None` = the state
+    /// carried no `los_blocked` seam, and `_los_clear` then returns true for
+    /// every pair. Shared across clones because it is never rewritten — see the
+    /// staleness note on `sim::resolve`.
+    pub los_pairs: Option<Rc<Vec<bool>>>,
 }
 
 impl State {

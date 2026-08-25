@@ -108,6 +108,11 @@ struct PlainState {
     vp_memo: Option<serde_json::Value>,
     #[serde(default)]
     cast_events: Vec<serde_json::Value>,
+    /// One string per unit in capture order, one character per unit: "1" = the
+    /// line of fire is clear (`BattleSim._los_clear`). Written by
+    /// `BattleSim.state_to_plain`; absent when the state has no los_blocked seam.
+    #[serde(default)]
+    los_pairs: Option<Vec<String>>,
 }
 
 /// One rollout action — `AiPlanner._policy_candidates` ai_planner.gd:517-545.
@@ -133,6 +138,14 @@ struct PlainNode {
     state_after: PlainState,
     score: f64,
     player: i64,
+    /// The mover's cover at its destination — `resolve`'s recorded `terrain_at`
+    /// answer; absent on a node whose action has no dest.
+    #[serde(default)]
+    cover_dest: Option<bool>,
+    /// Which leaf priced this node: RICH (`score + reply_threat`) or CHEAP
+    /// (`score` alone) — `AiPlanner._policy_step` ai_planner.gd:508-510.
+    #[serde(default)]
+    rich: bool,
 }
 
 #[derive(Debug)]
@@ -143,6 +156,10 @@ pub struct Node {
     /// The score `AiMissionEval.score` returned for `state_after` in the game.
     pub score: f64,
     pub player: i64,
+    /// `resolve`'s terrain answer for this node; `None` when the action has no dest.
+    pub cover_dest: Option<bool>,
+    /// True when the recorded score carries the reply threat (the RICH leaf).
+    pub rich: bool,
 }
 
 #[derive(Debug)]
@@ -214,6 +231,15 @@ fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Roster>) -> S
         mods: Vec::with_capacity(n),
         mods_base: Vec::with_capacity(n),
         los: Vec::with_capacity(n),
+        los_pairs: plain.los_pairs.as_ref().map(|rows| {
+            let mut m = Vec::with_capacity(n * n);
+            for r in rows {
+                for c in r.chars() {
+                    m.push(c == '1');
+                }
+            }
+            Rc::new(m)
+        }),
     };
     for (_, u) in plain.units.0 {
         st.player.push(u.player);
@@ -283,6 +309,8 @@ pub fn read_nodes<R: BufRead>(reader: R, origin: &str) -> Result<NodeCorpus, Str
             state_after: state_of(pn.state_after, &profiles, ra),
             score: pn.score,
             player: pn.player,
+            cover_dest: pn.cover_dest,
+            rich: pn.rich,
         });
     }
     Ok(NodeCorpus { profiles, nodes })

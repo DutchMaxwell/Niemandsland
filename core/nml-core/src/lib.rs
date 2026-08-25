@@ -5,9 +5,15 @@
 //! corpus written by `AiPlanner._record_node` is the contract between the two.
 //! Every ported function names its GDScript origin as `file:line`.
 
+pub mod combat;
+pub mod geom;
 pub mod io;
+pub mod rules;
 pub mod score;
+pub mod sim;
+pub mod spell;
 pub mod state;
+pub mod unit;
 
 /// `BattleSim.IN2M` — battle_sim.gd:11. Table units are metres, the book is inches.
 pub const IN2M: f64 = 0.0254;
@@ -20,6 +26,22 @@ pub const DISCOUNT: f64 = 0.5;
 /// `AiMissionEval.DESTROY_DEFENCE_WEIGHT` — ai_mission_eval.gd:410.
 pub const DESTROY_DEFENCE_WEIGHT: f64 = 0.8;
 
-pub use io::{load_nodes, read_nodes, Node, NodeCorpus};
+pub use io::{load_nodes, read_nodes, Action, Node, NodeCorpus};
+pub use rules::Registries;
 pub use score::{can_hold_marker, control_gap_in, presence, score, Incoming, NO_INCOMING};
+pub use sim::{reply_threat, resolve, Unsupported, ADVANCE, CHARGE, HOLD, RUSH};
 pub use state::{Marker, Mods, Objective, Profile, Profiles, State, Weapon};
+pub use unit::{Unimplemented, UnitStatic};
+
+/// Builds the per-unit static closure for a whole corpus, in profile-table order.
+/// `repo_root` is the checkout the mechanics assets are read from
+/// (`assets/solo/rules_mechanics_<system>.json`, `spells_mechanics_<system>.json`).
+pub fn build_statics(corpus: &NodeCorpus, repo_root: &str) -> Vec<UnitStatic> {
+    let mut reg = Registries::new(repo_root);
+    corpus
+        .profiles
+        .list
+        .iter()
+        .map(|p| UnitStatic::build(&mut reg, p))
+        .collect()
+}
