@@ -1,0 +1,41 @@
+name: Rust (advisory)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  rust:
+    name: Build and test core crates
+    runs-on: ubuntu-latest
+    # Advisory only: the crates aren't wired into the release build yet, so a
+    # failure here must not block main. Flip once they ship (NML-1073 R3).
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            core/nml-core
+            core/nml-core-godot
+            core/nml-core-py
+
+      - name: Test nml-core
+        run: cargo test --manifest-path core/nml-core/Cargo.toml --release
+
+      - name: Build nml-core-godot
+        run: cargo build --manifest-path core/nml-core-godot/Cargo.toml --release
+
+      - name: Check nml-core-py
+        run: cargo check --manifest-path core/nml-core-py/Cargo.toml
+        env:
+          PYO3_PYTHON: python3
