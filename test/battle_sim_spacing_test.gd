@@ -136,3 +136,71 @@ func test_seam_on_start_and_destination_both_blocked_picks_the_open_middle() -> 
 	for bp in (next["units"]["Blocker"] as Dictionary)["positions"]:
 		var gap_in: float = (mp - (bp as Vector3)).length() / IN2M - 2.0 * r_in
 		assert_float(gap_in).is_greater_equal(0.0)
+
+
+## NML-1073 S1: the CHARGE target gets a body-only (buffer 0.0) disc — GF
+## Advanced Rules v3.5.1 p.7's "may ignore that [1"] restriction" toward base
+## contact with ONE enemy unit. Pre-fix every other unit (including a charge
+## victim) keeps the full UNIT_SPACING_IN buffer, so the mover stops ~1" short
+## (RED); post-fix the charge target is body-only, so the mover reaches base
+## contact (GREEN).
+func test_a_charge_may_end_the_mover_in_base_contact_with_its_target() -> void:
+	OS.set_environment("NML_SIM_SPACING", "1")
+	_reset_spacing_cache()
+	var mover := _unit_at(1, [Vector3.ZERO], "Mover")
+	var blocker := _unit_at(2, [Vector3(6.0 * IN2M, 0, 0)], "Blocker")
+	var state := _capture(mover, blocker)
+	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(6.0 * IN2M, 0, 0), "charge": "Blocker"})
+	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
+	var bp: Vector3 = (next["units"]["Blocker"] as Dictionary)["positions"][0]
+	var gap_m: float = (mp - bp).length() - 2.0 * SeparationChecker.DEFAULT_BASE_RADIUS_M
+	assert_float(gap_m).is_less(0.001)
+
+
+## Guard against over-exemption: a RUSH (not a Charge) toward the same point
+## must still respect the full UNIT_SPACING_IN buffer against the same unit —
+## the exemption is charge-target-only, never a general "ignore everyone" seam.
+## GREEN both before and after this fix (no behaviour change for non-charges).
+func test_a_rush_toward_the_same_point_still_keeps_the_spacing_buffer() -> void:
+	OS.set_environment("NML_SIM_SPACING", "1")
+	_reset_spacing_cache()
+	var mover := _unit_at(1, [Vector3.ZERO], "Mover")
+	var blocker := _unit_at(2, [Vector3(6.0 * IN2M, 0, 0)], "Blocker")
+	var state := _capture(mover, blocker)
+	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
+		"dest": Vector3(6.0 * IN2M, 0, 0)})
+	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
+	var bp: Vector3 = (next["units"]["Blocker"] as Dictionary)["positions"][0]
+	var r_in := SeparationChecker.DEFAULT_BASE_RADIUS_M / IN2M
+	var gap_in: float = (mp - bp).length() / IN2M - 2.0 * r_in
+	assert_float(gap_in).is_greater_equal(SoloController.UNIT_SPACING_IN - 0.01)
+
+
+func _capture_with_hero(mover: GameUnit, hero: GameUnit) -> Dictionary:
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Mover": mover, "Hero": hero}
+	return BattleSim.capture(army)
+
+
+## NML-1073 S1: an attached hero moves as part of its host's body, so it must
+## never obstruct the host's own move — mirrors SoloController._spacing_
+## zones_world's "mover + its attached heroes are exempt entirely". Pre-fix
+## the hero is just another unit's model sitting on top of the mover's start,
+## so even a short move stays inside its no-go disc the whole way (RED, t=0.0
+## — none of the fast-path/bisection/8-point-sample candidates are legal).
+## Post-fix the hero is skipped as an obstacle entirely, leaving no obstacle
+## at all, so the move goes through in full (GREEN).
+func test_an_attached_hero_does_not_block_its_hosts_rush() -> void:
+	OS.set_environment("NML_SIM_SPACING", "1")
+	_reset_spacing_cache()
+	var mover := _unit_at(1, [Vector3.ZERO], "Mover")
+	var hero := _unit_at(1, [Vector3.ZERO], "Hero")
+	hero.unit_properties["attached_to"] = mover
+	mover.unit_properties["attached_heroes"] = [hero]
+	var state := _capture_with_hero(mover, hero)
+	var dest := Vector3(1.0 * IN2M, 0, 0)
+	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
+		"dest": dest})
+	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
+	assert_that(mp).is_equal(dest)

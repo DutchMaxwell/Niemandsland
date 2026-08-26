@@ -524,6 +524,23 @@ static func clone_state(state: Dictionary) -> Dictionary:
 	return out
 
 
+## A unit's own key plus its attached heroes' keys plus its host's key (if
+## any) — the set that moves/ends as one body for spacing purposes (mirrors
+## SoloController._spacing_zones_world's "own unit + its attached heroes"
+## exemption, NML-1073 S1). Returns a Dictionary used as a key set.
+static func _unit_group(next: Dictionary, key: String) -> Dictionary:
+	var group := {key: true}
+	if not next["units"].has(key):
+		return group
+	var su: Dictionary = next["units"][key]
+	for hk in su.get("attached", []):
+		group[str(hk)] = true
+	var host_key := str(su.get("attached_to", ""))
+	if host_key != "":
+		group[host_key] = true
+	return group
+
+
 ## NML-1068: the largest fraction t in [0,1] of `delta` that leaves every mover
 ## model clear of every OTHER alive unit's alive models (no-go disc radius =
 ## other model radius + UNIT_SPACING_IN + mover model radius, horizontal
@@ -537,21 +554,34 @@ static func clone_state(state: Dictionary) -> Dictionary:
 ## descending 8-point sample t=1.0,0.875,...,0.125, largest legal wins, 0.0 if
 ## none are. Radii come from the snapshot, falling back to the shared default
 ## base radius when absent.
+## NML-1073 S1: `charge_key` (the CHARGE victim, if any) mirrors the table's
+## no-go zones — the mover and its attached heroes are exempt entirely (no
+## obstacle at all), reserve (dormant) and Aircraft units are skipped, and the
+## charge target (plus ITS attached heroes) gets a body-only (buffer 0.0) disc
+## so a charge may end in base contact — every other unit keeps the full
+## UNIT_SPACING_IN buffer. GF Advanced Rules v3.5.1 p.7: models may never be
+## within 1" of models from other units unless taking a Charge action, which
+## may ignore that restriction toward base contact with ONE enemy unit.
 static func _spacing_fraction(next: Dictionary, mover_key: String, positions: Array,
-		mover_radii: Array, delta: Vector3) -> float:
+		mover_radii: Array, delta: Vector3, charge_key: String = "") -> float:
 	if delta.length_squared() <= 0.0:
 		return 1.0
 	var buffer_m := SoloController.UNIT_SPACING_IN * IN2M
+	var mover_group := _unit_group(next, mover_key)
+	var target_group := _unit_group(next, charge_key) if charge_key != "" else {}
 	var obstacles: Array = []   # {"c": Vector3, "r": float} per other alive model
 	for key in next["units"]:
-		if key == mover_key:
+		if mover_group.has(key):
 			continue
 		var ou: Dictionary = next["units"][key]
+		if bool(ou.get("dormant", false)) or bool(ou.get("aircraft", false)):
+			continue
+		var o_buffer := 0.0 if target_group.has(key) else buffer_m
 		var o_positions: Array = ou.get("positions", [])
 		var o_radii: Array = ou.get("radii", [])
 		for oi in range(o_positions.size()):
 			var o_r: float = float(o_radii[oi]) if oi < o_radii.size() else SeparationChecker.DEFAULT_BASE_RADIUS_M
-			obstacles.append({"c": o_positions[oi], "r": o_r + buffer_m})
+			obstacles.append({"c": o_positions[oi], "r": o_r + o_buffer})
 	if obstacles.is_empty():
 		return 1.0
 	var legal := func(t: float) -> bool:
@@ -609,7 +639,8 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			delta = delta.normalized() * reach_m
 		# NML-1068: RUSH and CHARGE share this same translation — one clamp covers both.
 		if spacing_enabled():
-			delta *= _spacing_fraction(next, action["unit"], positions, su.get("radii", []), delta)
+			delta *= _spacing_fraction(next, action["unit"], positions, su.get("radii", []), delta,
+				str(action.get("charge", "")))
 		for i in range(positions.size()):
 			positions[i] = (positions[i] as Vector3) + delta
 		var terrain_at: Callable = next.get("terrain_at", Callable())
@@ -1175,9 +1206,21 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 				# holds the marker). Without this the sim's ring is a base
 				# radius too tight and it scores a rule the game does not have.
 				radii.append(SoloController.model_base_radius_m(m as ModelInstance))
+		# NML-1073 S1: attachment as snapshot KEYS (not GameUnit refs — the plain-state
+		# encoder can't carry object references) — lets _spacing_fraction exempt a
+		# mover's own attached heroes the same way SoloController._spacing_zones_world
+		# already does on the table.
+		var attached: Array = []
+		for hero in u.get_attached_heroes():
+			if hero is GameUnit:
+				attached.append((hero as GameUnit).unit_id)
+		var attached_to_u: Variant = u.get_attached_to()
+		var attached_to: String = (attached_to_u as GameUnit).unit_id if attached_to_u is GameUnit else ""
 		units[uid] = {
 			"unit": u,
 			"radii": radii,
+			"attached": attached,
+			"attached_to": attached_to,
 			# Neither can seize or contest: an Aircraft ever, a unit that
 			# arrived from Ambush in the CURRENT round (GF/AoF v3.5.1 p.13).
 			# The arrival ROUND is captured, not a precomputed boolean, because
@@ -1267,7 +1310,8 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 const _UNIT_DYNAMIC := ["alive", "wounds", "radii", "in_cover", "shaken", "fatigued",
 	"activated", "casts", "mods", "mods_base", "aircraft", "ambush_arrived_round",
 	"player", "morale_bonus", "dormant", "dormant_models", "dormant_wounds",
-	"earliest_arrival_round", "wound_frac"]   # wound_frac: _apply_expected_wounds :1039/:1041
+	"earliest_arrival_round", "wound_frac",   # wound_frac: _apply_expected_wounds :1039/:1041
+	"attached", "attached_to"]   # NML-1073 S1: capture()'s attachment keys, verbatim
 ## `with_profile` false skips the per-unit STATIC profile (identical on every
 ## node of one game — a recorder that already wrote it once, e.g. NML-1073's
 ## nodes.jsonl header line, passes false to save the recompute AND the bytes).
