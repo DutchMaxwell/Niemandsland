@@ -3001,12 +3001,18 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 		var su: Dictionary = state["units"][k]
 		if int(su["player"]) == me and not pool.has(su["unit"]):
 			su["activated"] = true
+	# NML-1073 M2-0a: env NML_ACT_DUMP=<dir> records this activation's FULL
+	# input + the pick it returns (acts.jsonl) — the Rust port's per-
+	# activation contract. Unset (default) = begin() returns {} and finish()
+	# no-ops: byte-identical pick either way.
+	var act_rec := AiActRecorder.begin(state, me, pool, terrain_type_at)
 	var pick := {}
 	var doct := OS.get_environment("NML_OPENER_DOCTRINE")
 	if doct != "" and AiPlanner.opener_seat and _current_round() == 1:
 		pick = AiPlanner.doctrine_pick(state, me, doct)   # research probe, env-gated
 	if not bool(pick.get("used", false)):
 		pick = AiPlanner.plan_with_rollout(state, me)
+	AiActRecorder.finish(act_rec, pick)
 	if not bool(pick.get("used", false)):
 		return null
 	var chosen: GameUnit = (state["units"][pick["unit_key"]] as Dictionary)["unit"]
@@ -3035,7 +3041,11 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 				BattleSim.reply_threat(state, me), true)}})
 	# Leaf row (glasses v4): the winning candidate's horizon-end state — the
 	# distribution the leaf eval actually judges. Same record kind, flagged.
-	var leaf: Dictionary = AiPlanner._last_leaf_state
+	# NML-1073 M2-0b: TAKE it — the leaf is a live state (GameUnit refs, this
+	# controller's charge_illegal/los_at Callables) and must not stay parked in
+	# a script static, where process teardown frees it after its bound objects
+	# are already gone (measured: heap corruption, exit 134).
+	var leaf: Dictionary = AiPlanner.take_last_leaf()
 	if not leaf.is_empty():
 		record_decision({"kind": "planner", "unit": chosen.get_name(),
 			"rule": "leaf row: winning candidate's horizon-end position (training data)",

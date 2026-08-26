@@ -88,9 +88,38 @@ const PLAYOUT_DECIDE_MARGIN := 0.5   # mean marker-delta that settles it
 const PLAYOUT_CAP := 7               # max playouts per branch
 
 
+## NML-1073 M2-0b: the Rust port's per-activation contract needs the search's
+## INTERMEDIATE results too (root menus, prefilter, pool, rollout values,
+## winner/runner-up, playout arbitration) — not just plan_with_rollout's final
+## pick. Filled ONLY when AiActRecorder.active() (env NML_ACT_DUMP set);
+## AiActRecorder.finish() reads it once per activation then resets it to {} —
+## unset env = this dict is never touched, so the search stays byte-identical.
+static var trace: Dictionary = {}
+## NML-1073 M2-0c: lets tools/act_recheck.gd fill `trace` WITHOUT the
+## NML_ACT_DUMP file seam (AiActRecorder.active()) — the recheck tool never
+## writes a corpus, it only replays one. Off by default = no behaviour change.
+static var trace_enabled := false
+
+
+## menus.trace needs the SAME plain form the node dump's action gets
+## (ai_planner.gd:493-495) — a candidate's "dest" is a raw Vector3 otherwise,
+## and JSON.stringify would write that as its native "(x, y, z)" STRING, not
+## a parsable number array.
+static func _plain_candidates(cands: Array) -> Array:
+	var out: Array = []
+	for c in cands:
+		var pc: Dictionary = (c as Dictionary).duplicate()
+		if pc.has("dest"):
+			pc["dest"] = BattleSim._plain_vec3(pc["dest"])
+		out.append(pc)
+	return out
+
+
 static func plan_with_rollout(state: Dictionary, player: int,
 		top_k: int = -1) -> Dictionary:
 	_last_leaf_state = {}
+	var trace_on := AiActRecorder.active() or trace_enabled
+	trace = {"menus": {}, "arbitration": null} if trace_on else {}
 	if top_k == -1:
 		top_k = top_k_default()   # research seam; default = the const
 	if top_k <= 0:
@@ -103,6 +132,8 @@ static func plan_with_rollout(state: Dictionary, player: int,
 			continue
 		var cands: Array = [{"unit": key, "kind": AiDecision.Action.HOLD}] \
 			if bool(su.get("shaken", false)) else candidates(state, str(key))
+		if trace_on:
+			(trace["menus"] as Dictionary)[str(key)] = _plain_candidates(cands)
 		for action in cands:
 			var next := BattleSim.resolve(state, action)
 			scored.append({"unit_key": str(key), "action": action, "idx": scored.size(),
@@ -113,6 +144,15 @@ static func plan_with_rollout(state: Dictionary, player: int,
 		if float(a["score"]) != float(b["score"]):
 			return float(a["score"]) > float(b["score"])
 		return int(a["idx"]) < int(b["idx"]))
+	var idx_to_pos := {}
+	if trace_on:
+		var scored_plain: Array = []
+		for i in range(scored.size()):
+			var sc: Dictionary = scored[i]
+			idx_to_pos[int(sc["idx"])] = i
+			scored_plain.append({"idx": int(sc["idx"]), "unit": str(sc["unit_key"]),
+				"kind": int((sc["action"] as Dictionary)["kind"]), "score": float(sc["score"])})
+		trace["scored"] = scored_plain
 	# Coverage guarantee (diagnosis 07.08.): WHICH unit opens is the whole
 	# question, but bait moves rank low 1-ply and never survived a global
 	# TOP_K cut. Every un-activated unit gets its best candidate rolled out;
@@ -143,11 +183,21 @@ static func plan_with_rollout(state: Dictionary, player: int,
 		if str((cand["action"] as Dictionary).get("wave", "")) != "" \
 				and not pool.has(cand):
 			pool.append(cand)
+	if trace_on:
+		var pool_idx: Array = []
+		for cand in pool:
+			pool_idx.append(int(cand["idx"]))
+		trace["pool_idx"] = pool_idx
 	var best := {}
 	var runner := {}
+	var best_idx := -1
+	var runner_idx := -1
+	var rs_trace: Array = []
 	for cand in pool:
 		var ends := rollout_boundaries(state, cand["action"], player)
 		var rs := _blend_score(ends, player)
+		if trace_on:
+			rs_trace.append({"idx": int(cand["idx"]), "rs": rs})
 		if OS.get_environment("NML_PLAN_DUMP") == "1":   # diagnosis-only; ladder silent without it
 			printerr("[PLAN] R%d %s kind=%d 1ply=%.4f rolled=%.4f" % [int(state["round"]),
 				str(cand["unit_key"]), int((cand["action"] as Dictionary).get("kind", -1)),
@@ -155,11 +205,20 @@ static func plan_with_rollout(state: Dictionary, player: int,
 		var rolled := {"unit_key": cand["unit_key"], "action": cand["action"], "score": rs}
 		if best.is_empty() or rs > float(best["score"]):
 			runner = best
+			runner_idx = best_idx
 			best = rolled
+			if trace_on:
+				best_idx = int(idx_to_pos.get(int(cand["idx"]), -1))
 			if not ends.is_empty():
 				_last_leaf_state = ends[ends.size() - 1]
 		elif runner.is_empty() or rs > float(runner["score"]):
 			runner = rolled
+			if trace_on:
+				runner_idx = int(idx_to_pos.get(int(cand["idx"]), -1))
+	if trace_on:
+		trace["rs"] = rs_trace
+		trace["best_idx"] = best_idx
+		trace["runner_idx"] = runner_idx
 	# S-wave PS2 (D17/D19): on a CLOSE top-2 the playout DECIDES — adaptive
 	# escalation (3 playouts each, +2 while tied, hard cap), deterministic
 	# prng per state+branch. playout_search=false = byte-identical pick.
@@ -201,6 +260,9 @@ static func plan_with_rollout(state: Dictionary, player: int,
 			runner = tmp
 		playout_note = " [playout %d/side: %.2f vs %.2f -> %s]" % [done,
 			maxf(sum_b, sum_r) / done, minf(sum_b, sum_r) / done, str(best["unit_key"])]
+		if trace_on:
+			trace["arbitration"] = {"sig": sig, "n": done, "sum_b": sum_b, "sum_r": sum_r,
+				"swapped": sum_r > sum_b}
 	var waits := 0
 	for key in state["units"]:
 		var su: Dictionary = state["units"][key]
@@ -244,7 +306,24 @@ static func rollout(state: Dictionary, first_action: Dictionary, me: int,
 ## Leaf-row seam (glasses v4): the WINNING candidate's horizon-end state —
 ## the exact distribution the leaf eval judges. The controller logs it as a
 ## training row; reset per pick, {} when the rollout path did not run.
+## NML-1073 M2-0b: read it through take_last_leaf(), never straight off this
+## static. A leaf is a LIVE state: GameUnit refs AND the controller's
+## charge_illegal/los_at/terrain_at Callables. A GDScript lambda parked in a
+## script static outlives the object it was bound to and is freed during
+## process teardown — measured heap corruption ("corrupted size vs. prev_size
+## in fastbins", exit 134) AFTER a fully green suite. Bisect (7 variants):
+## clearing this static alone = exit 0, clearing `trace` alone = still 134, a
+## fixture with no Callable in the state = exit 0 with the trace ON.
 static var _last_leaf_state: Dictionary = {}
+
+
+## Hands the stashed leaf to its ONE consumer and drops the static's reference
+## in the same call — after this the search owns no live state. Same value the
+## consumer read before; the next plan_with_rollout resets the stash anyway.
+static func take_last_leaf() -> Dictionary:
+	var leaf := _last_leaf_state
+	_last_leaf_state = {}
+	return leaf
 
 
 ## the horizon (index 0 = end of the current round, last = horizon end) — the
@@ -467,6 +546,31 @@ static func _node_dump_stream() -> FileAccess:
 			if cap != "":
 				_node_dump_max = maxi(int(cap), 0)
 	return _node_dump_file
+
+
+## NML-1073 M2-0b: end-of-life for every static the search writes — the leaf
+## stash first (the live state that carries the teardown-fatal Callables), then
+## the trace and the node-dump stream. Called at a GAME's end (arena_match,
+## core_selfplay), a TOOL's end (act_recheck) and a TEST's end (after_test):
+## nothing the engine frees at teardown may still point at a dead object.
+static func close() -> void:
+	_last_leaf_state = {}
+	trace = {}
+	trace_enabled = false
+	close_node_dump()
+
+
+## NML-1073 M2-0: closes the node-dump stream at a GAME's end (arena_match.gd /
+## core_selfplay.gd's _write_result) — the file is complete where the writer
+## stands instead of at process teardown. Resets the cached checks so the NEXT
+## game (core_selfplay's multi-game loop) reopens a fresh file+header.
+static func close_node_dump() -> void:
+	if _node_dump_file != null:
+		_node_dump_file.flush()
+		_node_dump_file.close()
+	_node_dump_file = null
+	_node_dump_checked = false
+	_node_dump_count = 0
 
 
 static func _record_node(before: Dictionary, action: Dictionary, after: Dictionary,
