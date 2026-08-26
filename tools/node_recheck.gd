@@ -284,6 +284,39 @@ static func terrain_at_from_plain(terrain: Dictionary) -> Callable:
 		return 0
 
 
+## NML-1073 M3-0d: the state-level `los_blocked` seam (battle_sim.gd:792
+## `_los_clear`, ai_planner.gd:829 safe-line probe) rebuilt from the recorded
+## terrain instead of from the recorded ANSWERS. The corpus records only the
+## ROOT centre-pair grid ("los_pairs"), but the search asks this seam about
+## MOVED unit centres — every RUSH/ADVANCE candidate is scored on a state whose
+## mover has left its root centre — and about arbitrary safe-line points. No
+## root grid can answer those, so a nearest-centre snap silently returned the
+## mover's OLD line of fire. Terrain cells are STATIC for a whole game, so the
+## once-written header IS the complete input: this is the same function
+## core_selfplay stamps (tools/core_selfplay.gd:675), fed the recorded cells.
+## Only the school 3" grid produces "los_pairs" today; act_recheck diffs this
+## rebuild against the recorded LIVE grid before the search uses it, so a board
+## whose seam is NOT this function fails loudly instead of drifting.
+static func los_blocked_from_plain(terrain: Dictionary) -> Callable:
+	var cells := {}
+	for c in (terrain["cells"] as Array):
+		cells[Vector2i(int(c[0]), int(c[1]))] = int(c[2])
+	var cp: Dictionary = terrain["cell_params"]
+	var tsize: Array = cp["table_size_feet"]
+	var width_in := float(tsize[0]) * 12.0
+	var height_in := float(tsize[1]) * 12.0
+	var grid_in := float(cp["grid_size_inches"])
+	# The SAME grid convention terrain_at_from_plain uses above, i.e.
+	# map_layout.gd _calculate_grid_dimensions(): table diagonal / grid inches,
+	# rounded UP to even. SchoolTerrain.generate stores exactly this as "n".
+	var grid_size := int(ceil(sqrt(width_in * width_in + height_in * height_in) / grid_in))
+	if grid_size % 2 != 0:
+		grid_size += 1
+	var world := {"cells": cells, "n": grid_size}
+	return func(a: Vector3, b: Vector3) -> bool:
+		return SchoolTerrain.los_blocked(world, a, b)
+
+
 static func _vec3(v: Array) -> Vector3:
 	return Vector3(float(v[0]), float(v[1]), float(v[2]))
 

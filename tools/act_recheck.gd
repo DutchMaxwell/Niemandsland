@@ -20,6 +20,8 @@ extends SceneTree
 ##   file=<acts.jsonl> [n=25] [offset=0]
 ##   --corrupt=charge   RED proof: flip the PURE gate's answer inside the search
 ##   --corrupt=gate     RED proof for CHARGE_GATE: flip it inside the grid diff
+##   --corrupt=los      RED proof for M3-0d: give the search the OLD nearest-
+##                       centre los_pairs snap instead of the terrain rebuild
 ##   --ignore-knobs     RED proof (only bites on a non-default-knobs corpus):
 ##                       never stamp the header's knobs
 ##   write=<path>       NML-1073 M2-5b: copy the corpus to <path> with the pick +
@@ -36,12 +38,15 @@ var _write_path := ""
 var _write_stream: FileAccess = null
 var _corrupt_charge := false
 var _corrupt_gate := false
+var _corrupt_los := false
 var _ignore_knobs := false
 var _gate_pairs := 0
 var _gate_points := 0
 var _gate_bad := 0
 var _matrix_pairs := 0
 var _matrix_bad := 0
+var _los_pairs := 0
+var _los_bad := 0
 
 
 func _init() -> void:
@@ -54,6 +59,9 @@ func _init() -> void:
 			continue
 		if a == "--corrupt=gate":
 			_corrupt_gate = true
+			continue
+		if a == "--corrupt=los":
+			_corrupt_los = true
 			continue
 		if a == "--ignore-knobs":
 			_ignore_knobs = true
@@ -88,6 +96,9 @@ func _init() -> void:
 	# dictionary per gate call would dominate the run).
 	if terrain != null:
 		header["terrain_at"] = NodeRecheck.terrain_at_from_plain(terrain as Dictionary)
+		# M3-0d: the los_blocked seam is a pure function of the SAME static cells —
+		# built once here for the same reason (per-act rebuild would dominate).
+		header["los_blocked"] = NodeRecheck.los_blocked_from_plain(terrain as Dictionary)
 	AiPlanner.trace_enabled = true   # M2-0c seam: fill trace without the NML_ACT_DUMP file
 
 	var skipped := 0
@@ -118,6 +129,7 @@ func _init() -> void:
 				print("  MISMATCH %s: recorded=%s got=%s" % [str(m["field"]), str(m["recorded"]), str(m["got"])])
 	print("CHARGE_GATE pairs=%d grid=%d mismatch=%d" % [_gate_pairs, _gate_points, _gate_bad])
 	print("CHARGE_MATRIX pairs=%d mismatch=%d" % [_matrix_pairs, _matrix_bad])
+	print("LOS_GRID pairs=%d mismatch=%d" % [_los_pairs, _los_bad])
 	print("RECHECK acts=%d ok=%d mismatch=%d" % [checked, ok, mismatch])
 	# NML-1073 M2-0b: the replay stamps its OWN charge_illegal/los_at lambdas
 	# into every rebuilt state, and plan_with_rollout parks the last one's leaf
@@ -129,7 +141,7 @@ func _init() -> void:
 		_write_stream.close()
 		_write_stream = null
 		print("[ACT_RECHECK] wrote %s (pick + trace = THIS replay's answer)" % _write_path)
-	quit(0 if (mismatch == 0 and _gate_bad == 0) else 1)
+	quit(0 if (mismatch == 0 and _gate_bad == 0 and _los_bad == 0) else 1)
 
 
 ## One activation: rebuild -> stamp -> plan_with_rollout -> diff. Returns the
@@ -178,7 +190,13 @@ func _check_act(act: Dictionary, header: Dictionary, profiles: Dictionary,
 	# los_blocked, so its acts carry "los_pairs" (battle_sim.gd:1421-1439) — reconstruct
 	# an equivalent Callable from it.
 	if (plain_state.get("los_pairs", []) as Array).size() > 0:
-		state["los_blocked"] = _los_blocked_from_recorded(state, plain_state)
+		# NML-1073 M3-0d: the TERRAIN rebuild, not the recorded root answers.
+		# _check_los_grid proves it reproduces the recorded LIVE grid before the
+		# search leans on it; --corrupt=los hands the search the old snap back.
+		var lb: Callable = header.get("los_blocked", Callable())
+		_check_los_grid(state, plain_state, lb)
+		state["los_blocked"] = _los_blocked_from_recorded(state, plain_state) \
+			if (_corrupt_los or not lb.is_valid()) else lb
 
 	var statics: Dictionary = act.get("statics", {})
 	var playout_net: Dictionary = statics.get("playout_net", {})
@@ -218,6 +236,34 @@ func _check_act(act: Dictionary, header: Dictionary, profiles: Dictionary,
 	return mism
 
 
+## NML-1073 M3-0d oracle: the terrain rebuild, diffed against the LIVE grid the
+## recorder wrote (battle_sim.gd state_to_plain "los_pairs" — one character per
+## KEY-SORTED unit pair at their root centres, "0" = blocked). 0 mismatches means
+## the rebuilt Callable IS the seam the live game stamped, at every point the
+## corpus can testify about; the search then uses it at the moved points too.
+func _check_los_grid(state: Dictionary, plain_state: Dictionary, lb: Callable) -> void:
+	if not lb.is_valid():
+		return
+	var keys: Array = (plain_state["units"] as Dictionary).keys()
+	keys.sort()
+	var rows: Array = plain_state["los_pairs"]
+	var centres: Array = []
+	for k in keys:
+		centres.append(AiPlanner._centre(state["units"][str(k)]))
+	for i in range(centres.size()):
+		var row := str(rows[i]) if i < rows.size() else ""
+		for j in range(centres.size()):
+			if j >= row.length():
+				continue
+			_los_pairs += 1
+			var live := row[j] == "0"
+			if bool(lb.call(centres[i], centres[j])) != live:
+				_los_bad += 1
+				if _los_bad <= 3:
+					print("  LOS_GRID %s->%s: live=%s rebuilt=%s" \
+						% [str(keys[i]), str(keys[j]), str(live), str(not live)])
+
+
 ## NML-1073 M3-0: core_selfplay's dynamic los_blocked, rebuilt from the recorded
 ## "los_pairs" root grid (row i/col j, "0"=blocked) — nearest-centre match, same
 ## best-effort as _los_at_from_recorded below (a rollout moves units past the root).
@@ -225,7 +271,9 @@ func _check_act(act: Dictionary, header: Dictionary, profiles: Dictionary,
 ## state_to_plain) now builds row/col i from the SAME key-sorted order, so this
 ## must never lean on a Dictionary's iteration order (a live one is insertion
 ## order; only a JSON round-trip happens to come back key-sorted).
-func _los_blocked_from_recorded(state: Dictionary, plain_state: Dictionary) -> Callable:
+## M3-0d: static so the unit test can pin what it answers at a MOVED point
+## against the terrain rebuild that replaced it (same reason as the comparators).
+static func _los_blocked_from_recorded(state: Dictionary, plain_state: Dictionary) -> Callable:
 	var keys: Array = (plain_state["units"] as Dictionary).keys()
 	keys.sort()
 	var rows: Array = plain_state["los_pairs"]

@@ -380,3 +380,59 @@ func test_unit_order_round_trips_through_plain_form_and_rebuild() -> void:
 		profiles[uid] = BattleSim._unit_profile((state["units"][uid] as Dictionary)["unit"])
 	var rebuilt := NodeRecheck._rebuild_state(round_tripped, profiles)
 	assert_array((rebuilt["units"] as Dictionary).keys()).is_equal(["U9", "U10", "U2"])
+
+
+## NML-1073 M3-0d: the corpus records the los_blocked seam's answers only for the
+## ROOT centre pairs ("los_pairs"), but the search scores every RUSH/ADVANCE
+## candidate on a state whose mover has LEFT its root centre — battle_sim.gd:792
+## `_los_clear` then asks the seam about a point no root grid can answer. The old
+## rebuild snapped such a point to the nearest recorded centre and handed back the
+## mover's OLD line of fire; the fix rebuilds the seam from the recorded TERRAIN,
+## which is static for the whole game and therefore complete.
+## Board: one RUINS cell at x in [-3", 0"), A at -6", B at +12" — the root pair is
+## blocked THROUGH the ruin, and A rushed to +2" (still nearest to its own root
+## centre, so the snap keeps reading A's row) has a clear line.
+func test_los_blocked_rebuilds_from_terrain_and_answers_a_moved_point() -> void:
+	var world := {"cells": {Vector2i(14, 15): TerrainRules.TerrainType.RUINS}, "n": 30}
+	var a := _armed(1, [Vector3(-6.0 * IN2M, 0, 0)], "A")
+	var b := _armed(2, [Vector3(12.0 * IN2M, 0, 0)], "B")
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"A": a, "B": b}
+	var state := BattleSim.capture(army, func() -> Array: return [],
+		func(_i: int) -> int: return 0, 1, 3)
+	state["los_blocked"] = func(p: Vector3, q: Vector3) -> bool:
+		return SchoolTerrain.los_blocked(world, p, q)
+	var pending := AiActRecorder.begin(state, 1, [a], Callable(), world)
+	AiActRecorder.finish(pending, {"used": true, "unit_key": "A",
+		"action": {"unit": "A", "kind": AiDecision.Action.RUSH, "dest": Vector3.ZERO}})
+
+	var f := FileAccess.open(_DUMP_DIR.path_join("acts.jsonl"), FileAccess.READ)
+	var lines: Array = []
+	while not f.eof_reached():
+		var line := f.get_line()
+		if line != "":
+			lines.append(line)
+	f.close()
+	var header := JSON.parse_string(lines[0]) as Dictionary
+	var act := JSON.parse_string(lines[1]) as Dictionary
+	var plain_state := act["state"] as Dictionary
+	# the LIVE grid the recorder wrote: A->B and B->A blocked, self-pairs clear
+	assert_array(plain_state["los_pairs"] as Array).is_equal(["10", "01"])
+
+	var ca := Vector3(-6.0 * IN2M, 0, 0)
+	var cb := Vector3(12.0 * IN2M, 0, 0)
+	var moved := Vector3(2.0 * IN2M, 0, 0)   # A after an 8" rush, past the ruin
+	var lb: Callable = NodeRecheck.los_blocked_from_plain(header["terrain"] as Dictionary)
+	# 1) it reproduces the recorded LIVE grid exactly (act_recheck's LOS_GRID diff)
+	assert_bool(lb.call(ca, cb)).is_true()
+	assert_bool(lb.call(cb, ca)).is_true()
+	assert_bool(lb.call(ca, ca)).is_false()
+	# 2) and it answers the MOVED point the root grid cannot testify about
+	assert_bool(lb.call(moved, cb)).is_false()
+
+	# RED pin: the old nearest-centre rebuild snaps `moved` back onto A's row and
+	# reports the ruin still in the way — the divergence this ticket root-caused.
+	var rebuilt := NodeRecheck._rebuild_state(plain_state, header["profiles"] as Dictionary)
+	var snap: Callable = ActRecheck._los_blocked_from_recorded(rebuilt, plain_state)
+	assert_bool(snap.call(ca, cb)).is_true()
+	assert_bool(snap.call(moved, cb)).is_true()
