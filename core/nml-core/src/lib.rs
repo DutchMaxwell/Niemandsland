@@ -37,15 +37,17 @@ pub const DISCOUNT: f64 = 0.5;
 pub const DESTROY_DEFENCE_WEIGHT: f64 = 0.8;
 
 pub use acts::{
-    load_acts, read_acts, Act, ActCorpus, ActStatics, ArbitrationRec, Expectation, Knobs, PickRec,
-    RolloutValue, RunnerRec, Scored,
+    load_acts, read_act_header, read_acts, Act, ActCorpus, ActHeader, ActStatics, ArbitrationRec,
+    Expectation, Knobs, PickRec, RolloutValue, RunnerRec, Scored,
 };
 pub use arbitration::{
     arbitrate, arbitrate_bent, full_playout, full_playout_bent, ArbBend, Arbitration,
     PlayoutResult, PLAYOUT_CAP, PLAYOUT_DECIDE_MARGIN, PLAYOUT_MAX_ROUNDS,
 };
 pub use gate::{charge_illegal, charge_illegal_tuned};
-pub use io::{load_nodes, read_nodes, Action, Node, NodeCorpus, Seams};
+pub use io::{
+    load_nodes, plain_of, read_nodes, state_from_json, Action, Node, NodeCorpus, Seams,
+};
 pub use menu::{candidates, candidates_in, candidates_tuned, Candidate, Tuning};
 pub use mission::{
     apply_destroy_step, mission_winner, playout_seize, sabotage_winner, vp_end_bonus,

@@ -17,7 +17,7 @@ use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
 use crate::state::{
-    Bands, Marker, Mods, Objective, Profile, ProfileDyn, Profiles, Roster, State,
+    Bands, Marker, Mods, Objective, Profile, ProfileCache, ProfileDyn, Profiles, Roster, State,
 };
 
 /// A JSON object read as an ordered `Vec` of entries.
@@ -485,6 +485,167 @@ pub fn read_nodes<R: BufRead>(reader: R, origin: &str) -> Result<NodeCorpus, Str
         });
     }
     Ok(NodeCorpus { profiles, nodes, seams })
+}
+
+/// Reads ONE plain state — the object the ACT corpus carries under `"state"`,
+/// i.e. exactly `BattleSim.state_to_plain` plus the M2-0c/M2-0d gate reads and
+/// the M2-5b per-unit `prof` block.
+///
+/// It takes JSON TEXT rather than a `serde_json::Value` on purpose: `units`
+/// carries CAPTURE ORDER in its key order, and `serde_json::Value`'s map is a
+/// `BTreeMap` that would sort it away. `roster_cache` interns the roster across
+/// calls and `profiles` interns the per-activation table — the same two caches,
+/// used the same way, as `read_acts`. A caller that skipped `ProfileCache` here
+/// would replay every activation on the DEPLOYMENT reading, which is exactly
+/// the staleness M2-5b removed.
+pub fn state_from_json(
+    text: &str,
+    profiles: &mut ProfileCache,
+    roster_cache: &mut Option<Rc<Roster>>,
+) -> Result<State, String> {
+    let plain: PlainState = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    let roster = roster_of(&plain, profiles.base(), roster_cache)?;
+    let eff = profiles.effective(&roster, &plain.dyn_profiles());
+    Ok(state_of(plain, &eff, roster))
+}
+
+/// The inverse of `state_from_json` (NML-1073 M3-2) — the plain form
+/// `BattleSim.state_to_plain(state, false)` would have written for this state.
+/// Mirrors `core/nml-core-godot/src/plain.rs:418-548`, with one difference that
+/// is stated rather than hidden: the Godot seam replays the CAPTURED key mask,
+/// this one has no mask and writes a key whenever the value can be told apart
+/// from "the sim never carried it" —
+///
+///   * `dormant` only when true, `earliest_arrival_round` only when it is not
+///     the `-1` the reader defaults to, `wound_frac` only when non-zero (the
+///     same rule plain.rs:508 applies), `los`/`shroud` only when present;
+///   * `ambush_arrived_round`, `bands`, `charge_no_difficult` and
+///     `charge_probe_r` unconditionally — the act corpus always carries them;
+///   * state-level `markers_meta`, `destroy_seq`, `cast_events` only when
+///     non-empty and the three `vp` blobs only when present.
+///
+/// So `plain_of(state_from_json(x)) == x` holds for a state written by the act
+/// recorder, and a state that GREW a key inside `resolve` reports it.
+///
+/// ONE key is deliberately not written: the M2-5b `prof` block. It is a
+/// recorded READ, not state this port derives, and two of its seven fields
+/// (`shooting_range_bonus`, `max_activation_advance_bonus_in`) are not modelled
+/// at all — see `ProfileDyn`. A writer that invented them would claim a
+/// coverage the port does not have. A caller that has to hand the plain form
+/// back whole keeps the blocks it read, the way the Godot seam keeps its
+/// captured key mask (`nml-core-godot/src/plain.rs`, `Captured`).
+pub fn plain_of(st: &State) -> serde_json::Value {
+    use serde_json::{Map, Value};
+    let n = st.units();
+    let mut units = Map::new();
+    for i in 0..n {
+        let mut u = Map::new();
+        u.insert("player".into(), st.player[i].into());
+        u.insert("alive".into(), st.alive[i].into());
+        u.insert("activated".into(), st.activated[i].into());
+        u.insert("shaken".into(), st.shaken[i].into());
+        u.insert("fatigued".into(), st.fatigued[i].into());
+        u.insert("in_cover".into(), st.in_cover[i].into());
+        u.insert("aircraft".into(), st.aircraft[i].into());
+        u.insert("casts".into(), st.casts[i].into());
+        u.insert("morale_bonus".into(), st.morale_bonus[i].into());
+        u.insert("ambush_arrived_round".into(), st.ambush_arrived_round[i].into());
+        if st.dormant[i] {
+            u.insert("dormant".into(), true.into());
+        }
+        if st.earliest_arrival_round[i] != -1 {
+            u.insert("earliest_arrival_round".into(), st.earliest_arrival_round[i].into());
+        }
+        // `_apply_expected_wounds` (battle_sim.gd:1050-1059) CREATES the key the
+        // first time a volley lands; a zero carry is indistinguishable from
+        // "never touched" and stays absent — plain.rs:506-509 says the same.
+        if st.wound_frac[i] != 0.0 {
+            u.insert("wound_frac".into(), st.wound_frac[i].into());
+        }
+        u.insert(
+            "positions".into(),
+            Value::Array(
+                st.positions[i]
+                    .iter()
+                    .map(|p| Value::Array(p.iter().map(|&x| x.into()).collect()))
+                    .collect(),
+            ),
+        );
+        u.insert("wounds".into(), Value::Array(st.wounds[i].iter().map(|&w| w.into()).collect()));
+        u.insert("radii".into(), Value::Array(st.radii[i].iter().map(|&r| r.into()).collect()));
+        u.insert("mods".into(), serde_json::to_value(st.mods[i]).unwrap_or(Value::Null));
+        u.insert("mods_base".into(), serde_json::to_value(*st.mods_base[i]).unwrap_or(Value::Null));
+        u.insert(
+            "attached".into(),
+            Value::Array(st.attached[i].iter().map(|&h| st.key(h).into()).collect()),
+        );
+        u.insert(
+            "attached_to".into(),
+            st.attached_to[i].map(|h| st.key(h)).unwrap_or("").into(),
+        );
+        if let Some(row) = &st.los[i] {
+            let mut m = Map::new();
+            for (k, v) in row.iter() {
+                m.insert(k.clone(), (*v).into());
+            }
+            u.insert("los".into(), Value::Object(m));
+        }
+        u.insert("bands".into(), serde_json::to_value(st.bands[i]).unwrap_or(Value::Null));
+        if let Some(s) = st.shroud[i] {
+            u.insert("shroud".into(), Value::Array(vec![s[0].into(), s[1].into()]));
+        }
+        u.insert("charge_no_difficult".into(), st.charge_no_difficult[i].into());
+        u.insert("charge_probe_r".into(), st.charge_probe_r[i].into());
+        units.insert(st.roster.keys[i].clone(), Value::Object(u));
+    }
+    let mut out = Map::new();
+    out.insert("round".into(), st.round.into());
+    out.insert("rounds_total".into(), st.rounds_total.into());
+    out.insert("scoring".into(), Value::String(st.scoring.to_string()));
+    out.insert(
+        "objectives".into(),
+        serde_json::to_value(&st.objectives).unwrap_or(Value::Array(Vec::new())),
+    );
+    out.insert("units".into(), Value::Object(units));
+    if !st.markers_meta.is_empty() {
+        out.insert(
+            "markers_meta".into(),
+            serde_json::to_value(&st.markers_meta).unwrap_or(Value::Array(Vec::new())),
+        );
+    }
+    if !st.destroy_seq.is_empty() {
+        out.insert(
+            "destroy_seq".into(),
+            Value::Array(st.destroy_seq.iter().map(|&s| s.into()).collect()),
+        );
+    }
+    if let Some(v) = &st.vp {
+        out.insert("vp".into(), (**v).clone());
+    }
+    if let Some(v) = &st.vp_flavour {
+        out.insert("vp_flavour".into(), (**v).clone());
+    }
+    if let Some(v) = &st.vp_memo {
+        out.insert("vp_memo".into(), (**v).clone());
+    }
+    if !st.cast_events.is_empty() {
+        out.insert(
+            "cast_events".into(),
+            Value::Array(st.cast_events.iter().map(|e| (**e).clone()).collect()),
+        );
+    }
+    if let Some(m) = &st.los_pairs {
+        let mut rows = Vec::with_capacity(n);
+        for i in 0..n {
+            let mut s = String::with_capacity(n);
+            for j in 0..n {
+                s.push(if m[i * n + j] { '1' } else { '0' });
+            }
+            rows.push(Value::String(s));
+        }
+        out.insert("los_pairs".into(), Value::Array(rows));
+    }
+    Value::Object(out)
 }
 
 #[cfg(test)]
