@@ -1301,6 +1301,24 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 			du["dormant_models"] = dormant_wounds.size()
 			du["dormant_wounds"] = dormant_wounds
 			du["earliest_arrival_round"] = SoloController.ambush_earliest_round(u)
+	# NML-1081: an imported/AI army never calls EquipmentDistributor.attach_hero_to_unit
+	# (MP-only), so runtime attachment above is always empty — derive it from the list's
+	# join_to_unit/selectionId instead. Runtime attachment, when present, always wins.
+	var by_sel := {}
+	for k in units:
+		var od: Variant = (units[k]["unit"] as GameUnit).source_data
+		if od is OPRApiClient.OPRUnit and not (od as OPRApiClient.OPRUnit).selection_id.is_empty():
+			by_sel[(od as OPRApiClient.OPRUnit).selection_id] = k
+	for k in units:
+		var su: Dictionary = units[k]
+		if not String(su["attached_to"]).is_empty():
+			continue
+		var od: Variant = (su["unit"] as GameUnit).source_data
+		var join_to: String = (od as OPRApiClient.OPRUnit).join_to_unit if od is OPRApiClient.OPRUnit else ""
+		if join_to.is_empty() or not by_sel.has(join_to):
+			continue
+		su["attached_to"] = by_sel[join_to]
+		(units[by_sel[join_to]]["attached"] as Array).append(k)
 	if los_of.is_valid():
 		for k in units:
 			var su: Dictionary = units[k]
