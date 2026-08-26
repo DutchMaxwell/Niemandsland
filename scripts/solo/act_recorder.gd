@@ -44,13 +44,16 @@ static func active() -> bool:
 ## Pre-pick capture (INPUT): call right after the un-activated-pool loop and
 ## BEFORE doctrine_pick/plan_with_rollout. Returns {} when the env seam is off
 ## or the line cap is already hit — the caller's finish() then no-ops too.
-static func begin(state: Dictionary, me: int, pool: Array, terrain_cb: Callable) -> Dictionary:
+## `school_world` (NML-1073 M3-0): core_selfplay's SchoolTerrain dict, used only as
+## a terrain fallback when `terrain_cb` is invalid (core_selfplay has no overlay).
+static func begin(state: Dictionary, me: int, pool: Array, terrain_cb: Callable,
+		school_world: Dictionary = {}) -> Dictionary:
 	var f := _dump_stream()
 	if f == null or _count >= _max:
 		return {}
 	if not _header_written:
 		_header_written = true
-		f.store_line(JSON.stringify(_header_line(state, terrain_cb), "", true, true))
+		f.store_line(JSON.stringify(_header_line(state, terrain_cb, school_world), "", true, true))
 		f.flush()   # a same-process reader (the unit test) must see the header without a close()
 	var pool_keys: Array = []
 	for k in state["units"]:
@@ -121,7 +124,7 @@ static func _flatten_vec3(v: Variant) -> Variant:
 	return v
 
 
-static func _header_line(state: Dictionary, terrain_cb: Callable) -> Dictionary:
+static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: Dictionary = {}) -> Dictionary:
 	var profiles := {}
 	for key in state["units"]:
 		# NML-1073 M2-5b: STATIC data only. Every field of _unit_profile that a
@@ -132,7 +135,7 @@ static func _header_line(state: Dictionary, terrain_cb: Callable) -> Dictionary:
 		# takes one of those off this table replays a deployment-time reading.
 		profiles[str(key)] = BattleSim._unit_profile(
 			(state["units"][key] as Dictionary)["unit"])
-	return {"kind": "header", "profiles": profiles, "terrain": _terrain_line(terrain_cb),
+	return {"kind": "header", "profiles": profiles, "terrain": _terrain_line(terrain_cb, school_world),
 		"knobs": {"top_k": AiPlanner.top_k_default(), "horizon": AiPlanner.horizon(),
 			"tail_cap_p1": AiPlanner._tail_cap_for(1), "tail_cap_p2": AiPlanner._tail_cap_for(2),
 			"imagined_round_end": AiPlanner.imagined_round_end_enabled(),
@@ -145,9 +148,9 @@ static func _header_line(state: Dictionary, terrain_cb: Callable) -> Dictionary:
 ## Callable does: main.gd binds a lambda over its `terrain_overlay` member, so
 ## the Callable's bound object (get_object()) IS the main node. null when there
 ## is no overlay wired (headless tests, no terrain_type_at seam).
-static func _terrain_line(terrain_cb: Callable) -> Variant:
+static func _terrain_line(terrain_cb: Callable, school_world: Dictionary = {}) -> Variant:
 	if not terrain_cb.is_valid():
-		return null
+		return _school_terrain_line(school_world)
 	var owner_obj: Object = terrain_cb.get_object()
 	if owner_obj == null or not ("terrain_overlay" in owner_obj):
 		return null
@@ -169,6 +172,23 @@ static func _terrain_line(terrain_cb: Callable) -> Variant:
 		"cell_params": {"table_size_feet": [ov.table_size_feet.x, ov.table_size_feet.y],
 			"grid_rotation_degrees": float(ov.grid_rotation_degrees),
 			"grid_size_inches": ov.GRID_SIZE_INCHES, "inches_to_meters": ov.INCHES_TO_METERS}}
+
+
+## NML-1073 M3-0: core_selfplay has no TerrainOverlay node — its board is a
+## SchoolTerrain world dict (school_terrain.gd:generate, cells/n over the FIXED
+## 6x4ft school table). Same header SHAPE as the overlay branch above (so
+## act_recheck's terrain_at_from_plain reads either the same way): no sandbox
+## (SchoolTerrain has none), no rotation (the school layout never rotates).
+static func _school_terrain_line(world: Dictionary) -> Variant:
+	if world.is_empty():
+		return null
+	var cells: Array = []
+	for k in (world["cells"] as Dictionary):
+		var c := k as Vector2i
+		cells.append([c.x, c.y, int(world["cells"][k])])
+	return {"cells": cells, "sandbox": [],
+		"cell_params": {"table_size_feet": [6.0, 4.0], "grid_rotation_degrees": 0.0,
+			"grid_size_inches": SchoolTerrain.CELL_IN, "inches_to_meters": SchoolTerrain.IN2M}}
 
 
 ## charge_illegal(attacker, victim, gap_in, attacker_centre, victim_centre) for
