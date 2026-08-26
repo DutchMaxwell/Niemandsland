@@ -69,10 +69,28 @@ func after_test() -> void:
 	_reset_spacing_cache()
 
 
-## (a) pins today's behaviour: seam off, resolve rigidly translates the whole
-## mover onto the destination with no regard for the Blocker sitting there —
-## a full overlap (0" between centres).
+## NML-1073 S3: unit spacing is the imagination's DEFAULT (decision 26.08.) —
+## unset behaves exactly like "1"/"on" (both ON); only "0"/"off" opts out.
+func test_spacing_is_on_by_default_and_off_only_by_opt_out() -> void:
+	OS.set_environment("NML_SIM_SPACING", "")
+	_reset_spacing_cache()
+	assert_bool(BattleSim.spacing_enabled()).is_true()
+	OS.set_environment("NML_SIM_SPACING", "0")
+	_reset_spacing_cache()
+	assert_bool(BattleSim.spacing_enabled()).is_false()
+	OS.set_environment("NML_SIM_SPACING", "1")
+	_reset_spacing_cache()
+	assert_bool(BattleSim.spacing_enabled()).is_true()
+
+
+## (a) pins the OPT-OUT behaviour: seam explicitly off, resolve rigidly
+## translates the whole mover onto the destination with no regard for the
+## Blocker sitting there — a full overlap (0" between centres). Pre-S3 this
+## held with the env merely UNSET, since off was the old default; S3 flips
+## the default to ON (see test above), so this now needs an explicit "0".
 func test_seam_off_the_mover_ends_fully_overlapping_the_blocker() -> void:
+	OS.set_environment("NML_SIM_SPACING", "0")
+	_reset_spacing_cache()
 	var mover := _unit_at(1, [Vector3.ZERO], "Mover")
 	var blocker := _unit_at(2, [Vector3(6.0 * IN2M, 0, 0)], "Blocker")
 	var state := _capture(mover, blocker)

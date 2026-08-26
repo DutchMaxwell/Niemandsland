@@ -16,16 +16,18 @@ const IN2M := 0.0254
 ## simulation (that is S4). Set only via resolve_stochastic().
 static var stochastic_rng: RandomNumberGenerator = null
 
-## NML-1068 A/B seam: NML_SIM_SPACING="1"/"on" makes resolve() honour the
-## unit-spacing no-go rule (mirrors SoloController._spacing_zones_world) when
-## it translates a mover's positions; unset/anything else leaves resolve
-## byte-identical to today — the planner substrate keeps its shipped rollouts
-## until a never-worse A/B promotes the rule.
+## NML-1068/NML-1073 S3: unit spacing is the imagination's DEFAULT (decision
+## 26.08.) — resolve() honours the 1" no-go rule (mirrors SoloController.
+## _spacing_zones_world, with the S1 charge-target exemption) unless
+## NML_SIM_SPACING="0"/"off" (case-insensitive) opts OUT; "1"/"on" still opts
+## in explicitly. Rule: GF Advanced Rules v3.5.1 p.7 (no model may end its
+## move within 1" of an enemy model). The table (tree grades) never reaches
+## resolve() at all, so it is untouched by this default.
 static var _spacing_env := -1
 static func spacing_enabled() -> bool:
 	if _spacing_env < 0:
-		var raw := OS.get_environment("NML_SIM_SPACING")
-		_spacing_env = 1 if (raw == "1" or raw == "on") else 0
+		var raw := OS.get_environment("NML_SIM_SPACING").to_lower()
+		_spacing_env = 0 if (raw == "0" or raw == "off") else 1
 	return _spacing_env == 1
 
 ## NML-1069 A/B seam: NML_SIM_CAST="1"/"on" makes resolve() run the cast
