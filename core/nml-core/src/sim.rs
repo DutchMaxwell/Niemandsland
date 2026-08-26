@@ -168,7 +168,7 @@ fn expected_shooting_morale(
 /// template with the snapshot's live `alive` and `in_cover` written over it.
 /// (`melee` only adds the fatigue flag, which no shooting call sets.)
 #[inline]
-fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
+pub fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
     let mut c = us.ctx;
     c.models = state.alive[i];
     c.in_cover = state.in_cover[i];
@@ -188,15 +188,15 @@ fn ctx_of_melee(us: &UnitStatic, state: &State, i: usize) -> Ctx {
 /// Scratch buffers so a threat sweep allocates once per call, not per pair.
 #[derive(Default)]
 pub struct Scratch {
-    keep: Vec<usize>,
-    attacks: Vec<i64>,
+    pub keep: Vec<usize>,
+    pub attacks: Vec<i64>,
 }
 
 /// `BattleSim._profiles_of(su, false, d)` battle_sim.gd:714-749 fused with the
 /// distance gate of `AiShooting.profiles_in_range` (ai_shooting.gd:16-17): the
 /// merged ranged set is precomputed per unit, so all that is left per call is
 /// the range filter and the survivor scaling.
-fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
+pub fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
     sc.keep.clear();
     sc.attacks.clear();
     for (i, p) in us.shoot.iter().enumerate() {
@@ -211,7 +211,7 @@ fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
 /// `BattleSim._profiles_of(su, true)` battle_sim.gd:714-749, MELEE half: every
 /// melee profile strikes (no range gate), each with its survivor-scaled attack
 /// count. Fills `sc.attacks` index-parallel to `us.melee`.
-fn melee_profiles_of(us: &UnitStatic, alive: i64, sc: &mut Scratch) {
+pub fn melee_profiles_of(us: &UnitStatic, alive: i64, sc: &mut Scratch) {
     sc.attacks.clear();
     for p in &us.melee {
         sc.attacks.push(effective_attacks(p.attacks, alive, us.model_count));

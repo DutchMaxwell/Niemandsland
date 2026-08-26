@@ -16,10 +16,10 @@ use std::rc::Rc;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
-use crate::state::{Marker, Mods, Objective, Profile, Profiles, Roster, State};
+use crate::state::{Bands, Marker, Mods, Objective, Profile, Profiles, Roster, State};
 
 /// A JSON object read as an ordered `Vec` of entries.
-struct Ordered<T>(Vec<(String, T)>);
+pub(crate) struct Ordered<T>(pub(crate) Vec<(String, T)>);
 
 impl<'de, T: Deserialize<'de>> Deserialize<'de> for Ordered<T> {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
@@ -46,7 +46,7 @@ fn neg_one() -> i64 {
 }
 
 #[derive(Deserialize)]
-struct PlainUnit {
+pub(crate) struct PlainUnit {
     #[serde(default)]
     player: i64,
     #[serde(default)]
@@ -91,10 +91,27 @@ struct PlainUnit {
     attached_to: String,
     #[serde(default)]
     los: Option<HashMap<String, bool>>,
+    /// NML-1073 M2-0c/M2-0d gate reads — present on the ACT corpus only
+    /// (`AiActRecorder._stamp_gate_reads`, battle_sim.gd:1402). The node corpus
+    /// carries none of them, which is what the defaults answer.
+    #[serde(default)]
+    bands: Bands,
+    #[serde(default)]
+    shroud: Option<Vec<f64>>,
+    #[serde(default)]
+    charge_no_difficult: bool,
+    #[serde(default = "default_probe_r")]
+    charge_probe_r: f64,
+}
+
+/// `SeparationChecker.DEFAULT_BASE_RADIUS_M` — the fallback
+/// `BattleSim.charge_illegal_plain` (battle_sim.gd:1563) reads for an absent key.
+fn default_probe_r() -> f64 {
+    0.016
 }
 
 #[derive(Deserialize)]
-struct PlainState {
+pub(crate) struct PlainState {
     round: i64,
     rounds_total: i64,
     #[serde(default)]
@@ -209,7 +226,7 @@ pub struct NodeCorpus {
 
 /// Builds (or reuses) the roster for one plain state. Every node of one game has
 /// the same unit keys in the same order, so the roster is interned across nodes.
-fn roster_of(
+pub(crate) fn roster_of(
     plain: &PlainState,
     profiles: &Profiles,
     cache: &mut Option<Rc<Roster>>,
@@ -279,7 +296,7 @@ fn capture_positions(keys: &[String]) -> Vec<usize> {
     pos
 }
 
-fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Roster>) -> State {
+pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Roster>) -> State {
     let n = roster.keys.len();
     // Roster index -> its row/column in the recorded matrix; see `capture_positions`.
     let cap = capture_positions(&roster.keys);
@@ -317,6 +334,10 @@ fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Roster>) -> S
         attached: Rc::new(Vec::new()),
         attached_to: Rc::new(Vec::new()),
         los: Vec::with_capacity(n),
+        bands: Vec::with_capacity(n),
+        shroud: Vec::with_capacity(n),
+        charge_no_difficult: Vec::with_capacity(n),
+        charge_probe_r: Vec::with_capacity(n),
         los_pairs: plain.los_pairs.as_ref().map(|rows| {
             // Read the matrix in its own (capture) order and STORE it in roster
             // order, so `_los_clear`'s port can index it with roster indices.
@@ -357,6 +378,15 @@ fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Roster>) -> S
         st.mods.push(u.mods);
         st.mods_base.push(Rc::new(u.mods_base));
         st.los.push(u.los.map(Rc::new));
+        st.bands.push(u.bands);
+        // `_melee_shroud_charge_in_plain` (battle_sim.gd:1572) takes the pair only
+        // when the recorded array holds BOTH numbers; anything shorter is "absent".
+        st.shroud.push(match u.shroud {
+            Some(v) if v.len() >= 2 => Some([v[0], v[1]]),
+            _ => None,
+        });
+        st.charge_no_difficult.push(u.charge_no_difficult);
+        st.charge_probe_r.push(u.charge_probe_r);
     }
     st.attached = Rc::new(
         attached_keys
