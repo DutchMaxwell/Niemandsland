@@ -3333,6 +3333,8 @@ static var _move_seam_env := -1
 static var _move_check_env := -1
 const MOVE_SEAM_EPS := 1e-9
 var _core_move_warned := false
+var _core_move_checks := 0        # selfcheck: plan_unit_step calls compared this game
+var _core_move_diffs := 0         # selfcheck: how many of them disagreed
 
 
 static func _move_seam_on() -> bool:
@@ -3360,10 +3362,17 @@ func _core_move_plan(mctx: Dictionary, mpos: Array, mdelta: Vector2, walls_in: A
 		var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, grid,
 			allow_contact, board_in, plan_trails, opts)
 		if not seam.is_empty():
+			# One census line per CALL, the way the search selfcheck prints one
+			# per activation: a silent green proves nothing about how many calls
+			# were actually compared.
+			_core_move_checks += 1
 			var bad := _core_move_diff(seam, planned, plan_trails, opts)
 			if bad != "":
-				print("[core] move seam MISMATCH (%s act=%d r=%d): %s"
-					% [str(mctx["unit"]), int(mctx["act"]), int(mctx["round"]), bad])
+				_core_move_diffs += 1
+			print("[core] MOVE SELFCHECK #%d (%s act=%d r=%d models=%d) %s"
+				% [_core_move_checks, str(mctx["unit"]), int(mctx["act"]),
+					int(mctx["round"]), planned.size(),
+					"OK" if bad == "" else "DIFF[%d] %s" % [_core_move_diffs, bad]])
 		return planned
 	plan_trails.assign(seam["trails"])
 	opts["flow_order"] = seam["flow_order"]
@@ -3377,7 +3386,12 @@ func _core_move_step(mctx: Dictionary) -> Dictionary:
 	var node := _core_node_ready()
 	if node == null:
 		return {}
-	var out: Dictionary = node.plan_unit_step(mctx)
+	# fast_planner/fast_planner_guard are MovementPlanner class statics, per GAME
+	# and not per call (main.gd:2276-2282 — fast_planner is FALSE in interactive
+	# play with difficulty grades). The port cannot read them, so they travel
+	# beside the call rather than being assumed.
+	var out: Dictionary = node.plan_unit_step(mctx, MovementPlanner.fast_planner,
+		MovementPlanner.fast_planner_guard)
 	if bool(out.get("ok", false)):
 		return out
 	if not _core_move_warned:

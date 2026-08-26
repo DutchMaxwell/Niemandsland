@@ -392,19 +392,28 @@ impl NmlCore {
     /// is marshalled into the recorder's own JSON line and read back through
     /// `io::read_moves`, the corpus gate's reader, before the port sees it.
     ///
+    /// `fast_planner` / `fast_planner_guard` are `MovementPlanner`'s two class
+    /// statics (movement_planner.gd:54-61). They are per-GAME — the recorder
+    /// writes them into the corpus HEADER, not into a call line — so they come
+    /// in beside the call instead of being guessed. `fast_planner` is NOT always
+    /// true in the interactive game (main.gd:2276).
+    ///
     /// Answers `{"ok": true, "planned": [Vector2, …], "trails": [[Vector2, …],
-    /// …], "flow_order": [int, …]}` or `{"ok": false, "error": "…"}`. A decline
-    /// is expected, not exceptional: until M4-5 lands the solver the port
-    /// declines every call and the caller runs the GDScript planner. A panic
+    /// …], "flow_order": [int, …]}` or `{"ok": false, "error": "…"}`. A panic
     /// inside the port is caught and answered as a decline like any other — the
     /// seam never takes the game down (rule R1).
     #[func]
-    fn plan_unit_step(&mut self, call: VarDictionary) -> VarDictionary {
+    fn plan_unit_step(
+        &mut self,
+        call: VarDictionary,
+        fast_planner: bool,
+        fast_planner_guard: i64,
+    ) -> VarDictionary {
         self.last_error.clear();
         let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let line = mvcall::call_line(&call);
             let mc = nml_core::mv::entry::read_call_line(&line)?;
-            nml_core::mv::entry::plan_unit_step_call(&mc)
+            nml_core::mv::entry::plan_unit_step_call(&mc, fast_planner, fast_planner_guard)
         }));
         let out = match caught {
             Ok(r) => r,

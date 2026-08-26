@@ -6,38 +6,46 @@
 //! read back through `io::read_moves` — the SAME reader the corpus gate uses —
 //! so the seam and the gate can never disagree about what a call IS.
 //!
-//! The solver itself lands in M4-5 (flow/untangle, formation, charge extras).
-//! Until then `plan_unit_step_call` declines, the GDScript planner answers every
-//! call, and the plumbing below is what gets proven: the marshalling, the
-//! reader, and the fallback.
+//! The solver behind it is `mv::plan::plan_unit_step` (M4-5). This file owns the
+//! door, not the pipeline: the marshalling, the reader, and the one thing the
+//! call line cannot carry — the per-GAME search configuration, which lives in
+//! the corpus HEADER and is therefore handed in beside the call.
 
 use super::cost::{CellSet, Grid};
 use super::geom2::{to_f64, V2};
 use super::io::{read_moves, MoveCall};
+use super::plan::plan_unit_step_cfg;
+use super::theta::ThetaCfg;
 
-/// What `MovementPlanner.plan_unit_step` hands back — the three things
-/// `MoveRecorder.finish` records (move_recorder.gd:92-95): the per-model final
-/// positions it RETURNS, the per-model polylines it appended to `plan_trails`,
-/// and the `opts["flow_order"]` it wrote back into the caller's own dictionary.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct Planned {
-    /// The returned array — one final position per model, in model order.
-    pub planned: Vec<V2>,
-    /// `plan_trails` — one polyline per model, in model order.
-    pub trails: Vec<Vec<V2>>,
-    /// `opts["flow_order"]` — the order the sequential flow filed the models in.
-    pub flow_order: Vec<i64>,
-}
+/// What `MovementPlanner.plan_unit_step` hands back — `mv::plan`'s own struct.
+///
+/// The seam reads three of its fields (`planned`, `trails`, `flow_order`, the
+/// three channels `MoveRecorder.finish` records, move_recorder.gd:92-95); the
+/// other two are stage censuses a gate counts and a caller ignores.
+pub use super::plan::Planned;
 
 /// The port's answer for ONE recorded/live call.
 ///
-/// M4-6a ships the seam, not the solver: this declines until M4-5 lands the
-/// flow/untangle and formation stages it stands on. A decline is not a failure
-/// — the caller falls back to `MovementPlanner.plan_unit_step` and the game is
-/// byte-identical either way (rule R1: the port is never load-bearing).
-pub fn plan_unit_step_call(call: &MoveCall) -> Result<Planned, String> {
-    let _ = call;
-    Err("M4-5 pending".into())
+/// `fast_planner` / `fast_planner_guard` are `MovementPlanner`'s two class
+/// statics (movement_planner.gd:54-61, set in main.gd:2276-2282). They are
+/// per-GAME, not per-call — the recorder writes them into the corpus HEADER —
+/// so the live seam hands them in beside the call rather than inventing them.
+/// `fast_planner` is NOT always true in the interactive game
+/// (`_solo_batch or _solo_difficulty_grades.is_empty()`), and guessing it would
+/// be a silent divergence exactly where no arena gate ever looks.
+///
+/// The `Result` is the reader's channel, not the solver's: `plan_unit_step`
+/// itself is total. A decline leaves the GDScript planner in charge (rule R1).
+pub fn plan_unit_step_call(
+    call: &MoveCall,
+    fast_planner: bool,
+    fast_planner_guard: i64,
+) -> Result<Planned, String> {
+    Ok(plan_unit_step_cfg(
+        call,
+        ThetaCfg::of(fast_planner, fast_planner_guard),
+        Default::default(),
+    ))
 }
 
 // ------------------------------------------------------------------ reader --
@@ -222,11 +230,36 @@ mod tests {
         assert!(s1.contains("\"avoid_cells\":[[1,1],[2,2]]"), "{s1}");
     }
 
-    /// The solver is M4-5's; until then the seam declines and the caller falls
-    /// back. A green gate here must not read as "the port planned the move".
+    /// The door reaches the solver and the solver answers in the caller's own
+    /// shape: one endpoint and one trail per model, a flow order that is a
+    /// permutation of the model indices.
     #[test]
-    fn the_solver_declines_until_m4_5() {
+    fn the_door_reaches_the_solver() {
         let c = read_call_line(&line()).expect("call parses");
-        assert_eq!(plan_unit_step_call(&c), Err("M4-5 pending".to_string()));
+        let p = plan_unit_step_call(&c, true, super::super::FAST_PLANNER_GUARD)
+            .expect("the solver answers");
+        assert_eq!(p.planned.len(), c.model_pos.len());
+        assert_eq!(p.trails.len(), c.model_pos.len());
+        let mut order = p.flow_order.clone();
+        order.sort_unstable();
+        assert_eq!(order, vec![0, 1]);
+    }
+
+    /// The search configuration is the caller's, not a constant: the guard is
+    /// what bounds the any-angle search, so a seam that ignored it would plan a
+    /// different route from the GDScript it stands in for.
+    #[test]
+    fn the_search_configuration_is_load_bearing() {
+        let c = read_call_line(&line()).expect("call parses");
+        let fast = plan_unit_step_call(&c, true, 320).expect("fast");
+        let slow = plan_unit_step_call(&c, false, 320).expect("slow");
+        // Both are legal plans; what matters is that the flag REACHES the search
+        // rather than being dropped on the way in.
+        assert_eq!(fast.planned.len(), slow.planned.len());
+        assert_eq!(
+            ThetaCfg::of(false, 320).fast_planner,
+            false,
+            "the cfg the seam builds is the cfg the search gets"
+        );
     }
 }
