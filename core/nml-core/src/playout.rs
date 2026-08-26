@@ -21,8 +21,9 @@
 use crate::io::{Action, Seams};
 use crate::menu::{best_charge, best_shoot, safe_advance, Candidate, Tuning};
 use crate::score::{score, NO_INCOMING};
+use crate::mv::reach::ReachIndex;
 use crate::sim::{
-    reply_threat, resolve_on_board, Scratch, Unsupported, CHARGE, HOLD, RUSH,
+    reply_threat, resolve_on_board_reach, Scratch, Unsupported, CHARGE, HOLD, RUSH,
 };
 use crate::state::State;
 use crate::terrain::Terrain;
@@ -37,6 +38,11 @@ pub struct Policy<'a> {
     pub statics: &'a [UnitStatic],
     pub terrain: &'a Terrain,
     pub seams: Seams,
+    /// NML-1073 M4-7 — the round's tier-2 obstacle index, built once from the
+    /// planner's ROOT state (`plan::plan_with_rollout`) and shared by every
+    /// imagined activation. `None` whenever `seams.path` is off, and also when
+    /// the header carried no board.
+    pub reach: Option<&'a ReachIndex>,
     /// The menu tuning — `Tuning::default()` everywhere except in a red proof.
     pub tuning: Tuning,
     /// TEST SEAM, `None` in every shipping call: forces every imagined
@@ -49,7 +55,14 @@ pub struct Policy<'a> {
 
 impl<'a> Policy<'a> {
     pub fn new(statics: &'a [UnitStatic], terrain: &'a Terrain, seams: Seams) -> Policy<'a> {
-        Policy { statics, terrain, seams, tuning: Tuning::default(), force_leaf: None }
+        Policy {
+            statics,
+            terrain,
+            seams,
+            reach: None,
+            tuning: Tuning::default(),
+            force_leaf: None,
+        }
     }
 
     /// `AiPlanner._policy_candidates` ai_planner.gd:649-677 — the restricted
@@ -156,7 +169,7 @@ impl<'a> Policy<'a> {
     /// imagined activation goes through.
     pub fn resolve(&self, state: &State, c: &Candidate) -> Result<State, Unsupported> {
         let a: Action = c.action();
-        resolve_on_board(self.statics, state, &a, self.terrain, self.seams)
+        resolve_on_board_reach(self.statics, state, &a, self.terrain, self.seams, self.reach)
     }
 }
 

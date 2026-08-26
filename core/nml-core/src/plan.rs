@@ -44,7 +44,8 @@ use crate::menu::{candidates_tuned, Candidate};
 use crate::playout::Policy;
 use crate::rollout::Rollout;
 use crate::score::score;
-use crate::sim::{reply_threat, Scratch, Unsupported};
+use crate::mv::reach::ReachIndex;
+use crate::sim::{reach_index_for_state, reply_threat, Scratch, Unsupported};
 use crate::state::State;
 use crate::terrain::Terrain;
 use crate::unit::UnitStatic;
@@ -168,6 +169,32 @@ pub struct Search<'a> {
     pub sig: Option<i64>,
 }
 
+/// The three seams `resolve` branches on, off the resolved knobs.
+fn seams_of(knobs: &Knobs) -> Seams {
+    Seams { spacing: knobs.seam_spacing, cast: knobs.seam_cast, path: knobs.seam_path }
+}
+
+/// NML-1073 M4-7 — the tier-2 obstacle index for THIS planner call, built once
+/// from the root state and shared by every rollout underneath it. `None` unless
+/// the path seam is on, which is what keeps a seam-off search byte-identical.
+fn reach_of(seams: Seams, state: &State, terrain: &Terrain) -> Option<ReachIndex> {
+    if !seams.path {
+        return None;
+    }
+    reach_index_for_state(state, terrain)
+}
+
+fn policy_of<'a>(
+    statics: &'a [UnitStatic],
+    terrain: &'a Terrain,
+    seams: Seams,
+    reach: Option<&'a ReachIndex>,
+) -> Policy<'a> {
+    let mut p = Policy::new(statics, terrain, seams);
+    p.reach = reach;
+    p
+}
+
 /// `plan_with_rollout` with everything default — the entry point the game would
 /// call. `knobs` carries the resolved search settings AND the two `resolve`
 /// seams, so no environment is read here.
@@ -179,8 +206,9 @@ pub fn plan_with_rollout(
     act: &ActStatics,
     player: i64,
 ) -> Result<Pick, Unsupported> {
-    let seams = Seams { spacing: knobs.seam_spacing, cast: knobs.seam_cast };
-    let roll = Rollout::new(Policy::new(statics, terrain, seams), *knobs);
+    let seams = seams_of(knobs);
+    let index = reach_of(seams, state, terrain);
+    let roll = Rollout::new(policy_of(statics, terrain, seams, index.as_ref()), *knobs);
     let mut sc = Scratch::default();
     Search::new(roll, act).run(state, player, &mut sc)
 }
@@ -197,8 +225,9 @@ pub fn plan_with_rollout_sig(
     player: i64,
     sig: Option<i64>,
 ) -> Result<Pick, Unsupported> {
-    let seams = Seams { spacing: knobs.seam_spacing, cast: knobs.seam_cast };
-    let roll = Rollout::new(Policy::new(statics, terrain, seams), *knobs);
+    let seams = seams_of(knobs);
+    let index = reach_of(seams, state, terrain);
+    let roll = Rollout::new(policy_of(statics, terrain, seams, index.as_ref()), *knobs);
     let mut sc = Scratch::default();
     let mut search = Search::new(roll, act);
     search.sig = sig;
@@ -215,8 +244,9 @@ pub fn plan(
     act: &ActStatics,
     player: i64,
 ) -> Result<Option<OnePly>, Unsupported> {
-    let seams = Seams { spacing: knobs.seam_spacing, cast: knobs.seam_cast };
-    let roll = Rollout::new(Policy::new(statics, terrain, seams), *knobs);
+    let seams = seams_of(knobs);
+    let index = reach_of(seams, state, terrain);
+    let roll = Rollout::new(policy_of(statics, terrain, seams, index.as_ref()), *knobs);
     let mut sc = Scratch::default();
     Search::new(roll, act).plan(state, player, &mut sc)
 }

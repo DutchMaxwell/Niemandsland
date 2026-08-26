@@ -118,9 +118,23 @@ impl NmlCore {
     /// The A/B seams `resolve` branches on — `BattleSim.spacing_enabled()` /
     /// `cast_phase_enabled()` (battle_sim.gd:25-42). Default: the same
     /// NML_SIM_SPACING / NML_SIM_CAST environment read the GDScript does.
+    ///
+    /// The ARITY is fixed: two GDScript callers pass exactly these two
+    /// (solo_controller.gd:3103, tools/node_core_check.gd:85). The third seam
+    /// (NML-1073 M4-7 `path`) therefore keeps its ENVIRONMENT reading here and
+    /// gets `set_seam_path` of its own for a caller that wants to pin it.
     #[func]
     fn set_seams(&mut self, spacing: bool, cast: bool) {
-        self.seams = Some(Seams { spacing, cast });
+        let path = self.seams_now().path;
+        self.seams = Some(Seams { spacing, cast, path });
+    }
+
+    /// NML-1073 M4-7 — NML_SIM_PATH: the imagined move follows a tier-2
+    /// `mv::reach` route instead of a straight line. Default OFF.
+    #[func]
+    fn set_seam_path(&mut self, path: bool) {
+        let s = self.seams_now();
+        self.seams = Some(Seams { path, ..s });
     }
 
     #[func]
@@ -129,6 +143,7 @@ impl NmlCore {
         let mut d = VarDictionary::new();
         d.set("spacing", s.spacing);
         d.set("cast", s.cast);
+        d.set("path", s.path);
         d
     }
 
@@ -369,6 +384,7 @@ impl NmlCore {
         d.set("top_k", h.knobs.top_k);
         d.set("horizon", h.knobs.horizon);
         d.set("seam_spacing", h.knobs.seam_spacing);
+        d.set("seam_path", h.knobs.seam_path);
         d.set("statics_builds", self.scache.builds as i64);
         d
     }
@@ -442,6 +458,10 @@ impl NmlCore {
         statics: &VarDictionary,
         sig: i64,
     ) -> Result<VarDictionary, String> {
+        // BEFORE the header borrow: `seams_now` needs `&mut self`, and the path
+        // seam has to reach `plan_with_rollout` through the KNOBS, which is
+        // where `plan.rs` reads its three seams from.
+        let path_seam = self.seams_now().path;
         let keys = plain::unit_keys(plain);
         // NML-1073 M2-5b: the profile table THIS activation reads. The per-unit
         // `prof` blocks the seam stamps carry every field a live game rewrites
@@ -480,11 +500,13 @@ impl NmlCore {
             }
         }
         let act = act_statics_of(statics);
+        let mut knobs = h.knobs;
+        knobs.seam_path = knobs.seam_path || path_seam;
         let pick = plan_with_rollout_sig(
             &cap.state,
             &h.terrain,
             &unit_statics,
-            &h.knobs,
+            &knobs,
             &act,
             player,
             Some(sig),
@@ -507,6 +529,8 @@ impl NmlCore {
             self.seams = Some(Seams {
                 spacing: !spacing_off("NML_SIM_SPACING"),
                 cast: on("NML_SIM_CAST"),
+                // NML-1073 M4-7. Read ONCE, here, like its two siblings.
+                path: on("NML_SIM_PATH"),
             });
         }
         self.seams.unwrap()

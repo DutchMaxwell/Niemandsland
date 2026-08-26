@@ -211,6 +211,12 @@ pub struct Seams {
     /// `BattleSim.cast_phase_enabled()` — NML_SIM_CAST, battle_sim.gd:37-42.
     #[serde(default)]
     pub cast: bool,
+    /// NML-1073 M4-7 — NML_SIM_PATH: the imagined move follows a tier-2
+    /// `mv::reach` route instead of a straight line. No corpus was ever
+    /// recorded with it, so it defaults OFF and every recorded rollout replays
+    /// digest-identical.
+    #[serde(default)]
+    pub path: bool,
 }
 
 impl Node {

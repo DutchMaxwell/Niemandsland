@@ -108,7 +108,7 @@ fn sweep_board(
     bend_policy: impl Fn(&mut Policy),
 ) -> Report {
     let statics = build_act_statics(c, REPO);
-    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast };
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path };
     let mut policy = Policy::new(&statics, terrain, seams);
     bend_policy(&mut policy);
     let mut knobs = c.knobs;
@@ -463,7 +463,7 @@ fn the_rollout_policy_tunables_are_measured_not_assumed() {
     // The restricted menu itself must still be the four-entry one, or the
     // plateau above would be the plateau of a menu that is simply not built.
     let statics = build_act_statics(&c, REPO);
-    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast };
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path };
     let policy = Policy::new(&statics, &c.terrain, seams);
     let mut sc = Scratch::default();
     let mut kinds = [0usize; 4];

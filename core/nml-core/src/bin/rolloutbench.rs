@@ -49,7 +49,7 @@ fn main() {
     let rounds: usize = args.next().and_then(|s| s.parse().ok()).unwrap_or(20);
     let c = load_acts(&path).unwrap_or_else(|e| panic!("{e}"));
     let statics = build_act_statics(&c, REPO);
-    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast };
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
 

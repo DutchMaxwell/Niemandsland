@@ -24,6 +24,7 @@ pub mod geom2;
 pub mod io;
 pub mod plan;
 pub mod pull;
+pub mod reach;
 pub mod replay;
 pub mod theta;
 
@@ -51,6 +52,11 @@ pub use geom2::{
 pub use io::{load_moves, read_moves, CallOpts, Constants, FlowEntry, MoveCall, MoveCorpus,
     MoveHeader, SolvePass, ThetaPop, Trace};
 pub use plan::{append_trail_finals, plan_unit_step, plan_unit_step_cfg, PlanBend, Planned};
+pub use reach::{
+    owner_bit, polyline_arc, walk_to, Disc, Reach, ReachBuild, ReachIndex, ReachQuery, ReachStats,
+    NO_OWNER,
+    REACH_CAP, REACH_CELL_IN, REACH_MEMO_IN, REACH_PULL_AHEAD, REACH_WALL_PAD_IN,
+};
 pub use pull::{
     board_clamp, furthest_clear, furthest_clear_steps, string_pull, string_pull_bent, walk_offset,
     walk_offset_bent, PullBend, WalkBend,

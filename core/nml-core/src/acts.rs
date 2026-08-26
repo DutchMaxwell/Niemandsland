@@ -52,6 +52,9 @@ pub struct Knobs {
     /// `BattleSim.spacing_enabled()` — NML_SIM_SPACING.
     #[serde(default)]
     pub seam_spacing: bool,
+    /// NML-1073 M4-7 — NML_SIM_PATH, the tier-2 path seam of the imagination.
+    #[serde(default)]
+    pub seam_path: bool,
 }
 
 impl Default for Knobs {
@@ -68,6 +71,7 @@ impl Default for Knobs {
             playout_rich: true,
             seam_cast: false,
             seam_spacing: false,
+            seam_path: false,
         }
     }
 }
