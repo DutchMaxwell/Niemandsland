@@ -28,6 +28,7 @@ use std::collections::{HashMap, HashSet};
 
 use super::cost::{cspace_blocked, segment_cost, step_blocked, terrain_cost_at, Grid, StepOpts, Wall};
 use super::geom2::{distance_to, to_f32, V2};
+use super::io::ThetaPop;
 use super::{cell_of, EPS, FAST_PLANNER_GUARD, PLAN_CELL_IN, THETA_DIAG};
 
 /// A `Vector2i` grid cell.
@@ -163,6 +164,58 @@ pub fn theta_star_bent(
     cfg: ThetaCfg,
     bend: ThetaBend,
 ) -> Vec<V2> {
+    theta_core(start, goal, walls, grid, board, opts, cfg, bend, None)
+}
+
+/// The shipped search PLUS trace v2's per-pop record — `g`, the parent's index
+/// in this search's own pop order, and the open-list size before the pop
+/// (movement_planner.gd:1405-1409). The returned list is empty exactly when the
+/// search took one of the two early-outs, which is also exactly when the
+/// recorder writes no `theta_searches` entry (:1411, guarded by `not
+/// _tn.is_empty()`).
+pub fn theta_star_traced(
+    start: V2,
+    goal: V2,
+    walls: &[Wall],
+    grid: &Grid,
+    board: V2,
+    opts: &ThetaOpts,
+    cfg: ThetaCfg,
+) -> (Vec<V2>, Vec<ThetaPop>) {
+    theta_star_traced_bent(start, goal, walls, grid, board, opts, cfg, ThetaBend::default())
+}
+
+/// The traced search with the red-proof knobs — the pop record is a far
+/// sharper gate than the path, because a bend can move an intermediate pop
+/// without moving the answer.
+#[allow(clippy::too_many_arguments)]
+pub fn theta_star_traced_bent(
+    start: V2,
+    goal: V2,
+    walls: &[Wall],
+    grid: &Grid,
+    board: V2,
+    opts: &ThetaOpts,
+    cfg: ThetaCfg,
+    bend: ThetaBend,
+) -> (Vec<V2>, Vec<ThetaPop>) {
+    let mut pops: Vec<ThetaPop> = Vec::new();
+    let path = theta_core(start, goal, walls, grid, board, opts, cfg, bend, Some(&mut pops));
+    (path, pops)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn theta_core(
+    start: V2,
+    goal: V2,
+    walls: &[Wall],
+    grid: &Grid,
+    board: V2,
+    opts: &ThetaOpts,
+    cfg: ThetaCfg,
+    bend: ThetaBend,
+    mut trace: Option<&mut Vec<ThetaPop>>,
+) -> Vec<V2> {
     let so = &opts.step;
     // :1347-1352 — early-out ONLY when the straight shot is hard-clear AND
     // carries no soft-cost surcharge; a merely-Dangerous line must still be
@@ -200,6 +253,8 @@ pub fn theta_star_bent(
     let reach_closest = opts.reach_closest || cfg.fast_planner;
     let mut best_reach: Cell = start_c;
     let mut best_reach_d: f64 = distance_to(start, goal);
+    // trace v2 only — `_pop_idx`, movement_planner.gd:1392.
+    let mut pop_idx: HashMap<Cell, i64> = HashMap::new();
 
     let diag = bend.diag();
 
@@ -223,6 +278,18 @@ pub fn theta_star_bent(
             }
         }
         let cur = open[best_i];
+        // :1404-1409 — the record is taken BEFORE the goal check and BEFORE the
+        // removal, so `open` is the size WITH `cur` still in it.
+        if let Some(t) = trace.as_deref_mut() {
+            let par_cell = parent[&cur];
+            let par_idx: i64 = if par_cell != cur {
+                pop_idx.get(&par_cell).copied().unwrap_or(-1)
+            } else {
+                -1
+            };
+            pop_idx.insert(cur, t.len() as i64);
+            t.push(ThetaPop { g: g[&cur], parent: par_idx, open: open.len() as i64 });
+        }
         if cur == goal_c {
             return theta_reconstruct(&parent, &pos, cur);
         }

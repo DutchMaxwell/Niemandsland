@@ -93,6 +93,42 @@ fn red_e_swapping_the_walk_eps_order_moves_recorded_walks() {
     println!("RED e: eps swapped -> {} of {} walks diverge, {} moved", t.determined - t.walk_ok, t.determined, t.walk_moved);
 }
 
+/// Trace v2 makes EVERY search's zone set exact (the `pull` field), so both M4-3
+/// stages are judged on the whole file, and `walk_spent` pins the walk's arc
+/// length as well as its nodes.
+#[test]
+fn g3b_trace_v2_pins_both_stages_on_every_search() {
+    let c = load_moves(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/moves_v2_s27_head.jsonl"
+    ))
+    .unwrap_or_else(|e| panic!("{e}"));
+    let (mut n, mut pull_ok, mut walk_ok, mut spent_ok, mut spent) = (0, 0, 0, 0, 0);
+    for (ci, call) in c.calls.iter().enumerate() {
+        for s in searches(ci, call, &c.header) {
+            n += 1;
+            assert!(s.determined, "trace v2 must determine every search");
+            if s.run_pull(call) == s.taut_expected {
+                pull_ok += 1;
+            }
+            let walked = s.run_walk(call);
+            if walked == s.walked_expected {
+                walk_ok += 1;
+            }
+            if let Some(v) = s.walk_spent {
+                spent += 1;
+                if (nml_core::mv::geom2::polyline_length(&walked) - v).abs() <= 1e-9 {
+                    spent_ok += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(pull_ok, n, "{} string_pull polylines diverge", n - pull_ok);
+    assert_eq!(walk_ok, n, "{} _walk_offset polylines diverge", n - walk_ok);
+    assert_eq!(spent_ok, spent, "{} walk_spent values diverge", spent - spent_ok);
+    println!("G3 v2: {n} searches, pull {pull_ok} ok, walk {walk_ok} ok, walk_spent {spent_ok}/{spent}");
+}
+
 // === Hand-built cases =======================================================
 
 fn no_cells() -> CellSet {

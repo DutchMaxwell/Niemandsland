@@ -30,7 +30,8 @@ use std::time::Instant;
 
 use nml_core::mv::io::MoveCall;
 use nml_core::mv::pull::{PullBend, WalkBend};
-use nml_core::mv::replay::{searches, ReplaySearch};
+use nml_core::mv::geom2::polyline_length;
+use nml_core::mv::replay::{align_searches, searches, ReplaySearch};
 use nml_core::mv::theta::{ThetaBend, ThetaCfg};
 use nml_core::mv::{load_moves, MoveCorpus};
 
@@ -125,11 +126,23 @@ struct Tally {
     ok: [usize; 3],
     bad: [usize; 3],
     moved: [usize; 3],
+    /// trace v2: searches aligned onto a recorded pop list.
+    aligned: usize,
+    pops_ok: usize,
+    pops_bad: usize,
+    pops_total: usize,
+    /// Calls whose pop lists could not be aligned — reported, never guessed.
+    unaligned_calls: usize,
+    spent_ok: usize,
+    spent_bad: usize,
 }
+
+/// The per-node tolerance for trace v2's recorded `g` (a JSON f64).
+const G_TOL: f64 = 1e-9;
 
 const STAGES: [&str; 3] = ["theta", "pull", "walk"];
 
-fn run_file(path: &str, b: Bends, shown: &mut [bool; 3]) -> Tally {
+fn run_file(path: &str, b: Bends, shown: &mut [bool; 4]) -> Tally {
     let c: MoveCorpus = load_moves(path).unwrap_or_else(|e| panic!("{e}"));
     c.header.constants.check().unwrap_or_else(|e| panic!("{path}: corpus constants: {e}"));
     let shipped = ThetaCfg::of(c.header.fast_planner, c.header.fast_planner_guard);
@@ -140,7 +153,28 @@ fn run_file(path: &str, b: Bends, shown: &mut [bool; 3]) -> Tally {
     let bending = b.active();
     let mut t = Tally::default();
     for (ci, call) in c.calls.iter().enumerate() {
-        for s in searches(ci, call, &c.header) {
+        let all = searches(ci, call, &c.header);
+        // trace v2: align this call's searches onto its recorded pop lists.
+        let mut pops: Vec<Vec<nml_core::mv::io::ThetaPop>> = Vec::new();
+        let mut align: Vec<Option<usize>> = Vec::new();
+        if !call.trace.theta_searches.is_empty() {
+            let ran: Vec<bool> = all
+                .iter()
+                .map(|s| {
+                    let (_, p) = s.run_traced(call, cfg, b.theta);
+                    let r = !p.is_empty();
+                    pops.push(p);
+                    r
+                })
+                .collect();
+            let need = ran.iter().filter(|r| **r).count();
+            if need <= call.trace.theta_searches.len() {
+                align = align_searches(&ran);
+            } else {
+                t.unaligned_calls += 1;
+            }
+        }
+        for (si, s) in all.iter().enumerate() {
             t.total += 1;
             let got = [
                 s.run_bent(call, cfg, b.theta),
@@ -170,13 +204,66 @@ fn run_file(path: &str, b: Bends, shown: &mut [bool; 3]) -> Tally {
                     t.bad[k] += 1;
                     if !shown[k] {
                         shown[k] = true;
-                        report_mismatch(STAGES[k], &label(path), call, &s, want[k], &got[k], cfg);
+                        report_mismatch(STAGES[k], &label(path), call, s, want[k], &got[k], cfg);
                     }
+                }
+            }
+            // trace v2, gate 2: every popped node's g / parent index / open size.
+            if let Some(Some(k)) = align.get(si) {
+                let rec = &call.trace.theta_searches[*k];
+                let mine = &pops[si];
+                t.aligned += 1;
+                t.pops_total += rec.len();
+                let same = rec.len() == mine.len()
+                    && rec.iter().zip(mine).all(|(r, m)| {
+                        (r.g - m.g).abs() <= G_TOL && r.parent == m.parent && r.open == m.open
+                    });
+                if same {
+                    t.pops_ok += 1;
+                } else {
+                    t.pops_bad += 1;
+                    if !shown[3] {
+                        shown[3] = true;
+                        report_pop_mismatch(&label(path), call, s, rec, mine);
+                    }
+                }
+            }
+            // trace v2, gate 3: the walk's recomputed arc length.
+            if let Some(spent) = s.walk_spent {
+                if (polyline_length(&got[2]) - spent).abs() <= G_TOL {
+                    t.spent_ok += 1;
+                } else {
+                    t.spent_bad += 1;
                 }
             }
         }
     }
     t
+}
+
+fn report_pop_mismatch(
+    file: &str,
+    call: &MoveCall,
+    s: &ReplaySearch,
+    rec: &[nml_core::mv::io::ThetaPop],
+    mine: &[nml_core::mv::io::ThetaPop],
+) {
+    println!("\n=== FIRST POP-RECORD MISMATCH — {file} ===");
+    println!(
+        "call {} unit={:?} act={} flow entry {} model {}: recorded {} pops, rust {} pops",
+        s.call, call.unit, call.act, s.entry, s.model, rec.len(), mine.len()
+    );
+    for i in 0..rec.len().min(mine.len()) {
+        let (r, m) = (&rec[i], &mine[i]);
+        if (r.g - m.g).abs() > G_TOL || r.parent != m.parent || r.open != m.open {
+            println!(
+                "pop {i}: recorded g={} parent={} open={}   rust g={} parent={} open={}",
+                r.g, r.parent, r.open, m.g, m.parent, m.open
+            );
+            return;
+        }
+    }
+    println!("every shared pop agrees; only the pop COUNT differs");
 }
 
 fn bench(paths: &[String]) {
@@ -312,7 +399,7 @@ fn main() {
         "{:<8} {:>8} {:>10} {:>8} {:>8} {:>4} {:>7} {:>4} {:>7} {:>4}",
         "game", "searches", "determined", "expanded", "theta_ok", "x", "pull_ok", "x", "walk_ok", "x"
     );
-    let mut shown = [false; 3];
+    let mut shown = [false; 4];
     let mut tot = Tally::default();
     for p in &paths {
         let t = run_file(p, b, &mut shown);
@@ -329,6 +416,13 @@ fn main() {
             tot.bad[k] += t.bad[k];
             tot.moved[k] += t.moved[k];
         }
+        tot.aligned += t.aligned;
+        tot.pops_ok += t.pops_ok;
+        tot.pops_bad += t.pops_bad;
+        tot.pops_total += t.pops_total;
+        tot.unaligned_calls += t.unaligned_calls;
+        tot.spent_ok += t.spent_ok;
+        tot.spent_bad += t.spent_bad;
     }
     println!(
         "{:<8} {:>8} {:>10} {:>8} {:>8} {:>4} {:>7} {:>4} {:>7} {:>4}",
@@ -336,19 +430,31 @@ fn main() {
         tot.ok[0], tot.bad[0], tot.ok[1], tot.bad[1], tot.ok[2], tot.bad[2]
     );
     println!("undetermined by trace v1: {}", tot.total - tot.determined);
+    if tot.aligned > 0 || tot.spent_ok > 0 {
+        println!(
+            "trace v2:    {} searches aligned onto pop lists, {} node-exact, {} diverging \
+             ({} popped nodes at |dg| <= {G_TOL:e}); {} calls unalignable",
+            tot.aligned, tot.pops_ok, tot.pops_bad, tot.pops_total, tot.unaligned_calls
+        );
+        println!(
+            "walk_spent:  {} exact, {} diverging",
+            tot.spent_ok, tot.spent_bad
+        );
+    }
     if b.active() {
         println!(
             "bend moved:  theta {}  pull {}  walk {}  (of {} replayed)",
             tot.moved[0], tot.moved[1], tot.moved[2], tot.total
         );
     }
-    let bad: usize = tot.bad.iter().sum();
+    let bad: usize = tot.bad.iter().sum::<usize>() + tot.pops_bad + tot.spent_bad;
     if bad == 0 {
         println!("GATE GREEN — every determined recorded stage is polyline-exact.");
     } else {
         println!(
-            "GATE RED — theta {} / pull {} / walk {} of {} determined diverge.",
-            tot.bad[0], tot.bad[1], tot.bad[2], tot.determined
+            "GATE RED — theta {} / pull {} / walk {} of {} determined diverge; \
+             pops {} / walk_spent {}.",
+            tot.bad[0], tot.bad[1], tot.bad[2], tot.determined, tot.pops_bad, tot.spent_bad
         );
         std::process::exit(1);
     }
