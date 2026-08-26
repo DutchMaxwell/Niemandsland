@@ -54,6 +54,12 @@ state = core.state_of(plain)               # one plain state -> an opaque State
 | `Core.vp_round_add / vp_end_bonus / vp_score_round / vp_score_end` | the VP ledger |
 | `Core.apply_destroy_step(markers, owners, seq)` | a destructible marker falls |
 | `Core.mission_winner(scoring, owners, vp, markers, alive1, alive2) -> str` | the referee |
+| `board(terrain) -> Board` | the header's `"terrain"` object as a lookup (`None` = no board) |
+| `Board.n()` / `Board.is_valid()` | the grid width in cells; whether a board was carried |
+| `Board.type_at([x, y, z]) -> int` | `TerrainOverlay.get_terrain_at_world_position` |
+| `Board.los_blocked(a, b) -> bool` | `SchoolTerrain.los_blocked` — the seam `core_selfplay` stamps |
+| `Board.los_pairs(units) -> list[str]` | `BattleSim.state_to_plain`'s `"los_pairs"` rows, key-sorted |
+| `type_at` / `los_blocked` / `los_pairs` | the same three as one-shot module functions |
 
 Plain dicts and lists in, plain dicts and lists out; a `State` is opaque because
 handing the struct-of-arrays out per call would spend more time marshalling than
@@ -99,3 +105,29 @@ module and holds the answer to the Rust gates' own bar (G4 `plan.rs`, G5
 | P6 | the harness surface (resolve, dice, mission scorers, eval) answers |
 | P7 | bench, printed not asserted |
 | P8 `acts_hero_dead.jsonl` | 2/2 across a hero's death, plus a red proof: the same act with its `prof` blocks stripped answers differently |
+| P9 | the `Board` surface, plus a red proof: an empty board blocks nothing |
+
+## The terrain gate (NML-1073 M3-4)
+
+`Board`'s answers are gated against GDScript oracles that do not fit in the
+repo — 200 school boards written by `tools/terrain_bank_dump.gd` and the act
+corpus of `tools/core_selfplay.gd`:
+
+```sh
+godot --headless --path . -s res://tools/terrain_bank_dump.gd -- \
+    out=~/selfplay_out/terrain_bank from=1 to=200
+~/venvs/nmlcore/bin/python core/nml-core-py/tools/los_gate.py \
+    --bank ~/selfplay_out/terrain_bank --boards 20 \
+    --corpus ~/selfplay_out/m3_oracle
+```
+
+| | |
+| --- | --- |
+| TYPE_AT | `Board.type_at` over each board's 3" lattice, versus the `SchoolTerrain.type_at` answers the generator wrote into it |
+| LOS_PAIRS | `Board.los_pairs` versus the recorded `"los_pairs"` rows of every act, whole strings |
+| LOS_BLOCKED | the same rows one pair at a time — the diff `tools/act_recheck.gd` prints as `LOS_GRID` |
+
+`--red-lattice-shift-in=0.5` is the RED knob for the first (the lattice sits
+0.25" short of each cell's far corner, so half an inch lands in the next cell);
+the RED knob for the other two is dropping one of RUINS/CONTAINER/FOREST from
+`terrain.rs::los_blocked` and rebuilding.

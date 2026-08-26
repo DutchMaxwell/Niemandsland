@@ -462,3 +462,86 @@ def test_p8_a_fallen_hero_stops_lending_its_rules_to_its_host():
     bad = [field for field, _ in diff(acts[1], stale)]
     print(f"GATE P8 RED proof: act 2 without `prof` is off on {len(bad)} field(s): {bad}")
     assert bad, "a stale profile table has to be VISIBLE here, or this gate cannot fail"
+
+
+# ------------------------------------------------------------------ GATE P9 ---
+# NML-1073 M3-4 — the BOARD surface: `nml_core.board(terrain)` and its three
+# lookups. The corpus gates for these live outside the repo (200 banked school
+# boards, `core/nml-core-py/tools/los_gate.py`); what belongs HERE is the seam
+# itself — that the header's terrain object crosses it and that the three
+# answers are the ones school_terrain.gd gives.
+
+SCHOOL_TERRAIN = {
+    "cells": [[14, 15, nml_core.TERRAIN_RUINS]],
+    "sandbox": [],
+    "cell_params": {
+        "table_size_feet": [6.0, 4.0],
+        "grid_rotation_degrees": 0.0,
+        "grid_size_inches": 3.0,
+        "inches_to_meters": 0.0254,
+    },
+}
+IN2M = 0.0254
+
+
+def test_p9_the_board_answers_type_at_los_blocked_and_los_pairs():
+    b = nml_core.board(SCHOOL_TERRAIN)
+    # `map_layout._calculate_grid_dimensions()` on the 6x4 ft school table
+    assert b.n() == 30 and b.is_valid()
+    # the one RUINS cell covers x in [-3", 0"), z in [0", 3")
+    assert b.type_at([-1.5 * IN2M, 0.0, 1.5 * IN2M]) == nml_core.TERRAIN_RUINS
+    assert b.type_at([-1.5 * IN2M, 0.0, -1.5 * IN2M]) == nml_core.TERRAIN_NONE
+
+    # the M3-0d red-green pair, in miniature: A at -6" and B at +12" are blocked
+    # THROUGH the ruin, and A rushed to +2" is past it (a root grid could never
+    # answer that point — which is the whole reason this twin exists)
+    a, foe, moved = [-6.0 * IN2M, 0, 0], [12.0 * IN2M, 0, 0], [2.0 * IN2M, 0, 0]
+    assert b.los_blocked(a, foe) and b.los_blocked(foe, a)
+    assert not b.los_blocked(moved, foe)
+    assert not b.los_blocked(a, a)
+
+    # `BattleSim.state_to_plain`'s "los_pairs" block, key-sorted (M3-0b): the
+    # rows follow p1_1, p1_10, p1_2 — NOT the insertion order below.
+    units = {
+        "p1_2": {"positions": [[12.0 * IN2M, 0, 0]]},
+        "p1_10": {"positions": [[-6.0 * IN2M, 0, 0]]},
+        "p1_1": {"positions": [[-9.0 * IN2M, 0, 0]]},
+    }
+    assert b.los_pairs(units) == ["110", "110", "001"]
+    # the one-shot forms answer the same
+    assert nml_core.los_pairs(SCHOOL_TERRAIN, units) == b.los_pairs(units)
+    assert nml_core.los_blocked(SCHOOL_TERRAIN, a, foe) is True
+    assert nml_core.type_at(SCHOOL_TERRAIN, [-1.5 * IN2M, 0.0, 1.5 * IN2M]) == 1
+
+    # RED PROOF: without the ruin nothing blocks, so the green above is not the
+    # answer an empty board would give anyway.
+    empty = json.loads(json.dumps(SCHOOL_TERRAIN))
+    empty["cells"] = []
+    assert not nml_core.board(empty).los_blocked(a, foe)
+    assert nml_core.board(empty).los_pairs(units) == ["111", "111", "111"]
+
+    # An ABSENT board (`"terrain": null` in the header) falls open, the same way
+    # an invalid `los_blocked` Callable leaves `_los_clear` answering "clear".
+    assert not nml_core.board(None).is_valid()
+    assert not nml_core.board(None).los_blocked(a, foe)
+
+
+def test_p9_the_corpus_header_terrain_crosses_the_seam():
+    """The arena corpus's header carries the OVERLAY form of the same object
+    (cells + sandbox + cell_params); the board has to read it too."""
+    with open(REPO / "core/nml-core/tests/fixtures/acts_25.jsonl") as f:
+        header = json.loads(f.readline())
+    b = nml_core.board(header.get("terrain"))
+    assert b.is_valid()
+    assert b.n() > 0
+    # every recorded cell reads back as its own type at its own centre
+    cell_m = (header["terrain"]["cell_params"]["grid_size_inches"]
+              * header["terrain"]["cell_params"]["inches_to_meters"])
+    half = b.n() / 2.0
+    checked = 0
+    for cx, cz, kind in header["terrain"]["cells"]:
+        p = [(cx - half + 0.5) * cell_m, 0.0, (cz - half + 0.5) * cell_m]
+        assert b.type_at(p) == kind, f"cell {cx},{cz}"
+        checked += 1
+    print(f"\nGATE P9: {checked} recorded cells read back through the seam")
+    assert checked > 0

@@ -59,8 +59,9 @@ use nmlcore::sim::Scratch;
 use nmlcore::state::{Marker, ProfileCache, Roster};
 use nmlcore::unit::{StaticsCache, UnitStatic};
 use nmlcore::{
-    io, mission, reply_threat, resolve_on_board, resolve_stochastic_on_board, score, Action,
-    GodotRng, Registries, Seams, State as CoreState, Terrain, Unsupported as CoreUnsupported,
+    geom, io, mission, reply_threat, resolve_on_board, resolve_stochastic_on_board, score, Action,
+    GodotRng, PlainTerrain, Registries, Seams, State as CoreState, Terrain,
+    Unsupported as CoreUnsupported,
 };
 
 create_exception!(nml_core, Unsupported, PyRuntimeError);
@@ -669,13 +670,145 @@ fn load(repo_root: &str) -> Core {
     }
 }
 
+// ------------------------------------------------------------------ Board ---
+
+/// The header's `"terrain"` object, read once. Every lookup below is a pure
+/// function of these cells, so a caller that asks more than one question builds
+/// the board once instead of re-reading the dict per call — a 30x30 lattice over
+/// 200 banked boards is 180 000 questions.
+#[pyclass(unsendable, module = "nml_core")]
+pub struct Board {
+    inner: Terrain,
+}
+
+/// One `[x, y, z]` list as a Godot `Vector3` — the positions the corpus carries
+/// are f64 text of f32 values, so the narrowing is lossless.
+fn v3_of(p: &Bound<'_, PyAny>) -> PyResult<[f32; 3]> {
+    let v: Vec<f64> = p.extract()?;
+    if v.len() != 3 {
+        return Err(Unsupported::new_err(format!("a point is [x, y, z], got {} entries", v.len())));
+    }
+    Ok(geom::to_f32([v[0], v[1], v[2]]))
+}
+
+#[pymethods]
+impl Board {
+    /// `SchoolTerrain.generate`'s `world["n"]` — the grid is `n` x `n` cells,
+    /// derived from `cell_params` the way `map_layout._calculate_grid_dimensions`
+    /// derives it from the table.
+    fn n(&self) -> i64 {
+        self.inner.n()
+    }
+
+    /// True when the header carried a board at all.
+    fn is_valid(&self) -> bool {
+        self.inner.is_valid()
+    }
+
+    /// `TerrainOverlay.get_terrain_at_world_position` — the cell grid first, the
+    /// freely placed sandbox shapes second. `SchoolTerrain.type_at`
+    /// (school_terrain.gd:58-60) reads the SAME cells through its own two
+    /// constants; the terrain-bank gate proves the two readings agree.
+    fn type_at(&self, p: &Bound<'_, PyAny>) -> PyResult<i32> {
+        Ok(self.inner.type_at(v3_of(p)?))
+    }
+
+    /// `SchoolTerrain.los_blocked` school_terrain.gd:65-83 — the seam
+    /// `tools/core_selfplay.gd:675` stamps on every state it searches.
+    fn los_blocked(&self, a: &Bound<'_, PyAny>, b: &Bound<'_, PyAny>) -> PyResult<bool> {
+        Ok(self.inner.los_blocked(v3_of(a)?, v3_of(b)?))
+    }
+
+    /// `BattleSim.state_to_plain`'s `"los_pairs"` block, battle_sim.gd:1492-1506
+    /// — hand it a plain state's `"units"` dict (only `"positions"` is read) and
+    /// it answers the same rows the recorder wrote, key-sorted (NML-1073 M3-0b).
+    fn los_pairs(&self, units: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
+        let read: Map<String, Value> = match value_of(units)? {
+            Value::Object(m) => m,
+            _ => return Err(Unsupported::new_err("units must be a dict of unit key -> unit")),
+        };
+        let mut list = Vec::with_capacity(read.len());
+        for (k, v) in read {
+            // Only `"positions"` is read: `_centre_of` is the whole input, and a
+            // unit with none is `Vector3.ZERO` exactly as battle_sim.gd:802 says.
+            let ps = match v.get("positions") {
+                Some(Value::Array(a)) => a.clone(),
+                None | Some(Value::Null) => vec![],
+                Some(_) => return Err(Unsupported::new_err(format!("{k}: positions is not a list"))),
+            };
+            let mut out = Vec::with_capacity(ps.len());
+            for pos in ps {
+                let xyz: [f64; 3] = serde_json::from_value(pos)
+                    .map_err(|e| Unsupported::new_err(format!("{k}: position: {e}")))?;
+                out.push(xyz);
+            }
+            list.push((k, out));
+        }
+        Ok(self.inner.los_pairs(&list))
+    }
+
+    fn __repr__(&self) -> String {
+        format!("<nml_core.Board n {} valid {}>", self.inner.n(), self.inner.is_valid())
+    }
+}
+
+/// Reads one act header's `"terrain"` object (or `None`) into a `Board`.
+#[pyfunction]
+fn board(terrain: Option<&Bound<'_, PyAny>>) -> PyResult<Board> {
+    let Some(terrain) = terrain else { return Ok(Board { inner: Terrain::absent() }) };
+    if terrain.is_none() {
+        return Ok(Board { inner: Terrain::absent() });
+    }
+    let p: PlainTerrain = serde_json::from_value(value_of(terrain)?)
+        .map_err(|e| Unsupported::new_err(format!("terrain: {e}")))?;
+    Ok(Board { inner: Terrain::build(&p) })
+}
+
+/// `board(terrain).type_at(p)` — the one-shot form.
+#[pyfunction]
+fn type_at(terrain: Option<&Bound<'_, PyAny>>, p: &Bound<'_, PyAny>) -> PyResult<i32> {
+    board(terrain)?.type_at(p)
+}
+
+/// `board(terrain).los_blocked(a, b)` — the one-shot form.
+#[pyfunction]
+fn los_blocked(
+    terrain: Option<&Bound<'_, PyAny>>,
+    a: &Bound<'_, PyAny>,
+    b: &Bound<'_, PyAny>,
+) -> PyResult<bool> {
+    board(terrain)?.los_blocked(a, b)
+}
+
+/// `board(terrain).los_pairs(units)` — the one-shot form.
+#[pyfunction]
+fn los_pairs(
+    terrain: Option<&Bound<'_, PyAny>>,
+    units: &Bound<'_, PyAny>,
+) -> PyResult<Vec<String>> {
+    board(terrain)?.los_pairs(units)
+}
+
 #[pymodule]
 fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__doc__", "NML-1073 M3-1 — the Niemandsland fast rules core, callable from Python.")?;
     m.add("Unsupported", m.py().get_type::<Unsupported>())?;
     m.add_class::<Core>()?;
     m.add_class::<PyState>()?;
+    m.add_class::<Board>()?;
     m.add_function(wrap_pyfunction!(load, m)?)?;
+    // NML-1073 M3-4: the board as a pure lookup — the header's terrain in, the
+    // same answers `SchoolTerrain` gives the live game out.
+    m.add_function(wrap_pyfunction!(board, m)?)?;
+    m.add_function(wrap_pyfunction!(type_at, m)?)?;
+    m.add_function(wrap_pyfunction!(los_blocked, m)?)?;
+    m.add_function(wrap_pyfunction!(los_pairs, m)?)?;
+    // `TerrainRules.TerrainType` — terrain_rules.gd:24.
+    m.add("TERRAIN_NONE", nmlcore::terrain::NONE)?;
+    m.add("TERRAIN_RUINS", nmlcore::terrain::RUINS)?;
+    m.add("TERRAIN_FOREST", nmlcore::terrain::FOREST)?;
+    m.add("TERRAIN_CONTAINER", nmlcore::terrain::CONTAINER)?;
+    m.add("TERRAIN_DANGEROUS", nmlcore::terrain::DANGEROUS)?;
     // The four action kinds `resolve` branches on — battle_sim.gd:570-652.
     m.add("HOLD", nmlcore::HOLD)?;
     m.add("ADVANCE", nmlcore::ADVANCE)?;
