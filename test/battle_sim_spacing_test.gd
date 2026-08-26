@@ -263,7 +263,8 @@ func test_an_attached_hero_does_not_block_its_hosts_rush() -> void:
 ## once S1's spacing exemption lets the mover in — past the OLD trigger's
 ## CONTACT_IN=1.0" centre-distance gate, so this is RED pre-fix (no melee
 ## ever fires here) and GREEN once the trigger measures the EDGE gap against
-## the table's own contact epsilon, CHARGE_CONTACT_MARGIN_IN (0.25").
+## the table's engage distance, SoloController.MELEE_ENGAGE_IN (1", NML-1073
+## S1d; S1b measured it against the 0.25" contact epsilon).
 func test_a_charge_reaching_base_contact_resolves_melee() -> void:
 	OS.set_environment("NML_SIM_SPACING", "1")
 	_reset_spacing_cache()
@@ -276,15 +277,16 @@ func test_a_charge_reaching_base_contact_resolves_melee() -> void:
 	assert_int(int(b["alive"])).is_equal(0)
 
 
-## NML-1073 S1b guard: a charge whose 12" reach band runs out exactly 1" short
-## of base contact (well past CHARGE_CONTACT_MARGIN_IN=0.25") never resolves
-## melee. GREEN before and after this fix — the old centre-distance gate
-## agreed here too (2.26" centre gap > CONTACT_IN=1.0").
+## NML-1073 S1b guard, re-aimed by S1d: a charge whose 12" reach band runs out
+## 1.5" short of base contact never resolves melee. The gap was 1.0" while the
+## trigger was the 0.25" epsilon; 1.0" is now EXACTLY on the inclusive
+## MELEE_ENGAGE_IN band, so the fixture moves clear of the boundary (T8 below
+## guards the near side at 1.2"). GREEN before and after.
 func test_a_charge_short_of_contact_by_the_reach_band_applies_no_melee() -> void:
 	OS.set_environment("NML_SIM_SPACING", "1")
 	_reset_spacing_cache()
 	var r_in := SeparationChecker.DEFAULT_BASE_RADIUS_M / IN2M
-	var target_x_in := 12.0 + 1.0 + 2.0 * r_in   # 12" charge band leaves exactly a 1" edge gap
+	var target_x_in := 12.0 + 1.5 + 2.0 * r_in   # 12" charge band leaves a 1.5" edge gap
 	var mover := _armed_at(1, [Vector3.ZERO], "Mover")
 	var blocker := _armed_at(2, [Vector3(target_x_in * IN2M, 0, 0)], "Blocker")
 	var state := _capture(mover, blocker)
@@ -293,6 +295,43 @@ func test_a_charge_short_of_contact_by_the_reach_band_applies_no_melee() -> void
 	var b: Dictionary = next["units"]["Blocker"]
 	assert_int(int(b["alive"])).is_equal(1)
 	assert_int(int(b["wounds"][0])).is_equal(1)
+
+
+## NML-1073 S1d T7: a charge that LANDS with a 0.6" base-edge gap fights. The
+## table engages and snaps to contact anywhere within MELEE_ENGAGE_IN (1",
+## main.gd:7971-7986), so this charge connects on the table. RED pre-fix:
+## S1b's trigger was the 0.25" contact epsilon, so the imagination called
+## 0.6" a fall-short the table never plays.
+func test_a_charge_landing_inside_the_engage_distance_resolves_melee() -> void:
+	OS.set_environment("NML_SIM_SPACING", "1")
+	_reset_spacing_cache()
+	var r_in := SeparationChecker.DEFAULT_BASE_RADIUS_M / IN2M
+	var target_x_in := 12.0 + 0.6 + 2.0 * r_in   # 12" charge band leaves a 0.6" edge gap
+	var mover := _armed_at(1, [Vector3.ZERO], "Mover")
+	var blocker := _armed_at(2, [Vector3(target_x_in * IN2M, 0, 0)], "Blocker")
+	var state := _capture(mover, blocker)
+	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(target_x_in * IN2M, 0, 0), "charge": "Blocker"})
+	assert_bool(bool((next["units"]["Mover"] as Dictionary).get("fatigued", false))).is_true()
+	assert_int(int((next["units"]["Blocker"] as Dictionary)["alive"])).is_equal(0)
+
+
+## NML-1073 S1d T8: 1.2" of base-edge gap is BEYOND the table's engage distance,
+## so the imagined charge falls short exactly as the table's does — no strike,
+## no fatigue stamp. GREEN before and after; it pins the far side of the new
+## band so a future widening cannot pass unnoticed.
+func test_a_charge_landing_outside_the_engage_distance_applies_no_melee() -> void:
+	OS.set_environment("NML_SIM_SPACING", "1")
+	_reset_spacing_cache()
+	var r_in := SeparationChecker.DEFAULT_BASE_RADIUS_M / IN2M
+	var target_x_in := 12.0 + 1.2 + 2.0 * r_in   # 12" charge band leaves a 1.2" edge gap
+	var mover := _armed_at(1, [Vector3.ZERO], "Mover")
+	var blocker := _armed_at(2, [Vector3(target_x_in * IN2M, 0, 0)], "Blocker")
+	var state := _capture(mover, blocker)
+	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(target_x_in * IN2M, 0, 0), "charge": "Blocker"})
+	assert_bool(bool((next["units"]["Mover"] as Dictionary).get("fatigued", false))).is_false()
+	assert_int(int((next["units"]["Blocker"] as Dictionary)["alive"])).is_equal(1)
 
 
 ## NML-1073 S1 review (a): the charge VICTIM can itself be a joined hero

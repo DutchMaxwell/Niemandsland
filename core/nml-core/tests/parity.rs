@@ -7,30 +7,34 @@
 //!   * `FIXTURE` — every 10th node of the 2000-node spacing-OFF recording, both
 //!     seams OFF. A systematic sample, not the head: the first 200 nodes are all
 //!     round 1 and carry no volley that lands a wound, so a head slice would
-//!     pin GATE B without ever exercising the shoot path. Composition: 38 HOLD,
-//!     53 ADVANCE, 71 RUSH, 38 CHARGE; 74 rich-leaf, 126 cheap-leaf; 15 shoot
-//!     nodes of which 5 land wounds; 2 charges reach contact.
+//!     pin GATE B without ever exercising the shoot path. Composition: 50 HOLD,
+//!     39 ADVANCE, 57 RUSH, 54 CHARGE; 71 rich-leaf, 129 cheap-leaf; 12 shoot
+//!     nodes of which 7 land wounds; 5 charges reach contact.
 //!   * `SPACING` — every 10th node of the spacing-ON recording
 //!     (`NML_SIM_SPACING=1`, the trainer's default going forward): 47 HOLD,
 //!     45 ADVANCE, 53 RUSH, 55 CHARGE, of which 43 movers are SHORTENED by the
 //!     `_spacing_fraction` clamp.
 //!   * `MELEE` — EVERY charge node of the spacing-OFF recording that reached
-//!     contact (36 of 518), not a sample. Still a spacing-OFF slice, but no
+//!     contact (52 of 519), not a sample. Still a spacing-OFF slice, but no
 //!     longer because the clamp makes melee unreachable: NML-1073 S1 gives the
-//!     charge target a body-only disc, so a clamped charge CAN now land in base
-//!     contact (5 of 525 do, against 0 before). It stays the spacing-OFF
-//!     recording because that is where contacts are plentiful enough to gate
-//!     the strike/morale/rout half. Carries 7 routs and 22 newly-shaken units.
+//!     charge target a body-only disc, so a clamped charge CAN land in base
+//!     contact (7 of 525 do on the spacing-ON recording, against 5 in S2 and 0
+//!     before S1). It stays the spacing-OFF recording because that is where
+//!     contacts are plentiful enough to gate the strike/morale/rout half.
+//!     Carries 23 routs and 17 newly-shaken units.
 //!   * `CAST` — EVERY node of the cast-ON recording (`NML_SIM_CAST=1`, spacing
 //!     also on) whose activation spent a caster token: 99 of 2000, 33 each on
 //!     HOLD, RUSH and CHARGE. That HOLD/RUSH/CHARGE split IS the point of
 //!     NML-1069 — the legacy rider only ever cast inside a shoot pick, so a
 //!     rushing or charging caster never cast at all.
 //!
-//! All four were RE-RECORDED on the NML-1073 S1/S1b branch (seed 27,
-//! robot_legions_1000 vs blessed_sisters_1000, `NML_NODE_DUMP_MAX=2000`), same
-//! recipe as M1-3: the spacing exemption and the edge-gap melee trigger change
-//! what the GDScript plays, so the pre-S1 corpora no longer describe it.
+//! All four were RE-RECORDED for NML-1073 S1d (seed 27, robot_legions_1000 vs
+//! blessed_sisters_1000, `NML_NODE_DUMP_MAX=2000`), same recipe as M1-3. S1d
+//! moved the melee trigger from the 0.25" contact epsilon to the table's own
+//! 1" `MELEE_ENGAGE_IN` and made the planner's charge-candidate gate read the
+//! RAW edge gap, so the S1/S1b corpora no longer describe what the GDScript
+//! plays. Spacing is DEFAULT ON since 0171f9f, so the seam-OFF recording now
+//! has to say `NML_SIM_SPACING=0` explicitly.
 //!
 //! GATE A: `score(state_after, player, incoming)` reproduces the recorded score
 //! on every node, where `incoming` is `reply_threat` computed in Rust for a RICH
@@ -210,7 +214,7 @@ fn gate_b_on(path: &str, want: [usize; 4]) {
 
 #[test]
 fn gate_b_resolve_reproduces_state_after_on_every_kind() {
-    gate_b_on(FIXTURE, [38, 53, 71, 38]);
+    gate_b_on(FIXTURE, [50, 39, 57, 54]);
 }
 
 /// The same gate on the spacing-ON recording: `resolve` must take the clamp
@@ -285,9 +289,9 @@ fn gate_b_melee_charges_reproduce_strike_morale_and_rout() {
             }
         }
     }
-    assert_eq!(contacts, 36, "every recorded contact");
-    assert_eq!(routs, 7, "melee morale routs a side seven times");
-    assert_eq!(shaken, 22, "and shakes one twenty-two times");
+    assert_eq!(contacts, 52, "every recorded contact");
+    assert_eq!(routs, 23, "melee morale routs a side twenty-three times");
+    assert_eq!(shaken, 17, "and shakes one seventeen times");
     assert!(strike_backs > 0, "survivors strike back and fatigue the defender");
 }
 
@@ -308,13 +312,13 @@ fn the_melee_leg_is_load_bearing() {
             broken += 1;
         }
     }
-    assert_eq!(broken, 36, "every contact node needs the charge leg");
+    assert_eq!(broken, 52, "every contact node needs the charge leg");
 }
 
 /// Red-green for GATE B's shoot path: GATE B would be green on a `resolve()`
 /// that never fires a shot, as long as the recorded volleys all dealt zero. So
-/// count the volleys that actually MOVE the defender — the fixture carries 15
-/// shoot nodes, 5 of which land expected wounds (the rest are out of range, out
+/// count the volleys that actually MOVE the defender — the fixture carries 12
+/// shoot nodes, 7 of which land expected wounds (the rest are out of range, out
 /// of sight, or worth exactly nothing).
 #[test]
 fn gate_b_shoot_nodes_actually_deal_damage() {
@@ -339,8 +343,8 @@ fn gate_b_shoot_nodes_actually_deal_damage() {
             changed += 1;
         }
     }
-    assert_eq!(shooters, 15, "fixture's HOLD+shoot nodes");
-    assert_eq!(changed, 5, "volleys that land expected wounds");
+    assert_eq!(shooters, 12, "fixture's HOLD+shoot nodes");
+    assert_eq!(changed, 7, "volleys that land expected wounds");
 }
 
 /// Red-green for the recorded terrain answer: flipping `cover_dest` must change

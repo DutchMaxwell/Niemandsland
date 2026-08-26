@@ -403,13 +403,14 @@ func test_charge_illegal_callable_filters_the_menu() -> void:
 	assert_bool(kinds_gated.has(AiDecision.Action.CHARGE)).is_false()
 
 
-## NML-1073 S1b: the charge-candidate gate's `gap_in` argument must be the
-## table's EDGE gap (radii-aware), not centre distance minus the flat
-## BattleSim.CONTACT_IN (1.0") slack — only right for ~25 mm bases. Two 50 mm
-## bases (radius 0.025 m) 12.5" apart edge-to-edge sit at a 14.47" centre
-## distance; the OLD gate received 13.47" (dist - 1.0), the NEW gate receives
-## 12.25" (edge_gap - CHARGE_CONTACT_MARGIN_IN) — RED pre-fix (captured value
-## is 13.47), GREEN post-fix.
+## NML-1073 S1b/S1d: the charge-candidate gate's `gap_in` argument must be the
+## table's RAW EDGE gap (radii-aware) — the very quantity the table's own
+## re-gate passes (charge_illegal_why -> nearest_melee_gap_in, no slack), not
+## centre distance minus the flat BattleSim.CONTACT_IN (1.0", only right for
+## ~25 mm bases) and not the edge gap minus the 0.25" contact epsilon S1b
+## subtracted. Two 50 mm bases (radius 0.025 m) 12.5" apart edge-to-edge sit at
+## a 14.47" centre distance: the pre-S1b gate received 13.47", S1b's 12.25",
+## and the table-mirroring gate 12.5".
 func test_charge_gate_receives_the_base_edge_gap_not_centre_distance() -> void:
 	var a := _armed(1, [Vector3.ZERO], "Brawler", [{"name": "CCW", "range": 0}])
 	var b := _armed(2, [Vector3(14.468504 * IN2M, 0, 0)], "Victim", [{"name": "CCW", "range": 0}])
@@ -429,7 +430,7 @@ func test_charge_gate_receives_the_base_edge_gap_not_centre_distance() -> void:
 		seen_gap[0] = gap
 		return false
 	AiPlanner.candidates(state, akey)
-	assert_float(seen_gap[0]).is_equal_approx(12.25, 0.01)
+	assert_float(seen_gap[0]).is_equal_approx(12.5, 0.01)
 
 
 func test_net_guided_playout_picks_within_the_menu_and_is_deterministic() -> void:

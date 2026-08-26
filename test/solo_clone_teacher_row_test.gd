@@ -61,15 +61,15 @@ func after() -> void:
 func test_the_teacher_row_never_learns_a_charge_the_body_refused() -> void:
 	var grunts := _unit(2, Vector3.ZERO, "Grunts")
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
-	# NML-1073 S1b: the OLD lever (menu measured centre-1.0", body measured the
-	# TRUE edge gap) is closed by design -- both now read the same 0.394" radii
-	# sum. The NEW lever is the menu's own contact epsilon: it accepts up to
-	# band + CHARGE_CONTACT_MARGIN_IN (12.25"), the re-gate accepts only up to
-	# band, raw (12.0") -- a genuine ~0.25" window. Edge gap 12.1" (raw 12.4937"
-	# minus the 0.394" radii sum) sits inside it: menu gap_in = 12.1-0.25 =
-	# 11.85" <= 12" -> offered; re-gate gap = 12.1" > 12" -> refused. Old raw
-	# distance was 12.8" (menu 11.8" <= 12" via the old flat -1.0"; re-gate
-	# 12.406" > 12" via the true edge gap -- the closed lever).
+	# NML-1073 S1d: BOTH menu/body windows are now closed. S1b closed the first
+	# (menu measured centre-1.0", body the true edge gap); S1d closes the second
+	# (menu measured edge_gap-0.25", body the raw edge gap) by passing the RAW
+	# edge gap -- literally the quantity the body reads (charge_illegal_why ->
+	# nearest_melee_gap_in, solo_controller.gd:1406). One measure, no window, so
+	# this fixture now proves the CLOSURE end to end: edge gap 12.1" (raw
+	# 12.4937" minus the 0.394" radii sum) > the 12" band, so the menu never
+	# offers the charge, the body never charges, and the row cannot learn one.
+	# A3 below is the positive control the old A2 used to be.
 	army.game_units = {"Grunts": grunts, "Foe": _unit(1, Vector3(12.4937 * IN2M, 0, 0), "Foe")}
 	army.current_round = 1
 	var sc: SoloController = auto_free(SoloController.new())
@@ -80,19 +80,36 @@ func test_the_teacher_row_never_learns_a_charge_the_body_refused() -> void:
 	sc.objective_owner_of = func(_i: int) -> int: return 0
 	assert_bool(sc._clone_active()).is_true()
 	var report := sc._act(grunts)
-	# A (no-idle guard): the re-gate FIRED, so B cannot pass on a charge-free turn.
-	assert_int(int(report["action"])).is_equal(AiDecision.Action.RUSH)
+	# A (no-idle guard): the body did NOT charge, so B cannot pass by accident.
+	# S1d: the refusal moved from the re-gate into the MENU, so the played action
+	# is whatever the tree prefers among the legal ones, not the re-gate's RUSH.
+	assert_int(int(report["action"])).is_not_equal(AiDecision.Action.CHARGE)
 	var rows := sc.decision_log.filter(func(r: Dictionary) -> bool:
 		return str(r.get("kind", "")) == "teacher_row")
 	assert_int(rows.size()).is_equal(1)
 	var data: Dictionary = (rows[0] as Dictionary)["data"]
 	var menu: Array = data["menu"]
-	# A2 (menu-offered guard, fixup2 review 3b): A only proves the BODY played
-	# RUSH -- it says nothing about whether the recorded menu ever offered
-	# CHARGE. Without this, a regression that stopped the menu offering CHARGE
-	# at all would leave A and B both green for the wrong reason.
+	# A2 (S1d): the menu itself must refuse the out-of-band charge -- the body no
+	# longer has to catch it.
 	assert_int(menu.filter(func(m: Dictionary) -> bool:
-		return int(m["kind"]) == AiDecision.Action.CHARGE).size()).is_greater(0)
+		return int(m["kind"]) == AiDecision.Action.CHARGE).size()).is_equal(0)
+	# A3 (positive control, the honest half of the old A2): the SAME menu builder
+	# with the SAME gate still offers CHARGE against a foe inside the band --
+	# without this, a regression that stopped offering charges at all would leave
+	# A2 and B green for the wrong reason.
+	var near_army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	var brawler := _unit(2, Vector3.ZERO, "Brawler")
+	near_army.game_units = {"Brawler": brawler, "Near": _unit(1, Vector3(6.0 * IN2M, 0, 0), "Near")}
+	var near_state := BattleSim.capture(near_army, func() -> Array: return [],
+		func(_i: int) -> int: return 0, 1, 4)
+	near_state["charge_illegal"] = sc.charge_candidate_illegal
+	var bkey := ""
+	for k in near_state["units"]:
+		if (near_state["units"][k] as Dictionary)["unit"] == brawler:
+			bkey = str(k)
+	var near_kinds: Array = AiPlanner.candidates_wide(near_state, bkey).map(
+		func(c: Dictionary) -> int: return int(c["kind"]))
+	assert_bool(near_kinds.has(AiDecision.Action.CHARGE)).is_true()
 	var idx := int(data["teacher"])
 	var learned := -1 if idx < 0 else int((menu[idx] as Dictionary)["kind"])
 	# B: what the corpus learns must not be the charge the body just refused.
@@ -105,8 +122,9 @@ func test_the_teacher_row_never_learns_a_charge_the_body_refused() -> void:
 ## from the bug it replaced. This geometry sits INSIDE the ~0.25" window the
 ## fix closed: raw 12.8937" = edge gap 12.5" (10 mm bases, 0.394" radii sum).
 ## OLD menu gate (dist_in - CONTACT_IN): 12.8937 - 1.0 = 11.89 <= 12" band ->
-## OFFERED (the bug). NEW menu gate (edge_gap_in - CHARGE_CONTACT_MARGIN_IN):
-## 12.5 - 0.25 = 12.25 > 12" band -> REFUSED (the fix, asserted below).
+## OFFERED (the bug). NEW menu gate (the RAW edge gap since NML-1073 S1d,
+## edge_gap_in - CHARGE_CONTACT_MARGIN_IN in S1b): 12.5 > 12" band -> REFUSED
+## (the fix, asserted below; S1b's 12.25" refused it too).
 ## Verified by hand (fixup2 review): temporarily reverted _best_charge's
 ## gap_in lines in ai_planner.gd to the OLD formula -- this test FAILED
 ## (charge offered); `git checkout` restored the file byte-exact and the same

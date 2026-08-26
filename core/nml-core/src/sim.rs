@@ -27,9 +27,17 @@ use crate::{CONTROL_EPS, IN2M};
 /// still read it.
 pub const CONTACT_IN: f64 = 1.0;
 /// `SoloController.CHARGE_CONTACT_MARGIN_IN` solo_controller.gd:53 — the
-/// table's own contact epsilon, and since NML-1073 S1b the melee trigger:
-/// a charge fights once its nearest base edge is within 0.25" of the target's.
+/// table's own contact epsilon. Was the melee trigger between NML-1073 S1b and
+/// S1d; kept because the constant itself is unchanged and GDScript still reads
+/// it for the charge move's contact hair.
 pub const CHARGE_CONTACT_MARGIN_IN: f64 = 0.25;
+/// `SoloController.MELEE_ENGAGE_IN` solo_controller.gd:57 — THE table's engage
+/// distance (GF/AoF Advanced Rules v3.5.1 p.8/p.9, main.gd:7971-7986): a charge
+/// landing within 1" of base edge SNAPS into contact and fights; beyond it the
+/// charge falls short. Since NML-1073 S1d this, not the 0.25" epsilon, is the
+/// melee trigger — S1b's epsilon left the imagination 0.75" stricter than the
+/// table it is supposed to predict.
+pub const MELEE_ENGAGE_IN: f64 = 1.0;
 /// `SoloController.UNIT_SPACING_IN` solo_controller.gd:70 — the no-go buffer
 /// every OTHER unit's models project around themselves.
 pub const UNIT_SPACING_IN: f64 = 1.0;
@@ -689,13 +697,14 @@ pub fn resolve(
         }
     }
 
-    // --- charge (battle_sim.gd:700-733) ---
-    // No sight check here, only BASE CONTACT measured AFTER the move. NML-1073
-    // S1b: the trigger is the base-EDGE gap against the table's own contact
-    // epsilon, not the centre distance against CONTACT_IN — two 32 mm bases
-    // (radius 0.016 m) meet at a 1.26" centre distance, past the old 1.0" gate,
-    // so a landed 32 mm+ charge never fought. Unconditional, not seam-gated:
-    // this is the landing rule itself, not a research seam.
+    // --- charge (battle_sim.gd:698-714) ---
+    // No sight check here, only BASE CONTACT measured AFTER the move. The
+    // trigger is the base-EDGE gap, not the centre distance against CONTACT_IN
+    // — two 32 mm bases (radius 0.016 m) meet at a 1.26" centre distance, past
+    // the old 1.0" gate, so a landed 32 mm+ charge never fought (NML-1073 S1b).
+    // NML-1073 S1d: it is measured against MELEE_ENGAGE_IN (1"), the TABLE's own
+    // engage-and-snap distance, not the 0.25" contact epsilon. Unconditional,
+    // not seam-gated: this is the landing rule itself, not a research seam.
     if kind == CHARGE {
         if let Some(ti) = ci {
             if geom::edge_gap_in(
@@ -704,7 +713,7 @@ pub fn resolve(
                 &next.positions[ti],
                 &next.radii[ti],
                 DEFAULT_BASE_RADIUS_M,
-            ) <= CHARGE_CONTACT_MARGIN_IN
+            ) <= MELEE_ENGAGE_IN
             {
                 let tu_before = wounds_left(&next, ti);
                 let su_before = wounds_left(&next, si);
