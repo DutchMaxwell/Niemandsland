@@ -7468,9 +7468,13 @@ func _solo_show_toast(text: String, auto_hide_s: float = SOLO_TOAST_HIDE_S, expl
 	# A sticky toast is the only one that may take the mouse: it has to be clickable to be
 	# dismissible, and it must not eat clicks in the moments it is only a passing notice. It floats
 	# in the status lane over the expanded battle-log panel, so it can cover a line the player wants
-	# to click — the first click there clears the toast and the second reaches what was underneath.
+	# to click. PASS (not STOP, NML-1079 / GH #364): STOP consumed the whole click, so the first
+	# click after every AI action only dismissed the toast and the player lost that click — PASS
+	# still fires _on_solo_toast_gui_input (the dismiss), then, since the toast has no Control
+	# ancestor between it and $UI, falls through to _unhandled_input — the same click both clears
+	# the toast and reaches whatever is underneath (table pick, battle-log line, buttons).
 	_solo_toast_sticky = explain and auto_hide_s <= 0.0
-	_solo_toast.mouse_filter = Control.MOUSE_FILTER_STOP if _solo_toast_sticky else Control.MOUSE_FILTER_IGNORE
+	_solo_toast.mouse_filter = Control.MOUSE_FILTER_PASS if _solo_toast_sticky else Control.MOUSE_FILTER_IGNORE
 	_solo_toast.tooltip_text = "NACHTMAHR's reasoning — click to dismiss" if _solo_toast_sticky else ""
 	if auto_hide_s > 0.0:
 		_solo_toast_autohide(_solo_toast_gen, auto_hide_s)
@@ -7492,12 +7496,13 @@ func _solo_show_explain(text: String) -> void:
 
 
 ## Click on a sticky AI explanation = dismiss it (the toast is only mouse-visible while sticky).
+## No accept_event() here (NML-1079 / GH #364): the click must keep propagating past this handler
+## so it also reaches whatever is underneath the toast instead of being lost.
 func _on_solo_toast_gui_input(event: InputEvent) -> void:
 	var mb := event as InputEventMouseButton
 	if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT or not _solo_toast_sticky:
 		return
 	_solo_hide_toast(true)
-	_solo_toast.accept_event()   # the same click must not fall through and pick a model behind it
 
 
 ## Take the toast down. `force` also clears a sticky AI explanation (a dismiss click); without it a

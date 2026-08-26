@@ -14,6 +14,16 @@ extends GdUnitTestSuite
 
 const E2EBoot := preload("res://test/e2e/e2e_boot.gd")
 
+
+## NML-1079 / GH #364 — counts left-button presses that survive to _unhandled_input, i.e. the
+## click reached the table (or whatever else is underneath the toast) instead of being swallowed.
+class _InputProbe extends Node:
+	var left_press_count: int = 0
+	func _unhandled_input(event: InputEvent) -> void:
+		var mb := event as InputEventMouseButton
+		if mb != null and mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			left_press_count += 1
+
 var _runner: GdUnitSceneRunner
 var _main: Node
 var _root_before: Array
@@ -63,9 +73,11 @@ func test_an_ai_explanation_stays_up() -> void:
 		.override_failure_message("NML-955 — the AI explanation was hidden again; the maintainer cannot study what is not on screen") \
 		.is_true()
 	assert_bool(_main._solo_toast_sticky).is_true()
+	# Weg A (maintainer decision, 26.08., NML-1079 / GH #364): the dismiss click must also reach the
+	# table, so the toast takes PASS, not STOP — a reversal of the semantics this suite pinned before.
 	assert_int(t.mouse_filter) \
 		.override_failure_message("a sticky explanation must be able to take the click that dismisses it") \
-		.is_equal(Control.MOUSE_FILTER_STOP)
+		.is_equal(Control.MOUSE_FILTER_PASS)
 	assert_str(t.tooltip_text).contains("dismiss")
 
 
@@ -93,6 +105,29 @@ func test_a_click_dismisses_the_explanation() -> void:
 	assert_int(t.mouse_filter) \
 		.override_failure_message("a dismissed toast must stop taking clicks over the table") \
 		.is_equal(Control.MOUSE_FILTER_IGNORE)
+
+
+func test_a_dismiss_click_also_reaches_the_table() -> void:
+	# NML-1079 / GH #364 — "half my clicks are ignored": with mouse_filter STOP the dismiss click
+	# was consumed, so the first click after every AI action cost the player a click. Weg A: the
+	# same click dismisses the toast AND keeps going to whatever is underneath.
+	_main._solo_show_explain("NACHTMAHR: Grunts shoot Riders")
+	await _runner.simulate_frames(4)
+	var t := _toast()
+	assert_bool(t.visible).is_true()
+	assert_bool(_main._solo_toast_sticky).is_true()
+	var probe := _InputProbe.new()
+	_main.add_child(probe)
+	var centre: Vector2 = t.get_global_rect().get_center()
+	E2EBoot.click_canvas(_main.get_viewport(), centre, true)
+	E2EBoot.click_canvas(_main.get_viewport(), centre, false)
+	await _runner.simulate_frames(2)
+	assert_bool(t.visible) \
+		.override_failure_message("the dismiss click must still hide the toast") \
+		.is_false()
+	assert_int(probe.left_press_count) \
+		.override_failure_message("the dismiss click must not be a lost click — it has to reach what is underneath the toast too") \
+		.is_equal(1)
 
 
 func test_a_phase_boundary_clear_leaves_the_explanation_standing() -> void:
