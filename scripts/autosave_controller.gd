@@ -115,7 +115,9 @@ func _try_autosave(reason: String) -> void:
 	if not should_autosave(_in_mp_session(), _is_host(), _restore_in_flight(), _has_content(), since, _lesson_paused):
 		return
 	var path := next_slot_path(SaveManager.get_default_save_dir())
+	var _prof_as_t0 := BattleSim.prof_t0()   # NML-1072: disk write cost of an autosave
 	var err: Error = _save_manager.save_game(path)
+	BattleSim.prof_mark("autosave", _prof_as_t0)
 	if err != OK:
 		push_warning("[Autosave] save failed (%s): %s" % [reason, error_string(err)])
 		return

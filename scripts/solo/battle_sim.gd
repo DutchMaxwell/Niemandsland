@@ -61,6 +61,40 @@ static func core_enabled() -> bool:
 		_core_env = 1 if (want and have) else 0
 	return _core_env == 1
 
+## NML-1072: wall-clock profile of the trainer path — env-gated NML_PROFILE=1
+## (unset = byte-identical: the hot path pays exactly one cached bool check,
+## no extra call). Buckets NEST (resolve/clone/spacing/cast all run INSIDE
+## plan_with_rollout's search) — kept as their own totals anyway so a reader
+## sees both "search total" and "how much of it is resolve". core_selfplay
+## resets/reads this once per game.
+static var _profile_env := -1
+static func profile_enabled() -> bool:
+	if _profile_env < 0:
+		var raw := OS.get_environment("NML_PROFILE")
+		_profile_env = 1 if (raw == "1" or raw == "on") else 0
+	return _profile_env == 1
+
+static var profile := {"plan": 0, "plan_n": 0, "resolve": 0, "resolve_n": 0,
+	"clone": 0, "clone_n": 0, "snapshot": 0, "snapshot_n": 0,
+	"spacing": 0, "spacing_n": 0, "cast": 0, "cast_n": 0}
+
+static func profile_reset() -> void:
+	for k in profile.keys():
+		profile[k] = 0
+
+## NML-1072 (arena/main.gd phases): a start stamp (0 when profiling is off, so
+## the call site pays one cached bool check and nothing else) and the matching
+## accumulate-into-`profile` call — used by the LIVE-game phases (capture,
+## search, move, sight, attack, autosave, round, deploy) that live outside
+## BattleSim, in solo_controller.gd/main.gd/arena_match.gd.
+static func prof_t0() -> int:
+	return Time.get_ticks_usec() if profile_enabled() else 0
+
+static func prof_mark(key: String, t0: int) -> void:
+	if profile_enabled():
+		profile[key] = int(profile.get(key, 0)) + (Time.get_ticks_usec() - t0)
+		profile[key + "_n"] = int(profile.get(key + "_n", 0)) + 1
+
 # === Encoder board rows (v5 schema, NML-995) ==================================
 # ONE canonical source for the position-net input, used by BOTH the factory
 # (core_selfplay corpus) and the in-game encoder eval — a fork here would let
@@ -482,6 +516,7 @@ static func resolve_stochastic(state: Dictionary, action: Dictionary,
 ## Deep-copies the DYNAMIC layers (positions/wounds/flags/objective owners);
 ## GameUnit refs stay shared — they are read-only by contract.
 static func clone_state(state: Dictionary) -> Dictionary:
+	var _prof_t0 := Time.get_ticks_usec() if profile_enabled() else 0
 	var units := {}
 	for key in state["units"]:
 		var su: Dictionary = (state["units"][key] as Dictionary).duplicate()
@@ -524,6 +559,9 @@ static func clone_state(state: Dictionary) -> Dictionary:
 	for kf in ["scoring", "vp", "vp_flavour", "vp_memo"]:
 		if state.has(kf):
 			out[kf] = state[kf]
+	if profile_enabled():
+		profile["clone"] += Time.get_ticks_usec() - _prof_t0
+		profile["clone_n"] += 1
 	return out
 
 
@@ -629,6 +667,7 @@ static func _spacing_fraction(next: Dictionary, mover_key: String, positions: Ar
 ## move goal for the unit centre)}. Movement v0 (plan D4): the whole unit
 ## translates toward dest, clamped by the official move band — no pathfinding.
 static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
+	var _prof_t0 := Time.get_ticks_usec() if profile_enabled() else 0
 	var next := clone_state(state)
 	var su: Dictionary = next["units"][action["unit"]]
 	var was_shaken := bool(su.get("shaken", false))
@@ -651,8 +690,12 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			delta = delta.normalized() * reach_m
 		# NML-1068: RUSH and CHARGE share this same translation — one clamp covers both.
 		if spacing_enabled():
+			var _prof_sp_t0 := Time.get_ticks_usec() if profile_enabled() else 0
 			delta *= _spacing_fraction(next, action["unit"], positions, su.get("radii", []), delta,
 				str(action.get("charge", "")))
+			if profile_enabled():
+				profile["spacing"] += Time.get_ticks_usec() - _prof_sp_t0
+				profile["spacing_n"] += 1
 		for i in range(positions.size()):
 			positions[i] = (positions[i] as Vector3) + delta
 		var terrain_at: Callable = next.get("terrain_at", Callable())
@@ -664,7 +707,11 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 	# A/B seam (cast_phase_enabled): OFF restores the legacy shoot-rider below
 	# instead, so shipped rollouts stay byte-identical until the never-worse A/B.
 	if cast_phase_enabled():
+		var _prof_c_t0 := Time.get_ticks_usec() if profile_enabled() else 0
 		var cast_event := _cast_phase(next, str(action["unit"]), stochastic_rng)
+		if profile_enabled():
+			profile["cast"] += Time.get_ticks_usec() - _prof_c_t0
+			profile["cast_n"] += 1
 		if not cast_event.is_empty():
 			if not next.has("cast_events"):
 				next["cast_events"] = []
@@ -725,6 +772,9 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 	if was_shaken and kind == AiDecision.Action.HOLD and shoot_key == "":
 		su["shaken"] = false
 	su["activated"] = true
+	if profile_enabled():
+		profile["resolve"] += Time.get_ticks_usec() - _prof_t0
+		profile["resolve_n"] += 1
 	return next
 
 
