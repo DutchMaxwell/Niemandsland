@@ -44,6 +44,16 @@ pub fn mul(a: V2, s: f64) -> V2 {
     [a[0] * s, a[1] * s]
 }
 
+/// `Vector2::operator/(real_t)` — the divisor narrows to f32 first, the same
+/// way `mul` does. `_centroid` (movement_planner.gd:426) and
+/// `_pull_into_placed`'s unit step (:1243) both divide a `Vector2` by a
+/// GDScript `float`, so the division itself runs in f32.
+#[inline]
+pub fn div(a: V2, s: f64) -> V2 {
+    let s = s as f32;
+    [a[0] / s, a[1] / s]
+}
+
 /// `Vector2::length_squared()` — f32, promoted on the way out because GDScript
 /// stores the result in a `float`.
 #[inline]
