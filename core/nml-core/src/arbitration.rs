@@ -33,7 +33,7 @@ use crate::mission::{
 };
 use crate::rng::GodotRng;
 use crate::rollout::{round_start_refresh, Rollout};
-use crate::sim::{resolve_stochastic_on_board, Scratch, Unsupported};
+use crate::sim::{resolve_stochastic_on_board_reach, Scratch, Unsupported};
 use crate::state::State;
 
 /// `AiPlanner.PLAYOUT_MAX_ROUNDS` ai_planner.gd:1310 — INSURANCE, not a rule:
@@ -171,13 +171,14 @@ fn resolve_stochastic(
     if !bend.stochastic_wounds {
         return roll.policy.resolve(state, c); // RED PROOF ONLY — no draw at all
     }
-    resolve_stochastic_on_board(
+    resolve_stochastic_on_board_reach(
         roll.policy.statics,
         state,
         &c.action(),
         roll.policy.terrain,
         roll.policy.seams,
         rng,
+        roll.policy.reach,
     )
 }
 

@@ -753,6 +753,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         playout_rich: d.get("playout_rich").map(|v| flag(&v)).unwrap_or(dflt.playout_rich),
         seam_cast: dflag(d, "seam_cast"),
         seam_spacing: dflag(d, "seam_spacing"),
+        // NML-1073 M4-7. No recorder writes this key yet (ai_planner.gd:607
+        // stamps only spacing and cast); `NmlCore::plan_inner` ORs the
+        // NML_SIM_PATH environment on top, so the seam is reachable from a
+        // shipped build without a GDScript change.
+        seam_path: dflag(d, "seam_path"),
     }
 }
 

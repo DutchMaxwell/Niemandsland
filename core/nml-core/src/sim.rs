@@ -19,6 +19,8 @@ use crate::rng::GodotRng;
 use crate::rules::Spell;
 use crate::spell::{cast_success_chance_base, official_pick_order, spell_damage_ev_of, spell_ev_of};
 use crate::state::State;
+use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
+use crate::mv::CLEARANCE_EPS_IN;
 use crate::terrain::{gives_cover, Terrain};
 use crate::unit::{Ctx, UnitStatic};
 use crate::{CONTROL_EPS, IN2M};
@@ -385,6 +387,65 @@ fn spacing_fraction(state: &State, mi: usize, delta: geom::V3, ci: Option<usize>
     0.0
 }
 
+/// NML-1073 M4-7 — the STATIC per-round obstacle index the tier-2 `reach_query`
+/// answers from: the board rasterised onto a coarse grid plus every unit's
+/// models as discs, built ONCE from the root state of one planner call and
+/// reused by every imagined activation underneath it.
+///
+/// The disc set mirrors `spacing_fraction`'s obstacle loop (:328-347) — dormant
+/// (reserve) and Aircraft units are skipped, everyone else contributes one disc
+/// per model at `radius` and at `radius + UNIT_SPACING_IN`, and the exemptions
+/// (the mover's own group; the charge victim's body-only disc) are applied per
+/// QUERY through the two owner masks.
+///
+/// `None` when the header carried no board: `terrain_at.is_valid()` is false,
+/// there is nothing to rasterise, and the path seam then stays inert.
+///
+/// WALLS: the act corpus header carries a terrain grid but NO wall segments
+/// (`grep -rn "wall" core/nml-core/src` is empty), so the index is built with
+/// an empty wall list and Impassable CELLS are the only hard obstacle the
+/// imagination sees. The exact solver's 48 wall segments would need a new
+/// header key on the GDScript side — see the M4-7 report.
+pub fn reach_index_for_state(state: &State, terrain: &Terrain) -> Option<ReachIndex> {
+    let board = terrain.board_in();
+    if !terrain.is_valid() || board[0] <= 0.0 || board[1] <= 0.0 {
+        return None;
+    }
+    let mut discs: Vec<Disc> = Vec::new();
+    for oi in 0..state.units() {
+        if state.dormant[oi] || state.aircraft[oi] {
+            continue;
+        }
+        let bit = owner_bit(oi);
+        for (k, pos) in state.positions[oi].iter().enumerate() {
+            let r_in = state.radii[oi].get(k).copied().unwrap_or(DEFAULT_BASE_RADIUS_M) / IN2M;
+            discs.push(Disc {
+                c: terrain.to_inch(geom::to_f32(*pos)),
+                r_body: r_in as f32,
+                r_buf: (r_in + UNIT_SPACING_IN) as f32,
+                bit,
+            });
+        }
+    }
+    let mut b = ReachBuild::new(board, &[]);
+    b.discs = discs;
+    // The stored radii are the OBSTACLE's alone; the mover's own radius is added
+    // per query, because it is not known at build time.
+    b.add_mover_radius = true;
+    Some(ReachIndex::build(b, |p| {
+        let t = terrain.type_at(terrain.from_inch(p, 0.0));
+        if t == crate::terrain::CONTAINER {
+            f32::INFINITY
+        } else if t == crate::terrain::DANGEROUS {
+            crate::mv::DANGEROUS_COST_MULT as f32
+        } else if t == crate::terrain::FOREST {
+            crate::mv::DIFFICULT_COST_MULT as f32
+        } else {
+            1.0
+        }
+    }))
+}
+
 /// `BattleSim._best_spell_target` battle_sim.gd:922-943 — the enemy a
 /// damage/debuff spell lands on: alive, on the other side, inside `range_in`
 /// with line of sight, best damage EV first and NEAREST on a tie. A debuff
@@ -643,7 +704,7 @@ pub fn resolve(
     seams: Seams,
     cast_los: Option<&[bool]>,
 ) -> Result<State, Unsupported> {
-    resolve_with(statics, state, action, Cover::Recorded(cover_dest), seams, cast_los, None)
+    resolve_with(statics, state, action, Cover::Recorded(cover_dest), seams, cast_los, None, None)
 }
 
 /// The same activation against the LIVE board — the entry point a rollout uses,
@@ -657,7 +718,21 @@ pub fn resolve_on_board(
     terrain: &Terrain,
     seams: Seams,
 ) -> Result<State, Unsupported> {
-    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, None)
+    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, None, None)
+}
+
+/// The same, WITH the round's tier-2 obstacle index. `seams.path` alone is not
+/// enough: without an index (an absent board) the move step keeps its straight
+/// line, which is what makes the seam inert rather than wrong.
+pub fn resolve_on_board_reach(
+    statics: &[UnitStatic],
+    state: &State,
+    action: &Action,
+    terrain: &Terrain,
+    seams: Seams,
+    reach: Option<&ReachIndex>,
+) -> Result<State, Unsupported> {
+    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, None, reach)
 }
 
 /// `BattleSim.resolve_stochastic` battle_sim.gd:473-478 — the SAME activation
@@ -676,7 +751,21 @@ pub fn resolve_stochastic_on_board(
     seams: Seams,
     rng: &mut GodotRng,
 ) -> Result<State, Unsupported> {
-    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, Some(rng))
+    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, Some(rng), None)
+}
+
+/// The stochastic playout's activation, WITH the round's tier-2 index.
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_stochastic_on_board_reach(
+    statics: &[UnitStatic],
+    state: &State,
+    action: &Action,
+    terrain: &Terrain,
+    seams: Seams,
+    rng: &mut GodotRng,
+    reach: Option<&ReachIndex>,
+) -> Result<State, Unsupported> {
+    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, Some(rng), reach)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -688,6 +777,7 @@ fn resolve_with(
     seams: Seams,
     cast_los: Option<&[bool]>,
     mut rng: Option<&mut GodotRng>,
+    reach: Option<&ReachIndex>,
 ) -> Result<State, Unsupported> {
     let kind = action.kind;
     if kind != HOLD && kind != ADVANCE && kind != RUSH && kind != CHARGE {
@@ -730,6 +820,51 @@ fn resolve_with(
         let reach_m = band_in * IN2M;
         if (geom::length(delta) as f64) > reach_m {
             delta = geom::mul(geom::normalized(delta), reach_m);
+        }
+        // NML-1073 M4-7, seam-gated: the imagination stops moving in a straight
+        // line through walls and Impassable terrain. The tier-2 query answers
+        // where the unit CENTRE actually ends after following a coarse route,
+        // and the delta becomes that displacement. It sits AFTER the band clamp
+        // (the route may only spend the band) and BEFORE the spacing clamp, so
+        // the two seams compose: the path decides the route, spacing still
+        // trims the resting place.
+        if seams.path {
+            if let (Cover::Board(t), Some(ix)) = (cover, reach) {
+                let mut mover = owner_bit(si);
+                for h in state.attached[si].iter() {
+                    mover |= owner_bit(*h);
+                }
+                if let Some(host) = state.attached_to[si] {
+                    mover |= owner_bit(host);
+                }
+                let mut foe = 0u32;
+                if let Some(c) = ci {
+                    foe = owner_bit(c);
+                    for h in state.attached[c].iter() {
+                        foe |= owner_bit(*h);
+                    }
+                }
+                let radius_in = next.radii[si]
+                    .iter()
+                    .copied()
+                    .fold(DEFAULT_BASE_RADIUS_M, f64::max)
+                    / IN2M
+                    + CLEARANCE_EPS_IN;
+                let q = ReachQuery {
+                    start: t.to_inch(centre),
+                    target: t.to_inch(geom::add(centre, delta)),
+                    radius: radius_in,
+                    band: (geom::length(delta) as f64) / IN2M,
+                    // `BattleSim` has no p.11 per-polyline difficult cap today;
+                    // the seam does not invent one.
+                    cap_in: 0.0,
+                    mover,
+                    foe,
+                };
+                let r = ix.query_memo(&q);
+                let end = t.from_inch(r.end_centre, centre[1]);
+                delta = geom::sub(end, centre);
+            }
         }
         // NML-1068: RUSH and CHARGE share this same translation — one clamp
         // covers both (battle_sim.gd:647-650).

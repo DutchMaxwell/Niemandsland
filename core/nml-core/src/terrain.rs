@@ -82,6 +82,13 @@ pub struct Terrain {
     /// True when the header carried no terrain at all — `terrain_at.is_valid()`
     /// is then false and every caller takes its "no terrain seam" branch.
     absent: bool,
+    /// The table in INCHES, `[x, y]` — `table_size_feet * 12`. This is the
+    /// extent of the movement planner's 0-origin inch frame
+    /// (solo_controller.gd:5960-5968 converts world metres + half-extents into
+    /// it), which `mv::reach` rasterises onto.
+    board_in: [f64; 2],
+    /// `cell_params.inches_to_meters`.
+    in2m: f64,
 }
 
 impl Terrain {
@@ -96,6 +103,34 @@ impl Terrain {
     #[inline]
     pub fn is_valid(&self) -> bool {
         !self.absent
+    }
+
+    /// The table in inches, `[x, y]`. `[0, 0]` when the header carried no
+    /// terrain — the caller must then not build a reach index.
+    #[inline]
+    pub fn board_in(&self) -> [f64; 2] {
+        self.board_in
+    }
+
+    /// A world point (metres, `x`/`z`) in the movement planner's 0-origin INCH
+    /// frame: `(world + half_extent) / INCHES_TO_METERS`
+    /// (solo_controller.gd:5960-5968).
+    #[inline]
+    pub fn to_inch(&self, p: V3) -> [f32; 2] {
+        [
+            (p[0] as f64 / self.in2m + self.board_in[0] * 0.5) as f32,
+            (p[2] as f64 / self.in2m + self.board_in[1] * 0.5) as f32,
+        ]
+    }
+
+    /// The inverse, at the caller's own height.
+    #[inline]
+    pub fn from_inch(&self, p: [f32; 2], y: f32) -> V3 {
+        [
+            ((p[0] as f64 - self.board_in[0] * 0.5) * self.in2m) as f32,
+            y,
+            ((p[1] as f64 - self.board_in[1] * 0.5) * self.in2m) as f32,
+        ]
     }
 
     pub fn build(p: &PlainTerrain) -> Terrain {
@@ -121,6 +156,8 @@ impl Terrain {
             neg_rot: -rot_rad,
             half_grid: grid_size as f64 / 2.0,
             absent: false,
+            board_in: [width_in, height_in],
+            in2m: cp.inches_to_meters,
         }
     }
 
