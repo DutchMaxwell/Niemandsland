@@ -54,6 +54,14 @@ func _state() -> Dictionary:
 func before_test() -> void:
 	DirAccess.make_dir_recursive_absolute(_DUMP_DIR)
 	OS.set_environment("NML_ACT_DUMP", ProjectSettings.globalize_path(_DUMP_DIR))
+	# AiActRecorder's env check + open stream are cached STATIC state (by
+	# design — the real game opens the file once per process) — reset it per
+	# test so two test_ functions in this suite do not share one header/stream.
+	AiActRecorder._checked = false
+	AiActRecorder._stream = null
+	AiActRecorder._header_written = false
+	AiActRecorder._count = 0
+	AiPlanner.trace = {}
 
 
 func after_test() -> void:
@@ -72,7 +80,12 @@ func test_begin_and_finish_write_header_and_act_line() -> void:
 	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
 	var pending := AiActRecorder.begin(state, 1, pool, Callable())
 	assert_bool(pending.is_empty()).is_false()
-	var pick := {"used": true, "unit_key": "A", "action": {"unit": "A", "kind": AiDecision.Action.HOLD}}
+	# NML-1073 M2-0b: a Vector3 "dest" in the picked action — the 0a finding
+	# was that this reached JSON as JSON.stringify's native "(x, y, z)"
+	# STRING, unparsable back into numbers, unlike every other Vector3 this
+	# recorder writes via BattleSim._plain_vec3.
+	var pick := {"used": true, "unit_key": "A", "action": {"unit": "A",
+		"kind": AiDecision.Action.RUSH, "dest": Vector3(1.0, 2.0, 3.0)}}
 	AiActRecorder.finish(pending, pick)
 
 	var f := FileAccess.open(_DUMP_DIR.path_join("acts.jsonl"), FileAccess.READ)
@@ -107,8 +120,52 @@ func test_begin_and_finish_write_header_and_act_line() -> void:
 	assert_int(int(act["player"])).is_equal(1)
 	assert_array(act["pool"] as Array).contains(["A"])
 	assert_bool(bool((act["pick"] as Dictionary).get("used", false))).is_true()
+	var pick_dest = ((act["pick"] as Dictionary)["action"] as Dictionary)["dest"]
+	assert_bool(pick_dest is Array).is_true()
+	assert_array(pick_dest as Array).is_equal([1.0, 2.0, 3.0])
 	# ordered pair, both directions, opposite sides only — A|B and B|A, never A|A/B|B
 	var ci := act["charge_illegal"] as Dictionary
 	assert_bool(ci.has("A|B")).is_true()
 	assert_bool(ci.has("B|A")).is_true()
 	assert_int(ci.size()).is_equal(2)
+
+
+## NML-1073 M2-0b: plan_with_rollout's search TRACE — root menus, the sorted
+## 1-ply list, the rollout pool, every pool candidate's rolled score, and the
+## winner/runner-up — rides on AiActRecorder.finish()'s act line, gated by
+## AiActRecorder.active() (env NML_ACT_DUMP set, true here). top_k=1 keeps the
+## rollout pool to exactly A's own best candidate — the only engaged unit on
+## this objective-less fixture, where _safe_advance/_second_wave both return
+## {} for both units — so len(menus) == len(pool_idx) == 1 is provable, and
+## with a single-candidate pool no runner is ever set (runner_idx == -1).
+func test_trace_carries_search_and_flattens_menu_dests() -> void:
+	var state := _state()
+	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
+	var pending := AiActRecorder.begin(state, 1, pool, Callable())
+	var pick := AiPlanner.plan_with_rollout(state, 1, 1)
+	AiActRecorder.finish(pending, pick)
+
+	var f := FileAccess.open(_DUMP_DIR.path_join("acts.jsonl"), FileAccess.READ)
+	var lines: Array = []
+	while not f.eof_reached():
+		var line := f.get_line()
+		if line != "":
+			lines.append(line)
+	f.close()
+	var act := JSON.parse_string(lines[1]) as Dictionary
+	assert_bool(act.has("trace")).is_true()
+	var trace := act["trace"] as Dictionary
+	for key in ["menus", "scored", "pool_idx", "rs", "best_idx", "runner_idx", "arbitration"]:
+		assert_bool(trace.has(key)).is_true()
+	var menus := trace["menus"] as Dictionary
+	var pool_idx := trace["pool_idx"] as Array
+	assert_bool(menus.has("A")).is_true()
+	assert_int(menus.size()).is_equal(pool_idx.size())
+	assert_int(int(trace["best_idx"])).is_equal(0)
+	assert_int(int(trace["runner_idx"])).is_equal(-1)
+	assert_object(trace["arbitration"]).is_null()   # playout_search is off by default
+	for cand in (menus["A"] as Array):
+		var dest = (cand as Dictionary).get("dest")
+		if dest != null:
+			assert_bool(dest is Array).is_true()
+			assert_int((dest as Array).size()).is_equal(3)

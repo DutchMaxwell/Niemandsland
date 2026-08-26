@@ -33,6 +33,14 @@ static func _dump_stream() -> FileAccess:
 	return _stream
 
 
+## NML-1073 M2-0b: true once NML_ACT_DUMP is set (the same cached check
+## begin()/finish() use) — AiPlanner reads this to guard ALL search-trace
+## bookkeeping so the search stays byte-identical AND allocation-free when
+## the seam is off.
+static func active() -> bool:
+	return _dump_stream() != null
+
+
 ## Pre-pick capture (INPUT): call right after the un-activated-pool loop and
 ## BEFORE doctrine_pick/plan_with_rollout. Returns {} when the env seam is off
 ## or the line cap is already hit — the caller's finish() then no-ops too.
@@ -61,10 +69,36 @@ static func begin(state: Dictionary, me: int, pool: Array, terrain_cb: Callable)
 static func finish(pending: Dictionary, pick: Dictionary) -> void:
 	if pending.is_empty() or _stream == null or _count >= _max:
 		return
-	pending["pick"] = pick
+	pending["pick"] = _flatten_vec3(pick)
+	# NML-1073 M2-0b: plan_with_rollout's search-trace bookkeeping — read once,
+	# then reset so the NEXT activation (or a doctrine_pick that never calls
+	# plan_with_rollout) never carries this one's stale trace forward.
+	pending["trace"] = AiPlanner.trace
+	AiPlanner.trace = {}
 	_stream.store_line(JSON.stringify(pending, "", true, true))
 	_stream.flush()   # a same-process reader (the unit test) must see the line without a close()
 	_count += 1
+
+
+## 0a finding: pick.action.dest (and runner_up.action.dest) is a raw Vector3 —
+## JSON.stringify would write that as its native "(x, y, z)" STRING, not a
+## parsable number array, unlike every other Vector3 this recorder writes via
+## BattleSim._plain_vec3 (the SAME per-vector helper, applied recursively here
+## since a Vector3 can surface anywhere under `pick`).
+static func _flatten_vec3(v: Variant) -> Variant:
+	if v is Vector3:
+		return BattleSim._plain_vec3(v)
+	if v is Dictionary:
+		var out := {}
+		for k in (v as Dictionary):
+			out[k] = _flatten_vec3((v as Dictionary)[k])
+		return out
+	if v is Array:
+		var out: Array = []
+		for e in (v as Array):
+			out.append(_flatten_vec3(e))
+		return out
+	return v
 
 
 static func _header_line(state: Dictionary, terrain_cb: Callable) -> Dictionary:

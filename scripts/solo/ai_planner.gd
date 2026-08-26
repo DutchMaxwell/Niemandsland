@@ -88,9 +88,34 @@ const PLAYOUT_DECIDE_MARGIN := 0.5   # mean marker-delta that settles it
 const PLAYOUT_CAP := 7               # max playouts per branch
 
 
+## NML-1073 M2-0b: the Rust port's per-activation contract needs the search's
+## INTERMEDIATE results too (root menus, prefilter, pool, rollout values,
+## winner/runner-up, playout arbitration) — not just plan_with_rollout's final
+## pick. Filled ONLY when AiActRecorder.active() (env NML_ACT_DUMP set);
+## AiActRecorder.finish() reads it once per activation then resets it to {} —
+## unset env = this dict is never touched, so the search stays byte-identical.
+static var trace: Dictionary = {}
+
+
+## menus.trace needs the SAME plain form the node dump's action gets
+## (ai_planner.gd:493-495) — a candidate's "dest" is a raw Vector3 otherwise,
+## and JSON.stringify would write that as its native "(x, y, z)" STRING, not
+## a parsable number array.
+static func _plain_candidates(cands: Array) -> Array:
+	var out: Array = []
+	for c in cands:
+		var pc: Dictionary = (c as Dictionary).duplicate()
+		if pc.has("dest"):
+			pc["dest"] = BattleSim._plain_vec3(pc["dest"])
+		out.append(pc)
+	return out
+
+
 static func plan_with_rollout(state: Dictionary, player: int,
 		top_k: int = -1) -> Dictionary:
 	_last_leaf_state = {}
+	var trace_on := AiActRecorder.active()
+	trace = {"menus": {}, "arbitration": null} if trace_on else {}
 	if top_k == -1:
 		top_k = top_k_default()   # research seam; default = the const
 	if top_k <= 0:
@@ -103,6 +128,8 @@ static func plan_with_rollout(state: Dictionary, player: int,
 			continue
 		var cands: Array = [{"unit": key, "kind": AiDecision.Action.HOLD}] \
 			if bool(su.get("shaken", false)) else candidates(state, str(key))
+		if trace_on:
+			(trace["menus"] as Dictionary)[str(key)] = _plain_candidates(cands)
 		for action in cands:
 			var next := BattleSim.resolve(state, action)
 			scored.append({"unit_key": str(key), "action": action, "idx": scored.size(),
@@ -113,6 +140,15 @@ static func plan_with_rollout(state: Dictionary, player: int,
 		if float(a["score"]) != float(b["score"]):
 			return float(a["score"]) > float(b["score"])
 		return int(a["idx"]) < int(b["idx"]))
+	var idx_to_pos := {}
+	if trace_on:
+		var scored_plain: Array = []
+		for i in range(scored.size()):
+			var sc: Dictionary = scored[i]
+			idx_to_pos[int(sc["idx"])] = i
+			scored_plain.append({"idx": int(sc["idx"]), "unit": str(sc["unit_key"]),
+				"kind": int((sc["action"] as Dictionary)["kind"]), "score": float(sc["score"])})
+		trace["scored"] = scored_plain
 	# Coverage guarantee (diagnosis 07.08.): WHICH unit opens is the whole
 	# question, but bait moves rank low 1-ply and never survived a global
 	# TOP_K cut. Every un-activated unit gets its best candidate rolled out;
@@ -143,11 +179,21 @@ static func plan_with_rollout(state: Dictionary, player: int,
 		if str((cand["action"] as Dictionary).get("wave", "")) != "" \
 				and not pool.has(cand):
 			pool.append(cand)
+	if trace_on:
+		var pool_idx: Array = []
+		for cand in pool:
+			pool_idx.append(int(cand["idx"]))
+		trace["pool_idx"] = pool_idx
 	var best := {}
 	var runner := {}
+	var best_idx := -1
+	var runner_idx := -1
+	var rs_trace: Array = []
 	for cand in pool:
 		var ends := rollout_boundaries(state, cand["action"], player)
 		var rs := _blend_score(ends, player)
+		if trace_on:
+			rs_trace.append({"idx": int(cand["idx"]), "rs": rs})
 		if OS.get_environment("NML_PLAN_DUMP") == "1":   # diagnosis-only; ladder silent without it
 			printerr("[PLAN] R%d %s kind=%d 1ply=%.4f rolled=%.4f" % [int(state["round"]),
 				str(cand["unit_key"]), int((cand["action"] as Dictionary).get("kind", -1)),
@@ -155,11 +201,20 @@ static func plan_with_rollout(state: Dictionary, player: int,
 		var rolled := {"unit_key": cand["unit_key"], "action": cand["action"], "score": rs}
 		if best.is_empty() or rs > float(best["score"]):
 			runner = best
+			runner_idx = best_idx
 			best = rolled
+			if trace_on:
+				best_idx = int(idx_to_pos.get(int(cand["idx"]), -1))
 			if not ends.is_empty():
 				_last_leaf_state = ends[ends.size() - 1]
 		elif runner.is_empty() or rs > float(runner["score"]):
 			runner = rolled
+			if trace_on:
+				runner_idx = int(idx_to_pos.get(int(cand["idx"]), -1))
+	if trace_on:
+		trace["rs"] = rs_trace
+		trace["best_idx"] = best_idx
+		trace["runner_idx"] = runner_idx
 	# S-wave PS2 (D17/D19): on a CLOSE top-2 the playout DECIDES — adaptive
 	# escalation (3 playouts each, +2 while tied, hard cap), deterministic
 	# prng per state+branch. playout_search=false = byte-identical pick.
@@ -201,6 +256,9 @@ static func plan_with_rollout(state: Dictionary, player: int,
 			runner = tmp
 		playout_note = " [playout %d/side: %.2f vs %.2f -> %s]" % [done,
 			maxf(sum_b, sum_r) / done, minf(sum_b, sum_r) / done, str(best["unit_key"])]
+		if trace_on:
+			trace["arbitration"] = {"sig": sig, "n": done, "sum_b": sum_b, "sum_r": sum_r,
+				"swapped": sum_r > sum_b}
 	var waits := 0
 	for key in state["units"]:
 		var su: Dictionary = state["units"][key]
