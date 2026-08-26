@@ -923,8 +923,7 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 		if not seen_charge.has(str(ek)) and not ours.is_empty() \
 				and not (illegal_cb.is_valid() and bool(illegal_cb.call(su["unit"], tu["unit"],
 					maxf(BattleSim.edge_gap_in(su["positions"], su.get("radii", []),
-						tu["positions"], tu.get("radii", []))
-						- SoloController.CHARGE_CONTACT_MARGIN_IN, 0.0),
+						tu["positions"], tu.get("radii", [])), 0.0),
 					_centre(su), _centre(tu)))):
 			out.append({"unit": key, "kind": AiDecision.Action.CHARGE,
 				"dest": _centre(tu), "charge": str(ek)})
@@ -1197,17 +1196,13 @@ static func _best_charge(state: Dictionary, key: String) -> String:
 		var tu: Dictionary = state["units"][ek]
 		if illegal_cb.is_valid() and bool(illegal_cb.call(su["unit"], tu["unit"],
 				maxf(BattleSim.edge_gap_in(su["positions"], su.get("radii", []),
-					tu["positions"], tu.get("radii", []))
-					- SoloController.CHARGE_CONTACT_MARGIN_IN, 0.0),
+					tu["positions"], tu.get("radii", [])), 0.0),
 				_centre(su), _centre(tu))):
-			# NML-1073 S1b (fixup2 review, doc-only): gap_in is the base-EDGE gap minus
-			# CHARGE_CONTACT_MARGIN_IN (0.25", the table's contact epsilon) — the same
-			# quantity BattleSim.resolve()'s CHARGE trigger tests, so the menu offers
-			# precisely what the sim can execute, no less. This gap_in also feeds
-			# charge_candidate_illegal -> _charge_capped_by_difficult (solo_controller.gd
-			# ~1454): a charge whose edge gap falls in (5.74", 6.25"] used to exceed the
-			# 6" difficult-terrain cap threshold under the old dist_in-1.0" formula and
-			# no longer does under this one — its cap classification changed with S1b.
+			# NML-1073 S1d: gap_in is the RAW base-edge gap — exactly the quantity the
+			# TABLE's own charge re-gate passes (charge_illegal_why -> nearest_melee_gap_in,
+			# solo_controller.gd:1406 / :8038, no slack). S1b subtracted
+			# CHARGE_CONTACT_MARGIN_IN here — a band 0.25" wider than the table's, and a
+			# shifted 6" difficult-cap verdict in the (5.75", 6.25"] window.
 			continue
 		var us := BattleSim._ctx_of(su)
 		var them := BattleSim._ctx_of(tu)

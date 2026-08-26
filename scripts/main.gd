@@ -7970,7 +7970,7 @@ func _run_ai_melee(report: Dictionary) -> void:
 	# the charge at/near base contact, so the gap between the nearest models — not the unit centres — is the
 	# true reach test. Within MELEE_ENGAGE_IN it snaps to clean contact; beyond it the charge falls short.
 	var gap_in: float = solo_controller.nearest_melee_gap_in(unit, target)
-	if gap_in > MELEE_ENGAGE_IN:
+	if gap_in > SoloController.MELEE_ENGAGE_IN:
 		if battle_log != null:
 			_log_rule_event(BattleLog.Category.COMBAT, "%s's charge falls short (%.1f\")" % [unit.get_name(), gap_in], true)
 		# Stage seam: an early exit still closes its phase boundary — the falls-short line gets
@@ -8990,7 +8990,7 @@ func _solo_validate_target(attacker: GameUnit, target: GameUnit, melee: bool) ->
 		# Within MELEE_ENGAGE_IN of an enemy base counts as chargeable — the snap on confirm closes it to
 		# clean contact (GF/AoF v3.5.1 p.9 "Who Can Strike": base contact folds into the 2" strike reach).
 		var gap := solo_controller.nearest_melee_gap_in(attacker, target)
-		if gap <= MELEE_ENGAGE_IN:
+		if gap <= SoloController.MELEE_ENGAGE_IN:
 			return ""
 		return "not in melee range (%.1f\" — move into base contact)" % gap
 	# B11 (test game 2): the refusal message measures base-EDGE to base-edge between the NEAREST
@@ -9142,7 +9142,6 @@ func _solo_pick_unit_at(screen_pos: Vector2) -> GameUnit:
 
 const SOLO_LOS_REFRESH_MS := 150   # throttle for the per-model sighted-count recompute during hover
 const SOLO_LOS_UNBOUNDED_RANGE_IN := 9999   # "range never gates" sentinel for a pure LOS query
-const MELEE_ENGAGE_IN := 1.0   # base-edge gap within which the player may declare a Fight (then it snaps to contact)
 
 
 ## Live line of sight to the hovered enemy (goal 001 P8 + goal 003 per-model LOS): the line is green when

@@ -31,7 +31,8 @@ pub use rules::Registries;
 pub use score::{can_hold_marker, control_gap_in, presence, score, Incoming, NO_INCOMING};
 pub use sim::{
     reply_threat, resolve, Unsupported, ADVANCE, CHARGE, CHARGE_CONTACT_MARGIN_IN, CONTACT_IN,
-    DEFAULT_BASE_RADIUS_M, HOLD, RUSH, SPACING_BISECTIONS, SPACING_SAMPLES, UNIT_SPACING_IN,
+    DEFAULT_BASE_RADIUS_M, HOLD, MELEE_ENGAGE_IN, RUSH, SPACING_BISECTIONS, SPACING_SAMPLES,
+    UNIT_SPACING_IN,
 };
 pub use state::{Marker, Mods, Objective, Profile, Profiles, State, Weapon};
 pub use unit::{Unimplemented, UnitStatic};

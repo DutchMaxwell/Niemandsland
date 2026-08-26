@@ -51,6 +51,10 @@ const BASE_CONTACT_IN := 1.0        # nominal centre-to-centre gap of two standa
 ## (the target's body-only planner zone clamps them to exact contact; snap_charge clears any residual).
 ## Not a rule value — a contact epsilon (field-test finding 3: a charge within band fell short of contact).
 const CHARGE_CONTACT_MARGIN_IN := 0.25
+## THE table's engage distance (GF/AoF Advanced Rules v3.5.1 p.8/p.9): the base-edge gap within which
+## a Fight may be declared — the charge then SNAPS to clean contact; beyond it the charge falls short
+## (main.gd:7971-7986, :8990-8993). One truth for the table, the imagination and the Rust twin.
+const MELEE_ENGAGE_IN := 1.0
 ## Kite margin: the "Advancing" step-back stops this hair INSIDE max range instead of exactly ON the
 ## edge — a move ending at 24.000…1" of a 24" gun lost its shot to float noise (AI plausibility wave 1).
 ## A measuring margin in the CHARGE_CONTACT_MARGIN_IN spirit, not a rule value.

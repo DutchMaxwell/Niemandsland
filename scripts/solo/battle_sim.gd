@@ -698,18 +698,16 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 		# melee follows), so the trigger is the EDGE gap, not the centre distance:
 		# two 32 mm bases (radius 0.016 m) meet at a 1.26" centre distance, past
 		# the old CONTACT_IN=1.0" gate, so a landed 32 mm+ charge never fought.
-		# The tolerance is the table's own contact epsilon, CHARGE_CONTACT_MARGIN_IN
-		# (0.25"), which comfortably covers the spacing clamp's 8-step bisection
-		# worst-case shortfall (<= delta/256). Known residual, NOT covered by that
-		# margin: _spacing_fraction's OTHER fallback — the descending 8-point
-		# sample used when both the start and the full move are blocked — steps in
-		# 1/8ths, so it can land up to 1.5" short of the true legal boundary on a
-		# 12" charge; that scenario's melee correctly does not fire today.
-		# Fixup2 review (doc-only): the seam-OFF delta vs the old centre test is
-		# bidirectional — with 0.016 m default radii the trigger widens from 1.0"
-		# to 1.51" centre distance, with 10 mm bases it tightens to 0.644".
+		# NML-1073 S1d: the tolerance is the TABLE's engage distance,
+		# SoloController.MELEE_ENGAGE_IN (1"), not the 0.25" contact epsilon S1b
+		# used. main.gd:7971-7986 is the truth — within 1" of base edge the charge
+		# SNAPS into clean contact and fights, only beyond it does it fall short.
+		# S1b's 0.25" left the imagination 0.75" stricter than the table: in the
+		# 400-game A/B all 30 "move budget spent" fall-shorts sat at a 0.1-1.0"
+		# gap — charges the table would have connected. 1" also swallows both
+		# spacing-clamp shortfalls (bisection <= delta/256, 1/8th fallback sweep).
 		if edge_gap_in(positions, su.get("radii", []), tu["positions"], tu.get("radii", [])) \
-				<= SoloController.CHARGE_CONTACT_MARGIN_IN:
+				<= SoloController.MELEE_ENGAGE_IN:
 			var tu_before := _wounds_left(tu)
 			var su_before := _wounds_left(su)
 			_apply_expected_wounds(tu, AiEv.melee_ev(_profiles_of(su, true),
