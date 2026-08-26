@@ -31,9 +31,13 @@ use nml_core::plan::{build_pool, rank, PlanBend, ScoredRow, Search};
 use nml_core::playout::Policy;
 use nml_core::rollout::Rollout;
 use nml_core::sim::{Scratch, Unsupported, HOLD, RUSH};
-use nml_core::{build_act_statics, load_acts, Act, ActCorpus, Pick, Seams};
+use nml_core::{act_statics, build_act_statics, load_acts, Act, ActCorpus, Pick, Seams};
 
 const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_25.jsonl");
+/// NML-1073 M2-5b — the two-activation corpus whose second act has the host's
+/// attached hero DEAD. See `g4b_a_fallen_hero_stops_lending_its_rules_to_its_host`
+/// for how it was authored and why it is not a plain recording.
+const HERO_DEAD: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_hero_dead.jsonl");
 const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 /// The parity bar for every float. Both sides are f64 written by
 /// `JSON.stringify(.., full_precision=true)`, so an exact hit is achievable and
@@ -659,4 +663,177 @@ fn the_oracle_names_what_the_pick_does_not_cover() {
     );
     assert_eq!(single_pool, 0, "the empty-runner_up branch is not reached by this corpus");
     assert_eq!(picked[3], 0, "a CHARGE pick appeared — this corpus no longer needs the caveat");
+}
+
+// ------------------------------------------- NML-1073 M2-5b: the dead hero ---
+
+/// GATE G4b — a hero that FALLS stops lending its rules to the unit it joined,
+/// and the port has to see that within the same game.
+///
+/// `AiEv.rule_on_all_models` (ai_ev.gd:74-85) lets a unit-wide rule fire only
+/// when every ALIVE attached hero carries it too. The game header writes each
+/// unit's profile ONCE, so before M2-5b a hero that died mid-game kept voting in
+/// the port's copy for the rest of the game: the host stayed un-Shielded in the
+/// imagination while the table had already handed it the rule.
+///
+/// THE FIXTURE, stated rather than implied: it is act 14 of `acts_25.jsonl`
+/// (round 3, player 2, the Protector Sisters' own activation) twice — once
+/// verbatim, once with their attached Fanatic Superior dead (`alive` 0, no
+/// models, and the host's per-act `attached_hero_rules` empty, which is what
+/// `BattleSim._attached_hero_rules` answers for a fallen hero). The 23-act
+/// recording holds no dead hero to record, so the state was EDITED; both picks
+/// are then the answer the live GDScript search gives for that state, taken
+/// through `tools/act_recheck.gd write=` — the same replay that reproduces all
+/// 23 real recordings field for field, and it reproduces act 1's recorded pick
+/// here exactly, which is what makes its answer for act 2 worth trusting.
+///
+/// The one rule that flips is `Shielded`: the Protector Sisters carry it, the
+/// Fanatic Superior does not. It reaches the dice through
+/// `AiCombatMath.shielded_defense` (+1 defence), so this is a difference the
+/// score can actually feel — and it does: the live search changes its PICK.
+#[test]
+fn g4b_a_fallen_hero_stops_lending_its_rules_to_its_host() {
+    let c = load_acts(HERO_DEAD).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(c.acts.len(), 2, "the fixture is one activation before and one after the death");
+    let (a1, a2) = (&c.acts[0], &c.acts[1]);
+
+    // --- the instrument: the two acts really do read two different tables ---
+    assert!(
+        std::rc::Rc::ptr_eq(&a1.state.profiles, &c.profiles),
+        "act 1 reads the header's own table (nothing has moved yet)"
+    );
+    assert!(
+        !std::rc::Rc::ptr_eq(&a2.state.profiles, &c.profiles),
+        "act 2 must read a REBUILT table — otherwise this test proves nothing"
+    );
+    // The HOST is the unit whose inherited rules changed, not merely a unit with
+    // a hero: this recording holds four hero-carrying units and only one of them
+    // lost its hero.
+    let host = (0..a1.state.units())
+        .find(|&i| {
+            !a1.state.profile(i).attached_hero_rules.is_empty()
+                && a2.state.profile(i).attached_hero_rules.is_empty()
+        })
+        .expect("act 2 must show one host that stopped inheriting");
+    let hero = (0..a1.state.units())
+        .find(|&i| a1.state.alive[i] > 0 && a2.state.alive[i] == 0)
+        .expect("act 2 must hold exactly the death this fixture is about");
+    println!(
+        "G4b fixture: host {:?} rules {:?}; hero {:?} rules {:?}",
+        a1.state.profile(host).name,
+        a1.state.profile(host).special_rules,
+        a1.state.profile(hero).name,
+        a1.state.profile(hero).special_rules,
+    );
+    assert!(
+        a1.state.profile(host).special_rules.iter().any(|r| r == "Shielded"),
+        "the host has to carry the rule whose quantifier the hero was blocking"
+    );
+    assert!(
+        !a1.state.profile(hero).special_rules.iter().any(|r| r == "Shielded"),
+        "the hero has to LACK it, or nothing flips when it dies"
+    );
+    assert!(a2.state.profile(host).attached_hero_rules.is_empty(), "the hero stopped voting");
+
+    // --- and the derived closure flips with it, which is what the search reads ---
+    let statics = act_statics(&c, REPO);
+    assert!(
+        !statics[0][a1.state.roster.profile[host]].ctx.shielded,
+        "with the hero alive the host is NOT shielded"
+    );
+    assert!(
+        statics[1][a2.state.roster.profile[host]].ctx.shielded,
+        "with the hero dead the host IS shielded — the whole point of M2-5b"
+    );
+
+    // --- the picks, on the same bar G4 uses ---
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast };
+    let mut sc = Scratch::default();
+    let mut clean = 0;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let want = act.pick.as_ref().unwrap_or_else(|| panic!("act {ai} has no pick"));
+        let roll = Rollout::new(Policy::new(&statics[ai], &c.terrain, seams), c.knobs);
+        let search = Search::new(roll, &act.statics);
+        let got = search
+            .run(&act.state, act.player, &mut sc)
+            .unwrap_or_else(|u| panic!("act {} declined: {u:?}", ai + 1));
+        let (bad, _) = diff(act, want, &got);
+        println!(
+            "G4b act {}: picked {} (recorded {}), {} field(s) off",
+            ai + 1,
+            got.unit_key,
+            want.unit_key,
+            bad.len()
+        );
+        for (f, why) in &bad {
+            println!("  {f}: {why}");
+        }
+        if bad.is_empty() {
+            clean += 1;
+        }
+    }
+    assert_eq!(clean, 2, "both activations must reproduce field for field");
+
+    // The two acts must not answer the same, or the fixture would be green for
+    // a port that ignores the per-act reading entirely.
+    let p1 = c.acts[0].pick.as_ref().unwrap();
+    let p2 = c.acts[1].pick.as_ref().unwrap();
+    assert_ne!(
+        p1.unit_key, p2.unit_key,
+        "the death has to change the ANSWER, not just a number"
+    );
+
+    // --- RED, kept: act 2 through the HEADER's closure, i.e. the pre-M2-5b port ---
+    let roll = Rollout::new(Policy::new(&statics[0], &c.terrain, seams), c.knobs);
+    let stale = Search::new(roll, &a2.statics)
+        .run(&a2.state, a2.player, &mut sc)
+        .unwrap_or_else(|u| panic!("stale run declined: {u:?}"));
+    let (bad, _) = diff(a2, p2, &stale);
+    println!(
+        "G4b RED proof: act 2 on the deployment closure is off on {} field(s): {:?}",
+        bad.len(),
+        bad.iter().map(|(f, _)| *f).collect::<Vec<_>>()
+    );
+    assert!(
+        !bad.is_empty(),
+        "a stale profile table has to be VISIBLE here, or this gate cannot fail"
+    );
+}
+
+/// What the per-activation rebuild COSTS. `ProfileCache` hands back the same
+/// table while nothing moves, so this is paid once per hero death / rule grant,
+/// not once per activation — but the number belongs in the record either way.
+/// The bound is deliberately loose: it can only trip on a real regression, not
+/// on a busy machine.
+#[test]
+fn the_per_activation_rebuild_is_cheap() {
+    use nml_core::{Registries, StaticsCache};
+    let c = load_acts(HERO_DEAD).unwrap_or_else(|e| panic!("{e}"));
+    let mut reg = Registries::new(REPO);
+    // warm the registry maps: the first build pays for reading the mechanics
+    // JSON, which a mid-game rebuild never pays again.
+    let _ = StaticsCache::new().get(&mut reg, &c.profiles);
+    let t0 = std::time::Instant::now();
+    const N: u32 = 20;
+    for _ in 0..N {
+        let mut fresh = StaticsCache::new();
+        let _ = fresh.get(&mut reg, &c.acts[1].state.profiles);
+    }
+    let per = t0.elapsed().as_secs_f64() * 1e6 / f64::from(N);
+    println!(
+        "M2-5b rebuild cost: {:.1} us for {} unit profiles (search itself: ~9000 us/activation)",
+        per,
+        c.profiles.list.len()
+    );
+    assert!(per < 20_000.0, "a rebuild that costs {per:.0} us is a regression, not a cache miss");
+}
+
+/// The loud half of the same contract: there is no ONE static closure for a
+/// corpus whose dynamic profile reading moved, and asking for one says so
+/// instead of quietly handing back the header's.
+#[test]
+#[should_panic(expected = "use act_statics()")]
+fn a_corpus_with_a_moved_profile_read_refuses_a_single_static_closure() {
+    let c = load_acts(HERO_DEAD).unwrap_or_else(|e| panic!("{e}"));
+    let _ = build_act_statics(&c, REPO);
 }

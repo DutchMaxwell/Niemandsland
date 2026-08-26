@@ -124,11 +124,14 @@ static func _flatten_vec3(v: Variant) -> Variant:
 static func _header_line(state: Dictionary, terrain_cb: Callable) -> Dictionary:
 	var profiles := {}
 	for key in state["units"]:
-		var u: GameUnit = (state["units"][key] as Dictionary)["unit"]
-		var prof := BattleSim._unit_profile(u)
-		prof["shooting_range_bonus"] = SoloController.shooting_range_bonus(u)
-		prof["max_activation_advance_bonus_in"] = SoloController.max_activation_advance_bonus_in(u)
-		profiles[str(key)] = prof
+		# NML-1073 M2-5b: STATIC data only. Every field of _unit_profile that a
+		# live game rewrites (special_rules, tough, caster_value, item_grants,
+		# attached_hero_rules, the two SoloController bonuses that used to be
+		# stamped on here) travels per ACTIVATION instead — see
+		# BattleSim.unit_profile_dyn and _stamp_gate_reads below. A reader that
+		# takes one of those off this table replays a deployment-time reading.
+		profiles[str(key)] = BattleSim._unit_profile(
+			(state["units"][key] as Dictionary)["unit"])
 	return {"kind": "header", "profiles": profiles, "terrain": _terrain_line(terrain_cb),
 		"knobs": {"top_k": AiPlanner.top_k_default(), "horizon": AiPlanner.horizon(),
 			"tail_cap_p1": AiPlanner._tail_cap_for(1), "tail_cap_p2": AiPlanner._tail_cap_for(2),
@@ -205,6 +208,13 @@ static func _charge_illegal_matrix(state: Dictionary) -> Dictionary:
 ##                       the victim carries no rule of the Melee-Shrouding family.
 ## Per ACT, not in the once-written header: all three drift in a live game (models die, an
 ## attached hero joins or falls), and the gate reads them fresh on every activation.
+##
+## NML-1073 M2-5b: `prof` joins them — BattleSim.unit_profile_dyn, the DYNAMIC half of the
+## header profile (special_rules, tough, caster_value, item_grants, attached_hero_rules,
+## shooting_range_bonus, max_activation_advance_bonus_in). Same argument, one level up: the
+## header is written once per GAME, and a hero that dies mid-game silently froze the host's
+## inherited rules in it. Written for EVERY unit of every act, so a reader never has to guess
+## whether an absent key means "unchanged" or "not recorded".
 static func _stamp_gate_reads(state: Dictionary, plain: Dictionary) -> void:
 	var units: Dictionary = plain["units"]
 	for key in state["units"]:
@@ -214,6 +224,7 @@ static func _stamp_gate_reads(state: Dictionary, plain: Dictionary) -> void:
 		var u: GameUnit = (state["units"][key] as Dictionary)["unit"]
 		pu["charge_probe_r"] = _move_base_radius_of(u)
 		pu["charge_no_difficult"] = u.has_special_rule("Strider") or u.has_special_rule("Flying")
+		pu["prof"] = BattleSim.unit_profile_dyn(u)
 		var sh := _melee_shroud_params(u)
 		if not sh.is_empty():
 			pu["shroud"] = sh

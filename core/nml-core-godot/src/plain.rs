@@ -19,7 +19,7 @@ use godot::builtin::VariantType;
 
 use nml_core::state::{Bands, MoveBands, Roster};
 use nml_core::terrain::{CellParams, Obb, PlainTerrain};
-use nml_core::{Knobs, Marker, Mods, Objective, Profile, Profiles, State, Weapon};
+use nml_core::{Knobs, Marker, Mods, Objective, Profile, ProfileDyn, Profiles, State, Weapon};
 
 /// The dynamic per-unit keys `BattleSim._UNIT_DYNAMIC` (battle_sim.gd:1247-1250)
 /// writes, minus the two this port does not model (see `DROPPED`). Bit `i` of a
@@ -244,6 +244,35 @@ pub fn profile_of(d: &VarDictionary) -> Profile {
             rush: dnum(&bands, "rush", 12.0),
         },
     }
+}
+
+/// NML-1073 M2-5b — this activation's DYNAMIC profile reading per unit, in the
+/// state's own key order (= roster order).
+///
+/// `AiActRecorder._stamp_gate_reads` (act_recorder.gd) stamps it under the unit
+/// key `"prof"`; the live seam calls the very same function before it hands the
+/// state over, so the corpus the gate replays and the dictionary the game sends
+/// are one shape. A unit without the key keeps the header's deployment reading.
+pub fn dyn_profiles(plain: &VarDictionary) -> Vec<Option<ProfileDyn>> {
+    let units = ddict(plain, "units");
+    units
+        .keys_array()
+        .iter_shared()
+        .map(|k| {
+            let u = units.get(&k).and_then(|v| v.try_to::<VarDictionary>().ok())?;
+            let d = u.get("prof").and_then(|v| v.try_to::<VarDictionary>().ok())?;
+            Some(ProfileDyn {
+                special_rules: strings(&darr(&d, "special_rules")),
+                tough: dint(&d, "tough", 0),
+                caster_value: dint(&d, "caster_value", 0),
+                item_grants: strings(&darr(&d, "item_grants")),
+                attached_hero_rules: darr(&d, "attached_hero_rules")
+                    .iter_shared()
+                    .map(|v| strings(&any_array(&v)))
+                    .collect(),
+            })
+        })
+        .collect()
 }
 
 /// What one `capture_plain` call produced, beyond the state itself.

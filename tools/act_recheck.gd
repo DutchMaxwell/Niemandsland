@@ -22,10 +22,18 @@ extends SceneTree
 ##   --corrupt=gate     RED proof for CHARGE_GATE: flip it inside the grid diff
 ##   --ignore-knobs     RED proof (only bites on a non-default-knobs corpus):
 ##                       never stamp the header's knobs
+##   write=<path>       NML-1073 M2-5b: copy the corpus to <path> with the pick +
+##                       trace THIS replay produced instead of the recorded ones.
+##                       For AUTHORING an act whose state was edited by hand (a
+##                       hero killed mid-corpus): the live GDScript search is the
+##                       only oracle for such a state, and this is the tool that
+##                       already proves it replays the real recordings exactly.
 
 const NodeRecheck := preload("res://tools/node_recheck.gd")
 const EPS := 1e-9
 
+var _write_path := ""
+var _write_stream: FileAccess = null
 var _corrupt_charge := false
 var _corrupt_gate := false
 var _ignore_knobs := false
@@ -57,15 +65,24 @@ func _init() -> void:
 			"file": file_path = kv[1]
 			"n": n = int(kv[1])
 			"offset": offset = int(kv[1])
+			"write": _write_path = kv[1]
 	var f := FileAccess.open(file_path, FileAccess.READ)
 	if f == null:
 		printerr("[ACT_RECHECK] cannot open ", file_path)
 		quit(1)
 		return
-	var header: Dictionary = JSON.parse_string(f.get_line())
+	var header_line := f.get_line()
+	var header: Dictionary = JSON.parse_string(header_line)
 	var profiles: Dictionary = header["profiles"]
 	var terrain: Variant = header.get("terrain")
 	var knobs: Dictionary = header.get("knobs", {})
+	if _write_path != "":
+		_write_stream = FileAccess.open(_write_path, FileAccess.WRITE)
+		if _write_stream == null:
+			printerr("[ACT_RECHECK] cannot write ", _write_path)
+			quit(1)
+			return
+		_write_stream.store_line(header_line)
 	# M2-0d: BattleSim.charge_illegal_plain asks the board through header["terrain_at"]
 	# — the SAME port node_recheck already owns, built ONCE here (rebuilding the cell
 	# dictionary per gate call would dominate the run).
@@ -107,6 +124,11 @@ func _init() -> void:
 	# in a script static — drop it before quit(), or teardown frees a lambda
 	# whose script instance is already gone (measured elsewhere: exit 134).
 	AiPlanner.close()
+	if _write_stream != null:
+		_write_stream.flush()
+		_write_stream.close()
+		_write_stream = null
+		print("[ACT_RECHECK] wrote %s (pick + trace = THIS replay's answer)" % _write_path)
 	quit(0 if (mismatch == 0 and _gate_bad == 0) else 1)
 
 
@@ -171,6 +193,11 @@ func _check_act(act: Dictionary, header: Dictionary, profiles: Dictionary,
 
 	var pick := AiPlanner.plan_with_rollout(state, int(act["player"]))
 	var trace := AiPlanner.trace
+	if _write_stream != null:
+		var out := act.duplicate(true)
+		out["pick"] = AiActRecorder._flatten_vec3(pick)
+		out["trace"] = AiActRecorder._flatten_vec3(trace)
+		_write_stream.store_line(JSON.stringify(out, "", true, true))
 
 	var mism: Array = []
 	_compare_pick(act.get("pick", {}), pick, mism)

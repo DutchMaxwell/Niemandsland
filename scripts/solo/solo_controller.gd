@@ -3083,6 +3083,7 @@ var _core_declines := {}                  # reason -> already warned (once per g
 var _core_calls := 0
 var _core_us_total := 0
 var _core_us_max := 0
+var _core_statics_builds := 0     # M2-5b: profile-closure rebuilds seen so far
 
 
 ## Asks the Rust core for THIS activation. {} = declined (or the node could not
@@ -3104,6 +3105,9 @@ func _core_plan(state: Dictionary, me: int) -> Dictionary:
 			_core_warn_once(str(_core_node.last_error()))
 			return {}
 		_core_header_done = true
+		# The header's own closure IS build #1; start the counter there so the
+		# line below only ever announces a REAL mid-game rebuild.
+		_core_statics_builds = int(_core_node.statics_builds())
 		if OS.get_environment("NML_CORE_SELFCHECK") == "1":
 			_core_header_report(head)
 	var plain: Dictionary = BattleSim.state_to_plain(state, false)
@@ -3123,6 +3127,14 @@ func _core_plan(state: Dictionary, me: int) -> Dictionary:
 	_core_calls += 1
 	_core_us_total += dt
 	_core_us_max = maxi(_core_us_max, dt)
+	# NML-1073 M2-5b: the port rebuilds its per-unit closure when an activation's
+	# DYNAMIC profile reading moves (an attached hero fell, a spell granted or
+	# expired a rule). Say so — a silent rebuild looks like a stale replay.
+	var rebuilds := int(_core_node.statics_builds())
+	if rebuilds != _core_statics_builds:
+		_core_statics_builds = rebuilds
+		print("[CORE] PROFILE rebuild #%d — a live profile read changed (r%d p%d)"
+			% [rebuilds, _current_round(), me])
 	if OS.get_environment("NML_CORE_SELFCHECK") == "1":
 		_core_selfcheck(state, me, out)
 	print("[CORE] ACT r%d p%d us=%d n=%d mean_us=%d max_us=%d" % [_current_round(), me,

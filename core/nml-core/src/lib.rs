@@ -65,9 +65,11 @@ pub use sim::{
     ADVANCE, CHARGE, CHARGE_CONTACT_MARGIN_IN, CONTACT_IN, DEFAULT_BASE_RADIUS_M, HOLD,
     MELEE_ENGAGE_IN, RUSH, SPACING_BISECTIONS, SPACING_SAMPLES, UNIT_SPACING_IN,
 };
-pub use state::{Bands, Marker, Mods, Objective, Profile, Profiles, State, Weapon};
+pub use state::{
+    Bands, Marker, Mods, Objective, Profile, ProfileCache, ProfileDyn, Profiles, State, Weapon,
+};
 pub use terrain::{PlainTerrain, Terrain};
-pub use unit::{Unimplemented, UnitStatic};
+pub use unit::{StaticsCache, Unimplemented, UnitStatic};
 
 /// Builds the per-unit static closure for a whole corpus, in profile-table order.
 /// `repo_root` is the checkout the mechanics assets are read from
@@ -76,10 +78,41 @@ pub fn build_statics(corpus: &NodeCorpus, repo_root: &str) -> Vec<UnitStatic> {
     statics_of(&corpus.profiles, repo_root)
 }
 
-/// Same, for the ACT corpus (`acts.rs`) — both headers carry the identical
-/// `BattleSim._unit_profile` table, so one builder serves both.
+/// The ONE static closure of an act corpus whose every activation reads the
+/// header's own profile table — the shape the benches and the sweep tests want.
+///
+/// PANICS on a corpus where a dynamic profile read moved mid-game (a hero fell,
+/// a spell granted a rule): there is no single closure for such a corpus, and
+/// quietly handing back the header's would be exactly the staleness NML-1073
+/// M2-5b removed. Use `act_statics` and a per-act `Policy` there.
 pub fn build_act_statics(corpus: &ActCorpus, repo_root: &str) -> Vec<UnitStatic> {
+    let moved = corpus
+        .acts
+        .iter()
+        .position(|a| !std::rc::Rc::ptr_eq(&a.state.profiles, &corpus.profiles));
+    if let Some(i) = moved {
+        panic!(
+            "act {} reads a profile table the header does not carry (a dynamic \
+             profile read moved mid-game) — use act_statics(), not build_act_statics()",
+            i + 1
+        );
+    }
     statics_of(&corpus.profiles, repo_root)
+}
+
+/// The per-ACTIVATION static closure of an act corpus — one entry per act, in
+/// act order (NML-1073 M2-5b).
+///
+/// The act line carries the profile fields a live game rewrites (a dead hero's
+/// inherited rules, a Caster Group's alive count, a spelled-on rule list), so a
+/// closure derived once from the header answers with the deployment reading from
+/// the activation where one of them first moves. Entries are interned: acts that
+/// read alike share one `Rc`, and the whole corpus shares one when nothing ever
+/// changed.
+pub fn act_statics(corpus: &ActCorpus, repo_root: &str) -> Vec<std::rc::Rc<Vec<UnitStatic>>> {
+    let mut reg = Registries::new(repo_root);
+    let mut cache = StaticsCache::new();
+    corpus.acts.iter().map(|a| cache.get(&mut reg, &a.state.profiles)).collect()
 }
 
 fn statics_of(profiles: &Profiles, repo_root: &str) -> Vec<UnitStatic> {

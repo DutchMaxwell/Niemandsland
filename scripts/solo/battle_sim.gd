@@ -1529,11 +1529,46 @@ static func _unit_profile(u: GameUnit) -> Dictionary:
 		# primitive (rules_registry.gd:167-170, item-granted rules count as the
 		# unit's own); `attached_hero_rules` feeds AiEv.rule_on_all_models
 		# (ai_ev.gd:79-83), which withholds a rule when an ALIVE attached hero
-		# lacks it. Both are read at profile time, so a hero that dies later
-		# keeps voting — the same v0 gap the snapshot's static profile has for
-		# every other live read (documented, not silently dropped).
+		# lacks it. M2-5b: both are read at PROFILE time, i.e. once per game —
+		# a hero that dies later would keep voting here, so `unit_profile_dyn`
+		# below re-reads them (and every other live-read field) per activation
+		# and the act line carries THAT. The copies here are the deployment
+		# reading the node corpus still replays off.
 		"item_grants": _granted_rules(u),
 		"attached_hero_rules": _attached_hero_rules(u),
+	}
+
+
+## NML-1073 M2-5b: the DYNAMIC half of the profile above — every field whose
+## value a LIVE game rewrites between two activations. The header writes the
+## whole profile ONCE (at the first activation of a game), so a replay that
+## reads any of these off the header answers with a deployment-time reading:
+##   special_rules   main.gd:3761/:3775 add and remove a " (spell)"-suffixed
+##                   rule per cast (_solo_apply_grant / _solo_revoke_grant).
+##   tough           AiEv.unit_rating over special_rules — same source, derived.
+##   caster_value    get_caster_value() (game_unit.gd:382-414) answers a Caster
+##                   Group unit with its ALIVE model count.
+##   item_grants     unit_properties["item_grants"], the registry input of
+##                   RulesRegistry.unit_rules_of_primitive (rules_registry.gd:167).
+##   attached_hero_rules
+##                   ALIVE heroes only (_attached_hero_rules below) — a hero that
+##                   falls stops voting in AiEv.rule_on_all_models (ai_ev.gd:79-83)
+##                   and the host GAINS every unit-wide rule that hero lacked.
+##   shooting_range_bonus / max_activation_advance_bonus_in
+##                   SoloController :5218 / :5322 — both walk special_rules and
+##                   item_grants, and the first sums unit_properties
+##                   ["spell_range_mod"] verbatim.
+## AiActRecorder stamps this per ACTIVATION (act line, unit key "prof"); the
+## port and the stand-in read it there and never off the header.
+static func unit_profile_dyn(u: GameUnit) -> Dictionary:
+	return {
+		"special_rules": u.get_special_rules(),
+		"tough": maxi(AiEv.unit_rating(u, "Tough"), 1),
+		"caster_value": u.get_caster_value(),
+		"item_grants": _granted_rules(u),
+		"attached_hero_rules": _attached_hero_rules(u),
+		"shooting_range_bonus": SoloController.shooting_range_bonus(u),
+		"max_activation_advance_bonus_in": SoloController.max_activation_advance_bonus_in(u),
 	}
 
 

@@ -16,7 +16,9 @@ use std::rc::Rc;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
-use crate::state::{Bands, Marker, Mods, Objective, Profile, Profiles, Roster, State};
+use crate::state::{
+    Bands, Marker, Mods, Objective, Profile, ProfileDyn, Profiles, Roster, State,
+};
 
 /// A JSON object read as an ordered `Vec` of entries.
 pub(crate) struct Ordered<T>(pub(crate) Vec<(String, T)>);
@@ -107,6 +109,13 @@ pub(crate) struct PlainUnit {
     charge_no_difficult: bool,
     #[serde(default = "default_probe_r")]
     charge_probe_r: f64,
+    /// NML-1073 M2-5b — the DYNAMIC half of the unit's profile AS OF THIS
+    /// ACTIVATION (`BattleSim.unit_profile_dyn`, stamped by
+    /// `AiActRecorder._stamp_gate_reads`). `None` on the node corpus and on any
+    /// act corpus recorded before M2-5b, where the header's deployment reading
+    /// is all there is.
+    #[serde(default)]
+    prof: Option<ProfileDyn>,
 }
 
 /// `SeparationChecker.DEFAULT_BASE_RADIUS_M` — the fallback
@@ -299,6 +308,16 @@ fn capture_positions(keys: &[String]) -> Vec<usize> {
         pos[roster_i] = row;
     }
     pos
+}
+
+impl PlainState {
+    /// NML-1073 M2-5b — this activation's dynamic profile reading per unit, in
+    /// DOCUMENT order, which is roster order (`roster_of` walks the same list).
+    /// Read BEFORE `state_of` consumes the plain state, because the effective
+    /// profile table it produces is what `state_of` must be handed.
+    pub(crate) fn dyn_profiles(&self) -> Vec<Option<ProfileDyn>> {
+        self.units.0.iter().map(|(_, u)| u.prof.clone()).collect()
+    }
 }
 
 pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Roster>) -> State {

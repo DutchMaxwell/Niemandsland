@@ -139,7 +139,16 @@ static func _rebuild_action(a: Dictionary) -> Dictionary:
 ## proof: if resolve()/score() run correctly off this, the profile lost nothing
 ## the closures needed. Reuses the real GameUnit/ModelInstance/OPRUnit classes
 ## (not hand-mocked accessors) so RulesRegistry/AiEv/AiShooting need no changes.
-static func _stand_in_unit(p: Dictionary, dyn: Dictionary = {}) -> GameUnit:
+static func _stand_in_unit(p_static: Dictionary, dyn: Dictionary = {}) -> GameUnit:
+	# NML-1073 M2-5b: the header profile is the DEPLOYMENT reading; the act line
+	# carries the fields a live game rewrites (BattleSim.unit_profile_dyn, stamped
+	# by AiActRecorder._stamp_gate_reads under "prof"). The per-act reading WINS —
+	# without it a stand-in for a unit whose attached hero has fallen still
+	# inherits the dead hero's rules. An act with no "prof" (the node corpus, a
+	# pre-M2-5b act corpus) leaves the header reading in place, i.e. the old
+	# behaviour.
+	var p := p_static.duplicate(true)
+	p.merge(dyn.get("prof", {}) as Dictionary, true)
 	var u := GameUnit.new()
 	u.unit_id = str(p.get("unit_id", ""))
 	u.unit_properties = {"name": p.get("name", ""), "quality": int(p.get("quality", 0)),
@@ -206,8 +215,9 @@ static func _stand_in_unit(p: Dictionary, dyn: Dictionary = {}) -> GameUnit:
 	# NML-1073 M2-0d: the other two LIVE per-unit reads the ROOT search makes —
 	# ai_planner.gd:975 adds SoloController.max_activation_advance_bonus_in to the
 	# advance band for candidates_wide's reach gate, and AiShooting/the reach gates
-	# read SoloController.shooting_range_bonus. Both are recorded in the header
-	# profile (act_recorder.gd:112-113); answer them from the corpus here.
+	# read SoloController.shooting_range_bonus. Both are recorded per ACTIVATION
+	# (M2-5b: BattleSim.unit_profile_dyn, merged into `p` at the top of this
+	# function); answer them from the corpus here.
 	# shooting_range_bonus (:4966) has an ADDITIVE seam — unit_properties
 	# "spell_range_mod" is summed in verbatim — so it calibrates exactly, the same
 	# trick spell_move_mod plays for the bands above.

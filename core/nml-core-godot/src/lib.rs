@@ -26,9 +26,9 @@ use std::rc::Rc;
 
 use godot::prelude::*;
 
-use nml_core::state::{Profiles, Roster};
+use nml_core::state::{ProfileCache, Profiles, Roster};
 use nml_core::terrain::Terrain;
-use nml_core::unit::UnitStatic;
+use nml_core::unit::{StaticsCache, UnitStatic};
 use nml_core::{
     plan_with_rollout_sig, reply_threat, resolve, score, ActStatics, Action, Knobs, Pick,
     Registries, Seams,
@@ -72,7 +72,11 @@ struct GameHeader {
     profiles: Rc<Profiles>,
     terrain: Terrain,
     knobs: Knobs,
-    statics: Rc<Vec<UnitStatic>>,
+    /// NML-1073 M2-5b: the header table is the DEPLOYMENT reading. This turns
+    /// each activation's own `prof` blocks into the table that activation is
+    /// searched on — the header's own `Rc` while nothing has moved, one interned
+    /// rebuild per distinct reading after that.
+    pcache: ProfileCache,
     /// The roster for the last state seen, interned across activations the way
     /// `io::roster_of` interns it across corpus lines.
     keys: Vec<String>,
@@ -87,6 +91,9 @@ pub struct NmlCore {
     slab: Vec<Option<Slot>>,
     free: Vec<usize>,
     cache: RosterCache,
+    /// The derived `UnitStatic` closure per profile TABLE — rebuilt only on the
+    /// activation where the game's dynamic reading actually changed.
+    scache: StaticsCache,
     reg: Option<Registries>,
     repo_root: Option<String>,
     seams: Option<Seams>,
@@ -261,14 +268,17 @@ impl NmlCore {
         if self.reg.is_none() {
             self.reg = Some(Registries::new(&root));
         }
+        let profiles = Rc::new(profiles);
+        // The closure for the header's own reading is built here rather than on
+        // the first activation, so a broken registry path is a `set_game_header`
+        // failure and not a mid-game decline.
         let reg = self.reg.as_mut().unwrap();
-        let statics: Vec<UnitStatic> =
-            profiles.list.iter().map(|p| UnitStatic::build(reg, p)).collect();
+        let _ = self.scache.get(reg, &profiles);
         self.header = Some(GameHeader {
-            profiles: Rc::new(profiles),
+            pcache: ProfileCache::new(Rc::clone(&profiles)),
+            profiles,
             terrain,
             knobs,
-            statics: Rc::new(statics),
             keys: Vec::new(),
             roster: None,
         });
@@ -359,7 +369,17 @@ impl NmlCore {
         d.set("top_k", h.knobs.top_k);
         d.set("horizon", h.knobs.horizon);
         d.set("seam_spacing", h.knobs.seam_spacing);
+        d.set("statics_builds", self.scache.builds as i64);
         d
+    }
+
+    /// NML-1073 M2-5b — how often the port had to REBUILD the per-unit static
+    /// closure because an activation's dynamic profile reading differed from the
+    /// last one (a hero fell, a spell granted or expired a rule). 1 = the game
+    /// header's own build and nothing has moved since.
+    #[func]
+    fn statics_builds(&self) -> i64 {
+        self.scache.builds as i64
     }
 
     /// Frees the slot. Releasing an already-free or unknown handle is a no-op.
@@ -423,7 +443,11 @@ impl NmlCore {
         sig: i64,
     ) -> Result<VarDictionary, String> {
         let keys = plain::unit_keys(plain);
-        {
+        // NML-1073 M2-5b: the profile table THIS activation reads. The per-unit
+        // `prof` blocks the seam stamps carry every field a live game rewrites
+        // (a fallen hero's inherited rules above all), so the search is handed
+        // the reading of the moment, not the deployment one.
+        let effective = {
             let h = self
                 .header
                 .as_mut()
@@ -433,11 +457,21 @@ impl NmlCore {
                 h.keys = keys;
                 h.roster = Some(Rc::new(r));
             }
+            let dyns = plain::dyn_profiles(plain);
+            h.pcache.effective(h.roster.as_ref().unwrap(), &dyns)
+        };
+        let root = self.root();
+        if self.reg.is_none() {
+            self.reg = Some(Registries::new(&root));
         }
+        let unit_statics = {
+            let reg = self.reg.as_mut().unwrap();
+            self.scache.get(reg, &effective)
+        };
         let h = self.header.as_ref().unwrap();
         let cap = plain::build_state(
             plain,
-            Rc::clone(&h.profiles),
+            Rc::clone(&effective),
             Rc::clone(h.roster.as_ref().unwrap()),
         )?;
         for d in &cap.dropped {
@@ -449,7 +483,7 @@ impl NmlCore {
         let pick = plan_with_rollout_sig(
             &cap.state,
             &h.terrain,
-            &h.statics,
+            &unit_statics,
             &h.knobs,
             &act,
             player,

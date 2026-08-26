@@ -134,6 +134,120 @@ impl Profiles {
     }
 }
 
+/// NML-1073 M2-5b — the DYNAMIC half of `Profile`: every field a LIVE game
+/// rewrites between two activations. `BattleSim.unit_profile_dyn`
+/// (battle_sim.gd) reads them fresh per activation and `AiActRecorder.
+/// _stamp_gate_reads` stamps them into the act line under the unit key `prof`;
+/// the header's copy of the same fields is the DEPLOYMENT reading and is the
+/// fallback for a corpus recorded before this contract.
+///
+/// Why each one moves (the GDScript source of the drift):
+/// * `special_rules` — `main.gd` `_solo_apply_grant` / `_solo_revoke_grant`
+///   add and remove a `" (spell)"`-suffixed rule per cast.
+/// * `tough` — `AiEv.unit_rating(u, "Tough")`, derived from `special_rules`.
+/// * `caster_value` — `GameUnit.get_caster_value` answers a **Caster Group**
+///   unit with its ALIVE model count (game_unit.gd:382-414).
+/// * `item_grants` — `unit_properties["item_grants"]`, the registry input of
+///   `RulesRegistry.unit_rules_of_primitive` (rules_registry.gd:167-170).
+/// * `attached_hero_rules` — ALIVE attached heroes only. A hero that FALLS
+///   stops voting in `AiEv.rule_on_all_models` (ai_ev.gd:79-83), so the host
+///   GAINS every unit-wide rule that hero happened to lack. This is the gap
+///   this record exists for.
+///
+/// `shooting_range_bonus` / `max_activation_advance_bonus_in` travel in the same
+/// act block but are deliberately absent here: no function of this port reads
+/// them (the menu prices reach off the weapons' own ranges), so parsing them
+/// would only make the struct claim a coverage it does not have. They are read
+/// by the GDScript stand-in in tools/node_recheck.gd.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+pub struct ProfileDyn {
+    #[serde(default)]
+    pub special_rules: Vec<String>,
+    #[serde(default)]
+    pub tough: i64,
+    #[serde(default)]
+    pub caster_value: i64,
+    #[serde(default)]
+    pub item_grants: Vec<String>,
+    #[serde(default)]
+    pub attached_hero_rules: Vec<Vec<String>>,
+}
+
+impl ProfileDyn {
+    /// The reading the HEADER profile itself carries — what an act with no
+    /// `prof` block answers with, and the baseline every comparison starts from.
+    pub fn of(p: &Profile) -> ProfileDyn {
+        ProfileDyn {
+            special_rules: p.special_rules.clone(),
+            tough: p.tough,
+            caster_value: p.caster_value,
+            item_grants: p.item_grants.clone(),
+            attached_hero_rules: p.attached_hero_rules.clone(),
+        }
+    }
+
+    /// `p` with this activation's reading in place of the header's.
+    pub fn apply(&self, p: &Profile) -> Profile {
+        let mut out = p.clone();
+        out.special_rules = self.special_rules.clone();
+        out.tough = self.tough;
+        out.caster_value = self.caster_value;
+        out.item_grants = self.item_grants.clone();
+        out.attached_hero_rules = self.attached_hero_rules.clone();
+        out
+    }
+}
+
+/// NML-1073 M2-5b — interns the per-ACTIVATION profile table.
+///
+/// The header's own table is handed back unchanged while every unit's `prof`
+/// block still reads the way the header does; the first activation that differs
+/// (a hero falls, a spell grants a rule) gets ONE rebuild that is then reused
+/// for as long as the reading holds. Pointer identity is load-bearing, not an
+/// optimisation: `StaticsCache` keys the derived `UnitStatic` closure on
+/// `Rc::ptr_eq`, so handing back a fresh `Rc` with identical contents would
+/// rebuild the whole closure on every activation.
+#[derive(Debug)]
+pub struct ProfileCache {
+    base: Rc<Profiles>,
+    base_dyn: Vec<ProfileDyn>,
+    last: Option<(Vec<ProfileDyn>, Rc<Profiles>)>,
+}
+
+impl ProfileCache {
+    pub fn new(base: Rc<Profiles>) -> ProfileCache {
+        let base_dyn = base.list.iter().map(ProfileDyn::of).collect();
+        ProfileCache { base, base_dyn, last: None }
+    }
+
+    /// The table THIS activation reads. `dyns` is in ROSTER order and
+    /// `roster.profile[i]` names the profile entry each one overrides; `None`
+    /// (a corpus without the block) keeps the header's reading for that unit.
+    pub fn effective(&mut self, roster: &Roster, dyns: &[Option<ProfileDyn>]) -> Rc<Profiles> {
+        let mut want = self.base_dyn.clone();
+        for (i, d) in dyns.iter().enumerate() {
+            if let (Some(d), Some(&pi)) = (d.as_ref(), roster.profile.get(i)) {
+                if pi < want.len() {
+                    want[pi] = d.clone();
+                }
+            }
+        }
+        if want == self.base_dyn {
+            return Rc::clone(&self.base);
+        }
+        if let Some((k, t)) = self.last.as_ref() {
+            if *k == want {
+                return Rc::clone(t);
+            }
+        }
+        let list: Vec<Profile> =
+            self.base.list.iter().zip(&want).map(|(p, d)| d.apply(p)).collect();
+        let table = Rc::new(Profiles { list, index: self.base.index.clone() });
+        self.last = Some((want, Rc::clone(&table)));
+        table
+    }
+}
+
 /// Capture order + the profile index per unit. Never written after capture, so
 /// clones share it (`clone_state` battle_sim.gd:463-505 keeps the GameUnit ref).
 #[derive(Debug, Default)]

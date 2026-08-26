@@ -18,11 +18,13 @@
 //! the same `range` (it is part of the signature) — so the whole ranged set is
 //! merged once here and filtered per call.
 
+use std::rc::Rc;
+
 use crate::combat::{armored_defense, BANNER_MORALE_BONUS, REGENERATION_TARGET, SELF_REPAIR_TARGET};
 use crate::rules::{
     base_rule_name, has_special_rule, rule_rating, unit_rating, Registries, Spell,
 };
-use crate::state::{Profile, Weapon};
+use crate::state::{Profile, Profiles, Weapon};
 
 /// `AiEv` unit context — `ctx_for`'s dictionary as a struct. `models`,
 /// `in_cover` and `fatigued` are the DYNAMIC three `BattleSim._ctx_of`
@@ -585,5 +587,60 @@ impl UnitStatic {
             steadfast_active: unit_rule_active(reg, p, "Steadfast"),
             unimplemented,
         }
+    }
+}
+
+/// NML-1073 M2-5b — the derived per-unit closure for a profile TABLE, memoised
+/// by that table's identity (`Rc::ptr_eq`).
+///
+/// `ProfileCache` hands back the same `Rc<Profiles>` for as long as the game's
+/// dynamic reading holds, so this cache rebuilds `UnitStatic` only on the
+/// activation where something actually changed — a hero falling, a spell
+/// granting a rule — and never once per activation.
+///
+/// Bounded on purpose: a long game produces one distinct reading per such
+/// event, and `ProfileCache` only ever asks for two of them (the header's and
+/// the current one). Slot 0 — the header's table — is never evicted, so a game
+/// that returns to its deployment reading finds it still here.
+#[derive(Default)]
+pub struct StaticsCache {
+    entries: Vec<(Rc<Profiles>, Rc<Vec<UnitStatic>>)>,
+    /// How many tables were rebuilt (a diagnostic — the cost this cache exists
+    /// to keep off the per-activation path).
+    pub builds: u64,
+}
+
+impl std::fmt::Debug for StaticsCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StaticsCache")
+            .field("entries", &self.entries.len())
+            .field("builds", &self.builds)
+            .finish()
+    }
+}
+
+/// Distinct profile tables kept at once. Two is the steady state (the header's
+/// and the current reading); the rest is slack for a game that flips back.
+const STATICS_CACHE_CAP: usize = 4;
+
+impl StaticsCache {
+    pub fn new() -> StaticsCache {
+        StaticsCache::default()
+    }
+
+    /// The closure for `profiles`, built once per distinct table.
+    pub fn get(&mut self, reg: &mut Registries, profiles: &Rc<Profiles>) -> Rc<Vec<UnitStatic>> {
+        if let Some((_, s)) = self.entries.iter().find(|(p, _)| Rc::ptr_eq(p, profiles)) {
+            return Rc::clone(s);
+        }
+        let built: Vec<UnitStatic> =
+            profiles.list.iter().map(|p| UnitStatic::build(reg, p)).collect();
+        let rc = Rc::new(built);
+        self.builds += 1;
+        if self.entries.len() >= STATICS_CACHE_CAP {
+            self.entries.remove(1); // slot 0 is the header's table — keep it
+        }
+        self.entries.push((Rc::clone(profiles), Rc::clone(&rc)));
+        rc
     }
 }
