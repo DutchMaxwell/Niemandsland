@@ -1,0 +1,139 @@
+class_name AiActRecorder
+extends RefCounted
+## NML-1073 M2-0a: env NML_ACT_DUMP=<dir> appends every ACTIVATION the
+## planner picked to <dir>/acts.jsonl — the per-activation counterpart to
+## ai_planner.gd's NML_NODE_DUMP (per-node) recorder; same style (FileAccess
+## stream opened once and kept open, JSON lines via JSON.stringify with
+## sort_keys, env cap NML_ACT_DUMP_MAX). Unset (default) never touches disk:
+## SoloController._planner_pick_unit calls begin()/finish() unconditionally,
+## but begin() returns {} on the very first (cheap, cached) env check and
+## finish() no-ops on an empty pending dict — byte-identical game either way.
+## Line 1 is {"kind":"header", "profiles": {...}, "terrain": {...}|null,
+## "knobs": {...}} — the STATIC per-unit/board/search data, written ONCE;
+## every activation after it is a {"kind":"act", ...} line with the FULL
+## input the search read plus the "pick" it returned.
+
+
+static var _stream: FileAccess = null
+static var _checked := false
+static var _header_written := false
+static var _max := 5000
+static var _count := 0
+
+
+static func _dump_stream() -> FileAccess:
+	if not _checked:
+		_checked = true
+		var dir := OS.get_environment("NML_ACT_DUMP")
+		if dir != "" and DirAccess.dir_exists_absolute(dir):
+			_stream = FileAccess.open(dir.path_join("acts.jsonl"), FileAccess.WRITE)
+			var cap := OS.get_environment("NML_ACT_DUMP_MAX")
+			if cap != "":
+				_max = maxi(int(cap), 0)
+	return _stream
+
+
+## Pre-pick capture (INPUT): call right after the un-activated-pool loop and
+## BEFORE doctrine_pick/plan_with_rollout. Returns {} when the env seam is off
+## or the line cap is already hit — the caller's finish() then no-ops too.
+static func begin(state: Dictionary, me: int, pool: Array, terrain_cb: Callable) -> Dictionary:
+	var f := _dump_stream()
+	if f == null or _count >= _max:
+		return {}
+	if not _header_written:
+		_header_written = true
+		f.store_line(JSON.stringify(_header_line(state, terrain_cb), "", true, true))
+		f.flush()   # a same-process reader (the unit test) must see the header without a close()
+	var pool_keys: Array = []
+	for k in state["units"]:
+		if pool.has((state["units"][k] as Dictionary)["unit"]):
+			pool_keys.append(str(k))
+	return {"kind": "act", "round": int(state["round"]), "player": me,
+		"statics": {"opener_seat": AiPlanner.opener_seat, "playout_search": AiPlanner.playout_search,
+			"fit_mode": AiMissionEval.fit_mode, "playout_net": AiPlanner.playout_net},
+		"state": BattleSim.state_to_plain(state, false),
+		"charge_illegal": _charge_illegal_matrix(state), "pool": pool_keys}
+
+
+## Post-pick write (OUTPUT): call once the final pick (doctrine_pick or
+## plan_with_rollout) is settled. `pending` is begin()'s return value — {}
+## (env off / cap hit) is a silent no-op.
+static func finish(pending: Dictionary, pick: Dictionary) -> void:
+	if pending.is_empty() or _stream == null or _count >= _max:
+		return
+	pending["pick"] = pick
+	_stream.store_line(JSON.stringify(pending, "", true, true))
+	_stream.flush()   # a same-process reader (the unit test) must see the line without a close()
+	_count += 1
+
+
+static func _header_line(state: Dictionary, terrain_cb: Callable) -> Dictionary:
+	var profiles := {}
+	for key in state["units"]:
+		var u: GameUnit = (state["units"][key] as Dictionary)["unit"]
+		var prof := BattleSim._unit_profile(u)
+		prof["shooting_range_bonus"] = SoloController.shooting_range_bonus(u)
+		prof["max_activation_advance_bonus_in"] = SoloController.max_activation_advance_bonus_in(u)
+		profiles[str(key)] = prof
+	return {"kind": "header", "profiles": profiles, "terrain": _terrain_line(terrain_cb),
+		"knobs": {"top_k": AiPlanner.top_k_default(), "horizon": AiPlanner.horizon(),
+			"tail_cap_p1": AiPlanner._tail_cap_for(1), "tail_cap_p2": AiPlanner._tail_cap_for(2),
+			"imagined_round_end": AiPlanner.imagined_round_end_enabled(),
+			"depth_discount": AiPlanner.depth_discount(), "seat_mode": AiPlanner.seat_mode(),
+			"playout_margin": AiPlanner.close_margin(), "playout_rich": AiPlanner.playout_rich(),
+			"seam_cast": BattleSim.cast_phase_enabled(), "seam_spacing": BattleSim.spacing_enabled()}}
+
+
+## Reaches the live TerrainOverlay the same way SoloController's terrain_type_at
+## Callable does: main.gd binds a lambda over its `terrain_overlay` member, so
+## the Callable's bound object (get_object()) IS the main node. null when there
+## is no overlay wired (headless tests, no terrain_type_at seam).
+static func _terrain_line(terrain_cb: Callable) -> Variant:
+	if not terrain_cb.is_valid():
+		return null
+	var owner_obj: Object = terrain_cb.get_object()
+	if owner_obj == null or not ("terrain_overlay" in owner_obj):
+		return null
+	var ov = owner_obj.get("terrain_overlay")
+	if ov == null:
+		return null
+	var cells: Array = []
+	for k in (ov.grid_cells as Dictionary):
+		var c := k as Vector2i
+		cells.append([c.x, c.y, int(ov.grid_cells[k])])
+	var sandbox: Array = []
+	for s in ov._sandbox_shapes():
+		var sd := s as Dictionary
+		var c: Vector2 = sd["c"]
+		var he: Vector2 = sd["he"]
+		sandbox.append({"c": [c.x, c.y], "he": [he.x, he.y],
+			"yaw": float(sd["yaw"]), "type": int(sd["type"])})
+	return {"cells": cells, "sandbox": sandbox,
+		"cell_params": {"table_size_feet": [ov.table_size_feet.x, ov.table_size_feet.y],
+			"grid_rotation_degrees": float(ov.grid_rotation_degrees),
+			"grid_size_inches": ov.GRID_SIZE_INCHES, "inches_to_meters": ov.INCHES_TO_METERS}}
+
+
+## charge_illegal(attacker, victim, gap_in, attacker_centre, victim_centre) for
+## every ordered pair of distinct alive units on opposite sides — the exact
+## call shape AiPlanner._best_charge uses (ai_planner.gd ~:1190-1200). {} when
+## the state carries no charge_illegal seam (lab fixtures, old snapshots).
+static func _charge_illegal_matrix(state: Dictionary) -> Dictionary:
+	var out := {}
+	var cb: Callable = state.get("charge_illegal", Callable())
+	if not cb.is_valid():
+		return out
+	for ak in state["units"]:
+		var asu: Dictionary = state["units"][ak]
+		if int(asu["alive"]) <= 0:
+			continue
+		for vk in state["units"]:
+			if vk == ak:
+				continue
+			var vsu: Dictionary = state["units"][vk]
+			if int(vsu["alive"]) <= 0 or int(vsu["player"]) == int(asu["player"]):
+				continue
+			var gap := maxf(BattleSim.dist_in(asu["positions"], vsu["positions"]) - BattleSim.CONTACT_IN, 0.0)
+			out["%s|%s" % [str(ak), str(vk)]] = bool(cb.call(asu["unit"], vsu["unit"], gap,
+				AiPlanner._centre(asu), AiPlanner._centre(vsu)))
+	return out
