@@ -72,6 +72,22 @@ pub enum Unsupported {
     /// pre-move state cannot answer that. Never occurs in the recorded corpus
     /// (`_policy_candidates` ai_planner.gd:517-545 pairs a shoot only with HOLD).
     MovedShootLos,
+    /// `plan_with_rollout` scored nothing at all — the GDScript answers
+    /// `{"used": false}` (ai_planner.gd:141-142), which is not a pick.
+    NoCandidate,
+    /// `top_k <= 0`: the search degrades to the 1-ply `plan()` (:126), whose
+    /// dictionary has neither `waits` nor `rolled_units`. Call `plan::plan`.
+    OnePlyDegrade,
+    /// `AiPlanner.playout_search` fired on a CLOSE top-2 (:231-265): up to 7
+    /// STOCHASTIC `full_playout`s per branch then decide the pick outright.
+    /// M2-4 ports it; until then the search declines rather than guesses.
+    PlayoutArbitration,
+    /// `AiPlanner.playout_net` is non-empty — every imagined activation is
+    /// steered by a trained network (`_policy_step_net`, :627-645), which is not
+    /// rules code and is declined rather than approximated.
+    NetPlayout,
+    /// `AiMissionEval.fit_mode` — `score.rs` ports the HAND half only.
+    FittedEval,
 }
 
 /// `BattleSim._los_clear` battle_sim.gd:666-670, read off the recorded answers.

@@ -226,6 +226,10 @@ fn main() {
                     Unsupported::MovedShootLos => {
                         "moved unit also shoots — post-move LOS answer not recorded".to_string()
                     }
+                    // The remaining variants belong to `plan.rs`; `resolve`
+                    // cannot raise them, and a wildcard here keeps this report
+                    // from growing an arm every time the SEARCH gains a decline.
+                    other => format!("{other:?} — a search decline, not a resolve one"),
                 };
                 *unsupported.entry(label).or_insert(0) += 1;
             }

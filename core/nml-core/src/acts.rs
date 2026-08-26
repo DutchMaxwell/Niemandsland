@@ -101,10 +101,54 @@ pub struct RolloutValue {
     pub rs: f64,
 }
 
+/// `AiPlanner.plan_with_rollout`'s `expectation` — ai_planner.gd:273.
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+pub struct Expectation {
+    #[serde(default)]
+    pub before: f64,
+    #[serde(default)]
+    pub after: f64,
+}
+
+/// The pick's `runner_up` — the SECOND best rolled candidate (:274). The
+/// GDScript writes an EMPTY dictionary when the pool held a single candidate,
+/// which is why `action` is optional rather than the whole record.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct RunnerRec {
+    #[serde(default)]
+    pub unit_key: String,
+    #[serde(default)]
+    pub action: Option<Candidate>,
+    #[serde(default)]
+    pub score: f64,
+}
+
+/// The RECORDED pick — the dictionary `plan_with_rollout` returned
+/// (ai_planner.gd:272-275), minus `intent` (a battle-log label, not a decision).
+/// This is the M2-3 oracle.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct PickRec {
+    #[serde(default)]
+    pub used: bool,
+    #[serde(default)]
+    pub unit_key: String,
+    #[serde(default)]
+    pub action: Option<Candidate>,
+    #[serde(default)]
+    pub expectation: Expectation,
+    #[serde(default)]
+    pub waits: i64,
+    #[serde(default)]
+    pub rolled_units: Vec<String>,
+    #[serde(default)]
+    pub runner_up: RunnerRec,
+}
+
 /// `AiPlanner.trace` — the search bookkeeping `AiActRecorder.finish` attaches
-/// (act_recorder.gd:80-82). `arbitration` stays unread: it belongs to the
-/// stochastic `full_playout` arbitration (:222-253), which no part of this port
-/// reproduces.
+/// (act_recorder.gd:80-82). `arbitration` is READ but not reproduced: it belongs
+/// to the stochastic `full_playout` arbitration (:231-265), which this port
+/// declines (`Unsupported::PlayoutArbitration`). A gate has to be able to prove
+/// the corpus never triggered it, so the field cannot simply be ignored.
 #[derive(Debug, Default, Deserialize)]
 struct PlainTrace {
     #[serde(default)]
@@ -121,6 +165,10 @@ struct PlainTrace {
     best_idx: i64,
     #[serde(default = "neg_one")]
     runner_idx: i64,
+    /// `null` on every act this port accepts; a non-null object means the
+    /// stochastic arbitration decided that pick.
+    #[serde(default)]
+    arbitration: serde_json::Value,
 }
 
 fn neg_one() -> i64 {
@@ -179,7 +227,7 @@ struct PlainAct {
     #[serde(default)]
     statics: ActStatics,
     #[serde(default)]
-    pick: Option<serde_json::Value>,
+    pick: Option<PickRec>,
 }
 
 /// `AiActRecorder.GATE_GRID_STEPS` / `GATE_GRID_STEP_IN` — act_recorder.gd:239-240.
@@ -206,7 +254,9 @@ pub struct Act {
     pub best_idx: i64,
     pub runner_idx: i64,
     pub statics: ActStatics,
-    pub pick: Option<serde_json::Value>,
+    /// `trace.arbitration` — `Value::Null` unless the playout arbitration fired.
+    pub arbitration: serde_json::Value,
+    pub pick: Option<PickRec>,
 }
 
 #[derive(Debug)]
@@ -268,6 +318,7 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
             best_idx: pa.trace.best_idx,
             runner_idx: pa.trace.runner_idx,
             statics: pa.statics,
+            arbitration: pa.trace.arbitration,
             pick: pa.pick,
         });
     }

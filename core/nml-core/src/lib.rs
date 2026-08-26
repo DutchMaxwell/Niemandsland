@@ -12,6 +12,7 @@ pub mod geom;
 pub mod io;
 pub mod menu;
 pub mod mission;
+pub mod plan;
 pub mod playout;
 pub mod rollout;
 pub mod rules;
@@ -33,11 +34,17 @@ pub const DISCOUNT: f64 = 0.5;
 /// `AiMissionEval.DESTROY_DEFENCE_WEIGHT` — ai_mission_eval.gd:410.
 pub const DESTROY_DEFENCE_WEIGHT: f64 = 0.8;
 
-pub use acts::{load_acts, read_acts, Act, ActCorpus, ActStatics, Knobs, RolloutValue, Scored};
+pub use acts::{
+    load_acts, read_acts, Act, ActCorpus, ActStatics, Expectation, Knobs, PickRec, RolloutValue,
+    RunnerRec, Scored,
+};
 pub use gate::{charge_illegal, charge_illegal_tuned};
 pub use io::{load_nodes, read_nodes, Action, Node, NodeCorpus, Seams};
 pub use menu::{candidates, candidates_in, candidates_tuned, Candidate, Tuning};
 pub use mission::{apply_destroy_step, playout_seize, vp_end_bonus, vp_round_add, vp_score_round};
+pub use plan::{
+    build_pool, plan, plan_with_rollout, rank, OnePly, Pick, PlanBend, ScoredRow, Search,
+};
 pub use playout::{other_player, Policy};
 pub use rollout::{cross_round, imagined_round_end, Rollout, Stop};
 pub use rules::Registries;
