@@ -515,6 +515,12 @@ func _run() -> void:
 				func(mk: Variant) -> bool: return bool((mk as Dictionary).get("destroyed", false)))},
 		float(Time.get_ticks_msec() - t0) / 1000.0)
 	_write_capture_outputs()
+	# NML-1073 M2-0b: close the recorder streams AND drop every live reference
+	# the search parked in a script static — SceneTree.quit() frees those
+	# statics after the SoloController and its lambdas are gone, and freeing a
+	# Callable bound to a dead object corrupts the heap (measured: exit 134).
+	AiActRecorder.close()
+	AiPlanner.close()
 	quit(0)
 
 

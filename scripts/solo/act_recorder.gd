@@ -83,6 +83,23 @@ static func finish(pending: Dictionary, pick: Dictionary) -> void:
 	_count += 1
 
 
+## NML-1073 M2-0: closes the stream at a GAME's end (arena_match.gd) or a TEST's
+## end (after_test) — flushed and closed where the writer stands, not left to
+## process teardown. Resets every cached static so a later begin() reopens a
+## fresh file+header cleanly. (M2-0b measurement: this stream is NOT the
+## exit-134 heap corruption — that is AiPlanner's leaf stash. Closing it here
+## stays right on its own terms: the file is complete when the game ends.)
+## The planner's own statics are AiPlanner.close()'s job; callers close both.
+static func close() -> void:
+	if _stream != null:
+		_stream.flush()
+		_stream.close()
+	_stream = null
+	_checked = false
+	_header_written = false
+	_count = 0
+
+
 ## 0a finding: pick.action.dest (and runner_up.action.dest) is a raw Vector3 —
 ## JSON.stringify would write that as its native "(x, y, z)" STRING, not a
 ## parsable number array, unlike every other Vector3 this recorder writes via

@@ -207,6 +207,12 @@ func _play_one(game_seed: int) -> void:
 		BattleSim.vp_round_add(owners, vp)
 	BattleSim.vp_end_bonus(owners, vp)
 	_write_result(game_seed, owners, positions_log, vp)
+	# NML-1073 M2-0b: close the planner's statics at THIS game's end — the
+	# node-dump stream and, above all, the leaf stash: it holds this game's
+	# state, including the los_blocked lambda bound to the school world, and a
+	# lambda freed at process teardown corrupts the heap (measured: exit 134).
+	# The multi-game loop (_games > 1) reopens the dump fresh.
+	AiPlanner.close()
 
 
 ## Alternate single activations (official one-for-one; a dry side passes the

@@ -102,6 +102,11 @@ func _init() -> void:
 	print("CHARGE_GATE pairs=%d grid=%d mismatch=%d" % [_gate_pairs, _gate_points, _gate_bad])
 	print("CHARGE_MATRIX pairs=%d mismatch=%d" % [_matrix_pairs, _matrix_bad])
 	print("RECHECK acts=%d ok=%d mismatch=%d" % [checked, ok, mismatch])
+	# NML-1073 M2-0b: the replay stamps its OWN charge_illegal/los_at lambdas
+	# into every rebuilt state, and plan_with_rollout parks the last one's leaf
+	# in a script static — drop it before quit(), or teardown frees a lambda
+	# whose script instance is already gone (measured elsewhere: exit 134).
+	AiPlanner.close()
 	quit(0 if (mismatch == 0 and _gate_bad == 0) else 1)
 
 

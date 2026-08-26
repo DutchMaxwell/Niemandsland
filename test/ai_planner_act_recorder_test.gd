@@ -65,6 +65,15 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	# NML-1073 M2-0b: close the stream AND the planner's statics now. The
+	# fixture's state carries a charge_illegal LAMBDA bound to this suite;
+	# plan_with_rollout parks the winning leaf (that same state) in
+	# AiPlanner._last_leaf_state, and a lambda still sitting in a script static
+	# when the process tears down is freed after its script instance is gone —
+	# the measured "corrupted size vs. prev_size in fastbins" (exit 134) that
+	# turned CI red AFTER a fully green suite.
+	AiActRecorder.close()
+	AiPlanner.close()
 	OS.set_environment("NML_ACT_DUMP", "")
 	var d := DirAccess.open(_DUMP_DIR)
 	if d != null:

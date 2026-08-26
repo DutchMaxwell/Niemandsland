@@ -3041,7 +3041,11 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 				BattleSim.reply_threat(state, me), true)}})
 	# Leaf row (glasses v4): the winning candidate's horizon-end state — the
 	# distribution the leaf eval actually judges. Same record kind, flagged.
-	var leaf: Dictionary = AiPlanner._last_leaf_state
+	# NML-1073 M2-0b: TAKE it — the leaf is a live state (GameUnit refs, this
+	# controller's charge_illegal/los_at Callables) and must not stay parked in
+	# a script static, where process teardown frees it after its bound objects
+	# are already gone (measured: heap corruption, exit 134).
+	var leaf: Dictionary = AiPlanner.take_last_leaf()
 	if not leaf.is_empty():
 		record_decision({"kind": "planner", "unit": chosen.get_name(),
 			"rule": "leaf row: winning candidate's horizon-end position (training data)",

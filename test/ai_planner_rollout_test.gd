@@ -367,15 +367,20 @@ func test_doctrine_pick_arms() -> void:
 ## Leaf-row seam (glasses v4): plan_with_rollout stashes the winning
 ## candidate's horizon-end state — non-empty, a real state, at/after the
 ## root round; reset on entry so stale picks never leak.
+## NML-1073 M2-0b: and the consumer TAKES it — take_last_leaf() hands the leaf
+## over and empties the static in the same call, so no live state (GameUnit
+## refs, the controller's Callables) is left in a script static for process
+## teardown to free after its bound objects are gone (exit-134 heap corruption).
 func test_plan_with_rollout_stashes_the_winning_leaf() -> void:
 	var state := _state()
 	AiPlanner._last_leaf_state = {"stale": true}
 	var pick := AiPlanner.plan_with_rollout(state, 2)
 	assert_bool(bool(pick.get("used", false))).is_true()
-	var leaf := AiPlanner._last_leaf_state
+	var leaf := AiPlanner.take_last_leaf()
 	assert_bool(leaf.has("units")).is_true()
 	assert_bool(leaf.has("stale")).is_false()
 	assert_int(int(leaf["round"])).is_greater_equal(int(state["round"]))
+	assert_bool(AiPlanner._last_leaf_state.is_empty()).is_true()
 
 
 func test_charge_illegal_callable_filters_the_menu() -> void:

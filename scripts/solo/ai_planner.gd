@@ -306,7 +306,24 @@ static func rollout(state: Dictionary, first_action: Dictionary, me: int,
 ## Leaf-row seam (glasses v4): the WINNING candidate's horizon-end state —
 ## the exact distribution the leaf eval judges. The controller logs it as a
 ## training row; reset per pick, {} when the rollout path did not run.
+## NML-1073 M2-0b: read it through take_last_leaf(), never straight off this
+## static. A leaf is a LIVE state: GameUnit refs AND the controller's
+## charge_illegal/los_at/terrain_at Callables. A GDScript lambda parked in a
+## script static outlives the object it was bound to and is freed during
+## process teardown — measured heap corruption ("corrupted size vs. prev_size
+## in fastbins", exit 134) AFTER a fully green suite. Bisect (7 variants):
+## clearing this static alone = exit 0, clearing `trace` alone = still 134, a
+## fixture with no Callable in the state = exit 0 with the trace ON.
 static var _last_leaf_state: Dictionary = {}
+
+
+## Hands the stashed leaf to its ONE consumer and drops the static's reference
+## in the same call — after this the search owns no live state. Same value the
+## consumer read before; the next plan_with_rollout resets the stash anyway.
+static func take_last_leaf() -> Dictionary:
+	var leaf := _last_leaf_state
+	_last_leaf_state = {}
+	return leaf
 
 
 ## the horizon (index 0 = end of the current round, last = horizon end) — the
@@ -529,6 +546,31 @@ static func _node_dump_stream() -> FileAccess:
 			if cap != "":
 				_node_dump_max = maxi(int(cap), 0)
 	return _node_dump_file
+
+
+## NML-1073 M2-0b: end-of-life for every static the search writes — the leaf
+## stash first (the live state that carries the teardown-fatal Callables), then
+## the trace and the node-dump stream. Called at a GAME's end (arena_match,
+## core_selfplay), a TOOL's end (act_recheck) and a TEST's end (after_test):
+## nothing the engine frees at teardown may still point at a dead object.
+static func close() -> void:
+	_last_leaf_state = {}
+	trace = {}
+	trace_enabled = false
+	close_node_dump()
+
+
+## NML-1073 M2-0: closes the node-dump stream at a GAME's end (arena_match.gd /
+## core_selfplay.gd's _write_result) — the file is complete where the writer
+## stands instead of at process teardown. Resets the cached checks so the NEXT
+## game (core_selfplay's multi-game loop) reopens a fresh file+header.
+static func close_node_dump() -> void:
+	if _node_dump_file != null:
+		_node_dump_file.flush()
+		_node_dump_file.close()
+	_node_dump_file = null
+	_node_dump_checked = false
+	_node_dump_count = 0
 
 
 static func _record_node(before: Dictionary, action: Dictionary, after: Dictionary,
