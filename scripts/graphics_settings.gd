@@ -37,6 +37,13 @@ var reduce_motion: bool = false
 ## stalls fullscreen Vulkan), which persists to windowed on the next launch.
 var fullscreen: bool = true
 
+## NML-1078 / GH #363 — Discord playtest feedback: on a two-monitor PC the window opened on
+## the second monitor (initial_position_type=3 centres it on whatever screen the mouse is on)
+## and fullscreen never moved it, since borderless fullscreen just covers the CURRENT screen.
+## -1 = primary screen (the default the maintainer promised); 0..N-1 = a specific monitor.
+## Persisted; set via the graphics panel's Monitor dropdown.
+var screen_index: int = -1
+
 ## Path-painting move trails: show the chalk trails at all (the visible layer only — the
 ## move ledger always records for MP proof). Persisted; bound to the T hotkey and the
 ## Settings "Show Move Trails" toggle. Default on; auto-suppressed during deployment.
@@ -184,6 +191,7 @@ func _apply_window_constraints() -> void:
 	# too in case a future Godot passes it through.
 	var launch_args: PackedStringArray = OS.get_cmdline_args() + OS.get_cmdline_user_args()
 	var wants_windowed: bool = launch_args.has("--windowed") or OS.get_environment("NML_WINDOWED") == "1"
+	apply_screen(screen_index)
 	if wants_windowed:
 		print("[Graphics] windowed launch requested — skipping fullscreen restore")
 		apply_fullscreen(false)
@@ -201,10 +209,39 @@ func apply_fullscreen(on: bool) -> void:
 	if on:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_MAILBOX)
+		# Fullscreen only ever covers the CURRENT screen — re-assert the chosen monitor so
+		# toggling fullscreen never silently jumps the window back to whatever screen it
+		# was already on (NML-1078 / GH #363).
+		if DisplayServer.get_screen_count() > 1:
+			var target := screen_index
+			if target < 0 or target >= DisplayServer.get_screen_count():
+				target = DisplayServer.get_primary_screen()
+			DisplayServer.window_set_current_screen(target)
 	else:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 		DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED)
 	save_settings()
+
+
+## Move the window onto the requested monitor (idx), falling back to the primary screen when
+## idx is invalid (unknown/removed monitor, or the default -1). NML-1078 / GH #363: a
+## borderless-fullscreen window cannot reliably be moved to another screen while fullscreen,
+## so this drops to windowed, moves it, then restores fullscreen. On a single-screen or
+## headless run window_set_current_screen would be a pointless no-op, so it is skipped — but
+## the log line always fires so playtesters and tests can see what was resolved.
+func apply_screen(idx: int) -> void:
+	var count := DisplayServer.get_screen_count()
+	var target := idx
+	if target < 0 or target >= count:
+		target = DisplayServer.get_primary_screen()
+	if count > 1:
+		var was_fullscreen := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+		if was_fullscreen:
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		DisplayServer.window_set_current_screen(target)
+		if was_fullscreen:
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	print("[Graphics] window on screen %d of %d (requested %d)" % [target, count, idx])
 
 
 ## Scale the whole UI; clamps to a sane range and persists. Exposed to a settings slider.
@@ -352,6 +389,7 @@ func save_settings() -> void:
 	config.set_value("graphics", "ui_scale", ui_scale)
 	config.set_value("graphics", "reduce_motion", reduce_motion)
 	config.set_value("graphics", "fullscreen", fullscreen)
+	config.set_value("graphics", "screen_index", screen_index)
 	config.set_value("graphics", "show_move_trails", show_move_trails)
 	config.set_value("graphics", "show_rule_floats", show_rule_floats)
 	config.set_value("graphics", "show_combat_stage", show_combat_stage)
@@ -375,6 +413,7 @@ func load_settings() -> void:
 	ui_scale = config.get_value("graphics", "ui_scale", 1.0)
 	reduce_motion = config.get_value("graphics", "reduce_motion", false)
 	fullscreen = config.get_value("graphics", "fullscreen", true)
+	screen_index = config.get_value("graphics", "screen_index", -1)
 	show_move_trails = config.get_value("graphics", "show_move_trails", true)
 	show_rule_floats = config.get_value("graphics", "show_rule_floats", true)
 	show_combat_stage = config.get_value("graphics", "show_combat_stage", true)
