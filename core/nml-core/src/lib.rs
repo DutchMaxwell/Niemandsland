@@ -13,6 +13,7 @@ pub mod geom;
 pub mod io;
 pub mod menu;
 pub mod mission;
+pub mod mv;
 pub mod plan;
 pub mod playout;
 pub mod rng;
@@ -49,6 +50,7 @@ pub use io::{
     load_nodes, plain_of, read_nodes, state_from_json, Action, Node, NodeCorpus, Seams,
 };
 pub use menu::{candidates, candidates_in, candidates_tuned, Candidate, Tuning};
+pub use mv::{load_moves, read_moves, MoveCall, MoveCorpus, MoveHeader};
 pub use mission::{
     apply_destroy_step, mission_winner, playout_seize, sabotage_winner, vp_end_bonus,
     vp_round_add, vp_score_end, vp_score_round,
