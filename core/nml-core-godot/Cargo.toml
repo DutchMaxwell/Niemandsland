@@ -1,0 +1,16 @@
+[package]
+name = "nml-core-godot"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "NML-1073 M1-5: the GDExtension seam — the Rust rollout node (nml-core) callable from Godot as the RefCounted class NmlCore."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+godot = { version = "0.5.5", features = ["api-4-6"] }
+nml-core = { path = "../nml-core" }
+
+[profile.release]
+opt-level = 3

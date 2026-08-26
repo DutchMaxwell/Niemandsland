@@ -27,6 +27,10 @@ extends SceneTree
 ##     the FULL battle log (battlelog.txt — collected via entry_added, so the panel's 200-entry ring
 ##     buffer cap does not truncate it) and EVERY decision record verbatim (decisions.json, annotated
 ##     with side + round). Ladder runs without capture= are byte-identical to before.
+##   Golden-corpus reproducibility (NML-1073 M0-0b): a capture= run is byte-identical across machines
+##   ONLY on a WARMED user:// (every *_cache dir below already populated) — a cold box's first run
+##   fetches assets live and the timing races the dice-tray RNG. Warm every box once before recording;
+##   the run prints a WARNING listing any cold dir it finds.
 
 const P1_FIXTURE := "res://assets/tutorial/tutorial_army_p1.json"
 const P2_FIXTURE := "res://assets/tutorial/tutorial_army_p2.json"
@@ -124,6 +128,25 @@ func _run() -> void:
 
 	if not _capture_dir.is_empty():
 		DirAccess.make_dir_recursive_absolute(_capture_dir)
+		# NML-1073 M0-0b (VERIFY THE INSTRUMENT): a cold user:// cache makes the boot fetch tree/biome/
+		# hazard/ruin/container/model/AI-list assets live over the network; terrain/prop placement
+		# (map_layout.gd, terrain_overlay.gd, object_manager.gd) draws its cosmetic rotation/colour from
+		# the SAME shared global RNG that seed(_dice_seed) resets for the dice tray below, so a fetch
+		# still in flight when that reset fires can shift every dice roll after it — reproduced: two
+		# independently-cold runs of the identical seed diverged from EACH OTHER (not just from a warm
+		# run), while any two WARMED runs (any box, once every dir below is populated) replay byte-
+		# identical. No code fix here — this is a loud diagnostic so a cold fleet box never silently
+		# enters the golden corpus; warm every dir once (any local game/arena run) first.
+		var _cold_caches: Array[String] = []
+		for _cd in ["ai_lists_cache", "ambience_cache", "biome_cache", "containers_cache",
+				"hazards_cache", "model_cache", "ruins_cache", "trees_cache"]:
+			if _dir_is_empty("user://%s" % _cd):
+				_cold_caches.append(_cd)
+		if not _cold_caches.is_empty():
+			printerr(("[ARENA] WARNING: cold cache dir(s) under user:// — this capture may NOT replay " +
+				"byte-identical to a warmed box (NML-1073 M0-0b): %s. Warm every dir once (any local " +
+				"game/arena run) before recording or replaying a golden-corpus game.") %
+				", ".join(_cold_caches))
 		# PER-ACTIVATION board captures (maintainer directive: watch the AI play move by move — the wall-
 		# pathfinding complaints need eyes, not metrics). NML_CAPTURE_ACTS=1 + a real renderer (gamescope
 		# --backend headless): one PNG per AI activation, grabbed once the activation has RESOLVED. Nothing
@@ -444,7 +467,11 @@ func _run() -> void:
 	# seed, deployment under its per-slot seeds, AI pick/D3 under solo._rng = seed). The only remaining
 	# global-RNG consumer during the rounds is the dice tray, so re-seeding here isolates "the dice" as an
 	# independent stream: same seed + different dice_seed ⇒ identical board/deploy, different game course.
+	# NML-1076 (M0-0c): the tray now draws from its own RNG (seed_tray_rng), no longer this global one —
+	# seed(_dice_seed) stays so cosmetic terrain/prop placement (which DOES still draw from the global
+	# RNG) replays exactly as before this fix.
 	seed(_dice_seed)
+	main.seed_tray_rng(_dice_seed)
 
 	# Run the whole match unattended to the SOLO_GAME_ROUNDS scoring end, opened by the roll-off winner.
 	army_manager.current_round = 1
@@ -974,3 +1001,15 @@ func _parse_config() -> void:
 func _env_or(key: String, fallback: String) -> String:
 	var v := OS.get_environment(key).strip_edges()
 	return v if v != "" else fallback
+
+
+## NML-1073 M0-0b: true when a user:// content-cache dir is absent or has never been populated
+## (no files, no subdirs) — the signal that a FIRST-EVER boot on this box/XDG_DATA_HOME would still
+## fetch it live over the network rather than load it from disk.
+func _dir_is_empty(user_path: String) -> bool:
+	if not DirAccess.dir_exists_absolute(user_path):
+		return true
+	var d := DirAccess.open(user_path)
+	if d == null:
+		return true
+	return d.get_files().is_empty() and d.get_directories().is_empty()

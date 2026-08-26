@@ -40,6 +40,24 @@ static func cast_phase_enabled() -> bool:
 		_cast_env = 1 if (raw == "1" or raw == "on") else 0
 	return _cast_env == 1
 
+## NML-1073 M1-5 seam: NML_CORE="1" routes the rollout node to the Rust core
+## (the NmlCore GDExtension, core/nml_core.gdextension). Rule R1 — the library
+## is OPTIONAL: if it is missing or failed to load the class does not exist and
+## this returns false, so the GDScript path runs unchanged. Rule R2 — DEFAULT
+## OFF: without NML_CORE=1 nothing here is even asked. One warning, once, when
+## the seam was ASKED for and the library is absent; never an error, never a
+## warning on the default path.
+static var _core_env := -1
+static func core_enabled() -> bool:
+	if _core_env < 0:
+		var want := OS.get_environment("NML_CORE") == "1"
+		var have := ClassDB.class_exists("NmlCore")
+		if want and not have:
+			push_warning("[CORE] NML_CORE=1 but the NmlCore GDExtension is not loaded — "
+				+ "the GDScript BattleSim stays in charge (NML-1073 R1).")
+		_core_env = 1 if (want and have) else 0
+	return _core_env == 1
+
 # === Encoder board rows (v5 schema, NML-995) ==================================
 # ONE canonical source for the position-net input, used by BOTH the factory
 # (core_selfplay corpus) and the in-game encoder eval — a fork here would let
@@ -1238,3 +1256,138 @@ static func capture(army: OPRArmyManager, objectives_provider: Callable = Callab
 	if terrain_at.is_valid():   # absent key = pre-T2b snapshot, byte-identical
 		state["terrain_at"] = terrain_at
 	return state
+
+
+## NML-1073 M1-0: `state` as plain (JSON-safe) data — the node corpus contract
+## the Rust port replays against. Every DYNAMIC field of capture() verbatim
+## (positions as [x,y,z] full precision), plus one flattened STATIC "profile"
+## per unit — the GameUnit-read data resolve()/score() close over (enumerated
+## at _unit_profile below). One read per unit per call; no cache needed.
+const _UNIT_DYNAMIC := ["alive", "wounds", "radii", "in_cover", "shaken", "fatigued",
+	"activated", "casts", "mods", "mods_base", "aircraft", "ambush_arrived_round",
+	"player", "morale_bonus", "dormant", "dormant_models", "dormant_wounds",
+	"earliest_arrival_round", "wound_frac"]   # wound_frac: _apply_expected_wounds :1039/:1041
+## `with_profile` false skips the per-unit STATIC profile (identical on every
+## node of one game — a recorder that already wrote it once, e.g. NML-1073's
+## nodes.jsonl header line, passes false to save the recompute AND the bytes).
+static func state_to_plain(state: Dictionary, with_profile := true) -> Dictionary:
+	var units := {}
+	for uid in state["units"]:
+		var su: Dictionary = state["units"][uid]
+		var pu := {}
+		for k in _UNIT_DYNAMIC:
+			if su.has(k):
+				pu[k] = su[k]
+		pu["positions"] = _plain_vec3s(su.get("positions", []))
+		if su.has("los"):
+			pu["los"] = su["los"]
+		elif (state.get("los_at", Callable()) as Callable).is_valid():
+			var m := {}
+			for ok in state["units"]:
+				if ok != uid:
+					m[ok] = bool(state["los_at"].call(su["unit"], state["units"][ok]["unit"]))
+			pu["los"] = m
+		if with_profile:
+			pu["profile"] = _unit_profile(su["unit"])
+		units[uid] = pu
+	var out := {"round": state["round"], "rounds_total": state["rounds_total"],
+		"units": units, "scoring": state["scoring"]}
+	var obj: Array = []
+	for o in state.get("objectives", []):
+		obj.append({"pos": _plain_vec3((o as Dictionary)["pos"]), "owner": (o as Dictionary)["owner"]})
+	out["objectives"] = obj
+	for k in ["vp", "vp_flavour", "vp_memo", "markers_meta", "destroy_seq"]:
+		if state.has(k):
+			out[k] = state[k]
+	# NML-1073 M1-2: the DYNAMIC sight answers. `_los_clear` (:666) probes the
+	# los_blocked Callable with the CURRENT unit centres, so a plain state that
+	# carries only positions cannot reproduce it — the Rust port would have to
+	# own the terrain grid. Recorded instead as the answers themselves: row i is
+	# one character per unit in iteration order, "1" = `_los_clear(state, i, j)`
+	# is true (line of fire is clear), "0" = blocked. Absent when the state has
+	# no los_blocked seam (then `_los_clear` returns true for every pair).
+	var lb: Callable = state.get("los_blocked", Callable())
+	if lb.is_valid():
+		var centres: Array = []
+		for uid in state["units"]:
+			centres.append(_centre_of(state["units"][uid]))
+		var rows: Array = []
+		for i in range(centres.size()):
+			var row := ""
+			for j in range(centres.size()):
+				row += "0" if bool(lb.call(centres[i], centres[j])) else "1"
+			rows.append(row)
+		out["los_pairs"] = rows
+	return out
+
+
+static func _plain_vec3(v: Vector3) -> Array:
+	return [v.x, v.y, v.z]
+
+
+static func _plain_vec3s(a: Array) -> Array:
+	var out: Array = []
+	for v in a:
+		out.append(_plain_vec3(v))
+	return out
+
+
+## The flattened STATIC data resolve/score read off a live GameUnit:
+## _profiles_of :714 (weapons, OPR-only gate mirrored here), _ctx_of/
+## AiEv.ctx_for :701/ai_ev.gd:135 + _below_half :1068 (quality/defense/tough/
+## wounds_max/special_rules), SoloController.sim_move_bands (move_bands),
+## RulesRegistry rules_registry.gd:113/:120 (game_system/faction_folder key
+## its lookups — not in the field-list wording, but read by every rule check).
+static func _unit_profile(u: GameUnit) -> Dictionary:
+	var weapons: Array = []
+	if u.source_type == "opr" and u.source_data is OPRApiClient.OPRUnit:
+		for w in (u.source_data as OPRApiClient.OPRUnit).weapons:
+			weapons.append({"name": w.name, "range": w.range_value, "attacks": w.attacks,
+				"count": w.count, "ap": AiShooting._ap_of(w), "rules": w.special_rules})
+	var wounds_max: Array = []
+	for m in u.models:
+		wounds_max.append((m as ModelInstance).wounds_max)
+	var bands := SoloController.sim_move_bands(u)
+	return {
+		"unit_id": u.unit_id, "name": u.get_name(), "quality": u.get_quality(),
+		"defense": u.get_defense(), "tough": maxi(AiEv.unit_rating(u, "Tough"), 1),
+		"wounds_max": wounds_max, "model_count": u.models.size(), "weapons": weapons,
+		"special_rules": u.get_special_rules(), "caster_value": u.get_caster_value(),
+		"move_bands": {"advance": float(bands.get("advance", 6)),
+			"rush": float(bands.get("rush", 12))},
+		"base_radius": SoloController.model_base_radius_m(u.models[0]) \
+			if not u.models.is_empty() else SeparationChecker.DEFAULT_BASE_RADIUS_M,
+		"game_system": str(u.unit_properties.get("game_system", "")),
+		"faction_folder": str(u.unit_properties.get("faction_folder", "")),
+		# NML-1073 M1-2: the two remaining registry INPUTS the flat rule list
+		# does not carry. `item_grants` feeds RulesRegistry.unit_rules_of_
+		# primitive (rules_registry.gd:167-170, item-granted rules count as the
+		# unit's own); `attached_hero_rules` feeds AiEv.rule_on_all_models
+		# (ai_ev.gd:79-83), which withholds a rule when an ALIVE attached hero
+		# lacks it. Both are read at profile time, so a hero that dies later
+		# keeps voting — the same v0 gap the snapshot's static profile has for
+		# every other live read (documented, not silently dropped).
+		"item_grants": _granted_rules(u),
+		"attached_hero_rules": _attached_hero_rules(u),
+	}
+
+
+## Flattened item-granted rule names, in the iteration order rules_registry.gd:167
+## walks them (`item_grants.values()` then each list in order).
+static func _granted_rules(u: GameUnit) -> Array:
+	var out: Array = []
+	for granted_list in (u.unit_properties.get("item_grants", {}) as Dictionary).values():
+		for granted in granted_list:
+			out.append(str(granted))
+	return out
+
+
+## Special rules of every ALIVE attached hero — the quantifier AiEv.rule_on_all_models
+## (ai_ev.gd:79-83) evaluates before it lets a unit-wide rule fire.
+static func _attached_hero_rules(u: GameUnit) -> Array:
+	var out: Array = []
+	for h in u.get_attached_heroes():
+		var hero := h as GameUnit
+		if hero != null and hero.get_alive_count() > 0:
+			out.append(hero.get_special_rules())
+	return out
