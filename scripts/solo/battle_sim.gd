@@ -490,7 +490,8 @@ static func clone_state(state: Dictionary) -> Dictionary:
 		su["radii"] = (su.get("radii", []) as Array).duplicate()
 		# A1b-1: "mods" is a snapshot dict, not shared state — a clone owns its own copy.
 		# ("mods_base" is the capture-time reading and is NEVER written after capture,
-		# so the shallow ref the duplicate above carries over is safe to share.)
+		# so the shallow ref the duplicate above carries over is safe to share.
+		# "attached"/"attached_to" are the same kind of shared read-only reference.)
 		su["mods"] = (su.get("mods", {}) as Dictionary).duplicate()
 		units[key] = su
 	var objectives: Array = []
@@ -524,20 +525,23 @@ static func clone_state(state: Dictionary) -> Dictionary:
 	return out
 
 
-## A unit's own key plus its attached heroes' keys plus its host's key (if
-## any) — the set that moves/ends as one body for spacing purposes (mirrors
-## SoloController._spacing_zones_world's "own unit + its attached heroes"
-## exemption, NML-1073 S1). Returns a Dictionary used as a key set.
-static func _unit_group(next: Dictionary, key: String) -> Dictionary:
+## A unit's own key + its attached heroes' keys, plus (when include_host)
+## its host's key. Only the attached-heroes half mirrors SoloController.
+## _spacing_zones_world's exemption — host inclusion is a SIM-ONLY necessity
+## for the MOVER group, since a joined hero can activate apart from its host
+## here (unlike the table, solo_controller.gd:~397). The CHARGE TARGET group
+## always passes include_host = false to match the table's target zone.
+static func _unit_group(next: Dictionary, key: String, include_host: bool = true) -> Dictionary:
 	var group := {key: true}
 	if not next["units"].has(key):
 		return group
 	var su: Dictionary = next["units"][key]
 	for hk in su.get("attached", []):
 		group[str(hk)] = true
-	var host_key := str(su.get("attached_to", ""))
-	if host_key != "":
-		group[host_key] = true
+	if include_host:
+		var host_key := str(su.get("attached_to", ""))
+		if host_key != "":
+			group[host_key] = true
 	return group
 
 
@@ -568,7 +572,10 @@ static func _spacing_fraction(next: Dictionary, mover_key: String, positions: Ar
 		return 1.0
 	var buffer_m := SoloController.UNIT_SPACING_IN * IN2M
 	var mover_group := _unit_group(next, mover_key)
-	var target_group := _unit_group(next, charge_key) if charge_key != "" else {}
+	# NML-1068 S1 review (a): the target group is body-only for the target ITSELF
+	# and ITS heroes — never its host. Without include_host = false here, charging
+	# a joined hero would make its whole host regiment go body-only too.
+	var target_group := _unit_group(next, charge_key, false) if charge_key != "" else {}
 	var obstacles: Array = []   # {"c": Vector3, "r": float} per other alive model
 	for key in next["units"]:
 		if mover_group.has(key):

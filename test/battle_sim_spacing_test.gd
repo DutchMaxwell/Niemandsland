@@ -160,7 +160,10 @@ func test_seam_on_start_and_destination_both_blocked_picks_the_open_middle() -> 
 ## contact with ONE enemy unit. Pre-fix every other unit (including a charge
 ## victim) keeps the full UNIT_SPACING_IN buffer, so the mover stops ~1" short
 ## (RED); post-fix the charge target is body-only, so the mover reaches base
-## contact (GREEN).
+## contact (GREEN). Two-sided (S1 review c): the lower bound alone (gap_m <
+## 0.001) would also pass with the spacing seam OFF entirely — seam-off lands
+## the mover exactly on the Blocker's centre, a deeply negative gap — so the
+## upper bound (no overlap) proves the seam actually clamped the move.
 func test_a_charge_may_end_the_mover_in_base_contact_with_its_target() -> void:
 	OS.set_environment("NML_SIM_SPACING", "1")
 	_reset_spacing_cache()
@@ -173,6 +176,7 @@ func test_a_charge_may_end_the_mover_in_base_contact_with_its_target() -> void:
 	var bp: Vector3 = (next["units"]["Blocker"] as Dictionary)["positions"][0]
 	var gap_m: float = (mp - bp).length() - 2.0 * SeparationChecker.DEFAULT_BASE_RADIUS_M
 	assert_float(gap_m).is_less(0.001)
+	assert_float(gap_m).is_greater_equal(-1e-6)
 
 
 ## Guard against over-exemption: a RUSH (not a Charge) toward the same point
@@ -208,6 +212,12 @@ func _capture_with_hero(mover: GameUnit, hero: GameUnit) -> Dictionary:
 ## — none of the fast-path/bisection/8-point-sample candidates are legal).
 ## Post-fix the hero is skipped as an obstacle entirely, leaving no obstacle
 ## at all, so the move goes through in full (GREEN).
+## Two-sided (S1 review c): "mp == dest" alone would also pass with the
+## spacing seam OFF entirely (seam-off applies delta unconditionally, same
+## result) — it can't tell "the hero is correctly exempted" from "the seam
+## never engaged". The control run below swaps the exempt Hero for a PLAIN
+## unit at the identical start position and asserts THAT one gets clamped —
+## proving the seam is live and the free pass is the exemption, not inertia.
 func test_an_attached_hero_does_not_block_its_hosts_rush() -> void:
 	OS.set_environment("NML_SIM_SPACING", "1")
 	_reset_spacing_cache()
@@ -221,6 +231,13 @@ func test_an_attached_hero_does_not_block_its_hosts_rush() -> void:
 		"dest": dest})
 	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
 	assert_that(mp).is_equal(dest)
+	var decoy_mover := _unit_at(1, [Vector3.ZERO], "Mover")
+	var decoy := _unit_at(2, [Vector3.ZERO], "Blocker")
+	var decoy_state := _capture(decoy_mover, decoy)
+	var clamped := BattleSim.resolve(decoy_state, {"unit": "Mover", "kind": AiDecision.Action.RUSH,
+		"dest": dest})
+	var cmp: Vector3 = (clamped["units"]["Mover"] as Dictionary)["positions"][0]
+	assert_that(cmp).is_not_equal(dest)
 
 
 ## NML-1073 S1b: a charge that reaches BASE CONTACT resolves melee. Two 32 mm
@@ -258,3 +275,36 @@ func test_a_charge_short_of_contact_by_the_reach_band_applies_no_melee() -> void
 	var b: Dictionary = next["units"]["Blocker"]
 	assert_int(int(b["alive"])).is_equal(1)
 	assert_int(int(b["wounds"][0])).is_equal(1)
+
+
+## NML-1073 S1 review (a): the charge VICTIM can itself be a joined hero
+## (ai_planner._enemy_keys/._best_charge iterate every unit dict, heroes
+## included) — its "attached_to" host must NOT ride along into the body-only
+## exemption. Hero sits at (3,0), its Host 1.75" further out along Z; the
+## mover charges the Hero. RED on HEAD: _unit_group(next, "Hero") pulled in
+## "Host" too (bug), so Host went body-only and the mover ended only ~0.94"
+## from Host's edge — under the 1" buffer. GREEN post-fix: Host keeps its
+## full 1" buffer (the mover stops a little short of true Hero contact to
+## respect it), while still landing well inside the Hero's own
+## CHARGE_CONTACT_MARGIN_IN (0.25") — a real, checkable base contact.
+func test_a_charge_at_a_joined_hero_still_buffers_the_hosts_own_body() -> void:
+	OS.set_environment("NML_SIM_SPACING", "1")
+	_reset_spacing_cache()
+	var mover := _unit_at(1, [Vector3.ZERO], "Mover")
+	var hero := _unit_at(2, [Vector3(3.0 * IN2M, 0, 0)], "Hero")
+	var host := _unit_at(2, [Vector3(3.0 * IN2M, 0, 1.75 * IN2M)], "Host")
+	hero.unit_properties["attached_to"] = host
+	host.unit_properties["attached_heroes"] = [hero]
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Mover": mover, "Hero": hero, "Host": host}
+	var state := BattleSim.capture(army)
+	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(3.0 * IN2M, 0, 0), "charge": "Hero"})
+	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
+	var hp: Vector3 = (next["units"]["Hero"] as Dictionary)["positions"][0]
+	var hop: Vector3 = (next["units"]["Host"] as Dictionary)["positions"][0]
+	var r_in := SeparationChecker.DEFAULT_BASE_RADIUS_M / IN2M
+	var gap_hero_in: float = (mp - hp).length() / IN2M - 2.0 * r_in
+	var gap_host_in: float = (mp - hop).length() / IN2M - 2.0 * r_in
+	assert_float(gap_hero_in).is_less(SoloController.CHARGE_CONTACT_MARGIN_IN)
+	assert_float(gap_host_in).is_greater_equal(SoloController.UNIT_SPACING_IN - 0.02)
