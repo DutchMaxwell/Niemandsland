@@ -944,8 +944,15 @@ static func charge_contact_slots(mpos: Array, radii: Array, tgt_bases: Array) ->
 		ucentre += p as Vector2
 	ucentre /= maxf(1.0, float(mpos.size()))
 	var order := range(mpos.size())
+	# Bug-31 follow-up: sort_custom is UNSTABLE (Godot docs) and this predicate alone never says two
+	# candidates differ when their distance ties, so the order among tied movers was whatever the sort's
+	# internal pivoting happened to leave behind — not wrong on any ONE run, but not a guarantee either.
+	# `a`/`b` are the untouched original indices (order starts as identity), so falling back to a < b on
+	# a tie gives a full, version-independent order: lower original index wins the earlier (better) pick.
 	order.sort_custom(func(a, b) -> bool:
-		return _nearest_base_dist(mpos[a], tgt_bases) < _nearest_base_dist(mpos[b], tgt_bases))
+		var da := _nearest_base_dist(mpos[a], tgt_bases)
+		var db := _nearest_base_dist(mpos[b], tgt_bases)
+		return a < b if da == db else da < db)
 	var taken: Array = []
 	for idx in order:
 		var ri := float(radii[idx]) if idx < radii.size() else 0.5
