@@ -18,6 +18,7 @@
 pub mod cap;
 pub mod charge;
 pub mod cost;
+pub mod entry;
 pub mod flow;
 pub mod form;
 pub mod geom2;

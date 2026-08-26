@@ -34,6 +34,7 @@ use nml_core::{
     Registries, Seams,
 };
 
+mod mvcall;
 mod plain;
 
 use plain::Captured;
@@ -380,6 +381,95 @@ impl NmlCore {
     #[func]
     fn statics_builds(&self) -> i64 {
         self.scache.builds as i64
+    }
+
+    /// NML-1073 M4-6a — the MOVE seam: ONE `MovementPlanner.plan_unit_step`
+    /// call (movement_planner.gd:496).
+    ///
+    /// `call` is the very dictionary `MoveRecorder.begin` receives
+    /// (solo_controller.gd:6065) — the caller hands the SAME object to both, so
+    /// the corpus a gate replays and the call the game makes are one thing. It
+    /// is marshalled into the recorder's own JSON line and read back through
+    /// `io::read_moves`, the corpus gate's reader, before the port sees it.
+    ///
+    /// Answers `{"ok": true, "planned": [Vector2, …], "trails": [[Vector2, …],
+    /// …], "flow_order": [int, …]}` or `{"ok": false, "error": "…"}`. A decline
+    /// is expected, not exceptional: until M4-5 lands the solver the port
+    /// declines every call and the caller runs the GDScript planner. A panic
+    /// inside the port is caught and answered as a decline like any other — the
+    /// seam never takes the game down (rule R1).
+    #[func]
+    fn plan_unit_step(&mut self, call: VarDictionary) -> VarDictionary {
+        self.last_error.clear();
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let line = mvcall::call_line(&call);
+            let mc = nml_core::mv::entry::read_call_line(&line)?;
+            nml_core::mv::entry::plan_unit_step_call(&mc)
+        }));
+        let out = match caught {
+            Ok(r) => r,
+            Err(_) => Err("panic inside the port".to_string()),
+        };
+        match out {
+            Ok(p) => mvcall::planned_out(&p),
+            Err(e) => {
+                self.last_error = e.clone();
+                let mut d = VarDictionary::new();
+                d.set("ok", false);
+                d.set("error", &GString::from(e.as_str()));
+                d
+            }
+        }
+    }
+
+    /// NML-1073 M4-6a GATE B, half one: the canonical JSON the reader produced
+    /// out of a live-shaped `plan_unit_step` DICTIONARY. Empty = the call did
+    /// not parse; `last_error()` says why.
+    #[func]
+    fn move_call_roundtrip(&mut self, call: VarDictionary) -> GString {
+        self.last_error.clear();
+        let line = mvcall::call_line(&call);
+        match nml_core::mv::entry::read_call_line(&line) {
+            Ok(mc) => GString::from(nml_core::mv::entry::canonical_input(&mc).as_str()),
+            Err(e) => {
+                self.last_error = e;
+                GString::new()
+            }
+        }
+    }
+
+    /// NML-1073 M4-6a GATE B, the input side: one recorded `moves_calls.jsonl`
+    /// line rebuilt as the LIVE dictionary the controller would have sent —
+    /// `Vector2` positions, a `Vector2i`-keyed terrain grid, nested option
+    /// dictionaries. Feeding THAT back through `plan_unit_step`'s own door is
+    /// what makes the round-trip a statement about the Variant boundary rather
+    /// than about Godot's JSON parser. Empty = the line did not parse.
+    #[func]
+    fn move_line_to_dict(&mut self, line: GString) -> VarDictionary {
+        self.last_error.clear();
+        match nml_core::mv::entry::read_call_line(&line.to_string()) {
+            Ok(mc) => mvcall::call_dict(&mc),
+            Err(e) => {
+                self.last_error = e;
+                VarDictionary::new()
+            }
+        }
+    }
+
+    /// NML-1073 M4-6a GATE B, half two: the same canonical JSON out of a
+    /// RECORDED `moves_calls.jsonl` line. The two strings must be identical —
+    /// that, and nothing weaker, is what "the Dictionary marshalling loses
+    /// nothing" means.
+    #[func]
+    fn move_line_canonical(&mut self, line: GString) -> GString {
+        self.last_error.clear();
+        match nml_core::mv::entry::read_call_line(&line.to_string()) {
+            Ok(mc) => GString::from(nml_core::mv::entry::canonical_input(&mc).as_str()),
+            Err(e) => {
+                self.last_error = e;
+                GString::new()
+            }
+        }
     }
 
     /// Frees the slot. Releasing an already-free or unknown handle is a no-op.
