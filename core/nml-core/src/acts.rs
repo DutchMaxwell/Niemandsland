@@ -145,10 +145,10 @@ pub struct PickRec {
 }
 
 /// `AiPlanner.trace` — the search bookkeeping `AiActRecorder.finish` attaches
-/// (act_recorder.gd:80-82). `arbitration` is READ but not reproduced: it belongs
-/// to the stochastic `full_playout` arbitration (:231-265), which this port
-/// declines (`Unsupported::PlayoutArbitration`). A gate has to be able to prove
-/// the corpus never triggered it, so the field cannot simply be ignored.
+/// (act_recorder.gd:80-82). `arbitration` carries the stochastic arbitration's
+/// own verdict (:263-264); M2-4 reproduces it from the recorded `sig`, and a
+/// corpus that never triggered it must still be able to PROVE that, so the field
+/// is read either way.
 #[derive(Debug, Default, Deserialize)]
 struct PlainTrace {
     #[serde(default)]
@@ -165,10 +165,22 @@ struct PlainTrace {
     best_idx: i64,
     #[serde(default = "neg_one")]
     runner_idx: i64,
-    /// `null` on every act this port accepts; a non-null object means the
-    /// stochastic arbitration decided that pick.
+    /// `null` unless the stochastic arbitration decided that pick.
     #[serde(default)]
     arbitration: serde_json::Value,
+}
+
+/// `trace.arbitration` (ai_planner.gd:263-264) as a typed record — the M2-4
+/// oracle. `sig` is `_playout_sig`'s value AT RECORD TIME and is an INPUT to the
+/// port, not something it recomputes (see `arbitration.rs`'s module header).
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct ArbitrationRec {
+    pub sig: i64,
+    /// Playouts run PER BRANCH: 3, 5 or 7.
+    pub n: i64,
+    pub sum_b: f64,
+    pub sum_r: f64,
+    pub swapped: bool,
 }
 
 fn neg_one() -> i64 {
@@ -257,6 +269,21 @@ pub struct Act {
     /// `trace.arbitration` — `Value::Null` unless the playout arbitration fired.
     pub arbitration: serde_json::Value,
     pub pick: Option<PickRec>,
+}
+
+impl Act {
+    /// The typed `trace.arbitration`, or `None` when it did not fire on this act.
+    /// A present-but-malformed record panics rather than reading as "absent":
+    /// a gate that quietly skipped it would report green on nothing.
+    pub fn arbitration_rec(&self) -> Option<ArbitrationRec> {
+        if self.arbitration.is_null() {
+            return None;
+        }
+        Some(
+            serde_json::from_value(self.arbitration.clone())
+                .unwrap_or_else(|e| panic!("trace.arbitration: {e}")),
+        )
+    }
 }
 
 #[derive(Debug)]

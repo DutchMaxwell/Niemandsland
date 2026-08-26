@@ -186,3 +186,77 @@ pub fn vp_of(v: Option<&Value>) -> [i64; 2] {
         _ => [0, 0],
     }
 }
+
+/// `BattleSim.vp_score_end` battle_sim.gd:395-397 — the book's game-end bonus,
+/// paid only when the flavour defers the majority to the END (the default).
+pub fn vp_score_end(owners: &[i64], vp: &mut [i64; 2], flavour: &Value) {
+    if str_of(flavour, "majority", "end") == "end" {
+        vp_end_bonus(owners, vp);
+    }
+}
+
+/// `BattleSim.sabotage_winner` battle_sim.gd:428-440 — you win by destroying
+/// THEIR marker whilst keeping YOURS; anything else is a draw.
+///
+/// The GDScript walks a `{1: false, 2: false}` dictionary and OVERWRITES the
+/// entry per marker, so with several markers on a side the LAST one decides.
+/// That is mirrored, not corrected.
+pub fn sabotage_winner(markers: &[Marker]) -> &'static str {
+    let mut alive = [false, false];
+    for mk in markers {
+        let side = mk.owned_by;
+        if side == 1 || side == 2 {
+            alive[(side - 1) as usize] = !mk.destroyed;
+        }
+    }
+    if alive[0] && !alive[1] {
+        return "p1";
+    }
+    if alive[1] && !alive[0] {
+        return "p2";
+    }
+    "draw"
+}
+
+/// `BattleSim.mission_winner` battle_sim.gd:450-471 — THE end-of-game referee,
+/// branch order intact: sabotage by its own verdict, a progressive mission by
+/// the `round_vp` ledger, every other mission by markers held, and a board with
+/// NO markers at all by surviving models.
+pub fn mission_winner(
+    scoring: &str,
+    owners: &[i64],
+    vp: [i64; 2],
+    markers: &[Marker],
+    alive1: i64,
+    alive2: i64,
+) -> &'static str {
+    if scoring == "sabotage" {
+        return sabotage_winner(markers);
+    }
+    if scoring == "round_vp" {
+        return if vp[0] != vp[1] {
+            if vp[0] > vp[1] {
+                "p1"
+            } else {
+                "p2"
+            }
+        } else {
+            "draw"
+        };
+    }
+    let (mut p1, mut p2) = (0i64, 0i64);
+    for &o in owners {
+        if o == 1 {
+            p1 += 1;
+        } else if o == 2 {
+            p2 += 1;
+        }
+    }
+    if p1 != p2 {
+        return if p1 > p2 { "p1" } else { "p2" };
+    }
+    if owners.is_empty() && alive1 != alive2 {
+        return if alive1 > alive2 { "p1" } else { "p2" };
+    }
+    "draw"
+}

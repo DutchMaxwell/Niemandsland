@@ -38,6 +38,7 @@
 use std::cmp::Ordering;
 
 use crate::acts::{ActStatics, Knobs};
+use crate::arbitration::{arbitrate_bent, ArbBend, Arbitration};
 use crate::io::Seams;
 use crate::menu::{candidates_tuned, Candidate};
 use crate::playout::Policy;
@@ -112,7 +113,14 @@ pub struct Pick {
     /// `AiPlanner._last_leaf_state` (:213) — the horizon end of the WINNING
     /// rollout, rebound every time the best is replaced. The controller reads it
     /// after the pick, so it is part of the function's answer, not a debug aid.
+    ///
+    /// NOTE it is NOT rebound by a playout swap: the GDScript sets it inside the
+    /// rollout loop only (:213), so after an arbitration swap the leaf belongs to
+    /// the branch that LOST. Mirrored, not corrected.
     pub last_leaf: Option<State>,
+    /// `trace.arbitration` (:263-264) — `None` unless the playout arbitration
+    /// fired on this pick.
+    pub arbitration: Option<Arbitration>,
 }
 
 /// TEST SEAMS. Every shipping call uses `PlanBend::default()`, which is the
@@ -130,11 +138,19 @@ pub struct PlanBend {
     pub dedupe_by_value: bool,
     /// `true` runs the global top-K guarantee BEFORE the per-unit coverage.
     pub top_k_first: bool,
+    /// The playout arbitration's own seams — see `arbitration::ArbBend`.
+    pub arb: ArbBend,
 }
 
 impl Default for PlanBend {
     fn default() -> Self {
-        PlanBend { top_k: None, idx_tiebreak: true, dedupe_by_value: false, top_k_first: false }
+        PlanBend {
+            top_k: None,
+            idx_tiebreak: true,
+            dedupe_by_value: false,
+            top_k_first: false,
+            arb: ArbBend::default(),
+        }
     }
 }
 
@@ -145,6 +161,11 @@ pub struct Search<'a> {
     pub roll: Rollout<'a>,
     pub act: &'a ActStatics,
     pub bend: PlanBend,
+    /// `AiPlanner._playout_sig(state, player)` (:1305-1307) for THIS activation.
+    /// An INPUT, never recomputed — see the module header of `arbitration.rs`.
+    /// `None` means the caller cannot supply one, and a close top-2 then declines
+    /// with `Unsupported::PlayoutArbitration` instead of inventing a dice stream.
+    pub sig: Option<i64>,
 }
 
 /// `plan_with_rollout` with everything default — the entry point the game would
@@ -162,6 +183,26 @@ pub fn plan_with_rollout(
     let roll = Rollout::new(Policy::new(statics, terrain, seams), *knobs);
     let mut sc = Scratch::default();
     Search::new(roll, act).run(state, player, &mut sc)
+}
+
+/// The same entry point WITH the recorded playout signature, which is what a
+/// corpus whose acts arbitrated has to be replayed through.
+#[allow(clippy::too_many_arguments)]
+pub fn plan_with_rollout_sig(
+    state: &State,
+    terrain: &Terrain,
+    statics: &[UnitStatic],
+    knobs: &Knobs,
+    act: &ActStatics,
+    player: i64,
+    sig: Option<i64>,
+) -> Result<Pick, Unsupported> {
+    let seams = Seams { spacing: knobs.seam_spacing, cast: knobs.seam_cast };
+    let roll = Rollout::new(Policy::new(statics, terrain, seams), *knobs);
+    let mut sc = Scratch::default();
+    let mut search = Search::new(roll, act);
+    search.sig = sig;
+    search.run(state, player, &mut sc)
 }
 
 /// The 1-ply `AiPlanner.plan` (:21-45) on its own, for the `top_k <= 0` branch
@@ -182,7 +223,7 @@ pub fn plan(
 
 impl<'a> Search<'a> {
     pub fn new(roll: Rollout<'a>, act: &'a ActStatics) -> Search<'a> {
-        Search { roll, act, bend: PlanBend::default() }
+        Search { roll, act, bend: PlanBend::default(), sig: None }
     }
 
     /// `AiPlanner.top_k_default` ai_planner.gd:52-56 — the recorded knob already
@@ -365,11 +406,40 @@ impl<'a> Search<'a> {
         }
         let (bi, brs) = best.expect("a non-empty scored array always yields a non-empty pool");
 
-        // PHASE 5 — the stochastic arbitration this port declines (M2-4).
+        // PHASE 5 — the stochastic arbitration (ai_planner.gd:231-265).
+        let mut bi = bi;
+        let mut brs = brs;
+        let mut runner = runner;
+        let mut arbitration = None;
         if self.act.playout_search {
-            if let Some((_, r)) = runner {
+            if let Some((ri, r)) = runner {
                 if (brs - r).abs() < self.close_margin() {
-                    return Err(Unsupported::PlayoutArbitration);
+                    let Some(sig) = self.sig else {
+                        // No recorded signature: the seeds cannot be built, and a
+                        // guessed stream would be a silent lie. Decline instead.
+                        return Err(Unsupported::PlayoutArbitration);
+                    };
+                    let arb = arbitrate_bent(
+                        &self.roll,
+                        state,
+                        &scored[bi].cand,
+                        &scored[ri].cand,
+                        player,
+                        sig,
+                        self.bend.arb,
+                        sc,
+                    )?;
+                    if arb.swapped {
+                        // The whole record swaps, `expectation.after` included:
+                        // the GDScript exchanges the two rolled DICTIONARIES
+                        // (:258-261), so the winner carries the runner's rollout
+                        // value. `best_idx`/`runner_idx` were written BEFORE this
+                        // block (:219-220) and do NOT swap.
+                        runner = Some((bi, brs));
+                        bi = ri;
+                        brs = r;
+                    }
+                    arbitration = Some(arb);
                 }
             }
         }
@@ -406,6 +476,7 @@ impl<'a> Search<'a> {
             best_idx,
             runner_idx,
             last_leaf,
+            arbitration,
         })
     }
 }

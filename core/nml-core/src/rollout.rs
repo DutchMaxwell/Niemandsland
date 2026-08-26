@@ -264,7 +264,7 @@ pub fn imagined_round_end(cur: &mut State) {
 /// `GameUnit` (`if gu == null: return`); this port always has the unit's static
 /// closure, so that early return has no counterpart — a state without a profile
 /// cannot be loaded at all.
-fn round_start_refresh(statics: &[UnitStatic], state: &mut State, i: usize) {
+pub(crate) fn round_start_refresh(statics: &[UnitStatic], state: &mut State, i: usize) {
     state.activated[i] = false;
     state.fatigued[i] = false;
     let us = &statics[state.roster.profile[i]];

@@ -15,6 +15,7 @@ use crate::combat::{
 };
 use crate::geom;
 use crate::io::{Action, Seams};
+use crate::rng::GodotRng;
 use crate::rules::Spell;
 use crate::spell::{cast_success_chance_base, official_pick_order, spell_damage_ev_of, spell_ev_of};
 use crate::state::State;
@@ -130,15 +131,28 @@ fn morale_fails_expected(state: &State, us: &UnitStatic, i: usize) -> bool {
     fail_p >= 0.5
 }
 
-/// `BattleSim._apply_expected_wounds` battle_sim.gd:1027-1054 — expected unsaved
-/// wounds fill model by model in ARRAY order; the sub-wound remainder stays on
-/// the TARGET as `wound_frac` and joins the next volley instead of being floored
-/// away. `stochastic_rng` is null in every rollout node, so only the expectation
-/// branch exists here.
-fn apply_expected_wounds(state: &mut State, ti: usize, ev: f64) {
+/// `BattleSim._apply_expected_wounds` battle_sim.gd:1131-1155 — expected unsaved
+/// wounds fill model by model in ARRAY order.
+///
+/// TWO rounding rules, one per caller. `rng = None` is `stochastic_rng == null`,
+/// the rollout path: the sub-wound remainder stays on the TARGET as `wound_frac`
+/// and joins the next volley instead of being floored away. `rng = Some(..)` is
+/// `resolve_stochastic`, the PLAYOUT path: the remainder is spent on one
+/// mean-preserving coin flip (`randf() < pool - left`) and `wound_frac` is
+/// CLEARED, not carried. The draw happens once per call and BEFORE any model is
+/// touched — that position in the stream is what the arbitration's sums depend on.
+fn apply_expected_wounds(state: &mut State, ti: usize, ev: f64, rng: Option<&mut GodotRng>) {
     let pool = state.wound_frac[ti] + ev;
     let mut left = pool.floor() as i64;
-    state.wound_frac[ti] = pool - (left as f64);
+    match rng {
+        Some(r) => {
+            if r.randf() < pool - (left as f64) {
+                left += 1;
+            }
+            state.wound_frac[ti] = 0.0;
+        }
+        None => state.wound_frac[ti] = pool - (left as f64),
+    }
     while left > 0 && !state.wounds[ti].is_empty() {
         let take = left.min(state.wounds[ti][0]);
         state.wounds[ti][0] -= take;
@@ -441,19 +455,20 @@ fn pick_cast(
 
 /// `BattleSim._apply_cast_effect` battle_sim.gd:951-982 — damage lands as the
 /// scaled expectation, a modifier as a scaled stamp on the target's `mods`.
-/// The `rng` branch does not exist here: every rollout node is the expectation
-/// path (`stochastic_rng` is null).
+/// `rng` is handed straight down: a stochastic activation rounds a spell's
+/// damage the same way it rounds a volley's, from the same stream.
 fn apply_cast_effect(
     statics: &[UnitStatic],
     state: &mut State,
     ti: usize,
     entry: &Spell,
     scale: f64,
+    rng: Option<&mut GodotRng>,
 ) {
     if entry.effect_kind == "damage" {
         let ut = &statics[state.roster.profile[ti]];
         let ev = spell_damage_ev_of(entry, &ctx_of(ut, state, ti));
-        apply_expected_wounds(state, ti, scale * ev);
+        apply_expected_wounds(state, ti, scale * ev, rng);
         return;
     }
     let m = entry.modifier;
@@ -485,7 +500,13 @@ fn apply_cast_effect(
 /// the attempt and pays for it. `tokens` is read ONCE before the loop, so all
 /// three faces shop with the same purse. Later faces see the state the earlier
 /// ones already damaged — that order is load-bearing.
-fn cast_phase(statics: &[UnitStatic], state: &mut State, si: usize, los: &[bool]) {
+fn cast_phase(
+    statics: &[UnitStatic],
+    state: &mut State,
+    si: usize,
+    los: &[bool],
+    mut rng: Option<&mut GodotRng>,
+) {
     // p.10: a Shaken unit spends its activation idle and never casts.
     if state.shaken[si] {
         return;
@@ -507,7 +528,7 @@ fn cast_phase(statics: &[UnitStatic], state: &mut State, si: usize, los: &[bool]
         let Some((idx, ti)) = pick_cast(statics, state, si, &spells, tokens, d3, caster_x, los) else {
             continue;
         };
-        apply_cast_effect(statics, state, ti, &spells[idx], weight * p_success);
+        apply_cast_effect(statics, state, ti, &spells[idx], weight * p_success, rng.as_deref_mut());
         if cost.is_none() {
             cost = Some(spells[idx].threshold);
         }
@@ -622,7 +643,7 @@ pub fn resolve(
     seams: Seams,
     cast_los: Option<&[bool]>,
 ) -> Result<State, Unsupported> {
-    resolve_with(statics, state, action, Cover::Recorded(cover_dest), seams, cast_los)
+    resolve_with(statics, state, action, Cover::Recorded(cover_dest), seams, cast_los, None)
 }
 
 /// The same activation against the LIVE board — the entry point a rollout uses,
@@ -636,7 +657,26 @@ pub fn resolve_on_board(
     terrain: &Terrain,
     seams: Seams,
 ) -> Result<State, Unsupported> {
-    resolve_with(statics, state, action, Cover::Board(terrain), seams, None)
+    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, None)
+}
+
+/// `BattleSim.resolve_stochastic` battle_sim.gd:473-478 — the SAME activation
+/// with the static `stochastic_rng` set for its duration, which is the only
+/// thing that distinguishes it. Every wound-rounding remainder inside this one
+/// call is decided by a coin flip from `rng`; the generator is advanced in place,
+/// so a playout's draws stay in one unbroken stream across its activations.
+///
+/// The GDScript sets a class static and clears it after; here the generator is
+/// threaded, which is the same scope with the re-entrancy hazard removed.
+pub fn resolve_stochastic_on_board(
+    statics: &[UnitStatic],
+    state: &State,
+    action: &Action,
+    terrain: &Terrain,
+    seams: Seams,
+    rng: &mut GodotRng,
+) -> Result<State, Unsupported> {
+    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, Some(rng))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -647,6 +687,7 @@ fn resolve_with(
     cover: Cover,
     seams: Seams,
     cast_los: Option<&[bool]>,
+    mut rng: Option<&mut GodotRng>,
 ) -> Result<State, Unsupported> {
     let kind = action.kind;
     if kind != HOLD && kind != ADVANCE && kind != RUSH && kind != CHARGE {
@@ -722,7 +763,7 @@ fn resolve_with(
             Some(r) => r.to_vec(),
             None => (0..next.units()).map(|j| los_clear(&next, si, j)).collect(),
         };
-        cast_phase(statics, &mut next, si, &row);
+        cast_phase(statics, &mut next, si, &row, rng.as_deref_mut());
     }
 
     // --- shoot (battle_sim.gd:608-630); HOLD and ADVANCE only ---
@@ -759,7 +800,7 @@ fn resolve_with(
                     }
                 };
                 next.casts[si] -= sp_cost; // 0 unless the spell rider fired
-                apply_expected_wounds(&mut next, ti, volley);
+                apply_expected_wounds(&mut next, ti, volley, rng.as_deref_mut());
                 let ut = &statics[next.roster.profile[ti]];
                 expected_shooting_morale(&mut next, ut, ti, alive_before, wounds_before);
             }
@@ -796,7 +837,7 @@ fn resolve_with(
                     melee_profiles_of(us, next.alive[si], &mut sc);
                     melee_ev(&us.melee, &sc.attacks, &att, &def, true)
                 };
-                apply_expected_wounds(&mut next, ti, ev);
+                apply_expected_wounds(&mut next, ti, ev, rng.as_deref_mut());
                 next.fatigued[si] = true;
                 if next.alive[ti] > 0 {
                     // Survivors strike back, already survivor-scaled by the
@@ -810,7 +851,7 @@ fn resolve_with(
                         melee_profiles_of(ut, next.alive[ti], &mut sc);
                         melee_ev(&ut.melee, &sc.attacks, &att, &def, false)
                     };
-                    apply_expected_wounds(&mut next, si, ev_back);
+                    apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
                     next.fatigued[ti] = true;
                 }
                 expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before);
