@@ -95,6 +95,10 @@ const PLAYOUT_CAP := 7               # max playouts per branch
 ## AiActRecorder.finish() reads it once per activation then resets it to {} —
 ## unset env = this dict is never touched, so the search stays byte-identical.
 static var trace: Dictionary = {}
+## NML-1073 M2-0c: lets tools/act_recheck.gd fill `trace` WITHOUT the
+## NML_ACT_DUMP file seam (AiActRecorder.active()) — the recheck tool never
+## writes a corpus, it only replays one. Off by default = no behaviour change.
+static var trace_enabled := false
 
 
 ## menus.trace needs the SAME plain form the node dump's action gets
@@ -114,7 +118,7 @@ static func _plain_candidates(cands: Array) -> Array:
 static func plan_with_rollout(state: Dictionary, player: int,
 		top_k: int = -1) -> Dictionary:
 	_last_leaf_state = {}
-	var trace_on := AiActRecorder.active()
+	var trace_on := AiActRecorder.active() or trace_enabled
 	trace = {"menus": {}, "arbitration": null} if trace_on else {}
 	if top_k == -1:
 		top_k = top_k_default()   # research seam; default = the const

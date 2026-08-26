@@ -141,6 +141,20 @@ static func _stand_in_unit(p: Dictionary) -> GameUnit:
 				ow.special_rules.append(str(r))
 			ou.weapons.append(ow)
 		u.source_data = ou
+	# NML-1073 M2-0c finding: RulesRegistry.unit_rules_of_primitive (item_grants)
+	# and AiEv.rule_on_all_models (attached_heroes) are LIVE reads _unit_profile
+	# already flattens (item_grants/attached_hero_rules) but this stand-in never
+	# wired back — a unit with a granted rule (e.g. an aura item) replayed with
+	# NONE of its item/hero rules, diverging exactly where that rule mattered.
+	u.unit_properties["item_grants"] = {"_": p.get("item_grants", [])}
+	var heroes: Array = []
+	for hero_rules in (p.get("attached_hero_rules", []) as Array):
+		var h := GameUnit.new()
+		h.unit_properties = {"special_rules": hero_rules}
+		var hm := ModelInstance.new()
+		h.models.append(hm)
+		heroes.append(h)
+	u.unit_properties["attached_heroes"] = heroes
 	return u
 
 
