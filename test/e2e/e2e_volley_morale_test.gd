@@ -40,7 +40,7 @@ const VOLLEY_SEED := 20250803
 ## Own seed for the gap-B (Deadly-only) case: VOLLEY_SEED's faces are tuned for a 3-die pooled save
 ## roll, not the 6-die Deadly-weapon volley below — a separate constant keeps each case's dice fixed
 ## without coupling their outcomes.
-const DEADLY_SEED := 20250803001
+const DEADLY_SEED := 20250803003   # re-picked after NML-1076 (tray RNG)
 
 ## Rolls of `_solo_resolve_ai_volley` that happen BEFORE the wound landing: the to-hit batch and the
 ## defender's save batch. The click prompt needs `_solo_batch` false, the batch tray needs it true — so
@@ -251,6 +251,7 @@ func test_auto_allocation_volley_triggers_half_strength_morale(timeout := 120000
 	_main._solo_batch = true
 
 	seed(VOLLEY_SEED)
+	_main.seed_tray_rng(VOLLEY_SEED)   # NML-1076: the batch tray reads its own RNG, not the global one
 	await _main._solo_resolve_ai_volley(ai, squad, _shots(ai, "Autogun", 3, 5, 24), false)
 
 	var alive: int = squad.get_alive_count()
@@ -294,6 +295,7 @@ func test_hero_click_allocation_volley_triggers_half_strength_morale(timeout := 
 	_flip_batch_on = ROLLS_BEFORE_WOUNDS
 
 	seed(VOLLEY_SEED)
+	_main.seed_tray_rng(VOLLEY_SEED)   # NML-1076: the batch tray reads its own RNG, not the global one
 	await _main._solo_resolve_ai_volley(ai, squad, _shots(ai, "Autogun", 6, 5, 24), false)
 
 	assert_int(_picks_fed) \
@@ -349,6 +351,7 @@ func test_deadly_only_volley_triggers_half_strength_morale(timeout := 120000) ->
 	_main._solo_batch = true
 
 	seed(DEADLY_SEED)
+	_main.seed_tray_rng(DEADLY_SEED)   # NML-1076: the batch tray reads its own RNG, not the global one
 	await _main._solo_resolve_ai_volley(ai, squad, _shots(ai, "Deadlygun", 5, 5, 24, ["Deadly(3)"]), false)
 
 	var log := _log_text()

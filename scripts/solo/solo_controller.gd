@@ -294,6 +294,10 @@ var objective_owner_of: Callable = Callable()
 
 var turn_manager: TurnManager = null
 var _rng := RandomNumberGenerator.new()
+## M0-2 (NML-1073): the controller-side rng tap is ON by default — every _draw_traced() call emits an
+## "rng" decision record alongside the die draw. env NML_TRACE=0 disables it (byte-identical games
+## either way), matching the M0-1 dice-tap guard in main.gd (_solo_dice_trace_enabled).
+var _rng_trace_enabled: bool = OS.get_environment("NML_TRACE") != "0"
 
 # === AI ARENA difficulty (policy knobs; see SoloDifficulty) ===
 ## Per-side difficulty presets: player-slot → SoloDifficulty. Empty ⇒ the DEFAULT AI (the human-vs-AI flow
@@ -530,6 +534,11 @@ func activate_next_ai_unit() -> GameUnit:
 		turn_manager.notify_activated(unit)
 	_terrain_meter(unit, last_report)
 	ai_unit_activated.emit(unit)
+	# M0-3 (NML-1073): one state fingerprint per activation, after every kind (normal act, disembark,
+	# Shaken idle, aircraft) has fully resolved and returned — cheap (one sha256 per activation, not
+	# per roll) and gated by the same NML_TRACE guard as the dice/rng taps (write-only, no reader).
+	if _rng_trace_enabled:
+		record_decision({"kind": "digest", "seq": _activation_seq, "sha": state_digest()})
 	return unit
 
 
@@ -977,7 +986,7 @@ func _select_ai_unit(eligible: Array) -> GameUnit:
 			west.append(u)
 		else:
 			east.append(u)
-	var roll_west: bool = _rng.randi_range(1, 6) <= 3
+	var roll_west: bool = _draw_traced(1, 6, "deploy_side") <= 3
 	var section: Array = west if roll_west else east
 	if section.is_empty():
 		section = east if roll_west else west   # rotate to the other section (rule: no eligible unit there)
@@ -1006,7 +1015,7 @@ func _select_ai_unit(eligible: Array) -> GameUnit:
 		if not large.is_empty() and large.size() < section.size():
 			section = large
 			large_first = true
-	var picked: GameUnit = section[_rng.randi_range(0, section.size() - 1)]
+	var picked: GameUnit = section[_draw_traced(0, section.size() - 1, "section_pick")]
 	record_decision({"kind": "pick", "unit": picked.get_name(),
 		"rule": "Solo v3.5.0: D6 section roll, random eligible; Shaken last; Counter last in section (p.57)",
 		"candidates": [], "chosen": picked.get_name(),
@@ -1599,7 +1608,7 @@ func _act(unit: GameUnit) -> Dictionary:
 	if not bounding_rule.is_empty():
 		var bounding_in := float(bounding_plus)
 		for _d in bounding_dice:
-			bounding_in += float(_rng.randi_range(1, 3))
+			bounding_in += float(_draw_traced(1, 3, "bounding_d3"))
 		advance += bounding_in
 		rush += bounding_in
 		charge_reach += bounding_in
@@ -3662,7 +3671,7 @@ func _plan_member_cast(unit: GameUnit, member: GameUnit, hold_out: Array = []) -
 		hold_out.append("no spell data for this faction — casting stays manual")
 		return {}
 	var caster_x: int = member.get_caster_value()
-	var d3: int = _rng.randi_range(1, 3)
+	var d3: int = _draw_traced(1, 3, "d3")
 	var order: Array = AiSpell.official_pick_order(spells.size(), d3, caster_x)
 	var diff := active_difficulty()
 	# Difficulty ladder (design table): Rekrut/default follow the official D3+X die exactly; Veteran
@@ -6924,12 +6933,76 @@ func prime_round_plan() -> void:
 		_plan_for_round()
 
 
+## M0-2 (NML-1073): the controller-side rng tap — draws _rng.randi_range(lo, hi) exactly as every call
+## site below already did, and (when tracing is on) appends an "rng" decision record. Write-only:
+## nothing downstream reads the record back, so the draw itself is unchanged whether tracing is on or off.
+func _draw_traced(lo: int, hi: int, tag: String) -> int:
+	var v: int = _rng.randi_range(lo, hi)
+	if _rng_trace_enabled:
+		record_decision({"kind": "rng", "tag": tag, "value": v, "lo": lo, "hi": hi})
+	return v
+
+
 func record_decision(rec: Dictionary) -> void:
 	if decision_sink.is_valid():
 		decision_sink.call(rec)
 	decision_log.append(rec)
 	if decision_log.size() > DECISION_LOG_CAP:
 		decision_log.pop_front()
+
+
+## Deterministic per-unit identity for state_digest(): GameUnit.unit_id is NOT usable here — it is
+## Time.get_unix_time_from_system() + randi() (game_unit.gd:563-564, unseeded), so it differs on every
+## run even of the identical seed (found live: two seed-7 runs gave byte-identical moves.json/
+## battlelog.txt but every digest differed until this switch). The army list's OWN selectionId
+## (OPRUnit.selection_id, opr_api_client.gd:61) is fixed content from the army JSON — use that when the
+## unit came from an OPR import; fall back to player+name for a non-OPR source (not exercised by the
+## arena harness, which always loads OPR army lists).
+func _digest_unit_key(u: GameUnit) -> String:
+	var player_id: int = int(u.unit_properties.get("player_id", 0))
+	if u.source_type == "opr" and u.source_data is OPRApiClient.OPRUnit:
+		var sel: String = (u.source_data as OPRApiClient.OPRUnit).selection_id
+		if not sel.is_empty():
+			return "p%d:s:%s" % [player_id, sel]
+	return "p%d:n:%s" % [player_id, u.get_name()]
+
+
+## M0-3 (NML-1073): a pure text fingerprint of the state the RULES care about — unit/model flags,
+## wounds, markers, positions, round, activation index, objective owners. Rotation and visibility are
+## presentation and excluded on purpose (Design calls, PLAN_fast_rules_core.md). Deterministic field
+## order (units sorted by _digest_unit_key — get_all_game_units() iterates a Dictionary — models kept
+## in their stored array order, markers sorted) so two runs of the same seeds never diverge on
+## hash-map ordering alone, only on actual rules state. Positions are model.node.global_position
+## (Godot world units = metres, solo_controller.gd:7829 "World positions in METRES"), rounded to 0.01
+## via %.2f. y is included at 0.001 m (%.3f) because a spawn-drop animation moves height by only a
+## couple of millimetres — invisible at 0.01 m (found live: golden corpus idx 83, M0-4).
+func state_digest() -> String:
+	var parts: Array[String] = []
+	parts.append("round=%d|seq=%d" % [_current_round(), _activation_seq])
+	var raw: Array[GameUnit] = army_manager.get_all_game_units() if army_manager != null else []
+	var keyed: Array = []
+	for u in raw:
+		keyed.append({"key": _digest_unit_key(u), "unit": u})
+	keyed.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.key < b.key)
+	for entry in keyed:
+		var u: GameUnit = entry.unit
+		parts.append("u:%s|sh=%d|fa=%d|ac=%d|ca=%d" % [
+			entry.key, int(u.is_shaken), int(u.is_fatigued), int(u.is_activated), u.casts_current])
+		for m in u.models:
+			var model: ModelInstance = m
+			var pos: Vector3 = model.node.global_position \
+				if model.node and is_instance_valid(model.node) else Vector3.ZERO
+			var mk: Array[String] = model.markers.duplicate()
+			mk.sort()
+			parts.append("  m:al=%d|wo=%d|mk=%s|x=%.2f|y=%.3f|z=%.2f" % [
+				int(model.is_alive), model.wounds_current, ", ".join(mk), pos.x, pos.y, pos.z])
+	if objectives_provider.is_valid():
+		var objs: Variant = objectives_provider.call()
+		if objs is Array:
+			for i in range((objs as Array).size()):
+				var owner: int = int(objective_owner_of.call(i)) if objective_owner_of.is_valid() else 0
+				parts.append("o:%d|ow=%d" % [i, owner])
+	return "\n".join(parts).sha256_text()
 
 
 ## Official ROLL-OFF procedure (core rules): each player rolls a die, the higher result wins, and tied

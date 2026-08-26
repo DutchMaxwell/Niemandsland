@@ -83,6 +83,9 @@ const TRAY_MARGIN: float = 0.05  # 5cm gap from table edge
 const TRAY_DROP_HEIGHT: float = 0.5  # Start 50cm above table
 const TRAY_DROP_DURATION: float = 1.5  # Animation duration in seconds
 
+## Live spawn-drop tweens, so settle_spawn_drop() can finish them before the rules read positions.
+var _spawn_drop_tweens: Array[Tween] = []
+
 ## Ambush/Scout deployment band on the army tray (representation only — no rules enforcement).
 ## A staging strip across the tray's near (-Z) third, split Ambush-LEFT / Scout-RIGHT by a thin
 ## divider, with two flat bird's-eye labels. Units carrying the Scout/Ambush rule auto-place into
@@ -939,6 +942,7 @@ func _animate_tray_drop(tray: Node3D, models: Array[Node3D], start_height: float
 
 	# Animate tray dropping
 	tween.tween_property(tray, "position:y", 0.0, TRAY_DROP_DURATION)
+	_spawn_drop_tweens.append(tween)
 
 	# Animate all models dropping together
 	for model in models:
@@ -949,6 +953,26 @@ func _animate_tray_drop(tray: Node3D, models: Array[Node3D], start_height: float
 		model_tween.tween_property(model, "global_position:y", target_y, TRAY_DROP_DURATION)
 		# Ensure final position is exactly at table surface
 		model_tween.tween_callback(func(): model.global_position.y = 0.0)
+		_spawn_drop_tweens.append(model_tween)
+
+
+## NML-1073 M0-4: run the spawn drop to its end RIGHT NOW. _animate_tray_drop lowers every model's
+## global_position.y from TRAY_DROP_HEIGHT to 0 over TRAY_DROP_DURATION of WALL-CLOCK time, and the
+## rules read that very y: SoloController.alive_positions feeds it into VolumetricLos.eye(), whose
+## sight line clears a blocker a millimetre earlier from a higher eye. A both-AI game opens well
+## inside those 1.5 s, so two runs of the SAME seed found their models at different heights (golden
+## row 83, measured on one machine: 12.2 mm in one run, 14.0 mm in the next) and the Heavy Exo-Suit
+## shot a different unit — the first divergence of the golden corpus. state_digest() fingerprints
+## only x/z, so nothing caught it. Settling first makes the standing height STATE, identical in every
+## replica, instead of a sample of how fast the box got here. The drop still plays for a human game;
+## only a caller that is about to READ positions as rules input settles it.
+func settle_spawn_drop() -> void:
+	for t in _spawn_drop_tweens:
+		var tw := t as Tween
+		if tw != null and tw.is_valid():
+			tw.custom_step(TRAY_DROP_DURATION + 1.0)   # runs the final callback: y == exactly 0.0
+			tw.kill()
+	_spawn_drop_tweens.clear()
 
 
 ## Create an army tray beside the table for a player
