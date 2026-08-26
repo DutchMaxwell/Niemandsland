@@ -1388,6 +1388,16 @@ static func state_to_plain(state: Dictionary, with_profile := true) -> Dictionar
 			if su.has(k):
 				pu[k] = su[k]
 		pu["positions"] = _plain_vec3s(su.get("positions", []))
+		# NML-1073 M2-0c: the MOVE BANDS belong to the dynamic layer, not to the
+		# once-written static profile. move_bands_for_props (movement_range_
+		# controller.gd:80) derives them from unit_properties["rule_descriptions"],
+		# and that dict GROWS during a live game — a unit with an attached aura
+		# hero picks up the hero's texts (incl. "Slow"), so the same GameUnit
+		# answered rush 12 at the first activation and rush 8 three activations
+		# later. AiMissionEval._presence (:602) reads them on every score, so a
+		# replay off a stale profile drifts the whole eval. Recorder-only call
+		# (state_to_plain has no game-path caller); one read per unit per line.
+		pu["bands"] = SoloController.sim_move_bands(su["unit"])
 		if su.has("los"):
 			pu["los"] = su["los"]
 		elif (state.get("los_at", Callable()) as Callable).is_valid():

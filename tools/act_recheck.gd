@@ -105,7 +105,7 @@ func _check_act(act: Dictionary, profiles: Dictionary, terrain: Variant, knobs: 
 		return bool(matrix[mkey])
 
 	if terrain != null:
-		state["terrain_at"] = _terrain_at_callable(terrain as Dictionary)
+		state["terrain_at"] = NodeRecheck.terrain_at_from_plain(terrain as Dictionary)
 	# READ FIRST finding: solo_controller.gd never stamps state["los_blocked"] (grep
 	# confirms it), so it is left UNSET here too — _los_clear (battle_sim.gd:684-688)
 	# reads it every reply_threat call and short-circuits to "clear" on an invalid
@@ -144,41 +144,6 @@ func _check_act(act: Dictionary, profiles: Dictionary, terrain: Variant, knobs: 
 	if los_hit[0]:
 		mism.append({"field": "los_at.called", "recorded": "net path inactive", "got": "called"})
 	return mism
-
-
-## Port of terrain_overlay.gd get_terrain_at_world_position + world_to_cell
-## (scripts/terrain_overlay.gd:1090-1116) over the recorded cells/sandbox/
-## cell_params — no live TerrainOverlay node.
-func _terrain_at_callable(terrain: Dictionary) -> Callable:
-	var cells := {}
-	for c in (terrain["cells"] as Array):
-		cells[Vector2i(int(c[0]), int(c[1]))] = int(c[2])
-	var sandbox: Array = terrain["sandbox"]
-	var cp: Dictionary = terrain["cell_params"]
-	var tsize: Array = cp["table_size_feet"]
-	var width_in := float(tsize[0]) * 12.0
-	var height_in := float(tsize[1]) * 12.0
-	var grid_in := float(cp["grid_size_inches"])
-	var cell_m := grid_in * float(cp["inches_to_meters"])
-	var rot_rad := deg_to_rad(float(cp["grid_rotation_degrees"]))
-	var grid_size := int(ceil(sqrt(width_in * width_in + height_in * height_in) / grid_in))
-	if grid_size % 2 != 0:
-		grid_size += 1
-	return func(world_pos: Vector3) -> int:
-		var rx := world_pos.x * cos(-rot_rad) - world_pos.z * sin(-rot_rad)
-		var rz := world_pos.x * sin(-rot_rad) + world_pos.z * cos(-rot_rad)
-		var cell := Vector2i(int(floor(rx / cell_m + grid_size / 2.0)), int(floor(rz / cell_m + grid_size / 2.0)))
-		var t := int(cells.get(cell, 0))
-		if t != 0:
-			return t
-		var p := Vector2(world_pos.x, world_pos.z)
-		for s in sandbox:
-			var sd: Dictionary = s
-			var c: Array = sd["c"]
-			var he: Array = sd["he"]
-			if TerrainRules.point_in_obb(p, Vector2(c[0], c[1]), Vector2(he[0], he[1]), float(sd["yaw"])):
-				return int(sd["type"])
-		return 0
 
 
 ## Only reached when statics.playout_net is non-empty (none of the sample
