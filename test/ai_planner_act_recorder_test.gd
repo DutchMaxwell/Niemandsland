@@ -1,4 +1,6 @@
 extends GdUnitTestSuite
+
+const ActRecheck := preload("res://tools/act_recheck.gd")   ## NML-1073 M3-0b
 ## NML-1073 M2-0a: AiActRecorder (scripts/solo/act_recorder.gd) captures every
 ## planner ACTIVATION — the full input the search read (state, charge-illegal
 ## matrix, statics) plus the pick it returned — as one JSON line, preceded by
@@ -265,3 +267,78 @@ func test_a_dead_attached_hero_drops_out_of_the_per_act_profile() -> void:
 	assert_bool(AiEv.rule_on_all_models(host, "Shielded")).is_true()
 	# and the STATIC half is untouched by the death — it is the same unit
 	assert_array(fallen["special_rules"] as Array).is_equal(["Shielded"])
+
+
+## NML-1073 M3-0b: state_to_plain must carry a DORMANT (Ambush-reserve) unit's
+## snapshot verbatim — capture() already writes "dormant"/"dormant_models"/
+## "dormant_wounds"/"earliest_arrival_round" on it (battle_sim.gd:1346-1351)
+## and _UNIT_DYNAMIC already lists all four; this pins the contract so a
+## future edit to either list can't silently drop a reserve unit from a
+## core_selfplay act (arena corpora never carry one to catch the regression).
+func test_state_to_plain_keeps_a_dormant_reserve_unit() -> void:
+	var a := _armed(1, [Vector3.ZERO], "A")
+	var r := _armed(2, [Vector3(6.0 * IN2M, 0, 0)], "R")
+	r.unit_properties["ambush_reserve"] = true
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"A": a, "R": r}
+	var state := BattleSim.capture(army, func() -> Array: return [],
+		func(_i: int) -> int: return 0, 1, 3)
+	var plain := BattleSim.state_to_plain(state, false)
+	assert_bool((plain["units"] as Dictionary).has("R")).is_true()
+	var pr := (plain["units"] as Dictionary)["R"] as Dictionary
+	assert_bool(bool(pr.get("dormant", false))).is_true()
+	assert_int(int(pr.get("alive", -1))).is_equal(0)
+	assert_int(int(pr.get("dormant_models", -1))).is_equal(1)
+	assert_array(pr.get("dormant_wounds", []) as Array).is_equal([1])
+	assert_int(int(pr.get("earliest_arrival_round", -1))).is_equal(2)
+
+
+## NML-1073 M3-0b: los_pairs must be ordered by a STABLE KEY (unit id, sorted),
+## never by Dictionary insertion order — a live Dictionary preserves insertion
+## order, but the recorded corpus round-trips through JSON.stringify's
+## sort_keys, which comes back key-sorted; a writer that iterates raw
+## insertion order and a reader that assumes key-sorted order silently swap
+## rows/cols past ~10 units (the M1-6 trap: "U10" sorts before "U2"). Three
+## units inserted OUT of key-sorted order (U9, U10, U2) pin the writer
+## against a hand-computed grid over the SORTED key order (U10, U2, U9).
+func test_los_pairs_is_ordered_by_sorted_unit_key() -> void:
+	var u9 := _armed(1, [Vector3(9.0 * IN2M, 0, 0)], "U9")
+	var u10 := _armed(1, [Vector3(10.0 * IN2M, 0, 0)], "U10")
+	var u2 := _armed(2, [Vector3(2.0 * IN2M, 0, 0)], "U2")
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"U9": u9, "U10": u10, "U2": u2}
+	var state := BattleSim.capture(army, func() -> Array: return [],
+		func(_i: int) -> int: return 0, 1, 3)
+	state["los_blocked"] = func(from: Vector3, to: Vector3) -> bool: return from.x > to.x
+	var plain := BattleSim.state_to_plain(state, false)
+	assert_array(plain["los_pairs"] as Array).is_equal(["100", "111", "101"])
+
+
+## NML-1073 M3-0b: a core_selfplay-shaped state — NO "charge_illegal" wired, exactly
+## like tools/core_selfplay.gd (SoloController wires SoloController.charge_candidate_illegal
+## at solo_controller.gd:3002/:3358/:3475/:3704; core_selfplay never does) — must record
+## charge_gate=false, and act_recheck.gd's own decision (_stamps_charge_gate) must read that
+## false back and skip stamping the pure gate, replaying the live search (which never gated
+## charges) instead of manufacturing a veto it never applied. The M3-0b root-cause fix's
+## round trip, recorder to recheck, in one test.
+func test_a_gateless_activation_records_and_replays_without_the_charge_gate() -> void:
+	var state := _state()
+	state.erase("charge_illegal")   # core_selfplay never wires one
+	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
+	var pending := AiActRecorder.begin(state, 1, pool, Callable())
+	var pick := {"used": true, "unit_key": "A", "action": {"unit": "A",
+		"kind": AiDecision.Action.RUSH, "dest": Vector3.ZERO}}
+	AiActRecorder.finish(pending, pick)
+
+	var f := FileAccess.open(_DUMP_DIR.path_join("acts.jsonl"), FileAccess.READ)
+	var lines: Array = []
+	while not f.eof_reached():
+		var line := f.get_line()
+		if line != "":
+			lines.append(line)
+	f.close()
+	var act := JSON.parse_string(lines[1]) as Dictionary
+	assert_bool(bool(act.get("charge_gate", true))).is_false()
+	assert_bool(ActRecheck._stamps_charge_gate(act)).is_false()
+	# a pre-M3-0b corpus (no "charge_gate" key at all) must default to true — unchanged
+	assert_bool(ActRecheck._stamps_charge_gate({})).is_true()

@@ -65,6 +65,12 @@ static func begin(state: Dictionary, me: int, pool: Array, terrain_cb: Callable,
 		"statics": {"opener_seat": AiPlanner.opener_seat, "playout_search": AiPlanner.playout_search,
 			"fit_mode": AiMissionEval.fit_mode, "playout_net": AiPlanner.playout_net},
 		"state": plain,
+		# NML-1073 M3-0b: whether THIS activation's caller wired a real charge-legality
+		# gate — SoloController does (charge_candidate_illegal, solo_controller.gd:1450,
+		# stamped at :3002/:3358/:3475/:3704), core_selfplay.gd never does. A replay must
+		# know this to decide whether stamping the pure gate replays the live search or
+		# manufactures a veto it never applied.
+		"charge_gate": (state.get("charge_illegal", Callable()) as Callable).is_valid(),
 		"charge_illegal": _charge_illegal_matrix(state),
 		"charge_illegal_grid": _charge_illegal_grid(state), "pool": pool_keys}
 

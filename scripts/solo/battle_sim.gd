@@ -1472,13 +1472,19 @@ static func state_to_plain(state: Dictionary, with_profile := true) -> Dictionar
 	# los_blocked Callable with the CURRENT unit centres, so a plain state that
 	# carries only positions cannot reproduce it — the Rust port would have to
 	# own the terrain grid. Recorded instead as the answers themselves: row i is
-	# one character per unit in iteration order, "1" = `_los_clear(state, i, j)`
-	# is true (line of fire is clear), "0" = blocked. Absent when the state has
-	# no los_blocked seam (then `_los_clear` returns true for every pair).
+	# one character per unit KEY-SORTED (NML-1073 M3-0b — a live Dictionary's
+	# iteration order is insertion order, but JSON.stringify's sort_keys writes
+	# "units" back out key-sorted; a reader keyed off the round-tripped dict
+	# then read row/col i against the WRONG unit past ~10 units, e.g. "p1_10"
+	# sorts before "p1_2"), "1" = `_los_clear(state, i, j)` is true (line of
+	# fire is clear), "0" = blocked. Absent when the state has no los_blocked
+	# seam (then `_los_clear` returns true for every pair).
 	var lb: Callable = state.get("los_blocked", Callable())
 	if lb.is_valid():
+		var los_keys: Array = (state["units"] as Dictionary).keys()
+		los_keys.sort()
 		var centres: Array = []
-		for uid in state["units"]:
+		for uid in los_keys:
 			centres.append(_centre_of(state["units"][uid]))
 		var rows: Array = []
 		for i in range(centres.size()):
