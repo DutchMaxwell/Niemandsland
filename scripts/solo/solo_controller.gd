@@ -3097,17 +3097,26 @@ var _core_us_max := 0
 var _core_statics_builds := 0     # M2-5b: profile-closure rebuilds seen so far
 
 
-## Asks the Rust core for THIS activation. {} = declined (or the node could not
-## be built) and the caller runs the GDScript search — R1: the seam is never
-## load-bearing. Only ever entered when BattleSim.core_enabled() is true.
-func _core_plan(state: Dictionary, me: int) -> Dictionary:
+## The ONE live NmlCore node per controller — the search seam (M2-5) and the
+## move seam (M4-6a) share it: one instantiation, one repo root, one A/B pair.
+## null = the class is absent or would not instantiate (warned once).
+func _core_node_ready() -> Object:
 	if _core_node == null:
 		_core_node = ClassDB.instantiate("NmlCore")
 		if _core_node == null:
 			_core_warn_once("NmlCore could not be instantiated")
-			return {}
+			return null
 		_core_node.set_repo_root(ProjectSettings.globalize_path("res://"))
 		_core_node.set_seams(BattleSim.spacing_enabled(), BattleSim.cast_phase_enabled())
+	return _core_node
+
+
+## Asks the Rust core for THIS activation. {} = declined (or the node could not
+## be built) and the caller runs the GDScript search — R1: the seam is never
+## load-bearing. Only ever entered when BattleSim.core_enabled() is true.
+func _core_plan(state: Dictionary, me: int) -> Dictionary:
+	if _core_node_ready() == null:
+		return {}
 	if not _core_header_done:
 		# AiActRecorder._header_line IS the contract (profiles + terrain + knobs);
 		# a second copy here would be a second thing to keep in step with acts.jsonl.
@@ -3311,6 +3320,119 @@ func _core_selfcheck(state: Dictionary, me: int, out: Dictionary) -> void:
 				break
 	print("[CORE] SELFCHECK r%d p%d %s" % [_current_round(), me,
 		"OK" if bad.is_empty() else "DIFF " + str(bad.slice(0, 5))])
+
+
+## === NML-1073 M4-6a: the MOVE SEAM ==========================================
+## NML_CORE=1 *and* NML_CORE_MOVE=1 routes each MovementPlanner.plan_unit_step
+## call through NmlCore.plan_unit_step; the port's decline (everything, until
+## M4-5 lands the solver) falls back to the GDScript planner and is logged ONCE
+## per game. NML_CORE_SELFCHECK=1 runs BOTH and always keeps the GDScript
+## answer, printing the first field the two disagree on. Both flags unset = the
+## default path, byte for byte: one cached bool read and nothing else.
+static var _move_seam_env := -1
+static var _move_check_env := -1
+const MOVE_SEAM_EPS := 1e-9
+var _core_move_warned := false
+var _core_move_checks := 0        # selfcheck: plan_unit_step calls compared this game
+var _core_move_diffs := 0         # selfcheck: how many of them disagreed
+
+
+static func _move_seam_on() -> bool:
+	if _move_seam_env < 0:
+		_move_seam_env = 1 if (BattleSim.core_enabled()
+			and OS.get_environment("NML_CORE_MOVE") == "1") else 0
+	return _move_seam_env == 1
+
+
+static func _move_check_on() -> bool:
+	if _move_check_env < 0:
+		_move_check_env = 1 if OS.get_environment("NML_CORE_SELFCHECK") == "1" else 0
+	return _move_check_env == 1
+
+
+## ONE plan_unit_step call with the port asked first. Only ever entered from
+## _plan_positions under _move_seam_on(); the default path never reaches here.
+## Returns the planned per-model positions and, on the GDScript branch, has
+## filled plan_trails + opts["flow_order"] exactly as the direct call would.
+func _core_move_plan(mctx: Dictionary, mpos: Array, mdelta: Vector2, walls_in: Array,
+		grid: Dictionary, allow_contact: bool, board_in: float, plan_trails: Array,
+		opts: Dictionary) -> Array:
+	var seam := _core_move_step(mctx)
+	if seam.is_empty() or _move_check_on():
+		var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, grid,
+			allow_contact, board_in, plan_trails, opts)
+		if not seam.is_empty():
+			# One census line per CALL, the way the search selfcheck prints one
+			# per activation: a silent green proves nothing about how many calls
+			# were actually compared.
+			_core_move_checks += 1
+			var bad := _core_move_diff(seam, planned, plan_trails, opts)
+			if bad != "":
+				_core_move_diffs += 1
+			print("[core] MOVE SELFCHECK #%d (%s act=%d r=%d models=%d) %s"
+				% [_core_move_checks, str(mctx["unit"]), int(mctx["act"]),
+					int(mctx["round"]), planned.size(),
+					"OK" if bad == "" else "DIFF[%d] %s" % [_core_move_diffs, bad]])
+		return planned
+	plan_trails.assign(seam["trails"])
+	opts["flow_order"] = seam["flow_order"]
+	return seam["planned"]
+
+
+## The port's answer, or {} when it declined. mctx is the SAME dictionary
+## MoveRecorder.begin receives, so the recorded corpus and the live call are one
+## shape and cannot drift apart.
+func _core_move_step(mctx: Dictionary) -> Dictionary:
+	var node := _core_node_ready()
+	if node == null:
+		return {}
+	# fast_planner/fast_planner_guard are MovementPlanner class statics, per GAME
+	# and not per call (main.gd:2276-2282 — fast_planner is FALSE in interactive
+	# play with difficulty grades). The port cannot read them, so they travel
+	# beside the call rather than being assumed.
+	var out: Dictionary = node.plan_unit_step(mctx, MovementPlanner.fast_planner,
+		MovementPlanner.fast_planner_guard)
+	if bool(out.get("ok", false)):
+		return out
+	if not _core_move_warned:
+		_core_move_warned = true
+		print("[core] move seam fell back: %s" % str(out.get("error", "no reason given")))
+	return {}
+
+
+## The FIRST field the two plans disagree on, "" when they agree. Positions are
+## the planner's own f32 frame, so 1e-9 is a "bit for bit" comparison with room
+## for the promotion to double, not a tolerance.
+func _core_move_diff(seam: Dictionary, planned: Array, trails: Array, opts: Dictionary) -> String:
+	var sp: Array = seam.get("planned", [])
+	if sp.size() != planned.size():
+		return "planned.size %d vs %d" % [sp.size(), planned.size()]
+	for i in planned.size():
+		if not _move_v2_same(sp[i], planned[i]):
+			return "planned[%d] %s vs %s" % [i, str(sp[i]), str(planned[i])]
+	var st: Array = seam.get("trails", [])
+	if st.size() != trails.size():
+		return "trails.size %d vs %d" % [st.size(), trails.size()]
+	for i in trails.size():
+		var a: Array = st[i]
+		var b: Array = trails[i]
+		if a.size() != b.size():
+			return "trails[%d].size %d vs %d" % [i, a.size(), b.size()]
+		for j in b.size():
+			if not _move_v2_same(a[j], b[j]):
+				return "trails[%d][%d] %s vs %s" % [i, j, str(a[j]), str(b[j])]
+	var sf: Array = seam.get("flow_order", [])
+	var gf: Array = opts.get("flow_order", [])
+	if sf.size() != gf.size():
+		return "flow_order.size %d vs %d" % [sf.size(), gf.size()]
+	for i in gf.size():
+		if int(sf[i]) != int(gf[i]):
+			return "flow_order[%d] %d vs %d" % [i, int(sf[i]), int(gf[i])]
+	return ""
+
+
+func _move_v2_same(a: Vector2, b: Vector2) -> bool:
+	return absf(a.x - b.x) <= MOVE_SEAM_EPS and absf(a.y - b.y) <= MOVE_SEAM_EPS
 
 
 ## One line per REASON per game — a decline is normal (the core declines what it
@@ -6062,14 +6184,23 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 	# NML-1073 M4-0a: env NML_MOVE_DUMP=<dir> records this call's FULL input + the plan it returns
 	# (moves_calls.jsonl) — the Rust port's per-plan-call contract. Unset (default) = begin() returns
 	# {} and finish() no-ops: byte-identical plan either way.
-	var mrec := MoveRecorder.begin({"unit": unit.get_name(), "act": _move_act_seq, "round": _current_round(),
+	# NML-1073 M4-6a: ONE dictionary, both readers — the recorder and the Rust
+	# move seam receive the identical object, so neither can describe the call
+	# differently from the other.
+	var mctx := {"unit": unit.get_name(), "act": _move_act_seq, "round": _current_round(),
 		"rung": "reach_in=%.4f avoid_difficult=%s avoid_dangerous=%s allow_contact=%s" % [
 			charge_arc_in, avoid_difficult, avoid_dangerous, allow_contact],
 		"model_pos": mpos, "delta": mdelta, "walls": walls_in, "grid": sampled["grid"],
-		"allow_contact": allow_contact, "board_in": board_in, "opts": opts, "terrain_cb": terrain_type_at})
+		"allow_contact": allow_contact, "board_in": board_in, "opts": opts, "terrain_cb": terrain_type_at}
+	var mrec := MoveRecorder.begin(mctx)
 	var _prof_mv_t0 := BattleSim.prof_t0()
-	var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, sampled["grid"],
-		allow_contact, board_in, plan_trails, opts)
+	var planned: Array
+	if _move_seam_on():
+		planned = _core_move_plan(mctx, mpos, mdelta, walls_in, sampled["grid"],
+			allow_contact, board_in, plan_trails, opts)
+	else:
+		planned = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, sampled["grid"],
+			allow_contact, board_in, plan_trails, opts)
 	BattleSim.prof_mark("move", _prof_mv_t0)
 	MoveRecorder.finish(mrec, planned, plan_trails, opts)
 	if prewarm_enabled and not plan_key.is_empty():
