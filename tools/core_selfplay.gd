@@ -238,6 +238,10 @@ func _play_one(game_seed: int) -> void:
 	# lambda freed at process teardown corrupts the heap (measured: exit 134).
 	# The multi-game loop (_games > 1) reopens the dump fresh.
 	AiPlanner.close()
+	# NML-1073 M3-0: AiPlanner.close() does not touch the ACT stream (a separate
+	# static) — without this a _games>1 run would keep one acts.jsonl header/cap
+	# across every game in the process instead of one file per game.
+	AiActRecorder.close()
 
 
 ## Alternate single activations (official one-for-one; a dry side passes the
@@ -425,25 +429,32 @@ func _fork_pick(state: Dictionary, player: int) -> Dictionary:
 
 
 func _pick_for(state: Dictionary, player: int) -> Dictionary:
-	var has_pool := false
+	var pool: Array = []
 	for k in state["units"]:
 		var su: Dictionary = state["units"][k]
 		if int(su["player"]) == player and not bool(su["activated"]) and int(su["alive"]) > 0:
-			has_pool = true
-			break
-	if not has_pool:
+			pool.append(su["unit"])
+	if pool.is_empty():
 		return {}
 	# S2: NML_CORE_ACTOR=policy plays the cheap greedy policy instead of the
 	# full planner — volume data generation (states + outcomes) at a fraction
-	# of the cost; planner remains the default for quality data.
+	# of the cost; planner remains the default for quality data. NOT recorded
+	# (NML-1073 M3-0): the oracle wrap below only covers the full-planner pick.
 	if OS.get_environment("NML_CORE_ACTOR") == "policy":
 		var a := AiPlanner._policy_step(state, player, true)
 		return {} if a.is_empty() else {"used": true, "action": a}
+	# NML-1073 M3-0: the oracle — same begin()/finish() contract
+	# SoloController._planner_pick_unit uses (solo_controller.gd:3008-3015), so
+	# acts.jsonl replays a core_selfplay pick identically to the arena's.
+	# terrain_cb stays invalid here (no TerrainOverlay); _world (SchoolTerrain)
+	# is the header's terrain fallback (act_recorder.gd:_school_terrain_line).
+	var act_rec := AiActRecorder.begin(state, player, pool, Callable(), _world)
 	var _prof_t0 := Time.get_ticks_usec() if BattleSim.profile_enabled() else 0
 	var pick := AiPlanner.plan_with_rollout(state, player)
 	if BattleSim.profile_enabled():
 		BattleSim.profile["plan"] += Time.get_ticks_usec() - _prof_t0
 		BattleSim.profile["plan_n"] += 1
+	AiActRecorder.finish(act_rec, pick)
 	return pick if bool(pick.get("used", false)) else {}
 
 

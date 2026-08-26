@@ -165,11 +165,13 @@ func _check_act(act: Dictionary, header: Dictionary, profiles: Dictionary,
 	if terrain != null:
 		state["terrain_at"] = NodeRecheck.terrain_at_from_plain(terrain as Dictionary)
 	# READ FIRST finding: solo_controller.gd never stamps state["los_blocked"] (grep
-	# confirms it), so it is left UNSET here too — _los_clear (battle_sim.gd:684-688)
-	# reads it every reply_threat call and short-circuits to "clear" on an invalid
-	# Callable. Binding a stub here (tried first) changed nothing about the VALUE
-	# (the stub also had to return the same "clear" answer) but made is_valid() true,
-	# so it actually got called on every _los_clear probe — real signal, wrong fix.
+	# confirms it), so the arena corpus carries no "los_pairs" and this stays unset for
+	# it — _los_clear (battle_sim.gd:742) falls open ("clear") on an invalid Callable,
+	# matching the live arena. NML-1073 M3-0: core_selfplay's board DOES stamp a dynamic
+	# los_blocked, so its acts carry "los_pairs" (battle_sim.gd:1421-1439) — reconstruct
+	# an equivalent Callable from it.
+	if (plain_state.get("los_pairs", []) as Array).size() > 0:
+		state["los_blocked"] = _los_blocked_from_recorded(state, plain_state)
 
 	var statics: Dictionary = act.get("statics", {})
 	var playout_net: Dictionary = statics.get("playout_net", {})
@@ -207,6 +209,33 @@ func _check_act(act: Dictionary, header: Dictionary, profiles: Dictionary,
 	if los_hit[0]:
 		mism.append({"field": "los_at.called", "recorded": "net path inactive", "got": "called"})
 	return mism
+
+
+## NML-1073 M3-0: core_selfplay's dynamic los_blocked, rebuilt from the recorded
+## "los_pairs" root grid (row i/col j, "0"=blocked) — nearest-centre match, same
+## best-effort as _los_at_from_recorded below (a rollout moves units past the root).
+func _los_blocked_from_recorded(state: Dictionary, plain_state: Dictionary) -> Callable:
+	var keys: Array = (plain_state["units"] as Dictionary).keys()
+	var rows: Array = plain_state["los_pairs"]
+	var centres: Array = []
+	for k in keys:
+		centres.append(AiPlanner._centre(state["units"][str(k)]))
+	return func(pa: Vector3, pb: Vector3) -> bool:
+		var bi := 0
+		var bj := 0
+		var da := INF
+		var db := INF
+		for i in range(centres.size()):
+			var da2 := (centres[i] as Vector3).distance_squared_to(pa)
+			var db2 := (centres[i] as Vector3).distance_squared_to(pb)
+			if da2 < da:
+				da = da2
+				bi = i
+			if db2 < db:
+				db = db2
+				bj = i
+		var row := str(rows[bi]) if bi < rows.size() else ""
+		return bj < row.length() and row[bj] == "0"
 
 
 ## Only reached when statics.playout_net is non-empty (none of the sample
