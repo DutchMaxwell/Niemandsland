@@ -16,6 +16,7 @@
 //! promotes it, and all cost accumulation in f64.
 
 pub mod cost;
+pub mod flow;
 pub mod geom2;
 pub mod io;
 pub mod pull;
@@ -26,8 +27,12 @@ pub use cost::{
     cell_of, cspace_blocked, legs_cost, path_crosses_wall_opt, segment_cost, segment_cost_at,
     step_blocked, terrain_cost_at, CellSet, Grid, StepOpts, Wall, Zone,
 };
+pub use flow::{
+    centroid, flow_order, linked_r, plan_sequential_flow, pull_into_placed, recorded_endpoints,
+    untangle_endpoints, FlowBend, FlowOpts, FlowResult, FlowStep,
+};
 pub use geom2::{
-    add, distance_to, dot, length, length_squared, lerp, mul, normalized, orient,
+    add, distance_to, div, dot, length, length_squared, lerp, mul, normalized, orient,
     path_crosses_wall, point_seg_distance, polyline_length, seg_seg_distance, segments_cross, sub,
     to_f32, to_f64, trim_polyline, V2,
 };

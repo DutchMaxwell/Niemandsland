@@ -26,8 +26,11 @@
 //! `FlowEntry::pulled` and the determined set becomes the whole corpus — nothing
 //! else here changes.
 //!
-//! NOT COVERED AT ALL: `untangle_endpoints`' re-route searches (:1168) are not
-//! traced, so they are invisible to this replay.
+//! NOT COVERED AT ALL: `untangle_endpoints`' re-route searches (:1168) have no
+//! trace entry to hang off, so they are invisible to THIS replay — they sit in
+//! the tail of `trace.theta_searches` (86 lists over the 16-game corpus, after
+//! the 9 905 the flow's own entries align onto). M4-4's `mv::flow` runs the
+//! whole stage and therefore judges them too; see `tests/mv_flow.rs`.
 
 use super::cost::{StepOpts, Zone};
 use super::geom2::{add, distance_squared_to, distance_to, length, V2};
