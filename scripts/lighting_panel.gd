@@ -230,6 +230,33 @@ func _build_ui() -> void:
 		GraphicsSettings.apply_fullscreen(on))
 	vbox.add_child(fs_cb)
 
+	# Monitor (NML-1078 / GH #363): pick which screen the window opens/moves to. Only shown
+	# with more than one screen attached — nothing to choose between on a single monitor.
+	var screen_count := DisplayServer.get_screen_count()
+	if screen_count > 1:
+		var monitor_row := HBoxContainer.new()
+		monitor_row.add_theme_constant_override("separation", 8)
+		var monitor_lbl := Label.new()
+		monitor_lbl.text = "Monitor"
+		monitor_row.add_child(monitor_lbl)
+		var monitor_ob := OptionButton.new()
+		monitor_ob.add_item("Primary")
+		monitor_ob.set_item_id(0, -1)
+		for i in range(screen_count):
+			monitor_ob.add_item("Monitor %d" % (i + 1))
+			monitor_ob.set_item_id(monitor_ob.item_count - 1, i)
+		for i in range(monitor_ob.item_count):
+			if monitor_ob.get_item_id(i) == GraphicsSettings.screen_index:
+				monitor_ob.select(i)
+				break
+		monitor_ob.item_selected.connect(func(index: int) -> void:
+			var value := monitor_ob.get_item_id(index)
+			GraphicsSettings.screen_index = value
+			GraphicsSettings.apply_screen(value)
+			GraphicsSettings.save_settings())
+		monitor_row.add_child(monitor_ob)
+		vbox.add_child(monitor_row)
+
 	# Show Move Trails (path painting): the discoverable twin of the T hotkey. Persisted
 	# via GraphicsSettings; also pushed to the live MoveTrails node so it toggles at once.
 	# The move LEDGER keeps recording regardless — only the visible chalk is switched.
