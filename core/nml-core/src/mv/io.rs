@@ -6,6 +6,13 @@
 //!
 //! The JSON carries f64 numbers; every position is an exactly-representable f32
 //! (the recorder flattened Godot `Vector2`s), so the narrowing here is lossless.
+//!
+//! FORWARD COMPATIBILITY. No struct here uses `deny_unknown_fields`, and every
+//! field the recorder may not write yet is `#[serde(default)]` or `Option<>`.
+//! A trace v2 line carrying extra keys (per-node `g`, the parent index, the
+//! open-list size per pop, the post-pull endpoint, the walk's spent arc) loads
+//! unchanged through this loader; the only one it already READS is `pulled`
+//! (see `FlowEntry`), which widens the M4-2 gate's determined set on its own.
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -231,6 +238,11 @@ pub struct PlainFlowEntry {
     taut: Vec<[f64; 2]>,
     walked: Vec<[f64; 2]>,
     deferred: bool,
+    /// trace v2, optional: the endpoint AFTER `_pull_into_placed`
+    /// (movement_planner.gd:1141-1144), which trace v1 could not see because
+    /// `trace_model` fires before the pull.
+    #[serde(default)]
+    pulled: Option<[f64; 2]>,
 }
 
 #[derive(Clone, Debug)]
@@ -244,6 +256,8 @@ pub struct FlowEntry {
     pub walked: Vec<V2>,
     /// This attempt sent the model to the back of the queue (movement_planner.gd:1138).
     pub deferred: bool,
+    /// trace v2 only — `None` on a v1 line. See `PlainFlowEntry::pulled`.
+    pub pulled: Option<V2>,
 }
 
 /// One `MoveRecorder.trace_solve_pass` entry — move_recorder.gd:208.
@@ -426,6 +440,7 @@ fn call_of(pc: PlainCall, header: &MoveHeader, path: &str, ln: usize) -> Result<
                 taut: f.taut.into_iter().map(v2).collect(),
                 walked: f.walked.into_iter().map(v2).collect(),
                 deferred: f.deferred,
+                pulled: f.pulled.map(v2),
             })
             .collect(),
         untangle_swaps: pc.trace.untangle_swaps,
@@ -470,7 +485,6 @@ impl MoveCall {
 
     /// `MovementPlanner.board_extents` — movement_planner.gd:471.
     pub fn board(&self) -> V2 {
-        let by = self.opts.board_y_in;
-        to_f32([self.board_in, if by > super::EPS { by } else { self.board_in }])
+        super::theta::board_extents(self.board_in, self.opts.board_y_in)
     }
 }

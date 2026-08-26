@@ -18,6 +18,8 @@
 pub mod cost;
 pub mod geom2;
 pub mod io;
+pub mod replay;
+pub mod theta;
 
 pub use cost::{
     cell_of, cspace_blocked, legs_cost, path_crosses_wall_opt, segment_cost, segment_cost_at,
@@ -30,6 +32,11 @@ pub use geom2::{
 };
 pub use io::{load_moves, read_moves, CallOpts, Constants, FlowEntry, MoveCall, MoveCorpus,
     MoveHeader, SolvePass, Trace};
+pub use replay::{searches, ReplaySearch};
+pub use theta::{
+    board_extents, cell_before, cell_center_fine, theta_reconstruct, theta_star, theta_star_b,
+    theta_star_bent, Cell, ThetaBend, ThetaCfg, ThetaOpts,
+};
 
 // === movement_planner.gd constants (:25-90) ===============================
 
