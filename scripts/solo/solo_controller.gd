@@ -192,6 +192,9 @@ var _round_first_slot: Dictionary = {}    # D-wave: round -> slot that activated
 ## presentation glides each model individually in the order it filed to its slot. Empty for a regiment / a
 ## move that produced no plan.
 var last_flow_order: Array = []
+## NML-1073 M4-0a: bumped once per _planner_pick_unit activation — MoveRecorder's "act" field, so a
+## corpus reader can group the several plan_unit_step calls (rungs) one activation's move can produce.
+var _move_act_seq := 0
 ## Move budget (inches) actually granted to the last AI move (band, difficult-capped when the route
 ## entered difficult terrain) — the denominator of the corridor's distance label.
 var last_move_budget_in: float = 0.0
@@ -3008,6 +3011,7 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	# activation contract. Unset (default) = begin() returns {} and finish()
 	# no-ops: byte-identical pick either way.
 	var act_rec := AiActRecorder.begin(state, me, pool, terrain_type_at)
+	_move_act_seq += 1   # NML-1073 M4-0a: this activation's ordinal, for MoveRecorder's "act" field
 	var pick := {}
 	var seam_leaf := {}
 	var doct := OS.get_environment("NML_OPENER_DOCTRINE")
@@ -6055,10 +6059,19 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 			return (hit["planned"] as Array).duplicate(true)
 	# NML-1072: real-move pathfinding (C-space/Theta*/funnel) — the LIVE
 	# activation's execution, distinct from the imagined rollout's resolve().
+	# NML-1073 M4-0a: env NML_MOVE_DUMP=<dir> records this call's FULL input + the plan it returns
+	# (moves_calls.jsonl) — the Rust port's per-plan-call contract. Unset (default) = begin() returns
+	# {} and finish() no-ops: byte-identical plan either way.
+	var mrec := MoveRecorder.begin({"unit": unit.get_name(), "act": _move_act_seq, "round": _current_round(),
+		"rung": "reach_in=%.4f avoid_difficult=%s avoid_dangerous=%s allow_contact=%s" % [
+			charge_arc_in, avoid_difficult, avoid_dangerous, allow_contact],
+		"model_pos": mpos, "delta": mdelta, "walls": walls_in, "grid": sampled["grid"],
+		"allow_contact": allow_contact, "board_in": board_in, "opts": opts, "terrain_cb": terrain_type_at})
 	var _prof_mv_t0 := BattleSim.prof_t0()
 	var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, sampled["grid"],
 		allow_contact, board_in, plan_trails, opts)
 	BattleSim.prof_mark("move", _prof_mv_t0)
+	MoveRecorder.finish(mrec, planned, plan_trails, opts)
 	if prewarm_enabled and not plan_key.is_empty():
 		_plan_cache_store(plan_key, planned, plan_trails, opts.get("flow_order", []))
 	# The sequential per-model flow (finding 7) writes back the order its models filed to their slots, so the

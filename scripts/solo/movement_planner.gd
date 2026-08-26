@@ -64,6 +64,9 @@ const FAST_PLANNER_GUARD := 320
 ## AROUND obstacles/Dangerous terrain instead of reach_closest returning a straight-through route (field
 ## report: a unit walked into Dangerous terrain toward its goal instead of routing around it).
 static var fast_planner_guard: int = FAST_PLANNER_GUARD
+## NML-1073 M4-0a: armed by MoveRecorder.begin() when NML_MOVE_TRACE=1 is set alongside NML_MOVE_DUMP —
+## every trace_* call below is gated on this ONE bool so the hot path stays zero-cost when off.
+static var trace_on := false
 const DIFFICULT_COST_MULT := 2.0            # Theta* soft cost: route AROUND Difficult when cheaper (research §1.3/3.3)
 const DANGEROUS_COST_MULT := 6.0            # Dangerous DEALS DAMAGE — avoid it hard (route around unless the detour is >6x)
 const THETA_DIAG := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
@@ -1115,6 +1118,8 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 			if ctaut.is_empty() or (ctaut.back() as Vector2).distance_to(goal_pt) > EPS:
 				ctaut.append(goal_pt)
 			var cleg := _walk_offset(model_pos[idx], ctaut, Vector2.ZERO, allowance, walls, grid, woi, board)
+			if trace_on:
+				MoveRecorder.trace_model(idx, croute, ctaut, cleg, false)
 			result[idx] = cleg.back()
 			placed.append(idx)
 			if trails != null and idx < trails.size():
@@ -1129,8 +1134,11 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 		# still wait — try it again LAST, when the vacated ground and the advanced placed set give it both a
 		# clearer route and a FORWARD coherency pull. Each model defers at most once (deterministic, bounded).
 		var intended: float = minf(allowance, (model_pos[idx] as Vector2).distance_to(slot))
-		if not queue.is_empty() and not deferred.has(idx) and intended > STEP_IN \
-				and (model_pos[idx] as Vector2).distance_to(final_pt) < intended * STUCK_FRACTION:
+		var will_defer: bool = not queue.is_empty() and not deferred.has(idx) and intended > STEP_IN \
+				and (model_pos[idx] as Vector2).distance_to(final_pt) < intended * STUCK_FRACTION
+		if trace_on:
+			MoveRecorder.trace_model(idx, route, taut, leg, will_defer)
+		if will_defer:
 			deferred[idx] = true
 			queue.push_back(idx)
 			continue
@@ -1199,6 +1207,8 @@ static func untangle_endpoints(model_pos: Array, result: Array, radii: Array, al
 					result[j] = ei
 					improved = true
 					any = true
+					if trace_on:
+						MoveRecorder.trace_swap(i, j)
 		if not improved:
 			break
 	return any
@@ -1589,6 +1599,8 @@ static func solve_formation(desired: Array, radii: Array, walls: Array,
 		if not allow_contact:
 			_project_coherency(out, radii, walls, opts, board)
 		var s := _formation_score(out, radii, forbid, zones)
+		if trace_on:
+			MoveRecorder.trace_solve_pass(_pass, out, s)
 		if s < best_score - EPS:
 			best_score = s
 			best = out.duplicate()
