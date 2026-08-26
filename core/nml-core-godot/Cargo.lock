@@ -141,6 +141,7 @@ version = "0.1.0"
 dependencies = [
  "godot",
  "nml-core",
+ "serde_json",
 ]
 
 [[package]]

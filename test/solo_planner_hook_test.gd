@@ -149,3 +149,42 @@ func test_rollout_intent_is_executed_not_rederived() -> void:
 	var again := sc._solve_planner(striker)
 	if bool(again.get("used", false)):
 		assert_str(str(again["why"])).not_contains("kept back")
+
+
+## NML-1073 M2-5 (R1 + R2): the SEARCH SEAM is never load-bearing.
+## R2 — without NML_CORE=1 BattleSim.core_enabled() is false, _planner_pick_unit
+## never touches _core_plan (the NmlCore node stays null) and the pick is the
+## GDScript one this suite already pins.
+## R1 — the seam's own decline log is one line per REASON per game, so a corpus
+## of 200 activations that all decline for the same reason says so ONCE.
+func test_core_seam_stays_off_and_declines_once_per_reason() -> void:
+	var want := OS.get_environment("NML_CORE") == "1"
+	assert_bool(BattleSim.core_enabled()).is_equal(want and ClassDB.class_exists("NmlCore"))
+	var sc := _controller()
+	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
+	var taker: GameUnit = sc.army_manager.game_units["Taker"]
+	assert_object(sc._select_ai_unit([taker])).is_same(taker)
+	if not BattleSim.core_enabled():
+		assert_bool(sc._core_node == null).is_true()
+		assert_int(sc._core_calls).is_equal(0)
+	sc._core_warn_once("NetPlayout")
+	sc._core_warn_once("NetPlayout")
+	sc._core_warn_once("FittedEval")
+	assert_int(sc._core_declines.size()).is_equal(2)
+
+
+## The seam only ever ADDS a source for the pick: whatever it answers, the
+## dictionary the controller goes on to consume has the same keys the GDScript
+## search returns, so _solve_planner and the decision records cannot tell them
+## apart. Pinned on the GDScript answer, which is the shape both must have.
+func test_planner_pick_keeps_its_dictionary_shape() -> void:
+	var sc := _controller()
+	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
+	var state := BattleSim.capture(sc.army_manager, sc.objectives_provider,
+		sc.objective_owner_of, 1, 4)
+	var pick := AiPlanner.plan_with_rollout(state, 2)
+	AiPlanner.close()
+	for k in ["used", "unit_key", "action", "intent", "expectation", "runner_up",
+			"waits", "rolled_units"]:
+		assert_bool(pick.has(k)).override_failure_message("pick is missing " + k).is_true()
+	assert_str(str(pick["intent"])).contains("round played out")

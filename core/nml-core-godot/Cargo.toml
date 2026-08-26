@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 godot = { version = "0.5.5", features = ["api-4-6"] }
+serde_json = "1"
 nml-core = { path = "../nml-core" }
 
 [profile.release]

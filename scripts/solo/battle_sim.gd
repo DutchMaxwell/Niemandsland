@@ -1440,6 +1440,52 @@ static func state_to_plain(state: Dictionary, with_profile := true) -> Dictionar
 	return out
 
 
+## NML-1073 M2-5: the inverse of state_to_plain(state, false) — a plain state
+## (the Rust core's `leaf_state`) back as a LIVE BattleSim state, every unit key
+## resolved to the GameUnit the army manager holds. Its ONE consumer is the leaf
+## DECISION RECORD (solo_controller.gd:3049-3057): AiMissionEval.features and
+## BattleSim.reply_threat both reach the unit through su["unit"], which is the
+## whole reason a plain dictionary cannot serve as the leaf on its own.
+## Keys the plain form does not carry stay absent here too — the Callables
+## (los_blocked is never stamped by capture(), so _los_clear answers "clear" on
+## both paths) and dormant_models/dormant_wounds, which nothing on this path
+## reads (capture() writes them, no consumer in scripts/solo does).
+static func state_from_plain(plain: Dictionary, army: OPRArmyManager) -> Dictionary:
+	var units := {}
+	for uid in (plain.get("units", {}) as Dictionary):
+		var pu: Dictionary = (plain["units"] as Dictionary)[uid]
+		var su: Dictionary = pu.duplicate(true)
+		su["positions"] = _vec3s_of(pu.get("positions", []))
+		su["unit"] = (army.game_units as Dictionary).get(str(uid)) if army != null else null
+		units[str(uid)] = su
+	var out := {"round": int(plain.get("round", 0)),
+		"rounds_total": int(plain.get("rounds_total", 0)),
+		"units": units, "scoring": str(plain.get("scoring", ""))}
+	var obj: Array = []
+	for o in (plain.get("objectives", []) as Array):
+		obj.append({"pos": _vec3_of((o as Dictionary).get("pos", [])),
+			"owner": int((o as Dictionary).get("owner", 0))})
+	out["objectives"] = obj
+	for k in ["vp", "vp_flavour", "vp_memo", "markers_meta", "destroy_seq"]:
+		if plain.has(k):
+			out[k] = plain[k]
+	return out
+
+
+static func _vec3_of(a: Variant) -> Vector3:
+	var arr: Array = a as Array if a is Array else []
+	return Vector3(float(arr[0]) if arr.size() > 0 else 0.0,
+		float(arr[1]) if arr.size() > 1 else 0.0,
+		float(arr[2]) if arr.size() > 2 else 0.0)
+
+
+static func _vec3s_of(a: Array) -> Array:
+	var out: Array = []
+	for v in a:
+		out.append(_vec3_of(v))
+	return out
+
+
 static func _plain_vec3(v: Vector3) -> Array:
 	return [v.x, v.y, v.z]
 

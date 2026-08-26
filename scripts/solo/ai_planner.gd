@@ -270,9 +270,20 @@ static func plan_with_rollout(state: Dictionary, player: int,
 				and int(su["alive"]) > 0 and str(key) != str(best["unit_key"]):
 			waits += 1
 	return {"used": true, "unit_key": best["unit_key"], "action": best["action"],
-		"intent": _intent(state, best, runner, base) + " (round played out; %d own kept back)" % waits + playout_note,
+		"intent": intent_line(state, best, runner, base, waits, playout_note),
 		"expectation": {"before": base, "after": float(best["score"])},
 		"runner_up": runner, "waits": waits, "rolled_units": covered.keys()}
+
+
+## NML-1073 M2-5: the pick's battle-log sentence, factored out of the return
+## above so the SEARCH SEAM (SoloController._core_plan) composes the SAME text
+## from the Rust core's answer instead of a second copy of this concatenation.
+## `best`/`runner` are the search's own {unit_key, action, score} records —
+## `runner` empty when the pool held a single candidate.
+static func intent_line(state: Dictionary, best: Dictionary, runner: Dictionary,
+		base: float, waits: int, playout_note: String) -> String:
+	return _intent(state, best, runner, base) \
+		+ " (round played out; %d own kept back)" % waits + playout_note
 
 
 const ROLLOUT_HORIZON_ROUNDS := 2   # R6: a move's price only shows NEXT round — round 1 alone is a movement round

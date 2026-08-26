@@ -238,7 +238,7 @@ func _stamp_knobs(k: Dictionary) -> void:
 	BattleSim._spacing_env = -1
 
 
-func _compare_pick(rec: Dictionary, got: Dictionary, mism: Array) -> void:
+static func _compare_pick(rec: Dictionary, got: Dictionary, mism: Array) -> void:
 	_eq(mism, "pick.used", rec.get("used", false), got.get("used", false), "b")
 	if not bool(rec.get("used", false)):
 		return
@@ -265,7 +265,7 @@ func _compare_pick(rec: Dictionary, got: Dictionary, mism: Array) -> void:
 		mism.append({"field": "pick.rolled_units", "recorded": rec.get("rolled_units"), "got": got.get("rolled_units")})
 
 
-func _compare_action(rec: Dictionary, got: Dictionary, mism: Array, prefix: String) -> void:
+static func _compare_action(rec: Dictionary, got: Dictionary, mism: Array, prefix: String) -> void:
 	_eq(mism, prefix + ".kind", rec.get("kind", -1), got.get("kind", -1), "i")
 	_eq(mism, prefix + ".unit", rec.get("unit", ""), got.get("unit", ""), "s")
 	if rec.has("dest") or got.has("dest"):
@@ -279,7 +279,7 @@ func _compare_action(rec: Dictionary, got: Dictionary, mism: Array, prefix: Stri
 	_eq(mism, prefix + ".patient", rec.get("patient", false), got.get("patient", false), "b")
 
 
-func _compare_trace(rec: Dictionary, got: Dictionary, mism: Array) -> void:
+static func _compare_trace(rec: Dictionary, got: Dictionary, mism: Array) -> void:
 	if rec.is_empty() and got.is_empty():
 		return
 	var rsc: Array = rec.get("scored", [])
@@ -328,9 +328,11 @@ func _compare_trace(rec: Dictionary, got: Dictionary, mism: Array) -> void:
 		_eq(mism, "trace.arbitration.swapped", rad.get("swapped", false), gad.get("swapped", false), "b")
 
 
+## NML-1073 M2-5: the four comparators below are STATIC so tools/act_core_check.gd
+## (the same diff against the RUST search) reuses them instead of copying them.
 ## kind: "i" int, "s" string, "b" bool, "f" float (EPS tolerance) — JSON round-
 ## trips ints as floats, so every recorded value is coerced before comparing.
-func _eq(mism: Array, field: String, rec: Variant, got: Variant, kind: String) -> void:
+static func _eq(mism: Array, field: String, rec: Variant, got: Variant, kind: String) -> void:
 	var bad := true
 	match kind:
 		"i": bad = int(rec) != int(got)
