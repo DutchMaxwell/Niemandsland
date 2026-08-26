@@ -478,17 +478,32 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Double-click handling: select the WHOLE unit under the cursor in one click (issue #81) — no box
 ## drag or radial "select all" needed. A regiment is selected as its movement tray (it moves as one
 ## block); a loose unit selects all its model nodes; a non-unit object falls back to a normal click.
+##
+## GH #364 / NML-1079 — "half my clicks are being ignored". The DisplayServer flags the SECOND press
+## of any pair that lands on the same spot inside the double-click window (~400 ms X11 / the OS
+## setting on Windows) and then clears its state, so a stream of clicks is flagged
+## single/double/single/double: exactly every second one arrives here instead of at
+## _try_select_at_mouse(). This branch therefore has to WIDEN a click, never swallow one — measured
+## 5/10 before (test/e2e/e2e_click_drop_test.gd):
+##   - a flagged press over open table returned after _deselect_all(), so no rubber band ever began;
+##   - a flagged press on a unit selected it but never called _start_dragging(), so the model could
+##     not be picked up.
+## Both now do what the unflagged press does. The #81 feature itself is untouched: a flagged press on
+## a multi-model unit still selects the whole unit.
 func _try_select_unit_at_mouse(screen_pos: Vector2) -> void:
 	if not selection_enabled:
 		return
 	var obj := _get_object_at_position(screen_pos)
 	if obj == null:
-		_deselect_all()
+		# Nothing to widen — behave exactly like a normal click (trail proof + rubber band).
+		# _start_box_selection() clears the selection itself, so the old _deselect_all() is kept.
+		_try_select_at_mouse(screen_pos, false)
 		return
 	var tray := _regiment_tray_of(obj)
 	if tray != null:
 		_deselect_all()
 		_add_to_selection(tray)
+		_start_dragging(screen_pos)
 		return
 	var models := UnitUtils.get_combined_unit_models(obj)  # unit + attached heroes (#81)
 	# J6: a select action yields ONLY the type (alive/dead) of the model it started on — double-clicking
@@ -505,6 +520,7 @@ func _try_select_unit_at_mouse(screen_pos: Vector2) -> void:
 	_deselect_all()
 	for m in typed:
 		_add_to_selection(m)
+	_start_dragging(screen_pos)   # #364: a widened selection is still a grab — the unit must move
 
 
 func _try_select_at_mouse(screen_pos: Vector2, alt_pressed: bool = false) -> void:
