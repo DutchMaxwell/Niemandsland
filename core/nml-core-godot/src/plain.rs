@@ -23,7 +23,7 @@ use nml_core::{Marker, Mods, Objective, Profile, Profiles, State, Weapon};
 /// writes, minus the two this port does not model (see `DROPPED`). Bit `i` of a
 /// capture mask says "the plain form carried key `i`", so `plain_of` writes back
 /// exactly the key set that came in — `state_to_plain` is `if su.has(k)` too.
-pub const UNIT_KEYS: [&str; 17] = [
+pub const UNIT_KEYS: [&str; 19] = [
     "alive",
     "wounds",
     "radii",
@@ -41,6 +41,10 @@ pub const UNIT_KEYS: [&str; 17] = [
     "dormant",
     "earliest_arrival_round",
     "wound_frac",
+    // NML-1073 S1: appended, never inserted — a mask bit is a POSITION, so an
+    // insert would rename every key above it (battle_sim.gd:1353-1354 appends too).
+    "attached",
+    "attached_to",
 ];
 
 /// Keys of `_UNIT_DYNAMIC` the Rust state does not carry. Reported by
@@ -313,12 +317,17 @@ pub fn build_state(
         radii: Vec::with_capacity(n),
         mods: Vec::with_capacity(n),
         mods_base: Vec::with_capacity(n),
+        attached: Rc::new(Vec::new()),
+        attached_to: Rc::new(Vec::new()),
         los: Vec::with_capacity(n),
         los_pairs,
     };
     let mut mask: Vec<u32> = Vec::with_capacity(n);
     let mut has_los = false;
     let mut dropped: Vec<String> = Vec::new();
+    // The attachment keys only resolve once every unit key is known.
+    let mut attached_keys: Vec<Vec<String>> = Vec::with_capacity(n);
+    let mut host_keys: Vec<String> = Vec::with_capacity(n);
     for key in roster.keys.iter() {
         let u = units
             .get(key.as_str())
@@ -354,6 +363,8 @@ pub fn build_state(
         st.radii.push(darr(&u, "radii").iter_shared().map(|v| num(&v)).collect());
         st.mods.push(mods_of(&ddict(&u, "mods")));
         st.mods_base.push(Rc::new(mods_of(&ddict(&u, "mods_base"))));
+        attached_keys.push(strings(&darr(&u, "attached")));
+        host_keys.push(dtext(&u, "attached_to"));
         match u.get("los").and_then(|v| v.try_to::<VarDictionary>().ok()) {
             Some(m) => {
                 has_los = true;
@@ -368,6 +379,18 @@ pub fn build_state(
             None => st.los.push(None),
         }
     }
+    // A key the roster does not carry is dropped — `_unit_group` (battle_sim.gd:
+    // 528-547) puts it in its key set too, but the obstacle walk over
+    // `next["units"]` can never match it. `plain_of` therefore writes back the
+    // keys it could resolve; an unresolvable one does not survive the round trip.
+    st.attached = Rc::new(
+        attached_keys
+            .iter()
+            .map(|ks| ks.iter().filter_map(|k| roster.index.get(k.as_str()).copied()).collect())
+            .collect(),
+    );
+    st.attached_to =
+        Rc::new(host_keys.iter().map(|k| roster.index.get(k.as_str()).copied()).collect());
     Ok(Captured { state: st, extras, mask, has_los, dropped })
 }
 
@@ -461,6 +484,17 @@ pub fn plain_of(cap: &Captured) -> VarDictionary {
         }
         if has("earliest_arrival_round") {
             u.set("earliest_arrival_round", st.earliest_arrival_round[i]);
+        }
+        if has("attached") {
+            let mut a = VarArray::new();
+            for &h in &st.attached[i] {
+                a.push(&GString::from(st.key(h)).to_variant());
+            }
+            u.set("attached", &a);
+        }
+        if has("attached_to") {
+            let host = st.attached_to[i].map(|h| st.key(h)).unwrap_or("");
+            u.set("attached_to", &GString::from(host));
         }
         // `_apply_expected_wounds` (battle_sim.gd:1050-1059) CREATES the key on
         // the target the first time a volley lands, so a state that had none can

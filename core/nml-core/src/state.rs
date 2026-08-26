@@ -205,6 +205,17 @@ pub struct State {
     pub radii: Vec<Vec<f64>>,
     pub mods: Vec<Mods>,
     pub mods_base: Vec<Rc<Mods>>,
+    /// `capture()`'s attachment keys resolved to ROSTER indices — battle_sim.gd:
+    /// 1249-1258 stamps `attached` (a unit's attached heroes' snapshot keys, in
+    /// capture order) and `attached_to` (its host's key, "" for none).
+    /// `_unit_group` (battle_sim.gd:528-547) reads them and nothing ever writes
+    /// them, so `clone_state` shares the reference (battle_sim.gd:490-494) and an
+    /// `Rc` bump is the whole copy here. A key the roster does not carry is
+    /// dropped: the GDScript puts it in the key set too, but the obstacle loop
+    /// walks `next["units"]` and can never match it. Empty/None on a corpus
+    /// recorded before NML-1073 S1.
+    pub attached: Rc<Vec<Vec<usize>>>,
+    pub attached_to: Rc<Vec<Option<usize>>>,
     pub los: Vec<Option<Rc<HashMap<String, bool>>>>,
     /// `BattleSim._los_clear` (battle_sim.gd:666-670) answers for this state, as
     /// a row-major n x n matrix in capture order: `los_pairs[i * n + j]` is true

@@ -270,12 +270,17 @@ impl NmlCore {
 
     fn seams_now(&mut self) -> Seams {
         if self.seams.is_none() {
-            // battle_sim.gd:25-42 — "1" or "on", anything else is off.
+            // battle_sim.gd:38-43 — cast: "1"/"on", anything else is off.
             let on = |k: &str| {
                 matches!(std::env::var(k).unwrap_or_default().as_str(), "1" | "on")
             };
+            // battle_sim.gd:26-31 — spacing (NML-1073 S3): default ON, "0"/"off"
+            // (case-insensitive) opts out.
+            let spacing_off = |k: &str| {
+                matches!(std::env::var(k).unwrap_or_default().to_lowercase().as_str(), "0" | "off")
+            };
             self.seams = Some(Seams {
-                spacing: on("NML_SIM_SPACING"),
+                spacing: !spacing_off("NML_SIM_SPACING"),
                 cast: on("NML_SIM_CAST"),
             });
         }

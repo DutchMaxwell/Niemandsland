@@ -81,7 +81,7 @@ pub fn centre(ps: &[[f64; 3]]) -> V3 {
     div(c, ps.len() as f64)
 }
 
-/// `BattleSim.dist_in` battle_sim.gd:690-695 — nearest MODEL-to-model gap of two
+/// `BattleSim.dist_in` battle_sim.gd:758-764 — nearest MODEL-to-model gap of two
 /// snapshot position arrays in inches. `minf` is an f64 min over f32 lengths,
 /// and the division by `IN2M` is the one f64 step.
 pub fn dist_in(a: &[[f64; 3]], b: &[[f64; 3]]) -> f64 {
@@ -92,6 +92,40 @@ pub fn dist_in(a: &[[f64; 3]], b: &[[f64; 3]]) -> f64 {
             let d = length(sub(pa, to_f32(*pb))) as f64;
             if d < best {
                 best = d;
+            }
+        }
+    }
+    best / IN2M
+}
+
+/// `BattleSim.edge_gap_in` battle_sim.gd:766-785 — nearest BASE-EDGE gap of two
+/// snapshot position arrays in inches: min over all model pairs of (HORIZONTAL
+/// centre distance - r_a - r_b), a radii array shorter than its positions
+/// falling back to `default_radius` per missing entry. Negative = the bases
+/// already overlap; either array empty -> INFINITY, same as `dist_in`.
+///
+/// Precision path, identical to the spacing clamp's own probe: the x/z
+/// difference and `Vector3(...).length()` run in f32 (the engine's `real_t`),
+/// and only the radius subtraction and the division by `IN2M` widen — a Variant
+/// float is f64 the moment the length leaves the `Vector3`.
+pub fn edge_gap_in(
+    a_pos: &[[f64; 3]],
+    a_radii: &[f64],
+    b_pos: &[[f64; 3]],
+    b_radii: &[f64],
+    default_radius: f64,
+) -> f64 {
+    let mut best = f64::INFINITY;
+    for (ai, pa) in a_pos.iter().enumerate() {
+        let pa = to_f32(*pa);
+        let ra = a_radii.get(ai).copied().unwrap_or(default_radius);
+        for (bi, pb) in b_pos.iter().enumerate() {
+            let pb = to_f32(*pb);
+            let rb = b_radii.get(bi).copied().unwrap_or(default_radius);
+            let flat: V3 = [pa[0] - pb[0], 0.0, pa[2] - pb[2]];
+            let gap = length(flat) as f64 - ra - rb;
+            if gap < best {
+                best = gap;
             }
         }
     }

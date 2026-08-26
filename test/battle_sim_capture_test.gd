@@ -186,3 +186,33 @@ func test_capture_marks_reserve_units_dormant() -> void:
 	var t: Dictionary = state["units"]["Tank"]
 	assert_bool(t.get("dormant", false)).is_false()
 	assert_int(t["alive"]).is_equal(1)
+
+
+func _opr_source(selection_id: String, join_to_unit: String) -> OPRApiClient.OPRUnit:
+	var opr := OPRApiClient.OPRUnit.new()
+	opr.selection_id = selection_id
+	opr.join_to_unit = join_to_unit
+	return opr
+
+
+## NML-1081: an imported/AI army never calls EquipmentDistributor.attach_hero_to_unit
+## (MP-only), so runtime attached/attached_to are always empty — capture must fall back
+## to the list's join_to_unit/selectionId. Hero captured BEFORE its host on purpose.
+func test_capture_links_a_joined_hero_by_join_to_unit_when_runtime_attachment_is_empty() -> void:
+	var hero := _unit(1, [Vector3(1.0 * IN2M, 0, 0)], "Hero")
+	hero.source_type = "opr"
+	hero.source_data = _opr_source("HeroSel", "H1")
+	var host := _unit(1, [Vector3.ZERO], "Host")
+	host.source_type = "opr"
+	host.source_data = _opr_source("H1", "")
+	var control := _unit(1, [Vector3(2.0 * IN2M, 0, 0)], "Control")
+	control.source_type = "opr"
+	control.source_data = _opr_source("C1", "")
+	var state := BattleSim.capture(_army([hero, host, control]))
+	var h: Dictionary = state["units"]["Hero"]
+	assert_str(str(h["attached_to"])).is_equal("Host")
+	var o: Dictionary = state["units"]["Host"]
+	assert_array(o["attached"]).is_equal(["Hero"])
+	var c: Dictionary = state["units"]["Control"]
+	assert_str(str(c["attached_to"])).is_equal("")
+	assert_array(c["attached"]).is_equal([])

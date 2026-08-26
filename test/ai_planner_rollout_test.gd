@@ -265,14 +265,28 @@ func test_policy_candidates_include_the_patient_advance() -> void:
 
 ## The patient candidate must SURVIVE the 1-ply prefilter (same lesson as the
 ## bait coverage): rushing at the brute's marker ends inside its charge reach
-## and gets mauled in the playout; the clamped advance stays uncharged. With
+## and gets mauled in the playout; the patient advance stays uncharged. With
 ## top_k=1 the rush wins 1-ply — only a pool guarantee lets patience win the
-## blend.
+## blend. Fixup2 review (doc-only): the repaired fixture's patient move lands
+## at ~14.51", clear of the reach, so it does not clamp -- coverage of
+## _safe_advance's own clamping is not exercised here since S1b (a clamped
+## landing on the 0.5" grid always lands in (13.0", 13.5"], never clear of
+## the 13.51" reach).
 func test_patient_advance_survives_the_prefilter_and_wins() -> void:
 	var brute := _armed(1, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)],
 		"Brute", [{"name": "Claws", "range": 0, "attacks": 12}])
-	var squad := _armed(2, [Vector3(17.2 * IN2M, 0, 0), Vector3(18.2 * IN2M, 0, 0),
-		Vector3(19.2 * IN2M, 0, 0), Vector3(20.2 * IN2M, 0, 0)],
+	# NML-1073 S1b repair: _safe_advance's own threat ESTIMATE is untouched (band
+	# 12" + BattleSim.CONTACT_IN 1.0" = 13.0"), but resolve()'s corrected melee
+	# trigger needs band + radii_sum (1.26", two 32mm bases) + CHARGE_CONTACT_
+	# MARGIN_IN (0.25") = 13.51" to actually land a charge -- 0.51" farther than
+	# the old flat estimate. The OLD fixture (17.2..20.2") left the patient move
+	# only 0.2" past the OLD 13.0" estimate (13.2" landed gap) -- inside the NEW
+	# 13.51" true reach, so the playout mauled the "safe" candidate too. Moved
+	# 5.31" farther out so the patient's full 6" advance (still governed by the
+	# unchanged 13.0" estimate, comfortably inside its own "stays safe the whole
+	# advance" regime) lands at ~14.51" -- ~1.0" clear of the new 13.51" reach.
+	var squad := _armed(2, [Vector3(22.51 * IN2M, 0, 0), Vector3(23.51 * IN2M, 0, 0),
+		Vector3(24.51 * IN2M, 0, 0), Vector3(25.51 * IN2M, 0, 0)],
 		"Squad", [{"name": "CCW", "range": 0}])
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
 	army.game_units = {"Brute": brute, "Squad": squad}
@@ -387,6 +401,35 @@ func test_charge_illegal_callable_filters_the_menu() -> void:
 	var kinds_gated: Array = AiPlanner.candidates(state, akey).map(
 		func(c: Dictionary) -> int: return int(c["kind"]))
 	assert_bool(kinds_gated.has(AiDecision.Action.CHARGE)).is_false()
+
+
+## NML-1073 S1b: the charge-candidate gate's `gap_in` argument must be the
+## table's EDGE gap (radii-aware), not centre distance minus the flat
+## BattleSim.CONTACT_IN (1.0") slack — only right for ~25 mm bases. Two 50 mm
+## bases (radius 0.025 m) 12.5" apart edge-to-edge sit at a 14.47" centre
+## distance; the OLD gate received 13.47" (dist - 1.0), the NEW gate receives
+## 12.25" (edge_gap - CHARGE_CONTACT_MARGIN_IN) — RED pre-fix (captured value
+## is 13.47), GREEN post-fix.
+func test_charge_gate_receives_the_base_edge_gap_not_centre_distance() -> void:
+	var a := _armed(1, [Vector3.ZERO], "Brawler", [{"name": "CCW", "range": 0}])
+	var b := _armed(2, [Vector3(14.468504 * IN2M, 0, 0)], "Victim", [{"name": "CCW", "range": 0}])
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Brawler": a, "Victim": b}
+	var state := BattleSim.capture(army, func() -> Array: return [],
+		func(_i: int) -> int: return 0, 1, 4)
+	(state["units"]["Brawler"] as Dictionary)["radii"] = [0.025]
+	(state["units"]["Victim"] as Dictionary)["radii"] = [0.025]
+	var akey := ""
+	for k in state["units"]:
+		if (state["units"][k] as Dictionary)["unit"] == a:
+			akey = str(k)
+	var seen_gap := [-1.0]   # Array: a lambda captures an outer scalar BY VALUE, not by reference
+	state["charge_illegal"] = func(_u: GameUnit, _t: GameUnit, gap: float,
+			_from: Vector3, _to: Vector3) -> bool:
+		seen_gap[0] = gap
+		return false
+	AiPlanner.candidates(state, akey)
+	assert_float(seen_gap[0]).is_equal_approx(12.25, 0.01)
 
 
 func test_net_guided_playout_picks_within_the_menu_and_is_deterministic() -> void:

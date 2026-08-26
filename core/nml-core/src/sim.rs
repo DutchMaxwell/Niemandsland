@@ -21,8 +21,15 @@ use crate::state::State;
 use crate::unit::{Ctx, UnitStatic};
 use crate::{CONTROL_EPS, IN2M};
 
-/// `BattleSim.CONTACT_IN` battle_sim.gd:655 — the charge's contact ring.
+/// `BattleSim.CONTACT_IN` battle_sim.gd:725 — the charge's contact ring. No
+/// longer the melee trigger (NML-1073 S1b moved that to the base-EDGE gap);
+/// kept because the constant itself is unchanged and other GDScript callers
+/// still read it.
 pub const CONTACT_IN: f64 = 1.0;
+/// `SoloController.CHARGE_CONTACT_MARGIN_IN` solo_controller.gd:53 — the
+/// table's own contact epsilon, and since NML-1073 S1b the melee trigger:
+/// a charge fights once its nearest base edge is within 0.25" of the target's.
+pub const CHARGE_CONTACT_MARGIN_IN: f64 = 0.25;
 /// `SoloController.UNIT_SPACING_IN` solo_controller.gd:70 — the no-go buffer
 /// every OTHER unit's models project around themselves.
 pub const UNIT_SPACING_IN: f64 = 1.0;
@@ -236,7 +243,23 @@ fn expected_melee_morale(
     }
 }
 
-/// `BattleSim._spacing_fraction` battle_sim.gd:521-563 — the largest fraction
+/// `BattleSim._unit_group` battle_sim.gd:528-547 as a membership test — is unit
+/// `oi` part of the group `key_i` moves and ends as? That is `key_i` itself plus
+/// its attached heroes, plus (only when `include_host`) its host. Only the
+/// attached-heroes half mirrors `SoloController._spacing_zones_world`; the host
+/// is a SIM-ONLY necessity on the MOVER side, where a joined hero can activate
+/// apart from its host. The CHARGE TARGET group always passes false.
+///
+/// The GDScript builds a key SET and then walks `next["units"]`; a set the port
+/// never materialises answers the same question, because the only thing done
+/// with it is `group.has(key)` inside that walk.
+fn in_unit_group(state: &State, key_i: usize, oi: usize, include_host: bool) -> bool {
+    oi == key_i
+        || state.attached[key_i].contains(&oi)
+        || (include_host && state.attached_to[key_i] == Some(oi))
+}
+
+/// `BattleSim._spacing_fraction` battle_sim.gd:550-620 — the largest fraction
 /// of `delta` that leaves every mover model clear of every OTHER alive unit's
 /// models (horizontal distance only, the `control_gap_in` convention).
 ///
@@ -244,7 +267,21 @@ fn expected_melee_morale(
 /// move is legal -> 1.0 regardless of the start; (2) the START is legal -> an
 /// 8-step binary search, which is monotone only from a clear start; (3) both
 /// ends illegal -> 8 descending samples, largest legal wins, else 0.0.
-fn spacing_fraction(state: &State, mi: usize, delta: geom::V3) -> f64 {
+///
+/// NML-1073 S1: `ci` is the CHARGE victim's index, if the action names one.
+/// The mover's own group is exempt entirely (no obstacle at all), dormant
+/// (reserve) and Aircraft units are skipped, and the target's group — the
+/// target and ITS heroes, never its host — projects a BODY-ONLY disc (buffer
+/// 0.0) so a charge may end in base contact. Everyone else keeps the full
+/// `UNIT_SPACING_IN` buffer. GF Advanced Rules v3.5.1 p.7: models may never be
+/// within 1" of models from other units unless taking a Charge action, which
+/// may ignore that restriction toward base contact with ONE enemy unit.
+///
+/// Obstacle ORDER differs from the GDScript's (the loader reads the recorder's
+/// key-SORTED `units` object, the engine walks capture order) and cannot move
+/// the answer: `legal` is a conjunction over independent per-obstacle tests, so
+/// only the short-circuit point changes, never the boolean.
+fn spacing_fraction(state: &State, mi: usize, delta: geom::V3, ci: Option<usize>) -> f64 {
     // `Vector3.length_squared()` — f32, like every other Vector3 read.
     if delta[0] * delta[0] + delta[1] * delta[1] + delta[2] * delta[2] <= 0.0 {
         return 1.0;
@@ -252,13 +289,20 @@ fn spacing_fraction(state: &State, mi: usize, delta: geom::V3) -> f64 {
     let buffer_m = UNIT_SPACING_IN * IN2M;
     let mut obstacles: Vec<(geom::V3, f64)> = Vec::new();
     for oi in 0..state.units() {
-        if oi == mi {
+        if in_unit_group(state, mi, oi, true) {
             continue;
         }
+        if state.dormant[oi] || state.aircraft[oi] {
+            continue;
+        }
+        let o_buffer = match ci {
+            Some(c) if in_unit_group(state, c, oi, false) => 0.0,
+            _ => buffer_m,
+        };
         let radii = &state.radii[oi];
         for (k, pos) in state.positions[oi].iter().enumerate() {
             let r = radii.get(k).copied().unwrap_or(DEFAULT_BASE_RADIUS_M);
-            obstacles.push((geom::to_f32(*pos), r + buffer_m));
+            obstacles.push((geom::to_f32(*pos), r + o_buffer));
         }
     }
     if obstacles.is_empty() {
@@ -544,6 +588,16 @@ pub fn resolve(
         return Err(Unsupported::UnknownUnit);
     };
     let shoot_key = action.shoot.clone().unwrap_or_default();
+    // battle_sim.gd:649-650 hands `str(action.get("charge",""))` to the spacing
+    // clamp for EVERY move kind, not only CHARGE — resolved once here and
+    // reused by the melee branch below. A key the roster does not carry maps to
+    // None: the GDScript's key set then holds a name no obstacle can match.
+    let charge_key = action.charge.clone().unwrap_or_default();
+    let ci = if charge_key.is_empty() {
+        None
+    } else {
+        state.roster.index.get(charge_key.as_str()).copied()
+    };
     let pi_s = state.roster.profile[si];
     let mut next = state.clone();
     let was_shaken = next.shaken[si];
@@ -569,9 +623,9 @@ pub fn resolve(
             delta = geom::mul(geom::normalized(delta), reach_m);
         }
         // NML-1068: RUSH and CHARGE share this same translation — one clamp
-        // covers both (battle_sim.gd:590-592).
+        // covers both (battle_sim.gd:647-650).
         if seams.spacing {
-            delta = geom::mul(delta, spacing_fraction(&next, si, delta));
+            delta = geom::mul(delta, spacing_fraction(&next, si, delta, ci));
         }
         for p in next.positions[si].iter_mut() {
             *p = geom::to_f64(geom::add(geom::to_f32(*p), delta));
@@ -635,17 +689,23 @@ pub fn resolve(
         }
     }
 
-    // --- charge (battle_sim.gd:631-646) ---
-    // No sight check here, only the CONTACT_IN ring measured AFTER the move.
+    // --- charge (battle_sim.gd:700-733) ---
+    // No sight check here, only BASE CONTACT measured AFTER the move. NML-1073
+    // S1b: the trigger is the base-EDGE gap against the table's own contact
+    // epsilon, not the centre distance against CONTACT_IN — two 32 mm bases
+    // (radius 0.016 m) meet at a 1.26" centre distance, past the old 1.0" gate,
+    // so a landed 32 mm+ charge never fought. Unconditional, not seam-gated:
+    // this is the landing rule itself, not a research seam.
     if kind == CHARGE {
-        let charge_key = action.charge.clone().unwrap_or_default();
-        let ti = if charge_key.is_empty() {
-            None
-        } else {
-            next.roster.index.get(charge_key.as_str()).copied()
-        };
-        if let Some(ti) = ti {
-            if geom::dist_in(&next.positions[si], &next.positions[ti]) <= CONTACT_IN {
+        if let Some(ti) = ci {
+            if geom::edge_gap_in(
+                &next.positions[si],
+                &next.radii[si],
+                &next.positions[ti],
+                &next.radii[ti],
+                DEFAULT_BASE_RADIUS_M,
+            ) <= CHARGE_CONTACT_MARGIN_IN
+            {
                 let tu_before = wounds_left(&next, ti);
                 let su_before = wounds_left(&next, si);
                 // The charger strikes: charging profiles, its OWN fatigue state

@@ -83,6 +83,12 @@ struct PlainUnit {
     mods: Mods,
     #[serde(default)]
     mods_base: Mods,
+    /// NML-1073 S1 attachment keys (battle_sim.gd:1249-1258). Absent on a corpus
+    /// recorded before that commit, which is what the defaults answer.
+    #[serde(default)]
+    attached: Vec<String>,
+    #[serde(default)]
+    attached_to: String,
     #[serde(default)]
     los: Option<HashMap<String, bool>>,
 }
@@ -308,6 +314,8 @@ fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Roster>) -> S
         radii: Vec::with_capacity(n),
         mods: Vec::with_capacity(n),
         mods_base: Vec::with_capacity(n),
+        attached: Rc::new(Vec::new()),
+        attached_to: Rc::new(Vec::new()),
         los: Vec::with_capacity(n),
         los_pairs: plain.los_pairs.as_ref().map(|rows| {
             // Read the matrix in its own (capture) order and STORE it in roster
@@ -323,7 +331,13 @@ fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Roster>) -> S
             Rc::new(m)
         }),
     };
+    // The attachment keys can only be resolved once every unit key is known, so
+    // they are collected here and mapped after the per-unit loop.
+    let mut attached_keys: Vec<Vec<String>> = Vec::with_capacity(n);
+    let mut host_keys: Vec<String> = Vec::with_capacity(n);
     for (_, u) in plain.units.0 {
+        attached_keys.push(u.attached);
+        host_keys.push(u.attached_to);
         st.player.push(u.player);
         st.alive.push(u.alive);
         st.activated.push(u.activated);
@@ -344,6 +358,15 @@ fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Roster>) -> S
         st.mods_base.push(Rc::new(u.mods_base));
         st.los.push(u.los.map(Rc::new));
     }
+    st.attached = Rc::new(
+        attached_keys
+            .iter()
+            .map(|ks| ks.iter().filter_map(|k| st.roster.index.get(k.as_str()).copied()).collect())
+            .collect(),
+    );
+    st.attached_to = Rc::new(
+        host_keys.iter().map(|k| st.roster.index.get(k.as_str()).copied()).collect(),
+    );
     st
 }
 
