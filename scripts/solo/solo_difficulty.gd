@@ -76,6 +76,11 @@ const PRESETS := {
 	# SoloController._solve_planner. WORKING name for the arena A/B — no interactive exposure
 	# before the measurement gate (>=55% vs the tree), and never a display name.
 	"planner_v0": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true},
+	# NML-1073 M2-4 (working name, never exposed): planner_v0 with the PLAYOUT
+	# ARBITRATION armed and the hand eval kept — the recording arm the Rust port
+	# is gated against. planner_v2 cannot serve: its `eval_fit` is a different
+	# value function, which the port declines rather than approximates.
+	"planner_v0s": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "playout_search": true},
 	# E4 (eval-tuning wave): planner_v0 with the FITTED eval as the leaf — the
 	# arena A/B pair for "did the data-derived value function beat the hand one".
 	"planner_v1": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "eval_fit": true},
