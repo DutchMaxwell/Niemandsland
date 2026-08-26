@@ -132,3 +132,7 @@ CLAUDE.md
 HANDOFF_*.md
 HANDOVER*.md
 tools/review_trace.json
+
+# NML-1073 R1 — generated from core/nml_core.gdextension.in by
+# core/install_gdextension.sh only when the Rust library is built.
+core/nml_core.gdextension
