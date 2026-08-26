@@ -1,0 +1,13 @@
+[package]
+name = "nml-core"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Niemandsland fast rules core (NML-1073): battle state, clone and mission score, ported 1:1 from the GDScript BattleSim/AiMissionEval."
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+debug = true

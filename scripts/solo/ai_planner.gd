@@ -443,6 +443,76 @@ static func _cross_round(cur: Dictionary) -> int:
 	return int(players[0]) if not players.is_empty() else 0
 
 
+## NML-1073 M1-0: env NML_NODE_DUMP=<dir> appends every rollout node this loop
+## scores to <dir>/nodes.jsonl (the Rust port's plain-JSON contract). Unset
+## (default) never touches disk: byte-identical rollout. Stream opens ONCE and
+## stays open — one core_selfplay call plays exactly one game. NML_NODE_DUMP_MAX
+## (default 2000) caps the LINE count — a full game's node count is unbounded
+## and blew the shared /tmp quota once already; past the cap the game keeps
+## playing, it just stops writing. Line 1 is {"profiles": {key: profile},
+## "seams": {spacing, cast}} — the STATIC per-unit data plus the A/B seam
+## settings resolve() branched on, unchanging all game — written ONCE; every
+## node line after it carries only the DYNAMIC layer (state_to_plain(.., false)).
+static var _node_dump_file: FileAccess = null
+static var _node_dump_checked := false
+static var _node_dump_max := 2000
+static var _node_dump_count := 0
+static func _node_dump_stream() -> FileAccess:
+	if not _node_dump_checked:
+		_node_dump_checked = true
+		var dir := OS.get_environment("NML_NODE_DUMP")
+		if dir != "" and DirAccess.dir_exists_absolute(dir):
+			_node_dump_file = FileAccess.open(dir.path_join("nodes.jsonl"), FileAccess.WRITE)
+			var cap := OS.get_environment("NML_NODE_DUMP_MAX")
+			if cap != "":
+				_node_dump_max = maxi(int(cap), 0)
+	return _node_dump_file
+
+
+static func _record_node(before: Dictionary, action: Dictionary, after: Dictionary,
+		s: float, player: int, rich: bool) -> void:
+	var f := _node_dump_stream()
+	if f == null or _node_dump_count >= _node_dump_max:
+		return
+	# full_precision=true (JSON.stringify's 4th arg): the M1-0 spec calls for positions at FULL
+	# precision — without this flag Godot truncates doubles to ~15 significant digits on write.
+	# Found during the M1-1 pre-check (coordinator ask): confirmed via round-trip test, but NOT
+	# the cause of that check's 63/200 score mismatches (re-verified unchanged after this fix) —
+	# kept as a real, independent spec-compliance bug; that mismatch's cause is still open.
+	if _node_dump_count == 0:
+		var profiles := {}
+		for key in before["units"]:
+			profiles[str(key)] = BattleSim._unit_profile((before["units"][key] as Dictionary)["unit"])
+		# NML-1073 M1-3: WHICH A/B seams were live while this corpus was played.
+		# resolve() branches on them (battle_sim.gd:590-592 spacing, :604 cast),
+		# so a corpus that does not say which were on cannot be replayed by the
+		# Rust port without guessing — the M1-2 corpus had to be probed for it.
+		f.store_line(JSON.stringify({"profiles": profiles,
+			"seams": {"spacing": BattleSim.spacing_enabled(),
+				"cast": BattleSim.cast_phase_enabled()}}, "", true, true))
+	var a := action.duplicate()
+	if a.has("dest"):
+		a["dest"] = BattleSim._plain_vec3(a["dest"])
+	# NML-1073 M1-2: the TERRAIN answer. resolve() re-probes the mover's cover at
+	# its destination through the terrain_at Callable (battle_sim.gd:594-596) —
+	# a plain state carries no terrain grid, so the answer is recorded as an
+	# input. It is the mover's post-move `in_cover`, which is exactly what that
+	# probe wrote; nothing else in resolve() touches the flag.
+	# NML-1073 M1-2: WHICH leaf priced this node. The rollout policy scores the
+	# planning side with the RICH leaf (score + BattleSim.reply_threat) and the
+	# imagined opponent with the CHEAP one (:508-510) — without the flag the
+	# corpus cannot say which, and a parity check would have to guess by seat.
+	var rec := {"state_before": BattleSim.state_to_plain(before, false),
+		"action": a, "state_after": BattleSim.state_to_plain(after, false),
+		"score": s, "player": player, "rich": rich}
+	if a.has("dest") and (after["units"] as Dictionary).has(action["unit"]):
+		rec["cover_dest"] = bool((after["units"][action["unit"]] as Dictionary).get("in_cover", false))
+	f.store_line(JSON.stringify(rec, "", true, true))
+	_node_dump_count += 1
+	if _node_dump_count >= _node_dump_max:
+		f.close()
+
+
 ## Rollout policy, one step: the best restricted move of `player`'s un-activated
 ## units. The OPPONENT is imagined with the CHEAP leaf (mission eval WITHOUT
 ## reply pricing — greedy is a conservative enemy model); OUR OWN side steps
@@ -462,6 +532,7 @@ static func _policy_step(state: Dictionary, player: int, rich := false) -> Dicti
 			var next := BattleSim.resolve(state, action)
 			var s := AiMissionEval.score(next, player, BattleSim.reply_threat(next, player)) \
 				if rich else AiMissionEval.score(next, player)
+			_record_node(state, action, next, s, player, rich)
 			if s > best_s:
 				best_s = s
 				best = action
