@@ -128,6 +128,15 @@ func test_begin_and_finish_write_header_and_act_line() -> void:
 	assert_bool(ci.has("A|B")).is_true()
 	assert_bool(ci.has("B|A")).is_true()
 	assert_int(ci.size()).is_equal(2)
+	# NML-1073 M2-0d: the same pairs over the GAP GRID (the oracle the pure gate is
+	# diffed against), plus the per-unit gate reads inside the plain state.
+	var grid := act["charge_illegal_grid"] as Dictionary
+	assert_int(grid.size()).is_equal(2)
+	assert_int((grid["A|B"] as Array).size()).is_equal(AiActRecorder.GATE_GRID_STEPS)
+	var a_state := ((act["state"] as Dictionary)["units"] as Dictionary)["A"] as Dictionary
+	assert_bool(a_state.has("charge_probe_r")).is_true()
+	assert_bool(a_state.has("charge_no_difficult")).is_true()
+	assert_bool(a_state.has("bands")).is_true()
 
 
 ## NML-1073 M2-0b: plan_with_rollout's search TRACE — root menus, the sorted
@@ -169,3 +178,44 @@ func test_trace_carries_search_and_flattens_menu_dests() -> void:
 		if dest != null:
 			assert_bool(dest is Array).is_true()
 			assert_int((dest as Array).size()).is_equal(3)
+
+
+## NML-1073 M2-0d: BattleSim.charge_illegal_plain reproduces
+## SoloController.charge_candidate_illegal (solo_controller.gd:1434-1447) from the
+## CAPTURE alone — no GameUnit, no live overlay. Every gate line has its own case:
+## the aircraft veto, the rush band (incl. Melee Shrouding), the 6" difficult cap and
+## its Strider/Flying exemption, and the terrain corridor via the header Callable.
+func test_charge_illegal_plain_is_a_pure_function_of_the_capture() -> void:
+	var board := {"units": {
+		"A": {"positions": [[0.0, 0.0, 0.0]], "alive": 1, "player": 1, "aircraft": false,
+			"bands": {"advance": 6.0, "rush": 12.0},
+			"charge_probe_r": 0.016, "charge_no_difficult": false},
+		"B": {"positions": [[6.0 * IN2M, 0.0, 0.0]], "alive": 1, "player": 2, "aircraft": false,
+			"bands": {"advance": 6.0, "rush": 12.0},
+			"charge_probe_r": 0.016, "charge_no_difficult": false},
+		"P": {"positions": [[6.0 * IN2M, 0.0, 0.0]], "alive": 1, "player": 2, "aircraft": true,
+			"bands": {"advance": 6.0, "rush": 12.0},
+			"charge_probe_r": 0.016, "charge_no_difficult": false},
+		"S": {"positions": [[6.0 * IN2M, 0.0, 0.0]], "alive": 1, "player": 2, "aircraft": false,
+			"bands": {"advance": 6.0, "rush": 12.0}, "shroud": [3.0, 6.0],
+			"charge_probe_r": 0.016, "charge_no_difficult": false}}}
+	var open_board := {}   # no header terrain seam = no difficult ground anywhere
+
+	# 6" apart in the open, 12" rush band: a 5" gap is inside the band AND under the
+	# 6" difficult cap -> legal. 13" is past the band -> illegal.
+	assert_bool(BattleSim.charge_illegal_plain(board, open_board, "A", "B", 5.0)).is_false()
+	assert_bool(BattleSim.charge_illegal_plain(board, open_board, "A", "B", 13.0)).is_true()
+	# Aircraft victim: the gate's first line, illegal at any gap.
+	assert_bool(BattleSim.charge_illegal_plain(board, open_board, "A", "P", 0.0)).is_true()
+	# Melee Shrouding -3" to a floor of 6": the 12" band reaches 9", not 9.5".
+	assert_bool(BattleSim.charge_illegal_plain(board, open_board, "A", "S", 9.0)).is_false()
+	assert_bool(BattleSim.charge_illegal_plain(board, open_board, "A", "S", 9.5)).is_true()
+
+	# All-forest board: over the cap, every corridor (straight + both 4" doglegs)
+	# crosses difficult ground -> capped out; under the cap the rule never triggers.
+	var forest := {"terrain_at": func(_p: Vector3) -> int: return TerrainRules.TerrainType.FOREST}
+	assert_bool(BattleSim.charge_illegal_plain(board, forest, "A", "B", 10.0)).is_true()
+	assert_bool(BattleSim.charge_illegal_plain(board, forest, "A", "B", 5.0)).is_false()
+	# Strider/Flying ignore difficult (p.13).
+	(board["units"]["A"] as Dictionary)["charge_no_difficult"] = true
+	assert_bool(BattleSim.charge_illegal_plain(board, forest, "A", "B", 10.0)).is_false()

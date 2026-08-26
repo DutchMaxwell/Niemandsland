@@ -1510,3 +1510,117 @@ static func _attached_hero_rules(u: GameUnit) -> Array:
 		if hero != null and hero.get_alive_count() > 0:
 			out.append(hero.get_special_rules())
 	return out
+
+
+# === NML-1073 M2-0d: the CHARGE GATE as a pure function of the capture ======================
+#
+# SoloController.charge_candidate_illegal (solo_controller.gd:1434-1447) is the one menu-side
+# rule gate the planner calls with IMAGINED geometry: ai_planner.gd:970-990 (candidates_wide)
+# and :1254-1262 (_best_charge) hand it a gap derived from the CURRENT — possibly rollout-
+# imagined — positions, so a recorded root pair matrix cannot answer it (M2-0c: 22 of 25 acts
+# mismatched in the rollout leaf for exactly this reason). The corpus records the gate's INPUTS
+# instead and this mirrors the live decision line by line, in the live ORDER, with the live
+# arithmetic. What the live gate reads and where it comes from here:
+#   is_aircraft(tgt)                          -> state.units[victim]["aircraft"]
+#                                                (capture :1181, already in _UNIT_DYNAMIC)
+#   sim_move_bands(unit)["rush"]              -> state.units[attacker]["bands"]
+#                                                (state_to_plain :1292, DYNAMIC per M2-0c)
+#   melee_shroud_charge_in(band, tgt)         -> state.units[victim]["shroud"] = [pen, floor]
+#                                                (act_recorder._melee_shroud_params, M2-0d)
+#   has_special_rule("Strider"/"Flying")      -> state.units[attacker]["charge_no_difficult"]
+#                                                (act_recorder, M2-0d)
+#   _move_base_radius_m(_moving_models(unit)) -> state.units[attacker]["charge_probe_r"]
+#                                                (act_recorder, M2-0d — NOT state["radii"]:
+#                                                 capture writes the unit's OWN alive models,
+#                                                 the gate measures unit + attached heroes)
+#   terrain_type_at (the live overlay)        -> header["terrain_at"], the Callable
+#                                                node_recheck.terrain_at_from_plain builds
+#                                                from the corpus header's cells/sandbox
+# All five per-unit reads ask the REAL GameUnit, which the search never mutates (BattleSim
+# edits the state dict, not the unit) — they are ROOT reads, constant across one activation's
+# whole search. Only gap_in / from / to are imagined.
+#
+# `from`/`to` default to the state's own unit centres (AiPlanner._centre :930); a caller that
+# already holds the imagined centres passes them, exactly as the live 5-arg signature does.
+static func charge_illegal_plain(state: Dictionary, header: Dictionary,
+		attacker_key: String, victim_key: String, gap_in: float,
+		from := Vector3.INF, to := Vector3.INF) -> bool:
+	var units: Dictionary = state["units"]
+	if not units.has(attacker_key) or not units.has(victim_key):
+		return false
+	var au: Dictionary = units[attacker_key]
+	var vu: Dictionary = units[victim_key]
+	if bool(vu.get("aircraft", false)):
+		return true
+	var band := float((au.get("bands", {}) as Dictionary).get("rush", 12))
+	if gap_in > _melee_shroud_charge_in_plain(band, vu):
+		return true
+	# _charge_capped_by_difficult (solo_controller.gd:2746-2757)
+	if gap_in <= SoloController.DIFFICULT_MOVE_CAP_IN or gap_in == INF:
+		return false
+	if bool(au.get("charge_no_difficult", false)):
+		return false
+	var probe_r := float(au.get("charge_probe_r", SeparationChecker.DEFAULT_BASE_RADIUS_M))
+	var terrain_at: Callable = header.get("terrain_at", Callable())
+	return _corridor_forced_through_plain(
+		from if from != Vector3.INF else _plain_centre(au),
+		to if to != Vector3.INF else _plain_centre(vu), probe_r, terrain_at)
+
+
+## SoloController.melee_shroud_charge_in (:5150) off the recorded [penalty_in, floor_in] pair —
+## the rule walk (rule_on_all_models + the Ranged-Shrouding alias half) happens ONCE at record
+## time; absent key = the victim carries no rule of the family, so the reach is the raw band.
+static func _melee_shroud_charge_in_plain(rush_in: float, vu: Dictionary) -> float:
+	var s: Array = vu.get("shroud", [])
+	if s.size() < 2:
+		return rush_in
+	return AiCombatMath.shrouded_reach(rush_in, float(s[0]), float(s[1]))
+
+
+## SoloController._corridor_forced_through (:2761), verbatim: the straight line AND both
+## 4"-offset detours cross difficult ground -> the charge cannot skirt it.
+static func _corridor_forced_through_plain(from: Vector3, to: Vector3, probe_r: float,
+		terrain_at: Callable) -> bool:
+	if not _crosses_difficult_plain(from, to, probe_r, terrain_at):
+		return false
+	var dirv := Vector2(to.x - from.x, to.z - from.z)
+	if dirv.length() < 0.001:
+		return false
+	var perp := Vector2(-dirv.y, dirv.x).normalized()
+	var mid := (from + to) * 0.5
+	for side in [1.0, -1.0]:
+		var off := perp * (4.0 * SoloController.INCHES_TO_METERS) * float(side)
+		var m2 := Vector3(mid.x + off.x, mid.y, mid.z + off.y)
+		if not _crosses_difficult_plain(from, m2, probe_r, terrain_at) \
+				and not _crosses_difficult_plain(m2, to, probe_r, terrain_at):
+			return false
+	return true
+
+
+## SoloController._path_crosses_terrain (:6481) for PathCheck.DIFFICULT, verbatim — same step
+## count (half a 3" cell), same edge-aware base probe, same "no terrain seam = never crosses".
+static func _crosses_difficult_plain(a: Vector3, b: Vector3, radius_m: float,
+		terrain_at: Callable) -> bool:
+	if not terrain_at.is_valid():
+		return false
+	var span := Vector2(b.x - a.x, b.z - a.z).length()
+	var cell_m := TerrainRules.CELL_IN * SoloController.INCHES_TO_METERS
+	var steps := maxi(1, int(ceil(span / (cell_m * 0.5))))
+	for i in range(steps + 1):
+		var p := a.lerp(b, float(i) / float(steps))
+		if radius_m > 0.0:
+			if TerrainRules.base_in_terrain(p, radius_m, terrain_at, TerrainRules.is_difficult):
+				return true
+		elif TerrainRules.is_difficult(int(terrain_at.call(p))):
+			return true
+	return false
+
+
+## AiPlanner._centre (:930) over a PLAIN unit dict — positions may be [x,y,z] arrays (as
+## recorded) or Vector3 (a rebuilt state), so one helper serves both sides of the replay.
+static func _plain_centre(su: Dictionary) -> Vector3:
+	var c := Vector3.ZERO
+	var ps: Array = su.get("positions", [])
+	for p in ps:
+		c += (p as Vector3) if p is Vector3 else Vector3(float(p[0]), float(p[1]), float(p[2]))
+	return c / maxi(ps.size(), 1)

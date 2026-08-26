@@ -56,11 +56,14 @@ static func begin(state: Dictionary, me: int, pool: Array, terrain_cb: Callable)
 	for k in state["units"]:
 		if pool.has((state["units"][k] as Dictionary)["unit"]):
 			pool_keys.append(str(k))
+	var plain: Dictionary = BattleSim.state_to_plain(state, false)
+	_stamp_gate_reads(state, plain)
 	return {"kind": "act", "round": int(state["round"]), "player": me,
 		"statics": {"opener_seat": AiPlanner.opener_seat, "playout_search": AiPlanner.playout_search,
 			"fit_mode": AiMissionEval.fit_mode, "playout_net": AiPlanner.playout_net},
-		"state": BattleSim.state_to_plain(state, false),
-		"charge_illegal": _charge_illegal_matrix(state), "pool": pool_keys}
+		"state": plain,
+		"charge_illegal": _charge_illegal_matrix(state),
+		"charge_illegal_grid": _charge_illegal_grid(state), "pool": pool_keys}
 
 
 ## Post-pick write (OUTPUT): call once the final pick (doctrine_pick or
@@ -170,4 +173,103 @@ static func _charge_illegal_matrix(state: Dictionary) -> Dictionary:
 			var gap := maxf(BattleSim.dist_in(asu["positions"], vsu["positions"]) - BattleSim.CONTACT_IN, 0.0)
 			out["%s|%s" % [str(ak), str(vk)]] = bool(cb.call(asu["unit"], vsu["unit"], gap,
 				AiPlanner._centre(asu), AiPlanner._centre(vsu)))
+	return out
+
+
+## NML-1073 M2-0d: the per-unit LIVE reads SoloController.charge_candidate_illegal makes
+## (solo_controller.gd:1434-1447) that state_to_plain does not already carry, written into the
+## PLAIN unit dicts so BattleSim.charge_illegal_plain can answer the gate for an ARBITRARY
+## imagined gap — the root pair matrix below can only answer the root one.
+##   charge_probe_r      _move_base_radius_m(_moving_models(u)) (:4735/:4915). NOT state["radii"]:
+##                       capture (:1176) writes the unit's OWN alive models, the gate measures
+##                       unit + attached heroes and floors at DEFAULT_BASE_RADIUS_M.
+##   charge_no_difficult has_special_rule("Strider"/"Flying") — the p.13 difficult exemption.
+##   shroud              [penalty_in, floor_in] of melee_shroud_charge_in (:5150); absent when
+##                       the victim carries no rule of the Melee-Shrouding family.
+## Per ACT, not in the once-written header: all three drift in a live game (models die, an
+## attached hero joins or falls), and the gate reads them fresh on every activation.
+static func _stamp_gate_reads(state: Dictionary, plain: Dictionary) -> void:
+	var units: Dictionary = plain["units"]
+	for key in state["units"]:
+		var pu: Dictionary = units.get(str(key), {})
+		if pu.is_empty():
+			continue
+		var u: GameUnit = (state["units"][key] as Dictionary)["unit"]
+		pu["charge_probe_r"] = _move_base_radius_of(u)
+		pu["charge_no_difficult"] = u.has_special_rule("Strider") or u.has_special_rule("Flying")
+		var sh := _melee_shroud_params(u)
+		if not sh.is_empty():
+			pu["shroud"] = sh
+
+
+## SoloController._move_base_radius_m(_moving_models(u)) (:4735 over :4915) mirrored statically:
+## alive models INCLUDING attached heroes, node-filtered exactly as _moving_models filters them,
+## floored at the shared SeparationChecker default.
+static func _move_base_radius_of(u: GameUnit) -> float:
+	var r := SeparationChecker.DEFAULT_BASE_RADIUS_M
+	var raw: Array = u.get_alive_models_with_attached() if u.has_method("get_alive_models_with_attached") \
+		else u.get_alive_models()
+	for m in raw:
+		var node := (m as ModelInstance).node
+		if node != null and is_instance_valid(node):
+			r = maxf(r, SoloController.model_base_radius_m(m as ModelInstance))
+	return r
+
+
+## The [penalty_in, floor_in] SoloController.melee_shroud_charge_in (:5150) would apply against
+## `target`, resolved in the SAME order: the named rule first, then the DATA aliases of the
+## Melee-/Ranged-Shrouding primitives. [] = no rule of the family fires (reach = the raw band).
+static func _melee_shroud_params(target: GameUnit) -> Array:
+	if target == null:
+		return []
+	if AiEv.rule_on_all_models(target, "Melee Shrouding"):
+		return [float(RulesRegistry.unit_param(target, "Melee Shrouding", "move_penalty_in",
+				AiCombatMath.SHROUD_CHARGE_PENALTY_IN)),
+			float(RulesRegistry.unit_param(target, "Melee Shrouding", "floor_in",
+				AiCombatMath.SHROUD_FLOOR_IN))]
+	for prim in ["Melee Shrouding", "Ranged Shrouding"]:
+		for e in RulesRegistry.unit_rules_of_primitive(target, prim):
+			var ed := e as Dictionary
+			var n := str(ed["name"])
+			if n == "Melee Shrouding" or n == "Ranged Shrouding" or not AiEv.rule_on_all_models(target, n):
+				continue
+			var sp: Dictionary = ed.get("params", {})
+			var pen := float(sp.get("move_penalty_in", sp.get("melee_move_penalty_in", 0.0)))
+			if pen <= 0.0:
+				continue
+			return [pen, float(sp.get("melee_floor_in", sp.get("floor_in", AiCombatMath.SHROUD_FLOOR_IN)))]
+	return []
+
+
+## NML-1073 M2-0d ORACLE: the LIVE gate's answer for every ordered opposite-side pair over a
+## GAP GRID — 0", 0.5", … 14" — called exactly the way AiPlanner._best_charge calls it (same
+## argument shape, the pair's own root centres as from/to). The pair matrix above records one
+## point of this curve; the grid records the whole thing, so a replay's PURE gate can be diffed
+## against the live one at every gap the rollouts actually ask about. ~84 pairs x 29 per act.
+const GATE_GRID_STEPS := 29
+const GATE_GRID_STEP_IN := 0.5
+
+
+static func _charge_illegal_grid(state: Dictionary) -> Dictionary:
+	var out := {}
+	var cb: Callable = state.get("charge_illegal", Callable())
+	if not cb.is_valid():
+		return out
+	for ak in state["units"]:
+		var asu: Dictionary = state["units"][ak]
+		if int(asu["alive"]) <= 0:
+			continue
+		var ca := AiPlanner._centre(asu)
+		for vk in state["units"]:
+			if vk == ak:
+				continue
+			var vsu: Dictionary = state["units"][vk]
+			if int(vsu["alive"]) <= 0 or int(vsu["player"]) == int(asu["player"]):
+				continue
+			var cv := AiPlanner._centre(vsu)
+			var row: Array = []
+			for i in range(GATE_GRID_STEPS):
+				row.append(bool(cb.call(asu["unit"], vsu["unit"],
+					float(i) * GATE_GRID_STEP_IN, ca, cv)))
+			out["%s|%s" % [str(ak), str(vk)]] = row
 	return out

@@ -9,9 +9,17 @@ extends SceneTree
 ## called directly — both were already static, no edit needed there) instead
 ## of re-deriving state["units"]/stand-in GameUnits a second time.
 ##
+## NML-1073 M2-0d: the charge gate is no longer replayed from the recorded ROOT
+## pair matrix (which cannot answer a rollout-imagined gap) but from
+## BattleSim.charge_illegal_plain, a PURE function of the capture. Two checks
+## ride on that: CHARGE_GATE diffs the pure function against the recorded LIVE
+## gap grid (act line "charge_illegal_grid"), and the stamped state Callable
+## forwards to it so the search itself replays off the pure gate.
+##
 ## Usage: godot --headless -s res://tools/act_recheck.gd --
 ##   file=<acts.jsonl> [n=25] [offset=0]
-##   --corrupt=charge   RED proof: flip every recorded charge_illegal answer
+##   --corrupt=charge   RED proof: flip the PURE gate's answer inside the search
+##   --corrupt=gate     RED proof for CHARGE_GATE: flip it inside the grid diff
 ##   --ignore-knobs     RED proof (only bites on a non-default-knobs corpus):
 ##                       never stamp the header's knobs
 
@@ -19,7 +27,13 @@ const NodeRecheck := preload("res://tools/node_recheck.gd")
 const EPS := 1e-9
 
 var _corrupt_charge := false
+var _corrupt_gate := false
 var _ignore_knobs := false
+var _gate_pairs := 0
+var _gate_points := 0
+var _gate_bad := 0
+var _matrix_pairs := 0
+var _matrix_bad := 0
 
 
 func _init() -> void:
@@ -29,6 +43,9 @@ func _init() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a == "--corrupt=charge":
 			_corrupt_charge = true
+			continue
+		if a == "--corrupt=gate":
+			_corrupt_gate = true
 			continue
 		if a == "--ignore-knobs":
 			_ignore_knobs = true
@@ -49,6 +66,11 @@ func _init() -> void:
 	var profiles: Dictionary = header["profiles"]
 	var terrain: Variant = header.get("terrain")
 	var knobs: Dictionary = header.get("knobs", {})
+	# M2-0d: BattleSim.charge_illegal_plain asks the board through header["terrain_at"]
+	# — the SAME port node_recheck already owns, built ONCE here (rebuilding the cell
+	# dictionary per gate call would dominate the run).
+	if terrain != null:
+		header["terrain_at"] = NodeRecheck.terrain_at_from_plain(terrain as Dictionary)
 	AiPlanner.trace_enabled = true   # M2-0c seam: fill trace without the NML_ACT_DUMP file
 
 	var skipped := 0
@@ -66,7 +88,7 @@ func _init() -> void:
 		var act: Dictionary = JSON.parse_string(line)
 		checked += 1
 		var t0 := Time.get_ticks_msec()
-		var mism := _check_act(act, profiles, terrain, knobs)
+		var mism := _check_act(act, header, profiles, terrain, knobs)
 		var dt := Time.get_ticks_msec() - t0
 		var tag := "ACT %d round=%d player=%d" % [offset + checked, int(act["round"]), int(act["player"])]
 		if mism.is_empty():
@@ -77,32 +99,41 @@ func _init() -> void:
 			print("%s MISMATCH (%dms)" % [tag, dt])
 			for m in mism.slice(0, 3):
 				print("  MISMATCH %s: recorded=%s got=%s" % [str(m["field"]), str(m["recorded"]), str(m["got"])])
+	print("CHARGE_GATE pairs=%d grid=%d mismatch=%d" % [_gate_pairs, _gate_points, _gate_bad])
+	print("CHARGE_MATRIX pairs=%d mismatch=%d" % [_matrix_pairs, _matrix_bad])
 	print("RECHECK acts=%d ok=%d mismatch=%d" % [checked, ok, mismatch])
-	quit(0 if mismatch == 0 else 1)
+	quit(0 if (mismatch == 0 and _gate_bad == 0) else 1)
 
 
 ## One activation: rebuild -> stamp -> plan_with_rollout -> diff. Returns the
 ## list of mismatches (empty = exact replay).
-func _check_act(act: Dictionary, profiles: Dictionary, terrain: Variant, knobs: Dictionary) -> Array:
+func _check_act(act: Dictionary, header: Dictionary, profiles: Dictionary,
+		terrain: Variant, knobs: Dictionary) -> Array:
 	var state: Dictionary = NodeRecheck._rebuild_state(act["state"], profiles)
 	var key_of := {}   # GameUnit instance id -> the corpus's string unit key
 	for k in state["units"]:
 		key_of[(state["units"][k]["unit"] as GameUnit).get_instance_id()] = str(k)
 
-	var matrix: Dictionary = (act.get("charge_illegal", {}) as Dictionary).duplicate()
-	if _corrupt_charge:
-		for mk in matrix.keys():
-			matrix[mk] = not bool(matrix[mk])
+	# M2-0d: the search's charge gate is the PURE function of the capture, called
+	# with the SAME five arguments the live SoloController.charge_candidate_illegal
+	# takes — so a rollout-imagined gap/geometry gets a real answer instead of the
+	# root matrix's one recorded point (the M2-0c 22/25 rollout-leaf mismatch).
+	# The plain (recorded) state carries every per-unit read the gate makes; those
+	# are ROOT reads in the live game too (the search never mutates a GameUnit).
+	var plain_state: Dictionary = act["state"]
+	var corrupt := _corrupt_charge
 	var ci_gap := [false]
-	state["charge_illegal"] = func(atk: GameUnit, vic: GameUnit, _gap: float,
-			_ca: Vector3, _cb: Vector3) -> bool:
-		var mkey := "%s|%s" % [str(key_of.get(atk.get_instance_id(), "?")),
-			str(key_of.get(vic.get_instance_id(), "?"))]
-		if not matrix.has(mkey):
-			push_error("[ACT_RECHECK] charge_illegal: no recorded answer for " + mkey)
+	state["charge_illegal"] = func(atk: GameUnit, vic: GameUnit, gap: float,
+			ca: Vector3, cv: Vector3) -> bool:
+		var akey := str(key_of.get(atk.get_instance_id(), ""))
+		var vkey := str(key_of.get(vic.get_instance_id(), ""))
+		if akey == "" or vkey == "":
+			push_error("[ACT_RECHECK] charge_illegal: unit outside the corpus state")
 			ci_gap[0] = true
 			return false
-		return bool(matrix[mkey])
+		var v := BattleSim.charge_illegal_plain(plain_state, header, akey, vkey, gap, ca, cv)
+		return (not v) if corrupt else v
+	_check_gate_grid(act, header, plain_state)
 
 	if terrain != null:
 		state["terrain_at"] = NodeRecheck.terrain_at_from_plain(terrain as Dictionary)
@@ -303,3 +334,65 @@ func _eq(mism: Array, field: String, rec: Variant, got: Variant, kind: String) -
 		_: bad = absf(float(rec) - float(got)) > EPS
 	if bad:
 		mism.append({"field": field, "recorded": rec, "got": got})
+
+
+## NML-1073 M2-0d: BattleSim.charge_illegal_plain against the recorded LIVE gap grid —
+## every ordered opposite-side pair over 29 gaps (0", 0.5", … 14"). from/to are left to
+## the plain state's own centres, which is exactly how the recorder called the live gate.
+## The ROOT pair matrix is kept as an extra sanity print: the same pure function at the
+## pair's own real gap must reproduce the matrix M2-0c replayed from.
+func _check_gate_grid(act: Dictionary, header: Dictionary, plain_state: Dictionary) -> void:
+	var grid: Dictionary = act.get("charge_illegal_grid", {})
+	var first_bad := true
+	for pk in grid:
+		var parts := str(pk).split("|")
+		if parts.size() != 2:
+			continue
+		_gate_pairs += 1
+		var row: Array = grid[pk]
+		for i in row.size():
+			var gap := float(i) * AiActRecorder.GATE_GRID_STEP_IN
+			var want := bool(row[i])
+			var got := BattleSim.charge_illegal_plain(plain_state, header, parts[0], parts[1], gap)
+			if _corrupt_gate:
+				got = not got
+			_gate_points += 1
+			if got != want:
+				_gate_bad += 1
+				if first_bad:
+					first_bad = false
+					_print_gate_bisect(plain_state, header, parts[0], parts[1], gap, want, got)
+	var matrix: Dictionary = act.get("charge_illegal", {})
+	var units: Dictionary = plain_state["units"]
+	for mk in matrix:
+		var mp := str(mk).split("|")
+		if mp.size() != 2 or not units.has(mp[0]) or not units.has(mp[1]):
+			continue
+		_matrix_pairs += 1
+		var gap := maxf(BattleSim.dist_in(NodeRecheck._vec3s((units[mp[0]] as Dictionary)["positions"]),
+			NodeRecheck._vec3s((units[mp[1]] as Dictionary)["positions"])) - BattleSim.CONTACT_IN, 0.0)
+		if BattleSim.charge_illegal_plain(plain_state, header, mp[0], mp[1], gap) != bool(matrix[mk]):
+			_matrix_bad += 1
+
+
+## Every intermediate the LIVE gate computes on the way to its answer, for the FIRST
+## disagreeing pair/gap — the bisect the fix starts from (which read is missing, or wrong).
+func _print_gate_bisect(plain_state: Dictionary, header: Dictionary, ak: String, vk: String,
+		gap: float, want: bool, got: bool) -> void:
+	var units: Dictionary = plain_state["units"]
+	var au: Dictionary = units[ak]
+	var vu: Dictionary = units[vk]
+	var band := float((au.get("bands", {}) as Dictionary).get("rush", 12))
+	var reach := BattleSim._melee_shroud_charge_in_plain(band, vu)
+	var probe_r := float(au.get("charge_probe_r", -1.0))
+	var ca := BattleSim._plain_centre(au)
+	var cv := BattleSim._plain_centre(vu)
+	var terrain_at: Callable = header.get("terrain_at", Callable())
+	print("  CHARGE_GATE MISMATCH %s|%s gap=%.2f live=%s pure=%s" % [ak, vk, gap, str(want), str(got)])
+	print("    victim.aircraft=%s attacker.rush=%.3f shroud=%s reach=%.3f" \
+		% [str(bool(vu.get("aircraft", false))), band, str(vu.get("shroud", [])), reach])
+	print("    cap_in=%.1f no_difficult=%s probe_r=%.5f terrain=%s" \
+		% [SoloController.DIFFICULT_MOVE_CAP_IN, str(bool(au.get("charge_no_difficult", false))),
+			probe_r, str(terrain_at.is_valid())])
+	print("    from=%s to=%s corridor_forced=%s" % [str(ca), str(cv),
+		str(BattleSim._corridor_forced_through_plain(ca, cv, probe_r, terrain_at))])

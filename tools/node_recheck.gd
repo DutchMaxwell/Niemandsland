@@ -203,6 +203,30 @@ static func _stand_in_unit(p: Dictionary, dyn: Dictionary = {}) -> GameUnit:
 		var d_rush := int(roundf(float(want.get("rush", 0.0)) - float(nat.get("rush", 0.0))))
 		if d_adv != 0 or d_rush != 0:
 			u.unit_properties["spell_move_mod"] = {"advance": d_adv, "rush": d_rush}
+	# NML-1073 M2-0d: the other two LIVE per-unit reads the ROOT search makes —
+	# ai_planner.gd:975 adds SoloController.max_activation_advance_bonus_in to the
+	# advance band for candidates_wide's reach gate, and AiShooting/the reach gates
+	# read SoloController.shooting_range_bonus. Both are recorded in the header
+	# profile (act_recorder.gd:112-113); answer them from the corpus here.
+	# shooting_range_bonus (:4966) has an ADDITIVE seam — unit_properties
+	# "spell_range_mod" is summed in verbatim — so it calibrates exactly, the same
+	# trick spell_move_mod plays for the bands above.
+	# max_activation_advance_bonus_in (:5070) has NONE: it is a pure walk over
+	# Bounding/Quick/Teleport in RulesRegistry, which the stand-in already drives
+	# from the profile's special_rules + item_grants + game_system + faction_folder.
+	# So it is CHECKED, not stamped — a divergence is a real corpus gap and says so
+	# out loud instead of replaying a silently wrong band (0.0 everywhere in the
+	# arena corpus, so this never fires there).
+	if p.has("shooting_range_bonus"):
+		var nat_range := SoloController.shooting_range_bonus(u)
+		if int(p["shooting_range_bonus"]) != nat_range:
+			u.unit_properties["spell_range_mod"] = int(u.unit_properties.get("spell_range_mod", 0)) \
+				+ int(p["shooting_range_bonus"]) - nat_range
+	if p.has("max_activation_advance_bonus_in"):
+		var nat_adv := SoloController.max_activation_advance_bonus_in(u)
+		if absf(float(p["max_activation_advance_bonus_in"]) - nat_adv) > EPS:
+			push_warning("[RECHECK] %s: max_activation_advance_bonus_in recorded=%f stand-in=%f" \
+				% [str(p.get("unit_id", "")), float(p["max_activation_advance_bonus_in"]), nat_adv])
 	return u
 
 
