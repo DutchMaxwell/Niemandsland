@@ -64,6 +64,9 @@ const FAST_PLANNER_GUARD := 320
 ## AROUND obstacles/Dangerous terrain instead of reach_closest returning a straight-through route (field
 ## report: a unit walked into Dangerous terrain toward its goal instead of routing around it).
 static var fast_planner_guard: int = FAST_PLANNER_GUARD
+## NML-1073 M4-0a: armed by MoveRecorder.begin() when NML_MOVE_TRACE=1 is set alongside NML_MOVE_DUMP —
+## every trace_* call below is gated on this ONE bool so the hot path stays zero-cost when off.
+static var trace_on := false
 const DIFFICULT_COST_MULT := 2.0            # Theta* soft cost: route AROUND Difficult when cheaper (research §1.3/3.3)
 const DANGEROUS_COST_MULT := 6.0            # Dangerous DEALS DAMAGE — avoid it hard (route around unless the detour is >6x)
 const THETA_DIAG := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
@@ -941,8 +944,15 @@ static func charge_contact_slots(mpos: Array, radii: Array, tgt_bases: Array) ->
 		ucentre += p as Vector2
 	ucentre /= maxf(1.0, float(mpos.size()))
 	var order := range(mpos.size())
+	# Bug-31 follow-up: sort_custom is UNSTABLE (Godot docs) and this predicate alone never says two
+	# candidates differ when their distance ties, so the order among tied movers was whatever the sort's
+	# internal pivoting happened to leave behind — not wrong on any ONE run, but not a guarantee either.
+	# `a`/`b` are the untouched original indices (order starts as identity), so falling back to a < b on
+	# a tie gives a full, version-independent order: lower original index wins the earlier (better) pick.
 	order.sort_custom(func(a, b) -> bool:
-		return _nearest_base_dist(mpos[a], tgt_bases) < _nearest_base_dist(mpos[b], tgt_bases))
+		var da := _nearest_base_dist(mpos[a], tgt_bases)
+		var db := _nearest_base_dist(mpos[b], tgt_bases)
+		return a < b if da == db else da < db)
 	var taken: Array = []
 	for idx in order:
 		var ri := float(radii[idx]) if idx < radii.size() else 0.5
@@ -1115,6 +1125,9 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 			if ctaut.is_empty() or (ctaut.back() as Vector2).distance_to(goal_pt) > EPS:
 				ctaut.append(goal_pt)
 			var cleg := _walk_offset(model_pos[idx], ctaut, Vector2.ZERO, allowance, walls, grid, woi, board)
+			if trace_on:
+				MoveRecorder.trace_model(idx, croute, ctaut, cleg, false)
+				MoveRecorder.trace_pull(cleg.back())   # v2: charges skip the pull — post == pre
 			result[idx] = cleg.back()
 			placed.append(idx)
 			if trails != null and idx < trails.size():
@@ -1129,8 +1142,13 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 		# still wait — try it again LAST, when the vacated ground and the advanced placed set give it both a
 		# clearer route and a FORWARD coherency pull. Each model defers at most once (deterministic, bounded).
 		var intended: float = minf(allowance, (model_pos[idx] as Vector2).distance_to(slot))
-		if not queue.is_empty() and not deferred.has(idx) and intended > STEP_IN \
-				and (model_pos[idx] as Vector2).distance_to(final_pt) < intended * STUCK_FRACTION:
+		var will_defer: bool = not queue.is_empty() and not deferred.has(idx) and intended > STEP_IN \
+				and (model_pos[idx] as Vector2).distance_to(final_pt) < intended * STUCK_FRACTION
+		if trace_on:
+			MoveRecorder.trace_model(idx, route, taut, leg, will_defer)
+		if will_defer:
+			if trace_on:
+				MoveRecorder.trace_pull(final_pt)   # v2: no pull attempted on a deferred try — post == pre
 			deferred[idx] = true
 			queue.push_back(idx)
 			continue
@@ -1142,6 +1160,8 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 			if linked.distance_to(final_pt) > EPS:
 				leg.append(linked)
 				final_pt = linked
+		if trace_on:
+			MoveRecorder.trace_pull(final_pt)   # v2: the endpoint AFTER _pull_into_placed (pre-pull unchanged above)
 		result[idx] = final_pt
 		placed.append(idx)
 		if trails != null and idx < trails.size():
@@ -1199,6 +1219,8 @@ static func untangle_endpoints(model_pos: Array, result: Array, radii: Array, al
 					result[j] = ei
 					improved = true
 					any = true
+					if trace_on:
+						MoveRecorder.trace_swap(i, j)
 		if not improved:
 			break
 	return any
@@ -1364,6 +1386,11 @@ static func _theta_star_b(start: Vector2, goal: Vector2, walls: Array, grid: Dic
 	var reach_closest: bool = bool(opts.get("reach_closest", false)) or fast_planner
 	var best_reach: Vector2i = start_c
 	var best_reach_d: float = start.distance_to(goal)
+	# NML-1073 M4-0b trace v2: every popped node's g / parent (as an index into THIS search's OWN pop
+	# order, so a port can replay the search node-by-node without carrying cell coordinates) / open-list
+	# size at pop — flushed to MoveRecorder at every exit below so a Rust port can be gated node-exact.
+	var _tn: Array = []
+	var _pop_idx := {}
 	while not open.is_empty() and guard > 0:
 		guard -= 1
 		var best_i := 0
@@ -1375,7 +1402,14 @@ static func _theta_star_b(start: Vector2, goal: Vector2, walls: Array, grid: Dic
 				best_f = f
 				best_i = k
 		var cur: Vector2i = open[best_i]
+		if trace_on:
+			var par_cell: Vector2i = parent[cur]
+			var par_idx: int = int(_pop_idx.get(par_cell, -1)) if par_cell != cur else -1
+			_pop_idx[cur] = _tn.size()
+			_tn.append({"g": float(g[cur]), "parent": par_idx, "open": open.size()})
 		if cur == goal_c:
+			if trace_on and not _tn.is_empty():
+				MoveRecorder.trace_theta_search(_tn)
 			return _theta_reconstruct(parent, pos, cur)
 		open.remove_at(best_i)
 		open_set.erase(cur)
@@ -1424,8 +1458,14 @@ static func _theta_star_b(start: Vector2, goal: Vector2, walls: Array, grid: Dic
 		if not _cspace_blocked(start, goal, walls, grid, opts):
 			var via_stub: float = float(g[best_reach]) + _segment_cost(pos[best_reach] as Vector2, goal, grid, opts)
 			if _segment_cost(start, goal, grid, opts) <= via_stub + EPS:
+				if trace_on and not _tn.is_empty():
+					MoveRecorder.trace_theta_search(_tn)
 				return [start, goal]
+		if trace_on and not _tn.is_empty():
+			MoveRecorder.trace_theta_search(_tn)
 		return _theta_reconstruct(parent, pos, best_reach)
+	if trace_on and not _tn.is_empty():
+		MoveRecorder.trace_theta_search(_tn)
 	return [start, goal]
 
 
@@ -1484,6 +1524,8 @@ static func _legs_cost(path: Array, i0: int, i1: int, grid: Dictionary, opts: Di
 static func _walk_offset(start_pt: Vector2, taut: Array, offset: Vector2, allowance: float,
 		walls: Array, grid: Dictionary, opts: Dictionary, board: Vector2) -> Array:
 	if taut.size() <= 1:
+		if trace_on:
+			MoveRecorder.trace_walk_spent(0.0)
 		return [start_pt]
 	var out: Array = [start_pt]
 	var spent := 0.0
@@ -1516,6 +1558,14 @@ static func _walk_offset(start_pt: Vector2, taut: Array, offset: Vector2, allowa
 			if frac > EPS:
 				out.append(a.lerp(b, frac))
 			break
+	if trace_on:
+		# v2: the TRUE arc length of the returned polyline — not the internal `spent` above, which a
+		# clipped final leg leaves one step stale — recomputed here so it always matches `out`'s own
+		# cumulative length by construction; move_recheck checks that invariant against "walked".
+		var s := 0.0
+		for i in range(1, out.size()):
+			s += (out[i] as Vector2).distance_to(out[i - 1] as Vector2)
+		MoveRecorder.trace_walk_spent(s)
 	return out
 
 
@@ -1589,6 +1639,8 @@ static func solve_formation(desired: Array, radii: Array, walls: Array,
 		if not allow_contact:
 			_project_coherency(out, radii, walls, opts, board)
 		var s := _formation_score(out, radii, forbid, zones)
+		if trace_on:
+			MoveRecorder.trace_solve_pass(_pass, out, s)
 		if s < best_score - EPS:
 			best_score = s
 			best = out.duplicate()

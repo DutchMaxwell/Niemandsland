@@ -741,6 +741,58 @@ func test_charge_horde_surrounds_a_single_big_base() -> void:
 	assert_int(contacts).override_failure_message("nur %d/6 am Ring" % contacts).is_greater_equal(5)
 
 
+# === NML-1073 M4-0c: charge_contact_slots' priority sort (:947-950) had no tie-break — Array.sort_custom
+# is documented unstable, so the order among distance-tied movers was whatever the algorithm's internal
+# pivoting happened to leave behind. The fix falls back to "lower original index first" on an exact tie.
+
+func test_charge_contact_slots_symmetric_three_break_ties_by_index() -> void:
+	# Three movers at the EXACT same distance from a single target base (a dead tie in
+	# _nearest_base_dist), clustered within +-2 degrees so they all compete for the SAME nearest fan
+	# slot. Repeatable across runs, and mover 0 (lowest original index) always wins that nearest slot —
+	# the earlier a mover is processed, the better pick it gets.
+	var mpos := [Vector2(20, 0).rotated(deg_to_rad(-2.0)), Vector2(20, 0).rotated(deg_to_rad(0.0)),
+		Vector2(20, 0).rotated(deg_to_rad(2.0))]
+	var radii := [0.5, 0.5, 0.5]
+	var tgt := [[Vector2(0, 0), 5.0]]
+	var first: Array = []
+	for run in range(5):
+		var slots := MovementPlanner.charge_contact_slots(mpos, radii, tgt)
+		if run == 0:
+			first = slots.duplicate(true)
+			continue
+		for i in slots.size():
+			assert_float((slots[i] as Vector2).distance_to(first[i] as Vector2)) \
+				.override_failure_message("run %d model %d drifted from run 0" % [run, i]).is_less(0.0001)
+	var best_for_0 := INF
+	for k in [0.0, 0.7, -0.7, 1.4, -1.4, 2.1, -2.1, 2.8, -2.8, PI]:
+		var slot := Vector2(0, 0) + Vector2(cos(k), sin(k)) * 5.5
+		best_for_0 = minf(best_for_0, (mpos[0] as Vector2).distance_to(slot))
+	assert_float((first[0] as Vector2).distance_to(mpos[0] as Vector2)).override_failure_message(
+		"mover 0 did not win the nearest fan slot: got %s" % str(first[0])).is_equal_approx(best_for_0, 0.0001)
+
+
+func test_charge_contact_slots_nine_symmetric_is_deterministic_across_twenty_runs() -> void:
+	# 9 movers, all EXACTLY equidistant to one target base — a dead tie for every pairwise comparison
+	# the priority sort makes. Pre-fix, Godot's unstable sort_custom never actually varied run-to-run in
+	# this build (measured: 20/20 identical) — but nothing GUARANTEED that; the tie-break makes it explicit.
+	var mpos: Array = []
+	var radii: Array = []
+	for i in range(9):
+		mpos.append(Vector2(20, 0).rotated(deg_to_rad(float(i) * 40.0)))
+		radii.append(0.5)
+	var tgt := [[Vector2(0, 0), 5.0]]
+	var first: Array = []
+	for run in range(20):
+		var slots := MovementPlanner.charge_contact_slots(mpos, radii, tgt)
+		if run == 0:
+			first = slots.duplicate(true)
+			continue
+		assert_int(slots.size()).is_equal(first.size())
+		for i in slots.size():
+			assert_float((slots[i] as Vector2).distance_to(first[i] as Vector2)) \
+				.override_failure_message("run %d model %d drifted from run 0" % [run, i]).is_less(0.0001)
+
+
 # === Testspiel-Welle 3 (2026-07-22): base-kanten-bewusste Terrain-Vermeidung (avoid_fine) ===
 
 func test_step_blocked_honours_fine_avoid_set_with_escape() -> void:
