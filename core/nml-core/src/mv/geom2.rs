@@ -197,6 +197,17 @@ pub fn seg_seg_distance(p1: V2, p2: V2, q1: V2, q2: V2) -> f64 {
         .min(point_seg_distance(q1, p1, p2).min(point_seg_distance(q2, p1, p2)))
 }
 
+/// `MovementPlanner._world_before` — movement_planner.gd:1326. The world-frame
+/// canonical point order (smaller x, then y), with the same EPS band the cell
+/// order does not need. The components are read as Variant floats, so the
+/// comparison runs in f64 over f32-exact numbers.
+#[inline]
+pub fn world_before(a: V2, b: V2) -> bool {
+    let (ax, ay) = (a[0] as f64, a[1] as f64);
+    let (bx, by) = (b[0] as f64, b[1] as f64);
+    ax < bx - EPS || ((ax - bx).abs() <= EPS && ay < by - EPS)
+}
+
 /// `MovementPlanner.polyline_length` — movement_planner.gd:253. Each leg is an
 /// f32 `distance_to`; the sum accumulates in f64, left to right.
 pub fn polyline_length(points: &[V2]) -> f64 {
