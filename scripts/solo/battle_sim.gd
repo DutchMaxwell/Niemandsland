@@ -1460,6 +1460,17 @@ static func state_to_plain(state: Dictionary, with_profile := true) -> Dictionar
 			pu["profile"] = _unit_profile(su["unit"])
 		units[uid] = pu
 	var out := {"round": state["round"], "rounds_total": state["rounds_total"],
+		# NML-1073 M3-0c: the live Dictionary's key INSERTION order. A live
+		# state["units"] preserves insertion order (Godot 4 Dictionary), but
+		# the recorded corpus round-trips through JSON.stringify(sort_keys=
+		# true), which comes back key-sorted — a reader that rebuilds "units"
+		# off that sorted order hands the root search
+		# (ai_planner.gd "for key in state[\"units\"]") a DIFFERENT unit order
+		# than the one that produced the recorded pick, so best_idx/runner_idx
+		# and the final (unit, action) choice can diverge. `units.keys()` here
+		# is the SAME order the loop above just inserted, i.e. the order
+		# `state["units"]` had at record time.
+		"unit_order": units.keys(),
 		"units": units, "scoring": state["scoring"]}
 	var obj: Array = []
 	for o in state.get("objectives", []):
@@ -1472,13 +1483,19 @@ static func state_to_plain(state: Dictionary, with_profile := true) -> Dictionar
 	# los_blocked Callable with the CURRENT unit centres, so a plain state that
 	# carries only positions cannot reproduce it — the Rust port would have to
 	# own the terrain grid. Recorded instead as the answers themselves: row i is
-	# one character per unit in iteration order, "1" = `_los_clear(state, i, j)`
-	# is true (line of fire is clear), "0" = blocked. Absent when the state has
-	# no los_blocked seam (then `_los_clear` returns true for every pair).
+	# one character per unit KEY-SORTED (NML-1073 M3-0b — a live Dictionary's
+	# iteration order is insertion order, but JSON.stringify's sort_keys writes
+	# "units" back out key-sorted; a reader keyed off the round-tripped dict
+	# then read row/col i against the WRONG unit past ~10 units, e.g. "p1_10"
+	# sorts before "p1_2"), "1" = `_los_clear(state, i, j)` is true (line of
+	# fire is clear), "0" = blocked. Absent when the state has no los_blocked
+	# seam (then `_los_clear` returns true for every pair).
 	var lb: Callable = state.get("los_blocked", Callable())
 	if lb.is_valid():
+		var los_keys: Array = (state["units"] as Dictionary).keys()
+		los_keys.sort()
 		var centres: Array = []
-		for uid in state["units"]:
+		for uid in los_keys:
 			centres.append(_centre_of(state["units"][uid]))
 		var rows: Array = []
 		for i in range(centres.size()):

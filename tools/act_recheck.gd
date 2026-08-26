@@ -150,16 +150,23 @@ func _check_act(act: Dictionary, header: Dictionary, profiles: Dictionary,
 	var plain_state: Dictionary = act["state"]
 	var corrupt := _corrupt_charge
 	var ci_gap := [false]
-	state["charge_illegal"] = func(atk: GameUnit, vic: GameUnit, gap: float,
-			ca: Vector3, cv: Vector3) -> bool:
-		var akey := str(key_of.get(atk.get_instance_id(), ""))
-		var vkey := str(key_of.get(vic.get_instance_id(), ""))
-		if akey == "" or vkey == "":
-			push_error("[ACT_RECHECK] charge_illegal: unit outside the corpus state")
-			ci_gap[0] = true
-			return false
-		var v := BattleSim.charge_illegal_plain(plain_state, header, akey, vkey, gap, ca, cv)
-		return (not v) if corrupt else v
+	# NML-1073 M3-0b: stamp the pure gate ONLY when the ORIGINAL activation actually
+	# wired one — recorded as act["charge_gate"] (act_recorder.gd begin()). core_selfplay
+	# never wires SoloController.charge_candidate_illegal, so its acts record false and
+	# leaving state["charge_illegal"] unset here replays the live search exactly instead
+	# of manufacturing a veto it never applied. Absent key (pre-M3-0b corpora) defaults
+	# to true — those replays are unchanged.
+	if _stamps_charge_gate(act):
+		state["charge_illegal"] = func(atk: GameUnit, vic: GameUnit, gap: float,
+				ca: Vector3, cv: Vector3) -> bool:
+			var akey := str(key_of.get(atk.get_instance_id(), ""))
+			var vkey := str(key_of.get(vic.get_instance_id(), ""))
+			if akey == "" or vkey == "":
+				push_error("[ACT_RECHECK] charge_illegal: unit outside the corpus state")
+				ci_gap[0] = true
+				return false
+			var v := BattleSim.charge_illegal_plain(plain_state, header, akey, vkey, gap, ca, cv)
+			return (not v) if corrupt else v
 	_check_gate_grid(act, header, plain_state)
 
 	if terrain != null:
@@ -214,8 +221,13 @@ func _check_act(act: Dictionary, header: Dictionary, profiles: Dictionary,
 ## NML-1073 M3-0: core_selfplay's dynamic los_blocked, rebuilt from the recorded
 ## "los_pairs" root grid (row i/col j, "0"=blocked) — nearest-centre match, same
 ## best-effort as _los_at_from_recorded below (a rollout moves units past the root).
+## NML-1073 M3-0b: `keys` sorted explicitly — the writer (battle_sim.gd
+## state_to_plain) now builds row/col i from the SAME key-sorted order, so this
+## must never lean on a Dictionary's iteration order (a live one is insertion
+## order; only a JSON round-trip happens to come back key-sorted).
 func _los_blocked_from_recorded(state: Dictionary, plain_state: Dictionary) -> Callable:
 	var keys: Array = (plain_state["units"] as Dictionary).keys()
+	keys.sort()
 	var rows: Array = plain_state["los_pairs"]
 	var centres: Array = []
 	for k in keys:
@@ -292,6 +304,15 @@ func _stamp_knobs(k: Dictionary) -> void:
 	BattleSim._cast_env = -1
 	OS.set_environment("NML_SIM_SPACING", "1" if bool(k.get("seam_spacing", false)) else "0")
 	BattleSim._spacing_env = -1
+
+
+## NML-1073 M3-0b: whether to stamp the pure charge-legality gate for this act — true
+## when the recorded activation actually wired one (act_recorder.gd begin()'s
+## "charge_gate"), true too when the key is absent (a pre-M3-0b corpus — unchanged).
+## Static (like the comparators below) so a unit test can pin the contract without
+## booting this file as the SceneTree tool.
+static func _stamps_charge_gate(act: Dictionary) -> bool:
+	return bool(act.get("charge_gate", true))
 
 
 static func _compare_pick(rec: Dictionary, got: Dictionary, mism: Array) -> void:
