@@ -119,7 +119,16 @@ static func _rebuild_state(plain: Dictionary, profiles: Dictionary) -> Dictionar
 	state["objectives"] = objectives
 	var units := {}
 	var plain_units: Dictionary = plain["units"]
-	for uid in plain_units:
+	# NML-1073 M3-0c: reinsert in the RECORDED order (state_to_plain's
+	# "unit_order") when the corpus carries it. `plain_units` itself iterates
+	# key-sorted (it round-tripped through JSON.stringify(sort_keys=true)), but
+	# the root search (ai_planner.gd "for key in state[\"units\"]") walks
+	# insertion order — rebuilding sorted silently hands it a DIFFERENT unit
+	# order than the one that produced the recorded pick. Absent key
+	# (pre-M3-0c corpus) falls back to `plain_units`'s own order, i.e. today's
+	# (sorted) behaviour — unchanged.
+	var order: Array = plain.get("unit_order", plain_units.keys())
+	for uid in order:
 		var su: Dictionary = (plain_units[uid] as Dictionary).duplicate(true)
 		su["unit"] = _stand_in_unit(profiles[uid], su)
 		su["positions"] = _vec3s(su.get("positions", []))

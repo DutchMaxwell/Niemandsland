@@ -1460,6 +1460,17 @@ static func state_to_plain(state: Dictionary, with_profile := true) -> Dictionar
 			pu["profile"] = _unit_profile(su["unit"])
 		units[uid] = pu
 	var out := {"round": state["round"], "rounds_total": state["rounds_total"],
+		# NML-1073 M3-0c: the live Dictionary's key INSERTION order. A live
+		# state["units"] preserves insertion order (Godot 4 Dictionary), but
+		# the recorded corpus round-trips through JSON.stringify(sort_keys=
+		# true), which comes back key-sorted — a reader that rebuilds "units"
+		# off that sorted order hands the root search
+		# (ai_planner.gd "for key in state[\"units\"]") a DIFFERENT unit order
+		# than the one that produced the recorded pick, so best_idx/runner_idx
+		# and the final (unit, action) choice can diverge. `units.keys()` here
+		# is the SAME order the loop above just inserted, i.e. the order
+		# `state["units"]` had at record time.
+		"unit_order": units.keys(),
 		"units": units, "scoring": state["scoring"]}
 	var obj: Array = []
 	for o in state.get("objectives", []):

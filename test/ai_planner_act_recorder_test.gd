@@ -1,6 +1,7 @@
 extends GdUnitTestSuite
 
 const ActRecheck := preload("res://tools/act_recheck.gd")   ## NML-1073 M3-0b
+const NodeRecheck := preload("res://tools/node_recheck.gd")   ## NML-1073 M3-0c
 ## NML-1073 M2-0a: AiActRecorder (scripts/solo/act_recorder.gd) captures every
 ## planner ACTIVATION — the full input the search read (state, charge-illegal
 ## matrix, statics) plus the pick it returned — as one JSON line, preceded by
@@ -342,3 +343,40 @@ func test_a_gateless_activation_records_and_replays_without_the_charge_gate() ->
 	assert_bool(ActRecheck._stamps_charge_gate(act)).is_false()
 	# a pre-M3-0b corpus (no "charge_gate" key at all) must default to true — unchanged
 	assert_bool(ActRecheck._stamps_charge_gate({})).is_true()
+
+
+## NML-1073 M3-0c: a state whose insertion order differs from SORTED key order
+## must round-trip through state_to_plain() + NodeRecheck._rebuild_state() with
+## the SAME (non-sorted) keys() order it had live — the root cause this fixes:
+## the recorded "units" JSON round-trips key-sorted (JSON.stringify's
+## sort_keys), and ai_planner.gd's root search walks `for key in
+## state["units"]`, so a rebuild that leans on plain_units' own (sorted) order
+## hands the search a DIFFERENT unit than the one the recorded pick chose. Three
+## units inserted OUT of key-sorted order (U9, U10, U2) pin both halves of the
+## fix: state_to_plain's "unit_order" and _rebuild_state's reinsertion. The
+## JSON round-trip (JSON.stringify(sort_keys=true) -> JSON.parse_string, the
+## EXACT act_recorder.gd/act_recheck.gd pipeline) is load-bearing here — a live
+## GDScript Dictionary never loses insertion order on its own, so skipping the
+## round-trip would pass even with the bug (caught once by hand against a
+## temporary "ignore unit_order" edit: this test still passed without it).
+func test_unit_order_round_trips_through_plain_form_and_rebuild() -> void:
+	var u9 := _armed(1, [Vector3(9.0 * IN2M, 0, 0)], "U9")
+	var u10 := _armed(1, [Vector3(10.0 * IN2M, 0, 0)], "U10")
+	var u2 := _armed(2, [Vector3(2.0 * IN2M, 0, 0)], "U2")
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"U9": u9, "U10": u10, "U2": u2}
+	var state := BattleSim.capture(army, func() -> Array: return [],
+		func(_i: int) -> int: return 0, 1, 3)
+	var plain := BattleSim.state_to_plain(state, false)
+	assert_array(plain.get("unit_order", []) as Array).is_equal(["U9", "U10", "U2"])
+	# the same JSON round trip act_recorder.gd writes (JSON.stringify(..., "",
+	# true, true) = sort_keys) and act_recheck.gd reads back — this is what
+	# actually reorders "units" to U10/U2/U9; a bare in-memory Dictionary never
+	# forgets its insertion order on its own.
+	var round_tripped: Dictionary = JSON.parse_string(JSON.stringify(plain, "", true, true))
+
+	var profiles := {}
+	for uid in (state["units"] as Dictionary):
+		profiles[uid] = BattleSim._unit_profile((state["units"][uid] as Dictionary)["unit"])
+	var rebuilt := NodeRecheck._rebuild_state(round_tripped, profiles)
+	assert_array((rebuilt["units"] as Dictionary).keys()).is_equal(["U9", "U10", "U2"])
