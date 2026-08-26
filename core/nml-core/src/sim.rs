@@ -15,9 +15,11 @@ use crate::combat::{
 };
 use crate::geom;
 use crate::io::{Action, Seams};
+use crate::rng::GodotRng;
 use crate::rules::Spell;
 use crate::spell::{cast_success_chance_base, official_pick_order, spell_damage_ev_of, spell_ev_of};
 use crate::state::State;
+use crate::terrain::{gives_cover, Terrain};
 use crate::unit::{Ctx, UnitStatic};
 use crate::{CONTROL_EPS, IN2M};
 
@@ -71,6 +73,22 @@ pub enum Unsupported {
     /// pre-move state cannot answer that. Never occurs in the recorded corpus
     /// (`_policy_candidates` ai_planner.gd:517-545 pairs a shoot only with HOLD).
     MovedShootLos,
+    /// `plan_with_rollout` scored nothing at all — the GDScript answers
+    /// `{"used": false}` (ai_planner.gd:141-142), which is not a pick.
+    NoCandidate,
+    /// `top_k <= 0`: the search degrades to the 1-ply `plan()` (:126), whose
+    /// dictionary has neither `waits` nor `rolled_units`. Call `plan::plan`.
+    OnePlyDegrade,
+    /// `AiPlanner.playout_search` fired on a CLOSE top-2 (:231-265): up to 7
+    /// STOCHASTIC `full_playout`s per branch then decide the pick outright.
+    /// M2-4 ports it; until then the search declines rather than guesses.
+    PlayoutArbitration,
+    /// `AiPlanner.playout_net` is non-empty — every imagined activation is
+    /// steered by a trained network (`_policy_step_net`, :627-645), which is not
+    /// rules code and is declined rather than approximated.
+    NetPlayout,
+    /// `AiMissionEval.fit_mode` — `score.rs` ports the HAND half only.
+    FittedEval,
 }
 
 /// `BattleSim._los_clear` battle_sim.gd:666-670, read off the recorded answers.
@@ -113,15 +131,28 @@ fn morale_fails_expected(state: &State, us: &UnitStatic, i: usize) -> bool {
     fail_p >= 0.5
 }
 
-/// `BattleSim._apply_expected_wounds` battle_sim.gd:1027-1054 — expected unsaved
-/// wounds fill model by model in ARRAY order; the sub-wound remainder stays on
-/// the TARGET as `wound_frac` and joins the next volley instead of being floored
-/// away. `stochastic_rng` is null in every rollout node, so only the expectation
-/// branch exists here.
-fn apply_expected_wounds(state: &mut State, ti: usize, ev: f64) {
+/// `BattleSim._apply_expected_wounds` battle_sim.gd:1131-1155 — expected unsaved
+/// wounds fill model by model in ARRAY order.
+///
+/// TWO rounding rules, one per caller. `rng = None` is `stochastic_rng == null`,
+/// the rollout path: the sub-wound remainder stays on the TARGET as `wound_frac`
+/// and joins the next volley instead of being floored away. `rng = Some(..)` is
+/// `resolve_stochastic`, the PLAYOUT path: the remainder is spent on one
+/// mean-preserving coin flip (`randf() < pool - left`) and `wound_frac` is
+/// CLEARED, not carried. The draw happens once per call and BEFORE any model is
+/// touched — that position in the stream is what the arbitration's sums depend on.
+fn apply_expected_wounds(state: &mut State, ti: usize, ev: f64, rng: Option<&mut GodotRng>) {
     let pool = state.wound_frac[ti] + ev;
     let mut left = pool.floor() as i64;
-    state.wound_frac[ti] = pool - (left as f64);
+    match rng {
+        Some(r) => {
+            if r.randf() < pool - (left as f64) {
+                left += 1;
+            }
+            state.wound_frac[ti] = 0.0;
+        }
+        None => state.wound_frac[ti] = pool - (left as f64),
+    }
     while left > 0 && !state.wounds[ti].is_empty() {
         let take = left.min(state.wounds[ti][0]);
         state.wounds[ti][0] -= take;
@@ -168,7 +199,7 @@ fn expected_shooting_morale(
 /// template with the snapshot's live `alive` and `in_cover` written over it.
 /// (`melee` only adds the fatigue flag, which no shooting call sets.)
 #[inline]
-fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
+pub fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
     let mut c = us.ctx;
     c.models = state.alive[i];
     c.in_cover = state.in_cover[i];
@@ -188,15 +219,15 @@ fn ctx_of_melee(us: &UnitStatic, state: &State, i: usize) -> Ctx {
 /// Scratch buffers so a threat sweep allocates once per call, not per pair.
 #[derive(Default)]
 pub struct Scratch {
-    keep: Vec<usize>,
-    attacks: Vec<i64>,
+    pub keep: Vec<usize>,
+    pub attacks: Vec<i64>,
 }
 
 /// `BattleSim._profiles_of(su, false, d)` battle_sim.gd:714-749 fused with the
 /// distance gate of `AiShooting.profiles_in_range` (ai_shooting.gd:16-17): the
 /// merged ranged set is precomputed per unit, so all that is left per call is
 /// the range filter and the survivor scaling.
-fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
+pub fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
     sc.keep.clear();
     sc.attacks.clear();
     for (i, p) in us.shoot.iter().enumerate() {
@@ -211,7 +242,7 @@ fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
 /// `BattleSim._profiles_of(su, true)` battle_sim.gd:714-749, MELEE half: every
 /// melee profile strikes (no range gate), each with its survivor-scaled attack
 /// count. Fills `sc.attacks` index-parallel to `us.melee`.
-fn melee_profiles_of(us: &UnitStatic, alive: i64, sc: &mut Scratch) {
+pub fn melee_profiles_of(us: &UnitStatic, alive: i64, sc: &mut Scratch) {
     sc.attacks.clear();
     for p in &us.melee {
         sc.attacks.push(effective_attacks(p.attacks, alive, us.model_count));
@@ -424,19 +455,20 @@ fn pick_cast(
 
 /// `BattleSim._apply_cast_effect` battle_sim.gd:951-982 — damage lands as the
 /// scaled expectation, a modifier as a scaled stamp on the target's `mods`.
-/// The `rng` branch does not exist here: every rollout node is the expectation
-/// path (`stochastic_rng` is null).
+/// `rng` is handed straight down: a stochastic activation rounds a spell's
+/// damage the same way it rounds a volley's, from the same stream.
 fn apply_cast_effect(
     statics: &[UnitStatic],
     state: &mut State,
     ti: usize,
     entry: &Spell,
     scale: f64,
+    rng: Option<&mut GodotRng>,
 ) {
     if entry.effect_kind == "damage" {
         let ut = &statics[state.roster.profile[ti]];
         let ev = spell_damage_ev_of(entry, &ctx_of(ut, state, ti));
-        apply_expected_wounds(state, ti, scale * ev);
+        apply_expected_wounds(state, ti, scale * ev, rng);
         return;
     }
     let m = entry.modifier;
@@ -468,7 +500,13 @@ fn apply_cast_effect(
 /// the attempt and pays for it. `tokens` is read ONCE before the loop, so all
 /// three faces shop with the same purse. Later faces see the state the earlier
 /// ones already damaged — that order is load-bearing.
-fn cast_phase(statics: &[UnitStatic], state: &mut State, si: usize, los: &[bool]) {
+fn cast_phase(
+    statics: &[UnitStatic],
+    state: &mut State,
+    si: usize,
+    los: &[bool],
+    mut rng: Option<&mut GodotRng>,
+) {
     // p.10: a Shaken unit spends its activation idle and never casts.
     if state.shaken[si] {
         return;
@@ -490,7 +528,7 @@ fn cast_phase(statics: &[UnitStatic], state: &mut State, si: usize, los: &[bool]
         let Some((idx, ti)) = pick_cast(statics, state, si, &spells, tokens, d3, caster_x, los) else {
             continue;
         };
-        apply_cast_effect(statics, state, ti, &spells[idx], weight * p_success);
+        apply_cast_effect(statics, state, ti, &spells[idx], weight * p_success, rng.as_deref_mut());
         if cost.is_none() {
             cost = Some(spells[idx].threshold);
         }
@@ -563,6 +601,23 @@ pub fn reply_threat(statics: &[UnitStatic], state: &State, player: i64) -> Vec<f
     incoming
 }
 
+/// Where the mover's post-move cover answer comes from — `battle_sim.gd:598-600`
+/// probes the live `terrain_at` Callable at `centre + delta`, and a REPLAY of a
+/// recorded node instead reads the answer the recorder wrote down.
+///
+/// The distinction is not cosmetic: a rollout imagines destinations no recorder
+/// ever visited, so `Recorded` cannot serve it and `Board` cannot serve a node
+/// corpus (whose header carries no terrain at all).
+#[derive(Debug, Clone, Copy)]
+pub enum Cover<'a> {
+    /// The recorded `cover_dest`. `None` = the node carries no answer, and the
+    /// flag is then left exactly as the parent state had it.
+    Recorded(Option<bool>),
+    /// The live board. An ABSENT board is `terrain_at.is_valid() == false`, and
+    /// the GDScript then skips the write altogether (battle_sim.gd:598).
+    Board(&'a Terrain),
+}
+
 /// `BattleSim.resolve` battle_sim.gd:570-652 — one activation resolved IN
 /// EXPECTATION on a clone, for HOLD, ADVANCE, RUSH and CHARGE.
 ///
@@ -587,6 +642,52 @@ pub fn resolve(
     cover_dest: Option<bool>,
     seams: Seams,
     cast_los: Option<&[bool]>,
+) -> Result<State, Unsupported> {
+    resolve_with(statics, state, action, Cover::Recorded(cover_dest), seams, cast_los, None)
+}
+
+/// The same activation against the LIVE board — the entry point a rollout uses,
+/// because it invents destinations no recorder ever probed. `cast_los` is
+/// `None`: with the cast seam on, a moved caster's targeting would need the
+/// post-move sight row, which is M1-5 work and is reported, not guessed.
+pub fn resolve_on_board(
+    statics: &[UnitStatic],
+    state: &State,
+    action: &Action,
+    terrain: &Terrain,
+    seams: Seams,
+) -> Result<State, Unsupported> {
+    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, None)
+}
+
+/// `BattleSim.resolve_stochastic` battle_sim.gd:473-478 — the SAME activation
+/// with the static `stochastic_rng` set for its duration, which is the only
+/// thing that distinguishes it. Every wound-rounding remainder inside this one
+/// call is decided by a coin flip from `rng`; the generator is advanced in place,
+/// so a playout's draws stay in one unbroken stream across its activations.
+///
+/// The GDScript sets a class static and clears it after; here the generator is
+/// threaded, which is the same scope with the re-entrancy hazard removed.
+pub fn resolve_stochastic_on_board(
+    statics: &[UnitStatic],
+    state: &State,
+    action: &Action,
+    terrain: &Terrain,
+    seams: Seams,
+    rng: &mut GodotRng,
+) -> Result<State, Unsupported> {
+    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, Some(rng))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn resolve_with(
+    statics: &[UnitStatic],
+    state: &State,
+    action: &Action,
+    cover: Cover,
+    seams: Seams,
+    cast_los: Option<&[bool]>,
+    mut rng: Option<&mut GodotRng>,
 ) -> Result<State, Unsupported> {
     let kind = action.kind;
     if kind != HOLD && kind != ADVANCE && kind != RUSH && kind != CHARGE {
@@ -616,8 +717,8 @@ pub fn resolve(
     // rules (bands + the Musician bonus, solo_controller.gd:4966-4982), flattened
     // into the profile table at capture; RUSH and CHARGE share the rush band.
     let band_in = match kind {
-        ADVANCE => next.profiles.list[pi_s].move_bands.advance,
-        RUSH | CHARGE => next.profiles.list[pi_s].move_bands.rush,
+        ADVANCE => next.bands[si].advance,
+        RUSH | CHARGE => next.bands[si].rush,
         _ => 0.0,
     };
     let mut moved = false;
@@ -638,8 +739,17 @@ pub fn resolve(
         for p in next.positions[si].iter_mut() {
             *p = geom::to_f64(geom::add(geom::to_f32(*p), delta));
         }
-        if let Some(c) = cover_dest {
-            next.in_cover[si] = c;
+        // battle_sim.gd:598-600 — T2b: the mover's cover follows it, probed at
+        // the POST-move unit centre (`centre + delta`, after both the band clamp
+        // and the spacing clamp).
+        match cover {
+            Cover::Recorded(Some(c)) => next.in_cover[si] = c,
+            Cover::Recorded(None) => {}
+            Cover::Board(t) => {
+                if t.is_valid() {
+                    next.in_cover[si] = gives_cover(t.type_at(geom::add(centre, delta)));
+                }
+            }
         }
     }
     // --- cast sub-phase (battle_sim.gd:602-607), seam-gated ---
@@ -653,7 +763,7 @@ pub fn resolve(
             Some(r) => r.to_vec(),
             None => (0..next.units()).map(|j| los_clear(&next, si, j)).collect(),
         };
-        cast_phase(statics, &mut next, si, &row);
+        cast_phase(statics, &mut next, si, &row, rng.as_deref_mut());
     }
 
     // --- shoot (battle_sim.gd:608-630); HOLD and ADVANCE only ---
@@ -690,7 +800,7 @@ pub fn resolve(
                     }
                 };
                 next.casts[si] -= sp_cost; // 0 unless the spell rider fired
-                apply_expected_wounds(&mut next, ti, volley);
+                apply_expected_wounds(&mut next, ti, volley, rng.as_deref_mut());
                 let ut = &statics[next.roster.profile[ti]];
                 expected_shooting_morale(&mut next, ut, ti, alive_before, wounds_before);
             }
@@ -727,7 +837,7 @@ pub fn resolve(
                     melee_profiles_of(us, next.alive[si], &mut sc);
                     melee_ev(&us.melee, &sc.attacks, &att, &def, true)
                 };
-                apply_expected_wounds(&mut next, ti, ev);
+                apply_expected_wounds(&mut next, ti, ev, rng.as_deref_mut());
                 next.fatigued[si] = true;
                 if next.alive[ti] > 0 {
                     // Survivors strike back, already survivor-scaled by the
@@ -741,7 +851,7 @@ pub fn resolve(
                         melee_profiles_of(ut, next.alive[ti], &mut sc);
                         melee_ev(&ut.melee, &sc.attacks, &att, &def, false)
                     };
-                    apply_expected_wounds(&mut next, si, ev_back);
+                    apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
                     next.fatigued[ti] = true;
                 }
                 expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before);

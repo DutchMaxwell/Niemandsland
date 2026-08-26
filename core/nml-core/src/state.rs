@@ -95,6 +95,32 @@ impl Default for MoveBands {
     }
 }
 
+fn six() -> f64 {
+    6.0
+}
+
+/// `SoloController.sim_move_bands(unit)` as the recorder writes it into the
+/// DYNAMIC layer — `BattleSim.state_to_plain` battle_sim.gd:1402. Distinct from
+/// `Profile.move_bands` on purpose: the profile's copy is written ONCE per game,
+/// this one is re-read per activation because `move_bands_for_props`
+/// (movement_range_controller.gd:80) derives the bands from a dict that GROWS
+/// during a live game. The two defaults are the caller's own fallbacks —
+/// `bands.get("advance", 6)` (ai_planner.gd:713) and `bands.get("rush", 12)`
+/// (ai_planner.gd:1192) — so an absent key answers what the GDScript answers.
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct Bands {
+    #[serde(default = "six")]
+    pub advance: f64,
+    #[serde(default = "twelve")]
+    pub rush: f64,
+}
+
+impl Default for Bands {
+    fn default() -> Self {
+        Bands { advance: 6.0, rush: 12.0 }
+    }
+}
+
 /// The immutable per-game profile table; units index into it.
 #[derive(Debug, Default)]
 pub struct Profiles {
@@ -165,6 +191,11 @@ pub struct Marker {
     pub destructible: bool,
     #[serde(default)]
     pub destroyed: bool,
+    /// `BattleSim.apply_destroy_step` (:405-423) stamps the destruction ORDER
+    /// here; `vp_score_round`'s demolition branch (:365-383) reads it back to
+    /// decide who collects the revenge VP.
+    #[serde(default)]
+    pub destroyed_seq: i64,
 }
 
 /// The dynamic layer. `#[derive(Clone)]` reproduces `BattleSim.clone_state`
@@ -224,6 +255,21 @@ pub struct State {
     /// every pair. Shared across clones because it is never rewritten — see the
     /// staleness note on `sim::resolve`.
     pub los_pairs: Option<Rc<Vec<bool>>>,
+    // --- NML-1073 M2-0c/M2-0d gate reads, per unit, act corpus only ---
+    /// `SoloController.sim_move_bands(unit)` at capture time — battle_sim.gd:1402.
+    pub bands: Vec<Bands>,
+    /// `[penalty_in, floor_in]` of `SoloController.melee_shroud_charge_in`
+    /// (:5150), resolved at record time — `AiActRecorder._melee_shroud_params`.
+    /// `None` = the victim carries no rule of the Melee-Shrouding family, and
+    /// the charge reach is then the raw band.
+    pub shroud: Vec<Option<[f64; 2]>>,
+    /// `has_special_rule("Strider") or has_special_rule("Flying")` — the p.13
+    /// difficult-terrain exemption (`AiActRecorder._stamp_gate_reads`).
+    pub charge_no_difficult: Vec<bool>,
+    /// `SoloController._move_base_radius_m(_moving_models(unit))` (:4735/:4915) —
+    /// NOT `radii`: the gate measures unit PLUS attached heroes and floors at
+    /// `SeparationChecker.DEFAULT_BASE_RADIUS_M`.
+    pub charge_probe_r: Vec<f64>,
 }
 
 impl State {

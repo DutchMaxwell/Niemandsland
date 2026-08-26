@@ -74,7 +74,12 @@ pub fn presence(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 
         return 0.0;
     }
     let d = control_gap_in(state, i, obj_pos);
-    let rush = state.profile(i).move_bands.rush;
+    // `float(SoloController.sim_move_bands(su["unit"]).get("rush", 12))`
+    // (ai_mission_eval.gd:602) — the LIVE read, which is what `State.bands`
+    // carries (io.rs falls back to the profile's copy of the same call when a
+    // corpus predates the per-activation stamp). Reading the profile directly
+    // would answer 12" for a unit that picked up a `Slow` aura mid-game.
+    let rush = state.bands[i].rush;
     // An empty position array gives d = INF; the cast then saturates at i64::MAX
     // and `needed > moves_left` drops the unit — the same answer GDScript's
     // int(ceil(INF)) path produces.

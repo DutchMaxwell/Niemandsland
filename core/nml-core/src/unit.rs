@@ -152,6 +152,20 @@ pub struct UnitStatic {
     pub fearless: bool,
     pub is_caster: bool,
     pub spells: Vec<Spell>,
+    /// `GameUnit.has_special_rule("Caster Group")` — the round-start refill
+    /// resets such a unit to its BEARER COUNT instead of accumulating
+    /// (ai_planner.gd:487-492 via game_unit.gd:426-434).
+    pub caster_group: bool,
+    /// `GameUnit.casts_per_round`, which `GameUnit._ready` sets from
+    /// `get_caster_value()` (game_unit.gd:420) — the profile's `caster_value`
+    /// IS that number.
+    pub casts_per_round: i64,
+    /// `RulesRegistry.unit_rule_active(gu, "Battleborn" | "Steadfast")`
+    /// (rules_registry.gd:136-142) — the two rules that clear Shaken for free at
+    /// a round start (ai_planner.gd:493-495). Static per unit, so the registry
+    /// is read here once instead of per imagined round.
+    pub battleborn_active: bool,
+    pub steadfast_active: bool,
     /// Rules this unit carries that the port does NOT model — reported by name
     /// with a node count instead of being silently skipped.
     pub unimplemented: Vec<Unimplemented>,
@@ -565,6 +579,10 @@ impl UnitStatic {
             fearless: has_special_rule(&p.special_rules, "Fearless"),
             is_caster,
             spells,
+            caster_group: has_special_rule(&p.special_rules, "Caster Group"),
+            casts_per_round: p.caster_value,
+            battleborn_active: unit_rule_active(reg, p, "Battleborn"),
+            steadfast_active: unit_rule_active(reg, p, "Steadfast"),
             unimplemented,
         }
     }
