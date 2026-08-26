@@ -18,6 +18,7 @@
 pub mod cost;
 pub mod geom2;
 pub mod io;
+pub mod pull;
 pub mod replay;
 pub mod theta;
 
@@ -32,6 +33,10 @@ pub use geom2::{
 };
 pub use io::{load_moves, read_moves, CallOpts, Constants, FlowEntry, MoveCall, MoveCorpus,
     MoveHeader, SolvePass, Trace};
+pub use pull::{
+    board_clamp, furthest_clear, furthest_clear_steps, string_pull, string_pull_bent, walk_offset,
+    walk_offset_bent, PullBend, WalkBend,
+};
 pub use replay::{searches, ReplaySearch};
 pub use theta::{
     board_extents, cell_before, cell_center_fine, theta_reconstruct, theta_star, theta_star_b,
