@@ -28,11 +28,115 @@ static func _board_rows(state: Dictionary) -> Array:
 	return BattleSim.board_rows(state)
 
 
+## NML-1046 M2a: magic-cast telemetry seed — per-side granted/caster/spell-book
+## counts computed ONCE from the built rosters (before any activation), plus
+## the empty per-game cast/token counters _play_round fills in as it plays.
+static func _magic_init(units1: Array, units2: Array) -> Dictionary:
+	var magic := {"granted": {"p1": 0, "p2": 0}, "casters": {"p1": 0, "p2": 0},
+		"books_resolved": {"p1": 0, "p2": 0}, "casts": {"p1": 0, "p2": 0},
+		"tokens_spent": {"p1": 0, "p2": 0},
+		# NML-1064: eligibility counters — "never eligible" (no tokens, or no
+		# enemy in spell range) vs "eligible but chose not to cast" needs its
+		# own denominator; casts/tokens_spent alone can't tell them apart.
+		"caster_activations": {"p1": 0, "p2": 0}, "in_range_activations": {"p1": 0, "p2": 0},
+		# NML-1069: WHAT was cast, not just how much was paid — the cast sub-phase
+		# stamps a kind per attempt (battle_sim.gd:_cast_phase), and a corpus that
+		# only ever throws damage spells is a different bug from one that never casts.
+		"spells_by_kind": {"p1": {"damage": 0, "buff": 0, "debuff": 0},
+			"p2": {"damage": 0, "buff": 0, "debuff": 0}}}
+	for pair in [["p1", units1], ["p2", units2]]:
+		var key: String = pair[0]
+		for u in (pair[1] as Array):
+			var gu := u as GameUnit
+			magic["granted"][key] = int(magic["granted"][key]) + gu.casts_current
+			if gu.casts_current > 0:
+				magic["casters"][key] = int(magic["casters"][key]) + 1
+				if not SpellsRegistry.spells_for_unit(gu).is_empty():
+					magic["books_resolved"][key] = int(magic["books_resolved"][key]) + 1
+	return magic
+
+
+## Played-actions-only tally: a positive token delta across the ONE resolve at
+## the PLAYED action (core_selfplay.gd:167) IS the one-spell-per-activation
+## cast event (battle_sim.gd:_cast_phase) — the pair/fork resolves in _play_round
+## run on CLONES and never reach this call.
+static func _magic_tally(magic: Dictionary, side_key: String, tokens_before: int,
+		tokens_after: int) -> void:
+	var delta := tokens_before - tokens_after
+	if delta > 0:
+		magic["casts"][side_key] = int(magic["casts"][side_key]) + 1
+		magic["tokens_spent"][side_key] = int(magic["tokens_spent"][side_key]) + delta
+
+
+## NML-1069 companion of _magic_tally: the KINDS the played apply cast. `events`
+## is the round's cast log (state["cast_events"], accumulated across the round),
+## `from` its size read PRE-apply — so only this activation's stamps are counted.
+static func _spells_by_kind_tally(magic: Dictionary, side_key: String, events: Array,
+		from: int) -> void:
+	var by_kind: Dictionary = magic["spells_by_kind"][side_key]
+	for i in range(maxi(from, 0), events.size()):
+		var kind := str((events[i] as Dictionary).get("kind", ""))
+		if by_kind.has(kind):
+			by_kind[kind] = int(by_kind[kind]) + 1
+
+
+## NML-1064 round-start refill — GF v3.5.1 Caster(X): "Gets X spell tokens at
+## the start of each round, but can't hold more than 6" (accumulate+cap-6
+## lives on GameUnit.add_round_caster_points, game_unit.gd:426). The build-
+## time grant (initialize_caster_points, _units_from_list) covers round 1
+## only — the round loop (_play_one) calls this for round_no >= 2.
+static func _refill_round_caster_points(su: Dictionary, magic: Dictionary, side_key: String) -> void:
+	var gu := su.get("unit") as GameUnit
+	if gu == null:
+		return
+	# The sim only ever DECREMENTS su["casts"] (the cast sub-phase spends the
+	# attempt's tokens, battle_sim.gd:_cast_phase) and never writes back to the
+	# GameUnit — sync the ledger to the sim's spend before granting, or the
+	# refill starts from a stale (too-high) balance.
+	gu.casts_current = int(su.get("casts", 0))
+	var before := gu.casts_current
+	gu.add_round_caster_points()
+	su["casts"] = gu.casts_current
+	magic["granted"][side_key] = int(magic["granted"][side_key]) + (gu.casts_current - before)
+
+
+## NML-1064 eligibility tally — "never eligible" (no tokens, or no living
+## enemy within spell range) vs "eligible but chose not to cast" needs its
+## own denominator; _magic_tally alone (a positive token delta) can't tell
+## them apart. Reads `state` PRE-apply — the same instant _magic_tally reads
+## casts_before at the call site — so the resolve this activation is about
+## to produce never counts here.
+static func _magic_eligibility_tally(magic: Dictionary, side_key: String,
+		state: Dictionary, actor_key: String) -> void:
+	var su: Dictionary = (state["units"] as Dictionary).get(actor_key, {})
+	if int(su.get("casts", 0)) <= 0:
+		return
+	magic["caster_activations"][side_key] = int(magic["caster_activations"][side_key]) + 1
+	var gu := su.get("unit") as GameUnit
+	if gu == null:
+		return
+	var max_range := 0.0
+	for e in SpellsRegistry.spells_for_unit(gu):
+		max_range = maxf(max_range, float((e as Dictionary).get("range_in", 0)))
+	if max_range <= 0.0:
+		return
+	var actor_player := int(su.get("player", 0))
+	var positions: Array = su.get("positions", [])
+	for k in (state["units"] as Dictionary):
+		var ou: Dictionary = state["units"][k]
+		if int(ou.get("player", 0)) == actor_player or int(ou.get("alive", 0)) <= 0:
+			continue
+		if BattleSim.dist_in(positions, ou.get("positions", [])) <= max_range + 0.001:
+			magic["in_range_activations"][side_key] = int(magic["in_range_activations"][side_key]) + 1
+			return
+
+
 var _army1 := ""
 var _army2 := ""
 var _seed := 1
 var _games := 1
 var _out := ""
+var _magic: Dictionary = {}
 
 
 func _initialize() -> void:
@@ -66,6 +170,7 @@ func _play_one(game_seed: int) -> void:
 		printerr("[CORE] FATAL: empty army (%s / %s)" % [_army1, _army2])
 		quit(1)
 		return
+	_magic = _magic_init(units1, units2)
 	var objectives := [Vector3(-16.0 * IN2M, 0, 0), Vector3.ZERO, Vector3(16.0 * IN2M, 0, 0)]
 	# Realism wave (maintainer 14.08.): the REAL symmetric map layouter is the
 	# one terrain source for table and school. NOTE the old _gen_terrain drew 9
@@ -81,10 +186,20 @@ func _play_one(game_seed: int) -> void:
 	var positions_log: Array = []
 	for round_no in range(1, ROUNDS + 1):
 		state["round"] = round_no
+		# NML-1069: the round's cast log starts empty, and every spell modifier from
+		# the last round expires with it ("until the end of the round").
+		state["cast_events"] = []
+		BattleSim.reset_round_mods(state)
 		for k in state["units"]:
 			var su: Dictionary = state["units"][k]
 			su["activated"] = false
 			su["fatigued"] = false
+			# NML-1064: round 1 keeps the build-time grant (initialize_caster_points,
+			# _units_from_list) -- round 2+ must refill under the real per-round
+			# Caster(X) rule, or every core game after round 1 plays with a dead
+			# spell economy (add_round_caster_points is never called otherwise).
+			if round_no >= 2:
+				_refill_round_caster_points(su, _magic, "p%d" % int(su["player"]))
 		opener = _play_round(state, opener, rng, positions_log, round_no, game_seed,
 			owners, objectives)
 		state = _last_state   # adopt the played round (resolve works on clones)
@@ -164,7 +279,20 @@ func _play_round(state: Dictionary, opener: int, rng: RandomNumberGenerator,
 						round_no, owners, objectives, frng))
 				row["fork"] = {"chosen_runs": c_runs, "runner_runs": r_runs}
 		positions_log.append(row)
+		# NML-1046 M2a: the ONE played apply per activation — the pair/fork
+		# resolves above run on clones and must never feed the magic tally.
+		var ak := str((pick["action"] as Dictionary).get("unit", ""))
+		var casts_before := int((state["units"].get(ak, {}) as Dictionary).get("casts", 0))
+		var events_before := (state.get("cast_events", []) as Array).size()
+		# NML-1064: eligibility tally reads `state` PRE-apply, the same instant
+		# casts_before above is read.
+		_magic_eligibility_tally(_magic, "p%d" % turn, state, ak)
 		state = BattleSim.resolve_stochastic(state, pick["action"], rng)
+		if (state["units"] as Dictionary).has(ak):
+			var casts_after := int((state["units"][ak] as Dictionary).get("casts", 0))
+			_magic_tally(_magic, "p%d" % turn, casts_before, casts_after)
+		_spells_by_kind_tally(_magic, "p%d" % turn,
+			state.get("cast_events", []), events_before)
 		last_side = turn
 		turn = 2 if turn == 1 else 1
 	# writeback: resolve clones — copy the final round state over the caller's
@@ -280,40 +408,22 @@ func _pick_for(state: Dictionary, player: int) -> Dictionary:
 	return pick if bool(pick.get("used", false)) else {}
 
 
-## Round-end seize (persistence rule): majority of non-shaken alive units
-## within 3" wins the marker; both near => neutral; nobody near keeps owner.
+## Round-end marker seize — THE ONE referee (BattleSim.playout_seize), which
+## is also the rule the real game runs (SoloController.seize_objectives).
 func _seize(state: Dictionary, objectives: Array, owners: Array) -> void:
 	_seize_on(_last_state if not _last_state.is_empty() else state, objectives, owners)
 
 
 ## Seize on EXACTLY the given state — the fork playouts (E2-v2) score their
 ## own cloned worlds; the _last_state override above is main-loop-only.
-func _seize_on(state: Dictionary, objectives: Array, owners: Array) -> void:
-	for i in range(objectives.size()):
-		var near1 := 0
-		var near2 := 0
-		for k in state["units"]:
-			var su: Dictionary = state["units"][k]
-			if int(su["alive"]) <= 0 or bool(su.get("shaken", false)):
-				continue
-			for p in su["positions"]:
-				if ((p as Vector3) - (objectives[i] as Vector3)).length() <= 3.0 * IN2M:
-					if int(su["player"]) == 1:
-						near1 += 1
-					else:
-						near2 += 1
-					break
-		if near1 > near2:
-			owners[i] = 1
-		elif near2 > near1:
-			owners[i] = 2
-		elif near1 > 0:
-			owners[i] = 0
-		# S3 fix: write ownership back into the STATE — features/eval read the
-		# objectives' owner field, which otherwise stays 0 all game (S3-light
-		# found obj_owned_* frozen at zero in every core position).
-		if i < (state["objectives"] as Array).size():
-			((state["objectives"] as Array)[i] as Dictionary)["owner"] = owners[i]
+## NML gap 11: this used to be a SECOND seize with a rule of its own — it
+## counted BODIES and gave a contested marker to the MAJORITY, the very rule
+## BattleSim dropped on 16.08. Every label this corpus wrote, and every fork
+## branch it scored, was judged against a game that does not exist. It is now
+## a pass-through; the markers come from the state, so `_objectives` is only
+## kept for the call sites (and MUST keep its underscore, project.godot:37).
+static func _seize_on(state: Dictionary, _objectives: Array, owners: Array) -> void:
+	BattleSim.playout_seize(state, owners)
 
 
 ## Lightweight GameUnits from an Army-Forge list JSON — the test-fixture
@@ -371,12 +481,78 @@ func _units_from_list(path: String, player: int) -> Array:
 			_append_selection(host, ud)
 		else:
 			printerr("[CORE] WARN: combined partner %s not found" % str(ud["joinToUnit"]))
+	# NML-1046 M1: grant caster tokens via the SAME shared method the import
+	# path uses (equipment_distributor.gd:394) — no duplicated logic. Must run
+	# AFTER the combined pass above: Caster Group's X is the unit's model
+	# count, and combined halves must already be folded into the host.
+	for built in out:
+		(built as GameUnit).initialize_caster_points()
+	return out
+
+
+## A weapon PROFILE token always declares attacks and/or range — a rule grant
+## never does — so this flags "A2" (attacks), a `24"` range figure, or a
+## "Range..." field.
+static func _is_weapon_profile_token(token: String) -> bool:
+	var re := RegEx.new()
+	re.compile("^A\\d+$|\\d\"$|^Range\\b")
+	return re.search(token) != null
+
+
+## Rule labels an upgrade OPTION's label grants — the parenthesized tail lists them
+## (e.g. "Archivist (Caster(2))" grants "Caster(2)"; "Champion (Fear, Caster(1))"
+## grants both, split at TOP-LEVEL commas so "Caster(1)"'s own parens stay intact).
+## No parenthesized tail = a plain weapon/item swap, not a rule grant -> empty.
+## NML-1066 guard: a WEAPON-SWAP option also carries a parenthesized tail (its
+## profile, e.g. "Energy Sword (A2, AP(1), Rending)") — if ANY split token looks
+## like a weapon-profile field, the whole label is a swap, not a rule grant, so
+## it must NOT leak stray tokens into unit-wide special_rules (RulesRegistry/AiEv
+## read that array for combat EVs — this harness stays parity-bound).
+static func _rules_in_upgrade_label(label: String) -> Array:
+	var open := label.find("(")
+	var close := label.rfind(")")
+	if open < 0 or close <= open:
+		return []
+	var inner := label.substr(open + 1, close - open - 1)
+	var out: Array = []
+	var depth := 0
+	var start := 0
+	for i in range(inner.length()):
+		var c := inner[i]
+		if c == "(":
+			depth += 1
+		elif c == ")":
+			depth -= 1
+		elif c == "," and depth == 0:
+			var piece := inner.substr(start, i - start).strip_edges()
+			if piece != "":
+				out.append(piece)
+			start = i + 1
+	var last := inner.substr(start).strip_edges()
+	if last != "":
+		out.append(last)
+	for token in out:
+		if _is_weapon_profile_token(token):
+			return []
 	return out
 
 
 ## Adds one selection's models (with their Tough pools) and weapons to a unit —
-## used for the base selection and again for its combined partner.
+## used for the base selection and again for its combined partner, so a
+## combined-in hero's OWN upgrade rules also reach the (shared) host unit.
 func _append_selection(gu: GameUnit, ud: Dictionary) -> void:
+	# NML-1066: rules an upgrade GRANTS (e.g. "Archivist (Caster(2))") never land
+	# in ud["rules"] — the real import path resolves them from the option's typed
+	# "gains" (opr_api_client.gd:850), but this lightweight fixture carries only
+	# the option's label string, so we parse it instead. Must run before
+	# initialize_caster_points() (the loop at the end of _units_from_list) so an
+	# upgrade-granted Caster gets its tokens.
+	var rules: Array = gu.unit_properties.get("special_rules", [])
+	for su in ud.get("selectedUpgrades", []):
+		var option := (su as Dictionary).get("option", {}) as Dictionary
+		for rl in _rules_in_upgrade_label(str(option.get("label", ""))):
+			if rl not in rules:
+				rules.append(rl)
 	for w in ud.get("weapons", []):
 		var wd := w as Dictionary
 		var ow := OPRApiClient.OPRWeapon.new()
@@ -472,7 +648,9 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array,
 	var winner := "draw"
 	if p1 != p2:
 		winner = "p1" if p1 > p2 else "p2"
-	var result := {"schema": 1, "board_schema": 5, "rule_vocab": "v1c",
+	# NML-1046 M1: v1c -> v1d — caster-era rows (units now carry granted spell
+	# tokens) must stay distinguishable from pre-fix corpus rows.
+	var result := {"schema": 1, "board_schema": 5, "rule_vocab": "v1d",
 		"school_world": 2, "terrain": _world.get("pieces", []),
 		"unknown_rules": BattleSim.unknown_rules.keys(),
 		"tool": "core_selfplay", "seed": game_seed,
@@ -483,7 +661,11 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array,
 		"objectives": {"p1": p1, "p2": p2, "neutral": owners.size() - p1 - p2},
 		"vp": {"p1": vp1, "p2": vp2}, "scoring": "end",
 		"winner": winner, "planner_positions": positions_log, "planner_calib": [],
-		"roster": _roster_names()}
+		"roster": _roster_names(),
+		# NML-1046 M2a: per-game cast counter — without it a probe has no way to
+		# measure whether spells are actually firing (NML-1069 adds the per-kind
+		# split, so "only ever damage" is a different reading from "never casts").
+		"magic": _magic}
 	if _out != "":
 		DirAccess.make_dir_recursive_absolute(_out)
 		var f := FileAccess.open(_out.path_join("core_s%d.json" % game_seed), FileAccess.WRITE)

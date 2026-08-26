@@ -809,7 +809,7 @@ func test_the_wreck_dangerous_test_line_travels(timeout := 120000) -> void:
 
 # === 13. NML-962 — the routing wave from the NML-960 audit =====================================
 #
-# The audit (~/nml-mission/nml960_audit.md) classified all 228 still-local log_event sites
+# The NML-960 audit classified all 228 still-local log_event sites
 # against the #291 selection rule: 51 travel, 176 stay, decisions G1-G5. The door is the same
 # _log_rule_event for every routed site, so one drivable representative per FAMILY pins that the
 # family actually reaches it: token lifecycle, dice-less refusal, room event (G4), and the

@@ -314,7 +314,11 @@ func test_rich_policy_step_avoids_the_gun_the_cheap_one_walks_into() -> void:
 ## Opener seat: the LAST boundary alone votes (R6 mode — proven best opener
 ## seat); responder seat keeps the discounted blend (R7 — proven best
 ## responder). The static must default to responder mode.
+## U-wave (24.08.) promoted seat_off (both seats blend) to default; this test
+## pins the researched opener last-boundary mode via NML_SEAT_DEPTH=on.
 func test_seat_aware_blend_last_boundary_votes_alone_for_the_opener() -> void:
+	OS.set_environment("NML_SEAT_DEPTH", "on")
+	AiPlanner._seat_env = -1
 	var near := _state()
 	var far := AiPlanner.rollout(near, {"unit": "Screamer", "kind": AiDecision.Action.HOLD}, 2, 1)
 	var l1 := _leaf(near, 2)
@@ -325,6 +329,8 @@ func test_seat_aware_blend_last_boundary_votes_alone_for_the_opener() -> void:
 	AiPlanner.opener_seat = false
 	assert_float(deep).is_equal_approx(l2, 0.0001)
 	assert_float(AiPlanner._blend_score([near, far], 2)).is_equal_approx((l1 + 0.5 * l2) / 1.5, 0.0001)
+	OS.set_environment("NML_SEAT_DEPTH", "")
+	AiPlanner._seat_env = -1
 
 
 ## Opener-doctrine probe: each arm produces its forced round-1 shape — rush

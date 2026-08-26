@@ -339,6 +339,18 @@ var _solo_dev: bool = false                  # developer mode: render the AI's d
 ## Per-activation stderr trace of the both-AI arena loop (env NML_AI_TRACE=1) — the ladder tooling's
 ## progress/stall diagnostic for long unattended headless matches. Off by default: zero output in normal play.
 var _solo_arena_trace: bool = OS.get_environment("NML_AI_TRACE") == "1"
+## Harness seam (arena per-activation captures, NML_CAPTURE_ACTS): awaited AFTER an activation has
+## fully RESOLVED. A screenshot hung on ai_unit_activated instead lands mid-choreography — that signal
+## fires while the controller has already applied the final positions, and _solo_present_move_start()
+## then puts the models BACK at their route start for the glide. Unset in the shipped game: is_valid()
+## is false, nothing is awaited, and not one extra frame or dice draw enters the match.
+var solo_activation_done: Callable = Callable()
+## Harness seam (arena round-boundary boards): AWAITED at the END of a both-AI round — after the
+## auto-seize and the round advance, before the next round's first activation. A grab hung on
+## round_advanced instead lands a whole activation late (a signal handler that awaits is fire-and-
+## forget, and the loop runs on while the grab waits for its frame). Unset in the shipped game:
+## is_valid() is false, nothing is awaited. Argument: the round that just ENDED.
+var solo_round_done: Callable = Callable()
 var _solo_toast: Label = null                # transient AI-action attribution/outcome toast
 var _solo_live_announce: Array = []          # announce rings/line currently on the board (leak sweep)
 var _solo_toast_gen: int = 0   # generation token so an auto-hide never blanks a newer toast
@@ -897,7 +909,17 @@ func _run_solo_ai_turn() -> void:
 ## SoloController (official decision tree, terrain, walls), follow with the camera, narrate to the battle
 ## log, then resolve Dangerous tests / shooting / melee with real tray dice. A Shaken unit idles and
 ## recovers instead (OPR p.10). Returns the activated unit, or null when the AI side is done.
+##
+## Thin wrapper so the harness seam fires on EVERY exit path of the body below (Shaken idle and the
+## destroyed-mid-activation returns included), always with the board in its settled end state.
 func _solo_activate_one_ai() -> GameUnit:
+	var done: GameUnit = await _solo_activate_one_ai_body()
+	if done != null and solo_activation_done.is_valid():
+		await solo_activation_done.call(done)
+	return done
+
+
+func _solo_activate_one_ai_body() -> GameUnit:
 	# Community #163: guarantee one OS message-pump tick per unit. A run of HOLD/idle
 	# units used to await NOTHING (the pace/animate awaits are has_move-gated), so the
 	# whole AI side ran as one synchronous burst and Windows flagged the window "not
@@ -1833,6 +1855,8 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 			network_manager.broadcast_round_advance()
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL, "Round %d begins" % opr_army_manager.current_round, true)
+		if solo_round_done.is_valid():
+			await solo_round_done.call(round_no)   # harness: the board round_no ENDED on, nothing else acting
 	_solo_ai_busy = false
 
 
@@ -2102,8 +2126,8 @@ func _solo_player_label(pid: int) -> String:
 	return "P%d" % pid
 
 
-## End-of-game summary (goal 003 P2): after SOLO_GAME_ROUNDS the match ends — objectives held per side
-## decide the winner (OPR standard missions; with no markers on the table, surviving models break the tie).
+## End-of-game summary (goal 003 P2): after SOLO_GAME_ROUNDS the match ends — BattleSim.mission_winner
+## names the winner from the mission's OWN currency (NML-1048), never from a second count taken here.
 ## A battle-log block + a results dialog; the table stays as-is (the Next-Round button still works for
 ## anyone playing on).
 func _solo_show_game_summary() -> void:
@@ -2130,26 +2154,44 @@ func _solo_show_game_summary() -> void:
 	var side_b_label: String = _solo_player_label(ai_slot) if _solo_both_ai else "NACHTMAHR"
 	var win_a: String = "%s wins" % side_a_label if _solo_both_ai else "You win — NACHTMAHR yields."
 	var win_b: String = "%s wins" % side_b_label if _solo_both_ai else "NACHTMAHR claims the field."
-	var verdict: String
-	if objectives.is_empty():
-		# No markers on the table: fall back to surviving models (documented tie-break, not an OPR mission).
-		var ai_alive := _solo_side_alive(ai_slot)
-		var human_alive := _solo_total_alive() - ai_alive
-		verdict = win_a if human_alive > ai_alive else (win_b if ai_alive > human_alive else "Draw")
-	else:
-		verdict = win_a if human_held > ai_held else (win_b if ai_held > human_held else "Draw")
+	# NML-1048: the verdict comes from the SAME referee the result JSON uses — BattleSim.mission_winner.
+	# The old line counted the markers still held at the buzzer and never opened the mission VP ledger
+	# _solo_book_mission_vp fills every round, so on the four progressive missions the two drifted apart:
+	# over 633 self-play games, 55 of the 233 round_vp ones named the LOSING side (seed 3003000: board
+	# 1:2 markers, ledger 6:5 VP, referee "p1", summary "P2 wins").
+	var winner_side: String = BattleSim.mission_winner(SoloController.mission_scoring,
+		terrain_overlay.get_objective_owners() if terrain_overlay != null else [],
+		SoloController.mission_vp, SoloController.mission_markers,
+		_solo_side_alive(1), _solo_side_alive(2))   # the referee speaks P1/P2, never "you"/"AI"
+	var human_won: bool = winner_side == ("p%d" % human_slot)
+	var ai_won: bool = winner_side == ("p%d" % ai_slot)
+	var verdict: String = win_a if human_won else (win_b if ai_won else "Draw")
+	# The ledger IS the rule on a progressive mission, so the player has to see it next to the markers.
+	# Read it the way the referee reads it — guarded by size. A ledger shorter than the two seats is a
+	# state BattleSim.mission_winner answers with 0, and a face-off game does not own one at all, so an
+	# unguarded read here would take the whole game-over dialog down over a figure that mission never uses.
+	var ledger: Array = SoloController.mission_vp
+	var vp_a: int = int(ledger[human_slot - 1]) if ledger.size() >= human_slot else 0
+	var vp_b: int = int(ledger[ai_slot - 1]) if ledger.size() >= ai_slot else 0
+	var scored_by_vp: bool = SoloController.mission_scoring == "round_vp"
 	if battle_log != null:
 		_log_rule_event(BattleLog.Category.GENERAL, "=== GAME OVER — %d rounds played ===" % SOLO_GAME_ROUNDS, true)
 		if not objectives.is_empty():
 			_log_rule_event(BattleLog.Category.GENERAL, "Objectives — %s: %d · %s: %d · neutral: %d" % [
 				side_a_label, human_held, side_b_label, ai_held, neutral], true)
+		if scored_by_vp:
+			_log_rule_event(BattleLog.Category.GENERAL, "Mission VP (decides) — %s: %d · %s: %d" % [
+				side_a_label, vp_a, side_b_label, vp_b], true)
 		_log_rule_event(BattleLog.Category.GENERAL, verdict, true)
 	var dlg := AcceptDialog.new()
 	dlg.title = "Game over"
 	var obj_block: String = ("Objectives held:\n  %s: %d\n  %s: %d\n  Neutral: %d\n\n" % [
 		(side_a_label.capitalize() if not _solo_both_ai else side_a_label), human_held, side_b_label, ai_held, neutral]) \
 		if not objectives.is_empty() else "No objective markers were on the table.\n\n"
-	dlg.dialog_text = "%d rounds played.\n\n%s%s" % [SOLO_GAME_ROUNDS, obj_block, verdict]
+	var vp_block: String = ("Mission VP (decides):\n  %s: %d\n  %s: %d\n\n" % [
+		(side_a_label.capitalize() if not _solo_both_ai else side_a_label), vp_a, side_b_label, vp_b]) \
+		if scored_by_vp else ""
+	dlg.dialog_text = "%d rounds played.\n\n%s%s%s" % [SOLO_GAME_ROUNDS, obj_block, vp_block, verdict]
 	dlg.confirmed.connect(dlg.queue_free)
 	dlg.canceled.connect(dlg.queue_free)
 	if ThemeManager != null:
@@ -6542,28 +6584,10 @@ func _solo_regen_pick(target: GameUnit, from_spell: bool = false) -> Dictionary:
 	return {"target": best, "name": best_name}
 
 
-## Banner's morale-test bonus for a unit (wave 5): +1 when the unit or an attached hero carries Banner
-## AND its book fields the rule for this system (RulesRegistry gate; the bonus value is data with the
-## constant fallback). Coverage wave: DATA aliases of the family (Courage Aura, Hold the Line, Hive
-## Bond, …) resolve through the generic primitive layer — the strongest single bonus applies (rule
-## effects of the same name never stack; different names are one family here, best-of keeps it sane).
+## Banner's morale-test bonus for a unit — gap 18a: the body now lives in
+## SoloController.morale_bonus_of so the dice path and BattleSim share ONE truth.
 func _solo_morale_bonus(unit: GameUnit) -> int:
-	var best := 0
-	var members: Array = [unit]
-	if unit != null and unit.has_method("get_attached_heroes"):
-		members = members + unit.get_attached_heroes()
-	for m in members:
-		var member := m as GameUnit
-		if member == null or member.get_alive_count() == 0:
-			continue
-		if RulesRegistry.unit_rule_active(member, "Banner"):
-			best = maxi(best, int(RulesRegistry.unit_param(member, "Banner", "morale_bonus", AiCombatMath.BANNER_MORALE_BONUS)))
-		for e in RulesRegistry.unit_rules_of_primitive(member, "Banner"):
-			var ed := e as Dictionary
-			if str(ed["name"]) == "Banner":
-				continue
-			best = maxi(best, int((ed.get("params", {}) as Dictionary).get("morale_bonus", 0)))
-	return best
+	return SoloController.morale_bonus_of(unit)
 
 
 ## Apply a resolved wound pair to the defender: Regeneration rolls only against the regen-able bucket

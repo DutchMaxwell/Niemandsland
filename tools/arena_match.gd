@@ -83,7 +83,11 @@ var _position_rows: Array = []          # E1/E6: {side, round, seq, features} �
 
 # Showcase capture (capture= / NML_AI_CAPTURE) — board PNGs + full battle log + verbatim decisions.
 var _capture_dir := ""                  # empty => captures off (the ladder default)
-var _act_capture: Callable = Callable() # per-activation board capture (NML_CAPTURE_ACTS=1; wired onto ai_unit_activated)
+var _act_capture: Callable = Callable() # per-activation trail dump + queued PNG (NML_CAPTURE_ACTS=1; on ai_unit_activated)
+var _act_capture_png: Callable = Callable() # the queued PNG grab (main.solo_activation_done — the SETTLED board)
+var _act_png_pending := ""              # file name queued by _act_capture, drained by _act_capture_png
+var _act_fan: Node = null               # NML_CAPTURE_FAN overlay, kept alive until the deferred grab
+var _act_started := -1                  # activations BEGUN so far — the MOMENT stamp of every capture; -1 = not armed
 var _move_trail_dump: Array = []        # per-activation per-model path polylines (the offline wall-audit's input)
 var _move_trail_walls: Array = []       # wall segments (world XZ metres), stashed at the first activation capture
 var _all_decisions: Array = []          # EVERY decision record verbatim, annotated {side, round}
@@ -122,14 +126,14 @@ func _run() -> void:
 		DirAccess.make_dir_recursive_absolute(_capture_dir)
 		# PER-ACTIVATION board captures (maintainer directive: watch the AI play move by move — the wall-
 		# pathfinding complaints need eyes, not metrics). NML_CAPTURE_ACTS=1 + a real renderer (gamescope
-		# --backend headless): one PNG right after every AI activation applies its move. Fire-and-forget —
-		# under batch=1 a capture may lag ~one activation; fine for a visual route review.
+		# --backend headless): one PNG per AI activation, grabbed once the activation has RESOLVED. Nothing
+		# lags a picture behind its label any more — both grabs hang on awaited seams in the round loop.
 		if OS.get_environment("NML_CAPTURE_ACTS") == "1":
-			var act_n: Array = [0]
+			_act_started = 0
 			var arena_self := self
 			# connected below once `solo` exists (see after _ensure_solo_controller)
 			_act_capture = func(u) -> void:
-				act_n[0] += 1
+				_act_started += 1
 				var unit_tag := str(u.get_name()).to_lower().replace(" ", "_") if u != null else "unit"
 				# PER-MODEL PATH DUMP (maintainer: "nach jeder Modellbewegung — angemessenes Maß"): every
 				# model's planned polyline + base radius, for the offline wall-crossing AUDIT + re-render.
@@ -166,7 +170,7 @@ func _run() -> void:
 								tgt_bases.append([snappedf(tmi.node.global_position.x, 0.0001),
 									snappedf(tmi.node.global_position.z, 0.0001),
 									snappedf(solo_node.model_base_radius_m(tmi), 0.0001)])
-					_move_trail_dump.append({"act": act_n[0], "unit": str(u.get_name()) if u != null else "?", "flying": _fly,
+					_move_trail_dump.append({"act": _act_started, "unit": str(u.get_name()) if u != null else "?", "flying": _fly,
 						"coherent": _coh, "action": int(_rep.get("action", -1)),
 						"target": str(_tgt.get_name()) if _tgt != null else "",
 						"tgt_bases": tgt_bases,
@@ -174,13 +178,13 @@ func _run() -> void:
 				# NML_CAPTURE_FAN=1: draw the activating unit's sight+range fan into the capture — the
 				# watch-loop verification of the fan overlay (I review it against ruins/containers frame by
 				# frame before it ships to the player's selection UI).
-				var fan: Node = null
+				_act_fan = null
 				if OS.get_environment("NML_CAPTURE_FAN") == "1" and u != null:
-					fan = main.get_node_or_null("ArenaFanDebug")
-					if fan == null:
-						fan = SightFanController.new()
-						fan.name = "ArenaFanDebug"
-						main.add_child(fan)
+					_act_fan = main.get_node_or_null("ArenaFanDebug")
+					if _act_fan == null:
+						_act_fan = SightFanController.new()
+						_act_fan.name = "ArenaFanDebug"
+						main.add_child(_act_fan)
 					var solo_ctl: Node = main.get("solo_controller")
 					var fan_ranges: Array = []
 					if solo_ctl != null:
@@ -192,19 +196,33 @@ func _run() -> void:
 					var tbl: Node = main.get("table")
 					var hw: float = (tbl.table_size.x * 0.3048 / 2.0) if tbl != null else 0.0
 					var hd: float = (tbl.table_size.y * 0.3048 / 2.0) if tbl != null else 0.0
-					fan.show_fan_for(u, main.get("terrain_overlay"), fan_ranges,
+					_act_fan.show_fan_for(u, main.get("terrain_overlay"), fan_ranges,
 						Rect2(Vector2(-hw, -hd), Vector2(hw * 2.0, hd * 2.0)))
-				await arena_self._capture_board(main, "act%03d_%s.png" % [act_n[0], unit_tag])
-				if fan != null:
-					fan.clear_fan()
+				# QUEUE the PNG — grabbing here caught the board mid-choreography (measured, seed 7: 6 of
+				# 27 consecutive act PNGs byte-identical, 4 of them with the later unit moving >1"). The
+				# trail dump above stays on this signal: it must read last_move_paths / last_report before
+				# any pile-in or casualty edits them.
+				_act_png_pending = "act%03d_%s.png" % [_act_started, unit_tag]
+			# Drains the queue once the activation has fully resolved (main.solo_activation_done).
+			_act_capture_png = func(_u) -> void:
+				if _act_png_pending.is_empty():
+					return
+				await arena_self._capture_board(main, _act_png_pending)
+				_act_png_pending = ""
+				if _act_fan != null:
+					_act_fan.clear_fan()
+					_act_fan = null
 		# Full-log collection: the Battle Log panel's data source is a 200-entry ring buffer, so a
 		# whole match overflows it — mirror every entry as it is logged and dump the mirror at the end.
 		battle_log.entry_added.connect(func(entry: Dictionary) -> void: _log_entries.append(entry))
-		# Round-end boards: advance_round() emits AFTER the round's auto-seize, i.e. exactly at the
-		# round boundary — new_round-1 is the round that just ended (rounds 1..3; the final round has
-		# no advance and is captured after the game returns).
-		army_manager.round_advanced.connect(func(new_round: int) -> void:
-			await _capture_board(main, "round%d.png" % (new_round - 1)))
+		# Round-end boards (rounds 1..3; the final round has no advance and is captured after the game
+		# returns). Hung on round_advanced this landed a whole activation LATE — the handler's await is
+		# fire-and-forget, so the loop played on while the grab waited for its frame (measured, seed 7:
+		# round1/2/3.png were stamped after 8/16/23 activations, i.e. one unit of the NEXT round had
+		# already acted; round2.png carried six round-3 dice rolls). main.solo_round_done is AWAITED by
+		# the round loop, so nothing can act until the board is on disk.
+		main.solo_round_done = func(ended_round: int) -> void:
+			await _capture_board(main, "round%d.png" % ended_round)
 
 	main.set("_solo_fast", true)
 	main.set("_solo_batch", _batch)
@@ -304,7 +322,8 @@ func _run() -> void:
 		return
 	solo._rng.seed = _seed
 	if _act_capture.is_valid():
-		solo.ai_unit_activated.connect(_act_capture)   # per-activation board PNG (NML_CAPTURE_ACTS=1)
+		solo.ai_unit_activated.connect(_act_capture)   # trail dump + PNG queue (NML_CAPTURE_ACTS=1)
+		main.solo_activation_done = _act_capture_png   # the grab itself, on the settled board
 	# Off-board audit (#215) — ALWAYS on, no env gate: the ladder IS the A/B measurement track, so every
 	# graded game must carry the number. One parseable battle-log line per offending unit right after it
 	# settled; tools/tactic_audit.py counts those lines as d9. Measurement only — no decision is touched.
@@ -322,13 +341,8 @@ func _run() -> void:
 		by[str(u.get_name())] = int(by.get(str(u.get_name()), 0)) + 1
 		_unit_activations[slot] = by)
 	solo.decision_sink = func(rec: Dictionary) -> void:
-		var side: int = int(solo.ai_slot)
 		var kind := str(rec.get("kind", "?"))
-		# A round-end SEIZE record is an OBJECTIVE ownership event, not an acting side's decision — its
-		# honest side is the marker's new owner (0 = contested/neutral), never whichever slot happened to
-		# take the round's last activation (showcase finding: every seize carried the active slot).
-		if kind == "seize":
-			side = int((rec.get("data", {}) as Dictionary).get("owner", 0))
+		var side: int = honest_side(rec, int(solo.ai_slot))
 		var by_kind: Dictionary = _decision_counts.get(side, {})
 		by_kind[kind] = int(by_kind.get(kind, 0)) + 1
 		_decision_counts[side] = by_kind
@@ -458,25 +472,14 @@ func _run() -> void:
 			p2 += 1
 		else:
 			neutral += 1
-	var winner := "draw"
 	var vp1: int = int(SoloController.mission_vp[0])
 	var vp2: int = int(SoloController.mission_vp[1])
-	if SoloController.mission_scoring == "sabotage":
-		# W3: destroy theirs, keep yours — anything else is a draw.
-		winner = BattleSim.sabotage_winner(SoloController.mission_markers)
-	elif SoloController.mission_scoring == "round_vp":
-		# NML-1010 W2: progressive missions are decided by the VP ledger main
-		# booked every round (end bonus included) — most VPs wins, ties draw.
-		if vp1 != vp2:
-			winner = "p1" if vp1 > vp2 else "p2"
-	elif p1 != p2:
-		winner = "p1" if p1 > p2 else "p2"
-	elif owners.is_empty():
-		# No markers (not the ladder board): documented fallback — surviving models decide, ties draw.
-		var a1: int = int(main._solo_side_alive(1))
-		var a2: int = int(main._solo_side_alive(2))
-		if a1 != a2:
-			winner = "p1" if a1 > a2 else "p2"
+	# NML-1048: the verdict is no longer computed here. BattleSim.mission_winner is the ONE referee —
+	# the same call main._solo_show_game_summary makes — so the result JSON and the summary the table
+	# reads can never name different sides again (measured: 55 of 233 round_vp games disagreed).
+	var winner: String = BattleSim.mission_winner(SoloController.mission_scoring, owners,
+		SoloController.mission_vp, SoloController.mission_markers,
+		int(main._solo_side_alive(1)), int(main._solo_side_alive(2)))
 	printerr("[ARENA] RESULT seed=%d dice=%d P1(%s) objectives=%d P2(%s) objectives=%d vp=%d:%d → %s" % [
 		_seed, _dice_seed, _p1_grade, p1, _p2_grade, p2, vp1, vp2, winner])
 	_write_result_json(main, army_manager, opener, winner,
@@ -486,6 +489,26 @@ func _run() -> void:
 		float(Time.get_ticks_msec() - t0) / 1000.0)
 	_write_capture_outputs()
 	quit(0)
+
+
+## Whose ACCOUNT a decision record belongs on. Usually the slot the controller was acting as when the
+## record fired (`acting_slot`), but two kinds describe a side that is NOT the acting one:
+##   seize  — a round-end objective ownership event, not an acting side's decision: its honest side is
+##            the marker's new owner (0 = contested/neutral), never whichever slot happened to take the
+##            round's last activation (showcase finding: every seize carried the active slot).
+##   deploy — deploy_finish's coherency repair walks EVERY graded slot, so one side's finish pass emits
+##            repair records for the OTHER side's units (measured, rekrut vs rekrut seed 7: 8 of 17
+##            deploy records were a P2 unit's repair booked to P1). Those records carry the repaired
+##            unit's own seat in data.slot; every other deploy record has no hint and stays on the actor.
+static func honest_side(rec: Dictionary, acting_slot: int) -> int:
+	var data: Dictionary = rec.get("data", {})
+	match str(rec.get("kind", "?")):
+		"seize":
+			return int(data.get("owner", 0))
+		"deploy":
+			if data.has("slot"):
+				return int(data["slot"])
+	return acting_slot
 
 
 # === Showcase capture (capture= / NML_AI_CAPTURE) ===
@@ -519,7 +542,10 @@ func _capture_board(main: Node, file_name: String) -> void:
 		return
 	var path := _capture_dir.path_join(file_name)
 	if img.save_png(path) == OK:
-		printerr("[ARENA] capture -> %s" % path)
+		# The MOMENT belongs in the record: how many activations had already BEGUN when this frame was
+		# drawn. A picture whose stamp is one ahead of its file name is a picture of the wrong turn.
+		printerr("[ARENA] capture -> %s%s" % [path,
+			(" (after %d activations)" % _act_started) if _act_started >= 0 else ""])
 	else:
 		printerr("[ARENA] capture WRITE FAILED: %s" % path)
 
@@ -667,7 +693,8 @@ static func search_knobs() -> Dictionary:
 	return {
 		"top_k": AiPlanner.top_k_default(),
 		"horizon": AiPlanner.horizon(),
-		"seat_depth": AiPlanner.seat_depth_enabled(),
+		"seat_depth": AiPlanner.seat_mode(),
+		"depth_discount": AiPlanner.depth_discount(),
 		"fit_weights": "net" if net_loaded else ("v2" if fw == "v2" else "v4"),
 		"fit_blend": AiMissionEval.fit_blend(),
 		"net_path": OS.get_environment("NML_NET_PATH"),

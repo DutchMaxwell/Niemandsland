@@ -90,6 +90,11 @@ const STALL_REPLAN_FRACTION := 0.25
 ## die; the hybrid policy (docs/SOLO_AI_PLAN.md) ranks it by the EV metric instead. A documented
 ## convention, not an official value.
 const TARGET_TIE_BAND_IN := 1.0
+## How many target candidates one 'target' record writes down. Capped so a long enemy line cannot
+## inflate every record: the TIE GROUP stays complete (it is what the EV tie-break ranked), the losing
+## candidates fill the rest in army order. data.considered keeps the true total and data.listed says
+## how many names were written, so a capped record admits it instead of looking like a short list.
+const TARGET_RECORD_CAND_CAP := 8
 
 # --- Aircraft (GF Advanced Rules v3.5.1 special rule; AI plausibility wave 1) ---
 ## Fallback values for the RulesRegistry "Aircraft" params (the committed gf mechanics map carries the
@@ -1177,19 +1182,29 @@ func nearest_human_unit(ai_unit: GameUnit) -> GameUnit:
 			if int((c as Dictionary)["band"]) < int(chosen["band"]):
 				last_target_passed_activated = true
 				break
+	# Write down the SET the official key ranked, not just its winner: a rule that claims "nearest of N"
+	# is neither provable nor refutable while the record names one unit and claims N. The TIE GROUP goes
+	# first (tools/tactic_audit.py looks the chosen name up here, and a same-named also-ran must not
+	# shadow it), then the also-rans. Every entry carries the key it was ranked by, but only a tie-group
+	# member carries an "ev" — the rest were never scored, and a 0.00 would read as a computed verdict.
+	# Record-only: `chosen` was decided above and nothing below feeds back into it.
 	var rec_cands: Array = []
 	for t in tied:
 		var td := t as Dictionary
-		# Report a NON-NEGATIVE target EV (field-test finding 2): the charge tie-break score is a NET
-		# dealt-minus-taken utility that can go below zero for an unfavourable matchup, but it is only ever a
-		# ranking key — surfacing a negative "expected wounds" in the dev log is misleading, so the recorded
-		# value is floored at 0. The raw score still drives the ranking above (selection is unchanged).
-		rec_cands.append({"name": (td["unit"] as GameUnit).get_name(), "ev": maxf(0.0, float(td["ev"])),
-			"key": [td["activated"], td["band"]]})
+		rec_cands.append({"name": (td["unit"] as GameUnit).get_name(), "ev": float(td["ev"]),
+			"key": [td["activated"], td["band"]], "tied": true})
+	for c in cands:
+		if rec_cands.size() >= TARGET_RECORD_CAND_CAP:
+			break   # capped — the tie group above stays complete, the also-rans fill what is left
+		var cd := c as Dictionary
+		if _target_key_compare(cd, tied[0] as Dictionary) == 0:
+			continue   # already written above as a tie-group member
+		rec_cands.append({"name": (cd["unit"] as GameUnit).get_name(),
+			"key": [cd["activated"], cd["band"]], "tied": false})
 	record_decision({"kind": "target", "unit": ai_unit.get_name(),
 		"rule": "Solo v3.5.0 p.2: nearest valid target, not-activated first",
 		"candidates": rec_cands, "chosen": (chosen["unit"] as GameUnit).get_name(), "why": why,
-		"data": {"considered": cands.size(), "dist_in": float(chosen["d"]),
+		"data": {"considered": cands.size(), "listed": rec_cands.size(), "dist_in": float(chosen["d"]),
 			"passed_nearer_activated": last_target_passed_activated}})
 	return chosen["unit"] as GameUnit
 
@@ -2108,6 +2123,10 @@ func _act(unit: GameUnit) -> Dictionary:
 			and shoot_range > 0 and enemy_dist <= float(shoot_range)
 		_menu_probe(unit, action, goal, target_unit, do_shoot,
 			(rush if action == AiDecision.Action.RUSH else advance), kite)
+	# TR (NML-1009): the clone's imitation row is settled by the SAME point —
+	# every re-gate above has spoken and nothing has moved yet, so the row can
+	# carry the action the body is about to play instead of the one it wanted.
+	_flush_teacher_row(action)
 	var dang := 0
 	match action:
 		AiDecision.Action.RUSH:
@@ -3079,7 +3098,7 @@ func _menu_probe(unit: GameUnit, action: int, goal: Vector3, target_unit: GameUn
 	cov["loose_wide"] = bool(wide["loose"])
 	cov["menu_wide"] = int(wide["menu"])
 	if _teacher_rows_on():
-		_teacher_row(state, key, cands, int(wide.get("idx", -1)), str(cov["class"]))
+		record_decision(_teacher_row(state, key, cands, int(wide.get("idx", -1)), str(cov["class"])))
 	record_decision({"kind": "menu_probe", "unit": unit.get_name(),
 		"rule": "P0 (NML-1009): is the teacher's move even on the planner's candidate menu?",
 		"candidates": [], "chosen": ("on the menu" if bool(cov["covered"]) else "not offered"),
@@ -3252,7 +3271,9 @@ func _solve_clone(unit: GameUnit) -> Dictionary:
 	if _teacher_rows_on():
 		# EXPERT ITERATION: what the amplified clone chose is the training
 		# signal for the NEXT generation — the same row shape as the teacher's.
-		_teacher_row(state, key, cands, best, "clone")
+		# TR: held back, not recorded — _act may still re-gate this pick, and
+		# _flush_teacher_row stamps the row with what the body actually plays.
+		_pending_teacher_row = _teacher_row(state, key, cands, best, "clone")
 	var act: Dictionary = cands[best]
 	var kind := int(act["kind"])
 	record_decision({"kind": "clone", "unit": unit.get_name(),
@@ -3283,17 +3304,62 @@ func _teacher_rows_on() -> bool:
 	return _teacher_rows_env == 1
 
 
+## Builds the row; the CALLER decides when it is recorded. The tree probe is
+## already settled when it calls (its own gates spoke long before), so it
+## records at once; the clone holds its row back until _act has re-gated.
 func _teacher_row(state: Dictionary, key: String, cands: Array, idx: int,
-		cls: String) -> void:
+		cls: String) -> Dictionary:
 	# ONE source for the tuples (AiClone.menu_tuples): what the corpus records
 	# must be exactly what the clone later scores in play.
 	var menu := AiClone.menu_tuples(state, key, cands, terrain_type_at, los_checker)
-	record_decision({"kind": "teacher_row", "unit": str(key),
+	return {"kind": "teacher_row", "unit": str(key),
 		"rule": "P1 (NML-1009): the teacher's pick, the menu it came from, and the position it was made in",
 		"candidates": [], "chosen": str(idx), "why": cls,
 		"data": {"side": int(ai_slot), "round": _current_round(), "class": cls,
 			"teacher": idx, "menu": menu,
-			"board": BattleSim.board_rows(state)}})
+			"board": BattleSim.board_rows(state)}}
+
+
+## TR (NML-1009): the clone's row, held back and stamped with the action the
+## BODY plays. _solve_clone writes its argmax; _act's re-gates may then rewrite
+## it (Immobile/Artillery -> Hold, an illegal charge -> Rush), and a row emitted
+## before that teaches the next generation a move the game refused. Re-point at
+## the nearest menu entry of the EXECUTED kind; with none, -1 — the miss class
+## the trainer already drops, which is honest where inventing a label is not.
+var _pending_teacher_row: Dictionary = {}
+func _flush_teacher_row(action: int) -> void:
+	if _pending_teacher_row.is_empty():
+		return
+	var row := _pending_teacher_row
+	_pending_teacher_row = {}
+	var data: Dictionary = row["data"]
+	var menu: Array = data["menu"]
+	var idx := int(data["teacher"])
+	if idx >= 0 and idx < menu.size() and int((menu[idx] as Dictionary)["kind"]) != action:
+		var refused: Dictionary = menu[idx]
+		idx = _nearest_menu_entry(menu, action, float(refused["dest_x"]), float(refused["dest_z"]))
+		data["teacher"] = idx
+		data["regated"] = true
+		data["refused"] = int(refused["kind"])
+		row["chosen"] = str(idx)
+		row["why"] = "%s (re-gated)" % str(row["why"])
+	record_decision(row)
+
+
+## The entry of `kind` whose destination sits closest to (x, z) in inches; -1
+## when the menu holds no such entry at all.
+static func _nearest_menu_entry(menu: Array, kind: int, x: float, z: float) -> int:
+	var best := -1
+	var best_d := INF
+	for i in range(menu.size()):
+		var e: Dictionary = menu[i]
+		if int(e["kind"]) != kind:
+			continue
+		var d := pow(float(e["dest_x"]) - x, 2.0) + pow(float(e["dest_z"]) - z, 2.0)
+		if d < best_d:
+			best_d = d
+			best = i
+	return best
 
 
 ## The captured state's key for a live unit ("" when it is not on the board).
@@ -4917,6 +4983,102 @@ static func musician_move_bonus_in(unit: GameUnit) -> float:
 	if unit == null or not RulesRegistry.unit_rule_active(unit, "Musician"):
 		return 0.0
 	return float(RulesRegistry.unit_param(unit, "Musician", "move_bonus_in", AiCombatMath.MUSICIAN_MOVE_BONUS_IN))
+
+
+## Banner's morale-test bonus for a unit (wave 5): +1 when the unit or an attached hero carries Banner
+## AND its book fields the rule for this system (RulesRegistry gate; the bonus value is data with the
+## constant fallback). Coverage wave: DATA aliases of the family (Courage Aura, Hold the Line, Hive
+## Bond, …) resolve through the generic primitive layer — the strongest single bonus applies (rule
+## effects of the same name never stack; different names are one family here, best-of keeps it sane).
+## Gap 18a: moved here from main.gd so the dice path and BattleSim read ONE truth (the sim stamps it
+## at capture time — this walks the registry, far too costly per activation).
+static func morale_bonus_of(unit: GameUnit) -> int:
+	var best := 0
+	var members: Array = [unit]
+	if unit != null and unit.has_method("get_attached_heroes"):
+		members = members + unit.get_attached_heroes()
+	for m in members:
+		var member := m as GameUnit
+		if member == null or member.get_alive_count() == 0:
+			continue
+		if RulesRegistry.unit_rule_active(member, "Banner"):
+			best = maxi(best, int(RulesRegistry.unit_param(member, "Banner", "morale_bonus", AiCombatMath.BANNER_MORALE_BONUS)))
+		for e in RulesRegistry.unit_rules_of_primitive(member, "Banner"):
+			var ed := e as Dictionary
+			if str(ed["name"]) == "Banner":
+				continue
+			best = maxi(best, int((ed.get("params", {}) as Dictionary).get("morale_bonus", 0)))
+	return best
+
+
+## A1b-1 — NET of a unit's currently active spell/token modifiers, for BattleSim's snapshot.
+## scripts/solo reads the DURABLE mirror (unit.unit_properties["spell_records"], main.gd:3530-3563)
+## rather than main.gd's live _solo_spell_mods — BattleSim runs off a cloned board, no main.gd instance to ask.
+static func active_mod_net_of(unit: GameUnit) -> Dictionary:
+	var net := {"hit": 0, "def": 0, "morale": 0, "range_in": 0.0, "advance": 0.0, "rush": 0.0}
+	if unit == null:
+		return net
+	var records: Array = unit.unit_properties.get("spell_records", [])
+	if records.is_empty():
+		return net
+	# scope ("melee"/"shooting") splits some records and a capture-time snapshot doesn't know
+	# which attack type is coming, so each role is read for both and deduped — the same union
+	# main.gd:5514 uses to name what a defense mod WOULD have given either attack type.
+	var union := func(role: String) -> Array:
+		var seen: Array = []
+		for melee in [false, true]:
+			for rd in AiSpell.mods_for(records, role, melee):
+				if not seen.has(rd):
+					seen.append(rd)
+		return seen
+	for rd in union.call("attacker_own"):
+		net["hit"] += int((rd as Dictionary).get("hit_mod", 0))
+	for rd in union.call("defense"):
+		net["def"] += int((rd as Dictionary).get("def_mod", 0))
+	for rd in union.call("morale"):
+		net["morale"] += int((rd as Dictionary).get("morale_mod", 0))
+	for rd in union.call("range"):
+		net["range_in"] += float((rd as Dictionary).get("range_in", 0))
+	for rd in union.call("speed"):
+		net["advance"] += float((rd as Dictionary).get("advance_in", 0))
+		net["rush"] += float((rd as Dictionary).get("rush_in", 0))
+	return net
+
+
+## NML-1049: the LARGEST extra Advance inches an activation can put on top of
+## sim_move_bands — Bounding's placement (worst roll: 3" per die + the flat), the
+## once-per-game Speed-Feat family and Teleport, exactly what _act() adds to
+## `advance` before handing the band to _flank_goal. For REACH GATES only: worst
+## case on purpose, since over-estimating only over-offers while under-estimating
+## silently deletes a legal move. Deliberately NOT folded into sim_move_bands —
+## that is the band the sim EXECUTES with, and these are rolled per activation.
+static func max_activation_advance_bonus_in(unit: GameUnit) -> float:
+	if unit == null:
+		return 0.0
+	var bonus := 0.0
+	if RulesRegistry.unit_rule_active(unit, "Bounding"):
+		bonus += float(bounding_dice_count(RulesRegistry.lookup(RulesRegistry.system_of_unit(unit),
+			RulesRegistry.faction_of_unit(unit), "Bounding").get("params", {}))) * 3.0 \
+			+ float(RulesRegistry.unit_param(unit, "Bounding", "place_d3_plus", 1))
+	else:
+		var best := 0.0
+		for e in RulesRegistry.unit_rules_of_primitive(unit, "Bounding"):
+			var sp: Dictionary = (e as Dictionary).get("params", {})
+			best = maxf(best, float(bounding_dice_count(sp)) * 3.0 + float(sp.get("place_d3_plus", 0)))
+		bonus += best
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Quick"):
+		var spq: Dictionary = (e as Dictionary).get("params", {})
+		if int(spq.get("uses_per_game", 0)) > 0:
+			bonus += maxf(0.0, float(spq.get("advance_mod", 2)))
+	var tele := "Teleport" if RulesRegistry.unit_rule_active(unit, "Teleport") else ""
+	if tele.is_empty():
+		for te in RulesRegistry.unit_rules_of_primitive(unit, "Teleport"):
+			if str((te as Dictionary)["name"]) != "Teleport":
+				tele = str((te as Dictionary)["name"])
+				break
+	if not tele.is_empty():
+		bonus += maxf(0.0, float(RulesRegistry.unit_param(unit, tele, "advance_bonus_in", 3.0)))
+	return bonus
 
 
 # ===== Aircraft (GF Advanced Rules v3.5.1; system-scoped via RulesRegistry — AI plausibility wave 1) =====
@@ -6878,7 +7040,12 @@ static func render_decision(rec: Dictionary) -> String:
 			var cd := c as Dictionary
 			# EV is expected wounds — never render it negative (finding 2): a net charge score below zero is a
 			# ranking artefact, not a real "negative expected damage". Floored here as the final display guard.
-			listed.append("%s EV %.2f" % [str(cd.get("name", "?")), maxf(0.0, float(cd.get("ev", 0.0)))])
+			# An entry WITHOUT an "ev" was never scored (an also-ran outside the tie group): name only, because
+			# printing 0.00 for it would read as a computed verdict.
+			if cd.has("ev"):
+				listed.append("%s EV %.2f" % [str(cd.get("name", "?")), maxf(0.0, float(cd.get("ev", 0.0)))])
+			else:
+				listed.append(str(cd.get("name", "?")))
 		parts.append("options: " + ", ".join(listed))
 	var chosen := str(rec.get("chosen", ""))
 	if not chosen.is_empty():
@@ -8485,6 +8652,8 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 	# EVERY AI-controlled slot, not just the side deploying right now (verification run 4): the SECOND
 	# deploy's overlap cleanup can nudge a FIRST side's model back out of chain — the repair after the
 	# later deploy re-heals both. Human slots are never touched (the player places his own models).
+	# Because the pass crosses slots, each record NAMES its unit's own seat (data.slot) — the acting
+	# slot would book the other side's repairs on the deployer's account.
 	var forced_any := false
 	var ai_slots: Array = difficulty_by_slot.keys()
 	if ai_slots.is_empty():
@@ -8554,14 +8723,15 @@ func _repair_deploy_coherency(blocked_normal: Callable, blocked_flying: Callable
 				record_decision({"kind": "deploy", "unit": unit.get_name(),
 					"rule": "Deploy coherency repair: stragglers re-placed into chain range of the unit's largest group (p.7 — a unit never starts torn)",
 					"candidates": [], "chosen": "straggler re-placed", "why": "deploy left a model out of coherency",
-					"data": {"pass": _pass}})
+					"data": {"pass": _pass, "slot": int(unit.unit_properties.get("player_id", 0))}})
 			else:
 				# Nothing placeable — make the failure VISIBLE (audits read this) instead of a silent break.
 				record_decision({"kind": "deploy", "unit": unit.get_name(),
 					"rule": "Deploy coherency repair FAILED: no free linked ring spot for the remaining straggler(s)",
 					"candidates": [], "chosen": "still torn", "why": "deploy repair found no legal spot",
 					"data": {"pass": _pass, "models": ms.size(), "comp": comp.size(),
-						"stragglers": ms.size() - comp.size()}})
+						"stragglers": ms.size() - comp.size(),
+						"slot": int(unit.unit_properties.get("player_id", 0))}})
 				break   # avoid spinning
 	return forced_any
 

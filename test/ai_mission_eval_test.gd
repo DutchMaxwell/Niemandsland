@@ -487,3 +487,55 @@ func test_encoder_embedding_cache_identity_and_poison() -> void:
 	AiMissionEval._net_override = _tiny_encoder()   # NEW dict object -> flush
 	assert_float(AiMissionEval._score_fit(state, 1, {})).is_equal_approx(truth, 0.0001)
 	AiMissionEval._net_override = {}
+
+
+## HEAD_QUEUE #12 (rebuilt 23.08.): eval and referee must measure the SAME ring.
+## A 32mm model whose CENTRE sits 3.5" out has its base EDGE 2.87" in — the
+## referee counts it as a holder, the old 3D centre measure demoted it to an
+## approacher, and the planner then walked away from a marker it already held.
+func test_eval_measures_the_marker_ring_like_the_referee() -> void:
+	var obj := Vector3(0, 0, 0)
+	var su := {"alive": 1, "player": 1, "positions": [Vector3(3.5 * IN2M, 0, 0)],
+		"radii": [0.63 * IN2M], "wounds": [3], "shaken": false, "activated": false,
+		"unit": null}
+	# Base edge 2.87" -> inside the 3" ring, and height must not matter.
+	assert_float(BattleSim.control_gap_in(su, obj)).is_equal_approx(2.87, 0.02)
+	var high := su.duplicate(true)
+	high["positions"] = [Vector3(2.0 * IN2M, 5.0 * IN2M, 0)]
+	assert_float(BattleSim.control_gap_in(high, obj)).is_equal_approx(1.37, 0.02)
+
+
+## HEAD_QUEUE #13: who may hold at a round end at all — the referee's set.
+func test_aircraft_and_fresh_arrivals_cannot_hold_a_marker() -> void:
+	var plain := {"alive": 1, "shaken": false}
+	assert_bool(BattleSim.can_hold_marker(plain, 2)).is_true()
+	var air := {"alive": 1, "shaken": false, "aircraft": true}
+	assert_bool(BattleSim.can_hold_marker(air, 2)).is_false()
+	var shaken := {"alive": 1, "shaken": true}
+	assert_bool(BattleSim.can_hold_marker(shaken, 2)).is_false()
+	var landed := {"alive": 1, "shaken": false, "ambush_arrived_round": 2}
+	assert_bool(BattleSim.can_hold_marker(landed, 2)).is_false()   # this round: no
+	assert_bool(BattleSim.can_hold_marker(landed, 3)).is_true()    # next round: yes
+
+
+## HEAD_QUEUE #13: the tail counter is a MARKER forecast — "this unit can still
+## reach the ring this round". So it has to use the referee's eligibility set,
+## not a hand-copied pair of checks. An Aircraft never holds, and a unit that
+## landed from Ambush THIS round may act but may not seize (v3.5.1 p.13); both
+## used to be counted as tail runners, which paid the planner for a hold that
+## the round end would never book. Rows 1 and 4 are the counter-probe, so a
+## gate that is simply always shut cannot pass as a fix.
+func test_tail_uses_the_referees_eligibility_set() -> void:
+	var state := _state([_unit(1, [Vector3(4.0 * IN2M, 0, 0)], "Runner")],
+		[Vector3.ZERO], [0], 2)
+	var su: Dictionary = state["units"]["Runner"]
+	var tail := func() -> float:
+		return float(AiMissionEval.features(state, 1).get("tail_mine", -999.0))
+	assert_float(tail.call()).is_equal_approx(1.0, 0.001)       # 4" out, 12" rush
+	su["aircraft"] = true
+	assert_float(tail.call()).is_equal_approx(0.0, 0.001)
+	su["aircraft"] = false
+	su["ambush_arrived_round"] = 2                              # landed this round
+	assert_float(tail.call()).is_equal_approx(0.0, 0.001)
+	su["ambush_arrived_round"] = 1                              # landed last round
+	assert_float(tail.call()).is_equal_approx(1.0, 0.001)

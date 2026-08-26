@@ -265,6 +265,40 @@ static func _tail_cap_for(me: int) -> int:
 	return int(_tail_cap_env[me])
 
 
+static var _ire_env := -1   # A/B seam: NML_IMAGINED_ROUND_END=off restores the frozen-ledger boundary (lazy env)
+
+
+static func imagined_round_end_enabled() -> bool:
+	if _ire_env < 0:
+		_ire_env = 0 if OS.get_environment("NML_IMAGINED_ROUND_END") == "off" else 1
+	return _ire_env == 1
+
+
+## NML-1051: a TRUE imagined round boundary books the same round end the
+## factory playout (full_playout) books — seize from the final positions, the
+## marker destroy step, then the round's VP — so boundary snapshots stop
+## freezing marker ownership and the ledger at the last REAL round end.
+## vp/vp_memo are REPLACED, never written in place: clone_state hands both
+## down by REFERENCE, so an in-place write would leak into sibling rollouts
+## and the captured live state.
+static func _imagined_round_end(cur: Dictionary) -> void:
+	var owners: Array = []
+	for o in cur.get("objectives", []):
+		owners.append(int((o as Dictionary).get("owner", 0)))
+	BattleSim.playout_seize(cur, owners)
+	if cur.has("markers_meta"):
+		BattleSim.apply_destroy_step(cur["markers_meta"], owners, cur["destroy_seq"])
+	var vp := [0, 0]
+	var vp_live: Variant = cur.get("vp")
+	if vp_live is Array and (vp_live as Array).size() == 2:
+		vp = [int(vp_live[0]), int(vp_live[1])]
+	var vp_memo: Dictionary = (cur.get("vp_memo", {}) as Dictionary).duplicate()
+	BattleSim.vp_score_round(owners, vp, cur.get("vp_flavour", {}) as Dictionary,
+		vp_memo, cur.get("markers_meta", []))
+	cur["vp"] = vp
+	cur["vp_memo"] = vp_memo
+
+
 static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: int,
 		horizon_rounds: int = -1) -> Array:
 	if horizon_rounds <= 0:
@@ -279,7 +313,7 @@ static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: 
 	while guard > 0:
 		guard -= 1
 		if tail_cap > 0 and steps >= tail_cap:
-			out.append(cur)   # truncated: the blend prices this state as-is
+			out.append(cur)   # truncated MID-ROUND: priced as-is, no round-end bookkeeping (NML-1051)
 			return out
 		steps += 1
 		var a := _policy_step(cur, turn, turn == me)   # R9: own side steps danger-aware
@@ -287,6 +321,8 @@ static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: 
 			turn = _other_player(cur, turn)
 			a = _policy_step(cur, turn, turn == me)
 			if a.is_empty():
+				if imagined_round_end_enabled():
+					_imagined_round_end(cur)   # NML-1051: book the round end, THEN snapshot
 				out.append(cur)
 				rounds_left -= 1
 				if rounds_left <= 0 or int(cur["round"]) >= int(cur["rounds_total"]):
@@ -303,37 +339,61 @@ static func rollout_boundaries(state: Dictionary, first_action: Dictionary, me: 
 const DEPTH_DISCOUNT := 0.5   # R7: each further imagined round carries half the previous one's vote
 
 
+static var _dd_env := -1.0   # research seam: NML_DEPTH_DISCOUNT overrides the discount (lazy env, <0 = unread)
+
+
+## research seam: NML_DEPTH_DISCOUNT, a float in (0.0, 1.0], overrides the
+## per-round discount; anything empty/junk/out-of-range keeps the default.
+static func depth_discount() -> float:
+	if _dd_env < 0.0:
+		var raw := OS.get_environment("NML_DEPTH_DISCOUNT")
+		_dd_env = DEPTH_DISCOUNT
+		if raw.is_valid_float():
+			var f := raw.to_float()
+			if f > 0.0 and f <= 1.0:
+				_dd_env = f
+	return _dd_env
+
+
 ## D-wave: seat-aware leaf weighting. The A/B ledger proved the two depth
 ## modes own opposite seats — last-boundary voting (R6) was the best OPENER
 ## ever (12.5% seat) and the worst responder; the discount blend (R7) is the
 ## best RESPONDER (78%) and a weak opener. The controller sets this per pick:
 ## true = our side opened the current round.
 static var opener_seat := false
-static var _seat_env := -1   # research seam: NML_SEAT_DEPTH=off disables the opener mode (lazy env)
+static var _seat_env := -1   # research seam: NML_SEAT_DEPTH off/on/inv retunes the vote (lazy env)
 
 
-static func seat_depth_enabled() -> bool:
+## research seam: NML_SEAT_DEPTH — "on"=1 (pre-U opener last-boundary vote,
+## kept reachable for research), "inv"=2 (swap seats), anything else (incl.
+## unset and "off") = 0, today's default: the U-wave measurement (240
+## mirrored pairs) promoted seat_off — both seats take the discount blend.
+static func seat_mode() -> int:
 	if _seat_env < 0:
-		_seat_env = 0 if OS.get_environment("NML_SEAT_DEPTH") == "off" else 1
-	return _seat_env == 1
+		var raw := OS.get_environment("NML_SEAT_DEPTH")
+		_seat_env = 1 if raw == "on" else (2 if raw == "inv" else 0)
+	return _seat_env
 
 
 ## R7/D: price a rollout's round boundaries as ONE number. Responder seat:
 ## geometric depth discount, normalized — the current round's certainty keeps
 ## the 2/3 majority, the imagined next round refines. Opener seat: the LAST
 ## boundary alone votes — an opener's move only shows its worth after the
-## enemy's full reply, so the deep look must be allowed to outvote.
+## enemy's full reply, so the deep look must be allowed to outvote. Mode 2
+## (inv) swaps which seat gets which treatment; mode 0 (off) never votes last.
 static func _blend_score(ends: Array, player: int) -> float:
-	if opener_seat and seat_depth_enabled():
+	var mode := seat_mode()
+	if (mode == 1 and opener_seat) or (mode == 2 and not opener_seat):
 		var last: Dictionary = ends[ends.size() - 1]
 		return AiMissionEval.score(last, player, BattleSim.reply_threat(last, player))
+	var dd := depth_discount()
 	var total := 0.0
 	var weights := 0.0
 	var w := 1.0
 	for end in ends:
 		total += w * AiMissionEval.score(end, player, BattleSim.reply_threat(end, player))
 		weights += w
-		w *= DEPTH_DISCOUNT
+		w *= dd
 	return total / weights
 
 
@@ -775,11 +835,19 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 	# _best_charge — before this, teacher rows could label a charge the adoption gate
 	# then refused, so the book taught moves the body never plays.
 	var illegal_cb: Callable = state.get("charge_illegal", Callable())
+	# NML-1049: the advance band this unit would really cover, for the reach gate below.
+	# sim_move_bands alone is NOT it — _act() still adds Bounding, the Speed-Feat family
+	# and Teleport before handing the band to _flank_goal, the one branch that advances
+	# INTO firing range. Worst case on purpose: never delete a shot the move could set up.
+	var advance_in := float(SoloController.sim_move_bands(su["unit"]).get("advance", 6)) \
+		+ SoloController.max_activation_advance_bonus_in(su["unit"])
 	for ek in _enemy_keys(state, key):
 		var tu: Dictionary = state["units"][ek]
 		if int(tu["alive"]) <= 0:
 			continue
-		if not seen_shoot.has(str(ek)) and BattleSim.sees(su, str(ek)):
+		var gap_in := BattleSim.dist_in(su["positions"], tu["positions"])
+		if not seen_shoot.has(str(ek)) and BattleSim.sees(su, str(ek)) \
+				and _can_shoot_at(su, tu, gap_in):
 			out.append({"unit": key, "kind": AiDecision.Action.HOLD, "shoot": str(ek)})
 		if not seen_charge.has(str(ek)) and not ours.is_empty() \
 				and not (illegal_cb.is_valid() and bool(illegal_cb.call(su["unit"], tu["unit"],
@@ -801,10 +869,32 @@ static func candidates_wide(state: Dictionary, key: String) -> Array:
 		# with a median 62 survivors against tree-vs-tree's 54 — it moved and
 		# stopped fighting. Advance keeps the shot window open (Rush does not),
 		# so this is the move the tree makes constantly and the clone never saw.
-		if BattleSim.sees(su, str(ek)):
+		# NML-1049: ...but only when the barrel reaches after that advance. The gap
+		# is the OPTIMISTIC one (closing straight in at the full band), so the gate
+		# never removes a shot the move could have set up.
+		if BattleSim.sees(su, str(ek)) \
+				and _can_shoot_at(su, tu, maxf(gap_in - advance_in, 0.0)):
 			out.append({"unit": key, "kind": AiDecision.Action.ADVANCE,
 				"dest": _centre(tu), "shoot": str(ek)})
 	return out
+
+
+## NML-1049 GHOST SHOTS: can `su` put a shot on `tu` from `d_in` inches? The wide
+## menu asked BattleSim.sees() alone — line of sight — so it offered SHOOT to
+## gunless units and to targets far past every barrel: on the 633-game c8 corpus
+## 402 rows ordered a gunless unit to fire, 155 held and shot beyond range, 1328
+## advanced and were still short. The amplifier cannot strip them (an impossible
+## shot scores 0, so hold and hold+ghost-shot tie and the pick is arbitrary), so
+## the menu must gate. The truth used is the one BattleSim.resolve() fires with —
+## profiles_in_range — widened by the unit's range bonus (Royal Legion, spell
+## tokens) so a shot the ENGINE allows never falls out of the teacher's menu, plus
+## the caster's damage spells: for a gunless mage the spell IS the shot.
+## Shooting candidates only — charge, rush and retreat legality are untouched.
+static func _can_shoot_at(su: Dictionary, tu: Dictionary, d_in: float) -> bool:
+	var reach_in := maxf(d_in - float(SoloController.shooting_range_bonus(su["unit"])), 0.0)
+	if not BattleSim._profiles_of(su, false, reach_in).is_empty():
+		return true
+	return float(BattleSim.spell_ev_of(su, tu, d_in)["ev"]) > 0.0
 
 
 ## P0 MENU-COVERAGE PROBE (Plan B v2, 15.08.): can this menu even EXPRESS the

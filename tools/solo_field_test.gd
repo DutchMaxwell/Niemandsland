@@ -166,7 +166,10 @@ func _run_autogame(solo: SoloController, army: OPRArmyManager, human: Array, ai:
 		for u in (human + ai):
 			(u as GameUnit).is_activated = false
 			(u as GameUnit).is_fatigued = false
-	# Scoring (== main.gd _solo_show_game_summary): objectives held per side decide the winner.
+	# Scoring: this harness arms no mission, so scoring stays "end" and objectives held per side decide.
+	# NOT the same code as main._solo_show_game_summary any more — that one asks BattleSim.mission_winner
+	# (NML-1048). Same answer here only because "end" is the branch this count agrees with; the day this
+	# harness arms a mission it must call the referee instead. Third copy, deliberately out of scope.
 	var ai_held := 0
 	var human_held := 0
 	var neutral := 0
@@ -461,6 +464,9 @@ func _build_side(specs: Array, player: int, z_edge: float) -> Array:
 			node.global_position = Vector3(base_x + float(m % 5) * 0.03, 0.0, base_z + float(m / 5) * 0.03)
 			mi.node = node
 			unit.models.append(mi)
+		# NML-1046 M1: same hand-built-GameUnit gap as core_selfplay.gd — grant
+		# via the shared method (equipment_distributor.gd:394), after models exist.
+		unit.initialize_caster_points()
 		out.append(unit)
 	return out
 
