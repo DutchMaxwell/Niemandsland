@@ -7,7 +7,11 @@ description = "Niemandsland fast rules core (NML-1073): battle state, clone and 
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+# `float_roundtrip`: without it serde_json's fast parser reads a 17-digit
+# literal up to 1 ULP off, and `JSON.stringify(.., full_precision = true)`
+# writes every recorded position with 17 digits. Measured on the act corpus:
+# "-0.41839998960494995" parsed to bfdac710bfffffff instead of bfdac710c0000000.
+serde_json = { version = "1", features = ["float_roundtrip"] }
 
 [profile.release]
 debug = true

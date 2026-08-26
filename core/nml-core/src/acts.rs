@@ -298,6 +298,36 @@ pub struct ActCorpus {
     pub acts: Vec<Act>,
 }
 
+/// The header line's three products — the profile table, the board and the
+/// search knobs. Factored out of `read_acts` so a caller that never sees the
+/// file (the Python seam, NML-1073 M3-1) builds them from the SAME code path
+/// instead of a second reading of the header.
+#[derive(Debug)]
+pub struct ActHeader {
+    pub profiles: Rc<Profiles>,
+    pub terrain: Terrain,
+    pub knobs: Knobs,
+}
+
+/// Parses one act-corpus header line (`{"kind":"header", ...}`).
+pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
+    let header: Header = serde_json::from_str(text).map_err(|e| format!("act header: {e}"))?;
+    Ok(header_of(header))
+}
+
+fn header_of(header: Header) -> ActHeader {
+    let terrain = match &header.terrain {
+        Some(t) => Terrain::build(t),
+        None => Terrain::absent(),
+    };
+    let mut profiles = Profiles::default();
+    for (k, p) in header.profiles.0 {
+        profiles.index.insert(k, profiles.list.len());
+        profiles.list.push(p);
+    }
+    ActHeader { profiles: Rc::new(profiles), terrain, knobs: header.knobs }
+}
+
 /// Reads `acts.jsonl` into the profile table, the board and the activations.
 pub fn load_acts(path: &str) -> Result<ActCorpus, String> {
     let file = File::open(path).map_err(|e| format!("{path}: {e}"))?;
@@ -312,19 +342,8 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
         .next()
         .ok_or_else(|| format!("{path}: empty file"))?
         .map_err(|e| e.to_string())?;
-    let header: Header =
-        serde_json::from_str(&head).map_err(|e| format!("{path}:1 act header: {e}"))?;
-    let terrain = match &header.terrain {
-        Some(t) => Terrain::build(t),
-        None => Terrain::absent(),
-    };
-    let knobs = header.knobs;
-    let mut profiles = Profiles::default();
-    for (k, p) in header.profiles.0 {
-        profiles.index.insert(k, profiles.list.len());
-        profiles.list.push(p);
-    }
-    let profiles = Rc::new(profiles);
+    let ActHeader { profiles, terrain, knobs } =
+        read_act_header(&head).map_err(|e| format!("{path}:1 {e}"))?;
     // NML-1073 M2-5b: the header table is the DEPLOYMENT reading. Every act
     // carries its own reading of the fields a live game rewrites, and the state
     // that act is replayed on gets the table THAT says — interned, so acts that

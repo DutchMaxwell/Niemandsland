@@ -1,0 +1,14 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "nml-core"
+version = "0.1.0"
+description = "Niemandsland fast rules core (NML-1073) as a Python extension module"
+requires-python = ">=3.9"
+classifiers = ["Private :: Do Not Upload"]
+
+[tool.maturin]
+module-name = "nml_core"
+features = ["pyo3/extension-module"]

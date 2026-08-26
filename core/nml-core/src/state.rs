@@ -13,7 +13,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// One weapon line of the static profile — `BattleSim._unit_profile` :1304-1330.
 #[derive(Debug, Clone, Deserialize)]
@@ -107,7 +107,7 @@ fn six() -> f64 {
 /// during a live game. The two defaults are the caller's own fallbacks —
 /// `bands.get("advance", 6)` (ai_planner.gd:713) and `bands.get("rush", 12)`
 /// (ai_planner.gd:1192) — so an absent key answers what the GDScript answers.
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub struct Bands {
     #[serde(default = "six")]
     pub advance: f64,
@@ -220,6 +220,13 @@ impl ProfileCache {
         ProfileCache { base, base_dyn, last: None }
     }
 
+    /// The HEADER table this cache overrides — what `roster_of` has to resolve
+    /// unit keys against, so a caller never has to carry the two side by side
+    /// and let them drift apart.
+    pub fn base(&self) -> &Rc<Profiles> {
+        &self.base
+    }
+
     /// The table THIS activation reads. `dyns` is in ROSTER order and
     /// `roster.profile[i]` names the profile entry each one overrides; `None`
     /// (a corpus without the block) keeps the header's reading for that unit.
@@ -273,7 +280,7 @@ impl Roster {
 /// weight times the cast chance — a third of a half. A snapshot that has never
 /// been cast on carries plain `0`, which is why the M1-2 port could type the
 /// first three as ints and get away with it.
-#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Deserialize, Serialize)]
 pub struct Mods {
     #[serde(default)]
     pub hit: f64,
@@ -289,7 +296,7 @@ pub struct Mods {
     pub rush: f64,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub struct Objective {
     pub pos: [f64; 3],
     #[serde(default)]
@@ -297,7 +304,7 @@ pub struct Objective {
 }
 
 /// Marker-mission state — `SoloController` :33, read by `_score_hand` :368-380.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Marker {
     #[serde(default)]
     pub owned_by: i64,

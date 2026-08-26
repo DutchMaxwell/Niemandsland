@@ -161,15 +161,26 @@ fn randi_range_reversed_matches_the_engine_branch() {
     }
 }
 
-/// PINNED DEFECT, not a port property: `serde_json` 1.0.151 parses this
-/// 17-digit literal one ULP low. It is why GATE R reads the fixture with
-/// `str::parse` instead. When a dependency bump fixes it, THIS test fails and
-/// the reader in this file can be simplified — the gate itself never moves.
+/// THE INSTRUMENT, pinned: `serde_json`'s default parser reads this 17-digit
+/// literal one ULP LOW (0x3fc7_86a2_1fff_ffff), and every recorded position is
+/// written with 17 digits by `JSON.stringify(.., full_precision = true)`. The
+/// `float_roundtrip` feature (NML-1073 M3-1, `Cargo.toml`) turns that parser
+/// into a correctly rounded one, which is what makes
+/// `io::plain_of(io::state_from_json(x)) == x` hold EXACTLY on the act corpus.
+///
+/// This test fails the moment the feature is dropped — it is the only thing
+/// standing between the corpus and a silent 1-ULP shift in every coordinate.
+/// GATE R keeps its own `str::parse` reader regardless: a gate that reads its
+/// fixture through the crate it is measuring proves less.
 #[test]
-fn serde_json_float_parse_is_one_ulp_off() {
+fn serde_json_parses_a_17_digit_literal_exactly() {
     let lit = "0.18379618227481842";
     let via_serde: f64 = serde_json::from_str(lit).unwrap();
     let via_rust: f64 = lit.parse().unwrap();
     assert_eq!(via_rust.to_bits(), 0x3fc7_86a2_2000_0000, "Rust parses it correctly");
-    assert_eq!(via_serde.to_bits(), 0x3fc7_86a2_1fff_ffff, "serde_json is one ULP low");
+    assert_eq!(
+        via_serde.to_bits(),
+        via_rust.to_bits(),
+        "serde_json must be correctly rounded — is the `float_roundtrip` feature still on?"
+    );
 }
