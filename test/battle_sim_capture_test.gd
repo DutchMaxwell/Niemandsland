@@ -216,3 +216,48 @@ func test_capture_links_a_joined_hero_by_join_to_unit_when_runtime_attachment_is
 	var c: Dictionary = state["units"]["Control"]
 	assert_str(str(c["attached_to"])).is_equal("")
 	assert_array(c["attached"]).is_equal([])
+
+
+## NML-1073 M2-5: state_to_plain(state, false) -> state_from_plain is a ROUND
+## TRIP on every dynamic field, and it puts the LIVE GameUnit back on
+## su["unit"] — the leaf decision record reaches the unit through that ref
+## (AiMissionEval.features :530), so a plain leaf on its own cannot serve.
+func test_state_from_plain_round_trips_the_dynamic_layer() -> void:
+	var grunts := _unit(2, [Vector3.ZERO, Vector3(2.0 * IN2M, 0, 0)], "Grunts")
+	grunts.models[1].wounds_current = 2
+	grunts.is_shaken = true
+	grunts.casts_current = 1
+	var tank := _unit(1, [Vector3(10.0 * IN2M, 0, 0)], "Tank")
+	var army := _army([grunts, tank])
+	var objs := [Vector3(5.0 * IN2M, 0, 0)]
+	var state := BattleSim.capture(army, func() -> Array: return objs,
+		func(_i: int) -> int: return 1, 2, 4)
+	var back := BattleSim.state_from_plain(BattleSim.state_to_plain(state, false), army)
+	assert_int(int(back["round"])).is_equal(int(state["round"]))
+	assert_int(int(back["rounds_total"])).is_equal(int(state["rounds_total"]))
+	assert_str(str(back["scoring"])).is_equal(str(state["scoring"]))
+	assert_that((back["objectives"][0] as Dictionary)["pos"]).is_equal(objs[0])
+	assert_int(int((back["objectives"][0] as Dictionary)["owner"])).is_equal(1)
+	assert_int((back["units"] as Dictionary).size()).is_equal((state["units"] as Dictionary).size())
+	for k in state["units"]:
+		var src: Dictionary = state["units"][k]
+		var dst: Dictionary = back["units"][k]
+		assert_object(dst["unit"]).is_same(src["unit"])
+		for f in ["alive", "player", "casts", "shaken", "fatigued", "activated", "in_cover"]:
+			assert_that(dst[f]).is_equal(src[f])
+		assert_that(dst["wounds"]).is_equal(src["wounds"])
+		assert_that(dst["radii"]).is_equal(src["radii"])
+		assert_that(dst["positions"]).is_equal(src["positions"])
+
+
+## The round trip is a COPY, not an alias: writing the rebuilt state must never
+## reach back into the snapshot it came from (same contract as capture itself).
+func test_state_from_plain_is_a_copy() -> void:
+	var grunts := _unit(2, [Vector3.ZERO], "Grunts")
+	var army := _army([grunts])
+	var state := BattleSim.capture(army, func() -> Array: return [], Callable(), 1, 4)
+	var back := BattleSim.state_from_plain(BattleSim.state_to_plain(state, false), army)
+	(back["units"]["Grunts"] as Dictionary)["alive"] = 99
+	(back["units"]["Grunts"] as Dictionary)["positions"][0] = Vector3(9, 9, 9)
+	assert_int(int((state["units"]["Grunts"] as Dictionary)["alive"])).is_equal(1)
+	assert_that((state["units"]["Grunts"] as Dictionary)["positions"][0]).is_equal(Vector3.ZERO)

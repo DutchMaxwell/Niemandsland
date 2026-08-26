@@ -1440,6 +1440,52 @@ static func state_to_plain(state: Dictionary, with_profile := true) -> Dictionar
 	return out
 
 
+## NML-1073 M2-5: the inverse of state_to_plain(state, false) — a plain state
+## (the Rust core's `leaf_state`) back as a LIVE BattleSim state, every unit key
+## resolved to the GameUnit the army manager holds. Its ONE consumer is the leaf
+## DECISION RECORD (solo_controller.gd:3049-3057): AiMissionEval.features and
+## BattleSim.reply_threat both reach the unit through su["unit"], which is the
+## whole reason a plain dictionary cannot serve as the leaf on its own.
+## Keys the plain form does not carry stay absent here too — the Callables
+## (los_blocked is never stamped by capture(), so _los_clear answers "clear" on
+## both paths) and dormant_models/dormant_wounds, which nothing on this path
+## reads (capture() writes them, no consumer in scripts/solo does).
+static func state_from_plain(plain: Dictionary, army: OPRArmyManager) -> Dictionary:
+	var units := {}
+	for uid in (plain.get("units", {}) as Dictionary):
+		var pu: Dictionary = (plain["units"] as Dictionary)[uid]
+		var su: Dictionary = pu.duplicate(true)
+		su["positions"] = _vec3s_of(pu.get("positions", []))
+		su["unit"] = (army.game_units as Dictionary).get(str(uid)) if army != null else null
+		units[str(uid)] = su
+	var out := {"round": int(plain.get("round", 0)),
+		"rounds_total": int(plain.get("rounds_total", 0)),
+		"units": units, "scoring": str(plain.get("scoring", ""))}
+	var obj: Array = []
+	for o in (plain.get("objectives", []) as Array):
+		obj.append({"pos": _vec3_of((o as Dictionary).get("pos", [])),
+			"owner": int((o as Dictionary).get("owner", 0))})
+	out["objectives"] = obj
+	for k in ["vp", "vp_flavour", "vp_memo", "markers_meta", "destroy_seq"]:
+		if plain.has(k):
+			out[k] = plain[k]
+	return out
+
+
+static func _vec3_of(a: Variant) -> Vector3:
+	var arr: Array = a as Array if a is Array else []
+	return Vector3(float(arr[0]) if arr.size() > 0 else 0.0,
+		float(arr[1]) if arr.size() > 1 else 0.0,
+		float(arr[2]) if arr.size() > 2 else 0.0)
+
+
+static func _vec3s_of(a: Array) -> Array:
+	var out: Array = []
+	for v in a:
+		out.append(_vec3_of(v))
+	return out
+
+
 static func _plain_vec3(v: Vector3) -> Array:
 	return [v.x, v.y, v.z]
 
@@ -1483,11 +1529,46 @@ static func _unit_profile(u: GameUnit) -> Dictionary:
 		# primitive (rules_registry.gd:167-170, item-granted rules count as the
 		# unit's own); `attached_hero_rules` feeds AiEv.rule_on_all_models
 		# (ai_ev.gd:79-83), which withholds a rule when an ALIVE attached hero
-		# lacks it. Both are read at profile time, so a hero that dies later
-		# keeps voting — the same v0 gap the snapshot's static profile has for
-		# every other live read (documented, not silently dropped).
+		# lacks it. M2-5b: both are read at PROFILE time, i.e. once per game —
+		# a hero that dies later would keep voting here, so `unit_profile_dyn`
+		# below re-reads them (and every other live-read field) per activation
+		# and the act line carries THAT. The copies here are the deployment
+		# reading the node corpus still replays off.
 		"item_grants": _granted_rules(u),
 		"attached_hero_rules": _attached_hero_rules(u),
+	}
+
+
+## NML-1073 M2-5b: the DYNAMIC half of the profile above — every field whose
+## value a LIVE game rewrites between two activations. The header writes the
+## whole profile ONCE (at the first activation of a game), so a replay that
+## reads any of these off the header answers with a deployment-time reading:
+##   special_rules   main.gd:3761/:3775 add and remove a " (spell)"-suffixed
+##                   rule per cast (_solo_apply_grant / _solo_revoke_grant).
+##   tough           AiEv.unit_rating over special_rules — same source, derived.
+##   caster_value    get_caster_value() (game_unit.gd:382-414) answers a Caster
+##                   Group unit with its ALIVE model count.
+##   item_grants     unit_properties["item_grants"], the registry input of
+##                   RulesRegistry.unit_rules_of_primitive (rules_registry.gd:167).
+##   attached_hero_rules
+##                   ALIVE heroes only (_attached_hero_rules below) — a hero that
+##                   falls stops voting in AiEv.rule_on_all_models (ai_ev.gd:79-83)
+##                   and the host GAINS every unit-wide rule that hero lacked.
+##   shooting_range_bonus / max_activation_advance_bonus_in
+##                   SoloController :5218 / :5322 — both walk special_rules and
+##                   item_grants, and the first sums unit_properties
+##                   ["spell_range_mod"] verbatim.
+## AiActRecorder stamps this per ACTIVATION (act line, unit key "prof"); the
+## port and the stand-in read it there and never off the header.
+static func unit_profile_dyn(u: GameUnit) -> Dictionary:
+	return {
+		"special_rules": u.get_special_rules(),
+		"tough": maxi(AiEv.unit_rating(u, "Tough"), 1),
+		"caster_value": u.get_caster_value(),
+		"item_grants": _granted_rules(u),
+		"attached_hero_rules": _attached_hero_rules(u),
+		"shooting_range_bonus": SoloController.shooting_range_bonus(u),
+		"max_activation_advance_bonus_in": SoloController.max_activation_advance_bonus_in(u),
 	}
 
 

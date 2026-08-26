@@ -20,7 +20,7 @@ use serde::Deserialize;
 
 use crate::io::{roster_of, state_of, Ordered, PlainState};
 use crate::menu::Candidate;
-use crate::state::{Profile, Profiles, Roster, State};
+use crate::state::{Profile, ProfileCache, Profiles, Roster, State};
 use crate::terrain::{PlainTerrain, Terrain};
 
 /// The header's `"knobs"` object — `AiActRecorder._header_line`
@@ -288,6 +288,10 @@ impl Act {
 
 #[derive(Debug)]
 pub struct ActCorpus {
+    /// The HEADER table — the deployment reading. The table an act is actually
+    /// replayed on is `act.state.profiles`, which carries that activation's own
+    /// dynamic reading (NML-1073 M2-5b); ask `nml_core::act_statics` for the
+    /// matching per-act `UnitStatic` closures rather than deriving them here.
     pub profiles: Rc<Profiles>,
     pub terrain: Terrain,
     pub knobs: Knobs,
@@ -321,6 +325,11 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
         profiles.list.push(p);
     }
     let profiles = Rc::new(profiles);
+    // NML-1073 M2-5b: the header table is the DEPLOYMENT reading. Every act
+    // carries its own reading of the fields a live game rewrites, and the state
+    // that act is replayed on gets the table THAT says — interned, so acts that
+    // read alike share one table (and one derived `UnitStatic` closure).
+    let mut profile_cache = ProfileCache::new(Rc::clone(&profiles));
     let mut cache: Option<Rc<Roster>> = None;
     let mut acts = Vec::new();
     for (i, line) in lines.enumerate() {
@@ -331,10 +340,11 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
         let pa: PlainAct =
             serde_json::from_str(&line).map_err(|e| format!("{path}:{}: {e}", i + 2))?;
         let roster = roster_of(&pa.state, &profiles, &mut cache)?;
+        let eff = profile_cache.effective(&roster, &pa.state.dyn_profiles());
         acts.push(Act {
             round: pa.round,
             player: pa.player,
-            state: state_of(pa.state, &profiles, roster),
+            state: state_of(pa.state, &eff, roster),
             pool: pa.pool,
             charge_illegal: pa.charge_illegal,
             charge_illegal_grid: pa.charge_illegal_grid,

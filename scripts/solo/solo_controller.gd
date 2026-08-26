@@ -3007,9 +3007,22 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	# no-ops: byte-identical pick either way.
 	var act_rec := AiActRecorder.begin(state, me, pool, terrain_type_at)
 	var pick := {}
+	var seam_leaf := {}
 	var doct := OS.get_environment("NML_OPENER_DOCTRINE")
-	if doct != "" and AiPlanner.opener_seat and _current_round() == 1:
+	var doctrine_on := doct != "" and AiPlanner.opener_seat and _current_round() == 1
+	if doctrine_on:
 		pick = AiPlanner.doctrine_pick(state, me, doct)   # research probe, env-gated
+	# NML-1073 M2-5: the SEARCH SEAM. With NML_CORE=1 AND the GDExtension loaded
+	# (BattleSim.core_enabled(), R1+R2) this activation is decided by the Rust
+	# core instead of the loop below; a DECLINE (net playout, fitted eval, an
+	# unported branch) falls straight through to the GDScript search, unchanged.
+	# The doctrine probe keeps precedence — it is a different decision entirely.
+	if not doctrine_on and not bool(pick.get("used", false)) and BattleSim.core_enabled():
+		var seam := _core_plan(state, me)
+		if bool(seam.get("used", false)):
+			seam_leaf = seam.get("leaf", {})
+			seam.erase("leaf")
+			pick = seam
 	if not bool(pick.get("used", false)):
 		pick = AiPlanner.plan_with_rollout(state, me)
 	AiActRecorder.finish(act_rec, pick)
@@ -3045,7 +3058,10 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	# controller's charge_illegal/los_at Callables) and must not stay parked in
 	# a script static, where process teardown frees it after its bound objects
 	# are already gone (measured: heap corruption, exit 134).
-	var leaf: Dictionary = AiPlanner.take_last_leaf()
+	# M2-5: the seam's leaf comes back as a plain dictionary and is re-hydrated
+	# above; the GDScript search parks its own in a script static. Whichever
+	# search ran, the record below is computed from the SAME live leaf state.
+	var leaf: Dictionary = seam_leaf if not seam_leaf.is_empty() else AiPlanner.take_last_leaf()
 	if not leaf.is_empty():
 		record_decision({"kind": "planner", "unit": chosen.get_name(),
 			"rule": "leaf row: winning candidate's horizon-end position (training data)",
@@ -3054,6 +3070,246 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 				"features": AiMissionEval.features(_with_reserves(leaf), me,
 					BattleSim.reply_threat(leaf, me), true)}})
 	return chosen
+
+
+## === NML-1073 M2-5: the SEARCH SEAM ==========================================
+## One live NmlCore node per controller, one game header per game, one call per
+## activation. Every input is built by the SAME helper the act recorder uses, so
+## the corpus the parity gate replays and the dictionary the live game hands over
+## are one shape, not two.
+var _core_node: Object = null
+var _core_header_done := false
+var _core_declines := {}                  # reason -> already warned (once per game)
+var _core_calls := 0
+var _core_us_total := 0
+var _core_us_max := 0
+var _core_statics_builds := 0     # M2-5b: profile-closure rebuilds seen so far
+
+
+## Asks the Rust core for THIS activation. {} = declined (or the node could not
+## be built) and the caller runs the GDScript search — R1: the seam is never
+## load-bearing. Only ever entered when BattleSim.core_enabled() is true.
+func _core_plan(state: Dictionary, me: int) -> Dictionary:
+	if _core_node == null:
+		_core_node = ClassDB.instantiate("NmlCore")
+		if _core_node == null:
+			_core_warn_once("NmlCore could not be instantiated")
+			return {}
+		_core_node.set_repo_root(ProjectSettings.globalize_path("res://"))
+		_core_node.set_seams(BattleSim.spacing_enabled(), BattleSim.cast_phase_enabled())
+	if not _core_header_done:
+		# AiActRecorder._header_line IS the contract (profiles + terrain + knobs);
+		# a second copy here would be a second thing to keep in step with acts.jsonl.
+		var head := AiActRecorder._header_line(state, terrain_type_at)
+		if not bool(_core_node.set_game_header(head)):
+			_core_warn_once(str(_core_node.last_error()))
+			return {}
+		_core_header_done = true
+		# The header's own closure IS build #1; start the counter there so the
+		# line below only ever announces a REAL mid-game rebuild.
+		_core_statics_builds = int(_core_node.statics_builds())
+		if OS.get_environment("NML_CORE_SELFCHECK") == "1":
+			_core_header_report(head)
+	var plain: Dictionary = BattleSim.state_to_plain(state, false)
+	AiActRecorder._stamp_gate_reads(state, plain)   # M2-0d per-unit charge-gate reads
+	var statics := {"opener_seat": AiPlanner.opener_seat,
+		"playout_search": AiPlanner.playout_search,
+		"fit_mode": AiMissionEval.fit_mode, "playout_net": AiPlanner.playout_net}
+	# _playout_sig walks the whole board (ai_planner.gd:1345-1347); the core only
+	# ever reads it on a CLOSE top-2 under playout_search, so it is paid for then.
+	var sig := AiPlanner._playout_sig(state, me) if AiPlanner.playout_search else 0
+	var t0 := Time.get_ticks_usec()
+	var out: Dictionary = _core_node.plan_with_rollout(plain, me, statics, sig)
+	var dt := Time.get_ticks_usec() - t0
+	if not bool(out.get("used", false)):
+		_core_warn_once(str(out.get("unsupported", "no reason given")))
+		return {}
+	_core_calls += 1
+	_core_us_total += dt
+	_core_us_max = maxi(_core_us_max, dt)
+	# NML-1073 M2-5b: the port rebuilds its per-unit closure when an activation's
+	# DYNAMIC profile reading moves (an attached hero fell, a spell granted or
+	# expired a rule). Say so — a silent rebuild looks like a stale replay.
+	var rebuilds := int(_core_node.statics_builds())
+	if rebuilds != _core_statics_builds:
+		_core_statics_builds = rebuilds
+		print("[CORE] PROFILE rebuild #%d — a live profile read changed (r%d p%d)"
+			% [rebuilds, _current_round(), me])
+	if OS.get_environment("NML_CORE_SELFCHECK") == "1":
+		_core_selfcheck(state, me, out)
+	print("[CORE] ACT r%d p%d us=%d n=%d mean_us=%d max_us=%d" % [_current_round(), me,
+		dt, _core_calls, _core_us_total / maxi(_core_calls, 1), _core_us_max])
+	return _core_pick_of(out, state)
+
+
+## The core's answer as the dictionary AiPlanner.plan_with_rollout returns —
+## Vector3 destinations, the composed intent sentence, plus "leaf" (the winning
+## rollout's horizon end, re-hydrated with the LIVE GameUnits) for the caller.
+func _core_pick_of(out: Dictionary, state: Dictionary) -> Dictionary:
+	var act := _core_action_of(out.get("action", {}))
+	var runner: Dictionary = out.get("runner_up", {})
+	if not runner.is_empty():
+		runner = {"unit_key": str(runner["unit_key"]),
+			"action": _core_action_of(runner.get("action", {})),
+			"score": float(runner["score"])}
+	var exp: Dictionary = out.get("expectation", {})
+	var base := float(exp.get("before", 0.0))
+	var after := float(exp.get("after", 0.0))
+	var waits := int(out.get("waits", 0))
+	var best := {"unit_key": str(out["unit_key"]), "action": act, "score": after}
+	# ai_planner.gd:255-256 — the note is composed AFTER the swap, so it names
+	# the branch that actually won.
+	var note := ""
+	var arb: Variant = out.get("arbitration")
+	if arb != null:
+		var ad: Dictionary = arb
+		var done := int(ad["n"])
+		var sum_b := float(ad["sum_b"])
+		var sum_r := float(ad["sum_r"])
+		note = " [playout %d/side: %.2f vs %.2f -> %s]" % [done,
+			maxf(sum_b, sum_r) / done, minf(sum_b, sum_r) / done, str(best["unit_key"])]
+	var rolled: Array = []
+	for k in (out.get("rolled_units", []) as Array):
+		rolled.append(str(k))
+	if AiActRecorder.active() or AiPlanner.trace_enabled:
+		# The recorder reads AiPlanner.trace once per activation; the seam never
+		# entered plan_with_rollout, so it fills the same dict itself.
+		AiPlanner.trace = {"menus": {}, "scored": out.get("scored", []),
+			"pool_idx": out.get("pool_idx", []), "rs": out.get("rs", []),
+			"best_idx": int(out.get("best_idx", -1)),
+			"runner_idx": int(out.get("runner_idx", -1)),
+			"arbitration": out.get("arbitration")}
+	var pick := {"used": true, "unit_key": str(best["unit_key"]), "action": act,
+		"intent": AiPlanner.intent_line(state, best, runner, base, waits, note),
+		"expectation": {"before": base, "after": after},
+		"runner_up": runner, "waits": waits, "rolled_units": rolled}
+	var leaf_plain: Dictionary = out.get("leaf_state", {})
+	if not (leaf_plain.get("units", {}) as Dictionary).is_empty():
+		pick["leaf"] = BattleSim.state_from_plain(leaf_plain, army_manager)
+	return pick
+
+
+## A candidate dictionary as AiPlanner.candidates builds it: the core writes the
+## destination as [x, y, z] (a plain state carries no Vector3), everything else
+## verbatim — key PRESENCE is load-bearing (_solve_planner :3423-3428 asks has()).
+func _core_action_of(a: Dictionary) -> Dictionary:
+	var out := {}
+	for k in a:
+		out[k] = a[k]
+	if a.has("dest"):
+		out["dest"] = BattleSim._vec3_of(a["dest"])
+	return out
+
+
+## NML-1073 M2-5 BISECT: the SAME counts off the dictionary the seam SENT and
+## off what the port PARSED. A typed Godot array (Array[String], a Packed*Array)
+## is a different Variant type from an untyped one and can read as empty on the
+## far side; the JSONL corpus cannot carry that distinction, so only a live run
+## can catch it.
+func _core_header_report(h: Dictionary) -> void:
+	var profs: Dictionary = h.get("profiles", {})
+	var rules := 0
+	var weapons := 0
+	var wrules := 0
+	var grants := 0
+	var heroes := 0
+	var wmax := 0
+	var bands := 0.0
+	for k in profs:
+		var p: Dictionary = profs[k]
+		rules += (p.get("special_rules", []) as Array).size()
+		for w in (p.get("weapons", []) as Array):
+			weapons += 1
+			wrules += ((w as Dictionary).get("rules", []) as Array).size()
+		grants += (p.get("item_grants", []) as Array).size()
+		for hr in (p.get("attached_hero_rules", []) as Array):
+			heroes += (hr as Array).size()
+		for wm in (p.get("wounds_max", []) as Array):
+			wmax += int(wm)
+		var mb: Dictionary = p.get("move_bands", {})
+		bands += float(mb.get("advance", 0.0)) + float(mb.get("rush", 0.0))
+	var t: Variant = h.get("terrain")
+	print("[CORE] HEADER sent profiles=%d rules=%d weapons=%d weapon_rules=%d grants=%d hero_rules=%d wmax=%d bands=%.3f terrain=%s"
+		% [profs.size(), rules, weapons, wrules, grants, heroes, wmax, bands,
+			"null" if t == null else str((t as Dictionary).get("cells", []).size())])
+	print("[CORE] HEADER read %s" % str(_core_node.header_digest()))
+
+
+## NML-1073 M2-5 BISECT (env NML_CORE_SELFCHECK=1, never on a shipped path):
+## run the GDScript search on the SAME state, right after the core, and print
+## the FIRST field the two disagree on. A corpus gate can only judge the states
+## a corpus happens to hold; this judges every activation of a live game, which
+## is the only place a live-read gap shows itself.
+func _core_selfcheck(state: Dictionary, me: int, out: Dictionary) -> void:
+	var trace_was_on := AiPlanner.trace_enabled
+	AiPlanner.trace_enabled = true
+	var ref := AiPlanner.plan_with_rollout(state, me)
+	var rt: Dictionary = AiPlanner.trace
+	AiPlanner.trace = {}
+	AiPlanner.trace_enabled = trace_was_on
+	AiPlanner.take_last_leaf()   # never leave a live state parked in the static
+	var bad: Array = []
+	if str(ref.get("unit_key", "")) != str(out.get("unit_key", "")):
+		bad.append("unit_key %s vs %s" % [str(ref.get("unit_key")), str(out.get("unit_key"))])
+	var re: Dictionary = ref.get("expectation", {})
+	var oe: Dictionary = out.get("expectation", {})
+	for k in ["before", "after"]:
+		if absf(float(re.get(k, 0.0)) - float(oe.get(k, 0.0))) > 1e-9:
+			bad.append("expectation.%s %s vs %s" % [str(k),
+				String.num(float(re.get(k, 0.0)), 12), String.num(float(oe.get(k, 0.0)), 12)])
+	if int(ref.get("waits", -1)) != int(out.get("waits", -2)):
+		bad.append("waits %d vs %d" % [int(ref.get("waits", -1)), int(out.get("waits", -2))])
+	var rru: Dictionary = ref.get("runner_up", {})
+	var oru: Dictionary = out.get("runner_up", {})
+	if str(rru.get("unit_key", "")) != str(oru.get("unit_key", "")):
+		bad.append("runner %s vs %s" % [str(rru.get("unit_key", "")), str(oru.get("unit_key", ""))])
+	elif absf(float(rru.get("score", 0.0)) - float(oru.get("score", 0.0))) > 1e-9:
+		bad.append("runner.score %s vs %s" % [String.num(float(rru.get("score", 0.0)), 12),
+			String.num(float(oru.get("score", 0.0)), 12)])
+	# The trace is where a divergence STARTS: the prefilter first, then the pool,
+	# then the rollout values. Printing the first row that moves names the stage.
+	var rsc: Array = rt.get("scored", [])
+	var osc: Array = out.get("scored", [])
+	if rsc.size() != osc.size():
+		bad.append("scored.size %d vs %d" % [rsc.size(), osc.size()])
+	else:
+		for i in rsc.size():
+			var a: Dictionary = rsc[i]
+			var b: Dictionary = osc[i]
+			if int(a["idx"]) != int(b["idx"]) or absf(float(a["score"]) - float(b["score"])) > 1e-9:
+				bad.append("scored[%d] idx %d/%d kind %d/%d unit %s/%s score %s vs %s"
+					% [i, int(a["idx"]), int(b["idx"]), int(a["kind"]), int(b["kind"]),
+						str(a["unit"]), str(b["unit"]),
+						String.num(float(a["score"]), 12), String.num(float(b["score"]), 12)])
+				break
+	var rpi: Array = rt.get("pool_idx", [])
+	var opi: Array = out.get("pool_idx", [])
+	if str(rpi) != str(opi):
+		bad.append("pool_idx %s vs %s" % [str(rpi), str(opi)])
+	var rrs: Array = rt.get("rs", [])
+	var ors: Array = out.get("rs", [])
+	if rrs.size() != ors.size():
+		bad.append("rs.size %d vs %d" % [rrs.size(), ors.size()])
+	else:
+		for i in rrs.size():
+			var a2: Dictionary = rrs[i]
+			var b2: Dictionary = ors[i]
+			if int(a2["idx"]) != int(b2["idx"]) or absf(float(a2["rs"]) - float(b2["rs"])) > 1e-9:
+				bad.append("rs[%d] idx %d/%d %s vs %s" % [i, int(a2["idx"]), int(b2["idx"]),
+					String.num(float(a2["rs"]), 12), String.num(float(b2["rs"]), 12)])
+				break
+	print("[CORE] SELFCHECK r%d p%d %s" % [_current_round(), me,
+		"OK" if bad.is_empty() else "DIFF " + str(bad.slice(0, 5))])
+
+
+## One line per REASON per game — a decline is normal (the core declines what it
+## has not ported), a decline STORM is a finding, and 200 identical lines hide it.
+func _core_warn_once(reason: String) -> void:
+	if _core_declines.has(reason):
+		return
+	_core_declines[reason] = true
+	push_warning("[CORE] the Rust search declined this activation (%s) — "
+		% reason + "the GDScript search decides it (NML-1073 R1).")
 
 
 ## Feature wave: annotate a captured state with per-side off-table reserve

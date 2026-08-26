@@ -26,9 +26,13 @@ use std::rc::Rc;
 
 use godot::prelude::*;
 
-use nml_core::state::{Profiles, Roster};
-use nml_core::unit::UnitStatic;
-use nml_core::{reply_threat, resolve, score, Action, Registries, Seams};
+use nml_core::state::{ProfileCache, Profiles, Roster};
+use nml_core::terrain::Terrain;
+use nml_core::unit::{StaticsCache, UnitStatic};
+use nml_core::{
+    plan_with_rollout_sig, reply_threat, resolve, score, ActStatics, Action, Knobs, Pick,
+    Registries, Seams,
+};
 
 mod plain;
 
@@ -60,6 +64,25 @@ struct RosterCache {
     statics: Option<Rc<Vec<UnitStatic>>>,
 }
 
+/// The per-GAME closure the SEARCH needs on top of a single state — the exact
+/// three objects `AiActRecorder._header_line` (act_recorder.gd:118-134) writes
+/// as line 1 of the act corpus. Set ONCE per game by `set_game_header`; a state
+/// whose keys are not in `profiles` is refused rather than defaulted.
+struct GameHeader {
+    profiles: Rc<Profiles>,
+    terrain: Terrain,
+    knobs: Knobs,
+    /// NML-1073 M2-5b: the header table is the DEPLOYMENT reading. This turns
+    /// each activation's own `prof` blocks into the table that activation is
+    /// searched on — the header's own `Rc` while nothing has moved, one interned
+    /// rebuild per distinct reading after that.
+    pcache: ProfileCache,
+    /// The roster for the last state seen, interned across activations the way
+    /// `io::roster_of` interns it across corpus lines.
+    keys: Vec<String>,
+    roster: Option<Rc<Roster>>,
+}
+
 #[derive(GodotClass)]
 #[class(base = RefCounted, init)]
 pub struct NmlCore {
@@ -68,11 +91,15 @@ pub struct NmlCore {
     slab: Vec<Option<Slot>>,
     free: Vec<usize>,
     cache: RosterCache,
+    /// The derived `UnitStatic` closure per profile TABLE — rebuilt only on the
+    /// activation where the game's dynamic reading actually changed.
+    scache: StaticsCache,
     reg: Option<Registries>,
     repo_root: Option<String>,
     seams: Option<Seams>,
     last_error: String,
     dropped: Vec<String>,
+    header: Option<GameHeader>,
 }
 
 #[godot_api]
@@ -217,6 +244,144 @@ impl NmlCore {
         }
     }
 
+    /// NML-1073 M2-5 — the SEARCH seam, half one: the per-GAME closure.
+    ///
+    /// `header` is exactly the dictionary `AiActRecorder._header_line`
+    /// (act_recorder.gd:118-134) writes as line 1 of `acts.jsonl`:
+    /// `{"profiles": {unit_key: profile}, "terrain": {...}|null, "knobs": {...}}`.
+    /// Call it ONCE per game, before the first `plan_with_rollout`. Returns
+    /// false and leaves the reason in `last_error()` when the table is unusable.
+    #[func]
+    fn set_game_header(&mut self, header: VarDictionary) -> bool {
+        self.last_error.clear();
+        let profiles = plain::profiles_of_header(&plain::sub_dict(&header, "profiles"));
+        if profiles.list.is_empty() {
+            self.last_error = "game header carries no \"profiles\"".to_string();
+            return false;
+        }
+        let terrain = match header.get("terrain").and_then(|v| v.try_to::<VarDictionary>().ok()) {
+            Some(t) => Terrain::build(&plain::terrain_of(&t)),
+            None => Terrain::absent(),
+        };
+        let knobs = plain::knobs_of(&plain::sub_dict(&header, "knobs"));
+        let root = self.root();
+        if self.reg.is_none() {
+            self.reg = Some(Registries::new(&root));
+        }
+        let profiles = Rc::new(profiles);
+        // The closure for the header's own reading is built here rather than on
+        // the first activation, so a broken registry path is a `set_game_header`
+        // failure and not a mid-game decline.
+        let reg = self.reg.as_mut().unwrap();
+        let _ = self.scache.get(reg, &profiles);
+        self.header = Some(GameHeader {
+            pcache: ProfileCache::new(Rc::clone(&profiles)),
+            profiles,
+            terrain,
+            knobs,
+            keys: Vec::new(),
+            roster: None,
+        });
+        true
+    }
+
+    /// NML-1073 M2-5 — the SEARCH seam, half two: ONE activation.
+    ///
+    /// `AiPlanner.plan_with_rollout(state, player)` (ai_planner.gd:118-275) over
+    /// the plain state `BattleSim.state_to_plain(state, false)` writes, with the
+    /// per-activation class statics (`AiActRecorder.begin`, act_recorder.gd:62-63)
+    /// and `AiPlanner._playout_sig(state, player)` (:1345-1347) handed in rather
+    /// than guessed.
+    ///
+    /// Answers either the pick — the SAME dictionary the GDScript returns, minus
+    /// `intent` (a battle-log label the caller composes from the live GameUnits),
+    /// plus `leaf_state` (the winning rollout's horizon end, plain) and the
+    /// search trace — or `{"used": false, "unsupported": "<reason>"}` when the
+    /// port declines. It never crashes the game: a panic inside the port is
+    /// caught and answered as a decline like any other.
+    #[func]
+    fn plan_with_rollout(
+        &mut self,
+        state_plain: VarDictionary,
+        player: i64,
+        statics: VarDictionary,
+        sig: i64,
+    ) -> VarDictionary {
+        self.last_error.clear();
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.plan_inner(&state_plain, player, &statics, sig)
+        }));
+        let out = match caught {
+            Ok(r) => r,
+            Err(_) => Err("panic inside the port".to_string()),
+        };
+        match out {
+            Ok(d) => d,
+            Err(e) => {
+                self.last_error = e.clone();
+                let mut d = VarDictionary::new();
+                d.set("used", false);
+                d.set("unsupported", &GString::from(e.as_str()));
+                d
+            }
+        }
+    }
+
+    /// NML-1073 M2-5 diagnostic: what the port actually PARSED out of the game
+    /// header, as counts. The GDScript prints the same counts off the dictionary
+    /// it sent, so a marshalling gap (a typed Godot array read as empty, a
+    /// missing terrain) shows up as a number instead of as a wrong rollout.
+    #[func]
+    fn header_digest(&mut self) -> VarDictionary {
+        let mut d = VarDictionary::new();
+        let Some(h) = self.header.as_ref() else {
+            d.set("header", false);
+            return d;
+        };
+        d.set("header", true);
+        d.set("profiles", h.profiles.list.len() as i64);
+        d.set("terrain_valid", h.terrain.is_valid());
+        let mut rules = 0i64;
+        let mut weapons = 0i64;
+        let mut wrules = 0i64;
+        let mut grants = 0i64;
+        let mut heroes = 0i64;
+        let mut wmax = 0i64;
+        let mut bands = 0.0f64;
+        for p in &h.profiles.list {
+            rules += p.special_rules.len() as i64;
+            weapons += p.weapons.len() as i64;
+            for w in &p.weapons {
+                wrules += w.rules.len() as i64;
+            }
+            grants += p.item_grants.len() as i64;
+            heroes += p.attached_hero_rules.iter().map(|r| r.len() as i64).sum::<i64>();
+            wmax += p.wounds_max.iter().sum::<i64>();
+            bands += p.move_bands.advance + p.move_bands.rush;
+        }
+        d.set("special_rules", rules);
+        d.set("weapons", weapons);
+        d.set("weapon_rules", wrules);
+        d.set("item_grants", grants);
+        d.set("hero_rules", heroes);
+        d.set("wounds_max_sum", wmax);
+        d.set("move_bands_sum", bands);
+        d.set("top_k", h.knobs.top_k);
+        d.set("horizon", h.knobs.horizon);
+        d.set("seam_spacing", h.knobs.seam_spacing);
+        d.set("statics_builds", self.scache.builds as i64);
+        d
+    }
+
+    /// NML-1073 M2-5b — how often the port had to REBUILD the per-unit static
+    /// closure because an activation's dynamic profile reading differed from the
+    /// last one (a hero fell, a spell granted or expired a rule). 1 = the game
+    /// header's own build and nothing has moved since.
+    #[func]
+    fn statics_builds(&self) -> i64 {
+        self.scache.builds as i64
+    }
+
     /// Frees the slot. Releasing an already-free or unknown handle is a no-op.
     #[func]
     fn release(&mut self, h: i64) {
@@ -267,6 +432,66 @@ impl NmlCore {
     }
 
     // ------------------------------------------------------------ internals --
+
+    /// The body of `plan_with_rollout`, in `Result` form so every decline is one
+    /// `?` and the public wrapper owns the marshalling of the failure.
+    fn plan_inner(
+        &mut self,
+        plain: &VarDictionary,
+        player: i64,
+        statics: &VarDictionary,
+        sig: i64,
+    ) -> Result<VarDictionary, String> {
+        let keys = plain::unit_keys(plain);
+        // NML-1073 M2-5b: the profile table THIS activation reads. The per-unit
+        // `prof` blocks the seam stamps carry every field a live game rewrites
+        // (a fallen hero's inherited rules above all), so the search is handed
+        // the reading of the moment, not the deployment one.
+        let effective = {
+            let h = self
+                .header
+                .as_mut()
+                .ok_or_else(|| "set_game_header has not been called".to_string())?;
+            if h.roster.is_none() || h.keys != keys {
+                let r = plain::roster_of_keys(&keys, &h.profiles)?;
+                h.keys = keys;
+                h.roster = Some(Rc::new(r));
+            }
+            let dyns = plain::dyn_profiles(plain);
+            h.pcache.effective(h.roster.as_ref().unwrap(), &dyns)
+        };
+        let root = self.root();
+        if self.reg.is_none() {
+            self.reg = Some(Registries::new(&root));
+        }
+        let unit_statics = {
+            let reg = self.reg.as_mut().unwrap();
+            self.scache.get(reg, &effective)
+        };
+        let h = self.header.as_ref().unwrap();
+        let cap = plain::build_state(
+            plain,
+            Rc::clone(&effective),
+            Rc::clone(h.roster.as_ref().unwrap()),
+        )?;
+        for d in &cap.dropped {
+            if !self.dropped.iter().any(|x| x == d) {
+                self.dropped.push(d.clone());
+            }
+        }
+        let act = act_statics_of(statics);
+        let pick = plan_with_rollout_sig(
+            &cap.state,
+            &h.terrain,
+            &unit_statics,
+            &h.knobs,
+            &act,
+            player,
+            Some(sig),
+        )
+        .map_err(|u| format!("{u:?}"))?;
+        Ok(pick_out(&pick, &cap, sig))
+    }
 
     fn seams_now(&mut self) -> Seams {
         if self.seams.is_none() {
@@ -352,7 +577,7 @@ fn action_of(d: &VarDictionary) -> Action {
         if let Ok(p) = v.try_to::<Vector3>() {
             return Some([p.x as f64, p.y as f64, p.z as f64]);
         }
-        v.try_to::<VarArray>().ok().map(|a| {
+        Some(plain::any_array(&v)).map(|a| {
             let mut out = [0.0f64; 3];
             for (i, slot) in out.iter_mut().enumerate() {
                 if i < a.len() {
@@ -373,4 +598,96 @@ fn action_of(d: &VarDictionary) -> Action {
         charge: opt("charge"),
         patient: d.get("patient").map(|v| plain::flag(&v)).unwrap_or(false),
     }
+}
+
+/// `AiActRecorder.begin`'s `"statics"` object (act_recorder.gd:62-63) read off a
+/// Variant. `playout_net` only ever has to answer "empty or not" — a non-empty
+/// net is a different brain and the port declines it (`Unsupported::NetPlayout`).
+fn act_statics_of(d: &VarDictionary) -> ActStatics {
+    let net = d
+        .get("playout_net")
+        .and_then(|v| v.try_to::<VarDictionary>().ok())
+        .map(|n| n.len())
+        .unwrap_or(0);
+    let mut m = serde_json::Map::new();
+    if net > 0 {
+        m.insert("net".to_string(), serde_json::Value::Bool(true));
+    }
+    ActStatics {
+        opener_seat: d.get("opener_seat").map(|v| plain::flag(&v)).unwrap_or(false),
+        playout_search: d.get("playout_search").map(|v| plain::flag(&v)).unwrap_or(false),
+        fit_mode: d.get("fit_mode").map(|v| plain::flag(&v)).unwrap_or(false),
+        playout_net: serde_json::Value::Object(m),
+    }
+}
+
+/// The pick as `AiPlanner.plan_with_rollout` returns it (ai_planner.gd:272-275),
+/// plus the two things a Dictionary can carry that the GDScript keeps in class
+/// statics: the winning rollout's LEAF (`_last_leaf_state`, :213) and the search
+/// TRACE (`AiPlanner.trace`, :97) in its own recorded shape.
+fn pick_out(p: &Pick, root: &plain::Captured, sig: i64) -> VarDictionary {
+    let mut out = VarDictionary::new();
+    out.set("used", true);
+    out.set("unit_key", &GString::from(p.unit_key.as_str()));
+    out.set("action", &plain::candidate_out(&p.action));
+    let mut exp = VarDictionary::new();
+    exp.set("before", p.expectation_before);
+    exp.set("after", p.expectation_after);
+    out.set("expectation", &exp);
+    let mut runner = VarDictionary::new();
+    if let Some((k, c, s)) = &p.runner_up {
+        runner.set("unit_key", &GString::from(k.as_str()));
+        runner.set("action", &plain::candidate_out(c));
+        runner.set("score", *s);
+    }
+    out.set("runner_up", &runner);
+    out.set("waits", p.waits);
+    let mut rolled = VarArray::new();
+    for k in &p.rolled_units {
+        rolled.push(&GString::from(k.as_str()).to_variant());
+    }
+    out.set("rolled_units", &rolled);
+    match &p.last_leaf {
+        Some(leaf) => out.set("leaf_state", &plain::plain_of_derived(leaf, root)),
+        None => out.set("leaf_state", &VarDictionary::new()),
+    }
+    // --- the trace, in `AiPlanner.trace`'s own shape (ai_planner.gd:145-155) ---
+    let mut scored = VarArray::new();
+    for (idx, unit, kind, sc) in &p.scored {
+        let mut r = VarDictionary::new();
+        r.set("idx", *idx);
+        r.set("unit", &GString::from(unit.as_str()));
+        r.set("kind", *kind);
+        r.set("score", *sc);
+        scored.push(&r.to_variant());
+    }
+    out.set("scored", &scored);
+    let mut pool = VarArray::new();
+    for i in &p.pool_idx {
+        pool.push(&(*i as i64).to_variant());
+    }
+    out.set("pool_idx", &pool);
+    let mut rs = VarArray::new();
+    for (idx, v) in &p.rs {
+        let mut r = VarDictionary::new();
+        r.set("idx", *idx);
+        r.set("rs", *v);
+        rs.push(&r.to_variant());
+    }
+    out.set("rs", &rs);
+    out.set("best_idx", p.best_idx);
+    out.set("runner_idx", p.runner_idx);
+    match &p.arbitration {
+        Some(a) => {
+            let mut d = VarDictionary::new();
+            d.set("sig", sig);
+            d.set("n", a.n);
+            d.set("sum_b", a.sum_b);
+            d.set("sum_r", a.sum_r);
+            d.set("swapped", a.swapped);
+            out.set("arbitration", &d);
+        }
+        None => out.set("arbitration", &Variant::nil()),
+    }
+    out
 }

@@ -112,8 +112,12 @@ func test_begin_and_finish_write_header_and_act_line() -> void:
 	assert_bool(header.has("profiles")).is_true()
 	assert_bool((header["profiles"] as Dictionary).has("A")).is_true()
 	var a_profile := (header["profiles"] as Dictionary)["A"] as Dictionary
-	assert_bool(a_profile.has("shooting_range_bonus")).is_true()
-	assert_bool(a_profile.has("max_activation_advance_bonus_in")).is_true()
+	# NML-1073 M2-5b: the header is STATIC-only. The two SoloController bonuses
+	# used to be stamped on here; both are live reads (shooting_range_bonus sums
+	# unit_properties["spell_range_mod"] verbatim, and both walk special_rules),
+	# so they moved into the per-ACTIVATION block asserted below.
+	assert_bool(a_profile.has("shooting_range_bonus")).is_false()
+	assert_bool(a_profile.has("max_activation_advance_bonus_in")).is_false()
 	assert_bool(header.has("knobs")).is_true()
 	for knob in ["top_k", "horizon", "tail_cap_p1", "tail_cap_p2", "imagined_round_end",
 			"depth_discount", "seat_mode", "playout_margin", "playout_rich",
@@ -132,6 +136,13 @@ func test_begin_and_finish_write_header_and_act_line() -> void:
 	var pick_dest = ((act["pick"] as Dictionary)["action"] as Dictionary)["dest"]
 	assert_bool(pick_dest is Array).is_true()
 	assert_array(pick_dest as Array).is_equal([1.0, 2.0, 3.0])
+	# NML-1073 M2-5b: every unit of every act carries the DYNAMIC half of its
+	# profile — the fields a live game rewrites between two activations.
+	var a_dyn := (((act["state"] as Dictionary)["units"] as Dictionary)["A"]
+		as Dictionary)["prof"] as Dictionary
+	for k in ["special_rules", "tough", "caster_value", "item_grants",
+			"attached_hero_rules", "shooting_range_bonus", "max_activation_advance_bonus_in"]:
+		assert_bool(a_dyn.has(k)).is_true()
 	# ordered pair, both directions, opposite sides only — A|B and B|A, never A|A/B|B
 	var ci := act["charge_illegal"] as Dictionary
 	assert_bool(ci.has("A|B")).is_true()
@@ -228,3 +239,29 @@ func test_charge_illegal_plain_is_a_pure_function_of_the_capture() -> void:
 	# Strider/Flying ignore difficult (p.13).
 	(board["units"]["A"] as Dictionary)["charge_no_difficult"] = true
 	assert_bool(BattleSim.charge_illegal_plain(board, forest, "A", "B", 10.0)).is_false()
+
+
+## NML-1073 M2-5b: a hero that FALLS stops lending its rules to the unit it
+## joined. `AiEv.rule_on_all_models` (ai_ev.gd:79-83) only asks the ALIVE
+## attached heroes, so the host GAINS every unit-wide rule the dead hero lacked
+## — and the recorder has to say so on the very next activation, not at the next
+## game. The header's copy is taken once and cannot.
+func test_a_dead_attached_hero_drops_out_of_the_per_act_profile() -> void:
+	var host := _armed(1, [Vector3.ZERO], "H")
+	host.unit_properties["special_rules"] = ["Shielded"]
+	var hero := _armed(1, [Vector3(0.02, 0, 0)], "X")
+	hero.unit_properties["special_rules"] = ["Hero", "Tough(3)"]   # no Shielded
+	host.unit_properties["attached_heroes"] = [hero]
+	hero.unit_properties["attached_to"] = host
+
+	var alive := BattleSim.unit_profile_dyn(host)
+	assert_array(alive["attached_hero_rules"] as Array).is_equal([["Hero", "Tough(3)"]])
+	assert_bool(AiEv.rule_on_all_models(host, "Shielded")).is_false()
+
+	for m in hero.models:
+		(m as ModelInstance).is_alive = false
+	var fallen := BattleSim.unit_profile_dyn(host)
+	assert_array(fallen["attached_hero_rules"] as Array).is_empty()
+	assert_bool(AiEv.rule_on_all_models(host, "Shielded")).is_true()
+	# and the STATIC half is untouched by the death — it is the same unit
+	assert_array(fallen["special_rules"] as Array).is_equal(["Shielded"])
