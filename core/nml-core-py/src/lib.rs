@@ -352,7 +352,7 @@ impl Core {
     }
 
     fn seams(&self) -> Seams {
-        Seams { spacing: self.knobs.seam_spacing, cast: self.knobs.seam_cast }
+        Seams { spacing: self.knobs.seam_spacing, cast: self.knobs.seam_cast, path: self.knobs.seam_path }
     }
 }
 
@@ -390,6 +390,7 @@ impl Core {
         m.insert("playout_rich".into(), self.knobs.playout_rich.into());
         m.insert("seam_cast".into(), self.knobs.seam_cast.into());
         m.insert("seam_spacing".into(), self.knobs.seam_spacing.into());
+        m.insert("seam_path".into(), self.knobs.seam_path.into());
         to_py(py, &Value::Object(m))
     }
 
