@@ -4,27 +4,33 @@
 //! robot_legions vs blessed_sisters); they differ only in which A/B seam was
 //! live, and each carries that answer in its own header (`seams`).
 //!
-//!   * `FIXTURE` — every 10th node of the 2000-node M1-2 recording, both seams
-//!     OFF. A systematic sample, not the head: the first 200 nodes are all
+//!   * `FIXTURE` — every 10th node of the 2000-node spacing-OFF recording, both
+//!     seams OFF. A systematic sample, not the head: the first 200 nodes are all
 //!     round 1 and carry no volley that lands a wound, so a head slice would
 //!     pin GATE B without ever exercising the shoot path. Composition: 38 HOLD,
 //!     53 ADVANCE, 71 RUSH, 38 CHARGE; 74 rich-leaf, 126 cheap-leaf; 15 shoot
 //!     nodes of which 5 land wounds; 2 charges reach contact.
 //!   * `SPACING` — every 10th node of the spacing-ON recording
-//!     (`NML_SIM_SPACING=1`, the trainer's default going forward): 46 HOLD,
-//!     45 ADVANCE, 50 RUSH, 59 CHARGE, of which 40 movers are SHORTENED by the
+//!     (`NML_SIM_SPACING=1`, the trainer's default going forward): 47 HOLD,
+//!     45 ADVANCE, 53 RUSH, 55 CHARGE, of which 43 movers are SHORTENED by the
 //!     `_spacing_fraction` clamp.
 //!   * `MELEE` — EVERY charge node of the spacing-OFF recording that reached
-//!     contact (35 of 518), not a sample. It has to be a spacing-OFF slice:
-//!     with the clamp on, a legal move always ends at least (own radius + 1" +
-//!     their radius) ~ 2.3" from an enemy model, so no charge can ever get
-//!     inside the 1" CONTACT_IN ring and the melee branch is unreachable.
-//!     Carries 7 routs and 22 newly-shaken units.
+//!     contact (36 of 518), not a sample. Still a spacing-OFF slice, but no
+//!     longer because the clamp makes melee unreachable: NML-1073 S1 gives the
+//!     charge target a body-only disc, so a clamped charge CAN now land in base
+//!     contact (5 of 525 do, against 0 before). It stays the spacing-OFF
+//!     recording because that is where contacts are plentiful enough to gate
+//!     the strike/morale/rout half. Carries 7 routs and 22 newly-shaken units.
 //!   * `CAST` — EVERY node of the cast-ON recording (`NML_SIM_CAST=1`, spacing
-//!     also on) whose activation spent a caster token: 93 of 2000, 31 each on
+//!     also on) whose activation spent a caster token: 99 of 2000, 33 each on
 //!     HOLD, RUSH and CHARGE. That HOLD/RUSH/CHARGE split IS the point of
 //!     NML-1069 — the legacy rider only ever cast inside a shoot pick, so a
 //!     rushing or charging caster never cast at all.
+//!
+//! All four were RE-RECORDED on the NML-1073 S1/S1b branch (seed 27,
+//! robot_legions_1000 vs blessed_sisters_1000, `NML_NODE_DUMP_MAX=2000`), same
+//! recipe as M1-3: the spacing exemption and the edge-gap melee trigger change
+//! what the GDScript plays, so the pre-S1 corpora no longer describe it.
 //!
 //! GATE A: `score(state_after, player, incoming)` reproduces the recorded score
 //! on every node, where `incoming` is `reply_threat` computed in Rust for a RICH
@@ -214,7 +220,7 @@ fn gate_b_spacing_corpus_resolves_every_kind() {
     let corpus = load_nodes(SPACING).expect("fixture loads");
     assert!(corpus.seams.spacing, "the spacing fixture records spacing=on");
     assert!(!corpus.seams.cast, "and cast=off");
-    gate_b_on(SPACING, [46, 45, 50, 59]);
+    gate_b_on(SPACING, [47, 45, 53, 55]);
 }
 
 /// Red-green for the clamp: resolving the spacing corpus with the seam OFF must
@@ -234,7 +240,7 @@ fn spacing_clamp_is_load_bearing() {
             broken += 1;
         }
     }
-    assert_eq!(broken, 40, "dropping the clamp must redden exactly the shortened movers");
+    assert_eq!(broken, 43, "dropping the clamp must redden exactly the shortened movers");
 }
 
 /// The melee half of the CHARGE branch: every recorded contact, with the
@@ -279,7 +285,7 @@ fn gate_b_melee_charges_reproduce_strike_morale_and_rout() {
             }
         }
     }
-    assert_eq!(contacts, 35, "every recorded contact");
+    assert_eq!(contacts, 36, "every recorded contact");
     assert_eq!(routs, 7, "melee morale routs a side seven times");
     assert_eq!(shaken, 22, "and shakes one twenty-two times");
     assert!(strike_backs > 0, "survivors strike back and fatigue the defender");
@@ -302,7 +308,7 @@ fn the_melee_leg_is_load_bearing() {
             broken += 1;
         }
     }
-    assert_eq!(broken, 35, "every contact node needs the charge leg");
+    assert_eq!(broken, 36, "every contact node needs the charge leg");
 }
 
 /// Red-green for GATE B's shoot path: GATE B would be green on a `resolve()`
@@ -387,8 +393,8 @@ fn gate_b_cast_subphase_reproduces_every_recorded_cast() {
             spent += node.state_before.casts[u] - got.casts[u];
         }
     }
-    assert_eq!(per_kind, [31, 0, 31, 31], "HOLD / ADVANCE / RUSH / CHARGE casts");
-    assert_eq!(spent, 145, "tokens the sub-phase spent across the slice");
+    assert_eq!(per_kind, [33, 0, 33, 33], "HOLD / ADVANCE / RUSH / CHARGE casts");
+    assert_eq!(spent, 153, "tokens the sub-phase spent across the slice");
 }
 
 /// Red-green for the seam: with `cast` off, `resolve` runs the LEGACY rider
@@ -415,7 +421,7 @@ fn the_cast_subphase_is_load_bearing() {
             broken += 1;
         }
     }
-    assert_eq!(broken, 93, "the legacy rider reproduces none of the recorded casts");
+    assert_eq!(broken, 99, "the legacy rider reproduces none of the recorded casts");
 }
 
 /// Red-green for the recorded POST-move sight answers: dropping them back to
@@ -441,7 +447,7 @@ fn the_post_move_cast_los_is_a_real_input() {
             broken += 1;
         }
     }
-    assert_eq!(broken, 41, "moved casters need the post-move sight answers");
+    assert_eq!(broken, 45, "moved casters need the post-move sight answers");
 }
 
 /// `AiSpell.official_pick_order` ai_spell.gd:305-312 — the rotation IS rule
