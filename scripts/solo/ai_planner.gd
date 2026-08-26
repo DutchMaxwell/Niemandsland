@@ -1200,10 +1200,14 @@ static func _best_charge(state: Dictionary, key: String) -> String:
 					tu["positions"], tu.get("radii", []))
 					- SoloController.CHARGE_CONTACT_MARGIN_IN, 0.0),
 				_centre(su), _centre(tu))):
-			# Review find (workflow 22.08.): dist_in is centre-to-centre while the gate's
-			# truth measures base-edge gap — the CONTACT_IN slack is exactly the sim's own
-			# landing rule (post-move centre gap <= CONTACT_IN = melee), so the menu offers
-			# precisely what the sim can execute, no less.
+			# NML-1073 S1b (fixup2 review, doc-only): gap_in is the base-EDGE gap minus
+			# CHARGE_CONTACT_MARGIN_IN (0.25", the table's contact epsilon) — the same
+			# quantity BattleSim.resolve()'s CHARGE trigger tests, so the menu offers
+			# precisely what the sim can execute, no less. This gap_in also feeds
+			# charge_candidate_illegal -> _charge_capped_by_difficult (solo_controller.gd
+			# ~1454): a charge whose edge gap falls in (5.74", 6.25"] used to exceed the
+			# 6" difficult-terrain cap threshold under the old dist_in-1.0" formula and
+			# no longer does under this one — its cap classification changed with S1b.
 			continue
 		var us := BattleSim._ctx_of(su)
 		var them := BattleSim._ctx_of(tu)

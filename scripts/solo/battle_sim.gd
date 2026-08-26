@@ -566,6 +566,9 @@ static func _unit_group(next: Dictionary, key: String, include_host: bool = true
 ## UNIT_SPACING_IN buffer. GF Advanced Rules v3.5.1 p.7: models may never be
 ## within 1" of models from other units unless taking a Charge action, which
 ## may ignore that restriction toward base contact with ONE enemy unit.
+## Fixup2 review (doc-only): the seam-ON exemption above applies to EVERY
+## move kind, not only charges — mover_group already swallows attached heroes
+## + host regardless of `charge_key`, and dormant/aircraft are never obstacles.
 static func _spacing_fraction(next: Dictionary, mover_key: String, positions: Array,
 		mover_radii: Array, delta: Vector3, charge_key: String = "") -> float:
 	if delta.length_squared() <= 0.0:
@@ -700,6 +703,9 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 		# sample used when both the start and the full move are blocked — steps in
 		# 1/8ths, so it can land up to 1.5" short of the true legal boundary on a
 		# 12" charge; that scenario's melee correctly does not fire today.
+		# Fixup2 review (doc-only): the seam-OFF delta vs the old centre test is
+		# bidirectional — with 0.016 m default radii the trigger widens from 1.0"
+		# to 1.51" centre distance, with 10 mm bases it tightens to 0.644".
 		if edge_gap_in(positions, su.get("radii", []), tu["positions"], tu.get("radii", [])) \
 				<= SoloController.CHARGE_CONTACT_MARGIN_IN:
 			var tu_before := _wounds_left(tu)

@@ -86,21 +86,34 @@ func test_the_teacher_row_never_learns_a_charge_the_body_refused() -> void:
 		return str(r.get("kind", "")) == "teacher_row")
 	assert_int(rows.size()).is_equal(1)
 	var data: Dictionary = (rows[0] as Dictionary)["data"]
+	var menu: Array = data["menu"]
+	# A2 (menu-offered guard, fixup2 review 3b): A only proves the BODY played
+	# RUSH -- it says nothing about whether the recorded menu ever offered
+	# CHARGE. Without this, a regression that stopped the menu offering CHARGE
+	# at all would leave A and B both green for the wrong reason.
+	assert_int(menu.filter(func(m: Dictionary) -> bool:
+		return int(m["kind"]) == AiDecision.Action.CHARGE).size()).is_greater(0)
 	var idx := int(data["teacher"])
-	var learned := -1 if idx < 0 else int(((data["menu"] as Array)[idx] as Dictionary)["kind"])
+	var learned := -1 if idx < 0 else int((menu[idx] as Dictionary)["kind"])
 	# B: what the corpus learns must not be the charge the body just refused.
 	assert_int(learned).is_not_equal(AiDecision.Action.CHARGE)
 
 
-## NML-1073 S1b (positive, GREEN-only -- same change as the fix, not a fresh
-## RED): the base-radius mismatch above is a narrow ~0.25" epsilon window, not
-## a wide-open gap -- a target the menu can clearly see is out of band (edge
-## gap 14", well past band 12" + the 0.25" margin) is never offered a CHARGE
-## candidate either. 10 mm bases again; raw distance 14.3937" = 14" edge gap
-## + the 0.394" radii sum.
+## NML-1073 S1b (RED-then-GREEN, fixup2 review 3c): the previous fixture (raw
+## 14.3937", edge gap 14") was INERT -- the OLD flat -1.0" formula also
+## refused it (14.3937 - 1.0 = 13.39 > 12), so it never distinguished the fix
+## from the bug it replaced. This geometry sits INSIDE the ~0.25" window the
+## fix closed: raw 12.8937" = edge gap 12.5" (10 mm bases, 0.394" radii sum).
+## OLD menu gate (dist_in - CONTACT_IN): 12.8937 - 1.0 = 11.89 <= 12" band ->
+## OFFERED (the bug). NEW menu gate (edge_gap_in - CHARGE_CONTACT_MARGIN_IN):
+## 12.5 - 0.25 = 12.25 > 12" band -> REFUSED (the fix, asserted below).
+## Verified by hand (fixup2 review): temporarily reverted _best_charge's
+## gap_in lines in ai_planner.gd to the OLD formula -- this test FAILED
+## (charge offered); `git checkout` restored the file byte-exact and the same
+## run PASSED.
 func test_menu_no_longer_offers_a_charge_past_the_true_edge_gap() -> void:
 	var grunts := _unit(2, Vector3.ZERO, "Grunts")
-	var foe := _unit(1, Vector3(14.3937 * IN2M, 0, 0), "Foe")
+	var foe := _unit(1, Vector3(12.8937 * IN2M, 0, 0), "Foe")
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
 	army.game_units = {"Grunts": grunts, "Foe": foe}
 	var state := BattleSim.capture(army, func() -> Array: return [],

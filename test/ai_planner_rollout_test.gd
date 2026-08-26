@@ -265,9 +265,13 @@ func test_policy_candidates_include_the_patient_advance() -> void:
 
 ## The patient candidate must SURVIVE the 1-ply prefilter (same lesson as the
 ## bait coverage): rushing at the brute's marker ends inside its charge reach
-## and gets mauled in the playout; the clamped advance stays uncharged. With
+## and gets mauled in the playout; the patient advance stays uncharged. With
 ## top_k=1 the rush wins 1-ply — only a pool guarantee lets patience win the
-## blend.
+## blend. Fixup2 review (doc-only): the repaired fixture's patient move lands
+## at ~14.51", clear of the reach, so it does not clamp -- coverage of
+## _safe_advance's own clamping is not exercised here since S1b (a clamped
+## landing on the 0.5" grid always lands in (13.0", 13.5"], never clear of
+## the 13.51" reach).
 func test_patient_advance_survives_the_prefilter_and_wins() -> void:
 	var brute := _armed(1, [Vector3.ZERO, Vector3(1.0 * IN2M, 0, 0), Vector3(2.0 * IN2M, 0, 0)],
 		"Brute", [{"name": "Claws", "range": 0, "attacks": 12}])
