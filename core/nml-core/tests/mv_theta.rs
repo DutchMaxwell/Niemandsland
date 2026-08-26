@@ -10,15 +10,24 @@
 //! `_pull_into_placed` may have moved) — those are counted, never guessed at.
 //! Positions are f32 on both sides, so the comparison is exact equality.
 //!
-//! WHAT THE RED PROOFS FOUND. Only ONE of the three bends moves a recorded path
-//! often enough to fail the corpus gate: raising `fast_planner_guard` from 320
-//! to 640 (14 mismatches over the 16-game corpus, 229 paths moved). The other
-//! two are load-bearing but almost never DECIDE anything on real boards — a
-//! strict open-list compare moves 2 paths in 11 758, swapping THETA_DIAG entries
-//! moves none — so they are proven here on hand-built boards that force the tie
-//! instead, which is the only place the rule is reachable at all. That is a
-//! finding about the corpus, not a licence to simplify: both rules DO decide,
-//! and the two tests below are the falsification.
+//! WHAT THE RED PROOFS FOUND (16 games, trace v2: 11 758 searches, 9 905 pop
+//! records, 1 759 838 popped nodes):
+//!
+//!   * `fast_planner_guard` 640 instead of 320 — 239 paths and 4 972 pop
+//!     records diverge. The truncation is the contract.
+//!   * a strict open-list compare — only 2 PATHS move, but 1 119 POP RECORDS
+//!     do. The EPS rule plus `_cell_before` decides which node is expanded far
+//!     more often than it decides the answer; without the node-level gate the
+//!     rule looks inert.
+//!   * swapping THETA_DIAG entries — 0 paths AND 0 pop records move, over four
+//!     different swaps (0,1 / 0,4 / 2,4 / 4,7). The M4 recon called the order
+//!     "load-bearing (first-wins on equal g)"; that conflates cross-expansion
+//!     relaxation with within-expansion order. Inside ONE expansion the eight
+//!     neighbours are independent — `g`, `parent` and the open-list SIZE cannot
+//!     see the order — so it can only decide a `best_reach` near-tie, which no
+//!     recorded search hits. It is still reachable, and `red_b` below builds
+//!     the board on which it decides; do not simplify it away on the strength
+//!     of the corpus being green.
 
 use nml_core::mv::cost::{empty_cells, step_blocked, CellSet, Grid, StepOpts, Wall, Zone};
 use nml_core::mv::geom2::{polyline_length, V2};
@@ -275,4 +284,120 @@ fn theta_on_a_hand_built_3x3_grid_bends_around_the_middle_cell() {
     assert_eq!(path, theta_star_b(start, goal, &walls, &grid, board, &o, cfg));
     // `empty_cells()` is the shared empty set the flow's `oi` implies.
     assert!(empty_cells().is_empty());
+}
+
+
+// === Trace v2 — every search checkable, and every popped node ===============
+
+const FIXTURE_V2: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/moves_v2_s27_head.jsonl");
+
+struct V2Tally {
+    searches: usize,
+    determined: usize,
+    path_ok: usize,
+    aligned: usize,
+    pops_ok: usize,
+    pops: usize,
+    spent_ok: usize,
+    spent: usize,
+    unaligned_calls: usize,
+}
+
+/// Replays a trace v2 corpus: the `pull` field makes every search's zone set
+/// exact, and `theta_searches` pins every popped node.
+fn replay_v2(bend: ThetaBend) -> V2Tally {
+    let c = load_moves(FIXTURE_V2).unwrap_or_else(|e| panic!("{e}"));
+    let cfg = ThetaCfg::of(c.header.fast_planner, c.header.fast_planner_guard);
+    let mut t = V2Tally {
+        searches: 0,
+        determined: 0,
+        path_ok: 0,
+        aligned: 0,
+        pops_ok: 0,
+        pops: 0,
+        spent_ok: 0,
+        spent: 0,
+        unaligned_calls: 0,
+    };
+    for (ci, call) in c.calls.iter().enumerate() {
+        let all = searches(ci, call, &c.header);
+        let mut mine = Vec::with_capacity(all.len());
+        let mut ran = Vec::with_capacity(all.len());
+        for s in &all {
+            let (path, pops) = s.run_traced(call, cfg, bend);
+            ran.push(!pops.is_empty());
+            mine.push((path, pops));
+        }
+        let need = ran.iter().filter(|r| **r).count();
+        // The recorder writes no entry for an early-out and appends the untangle
+        // re-routes at the tail, so the port may need FEWER lists, never more.
+        let align = if need <= call.trace.theta_searches.len() {
+            nml_core::mv::replay::align_searches(&ran)
+        } else {
+            t.unaligned_calls += 1;
+            vec![None; all.len()]
+        };
+        for (si, s) in all.iter().enumerate() {
+            t.searches += 1;
+            if s.determined {
+                t.determined += 1;
+            }
+            if mine[si].0 == s.expected {
+                t.path_ok += 1;
+            }
+            if let Some(Some(k)) = align.get(si) {
+                t.aligned += 1;
+                let rec = &call.trace.theta_searches[*k];
+                t.pops += rec.len();
+                if rec.len() == mine[si].1.len()
+                    && rec.iter().zip(&mine[si].1).all(|(r, m)| {
+                        (r.g - m.g).abs() <= 1e-9 && r.parent == m.parent && r.open == m.open
+                    })
+                {
+                    t.pops_ok += 1;
+                }
+            }
+            if let Some(spent) = s.walk_spent {
+                t.spent += 1;
+                if (polyline_length(&s.run_walk(call)) - spent).abs() <= 1e-9 {
+                    t.spent_ok += 1;
+                }
+            }
+        }
+    }
+    t
+}
+
+#[test]
+fn g2b_trace_v2_pins_every_search_and_every_popped_node() {
+    let t = replay_v2(ThetaBend::default());
+    assert_eq!(t.determined, t.searches, "the `pull` field must make every search exact");
+    assert_eq!(t.path_ok, t.searches, "{} paths diverge", t.searches - t.path_ok);
+    assert_eq!(t.unaligned_calls, 0, "a call's pop lists could not be aligned");
+    assert!(t.aligned > 0 && t.pops > 1000, "only {} pops over {} searches", t.pops, t.aligned);
+    assert_eq!(
+        t.pops_ok, t.aligned,
+        "{} of {} pop records diverge in g / parent / open size",
+        t.aligned - t.pops_ok, t.aligned
+    );
+    assert_eq!(t.spent_ok, t.spent, "{} walk_spent values diverge", t.spent - t.spent_ok);
+    println!(
+        "G2 v2: {} searches all determined, {} paths exact, {} pop records exact ({} nodes), \
+         {} walk_spent exact",
+        t.searches, t.path_ok, t.pops_ok, t.pops, t.spent_ok
+    );
+}
+
+#[test]
+fn red_h_a_strict_open_compare_moves_recorded_pop_records() {
+    // The node-level gate is the one that can see this rule at all: on the whole
+    // 16-game corpus a strict compare moves 2 paths but 1 119 pop records.
+    let t = replay_v2(ThetaBend { strict_open: true, ..Default::default() });
+    assert!(
+        t.pops_ok < t.aligned,
+        "a strict open-list compare left all {} pop records intact",
+        t.aligned
+    );
+    println!("RED h: strict open -> {} of {} pop records diverge", t.aligned - t.pops_ok, t.aligned);
 }

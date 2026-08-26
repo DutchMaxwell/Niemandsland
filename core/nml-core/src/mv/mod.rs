@@ -18,6 +18,7 @@
 pub mod cost;
 pub mod geom2;
 pub mod io;
+pub mod pull;
 pub mod replay;
 pub mod theta;
 
@@ -31,11 +32,15 @@ pub use geom2::{
     to_f32, to_f64, trim_polyline, V2,
 };
 pub use io::{load_moves, read_moves, CallOpts, Constants, FlowEntry, MoveCall, MoveCorpus,
-    MoveHeader, SolvePass, Trace};
-pub use replay::{searches, ReplaySearch};
+    MoveHeader, SolvePass, ThetaPop, Trace};
+pub use pull::{
+    board_clamp, furthest_clear, furthest_clear_steps, string_pull, string_pull_bent, walk_offset,
+    walk_offset_bent, PullBend, WalkBend,
+};
+pub use replay::{align_searches, searches, ReplaySearch};
 pub use theta::{
     board_extents, cell_before, cell_center_fine, theta_reconstruct, theta_star, theta_star_b,
-    theta_star_bent, Cell, ThetaBend, ThetaCfg, ThetaOpts,
+    theta_star_bent, theta_star_traced, theta_star_traced_bent, Cell, ThetaBend, ThetaCfg, ThetaOpts,
 };
 
 // === movement_planner.gd constants (:25-90) ===============================

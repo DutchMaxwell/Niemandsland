@@ -11,8 +11,8 @@
 //! field the recorder may not write yet is `#[serde(default)]` or `Option<>`.
 //! A trace v2 line carrying extra keys (per-node `g`, the parent index, the
 //! open-list size per pop, the post-pull endpoint, the walk's spent arc) loads
-//! unchanged through this loader; the only one it already READS is `pulled`
-//! (see `FlowEntry`), which widens the M4-2 gate's determined set on its own.
+//! unchanged through this loader. Trace v2 (move_recorder.gd:24-26, commit
+//! 023e3e2) is READ here in full: `pull`, `walk_spent` and `theta_searches`.
 
 use std::fs::File;
 use std::io::{BufRead, BufReader};
@@ -239,10 +239,17 @@ pub struct PlainFlowEntry {
     walked: Vec<[f64; 2]>,
     deferred: bool,
     /// trace v2, optional: the endpoint AFTER `_pull_into_placed`
-    /// (movement_planner.gd:1141-1144), which trace v1 could not see because
-    /// `trace_model` fires before the pull.
-    #[serde(default)]
+    /// (movement_planner.gd:1164), which trace v1 could not see because
+    /// `trace_model` fires before the pull. Charges and deferred attempts never
+    /// pull, so there it equals `walked`'s last point.
+    #[serde(default, rename = "pull", alias = "pulled")]
     pulled: Option<[f64; 2]>,
+    /// trace v2, optional: the TRUE arc length of `walked`, recomputed by the
+    /// recorder from the returned polyline (movement_planner.gd:1561-1568) —
+    /// NOT the planner's internal `spent`, which a clipped final leg leaves one
+    /// step stale.
+    #[serde(default)]
+    walk_spent: Option<f64>,
 }
 
 #[derive(Clone, Debug)]
@@ -258,6 +265,21 @@ pub struct FlowEntry {
     pub deferred: bool,
     /// trace v2 only — `None` on a v1 line. See `PlainFlowEntry::pulled`.
     pub pulled: Option<V2>,
+    /// trace v2 only — the arc length of `walked`.
+    pub walk_spent: Option<f64>,
+}
+
+/// One popped node of one `_theta_star_b` search — trace v2,
+/// movement_planner.gd:1405-1409.
+#[derive(Clone, Copy, Debug, Deserialize)]
+pub struct ThetaPop {
+    /// `g[cur]` at the moment of the pop.
+    pub g: f64,
+    /// Index of `parent[cur]` in THIS search's own pop order, or -1 when the
+    /// node is its own parent (the start).
+    pub parent: i64,
+    /// `open.size()` BEFORE the pop's `remove_at`.
+    pub open: i64,
 }
 
 /// One `MoveRecorder.trace_solve_pass` entry — move_recorder.gd:208.
@@ -281,6 +303,12 @@ pub struct Trace {
     pub flow: Vec<FlowEntry>,
     pub untangle_swaps: Vec<[i64; 2]>,
     pub solve_passes: Vec<SolvePass>,
+    /// trace v2: one pop list per `_theta_star_b` call that ACTUALLY RAN a
+    /// search, in invocation order — the early-outs (movement_planner.gd:1355,
+    /// :1364) record nothing, and `untangle_endpoints`' re-routes (:1235) append
+    /// after every flow entry. There is no key linking a list to a flow entry;
+    /// see `mv::replay::align_searches`.
+    pub theta_searches: Vec<Vec<ThetaPop>>,
 }
 
 #[derive(Deserialize, Default)]
@@ -291,6 +319,8 @@ struct PlainTrace {
     untangle_swaps: Vec<[i64; 2]>,
     #[serde(default)]
     solve_passes: Vec<PlainSolvePass>,
+    #[serde(default)]
+    theta_searches: Vec<Vec<ThetaPop>>,
 }
 
 /// One recorded `MovementPlanner.plan_unit_step` call.
@@ -441,9 +471,11 @@ fn call_of(pc: PlainCall, header: &MoveHeader, path: &str, ln: usize) -> Result<
                 walked: f.walked.into_iter().map(v2).collect(),
                 deferred: f.deferred,
                 pulled: f.pulled.map(v2),
+                walk_spent: f.walk_spent,
             })
             .collect(),
         untangle_swaps: pc.trace.untangle_swaps,
+        theta_searches: pc.trace.theta_searches,
         solve_passes: pc
             .trace
             .solve_passes

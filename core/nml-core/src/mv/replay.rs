@@ -30,10 +30,14 @@
 //! traced, so they are invisible to this replay.
 
 use super::cost::{StepOpts, Zone};
-use super::geom2::{add, distance_squared_to, length, V2};
+use super::geom2::{add, distance_squared_to, distance_to, length, V2};
 use super::io::{MoveCall, MoveHeader};
-use super::theta::{theta_star_b, theta_star_bent, ThetaBend, ThetaCfg, ThetaOpts};
-use super::{cost::empty_cells, CONTACT_SLIDE_EPS_IN, PLAN_CELL_IN};
+use super::pull::{string_pull_bent, walk_offset_bent, PullBend, WalkBend};
+use super::io::ThetaPop;
+use super::theta::{
+    theta_star_b, theta_star_bent, theta_star_traced_bent, ThetaBend, ThetaCfg, ThetaOpts,
+};
+use super::{cost::empty_cells, CONTACT_SLIDE_EPS_IN, EPS, PLAN_CELL_IN};
 
 /// `plan_sequential_flow`'s `base_zones` — movement_planner.gd:1050, plus the
 /// `fast_planner` reach cull at :1058-1069 (sweep-only, and explicitly NOT
@@ -83,8 +87,23 @@ pub struct ReplaySearch {
     pub reach_closest: bool,
     /// This entry came from the charge branch (:1096-1126).
     pub charge: bool,
-    /// The recorded `_theta_star_b` return value.
+    /// The recorded `_theta_star_b` return value — the M4-2 answer, and the
+    /// INPUT the string pull was handed.
     pub expected: Vec<V2>,
+    /// The recorded `string_pull` result (movement_planner.gd:1131 / :1117-1118,
+    /// charge goal already appended) — the M4-3 answer, and the INPUT the walk
+    /// was handed. Each stage is judged on its OWN recorded input, so an M4-2
+    /// regression cannot masquerade as an M4-3 one.
+    pub taut_expected: Vec<V2>,
+    /// The recorded `_walk_offset` result (movement_planner.gd:1132 / :1120).
+    pub walked_expected: Vec<V2>,
+    /// `plan_sequential_flow`'s arc budget — movement_planner.gd:1039.
+    pub allowance: f64,
+    /// The charge branch appends its body goal to the taut path UNCHECKED
+    /// (movement_planner.gd:1117-1118) before the walk sees it.
+    pub charge_append: Option<V2>,
+    /// trace v2 only — the arc length of the recorded `walked` polyline.
+    pub walk_spent: Option<f64>,
     /// Are these inputs EXACTLY what the GDScript search saw? See the module note.
     pub determined: bool,
 }
@@ -110,6 +129,68 @@ impl ReplaySearch {
         theta_star_b(self.start, self.goal, &call.walls, &call.grid, call.board(), &o, cfg)
     }
 
+    /// `string_pull` of the RECORDED Theta* path, charge append included.
+    pub fn run_pull(&self, call: &MoveCall) -> Vec<V2> {
+        self.run_pull_bent(call, PullBend::default())
+    }
+
+    /// Same, with the red-proof knob.
+    pub fn run_pull_bent(&self, call: &MoveCall, bend: PullBend) -> Vec<V2> {
+        let o = self.opts(call);
+        let mut taut = string_pull_bent(&self.expected, &call.walls, &call.grid, &o.step, bend);
+        if let Some(goal_pt) = self.charge_append {
+            // :1117-1118 — appended when the pull did not already end there.
+            if taut.is_empty() || distance_to(*taut.last().unwrap(), goal_pt) > EPS {
+                taut.push(goal_pt);
+            }
+        }
+        taut
+    }
+
+    /// `_walk_offset` of the RECORDED taut path. The flow always walks with a
+    /// ZERO offset (movement_planner.gd:1119 / :1132).
+    pub fn run_walk(&self, call: &MoveCall) -> Vec<V2> {
+        self.run_walk_bent(call, WalkBend::default())
+    }
+
+    /// Same, with the red-proof knobs.
+    pub fn run_walk_bent(&self, call: &MoveCall, bend: WalkBend) -> Vec<V2> {
+        let o = self.opts(call);
+        walk_offset_bent(
+            self.start,
+            &self.taut_expected,
+            [0.0, 0.0],
+            self.allowance,
+            &call.walls,
+            &call.grid,
+            &o.step,
+            call.board(),
+            bend,
+        )
+    }
+
+    /// The search plus trace v2's per-pop record. The pop list is empty exactly
+    /// when the search took an early-out, which is exactly when the recorder
+    /// wrote no `theta_searches` entry.
+    pub fn run_traced(
+        &self,
+        call: &MoveCall,
+        cfg: ThetaCfg,
+        bend: ThetaBend,
+    ) -> (Vec<V2>, Vec<ThetaPop>) {
+        let o = self.opts(call);
+        theta_star_traced_bent(
+            self.start,
+            self.goal,
+            &call.walls,
+            &call.grid,
+            call.board(),
+            &o,
+            cfg,
+            bend,
+        )
+    }
+
     /// Same, with the red-proof knobs.
     pub fn run_bent(&self, call: &MoveCall, cfg: ThetaCfg, bend: ThetaBend) -> Vec<V2> {
         let o = self.opts(call);
@@ -124,6 +205,31 @@ impl ReplaySearch {
             bend,
         )
     }
+}
+
+/// Maps a call's flow entries onto `trace.theta_searches`.
+///
+/// The recorder writes ONE list per `_theta_star_b` call that actually ran a
+/// search (movement_planner.gd:1411, guarded by `not _tn.is_empty()`), with no
+/// key back to the flow entry. Two facts make the mapping recoverable: an
+/// early-out records nothing, and `untangle_endpoints`' re-routes (:1235) all
+/// run AFTER the queue loop, so they occupy the tail. `ran[k]` says whether the
+/// port's k-th flow-entry search entered the loop; the k-th `true` is
+/// `theta_searches[k]`. A caller MUST check that the number of `true`s does not
+/// exceed the recorded list count — if it does, this call's alignment is not
+/// established and its searches must be skipped, not guessed.
+pub fn align_searches(ran: &[bool]) -> Vec<Option<usize>> {
+    let mut out = Vec::with_capacity(ran.len());
+    let mut k = 0usize;
+    for r in ran {
+        if *r {
+            out.push(Some(k));
+            k += 1;
+        } else {
+            out.push(None);
+        }
+    }
+    out
 }
 
 /// Every Theta* search the trace of `call` recorded, in flow order.
@@ -163,6 +269,7 @@ pub fn searches(call_idx: usize, call: &MoveCall, header: &MoveHeader) -> Vec<Re
             }
         }
         let determined = placed.iter().all(|j| exact[*j]);
+        let mut charge_append = None;
         let (goal, reach_closest) = if charge {
             // :1108-1111 — the per-model contact slot, else the body centre.
             let body = call.opts.charge_goal.unwrap();
@@ -176,6 +283,7 @@ pub fn searches(call_idx: usize, call: &MoveCall, header: &MoveHeader) -> Vec<Re
                         .max(0.0),
                 });
             }
+            charge_append = Some(goal_pt);
             (goal_pt, true)
         } else {
             // :1130 — the rigid slot.
@@ -191,6 +299,11 @@ pub fn searches(call_idx: usize, call: &MoveCall, header: &MoveHeader) -> Vec<Re
             reach_closest,
             charge,
             expected: f.theta.clone(),
+            taut_expected: f.taut.clone(),
+            walked_expected: f.walked.clone(),
+            allowance: call.allowance(),
+            charge_append,
+            walk_spent: f.walk_spent,
             determined,
         });
         // Advance the flow state exactly as :1120-1155 does.
