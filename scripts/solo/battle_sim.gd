@@ -82,6 +82,19 @@ static func profile_reset() -> void:
 	for k in profile.keys():
 		profile[k] = 0
 
+## NML-1072 (arena/main.gd phases): a start stamp (0 when profiling is off, so
+## the call site pays one cached bool check and nothing else) and the matching
+## accumulate-into-`profile` call — used by the LIVE-game phases (capture,
+## search, move, sight, attack, autosave, round, deploy) that live outside
+## BattleSim, in solo_controller.gd/main.gd/arena_match.gd.
+static func prof_t0() -> int:
+	return Time.get_ticks_usec() if profile_enabled() else 0
+
+static func prof_mark(key: String, t0: int) -> void:
+	if profile_enabled():
+		profile[key] = int(profile.get(key, 0)) + (Time.get_ticks_usec() - t0)
+		profile[key + "_n"] = int(profile.get(key + "_n", 0)) + 1
+
 # === Encoder board rows (v5 schema, NML-995) ==================================
 # ONE canonical source for the position-net input, used by BOTH the factory
 # (core_selfplay corpus) and the in-game encoder eval — a fork here would let

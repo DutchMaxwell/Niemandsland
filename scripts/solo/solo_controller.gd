@@ -2991,9 +2991,11 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	# D-wave: seat-aware depth — opener when OUR side made this round's first
 	# activation (or nobody acted yet, i.e. we are about to open it).
 	AiPlanner.opener_seat = int(_round_first_slot.get(_current_round(), ai_slot)) == int(ai_slot)
+	var _prof_cap_t0 := BattleSim.prof_t0()
 	var state := BattleSim.capture(army_manager, objectives_provider, objective_owner_of,
 		_current_round(), maxi(game_rounds, _current_round()), majority_in_cover, _has_los,
 		terrain_type_at)
+	BattleSim.prof_mark("capture", _prof_cap_t0)
 	state["charge_illegal"] = charge_candidate_illegal   # head wave 1: menu-side rule gates
 	state["los_at"] = los_checker   # review find: playout tuples need the trained sight feature
 	var me: int = int((pool[0] as GameUnit).unit_properties.get("player_id", 0))
@@ -3010,6 +3012,10 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	var seam_leaf := {}
 	var doct := OS.get_environment("NML_OPENER_DOCTRINE")
 	var doctrine_on := doct != "" and AiPlanner.opener_seat and _current_round() == 1
+	# NML-1072: ONE timer around the whole decision — the search seam (Rust,
+	# _core_plan) or the GDScript fallback, whichever ran — so the split reads
+	# "search total" regardless of NML_CORE.
+	var _prof_srch_t0 := BattleSim.prof_t0()
 	if doctrine_on:
 		pick = AiPlanner.doctrine_pick(state, me, doct)   # research probe, env-gated
 	# NML-1073 M2-5: the SEARCH SEAM. With NML_CORE=1 AND the GDExtension loaded
@@ -3025,6 +3031,7 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 			pick = seam
 	if not bool(pick.get("used", false)):
 		pick = AiPlanner.plan_with_rollout(state, me)
+	BattleSim.prof_mark("search", _prof_srch_t0)
 	AiActRecorder.finish(act_rec, pick)
 	if not bool(pick.get("used", false)):
 		return null
@@ -6046,8 +6053,12 @@ func _plan_positions(unit: GameUnit, models: Array, positions: Array, delta: Vec
 			last_flow_order = (hit["flow_order"] as Array).duplicate()
 			_plan_cache_hits += 1
 			return (hit["planned"] as Array).duplicate(true)
+	# NML-1072: real-move pathfinding (C-space/Theta*/funnel) — the LIVE
+	# activation's execution, distinct from the imagined rollout's resolve().
+	var _prof_mv_t0 := BattleSim.prof_t0()
 	var planned: Array = MovementPlanner.plan_unit_step(mpos, mdelta, walls_in, sampled["grid"],
 		allow_contact, board_in, plan_trails, opts)
+	BattleSim.prof_mark("move", _prof_mv_t0)
 	if prewarm_enabled and not plan_key.is_empty():
 		_plan_cache_store(plan_key, planned, plan_trails, opts.get("flow_order", []))
 	# The sequential per-model flow (finding 7) writes back the order its models filed to their slots, so the

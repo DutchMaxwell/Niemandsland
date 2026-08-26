@@ -115,6 +115,8 @@ func _run() -> void:
 		quit(1)
 		return
 	printerr("[ARENA] main.tscn ready")   # main.gd parsed + _ready ran — the launch gate
+	if BattleSim.profile_enabled():   # NML-1072: process boot, up to main.tscn ready
+		BattleSim.profile["startup"] = (Time.get_ticks_msec() - t0) * 1000
 
 	var army_manager: Node = main.get("opr_army_manager")
 	var layout_editor: Control = main.get("map_layout_editor")
@@ -455,9 +457,11 @@ func _run() -> void:
 	for o in objectives:
 		objectives_v2.append(Vector2((o as Vector3).x, (o as Vector3).z))
 	var deploy_order: Array = [1, 2] if deploy_first == 1 else [2, 1]
+	var _prof_dep_t0 := BattleSim.prof_t0()   # NML-1072: physics-probe deployment, both sides
 	for slot in deploy_order:
 		_deploy_side(main, solo, table, terrain_overlay, int(slot), objectives_v2, _seed + int(slot),
 			int(slot) == deploy_first)
+	BattleSim.prof_mark("deploy", _prof_dep_t0)
 	await process_frame
 	# Deployment board BEFORE the dice re-seed below, so the capture's frame ticks cannot leak into
 	# the dice stream (seed(_dice_seed) resets the global RNG right after either way).
@@ -519,8 +523,15 @@ func _run() -> void:
 	# the search parked in a script static — SceneTree.quit() frees those
 	# statics after the SoloController and its lambdas are gone, and freeing a
 	# Callable bound to a dead object corrupts the heap (measured: exit 134).
+	var _prof_td_t0 := BattleSim.prof_t0()   # NML-1072: recorder/planner teardown
 	AiActRecorder.close()
 	AiPlanner.close()
+	BattleSim.prof_mark("teardown", _prof_td_t0)
+	if BattleSim.profile_enabled():   # NML-1072: final wall-clock split, one line per phase
+		for k in BattleSim.profile.keys():
+			if not str(k).ends_with("_n"):
+				printerr("[PROFILE] phase=%s total_ms=%d calls=%d" % [
+					k, int(BattleSim.profile[k]) / 1000, int(BattleSim.profile.get(str(k) + "_n", 0))])
 	quit(0)
 
 
@@ -662,6 +673,8 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 		"unit_activations": _stringify_keys(_unit_activations),
 		"duration_sec": duration_sec,
 	}
+	if BattleSim.profile_enabled():   # NML-1072: wall-clock phase split (teardown lands after this write)
+		result["profile"] = BattleSim.profile.duplicate()
 	for c in result["planner_calib"]:
 		printerr("[ARENA] planner_calib P%d round %d->%d: predicted %.3f measured %.3f gap %+.3f" % [
 			int(c["side"]), int(c["from_round"]), int(c["to_round"]),

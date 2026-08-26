@@ -1075,10 +1075,12 @@ func _solo_activate_one_ai_body() -> GameUnit:
 	await _solo_apply_crossing_attack(unit)
 	var hnr_attacked: bool = bool(report.get("can_shoot", false)) \
 		or int(report.get("action", 0)) == AiDecision.Action.CHARGE
+	var _prof_atk_t0 := BattleSim.prof_t0()   # NML-1072: live shoot/melee resolution
 	if bool(report.get("can_shoot", false)):
 		await _run_ai_shooting(report)
 	elif int(report.get("action", 0)) == AiDecision.Action.CHARGE:
 		await _run_ai_melee(report)
+	BattleSim.prof_mark("attack", _prof_atk_t0)
 	# Hit & Run (grill round 2 cut C; Shooter/Fighter halves 2026-07-19): after shooting or being in
 	# melee — the once-per-round 3" step, EV-scored in the controller. The trigger says which half
 	# qualifies (shoot vs charge).
@@ -1848,16 +1850,20 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 	await _solo_both_ai_rapid_round_one()   # Rapid Ambush may land before round 1's first activation
 	while not _solo_game_finished:
 		var round_no: int = opr_army_manager.current_round
+		var _prof_rd_t0 := BattleSim.prof_t0()   # NML-1072: round-transition bookkeeping
 		if round_no >= 2:
 			await _solo_both_ai_round_start(round_no)
+		BattleSim.prof_mark("round", _prof_rd_t0)
 		var last_side: int = await _solo_run_both_ai_round(opener)
 		# The side that did NOT take the last activation opens the next round (GF/AoF v3.5.1 round-opener rule;
 		# finding 7 — never back-to-back across the boundary). If the round had no activation, keep the opener.
 		if last_side != 0:
 			opener = 2 if last_side == 1 else 1
+		_prof_rd_t0 = BattleSim.prof_t0()
 		_solo_auto_seize()
 		_solo_book_mission_vp(round_no >= SOLO_GAME_ROUNDS)
 		if round_no >= SOLO_GAME_ROUNDS:
+			BattleSim.prof_mark("round", _prof_rd_t0)
 			if not _solo_game_finished:
 				_solo_game_finished = true
 				_solo_show_game_summary()
@@ -1872,6 +1878,7 @@ func _solo_run_both_ai_game(first_opener: int = 1) -> void:
 			network_manager.broadcast_round_advance()
 		if battle_log != null:
 			battle_log.log_event(BattleLog.Category.GENERAL, "Round %d begins" % opr_army_manager.current_round, true)
+		BattleSim.prof_mark("round", _prof_rd_t0)
 		if solo_round_done.is_valid():
 			await solo_round_done.call(round_no)   # harness: the board round_no ENDED on, nothing else acting
 	_solo_ai_busy = false
@@ -4102,6 +4109,7 @@ func _solo_pick_overlay_target(attacker: GameUnit, overlay: int, max_range: floa
 func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ignore_los: bool = false) -> int:
 	if shooter == null or target == null or solo_controller == null:
 		return 0
+	var _prof_sight_t0 := BattleSim.prof_t0()   # NML-1072: LOS/sight computation
 	var target_positions: Array = []
 	var target_members: Array = [target]
 	if target.has_method("get_attached_heroes"):
@@ -4119,8 +4127,10 @@ func _solo_sighted_count(shooter: GameUnit, target: GameUnit, range_in: int, ign
 	# the ruler showed in range (~5" off between large bases). Extending the range by both units'
 	# base radii is the centre-space equivalent of subtracting them from every pair distance.
 	var edge_slack_m: float = _solo_unit_base_radius_m(shooter) + _solo_unit_base_radius_m(target)
-	return SoloController.sighted_models(solo_controller.alive_positions(shooter), target_positions,
+	var _sighted := SoloController.sighted_models(solo_controller.alive_positions(shooter), target_positions,
 		float(range_in) * MoveIntent.INCHES_TO_METERS + edge_slack_m, los)
+	BattleSim.prof_mark("sight", _prof_sight_t0)
+	return _sighted
 
 
 ## GEOMETRIC PER-MODEL line of sight for a shooter→target model pair (GF/AoF v3.5.1 p.5: "Models can't see
