@@ -38,8 +38,6 @@ pub const SAFE_LINE_OPEN_LINE_PENALTY_IN: f64 = 2.0;
 /// `SoloController.FUTILE_CHARGE_EV` solo_controller.gd:1390 — the bar a charge
 /// target must clear before it may enter the menu at all.
 pub const FUTILE_CHARGE_EV: f64 = 0.2;
-/// `SoloController.CHARGE_CONTACT_MARGIN_IN` solo_controller.gd:53.
-pub const CHARGE_CONTACT_MARGIN_IN: f64 = 0.25;
 /// `SeparationChecker.DEFAULT_BASE_RADIUS_M` — `edge_gap_in`'s per-model fallback.
 pub const DEFAULT_BASE_RADIUS_M: f64 = 0.016;
 /// The half-inch grid `_safe_advance` probes safety on (ai_planner.gd:756).
@@ -204,10 +202,18 @@ fn charge_score(
     dealt - taken * risk_weight
 }
 
-/// `AiPlanner._best_charge` ai_planner.gd:1246-1282 — best hurtable melee target
+/// `AiPlanner._best_charge` ai_planner.gd:1287-1318 — best hurtable melee target
 /// by `charge_score`, with the controller's charge-legality gate and the futile
-/// bar applied first. The gate's `gap_in` is the base-EDGE gap minus the table's
-/// contact epsilon: exactly the quantity `resolve`'s CHARGE trigger tests.
+/// bar applied first.
+///
+/// NML-1073 S1d: the gate's `gap_in` is the RAW base-edge gap, clamped at 0 and
+/// nothing subtracted — exactly what the TABLE's own charge re-gate passes
+/// (`charge_illegal_why` -> `nearest_melee_gap_in`, solo_controller.gd:1406 /
+/// :8042). S1b took `CHARGE_CONTACT_MARGIN_IN` off here, which widened the
+/// menu's band by 0.25" against the body's and shifted the 6" difficult-cap
+/// verdict inside the (5.75", 6.25"] window. The GDScript dropped that
+/// subtraction at both menu sites (ai_planner.gd:1029-1030, :1303-1304); this
+/// twin follows it.
 pub fn best_charge(
     state: &State,
     terrain: &Terrain,
@@ -226,14 +232,14 @@ pub fn best_charge(
     let mut best = None;
     let mut best_score = f64::NEG_INFINITY;
     for e in enemy_keys(state, i) {
-        let gap_in = (geom::edge_gap_in(
+        let gap_in = geom::edge_gap_in(
             &state.positions[i],
             &state.radii[i],
             &state.positions[e],
             &state.radii[e],
             DEFAULT_BASE_RADIUS_M,
-        ) - CHARGE_CONTACT_MARGIN_IN)
-            .max(0.0);
+        )
+        .max(0.0);
         let centre_them = geom::centre(&state.positions[e]);
         if crate::gate::charge_illegal_tuned(
             state,

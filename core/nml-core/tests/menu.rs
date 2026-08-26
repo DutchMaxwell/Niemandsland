@@ -1,29 +1,30 @@
 //! The NML-1073 M2-1 gates, pinned on the recorded ACT corpus.
 //!
-//! `acts_25.jsonl` is the first 25 activations of one `tools/arena_match.gd`
-//! game recorded with `NML_ACT_DUMP` (M2-0a): robot_legions_1000 vs
-//! blessed_sisters_1000, seed 27, dice seed 27, both sides `planner_v0`,
-//! `NML_SIM_SPACING=0 NML_SIM_CAST=0`, 4 rounds, 13 units, a 3-marker `duel`
-//! mission on a 6x4 board with 107 painted terrain cells and no sandbox pieces.
-//! Each line carries the FULL search input (`state`, incl. the M2-0c/M2-0d
-//! per-unit gate reads), the live charge gate's answers (`charge_illegal`,
-//! `charge_illegal_grid`) and the search trace, of which `trace.menus` is this
-//! milestone's oracle.
+//! `acts_25.jsonl` is one whole `tools/arena_match.gd` game recorded with
+//! `NML_ACT_DUMP` (M2-0a), 23 activations under an `NML_ACT_DUMP_MAX=25` cap:
+//! robot_legions_1000 vs blessed_sisters_1000, seed 27, dice seed 27, both
+//! sides `planner_v0`, `NML_SIM_SPACING=0 NML_SIM_CAST=0`, 4 rounds, 13 units,
+//! a 3-marker `duel` mission on a 6x4 board with 107 painted terrain cells and
+//! no sandbox pieces. Each line carries the FULL search input (`state`, incl.
+//! the M2-0c/M2-0d per-unit gate reads), the live charge gate's answers
+//! (`charge_illegal`, `charge_illegal_grid`) and the search trace, of which
+//! `trace.menus` is this milestone's oracle.
 //!
-//! IT WAS RE-RECORDED FOR THIS STEP, and the reason is the whole point of
-//! checking a measuring instrument before trusting it. The M2-0d recording this
-//! step was handed reproduced only 5 of its own 25 activations when
-//! `tools/act_recheck.gd` replayed it against this HEAD — its planner still used
-//! the PRE-NML-1073-S1b charge gap in `_best_charge`
-//! (`maxf(dist_in - CONTACT_IN, 0)`, ai_planner.gd:1197-1199 at 0171f9f^)
-//! instead of today's base-edge gap (`maxf(edge_gap_in - CHARGE_CONTACT_MARGIN_IN, 0)`,
-//! ai_planner.gd:1260-1264). The recorder process predated the merge that
-//! changed it, so the corpus described a planner that no longer exists: this
-//! port matched 554 of its 575 candidates, and the 21 that differed were all one
-//! extra CHARGE, on one pair, in three acts — a 7.77" edge gap that the old
-//! formula read as 10.04" and the 8" rush band then refused. The corpus here
-//! replays 25/25 through `act_recheck` at this HEAD (CHARGE_GATE 55680/55680,
-//! CHARGE_MATRIX 1920/1920), which is what makes it an oracle at all.
+//! IT HAS BEEN RE-RECORDED TWICE, and both times for the same reason: a corpus
+//! that describes a planner which no longer exists is not an oracle, it is a
+//! fossil. M2-1 re-recorded it because the handed M2-0d capture still used the
+//! pre-NML-1073-S1b charge gap. M2-1b (this step) re-recorded it because
+//! NML-1073 S1d changed the RULE underneath it — `BattleSim.resolve`'s melee
+//! trigger became `SoloController.MELEE_ENGAGE_IN` (1") and BOTH planner menu
+//! sites now hand the charge gate the RAW base-edge gap instead of
+//! `edge_gap_in - CHARGE_CONTACT_MARGIN_IN`. Against the pre-S1d corpus this
+//! crate scored G3 238/287, G4 15/25 and G5 7/15; the game itself also plays
+//! out differently, because charges that used to fall short now connect (23
+//! activations instead of 25, 10 CHARGE candidates instead of 13).
+//!
+//! The corpus replays 23/23 through `act_recheck` at this HEAD (CHARGE_GATE
+//! 50808/50808, CHARGE_MATRIX 1752/1752), which is what makes it an oracle at
+//! all.
 //!
 //! GATE G1 — the CHARGE GATE: `gate::charge_illegal` reproduces the recorded
 //! `charge_illegal_grid` for every ordered opposite-side pair at every gap of
@@ -96,7 +97,7 @@ fn gate_pass(act: &Act, terrain: &nml_core::Terrain, honour_no_difficult: bool) 
 #[test]
 fn g1_the_pure_charge_gate_reproduces_the_recorded_gap_grid() {
     let c = corpus();
-    assert_eq!(c.acts.len(), 25, "the fixture is the whole 25-activation recording");
+    assert_eq!(c.acts.len(), 23, "the fixture is the whole 23-activation recording");
     let (mut n, mut bad) = (0usize, 0usize);
     for act in &c.acts {
         let (an, ab) = gate_pass(act, &c.terrain, true);
@@ -104,7 +105,7 @@ fn g1_the_pure_charge_gate_reproduces_the_recorded_gap_grid() {
         bad += ab;
     }
     println!("G1 charge gate: {}/{} grid answers reproduced", n - bad, n);
-    assert_eq!(n, 55_680, "the grid size itself is part of the contract");
+    assert_eq!(n, 50_808, "the grid size itself is part of the contract");
     assert_eq!(bad, 0, "{bad} of {n} grid answers differ from the live gate");
 }
 
@@ -244,9 +245,9 @@ fn g2_the_rust_menu_equals_every_recorded_menu() {
         r.kinds[2],
         r.kinds[3]
     );
-    assert_eq!(r.menus, 78, "one menu per pool unit per act");
-    assert_eq!(r.cands, 566, "the recorded candidate count is part of the contract");
-    assert_eq!(r.kinds, [107, 212, 234, 13], "per-kind composition of the oracle");
+    assert_eq!(r.menus, 73, "one menu per pool unit per act");
+    assert_eq!(r.cands, 529, "the recorded candidate count is part of the contract");
+    assert_eq!(r.kinds, [103, 197, 219, 10], "per-kind composition of the oracle");
     assert_eq!(r.bad, 0, "{} mismatches; first: {}", r.bad, r.first.unwrap_or_default());
 }
 

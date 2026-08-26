@@ -1,5 +1,5 @@
 //! GATE G3 (NML-1073 M2-2) — the ROLLOUT VALUE, pinned on the recorded ACT
-//! corpus `tests/fixtures/acts_25.jsonl` (the same 25 activations G1/G2 use;
+//! corpus `tests/fixtures/acts_25.jsonl` (the same 23 activations G1/G2 use;
 //! see `tests/menu.rs` for how it was recorded and why it was re-recorded).
 //!
 //! Each act's `trace.rs` is a list of `{idx, rs}`: for every candidate that
@@ -207,7 +207,7 @@ fn the_flat_build_order_is_the_recorded_idx_space() {
          {checked} (unit, kind) rows cross-checked against trace.scored",
         c.acts.len()
     );
-    assert_eq!(cands, 566, "the recorded candidate count is part of the contract");
+    assert_eq!(cands, 529, "the recorded candidate count is part of the contract");
 }
 
 /// The corpus must have been recorded by the search this port implements — a
@@ -257,7 +257,7 @@ fn g3_the_rust_rollout_value_matches_every_recorded_pool_candidate() {
     );
     println!("G3 boundaries: {} | {} priced leaves", hist.join(", "), r.priced);
     println!("G3 stop reasons: {}", stops.join(", "));
-    assert_eq!(r.n, 287, "the recorded pool size is part of the contract");
+    assert_eq!(r.n, 266, "the recorded pool size is part of the contract");
     // A boundary array is never empty and never longer than the horizon: index 0
     // is the end of the CURRENT round, and the loop returns as soon as
     // `rounds_left` runs out (ai_planner.gd:388-390).
@@ -437,12 +437,12 @@ fn the_horizon_and_the_round_crossing_are_load_bearing() {
 /// patient advance never wins the greedy argmax inside a playout (it forgoes the
 /// marker, which is precisely why `plan_with_rollout` needs its R8 pool
 /// guarantee at the ROOT, ai_planner.gd:170-176), and no imagined charge in
-/// these 25 activations has both a gap past the 6" difficult cap and a corridor
+/// these 23 activations has both a gap past the 6" difficult cap and a corridor
 /// through difficult ground.
 ///
 /// So this file does NOT claim those two branches as gated. The branch that
 /// proves the rollout really walks `policy_candidates` / `policy_step` is the
-/// leaf split above: forcing either leaf moves 176 and 187 of 287 values, which
+/// leaf split above: forcing either leaf moves 165 and 159 of 266 values, which
 /// is impossible unless every imagined activation is being scored here.
 #[test]
 fn the_rollout_policy_tunables_are_measured_not_assumed() {
@@ -484,10 +484,10 @@ fn the_rollout_policy_tunables_are_measured_not_assumed() {
     }
     println!(
         "policy menus at the act roots: {menus} menus, HOLD {} ADVANCE {} RUSH {} CHARGE {} \
-         (plateau total: {moved} of 287 x 5 probes)",
+         (plateau total: {moved} of 266 x 5 probes)",
         kinds[0], kinds[1], kinds[2], kinds[3]
     );
-    assert_eq!(menus, 78, "one restricted menu per pool unit");
+    assert_eq!(menus, 73, "one restricted menu per pool unit");
     assert!(kinds.iter().all(|&k| k > 0), "a whole candidate kind is missing from the policy menu");
 }
 

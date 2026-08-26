@@ -1,5 +1,5 @@
 //! GATE G4 (NML-1073 M2-3) — the PICK, pinned on the recorded ACT corpus
-//! `tests/fixtures/acts_25.jsonl` (the same 25 activations G1/G2/G3 use).
+//! `tests/fixtures/acts_25.jsonl` (the same 23 activations G1/G2/G3 use).
 //!
 //! G1 gated the charge gate, G2 the menu, G3 the rollout value of one candidate.
 //! G4 is the whole search: `plan::plan_with_rollout` reads an act's state and
@@ -306,7 +306,7 @@ fn sweep(c: &ActCorpus, bend: PlanBend) -> Report {
 #[test]
 fn the_corpus_is_one_the_ported_search_may_answer() {
     let c = corpus();
-    assert_eq!(c.acts.len(), 25, "the fixture is the whole 25-activation recording");
+    assert_eq!(c.acts.len(), 23, "the fixture is the whole 23-activation recording");
     let arb = c.acts.iter().filter(|a| !a.arbitration.is_null()).count();
     let searchers = c.acts.iter().filter(|a| a.statics.playout_search).count();
     let net = c.acts.iter().filter(|a| !a.statics.heuristic_playout()).count();
@@ -322,7 +322,7 @@ fn the_corpus_is_one_the_ported_search_may_answer() {
     assert_eq!(searchers, 0, "{searchers} acts ran with playout_search on");
     assert_eq!(net, 0, "{net} acts used a net-guided playout, which this port declines");
     assert_eq!(fitted, 0, "{fitted} acts used the fitted eval, which score.rs does not port");
-    assert_eq!(used, 25, "every recorded act must carry a real pick");
+    assert_eq!(used, 23, "every recorded act must carry a real pick");
     assert_eq!(c.knobs.top_k, 6, "the recorded rollout budget is part of the contract");
 }
 
@@ -355,8 +355,8 @@ fn g4_the_rust_search_reproduces_every_recorded_pick() {
     );
     // Reported, not merely implied: the pool guarantees really do fire here, or
     // three of the four passes would be untested scenery.
-    assert_eq!(scored, 566, "the recorded candidate count is part of the contract");
-    assert_eq!(pool, 287, "the recorded pool size is part of the contract");
+    assert_eq!(scored, 529, "the recorded candidate count is part of the contract");
+    assert_eq!(pool, 266, "the recorded pool size is part of the contract");
 }
 
 /// RED PROOF 1 — the ROLLOUT BUDGET is load-bearing. `top_k` 6 -> 3 halves the
@@ -613,6 +613,13 @@ fn the_oracle_names_what_the_pick_does_not_cover() {
     let mut wave = 0usize;
     let mut shaken_pool = 0usize;
     let mut single_pool = 0usize;
+    // NML-1073 M2-1b: the pick census, because the re-recorded corpus lost the
+    // three CHARGE picks the pre-S1d one had. S1d hands the menu the RAW edge
+    // gap (0.25" larger than S1b's), so the rush band refuses more charge
+    // candidates (13 -> 10) and none of them survives the ranking here. G4
+    // therefore does NOT gate a CHARGE pick end to end; the CHARGE branch is
+    // still gated by G2 (10 candidates), by G3's rollouts and by parity GATE B.
+    let mut picked = [0usize; 4];
     for a in &c.acts {
         for m in a.menus.values() {
             for cand in m {
@@ -636,14 +643,20 @@ fn the_oracle_names_what_the_pick_does_not_cover() {
         if a.pool_idx.len() < 2 {
             single_pool += 1;
         }
+        if let Some(action) = a.pick.as_ref().and_then(|p| p.action.as_ref()) {
+            picked[action.kind as usize] += 1;
+        }
     }
     println!(
         "uncovered by this fixture: the stochastic playout ARBITRATION (playout_search off \
-         on all 25 acts, trace.arbitration null), the `used: false` answer (every act picks), \
+         on all 23 acts, trace.arbitration null), the `used: false` answer (every act picks), \
          a single-candidate pool that leaves runner_up empty ({single_pool} acts), \
-         plan()'s running runner-up (no recorded counterpart); \
+         plan()'s running runner-up (no recorded counterpart), \
+         a CHARGE pick (picked kinds HOLD {} ADVANCE {} RUSH {} CHARGE {}); \
          exercised: patient candidates {patient}, second-wave candidates {wave}, \
-         SHAKEN units in the activation pool {shaken_pool}"
+         SHAKEN units in the activation pool {shaken_pool}",
+        picked[0], picked[1], picked[2], picked[3]
     );
     assert_eq!(single_pool, 0, "the empty-runner_up branch is not reached by this corpus");
+    assert_eq!(picked[3], 0, "a CHARGE pick appeared — this corpus no longer needs the caveat");
 }
