@@ -94,8 +94,13 @@ pub(crate) struct PlainUnit {
     /// NML-1073 M2-0c/M2-0d gate reads — present on the ACT corpus only
     /// (`AiActRecorder._stamp_gate_reads`, battle_sim.gd:1402). The node corpus
     /// carries none of them, which is what the defaults answer.
+    /// ABSENT on the node corpus, which is why this is an `Option`: the
+    /// fallback is the unit's PROFILE `move_bands` (also a
+    /// `SoloController.sim_move_bands` reading, taken once per game), not
+    /// `Bands::default()` — a defaulted 6"/12" would answer for a Slow unit
+    /// that the profile already reads as 4"/8".
     #[serde(default)]
-    bands: Bands,
+    bands: Option<Bands>,
     #[serde(default)]
     shroud: Option<Vec<f64>>,
     #[serde(default)]
@@ -356,7 +361,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
     // they are collected here and mapped after the per-unit loop.
     let mut attached_keys: Vec<Vec<String>> = Vec::with_capacity(n);
     let mut host_keys: Vec<String> = Vec::with_capacity(n);
-    for (_, u) in plain.units.0 {
+    for (ui, (_, u)) in plain.units.0.into_iter().enumerate() {
         attached_keys.push(u.attached);
         host_keys.push(u.attached_to);
         st.player.push(u.player);
@@ -378,7 +383,16 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         st.mods.push(u.mods);
         st.mods_base.push(Rc::new(u.mods_base));
         st.los.push(u.los.map(Rc::new));
-        st.bands.push(u.bands);
+        // `SoloController.sim_move_bands(su["unit"])` — the LIVE read
+        // `BattleSim.resolve` (:636) and `AiMissionEval._presence` (:602) take
+        // on every call. The act corpus stamps it per activation because the
+        // dict it derives from GROWS during a game (battle_sim.gd:1391-1401);
+        // the node corpus predates that stamp, and its profile copy of the SAME
+        // call (battle_sim.gd:1471) is the closest reading there is.
+        st.bands.push(u.bands.unwrap_or_else(|| {
+            let mb = st.profiles.list[st.roster.profile[ui]].move_bands;
+            Bands { advance: mb.advance, rush: mb.rush }
+        }));
         // `_melee_shroud_charge_in_plain` (battle_sim.gd:1572) takes the pair only
         // when the recorded array holds BOTH numbers; anything shorter is "absent".
         st.shroud.push(match u.shroud {

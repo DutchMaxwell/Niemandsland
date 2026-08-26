@@ -191,6 +191,11 @@ pub struct Marker {
     pub destructible: bool,
     #[serde(default)]
     pub destroyed: bool,
+    /// `BattleSim.apply_destroy_step` (:405-423) stamps the destruction ORDER
+    /// here; `vp_score_round`'s demolition branch (:365-383) reads it back to
+    /// decide who collects the revenge VP.
+    #[serde(default)]
+    pub destroyed_seq: i64,
 }
 
 /// The dynamic layer. `#[derive(Clone)]` reproduces `BattleSim.clone_state`

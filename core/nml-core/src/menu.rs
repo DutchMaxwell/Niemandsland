@@ -75,7 +75,7 @@ pub struct Candidate {
 }
 
 impl Candidate {
-    fn new(unit: &str, kind: i64) -> Candidate {
+    pub fn new(unit: &str, kind: i64) -> Candidate {
         Candidate { unit: unit.to_string(), kind, ..Candidate::default() }
     }
 }

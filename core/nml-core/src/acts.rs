@@ -81,15 +81,82 @@ struct Header {
     knobs: Knobs,
 }
 
+/// One entry of `trace.scored` — `AiPlanner.plan_with_rollout` ai_planner.gd:
+/// 150-155, written AFTER the sort, so the array is in ranked order and `idx`
+/// is the candidate's position in the unsorted build order.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Scored {
+    pub idx: i64,
+    pub unit: String,
+    pub kind: i64,
+    pub score: f64,
+}
+
+/// One entry of `trace.rs` — ai_planner.gd:203-204: the ROLLOUT value of one
+/// pool candidate, in the order the pool was played out. This is the number
+/// milestone M2-2 reproduces.
+#[derive(Debug, Clone, Copy, Deserialize)]
+pub struct RolloutValue {
+    pub idx: i64,
+    pub rs: f64,
+}
+
 /// `AiPlanner.trace` — the search bookkeeping `AiActRecorder.finish` attaches
-/// (act_recorder.gd:80-82). Only `menus` is a milestone-M2-1 contract; the other
-/// six keys (`scored`, `pool_idx`, `rs`, `best_idx`, `runner_idx`,
-/// `arbitration`) are the SCORING half and belong to the next step, so they are
-/// deliberately not read here rather than carried dead.
+/// (act_recorder.gd:80-82). `arbitration` stays unread: it belongs to the
+/// stochastic `full_playout` arbitration (:222-253), which no part of this port
+/// reproduces.
 #[derive(Debug, Default, Deserialize)]
 struct PlainTrace {
     #[serde(default)]
     menus: HashMap<String, Vec<Candidate>>,
+    #[serde(default)]
+    scored: Vec<Scored>,
+    /// The `idx` of every candidate that survived the prefilter, in pool order.
+    #[serde(default)]
+    pool_idx: Vec<i64>,
+    #[serde(default)]
+    rs: Vec<RolloutValue>,
+    /// Positions in the SORTED `scored` array, not `idx` values (:210, :217).
+    #[serde(default = "neg_one")]
+    best_idx: i64,
+    #[serde(default = "neg_one")]
+    runner_idx: i64,
+}
+
+fn neg_one() -> i64 {
+    -1
+}
+
+/// The per-act `"statics"` object — `AiActRecorder.begin` act_recorder.gd:62-63.
+/// These are settings the search read off class statics rather than off the
+/// state, so a replay that does not restore them replays a different search.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct ActStatics {
+    /// `AiPlanner.opener_seat` — true when OUR side opened the current round.
+    /// `_blend_score` (:439-441) branches on it under seat modes 1 and 2.
+    #[serde(default)]
+    pub opener_seat: bool,
+    #[serde(default)]
+    pub playout_search: bool,
+    /// `AiMissionEval.fit_mode` — `score.rs` ports the HAND half only.
+    #[serde(default)]
+    pub fit_mode: bool,
+    /// `AiPlanner.playout_net` — a NON-empty dict routes every imagined
+    /// activation through a trained network (`_policy_step_net`, :627-645),
+    /// which this port declines rather than approximates.
+    #[serde(default)]
+    pub playout_net: serde_json::Value,
+}
+
+impl ActStatics {
+    /// True when the recording used the heuristic playout this port implements.
+    pub fn heuristic_playout(&self) -> bool {
+        match &self.playout_net {
+            serde_json::Value::Null => true,
+            serde_json::Value::Object(m) => m.is_empty(),
+            _ => false,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -110,6 +177,8 @@ struct PlainAct {
     #[serde(default)]
     trace: PlainTrace,
     #[serde(default)]
+    statics: ActStatics,
+    #[serde(default)]
     pick: Option<serde_json::Value>,
 }
 
@@ -128,6 +197,15 @@ pub struct Act {
     pub charge_illegal_grid: HashMap<String, Vec<bool>>,
     /// The RECORDED menu per pool unit — the oracle `menu::candidates` replays.
     pub menus: HashMap<String, Vec<Candidate>>,
+    /// Every (unit, candidate) pair the 1-ply prefilter scored, RANKED.
+    pub scored: Vec<Scored>,
+    /// The `idx` of every candidate that reached a full rollout, in pool order.
+    pub pool_idx: Vec<i64>,
+    /// The RECORDED rollout value per pool candidate — the M2-2 oracle.
+    pub rs: Vec<RolloutValue>,
+    pub best_idx: i64,
+    pub runner_idx: i64,
+    pub statics: ActStatics,
     pub pick: Option<serde_json::Value>,
 }
 
@@ -184,6 +262,12 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
             charge_illegal: pa.charge_illegal,
             charge_illegal_grid: pa.charge_illegal_grid,
             menus: pa.trace.menus,
+            scored: pa.trace.scored,
+            pool_idx: pa.trace.pool_idx,
+            rs: pa.trace.rs,
+            best_idx: pa.trace.best_idx,
+            runner_idx: pa.trace.runner_idx,
+            statics: pa.statics,
             pick: pa.pick,
         });
     }

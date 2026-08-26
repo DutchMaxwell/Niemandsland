@@ -11,6 +11,9 @@ pub mod gate;
 pub mod geom;
 pub mod io;
 pub mod menu;
+pub mod mission;
+pub mod playout;
+pub mod rollout;
 pub mod rules;
 pub mod score;
 pub mod sim;
@@ -30,16 +33,19 @@ pub const DISCOUNT: f64 = 0.5;
 /// `AiMissionEval.DESTROY_DEFENCE_WEIGHT` — ai_mission_eval.gd:410.
 pub const DESTROY_DEFENCE_WEIGHT: f64 = 0.8;
 
-pub use acts::{load_acts, read_acts, Act, ActCorpus, Knobs};
+pub use acts::{load_acts, read_acts, Act, ActCorpus, ActStatics, Knobs, RolloutValue, Scored};
 pub use gate::{charge_illegal, charge_illegal_tuned};
 pub use io::{load_nodes, read_nodes, Action, Node, NodeCorpus, Seams};
 pub use menu::{candidates, candidates_in, candidates_tuned, Candidate, Tuning};
+pub use mission::{apply_destroy_step, playout_seize, vp_end_bonus, vp_round_add, vp_score_round};
+pub use playout::{other_player, Policy};
+pub use rollout::{cross_round, imagined_round_end, Rollout, Stop};
 pub use rules::Registries;
 pub use score::{can_hold_marker, control_gap_in, presence, score, Incoming, NO_INCOMING};
 pub use sim::{
-    reply_threat, resolve, Unsupported, ADVANCE, CHARGE, CHARGE_CONTACT_MARGIN_IN, CONTACT_IN,
-    DEFAULT_BASE_RADIUS_M, HOLD, MELEE_ENGAGE_IN, RUSH, SPACING_BISECTIONS, SPACING_SAMPLES,
-    UNIT_SPACING_IN,
+    reply_threat, resolve, resolve_on_board, Cover, Unsupported, ADVANCE, CHARGE,
+    CHARGE_CONTACT_MARGIN_IN, CONTACT_IN, DEFAULT_BASE_RADIUS_M, HOLD, MELEE_ENGAGE_IN, RUSH,
+    SPACING_BISECTIONS, SPACING_SAMPLES, UNIT_SPACING_IN,
 };
 pub use state::{Bands, Marker, Mods, Objective, Profile, Profiles, State, Weapon};
 pub use terrain::{PlainTerrain, Terrain};
