@@ -681,7 +681,20 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 	var charge_key := str(action.get("charge", ""))
 	if kind == AiDecision.Action.CHARGE and charge_key != "" and next["units"].has(charge_key):
 		var tu: Dictionary = next["units"][charge_key]
-		if dist_in(positions, tu["positions"]) <= CONTACT_IN:
+		# NML-1073 S1b: melee resolves once the charge reaches BASE CONTACT (GF
+		# Advanced Rules v3.5.1 p.7/p.9 — charging models move into base contact,
+		# melee follows), so the trigger is the EDGE gap, not the centre distance:
+		# two 32 mm bases (radius 0.016 m) meet at a 1.26" centre distance, past
+		# the old CONTACT_IN=1.0" gate, so a landed 32 mm+ charge never fought.
+		# The tolerance is the table's own contact epsilon, CHARGE_CONTACT_MARGIN_IN
+		# (0.25"), which comfortably covers the spacing clamp's 8-step bisection
+		# worst-case shortfall (<= delta/256). Known residual, NOT covered by that
+		# margin: _spacing_fraction's OTHER fallback — the descending 8-point
+		# sample used when both the start and the full move are blocked — steps in
+		# 1/8ths, so it can land up to 1.5" short of the true legal boundary on a
+		# 12" charge; that scenario's melee correctly does not fire today.
+		if edge_gap_in(positions, su.get("radii", []), tu["positions"], tu.get("radii", [])) \
+				<= SoloController.CHARGE_CONTACT_MARGIN_IN:
 			var tu_before := _wounds_left(tu)
 			var su_before := _wounds_left(su)
 			_apply_expected_wounds(tu, AiEv.melee_ev(_profiles_of(su, true),
@@ -741,6 +754,26 @@ static func dist_in(a: Array, b: Array) -> float:
 	for pa in a:
 		for pb in b:
 			best = minf(best, ((pa as Vector3) - (pb as Vector3)).length())
+	return best / IN2M
+
+
+## Nearest BASE-EDGE gap between two snapshot position arrays, inches: min over
+## all model pairs of (horizontal centre distance - r_a - r_b); a radii array
+## shorter than its positions falls back to SeparationChecker.DEFAULT_BASE_
+## RADIUS_M per missing entry (same convention as _spacing_fraction). Negative
+## = bases already overlapping. Horizontal (x/z), not 3D — mirrors the spacing
+## clamp's own probe (Vector3(p.x-oc.x, 0.0, p.z-oc.z).length()), since model
+## height never gates a tabletop contact measurement. Either array empty -> INF,
+## same as dist_in.
+static func edge_gap_in(a_pos: Array, a_radii: Array, b_pos: Array, b_radii: Array) -> float:
+	var best := INF
+	for ai in range(a_pos.size()):
+		var pa: Vector3 = a_pos[ai]
+		var ra: float = float(a_radii[ai]) if ai < a_radii.size() else SeparationChecker.DEFAULT_BASE_RADIUS_M
+		for bi in range(b_pos.size()):
+			var pb: Vector3 = b_pos[bi]
+			var rb: float = float(b_radii[bi]) if bi < b_radii.size() else SeparationChecker.DEFAULT_BASE_RADIUS_M
+			best = minf(best, Vector3(pa.x - pb.x, 0.0, pa.z - pb.z).length() - ra - rb)
 	return best / IN2M
 
 

@@ -36,6 +36,23 @@ func _unit_at(pid: int, positions: Array, uid: String) -> GameUnit:
 	return u
 
 
+## NML-1073 S1b: melee-capable fixture — a CCW (melee, range 0, 4 attacks) on
+## top of _unit_at's bare Node3D models, so the CHARGE branch's EV is
+## non-zero. Mirrors battle_sim_resolve_test.gd's _armed fixture.
+func _armed_at(pid: int, positions: Array, uid: String) -> GameUnit:
+	var u := _unit_at(pid, positions, uid)
+	var opr := OPRApiClient.OPRUnit.new()
+	var w := OPRApiClient.OPRWeapon.new()
+	w.name = "CCW"
+	w.range_value = 0
+	w.attacks = 4
+	w.count = 1
+	opr.weapons.append(w)
+	u.source_type = "opr"
+	u.source_data = opr
+	return u
+
+
 func _capture(mover: GameUnit, blocker: GameUnit) -> Dictionary:
 	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
 	army.game_units = {"Mover": mover, "Blocker": blocker}
@@ -204,3 +221,40 @@ func test_an_attached_hero_does_not_block_its_hosts_rush() -> void:
 		"dest": dest})
 	var mp: Vector3 = (next["units"]["Mover"] as Dictionary)["positions"][0]
 	assert_that(mp).is_equal(dest)
+
+
+## NML-1073 S1b: a charge that reaches BASE CONTACT resolves melee. Two 32 mm
+## bases (radius 0.016 m, _unit_at's default) meet at a 1.26" CENTRE distance
+## once S1's spacing exemption lets the mover in — past the OLD trigger's
+## CONTACT_IN=1.0" centre-distance gate, so this is RED pre-fix (no melee
+## ever fires here) and GREEN once the trigger measures the EDGE gap against
+## the table's own contact epsilon, CHARGE_CONTACT_MARGIN_IN (0.25").
+func test_a_charge_reaching_base_contact_resolves_melee() -> void:
+	OS.set_environment("NML_SIM_SPACING", "1")
+	_reset_spacing_cache()
+	var mover := _armed_at(1, [Vector3.ZERO], "Mover")
+	var blocker := _armed_at(2, [Vector3(6.0 * IN2M, 0, 0)], "Blocker")
+	var state := _capture(mover, blocker)
+	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(6.0 * IN2M, 0, 0), "charge": "Blocker"})
+	var b: Dictionary = next["units"]["Blocker"]
+	assert_int(int(b["alive"])).is_equal(0)
+
+
+## NML-1073 S1b guard: a charge whose 12" reach band runs out exactly 1" short
+## of base contact (well past CHARGE_CONTACT_MARGIN_IN=0.25") never resolves
+## melee. GREEN before and after this fix — the old centre-distance gate
+## agreed here too (2.26" centre gap > CONTACT_IN=1.0").
+func test_a_charge_short_of_contact_by_the_reach_band_applies_no_melee() -> void:
+	OS.set_environment("NML_SIM_SPACING", "1")
+	_reset_spacing_cache()
+	var r_in := SeparationChecker.DEFAULT_BASE_RADIUS_M / IN2M
+	var target_x_in := 12.0 + 1.0 + 2.0 * r_in   # 12" charge band leaves exactly a 1" edge gap
+	var mover := _armed_at(1, [Vector3.ZERO], "Mover")
+	var blocker := _armed_at(2, [Vector3(target_x_in * IN2M, 0, 0)], "Blocker")
+	var state := _capture(mover, blocker)
+	var next := BattleSim.resolve(state, {"unit": "Mover", "kind": AiDecision.Action.CHARGE,
+		"dest": Vector3(target_x_in * IN2M, 0, 0), "charge": "Blocker"})
+	var b: Dictionary = next["units"]["Blocker"]
+	assert_int(int(b["alive"])).is_equal(1)
+	assert_int(int(b["wounds"][0])).is_equal(1)
