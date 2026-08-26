@@ -13,6 +13,13 @@ extends SceneTree
 ## diff once "planned"/"trails" are flattened through MoveRecorder._flatten too (reused verbatim, the same
 ## pattern act_recheck.gd uses for AiActRecorder._flatten_vec3).
 ##
+## trace v2 (header "trace_v": 2, NML-1073 M4-0b follow-up): the generic diff above already covers the new
+## per-node Theta* search trace and the new per-flow-entry "walk_spent"/"pull" fields node-exact (it only
+## ever checks keys the RECORDING carries, so a v1 file — no "trace_v", no v2 keys — is unaffected). ON TOP
+## of that, _verify_v2 below checks what a v2 file lets us recompute from the corpus ALONE, independent of
+## the full replay: walk_spent against the recorded trail's own arc length, and the post-pull endpoint via
+## a standalone MovementPlanner._pull_into_placed call. Reports "v2 fields: checked N / skipped M" per file.
+##
 ## Usage: godot --headless -s res://tools/move_recheck.gd --
 ##   file=<moves_calls.jsonl> [n=<N>] [offset=<K>]
 ##   --corrupt=zones   RED proof: drop every second recorded zone disc before replay
@@ -62,13 +69,14 @@ func _init() -> void:
 	var checked := 0
 	var ok := 0
 	var mismatch := 0
+	var v2n := [0, 0]   # [checked, skipped] — v2-only field verification tally (trace_pull / trace_walk_spent)
 	while (n < 0 or checked < n) and not f.eof_reached():
 		var line := f.get_line().strip_edges()
 		if line == "":
 			continue
 		var call: Dictionary = JSON.parse_string(line)
 		checked += 1
-		var mism := _check_call(call, header_walls)
+		var mism := _check_call(call, header_walls, v2n)
 		var tag := "CALL %d unit=%s rung=%s" % [offset + checked, str(call.get("unit", "")), str(call.get("rung", ""))]
 		if mism.is_empty():
 			ok += 1
@@ -79,11 +87,13 @@ func _init() -> void:
 			for m in mism.slice(0, 3):
 				print("  MISMATCH %s: recorded=%s got=%s" % [str(m["field"]), str(m["recorded"]), str(m["got"])])
 	print("MOVE_RECHECK calls=%d ok=%d mismatch=%d" % [checked, ok, mismatch])
+	print("v2 fields: checked %d / skipped %d" % [v2n[0], v2n[1]])
 	quit(0 if mismatch == 0 else 1)
 
 
-## One call: rebuild -> plan_unit_step (trace armed) -> diff. Returns the list of mismatches (empty = exact replay).
-func _check_call(call: Dictionary, header_walls: Array) -> Array:
+## One call: rebuild -> plan_unit_step (trace armed) -> diff. Returns the list of mismatches (empty = exact
+## replay). `v2n` ([checked, skipped]) is mutated with the standalone v2-field tally (see _verify_v2).
+func _check_call(call: Dictionary, header_walls: Array, v2n: Array) -> Array:
 	var mism: Array = []
 	var mpos := _vec2_list(call["model_pos"])
 	var delta_arr: Array = call["delta"]
@@ -98,20 +108,82 @@ func _check_call(call: Dictionary, header_walls: Array) -> Array:
 	MoveRecorder._trace_flow = []
 	MoveRecorder._trace_swaps = []
 	MoveRecorder._trace_solve = []
+	MoveRecorder._trace_theta = []
 	MovementPlanner.trace_on = true
 	var planned: Array = MovementPlanner.plan_unit_step(mpos, delta, walls, grid, allow_contact, board_in, trails, opts)
 	MovementPlanner.trace_on = false
 	var flow_order: Array = opts.get("flow_order", [])
 	var trace := {"flow": MoveRecorder._trace_flow.duplicate(true),
 		"untangle_swaps": MoveRecorder._trace_swaps.duplicate(true),
-		"solve_passes": MoveRecorder._trace_solve.duplicate(true)}
+		"solve_passes": MoveRecorder._trace_solve.duplicate(true),
+		"theta_searches": MoveRecorder._trace_theta.duplicate(true)}
 
 	_diff("planned", call.get("planned", []), MoveRecorder._flatten(planned), mism)
 	_diff("trails", call.get("trails", []), MoveRecorder._flatten(trails), mism)
 	_diff("flow_order", call.get("flow_order", []), flow_order, mism)
 	if call.has("trace"):
 		_diff("trace", call["trace"], trace, mism)
+		_verify_v2(call, mpos.size(), walls, board_in, opts, mism, v2n)
 	return mism
+
+
+## NML-1073 M4-0b trace v2: verifies whatever is recomputable from the CORPUS ALONE (independent of the
+## full replay above) — a v1 file (no "walk_spent"/"pull" per flow entry) contributes only to `skipped`.
+##   1. walk_spent self-consistency: the recorded scalar equals the recorded "walked" trail's own arc length.
+##   2. post-pull endpoint: re-running MovementPlanner._pull_into_placed on the RECORDED pre-pull endpoint
+##      (the flow entry's own "walked".back()) reproduces the recorded "pull" — only where the live flow
+##      would actually have called it (non-charge, not deferred, at least one model already placed).
+func _verify_v2(call: Dictionary, n_models: int, walls: Array, board_in: float, opts: Dictionary,
+		mism: Array, v2n: Array) -> void:
+	var trace: Dictionary = call.get("trace", {})
+	var flow: Array = trace.get("flow", [])
+	var is_charge: bool = bool(call.get("allow_contact", false)) and opts.has("charge_goal")
+	var radii: Array = opts.get("radii", [])
+	var clearance: float = float(opts.get("clearance", 0.0))
+	var base_zones: Array = [] if bool(opts.get("zones_rest_only", false)) else opts.get("zones", [])
+	var avoid_cells: Dictionary = opts.get("avoid_cells", {})
+	var board := MovementPlanner.board_extents(board_in, opts)
+	var result: Array = []
+	result.resize(n_models)
+	var placed: Array = []
+	for e in flow:
+		var ed: Dictionary = e
+		var idx := int(ed.get("model", -1))
+		var deferred := bool(ed.get("deferred", false))
+		var walked: Array = ed.get("walked", [])
+		var pre_pull := Vector2.ZERO
+		if not walked.is_empty():
+			var last: Array = walked.back()
+			pre_pull = Vector2(float(last[0]), float(last[1]))
+		if ed.has("walk_spent"):
+			var s := 0.0
+			for i in range(1, walked.size()):
+				var a: Array = walked[i - 1]
+				var b: Array = walked[i]
+				s += Vector2(float(a[0]), float(a[1])).distance_to(Vector2(float(b[0]), float(b[1])))
+			v2n[0] += 1
+			if absf(s - float(ed["walk_spent"])) > EPS:
+				mism.append({"field": "v2.walk_spent[model=%d]" % idx, "recorded": ed["walk_spent"], "got": s})
+		else:
+			v2n[1] += 1
+		var eligible: bool = not is_charge and not deferred and not placed.is_empty() and idx < radii.size()
+		if eligible and ed.has("pull"):
+			var got := MovementPlanner._pull_into_placed(pre_pull, idx, radii, placed, result, walls,
+				clearance, base_zones, avoid_cells, board)
+			v2n[0] += 1
+			var rp: Array = ed["pull"]
+			var recorded_pull := Vector2(float(rp[0]), float(rp[1]))
+			if got.distance_to(recorded_pull) > EPS:
+				mism.append({"field": "v2.pull[model=%d]" % idx, "recorded": rp, "got": [got.x, got.y]})
+		else:
+			v2n[1] += 1
+		if not deferred and idx >= 0 and idx < result.size():
+			var final_pt := pre_pull
+			if ed.has("pull"):
+				var fp: Array = ed["pull"]
+				final_pt = Vector2(float(fp[0]), float(fp[1]))
+			result[idx] = final_pt
+			placed.append(idx)
 
 
 ## opts, rebuilt to the exact types _plan_positions passes (solo_controller.gd:5978-6037): Vector2/Vector2i
@@ -253,14 +325,14 @@ static func _diff(path: String, rec: Variant, got: Variant, mism: Array) -> void
 			return
 		var rd: Dictionary = rec
 		var gd: Dictionary = got
+		# One-directional on purpose (NML-1073 M4-0b trace v2): only keys the RECORDING carries are
+		# checked, so a v1 corpus (no "walk_spent"/"pull"/"theta_searches" per entry) simply never
+		# exercises those v2-only keys, even though a live v2 replay always produces them.
 		for k in rd:
 			if not gd.has(k):
 				mism.append({"field": path + "." + str(k), "recorded": rd[k], "got": null})
 				continue
 			_diff(path + "." + str(k), rd[k], gd[k], mism)
-		for k in gd:
-			if not rd.has(k):
-				mism.append({"field": path + "." + str(k), "recorded": null, "got": gd[k]})
 		return
 	if rt == TYPE_STRING or gt == TYPE_STRING:
 		if str(rec) != str(got):

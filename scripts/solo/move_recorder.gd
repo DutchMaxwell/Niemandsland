@@ -9,7 +9,7 @@ extends RefCounted
 ## either way (the Rust port's per-move-call contract, corpus for M4-0b's replay parity gate).
 ##
 ## Line 1 is {"kind":"header", "board_in":[w,h], "board_y_in", "inches_to_meters", "terrain", "walls",
-## "fast_planner", "fast_planner_guard", "constants":{...}} — the STATIC per-game data every
+## "fast_planner", "fast_planner_guard", "trace_v", "constants":{...}} — the STATIC per-game data every
 ## plan_unit_step call reads, written ONCE from the first call's own inputs; every call after it is a
 ## {"kind":"call", ...} line with the FULL plan_unit_step input (model_pos/delta/walls/grid/opts, AS
 ## PASSED) plus the "planned"/"trails"/"flow_order" it returned.
@@ -19,6 +19,14 @@ extends RefCounted
 ## model Theta*/string-pull/walk legs, the untangle 2-opt swaps, and solve_formation's per-pass
 ## positions+score — fed in by MovementPlanner's own trace_model/trace_swap/trace_solve_pass calls into
 ## this file's static buffers (zero cost on the hot path when trace_on is false: one bool check).
+##
+## NML-1073 M4-0b trace v2 (header "trace_v": 2 — a v1 reader without the field just skips these): every
+## flow entry ALSO carries "walk_spent" (the model's own _walk_offset arc length, exact) and "pull" (its
+## endpoint AFTER _pull_into_placed — equal to "walked"'s own last point when no pull ran, e.g. a charge or
+## a deferred attempt); trace also carries "theta_searches", one entry per _theta_star_b call that actually
+## searched — that search's own pop-order node list ({"g","parent","open"}, parent as a same-list index) so
+## a port can replay Theta* node-by-node. All new hooks are guarded by the same trace_on check, so recording
+## OFF stays a zero-allocation no-op exactly as before.
 
 
 static var _stream: FileAccess = null
@@ -32,6 +40,8 @@ static var _header_walls: Array = []
 static var _trace_flow: Array = []
 static var _trace_swaps: Array = []
 static var _trace_solve: Array = []
+static var _trace_theta: Array = []   # v2: one entry per _theta_star_b call that ran a search (its own popped-node list)
+static var _pending_spent := -1.0     # v2: the last _walk_offset call's spent, consumed by the next trace_model
 
 
 static func _dump_stream() -> FileAccess:
@@ -64,6 +74,8 @@ static func begin(ctx: Dictionary) -> Dictionary:
 		_trace_flow = []
 		_trace_swaps = []
 		_trace_solve = []
+		_trace_theta = []
+		_pending_spent = -1.0
 	var opts: Dictionary = ctx["opts"]
 	var walls: Array = ctx["walls"]
 	return {"kind": "call", "unit": ctx["unit"], "act": int(ctx["act"]), "round": int(ctx["round"]),
@@ -83,7 +95,8 @@ static func finish(pending: Dictionary, planned: Array, trails: Array, opts: Dic
 	pending["trails"] = _flatten(trails)
 	pending["flow_order"] = opts.get("flow_order", [])
 	if MovementPlanner.trace_on:
-		pending["trace"] = {"flow": _trace_flow, "untangle_swaps": _trace_swaps, "solve_passes": _trace_solve}
+		pending["trace"] = {"flow": _trace_flow, "untangle_swaps": _trace_swaps, "solve_passes": _trace_solve,
+			"theta_searches": _trace_theta}
 	MovementPlanner.trace_on = false
 	_stream.store_line(JSON.stringify(pending, "", true, true))
 	_stream.flush()   # a same-process reader (the completeness smoke) must see the line without a close()
@@ -103,6 +116,8 @@ static func close() -> void:
 	_count = 0
 	_trace_wanted = false
 	_header_walls = []
+	_trace_theta = []
+	_pending_spent = -1.0
 	MovementPlanner.trace_on = false
 
 
@@ -114,7 +129,7 @@ static func _header_line(ctx: Dictionary) -> Dictionary:
 		"inches_to_meters": SoloController.INCHES_TO_METERS,
 		"terrain": AiActRecorder._terrain_line(ctx["terrain_cb"]), "walls": _flatten(ctx["walls"]),
 		"fast_planner": MovementPlanner.fast_planner, "fast_planner_guard": MovementPlanner.fast_planner_guard,
-		"constants": _constants()}
+		"trace_v": 2, "constants": _constants()}
 
 
 ## Every MovementPlanner const the plan_unit_step pipeline (:496-1650) reads, plus SoloController's
@@ -203,7 +218,23 @@ static func _flatten(v: Variant) -> Variant:
 ## walked (offset + allowance-spent) leg, plus whether this attempt deferred to the back of the queue.
 static func trace_model(idx: int, route: Array, taut: Array, leg: Array, deferred: bool) -> void:
 	_trace_flow.append({"model": idx, "theta": _flatten(route), "taut": _flatten(taut),
-		"walked": _flatten(leg), "deferred": deferred})
+		"walked": _flatten(leg), "deferred": deferred, "walk_spent": _pending_spent})
+	_pending_spent = -1.0
+
+
+## v2: the endpoint AFTER _pull_into_placed for the model whose trace_model entry was JUST appended.
+## Charges and deferred attempts never call _pull_into_placed — the caller hands back the PRE-pull
+## endpoint in those cases, so "pull" always exists and equals "walked"'s own last point when no pull ran.
+static func trace_pull(pt: Vector2) -> void:
+	if _trace_flow.is_empty():
+		return
+	(_trace_flow[_trace_flow.size() - 1] as Dictionary)["pull"] = _flatten(pt)
+
+
+## v2: _walk_offset's own true arc length spent (movement_planner.gd:1501-1535+), stashed here and picked
+## up by the very next trace_model call — the two always run back-to-back, once per model per attempt.
+static func trace_walk_spent(spent: float) -> void:
+	_pending_spent = spent
 
 
 ## untangle_endpoints (:1173-1204): one [i, j] entry per accepted endpoint swap.
@@ -215,3 +246,11 @@ static func trace_swap(i: int, j: int) -> void:
 ## its violation score (0 = fully legal; see _formation_score).
 static func trace_solve_pass(pass_idx: int, positions: Array, score: float) -> void:
 	_trace_solve.append({"pass": pass_idx, "positions": _flatten(positions), "score": score})
+
+
+## v2: one entry per _theta_star_b call that actually ran a search (the exact-line shortcut records
+## nothing — no search happened). `nodes` is that search's OWN pop-order list of {"g","parent","open"}
+## dicts (movement_planner.gd:1351-1450) — "parent" indexes an EARLIER entry in this SAME list (or -1 for
+## the root), so a port can replay the search node-by-node without carrying cell coordinates at all.
+static func trace_theta_search(nodes: Array) -> void:
+	_trace_theta.append(nodes)

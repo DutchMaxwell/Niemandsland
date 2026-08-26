@@ -1127,6 +1127,7 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 			var cleg := _walk_offset(model_pos[idx], ctaut, Vector2.ZERO, allowance, walls, grid, woi, board)
 			if trace_on:
 				MoveRecorder.trace_model(idx, croute, ctaut, cleg, false)
+				MoveRecorder.trace_pull(cleg.back())   # v2: charges skip the pull — post == pre
 			result[idx] = cleg.back()
 			placed.append(idx)
 			if trails != null and idx < trails.size():
@@ -1146,6 +1147,8 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 		if trace_on:
 			MoveRecorder.trace_model(idx, route, taut, leg, will_defer)
 		if will_defer:
+			if trace_on:
+				MoveRecorder.trace_pull(final_pt)   # v2: no pull attempted on a deferred try — post == pre
 			deferred[idx] = true
 			queue.push_back(idx)
 			continue
@@ -1157,6 +1160,8 @@ static func plan_sequential_flow(model_pos: Array, delta: Vector2, radii: Array,
 			if linked.distance_to(final_pt) > EPS:
 				leg.append(linked)
 				final_pt = linked
+		if trace_on:
+			MoveRecorder.trace_pull(final_pt)   # v2: the endpoint AFTER _pull_into_placed (pre-pull unchanged above)
 		result[idx] = final_pt
 		placed.append(idx)
 		if trails != null and idx < trails.size():
@@ -1381,6 +1386,11 @@ static func _theta_star_b(start: Vector2, goal: Vector2, walls: Array, grid: Dic
 	var reach_closest: bool = bool(opts.get("reach_closest", false)) or fast_planner
 	var best_reach: Vector2i = start_c
 	var best_reach_d: float = start.distance_to(goal)
+	# NML-1073 M4-0b trace v2: every popped node's g / parent (as an index into THIS search's OWN pop
+	# order, so a port can replay the search node-by-node without carrying cell coordinates) / open-list
+	# size at pop — flushed to MoveRecorder at every exit below so a Rust port can be gated node-exact.
+	var _tn: Array = []
+	var _pop_idx := {}
 	while not open.is_empty() and guard > 0:
 		guard -= 1
 		var best_i := 0
@@ -1392,7 +1402,14 @@ static func _theta_star_b(start: Vector2, goal: Vector2, walls: Array, grid: Dic
 				best_f = f
 				best_i = k
 		var cur: Vector2i = open[best_i]
+		if trace_on:
+			var par_cell: Vector2i = parent[cur]
+			var par_idx: int = int(_pop_idx.get(par_cell, -1)) if par_cell != cur else -1
+			_pop_idx[cur] = _tn.size()
+			_tn.append({"g": float(g[cur]), "parent": par_idx, "open": open.size()})
 		if cur == goal_c:
+			if trace_on and not _tn.is_empty():
+				MoveRecorder.trace_theta_search(_tn)
 			return _theta_reconstruct(parent, pos, cur)
 		open.remove_at(best_i)
 		open_set.erase(cur)
@@ -1441,8 +1458,14 @@ static func _theta_star_b(start: Vector2, goal: Vector2, walls: Array, grid: Dic
 		if not _cspace_blocked(start, goal, walls, grid, opts):
 			var via_stub: float = float(g[best_reach]) + _segment_cost(pos[best_reach] as Vector2, goal, grid, opts)
 			if _segment_cost(start, goal, grid, opts) <= via_stub + EPS:
+				if trace_on and not _tn.is_empty():
+					MoveRecorder.trace_theta_search(_tn)
 				return [start, goal]
+		if trace_on and not _tn.is_empty():
+			MoveRecorder.trace_theta_search(_tn)
 		return _theta_reconstruct(parent, pos, best_reach)
+	if trace_on and not _tn.is_empty():
+		MoveRecorder.trace_theta_search(_tn)
 	return [start, goal]
 
 
@@ -1501,6 +1524,8 @@ static func _legs_cost(path: Array, i0: int, i1: int, grid: Dictionary, opts: Di
 static func _walk_offset(start_pt: Vector2, taut: Array, offset: Vector2, allowance: float,
 		walls: Array, grid: Dictionary, opts: Dictionary, board: Vector2) -> Array:
 	if taut.size() <= 1:
+		if trace_on:
+			MoveRecorder.trace_walk_spent(0.0)
 		return [start_pt]
 	var out: Array = [start_pt]
 	var spent := 0.0
@@ -1533,6 +1558,14 @@ static func _walk_offset(start_pt: Vector2, taut: Array, offset: Vector2, allowa
 			if frac > EPS:
 				out.append(a.lerp(b, frac))
 			break
+	if trace_on:
+		# v2: the TRUE arc length of the returned polyline — not the internal `spent` above, which a
+		# clipped final leg leaves one step stale — recomputed here so it always matches `out`'s own
+		# cumulative length by construction; move_recheck checks that invariant against "walked".
+		var s := 0.0
+		for i in range(1, out.size()):
+			s += (out[i] as Vector2).distance_to(out[i - 1] as Vector2)
+		MoveRecorder.trace_walk_spent(s)
 	return out
 
 
