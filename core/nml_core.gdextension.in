@@ -9,6 +9,12 @@
 ; and is NOT committed. A Windows .dll (and a macOS .dylib) is a CI/packaging
 ; question and stays out until the core ships — rule R3 keeps the release
 ; pipeline independent of the Rust job.
+;
+; THIS FILE IS A TEMPLATE, not the live manifest. Godot only loads files
+; literally named *.gdextension, so this .in copy is inert on a plain checkout.
+; core/install_gdextension.sh copies it to core/nml_core.gdextension (gitignored)
+; when, and only when, the .so above exists — that is what keeps a checkout
+; without the built library free of the load-error spam this ticket removed.
 
 [configuration]
 

@@ -17,9 +17,10 @@
 //!   `last_error()`.
 //!
 //! PLAYER SAFETY (rules of record R1/R2): this library is OPTIONAL. Godot loads
-//! it if `core/nml_core.gdextension` finds the .so; if it does not, the class
-//! simply does not exist and `BattleSim.core_enabled()` is false — the GDScript
-//! path runs unchanged. Nothing in the game calls this class unless NML_CORE=1.
+//! it if `core/nml_core.gdextension` (installed from the tracked
+//! `core/nml_core.gdextension.in` by `core/install_gdextension.sh`, only when
+//! this .so exists) finds it; if it does not, the class simply does not exist
+//! and `BattleSim.core_enabled()` is false — the GDScript path runs unchanged. Nothing in the game calls this class unless NML_CORE=1.
 
 use std::rc::Rc;
 

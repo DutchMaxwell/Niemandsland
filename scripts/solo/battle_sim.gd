@@ -41,12 +41,13 @@ static func cast_phase_enabled() -> bool:
 	return _cast_env == 1
 
 ## NML-1073 M1-5 seam: NML_CORE="1" routes the rollout node to the Rust core
-## (the NmlCore GDExtension, core/nml_core.gdextension). Rule R1 — the library
-## is OPTIONAL: if it is missing or failed to load the class does not exist and
-## this returns false, so the GDScript path runs unchanged. Rule R2 — DEFAULT
-## OFF: without NML_CORE=1 nothing here is even asked. One warning, once, when
-## the seam was ASKED for and the library is absent; never an error, never a
-## warning on the default path.
+## (the NmlCore GDExtension, core/nml_core.gdextension — installed from
+## core/nml_core.gdextension.in by core/install_gdextension.sh, only when the
+## .so is built). Rule R1 — the library is OPTIONAL: if it is missing or failed
+## to load the class does not exist and this returns false, so the GDScript
+## path runs unchanged. Rule R2 — DEFAULT OFF: without NML_CORE=1 nothing here
+## is even asked. One warning, once, when the seam was ASKED for and the
+## library is absent; never an error, never a warning on the default path.
 static var _core_env := -1
 static func core_enabled() -> bool:
 	if _core_env < 0:
