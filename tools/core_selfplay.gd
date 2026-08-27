@@ -611,7 +611,12 @@ func _append_selection(gu: GameUnit, ud: Dictionary) -> void:
 		ow.attacks = int(wd.get("attacks", 1))
 		ow.count = maxi(int(wd.get("count", 1)), 1)
 		for wr in wd.get("specialRules", []):
-			var wl := str((wr as Dictionary).get("label", (wr as Dictionary).get("name", "")))
+			# NML-1073 M3-3b: weapon-level rule dicts (e.g. {"name":"AP","rating":1})
+			# carry no "label" — the old label/name fallback silently dropped the
+			# rating, zeroing AP/Blast/Deadly for every weapon in the trainer.
+			# _rule_to_string is the shared, tested source of truth (also used by
+			# the arena import path) for turning a rule dict into "Name(X)".
+			var wl := OPRApiClient._rule_to_string(wr as Dictionary)
 			if wl != "":
 				ow.special_rules.append(wl)
 		(gu.source_data as OPRApiClient.OPRUnit).weapons.append(ow)

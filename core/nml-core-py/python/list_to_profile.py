@@ -1,6 +1,6 @@
 """Army-Forge list -> BattleSim unit profile, in pure Python (NML-1073 M3-3).
 
-Ports two GDScript functions field for field:
+Ports three GDScript functions field for field:
 
   tools/core_selfplay.gd:_units_from_list / _append_selection (the
       Godot-free army loader every M3 corpus is built from — combined-unit
@@ -9,6 +9,16 @@ Ports two GDScript functions field for field:
   scripts/solo/battle_sim.gd:_unit_profile (the STATIC per-unit profile dict
       AiActRecorder stamps once per game onto the act corpus header's
       "profiles" line)
+
+  scripts/opr_api_client.gd:_rule_to_string (NML-1073 M3-3b: a weapon-level
+      specialRules entry, e.g. {"name": "AP", "rating": 1}, carries no
+      "label" — only "rating" — so core_selfplay.gd's plain label/name
+      fallback used to drop it to a bare "AP", zeroing AP/Blast/Deadly for
+      every weapon in the trainer. core_selfplay.gd now calls this shared,
+      arena-tested formatter for weapon rules specifically; unit-level
+      "rules" and upgrade-label grants keep the plain label/name fallback,
+      since those dicts already carry a pre-formatted "label" — see
+      _rule_label below)
 
 This reproduces exactly what THAT loader produces today, not the full
 Army-Forge import path (opr_api_client.gd), which resolves base-size
@@ -68,8 +78,44 @@ RAPID_ADVANCE_BONUS = 4
 
 def _rule_label(r: dict) -> str:
     """A rule/specialRule entry's display name — battle_sim / core_selfplay
-    read "label" first, "name" as the fallback, empty string last."""
+    read "label" first, "name" as the fallback, empty string last. Used for
+    UNIT-level "rules" and upgrade-label grants only; those dicts already
+    carry a pre-formatted "label" (e.g. Tough's is "Tough(3)"). Weapon-level
+    specialRules entries go through _rule_to_string below instead — see its
+    docstring for why."""
     return str(r.get("label", r.get("name", "")))
+
+
+def _format_rating(value: Any) -> str:
+    """opr_api_client.gd:_format_rating — strips a whole float's decimal
+    point (1.0 -> "1"); any other type (int, str, a fractional float, ...)
+    formats via plain str()."""
+    if isinstance(value, float):
+        if value == int(value):
+            return str(int(value))
+        return str(value)
+    return str(value)
+
+
+def _rule_to_string(rule: dict) -> str:
+    """opr_api_client.gd:_rule_to_string — the single source of truth (also
+    used by the arena import path) for turning an Army-Forge rule dict into
+    its display string. A weapon-level specialRules entry (e.g.
+    {"name": "AP", "rating": 1}) carries no "label", only "rating" — the
+    plain label/name fallback (_rule_label above) silently dropped it to a
+    bare "AP", zeroing every rated weapon rule (NML-1073 M3-3b). Ported
+    field for field: a present "rating" always wins (formatted via
+    _format_rating, so a string rating like "+3" passes through as-is, e.g.
+    "Deadly(+3)"); absent a rating, a "label" already shaped "Name(X)" is
+    kept whole; otherwise it's the bare name, else the bare label."""
+    rule_name = str(rule.get("name", ""))
+    rating = rule.get("rating", None)
+    if rating is not None and str(rating) != "":
+        return "%s(%s)" % (rule_name, _format_rating(rating))
+    label = str(rule.get("label", ""))
+    if rule_name and label.startswith(rule_name + "(") and label.endswith(")"):
+        return label
+    return rule_name if rule_name else label
 
 
 def _is_weapon_profile_token(token: str) -> bool:
@@ -242,7 +288,7 @@ def _units_from_list(
         for w in ud.get("weapons", []):
             wrules: list[str] = []
             for wr in w.get("specialRules", []):
-                wl = _rule_label(wr)
+                wl = _rule_to_string(wr)
                 if wl:
                     wrules.append(wl)
             u["weapons"].append(

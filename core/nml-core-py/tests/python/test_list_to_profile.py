@@ -27,12 +27,18 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 
 from list_to_profile import (  # noqa: E402
+    _rule_to_string,
     _rules_in_upgrade_label,
     profiles_from_army_forge_json,
     profiles_from_list,
 )
 
-ORACLE_DIR = Path.home() / "selfplay_out" / "m3_oracle"
+# NML-1073 M3-3b: m3_oracle_v2 replaces m3_oracle as the gate corpus — the
+# v1 games were recorded with core_selfplay's bare-"AP" bug (see
+# _rule_to_string's docstring), so their header "profiles" no longer match
+# this port's (correct) weapon-rule strings. m3_oracle stays on disk
+# untouched for another builder's unrelated gate.
+ORACLE_DIR = Path.home() / "selfplay_out" / "m3_oracle_v2"
 AI_LISTS_DIR = Path.home() / "nml-mission" / "farm" / "ai_lists"
 
 
@@ -183,6 +189,40 @@ def test_weapon_swap_label_grants_nothing():
     }
     profiles = profiles_from_army_forge_json(data, "test_faction", player=1)
     assert profiles["p1_0_swap"]["special_rules"] == []
+
+
+def test_weapon_rule_keeps_its_rating():
+    """NML-1073 M3-3b: a weapon-level specialRules entry (e.g.
+    {"name": "AP", "rating": 1}) carries no "label" — only "rating". The old
+    label/name fallback silently dropped it to a bare "AP" (ap ends up 0);
+    this must produce "AP(1)", with the weapon's derived "ap" field
+    mirroring the rating."""
+    assert _rule_to_string({"name": "AP", "rating": 1}) == "AP(1)"
+    data = {
+        "gameSystem": "gf",
+        "units": [
+            _selection(
+                "u",
+                "Unit",
+                weapons=[
+                    {
+                        "name": "Reaper Rifle",
+                        "range": 24,
+                        "attacks": 1,
+                        "count": 1,
+                        "specialRules": [
+                            {"name": "AP", "rating": 1},
+                            {"name": "Blast", "rating": 3},
+                        ],
+                    }
+                ],
+            ),
+        ],
+    }
+    profiles = profiles_from_army_forge_json(data, "test_faction", player=1)
+    weapon = profiles["p1_0_u"]["weapons"][0]
+    assert weapon["rules"] == ["AP(1)", "Blast(3)"]
+    assert weapon["ap"] == 1
 
 
 def test_base_radius_is_the_32mm_trainer_default():
