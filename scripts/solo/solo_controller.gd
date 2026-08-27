@@ -192,9 +192,17 @@ var _round_first_slot: Dictionary = {}    # D-wave: round -> slot that activated
 ## presentation glides each model individually in the order it filed to its slot. Empty for a regiment / a
 ## move that produced no plan.
 var last_flow_order: Array = []
-## NML-1073 M4-0a: bumped once per _planner_pick_unit activation — MoveRecorder's "act" field, so a
-## corpus reader can group the several plan_unit_step calls (rungs) one activation's move can produce.
+## NML-1073 M4-0a: bumped once per ACTIVATION — MoveRecorder's "act" field, so a corpus reader can
+## group the several plan_unit_step calls (rungs) one activation's move can produce.
+## M5: the bump lives at the top of _select_ai_unit, NOT in _planner_pick_unit. It used to sit inside
+## the planner pick, so the ~20% of activations that take the one-unit shortcut (:978) never advanced
+## it and their dice/move records were filed under the PREVIOUS pick's number. _select_ai_unit runs
+## exactly once per activation (peek_next_ai_unit caches its draw, activate_next_ai_unit consumes it),
+## so the ordinal now means what its name says.
 var _move_act_seq := 0
+## Ordinal whose FULL act line AiActRecorder already wrote (set right after finish()). Anything else
+## reaching the end of an activation gets the minimal "auto" line instead — never both.
+var _act_line_seq := -1
 
 
 ## NML-1073 M5 D1-B1: read-only accessor — main.gd's tray-roll tap stamps this same ordinal onto
@@ -547,6 +555,15 @@ func activate_next_ai_unit() -> GameUnit:
 	if turn_manager != null:
 		turn_manager.notify_activated(unit)
 	_terrain_meter(unit, last_report)
+	# NML-1073 M5: an activation the planner never PICKED (a one-unit pool returns above the planner
+	# block, so begin()/finish() never ran) still gets a MINIMAL act line — no state, no search trace,
+	# because there is none. It exists so acts.jsonl covers EVERY activation and the dice tap's "act"
+	# ordinal always resolves to a line. The ordinal guard is what keeps a planner-picked activation
+	# from being written twice. No-op when NML_ACT_DUMP is unset.
+	if _act_line_seq != _move_act_seq:
+		AiActRecorder.auto(_move_act_seq, _current_round(),
+			int(unit.unit_properties.get("player_id", 0)), unit.get_name(),
+			int(last_report.get("action", -1)))
 	ai_unit_activated.emit(unit)
 	# M0-3 (NML-1073): one state fingerprint per activation, after every kind (normal act, disembark,
 	# Shaken idle, aircraft) has fully resolved and returned — cheap (one sha256 per activation, not
@@ -948,6 +965,7 @@ func _cargo_should_wait_for_ride(u: GameUnit) -> bool:
 
 
 func _select_ai_unit(eligible: Array) -> GameUnit:
+	_move_act_seq += 1   # NML-1073 M5: ONE bump per activation, above every exit (see _move_act_seq)
 	# TC-081: defer embarked cargo while its transport has not acted — the transport sits in
 	# the same pool, so it always comes first; the deferral yields when ONLY cargo is left
 	# (never a stall). One decision record per unit and round keeps it explainable.
@@ -3018,7 +3036,6 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	# activation contract. Unset (default) = begin() returns {} and finish()
 	# no-ops: byte-identical pick either way.
 	var act_rec := AiActRecorder.begin(state, me, pool, terrain_type_at)
-	_move_act_seq += 1   # NML-1073 M4-0a: this activation's ordinal, for MoveRecorder's "act" field
 	var pick := {}
 	var seam_leaf := {}
 	var doct := OS.get_environment("NML_OPENER_DOCTRINE")
@@ -3044,6 +3061,8 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 		pick = AiPlanner.plan_with_rollout(state, me)
 	BattleSim.prof_mark("search", _prof_srch_t0)
 	AiActRecorder.finish(act_rec, pick)
+	if not act_rec.is_empty():
+		_act_line_seq = _move_act_seq   # this activation already has its FULL line
 	if not bool(pick.get("used", false)):
 		return null
 	var chosen: GameUnit = (state["units"][pick["unit_key"]] as Dictionary)["unit"]

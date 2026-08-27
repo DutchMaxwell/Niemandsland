@@ -84,6 +84,52 @@ func test_planner_picks_which_unit_activates() -> void:
 	assert_that(_kinds(sc2)).not_contains(["planner"])
 
 
+## NML-1073 M5: the act ordinal counts ACTIVATIONS, not planner picks. It used to be bumped inside
+## _planner_pick_unit, so the one-unit shortcut (:978, ~20% of table activations) never advanced it
+## and every dice/move record of those activations was filed under the PREVIOUS pick's number.
+func test_act_ordinal_counts_activations_not_planner_picks() -> void:
+	for preset in ["", "nachtmahr", "planner_v0"]:
+		var sc := _controller()
+		if preset != "":
+			sc.set_difficulty(2, SoloDifficulty.for_grade(preset))
+		var taker: GameUnit = sc.army_manager.game_units["Taker"]
+		assert_int(sc.move_act_seq()).is_equal(0)
+		# A ONE-unit pool: returns above the planner block on every preset.
+		sc._select_ai_unit([taker])
+		assert_int(sc.move_act_seq()) \
+			.override_failure_message("one-unit activation did not advance the act ordinal (preset '%s')" % preset) \
+			.is_equal(1)
+
+
+## The ordinal advances ONCE per activation, not once per _select_ai_unit call: peek_next_ai_unit
+## caches its draw and activate_next_ai_unit consumes it.
+func test_peek_then_activate_bumps_the_ordinal_once() -> void:
+	var sc := _controller()
+	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
+	assert_object(sc.peek_next_ai_unit()).is_not_null()
+	assert_int(sc.move_act_seq()).is_equal(1)
+	assert_object(sc.activate_next_ai_unit()).is_not_null()
+	assert_int(sc.move_act_seq()) \
+		.override_failure_message("peek + activate bumped the act ordinal twice for one activation") \
+		.is_equal(1)
+
+
+## The guard: a planner-PICKED activation is marked as already having its full act line, so it can
+## never also get the minimal auto line. A one-unit activation is not marked, so it gets one.
+func test_only_unpicked_activations_are_left_for_the_auto_line() -> void:
+	var sc := _controller()
+	var idler := _unit(2, [Vector3(60.0 * IN2M, 0, 60.0 * IN2M)], "Idler")
+	sc.army_manager.game_units["Idler"] = idler
+	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
+	var taker: GameUnit = sc.army_manager.game_units["Taker"]
+	# NML_ACT_DUMP is unset in the suite, so begin() returns {} and nothing is marked — that is the
+	# byte-identical path. What must hold either way is that the shortcut never claims a line.
+	sc._select_ai_unit([taker])
+	assert_int(sc._act_line_seq) \
+		.override_failure_message("the one-unit shortcut claimed an act line it never wrote") \
+		.is_not_equal(sc.move_act_seq())
+
+
 func test_solve_planner_maps_pick_to_adoption_shape() -> void:
 	var sc := _controller()
 	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
