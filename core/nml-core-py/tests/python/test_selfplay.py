@@ -277,6 +277,40 @@ def test_the_charge_gate_knob_is_load_bearing():
     print("charge gate: %d extra charge candidates once the gate is off" % extra)
 
 
+def test_the_charge_gate_mode_stamps_what_the_table_stamped():
+    """GATE D2 (NML-1073) in miniature, on the in-repo arena recording.
+
+    `charge_gate="table"` has to stamp what `SoloController` stamped: for every
+    act of `acts_25.jsonl` the trainer's `charge_illegal` matrix must equal the
+    one the recorder read off the LIVE Callable, pair for pair. RED-GREEN: with
+    the mode "off" the trainer stamps `{}`, which is what the recorder writes
+    for a caller whose Callable is invalid — so the same comparison must go red
+    on every recorded pair."""
+    assert sp.resolve_charge_gate("table") is True
+    assert sp.resolve_charge_gate("off") is False
+    with pytest.raises(ValueError):
+        sp.resolve_charge_gate("on")
+
+    header, acts = read_acts("acts_25.jsonl")
+    cores = {}
+    for mode in sp.CHARGE_GATE_MODES:
+        h = dict(header)
+        h["knobs"] = dict(header.get("knobs", {}), charge_gate=sp.resolve_charge_gate(mode))
+        cores[mode] = nml_core.load(str(REPO))
+        cores[mode].set_header(h)
+
+    pairs = red = 0
+    for act in acts:
+        want = act["charge_illegal"]
+        assert want, "the recording carries no stamp — it cannot gate anything"
+        assert sp.charge_illegal_stamp(cores["table"], cores["table"].state_of(act["state"])) == want
+        assert sp.charge_illegal_stamp(cores["off"], cores["off"].state_of(act["state"])) == {}
+        pairs += len(want)
+        red += len(want)
+    assert pairs > 0
+    print("charge gate stamp: %d/%d pairs equal, %d red with the gate off" % (pairs, pairs, red))
+
+
 def test_the_top_k_horizon_env_knobs_mirror_ai_planner(monkeypatch):
     """`NML_TOP_K` / `NML_HORIZON` (ai_planner.gd:49-56, 290-297) reach the fast
     trainer the same way: unset is the trainer's own default, set is
