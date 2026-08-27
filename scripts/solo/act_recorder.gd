@@ -92,6 +92,26 @@ static func finish(pending: Dictionary, pick: Dictionary) -> void:
 	_count += 1
 
 
+## NML-1073 M5: the MINIMAL line for an activation the planner never PICKED. A side's LAST
+## un-activated unit takes _select_ai_unit's one-unit shortcut, above the planner block, so
+## begin()/finish() never ran for it — 1428 of 7106 activations (20.1%) in the 168-game reference
+## corpus. Without this line acts.jsonl is not a thinner sample of the table, it is a BIASED one,
+## and the dice tap's "act" ordinal points at the previous pick's line for every one of them.
+## No state and no search trace: there is none to record. SoloController guards the call with its
+## own ordinal flag, so a planner-picked activation never gets both kinds of line.
+## No-op when the seam is off, when the line cap is hit, or before the header exists (line 1 must
+## stay the header; a game whose very FIRST activation is auto-played would otherwise start the
+## file with an act line, which no reader expects).
+static func auto(act: int, round_no: int, player: int, unit: String, action: int) -> void:
+	var f := _dump_stream()
+	if f == null or _count >= _max or not _header_written:
+		return
+	f.store_line(JSON.stringify({"kind": "auto", "act": act, "round": round_no,
+		"player": player, "unit": unit, "action": action}, "", true, true))
+	f.flush()   # a same-process reader (the unit test) must see the line without a close()
+	_count += 1
+
+
 ## NML-1073 M2-0: closes the stream at a GAME's end (arena_match.gd) or a TEST's
 ## end (after_test) — flushed and closed where the writer stands, not left to
 ## process teardown. Resets every cached static so a later begin() reopens a

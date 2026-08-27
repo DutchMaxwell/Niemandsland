@@ -85,6 +85,50 @@ func after_test() -> void:
 	DirAccess.remove_absolute(_DUMP_DIR)
 
 
+## NML-1073 M5: auto() writes ONE minimal line for an activation the planner never picked, and
+## it carries the activation ordinal so the dice tap's "act" field resolves to a real line.
+func test_auto_writes_a_minimal_line_for_an_unpicked_activation() -> void:
+	var state := _state()
+	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
+	var pending := AiActRecorder.begin(state, 1, pool, Callable())
+	AiActRecorder.finish(pending, {"used": true, "unit_key": "A",
+		"action": {"unit": "A", "kind": AiDecision.Action.HOLD}})
+	AiActRecorder.auto(2, 1, 2, "B", AiDecision.Action.RUSH)
+
+	var lines := _dump_lines()
+	assert_int(lines.size()).is_equal(3)   # header + act + auto
+	var auto_line: Dictionary = JSON.parse_string(lines[2])
+	assert_str(str(auto_line["kind"])).is_equal("auto")
+	assert_int(int(auto_line["act"])).is_equal(2)
+	assert_int(int(auto_line["round"])).is_equal(1)
+	assert_int(int(auto_line["player"])).is_equal(2)
+	assert_str(str(auto_line["unit"])).is_equal("B")
+	assert_int(int(auto_line["action"])).is_equal(AiDecision.Action.RUSH)
+	# MINIMAL means minimal: no state, no trace — that is the whole point of the line.
+	assert_bool(auto_line.has("state")).is_false()
+	assert_bool(auto_line.has("trace")).is_false()
+
+
+## Line 1 must stay the header, so an auto line before any planner pick is dropped rather than
+## written as the first line of the file.
+func test_auto_no_ops_before_the_header_exists() -> void:
+	AiActRecorder.auto(1, 1, 1, "A", AiDecision.Action.HOLD)
+	assert_int(_dump_lines().size()).is_equal(0)
+
+
+func _dump_lines() -> Array:
+	var f := FileAccess.open(_DUMP_DIR.path_join("acts.jsonl"), FileAccess.READ)
+	if f == null:
+		return []
+	var out: Array = []
+	while not f.eof_reached():
+		var line := f.get_line()
+		if line != "":
+			out.append(line)
+	f.close()
+	return out
+
+
 ## begin() before the pick, finish() after — one header line + one act line,
 ## every key from the M2-0a spec present and parsable.
 func test_begin_and_finish_write_header_and_act_line() -> void:
