@@ -81,7 +81,11 @@ from typing import Any
 
 import nml_core
 
-from list_to_profile import _faction_from_path, profiles_from_army_forge_json
+from list_to_profile import (
+    _faction_from_path,
+    profiles_from_army_forge_json,
+    selections_from_army_forge_json,
+)
 
 # core_selfplay.gd:20-23
 IN2M = 0.0254
@@ -139,6 +143,14 @@ def load_army(path: str | Path, player: int) -> list[dict[str, Any]]:
     return list(profiles.values())
 
 
+def load_selections(path: str | Path, player: int) -> dict[str, tuple[str, str]]:
+    """The same list's `(selection_id, join_to_unit)` per unit key — the input
+    `derive_attachment` needs and the profile deliberately does not carry."""
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    return selections_from_army_forge_json(data, player)
+
+
 # -------------------------------------------------------------- deployment ---
 
 
@@ -170,12 +182,48 @@ def deploy_zone(
 # ----------------------------------------------------------------- capture ---
 
 
+def derive_attachment(
+    units: list[dict[str, Any]], selections: dict[str, tuple[str, str]]
+) -> tuple[dict[str, list[str]], dict[str, str]]:
+    """`BattleSim.capture`'s NML-1081 fallback (battle_sim.gd:1352-1369) over
+    the trainer's own units, in capture order.
+
+    An imported or AI army never calls `EquipmentDistributor.attach_hero_to_unit`
+    (that is the multiplayer path), so runtime attachment is always empty and the
+    table derives it from the LIST instead: one `selection_id -> unit key` index
+    over BOTH armies — a later selection overwrites an earlier one with the same
+    id, which is the table's behaviour and not a guard this port may add — then
+    every unit whose `join_to_unit` names an indexed selection becomes that
+    host's attached hero. The `attached` lists are appended in capture order,
+    which is the order the recorded state carries them in.
+
+    Returns `(attached, attached_to)` keyed by unit id, both filled for every
+    unit — `[]` and `""` for a unit that neither joins nor is joined."""
+    by_sel: dict[str, str] = {}
+    for u in units:
+        sel = selections.get(u["unit_id"], ("", ""))[0]
+        if sel:
+            by_sel[sel] = u["unit_id"]
+    attached: dict[str, list[str]] = {u["unit_id"]: [] for u in units}
+    attached_to: dict[str, str] = {u["unit_id"]: "" for u in units}
+    for u in units:
+        key = u["unit_id"]
+        join = selections.get(key, ("", ""))[1]
+        if not join or join not in by_sel:
+            continue
+        attached_to[key] = by_sel[join]
+        attached[by_sel[join]].append(key)
+    return attached, attached_to
+
+
 def capture(
     units: list[dict[str, Any]],
     positions: list[list[list[float]]],
     reads: dict[str, dict[str, Any]],
     board: "nml_core.Board",
     objectives: list[list[float]],
+    attached: dict[str, list[str]] | None = None,
+    attached_to: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """`_capture` (core_selfplay.gd:608-637) through `BattleSim.capture` and
     `BattleSim.state_to_plain(state, false)` — the plain state the search reads.
@@ -208,10 +256,12 @@ def capture(
             # `initialize_caster_points` game_unit.gd:417-422 — the build-time
             # grant is the whole Caster(X) rating; round 2+ refills on top.
             "casts": max(int(u["caster_value"]), 0),
-            # The trainer never attaches heroes: its OPRUnit carries neither a
-            # selectionId nor a joinToUnit, so capture's derivation finds none.
-            "attached": [],
-            "attached_to": "",
+            # `hero_attach="off"` (the default) is the M3-6b trainer: its OPRUnit
+            # carries neither a selectionId nor a joinToUnit, so capture's
+            # derivation finds none. `derive_attachment` fills these for
+            # `hero_attach="table"` (NML-1073 D4).
+            "attached": list(attached[key]) if attached is not None else [],
+            "attached_to": attached_to[key] if attached_to is not None else "",
             "bands": {
                 "advance": u["move_bands"]["advance"],
                 "rush": u["move_bands"]["rush"],
@@ -345,6 +395,35 @@ def charge_illegal_stamp(core, state) -> dict[str, bool]:
     which is exactly what the recorder writes for a caller whose Callable is
     invalid."""
     return core.charge_illegal_matrix(state)
+
+
+#: `hero_attach` modes. "off" is the default and is what every corpus written
+#: before this knob has: `tools/core_selfplay.gd` hands each unit a blank
+#: `OPRApiClient.OPRUnit` whose `selection_id` / `join_to_unit` are unset
+#: (M3-6b left them so deliberately), so `BattleSim.capture`'s NML-1081
+#: derivation finds nothing and no hero is ever joined. "table" reads the two
+#: fields off the Army-Forge list the way the table does and derives
+#: `attached` / `attached_to` from them (`derive_attachment`), plus the one
+#: PROFILE field that follows from attachment: `attached_hero_rules`, the alive
+#: attached heroes' own rules, which is what `AiEv.rule_on_all_models`
+#: (ai_ev.gd:79-83) quantifies over before a unit-wide rule may fire.
+#:
+#: LIMIT, deliberate: the trainer stamps the header profile once, at deployment,
+#: and never rewrites it per activation the way `BattleSim.unit_profile_dyn`
+#: does — so a hero that FALLS keeps voting here. That is the gap
+#: `state::ProfileDyn` exists for and it belongs to a later rung, not to D4.
+HERO_ATTACH_MODES = ("off", "table")
+
+
+def resolve_hero_attach(hero_attach: str) -> bool:
+    """`hero_attach` as the bit `play_game` branches on. An unknown mode RAISES:
+    a trainer that silently ignored the mode would write a corpus whose header
+    claims a rule it did not play."""
+    if hero_attach not in HERO_ATTACH_MODES:
+        raise ValueError(
+            "hero_attach must be one of %s, not %r" % (list(HERO_ATTACH_MODES), hero_attach)
+        )
+    return hero_attach == "table"
 
 
 # `AiActRecorder._header_line` act_recorder.gd:144-150 resolves these from the
@@ -748,6 +827,7 @@ def play_game(
     top_k: int | None = None,
     horizon: int | None = None,
     charge_gate: str = "off",
+    hero_attach: str = "off",
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -769,6 +849,11 @@ def play_game(
     offer charges against aircraft, past the rush band and through difficult
     ground; "table" wires the arena's own gate. It is stamped into the result's
     `knobs` alongside the search pair — see `CHARGE_GATE_MODES`.
+
+    `hero_attach` is the D4 rung: "off" (the default) is byte-identical to every
+    corpus written before it, "table" joins the heroes the list joins — see
+    `HERO_ATTACH_MODES`. It is stamped into the result's `knobs` alongside the
+    search pair.
 
     `sidecars` writes the pair/fork counterfactual blocks (NML-1073 M3-9); they
     resolve on clones under generators of their own, so the PLAYED game is
@@ -798,6 +883,18 @@ def play_game(
         raise ValueError("empty army (%s / %s)" % (list_p1, list_p2))
     units = units1 + units2
     profiles = {u["unit_id"]: u for u in units}
+    # D4: derived BEFORE the header, because `attached_hero_rules` is a PROFILE
+    # field the crate reads out of it (state.rs:71). "off" touches neither the
+    # profiles nor the capture, so it stays byte-identical.
+    attached = attached_to = None
+    if resolve_hero_attach(hero_attach):
+        selections = dict(load_selections(list_p1, 1))
+        selections.update(load_selections(list_p2, 2))
+        attached, attached_to = derive_attachment(units, selections)
+        for u in units:
+            u["attached_hero_rules"] = [
+                profiles[h]["special_rules"] for h in attached[u["unit_id"]]
+            ]
 
     board, terrain, pieces = load_board(seed, bank_dir)
     if core is None:
@@ -836,7 +933,7 @@ def play_game(
         pos2 = deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, side)
         deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng)
         deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng)
-    plain = capture(units, pos1 + pos2, reads, board, objectives)
+    plain = capture(units, pos1 + pos2, reads, board, objectives, attached, attached_to)
     state = core.state_of(plain)
 
     owners = [0, 0, 0]
@@ -882,7 +979,12 @@ def play_game(
         # e.g. the old training corpus's `NML_TOP_K=2 NML_HORIZON=1`. Excluded
         # from the Godot parity gates alongside the other Python-only extras
         # (sidecar_gate.py's `EXCLUDED_TOP`).
-        "knobs": {"top_k": eff_top_k, "horizon": eff_horizon, "charge_gate": charge_gate},
+        "knobs": {
+            "top_k": eff_top_k,
+            "horizon": eff_horizon,
+            "charge_gate": charge_gate,
+            "hero_attach": hero_attach,
+        },
         "seed": seed,
         "dice_seed": seed,
         "grades": {"p1": "planner_core", "p2": "planner_core"},
@@ -991,6 +1093,14 @@ def main(argv: list[str]) -> int:
         help="'table' wires SoloController.charge_candidate_illegal; 'off' (default) "
         "is tools/core_selfplay.gd, which stamps no gate at all",
     )
+    ap.add_argument(
+        "--hero-attach",
+        choices=list(HERO_ATTACH_MODES),
+        default="off",
+        help="'table' derives attached/attached_to from the list's "
+        "selectionId/joinToUnit the way BattleSim.capture does; 'off' (default) "
+        "is tools/core_selfplay.gd, which joins no hero at all",
+    )
     a = ap.parse_args(argv)
 
     core = nml_core.load(a.repo)
@@ -1011,6 +1121,7 @@ def main(argv: list[str]) -> int:
             top_k=a.top_k,
             horizon=a.horizon,
             charge_gate=a.charge_gate,
+            hero_attach=a.hero_attach,
         )
         res["wall_seconds"] = round(time.perf_counter() - t0, 3)
         if a.out:
