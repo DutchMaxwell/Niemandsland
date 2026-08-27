@@ -26,6 +26,12 @@ HELD SINCE M3-9b: `terrain` (the drawing list, off the bank's `pieces`) and
 EXCLUDED, and named rather than quietly skipped (`--excluded` prints the list):
 
   * `tool` — deliberate provenance ("core_selfplay" vs "core_selfplay_py").
+  * `knobs` — the Python harness's `top_k`/`horizon` mode stamp
+    (selfplay.py's `TRAINER_KNOBS` docstring); `tools/core_selfplay.gd` never
+    writes such a field, so it is Python-only provenance like `tool`, not a
+    held quantity. `--top-k` / `--horizon` (default: `NML_TOP_K` /
+    `NML_HORIZON` env or the planner's own defaults, ai_planner.gd:49-56,
+    290-297) forward straight to `selfplay.play_game`.
 
 `armies` is held by list BASENAME: a reference recorded on the fleet carries that
 machine's path for the same list, and the path is not a rule.
@@ -63,7 +69,7 @@ import nml_core  # noqa: E402
 import selfplay as sp  # noqa: E402
 
 #: Top-level result fields this gate does not hold — see the module docstring.
-EXCLUDED_TOP = ("tool", "rounds_played", "rounds_log", "wall_seconds")
+EXCLUDED_TOP = ("tool", "knobs", "rounds_played", "rounds_log", "wall_seconds")
 #: Per-row fields this gate does not hold.
 EXCLUDED_ROW = ("intent", "unit", "kind", "action")
 #: `planner_positions[].board` column indices that carry a FLOAT.
@@ -239,6 +245,18 @@ def main(argv: list[str]) -> int:
         help="RED PROOF: shift every drawn piece N cells along +x; the gate must FAIL",
     )
     ap.add_argument("--excluded", action="store_true", help="print the excluded fields and exit")
+    ap.add_argument(
+        "--top-k",
+        type=int,
+        default=None,
+        help="planner top_k override; default is NML_TOP_K env or 6 (ai_planner.gd:49-56)",
+    )
+    ap.add_argument(
+        "--horizon",
+        type=int,
+        default=None,
+        help="planner horizon override; default is NML_HORIZON env or 2 (ai_planner.gd:290-297)",
+    )
     a = ap.parse_args(argv)
 
     if a.excluded:
@@ -267,6 +285,7 @@ def main(argv: list[str]) -> int:
             seed, a.army1, a.army2, a.repo, a.bank, core, sidecar_skip=a.red,
             legacy_source_qd=a.red_source_qd,
             terrain_shift_cells=a.red_terrain_shift,
+            top_k=a.top_k, horizon=a.horizon,
         )
         seconds.append(time.perf_counter() - t0)
         compared += 1
