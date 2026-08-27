@@ -29,14 +29,39 @@ target:
   planner picks (a dry side hands the tail to the other), and those land on the
   same defender.
 
-VERDICTS per act: `equal` (every roll matched), `both_silent` (neither side rolled
-a die), `table_silent` (the trainer's volley fired, the TABLE's did not),
-`port_silent`, `shape` (a count/target parted) and `faces` (the shape held and a
-face did not — which would mean the tray twin itself is wrong).
+VERDICTS per act. `want` is EVERY roll the table drew under this activation
+ordinal, never a prefix — truncating it would hide the case where the table drew
+MORE than the port did:
 
-RED PROOF: `--mode off` runs the SAME acts down the expected-value path
-(`resolve_stochastic_rng`), which draws nothing from the tray. Every act that
-the table rolled dice for must then go red, and none may report `equal`.
+  `full_equal`   — same number of rolls, every roll identical. THIS is the gate's
+                   number, and the tool exits 1 while any act misses it (pass
+                   `--report-only` to survey instead of gate).
+  `prefix_equal` — the overlap held but the lengths differ. It splits into
+                   `table_longer` (the table drew rolls the port did not — often
+                   a LATER activation sharing the ordinal, because `move_act_seq`
+                   bumps once per planner pick and a dry side hands the tail to
+                   the other; benign but unproven) and `port_longer` (the port
+                   drew rolls the table never did — never benign).
+  `both_silent` / `table_silent` / `port_silent` — one side or both drew nothing.
+                   These are classified and CLOSED; they never fall through into
+                   the length or shape counters.
+  `shape` / `faces` — a roll parted inside the overlap. `faces` after `shape`
+                   held would mean the tray twin itself is wrong.
+
+THE TWO REDS, and they are not equals:
+
+  `--red-misseed` is the LOAD-BEARING one. It seeds the tray with `dice_seed + 1`
+  and changes nothing else: every die count and every target still comes out of
+  the same recorded state, so the shapes line up, the comparison REACHES the
+  faces, and every act that rolls must part there. A green here would mean the
+  faces are not actually being compared. The bar is stated in dice, not in acts:
+  an activation of one or two dice CAN agree on a wrong seed by chance (1/6,
+  1/36) and two of the 670 do, so the red holds when no act that staked MORE
+  than two dice survived — and the surviving sizes are printed, not hidden.
+
+  `--mode off` reruns the same acts down the expected-value path. It draws no
+  dice at all, so it proves the REPORTING CHANNEL — that an absent stream is
+  noticed — and nothing whatever about whether the faces are right.
 
     PYTHONPATH=<module> python core/nml-core-py/tools/shoot_replay_gate.py \\
         --ref ~/selfplay_out/qbd_ref --limit 3
@@ -105,7 +130,7 @@ def defender_state(plain: dict, key: str) -> tuple[int, int]:
     return (int(u["alive"]), int(sum(u["wounds"])))
 
 
-def run(ref: Path, repo: str, mode: str, limit: int, verbose: int) -> int:
+def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: bool) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -114,8 +139,10 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int) -> int:
         return 1
 
     tally = {k: 0 for k in
-             ("acts", "equal", "both_silent", "table_silent", "port_silent", "shape", "faces",
-              "declined", "rolls_equal", "rolls", "hits_equal", "hits", "next_checked", "next_equal")}
+             ("acts", "prefix_equal", "full_equal", "table_longer", "port_longer",
+              "both_silent", "table_silent", "port_silent", "shape", "faces",
+              "declined", "rolls_equal", "rolls", "hits_equal", "hits", "next_checked",
+              "next_equal", "equal_over_2", "equal_dice_max")}
     unported: dict[str, int] = {}
     reasons: dict[str, int] = {}
     firsts: list[str] = []
@@ -134,11 +161,15 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int) -> int:
             tally["acts"] += 1
             i0 = first_at_or_after(dice, k)
             state = core.state_of(act["state"])
-            tray = nml_core.Tray(seed)
+            # `--red-misseed` moves the tray one seed over. Every count and
+            # every target still comes out of the same state, so the SHAPE holds
+            # and the comparison reaches the faces — which is exactly what has
+            # to go red, and what `--mode off` (no dice at all) cannot prove.
+            tray = nml_core.Tray(seed + 1 if mode == "misseed" else seed)
             if burn[i0]:
                 tray.roll(burn[i0])
             try:
-                if mode == "table":
+                if mode in ("table", "misseed"):
                     nxt, report = core.resolve_with_tray(state, action, nml_core.Rng(0), tray)
                 else:
                     nxt = core.resolve_stochastic_rng(state, action, nml_core.Rng(0))
@@ -152,18 +183,27 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int) -> int:
                 unported[name] = unported.get(name, 0) + 1
 
             got = [(r["kind"], r["count"], r["target"], r["faces"]) for r in report["rolls"]]
+            # EVERY roll the table drew under this activation ordinal, NOT a
+            # prefix: truncating to `len(got)` would hide "the table drew more
+            # than the port did", which is the whole `table_longer` bucket.
             want = [(r["roll_kind"], r["count"], r["target"], r["faces"])
-                    for r in dice[i0:] if int(r["act"]) == k][:len(got) if got else None]
-            # `want` is the PREFIX of this activation's own rolls: the table can
-            # run further activations under the same ordinal, and those are not
-            # this volley's.
+                    for r in dice[i0:] if int(r["act"]) == k]
             if not got and not want:
                 tally["both_silent"] += 1
                 continue
             if got and not want:
                 tally["table_silent"] += 1
-            elif want and not got:
+                if len(firsts) < 3:
+                    firsts.append("%s act %d [table_silent] %s — the port drew %d roll(s), "
+                                  "the table none" % (d.name, k, action["shoot"][-6:], len(got)))
+                continue
+            if want and not got:
                 tally["port_silent"] += 1
+                if len(firsts) < 3:
+                    firsts.append("%s act %d [port_silent] %s — the table drew %d roll(s), "
+                                  "the port none" % (d.name, k, action["shoot"][-6:], len(want)))
+                continue
+
             verdict = "equal"
             why = ""
             tally["rolls"] += max(len(got), len(want))
@@ -181,38 +221,64 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int) -> int:
                     break
                 if g[3] != w[3]:
                     verdict, why = "faces", "roll %d %s: %s vs table %s" % (i + 1, g[0], g[3], w[3])
+                    reasons["faces"] = reasons.get("faces", 0) + 1
                     break
                 tally["rolls_equal"] += 1
                 tally["hits"] += 1
                 if successes(g[3], g[2]) == successes(w[3], w[2]):
                     tally["hits_equal"] += 1
-            if verdict == "equal" and len(got) != len(want):
-                verdict = "shape"
-                reasons["length"] = reasons.get("length", 0) + 1
-                why = "%d rolls vs the table's %d for this activation" % (len(got), len(want))
-            if verdict == "equal":
-                tally["equal"] += 1
+            if verdict != "equal":
+                tally[verdict] += 1
+                if why and len(firsts) < 3:
+                    firsts.append("%s act %d [%s] %s — %s"
+                                  % (d.name, k, verdict, action["shoot"][-6:], why))
+            else:
+                # The overlap held. PREFIX-equal is that much; FULL-equal also
+                # needs the two lists to be the same length. They part when the
+                # table ran further activations under this same ordinal
+                # (`table_longer`, benign but unproven) or when the port drew
+                # rolls the table never did (`port_longer`, never benign).
+                tally["prefix_equal"] += 1
+                # How many dice this act actually staked on the comparison. A
+                # 2-die act agreeing by CHANCE is a 1-in-36 event, so it says
+                # nothing; the misseed red below is measured on the acts that
+                # staked more than that.
+                staked = sum(g[1] for g in got)
+                tally["equal_dice_max"] = max(tally["equal_dice_max"], staked)
+                if staked > 2:
+                    tally["equal_over_2"] += 1
+                if len(got) == len(want):
+                    tally["full_equal"] += 1
+                elif len(want) > len(got):
+                    tally["table_longer"] += 1
+                    reasons["length"] = reasons.get("length", 0) + 1
+                else:
+                    tally["port_longer"] += 1
+                    reasons["length"] = reasons.get("length", 0) + 1
+                    if len(firsts) < 3:
+                        firsts.append("%s act %d [port_longer] %s — %d rolls vs the table's %d"
+                                      % (d.name, k, action["shoot"][-6:], len(got), len(want)))
                 if k < len(lines):
                     tally["next_checked"] += 1
                     if defender_state(nxt.plain(), action["shoot"]) == defender_state(
                             lines[k]["state"], action["shoot"]):
                         tally["next_equal"] += 1
-            elif why and len(firsts) < 3:
-                firsts.append("%s act %d [%s] %s — %s" % (d.name, k, verdict, action["shoot"][-6:], why))
-            if verdict in ("shape", "faces") and not (got and not want) and not (want and not got):
-                tally[verdict] += 1
-            if verbose and verdict != "equal":
-                print("  %s act %d %s: got %s want %s" % (d.name, k, verdict, got, want))
 
-    label = "GATE D1-B4" if mode == "table" else "RED D1-B4 (dice=expected)"
+
+    label = {"table": "GATE D1-B4",
+             "off": "RED D1-B4 --mode off (dice=expected)",
+             "misseed": "RED D1-B4 --red-misseed (tray on dice_seed+1)"}[mode]
     print()
     print("%s over %d games, %d shooting acts (%.1fs)" % (
         label, len(games), tally["acts"], time.perf_counter() - t0))
-    print("  stream: %d/%d acts roll for roll EQUAL   (%d rolls equal of %d compared)"
-          % (tally["equal"], tally["acts"], tally["rolls_equal"], tally["rolls"]))
+    print("  EQUAL : %d/%d acts FULL-equal (same roll count, every roll identical)"
+          % (tally["full_equal"], tally["acts"]))
+    print("        : %d/%d acts PREFIX-equal (the overlap held; %d table_longer, %d port_longer)"
+          % (tally["prefix_equal"], tally["acts"], tally["table_longer"], tally["port_longer"]))
+    print("  rolls : %d of %d compared rolls equal" % (tally["rolls_equal"], tally["rolls"]))
     print("  hits  : %d/%d rolls score the same hits/blocks off the recorded faces"
           % (tally["hits_equal"], tally["hits"]))
-    print("  next  : %d/%d equal defender (alive, wounds) at the next act"
+    print("  next  : %d/%d equal defender (alive, wounds) at the next act (prefix-equal acts)"
           % (tally["next_equal"], tally["next_checked"]))
     print("  split : %d both silent, %d table silent, %d port silent, %d shape, %d faces, %d declined"
           % (tally["both_silent"], tally["table_silent"], tally["port_silent"],
@@ -223,24 +289,65 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int) -> int:
         ", ".join("%s=%d" % kv for kv in sorted(unported.items())) or "none"))
     for f in firsts:
         print("  first : %s" % f)
-    if mode != "table":
-        ok = tally["equal"] == 0 and tally["acts"] > 0
-        print("  RED %s" % ("held (the tray is load-bearing)" if ok else "FAILED — the EV path matched"))
+
+    if mode == "off":
+        # The reporting channel only: with no dice drawn there is nothing to
+        # compare, so this proves the tool NOTICES an absent stream — not that
+        # the stream is right. `--red-misseed` is the load-bearing one.
+        ok = tally["prefix_equal"] == 0 and tally["acts"] > 0
+        print("  RED (reporting channel) %s"
+              % ("held — no tray, no equal act" if ok else "FAILED — the EV path matched"))
         return 0 if ok else 1
-    print("  measured, not asserted: this gate REPORTS; the bar is the trend, act by act")
-    return 0
+    if mode == "misseed":
+        # LOAD-BEARING: the shapes still line up, so the comparison must reach
+        # the faces and fail there. A green here would mean the faces are not
+        # actually being compared.
+        # A wrong seed must redden every act that staked more than a coin-flip's
+        # worth of dice. Acts of 1-2 dice CAN agree by chance (1/6, 1/36) and two
+        # of them do over 670 acts — counting those as a red failure would be
+        # arithmetic denial, so the bar is `equal_over_2 == 0` and the surviving
+        # sizes are printed rather than hidden.
+        ok = tally["faces"] > 0 and tally["equal_over_2"] == 0
+        print("  RED (load-bearing) %s"
+              % ("held — %d acts reached the faces and parted; the %d that did not staked "
+                 "at most %d dice (chance, 1-in-6^n)"
+                 % (tally["faces"], tally["prefix_equal"], tally["equal_dice_max"])
+                 if ok else
+                 "FAILED — %d act(s) of more than 2 dice survived a wrong-seeded tray"
+                 % tally["equal_over_2"]))
+        return 0 if ok else 1
+
+    ok = tally["acts"] > 0 and tally["full_equal"] == tally["acts"]
+    if report_only:
+        print("  REPORT ONLY — %d/%d acts short of full equality, exit 0 by request"
+              % (tally["acts"] - tally["full_equal"], tally["acts"]))
+        return 0
+    print("  %s" % ("PASS" if ok else
+                    "FAIL — %d of %d shooting acts are not FULL-equal (see the buckets above)"
+                    % (tally["acts"] - tally["full_equal"], tally["acts"])))
+    return 0 if ok else 1
 
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--ref", required=True, help="directory of arena game dirs with dice.jsonl")
     ap.add_argument("--repo", default=str(Path(__file__).resolve().parents[3]))
-    ap.add_argument("--mode", choices=("table", "off"), default="table",
-                    help="'table' is the gate; 'off' is the RED PROOF and must go red")
+    ap.add_argument("--mode", choices=("table", "off", "misseed"), default="table",
+                    help="'table' is the gate; 'off' reruns the acts down the expected-value "
+                         "path, which proves the REPORTING CHANNEL only (no dice are drawn, so "
+                         "nothing about the faces is tested); 'misseed' is the load-bearing red")
+    ap.add_argument("--red-misseed", action="store_true",
+                    help="RED PROOF: seed the tray with dice_seed+1. Every count and target is "
+                         "unchanged, so the shapes hold and the FACES must part on every act "
+                         "that rolls")
+    ap.add_argument("--report-only", action="store_true",
+                    help="exit 0 even when acts are short of full equality (this tool is a GATE "
+                         "by default and exits 1)")
     ap.add_argument("--limit", type=int, default=0, help="only the first N game dirs")
     ap.add_argument("--verbose", type=int, default=0, help="print every diverging act")
     a = ap.parse_args(argv)
-    return run(Path(a.ref).expanduser(), a.repo, a.mode, a.limit, a.verbose)
+    mode = "misseed" if a.red_misseed else a.mode
+    return run(Path(a.ref).expanduser(), a.repo, mode, a.limit, a.verbose, a.report_only)
 
 
 if __name__ == "__main__":
