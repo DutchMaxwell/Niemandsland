@@ -8,6 +8,7 @@
 pub mod acts;
 pub mod arbitration;
 pub mod combat;
+pub mod dice;
 pub mod gate;
 pub mod geom;
 pub mod io;
@@ -46,6 +47,7 @@ pub use arbitration::{
     arbitrate, arbitrate_bent, full_playout, full_playout_bent, ArbBend, Arbitration,
     PlayoutResult, PLAYOUT_CAP, PLAYOUT_DECIDE_MARGIN, PLAYOUT_MAX_ROUNDS,
 };
+pub use dice::{faces_to_hits, Tray};
 pub use gate::{charge_illegal, charge_illegal_tuned};
 pub use io::{
     load_nodes, plain_of, read_nodes, state_from_json, Action, Node, NodeCorpus, Seams,

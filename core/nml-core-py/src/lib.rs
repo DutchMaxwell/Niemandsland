@@ -61,7 +61,7 @@ use nmlcore::rows::{Cell, RowEncoder};
 use nmlcore::unit::{StaticsCache, UnitStatic};
 use nmlcore::{
     geom, io, mission, reply_threat, resolve_on_board, resolve_stochastic_on_board, score, Action,
-    GodotRng, PlainTerrain, Registries, Seams, State as CoreState, Terrain,
+    GodotRng, PlainTerrain, Registries, Seams, State as CoreState, Terrain, Tray,
     Unsupported as CoreUnsupported,
 };
 
@@ -435,6 +435,54 @@ impl PyRng {
 
     fn __repr__(&self) -> String {
         format!("<nml_core.Rng state {}>", self.inner.state_i64())
+    }
+}
+
+// ------------------------------------------------------------------- Tray ---
+
+/// The table's DICE TRAY (`nmlcore::Tray`) — NML-1073 M5 D1-B3.
+///
+/// A SECOND stream, deliberately: `Rng` above is the game's own generator
+/// (deployment, opener roll-off, played activations), while the tray is the
+/// one `main.seed_tray_rng(_dice_seed)` seeds after deployment
+/// (arena_match.gd:478, main.gd:7120-7121). Sharing one generator between the
+/// two could never reproduce the table, however correct the roll order got.
+///
+/// `roll(count)` is `main.gd:7152-7159` including its `maxi(1, count)`: a
+/// zero-die roll returns ONE face and burns ONE draw.
+#[pyclass(unsendable, module = "nml_core", name = "Tray")]
+pub struct PyTray {
+    inner: Tray,
+}
+
+#[pymethods]
+impl PyTray {
+    /// `main.seed_tray_rng(seed)`.
+    #[new]
+    fn new(seed: i64) -> PyTray {
+        PyTray { inner: Tray::seeded(seed) }
+    }
+
+    /// Re-seeds in place, as a second `seed_tray_rng` call would.
+    fn seed(&mut self, seed: i64) {
+        self.inner.seed(seed);
+    }
+
+    /// `_solo_tray_roll(count, ..)` in batch mode: the faces, in draw order.
+    /// Widened to `i64` on the way out so Python sees a `list[int]` (a
+    /// `Vec<u8>` would marshal as `bytes`).
+    fn roll(&mut self, count: usize) -> Vec<i64> {
+        self.inner.roll(count).into_iter().map(i64::from).collect()
+    }
+
+    /// `rng.state` of the tray's own generator — the replay checkpoint.
+    #[getter]
+    fn state(&self) -> i64 {
+        self.inner.state_i64()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("<nml_core.Tray state {}>", self.inner.state_i64())
     }
 }
 
@@ -1161,6 +1209,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyState>()?;
     m.add_class::<Board>()?;
     m.add_class::<PyRng>()?;
+    m.add_class::<PyTray>()?;
     m.add_function(wrap_pyfunction!(load, m)?)?;
     // NML-1073 M3-4: the board as a pure lookup — the header's terrain in, the
     // same answers `SchoolTerrain` gives the live game out.

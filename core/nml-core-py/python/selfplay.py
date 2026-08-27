@@ -387,6 +387,32 @@ def resolve_charge_gate(charge_gate: str) -> bool:
     return charge_gate == "table"
 
 
+#: `dice` modes. "expected" is the default and is what every corpus written
+#: before this knob existed contains: no combat die at all, `sim.rs:148-174`
+#: `apply_expected_wounds` filling wounds from a float EV. "table" is the rung
+#: D1 builds — the shipped game's DICE TRAY, `_solo_tray_roll` in batch mode
+#: (main.gd:7126-7180), drawn from a generator of its own that
+#: `main.seed_tray_rng(_dice_seed)` seeds after deployment
+#: (arena_match.gd:478), with `_dice_seed` defaulting to the game seed
+#: (arena_match.gd:984-985).
+#:
+#: B3 SHIPS THE PLUMBING ONLY: the tray is built and seeded, the mode is
+#: validated and stamped, and NOTHING reads the tray yet — so "table" plays
+#: the identical game "expected" plays, byte for byte, and the two results
+#: differ in exactly one string: `knobs["dice"]`. B4 (shooting) and B5 (melee)
+#: add the consumers that deliberately break that.
+DICE_MODES = ("expected", "table")
+
+
+def resolve_dice(dice: str) -> str:
+    """The validated `dice` mode. An unknown mode RAISES rather than falling
+    back to "expected": a corpus that silently recorded expected-value combat
+    while its file claimed table dice is worse than no corpus."""
+    if dice not in DICE_MODES:
+        raise ValueError("dice must be one of %s, not %r" % (list(DICE_MODES), dice))
+    return dice
+
+
 def charge_illegal_stamp(core, state) -> dict[str, bool]:
     """What THIS trainer stamps into `state["charge_illegal"]`, in the shape
     `AiActRecorder._charge_illegal_matrix` records (act_recorder.gd:204-222):
@@ -731,6 +757,7 @@ def _play_round(
     sidecar_skip: int = 0,
     magic: dict[str, Any] | None = None,
     spell_reach: dict[str, float] | None = None,
+    tray=None,
 ) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
     dry side hands the tail to the other, and the NEXT round opens with whoever
@@ -741,7 +768,12 @@ def _play_round(
     `round_no`-th runner-bearing pick additionally carries the E2 fork. All of it
     resolves on clones under generators of their own: `rng`, the game's stream, is
     advanced ONLY by the played activation, so `sidecars=False` plays the same
-    game die for die."""
+    game die for die.
+
+    `tray` is the SECOND stream — the `nml_core.Tray` seeded from `dice_seed`
+    (see `DICE_MODES`). B3 carries it here and no further: nothing in this
+    function draws from it, which is why `dice="table"` still plays the
+    expected-value game. B4 hands it to the resolve below."""
     turn = opener
     last_side = 0
     forked = False
@@ -828,6 +860,7 @@ def play_game(
     horizon: int | None = None,
     charge_gate: str = "off",
     hero_attach: str = "off",
+    dice: str = "expected",
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -854,6 +887,14 @@ def play_game(
     corpus written before it, "table" joins the heroes the list joins — see
     `HERO_ATTACH_MODES`. It is stamped into the result's `knobs` alongside the
     search pair.
+
+    `dice` is the FOURTH (NML-1073 M5 D1-B3) and the deepest: "expected" (the
+    default) keeps the expected-value combat every corpus so far was written
+    with; "table" is the rung with the shipped game's real dice tray. B3 ships
+    the PLUMBING ONLY — the tray is constructed and seeded from `dice_seed`,
+    the mode is stamped into `knobs`, and no consumer reads the tray yet, so
+    "table" and "expected" play the identical game and differ in that one
+    stamped string alone. B4/B5 add the consumers. See `DICE_MODES`.
 
     `sidecars` writes the pair/fork counterfactual blocks (NML-1073 M3-9); they
     resolve on clones under generators of their own, so the PLAYED game is
@@ -902,6 +943,7 @@ def play_game(
     eff_top_k = resolve_top_k(top_k)
     eff_horizon = resolve_horizon(horizon)
     eff_charge_gate = resolve_charge_gate(charge_gate)
+    eff_dice = resolve_dice(dice)
     knobs = dict(
         TRAINER_KNOBS, top_k=eff_top_k, horizon=eff_horizon, charge_gate=eff_charge_gate
     )
@@ -922,6 +964,16 @@ def play_game(
     magic = _magic_init(units, books)
 
     rng = nml_core.Rng(seed)
+    # THE STREAM SPLIT (NML-1073 M5 D1-B3). `rng` above is the game's own
+    # generator — deployment, the opener roll-off and every played activation
+    # draw from it, exactly as `tools/core_selfplay.gd:_play_one` does. The
+    # tray is a SECOND generator, seeded from the dice seed the way
+    # `arena_match.gd:478` seeds the table's (`_dice_seed`, which defaults to
+    # the game seed, :984-985) — because on the table those are two streams,
+    # and one generator serving both could never reproduce it. B3 seeds it and
+    # stops: nothing draws from it, so the played stream is untouched and every
+    # digest written before this knob existed still reproduces.
+    tray = nml_core.Tray(seed)
     # core_selfplay.gd:176 — three markers on the centre line, 16" apart.
     objectives = [[f32(-16.0 * IN2M), 0.0, 0.0], [0.0, 0.0, 0.0], [f32(16.0 * IN2M), 0.0, 0.0]]
     if deploy_rng_seed is None:
@@ -953,7 +1005,7 @@ def play_game(
             core, state, opener, rng, log, round_no,
             seed=seed, owners=owners, sidecars=sidecars,
             fork_salt=fork_salt, sidecar_skip=sidecar_skip,
-            magic=magic, spell_reach=spell_reach,
+            magic=magic, spell_reach=spell_reach, tray=tray,
         )
         state, owners = core.playout_seize(state, owners)
         vp = core.vp_round_add(owners, vp)
@@ -984,6 +1036,7 @@ def play_game(
             "horizon": eff_horizon,
             "charge_gate": charge_gate,
             "hero_attach": hero_attach,
+            "dice": eff_dice,
         },
         "seed": seed,
         "dice_seed": seed,
@@ -1101,6 +1154,13 @@ def main(argv: list[str]) -> int:
         "selectionId/joinToUnit the way BattleSim.capture does; 'off' (default) "
         "is tools/core_selfplay.gd, which joins no hero at all",
     )
+    ap.add_argument(
+        "--dice",
+        choices=list(DICE_MODES),
+        default="expected",
+        help="'table' is the real dice tray (D1); 'expected' (default) is the "
+        "expected-value combat every corpus so far was written with",
+    )
     a = ap.parse_args(argv)
 
     core = nml_core.load(a.repo)
@@ -1122,6 +1182,7 @@ def main(argv: list[str]) -> int:
             horizon=a.horizon,
             charge_gate=a.charge_gate,
             hero_attach=a.hero_attach,
+            dice=a.dice,
         )
         res["wall_seconds"] = round(time.perf_counter() - t0, 3)
         if a.out:
