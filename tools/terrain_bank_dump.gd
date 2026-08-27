@@ -17,6 +17,11 @@ extends SceneTree
 ## Run: godot --headless -s res://tools/terrain_bank_dump.gd -- \
 ##        [out=<dir>] [from=1] [to=200]
 ## Writes one file per seed: <out>/board_<seed>.json
+##
+## NML-1073 M3-9b: each board ALSO carries `pieces`, `SchoolTerrain.generate`'s
+## drawing list — the `terrain` field of a `core_s<seed>.json`. A bank written
+## before that key existed is still a valid board bank; a trainer asked to write
+## the result field off such a bank raises instead of guessing.
 
 const IN2M := 0.0254
 ## Half a cell minus a quarter inch — see the anchor note above.
@@ -47,6 +52,12 @@ func _init() -> void:
 			"cells_set": (world["cells"] as Dictionary).size(),
 			# The header line verbatim — the SAME function the act recorder calls.
 			"terrain": AiActRecorder._school_terrain_line(world),
+			# NML-1073 M3-9b: the DRAWING list `tools/core_selfplay.gd:725` writes
+			# out as the result file's `terrain`. It is NOT derivable from the
+			# header line above — that one merges every footprint into a cell map
+			# and drops each piece's origin, size and rotation — so the bank has to
+			# carry it, or the Godot-free trainer cannot write the field at all.
+			"pieces": world.get("pieces", []),
 			"lattice": _lattice(world, n),
 		}
 		var f := FileAccess.open(out.path_join("board_%d.json" % layout_seed), FileAccess.WRITE)

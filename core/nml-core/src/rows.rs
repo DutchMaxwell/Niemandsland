@@ -180,11 +180,22 @@ pub struct RowEncoder {
     /// Every rule/spell name the vocabulary does not carry, `"spell:"`-prefixed
     /// for a spell exactly like the GDScript key.
     pub unknown: BTreeSet<String>,
+    /// LEGACY REPLAY ONLY — a fixed reading for columns 10 and 11. `None` (the
+    /// default, and the only setting a fresh corpus may use) reads the unit's
+    /// own `quality`/`defense`, which is what `gu.source_data` carries since the
+    /// harness fill (#392). A corpus recorded before that fix reads the blank
+    /// `OPRApiClient.OPRUnit` defaults (4/4) in every row; `Some((4, 4))`
+    /// reproduces it.
+    pub source_qd: Option<(i64, i64)>,
 }
 
 impl RowEncoder {
     pub fn new(repo_root: &str) -> RowEncoder {
-        RowEncoder { vocab: RowVocab::load(repo_root), unknown: BTreeSet::new() }
+        RowEncoder {
+            vocab: RowVocab::load(repo_root),
+            unknown: BTreeSet::new(),
+            source_qd: None,
+        }
     }
 
     /// `BattleSim._rule_pairs` battle_sim.gd:115-160 — the flat
@@ -299,8 +310,8 @@ impl RowEncoder {
                 Cell::I(state.activated[i] as i64),
                 Cell::I(rmax),
                 Cell::I(atk),
-                Cell::I(p.quality),
-                Cell::I(p.defense),
+                Cell::I(self.source_qd.map_or(p.quality, |(q, _)| q)),
+                Cell::I(self.source_qd.map_or(p.defense, |(_, d)| d)),
                 Cell::F(sev),
                 Cell::F(mev),
             ];

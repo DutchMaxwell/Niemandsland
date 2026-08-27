@@ -262,6 +262,59 @@ impl PyState {
         }
     }
 
+    /// The per-round reset a FORK PLAYOUT does (`tools/core_selfplay.gd:
+    /// _fork_playout` :382-386): the round number, and `activated`/`fatigued`
+    /// cleared on every unit of both sides.
+    ///
+    /// Deliberately NOT the game's own round start (`_play_one` :190-206), which
+    /// also expires the spell modifiers and refills the Caster(X) tokens — an
+    /// imagined round inherits the last one's modifiers, exactly as the shipped
+    /// playouts do.
+    fn refresh_round(&self, py: Python<'_>, round_no: i64) -> PyState {
+        let mut out = self.copy(py);
+        out.inner.round = round_no;
+        for i in 0..out.inner.units() {
+            out.inner.activated[i] = false;
+            out.inner.fatigued[i] = false;
+        }
+        out
+    }
+
+    /// `su["casts"]` of every unit, in CAPTURE order — the spell-token ledger
+    /// `_magic_tally` reads either side of the played apply (core_selfplay.gd
+    /// :63-69) and `_magic_eligibility_tally` reads pre-apply (:109-114).
+    fn casts(&self) -> Vec<i64> {
+        self.inner.casts.clone()
+    }
+
+    /// `_magic_eligibility_tally`'s in-range test (core_selfplay.gd:124-131):
+    /// does `actor` have a LIVING enemy whose nearest model sits within
+    /// `range_in`? The 0.001" slack is the GDScript's own, and `BattleSim
+    /// .dist_in` is `geom::dist_in` — the same f32 lengths.
+    fn enemy_within(&self, actor: usize, range_in: f64) -> bool {
+        let st = &self.inner;
+        if actor >= st.units() {
+            return false;
+        }
+        (0..st.units()).any(|i| {
+            st.player[i] != st.player[actor]
+                && st.alive[i] > 0
+                && nmlcore::geom::dist_in(&st.positions[actor], &st.positions[i])
+                    <= range_in + 0.001
+        })
+    }
+
+    /// The `kind` stamp of every entry in `state["cast_events"]`, in order —
+    /// what `_spells_by_kind_tally` (core_selfplay.gd:74-81) counts from its
+    /// pre-apply mark. Empty while the cast sub-phase is off.
+    fn cast_event_kinds(&self) -> Vec<String> {
+        self.inner
+            .cast_events
+            .iter()
+            .map(|e| e.get("kind").and_then(|k| k.as_str()).unwrap_or("").to_string())
+            .collect()
+    }
+
     /// The unit keys in CAPTURE order; every per-unit list this module returns
     /// is indexed by it.
     fn keys(&self) -> Vec<String> {
@@ -501,6 +554,28 @@ impl Core {
         to_py(py, &Value::Object(out))
     }
 
+    /// `SpellsRegistry.spells_for_unit` spells_registry.gd:62-63 — every
+    /// header unit's spell BOOK, by unit id, as the `range_in` of each entry in
+    /// book order. The registry keys on (system, faction) alone, so this is NOT
+    /// gated on Caster(X), exactly like the GDScript: `_magic_init` asks a
+    /// token-bearing unit whether its book resolved, and
+    /// `_magic_eligibility_tally` asks for its longest range.
+    fn spell_ranges(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let profiles = self.profiles.as_ref().ok_or_else(Core::no_header)?;
+        let reg = self.reg.as_mut().ok_or_else(Core::no_header)?;
+        let base = profiles.base();
+        let mut out = Map::new();
+        for p in &base.list {
+            let book: Vec<Value> = reg
+                .spells_for(&p.game_system, &p.faction_folder)
+                .iter()
+                .map(|sp| sp.range_in.into())
+                .collect();
+            out.insert(p.unit_id.clone(), Value::Array(book));
+        }
+        to_py(py, &Value::Object(out))
+    }
+
     /// True when the header carried a board — a `Terrain::absent()` is the
     /// `terrain_at.is_valid() == false` case, and `resolve` then leaves the
     /// mover's cover flag exactly as the parent state had it.
@@ -674,6 +749,29 @@ impl Core {
         Ok(reply_threat(&statics, &state.inner, player))
     }
 
+    /// `AiPlanner._policy_step` ai_planner.gd:602-624 with the RICH leaf — the
+    /// cheap greedy brain `tools/core_selfplay.gd:_fork_pick` (:422-430) plays
+    /// every fork continuation with. Returns the action dict, or `None` when the
+    /// side has no living un-activated unit with a candidate.
+    #[pyo3(signature = (state, player, rich = true))]
+    fn policy_step(
+        &mut self,
+        py: Python<'_>,
+        state: PyRef<'_, PyState>,
+        player: i64,
+        rich: bool,
+    ) -> PyResult<Option<Py<PyAny>>> {
+        let statics = self.statics_for(&state.inner)?;
+        let mut policy = Policy::new(&statics, &self.terrain, self.seams());
+        policy.tuning = self.tuning();
+        let mut sc = Scratch::default();
+        match policy.policy_step(&state.inner, player, rich, &mut sc) {
+            Ok(None) => Ok(None),
+            Ok(Some(c)) => Ok(Some(to_py(py, &cand_plain(&c))?)),
+            Err(u) => Err(declined(u)),
+        }
+    }
+
     // -------------------------------------------------- encoder rows / eval ---
 
     /// `BattleSim.board_rows` battle_sim.gd:176 — the v5 encoder input: one row
@@ -707,6 +805,22 @@ impl Core {
     /// every unit row, in row order.
     fn board_row_indices(&self, state: PyRef<'_, PyState>) -> Vec<i64> {
         nmlcore::board_row_indices(&state.inner)
+    }
+
+    /// LEGACY REPLAY ONLY — board columns 10 and 11 (`quality`, `defense`).
+    /// The shipped encoder reads them off the unit's live profile, which is what
+    /// `tools/core_selfplay.gd` writes since the `source_data` fill (#392) and
+    /// what this module does by default. A corpus recorded BEFORE that fix reads
+    /// the blank `OPRApiClient.OPRUnit` defaults (4/4) in every row; set this to
+    /// `(4, 4)` to reproduce such a corpus, and to nothing else.
+    fn set_encoder_source_qd(&mut self, quality: i64, defense: i64) {
+        self.rows.source_qd = Some((quality, defense));
+    }
+
+    /// Drop the legacy column-10/11 override — back to the profile's own
+    /// quality/defense, the default and the only setting a fresh corpus may use.
+    fn clear_encoder_source_qd(&mut self) {
+        self.rows.source_qd = None;
     }
 
     /// Rule/spell names the committed vocabulary does not carry, collected
