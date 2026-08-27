@@ -195,6 +195,13 @@ var last_flow_order: Array = []
 ## NML-1073 M4-0a: bumped once per _planner_pick_unit activation — MoveRecorder's "act" field, so a
 ## corpus reader can group the several plan_unit_step calls (rungs) one activation's move can produce.
 var _move_act_seq := 0
+
+
+## NML-1073 M5 D1-B1: read-only accessor — main.gd's tray-roll tap stamps this same ordinal onto
+## every dice record (AiDiceRecorder's "act" field), so a reader can group dice.jsonl by activation
+## exactly the way MoveRecorder's "act" field already groups moves_calls.jsonl.
+func move_act_seq() -> int:
+	return _move_act_seq
 ## Move budget (inches) actually granted to the last AI move (band, difficult-capped when the route
 ## entered difficult terrain) — the denominator of the corridor's distance label.
 var last_move_budget_in: float = 0.0
