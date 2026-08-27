@@ -7172,6 +7172,13 @@ func _solo_tray_roll(count: int, success_target: int, owner: String, roll_kind: 
 		_solo_dice_seq += 1
 		solo_controller.record_decision({"kind": "dice", "seq": _solo_dice_seq, "roll_kind": roll_kind,
 			"owner": owner, "target": success_target, "count": count, "faces": faces})
+		# NML-1073 M5 D1-B1: sibling file, default OFF (env NML_DICE_DUMP) — stamps the ACTIVATION
+		# ordinal the "dice" decision record above never carries (a live decisions.json must stay
+		# byte-identical whether this seam is on or off, so it is not added there).
+		AiDiceRecorder.record({"act": solo_controller.move_act_seq(), "seq": _solo_dice_seq,
+			"round": solo_controller._current_round(), "player": solo_controller.ai_slot,
+			"roll_kind": roll_kind, "owner": owner, "target": success_target, "count": count,
+			"faces": faces})
 	_dice_count = prev_count
 	_update_dice_set(prev_count)
 	_success_target = prev_target
