@@ -146,6 +146,9 @@ pub struct Unimplemented {
 #[derive(Debug, Default)]
 pub struct UnitStatic {
     pub ctx: Ctx,
+    /// `Profile.name` — `GameUnit.get_name()`, which is what `_solo_tray_roll`
+    /// signs every die with (main.gd:3199-3200, :6448).
+    pub name: String,
     /// Merged + stamped RANGED profiles, unfiltered (range > 0, any distance).
     pub shoot: Vec<ShootProfile>,
     /// Merged + stamped MELEE profiles (range 0) — `AiShooting.melee_profiles`
@@ -685,6 +688,7 @@ impl UnitStatic {
 
         UnitStatic {
             ctx: ctx_for(reg, p),
+            name: p.name.clone(),
             shoot,
             melee,
             model_count: p.model_count,

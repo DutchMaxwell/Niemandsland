@@ -102,6 +102,12 @@ pub struct Roll {
     pub count: i64,
     pub target: i64,
     pub faces: Vec<u8>,
+    /// `_solo_tray_roll`'s `owner` (main.gd:7173), WITHOUT the `"AI (%s)"`
+    /// wrapper `_solo_owner_label` (:7039-7040) puts on it: the firing MEMBER's
+    /// name for an attack roll (main.gd:3199-3200 — `shooter_name` is
+    /// `member.get_name()`, so an attached hero signs its own dice) and the
+    /// DEFENDER's for a save batch (:6448) and the Regeneration roll (:6543).
+    pub owner: String,
 }
 
 /// What one shooting activation did on the tray.
@@ -171,9 +177,11 @@ fn shred_ones(faces: &[u8], reroll: &[u8]) -> i64 {
 /// `main._solo_save_batch` :6385-6483 — ONE batch for the whole defender (not
 /// per model), Fortified first, then the dice, then Bane's re-roll of the
 /// unmodified 6s, then Shred and the pooled Deadly multiplier.
+#[allow(clippy::too_many_arguments)]
 fn save_batch(
     p: &ShootProfile,
     def: &Ctx,
+    def_owner: &str,
     count: i64,
     defense: i64,
     ap: i64,
@@ -185,7 +193,13 @@ fn save_batch(
     }
     let target = save_target(defense, fortified_ap(ap, def.fortified));
     let faces = tray.roll(count as usize);
-    out.rolls.push(Roll { kind: "defense", count, target, faces: faces.clone() });
+    out.rolls.push(Roll {
+        kind: "defense",
+        count,
+        target,
+        faces: faces.clone(),
+        owner: def_owner.into(),
+    });
     let mut reroll: Vec<u8> = Vec::new();
     if p.bane {
         let n = sixes(&faces);
@@ -196,6 +210,7 @@ fn save_batch(
                 count: n,
                 target,
                 faces: reroll.clone(),
+                owner: def_owner.into(),
             });
         }
     }
@@ -251,8 +266,10 @@ fn save_batch(
 ///   * per-model SIGHTING — the table scales attacks by `_solo_sighted_count`
 ///     (:4131), a per-model geometric LOS plus base-edge range gate
 ///     (:4283-4304); this port scales by `alive` through `effective_attacks`.
-///   * attached HEROES fire as their own shots inside the host's volley
-///     (:2954-2990); with `hero_attach="off"` they are separate units here.
+///   * per-copy bearer scaling — see below; PORTED in D1-B4b: attached HEROES
+///     fire as their own shots inside the host's volley (:2954-2990), through
+///     `resolve_volley_with_tray`. With `hero_attach="off"` the state carries
+///     no attachment at all, so that path is never entered.
 ///   * per-copy bearer scaling of a weapon's carriers
 ///     (solo_controller.gd:457-467).
 ///   * split fire, and the Takedown -> Deadly -> rest priority sort of the shot
@@ -289,11 +306,83 @@ pub fn resolve_shooting_with_tray(
     dist_in: f64,
     tray: &mut Tray,
 ) -> ShootResult {
+    let one = [Shooter { profiles, keep, attacks, att, owner: "" }];
+    resolve_volley_with_tray(&one, def, "", dist_in, tray)
+}
+
+/// NML-1073 M5 D1-B4b — ONE member of a shooting activation's volley.
+///
+/// The table builds the shot list over `members = [unit] + unit
+/// .get_attached_heroes()` (`main._run_ai_shooting` :2954-2958), one shot per
+/// (member, ranged weapon), each stamped with THAT member's `quality` and its
+/// own `alive`/`max` scaling (:2985-2990) — so a joined hero fires its own
+/// guns, at its own Quality, under the host's activation, and signs the dice
+/// with its own name (:3199-3200).
+pub struct Shooter<'a> {
+    /// The member's own ranged set (`UnitStatic::shoot`).
+    pub profiles: &'a [ShootProfile],
+    /// Indices into `profiles` that passed the range gate, in `profiles_of`
+    /// order — which IS the member's weapon order, the table's build order.
+    pub keep: &'a [usize],
+    /// Survivor-scaled attack counts, index-parallel to `keep`.
+    pub attacks: &'a [i64],
+    /// The member's own shooting context (its Quality above all).
+    pub att: &'a Ctx,
+    /// The member's name, for `Roll::owner`.
+    pub owner: &'a str,
+}
+
+/// The volley of `shooters` — the host first, then each attached hero — against
+/// one defender, on one tray. Everything the single-shooter form documents
+/// holds; the members are simply walked in the table's build order, and
+/// Regeneration stays pooled over the WHOLE volley (`_solo_land_wounds` :6623),
+/// not per member.
+///
+/// STILL NOT PORTED here, and now visible because the members are: SPLIT FIRE.
+/// The table picks a target per SHOT under that weapon's overlay
+/// (`_solo_pick_overlay_target` :3000) and resolves one volley per target, so a
+/// hero whose overlay prefers another unit fires elsewhere entirely; this port
+/// aims every member at the activation's one recorded `shoot` key. And the
+/// Takedown -> Deadly -> rest priority sort (:3052-3062) still does not run, so
+/// the members are in build order, not resolve order.
+pub fn resolve_volley_with_tray(
+    shooters: &[Shooter<'_>],
+    def: &Ctx,
+    def_owner: &str,
+    dist_in: f64,
+    tray: &mut Tray,
+) -> ShootResult {
     let mut out = ShootResult::default();
     let (mut regenable, mut regen_proof) = (0i64, 0i64);
     let reach_gate = dist_in.ceil();
-    for (k, &pi) in keep.iter().enumerate() {
-        let p = &profiles[pi];
+    // FLATTENED on purpose: one pass over the (member, profile) pairs, so the
+    // body below stays the single-shooter one.
+    //
+    // ORDER — `_solo_resolve_ai_volley` :3052-3062, GF v3.5.1 p.14: "Takedown
+    // attacks must be resolved before other weapons" and "Hits from Deadly must
+    // be resolved first", the ladder `_solo_shot_priority` :3033-3040 spells
+    // out. It runs over the WHOLE shot list, host and heroes together, which is
+    // why an attached hero's Deadly gun fires before the host's plain rifles.
+    // `sort_custom` on a volley-sized array is Godot's final insertion sort and
+    // therefore stable, so equal-priority shots keep the build order (the host's
+    // weapons, then each hero's) — `sort_by_key` is stable and is the twin.
+    let mut shots: Vec<(&Shooter<'_>, usize, usize)> = shooters
+        .iter()
+        .flat_map(|sh| sh.keep.iter().enumerate().map(move |(k, &pi)| (sh, k, pi)))
+        .collect();
+    shots.sort_by_key(|&(sh, _, pi)| {
+        let p = &sh.profiles[pi];
+        if p.takedown {
+            0
+        } else if p.deadly > 0 {
+            1
+        } else {
+            2
+        }
+    });
+    for (sh, k, pi) in shots {
+        let att = sh.att;
+        let p = &sh.profiles[pi];
         let reach = if def.ranged_shrouding {
             shrouded_reach(p.range as f64, SHROUD_RANGE_PENALTY_IN, SHROUD_FLOOR_IN)
         } else {
@@ -302,7 +391,7 @@ pub fn resolve_shooting_with_tray(
         if p.range <= 0 || reach < reach_gate {
             continue;
         }
-        let n = attacks[k];
+        let n = sh.attacks[k];
         if n <= 0 {
             continue; // main.gd:3163 — a silent weapon leaves before any die
         }
@@ -330,7 +419,13 @@ pub fn resolve_shooting_with_tray(
         // COUNTS (:4405-4406) — so the die count is scored one better while the
         // RECORDED target stays raw, which is what `dice.jsonl` carries.
         let faces = tray.roll(n as usize);
-        out.rolls.push(Roll { kind: "attack", count: n, target, faces: faces.clone() });
+        out.rolls.push(Roll {
+            kind: "attack",
+            count: n,
+            target,
+            faces: faces.clone(),
+            owner: sh.owner.into(),
+        });
         let count_target = if p.precise { modified_hit_target(target, 1) } else { target };
         if p.hazardous {
             out.mark("hazardous");
@@ -387,8 +482,8 @@ pub fn resolve_shooting_with_tray(
             covered_defense(base, def.in_cover)
         };
         let ap = p.ap + versatile_ap;
-        let mut w = save_batch(p, def, ap4, save_def, ap + on6, tray, &mut out);
-        w += save_batch(p, def, hits - ap4, save_def, ap, tray, &mut out);
+        let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, tray, &mut out);
+        w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, tray, &mut out);
         if p.deadly > 0 {
             out.mark("deadly");
         }
@@ -409,6 +504,7 @@ pub fn resolve_shooting_with_tray(
             count: regenable,
             target: def.regen_target,
             faces,
+            owner: def_owner.into(),
         });
         regenable = (regenable - ignored).max(0);
     }
@@ -645,6 +741,43 @@ mod tests {
         assert!(out.unported.contains(&"deadly"), "{:?}", out.unported);
         assert!(out.unported.contains(&"hazardous"), "{:?}", out.unported);
         assert!(!out.rolls.is_empty(), "a flagged activation still resolves");
+    }
+
+    /// D1-B4b — the ATTACHED HERO fires its own shots inside the host's volley
+    /// (main.gd:2954-2990): the host's rolls first, then the hero's, at the
+    /// HERO's own Quality and with its own name on the dice. RED half: drop the
+    /// hero's group and the stream is one roll and 24 faces short — a different
+    /// game from the first hero onward.
+    #[test]
+    fn an_attached_hero_fires_its_own_shots_after_the_host() {
+        let host_p = [rifle(6)];
+        let hero_p = [ShootProfile { name: "Hero Gun".into(), ..rifle(2) }];
+        let (host_q, hero_q) = (shooter(5), shooter(2));
+        let def = defender(4, 5);
+        let host = Shooter {
+            profiles: &host_p, keep: &[0], attacks: &[6], att: &host_q, owner: "Shooter Grunts",
+        };
+        let hero = Shooter {
+            profiles: &hero_p, keep: &[0], attacks: &[2], att: &hero_q, owner: "Vradhez",
+        };
+        let mut tray = Tray::seeded(27);
+        let out = resolve_volley_with_tray(&[host, hero], &def, "Pathfinders", 12.0, &mut tray);
+        let attacks: Vec<_> = out.rolls.iter().filter(|r| r.kind == "attack").collect();
+        assert_eq!(attacks.len(), 2, "host then hero: {:?}", out.rolls);
+        assert_eq!((attacks[0].count, attacks[0].target, attacks[0].owner.as_str()),
+                   (6, 5, "Shooter Grunts"), "the host fires first, at its own Quality");
+        assert_eq!((attacks[1].count, attacks[1].target, attacks[1].owner.as_str()),
+                   (2, 2, "Vradhez"), "then the hero, at ITS Quality — not the host's");
+        assert!(out.rolls.iter().all(|r| r.kind != "defense" || r.owner == "Pathfinders"),
+                "every save batch is signed by the DEFENDER");
+        // RED: the host alone draws strictly fewer dice, so every later
+        // activation reads different faces.
+        let mut solo = Tray::seeded(27);
+        let host_only = resolve_shooting_with_tray(
+            &host_p, &[0], &[6], &host_q, &def, 12.0, &mut solo,
+        );
+        assert!(host_only.rolls.len() < out.rolls.len(), "the hero's rolls are missing");
+        assert_ne!(solo.state_i64(), tray.state_i64(), "and the tray stands elsewhere");
     }
 
     /// `DiceRules.is_success` in full: the natural 6 beats an impossible

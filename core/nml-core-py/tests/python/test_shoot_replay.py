@@ -104,7 +104,10 @@ def test_the_bundled_game_replays_its_shooting_dice_on_the_tray():
     got = replay("table")
     assert got["acts"] == 9, "the fixture's shooting acts: %s" % got
     assert got["faces"] == 0, "a face parted after the shape held — the Tray twin is wrong: %s" % got
-    assert got["rolls"] == 8, "rolls compared before the first shape divergence: %s" % got
+    # D1-B4b moved this from 8 to 9: with the attached heroes' own shots in the
+    # volley and the Takedown -> Deadly -> rest resolve order ported, one more
+    # roll survives to be compared before the first shape parts.
+    assert got["rolls"] == 9, "rolls compared before the first shape divergence: %s" % got
     assert got["hits_equal"] == got["rolls"], "hits/blocks off the recorded faces: %s" % got
     assert got["full_equal"] >= 2, "FULL-equal acts fell below the measured bar: %s" % got
     assert got["prefix_equal"] >= 3, "PREFIX-equal acts fell below the measured bar: %s" % got

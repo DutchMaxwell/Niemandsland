@@ -995,13 +995,40 @@ fn resolve_with(
                     // wounds then land through the SAME casualty machinery the
                     // EV path uses — kill order stays the trainer's.
                     Some((tray, shot)) => {
-                        let us = &statics[pi_s];
                         let ut = &statics[next.roster.profile[ti]];
-                        profiles_of(us, next.alive[si], d, &mut sc);
-                        let att = ctx_of(us, &next, si);
                         let def = ctx_of(ut, &next, ti);
-                        *shot = crate::dice::resolve_shooting_with_tray(
-                            &us.shoot, &sc.keep, &sc.attacks, &att, &def, d, tray,
+                        // D1-B4b: the volley's MEMBERS, in the table's build
+                        // order — the host, then its attached heroes in
+                        // capture order (`main._run_ai_shooting` :2954-2958,
+                        // `State::attached` state.rs:361-362). Each brings its
+                        // OWN ranged set, Quality and survivor scaling
+                        // (:2985-2990); a member with no living model is
+                        // skipped exactly as the table skips it (:2959).
+                        let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
+                        for &mi in std::iter::once(&si).chain(next.attached[si].iter()) {
+                            if next.alive[mi] <= 0 {
+                                continue;
+                            }
+                            let um = &statics[next.roster.profile[mi]];
+                            let mut msc = Scratch::default();
+                            profiles_of(um, next.alive[mi], d, &mut msc);
+                            parts.push((mi, msc, ctx_of(um, &next, mi)));
+                        }
+                        let members: Vec<crate::dice::Shooter<'_>> = parts
+                            .iter()
+                            .map(|(mi, msc, att)| {
+                                let um = &statics[next.roster.profile[*mi]];
+                                crate::dice::Shooter {
+                                    profiles: &um.shoot,
+                                    keep: &msc.keep,
+                                    attacks: &msc.attacks,
+                                    att,
+                                    owner: &um.name,
+                                }
+                            })
+                            .collect();
+                        *shot = crate::dice::resolve_volley_with_tray(
+                            &members, &def, &ut.name, d, tray,
                         );
                         let w = shot.wounds;
                         land_wounds(&mut next, ti, w);

@@ -122,6 +122,19 @@ def first_at_or_after(dice: list[dict], act: int) -> int:
     return len(dice)
 
 
+def detach(plain: dict) -> dict:
+    """`--hero-attach off` on a RECORDED state. The corpus is a table game, so
+    every host already carries its `attached` heroes and every hero its
+    `attached_to` — which is `hero_attach="table"`, and there is nothing to
+    switch on. This strips the two fields instead, so the same acts replay the
+    way a `hero_attach="off"` corpus would: the D1-B4b volley then finds no
+    member but the host, exactly as `selfplay.play_game(hero_attach="off")`
+    leaves it. It is the BEFORE half of the B4b measurement, in one tool."""
+    out = dict(plain)
+    out["units"] = {k: dict(u, attached=[], attached_to="") for k, u in plain["units"].items()}
+    return out
+
+
 def defender_state(plain: dict, key: str) -> tuple[int, int]:
     """(alive, total wounds left) of one unit in a plain state."""
     u = plain["units"].get(key)
@@ -130,7 +143,8 @@ def defender_state(plain: dict, key: str) -> tuple[int, int]:
     return (int(u["alive"]), int(sum(u["wounds"])))
 
 
-def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: bool) -> int:
+def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: bool,
+        hero_attach: str = "table") -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -160,7 +174,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 continue
             tally["acts"] += 1
             i0 = first_at_or_after(dice, k)
-            state = core.state_of(act["state"])
+            plain = act["state"] if hero_attach == "table" else detach(act["state"])
+            state = core.state_of(plain)
             # `--red-misseed` moves the tray one seed over. Every count and
             # every target still comes out of the same state, so the SHAPE holds
             # and the comparison reaches the faces — which is exactly what has
@@ -182,11 +197,16 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             for name in report["unported"]:
                 unported[name] = unported.get(name, 0) + 1
 
-            got = [(r["kind"], r["count"], r["target"], r["faces"]) for r in report["rolls"]]
+            # `owner` rides along as the FIFTH slot and is deliberately NOT
+            # compared: D1-B4b stamps it so a divergence can say WHO rolled
+            # (main.gd:7173 — the firing member, so an attached hero signs its
+            # own dice), not so the verdict changes shape.
+            got = [(r["kind"], r["count"], r["target"], r["faces"], r["owner"])
+                   for r in report["rolls"]]
             # EVERY roll the table drew under this activation ordinal, NOT a
             # prefix: truncating to `len(got)` would hide "the table drew more
             # than the port did", which is the whole `table_longer` bucket.
-            want = [(r["roll_kind"], r["count"], r["target"], r["faces"])
+            want = [(r["roll_kind"], r["count"], r["target"], r["faces"], r["owner"])
                     for r in dice[i0:] if int(r["act"]) == k]
             if not got and not want:
                 tally["both_silent"] += 1
@@ -216,8 +236,10 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                     field = ("kind" if g[0] != w[0] else
                              "count" if g[1] != w[1] else "target")
                     reasons[field] = reasons.get(field, 0) + 1
-                    verdict, why = "shape", "roll %d %s: %s(%d dice, %d+) vs table %s(%d dice, %d+)" % (
-                        i + 1, field, g[0], g[1], g[2], w[0], w[1], w[2])
+                    verdict, why = ("shape",
+                                    "roll %d %s: %s(%d dice, %d+, %s) vs table %s(%d dice, %d+, %s)"
+                                    % (i + 1, field, g[0], g[1], g[2], "AI (%s)" % g[4],
+                                       w[0], w[1], w[2], w[4]))
                     break
                 if g[3] != w[3]:
                     verdict, why = "faces", "roll %d %s: %s vs table %s" % (i + 1, g[0], g[3], w[3])
@@ -269,8 +291,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
              "off": "RED D1-B4 --mode off (dice=expected)",
              "misseed": "RED D1-B4 --red-misseed (tray on dice_seed+1)"}[mode]
     print()
-    print("%s over %d games, %d shooting acts (%.1fs)" % (
-        label, len(games), tally["acts"], time.perf_counter() - t0))
+    print("%s over %d games, %d shooting acts, hero_attach=%s (%.1fs)" % (
+        label, len(games), tally["acts"], hero_attach, time.perf_counter() - t0))
     print("  EQUAL : %d/%d acts FULL-equal (same roll count, every roll identical)"
           % (tally["full_equal"], tally["acts"]))
     print("        : %d/%d acts PREFIX-equal (the overlap held; %d table_longer, %d port_longer)"
@@ -343,11 +365,17 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--report-only", action="store_true",
                     help="exit 0 even when acts are short of full equality (this tool is a GATE "
                          "by default and exits 1)")
+    ap.add_argument("--hero-attach", choices=("table", "off"), default="table",
+                    help="'table' replays the recorded attachment, which is what the corpus "
+                         "carries and what D1-B4b reads; 'off' strips `attached`/`attached_to` "
+                         "from every replayed state, reproducing a hero_attach='off' corpus — "
+                         "the BEFORE half of the B4b measurement")
     ap.add_argument("--limit", type=int, default=0, help="only the first N game dirs")
     ap.add_argument("--verbose", type=int, default=0, help="print every diverging act")
     a = ap.parse_args(argv)
     mode = "misseed" if a.red_misseed else a.mode
-    return run(Path(a.ref).expanduser(), a.repo, mode, a.limit, a.verbose, a.report_only)
+    return run(Path(a.ref).expanduser(), a.repo, mode, a.limit, a.verbose, a.report_only,
+               a.hero_attach)
 
 
 if __name__ == "__main__":

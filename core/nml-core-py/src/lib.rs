@@ -861,6 +861,9 @@ impl Core {
                     "count": r.count,
                     "target": r.target,
                     "faces": r.faces.iter().map(|&f| f as i64).collect::<Vec<i64>>(),
+                    // D1-B4b: WHO rolled it — `dice.jsonl` wraps this in
+                    // `"AI (%s)"` (main.gd:7039-7040).
+                    "owner": r.owner,
                 })
             })
             .collect();
