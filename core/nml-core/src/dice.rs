@@ -224,27 +224,62 @@ fn save_batch(
 /// Shielded/Guarded/Cover on the save target, Bane's re-roll, Shred, the pooled
 /// Deadly multiplier and the pooled Regeneration roll.
 ///
-/// NOT PORTED (each one either draws dice the table draws or reads faces this
-/// port ignores — every occurrence is FLAGGED in `unported`, never skipped
-/// silently):
-///   * `hazardous`  — Hazardous wounds the FIRER on its natural 1s (:16555).
-///   * `deadly`     — the table lands Deadly per model with its OWN
+/// NOT PORTED. Nothing here is a silent skip: everything the trainer's own
+/// profile model can SEE is flagged per activation in `unported`; everything
+/// below the line has no field to detect it by and is listed instead.
+///
+/// FLAGGED (a counter per activation):
+///   * `surge_gates` — Surge fires unconditionally; the table gates it on
+///     `surge_within_in` and `surge_low` (main.gd:4427-4435).
+///   * `hazardous`   — Hazardous wounds the FIRER on its natural 1s (:16555).
+///   * `deadly`      — the table lands Deadly per model with its OWN
 ///     Regeneration roll on the RAW unsaved count (:6634), not the pooled one
 ///     this port uses, so the regen roll's die count moves.
-///   * `takedown`   — resolved "as a unit of [1]" against a picked model, with
+///   * `takedown`    — resolved "as a unit of [1]" against a picked model, with
 ///     that model's own Defense (:3155).
-///   * `strafing`   — the table splits a Strafing weapon per model (:2918).
-/// And these have no field in the trainer's profile model at all, so they can
-/// only be listed here, not counted: the extra-ATTACK dice of the Bloodborn /
-/// Primal / Predator family (:4454, DRAWS), the Unpredictable die once per
-/// volley (:3114, DRAWS), Sergeant's bonus hits, Spot markers, the Piercing
-/// tag, Reckless AP, vs-target Marks, `stamp_conditional_ap`, the per-member
-/// shot iteration with its Takedown/Deadly priority sort, split fire, and the
-/// per-model SIGHTING count (:3145) the table scales attacks by where this port
-/// scales by `alive`.
+///   * `strafing`    — the table splits a Strafing weapon per model (:2918).
+///
+/// STREAM-DESYNCING DRAWS — these ROLL DICE on the table and nothing here does,
+/// so from the first one onward a `dice="table"` corpus is on a different
+/// stream than the recording. They are the top of the B5+ list for that reason:
+///   * the Unpredictable die, ONE per volley before any weapon fires (:3114).
+///   * the extra-ATTACK dice of the Bloodborn / Primal / Predator / Clan
+///     Warrior family, rolled for each unmodified 6 to hit (:4454).
+///
+/// SHOT SELECTION AND SCALING (all of them change the die COUNT, which is the
+/// largest divergence class the replay gate measures):
+///   * per-model SIGHTING — the table scales attacks by `_solo_sighted_count`
+///     (:4131), a per-model geometric LOS plus base-edge range gate
+///     (:4283-4304); this port scales by `alive` through `effective_attacks`.
+///   * attached HEROES fire as their own shots inside the host's volley
+///     (:2954-2990); with `hero_attach="off"` they are separate units here.
+///   * per-copy bearer scaling of a weapon's carriers
+///     (solo_controller.gd:457-467).
+///   * split fire, and the Takedown -> Deadly -> rest priority sort of the shot
+///     list (:3052-3062).
+///
+/// TO-HIT AND SAVE MODIFIERS with no field in the profile/context model:
+///   * Indirect's moved -1 and its Quick Readjustment opt-out (:3163-3169).
+///   * Spot markers, the Piercing tag, Reckless AP, vs-target Marks,
+///     `AiEv.stamp_conditional_ap` (Shatter / Tear / Disintegrate).
+///   * unit-level Bane / Lacerate — the STRIKER's own special rules, not just
+///     the weapon's (:6490-6500) — so a unit-level Bane neither re-rolls the
+///     defender's 6s nor bypasses Regeneration here.
+///   * the Fortified DATA ALIASES (Guardian, Primeborn and their over-9" gate)
+///     and Fortified Growth's marker-driven AP reduction (:6411-6441): only the
+///     plain `Fortified` flag reaches this port.
+///   * Stealth / Evasive data aliases, `Shot Modifier`, Vengeance, Instinctive.
+///
+/// AND morale, Fearless and No Retreat (:8313-8342) — B5's, deliberately left
+/// undrawn so the stream stands exactly where the table's morale roll begins.
 ///
 /// `keep`/`attacks` are `shoot_ev`'s, so the range gate and the survivor
-/// scaling are the ones the EV path already agreed on.
+/// scaling are the ones the EV path already agreed on. NOTE: this path never
+/// touches `State::wound_frac` — deliberately. The remainder carry is an
+/// artefact of resolving a volley in EXPECTATION; real dice produce whole
+/// wounds, so there is no sub-wound remainder to carry and no coin flip to
+/// spend. A `dice="table"` game therefore leaves `wound_frac` wherever the
+/// last expected-value activation (melee, spells — B5's) left it.
 pub fn resolve_shooting_with_tray(
     profiles: &[ShootProfile],
     keep: &[usize],
@@ -290,11 +325,13 @@ pub fn resolve_shooting_with_tray(
             versatile_ap = ap_mod;
             target = modified_hit_target(target, hit_mod);
         }
-        if p.precise {
-            target = modified_hit_target(target, 1);
-        }
+        // Precise is NOT in the rolled target. `_solo_tray_roll` is handed the
+        // plain `to_hit` (main.gd:3200) and `_solo_hits` applies the +1 when it
+        // COUNTS (:4405-4406) — so the die count is scored one better while the
+        // RECORDED target stays raw, which is what `dice.jsonl` carries.
         let faces = tray.roll(n as usize);
         out.rolls.push(Roll { kind: "attack", count: n, target, faces: faces.clone() });
+        let count_target = if p.precise { modified_hit_target(target, 1) } else { target };
         if p.hazardous {
             out.mark("hazardous");
         }
@@ -305,12 +342,25 @@ pub fn resolve_shooting_with_tray(
             out.mark("takedown");
         }
         // --- `_solo_hits` :4404-4487 ---
-        let mut hits = faces_to_hits(&faces, target as u8) as i64;
+        let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
         if p.relentless && dist_in > LONG_RANGE_IN {
             hits += sixes(&faces);
         }
         if p.surge {
+            // The two GATES this port cannot see — `surge_within_in` (Point-Blank
+            // Surge: only within 12") and `surge_low` (Devout Boost: successful
+            // unmodified 5s count too, over 9") — have no field in
+            // `ShootProfile`, so Surge fires UNCONDITIONALLY here and every
+            // Surge activation says so (main.gd:4427-4435).
             hits += sixes(&faces);
+            out.mark("surge_gates");
+        }
+        // `AiCombatMath.sergeant_bonus_hits` :493-494 — the bearer's unmodified
+        // 6s, capped at its own attack share. The EV path values this
+        // (combat.rs:339-342); the dice path must not be the poorer twin, even
+        // though `stamp_sergeant` leaves the field at 0 in this port today.
+        if p.sergeant_attacks > 0 {
+            hits += sixes(&faces).min(p.sergeant_attacks);
         }
         if hits > 0 && p.blast > 1 {
             hits *= p.blast.clamp(1, def.models.max(1));
@@ -529,6 +579,57 @@ mod tests {
             !out.rolls.iter().any(|r| r.target == 5 && r.kind == "attack" && r.count == out.wounds),
             "Bane bypasses Regeneration — no ignore roll may be drawn"
         );
+    }
+
+    /// Precise (+1 to hit) is applied when the hits are COUNTED, not when the
+    /// dice leave the cup: the table rolls at the plain `to_hit` (main.gd:3200)
+    /// and `_solo_hits` scores them one better (:4405-4406). Recording the
+    /// improved target instead would part company with `dice.jsonl` on every
+    /// Precise weapon while the faces themselves still matched.
+    #[test]
+    fn precise_rolls_at_the_plain_to_hit_and_scores_one_better() {
+        let faces = Tray::seeded(27).roll(6);
+        let plain = faces_to_hits(&faces, 4) as i64;
+        let better = faces_to_hits(&faces, 3) as i64;
+        assert!(better > plain, "fixture seed cannot tell the two targets apart");
+        let mut tray = Tray::seeded(27);
+        let out = resolve_shooting_with_tray(
+            &[ShootProfile { precise: true, ..rifle(6) }],
+            &[0], &[6], &shooter(4), &defender(4, 6), 12.0, &mut tray,
+        );
+        assert_eq!(out.rolls[0].target, 4, "the RECORDED target is the raw to-hit");
+        assert_eq!(out.rolls[0].faces, faces);
+        assert_eq!(out.rolls[1].count, better, "but the hits are scored at 3+");
+        assert_ne!(out.rolls[1].count, plain, "rolling at the improved target is a DIFFERENT stream");
+    }
+
+    /// Sergeant's bonus hits (`AiCombatMath.sergeant_bonus_hits` :493-494): the
+    /// bearer's unmodified 6s, capped at its own attack share. The EV path
+    /// already values these (combat.rs:339-342), so a dice path that dropped
+    /// them would be the poorer twin of the thing it replaces.
+    #[test]
+    fn sergeant_adds_its_capped_share_of_unmodified_sixes() {
+        let faces = Tray::seeded(5).roll(6);
+        let sixes = faces.iter().filter(|&&f| f == 6).count() as i64;
+        assert_eq!(sixes, 3, "seed 5 rolls [6, 2, 6, 1, 5, 6] — three unmodified 6s");
+        let base = {
+            let mut t = Tray::seeded(5);
+            resolve_shooting_with_tray(&[rifle(6)], &[0], &[6], &shooter(4), &defender(4, 6), 12.0, &mut t)
+                .rolls[1].count
+        };
+        let mut tray = Tray::seeded(5);
+        let out = resolve_shooting_with_tray(
+            &[ShootProfile { sergeant_attacks: 1, ..rifle(6) }],
+            &[0], &[6], &shooter(4), &defender(4, 6), 12.0, &mut tray,
+        );
+        assert_eq!(out.rolls[1].count, base + 1, "the bearer's share is 1 attack");
+        // And the cap is real: an uncapped share adds EVERY unmodified 6.
+        let mut wide = Tray::seeded(5);
+        let all = resolve_shooting_with_tray(
+            &[ShootProfile { sergeant_attacks: 99, ..rifle(6) }],
+            &[0], &[6], &shooter(4), &defender(4, 6), 12.0, &mut wide,
+        );
+        assert_eq!(all.rolls[1].count, base + sixes, "uncapped: one bonus hit per 6");
     }
 
     /// A Deadly weapon still resolves, and it says so: the table lands Deadly
