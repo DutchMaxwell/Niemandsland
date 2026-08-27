@@ -167,7 +167,13 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			"imagined_round_end": AiPlanner.imagined_round_end_enabled(),
 			"depth_discount": AiPlanner.depth_discount(), "seat_mode": AiPlanner.seat_mode(),
 			"playout_margin": AiPlanner.close_margin(), "playout_rich": AiPlanner.playout_rich(),
-			"seam_cast": BattleSim.cast_phase_enabled(), "seam_spacing": BattleSim.spacing_enabled()}}
+			"seam_cast": BattleSim.cast_phase_enabled(), "seam_spacing": BattleSim.spacing_enabled(),
+			# NML-1073 M5 BUG-3: the Rust seam reads its `Seams::hero_attach` out of THIS key
+			# (nml-core-godot/src/plain.rs knobs_of), so an NML_CORE=1 game folds the same way the
+			# GDScript pool does. CAVEAT: the header is stamped ONCE per game, so a MIXED-seat A/B
+			# arm (fold on one side only) must run with NML_CORE unset — the GDScript path reads the
+			# knob per pick and is always seat-correct.
+			"hero_attach": BattleSim.hero_fold_enabled()}}
 
 
 ## Reaches the live TerrainOverlay the same way SoloController's terrain_type_at
