@@ -17,7 +17,7 @@ use crate::combat::{
 };
 use crate::geom::{self, V3};
 use crate::io::{Action, Seams};
-use crate::dice::{ShootResult, Tray};
+use crate::dice::{Morale, ShootResult, Tray};
 use crate::rng::GodotRng;
 use crate::rules::Spell;
 use crate::spell::{cast_success_chance_base, official_pick_order, spell_damage_ev_of, spell_ev_of};
@@ -181,30 +181,28 @@ pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
     state.alive[ti] = state.positions[ti].len() as i64;
 }
 
-/// `BattleSim._expected_shooting_morale` battle_sim.gd:1096-1105 — a shooting
-/// fail is SHAKEN, never a Rout (Rout exists only in melee).
-fn expected_shooting_morale(
-    state: &mut State,
+/// `BattleSim._expected_shooting_morale` battle_sim.gd:1096-1105 /
+/// `main._solo_shooting_morale` :8232-8250 — WHETHER the volley's target has to
+/// test at all.
+///
+/// D1-B5b splits the trigger from the outcome: the trigger is one truth, but
+/// `dice="table"` then rolls a real die for it (`tray_morale`) where the EV path
+/// asks `morale_fails_expected`. A shooting fail is SHAKEN, never a Rout — Rout
+/// exists only in melee.
+fn shooting_morale_trigger(
+    state: &State,
     us: &UnitStatic,
     ti: usize,
     alive_before: i64,
     wounds_before: i64,
-) {
+) -> bool {
     if us.model_count == 1 {
-        if state.alive[ti] > 0
+        // A single model measures morale in TOUGH WOUNDS, not models (p.10).
+        return state.alive[ti] > 0
             && wounds_left(state, ti) < wounds_before
-            && below_half(state, us, ti)
-            && morale_fails_expected(state, us, ti)
-        {
-            state.shaken[ti] = true;
-        }
-        return;
+            && below_half(state, us, ti);
     }
-    if should_test_shooting_morale(alive_before, state.alive[ti], us.model_count)
-        && morale_fails_expected(state, us, ti)
-    {
-        state.shaken[ti] = true;
-    }
+    should_test_shooting_morale(alive_before, state.alive[ti], us.model_count)
 }
 
 /// `BattleSim._ctx_of(su)` battle_sim.gd:701-712, SHOOTING half: the static
@@ -382,6 +380,53 @@ fn impact_phase(
         land_wounds(next, ti, w);
     }
     caused
+}
+
+/// `main._solo_morale_test` :8305 on the played path — the tray twin of
+/// `morale_fails_expected`, with No Retreat's self-wounds landed regen-free
+/// ("can't be ignored") and the Rout half clearing the unit off the board
+/// exactly as `expected_melee_morale` does.
+fn tray_morale(
+    state: &mut State,
+    us: &UnitStatic,
+    i: usize,
+    melee: bool,
+    tray: &mut Tray,
+    shot: &mut ShootResult,
+) {
+    if state.alive[i] <= 0 {
+        return;
+    }
+    let mut ctx = ctx_of(us, state, i);
+    // The LIVE Banner/spell bonus, not the static one: `morale_fails_expected`
+    // reads `state.morale_bonus[i]` and `_solo_morale_bonus` (main.gd:6632) is
+    // the same live read, so the ROLLED target has to be too. Reading the static
+    // profile instead is a whole point of target off on every Banner unit.
+    ctx.morale_bonus = state.morale_bonus[i];
+    let (outcome, r) = crate::dice::resolve_morale_with_tray(
+        &ctx,
+        &us.name,
+        melee,
+        below_half(state, us, i),
+        state.shaken[i],
+        // `SoloController.wounds_to_destroy` :6084 also counts the attached
+        // heroes' models; this port counts the unit's own wounds, which is the
+        // die COUNT of a No Retreat roll and nothing else.
+        wounds_left(state, i),
+        tray,
+    );
+    let self_wounds = shot.absorb(r);
+    land_wounds(state, i, self_wounds);
+    match outcome {
+        Morale::Passed => {}
+        Morale::Shaken => state.shaken[i] = true,
+        Morale::Routed => {
+            state.wounds[i].clear();
+            state.positions[i].clear();
+            state.radii[i].clear();
+            state.alive[i] = 0;
+        }
+    }
 }
 
 /// The whole CHARGE melee on the tray — `main._solo_resolve_ai_charge`
@@ -1191,8 +1236,21 @@ fn resolve_with(
                     }
                     None => apply_expected_wounds(&mut next, ti, volley, rng.as_deref_mut()),
                 }
+                // D1-B5b: the volley's morale test is the NEXT thing on the
+                // table's tray (main.gd:8248-8251). Leaving it undrawn is what
+                // put every later activation of a `dice="table"` game on a
+                // different stream than the recording.
                 let ut = &statics[next.roster.profile[ti]];
-                expected_shooting_morale(&mut next, ut, ti, alive_before, wounds_before);
+                if shooting_morale_trigger(&next, ut, ti, alive_before, wounds_before) {
+                    match dice.as_mut() {
+                        Some((tray, shot)) => tray_morale(&mut next, ut, ti, false, tray, shot),
+                        None => {
+                            if morale_fails_expected(&next, ut, ti) {
+                                next.shaken[ti] = true;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -1224,17 +1282,11 @@ fn resolve_with(
                 // undrawn so this PR changes the melee and nothing else.
                 if let Some((tray, shot)) = dice.as_mut() {
                     if let Some(li) = tray_charge(statics, &mut next, si, ti, tray, shot) {
+                        // D1-B5b: the melee loser's test is a REAL die now
+                        // (:8116-8118), where D1-B5a still asked the
+                        // expected-value oracle for the outcome.
                         let ul = &statics[next.roster.profile[li]];
-                        if next.alive[li] > 0 && morale_fails_expected(&next, ul, li) {
-                            if below_half(&next, ul, li) {
-                                next.wounds[li].clear();
-                                next.positions[li].clear();
-                                next.radii[li].clear();
-                                next.alive[li] = 0;
-                            } else {
-                                next.shaken[li] = true;
-                            }
-                        }
+                        tray_morale(&mut next, ul, li, true, tray, shot);
                     }
                 } else {
                     // The charger strikes: charging profiles, its OWN fatigue state

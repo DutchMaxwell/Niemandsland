@@ -1,4 +1,4 @@
-"""GATE D1-B5a (NML-1073) — the TABLE's MELEE and IMPACT dice, act by act, roll by roll.
+"""GATE D1-B5b (NML-1073) — the TABLE's MELEE, IMPACT and MORALE dice, act by act, roll by roll.
 
 WHAT IS BEING GATED. D1-B4 put the table's SHOOTING on the tray; the melee half
 of an activation still filled an expected-value pool and drew nothing at all.
@@ -33,6 +33,16 @@ CHARGE picks, and it is a CHARGE-LANDING divergence, not a dice one: the table's
 charge move did not connect while this port's `edge_gap_in <= MELEE_ENGAGE_IN`
 gate lands and fights. `port_silent` is the opposite and is never benign.
 
+THE MORALE CHECK, reported apart from the three bars because a morale roll is
+stamped `roll_kind` "attack" like everything else and can only be told apart by
+WHERE it sits: it is the last thing an activation draws. `trailing_morale` takes
+both sides' trailing run and compares (count, target, roller). A 1-attack strike
+that scored no hits looks the same from outside and is counted here too — the
+bucket is symmetric, so it cannot flatter the port. Buckets: `equal`,
+`table_only` (the table tested and the port did not: it found no loser, or the
+wounds it dealt made the other side lose), `port_only`, `other` (both tested, a
+different target or roller), `neither`.
+
 THE RED. `--red-misseed` seeds the tray with `dice_seed + 1` and changes nothing
 else: every die count and every target still comes out of the same recorded
 state, so the shapes line up, the comparison REACHES the faces, and every act
@@ -62,6 +72,27 @@ from shoot_replay_gate import (  # noqa: E402
 
 #: `BattleSim.CHARGE` — the only act kind that fights a melee.
 CHARGE_KIND = 3
+#: `AiCombatMath.NO_RETREAT_SELF_WOUND_MAX + 1` — the SUCCESS target of a No
+#: Retreat self-wound roll (main.gd:8365), the one morale roll of >1 die.
+NO_RETREAT_TARGET = 4
+
+
+def trailing_morale(rolls: list[tuple]) -> list[tuple]:
+    """The activation's trailing MORALE block, which is the last thing it draws.
+
+    A morale test is one die, and so is Fearless's re-roll — but No Retreat's
+    self-wound roll is `wounds_to_destroy` dice (main.gd:8364) and it is always
+    LAST. Walking back over 1-die rolls alone therefore stops at it and drops
+    the whole block, which is why it is accepted once, at the end, by its
+    target.
+    """
+    i = len(rolls)
+    if i and rolls[i - 1][0] == "attack" and rolls[i - 1][1] > 1 \
+            and rolls[i - 1][2] == NO_RETREAT_TARGET:
+        i -= 1
+    while i > 0 and rolls[i - 1][0] == "attack" and rolls[i - 1][1] == 1:
+        i -= 1
+    return rolls[i:]
 
 
 def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool) -> int:
@@ -76,7 +107,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool) -> int:
              ("acts", "full_equal", "prefix_equal", "table_longer", "port_longer",
               "both_silent", "table_silent", "port_silent", "shape", "faces", "declined",
               "rolls", "rolls_equal", "hits", "hits_equal", "next_checked", "next_equal",
-              "equal_over_2", "equal_dice_max")}
+              "equal_over_2", "equal_dice_max", "morale_equal", "morale_table_only",
+              "morale_port_only", "morale_other", "morale_none")}
     unported: dict[str, int] = {}
     reasons: dict[str, int] = {}
     firsts: list[str] = []
@@ -126,6 +158,24 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool) -> int:
                     firsts.append("%s act %d [port_silent] the table drew %d roll(s), the port none"
                                   % (d.name, k, len(want)))
                 continue
+
+            # MORALE, measured apart from the four-field verdict and only on the
+            # acts where BOTH sides rolled: an act the table never fought has no
+            # morale test to compare against.
+            gm, wm = trailing_morale(got), trailing_morale(want)
+            if not gm and not wm:
+                tally["morale_none"] += 1
+            elif gm and not wm:
+                tally["morale_port_only"] += 1
+            elif wm and not gm:
+                tally["morale_table_only"] += 1
+                if len(firsts) < 3:
+                    firsts.append("%s act %d [morale_table_only] the table drew %s, the port none"
+                                  % (d.name, k, [(w[1], w[2], w[4]) for w in wm]))
+            elif [(g[1], g[2], g[4]) for g in gm] == [(w[1], w[2], w[4]) for w in wm]:
+                tally["morale_equal"] += 1
+            else:
+                tally["morale_other"] += 1
 
             verdict, why = "equal", ""
             tally["rolls"] += max(len(got), len(want))
@@ -184,8 +234,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool) -> int:
                        for key in (action["unit"], action["charge"])):
                     tally["next_equal"] += 1
 
-    label = {"table": "GATE D1-B5a",
-             "misseed": "RED D1-B5a --red-misseed (tray on dice_seed+1)"}[mode]
+    label = {"table": "GATE D1-B5b",
+             "misseed": "RED D1-B5b --red-misseed (tray on dice_seed+1)"}[mode]
     silent_table = tally["both_silent"] + tally["table_silent"]
     print()
     print("%s over %d games, %d charge acts (%.1fs)"
@@ -207,6 +257,10 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool) -> int:
           % (silent_table, tally["acts"], tally["both_silent"], tally["table_silent"]))
     print("        : %d/%d acts where the PORT drew nothing while the table rolled — never benign"
           % (tally["port_silent"], tally["acts"]))
+    print("  morale: %d equal (count, target and roller), %d table only, %d port only, "
+          "%d other, %d neither"
+          % (tally["morale_equal"], tally["morale_table_only"], tally["morale_port_only"],
+             tally["morale_other"], tally["morale_none"]))
     print("  parted: %d shape, %d faces, %d declined" % (tally["shape"], tally["faces"],
                                                          tally["declined"]))
     print("  first field to part: %s"

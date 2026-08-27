@@ -54,6 +54,10 @@ pub struct Ctx {
     /// "Unpredictable" (exact rule AND registry-active). One die per melee
     /// phase, before any strike.
     pub unpredictable: bool,
+    /// `RulesRegistry.unit_rule_active(unit, "No Retreat")` main.gd:8360 — a
+    /// failed morale test counts as PASSED instead, and is paid for in
+    /// self-wounds that cannot be ignored.
+    pub no_retreat: bool,
     /// `main._solo_unit_has_unwieldy` :16675 — "strikes last when charging":
     /// the CHARGER's strikes swap BEHIND the defender's strike-back
     /// (main.gd:8073-8078). Counter and Impact keep their slots.
@@ -498,6 +502,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         furious: has_special_rule(&p.special_rules, "Furious"),
         fearless: has_special_rule(&p.special_rules, "Fearless"),
         fear: unit_rating(&p.special_rules, "Fear"),
+        no_retreat: unit_rule_active(reg, p, "No Retreat"),
         // BOTH variants, in `_solo_unpredictable_rule`'s own order and with its
         // own gates: the melee-only Fighter form needs the rule on every model,
         // the generic form an EXACT rule name plus a registry that fields it.

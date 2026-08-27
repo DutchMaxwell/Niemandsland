@@ -1,5 +1,5 @@
-"""GATE D1-B5a (NML-1073 M5) — MELEE and IMPACT replayed on the tray, on a
-BUNDLED game.
+"""GATE D1-B5b (NML-1073 M5) — MELEE, IMPACT and MORALE replayed on the tray, on
+a BUNDLED game.
 
 `tools/melee_replay_gate.py` runs over the whole 168-game arena corpus, which
 lives outside the repo. This test runs the same comparison over ONE game copied
@@ -21,9 +21,14 @@ WHAT IS PINNED:
     already held, so one would mean the `Tray` twin itself is wrong — GATE R's
     ground, already proven 6003/6003.
   * every compared roll scores the same hits/blocks off the recorded faces.
-  * the FULL-equal charge activation, which is what carries the draw order:
-    Impact, the charger's strikes and the strike-back all have to land in the
-    right places for a whole activation to match roll for roll.
+  * the FULL-equal charge activations, which is what carries the draw order:
+    Impact, the charger's strikes, the strike-back AND the loser's morale test
+    all have to land in the right places for a whole activation to match roll
+    for roll. D1-B5b moved this fixture from 1 to 2 and the compared rolls from
+    9 to 10, and the morale die is what did it — on the whole 168-game corpus
+    the same change moved FULL-equal 7 -> 18 of 237.
+  * one activation where the port's trailing morale block matches the table's in
+    count, target AND roller.
 
 THE RED, and it is the stricter of the two this port has. The corpus tool's
 `--red-misseed` can only speak for acts whose SHAPES already agree; here the
@@ -56,7 +61,8 @@ def replay(seed_shift: int = 0) -> dict:
     core = nml_core.load(str(REPO))
     core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
                      "knobs": dict(head.get("knobs", {}), hero_attach=True)})
-    out = {"acts": 0, "full_equal": 0, "faces": 0, "rolls": 0, "hits_equal": 0}
+    out = {"acts": 0, "full_equal": 0, "faces": 0, "rolls": 0, "hits_equal": 0,
+           "morale_equal": 0}
     for act in lines:
         k = int(act["act"])
         action = (act.get("pick") or {}).get("action") or {}
@@ -75,6 +81,9 @@ def replay(seed_shift: int = 0) -> dict:
                 for r in dice[i0:] if int(r["act"]) == k]
         if not got or not want:
             continue
+        gm, wm = mrg.trailing_morale(got), mrg.trailing_morale(want)
+        if gm and wm and [(g[1], g[2], g[4]) for g in gm] == [(w[1], w[2], w[4]) for w in wm]:
+            out["morale_equal"] += 1
         for g, w in zip(got, want):
             if g[:3] != w[:3] or g[4] != w[4]:
                 break
@@ -94,9 +103,10 @@ def test_the_bundled_game_replays_its_melee_dice_on_the_tray():
     got = replay()
     assert got["acts"] == 3, "the fixture's charge acts: %s" % got
     assert got["faces"] == 0, "a face parted after the shape held — the Tray twin is wrong: %s" % got
-    assert got["rolls"] == 9, "rolls compared before the first shape divergence: %s" % got
+    assert got["rolls"] == 10, "rolls compared before the first shape divergence: %s" % got
     assert got["hits_equal"] == got["rolls"], "hits/blocks off the recorded faces: %s" % got
-    assert got["full_equal"] >= 1, "the FULL-equal charge act fell away: %s" % got
+    assert got["full_equal"] >= 2, "a FULL-equal charge act fell away: %s" % got
+    assert got["morale_equal"] >= 1, "no morale block matched count, target and roller: %s" % got
 
 
 def test_red_a_wrong_seeded_tray_parts_on_the_faces():
@@ -107,3 +117,36 @@ def test_red_a_wrong_seeded_tray_parts_on_the_faces():
     assert red["acts"] == 3
     assert red["faces"] > 0, "a wrong-seeded tray still matched every face: %s" % red
     assert red["full_equal"] == 0, "a wrong-seeded tray produced a FULL-equal act: %s" % red
+
+
+def test_trailing_morale_keeps_a_no_retreat_block_together():
+    """RED-GREEN for `trailing_morale`, on the one morale roll of MORE than one
+    die.
+
+    A morale test is one die and so is Fearless's re-roll, but No Retreat's
+    self-wound roll is `wounds_to_destroy` dice (main.gd:8364) and it is always
+    LAST. Walking back over 1-die rolls alone therefore stops at it and drops
+    the whole block — the gate would then report `morale_none` for exactly the
+    activations that tested hardest. `~/selfplay_out/qbe_ref` fields no No
+    Retreat unit, so this is the only place the rule can be held to.
+    """
+    rolls = [
+        ("attack", 6, 3, [1, 2, 3, 4, 5, 6], "AI (Striker)"),   # a strike
+        ("defense", 2, 5, [1, 2], "AI (Target)"),               # its saves
+        ("attack", 1, 4, [2], "AI (Target)"),                   # the morale test
+        ("attack", 1, 4, [3], "AI (Target)"),                   # Fearless's re-roll
+        ("attack", 5, 4, [1, 1, 4, 5, 2], "AI (Target)"),       # No Retreat, 5 dice
+    ]
+    assert mrg.trailing_morale(rolls) == rolls[2:], "the whole block, self-wounds included"
+
+    # RED: the 1-die-only walk-back, which is what this function used to be.
+    i = len(rolls)
+    while i > 0 and rolls[i - 1][0] == "attack" and rolls[i - 1][1] == 1:
+        i -= 1
+    assert rolls[i:] == [], "the old walk-back stopped at the self-wound roll and found nothing"
+
+    # And it must not swallow a plain multi-die strike that happens to end an
+    # activation at the same target: only ONE such roll is taken, at the end.
+    plain = rolls[:2] + [("attack", 4, 4, [1, 2, 3, 4], "AI (Striker)")]
+    assert mrg.trailing_morale(plain) == plain[2:], "one trailing roll, and no further"
+    assert mrg.trailing_morale(rolls[:2]) == [], "a save batch ends the block"
