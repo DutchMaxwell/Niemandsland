@@ -132,6 +132,7 @@ pub(crate) struct PlainState {
     scoring: String,
     #[serde(default)]
     objectives: Vec<Objective>,
+    #[serde(deserialize_with = "units_in_capture_order")]
     units: Ordered<PlainUnit>,
     #[serde(default)]
     markers_meta: Vec<Marker>,
@@ -273,44 +274,78 @@ pub(crate) fn roster_of(
     Ok(rc)
 }
 
-/// The CAPTURE order of a roster, recovered from the unit ids.
+/// `(side, index)` of a recorder-shaped unit id `p<player>_<index>_<token>`, or
+/// `None` for an id this port did not shape.
+fn natural_key(id: &str) -> Option<(i64, i64)> {
+    let mut it = id.split('_');
+    let side = it.next()?.strip_prefix('p')?.parse::<i64>().ok()?;
+    let index = it.next()?.parse::<i64>().ok()?;
+    Some((side, index))
+}
+
+/// The `units` object, read in CAPTURE order whatever order the document holds.
 ///
-/// The recorder writes each node with `JSON.stringify(rec, "", true, true)`
-/// (ai_planner.gd:505 and :508) — the third argument is Godot's `sort_keys`, so
-/// the `units` OBJECT of every recorded state comes out KEY-SORTED. The
-/// `los_pairs` rows, however, are written by walking the live dictionary in its
-/// own insertion order (battle_sim.gd:1311-1319, `for uid in state["units"]`),
-/// which is `BattleSim.capture()`'s roster order (:1128-1240: "units are a Dict —
-/// INSERTION ORDER is roster order and load-bearing").
+/// `BattleSim.capture()` (battle_sim.gd:1128-1240) says it outright: "units are
+/// a Dict — INSERTION ORDER is roster order and load-bearing". Two writers lose
+/// that order on the way out and neither can be asked to keep it:
+/// `JSON.stringify(rec, "", true, true)` key-SORTS the recorded corpus
+/// (ai_planner.gd:505), and `plain_of` below builds the object in a
+/// `serde_json::Map`, i.e. a `BTreeMap`, which sorts it again on every
+/// `state.plain()` round-trip of the Python trainer.
 ///
-/// The two orders agree only while every unit id sorts the way it was captured.
-/// They diverge the moment a side fields ten or more units: the ids are
-/// `p<player>_<index>_<token>`, and lexically "p2_10_..." sorts BEFORE
-/// "p2_1_...", so on a 20-unit corpus every p2 row is read one slot off — and
-/// the sight gate of `reply_threat` (battle_sim.gd:1013-1014) and of `resolve`'s
-/// shoot branch (:629) then answers for the wrong pair.
-///
-/// Returns, per ROSTER index, the row/column that unit owns in `los_pairs`. Ids
-/// that do not parse leave the mapping at the identity — which is exactly what
-/// every corpus without a two-digit unit index needs anyway.
-fn capture_positions(keys: &[String]) -> Vec<usize> {
-    fn natural_key(id: &str) -> Option<(i64, i64)> {
-        let mut it = id.split('_');
-        let side = it.next()?.strip_prefix('p')?.parse::<i64>().ok()?;
-        let index = it.next()?.parse::<i64>().ok()?;
-        Some((side, index))
-    }
-    let n = keys.len();
-    let mut natural: Vec<(i64, i64, usize)> = Vec::with_capacity(n);
-    for (i, k) in keys.iter().enumerate() {
+/// While no side fields ten units the two orders agree and this is a no-op. The
+/// moment one does they come apart — "p1_10_..." sorts BEFORE "p1_1_..." — and
+/// the roster, the board rows the trainer logs, the activation pool order and
+/// the `los_pairs` mapping all read one slot off. An id shape this port did not
+/// write leaves the document order alone, which is what a hand-built state and
+/// every pre-recorder corpus need.
+fn units_in_capture_order<'de, D: Deserializer<'de>>(
+    d: D,
+) -> Result<Ordered<PlainUnit>, D::Error> {
+    let mut units = Ordered::<PlainUnit>::deserialize(d)?;
+    let mut keyed: Vec<(i64, i64, usize)> = Vec::with_capacity(units.0.len());
+    for (i, (k, _)) in units.0.iter().enumerate() {
         match natural_key(k) {
-            Some((s, x)) => natural.push((s, x, i)),
-            None => return (0..n).collect(), // unknown id shape -> identity
+            Some((s, x)) => keyed.push((s, x, i)),
+            None => return Ok(units), // unknown id shape -> document order
         }
     }
-    natural.sort();
+    keyed.sort();
+    if keyed.iter().enumerate().all(|(row, &(_, _, i))| row == i) {
+        return Ok(units);
+    }
+    let mut slots: Vec<Option<(String, PlainUnit)>> = units.0.into_iter().map(Some).collect();
+    units = Ordered(
+        keyed
+            .into_iter()
+            .map(|(_, _, i)| slots[i].take().expect("each index taken once"))
+            .collect(),
+    );
+    Ok(units)
+}
+
+/// The row/column each ROSTER index owns in the `los_pairs` matrix.
+///
+/// The matrix is written KEY-SORTED by both writers that produce one:
+/// `BattleSim.state_to_plain` sorts explicitly (battle_sim.gd:1492-1506,
+/// `los_keys.sort()` — "row i is one character per unit KEY-SORTED"), and
+/// `Terrain::los_pairs` (terrain.rs:295) ports that sort. The ROSTER, however,
+/// is the capture order `units_in_capture_order` restores, because that is the
+/// order `AiPlanner`'s root loop walks (`for key in state["units"]`).
+///
+/// The two agree only while every unit id sorts the way it was captured. They
+/// come apart the moment a side fields eleven units: the ids are
+/// `p<player>_<index>_<token>`, and lexically "p1_10_..." sorts BEFORE
+/// "p1_1_...", so twelve of a twenty-unit matrix's rows land on the wrong unit
+/// — and the sight gate of `reply_threat` (battle_sim.gd:1013-1014) and of
+/// `resolve`'s shoot branch (:629) then answers for the wrong pair.
+fn los_positions(keys: &[String]) -> Vec<usize> {
+    let n = keys.len();
+    let mut sorted: Vec<(&str, usize)> =
+        keys.iter().enumerate().map(|(i, k)| (k.as_str(), i)).collect();
+    sorted.sort();
     let mut pos = vec![0usize; n];
-    for (row, &(_, _, roster_i)) in natural.iter().enumerate() {
+    for (row, &(_, roster_i)) in sorted.iter().enumerate() {
         pos[roster_i] = row;
     }
     pos
@@ -328,8 +363,8 @@ impl PlainState {
 
 pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Roster>) -> State {
     let n = roster.keys.len();
-    // Roster index -> its row/column in the recorded matrix; see `capture_positions`.
-    let cap = capture_positions(&roster.keys);
+    // Roster index -> its row/column in the KEY-SORTED matrix; see `los_positions`.
+    let cap = los_positions(&roster.keys);
     let mut st = State {
         roster,
         profiles: Rc::clone(profiles),
@@ -369,8 +404,9 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         charge_no_difficult: Vec::with_capacity(n),
         charge_probe_r: Vec::with_capacity(n),
         los_pairs: plain.los_pairs.as_ref().map(|rows| {
-            // Read the matrix in its own (capture) order and STORE it in roster
-            // order, so `_los_clear`'s port can index it with roster indices.
+            // Read the matrix in its own (key-sorted) order and STORE it in
+            // roster order, so `_los_clear`'s port can index it with roster
+            // indices.
             let raw: Vec<&[u8]> = rows.iter().map(|r| r.as_bytes()).collect();
             let mut m = Vec::with_capacity(n * n);
             for i in 0..n {
@@ -641,10 +677,17 @@ pub fn plain_of(st: &State) -> serde_json::Value {
         );
     }
     if let Some(m) = &st.los_pairs {
+        // KEY-SORTED, which is the one order `state_to_plain` writes and
+        // `state_of` reads — the state carries it in ROSTER order.
+        let pos = los_positions(&st.roster.keys);
+        let mut at = vec![0usize; n];
+        for (i, &row) in pos.iter().enumerate() {
+            at[row] = i;
+        }
         let mut rows = Vec::with_capacity(n);
-        for i in 0..n {
+        for &i in &at {
             let mut s = String::with_capacity(n);
-            for j in 0..n {
+            for &j in &at {
                 s.push(if m[i * n + j] { '1' } else { '0' });
             }
             rows.push(Value::String(s));
@@ -656,51 +699,91 @@ pub fn plain_of(st: &State) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-    use super::capture_positions;
+    use super::{los_positions, units_in_capture_order};
 
-    /// Red-green for the `los_pairs` re-order: while no side fields ten units
-    /// the recorded (sorted) order IS the capture order, and the mapping must
-    /// stay the identity — anything else would move the three 1000pt corpora.
+    /// GATE Q-A-2 (NML-1073) — a `units` OBJECT is key-sorted by both writers
+    /// that produce one (`JSON.stringify(.., sort_keys)` for the corpus,
+    /// `plain_of`'s `serde_json::Map` on every `state.plain()` round-trip), and
+    /// on a side of eleven units that is NOT the capture order. Read back, the
+    /// eleventh unit has to be eleventh again — the first assertion here is the
+    /// RED half: it states what the document order actually is.
+    #[test]
+    fn a_key_sorted_units_object_is_read_back_in_capture_order() {
+        let mut keys: Vec<String> = (0..11).map(|i| format!("p1_{i}_a")).collect();
+        keys.sort();
+        assert_eq!(keys[1], "p1_10_a", "sorted document order puts p1_10 second");
+        let doc = format!(
+            "{{{}}}",
+            keys.iter().map(|k| format!("\"{k}\":{{}}")).collect::<Vec<_>>().join(",")
+        );
+        let mut de = serde_json::Deserializer::from_str(&doc);
+        let units = units_in_capture_order(&mut de).expect("plain units");
+        let read: Vec<&str> = units.0.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(read[1], "p1_1_a", "capture order puts p1_1 second");
+        assert_eq!(read[10], "p1_10_a", "captured LAST — the eleventh unit");
+    }
+
+    /// Ten units a side and fewer: the two orders agree, and the read must not
+    /// move a single entry — the 1000/1500pt corpora ride on that.
+    #[test]
+    fn under_ten_units_a_side_the_document_order_is_kept() {
+        let mut keys: Vec<String> = (0..9)
+            .map(|i| format!("p1_{i}_a"))
+            .chain((0..9).map(|i| format!("p2_{i}_b")))
+            .collect();
+        keys.sort();
+        let doc = format!(
+            "{{{}}}",
+            keys.iter().map(|k| format!("\"{k}\":{{}}")).collect::<Vec<_>>().join(",")
+        );
+        let mut de = serde_json::Deserializer::from_str(&doc);
+        let units = units_in_capture_order(&mut de).expect("plain units");
+        let read: Vec<String> = units.0.iter().map(|(k, _)| k.clone()).collect();
+        assert_eq!(read, keys);
+    }
+
+    /// Red-green for the `los_pairs` mapping: while no side fields eleven
+    /// units the KEY-SORTED matrix order IS the capture order, and the mapping
+    /// must stay the identity — anything else would move the 1000/1500pt
+    /// corpora.
     #[test]
     fn nine_units_a_side_keep_the_identity_mapping() {
         let keys: Vec<String> = (0..9)
             .map(|i| format!("p1_{i}_aaa"))
             .chain((0..9).map(|i| format!("p2_{i}_bbb")))
             .collect();
-        assert_eq!(capture_positions(&keys), (0..18).collect::<Vec<_>>());
+        assert_eq!(los_positions(&keys), (0..18).collect::<Vec<_>>());
     }
 
-    /// The case the 2000pt corpus fields: "p2_10_..." sorts BEFORE "p2_1_...",
-    /// so the recorded object order (sorted) and the matrix order (capture)
-    /// come apart — the mapping has to put p2_10 back on the LAST row.
+    /// The case the 2000pt lists field: "p2_10_..." sorts BEFORE "p2_1_...", so
+    /// the CAPTURE-ordered roster and the KEY-SORTED matrix come apart — the
+    /// eleventh p2 unit owns row 3, not the row its roster index names.
     #[test]
-    fn a_two_digit_unit_index_breaks_sorted_order_and_is_repaired() {
-        let mut keys: Vec<String> = (0..2)
+    fn a_two_digit_unit_index_moves_the_matrix_rows() {
+        // capture order — what `units_in_capture_order` restores
+        let keys: Vec<String> = (0..2)
             .map(|i| format!("p1_{i}_aaa"))
             .chain((0..11).map(|i| format!("p2_{i}_bbb")))
             .collect();
-        keys.sort(); // exactly what JSON.stringify(.., sort_keys=true) writes
-        let pos = capture_positions(&keys);
+        let pos = los_positions(&keys);
         let at = |id: &str| pos[keys.iter().position(|k| k == id).unwrap()];
-        assert_eq!(
-            keys.iter().position(|k| k == "p2_10_bbb"),
-            Some(3),
-            "sorted order puts p2_10 straight after p2_0"
-        );
-        assert_eq!(at("p2_10_bbb"), 12, "captured LAST — the eleventh p2 unit");
-        assert_eq!(at("p2_1_bbb"), 3);
-        assert_eq!(at("p2_9_bbb"), 11);
+        assert_eq!(at("p2_10_bbb"), 3, "sorted order puts p2_10 straight after p2_0");
+        assert_eq!(at("p2_1_bbb"), 4);
+        assert_eq!(at("p2_9_bbb"), 12);
         assert_eq!(at("p1_0_aaa"), 0);
         let mut seen = pos.clone();
         seen.sort();
         assert_eq!(seen, (0..13).collect::<Vec<_>>(), "still a permutation");
     }
 
-    /// A corpus whose ids the recorder did not shape keeps the identity, so an
-    /// unknown id shape degrades to the pre-fix behaviour instead of guessing.
+    /// An id shape this port did not write keeps the DOCUMENT order, so a
+    /// hand-built state degrades to the pre-fix reading instead of guessing.
     #[test]
-    fn an_unparsable_id_falls_back_to_the_identity() {
-        let keys = vec!["hero".to_string(), "p1_0_aaa".to_string()];
-        assert_eq!(capture_positions(&keys), vec![0, 1]);
+    fn an_unparsable_id_keeps_the_document_order() {
+        let doc = "{\"hero\":{},\"p1_0_aaa\":{}}";
+        let mut de = serde_json::Deserializer::from_str(doc);
+        let units = units_in_capture_order(&mut de).expect("plain units");
+        let read: Vec<&str> = units.0.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(read, vec!["hero", "p1_0_aaa"]);
     }
 }
