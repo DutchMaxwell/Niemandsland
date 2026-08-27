@@ -19,31 +19,54 @@ The three GDScript functions ported here, field for field:
 
 WHAT IT DOES NOT PRODUCE (deliberately, and named rather than faked):
 
-  * `planner_positions[].board` / `.features` — `BattleSim.board_rows` and
-    `AiMissionEval.features` are the two encoders the crate does not carry yet
-    (recon items 9 and 10). The rows here carry side/round/seq/value/unit/kind/
-    intent, which is what the M3-5 gate compares; the trainer's net inputs are a
-    later step.
-  * `planner_positions[].pair` / `.fork` — the E0b/E2 counterfactual sidecars.
-    They resolve on CLONES under log-local generators (core_selfplay.gd:262-296)
-    and never touch the game's dice stream, so leaving them out changes no game;
-    it only leaves the corpus thinner.
-  * `terrain` (the drawing list), `magic` (the cast telemetry) and
-    `unknown_rules`. The terrain bank stores the act-header shape, not
-    `SchoolTerrain`'s `pieces`; the magic ledger needs the spell registry's
-    per-unit book and the unknown-rule tally needs the port's `Unimplemented`
-    list, neither of which the seam exposes. All three are ABSENT keys here,
-    never zero-filled ones: a `[]` would claim a coverage this does not have.
+  * `planner_positions[].intent` — the planner's ORIGINAL intent SENTENCE
+    (`AiPlanner`'s prose, "X: rush objective 1 — win 0.63 -> 0.62; over Y ..."),
+    which the crate does not build: it is a report string, not a rule. The key is
+    present and EMPTY here rather than absent, because that is what the M3-5 rows
+    already carried. An ABSENT key would be the honest shape; the key stays for
+    the corpus reader that already expects it.
+
+THE RESULT FIELDS `terrain` AND `magic` (NML-1073 M3-9b).
+
+  * `terrain` is the DRAWING list `tools/core_selfplay.gd:725` writes —
+    `SchoolTerrain.generate(seed)["pieces"]`, one `[type, cx_in, cz_in, w_in,
+    h_in, rot]` per placed piece. It is NOT derivable from the act-header terrain
+    the M3-4 bank carried: that shape merges every footprint into a cell map and
+    drops each piece's origin, size and rotation. So the BANK carries it now
+    (`tools/terrain_bank_dump.gd` writes `pieces` next to `terrain`), and a board
+    file without the key makes this module RAISE rather than write a guess.
+  * `magic` is the cast telemetry (`_magic_init` / `_magic_tally` /
+    `_spells_by_kind_tally` / `_magic_eligibility_tally`, core_selfplay.gd
+    :33-131), ported field for field. The trainer runs with the cast sub-phase
+    OFF (`seam_cast` below), so `casts`, `tokens_spent` and `spells_by_kind` are
+    all zero — MEASURED zero, from the same token deltas and cast log the
+    GDScript reads, not written zero.
+
+THE ENCODER'S QUALITY/DEFENSE COLUMNS. Board columns 10 and 11 come off the
+`GameUnit`'s `source_data` (battle_sim.gd:233-234). `tools/core_selfplay.gd`
+used to hand every unit a BLANK `OPRApiClient.OPRUnit`, so its whole corpus read
+that class's 4/4 defaults there; #392 fills the stats, and the DEFAULT here is
+the unit's own quality/defense to match. `legacy_source_qd=True` reproduces the
+pre-#392 reading and exists only to replay such a corpus.
+
+THE SIDECARS (NML-1073 M3-9). `planner_positions[].board` / `.ids` /
+`.features` / `.pair` / `.fork` are written, on the crate's own encoders
+(`nml_core.Core.board_rows` / `.board_row_indices` / `.features`) and the crate's
+cheap policy (`.policy_step`). The pair and the fork resolve on CLONES under
+generators of their own — the pair's `game_seed * 100000 + seq` (+ 50000 for the
+runner branch), the fork's `game_seed * 1000003 + seq (+ 500011) + rep * 70001` —
+so the game's own dice stream is untouched and the played game is byte-identical
+with `sidecars=False`.
 
 THE DICE. One `nml_core.Rng` per game, seeded with the game seed, exactly as
 `_play_one` (:169-170) does: deployment draws first (p1 then p2, x then z per
 unit), then the two `randi_range(1, 6)` of the opener roll-off, then every
 played `resolve_stochastic`. A per-call seed would be a different game.
 
-THE BOARD. `SchoolTerrain.generate(seed)` is a Godot layouter; M3-4 banked its
-output for seeds 1..200 in the act-header terrain shape
-(`tools/terrain_bank_dump.gd`), and this module reads the bank. A seed outside
-the bank raises rather than inventing a board.
+THE BOARD. `SchoolTerrain.generate(seed)` is a Godot layouter;
+`tools/terrain_bank_dump.gd` banks its output per seed — the act-header terrain
+shape AND the drawing list — and this module reads the bank. A seed outside the
+bank raises rather than inventing a board.
 """
 
 from __future__ import annotations
@@ -64,6 +87,11 @@ TABLE_D_IN = 48.0
 ROUNDS = 4
 # game_unit.gd — `add_round_caster_points` caps the accumulation here.
 CASTER_POINTS_CAP = 6
+# `OPRApiClient.OPRUnit` :72-73 — the defaults a BLANK source_data carries, and
+# so the quality/defense every pre-#392 trainer row was encoded with. Used only
+# by `play_game(legacy_source_qd=True)`; see the module docstring.
+SOURCE_DATA_QUALITY = 4
+SOURCE_DATA_DEFENSE = 4
 # terrain_rules.gd:20 — TerrainType.RUINS / FOREST are the two that give cover.
 COVER_TYPES = (1, 2)
 # separation_checker.gd — the trainer's units never carry a base size, so every
@@ -209,17 +237,29 @@ def capture(
 # --------------------------------------------------------------- the board ---
 
 
-def load_board(seed: int, bank_dir: str | Path) -> tuple["nml_core.Board", dict[str, Any]]:
-    """One banked school board — `tools/terrain_bank_dump.gd` writes the act
-    header's terrain object for `SchoolTerrain.generate(seed)`."""
+def load_board(
+    seed: int, bank_dir: str | Path
+) -> tuple["nml_core.Board", dict[str, Any], list]:
+    """One banked school board — `tools/terrain_bank_dump.gd` writes both shapes
+    `SchoolTerrain.generate(seed)` has: the act header's terrain object, and the
+    `pieces` drawing list the result file carries as `terrain`.
+
+    A bank written before `pieces` existed raises HERE rather than letting the
+    result file carry a guessed drawing list."""
     path = Path(bank_dir) / ("board_%d.json" % seed)
     if not path.exists():
         raise FileNotFoundError(
             "no banked board for seed %d (%s) — run tools/terrain_bank_dump.gd" % (seed, path)
         )
     with open(path, encoding="utf-8") as f:
-        terrain = json.load(f)["terrain"]
-    return nml_core.board(terrain), terrain
+        board = json.load(f)
+    if "pieces" not in board:
+        raise KeyError(
+            "banked board %s carries no `pieces` — re-run tools/terrain_bank_dump.gd "
+            "(the result file's `terrain` is that drawing list and cannot be "
+            "rebuilt from the header shape)" % path
+        )
+    return nml_core.board(board["terrain"]), board["terrain"], board["pieces"]
 
 
 # ------------------------------------------------------------------- knobs ---
@@ -283,32 +323,263 @@ def _refill_round_caster_points(unit: dict[str, Any], profile: dict[str, Any]) -
     return int(unit["casts"]) - before
 
 
-def _round_start(plain: dict[str, Any], round_no: int, by_key: dict[str, dict]) -> int:
-    """`_play_one`'s per-round reset (core_selfplay.gd:190-201): the round number,
-    the expired spell modifiers (`BattleSim.reset_round_mods`), the activation and
-    fatigue flags, and — from round 2 — the Caster(X) refill.
+def _shift_pieces(pieces: list, cells: int) -> list:
+    """The terrain RED PROOF and nothing else: every drawn piece's centre moved
+    `cells` 3" cells along +x. `0` returns the banked list unchanged, which is
+    what every real game writes."""
+    if not cells:
+        return pieces
+    out = []
+    for p in pieces:
+        q = list(p)
+        q[1] = q[1] + cells * 3.0
+        out.append(q)
+    return out
 
-    Returns the tokens granted this round, which is the one number
-    `_refill_round_caster_points` feeds the trainer's magic ledger — kept here so
-    a caller that writes that ledger has it, though this port does not (see the
-    module docstring)."""
+
+# ------------------------------------------------------------------- magic ---
+
+
+def _magic_init(units: list[dict[str, Any]], books: dict[str, list[float]]) -> dict[str, Any]:
+    """`_magic_init` core_selfplay.gd:34-56 — the per-side seed counters, read
+    off the BUILT rosters before any activation. `casts_current` at that point is
+    `initialize_caster_points` (game_unit.gd:419-422), i.e. the profile's
+    `caster_value` when positive, which is exactly what `capture` writes.
+
+    `books_resolved` asks `SpellsRegistry.spells_for_unit` — a (system, faction)
+    lookup that is NOT gated on Caster(X); the token test in front of it is."""
+    magic: dict[str, Any] = {
+        "granted": {"p1": 0, "p2": 0},
+        "casters": {"p1": 0, "p2": 0},
+        "books_resolved": {"p1": 0, "p2": 0},
+        "casts": {"p1": 0, "p2": 0},
+        "tokens_spent": {"p1": 0, "p2": 0},
+        "caster_activations": {"p1": 0, "p2": 0},
+        "in_range_activations": {"p1": 0, "p2": 0},
+        "spells_by_kind": {
+            "p1": {"damage": 0, "buff": 0, "debuff": 0},
+            "p2": {"damage": 0, "buff": 0, "debuff": 0},
+        },
+    }
+    for u in units:
+        # `capture` (:189) reads the side off the unit id, and `_magic_init`
+        # walks the two BUILT rosters — the same split, from the same place.
+        key = "p1" if str(u["unit_id"]).startswith("p1_") else "p2"
+        tokens = max(int(u["caster_value"]), 0)
+        magic["granted"][key] += tokens
+        if tokens > 0:
+            magic["casters"][key] += 1
+            if books.get(u["unit_id"]):
+                magic["books_resolved"][key] += 1
+    return magic
+
+
+def _magic_tally(magic: dict[str, Any], side_key: str, before: int, after: int) -> None:
+    """`_magic_tally` core_selfplay.gd:66-69 — a POSITIVE token delta across the
+    one PLAYED apply is the activation's cast event. The pair/fork resolves run
+    on clones and never reach this call."""
+    delta = before - after
+    if delta > 0:
+        magic["casts"][side_key] += 1
+        magic["tokens_spent"][side_key] += delta
+
+
+def _spells_by_kind_tally(
+    magic: dict[str, Any], side_key: str, kinds: list[str], frm: int
+) -> None:
+    """`_spells_by_kind_tally` core_selfplay.gd:74-81 — the KINDS this
+    activation stamped into the round's cast log, counted from the pre-apply
+    mark. A kind the counter does not carry is skipped, exactly as the
+    GDScript's `by_kind.has(kind)` does."""
+    by_kind = magic["spells_by_kind"][side_key]
+    for kind in kinds[max(frm, 0):]:
+        if kind in by_kind:
+            by_kind[kind] += 1
+
+
+def _magic_eligibility_tally(
+    magic: dict[str, Any], side_key: str, state, actor: int, max_range_in: float
+) -> None:
+    """`_magic_eligibility_tally` core_selfplay.gd:109-131 — the DENOMINATOR
+    behind `casts`: how often a token-bearing unit activated at all, and how
+    often it did so with a living enemy inside its longest spell range. Read
+    PRE-apply, the same instant `casts_before` is read."""
+    if state.casts()[actor] <= 0:
+        return
+    magic["caster_activations"][side_key] += 1
+    if max_range_in <= 0.0:
+        return
+    if state.enemy_within(actor, max_range_in):
+        magic["in_range_activations"][side_key] += 1
+
+
+def _round_start(
+    plain: dict[str, Any],
+    round_no: int,
+    by_key: dict[str, dict],
+    magic: dict[str, Any] | None = None,
+) -> int:
+    """`_play_one`'s per-round reset (core_selfplay.gd:190-206): the round number,
+    the round's EMPTY cast log, the expired spell modifiers
+    (`BattleSim.reset_round_mods`), the activation and fatigue flags, and — from
+    round 2 — the Caster(X) refill.
+
+    Returns the tokens granted this round, and books them per side into `magic`
+    when one is given — `_refill_round_caster_points` (:100) does exactly that."""
     plain["round"] = round_no
+    plain["cast_events"] = []
     granted = 0
     for key, u in plain["units"].items():
         u["mods"] = dict(u.get("mods_base", ZERO_MODS))
         u["activated"] = False
         u["fatigued"] = False
         if round_no >= 2:
-            granted += _refill_round_caster_points(u, by_key[key])
+            got = _refill_round_caster_points(u, by_key[key])
+            granted += got
+            if magic is not None:
+                magic["granted"]["p%d" % int(u["player"])] += got
     return granted
 
 
-def _play_round(core, state, opener: int, rng, log: list, round_no: int) -> tuple[Any, int]:
+# ---------------------------------------------------------------- sidecars ---
+
+# `tools/core_selfplay.gd:262-268` and `:309-318` — the three log-local dice
+# formulas, written once here because a guessed seed is a silent lie.
+PAIR_SEED_STRIDE = 100000
+PAIR_RUNNER_OFFSET = 50000
+FORK_SEED_STRIDE = 1000003
+FORK_RUNNER_OFFSET = 500011
+FORK_REP_STRIDE = 70001
+# `NML_FORK_SALT` (core_selfplay.gd:304-306) shifts ONLY the fork dice.
+FORK_REPS = 3
+
+
+def _local_rng(seed: int, skip: int) -> "nml_core.Rng":
+    """One sidecar generator. `skip` is the RED PROOF knob and nothing else: it
+    advances the stream by that many draws before the clone is resolved, so the
+    seeds, the clone points and the played game all stay exactly as they were and
+    the ONLY thing that moved is which dice the counterfactual saw."""
+    r = nml_core.Rng(seed)
+    for _ in range(max(skip, 0)):
+        r.randf()
+    return r
+
+
+def _fork_run_activations(core, state, turn: int, frng) -> tuple[Any, int]:
+    """`_fork_run_activations` core_selfplay.gd:402-419 — the bare alternation of
+    a fork branch. Both branches step with the SAME cheap policy, which is what
+    keeps the outcome DELTA a fair comparison (and the fork near-free)."""
+    last = 0
+    guard = state.units * 2 + 4
+    while guard > 0:
+        guard -= 1
+        action = core.policy_step(state, turn, True)
+        if action is None:
+            other = 2 if turn == 1 else 1
+            action = core.policy_step(state, other, True)
+            if action is None:
+                break
+            turn = other
+        state = core.resolve_stochastic_rng(state, action, frng)
+        last = turn
+        turn = 2 if turn == 1 else 1
+    return state, last
+
+
+def _fork_playout(core, pre_state, action, turn: int, round_no: int, owners0, frng):
+    """`_fork_playout` core_selfplay.gd:363-396 — play ONE branch (this action
+    from this pre-pick state) to GAME END on clones and report the final marker
+    count per side.
+
+    The VP ledger the GDScript keeps here is deliberately not kept: it computes
+    `vp` round by round and then returns the MARKERS ("fork labels score like the
+    mission — END for Face-Off"), so the ledger is dead weight in both."""
+    owners = list(owners0)
+    state = core.resolve_stochastic_rng(pre_state, action, frng)
+    next_turn = 2 if turn == 1 else 1
+    state, last = _fork_run_activations(core, state, next_turn, frng)
+    opener = (2 if last == 1 else 1) if last != 0 else next_turn
+    state, owners = core.playout_seize(state, owners)
+    for r in range(round_no + 1, ROUNDS + 1):
+        state = state.refresh_round(r)
+        state, last = _fork_run_activations(core, state, opener, frng)
+        if last != 0:
+            opener = 2 if last == 1 else 1
+        state, owners = core.playout_seize(state, owners)
+    return {
+        "p1": sum(1 for o in owners if o == 1),
+        "p2": sum(1 for o in owners if o == 2),
+    }
+
+
+def _pair_block(core, state, pick, runner, seed: int, seq: int, skip: int) -> dict:
+    """E0b, `_play_round` core_selfplay.gd:281-294 — the CHOSEN and the REJECTED
+    candidate each resolved on a clone, both end boards logged. The generator is
+    log-local, so the game's dice stream never moves."""
+    lrng = _local_rng(seed * PAIR_SEED_STRIDE + seq, skip)
+    st_ch = core.resolve_stochastic_rng(state, pick["action"], lrng)
+    lrng.seed(seed * PAIR_SEED_STRIDE + seq + PAIR_RUNNER_OFFSET)
+    for _ in range(max(skip, 0)):
+        lrng.randf()
+    st_ru = core.resolve_stochastic_rng(state, runner["action"], lrng)
+    return {
+        "chosen": core.board_rows(st_ch),
+        "runner": core.board_rows(st_ru),
+        "chosen_ids": core.board_row_indices(st_ch),
+        "runner_ids": core.board_row_indices(st_ru),
+    }
+
+
+def _fork_block(core, state, pick, runner, turn: int, round_no: int, owners, seed: int,
+                seq: int, salt: int, skip: int) -> dict:
+    """E2-v2, `_play_round` core_selfplay.gd:295-319 — ONE fork per round, played
+    to GAME END, THREE playouts per branch (a single playout flips sign in 3 of 4
+    forks under re-dicing, probe 14.08.), per-run points kept."""
+    c_runs: list[dict[str, int]] = []
+    r_runs: list[dict[str, int]] = []
+    for rep in range(FORK_REPS):
+        base = seed * FORK_SEED_STRIDE + seq + rep * FORK_REP_STRIDE + salt
+        frng = _local_rng(base, skip)
+        c_runs.append(_fork_playout(core, state, pick["action"], turn, round_no, owners, frng))
+        frng.seed(base + FORK_RUNNER_OFFSET)
+        for _ in range(max(skip, 0)):
+            frng.randf()
+        r_runs.append(_fork_playout(core, state, runner["action"], turn, round_no, owners, frng))
+    return {"chosen_runs": c_runs, "runner_runs": r_runs}
+
+
+def _play_round(
+    core,
+    state,
+    opener: int,
+    rng,
+    log: list,
+    round_no: int,
+    seed: int = 0,
+    owners: list[int] | None = None,
+    sidecars: bool = True,
+    fork_salt: int = 0,
+    sidecar_skip: int = 0,
+    magic: dict[str, Any] | None = None,
+    spell_reach: dict[str, float] | None = None,
+) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
     dry side hands the tail to the other, and the NEXT round opens with whoever
-    did NOT take the last activation."""
+    did NOT take the last activation.
+
+    With `sidecars`, every row also carries the board, the roster indices, the
+    feature vector and — on a runner-bearing pick — the E0b pair; the ROUND's
+    `round_no`-th runner-bearing pick additionally carries the E2 fork. All of it
+    resolves on clones under generators of their own: `rng`, the game's stream, is
+    advanced ONLY by the played activation, so `sidecars=False` plays the same
+    game die for die."""
     turn = opener
     last_side = 0
+    forked = False
+    rp_count = 0
+    # `state["units"]` is keyed by unit key and the crate's per-unit lists by
+    # capture index; the roster never changes shape inside a game.
+    at = {k: i for i, k in enumerate(state.keys())}
     guard = state.units * 2 + 4
     while guard > 0:
         guard -= 1
@@ -320,19 +591,51 @@ def _play_round(core, state, opener: int, rng, log: list, round_no: int) -> tupl
                 break
             turn = other
         action = pick["action"]
-        log.append(
-            {
-                "side": turn,
-                "round": round_no,
-                "seq": len(log),
-                "value": float(pick["expectation"]["before"]),
-                "unit": pick["unit_key"],
-                "kind": int(action["kind"]),
-                "action": action,
-                "intent": str(pick.get("intent", "")),
-            }
-        )
+        seq = len(log)
+        row = {
+            "side": turn,
+            "round": round_no,
+            "seq": seq,
+            "value": float(pick["expectation"]["before"]),
+            "unit": pick["unit_key"],
+            "kind": int(action["kind"]),
+            "action": action,
+            "intent": str(pick.get("intent", "")),
+        }
+        if sidecars:
+            # `AiMissionEval.features(state, player, BattleSim.reply_threat(
+            # state, player), true)` — the RICH vector, which is what
+            # `tools/core_selfplay.gd:274` logs. `incoming=None` lets the seam
+            # compute that reply threat itself, the same default the GDScript has.
+            row["features"] = core.features(state, turn, None, True)
+            row["board"] = core.board_rows(state)
+            row["ids"] = core.board_row_indices(state)
+            runner = pick.get("runner_up") or {}
+            if runner.get("action") is not None:
+                row["pair"] = _pair_block(core, state, pick, runner, seed, seq, sidecar_skip)
+                rp_count += 1
+                if not forked and rp_count >= round_no and owners:
+                    forked = True
+                    row["fork"] = _fork_block(
+                        core, state, pick, runner, turn, round_no, owners,
+                        seed, seq, fork_salt, sidecar_skip,
+                    )
+        log.append(row)
+        # core_selfplay.gd:322-333 — the ONE played apply per activation is the
+        # only resolve the magic ledger sees; every read below is PRE-apply.
+        side_key = "p%d" % turn
+        actor = at[pick["unit_key"]]
+        if magic is not None:
+            casts_before = state.casts()[actor]
+            events_before = len(state.cast_event_kinds())
+            _magic_eligibility_tally(
+                magic, side_key, state, actor,
+                (spell_reach or {}).get(pick["unit_key"], 0.0),
+            )
         state = core.resolve_stochastic_rng(state, action, rng)
+        if magic is not None:
+            _magic_tally(magic, side_key, casts_before, state.casts()[actor])
+            _spells_by_kind_tally(magic, side_key, state.cast_event_kinds(), events_before)
         last_side = turn
         turn = 2 if turn == 1 else 1
     nxt = (2 if last_side == 1 else 1) if last_side != 0 else opener
@@ -347,12 +650,33 @@ def play_game(
     bank_dir: str | Path,
     core=None,
     deploy_rng_seed: int | None = None,
+    sidecars: bool = True,
+    fork_salt: int = 0,
+    sidecar_skip: int = 0,
+    legacy_source_qd: bool = False,
+    terrain_shift_cells: int = 0,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
     `core` may be a `nml_core.Core` to reuse across games (the registries and the
     mechanics maps are the expensive part); its header is re-set per game anyway,
     because the board changes with the seed.
+
+    `sidecars` writes the pair/fork counterfactual blocks (NML-1073 M3-9); they
+    resolve on clones under generators of their own, so the PLAYED game is
+    identical with them off. `fork_salt` is `NML_FORK_SALT` (label-noise probes:
+    same game, re-diced playouts) and `sidecar_skip` the M3-9 red proof — see
+    `_local_rng`.
+
+    `legacy_source_qd` encodes board columns 10/11 as the blank
+    `OPRApiClient.OPRUnit` 4/4 that every PRE-#392 trainer row carries; the
+    default is the unit's own quality/defense, which is what the fixed GDScript
+    trainer writes. It exists to replay an old corpus, and as the red proof that
+    the two readings are not the same file.
+
+    `terrain_shift_cells` is the terrain RED PROOF: the drawing list is written
+    with every piece centre moved that many 3" cells along +x, so a gate that
+    could not tell the board apart would be reading a shape, not a board.
 
     `deploy_rng_seed` is the RED PROOF knob and nothing else: deployment then
     draws from a generator of its own while the game's generator is advanced by
@@ -367,11 +691,24 @@ def play_game(
     units = units1 + units2
     profiles = {u["unit_id"]: u for u in units}
 
-    board, terrain = load_board(seed, bank_dir)
+    board, terrain, pieces = load_board(seed, bank_dir)
     if core is None:
         core = nml_core.load(str(repo_root))
     core.set_header({"profiles": profiles, "terrain": terrain, "knobs": TRAINER_KNOBS})
+    # Board columns 10/11 read the GameUnit's `source_data` (battle_sim.gd
+    # :233-234), which `tools/core_selfplay.gd` fills from the unit since #392 —
+    # so the DEFAULT is the profile's own quality/defense. The 4/4 of a blank
+    # `OPRApiClient.OPRUnit` is what a pre-#392 corpus carries and nothing else.
+    if legacy_source_qd:
+        core.set_encoder_source_qd(SOURCE_DATA_QUALITY, SOURCE_DATA_DEFENSE)
+    else:
+        core.clear_encoder_source_qd()
     reads = core.capture_reads()
+    # `SpellsRegistry.spells_for_unit(gu)` per unit — the book `_magic_init` asks
+    # whether it resolved, and whose LONGEST range gates the eligibility tally.
+    books = core.spell_ranges()
+    spell_reach = {k: (max(v) if v else 0.0) for k, v in books.items()}
+    magic = _magic_init(units, books)
 
     rng = nml_core.Rng(seed)
     # core_selfplay.gd:176 — three markers on the centre line, 16" apart.
@@ -399,9 +736,14 @@ def play_game(
     rounds_played = 0
     for round_no in range(1, ROUNDS + 1):
         plain = state.plain()
-        _round_start(plain, round_no, profiles)
+        _round_start(plain, round_no, profiles, magic)
         state = core.state_of(plain)
-        state, opener = _play_round(core, state, opener, rng, log, round_no)
+        state, opener = _play_round(
+            core, state, opener, rng, log, round_no,
+            seed=seed, owners=owners, sidecars=sidecars,
+            fork_salt=fork_salt, sidecar_skip=sidecar_skip,
+            magic=magic, spell_reach=spell_reach,
+        )
         state, owners = core.playout_seize(state, owners)
         vp = core.vp_round_add(owners, vp)
         rounds_played = round_no
@@ -417,6 +759,9 @@ def play_game(
         "board_schema": 5,
         "rule_vocab": "v1d",
         "school_world": 2,
+        # `_write_result` :725 — `SchoolTerrain.generate(seed)["pieces"]`, the
+        # judge bench's drawing list, straight out of the bank.
+        "terrain": _shift_pieces(pieces, terrain_shift_cells),
         "tool": "core_selfplay_py",
         "seed": seed,
         "dice_seed": seed,
@@ -441,6 +786,13 @@ def play_game(
         "planner_positions": log,
         "planner_calib": [],
         "roster": [u["name"] for u in units],
+        # `BattleSim.unknown_rules` — every rule name the committed encoder
+        # vocabulary does not carry, collected by the row encoder above. Empty is
+        # the only healthy answer, and it is MEASURED, not assumed.
+        "unknown_rules": core.unknown_rules(),
+        # `_write_result` :739 — the per-game cast counters, measured through the
+        # same token deltas and cast log the GDScript reads.
+        "magic": magic,
     }
 
 
@@ -462,6 +814,14 @@ def main(argv: list[str]) -> int:
         default=0,
         help="RED PROOF: deploy from seed+OFFSET while the dice stay on seed",
     )
+    ap.add_argument("--no-sidecars", action="store_true", help="skip the pair/fork blocks")
+    ap.add_argument("--fork-salt", type=int, default=0, help="NML_FORK_SALT — shifts ONLY the fork dice")
+    ap.add_argument(
+        "--sidecar-skip",
+        type=int,
+        default=0,
+        help="RED PROOF: advance every sidecar generator by N draws",
+    )
     a = ap.parse_args(argv)
 
     core = nml_core.load(a.repo)
@@ -476,6 +836,9 @@ def main(argv: list[str]) -> int:
             a.bank,
             core,
             deploy_rng_seed=(seed + a.deploy_rng_offset) if a.deploy_rng_offset else None,
+            sidecars=not a.no_sidecars,
+            fork_salt=a.fork_salt,
+            sidecar_skip=a.sidecar_skip,
         )
         res["wall_seconds"] = round(time.perf_counter() - t0, 3)
         if a.out:
