@@ -84,6 +84,45 @@ func test_planner_picks_which_unit_activates() -> void:
 	assert_that(_kinds(sc2)).not_contains(["planner"])
 
 
+## NML-1073 M5: a side's LAST un-activated unit must take the SAME road as every
+## other pick. There is no choice of UNIT left, but there is still a choice of
+## ACTION — before this fix `pool.size() == 1` returned above the planner block,
+## so the act ordinal was never bumped, no acts.jsonl line was written, and
+## _solve_planner re-derived the action 1-ply instead of rolling it out.
+func test_last_unit_of_a_side_still_goes_through_the_rollout_planner() -> void:
+	var sc := _controller()
+	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
+	var taker: GameUnit = sc.army_manager.game_units["Taker"]
+	assert_int(sc.move_act_seq()).is_equal(0)
+	assert_object(sc._select_ai_unit([taker])).is_same(taker)
+	assert_int(sc.move_act_seq()) \
+		.override_failure_message("the last un-activated unit bypassed _planner_pick_unit — no act ordinal, no act line") \
+		.is_equal(1)
+	assert_that(_kinds(sc)) \
+		.override_failure_message("no planner decision record for a one-unit pool") \
+		.contains(["planner"])
+	assert_bool(sc._planner_intent.is_empty()) \
+		.override_failure_message("the rollout intent was not cached — _solve_planner would re-plan 1-ply") \
+		.is_false()
+	assert_object(sc._planner_intent.get("unit", null)).is_same(taker)
+
+
+## The TREE paths keep the shortcut: a one-unit pool returns that unit directly,
+## above the lookahead and above the D6 section roll — no planner, no record, and
+## crucially no draw off the seeded stream.
+func test_tree_keeps_the_one_unit_shortcut_without_a_draw() -> void:
+	for preset in ["", "nachtmahr"]:
+		var sc := _controller()
+		if preset != "":
+			sc.set_difficulty(2, SoloDifficulty.for_grade(preset))
+		var taker: GameUnit = sc.army_manager.game_units["Taker"]
+		assert_object(sc._select_ai_unit([taker])).is_same(taker)
+		assert_int(sc.move_act_seq()).is_equal(0)
+		assert_that(_kinds(sc)).not_contains(["planner"])
+		assert_that(_kinds(sc)).not_contains(["pick"])
+		assert_that(_kinds(sc)).not_contains(["lookahead"])
+
+
 func test_solve_planner_maps_pick_to_adoption_shape() -> void:
 	var sc := _controller()
 	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))

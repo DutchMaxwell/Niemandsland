@@ -975,16 +975,26 @@ func _select_ai_unit(eligible: Array) -> GameUnit:
 		else:
 			fresh.append(u)
 	var pool: Array = fresh if not fresh.is_empty() else shaken
-	if pool.size() == 1:
-		return pool[0]
 	# PLANNER_V0 (NML-995): WHICH unit activates becomes part of the pick — plan()
 	# ranks every pool unit's best action in mission currency. Sits above the
 	# ALBTRAUM lookahead (the planner difficulty subsumes it); consumes no RNG,
 	# so a null fallback leaves the seeded draw byte-identical.
+	# NML-1073 M5: a ONE-unit pool enters here too. "No choice of UNIT" is not "no
+	# choice of ACTION" — the old `pool.size() == 1` shortcut sat ABOVE this block
+	# and auto-played a side's last un-activated unit: no act ordinal, no acts.jsonl
+	# line, and _solve_planner then re-derived the action 1-ply with plan() instead
+	# of the plan_with_rollout every other pick uses. That was 20.1% of all table
+	# activations (1428 of 7106 in the 168-game reference corpus), and it made the
+	# act corpus a BIASED sample, not a thinner one.
 	if _planner_active():
 		var planned := _planner_pick_unit(pool)
 		if planned != null:
 			return planned
+	# Nothing left to draw from a one-unit pool. Below the planner block, so the
+	# TREE paths (and a planner that declined) return exactly what they always did
+	# — before the ALBTRAUM lookahead, before the D6 section roll, no RNG consumed.
+	if pool.size() == 1:
+		return pool[0]
 	# ALBTRAUM LOOKAHEAD (the grade's first REAL engine differentiator — before this, albtraum ==
 	# kriegsherr): instead of the official random D6-section pick, evaluate every eligible unit's IMMEDIATE
 	# activation value (best shoot/charge EV + objective-seize worth, final-round weighted) and activate
