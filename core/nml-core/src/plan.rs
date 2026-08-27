@@ -184,15 +184,27 @@ fn reach_of(seams: Seams, state: &State, terrain: &Terrain) -> Option<ReachIndex
     reach_index_for_state(state, terrain)
 }
 
+/// The rollout policy for one search — and, since `plan::prefilter` reads the
+/// SAME `Policy.tuning` for the root menu, the one place the header's menu
+/// knobs are turned into that tuning. NML-1073 M3-5 added `charge_gate` there:
+/// a caller that wires no charge-legality gate (tools/core_selfplay.gd) is
+/// offered charges the arena's gate refuses, and both menus have to agree on it.
 fn policy_of<'a>(
     statics: &'a [UnitStatic],
     terrain: &'a Terrain,
     seams: Seams,
     reach: Option<&'a ReachIndex>,
+    knobs: &Knobs,
 ) -> Policy<'a> {
     let mut p = Policy::new(statics, terrain, seams);
     p.reach = reach;
+    p.tuning = tuning_of(knobs);
     p
+}
+
+/// The menu tuning a header resolves to — see `policy_of`.
+pub fn tuning_of(knobs: &Knobs) -> crate::menu::Tuning {
+    crate::menu::Tuning { charge_gate: knobs.charge_gate, ..Default::default() }
 }
 
 /// `plan_with_rollout` with everything default — the entry point the game would
@@ -208,7 +220,7 @@ pub fn plan_with_rollout(
 ) -> Result<Pick, Unsupported> {
     let seams = seams_of(knobs);
     let index = reach_of(seams, state, terrain);
-    let roll = Rollout::new(policy_of(statics, terrain, seams, index.as_ref()), *knobs);
+    let roll = Rollout::new(policy_of(statics, terrain, seams, index.as_ref(), knobs), *knobs);
     let mut sc = Scratch::default();
     Search::new(roll, act).run(state, player, &mut sc)
 }
@@ -227,7 +239,7 @@ pub fn plan_with_rollout_sig(
 ) -> Result<Pick, Unsupported> {
     let seams = seams_of(knobs);
     let index = reach_of(seams, state, terrain);
-    let roll = Rollout::new(policy_of(statics, terrain, seams, index.as_ref()), *knobs);
+    let roll = Rollout::new(policy_of(statics, terrain, seams, index.as_ref(), knobs), *knobs);
     let mut sc = Scratch::default();
     let mut search = Search::new(roll, act);
     search.sig = sig;
@@ -246,7 +258,7 @@ pub fn plan(
 ) -> Result<Option<OnePly>, Unsupported> {
     let seams = seams_of(knobs);
     let index = reach_of(seams, state, terrain);
-    let roll = Rollout::new(policy_of(statics, terrain, seams, index.as_ref()), *knobs);
+    let roll = Rollout::new(policy_of(statics, terrain, seams, index.as_ref(), knobs), *knobs);
     let mut sc = Scratch::default();
     Search::new(roll, act).plan(state, player, &mut sc)
 }

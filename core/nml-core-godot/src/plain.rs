@@ -758,6 +758,12 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // NML_SIM_PATH environment on top, so the seam is reachable from a
         // shipped build without a GDScript change.
         seam_path: dflag(d, "seam_path"),
+        // NML-1073 M3-5. The GDScript seam runs INSIDE the game, whose
+        // SoloController always wires `state["charge_illegal"]` — so the gate
+        // is on, which is also `Knobs::default()`. The knob exists for the
+        // Godot-free harness, whose GDScript twin (tools/core_selfplay.gd)
+        // wires no gate; a header that carries the key is honoured either way.
+        charge_gate: d.get("charge_gate").map(|v| flag(&v)).unwrap_or(dflt.charge_gate),
     }
 }
 

@@ -91,6 +91,20 @@ impl GodotRng {
         self.randf_f32() as f64
     }
 
+    /// `RandomNumberGenerator::randf_range(from, to)` — `RandomPCG::random(float,
+    /// float)`, i.e. `randf() * (to - from) + from` in SINGLE precision, with a
+    /// rounding step per operation. GDScript widens the answer to a Variant
+    /// float, which is why this returns `f64`.
+    ///
+    /// DERIVED, not guessed (NML-1073 M3-5): the double overload (`randd`, three
+    /// draws) and a single-rounded f64 form were both tried against the deployed
+    /// positions `tools/core_selfplay.gd:_deploy_zone` recorded for seed 27, and
+    /// both put a unit one f32 ULP off. Two f32 roundings reproduce all 59 models.
+    pub fn randf_range(&mut self, from: f64, to: f64) -> f64 {
+        let (a, b) = (from as f32, to as f32);
+        (self.randf_f32() * (b - a) + a) as f64
+    }
+
     /// `RandomNumberGenerator::randi_range` — the BIASED modulo the engine ships,
     /// including its reversed-range branch. One draw.
     pub fn randi_range(&mut self, from: i64, to: i64) -> i64 {

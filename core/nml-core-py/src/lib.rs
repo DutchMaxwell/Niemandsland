@@ -51,7 +51,7 @@ use serde_json::{Map, Value};
 
 use nmlcore::acts::{ActHeader, ActStatics, Knobs};
 use nmlcore::arbitration::Arbitration;
-use nmlcore::menu::{candidates_in, Candidate};
+use nmlcore::menu::{candidates_tuned, Candidate, Tuning};
 use nmlcore::plan::{Pick, Search};
 use nmlcore::playout::Policy;
 use nmlcore::rollout::Rollout;
@@ -321,6 +321,69 @@ impl PyState {
     }
 }
 
+// -------------------------------------------------------------------- Rng ---
+
+/// Godot's `RandomNumberGenerator`, bit-exact (`nmlcore::GodotRng`).
+///
+/// The harness owns the DICE, not this module: `tools/core_selfplay.gd:_play_one`
+/// seeds ONE generator per game and keeps drawing from it — deployment, the
+/// opener roll-off and every played `resolve_stochastic` share that stream, so a
+/// per-call seed would be a different game. This is that generator, handed over
+/// so a Python loop can hold it across activations.
+#[pyclass(unsendable, module = "nml_core", name = "Rng")]
+pub struct PyRng {
+    inner: GodotRng,
+}
+
+#[pymethods]
+impl PyRng {
+    /// `var rng := RandomNumberGenerator.new(); rng.seed = seed`.
+    #[new]
+    fn new(seed: i64) -> PyRng {
+        PyRng { inner: GodotRng::new(seed) }
+    }
+
+    /// `rng.seed = seed` on a live generator.
+    fn seed(&mut self, seed: i64) {
+        self.inner.seed(seed);
+    }
+
+    /// `rng.state`, readable and writable exactly as GDScript reads it.
+    #[getter]
+    fn state(&self) -> i64 {
+        self.inner.state_i64()
+    }
+
+    #[setter]
+    fn set_state(&mut self, state: i64) {
+        self.inner.state = state as u64;
+    }
+
+    /// `rng.randf()` — the f32 draw, widened the way a Variant float is.
+    fn randf(&mut self) -> f64 {
+        self.inner.randf()
+    }
+
+    /// `rng.randf_range(from, to)` — single-precision, one rounding per op.
+    fn randf_range(&mut self, from: f64, to: f64) -> f64 {
+        self.inner.randf_range(from, to)
+    }
+
+    /// `rng.randi_range(from, to)` — the biased modulo, one draw.
+    fn randi_range(&mut self, from: i64, to: i64) -> i64 {
+        self.inner.randi_range(from, to)
+    }
+
+    /// One raw PCG32 draw — the unit the other three are counted in.
+    fn rand_u32(&mut self) -> u32 {
+        self.inner.rand_u32()
+    }
+
+    fn __repr__(&self) -> String {
+        format!("<nml_core.Rng state {}>", self.inner.state_i64())
+    }
+}
+
 // ------------------------------------------------------------------- Core ---
 
 /// The per-game closure: the profile table, the board, the search knobs and the
@@ -354,6 +417,13 @@ impl Core {
 
     fn seams(&self) -> Seams {
         Seams { spacing: self.knobs.seam_spacing, cast: self.knobs.seam_cast, path: self.knobs.seam_path }
+    }
+
+    /// The menu tuning this header resolved to — `plan::tuning_of`, the SAME
+    /// derivation `plan_with_rollout` uses inside the crate, so the seam and the
+    /// crate's own entry points cannot drift on a menu knob.
+    fn tuning(&self) -> Tuning {
+        nmlcore::tuning_of(&self.knobs)
     }
 }
 
@@ -392,7 +462,39 @@ impl Core {
         m.insert("seam_cast".into(), self.knobs.seam_cast.into());
         m.insert("seam_spacing".into(), self.knobs.seam_spacing.into());
         m.insert("seam_path".into(), self.knobs.seam_path.into());
+        m.insert("charge_gate".into(), self.knobs.charge_gate.into());
         to_py(py, &Value::Object(m))
+    }
+
+    /// The capture-time registry reads for every unit of the header's profile
+    /// table — `{key: {morale_bonus, aircraft, charge_no_difficult, shroud}}`.
+    ///
+    /// `BattleSim.capture` and `AiActRecorder._stamp_gate_reads` take these off
+    /// the LIVE `GameUnit` through `RulesRegistry`; a Godot-free capture has to
+    /// answer them from the SAME mechanics maps this module already loaded, or
+    /// the harness would carry a second registry reader that can drift.
+    /// `shroud` is `None` when no rule of the Shrouding family fires.
+    fn capture_reads(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let profiles = self.profiles.as_ref().ok_or_else(Core::no_header)?;
+        let reg = self.reg.as_mut().ok_or_else(Core::no_header)?;
+        let base = profiles.base();
+        let mut out = Map::new();
+        for p in &base.list {
+            let r = nmlcore::capture_reads(reg, p);
+            let mut m = Map::new();
+            m.insert("morale_bonus".into(), r.morale_bonus.into());
+            m.insert("aircraft".into(), r.aircraft.into());
+            m.insert("charge_no_difficult".into(), r.charge_no_difficult.into());
+            m.insert(
+                "shroud".into(),
+                match r.shroud {
+                    Some(s) => Value::Array(vec![s[0].into(), s[1].into()]),
+                    None => Value::Null,
+                },
+            );
+            out.insert(p.unit_id.clone(), Value::Object(m));
+        }
+        to_py(py, &Value::Object(out))
     }
 
     /// True when the header carried a board — a `Terrain::absent()` is the
@@ -444,8 +546,9 @@ impl Core {
         let act: ActStatics = serde_json::from_value(value_of(statics)?)
             .map_err(|e| Unsupported::new_err(format!("statics: {e}")))?;
         let statics = self.statics_for(&state.inner)?;
-        let roll =
-            Rollout::new(Policy::new(&statics, &self.terrain, self.seams()), self.knobs);
+        let mut policy = Policy::new(&statics, &self.terrain, self.seams());
+        policy.tuning = self.tuning();
+        let roll = Rollout::new(policy, self.knobs);
         let mut search = Search::new(roll, &act);
         search.sig = sig;
         let mut sc = Scratch::default();
@@ -474,7 +577,7 @@ impl Core {
         };
         let statics = self.statics_for(st)?;
         let mut sc = Scratch::default();
-        let menu = candidates_in(st, &self.terrain, &statics, i, &mut sc);
+        let menu = candidates_tuned(st, &self.terrain, &statics, i, &mut sc, self.tuning());
         to_py(py, &Value::Array(menu.iter().map(cand_plain).collect()))
     }
 
@@ -516,6 +619,32 @@ impl Core {
             &self.terrain,
             self.seams(),
             &mut rng,
+        )
+        .map(PyState::derived)
+        .map_err(declined)
+    }
+
+    /// The same activation against a LIVE generator — the game's own dice
+    /// stream, advanced by this call and kept by the caller (`tools/
+    /// core_selfplay.gd:_play_round` passes the game `rng` to every played
+    /// resolve). `resolve_stochastic` above seeds a fresh one per call, which is
+    /// what the log-local pair/fork branches want and what a whole game does not.
+    fn resolve_stochastic_rng(
+        &mut self,
+        state: PyRef<'_, PyState>,
+        action: &Bound<'_, PyAny>,
+        rng: &mut PyRng,
+    ) -> PyResult<PyState> {
+        let act: Action = serde_json::from_value(value_of(action)?)
+            .map_err(|e| Unsupported::new_err(format!("action: {e}")))?;
+        let statics = self.statics_for(&state.inner)?;
+        resolve_stochastic_on_board(
+            &statics,
+            &state.inner,
+            &act,
+            &self.terrain,
+            self.seams(),
+            &mut rng.inner,
         )
         .map(PyState::derived)
         .map_err(declined)
@@ -796,6 +925,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Core>()?;
     m.add_class::<PyState>()?;
     m.add_class::<Board>()?;
+    m.add_class::<PyRng>()?;
     m.add_function(wrap_pyfunction!(load, m)?)?;
     // NML-1073 M3-4: the board as a pure lookup — the header's terrain in, the
     // same answers `SchoolTerrain` gives the live game out.

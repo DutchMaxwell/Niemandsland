@@ -88,11 +88,24 @@ pub struct Tuning {
     pub cover_bonus_in: f64,
     /// The p.13 Strider/Flying difficult-terrain exemption inside the charge gate.
     pub honour_no_difficult: bool,
+    /// Whether the CALLER wired a charge-legality gate at all. `state[
+    /// "charge_illegal"]` is a Callable the arena stamps (solo_controller.gd:
+    /// 3002) and `tools/core_selfplay.gd` never does — and both menu sites read
+    /// it as `illegal_cb.is_valid() and illegal_cb.call(...)` (ai_planner.gd:
+    /// 1024/1308), so a gateless caller offers charges the gate would refuse.
+    /// `false` reproduces THAT menu; `true` (the default, and every arena
+    /// corpus) keeps the gate. The act corpus records the same bit per
+    /// activation as `charge_gate` (act_recorder.gd:73).
+    pub charge_gate: bool,
 }
 
 impl Default for Tuning {
     fn default() -> Self {
-        Tuning { cover_bonus_in: SAFE_LINE_COVER_BONUS_IN, honour_no_difficult: true }
+        Tuning {
+            cover_bonus_in: SAFE_LINE_COVER_BONUS_IN,
+            honour_no_difficult: true,
+            charge_gate: true,
+        }
     }
 }
 
@@ -241,16 +254,18 @@ pub fn best_charge(
         )
         .max(0.0);
         let centre_them = geom::centre(&state.positions[e]);
-        if crate::gate::charge_illegal_tuned(
-            state,
-            terrain,
-            i,
-            e,
-            gap_in,
-            Some(centre_us),
-            Some(centre_them),
-            tuning.honour_no_difficult,
-        ) {
+        if tuning.charge_gate
+            && crate::gate::charge_illegal_tuned(
+                state,
+                terrain,
+                i,
+                e,
+                gap_in,
+                Some(centre_us),
+                Some(centre_them),
+                tuning.honour_no_difficult,
+            )
+        {
             continue;
         }
         let ut = &statics[state.roster.profile[e]];
@@ -358,20 +373,28 @@ pub fn safe_advance(state: &State, terrain: &Terrain, i: usize, tuning: Tuning) 
             if terrain.is_valid() && gives_cover(terrain.type_at(pnt)) {
                 s += tuning.cover_bonus_in;
             }
-            // OPEN-FIRE-LINE PENALTY (ai_planner.gd:773-785), NOT ported and not
-            // silently dropped: it calls `los_blocked(_centre(enemy), pnt)` with
-            // the PROBE POINT, and no capture records that — `state_to_plain`
-            // (battle_sim.gd:1430-1441) writes only the unit-centre x unit-centre
-            // matrix. The branch is guarded by `los_blocked.is_valid()` in the
-            // GDScript, and the arena never stamps that seam (the act corpus
-            // carries no `los_pairs` at all), so it is ABSENT here in the same
-            // sense it is absent there. A corpus recorded WITH the seam would
-            // need the probe answers recorded alongside, exactly the way
-            // `cover_dest` records `resolve`'s terrain answer.
-            debug_assert!(
-                state.los_pairs.is_none(),
-                "_safe_advance's open-line penalty needs probe-point sight answers the capture does not carry"
-            );
+            // OPEN-FIRE-LINE PENALTY, ai_planner.gd:773-785. It probes
+            // `los_blocked(_centre(enemy), pnt)` — the PROBE POINT, which no
+            // capture records, so until NML-1073 M3-5 this branch was absent
+            // (the arena never stamps the seam and its corpora carry no
+            // `los_pairs` at all). With the board in hand the probe is a
+            // question the terrain can answer directly, which is the same
+            // source `state["los_blocked"]` reads in `tools/core_selfplay.gd`.
+            // Guarded exactly as the GDScript guards it — `los_blocked.
+            // is_valid()`, i.e. a state that carries a sight matrix at all —
+            // so a corpus without the seam keeps the old, penalty-free menu.
+            if state.los_pairs.is_some() && terrain.is_valid() {
+                let mut open_lines = 0i64;
+                for e in enemy_keys(state, i) {
+                    if !terrain.los_blocked(geom::centre(&state.positions[e]), pnt) {
+                        open_lines += 1;
+                    }
+                    if open_lines >= 4 {
+                        break;
+                    }
+                }
+                s -= SAFE_LINE_OPEN_LINE_PENALTY_IN * (open_lines - 1).max(0) as f64;
+            }
             if s > best_sc {
                 best_sc = s;
                 best_t = ft;

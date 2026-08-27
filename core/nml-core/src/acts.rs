@@ -55,6 +55,21 @@ pub struct Knobs {
     /// NML-1073 M4-7 — NML_SIM_PATH, the tier-2 path seam of the imagination.
     #[serde(default)]
     pub seam_path: bool,
+    /// NML-1073 M3-5 — whether the CALLER wires `state["charge_illegal"]` at
+    /// all. The arena does (solo_controller.gd:3002), `tools/core_selfplay.gd`
+    /// never does, and both menu sites skip the gate outright for a caller that
+    /// does not (`illegal_cb.is_valid()`, ai_planner.gd:1024/1308). Absent from
+    /// every recorded header, so the default is `true` and no corpus moves; the
+    /// Godot-free harness writes `false` because its GDScript twin is gateless.
+    /// The act line records the same bit per activation as `charge_gate`.
+    #[serde(default = "yes")]
+    pub charge_gate: bool,
+}
+
+/// `#[serde(default)]` on a `bool` is `false`; `charge_gate` defaults the other
+/// way, because a header that predates the field came from a gated caller.
+fn yes() -> bool {
+    true
 }
 
 impl Default for Knobs {
@@ -72,6 +87,7 @@ impl Default for Knobs {
             seam_cast: false,
             seam_spacing: false,
             seam_path: false,
+            charge_gate: true,
         }
     }
 }

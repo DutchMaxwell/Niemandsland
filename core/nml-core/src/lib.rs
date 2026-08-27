@@ -56,8 +56,8 @@ pub use mission::{
     vp_round_add, vp_score_end, vp_score_round,
 };
 pub use plan::{
-    build_pool, plan, plan_with_rollout, plan_with_rollout_sig, rank, OnePly, Pick, PlanBend,
-    ScoredRow, Search,
+    build_pool, plan, plan_with_rollout, plan_with_rollout_sig, rank, tuning_of, OnePly, Pick,
+    PlanBend, ScoredRow, Search,
 };
 pub use playout::{other_player, Policy};
 pub use rollout::{cross_round, imagined_round_end, Rollout, Stop};
@@ -73,7 +73,7 @@ pub use state::{
     Bands, Marker, Mods, Objective, Profile, ProfileCache, ProfileDyn, Profiles, State, Weapon,
 };
 pub use terrain::{PlainTerrain, Terrain};
-pub use unit::{StaticsCache, Unimplemented, UnitStatic};
+pub use unit::{capture_reads, CaptureReads, StaticsCache, Unimplemented, UnitStatic};
 
 /// Builds the per-unit static closure for a whole corpus, in profile-table order.
 /// `repo_root` is the checkout the mechanics assets are read from
