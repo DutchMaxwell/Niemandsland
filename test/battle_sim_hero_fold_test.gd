@@ -148,6 +148,20 @@ func test_all_four_ab_arms_resolve_with_the_expected_flags() -> void:
 		assert_bool(d.hero_fold).is_equal(bool(row[2]))
 
 
+## THE SHIPPED-GRADE PAIR: nachtmahr_herofold is nachtmahr plus the fold, nothing else — the
+## tree-vs-tree A/B the maintainer wants BEFORE any default flip, since ALBTRAUM lookahead
+## also runs on BattleSim.
+func test_the_nachtmahr_herofold_preset_pairs_with_nachtmahr() -> void:
+	assert_bool(SoloDifficulty.PRESETS.has("nachtmahr_herofold")).is_true()
+	var d := SoloDifficulty.for_grade("nachtmahr_herofold")
+	assert_str(d.grade_name).is_equal("nachtmahr_herofold")   # no silent nachtmahr fallback
+	assert_bool(d.planner).is_false()
+	assert_bool(d.hero_fold).is_true()
+	var paired: Dictionary = (SoloDifficulty.PRESETS["nachtmahr_herofold"] as Dictionary).duplicate()
+	paired.erase("hero_fold")
+	assert_dict(paired).is_equal(SoloDifficulty.PRESETS["nachtmahr"])
+
+
 ## The env door (headless runs): NML_HERO_FOLD=1 pins the fold process-wide.
 func test_the_env_seam_turns_the_fold_on() -> void:
 	assert_bool(BattleSim.hero_fold_enabled()).is_false()
