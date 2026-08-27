@@ -72,6 +72,11 @@ const _UNIT_RESOLUTION := 1000000
 ## weaker personas later is a matter of adding presets, not code.
 const PRESETS := {
 	"nachtmahr": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true},
+	# NML-1073 M5 (working name, never exposed): the SHIPPED nachtmahr grade plus the
+	# hero_fold knob. ALBTRAUM lookahead uses BattleSim too, so the knob touches the shipped
+	# tree grade, not just the planner — this pairs it for a tree-vs-tree A/B before any
+	# default flip.
+	"nachtmahr_herofold": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "hero_fold": true},
 	# PLANNER_V0 (NML-995, plan D6): NACHTMAHR knobs plus the 1-ply mission planner overlay in
 	# SoloController._solve_planner. WORKING name for the arena A/B — no interactive exposure
 	# before the measurement gate (>=55% vs the tree), and never a display name.
