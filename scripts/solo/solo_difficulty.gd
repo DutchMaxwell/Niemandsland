@@ -88,6 +88,12 @@ const PRESETS := {
 	# armed in the imagination. One arm of the four-arm A/B the maintainer gated the promotion
 	# on — nothing here becomes a default before that measurement.
 	"planner_v0_herofold": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "hero_fold": true},
+	# NML-1073 M5, the other two A/B arms. `planner_v0_pool1` is planner_v0 with the ONE-UNIT
+	# POOL routed through the rollout (#410); `planner_v0_both` arms that AND the joined-hero
+	# fold. With planner_v0 (neither) and planner_v0_herofold above, the four arms of the A/B
+	# the maintainer gated the promotion on are all selectable PER SEAT.
+	"planner_v0_pool1": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "pool1_rollout": true},
+	"planner_v0_both": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "pool1_rollout": true, "hero_fold": true},
 	"planner_v2": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "eval_fit": true, "playout_search": true},
 }
 
@@ -148,6 +154,7 @@ static func for_grade(name: String, p_base_seed: int = 0) -> SoloDifficulty:
 	d.planner = bool(preset.get("planner", false))
 	d.eval_fit = bool(preset.get("eval_fit", false))
 	d.playout_search = bool(preset.get("playout_search", false))
+	d.pool1_rollout = bool(preset.get("pool1_rollout", false))
 	d.hero_fold = bool(preset.get("hero_fold", false))
 	d.base_seed = p_base_seed
 	return d

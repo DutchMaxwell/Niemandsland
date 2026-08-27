@@ -132,6 +132,22 @@ func test_the_preset_carries_the_knob() -> void:
 	assert_bool(SoloDifficulty.for_grade("planner_v0").hero_fold).is_false()
 
 
+## THE FOUR A/B ARMS. `arena_match.gd` FATALs on a grade that is not in PRESETS (the
+## label-bug guard), and `for_grade` silently falls back to nachtmahr for an unknown name —
+## so a typo'd arm would play the wrong AI under the right label. Pin all four by name.
+func test_all_four_ab_arms_resolve_with_the_expected_flags() -> void:
+	for row in [["planner_v0", false, false], ["planner_v0_herofold", false, true],
+			["planner_v0_pool1", true, false], ["planner_v0_both", true, true]]:
+		var name: String = row[0]
+		assert_bool(SoloDifficulty.PRESETS.has(name)) \
+			.override_failure_message("arena_match would FATAL on grade '%s'" % name).is_true()
+		var d := SoloDifficulty.for_grade(name)
+		assert_str(d.grade_name).is_equal(name)          # no silent nachtmahr fallback
+		assert_bool(d.planner).is_true()
+		assert_bool(d.pool1_rollout).is_equal(bool(row[1]))
+		assert_bool(d.hero_fold).is_equal(bool(row[2]))
+
+
 ## The env door (headless runs): NML_HERO_FOLD=1 pins the fold process-wide.
 func test_the_env_seam_turns_the_fold_on() -> void:
 	assert_bool(BattleSim.hero_fold_enabled()).is_false()
