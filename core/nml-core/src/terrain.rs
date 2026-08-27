@@ -79,6 +79,11 @@ pub struct Terrain {
     neg_rot: f64,
     /// `grid_size / 2.0`, the half-offset the cell index adds.
     half_grid: f64,
+    /// `map_layout._calculate_grid_dimensions().x` — the grid is `n` x `n` cells.
+    /// `SchoolTerrain.generate` stores exactly this number as `world["n"]`, and
+    /// `NodeRecheck.los_blocked_from_plain` (node_recheck.gd:287-316) derives it
+    /// back out of `cell_params` the same way `build` does below.
+    n: i64,
     /// True when the header carried no terrain at all — `terrain_at.is_valid()`
     /// is then false and every caller takes its "no terrain seam" branch.
     absent: bool,
@@ -133,6 +138,12 @@ impl Terrain {
         ]
     }
 
+    /// The grid width in cells — `SchoolTerrain.generate`'s `world["n"]`.
+    #[inline]
+    pub fn n(&self) -> i64 {
+        self.n
+    }
+
     pub fn build(p: &PlainTerrain) -> Terrain {
         let mut cells = HashMap::with_capacity(p.cells.len());
         for c in &p.cells {
@@ -155,6 +166,7 @@ impl Terrain {
             cell_m,
             neg_rot: -rot_rad,
             half_grid: grid_size as f64 / 2.0,
+            n: grid_size,
             absent: false,
             board_in: [width_in, height_in],
             in2m: cp.inches_to_meters,
@@ -187,6 +199,112 @@ impl Terrain {
             }
         }
         NONE
+    }
+}
+
+// ------------------------------------------------- the school 3" LOS grid ---
+//
+// `SchoolTerrain` (scripts/solo/school_terrain.gd) is the board `core_selfplay`
+// plays on: the game's own symmetric map layouter, converted to a plain
+// `{cells, n}` dict. It reads the SAME cells the header carries, but through
+// its own two constants (`CELL_IN` 3.0, `IN2M` 0.0254) rather than through
+// `cell_params` — the school table never rotates and its grid is always the 3"
+// one, which is why `NodeRecheck.los_blocked_from_plain` (node_recheck.gd:
+// 287-316) can rebuild the whole seam from `cells` plus a derived `n`.
+//
+// Precision, expression by expression (GDScript `float` is f64, `Vector2`/
+// `Vector3` are `real_t` = f32):
+//   `Vector2(a.x / IN2M, a.z / IN2M)` — f32 in, f64 divide, f32 back out.
+//   `cell_of(av.x, av.y, n)`         — the f32 widens to f64 at the typed
+//                                      `float` parameter, then `floor` in f64.
+//   `av.distance_to(bv)`             — `Math::sqrt` in f32, widened on return.
+//   `av.lerp(bv, float(i)/float(steps))` — the weight narrows to f32 and the
+//                                      whole lerp runs in f32.
+
+impl Terrain {
+    /// `SchoolTerrain.cell_of` school_terrain.gd:52-53 — inches (relative to the
+    /// TABLE CENTRE) to a cell index. `int(floor(...))` floors toward -inf.
+    #[inline]
+    pub fn school_cell_of(&self, x_in: f64, z_in: f64) -> (i64, i64) {
+        (
+            (x_in / CELL_IN + self.half_grid).floor() as i64,
+            (z_in / CELL_IN + self.half_grid).floor() as i64,
+        )
+    }
+
+    /// `SchoolTerrain.cell_centre_in` school_terrain.gd:48-49 — the inverse, in
+    /// inches. `Vector2` is f32, so the product narrows.
+    #[inline]
+    pub fn school_cell_centre_in(&self, cell: (i64, i64)) -> [f32; 2] {
+        [
+            ((cell.0 as f64 - self.half_grid + 0.5) * CELL_IN) as f32,
+            ((cell.1 as f64 - self.half_grid + 0.5) * CELL_IN) as f32,
+        ]
+    }
+
+    /// `SchoolTerrain.los_blocked` school_terrain.gd:65-83 — centre-line block,
+    /// v0: any RUINS, CONTAINER or FOREST cell STRICTLY between the endpoints
+    /// blocks, sampled at 1"-ish steps. The two endpoint cells never block, so a
+    /// unit inside a ruin sees out of it and can be seen.
+    ///
+    /// This is the seam `tools/core_selfplay.gd:675-679` stamps as
+    /// `state["los_blocked"]`, read by `BattleSim._los_clear` on every scored
+    /// candidate. An ABSENT board has no cells, so it answers "clear" for every
+    /// pair — the same fall-open an invalid Callable gives `_los_clear`.
+    pub fn los_blocked(&self, a: V3, b: V3) -> bool {
+        // `Vector2(a.x / IN2M, a.z / IN2M)`: f64 divide, f32 store.
+        let av = [(a[0] as f64 / crate::IN2M) as f32, (a[2] as f64 / crate::IN2M) as f32];
+        let bv = [(b[0] as f64 / crate::IN2M) as f32, (b[2] as f64 / crate::IN2M) as f32];
+        let ca = self.school_cell_of(av[0] as f64, av[1] as f64);
+        let cb = self.school_cell_of(bv[0] as f64, bv[1] as f64);
+        // `Vector2::distance_to` — sqrtf over the f32 squares, then widened.
+        let (dx, dy) = (av[0] - bv[0], av[1] - bv[1]);
+        let dist = (dx * dx + dy * dy).sqrt() as f64;
+        // `maxi(int(dist), 1)` — `int()` truncates toward zero.
+        let steps = (dist as i64).max(1);
+        for i in 1..steps {
+            // `av.lerp(bv, float(i) / float(steps))` — Godot's
+            // `res.x += weight * (to.x - x)`, weight narrowed to f32 first.
+            let w = (i as f64 / steps as f64) as f32;
+            let px = av[0] + w * (bv[0] - av[0]);
+            let py = av[1] + w * (bv[1] - av[1]);
+            let c = self.school_cell_of(px as f64, py as f64);
+            if c == ca || c == cb {
+                continue;
+            }
+            let t = self.cells.get(&c).copied().unwrap_or(NONE);
+            if t == RUINS || t == CONTAINER || t == FOREST {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// `BattleSim.state_to_plain`'s `"los_pairs"` block, battle_sim.gd:1492-1506
+    /// — one row per unit, one character per unit, `"0"` = the `los_blocked`
+    /// seam says blocked, `"1"` = clear. Row/column `i` is the unit at index `i`
+    /// of the KEY-SORTED unit keys (NML-1073 M3-0b, PR #383): a live Dictionary
+    /// iterates in insertion order, but `JSON.stringify(sort_keys)` writes
+    /// `"units"` back out key-sorted, so a reader keyed off the round-tripped
+    /// dict read the wrong row past ~10 units ("p1_10" sorts before "p1_2").
+    ///
+    /// The unit centres are `BattleSim._centre_of` (battle_sim.gd:799-806), the
+    /// arithmetic mean of the snapshot positions in f32. Godot's `Array.sort()`
+    /// on Strings compares codepoint by codepoint; unit keys are ASCII, so
+    /// Rust's byte-wise `str` ordering is the same order.
+    pub fn los_pairs(&self, units: &[(String, Vec<[f64; 3]>)]) -> Vec<String> {
+        let mut order: Vec<usize> = (0..units.len()).collect();
+        order.sort_by(|a, b| units[*a].0.cmp(&units[*b].0));
+        let centres: Vec<V3> = order.iter().map(|i| crate::geom::centre(&units[*i].1)).collect();
+        let mut rows = Vec::with_capacity(centres.len());
+        for a in &centres {
+            let mut row = String::with_capacity(centres.len());
+            for b in &centres {
+                row.push(if self.los_blocked(*a, *b) { '0' } else { '1' });
+            }
+            rows.push(row);
+        }
+        rows
     }
 }
 
@@ -228,4 +346,115 @@ pub fn base_in_terrain(centre: V3, radius: f64, t: &Terrain, class_check: fn(i32
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::IN2M;
+
+    /// The school table: 6x4 ft on the 3" grid — `cell_params` as
+    /// `AiActRecorder._school_terrain_line` (act_recorder.gd:188-197) writes it.
+    fn school(cells: &[(i64, i64, i32)]) -> Terrain {
+        Terrain::build(&PlainTerrain {
+            cells: cells.iter().map(|c| [c.0 as f64, c.1 as f64, c.2 as f64]).collect(),
+            sandbox: vec![],
+            cell_params: CellParams {
+                table_size_feet: [6.0, 4.0],
+                grid_rotation_degrees: 0.0,
+                grid_size_inches: 3.0,
+                inches_to_meters: IN2M,
+            },
+        })
+    }
+
+    fn at(x_in: f64, z_in: f64) -> V3 {
+        [(x_in * IN2M) as f32, 0.0, (z_in * IN2M) as f32]
+    }
+
+    /// `map_layout._calculate_grid_dimensions()`: the 6x4 ft diagonal is 86.53",
+    /// / 3" = 28.84 -> 29, rounded up to even -> 30. `SchoolTerrain.generate`
+    /// stores that as `world["n"]`, and the terrain bank dump carries it so this
+    /// derivation can be checked against the generator instead of assumed.
+    #[test]
+    fn the_school_grid_width_is_derived_from_the_table_diagonal() {
+        assert_eq!(school(&[]).n(), 30);
+        // and the two cell mappings are each other's inverse
+        let t = school(&[]);
+        for cell in [(0i64, 0i64), (13, 15), (14, 15), (29, 29)] {
+            let c = t.school_cell_centre_in(cell);
+            assert_eq!(t.school_cell_of(c[0] as f64, c[1] as f64), cell);
+        }
+    }
+
+    /// The miniature red-green pair PR #386 pinned in GDScript
+    /// (`test_los_blocked_rebuilds_from_terrain_and_answers_a_moved_point`):
+    /// one RUINS cell at x in [-3", 0"), A at -6", B at +12". The root pair is
+    /// blocked THROUGH the ruin; A rushed to +2" is past it and sees clear.
+    #[test]
+    fn one_ruin_between_two_units_blocks_and_a_rush_past_it_does_not() {
+        let t = school(&[(14, 15, RUINS)]);
+        let (a, b, moved) = (at(-6.0, 0.0), at(12.0, 0.0), at(2.0, 0.0));
+        assert!(t.los_blocked(a, b));
+        assert!(t.los_blocked(b, a));
+        assert!(!t.los_blocked(moved, b));
+        // a unit's own centre is never blocked from itself (steps == 1, no
+        // sample in between)
+        assert!(!t.los_blocked(a, a));
+    }
+
+    /// school_terrain.gd:64 — "endpoint cells never block: a unit inside a ruin
+    /// or wood sees out of it and can be seen".
+    #[test]
+    fn the_endpoint_cells_never_block() {
+        let t = school(&[(13, 15, FOREST), (19, 15, CONTAINER)]);
+        assert!(!t.los_blocked(at(-6.0, 0.0), at(12.0, 0.0)));
+        // ... but one cell further in does
+        let t = school(&[(13, 15, FOREST), (16, 15, CONTAINER)]);
+        assert!(t.los_blocked(at(-6.0, 0.0), at(12.0, 0.0)));
+    }
+
+    /// DANGEROUS is terrain but not a sight blocker (school_terrain.gd:80-82
+    /// names RUINS, CONTAINER and FOREST, nothing else).
+    #[test]
+    fn only_ruins_container_and_forest_block_the_line() {
+        for (kind, blocks) in
+            [(RUINS, true), (FOREST, true), (CONTAINER, true), (DANGEROUS, false), (NONE, false)]
+        {
+            assert_eq!(
+                school(&[(15, 15, kind)]).los_blocked(at(-6.0, 0.0), at(12.0, 0.0)),
+                blocks,
+                "terrain type {kind}"
+            );
+        }
+    }
+
+    /// battle_sim.gd:1492-1506 — row/column `i` is the `i`-th KEY-SORTED unit,
+    /// not the `i`-th inserted one (NML-1073 M3-0b). "p1_10" sorts before
+    /// "p1_2", which is exactly where the pre-PR-#383 reader went wrong.
+    #[test]
+    fn los_pairs_rows_follow_the_sorted_unit_keys() {
+        let t = school(&[(14, 15, RUINS)]);
+        // insertion order p1_2 (right of the ruin), p1_10 (left of it), p1_1
+        // (left of it too); sorted order is p1_1, p1_10, p1_2.
+        let units = vec![
+            ("p1_2".to_string(), vec![[12.0 * IN2M, 0.0, 0.0]]),
+            ("p1_10".to_string(), vec![[-6.0 * IN2M, 0.0, 0.0]]),
+            ("p1_1".to_string(), vec![[-9.0 * IN2M, 0.0, 0.0]]),
+        ];
+        assert_eq!(t.los_pairs(&units), vec!["110", "110", "001"]);
+    }
+
+    /// `BattleSim._centre_of` — a multi-model unit is seen from the mean of its
+    /// model positions, so two models straddling the ruin are read at the middle.
+    #[test]
+    fn los_pairs_reads_a_unit_from_its_model_centre() {
+        let t = school(&[(14, 15, RUINS)]);
+        let units = vec![
+            ("a".to_string(), vec![[-9.0 * IN2M, 0.0, 0.0], [-3.0 * IN2M, 0.0, 0.0]]),
+            ("b".to_string(), vec![[12.0 * IN2M, 0.0, 0.0]]),
+        ];
+        // the centre is -6", the same point the single-model case blocks from
+        assert_eq!(t.los_pairs(&units), vec!["10", "01"]);
+    }
 }
