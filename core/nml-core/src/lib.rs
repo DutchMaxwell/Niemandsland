@@ -47,7 +47,7 @@ pub use arbitration::{
     arbitrate, arbitrate_bent, full_playout, full_playout_bent, ArbBend, Arbitration,
     PlayoutResult, PLAYOUT_CAP, PLAYOUT_DECIDE_MARGIN, PLAYOUT_MAX_ROUNDS,
 };
-pub use dice::{faces_to_hits, Tray};
+pub use dice::{faces_to_hits, resolve_shooting_with_tray, Roll, ShootResult, Tray};
 pub use gate::{charge_illegal, charge_illegal_tuned};
 pub use io::{
     load_nodes, plain_of, read_nodes, state_from_json, Action, Node, NodeCorpus, Seams,
@@ -72,7 +72,8 @@ pub use rng::GodotRng;
 pub use rules::Registries;
 pub use score::{can_hold_marker, control_gap_in, presence, score, Incoming, NO_INCOMING};
 pub use sim::{
-    melee_threat, reply_threat, resolve, resolve_on_board, resolve_stochastic_on_board, Cover, Unsupported,
+    land_wounds, melee_threat, reply_threat, resolve, resolve_on_board,
+    resolve_stochastic_on_board, resolve_stochastic_tray_on_board, Cover, Unsupported,
     ADVANCE, CHARGE, CHARGE_CONTACT_MARGIN_IN, CONTACT_IN, DEFAULT_BASE_RADIUS_M, HOLD,
     MELEE_ENGAGE_IN, RUSH, SPACING_BISECTIONS, SPACING_SAMPLES, UNIT_SPACING_IN,
 };

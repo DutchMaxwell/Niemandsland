@@ -1,0 +1,6 @@
+{
+ "dice_seed": 33,
+ "seed": 33,
+ "source": "alien_hives_1000_vs_battle_brothers_1000_s33",
+ "note": "trimmed arena result: the gate reads dice_seed and nothing else"
+}

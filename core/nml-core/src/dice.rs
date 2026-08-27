@@ -25,7 +25,14 @@
 //! `RandomPCG` twin (GATE R, 6003/6003), and a tray face is one
 //! `randi_range(1, 6)` on it.
 
+use crate::combat::{
+    covered_defense, deadly_multiplier, fortified_ap, guarded_defense, modified_hit_target,
+    reliable_quality, save_target, shielded_defense, shooting_hit_modifier, shrouded_reach,
+    versatile_best_mode, LONG_RANGE_IN, RENDING_AP_BONUS, SHROUD_FLOOR_IN,
+    SHROUD_RANGE_PENALTY_IN,
+};
 use crate::rng::GodotRng;
+use crate::unit::{Ctx, ShootProfile};
 
 /// One dice tray: the generator `seed_tray_rng` seeds, and nothing else.
 #[derive(Debug, Clone, Copy)]
@@ -81,6 +88,282 @@ pub fn faces_to_hits(faces: &[u8], target: u8) -> usize {
         return 0; // `TARGET_NONE` — dice_rules.gd:57, nothing is being tested.
     }
     faces.iter().filter(|&&f| f >= 6 || (f > 1 && f >= target)).count()
+}
+
+// ------------------------------------------------- D1-B4: SHOOTING on the tray ---
+
+/// One tray roll, in the shape `AiDiceRecorder` writes to `dice.jsonl`
+/// (main.gd:7170-7178) — the gate compares these tuples line by line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Roll {
+    /// `_solo_tray_roll`'s `roll_kind`: "attack" for hit/Regeneration dice,
+    /// "defense" for a save batch and its Bane re-roll.
+    pub kind: &'static str,
+    pub count: i64,
+    pub target: i64,
+    pub faces: Vec<u8>,
+}
+
+/// What one shooting activation did on the tray.
+#[derive(Debug, Default, Clone)]
+pub struct ShootResult {
+    /// Unsaved wounds after Deadly, Shred and Regeneration — handed to the
+    /// trainer's OWN casualty machinery, which decides who dies.
+    pub wounds: i64,
+    /// Every roll drawn, in draw order.
+    pub rolls: Vec<Roll>,
+    /// Table branches this port does NOT reproduce that THIS activation hit.
+    /// Never silent: a flagged activation is a reported divergence, not a skip.
+    pub unported: Vec<&'static str>,
+}
+
+impl ShootResult {
+    fn mark(&mut self, what: &'static str) {
+        if !self.unported.contains(&what) {
+            self.unported.push(what);
+        }
+    }
+}
+
+#[inline]
+fn sixes(faces: &[u8]) -> i64 {
+    faces.iter().filter(|&&f| f == 6).count() as i64
+}
+
+/// `AiCombatMath.blocks_with_bane` :354-363 — each unmodified Defense 6 is
+/// replaced by the next re-roll face, in order; a re-rolled 6 still blocks.
+fn blocks_with_bane(faces: &[u8], reroll: &[u8], target: i64) -> i64 {
+    let mut ri = 0usize;
+    let mut blocks = 0i64;
+    for &f in faces {
+        let eff = if f == 6 {
+            let r = reroll.get(ri).copied().unwrap_or(6);
+            ri += 1;
+            r
+        } else {
+            f
+        };
+        if eff >= 6 || (eff > 1 && eff as i64 >= target) {
+            blocks += 1;
+        }
+    }
+    blocks
+}
+
+/// `AiCombatMath.shred_bonus_wounds` :475-485 — unmodified Defense 1s on the
+/// FINAL faces (a 6 that Bane re-rolled into a 1 counts, the 6 itself never).
+fn shred_ones(faces: &[u8], reroll: &[u8]) -> i64 {
+    let mut ri = 0usize;
+    let mut ones = 0i64;
+    for &f in faces {
+        if f == 6 && ri < reroll.len() {
+            if reroll[ri] == 1 {
+                ones += 1;
+            }
+            ri += 1;
+        } else if f == 1 {
+            ones += 1;
+        }
+    }
+    ones
+}
+
+/// `main._solo_save_batch` :6385-6483 — ONE batch for the whole defender (not
+/// per model), Fortified first, then the dice, then Bane's re-roll of the
+/// unmodified 6s, then Shred and the pooled Deadly multiplier.
+fn save_batch(
+    p: &ShootProfile,
+    def: &Ctx,
+    count: i64,
+    defense: i64,
+    ap: i64,
+    tray: &mut Tray,
+    out: &mut ShootResult,
+) -> i64 {
+    if count <= 0 {
+        return 0;
+    }
+    let target = save_target(defense, fortified_ap(ap, def.fortified));
+    let faces = tray.roll(count as usize);
+    out.rolls.push(Roll { kind: "defense", count, target, faces: faces.clone() });
+    let mut reroll: Vec<u8> = Vec::new();
+    if p.bane {
+        let n = sixes(&faces);
+        if n > 0 {
+            reroll = tray.roll(n as usize);
+            out.rolls.push(Roll {
+                kind: "defense",
+                count: n,
+                target,
+                faces: reroll.clone(),
+            });
+        }
+    }
+    let unsaved = (count - blocks_with_bane(&faces, &reroll, target)).max(0);
+    let shred = if p.shred { shred_ones(&faces, &reroll) } else { 0 };
+    let mult = if p.deadly > 0 { deadly_multiplier(p.deadly, def.tough.max(1)) } else { 1 };
+    unsaved * mult + shred
+}
+
+/// ONE shooting activation resolved on the tray, in the TABLE's draw order
+/// (`main._solo_resolve_ai_volley` :3047, per shot, main.gd line in brackets):
+///
+///   hit dice [:3200] -> Hazardous reads those faces, draws nothing [:16555]
+///   -> surge/extra-attack dice [:4454] -> the defender's saves as ONE batch
+///   [:6448] -> Bane re-roll [:6463] -> (next weapon) -> Regeneration, pooled
+///   over the whole volley [:6543/:6624] -> morale [:8313].
+///
+/// The stream is left standing exactly BEFORE the morale roll: morale, Fearless
+/// and No Retreat are B5's, and drawing them here would shift every later
+/// activation.
+///
+/// PORTED: the to-hit target (`profile_ev`'s shooting branch verbatim —
+/// Reliable, the range/Stealth/Artillery/Evasive modifiers, Unstoppable's
+/// clamp, Versatile Attack, Precise), the unmodified-6 bonus hits of Relentless
+/// and Surge, Blast, the Rending/Destructive/on-6 AP sub-batch, Fortified,
+/// Shielded/Guarded/Cover on the save target, Bane's re-roll, Shred, the pooled
+/// Deadly multiplier and the pooled Regeneration roll.
+///
+/// NOT PORTED (each one either draws dice the table draws or reads faces this
+/// port ignores — every occurrence is FLAGGED in `unported`, never skipped
+/// silently):
+///   * `hazardous`  — Hazardous wounds the FIRER on its natural 1s (:16555).
+///   * `deadly`     — the table lands Deadly per model with its OWN
+///     Regeneration roll on the RAW unsaved count (:6634), not the pooled one
+///     this port uses, so the regen roll's die count moves.
+///   * `takedown`   — resolved "as a unit of [1]" against a picked model, with
+///     that model's own Defense (:3155).
+///   * `strafing`   — the table splits a Strafing weapon per model (:2918).
+/// And these have no field in the trainer's profile model at all, so they can
+/// only be listed here, not counted: the extra-ATTACK dice of the Bloodborn /
+/// Primal / Predator family (:4454, DRAWS), the Unpredictable die once per
+/// volley (:3114, DRAWS), Sergeant's bonus hits, Spot markers, the Piercing
+/// tag, Reckless AP, vs-target Marks, `stamp_conditional_ap`, the per-member
+/// shot iteration with its Takedown/Deadly priority sort, split fire, and the
+/// per-model SIGHTING count (:3145) the table scales attacks by where this port
+/// scales by `alive`.
+///
+/// `keep`/`attacks` are `shoot_ev`'s, so the range gate and the survivor
+/// scaling are the ones the EV path already agreed on.
+pub fn resolve_shooting_with_tray(
+    profiles: &[ShootProfile],
+    keep: &[usize],
+    attacks: &[i64],
+    att: &Ctx,
+    def: &Ctx,
+    dist_in: f64,
+    tray: &mut Tray,
+) -> ShootResult {
+    let mut out = ShootResult::default();
+    let (mut regenable, mut regen_proof) = (0i64, 0i64);
+    let reach_gate = dist_in.ceil();
+    for (k, &pi) in keep.iter().enumerate() {
+        let p = &profiles[pi];
+        let reach = if def.ranged_shrouding {
+            shrouded_reach(p.range as f64, SHROUD_RANGE_PENALTY_IN, SHROUD_FLOOR_IN)
+        } else {
+            p.range as f64
+        };
+        if p.range <= 0 || reach < reach_gate {
+            continue;
+        }
+        let n = attacks[k];
+        if n <= 0 {
+            continue; // main.gd:3163 — a silent weapon leaves before any die
+        }
+        // --- to-hit, `profile_ev` ai_ev.gd:335-370's shooting branch ---
+        let mut target = reliable_quality(att.quality, p.reliable);
+        let mut m =
+            shooting_hit_modifier(dist_in, att.artillery, def.stealth, def.artillery, def.evasive);
+        if p.unstoppable && m < 0 {
+            m = 0;
+        }
+        target = modified_hit_target(target, m);
+        let mut versatile_ap = 0;
+        if p.versatile_attack && dist_in > LONG_RANGE_IN {
+            let (hit_mod, ap_mod) = versatile_best_mode(
+                target,
+                shielded_defense(def.defense, def.shielded),
+                p.ap,
+                p.bane,
+            );
+            versatile_ap = ap_mod;
+            target = modified_hit_target(target, hit_mod);
+        }
+        if p.precise {
+            target = modified_hit_target(target, 1);
+        }
+        let faces = tray.roll(n as usize);
+        out.rolls.push(Roll { kind: "attack", count: n, target, faces: faces.clone() });
+        if p.hazardous {
+            out.mark("hazardous");
+        }
+        if p.strafing {
+            out.mark("strafing");
+        }
+        if p.takedown {
+            out.mark("takedown");
+        }
+        // --- `_solo_hits` :4404-4487 ---
+        let mut hits = faces_to_hits(&faces, target as u8) as i64;
+        if p.relentless && dist_in > LONG_RANGE_IN {
+            hits += sixes(&faces);
+        }
+        if p.surge {
+            hits += sixes(&faces);
+        }
+        if hits > 0 && p.blast > 1 {
+            hits *= p.blast.clamp(1, def.models.max(1));
+        }
+        if hits <= 0 {
+            continue; // :3210 — no hits, no save batch
+        }
+        // --- `_solo_resolve_saves` :6337-6376: the on-6 AP sub-batch first ---
+        let on6 = if p.on6_ap > 0 {
+            p.on6_ap
+        } else if p.rending || p.destructive {
+            RENDING_AP_BONUS
+        } else {
+            0
+        };
+        let ap4 = if on6 > 0 { sixes(&faces).min(hits) } else { 0 };
+        // Defense, in main.gd's own order: Shielded, then Guarded (over 9"),
+        // then Cover — which Blast / Indirect / Ignores Cover skip (:3221).
+        let mut base = shielded_defense(def.defense, def.shielded);
+        base = guarded_defense(base, def.guarded && dist_in > LONG_RANGE_IN);
+        let save_def = if p.blast > 1 || p.indirect || p.ignores_cover {
+            base
+        } else {
+            covered_defense(base, def.in_cover)
+        };
+        let ap = p.ap + versatile_ap;
+        let mut w = save_batch(p, def, ap4, save_def, ap + on6, tray, &mut out);
+        w += save_batch(p, def, hits - ap4, save_def, ap, tray, &mut out);
+        if p.deadly > 0 {
+            out.mark("deadly");
+        }
+        // `_solo_ignores_regen` :6927-6933 — Bane / Rending (and Unstoppable,
+        // ai_ev.gd:433) cut through Regeneration; everything else is poolable.
+        if p.bane || p.rending || p.unstoppable {
+            regen_proof += w;
+        } else {
+            regenable += w;
+        }
+    }
+    // --- `_solo_land_wounds` :6623 -> `_solo_apply_regeneration` :6543 ---
+    if regenable > 0 && def.regeneration && def.regen_target > 0 {
+        let faces = tray.roll(regenable as usize);
+        let ignored = faces.iter().filter(|&&f| f as i64 >= def.regen_target).count() as i64;
+        out.rolls.push(Roll {
+            kind: "attack",
+            count: regenable,
+            target: def.regen_target,
+            faces,
+        });
+        regenable = (regenable - ignored).max(0);
+    }
+    out.wounds = regen_proof + regenable;
+    out
 }
 
 #[cfg(test)]
@@ -141,6 +424,126 @@ mod tests {
         let want: Vec<u8> = (0..64).map(|_| rng.randi_range(1, 6) as u8).collect();
         assert_eq!(faces, want);
         assert_eq!(tray.state_i64(), rng.state_i64());
+    }
+
+    // ------------------------------------------ D1-B4: the shooting order ---
+
+    /// A plain rifle: `quality`+ to hit at `defense`+ to save, nothing else.
+    fn rifle(attacks: i64) -> ShootProfile {
+        ShootProfile { name: "Rifle".into(), attacks, count: 1, range: 24, ..Default::default() }
+    }
+
+    fn shooter(quality: i64) -> Ctx {
+        Ctx { quality, ..Default::default() }
+    }
+
+    fn defender(defense: i64, models: i64) -> Ctx {
+        Ctx { defense, models, tough: 1, ..Default::default() }
+    }
+
+    /// THE DRAW ORDER: hit dice first, then ONE save batch for the whole
+    /// defender (main.gd:6448 — not one per model), and the save batch's die
+    /// count is the HIT count, so the tray's faces line up with the recorded
+    /// ones only if both are right.
+    #[test]
+    fn a_volley_draws_hit_dice_then_one_save_batch_of_exactly_the_hits() {
+        let p = [rifle(6)];
+        let mut tray = Tray::seeded(27);
+        let want_hits = Tray::seeded(27).roll(6);
+        let out = resolve_shooting_with_tray(
+            &p, &[0], &[6], &shooter(4), &defender(4, 5), 12.0, &mut tray,
+        );
+        assert_eq!(out.rolls.len(), 2, "one hit roll, one save batch: {:?}", out.rolls);
+        assert_eq!(out.rolls[0].kind, "attack");
+        assert_eq!(out.rolls[0].count, 6);
+        assert_eq!(out.rolls[0].target, 4, "Quality 4+ at 12\", no modifiers");
+        assert_eq!(out.rolls[0].faces, want_hits, "the hit dice are the tray's first six");
+        let hits = faces_to_hits(&want_hits, 4) as i64;
+        assert_eq!(out.rolls[1].kind, "defense");
+        assert_eq!(out.rolls[1].count, hits, "one save die per hit");
+        assert_eq!(out.rolls[1].target, 4, "Defense 4+, AP(0)");
+        assert!(out.unported.is_empty(), "a plain rifle hits no unported branch");
+    }
+
+    /// A weapon that scores nothing draws NO save batch — the table `continue`s
+    /// at main.gd:3210. Drawing an empty one would burn a die (`maxi(1, count)`)
+    /// and shift every later activation.
+    #[test]
+    fn a_volley_that_misses_everything_draws_no_save_batch() {
+        // Quality 6+ against a single die: seed 12345's first face is not a 6.
+        let first = Tray::seeded(12345).roll(1)[0];
+        assert!(first < 6, "fixture seed no longer misses — pick another");
+        let mut tray = Tray::seeded(12345);
+        let out = resolve_shooting_with_tray(
+            &[rifle(1)], &[0], &[1], &shooter(6), &defender(4, 5), 12.0, &mut tray,
+        );
+        assert_eq!(out.rolls.len(), 1, "a miss must not roll saves: {:?}", out.rolls);
+        assert_eq!(out.wounds, 0);
+        assert_eq!(out.rolls[0].count, 1, "and exactly one die left the cup");
+        let mut one = Tray::seeded(12345);
+        one.roll(1);
+        assert_eq!(tray.state_i64(), one.state_i64(), "the tray advanced by exactly one draw");
+    }
+
+    /// RED-GREEN on Blast(X): the save batch is `hits * min(X, models)` dice
+    /// (AiCombatMath.blast_hits :370-375). Drop the multiply and the batch is
+    /// `hits` — a different die COUNT, so every face after it shifts. Both
+    /// counts are computed here so the red half cannot silently become green.
+    #[test]
+    fn blast_multiplies_the_save_batch_and_dropping_it_shifts_the_stream() {
+        let p = [ShootProfile { blast: 3, ..rifle(2) }];
+        let mut tray = Tray::seeded(27);
+        let faces = Tray::seeded(27).roll(2);
+        let hits = faces_to_hits(&faces, 2) as i64;
+        assert!(hits > 0, "fixture seed no longer hits — pick another");
+        let out = resolve_shooting_with_tray(
+            &p, &[0], &[2], &shooter(2), &defender(4, 5), 12.0, &mut tray,
+        );
+        assert_eq!(out.rolls[1].count, hits * 3, "Blast(3) vs 5 models multiplies by 3");
+        assert_ne!(out.rolls[1].count, hits, "the un-multiplied count is a DIFFERENT stream");
+        // The cap: never more than there are models to spill onto.
+        let mut tray2 = Tray::seeded(27);
+        let capped = resolve_shooting_with_tray(
+            &p, &[0], &[2], &shooter(2), &defender(4, 2), 12.0, &mut tray2,
+        );
+        assert_eq!(capped.rolls[1].count, hits * 2, "capped by the 2 models in the target");
+    }
+
+    /// Bane re-rolls the defender's unmodified 6s as a SEPARATE tray roll after
+    /// the batch is fully read (main.gd:6463) — a third roll in the stream, and
+    /// a Bane weapon's wounds bypass Regeneration entirely (:6927-6933).
+    #[test]
+    fn bane_draws_its_re_roll_after_the_save_batch_and_bypasses_regeneration() {
+        let p = [ShootProfile { bane: true, ..rifle(8) }];
+        let mut tray = Tray::seeded(27);
+        let def = Ctx { regeneration: true, regen_target: 5, ..defender(4, 8) };
+        let out = resolve_shooting_with_tray(&p, &[0], &[8], &shooter(2), &def, 12.0, &mut tray);
+        let saves = &out.rolls[1];
+        let sixes = saves.faces.iter().filter(|&&f| f == 6).count() as i64;
+        assert!(sixes > 0, "fixture seed rolls no Defense 6 — pick another");
+        assert_eq!(out.rolls.len(), 3, "hit dice, saves, Bane re-roll: {:?}", out.rolls);
+        assert_eq!(out.rolls[2].kind, "defense");
+        assert_eq!(out.rolls[2].count, sixes, "one re-roll die per unmodified 6");
+        assert_eq!(out.rolls[2].target, saves.target, "at the same save target");
+        assert!(
+            !out.rolls.iter().any(|r| r.target == 5 && r.kind == "attack" && r.count == out.wounds),
+            "Bane bypasses Regeneration — no ignore roll may be drawn"
+        );
+    }
+
+    /// A Deadly weapon still resolves, and it says so: the table lands Deadly
+    /// per model with its own Regeneration roll, which this port does not
+    /// reproduce, so the activation is FLAGGED rather than quietly counted.
+    #[test]
+    fn an_unported_branch_is_reported_not_skipped() {
+        let p = [ShootProfile { deadly: 3, hazardous: true, ..rifle(4) }];
+        let mut tray = Tray::seeded(27);
+        let out = resolve_shooting_with_tray(
+            &p, &[0], &[4], &shooter(3), &defender(4, 3), 12.0, &mut tray,
+        );
+        assert!(out.unported.contains(&"deadly"), "{:?}", out.unported);
+        assert!(out.unported.contains(&"hazardous"), "{:?}", out.unported);
+        assert!(!out.rolls.is_empty(), "a flagged activation still resolves");
     }
 
     /// `DiceRules.is_success` in full: the natural 6 beats an impossible

@@ -17,6 +17,7 @@ use crate::combat::{
 };
 use crate::geom::{self, V3};
 use crate::io::{Action, Seams};
+use crate::dice::{ShootResult, Tray};
 use crate::rng::GodotRng;
 use crate::rules::Spell;
 use crate::spell::{cast_success_chance_base, official_pick_order, spell_damage_ev_of, spell_ev_of};
@@ -157,6 +158,13 @@ fn apply_expected_wounds(state: &mut State, ti: usize, ev: f64, rng: Option<&mut
         }
         None => state.wound_frac[ti] = pool - (left as f64),
     }
+    land_wounds(state, ti, left);
+}
+
+/// The casualty half of `_apply_expected_wounds` battle_sim.gd:1140-1155 — whole
+/// wounds fill model by model in ARRAY order. Shared with the D1 dice path, so a
+/// real-dice volley kills exactly the models the EV volley would have.
+pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
     while left > 0 && !state.wounds[ti].is_empty() {
         let take = left.min(state.wounds[ti][0]);
         state.wounds[ti][0] -= take;
@@ -720,7 +728,7 @@ pub fn resolve(
     seams: Seams,
     cast_los: Option<&[bool]>,
 ) -> Result<State, Unsupported> {
-    resolve_with(statics, state, action, Cover::Recorded(cover_dest), seams, cast_los, None, None)
+    resolve_with(statics, state, action, Cover::Recorded(cover_dest), seams, cast_los, None, None, None)
 }
 
 /// The same activation against the LIVE board — the entry point a rollout uses,
@@ -734,7 +742,7 @@ pub fn resolve_on_board(
     terrain: &Terrain,
     seams: Seams,
 ) -> Result<State, Unsupported> {
-    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, None, None)
+    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, None, None, None)
 }
 
 /// The same, WITH the round's tier-2 obstacle index. `seams.path` alone is not
@@ -748,7 +756,7 @@ pub fn resolve_on_board_reach(
     seams: Seams,
     reach: Option<&ReachIndex>,
 ) -> Result<State, Unsupported> {
-    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, None, reach)
+    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, None, reach, None)
 }
 
 /// `BattleSim.resolve_stochastic` battle_sim.gd:473-478 — the SAME activation
@@ -767,7 +775,7 @@ pub fn resolve_stochastic_on_board(
     seams: Seams,
     rng: &mut GodotRng,
 ) -> Result<State, Unsupported> {
-    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, Some(rng), None)
+    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, Some(rng), None, None)
 }
 
 /// The stochastic playout's activation, WITH the round's tier-2 index.
@@ -781,7 +789,37 @@ pub fn resolve_stochastic_on_board_reach(
     rng: &mut GodotRng,
     reach: Option<&ReachIndex>,
 ) -> Result<State, Unsupported> {
-    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, Some(rng), reach)
+    resolve_with(statics, state, action, Cover::Board(terrain), seams, None, Some(rng), reach, None)
+}
+
+/// NML-1073 M5 D1-B4 — the SAME played activation with `dice="table"`: the
+/// shooting sub-phase draws from `tray` in the table's own order instead of
+/// filling an expected-value pool, and reports what it drew. `rng` still runs
+/// the rest of the activation (the melee/spell remainders B5 will take over),
+/// so the two streams stay exactly as split as the table's are.
+#[allow(clippy::too_many_arguments)]
+pub fn resolve_stochastic_tray_on_board(
+    statics: &[UnitStatic],
+    state: &State,
+    action: &Action,
+    terrain: &Terrain,
+    seams: Seams,
+    rng: &mut GodotRng,
+    tray: &mut Tray,
+) -> Result<(State, ShootResult), Unsupported> {
+    let mut shot = ShootResult::default();
+    let next = resolve_with(
+        statics,
+        state,
+        action,
+        Cover::Board(terrain),
+        seams,
+        None,
+        Some(rng),
+        None,
+        Some((tray, &mut shot)),
+    )?;
+    Ok((next, shot))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -794,6 +832,7 @@ fn resolve_with(
     cast_los: Option<&[bool]>,
     mut rng: Option<&mut GodotRng>,
     reach: Option<&ReachIndex>,
+    dice: Option<(&mut Tray, &mut ShootResult)>,
 ) -> Result<State, Unsupported> {
     let kind = action.kind;
     if kind != HOLD && kind != ADVANCE && kind != RUSH && kind != CHARGE {
@@ -951,7 +990,24 @@ fn resolve_with(
                     }
                 };
                 next.casts[si] -= sp_cost; // 0 unless the spell rider fired
-                apply_expected_wounds(&mut next, ti, volley, rng.as_deref_mut());
+                match dice {
+                    // D1-B4: the table's dice, in the table's draw order. The
+                    // wounds then land through the SAME casualty machinery the
+                    // EV path uses — kill order stays the trainer's.
+                    Some((tray, shot)) => {
+                        let us = &statics[pi_s];
+                        let ut = &statics[next.roster.profile[ti]];
+                        profiles_of(us, next.alive[si], d, &mut sc);
+                        let att = ctx_of(us, &next, si);
+                        let def = ctx_of(ut, &next, ti);
+                        *shot = crate::dice::resolve_shooting_with_tray(
+                            &us.shoot, &sc.keep, &sc.attacks, &att, &def, d, tray,
+                        );
+                        let w = shot.wounds;
+                        land_wounds(&mut next, ti, w);
+                    }
+                    None => apply_expected_wounds(&mut next, ti, volley, rng.as_deref_mut()),
+                }
                 let ut = &statics[next.roster.profile[ti]];
                 expected_shooting_morale(&mut next, ut, ti, alive_before, wounds_before);
             }

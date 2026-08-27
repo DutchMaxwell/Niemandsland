@@ -69,7 +69,7 @@ import nml_core  # noqa: E402
 import selfplay as sp  # noqa: E402
 
 #: Top-level result fields this gate does not hold — see the module docstring.
-EXCLUDED_TOP = ("tool", "knobs", "rounds_played", "rounds_log", "wall_seconds")
+EXCLUDED_TOP = ("tool", "knobs", "rounds_played", "rounds_log", "wall_seconds", "dice_tally")
 #: Per-row fields this gate does not hold.
 EXCLUDED_ROW = ("intent", "unit", "kind", "action")
 #: `planner_positions[].board` column indices that carry a FLOAT.
