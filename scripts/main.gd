@@ -11120,13 +11120,24 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		# Toggle 45° arc quadrants (F key) - facing display aid (AoF:R v3.5.1 p.5,
 		# no rule). Selected regiment tray(s) toggle alone (keeps the table
-		# uncluttered); with no tray selected F must toggle ALL regiments, never
+		# uncluttered); with NOTHING selected F must toggle ALL regiments, never
 		# no-op (NML-1033).
+		#
+		# NML-1083: a NON-EMPTY selection that holds no tray belongs to ObjectManager's
+		# sight+range fan (object_manager.gd, "F: sight+range fan for the selected unit").
+		# Godot dispatches _unhandled_key_input BEFORE the _unhandled_input group, so
+		# consuming the key here swallowed it every time — F was a dead key for every loose
+		# (GF) unit, which is exactly the "F shows no shooting ranges" report. Leaving the
+		# event UNHANDLED in that one case is what hands it to the fan.
 		elif event.keycode == KEY_F and not event.ctrl_pressed and not event.shift_pressed:
+			var f_selection: Array = object_manager.get_selected_objects()
+			var f_trays: int = -1
 			if opr_army_manager:
-				if opr_army_manager.toggle_selected_regiment_arcs(object_manager.get_selected_objects()) == -1:
+				f_trays = opr_army_manager.toggle_selected_regiment_arcs(f_selection)
+				if f_trays == -1 and f_selection.is_empty():
 					opr_army_manager.toggle_all_regiment_arcs()
-			get_viewport().set_input_as_handled()
+			if f_trays != -1 or f_selection.is_empty():
+				get_viewport().set_input_as_handled()
 		# Cycle regiment frontage (Shift+F) - reform to the next width in the cycle
 		# (5 -> 4 -> 3 -> 2 -> 1 -> 5). AoF:R v3.5.1 p.6 "Unit Formations". Only
 		# selected RegimentTray blocks are affected; loose models are ignored.

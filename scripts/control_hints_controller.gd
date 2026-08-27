@@ -13,7 +13,7 @@ const PANEL_ALPHA := 0.72
 ## One verified hint line per object kind (English-only UI).
 const HINTS := {
 	"regiment": "Drag: move tray · R (hold): rotate · Shift+F: frontage · Ctrl+R: pivot snap · F: arcs · M: reach · G: ring",
-	"unit": "Drag: move · R (hold): rotate · G: ring · M: reach · T: trails · P: pin ruler · Esc: cancel drag",
+	"unit": "Drag: move · R (hold): rotate · F: sight+range fan · G: ring · M: reach · T: trails · P: pin ruler · Esc: cancel drag",
 	"object": "Drag: move · R (hold): rotate · Esc: cancel drag",
 }
 
