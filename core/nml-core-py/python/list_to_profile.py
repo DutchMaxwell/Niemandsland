@@ -323,6 +323,11 @@ def _units_from_list(
             "name": str(ud.get("name", "Unit")),
             "quality": int(ud.get("quality", 4)),
             "defense": int(ud.get("defense", 4)),
+            # NML-1073 D4: the two list fields `_unit_profile` does NOT carry —
+            # see `selections_from_army_forge_json`. `joinToUnit` is JSON null on
+            # a selection that joins nothing, so `or ""` and not `get(.., "")`.
+            "selection_id": str(ud.get("selectionId", "")),
+            "join_to_unit": str(ud.get("joinToUnit") or ""),
             "special_rules": rules,
             "weapons": [],
             "model_tough": [],
@@ -391,6 +396,24 @@ def profiles_from_army_forge_json(
     game_system = str(data.get("gameSystem", "gf"))
     built = _units_from_list(data, player)
     return {u["unit_id"]: _unit_profile(u, faction, game_system) for u in built}
+
+
+def selections_from_army_forge_json(
+    data: dict[str, Any], player: int
+) -> dict[str, tuple[str, str]]:
+    """The `(selection_id, join_to_unit)` pair per unit key — what
+    `battle_sim.gd:1352-1369` reads off each `GameUnit`'s
+    `OPRApiClient.OPRUnit` source_data to derive hero attachment (NML-1081).
+
+    They come back HERE instead of riding the profile because an act corpus
+    header's `profiles` dict is compared field for field (M3-3), and a new key
+    would be a new field. Keys and order are `profiles_from_army_forge_json`'s;
+    a combined-in partner is folded into its host and has no key of its own,
+    exactly as `OPRArmyManager` gives it no `GameUnit`."""
+    return {
+        u["unit_id"]: (u["selection_id"], u["join_to_unit"])
+        for u in _units_from_list(data, player)
+    }
 
 
 def profiles_from_list(path: str | Path, player: int) -> dict[str, dict[str, Any]]:

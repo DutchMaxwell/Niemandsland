@@ -31,6 +31,7 @@ import json
 import os
 import struct
 import sys
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -38,9 +39,14 @@ import pytest
 import nml_core
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 
+import hero_attach_gate as hag  # noqa: E402
 import selfplay as sp  # noqa: E402
-from list_to_profile import profiles_from_army_forge_json  # noqa: E402
+from list_to_profile import (  # noqa: E402
+    profiles_from_army_forge_json,
+    selections_from_army_forge_json,
+)
 
 REPO = Path(__file__).resolve().parents[4]
 FIXTURES = REPO / "core" / "nml-core" / "tests" / "fixtures"
@@ -218,6 +224,112 @@ def test_capture_produces_a_state_the_core_reads_back_unchanged():
     assert back["los_pairs"] == plain["los_pairs"]
     assert back["round"] == 1 and back["rounds_total"] == sp.ROUNDS
     assert back["scoring"] == "end"
+
+
+#: D4: a host, the HERO that joins it (`joinToUnit` with `combined` false —
+#: a combined partner would be folded INTO the host instead) and a lone unit.
+JOIN_LIST = {
+    "gameSystem": "gf",
+    "units": [
+        {
+            "id": "h", "selectionId": "sh", "joinToUnit": "sa", "name": "Lord",
+            "quality": 3, "defense": 4, "size": 1,
+            "rules": [{"label": "Hero", "name": "Hero"}],
+            "weapons": [{"name": "Blade", "range": 0, "attacks": 3, "count": 1}],
+        },
+        TINY_LIST["units"][0],
+        {
+            "id": "b", "selectionId": "sb", "name": "Lone", "quality": 4,
+            "defense": 4, "size": 1, "rules": [],
+            "weapons": [{"name": "Rifle", "range": 24, "attacks": 1, "count": 1}],
+        },
+    ],
+}
+
+
+def test_the_hero_attach_knob_joins_the_list_the_way_the_table_does():
+    """`BattleSim.capture` battle_sim.gd:1352-1369: the hero whose
+    `join_to_unit` names the host's `selection_id` becomes that host's attached
+    hero, and the host's PROFILE gains the hero's rules as
+    `attached_hero_rules`. RED half: at the default the same list joins nobody,
+    so every `attached` is empty and no profile field moves."""
+    profiles = profiles_from_army_forge_json(JOIN_LIST, "robot_legions", 1)
+    units = list(profiles.values())
+    selections = selections_from_army_forge_json(JOIN_LIST, 1)
+    # loader order is ROSTER order: the joining hero is listed first here.
+    hero, host, lone = (u["unit_id"] for u in units)
+    assert selections[hero] == ("sh", "sa") and selections[host] == ("sa", "")
+
+    attached, attached_to = sp.derive_attachment(units, selections)
+    assert attached == {host: [hero], hero: [], lone: []}
+    assert attached_to == {host: "", hero: host, lone: ""}
+
+    core = nml_core.load(str(REPO))
+    header, _ = read_acts("acts_25.jsonl")
+    board = nml_core.board(header["terrain"])
+    profiles[host]["attached_hero_rules"] = [profiles[hero]["special_rules"]]
+    core.set_header({"profiles": profiles, "terrain": header["terrain"],
+                     "knobs": sp.TRAINER_KNOBS})
+    rng = nml_core.Rng(1)
+    pos = sp.deploy_zone(units, -24.0, 12.0, rng)
+    plain = sp.capture(units, pos, core.capture_reads(), board, [[0.0, 0.0, 0.0]],
+                       attached, attached_to)
+    assert plain["units"][host]["attached"] == [hero]
+    assert plain["units"][hero]["attached_to"] == host
+    assert core.state_of(plain).plain()["units"][hero]["attached_to"] == host
+    assert profiles[host]["attached_hero_rules"] == [["Hero"]]
+
+    red = sp.capture(units, pos, core.capture_reads(), board, [[0.0, 0.0, 0.0]])
+    assert all(u["attached"] == [] and u["attached_to"] == "" for u in red["units"].values())
+
+
+def test_hero_attach_refuses_a_mode_it_does_not_have():
+    """A silently ignored mode would write a corpus whose header claims a rule
+    it did not play."""
+    assert sp.resolve_hero_attach("table") is True
+    assert sp.resolve_hero_attach("off") is False
+    with pytest.raises(ValueError):
+        sp.resolve_hero_attach("Table")
+
+
+def test_the_arena_fixture_carries_four_joined_heroes():
+    """The gate's arena reader over an in-repo recording: `acts_25.jsonl` is a
+    real arena game and its first act joins four heroes. RED half: the same
+    comparison against a roster with the attachment stripped must NOT agree —
+    that is exactly what `hero_attach="off"` produces."""
+    header, acts = read_acts("acts_25.jsonl")
+    arena = hag.arena_graph(header["profiles"], acts[0]["state"]["units"])
+    joined = [g for side in arena.values() for g in side if g[2] is not None]
+    assert len(joined) == 4, [g[0][0] for g in joined]
+    assert all(g[3] == 1 for side in arena.values() for g in side if g[1])
+
+    stripped = {s: [(g[0], (), None, 0) for g in arena[s]] for s in (1, 2)}
+    assert any(Counter(arena[s]) != Counter(stripped[s]) for s in (1, 2))
+
+
+@pytest.mark.skipif(not ARMY1.exists() or not ARMY2.exists(),
+                    reason="the AI lists live in the private mission tracker")
+def test_the_trainer_derives_the_arena_fixtures_attachment_graph():
+    """GATE D4 in miniature: `acts_25.jsonl` was recorded from ARMY1 vs ARMY2,
+    so the same two lists through the trainer's loader must produce the arena's
+    attachment graph, unit for unit. RED half: at `hero_attach="off"` they
+    must not."""
+    header, acts = read_acts("acts_25.jsonl")
+    arena = hag.arena_graph(header["profiles"], acts[0]["state"]["units"])
+    units1, units2 = sp.load_army(ARMY1, 1), sp.load_army(ARMY2, 2)
+    selections = dict(sp.load_selections(ARMY1, 1))
+    selections.update(sp.load_selections(ARMY2, 2))
+    attached, attached_to = sp.derive_attachment(units1 + units2, selections)
+    by_id = {u["unit_id"]: u for u in units1 + units2}
+    for u in units1 + units2:
+        u["attached_hero_rules"] = [by_id[h]["special_rules"] for h in attached[u["unit_id"]]]
+
+    got = hag.trainer_graph(units1, units2, attached, attached_to)
+    for side in (1, 2):
+        assert Counter(arena[side]) == Counter(got[side]), side
+
+    red = hag.trainer_graph(units1, units2, {}, {})
+    assert any(Counter(arena[s]) != Counter(red[s]) for s in (1, 2))
 
 
 def test_the_round_refill_follows_the_caster_rule():
