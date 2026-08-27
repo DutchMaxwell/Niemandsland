@@ -10,6 +10,14 @@ reads — the act lines keep `state` and `pick` and drop `trace`,
 verbatim; `arena_fixture.json` carries the one field the gate wants from the
 arena result, `dice_seed`. 340 KB in total.
 
+THE ACTIVATION ORDINAL (D1-B5-0). `read_game` stamps each replayable act line
+with its position in the INTERLEAVED `act|auto` stream, because a `kind:"auto"`
+activation takes an ordinal in `dice.jsonl` too. THIS FIXTURE HAS NO `auto`
+LINES, so none of the numbers below move with that fix — which is exactly why
+the fix needs its own test, `test_an_auto_activation_takes_an_ordinal_too`
+below, and why the corpus step (15 -> 100 of 669 FULL-equal on `qbe_ref`,
+`table_silent` 359 -> 91) cannot be seen here.
+
 WHAT IS PINNED, and why each number is the one it is:
 
   * ZERO `faces` divergences. A face can only part company after the shape
@@ -138,3 +146,46 @@ def test_red_the_expected_value_path_cannot_replay_one_roll():
     red = replay("off")
     assert red["acts"] == 9
     assert red["rolls"] == 0 and red["prefix_equal"] == 0, "the EV path produced dice: %s" % red
+
+
+def test_an_auto_activation_takes_an_ordinal_too(tmp_path):
+    """RED-GREEN for the ordinal reader, on a game built to have the one thing
+    the bundled fixture lacks: an `auto` activation.
+
+    Three lines — header, one `kind:"auto"` activation, one `kind:"act"` — and a
+    `dice.jsonl` whose rolls sit under ordinal 2. The act line is the FIRST
+    replayable one, so numbering act lines among themselves calls it ordinal 1
+    and slices the auto activation's roll; the interleaved position calls it 2
+    and slices its own. Both slices exist here, so the wrong one cannot pass by
+    drawing nothing.
+    """
+    import json
+
+    game = tmp_path / "game"
+    game.mkdir()
+    (game / "acts.jsonl").write_text("\n".join(json.dumps(x) for x in [
+        {"profiles": {}, "terrain": None, "knobs": {}},
+        {"kind": "auto", "act": 1, "round": 1, "player": 1, "unit": "Dry Side"},
+        {"kind": "act", "round": 1, "player": 2, "pick": {"action": {"kind": 0}}, "state": {}},
+    ]) + "\n")
+    (game / "dice.jsonl").write_text("\n".join(json.dumps(x) for x in [
+        {"act": 1, "seq": 1, "roll_kind": "attack", "owner": "AI (Dry Side)",
+         "target": 4, "count": 2, "faces": [1, 1]},
+        {"act": 2, "seq": 2, "roll_kind": "attack", "owner": "AI (Picked)",
+         "target": 3, "count": 3, "faces": [6, 6, 6]},
+    ]) + "\n")
+    (game / "arena_fixture.json").write_text(json.dumps({"dice_seed": 27}))
+
+    _, lines, dice, _ = srg.read_game(game)
+    assert len(lines) == 1, "only the planner-picked line is replayable"
+    assert int(lines[0]["act"]) == 2, "the auto activation took ordinal 1"
+
+    k = int(lines[0]["act"])
+    i0 = srg.first_at_or_after(dice, k)
+    mine = [r for r in dice[i0:] if int(r["act"]) == k]
+    assert [r["faces"] for r in mine] == [[6, 6, 6]], "the act got its OWN rolls"
+    # RED: the old reader numbered act lines among themselves, so this act was
+    # ordinal 1 and read the auto activation's dice instead.
+    stale = [r for r in dice if int(r["act"]) == 1]
+    assert [r["faces"] for r in stale] == [[1, 1]], "the slice the old reader took"
+    assert srg.burn_prefix(dice)[i0] == 2, "and it burned two draws too few"
