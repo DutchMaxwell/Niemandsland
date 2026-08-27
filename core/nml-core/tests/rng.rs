@@ -270,3 +270,41 @@ fn red_proof_the_double_precision_randf_range_fails_gate_r2() {
     );
     println!("RED PROOF (randf_range in f64): {mismatches}/{checked} draws wrong");
 }
+
+// ----------------------------------------------------- GATE R3: the tray ---
+
+/// GATE R3 (NML-1073 M5 D1-B3) — the dice `Tray` against the SAME engine
+/// recording, not against the twin it is built on.
+///
+/// `tools/rng_fixture.gd` dumps, per seed, 1000 `randf()` and then 1000
+/// `randi_range(1, 6)`. A tray face IS one `randi_range(1, 6)`
+/// (main.gd:7152-7159), so a generator advanced past the 1000 recorded
+/// `randf()` draws and handed to a `Tray` must roll the 1000 recorded faces —
+/// in ONE `roll(1000)`, which is also the proof that a batch roll draws once
+/// per die and in order.
+#[test]
+fn gate_r3_the_tray_rolls_the_recorded_engine_faces() {
+    let raw = std::fs::read_to_string(FIXTURE).unwrap_or_else(|e| panic!("{FIXTURE}: {e}"));
+    let mut checked = 0usize;
+    let mut bad: Vec<String> = Vec::new();
+    for seed in [1i64, 12345, 1_099_511_627_783] {
+        let block = seed_block(&raw, &seed.to_string());
+        let mut rng = nml_core::GodotRng::new(seed);
+        for _ in 0..1000 {
+            rng.randf(); // the fixture's randi block starts here
+        }
+        let want = array_literals(block, "randi_range_1_6");
+        assert_eq!(want.len(), 1000, "seed {seed}: 1000 recorded faces");
+        let faces = nml_core::Tray::from_rng(rng).roll(want.len());
+        for (i, lit) in want.iter().enumerate() {
+            let w: u8 = lit.parse().unwrap_or_else(|e| panic!("face[{i}] {lit}: {e}"));
+            checked += 1;
+            if faces[i] != w {
+                bad.push(format!("seed {seed} face[{i}]: {} != {w}", faces[i]));
+            }
+        }
+    }
+    assert_eq!(checked, 3000, "GATE R3 checks 3 x 1000 recorded faces");
+    assert!(bad.is_empty(), "GATE R3: {} mismatches, first: {:?}", bad.len(), &bad[..bad.len().min(8)]);
+    println!("GATE R3: {checked}/{checked} tray faces match the engine recording");
+}

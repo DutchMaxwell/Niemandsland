@@ -423,6 +423,91 @@ def test_the_charge_gate_mode_stamps_what_the_table_stamped():
     print("charge gate stamp: %d/%d pairs equal, %d red with the gate off" % (pairs, pairs, red))
 
 
+# ------------------------------------------------------- D1-B3: the tray ----
+
+
+def test_the_dice_mode_is_validated():
+    """`resolve_dice` takes the two modes and RAISES on anything else — a run
+    that meant to record table dice and silently recorded expected values is
+    the one failure this knob exists to make impossible."""
+    assert sp.resolve_dice("expected") == "expected"
+    assert sp.resolve_dice("table") == "table"
+    for bad in ("real", "on", "", "Table"):
+        with pytest.raises(ValueError):
+            sp.resolve_dice(bad)
+
+
+def test_the_tray_is_the_engines_randi_range_and_burns_the_zero_die_roll():
+    """`nml_core.Tray` from Python, against the two things `dice.rs` pins:
+    a face is one `randi_range(1, 6)` on the seeded twin (main.gd:7152-7159),
+    and `maxi(1, count)` makes a ZERO-die roll cost one draw all the same."""
+    tray = nml_core.Tray(27)
+    twin = nml_core.Rng(27)
+    assert tray.roll(5) == [twin.randi_range(1, 6) for _ in range(5)]
+    assert tray.state == twin.state
+
+    burned, straight = nml_core.Tray(27), nml_core.Tray(27)
+    assert len(burned.roll(0)) == 1, "a zero-die roll still rolls one"
+    assert burned.roll(3) == straight.roll(4)[1:], "and it burns exactly one draw"
+
+
+def _digest_without_the_dice_mode(res: dict) -> str:
+    """The game, with the ONE field B3 is allowed to change removed."""
+    body = dict(res)
+    body["knobs"] = {k: v for k, v in res["knobs"].items() if k != "dice"}
+    return sp.result_digest(body)
+
+
+@pytest.mark.skipif(
+    not (BANK_DIR.is_dir() and ARMY1.exists() and ARMY2.exists()),
+    reason="no terrain bank / AI lists on this machine",
+)
+def test_b3_the_dice_knob_is_stamped_and_does_not_move_the_game_yet():
+    """THE B3 INVARIANT, and it is meant to be broken later.
+
+    B3 ships the tray and the stream split but no consumer, so `dice="table"`
+    must still play the expected-value game: same seed, same everything except
+    the one string `knobs["dice"]`, which is removed before the digest is
+    taken. B4 (shooting on the tray) and B5 (melee/morale) will make this fail
+    on purpose — when they do, this test is inverted, not deleted.
+
+    RED PROOF, because a green digest comparison on its own proves nothing
+    here: burn ONE draw out of the GAME generator per round and the digest must
+    move. MEASURED while writing this test — seed 27 alone would NOT have
+    moved (its played activations spend the mean-preserving remainder flip in
+    one round of four, and that flip lands the same side either way), which is
+    exactly why the invariant runs on seed 28 as well and the red proof runs on
+    the seed that is stream-sensitive."""
+    core = nml_core.load(str(REPO))
+    for seed in (27, 28):
+        out = {}
+        for mode in sp.DICE_MODES:
+            res = sp.play_game(seed, ARMY1, ARMY2, REPO, BANK_DIR, core, dice=mode)
+            assert res["knobs"]["dice"] == mode, "the corpus file must document its rung"
+            assert res["dice_seed"] == res["seed"], "arena_match.gd:984-985 — dice_seed IS the seed"
+            out[mode] = _digest_without_the_dice_mode(res)
+        assert out["expected"] == out["table"], (
+            "B3 has no tray consumer — seed %d must play the identical game: %s" % (seed, out)
+        )
+
+    base = _digest_without_the_dice_mode(sp.play_game(28, ARMY1, ARMY2, REPO, BANK_DIR, core))
+    played = sp._play_round
+
+    def burn_one(core_, state, opener, rng, log, round_no, **kw):
+        rng.randf()  # a consumer drawing from the WRONG generator
+        return played(core_, state, opener, rng, log, round_no, **kw)
+
+    sp._play_round = burn_one
+    try:
+        shifted = _digest_without_the_dice_mode(
+            sp.play_game(28, ARMY1, ARMY2, REPO, BANK_DIR, core)
+        )
+    finally:
+        sp._play_round = played
+    assert shifted != base, "seed 28 is stream-blind — the invariant above measures nothing"
+    print("B3 invariant: seeds 27+28 identical in both modes; a stream shift reddens seed 28")
+
+
 def test_the_top_k_horizon_env_knobs_mirror_ai_planner(monkeypatch):
     """`NML_TOP_K` / `NML_HORIZON` (ai_planner.gd:49-56, 290-297) reach the fast
     trainer the same way: unset is the trainer's own default, set is
