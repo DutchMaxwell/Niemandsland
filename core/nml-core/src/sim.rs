@@ -294,6 +294,144 @@ fn expected_melee_morale(
     }
 }
 
+// --------------------------- D1-B5a: the melee sub-phases on the tray ---
+
+/// The MEMBERS of a melee strike phase in the table's build order
+/// (`_solo_attack_groups` main.gd:4284-4290): the unit, then each attached hero,
+/// each with its OWN melee set, Quality and fatigue flag. Melee has no range
+/// gate, so `keep` is every profile — the two `Shooter` arrays stay
+/// index-parallel and the shooting resolver's shape is reused, not copied.
+fn melee_parts(statics: &[UnitStatic], state: &State, i: usize) -> Vec<(usize, Scratch, Ctx)> {
+    let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
+    for &mi in std::iter::once(&i).chain(state.attached[i].iter()) {
+        if state.alive[mi] <= 0 {
+            continue; // main.gd:4290 — a member with no living model never rolls
+        }
+        let um = &statics[state.roster.profile[mi]];
+        let mut sc = Scratch::default();
+        melee_profiles_of(um, state.alive[mi], &mut sc);
+        sc.keep = (0..um.melee.len()).collect();
+        parts.push((mi, sc, ctx_of_melee(um, state, mi)));
+    }
+    parts
+}
+
+/// ONE side's strike phase on the tray, wounds LANDED. The landing is the point:
+/// the table resolves Impact, the charger's strikes and the strike-back as
+/// separate phases, and each later one is survivor-scaled by what the earlier
+/// ones killed (main.gd:8067-8102). Returns the PRE-Regeneration wounds it
+/// caused — the melee-winner tally, which is what the table compares.
+fn strike_phase(
+    statics: &[UnitStatic],
+    next: &mut State,
+    si: usize,
+    ti: usize,
+    charging: bool,
+    tray: &mut Tray,
+    shot: &mut ShootResult,
+) -> i64 {
+    let parts = melee_parts(statics, next, si);
+    let ut = &statics[next.roster.profile[ti]];
+    let def = ctx_of(ut, next, ti);
+    let members: Vec<crate::dice::Shooter<'_>> = parts
+        .iter()
+        .map(|(mi, sc, att)| {
+            let um = &statics[next.roster.profile[*mi]];
+            crate::dice::Shooter {
+                profiles: &um.melee,
+                keep: &sc.keep,
+                attacks: &sc.attacks,
+                att,
+                owner: &um.name,
+            }
+        })
+        .collect();
+    let r = crate::dice::resolve_melee_with_tray(&members, &def, &ut.name, charging, tray);
+    let caused = r.caused;
+    let w = shot.absorb(r);
+    land_wounds(next, ti, w);
+    caused
+}
+
+/// The charge's Impact, pool by pool — `main._solo_charge_impact` :6292. The
+/// pools are resolved SEPARATELY because :6304 re-checks the defender's alive
+/// count before each one: an Impact pool that wipes the defender means the Heavy
+/// pool never rolls. Returns the pre-Regeneration wounds caused.
+fn impact_phase(
+    statics: &[UnitStatic],
+    next: &mut State,
+    si: usize,
+    ti: usize,
+    tray: &mut Tray,
+    shot: &mut ShootResult,
+) -> i64 {
+    let us = &statics[next.roster.profile[si]];
+    let ut = &statics[next.roster.profile[ti]];
+    let pools = crate::dice::impact_pools(&ctx_of_melee(us, next, si), &ctx_of(ut, next, ti));
+    let mut caused = 0;
+    for (dice, ap) in pools {
+        if dice <= 0 || next.alive[ti] <= 0 {
+            continue; // :6304 — nothing left to hit, no dice
+        }
+        let def = ctx_of(ut, next, ti);
+        let r = crate::dice::resolve_impact_pool_with_tray(
+            dice, ap, &us.name, &def, &ut.name, tray,
+        );
+        caused += r.caused;
+        let w = shot.absorb(r);
+        land_wounds(next, ti, w);
+    }
+    caused
+}
+
+/// The whole CHARGE melee on the tray — `main._solo_resolve_ai_charge`
+/// :8039-8118 in its own order: Counter's pre-phase (flagged), Impact (:8067),
+/// the charger's strikes (:8081), the strike-back (:8100), the melee result
+/// (:8110). UNWIELDY swaps the charger BEHIND the strike-back (:8073-8078);
+/// Counter and Impact keep their slots either way.
+///
+/// Returns the loser of the melee — the side that CAUSED fewer wounds, Fear(X)
+/// counting as +X dealt for this comparison only and never for the wounds
+/// applied (:8110-8112). `None` on a tie, which is what the table means by
+/// "nobody tests".
+fn tray_charge(
+    statics: &[UnitStatic],
+    next: &mut State,
+    si: usize,
+    ti: usize,
+    tray: &mut Tray,
+    shot: &mut ShootResult,
+) -> Option<usize> {
+    if statics[next.roster.profile[ti]].melee.iter().any(|p| p.counter) {
+        // :8055-8059 — a Counter weapon runs a WHOLE extra strike phase before
+        // Impact, and strips Impact dice with it.
+        shot.mark("counter_strikes_first");
+    }
+    let mut by_su = impact_phase(statics, next, si, ti, tray, shot);
+    let mut by_tu = 0;
+    let charger_last = statics[next.roster.profile[si]].ctx.unwieldy;
+    for slot in 0..2 {
+        if (slot == 0) != charger_last {
+            // :8079 — the charger strikes only while BOTH sides still stand;
+            // an Impact pool that wiped the defender ends the melee here.
+            if next.alive[si] > 0 && next.alive[ti] > 0 {
+                by_su += strike_phase(statics, next, si, ti, true, tray, shot);
+                next.fatigued[si] = true;
+            }
+        } else if next.alive[ti] > 0 && next.alive[si] > 0 {
+            // :8100 — and so does the strike-back, in both directions.
+            by_tu += strike_phase(statics, next, ti, si, false, tray, shot);
+            next.fatigued[ti] = true;
+        }
+    }
+    let a = by_su + statics[next.roster.profile[si]].ctx.fear;
+    let b = by_tu + statics[next.roster.profile[ti]].ctx.fear;
+    if a == b {
+        return None;
+    }
+    Some(if a > b { ti } else { si })
+}
+
 /// `BattleSim._unit_group` battle_sim.gd:528-547 as a membership test — is unit
 /// `oi` part of the group `key_i` moves and ends as? That is `key_i` itself plus
 /// its attached heroes, plus (only when `include_host`) its host. Only the
@@ -832,7 +970,7 @@ fn resolve_with(
     cast_los: Option<&[bool]>,
     mut rng: Option<&mut GodotRng>,
     reach: Option<&ReachIndex>,
-    dice: Option<(&mut Tray, &mut ShootResult)>,
+    mut dice: Option<(&mut Tray, &mut ShootResult)>,
 ) -> Result<State, Unsupported> {
     let kind = action.kind;
     if kind != HOLD && kind != ADVANCE && kind != RUSH && kind != CHARGE {
@@ -1005,7 +1143,7 @@ fn resolve_with(
                     }
                 };
                 next.casts[si] -= sp_cost; // 0 unless the spell rider fired
-                match dice {
+                match dice.as_mut() {
                     // D1-B4: the table's dice, in the table's draw order. The
                     // wounds then land through the SAME casualty machinery the
                     // EV path uses — kill order stays the trainer's.
@@ -1042,10 +1180,13 @@ fn resolve_with(
                                 }
                             })
                             .collect();
-                        *shot = crate::dice::resolve_volley_with_tray(
+                        let r = crate::dice::resolve_volley_with_tray(
                             &members, &def, &ut.name, d, tray,
                         );
-                        let w = shot.wounds;
+                        // D1-B5a: `absorb`, not `=` — a CHARGE activation puts
+                        // several sub-phases into ONE report, and the replay
+                        // gate compares the whole activation roll by roll.
+                        let w = shot.absorb(r);
                         land_wounds(&mut next, ti, w);
                     }
                     None => apply_expected_wounds(&mut next, ti, volley, rng.as_deref_mut()),
@@ -1076,34 +1217,55 @@ fn resolve_with(
             {
                 let tu_before = wounds_left(&next, ti);
                 let su_before = wounds_left(&next, si);
-                // The charger strikes: charging profiles, its OWN fatigue state
-                // (still the pre-charge one), the defender's plain context.
-                let ev = {
-                    let us = &statics[pi_s];
-                    let ut = &statics[next.roster.profile[ti]];
-                    let att = ctx_of_melee(us, &next, si);
-                    let def = ctx_of(ut, &next, ti);
-                    melee_profiles_of(us, next.alive[si], &mut sc);
-                    melee_ev(&us.melee, &sc.attacks, &att, &def, true)
-                };
-                apply_expected_wounds(&mut next, ti, ev, rng.as_deref_mut());
-                next.fatigued[si] = true;
-                if next.alive[ti] > 0 {
-                    // Survivors strike back, already survivor-scaled by the
-                    // updated `alive`. W-P1 parity (p.9): the strike-back
-                    // fatigues the DEFENDER too.
-                    let ev_back = {
-                        let ut = &statics[next.roster.profile[ti]];
+                // D1-B5a: with `dice="table"` the whole melee is resolved on the
+                // tray instead, phase by phase in the table's own order. The
+                // loser then takes the SAME expected-value morale outcome the EV
+                // path gives it — the morale DIE is D1-B5b's, deliberately left
+                // undrawn so this PR changes the melee and nothing else.
+                if let Some((tray, shot)) = dice.as_mut() {
+                    if let Some(li) = tray_charge(statics, &mut next, si, ti, tray, shot) {
+                        let ul = &statics[next.roster.profile[li]];
+                        if next.alive[li] > 0 && morale_fails_expected(&next, ul, li) {
+                            if below_half(&next, ul, li) {
+                                next.wounds[li].clear();
+                                next.positions[li].clear();
+                                next.radii[li].clear();
+                                next.alive[li] = 0;
+                            } else {
+                                next.shaken[li] = true;
+                            }
+                        }
+                    }
+                } else {
+                    // The charger strikes: charging profiles, its OWN fatigue state
+                    // (still the pre-charge one), the defender's plain context.
+                    let ev = {
                         let us = &statics[pi_s];
-                        let att = ctx_of_melee(ut, &next, ti);
-                        let def = ctx_of(us, &next, si);
-                        melee_profiles_of(ut, next.alive[ti], &mut sc);
-                        melee_ev(&ut.melee, &sc.attacks, &att, &def, false)
+                        let ut = &statics[next.roster.profile[ti]];
+                        let att = ctx_of_melee(us, &next, si);
+                        let def = ctx_of(ut, &next, ti);
+                        melee_profiles_of(us, next.alive[si], &mut sc);
+                        melee_ev(&us.melee, &sc.attacks, &att, &def, true)
                     };
-                    apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
-                    next.fatigued[ti] = true;
+                    apply_expected_wounds(&mut next, ti, ev, rng.as_deref_mut());
+                    next.fatigued[si] = true;
+                    if next.alive[ti] > 0 {
+                        // Survivors strike back, already survivor-scaled by the
+                        // updated `alive`. W-P1 parity (p.9): the strike-back
+                        // fatigues the DEFENDER too.
+                        let ev_back = {
+                            let ut = &statics[next.roster.profile[ti]];
+                            let us = &statics[pi_s];
+                            let att = ctx_of_melee(ut, &next, ti);
+                            let def = ctx_of(us, &next, si);
+                            melee_profiles_of(ut, next.alive[ti], &mut sc);
+                            melee_ev(&ut.melee, &sc.attacks, &att, &def, false)
+                        };
+                        apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
+                        next.fatigued[ti] = true;
+                    }
+                    expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before);
                 }
-                expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before);
             }
         }
     }
