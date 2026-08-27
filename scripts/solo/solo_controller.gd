@@ -320,6 +320,10 @@ var _rng := RandomNumberGenerator.new()
 ## "rng" decision record alongside the die draw. env NML_TRACE=0 disables it (byte-identical games
 ## either way), matching the M0-1 dice-tap guard in main.gd (_solo_dice_trace_enabled).
 var _rng_trace_enabled: bool = OS.get_environment("NML_TRACE") != "0"
+## NML-1073 M5 (EXPERIMENT, DEFAULT OFF): env NML_POOL1_ROLLOUT=1 routes a side's LAST un-activated
+## unit through _planner_pick_unit instead of _select_ai_unit's one-unit shortcut. Read ONCE per
+## controller, the same shape as the trace gate above, so the check costs nothing per activation.
+var _pool1_rollout_env: bool = OS.get_environment("NML_POOL1_ROLLOUT") == "1"
 
 # === AI ARENA difficulty (policy knobs; see SoloDifficulty) ===
 ## Per-side difficulty presets: player-slot → SoloDifficulty. Empty ⇒ the DEFAULT AI (the human-vs-AI flow
@@ -964,6 +968,14 @@ func _cargo_should_wait_for_ride(u: GameUnit) -> bool:
 	return int(tr.unit_properties.get("player_id", 0)) == int(u.unit_properties.get("player_id", 0))
 
 
+## Whether THIS activation lets a one-unit pool reach the rollout (NML-1073 M5 experiment). The env
+## bit and the preset bit are OR'd, exactly like the other research seams; the planner must be live
+## either way, because there is nothing else for a one-unit pool to be routed INTO.
+func _pool1_rollout_active() -> bool:
+	var diff := active_difficulty()
+	return (_pool1_rollout_env or (diff != null and diff.pool1_rollout)) and _planner_active()
+
+
 func _select_ai_unit(eligible: Array) -> GameUnit:
 	_move_act_seq += 1   # NML-1073 M5: ONE bump per activation, above every exit (see _move_act_seq)
 	# TC-081: defer embarked cargo while its transport has not acted — the transport sits in
@@ -993,7 +1005,12 @@ func _select_ai_unit(eligible: Array) -> GameUnit:
 		else:
 			fresh.append(u)
 	var pool: Array = fresh if not fresh.is_empty() else shaken
-	if pool.size() == 1:
+	# NML-1073 M5 (EXPERIMENT, default off): with the knob OFF this is the shipped shortcut, byte for
+	# byte — a one-unit pool returns here, above everything. With it ON the unit falls through to the
+	# planner block: no choice of UNIT is left, but there is still a choice of ACTION, and today that
+	# choice is made by the 1-ply plan() in _solve_planner instead of the rollout every other pick uses.
+	var one_left := pool.size() == 1
+	if one_left and not _pool1_rollout_active():
 		return pool[0]
 	# PLANNER_V0 (NML-995): WHICH unit activates becomes part of the pick — plan()
 	# ranks every pool unit's best action in mission currency. Sits above the
@@ -1003,6 +1020,12 @@ func _select_ai_unit(eligible: Array) -> GameUnit:
 		var planned := _planner_pick_unit(pool)
 		if planned != null:
 			return planned
+	# A DECLINE on a one-unit pool lands EXACTLY where the shortcut landed: return the unit, above the
+	# ALBTRAUM lookahead and above the D6 section roll. Falling through would reach the lookahead pick
+	# (its own seeded noisy_pick) or the "deploy_side"/"section_pick" draws off _rng — decisions the
+	# shipped path never makes, which would shift every later roll in the game.
+	if one_left:
+		return pool[0]
 	# ALBTRAUM LOOKAHEAD (the grade's first REAL engine differentiator — before this, albtraum ==
 	# kriegsherr): instead of the official random D6-section pick, evaluate every eligible unit's IMMEDIATE
 	# activation value (best shoot/charge EV + objective-seize worth, final-round weighted) and activate

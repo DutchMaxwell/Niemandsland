@@ -130,6 +130,76 @@ func test_only_unpicked_activations_are_left_for_the_auto_line() -> void:
 		.is_not_equal(sc.move_act_seq())
 
 
+## NML-1073 M5 (experiment knob). DEFAULT OFF: a one-unit pool returns above the planner block
+## exactly as the shipped AI does — no planner record, no cached intent.
+func test_pool1_rollout_is_off_by_default() -> void:
+	var sc := _controller()
+	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
+	var taker: GameUnit = sc.army_manager.game_units["Taker"]
+	assert_bool(sc._pool1_rollout_active()).is_false()
+	assert_object(sc._select_ai_unit([taker])).is_same(taker)
+	assert_that(_kinds(sc)).not_contains(["planner"])
+	assert_bool(sc._planner_intent.is_empty()).is_true()
+
+
+## Knob ON (env seam): the same one-unit pool goes through the rollout pick — planner record written
+## and the intent cached, so _solve_planner executes it instead of re-deriving it 1-ply.
+func test_pool1_rollout_routes_the_last_unit_through_the_planner_when_on() -> void:
+	OS.set_environment("NML_POOL1_ROLLOUT", "1")
+	var sc := _controller()
+	OS.set_environment("NML_POOL1_ROLLOUT", "")
+	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
+	var taker: GameUnit = sc.army_manager.game_units["Taker"]
+	assert_bool(sc._pool1_rollout_active()).is_true()
+	assert_object(sc._select_ai_unit([taker])).is_same(taker)
+	assert_that(_kinds(sc)).contains(["planner"])
+	assert_bool(sc._planner_intent.is_empty()).is_false()
+	assert_object(sc._planner_intent.get("unit", null)).is_same(taker)
+
+
+## The knob also rides on the difficulty preset, not only on the env seam.
+func test_pool1_rollout_can_come_from_the_difficulty_preset() -> void:
+	var sc := _controller()
+	var diff := SoloDifficulty.for_grade("planner_v0")
+	diff.pool1_rollout = true
+	sc.set_difficulty(2, diff)
+	assert_bool(sc._pool1_rollout_active()).is_true()
+	assert_object(sc._select_ai_unit([sc.army_manager.game_units["Taker"]])) \
+		.is_same(sc.army_manager.game_units["Taker"])
+	assert_that(_kinds(sc)).contains(["planner"])
+
+
+## THE REGRESSION GUARD. With the knob ON, a planner DECLINE on a one-unit pool must land exactly
+## where the shortcut landed — return the unit, no D6 section roll. Falling through would draw
+## "deploy_side" and "section_pick" off the seeded _rng, two numbers the shipped path never takes,
+## and every later roll in the game would shift.
+func test_a_declined_one_unit_pick_takes_no_rng_draw() -> void:
+	OS.set_environment("NML_POOL1_ROLLOUT", "1")
+	var sc := _controller()
+	OS.set_environment("NML_POOL1_ROLLOUT", "")
+	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
+	# A unit with no living models has no candidates, so plan_with_rollout returns used=false and
+	# _planner_pick_unit hands back null — the decline this guard is about.
+	var gone := _unit(2, [Vector3(9.0 * IN2M, 0, 0)], "Gone")
+	for m in gone.models:
+		(m as ModelInstance).is_alive = false
+		(m as ModelInstance).wounds_current = 0
+	sc.army_manager.game_units["Gone"] = gone
+	assert_object(sc._select_ai_unit([gone])).is_same(gone)
+	var tags: Array = sc.decision_log \
+		.filter(func(r: Dictionary) -> bool: return str(r.get("kind", "")) == "rng") \
+		.map(func(r: Dictionary) -> String: return str(r.get("tag", "")))
+	assert_int(tags.size()) \
+		.override_failure_message("a declined one-unit pick drew off the seeded stream: %s" % str(tags)) \
+		.is_equal(0)
+	# Neither of the two selection paths below the planner block may run: the D6 section roll writes a
+	# "pick" record, the ALBTRAUM lookahead a "lookahead" one, and its noisy_pick is its own seeded draw.
+	assert_that(_kinds(sc)).not_contains(["pick"])
+	assert_that(_kinds(sc)) \
+		.override_failure_message("a declined one-unit pick fell through into the ALBTRAUM lookahead") \
+		.not_contains(["lookahead"])
+
+
 func test_solve_planner_maps_pick_to_adoption_shape() -> void:
 	var sc := _controller()
 	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))

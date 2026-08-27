@@ -106,6 +106,10 @@ var endgame_convergence: bool = false   # albtraum v2: last-two-rounds marker ru
 var planner: bool = false   # PLANNER_V0: route activations through the 1-ply mission planner overlay
 var eval_fit: bool = false  # E4: planner leaves score with the FITTED eval (planner_v1)
 var playout_search: bool = false  # S-wave: close top-2 arbitrated by full playouts (planner_v2)
+## NML-1073 M5 (EXPERIMENT, default false): route a side's LAST un-activated unit through the
+## rollout pick instead of _select_ai_unit's one-unit shortcut. env NML_POOL1_ROLLOUT=1 sets the
+## same bit process-wide. Off = the shipped behaviour, byte-identical.
+var pool1_rollout: bool = false
 
 ## The game-level base seed folded into every deterministic draw (reproducibility across a rating run).
 var base_seed: int = 0
