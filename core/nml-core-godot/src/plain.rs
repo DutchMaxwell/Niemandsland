@@ -782,6 +782,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // Godot-free harness, whose GDScript twin (tools/core_selfplay.gd)
         // wires no gate; a header that carries the key is honoured either way.
         charge_gate: d.get("charge_gate").map(|v| flag(&v)).unwrap_or(dflt.charge_gate),
+        // NML-1073 M5 D1-B4b. The in-game seam plans for BattleSim, whose
+        // parity gate (G5) gives a joined hero its own activation, so the
+        // fold stays OFF here — which is also `Knobs::default()`; a header
+        // that carries the key is honoured either way.
+        hero_attach: d.get("hero_attach").map(|v| flag(&v)).unwrap_or(dflt.hero_attach),
     }
 }
 
