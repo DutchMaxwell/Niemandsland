@@ -17,6 +17,7 @@ use std::rc::Rc;
 use godot::prelude::*;
 use godot::builtin::VariantType;
 
+use nml_core::io::los_positions;
 use nml_core::state::{Bands, MoveBands, Roster};
 use nml_core::terrain::{CellParams, Obb, PlainTerrain};
 use nml_core::{Knobs, Marker, Mods, Objective, Profile, ProfileDyn, Profiles, State, Weapon};
@@ -349,11 +350,21 @@ pub fn build_state(
             destroyed_seq: dint(&m, "destroyed_seq", 0),
         })
         .collect();
+    // NML-1073 seam: the matrix is KEY-SORTED (`state_to_plain` sorts it
+    // explicitly, battle_sim.gd:1492-1506) while `roster` above is the live
+    // dictionary's INSERTION order, i.e. capture order. Same two orders
+    // `io::state_of` tells apart, same helper — under eleven units a side the
+    // mapping is the identity, and past it row i answers for another unit.
+    let pos = los_positions(&roster.keys);
     let los_pairs = plain.get("los_pairs").map(|v| any_array(&v)).filter(|r| !r.is_empty()).map(|rows| {
+        // Read in the matrix's own (key-sorted) order, STORE in roster order,
+        // so `_los_clear`'s port can index it with roster indices.
+        let raw: Vec<Vec<u8>> = rows.iter_shared().map(|r| text(&r).into_bytes()).collect();
         let mut m = Vec::with_capacity(n * n);
-        for r in rows.iter_shared() {
-            for c in text(&r).chars() {
-                m.push(c == '1');
+        for i in 0..n {
+            for j in 0..n {
+                let (ri, rj) = (pos[i], pos[j]);
+                m.push(raw.get(ri).and_then(|r| r.get(rj)).copied() == Some(b'1'));
             }
         }
         Rc::new(m)
@@ -640,11 +651,18 @@ pub fn plain_of(cap: &Captured) -> VarDictionary {
         }
     }
     if let Some(m) = &st.los_pairs {
+        // Written back KEY-SORTED, the one order `state_to_plain` produces and
+        // the reader above expects — the state carries it in ROSTER order.
         let n = st.units();
+        let pos = los_positions(&st.roster.keys);
+        let mut at = vec![0usize; n];
+        for (i, &row) in pos.iter().enumerate() {
+            at[row] = i;
+        }
         let mut rows = VarArray::new();
-        for i in 0..n {
+        for &i in &at {
             let mut s = String::with_capacity(n);
-            for j in 0..n {
+            for &j in &at {
                 s.push(if m[i * n + j] { '1' } else { '0' });
             }
             rows.push(&GString::from(s.as_str()).to_variant());
