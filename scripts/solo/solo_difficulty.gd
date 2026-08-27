@@ -80,15 +80,21 @@ const PRESETS := {
 	# PLANNER_V0 (NML-995, plan D6): NACHTMAHR knobs plus the 1-ply mission planner overlay in
 	# SoloController._solve_planner. WORKING name for the arena A/B — no interactive exposure
 	# before the measurement gate (>=55% vs the tree), and never a display name.
-	"planner_v0": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true},
+	# NML-1073 M5 (maintainer 27.08., "an der Realität halten"): the table-fidelity knobs
+	# (pool1_rollout, hero_fold) are DEFAULT ON here — not worse on 298 pairs (four-arm A/B),
+	# ~+14% table time. The four A/B arm presets below (planner_v0_pool1/_herofold/_both) keep
+	# their own explicit combinations for future A/Bs and are untouched by this flip.
+	"planner_v0": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "pool1_rollout": true, "hero_fold": true},
 	# NML-1073 M2-4 (working name, never exposed): planner_v0 with the PLAYOUT
 	# ARBITRATION armed and the hand eval kept — the recording arm the Rust port
 	# is gated against. planner_v2 cannot serve: its `eval_fit` is a different
 	# value function, which the port declines rather than approximates.
-	"planner_v0s": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "playout_search": true},
+	# NML-1073 M5: table-fidelity knobs default on, same as planner_v0 (see above).
+	"planner_v0s": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "playout_search": true, "pool1_rollout": true, "hero_fold": true},
 	# E4 (eval-tuning wave): planner_v0 with the FITTED eval as the leaf — the
 	# arena A/B pair for "did the data-derived value function beat the hand one".
-	"planner_v1": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "eval_fit": true},
+	# NML-1073 M5: table-fidelity knobs default on, same as planner_v0 (see above).
+	"planner_v1": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "eval_fit": true, "pool1_rollout": true, "hero_fold": true},
 	# NML-1073 M5 BUG-3 (working name, never exposed): planner_v0 with the JOINED-HERO FOLD
 	# armed in the imagination. One arm of the four-arm A/B the maintainer gated the promotion
 	# on — nothing here becomes a default before that measurement.
@@ -99,7 +105,8 @@ const PRESETS := {
 	# the maintainer gated the promotion on are all selectable PER SEAT.
 	"planner_v0_pool1": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "pool1_rollout": true},
 	"planner_v0_both": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "pool1_rollout": true, "hero_fold": true},
-	"planner_v2": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "eval_fit": true, "playout_search": true},
+	# NML-1073 M5: table-fidelity knobs default on, same as planner_v0 (see above).
+	"planner_v2": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "eval_fit": true, "playout_search": true, "pool1_rollout": true, "hero_fold": true},
 }
 
 ## Legacy grade names (old harness scripts, saved arena invocations, docs) all resolve to
