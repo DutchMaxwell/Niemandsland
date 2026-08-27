@@ -1841,6 +1841,11 @@ func _add_wall_corner_pieces(wall_segments: Array, grid_dims: Vector2i, cell_siz
 	var use_shell := _ruin_panels_ready()
 	var corner_inches := RUIN_POST_SIZE_INCHES if use_shell else CORNER_SIZE_INCHES
 	var corner_size := corner_inches * INCHES_TO_METERS
+	# NML-1088: the ART may grow (0.6" post), the RULE size never does. The collider is
+	# what AiDeployment.best_spot and the arena's blocked_normal probe read, and
+	# _ruin_panels_ready() follows an async DOWNLOAD CACHE — sizing collision from the
+	# art made the same seed deploy differently on a cold box than on a warm one.
+	var rule_corner_size := CORNER_SIZE_INCHES * INCHES_TO_METERS
 
 	# Build a dictionary of wall endpoints: corner_pos -> Array of wall_keys
 	# Each wall segment touches two corners of its edge
@@ -1904,7 +1909,7 @@ func _add_wall_corner_pieces(wall_segments: Array, grid_dims: Vector2i, cell_siz
 
 		var collision := CollisionShape3D.new()
 		var shape := BoxShape3D.new()
-		shape.size = Vector3(corner_size, target_height, corner_size)
+		shape.size = Vector3(rule_corner_size, target_height, rule_corner_size)
 		collision.shape = shape
 		collision.position.y = target_height / 2.0 - Z_FIGHT_OFFSET
 		body.add_child(collision)
@@ -2028,6 +2033,10 @@ func _create_shell_wall(segment: Dictionary, length_inches: float, cap_neg_x: bo
 	var width := length_inches * INCHES_TO_METERS
 	var height := WALL_HEIGHT_INCHES * INCHES_TO_METERS
 	var thickness := RUIN_SHELL_THICKNESS_INCHES * INCHES_TO_METERS
+	# NML-1088: collision follows the RULE thickness (the same 0.25" the LOS volume
+	# registry publishes in _wall_volumes), never the shell's art depth — see
+	# _add_wall_corner_pieces. The mesh below keeps the 0.4" look.
+	var rule_thickness := WALL_THICKNESS_INCHES * INCHES_TO_METERS
 
 	var body := StaticBody3D.new()
 	body.add_to_group("terrain")
@@ -2051,7 +2060,7 @@ func _create_shell_wall(segment: Dictionary, length_inches: float, cap_neg_x: bo
 
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
-	shape.size = Vector3(width, height, thickness)
+	shape.size = Vector3(width, height, rule_thickness)
 	collision.shape = shape
 	collision.position.y = y_mid
 	body.add_child(collision)
