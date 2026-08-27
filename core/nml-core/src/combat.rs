@@ -35,6 +35,9 @@ pub const RAVAGE_WOUND_TARGET: i64 = 6;
 /// `AiCombatMath.SHROUD_RANGE_PENALTY_IN` :297 / `SHROUD_FLOOR_IN` :299.
 pub const SHROUD_RANGE_PENALTY_IN: f64 = 6.0;
 pub const SHROUD_FLOOR_IN: f64 = 6.0;
+/// `AiCombatMath.SHROUD_CHARGE_PENALTY_IN` :298 — the CHARGE-band twin of
+/// `SHROUD_RANGE_PENALTY_IN`, read by `SoloController.melee_shroud_charge_in`.
+pub const SHROUD_CHARGE_PENALTY_IN: f64 = 3.0;
 /// `AiCombatMath.BANNER_MORALE_BONUS` :106.
 pub const BANNER_MORALE_BONUS: i64 = 1;
 /// `AiEv.REGENERATION_TARGET` ai_ev.gd:41 / `SELF_REPAIR_TARGET` :45.

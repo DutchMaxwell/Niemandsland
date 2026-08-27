@@ -9,11 +9,13 @@
 //! (:602-607) on. With `cast` off the LEGACY spell rider inside the shoot
 //! branch runs instead (:621-628), which is what the shipped rollouts still do.
 
+use std::rc::Rc;
+
 use crate::combat::{
     at_or_below_half, effective_attacks, melee_ev, morale_target, shoot_ev,
     should_test_shooting_morale,
 };
-use crate::geom;
+use crate::geom::{self, V3};
 use crate::io::{Action, Seams};
 use crate::rng::GodotRng;
 use crate::rules::Spell;
@@ -999,5 +1001,45 @@ fn resolve_with(
         next.shaken[si] = false;
     }
     next.activated[si] = true;
+    // NML-1073 M3-5: the sight matrix follows the MODELS. `BattleSim._los_clear`
+    // (battle_sim.gd:792-796) calls `state["los_blocked"]` with the CURRENT
+    // centres on every probe, so a unit that just rushed — or one that just lost
+    // models, or routed off the table — is seen from its NEW centre by the very
+    // next reply-threat read. The parent's matrix answers for where it stood.
+    // Refreshed only on the LIVE board (`Cover::Board`) and only when the parent
+    // carried a matrix at all: a `Cover::Recorded` replay reads each node's own
+    // recorded rows, and a state with no matrix had no `los_blocked` seam.
+    if let Cover::Board(terrain) = cover {
+        refresh_los_pairs(&mut next, state, terrain);
+    }
     Ok(next)
+}
+
+/// Rewrites the `los_pairs` row AND column of every unit whose model positions
+/// changed in this activation — the mover, its casualties, a routed unit whose
+/// positions were cleared. Untouched units keep the parent's answers, which are
+/// still the ones `SchoolTerrain.los_blocked` would give for the same two
+/// centres. Both directions are recomputed rather than mirrored: the GDScript
+/// samples `a.lerp(b, t)`, and the two orders are only equal in exact
+/// arithmetic.
+fn refresh_los_pairs(next: &mut State, parent: &State, terrain: &Terrain) {
+    if !terrain.is_valid() {
+        return;
+    }
+    let Some(old) = next.los_pairs.as_ref() else { return };
+    let n = next.units();
+    let moved: Vec<usize> =
+        (0..n).filter(|&i| next.positions[i] != parent.positions[i]).collect();
+    if moved.is_empty() {
+        return;
+    }
+    let mut m = (**old).clone();
+    let centres: Vec<V3> = (0..n).map(|i| geom::centre(&next.positions[i])).collect();
+    for &i in &moved {
+        for j in 0..n {
+            m[i * n + j] = !terrain.los_blocked(centres[i], centres[j]);
+            m[j * n + i] = !terrain.los_blocked(centres[j], centres[i]);
+        }
+    }
+    next.los_pairs = Some(Rc::new(m));
 }

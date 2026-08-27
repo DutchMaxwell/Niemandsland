@@ -20,7 +20,10 @@
 
 use std::rc::Rc;
 
-use crate::combat::{armored_defense, BANNER_MORALE_BONUS, REGENERATION_TARGET, SELF_REPAIR_TARGET};
+use crate::combat::{
+    armored_defense, BANNER_MORALE_BONUS, REGENERATION_TARGET, SELF_REPAIR_TARGET,
+    SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN,
+};
 use crate::rules::{
     base_rule_name, has_special_rule, rule_rating, unit_rating, Registries, Spell,
 };
@@ -330,6 +333,102 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
     }
     let _ = rule_rating("", 0); // keep the import honest: ratings are unread here
     out
+}
+
+/// The capture-time registry reads that do NOT live on the profile — the ones
+/// `BattleSim.capture` (battle_sim.gd:1329/1332) and
+/// `AiActRecorder._stamp_gate_reads` (act_recorder.gd:251-256) take off the LIVE
+/// `GameUnit` and write into the plain unit dict. A Godot-free capture has to
+/// answer them from the same mechanics maps the search already loaded, or it
+/// would need a second registry reader of its own.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct CaptureReads {
+    /// `SoloController.morale_bonus_of` solo_controller.gd:5407-5423.
+    pub morale_bonus: i64,
+    /// `SoloController.is_aircraft` :5501.
+    pub aircraft: bool,
+    /// `u.has_special_rule("Strider") or u.has_special_rule("Flying")` — the p.13
+    /// difficult-terrain exemption, a PLAIN rule-name read (no registry).
+    pub charge_no_difficult: bool,
+    /// `AiActRecorder._melee_shroud_params` :276-295 — `[penalty_in, floor_in]`.
+    pub shroud: Option<[f64; 2]>,
+}
+
+/// `SoloController.morale_bonus_of`, evaluated over one member's rule list:
+/// the named "Banner" (when the map fields it) and every DATA ALIAS whose entry
+/// resolves to the Banner primitive.
+fn banner_bonus_of(reg: &mut Registries, p: &Profile, rules: &[String]) -> i64 {
+    let mut best = 0;
+    let map = reg.rules_for(&p.game_system);
+    if has_special_rule(rules, "Banner") && (map.empty || map.has_primitive(&p.faction_folder, "Banner")) {
+        best = best.max(match map.lookup(&p.faction_folder, "Banner") {
+            Some(e) => e.param_i("morale_bonus", BANNER_MORALE_BONUS),
+            None => BANNER_MORALE_BONUS,
+        });
+    }
+    let mut seen: Vec<String> = Vec::new();
+    for raw in rules {
+        let n = base_rule_name(raw);
+        if n.is_empty() || n == "Banner" || seen.iter().any(|s| *s == n) {
+            continue;
+        }
+        seen.push(n.clone());
+        if let Some(e) = map.lookup(&p.faction_folder, &n) {
+            if e.primitive.as_deref() == Some("Banner") {
+                best = best.max(e.param_i("morale_bonus", 0));
+            }
+        }
+    }
+    best
+}
+
+/// `AiActRecorder._melee_shroud_params` act_recorder.gd:276-295 — the named rule
+/// first, then the DATA aliases of the two Shrouding primitives, in that order.
+fn melee_shroud_params(reg: &mut Registries, p: &Profile) -> Option<[f64; 2]> {
+    if rule_on_all_models(p, "Melee Shrouding") {
+        let map = reg.rules_for(&p.game_system);
+        let e = map.lookup(&p.faction_folder, "Melee Shrouding");
+        return Some(match e {
+            Some(e) => [
+                e.param_f("move_penalty_in", SHROUD_CHARGE_PENALTY_IN),
+                e.param_f("floor_in", SHROUD_FLOOR_IN),
+            ],
+            None => [SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN],
+        });
+    }
+    for prim in ["Melee Shrouding", "Ranged Shrouding"] {
+        for hit in rules_of_primitive(reg, p, prim) {
+            if hit.name == "Melee Shrouding"
+                || hit.name == "Ranged Shrouding"
+                || !rule_on_all_models(p, &hit.name)
+            {
+                continue;
+            }
+            let map = reg.rules_for(&p.game_system);
+            let Some(e) = map.lookup(&p.faction_folder, &hit.name) else { continue };
+            let pen = e.param_f("move_penalty_in", e.param_f("melee_move_penalty_in", 0.0));
+            if pen <= 0.0 {
+                continue;
+            }
+            return Some([pen, e.param_f("melee_floor_in", e.param_f("floor_in", SHROUD_FLOOR_IN))]);
+        }
+    }
+    None
+}
+
+/// The four reads above for one unit profile.
+pub fn capture_reads(reg: &mut Registries, p: &Profile) -> CaptureReads {
+    let mut morale_bonus = banner_bonus_of(reg, p, &p.special_rules);
+    for hero in &p.attached_hero_rules {
+        morale_bonus = morale_bonus.max(banner_bonus_of(reg, p, hero));
+    }
+    CaptureReads {
+        morale_bonus,
+        aircraft: unit_rule_active(reg, p, "Aircraft"),
+        charge_no_difficult: has_special_rule(&p.special_rules, "Strider")
+            || has_special_rule(&p.special_rules, "Flying"),
+        shroud: melee_shroud_params(reg, p),
+    }
 }
 
 /// `AiEv._regen_target` ai_ev.gd:171-177.

@@ -47,6 +47,8 @@ state = core.state_of(plain)               # one plain state -> an opaque State
 | `Core.candidates(state, unit_key) -> list[dict]` | the full menu of one unit |
 | `Core.resolve(state, action) -> State` | `BattleSim.resolve` — in expectation |
 | `Core.resolve_stochastic(state, action, seed) -> State` | `BattleSim.resolve_stochastic` |
+| `Core.resolve_stochastic_rng(state, action, rng) -> State` | the same against a LIVE `Rng`, advanced in place |
+| `Core.capture_reads() -> dict` | the capture-time registry reads per unit (`morale_bonus`, `aircraft`, `charge_no_difficult`, `shroud`) |
 | `Core.score(state, player) -> float` | `AiMissionEval.score` with the reply threat |
 | `Core.score_cheap(state, player) -> float` | the same without it |
 | `Core.reply_threat(state, player) -> list[float]` | expected reply wounds, in CAPTURE order |
@@ -60,6 +62,7 @@ state = core.state_of(plain)               # one plain state -> an opaque State
 | `Board.los_blocked(a, b) -> bool` | `SchoolTerrain.los_blocked` — the seam `core_selfplay` stamps |
 | `Board.los_pairs(units) -> list[str]` | `BattleSim.state_to_plain`'s `"los_pairs"` rows, key-sorted |
 | `type_at` / `los_blocked` / `los_pairs` | the same three as one-shot module functions |
+| `Rng(seed)` | Godot's `RandomNumberGenerator`, bit-exact: `.state` (get/set), `.seed()`, `.randf()`, `.randf_range()`, `.randi_range()`, `.rand_u32()` |
 
 Plain dicts and lists in, plain dicts and lists out; a `State` is opaque because
 handing the struct-of-arrays out per call would spend more time marshalling than
@@ -76,6 +79,10 @@ advances it for that call. The formula stays with the caller:
 `tools/core_selfplay.gd:262-268` builds the log-local seed as
 `game_seed * 100000 + row_index`, and `+ 50000` for the runner-up branch. This
 module never invents one — a guessed dice stream is a silent lie.
+
+A whole GAME is the other case: one generator, seeded once, drawn from by the
+deployment, the opener roll-off and every played activation in order. That is
+`Rng` plus `resolve_stochastic_rng`, and the caller holds it.
 
 **Nothing else.** The per-activation profile reading is NOT the caller's job:
 `state_of` feeds each act's `prof` block through a `ProfileCache`/`StaticsCache`
@@ -107,6 +114,11 @@ module and holds the answer to the Rust gates' own bar (G4 `plan.rs`, G5
 | P8 `acts_hero_dead.jsonl` | 2/2 across a hero's death, plus a red proof: the same act with its `prof` blocks stripped answers differently |
 | P9 | the `Board` surface, plus a red proof: an empty board blocks nothing |
 
+`tests/python/test_selfplay.py` adds the M3-5 layer — the `Rng` stream against
+`rng_range_godot.json`, the deployment arithmetic, the caster refill, the
+capture round trip, and three RED-GREEN pairs for the seam knobs this milestone
+added (see below).
+
 ## The terrain gate (NML-1073 M3-4)
 
 `Board`'s answers are gated against GDScript oracles that do not fit in the
@@ -131,3 +143,39 @@ godot --headless --path . -s res://tools/terrain_bank_dump.gd -- \
 0.25" short of each cell's far corner, so half an inch lands in the next cell);
 the RED knob for the other two is dropping one of RUINS/CONTAINER/FOREST from
 `terrain.rs::los_blocked` and rebuilding.
+
+## Godot-free self-play (NML-1073 M3-5)
+
+`python/selfplay.py` plays the whole game `tools/core_selfplay.gd` plays, with
+no Godot in the loop: the army loader (M3-3), the zone deployment, the capture,
+the alternating round loop, the round-end seize and the VP ledger, all of it
+asking `nml_core` every rule question.
+
+```sh
+~/venvs/nmlcore/bin/python core/nml-core-py/python/selfplay.py \
+    --army1 ~/nml-mission/farm/ai_lists/robot_legions_1000.json \
+    --army2 ~/nml-mission/farm/ai_lists/blessed_sisters_1000.json \
+    --seed 27 --games 20 --repo . --bank ~/selfplay_out/terrain_bank \
+    --out ~/selfplay_out/m3_py
+```
+
+The gate compares whole games against the trainer's own output, seed for seed —
+winner, objectives, VP, rounds played and the SEQUENCE of picks:
+
+```sh
+~/venvs/nmlcore/bin/python core/nml-core-py/tools/selfplay_gate.py \
+    --ref ~/selfplay_out/m3_ref_v2 --bank ~/selfplay_out/terrain_bank \
+    --army1 ... --army2 ... --seeds 27-46          # add --red for the red proof
+```
+
+### What the gate found — three changes in the crate, not in the harness
+
+Each is a place where the port answered for the ARENA, whose corpora it was
+built on, and the trainer differs. All three are guarded so no recorded corpus
+moves, and each carries a red proof in `tests/python/test_selfplay.py`.
+
+| | |
+| --- | --- |
+| `knobs.charge_gate` | `tools/core_selfplay.gd` never stamps `state["charge_illegal"]`, and both menu sites read it as `illegal_cb.is_valid() and illegal_cb.call(...)` (ai_planner.gd:1024/1308) — a gateless caller is offered charges the arena's gate refuses. Absent from every recorded header, so the default is `true`. |
+| the sight refresh in `resolve` | `BattleSim._los_clear` probes `state["los_blocked"]` with the CURRENT centres, so a unit that just moved (or lost models, or routed) is seen from where it now is. `sim.rs` now rewrites the `los_pairs` row and column of every unit whose positions changed — only on the live board, and only when the parent carried a matrix. |
+| `_safe_advance`'s open-fire-line penalty | ai_planner.gd:773-785 probes `los_blocked(enemy_centre, PROBE POINT)`, which no capture records; with the board in hand it is a question the terrain answers. Guarded exactly as the GDScript guards it, so a corpus without the seam keeps the penalty-free menu. |

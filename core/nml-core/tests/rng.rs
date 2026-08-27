@@ -184,3 +184,89 @@ fn serde_json_parses_a_17_digit_literal_exactly() {
         "serde_json must be correctly rounded — is the `float_roundtrip` feature still on?"
     );
 }
+
+// ------------------------------------------------- GATE R2: randf_range ---
+
+const RANGE_FIXTURE: &str =
+    concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/rng_range_godot.json");
+
+/// GATE R2 (NML-1073 M3-5) — `RandomNumberGenerator.randf_range`, the draw
+/// `tools/core_selfplay.gd:_deploy_zone` makes twice per unit, against
+/// `tests/fixtures/rng_range_godot.json` (`tools/rng_range_fixture.gd`).
+///
+/// The engine's call is `RandomPCG::random(float, float)` — `randf() * (to -
+/// from) + from` in SINGLE precision, with a rounding step per operation. The
+/// bar is EXACT, like GATE R: one ULP here moves a deployed model by ~2e-9 m,
+/// which is enough to flip a cell lookup and with it a whole game.
+#[test]
+fn gate_r2_reproduces_godots_randf_range_exactly() {
+    let raw = std::fs::read_to_string(RANGE_FIXTURE).unwrap_or_else(|e| panic!("{RANGE_FIXTURE}: {e}"));
+    let mut checked = 0usize;
+    let mut bad: Vec<String> = Vec::new();
+    for seed in [1i64, 27, 12345] {
+        let block = seed_block(&raw, &seed.to_string());
+        let mut rng = GodotRng::new(seed);
+        for (name, from, to) in
+            [("randf_range_m3_3", -3.0f64, 3.0f64), ("randf_range_1_9", 1.0, 9.0)]
+        {
+            let want_v = array_literals(block, name);
+            assert_eq!(want_v.len(), 500, "seed {seed}: 500 {name} draws");
+            for (i, lit) in want_v.iter().enumerate() {
+                let want: f64 = lit.parse().unwrap_or_else(|e| panic!("{name}[{i}] {lit}: {e}"));
+                let got = rng.randf_range(from, to);
+                checked += 1;
+                if got != want {
+                    bad.push(format!("seed {seed} {name}[{i}]: {got:?} != {want:?}"));
+                }
+            }
+        }
+        let want_state = state_literal(block);
+        checked += 1;
+        if rng.state_i64() != want_state {
+            bad.push(format!("seed {seed} state: {} != {want_state}", rng.state_i64()));
+        }
+    }
+    assert_eq!(checked, 3003, "GATE R2 checks 3 x (500 + 500) values plus 3 states");
+    assert!(
+        bad.is_empty(),
+        "GATE R2: {} mismatches of {checked}, first few: {:?}",
+        bad.len(),
+        &bad[..bad.len().min(8)]
+    );
+    println!("GATE R2: {checked}/{checked} exact (3 seeds x 500 randf_range(-3,3) + 500 randf_range(1,9) + 3 states)");
+}
+
+/// RED PROOF for GATE R2: the same two draws with the multiply-add done in
+/// DOUBLE precision — one rounding instead of two, the shape a port writes
+/// when it forgets `real_t` is a float. It reproduces the leading digits and
+/// then misses, which is exactly the failure mode a 1e-9 tolerance would hide,
+/// so the count is printed rather than assumed.
+#[test]
+fn red_proof_the_double_precision_randf_range_fails_gate_r2() {
+    let raw = std::fs::read_to_string(RANGE_FIXTURE).unwrap_or_else(|e| panic!("{RANGE_FIXTURE}: {e}"));
+    let mut checked = 0usize;
+    let mut mismatches = 0usize;
+    for seed in [1i64, 27, 12345] {
+        let block = seed_block(&raw, &seed.to_string());
+        let mut rng = GodotRng::new(seed);
+        for (name, from, to) in
+            [("randf_range_m3_3", -3.0f64, 3.0f64), ("randf_range_1_9", 1.0, 9.0)]
+        {
+            for lit in array_literals(block, name) {
+                let want: f64 = lit.parse().unwrap();
+                // The WRONG mapping: f64 arithmetic over the f32 draw.
+                let got = rng.randf() * (to - from) + from;
+                checked += 1;
+                if got != want {
+                    mismatches += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(checked, 3000);
+    assert!(
+        mismatches > 0,
+        "the f64 form must miss at least one recorded draw, or the gate proves nothing"
+    );
+    println!("RED PROOF (randf_range in f64): {mismatches}/{checked} draws wrong");
+}
