@@ -132,6 +132,15 @@ var _measure_front_label: Label3D = null  # Regiment facing aid (front vs flank/
 var range_ring_controller: Node = null
 var sight_fan_toggle: Callable = Callable()   # main provides: F toggles the selected unit's sight+range fan
 
+## NML-1085: while a solo PLACEMENT PROMPT is open — "place ONE reserve unit from the tray" — main
+## fills this with the model nodes those units own, and every other object on the table counts as
+## locked until the prompt closes. The maintainer could walk his OTHER units around while the Ambush
+## question stood open: a free move outside any activation, and the arrival check cannot tell the two
+## apart. Set of Node3D (a Dictionary used as a set); EMPTY means no restriction, which is the normal
+## state of the game. One choke point, so click-selection, box-select, drag and the radial are all
+## covered by it (see is_object_locked).
+var placement_only_nodes: Dictionary = {}
+
 # Movement reach indicator: M toggles the Advance + Rush/Charge bands on selected models,
 # Shift+M clears all. The MovementRangeController (injected by main.gd) owns the per-model
 # rings; local-only display aid. See scripts/movement_range_controller.gd.
@@ -4562,6 +4571,10 @@ func _set_object_locked(obj: Node3D, locked: bool) -> void:
 
 ## Check if object is locked
 func is_object_locked(obj: Node3D) -> bool:
+	# NML-1085: while a placement prompt owns the table for particular units (the Ambush arrival),
+	# everything else is locked for its duration — see placement_only_nodes.
+	if not placement_only_nodes.is_empty() and not placement_only_nodes.has(obj):
+		return true
 	# NML-105: an EMBARKED model is un-draggable while inside its transport — selection and the
 	# move gesture treat it like a locked object; its radial (Disembark) routes separately.
 	return obj.get_meta("locked", false) or obj.get_meta("embarked", false)

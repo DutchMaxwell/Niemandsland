@@ -10553,6 +10553,10 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 			beacon_hint += ("" if beacon_hint.is_empty() else ", ") + str(bd["unit"])
 	if not beacon_hint.is_empty():
 		beacon_hint = "\nAmbush Beacon: within 6\" of %s no enemy distance restriction applies." % beacon_hint
+	# NML-1085: the question is about the RESERVE units, so only they may be touched while it stands.
+	# Without this the player could move his other units during the arrival step — a free move outside
+	# any activation, and _solo_reserve_table_presence cannot tell that from a placement.
+	_solo_lock_table_to_units(pool)
 	_solo_deploy_ui_show("Ambush — round %d: place ONE reserve unit from the tray (>9\" from enemies), then hand over.\nIn reserve: %s%s" % [
 			round_number, ", ".join(names), beacon_hint],
 		"✓ Unit placed", func() -> void: outcome.append("placed"),
@@ -10573,6 +10577,7 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 					(pe["unit"] as GameUnit).get_name(), int(pe["on"]), int(pe["total"])])
 			else:
 				_solo_show_toast("No new reserve unit detected on the table — place it first, then ✓")
+			_solo_unlock_table()
 			_solo_deploy_ui_hide()
 			return await _solo_ambush_human_turn(round_number, pool)
 		for p in partial:
@@ -10595,8 +10600,37 @@ func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
 			_solo_warn_ambush_proximity(gu)
 	elif battle_log != null:
 		_log_rule_event(BattleLog.Category.GENERAL, "Your Ambush reserve keeps waiting this round", false)
+	_solo_unlock_table()
 	_solo_deploy_ui_hide()
 	return placed
+
+
+## Restrict the table to the models of `units` (attached heroes included) while a placement prompt is
+## open — everything else answers "locked" to selection, dragging and the radial. _solo_unlock_table()
+## releases it, and every exit path of the prompt takes one of the two (NML-1085).
+func _solo_lock_table_to_units(units: Array) -> void:
+	if object_manager == null:
+		return
+	var allowed := {}
+	for u in units:
+		var gu := u as GameUnit
+		if gu == null:
+			continue
+		var chain: Array = [gu]
+		if gu.has_method("get_attached_heroes"):
+			chain.append_array(gu.get_attached_heroes())
+		for c in chain:
+			for m in (c as GameUnit).models:
+				var node: Node3D = (m as ModelInstance).node
+				if node != null and is_instance_valid(node):
+					allowed[node] = true
+	object_manager.placement_only_nodes = allowed
+
+
+## Release the placement lock (NML-1085). Idempotent — safe on any exit path.
+func _solo_unlock_table() -> void:
+	if object_manager != null:
+		object_manager.placement_only_nodes = {}
 
 
 ## Human reserve units by their CURRENT table presence — the Ambush ✓ click's detection.
