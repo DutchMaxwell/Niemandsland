@@ -14961,6 +14961,18 @@ func _on_map_layout_updated(grid_cells: Dictionary, table_size: Vector2,
 ## Deployment Zones (Visibility Only - Editing is in Map Tool)
 ## ============================================================================
 
+## PURE (NML-1084): does the left menu offer the "AI reasoning in the log" toggle? It always does.
+## UI audit A-8 hid it behind OS.is_debug_build() / NML_AI_TRACE=1 — reasonable from a dev machine,
+## and it left the maintainer's EXPORTED CI build with no way to switch the AI log on at all. His
+## finding was exactly that: "the AI log cannot be activated, the entry is no longer selectable in the
+## left menu". An environment variable you must set before launching is not a UI. Solo's whole promise
+## is an opponent you can UNDERSTAND, so the explanation belongs to the player; it stays OFF by
+## default, and off costs nothing (the records are only rendered while it is on). Kept as a named
+## predicate so the decision is testable instead of buried in a UI builder.
+static func ai_reasoning_toggle_visible(_debug_build: bool, _trace_env: String) -> bool:
+	return true
+
+
 ## Solo section in the left panel (goal 001, F3): one AI toggle per imported army, so the designation
 ## can be changed after import (the import dialog's checkbox sets it up front). F11 plays the marked army.
 func _init_solo_panel() -> void:
@@ -15000,13 +15012,10 @@ func _refresh_solo_panel() -> void:
 	fast_cb.add_theme_font_size_override("font_size", 12)
 	fast_cb.toggled.connect(func(pressed: bool) -> void: _solo_fast = pressed)
 	solo_panel_box.add_child(fast_cb)
-	# UI audit A-8: developer instrumentation, hidden from ordinary players (it reads as an
-	# unfinished product in the HUD) — but the maintainer tests with EXPORTED builds and needs it
-	# for exactly the AI findings it explains, so the existing NML_AI_TRACE opt-in brings it back:
-	#   NML_AI_TRACE=1 ./Niemandsland.x86_64
+	# NML-1084: the AI log is a player-facing option again (see ai_reasoning_toggle_visible).
 	var dev_cb := CheckButton.new()
-	dev_cb.visible = OS.is_debug_build() or OS.get_environment("NML_AI_TRACE") == "1"
-	dev_cb.text = "AI reasoning (dev)"
+	dev_cb.visible = ai_reasoning_toggle_visible(OS.is_debug_build(), OS.get_environment("NML_AI_TRACE"))
+	dev_cb.text = "AI reasoning in the log"
 	dev_cb.tooltip_text = "Log WHY the AI decides: deployment spots, activation picks, tree branches, target EV scores, move budgets. Off = zero rendering cost."
 	dev_cb.button_pressed = _solo_dev
 	dev_cb.focus_mode = Control.FOCUS_NONE
