@@ -26,6 +26,9 @@ HELD SINCE M3-9b: `terrain` (the drawing list, off the bank's `pieces`) and
 EXCLUDED, and named rather than quietly skipped (`--excluded` prints the list):
 
   * `tool` — deliberate provenance ("core_selfplay" vs "core_selfplay_py").
+
+`armies` is held by list BASENAME: a reference recorded on the fleet carries that
+machine's path for the same list, and the path is not a rule.
   * `planner_positions[].intent` — the planner's prose sentence, a report string
     rather than a rule; the Python row carries the key, empty.
   * The Python-only extras `rounds_played`, `rounds_log`, `wall_seconds` and the
@@ -145,11 +148,21 @@ def diff_board(ref: list, got: list, path: str, tol: float, out: list[tuple]) ->
                 return
 
 
+def _armies_by_name(block: dict) -> dict:
+    """`armies` is a pair of list PATHS, and a reference recorded on the fleet
+    carries that machine's path (`/root/ai_lists_gf/...`). The LIST is the held
+    quantity, so both sides are compared by basename — held, not excluded."""
+    return {k: Path(str(v)).name for k, v in block.items()}
+
+
 def compare(ref: dict, got: dict, tol: float) -> list[tuple]:
     """Every held quantity, in report order. Empty = field-for-field equal."""
     bad: list[tuple] = []
     ref_top = {k: v for k, v in ref.items() if k not in EXCLUDED_TOP and k != "planner_positions"}
     got_top = {k: v for k, v in got.items() if k not in EXCLUDED_TOP and k != "planner_positions"}
+    for top in (ref_top, got_top):
+        if isinstance(top.get("armies"), dict):
+            top["armies"] = _armies_by_name(top["armies"])
     if set(ref_top) != set(got_top):
         bad.append(
             ("top-level keys", sorted(set(ref_top) - set(got_top)), sorted(set(got_top) - set(ref_top)))
