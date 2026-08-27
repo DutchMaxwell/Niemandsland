@@ -1,0 +1,9 @@
+{"act":9,"count":1,"faces":[5],"owner":"AI (Blood Pathfinders)","player":2,"roll_kind":"attack","round":2,"seq":1,"target":6}
+{"act":17,"count":1,"faces":[6],"owner":"AI (Blood Pathfinders)","player":2,"roll_kind":"attack","round":3,"seq":2,"target":4}
+{"act":17,"count":1,"faces":[5],"owner":"AI (Blood Pathfinders)","player":2,"roll_kind":"attack","round":3,"seq":3,"target":4}
+{"act":17,"count":2,"faces":[1,2],"owner":"AI (Novice Sisters)","player":2,"roll_kind":"defense","round":3,"seq":4,"target":6}
+{"act":21,"count":2,"faces":[4,4],"owner":"AI (Blood Veteran Battle Brothers)","player":2,"roll_kind":"attack","round":4,"seq":5,"target":2}
+{"act":21,"count":2,"faces":[6,4],"owner":"AI (Novice Sisters)","player":2,"roll_kind":"defense","round":4,"seq":6,"target":6}
+{"act":23,"count":1,"faces":[6],"owner":"AI (Blood Pathfinders)","player":2,"roll_kind":"attack","round":4,"seq":7,"target":4}
+{"act":23,"count":1,"faces":[2],"owner":"AI (Blood Pathfinders)","player":2,"roll_kind":"attack","round":4,"seq":8,"target":4}
+{"act":23,"count":1,"faces":[2],"owner":"AI (Novice Sisters)","player":2,"roll_kind":"defense","round":4,"seq":9,"target":6}
