@@ -60,9 +60,9 @@ use nmlcore::state::{Marker, ProfileCache, Roster};
 use nmlcore::rows::{Cell, RowEncoder};
 use nmlcore::unit::{StaticsCache, UnitStatic};
 use nmlcore::{
-    geom, io, mission, reply_threat, resolve_on_board, resolve_stochastic_on_board, score, Action,
-    GodotRng, PlainTerrain, Registries, Seams, State as CoreState, Terrain, Tray,
-    Unsupported as CoreUnsupported,
+    geom, io, mission, reply_threat, resolve_on_board, resolve_stochastic_on_board,
+    resolve_stochastic_tray_on_board, score, Action, GodotRng, PlainTerrain, Registries, Seams,
+    State as CoreState, Terrain, Tray, Unsupported as CoreUnsupported,
 };
 
 create_exception!(nml_core, Unsupported, PyRuntimeError);
@@ -817,6 +817,58 @@ impl Core {
         )
         .map(PyState::derived)
         .map_err(declined)
+    }
+
+    /// NML-1073 M5 D1-B4 — the same played activation with `dice="table"`:
+    /// the SHOOTING sub-phase draws from `tray` in the table's own draw order
+    /// (`nmlcore::dice::resolve_shooting_with_tray`) instead of filling an
+    /// expected-value pool. `rng` still runs everything else, so the two
+    /// streams stay split the way the table's are.
+    ///
+    /// Returns `(state, report)` with `report = {"rolls": [{"kind", "count",
+    /// "target", "faces"}], "unported": [name, ...]}` — `rolls` in draw order
+    /// (what `dice.jsonl` records), `unported` the table branches THIS
+    /// activation hit that the port does not reproduce. A caller that ignores
+    /// `unported` is choosing to ignore a known divergence, not being told
+    /// nothing.
+    fn resolve_with_tray(
+        &mut self,
+        py: Python<'_>,
+        state: PyRef<'_, PyState>,
+        action: &Bound<'_, PyAny>,
+        rng: &mut PyRng,
+        tray: &mut PyTray,
+    ) -> PyResult<(PyState, Py<PyAny>)> {
+        let act: Action = serde_json::from_value(value_of(action)?)
+            .map_err(|e| Unsupported::new_err(format!("action: {e}")))?;
+        let statics = self.statics_for(&state.inner)?;
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics,
+            &state.inner,
+            &act,
+            &self.terrain,
+            self.seams(),
+            &mut rng.inner,
+            &mut tray.inner,
+        )
+        .map_err(declined)?;
+        let rolls: Vec<Value> = shot
+            .rolls
+            .iter()
+            .map(|r| {
+                serde_json::json!({
+                    "kind": r.kind,
+                    "count": r.count,
+                    "target": r.target,
+                    "faces": r.faces.iter().map(|&f| f as i64).collect::<Vec<i64>>(),
+                })
+            })
+            .collect();
+        let report = serde_json::json!({
+            "rolls": Value::Array(rolls),
+            "unported": shot.unported.iter().map(|s| Value::String((*s).into())).collect::<Vec<Value>>(),
+        });
+        Ok((PyState::derived(next), to_py(py, &report)?))
     }
 
     /// `AiMissionEval.score` with the reply threat — the RICH leaf

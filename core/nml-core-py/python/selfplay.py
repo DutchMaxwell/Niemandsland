@@ -758,6 +758,7 @@ def _play_round(
     magic: dict[str, Any] | None = None,
     spell_reach: dict[str, float] | None = None,
     tray=None,
+    dice_tally: dict[str, int] | None = None,
 ) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
     dry side hands the tail to the other, and the NEXT round opens with whoever
@@ -771,9 +772,12 @@ def _play_round(
     game die for die.
 
     `tray` is the SECOND stream — the `nml_core.Tray` seeded from `dice_seed`
-    (see `DICE_MODES`). B3 carries it here and no further: nothing in this
-    function draws from it, which is why `dice="table"` still plays the
-    expected-value game. B4 hands it to the resolve below."""
+    (see `DICE_MODES`). It is `None` under `dice="expected"`; under
+    `dice="table"` (D1-B4) the played resolve draws its SHOOTING dice from it
+    in the table's own order, and `dice_tally` collects the unported branches
+    those activations hit (see `Core.resolve_with_tray`). Nothing else draws
+    from the tray in B4 — melee, impact and morale are B5's, which is why the
+    stream is left standing exactly before the morale roll."""
     turn = opener
     last_side = 0
     forked = False
@@ -833,7 +837,17 @@ def _play_round(
                 magic, side_key, state, actor,
                 (spell_reach or {}).get(pick["unit_key"], 0.0),
             )
-        state = core.resolve_stochastic_rng(state, action, rng)
+        if tray is None:
+            state = core.resolve_stochastic_rng(state, action, rng)
+        else:
+            state, report = core.resolve_with_tray(state, action, rng, tray)
+            if dice_tally is not None:
+                dice_tally["activations"] = dice_tally.get("activations", 0) + 1
+                dice_tally["rolls"] = dice_tally.get("rolls", 0) + len(report["rolls"])
+                if report["unported"]:
+                    dice_tally["unported_acts"] = dice_tally.get("unported_acts", 0) + 1
+                for name in report["unported"]:
+                    dice_tally[name] = dice_tally.get(name, 0) + 1
         if magic is not None:
             _magic_tally(magic, side_key, casts_before, state.casts()[actor])
             _spells_by_kind_tally(magic, side_key, state.cast_event_kinds(), events_before)
@@ -970,10 +984,12 @@ def play_game(
     # tray is a SECOND generator, seeded from the dice seed the way
     # `arena_match.gd:478` seeds the table's (`_dice_seed`, which defaults to
     # the game seed, :984-985) — because on the table those are two streams,
-    # and one generator serving both could never reproduce it. B3 seeds it and
-    # stops: nothing draws from it, so the played stream is untouched and every
-    # digest written before this knob existed still reproduces.
-    tray = nml_core.Tray(seed)
+    # and one generator serving both could never reproduce it. D1-B4 gives it
+    # its FIRST consumer — the shooting sub-phase — so under `dice="expected"`
+    # the tray is not even built and every digest written before this knob
+    # existed still reproduces byte for byte.
+    tray = nml_core.Tray(seed) if eff_dice == "table" else None
+    dice_tally: dict[str, int] = {}
     # core_selfplay.gd:176 — three markers on the centre line, 16" apart.
     objectives = [[f32(-16.0 * IN2M), 0.0, 0.0], [0.0, 0.0, 0.0], [f32(16.0 * IN2M), 0.0, 0.0]]
     if deploy_rng_seed is None:
@@ -1005,7 +1021,7 @@ def play_game(
             core, state, opener, rng, log, round_no,
             seed=seed, owners=owners, sidecars=sidecars,
             fork_salt=fork_salt, sidecar_skip=sidecar_skip,
-            magic=magic, spell_reach=spell_reach, tray=tray,
+            magic=magic, spell_reach=spell_reach, tray=tray, dice_tally=dice_tally,
         )
         state, owners = core.playout_seize(state, owners)
         vp = core.vp_round_add(owners, vp)
@@ -1038,6 +1054,12 @@ def play_game(
             "hero_attach": hero_attach,
             "dice": eff_dice,
         },
+        # D1-B4 telemetry, empty under `dice="expected"`: how many shooting
+        # activations drew from the tray, how many rolls that was, and how many
+        # of those activations hit a table branch this port does NOT reproduce
+        # (`unported_acts`, then one counter per branch name). An unported
+        # branch is a REPORTED divergence, never a silent skip.
+        "dice_tally": dice_tally,
         "seed": seed,
         "dice_seed": seed,
         "grades": {"p1": "planner_core", "p2": "planner_core"},
@@ -1077,7 +1099,13 @@ def play_game(
 # disagree. Named explicitly so a second timing field never joins the
 # exclusion silently; there is no other Python-only field in the result dict
 # (see the module docstring's field-by-field accounting).
-DIGEST_EXCLUDED_FIELDS = ("wall_seconds",)
+#
+# `dice_tally` (D1-B4) joins it for a different reason: it is a REPORT ABOUT the
+# resolution (how many activations drew, how many hit an unported branch), not
+# the game. Hashing it would make `dice="table"` differ from `dice="expected"`
+# on the counters alone, which is exactly the evidence the B4 test must not be
+# allowed to fake — the digests have to part company because the GAME parted.
+DIGEST_EXCLUDED_FIELDS = ("wall_seconds", "dice_tally")
 
 
 def result_digest(result: dict) -> str:

@@ -105,7 +105,11 @@ def test_missing_timing_field_still_matches():
     assert sp.result_digest(a) == sp.result_digest(b)
 
 
-def test_excluded_fields_list_is_exactly_wall_seconds():
-    """Pins the exclusion list itself — a second timing field must be added
-    here deliberately, not slip in unnoticed."""
-    assert sp.DIGEST_EXCLUDED_FIELDS == ("wall_seconds",)
+def test_excluded_fields_list_is_exactly_wall_seconds_and_the_dice_tally():
+    """Pins the exclusion list itself — a field must be added here
+    deliberately, not slip in unnoticed. `dice_tally` (NML-1073 M5 D1-B4) is a
+    REPORT ABOUT the resolution (activations that drew, branches this port does
+    not reproduce), not the game: hashing it would let `dice="table"` differ
+    from `dice="expected"` on counters alone, which is precisely the evidence
+    the B4 invariant test must not be able to fake."""
+    assert sp.DIGEST_EXCLUDED_FIELDS == ("wall_seconds", "dice_tally")

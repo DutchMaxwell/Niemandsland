@@ -462,14 +462,22 @@ def _digest_without_the_dice_mode(res: dict) -> str:
     not (BANK_DIR.is_dir() and ARMY1.exists() and ARMY2.exists()),
     reason="no terrain bank / AI lists on this machine",
 )
-def test_b3_the_dice_knob_is_stamped_and_does_not_move_the_game_yet():
-    """THE B3 INVARIANT, and it is meant to be broken later.
+def test_b4_the_dice_knob_now_moves_the_game():
+    """THE B3 INVARIANT, INVERTED — exactly as its own docstring instructed.
 
-    B3 ships the tray and the stream split but no consumer, so `dice="table"`
-    must still play the expected-value game: same seed, same everything except
-    the one string `knobs["dice"]`, which is removed before the digest is
-    taken. B4 (shooting on the tray) and B5 (melee/morale) will make this fail
-    on purpose — when they do, this test is inverted, not deleted.
+    B3 shipped the tray and the stream split with NO consumer, so both modes
+    played the identical game and the test asserted equality. D1-B4 gives the
+    tray its first consumer (SHOOTING, `dice.rs::resolve_shooting_with_tray`),
+    so `dice="table"` now resolves real hit dice, real save batches and a real
+    Regeneration roll where `dice="expected"` fills a mean-preserving pool. The
+    two digests MUST part company on both seeds; if they ever agree again, the
+    consumer has come unwired and every "table" corpus written afterwards would
+    be an expected-value corpus wearing the wrong label.
+
+    `knobs["dice"]` is still removed before the digest is taken, and
+    `dice_tally` is excluded from `result_digest` (see
+    `DIGEST_EXCLUDED_FIELDS`), so the difference below cannot come from a
+    counter or a stamped string — only from the GAME.
 
     RED PROOF, because a green digest comparison on its own proves nothing
     here: burn ONE draw out of the GAME generator per round and the digest must
@@ -486,8 +494,8 @@ def test_b3_the_dice_knob_is_stamped_and_does_not_move_the_game_yet():
             assert res["knobs"]["dice"] == mode, "the corpus file must document its rung"
             assert res["dice_seed"] == res["seed"], "arena_match.gd:984-985 — dice_seed IS the seed"
             out[mode] = _digest_without_the_dice_mode(res)
-        assert out["expected"] == out["table"], (
-            "B3 has no tray consumer — seed %d must play the identical game: %s" % (seed, out)
+        assert out["expected"] != out["table"], (
+            "B4 wired the tray to SHOOTING — seed %d must play a different game: %s" % (seed, out)
         )
 
     base = _digest_without_the_dice_mode(sp.play_game(28, ARMY1, ARMY2, REPO, BANK_DIR, core))
@@ -504,8 +512,8 @@ def test_b3_the_dice_knob_is_stamped_and_does_not_move_the_game_yet():
         )
     finally:
         sp._play_round = played
-    assert shifted != base, "seed 28 is stream-blind — the invariant above measures nothing"
-    print("B3 invariant: seeds 27+28 identical in both modes; a stream shift reddens seed 28")
+    assert shifted != base, "seed 28 is stream-blind — the red proof above measures nothing"
+    print("B4: seeds 27+28 part company between the two dice modes; a stream shift still reddens seed 28")
 
 
 def test_the_top_k_horizon_env_knobs_mirror_ai_planner(monkeypatch):
