@@ -3033,6 +3033,9 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 	var diff := active_difficulty()
 	AiMissionEval.fit_mode = diff != null and diff.eval_fit   # E4: leaf choice per preset
 	AiPlanner.playout_search = diff != null and diff.playout_search   # S-wave: per preset
+	# NML-1073 M5 BUG-3: the joined-hero fold is a PER-SEAT knob, so it is stamped here, per
+	# pick, exactly like the line above. env NML_HERO_FOLD=1 pins it on for headless runs.
+	BattleSim.hero_fold = diff != null and diff.hero_fold
 	# Net-guided playouts (research gate NML_PLAYOUT_NET=1): the loaded clone
 	# steers every imagined activation; OFF or no net = byte-identical heuristics.
 	# NML_PLAYOUT_NET_P<slot> overrides per seat (improvement-operator pattern,
@@ -3842,6 +3845,7 @@ func _solve_planner(unit: GameUnit) -> Dictionary:
 	var sp_diff := active_difficulty()
 	AiMissionEval.fit_mode = sp_diff != null and sp_diff.eval_fit   # E4: leaf choice per preset
 	AiPlanner.playout_search = sp_diff != null and sp_diff.playout_search   # S-wave: per preset
+	BattleSim.hero_fold = sp_diff != null and sp_diff.hero_fold   # NML-1073 M5 BUG-3: per preset
 	# R3: execute the rollout intent when it is still valid (same unit, same
 	# round, target still alive) — re-deriving 1-ply here would undo the tempo
 	# choice the unit pick just made. Any mismatch falls through to the re-plan.

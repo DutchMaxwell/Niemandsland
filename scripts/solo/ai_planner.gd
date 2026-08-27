@@ -13,6 +13,20 @@ const SAFE_LINE_COVER_BONUS_IN := 6.0    # D22: a covered stop outbids 6" of ope
 const SAFE_LINE_OPEN_LINE_PENALTY_IN := 2.0   # D22: each open fire line beyond the first costs 2"
 
 
+## THE IMAGINATION'S ACTIVATION POOL — one predicate for every enumeration that used to
+## spell the same three terms inline (:27, :131, :269, :645, :673, :870, :1504, own side and
+## enemy alike). The three terms are unchanged: the unit's side, its `activated` flag, a
+## living model. Under BattleSim.hero_fold_enabled() (NML-1073 M5 BUG-3, default OFF) a
+## FOURTH term joins them — the table's own last line, `SoloController.can_activate`
+## solo_controller.gd:419: a JOINED HERO has no activation of its own. Twin of the Rust
+## `State::can_activate` (core/nml-core/src/state.rs:414), so the NML_CORE seam and this
+## search offer the same pool. Knob off ⇒ byte-for-byte the old filter.
+static func _can_activate(su: Dictionary, player: int) -> bool:
+	if int(su["player"]) != player or bool(su["activated"]) or int(su["alive"]) <= 0:
+		return false
+	return not (BattleSim.hero_fold_enabled() and not str(su.get("attached_to", "")).is_empty())
+
+
 ## The 1-ply pick (plan D5): roll every candidate of every un-activated unit
 ## of `player` through BattleSim.resolve, score the outcome in mission
 ## currency, and return the best (unit, action) pair — WHICH unit activates
@@ -24,7 +38,7 @@ static func plan(state: Dictionary, player: int) -> Dictionary:
 	var runner := {}
 	for key in state["units"]:
 		var su: Dictionary = state["units"][key]
-		if int(su["player"]) != player or bool(su["activated"]) or int(su["alive"]) <= 0:
+		if not _can_activate(su, player):
 			continue
 		var cands: Array = [{"unit": key, "kind": AiDecision.Action.HOLD}] \
 			if bool(su.get("shaken", false)) else candidates(state, str(key))
@@ -128,7 +142,7 @@ static func plan_with_rollout(state: Dictionary, player: int,
 	var scored: Array = []
 	for key in state["units"]:
 		var su: Dictionary = state["units"][key]
-		if int(su["player"]) != player or bool(su["activated"]) or int(su["alive"]) <= 0:
+		if not _can_activate(su, player):
 			continue
 		var cands: Array = [{"unit": key, "kind": AiDecision.Action.HOLD}] \
 			if bool(su.get("shaken", false)) else candidates(state, str(key))
@@ -266,8 +280,7 @@ static func plan_with_rollout(state: Dictionary, player: int,
 	var waits := 0
 	for key in state["units"]:
 		var su: Dictionary = state["units"][key]
-		if int(su["player"]) == player and not bool(su["activated"]) \
-				and int(su["alive"]) > 0 and str(key) != str(best["unit_key"]):
+		if _can_activate(su, player) and str(key) != str(best["unit_key"]):
 			waits += 1
 	return {"used": true, "unit_key": best["unit_key"], "action": best["action"],
 		"intent": intent_line(state, best, runner, base, waits, playout_note),
@@ -642,7 +655,7 @@ static func _policy_step(state: Dictionary, player: int, rich := false) -> Dicti
 	var best_s := -INF
 	for key in state["units"]:
 		var su: Dictionary = state["units"][key]
-		if int(su["player"]) != player or bool(su["activated"]) or int(su["alive"]) <= 0:
+		if not _can_activate(su, player):
 			continue
 		for action in _policy_candidates(state, str(key)):
 			var next := BattleSim.resolve(state, action)
@@ -670,7 +683,7 @@ static func _policy_step_net(state: Dictionary, player: int, rich := false) -> D
 	var picks: Array = []
 	for key in state["units"]:
 		var su: Dictionary = state["units"][key]
-		if int(su["player"]) != player or bool(su["activated"]) or int(su["alive"]) <= 0:
+		if not _can_activate(su, player):
 			continue
 		var cands := _policy_candidates(state, str(key))
 		if cands.is_empty():
@@ -870,6 +883,8 @@ static func doctrine_pick(state: Dictionary, player: int, doctrine: String) -> D
 		if bool(su["activated"]):
 			any_own_acted = true
 			continue
+		if not _can_activate(su, player):
+			continue   # BUG-3 fold: only the hero term can bite here — the other three just ran
 		if first_key == "":
 			first_key = str(key)
 		var wsum := 0.0
@@ -1501,7 +1516,6 @@ static func _playout_round_tail(state: Dictionary, turn: int,
 static func _playout_pick(state: Dictionary, player: int) -> Dictionary:
 	for k in state["units"]:
 		var su: Dictionary = state["units"][k]
-		if int(su["player"]) == player and not bool(su["activated"]) \
-				and int(su["alive"]) > 0:
+		if _can_activate(su, player):
 			return _policy_step(state, player, playout_rich())
 	return {}

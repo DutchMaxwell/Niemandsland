@@ -630,10 +630,11 @@ impl NmlCore {
                 cast: on("NML_SIM_CAST"),
                 // NML-1073 M4-7. Read ONCE, here, like its two siblings.
                 path: on("NML_SIM_PATH"),
-                // NML-1073 M5 D1-B4b. The GODOT caller is the live game, whose
-                // own `SoloController` already folds a joined hero into its
-                // host — folding it a second time here would move the hero
-                // twice. Never on from this side.
+                // NML-1073 M5 D1-B4b/BUG-3. Not read from the environment here:
+                // `plan_inner` takes `hero_attach` off the HEADER knobs (which
+                // `act_recorder.gd` stamps from `BattleSim.hero_fold_enabled()`),
+                // so the seat's own knob decides. This struct only supplies
+                // `path` to the planner; the value below is inert for it.
                 hero_attach: false,
             });
         }

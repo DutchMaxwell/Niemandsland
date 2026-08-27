@@ -42,6 +42,25 @@ static func cast_phase_enabled() -> bool:
 		_cast_env = 1 if (raw == "1" or raw == "on") else 0
 	return _cast_env == 1
 
+## NML-1073 M5 BUG-3 (EXPERIMENT, DEFAULT OFF): fold a JOINED HERO into its host inside the
+## IMAGINATION, the way the real table already does. `SoloController.can_activate`
+## (solo_controller.gd:405-419) ends on `not u.is_attached()` — a joined hero has no activation
+## of its own; it moves and fights inside its host. `BattleSim`/`AiPlanner` grant it one anyway
+## (ai_planner.gd:27/:131/:645, and resolve() below moves `su["positions"]` alone), so the AI
+## plans with an army that has more activations than it really has. With the knob ON three
+## things mirror the table, exactly the three halves of the Rust `Seams::hero_attach`
+## (core/nml-core/src/io.rs:221): the pool refuses the hero (AiPlanner._can_activate ~ state.rs:414),
+## the host's move carries the hero's models (resolve ~ sim.rs:940), and the host's activation
+## spends the hero (resolve ~ sim.rs:1122). Set per pick from the difficulty preset
+## (SoloDifficulty.hero_fold, like AiPlanner.playout_search); env NML_HERO_FOLD=1 turns it on
+## process-wide for headless runs. OFF = byte-identical to the shipped planner.
+static var hero_fold := false
+static var _hero_fold_env := -1
+static func hero_fold_enabled() -> bool:
+	if _hero_fold_env < 0:
+		_hero_fold_env = 1 if OS.get_environment("NML_HERO_FOLD") == "1" else 0
+	return hero_fold or _hero_fold_env == 1
+
 ## NML-1073 M1-5 seam: NML_CORE="1" routes the rollout node to the Rust core
 ## (the NmlCore GDExtension, core/nml_core.gdextension — installed from
 ## core/nml_core.gdextension.in by core/install_gdextension.sh, only when the
@@ -698,6 +717,17 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 				profile["spacing_n"] += 1
 		for i in range(positions.size()):
 			positions[i] = (positions[i] as Vector3) + delta
+		# BUG-3 fold, half 2 (mirrors sim.rs:940): a joined hero's models ride the HOST's
+		# rigid delta — the table plans the host's move over ONE model list that already
+		# contains them (SoloController._moving_models -> get_alive_models_with_attached()).
+		# After both clamps, so the hero lands inside the host's footprint.
+		if hero_fold_enabled():
+			for hk in su.get("attached", []):
+				if not next["units"].has(hk):
+					continue
+				var hp: Array = (next["units"][hk] as Dictionary)["positions"]
+				for i in range(hp.size()):
+					hp[i] = (hp[i] as Vector3) + delta
 		var terrain_at: Callable = next.get("terrain_at", Callable())
 		if terrain_at.is_valid():   # T2b: the mover's cover follows it (unit-centre probe, v0)
 			su["in_cover"] = TerrainRules.gives_cover(int(terrain_at.call(centre + delta)))
@@ -772,6 +802,14 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 	if was_shaken and kind == AiDecision.Action.HOLD and shoot_key == "":
 		su["shaken"] = false
 	su["activated"] = true
+	# BUG-3 fold, half 3 (mirrors sim.rs:1122): the host's activation SPENDS its joined
+	# heroes too — what keeps the "un-activated" readings honest (AiMissionEval moves_left
+	# :611, board_rows :252) once the host has gone. The pool filter alone would leave the
+	# hero looking fresh to every feature that counts activations left.
+	if hero_fold_enabled():
+		for hk in su.get("attached", []):
+			if next["units"].has(hk):
+				(next["units"][hk] as Dictionary)["activated"] = true
 	if profile_enabled():
 		profile["resolve"] += Time.get_ticks_usec() - _prof_t0
 		profile["resolve_n"] += 1
