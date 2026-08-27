@@ -28,9 +28,10 @@
 use crate::combat::{
     covered_defense, deadly_multiplier, fortified_ap, guarded_defense, impact_total_dice,
     melee_hit_modifier, modified_hit_target, reliable_quality, save_target, shielded_defense,
-    shooting_hit_modifier, shrouded_reach, thrust_to_hit, versatile_best_mode, BEST_HIT_TARGET,
-    HEAVY_IMPACT_AP, IMPACT_HIT_TARGET, LONG_RANGE_IN, RAVAGE_WOUND_TARGET, RENDING_AP_BONUS,
-    SHROUD_FLOOR_IN, SHROUD_RANGE_PENALTY_IN, THRUST_AP_BONUS, UNMODIFIED_SIX,
+    morale_target, shooting_hit_modifier, shrouded_reach, thrust_to_hit, versatile_best_mode,
+    BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP, IMPACT_HIT_TARGET, LONG_RANGE_IN,
+    NO_RETREAT_SELF_WOUND_MAX, RAVAGE_WOUND_TARGET, RENDING_AP_BONUS, SHROUD_FLOOR_IN,
+    SHROUD_RANGE_PENALTY_IN, THRUST_AP_BONUS, UNMODIFIED_SIX,
 };
 use crate::rng::GodotRng;
 use crate::unit::{Ctx, ShootProfile};
@@ -863,6 +864,97 @@ pub fn resolve_impact_pool_with_tray(
     out
 }
 
+// ------------------------------------- D1-B5b: MORALE on the same tray ---
+
+/// `AiCombatMath.Morale` — the three outcomes of a morale test.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Morale {
+    Passed,
+    Shaken,
+    Routed,
+}
+
+/// ONE morale test on the tray — `main._solo_morale_test` :8305, in its order:
+///
+///   the test die at the Banner-modified Quality target [:8336] -> Fearless's
+///   single re-roll of a FAILED test, a 4+ counting as passed [:8347] -> No
+///   Retreat, which turns the still-failed test into a pass and pays for it in
+///   self-wounds, one die per wound needed to destroy the unit [:8365].
+///
+/// TWO things a naive port gets wrong, both pinned by the tests below:
+///
+///   1. An ALREADY Shaken unit fails automatically and draws NO die at all
+///      (:8310-8317). Burn one there and every later activation of the game is
+///      on different faces.
+///   2. ROUT exists only in MELEE (p.10, PDF-verified): a shooting-caused
+///      failure is Shaken whatever the unit's strength. `melee` is that gate.
+///
+/// The morale die is stamped `roll_kind` "attack" like every other tray roll
+/// (main.gd:8336), so the replay gate can only tell it apart by where it sits.
+///
+/// Returns the outcome and the report; `wounds` are No Retreat's self-wounds,
+/// which land DIRECTLY — "can't be ignored", so no Regeneration roll follows.
+///
+/// NOT PORTED: the spell morale tokens that join the Banner bonus in the target
+/// (:8348-8355) — this port carries no spell-token ledger.
+pub fn resolve_morale_with_tray(
+    unit: &Ctx,
+    owner: &str,
+    melee: bool,
+    below_half: bool,
+    shaken: bool,
+    wounds_to_destroy: i64,
+    tray: &mut Tray,
+) -> (Morale, ShootResult) {
+    let mut out = ShootResult::default();
+    let failed = if below_half && melee { Morale::Routed } else { Morale::Shaken };
+    let mut result = if shaken {
+        failed // `morale_result_shaken` :558 — no Quality roll, and no draw.
+    } else {
+        let target = morale_target(unit.quality, unit.morale_bonus);
+        let faces = tray.roll(1);
+        let passed = faces_to_hits(&faces, target as u8) > 0;
+        out.rolls.push(Roll { kind: "attack", count: 1, target, faces, owner: owner.into() });
+        if passed {
+            Morale::Passed
+        } else {
+            failed
+        }
+    };
+    if result != Morale::Passed && unit.fearless {
+        let faces = tray.roll(1);
+        let passed = faces_to_hits(&faces, FEARLESS_RECOVER_TARGET as u8) > 0;
+        out.rolls.push(Roll {
+            kind: "attack",
+            count: 1,
+            target: FEARLESS_RECOVER_TARGET,
+            faces,
+            owner: owner.into(),
+        });
+        if passed {
+            result = Morale::Passed;
+        }
+    }
+    if result != Morale::Passed && unit.no_retreat {
+        // `maxi(1, wounds_to_destroy)` :8364 — the zero-die rule applies here
+        // too, and the recorded target is the SAFE face, `MAX + 1`.
+        let n = wounds_to_destroy.max(1);
+        let faces = tray.roll(n as usize);
+        out.wounds =
+            faces.iter().filter(|&&f| (f as i64) <= NO_RETREAT_SELF_WOUND_MAX).count() as i64;
+        out.caused = out.wounds;
+        out.rolls.push(Roll {
+            kind: "attack",
+            count: n,
+            target: NO_RETREAT_SELF_WOUND_MAX + 1,
+            faces,
+            owner: owner.into(),
+        });
+        result = Morale::Passed;
+    }
+    (result, out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1295,6 +1387,63 @@ mod tests {
         let attacks: Vec<(&str, i64)> = out.rolls.iter().filter(|r| r.kind == "attack")
             .map(|r| (r.owner.as_str(), r.count)).collect();
         assert_eq!(attacks, vec![("Host", 4), ("Hero", 1)], "host first, then the hero");
+    }
+
+    // ------------------------------------------------ D1-B5b: the morale dice ---
+
+    /// One test die at the Banner-modified Quality target, and Fearless's single
+    /// re-roll as a SECOND batch after it (main.gd:8336 then :8347).
+    #[test]
+    fn a_morale_test_is_one_die_and_fearless_re_rolls_a_failure() {
+        let unit = Ctx { quality: 6, fearless: true, ..Default::default() };
+        let mut tray = Tray::seeded(11);
+        let (_, out) = resolve_morale_with_tray(&unit, "Unit", true, false, false, 4, &mut tray);
+        assert_eq!(out.rolls[0].count, 1);
+        assert_eq!(out.rolls[0].target, 6, "Quality 6+, no Banner");
+        let failed = faces_to_hits(&out.rolls[0].faces, 6) == 0;
+        assert_eq!(out.rolls.len(), if failed { 2 } else { 1 });
+        if failed {
+            assert_eq!(out.rolls[1].target, FEARLESS_RECOVER_TARGET, "the 4+ rescue die");
+        }
+    }
+
+    /// An ALREADY Shaken unit fails automatically and draws NO die (:8310-8317).
+    /// Burn one and every later activation of the game is on other faces.
+    #[test]
+    fn an_already_shaken_unit_fails_morale_without_drawing_a_die() {
+        let unit = Ctx { quality: 4, ..Default::default() };
+        let mut tray = Tray::seeded(5);
+        let (res, out) = resolve_morale_with_tray(&unit, "Unit", true, true, true, 3, &mut tray);
+        assert!(out.rolls.is_empty(), "no Quality roll for a Shaken unit");
+        assert_eq!(res, Morale::Routed, "Shaken + at half + melee = Rout");
+        assert_eq!(tray.state_i64(), Tray::seeded(5).state_i64(), "and not one draw spent");
+    }
+
+    /// ROUT is melee-only (p.10). The same failed test at half strength is a
+    /// Rout in melee and only Shaken after shooting.
+    #[test]
+    fn only_a_melee_test_can_rout() {
+        let unit = Ctx { quality: 4, ..Default::default() };
+        let melee = resolve_morale_with_tray(&unit, "U", true, true, true, 2, &mut Tray::seeded(1));
+        let shot = resolve_morale_with_tray(&unit, "U", false, true, true, 2, &mut Tray::seeded(1));
+        assert_eq!(melee.0, Morale::Routed);
+        assert_eq!(shot.0, Morale::Shaken);
+    }
+
+    /// No Retreat turns the still-failed test into a PASS and pays for it in
+    /// self-wounds: one die per wound needed to destroy the unit, 1-3 wounding
+    /// (:8365). The target the tray records is `MAX + 1`, the safe face.
+    #[test]
+    fn no_retreat_pays_a_failed_test_in_self_wounds() {
+        let unit = Ctx { quality: 6, no_retreat: true, ..Default::default() };
+        let mut tray = Tray::seeded(2);
+        let (res, out) = resolve_morale_with_tray(&unit, "Unit", true, true, true, 5, &mut tray);
+        assert_eq!(res, Morale::Passed, "No Retreat counts as passed");
+        assert_eq!(out.rolls.len(), 1, "Shaken drew no test die; only the self-wound roll");
+        assert_eq!(out.rolls[0].count, 5, "one die per wound needed to destroy it");
+        assert_eq!(out.rolls[0].target, NO_RETREAT_SELF_WOUND_MAX + 1);
+        let want = out.rolls[0].faces.iter().filter(|&&f| f <= 3).count() as i64;
+        assert_eq!(out.wounds, want, "each 1-3 is one self-wound");
     }
 
     #[test]
