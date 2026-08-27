@@ -127,6 +127,33 @@ func test_area_volume_is_seen_over_into_and_out_of_but_not_through() -> void:
 	assert_bool(VolumetricLos.has_los(_model(-10.0, 0.0, 6.0, 25.0), ground_b, near_forest)).is_true()
 
 
+## NML-1086 (maintainer game 27.08.): a model whose BASE is in the wood is in the wood. The Sister that
+## triggered this stood 0.17" (centre to painted cell) outside a forest cell with a 32 mm base — 0.63"
+## wide — so her base was planted in the trees while the centre test called it open ground, and the wood
+## she was standing in blocked a sniper 5" away. GF/AoF v3.5.1 p.12: see into and out of forests.
+func test_a_base_that_overlaps_a_forest_edge_counts_as_standing_in_it() -> void:
+	# Painted forest, cell (0,0) = 0..3" in x and z, 3.4" tall.
+	var forest := [_area(_cells([Vector2i(0, 0)], 0.0, 3.4))]
+	var shooter := _model(-5.0, 1.5, 0.0, 32.0)
+	# Centre 0.17" OUTSIDE the cell edge, 32 mm base (radius 0.63") — the base overlaps the trees.
+	var edge_stander := _model(3.17, 1.5, 0.0, 32.0)
+	assert_bool(VolumetricLos.has_los(shooter, edge_stander, forest)) \
+		.override_failure_message("a base planted in the wood must be visible — the see-in/out exception read only the centre") \
+		.is_true()
+	# A model a clear base-width BEYOND the wood is still hidden behind it: "not through" survives.
+	var behind := _model(5.0, 1.5, 0.0, 32.0)
+	assert_bool(VolumetricLos.has_los(shooter, behind, forest)).is_false()
+	# Symmetric: the same overlap lets the model SHOOT OUT of the wood.
+	assert_bool(VolumetricLos.has_los(edge_stander, _model(-5.0, 1.5, 0.0, 32.0), forest)).is_true()
+	# The footprint test is radius-aware, not a blanket widening: a 25 mm base (radius 0.49") whose
+	# centre is 0.6" out does NOT reach the trees, so that model stays hidden behind them.
+	assert_bool(VolumetricLos.has_los(shooter, _model(3.6, 1.5, 0.0, 25.0), forest)).is_false()
+	# Height still decides: a model on a 6" roof above the same cell is NOT standing in the forest
+	# (asserted on the predicate — its sight line clears the 3.4" canopy anyway).
+	assert_bool(VolumetricLos.cyl_in_volume(_model(3.17, 1.5, 6.0, 32.0), forest[0])).is_false()
+	assert_bool(VolumetricLos.cyl_in_volume(edge_stander, forest[0])).is_true()
+
+
 func test_painted_cell_zones_block_solid_and_area_the_same_way() -> void:
 	# Grid-painted zones are one cells-volume per zone; cell (0,0) covers 0..3" in x and z.
 	var solid_zone := [_cells([Vector2i(0, 0)], 0.0, 2.5)]

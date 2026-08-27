@@ -155,7 +155,8 @@ static func has_los(from_cyl: Dictionary, to_cyl: Dictionary, volumes: Array = [
 		if bool(vol.get("solid", true)):
 			return false   # solid pieces hard-block, own zone or not
 		# P4 area terrain: see INTO and OUT OF the zone you are in, just not through someone else's.
-		if point_inside_volume(a, vol) or point_inside_volume(b, vol):
+		# "The zone you are in" is decided by the BASE, not by the base's centre point (cyl_in_volume).
+		if cyl_in_volume(from_cyl, vol) or cyl_in_volume(to_cyl, vol):
 			continue
 		return false
 	return true
@@ -270,6 +271,48 @@ static func point_inside_volume(p: Vector3, vol: Dictionary) -> bool:
 	if p.y > float(vol["y1"]) + Y_EPS_M:
 		return false
 	return point_in_footprint(Vector2(p.x, p.z), vol)
+
+
+## True if the MODEL `cyl` stands IN `vol`: its eye at or below the volume's top (a model on a 6" roof is
+## not "in" the 3.4" forest below it), and its BASE FOOTPRINT — not merely the base CENTRE — overlapping
+## the zone. NML-1086 (maintainer game 27.08.): a Sister whose 32 mm base was planted in the trees, her
+## centre 0.17" outside the painted cell, was invisible to a sniper 5" away — the centre test found open
+## ground, the see-in/out exception never fired, and the wood she was standing IN blocked the line. On the
+## table a base in the wood is in the wood (GF/AoF v3.5.1 p.12: "units can see into and out of forests,
+## but not through them"). Every caller already hands its base radius in as "r"; it was never read here.
+static func cyl_in_volume(cyl: Dictionary, vol: Dictionary) -> bool:
+	if float(cyl["y1"]) > float(vol["y1"]) + Y_EPS_M:
+		return false
+	return circle_in_footprint(cyl["c"], float(cyl.get("r", 0.0)), vol)
+
+
+## True if the disc (`c`, `r`) touches the volume's footprint — the radius-aware twin of
+## point_in_footprint, which it reproduces exactly at r = 0.
+static func circle_in_footprint(c: Vector2, r: float, vol: Dictionary) -> bool:
+	match String(vol.get("kind", "box")):
+		"cyl":
+			return c.distance_to(vol["c"]) <= float(vol["r"]) + r
+		"cells":
+			var yaw := float(vol.get("yaw", 0.0))
+			var q := c if is_zero_approx(yaw) else c.rotated(-yaw)
+			var cs := float(vol["cell_size"])
+			var lo := TerrainRules.cell_of(q - Vector2(r, r), cs)
+			var hi := TerrainRules.cell_of(q + Vector2(r, r), cs)
+			for cx in range(lo.x, hi.x + 1):
+				for cy in range(lo.y, hi.y + 1):
+					if not (vol["cells"] as Dictionary).has(Vector2i(cx, cy)):
+						continue
+					var near := Vector2(clampf(q.x, cx * cs, (cx + 1) * cs), clampf(q.y, cy * cs, (cy + 1) * cs))
+					if near.distance_to(q) <= r:
+						return true
+			return false
+		_:
+			var d: Vector2 = c - (vol["c"] as Vector2)
+			var he: Vector2 = vol["he"]
+			var yaw_b := float(vol["yaw"])
+			var local := Vector2(d.dot(Vector2(cos(yaw_b), -sin(yaw_b))), d.dot(Vector2(sin(yaw_b), cos(yaw_b))))
+			var near_b := Vector2(clampf(local.x, -he.x, he.x), clampf(local.y, -he.y, he.y))
+			return local.distance_to(near_b) <= r
 
 
 ## True if the flat point `p` lies in the volume's footprint, height ignored.
