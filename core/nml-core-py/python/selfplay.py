@@ -71,6 +71,7 @@ bank raises rather than inventing a board.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -863,6 +864,36 @@ def play_game(
         # same token deltas and cast log the GDScript reads.
         "magic": magic,
     }
+
+
+# `main()` (below, :926-ish) stamps this onto a result AFTER `play_game`
+# returns it — wall-clock, not game state — so it is the ONLY field on which
+# `play_game`'s return value and a written `core_s<seed>.json` can ever
+# disagree. Named explicitly so a second timing field never joins the
+# exclusion silently; there is no other Python-only field in the result dict
+# (see the module docstring's field-by-field accounting).
+DIGEST_EXCLUDED_FIELDS = ("wall_seconds",)
+
+
+def result_digest(result: dict) -> str:
+    """GATE Q C4 (NML-1073) — a SHA-256 over the WHOLE game result, canonical
+    (recursively sorted keys, floats through Python's own round-trip
+    `repr()`, which is what `json.dumps` already calls) so two dicts meaning
+    the same game hash the same regardless of key order or which process
+    built them.
+
+    This replaces the narrow digest `tools/throughput.py` used to compute
+    inline (`winner`, `vp`, `objectives` and a 4-tuple per pick — ~161 numbers
+    on a typical game). That digest is blind to the training data itself: it
+    cannot see a `planner_positions` row's `board` / `ids` / `features` /
+    `value` / `pair` / `fork` (the sidecars a training run actually
+    consumes), `terrain`, or `magic` — so it produced the SAME hash for the
+    pre-#392 quality/defense encoding, for a deliberately shifted terrain
+    board, and for `sidecars=False`. `result_digest` does not: every field
+    `play_game` returns is in scope except `DIGEST_EXCLUDED_FIELDS`."""
+    body = {k: v for k, v in result.items() if k not in DIGEST_EXCLUDED_FIELDS}
+    canonical = json.dumps(body, sort_keys=True, ensure_ascii=True, allow_nan=True)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def main(argv: list[str]) -> int:
