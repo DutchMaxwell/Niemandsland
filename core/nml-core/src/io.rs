@@ -339,7 +339,12 @@ fn units_in_capture_order<'de, D: Deserializer<'de>>(
 /// "p1_1_...", so twelve of a twenty-unit matrix's rows land on the wrong unit
 /// — and the sight gate of `reply_threat` (battle_sim.gd:1013-1014) and of
 /// `resolve`'s shoot branch (:629) then answers for the wrong pair.
-fn los_positions(keys: &[String]) -> Vec<usize> {
+///
+/// `pub` because the IN-GAME seam needs the identical mapping: the Variant
+/// marshaller (`nml-core-godot/src/plain.rs`) is handed the very same plain
+/// form straight from `state_to_plain`, so it reads the very same key-sorted
+/// matrix against a capture-ordered roster.
+pub fn los_positions(keys: &[String]) -> Vec<usize> {
     let n = keys.len();
     let mut sorted: Vec<(&str, usize)> =
         keys.iter().enumerate().map(|(i, k)| (k.as_str(), i)).collect();
