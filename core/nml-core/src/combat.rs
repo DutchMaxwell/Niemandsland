@@ -38,6 +38,11 @@ pub const SHROUD_FLOOR_IN: f64 = 6.0;
 /// `AiCombatMath.SHROUD_CHARGE_PENALTY_IN` :298 — the CHARGE-band twin of
 /// `SHROUD_RANGE_PENALTY_IN`, read by `SoloController.melee_shroud_charge_in`.
 pub const SHROUD_CHARGE_PENALTY_IN: f64 = 3.0;
+/// `AiCombatMath.THRUST_AP_BONUS` :53 — a charging Thrust weapon's AP(+1).
+pub const THRUST_AP_BONUS: i64 = 1;
+/// `RulesRegistry.unit_param(charger, "Heavy Impact", "ap", 1)` main.gd:6297 —
+/// the AP of a Heavy Impact hit where the book fields no value of its own.
+pub const HEAVY_IMPACT_AP: i64 = 1;
 /// `AiCombatMath.BANNER_MORALE_BONUS` :106.
 pub const BANNER_MORALE_BONUS: i64 = 1;
 /// `AiEv.REGENERATION_TARGET` ai_ev.gd:41 / `SELF_REPAIR_TARGET` :45.

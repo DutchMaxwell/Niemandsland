@@ -42,6 +42,22 @@ pub struct Ctx {
     pub artillery: bool,
     pub furious: bool,
     pub fearless: bool,
+    /// `Fear(X)` — the melee WINNER comparison and nothing else
+    /// (`AiCombatMath.fear_adjusted_wounds` :338, main.gd:8110-8112). It never
+    /// changes a wound applied, only which side ends up testing morale, so the
+    /// D1 dice path needs it and the EV path — which never asks who won — does
+    /// not.
+    pub fear: i64,
+    /// `main._solo_unpredictable_rule(striker, true)` :5414-5418 — the melee
+    /// form of the Unpredictable die, EITHER variant: the melee-only
+    /// "Unpredictable Fighter" on all models, or the generic army-book
+    /// "Unpredictable" (exact rule AND registry-active). One die per melee
+    /// phase, before any strike.
+    pub unpredictable: bool,
+    /// `main._solo_unit_has_unwieldy` :16675 — "strikes last when charging":
+    /// the CHARGER's strikes swap BEHIND the defender's strike-back
+    /// (main.gd:8073-8078). Counter and Impact keep their slots.
+    pub unwieldy: bool,
     /// `Impact(X)` / `Heavy Impact(X)` / `Ravage(X)` ratings — read only by the
     /// melee side (`impact_ev` / `ravage_ev`, ai_ev.gd:497-529).
     pub impact: i64,
@@ -481,6 +497,20 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         artillery: has_special_rule(&p.special_rules, "Artillery"),
         furious: has_special_rule(&p.special_rules, "Furious"),
         fearless: has_special_rule(&p.special_rules, "Fearless"),
+        fear: unit_rating(&p.special_rules, "Fear"),
+        // BOTH variants, in `_solo_unpredictable_rule`'s own order and with its
+        // own gates: the melee-only Fighter form needs the rule on every model,
+        // the generic form an EXACT rule name plus a registry that fields it.
+        unpredictable: rule_on_all_models(p, "Unpredictable Fighter")
+            || (has_exact_rule(&p.special_rules, "Unpredictable")
+                && unit_rule_active(reg, p, "Unpredictable")),
+        // The table asks the whole joined chain (`_solo_joined_chain`
+        // main.gd:16677). The port sees an attached hero only as a list of rule
+        // NAMES, so the primitive layer answers for the unit itself and an exact
+        // name answers for the heroes — an alias carried ONLY by a hero is the
+        // one case this misses, and it is named in `resolve_melee_with_tray`.
+        unwieldy: !rules_of_primitive(reg, p, "Unwieldy").is_empty()
+            || p.attached_hero_rules.iter().any(|hr| has_exact_rule(hr, "Unwieldy")),
         impact: unit_rating(&p.special_rules, "Impact"),
         heavy_impact: unit_rating(&p.special_rules, "Heavy Impact"),
         ravage: unit_rating(&p.special_rules, "Ravage"),
@@ -493,6 +523,13 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         ranged_shrouding: rule_on_all_models(p, "Ranged Shrouding"),
         shielded: rule_on_all_models(p, "Shielded"),
         in_cover: false,
+        // HARD 0, and it stays 0: `BattleSim._ctx_of` never passes
+        // `AiEv.ctx_for`'s third argument either (battle_sim.gd:702,
+        // ai_ev.gd:135). The table counts the DEFENDER's alive models whose
+        // melee weapons carry Counter (`SoloController.counter_models_of`), a
+        // per-MODEL loadout read the capture does not carry — so Counter's
+        // Impact reduction is inert in this port, and `resolve_melee_with_tray`
+        // raises `counter_strikes_first` whenever it would have mattered.
         counter_models: 0,
         regeneration: regen_target(reg, p) > 0,
         regen_target: regen_target(reg, p),
