@@ -93,9 +93,23 @@ def successes(faces, target: int) -> int:
 
 
 def read_game(d: Path) -> tuple[dict, list[dict], list[dict], int]:
-    """(header, act lines, dice lines, dice_seed) of one recorded arena game."""
+    """(header, act lines, dice lines, dice_seed) of one recorded arena game.
+
+    THE ORDINAL. `dice.jsonl` stamps `act` = `solo_controller.move_act_seq()`,
+    which bumps once per ACTIVATION — and a side that hands its tail to the
+    other writes a `kind:"auto"` line that bumps it too (it carries its own
+    `act`, and it equals its position in the interleaved act|auto stream). Only
+    the planner-picked `kind:"act"` lines can be replayed, so each one is
+    stamped with its INTERLEAVED position here rather than its position among
+    its own kind. Counting act lines alone slides every ordinal after the first
+    auto activation, and the whole game then compares against the wrong rolls.
+    """
     acts = [json.loads(x) for x in (d / "acts.jsonl").read_text().splitlines() if x.strip()]
-    head, lines = acts[0], [a for a in acts[1:] if a.get("kind") == "act"]
+    head = acts[0]
+    lines = []
+    for i, a in enumerate((x for x in acts[1:] if x.get("kind") in ("act", "auto")), 1):
+        if a.get("kind") == "act":
+            lines.append(dict(a, act=i))
     dice = [json.loads(x) for x in (d / "dice.jsonl").read_text().splitlines() if x.strip()]
     arena = next(d.glob("arena_*.json"))
     return head, lines, dice, int(json.loads(arena.read_text())["dice_seed"])
@@ -195,7 +209,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
                          "knobs": dict(head.get("knobs", {}),
                                        hero_attach=hero_attach == "table")})
-        for k, act in enumerate(lines, 1):
+        for pos, act in enumerate(lines):
+            k = int(act["act"])
             action = (act.get("pick") or {}).get("action") or {}
             if int(action.get("kind", -1)) not in SHOOTING_KINDS or not action.get("shoot"):
                 continue
@@ -337,10 +352,10 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                     if len(firsts) < 3:
                         firsts.append("%s act %d [port_longer] %s — %d rolls vs the table's %d"
                                       % (d.name, k, action["shoot"][-6:], len(got), len(want)))
-                if k < len(lines):
+                if pos + 1 < len(lines):
                     tally["next_checked"] += 1
                     if defender_state(nxt.plain(), action["shoot"]) == defender_state(
-                            lines[k]["state"], action["shoot"]):
+                            lines[pos + 1]["state"], action["shoot"]):
                         tally["next_equal"] += 1
 
 

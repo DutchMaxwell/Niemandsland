@@ -20,7 +20,8 @@ WHAT IS PINNED, and why each number is the one it is:
     the port and the table drew the same NUMBER of rolls and every one matched;
     PREFIX-equal means the overlap matched but the lists were different lengths
     (usually because a later activation shares the ordinal — see the tool's
-    docstring). 2 full / 3 prefix of 9 here.
+    docstring). 3 full / 3 prefix of 9 here; on the whole 168-game corpus D1-B5
+    moved FULL-equal 111 -> 122 by drawing the volley's morale die.
 
 THE TWO REDS, and only one of them is load-bearing:
 
@@ -106,10 +107,12 @@ def test_the_bundled_game_replays_its_shooting_dice_on_the_tray():
     assert got["faces"] == 0, "a face parted after the shape held — the Tray twin is wrong: %s" % got
     # D1-B4b moved this from 8 to 9: with the attached heroes' own shots in the
     # volley and the Takedown -> Deadly -> rest resolve order ported, one more
-    # roll survives to be compared before the first shape parts.
-    assert got["rolls"] == 9, "rolls compared before the first shape divergence: %s" % got
+    # roll survives to be compared before the first shape parts. D1-B5 moved it
+    # to 10 and FULL-equal from 2 to 3: the volley's MORALE test is now drawn
+    # too (main.gd:8248), at the LIVE Banner-modified target.
+    assert got["rolls"] == 10, "rolls compared before the first shape divergence: %s" % got
     assert got["hits_equal"] == got["rolls"], "hits/blocks off the recorded faces: %s" % got
-    assert got["full_equal"] >= 2, "FULL-equal acts fell below the measured bar: %s" % got
+    assert got["full_equal"] >= 3, "FULL-equal acts fell below the measured bar: %s" % got
     assert got["prefix_equal"] >= 3, "PREFIX-equal acts fell below the measured bar: %s" % got
     print("D1-B4 fixture: %d/%d FULL-equal, %d PREFIX-equal, %d rolls compared, 0 face divergences"
           % (got["full_equal"], got["acts"], got["prefix_equal"], got["rolls"]))

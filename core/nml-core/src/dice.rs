@@ -26,10 +26,12 @@
 //! `randi_range(1, 6)` on it.
 
 use crate::combat::{
-    covered_defense, deadly_multiplier, fortified_ap, guarded_defense, modified_hit_target,
-    reliable_quality, save_target, shielded_defense, shooting_hit_modifier, shrouded_reach,
-    versatile_best_mode, LONG_RANGE_IN, RENDING_AP_BONUS, SHROUD_FLOOR_IN,
-    SHROUD_RANGE_PENALTY_IN,
+    covered_defense, deadly_multiplier, fortified_ap, guarded_defense, impact_total_dice,
+    melee_hit_modifier, modified_hit_target, morale_target, reliable_quality, save_target,
+    shielded_defense, shooting_hit_modifier, shrouded_reach, thrust_to_hit, versatile_best_mode,
+    BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP, IMPACT_HIT_TARGET, LONG_RANGE_IN,
+    NO_RETREAT_SELF_WOUND_MAX, RAVAGE_WOUND_TARGET, RENDING_AP_BONUS, SHROUD_FLOOR_IN,
+    SHROUD_RANGE_PENALTY_IN, THRUST_AP_BONUS, UNMODIFIED_SIX,
 };
 use crate::rng::GodotRng;
 use crate::unit::{Ctx, ShootProfile};
@@ -124,10 +126,25 @@ pub struct ShootResult {
 }
 
 impl ShootResult {
-    fn mark(&mut self, what: &'static str) {
+    /// Flag a table branch this activation hit and the port does not reproduce.
+    /// Public because D1-B5's sub-phases are orchestrated from `sim.rs`, where
+    /// the melee-only branches (Counter striking first, Unwieldy) are visible.
+    pub fn mark(&mut self, what: &'static str) {
         if !self.unported.contains(&what) {
             self.unported.push(what);
         }
+    }
+
+    /// Fold a SUB-PHASE's draw into this activation's report, in draw order, and
+    /// hand back its wounds so the caller lands them itself. One activation is
+    /// one report: impact, strikes, strike-back and morale all queue here, which
+    /// is what lets the replay gate compare a whole melee roll by roll.
+    pub fn absorb(&mut self, other: ShootResult) -> i64 {
+        self.rolls.extend(other.rolls);
+        for u in other.unported {
+            self.mark(u);
+        }
+        other.wounds
     }
 }
 
@@ -530,20 +547,354 @@ pub fn resolve_volley_with_tray(
         }
     }
     // --- `_solo_land_wounds` :6623 -> `_solo_apply_regeneration` :6543 ---
-    if regenable > 0 && def.regeneration && def.regen_target > 0 {
-        let faces = tray.roll(regenable as usize);
-        let ignored = faces.iter().filter(|&&f| f as i64 >= def.regen_target).count() as i64;
+    out.wounds = regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
+    out
+}
+
+/// `main._solo_apply_regeneration` :6543 — one tray die per incoming wound, each
+/// `regen_target`+ ignoring it. Split out of the volley tail because D1-B5's
+/// melee needs it THREE more times: Ravage lands at once (:6002), each Impact
+/// pool lands at once (:6337), and the strike phase pools its own (:6161).
+fn regen_batch(
+    w: i64,
+    def: &Ctx,
+    def_owner: &str,
+    tray: &mut Tray,
+    rolls: &mut Vec<Roll>,
+) -> i64 {
+    if w <= 0 || !def.regeneration || def.regen_target <= 0 {
+        return w.max(0);
+    }
+    let faces = tray.roll(w as usize);
+    let ignored = faces.iter().filter(|&&f| f as i64 >= def.regen_target).count() as i64;
+    rolls.push(Roll { kind: "attack", count: w, target: def.regen_target, faces, owner: def_owner.into() });
+    (w - ignored).max(0)
+}
+
+// ------------------------ D1-B5: MELEE, IMPACT and MORALE on the same tray ---
+
+/// The melee to-hit target `_solo_melee_strike_phase` :6046-6060 hands the tray.
+///
+/// Order is the table's and it is load-bearing: Reliable sets the base Quality
+/// FIRST ("Reliable only changes the Quality value, so the roll can still be
+/// modified", p.14), then Thrust's charge bonus, then the defender's Evasive /
+/// Melee Evasion with Unstoppable clamping a negative sum (NML-974). Fatigue is
+/// not a modifier at all — it is a flat unmodified 6 (p.9) above the whole
+/// pipeline.
+///
+/// This is deliberately NOT `profile_ev`'s melee branch: that one drops Reliable
+/// (ai_ev.gd:336-341) and would roll a Reliable melee weapon at the unit's plain
+/// Quality — a recorded `target` the port could never match.
+fn melee_hit_target(p: &ShootProfile, att: &Ctx, def: &Ctx, charging: bool) -> i64 {
+    if att.fatigued {
+        return UNMODIFIED_SIX;
+    }
+    let base = thrust_to_hit(reliable_quality(att.quality, p.reliable), charging && p.thrust);
+    let mut m = melee_hit_modifier(def.evasive, def.melee_evasion);
+    if p.unstoppable && m < 0 {
+        m = 0;
+    }
+    modified_hit_target(base, m)
+}
+
+/// ONE melee strike phase on the tray — `main._solo_melee_strike_phase` :5941,
+/// in its own draw order (main.gd line in brackets):
+///
+///   Unpredictable Fighter, one die for the whole phase [:5957] -> Ravage per
+///   MEMBER, each landing at once with its own Regeneration roll [:5983/:6002]
+///   -> per member, per profile: hit dice [:6060] -> the on-6 AP sub-batch and
+///   then the rest of the saves [:6337] with Bane's re-roll inside -> the
+///   phase's pooled Regeneration roll [:6161].
+///
+/// `strikers` are the table's attack GROUPS in build order (`_solo_attack_groups`
+/// :4284-4290): the unit, then each attached hero, each with its own melee set,
+/// Quality and fatigue. `Shooter::keep` is every melee profile — melee has no
+/// range gate (`melee_profiles_of` sim.rs:257).
+///
+/// PORTED: Reliable/Thrust/Evasive/Unstoppable on the to-hit, Unpredictable
+/// Fighter's die and both of its halves, Ravage, Furious's unmodified-6 bonus
+/// hits on the charge, Surge, Sergeant, Blast, the Rending/Destructive/on-6 AP
+/// sub-batch, Thrust's charge AP, Bane's re-roll, Shred, the pooled Deadly
+/// multiplier and every Regeneration roll in its own place.
+///
+/// FLAGGED per activation, never skipped silently: `deadly` (the table lands
+/// Deadly per model with its OWN Regeneration roll on the raw unsaved count,
+/// :6120, so the regen die count moves), `takedown`, `hazardous`, `surge_gates`,
+/// and `counter_strikes_first` (a defender Counter weapon runs a whole EXTRA
+/// strike phase BEFORE Impact, :8058).
+///
+/// NOT PORTED, and with no field to flag them by — the honest list:
+///   * the STRIKE REACH. The table scales each member's attacks by
+///     `striking_models_for` (main.gd:4331), the models within 2"; this port
+///     scales by `alive`, exactly as the EV path does. That is the melee twin of
+///     shooting's per-model sighting and the largest die-COUNT class here.
+///   * Bloodthirsty Fighter's extra attacks off the defender's blocked 1s
+///     (:6123), Retaliate (:6175), Deathstrike / Self-Destruct (:6198).
+///   * Reckless Piercing's round AP stamp (:5974), Versatile Attack's melee half
+///     (:6076), vs-target Marks, Takedown's unit-of-[1] pick and its bonus
+///     groups, Limited's once-per-game ledger.
+///   * Guarded / Versatile Defense's charged-from-over-9" +1 Defense (:5948):
+///     the port never measured a pre-charge gap.
+pub fn resolve_melee_with_tray(
+    strikers: &[Shooter<'_>],
+    def: &Ctx,
+    def_owner: &str,
+    charging: bool,
+    tray: &mut Tray,
+) -> ShootResult {
+    let mut out = ShootResult::default();
+    // (1) Unpredictable Fighter :5957 — ONE die for the whole phase, BEFORE
+    //     anything else: 1-3 is AP(+1) on every melee weapon, 4-6 is +1 to hit
+    //     (`unpredictable_fighter_effect` ai_combat_math.gd:387-388).
+    let mut uf_ap = 0;
+    let mut uf_hit = 0;
+    if strikers.first().is_some_and(|sh| sh.att.unpredictable) {
+        let faces = tray.roll(1);
+        if faces[0] <= 3 {
+            uf_ap = 1;
+        } else {
+            uf_hit = 1;
+        }
         out.rolls.push(Roll {
             kind: "attack",
-            count: regenable,
-            target: def.regen_target,
+            count: 1,
+            target: BEST_HIT_TARGET,
             faces,
-            owner: def_owner.into(),
+            owner: strikers[0].owner.into(),
         });
-        regenable = (regenable - ignored).max(0);
     }
-    out.wounds = regen_proof + regenable;
+    // (2) Ravage :5983 — X dice per alive bearer, per MEMBER, each 6+ a DIRECT
+    //     wound: no hit roll, no save. They land at once (:6002), so their
+    //     Regeneration rolls here and not into the phase pool.
+    for sh in strikers {
+        let n = sh.att.ravage * sh.att.models.max(0);
+        if n <= 0 {
+            continue;
+        }
+        let faces = tray.roll(n as usize);
+        let w = faces.iter().filter(|&&f| f as i64 >= RAVAGE_WOUND_TARGET).count() as i64;
+        out.rolls.push(Roll {
+            kind: "attack",
+            count: n,
+            target: RAVAGE_WOUND_TARGET,
+            faces,
+            owner: sh.owner.into(),
+        });
+        out.wounds += regen_batch(w, def, def_owner, tray, &mut out.rolls);
+    }
+    // (3) the strikes :6060-6148. `regenable`/`regen_proof` are the PHASE's, not
+    //     the member's — the table declares them before the group loop and lands
+    //     them once after it (:6161).
+    let (mut regenable, mut regen_proof) = (0i64, 0i64);
+    for sh in strikers {
+        for (k, &pi) in sh.keep.iter().enumerate() {
+            let p = &sh.profiles[pi];
+            let n = sh.attacks[k];
+            if n <= 0 {
+                continue;
+            }
+            if p.counter {
+                out.mark("counter_strikes_first");
+            }
+            if p.takedown {
+                out.mark("takedown");
+            }
+            if p.hazardous {
+                out.mark("hazardous");
+            }
+            let target = modified_hit_target(melee_hit_target(p, sh.att, def, charging), uf_hit);
+            let faces = tray.roll(n as usize);
+            out.rolls.push(Roll {
+                kind: "attack",
+                count: n,
+                target,
+                faces: faces.clone(),
+                owner: sh.owner.into(),
+            });
+            // Precise scores one better than it ROLLS — `_solo_hits` :4405-4406
+            // applies the +1 when counting, so the recorded target stays raw.
+            let count_target = if p.precise { modified_hit_target(target, 1) } else { target };
+            let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
+            if p.surge {
+                hits += sixes(&faces);
+                out.mark("surge_gates");
+            }
+            // Furious :4477 — the unit-level rule stamped onto every melee
+            // profile (main.gd:4343), unmodified 6s, charge only.
+            if charging && sh.att.furious {
+                hits += sixes(&faces);
+            }
+            if p.sergeant_attacks > 0 {
+                hits += sixes(&faces).min(p.sergeant_attacks);
+            }
+            if hits > 0 && p.blast > 1 {
+                hits *= p.blast.clamp(1, def.models.max(1));
+            }
+            if hits <= 0 {
+                continue;
+            }
+            let on6 = if p.on6_ap > 0 {
+                p.on6_ap
+            } else if p.rending || p.destructive {
+                RENDING_AP_BONUS
+            } else {
+                0
+            };
+            let ap4 = if on6 > 0 { sixes(&faces).min(hits) } else { 0 };
+            // Melee never reads Cover or Guarded (`profile_ev` combat.rs:355-362
+            // keeps both on the shooting side); Shielded is the whole ladder.
+            let save_def = shielded_defense(def.defense, def.shielded);
+            let ap = p.ap + uf_ap + if charging && p.thrust { THRUST_AP_BONUS } else { 0 };
+            let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, tray, &mut out);
+            w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, tray, &mut out);
+            if p.deadly > 0 {
+                out.mark("deadly");
+            }
+            if p.bane || p.rending || p.unstoppable {
+                regen_proof += w;
+            } else {
+                regenable += w;
+            }
+        }
+    }
+    out.wounds += regen_proof + regen_batch(regenable, def, def_owner, tray, &mut out.rolls);
     out
+}
+
+/// The charge's Impact hits — `main._solo_charge_impact` :6292. Two pools in
+/// this order: plain Impact (2+, no AP) and then Heavy Impact (saves at AP(1)),
+/// the defender's Counter models stripping the HEAVY dice first. Each pool is
+/// one hit roll, ONE save batch (no to-hit faces reach it, so no Rending
+/// sub-batch) and its own Regeneration roll, because it lands at once (:6337).
+///
+/// A fatigued charger rolls nothing at all (p.13). FLAGGED: `guarded_over9` —
+/// the table raises the Impact save by 1 when the charge came from over 9"
+/// (:6309), a pre-charge gap this port never measured.
+pub fn resolve_impact_with_tray(
+    att: &Ctx,
+    att_owner: &str,
+    def: &Ctx,
+    def_owner: &str,
+    tray: &mut Tray,
+) -> ShootResult {
+    let mut out = ShootResult::default();
+    if att.fatigued {
+        return out;
+    }
+    let models = att.models.max(0);
+    let heavy_raw = att.heavy_impact * models;
+    let heavy_cut = def.counter_models.min(heavy_raw);
+    let pools = [
+        (impact_total_dice(att.impact, models, def.counter_models - heavy_cut), 0i64),
+        (heavy_raw - heavy_cut, HEAVY_IMPACT_AP),
+    ];
+    let save_def = shielded_defense(def.defense, def.shielded);
+    for (dice, ap) in pools {
+        if dice <= 0 {
+            continue;
+        }
+        if def.guarded {
+            out.mark("guarded_over9");
+        }
+        let faces = tray.roll(dice as usize);
+        let hits = faces_to_hits(&faces, IMPACT_HIT_TARGET as u8) as i64;
+        out.rolls.push(Roll {
+            kind: "attack",
+            count: dice,
+            target: IMPACT_HIT_TARGET,
+            faces,
+            owner: att_owner.into(),
+        });
+        if hits <= 0 {
+            continue;
+        }
+        // "Impact is not a weapon": no Deadly, no Bane, no Shred — a bare
+        // profile carrying only the pool's AP, exactly as :6325 builds it.
+        let bare = ShootProfile { ap, ..Default::default() };
+        let w = save_batch(&bare, def, def_owner, hits, save_def, ap, tray, &mut out);
+        out.wounds += regen_batch(w, def, def_owner, tray, &mut out.rolls);
+    }
+    out
+}
+
+/// `AiCombatMath.Morale` — the three outcomes of `_solo_morale_test`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Morale {
+    Passed,
+    Shaken,
+    Routed,
+}
+
+/// ONE morale test on the tray — `main._solo_morale_test` :8305, in its order:
+///
+///   the test die at the Banner-modified Quality target [:8330] -> Fearless's
+///   single re-roll of a FAILED test, 4+ counts as passed [:8324] -> No Retreat,
+///   which turns the still-failed test into a pass and pays for it in
+///   self-wounds, one die per wound needed to destroy the unit [:8342].
+///
+/// `melee` opens the ROUT half: only a MELEE test can rout (p.10, PDF-verified),
+/// a shooting-caused fail is Shaken whatever the strength. An ALREADY Shaken
+/// unit fails automatically and draws NO die (:8310-8317) — get that wrong and
+/// the whole stream shifts by one from there on.
+///
+/// Returns the outcome and the report; `wounds` are No Retreat's self-wounds,
+/// which land directly ("can't be ignored" — no Regeneration roll follows).
+///
+/// NOT PORTED: the spell morale tokens that join the Banner bonus in the target
+/// (:8321-8328) — this port carries no spell token ledger.
+pub fn resolve_morale_with_tray(
+    unit: &Ctx,
+    owner: &str,
+    melee: bool,
+    below_half: bool,
+    shaken: bool,
+    wounds_to_destroy: i64,
+    tray: &mut Tray,
+) -> (Morale, ShootResult) {
+    let mut out = ShootResult::default();
+    let failed = |half: bool| if half && melee { Morale::Routed } else { Morale::Shaken };
+    let mut result = if shaken {
+        failed(below_half)
+    } else {
+        let target = morale_target(unit.quality, unit.morale_bonus);
+        let faces = tray.roll(1);
+        let passed = faces_to_hits(&faces, target as u8) > 0;
+        out.rolls.push(Roll { kind: "attack", count: 1, target, faces, owner: owner.into() });
+        if passed {
+            Morale::Passed
+        } else {
+            failed(below_half)
+        }
+    };
+    if result != Morale::Passed && unit.fearless {
+        let faces = tray.roll(1);
+        let passed = faces_to_hits(&faces, FEARLESS_RECOVER_TARGET as u8) > 0;
+        out.rolls.push(Roll {
+            kind: "attack",
+            count: 1,
+            target: FEARLESS_RECOVER_TARGET,
+            faces,
+            owner: owner.into(),
+        });
+        if passed {
+            result = Morale::Passed;
+        }
+    }
+    if result != Morale::Passed && unit.no_retreat {
+        let n = wounds_to_destroy.max(1);
+        let faces = tray.roll(n as usize);
+        out.wounds =
+            faces.iter().filter(|&&f| (f as i64) <= NO_RETREAT_SELF_WOUND_MAX).count() as i64;
+        out.rolls.push(Roll {
+            kind: "attack",
+            count: n,
+            target: NO_RETREAT_SELF_WOUND_MAX + 1,
+            faces,
+            owner: owner.into(),
+        });
+        result = Morale::Passed;
+    }
+    (result, out)
 }
 
 #[cfg(test)]
@@ -817,6 +1168,162 @@ mod tests {
     /// `DiceRules.is_success` in full: the natural 6 beats an impossible
     /// target, the natural 1 fails an automatic one, and `TARGET_NONE` counts
     /// nothing.
+    // -------------------------------- D1-B5: the melee / morale draw order ---
+
+    fn blade(attacks: i64) -> ShootProfile {
+        ShootProfile { name: "Blade".into(), attacks, count: 1, range: 0, ..Default::default() }
+    }
+
+    fn striker<'a>(profiles: &'a [ShootProfile], keep: &'a [usize], attacks: &'a [i64],
+                   att: &'a Ctx) -> Shooter<'a> {
+        Shooter { profiles, keep, attacks, att, owner: "Striker" }
+    }
+
+    /// THE ORDER, and the reason it is a gate and not a preference: the table
+    /// rolls the charge's Impact dice BEFORE the strikes (main.gd:8067 then
+    /// :8081). Both phases draw from ONE tray, so swapping them hands the
+    /// strikes the dice that belong to Impact — every face from the first roll
+    /// on is a different number, and a recorded activation stops replaying.
+    #[test]
+    fn impact_is_drawn_before_the_strikes_and_swapping_them_desyncs_the_faces() {
+        let p = [blade(3)];
+        let att = Ctx { quality: 4, impact: 2, models: 2, ..Default::default() };
+        let def = defender(5, 4);
+        // The table's order.
+        let mut tray = Tray::seeded(27);
+        let mut table = ShootResult::default();
+        table.absorb(resolve_impact_with_tray(&att, "Striker", &def, "Target", &mut tray));
+        table.absorb(resolve_melee_with_tray(
+            &[striker(&p, &[0], &[3], &att)], &def, "Target", true, &mut tray,
+        ));
+        assert_eq!(table.rolls[0].count, 4, "Impact(2) x 2 models = 4 dice, at 2+");
+        assert_eq!(table.rolls[0].target, IMPACT_HIT_TARGET);
+        // RED PROOF: the same two phases, strikes first.
+        let mut tray = Tray::seeded(27);
+        let mut swapped = ShootResult::default();
+        swapped.absorb(resolve_melee_with_tray(
+            &[striker(&p, &[0], &[3], &att)], &def, "Target", true, &mut tray,
+        ));
+        swapped.absorb(resolve_impact_with_tray(&att, "Striker", &def, "Target", &mut tray));
+        let faces = |r: &ShootResult| r.rolls.iter().flat_map(|x| x.faces.clone()).collect::<Vec<u8>>();
+        assert_ne!(faces(&table), faces(&swapped), "swapping the phases must move the faces");
+        assert_ne!(
+            table.rolls[0].faces, swapped.rolls[0].faces,
+            "and it must part on the very FIRST roll, not somewhere downstream"
+        );
+    }
+
+    /// Ravage is not a weapon: X dice per alive bearer, each 6+ a DIRECT wound
+    /// with no hit roll and no save (main.gd:5983-6002) — and it is drawn
+    /// BEFORE the strikes, so a save batch may never follow it.
+    #[test]
+    fn ravage_wounds_directly_and_is_drawn_before_the_strikes() {
+        let p = [blade(2)];
+        let att = Ctx { quality: 4, ravage: 1, models: 3, ..Default::default() };
+        let mut tray = Tray::seeded(9);
+        let want = Tray::seeded(9).roll(3);
+        let out = resolve_melee_with_tray(
+            &[striker(&p, &[0], &[2], &att)], &defender(4, 4), "Target", false, &mut tray,
+        );
+        assert_eq!(out.rolls[0].count, 3, "Ravage(1) x 3 alive models");
+        assert_eq!(out.rolls[0].target, RAVAGE_WOUND_TARGET);
+        assert_eq!(out.rolls[0].faces, want, "Ravage draws first");
+        assert_eq!(out.rolls[1].kind, "attack", "the strike follows — no save batch in between");
+        assert_eq!(out.rolls[1].count, 2);
+    }
+
+    /// Fatigue is not a modifier — it is a flat unmodified 6 above the whole
+    /// pipeline (p.9), and Reliable sets the Quality BEFORE Thrust's charge
+    /// bonus, which is the target `dice.jsonl` records.
+    #[test]
+    fn the_melee_target_is_reliable_then_thrust_and_fatigue_overrides_both() {
+        let mut p = blade(1);
+        p.reliable = true;
+        p.thrust = true;
+        let att = Ctx { quality: 5, models: 1, ..Default::default() };
+        let mut tray = Tray::seeded(3);
+        let out = resolve_melee_with_tray(
+            &[striker(std::slice::from_ref(&p), &[0], &[1], &att)],
+            &defender(4, 1), "Target", true, &mut tray,
+        );
+        assert_eq!(out.rolls[0].target, 2, "Reliable 2+, Thrust cannot go below the 2+ floor");
+        let tired = Ctx { fatigued: true, ..att };
+        let mut tray = Tray::seeded(3);
+        let out = resolve_melee_with_tray(
+            &[striker(std::slice::from_ref(&p), &[0], &[1], &tired)],
+            &defender(4, 1), "Target", true, &mut tray,
+        );
+        assert_eq!(out.rolls[0].target, 6, "fatigued: unmodified 6s only");
+    }
+
+    /// One test die at the Banner-modified Quality target, and Fearless's single
+    /// re-roll as a SECOND batch after it (main.gd:8330 then :8324).
+    #[test]
+    fn a_morale_test_is_one_die_and_fearless_re_rolls_a_failure() {
+        let unit = Ctx { quality: 6, fearless: true, ..Default::default() };
+        let mut tray = Tray::seeded(11);
+        let (_, out) = resolve_morale_with_tray(&unit, "Unit", true, false, false, 4, &mut tray);
+        assert_eq!(out.rolls[0].count, 1);
+        assert_eq!(out.rolls[0].target, 6, "Quality 6+, no Banner");
+        let failed = faces_to_hits(&out.rolls[0].faces, 6) == 0;
+        assert_eq!(out.rolls.len(), if failed { 2 } else { 1 });
+        if failed {
+            assert_eq!(out.rolls[1].target, FEARLESS_RECOVER_TARGET, "the 4+ rescue die");
+        }
+    }
+
+    /// An ALREADY Shaken unit fails automatically and draws NO die (:8310-8317).
+    /// Burn one here and every later activation of the game is on other faces.
+    #[test]
+    fn an_already_shaken_unit_fails_morale_without_drawing_a_die() {
+        let unit = Ctx { quality: 4, ..Default::default() };
+        let mut tray = Tray::seeded(5);
+        let (res, out) = resolve_morale_with_tray(&unit, "Unit", true, true, true, 3, &mut tray);
+        assert!(out.rolls.is_empty(), "no Quality roll for a Shaken unit");
+        assert_eq!(res, Morale::Routed, "Shaken + at half + melee = Rout");
+        assert_eq!(tray.state_i64(), Tray::seeded(5).state_i64(), "and not one draw spent");
+    }
+
+    /// No Retreat turns the still-failed test into a PASS and pays for it in
+    /// self-wounds: one die per wound needed to destroy the unit, 1-3 wounding
+    /// (:8342). The roll target the tray records is `MAX + 1`, the safe face.
+    #[test]
+    fn no_retreat_pays_a_failed_test_in_self_wounds() {
+        let unit = Ctx { quality: 6, no_retreat: true, ..Default::default() };
+        let mut tray = Tray::seeded(2);
+        let (res, out) = resolve_morale_with_tray(&unit, "Unit", true, true, true, 5, &mut tray);
+        assert_eq!(res, Morale::Passed, "No Retreat counts as passed");
+        assert_eq!(out.rolls.len(), 1, "Shaken drew no test die; only the self-wound roll");
+        assert_eq!(out.rolls[0].count, 5, "one die per wound needed to destroy it");
+        assert_eq!(out.rolls[0].target, NO_RETREAT_SELF_WOUND_MAX + 1);
+        let want = out.rolls[0].faces.iter().filter(|&&f| f <= 3).count() as i64;
+        assert_eq!(out.wounds, want, "each 1-3 is one self-wound");
+    }
+
+    /// An attached hero strikes under the host's activation and signs its own
+    /// dice (`_solo_attack_groups` :4284-4290), host first.
+    #[test]
+    fn an_attached_hero_strikes_after_the_host_and_signs_its_own_dice() {
+        let hp = [blade(4)];
+        let hero = [blade(1)];
+        let att = Ctx { quality: 4, models: 2, ..Default::default() };
+        let mut tray = Tray::seeded(21);
+        let out = resolve_melee_with_tray(
+            &[
+                Shooter { profiles: &hp, keep: &[0], attacks: &[4], att: &att, owner: "Host" },
+                Shooter { profiles: &hero, keep: &[0], attacks: &[1], att: &att, owner: "Hero" },
+            ],
+            &defender(6, 3), "Target", false, &mut tray,
+        );
+        let attacks: Vec<(&str, i64)> = out
+            .rolls
+            .iter()
+            .filter(|r| r.kind == "attack")
+            .map(|r| (r.owner.as_str(), r.count))
+            .collect();
+        assert_eq!(attacks, vec![("Host", 4), ("Hero", 1)], "host first, then the hero");
+    }
+
     #[test]
     fn faces_to_hits_follows_the_natural_6_and_natural_1_rules() {
         let faces = [1u8, 2, 3, 4, 5, 6];

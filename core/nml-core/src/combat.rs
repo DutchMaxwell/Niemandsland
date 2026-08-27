@@ -38,6 +38,17 @@ pub const SHROUD_FLOOR_IN: f64 = 6.0;
 /// `AiCombatMath.SHROUD_CHARGE_PENALTY_IN` :298 — the CHARGE-band twin of
 /// `SHROUD_RANGE_PENALTY_IN`, read by `SoloController.melee_shroud_charge_in`.
 pub const SHROUD_CHARGE_PENALTY_IN: f64 = 3.0;
+/// `AiCombatMath.THRUST_AP_BONUS` :53 — a charging Thrust weapon's AP(+1).
+pub const THRUST_AP_BONUS: i64 = 1;
+/// `RulesRegistry.unit_param(charger, "Heavy Impact", "ap", 1)` main.gd:6297 —
+/// the default AP of a Heavy Impact hit where the book fields no value.
+pub const HEAVY_IMPACT_AP: i64 = 1;
+/// `AiCombatMath.FEARLESS_RECOVER_TARGET` :29 — a failed morale test re-rolls
+/// once and counts as passed on a 4+.
+pub const FEARLESS_RECOVER_TARGET: i64 = 4;
+/// `AiCombatMath.NO_RETREAT_SELF_WOUND_MAX` :41 — a No Retreat die of 1-3 is one
+/// self-wound; the roll target the tray records is therefore `MAX + 1`.
+pub const NO_RETREAT_SELF_WOUND_MAX: i64 = 3;
 /// `AiCombatMath.BANNER_MORALE_BONUS` :106.
 pub const BANNER_MORALE_BONUS: i64 = 1;
 /// `AiEv.REGENERATION_TARGET` ai_ev.gd:41 / `SELF_REPAIR_TARGET` :45.

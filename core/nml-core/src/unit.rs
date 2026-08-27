@@ -42,6 +42,17 @@ pub struct Ctx {
     pub artillery: bool,
     pub furious: bool,
     pub fearless: bool,
+    /// `Fear(X)` — the melee WINNER comparison only (`fear_adjusted_wounds`
+    /// ai_combat_math.gd:338, main.gd:8110-8112). It never changes the wounds
+    /// applied, only who ends up taking the morale test, which is why the D1
+    /// dice path needs it and the EV path (which never asks) does not.
+    pub fear: i64,
+    /// `RulesRegistry.unit_rule_active(unit, "No Retreat")` main.gd:8337 — a
+    /// failed morale test counts as passed and is paid in self-wounds.
+    pub no_retreat: bool,
+    /// `_solo_rule_on_all_models(striker, "Unpredictable Fighter")`
+    /// main.gd:5948-5952 — ONE die per melee phase, before any strike.
+    pub unpredictable: bool,
     /// `Impact(X)` / `Heavy Impact(X)` / `Ravage(X)` ratings — read only by the
     /// melee side (`impact_ev` / `ravage_ev`, ai_ev.gd:497-529).
     pub impact: i64,
@@ -481,6 +492,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         artillery: has_special_rule(&p.special_rules, "Artillery"),
         furious: has_special_rule(&p.special_rules, "Furious"),
         fearless: has_special_rule(&p.special_rules, "Fearless"),
+        fear: unit_rating(&p.special_rules, "Fear"),
+        no_retreat: unit_rule_active(reg, p, "No Retreat"),
+        unpredictable: rule_on_all_models(p, "Unpredictable Fighter"),
         impact: unit_rating(&p.special_rules, "Impact"),
         heavy_impact: unit_rating(&p.special_rules, "Heavy Impact"),
         ravage: unit_rating(&p.special_rules, "Ravage"),
