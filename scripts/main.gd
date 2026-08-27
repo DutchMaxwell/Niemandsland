@@ -3134,6 +3134,22 @@ func _solo_resolve_ai_volley(attacker: GameUnit, target: GameUnit, shots: Array,
 		# NML-1025: the bearer gate now guards the AI volley too (was human-only).
 		var volley_report: Dictionary = SoloController.scaled_attacks_report(member, profile, sighted, int(shot["max"]))
 		var attacks: int = int(volley_report["attacks"])
+		# NML-1073 M5 D6a-B6: sibling of the dice tap (AiDiceRecorder) — the table-side per-shot
+		# facts the count above used, env NML_SHOT_DUMP, default OFF (byte-identical game either
+		# way; AiShotRecorder.record() no-ops on its own cached env check).
+		var shot_range_in: int = int(SoloController.effective_shoot_reach_in(float(shot["reach"]), target))
+		var shot_max_models: int = int(shot["max"])
+		var shot_copies: int = maxi(int(profile.get("count", 1)), 1)
+		var shot_bearers: int = SoloController.alive_bearers_of(member, str(profile.get("name", ""))) \
+			if shot_copies < shot_max_models else -1
+		AiShotRecorder.record({"act": solo_controller.move_act_seq(), "round": solo_controller._current_round(),
+			"player": solo_controller.ai_slot, "shooter": attacker.get_name(), "member": member.get_name(),
+			"weapon": str(profile.get("name", "?")), "target": target.get_name(),
+			"alive": member.get_alive_count(), "sighted": sighted, "bearers": shot_bearers,
+			"max_models": shot_max_models, "attacks": attacks,
+			"reach_in": float(shot_range_in) + (_solo_unit_base_radius_m(member) + _solo_unit_base_radius_m(target)) \
+				/ MoveIntent.INCHES_TO_METERS,
+			"indirect": bool(profile.get("indirect", false))})
 		if attacks <= 0:
 			# NML-1035: a neutralized weapon says WHY it stays silent — a volley of
 			# only-silent weapons used to read as "unit never activated".

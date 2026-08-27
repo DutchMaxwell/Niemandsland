@@ -526,6 +526,7 @@ func _run() -> void:
 	var _prof_td_t0 := BattleSim.prof_t0()   # NML-1072: recorder/planner teardown
 	AiActRecorder.close()
 	AiDiceRecorder.close()
+	AiShotRecorder.close()
 	AiPlanner.close()
 	BattleSim.prof_mark("teardown", _prof_td_t0)
 	if BattleSim.profile_enabled():   # NML-1072: final wall-clock split, one line per phase
