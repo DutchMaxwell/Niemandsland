@@ -171,7 +171,12 @@ pub struct Search<'a> {
 
 /// The three seams `resolve` branches on, off the resolved knobs.
 fn seams_of(knobs: &Knobs) -> Seams {
-    Seams { spacing: knobs.seam_spacing, cast: knobs.seam_cast, path: knobs.seam_path }
+    Seams {
+        spacing: knobs.seam_spacing,
+        cast: knobs.seam_cast,
+        path: knobs.seam_path,
+        hero_attach: knobs.hero_attach,
+    }
 }
 
 /// NML-1073 M4-7 — the tier-2 obstacle index for THIS planner call, built once
@@ -323,8 +328,11 @@ impl<'a> Search<'a> {
         let terrain = self.roll.policy.terrain;
         let base = score(state, player, &reply_threat(statics, state, player));
         let mut scored: Vec<ScoredRow> = Vec::new();
+        let hero_attach = self.roll.policy.seams.hero_attach;
         for i in 0..state.units() {
-            if state.player[i] != player || state.activated[i] || state.alive[i] <= 0 {
+            // D1-B4b: the three-term pool filter, plus — only under
+            // `Seams::hero_attach` — "a joined hero has no activation of its own".
+            if !state.can_activate(i, player, hero_attach) {
                 continue;
             }
             let key = state.key(i);
@@ -490,9 +498,7 @@ impl<'a> Search<'a> {
         let unit_key = scored[bi].unit_key.clone();
         let mut waits = 0i64;
         for i in 0..state.units() {
-            if state.player[i] == player
-                && !state.activated[i]
-                && state.alive[i] > 0
+            if state.can_activate(i, player, self.roll.policy.seams.hero_attach)
                 && state.key(i) != unit_key
             {
                 waits += 1;

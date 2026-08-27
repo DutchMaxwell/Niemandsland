@@ -218,6 +218,25 @@ pub struct Seams {
     /// digest-identical.
     #[serde(default)]
     pub path: bool,
+    /// NML-1073 M5 D1-B4b — the trainer plays `hero_attach="table"`, so a
+    /// JOINED HERO is folded into its host the way the live game folds it:
+    /// the host's activation marks the hero activated too
+    /// (`SoloController.can_activate` solo_controller.gd:411 — a joined hero
+    /// never activates alone) and the hero's models take the host's
+    /// displacement (`_moving_models` :5319-5321 walks
+    /// `get_alive_models_with_attached()`).
+    ///
+    /// A SEAM and not a plain rule, because `BattleSim` — the parity authority
+    /// for every planner gate — does neither: `ai_planner.gd:27/131/645`
+    /// filters on player/activated/alive only, and `battle_sim.gd:699-700`
+    /// moves `su["positions"]` and nothing else. A table RECORDING carries
+    /// attachment on every host, so folding it in unconditionally would move
+    /// the recorded rollout values and redden GATE G5. Default OFF: no corpus
+    /// moves. `selfplay.play_game(hero_attach="table")` turns it on, which is
+    /// what stops an attached hero from both firing in its host's volley
+    /// (D1-B4b) and spending a full activation of its own.
+    #[serde(default)]
+    pub hero_attach: bool,
 }
 
 impl Node {

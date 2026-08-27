@@ -346,7 +346,14 @@ impl PyState {
     fn pool(&self, player: i64) -> Vec<String> {
         let st = &self.inner;
         (0..st.units())
-            .filter(|&i| st.player[i] == player && !st.activated[i] && st.alive[i] > 0)
+            // D1-B4b: a JOINED HERO is never an activation of its own
+            // (`SoloController.can_activate` solo_controller.gd:411) — it fires
+            // and moves inside its host's. Unconditional here, unlike the
+            // planner's own filter, because this is the HARNESS's "is the side
+            // dry?" question and not a parity surface; under
+            // `hero_attach="off"` no unit has a host and it is the old filter
+            // verbatim anyway.
+            .filter(|&i| st.can_activate(i, player, true))
             .map(|i| st.key(i).to_string())
             .collect()
     }
@@ -521,7 +528,12 @@ impl Core {
     }
 
     fn seams(&self) -> Seams {
-        Seams { spacing: self.knobs.seam_spacing, cast: self.knobs.seam_cast, path: self.knobs.seam_path }
+        Seams {
+            spacing: self.knobs.seam_spacing,
+            cast: self.knobs.seam_cast,
+            path: self.knobs.seam_path,
+            hero_attach: self.knobs.hero_attach,
+        }
     }
 
     /// The menu tuning this header resolved to — `plan::tuning_of`, the SAME
@@ -568,6 +580,7 @@ impl Core {
         m.insert("seam_spacing".into(), self.knobs.seam_spacing.into());
         m.insert("seam_path".into(), self.knobs.seam_path.into());
         m.insert("charge_gate".into(), self.knobs.charge_gate.into());
+        m.insert("hero_attach".into(), self.knobs.hero_attach.into());
         to_py(py, &Value::Object(m))
     }
 

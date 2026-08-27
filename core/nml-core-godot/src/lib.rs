@@ -127,7 +127,7 @@ impl NmlCore {
     #[func]
     fn set_seams(&mut self, spacing: bool, cast: bool) {
         let path = self.seams_now().path;
-        self.seams = Some(Seams { spacing, cast, path });
+        self.seams = Some(Seams { spacing, cast, path, hero_attach: false });
     }
 
     /// NML-1073 M4-7 — NML_SIM_PATH: the imagined move follows a tier-2
@@ -630,6 +630,11 @@ impl NmlCore {
                 cast: on("NML_SIM_CAST"),
                 // NML-1073 M4-7. Read ONCE, here, like its two siblings.
                 path: on("NML_SIM_PATH"),
+                // NML-1073 M5 D1-B4b. The GODOT caller is the live game, whose
+                // own `SoloController` already folds a joined hero into its
+                // host — folding it a second time here would move the hero
+                // twice. Never on from this side.
+                hero_attach: false,
             });
         }
         self.seams.unwrap()

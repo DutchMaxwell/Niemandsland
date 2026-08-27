@@ -118,7 +118,7 @@ fn playout_pick(
     sc: &mut Scratch,
 ) -> Result<Option<Candidate>, Unsupported> {
     for i in 0..state.units() {
-        if state.player[i] == player && !state.activated[i] && state.alive[i] > 0 {
+        if state.can_activate(i, player, roll.policy.seams.hero_attach) {
             // BOTH sides step with `playout_rich()` here — unlike `rollout.rs`,
             // which splits rich/cheap by seat (R9). Same brain for both branches
             // keeps the comparison fair (ai_planner.gd:72-74).

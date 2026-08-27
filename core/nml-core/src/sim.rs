@@ -929,6 +929,21 @@ fn resolve_with(
         for p in next.positions[si].iter_mut() {
             *p = geom::to_f64(geom::add(geom::to_f32(*p), delta));
         }
+        // D1-B4b: a joined hero's models move WITH the host. The table plans the
+        // host's move over ONE model list that already contains them —
+        // `SoloController._moving_models` :5319-5321 returns
+        // `get_alive_models_with_attached()` — and `_plan_positions` :6084-6086
+        // starts every model from the same rigid `delta`. The simplest faithful
+        // mirror is that delta, applied AFTER both clamps, so the hero lands
+        // inside the unit's footprint instead of being left behind on the board.
+        // (Per-model steering is the table's; this port has never had it.)
+        if seams.hero_attach {
+            for &h in state.attached[si].iter() {
+                for p in next.positions[h].iter_mut() {
+                    *p = geom::to_f64(geom::add(geom::to_f32(*p), delta));
+                }
+            }
+        }
         // battle_sim.gd:598-600 — T2b: the mover's cover follows it, probed at
         // the POST-move unit centre (`centre + delta`, after both the band clamp
         // and the spacing clamp).
@@ -1098,6 +1113,17 @@ fn resolve_with(
         next.shaken[si] = false;
     }
     next.activated[si] = true;
+    // D1-B4b: a joined hero spends the HOST's activation, never one of its own
+    // (`SoloController.can_activate` solo_controller.gd:411). Marking it here is
+    // what keeps `MY_UNACTIVATED` (rows.rs:491) and `moves_left` (score.rs:96)
+    // honest once the host has gone, and it is the second half of the pool
+    // filter: `can_activate` stops the hero being offered BEFORE the host moves,
+    // this stops it being offered after.
+    if seams.hero_attach {
+        for &h in state.attached[si].iter() {
+            next.activated[h] = true;
+        }
+    }
     // NML-1073 M3-5: the sight matrix follows the MODELS. `BattleSim._los_clear`
     // (battle_sim.gd:792-796) calls `state["los_blocked"]` with the CURRENT
     // centres on every probe, so a unit that just rushed — or one that just lost
