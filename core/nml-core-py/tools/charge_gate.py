@@ -97,6 +97,16 @@ def stamp_diff(got: dict, want: dict) -> tuple[int, int, str]:
     return len(keys), bad, first
 
 
+def vecs_differ(a, b, eps: float = EPS) -> bool:
+    """True when two target vectors are not the same point. Unequal LENGTH
+    counts as a difference too — plain `zip(a, b)` silently drops the tail of
+    the longer one, so a 2-vector and a 3-vector that agree on their first two
+    components would read as equal."""
+    if len(a) != len(b):
+        return True
+    return any(abs(float(x) - float(y)) > eps for x, y in zip(a, b, strict=True))
+
+
 def action_diff(got: dict, want: dict) -> str:
     """Empty when the two actions are the same action — `tests/menu.rs::same`'s
     field list, in the order a mismatch report wants it."""
@@ -114,7 +124,7 @@ def action_diff(got: dict, want: dict) -> str:
     gd, wd = got.get("dest"), want.get("dest")
     if (gd is None) != (wd is None):
         return "dest %s != %s" % (gd, wd)
-    if gd is not None and any(abs(float(x) - float(y)) > EPS for x, y in zip(gd, wd)):
+    if gd is not None and vecs_differ(gd, wd):
         return "dest %s != %s" % (gd, wd)
     return ""
 
