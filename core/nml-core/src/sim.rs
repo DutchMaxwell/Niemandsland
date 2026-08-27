@@ -623,6 +623,20 @@ fn volley_ev(
     (shooting + sp_ev, sp_cost)
 }
 
+/// `BattleSim.melee_threat` battle_sim.gd:852-853 — `si`'s melee EV onto `ti`,
+/// valued as a CHARGE and with `si`'s own fatigue state: the magnitude
+/// `AiMissionEval.features` reads for `my_melee_in`/`their_melee_in` when the
+/// feature wave is on (ai_mission_eval.gd:544).
+pub fn melee_threat(statics: &[UnitStatic], state: &State, si: usize, ti: usize) -> f64 {
+    let us = &statics[state.roster.profile[si]];
+    let ut = &statics[state.roster.profile[ti]];
+    let att = ctx_of_melee(us, state, si);
+    let def = ctx_of(ut, state, ti);
+    let mut sc = Scratch::default();
+    melee_profiles_of(us, state.alive[si], &mut sc);
+    melee_ev(&us.melee, &sc.attacks, &att, &def, true)
+}
+
 /// `BattleSim.reply_threat` battle_sim.gd:1003-1024 — every living enemy
 /// activates once and shoots its best-EV visible target. The result is indexed
 /// by CAPTURE order; the GDScript keys it by unit key and

@@ -45,7 +45,7 @@ use std::rc::Rc;
 use pyo3::create_exception;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
+use pyo3::types::{PyDict, PyList};
 
 use serde_json::{Map, Value};
 
@@ -57,6 +57,7 @@ use nmlcore::playout::Policy;
 use nmlcore::rollout::Rollout;
 use nmlcore::sim::Scratch;
 use nmlcore::state::{Marker, ProfileCache, Roster};
+use nmlcore::rows::{Cell, RowEncoder};
 use nmlcore::unit::{StaticsCache, UnitStatic};
 use nmlcore::{
     geom, io, mission, reply_threat, resolve_on_board, resolve_stochastic_on_board, score, Action,
@@ -400,6 +401,9 @@ pub struct Core {
     terrain: Terrain,
     knobs: Knobs,
     roster: Option<Rc<Roster>>,
+    /// The encoder row vocabulary + its loud unknown-rule collector, read once
+    /// from `repo_root/data/encoder_rule_vocab_v1.json` (NML-1073 M3-6a).
+    rows: RowEncoder,
 }
 
 impl Core {
@@ -670,6 +674,80 @@ impl Core {
         Ok(reply_threat(&statics, &state.inner, player))
     }
 
+    // -------------------------------------------------- encoder rows / eval ---
+
+    /// `BattleSim.board_rows` battle_sim.gd:176 — the v5 encoder input: one row
+    /// per LIVING unit in capture order, then one per objective (type 3), then
+    /// the single game-state row (type 4). Ints come back as Python ints and
+    /// floats as Python floats, the way `JSON.stringify` writes them.
+    fn board_rows(&mut self, py: Python<'_>, state: PyRef<'_, PyState>) -> PyResult<Py<PyAny>> {
+        if !self.rows.vocab.loaded {
+            return Err(Unsupported::new_err(format!(
+                "rule vocab unreadable at {}/data/encoder_rule_vocab_v1.json",
+                self.repo_root
+            )));
+        }
+        let statics = self.statics_for(&state.inner)?;
+        let rows = self.rows.board_rows(&state.inner, &statics);
+        let out = PyList::empty(py);
+        for row in rows {
+            let r = PyList::empty(py);
+            for c in row {
+                match c {
+                    Cell::I(v) => r.append(v)?,
+                    Cell::F(v) => r.append(v)?,
+                }
+            }
+            out.append(r)?;
+        }
+        Ok(out.into_any().unbind())
+    }
+
+    /// `BattleSim.board_row_indices` battle_sim.gd:166 — the capture index of
+    /// every unit row, in row order.
+    fn board_row_indices(&self, state: PyRef<'_, PyState>) -> Vec<i64> {
+        nmlcore::board_row_indices(&state.inner)
+    }
+
+    /// Rule/spell names the committed vocabulary does not carry, collected
+    /// across every `board_rows` call — `BattleSim.unknown_rules` (:82), which
+    /// the GDScript also stamps into its result rather than slotting silently.
+    fn unknown_rules(&self) -> Vec<String> {
+        self.rows.unknown.iter().cloned().collect()
+    }
+
+    /// `AiMissionEval.features` ai_mission_eval.gd:480 — the eval's raw feature
+    /// vector for `player`, as a name -> float dict.
+    ///
+    /// `incoming` defaults to `BattleSim.reply_threat(state, player)` (what both
+    /// logging sites pass); hand `[]` for the `{}` default. `rich` is the
+    /// feature-wave gate — the trainer logs with it ON. `reserves` is
+    /// `(mine, theirs)`, 0/0 on every state that is not one of the two in-game
+    /// logging sites (nothing else carries the key).
+    #[pyo3(signature = (state, player, incoming = None, rich = false, reserves = (0.0, 0.0)))]
+    fn features(
+        &mut self,
+        py: Python<'_>,
+        state: PyRef<'_, PyState>,
+        player: i64,
+        incoming: Option<Vec<f64>>,
+        rich: bool,
+        reserves: (f64, f64),
+    ) -> PyResult<Py<PyAny>> {
+        let statics = self.statics_for(&state.inner)?;
+        let inc = match incoming {
+            Some(v) => v,
+            None => reply_threat(&statics, &state.inner, player),
+        };
+        let vals =
+            nmlcore::features(&state.inner, &statics, player, &inc, rich, reserves);
+        let d = PyDict::new(py);
+        for (k, v) in nmlcore::FEATURE_KEYS.iter().zip(vals) {
+            d.set_item(*k, v)?;
+        }
+        Ok(d.into_any().unbind())
+    }
+
     // ------------------------------------------------------------ mission ---
 
     /// `BattleSim.playout_seize` battle_sim.gd:268 — the 3" ring, applied to
@@ -796,6 +874,7 @@ fn load(repo_root: &str) -> Core {
         terrain: Terrain::absent(),
         knobs: Knobs::default(),
         roster: None,
+        rows: RowEncoder::new(repo_root),
     }
 }
 

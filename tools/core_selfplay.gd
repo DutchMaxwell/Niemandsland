@@ -518,7 +518,23 @@ func _units_from_list(path: String, player: int) -> Array:
 		gu.unit_properties["faction_folder"] = faction
 		gu.unit_properties["game_system"] = gsys
 		gu.source_type = "opr"
-		gu.source_data = OPRApiClient.OPRUnit.new()
+		# NML-1073 M3-6b: a fresh OPRUnit() carries only class DEFAULTS
+		# (quality 4, defense 4, size 1, cost 0) — BattleSim.board_rows reads
+		# od.quality/od.defense straight off this object for the trainer's
+		# net-input columns 10/11, so every recorded row was 4/4 no matter the
+		# real unit. Fill the same header fields the list JSON already gave
+		# gu.unit_properties above. selection_id/join_to_unit stay UNSET
+		# (unlike the real import path): battle_sim.gd's NML-1081 attachment
+		# fallback keys off them, and wiring that up changes sim behaviour —
+		# out of scope here (combat profile stays exactly as it was).
+		var ou := OPRApiClient.OPRUnit.new()
+		ou.id = str(ud.get("id", uidx))
+		ou.name = str(ud.get("name", "Unit"))
+		ou.size = int(ud.get("size", 1))
+		ou.cost = int(ud.get("cost", 0))
+		ou.quality = int(ud.get("quality", 4))
+		ou.defense = int(ud.get("defense", 4))
+		gu.source_data = ou
 		_append_selection(gu, ud)
 		by_sel[str(ud.get("selectionId", ""))] = gu
 		out.append(gu)
