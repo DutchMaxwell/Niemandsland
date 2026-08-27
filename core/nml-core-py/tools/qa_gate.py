@@ -110,6 +110,18 @@ def main(argv: list[str]) -> int:
         metavar="N",
         help="RED PROOF: shift every drawn piece N cells along +x; the gate must FAIL",
     )
+    ap.add_argument(
+        "--top-k",
+        type=int,
+        default=None,
+        help="planner top_k override; default is NML_TOP_K env or 6 (ai_planner.gd:49-56)",
+    )
+    ap.add_argument(
+        "--horizon",
+        type=int,
+        default=None,
+        help="planner horizon override; default is NML_HORIZON env or 2 (ai_planner.gd:290-297)",
+    )
     a = ap.parse_args(argv)
 
     lists = Path(a.lists).expanduser()
@@ -140,6 +152,7 @@ def main(argv: list[str]) -> int:
             sidecar_skip=a.red,
             legacy_source_qd=a.red_source_qd,
             terrain_shift_cells=a.red_terrain_shift,
+            top_k=a.top_k, horizon=a.horizon,
         )
         seconds.append(time.perf_counter() - t0)
         total += 1

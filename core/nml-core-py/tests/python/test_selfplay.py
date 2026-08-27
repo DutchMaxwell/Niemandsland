@@ -277,6 +277,46 @@ def test_the_charge_gate_knob_is_load_bearing():
     print("charge gate: %d extra charge candidates once the gate is off" % extra)
 
 
+def test_the_top_k_horizon_env_knobs_mirror_ai_planner(monkeypatch):
+    """`NML_TOP_K` / `NML_HORIZON` (ai_planner.gd:49-56, 290-297) reach the fast
+    trainer the same way: unset is the trainer's own default, set is
+    `int(env)` clamped to the SAME bounds — `0` clamps UP rather than asking
+    for the default — and an explicit argument outranks the env. The resolved
+    pair also has to land in `Core.knobs()`, which is what the search actually
+    runs on (`plan_with_rollout`'s `Rollout::new(policy, self.knobs)`)."""
+    monkeypatch.delenv("NML_TOP_K", raising=False)
+    monkeypatch.delenv("NML_HORIZON", raising=False)
+    assert sp.resolve_top_k(None) == sp.ROLLOUT_TOP_K == 6
+    assert sp.resolve_horizon(None) == sp.ROLLOUT_HORIZON_ROUNDS == 2
+
+    monkeypatch.setenv("NML_TOP_K", "2")
+    monkeypatch.setenv("NML_HORIZON", "1")
+    assert sp.resolve_top_k(None) == 2
+    assert sp.resolve_horizon(None) == 1
+    assert sp.resolve_top_k(5) == 5  # an explicit argument outranks the env
+
+    # ai_planner.gd's `clampi(int(e), 1, 32)` / `clampi(int(e), 1, 3)`: `0` is
+    # NOT a second way to ask for the default, it clamps UP to the floor.
+    monkeypatch.setenv("NML_TOP_K", "0")
+    monkeypatch.setenv("NML_HORIZON", "0")
+    assert sp.resolve_top_k(None) == 1
+    assert sp.resolve_horizon(None) == 1
+    monkeypatch.setenv("NML_TOP_K", "999")
+    assert sp.resolve_top_k(None) == 32  # clamped, ai_planner.gd:54
+
+    header, _ = read_acts("acts_25.jsonl")
+    monkeypatch.setenv("NML_TOP_K", "2")
+    monkeypatch.setenv("NML_HORIZON", "1")
+    stamped = dict(header)
+    stamped["knobs"] = dict(
+        header.get("knobs", {}), top_k=sp.resolve_top_k(None), horizon=sp.resolve_horizon(None)
+    )
+    core = nml_core.load(str(REPO))
+    core.set_header(stamped)
+    assert core.knobs()["top_k"] == 2
+    assert core.knobs()["horizon"] == 1
+
+
 def _fresh_los(board, plain):
     return board.los_pairs(plain["units"])
 

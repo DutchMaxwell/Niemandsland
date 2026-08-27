@@ -72,6 +72,8 @@ bank raises rather than inventing a board.
 from __future__ import annotations
 
 import json
+import os
+import re
 import struct
 from pathlib import Path
 from typing import Any
@@ -264,14 +266,62 @@ def load_board(
 
 # ------------------------------------------------------------------- knobs ---
 
+# `AiPlanner.ROLLOUT_TOP_K` / `.ROLLOUT_HORIZON_ROUNDS` ai_planner.gd:48/289 —
+# the planner's own defaults, read by `top_k_default()` / `horizon()` (:52-56,
+# :293-297) whenever `NML_TOP_K` / `NML_HORIZON` is unset.
+ROLLOUT_TOP_K = 6
+ROLLOUT_HORIZON_ROUNDS = 2
+
+
+def _godot_int(s: str) -> int:
+    """Godot's `int(String)`: a leading optional sign and digits, `0` when
+    there is no such prefix — a non-numeric env value degrades to `0` rather
+    than raising, exactly what `int(e)` does in ai_planner.gd:54/295."""
+    m = re.match(r"^\s*([+-]?\d+)", s)
+    return int(m.group(1)) if m else 0
+
+
+def _env_knob(name: str, lo: int, hi: int, default: int) -> int:
+    """`AiPlanner.top_k_default` / `.horizon` ai_planner.gd:49-56 / :290-297,
+    ported (minus the `static var` cache, which only saves a repeated env
+    read — the value cannot change mid-process either way): the env var
+    UNSET (empty string) is the trainer's own default; SET is `int(e)` clamped
+    to `[lo, hi]` — so e.g. `NML_TOP_K=0` clamps UP to `lo`, it is not a
+    second way to ask for the default."""
+    e = os.environ.get(name, "")
+    if e == "":
+        return default
+    return max(lo, min(hi, _godot_int(e)))
+
+
+def resolve_top_k(top_k: int | None) -> int:
+    """`top_k`, else `NML_TOP_K` (ai_planner.gd:49-56), else `ROLLOUT_TOP_K`."""
+    if top_k is not None:
+        return top_k
+    return _env_knob("NML_TOP_K", 1, 32, ROLLOUT_TOP_K)
+
+
+def resolve_horizon(horizon: int | None) -> int:
+    """`horizon`, else `NML_HORIZON` (ai_planner.gd:290-297), else
+    `ROLLOUT_HORIZON_ROUNDS`."""
+    if horizon is not None:
+        return horizon
+    return _env_knob("NML_HORIZON", 1, 3, ROLLOUT_HORIZON_ROUNDS)
+
+
 # `AiActRecorder._header_line` act_recorder.gd:144-150 resolves these from the
 # planner's class statics; `tools/core_selfplay.gd` runs them at their defaults
 # with NML_SIM_SPACING on and NML_SIM_CAST off, which is what a recorded header
 # of this trainer says. `charge_gate` is the M3-5 addition: the trainer never
 # stamps `state["charge_illegal"]`, so both menu sites skip the gate outright.
+# `top_k` / `horizon` here are the PLANNER's own defaults — a game recorded
+# with a different mode (e.g. the OLD training corpus's
+# `NML_TOP_K=2 NML_HORIZON=1`, farm/mass_wave_template.sh:9) goes through
+# `play_game(top_k=..., horizon=...)`, which builds its OWN per-game copy of
+# this dict (`resolve_top_k` / `resolve_horizon`) rather than mutating it.
 TRAINER_KNOBS = {
-    "top_k": 6,
-    "horizon": 2,
+    "top_k": ROLLOUT_TOP_K,
+    "horizon": ROLLOUT_HORIZON_ROUNDS,
     "tail_cap_p1": 0,
     "tail_cap_p2": 0,
     "imagined_round_end": True,
@@ -655,12 +705,22 @@ def play_game(
     sidecar_skip: int = 0,
     legacy_source_qd: bool = False,
     terrain_shift_cells: int = 0,
+    top_k: int | None = None,
+    horizon: int | None = None,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
     `core` may be a `nml_core.Core` to reuse across games (the registries and the
     mechanics maps are the expensive part); its header is re-set per game anyway,
     because the board changes with the seed.
+
+    `top_k` / `horizon` are the two research seams `AiPlanner.top_k_default` /
+    `.horizon` read off `NML_TOP_K` / `NML_HORIZON` (ai_planner.gd:49-56,
+    290-297): `None` here reads the SAME env vars the same way
+    (`resolve_top_k` / `resolve_horizon`), so a caller that sets nothing gets
+    exactly what the Godot trainer would. The resolved pair is stamped into the
+    result's `knobs` so a corpus documents which mode wrote it — the OLD
+    training corpus's `NML_TOP_K=2 NML_HORIZON=1` looks like any other run.
 
     `sidecars` writes the pair/fork counterfactual blocks (NML-1073 M3-9); they
     resolve on clones under generators of their own, so the PLAYED game is
@@ -694,7 +754,10 @@ def play_game(
     board, terrain, pieces = load_board(seed, bank_dir)
     if core is None:
         core = nml_core.load(str(repo_root))
-    core.set_header({"profiles": profiles, "terrain": terrain, "knobs": TRAINER_KNOBS})
+    eff_top_k = resolve_top_k(top_k)
+    eff_horizon = resolve_horizon(horizon)
+    knobs = dict(TRAINER_KNOBS, top_k=eff_top_k, horizon=eff_horizon)
+    core.set_header({"profiles": profiles, "terrain": terrain, "knobs": knobs})
     # Board columns 10/11 read the GameUnit's `source_data` (battle_sim.gd
     # :233-234), which `tools/core_selfplay.gd` fills from the unit since #392 —
     # so the DEFAULT is the profile's own quality/defense. The 4/4 of a blank
@@ -763,6 +826,12 @@ def play_game(
         # judge bench's drawing list, straight out of the bank.
         "terrain": _shift_pieces(pieces, terrain_shift_cells),
         "tool": "core_selfplay_py",
+        # `tools/core_selfplay.gd` stamps no such field (it always runs the
+        # planner's own defaults) — this documents the fast trainer's MODE,
+        # e.g. the old training corpus's `NML_TOP_K=2 NML_HORIZON=1`. Excluded
+        # from the Godot parity gates alongside the other Python-only extras
+        # (sidecar_gate.py's `EXCLUDED_TOP`).
+        "knobs": {"top_k": eff_top_k, "horizon": eff_horizon},
         "seed": seed,
         "dice_seed": seed,
         "grades": {"p1": "planner_core", "p2": "planner_core"},
@@ -822,6 +891,18 @@ def main(argv: list[str]) -> int:
         default=0,
         help="RED PROOF: advance every sidecar generator by N draws",
     )
+    ap.add_argument(
+        "--top-k",
+        type=int,
+        default=None,
+        help="planner ROLLOUT_TOP_K override; default is NML_TOP_K env or 6 (ai_planner.gd:49-56)",
+    )
+    ap.add_argument(
+        "--horizon",
+        type=int,
+        default=None,
+        help="planner ROLLOUT_HORIZON_ROUNDS override; default is NML_HORIZON env or 2 (ai_planner.gd:290-297)",
+    )
     a = ap.parse_args(argv)
 
     core = nml_core.load(a.repo)
@@ -839,6 +920,8 @@ def main(argv: list[str]) -> int:
             sidecars=not a.no_sidecars,
             fork_salt=a.fork_salt,
             sidecar_skip=a.sidecar_skip,
+            top_k=a.top_k,
+            horizon=a.horizon,
         )
         res["wall_seconds"] = round(time.perf_counter() - t0, 3)
         if a.out:
