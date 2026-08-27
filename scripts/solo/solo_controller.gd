@@ -420,7 +420,17 @@ func is_eligible(unit) -> bool:
 			# it would disembark at tray coordinates.
 			if unit_in_reserve(tr):
 				return false
-	return not (u.has_method("is_attached") and u.is_attached())
+	# A joined hero has no activation of its own — it acts inside its host. The ONE exception is the
+	# host being wiped: "fights on alone" (GF v3.5.1 p.14) means the hero IS the unit now, and refusing
+	# it an activation strands a living unit for the rest of the game. NML-1087 (maintainer game
+	# 27.08.): two AI units never activated again after the volley that killed their last host model,
+	# and one of them stayed Shaken to the end — recovery needs the activation it never got.
+	# Exactly one of host/hero is eligible at any time (a live host refuses the hero; a dead host is
+	# is_destroyed above), so this can never hand the side a second activation.
+	if u.has_method("is_attached") and u.is_attached():
+		var host := u.get_attached_to() as GameUnit
+		return host != null and host.get_alive_count() <= 0
+	return true
 
 
 ## Whether a unit is still HELD in Ambush reserve (off-table, not yet arrived — GF/AoF v3.5.1 p.13). The

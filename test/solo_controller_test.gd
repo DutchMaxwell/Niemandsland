@@ -179,6 +179,37 @@ func test_ambush_arrival_is_noop_with_empty_reserve() -> void:
 	assert_int(int(res["arrived"])).is_equal(0)
 
 
+## NML-1087 (maintainer game 27.08.): a joined hero whose HOST has been wiped IS the unit ("fights on
+## alone", GF v3.5.1 p.14) and must keep its activation. Both AI units that ended up hero-only stopped
+## activating for the rest of the game, and the Shaken one never recovered — recovery costs an activation.
+func test_joined_hero_becomes_activatable_once_its_host_is_wiped() -> void:
+	var enemy := _unit(1, [Vector3(0.5, 0, 0.5)])
+	var host := _unit(2, [Vector3(0.2, 0, 0.2), Vector3(0.25, 0, 0.2)])
+	var hero := _unit(2, [Vector3(0.22, 0, 0.22)])
+	hero.unit_id = "hero_p2"
+	EquipmentDistributor.attach_hero_to_unit(hero, host)
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {enemy.unit_id: enemy, host.unit_id: host, hero.unit_id: hero}
+	army.current_round = 2
+	var solo: SoloController = auto_free(SoloController.new())
+	add_child(solo)
+	solo.setup(army, null, null, 1, 2)
+	# Host alive: the host owns the one activation, the joined hero owns none.
+	assert_bool(solo.is_eligible(host)).is_true()
+	assert_bool(solo.is_eligible(hero)).is_false()
+	assert_int(solo.eligible_ai_units().size()).is_equal(1)
+	# Host wiped, hero alive: the hero IS the unit now — RED before the fix (nothing was eligible, so
+	# the AI side read as exhausted and the unit never activated again).
+	for m in host.models:
+		m.is_alive = false
+	assert_bool(solo.is_eligible(host)).is_false()
+	assert_bool(solo.is_eligible(hero)).is_true()
+	assert_array(solo.eligible_ai_units()).contains([hero])
+	assert_int(solo.eligible_ai_units().size()).is_equal(1)   # never BOTH — no phantom second activation
+	# ...and the AI actually takes that activation instead of reporting an empty side.
+	assert_object(solo.activate_next_ai_unit()).is_equal(hero)
+
+
 ## Field-test finding 5: a reserve Ambush unit is NOT activatable while held, and arriving from Ambush does
 ## NOT consume its activation — it is eligible to act that same round (GF/AoF v3.5.1 p.13).
 func test_ambush_reserve_unit_is_ineligible_until_it_arrives_then_can_act() -> void:
