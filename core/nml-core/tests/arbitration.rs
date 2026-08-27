@@ -262,7 +262,8 @@ fn diff(act: &Act, want: &PickRec, got: &Pick) -> Vec<(&'static str, String)> {
 /// anything else is a red proof.
 fn sweep(c: &ActCorpus, bend: PlanBend) -> Report {
     let statics = build_act_statics(c, REPO);
-    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path };
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
+        hero_attach: c.knobs.hero_attach };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
     let mut r = Report::default();
@@ -422,7 +423,8 @@ fn red_proof_stochastic_wound_rounding_is_load_bearing() {
 fn a_close_top_two_without_a_signature_declines() {
     let c = corpus();
     let statics = build_act_statics(&c, REPO);
-    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path };
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
+        hero_attach: c.knobs.hero_attach };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
     let mut declined = 0usize;

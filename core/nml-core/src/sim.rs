@@ -929,6 +929,21 @@ fn resolve_with(
         for p in next.positions[si].iter_mut() {
             *p = geom::to_f64(geom::add(geom::to_f32(*p), delta));
         }
+        // D1-B4b: a joined hero's models move WITH the host. The table plans the
+        // host's move over ONE model list that already contains them —
+        // `SoloController._moving_models` :5319-5321 returns
+        // `get_alive_models_with_attached()` — and `_plan_positions` :6084-6086
+        // starts every model from the same rigid `delta`. The simplest faithful
+        // mirror is that delta, applied AFTER both clamps, so the hero lands
+        // inside the unit's footprint instead of being left behind on the board.
+        // (Per-model steering is the table's; this port has never had it.)
+        if seams.hero_attach {
+            for &h in state.attached[si].iter() {
+                for p in next.positions[h].iter_mut() {
+                    *p = geom::to_f64(geom::add(geom::to_f32(*p), delta));
+                }
+            }
+        }
         // battle_sim.gd:598-600 — T2b: the mover's cover follows it, probed at
         // the POST-move unit centre (`centre + delta`, after both the band clamp
         // and the spacing clamp).
@@ -995,13 +1010,40 @@ fn resolve_with(
                     // wounds then land through the SAME casualty machinery the
                     // EV path uses — kill order stays the trainer's.
                     Some((tray, shot)) => {
-                        let us = &statics[pi_s];
                         let ut = &statics[next.roster.profile[ti]];
-                        profiles_of(us, next.alive[si], d, &mut sc);
-                        let att = ctx_of(us, &next, si);
                         let def = ctx_of(ut, &next, ti);
-                        *shot = crate::dice::resolve_shooting_with_tray(
-                            &us.shoot, &sc.keep, &sc.attacks, &att, &def, d, tray,
+                        // D1-B4b: the volley's MEMBERS, in the table's build
+                        // order — the host, then its attached heroes in
+                        // capture order (`main._run_ai_shooting` :2954-2958,
+                        // `State::attached` state.rs:361-362). Each brings its
+                        // OWN ranged set, Quality and survivor scaling
+                        // (:2985-2990); a member with no living model is
+                        // skipped exactly as the table skips it (:2959).
+                        let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
+                        for &mi in std::iter::once(&si).chain(next.attached[si].iter()) {
+                            if next.alive[mi] <= 0 {
+                                continue;
+                            }
+                            let um = &statics[next.roster.profile[mi]];
+                            let mut msc = Scratch::default();
+                            profiles_of(um, next.alive[mi], d, &mut msc);
+                            parts.push((mi, msc, ctx_of(um, &next, mi)));
+                        }
+                        let members: Vec<crate::dice::Shooter<'_>> = parts
+                            .iter()
+                            .map(|(mi, msc, att)| {
+                                let um = &statics[next.roster.profile[*mi]];
+                                crate::dice::Shooter {
+                                    profiles: &um.shoot,
+                                    keep: &msc.keep,
+                                    attacks: &msc.attacks,
+                                    att,
+                                    owner: &um.name,
+                                }
+                            })
+                            .collect();
+                        *shot = crate::dice::resolve_volley_with_tray(
+                            &members, &def, &ut.name, d, tray,
                         );
                         let w = shot.wounds;
                         land_wounds(&mut next, ti, w);
@@ -1071,6 +1113,17 @@ fn resolve_with(
         next.shaken[si] = false;
     }
     next.activated[si] = true;
+    // D1-B4b: a joined hero spends the HOST's activation, never one of its own
+    // (`SoloController.can_activate` solo_controller.gd:411). Marking it here is
+    // what keeps `MY_UNACTIVATED` (rows.rs:491) and `moves_left` (score.rs:96)
+    // honest once the host has gone, and it is the second half of the pool
+    // filter: `can_activate` stops the hero being offered BEFORE the host moves,
+    // this stops it being offered after.
+    if seams.hero_attach {
+        for &h in state.attached[si].iter() {
+            next.activated[h] = true;
+        }
+    }
     // NML-1073 M3-5: the sight matrix follows the MODELS. `BattleSim._los_clear`
     // (battle_sim.gd:792-796) calls `state["los_blocked"]` with the CURRENT
     // centres on every probe, so a unit that just rushed — or one that just lost

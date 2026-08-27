@@ -23,7 +23,9 @@ fn flat_build_order(act: &Act) -> Vec<&Candidate> {
     let st = &act.state;
     let mut out = Vec::new();
     for i in 0..st.units() {
-        if st.player[i] != act.player || st.activated[i] || st.alive[i] <= 0 {
+        // The recorded acts of this bench are all `hero_attach="off"` corpora,
+        // where the seam changes nothing; `false` is the recorded reading.
+        if !st.can_activate(i, act.player, false) {
             continue;
         }
         for c in &act.menus[st.key(i)] {
@@ -49,7 +51,8 @@ fn main() {
     let rounds: usize = args.next().and_then(|s| s.parse().ok()).unwrap_or(20);
     let c = load_acts(&path).unwrap_or_else(|e| panic!("{e}"));
     let statics = build_act_statics(&c, REPO);
-    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path };
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
+        hero_attach: c.knobs.hero_attach };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
 

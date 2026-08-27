@@ -122,6 +122,37 @@ def first_at_or_after(dice: list[dict], act: int) -> int:
     return len(dice)
 
 
+def detach(plain: dict) -> dict:
+    """`--hero-attach off` on a RECORDED state. The corpus is a table game, so
+    every host already carries its `attached` heroes and every hero its
+    `attached_to` — which is `hero_attach="table"`, and there is nothing to
+    switch on. This strips the two fields instead, so the same acts replay the
+    way a `hero_attach="off"` corpus would: the D1-B4b volley then finds no
+    member but the host, exactly as `selfplay.play_game(hero_attach="off")`
+    leaves it. It is the BEFORE half of the B4b measurement, in one tool."""
+    out = dict(plain)
+    units = {}
+    for k, u in plain["units"].items():
+        u = dict(u, attached=[], attached_to="")
+        # `attached_hero_rules` (state.rs:71/:173) is the ONE profile field that
+        # follows from attachment, and it rides the act's own `prof` block. Left
+        # standing, a fallen-hero-less "off" control would still let the hero's
+        # rules vote in `AiEv.rule_on_all_models` (ai_ev.gd:79-83) — the control
+        # would not be a control.
+        if isinstance(u.get("prof"), dict):
+            u["prof"] = dict(u["prof"], attached_hero_rules=[])
+        units[k] = u
+    out["units"] = units
+    return out
+
+
+def detach_header(head: dict) -> dict:
+    """The header's half of `--hero-attach off`: an act with no `prof` block
+    falls back to the HEADER profile, so the same field has to go there too."""
+    profiles = {k: dict(p, attached_hero_rules=[]) for k, p in head["profiles"].items()}
+    return dict(head, profiles=profiles)
+
+
 def defender_state(plain: dict, key: str) -> tuple[int, int]:
     """(alive, total wounds left) of one unit in a plain state."""
     u = plain["units"].get(key)
@@ -130,7 +161,8 @@ def defender_state(plain: dict, key: str) -> tuple[int, int]:
     return (int(u["alive"]), int(sum(u["wounds"])))
 
 
-def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: bool) -> int:
+def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: bool,
+        hero_attach: str = "table") -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -142,7 +174,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
              ("acts", "prefix_equal", "full_equal", "table_longer", "port_longer",
               "both_silent", "table_silent", "port_silent", "shape", "faces",
               "declined", "rolls_equal", "rolls", "hits_equal", "hits", "next_checked",
-              "next_equal", "equal_over_2", "equal_dice_max")}
+              "next_equal", "equal_over_2", "equal_dice_max", "split_fire",
+              "full_equal_owner")}
     unported: dict[str, int] = {}
     reasons: dict[str, int] = {}
     firsts: list[str] = []
@@ -152,15 +185,24 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         head, lines, dice, seed = read_game(d)
         burn = burn_prefix(dice)
         core = nml_core.load(repo)
+        if hero_attach == "off":
+            head = detach_header(head)
+        # `hero_attach` is also a SEAM (`Seams::hero_attach`, io.rs): with it on,
+        # a host's activation marks its heroes activated and drags their models
+        # along. Neither touches this tool's verdict — it replays one recorded
+        # act at a time and compares the DEFENDER — but a control that only half
+        # flips the knob is not a control.
         core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
-                         "knobs": dict(head.get("knobs", {}))})
+                         "knobs": dict(head.get("knobs", {}),
+                                       hero_attach=hero_attach == "table")})
         for k, act in enumerate(lines, 1):
             action = (act.get("pick") or {}).get("action") or {}
             if int(action.get("kind", -1)) not in SHOOTING_KINDS or not action.get("shoot"):
                 continue
             tally["acts"] += 1
             i0 = first_at_or_after(dice, k)
-            state = core.state_of(act["state"])
+            plain = act["state"] if hero_attach == "table" else detach(act["state"])
+            state = core.state_of(plain)
             # `--red-misseed` moves the tray one seed over. Every count and
             # every target still comes out of the same state, so the SHAPE holds
             # and the comparison reaches the faces — which is exactly what has
@@ -181,12 +223,27 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 continue
             for name in report["unported"]:
                 unported[name] = unported.get(name, 0) + 1
+            # SPLIT FIRE, measured rather than assumed: the table signs each save
+            # batch with the DEFENDER (main.gd:6448), so a defense roll under
+            # this ordinal whose owner is not the recorded `shoot` target means
+            # the table aimed a shot somewhere this port cannot follow
+            # (`_solo_pick_overlay_target` :2996-3005).
+            tgt_owner = "AI (%s)" % head["profiles"][action["shoot"]]["name"] \
+                if action["shoot"] in head["profiles"] else None
+            if tgt_owner and any(r["roll_kind"] == "defense" and r["owner"] != tgt_owner
+                                 for r in dice[i0:] if int(r["act"]) == k):
+                tally["split_fire"] += 1
 
-            got = [(r["kind"], r["count"], r["target"], r["faces"]) for r in report["rolls"]]
+            # `owner` rides along as the FIFTH slot and is deliberately NOT
+            # compared: D1-B4b stamps it so a divergence can say WHO rolled
+            # (main.gd:7173 — the firing member, so an attached hero signs its
+            # own dice), not so the verdict changes shape.
+            got = [(r["kind"], r["count"], r["target"], r["faces"], r["owner"])
+                   for r in report["rolls"]]
             # EVERY roll the table drew under this activation ordinal, NOT a
             # prefix: truncating to `len(got)` would hide "the table drew more
             # than the port did", which is the whole `table_longer` bucket.
-            want = [(r["roll_kind"], r["count"], r["target"], r["faces"])
+            want = [(r["roll_kind"], r["count"], r["target"], r["faces"], r["owner"])
                     for r in dice[i0:] if int(r["act"]) == k]
             if not got and not want:
                 tally["both_silent"] += 1
@@ -216,8 +273,10 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                     field = ("kind" if g[0] != w[0] else
                              "count" if g[1] != w[1] else "target")
                     reasons[field] = reasons.get(field, 0) + 1
-                    verdict, why = "shape", "roll %d %s: %s(%d dice, %d+) vs table %s(%d dice, %d+)" % (
-                        i + 1, field, g[0], g[1], g[2], w[0], w[1], w[2])
+                    verdict, why = ("shape",
+                                    "roll %d %s: %s(%d dice, %d+, %s) vs table %s(%d dice, %d+, %s)"
+                                    % (i + 1, field, g[0], g[1], g[2], "AI (%s)" % g[4],
+                                       w[0], w[1], w[2], w[4]))
                     break
                 if g[3] != w[3]:
                     verdict, why = "faces", "roll %d %s: %s vs table %s" % (i + 1, g[0], g[3], w[3])
@@ -247,8 +306,28 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 tally["equal_dice_max"] = max(tally["equal_dice_max"], staked)
                 if staked > 2:
                     tally["equal_over_2"] += 1
+                # D1-B4b — THE SECOND BAR: WHO rolled. The port emits the bare
+                # unit name; `dice.jsonl` wraps it the way `_solo_owner_label`
+                # does (main.gd:7039-7040), and in a trainer corpus every unit
+                # is an AI unit. Compared APART from the four-field verdict so
+                # the numbers above stay the ones every earlier run measured —
+                # and compared at all because it is what turns "the attached
+                # hero fires its OWN shots" from a claim into a verdict: a host
+                # rolling the hero's dice matches on count, target and faces and
+                # can only part HERE.
+                owners_ok = all("AI (%s)" % g[4] == w[4] for g, w in zip(got, want))
+                if not owners_ok:
+                    reasons["owner"] = reasons.get("owner", 0) + 1
+                    if len(firsts) < 3:
+                        bad = next((i for i, (g, w) in enumerate(zip(got, want))
+                                    if "AI (%s)" % g[4] != w[4]), 0)
+                        firsts.append("%s act %d [owner] %s — roll %d: AI (%s) vs table %s"
+                                      % (d.name, k, action["shoot"][-6:], bad + 1,
+                                         got[bad][4], want[bad][4]))
                 if len(got) == len(want):
                     tally["full_equal"] += 1
+                    if owners_ok:
+                        tally["full_equal_owner"] += 1
                 elif len(want) > len(got):
                     tally["table_longer"] += 1
                     reasons["length"] = reasons.get("length", 0) + 1
@@ -269,10 +348,14 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
              "off": "RED D1-B4 --mode off (dice=expected)",
              "misseed": "RED D1-B4 --red-misseed (tray on dice_seed+1)"}[mode]
     print()
-    print("%s over %d games, %d shooting acts (%.1fs)" % (
-        label, len(games), tally["acts"], time.perf_counter() - t0))
+    print("%s over %d games, %d shooting acts, hero_attach=%s (%.1fs)" % (
+        label, len(games), tally["acts"], hero_attach, time.perf_counter() - t0))
     print("  EQUAL : %d/%d acts FULL-equal (same roll count, every roll identical)"
           % (tally["full_equal"], tally["acts"]))
+    print("  OWNER : %d/%d acts FULL-equal AND every roll signed by the same unit "
+          "(the strict bar; %d act(s) match the dice but not the roller)"
+          % (tally["full_equal_owner"], tally["acts"],
+             tally["full_equal"] - tally["full_equal_owner"]))
     print("        : %d/%d acts PREFIX-equal (the overlap held; %d table_longer, %d port_longer)"
           % (tally["prefix_equal"], tally["acts"], tally["table_longer"], tally["port_longer"]))
     print("  rolls : %d of %d compared rolls equal" % (tally["rolls_equal"], tally["rolls"]))
@@ -285,6 +368,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
              tally["shape"], tally["faces"], tally["declined"]))
     print("  first field to part: %s" % (
         ", ".join("%s=%d" % kv for kv in sorted(reasons.items())) or "none"))
+    print("  split-fire: %d/%d acts where the table saved dice under a unit that is NOT "
+          "the recorded shoot target" % (tally["split_fire"], tally["acts"]))
     print("  unported branches touched: %s" % (
         ", ".join("%s=%d" % kv for kv in sorted(unported.items())) or "none"))
     for f in firsts:
@@ -317,14 +402,15 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                  % tally["equal_over_2"]))
         return 0 if ok else 1
 
-    ok = tally["acts"] > 0 and tally["full_equal"] == tally["acts"]
+    # The GATE is the strict bar: same dice AND the same unit rolling them.
+    ok = tally["acts"] > 0 and tally["full_equal_owner"] == tally["acts"]
     if report_only:
         print("  REPORT ONLY — %d/%d acts short of full equality, exit 0 by request"
-              % (tally["acts"] - tally["full_equal"], tally["acts"]))
+              % (tally["acts"] - tally["full_equal_owner"], tally["acts"]))
         return 0
     print("  %s" % ("PASS" if ok else
                     "FAIL — %d of %d shooting acts are not FULL-equal (see the buckets above)"
-                    % (tally["acts"] - tally["full_equal"], tally["acts"])))
+                    % (tally["acts"] - tally["full_equal_owner"], tally["acts"])))
     return 0 if ok else 1
 
 
@@ -343,11 +429,17 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--report-only", action="store_true",
                     help="exit 0 even when acts are short of full equality (this tool is a GATE "
                          "by default and exits 1)")
+    ap.add_argument("--hero-attach", choices=("table", "off"), default="table",
+                    help="'table' replays the recorded attachment, which is what the corpus "
+                         "carries and what D1-B4b reads; 'off' strips `attached`/`attached_to` "
+                         "from every replayed state, reproducing a hero_attach='off' corpus — "
+                         "the BEFORE half of the B4b measurement")
     ap.add_argument("--limit", type=int, default=0, help="only the first N game dirs")
     ap.add_argument("--verbose", type=int, default=0, help="print every diverging act")
     a = ap.parse_args(argv)
     mode = "misseed" if a.red_misseed else a.mode
-    return run(Path(a.ref).expanduser(), a.repo, mode, a.limit, a.verbose, a.report_only)
+    return run(Path(a.ref).expanduser(), a.repo, mode, a.limit, a.verbose, a.report_only,
+               a.hero_attach)
 
 
 if __name__ == "__main__":

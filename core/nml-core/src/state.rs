@@ -394,6 +394,29 @@ pub struct State {
 }
 
 impl State {
+
+    /// NML-1073 M5 D1-B4b — may unit `i` take an activation of its OWN this
+    /// round? `SoloController.can_activate` (solo_controller.gd:405-411) ends on
+    /// `not u.is_attached()`: a joined hero NEVER activates alone. It acts
+    /// inside its host's activation — firing its own guns in the host's volley
+    /// (`main._run_ai_shooting` :2954-2958) and moving with the host's models
+    /// (`SoloController._moving_models` :5319-5321, which walks
+    /// `get_alive_models_with_attached()`).
+    ///
+    /// The other three terms are the GDScript planner's own pool filter
+    /// verbatim (ai_planner.gd:27, :131, :645): the unit's side, its `activated`
+    /// flag and a living model — and they are ALL the filter unless
+    /// `hero_attach` is on. `BattleSim`/`AiPlanner` never refuse a joined hero
+    /// (only `SoloController` does, one layer up), and a table RECORDING carries
+    /// attachment on every host, so an unconditional refusal here would move
+    /// every recorded rollout value and redden GATE G5. `Seams::hero_attach`
+    /// (io.rs) is therefore the switch, default OFF.
+    pub fn can_activate(&self, i: usize, player: i64, hero_attach: bool) -> bool {
+        self.player[i] == player
+            && !self.activated[i]
+            && self.alive[i] > 0
+            && !(hero_attach && self.attached_to[i].is_some())
+    }
     pub fn units(&self) -> usize {
         self.roster.len()
     }

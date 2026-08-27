@@ -142,7 +142,7 @@ impl<'a> Policy<'a> {
         let mut best: Option<Candidate> = None;
         let mut best_s = f64::NEG_INFINITY;
         for i in 0..state.units() {
-            if state.player[i] != player || state.activated[i] || state.alive[i] <= 0 {
+            if !state.can_activate(i, player, self.seams.hero_attach) {
                 continue;
             }
             for action in self.policy_candidates(state, i, sc) {

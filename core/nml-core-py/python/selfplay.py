@@ -942,7 +942,8 @@ def play_game(
     # field the crate reads out of it (state.rs:71). "off" touches neither the
     # profiles nor the capture, so it stays byte-identical.
     attached = attached_to = None
-    if resolve_hero_attach(hero_attach):
+    eff_hero_attach = resolve_hero_attach(hero_attach)
+    if eff_hero_attach:
         selections = dict(load_selections(list_p1, 1))
         selections.update(load_selections(list_p2, 2))
         attached, attached_to = derive_attachment(units, selections)
@@ -959,7 +960,16 @@ def play_game(
     eff_charge_gate = resolve_charge_gate(charge_gate)
     eff_dice = resolve_dice(dice)
     knobs = dict(
-        TRAINER_KNOBS, top_k=eff_top_k, horizon=eff_horizon, charge_gate=eff_charge_gate
+        TRAINER_KNOBS,
+        top_k=eff_top_k,
+        horizon=eff_horizon,
+        charge_gate=eff_charge_gate,
+        # NML-1073 M5 D1-B4b: the SEAM half of `hero_attach`. Deriving the
+        # attachment is not enough — without this the hero would fire inside its
+        # host's volley AND still be handed a full activation of its own
+        # (`Seams::hero_attach` io.rs). "off" leaves it False, which is the
+        # default and what every earlier corpus carries.
+        hero_attach=eff_hero_attach,
     )
     core.set_header({"profiles": profiles, "terrain": terrain, "knobs": knobs})
     # Board columns 10/11 read the GameUnit's `source_data` (battle_sim.gd
