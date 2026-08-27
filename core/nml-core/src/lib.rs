@@ -18,6 +18,7 @@ pub mod plan;
 pub mod playout;
 pub mod rng;
 pub mod rollout;
+pub mod rows;
 pub mod rules;
 pub mod score;
 pub mod sim;
@@ -61,11 +62,15 @@ pub use plan::{
 };
 pub use playout::{other_player, Policy};
 pub use rollout::{cross_round, imagined_round_end, Rollout, Stop};
+pub use rows::{
+    board_row_indices, features, neutral_defender, snappedf, Cell, RowEncoder, RowVocab,
+    EV_REF_DIST_IN, FEATURE_KEYS, FLAG_RULES, NO_RESERVES,
+};
 pub use rng::GodotRng;
 pub use rules::Registries;
 pub use score::{can_hold_marker, control_gap_in, presence, score, Incoming, NO_INCOMING};
 pub use sim::{
-    reply_threat, resolve, resolve_on_board, resolve_stochastic_on_board, Cover, Unsupported,
+    melee_threat, reply_threat, resolve, resolve_on_board, resolve_stochastic_on_board, Cover, Unsupported,
     ADVANCE, CHARGE, CHARGE_CONTACT_MARGIN_IN, CONTACT_IN, DEFAULT_BASE_RADIUS_M, HOLD,
     MELEE_ENGAGE_IN, RUSH, SPACING_BISECTIONS, SPACING_SAMPLES, UNIT_SPACING_IN,
 };

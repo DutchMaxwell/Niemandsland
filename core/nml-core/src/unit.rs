@@ -609,47 +609,60 @@ fn stamp_unit_strikers(p: &Profile, shoot: &mut [ShootProfile]) {
     }
 }
 
+/// `AiShooting.profiles_in_range` ai_shooting.gd:14-26 — the merged RANGED set,
+/// UNSTAMPED (the `AiEv.stamp_sergeant` pass belongs to `BattleSim._profiles_of`,
+/// not to this function). `UnitStatic::build` calls it at 0.0 and stamps after;
+/// `rows::board_rows` calls it at `EV_REF_DIST_IN` and stamps NOT AT ALL, which
+/// is exactly what battle_sim.gd:206 does.
+pub(crate) fn profiles_in_range(weapons: &[Weapon], dist_in: f64) -> Vec<ShootProfile> {
+    let mut raw: Vec<ShootProfile> = Vec::new();
+    for w in weapons {
+        // `AiShooting._field_i(w, "range_value", 0)` — an int read; the
+        // recorded value is `OPRWeapon.range_value`, already an integer.
+        let rng_in = w.range as i64;
+        if rng_in <= 0 || (rng_in as f64) < dist_in {
+            continue;
+        }
+        if weapon_has(w, "Strafing") {
+            continue; // NML-002: fires only through the move-through trigger
+        }
+        let attacks = w.attacks.max(0) * w.count.max(1);
+        if attacks <= 0 {
+            continue;
+        }
+        raw.push(base_profile(w, attacks, rng_in));
+    }
+    merge_identical(raw)
+}
+
+/// `AiShooting.melee_profiles` ai_shooting.gd:44-56 — every range-0 weapon, also
+/// UNSTAMPED. Strafing is NOT excluded here: that filter lives in
+/// `profiles_in_range` alone, and a melee weapon never carries the move-through
+/// trigger.
+pub(crate) fn melee_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
+    let mut raw: Vec<ShootProfile> = Vec::new();
+    for w in weapons {
+        if w.range as i64 > 0 {
+            continue;
+        }
+        let attacks = w.attacks.max(0) * w.count.max(1);
+        if attacks <= 0 {
+            continue;
+        }
+        raw.push(base_profile(w, attacks, 0));
+    }
+    merge_identical(raw)
+}
+
 impl UnitStatic {
     pub fn build(reg: &mut Registries, p: &Profile) -> UnitStatic {
         let mut unimplemented: Vec<Unimplemented> = Vec::new();
 
-        // --- profiles_in_range(weapons, 0.0): every ranged weapon (ai_shooting.gd:14-26) ---
-        let mut raw: Vec<ShootProfile> = Vec::new();
-        for w in &p.weapons {
-            // `AiShooting._field_i(w, "range_value", 0)` — an int read; the
-            // recorded value is `OPRWeapon.range_value`, already an integer.
-            let rng_in = w.range as i64;
-            if rng_in <= 0 {
-                continue;
-            }
-            if weapon_has(w, "Strafing") {
-                continue; // NML-002: fires only through the move-through trigger
-            }
-            let attacks = w.attacks.max(0) * w.count.max(1);
-            if attacks <= 0 {
-                continue;
-            }
-            raw.push(base_profile(w, attacks, rng_in));
-        }
-        let mut shoot = merge_identical(raw);
+        let mut shoot = profiles_in_range(&p.weapons, 0.0);
         stamp(reg, p, &mut shoot, &mut unimplemented);
         stamp_unit_strikers(p, &mut shoot);
 
-        // --- melee_profiles(weapons): every range-0 weapon (ai_shooting.gd:44-56).
-        // Strafing is NOT excluded here — that filter lives in profiles_in_range
-        // alone, and a melee weapon never carries the move-through trigger.
-        let mut raw_melee: Vec<ShootProfile> = Vec::new();
-        for w in &p.weapons {
-            if w.range as i64 > 0 {
-                continue;
-            }
-            let attacks = w.attacks.max(0) * w.count.max(1);
-            if attacks <= 0 {
-                continue;
-            }
-            raw_melee.push(base_profile(w, attacks, 0));
-        }
-        let mut melee = merge_identical(raw_melee);
+        let mut melee = melee_profiles(&p.weapons);
         // The same stamping runs on the melee array (`_profiles_of(su, true)`
         // battle_sim.gd:719-720 takes the identical path); a rule the port
         // cannot model is reported ONCE, not once per array.
