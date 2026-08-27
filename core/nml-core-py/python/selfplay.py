@@ -310,11 +310,50 @@ def resolve_horizon(horizon: int | None) -> int:
     return _env_knob("NML_HORIZON", 1, 3, ROLLOUT_HORIZON_ROUNDS)
 
 
+#: `charge_gate` modes. "off" is the default and is what the OLD planner-lane
+#: trainer does: `tools/core_selfplay.gd` never stamps `state["charge_illegal"]`,
+#: so both planner menu sites read `illegal_cb.is_valid()` as false
+#: (ai_planner.gd:1024/1308) and offer charges the table would refuse. "table"
+#: wires the gate the ARENA wires — `SoloController.charge_candidate_illegal`
+#: (solo_controller.gd:1450, stamped at :3002/:3358/:3475/:3704) — through its
+#: pure twin `gate::charge_illegal` (NML-1073 M2-0c), whose five inputs the
+#: capture already carries per unit: `aircraft`, the rush `bands`, the melee
+#: `shroud` pair, `charge_no_difficult` (the p.13 Strider/Flying exemption) and
+#: `charge_probe_r` (the unit footprint), against the header board's difficult
+#: ground. Nothing else changes, so "off" stays byte-identical to every corpus
+#: written before this knob existed.
+CHARGE_GATE_MODES = ("off", "table")
+
+
+def resolve_charge_gate(charge_gate: str) -> bool:
+    """`charge_gate` as the crate's `Knobs.charge_gate` bit — the very thing the
+    act line records per activation (act_recorder.gd:73) and the crate reads as
+    `Tuning.charge_gate`. An unknown mode RAISES: a silently ungated trainer is
+    what this rung exists to end."""
+    if charge_gate not in CHARGE_GATE_MODES:
+        raise ValueError(
+            "charge_gate must be one of %s, not %r" % (list(CHARGE_GATE_MODES), charge_gate)
+        )
+    return charge_gate == "table"
+
+
+def charge_illegal_stamp(core, state) -> dict[str, bool]:
+    """What THIS trainer stamps into `state["charge_illegal"]`, in the shape
+    `AiActRecorder._charge_illegal_matrix` records (act_recorder.gd:204-222):
+    `"attacker|victim" -> bool` for every ordered pair of alive opposite-side
+    units at that pair's root gap. `{}` when the trainer runs `charge_gate=off`,
+    which is exactly what the recorder writes for a caller whose Callable is
+    invalid."""
+    return core.charge_illegal_matrix(state)
+
+
 # `AiActRecorder._header_line` act_recorder.gd:144-150 resolves these from the
 # planner's class statics; `tools/core_selfplay.gd` runs them at their defaults
 # with NML_SIM_SPACING on and NML_SIM_CAST off, which is what a recorded header
-# of this trainer says. `charge_gate` is the M3-5 addition: the trainer never
-# stamps `state["charge_illegal"]`, so both menu sites skip the gate outright.
+# of this trainer says. `charge_gate` is the M3-5 addition, false HERE because
+# that is the gateless default `tools/core_selfplay.gd` has: both menu sites
+# then skip the gate outright. `play_game(charge_gate="table")` overrides it in
+# its own per-game copy (D2) — see `CHARGE_GATE_MODES`.
 # `top_k` / `horizon` here are the PLANNER's own defaults — a game recorded
 # with a different mode (e.g. the OLD training corpus's
 # `NML_TOP_K=2 NML_HORIZON=1`, farm/mass_wave_template.sh:9) goes through
@@ -708,6 +747,7 @@ def play_game(
     terrain_shift_cells: int = 0,
     top_k: int | None = None,
     horizon: int | None = None,
+    charge_gate: str = "off",
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -722,6 +762,13 @@ def play_game(
     exactly what the Godot trainer would. The resolved pair is stamped into the
     result's `knobs` so a corpus documents which mode wrote it — the OLD
     training corpus's `NML_TOP_K=2 NML_HORIZON=1` looks like any other run.
+
+    `charge_gate` is the THIRD such seam (NML-1073 D2) and the only one that
+    changes a RULE: "off" (the default) reproduces `tools/core_selfplay.gd`,
+    which stamps no `state["charge_illegal"]` and therefore lets the planner
+    offer charges against aircraft, past the rush band and through difficult
+    ground; "table" wires the arena's own gate. It is stamped into the result's
+    `knobs` alongside the search pair — see `CHARGE_GATE_MODES`.
 
     `sidecars` writes the pair/fork counterfactual blocks (NML-1073 M3-9); they
     resolve on clones under generators of their own, so the PLAYED game is
@@ -757,7 +804,10 @@ def play_game(
         core = nml_core.load(str(repo_root))
     eff_top_k = resolve_top_k(top_k)
     eff_horizon = resolve_horizon(horizon)
-    knobs = dict(TRAINER_KNOBS, top_k=eff_top_k, horizon=eff_horizon)
+    eff_charge_gate = resolve_charge_gate(charge_gate)
+    knobs = dict(
+        TRAINER_KNOBS, top_k=eff_top_k, horizon=eff_horizon, charge_gate=eff_charge_gate
+    )
     core.set_header({"profiles": profiles, "terrain": terrain, "knobs": knobs})
     # Board columns 10/11 read the GameUnit's `source_data` (battle_sim.gd
     # :233-234), which `tools/core_selfplay.gd` fills from the unit since #392 —
@@ -832,7 +882,7 @@ def play_game(
         # e.g. the old training corpus's `NML_TOP_K=2 NML_HORIZON=1`. Excluded
         # from the Godot parity gates alongside the other Python-only extras
         # (sidecar_gate.py's `EXCLUDED_TOP`).
-        "knobs": {"top_k": eff_top_k, "horizon": eff_horizon},
+        "knobs": {"top_k": eff_top_k, "horizon": eff_horizon, "charge_gate": charge_gate},
         "seed": seed,
         "dice_seed": seed,
         "grades": {"p1": "planner_core", "p2": "planner_core"},
@@ -934,6 +984,13 @@ def main(argv: list[str]) -> int:
         default=None,
         help="planner ROLLOUT_HORIZON_ROUNDS override; default is NML_HORIZON env or 2 (ai_planner.gd:290-297)",
     )
+    ap.add_argument(
+        "--charge-gate",
+        choices=list(CHARGE_GATE_MODES),
+        default="off",
+        help="'table' wires SoloController.charge_candidate_illegal; 'off' (default) "
+        "is tools/core_selfplay.gd, which stamps no gate at all",
+    )
     a = ap.parse_args(argv)
 
     core = nml_core.load(a.repo)
@@ -953,6 +1010,7 @@ def main(argv: list[str]) -> int:
             sidecar_skip=a.sidecar_skip,
             top_k=a.top_k,
             horizon=a.horizon,
+            charge_gate=a.charge_gate,
         )
         res["wall_seconds"] = round(time.perf_counter() - t0, 3)
         if a.out:

@@ -523,6 +523,48 @@ impl Core {
         to_py(py, &Value::Object(m))
     }
 
+    /// The charge-legality STAMP this caller wires — `AiActRecorder.
+    /// _charge_illegal_matrix` (act_recorder.gd:204-222) read off the pure
+    /// contract instead of off a live `Callable`.
+    ///
+    /// On the table `SoloController` stamps `state["charge_illegal"]` with
+    /// `charge_candidate_illegal` (solo_controller.gd:1450, wired at
+    /// :3002/:3358/:3475/:3704) and the recorder samples it for every ordered
+    /// pair of ALIVE opposite-side units at that pair's ROOT gap
+    /// (`dist_in - CONTACT_IN`, floored at 0 — not the edge gap `_best_charge`
+    /// uses). `gate::charge_illegal` is that same body as a pure function of
+    /// the capture (NML-1073 M2-0c), so this method answers what the table
+    /// stamped.
+    ///
+    /// The `charge_gate` knob IS the GDScript's `cb.is_valid()`: a caller that
+    /// wires no gate stamps NOTHING, so this returns `{}` — the same empty dict
+    /// the recorder writes for `tools/core_selfplay.gd`. That is what makes the
+    /// gate-off arm a real red proof rather than a second green.
+    fn charge_illegal_matrix(&self, py: Python<'_>, state: PyRef<'_, PyState>) -> PyResult<Py<PyAny>> {
+        let mut m = Map::new();
+        if !self.knobs.charge_gate {
+            return to_py(py, &Value::Object(m));
+        }
+        let st = &state.inner;
+        for a in 0..st.units() {
+            if st.alive[a] <= 0 {
+                continue;
+            }
+            for v in 0..st.units() {
+                if v == a || st.alive[v] <= 0 || st.player[v] == st.player[a] {
+                    continue;
+                }
+                let gap = (geom::dist_in(&st.positions[a], &st.positions[v])
+                    - nmlcore::CONTACT_IN)
+                    .max(0.0);
+                let bad =
+                    nmlcore::charge_illegal(st, &self.terrain, a, v, gap, None, None);
+                m.insert(format!("{}|{}", st.key(a), st.key(v)), bad.into());
+            }
+        }
+        to_py(py, &Value::Object(m))
+    }
+
     /// The capture-time registry reads for every unit of the header's profile
     /// table — `{key: {morale_bonus, aircraft, charge_no_difficult, shroud}}`.
     ///

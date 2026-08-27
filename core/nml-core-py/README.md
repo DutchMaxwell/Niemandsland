@@ -179,3 +179,30 @@ moves, and each carries a red proof in `tests/python/test_selfplay.py`.
 | `knobs.charge_gate` | `tools/core_selfplay.gd` never stamps `state["charge_illegal"]`, and both menu sites read it as `illegal_cb.is_valid() and illegal_cb.call(...)` (ai_planner.gd:1024/1308) — a gateless caller is offered charges the arena's gate refuses. Absent from every recorded header, so the default is `true`. |
 | the sight refresh in `resolve` | `BattleSim._los_clear` probes `state["los_blocked"]` with the CURRENT centres, so a unit that just moved (or lost models, or routed) is seen from where it now is. `sim.rs` now rewrites the `los_pairs` row and column of every unit whose positions changed — only on the live board, and only when the parent carried a matrix. |
 | `_safe_advance`'s open-fire-line penalty | ai_planner.gd:773-785 probes `los_blocked(enemy_centre, PROBE POINT)`, which no capture records; with the board in hand it is a question the terrain answers. Guarded exactly as the GDScript guards it, so a corpus without the seam keeps the penalty-free menu. |
+
+## The table's charge gate in the trainer (NML-1073 D2)
+
+`--charge-gate table` (`play_game(charge_gate="table")`) wires the gate the
+ARENA wires and the trainer never had: `SoloController.charge_candidate_illegal`
+(solo_controller.gd:1450, stamped into `state["charge_illegal"]` at
+:3002/:3358/:3475/:3704), through its pure twin `gate::charge_illegal`. The
+five per-unit inputs — `aircraft`, the rush `bands`, the melee `shroud`,
+`charge_no_difficult` and `charge_probe_r` — were already in the capture since
+M2-0d; only the asking was missing. The DEFAULT stays `off`, so every corpus
+written before this knob replays byte for byte, and the mode is stamped into
+the result's `knobs`.
+
+`tools/charge_gate.py` is the gate, act by act, on a directory of recorded
+ARENA games (`<p1>_vs_<p2>_s<seed>/acts.jsonl`, written with `NML_ACT_DUMP`):
+
+```sh
+~/venvs/nmlcore/bin/python core/nml-core-py/tools/charge_gate.py \
+    --ref ~/selfplay_out/qb_ref --repo .        # --mode off is the red proof
+```
+
+STAMP — the trainer's `charge_illegal` matrix against the one the recorder read
+off the live Callable, pair for pair. PICK — `plan_with_rollout` replayed on the
+recorded state WITH the stamp, against the recorded pick, on the act corpus's
+OWN search knobs, so the only knob the tool moves is `charge_gate`. The arena
+also rolls REAL dice and runs table rules the trainer has not ported, so whole
+GAMES still diverge; act-level equality is what this rung claims.
