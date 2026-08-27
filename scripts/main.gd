@@ -10535,11 +10535,43 @@ func _solo_ambush_enemy_positions(enemy_slot: int) -> Array:
 	return out
 
 
+## How long a round-start prompt may park behind an open resolution before it goes ahead anyway.
+const SOLO_RESOLUTION_WAIT_MS := 20000
+
+
+## NML-1089 — "a resolution is IN FLIGHT": the one dice tray is rolling, a wound / Takedown model
+## pick is armed and waiting for its click, or the player is still picking a target. NML-954 gave
+## the tray this notion for the tray's own sake; a round-start prompt needs the wider one, because
+## the human volley resolves as a DETACHED coroutine while the alternation may already have ended
+## the round (maintainer test game 2026-08-27, round 2).
+func _solo_resolution_pending() -> bool:
+	return _solo_tray_busy or not _solo_model_pick.is_empty() or not _solo_target_mode.is_empty()
+
+
+## Park until nothing is resolving. Bounded, so a resolution the player walks away from can never
+## freeze the round — and the give-up SAYS so, because a beat that silently changes its mind reads
+## exactly like a broken rule.
+func _solo_await_resolution_idle(what: String) -> void:
+	if not _solo_resolution_pending():
+		return
+	var deadline: int = Time.get_ticks_msec() + SOLO_RESOLUTION_WAIT_MS
+	while _solo_resolution_pending() and Time.get_ticks_msec() < deadline:
+		await get_tree().process_frame
+	if _solo_resolution_pending() and battle_log != null:
+		battle_log.log_event(BattleLog.Category.GENERAL,
+			"%s: the open resolution did not finish within %ds — asking now" % [
+				what, SOLO_RESOLUTION_WAIT_MS / 1000], false)
+
+
 ## The human's Ambush turn (maintainer flow: SAME hand-over procedure as deployment): he places
 ## ONE reserve unit HIMSELF (drag from the tray, >9" from enemies — his measure) and hands over by
 ## click; "Keine mehr" keeps the rest waiting this round. The ✓ click detects which reserve units
 ## newly stand on the table and clears their flags. Returns the placed units ([] = waiting).
 func _solo_ambush_human_turn(round_number: int, pool: Array) -> Array:
+	# NML-1089: never open on top of an unresolved volley. In the maintainer's round-2 log this
+	# question — and its ANSWER — landed between "Custodian Brothers saves on 6+" and the defender's
+	# dice, so the reserve step interleaved with a shot that had not been resolved yet.
+	await _solo_await_resolution_idle("Ambush arrival")
 	var names: PackedStringArray = []
 	for u in pool:
 		names.append((u as GameUnit).get_name())
