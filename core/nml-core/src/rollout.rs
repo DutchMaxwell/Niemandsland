@@ -29,7 +29,7 @@ use crate::acts::Knobs;
 use crate::menu::Candidate;
 use crate::mission::{apply_destroy_step, playout_seize, vp_of, vp_score_round};
 use crate::playout::{other_player, Policy};
-use crate::score::score;
+use crate::score::score_with;
 use crate::sim::{reply_threat, Scratch, Unsupported};
 use crate::state::State;
 use crate::unit::UnitStatic;
@@ -203,7 +203,7 @@ impl<'a> Rollout<'a> {
         if (mode == 1 && opener_seat) || (mode == 2 && !opener_seat) {
             let last = &ends[ends.len() - 1];
             let incoming = reply_threat(self.statics(), last, player);
-            return score(last, player, &incoming);
+            return score_with(last, self.statics(), player, &incoming, self.policy.fit);
         }
         let dd = self.depth_discount();
         let mut total = 0.0f64;
@@ -214,7 +214,7 @@ impl<'a> Rollout<'a> {
         let mut w = 1.0f64;
         for end in ends {
             let incoming = reply_threat(self.statics(), end, player);
-            total += w * score(end, player, &incoming);
+            total += w * score_with(end, self.statics(), player, &incoming, self.policy.fit);
             weights += w;
             w *= dd;
         }

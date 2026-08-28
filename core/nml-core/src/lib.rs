@@ -10,6 +10,7 @@ pub mod arbitration;
 pub mod combat;
 pub mod dice;
 pub mod gate;
+pub mod fitted;
 pub mod geom;
 pub mod io;
 pub mod menu;
@@ -78,7 +79,10 @@ pub use rows::{
 };
 pub use rng::GodotRng;
 pub use rules::Registries;
-pub use score::{can_hold_marker, control_gap_in, presence, score, Incoming, NO_INCOMING};
+pub use fitted::{Fitted, Net};
+pub use score::{
+    can_hold_marker, control_gap_in, presence, score, score_with, Incoming, NO_INCOMING,
+};
 pub use sim::{
     folded_slice, land_wounds, melee_threat, member_profiles_of, reply_threat, resolve,
     resolve_on_board,

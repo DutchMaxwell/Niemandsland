@@ -43,7 +43,7 @@ use crate::io::Seams;
 use crate::menu::{candidates_tuned, Candidate};
 use crate::playout::Policy;
 use crate::rollout::Rollout;
-use crate::score::score;
+use crate::score::score_with;
 use crate::mv::reach::ReachIndex;
 use crate::sim::{reach_index_for_state, reply_threat, Scratch, Unsupported};
 use crate::state::State;
@@ -304,14 +304,23 @@ impl<'a> Search<'a> {
         }
     }
 
-    /// The two whole-search declines, checked before any work is paid for: a
-    /// net-guided playout and the fitted eval are different brains, and a green
-    /// gate against either would be measuring the wrong thing.
+    /// The two whole-search declines, checked before any work is paid for.
+    ///
+    /// `playout_net` stays refused (NML-1142): `AiPlanner._policy_step_net`
+    /// (ai_planner.gd:677-709) picks each unit's move with `AiClone.scores` over
+    /// `AiClone.menu_tuples` — a POLICY net carrying `row_w1`/`act_dim` out of
+    /// `netlab/clone_train.py`, with its own forward, its own action vector and
+    /// live terrain/LOS callables. It is not the encoder eval this crate serves,
+    /// so approximating it with one would be measuring the wrong brain.
+    ///
+    /// `fit_mode` is now served — but only with a net actually loaded. An act
+    /// recorded under the fitted eval that reaches a search with none would
+    /// otherwise be answered by the hand eval, green and wrong.
     fn admissible(&self) -> Result<(), Unsupported> {
         if !self.act.heuristic_playout() {
             return Err(Unsupported::NetPlayout);
         }
-        if self.act.fit_mode {
+        if self.act.fit_mode && self.roll.policy.fit.is_none() {
             return Err(Unsupported::FittedEval);
         }
         Ok(())
@@ -331,7 +340,8 @@ impl<'a> Search<'a> {
     ) -> Result<(f64, Vec<ScoredRow>), Unsupported> {
         let statics = self.roll.policy.statics;
         let terrain = self.roll.policy.terrain;
-        let base = score(state, player, &reply_threat(statics, state, player));
+        let fit = self.roll.policy.fit;
+        let base = score_with(state, statics, player, &reply_threat(statics, state, player), fit);
         let mut scored: Vec<ScoredRow> = Vec::new();
         let hero_attach = self.roll.policy.seams.hero_attach;
         for i in 0..state.units() {
@@ -353,7 +363,8 @@ impl<'a> Search<'a> {
             };
             for cand in menu {
                 let next = self.roll.policy.resolve(state, &cand)?;
-                let s = score(&next, player, &reply_threat(statics, &next, player));
+                let s =
+                    score_with(&next, statics, player, &reply_threat(statics, &next, player), fit);
                 scored.push(ScoredRow {
                     idx: scored.len(),
                     unit_key: key.to_string(),
