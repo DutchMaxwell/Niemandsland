@@ -2698,13 +2698,23 @@ func _commander_close_order(unit: GameUnit, default_target: GameUnit, prev: Dict
 		"why": "continue standing close order — keep closing on one enemy across rounds"}
 
 
+## The registry-gated Caster gate: "Caster(X)" OR the army-book "Caster Group" pool — the two forms
+## GameUnit.is_caster() accepts. NML-1112: the lookup no longer prefix-matches, so the Group form has
+## to be named here; before, a "Caster Group" unit (AoF goblin Shaman Circle) passed as plain "Caster".
+static func _caster_rule_active(gu: GameUnit) -> bool:
+	if gu == null:
+		return false
+	return RulesRegistry.unit_rule_active(gu, "Caster") \
+		or RulesRegistry.unit_rule_active(gu, "Caster Group")
+
+
 ## Whether ANY member of the unit (itself or an attached hero) is a Caster — the caster role package.
 func _unit_has_caster(unit: GameUnit) -> bool:
-	if RulesRegistry.unit_rule_active(unit, "Caster"):
+	if _caster_rule_active(unit):
 		return true
 	if unit.has_method("get_attached_heroes"):
 		for h in unit.get_attached_heroes():
-			if h != null and RulesRegistry.unit_rule_active(h, "Caster"):
+			if _caster_rule_active(h):
 				return true
 	return false
 
@@ -4102,7 +4112,7 @@ func _plan_casts(unit: GameUnit, report: Dictionary = {}) -> Array:
 		var member := m as GameUnit
 		if member == null or member.get_alive_count() == 0 or not member.is_caster():
 			continue
-		if not RulesRegistry.unit_rule_active(member, "Caster"):
+		if not _caster_rule_active(member):
 			continue   # system-scoped gate: the rule only fires where the book fields it
 		var hold: Array = []
 		var plan := _plan_member_cast(unit, member, hold)

@@ -75,6 +75,24 @@ def cells_differ(got, want) -> bool:
     return got != want if gi else abs(got - want) > 1e-9
 
 
+#: NML-1112 replay switch, NOT a game knob — the sibling of
+#: `list_to_profile.LEGACY_CORE_SELFPLAY` for the rule READING. `core_selfplay.gd`
+#: runs no aura expansion, so a "Furious Aura" carrier in this corpus answered the
+#: "Furious" query only through the pre-NML-1112 prefix match; two of the eight
+#: games carry such a unit and recorded it into column 18 (the flag) and column 13
+#: (melee EV). Neither reading is game-true — a real aura grants unit-wide, the
+#: prefix gave it to the carrier alone. This gate pins the SEARCH LOOP, not the
+#: rule; the loader gap is NML-1105.
+LEGACY_PREFIX_RULES = True
+
+
+@pytest.fixture(autouse=True)
+def _legacy_prefix_rules():
+    nml_core.set_legacy_prefix_rules(LEGACY_PREFIX_RULES)
+    yield
+    nml_core.set_legacy_prefix_rules(False)
+
+
 def test_board_rows_and_features_match_every_recorded_activation():
     names = [n for n, _, _ in games()]
     assert names, f"no games under {ORACLE}"
@@ -161,3 +179,41 @@ def test_the_committed_rule_vocabulary_covers_the_whole_corpus():
                 core.board_rows(core.state_of(act["state"]))
         unknown |= set(core.unknown_rules())
     assert not unknown, f"rules outside the committed vocabulary: {sorted(unknown)}"
+
+
+def test_red_the_legacy_prefix_reading_is_what_this_corpus_recorded():
+    """The shim, pinned both ways on the unit that made it necessary.
+
+    `alien_hives_1000_vs_battle_brothers_1000_s101` slot `p1_0_lezKVcK` carries
+    "Furious Aura" and no plain "Furious". Under the legacy prefix reading the
+    Furious flag (board column 18) is 1, as recorded; under the shipped exact
+    reading it is 0 — which is what makes this a fixture and not a bug.
+    """
+    name = "alien_hives_1000_vs_battle_brothers_1000_s101"
+    hit = [g for g in games() if g[0] == name]
+    if not hit:
+        pytest.skip(f"{name} not in {ORACLE}")
+    _, _, acts_path = hit[0]
+    lines = [json.loads(l) for l in open(acts_path)]
+    act = next(o for o in lines if o.get("kind") == "act")
+    rules = act["state"]["units"]["p1_0_lezKVcK"]["prof"]["special_rules"]
+    assert "Furious Aura" in rules and "Furious" not in rules, rules
+
+    #: `BattleSim.FLAG_RULES` slot for Furious — rows.rs:51, row column 18.
+    FURIOUS_COL = 18
+    flags = {}
+    for legacy in (True, False):
+        nml_core.set_legacy_prefix_rules(legacy)
+        core = nml_core.load(REPO_ROOT)
+        core.set_header(lines[0])
+        state = core.state_of(act["state"])
+        ids = core.board_row_indices(state)
+        ri = ids.index(0)
+        flags[legacy] = core.board_rows(state)[ri][FURIOUS_COL]
+    nml_core.set_legacy_prefix_rules(LEGACY_PREFIX_RULES)
+
+    assert flags[True] == 1, "the prefix reading is what the corpus recorded"
+    assert flags[False] == 0, (
+        "the shipped exact reading must NOT see 'Furious' in 'Furious Aura' — "
+        "if this is 1 the NML-1112 fix has been undone"
+    )

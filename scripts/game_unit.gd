@@ -246,13 +246,25 @@ func get_special_rules() -> Array:
 	return unit_properties.get("special_rules", [])
 
 
-## Checks if this unit has a specific special rule.
+## Whether the rule string `candidate` names `rule` — NML-1112, the single truth for every
+## special-rule lookup. A match is the EXACT name, or the name followed by a parenthesised
+## qualifier: the rating form "Tough(3)" and the " (spell)" grant mark of main.gd. A bare prefix
+## is NOT a match, so "Fearless" is not "Fear", "Ambush Beacon" is not "Ambush" and
+## "Caster Group" is not "Caster" — each of those is a rule of its own.
+static func rule_name_matches(candidate: String, rule: String) -> bool:
+	var s := candidate.strip_edges()
+	if s == rule:
+		return true
+	return s.begins_with(rule) and s.substr(rule.length()).strip_edges().begins_with("(")
+
+
+## Checks if this unit has a specific special rule (exact name or its parametrised form).
 func has_special_rule(rule: String) -> bool:
 	var rules = get_special_rules()
 	for r in rules:
-		if r is String and r.begins_with(rule):
+		if r is String and rule_name_matches(r, rule):
 			return true
-		elif r is Dictionary and r.get("name", "").begins_with(rule):
+		elif r is Dictionary and rule_name_matches(str(r.get("name", "")), rule):
 			return true
 	return false
 
