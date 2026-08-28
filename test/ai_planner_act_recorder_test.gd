@@ -168,8 +168,14 @@ func test_begin_and_finish_write_header_and_act_line() -> void:
 	assert_bool(header.has("knobs")).is_true()
 	for knob in ["top_k", "horizon", "tail_cap_p1", "tail_cap_p2", "imagined_round_end",
 			"depth_discount", "seat_mode", "playout_margin", "playout_rich",
-			"seam_cast", "seam_spacing"]:
+			"seam_cast", "seam_spacing", "dice"]:
 		assert_bool((header["knobs"] as Dictionary).has(knob)).is_true()
+	# NML-1073 M5 D1-B7: which RESOLVER produced the row. The table has exactly one —
+	# every combat die goes through main._solo_tray_roll — so a header written HERE is
+	# always "table"; the fast trainer stamps the same key from its own `dice` knob, whose
+	# default is still "expected" (selfplay.py DICE_MODES). Without this a reader cannot
+	# tell an expected-value corpus from a real-dice one.
+	assert_str(str((header["knobs"] as Dictionary).get("dice", ""))).is_equal("table")
 	assert_object(header.get("terrain")).is_null()   # no terrain_type_at seam in this fixture
 
 	var act := JSON.parse_string(lines[1]) as Dictionary

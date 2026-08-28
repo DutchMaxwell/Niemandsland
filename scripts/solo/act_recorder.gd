@@ -173,7 +173,14 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# GDScript pool does. CAVEAT: the header is stamped ONCE per game, so a MIXED-seat A/B
 			# arm (fold on one side only) must run with NML_CORE unset — the GDScript path reads the
 			# knob per pick and is always seat-correct.
-			"hero_attach": BattleSim.hero_fold_enabled()}}
+			"hero_attach": BattleSim.hero_fold_enabled(),
+			# NML-1073 M5 D1-B7: which RESOLVER produced this corpus row. The table has only
+			# one — every combat die goes through main._solo_tray_roll — so this side is the
+			# constant "table"; the fast trainer stamps the same key from its own `dice` knob
+			# (selfplay.py `DICE_MODES`), whose default is still "expected". A reader can then
+			# tell an expected-value corpus from a real-dice one without guessing at the file
+			# name. Inert for the Rust seam: plain.rs `knobs_of` reads no such key.
+			"dice": "table"}}
 
 
 ## Reaches the live TerrainOverlay the same way SoloController's terrain_type_at

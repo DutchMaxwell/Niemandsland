@@ -750,6 +750,9 @@ static func search_knobs() -> Dictionary:
 		"playout_rich": AiPlanner.playout_rich(),
 		"playout_margin": AiPlanner.close_margin(),
 		"playout_fired": AiPlanner.playout_arbitrations,
+		# NML-1073 M5 D1-B7: the resolver behind this game's combat, the same key the act
+		# corpus header carries (act_recorder.gd `_header_line`). Constant on the table.
+		"dice": "table",
 	}
 
 
