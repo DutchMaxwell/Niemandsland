@@ -22,6 +22,15 @@ var _army_books: Dictionary = {}
 ## Cached common/system rule responses (game-system id -> response data)
 var _common_rules_cache: Dictionary = {}
 
+## Which source filled `_common_rules_cache` per game-system id ("snapshot" / "api"), so the
+## memo hit re-stamps the same provenance the first read did.
+var _common_rules_source: Dictionary = {}
+
+## Snapshot army books (armyId -> book-shaped snapshot data). Kept apart from `_army_books`
+## on purpose: that one holds FULL API books (with `units`, which the share-link path needs)
+## and must never be served a units-less snapshot.
+var _snapshot_books: Dictionary = {}
+
 # =============================================================================
 # NML-1126: rule-TEXT provenance
 # =============================================================================
@@ -38,6 +47,26 @@ var _common_rules_cache: Dictionary = {}
 static var rule_text_ok := true
 static var rule_text_source := "none"
 
+## NML-1115: the PRIVATE army-book snapshot the game prefers over the live API. It carries
+## exactly the fields this parser reads (book name, specialRules/customRules, spells,
+## versionString, modifiedAt) as `<dir>/<system>/<armyId>.json` + `<dir>/<system>/_common.json`,
+## written by a private tool outside this repository. It is a CORPUS-RECORDING instrument, not
+## a product feature: `NML_ARMY_BOOKS_DIR` points a fleet box at the copy rsynced to it, and
+## nothing ships a snapshot to players — an ordinary import finds none, says so quietly and
+## fetches from Army Forge exactly as before. `user://army_books/` is only the local default
+## for a hand-placed copy. NEVER `res://`: THIRD_PARTY.md forbids bundling OPR rule prose in
+## the repo or the exported .pck. Books drift upstream weekly, so a pinned snapshot is what
+## makes a RECORDED game reproducible at all.
+const SNAPSHOT_USER_DIR := "user://army_books"
+const SNAPSHOT_DIR_ENV := "NML_ARMY_BOOKS_DIR"
+
+## The snapshot's identity, read once out of its `_manifest.json` and stamped into every act
+## header (AiActRecorder._header_line, key "books"), so a corpus row names the exact texts it
+## played with. Both empty while no snapshot has answered.
+static var snapshot_sha256 := ""
+static var snapshot_generated := ""
+static var _snapshot_manifest_read := false
+
 
 ## Resets the rule-text stamp. Production never needs it — one arena game is one process —
 ## but a test (and any harness playing several games in one process) must be able to start
@@ -45,6 +74,9 @@ static var rule_text_source := "none"
 static func reset_rule_text_stamp() -> void:
 	rule_text_ok = true
 	rule_text_source = "none"
+	snapshot_sha256 = ""
+	snapshot_generated = ""
+	_snapshot_manifest_read = false
 
 
 ## The ONE place a failed rule-text fetch is recorded: LOUD (push_error, naming the army
@@ -83,6 +115,91 @@ static func book_index_entry(army_id: String, system_abbrev: String) -> Dictiona
 		return {}
 	var entry: Variant = (section as Dictionary).get(army_id, {})
 	return entry if entry is Dictionary else {}
+
+
+# =============================================================================
+# NML-1115: the book SNAPSHOT — the rule TEXT without the network
+# =============================================================================
+## Where the snapshot lives: the env override first (a fleet box gets the pool rsynced next to
+## the AI lists), else the local `user://` default. Returns a directory path, existing or not.
+static func snapshot_dir() -> String:
+	var env := OS.get_environment(SNAPSHOT_DIR_ENV)
+	return env if not env.is_empty() else SNAPSHOT_USER_DIR
+
+
+## Reads one JSON file out of the snapshot directory. {} when absent or unparsable — the
+## caller decides how loud that is (a missing BOOK is loud, a missing manifest is not: the
+## texts can be present and usable while only the pin is unknown).
+static func _snapshot_json(rel_path: String) -> Dictionary:
+	var path := snapshot_dir().path_join(rel_path)
+	if not FileAccess.file_exists(path):
+		return {}
+	var text := FileAccess.get_file_as_string(path)
+	if text.is_empty():
+		return {}
+	var json := JSON.new()
+	if json.parse(text) != OK or not (json.data is Dictionary):
+		push_error("OPRApiClient: army book snapshot file did not parse: %s" % path)
+		return {}
+	return json.data
+
+
+## Pins the snapshot ONCE per process: its manifest sha256 (a digest over the per-file
+## digests) and generation time. Called on the first snapshot hit, so a game that never
+## touched the snapshot leaves both empty and the act header says so.
+static func _pin_snapshot() -> void:
+	if _snapshot_manifest_read:
+		return
+	_snapshot_manifest_read = true
+	var manifest := _snapshot_json("_manifest.json")
+	snapshot_sha256 = str(manifest.get("sha256", ""))
+	snapshot_generated = str(manifest.get("generated", ""))
+
+
+## The snapshot's copy of one army book, or {} on a miss. Book-SHAPED, so
+## `_extract_rule_descriptions` / `_extract_spells` consume it exactly like an API payload.
+func _snapshot_book(army_id: String, game_system_abbrev: String) -> Dictionary:
+	if army_id.is_empty() or game_system_abbrev.is_empty():
+		return {}
+	if _snapshot_books.has(army_id):
+		return _snapshot_books[army_id]
+	var data := _snapshot_json("%s/%s.json" % [game_system_abbrev, army_id])
+	if not data.has("name"):
+		return {}
+	_snapshot_books[army_id] = data
+	_pin_snapshot()
+	return data
+
+
+## Is a snapshot EXPECTED here? True when the env names one (a fleet box always does, even
+## if the rsync failed — that case must scream) or when the local directory exists. False on
+## an ordinary install, which is never given one and where a miss is the normal reading.
+static func _snapshot_expected() -> bool:
+	return not OS.get_environment(SNAPSHOT_DIR_ENV).is_empty() \
+		or DirAccess.dir_exists_absolute(SNAPSHOT_USER_DIR)
+
+
+## One place a snapshot miss is reported. LOUD where a snapshot was expected (NML-1126's
+## style: a corpus box must not quietly fall through to the network), a plain warning where
+## none is configured at all — otherwise every ordinary import would raise an error per army
+## for a file nobody ships it. Either way the fallback stamps "api", and that stamp
+## is what `arena_match.rule_text_refused` acts on; the loudness is for humans, not the gate.
+static func _snapshot_miss(book_id: String, system: String) -> void:
+	var msg := "OPRApiClient: army book snapshot miss %s (%s) under '%s' — falling back to the LIVE API; this game's rule text is not pinned." % [
+		book_id, system, snapshot_dir()]
+	if _snapshot_expected():
+		push_error(msg)
+	else:
+		push_warning(msg)
+
+
+## `rule_text_source` for the act header. "api" is STICKY: once a single description came
+## off the network the game is not a snapshot game any more, whatever landed afterwards —
+## which is exactly the reading `arena_match.rule_text_refused` refuses to record.
+static func _note_rule_text_source(source: String) -> void:
+	if rule_text_source == "api":
+		return
+	rule_text_source = source
 
 
 ## Army data structure
@@ -538,14 +655,24 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 
 	# The book REFINES the faction name the index already set (NML-1115) and is the only
 	# source of rule texts + spells; a failure now costs the texts, not the registry key.
+	# And the book itself comes from the pinned SNAPSHOT first, the live API only when that
+	# misses: the API's books drift weekly (one of the 87 the pools use was edited upstream
+	# the day before this landed), so an unpinned game silently plays different movement
+	# bands from the one recorded a week earlier. A miss is LOUD and stamps "api", which is
+	# a reading a corpus run refuses to record.
 	if not army.army_id.is_empty():
-		var book_data = await _fetch_army_book(army.army_id, army.game_system_abbrev)
+		var book_data := _snapshot_book(army.army_id, army.game_system_abbrev)
+		var book_source := "snapshot"
+		if book_data.is_empty():
+			book_source = "api"
+			_snapshot_miss(army.army_id, army.game_system_abbrev)
+			book_data = await _fetch_army_book(army.army_id, army.game_system_abbrev)
 		if not book_data.is_empty():
 			army.faction_name = book_data.get("name", "")
 			# Normalize faction name for folder: "Alien Hives" -> "alien_hives"
 			army.faction_folder = army.faction_name.to_lower().replace(" ", "_").replace("-", "_")
 			# Army-book special-rule descriptions (faction-specific take precedence).
-			_extract_rule_descriptions(army, book_data)
+			_extract_rule_descriptions(army, book_data, book_source)
 			# Faction spell list (shown for caster units).
 			_extract_spells(army, book_data)
 
@@ -1204,7 +1331,7 @@ static func _game_system_id(abbrev: String) -> int:
 
 ## Pulls special-rule name -> description pairs from an army-book response.
 ## Army-book rules take precedence over the shared common rules.
-func _extract_rule_descriptions(army: OPRArmy, book_data: Dictionary) -> void:
+func _extract_rule_descriptions(army: OPRArmy, book_data: Dictionary, source := "api") -> void:
 	for key in ["specialRules", "customRules"]:
 		var rules = book_data.get(key, [])
 		if not (rules is Array):
@@ -1215,7 +1342,8 @@ func _extract_rule_descriptions(army: OPRArmy, book_data: Dictionary) -> void:
 				var desc := str(rule.get("description", ""))
 				if not rname.is_empty() and not desc.is_empty():
 					army.rule_descriptions[rname] = desc
-					rule_text_source = "api"   # NML-1126: text really landed, not just a 200
+					# NML-1126: text really landed, not just a 200. NML-1115: from where.
+					_note_rule_text_source(source)
 
 
 ## Parse the faction's spell list from the army book. Each spell carries its casting cost
@@ -1253,8 +1381,18 @@ static func spell_radius_inches(effect: String) -> int:
 func _fetch_common_rules(army: OPRArmy) -> void:
 	var gs_id := _game_system_id(army.game_system_abbrev)
 	if _common_rules_cache.has(gs_id):
-		_merge_common_descriptions(army, _common_rules_cache[gs_id])
+		_merge_common_descriptions(army, _common_rules_cache[gs_id],
+			str(_common_rules_source.get(gs_id, "api")))
 		return
+	# The snapshot's copy of this system's shared rules + traits, same shape as the API's.
+	var snap := _snapshot_json("%s/_common.json" % army.game_system_abbrev)
+	if snap.has("rules") or snap.has("traits"):
+		_pin_snapshot()
+		_common_rules_cache[gs_id] = snap
+		_common_rules_source[gs_id] = "snapshot"
+		_merge_common_descriptions(army, snap, "snapshot")
+		return
+	_snapshot_miss("_common", army.game_system_abbrev)
 	var url = "%s/rules/common/%d" % [API_BASE_URL, gs_id]
 	var error = _book_http_request.request(url)
 	if error != OK:
@@ -1274,12 +1412,13 @@ func _fetch_common_rules(army: OPRArmy) -> void:
 			army.army_id, army.game_system_abbrev)
 		return
 	_common_rules_cache[gs_id] = json.data
-	_merge_common_descriptions(army, json.data)
+	_common_rules_source[gs_id] = "api"
+	_merge_common_descriptions(army, json.data, "api")
 
 
 ## Merges common "rules" + "traits" ({name, description}) into the army's map,
 ## keeping any army-book-specific description already present (precedence).
-func _merge_common_descriptions(army: OPRArmy, data: Dictionary) -> void:
+func _merge_common_descriptions(army: OPRArmy, data: Dictionary, source := "api") -> void:
 	for key in ["rules", "traits"]:
 		var arr = data.get(key, [])
 		if not (arr is Array):
@@ -1292,7 +1431,7 @@ func _merge_common_descriptions(army: OPRArmy, data: Dictionary) -> void:
 					continue
 				if not army.rule_descriptions.has(rname):
 					army.rule_descriptions[rname] = desc
-					rule_text_source = "api"   # NML-1126
+					_note_rule_text_source(source)   # NML-1126 / NML-1115
 
 
 ## Returns the description for a special rule, or "" if unknown. Handles

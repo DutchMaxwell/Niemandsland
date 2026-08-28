@@ -173,6 +173,16 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 		# imported an army). Additive: every other key on this line is unchanged.
 		"rule_text_ok": OPRApiClient.rule_text_ok,
 		"rule_text_source": OPRApiClient.rule_text_source,
+		# NML-1115: WHICH texts. `rule_text_source` says whether the prose came off the
+		# network; this says which pinned set answered. The army-forge books drift weekly
+		# (79 of the 87 the pools use were at 3.5.3, 8 at 3.5.2, one edited upstream the day
+		# before), so two corpora recorded a week apart against the live API are not the same
+		# corpus and nothing on this line used to say so. `sha256` is the snapshot manifest's
+		# digest over its per-file digests; both fields stay "" for an API game, which is
+		# itself the reading. Additive: every other key on this line is unchanged.
+		"books": {"source": OPRApiClient.rule_text_source,
+			"sha256": OPRApiClient.snapshot_sha256,
+			"generated": OPRApiClient.snapshot_generated},
 		"knobs": {"top_k": AiPlanner.top_k_default(), "horizon": AiPlanner.horizon(),
 			"tail_cap_p1": AiPlanner._tail_cap_for(1), "tail_cap_p2": AiPlanner._tail_cap_for(2),
 			"imagined_round_end": AiPlanner.imagined_round_end_enabled(),

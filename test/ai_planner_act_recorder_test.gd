@@ -630,3 +630,45 @@ func test_header_stamps_a_healthy_import_as_ok_from_the_api() -> void:
 	assert_bool(bool(header.get("rule_text_ok", false))).is_true()
 	assert_str(str(header.get("rule_text_source", ""))).is_equal("api")
 	OPRApiClient.reset_rule_text_stamp()
+
+
+## NML-1115: `rule_text_source` says whether the text came off the network; `books` says
+## WHICH pinned set answered. Without it two corpora recorded a week apart against the live
+## API look identical on this line while playing different movement bands — the books drift
+## weekly. Both values stay "" for an API game, which is itself the reading.
+func test_header_pins_the_army_book_snapshot_that_answered() -> void:
+	OPRApiClient.reset_rule_text_stamp()
+	OPRApiClient.rule_text_source = "snapshot"
+	OPRApiClient.snapshot_sha256 = "cafef00d"
+	OPRApiClient.snapshot_generated = "2026-08-28T16:14:42Z"
+
+	var state := _state()
+	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
+	AiActRecorder.finish(AiActRecorder.begin(state, 1, pool, Callable()),
+		{"used": true, "unit_key": "A", "action": {"unit": "A", "kind": AiDecision.Action.HOLD}})
+
+	var header := JSON.parse_string(_dump_lines()[0]) as Dictionary
+	var books := header.get("books", {}) as Dictionary
+	assert_str(str(books.get("source", ""))).is_equal("snapshot")
+	assert_str(str(books.get("sha256", ""))).is_equal("cafef00d")
+	assert_str(str(books.get("generated", ""))).is_equal("2026-08-28T16:14:42Z")
+	OPRApiClient.reset_rule_text_stamp()
+
+
+## The other reading: an unpinned game names no snapshot, so a reader can tell the two apart
+## off the artefact alone.
+func test_header_books_is_empty_for_an_unpinned_api_game() -> void:
+	OPRApiClient.reset_rule_text_stamp()
+	OPRApiClient.rule_text_source = "api"
+
+	var state := _state()
+	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
+	AiActRecorder.finish(AiActRecorder.begin(state, 1, pool, Callable()),
+		{"used": true, "unit_key": "A", "action": {"unit": "A", "kind": AiDecision.Action.HOLD}})
+
+	var books := (JSON.parse_string(_dump_lines()[0]) as Dictionary).get("books", {}) as Dictionary
+	assert_str(str(books.get("source", ""))).is_equal("api")
+	assert_str(str(books.get("sha256", "MISSING"))).is_equal("")
+	assert_str(str(books.get("generated", "MISSING"))).is_equal("")
+	OPRApiClient.reset_rule_text_stamp()
+

@@ -857,12 +857,18 @@ func _stringify_keys(d: Dictionary) -> Dictionary:
 	return out
 
 
-## NML-1126: the corpus-provenance seam. `NML_REQUIRE_RULE_TEXT=1` turns a text-less import
-## from a silently banked game into a refused one. Pure and static so a test can drive the
-## decision without booting the arena: env unset is always false (today's behaviour), env set
-## refuses exactly the import that produced NO rule descriptions.
-static func rule_text_refused(descriptions: Dictionary) -> bool:
-	return OS.get_environment("NML_REQUIRE_RULE_TEXT") == "1" and descriptions.is_empty()
+## The corpus-provenance seam. `NML_REQUIRE_RULE_TEXT=1` turns an import whose rule text
+## cannot be trusted from a silently banked game into a refused one — NML-1126: no text at
+## all; NML-1115: text off the live API instead of the pinned snapshot. Pure and static so a
+## test can drive the decision without booting the arena: env unset is always false (today's
+## behaviour), an unstamped `source` keeps the NML-1126 reading exactly.
+static func rule_text_refused(descriptions: Dictionary, source := "") -> bool:
+	if OS.get_environment("NML_REQUIRE_RULE_TEXT") != "1":
+		return false
+	# NML-1126: no text at all. NML-1115: text off the LIVE API — the army-forge books change
+	# upstream weekly, so an API game pins nothing and a corpus that mixes API vintages is
+	# unreproducible by construction. A corpus game must come from the snapshot.
+	return descriptions.is_empty() or source == "api"
 
 
 func _import_and_spawn(main: Node, army_manager: Node, fixture: String, player_id: int) -> bool:
@@ -883,10 +889,15 @@ func _import_and_spawn(main: Node, army_manager: Node, fixture: String, player_i
 	# text-less import REFUSES: quit here, BEFORE any arena_*.json is written, so the runner's
 	# "no arena_*.json" branch fires and the game is retried/flagged instead of banked. Env unset
 	# (the default) is today's behaviour byte for byte.
-	if rule_text_refused(army.rule_descriptions):
-		print("ARENA_FAIL rule text missing for %s" % army.name)
-		printerr("[ARENA] FATAL: player %d rule text missing — '%s' (%s) imported 0 rule descriptions; NML_REQUIRE_RULE_TEXT=1 refuses to record this game" % [
-			player_id, army.name, fixture])
+	if rule_text_refused(army.rule_descriptions, OPRApiClient.rule_text_source):
+		if army.rule_descriptions.is_empty():
+			print("ARENA_FAIL rule text missing for %s" % army.name)
+			printerr("[ARENA] FATAL: player %d rule text missing — '%s' (%s) imported 0 rule descriptions; NML_REQUIRE_RULE_TEXT=1 refuses to record this game" % [
+				player_id, army.name, fixture])
+		else:
+			print("ARENA_FAIL rule text from live api for %s" % army.name)
+			printerr("[ARENA] FATAL: player %d rule text came from the LIVE API — '%s' (%s) found no army-book snapshot under '%s'; NML_REQUIRE_RULE_TEXT=1 refuses to record an unpinned game" % [
+				player_id, army.name, fixture, OPRApiClient.snapshot_dir()])
 		quit(1)
 		return false
 	army.player_id = player_id
