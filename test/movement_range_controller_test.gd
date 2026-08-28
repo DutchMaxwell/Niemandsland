@@ -146,6 +146,48 @@ func test_move_bands_once_per_game_feat_stays_out_of_bands() -> void:
 	assert_int(b["rush"]).is_equal(12)
 
 
+## NML-1106 (TABLE BUG, found in the qbf_ref arena act header): Melee Shrouding is an ENEMY debuff —
+## "Enemies get -3\" movement … when trying to charge units where all models have this rule". The
+## description pass scraped the -3\" and braked the CARRIER: battle_brothers_2000's Elite Pathfinder
+## (Melee Shrouding Aura) was recorded with rush 9\" where the rules say 12\". The charger-side
+## application (SoloController.melee_shroud_charge_in) is the only place this -3\" belongs.
+func test_parse_modifier_enemy_targeted_text_never_touches_the_carrier() -> void:
+	var d := "Enemies get -3\" movement to a min. of 6\" when trying to charge units where all " \
+		+ "models have this rule."
+	var mod := MovementRangeController.move_modifier_from_description(d)
+	assert_int(mod["advance"]) \
+		.override_failure_message("an enemy-targeted rule moved the CARRIER's advance band (NML-1106)") \
+		.is_equal(0)
+	assert_int(mod["rush"]) \
+		.override_failure_message("an enemy-targeted rule braked the CARRIER's own rush — the 12\"-becomes-9\" bug (NML-1106)") \
+		.is_equal(0)
+
+
+func test_move_bands_melee_shrouding_leaves_its_carrier_at_full_reach() -> void:
+	# The bands-level half of NML-1106: the aura's carrier keeps the plain 6/12.
+	var b := _controller().move_bands_for_props({
+		"special_rules": ["Melee Shrouding", "Fearless"],
+		"rule_descriptions": {"Melee Shrouding": "Enemies get -3\" movement to a min. of 6\" when " \
+			+ "trying to charge units where all models have this rule."}})
+	assert_int(b["advance"]).is_equal(6)
+	assert_int(b["rush"]) \
+		.override_failure_message("Melee Shrouding braked its own carrier's rush band (NML-1106)") \
+		.is_equal(12)
+
+
+func test_move_bands_self_modifier_text_still_applies_after_the_enemy_guard() -> void:
+	# The counter-case: a SELF modifier ("Moves -2\" … -4\" …", the official Slow text) must keep
+	# working — the NML-1106 guard may only eat enemy-subject sentences.
+	var d := "Moves -2\" when using Advance, and -4\" when using Rush/Charge."
+	var mod := MovementRangeController.move_modifier_from_description(d)
+	assert_int(mod["advance"]).is_equal(-2)
+	assert_int(mod["rush"]).is_equal(-4)
+	var b := _controller().move_bands_for_props({
+		"special_rules": ["Slow"], "rule_descriptions": {"Slow": d}})
+	assert_int(b["advance"]).is_equal(4)
+	assert_int(b["rush"]).is_equal(8)
+
+
 func test_parse_modifier_both_bands_or_still_accrues() -> void:
 	# The counter-case guarding B10: ONE modifier naming both actions with a plain "or" (no "either")
 	# is NOT a pick-one — it applies to both bands, permanently. The pick-one guard must not eat it.
