@@ -293,7 +293,6 @@ var _solo_los_cache: Dictionary = {}         # {target_id, count, at} — thrott
 # Solo P2 auto-game state (goal 003 P2): alternation queue + match end.
 const SOLO_GAME_ROUNDS := 4                  # OPR standard match length (rounds)
 const SOLO_AI_TAIL_DELAY_S := 1.2            # readable pause between the AI's unprompted tail activations
-const SOLO_DEPLOY_WALL_CLEARANCE_M := 0.02   # a deploy sample point within 2 cm (~0.8") of a container/ruin wall is blocked (finding 1)
 ## NML-949 — the match-level rule store (OPRArmyManager.rule_state). Falls back to a local
 ## dictionary before the army manager exists (early boot) so the properties below never
 ## null-crash; that fallback is pre-game state and is never saved.
@@ -2357,54 +2356,12 @@ func _on_solo_deploy_pressed() -> void:
 	if terrain_overlay != null:
 		for o in terrain_overlay.get_objectives():
 			objectives.append(Vector2(o.x, o.z))
-	# Physics probe against SOLID props (walls, containers, trees, free-placed sandbox ruins — those are
-	# NOT in the map grid): a small sphere hovering above base height; anything tall it touches that is
-	# not a miniature blocks the spot (field test: models deployed inside walls).
-	var space := terrain_overlay.get_world_3d().direct_space_state if terrain_overlay != null else null
-	var probe := PhysicsShapeQueryParameters3D.new()
-	var probe_shape := SphereShape3D.new()
-	probe_shape.radius = 0.02
-	probe.shape = probe_shape
-	probe.collide_with_areas = false
-	var hits_prop := func(p: Vector2) -> bool:
-		if space == null:
-			return false
-		probe.transform = Transform3D(Basis.IDENTITY, Vector3(p.x, 0.07, p.y))
-		for hit in space.intersect_shape(probe, 6):
-			var col: Object = hit.get("collider")
-			if col is Node3D and not (col as Node3D).is_in_group("miniature"):
-				return true
-		return false
-	# Container/ruin WALL SEGMENTS (field-test round 6, finding 1): a container may be a SPAWNED object that
-	# carries wall segments rather than a terrain-GRID cell, so `get_terrain_at_world_position` returns NONE and
-	# the tiny physics probe can miss it — the deploy check must ALSO test the container/ruin walls. A sample
-	# point within SOLO_DEPLOY_WALL_CLEARANCE_M of any wall segment is blocked; combined with the footprint's
-	# base-edge sampling (AiDeployment) this rejects a base whose OUTER EDGE overlaps a container (finding 6).
-	var wall_segs: Array = terrain_overlay.get_wall_segments_world() \
-		if terrain_overlay != null and terrain_overlay.has_method("get_wall_segments_world") else []
-	var near_wall := func(p: Vector2) -> bool:
-		for wseg in wall_segs:
-			if MovementPlanner.point_seg_distance(p, wseg[0], wseg[1]) < SOLO_DEPLOY_WALL_CLEARANCE_M:
-				return true
-		return false
-	var blocked_normal := func(p: Vector2) -> bool:
-		if hits_prop.call(p) or near_wall.call(p):
-			return true
-		if terrain_overlay == null:
-			return false
-		# Deploy doctrine (maintainer + five-game study T1): FOREST and RUIN floors are LEGAL deploy spots —
-		# cover placement is good play ("nicht falsch, in Deckung zu platzieren"), and blanket-blocking them
-		# forced mid-zone open-ground deploys. Walls still block via near_wall; DANGEROUS (first move pays
-		# tests) and solid CONTAINER stay blocked.
-		var t: int = terrain_overlay.get_terrain_at_world_position(Vector3(p.x, 0.0, p.y))
-		return t == terrain_overlay.TerrainType.DANGEROUS or t == terrain_overlay.TerrainType.CONTAINER
-	var blocked_flying := func(p: Vector2) -> bool:
-		if hits_prop.call(p) or near_wall.call(p):
-			return true
-		if terrain_overlay == null:
-			return false
-		var t: int = terrain_overlay.get_terrain_at_world_position(Vector3(p.x, 0.0, p.y))
-		return t == terrain_overlay.TerrainType.CONTAINER or t == terrain_overlay.TerrainType.RUINS
+	# The ONE deploy terrain rule (NML-1088b): the physics probe against solid props, the container/ruin
+	# wall test on the overlay DATA, and the terrain class. It lives in AiDeployment so the arena harness
+	# deploys by exactly this rule — same seed, same placement, arena game or interactive game.
+	var blocked_tests: Dictionary = AiDeployment.make_blocked_tests(terrain_overlay)
+	var blocked_normal: Callable = blocked_tests["normal"]
+	var blocked_flying: Callable = blocked_tests["flying"]
 	# Seeded for reproducibility (solo convention); the seed lands in the console + battle log.
 	var seed_value: int = int(Time.get_unix_time_from_system()) % 100000
 	# "Start Deployment" (maintainer flow 2026-07-23, GF v3.5.1 p.6 verbatim): roll-off → the WINNER
