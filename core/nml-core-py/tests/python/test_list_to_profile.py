@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 
 import list_to_profile  # noqa: E402
 from list_to_profile import (  # noqa: E402
+    ROYAL_LEGION_RANGE_BONUS_IN,
     _rule_to_string,
     _rules_in_upgrade_label,
     base_shape_of,
@@ -456,3 +457,87 @@ def test_base_shape_of_reads_a_d5_4b_header_and_survives_an_older_one():
     # RED: a shape this port cannot draw is named, not silently rounded off.
     with pytest.raises(ValueError, match="unknown base_shape"):
         base_shape_of({"base_shape": "hexagon"})
+
+
+# === NML-1108: the registry alias passes ======================================
+
+
+def _aof_profile(faction: str, rules: list[str], **sel_kw) -> dict:
+    """One AoF unit's profile off a bare rule list — the shape the AI lists
+    ship in (rule NAMES, no description text)."""
+    sel = _selection("u", "Warrior", rules=[{"label": r} for r in rules], **sel_kw)
+    return profiles_from_army_forge_json(
+        {"gameSystem": "aof", "units": [sel]}, faction, player=1
+    )["p1_0_u"]
+
+
+def test_a_registry_alias_of_quick_moves_the_bands():
+    """movement_range_controller.gd:164-188 — High Elves' "Highborn" and Human
+    Empire's "Agile" are the SAME primitive (Quick) with different params, and
+    neither name is in the loader's name-based pass. 26 + 2 qag_ref roster
+    units read the table's bands only once this pass exists."""
+    assert _aof_profile("high_elves", ["Highborn"])["move_bands"] == {
+        "advance": 8.0,
+        "rush": 14.0,
+    }
+    assert _aof_profile("human_empire", ["Agile"])["move_bands"] == {
+        "advance": 7.0,
+        "rush": 14.0,
+    }
+    # System-scoped: the same name under a faction that does not field it is inert.
+    assert _aof_profile("goblins", ["Highborn"])["move_bands"] == {
+        "advance": 6.0,
+        "rush": 12.0,
+    }
+    # The NAME pass owns a band the registry may not top up: Fast fills both,
+    # so Highborn adds nothing on top (arena `Silver Cavalry` reads 10"/18").
+    assert _aof_profile("high_elves", ["Fast", "Highborn"])["move_bands"] == {
+        "advance": 10.0,
+        "rush": 18.0,
+    }
+
+
+def test_royal_legion_lands_on_the_rush_band_and_the_shooting_range():
+    """solo_controller.gd:5436 + the registry move pass — Royal Legion is one
+    rule with two halves: +4" range when shooting (unit_profile_dyn's
+    shooting_range_bonus) and +2" on Charge, which rides the rush band via the
+    primitive's `charge_mod`. Both halves hit the same 27 qag_ref units."""
+    prof = _aof_profile("mummified_undead", ["Royal Legion"])
+    assert prof["move_bands"] == {"advance": 6.0, "rush": 14.0}
+    assert prof["shooting_range_bonus"] == 4
+    # The two halves are scoped DIFFERENTLY, and this port keeps the table's
+    # asymmetry: the band half runs through the registry, so a faction whose
+    # book does not field the rule gets nothing; the range half takes the
+    # by-NAME branch first (solo_controller.gd:5443) and falls back to the
+    # constant 4", registry or no registry.
+    plain = _aof_profile("high_elves", ["Royal Legion"])
+    assert plain["move_bands"] == {"advance": 6.0, "rush": 12.0}
+    assert plain["shooting_range_bonus"] == ROYAL_LEGION_RANGE_BONUS_IN == 4
+    # An ALIAS of the primitive (an item-granted one included) is registry-only.
+    assert _aof_profile("high_elves", ["Not A Rule"])["shooting_range_bonus"] == 0
+
+
+def test_bounding_answers_the_activation_advance_bonus_and_leaves_the_bands():
+    """solo_controller.gd:5540 — Bounding's placement is rolled PER
+    ACTIVATION, so it is worst-case reach (3" per die + the flat), never a
+    permanent band. Its primitive is deliberately absent from
+    MOVE_PRIMITIVES, which is why move_bands must stay 6"/12"."""
+    prof = _aof_profile("goblins", ["Bounding"])
+    assert prof["max_activation_advance_bonus_in"] == 4.0
+    assert prof["move_bands"] == {"advance": 6.0, "rush": 12.0}
+    # The Teleport family answers the same field off its own advance_bonus_in;
+    # Ghostly Undead's Ethereal encodes 0.0, so it adds nothing.
+    ghost = _aof_profile("ghostly_undead", ["Ethereal"])
+    assert ghost["max_activation_advance_bonus_in"] == 0.0
+    assert ghost["move_bands"] == {"advance": 6.0, "rush": 12.0}
+
+
+def test_the_legacy_reading_skips_the_registry_passes(monkeypatch):
+    """`LEGACY_CORE_SELFPLAY` replays the pre-NML-1108 loader — no registry
+    pass on the bands, both dynamic fields hardcoded — so the M3-5
+    seed-for-seed gates keep measuring the search loop, not this fix."""
+    monkeypatch.setattr(list_to_profile, "LEGACY_CORE_SELFPLAY", True)
+    prof = _aof_profile("mummified_undead", ["Royal Legion"])
+    assert prof["move_bands"] == {"advance": 6.0, "rush": 12.0}
+    assert prof["shooting_range_bonus"] == 0
+    assert prof["max_activation_advance_bonus_in"] == 0.0
