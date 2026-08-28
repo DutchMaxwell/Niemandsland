@@ -44,6 +44,8 @@ const RAPID_ADVANCE_BONUS: int = 4
 ## (arena act header: a Battle Brothers hero with the Melee Shrouding Aura recorded rush 9\"
 ## instead of 12\"). An explicit phrase list, not a parser rewrite: either the SUBJECT of the
 ## sentence is the enemy, or the carrier is named as the TARGET of the movement.
+## NML-1122: this list is now the FALLBACK — _registry_targets_enemy() settles every rule the
+## mechanics map knows; the phrases only cover rules with NO registry entry.
 const ENEMY_TARGETED_MOVE_PHRASES: Array[String] = [
 	# subject is the enemy
 	"enemies get", "enemies suffer", "enemies have", "enemies take",
@@ -105,9 +107,13 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 	# rule counted and suppress the name fallback — Fast then lost its +4" rush/charge bonus. Now the
 	# fallback fills exactly the missing band.
 	var counted: Dictionary = {}  # rule base name -> {"advance": bool, "rush": bool} already applied
+	var reg_system := RulesRegistry.normalize_system(str(props.get("game_system", "")))
+	var reg_faction := str(props.get("faction_folder", ""))
 	for name in descriptions:
 		if negated.has(name):
 			continue
+		if _registry_targets_enemy(reg_system, reg_faction, _rule_base_name(str(name))):
+			continue  # NML-1122: the registry says these inches belong to a PICKED ENEMY
 		var mod := move_modifier_from_description(str(descriptions[name]))
 		if int(mod["advance"]) != 0 or int(mod["rush"]) != 0:
 			advance += int(mod["advance"])
@@ -165,8 +171,6 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 	# Highborn / Agile → Quick-style mods, Lustbound's charge half via Royal Legion, …) apply their
 	# params to any band the description/name passes did not already cover. Offline-safe: works
 	# without description texts (the bundled AI lists ship stripped).
-	var reg_system := RulesRegistry.normalize_system(str(props.get("game_system", "")))
-	var reg_faction := str(props.get("faction_folder", ""))
 	for r in props.get("special_rules", []):
 		var base2 := _rule_base_name(str(r))
 		if negated.has(base2):
@@ -277,6 +281,20 @@ static func _is_enemy_targeted_move_text(description: String) -> bool:
 		if low.contains(phrase):
 			return true
 	return false
+
+
+## NML-1122: THE REGISTRY, not the prose, decides whom a rule's inches belong to. wood_elves
+## "Speed Debuff" (Yrana, every bundled AoF list; orcs "Waurgazg" the same) picks an enemy unit
+## and grants it Slow, but the army book
+## phrases that as a RELATIVE CLAUSE ("... pick one enemy unit ..., which gets -2\" ...") — no
+## enemy SUBJECT, no "this unit" object, so ENEMY_TARGETED_MOVE_PHRASES cannot see it and the
+## caster braked herself by -2\"/-4\" on top of Wild Veil. The mechanics map already states the
+## truth (Utility Buff, params.target "enemy"), so a rule whose entry declares an enemy target
+## never contributes to its CARRIER's bands, whatever the sentence looks like. The phrase list
+## stays the FALLBACK for rules with NO registry entry (custom/homebrew or unmapped imports).
+static func _registry_targets_enemy(system: String, faction: String, rule_name: String) -> bool:
+	var params: Dictionary = RulesRegistry.lookup(system, faction, rule_name).get("params", {})
+	return str(params.get("target", "")) == "enemy"
 
 
 ## Lowest index at which any of `needles` occurs in `haystack`, or -1 if none do.

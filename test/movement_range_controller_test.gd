@@ -188,6 +188,40 @@ func test_move_bands_self_modifier_text_still_applies_after_the_enemy_guard() ->
 	assert_int(b["rush"]).is_equal(8)
 
 
+## NML-1122 (TABLE BUG, NML-1106 family): wood_elves "Speed Debuff" (the hero Yrana, 3 AoF lists)
+## picks an ENEMY unit and grants it Slow — but the book phrases that as a RELATIVE CLAUSE, which
+## the #441 phrase list cannot see, so the description pass scraped -2\"/-4\" onto the CASTER (on
+## top of Wild Veil). The registry entry already says Utility Buff / params.target "enemy".
+func test_move_bands_registry_enemy_target_never_brakes_the_carrier() -> void:
+	var b := _controller().move_bands_for_props({
+		"game_system": "aof", "faction_folder": "wood_elves",
+		"special_rules": ["Speed Debuff", "Strider"],
+		"rule_descriptions": {"Speed Debuff": "Once per activation, this model may pick one enemy " \
+			+ "unit within 18\" and in line of sight, which gets -2\" when using Advance and -4\" " \
+			+ "when using Rush/Charge actions."}})
+	assert_int(b["advance"]) \
+		.override_failure_message("a registry target:\"enemy\" rule moved the CARRIER's advance band (NML-1122)") \
+		.is_equal(6)
+	assert_int(b["rush"]) \
+		.override_failure_message("Speed Debuff braked its own caster's rush band (NML-1122)") \
+		.is_equal(12)
+
+
+func test_move_bands_self_slow_still_applies_beside_the_registry_guard() -> void:
+	# The counter-case: on the very same (system, faction) a SELF move rule keeps its modifier —
+	# the NML-1122 guard may only eat entries whose registry target is the enemy.
+	var b := _controller().move_bands_for_props({
+		"game_system": "aof", "faction_folder": "wood_elves",
+		"special_rules": ["Slow"],
+		"rule_descriptions": {"Slow": "Moves -2\" when using Advance, and -4\" when using Rush/Charge."}})
+	assert_int(b["advance"]) \
+		.override_failure_message("the NML-1122 guard ate a legitimate SELF advance modifier") \
+		.is_equal(4)
+	assert_int(b["rush"]) \
+		.override_failure_message("the NML-1122 guard ate a legitimate SELF rush modifier") \
+		.is_equal(8)
+
+
 func test_parse_modifier_both_bands_or_still_accrues() -> void:
 	# The counter-case guarding B10: ONE modifier naming both actions with a plain "or" (no "either")
 	# is NOT a pick-one — it applies to both bands, permanently. The pick-one guard must not eat it.
