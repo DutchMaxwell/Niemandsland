@@ -963,6 +963,7 @@ def _play_round(
     spell_reach: dict[str, float] | None = None,
     tray=None,
     dice_tally: dict[str, int] | None = None,
+    roll_log: list | None = None,
 ) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
     dry side hands the tail to the other, and the NEXT round opens with whoever
@@ -981,7 +982,14 @@ def _play_round(
     in the table's own order, and `dice_tally` collects the unported branches
     those activations hit (see `Core.resolve_with_tray`). Nothing else draws
     from the tray in B4 — melee, impact and morale are B5's, which is why the
-    stream is left standing exactly before the morale roll."""
+    stream is left standing exactly before the morale roll.
+
+    `roll_log` is the OUTCOME GATE's seam (NML-1073 M5 D0) and nothing else:
+    when a list is passed, this round appends ONE entry per played activation —
+    the `report["rolls"]` that activation drew, `[]` when it drew none or the
+    tray is off. It is opt-in because the played game must not change: nothing
+    here reads it back, and it is deliberately NOT hung on the log row, which
+    `result_digest` hashes."""
     turn = opener
     last_side = 0
     forked = False
@@ -1043,8 +1051,12 @@ def _play_round(
             )
         if tray is None:
             state = core.resolve_stochastic_rng(state, action, rng)
+            if roll_log is not None:
+                roll_log.append([])
         else:
             state, report = core.resolve_with_tray(state, action, rng, tray)
+            if roll_log is not None:
+                roll_log.append(report["rolls"])
             if dice_tally is not None:
                 dice_tally["activations"] = dice_tally.get("activations", 0) + 1
                 dice_tally["rolls"] = dice_tally.get("rolls", 0) + len(report["rolls"])
@@ -1059,6 +1071,91 @@ def _play_round(
         turn = 2 if turn == 1 else 1
     nxt = (2 if last_side == 1 else 1) if last_side != 0 else opener
     return state, nxt
+
+
+def play_from_state(
+    core,
+    plain: dict[str, Any],
+    profiles: dict[str, dict],
+    opener: int,
+    rng,
+    tray=None,
+    roll_log: list | None = None,
+    dice_tally: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    """NML-1073 M5 D0 — the round loop from a GIVEN state instead of from two
+    army lists and a seed, so a recorded game's own DEPLOYMENT can be the
+    starting position.
+
+    `play_game` owns everything BEFORE round 1: it loads the lists, derives the
+    attachment, draws the board out of the bank, deploys both sides out of the
+    game's own generator and rolls the opener off. None of that is reproducible
+    from a recorded arena game — the table deployed by its OWN mission rule and
+    rolled its OWN opener, and both are already IN the corpus (the first act
+    line's state, and `arena_*.json`'s `opener`). This entry therefore starts
+    where the recording starts and asks the caller for exactly those two
+    things; the header, the profiles and every fidelity knob are the caller's
+    too, because a gate replaying a corpus must set them to that corpus's own
+    vintage.
+
+    Everything from there down is `play_game`'s round loop VERBATIM and shared
+    with it in code, not copied: `_round_start`, `_play_round`,
+    `playout_seize`, `vp_round_add`, `vp_end_bonus`, the marker count and the
+    Face-Off END verdict. Sidecars are off — a gate that judges the RESULT has
+    no use for the counterfactual blocks and they cost more than the game.
+
+    `rng` is the game's own stream, `tray` the SECOND one (see `_play_round`);
+    `roll_log`, when given, collects the rolls per activation so a caller can
+    hold the twin's dice stream against the table's recorded one.
+
+    THE OBJECTIVES KNOB (NML-1073 M5 D8a) is honoured here by INHERITANCE, and
+    that is the only reading that can be right. `play_game` PLACES the markers —
+    three centre-line constants under `objectives="constant"`, the seeded
+    rulebook layout (`nml_core.objective_layout`) under `"rulebook"` — because a
+    fresh game has no board to copy. A game replayed from a recorded state has
+    one: `plain["objectives"]` IS the layout the table played, count, positions
+    and starting ownership together, whichever mode wrote it. Re-deriving it
+    would be strictly worse — it could only ever disagree with the recording.
+    So the marker COUNT comes off the state (D3+2 is 3 to 5 markers, not the 3
+    every pre-D8a corpus carries) and so does each marker's starting owner.
+
+    Returns the RESULT FIELDS an outcome comparison needs and no more —
+    `winner`, `objectives`, `vp`, `rounds_played`, the per-round ledger and the
+    activation log. It is deliberately NOT a `play_game` result dict: it has no
+    armies, no terrain drawing list and no seed, because a game started from a
+    recorded state has no honest value for any of them."""
+    state = core.state_of(plain)
+    markers = plain.get("objectives") or []
+    if not markers:
+        raise ValueError("the recorded state carries no objectives to play for")
+    owners = [int(m.get("owner", 0)) for m in markers]
+    vp = [0, 0]
+    log: list[dict[str, Any]] = []
+    rounds_log: list[dict[str, Any]] = []
+    rounds_played = 0
+    for round_no in range(1, ROUNDS + 1):
+        p = state.plain()
+        _round_start(p, round_no, profiles)
+        state = core.state_of(p)
+        state, opener = _play_round(
+            core, state, opener, rng, log, round_no, sidecars=False,
+            tray=tray, dice_tally=dice_tally, roll_log=roll_log,
+        )
+        state, owners = core.playout_seize(state, owners)
+        vp = core.vp_round_add(owners, vp)
+        rounds_played = round_no
+        rounds_log.append({"round": round_no, "owners": list(owners), "vp": list(vp)})
+    vp = core.vp_end_bonus(owners, vp)
+    p1 = sum(1 for o in owners if o == 1)
+    p2 = sum(1 for o in owners if o == 2)
+    return {
+        "winner": "draw" if p1 == p2 else ("p1" if p1 > p2 else "p2"),
+        "objectives": {"p1": p1, "p2": p2, "neutral": len(owners) - p1 - p2},
+        "vp": {"p1": int(vp[0]), "p2": int(vp[1])},
+        "rounds_played": rounds_played,
+        "rounds_log": rounds_log,
+        "planner_positions": log,
+    }
 
 
 def play_game(
