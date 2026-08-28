@@ -771,16 +771,20 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			and (kind == AiDecision.Action.HOLD or kind == AiDecision.Action.ADVANCE):
 		var tu: Dictionary = next["units"][shoot_key]
 		if _los_clear(next, su, tu):
-			var d := dist_in(positions, tu["positions"])
+			# NML-1132: measured over the TABLE's own two model sets — host + attached
+			# heroes on both sides (_fold_dist_in below), because the table's reach test
+			# runs from the FIRING MEMBER's models to the target unit AND its heroes
+			# (main.gd:4086-4103). Fold off: the same single dist_in call as before.
+			var d := _fold_dist_in(next, su, positions, tu)
 			var alive_before := int(tu["alive"])
 			var wounds_before := _wounds_left(tu)
 			if cast_phase_enabled():
 				_apply_expected_wounds(tu,
-					AiEv.shoot_ev(_profiles_of(su, false, d), _ctx_of(su), _ctx_of(tu), d))
+					AiEv.shoot_ev(_profiles_of(su, false, d, next), _ctx_of(su), _ctx_of(tu), d))
 			else:
 				# Seam OFF: the legacy spell rider, verbatim from dabd1da — the
 				# sub-phase above never ran, so casting only happens inside a shoot pick.
-				var volley := AiEv.shoot_ev(_profiles_of(su, false, d), _ctx_of(su), _ctx_of(tu), d)
+				var volley := AiEv.shoot_ev(_profiles_of(su, false, d, next), _ctx_of(su), _ctx_of(tu), d)
 				var sp := spell_ev_of(su, tu, d)
 				if float(sp["ev"]) > 0.0:
 					volley += float(sp["ev"])
@@ -809,11 +813,14 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 		if _engage_gap_in(next, su, positions, tu) <= SoloController.MELEE_ENGAGE_IN:
 			var tu_before := _wounds_left(tu)
 			var su_before := _wounds_left(su)
-			_apply_expected_wounds(tu, AiEv.melee_ev(_profiles_of(su, true),
+			# NML-1132: both strike phases are built the way the table builds them —
+			# the host's melee set PLUS every alive attached hero's (main.gd:4284-4290),
+			# on the charger and on the striking-back defender alike.
+			_apply_expected_wounds(tu, AiEv.melee_ev(_profiles_of(su, true, 0.0, next),
 				_ctx_of(su, true), _ctx_of(tu), true))
 			su["fatigued"] = true
 			if int(tu["alive"]) > 0:   # survivors strike back, already survivor-scaled
-				_apply_expected_wounds(su, AiEv.melee_ev(_profiles_of(tu, true),
+				_apply_expected_wounds(su, AiEv.melee_ev(_profiles_of(tu, true, 0.0, next),
 					_ctx_of(tu, true), _ctx_of(su), false))
 				# W-P1 parity (p.9): striking back fatigues the DEFENDER too — the
 				# game stamps both sides, the sim only ever stamped the charger.
@@ -959,7 +966,13 @@ static func _ctx_of(su: Dictionary, melee := false) -> Dictionary:
 ## Weapon profiles with attacks scaled to the snapshot's survivors (dead models
 ## stop attacking — mirrors effective_attacks in the real path). Limited-weapon
 ## usage tracking is NOT modelled yet (v0; noted for the parity wave).
-static func _profiles_of(su: Dictionary, melee: bool, d := 0.0) -> Array:
+## NML-1132: `state` is the SNAPSHOT the caller is resolving in, and it is what lets the
+## fold reach a joined hero's imagined row (`su["attached"]` carries keys, not units). Absent
+## — the menu-side probes in `AiPlanner`, `melee_threat` — the host's own profile comes back,
+## which is what this function always returned; the Rust twin folds at exactly the same two
+## sites (`sim::member_profiles_of`, called from `resolve`'s shoot and charge branches only),
+## so the two imaginations still answer the same number everywhere.
+static func _profiles_of(su: Dictionary, melee: bool, d := 0.0, state := {}) -> Array:
 	var u: GameUnit = su["unit"]
 	var weapons: Array = []
 	if u.source_type == "opr" and u.source_data is OPRApiClient.OPRUnit:
@@ -1000,7 +1013,72 @@ static func _profiles_of(su: Dictionary, melee: bool, d := 0.0) -> Array:
 		if u_unstop:
 			q["unstoppable"] = true
 		out.append(q)
+	_fold_hero_profiles(state, su, melee, d, out)
 	return out
+
+
+## NML-1132 — the fold itself: every ALIVE attached hero's OWN profile set appended to its
+## host's, in capture order. The live table has always fought that way — `main._run_ai_shooting`
+## (:2910-2941) builds "a shot per ranged weapon of the unit + attached heroes", each member with
+## its own weapons and its own survivor scaling, and `_solo_attack_groups` (main.gd:4284-4290)
+## builds a melee strike phase the same way — but the IMAGINATION read the host's OPR weapons
+## alone (:944 above). Both imaginations did, so they agreed with each other and no parity gate
+## could see it: a rifle squad carrying a fusion-pistol hero was valued, targeted and charged as
+## if the pistol did not exist. `hero_ev_gate.py` is the gate that can, on the recorded table.
+##
+## SEAM-GATED on `hero_fold_enabled()` alone, exactly like `_engage_gap_in`: without the fold
+## neither the pool nor the move nor the activation folds, so folding the WEAPONS would price a
+## unit the rest of resolve() does not believe in. Fold off = the host's array, untouched.
+##
+## THE APPROXIMATION, named and not hidden: `AiEv.shoot_ev`/`melee_ev` price a volley with ONE
+## attacker context, so a hero's weapons roll at the HOST's Quality here. The real resolution
+## paths already carry the per-member context (main.gd:2941, the twin's `melee_parts`); only the
+## expected-value layer does not.
+static func _fold_hero_profiles(state: Dictionary, su: Dictionary, melee: bool, d: float,
+		out: Array) -> void:
+	if not hero_fold_enabled() or not state.has("units"):
+		return
+	for hk in su.get("attached", []):
+		if not (state["units"] as Dictionary).has(hk):
+			continue
+		var hu: Dictionary = state["units"][hk]
+		if int(hu.get("alive", 0)) <= 0:
+			continue   # main.gd:2915 — a member with no living model brings no shot
+		out.append_array(_profiles_of(hu, melee, d))
+
+
+## NML-1132 — `dist_in` over the TABLE's two model sets: host plus every attached hero the
+## snapshot still carries, on BOTH sides. The table measures a shot's reach from the FIRING
+## MEMBER's models (`main._solo_sighted_count` :4103, `SoloController.sighted_models` :7764) to
+## the target unit AND its attached heroes (:4086-4092), so the host-to-host distance the
+## imagination used is neither end of that. `dist_in` is itself a minimum over model pairs, so
+## the minimum over the (host + heroes) x (host + heroes) cross product IS the number the table
+## would measure; a dead hero has an empty position array and contributes INF, exactly as an
+## empty side does there. Fold off = the single `dist_in` call, byte for byte.
+static func _fold_dist_in(state: Dictionary, su: Dictionary, su_positions: Array,
+		tu: Dictionary) -> float:
+	if not hero_fold_enabled():
+		return dist_in(su_positions, tu["positions"])
+	var a_side: Array = [su_positions]
+	_append_attached_positions(state, su, a_side)
+	var b_side: Array = [tu["positions"]]
+	_append_attached_positions(state, tu, b_side)
+	var best := INF
+	for a in a_side:
+		for b in b_side:
+			best = minf(best, dist_in(a, b))
+	return best
+
+
+## The position arrays of a snapshot unit's attached heroes, appended to `out` — the same
+## `state["units"].has(hk)` guard `_append_attached_models` uses, so a hero the snapshot does
+## not carry is skipped rather than faked.
+static func _append_attached_positions(state: Dictionary, u: Dictionary, out: Array) -> void:
+	if not state.has("units"):
+		return
+	for hk in u.get("attached", []):
+		if (state["units"] as Dictionary).has(hk):
+			out.append((state["units"][hk] as Dictionary)["positions"])
 
 
 ## Expected melee damage `tu` would take from `su` charging RIGHT NOW —

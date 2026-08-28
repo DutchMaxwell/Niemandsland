@@ -383,6 +383,11 @@ fn ctx_of_melee(us: &UnitStatic, state: &State, i: usize) -> Ctx {
 pub struct Scratch {
     pub keep: Vec<usize>,
     pub attacks: Vec<i64>,
+    /// NML-1132: the FOLDED member profile list — the host's weapons followed by
+    /// every alive attached hero's, filled only by `member_profiles_of` and only
+    /// when the fold ran. EMPTY means "the unit's own slice is the answer", which
+    /// is what `folded_slice` reads; every other filler clears it.
+    pub fold: Vec<ShootProfile>,
 }
 
 /// `BattleSim._profiles_of(su, false, d)` battle_sim.gd:714-749 fused with the
@@ -392,6 +397,7 @@ pub struct Scratch {
 pub fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
     sc.keep.clear();
     sc.attacks.clear();
+    sc.fold.clear();
     for (i, p) in us.shoot.iter().enumerate() {
         if (p.range as f64) < d {
             continue;
@@ -406,9 +412,104 @@ pub fn profiles_of(us: &UnitStatic, alive: i64, d: f64, sc: &mut Scratch) {
 /// count. Fills `sc.attacks` index-parallel to `us.melee`.
 pub fn melee_profiles_of(us: &UnitStatic, alive: i64, sc: &mut Scratch) {
     sc.attacks.clear();
+    sc.fold.clear();
     for p in &us.melee {
         sc.attacks.push(effective_attacks(p.attacks, alive, us.model_count));
     }
+}
+
+/// NML-1132 — `profiles_of`/`melee_profiles_of` over the TABLE's own MEMBER list:
+/// the host, then every ALIVE attached hero, each with its own weapons and its own
+/// survivor scaling. The live table has always built a volley that way
+/// (`main._run_ai_shooting` :2910-2941, "a shot per ranged weapon of the unit +
+/// attached heroes") and a melee strike phase too (`_solo_attack_groups`
+/// main.gd:4284-4290) — but the IMAGINATION read the host's weapons alone on both
+/// sides of the port, so the two agreed with each other and disagreed with the table:
+/// a rifle squad carrying a fusion-pistol hero was valued, targeted and charged as if
+/// the pistol did not exist. Mirrors `BattleSim._profiles_of(su, melee, d, state)`.
+///
+/// SEAM-GATED on `hero_attach` alone, like `engage_gap_in`: without it neither the
+/// pool nor the move nor the activation folds, so folding the weapons would price a
+/// unit the rest of `resolve` does not believe in. Fold off = the plain filler, and
+/// `sc.fold` stays empty, so `folded_slice` hands back the unit's own slice.
+///
+/// THE APPROXIMATION, named rather than hidden: `shoot_ev`/`melee_ev` price a volley
+/// with ONE attacker context, so a hero's weapons roll at the HOST's Quality here.
+/// The TRAY resolver does carry the per-member context already (`melee_parts`, the
+/// volley members in `resolve`) — only the expected-value layer does not.
+pub fn member_profiles_of(
+    statics: &[UnitStatic],
+    state: &State,
+    si: usize,
+    melee: bool,
+    d: f64,
+    seams: Seams,
+    sc: &mut Scratch,
+) {
+    let us = &statics[state.roster.profile[si]];
+    if !(seams.hero_attach && state.attached[si].iter().any(|&h| state.alive[h] > 0)) {
+        if melee {
+            melee_profiles_of(us, state.alive[si], sc);
+        } else {
+            profiles_of(us, state.alive[si], d, sc);
+        }
+        return;
+    }
+    sc.keep.clear();
+    sc.attacks.clear();
+    sc.fold.clear();
+    for &mi in std::iter::once(&si).chain(state.attached[si].iter()) {
+        if state.alive[mi] <= 0 {
+            continue; // main.gd:2915 — a member with no living model brings no shot
+        }
+        let um = &statics[state.roster.profile[mi]];
+        let set = if melee { &um.melee } else { &um.shoot };
+        for p in set {
+            let a = effective_attacks(p.attacks, state.alive[mi], um.model_count);
+            // MELEE has no range gate and `melee_ev` no `keep`, so its `attacks` must
+            // stay parallel to the whole list; SHOOTING keeps `profiles_of`'s filter
+            // and indexes the folded list through `keep`.
+            if melee {
+                sc.attacks.push(a);
+            } else if (p.range as f64) >= d {
+                let idx = sc.fold.len();
+                sc.keep.push(idx);
+                sc.attacks.push(a);
+            }
+            sc.fold.push(p.clone());
+        }
+    }
+}
+
+/// The profile slice a `member_profiles_of` fill belongs to: the unit's own set when
+/// the fold did not run, `sc.fold` when it did.
+pub fn folded_slice<'a>(own: &'a [ShootProfile], sc: &'a Scratch) -> &'a [ShootProfile] {
+    if sc.fold.is_empty() {
+        own
+    } else {
+        &sc.fold
+    }
+}
+
+/// NML-1132 — `geom::dist_in` over the TABLE's two model sets: host plus every
+/// attached hero, on BOTH sides. The table measures a shot's reach from the FIRING
+/// member's models (`main._solo_sighted_count` :4103) to the target unit AND its
+/// attached heroes (:4086-4092), so the host-to-host distance the imagination used
+/// is neither end of that. `dist_in` is itself a minimum over model pairs, so the
+/// minimum over the cross product IS the number the table would measure; a hero with
+/// no models left has an empty array and contributes INF, exactly as an empty side does.
+/// Fold off = the single `dist_in` call, byte for byte.
+pub fn fold_dist_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
+    if !seams.hero_attach {
+        return geom::dist_in(&state.positions[si], &state.positions[ti]);
+    }
+    let mut best = f64::INFINITY;
+    for &a in std::iter::once(&si).chain(state.attached[si].iter()) {
+        for &b in std::iter::once(&ti).chain(state.attached[ti].iter()) {
+            best = best.min(geom::dist_in(&state.positions[a], &state.positions[b]));
+        }
+    }
+    best
 }
 
 // ------------------------- D6a-B4: the table's own per-weapon die count ---
@@ -1477,6 +1578,12 @@ fn resolve_with(
         if let Some(&ti) = next.roster.index.get(shoot_key.as_str()) {
             if next.sees(si, &shoot_key) && los_clear(&next, si, ti) {
                 let d = geom::dist_in(&next.positions[si], &next.positions[ti]);
+                // NML-1132: the EXPECTED-VALUE half measures over the table's folded
+                // model set (`fold_dist_in`); the TRAY half below keeps the plain
+                // host-to-host `d`, because it already measures per FIRING MEMBER
+                // (`sighted_profiles_of`, `main._solo_sighted_count` :4103) and a
+                // folded reach there would let a host weapon fire from a hero's model.
+                let d_ev = if seams.hero_attach { fold_dist_in(&next, si, ti, seams) } else { d };
                 let alive_before = next.alive[ti];
                 let wounds_before = wounds_left(&next, ti);
                 // Seam ON: a plain volley — the cast sub-phase above already
@@ -1486,15 +1593,17 @@ fn resolve_with(
                 let (volley, sp_cost) = {
                     let us = &statics[pi_s];
                     let ut = &statics[next.roster.profile[ti]];
-                    profiles_of(us, next.alive[si], d, &mut sc);
+                    member_profiles_of(statics, &next, si, false, d_ev, seams, &mut sc);
                     let att = ctx_of(us, &next, si);
                     let def = ctx_of(ut, &next, ti);
-                    let shooting = shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d);
+                    let shooting = shoot_ev(
+                        folded_slice(&us.shoot, &sc), &sc.keep, &sc.attacks, &att, &def, d_ev,
+                    );
                     if seams.cast {
                         (shooting, 0)
                     } else {
                         let (sp_ev, sp_cost) =
-                            spell_ev_of(us.is_caster, &us.spells, next.casts[si], &def, d);
+                            spell_ev_of(us.is_caster, &us.spells, next.casts[si], &def, d_ev);
                         if sp_ev > 0.0 {
                             (shooting + sp_ev, sp_cost)
                         } else {
@@ -1628,8 +1737,10 @@ fn resolve_with(
                         let ut = &statics[next.roster.profile[ti]];
                         let att = ctx_of_melee(us, &next, si);
                         let def = ctx_of(ut, &next, ti);
-                        melee_profiles_of(us, next.alive[si], &mut sc);
-                        melee_ev(&us.melee, &sc.attacks, &att, &def, true)
+                        // NML-1132: the charger's strike phase is the host's melee set
+                        // PLUS every alive attached hero's, the way the table builds it.
+                        member_profiles_of(statics, &next, si, true, 0.0, seams, &mut sc);
+                        melee_ev(folded_slice(&us.melee, &sc), &sc.attacks, &att, &def, true)
                     };
                     apply_expected_wounds(&mut next, ti, ev, rng.as_deref_mut());
                     next.fatigued[si] = true;
@@ -1642,8 +1753,10 @@ fn resolve_with(
                             let us = &statics[pi_s];
                             let att = ctx_of_melee(ut, &next, ti);
                             let def = ctx_of(us, &next, si);
-                            melee_profiles_of(ut, next.alive[ti], &mut sc);
-                            melee_ev(&ut.melee, &sc.attacks, &att, &def, false)
+                            // The strike-back folds too (`_solo_attack_groups` is built
+                            // for the DEFENDER the same way, main.gd:4284-4290).
+                            member_profiles_of(statics, &next, ti, true, 0.0, seams, &mut sc);
+                            melee_ev(folded_slice(&ut.melee, &sc), &sc.attacks, &att, &def, false)
                         };
                         apply_expected_wounds(&mut next, si, ev_back, rng.as_deref_mut());
                         next.fatigued[ti] = true;
@@ -1913,5 +2026,109 @@ mod tests {
         st.positions[1].clear();
         let on = Seams { hero_attach: true, ..Seams::default() };
         assert!((engage_gap_in(&st, 0, 2, on) - 10.0).abs() < 1e-6);
+    }
+
+    // ------------------------------------------------- NML-1132: the WEAPONS ---
+
+    fn gun(name: &str, attacks: i64, range: i64) -> ShootProfile {
+        ShootProfile { name: name.into(), attacks, count: 1, range, ..Default::default() }
+    }
+
+    /// One static per unit of `four_unit_line` (whose roster shares profile 0, so
+    /// the roster is rebuilt alongside): the charger host carries a 24" RIFLE and a
+    /// CCW, its joined hero a 36" HEAVY GUN and a FIST, the two enemies nothing.
+    fn hero_line() -> (State, Vec<UnitStatic>) {
+        let mut st = four_unit_line();
+        let r = &*st.roster;
+        st.roster = Rc::new(crate::state::Roster {
+            keys: r.keys.clone(),
+            index: r.index.clone(),
+            profile: vec![0, 1, 2, 3],
+        });
+        let host = UnitStatic {
+            name: "host".into(),
+            model_count: 1,
+            shoot: vec![gun("Rifle", 1, 24)],
+            melee: vec![gun("CCW", 2, 0)],
+            ..Default::default()
+        };
+        let hero = UnitStatic {
+            name: "hero".into(),
+            model_count: 1,
+            shoot: vec![gun("Heavy Gun", 3, 36)],
+            melee: vec![gun("Fist", 4, 0)],
+            ..Default::default()
+        };
+        (st, vec![host, hero, UnitStatic::default(), UnitStatic::default()])
+    }
+
+    fn kept(statics: &[UnitStatic], melee: bool, sc: &Scratch) -> Vec<String> {
+        let own = if melee { &statics[0].melee } else { &statics[0].shoot };
+        let all = folded_slice(own, sc);
+        if melee {
+            all.iter().map(|p| p.name.clone()).collect()
+        } else {
+            sc.keep.iter().map(|&i| all[i].name.clone()).collect()
+        }
+    }
+
+    /// The imagined VOLLEY is the table's member list: the host's weapons and its
+    /// joined hero's. At 30" the host's own 24" rifle is out of reach, so the fold
+    /// is the only thing that can put a die on the table at all — and it puts the
+    /// HERO's 36" gun there, with the hero's own survivor scaling.
+    #[test]
+    fn the_imagined_volley_carries_a_joined_heros_ranged_weapon() {
+        let (st, statics) = hero_line();
+        let on = Seams { hero_attach: true, ..Seams::default() };
+        let mut sc = Scratch::default();
+        member_profiles_of(&statics, &st, 0, false, 30.0, on, &mut sc);
+        assert_eq!(kept(&statics, false, &sc), vec!["Heavy Gun".to_string()]);
+        assert_eq!(sc.attacks, vec![3]);
+        // Closer in, BOTH members fire, host first — the table's build order.
+        member_profiles_of(&statics, &st, 0, false, 20.0, on, &mut sc);
+        assert_eq!(kept(&statics, false, &sc), vec!["Rifle".to_string(), "Heavy Gun".into()]);
+        assert_eq!(sc.attacks, vec![1, 3]);
+    }
+
+    /// The MELEE half, and the RED for both: with the seam off `member_profiles_of`
+    /// is the plain `profiles_of`/`melee_profiles_of` — the host alone, which is the
+    /// imagination this ticket found and the identity every recorded corpus replays on.
+    #[test]
+    fn the_seam_off_leaves_the_host_alone_in_both_halves() {
+        let (st, statics) = hero_line();
+        let on = Seams { hero_attach: true, ..Seams::default() };
+        let off = Seams::default();
+        let mut sc = Scratch::default();
+        member_profiles_of(&statics, &st, 0, true, 0.0, on, &mut sc);
+        assert_eq!(kept(&statics, true, &sc), vec!["CCW".to_string(), "Fist".into()]);
+        assert_eq!(sc.attacks, vec![2, 4]);
+        member_profiles_of(&statics, &st, 0, true, 0.0, off, &mut sc);
+        assert_eq!(kept(&statics, true, &sc), vec!["CCW".to_string()]);
+        assert_eq!(sc.attacks, vec![2]);
+        member_profiles_of(&statics, &st, 0, false, 30.0, off, &mut sc);
+        assert!(kept(&statics, false, &sc).is_empty());   // the 24" rifle cannot reach
+    }
+
+    /// A hero with no living model brings no shot — `main._run_ai_shooting` :2915
+    /// skips exactly that member, and so does the fold.
+    #[test]
+    fn a_dead_joined_hero_brings_no_weapon() {
+        let (mut st, statics) = hero_line();
+        st.alive[1] = 0;
+        let on = Seams { hero_attach: true, ..Seams::default() };
+        let mut sc = Scratch::default();
+        member_profiles_of(&statics, &st, 0, true, 0.0, on, &mut sc);
+        assert_eq!(kept(&statics, true, &sc), vec!["CCW".to_string()]);
+    }
+
+    /// The RANGE half: the reach is measured over the table's two model sets, so the
+    /// two joined heroes (2" and 9") decide it at 7" — not the hosts' 12". Folding
+    /// one side alone would read 9" or 10", which is why the number is exact.
+    #[test]
+    fn the_imagined_reach_is_measured_from_the_joined_heros_model() {
+        let st = four_unit_line();
+        let on = Seams { hero_attach: true, ..Seams::default() };
+        assert!((fold_dist_in(&st, 0, 2, on) - 7.0).abs() < 1e-4);
+        assert!((fold_dist_in(&st, 0, 2, Seams::default()) - 12.0).abs() < 1e-4);
     }
 }

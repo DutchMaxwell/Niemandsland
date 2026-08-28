@@ -52,6 +52,7 @@ state = core.state_of(plain)               # one plain state -> an opaque State
 | `Core.score(state, player) -> float` | `AiMissionEval.score` with the reply threat |
 | `Core.score_cheap(state, player) -> float` | the same without it |
 | `Core.reply_threat(state, player) -> list[float]` | expected reply wounds, in CAPTURE order |
+| `Core.imagined_profiles(state, unit, melee=False, target=None, d_in=0.0)` | the weapon set the EV half of `resolve` fires with (`sim::member_profiles_of`) — folded over the attached heroes when the header's `hero_attach` is on; `hero_ev_gate.py`'s instrument |
 | `Core.playout_seize(state, owners) -> (State, owners)` | the 3" ring |
 | `Core.vp_round_add / vp_end_bonus / vp_score_round / vp_score_end` | the VP ledger |
 | `Core.apply_destroy_step(markers, owners, seq)` | a destructible marker falls |
