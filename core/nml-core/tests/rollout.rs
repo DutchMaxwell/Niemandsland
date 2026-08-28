@@ -31,6 +31,8 @@ use nml_core::rollout::{Rollout, Stop};
 use nml_core::sim::Scratch;
 use nml_core::{build_act_statics, load_acts, Act, ActCorpus, Seams, State, Terrain};
 
+mod common;
+
 const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_25.jsonl");
 const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 /// The parity bar. `rs` is a blend of f64 scores written by
@@ -39,6 +41,7 @@ const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 const RS_EPS: f64 = 1e-9;
 
 fn corpus() -> ActCorpus {
+    common::pin_legacy_no_cond_ap();
     load_acts(FIXTURE).unwrap_or_else(|e| panic!("{e}"))
 }
 
