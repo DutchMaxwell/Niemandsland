@@ -6658,16 +6658,24 @@ func _solo_land_deadly_wounds(target: GameUnit, weapon_name: String, deadly_x: i
 			radial_menu_controller._update_wound_marker(m)
 		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
 			network_manager.broadcast_model_wounds(m)
+	# NML-1090: the removals are COLLECTED here and carried out below, AFTER the Deadly line is
+	# written. set_loose_model_dead emits loose_model_dead_changed, and the battle log turns that into
+	# "<unit> destroyed" / "<unit> loses a model" — parking a model from inside the apply loop
+	# therefore printed the EFFECT one line above its CAUSE. Same frame, same models, same order; the
+	# wound arithmetic (apply_deadly_wounds) never reads the parked state, only is_alive/wounds_current.
+	var died_models: Array[ModelInstance] = []
 	var on_died := func(m: ModelInstance) -> void:
-		if m.node != null and is_instance_valid(m.node):
-			opr_army_manager.set_loose_model_dead(m.node, pid, true, target.unit_id)
-		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
-			network_manager.broadcast_model_wounds(m)
+		died_models.append(m)
 	var dealt: int = SoloController.apply_deadly_wounds(target, surviving, deadly_x, on_changed, on_died)
 	if battle_log != null and dealt > 0:
 		battle_log.log_event(BattleLog.Category.COMBAT, "Deadly(%d): %d unsaved ×%d, no carry-over → %d wound%s dealt" % [
 			deadly_x, surviving, deadly_x, dealt, ("" if dealt == 1 else "s")], true)
 		_solo_rule_float(target, "Deadly(%d) → %d" % [deadly_x, dealt], Color(1.0, 0.5, 0.4))
+	for m in died_models:
+		if m.node != null and is_instance_valid(m.node):
+			opr_army_manager.set_loose_model_dead(m.node, pid, true, target.unit_id)
+		if network_manager != null and network_manager.has_method("broadcast_model_wounds"):
+			network_manager.broadcast_model_wounds(m)
 	return dealt
 
 
