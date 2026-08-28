@@ -680,7 +680,10 @@ TRAINER_KNOBS = {
 }
 
 # `AiActRecorder.begin` :65-66 — the planner's per-activation class statics, all
-# at their defaults in a trainer process.
+# at their defaults in a trainer process. `fit_mode` is the ONE that a caller can
+# move (NML-1142): it is `AiMissionEval.fit_mode`, the `eval_fit` bit of the
+# `planner_v1`/`planner_v2` presets (solo_difficulty.gd:97/:109), and it is on
+# for exactly as long as a net is armed on the core — see `_pick_for`.
 TRAINER_STATICS = {
     "opener_seat": False,
     "playout_search": False,
@@ -692,7 +695,7 @@ TRAINER_STATICS = {
 # ------------------------------------------------------------------- game ----
 
 
-def _pick_for(core, state, player: int) -> dict[str, Any]:
+def _pick_for(core, state, player: int, net_player: int = 0) -> dict[str, Any]:
     """`_pick_for` core_selfplay.gd:398-459 — the full planner for whichever side
     still has a living, un-activated unit; `{}` when the side is dry.
 
@@ -702,7 +705,13 @@ def _pick_for(core, state, player: int) -> dict[str, Any]:
     the oracle's "joined but not folded" game — see `HERO_ATTACH_MODES`."""
     if not state.pool(player, bool(core.knobs().get("hero_attach", True))):
         return {}
-    pick = core.plan_with_rollout(state, player, TRAINER_STATICS)
+    # NML-1142: `AiMissionEval.fit_mode` is per-ACTIVATION on the table and the
+    # net is per-PROCESS, so the crate makes the caller say both. A trainer that
+    # armed a net plays every activation with it — unless `net_player` names ONE
+    # seat, which is the A/B seam described in `play_game`.
+    fit = core.has_net() and net_player in (0, player)
+    statics = dict(TRAINER_STATICS, fit_mode=True) if fit else TRAINER_STATICS
+    pick = core.plan_with_rollout(state, player, statics)
     return pick if pick.get("used") else {}
 
 
@@ -964,6 +973,7 @@ def _play_round(
     tray=None,
     dice_tally: dict[str, int] | None = None,
     roll_log: list | None = None,
+    net_player: int = 0,
 ) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
     dry side hands the tail to the other, and the NEXT round opens with whoever
@@ -1000,10 +1010,10 @@ def _play_round(
     guard = state.units * 2 + 4
     while guard > 0:
         guard -= 1
-        pick = _pick_for(core, state, turn)
+        pick = _pick_for(core, state, turn, net_player)
         if not pick:
             other = 2 if turn == 1 else 1
-            pick = _pick_for(core, state, other)
+            pick = _pick_for(core, state, other, net_player)
             if not pick:
                 break
             turn = other
@@ -1082,6 +1092,7 @@ def play_from_state(
     tray=None,
     roll_log: list | None = None,
     dice_tally: dict[str, int] | None = None,
+    net_player: int = 0,
 ) -> dict[str, Any]:
     """NML-1073 M5 D0 — the round loop from a GIVEN state instead of from two
     army lists and a seed, so a recorded game's own DEPLOYMENT can be the
@@ -1123,7 +1134,18 @@ def play_from_state(
     `winner`, `objectives`, `vp`, `rounds_played`, the per-round ledger and the
     activation log. It is deliberately NOT a `play_game` result dict: it has no
     armies, no terrain drawing list and no seed, because a game started from a
-    recorded state has no honest value for any of them."""
+    recorded state has no honest value for any of them.
+
+    THE FITTED EVAL (NML-1142) arrives by INHERITANCE, like the header and every
+    fidelity knob: the net is armed on the CORE (`Core.load_net`), and
+    `_pick_for` reads `core.has_net()`, so a caller that armed one plays every
+    activation of this game with the fitted leaf and one that did not plays the
+    hand eval — byte-identical to every call written before the net existed.
+    There is deliberately no `net` parameter here: `play_game` has one only
+    because it may CREATE the core; this entry is always handed one.
+    `net_player` is the exception and is threaded, because it is not a property
+    of the core but of the match — the head-to-head A/B seam described in
+    `play_game`, `0` (both seats, the table's reading) by default."""
     state = core.state_of(plain)
     markers = plain.get("objectives") or []
     if not markers:
@@ -1140,6 +1162,7 @@ def play_from_state(
         state, opener = _play_round(
             core, state, opener, rng, log, round_no, sidecars=False,
             tray=tray, dice_tally=dice_tally, roll_log=roll_log,
+            net_player=net_player,
         )
         state, owners = core.playout_seize(state, owners)
         vp = core.vp_round_add(owners, vp)
@@ -1183,6 +1206,8 @@ def play_game(
     cond_ap: bool | None = None,
     vocab_version: int | None = None,
     objectives: str = "constant",
+    net: str | Path | None = None,
+    net_player: int = 0,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -1284,6 +1309,13 @@ def play_game(
     board, terrain, pieces = load_board(seed, bank_dir)
     if core is None:
         core = nml_core.load(str(repo_root))
+    # NML-1142 — the trained eval. `None` leaves whatever the caller armed (a
+    # reused core keeps its net across games, the way the table keeps its
+    # process-global one); a path arms it and turns `fit_mode` on for every
+    # activation of this game. The loader GATE is the GDScript's own selftest,
+    # so a drifted net RAISES here instead of quietly playing.
+    if net is not None:
+        core.load_net(str(net))
     eff_top_k = resolve_top_k(top_k)
     eff_horizon = resolve_horizon(horizon)
     eff_charge_gate = resolve_charge_gate(charge_gate)
@@ -1405,6 +1437,7 @@ def play_game(
             seed=seed, owners=owners, sidecars=sidecars,
             fork_salt=fork_salt, sidecar_skip=sidecar_skip,
             magic=magic, spell_reach=spell_reach, tray=tray, dice_tally=dice_tally,
+            net_player=net_player,
         )
         state, owners = core.playout_seize(state, owners)
         vp = core.vp_round_add(owners, vp)
@@ -1441,6 +1474,10 @@ def play_game(
             "sighting": eff_sighting,
             "engage_fold": engage_fold,
             "cond_ap": cond_ap,
+            # NML-1142: WHICH brain played. `""` is the hand eval — every corpus
+            # written before this knob existed, and the default still.
+            "net": str(net) if net is not None else "",
+            "net_player": net_player,
         },
         # D1-B4 telemetry, empty under `dice="expected"`: how many shooting
         # activations drew from the tray, how many rolls that was, and how many
@@ -1607,6 +1644,21 @@ def main(argv: list[str]) -> int:
         "(default) fires the whole unit, which is what every corpus written "
         "before D6a-B4 carries",
     )
+    ap.add_argument(
+        "--net",
+        default="",
+        help="NML-1142 — a netlab/fork_train.py ENCODER net JSON; arms the "
+        "fitted eval (`AiMissionEval.fit_mode`, the planner_v1 `eval_fit` bit) "
+        "for every activation. Empty (default) plays the hand eval",
+    )
+    ap.add_argument(
+        "--net-player",
+        type=int,
+        default=0,
+        choices=(0, 1, 2),
+        help="RESEARCH SEAM (no table twin): 0 = the armed eval plays both "
+        "seats, 1 or 2 = only that seat plays the net, for a head-to-head A/B",
+    )
     a = ap.parse_args(argv)
 
     core = nml_core.load(a.repo)
@@ -1632,6 +1684,8 @@ def main(argv: list[str]) -> int:
             charge_landing=a.charge_landing,
             movement=a.movement,
             sighting=a.sighting,
+            net=a.net or None,
+            net_player=a.net_player,
         )
         res["wall_seconds"] = round(time.perf_counter() - t0, 3)
         if a.out:

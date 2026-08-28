@@ -281,6 +281,13 @@ def main(argv: list[str]) -> int:
                     default=FIDELITY_DEFAULTS["movement"])
     ap.add_argument("--no-engage-fold", dest="engage_fold", action="store_false", default=True,
                     help="RED switch for the D5-4 attached-hero fold of the engage test")
+    ap.add_argument(
+        "--net",
+        default="",
+        help="NML-1142 -- a netlab/fork_train.py ENCODER net JSON. Every game of "
+        "the run then plays the FITTED eval (`AiMissionEval.fit_mode`); empty "
+        "(the default) is the hand eval and every corpus written before it",
+    )
     ap.add_argument("--cond-ap", choices=["auto", "on", "off"], default="auto",
                     help="conditional AP (NML-1103); 'auto' leaves the process global alone")
     ap.add_argument(
@@ -300,6 +307,10 @@ def main(argv: list[str]) -> int:
         "movement": a.movement,
         "engage_fold": a.engage_fold,
         "cond_ap": None if a.cond_ap == "auto" else (a.cond_ap == "on"),
+        # NML-1142: WHICH eval played. `None` is the hand eval -- the default,
+        # and what every corpus written before this knob carries. It rides
+        # `fidelity` like the rest, so `.RUN.json` records the brain too.
+        "net": a.net or None,
     }
 
     sizes = [int(x) for x in a.sizes.split(",")]

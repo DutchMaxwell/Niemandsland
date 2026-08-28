@@ -8,11 +8,13 @@
 //! CAPTURE order into two separate sums (`mine`, `theirs`), objectives
 //! accumulate in list order into `total`, wounds accumulate in array order.
 //!
-//! `AiMissionEval.fit_mode` (:324) is `false` at the rollout hot path — the
-//! selfplay/arena presets that switch it on take the blended fitted eval, which
-//! is M2 work; `score()` therefore routes straight to `_score_hand`.
+//! `AiMissionEval.fit_mode` (:324) selects the E4.2 BLEND instead — see
+//! `score_with`, whose fitted half lives in `fitted.rs` (NML-1142). `score()`
+//! is that call with no net, i.e. `fit_mode == false`.
 
+use crate::fitted::Fitted;
 use crate::state::State;
+use crate::unit::UnitStatic;
 use crate::{CONTROL_EPS, DESTROY_DEFENCE_WEIGHT, DISCOUNT, IN2M, OBJECTIVE_CONTROL_IN};
 
 /// `incoming` (ai_mission_eval.gd:344) — expected reply wounds per unit, indexed
@@ -187,4 +189,23 @@ pub fn score_hand(state: &State, player: i64, incoming: Incoming) -> f64 {
 /// `AiMissionEval.score` ai_mission_eval.gd:344-354 with `fit_mode == false`.
 pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
+}
+
+/// `AiMissionEval.score` ai_mission_eval.gd:344-354 in FULL (NML-1142): with a
+/// net, the E4.2 blend `(1 - fb) * hand + fb * fit`; without one, the hand eval
+/// alone. `fit == None` IS `fit_mode == false` — the caller decides, because the
+/// GDScript's `fit_mode` is a per-activation static and the net is not.
+pub fn score_with(
+    state: &State,
+    statics: &[UnitStatic],
+    player: i64,
+    incoming: Incoming,
+    fit: Option<&Fitted>,
+) -> f64 {
+    let Some(fit) = fit else {
+        return score_hand(state, player, incoming);
+    };
+    let fb = fit.blend;
+    (1.0 - fb) * score_hand(state, player, incoming)
+        + fb * fit.score_fit(state, statics, player, incoming)
 }

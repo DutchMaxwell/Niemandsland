@@ -62,8 +62,8 @@ use nmlcore::rows::{Cell, RowEncoder};
 use nmlcore::unit::{StaticsCache, UnitStatic};
 use nmlcore::{
     geom, io, mission, reply_threat, resolve_on_board, resolve_stochastic_on_board,
-    resolve_stochastic_tray_on_board, score, Action, GodotRng, PlainTerrain, Registries, Seams,
-    State as CoreState, Terrain, Tray, Unsupported as CoreUnsupported,
+    resolve_stochastic_tray_on_board, score_with, Action, Fitted, GodotRng, PlainTerrain,
+    Registries, Seams, State as CoreState, Terrain, Tray, Unsupported as CoreUnsupported,
 };
 
 create_exception!(nml_core, Unsupported, PyRuntimeError);
@@ -522,6 +522,10 @@ pub struct Core {
     /// The encoder row vocabulary + its loud unknown-rule collector, read once
     /// from `repo_root/data/encoder_rule_vocab_v1.json` (NML-1073 M3-6a).
     rows: RowEncoder,
+    /// NML-1142 — the trained eval, `None` until `load_net`. Its presence IS
+    /// this core's `AiMissionEval.fit_mode`: every search it runs takes the
+    /// blended fitted leaf, and one that does not want it must not load a net.
+    net: Option<Fitted>,
 }
 
 impl Core {
@@ -863,6 +867,12 @@ impl Core {
         let statics = self.statics_for(&state.inner)?;
         let mut policy = Policy::new(&statics, &self.terrain, self.seams());
         policy.tuning = self.tuning();
+        // The net is this core's `AiMissionEval.fit_mode`, but WHETHER it is
+        // switched on is the activation's own static. An act recorded with the
+        // hand eval must replay on the hand eval even on a core that carries a
+        // net — and one recorded with the fitted eval on a core that does not
+        // is declined by `admissible`, not silently answered.
+        policy.fit = self.net.as_ref().filter(|_| act.fit_mode);
         let roll = Rollout::new(policy, self.knobs);
         let mut search = Search::new(roll, &act);
         search.sig = sig;
@@ -1025,12 +1035,58 @@ impl Core {
     fn score(&mut self, state: PyRef<'_, PyState>, player: i64) -> PyResult<f64> {
         let statics = self.statics_for(&state.inner)?;
         let incoming = reply_threat(&statics, &state.inner, player);
-        Ok(score(&state.inner, player, &incoming))
+        Ok(score_with(&state.inner, &statics, player, &incoming, self.net.as_ref()))
     }
 
     /// The same score WITHOUT the reply threat — the cheap leaf.
-    fn score_cheap(&self, state: PyRef<'_, PyState>, player: i64) -> f64 {
-        score(&state.inner, player, nmlcore::NO_INCOMING)
+    fn score_cheap(&mut self, state: PyRef<'_, PyState>, player: i64) -> PyResult<f64> {
+        let statics = self.statics_for(&state.inner)?;
+        Ok(score_with(
+            &state.inner,
+            &statics,
+            player,
+            nmlcore::NO_INCOMING,
+            self.net.as_ref(),
+        ))
+    }
+
+    /// NML-1142 — load a `netlab/fork_train.py` ENCODER net and play with it.
+    /// The loader GATE is the GDScript's own (`_encoder_selftest_ok`): a net
+    /// without a `selftest` block, or one whose forward here misses that block's
+    /// answer by more than 1e-4, RAISES instead of quietly scoring games.
+    ///
+    /// `scale` is the RED-PROOF seam and 1.0 in every real call: the net's own
+    /// answer times this, before the blend.
+    ///
+    /// Returns the net's shape, so a caller can log WHICH brain it just armed.
+    #[pyo3(signature = (path, scale = 1.0, blend = None))]
+    fn load_net(
+        &mut self,
+        py: Python<'_>,
+        path: &str,
+        scale: f64,
+        blend: Option<f64>,
+    ) -> PyResult<Py<PyAny>> {
+        let net = nmlcore::Net::load(path).map_err(Unsupported::new_err)?;
+        let shape = serde_json::json!({
+            "slots": net.slots.len(),
+            "keys": net.keys.len(),
+            "hidden": net.unit_b1.len(),
+        });
+        let mut fit =
+            Fitted::new(net, &self.repo_root).map_err(Unsupported::new_err)?;
+        fit.set_source_qd(self.rows.source_qd);
+        fit.scale = scale;
+        if let Some(b) = blend {
+            fit.blend = b;
+        }
+        self.net = Some(fit);
+        to_py(py, &shape)
+    }
+
+    /// True when a net is armed — the trainer reads it as `fit_mode`.
+    fn has_net(&self) -> bool {
+        self.net.is_some()
     }
 
     /// `BattleSim.reply_threat` battle_sim.gd:1099 — expected reply wounds per
@@ -1055,6 +1111,7 @@ impl Core {
         let statics = self.statics_for(&state.inner)?;
         let mut policy = Policy::new(&statics, &self.terrain, self.seams());
         policy.tuning = self.tuning();
+        policy.fit = self.net.as_ref();
         let mut sc = Scratch::default();
         match policy.policy_step(&state.inner, player, rich, &mut sc) {
             Ok(None) => Ok(None),
@@ -1200,19 +1257,33 @@ impl Core {
     /// `(4, 4)` to reproduce such a corpus, and to nothing else.
     fn set_encoder_source_qd(&mut self, quality: i64, defense: i64) {
         self.rows.source_qd = Some((quality, defense));
+        // The fitted eval encodes its own rows; a reading set here that did not
+        // reach it would leave the two halves of one core disagreeing.
+        if let Some(f) = self.net.as_ref() {
+            f.set_source_qd(Some((quality, defense)));
+        }
     }
 
     /// Drop the legacy column-10/11 override — back to the profile's own
     /// quality/defense, the default and the only setting a fresh corpus may use.
     fn clear_encoder_source_qd(&mut self) {
         self.rows.source_qd = None;
+        if let Some(f) = self.net.as_ref() {
+            f.set_source_qd(None);
+        }
     }
 
     /// Rule/spell names the committed vocabulary does not carry, collected
     /// across every `board_rows` call — `BattleSim.unknown_rules` (:82), which
     /// the GDScript also stamps into its result rather than slotting silently.
     fn unknown_rules(&self) -> Vec<String> {
-        self.rows.unknown.iter().cloned().collect()
+        // BOTH collectors (NML-1142): the fitted eval encodes its own rows, and
+        // in a `--no-sidecars` net game it is the only encoder that ran.
+        let mut out: std::collections::BTreeSet<String> = self.rows.unknown.iter().cloned().collect();
+        if let Some(f) = self.net.as_ref() {
+            out.extend(f.unknown());
+        }
+        out.into_iter().collect()
     }
 
     /// `AiMissionEval.features` ai_mission_eval.gd:480 — the eval's raw feature
@@ -1374,6 +1445,7 @@ fn load(repo_root: &str) -> Core {
         knobs: Knobs::default(),
         roster: None,
         rows: RowEncoder::new(repo_root),
+        net: None,
     }
 }
 

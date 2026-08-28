@@ -20,7 +20,8 @@
 
 use crate::io::{Action, Seams};
 use crate::menu::{best_charge, best_shoot, safe_advance, Candidate, Tuning};
-use crate::score::{score, NO_INCOMING};
+use crate::fitted::Fitted;
+use crate::score::{score_with, NO_INCOMING};
 use crate::mv::reach::ReachIndex;
 use crate::sim::{
     reply_threat, resolve_on_board_reach, Scratch, Unsupported, CHARGE, HOLD, RUSH,
@@ -51,6 +52,12 @@ pub struct Policy<'a> {
     /// PROVE that split is load-bearing rather than assert green against a
     /// rollout that might be scoring both sides the same way by accident.
     pub force_leaf: Option<bool>,
+    /// NML-1142 — the trained eval, or `None` for the hand eval. It is the
+    /// CALLER's job to leave this `None` unless the activation's recorded
+    /// `AiMissionEval.fit_mode` was on; `Search::admissible` declines a
+    /// `fit_mode` act that reaches it without one rather than quietly playing
+    /// the other brain.
+    pub fit: Option<&'a Fitted>,
 }
 
 impl<'a> Policy<'a> {
@@ -62,6 +69,7 @@ impl<'a> Policy<'a> {
             reach: None,
             tuning: Tuning::default(),
             force_leaf: None,
+            fit: None,
         }
     }
 
@@ -149,9 +157,9 @@ impl<'a> Policy<'a> {
                 let next = self.resolve(state, &action)?;
                 let s = if rich {
                     let incoming = reply_threat(self.statics, &next, player);
-                    score(&next, player, &incoming)
+                    score_with(&next, self.statics, player, &incoming, self.fit)
                 } else {
-                    score(&next, player, NO_INCOMING)
+                    score_with(&next, self.statics, player, NO_INCOMING, self.fit)
                 };
                 // `_record_node` (:617) sits here and is INERT without
                 // NML_NODE_DUMP; the rollout it belongs to is byte-identical
