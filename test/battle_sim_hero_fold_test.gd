@@ -124,19 +124,23 @@ func test_the_hosts_activation_moves_and_spends_its_hero_only_under_the_knob() -
 
 # === the KNOB's three doors =================================================
 
-## The preset door: planner_v0_herofold is planner_v0 plus the fold, and plain
-## planner_v0 keeps it off.
+## The preset door: planner_v0_herofold is planner_v0 plus the fold. NML-1073 M5
+## (maintainer 27.08., "an der Realität halten"): plain planner_v0 now carries the
+## fold ON by default too — not worse on 298 pairs (four-arm A/B).
 func test_the_preset_carries_the_knob() -> void:
 	assert_bool(SoloDifficulty.for_grade("planner_v0_herofold").hero_fold).is_true()
 	assert_bool(SoloDifficulty.for_grade("planner_v0_herofold").planner).is_true()
-	assert_bool(SoloDifficulty.for_grade("planner_v0").hero_fold).is_false()
+	assert_bool(SoloDifficulty.for_grade("planner_v0").hero_fold).is_true()
 
 
 ## THE FOUR A/B ARMS. `arena_match.gd` FATALs on a grade that is not in PRESETS (the
 ## label-bug guard), and `for_grade` silently falls back to nachtmahr for an unknown name —
 ## so a typo'd arm would play the wrong AI under the right label. Pin all four by name.
+## NML-1073 M5 (maintainer 27.08.): the promotion flip made plain planner_v0 resolve like
+## planner_v0_both (both knobs on) — the three ARM presets below keep their own explicit,
+## unchanged combinations for future A/Bs.
 func test_all_four_ab_arms_resolve_with_the_expected_flags() -> void:
-	for row in [["planner_v0", false, false], ["planner_v0_herofold", false, true],
+	for row in [["planner_v0", true, true], ["planner_v0_herofold", false, true],
 			["planner_v0_pool1", true, false], ["planner_v0_both", true, true]]:
 		var name: String = row[0]
 		assert_bool(SoloDifficulty.PRESETS.has(name)) \

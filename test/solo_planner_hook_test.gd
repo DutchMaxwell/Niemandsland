@@ -130,11 +130,16 @@ func test_only_unpicked_activations_are_left_for_the_auto_line() -> void:
 		.is_not_equal(sc.move_act_seq())
 
 
-## NML-1073 M5 (experiment knob). DEFAULT OFF: a one-unit pool returns above the planner block
-## exactly as the shipped AI does — no planner record, no cached intent.
-func test_pool1_rollout_is_off_by_default() -> void:
+## NML-1073 M5 (experiment knob). The field default is OFF, but since the maintainer's M5
+## promotion (27.08.) the planner_v0 PRESET itself carries the knob on — so this proves the
+## shipped shortcut still exists by forcing the bit off explicitly, on top of the preset: a
+## one-unit pool then returns above the planner block exactly as the shipped AI does — no
+## planner record, no cached intent.
+func test_pool1_rollout_is_off_when_explicitly_disabled() -> void:
 	var sc := _controller()
-	sc.set_difficulty(2, SoloDifficulty.for_grade("planner_v0"))
+	var diff := SoloDifficulty.for_grade("planner_v0")
+	diff.pool1_rollout = false
+	sc.set_difficulty(2, diff)
 	var taker: GameUnit = sc.army_manager.game_units["Taker"]
 	assert_bool(sc._pool1_rollout_active()).is_false()
 	assert_object(sc._select_ai_unit([taker])).is_same(taker)
