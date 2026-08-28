@@ -180,10 +180,28 @@ func _play_one(game_seed: int) -> void:
 	# values from the game rng — its removal starts a new world era anyway
 	# (result stamp school_world=2 keeps corpora separate).
 	_world = SchoolTerrain.generate(game_seed)
+	# D8a: NML_OBJECTIVES=rulebook swaps the three constants for the seeded rulebook
+	# layout. The board is this tool's own SchoolTerrain world — the very cells its act
+	# header records — so the twin re-derives the layout from the header. The board seed
+	# IS game_seed here, so that is the objective stream's seed too.
+	if OS.get_environment("NML_OBJECTIVES").strip_edges().to_lower() == "rulebook":
+		var stamp_o := ObjectiveLayout.generate(game_seed, MissionCatalog.get_mission("duel"),
+			DeploymentCatalog.get_style("front_line"), _world["cells"], int(_world["n"]))
+		objectives = []
+		for rp in (stamp_o["positions"] as Array):
+			objectives.append(Vector3(float(rp[0]) * IN2M, 0.0, float(rp[1]) * IN2M))
+		AiActRecorder.objectives_stamp = stamp_o
+		printerr("[CORESP] objectives=rulebook: rolled %d, P%d first, seed %d, swept %d" % [
+			int(stamp_o["count_roll"]), int(stamp_o["first_placer"]), game_seed,
+			int(stamp_o["swept"])])
 	_deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng)
 	_deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng)
 	var state := _capture(units1 + units2, objectives, _world)
-	var owners := [0, 0, 0]
+	# D8a: the owner slot count follows the LAYOUT, not the historical three — the
+	# rulebook generator rolls D3+2 markers.
+	var owners: Array = []
+	for _oi in range(objectives.size()):
+		owners.append(0)
 	var vp := [0, 0]   # NML-1008: cumulative VPs, 1/marker at each round end
 	var opener := 1 if rng.randi_range(1, 6) >= rng.randi_range(1, 6) else 2
 	var positions_log: Array = []
@@ -613,7 +631,8 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array,
 		"tool": "core_selfplay", "seed": game_seed,
 		"dice_seed": game_seed, "grades": {"p1": "planner_core", "p2": "planner_core"},
 		"mission": {"family": "face_off", "name": "duel", "rounds": ROUNDS,
-			"deployment": "zone12", "symmetric": true, "objective_count": 3, "packs": []},
+			"deployment": "zone12", "symmetric": true,
+			"objective_count": owners.size(), "packs": []},
 		"armies": {"p1": _army1, "p2": _army2}, "opener": 0,
 		"objectives": {"p1": p1, "p2": p2, "neutral": owners.size() - p1 - p2},
 		"vp": {"p1": vp1, "p2": vp2}, "scoring": "end",

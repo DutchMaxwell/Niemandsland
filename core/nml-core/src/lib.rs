@@ -15,6 +15,7 @@ pub mod io;
 pub mod menu;
 pub mod mission;
 pub mod mv;
+pub mod objectives;
 pub mod plan;
 pub mod playout;
 pub mod rng;
@@ -59,6 +60,7 @@ pub use io::{
 };
 pub use menu::{candidates, candidates_in, candidates_tuned, Candidate, Tuning};
 pub use mv::{load_moves, read_moves, MoveCall, MoveCorpus, MoveHeader};
+pub use objectives::{generate as objective_layout, Cells as ObjectiveCells, Layout as ObjectiveLayoutOut};
 pub use mission::{
     apply_destroy_step, mission_winner, playout_seize, sabotage_winner, vp_end_bonus,
     vp_round_add, vp_score_end, vp_score_round,

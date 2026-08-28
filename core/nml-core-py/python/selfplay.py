@@ -427,6 +427,38 @@ def resolve_charge_gate(charge_gate: str) -> bool:
 #: add the consumers that deliberately break that.
 DICE_MODES = ("expected", "table")
 
+#: `objectives` modes (NML-1073 M5 D8a). "constant" is the default and is what
+#: EVERY corpus written before this knob contains: the three hard-coded centre-line
+#: markers `tools/core_selfplay.gd:177` and `tools/arena_match.gd:279` place, which
+#: are identical in all 168 games of qbg_ref. "rulebook" runs the seeded generator
+#: `core/nml-core/src/objectives.rs` mirrors from `scripts/solo/objective_layout.gd`:
+#: D3+2 markers, a roll-off for the first placer, then alternating placement rejected
+#: back to the book's constraints (outside both deployment zones, over 9" from every
+#: other marker, off an impassable cell). The draw stream is a `GodotRng` seeded with
+#: the LAYOUT seed — deliberately not the table's global RNG (the terrain layouter
+#: consumes it a data-dependent number of times) and not `SoloController._rng`.
+OBJECTIVES_MODES = ("constant", "rulebook")
+
+#: The catalog deployment style the harnesses play. Both `arena_match.gd` and
+#: `core_selfplay.gd` deploy FRONT_LINE 12" zones, so the twin's legality test uses
+#: the same polygons `assets/solo/deployments.json` gives that style.
+FRONT_LINE_ZONES = {
+    "zones": {
+        "1": [[[-36, -24], [36, -24], [36, -12], [-36, -12]]],
+        "2": [[[-36, 12], [36, 12], [36, 24], [-36, 24]]],
+    }
+}
+
+
+def resolve_objectives(objectives: str) -> str:
+    """The validated `objectives` mode. An unknown mode RAISES: a corpus whose file
+    claims a rulebook layout while it played the three constants is worse than none."""
+    if objectives not in OBJECTIVES_MODES:
+        raise ValueError(
+            "objectives must be one of %s, not %r" % (list(OBJECTIVES_MODES), objectives)
+        )
+    return objectives
+
 
 def resolve_dice(dice: str) -> str:
     """The validated `dice` mode. An unknown mode RAISES rather than falling
@@ -1053,6 +1085,7 @@ def play_game(
     engage_fold: bool = True,
     cond_ap: bool | None = None,
     vocab_version: int | None = None,
+    objectives: str = "constant",
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -1232,7 +1265,19 @@ def play_game(
     tray = nml_core.Tray(seed) if eff_dice == "table" else None
     dice_tally: dict[str, int] = {}
     # core_selfplay.gd:176 — three markers on the centre line, 16" apart.
-    objectives = [[f32(-16.0 * IN2M), 0.0, 0.0], [0.0, 0.0, 0.0], [f32(16.0 * IN2M), 0.0, 0.0]]
+    eff_objectives = resolve_objectives(objectives)
+    objective_layout: dict[str, Any] | None = None
+    if eff_objectives == "rulebook":
+        # D8a: the same layout the table places for this seed. The board is the very
+        # `terrain` object the act header carries, so the legality test sees the same
+        # impassable cells on both sides.
+        objective_layout = nml_core.objective_layout(terrain, seed, "d3+2", FRONT_LINE_ZONES)
+        objectives = [
+            [f32(float(x) * IN2M), 0.0, f32(float(z) * IN2M)]
+            for x, z in objective_layout["positions"]
+        ]
+    else:
+        objectives = [[f32(-16.0 * IN2M), 0.0, 0.0], [0.0, 0.0, 0.0], [f32(16.0 * IN2M), 0.0, 0.0]]
     if deploy_rng_seed is None:
         pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng)
         pos2 = deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng)
@@ -1245,7 +1290,7 @@ def play_game(
     plain = capture(units, pos1 + pos2, reads, board, objectives, attached, attached_to)
     state = core.state_of(plain)
 
-    owners = [0, 0, 0]
+    owners = [0] * len(objectives)
     vp = [0, 0]
     # The d6 roll-off, P1 winning ties — and BOTH dice are drawn, left first.
     left = rng.randi_range(1, 6)
@@ -1315,7 +1360,10 @@ def play_game(
             "rounds": ROUNDS,
             "deployment": "zone12",
             "symmetric": True,
-            "objective_count": 3,
+            "objective_count": len(owners),
+            # D8a: the layout INPUTS, present only when the rulebook generator ran, so
+            # a "constant" result is the same object it was before this knob existed.
+            **({"objectives_layout": objective_layout} if objective_layout else {}),
             "packs": [],
         },
         "armies": {"p1": str(list_p1), "p2": str(list_p2)},
