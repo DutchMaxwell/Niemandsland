@@ -75,15 +75,33 @@ def cells_differ(got, want) -> bool:
     return got != want if gi else abs(got - want) > 1e-9
 
 
-#: NML-1112 replay switch, NOT a game knob — the sibling of
-#: `list_to_profile.LEGACY_CORE_SELFPLAY` for the rule READING. `core_selfplay.gd`
-#: runs no aura expansion, so a "Furious Aura" carrier in this corpus answered the
-#: "Furious" query only through the pre-NML-1112 prefix match; two of the eight
-#: games carry such a unit and recorded it into column 18 (the flag) and column 13
-#: (melee EV). Neither reading is game-true — a real aura grants unit-wide, the
-#: prefix gave it to the carrier alone. This gate pins the SEARCH LOOP, not the
-#: rule; the loader gap is NML-1105.
-LEGACY_PREFIX_RULES = True
+#: The two replay switches this module needs, PER CORPUS — neither is a game
+#: knob, both are the corpus's own reading.
+#:
+#: `LEGACY_PREFIX_RULES` (NML-1112, #442): `core_selfplay.gd` ran no aura
+#: expansion before NML-1105, so a "Furious Aura" carrier answered the "Furious"
+#: query only through the pre-#442 PREFIX match, and recorded that into column 18
+#: (the flag) and column 13 (melee EV).
+#:
+#: `LEGACY_NO_COND_AP` (NML-1103, #448): `AiEv.stamp_conditional_ap` was not in
+#: the sim path, so the search valued Shatter / Tear / Disintegrate / Melee
+#: Slayer / Piercing Assault / Piercing Hunter at their PRINTED AP while the
+#: table resolved them with the bonus (main.gd:6319).
+#:
+#: A corpus recorded AFTER both fixes must be replayed with NEITHER, or the gate
+#: measures the fix instead of the encoder. MEASURED on `m3_oracle_v4` (cut at
+#: c94f825, which carries both): with the pins ON, 76 of 393 activations show a
+#: feature mismatch — `my_incoming` (42), `my_incoming_max` (36),
+#: `their_incoming` (34), `presence_mine` (20); with them OFF, 0 rows and 0
+#: feature comparisons differ out of 6396 rows / 198388 cells / 11790 keys. So
+#: the OLD corpora are listed by name and everything else gets the SHIPPED
+#: reading, which is what a corpus recorded from today's trainer needs.
+LEGACY_BY_CORPUS = {
+    "m3_oracle": (True, True),
+    "m3_oracle_v2": (True, True),
+    "m3_oracle_v3": (True, True),
+}
+LEGACY_PREFIX_RULES, LEGACY_NO_COND_AP = LEGACY_BY_CORPUS.get(ORACLE.name, (False, False))
 
 
 @pytest.fixture(autouse=True)
@@ -91,17 +109,6 @@ def _legacy_prefix_rules():
     nml_core.set_legacy_prefix_rules(LEGACY_PREFIX_RULES)
     yield
     nml_core.set_legacy_prefix_rules(False)
-
-
-#: NML-1103 replay switch, NOT a game knob — the sibling of `LEGACY_PREFIX_RULES`
-#: and `list_to_profile.LEGACY_CORE_SELFPLAY` for the conditional-AP family.
-#: `AiEv.stamp_conditional_ap` was never called in the sim path when this corpus
-#: was cut, so its search valued Shatter / Tear / Disintegrate / Melee Slayer /
-#: Piercing Assault / Piercing Hunter at their PRINTED AP while the table
-#: resolved them with the bonus (main.gd:6319). Replaying those games against the
-#: fixed EV would measure the fix, not the search loop this gate pins. Neither
-#: reading is game-true forever: re-record after NML-1105 and the flag retires.
-LEGACY_NO_COND_AP = True
 
 
 @pytest.fixture(autouse=True)
@@ -215,6 +222,13 @@ def test_red_the_legacy_prefix_reading_is_what_this_corpus_recorded():
     lines = [json.loads(l) for l in open(acts_path)]
     act = next(o for o in lines if o.get("kind") == "act")
     rules = act["state"]["units"]["p1_0_lezKVcK"]["prof"]["special_rules"]
+    if not LEGACY_PREFIX_RULES:
+        # The v4-side counterpart. NML-1105 gave `core_selfplay.gd` the table's
+        # aura expansion, so the same slot now carries a REAL unit-wide
+        # "Furious" and the shim has nothing left to do: the flag is 1 under
+        # BOTH readings, which is the fix working rather than a regression.
+        assert "Furious" in rules, rules
+        pytest.skip("%s expands auras (NML-1105) — the prefix shim is inert here" % ORACLE.name)
     assert "Furious Aura" in rules and "Furious" not in rules, rules
 
     #: `BattleSim.FLAG_RULES` slot for Furious — rows.rs:51, row column 18.
