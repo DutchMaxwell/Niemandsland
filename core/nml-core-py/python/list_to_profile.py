@@ -27,11 +27,15 @@ core_selfplay's lightweight loader never touches. Three consequences, all
 confirmed against the M3-0 oracle corpus (8 games, 101 units, 0 mismatches
 before this port existed to gate on the corpus for real):
 
-  * base_radius is ALWAYS 32 mm (0.016 m) — the loader never copies the
-    list's own "bases" field onto unit_properties, so SeparationChecker's
-    shape builder always falls through to its DEFAULT_BASE_MM. This is a
-    property of TODAY'S trainer, not a game rule; NML-1073 M3-8+ may need a
-    real base-size reader once the trainer's units carry positions/spacing.
+  * base_radius WAS always 32 mm (0.016 m). NML-1097 reads the list's own
+    "bases" field through opr_api_client.gd's parser instead: the ARENA's act
+    headers, recorded off these very lists, carry the real radii, and 131 of
+    qbf_ref's 148 roster units are not 32 mm. This is the first field where
+    this loader deliberately follows the TABLE and no longer reproduces
+    tools/core_selfplay.gd, which still has the bug — see tools/loader_gate.py.
+    Not ported: `_apply_tough_base_fallback` (opr_api_client.gd:609-633), the
+    keyword+Tough ladder for a unit Army Forge gave no usable base for; those
+    keep the 32 mm default and are the gate's remaining base residue.
   * item_grants and attached_hero_rules are ALWAYS empty — item-granted
     rules and live hero attachment are both import-path/MP-only features
     this loader never wires (NML-1081).
@@ -58,6 +62,7 @@ compute here too, not a shortcut that happens to pass.
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -65,6 +70,16 @@ from typing import Any
 # separation_checker.gd / opr_army_manager.gd constants (base-radius fallback)
 DEFAULT_BASE_MM = 32
 MM_TO_METERS = 0.001
+# opr_api_client.gd:650-657 — every parsed base dimension is clamped here.
+BASE_MM_MIN = 20
+BASE_MM_MAX = 150
+
+#: NML-1097 — replay switch, NOT a game knob. `tools/core_selfplay.gd` reads no
+#: base at all, so every model in a corpus THAT harness recorded sits on the
+#: 32 mm fallback with no Tough scaling. The seed-for-seed gates against those
+#: corpora (test_selfplay / test_sidecars) set this so they keep measuring the
+#: search loop instead of this fix; `tools/loader_gate.py` measures this fix.
+LEGACY_CORE_SELFPLAY = False
 
 # movement_range_controller.gd constants (name-based move-band fallback)
 OPR_ADVANCE_INCHES = 6
@@ -225,12 +240,116 @@ def _move_bands(special_rules: list[str]) -> dict[str, float]:
     return {"advance": float(max(0, advance)), "rush": float(max(0, rush))}
 
 
-def _base_radius_m(base_mm: int = DEFAULT_BASE_MM) -> float:
-    """separation_checker.gd:shape_for_model, the round-base branch with
-    model_tough == 1 (this loader never enlarges a model's base): radius =
-    (base_mm / 2) in metres, no Tough up-scaling. `base_mm` is a parameter
-    (not baked in) so the M3-3 red proof can flip it to prove the gate."""
-    return (base_mm / 2.0) * MM_TO_METERS
+def _is_valid_int(s: str) -> bool:
+    """GDScript `String.is_valid_int()` — an optional sign, then digits only."""
+    return re.fullmatch(r"[+-]?\d+", s) is not None
+
+
+def _is_valid_float(s: str) -> bool:
+    """GDScript `String.is_valid_float()`."""
+    return re.fullmatch(r"[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?", s) is not None
+
+
+def _is_usable_base_value(value: Any) -> bool:
+    """opr_api_client.gd:_is_usable_base_value — Army Forge answers
+    `bases:{round:"none"}` for a model it has no recommendation for, so a
+    non-empty dict is not proof of a real one."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return value > 0
+    if isinstance(value, str):
+        s = value.strip().lower()
+        if s in ("", "none", "null", "0"):
+            return False
+        return "x" in s or _is_valid_int(s) or _is_valid_float(s)
+    return False
+
+
+def _parse_base_size(value: Any, default: int = DEFAULT_BASE_MM) -> tuple[bool, int, int]:
+    """opr_api_client.gd:_parse_base_size — `(is_oval, width_mm, depth_mm)`.
+    A round base answers `(False, size, size)`; an oval "105x70" answers
+    `(True, 70, 105)` — width is the SHORT axis (perpendicular to facing),
+    depth the LONG one, whichever order Army Forge wrote them in."""
+    if value is None or isinstance(value, bool):
+        return (False, default, default)
+    if isinstance(value, int):
+        return (False, value, value)
+    if isinstance(value, float):
+        return (False, int(value), int(value))
+    if isinstance(value, str):
+        if "x" in value:
+            parts = value.split("x")
+            if len(parts) >= 2:
+                first = int(parts[0]) if _is_valid_int(parts[0]) else default
+                second = int(parts[1]) if _is_valid_int(parts[1]) else default
+                return (True, min(first, second), max(first, second))
+        if _is_valid_int(value):
+            return (False, int(value), int(value))
+        if _is_valid_float(value):
+            return (False, int(float(value)), int(float(value)))
+    return (False, default, default)
+
+
+def _clamp_mm(mm: int) -> int:
+    return max(BASE_MM_MIN, min(BASE_MM_MAX, mm))
+
+
+def _base_of(ud: dict[str, Any], game_system: str) -> dict[str, Any]:
+    """opr_api_client.gd:_apply_base_recommendation over ONE list selection ->
+    the three properties `SeparationChecker.shape_for_model` reads off
+    `unit_properties` (`base_is_oval` / `base_width_mm` / `base_depth_mm`).
+
+    PRECEDENCE RULE, verbatim from the table: an explicit Army-Forge
+    recommendation always WINS; without a usable one the unit keeps `OPRUnit`'s
+    32 mm round default (the table's Tough fallback is not ported — see the
+    module docstring). `aofr` reads the SQUARE recommendation first; its shape
+    is still `shape_for_model`'s round branch, off the longer edge."""
+    bases = ud.get("bases") or {}
+    if not isinstance(bases, dict):
+        bases = {}
+    if game_system == "aofr" and _is_usable_base_value(bases.get("square", "")):
+        _, w, d = _parse_base_size(bases.get("square", ""), 25)
+        return {"is_oval": False, "width_mm": _clamp_mm(w), "depth_mm": _clamp_mm(d)}
+    if _is_usable_base_value(bases.get("round", "")):
+        is_oval, w, d = _parse_base_size(bases.get("round", ""), DEFAULT_BASE_MM)
+        return {"is_oval": is_oval, "width_mm": _clamp_mm(w), "depth_mm": _clamp_mm(d)}
+    return {"is_oval": False, "width_mm": DEFAULT_BASE_MM, "depth_mm": DEFAULT_BASE_MM}
+
+
+def _base_size_from_tough(tough: int) -> int:
+    """opr_api_client.gd:_base_size_from_tough — the base long edge (mm) a
+    model's Tough alone justifies. 0 = normal infantry, keep the unit base."""
+    if tough >= 18:
+        return 150  # Titans
+    if tough >= 12:
+        return 120  # Large monsters / giants / large vehicles
+    if tough >= 9:
+        return 80
+    if tough >= 6:
+        return 60  # Monsters / vehicles
+    if tough >= 3:
+        return 40  # Large infantry / cavalry
+    return 0
+
+
+def _base_radius_m(base: dict[str, Any], model_tough: int = 1) -> float:
+    """`SoloController.model_base_radius_m` (solo_controller.gd:5187-5191) =
+    `SeparationChecker.shape_for_model(...).bounding_radius()` for the unit's
+    FIRST model — exactly the scalar an act header carries as `base_radius`.
+
+    A Tough model's base grows to `OPRArmyManager.model_base_long_mm`
+    (opr_army_manager.gd:1470) — unit base vs Tough-justified base, whichever is
+    longer — as a SCALE, so an oval keeps its proportions. Round: the scaled
+    radius. Oval: the circumscribed radius of the scaled half-axes
+    (separation_checker.gd:253-278, :137-140)."""
+    long_mm = max(base["width_mm"], base["depth_mm"])
+    scale = float(max(long_mm, _base_size_from_tough(model_tough))) / float(max(1, long_mm))
+    if base["is_oval"]:
+        semi_x = (base["width_mm"] / 2.0) * MM_TO_METERS * scale
+        semi_z = (base["depth_mm"] / 2.0) * MM_TO_METERS * scale
+        return math.sqrt(semi_x * semi_x + semi_z * semi_z)
+    return (long_mm / 2.0) * MM_TO_METERS * scale
 
 
 def _caster_value(special_rules: list[str], alive_count: int) -> int:
@@ -273,6 +392,7 @@ def _units_from_list(
     (joinToUnit + combined:true) into its host by selectionId. Returns the
     internal (pre-profile) unit dicts in host-creation order."""
     raw: list[dict] = data.get("units", [])
+    game_system = str(data.get("gameSystem", "gf"))
     units: dict[str, dict] = {}
     by_sel: dict[str, dict] = {}
     order: list[str] = []
@@ -331,6 +451,10 @@ def _units_from_list(
             "special_rules": rules,
             "weapons": [],
             "model_tough": [],
+            # NML-1097: the HOST selection's base. A combined-in partner folds
+            # its models in and its own `bases` is dropped — `_merge_combined_units`
+            # (opr_api_client.gd:1378-1411) keeps the anchor half's base.
+            "base": _base_of(ud, game_system),
         }
         append_selection(u, ud)
         by_sel[str(ud.get("selectionId", ""))] = u
@@ -375,7 +499,9 @@ def _unit_profile(u: dict[str, Any], faction: str, game_system: str) -> dict[str
         "special_rules": special_rules,
         "caster_value": _caster_value(special_rules, model_count),
         "move_bands": _move_bands(special_rules),
-        "base_radius": _base_radius_m(),
+        "base_radius": (DEFAULT_BASE_MM / 2.0) * MM_TO_METERS
+        if LEGACY_CORE_SELFPLAY
+        else _base_radius_m(u["base"], u["model_tough"][0] if u["model_tough"] else 1),
         "game_system": game_system,
         "faction_folder": faction,
         "item_grants": [],

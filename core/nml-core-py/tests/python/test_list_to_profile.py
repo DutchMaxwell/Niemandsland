@@ -41,6 +41,16 @@ from list_to_profile import (  # noqa: E402
 ORACLE_DIR = Path.home() / "selfplay_out" / "m3_oracle_v2"
 AI_LISTS_DIR = Path.home() / "nml-mission" / "farm" / "ai_lists"
 
+#: NML-1097 — fields this loader deliberately no longer reproduces field for
+#: field. `tools/core_selfplay.gd:_units_from_list` never copies a list's
+#: "bases" onto `unit_properties`, so every unit in an M3 corpus header was
+#: recorded at the 32 mm fallback; the ARENA, importing the SAME lists through
+#: the table's own path, records the real radii. The trainer now follows the
+#: table, so this corpus can no longer gate the column — `tools/loader_gate.py`
+#: (against the arena's act headers) does, and it is the stronger oracle.
+#: Everything else below still has to match core_selfplay exactly.
+DIVERGED_FROM_CORE_SELFPLAY = ("base_radius",)
+
 
 # === synthetic unit tests =====================================================
 
@@ -225,17 +235,59 @@ def test_weapon_rule_keeps_its_rating():
     assert weapon["ap"] == 1
 
 
-def test_base_radius_is_the_32mm_trainer_default():
-    """core_selfplay's loader never copies a list's "bases" field onto the
-    unit, so every model falls back to the SAME 32 mm default regardless of
-    what "bases" says — this port matches that (see module docstring)."""
-    data = {
-        "gameSystem": "gf",
-        "units": [_selection("u", "Unit", size=1)],
-        "bases": {"round": "60mm"},  # present in the JSON, ignored by the loader
-    }
-    profiles = profiles_from_army_forge_json(data, "test_faction", player=1)
-    assert profiles["p1_0_u"]["base_radius"] == pytest.approx(0.016, abs=1e-9)
+def _radius_of(sel: dict, system: str = "gf") -> float:
+    data = {"gameSystem": system, "units": [sel]}
+    return profiles_from_army_forge_json(data, "test_faction", player=1)["p1_0_u"][
+        "base_radius"
+    ]
+
+
+def test_base_radius_reads_the_lists_round_base():
+    """NML-1097: a 25 mm base is 12.5 mm of radius, not the 32 mm default."""
+    sel = _selection("u", "Unit", size=1)
+    sel["bases"] = {"round": "25", "square": "25"}
+    assert _radius_of(sel) == pytest.approx(0.0125, abs=1e-12)
+
+
+def test_a_tough_model_scales_its_base_up():
+    """`OPRArmyManager.model_base_long_mm`: Tough(3) justifies a 40 mm long
+    edge, so a 25 mm base is scaled by 40/25 — the arena's own 0.02 for every
+    Tough(3) hero on a 25 mm base. A 40 mm base is already there and unchanged."""
+    small = _selection("u", "Unit", size=1, rules=[{"label": "Tough(3)"}])
+    small["bases"] = {"round": "25"}
+    assert _radius_of(small) == pytest.approx(0.0125 * (40.0 / 25.0), abs=1e-12)
+    big = _selection("u", "Unit", size=1, rules=[{"label": "Tough(3)"}])
+    big["bases"] = {"round": "40"}
+    assert _radius_of(big) == pytest.approx(0.02, abs=1e-12)
+
+
+def test_an_oval_base_answers_its_circumscribed_radius():
+    """`BaseShape.bounding_radius` of the oval `shape_for_model` builds — the
+    105x70 mm walker the arena records as 0.0630971..., not a 32 mm round."""
+    sel = _selection("u", "Unit", size=1, rules=[{"label": "Tough(6)"}])
+    sel["bases"] = {"round": "105x70", "square": "100x60"}
+    want = math.sqrt(0.0525**2 + 0.035**2)
+    assert _radius_of(sel) == pytest.approx(want, abs=1e-12)
+
+
+def test_an_unusable_base_keeps_the_32mm_default():
+    """Army Forge answers `round:"none"` for a model it has no recommendation
+    for. The table then runs its Tough ladder; this loader does not (module
+    docstring), so the unit keeps OPRUnit's 32 mm — scaled by Tough like any
+    other base, which is why a Tough(12) tank reads 60 mm of radius here."""
+    sel = _selection("u", "Unit", size=1, rules=[{"label": "Tough(12)"}])
+    sel["bases"] = {"round": "none", "square": "none"}
+    assert _radius_of(sel) == pytest.approx(0.016 * (120.0 / 32.0), abs=1e-12)
+    plain = _selection("u", "Unit", size=1)
+    plain["bases"] = {}
+    assert _radius_of(plain) == pytest.approx(0.016, abs=1e-12)
+
+
+def test_a_regiments_list_reads_the_square_base():
+    """`aofr` takes the SQUARE recommendation first (opr_api_client.gd:643)."""
+    sel = _selection("u", "Unit", size=1)
+    sel["bases"] = {"round": "25", "square": "40x40"}
+    assert _radius_of(sel, system="aofr") == pytest.approx(0.02, abs=1e-12)
 
 
 # === corpus gate ===============================================================
@@ -291,6 +343,8 @@ def test_matches_oracle_header(game_dir: Path):
     mismatches = []
     for uid, wprof in want.items():
         for k, wv in wprof.items():
+            if k in DIVERGED_FROM_CORE_SELFPLAY:
+                continue
             r = _deep_eq(wv, got[uid].get(k))
             if r:
                 mismatches.append(f"{uid}.{k}{r}")

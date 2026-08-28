@@ -35,6 +35,7 @@ import nml_core
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 
+import list_to_profile  # noqa: E402
 import selfplay as sp  # noqa: E402
 import sidecar_gate as gate  # noqa: E402
 
@@ -56,6 +57,22 @@ LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
 ARMY1 = LISTS / "robot_legions_1000.json"
 ARMY2 = LISTS / "blessed_sisters_1000.json"
 GATE_SEEDS = range(27, 47)
+
+
+@pytest.fixture(autouse=True)
+def _legacy_core_selfplay_loader():
+    """NML-1097: every corpus this module gates against was recorded by
+    `tools/core_selfplay.gd`, whose loader never copies a list's base sizes — so
+    every model in it sits on the 32 mm fallback. The trainer now reads the real
+    bases (it follows the TABLE, not that harness), so a seed-for-seed replay of
+    THOSE games must ask the loader for THAT reading; otherwise this gate would
+    be measuring the loader fix instead of the search loop, and the fix has its
+    own gate in `tools/loader_gate.py`."""
+    before = list_to_profile.LEGACY_CORE_SELFPLAY
+    list_to_profile.LEGACY_CORE_SELFPLAY = True
+    yield
+    list_to_profile.LEGACY_CORE_SELFPLAY = before
+
 
 #: `board_rows` writes one row per living unit, then one per objective (type 3),
 #: then the single game-state row (type 4) — battle_sim.gd:210-283.
