@@ -122,16 +122,11 @@ def main(argv: list[str]) -> int:
     ref_dir = Path(a.ref)
     seeds = parse_seeds(a.seeds)
     core = nml_core.load(a.repo)
-    hero_attach = a.hero_attach
-    if hero_attach == "auto":
-        # The FIRST seed that carries an act corpus decides for the run: one
-        # reference directory is one recording session, one mode.
-        found = next(
-            (p for s in seeds if (p := ref_dir / ("acts_%d" % s) / "acts.jsonl").exists()),
-            None,
-        )
-        hero_attach = sp.hero_attach_of_corpus(found) if found else "off"
-        print("hero_attach   %s (read off %s)" % (hero_attach, found or "nothing — default"))
+    hero_attach, source = sp.resolve_hero_attach_mode(
+        a.hero_attach, (ref_dir / ("acts_%d" % s) / "acts.jsonl" for s in seeds)
+    )
+    if a.hero_attach == "auto":
+        print("hero_attach   %s (read off %s)" % (hero_attach, source or "nothing — default"))
 
     compared = equal = missing = 0
     first: tuple | None = None

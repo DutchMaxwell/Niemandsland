@@ -533,6 +533,20 @@ def hero_attach_of_corpus(acts_path) -> str:
     return "join" if any(u.get("attached_to") for u in units.values()) else "off"
 
 
+def resolve_hero_attach_mode(mode: str, acts_paths) -> str:
+    """`mode` verbatim, unless it is "auto" — then the FIRST readable act corpus
+    in `acts_paths` decides, because one reference directory is one recording
+    session and one mode. No readable corpus at all reads "off", which is what
+    every corpus written before NML-1105 is. Returns `(mode, source_path)` so
+    the caller can SAY which file decided instead of asserting a mode."""
+    if mode != "auto":
+        return mode, None
+    for path in acts_paths:
+        if path is not None and Path(path).is_file():
+            return hero_attach_of_corpus(path), path
+    return "off", None
+
+
 # `AiActRecorder._header_line` act_recorder.gd:144-150 resolves these from the
 # planner's class statics; `tools/core_selfplay.gd` runs them at their defaults
 # with NML_SIM_SPACING on and NML_SIM_CAST off, which is what a recorded header
