@@ -10,8 +10,10 @@ OWN-owner die COUNTS. Stdlib only, no `nml_core`, no build — MEASURING only.
 
 ACT SELECTION mirrors `shoot_replay_gate.py` (PR #404): `kind` in
 HOLD/ADVANCE (0, 1) with a `shoot` target. An act's ordinal is the 1-based
-position of its `act` line among `kind == "act"` lines — no seed/tray replay,
-this tool never touches the dice STREAM, only the per-act tally.
+position of its `act` line among ALL body lines of KIND `act` OR `auto` (PR
+#408) — the same interleaved numbering `dice.jsonl`/`shots.jsonl` stamp
+their own `act` field with; no seed/tray replay, this tool never touches the
+dice STREAM, only the per-act tally.
 
 OWN vs HERO vs OTHER: `dice.jsonl` lines carry `owner` as "AI (Name)". Own =
 owner names the shooter's profile (`head.profiles[shooter]`, NOT
@@ -55,8 +57,17 @@ def effective_attacks(attacks: int, s: int, max_models: int) -> int:
 
 
 def read_game(d: Path) -> tuple[dict, list[dict], list[dict]]:
+    """`act_lines` come back stamped with their INTERLEAVED ordinal (position
+    among `kind in ("act", "auto")` lines, not among `"act"` lines alone) --
+    the same numbering `dice.jsonl`/`shots.jsonl` use (shoot_replay_gate.py's
+    `read_game`, PR #408). Mirrored here rather than imported: that reader
+    also requires `nml_core` and an `arena_*.json` sidecar this tool has no
+    other use for."""
     acts = [json.loads(x) for x in (d / "acts.jsonl").read_text().splitlines() if x.strip()]
-    act_lines = [a for a in acts[1:] if a.get("kind") == "act"]
+    act_lines = []
+    for i, a in enumerate((x for x in acts[1:] if x.get("kind") in ("act", "auto")), 1):
+        if a.get("kind") == "act":
+            act_lines.append(dict(a, act=i))
     dice = [json.loads(x) for x in (d / "dice.jsonl").read_text().splitlines() if x.strip()]
     return acts[0], act_lines, dice
 
@@ -126,7 +137,8 @@ def collect(ref: Path, limit: int) -> list[dict]:
     records = []
     for d in games:
         head, act_lines, dice = read_game(d)
-        for k, act in enumerate(act_lines, 1):
+        for act in act_lines:
+            k = act["act"]  # the INTERLEAVED ordinal `read_game` stamped
             action = (act.get("pick") or {}).get("action") or {}
             if int(action.get("kind", -1)) not in SHOOTING_KINDS or not action.get("shoot"):
                 continue
