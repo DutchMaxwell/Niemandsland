@@ -514,6 +514,27 @@ CHARGE_LANDING_MODES = ("off", "table")
 #: engage gate subtracts is the arc the table actually walked.
 MOVEMENT_MODES = ("rigid", "table")
 
+#: `sighting` modes (NML-1073 M5 D6a-B4). "unit" is the default and is every
+#: corpus written before this knob: `BattleSim._profiles_of`
+#: (battle_sim.gd:714-749) fires the WHOLE unit. "model" is the table's own
+#: rule (`main._run_ai_shooting` :3131-3134, GF Advanced Rules v3.5.1 p.8) —
+#: per (member, weapon), only the models with both range and line of sight.
+#: The crate has carried the header knob since D6a-B4 (`acts::Sighting`); this
+#: is the trainer's way of reaching it, so a Godot-free corpus can be written
+#: at the same sighting fidelity a recorded one is replayed at.
+SIGHTING_MODES = ("unit", "model")
+
+
+def resolve_sighting(sighting: str) -> str:
+    """The validated `sighting` mode, as the header spells it. An unknown mode
+    RAISES for the same reason `resolve_dice` does: a corpus whose header
+    claims a rung it did not play is worse than no corpus."""
+    if sighting not in SIGHTING_MODES:
+        raise ValueError(
+            "sighting must be one of %s, not %r" % (list(SIGHTING_MODES), sighting)
+        )
+    return sighting
+
 
 def resolve_hero_attach(hero_attach: str) -> bool:
     """The FOLD bit — `Seams::hero_attach` (io.rs) and the header's own
@@ -1028,6 +1049,7 @@ def play_game(
     dice: str = "expected",
     charge_landing: str = "off",
     movement: str = "rigid",
+    sighting: str = "unit",
     engage_fold: bool = True,
     cond_ap: bool | None = None,
     vocab_version: int | None = None,
@@ -1138,6 +1160,7 @@ def play_game(
     eff_dice = resolve_dice(dice)
     eff_charge_landing = resolve_charge_landing(charge_landing)
     eff_movement = resolve_movement(movement)
+    eff_sighting = resolve_sighting(sighting)
     knobs = dict(
         TRAINER_KNOBS,
         top_k=eff_top_k,
@@ -1155,6 +1178,10 @@ def play_game(
         # NML-1073 M5 D5-2: the charge MOVE itself. "rigid" leaves it False,
         # which is the default and what every earlier corpus carries.
         movement=eff_movement,
+        # NML-1073 M5 D6a-B4: how a VOLLEY counts its shooters. "unit" is the
+        # crate's own default and what every earlier corpus carries, so a caller
+        # that passes nothing writes the identical header.
+        sighting=eff_sighting,
         # NML-1130: the header knob PR #446 defaults ON in the twin. True here
         # matches that default, so a caller that passes nothing sees no change.
         engage_fold=engage_fold,
@@ -1269,6 +1296,7 @@ def play_game(
             "dice": eff_dice,
             "charge_landing": charge_landing,
             "movement": movement,
+            "sighting": eff_sighting,
             "engage_fold": engage_fold,
             "cond_ap": cond_ap,
         },
@@ -1425,6 +1453,15 @@ def main(argv: list[str]) -> int:
         "target's contact boundary; 'rigid' (default) translates the whole unit "
         "by one clamped delta",
     )
+    ap.add_argument(
+        "--sighting",
+        choices=list(SIGHTING_MODES),
+        default="unit",
+        help="'model' counts a volley the table's way — per model and per "
+        "weapon, only the models with both range and line of sight; 'unit' "
+        "(default) fires the whole unit, which is what every corpus written "
+        "before D6a-B4 carries",
+    )
     a = ap.parse_args(argv)
 
     core = nml_core.load(a.repo)
@@ -1449,6 +1486,7 @@ def main(argv: list[str]) -> int:
             dice=a.dice,
             charge_landing=a.charge_landing,
             movement=a.movement,
+            sighting=a.sighting,
         )
         res["wall_seconds"] = round(time.perf_counter() - t0, 3)
         if a.out:
