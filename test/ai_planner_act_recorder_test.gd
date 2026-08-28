@@ -116,6 +116,44 @@ func test_auto_no_ops_before_the_header_exists() -> void:
 	assert_int(_dump_lines().size()).is_equal(0)
 
 
+## NML-1073 M5 D5-4b: the header profile carries the base SHAPE, not only the
+## circumscribing radius. `base_radius` is `BaseShape.bounding_radius()`, while
+## the table's own contact measure walks the exact SUPPORT EXTENT of an oval
+## (SeparationChecker._edge_distance_meters separation_checker.gd:290) — so a
+## reader with the radius alone mis-measures every vehicle, cavalry and monster
+## base, and no consumer can fix that without the axes being recorded.
+func test_unit_profile_records_the_base_shape_and_its_axes() -> void:
+	var round_unit := _armed(1, [Vector3.ZERO], "R")
+	var p_round := BattleSim._unit_profile(round_unit)
+	assert_bool(p_round.has("base_shape")).is_true()
+	assert_str(str(p_round.get("base_shape", ""))).is_equal("round")
+	# No base keys on the unit at all: shape_for_model's own fallback, 32 mm.
+	assert_int(int(p_round.get("base_w_mm", 0))).is_equal(SeparationChecker.DEFAULT_BASE_MM)
+	assert_int(int(p_round.get("base_d_mm", 0))).is_equal(SeparationChecker.DEFAULT_BASE_MM)
+
+	# A Battle Tank's 92 x 120 oval — the class the pessimism was measured on.
+	var tank := _armed(2, [Vector3.ZERO], "T")
+	tank.unit_properties["base_is_oval"] = true
+	tank.unit_properties["base_width_mm"] = 92
+	tank.unit_properties["base_depth_mm"] = 120
+	var p_oval := BattleSim._unit_profile(tank)
+	assert_str(str(p_oval.get("base_shape", ""))).is_equal("oval")
+	assert_int(int(p_oval.get("base_w_mm", 0))).is_equal(92)
+	assert_int(int(p_oval.get("base_d_mm", 0))).is_equal(120)
+	# The two axes are what the radius cannot say: the SHORT one is 0.046 m and
+	# the recorded radius is the circumscribed 0.0756 m, 64 % larger.
+	assert_float(float(p_oval["base_radius"])).is_greater(0.046)
+
+	# A square base is recorded ROUND on purpose: shape_for_model (:267-278) has
+	# no RECT branch, so the table itself measures it off base_size_round.
+	var block := _armed(1, [Vector3.ZERO], "S")
+	block.unit_properties["base_is_square"] = true
+	block.unit_properties["base_size_round"] = 40
+	var p_sq := BattleSim._unit_profile(block)
+	assert_str(str(p_sq.get("base_shape", ""))).is_equal("round")
+	assert_int(int(p_sq.get("base_w_mm", 0))).is_equal(40)
+
+
 func _dump_lines() -> Array:
 	var f := FileAccess.open(_DUMP_DIR.path_join("acts.jsonl"), FileAccess.READ)
 	if f == null:
@@ -165,6 +203,10 @@ func test_begin_and_finish_write_header_and_act_line() -> void:
 	# so they moved into the per-ACTIVATION block asserted below.
 	assert_bool(a_profile.has("shooting_range_bonus")).is_false()
 	assert_bool(a_profile.has("max_activation_advance_bonus_in")).is_false()
+	# NML-1073 M5 D5-4b: the base SHAPE reaches the written header, not only
+	# `BattleSim._unit_profile`'s return value.
+	for k in ["base_radius", "base_shape", "base_w_mm", "base_d_mm"]:
+		assert_bool(a_profile.has(k)).is_true()
 	assert_bool(header.has("knobs")).is_true()
 	for knob in ["top_k", "horizon", "tail_cap_p1", "tail_cap_p2", "imagined_round_end",
 			"depth_discount", "seat_mode", "playout_margin", "playout_rich",

@@ -1627,6 +1627,25 @@ static func _unit_profile(u: GameUnit) -> Dictionary:
 			"rush": float(bands.get("rush", 12))},
 		"base_radius": SoloController.model_base_radius_m(u.models[0]) \
 			if not u.models.is_empty() else SeparationChecker.DEFAULT_BASE_RADIUS_M,
+		# NML-1073 M5 D5-4b: the base SHAPE, which `base_radius` above cannot carry.
+		# That scalar is `BaseShape.bounding_radius()`, i.e. the CIRCUMSCRIBING circle,
+		# while SeparationChecker._edge_distance_meters (separation_checker.gd:290)
+		# measures the exact SUPPORT EXTENT of an oval. A reader with the radius alone
+		# therefore mis-measures every oval base (vehicles, cavalry, monsters) by the
+		# difference between the two. The three keys here are the unit's UNSCALED list
+		# reading, exactly the props shape_for_model (:267-278) reads; the per-MODEL
+		# Tough scale is already in state["radii"], so a consumer recovers each model's
+		# semi-axes as radius * (axis_mm / max(base_w_mm, base_d_mm)).
+		# "rect" is accepted by the readers and never written here: shape_for_model has
+		# no RECT branch — a `base_is_square` unit gets a ROUND shape off base_size_round
+		# — so writing it would claim a geometry the table does not use.
+		"base_shape": "oval" if u.unit_properties.get("base_is_oval", false) else "round",
+		"base_w_mm": int(u.unit_properties.get("base_width_mm", SeparationChecker.DEFAULT_BASE_MM)) \
+			if u.unit_properties.get("base_is_oval", false) \
+			else int(u.unit_properties.get("base_size_round", SeparationChecker.DEFAULT_BASE_MM)),
+		"base_d_mm": int(u.unit_properties.get("base_depth_mm", SeparationChecker.DEFAULT_BASE_MM)) \
+			if u.unit_properties.get("base_is_oval", false) \
+			else int(u.unit_properties.get("base_size_round", SeparationChecker.DEFAULT_BASE_MM)),
 		"game_system": str(u.unit_properties.get("game_system", "")),
 		"faction_folder": str(u.unit_properties.get("faction_folder", "")),
 		# NML-1073 M1-2: the two remaining registry INPUTS the flat rule list

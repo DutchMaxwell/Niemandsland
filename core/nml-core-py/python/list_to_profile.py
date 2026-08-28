@@ -643,6 +643,43 @@ def _base_radius_m(base: dict[str, Any], model_tough: int = 1) -> float:
     return (long_mm / 2.0) * MM_TO_METERS * scale
 
 
+#: NML-1073 M5 D5-4b — the base SHAPES an act-header profile may name.
+#: `"rect"` is READ and never written: `SeparationChecker.shape_for_model`
+#: (separation_checker.gd:253-278) has no RECT branch, so a `base_is_square`
+#: unit gets a ROUND shape off `base_size_round` and the recorder says round.
+BASE_SHAPES = ("round", "oval", "rect")
+
+
+def base_shape_of(profile: dict[str, Any]) -> tuple[str, int | None, int | None]:
+    """The base SHAPE of one act-header profile: `(base_shape, w_mm, d_mm)`.
+
+    WHY IT IS NOT `base_radius`. That scalar is `BaseShape.bounding_radius()`,
+    the CIRCUMSCRIBING circle of the unit's first model, while the table's own
+    contact measure `SeparationChecker._edge_distance_meters`
+    (separation_checker.gd:290) walks the exact SUPPORT EXTENT of an oval. A
+    reader with the radius alone therefore mis-measures every oval base —
+    vehicles, cavalry, monsters — and no amount of Rust can fix it, because the
+    corpus did not carry the shape. `BattleSim._unit_profile` records these
+    three keys from D5-4b on; this is the reader for them.
+
+    A header recorded BEFORE D5-4b carries none of the three. That is answered
+    `("round", None, None)`: round is what every consumer already assumes, and
+    the two `None`s say the axes are unknown rather than 32 mm. An unknown
+    `base_shape` RAISES — reading a geometry this port cannot draw as if it
+    were a circle is the silent skip, not the safe default.
+
+    The mm are the unit's UNSCALED list reading. The per-MODEL Tough scale is
+    already in `state["radii"]`, so each model's semi-axes come back as
+    `radius * (axis_mm / max(w_mm, d_mm))`.
+    """
+    shape = str(profile.get("base_shape") or "round")
+    if shape not in BASE_SHAPES:
+        raise ValueError("unknown base_shape %r — expected one of %s"
+                         % (shape, ", ".join(BASE_SHAPES)))
+    w, d = profile.get("base_w_mm"), profile.get("base_d_mm")
+    return shape, (None if w is None else int(w)), (None if d is None else int(d))
+
+
 def _caster_value(special_rules: list[str], alive_count: int) -> int:
     """game_unit.gd:get_caster_value — Caster(X) rating, else Caster Group's
     alive-model count, else Spell Accumulator(X), else 0."""
