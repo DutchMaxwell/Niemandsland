@@ -33,9 +33,9 @@ before this port existed to gate on the corpus for real):
     qbf_ref's 148 roster units are not 32 mm. This is the first field where
     this loader deliberately follows the TABLE and no longer reproduces
     tools/core_selfplay.gd, which still has the bug — see tools/loader_gate.py.
-    Not ported: `_apply_tough_base_fallback` (opr_api_client.gd:609-633), the
-    keyword+Tough ladder for a unit Army Forge gave no usable base for; those
-    keep the 32 mm default and are the gate's remaining base residue.
+    NML-1097b ports `_apply_tough_base_fallback` (opr_api_client.gd:609-633)
+    too: the keyword+Tough ladder that sizes a unit Army Forge gave no usable
+    base for (`bases:{round:"none"}`, common for vehicles) — see `_base_of`.
   * item_grants was ALWAYS empty, and with it every rule an item grants was
     missing from special_rules. NML-1098 ports the table's own loadout pass
     (opr_api_client.gd:_parse_tts_unit :738-813): a non-weapon loadout entry
@@ -481,16 +481,107 @@ def _clamp_mm(mm: int) -> int:
     return max(BASE_MM_MIN, min(BASE_MM_MAX, mm))
 
 
-def _base_of(ud: dict[str, Any], game_system: str) -> dict[str, Any]:
+#: opr_api_client.gd:531-534 — keyword heuristics for classifying a bracketless big
+#: single model when Army Forge gave no usable base. VEHICLE_KEYWORDS is checked
+#: FIRST (NML-993): vehicle-heavy names ("APC", "tank", ...) win over walker-shaped
+#: words ("Knight Brothers APC" is a transport, not a knight-walker).
+VEHICLE_KEYWORDS = ("apc", "tank", "transport", "carrier", "hover", "chariot", "buggy")
+WALKER_KEYWORDS = (
+    "walker", "mech", "dreadnought", "sentinel", "war-suit", "warsuit", "exo", "knight", "suit",
+)
+ARTILLERY_KEYWORDS = (
+    "artillery", "cannon", "mortar", "howitzer", "battery", "ballista", "catapult", "bombard",
+)
+MONSTER_KEYWORDS = (
+    "dragon", "beast", "monster", "wyrm", "behemoth", "daemon", "demon", "hive", "kraken",
+    "hydra", "giant", "ogre", "troll",
+)
+
+
+def _tough_from_rules(rules: list[str]) -> int:
+    """opr_api_client.gd:_tough_from_rules — Tough(x) off a special_rules array (0 if none)."""
+    for r in rules:
+        s = str(r)
+        if s.startswith("Tough(") and s.endswith(")") and _is_valid_int(s[len("Tough(") : -1]):
+            return int(s[len("Tough(") : -1])
+    return 0
+
+
+def _classify_big_model(name: str, size: int, tough: int) -> str:
+    """opr_api_client.gd:_classify_big_model — walker / vehicle / artillery / monster, or ""
+    for infantry/cavalry/hero (sized by the round Tough ladder instead). Multi-model units are
+    never a vehicle; a keyword-less single model is only a vehicle once Tough >= 6."""
+    if size > 1:
+        return ""
+    n = name.lower()
+    for kw in VEHICLE_KEYWORDS:
+        if kw in n:
+            return "vehicle"
+    for kw in WALKER_KEYWORDS:
+        if kw in n:
+            return "walker"
+    for kw in ARTILLERY_KEYWORDS:
+        if kw in n:
+            return "artillery"
+    for kw in MONSTER_KEYWORDS:
+        if kw in n:
+            return "monster"
+    return "vehicle" if tough >= 6 else ""
+
+
+def _walker_base_mm(tough: int) -> int:
+    """opr_api_client.gd:_walker_base_mm — ROUND base (mm) by Tough."""
+    if tough >= 18:
+        return 120
+    if tough >= 15:
+        return 100
+    if tough >= 12:
+        return 80
+    if tough >= 9:
+        return 60
+    if tough >= 6:
+        return 50
+    return 40
+
+
+def _vehicle_base_mm(tough: int) -> tuple[int, int]:
+    """opr_api_client.gd:_vehicle_base_mm — OVAL base (width_mm, depth_mm) by Tough."""
+    if tough >= 18:
+        return (105, 170)
+    if tough >= 15:
+        return (92, 150)
+    if tough >= 12:
+        return (92, 120)
+    if tough >= 9:
+        return (70, 105)
+    if tough >= 6:
+        return (52, 90)
+    return (42, 75)
+
+
+def _artillery_base_mm(tough: int) -> tuple[int, int]:
+    """opr_api_client.gd:_artillery_base_mm — OVAL base (width_mm, depth_mm) by Tough."""
+    if tough >= 9:
+        return (52, 90)
+    if tough >= 6:
+        return (42, 75)
+    return (35, 60)
+
+
+def _base_of(ud: dict[str, Any], game_system: str, rules: list[str]) -> dict[str, Any]:
     """opr_api_client.gd:_apply_base_recommendation over ONE list selection ->
     the three properties `SeparationChecker.shape_for_model` reads off
     `unit_properties` (`base_is_oval` / `base_width_mm` / `base_depth_mm`).
 
     PRECEDENCE RULE, verbatim from the table: an explicit Army-Forge
-    recommendation always WINS; without a usable one the unit keeps `OPRUnit`'s
-    32 mm round default (the table's Tough fallback is not ported — see the
-    module docstring). `aofr` reads the SQUARE recommendation first; its shape
-    is still `shape_for_model`'s round branch, off the longer edge."""
+    recommendation always WINS; without a usable one, `_apply_tough_base_fallback`
+    (opr_api_client.gd:609-633) sizes the unit from its TYPE (keyword + Tough) —
+    see `_classify_big_model` and friends above. Its "never shrink below the
+    existing base" guard is not reproduced: every ladder mm here (>= 35) already
+    exceeds `OPRUnit`'s 32 mm round default, the only base this fallback ever
+    starts from, so the guard can never actually block anything. `aofr` reads the
+    SQUARE recommendation first; its shape is still `shape_for_model`'s round
+    branch, off the longer edge."""
     bases = ud.get("bases") or {}
     if not isinstance(bases, dict):
         bases = {}
@@ -500,7 +591,21 @@ def _base_of(ud: dict[str, Any], game_system: str) -> dict[str, Any]:
     if _is_usable_base_value(bases.get("round", "")):
         is_oval, w, d = _parse_base_size(bases.get("round", ""), DEFAULT_BASE_MM)
         return {"is_oval": is_oval, "width_mm": _clamp_mm(w), "depth_mm": _clamp_mm(d)}
-    return {"is_oval": False, "width_mm": DEFAULT_BASE_MM, "depth_mm": DEFAULT_BASE_MM}
+    tough = _tough_from_rules(rules)
+    if tough < 3:
+        return {"is_oval": False, "width_mm": DEFAULT_BASE_MM, "depth_mm": DEFAULT_BASE_MM}
+    verdict = _classify_big_model(str(ud.get("name", "")), int(ud.get("size", 1)), tough)
+    if verdict == "vehicle":
+        w, d = _vehicle_base_mm(tough)
+        return {"is_oval": True, "width_mm": _clamp_mm(w), "depth_mm": _clamp_mm(d)}
+    if verdict == "artillery":
+        w, d = _artillery_base_mm(tough)
+        return {"is_oval": True, "width_mm": _clamp_mm(w), "depth_mm": _clamp_mm(d)}
+    if verdict in ("walker", "monster"):
+        mm = _clamp_mm(_walker_base_mm(tough))
+        return {"is_oval": False, "width_mm": mm, "depth_mm": mm}
+    mm = _clamp_mm(_base_size_from_tough(tough))  # large infantry / cavalry
+    return {"is_oval": False, "width_mm": mm, "depth_mm": mm}
 
 
 def _base_size_from_tough(tough: int) -> int:
@@ -632,10 +737,13 @@ def _units_from_list(
             "item_grants": grants,
             "weapons": [],
             "model_tough": [],
-            # NML-1097: the HOST selection's base. A combined-in partner folds
-            # its models in and its own `bases` is dropped — `_merge_combined_units`
-            # (opr_api_client.gd:1378-1411) keeps the anchor half's base.
-            "base": _base_of(ud, game_system),
+            # NML-1097 / NML-1097b: the HOST selection's base. A combined-in partner
+            # folds its models in and its own `bases` is dropped — `_merge_combined_units`
+            # (opr_api_client.gd:1378-1411) keeps the anchor half's base. `rules` is
+            # this selection's already-assembled special_rules (base rules + loadout
+            # grants) — the Tough(x) fallback classifier reads the same set
+            # `_apply_tough_base_fallback` does on the table (`unit.special_rules`).
+            "base": _base_of(ud, game_system, rules),
         }
         append_selection(u, ud)
         by_sel[str(ud.get("selectionId", ""))] = u
