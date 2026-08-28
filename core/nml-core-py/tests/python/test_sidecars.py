@@ -52,6 +52,13 @@ REF_CORPORA = (
     (Path(os.path.expanduser("~/selfplay_out/m3_ref_v3")), False),
     (Path(os.path.expanduser("~/selfplay_out/m3_ref_v2")), True),
 )
+#: The v4 corpus (NML-1105 / NML-1127) — recorded by a `tools/core_selfplay.gd`
+#: that builds its units through the TABLE's import path. It gets its own case
+#: rather than a row in `REF_CORPORA`, because it differs in three more ways
+#: than the `source_qd` reading that tuple parametrises: the SHIPPED loader, the
+#: SHIPPED conditional-AP EV, and `hero_attach="join"` — the roster join without
+#: the activation fold, which is the game its header describes.
+REF_DIR_V4 = Path(os.path.expanduser("~/selfplay_out/m3_ref_v4"))
 BANK_DIR = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
 LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
 ARMY1 = LISTS / "robot_legions_1000.json"
@@ -339,6 +346,52 @@ def test_the_python_result_file_equals_the_godot_one_field_by_field():
     assert not bad, "seeds that diverged: %s" % bad[:3]
     print(
         "GATE M3-9: %d/%d seeds field-for-field equal (%d pair, %d fork blocks)"
+        % (len(seeds), len(seeds), pairs, forks)
+    )
+
+
+def _gate_seeds_v4():
+    if not (REF_DIR_V4.is_dir() and BANK_DIR.is_dir() and ARMY1.exists() and ARMY2.exists()):
+        return []
+    return [s for s in GATE_SEEDS if (REF_DIR_V4 / ("core_s%d.json" % s)).exists()]
+
+
+@pytest.mark.skipif(not _gate_seeds_v4(), reason="no m3_ref_v4 recording on this machine")
+def test_the_python_result_file_equals_the_v4_oracle_field_by_field(monkeypatch):
+    """THE SAME GATE against the NML-1105 corpus, with every pin OFF.
+
+    The module's two autouse fixtures pin the OLD reading, which is right for
+    `m3_ref_v2`/`v3` and wrong here — this corpus was recorded after the loader,
+    the rule lookup and the conditional-AP EV were all fixed, and `source_data`
+    has carried the real quality/defense since #392. The mode is read off the
+    corpus (`selfplay.hero_attach_of_corpus`), not asserted into it.
+    """
+    monkeypatch.setattr(list_to_profile, "LEGACY_CORE_SELFPLAY", False)
+    nml_core.set_legacy_no_cond_ap(False)
+
+    seeds = _gate_seeds_v4()
+    mode = sp.hero_attach_of_corpus(REF_DIR_V4 / ("acts_%d" % seeds[0]) / "acts.jsonl")
+    assert mode == "join", "m3_ref_v4 records the join without the fold, not %r" % mode
+
+    core = nml_core.load(str(REPO))
+    bad = []
+    pairs = forks = 0
+    for seed in seeds:
+        with open(REF_DIR_V4 / ("core_s%d.json" % seed), encoding="utf-8") as f:
+            ref = json.load(f)
+        got = sp.play_game(
+            seed, ARMY1, ARMY2, REPO, BANK_DIR, core,
+            legacy_source_qd=False, hero_attach=mode,
+        )
+        np, nf = gate.sidecar_shape(got)
+        pairs += np
+        forks += nf
+        d = gate.compare(ref, got, 1e-9)
+        if d:
+            bad.append((seed, d[0]))
+    assert not bad, "seeds that diverged: %s" % bad[:3]
+    print(
+        "GATE M3-9 (v4): %d/%d seeds field-for-field equal (%d pair, %d fork blocks)"
         % (len(seeds), len(seeds), pairs, forks)
     )
 

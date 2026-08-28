@@ -61,6 +61,17 @@ ARMY1 = LISTS / "robot_legions_1000.json"
 ARMY2 = LISTS / "blessed_sisters_1000.json"
 GATE_SEEDS = range(27, 47)
 
+#: The v4 corpus (NML-1105 / NML-1127) — recorded by a `tools/core_selfplay.gd`
+#: that builds its units through the TABLE's import path. It is a different
+#: replay from `m3_ref_v2` in three ways, all of them measured, and it gets its
+#: own case rather than replacing the old one: the SHIPPED loader (no
+#: `LEGACY_CORE_SELFPLAY`), the SHIPPED conditional-AP EV (no `LEGACY_NO_COND_AP`,
+#: both fixes are ancestors of the commit it was cut at), and `hero_attach="join"`
+#: — the roster join without the activation fold, which is the game its header
+#: describes. `~/ai_lists_gf` is byte-identical to `LISTS` on every list either
+#: corpus uses, so the same two paths serve both.
+REF_DIR_V4 = Path(os.path.expanduser("~/selfplay_out/m3_ref_v4"))
+
 
 @pytest.fixture(autouse=True)
 def _legacy_core_selfplay_loader():
@@ -700,6 +711,47 @@ def test_the_python_harness_plays_the_same_game_seed_for_seed():
             bad.append((seed, diff))
     assert not bad, "seeds that diverged: %s" % bad[:3]
     print("GATE M3-5: %d/%d seeds seed-for-seed equal" % (len(seeds), len(seeds)))
+
+
+def _gate_seeds_v4():
+    if not (REF_DIR_V4.is_dir() and BANK_DIR.is_dir() and ARMY1.exists() and ARMY2.exists()):
+        return []
+    return [s for s in GATE_SEEDS if (REF_DIR_V4 / ("core_s%d.json" % s)).exists()]
+
+
+@pytest.mark.skipif(not _gate_seeds_v4(), reason="no m3_ref_v4 recording on this machine")
+def test_the_python_harness_plays_the_v4_oracle_seed_for_seed(monkeypatch):
+    """THE SAME GATE against the NML-1105 corpus, with every pin OFF.
+
+    The two autouse fixtures above pin the module to the OLD reading, which is
+    right for `m3_ref_v2` and wrong here: this corpus was recorded after the
+    loader, the rule lookup and the conditional-AP EV were all fixed. Replaying
+    it under the pins would measure the pins.
+
+    The mode is read off the corpus, not asserted — see
+    `selfplay.hero_attach_of_corpus`. On `m3_ref_v4` it answers "join".
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
+    import selfplay_gate as gate  # noqa: E402
+
+    monkeypatch.setattr(list_to_profile, "LEGACY_CORE_SELFPLAY", False)
+    nml_core.set_legacy_no_cond_ap(False)
+
+    seeds = _gate_seeds_v4()
+    mode = sp.hero_attach_of_corpus(REF_DIR_V4 / ("acts_%d" % seeds[0]) / "acts.jsonl")
+    assert mode == "join", "m3_ref_v4 records the join without the fold, not %r" % mode
+
+    core = nml_core.load(str(REPO))
+    bad = []
+    for seed in seeds:
+        with open(REF_DIR_V4 / ("core_s%d.json" % seed), encoding="utf-8") as f:
+            ref = json.load(f)
+        got = sp.play_game(seed, ARMY1, ARMY2, REPO, BANK_DIR, core, hero_attach=mode)
+        diff = gate.compare(ref, got, gate.ref_picks(REF_DIR_V4, seed))
+        if diff:
+            bad.append((seed, diff))
+    assert not bad, "seeds that diverged: %s" % bad[:3]
+    print("GATE M3-5 (v4): %d/%d seeds seed-for-seed equal" % (len(seeds), len(seeds)))
 
 
 @pytest.mark.skipif(not _gate_seeds(), reason="no recorded core_selfplay reference on this machine")
