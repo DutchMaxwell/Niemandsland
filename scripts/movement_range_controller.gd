@@ -37,27 +37,6 @@ const QUICK_BONUS: int = 2
 ## OPR army-book "Rapid Advance": "+4" when using Advance actions" — Advance band only.
 const RAPID_ADVANCE_BONUS: int = 4
 
-## NML-1106: rule text whose inches belong to the ENEMY, never to the rule's CARRIER. Melee
-## Shrouding reads "Enemies get -3\" movement to a min. of 6\" when trying to charge units where
-## all models have this rule" — the -3\" is the CHARGER's penalty (solo_controller applies it via
-## melee_shroud_charge_in), yet the description pass scraped it into the carrier's own rush band
-## (arena act header: a Battle Brothers hero with the Melee Shrouding Aura recorded rush 9\"
-## instead of 12\"). An explicit phrase list, not a parser rewrite: either the SUBJECT of the
-## sentence is the enemy, or the carrier is named as the TARGET of the movement.
-## NML-1122: this list is now the FALLBACK — _registry_targets_enemy() settles every rule the
-## mechanics map knows; the phrases only cover rules with NO registry entry.
-const ENEMY_TARGETED_MOVE_PHRASES: Array[String] = [
-	# subject is the enemy
-	"enemies get", "enemies suffer", "enemies have", "enemies take",
-	"enemy units get", "enemy units suffer", "enemy models get",
-	"opponents get", "opposing units get",
-	# the carrier is the TARGET of the movement, not its owner
-	"when charging this unit", "when trying to charge this unit",
-	"against this unit", "targeting this unit",
-	"charge units where all models have this rule",
-	"charging units where all models have this rule",
-]
-
 const RING_Y: float = 0.004
 const RING_SEGMENTS: int = 48
 const RING_BAND_M: float = 0.004  # 4 mm visible band
@@ -87,10 +66,16 @@ func base_radius_for_props(props: Dictionary) -> float:
 
 
 ## The Advance + Rush/Charge distances (inches) for a unit, applying every movement-modifying
-## rule it effectively carries. `props["rule_descriptions"]` already holds the unit's EFFECTIVE
-## rules — direct, item-granted AND free-text-granted (e.g. an ability that grants Swift) — so
-## parsing every description here picks up indirectly-granted modifiers too (issue #79). A Fast/Slow
-## constant fallback covers a core rule listed directly but without (parseable) description text.
+## rule it effectively carries. NML-1115: the bands read the unit's rule NAMES and the mechanics
+## REGISTRY only — never the imported rule TEXT. The description pass that used to run first was
+## the project's whole prose-divergence engine: it out-ranked the registry wherever the two
+## disagreed, it fired on rules the unit did not carry (the transitive
+## `_effective_rule_descriptions` pull), it braked the CARRIER with an enemy's penalty
+## (Melee Shrouding #441, Speed Debuff NML-1122), and neither the Godot-free trainer nor the Rust
+## core has that text at all — so every reading it produced was a table/trainer split, and an
+## upstream text edit could change what the table plays without a commit. Aura- and item-granted
+## rules still reach the bands, through the STRUCTURED path (`OPRArmyManager.expand_auras_of`
+## stamps the granted rule NAME into special_rules).
 ## Returns {"advance": int, "rush": int}, clamped at 0 so a heavy Slow can't go negative.
 ## STATIC + pure (reads only `props`): so callers WITHOUT a live controller instance — the Solo AI when
 ## no MovementRangeController is injected — resolve Fast/Slow through this ONE band source instead of a
@@ -98,31 +83,14 @@ func base_radius_for_props(props: Dictionary) -> float:
 static func move_bands_for_props(props: Dictionary) -> Dictionary:
 	var advance := OPR_ADVANCE_INCHES
 	var rush := OPR_RUSH_CHARGE_INCHES
-	var descriptions: Dictionary = props.get("rule_descriptions", {})
-	# Some rules NEGATE another movement rule (e.g. "Swift": "may ignore the Slow rule"); a negated
-	# rule contributes nothing, so its modifier is skipped below (issue #79).
-	var negated: Dictionary = _negated_move_rules(descriptions)
-	# B10 (test game 2): counted tracks WHICH BAND a description contributed, not just the rule name.
-	# A partial parse (e.g. the advance half attributed, the rush half not) used to mark the whole
-	# rule counted and suppress the name fallback — Fast then lost its +4" rush/charge bonus. Now the
-	# fallback fills exactly the missing band.
+	# counted tracks WHICH BAND a rule already contributed, not just the rule name, so the registry
+	# pass fills exactly the band the name fallback left open (B10, test game 2).
 	var counted: Dictionary = {}  # rule base name -> {"advance": bool, "rush": bool} already applied
 	var reg_system := RulesRegistry.normalize_system(str(props.get("game_system", "")))
 	var reg_faction := str(props.get("faction_folder", ""))
-	for name in descriptions:
-		if negated.has(name):
-			continue
-		if _registry_targets_enemy(reg_system, reg_faction, _rule_base_name(str(name))):
-			continue  # NML-1122: the registry says these inches belong to a PICKED ENEMY
-		var mod := move_modifier_from_description(str(descriptions[name]))
-		if int(mod["advance"]) != 0 or int(mod["rush"]) != 0:
-			advance += int(mod["advance"])
-			rush += int(mod["rush"])
-			counted[name] = {"advance": int(mod["advance"]) != 0, "rush": int(mod["rush"]) != 0}
-	# Swift name-fallback ("This model may ignore the Slow rule"): with description text the negation
-	# scan above cancels Slow already; with bare rule NAMES (no descriptions — tests, fallback imports)
-	# the name pair must still cancel. Mixed shapes (Slow with text, Swift without) stay a documented
-	# edge — imports deliver descriptions as a package.
+	# Swift cancels Slow by NAME ("This model may ignore the Slow rule"). The text-level negation
+	# scan is gone with the description pass; the rule pair is the whole measured effect of it
+	# (across both AI pools the "ignore ..." scan only ever named Regeneration, AP and Cover).
 	var swift_by_name := false
 	for r in props.get("special_rules", []):
 		if _rule_base_name(str(r)) == "Swift":
@@ -130,9 +98,6 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 			break
 	for r in props.get("special_rules", []):
 		var base := _rule_base_name(str(r))
-		if negated.has(base):
-			continue  # negated by another rule
-		# B10: the fallback fills only the band(s) the description pass did NOT already apply.
 		var done: Dictionary = counted.get(base, {})
 		var adv_done := bool(done.get("advance", false))
 		var rush_done := bool(done.get("rush", false))
@@ -169,17 +134,16 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 			counted[base] = {"advance": true, "rush": true}
 	# Coverage wave (2026-07-23): REGISTRY pass — data aliases of the move-band family (Scurry /
 	# Highborn / Agile → Quick-style mods, Lustbound's charge half via Royal Legion, …) apply their
-	# params to any band the description/name passes did not already cover. Offline-safe: works
-	# without description texts (the bundled AI lists ship stripped).
+	# params to any band the name pass did not already cover. NML-1115: with the description pass
+	# gone this and the name fallback are the ONLY band sources, so a new book rule with a band
+	# modifier does nothing until the registry learns it — deliberately, and `tools/prose_gate.gd`
+	# is what keeps that loss visible instead of silent.
 	# NML-1121: "Teleport" joins the allowlist for Ethereal's own advance_mod/rush_mod (-6/-6, the
 	# book text's "-6\" when using Advance ... -6\" when using Rush/Charge") — the real "Teleport"
 	# rule's advance_bonus_in/rush_bonus_in params stay untouched (advance_mod/rush_mod default 0
 	# for it, so it never rides this pass; it stays a per-activation ability bonus, solo_controller.gd).
-	# reg_system/reg_faction: hoisted above the description loop (NML-1122), reused here.
 	for r in props.get("special_rules", []):
 		var base2 := _rule_base_name(str(r))
-		if negated.has(base2):
-			continue
 		var done2: Dictionary = counted.get(base2, {})
 		if bool(done2.get("advance", false)) and bool(done2.get("rush", false)):
 			continue
@@ -202,114 +166,6 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 	advance += int(spell_mod.get("advance", 0))
 	rush += int(spell_mod.get("rush", 0))
 	return {"advance": maxi(0, advance), "rush": maxi(0, rush)}
-
-
-## Movement rules that are NEGATED by another rule's text — e.g. "Swift" whose description reads
-## "This model may ignore the Slow rule" cancels Slow. Returns the set of negated rule base names.
-## Detected by an "ignore … <RuleName>" phrase where <RuleName> is another rule with a description.
-static func _negated_move_rules(descriptions: Dictionary) -> Dictionary:
-	var negated: Dictionary = {}
-	for name in descriptions:
-		var text: String = str(descriptions[name]).to_lower()
-		var at: int = text.find("ignore")
-		while at != -1:
-			var window: String = text.substr(at, 48)
-			for other in descriptions:
-				var other_name: String = str(other)
-				if other_name != name and window.find(other_name.to_lower()) != -1:
-					negated[other_name] = true
-			at = text.find("ignore", at + 1)
-	return negated
-
-
-## Parses the Advance and Rush/Charge movement modifiers out of an OPR rule description, e.g.
-## "...moves +2\" when using Advance, and +4\" when using Rush/Charge." -> {advance:2, rush:4}.
-## Each signed inch modifier is attributed to whichever action ("advance" vs "rush"/"charge") is
-## named in the text up to the next modifier — matching OPR's "<value> when using <action>" phrasing.
-## The sign is required, so plain distances (ranges, auras) aren't mistaken for move modifiers.
-## Static + side-effect-free so it can be unit-tested directly.
-static func move_modifier_from_description(description: String) -> Dictionary:
-	var result := {"advance": 0, "rush": 0}
-	if description.is_empty():
-		return result
-	# PICK-ONE rules never accrue into the permanent bands (NML-230): "either get +4\" range when
-	# shooting, or move +2\" when charging" (Versatile Reach) is a per-activation CHOICE — baking its
-	# charge half into the band gave every Founder's-Banner unit a permanent 14\" rush, even in range
-	# mode, and would double-count when the charge mode fires (solo_controller grants the conditional
-	# +2 at pick time). OPR phrases every pick-one as "either … or …"; the B10 both-bands case
-	# ("+2\" when using Advance or Rush actions") says "or" but never "either", so it still accrues.
-	if description.to_lower().contains("either"):
-		return result
-	# ONCE-PER-GAME feats never accrue either (NML-982, measured as an exact 10" advance in a
-	# maintainer game): "Once per game, … +2\" when using Advance … +4\" when using Rush" (Speed
-	# Feat) is SPENT by the solo layer at activation (registry uses_per_game) — baking its inches
-	# into the band double-counts the bonus. The registry pass keeps its own uses_per_game skip.
-	if description.to_lower().contains("once per game"):
-		return result
-	# NML-1106: an ENEMY-targeted modifier is not the carrier's own band — see
-	# ENEMY_TARGETED_MOVE_PHRASES. Melee Shrouding used to brake the very unit that carries it.
-	if _is_enemy_targeted_move_text(description):
-		return result
-	var re := RegEx.new()
-	if re.compile("([+-]\\d+)\\s*[\"”]") != OK:
-		return result
-	var matches := re.search_all(description)
-	for i in matches.size():
-		var m: RegExMatch = matches[i]
-		var value := int(m.get_string(1))
-		var win_start := m.get_end()
-		var win_end := description.length()
-		if i + 1 < matches.size():
-			win_end = matches[i + 1].get_start()
-		var window := description.substr(win_start, win_end - win_start).to_lower()
-		# Stems so inflections match too ("advancing", "charges").
-		var adv_at := window.find("advanc")
-		var rush_at := _first_index(window, ["rush", "charg"])
-		# B10: ONE modifier naming BOTH actions ("+2\" when using Advance or Rush actions") applies to
-		# both bands — the old first-stem-wins attribution silently dropped the second band. Windows
-		# end at the next modifier, so the classic "+2\" Advance, +4\" Rush" pair is unaffected.
-		if adv_at != -1 and rush_at != -1:
-			result["advance"] = int(result["advance"]) + value
-			result["rush"] = int(result["rush"]) + value
-		elif adv_at != -1:
-			result["advance"] = int(result["advance"]) + value
-		elif rush_at != -1:
-			result["rush"] = int(result["rush"]) + value
-	return result
-
-
-## True when the description's movement modifier applies to ENEMIES (or to whoever charges/targets
-## this unit) rather than to the unit carrying the rule — see ENEMY_TARGETED_MOVE_PHRASES (NML-1106).
-static func _is_enemy_targeted_move_text(description: String) -> bool:
-	var low := description.to_lower()
-	for phrase in ENEMY_TARGETED_MOVE_PHRASES:
-		if low.contains(phrase):
-			return true
-	return false
-
-
-## NML-1122: THE REGISTRY, not the prose, decides whom a rule's inches belong to. wood_elves
-## "Speed Debuff" (Yrana, every bundled AoF list; orcs "Waurgazg" the same) picks an enemy unit
-## and grants it Slow, but the army book
-## phrases that as a RELATIVE CLAUSE ("... pick one enemy unit ..., which gets -2\" ...") — no
-## enemy SUBJECT, no "this unit" object, so ENEMY_TARGETED_MOVE_PHRASES cannot see it and the
-## caster braked herself by -2\"/-4\" on top of Wild Veil. The mechanics map already states the
-## truth (Utility Buff, params.target "enemy"), so a rule whose entry declares an enemy target
-## never contributes to its CARRIER's bands, whatever the sentence looks like. The phrase list
-## stays the FALLBACK for rules with NO registry entry (custom/homebrew or unmapped imports).
-static func _registry_targets_enemy(system: String, faction: String, rule_name: String) -> bool:
-	var params: Dictionary = RulesRegistry.lookup(system, faction, rule_name).get("params", {})
-	return str(params.get("target", "")) == "enemy"
-
-
-## Lowest index at which any of `needles` occurs in `haystack`, or -1 if none do.
-static func _first_index(haystack: String, needles: Array) -> int:
-	var best := -1
-	for n in needles:
-		var idx: int = haystack.find(n)
-		if idx != -1 and (best == -1 or idx < best):
-			best = idx
-	return best
 
 
 ## A rule's base name without its rating parenthetical: "Swift(3)" -> "Swift", "Fast" -> "Fast".
