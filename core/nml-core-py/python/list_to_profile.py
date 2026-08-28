@@ -48,7 +48,10 @@ before this port existed to gate on the corpus for real):
     (:826-869), the `option.gains` pass. All 6741 selectedUpgrades across both
     AI list pools carry an EMPTY `gains`, so it contributes nothing; the label
     text those lists do carry is not a rule source on the table.
-    attached_hero_rules stays the caller's (selfplay.play_game) job (NML-1081).
+    An item's rules then feed the AURA pass (opr_army_manager.gd:_expand_auras):
+    "Furious Aura" on a hero grants "Furious" to its whole unit, which is the
+    single biggest rule source these lists have. attached_hero_rules stays the
+    caller's (selfplay.play_game) job (NML-1081) and picks all of this up.
   * move_bands only ever needs the NAME-based Fast/Slow/Rapid Rush/Quick/
     Rapid Advance fallback (movement_range_controller.gd's description pass
     and RulesRegistry data-alias pass both read unit_properties keys this
@@ -297,6 +300,56 @@ def _selection_rules(ud: dict[str, Any]) -> tuple[list[str], dict[str, list[str]
             if g not in rules:
                 rules.append(g)
     return rules, grants
+
+
+def _aura_granted_rules(members: list[dict[str, Any]]) -> list[str]:
+    """ai_ev.gd:aura_granted_rules — the base rules a set of unit members (the
+    unit plus its attached heroes) grants to the WHOLE unit through any "X Aura"
+    they carry. The base keeps any qualifier: "Bane in Melee Aura" grants
+    "Bane in Melee"."""
+    granted: list[str] = []
+    for m in members:
+        for r in m["special_rules"]:
+            rule = str(r).strip()
+            if rule.endswith(" Aura"):
+                base = rule[: -len(" Aura")].strip()
+                if base and base not in granted:
+                    granted.append(base)
+    return granted
+
+
+def _expand_auras(units: list[dict[str, Any]]) -> None:
+    """opr_army_manager.gd:_expand_auras (:2112-2147), run once per ARMY right
+    after the joined heroes are attached (:385-389).
+
+    For every unit, every "X Aura" carried by the unit OR by one of its attached
+    heroes grants X to the unit AND to each of those heroes — the official text
+    is "this model and its unit get X", and the heroes need it too or
+    `AiEv.rule_on_all_models`'s "all models" quantifier would withhold it.
+    Purely additive and deduped; a base rule nothing models is simply inert.
+
+    The attachment is `_attach_joined_heroes` (:2150-2164): index the army by
+    selection id, then every unit whose `join_to_unit` names another one joins
+    it. Combined halves are already folded away, so what is left joining is a
+    Hero."""
+    if LEGACY_CORE_SELFPLAY:
+        return
+    by_sel: dict[str, dict[str, Any]] = {}
+    for u in units:
+        if u["selection_id"]:
+            by_sel[u["selection_id"]] = u
+    heroes: dict[str, list[dict[str, Any]]] = {u["unit_id"]: [] for u in units}
+    for u in units:
+        host = by_sel.get(u["join_to_unit"])
+        if host is not None and host["unit_id"] != u["unit_id"]:
+            heroes[host["unit_id"]].append(u)
+    for u in units:
+        members = [u] + heroes[u["unit_id"]]
+        granted = _aura_granted_rules(members)
+        for m in members:
+            for g in granted:
+                if g not in m["special_rules"]:
+                    m["special_rules"].append(g)
 
 
 def _flatten_grants(grants: dict[str, list[str]]) -> list[str]:
@@ -658,6 +711,7 @@ def profiles_from_army_forge_json(
     """
     game_system = str(data.get("gameSystem", "gf"))
     built = _units_from_list(data, player)
+    _expand_auras(built)
     return {u["unit_id"]: _unit_profile(u, faction, game_system) for u in built}
 
 

@@ -198,6 +198,7 @@ def test_an_items_name_and_its_rules_reach_the_rule_line():
         "Strider",
         "Combat Bio-Engineer",
         "Furious Aura",
+        "Furious",  # the aura pass, below
     ]
     assert prof["item_grants"] == ["Furious Aura"]
 
@@ -225,6 +226,24 @@ def test_an_item_that_grants_a_weapon_loses_that_name_from_the_rule_line():
         {"gameSystem": "gf", "units": [sel]}, "test_faction", player=1
     )["p1_0_u"]
     assert prof["special_rules"] == ["Weapon Team"]
+
+
+def test_an_aura_grants_its_base_rule_to_the_unit_and_to_its_hero():
+    """`_expand_auras` (opr_army_manager.gd:2112-2147): "X Aura" on a joined
+    hero grants X to the host AND back to the hero, so the "all models"
+    quantifier sees it. The base keeps any qualifier."""
+    host = _selection("host", "Squad", size=3)
+    hero = _selection("hero", "Champion", join_to_unit="host")
+    hero["loadout"] = [_item("Blessed Icon", ["Bane in Melee Aura"])]
+    profiles = profiles_from_army_forge_json(
+        {"gameSystem": "gf", "units": [host, hero]}, "test_faction", player=1
+    )
+    assert profiles["p1_0_host"]["special_rules"] == ["Bane in Melee"]
+    assert profiles["p1_1_hero"]["special_rules"] == [
+        "Blessed Icon",
+        "Bane in Melee Aura",
+        "Bane in Melee",
+    ]
 
 
 def test_the_legacy_reading_still_parses_the_upgrade_label(monkeypatch):
