@@ -533,6 +533,7 @@ impl Core {
             cast: self.knobs.seam_cast,
             path: self.knobs.seam_path,
             hero_attach: self.knobs.hero_attach,
+            charge_landing: self.knobs.charge_landing,
         }
     }
 
@@ -581,6 +582,7 @@ impl Core {
         m.insert("seam_path".into(), self.knobs.seam_path.into());
         m.insert("charge_gate".into(), self.knobs.charge_gate.into());
         m.insert("hero_attach".into(), self.knobs.hero_attach.into());
+        m.insert("charge_landing".into(), self.knobs.charge_landing.into());
         to_py(py, &Value::Object(m))
     }
 

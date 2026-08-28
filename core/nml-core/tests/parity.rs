@@ -235,7 +235,7 @@ fn gate_b_spacing_corpus_resolves_every_kind() {
 fn spacing_clamp_is_load_bearing() {
     let corpus = load_nodes(SPACING).expect("fixture loads");
     let statics = build_statics(&corpus, REPO);
-    let off = Seams { spacing: false, cast: false, path: false, hero_attach: false };
+    let off = Seams { spacing: false, cast: false, path: false, hero_attach: false, charge_landing: false };
     let mut broken = 0usize;
     for node in &corpus.nodes {
         let got = resolve(&statics, &node.state_before, &node.action, node.cover_dest, off, node.cast_los())
@@ -293,6 +293,43 @@ fn gate_b_melee_charges_reproduce_strike_morale_and_rout() {
     assert_eq!(routs, 23, "melee morale routs a side twenty-three times");
     assert_eq!(shaken, 17, "and shakes one seventeen times");
     assert!(strike_backs > 0, "survivors strike back and fatigue the defender");
+}
+
+/// NML-1073 M5 D5-1 — the CHARGE's SECOND engage gate, red and green in one
+/// test on the same 52 recorded contacts.
+///
+/// Landing within `MELEE_ENGAGE_IN` is only the first question the table asks
+/// (main.gd:8005-8006). The second is `snap_charge(unit, target,
+/// last_move_remaining_in())` (main.gd:8015-8022): the snap that closes the
+/// residual base gap is MOVEMENT and must fit the move budget the charge left
+/// over, and a negative answer is a falls-short with no fight
+/// (solo_controller.gd:8644). GREEN: with the seam on, the contacts that landed
+/// inside the contact epsilon still fight — the gate is not a blanket refusal.
+/// RED: some of them do not any more, which is the only proof that the clamp is
+/// wired at all; delete the `charge_remaining_in` term and this count is 0.
+#[test]
+fn d5_1_charge_landing_asks_whether_the_snap_still_fits_the_budget() {
+    let corpus = load_nodes(MELEE).expect("fixture loads");
+    let statics = build_statics(&corpus, REPO);
+    let on = Seams { charge_landing: true, ..corpus.seams };
+    let (mut refused, mut still_fights) = (0usize, 0usize);
+    for node in &corpus.nodes {
+        let off = resolve(&statics, &node.state_before, &node.action, node.cover_dest,
+                          corpus.seams, node.cast_los()).expect("resolves");
+        let got = resolve(&statics, &node.state_before, &node.action, node.cover_dest,
+                          on, node.cast_los()).expect("resolves");
+        let si = got.roster.index[node.action.unit.as_str()];
+        // The charger's fatigue stamp IS the melee: `resolve` sets it only on
+        // the branch that strikes (sim.rs, `next.fatigued[si] = true`).
+        if off.fatigued[si] && !got.fatigued[si] {
+            refused += 1;
+        } else if off.fatigued[si] && got.fatigued[si] {
+            still_fights += 1;
+        }
+    }
+    assert_eq!(refused, 20, "the budget clamp refuses exactly these contacts");
+    assert!(still_fights > 0, "a charge that landed in clean contact still fights");
+    assert_eq!(refused + still_fights, 52, "every recorded contact is accounted for");
 }
 
 /// Red-green for the CHARGE branch: reading the same nodes as a RUSH (same move,
@@ -409,7 +446,7 @@ fn gate_b_cast_subphase_reproduces_every_recorded_cast() {
 fn the_cast_subphase_is_load_bearing() {
     let corpus = load_nodes(CAST).expect("fixture loads");
     let statics = build_statics(&corpus, REPO);
-    let legacy = Seams { spacing: true, cast: false, path: false, hero_attach: false };
+    let legacy = Seams { spacing: true, cast: false, path: false, hero_attach: false, charge_landing: false };
     let mut broken = 0usize;
     for node in &corpus.nodes {
         let got = resolve(

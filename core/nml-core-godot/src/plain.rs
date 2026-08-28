@@ -789,6 +789,12 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // before the knob) it is `Knobs::default()` = OFF, so no recorded
         // rollout moves.
         hero_attach: d.get("hero_attach").map(|v| flag(&v)).unwrap_or(dflt.hero_attach),
+        // NML-1073 M5 D5-1. No recorder writes this key: the SHIPPED table is
+        // where the rule comes from, so the in-game seam must never turn it on
+        // — a `BattleSim` that refused a landed charge would move every
+        // recorded rollout. Absent = `Knobs::default()` = OFF, and honoured if
+        // a header ever does carry it.
+        charge_landing: d.get("charge_landing").map(|v| flag(&v)).unwrap_or(dflt.charge_landing),
     }
 }
 

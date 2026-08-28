@@ -45,6 +45,11 @@ pub const CHARGE_CONTACT_MARGIN_IN: f64 = 0.25;
 /// melee trigger — S1b's epsilon left the imagination 0.75" stricter than the
 /// table it is supposed to predict.
 pub const MELEE_ENGAGE_IN: f64 = 1.0;
+/// `SeparationChecker.BASE_CONTACT_EPSILON_INCHES` separation_checker.gd:77 —
+/// the hair inside which two bases already count as touching. `snap_charge`
+/// returns 0 below it (solo_controller.gd:8639) and measures its budget clamp
+/// against it (:8644), so it is the tolerance on BOTH halves of D5-1's gate.
+pub const BASE_CONTACT_EPSILON_IN: f64 = 0.05;
 /// `SoloController.UNIT_SPACING_IN` solo_controller.gd:70 — the no-go buffer
 /// every OTHER unit's models project around themselves.
 pub const UNIT_SPACING_IN: f64 = 1.0;
@@ -1050,6 +1055,11 @@ fn resolve_with(
         _ => 0.0,
     };
     let mut moved = false;
+    // D5-1 — what the band still has left after the charge move, and so what
+    // the melee snap may spend (solo_controller.gd:8659). Infinite while the
+    // seam is off: the second engage gate then never refuses anything, which is
+    // what every corpus recorded before D5-1 replayed with.
+    let mut charge_remaining_in = f64::INFINITY;
     if band_in > 0.0 && action.dest.is_some() && !next.positions[si].is_empty() {
         moved = true;
         let dest = geom::to_f32(action.dest.unwrap());
@@ -1108,6 +1118,17 @@ fn resolve_with(
         // covers both (battle_sim.gd:647-650).
         if seams.spacing {
             delta = geom::mul(delta, spacing_fraction(&next, si, delta, ci));
+        }
+        // D5-1 — what the CHARGE's move budget has left, measured on the
+        // displacement that actually happened (after the band clamp AND the
+        // spacing clamp, which is what `last_move_remaining_in`
+        // solo_controller.gd:8659-8667 measures on the table: the budget minus
+        // the LONGEST model arc, and a rigid translation gives every model the
+        // same arc). This is a LOWER bound on the table's remainder, because
+        // the table walks a bent route and spends more arc than this straight
+        // line does — so the gate below under-refuses rather than over-refuses.
+        if seams.charge_landing && kind == CHARGE {
+            charge_remaining_in = (band_in - geom::length(delta) as f64 / IN2M).max(0.0);
         }
         for p in next.positions[si].iter_mut() {
             *p = geom::to_f64(geom::add(geom::to_f32(*p), delta));
@@ -1265,13 +1286,23 @@ fn resolve_with(
     // not seam-gated: this is the landing rule itself, not a research seam.
     if kind == CHARGE {
         if let Some(ti) = ci {
-            if geom::edge_gap_in(
+            let engage_gap_in = geom::edge_gap_in(
                 &next.positions[si],
                 &next.radii[si],
                 &next.positions[ti],
                 &next.radii[ti],
                 DEFAULT_BASE_RADIUS_M,
-            ) <= MELEE_ENGAGE_IN
+            );
+            // D5-1: the table asks TWICE before it fights. First the engage
+            // distance (main.gd:8005-8006, the line above). Then whether the
+            // snap that closes the residual base gap still FITS the move budget
+            // the charge left over — `snap_charge(unit, target,
+            // last_move_remaining_in())` returning negative is a falls-short
+            // and no fight (main.gd:8015-8022, solo_controller.gd:8639/8644).
+            // A gap already inside the contact epsilon snaps for free.
+            if engage_gap_in <= MELEE_ENGAGE_IN
+                && (engage_gap_in <= BASE_CONTACT_EPSILON_IN
+                    || engage_gap_in <= charge_remaining_in + BASE_CONTACT_EPSILON_IN)
             {
                 let tu_before = wounds_left(&next, ti);
                 let su_before = wounds_left(&next, si);

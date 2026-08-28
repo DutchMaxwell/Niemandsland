@@ -119,6 +119,58 @@ def test_red_a_wrong_seeded_tray_parts_on_the_faces():
     assert red["full_equal"] == 0, "a wrong-seeded tray produced a FULL-equal act: %s" % red
 
 
+def test_d5_1_the_charge_landing_knob_reaches_the_resolver_from_the_header():
+    """NML-1073 M5 D5-1 — the `charge_landing` knob crosses FOUR layers before it
+    can refuse anything: the header's `knobs` object -> `acts::Knobs` ->
+    `Core::seams` -> `Seams::charge_landing` -> `resolve_with`. A knob that
+    quietly fell off any of them would leave every gate green while measuring
+    the OLD rule, and Rust cannot see that seam. So this test is about the
+    WIRING; the rule itself is red-greened next door in `tests/parity.rs`
+    (`d5_1_charge_landing_asks_whether_the_snap_still_fits_the_budget`: 20 of 52
+    recorded contacts refused, the rest still fighting).
+
+    All three of the bundled game's charges land INSIDE the 0.05" contact
+    epsilon, where `snap_charge` returns 0 for free (solo_controller.gd:8639) —
+    so the fixture as recorded cannot show the gate biting, and saying so is
+    part of the measurement. Act 16's charger is a 16" Fast unit; stripped to
+    14" its move spends the whole band and stops in the window the gate is
+    about, more than a hair from contact and less than the engage inch. That
+    band is the ONLY thing changed, and the two arms differ only in the knob.
+    """
+    import copy
+
+    import nml_core
+
+    head, lines, dice, seed = srg.read_game(GAME)
+    burn = srg.burn_prefix(dice)
+    act = next(a for a in lines if int(a["act"]) == 16)
+    action = act["pick"]["action"]
+    assert int(action["kind"]) == mrg.CHARGE_KIND and action.get("charge")
+    state = copy.deepcopy(act["state"])
+    assert state["units"][action["unit"]]["bands"]["rush"] == 16, "the fixture's Fast charger"
+    state["units"][action["unit"]]["bands"]["rush"] = 14
+
+    rolls = {}
+    for landing in (False, True):
+        core = nml_core.load(str(REPO))
+        core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
+                         "knobs": dict(head.get("knobs", {}), hero_attach=True,
+                                       charge_landing=landing)})
+        assert core.knobs()["charge_landing"] is landing, "the header knob round-trips"
+        i0 = srg.first_at_or_after(dice, 16)
+        tray = nml_core.Tray(seed)
+        if burn[i0]:
+            tray.roll(burn[i0])
+        _, report = core.resolve_with_tray(
+            core.state_of(state), action, nml_core.Rng(0), tray)
+        rolls[landing] = len(report["rolls"])
+
+    assert rolls[False] > 0, "with the seam OFF a charge inside the engage inch fights: %s" % rolls
+    assert rolls[True] == 0, (
+        "the seam did not reach the resolver — the snap had no budget left and the "
+        "melee still ran: %s" % rolls)
+
+
 def test_trailing_morale_keeps_a_no_retreat_block_together():
     """RED-GREEN for `trailing_morale`, on the one morale roll of MORE than one
     die.

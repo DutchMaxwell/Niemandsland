@@ -69,6 +69,11 @@ pub struct Knobs {
     /// default is OFF and nothing replays differently.
     #[serde(default)]
     pub hero_attach: bool,
+    /// NML-1073 M5 D5-1 — `Seams::charge_landing`, carried in the header the
+    /// way every other seam is. Absent from every corpus recorded before it, so
+    /// the default is OFF and nothing replays differently.
+    #[serde(default)]
+    pub charge_landing: bool,
 }
 
 /// `#[serde(default)]` on a `bool` is `false`; `charge_gate` defaults the other
@@ -94,6 +99,7 @@ impl Default for Knobs {
             seam_path: false,
             charge_gate: true,
             hero_attach: false,
+            charge_landing: false,
         }
     }
 }
