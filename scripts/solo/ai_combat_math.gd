@@ -310,10 +310,10 @@ static func impact_total_dice(impact_x: int, charging_models: int, counter_model
 	return maxi(0, maxi(impact_x, 0) * maxi(charging_models, 0) - maxi(counter_models, 0))
 
 
-## Whether a Fearless re-roll rescues a FAILED morale test (GF/AoF Advanced Rules v3.5.1, p.13: on a failed
-## test, "roll one die. On a 4+ it counts as passed instead."). True when the single re-roll die is a 4+.
-static func fearless_recovers(reroll_face: int) -> bool:
-	return DiceRules.is_success(reroll_face, FEARLESS_RECOVER_TARGET, 0)
+## Whether a Fearless recovery die rescues a FAILED morale test (GF/AoF Advanced Rules v3.5.1, p.13: on a
+## failed test, "roll one die. On a 4+ it counts as passed instead."). True when the recovery die is a 4+.
+static func fearless_recovers(recovery_face: int) -> bool:
+	return DiceRules.is_success(recovery_face, FEARLESS_RECOVER_TARGET, 0)
 
 
 ## Whether a round-start Shaken-recovery die (wave-4 Battleborn; quick-win Steadfast carries the

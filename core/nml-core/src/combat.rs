@@ -43,8 +43,8 @@ pub const THRUST_AP_BONUS: i64 = 1;
 /// `RulesRegistry.unit_param(charger, "Heavy Impact", "ap", 1)` main.gd:6297 —
 /// the AP of a Heavy Impact hit where the book fields no value of its own.
 pub const HEAVY_IMPACT_AP: i64 = 1;
-/// `AiCombatMath.FEARLESS_RECOVER_TARGET` :29 — a FAILED morale test re-rolls
-/// once and counts as passed on a 4+.
+/// `AiCombatMath.FEARLESS_RECOVER_TARGET` :29 — a FAILED morale test rolls a
+/// recovery die once and counts as passed on a 4+.
 pub const FEARLESS_RECOVER_TARGET: i64 = 4;
 /// `AiCombatMath.NO_RETREAT_SELF_WOUND_MAX` :41 — a No Retreat die of 1-3 is one
 /// self-wound, so the SUCCESS target the tray records is `MAX + 1`: the tray

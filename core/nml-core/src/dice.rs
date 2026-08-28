@@ -1392,9 +1392,9 @@ mod tests {
     // ------------------------------------------------ D1-B5b: the morale dice ---
 
     /// One test die at the Banner-modified Quality target, and Fearless's single
-    /// re-roll as a SECOND batch after it (main.gd:8336 then :8347).
+    /// recovery die as a SECOND batch after it (main.gd:8336 then :8347).
     #[test]
-    fn a_morale_test_is_one_die_and_fearless_re_rolls_a_failure() {
+    fn a_morale_test_is_one_die_and_fearless_rolls_a_recovery_die() {
         let unit = Ctx { quality: 6, fearless: true, ..Default::default() };
         let mut tray = Tray::seeded(11);
         let (_, out) = resolve_morale_with_tray(&unit, "Unit", true, false, false, 4, &mut tray);

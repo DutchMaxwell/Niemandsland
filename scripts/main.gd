@@ -8304,19 +8304,19 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 		if faces.is_empty():
 			return
 		result = AiCombatMath.morale_result(int(faces[0]), test_target, below_half and melee)
-	# Fearless (GF/AoF Advanced Rules v3.5.1 p.13): a unit where all models have this rule re-rolls a FAILED
-	# morale test once; on a 4+ it counts as passed instead. Rolled visibly on the real tray. The 4+ is
-	# DATA where the mechanics map carries it (RulesRegistry; constant fallback — byte-identical seam).
+	# Fearless (GF/AoF Advanced Rules v3.5.1 p.13): a unit where all models have this rule rolls a recovery
+	# die once after a FAILED morale test; on a 4+ it counts as passed instead. Rolled visibly on the real
+	# tray. The 4+ is DATA where the mechanics map carries it (RulesRegistry; constant fallback — byte-identical seam).
 	if result != AiCombatMath.Morale.PASSED and unit.has_special_rule("Fearless"):
 		var recover_target: int = int(RulesRegistry.unit_param(unit, "Fearless", "recover_target", AiCombatMath.FEARLESS_RECOVER_TARGET))
-		var reroll: Array = await _solo_tray_roll(1, recover_target, owner, "attack",
-			"Morale re-roll — Fearless (%d+)" % recover_target)
-		if not reroll.is_empty() and DiceRules.is_success(int(reroll[0]), recover_target, 0):
+		var recovery_die: Array = await _solo_tray_roll(1, recover_target, owner, "attack",
+			"Morale recovery die — Fearless (%d+)" % recover_target)
+		if not recovery_die.is_empty() and DiceRules.is_success(int(recovery_die[0]), recover_target, 0):
 			result = AiCombatMath.Morale.PASSED
 			if battle_log != null:
-				battle_log.log_event(BattleLog.Category.COMBAT, "%s is Fearless — re-roll (4+) passes morale" % unit.get_name(), true)
+				battle_log.log_event(BattleLog.Category.COMBAT, "%s is Fearless — recovery die (4+) holds" % unit.get_name(), true)
 		elif battle_log != null:
-			battle_log.log_event(BattleLog.Category.COMBAT, "%s is Fearless — re-roll fails" % unit.get_name(), true)
+			battle_log.log_event(BattleLog.Category.COMBAT, "%s is Fearless — recovery die (4+) fails" % unit.get_name(), true)
 	# No Retreat (quick-win batch; official text: a failed morale test that causes Shaken/Rout "counts
 	# as passed instead. Then, roll as many dice as the number of wounds it would take to fully destroy
 	# it, and for each result of 1-3 the unit takes one wound, which can't be ignored."): the pass is
