@@ -934,6 +934,51 @@ impl Core {
 
     // -------------------------------------------------- encoder rows / eval ---
 
+    /// NML-1073 M5 D6a-B3 — the port's PER-MODEL sighted count for one shot,
+    /// so `tools/sight_gate.py` can hold `sight.rs` against the table's own
+    /// recorded `sighted` (`shots.jsonl`, scripts/solo/shot_recorder.gd) instead
+    /// of against another guess.
+    ///
+    /// `member` is the firing unit key (the host, or one of its attached
+    /// heroes); `target` the unit it fires at; `reach_in` the weapon's reach in
+    /// inches BEFORE the base-edge slack, which `sight::sighted_count` adds the
+    /// way `main._solo_sighted_count` (:4141-4145) adds it. `slack_in` comes
+    /// back so the caller can check that half against the recorded
+    /// `reach_in` rather than trust it: the recording stamps
+    /// `int(reach) + slack`, so `recorded - slack_in` must land on an integer.
+    #[pyo3(signature = (state, member, target, reach_in, indirect = false))]
+    fn sighted(
+        &mut self,
+        py: Python<'_>,
+        state: PyRef<'_, PyState>,
+        member: &str,
+        target: &str,
+        reach_in: f64,
+        indirect: bool,
+    ) -> PyResult<Py<PyAny>> {
+        let st = &state.inner;
+        let idx = |k: &str| {
+            st.roster.index.get(k).copied().ok_or_else(|| Unsupported::new_err(format!("no unit {k}")))
+        };
+        let (mi, ti) = (idx(member)?, idx(target)?);
+        let zones = nmlcore::sight::zones_of(&self.terrain);
+        let blockers = nmlcore::sight::blockers_of(st, mi, ti);
+        let n = nmlcore::sight::sighted_count(st, &zones, &blockers, mi, ti, reach_in, indirect);
+        let slack = nmlcore::sight::unit_radius_m(st, mi) + nmlcore::sight::unit_radius_m(st, ti);
+        to_py(
+            py,
+            &serde_json::json!({
+                "sighted": n,
+                "alive": st.alive[mi],
+                "slack_in": slack / nmlcore::sight::IN2M,
+                "blockers": blockers.len(),
+                "zones": zones.len(),
+                // NON-ZERO is a seam, not a detail — see `Terrain::sandbox_pieces`.
+                "sandbox": self.terrain.sandbox_pieces(),
+            }),
+        )
+    }
+
     /// `BattleSim.board_rows` battle_sim.gd:176 — the v5 encoder input: one row
     /// per LIVING unit in capture order, then one per objective (type 3), then
     /// the single game-state row (type 4). Ints come back as Python ints and

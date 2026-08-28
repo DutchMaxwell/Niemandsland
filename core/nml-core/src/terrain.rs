@@ -144,6 +144,45 @@ impl Terrain {
         self.n
     }
 
+    // --- NML-1073 M5 D6a: the grid as `TerrainOverlay` itself holds it, for
+    // `sight::zones_of`. `type_at` answers ONE point; the sight volumes need the
+    // painted cells whole, in the grid's own frame and at the grid's own yaw.
+
+    /// Every painted cell as `((cx, cz), type)`, in the RECORDED 0-based grid
+    /// index — `AiActRecorder._terrain_line` act_recorder.gd:137-139.
+    pub fn painted_cells(&self) -> impl Iterator<Item = ((i64, i64), i32)> + '_ {
+        self.cells.iter().map(|(&c, &k)| (c, k))
+    }
+
+    /// Half the grid width in cells — the offset `TerrainOverlay._zone_volumes`
+    /// (:1240) subtracts to key a cell in the grid's own centred frame.
+    #[inline]
+    pub fn half_grid_cells(&self) -> i64 {
+        self.n / 2
+    }
+
+    /// One cell's edge in METRES (`GRID_SIZE_INCHES * INCHES_TO_METERS`).
+    #[inline]
+    pub fn cell_m(&self) -> f64 {
+        self.cell_m
+    }
+
+    /// `deg_to_rad(grid_rotation_degrees)` — the grid's own yaw, which
+    /// `VolumetricLos.cells_key` rotates a world point back by.
+    #[inline]
+    pub fn grid_yaw(&self) -> f64 {
+        -self.neg_rot
+    }
+
+    /// How many freely placed sandbox pieces the header carried. NON-ZERO is a
+    /// SEAM for the sight port: `TerrainOverlay._sandbox_volumes` (:1255-1273)
+    /// turns each into its own box volume, and `sight::zones_of` builds grid
+    /// zones only. Empty on every board of the reference corpus.
+    #[inline]
+    pub fn sandbox_pieces(&self) -> usize {
+        self.sandbox.len()
+    }
+
     pub fn build(p: &PlainTerrain) -> Terrain {
         let mut cells = HashMap::with_capacity(p.cells.len());
         for c in &p.cells {
