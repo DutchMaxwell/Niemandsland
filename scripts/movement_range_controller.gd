@@ -171,6 +171,11 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 	# Highborn / Agile → Quick-style mods, Lustbound's charge half via Royal Legion, …) apply their
 	# params to any band the description/name passes did not already cover. Offline-safe: works
 	# without description texts (the bundled AI lists ship stripped).
+	# NML-1121: "Teleport" joins the allowlist for Ethereal's own advance_mod/rush_mod (-6/-6, the
+	# book text's "-6\" when using Advance ... -6\" when using Rush/Charge") — the real "Teleport"
+	# rule's advance_bonus_in/rush_bonus_in params stay untouched (advance_mod/rush_mod default 0
+	# for it, so it never rides this pass; it stays a per-activation ability bonus, solo_controller.gd).
+	# reg_system/reg_faction: hoisted above the description loop (NML-1122), reused here.
 	for r in props.get("special_rules", []):
 		var base2 := _rule_base_name(str(r))
 		if negated.has(base2):
@@ -180,7 +185,7 @@ static func move_bands_for_props(props: Dictionary) -> Dictionary:
 			continue
 		var entry := RulesRegistry.lookup(reg_system, reg_faction, base2)
 		var prim: Variant = entry.get("primitive")
-		if not (prim is String) or not ["Fast", "Slow", "Quick", "Rapid Advance", "Rapid Rush", "Royal Legion"].has(str(prim)):
+		if not (prim is String) or not ["Fast", "Slow", "Quick", "Rapid Advance", "Rapid Rush", "Royal Legion", "Teleport"].has(str(prim)):
 			continue
 		var rp: Dictionary = entry.get("params", {})
 		if int(rp.get("uses_per_game", 0)) > 0:

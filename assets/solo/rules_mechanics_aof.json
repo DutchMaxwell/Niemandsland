@@ -2763,7 +2763,9 @@
     "book_version": "3.5.3",
     "params": {
      "advance_bonus_in": 0.0,
-     "rush_bonus_in": 0.0
+     "rush_bonus_in": 0.0,
+     "advance_mod": -6,
+     "rush_mod": -6
     }
    },
    "No Retreat": {
@@ -7006,7 +7008,9 @@
     "book_version": "3.5.3",
     "params": {
      "advance_bonus_in": 0.0,
-     "rush_bonus_in": 0.0
+     "rush_bonus_in": 0.0,
+     "advance_mod": -6,
+     "rush_mod": -6
     }
    },
    "Evasive": {
