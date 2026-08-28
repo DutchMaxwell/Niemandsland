@@ -27,6 +27,7 @@ pub mod plan;
 pub mod pull;
 pub mod reach;
 pub mod replay;
+pub mod step;
 pub mod theta;
 
 pub use cap::{cap_difficult_polylines, difficult_at_point, trail_crosses_difficult_cells, CapReport};

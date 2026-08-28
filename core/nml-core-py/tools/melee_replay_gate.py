@@ -58,6 +58,7 @@ speak for the acts whose shapes already agree — the bundled fixture test
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -75,6 +76,48 @@ CHARGE_KIND = 3
 #: `AiCombatMath.NO_RETREAT_SELF_WOUND_MAX + 1` — the SUCCESS target of a No
 #: Retreat self-wound roll (main.gd:8365), the one morale roll of >1 die.
 NO_RETREAT_TARGET = 4
+#: `SoloController.INCHES_TO_METERS`.
+IN2M = 0.0254
+
+
+def header_walls_m(d: Path, head: dict) -> tuple[list, str]:
+    """The board's wall segments in the ACT-HEADER contract — WORLD METRES —
+    plus one line saying where they came from.
+
+    TWO SOURCES, TWO FRAMES. Rung D5-2a (#436) puts `walls` inside the act
+    header's `terrain` object as `TerrainOverlay.get_wall_segments_world()`, i.e.
+    world metres centred on the origin. `moves_calls.jsonl`'s header has carried
+    the same segments since M4-0a but in the movement planner's BOARD-LOCAL INCH
+    frame (`walls_in`, solo_controller.gd:6165-6169). A corpus recorded before
+    D5-2a has only the second, so it is converted back here — the inverse of the
+    one conversion `Terrain::set_walls_world_m` performs — and the gate then
+    prints what the port made of it again (`--walls-check`).
+    """
+    ter = head.get("terrain") or {}
+    if ter.get("walls"):
+        return ter["walls"], "act header terrain.walls (D5-2a), %d segments" % len(ter["walls"])
+    mc = d / "moves_calls.jsonl"
+    if not mc.exists():
+        return [], "NONE — no act-header walls and no moves_calls.jsonl"
+    with open(mc, encoding="utf-8") as f:
+        mh = json.loads(f.readline())
+        raw = mh.get("walls") or []
+        src = "header"
+        # `MoveRecorder._header_line` (move_recorder.gd:126) snapshots the walls of
+        # the FIRST plan call of the game, and in a handful of games that call ran
+        # before the wall provider was live — the header then reads 0 segments
+        # while every later line carries the real list INLINE. Take the first
+        # inline list in that case; a header that HAS walls is always preferred.
+        if not raw:
+            for line in f:
+                w = json.loads(line).get("walls")
+                if isinstance(w, list) and w:
+                    raw, src = w, "first inline call line (header was empty)"
+                    break
+    board = mh.get("board_in") or [0.0, 0.0]
+    half = [board[0] * 0.5, board[1] * 0.5]
+    out = [[[(p[0] - half[0]) * IN2M, (p[1] - half[1]) * IN2M] for p in w] for w in raw]
+    return out, "moves_calls.jsonl %s, %d segments (inches -> metres)" % (src, len(out))
 
 
 def trailing_morale(rolls: list[tuple]) -> list[tuple]:
@@ -96,7 +139,8 @@ def trailing_morale(rolls: list[tuple]) -> list[tuple]:
 
 
 def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
-        charge_landing: bool = False) -> int:
+        charge_landing: bool = False, movement: bool = False,
+        walls_check: bool = False, rigid_red: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -113,15 +157,40 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
     unported: dict[str, int] = {}
     reasons: dict[str, int] = {}
     firsts: list[str] = []
+    warns: list[str] = []
+    walls_seen = {"games": 0, "segments": 0, "worst": 0.0, "source": ""}
     t0 = time.perf_counter()
 
     for d in games:
         head, lines, dice, seed = read_game(d)
         burn = burn_prefix(dice)
         core = nml_core.load(repo)
-        core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
+        # D5-2: the charge move routes around the board's WALLS, and the act
+        # corpus carried none before rung D5-2a. Without them the port would
+        # plan through ruins and call it the table's route, so the source is
+        # named out loud and an empty list is a WARN, not a silent default.
+        walls, source = header_walls_m(d, head)
+        walls_seen["source"] = source
+        if movement and not walls:
+            warns.append("%s: %s — the charge route sees no walls" % (d.name, source))
+        core.set_header({"profiles": head["profiles"],
+                         "terrain": dict(head.get("terrain") or {}, walls=walls)
+                         if head.get("terrain") else None,
                          "knobs": dict(head.get("knobs", {}), hero_attach=True,
-                                       charge_landing=charge_landing)})
+                                       charge_landing=charge_landing,
+                                       movement=movement and not rigid_red)})
+        if walls_check and walls:
+            walls_seen["games"] += 1
+            got = core.walls_in()
+            with open(d / "moves_calls.jsonl", encoding="utf-8") as f:
+                mb = (json.loads(f.readline()).get("board_in") or [0.0, 0.0])
+            want = [[[(p[0] / IN2M) + mb[0] * 0.5, (p[1] / IN2M) + mb[1] * 0.5] for p in w]
+                    for w in walls]
+            for g, w in zip(got, want):
+                for pg, pw in zip(g, w):
+                    walls_seen["worst"] = max(walls_seen["worst"],
+                                              abs(pg[0] - pw[0]), abs(pg[1] - pw[1]))
+                    walls_seen["segments"] += 1
         for pos, act in enumerate(lines):
             k = int(act["act"])
             action = (act.get("pick") or {}).get("action") or {}
@@ -240,6 +309,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
              "misseed": "RED D1-B5b --red-misseed (tray on dice_seed+1)"}[mode]
     if charge_landing:
         label += " + D5-1 charge_landing"
+    if movement:
+        label += " + D5-2 movement=table" + (" [RED: rigid]" if rigid_red else "")
     silent_table = tally["both_silent"] + tally["table_silent"]
     print()
     print("%s over %d games, %d charge acts (%.1fs)"
@@ -273,6 +344,17 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
           % (", ".join("%s=%d" % kv for kv in sorted(unported.items())) or "none"))
     for f in firsts:
         print("  first : %s" % f)
+    if movement:
+        print("  walls : %s" % (walls_seen["source"] or "none"))
+        for w in warns[:3]:
+            print("  WARN  : %s" % w)
+        if warns:
+            print("  WARN  : %d of %d games carry no wall segments at all"
+                  % (len(warns), len(games)))
+    if walls_check:
+        print("  walls : %d endpoint pairs over %d games, worst |port inch - recorded inch| "
+              "= %.6f\" (bar 0.05)"
+              % (walls_seen["segments"], walls_seen["games"], walls_seen["worst"]))
 
     if mode == "misseed":
         # LOAD-BEARING as far as it reaches: the shapes still line up, so the
@@ -312,6 +394,18 @@ def main(argv: list[str]) -> int:
                     help="exit 0 even when acts are short of full equality (this tool is a GATE "
                          "by default and exits 1)")
     ap.add_argument("--limit", type=int, default=0, help="only the first N game dirs")
+    ap.add_argument("--movement", action="store_true",
+                    help="NML-1073 M5 D5-2: replay with the header knob movement=table — the "
+                         "CHARGE moves per model through the M4 movement port on the table's "
+                         "arc budget, and D5-1's engage gate then subtracts the arc the route "
+                         "actually walked instead of the straight line's length")
+    ap.add_argument("--red-move-rigid", action="store_true",
+                    help="RED PROOF for --movement: everything else identical (the walls are "
+                         "still read and handed over) but the header knob stays OFF, so the "
+                         "charge translates rigidly again and the silent buckets fall back")
+    ap.add_argument("--walls-check", action="store_true",
+                    help="instrument check for the two wall frames: hold the port's converted "
+                         "INCH segments against the ones moves_calls.jsonl recorded")
     ap.add_argument("--charge-landing", action="store_true",
                     help="NML-1073 M5 D5-1: replay with the header knob charge_landing on — "
                          "the charge aims and lands the way the table does and fights only "
@@ -322,7 +416,8 @@ def main(argv: list[str]) -> int:
     a = ap.parse_args(argv)
     return run(Path(a.ref).expanduser(), a.repo,
                "misseed" if a.red_misseed else a.mode, a.limit, a.report_only,
-               a.charge_landing)
+               a.charge_landing, a.movement or a.red_move_rigid, a.walls_check,
+               a.red_move_rigid)
 
 
 if __name__ == "__main__":

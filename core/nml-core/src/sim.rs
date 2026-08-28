@@ -1137,7 +1137,47 @@ fn resolve_with(
     // seam is off: the second engage gate then never refuses anything, which is
     // what every corpus recorded before D5-1 replayed with.
     let mut charge_remaining_in = f64::INFINITY;
-    if band_in > 0.0 && action.dest.is_some() && !next.positions[si].is_empty() {
+    // D5-2, seam-gated: the CHARGE moves per model through the M4 movement port
+    // instead of as one rigid delta — the table's own aim (`_charge_move`
+    // solo_controller.gd:8582), its own arc budget and its own route. It runs
+    // BEFORE the rigid block and, when it answers, replaces it whole: the aim
+    // is the contact boundary, not the planner's `dest`, so the band clamp and
+    // the spacing clamp below would be measuring a different move.
+    let mut landing: Option<crate::mv::step::Landing> = None;
+    if seams.movement && kind == CHARGE && band_in > 0.0 {
+        if let (Cover::Board(t), Some(ti)) = (cover, ci) {
+            landing = crate::mv::step::charge_move(
+                &next,
+                t,
+                si,
+                ti,
+                band_in,
+                seams.hero_attach,
+                true,
+                crate::mv::FAST_PLANNER_GUARD,
+            );
+        }
+    }
+    if let Some(land) = landing {
+        moved = true;
+        for (i, m) in land.movers.iter().enumerate() {
+            next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
+        }
+        // D5-2 review fix: the table's own arc only feeds the D5-1 budget
+        // gate when `charge_landing` asks for it — otherwise `movement=
+        // "table"` silently forces `charge_landing="table"` on, and the
+        // engage snap gate refuses charges D5-1-off never refused.
+        if seams.charge_landing {
+            charge_remaining_in = land.remaining_in();
+        }
+        // battle_sim.gd:598-600 — the mover's cover follows it, probed at the
+        // POST-move unit centre, which is now the solved formation's centre.
+        if let Cover::Board(t) = cover {
+            if t.is_valid() {
+                next.in_cover[si] = gives_cover(t.type_at(geom::centre(&next.positions[si])));
+            }
+        }
+    } else if band_in > 0.0 && action.dest.is_some() && !next.positions[si].is_empty() {
         moved = true;
         let dest = geom::to_f32(action.dest.unwrap());
         let centre = geom::centre(&next.positions[si]);

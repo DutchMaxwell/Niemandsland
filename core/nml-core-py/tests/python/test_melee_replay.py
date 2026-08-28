@@ -40,8 +40,11 @@ compared at all.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 
@@ -50,6 +53,7 @@ import shoot_replay_gate as srg  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[4]
 GAME = Path(__file__).resolve().parent / "fixtures" / "melee_replay"
+QBE_REF = Path(os.path.expanduser("~/selfplay_out/qbe_ref"))
 
 
 def replay(seed_shift: int = 0) -> dict:
@@ -169,6 +173,106 @@ def test_d5_1_the_charge_landing_knob_reaches_the_resolver_from_the_header():
     assert rolls[True] == 0, (
         "the seam did not reach the resolver — the snap had no budget left and the "
         "melee still ran: %s" % rolls)
+
+
+def test_d5_2_the_movement_knob_moves_the_charge_per_model_from_the_header():
+    """NML-1073 M5 D5-2 — the `movement` knob crosses the same four layers the
+    `charge_landing` knob does (header `knobs` -> `acts::Knobs` -> `Core::seams`
+    -> `Seams::movement` -> `resolve_with`), and the thing it switches on is a
+    whole solver, so a knob that fell off would leave the gate measuring the OLD
+    rigid translation while claiming the table's route.
+
+    Two arms, one act, nothing changed but the knob. OFF, every model of the
+    charging unit takes the SAME clamped delta, so the pairwise offsets are
+    preserved to the digit. ON, the M4 movement port solves the route per model
+    and the formation FANS — models end inches apart from where the rigid slide
+    would have put them. The landing is also read directly (`Core.charge_move`),
+    because the endpoints are what `charge_move_gate.py` holds against the
+    table's recorded `moves_calls.jsonl` on the reference corpora.
+    """
+    import math
+
+    import nml_core
+
+    head, lines, dice, seed = srg.read_game(GAME)
+    act = next(a for a in lines if int(a["act"]) == 16)
+    action = act["pick"]["action"]
+    assert int(action["kind"]) == mrg.CHARGE_KIND and action.get("charge")
+
+    ends = {}
+    for movement in (False, True):
+        core = nml_core.load(str(REPO))
+        core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
+                         "knobs": dict(head.get("knobs", {}), hero_attach=True,
+                                       charge_landing=False, movement=movement)})
+        assert core.knobs()["movement"] is movement, "the header knob round-trips"
+        nxt = core.resolve(core.state_of(act["state"]), action)
+        ends[movement] = nxt.plain()["units"][action["unit"]]["positions"]
+        if not movement:
+            # The port declines to plan when the knob is off — nothing is built.
+            continue
+        land = core.charge_move(core.state_of(act["state"]), action["unit"], action["charge"])
+        assert land is not None, "the port plans this charge"
+        assert len(land["movers"]) == len(land["end"]) > len(ends[False]), \
+            "one endpoint per moving model, the attached hero's included"
+        assert land["budget_in"] == 16.0, "the charger's Fast rush band is the granted budget"
+        # The distance-truth trim (_execute_move solo_controller.gd:4841) compares
+        # in METRES with a 0.0005 m slack, i.e. 0.0197" — a trail inside that is
+        # never cut, so the band is the bar plus the table's own tolerance.
+        assert 0.0 <= land["arc_in"] <= land["budget_in"] + 0.02, \
+            "no model walks past its band: %s" % land["arc_in"]
+        assert land["remaining_in"] == max(0.0, land["budget_in"] - land["arc_in"])
+
+    assert len(ends[False]) == len(ends[True])
+    apart = [math.dist(a, b) / 0.0254 for a, b in zip(ends[False], ends[True])]
+    assert max(apart) > 1.0, (
+        "the seam did not reach the resolver — the charge still landed on the rigid "
+        "delta: %s" % [round(x, 3) for x in apart])
+    # RED-GREEN for the CLAIM, not just for the difference: the rigid arm really
+    # is one translation (every pairwise offset preserved), the table arm is not.
+    def spread(ps):
+        d0 = [p[i] - ps[0][i] for p in ps for i in (0, 2)]
+        return d0
+    assert spread(ends[False]) != spread(ends[True]), "the table arm steers per model"
+
+
+@pytest.mark.skipif(not QBE_REF.exists(), reason="no qbe_ref reference corpus on this machine")
+def test_d5_2_review_the_landing_gate_only_bites_with_charge_landing_on():
+    """REVIEW #440 fix — `sim.rs:1166` used to set the D5-1 budget gate
+    (`charge_remaining_in`) from the D5-2 landing UNCONDITIONALLY, so
+    `movement="table"` silently forced `charge_landing="table"` on even with
+    that knob off. Pinned on `qbe_ref/alien_hives_1000_vs_change_disciples_
+    1000_s30` act 24, the review's own proof: off/off draws 2 melee rolls, and
+    table/off MUST equal it (before the fix it drew 0); table/table (both
+    knobs on) still refuses.
+    """
+    import nml_core
+
+    game = QBE_REF / "alien_hives_1000_vs_change_disciples_1000_s30"
+    head, lines, dice, seed = srg.read_game(game)
+    burn = srg.burn_prefix(dice)
+    act = next(a for a in lines if int(a["act"]) == 24)
+    action = (act.get("pick") or {}).get("action") or {}
+    assert int(action.get("kind", -1)) == mrg.CHARGE_KIND and action.get("charge")
+
+    rolls = {}
+    for movement, charge_landing in ((False, False), (True, False), (True, True)):
+        core = nml_core.load(str(REPO))
+        core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
+                         "knobs": dict(head.get("knobs", {}), hero_attach=True,
+                                       charge_landing=charge_landing, movement=movement)})
+        i0 = srg.first_at_or_after(dice, 24)
+        tray = nml_core.Tray(seed)
+        if burn[i0]:
+            tray.roll(burn[i0])
+        _, report = core.resolve_with_tray(
+            core.state_of(act["state"]), action, nml_core.Rng(0), tray)
+        rolls[(movement, charge_landing)] = len(report["rolls"])
+
+    assert rolls[(False, False)] == 2, "the off/off baseline: %s" % rolls
+    assert rolls[(True, False)] == rolls[(False, False)], (
+        "movement=table with charge_landing OFF must behave like D5-1-off: %s" % rolls)
+    assert rolls[(True, True)] == 0, "movement=table WITH charge_landing still refuses: %s" % rolls
 
 
 def test_trailing_morale_keeps_a_no_retreat_block_together():

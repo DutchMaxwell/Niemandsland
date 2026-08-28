@@ -80,6 +80,11 @@ pub struct Knobs {
     /// every corpus recorded before it, so the default replays byte-identical.
     #[serde(default)]
     pub sighting: Sighting,
+    /// NML-1073 M5 D5-2 — `Seams::movement`, carried in the header the way every
+    /// other seam is. Absent from every corpus recorded before it, so the
+    /// default is OFF and nothing replays differently.
+    #[serde(default)]
+    pub movement: bool,
 }
 
 /// The `sighting` knob's two settings — the header writes them as strings, the
@@ -120,6 +125,7 @@ impl Default for Knobs {
             hero_attach: false,
             charge_landing: false,
             sighting: Sighting::Unit,
+            movement: false,
         }
     }
 }
