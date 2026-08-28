@@ -27,6 +27,7 @@ load-bearing:
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 import struct
@@ -435,6 +436,22 @@ def test_the_dice_mode_is_validated():
     for bad in ("real", "on", "", "Table"):
         with pytest.raises(ValueError):
             sp.resolve_dice(bad)
+
+
+def test_the_dice_knob_is_stamped_and_still_defaults_to_expected():
+    """NML-1073 M5 D1-B7. Two things, and they are the whole of B7's Python
+    half: `play_game` still DEFAULTS to the expected-value resolver — D1 ships
+    default-OFF and the corpus version is bumped on the flip, not before — and
+    the mode reaches the result's `knobs`, so a corpus row says which resolver
+    produced it. `test_b4_the_dice_knob_now_moves_the_game` proves the knob is
+    wired to real behaviour; this one proves the LABEL and the default, which
+    no test pinned (every caller there passes `dice=` explicitly)."""
+    assert inspect.signature(sp.play_game).parameters["dice"].default == "expected"
+    # The TABLE's half of B7 stamps the literal "table" into its own act-corpus
+    # header (act_recorder.gd `_header_line`). Both halves have to speak one
+    # vocabulary or a corpus reader would have to know which tool wrote a row
+    # before it could read the label.
+    assert sp.DICE_MODES == ("expected", "table")
 
 
 def test_the_tray_is_the_engines_randi_range_and_burns_the_zero_die_roll():
