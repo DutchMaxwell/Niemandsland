@@ -22,6 +22,7 @@ pub mod rollout;
 pub mod rows;
 pub mod rules;
 pub mod score;
+pub mod sight;
 pub mod sim;
 pub mod spell;
 pub mod state;

@@ -22,7 +22,11 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 import sight_oracle as so  # noqa: E402
+
+#: `AiPlanner` action kinds that shoot (`BattleSim.HOLD` / `.ADVANCE`).
+SHOOTING_KINDS = (0, 1)
 
 
 def gd_round(x: float) -> int:
@@ -218,12 +222,158 @@ def red_check(games: list[Path]) -> dict:
             "bearer_cap_slack_expected_unbroken": cap_slack_n}
 
 
-def run(ref: Path, limit: int, red_formula: str, out: Path) -> int:
+def profile_name(head: dict, plain: dict, key: str) -> str:
+    """The unit's profile NAME, off the act's own `prof` block when it carries
+    one and off the header otherwise — the same fallback `read_act_header`
+    gives the crate."""
+    u = plain["units"].get(key) or {}
+    prof = u.get("prof")
+    if isinstance(prof, dict) and prof.get("name"):
+        return str(prof["name"])
+    return str(head.get("profiles", {}).get(u.get("profile", key), {}).get("name", "?"))
+
+
+def act_lines(d: Path) -> list[dict]:
+    """The planner-picked act lines, each stamped with its INTERLEAVED position —
+    the ordinal `shots.jsonl` and `dice.jsonl` carry (see
+    `shoot_replay_gate.read_game`, which numbers them the same way)."""
+    body = [json.loads(x) for x in (d / "acts.jsonl").read_text().splitlines() if x.strip()][1:]
+    out = []
+    for i, a in enumerate((x for x in body if x.get("kind") in ("act", "auto")), 1):
+        if a.get("kind") == "act":
+            out.append(dict(a, act=i))
+    return out
+
+
+def port_check(games: list[Path], repo: str, red: str) -> dict:
+    """D6a-B3 — `sight.rs` against the table's own per-shot `sighted`.
+
+    THE POPULATION, and what falls out of it. Only a shot the port could ever
+    reproduce is compared: one fired at the activation's OWN recorded target
+    (the table picks a target per WEAPON, `_solo_pick_overlay_target`
+    main.gd:2996-3005, and the port aims the whole volley at the one recorded
+    `shoot` key — `split_fire`, a seam that predates this rung), and one whose
+    firing member still has as many recorded positions as the shot records live
+    models (`stale`: the act line is the state at the START of the activation,
+    and a unit that walked through Dangerous ground on the way lost models
+    between the two — those acts decline in the replay gate anyway).
+
+    THE REACH IS CHECKED, NOT ASSUMED. `sighted()` hands back the base-edge
+    slack it added (`main._solo_sighted_count` :4141-4145). The recording stamps
+    `int(reach) + slack`, so subtracting the port's slack from the recorded
+    `reach_in` must land on a whole inch; `reach_off` counts every shot where it
+    does not, and those are reported rather than rounded away.
+
+    RED KNOBS, one per half:
+      `alive`    — answer with the unit's living model count, which is what the
+                   trainer does today. Must break on every shot where the table
+                   saw fewer.
+      `indirect` — waive the sight half and keep the range gate, i.e. run the
+                   geometry with no line of sight at all. Must break exactly the
+                   shots a blocker or a wood was holding down.
+    """
+    t = {k: 0 for k in ("shots", "equal", "split_fire", "stale", "no_member", "reach_off",
+                        "sandbox", "blockers", "blocker_mismatch", "acts")}
+    hist: Counter = Counter()
+    firsts: list[str] = []
+    for d in games:
+        head = so.read_game(d)[0]
+        core = nml_core.load(repo)
+        core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
+                         "knobs": head.get("knobs", {})})
+        by_act: dict[int, list[dict]] = {}
+        for sh in read_shots(d):
+            by_act.setdefault(sh["act"], []).append(sh)
+        for act in act_lines(d):
+            action = (act.get("pick") or {}).get("action") or {}
+            if int(action.get("kind", -1)) not in SHOOTING_KINDS or not action.get("shoot"):
+                continue
+            shots = by_act.get(int(act["act"]))
+            if not shots:
+                continue
+            t["acts"] += 1
+            plain, sk, tk = act["state"], action["unit"], action["shoot"]
+            state = core.state_of(plain)
+            members = [sk] + list((plain["units"].get(sk) or {}).get("attached") or [])
+            for sh in shots:
+                if sh["target"] != profile_name(head, plain, tk):
+                    t["split_fire"] += 1
+                    continue
+                mk = next((m for m in members if profile_name(head, plain, m) == sh["member"]), None)
+                if mk is None:
+                    t["no_member"] += 1
+                    continue
+                if len((plain["units"][mk].get("positions") or [])) != sh["alive"]:
+                    t["stale"] += 1
+                    continue
+                ind = bool(sh["indirect"]) or red == "indirect"
+                probe = core.sighted(state, mk, tk, 0.0, ind)
+                reach = sh["reach_in"] - float(probe["slack_in"])
+                if abs(reach - round(reach)) > 1e-6:
+                    t["reach_off"] += 1
+                got = core.sighted(state, mk, tk, float(round(reach)), ind)
+                n = int(sh["alive"]) if red == "alive" else int(got["sighted"])
+                t["shots"] += 1
+                t["sandbox"] += int(got["sandbox"]) > 0
+                t["blockers"] += int(got["blockers"])
+                # D6a-B3 RED-GREEN: the blocker set is every OTHER unit's alive
+                # models — the on-table model count minus the firing member's,
+                # the target's and both their heroes' (main._solo_los_blockers
+                # :4192-4207), and minus every unit still in Ambush reserve.
+                skip = {mk, tk} | set((plain["units"][mk].get("attached") or [])) \
+                    | set((plain["units"][tk].get("attached") or []))
+                want_bl = sum(len(u.get("positions") or []) for k, u in plain["units"].items()
+                              if k not in skip and not u.get("dormant"))
+                t["blocker_mismatch"] += int(got["blockers"]) != want_bl
+                if n == sh["sighted"]:
+                    t["equal"] += 1
+                else:
+                    hist[n - int(sh["sighted"])] += 1
+                    if len(firsts) < 8:
+                        firsts.append("%s act=%s %s/%s port=%d table=%d alive=%d reach=%.2f" % (
+                            d.name, sh["act"], sh["member"], sh["weapon"], n, sh["sighted"],
+                            sh["alive"], sh["reach_in"]))
+    t["diff_hist"] = {str(k): v for k, v in sorted(hist.items())}
+    t["examples"] = firsts
+    return t
+
+
+def run(ref: Path, limit: int, red_formula: str, out: Path,
+        port: str, repo: str, red_port: str) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "shots.jsonl").exists())
     games = games[:limit] if limit else games
     if not games:
         print("no games with shots.jsonl under %s" % ref)
         return 1
+
+    if port:
+        global nml_core
+        import nml_core  # noqa: PLC0415 — only the --port run needs the extension
+        p = port_check(games, repo, red_port)
+        print("=== sight_gate --port (%d games, %d comparable shots of %d acts) ===" % (
+            len(games), p["shots"], p["acts"]))
+        print("port [%s]: %d/%d shots match the recorded per-model `sighted` (%.2f%%)" % (
+            red_port or "green", p["equal"], p["shots"], pct(p["equal"], p["shots"])))
+        print("  port-minus-table histogram: %s" % (p["diff_hist"] or "{} (exact)"))
+        print("  not comparable: %d split-fire, %d stale state, %d member not found" % (
+            p["split_fire"], p["stale"], p["no_member"]))
+        print("  reach: %d shot(s) where recorded reach_in minus the port's base-edge "
+              "slack is not a whole inch" % p["reach_off"])
+        print("  blockers: %d cylinders built, %d shot(s) where the set is NOT "
+              "\"every other unit's alive models\"" % (p["blockers"], p["blocker_mismatch"]))
+        print("  seams touched: %d shot(s) on a board with sandbox pieces (no box volumes "
+              "in this port)" % p["sandbox"])
+        for ex in p["examples"]:
+            print("  first : %s" % ex)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps({"games": len(games), "port": p}, indent=1))
+        print("summary written to %s" % out)
+        if not red_port:
+            return 0
+        ok = p["equal"] < p["shots"]
+        print("  RED (%s) %s" % (red_port, "held — %d/%d shots parted" % (
+            p["shots"] - p["equal"], p["shots"]) if ok else "FAILED — nothing parted"))
+        return 0 if ok else 1
 
     inst = instrument_check(games, red_formula)
     dist = distribution(games)
@@ -275,8 +425,16 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--red-formula", choices=("sighted", "alive"), default="sighted",
                      help="'sighted' (default, GREEN) or 'alive' (RED: must break the instrument)")
     ap.add_argument("--out", default="~/selfplay_out/qbe_sight_summary.json")
+    ap.add_argument("--port", action="store_true",
+                    help="D6a-B3: hold `sight.rs` against the recorded per-shot `sighted` "
+                         "instead of checking the recording against itself")
+    ap.add_argument("--repo", default=str(Path(__file__).resolve().parents[3]))
+    ap.add_argument("--red-port", choices=("alive", "indirect"), default="",
+                    help="RED for --port: 'alive' answers with the living model count (what the "
+                         "trainer does today), 'indirect' waives the sight half. Either must part")
     a = ap.parse_args(argv)
-    return run(Path(a.ref).expanduser(), a.limit, a.red_formula, Path(a.out).expanduser())
+    return run(Path(a.ref).expanduser(), a.limit, a.red_formula, Path(a.out).expanduser(),
+               a.port, a.repo, a.red_port)
 
 
 if __name__ == "__main__":
