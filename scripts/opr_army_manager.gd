@@ -2119,8 +2119,15 @@ func _order_units_heroes_after_host(units: Array) -> Array:
 ## checks see it too). Purely additive + deduped; grants regardless of whether X is modelled (an unmodelled
 ## base is simply inert — data refines, never breaks).
 func _expand_auras(army: OPRApiClient.OPRArmy) -> void:
-	for unit in army.units:
-		var gu: GameUnit = unit_to_game_unit.get(unit)
+	expand_auras_of(army.units, unit_to_game_unit)
+
+
+## The aura pass with its GameUnit lookup handed IN (OPRUnit -> GameUnit), so a
+## headless builder that keeps no manager can run the very same pass
+## (tools/core_selfplay.gd, NML-1105).
+static func expand_auras_of(units: Array, by_unit: Dictionary) -> void:
+	for unit in units:
+		var gu: GameUnit = by_unit.get(unit)
 		if gu == null:
 			continue
 		var members: Array = [gu]
@@ -2148,17 +2155,23 @@ func _expand_auras(army: OPRApiClient.OPRArmy) -> void:
 
 
 func _attach_joined_heroes(army: OPRApiClient.OPRArmy) -> void:
+	attach_joined_heroes_of(army.units, unit_to_game_unit)
+
+
+## The joined-Hero pass with its GameUnit lookup handed IN — same split as
+## expand_auras_of above (NML-1105).
+static func attach_joined_heroes_of(units: Array, by_unit: Dictionary) -> void:
 	# Index every unit's GameUnit by its selectionId.
 	var by_selection: Dictionary = {}
-	for unit in army.units:
-		var game_unit: GameUnit = unit_to_game_unit.get(unit)
+	for unit in units:
+		var game_unit: GameUnit = by_unit.get(unit)
 		if game_unit and not unit.selection_id.is_empty():
 			by_selection[unit.selection_id] = game_unit
 
-	for unit in army.units:
+	for unit in units:
 		if unit.join_to_unit.is_empty():
 			continue
-		var hero_unit: GameUnit = unit_to_game_unit.get(unit)
+		var hero_unit: GameUnit = by_unit.get(unit)
 		var host_unit: GameUnit = by_selection.get(unit.join_to_unit)
 		if hero_unit and host_unit and hero_unit != host_unit:
 			EquipmentDistributor.attach_hero_to_unit(hero_unit, host_unit)

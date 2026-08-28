@@ -1,10 +1,12 @@
 extends GdUnitTestSuite
-## NML-1046 M1: tools/core_selfplay.gd hand-builds GameUnits via GameUnit.new()
-## in _units_from_list(), bypassing the equipment-import path that normally
-## calls initialize_caster_points() (scripts/equipment_distributor.gd:394).
-## Without the grant, every core-generated unit entered BattleSim.capture()
-## with casts_current == 0 and BattleSim.spell_ev_of() always saw tokens <= 0
-## — thousands of core games, zero spells.
+## NML-1046 M1: tools/core_selfplay.gd used to hand-build GameUnits via
+## GameUnit.new() in _units_from_list(), bypassing the equipment-import path
+## that normally calls initialize_caster_points()
+## (scripts/equipment_distributor.gd:394). Without the grant, every
+## core-generated unit entered BattleSim.capture() with casts_current == 0 and
+## BattleSim.spell_ev_of() always saw tokens <= 0 — thousands of core games,
+## zero spells. NML-1105 routed _units_from_list through the table's own import
+## path, which calls that grant itself; this suite keeps guarding the quantity.
 ##
 ## This suite drives a NON-RUNNING SceneTree.new() instance of
 ## core_selfplay.gd directly: _units_from_list() is an INSTANCE method that
@@ -33,11 +35,28 @@ func _unit_spec(id: String, size: int, rules: Array, sel: String = "",
 		"combined": combined}
 
 
-## Adds ONE selectedUpgrades entry (option label only — this fixture format
-## never carries typed "gains", see core_selfplay.gd:_rules_in_upgrade_label).
-func _with_upgrade(spec: Dictionary, option_label: String) -> Dictionary:
+## Adds ONE selectedUpgrades entry with the option's TYPED gains — the ONLY
+## shape the table reads (opr_api_client.gd:_apply_selected_upgrade_rules).
+## NML-1105: the harness now goes through that same parser, so the fixtures
+## carry what Army Forge actually sends instead of a parsable label.
+func _with_upgrade_gains(spec: Dictionary, gains: Array) -> Dictionary:
+	spec["selectedUpgrades"] = [{"option": {"label": "Upgrade", "gains": gains}}]
+	return spec
+
+
+## Adds ONE selectedUpgrades entry that carries an option LABEL and nothing else
+## — no typed gain, so it grants nothing.
+func _with_upgrade_label(spec: Dictionary, option_label: String) -> Dictionary:
 	spec["selectedUpgrades"] = [{"option": {"label": option_label}}]
 	return spec
+
+
+## One ArmyBookRule gain entry, e.g. _rule_gain("Caster", 2) -> "Caster(2)".
+func _rule_gain(rule_name: String, rating: Variant = null) -> Dictionary:
+	var gain := {"type": "ArmyBookRule", "name": rule_name}
+	if rating != null:
+		gain["rating"] = rating
+	return gain
 
 
 ## (a) A Caster(X) list unit is granted X tokens after the build.
@@ -69,8 +88,10 @@ func test_non_caster_list_unit_keeps_zero_tokens() -> void:
 ## run AFTER that fold, or it only sees the host's own pre-combine models.
 func test_caster_group_grant_counts_the_combined_models() -> void:
 	var cs: SceneTree = CoreSelfplayScript.new()
+	# BOTH halves of an OPR Combined unit carry combined:true (the anchor has no
+	# joinToUnit) — that is the shape opr_api_client.gd:_merge_combined_units folds.
 	var host := _unit_spec("Musician", 2,
-		[{"name": "Caster Group", "label": "Caster Group"}], "hostSel")
+		[{"name": "Caster Group", "label": "Caster Group"}], "hostSel", null, true)
 	var partner := _unit_spec("Musician_B", 3,
 		[{"name": "Caster Group", "label": "Caster Group"}], "partnerSel", "hostSel", true)
 	var path := _write_list([host, partner])
@@ -98,25 +119,24 @@ func test_caster_group_tokens_recount_after_casualties() -> void:
 	cs.free()
 
 
-## NML-1066 (a): an UPGRADE-granted Caster (selectedUpgrades option label, not
-## a printed unit rule) must reach the unit and grant its tokens — the real
-## import path resolves this from the option's typed "gains"
-## (opr_api_client.gd:850); the trainer's list fixture only carries the label.
+## NML-1066 (a): an UPGRADE-granted Caster (a selectedUpgrades gain, not a
+## printed unit rule) must reach the unit and grant its tokens — resolved from
+## the option's typed "gains", exactly as the table does.
 func test_upgrade_granted_caster_gets_tokens() -> void:
 	var cs: SceneTree = CoreSelfplayScript.new()
-	var path := _write_list([_with_upgrade(
-		_unit_spec("Master Brother", 1, []), "Archivist (Caster(2))")])
+	var path := _write_list([_with_upgrade_gains(
+		_unit_spec("Master Brother", 1, []), [_rule_gain("Caster", 2)])])
 	var units: Array = cs._units_from_list(path, 1)
 	assert_int(units.size()).is_equal(1)
 	assert_int((units[0] as GameUnit).casts_current).is_equal(2)
 	cs.free()
 
 
-## NML-1066 (b): an option label with NO parenthesized tail is a plain
-## weapon/item swap (e.g. "Replace CCW" -> "Iron Sights"), not a rule grant.
+## NML-1066 (b): an option with no typed gain (a plain weapon/item swap, e.g.
+## "Replace CCW" -> "Iron Sights") grants no rule.
 func test_upgrade_option_without_parens_grants_nothing() -> void:
 	var cs: SceneTree = CoreSelfplayScript.new()
-	var path := _write_list([_with_upgrade(
+	var path := _write_list([_with_upgrade_label(
 		_unit_spec("Trooper", 1, []), "Iron Sights")])
 	var units: Array = cs._units_from_list(path, 1)
 	var unit := units[0] as GameUnit
@@ -132,8 +152,8 @@ func test_upgrade_option_without_parens_grants_nothing() -> void:
 ## this actual (first-listed) behavior, not a max/combine that doesn't exist.
 func test_upgrade_caster_alongside_printed_caster_keeps_printed_value() -> void:
 	var cs: SceneTree = CoreSelfplayScript.new()
-	var path := _write_list([_with_upgrade(_unit_spec("Hybrid Caster", 1,
-		[{"name": "Caster", "rating": 1, "label": "Caster(1)"}]), "Seer (Caster(2))")])
+	var path := _write_list([_with_upgrade_gains(_unit_spec("Hybrid Caster", 1,
+		[{"name": "Caster", "rating": 1, "label": "Caster(1)"}]), [_rule_gain("Caster", 2)])])
 	var units: Array = cs._units_from_list(path, 1)
 	var unit := units[0] as GameUnit
 	assert_int(unit.casts_current).is_equal(1)
@@ -143,13 +163,12 @@ func test_upgrade_caster_alongside_printed_caster_keeps_printed_value() -> void:
 	cs.free()
 
 
-## NML-1066 (d): a multi-rule option label grants EVERY comma-separated rule
-## inside the outer parentheses, e.g. "Champion (Fear, Caster(1))" grants both
-## "Fear" and "Caster(1)" (the inner "(1)" stays part of the Caster label).
+## NML-1066 (d): an option with SEVERAL typed gains grants every one of them,
+## e.g. a Champion carrying both "Fear" and "Caster(1)".
 func test_upgrade_multi_rule_label_grants_all_of_them() -> void:
 	var cs: SceneTree = CoreSelfplayScript.new()
-	var path := _write_list([_with_upgrade(
-		_unit_spec("Champion Bearer", 1, []), "Champion (Fear, Caster(1))")])
+	var path := _write_list([_with_upgrade_gains(
+		_unit_spec("Champion Bearer", 1, []), [_rule_gain("Fear"), _rule_gain("Caster", 1)])])
 	var units: Array = cs._units_from_list(path, 1)
 	var unit := units[0] as GameUnit
 	assert_int(unit.casts_current).is_equal(1)
@@ -164,9 +183,9 @@ func test_upgrade_multi_rule_label_grants_all_of_them() -> void:
 ## unit via combined:true must not lose its upgrade-granted Caster.
 func test_combined_partner_upgrade_caster_reaches_the_host() -> void:
 	var cs: SceneTree = CoreSelfplayScript.new()
-	var host := _unit_spec("Grunts", 2, [], "hostSel")
-	var partner := _with_upgrade(
-		_unit_spec("Archivist", 1, [], "partnerSel", "hostSel", true), "Archivist (Caster(2))")
+	var host := _unit_spec("Grunts", 2, [], "hostSel", null, true)
+	var partner := _with_upgrade_gains(
+		_unit_spec("Archivist", 1, [], "partnerSel", "hostSel", true), [_rule_gain("Caster", 2)])
 	var path := _write_list([host, partner])
 	var units: Array = cs._units_from_list(path, 1)
 	assert_int(units.size()).is_equal(1)
@@ -174,12 +193,13 @@ func test_combined_partner_upgrade_caster_reaches_the_host() -> void:
 	cs.free()
 
 
-## NML-1066 (e) guard: a WEAPON-SWAP option's label also carries a parenthesized
-## tail (its profile) — "Energy Sword (A2, AP(1), Rending)" must grant NOTHING,
-## not leak "A2"/"AP(1)"/"Rending" into unit-wide special_rules.
+## NML-1066 (e) guard, NML-1105 reading: a WEAPON-SWAP option's label carries a
+## parenthesized profile — "Energy Sword (A2, AP(1), Rending)" must grant
+## NOTHING, not leak "A2"/"AP(1)"/"Rending" into unit-wide special_rules. The
+## harness no longer parses labels at all, so this is now free by construction.
 func test_upgrade_weapon_swap_profile_grants_nothing() -> void:
 	var cs: SceneTree = CoreSelfplayScript.new()
-	var path := _write_list([_with_upgrade(
+	var path := _write_list([_with_upgrade_label(
 		_unit_spec("Swordsman", 1, []), "Energy Sword (A2, AP(1), Rending)")])
 	var units: Array = cs._units_from_list(path, 1)
 	var unit := units[0] as GameUnit
@@ -192,7 +212,7 @@ func test_upgrade_weapon_swap_profile_grants_nothing() -> void:
 ## range figure must also void the whole label.
 func test_upgrade_weapon_swap_with_range_grants_nothing() -> void:
 	var cs: SceneTree = CoreSelfplayScript.new()
-	var path := _write_list([_with_upgrade(
+	var path := _write_list([_with_upgrade_label(
 		_unit_spec("Rifleman", 1, []), "Heavy Rifle (24\", A1, AP(1))")])
 	var units: Array = cs._units_from_list(path, 1)
 	var unit := units[0] as GameUnit
