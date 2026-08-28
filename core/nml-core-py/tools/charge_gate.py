@@ -51,6 +51,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 import nml_core  # noqa: E402
 
 import selfplay as sp  # noqa: E402
+from shoot_replay_gate import (  # noqa: E402
+    resolve_vintage_flag, vintage_report_line,
+)
 
 #: `AiPlanner` action kinds — `BattleSim.CHARGE` (battle_sim.gd), the one the
 #: red proof counts.
@@ -129,7 +132,8 @@ def action_diff(got: dict, want: dict) -> str:
     return ""
 
 
-def run(ref: Path, repo: str, mode: str, limit: int) -> int:
+def run(ref: Path, repo: str, mode: str, limit: int,
+        engage_fold: str = "auto", cond_ap: str = "auto") -> int:
     gate = sp.resolve_charge_gate(mode)
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "acts.jsonl").exists())
     if limit:
@@ -144,17 +148,26 @@ def run(ref: Path, repo: str, mode: str, limit: int) -> int:
     illegal_true = 0
     charge_diffs = charge_vetoed = 0
     first_stamp = first_pick = ""
+    vintage_seen: set[tuple[bool, bool]] = set()
     t0 = time.perf_counter()
     for d in games:
         head, lines = acts_of(d / "acts.jsonl")
         # One Core per GAME: `set_header` rebuilds the profile table and the
         # board, and both change with the pairing and the seed.
         core = nml_core.load(repo)
+        # NML-1130: the PICK check drives `plan_with_rollout` (search), which
+        # both `engage_fold` and conditional AP feed — replay with the corpus's
+        # OWN vintage, not today's twin defaults.
+        eff_engage_fold = resolve_vintage_flag(engage_fold, head, repo, "engage_fold")
+        eff_cond_ap = resolve_vintage_flag(cond_ap, head, repo, "cond_ap")
+        vintage_seen.add((eff_engage_fold, eff_cond_ap))
+        nml_core.set_legacy_no_cond_ap(not eff_cond_ap)
         core.set_header(
             {
                 "profiles": head["profiles"],
                 "terrain": head.get("terrain"),
-                "knobs": dict(head.get("knobs", {}), charge_gate=gate),
+                "knobs": dict(head.get("knobs", {}), charge_gate=gate,
+                              engage_fold=eff_engage_fold),
             }
         )
         for n_act, act in enumerate(lines, 1):
@@ -208,8 +221,8 @@ def run(ref: Path, repo: str, mode: str, limit: int) -> int:
 
     label = "GATE D2" if gate else "RED D2 (charge_gate=off)"
     print()
-    print("%s over %d games, %d acts (%.1fs)" % (
-        label, len(games), acts, time.perf_counter() - t0))
+    print("%s over %d games, %d acts, %s (%.1fs)" % (
+        label, len(games), acts, vintage_report_line(vintage_seen), time.perf_counter() - t0))
     print("  stamp : %d/%d pairs equal   (%d mismatches; %d acts carry a stamp; "
           "%d recorded pairs are ILLEGAL)" % (pairs - pair_bad, pairs, pair_bad,
                                               acts_stamped, illegal_true))
@@ -241,8 +254,16 @@ def main(argv: list[str]) -> int:
         help="'table' is the gate; 'off' is the RED PROOF and must go red",
     )
     ap.add_argument("--limit", type=int, default=0, help="only the first N game dirs")
+    ap.add_argument("--engage-fold", choices=("auto", "on", "off"), default="auto",
+                    help="NML-1130: the header knob engage_fold (PR #446). 'auto' (default) "
+                         "reads the corpus's OWN vintage (vintage_knobs) — absent means the "
+                         "corpus predates the knob, so OFF; 'on'/'off' force it")
+    ap.add_argument("--cond-ap", choices=("auto", "on", "off"), default="auto",
+                    help="NML-1130: conditional AP (PR #448/NML-1103), i.e. LEGACY_NO_COND_AP "
+                         "inverted. 'auto' (default) reads the corpus's OWN vintage; 'on'/'off' "
+                         "force it")
     a = ap.parse_args(argv)
-    return run(Path(a.ref).expanduser(), a.repo, a.mode, a.limit)
+    return run(Path(a.ref).expanduser(), a.repo, a.mode, a.limit, a.engage_fold, a.cond_ap)
 
 
 if __name__ == "__main__":

@@ -245,7 +245,8 @@ def act_lines(d: Path) -> list[dict]:
     return out
 
 
-def port_check(games: list[Path], repo: str, red: str) -> dict:
+def port_check(games: list[Path], repo: str, red: str,
+                engage_fold: str = "auto", cond_ap: str = "auto") -> dict:
     """D6a-B3 — `sight.rs` against the table's own per-shot `sighted`.
 
     THE POPULATION, and what falls out of it. Only a shot the port could ever
@@ -272,15 +273,29 @@ def port_check(games: list[Path], repo: str, red: str) -> dict:
                    geometry with no line of sight at all. Must break exactly the
                    shots a blocker or a wood was holding down.
     """
+    # NML-1130: lazy, alongside `run()`'s own `import nml_core` — this module
+    # otherwise never touches the extension outside `--port`.
+    from shoot_replay_gate import (  # noqa: PLC0415
+        resolve_vintage_flag, vintage_report_line,
+    )
     t = {k: 0 for k in ("shots", "equal", "split_fire", "stale", "no_member", "reach_off",
                         "sandbox", "blockers", "blocker_mismatch", "acts")}
     hist: Counter = Counter()
     firsts: list[str] = []
+    vintage_seen: set[tuple[bool, bool]] = set()
     for d in games:
         head = so.read_game(d)[0]
         core = nml_core.load(repo)
+        # `core.sighted()` is pure geometry and does not itself read
+        # engage_fold/cond_ap, but `set_header` builds the ONE Core this game
+        # replays every shot against — stamped for consistency with the other
+        # gates, see `vintage_knobs`.
+        eff_engage_fold = resolve_vintage_flag(engage_fold, head, repo, "engage_fold")
+        eff_cond_ap = resolve_vintage_flag(cond_ap, head, repo, "cond_ap")
+        vintage_seen.add((eff_engage_fold, eff_cond_ap))
+        nml_core.set_legacy_no_cond_ap(not eff_cond_ap)
         core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
-                         "knobs": head.get("knobs", {})})
+                         "knobs": dict(head.get("knobs", {}), engage_fold=eff_engage_fold)})
         by_act: dict[int, list[dict]] = {}
         for sh in read_shots(d):
             by_act.setdefault(sh["act"], []).append(sh)
@@ -335,11 +350,13 @@ def port_check(games: list[Path], repo: str, red: str) -> dict:
                             sh["alive"], sh["reach_in"]))
     t["diff_hist"] = {str(k): v for k, v in sorted(hist.items())}
     t["examples"] = firsts
+    t["vintage"] = vintage_report_line(vintage_seen)
     return t
 
 
 def run(ref: Path, limit: int, red_formula: str, out: Path,
-        port: str, repo: str, red_port: str) -> int:
+        port: str, repo: str, red_port: str,
+        engage_fold: str = "auto", cond_ap: str = "auto") -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "shots.jsonl").exists())
     games = games[:limit] if limit else games
     if not games:
@@ -349,9 +366,9 @@ def run(ref: Path, limit: int, red_formula: str, out: Path,
     if port:
         global nml_core
         import nml_core  # noqa: PLC0415 — only the --port run needs the extension
-        p = port_check(games, repo, red_port)
-        print("=== sight_gate --port (%d games, %d comparable shots of %d acts) ===" % (
-            len(games), p["shots"], p["acts"]))
+        p = port_check(games, repo, red_port, engage_fold, cond_ap)
+        print("=== sight_gate --port (%d games, %d comparable shots of %d acts), %s ===" % (
+            len(games), p["shots"], p["acts"], p["vintage"]))
         print("port [%s]: %d/%d shots match the recorded per-model `sighted` (%.2f%%)" % (
             red_port or "green", p["equal"], p["shots"], pct(p["equal"], p["shots"])))
         print("  port-minus-table histogram: %s" % (p["diff_hist"] or "{} (exact)"))
@@ -432,9 +449,17 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--red-port", choices=("alive", "indirect"), default="",
                     help="RED for --port: 'alive' answers with the living model count (what the "
                          "trainer does today), 'indirect' waives the sight half. Either must part")
+    ap.add_argument("--engage-fold", choices=("auto", "on", "off"), default="auto",
+                    help="NML-1130: the header knob engage_fold (PR #446), --port only. 'auto' "
+                         "(default) reads the corpus's OWN vintage (vintage_knobs); 'on'/'off' "
+                         "force it")
+    ap.add_argument("--cond-ap", choices=("auto", "on", "off"), default="auto",
+                    help="NML-1130: conditional AP (PR #448/NML-1103), --port only, i.e. "
+                         "LEGACY_NO_COND_AP inverted. 'auto' (default) reads the corpus's OWN "
+                         "vintage; 'on'/'off' force it")
     a = ap.parse_args(argv)
     return run(Path(a.ref).expanduser(), a.limit, a.red_formula, Path(a.out).expanduser(),
-               a.port, a.repo, a.red_port)
+               a.port, a.repo, a.red_port, a.engage_fold, a.cond_ap)
 
 
 if __name__ == "__main__":

@@ -977,6 +977,8 @@ def play_game(
     dice: str = "expected",
     charge_landing: str = "off",
     movement: str = "rigid",
+    engage_fold: bool = True,
+    cond_ap: bool | None = None,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -1035,7 +1037,26 @@ def play_game(
     the SAME number of draws and discards them, so the opener roll-off and every
     die of every activation stay bit-identical and the ONLY thing that moved is
     where the models were put. A gate that could not tell that apart would be
-    measuring the seed, not the deployment."""
+    measuring the seed, not the deployment.
+
+    `engage_fold` (PR #446, D5-4) and `cond_ap` (PR #448, NML-1103) are plain
+    bools/`None`, not a mode string: neither has a "table" reading to fall
+    back to here (this call GENERATES a game, it does not replay a recorded
+    one). `engage_fold` rides the header knob the way every replay gate does,
+    and its default (True) is the twin's OWN default, so a caller that passes
+    nothing sees no change. `cond_ap` is inverted onto
+    `nml_core.set_legacy_no_cond_ap` — but that flag is a PROCESS GLOBAL, and
+    several existing test files (`test_selfplay.py`, `test_sidecars.py`,
+    `test_rows.py`) already manage it themselves around a `play_game` call
+    (an `autouse` fixture sets it for `m3_ref_v2`'s known LEGACY corpus, the
+    sibling of `rules.LEGACY_PREFIX_RULES`). `cond_ap` therefore defaults to
+    `None` — "do not touch it" — and only calls `set_legacy_no_cond_ap` when
+    a caller passes an explicit bool; `None` is otherwise indistinguishable
+    from every call site written before this parameter existed. NML-1130's
+    own callers (the gates under `tools/`) always resolve `auto`/`on`/`off`
+    to a concrete bool before they ever reach here (there is no header for
+    this function to read a vintage off, so `auto` resolves against
+    `vintage_knobs({}, ...)`)."""
     units1 = load_army(list_p1, 1)
     units2 = load_army(list_p2, 2)
     if not units1 or not units2:
@@ -1082,8 +1103,18 @@ def play_game(
         # NML-1073 M5 D5-2: the charge MOVE itself. "rigid" leaves it False,
         # which is the default and what every earlier corpus carries.
         movement=eff_movement,
+        # NML-1130: the header knob PR #446 defaults ON in the twin. True here
+        # matches that default, so a caller that passes nothing sees no change.
+        engage_fold=engage_fold,
     )
     core.set_header({"profiles": profiles, "terrain": terrain, "knobs": knobs})
+    # NML-1130 (PR #448, NML-1103): conditional AP (Shatter/Tear/Disintegrate/
+    # Melee Slayer/Piercing Assault/Piercing Hunter) counted the corrected way.
+    # `cond_ap=None` (the default) leaves `LEGACY_NO_COND_AP` exactly as the
+    # CALLER left it — see the docstring on why this one knob does not get a
+    # concrete default the way `engage_fold` does.
+    if cond_ap is not None:
+        nml_core.set_legacy_no_cond_ap(not cond_ap)
     # Board columns 10/11 read the GameUnit's `source_data` (battle_sim.gd
     # :233-234), which `tools/core_selfplay.gd` fills from the unit since #392 —
     # so the DEFAULT is the profile's own quality/defense. The 4/4 of a blank
@@ -1177,6 +1208,8 @@ def play_game(
             "dice": eff_dice,
             "charge_landing": charge_landing,
             "movement": movement,
+            "engage_fold": engage_fold,
+            "cond_ap": cond_ap,
         },
         # D1-B4 telemetry, empty under `dice="expected"`: how many shooting
         # activations drew from the tray, how many rolls that was, and how many
