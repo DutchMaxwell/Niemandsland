@@ -30,6 +30,7 @@ import list_to_profile  # noqa: E402
 from list_to_profile import (  # noqa: E402
     _rule_to_string,
     _rules_in_upgrade_label,
+    base_shape_of,
     profiles_from_army_forge_json,
     profiles_from_list,
 )
@@ -426,3 +427,32 @@ def test_matches_oracle_header(game_dir: Path):
             if r:
                 mismatches.append(f"{uid}.{k}{r}")
     assert not mismatches, "\n".join(mismatches)
+
+
+def test_base_shape_of_reads_a_d5_4b_header_and_survives_an_older_one():
+    """NML-1073 M5 D5-4b — the base-SHAPE reader, both eras of act header.
+
+    D5-4b made `BattleSim._unit_profile` write `base_shape` / `base_w_mm` /
+    `base_d_mm`; every corpus recorded before it (`qbf_ref`, `qag_ref`, the
+    oracle games this file gates on) carries none of the three. A reader that
+    only worked on the new era would take the whole gate down on the old one,
+    and one that quietly answered 32 mm for a missing oval would invent the
+    very number the rung exists to record — hence `None`, not a default.
+    """
+    oval = {"base_radius": 0.0756, "base_shape": "oval",
+            "base_w_mm": 92, "base_d_mm": 120}
+    assert base_shape_of(oval) == ("oval", 92, 120)
+    assert base_shape_of({"base_shape": "round", "base_w_mm": 32,
+                          "base_d_mm": 32}) == ("round", 32, 32)
+    # "rect" is read even though the recorder never writes it — shape_for_model
+    # has no RECT branch, so a square-based unit is recorded as round.
+    assert base_shape_of({"base_shape": "rect", "base_w_mm": 25,
+                          "base_d_mm": 50}) == ("rect", 25, 50)
+
+    # A pre-D5-4b header: round, and the axes are UNKNOWN rather than assumed.
+    assert base_shape_of({"base_radius": 0.016}) == ("round", None, None)
+    assert base_shape_of({}) == ("round", None, None)
+
+    # RED: a shape this port cannot draw is named, not silently rounded off.
+    with pytest.raises(ValueError, match="unknown base_shape"):
+        base_shape_of({"base_shape": "hexagon"})
