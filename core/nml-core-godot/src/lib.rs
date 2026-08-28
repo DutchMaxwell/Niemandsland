@@ -137,6 +137,8 @@ impl NmlCore {
             movement: false,
             // D1-B8: inert without a tray — this seat resolves expected values.
             no_dangerous: false,
+            // D5-4: inert — this seat never turns `hero_attach` on.
+            no_engage_fold: false,
         });
     }
 
@@ -656,6 +658,8 @@ impl NmlCore {
                 movement: false,
                 // D1-B8: inert without a tray — this seat resolves expected values.
                 no_dangerous: false,
+                // D5-4: inert — this seat never turns `hero_attach` on.
+                no_engage_fold: false,
             });
         }
         self.seams.unwrap()

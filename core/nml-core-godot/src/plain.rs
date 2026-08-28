@@ -822,6 +822,10 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // and defaults ON. Absent (every corpus) = `Knobs::default()` = true, and
         // a gate that writes `false` gets the RED reading.
         dangerous: d.get("dangerous").map(|v| flag(&v)).unwrap_or(dflt.dangerous),
+        // NML-1073 M5 D5-4. Not a seam: the engage test's hero fold rides
+        // `hero_attach` and defaults ON. Absent (every corpus) =
+        // `Knobs::default()` = true; a gate that writes `false` gets the RED.
+        engage_fold: d.get("engage_fold").map(|v| flag(&v)).unwrap_or(dflt.engage_fold),
     }
 }
 

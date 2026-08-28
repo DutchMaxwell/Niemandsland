@@ -141,7 +141,7 @@ def trailing_morale(rolls: list[tuple]) -> list[tuple]:
 def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         charge_landing: bool = False, movement: bool = False,
         walls_check: bool = False, rigid_red: bool = False,
-        no_dangerous: bool = False) -> int:
+        no_dangerous: bool = False, no_hero_fold: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -180,6 +180,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
                          "knobs": dict(head.get("knobs", {}), hero_attach=True,
                                        charge_landing=charge_landing,
                                        dangerous=not no_dangerous,
+                                       engage_fold=not no_hero_fold,
                                        movement=movement and not rigid_red)})
         if walls_check and walls:
             walls_seen["games"] += 1
@@ -315,6 +316,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         label += " + D5-2 movement=table" + (" [RED: rigid]" if rigid_red else "")
     if no_dangerous:
         label += " [RED: --red-no-dangerous, the p.12 test OFF]"
+    if no_hero_fold:
+        label += " [RED: --red-no-hero-fold, the engage test on the hosts alone]"
     silent_table = tally["both_silent"] + tally["table_silent"]
     print()
     print("%s over %d games, %d charge acts (%.1fs)"
@@ -421,11 +424,16 @@ def main(argv: list[str]) -> int:
                     help="RED PROOF for D1-B8: switch the p.12 DANGEROUS-terrain test back OFF "
                          "(header knob dangerous=false), everything else unchanged. Every "
                          "bucket must fall back to the pre-D1-B8 baseline")
+    ap.add_argument("--red-no-hero-fold", action="store_true",
+                    help="RED PROOF for D5-4: measure the engage test over the two HOSTS again "
+                         "(header knob engage_fold=false) while hero_attach stays on, "
+                         "everything else unchanged. Every bucket must fall back to the "
+                         "pre-D5-4 baseline")
     a = ap.parse_args(argv)
     return run(Path(a.ref).expanduser(), a.repo,
                "misseed" if a.red_misseed else a.mode, a.limit, a.report_only,
                a.charge_landing, a.movement or a.red_move_rigid, a.walls_check,
-               a.red_move_rigid, a.red_no_dangerous)
+               a.red_move_rigid, a.red_no_dangerous, a.red_no_hero_fold)
 
 
 if __name__ == "__main__":

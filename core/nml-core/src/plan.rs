@@ -180,6 +180,7 @@ fn seams_of(knobs: &Knobs) -> Seams {
         sighting: knobs.sighting == Sighting::Model,
         movement: knobs.movement,
         no_dangerous: !knobs.dangerous,
+        no_engage_fold: !knobs.engage_fold,
     }
 }
 
