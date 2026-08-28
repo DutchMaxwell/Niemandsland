@@ -5785,7 +5785,7 @@ func _solo_retreating_strike(unit: GameUnit) -> void:
 			var x := maxi(int(ed.get("rating", 0)), 1)
 			var dice := x * member.get_alive_count()
 			var owner_lbl: String = ("AI (%s)" % member.get_name()) if _solo_is_ai_unit(unit) else "You"
-			var rs_faces: Array = await _solo_tray_roll(dice, AiCombatMath.RAVAGE_WOUND_TARGET, owner_lbl)
+			var rs_faces: Array = await _solo_tray_roll(dice, AiCombatMath.RAVAGE_WOUND_TARGET, owner_lbl, "ravage")
 			var wounds: int = AiCombatMath.ravage_wounds(rs_faces)
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT,
@@ -5953,7 +5953,7 @@ func _solo_melee_strike_phase(striker: GameUnit, defender: GameUnit, charging: b
 				continue
 			var rv_dice: int = rx * rv.get_alive_count()
 			var rv_owner: String = ("AI (%s)" % rv.get_name()) if _solo_is_ai_unit(striker) else "You"
-			var rv_faces: Array = await _solo_tray_roll(rv_dice, AiCombatMath.RAVAGE_WOUND_TARGET, rv_owner)
+			var rv_faces: Array = await _solo_tray_roll(rv_dice, AiCombatMath.RAVAGE_WOUND_TARGET, rv_owner, "ravage")
 			var rv_wounds: int = AiCombatMath.ravage_wounds(rv_faces)
 			if battle_log != null:
 				battle_log.log_event(BattleLog.Category.COMBAT, "Ravage(%d): %s rolls %d dice → %d wound%s (no save)" % [
@@ -6513,7 +6513,7 @@ func _solo_apply_regeneration(target: GameUnit, wounds: int, from_spell: bool = 
 	var regen_target: int = int(pick.get("target", 0))
 	if wounds <= 0 or regen_target <= 0:
 		return maxi(wounds, 0)
-	var faces: Array = await _solo_tray_roll(wounds, regen_target, _solo_owner_label(target), "attack",
+	var faces: Array = await _solo_tray_roll(wounds, regen_target, _solo_owner_label(target), "regeneration",
 		"Regeneration (%d+ ignores a wound)" % regen_target)
 	var ignored := 0
 	for f in faces:
@@ -7026,7 +7026,7 @@ func _solo_owner_label(unit: GameUnit) -> String:
 func _run_ai_dangerous(unit: GameUnit, model_count: int) -> void:
 	if unit == null or dice_roller_control == null or model_count <= 0:
 		return
-	var faces: Array = await _solo_tray_roll(model_count, 6, "AI (%s)" % unit.get_name(), "attack",
+	var faces: Array = await _solo_tray_roll(model_count, 6, "AI (%s)" % unit.get_name(), "dangerous",
 		"Dangerous terrain: %s (a 1 wounds)" % unit.get_name())
 	var wounds := 0
 	for f in faces:
@@ -8298,7 +8298,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 		if spell_morale != 0 and battle_log != null:
 			battle_log.log_event(BattleLog.Category.COMBAT, "%s: %+d to morale test rolls — %s passes on %d+" % [
 				", ".join(morale_notes), spell_morale, unit.get_name(), test_target], true)
-		var faces: Array = await _solo_tray_roll(1, test_target, owner, "attack",
+		var faces: Array = await _solo_tray_roll(1, test_target, owner, "morale",
 			"Morale test: %s (%d+)" % [unit.get_name(), test_target])
 		_solo_spend_once_kind(unit, ["morale"])   # NML-006: spent by this test
 		if faces.is_empty():
@@ -8309,7 +8309,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 	# tray. The 4+ is DATA where the mechanics map carries it (RulesRegistry; constant fallback — byte-identical seam).
 	if result != AiCombatMath.Morale.PASSED and unit.has_special_rule("Fearless"):
 		var recover_target: int = int(RulesRegistry.unit_param(unit, "Fearless", "recover_target", AiCombatMath.FEARLESS_RECOVER_TARGET))
-		var recovery_die: Array = await _solo_tray_roll(1, recover_target, owner, "attack",
+		var recovery_die: Array = await _solo_tray_roll(1, recover_target, owner, "fearless",
 			"Morale recovery die — Fearless (%d+)" % recover_target)
 		if not recovery_die.is_empty() and DiceRules.is_success(int(recovery_die[0]), recover_target, 0):
 			result = AiCombatMath.Morale.PASSED
@@ -8327,7 +8327,7 @@ func _solo_morale_test(unit: GameUnit, owner: String, melee: bool = false) -> vo
 	if result != AiCombatMath.Morale.PASSED and RulesRegistry.unit_rule_active(unit, "No Retreat"):
 		var wound_max: int = int(RulesRegistry.unit_param(unit, "No Retreat", "self_wound_max", AiCombatMath.NO_RETREAT_SELF_WOUND_MAX))
 		var dice_n: int = maxi(1, SoloController.wounds_to_destroy(unit))
-		var nr_faces: Array = await _solo_tray_roll(dice_n, wound_max + 1, owner, "attack",
+		var nr_faces: Array = await _solo_tray_roll(dice_n, wound_max + 1, owner, "no_retreat",
 			"No Retreat self-wounds (1-%d = wound)" % wound_max)
 		var self_wounds: int = AiCombatMath.no_retreat_wounds(nr_faces, wound_max)
 		result = AiCombatMath.Morale.PASSED
@@ -10356,7 +10356,7 @@ func _solo_battleborn_recovery() -> void:
 			continue
 		var target: int = int(RulesRegistry.unit_param(gu, rule, "recover_target", AiCombatMath.BATTLEBORN_RECOVER_TARGET))
 		if _solo_is_ai_unit(gu):
-			var face: Array = await _solo_tray_roll(1, target, "AI (%s)" % gu.get_name())
+			var face: Array = await _solo_tray_roll(1, target, "AI (%s)" % gu.get_name(), "battleborn")
 			var recovered: bool = not face.is_empty() and AiCombatMath.battleborn_recovers(int(face[0]), target)
 			if recovered and radial_menu_controller != null:
 				radial_menu_controller.card_toggle_shaken(gu)   # clears Shaken via the state+marker+MP seam

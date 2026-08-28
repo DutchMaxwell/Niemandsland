@@ -56,7 +56,12 @@ CLASSES: `shooting` (HOLD/ADVANCE with a shoot target), `melee` (CHARGE with a
 target), and `morale` — the trailing morale block of EITHER, counted only on the
 activations where at least one side drew one, which is why its denominator is
 smaller than the other two. A morale roll is stamped `roll_kind` "attack" like
-every other die and can only be told apart by WHERE it sits: last.
+every other die and can only be told apart by WHERE it sits: last. (NML-1104
+split the RECORDED corpus's `roll_kind` by rule for seven special-rule dice —
+morale, Fearless, No Retreat, Regeneration, Ravage, Battleborn, dangerous
+terrain; `shoot_replay_gate.combat_kind()` folds those back to "attack" when
+this file's `want` tuples are built, so the port's still-blanket "attack"
+(`core/nml-core/src/dice.rs`) keeps comparing like for like.)
 
 THE THREE REDS, and the point of each is that it reddens ONE check and leaves
 the other two standing. All three run the green arm in the SAME pass, so the
@@ -105,7 +110,8 @@ import nml_core  # noqa: E402
 from dice_stream_gate import walk_game  # noqa: E402
 from melee_replay_gate import CHARGE_KIND, trailing_morale  # noqa: E402
 from shoot_replay_gate import (  # noqa: E402
-    SHOOTING_KINDS, burn_prefix, defender_state, first_at_or_after, read_game, successes,
+    SHOOTING_KINDS, burn_prefix, combat_kind, defender_state, first_at_or_after, read_game,
+    successes,
 )
 
 CLASSES = ("shooting", "melee", "morale")
@@ -215,7 +221,10 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 continue
             got = [(r["kind"], r["count"], r["target"], r["faces"], "AI (%s)" % r["owner"])
                    for r in report["rolls"]]
-            want = [(r["roll_kind"], r["count"], r["target"], r["faces"], r["owner"])
+            # `roll_kind` -> `combat_kind()` (NML-1104): the RECORDED corpus
+            # names the rule behind seven special-rule dice the port still
+            # lumps under "attack" — see this file's docstring, CLASSES.
+            want = [(combat_kind(r["roll_kind"]), r["count"], r["target"], r["faces"], r["owner"])
                     for r in dice[i0:] if int(r["act"]) == k]
             grid[cls][classify(got, want)] += 1
             gm, wm = trailing_morale(got), trailing_morale(want)

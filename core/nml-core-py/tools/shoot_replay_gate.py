@@ -83,6 +83,27 @@ import nml_core  # noqa: E402
 #: `AiPlanner` action kinds that shoot (`BattleSim.HOLD` / `.ADVANCE`).
 SHOOTING_KINDS = (0, 1)
 
+#: NML-1104: the RECORDED corpus's `roll_kind` now names the rule behind seven
+#: special-rule dice that used to be lumped under the blanket "attack" —
+#: morale, Fearless's recovery die, No Retreat, Regeneration, Ravage,
+#: Battleborn, dangerous terrain (main.gd's `_solo_tray_roll` call sites).
+#: `nml_core`'s own rolls (`core/nml-core/src/dice.rs`) still stamp all of
+#: them "attack" — it has no matching split. Every reader here that compares
+#: a recorded roll against the port's OWN roll positionally, `roll_kind`
+#: included, folds the recorded side back through `combat_kind()` first, so
+#: "kind" still means the same two-value thing on both sides of the compare.
+_COMBAT_KIND = {
+    "morale": "attack", "fearless": "attack", "no_retreat": "attack",
+    "regeneration": "attack", "ravage": "attack", "battleborn": "attack",
+    "dangerous": "attack",
+}
+
+
+def combat_kind(roll_kind: str) -> str:
+    """`roll_kind` folded to the port's two-value scheme ("attack"/"defense")
+    — see `_COMBAT_KIND`. A no-op for every kind the port already knows."""
+    return _COMBAT_KIND.get(roll_kind, roll_kind)
+
 
 def successes(faces, target: int) -> int:
     """`DiceRules.count_successes(faces, target, 0)` dice_rules.gd:55-71 — a 6
@@ -278,7 +299,10 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             # EVERY roll the table drew under this activation ordinal, NOT a
             # prefix: truncating to `len(got)` would hide "the table drew more
             # than the port did", which is the whole `table_longer` bucket.
-            want = [(r["roll_kind"], r["count"], r["target"], r["faces"], r["owner"])
+            # `roll_kind` goes through `combat_kind()` (NML-1104) so a
+            # Regeneration/morale roll inside this window still reads "attack"
+            # against the port's own still-blanket kind.
+            want = [(combat_kind(r["roll_kind"]), r["count"], r["target"], r["faces"], r["owner"])
                     for r in dice[i0:] if int(r["act"]) == k]
             if not split:
                 tally["clean_acts"] += 1
