@@ -5,7 +5,7 @@
 //! :497-505 and the melee branch of `profile_ev` :330-350) arrived with M1-3;
 //! `resolve()` reaches it only on a CHARGE (battle_sim.gd:631-646).
 
-use crate::unit::{Ctx, ShootProfile};
+use crate::unit::{CondAp, Ctx, ShootProfile};
 
 /// `AiEv.SIX_P` ai_ev.gd:27 — P(one specific d6 face).
 pub const SIX_P: f64 = 1.0 / 6.0;
@@ -275,6 +275,42 @@ pub fn versatile_best_mode(hit_target: i64, defense: i64, ap: i64, bane: bool) -
     }
 }
 
+/// `AiCombatMath.conditional_ap_bonus` ai_combat_math.gd:410-437 — the extra AP
+/// one conditional-AP rule grants against THIS defender. Four conditions carry a
+/// bonus and every other spelling returns 0, exactly like the GDScript `match`:
+///   * `vs_tough_ge`  Shatter / Tear / Slayer / Melee Slayer — target Tough >= threshold
+///   * `vs_armor`     Disintegrate — target Defense <= threshold (a BETTER save)
+///   * `on_charge`    Piercing Assault — charging only
+///   * `ranged_over`  Piercing Hunter — shooting from beyond `over_in`
+/// `charge_only` is an extra gate on top of the condition (Melee Slayer), and the
+/// `ranged_over_or_charge` GATE (Slayer) adds "charging OR shot from over 9 in".
+/// `dist_in < 0` means the caller has no range context: the ranged legs stay shut.
+pub fn conditional_ap_bonus(
+    c: &CondAp,
+    target_tough: i64,
+    target_defense: i64,
+    is_charging: bool,
+    dist_in: f64,
+    melee: bool,
+) -> i64 {
+    if c.ap_bonus <= 0 {
+        return 0;
+    }
+    if c.charge_only && !is_charging {
+        return 0;
+    }
+    if c.gate == "ranged_over_or_charge" && !(is_charging || (!melee && dist_in > c.over_in)) {
+        return 0;
+    }
+    match c.condition.as_str() {
+        "vs_tough_ge" if target_tough >= c.threshold => c.ap_bonus,
+        "vs_armor" if target_defense <= c.threshold => c.ap_bonus,
+        "on_charge" if is_charging => c.ap_bonus,
+        "ranged_over" if !melee && dist_in > c.over_in => c.ap_bonus,
+        _ => 0,
+    }
+}
+
 /// `AiEv.profile_ev` ai_ev.gd:322-437 — both halves. `melee` is the GDScript's
 /// own derivation (`profile.range <= 0`, :330), never a caller's opinion;
 /// `charging` only ever reaches it from `melee_ev(.., true)`.
@@ -283,10 +319,11 @@ pub fn versatile_best_mode(hit_target: i64, defense: i64, ap: i64, bane: bool) -
 /// the merged profile (battle_sim.gd:738-739), passed in rather than stored so
 /// the immutable profile table can be shared across every rollout node.
 ///
-/// Not modelled, and not reachable from this call site (each with the GDScript
-/// line that would produce it): `spell_hit_mod` (:331 — `_ctx_of` never sets it)
-/// and `cond_ap` (:412 — `AiEv.stamp_conditional_ap` is not called anywhere in
-/// the sim path).
+/// Not modelled, and not reachable from this call site (with the GDScript line
+/// that would produce it): `spell_hit_mod` (:331 — `_ctx_of` never sets it).
+///
+/// NML-1103: `cond_ap` (:412) IS modelled now — `BattleSim._profiles_of` stamps
+/// it (battle_sim.gd:927), so the twin stamps it too (`unit::stamp_conditional_ap`).
 pub fn profile_ev(
     p: &ShootProfile,
     attacks: i64,
@@ -373,7 +410,16 @@ pub fn profile_ev(
     if !melee {
         defense = guarded_defense(defense, def.guarded && dist_in > LONG_RANGE_IN);
     }
-    let ap = p.ap + versatile_ap;
+    // NML-1103 — target-property conditional AP (ai_ev.gd:412-417): Shatter,
+    // Tear, Disintegrate, Melee Slayer, Piercing Assault, Piercing Hunter. The
+    // `is_charging` argument is the GDScript's `def_ctx.get("charging", false)`
+    // and `AiEv.ctx_for` never writes that key, so the charge-gated members are
+    // inert in BOTH twins — the table's own EV path has them inert as well.
+    // `def.defense` is the RAW context Defense, not the ladder above.
+    let mut ap = p.ap + versatile_ap;
+    for c in &p.cond_ap {
+        ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, false, dist_in, melee);
+    }
     let bane = p.bane;
     let fort = def.fortified;
     let mut unsaved = (hits - six_hits) * (1.0 - block_chance(defense, fortified_ap(ap, fort), bane))
@@ -519,5 +565,98 @@ mod tests {
         assert!((plain - 0.5).abs() < 1e-15);
         assert!((baned - (0.5 - SIX_P + SIX_P * 0.5)).abs() < 1e-15);
         assert!(baned < plain, "a re-rolled 6 blocks only half the time");
+    }
+
+    /// NML-1103, the twin of `parity_w1_cent_fixes_test.gd`
+    /// `test_conditional_ap_reaches_sim_profiles_and_moves_the_ev` — the SAME
+    /// fixture numbers: a Blade (melee, 2 attacks, AP 0) of a Quality 4 striker
+    /// against 3 models of Tough 1, once at Defense 3+ and once at Defense 5+.
+    /// Disintegrate is `{"condition": "vs_armor", "threshold": 3, "ap_bonus": 2}`
+    /// (assets/solo/rules_mechanics_gf.json, blessed_sisters).
+    #[test]
+    fn disintegrate_raises_the_ev_against_armour_and_only_against_armour() {
+        let disintegrate = CondAp {
+            ap_bonus: 2,
+            condition: "vs_armor".into(),
+            threshold: 3,
+            over_in: LONG_RANGE_IN,
+            ..Default::default()
+        };
+        let plain = ShootProfile {
+            attacks: 2,
+            ..Default::default()
+        };
+        let armed = ShootProfile {
+            cond_ap: vec![disintegrate],
+            ..plain.clone()
+        };
+        let att = Ctx {
+            quality: 4,
+            models: 3,
+            tough: 1,
+            ..Default::default()
+        };
+        let hard = Ctx {
+            quality: 4,
+            defense: 3,
+            tough: 1,
+            models: 3,
+            ..Default::default()
+        };
+        let soft = Ctx { defense: 5, ..hard };
+        // RED before the stamp: `cond_ap` was never filled, so both were equal.
+        assert!(
+            profile_ev(&armed, 2, &att, &hard, 0.0, false)
+                > profile_ev(&plain, 2, &att, &hard, 0.0, false),
+            "AP(+2) against a Defense 3+ save must raise the expected wounds"
+        );
+        // The condition gates it: a Defense 5+ target is outside the threshold.
+        assert_eq!(
+            profile_ev(&armed, 2, &att, &soft, 0.0, false),
+            profile_ev(&plain, 2, &att, &soft, 0.0, false),
+            "vs_armor(3) must not fire against Defense 5+"
+        );
+    }
+
+    /// The four conditions and the two extra gates, straight off
+    /// `ai_combat_math.gd:410-437` — including the two the GDScript `match`
+    /// answers with 0 (`ranged`, `in_melee`), which are printed rules the shared
+    /// arithmetic has never implemented on either side.
+    #[test]
+    fn conditional_ap_bonus_matches_the_gdscript_match() {
+        let spec = |cond: &str, gate: &str, charge_only: bool, threshold: i64| CondAp {
+            ap_bonus: 2,
+            charge_only,
+            gate: gate.into(),
+            over_in: LONG_RANGE_IN,
+            condition: cond.into(),
+            threshold,
+        };
+        // Shatter / Tear: vs_tough_ge, no gate.
+        let shatter = spec("vs_tough_ge", "", false, 3);
+        assert_eq!(conditional_ap_bonus(&shatter, 3, 4, false, 0.0, true), 2);
+        assert_eq!(conditional_ap_bonus(&shatter, 2, 4, false, 0.0, true), 0);
+        // Melee Slayer: the same condition behind `charge_only`.
+        let melee_slayer = spec("vs_tough_ge", "", true, 3);
+        assert_eq!(conditional_ap_bonus(&melee_slayer, 3, 4, false, 0.0, true), 0);
+        assert_eq!(conditional_ap_bonus(&melee_slayer, 3, 4, true, 0.0, true), 2);
+        // Piercing Assault: charge only, no target property.
+        let assault = spec("on_charge", "", false, 0);
+        assert_eq!(conditional_ap_bonus(&assault, 1, 6, true, 0.0, true), 2);
+        assert_eq!(conditional_ap_bonus(&assault, 1, 6, false, 0.0, true), 0);
+        // Piercing Hunter: shooting from beyond 9 in; a melee call never fires,
+        // and an unknown distance (-1) keeps the ranged leg shut.
+        let hunter = spec("ranged_over", "", false, 0);
+        assert_eq!(conditional_ap_bonus(&hunter, 1, 6, false, 12.0, false), 2);
+        assert_eq!(conditional_ap_bonus(&hunter, 1, 6, false, 6.0, false), 0);
+        assert_eq!(conditional_ap_bonus(&hunter, 1, 6, false, -1.0, true), 0);
+        // Slayer: vs_tough_ge behind the `ranged_over_or_charge` gate.
+        let slayer = spec("vs_tough_ge", "ranged_over_or_charge", false, 3);
+        assert_eq!(conditional_ap_bonus(&slayer, 3, 4, false, 12.0, false), 2);
+        assert_eq!(conditional_ap_bonus(&slayer, 3, 4, true, 0.0, true), 2);
+        assert_eq!(conditional_ap_bonus(&slayer, 3, 4, false, 4.0, false), 0);
+        // Unimplemented spellings answer 0 on both sides.
+        assert_eq!(conditional_ap_bonus(&spec("ranged", "", false, 0), 9, 2, true, 30.0, false), 0);
+        assert_eq!(conditional_ap_bonus(&spec("in_melee", "", false, 0), 9, 2, true, 0.0, true), 0);
     }
 }

@@ -91,3 +91,47 @@ func test_resolve_stamps_defender_fatigue_after_strike_back() -> void:
 	var next := BattleSim.resolve(state, {"unit": "A", "kind": AiDecision.Action.CHARGE, "charge": "B"})
 	assert_bool(bool((next["units"]["A"] as Dictionary)["fatigued"])).is_true()
 	assert_bool(bool((next["units"]["B"] as Dictionary)["fatigued"])).is_true()
+
+
+func _gf_unit(id: String, pid: int, faction: String, defense: int,
+		weapon_rules: Array) -> GameUnit:
+	# `_sim_unit`'s Blade (melee, A2, 3 models) plus the two registry keys every
+	# conditional-AP lookup is keyed by (rules_registry.gd:113/:120).
+	var u := _sim_unit(id, pid, 3, [])
+	u.unit_properties["defense"] = defense
+	u.unit_properties["game_system"] = "gf"
+	u.unit_properties["faction_folder"] = faction
+	var w: OPRApiClient.OPRWeapon = (u.source_data as OPRApiClient.OPRUnit).weapons[0]
+	w.special_rules.assign(weapon_rules)
+	return u
+
+
+func test_conditional_ap_reaches_sim_profiles_and_moves_the_ev() -> void:
+	# NML-1103. Disintegrate is AP(+2) against an armour of Defense 3+ — registry
+	# `{"condition": "vs_armor", "threshold": 3, "ap_bonus": 2}`
+	# (assets/solo/rules_mechanics_gf.json, blessed_sisters). The table's resolution
+	# applies it (main.gd:6319 `_solo_conditional_ap_parts`); BattleSim never stamped
+	# it, so the planner imagined the weapon at its printed AP(0).
+	var armed := _gf_unit("Armed", 1, "blessed_sisters", 4, ["Disintegrate"])
+	var plain := _gf_unit("Plain", 1, "blessed_sisters", 4, [])
+	var hard := _gf_unit("Hard", 2, "blessed_sisters", 3, [])   # Defense 3+ — the gate opens
+	var soft := _gf_unit("Soft", 2, "blessed_sisters", 5, [])   # Defense 5+ — it stays shut
+	var army: OPRArmyManager = auto_free(OPRArmyManager.new())
+	army.game_units = {"Armed": armed, "Plain": plain, "Hard": hard, "Soft": soft}
+	var state := BattleSim.capture(army)
+	# RED on main: without the stamp both strikers threaten the armoured target
+	# with exactly the same expected wounds.
+	assert_bool(BattleSim.melee_threat(state["units"]["Armed"], state["units"]["Hard"])
+		> BattleSim.melee_threat(state["units"]["Plain"], state["units"]["Hard"])).is_true()
+	# And the condition GATES it: against Defense 5+ the two are byte-identical.
+	assert_float(BattleSim.melee_threat(state["units"]["Armed"], state["units"]["Soft"])) \
+		.is_equal_approx(BattleSim.melee_threat(state["units"]["Plain"], state["units"]["Soft"]), 1e-9)
+	# The stamp itself: the spec the registry hands over, on the armed weapon only.
+	var specs: Array = (BattleSim._profiles_of(state["units"]["Armed"], true)[0] as Dictionary) \
+		.get("cond_ap", [])
+	assert_int(specs.size()).is_equal(1)
+	var spec: Dictionary = specs[0] if not specs.is_empty() else {}
+	assert_int(int(spec.get("ap_bonus", 0))).is_equal(2)
+	assert_str(str(spec.get("condition", ""))).is_equal("vs_armor")
+	assert_bool((BattleSim._profiles_of(state["units"]["Plain"], true)[0] as Dictionary) \
+		.has("cond_ap")).is_false()
