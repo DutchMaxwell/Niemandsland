@@ -413,6 +413,18 @@ def resolve_dice(dice: str) -> str:
     return dice
 
 
+def resolve_charge_landing(charge_landing: str) -> bool:
+    """`charge_landing` as the bit `play_game` branches on. An unknown mode
+    RAISES for the same reason `resolve_dice` does: a corpus whose header claims
+    a rung it did not play is worse than no corpus."""
+    if charge_landing not in CHARGE_LANDING_MODES:
+        raise ValueError(
+            "charge_landing must be one of %s, not %r"
+            % (list(CHARGE_LANDING_MODES), charge_landing)
+        )
+    return charge_landing == "table"
+
+
 def charge_illegal_stamp(core, state) -> dict[str, bool]:
     """What THIS trainer stamps into `state["charge_illegal"]`, in the shape
     `AiActRecorder._charge_illegal_matrix` records (act_recorder.gd:204-222):
@@ -439,6 +451,17 @@ def charge_illegal_stamp(core, state) -> dict[str, bool]:
 #: does — so a hero that FALLS keeps voting here. That is the gap
 #: `state::ProfileDyn` exists for and it belongs to a later rung, not to D4.
 HERO_ATTACH_MODES = ("off", "table")
+
+#: `charge_landing` modes (NML-1073 M5 D5-1). "off" is the default and is every
+#: corpus written before this knob: a charge that lands within `MELEE_ENGAGE_IN`
+#: of the target's base edge always fights. "table" adds the SECOND question the
+#: shipped game asks — `main._run_ai_melee` (main.gd:8015-8022) hands the
+#: residual base gap to `snap_charge(unit, target, last_move_remaining_in())`
+#: (solo_controller.gd:8632-8657) and takes a NEGATIVE answer as "the charge
+#: falls short, no fight": the snap is movement and must fit the move budget the
+#: charge left over. On the 168-game reference that gate alone accounts for 53
+#: of the 116 recorded charges the table never fought.
+CHARGE_LANDING_MODES = ("off", "table")
 
 
 def resolve_hero_attach(hero_attach: str) -> bool:
@@ -875,6 +898,7 @@ def play_game(
     charge_gate: str = "off",
     hero_attach: str = "off",
     dice: str = "expected",
+    charge_landing: str = "off",
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -959,6 +983,7 @@ def play_game(
     eff_horizon = resolve_horizon(horizon)
     eff_charge_gate = resolve_charge_gate(charge_gate)
     eff_dice = resolve_dice(dice)
+    eff_charge_landing = resolve_charge_landing(charge_landing)
     knobs = dict(
         TRAINER_KNOBS,
         top_k=eff_top_k,
@@ -970,6 +995,9 @@ def play_game(
         # (`Seams::hero_attach` io.rs). "off" leaves it False, which is the
         # default and what every earlier corpus carries.
         hero_attach=eff_hero_attach,
+        # NML-1073 M5 D5-1: the table's SECOND engage gate. "off" leaves it
+        # False, which is the default and what every earlier corpus carries.
+        charge_landing=eff_charge_landing,
     )
     core.set_header({"profiles": profiles, "terrain": terrain, "knobs": knobs})
     # Board columns 10/11 read the GameUnit's `source_data` (battle_sim.gd
@@ -1063,6 +1091,7 @@ def play_game(
             "charge_gate": charge_gate,
             "hero_attach": hero_attach,
             "dice": eff_dice,
+            "charge_landing": charge_landing,
         },
         # D1-B4 telemetry, empty under `dice="expected"`: how many shooting
         # activations drew from the tray, how many rolls that was, and how many
@@ -1199,6 +1228,15 @@ def main(argv: list[str]) -> int:
         help="'table' is the real dice tray (D1); 'expected' (default) is the "
         "expected-value combat every corpus so far was written with",
     )
+    ap.add_argument(
+        "--charge-landing",
+        choices=list(CHARGE_LANDING_MODES),
+        default="off",
+        help="'table' asks the table's SECOND engage question after a charge — "
+        "the snap that closes the residual base gap must still fit the move "
+        "budget the charge left over; 'off' (default) fights every charge that "
+        "landed within 1\" of the target's base edge",
+    )
     a = ap.parse_args(argv)
 
     core = nml_core.load(a.repo)
@@ -1221,6 +1259,7 @@ def main(argv: list[str]) -> int:
             charge_gate=a.charge_gate,
             hero_attach=a.hero_attach,
             dice=a.dice,
+            charge_landing=a.charge_landing,
         )
         res["wall_seconds"] = round(time.perf_counter() - t0, 3)
         if a.out:

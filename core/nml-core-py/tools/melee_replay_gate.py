@@ -95,7 +95,8 @@ def trailing_morale(rolls: list[tuple]) -> list[tuple]:
     return rolls[i:]
 
 
-def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool) -> int:
+def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
+        charge_landing: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -119,7 +120,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool) -> int:
         burn = burn_prefix(dice)
         core = nml_core.load(repo)
         core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
-                         "knobs": dict(head.get("knobs", {}), hero_attach=True)})
+                         "knobs": dict(head.get("knobs", {}), hero_attach=True,
+                                       charge_landing=charge_landing)})
         for pos, act in enumerate(lines):
             k = int(act["act"])
             action = (act.get("pick") or {}).get("action") or {}
@@ -236,6 +238,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool) -> int:
 
     label = {"table": "GATE D1-B5b",
              "misseed": "RED D1-B5b --red-misseed (tray on dice_seed+1)"}[mode]
+    if charge_landing:
+        label += " + D5-1 charge_landing"
     silent_table = tally["both_silent"] + tally["table_silent"]
     print()
     print("%s over %d games, %d charge acts (%.1fs)"
@@ -308,9 +312,17 @@ def main(argv: list[str]) -> int:
                     help="exit 0 even when acts are short of full equality (this tool is a GATE "
                          "by default and exits 1)")
     ap.add_argument("--limit", type=int, default=0, help="only the first N game dirs")
+    ap.add_argument("--charge-landing", action="store_true",
+                    help="NML-1073 M5 D5-1: replay with the header knob charge_landing on — "
+                         "the charge aims and lands the way the table does and fights only "
+                         "when the table's SECOND engage gate (the snap must fit the move "
+                         "budget the route left over) also passes. OFF is the D1-B5b bar; the "
+                         "D5-1 red is the same corpus WITHOUT the flag, where the 'table drew "
+                         "nothing' class climbs back")
     a = ap.parse_args(argv)
     return run(Path(a.ref).expanduser(), a.repo,
-               "misseed" if a.red_misseed else a.mode, a.limit, a.report_only)
+               "misseed" if a.red_misseed else a.mode, a.limit, a.report_only,
+               a.charge_landing)
 
 
 if __name__ == "__main__":

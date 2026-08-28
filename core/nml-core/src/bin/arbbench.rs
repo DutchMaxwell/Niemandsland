@@ -54,7 +54,7 @@ fn main() {
     let c = load_acts(&path).unwrap_or_else(|e| panic!("{e}"));
     let statics = build_act_statics(&c, REPO);
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
-        hero_attach: c.knobs.hero_attach };
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
 

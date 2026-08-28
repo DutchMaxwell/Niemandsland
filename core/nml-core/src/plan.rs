@@ -176,6 +176,7 @@ fn seams_of(knobs: &Knobs) -> Seams {
         cast: knobs.seam_cast,
         path: knobs.seam_path,
         hero_attach: knobs.hero_attach,
+        charge_landing: knobs.charge_landing,
     }
 }
 

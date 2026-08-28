@@ -127,7 +127,7 @@ impl NmlCore {
     #[func]
     fn set_seams(&mut self, spacing: bool, cast: bool) {
         let path = self.seams_now().path;
-        self.seams = Some(Seams { spacing, cast, path, hero_attach: false });
+        self.seams = Some(Seams { spacing, cast, path, hero_attach: false, charge_landing: false });
     }
 
     /// NML-1073 M4-7 — NML_SIM_PATH: the imagined move follows a tier-2
@@ -634,8 +634,10 @@ impl NmlCore {
                 // `plan_inner` takes `hero_attach` off the HEADER knobs (which
                 // `act_recorder.gd` stamps from `BattleSim.hero_fold_enabled()`),
                 // so the seat's own knob decides. This struct only supplies
-                // `path` to the planner; the value below is inert for it.
+                // `path` to the planner; the two below are inert for it.
                 hero_attach: false,
+                // NML-1073 M5 D5-1 — same reasoning: a header knob, not an env one.
+                charge_landing: false,
             });
         }
         self.seams.unwrap()

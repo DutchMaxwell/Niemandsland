@@ -237,6 +237,28 @@ pub struct Seams {
     /// (D1-B4b) and spending a full activation of its own.
     #[serde(default)]
     pub hero_attach: bool,
+    /// NML-1073 M5 D5-1 — the trainer plays `charge_landing="table"`, so a
+    /// CHARGE fights only when the table would have fought it.
+    ///
+    /// Landing within `MELEE_ENGAGE_IN` is only the FIRST question
+    /// `main._run_ai_melee` asks (main.gd:8005-8006). The second is whether the
+    /// SNAP that closes the residual base gap still fits the move budget the
+    /// charge left over: `snap_charge(unit, target, last_move_remaining_in())`
+    /// returning negative is a falls-short and no fight (main.gd:8015-8022,
+    /// solo_controller.gd:8639/8644/8659). On `~/selfplay_out/qbe_ref` that one
+    /// gate accounts for 53 of the 116 recorded charges the table never fought,
+    /// all of them landed within an inch — median residual 0.14".
+    ///
+    /// WHAT THIS SEAM DOES NOT DO, so the number is not read as more than it
+    /// is: the port's move is still a rigid translation toward the planner's
+    /// `dest`, so its spent arc is a LOWER bound on the table's bent route and
+    /// the gate under-refuses. Routing the move is D5-2 and it needs the exact
+    /// solver — the tier-2 `mv::reach` route was measured here and is WORSE
+    /// (its coarse arc starves charges the table lands).
+    ///
+    /// Default OFF: every corpus recorded before this replays unchanged.
+    #[serde(default)]
+    pub charge_landing: bool,
 }
 
 impl Node {
