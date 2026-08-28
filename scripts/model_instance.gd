@@ -82,14 +82,14 @@ func get_property(key: String, default: Variant = null) -> Variant:
 	return properties.get(key, default)
 
 
-## Checks if this model has a special rule (prefix match).
-## e.g., has_special_rule("Tough") matches "Tough(3)"
+## Checks if this model has a special rule: the exact name or its parametrised form, e.g.
+## has_special_rule("Tough") matches "Tough(3)" but NOT "Toughness" (GameUnit.rule_name_matches).
 func has_special_rule(rule: String) -> bool:
 	var rules = properties.get("special_rules", [])
 	for r in rules:
-		if r is String and r.begins_with(rule):
+		if r is String and GameUnit.rule_name_matches(r, rule):
 			return true
-		elif r is Dictionary and r.get("name", "").begins_with(rule):
+		elif r is Dictionary and GameUnit.rule_name_matches(str(r.get("name", "")), rule):
 			return true
 	return false
 

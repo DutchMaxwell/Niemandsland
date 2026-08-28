@@ -57,10 +57,23 @@ pub fn rule_rating(rule: &str, fallback: i64) -> i64 {
     }
 }
 
-/// `GameUnit.has_special_rule` game_unit.gd:250-257 — a PREFIX match, which is
-/// why "Caster" finds "Caster(1)" and why `AiEv.has_exact_rule` exists at all.
+/// `GameUnit.rule_name_matches` game_unit.gd — the EXACT rule name, or the name
+/// followed by a parenthesised qualifier (the rating form "Tough(3)", the
+/// " (spell)" grant mark). A bare prefix is NOT a match: "Fearless" is not
+/// "Fear", "Caster Group" is not "Caster" (NML-1112).
+pub fn rule_name_matches(candidate: &str, rule: &str) -> bool {
+    let s = candidate.trim();
+    if s == rule {
+        return true;
+    }
+    // `starts_with` guarantees `rule.len()` is a char boundary of `s`.
+    s.starts_with(rule) && s[rule.len()..].trim_start().starts_with('(')
+}
+
+/// `GameUnit.has_special_rule` game_unit.gd — exact name or parametrised form,
+/// which is why "Caster" finds "Caster(1)" but never "Caster Group".
 pub fn has_special_rule(rules: &[String], rule: &str) -> bool {
-    rules.iter().any(|r| r.starts_with(rule))
+    rules.iter().any(|r| rule_name_matches(r, rule))
 }
 
 /// `AiEv.unit_rating` ai_ev.gd:117-125 — rating X of a unit-level "Name(X)"
@@ -377,5 +390,11 @@ mod tests {
         assert_eq!(unit_rating(&["Tough".into()], "Tough"), 0);
         assert!(has_special_rule(&["Caster(1)".into()], "Caster"));
         assert!(!has_special_rule(&["Caster(1)".into()], "Fearless"));
+        // NML-1112: exact name or parametrised form, never a bare prefix.
+        assert!(!has_special_rule(&["Fearless".into()], "Fear"));
+        assert!(!has_special_rule(&["Caster Group".into()], "Caster"));
+        assert!(has_special_rule(&["Relentless (spell)".into()], "Relentless"));
+        assert!(rule_name_matches("Tough(3)", "Tough"));
+        assert!(!rule_name_matches("Toughness", "Tough"));
     }
 }

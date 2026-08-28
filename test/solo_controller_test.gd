@@ -252,15 +252,16 @@ func test_seize_objectives_skips_ambush_units_on_their_arrival_round() -> void:
 const INCH_M := 0.0254
 
 
-## The prefix trap that made this wave necessary: GameUnit.has_special_rule matches by PREFIX, so a
-## beacon or re-deployment carrier answered TRUE to "Ambush" and unit_has_ambush pulled it off the
-## table into reserve although both deploy normally. unit_carries_rule matches EXACTLY.
+## The prefix trap that made this wave necessary: GameUnit.has_special_rule used to match by PREFIX,
+## so a beacon or re-deployment carrier answered TRUE to "Ambush" and unit_has_ambush pulled it off
+## the table into reserve although both deploy normally. unit_carries_rule matches EXACTLY — and
+## since NML-1112 has_special_rule does too, so both readers now agree here.
 func test_rule_detection_is_exact_and_rapid_ambush_is_the_only_alias() -> void:
 	var beacon := _unit(2, [Vector3.ZERO])
 	beacon.unit_properties["special_rules"] = ["Ambush Beacon"]
 	assert_bool(beacon.has_special_rule("Ambush")) \
-		.override_failure_message("fixture check — the prefix reader must still answer true here") \
-		.is_true()
+		.override_failure_message("NML-1112 — 'Ambush Beacon' is not 'Ambush' for the plain reader either") \
+		.is_false()
 	assert_bool(SoloController.unit_carries_rule(beacon, "Ambush")).is_false()
 	assert_bool(SoloController.unit_carries_rule(beacon, SoloController.RULE_AMBUSH_BEACON)).is_true()
 	assert_bool(SoloController.unit_has_ambush(beacon)) \
@@ -2459,13 +2460,14 @@ func test_reanimation_pool_counts_wounds_not_models() -> void:
 
 
 func test_reanimation_gate_never_prefix_matches_the_aura() -> void:
-	# GameUnit.has_special_rule is PREFIX based, so "Reanimation Aura" answers true for "Reanimation".
-	# The carrier gate must not — otherwise a fallen Re-Animator would keep reanimating his unit.
+	# GameUnit.has_special_rule used to be PREFIX based, so "Reanimation Aura" answered true for
+	# "Reanimation". The carrier gate must not — otherwise a fallen Re-Animator would keep
+	# reanimating his unit. NML-1112 closed the prefix leak in the plain reader as well.
 	var aura_only := _reanim_unit(2, "AuraOnly", [[1, 1]])
 	aura_only.unit_properties["special_rules"] = ["Reanimation Aura"]
 	assert_bool(aura_only.has_special_rule("Reanimation")) \
-		.override_failure_message("fixture check: the prefix reader is expected to say yes here") \
-		.is_true()
+		.override_failure_message("NML-1112 — the plain reader must tell the aura from the rule too") \
+		.is_false()
 	assert_bool(SoloController.has_exact_rule(aura_only, "Reanimation")) \
 		.override_failure_message("the exact reader must tell 'Reanimation' from 'Reanimation Aura'") \
 		.is_false()

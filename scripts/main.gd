@@ -3470,7 +3470,7 @@ func _solo_resolve_spell_damage(caster: GameUnit, caster_unit: GameUnit, spell_n
 ## Whether a spell's weapon-rule token list carries `rule_name` (facet gate for the dice path).
 func _solo_spell_has_rule(effect: Dictionary, rule_name: String) -> bool:
 	for r in effect.get("weapon_rules", []):
-		if str(r).strip_edges().begins_with(rule_name):
+		if GameUnit.rule_name_matches(str(r), rule_name):
 			return true
 	return false
 

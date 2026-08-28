@@ -187,9 +187,11 @@ static func _rating_of(w: Variant, rule_name: String) -> int:
 
 
 ## Whether a weapon carries a flag-style special rule (no rating), e.g. "Relentless" / "Takedown".
+## Exact name or parametrised form (NML-1112): "Rending Mark" and "Shred in Melee" are rules of
+## their own and must not answer for plain Rending / Shred.
 static func _has_rule(w: Variant, rule_name: String) -> bool:
 	for r in _rules_of(w):
-		if str(r).strip_edges().begins_with(rule_name):
+		if GameUnit.rule_name_matches(str(r), rule_name):
 			return true
 	return false
 
