@@ -833,6 +833,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // `hero_attach` and defaults ON. Absent (every corpus) =
         // `Knobs::default()` = true; a gate that writes `false` gets the RED.
         engage_fold: d.get("engage_fold").map(|v| flag(&v)).unwrap_or(dflt.engage_fold),
+        // NML-1134. The recorder writes this key (act_recorder.gd `_header_line`,
+        // from `BattleSim.RULE_VOCAB_VERSION`); absent = `Knobs::default()` = the
+        // pre-stamp version 2. INERT for the in-game seam — nothing in
+        // nml-core-godot builds encoder rows — and carried so a header round-trips.
+        rule_vocab_version: dint(d, "rule_vocab_version", dflt.rule_vocab_version),
     }
 }
 

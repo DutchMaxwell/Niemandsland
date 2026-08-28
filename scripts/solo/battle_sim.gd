@@ -130,6 +130,11 @@ static func prof_mark(key: String, t0: int) -> void:
 const EV_REF_DIST_IN := 12.0
 const FLAG_RULES: Array[String] = ["Fearless", "Ambush", "Flying", "Stealth", "Furious", "Regeneration"]
 const RULE_VOCAB_PATH := "res://data/encoder_rule_vocab_v1.json"
+## NML-1134: the vocabulary version THIS build reads. The file is shared with the
+## Rust twin (`nml_core::rows::RULE_VOCAB_VERSION`, core/nml-core/src/rows.rs) and
+## both sides refuse a file that does not carry exactly this number — a silently
+## mis-slotted rule would move every board row without a single loud line.
+const RULE_VOCAB_VERSION := 3
 static var _vocab_unit: Dictionary = {}
 static var _vocab_weapon: Dictionary = {}
 static var _vocab_spell: Dictionary = {}   # v1c: spell book namespace, slots 300+
@@ -141,19 +146,32 @@ static func _load_vocab() -> void:
 	if _vocab_loaded:
 		return
 	_vocab_loaded = true
-	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(RULE_VOCAB_PATH))
-	if data is Dictionary:
-		var ul: Array = data.get("unit", [])
-		for i in ul.size():
-			_vocab_unit[str(ul[i])] = i
-		var wl: Array = data.get("weapon", [])
-		for i in wl.size():
-			_vocab_weapon[str(wl[i])] = 200 + i
-		var sl: Array = data.get("spell", [])
-		for i in sl.size():
-			_vocab_spell[str(sl[i])] = 300 + i
-	else:
-		push_warning("BattleSim: rule vocab unreadable at %s" % RULE_VOCAB_PATH)
+	var err := _fill_vocab(JSON.parse_string(FileAccess.get_file_as_string(RULE_VOCAB_PATH)))
+	if err != "":
+		push_error("BattleSim: %s (%s)" % [err, RULE_VOCAB_PATH])
+
+
+## NML-1134: the vocabulary reading itself, split off `_load_vocab` so a test can
+## hand it a file that is NOT the committed one. Returns "" when the three slot
+## maps were filled, an error sentence otherwise — and on an error it fills
+## NOTHING, so every rule then collects LOUDLY into `unknown_rules` instead of
+## landing on a slot the recorder and the Rust twin disagree about.
+static func _fill_vocab(data: Variant) -> String:
+	if not (data is Dictionary):
+		return "rule vocab unreadable"
+	var v: int = int((data as Dictionary).get("version", 0))
+	if v != RULE_VOCAB_VERSION:
+		return "rule vocab version %d, this build reads %d" % [v, RULE_VOCAB_VERSION]
+	var ul: Array = (data as Dictionary).get("unit", [])
+	for i in ul.size():
+		_vocab_unit[str(ul[i])] = i
+	var wl: Array = (data as Dictionary).get("weapon", [])
+	for i in wl.size():
+		_vocab_weapon[str(wl[i])] = 200 + i
+	var sl: Array = (data as Dictionary).get("spell", [])
+	for i in sl.size():
+		_vocab_spell[str(sl[i])] = 300 + i
+	return ""
 
 
 ## "Tough(3)" / {name:"Tough", rating:3} -> ["Tough", 3]

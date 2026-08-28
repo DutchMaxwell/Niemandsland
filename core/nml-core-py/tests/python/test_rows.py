@@ -193,6 +193,13 @@ def test_the_committed_rule_vocabulary_covers_the_whole_corpus():
     `unknown_rules`; the port keeps the same collector, and on the recorded games
     it must stay empty — a non-empty set means the committed vocabulary
     (`data/encoder_rule_vocab_v1.json`) has fallen behind the army books.
+
+    NML-1134: "the committed vocabulary" means the one THIS corpus was recorded
+    under — `core.set_header` reads `knobs.rule_vocab_version` off the header and
+    an unstamped header replays under version 2. So a corpus cut BEFORE the v3
+    bump answers with the names version 2 lacked, which is exactly the finding
+    that led to the bump (`m3_oracle_v4`: 11 names). Point this at a corpus
+    recorded at or after the bump — `m3_oracle_v5` — for the green reading.
     """
     unknown = set()
     for _, _, acts_path in games():

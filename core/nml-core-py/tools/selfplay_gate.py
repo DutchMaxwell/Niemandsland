@@ -116,6 +116,13 @@ def main(argv: list[str]) -> int:
         help='hero mode to replay; "auto" (default) reads it off the reference '
         "corpus itself (`selfplay.hero_attach_of_corpus`)",
     )
+    ap.add_argument(
+        "--vocab-version",
+        default="auto",
+        help='rule vocabulary to slot the replay with; "auto" (default) reads it '
+        "off the reference corpus itself (`selfplay.vocab_version_of_corpus`) — a "
+        "corpus recorded before the stamp replays under version 2",
+    )
     ap.add_argument("--red", action="store_true", help="run the deployment red proof instead")
     a = ap.parse_args(argv)
 
@@ -127,6 +134,10 @@ def main(argv: list[str]) -> int:
     )
     if a.hero_attach == "auto":
         print("hero_attach   %s (read off %s)" % (hero_attach, source or "nothing — default"))
+    vocab_version, vsource = sp.resolve_vocab_version(
+        a.vocab_version, (ref_dir / ("acts_%d" % s) / "acts.jsonl" for s in seeds)
+    )
+    print("vocab_version %d (%s)" % (vocab_version, vsource or "this build"))
 
     compared = equal = missing = 0
     first: tuple | None = None
@@ -150,6 +161,7 @@ def main(argv: list[str]) -> int:
             core,
             deploy_rng_seed=(seed + 1) if a.red else None,
             hero_attach=hero_attach,
+            vocab_version=vocab_version,
         )
         seconds.append(time.perf_counter() - t0)
         log = ref_dir / ("run_%d.log" % seed)

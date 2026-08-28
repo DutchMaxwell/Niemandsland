@@ -59,6 +59,13 @@ REF_CORPORA = (
 #: SHIPPED conditional-AP EV, and `hero_attach="join"` — the roster join without
 #: the activation fold, which is the game its header describes.
 REF_DIR_V4 = Path(os.path.expanduser("~/selfplay_out/m3_ref_v4"))
+#: NML-1134 — the v5 corpus: the SAME recipe as v4, re-recorded under rule
+#: vocabulary v3 (the 11 item-granted names appended as unit slots 128-138).
+#: v4 replays under the legacy vocabulary because its header carries no version
+#: stamp; v5 carries one and replays under the shipped file. Both are held here,
+#: because a fresh oracle is only an oracle while the code it describes exists.
+REF_DIR_V5 = Path(os.path.expanduser("~/selfplay_out/m3_ref_v5"))
+FRESH_ORACLES = (REF_DIR_V4, REF_DIR_V5)
 BANK_DIR = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
 LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
 ARMY1 = LISTS / "robot_legions_1000.json"
@@ -322,7 +329,18 @@ def _gate_seeds():
 
 def _play(core, seed: int, **kw):
     kw.setdefault("legacy_source_qd", LEGACY_SOURCE_QD)
+    # NML-1134: and the rule VOCABULARY that corpus's rows were slotted with,
+    # read off its own act header. `m3_ref_v2`/`v3` carry no stamp and therefore
+    # replay under version 2, which is what they recorded.
+    kw.setdefault("vocab_version", _vocab_of(REF_DIR, seed))
     return sp.play_game(seed, ARMY1, ARMY2, REPO, BANK_DIR, core, **kw)
+
+
+def _vocab_of(ref: Path, seed: int) -> int:
+    """The rule-vocabulary version the corpus at `ref` was recorded under —
+    `selfplay.resolve_vocab_version` over its own `acts_<seed>/acts.jsonl`, which
+    is the ONE reading of that rule (`nml_core.vocab_version_of_header`)."""
+    return sp.resolve_vocab_version("auto", [ref / ("acts_%d" % seed) / "acts.jsonl"])[0]
 
 
 @pytest.mark.skipif(not _gate_seeds(), reason="no recorded core_selfplay reference on this machine")
@@ -350,38 +368,43 @@ def test_the_python_result_file_equals_the_godot_one_field_by_field():
     )
 
 
-def _gate_seeds_v4():
-    if not (REF_DIR_V4.is_dir() and BANK_DIR.is_dir() and ARMY1.exists() and ARMY2.exists()):
+def _fresh_seeds(ref: Path):
+    if not (ref.is_dir() and BANK_DIR.is_dir() and ARMY1.exists() and ARMY2.exists()):
         return []
-    return [s for s in GATE_SEEDS if (REF_DIR_V4 / ("core_s%d.json" % s)).exists()]
+    return [s for s in GATE_SEEDS if (ref / ("core_s%d.json" % s)).exists()]
 
 
-@pytest.mark.skipif(not _gate_seeds_v4(), reason="no m3_ref_v4 recording on this machine")
-def test_the_python_result_file_equals_the_v4_oracle_field_by_field(monkeypatch):
-    """THE SAME GATE against the NML-1105 corpus, with every pin OFF.
+@pytest.mark.parametrize("ref_dir", FRESH_ORACLES, ids=lambda p: p.name)
+def test_the_python_result_file_equals_the_fresh_oracle_field_by_field(ref_dir, monkeypatch):
+    """THE SAME GATE against a FRESH corpus, with every pin OFF.
 
     The module's two autouse fixtures pin the OLD reading, which is right for
-    `m3_ref_v2`/`v3` and wrong here — this corpus was recorded after the loader,
-    the rule lookup and the conditional-AP EV were all fixed, and `source_data`
-    has carried the real quality/defense since #392. The mode is read off the
-    corpus (`selfplay.hero_attach_of_corpus`), not asserted into it.
+    `m3_ref_v2`/`v3` and wrong here — these corpora were recorded after the
+    loader, the rule lookup and the conditional-AP EV were all fixed, and
+    `source_data` has carried the real quality/defense since #392. The mode
+    (`selfplay.hero_attach_of_corpus`) and the vocabulary version
+    (`selfplay.vocab_version_of_corpus`, NML-1134) are read off the corpus, not
+    asserted into it — v4 answers 2 (recorded before the stamp), v5 answers 3.
     """
+    seeds = _fresh_seeds(ref_dir)
+    if not seeds:
+        pytest.skip("no %s recording on this machine" % ref_dir.name)
     monkeypatch.setattr(list_to_profile, "LEGACY_CORE_SELFPLAY", False)
     nml_core.set_legacy_no_cond_ap(False)
 
-    seeds = _gate_seeds_v4()
-    mode = sp.hero_attach_of_corpus(REF_DIR_V4 / ("acts_%d" % seeds[0]) / "acts.jsonl")
-    assert mode == "join", "m3_ref_v4 records the join without the fold, not %r" % mode
+    mode = sp.hero_attach_of_corpus(ref_dir / ("acts_%d" % seeds[0]) / "acts.jsonl")
+    assert mode == "join", "%s records the join without the fold, not %r" % (ref_dir.name, mode)
 
     core = nml_core.load(str(REPO))
     bad = []
     pairs = forks = 0
     for seed in seeds:
-        with open(REF_DIR_V4 / ("core_s%d.json" % seed), encoding="utf-8") as f:
+        with open(ref_dir / ("core_s%d.json" % seed), encoding="utf-8") as f:
             ref = json.load(f)
         got = sp.play_game(
             seed, ARMY1, ARMY2, REPO, BANK_DIR, core,
             legacy_source_qd=False, hero_attach=mode,
+            vocab_version=_vocab_of(ref_dir, seed),
         )
         np, nf = gate.sidecar_shape(got)
         pairs += np
@@ -391,9 +414,50 @@ def test_the_python_result_file_equals_the_v4_oracle_field_by_field(monkeypatch)
             bad.append((seed, d[0]))
     assert not bad, "seeds that diverged: %s" % bad[:3]
     print(
-        "GATE M3-9 (v4): %d/%d seeds field-for-field equal (%d pair, %d fork blocks)"
-        % (len(seeds), len(seeds), pairs, forks)
+        "GATE M3-9 (%s, vocab v%d): %d/%d seeds field-for-field equal (%d pair, %d fork blocks)"
+        % (ref_dir.name, _vocab_of(ref_dir, seeds[0]), len(seeds), len(seeds), pairs, forks)
     )
+
+
+def test_red_a_legacy_corpus_replayed_under_the_shipped_vocabulary_diverges():
+    """RED PROOF for the NML-1134 legacy reading, on the corpus that made it
+    necessary. `m3_ref_v4` stamps no vocabulary version, so it replays under
+    version 2 and the gate above is 20/20. Force TODAY's vocabulary onto it and
+    the four item-granted names it recorded as unknown (Courage, Flagellant,
+    Paradox Shielding Device, Warden) are slotted instead — `unknown_rules`
+    empties and the gate must go red. If this ever passes, the legacy reading
+    has stopped doing anything and the pin is a lie."""
+    seeds = _fresh_seeds(REF_DIR_V4)
+    if not seeds:
+        pytest.skip("no m3_ref_v4 recording on this machine")
+    assert _vocab_of(REF_DIR_V4, seeds[0]) == nml_core.LEGACY_VOCAB_VERSION, (
+        "m3_ref_v4 is a pre-stamp corpus; if it ever answers otherwise this test "
+        "is pointed at the wrong recording"
+    )
+    seed = seeds[0]
+    with open(REF_DIR_V4 / ("core_s%d.json" % seed), encoding="utf-8") as f:
+        ref = json.load(f)
+    # ONE CORE PER PLAY: `unknown_rules` is collected across every `board_rows`
+    # call a core makes, so a second game on the same core would inherit the
+    # first game's set (qa_gate.py makes a fresh core per reference game for
+    # exactly this reason).
+    kw = dict(legacy_source_qd=False, hero_attach="join")
+    before = list_to_profile.LEGACY_CORE_SELFPLAY
+    list_to_profile.LEGACY_CORE_SELFPLAY = False
+    nml_core.set_legacy_no_cond_ap(False)
+    try:
+        green = sp.play_game(seed, ARMY1, ARMY2, REPO, BANK_DIR, nml_core.load(str(REPO)),
+                             vocab_version=nml_core.LEGACY_VOCAB_VERSION, **kw)
+        red = sp.play_game(seed, ARMY1, ARMY2, REPO, BANK_DIR, nml_core.load(str(REPO)),
+                           vocab_version=nml_core.RULE_VOCAB_VERSION, **kw)
+    finally:
+        list_to_profile.LEGACY_CORE_SELFPLAY = before
+    assert not gate.compare(ref, green, 1e-9), "the corpus's own vocabulary must hold"
+    assert gate.compare(ref, red, 1e-9), "the shipped vocabulary must NOT hold"
+    assert sorted(green["unknown_rules"]) == [
+        "Courage", "Flagellant", "Paradox Shielding Device", "Warden"
+    ], green["unknown_rules"]
+    assert red["unknown_rules"] == [], red["unknown_rules"]
 
 
 @pytest.mark.skipif(not _gate_seeds(), reason="no recorded core_selfplay reference on this machine")

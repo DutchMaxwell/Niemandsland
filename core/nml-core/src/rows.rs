@@ -54,6 +54,18 @@ pub const FLAG_RULES: [&str; 6] =
 /// `BattleSim.RULE_VOCAB_PATH` battle_sim.gd:77, relative to the repo root.
 pub const RULE_VOCAB_PATH: &str = "data/encoder_rule_vocab_v1.json";
 
+/// NML-1134 — the vocabulary version THIS build reads, `BattleSim.
+/// RULE_VOCAB_VERSION` battle_sim.gd:131. The file is SHARED by the table and
+/// this crate, so a build that reads a version it was not written for refuses
+/// to slot anything at all rather than move every board row in silence.
+pub const RULE_VOCAB_VERSION: i64 = 3;
+
+/// NML-1134 — the version a corpus was recorded under when its act header
+/// carries no `rule_vocab_version` at all. Every corpus cut before the stamp
+/// (m3_ref_v2/v3/v4, m3_oracle/_v2/_v3/_v4, m4_corpus_v2, qa_ref, qb*_ref,
+/// golden_planner*) is one of those, and every one of them is version 2.
+pub const LEGACY_VOCAB_VERSION: i64 = 2;
+
 /// `AiEv.NEUTRAL_DEFENDER` ai_ev.gd:37 — `{"defense": 4, "tough": 1,
 /// "models": 5}`. Every other key is absent, and GDScript's `.get(k, default)`
 /// then answers the reader's own fallback, which is what `Ctx::default()` is.
@@ -96,30 +108,88 @@ impl Cell {
 /// battle_sim.gd:86-102. Unit slots 0-199, weapon 200+, spell 300+.
 #[derive(Debug, Default)]
 pub struct RowVocab {
-    /// False when the file was unreadable — `push_warning` on the GDScript side,
-    /// and every rule then collects as unknown.
+    /// False when the file was unreadable OR carried a version this build does
+    /// not read — `push_error` on the GDScript side, and every rule then
+    /// collects as unknown instead of landing on a slot the two sides disagree
+    /// about. `error` says which of the two it was.
     pub loaded: bool,
+    /// The version this instance READS: `RULE_VOCAB_VERSION` for a fresh game,
+    /// an older one when a corpus header asked for it (see `for_version`).
+    pub version: i64,
+    /// The loud half of `loaded == false`.
+    pub error: Option<String>,
     unit: HashMap<String, i64>,
     weapon: HashMap<String, i64>,
     spell: HashMap<String, i64>,
 }
 
 impl RowVocab {
+    /// The committed vocabulary at THIS build's version — what a fresh game and
+    /// a freshly recorded corpus use.
     pub fn load(repo_root: &str) -> RowVocab {
+        RowVocab::for_version(repo_root, RULE_VOCAB_VERSION)
+    }
+
+    /// NML-1134 — the committed vocabulary AS OF `want`. The file is
+    /// APPEND-ONLY, so every older version is a PREFIX of the committed one and
+    /// the older reading is exactly "truncate each list to the length it had
+    /// then" (`legacy_lengths` in the file itself, so the two loaders share one
+    /// source). A name past the cut is not in the map and therefore collects
+    /// LOUDLY into `unknown`, which is what the corpus recorded at the time.
+    pub fn for_version(repo_root: &str, want: i64) -> RowVocab {
         let path = Path::new(repo_root).join(RULE_VOCAB_PATH);
-        let Some(v) = std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
-        else {
-            return RowVocab::default();
+        let Some(text) = std::fs::read_to_string(&path).ok() else {
+            return RowVocab::broken(want, format!("rule vocab unreadable at {}", path.display()));
         };
-        if !v.is_object() {
-            return RowVocab::default();
+        match serde_json::from_str::<Value>(&text) {
+            Ok(v) => RowVocab::from_value(&v, want),
+            Err(e) => RowVocab::broken(want, format!("rule vocab unparsable at {}: {e}", path.display())),
         }
+    }
+
+    /// The reading itself, split off the file so a test can hand it a
+    /// vocabulary that is NOT the committed one.
+    pub fn from_value(v: &Value, want: i64) -> RowVocab {
+        if !v.is_object() {
+            return RowVocab::broken(want, "rule vocab is not an object".into());
+        }
+        let have = v.get("version").and_then(|x| x.as_i64()).unwrap_or(0);
+        if have != RULE_VOCAB_VERSION {
+            return RowVocab::broken(
+                want,
+                format!("rule vocab version {have}, this build reads {RULE_VOCAB_VERSION}"),
+            );
+        }
+        // How long each list was at `want`. The committed version is the whole
+        // file; an older one is a documented prefix, and a version the file does
+        // not describe is an error, never a guess.
+        let cut: Option<HashMap<String, usize>> = if want == RULE_VOCAB_VERSION {
+            None
+        } else {
+            let by_version = v.get("legacy_lengths").and_then(|x| x.as_object());
+            let entry = by_version.and_then(|m| m.get(&want.to_string())).and_then(|x| x.as_object());
+            match entry {
+                Some(e) => Some(
+                    e.iter()
+                        .filter_map(|(k, x)| x.as_u64().map(|n| (k.clone(), n as usize)))
+                        .collect(),
+                ),
+                None => {
+                    return RowVocab::broken(
+                        want,
+                        format!("rule vocab has no legacy_lengths for version {want}"),
+                    )
+                }
+            }
+        };
         let list = |key: &str, base: i64| -> HashMap<String, i64> {
             let mut m = HashMap::new();
             if let Some(a) = v.get(key).and_then(|x| x.as_array()) {
-                for (i, e) in a.iter().enumerate() {
+                let n = match &cut {
+                    Some(c) => c.get(key).copied().unwrap_or(a.len()).min(a.len()),
+                    None => a.len(),
+                };
+                for (i, e) in a.iter().take(n).enumerate() {
                     // `str(ul[i])` — the committed lists are plain strings.
                     let name = match e {
                         Value::String(s) => s.clone(),
@@ -134,10 +204,16 @@ impl RowVocab {
         };
         RowVocab {
             loaded: true,
+            version: want,
+            error: None,
             unit: list("unit", 0),
             weapon: list("weapon", 200),
             spell: list("spell", 300),
         }
+    }
+
+    fn broken(want: i64, why: String) -> RowVocab {
+        RowVocab { loaded: false, version: want, error: Some(why), ..RowVocab::default() }
     }
 }
 
@@ -191,10 +267,25 @@ pub struct RowEncoder {
 
 impl RowEncoder {
     pub fn new(repo_root: &str) -> RowEncoder {
+        RowEncoder::for_version(repo_root, RULE_VOCAB_VERSION)
+    }
+
+    /// NML-1134 — an encoder that slots the way the vocabulary did at `want`.
+    /// A REPLAY of a corpus recorded under an older vocabulary uses this;
+    /// nothing that plays a fresh game may.
+    pub fn for_version(repo_root: &str, want: i64) -> RowEncoder {
         RowEncoder {
-            vocab: RowVocab::load(repo_root),
+            vocab: RowVocab::for_version(repo_root, want),
             unknown: BTreeSet::new(),
             source_qd: None,
+        }
+    }
+
+    /// Swap the vocabulary reading (keeping everything already collected in
+    /// `unknown`) — a no-op when it is already the wanted one.
+    pub fn set_vocab_version(&mut self, repo_root: &str, want: i64) {
+        if self.vocab.version != want || !self.vocab.loaded {
+            self.vocab = RowVocab::for_version(repo_root, want);
         }
     }
 
@@ -613,6 +704,52 @@ mod tests {
         (state, statics)
     }
 
+    /// The same state with one extra unit rule on side 1 — the lever the
+    /// vocabulary version pulls.
+    fn state_with(rule: &str) -> (crate::State, Vec<UnitStatic>) {
+        let header = read_act_header(&HEADER.replace(
+            r#""special_rules":["Fearless","Tough(3)"]"#,
+            &format!(r#""special_rules":["Fearless","Tough(3)","{rule}"]"#),
+        ))
+        .expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        let state = state_from_json(PLAIN, &mut cache, &mut roster).expect("state");
+        let mut reg = Registries::new(&repo_root());
+        let statics =
+            state.profiles.list.iter().map(|p| UnitStatic::build(&mut reg, p)).collect();
+        (state, statics)
+    }
+
+    /// NML-1134 RED-GREEN — the vocabulary version is LOAD-BEARING on the board
+    /// rows themselves, which is why the bump and the oracle re-record had to
+    /// land together. One appended name (`Warden`, unit slot 137) on one unit:
+    /// under the shipped vocabulary the row grows by one `(slot, value)` pair
+    /// and nothing is collected; under the version-2 reading the row keeps its
+    /// old LENGTH and the name is collected loudly, exactly as the corpora
+    /// recorded before the bump have it.
+    #[test]
+    fn the_vocabulary_version_decides_the_row_length_and_the_unknown_set() {
+        let (state, statics) = state_with("Warden");
+        let plain = {
+            let mut enc = RowEncoder::new(&repo_root());
+            let rows = enc.board_rows(&state, &statics);
+            (rows[0].len(), rows[0][20], enc.unknown.clone())
+        };
+        let legacy = {
+            let mut enc = RowEncoder::for_version(&repo_root(), LEGACY_VOCAB_VERSION);
+            let rows = enc.board_rows(&state, &statics);
+            (rows[0].len(), rows[0][20], enc.unknown.clone())
+        };
+        // GREEN: the shipped vocabulary slots it — four pairs, no unknown.
+        assert_eq!(plain.1, Cell::I(4), "Fearless, Tough(3), Warden and the rifle's AP(1)");
+        assert!(plain.2.is_empty(), "{:?}", plain.2);
+        // RED: the version-2 reading does not have the name at all.
+        assert_eq!(legacy.1, Cell::I(3), "the same row without Warden's pair");
+        assert_eq!(legacy.0 + 2, plain.0, "one pair is two cells of row LENGTH");
+        assert_eq!(legacy.2.iter().cloned().collect::<Vec<_>>(), vec!["Warden".to_string()]);
+    }
+
     fn f(vals: &[f64], key: &str) -> f64 {
         vals[FEATURE_KEYS.iter().position(|k| *k == key).expect(key)]
     }
@@ -738,6 +875,104 @@ mod tests {
         near(snappedf(-20.35, 0.1), -20.3);
         near(snappedf(-20.36, 0.1), -20.4);
         assert_eq!(snappedf(1.0, 0.0), 1.0, "a zero step is the identity");
+    }
+
+    /// NML-1134 — the committed file is the version this build reads, it carries
+    /// the 11 item-granted names at slots 128-138, and every one of them is a
+    /// name the pre-NML-1105 loader never granted.
+    #[test]
+    fn the_committed_vocabulary_is_this_builds_version() {
+        let v = RowVocab::load(&repo_root());
+        assert!(v.loaded, "{:?}", v.error);
+        assert_eq!(v.version, RULE_VOCAB_VERSION);
+        for (slot, name) in [
+            (128, "Adrenaline Fueled"),
+            (129, "Combat Bio-Engineer"),
+            (130, "Combat Mutations"),
+            (131, "Courage"),
+            (132, "Flagellant"),
+            (133, "For the Hive!"),
+            (134, "Paradox Shielding Device"),
+            (135, "Toxic Cysts"),
+            (136, "Versatile Reach"),
+            (137, "Warden"),
+            (138, "Winged Breed"),
+        ] {
+            assert_eq!(v.unit.get(name), Some(&slot), "unit slot of {name}");
+        }
+    }
+
+    /// NML-1134 — the LEGACY reading: a corpus recorded under version 2 replays
+    /// with the vocabulary as it was then. The file is append-only, so that is
+    /// the same map minus the 11 appended names, which then collect as unknown
+    /// exactly as they did in the recording.
+    #[test]
+    fn the_legacy_reading_is_the_vocabulary_as_of_version_2() {
+        let now = RowVocab::load(&repo_root());
+        let old = RowVocab::for_version(&repo_root(), LEGACY_VOCAB_VERSION);
+        assert!(old.loaded, "{:?}", old.error);
+        assert_eq!(old.version, 2);
+        assert_eq!(old.unit.len() + 11, now.unit.len(), "11 unit names appended");
+        assert_eq!(old.weapon.len(), now.weapon.len(), "no weapon name appended");
+        assert_eq!(old.spell.len(), now.spell.len(), "no spell name appended");
+        assert_eq!(old.unit.get("Warden"), None, "appended after version 2");
+        assert_eq!(now.unit.get("Warden"), Some(&137));
+        // Everything the old reading DOES carry sits on the same slot as now —
+        // that is what append-only means, and a gate replaying a v2 corpus
+        // depends on it.
+        for (name, slot) in &old.unit {
+            assert_eq!(now.unit.get(name), Some(slot), "slot of {name} moved");
+        }
+    }
+
+    /// NML-1134 RED — a vocabulary file whose version is not this build's is
+    /// REFUSED, loudly, and fills nothing. Without this the two loaders would
+    /// slot the same rule differently and every board row would move in silence.
+    #[test]
+    fn a_vocabulary_of_the_wrong_version_is_refused() {
+        let wrong = serde_json::json!({
+            "version": RULE_VOCAB_VERSION + 1,
+            "unit": ["Fearless"], "weapon": [], "spell": [],
+        });
+        let v = RowVocab::from_value(&wrong, RULE_VOCAB_VERSION);
+        assert!(!v.loaded, "a version this build does not read must not load");
+        assert!(v.unit.is_empty(), "and it must fill nothing");
+        let err = v.error.expect("a loud error");
+        assert!(err.contains(&format!("version {}", RULE_VOCAB_VERSION + 1)), "{err}");
+        assert!(err.contains(&format!("reads {RULE_VOCAB_VERSION}")), "{err}");
+
+        // GREEN counterpart on the same shape: the right version does load.
+        let right = serde_json::json!({
+            "version": RULE_VOCAB_VERSION,
+            "unit": ["Fearless"], "weapon": [], "spell": [],
+        });
+        let ok = RowVocab::from_value(&right, RULE_VOCAB_VERSION);
+        assert!(ok.loaded && ok.unit.get("Fearless") == Some(&0));
+
+        // And a legacy version the file does not describe is an error too,
+        // never a guess at where the older list ended.
+        let no_lengths = RowVocab::from_value(&right, LEGACY_VOCAB_VERSION);
+        assert!(!no_lengths.loaded);
+        assert!(no_lengths.error.unwrap().contains("legacy_lengths"));
+    }
+
+    /// NML-1134 — the ONE rule that decides which vocabulary a corpus replays
+    /// under, read off its own act header.
+    #[test]
+    fn a_header_says_which_vocabulary_it_was_recorded_under() {
+        use crate::acts::vocab_version_of_header;
+        // The stamp the recorder writes since NML-1134.
+        assert_eq!(vocab_version_of_header(r#"{"knobs":{"rule_vocab_version":3}}"#), 3);
+        // Every corpus recorded before it: a knobs block without the key ...
+        assert_eq!(vocab_version_of_header(r#"{"knobs":{"top_k":6}}"#), LEGACY_VOCAB_VERSION);
+        // ... no knobs block at all ...
+        assert_eq!(vocab_version_of_header(r#"{"kind":"header"}"#), LEGACY_VOCAB_VERSION);
+        // ... and something that is not a header at all.
+        assert_eq!(vocab_version_of_header("not json"), LEGACY_VOCAB_VERSION);
+        // The typed reader agrees with the standalone one, because it IS it.
+        let head = read_act_header(HEADER).expect("header");
+        assert_eq!(head.knobs.rule_vocab_version, LEGACY_VOCAB_VERSION);
+        assert_eq!(vocab_version_of_header(HEADER), head.knobs.rule_vocab_version);
     }
 
     #[test]

@@ -141,6 +141,14 @@ def main(argv: list[str]) -> int:
                     help="NML-1130: conditional AP (PR #448/NML-1103), i.e. LEGACY_NO_COND_AP "
                          "inverted. 'auto' (default) reads the same acts.jsonl's vintage_knobs(); "
                          "'on'/'off' force it")
+    ap.add_argument(
+        "--vocab-version",
+        default="auto",
+        help='rule vocabulary to slot the replay with; "auto" (default) reads it '
+        "off the same acts.jsonl --hero-attach auto reads "
+        "(`selfplay.vocab_version_of_corpus`) — a corpus recorded before the "
+        "stamp replays under version 2",
+    )
     a = ap.parse_args(argv)
 
     lists = Path(a.lists).expanduser()
@@ -168,6 +176,9 @@ def main(argv: list[str]) -> int:
             break
     eff_engage_fold = resolve_vintage_flag(a.engage_fold, qa_header, a.repo, "engage_fold")
     eff_cond_ap = resolve_vintage_flag(a.cond_ap, qa_header, a.repo, "cond_ap")
+    # NML-1134: and the rule VOCABULARY the same session was slotted with.
+    eff_vocab_version, vsource = sp.resolve_vocab_version(a.vocab_version, acts_paths)
+    print("vocab_version %d (%s)" % (eff_vocab_version, vsource or "this build"))
 
     red = bool(a.red or a.red_source_qd or a.red_terrain_shift)
     total = equal = rows = 0
@@ -192,6 +203,7 @@ def main(argv: list[str]) -> int:
             terrain_shift_cells=a.red_terrain_shift,
             top_k=a.top_k, horizon=a.horizon, hero_attach=hero_attach,
             engage_fold=eff_engage_fold, cond_ap=eff_cond_ap,
+            vocab_version=eff_vocab_version,
         )
         seconds.append(time.perf_counter() - t0)
         total += 1

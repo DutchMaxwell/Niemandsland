@@ -41,8 +41,9 @@ pub const DISCOUNT: f64 = 0.5;
 pub const DESTROY_DEFENCE_WEIGHT: f64 = 0.8;
 
 pub use acts::{
-    load_acts, read_act_header, read_acts, Act, ActCorpus, ActHeader, ActStatics, ArbitrationRec,
-    Expectation, Knobs, PickRec, RolloutValue, RunnerRec, Scored, Sighting,
+    load_acts, read_act_header, read_acts, vocab_version_of_header, Act, ActCorpus, ActHeader,
+    ActStatics, ArbitrationRec, Expectation, Knobs, PickRec, RolloutValue, RunnerRec, Scored,
+    Sighting,
 };
 pub use arbitration::{
     arbitrate, arbitrate_bent, full_playout, full_playout_bent, ArbBend, Arbitration,
@@ -70,7 +71,8 @@ pub use playout::{other_player, Policy};
 pub use rollout::{cross_round, imagined_round_end, Rollout, Stop};
 pub use rows::{
     board_row_indices, features, neutral_defender, snappedf, Cell, RowEncoder, RowVocab,
-    EV_REF_DIST_IN, FEATURE_KEYS, FLAG_RULES, NO_RESERVES,
+    EV_REF_DIST_IN, FEATURE_KEYS, FLAG_RULES, LEGACY_VOCAB_VERSION, NO_RESERVES,
+    RULE_VOCAB_VERSION,
 };
 pub use rng::GodotRng;
 pub use rules::Registries;
