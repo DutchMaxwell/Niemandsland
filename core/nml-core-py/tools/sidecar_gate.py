@@ -74,6 +74,15 @@ EXCLUDED_TOP = ("tool", "knobs", "rounds_played", "rounds_log", "wall_seconds", 
 EXCLUDED_ROW = ("intent", "unit", "kind", "action")
 #: `planner_positions[].board` column indices that carry a FLOAT.
 BOARD_FLOAT_COLS = (1, 2, 12, 13)
+#: Top-level fields that are a SET on both sides and only reach a corpus as a
+#: list, so their ORDER is the writer's container and not a claim.
+#: `BattleSim.unknown_rules` (battle_sim.gd:82) is a Dictionary — Godot writes
+#: its keys in INSERTION order, i.e. which unit the encoder walked first; the
+#: port's `RowEncoder.unknown` is a `BTreeSet` and writes them sorted. Measured
+#: on all 20 seeds of `m3_ref_v4`: ref `['Warden', 'Paradox Shielding Device',
+#: 'Flagellant', 'Courage']`, got the same four sorted. Membership is still
+#: held exactly — a name on one side only is still a divergence.
+SET_TOP = ("unknown_rules",)
 
 
 def parse_seeds(spec: str) -> list[int]:
@@ -169,6 +178,9 @@ def compare(ref: dict, got: dict, tol: float) -> list[tuple]:
     for top in (ref_top, got_top):
         if isinstance(top.get("armies"), dict):
             top["armies"] = _armies_by_name(top["armies"])
+        for key in SET_TOP:
+            if isinstance(top.get(key), list):
+                top[key] = sorted(top[key])
     if set(ref_top) != set(got_top):
         bad.append(
             ("top-level keys", sorted(set(ref_top) - set(got_top)), sorted(set(got_top) - set(ref_top)))
@@ -257,6 +269,13 @@ def main(argv: list[str]) -> int:
         default=None,
         help="planner horizon override; default is NML_HORIZON env or 2 (ai_planner.gd:290-297)",
     )
+    ap.add_argument(
+        "--hero-attach",
+        choices=("auto",) + sp.HERO_ATTACH_MODES,
+        default="auto",
+        help='hero mode to replay; "auto" (default) reads it off the reference '
+        "corpus itself (`selfplay.hero_attach_of_corpus`)",
+    )
     a = ap.parse_args(argv)
 
     if a.excluded:
@@ -267,6 +286,11 @@ def main(argv: list[str]) -> int:
     ref_dir = Path(a.ref)
     seeds = parse_seeds(a.seeds)
     core = nml_core.load(a.repo)
+    hero_attach, source = sp.resolve_hero_attach_mode(
+        a.hero_attach, (ref_dir / ("acts_%d" % s) / "acts.jsonl" for s in seeds)
+    )
+    if a.hero_attach == "auto":
+        print("hero_attach   %s (read off %s)" % (hero_attach, source or "nothing — default"))
 
     compared = equal = missing = 0
     first: tuple | None = None
@@ -285,7 +309,7 @@ def main(argv: list[str]) -> int:
             seed, a.army1, a.army2, a.repo, a.bank, core, sidecar_skip=a.red,
             legacy_source_qd=a.red_source_qd,
             terrain_shift_cells=a.red_terrain_shift,
-            top_k=a.top_k, horizon=a.horizon,
+            top_k=a.top_k, horizon=a.horizon, hero_attach=hero_attach,
         )
         seconds.append(time.perf_counter() - t0)
         compared += 1

@@ -391,3 +391,29 @@ def test_red_the_sidecar_generators_do_roll_dice():
                 moved += 1
                 break
     assert moved == len(_gate_seeds()), "only %d seeds drew a sidecar die" % moved
+
+
+def test_unknown_rules_is_held_as_the_set_it_is_on_both_sides():
+    """NML-1127 — `unknown_rules` is a SET, and its ORDER is the writer's
+    container, not a claim about the game.
+
+    `BattleSim.unknown_rules` (battle_sim.gd:82) is a GDScript Dictionary, so a
+    Godot recording writes its keys in INSERTION order — which unit the encoder
+    walked first. `RowEncoder.unknown` is a `BTreeSet` and writes them sorted.
+    Measured on all 20 seeds of `m3_ref_v4`: ref `['Warden', 'Paradox Shielding
+    Device', 'Flagellant', 'Courage']` against the same four sorted — the only
+    field left standing between the harness and that oracle.
+
+    MEMBERSHIP is still held exactly, which is the half that means something.
+    """
+    same = ["Warden", "Paradox Shielding Device", "Flagellant", "Courage"]
+    ref = {"unknown_rules": same, "planner_positions": []}
+    got = {"unknown_rules": sorted(same), "planner_positions": []}
+    assert gate.compare(ref, got, 1e-9) == []
+
+    # RED — a name only one side knows is still a divergence, in either
+    # direction, and so is a missing one.
+    short = {"unknown_rules": sorted(same[:3]), "planner_positions": []}
+    extra = {"unknown_rules": sorted(same + ["Zealotry"]), "planner_positions": []}
+    assert gate.compare(ref, short, 1e-9), "a dropped unknown rule slipped through"
+    assert gate.compare(ref, extra, 1e-9), "an invented unknown rule slipped through"

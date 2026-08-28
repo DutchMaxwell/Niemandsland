@@ -122,6 +122,13 @@ def main(argv: list[str]) -> int:
         default=None,
         help="planner horizon override; default is NML_HORIZON env or 2 (ai_planner.gd:290-297)",
     )
+    ap.add_argument(
+        "--hero-attach",
+        choices=("auto",) + sp.HERO_ATTACH_MODES,
+        default="auto",
+        help='hero mode to replay; "auto" (default) reads it off the reference '
+        "corpus itself (`selfplay.hero_attach_of_corpus`)",
+    )
     a = ap.parse_args(argv)
 
     lists = Path(a.lists).expanduser()
@@ -130,6 +137,13 @@ def main(argv: list[str]) -> int:
     if not found:
         print("no reference games under %s" % a.ref)
         return 1
+
+    hero_attach, source = sp.resolve_hero_attach_mode(
+        # `found`'s last element is the RESULT file; the act corpus sits beside it.
+        a.hero_attach, (res.parent / "acts.jsonl" for _p, _a, _b, _s, res in found)
+    )
+    if a.hero_attach == "auto":
+        print("hero_attach   %s (read off %s)" % (hero_attach, source or "nothing — default"))
 
     red = bool(a.red or a.red_source_qd or a.red_terrain_shift)
     total = equal = rows = 0
@@ -152,7 +166,7 @@ def main(argv: list[str]) -> int:
             sidecar_skip=a.red,
             legacy_source_qd=a.red_source_qd,
             terrain_shift_cells=a.red_terrain_shift,
-            top_k=a.top_k, horizon=a.horizon,
+            top_k=a.top_k, horizon=a.horizon, hero_attach=hero_attach,
         )
         seconds.append(time.perf_counter() - t0)
         total += 1
