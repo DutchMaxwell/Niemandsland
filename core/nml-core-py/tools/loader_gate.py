@@ -91,6 +91,21 @@ DYN_FIELDS = ("shooting_range_bonus", "max_activation_advance_bonus_in")
 FIELDS = STATIC_FIELDS + DYN_FIELDS
 
 
+def rule_text_reading(game_dir: Path) -> tuple[bool, str]:
+    """NML-1126: the act header's rule-TEXT provenance, `(ok, source)`.
+
+    The arena's special-rule DESCRIPTIONS are fetched live from the army-forge API at
+    import and drive the description move modifiers; a failed fetch used to leave them
+    empty and the game played on with different movement bands and recorded nothing about
+    it. `ok` False means this game's `profiles` above were built WITHOUT that text — a
+    different corpus, not a noisy sample of this one. A header written before NML-1126
+    carries neither key and reads as `(True, "unknown")`: silence, not a claim.
+    """
+    with open(game_dir / "acts.jsonl", encoding="utf-8") as f:
+        header = json.loads(f.readline())
+    return bool(header.get("rule_text_ok", True)), str(header.get("rule_text_source", "unknown"))
+
+
 def _eq(a, b) -> bool:
     """Field equality. Floats compare with an absolute tolerance (the arena
     writes `0.0125 * 1.6` and JSON round-trips it), everything else exactly."""
@@ -223,6 +238,9 @@ def main(argv: list[str]) -> int:
     games_hit: dict[str, set] = {f: set() for f in FIELDS}
     examples: dict[str, dict[tuple, tuple]] = {f: {} for f in FIELDS}
     misaligned = 0
+    #: NML-1126 informational: games whose header says the rule TEXT never arrived.
+    rule_text_bad = 0
+    rule_text_sources: Counter = Counter()
     clean_games = 0
     total_units = 0
     seen_units: set = set()
@@ -232,6 +250,12 @@ def main(argv: list[str]) -> int:
             profiles, aunits = arena_reading(d)
         except (OSError, json.JSONDecodeError):
             continue
+        try:  # NML-1126: informational only — never part of the verdict below.
+            rt_ok, rt_source = rule_text_reading(d)
+        except (OSError, json.JSONDecodeError, KeyError):
+            rt_ok, rt_source = True, "unreadable"
+        rule_text_bad += 0 if rt_ok else 1
+        rule_text_sources[rt_source] += 1
         sides = {}
         for side, stem in ((1, p1), (2, p2)):
             key = (stem, side)
@@ -269,6 +293,13 @@ def main(argv: list[str]) -> int:
         % (len(todo), clean_games, misaligned)
     )
     print("units          %d distinct roster units, %d unit-readings" % (len(seen_units), total_units))
+    # NML-1126, INFORMATIONAL: a game whose rule text never arrived was built from a
+    # different reading of the same list, so a loader mismatch on it may be provenance and
+    # not a loader bug. Reported, never counted into the verdict.
+    print(
+        "rule_text      %d game(s) with rule_text_ok=false, sources %s"
+        % (rule_text_bad, dict(sorted(rule_text_sources.items())) or "-")
+    )
     print()
     print("%-32s %8s %8s %8s" % ("field", "units", "rows", "games"))
     bad = 0

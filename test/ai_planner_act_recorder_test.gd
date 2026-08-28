@@ -590,3 +590,43 @@ func test_header_terrain_line_walls_is_empty_without_the_overlay_method() -> voi
 	host.terrain_overlay = overlay
 	var line := AiActRecorder._terrain_line(Callable(host, "terrain_type_at")) as Dictionary
 	assert_array(line["walls"] as Array).is_equal([])
+
+
+## NML-1126: the header carries the rule-TEXT provenance of the game that wrote it.
+## `OPRArmy.rule_descriptions` is fetched live from the army-forge API at import and feeds
+## the description-driven move modifiers; when that fetch failed the game used to play on
+## with different movement bands and record NOTHING about it (NML-1114 root cause — a fleet
+## box banked exactly such a game). A reader must be able to separate those rows from the
+## corpus off the artefact alone, which means the header has to say so.
+func test_header_stamps_the_rule_text_provenance() -> void:
+	OPRApiClient.reset_rule_text_stamp()
+	OPRApiClient.rule_text_ok = false        # as a failed _fetch_common_rules leaves the process
+	OPRApiClient.rule_text_source = "none"
+
+	var state := _state()
+	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
+	AiActRecorder.finish(AiActRecorder.begin(state, 1, pool, Callable()),
+		{"used": true, "unit_key": "A", "action": {"unit": "A", "kind": AiDecision.Action.HOLD}})
+
+	var header := JSON.parse_string(_dump_lines()[0]) as Dictionary
+	assert_bool(header.has("rule_text_ok")).is_true()
+	assert_bool(bool(header.get("rule_text_ok", true))).is_false()
+	assert_str(str(header.get("rule_text_source", ""))).is_equal("none")
+	OPRApiClient.reset_rule_text_stamp()
+
+
+## The other reading of the same stamp: a game whose text DID arrive says so, so the key is a
+## real discriminator and not a constant.
+func test_header_stamps_a_healthy_import_as_ok_from_the_api() -> void:
+	OPRApiClient.reset_rule_text_stamp()
+	OPRApiClient.rule_text_source = "api"    # as a successful merge leaves the process
+
+	var state := _state()
+	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
+	AiActRecorder.finish(AiActRecorder.begin(state, 1, pool, Callable()),
+		{"used": true, "unit_key": "A", "action": {"unit": "A", "kind": AiDecision.Action.HOLD}})
+
+	var header := JSON.parse_string(_dump_lines()[0]) as Dictionary
+	assert_bool(bool(header.get("rule_text_ok", false))).is_true()
+	assert_str(str(header.get("rule_text_source", ""))).is_equal("api")
+	OPRApiClient.reset_rule_text_stamp()
