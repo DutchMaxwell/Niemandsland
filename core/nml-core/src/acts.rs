@@ -98,6 +98,14 @@ pub struct Knobs {
     /// (`--red-no-hero-fold`).
     #[serde(default = "yes")]
     pub engage_fold: bool,
+    /// NML-1134 — which RULE VOCABULARY this corpus's board rows were slotted
+    /// with (`data/encoder_rule_vocab_v1.json`, stamped by `act_recorder.gd`).
+    /// THE ONE RULE, and every reader gets it from here: the header says, and a
+    /// header that does NOT say was recorded before the stamp existed, which
+    /// means version 2. `vocab_version_of_header` is this same default reached
+    /// from Python.
+    #[serde(default = "legacy_vocab_version")]
+    pub rule_vocab_version: i64,
 }
 
 /// The `sighting` knob's two settings — the header writes them as strings, the
@@ -117,6 +125,27 @@ pub enum Sighting {
 /// way, because a header that predates the field came from a gated caller.
 fn yes() -> bool {
     true
+}
+
+/// NML-1134 — `#[serde(default)]` on the vocabulary version: absent means a
+/// corpus recorded before the stamp, and every one of those is version 2.
+fn legacy_vocab_version() -> i64 {
+    crate::rows::LEGACY_VOCAB_VERSION
+}
+
+/// NML-1134 — the vocabulary version one act header asks to be replayed under,
+/// read through the SAME serde default every corpus reader uses. Python calls
+/// it as `nml_core.vocab_version_of_header(header)`; the Rust tests call it
+/// directly; neither owns a second copy of the "absent means 2" rule.
+pub fn vocab_version_of_header(text: &str) -> i64 {
+    #[derive(Deserialize)]
+    struct KnobsOnly {
+        #[serde(default)]
+        knobs: Knobs,
+    }
+    serde_json::from_str::<KnobsOnly>(text)
+        .map(|k| k.knobs.rule_vocab_version)
+        .unwrap_or(crate::rows::LEGACY_VOCAB_VERSION)
 }
 
 impl Default for Knobs {
@@ -141,6 +170,11 @@ impl Default for Knobs {
             movement: false,
             dangerous: true,
             engage_fold: true,
+            // NML-1134: the CORPUS reading — a header with no `knobs` block at
+            // all predates the stamp just as surely as one with an unstamped
+            // block does. A caller that plays a FRESH game stamps
+            // `rows::RULE_VOCAB_VERSION` itself.
+            rule_vocab_version: crate::rows::LEGACY_VOCAB_VERSION,
         }
     }
 }

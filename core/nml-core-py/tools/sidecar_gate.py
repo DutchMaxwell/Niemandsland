@@ -276,6 +276,13 @@ def main(argv: list[str]) -> int:
         help='hero mode to replay; "auto" (default) reads it off the reference '
         "corpus itself (`selfplay.hero_attach_of_corpus`)",
     )
+    ap.add_argument(
+        "--vocab-version",
+        default="auto",
+        help='rule vocabulary to slot the replay with; "auto" (default) reads it '
+        "off the reference corpus itself (`selfplay.vocab_version_of_corpus`) — a "
+        "corpus recorded before the stamp replays under version 2",
+    )
     a = ap.parse_args(argv)
 
     if a.excluded:
@@ -291,6 +298,10 @@ def main(argv: list[str]) -> int:
     )
     if a.hero_attach == "auto":
         print("hero_attach   %s (read off %s)" % (hero_attach, source or "nothing — default"))
+    vocab_version, vsource = sp.resolve_vocab_version(
+        a.vocab_version, (ref_dir / ("acts_%d" % s) / "acts.jsonl" for s in seeds)
+    )
+    print("vocab_version %d (%s)" % (vocab_version, vsource or "this build"))
 
     compared = equal = missing = 0
     first: tuple | None = None
@@ -310,6 +321,7 @@ def main(argv: list[str]) -> int:
             legacy_source_qd=a.red_source_qd,
             terrain_shift_cells=a.red_terrain_shift,
             top_k=a.top_k, horizon=a.horizon, hero_attach=hero_attach,
+            vocab_version=vocab_version,
         )
         seconds.append(time.perf_counter() - t0)
         compared += 1

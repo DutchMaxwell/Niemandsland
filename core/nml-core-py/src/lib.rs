@@ -581,6 +581,16 @@ impl Core {
         self.terrain = terrain;
         self.knobs = knobs;
         self.roster = None;
+        // NML-1134: the board rows are slotted with the vocabulary THIS corpus
+        // was recorded under — `knobs.rule_vocab_version`, absent meaning the
+        // pre-stamp version 2. A version the committed file cannot serve is an
+        // error HERE, not a silently different row later.
+        self.rows.set_vocab_version(&self.repo_root, self.knobs.rule_vocab_version);
+        if !self.rows.vocab.loaded {
+            return Err(Unsupported::new_err(
+                self.rows.vocab.error.clone().unwrap_or_else(|| "rule vocab unreadable".into()),
+            ));
+        }
         Ok(())
     }
 
@@ -615,6 +625,7 @@ impl Core {
         m.insert("movement".into(), self.knobs.movement.into());
         m.insert("dangerous".into(), self.knobs.dangerous.into());
         m.insert("engage_fold".into(), self.knobs.engage_fold.into());
+        m.insert("rule_vocab_version".into(), self.knobs.rule_vocab_version.into());
         to_py(py, &Value::Object(m))
     }
 
@@ -1104,9 +1115,8 @@ impl Core {
     /// floats as Python floats, the way `JSON.stringify` writes them.
     fn board_rows(&mut self, py: Python<'_>, state: PyRef<'_, PyState>) -> PyResult<Py<PyAny>> {
         if !self.rows.vocab.loaded {
-            return Err(Unsupported::new_err(format!(
-                "rule vocab unreadable at {}/data/encoder_rule_vocab_v1.json",
-                self.repo_root
+            return Err(Unsupported::new_err(self.rows.vocab.error.clone().unwrap_or_else(
+                || format!("rule vocab unreadable at {}/{}", self.repo_root, nmlcore::rows::RULE_VOCAB_PATH),
             )));
         }
         let statics = self.statics_for(&state.inner)?;
@@ -1348,6 +1358,24 @@ fn set_legacy_no_cond_ap(on: bool) {
     nmlcore::unit::LEGACY_NO_COND_AP.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
+/// NML-1134 — the rule-vocabulary version one act header asks to be replayed
+/// under. THE ONE RULE, and the only implementation of it: the header's
+/// `knobs.rule_vocab_version` when it carries one, else 2, because every corpus
+/// recorded before the stamp existed was recorded under version 2. The Python
+/// fixtures and gates call this; the Rust tests call
+/// `nmlcore::vocab_version_of_header` — the same function.
+#[pyfunction]
+fn vocab_version_of_header(header: &Bound<'_, PyAny>) -> PyResult<i64> {
+    Ok(nmlcore::vocab_version_of_header(&json_text(header)?))
+}
+
+/// NML-1134 — the vocabulary version THIS build reads, i.e. the one a FRESH
+/// game (and a freshly recorded corpus) is slotted with.
+#[pyfunction]
+fn rule_vocab_version() -> i64 {
+    nmlcore::RULE_VOCAB_VERSION
+}
+
 // ------------------------------------------------------------------ Board ---
 
 /// The header's `"terrain"` object, read once. Every lookup below is a pure
@@ -1479,6 +1507,11 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(load, m)?)?;
     m.add_function(wrap_pyfunction!(set_legacy_prefix_rules, m)?)?;
     m.add_function(wrap_pyfunction!(set_legacy_no_cond_ap, m)?)?;
+    // NML-1134: the rule vocabulary's version — this build's, and one corpus's.
+    m.add_function(wrap_pyfunction!(vocab_version_of_header, m)?)?;
+    m.add_function(wrap_pyfunction!(rule_vocab_version, m)?)?;
+    m.add("RULE_VOCAB_VERSION", nmlcore::RULE_VOCAB_VERSION)?;
+    m.add("LEGACY_VOCAB_VERSION", nmlcore::LEGACY_VOCAB_VERSION)?;
     // NML-1073 M3-4: the board as a pure lookup — the header's terrain in, the
     // same answers `SchoolTerrain` gives the live game out.
     m.add_function(wrap_pyfunction!(board, m)?)?;

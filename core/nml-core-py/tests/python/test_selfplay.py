@@ -71,6 +71,18 @@ GATE_SEEDS = range(27, 47)
 #: describes. `~/ai_lists_gf` is byte-identical to `LISTS` on every list either
 #: corpus uses, so the same two paths serve both.
 REF_DIR_V4 = Path(os.path.expanduser("~/selfplay_out/m3_ref_v4"))
+#: NML-1134 — the v5 corpus: the SAME recipe as v4, re-recorded under rule
+#: vocabulary v3. Its header carries `knobs.rule_vocab_version`, so it replays
+#: under the shipped vocabulary while v4 (no stamp) replays under version 2.
+REF_DIR_V5 = Path(os.path.expanduser("~/selfplay_out/m3_ref_v5"))
+FRESH_ORACLES = (REF_DIR_V4, REF_DIR_V5)
+
+
+def _vocab_of(ref: Path, seed: int) -> int:
+    """The rule-vocabulary version the corpus at `ref` was recorded under —
+    `selfplay.resolve_vocab_version` over its own `acts_<seed>/acts.jsonl`, which
+    is the ONE reading of that rule (`nml_core.vocab_version_of_header`)."""
+    return sp.resolve_vocab_version("auto", [ref / ("acts_%d" % seed) / "acts.jsonl"])[0]
 
 
 @pytest.fixture(autouse=True)
@@ -705,7 +717,10 @@ def test_the_python_harness_plays_the_same_game_seed_for_seed():
     for seed in seeds:
         with open(REF_DIR / ("core_s%d.json" % seed), encoding="utf-8") as f:
             ref = json.load(f)
-        got = sp.play_game(seed, ARMY1, ARMY2, REPO, BANK_DIR, core)
+        got = sp.play_game(
+            seed, ARMY1, ARMY2, REPO, BANK_DIR, core,
+            vocab_version=_vocab_of(REF_DIR, seed),
+        )
         diff = gate.compare(ref, got, gate.ref_picks(REF_DIR, seed))
         if diff:
             bad.append((seed, diff))
@@ -713,45 +728,60 @@ def test_the_python_harness_plays_the_same_game_seed_for_seed():
     print("GATE M3-5: %d/%d seeds seed-for-seed equal" % (len(seeds), len(seeds)))
 
 
-def _gate_seeds_v4():
-    if not (REF_DIR_V4.is_dir() and BANK_DIR.is_dir() and ARMY1.exists() and ARMY2.exists()):
+def _fresh_seeds(ref: Path):
+    if not (ref.is_dir() and BANK_DIR.is_dir() and ARMY1.exists() and ARMY2.exists()):
         return []
-    return [s for s in GATE_SEEDS if (REF_DIR_V4 / ("core_s%d.json" % s)).exists()]
+    return [s for s in GATE_SEEDS if (ref / ("core_s%d.json" % s)).exists()]
 
 
-@pytest.mark.skipif(not _gate_seeds_v4(), reason="no m3_ref_v4 recording on this machine")
-def test_the_python_harness_plays_the_v4_oracle_seed_for_seed(monkeypatch):
-    """THE SAME GATE against the NML-1105 corpus, with every pin OFF.
+def _gate_seeds_v4():
+    """`_fresh_seeds` for the v4 corpus alone — NML-1127's charge-probe test
+    below is pinned to it (it is the corpus whose attachment graph the probe can
+    get wrong), while the two gates take every fresh oracle."""
+    return _fresh_seeds(REF_DIR_V4)
+
+
+@pytest.mark.parametrize("ref_dir", FRESH_ORACLES, ids=lambda p: p.name)
+def test_the_python_harness_plays_the_fresh_oracle_seed_for_seed(ref_dir, monkeypatch):
+    """THE SAME GATE against a FRESH corpus, with every pin OFF.
 
     The two autouse fixtures above pin the module to the OLD reading, which is
-    right for `m3_ref_v2` and wrong here: this corpus was recorded after the
+    right for `m3_ref_v2` and wrong here: these corpora were recorded after the
     loader, the rule lookup and the conditional-AP EV were all fixed. Replaying
-    it under the pins would measure the pins.
+    them under the pins would measure the pins.
 
-    The mode is read off the corpus, not asserted — see
-    `selfplay.hero_attach_of_corpus`. On `m3_ref_v4` it answers "join".
+    Neither the hero mode nor the vocabulary version is asserted into the
+    corpus — both are read off it (`selfplay.hero_attach_of_corpus`,
+    `selfplay.vocab_version_of_corpus`). Both v4 and v5 answer "join"; v4
+    answers vocabulary 2 (recorded before the stamp), v5 answers 3.
     """
     sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
     import selfplay_gate as gate  # noqa: E402
 
+    seeds = _fresh_seeds(ref_dir)
+    if not seeds:
+        pytest.skip("no %s recording on this machine" % ref_dir.name)
     monkeypatch.setattr(list_to_profile, "LEGACY_CORE_SELFPLAY", False)
     nml_core.set_legacy_no_cond_ap(False)
 
-    seeds = _gate_seeds_v4()
-    mode = sp.hero_attach_of_corpus(REF_DIR_V4 / ("acts_%d" % seeds[0]) / "acts.jsonl")
-    assert mode == "join", "m3_ref_v4 records the join without the fold, not %r" % mode
+    mode = sp.hero_attach_of_corpus(ref_dir / ("acts_%d" % seeds[0]) / "acts.jsonl")
+    assert mode == "join", "%s records the join without the fold, not %r" % (ref_dir.name, mode)
 
     core = nml_core.load(str(REPO))
     bad = []
     for seed in seeds:
-        with open(REF_DIR_V4 / ("core_s%d.json" % seed), encoding="utf-8") as f:
+        with open(ref_dir / ("core_s%d.json" % seed), encoding="utf-8") as f:
             ref = json.load(f)
-        got = sp.play_game(seed, ARMY1, ARMY2, REPO, BANK_DIR, core, hero_attach=mode)
-        diff = gate.compare(ref, got, gate.ref_picks(REF_DIR_V4, seed))
+        got = sp.play_game(
+            seed, ARMY1, ARMY2, REPO, BANK_DIR, core, hero_attach=mode,
+            vocab_version=_vocab_of(ref_dir, seed),
+        )
+        diff = gate.compare(ref, got, gate.ref_picks(ref_dir, seed))
         if diff:
             bad.append((seed, diff))
     assert not bad, "seeds that diverged: %s" % bad[:3]
-    print("GATE M3-5 (v4): %d/%d seeds seed-for-seed equal" % (len(seeds), len(seeds)))
+    print("GATE M3-5 (%s, vocab v%d): %d/%d seeds seed-for-seed equal"
+          % (ref_dir.name, _vocab_of(ref_dir, seeds[0]), len(seeds), len(seeds)))
 
 
 @pytest.mark.skipif(not _gate_seeds_v4(), reason="no m3_ref_v4 recording on this machine")

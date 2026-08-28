@@ -205,7 +205,13 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# (selfplay.py `DICE_MODES`), whose default is still "expected". A reader can then
 			# tell an expected-value corpus from a real-dice one without guessing at the file
 			# name. Inert for the Rust seam: plain.rs `knobs_of` reads no such key.
-			"dice": "table"}}
+			"dice": "table",
+			# NML-1134: which RULE VOCABULARY this corpus's board rows were slotted with
+			# (data/encoder_rule_vocab_v1.json, shared with the Rust twin). The vocabulary is
+			# APPEND-ONLY, so an older version is a prefix of a newer one and a replay only has
+			# to truncate to it; a header WITHOUT this key predates the stamp and reads as
+			# version 2 (`nml_core.vocab_version_of_header`, core/nml-core/src/acts.rs).
+			"rule_vocab_version": BattleSim.RULE_VOCAB_VERSION}}
 
 
 ## Reaches the live TerrainOverlay the same way SoloController's terrain_type_at

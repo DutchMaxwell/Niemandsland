@@ -1,5 +1,5 @@
 {
- "version": 2,
+ "version": 3,
  "comment": "Encoder rule vocabulary v2 (NML-995): built from ALL 43 CDN factions x sizes (210 lists). Slot order APPEND-ONLY; new rules get the next slot centrally at collect time. Unit slots 0-199, weapon slots 200-299 (v1b fix: 128 unit rules overflowed the old 0-99 range) in board rows.",
  "unit": [
   "Agile",
@@ -129,7 +129,18 @@
   "Versatile Reach Aura",
   "Warbound",
   "Watchborn",
-  "Wolfborn"
+  "Wolfborn",
+  "Adrenaline Fueled",
+  "Combat Bio-Engineer",
+  "Combat Mutations",
+  "Courage",
+  "Flagellant",
+  "For the Hive!",
+  "Paradox Shielding Device",
+  "Toxic Cysts",
+  "Versatile Reach",
+  "Warden",
+  "Winged Breed"
  ],
  "weapon": [
   "AP",
@@ -620,5 +631,7 @@
   "Zap!",
   "Zealot Spirit"
  ],
- "comment_v1c": "v1c (15.08., v5.1 grill 13.08.): append-only spell namespace, slots 300+i in vocab order; casters emit (slot, threshold) pairs; unknown spells loud-collect like rules."
+ "comment_v1c": "v1c (15.08., v5.1 grill 13.08.): append-only spell namespace, slots 300+i in vocab order; casters emit (slot, threshold) pairs; unknown spells loud-collect like rules.",
+ "comment_v3": "v3 (28.08., NML-1134): 11 item-granted rule names the fixed unit-import path (NML-1105, #451) now grants, appended as unit slots 128-138. APPEND-ONLY, so every older version is a PREFIX of this file and `legacy_lengths` gives where each one ended — a corpus recorded under an older vocabulary replays by truncating the lists to those lengths, and the names beyond them collect as unknown exactly as they did then.",
+ "legacy_lengths": {"2": {"unit": 128, "weapon": 22, "spell": 463}}
 }

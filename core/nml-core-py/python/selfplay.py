@@ -557,6 +557,33 @@ def hero_attach_of_corpus(acts_path) -> str:
     return "join" if any(u.get("attached_to") for u in units.values()) else "off"
 
 
+def vocab_version_of_corpus(acts_path) -> int:
+    """NML-1134 — the RULE VOCABULARY version a recorded act corpus was slotted
+    with, read off its own header. Same spirit as `hero_attach_of_corpus`: a
+    recording is self-describing.
+
+    The rule itself lives in ONE place, `nml_core.vocab_version_of_header`
+    (core/nml-core/src/acts.rs) — the header's `knobs.rule_vocab_version` when it
+    carries one, else version 2, because every corpus cut before the stamp
+    existed was cut under version 2. This function only opens the file."""
+    with open(acts_path, encoding="utf-8") as fh:
+        return nml_core.vocab_version_of_header(json.loads(fh.readline()))
+
+
+def resolve_vocab_version(flag, acts_paths):
+    """`flag` verbatim (an int), unless it is "auto" — then the FIRST readable
+    act corpus in `acts_paths` decides, exactly the way `resolve_hero_attach_mode`
+    resolves its own. No readable corpus at all reads THIS BUILD's version, which
+    is what a freshly played game is slotted with. Returns `(version, source)` so
+    a gate can SAY which file decided."""
+    if flag != "auto":
+        return int(flag), None
+    for path in acts_paths:
+        if path is not None and Path(path).is_file():
+            return vocab_version_of_corpus(path), str(path)
+    return nml_core.RULE_VOCAB_VERSION, None
+
+
 def resolve_hero_attach_mode(mode: str, acts_paths) -> str:
     """`mode` verbatim, unless it is "auto" — then the FIRST readable act corpus
     in `acts_paths` decides, because one reference directory is one recording
@@ -1003,6 +1030,7 @@ def play_game(
     movement: str = "rigid",
     engage_fold: bool = True,
     cond_ap: bool | None = None,
+    vocab_version: int | None = None,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -1130,6 +1158,15 @@ def play_game(
         # NML-1130: the header knob PR #446 defaults ON in the twin. True here
         # matches that default, so a caller that passes nothing sees no change.
         engage_fold=engage_fold,
+        # NML-1134: which RULE VOCABULARY this game's board rows are slotted
+        # with. A fresh game uses THIS BUILD's version — the default here, and
+        # the only setting a fresh corpus may use. A gate replaying a corpus
+        # recorded under an older vocabulary passes that corpus's version
+        # (`resolve_vocab_version`), so its `unknown_rules` and its row LENGTHS
+        # are the ones the recording carries instead of today's.
+        rule_vocab_version=(
+            nml_core.RULE_VOCAB_VERSION if vocab_version is None else int(vocab_version)
+        ),
     )
     core.set_header({"profiles": profiles, "terrain": terrain, "knobs": knobs})
     # NML-1130 (PR #448, NML-1103): conditional AP (Shatter/Tear/Disintegrate/

@@ -175,3 +175,34 @@ func test_caster_rows_carry_spell_book_pairs() -> void:
 	BattleSim._load_vocab()
 	assert_int(int(BattleSim._vocab_spell.get(target, -1))).is_equal(300 + idx)
 	assert_bool(BattleSim._vocab_spell.size() == spells.size()).is_true()
+
+
+## NML-1134: the vocabulary file is SHARED with the Rust twin
+## (`nml_core::rows::RULE_VOCAB_VERSION`), so a file of a version this build
+## does not read is REFUSED — loudly and completely. It fills nothing, and every
+## rule then collects into `unknown_rules` instead of landing on a slot the two
+## sides disagree about. RED half: the wrong version. GREEN half: the committed
+## file, through the same function.
+func test_rule_vocab_of_a_wrong_version_is_refused() -> void:
+	BattleSim._load_vocab()
+	var committed: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string("res://data/encoder_rule_vocab_v1.json"))
+	assert_int(int(committed["version"])).is_equal(BattleSim.RULE_VOCAB_VERSION)
+
+	var before: int = BattleSim._vocab_unit.size()
+	var wrong := {"version": BattleSim.RULE_VOCAB_VERSION + 1,
+		"unit": ["Frobnicate"], "weapon": [], "spell": []}
+	assert_str(BattleSim._fill_vocab(wrong)).contains("version")
+	assert_int(BattleSim._vocab_unit.size()).is_equal(before)
+	assert_bool(BattleSim._vocab_unit.has("Frobnicate")).is_false()
+	# Not a Dictionary at all is the other half of the same refusal.
+	assert_str(BattleSim._fill_vocab(null)).is_not_empty()
+
+	# GREEN: the committed file loads, and carries the 11 item-granted names
+	# NML-1105 made the trainer grant (unit slots 128-138, append-only).
+	assert_str(BattleSim._fill_vocab(committed)).is_equal("")
+	var appended := ["Adrenaline Fueled", "Combat Bio-Engineer", "Combat Mutations",
+		"Courage", "Flagellant", "For the Hive!", "Paradox Shielding Device",
+		"Toxic Cysts", "Versatile Reach", "Warden", "Winged Breed"]
+	for i in appended.size():
+		assert_int(int(BattleSim._vocab_unit.get(appended[i], -1))).is_equal(128 + i)
