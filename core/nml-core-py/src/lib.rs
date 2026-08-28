@@ -541,6 +541,9 @@ impl Core {
             // NML-1073 M5 D1-B8 — the header's RED switch, inverted: `dangerous`
             // defaults true, so the p.12 test runs unless a gate turns it off.
             no_dangerous: !self.knobs.dangerous,
+            // NML-1073 M5 D5-4 — the header's RED switch, inverted: `hero_fold`
+            // defaults true, so the engage test folds unless a gate says no.
+            no_engage_fold: !self.knobs.engage_fold,
         }
     }
 
@@ -602,6 +605,7 @@ impl Core {
         );
         m.insert("movement".into(), self.knobs.movement.into());
         m.insert("dangerous".into(), self.knobs.dangerous.into());
+        m.insert("engage_fold".into(), self.knobs.engage_fold.into());
         to_py(py, &Value::Object(m))
     }
 

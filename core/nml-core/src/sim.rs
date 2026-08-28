@@ -274,6 +274,53 @@ pub(crate) fn dangerous_dice(
     dice
 }
 
+/// `SoloController.nearest_melee_gap_in` solo_controller.gd:8526 — the gap the
+/// table measures before it lets a charge fight, and it measures it over
+/// `_moving_models` (:5375) on BOTH sides: each unit's own alive models PLUS
+/// its attached heroes'. D5-1 asked the same question over the HOSTS alone, so
+/// a hero standing at the front of its host — or on the target — was invisible
+/// to the engage test while the very same models had just been moved by it
+/// (:1123 / `mv::step::movers_of`). The D5-2 review measured 14 charge acts the
+/// table fought and this port refused for exactly that reason.
+///
+/// `geom::edge_gap_in` is itself a minimum over model pairs, so the minimum
+/// over the (host + heroes) x (host + heroes) cross product IS the one number
+/// `nearest_melee_gap_in` returns. A hero with no models left contributes
+/// `INFINITY` and changes nothing, the same way an empty `b_shapes` does there.
+///
+/// SEAM-GATED, and on `hero_attach` alone — no new seam: without it the state
+/// is not folded anywhere else either (the pool, the volley, the move), so
+/// folding it HERE would measure a unit the rest of the resolver does not
+/// believe in. With the seam off the two lists are the hosts alone and this
+/// collapses to the single `edge_gap_in` call D5-1 wrote, byte for byte.
+/// `no_engage_fold` is the RED switch and nothing else — see `io::Seams`.
+fn engage_gap_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
+    let fold = seams.hero_attach && !seams.no_engage_fold;
+    let side = |u: usize| -> Vec<usize> {
+        let mut v = vec![u];
+        if fold {
+            v.extend(state.attached[u].iter().copied());
+        }
+        v
+    };
+    let mut best = f64::INFINITY;
+    for a in side(si) {
+        for b in side(ti) {
+            let g = geom::edge_gap_in(
+                &state.positions[a],
+                &state.radii[a],
+                &state.positions[b],
+                &state.radii[b],
+                DEFAULT_BASE_RADIUS_M,
+            );
+            if g < best {
+                best = g;
+            }
+        }
+    }
+    best
+}
+
 /// `BattleSim._expected_shooting_morale` battle_sim.gd:1096-1105 /
 /// `main._solo_shooting_morale` :8232-8250 — WHETHER the volley's target has to
 /// test at all.
@@ -1532,13 +1579,9 @@ fn resolve_with(
     // not seam-gated: this is the landing rule itself, not a research seam.
     if kind == CHARGE {
         if let Some(ti) = ci {
-            let engage_gap_in = geom::edge_gap_in(
-                &next.positions[si],
-                &next.radii[si],
-                &next.positions[ti],
-                &next.radii[ti],
-                DEFAULT_BASE_RADIUS_M,
-            );
+            // D5-4: over `_moving_models` on BOTH sides once `hero_attach`
+            // is on — the table's own list, not the two hosts'.
+            let engage_gap_in = engage_gap_in(&next, si, ti, seams);
             // D5-1: the table asks TWICE before it fights. First the engage
             // distance (main.gd:8005-8006, the line above). Then whether the
             // snap that closes the residual base gap still FITS the move budget
@@ -1705,5 +1748,120 @@ mod d6a_tests {
         // RED for the whole rung: answering `alive` instead of `sighted` gives
         // the count this port drew before D6a, and it is a different number.
         assert_ne!(bearer_scaled_attacks(&rifle, 5, 5, 3), bearer_scaled_attacks(&rifle, 5, 5, 5));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::{Bands, Mods, MoveBands, Profile, Profiles, Roster};
+    use std::collections::HashMap;
+
+    /// Four 1"-radius single-model units on one line: a charger host (unit 0)
+    /// with a joined hero (unit 1) two inches in front of it, and a target host
+    /// (unit 2) with a joined hero (unit 3) three inches in front of IT. The
+    /// four base-edge gaps the engage test can pick from are therefore
+    /// 10" (host to host), 8" and 7" (one hero folded) and 5" (both) — one
+    /// number per fold, so a single assertion says which lists were measured.
+    fn four_unit_line() -> State {
+        let profile = Profile {
+            unit_id: "u".into(),
+            name: "u".into(),
+            quality: 4,
+            defense: 4,
+            tough: 1,
+            wounds_max: vec![],
+            model_count: 1,
+            weapons: vec![],
+            special_rules: vec![],
+            caster_value: 0,
+            base_radius: 0.0,
+            game_system: String::new(),
+            faction_folder: String::new(),
+            item_grants: vec![],
+            attached_hero_rules: vec![],
+            move_bands: MoveBands::default(),
+        };
+        let xs = [0.0, 2.0, 12.0, 9.0];
+        State {
+            roster: Rc::new(Roster {
+                keys: vec!["a".into(), "ah".into(), "b".into(), "bh".into()],
+                index: HashMap::new(),
+                profile: vec![0, 0, 0, 0],
+            }),
+            profiles: Rc::new(Profiles { list: vec![profile], index: HashMap::new() }),
+            round: 0,
+            rounds_total: 1,
+            scoring: Rc::from(""),
+            objectives: vec![],
+            markers_meta: vec![],
+            destroy_seq: vec![],
+            vp: None,
+            vp_flavour: None,
+            vp_memo: None,
+            cast_events: vec![],
+            player: vec![0, 0, 1, 1],
+            alive: vec![1; 4],
+            activated: vec![false; 4],
+            shaken: vec![false; 4],
+            fatigued: vec![false; 4],
+            in_cover: vec![false; 4],
+            aircraft: vec![false; 4],
+            dormant: vec![false; 4],
+            casts: vec![0; 4],
+            morale_bonus: vec![0; 4],
+            ambush_arrived_round: vec![-1; 4],
+            earliest_arrival_round: vec![-1; 4],
+            wound_frac: vec![1.0; 4],
+            positions: xs.iter().map(|x| vec![[x * IN2M, 0.0, 0.0]]).collect(),
+            wounds: vec![vec![1]; 4],
+            radii: vec![vec![IN2M]; 4],
+            mods: vec![Mods::default(); 4],
+            mods_base: (0..4).map(|_| Rc::new(Mods::default())).collect(),
+            attached: Rc::new(vec![vec![1], vec![], vec![3], vec![]]),
+            attached_to: Rc::new(vec![None, Some(0), None, Some(2)]),
+            los: vec![None, None, None, None],
+            los_pairs: None,
+            bands: vec![Bands::default(); 4],
+            shroud: vec![None; 4],
+            charge_no_difficult: vec![false; 4],
+            charge_probe_r: vec![0.0; 4],
+        }
+    }
+
+    /// D5-4. `nearest_melee_gap_in` (:8526) measures `_moving_models` on BOTH
+    /// sides, so the joined heroes' bases are the ones that decide this charge:
+    /// 5", not the hosts' 10". Folding only one side would read 8" or 7", which
+    /// is why the assertion is on the exact number and not on "smaller".
+    #[test]
+    fn the_engage_test_measures_from_a_joined_heros_base_on_both_sides() {
+        let st = four_unit_line();
+        let on = Seams { hero_attach: true, ..Seams::default() };
+        assert!((engage_gap_in(&st, 0, 2, on) - 5.0).abs() < 1e-6);
+    }
+
+    /// The seam OFF is the D5-1 reading, hosts alone — the identity that keeps
+    /// every recorded corpus replaying. The RED knob (`engage_fold=false` in the
+    /// header) has to return exactly that number while `hero_attach` stays on,
+    /// or it is not a red for this rung but for the whole seam.
+    #[test]
+    fn the_hosts_alone_answer_with_the_seam_off_and_under_the_red_knob() {
+        let st = four_unit_line();
+        let off = Seams::default();
+        let red = Seams { hero_attach: true, no_engage_fold: true, ..Seams::default() };
+        assert!((engage_gap_in(&st, 0, 2, off) - 10.0).abs() < 1e-6);
+        assert_eq!(engage_gap_in(&st, 0, 2, red), engage_gap_in(&st, 0, 2, off));
+    }
+
+    /// A hero with no models left is `_moving_models`' empty list: it drops out
+    /// of the minimum instead of dragging it to `INFINITY`, the same way an
+    /// empty `b_shapes` does on the table.
+    #[test]
+    fn a_dead_joined_hero_does_not_move_the_engage_gap() {
+        let mut st = four_unit_line();
+        st.positions[3].clear();
+        st.positions[1].clear();
+        let on = Seams { hero_attach: true, ..Seams::default() };
+        assert!((engage_gap_in(&st, 0, 2, on) - 10.0).abs() < 1e-6);
     }
 }

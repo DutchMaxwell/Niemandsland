@@ -137,9 +137,16 @@ def test_d5_1_the_charge_landing_knob_reaches_the_resolver_from_the_header():
     epsilon, where `snap_charge` returns 0 for free (solo_controller.gd:8639) —
     so the fixture as recorded cannot show the gate biting, and saying so is
     part of the measurement. Act 16's charger is a 16" Fast unit; stripped to
-    14" its move spends the whole band and stops in the window the gate is
+    12" its move spends the whole band and stops in the window the gate is
     about, more than a hair from contact and less than the engage inch. That
     band is the ONLY thing changed, and the two arms differ only in the knob.
+
+    THE BAND WAS 14" UNTIL D5-4. The engage test now measures `_moving_models`
+    on both sides (`nearest_melee_gap_in` :8526), and this act's target carries
+    a joined hero standing in front of it — so the gap to close is SHORTER than
+    the two hosts' was, and a 14" charge now lands inside the contact epsilon
+    where the snap is free. 12" puts the same act back in the window the D5-1
+    gate is about; nothing else about the test moved.
     """
     import copy
 
@@ -152,7 +159,7 @@ def test_d5_1_the_charge_landing_knob_reaches_the_resolver_from_the_header():
     assert int(action["kind"]) == mrg.CHARGE_KIND and action.get("charge")
     state = copy.deepcopy(act["state"])
     assert state["units"][action["unit"]]["bands"]["rush"] == 16, "the fixture's Fast charger"
-    state["units"][action["unit"]]["bands"]["rush"] = 14
+    state["units"][action["unit"]]["bands"]["rush"] = 12
 
     rolls = {}
     for landing in (False, True):
@@ -373,3 +380,38 @@ def test_trailing_morale_keeps_a_no_retreat_block_together():
     plain = rolls[:2] + [("attack", 4, 4, [1, 2, 3, 4], "AI (Striker)")]
     assert mrg.trailing_morale(plain) == plain[2:], "one trailing roll, and no further"
     assert mrg.trailing_morale(rolls[:2]) == [], "a save batch ends the block"
+
+
+def test_the_engage_fold_knob_is_load_bearing_on_the_bundled_game() -> None:
+    """NML-1073 M5 D5-4 — the attached-hero fold of the ENGAGE test, and its RED.
+
+    `main._run_ai_melee` (:7970) asks `nearest_melee_gap_in`, which measures
+    `_moving_models` (:5375) on BOTH sides — host models PLUS attached heroes'.
+    D5-1 measured the two HOSTS, so a charge that only reached the target's
+    joined hero fell short in the port while the table fought it.
+
+    Act 16 of the bundled game is one: with the fold on the port resolves the
+    whole melee (5 rolls), with the header's RED knob `engage_fold=false` it
+    draws NOTHING and the activation joins `port_silent`. Two arms, one act,
+    nothing changed but that knob — so a wire that fell off between the header
+    and `Seams::no_engage_fold` cannot pass here.
+    """
+    import nml_core
+
+    head, lines, dice, seed = srg.read_game(GAME)
+    act = next(a for a in lines if int(a["act"]) == 16)
+    action = act["pick"]["action"]
+
+    rolls = {}
+    for fold in (True, False):
+        core = nml_core.load(str(REPO))
+        core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
+                         "knobs": dict(head.get("knobs", {}), hero_attach=True,
+                                       charge_landing=True, engage_fold=fold,
+                                       movement=True)})
+        assert core.knobs()["engage_fold"] is fold, "the header knob round-trips"
+        _, report = core.resolve_with_tray(
+            core.state_of(act["state"]), action, nml_core.Rng(0), nml_core.Tray(seed))
+        rolls[fold] = len(report["rolls"])
+    assert rolls[True] == 5, "the fold reaches the target's joined hero and the melee runs"
+    assert rolls[False] == 0, "RED: on the hosts alone the charge falls short and draws nothing"

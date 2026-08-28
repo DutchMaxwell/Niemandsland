@@ -91,6 +91,13 @@ pub struct Knobs {
     /// the numbers come back (`--red-no-dangerous`).
     #[serde(default = "yes")]
     pub dangerous: bool,
+    /// NML-1073 M5 D5-4 — the RED switch for the attached-hero fold of the
+    /// engage test. NOT a feature knob: the fold rides `hero_attach`, which
+    /// already exists, and defaults ON exactly the way `charge_gate` does. It
+    /// is here so a gate can take the fold away and prove the numbers come back
+    /// (`--red-no-hero-fold`).
+    #[serde(default = "yes")]
+    pub engage_fold: bool,
 }
 
 /// The `sighting` knob's two settings — the header writes them as strings, the
@@ -133,6 +140,7 @@ impl Default for Knobs {
             sighting: Sighting::Unit,
             movement: false,
             dangerous: true,
+            engage_fold: true,
         }
     }
 }

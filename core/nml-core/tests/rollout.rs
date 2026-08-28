@@ -110,7 +110,7 @@ fn sweep_board(
     let statics = build_act_statics(c, REPO);
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, no_dangerous: false };
+        movement: c.knobs.movement, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold };
     let mut policy = Policy::new(&statics, terrain, seams);
     bend_policy(&mut policy);
     let mut knobs = c.knobs;
@@ -467,7 +467,7 @@ fn the_rollout_policy_tunables_are_measured_not_assumed() {
     let statics = build_act_statics(&c, REPO);
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, no_dangerous: false };
+        movement: c.knobs.movement, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold };
     let policy = Policy::new(&statics, &c.terrain, seams);
     let mut sc = Scratch::default();
     let mut kinds = [0usize; 4];

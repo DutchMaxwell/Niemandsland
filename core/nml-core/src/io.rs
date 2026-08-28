@@ -289,6 +289,12 @@ pub struct Seams {
     /// `dice="table"` path, which is why an EV planner seat can leave it alone.
     #[serde(default)]
     pub no_dangerous: bool,
+    /// NML-1073 M5 D5-4 — the RED switch for the attached-hero fold of the
+    /// engage test, inverted on purpose: the fold is not a research seam of its
+    /// own but the second half of `hero_attach`, so `false` (the `Default`, and
+    /// every corpus's) FOLDS. It can only ever matter where `hero_attach` is on.
+    #[serde(default)]
+    pub no_engage_fold: bool,
 }
 
 impl Node {
