@@ -361,3 +361,35 @@ func test_harness_books_records_without_an_owner_hint_on_the_acting_slot() -> vo
 	assert_int(ArenaMatch.honest_side({"kind": "deploy", "data": {"section": 1}}, 2)).is_equal(2)
 	assert_int(ArenaMatch.honest_side({"kind": "seize", "data": {"owner": 1}}, 2)).is_equal(1)
 	assert_int(ArenaMatch.honest_side({"kind": "seize", "data": {}}, 2)).is_equal(0)
+
+
+## NML-1126: the arena's REFUSAL seam. A game whose army import produced no rule descriptions
+## played on with the description-driven move modifiers silently off and was banked into the
+## corpus anyway (NML-1114). `NML_REQUIRE_RULE_TEXT=1` makes arena_match.gd quit BEFORE the
+## result JSON is written, so a corpus runner's "no arena_*.json" branch retries or flags the
+## game instead. The env unset must stay today's behaviour exactly — a text-less game still
+## records, because that is what every existing runner expects.
+func test_rule_text_refusal_only_bites_under_the_env() -> void:
+	# Reached through load() and call(), NOT the suite's preloaded `ArenaMatch` const: a
+	# const-typed call is resolved at PARSE time, so a tree without the seam would fail to
+	# load this whole suite instead of reporting one honest failure. Dynamic dispatch keeps
+	# the "seam missing" case a normal red — held by the very first assert.
+	var arena: Object = load("res://tools/arena_match.gd")
+	var with_text := {"Tough": "Takes extra hits to kill."}
+	assert_bool(arena.has_method("rule_text_refused")).is_true()
+	if not arena.has_method("rule_text_refused"):
+		return
+
+	OS.set_environment("NML_REQUIRE_RULE_TEXT", "")
+	assert_bool(bool(arena.call("rule_text_refused", {}))).is_false()          # default: unchanged
+	assert_bool(bool(arena.call("rule_text_refused", with_text))).is_false()
+
+	OS.set_environment("NML_REQUIRE_RULE_TEXT", "1")
+	assert_bool(bool(arena.call("rule_text_refused", {}))).is_true()           # no text -> refuse
+	assert_bool(bool(arena.call("rule_text_refused", with_text))).is_false()   # text -> play on
+
+	# Only the exact "1" arms it — a stray value must never silently disarm a fleet run's gate
+	# by looking set, nor arm one that meant to stay off.
+	OS.set_environment("NML_REQUIRE_RULE_TEXT", "0")
+	assert_bool(bool(arena.call("rule_text_refused", {}))).is_false()
+	OS.set_environment("NML_REQUIRE_RULE_TEXT", "")

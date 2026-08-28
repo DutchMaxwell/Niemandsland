@@ -27,6 +27,11 @@ extends SceneTree
 ##     the FULL battle log (battlelog.txt — collected via entry_added, so the panel's 200-entry ring
 ##     buffer cap does not truncate it) and EVERY decision record verbatim (decisions.json, annotated
 ##     with side + round). Ladder runs without capture= are byte-identical to before.
+##   NML_REQUIRE_RULE_TEXT=1 (NML-1126) — REFUSE to play a game whose army import produced no
+##     special-rule descriptions (the army-forge rule-text fetch failed). Prints
+##     "ARENA_FAIL rule text missing for <army>" and quits BEFORE any result JSON is written,
+##     so a corpus runner sees "no arena_*.json" and retries/flags instead of banking a game
+##     whose description-driven move modifiers were silently off. Unset = unchanged behaviour.
 ##   Golden-corpus reproducibility (NML-1073 M0-0b): a capture= run is byte-identical across machines
 ##   ONLY on a WARMED user:// (every *_cache dir below already populated) — a cold box's first run
 ##   fetches assets live and the timing races the dice-tray RNG. Warm every box once before recording;
@@ -852,6 +857,14 @@ func _stringify_keys(d: Dictionary) -> Dictionary:
 	return out
 
 
+## NML-1126: the corpus-provenance seam. `NML_REQUIRE_RULE_TEXT=1` turns a text-less import
+## from a silently banked game into a refused one. Pure and static so a test can drive the
+## decision without booting the arena: env unset is always false (today's behaviour), env set
+## refuses exactly the import that produced NO rule descriptions.
+static func rule_text_refused(descriptions: Dictionary) -> bool:
+	return OS.get_environment("NML_REQUIRE_RULE_TEXT") == "1" and descriptions.is_empty()
+
+
 func _import_and_spawn(main: Node, army_manager: Node, fixture: String, player_id: int) -> bool:
 	var text := FileAccess.get_file_as_string(fixture)
 	if text.is_empty():
@@ -861,6 +874,19 @@ func _import_and_spawn(main: Node, army_manager: Node, fixture: String, player_i
 	var army = await army_manager.api_client._parse_tts_api_response(text)
 	if army == null or army.units.is_empty():
 		printerr("[ARENA] FATAL: player %d import produced no units (network needed for the army-book fetch?)" % player_id)
+		quit(1)
+		return false
+	# NML-1126: rule TEXT (OPRArmy.rule_descriptions) is fetched live from the army-forge API and
+	# a failure used to be a push_warning nobody read — the game then played on with the
+	# description-driven move modifiers silently OFF and BANKED the row (NML-1114: one fleet box
+	# recorded a corpus game with its own movement bands). Under NML_REQUIRE_RULE_TEXT=1 a
+	# text-less import REFUSES: quit here, BEFORE any arena_*.json is written, so the runner's
+	# "no arena_*.json" branch fires and the game is retried/flagged instead of banked. Env unset
+	# (the default) is today's behaviour byte for byte.
+	if rule_text_refused(army.rule_descriptions):
+		print("ARENA_FAIL rule text missing for %s" % army.name)
+		printerr("[ARENA] FATAL: player %d rule text missing — '%s' (%s) imported 0 rule descriptions; NML_REQUIRE_RULE_TEXT=1 refuses to record this game" % [
+			player_id, army.name, fixture])
 		quit(1)
 		return false
 	army.player_id = player_id

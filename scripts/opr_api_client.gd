@@ -22,6 +22,40 @@ var _army_books: Dictionary = {}
 ## Cached common/system rule responses (game-system id -> response data)
 var _common_rules_cache: Dictionary = {}
 
+# =============================================================================
+# NML-1126: rule-TEXT provenance
+# =============================================================================
+## The special-rule DESCRIPTIONS (`OPRArmy.rule_descriptions`) come only from the live
+## army-forge API. The description-driven move modifiers read them
+## (movement_range_controller.gd), so an empty map is not a cosmetic loss: the game plays
+## on with different movement bands and says nothing — the NML-1114 root cause, where one
+## fleet box banked a corpus game with its own movement bands. These two statics are the
+## process-wide answer to "did the rule text arrive": `AiActRecorder._header_line` stamps
+## them into every act-corpus header, so a READER can tell a full-text game from a
+## text-less one without re-running it.
+## `rule_text_ok` is false once ANY fetch on the path failed; `rule_text_source` is "api"
+## once at least one description actually landed, "none" while none has.
+static var rule_text_ok := true
+static var rule_text_source := "none"
+
+
+## Resets the rule-text stamp. Production never needs it — one arena game is one process —
+## but a test (and any harness playing several games in one process) must be able to start
+## from a known reading.
+static func reset_rule_text_stamp() -> void:
+	rule_text_ok = true
+	rule_text_source = "none"
+
+
+## The ONE place a failed rule-text fetch is recorded: LOUD (push_error, naming the army
+## book, its game system and what the API answered) and STAMPED (rule_text_ok goes false
+## for the rest of the process). Every early `return` in `_fetch_army_book` /
+## `_fetch_common_rules` goes through here; nothing else may clear the flag.
+static func _rule_text_failed(detail: String, book_id: String, system: String) -> void:
+	rule_text_ok = false
+	push_error("OPRApiClient: rule text missing — army book '%s' (%s): %s. Description-driven rules (move modifiers) will be OFF for this army." % [
+		book_id, system, detail])
+
 
 ## Army data structure
 class OPRArmy:
@@ -1079,7 +1113,7 @@ func _fetch_army_book(army_id: String, game_system_abbrev: String) -> Dictionary
 
 	var error = _book_http_request.request(url)
 	if error != OK:
-		push_warning("OPRApiClient: Failed to request army book: %d" % error)
+		_rule_text_failed("request could not start (error %d)" % error, army_id, game_system_abbrev)
 		return {}
 
 	# Wait for response
@@ -1088,14 +1122,14 @@ func _fetch_army_book(army_id: String, game_system_abbrev: String) -> Dictionary
 	var body = result[3]
 
 	if response_code != 200:
-		push_warning("OPRApiClient: Army book API returned %d" % response_code)
+		_rule_text_failed("army book API returned %d" % response_code, army_id, game_system_abbrev)
 		return {}
 
 	# Parse the response directly here
 	var json = JSON.new()
 	var parse_result = json.parse(body.get_string_from_utf8())
 	if parse_result != OK:
-		push_warning("OPRApiClient: Failed to parse army book response")
+		_rule_text_failed("army book response did not parse as JSON", army_id, game_system_abbrev)
 		return {}
 
 	var data = json.data
@@ -1103,6 +1137,7 @@ func _fetch_army_book(army_id: String, game_system_abbrev: String) -> Dictionary
 		_army_books[army_id] = data
 		return data
 
+	_rule_text_failed("army book response carried no 'name'", army_id, game_system_abbrev)
 	return {}
 
 
@@ -1134,6 +1169,7 @@ func _extract_rule_descriptions(army: OPRArmy, book_data: Dictionary) -> void:
 				var desc := str(rule.get("description", ""))
 				if not rname.is_empty() and not desc.is_empty():
 					army.rule_descriptions[rname] = desc
+					rule_text_source = "api"   # NML-1126: text really landed, not just a 200
 
 
 ## Parse the faction's spell list from the army book. Each spell carries its casting cost
@@ -1176,17 +1212,20 @@ func _fetch_common_rules(army: OPRArmy) -> void:
 	var url = "%s/rules/common/%d" % [API_BASE_URL, gs_id]
 	var error = _book_http_request.request(url)
 	if error != OK:
-		push_warning("OPRApiClient: Failed to request common rules: %d" % error)
+		_rule_text_failed("common-rules request could not start (error %d)" % error,
+			army.army_id, army.game_system_abbrev)
 		return
 	var result = await _book_http_request.request_completed
 	var response_code = result[1]
 	var body = result[3]
 	if response_code != 200:
-		push_warning("OPRApiClient: Common rules API returned %d" % response_code)
+		_rule_text_failed("common rules API returned %d" % response_code,
+			army.army_id, army.game_system_abbrev)
 		return
 	var json = JSON.new()
 	if json.parse(body.get_string_from_utf8()) != OK or not (json.data is Dictionary):
-		push_warning("OPRApiClient: Failed to parse common rules response")
+		_rule_text_failed("common-rules response did not parse as JSON",
+			army.army_id, army.game_system_abbrev)
 		return
 	_common_rules_cache[gs_id] = json.data
 	_merge_common_descriptions(army, json.data)
@@ -1207,6 +1246,7 @@ func _merge_common_descriptions(army: OPRArmy, data: Dictionary) -> void:
 					continue
 				if not army.rule_descriptions.has(rname):
 					army.rule_descriptions[rname] = desc
+					rule_text_source = "api"   # NML-1126
 
 
 ## Returns the description for a special rule, or "" if unknown. Handles

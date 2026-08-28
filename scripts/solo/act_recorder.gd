@@ -162,6 +162,17 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 		profiles[str(key)] = BattleSim._unit_profile(
 			(state["units"][key] as Dictionary)["unit"])
 	return {"kind": "header", "profiles": profiles, "terrain": _terrain_line(terrain_cb, school_world),
+		# NML-1126: rule-TEXT provenance for THIS game. The special-rule descriptions the
+		# description-driven move modifiers read (movement_range_controller.gd) are fetched
+		# live from the army-forge API at import; a failed fetch used to leave the map empty
+		# and the game played on with different movement bands and said nothing (NML-1114).
+		# `rule_text_ok` false means at least one fetch failed, so the profiles above were
+		# built WITHOUT the text — a reader must treat this game as a different corpus, not
+		# as a noisy sample of the same one. `rule_text_source` is "api" once any description
+		# landed, "none" when none did (also the reading for a trainer game that never
+		# imported an army). Additive: every other key on this line is unchanged.
+		"rule_text_ok": OPRApiClient.rule_text_ok,
+		"rule_text_source": OPRApiClient.rule_text_source,
 		"knobs": {"top_k": AiPlanner.top_k_default(), "horizon": AiPlanner.horizon(),
 			"tail_cap_p1": AiPlanner._tail_cap_for(1), "tail_cap_p2": AiPlanner._tail_cap_for(2),
 			"imagined_round_end": AiPlanner.imagined_round_end_enabled(),
