@@ -261,3 +261,62 @@ static func _nearest_objective_distance(p: Vector2, objectives: Array, section: 
 	for obj in objectives:
 		best = minf(best, p.distance_to(obj))
 	return best
+
+
+# === The deploy TERRAIN RULE — ONE rule for the game and the arena (NML-1088b) ===
+
+const DEPLOY_WALL_CLEARANCE_M := 0.02   # a deploy sample point within 2 cm (~0.8") of a container/ruin wall is blocked (finding 1)
+
+
+## The blocked-cell tests a deployment runs on every sample point:
+## `{"normal": Callable(Vector2) -> bool, "flying": Callable(Vector2) -> bool}`. Extracted verbatim
+## from main._on_solo_deploy_pressed so the arena harness (tools/arena_match.gd) deploys by the
+## SHIPPED rule — it used to run a physics-only probe AND blanket-block FOREST/RUINS, so the same seed
+## placed the AI differently in an arena game than in an interactive one (NML-1088b). Three layers:
+##  * the physics probe against SOLID props (walls, containers, trees, free-placed sandbox ruins —
+##    those are NOT in the map grid): a small sphere hovering above base height; anything tall it
+##    touches that is not a miniature blocks the spot (field test: models deployed inside walls);
+##  * the container/ruin WALL SEGMENTS from the overlay DATA (field-test round 6, finding 1): a
+##    container may be a SPAWNED object carrying wall segments rather than a terrain-GRID cell, where
+##    `get_terrain_at_world_position` returns NONE and the tiny probe can miss it;
+##  * the terrain class. Deploy doctrine (maintainer + five-game study T1): FOREST and RUIN floors are
+##    LEGAL deploy spots — cover placement is good play — so only DANGEROUS and solid CONTAINER block
+##    a walker, while a flyer stays clear of CONTAINER and RUINS.
+static func make_blocked_tests(terrain_overlay: Node3D) -> Dictionary:
+	var space := terrain_overlay.get_world_3d().direct_space_state if terrain_overlay != null else null
+	var probe := PhysicsShapeQueryParameters3D.new()
+	var probe_shape := SphereShape3D.new()
+	probe_shape.radius = 0.02
+	probe.shape = probe_shape
+	probe.collide_with_areas = false
+	var hits_prop := func(p: Vector2) -> bool:
+		if space == null:
+			return false
+		probe.transform = Transform3D(Basis.IDENTITY, Vector3(p.x, 0.07, p.y))
+		for hit in space.intersect_shape(probe, 6):
+			var col: Object = hit.get("collider")
+			if col is Node3D and not (col as Node3D).is_in_group("miniature"):
+				return true
+		return false
+	var wall_segs: Array = terrain_overlay.get_wall_segments_world() \
+		if terrain_overlay != null and terrain_overlay.has_method("get_wall_segments_world") else []
+	var near_wall := func(p: Vector2) -> bool:
+		for wseg in wall_segs:
+			if MovementPlanner.point_seg_distance(p, wseg[0], wseg[1]) < DEPLOY_WALL_CLEARANCE_M:
+				return true
+		return false
+	var blocked_normal := func(p: Vector2) -> bool:
+		if hits_prop.call(p) or near_wall.call(p):
+			return true
+		if terrain_overlay == null:
+			return false
+		var t: int = terrain_overlay.get_terrain_at_world_position(Vector3(p.x, 0.0, p.y))
+		return t == terrain_overlay.TerrainType.DANGEROUS or t == terrain_overlay.TerrainType.CONTAINER
+	var blocked_flying := func(p: Vector2) -> bool:
+		if hits_prop.call(p) or near_wall.call(p):
+			return true
+		if terrain_overlay == null:
+			return false
+		var t: int = terrain_overlay.get_terrain_at_world_position(Vector3(p.x, 0.0, p.y))
+		return t == terrain_overlay.TerrainType.CONTAINER or t == terrain_overlay.TerrainType.RUINS
+	return {"normal": blocked_normal, "flying": blocked_flying}
