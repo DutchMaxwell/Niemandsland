@@ -272,7 +272,7 @@ fn flat_slot(act: &Act, idx: i64) -> usize {
 fn sweep(c: &ActCorpus, bend: PlanBend) -> Report {
     let statics = build_act_statics(c, REPO);
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
-        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing };
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
     let mut r = Report::default();
@@ -573,7 +573,7 @@ fn the_one_ply_valve_routes_to_plan_and_plan_picks_the_ranked_head() {
     let c = corpus();
     let statics = build_act_statics(&c, REPO);
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
-        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing };
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
     let (mut checked, mut bad, mut valve) = (0usize, 0usize, 0usize);
@@ -750,7 +750,7 @@ fn g4b_a_fallen_hero_stops_lending_its_rules_to_its_host() {
 
     // --- the picks, on the same bar G4 uses ---
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
-        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing };
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false };
     let mut sc = Scratch::default();
     let mut clean = 0;
     for (ai, act) in c.acts.iter().enumerate() {

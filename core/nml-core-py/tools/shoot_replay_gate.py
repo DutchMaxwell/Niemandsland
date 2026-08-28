@@ -182,7 +182,7 @@ def defender_state(plain: dict, key: str) -> tuple[int, int]:
 
 
 def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: bool,
-        hero_attach: str = "table") -> int:
+        hero_attach: str = "table", sighting: str = "unit") -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -195,9 +195,14 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
               "both_silent", "table_silent", "port_silent", "shape", "faces",
               "declined", "rolls_equal", "rolls", "hits_equal", "hits", "next_checked",
               "next_equal", "equal_over_2", "equal_dice_max", "split_fire",
-              "full_equal_owner")}
+              "full_equal_owner", "clean_acts", "clean_full_equal", "clean_both_silent")}
     unported: dict[str, int] = {}
     reasons: dict[str, int] = {}
+    # D6a-B5: the SAME classifier over the acts the table did NOT split-fire on.
+    # `first field to part` is first-past-the-post, so an act the port cannot
+    # possibly match (the table aimed a weapon somewhere else) lands in whatever
+    # field parts first and buries the class this rung is about.
+    reasons_clean: dict[str, int] = {}
     firsts: list[str] = []
     t0 = time.perf_counter()
 
@@ -214,7 +219,14 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         # flips the knob is not a control.
         core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
                          "knobs": dict(head.get("knobs", {}),
-                                       hero_attach=hero_attach == "table")})
+                                       hero_attach=hero_attach == "table",
+                                       # NML-1073 M5 D6a-B4. `"unit"` is the
+                                       # default and the BEFORE half of the
+                                       # sighting measurement; `"model"` gives
+                                       # the volley the table's own die count,
+                                       # which lands in the `count` bucket of
+                                       # "first field to part".
+                                       sighting=sighting)})
         for pos, act in enumerate(lines):
             # The INTERLEAVED ordinal `read_game` stamped, never the
             # act line's position among its own kind.
@@ -253,9 +265,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             # (`_solo_pick_overlay_target` :2996-3005).
             tgt_owner = "AI (%s)" % head["profiles"][action["shoot"]]["name"] \
                 if action["shoot"] in head["profiles"] else None
-            if tgt_owner and any(r["roll_kind"] == "defense" and r["owner"] != tgt_owner
-                                 for r in dice[i0:] if int(r["act"]) == k):
-                tally["split_fire"] += 1
+            split = bool(tgt_owner and any(r["roll_kind"] == "defense" and r["owner"] != tgt_owner
+                                           for r in dice[i0:] if int(r["act"]) == k))
+            tally["split_fire"] += split
 
             # `owner` rides along as the FIFTH slot and is deliberately NOT
             # compared: D1-B4b stamps it so a divergence can say WHO rolled
@@ -268,8 +280,11 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             # than the port did", which is the whole `table_longer` bucket.
             want = [(r["roll_kind"], r["count"], r["target"], r["faces"], r["owner"])
                     for r in dice[i0:] if int(r["act"]) == k]
+            if not split:
+                tally["clean_acts"] += 1
             if not got and not want:
                 tally["both_silent"] += 1
+                tally["clean_both_silent"] += not split
                 continue
             if got and not want:
                 tally["table_silent"] += 1
@@ -296,6 +311,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                     field = ("kind" if g[0] != w[0] else
                              "count" if g[1] != w[1] else "target")
                     reasons[field] = reasons.get(field, 0) + 1
+                    if not split:
+                        reasons_clean[field] = reasons_clean.get(field, 0) + 1
                     verdict, why = ("shape",
                                     "roll %d %s: %s(%d dice, %d+, %s) vs table %s(%d dice, %d+, %s)"
                                     % (i + 1, field, g[0], g[1], g[2], "AI (%s)" % g[4],
@@ -349,6 +366,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                                          got[bad][4], want[bad][4]))
                 if len(got) == len(want):
                     tally["full_equal"] += 1
+                    tally["clean_full_equal"] += not split
                     if owners_ok:
                         tally["full_equal_owner"] += 1
                 elif len(want) > len(got):
@@ -373,8 +391,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
              "off": "RED D1-B4 --mode off (dice=expected)",
              "misseed": "RED D1-B4 --red-misseed (tray on dice_seed+1)"}[mode]
     print()
-    print("%s over %d games, %d shooting acts, hero_attach=%s (%.1fs)" % (
-        label, len(games), tally["acts"], hero_attach, time.perf_counter() - t0))
+    print("%s over %d games, %d shooting acts, hero_attach=%s, sighting=%s (%.1fs)" % (
+        label, len(games), tally["acts"], hero_attach, sighting, time.perf_counter() - t0))
     print("  EQUAL : %d/%d acts FULL-equal (same roll count, every roll identical)"
           % (tally["full_equal"], tally["acts"]))
     print("  OWNER : %d/%d acts FULL-equal AND every roll signed by the same unit "
@@ -395,6 +413,11 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         ", ".join("%s=%d" % kv for kv in sorted(reasons.items())) or "none"))
     print("  split-fire: %d/%d acts where the table saved dice under a unit that is NOT "
           "the recorded shoot target" % (tally["split_fire"], tally["acts"]))
+    # The same two numbers over the acts split fire did NOT touch — the only
+    # population where a FULL-equal verdict is reachable at all.
+    print("  no-split : %d/%d of those acts FULL-equal (+%d both silent); first field to part "
+          "there: %s" % (tally["clean_full_equal"], tally["clean_acts"], tally["clean_both_silent"],
+                         ", ".join("%s=%d" % kv for kv in sorted(reasons_clean.items())) or "none"))
     print("  unported branches touched: %s" % (
         ", ".join("%s=%d" % kv for kv in sorted(unported.items())) or "none"))
     for f in firsts:
@@ -459,12 +482,16 @@ def main(argv: list[str]) -> int:
                          "carries and what D1-B4b reads; 'off' strips `attached`/`attached_to` "
                          "from every replayed state, reproducing a hero_attach='off' corpus — "
                          "the BEFORE half of the B4b measurement")
+    ap.add_argument("--sighting", choices=("unit", "model"), default="unit",
+                    help="'unit' is today's die count (every ALIVE model of the unit fires) and "
+                         "the BEFORE half of D6a; 'model' counts the models with range AND line "
+                         "of sight, per weapon, the way the table does")
     ap.add_argument("--limit", type=int, default=0, help="only the first N game dirs")
     ap.add_argument("--verbose", type=int, default=0, help="print every diverging act")
     a = ap.parse_args(argv)
     mode = "misseed" if a.red_misseed else a.mode
     return run(Path(a.ref).expanduser(), a.repo, mode, a.limit, a.verbose, a.report_only,
-               a.hero_attach)
+               a.hero_attach, a.sighting)
 
 
 if __name__ == "__main__":

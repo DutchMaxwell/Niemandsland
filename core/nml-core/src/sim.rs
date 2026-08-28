@@ -13,8 +13,10 @@ use std::rc::Rc;
 
 use crate::combat::{
     at_or_below_half, effective_attacks, melee_ev, morale_target, shoot_ev,
-    should_test_shooting_morale,
+    should_test_shooting_morale, shrouded_reach, SHROUD_FLOOR_IN, SHROUD_RANGE_PENALTY_IN,
 };
+// NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
+use crate::sight;
 use crate::geom::{self, V3};
 use crate::io::{Action, Seams};
 use crate::dice::{Morale, ShootResult, Tray};
@@ -25,7 +27,7 @@ use crate::state::State;
 use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
 use crate::mv::CLEARANCE_EPS_IN;
 use crate::terrain::{gives_cover, Terrain};
-use crate::unit::{Ctx, UnitStatic};
+use crate::unit::{Ctx, UnitStatic, ShootProfile};
 use crate::{CONTROL_EPS, IN2M};
 
 /// `BattleSim.CONTACT_IN` battle_sim.gd:725 — the charge's contact ring. No
@@ -261,6 +263,81 @@ pub fn melee_profiles_of(us: &UnitStatic, alive: i64, sc: &mut Scratch) {
     sc.attacks.clear();
     for p in &us.melee {
         sc.attacks.push(effective_attacks(p.attacks, alive, us.model_count));
+    }
+}
+
+// ------------------------- D6a-B4: the table's own per-weapon die count ---
+
+/// `SoloController.effective_shoot_reach_in` (:5636-5637) — the weapon's reach
+/// against THIS target: the Aircraft range penalty first (:5577-5580), then
+/// Ranged Shrouding (:5587-5593). `main._run_ai_shooting` :3131-3133 casts the
+/// result to `int`, and the cast is part of the answer.
+fn sight_reach_in(range_in: f64, def_aircraft: bool, def: &Ctx) -> f64 {
+    let r = (range_in - if def_aircraft { sight::AIRCRAFT_TARGET_RANGE_PENALTY_IN } else { 0.0 })
+        .max(0.0);
+    let r = if def.ranged_shrouding {
+        shrouded_reach(r, SHROUD_RANGE_PENALTY_IN, SHROUD_FLOOR_IN)
+    } else {
+        r
+    };
+    r.trunc()
+}
+
+/// `SoloController.scaled_attacks_report` solo_controller.gd:477-490 — the ONE
+/// attack-scaling truth of every table volley. A weapon carried by FEWER models
+/// than the unit has fires `per-copy x living bearers`, capped by the sighted
+/// count; every other weapon keeps the `sighted/max` ratio.
+///
+/// THE APPROXIMATION, and it is the largest one on this rung: `alive_bearers_of`
+/// (:7720-7739) counts the weapon in LIVING models' hands off the per-model
+/// loadout, which the capture does not carry at all. This port assumes the
+/// special weapons' bearers are the last to fall — `min(copies, alive)`.
+/// Measured on `~/selfplay_out/qbe_ref`: that reproduces the recorded `attacks`
+/// on 919 of the 1052 shots that take this path (and the flat path, 1065 shots,
+/// needs no bearer count). The remaining 133 need the recorder extension the
+/// D6a draft's §3 describes.
+fn bearer_scaled_attacks(p: &ShootProfile, alive: i64, model_count: i64, sighted: i64) -> i64 {
+    let copies = p.count.max(1);
+    if copies < model_count {
+        // `bearers == 0` (the GDScript's honesty-alarm branch) cannot be reached
+        // here: `alive > 0` on every member this port shoots with, so
+        // `min(copies, alive) >= 1`.
+        let bearers = copies.min(alive);
+        return (p.attacks / copies).max(0) * bearers.min(sighted);
+    }
+    effective_attacks(p.attacks, sighted, model_count)
+}
+
+/// `profiles_of` with the die count the TABLE draws: per weapon, the member's
+/// models that have BOTH range and line of sight to the target
+/// (`main._solo_sighted_count` :4125-4147, GF Advanced Rules v3.5.1 p.8). The
+/// range filter that decides WHICH weapons fire is left exactly as
+/// `profiles_of` has it — only the count changes.
+fn sighted_profiles_of(
+    us: &UnitStatic,
+    state: &State,
+    statics: &[UnitStatic],
+    mi: usize,
+    ti: usize,
+    zones: &[sight::Zone],
+    d: f64,
+    sc: &mut Scratch,
+) {
+    sc.keep.clear();
+    sc.attacks.clear();
+    let blockers = sight::blockers_of(state, mi, ti);
+    let def = &statics[state.roster.profile[ti]].ctx;
+    for (i, p) in us.shoot.iter().enumerate() {
+        if (p.range as f64) < d {
+            continue;
+        }
+        sc.keep.push(i);
+        let reach = sight_reach_in(p.range as f64, state.aircraft[ti], def);
+        // Indirect (GF v3.5.1) "may target enemies that are not in line of
+        // sight as if in line of sight": the range gate stays, the sight test
+        // goes (main.gd:4136-4138).
+        let seen = sight::sighted_count(state, zones, &blockers, mi, ti, reach, p.indirect);
+        sc.attacks.push(bearer_scaled_attacks(p, state.alive[mi], us.model_count, seen));
     }
 }
 
@@ -1223,6 +1300,13 @@ fn resolve_with(
                         // OWN ranged set, Quality and survivor scaling
                         // (:2985-2990); a member with no living model is
                         // skipped exactly as the table skips it (:2959).
+                        // D6a-B4: with `sighting="model"` the die count is the
+                        // table's own, per member and per WEAPON — the board's
+                        // sight volumes are built once for the whole volley.
+                        let zones = match (seams.sighting, cover) {
+                            (true, Cover::Board(t)) => sight::zones_of(t),
+                            _ => Vec::new(),
+                        };
                         let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
                         for &mi in std::iter::once(&si).chain(next.attached[si].iter()) {
                             if next.alive[mi] <= 0 {
@@ -1230,7 +1314,11 @@ fn resolve_with(
                             }
                             let um = &statics[next.roster.profile[mi]];
                             let mut msc = Scratch::default();
-                            profiles_of(um, next.alive[mi], d, &mut msc);
+                            if seams.sighting {
+                                sighted_profiles_of(um, &next, statics, mi, ti, &zones, d, &mut msc);
+                            } else {
+                                profiles_of(um, next.alive[mi], d, &mut msc);
+                            }
                             parts.push((mi, msc, ctx_of(um, &next, mi)));
                         }
                         let members: Vec<crate::dice::Shooter<'_>> = parts
@@ -1410,4 +1498,54 @@ fn refresh_los_pairs(next: &mut State, parent: &State, terrain: &Terrain) {
         }
     }
     next.los_pairs = Some(Rc::new(m));
+}
+
+#[cfg(test)]
+mod d6a_tests {
+    use super::*;
+
+    fn weapon(attacks: i64, count: i64, range: i64) -> ShootProfile {
+        ShootProfile { attacks, count, range, ..Default::default() }
+    }
+
+    /// `SoloController.effective_shoot_reach_in` — the Aircraft penalty first,
+    /// Ranged Shrouding after it, and the `int()` the caller applies.
+    #[test]
+    fn the_sight_reach_follows_the_targets_two_range_rules() {
+        let plain = Ctx::default();
+        let shroud = Ctx { ranged_shrouding: true, ..Ctx::default() };
+        assert_eq!(sight_reach_in(24.0, false, &plain), 24.0);
+        // Aircraft: -12" (SoloController.AIRCRAFT_TARGET_RANGE_PENALTY_IN).
+        assert_eq!(sight_reach_in(24.0, true, &plain), 12.0);
+        // Never below zero — a 9" pistol against an Aircraft simply cannot reach.
+        assert_eq!(sight_reach_in(9.0, true, &plain), 0.0);
+        // Ranged Shrouding: -6" to a floor of 6".
+        assert_eq!(sight_reach_in(24.0, false, &shroud), 18.0);
+        assert_eq!(sight_reach_in(9.0, false, &shroud), 6.0);
+        // Both, in the table's order: 30 - 12 = 18, then -6 = 12.
+        assert_eq!(sight_reach_in(30.0, true, &shroud), 12.0);
+    }
+
+    /// `SoloController.scaled_attacks_report` — the FLAT ratio for a weapon every
+    /// model carries, the BEARER CAP for a weapon only some do.
+    #[test]
+    fn the_die_count_takes_the_ratio_or_the_bearer_cap() {
+        // 5 models, a rifle each (count == model_count): the ratio path, and it
+        // is `round(base * sighted / max)` — 3 of 5 sighted of 10 attacks is 6.
+        let rifle = weapon(10, 5, 24);
+        assert_eq!(bearer_scaled_attacks(&rifle, 5, 5, 5), 10);
+        assert_eq!(bearer_scaled_attacks(&rifle, 5, 5, 3), 6);
+        assert_eq!(bearer_scaled_attacks(&rifle, 5, 5, 0), 0);
+        // 2 special weapons in a unit of 5, 2 attacks each (merged base 4): the
+        // bearer path caps at the copies, so a wide sightline adds nothing...
+        let special = weapon(4, 2, 24);
+        assert_eq!(bearer_scaled_attacks(&special, 5, 5, 5), 4);
+        // ...and a narrow one binds instead of the copies.
+        assert_eq!(bearer_scaled_attacks(&special, 5, 5, 1), 2);
+        // Casualties take bearers with them: 1 model left carries at most 1 copy.
+        assert_eq!(bearer_scaled_attacks(&special, 1, 5, 5), 2);
+        // RED for the whole rung: answering `alive` instead of `sighted` gives
+        // the count this port drew before D6a, and it is a different number.
+        assert_ne!(bearer_scaled_attacks(&rifle, 5, 5, 3), bearer_scaled_attacks(&rifle, 5, 5, 5));
+    }
 }

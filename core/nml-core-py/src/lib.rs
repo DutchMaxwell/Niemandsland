@@ -49,7 +49,7 @@ use pyo3::types::{PyDict, PyList};
 
 use serde_json::{Map, Value};
 
-use nmlcore::acts::{ActHeader, ActStatics, Knobs};
+use nmlcore::acts::{ActHeader, ActStatics, Knobs, Sighting};
 use nmlcore::arbitration::Arbitration;
 use nmlcore::menu::{candidates_tuned, Candidate, Tuning};
 use nmlcore::plan::{Pick, Search};
@@ -534,6 +534,9 @@ impl Core {
             path: self.knobs.seam_path,
             hero_attach: self.knobs.hero_attach,
             charge_landing: self.knobs.charge_landing,
+            // NML-1073 M5 D6a-B4 — `sighting="model"` in the header turns the
+            // per-model, per-weapon die count on for the TRAY resolver only.
+            sighting: self.knobs.sighting == Sighting::Model,
         }
     }
 
@@ -583,6 +586,16 @@ impl Core {
         m.insert("charge_gate".into(), self.knobs.charge_gate.into());
         m.insert("hero_attach".into(), self.knobs.hero_attach.into());
         m.insert("charge_landing".into(), self.knobs.charge_landing.into());
+        m.insert(
+            "sighting".into(),
+            Value::String(
+                match self.knobs.sighting {
+                    Sighting::Unit => "unit",
+                    Sighting::Model => "model",
+                }
+                .into(),
+            ),
+        );
         to_py(py, &Value::Object(m))
     }
 

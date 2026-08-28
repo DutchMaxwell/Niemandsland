@@ -37,7 +37,7 @@
 
 use std::cmp::Ordering;
 
-use crate::acts::{ActStatics, Knobs};
+use crate::acts::{ActStatics, Knobs, Sighting};
 use crate::arbitration::{arbitrate_bent, ArbBend, Arbitration};
 use crate::io::Seams;
 use crate::menu::{candidates_tuned, Candidate};
@@ -177,6 +177,7 @@ fn seams_of(knobs: &Knobs) -> Seams {
         path: knobs.seam_path,
         hero_attach: knobs.hero_attach,
         charge_landing: knobs.charge_landing,
+        sighting: knobs.sighting == Sighting::Model,
     }
 }
 

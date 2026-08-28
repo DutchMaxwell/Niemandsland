@@ -74,6 +74,25 @@ pub struct Knobs {
     /// the default is OFF and nothing replays differently.
     #[serde(default)]
     pub charge_landing: bool,
+    /// NML-1073 M5 D6a-B4 — how a volley counts its shooters. `"unit"` is the
+    /// default and today's behaviour (every ALIVE model of the unit fires);
+    /// `"model"` is the table's own rule, per model and per weapon. Absent from
+    /// every corpus recorded before it, so the default replays byte-identical.
+    #[serde(default)]
+    pub sighting: Sighting,
+}
+
+/// The `sighting` knob's two settings — the header writes them as strings, the
+/// way `dice` writes `"expected"` / `"table"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Sighting {
+    /// `BattleSim._profiles_of` (battle_sim.gd:714-749): the whole unit fires.
+    #[default]
+    Unit,
+    /// `main._run_ai_shooting` :3131-3134: per (member, weapon), the models with
+    /// both range and line of sight (GF Advanced Rules v3.5.1 p.8).
+    Model,
 }
 
 /// `#[serde(default)]` on a `bool` is `false`; `charge_gate` defaults the other
@@ -100,6 +119,7 @@ impl Default for Knobs {
             charge_gate: true,
             hero_attach: false,
             charge_landing: false,
+            sighting: Sighting::Unit,
         }
     }
 }

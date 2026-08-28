@@ -259,6 +259,14 @@ pub struct Seams {
     /// Default OFF: every corpus recorded before this replays unchanged.
     #[serde(default)]
     pub charge_landing: bool,
+    /// NML-1073 M5 D6a-B4 — `Knobs::sighting == Model`: the tray volley counts
+    /// its shooters per model and per weapon instead of taking the unit's
+    /// `alive`. Scoped to the TRAY resolver on purpose: the planner's EV must
+    /// keep scaling by `alive` on both sides, because the table itself is
+    /// asymmetric — it plans in `alive` (`AiEv.shoot_ev` via
+    /// `BattleSim._profiles_of`) and resolves in `sighted`.
+    #[serde(default)]
+    pub sighting: bool,
 }
 
 impl Node {
