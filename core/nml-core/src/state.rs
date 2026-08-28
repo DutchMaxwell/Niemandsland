@@ -13,6 +13,8 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
+use crate::geom;
+
 use serde::{Deserialize, Serialize};
 
 /// One weapon line of the static profile — `BattleSim._unit_profile` :1304-1330.
@@ -55,6 +57,19 @@ pub struct Profile {
     pub caster_value: i64,
     #[serde(default)]
     pub base_radius: f64,
+    /// NML-1073 M5 D5-4b (#447) — the base SHAPE `base_radius` cannot carry.
+    /// That scalar is `BaseShape.bounding_radius()`, the CIRCUMSCRIBING circle,
+    /// while the table measures an oval's exact support extent
+    /// (separation_checker.gd:290). "oval" / "round"; absent on every corpus
+    /// recorded before #447, and "" then reads as round — today's path.
+    #[serde(default)]
+    pub base_shape: String,
+    /// The unit's UNSCALED base axes in millimetres (battle_sim.gd:1649-1655),
+    /// local X and local Z. Zero when the header did not write them.
+    #[serde(default)]
+    pub base_w_mm: f64,
+    #[serde(default)]
+    pub base_d_mm: f64,
     #[serde(default)]
     pub game_system: String,
     #[serde(default)]
@@ -171,6 +186,20 @@ pub struct ProfileDyn {
     pub item_grants: Vec<String>,
     #[serde(default)]
     pub attached_hero_rules: Vec<Vec<String>>,
+}
+
+impl Profile {
+    /// The recorded footprint as `SeparationChecker.shape_for_model` :267-278
+    /// builds it. Anything but "oval" — including the "rect" the readers accept
+    /// and the recorder never writes — is a ROUND base, which is exactly what
+    /// that function does with a `base_is_square` unit.
+    pub fn shape(&self) -> geom::BaseShape {
+        if self.base_shape == "oval" && self.base_w_mm > 0.0 && self.base_d_mm > 0.0 {
+            geom::BaseShape::Oval { w_mm: self.base_w_mm, d_mm: self.base_d_mm, yaw: 0.0 }
+        } else {
+            geom::BaseShape::Round
+        }
+    }
 }
 
 impl ProfileDyn {
@@ -425,6 +454,11 @@ impl State {
     }
     pub fn profile(&self, i: usize) -> &Profile {
         &self.profiles.list[self.roster.profile[i]]
+    }
+    /// The unit's recorded base footprint — `Profile::shape`, per unit, so an
+    /// attached hero (its own roster slot) answers with its own base.
+    pub fn base_shape(&self, i: usize) -> geom::BaseShape {
+        self.profile(i).shape()
     }
     /// `BattleSim.sees` battle_sim.gd:683-686 — no matrix means everyone sees
     /// everyone; a present matrix defaults an unlisted key to `true`.

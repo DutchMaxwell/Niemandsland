@@ -303,14 +303,26 @@ fn engage_gap_in(state: &State, si: usize, ti: usize, seams: Seams) -> f64 {
         }
         v
     };
+    // D5-2b: WHICH of the table's two edge measures this is. With both charge
+    // seams off the resolver is imitating `BattleSim`, whose own
+    // `edge_gap_in` (battle_sim.gd:869) knows nothing but a radius — so the
+    // circumscribing circle IS the parity target and every rollout digest
+    // holds. With `charge_landing` or `movement` on it is imitating the LIVE
+    // table (`main._run_ai_melee` -> `nearest_melee_gap_in` :8536 ->
+    // `SeparationChecker.edge_distance`), which walks the exact support extent
+    // of an oval base. Same seam split `hero_attach` already draws for the fold.
+    let shaped = seams.charge_landing || seams.movement;
+    let shape = |u: usize| if shaped { state.base_shape(u) } else { geom::BaseShape::Round };
     let mut best = f64::INFINITY;
     for a in side(si) {
         for b in side(ti) {
-            let g = geom::edge_gap_in(
+            let g = geom::edge_gap_shaped_in(
                 &state.positions[a],
                 &state.radii[a],
+                shape(a),
                 &state.positions[b],
                 &state.radii[b],
+                shape(b),
                 DEFAULT_BASE_RADIUS_M,
             );
             if g < best {
@@ -1776,6 +1788,9 @@ mod tests {
             special_rules: vec![],
             caster_value: 0,
             base_radius: 0.0,
+            base_shape: String::new(),
+            base_w_mm: 0.0,
+            base_d_mm: 0.0,
             game_system: String::new(),
             faction_folder: String::new(),
             item_grants: vec![],
@@ -1851,6 +1866,41 @@ mod tests {
         let red = Seams { hero_attach: true, no_engage_fold: true, ..Seams::default() };
         assert!((engage_gap_in(&st, 0, 2, off) - 10.0).abs() < 1e-6);
         assert_eq!(engage_gap_in(&st, 0, 2, red), engage_gap_in(&st, 0, 2, off));
+    }
+
+    /// D5-2b — the target is a 92 x 120 mm OVAL whose recorded (circumscribing)
+    /// radius is still 1". Across its short axis the table measures 0.6084" of
+    /// base, not 1", so the engage gap opens from 10" to 10.3916" — but ONLY
+    /// while the resolver is imitating the live table. With both charge seams
+    /// off it is imitating `BattleSim`, whose own `edge_gap_in`
+    /// (battle_sim.gd:869) knows nothing but the radius, and the answer must
+    /// stay the D5-1 number to the digit.
+    #[test]
+    fn an_oval_target_is_measured_by_its_support_extent_under_the_charge_seams() {
+        let mut st = four_unit_line();
+        let mut oval = st.profiles.list[0].clone();
+        oval.base_shape = "oval".into();
+        oval.base_w_mm = 92.0;
+        oval.base_d_mm = 120.0;
+        st.profiles = Rc::new(Profiles {
+            list: vec![st.profiles.list[0].clone(), oval],
+            index: HashMap::new(),
+        });
+        st.roster = Rc::new(Roster {
+            keys: st.roster.keys.clone(),
+            index: HashMap::new(),
+            profile: vec![0, 0, 1, 0],
+        });
+        let short_semi_in = 92.0 / (92.0f64 * 92.0 + 120.0 * 120.0).sqrt();
+        let want = 12.0 - 1.0 - short_semi_in;
+        for seams in [
+            Seams { charge_landing: true, ..Seams::default() },
+            Seams { movement: true, ..Seams::default() },
+        ] {
+            let got = engage_gap_in(&st, 0, 2, seams);
+            assert!((got - want).abs() < 1e-6, "shaped engage gap {got}, want {want}");
+        }
+        assert!((engage_gap_in(&st, 0, 2, Seams::default()) - 10.0).abs() < 1e-6);
     }
 
     /// A hero with no models left is `_moving_models`' empty list: it drops out

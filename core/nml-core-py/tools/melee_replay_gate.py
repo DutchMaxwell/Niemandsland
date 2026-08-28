@@ -87,6 +87,23 @@ NO_RETREAT_TARGET = 4
 IN2M = 0.0254
 
 
+#: The three per-unit header fields rung D5-4b (#447) added — the base SHAPE
+#: `base_radius` cannot carry. A corpus recorded before it has none of them.
+BASE_SHAPE_KEYS = ("base_shape", "base_w_mm", "base_d_mm")
+
+
+def round_only_profiles(profiles: dict) -> dict:
+    """The header's profile table with the D5-4b base-SHAPE fields removed.
+
+    The RED for D5-2b, and the identity proof in the same move: the twin reads
+    the shape ONLY out of these three keys, so stripping them must reproduce
+    the pre-D5-2b run line for line — which is also why every corpus older
+    than #447 (qbe_ref, qbf_ref, qag_ref) replays byte for byte untouched.
+    """
+    return {k: {f: v for f, v in p.items() if f not in BASE_SHAPE_KEYS}
+            for k, p in profiles.items()}
+
+
 def header_walls_m(d: Path, head: dict) -> tuple[list, str]:
     """The board's wall segments in the ACT-HEADER contract — WORLD METRES —
     plus one line saying where they came from.
@@ -149,7 +166,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         charge_landing: bool = False, movement: bool = False,
         walls_check: bool = False, rigid_red: bool = False,
         no_dangerous: bool = False, no_hero_fold: bool = False,
-        engage_fold: str = "auto", cond_ap: str = "auto") -> int:
+        engage_fold: str = "auto", cond_ap: str = "auto",
+        red_round_only: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -192,7 +210,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         eff_cond_ap = resolve_vintage_flag(cond_ap, head, repo, "cond_ap")
         vintage_seen.add((eff_engage_fold, eff_cond_ap))
         nml_core.set_legacy_no_cond_ap(not eff_cond_ap)
-        core.set_header({"profiles": head["profiles"],
+        core.set_header({"profiles": round_only_profiles(head["profiles"])
+                         if red_round_only else head["profiles"],
                          "terrain": dict(head.get("terrain") or {}, walls=walls)
                          if head.get("terrain") else None,
                          "knobs": dict(head.get("knobs", {}), hero_attach=True,
@@ -338,6 +357,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         label += " [RED: --red-no-dangerous, the p.12 test OFF]"
     if no_hero_fold:
         label += " [RED: --red-no-hero-fold, the engage test on the hosts alone]"
+    if red_round_only:
+        label += " [RED: --red-round-only, every base its circumscribing circle]"
     silent_table = tally["both_silent"] + tally["table_silent"]
     print()
     print("%s over %d games, %d charge acts, %s (%.1fs)"
@@ -450,6 +471,12 @@ def main(argv: list[str]) -> int:
                          "(header knob engage_fold=false) while hero_attach stays on, "
                          "everything else unchanged. Every bucket must fall back to the "
                          "pre-D5-4 baseline. Wins over --engage-fold.")
+    ap.add_argument("--red-round-only", action="store_true",
+                    help="RED PROOF for D5-2b: drop the header's base_shape/base_w_mm/"
+                         "base_d_mm so every base is its circumscribing circle again, "
+                         "everything else unchanged. Every bucket must fall back to the "
+                         "pre-D5-2b baseline — and a corpus recorded before #447 carries "
+                         "none of the three, so the flag is a no-op there")
     ap.add_argument("--engage-fold", choices=("auto", "on", "off"), default="auto",
                     help="NML-1130: the header knob engage_fold (PR #446). 'auto' (default) "
                          "reads the corpus's OWN vintage (vintage_knobs) — absent means the "
@@ -464,7 +491,7 @@ def main(argv: list[str]) -> int:
                "misseed" if a.red_misseed else a.mode, a.limit, a.report_only,
                a.charge_landing, a.movement or a.red_move_rigid, a.walls_check,
                a.red_move_rigid, a.red_no_dangerous, a.red_no_hero_fold,
-               a.engage_fold, a.cond_ap)
+               a.engage_fold, a.cond_ap, a.red_round_only)
 
 
 if __name__ == "__main__":

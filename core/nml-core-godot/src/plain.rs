@@ -234,6 +234,13 @@ pub fn profile_of(d: &VarDictionary) -> Profile {
         special_rules: strings(&darr(d, "special_rules")),
         caster_value: dint(d, "caster_value", 0),
         base_radius: dnum(d, "base_radius", 0.0),
+        // D5-4b (#447): the shape the radius cannot carry. Read here so the
+        // GDExtension's profile table is the recorder's, field for field; the
+        // resolver only consults it under `charge_landing`/`movement`, both of
+        // which `seams_now` pins OFF in-game.
+        base_shape: dtext(d, "base_shape"),
+        base_w_mm: dnum(d, "base_w_mm", 0.0),
+        base_d_mm: dnum(d, "base_d_mm", 0.0),
         game_system: dtext(d, "game_system"),
         faction_folder: dtext(d, "faction_folder"),
         item_grants: strings(&darr(d, "item_grants")),

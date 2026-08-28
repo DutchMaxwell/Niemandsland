@@ -40,6 +40,7 @@ compared at all.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -415,3 +416,46 @@ def test_the_engage_fold_knob_is_load_bearing_on_the_bundled_game() -> None:
         rolls[fold] = len(report["rolls"])
     assert rolls[True] == 5, "the fold reaches the target's joined hero and the melee runs"
     assert rolls[False] == 0, "RED: on the hosts alone the charge falls short and draws nothing"
+
+
+def test_the_base_shape_is_load_bearing_on_the_bundled_game() -> None:
+    """NML-1073 M5 D5-2b — the ENGAGE test measures the base SHAPE, and its RED.
+
+    `nearest_melee_gap_in` (:8536) asks `SeparationChecker.edge_distance`,
+    which walks an oval's exact SUPPORT EXTENT (separation_checker.gd:290);
+    the act header carries only `base_radius`, the CIRCUMSCRIBING circle. On a
+    92 x 120 mm base the two differ by 1.17" across the short axis.
+
+    Act 16 of the bundled game shows it: with the target's profile stamped as
+    that oval — the three D5-4b keys (#447) and nothing else — the charge no
+    longer reaches its base and the melee is silent, where the recorded ROUND
+    reading fights it out in 5 rolls. `round_only_profiles`, the gate's
+    `--red-round-only`, puts the 5 back, and so does turning the two charge
+    seams off, because with them off the resolver is imitating
+    `BattleSim.edge_gap_in` (battle_sim.gd:869), which has only a radius.
+    """
+    import nml_core
+
+    head, lines, dice, seed = srg.read_game(GAME)
+    act = next(a for a in lines if int(a["act"]) == 16)
+    action = act["pick"]["action"]
+    oval = json.loads(json.dumps(head["profiles"]))
+    oval[action["charge"]].update({"base_shape": "oval", "base_w_mm": 92, "base_d_mm": 120})
+    assert mrg.round_only_profiles(oval) == head["profiles"], \
+        "the RED strips exactly the three D5-4b keys and touches nothing else"
+
+    def rolls(profiles: dict, seams_on: bool) -> int:
+        core = nml_core.load(str(REPO))
+        core.set_header({"profiles": profiles, "terrain": head.get("terrain"),
+                         "knobs": dict(head.get("knobs", {}), hero_attach=True,
+                                       engage_fold=True, charge_landing=seams_on,
+                                       movement=seams_on)})
+        _, report = core.resolve_with_tray(
+            core.state_of(act["state"]), action, nml_core.Rng(0), nml_core.Tray(seed))
+        return len(report["rolls"])
+
+    assert rolls(head["profiles"], True) == 5, "the recorded round base reaches and fights"
+    assert rolls(oval, True) == 0, "the oval's support extent is 1.17\" shy — no contact"
+    assert rolls(mrg.round_only_profiles(oval), True) == 5, "RED: --red-round-only puts it back"
+    assert rolls(oval, False) == rolls(head["profiles"], False), \
+        "with both charge seams off the shape is not read at all"
