@@ -665,33 +665,11 @@ func _deploy_side(main: Node, solo: Node, table: Node, terrain_overlay: Node, sl
 	var depth: float = 12.0 * IN2M
 	var zmin: float = (-d / 2.0) if slot == 1 else (d / 2.0 - depth)
 	var zone := Rect2(Vector2(-w / 2.0, zmin), Vector2(w, depth))
-	var space = terrain_overlay.get_world_3d().direct_space_state if terrain_overlay != null else null
-	var probe := PhysicsShapeQueryParameters3D.new()
-	var probe_shape := SphereShape3D.new()
-	probe_shape.radius = 0.02
-	probe.shape = probe_shape
-	probe.collide_with_areas = false
-	var hits_prop := func(p: Vector2) -> bool:
-		if space == null:
-			return false
-		probe.transform = Transform3D(Basis.IDENTITY, Vector3(p.x, 0.07, p.y))
-		for hit in space.intersect_shape(probe, 6):
-			var col: Object = hit.get("collider")
-			if col is Node3D and not (col as Node3D).is_in_group("miniature"):
-				return true
-		return false
-	var blocked_normal := func(p: Vector2) -> bool:
-		if hits_prop.call(p):
-			return true
-		var t: int = terrain_overlay.get_terrain_at_world_position(Vector3(p.x, 0.0, p.y))
-		return t == terrain_overlay.TerrainType.FOREST or t == terrain_overlay.TerrainType.DANGEROUS \
-			or t == terrain_overlay.TerrainType.CONTAINER or t == terrain_overlay.TerrainType.RUINS
-	var blocked_flying := func(p: Vector2) -> bool:
-		if hits_prop.call(p):
-			return true
-		var t: int = terrain_overlay.get_terrain_at_world_position(Vector3(p.x, 0.0, p.y))
-		return t == terrain_overlay.TerrainType.CONTAINER or t == terrain_overlay.TerrainType.RUINS
-	var res: Dictionary = solo.deploy_army(zone, objectives_v2, blocked_normal, blocked_flying, seed_value)
+	# The ONE deploy terrain rule (NML-1088b): the same tests main._on_solo_deploy_pressed and the
+	# arena harness use, so self-play deploys identically to an interactive game with the same seed.
+	var blocked_tests: Dictionary = AiDeployment.make_blocked_tests(terrain_overlay as Node3D)
+	var res: Dictionary = solo.deploy_army(zone, objectives_v2, blocked_tests["normal"],
+		blocked_tests["flying"], seed_value)
 	for u in solo.ambush_reserve:
 		main._solo_set_unit_visible(u, false)
 	main.battle_log.log_event(0, "P%d deploys %d units (%d in ambush reserve) [seed %d]" % [
