@@ -109,12 +109,29 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--army2", required=True)
     ap.add_argument("--seeds", required=True, help='e.g. "27-46" or "1,4,9"')
     ap.add_argument("--repo", default=str(Path(__file__).resolve().parents[3]))
+    ap.add_argument(
+        "--hero-attach",
+        choices=("auto",) + sp.HERO_ATTACH_MODES,
+        default="auto",
+        help='hero mode to replay; "auto" (default) reads it off the reference '
+        "corpus itself (`selfplay.hero_attach_of_corpus`)",
+    )
     ap.add_argument("--red", action="store_true", help="run the deployment red proof instead")
     a = ap.parse_args(argv)
 
     ref_dir = Path(a.ref)
     seeds = parse_seeds(a.seeds)
     core = nml_core.load(a.repo)
+    hero_attach = a.hero_attach
+    if hero_attach == "auto":
+        # The FIRST seed that carries an act corpus decides for the run: one
+        # reference directory is one recording session, one mode.
+        found = next(
+            (p for s in seeds if (p := ref_dir / ("acts_%d" % s) / "acts.jsonl").exists()),
+            None,
+        )
+        hero_attach = sp.hero_attach_of_corpus(found) if found else "off"
+        print("hero_attach   %s (read off %s)" % (hero_attach, found or "nothing — default"))
 
     compared = equal = missing = 0
     first: tuple | None = None
@@ -137,6 +154,7 @@ def main(argv: list[str]) -> int:
             a.bank,
             core,
             deploy_rng_seed=(seed + 1) if a.red else None,
+            hero_attach=hero_attach,
         )
         seconds.append(time.perf_counter() - t0)
         log = ref_dir / ("run_%d.log" % seed)

@@ -458,7 +458,17 @@ def charge_illegal_stamp(core, state) -> dict[str, bool]:
 #: and never rewrites it per activation the way `BattleSim.unit_profile_dyn`
 #: does — so a hero that FALLS keeps voting here. That is the gap
 #: `state::ProfileDyn` exists for and it belongs to a later rung, not to D4.
-HERO_ATTACH_MODES = ("off", "table")
+#:
+#: "join" (NML-1127) is the middle mode, and it is what `tools/core_selfplay.gd`
+#: has PLAYED since NML-1105: the roster JOIN without the activation FOLD. The
+#: two are separate things on the table and the oracle records them separately —
+#: the join is the GameUnit graph (`OPRArmyManager.attach_joined_heroes_of`),
+#: which reaches the corpus as every host's `attached` / `attached_to` and
+#: `attached_hero_rules`; the fold is `BattleSim.hero_fold`, which the harness
+#: never sets, so its header stamps `hero_attach: false` while its states carry
+#: attachment on every host. "off" and "table" could not describe that game
+#: between them, which is why every M3 gate read 0/N against the v4 oracle.
+HERO_ATTACH_MODES = ("off", "join", "table")
 
 #: `charge_landing` modes (NML-1073 M5 D5-1). "off" is the default and is every
 #: corpus written before this knob: a charge that lands within `MELEE_ENGAGE_IN`
@@ -482,14 +492,45 @@ MOVEMENT_MODES = ("rigid", "table")
 
 
 def resolve_hero_attach(hero_attach: str) -> bool:
-    """`hero_attach` as the bit `play_game` branches on. An unknown mode RAISES:
-    a trainer that silently ignored the mode would write a corpus whose header
-    claims a rule it did not play."""
+    """The FOLD bit — `Seams::hero_attach` (io.rs) and the header's own
+    `hero_attach` key. An unknown mode RAISES: a trainer that silently ignored
+    the mode would write a corpus whose header claims a rule it did not play."""
     if hero_attach not in HERO_ATTACH_MODES:
         raise ValueError(
             "hero_attach must be one of %s, not %r" % (list(HERO_ATTACH_MODES), hero_attach)
         )
     return hero_attach == "table"
+
+
+def hero_join(hero_attach: str) -> bool:
+    """The JOIN bit — whether `derive_attachment` runs at all. "join" and
+    "table" both join; only "table" also folds (see `HERO_ATTACH_MODES`)."""
+    if hero_attach not in HERO_ATTACH_MODES:
+        raise ValueError(
+            "hero_attach must be one of %s, not %r" % (list(HERO_ATTACH_MODES), hero_attach)
+        )
+    return hero_attach != "off"
+
+
+def hero_attach_of_corpus(acts_path) -> str:
+    """The `hero_attach` MODE a recorded act corpus was played with, read off
+    the corpus itself — a recording is self-describing and a gate should not
+    have to be told twice.
+
+    The header's `hero_attach` key is the FOLD alone (`act_recorder.gd:176`,
+    stamped from `BattleSim.hero_fold_enabled()`). The JOIN shows up one line
+    lower: the first act's state carries a non-empty `attached_to` on every
+    joined hero. A corpus recorded before NML-1105 has neither and reads "off".
+    """
+    with open(acts_path, encoding="utf-8") as fh:
+        header = json.loads(fh.readline())
+        first = fh.readline()
+    if bool(header.get("knobs", {}).get("hero_attach", False)):
+        return "table"
+    if not first.strip():
+        return "off"
+    units = json.loads(first).get("state", {}).get("units", {})
+    return "join" if any(u.get("attached_to") for u in units.values()) else "off"
 
 
 # `AiActRecorder._header_line` act_recorder.gd:144-150 resolves these from the
@@ -535,8 +576,13 @@ TRAINER_STATICS = {
 
 def _pick_for(core, state, player: int) -> dict[str, Any]:
     """`_pick_for` core_selfplay.gd:398-459 — the full planner for whichever side
-    still has a living, un-activated unit; `{}` when the side is dry."""
-    if not state.pool(player):
+    still has a living, un-activated unit; `{}` when the side is dry.
+
+    The pool is the PLANNER's own filter (:431-436, player / activated / alive)
+    unless the header's `hero_attach` FOLD seam is on. NML-1127: reading that
+    seam here rather than folding unconditionally is what lets the harness play
+    the oracle's "joined but not folded" game — see `HERO_ATTACH_MODES`."""
+    if not state.pool(player, bool(core.knobs().get("hero_attach", True))):
         return {}
     pick = core.plan_with_rollout(state, player, TRAINER_STATICS)
     return pick if pick.get("used") else {}
@@ -940,9 +986,11 @@ def play_game(
     `knobs` alongside the search pair — see `CHARGE_GATE_MODES`.
 
     `hero_attach` is the D4 rung: "off" (the default) is byte-identical to every
-    corpus written before it, "table" joins the heroes the list joins — see
-    `HERO_ATTACH_MODES`. It is stamped into the result's `knobs` alongside the
-    search pair.
+    corpus written before it, "join" joins the heroes the list joins and folds
+    nothing (what `tools/core_selfplay.gd` plays since NML-1105), "table" joins
+    AND folds — see `HERO_ATTACH_MODES`. Only the FOLD reaches the header knob;
+    the mode string is stamped into the result's `knobs` alongside the search
+    pair.
 
     `dice` is the FOURTH (NML-1073 M5 D1-B3) and the deepest: "expected" (the
     default) keeps the expected-value combat every corpus so far was written
@@ -985,7 +1033,7 @@ def play_game(
     # profiles nor the capture, so it stays byte-identical.
     attached = attached_to = None
     eff_hero_attach = resolve_hero_attach(hero_attach)
-    if eff_hero_attach:
+    if hero_join(hero_attach):
         selections = dict(load_selections(list_p1, 1))
         selections.update(load_selections(list_p2, 2))
         attached, attached_to = derive_attachment(units, selections)

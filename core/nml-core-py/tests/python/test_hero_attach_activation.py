@@ -25,6 +25,7 @@ hosts really do carry heroes) — no new fixture, no corpus dependency.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import nml_core
@@ -152,3 +153,66 @@ def test_the_host_activation_carries_its_heroes_along():
         assert max(abs(m) for m in red_moved) < 1e-9, "the RED half already moves the hero"
         return
     raise AssertionError("no act in the fixture moves a host that carries a hero")
+
+
+# ------------------------------------------- NML-1127: the JOIN is not the FOLD ---
+
+
+def test_the_harness_pool_folds_a_joined_hero_only_under_the_seam():
+    """RED-GREEN — `State.pool` must ask the fold seam, not assume it.
+
+    `State.pool` used to call `can_activate(.., true)` unconditionally, on the
+    argument that a corpus without the seam carries no attachment either. That
+    was true until NML-1105 and is false since: `tools/core_selfplay.gd` now
+    builds its units through the table's import path, so its states carry
+    `attached_to` on every host while its pool (:431-436) is still the
+    planner's own filter and never folds — a `hero_attach: false` header over
+    a fully joined roster. Folding regardless costs one activation per joined
+    hero, which is what read 0/20 on every M3 gate against that oracle.
+    """
+    head, lines = _acts()
+    core = _core(head)
+    plain = lines[0]["state"]
+    live = {k for k, u in plain["units"].items()
+            if u.get("attached_to") and not u["activated"] and u["alive"] > 0}
+    assert live, "the fixture no longer carries a live joined hero"
+
+    folded = set()
+    loose = set()
+    for player in (1, 2):
+        folded |= set(core.state_of(plain).pool(player, True))
+        loose |= set(core.state_of(plain).pool(player, False))
+    assert not (folded & live), "the seam ON must keep a joined hero out of the pool"
+    assert live <= loose, "the seam OFF must still hand a joined hero its own activation"
+    # The DEFAULT is the fold — every caller written before NML-1127 gets what
+    # it always got, which is what keeps the frozen corpora byte-identical.
+    for player in (1, 2):
+        assert core.state_of(plain).pool(player) == core.state_of(plain).pool(player, True)
+
+
+def test_hero_attach_of_corpus_reads_the_join_and_the_fold_apart(tmp_path):
+    """`selfplay.hero_attach_of_corpus` — the mode a recording actually played.
+
+    The header's `hero_attach` key is the FOLD alone; the JOIN is only visible
+    in the first act's state. All three modes are distinguishable, and a gate
+    that reads them off the corpus cannot be pointed at the wrong one.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
+    import selfplay as sp
+
+    head, lines = _acts()
+    plain = lines[0]["state"]
+    assert any(u.get("attached_to") for u in plain["units"].values())
+
+    def write(fold: bool, state: dict) -> Path:
+        path = tmp_path / ("c_%s_%d.jsonl" % (fold, len(list(tmp_path.iterdir()))))
+        path.write_text(
+            json.dumps({"kind": "header", "knobs": dict(head.get("knobs", {}),
+                                                        hero_attach=fold)})
+            + "\n" + json.dumps({"kind": "act", "state": state}) + "\n"
+        )
+        return path
+
+    assert sp.hero_attach_of_corpus(write(False, plain)) == "join"
+    assert sp.hero_attach_of_corpus(write(True, plain)) == "table"
+    assert sp.hero_attach_of_corpus(write(False, _detached(plain))) == "off"

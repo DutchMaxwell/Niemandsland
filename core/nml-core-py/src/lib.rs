@@ -343,17 +343,26 @@ impl PyState {
 
     /// Own living, un-activated units of `player`, in capture order — what the
     /// harness loops over to know whether a side still has an activation.
-    fn pool(&self, player: i64) -> Vec<String> {
+    ///
+    /// `hero_attach` is `Seams::hero_attach` (io.rs), the FOLD: under it a
+    /// JOINED HERO is never an activation of its own
+    /// (`SoloController.can_activate` solo_controller.gd:411) — it fires and
+    /// moves inside its host's (D1-B4b). It defaults to `true`, which is what
+    /// every caller written before NML-1127 got.
+    ///
+    /// NML-1127: it may not stay UNCONDITIONAL. The old comment here argued
+    /// that folding always was harmless because "under `hero_attach="off"` no
+    /// unit has a host anyway" — true until NML-1105, and false since:
+    /// `tools/core_selfplay.gd` now builds its units through the table's
+    /// import path, so its states carry an attachment graph while its pool
+    /// (:431-436) still uses the planner's own filter and never folds. A
+    /// harness that folds regardless is one activation short per joined hero
+    /// and plays a different game from the oracle it is gated against.
+    #[pyo3(signature = (player, hero_attach = true))]
+    fn pool(&self, player: i64, hero_attach: bool) -> Vec<String> {
         let st = &self.inner;
         (0..st.units())
-            // D1-B4b: a JOINED HERO is never an activation of its own
-            // (`SoloController.can_activate` solo_controller.gd:411) — it fires
-            // and moves inside its host's. Unconditional here, unlike the
-            // planner's own filter, because this is the HARNESS's "is the side
-            // dry?" question and not a parity surface; under
-            // `hero_attach="off"` no unit has a host and it is the old filter
-            // verbatim anyway.
-            .filter(|&i| st.can_activate(i, player, true))
+            .filter(|&i| st.can_activate(i, player, hero_attach))
             .map(|i| st.key(i).to_string())
             .collect()
     }
