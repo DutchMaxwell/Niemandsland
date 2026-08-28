@@ -1109,6 +1109,56 @@ impl Core {
         )
     }
 
+    /// NML-1132 — the weapon set the EXPECTED-VALUE half of `resolve` really fires
+    /// with: `sim::member_profiles_of` for one unit at one state, ranged or melee,
+    /// under THIS header's seams. `hero_ev_gate.py`'s instrument — it asks the twin
+    /// what its imagination believes the unit carries instead of restating the rule
+    /// in Python, so the gate measures the code and not a paraphrase of it.
+    ///
+    /// `d` is the reach the range filter uses (ranged only; melee has no gate) —
+    /// pass `fold_dist_in`'s answer by handing `target` instead, which measures it
+    /// the way `resolve` does. Comes back as `{"names": [...], "attacks": [...],
+    /// "d_in": float, "folded": bool}`: `names`/`attacks` are the profiles that
+    /// PASSED the filter, in the order the EV reads them.
+    #[pyo3(signature = (state, unit, melee = false, target = None, d_in = 0.0))]
+    fn imagined_profiles(
+        &mut self,
+        py: Python<'_>,
+        state: PyRef<'_, PyState>,
+        unit: &str,
+        melee: bool,
+        target: Option<&str>,
+        d_in: f64,
+    ) -> PyResult<Py<PyAny>> {
+        let st = &state.inner;
+        let idx = |k: &str| {
+            st.roster.index.get(k).copied().ok_or_else(|| Unsupported::new_err(format!("no unit {k}")))
+        };
+        let si = idx(unit)?;
+        let seams = self.seams();
+        let d = match target {
+            Some(t) => nmlcore::sim::fold_dist_in(st, si, idx(t)?, seams),
+            None => d_in,
+        };
+        let statics = self.statics_for(st)?;
+        let mut sc = nmlcore::sim::Scratch::default();
+        nmlcore::member_profiles_of(&statics, st, si, melee, d, seams, &mut sc);
+        let us = &statics[st.roster.profile[si]];
+        let own = if melee { &us.melee } else { &us.shoot };
+        let all = nmlcore::folded_slice(own, &sc);
+        // MELEE has no `keep` (every profile strikes); SHOOTING indexes through it.
+        let keep: Vec<usize> = if melee { (0..all.len()).collect() } else { sc.keep.clone() };
+        to_py(
+            py,
+            &serde_json::json!({
+                "names": keep.iter().map(|&i| all[i].name.clone()).collect::<Vec<_>>(),
+                "attacks": sc.attacks,
+                "d_in": d,
+                "folded": !sc.fold.is_empty(),
+            }),
+        )
+    }
+
     /// `BattleSim.board_rows` battle_sim.gd:176 — the v5 encoder input: one row
     /// per LIVING unit in capture order, then one per objective (type 3), then
     /// the single game-state row (type 4). Ints come back as Python ints and
