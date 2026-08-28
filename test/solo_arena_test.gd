@@ -393,3 +393,25 @@ func test_rule_text_refusal_only_bites_under_the_env() -> void:
 	OS.set_environment("NML_REQUIRE_RULE_TEXT", "0")
 	assert_bool(bool(arena.call("rule_text_refused", {}))).is_false()
 	OS.set_environment("NML_REQUIRE_RULE_TEXT", "")
+
+
+## NML-1115: the SECOND refusal. Text that arrived is not enough — a corpus game's text must
+## come from the pinned snapshot. The army-forge books drift weekly, so a game that fetched
+## live pins nothing and a corpus mixing API vintages is unreproducible by construction (both
+## reference corpora already carry 224 readings today's main cannot reproduce). Env unset is
+## still today's behaviour byte for byte, live text included.
+func test_live_api_rule_text_is_refused_under_the_env() -> void:
+	var arena: Object = load("res://tools/arena_match.gd")
+	var with_text := {"Tough": "Takes extra hits to kill."}
+
+	OS.set_environment("NML_REQUIRE_RULE_TEXT", "")
+	assert_bool(bool(arena.call("rule_text_refused", with_text, "api"))).is_false()
+
+	OS.set_environment("NML_REQUIRE_RULE_TEXT", "1")
+	assert_bool(bool(arena.call("rule_text_refused", with_text, "api"))).is_true()
+	assert_bool(bool(arena.call("rule_text_refused", with_text, "snapshot"))).is_false()
+	# Unstamped ("none" / omitted) keeps the NML-1126 reading: only an EMPTY map refuses.
+	assert_bool(bool(arena.call("rule_text_refused", with_text, "none"))).is_false()
+	assert_bool(bool(arena.call("rule_text_refused", with_text))).is_false()
+	assert_bool(bool(arena.call("rule_text_refused", {}, "snapshot"))).is_true()
+	OS.set_environment("NML_REQUIRE_RULE_TEXT", "")

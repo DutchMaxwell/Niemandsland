@@ -14,10 +14,15 @@ jobs:
         run: |
           if grep -rIlE '/home/[a-z]+/' --include='*.gd' --include='*.py' --include='*.sh' . | grep -v '.github' | grep -v '^\./test/' ; then
             echo "::error::Hardcoded /home/<user> paths found (derive from env/user:// instead)"; exit 1; fi
-      - name: "No bundled AI lists (IP: delivered via CDN at runtime, never in-repo)"
+      - name: "No bundled OPR data (IP: delivered via CDN at runtime, never in-repo)"
         run: |
           if [ -d assets/ai_lists ]; then
             echo "::error::assets/ai_lists/ must not be committed — AI opponent lists are delivered via the asset CDN"; exit 1; fi
+          # NML-1115: the army-book SNAPSHOT is OPR rule PROSE — strictly more OPR content
+          # than the stats above. It reaches the game through user://army_books/ (CDN) or
+          # NML_ARMY_BOOKS_DIR (fleet boxes), never through res://.
+          if [ -d assets/army_books ] || [ -d army_books ]; then
+            echo "::error::army_books/ must not be committed — OPR rule text is delivered at runtime (see THIRD_PARTY.md)"; exit 1; fi
       - name: Docs version matches the engine (truth-pass guard)
         run: |
           V=$(grep -oP 'config/version="\K[^"]+' project.godot)
