@@ -267,6 +267,22 @@ pub struct Seams {
     /// `BattleSim._profiles_of`) and resolves in `sighted`.
     #[serde(default)]
     pub sighting: bool,
+    /// NML-1073 M5 D5-2 — the trainer plays `movement="table"`, so a CHARGE
+    /// MOVES the way the table moves it: per model, routed by the M4 movement
+    /// port (`mv::step::charge_move`) around walls and terrain on the table's
+    /// own arc budget, instead of one rigid translation of the whole unit.
+    ///
+    /// It is the other half of `charge_landing`: D5-1's second engage gate asks
+    /// whether the snap still fits the leftover budget, and with a rigid delta
+    /// that leftover is a LOWER bound on the table's bent route. With this seam
+    /// the arc is measured off the SOLVER's own per-model trails
+    /// (`last_move_remaining_in` solo_controller.gd:8659), so the gate finally
+    /// asks the table's question with the table's number.
+    ///
+    /// Default OFF: every corpus recorded before this replays unchanged, and a
+    /// `BattleSim` rollout keeps its cheap straight-line imagination.
+    #[serde(default)]
+    pub movement: bool,
 }
 
 impl Node {

@@ -134,6 +134,7 @@ impl NmlCore {
             hero_attach: false,
             charge_landing: false,
             sighting: false,
+            movement: false,
         });
     }
 
@@ -648,6 +649,9 @@ impl NmlCore {
                 // NML-1073 M5 D6a-B4, same reasoning: `sighting` rides the
                 // HEADER knobs into the tray resolver and is inert here.
                 sighting: false,
+                // NML-1073 M5 D5-2 — likewise. The in-game `BattleSim` keeps its
+                // rigid imagination; only the trainer's header turns this on.
+                movement: false,
             });
         }
         self.seams.unwrap()

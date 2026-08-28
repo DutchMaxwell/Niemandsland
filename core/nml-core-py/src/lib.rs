@@ -537,6 +537,7 @@ impl Core {
             // NML-1073 M5 D6a-B4 — `sighting="model"` in the header turns the
             // per-model, per-weapon die count on for the TRAY resolver only.
             sighting: self.knobs.sighting == Sighting::Model,
+            movement: self.knobs.movement,
         }
     }
 
@@ -596,7 +597,34 @@ impl Core {
                 .into(),
             ),
         );
+        m.insert("movement".into(), self.knobs.movement.into());
         to_py(py, &Value::Object(m))
+    }
+
+    /// NML-1073 M5 D5-2 — the header's `walls` as the PORT converted them, in
+    /// the movement planner's 0-origin INCH frame (`[[ax, ay], [bx, by]]` per
+    /// segment). The act header writes `get_wall_segments_world()` in WORLD
+    /// METRES while `moves_calls.jsonl` writes board-local INCHES; this is the
+    /// instrument that proves the one conversion between them, because a gate
+    /// can hold it against the recorded inch list segment by segment.
+    fn walls_in(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let v: Vec<Value> = self
+            .terrain
+            .walls_in()
+            .iter()
+            .map(|w| {
+                Value::Array(
+                    w.iter()
+                        .map(|p| {
+                            Value::Array(
+                                p.iter().map(|c| Value::from(*c as f64)).collect::<Vec<_>>(),
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect();
+        to_py(py, &Value::Array(v))
     }
 
     /// The charge-legality STAMP this caller wires — `AiActRecorder.
@@ -637,6 +665,67 @@ impl Core {
                     nmlcore::charge_illegal(st, &self.terrain, a, v, gap, None, None);
                 m.insert(format!("{}|{}", st.key(a), st.key(v)), bad.into());
             }
+        }
+        to_py(py, &Value::Object(m))
+    }
+
+    /// NML-1073 M5 D5-2 — the TABLE's charge MOVE for one (charger, target)
+    /// pair, exactly as `Seams::movement` runs it, without resolving a melee.
+    ///
+    /// This is the sharp instrument for the rung: `end` can be held against the
+    /// per-model endpoints `moves_calls.jsonl` recorded for the same activation,
+    /// and `call` is the `plan_unit_step` input the port BUILT, so a landing
+    /// that misses can be traced to the field of the call that differs rather
+    /// than guessed at. `None` when the port declines (no board, no models).
+    fn charge_move(
+        &self,
+        py: Python<'_>,
+        state: PyRef<'_, PyState>,
+        unit: &str,
+        target: &str,
+    ) -> PyResult<Py<PyAny>> {
+        let st = &state.inner;
+        let (Some(&si), Some(&ci)) =
+            (st.roster.index.get(unit), st.roster.index.get(target))
+        else {
+            return to_py(py, &Value::Null);
+        };
+        let land = nmlcore::mv::step::charge_move(
+            st,
+            &self.terrain,
+            si,
+            ci,
+            st.bands[si].rush,
+            self.knobs.hero_attach,
+            true,
+            nmlcore::mv::FAST_PLANNER_GUARD,
+        );
+        let Some(l) = land else { return to_py(py, &Value::Null) };
+        let mut m = Map::new();
+        m.insert(
+            "movers".into(),
+            Value::Array(
+                l.movers
+                    .iter()
+                    .map(|mv| Value::Array(vec![(mv.unit as i64).into(), (mv.model as i64).into()]))
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "end".into(),
+            Value::Array(
+                l.end
+                    .iter()
+                    .map(|p| Value::Array(p.iter().map(|c| Value::from(*c as f64)).collect()))
+                    .collect(),
+            ),
+        );
+        m.insert("budget_in".into(), Value::from(l.budget_in));
+        m.insert("arc_in".into(), Value::from(l.arc_in));
+        m.insert("remaining_in".into(), Value::from(l.remaining_in()));
+        if let Some(c) = &l.call {
+            let text = nmlcore::mv::entry::canonical_input(c);
+            m.insert("call".into(), serde_json::from_str(&text).unwrap_or(Value::Null));
         }
         to_py(py, &Value::Object(m))
     }

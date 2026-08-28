@@ -740,10 +740,22 @@ pub fn terrain_of(d: &VarDictionary) -> PlainTerrain {
             kind: dint(&s, "type", 0) as i32,
         })
         .collect();
+    // NML-1073 M5 D5-2a — the overlay's wall segments, world metres.
+    let walls: Vec<[[f64; 2]; 2]> = darr(d, "walls")
+        .iter_shared()
+        .map(|v| {
+            let a = any_array(&v);
+            [
+                if a.is_empty() { [0.0; 2] } else { pair(&any_array(&a.at(0))) },
+                if a.len() < 2 { [0.0; 2] } else { pair(&any_array(&a.at(1))) },
+            ]
+        })
+        .collect();
     let cp = ddict(d, "cell_params");
     PlainTerrain {
         cells,
         sandbox,
+        walls,
         cell_params: CellParams {
             table_size_feet: pair(&darr(&cp, "table_size_feet")),
             grid_rotation_degrees: dnum(&cp, "grid_rotation_degrees", 0.0),
@@ -805,6 +817,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
             Some("model") => Sighting::Model,
             _ => dflt.sighting,
         },
+        movement: d.get("movement").map(|v| flag(&v)).unwrap_or(dflt.movement),
     }
 }
 

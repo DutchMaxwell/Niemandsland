@@ -615,6 +615,7 @@ mod tests {
         Terrain::build(&PlainTerrain {
             cells: cells.iter().map(|&(x, z, k)| [x as f64, z as f64, k as f64]).collect(),
             sandbox: Vec::<Obb>::new(),
+            walls: vec![],
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],
                 grid_rotation_degrees: 0.0,

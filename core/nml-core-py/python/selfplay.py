@@ -425,6 +425,14 @@ def resolve_charge_landing(charge_landing: str) -> bool:
     return charge_landing == "table"
 
 
+def resolve_movement(movement: str) -> bool:
+    """`movement` as the bit `play_game` branches on. An unknown mode RAISES for
+    the same reason `resolve_charge_landing` does."""
+    if movement not in MOVEMENT_MODES:
+        raise ValueError("movement must be one of %s, not %r" % (list(MOVEMENT_MODES), movement))
+    return movement == "table"
+
+
 def charge_illegal_stamp(core, state) -> dict[str, bool]:
     """What THIS trainer stamps into `state["charge_illegal"]`, in the shape
     `AiActRecorder._charge_illegal_matrix` records (act_recorder.gd:204-222):
@@ -462,6 +470,15 @@ HERO_ATTACH_MODES = ("off", "table")
 #: charge left over. On the 168-game reference that gate alone accounts for 53
 #: of the 116 recorded charges the table never fought.
 CHARGE_LANDING_MODES = ("off", "table")
+
+#: `movement` modes (NML-1073 M5 D5-2). "rigid" is the default and is every
+#: corpus written before this knob: a CHARGE translates the whole unit rigidly
+#: toward the planner's `dest`, clamped to the band. "table" runs the table's
+#: own charge move instead — `_charge_move` aims at the target's contact
+#: boundary (solo_controller.gd:8582) and the M4 movement port solves the
+#: per-model, arc-budgeted route around walls and terrain, so the arc the D5-1
+#: engage gate subtracts is the arc the table actually walked.
+MOVEMENT_MODES = ("rigid", "table")
 
 
 def resolve_hero_attach(hero_attach: str) -> bool:
@@ -899,6 +916,7 @@ def play_game(
     hero_attach: str = "off",
     dice: str = "expected",
     charge_landing: str = "off",
+    movement: str = "rigid",
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -984,6 +1002,7 @@ def play_game(
     eff_charge_gate = resolve_charge_gate(charge_gate)
     eff_dice = resolve_dice(dice)
     eff_charge_landing = resolve_charge_landing(charge_landing)
+    eff_movement = resolve_movement(movement)
     knobs = dict(
         TRAINER_KNOBS,
         top_k=eff_top_k,
@@ -998,6 +1017,9 @@ def play_game(
         # NML-1073 M5 D5-1: the table's SECOND engage gate. "off" leaves it
         # False, which is the default and what every earlier corpus carries.
         charge_landing=eff_charge_landing,
+        # NML-1073 M5 D5-2: the charge MOVE itself. "rigid" leaves it False,
+        # which is the default and what every earlier corpus carries.
+        movement=eff_movement,
     )
     core.set_header({"profiles": profiles, "terrain": terrain, "knobs": knobs})
     # Board columns 10/11 read the GameUnit's `source_data` (battle_sim.gd
@@ -1092,6 +1114,7 @@ def play_game(
             "hero_attach": hero_attach,
             "dice": eff_dice,
             "charge_landing": charge_landing,
+            "movement": movement,
         },
         # D1-B4 telemetry, empty under `dice="expected"`: how many shooting
         # activations drew from the tray, how many rolls that was, and how many
@@ -1237,6 +1260,15 @@ def main(argv: list[str]) -> int:
         "budget the charge left over; 'off' (default) fights every charge that "
         "landed within 1\" of the target's base edge",
     )
+    ap.add_argument(
+        "--movement",
+        choices=list(MOVEMENT_MODES),
+        default="rigid",
+        help="'table' moves a CHARGE the way the table moves it — per model, "
+        "routed by the M4 movement port on the table's arc budget, aimed at the "
+        "target's contact boundary; 'rigid' (default) translates the whole unit "
+        "by one clamped delta",
+    )
     a = ap.parse_args(argv)
 
     core = nml_core.load(a.repo)
@@ -1260,6 +1292,7 @@ def main(argv: list[str]) -> int:
             hero_attach=a.hero_attach,
             dice=a.dice,
             charge_landing=a.charge_landing,
+            movement=a.movement,
         )
         res["wall_seconds"] = round(time.perf_counter() - t0, 3)
         if a.out:

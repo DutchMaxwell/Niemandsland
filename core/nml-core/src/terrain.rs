@@ -65,6 +65,12 @@ pub struct PlainTerrain {
     /// `[cx, cz, type]` triples — act_recorder.gd:137-139.
     pub cells: Vec<[f64; 3]>,
     pub sandbox: Vec<Obb>,
+    /// NML-1073 M5 D5-2a — `TerrainOverlay.get_wall_segments_world()` flattened
+    /// (act_recorder.gd:210-218): one `[[ax, az], [bx, az]]` per segment in
+    /// WORLD METRES. Absent from every corpus recorded before that rung, and the
+    /// charge-move seam then plans on a board with no ruin walls at all.
+    #[serde(default)]
+    pub walls: Vec<[[f64; 2]; 2]>,
     pub cell_params: CellParams,
 }
 
@@ -94,6 +100,15 @@ pub struct Terrain {
     board_in: [f64; 2],
     /// `cell_params.inches_to_meters`.
     in2m: f64,
+    /// NML-1073 M5 D5-2 — `TerrainOverlay.get_wall_segments_world()` in the
+    /// movement planner's 0-origin INCH frame, the shape `plan_unit_step` wants
+    /// (`walls_in`, solo_controller.gd:6165-6169). The act header writes the
+    /// segments in WORLD METRES (act_recorder.gd, rung D5-2a); the conversion
+    /// happens ONCE here so no caller can repeat it with the wrong offset.
+    /// Empty when the header carried no `walls` key — every corpus recorded
+    /// before D5-2a, and the reason the charge-move seam warns instead of
+    /// pretending the board has no ruins.
+    walls_in: Vec<[[f32; 2]; 2]>,
 }
 
 impl Terrain {
@@ -115,6 +130,29 @@ impl Terrain {
     #[inline]
     pub fn board_in(&self) -> [f64; 2] {
         self.board_in
+    }
+
+    /// The board's wall segments in the planner's INCH frame. Empty = the
+    /// header carried none (NOT "the board has none" — see `walls_in`).
+    #[inline]
+    pub fn walls_in(&self) -> &[[[f32; 2]; 2]] {
+        &self.walls_in
+    }
+
+    /// Converts `TerrainOverlay.get_wall_segments_world()` — WORLD METRES,
+    /// `[[ax, az], [bx, bz]]` per segment — into the inch frame and stores it.
+    /// The conversion is `to_inch` itself, so a wall and a model position can
+    /// never land in two different frames.
+    pub fn set_walls_world_m(&mut self, raw: &[[[f64; 2]; 2]]) {
+        self.walls_in = raw
+            .iter()
+            .map(|w| {
+                [
+                    self.to_inch([w[0][0] as f32, 0.0, w[0][1] as f32]),
+                    self.to_inch([w[1][0] as f32, 0.0, w[1][1] as f32]),
+                ]
+            })
+            .collect();
     }
 
     /// A world point (metres, `x`/`z`) in the movement planner's 0-origin INCH
@@ -199,7 +237,7 @@ impl Terrain {
         if grid_size % 2 != 0 {
             grid_size += 1;
         }
-        Terrain {
+        let mut out = Terrain {
             cells,
             sandbox: p.sandbox.clone(),
             cell_m,
@@ -209,7 +247,10 @@ impl Terrain {
             absent: false,
             board_in: [width_in, height_in],
             in2m: cp.inches_to_meters,
-        }
+            walls_in: Vec::new(),
+        };
+        out.set_walls_world_m(&p.walls);
+        out
     }
 
     /// The lambda `terrain_at_from_plain` returns (node_recheck.gd:251-266).
@@ -398,6 +439,7 @@ mod tests {
         Terrain::build(&PlainTerrain {
             cells: cells.iter().map(|c| [c.0 as f64, c.1 as f64, c.2 as f64]).collect(),
             sandbox: vec![],
+            walls: vec![],
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],
                 grid_rotation_degrees: 0.0,
