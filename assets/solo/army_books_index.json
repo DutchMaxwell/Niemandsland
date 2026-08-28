@@ -1,0 +1,441 @@
+{
+	"aof": {
+		"-MrGWaleoZR7pxIn": {
+			"book_name": "Eternal Wardens",
+			"faction_folder": "eternal_wardens",
+			"version": "3.5.3"
+		},
+		"05ICj2EFntjZAPD9": {
+			"book_name": "Giant Tribes War Disciples",
+			"faction_folder": "giant_tribes_war_disciples",
+			"version": "3.5.2"
+		},
+		"0EXXlzFwAk3q1n5e": {
+			"book_name": "Halflings",
+			"faction_folder": "halflings",
+			"version": "3.5.3"
+		},
+		"8siLk9I6-H8lk78b": {
+			"book_name": "Havoc Dwarves",
+			"faction_folder": "havoc_dwarves",
+			"version": "3.5.3"
+		},
+		"AQSDPFVL1DiNNnSU": {
+			"book_name": "Orcs",
+			"faction_folder": "orcs",
+			"version": "3.5.3"
+		},
+		"AcDXPPXmWrgHChlS": {
+			"book_name": "Sky-City Dwarves",
+			"faction_folder": "sky_city_dwarves",
+			"version": "3.5.3"
+		},
+		"BubhE1kUpgYbqZvW": {
+			"book_name": "Saurians",
+			"faction_folder": "saurians",
+			"version": "3.5.3"
+		},
+		"CNOmkR5Q2C7Dc4Nm": {
+			"book_name": "Change Disciples",
+			"faction_folder": "change_disciples",
+			"version": "3.5.3"
+		},
+		"CuyCCyZTIHo5rc0Z": {
+			"book_name": "Rift Daemons of Lust",
+			"faction_folder": "rift_daemons_of_lust",
+			"version": "3.5.3"
+		},
+		"EiBIYQlLB0-9V8W8": {
+			"book_name": "Giant Tribes Plague Disciples",
+			"faction_folder": "giant_tribes_plague_disciples",
+			"version": "3.5.2"
+		},
+		"FF4UemWHh60T1VRq": {
+			"book_name": "Chivalrous Kingdoms",
+			"faction_folder": "chivalrous_kingdoms",
+			"version": "3.5.3"
+		},
+		"HjmV6_v6dmBmEdy7": {
+			"book_name": "Giant Tribes",
+			"faction_folder": "giant_tribes",
+			"version": "3.5.3"
+		},
+		"IKT625BeGZtF67EA": {
+			"book_name": "Dark Elves",
+			"faction_folder": "dark_elves",
+			"version": "3.5.3"
+		},
+		"Ir5XtqTM8JS3YEAJ": {
+			"book_name": "Volcanic Dwarves",
+			"faction_folder": "volcanic_dwarves",
+			"version": "3.5.3"
+		},
+		"KAmoZbLcBoqrt6ZS": {
+			"book_name": "Giant Tribes Lust Disciples",
+			"faction_folder": "giant_tribes_lust_disciples",
+			"version": "3.5.2"
+		},
+		"L1zCkfmeAongLj1X": {
+			"book_name": "Deep-Sea Elves",
+			"faction_folder": "deep_sea_elves",
+			"version": "3.5.3"
+		},
+		"Lo39Hss3bevFj44V": {
+			"book_name": "Dragon Empire",
+			"faction_folder": "dragon_empire",
+			"version": "3.5.3"
+		},
+		"PGxKcq4R571OtwqD": {
+			"book_name": "Havoc Warriors",
+			"faction_folder": "havoc_warriors",
+			"version": "3.5.3"
+		},
+		"Q59-nh6A1AhRBrLR": {
+			"book_name": "Rift Daemons of War",
+			"faction_folder": "rift_daemons_of_war",
+			"version": "3.5.3"
+		},
+		"RJDq2ZD7wjlAcUVB": {
+			"book_name": "Dwarves",
+			"faction_folder": "dwarves",
+			"version": "3.5.3"
+		},
+		"RgHxqAlAXnUuF3ty": {
+			"book_name": "Kingdom of Angels",
+			"faction_folder": "kingdom_of_angels",
+			"version": "3.5.3"
+		},
+		"TciwNI3AOMXAM-dr": {
+			"book_name": "Beastmen",
+			"faction_folder": "beastmen",
+			"version": "3.5.3"
+		},
+		"TjNtGnCDVts3l3ER": {
+			"book_name": "War Disciples",
+			"faction_folder": "war_disciples",
+			"version": "3.5.3"
+		},
+		"VU1EFPa2uODffW8D": {
+			"book_name": "Duchies of Vinci",
+			"faction_folder": "duchies_of_vinci",
+			"version": "3.5.3"
+		},
+		"a_HXTYv06IFtSs9G": {
+			"book_name": "Ossified Undead",
+			"faction_folder": "ossified_undead",
+			"version": "3.5.3"
+		},
+		"bPAtRGFrpFfyAjLW": {
+			"book_name": "High Elves",
+			"faction_folder": "high_elves",
+			"version": "3.5.3"
+		},
+		"cZEjmUJf-qCSdWSA": {
+			"book_name": "Giant Tribes Change Disciples",
+			"faction_folder": "giant_tribes_change_disciples",
+			"version": "3.5.2"
+		},
+		"gHTrjw-g76vfGCSt": {
+			"book_name": "Shadow Stalkers",
+			"faction_folder": "shadow_stalkers",
+			"version": "3.5.3"
+		},
+		"jZ02AVPLx_S48Mnb": {
+			"book_name": "Human Empire",
+			"faction_folder": "human_empire",
+			"version": "3.5.3"
+		},
+		"lpRj9EBwROpO1um7": {
+			"book_name": "Ogres",
+			"faction_folder": "ogres",
+			"version": "3.5.3"
+		},
+		"mdT4HVzHUmxGevc_": {
+			"book_name": "Ghostly Undead",
+			"faction_folder": "ghostly_undead",
+			"version": "3.5.3"
+		},
+		"q9BQlBp583ZuuOnQ": {
+			"book_name": "Goblins",
+			"faction_folder": "goblins",
+			"version": "3.5.3"
+		},
+		"qABIfXYbYxmA75yL": {
+			"book_name": "Vampiric Undead",
+			"faction_folder": "vampiric_undead",
+			"version": "3.5.3"
+		},
+		"qtuyeoRfXKlNflK0": {
+			"book_name": "Wood Elves",
+			"faction_folder": "wood_elves",
+			"version": "3.5.3"
+		},
+		"t-sIke2snonFSL6Q": {
+			"book_name": "Mummified Undead",
+			"faction_folder": "mummified_undead",
+			"version": "3.5.3"
+		},
+		"tOWt5fgqK2nfpoBN": {
+			"book_name": "Ratmen",
+			"faction_folder": "ratmen",
+			"version": "3.5.3"
+		},
+		"upWNWC9UIXtQP2o_": {
+			"book_name": "Plague Disciples",
+			"faction_folder": "plague_disciples",
+			"version": "3.5.3"
+		},
+		"vJuokTQpJWj3_MrJ": {
+			"book_name": "Rift Daemons of Plague",
+			"faction_folder": "rift_daemons_of_plague",
+			"version": "3.5.3"
+		},
+		"yxVDySKYQYRhdEgA": {
+			"book_name": "Rift Daemons of Change",
+			"faction_folder": "rift_daemons_of_change",
+			"version": "3.5.3"
+		},
+		"zZ3RNHVtFJIZqzzN": {
+			"book_name": "Lust Disciples",
+			"faction_folder": "lust_disciples",
+			"version": "3.5.3"
+		}
+	},
+	"gf": {
+		"04z57ua0bwth37zh": {
+			"book_name": "Wormhole Daemons of Change",
+			"faction_folder": "wormhole_daemons_of_change",
+			"version": "3.5.3"
+		},
+		"1wj1ysgxpuuz9bc7": {
+			"book_name": "Orc Marauders",
+			"faction_folder": "orc_marauders",
+			"version": "3.5.3"
+		},
+		"31xjrm9ivdimkjxp": {
+			"book_name": "War Disciples",
+			"faction_folder": "war_disciples",
+			"version": "3.5.3"
+		},
+		"3j10zage1lddt6sr": {
+			"book_name": "Titan Lords",
+			"faction_folder": "titan_lords",
+			"version": "3.5.3"
+		},
+		"4k5amkxoybdiqotm": {
+			"book_name": "Robot Legions",
+			"faction_folder": "robot_legions",
+			"version": "3.5.3"
+		},
+		"5wbcv465hacdwvkb": {
+			"book_name": "Rebel Guerrillas",
+			"faction_folder": "rebel_guerrillas",
+			"version": "3.5.3"
+		},
+		"78qp9l5alslt6yj8": {
+			"book_name": "Battle Brothers",
+			"faction_folder": "battle_brothers",
+			"version": "3.5.3"
+		},
+		"7el7k3hgy5pb9o9i": {
+			"book_name": "Machine Cults",
+			"faction_folder": "machine_cults",
+			"version": "3.5.3"
+		},
+		"7ex2x15bpkmy1alv": {
+			"book_name": "Blood Prime Brothers",
+			"faction_folder": "blood_prime_brothers",
+			"version": "3.5.3"
+		},
+		"7i7blhft75q9zfdc": {
+			"book_name": "High Elf Fleets",
+			"faction_folder": "high_elf_fleets",
+			"version": "3.5.3"
+		},
+		"7o6om21wxlvvy3hq": {
+			"book_name": "Havoc Brothers",
+			"faction_folder": "havoc_brothers",
+			"version": "3.5.3"
+		},
+		"7oi8zeiqfamiur21": {
+			"book_name": "Blessed Sisters",
+			"faction_folder": "blessed_sisters",
+			"version": "3.5.3"
+		},
+		"9qvy1oufoangt2gl": {
+			"book_name": "Wormhole Daemons of Lust",
+			"faction_folder": "wormhole_daemons_of_lust",
+			"version": "3.5.3"
+		},
+		"BKi_hJaJflN8ZorH": {
+			"book_name": "Jackals",
+			"faction_folder": "jackals",
+			"version": "3.5.3"
+		},
+		"U6hwlur14RpnInZr": {
+			"book_name": "Saurian Starhost",
+			"faction_folder": "saurian_starhost",
+			"version": "3.5.3"
+		},
+		"YYIAF_LCwgJiyXYa": {
+			"book_name": "Titan Lords Lust Disciples",
+			"faction_folder": "titan_lords_lust_disciples",
+			"version": "3.5.2"
+		},
+		"bf20fNmJEyUS-PIX": {
+			"book_name": "Titan Lords Plague Disciples",
+			"faction_folder": "titan_lords_plague_disciples",
+			"version": "3.5.2"
+		},
+		"dnthspt7c0klhmt8": {
+			"book_name": "Infected Colonies",
+			"faction_folder": "infected_colonies",
+			"version": "3.5.3"
+		},
+		"drqw1iswxmuugp3d": {
+			"book_name": "Lust Disciples",
+			"faction_folder": "lust_disciples",
+			"version": "3.5.3"
+		},
+		"e8mflytiz51kc4n6": {
+			"book_name": "Wolf Prime Brothers",
+			"faction_folder": "wolf_prime_brothers",
+			"version": "3.5.3"
+		},
+		"ewbra8nv3nq3k27p": {
+			"book_name": "Custodian Brothers",
+			"faction_folder": "custodian_brothers",
+			"version": "3.5.3"
+		},
+		"fk1mkbp8apvltu0z": {
+			"book_name": "Dwarf Guilds",
+			"faction_folder": "dwarf_guilds",
+			"version": "3.5.3"
+		},
+		"fmuqw5lr5l6dq0mq": {
+			"book_name": "Wormhole Daemons of Plague",
+			"faction_folder": "wormhole_daemons_of_plague",
+			"version": "3.5.3"
+		},
+		"gk7me4sgn9s740kw": {
+			"book_name": "Dark Prime Brothers",
+			"faction_folder": "dark_prime_brothers",
+			"version": "3.5.3"
+		},
+		"hk70l4d471plza00": {
+			"book_name": "Ratmen Clans",
+			"faction_folder": "ratmen_clans",
+			"version": "3.5.3"
+		},
+		"iV_3U33NE1_ZTXBB": {
+			"book_name": "Titan Lords War Disciples",
+			"faction_folder": "titan_lords_war_disciples",
+			"version": "3.5.2"
+		},
+		"jlray7cwf8mvw5sn": {
+			"book_name": "Plague Disciples",
+			"faction_folder": "plague_disciples",
+			"version": "3.5.3"
+		},
+		"jpc0kyil0juwy602": {
+			"book_name": "Human Inquisition",
+			"faction_folder": "human_inquisition",
+			"version": "3.5.3"
+		},
+		"k5T0f2XIfpmPO28h": {
+			"book_name": "Goblin Reclaimers",
+			"faction_folder": "goblin_reclaimers",
+			"version": "3.5.3"
+		},
+		"m0JXdcVTyo-WFrMF": {
+			"book_name": "Titan Lords Change Disciples",
+			"faction_folder": "titan_lords_change_disciples",
+			"version": "3.5.2"
+		},
+		"nyh41t82jugcdq8m": {
+			"book_name": "Elven Jesters",
+			"faction_folder": "elven_jesters",
+			"version": "3.5.3"
+		},
+		"oqnnu0gk8q6hyyny": {
+			"book_name": "Prime Brothers",
+			"faction_folder": "prime_brothers",
+			"version": "3.5.3"
+		},
+		"prsajf5ot936qznk": {
+			"book_name": "Wormhole Daemons of War",
+			"faction_folder": "wormhole_daemons_of_war",
+			"version": "3.5.3"
+		},
+		"q11la9v8h1heu9ja": {
+			"book_name": "Dark Elf Raiders",
+			"faction_folder": "dark_elf_raiders",
+			"version": "3.5.3"
+		},
+		"r6hr29338u4micfw": {
+			"book_name": "Change Disciples",
+			"faction_folder": "change_disciples",
+			"version": "3.5.3"
+		},
+		"rl7ympklz4r0ls38": {
+			"book_name": "Watch Prime Brothers",
+			"faction_folder": "watch_prime_brothers",
+			"version": "3.5.3"
+		},
+		"rvvb3kdn2x2pqkki": {
+			"book_name": "Watch Brothers",
+			"faction_folder": "watch_brothers",
+			"version": "3.5.3"
+		},
+		"vux1Y5vvULmaxZ8P": {
+			"book_name": "Eternal Dynasty",
+			"faction_folder": "eternal_dynasty",
+			"version": "3.5.3"
+		},
+		"w70ha3o85pa7nigq": {
+			"book_name": "Knight Brothers",
+			"faction_folder": "knight_brothers",
+			"version": "3.5.3"
+		},
+		"w7qor7b2kuifcyvk": {
+			"book_name": "Alien Hives",
+			"faction_folder": "alien_hives",
+			"version": "3.5.3"
+		},
+		"wopr4xvwa51xh3mc": {
+			"book_name": "Knight Prime Brothers",
+			"faction_folder": "knight_prime_brothers",
+			"version": "3.5.3"
+		},
+		"xnnqhh1775kvmz2r": {
+			"book_name": "Blood Brothers",
+			"faction_folder": "blood_brothers",
+			"version": "3.5.3"
+		},
+		"xp5zwh73lg1uaym4": {
+			"book_name": "Dark Brothers",
+			"faction_folder": "dark_brothers",
+			"version": "3.5.3"
+		},
+		"yxjboa8oma9bbdck": {
+			"book_name": "Wolf Brothers",
+			"faction_folder": "wolf_brothers",
+			"version": "3.5.3"
+		},
+		"z65fgu0l29i4lnlu": {
+			"book_name": "Human Defense Force",
+			"faction_folder": "human_defense_force",
+			"version": "3.5.3"
+		},
+		"z8205ez2boggzs22": {
+			"book_name": "DAO Union",
+			"faction_folder": "dao_union",
+			"version": "3.5.3"
+		},
+		"zz3kp5ry7ks6mxcx": {
+			"book_name": "Soul-Snatcher Cults",
+			"faction_folder": "soul_snatcher_cults",
+			"version": "3.5.3"
+		}
+	}
+}
