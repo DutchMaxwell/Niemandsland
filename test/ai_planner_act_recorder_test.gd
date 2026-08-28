@@ -486,3 +486,65 @@ func test_los_blocked_rebuilds_from_terrain_and_answers_a_moved_point() -> void:
 	var snap: Callable = ActRecheck._los_blocked_from_recorded(rebuilt, plain_state)
 	assert_bool(snap.call(ca, cb)).is_true()
 	assert_bool(snap.call(moved, cb)).is_true()
+
+
+## NML-1073 M5 D5-2a: the header's terrain block now carries "walls" — the overlay's
+## get_wall_segments_world() output, flattened the same way MoveRecorder._flatten
+## flattens move_recorder.gd's own "walls" key. Two stand-ins, same minimal-overlay
+## pattern as ai_deployment_blocked_tests_test.gd's StubOverlay: one WITH the method
+## (real segments), one WITHOUT it (an overlay predating this feature, or a fixture).
+class _StubOverlayWithWalls extends Node3D:
+	var grid_cells: Dictionary = {}
+	var table_size_feet := Vector2(6, 4)
+	var grid_rotation_degrees := 0.0
+	const GRID_SIZE_INCHES := 3.0
+	const INCHES_TO_METERS := 0.0254
+	var walls_out: Array = []
+	func _sandbox_shapes() -> Array:
+		return []
+	func get_wall_segments_world() -> Array:
+		return walls_out
+
+
+class _StubOverlayNoWallsMethod extends Node3D:
+	var grid_cells: Dictionary = {}
+	var table_size_feet := Vector2(6, 4)
+	var grid_rotation_degrees := 0.0
+	const GRID_SIZE_INCHES := 3.0
+	const INCHES_TO_METERS := 0.0254
+	func _sandbox_shapes() -> Array:
+		return []
+
+
+## Binds a Callable whose get_object() is a real object carrying a `terrain_overlay`
+## property — the exact shape _terrain_line's ov branch reads (main.gd binds the live
+## terrain_type_at lambda the same way; a bare closure over a local var would bind to
+## THIS suite instead, which has no such property).
+class _FakeTerrainHost extends Node:
+	var terrain_overlay: Node3D = null
+	func terrain_type_at(_p: Vector3) -> int:
+		return 0
+
+
+func test_header_terrain_line_carries_the_overlays_wall_segments() -> void:
+	var overlay: _StubOverlayWithWalls = auto_free(_StubOverlayWithWalls.new())
+	overlay.walls_out = [[Vector2(1.0, 2.0), Vector2(3.0, 4.0)],
+		[Vector2(5.0, 6.0), Vector2(7.0, 8.0)]]
+	var host: _FakeTerrainHost = auto_free(_FakeTerrainHost.new())
+	host.terrain_overlay = overlay
+	var line := AiActRecorder._terrain_line(Callable(host, "terrain_type_at")) as Dictionary
+	assert_array(line["walls"] as Array).is_equal([
+		[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])
+	# the pre-existing fields stay exactly as they were — this feature is additive only
+	assert_array(line["cells"] as Array).is_equal([])
+	assert_array(line["sandbox"] as Array).is_equal([])
+	assert_dict(line["cell_params"] as Dictionary).is_equal({"table_size_feet": [6.0, 4.0],
+		"grid_rotation_degrees": 0.0, "grid_size_inches": 3.0, "inches_to_meters": 0.0254})
+
+
+func test_header_terrain_line_walls_is_empty_without_the_overlay_method() -> void:
+	var overlay: _StubOverlayNoWallsMethod = auto_free(_StubOverlayNoWallsMethod.new())
+	var host: _FakeTerrainHost = auto_free(_FakeTerrainHost.new())
+	host.terrain_overlay = overlay
+	var line := AiActRecorder._terrain_line(Callable(host, "terrain_type_at")) as Dictionary
+	assert_array(line["walls"] as Array).is_equal([])

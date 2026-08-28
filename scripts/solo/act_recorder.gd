@@ -207,7 +207,15 @@ static func _terrain_line(terrain_cb: Callable, school_world: Dictionary = {}) -
 		var he: Vector2 = sd["he"]
 		sandbox.append({"c": [c.x, c.y], "he": [he.x, he.y],
 			"yaw": float(sd["yaw"]), "type": int(sd["type"])})
-	return {"cells": cells, "sandbox": sandbox,
+	# NML-1073 M5 D5-2a: world-space wall segments, metres, [[ax,ay],[bx,by]] per
+	# segment — flattened with MoveRecorder._flatten (reused, not mirrored: that
+	# helper is already reachable cross-class, the same way move_recorder.gd
+	# calls THIS class's _terrain_line above). Raw get_wall_segments_world()
+	# output, NOT move_recorder's board-local-inches walls_in — this call site
+	# has no per-move half-extents to apply that offset with, only the overlay.
+	var walls: Array = MoveRecorder._flatten(ov.get_wall_segments_world()) \
+		if ov.has_method("get_wall_segments_world") else []
+	return {"cells": cells, "sandbox": sandbox, "walls": walls,
 		"cell_params": {"table_size_feet": [ov.table_size_feet.x, ov.table_size_feet.y],
 			"grid_rotation_degrees": float(ov.grid_rotation_degrees),
 			"grid_size_inches": ov.GRID_SIZE_INCHES, "inches_to_meters": ov.INCHES_TO_METERS}}
@@ -225,7 +233,7 @@ static func _school_terrain_line(world: Dictionary) -> Variant:
 	for k in (world["cells"] as Dictionary):
 		var c := k as Vector2i
 		cells.append([c.x, c.y, int(world["cells"][k])])
-	return {"cells": cells, "sandbox": [],
+	return {"cells": cells, "sandbox": [], "walls": [],
 		"cell_params": {"table_size_feet": [6.0, 4.0], "grid_rotation_degrees": 0.0,
 			"grid_size_inches": SchoolTerrain.CELL_IN, "inches_to_meters": SchoolTerrain.IN2M}}
 
