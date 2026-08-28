@@ -594,7 +594,85 @@ pub fn charge_move(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::{Bands, Mods, MoveBands, Profile, Profiles, Roster};
     use crate::terrain::{CellParams, Obb, PlainTerrain};
+    use std::collections::HashMap;
+    use std::rc::Rc;
+
+    /// The smallest two-unit `State` `nearest_charge_vector`/`charge_move` can
+    /// read: unit 0 (the charger) at `pos_a`, unit 1 (the target) at `pos_b`,
+    /// both 1"-radius bases, no attachment, no terrain gate reads.
+    fn two_unit_state(pos_a: Vec<V3>, pos_b: Vec<V3>) -> State {
+        let profile = Profile {
+            unit_id: "u".into(),
+            name: "u".into(),
+            quality: 4,
+            defense: 4,
+            tough: 1,
+            wounds_max: vec![],
+            model_count: 1,
+            weapons: vec![],
+            special_rules: vec![],
+            caster_value: 0,
+            base_radius: 0.0,
+            game_system: String::new(),
+            faction_folder: String::new(),
+            item_grants: vec![],
+            attached_hero_rules: vec![],
+            move_bands: MoveBands::default(),
+        };
+        let profiles = Rc::new(Profiles { list: vec![profile], index: HashMap::new() });
+        let roster = Rc::new(Roster {
+            keys: vec!["a".into(), "b".into()],
+            index: HashMap::new(),
+            profile: vec![0, 0],
+        });
+        let na = pos_a.len();
+        let nb = pos_b.len();
+        State {
+            roster,
+            profiles,
+            round: 0,
+            rounds_total: 1,
+            scoring: Rc::from(""),
+            objectives: vec![],
+            markers_meta: vec![],
+            destroy_seq: vec![],
+            vp: None,
+            vp_flavour: None,
+            vp_memo: None,
+            cast_events: vec![],
+            player: vec![0, 1],
+            alive: vec![1, 1],
+            activated: vec![false, false],
+            shaken: vec![false, false],
+            fatigued: vec![false, false],
+            in_cover: vec![false, false],
+            aircraft: vec![false, false],
+            dormant: vec![false, false],
+            casts: vec![0, 0],
+            morale_bonus: vec![0, 0],
+            ambush_arrived_round: vec![-1, -1],
+            earliest_arrival_round: vec![-1, -1],
+            wound_frac: vec![1.0, 1.0],
+            positions: vec![
+                pos_a.iter().map(|p| geom::to_f64(*p)).collect(),
+                pos_b.iter().map(|p| geom::to_f64(*p)).collect(),
+            ],
+            wounds: vec![vec![1; na], vec![1; nb]],
+            radii: vec![vec![IN2M; na], vec![IN2M; nb]],
+            mods: vec![Mods::default(), Mods::default()],
+            mods_base: vec![Rc::new(Mods::default()), Rc::new(Mods::default())],
+            attached: Rc::new(vec![vec![], vec![]]),
+            attached_to: Rc::new(vec![None, None]),
+            los: vec![None, None],
+            los_pairs: None,
+            bands: vec![Bands::default(), Bands::default()],
+            shroud: vec![None, None],
+            charge_no_difficult: vec![false, false],
+            charge_probe_r: vec![0.0, 0.0],
+        }
+    }
 
     /// A 6x4 ft board with no cells and the given wall segments (world metres).
     fn board(walls: Vec<[[f64; 2]; 2]>) -> Terrain {
@@ -655,14 +733,21 @@ mod tests {
 
     /// `nearest_charge_vector` :8550 — the smallest BASE-EDGE gap and the unit
     /// direction from that charger model toward that target model. Two 1"-radius
-    /// bases 10" apart centre to centre are 8" apart edge to edge.
+    /// bases 10" apart centre to centre are 8" apart edge to edge, and the
+    /// direction points from the charger straight at the target.
     #[test]
     fn the_charge_aim_measures_base_edges_and_points_at_the_nearest_pair() {
         let a: V3 = [0.0, 0.0, 0.0];
         let b: V3 = [10.0 * IN2M as f32, 0.0, 0.0];
         let flat: V3 = [a[0] - b[0], 0.0, a[2] - b[2]];
-        let gap = (geom::length(flat) as f64 - IN2M - IN2M) / IN2M;
+        let want_gap = (geom::length(flat) as f64 - IN2M - IN2M) / IN2M;
+        let state = two_unit_state(vec![a], vec![b]);
+        let from = [Mover { unit: 0, model: 0 }];
+        let to = [Mover { unit: 1, model: 0 }];
+        let (gap, dir) = nearest_charge_vector(&state, &from, &to);
+        assert!((gap - want_gap).abs() < 1e-6, "{gap} vs {want_gap}");
         assert!((gap - 8.0).abs() < 1e-4, "{gap}");
+        assert!((dir[0] - 1.0).abs() < 1e-6 && dir[1].abs() < 1e-6, "{dir:?}");
     }
 
     /// `_clamp_delta_to_bounds` :8886 — a move that would carry a model off the
@@ -686,5 +771,17 @@ mod tests {
     #[test]
     fn a_charge_declines_without_a_board() {
         assert_eq!(Terrain::absent().board_in(), [0.0, 0.0]);
+        let state = two_unit_state(vec![[0.0, 0.0, 0.0]], vec![[5.0 * IN2M as f32, 0.0, 0.0]]);
+        let land = charge_move(
+            &state,
+            &Terrain::absent(),
+            0,
+            1,
+            12.0,
+            false,
+            true,
+            crate::mv::FAST_PLANNER_GUARD,
+        );
+        assert!(land.is_none(), "no board, no charge move: {land:?}");
     }
 }

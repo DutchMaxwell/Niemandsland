@@ -187,7 +187,8 @@ def run(ref: Path, repo: str, limit: int, red_shift: bool, red_no_walls: bool,
             else:
                 reasons[why.split(":")[0]] = reasons.get(why.split(":")[0], 0) + 1
             end = [[(p[0] / IN2M) + half[0], (p[2] / IN2M) + half[1]] for p in got["end"]]
-            pl = [[p[0] + (0.06 if red_shift else 0.0), p[1]] for p in (want.get("planned") or [])]
+            pl = [[p[0] + (0.06 if red_shift else 0.0), p[1] + (0.06 if red_shift else 0.0)]
+                  for p in (want.get("planned") or [])]
             if len(pl) != len(end):
                 reasons["planned:len"] = reasons.get("planned:len", 0) + 1
                 if len(firsts) < 3:

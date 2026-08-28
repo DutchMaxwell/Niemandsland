@@ -40,8 +40,11 @@ compared at all.
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 
@@ -50,6 +53,7 @@ import shoot_replay_gate as srg  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[4]
 GAME = Path(__file__).resolve().parent / "fixtures" / "melee_replay"
+QBE_REF = Path(os.path.expanduser("~/selfplay_out/qbe_ref"))
 
 
 def replay(seed_shift: int = 0) -> dict:
@@ -230,6 +234,45 @@ def test_d5_2_the_movement_knob_moves_the_charge_per_model_from_the_header():
         d0 = [p[i] - ps[0][i] for p in ps for i in (0, 2)]
         return d0
     assert spread(ends[False]) != spread(ends[True]), "the table arm steers per model"
+
+
+@pytest.mark.skipif(not QBE_REF.exists(), reason="no qbe_ref reference corpus on this machine")
+def test_d5_2_review_the_landing_gate_only_bites_with_charge_landing_on():
+    """REVIEW #440 fix — `sim.rs:1166` used to set the D5-1 budget gate
+    (`charge_remaining_in`) from the D5-2 landing UNCONDITIONALLY, so
+    `movement="table"` silently forced `charge_landing="table"` on even with
+    that knob off. Pinned on `qbe_ref/alien_hives_1000_vs_change_disciples_
+    1000_s30` act 24, the review's own proof: off/off draws 2 melee rolls, and
+    table/off MUST equal it (before the fix it drew 0); table/table (both
+    knobs on) still refuses.
+    """
+    import nml_core
+
+    game = QBE_REF / "alien_hives_1000_vs_change_disciples_1000_s30"
+    head, lines, dice, seed = srg.read_game(game)
+    burn = srg.burn_prefix(dice)
+    act = next(a for a in lines if int(a["act"]) == 24)
+    action = (act.get("pick") or {}).get("action") or {}
+    assert int(action.get("kind", -1)) == mrg.CHARGE_KIND and action.get("charge")
+
+    rolls = {}
+    for movement, charge_landing in ((False, False), (True, False), (True, True)):
+        core = nml_core.load(str(REPO))
+        core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
+                         "knobs": dict(head.get("knobs", {}), hero_attach=True,
+                                       charge_landing=charge_landing, movement=movement)})
+        i0 = srg.first_at_or_after(dice, 24)
+        tray = nml_core.Tray(seed)
+        if burn[i0]:
+            tray.roll(burn[i0])
+        _, report = core.resolve_with_tray(
+            core.state_of(act["state"]), action, nml_core.Rng(0), tray)
+        rolls[(movement, charge_landing)] = len(report["rolls"])
+
+    assert rolls[(False, False)] == 2, "the off/off baseline: %s" % rolls
+    assert rolls[(True, False)] == rolls[(False, False)], (
+        "movement=table with charge_landing OFF must behave like D5-1-off: %s" % rolls)
+    assert rolls[(True, True)] == 0, "movement=table WITH charge_landing still refuses: %s" % rolls
 
 
 def test_trailing_morale_keeps_a_no_retreat_block_together():
