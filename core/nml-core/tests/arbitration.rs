@@ -35,11 +35,14 @@ use nml_core::rollout::Rollout;
 use nml_core::sim::Scratch;
 use nml_core::{build_act_statics, load_acts, Act, ActCorpus, Pick, Seams};
 
+mod common;
+
 const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_arb.jsonl");
 const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 const EPS: f64 = 1e-9;
 
 fn corpus() -> ActCorpus {
+    common::pin_legacy_no_cond_ap();
     load_acts(FIXTURE).unwrap_or_else(|e| panic!("{e}"))
 }
 

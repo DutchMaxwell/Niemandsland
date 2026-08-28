@@ -33,6 +33,8 @@ use nml_core::rollout::Rollout;
 use nml_core::sim::{Scratch, Unsupported, HOLD, RUSH};
 use nml_core::{act_statics, build_act_statics, load_acts, Act, ActCorpus, Pick, Seams};
 
+mod common;
+
 const FIXTURE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/acts_25.jsonl");
 /// NML-1073 M2-5b — the two-activation corpus whose second act has the host's
 /// attached hero DEAD. See `g4b_a_fallen_hero_stops_lending_its_rules_to_its_host`
@@ -45,6 +47,7 @@ const REPO: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../..");
 const EPS: f64 = 1e-9;
 
 fn corpus() -> ActCorpus {
+    common::pin_legacy_no_cond_ap();
     load_acts(FIXTURE).unwrap_or_else(|e| panic!("{e}"))
 }
 
@@ -697,6 +700,7 @@ fn the_oracle_names_what_the_pick_does_not_cover() {
 /// score can actually feel — and it does: the live search changes its PICK.
 #[test]
 fn g4b_a_fallen_hero_stops_lending_its_rules_to_its_host() {
+    common::pin_legacy_no_cond_ap();
     let c = load_acts(HERO_DEAD).unwrap_or_else(|e| panic!("{e}"));
     assert_eq!(c.acts.len(), 2, "the fixture is one activation before and one after the death");
     let (a1, a2) = (&c.acts[0], &c.acts[1]);
@@ -814,6 +818,7 @@ fn g4b_a_fallen_hero_stops_lending_its_rules_to_its_host() {
 #[test]
 fn the_per_activation_rebuild_is_cheap() {
     use nml_core::{Registries, StaticsCache};
+    common::pin_legacy_no_cond_ap();
     let c = load_acts(HERO_DEAD).unwrap_or_else(|e| panic!("{e}"));
     let mut reg = Registries::new(REPO);
     // warm the registry maps: the first build pays for reading the mechanics
@@ -840,6 +845,7 @@ fn the_per_activation_rebuild_is_cheap() {
 #[test]
 #[should_panic(expected = "use act_statics()")]
 fn a_corpus_with_a_moved_profile_read_refuses_a_single_static_closure() {
+    common::pin_legacy_no_cond_ap();
     let c = load_acts(HERO_DEAD).unwrap_or_else(|e| panic!("{e}"));
     let _ = build_act_statics(&c, REPO);
 }

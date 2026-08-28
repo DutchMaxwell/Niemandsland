@@ -1322,6 +1322,23 @@ fn set_legacy_prefix_rules(on: bool) {
     nmlcore::rules::LEGACY_PREFIX_RULES.store(on, std::sync::atomic::Ordering::Relaxed);
 }
 
+/// LEGACY REPLAY ONLY — skip the NML-1103 conditional-AP stamp for every `Core`
+/// in this process, so the EV prices Shatter / Tear / Disintegrate / Melee
+/// Slayer / Piercing Assault / Piercing Hunter at their PRINTED AP the way the
+/// pre-NML-1103 `BattleSim` did. `False` (the default, and the only setting a
+/// fresh corpus may use) is the shipped rule.
+///
+/// `AiEv.stamp_conditional_ap` was never called in the sim path, so the frozen
+/// corpora under `~/selfplay_out` recorded a search that valued those weapons at
+/// AP(0) while the TABLE resolved them with the bonus. Replaying one of those
+/// games against the fixed EV measures the fix, not the search loop the corpus
+/// pins. Neither reading is game-true forever: re-record after NML-1105 and this
+/// flag retires with the corpora.
+#[pyfunction]
+fn set_legacy_no_cond_ap(on: bool) {
+    nmlcore::unit::LEGACY_NO_COND_AP.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
 // ------------------------------------------------------------------ Board ---
 
 /// The header's `"terrain"` object, read once. Every lookup below is a pure
@@ -1452,6 +1469,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyTray>()?;
     m.add_function(wrap_pyfunction!(load, m)?)?;
     m.add_function(wrap_pyfunction!(set_legacy_prefix_rules, m)?)?;
+    m.add_function(wrap_pyfunction!(set_legacy_no_cond_ap, m)?)?;
     // NML-1073 M3-4: the board as a pure lookup — the header's terrain in, the
     // same answers `SchoolTerrain` gives the live game out.
     m.add_function(wrap_pyfunction!(board, m)?)?;

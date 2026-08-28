@@ -919,7 +919,13 @@ static func _profiles_of(su: Dictionary, melee: bool, d := 0.0) -> Array:
 		elif rs.begins_with("Unstoppable") and not rs.contains(" in ") and not rs.contains(" when "):
 			u_unstop = true
 	var out: Array = []
-	for p in AiEv.stamp_sergeant(profiles, u):
+	# NML-1103: the conditional-AP family (Shatter / Tear / Disintegrate / Crack / Melee Slayer /
+	# Piercing Assault / Piercing Hunter) is AP that exists only against a target property. The
+	# table RESOLVES it (main.gd:6319-6326 via `_solo_conditional_ap_parts`) but the imagination
+	# never stamped it, so the planner valued those weapons at their printed AP and mis-targeted.
+	# `profile_ev` already reads both keys the stamp writes — `cond_ap` (ai_ev.gd:415) and the
+	# on-6 `on6_ap` (:387). Stamped AFTER Sergeant, the order main.gd:2947/4336 uses.
+	for p in AiEv.stamp_conditional_ap(AiEv.stamp_sergeant(profiles, u), u):
 		var q := (p as Dictionary).duplicate()
 		q["attacks"] = SoloController.effective_attacks(int(q.get("attacks", 0)),
 			int(su["alive"]), u.models.size())

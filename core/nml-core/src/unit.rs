@@ -19,9 +19,10 @@
 //! merged once here and filtered per call.
 
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::combat::{
-    armored_defense, BANNER_MORALE_BONUS, REGENERATION_TARGET, SELF_REPAIR_TARGET,
+    armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, SELF_REPAIR_TARGET,
     SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN,
 };
 use crate::rules::{
@@ -86,6 +87,22 @@ pub struct Ctx {
     pub fatigued: bool,
 }
 
+/// One conditional-AP spec — the registry `params` block of a Shatter / Tear /
+/// Disintegrate / Melee Slayer / Piercing Assault / Piercing Hunter / Slayer
+/// entry, as `AiEv.stamp_conditional_ap` ai_ev.gd:283-315 hands it to
+/// `AiCombatMath.conditional_ap_bonus`. Carried verbatim rather than resolved
+/// here: the bonus depends on the DEFENDER, which the static layer never sees.
+#[derive(Debug, Clone, Default)]
+pub struct CondAp {
+    pub ap_bonus: i64,
+    pub charge_only: bool,
+    /// The extra situational gate (`"ranged_over_or_charge"`), "" for none.
+    pub gate: String,
+    pub over_in: f64,
+    pub condition: String,
+    pub threshold: i64,
+}
+
 /// One merged, stamped weapon profile — `AiShooting._profile` ai_shooting.gd:90-152
 /// plus the `stamp_sergeant` facets `profile_ev` actually reads.
 #[derive(Debug, Clone, Default)]
@@ -122,6 +139,9 @@ pub struct ShootProfile {
     /// `AiEv.stamp_sergeant` :267-274 writes the bearer's own attack share here.
     /// ALWAYS 0 in this port — see `UnitStatic::unimplemented`.
     pub sergeant_attacks: i64,
+    /// NML-1103 — `AiEv.stamp_conditional_ap` ai_ev.gd:296-313, read by
+    /// `combat::profile_ev`. Stamped AFTER the merge, like every other facet.
+    pub cond_ap: Vec<CondAp>,
 }
 
 impl ShootProfile {
@@ -654,6 +674,91 @@ fn stamp_unit_strikers(p: &Profile, shoot: &mut [ShootProfile]) {
     }
 }
 
+/// The registry read behind `AiEv.stamp_conditional_ap` ai_ev.gd:291-306: the
+/// conditional-AP spec of ONE rule name (None when the book has no entry, or an
+/// entry without a `condition` key — the presence of that key IS the gate) plus
+/// the entry's `on6_ap`, which the same GDScript loop stamps on the way past.
+fn cond_ap_of(reg: &mut Registries, p: &Profile, base: &str) -> (Option<CondAp>, i64) {
+    let map = reg.rules_for(&p.game_system);
+    let Some(e) = map.lookup(&p.faction_folder, base) else {
+        return (None, 0);
+    };
+    let on6 = e.param_i("on6_ap", 0);
+    if e.params.get("condition").is_none() {
+        return (None, on6);
+    }
+    (
+        Some(CondAp {
+            ap_bonus: e.param_i("ap_bonus", 0),
+            charge_only: e.param_b("charge_only"),
+            gate: e.param_s("gate").to_string(),
+            over_in: e.param_f("over_in", LONG_RANGE_IN),
+            condition: e.param_s("condition").to_string(),
+            threshold: e.param_i("threshold", 0),
+        }),
+        on6,
+    )
+}
+
+/// LEGACY REPLAY ONLY — skip the NML-1103 conditional-AP stamp, so
+/// `profile_ev` prices Shatter / Tear / Disintegrate / Melee Slayer / Piercing
+/// Assault / Piercing Hunter at their PRINTED AP the way the pre-NML-1103
+/// `BattleSim` did. Nothing else in this crate reads it, and `false` (the
+/// default, and the only setting a fresh corpus may use) is the shipped rule.
+///
+/// Why a switch exists at all: `AiEv.stamp_conditional_ap` was never called in
+/// the sim path, so every frozen corpus under `~/selfplay_out` recorded a search
+/// that valued those weapons at AP(0) while the TABLE resolved them with the
+/// bonus (`main.gd:6319`). Replaying one of those games against the fixed EV
+/// measures the fix, not the search loop the corpus was cut to pin.
+///
+/// NEITHER READING IS GAME-TRUE FOREVER. The corpora pin the SEARCH LOOP, not
+/// the rule; a corpus re-recorded after NML-1105 (the `core_selfplay.gd` loader)
+/// will differ from both, and this flag retires with it. Never set it to make a
+/// NEW recording agree with an old one.
+pub static LEGACY_NO_COND_AP: AtomicBool = AtomicBool::new(false);
+
+/// `AiEv.stamp_conditional_ap` ai_ev.gd:283-315 — NML-1103. The pass
+/// `BattleSim._profiles_of` (battle_sim.gd:927) runs right after `stamp_sergeant`,
+/// on the melee and the ranged array alike. WEAPON rules stamp their own spec;
+/// the MODEL-level members of the family (Slayer / Piercing Hunter: "when this
+/// model shoots…") sit on the UNIT and are stamped onto every profile, deduped
+/// against the weapon's own rules BY NAME.
+fn stamp_conditional_ap(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile]) {
+    if LEGACY_NO_COND_AP.load(Ordering::Relaxed) {
+        return; // frozen-corpus replay — see the flag's own note
+    }
+    let mut unit_specs: Vec<(String, CondAp)> = Vec::new();
+    for r in &p.special_rules {
+        let base = base_rule_name(r);
+        if let (Some(c), _) = cond_ap_of(reg, p, &base) {
+            unit_specs.push((base, c));
+        }
+    }
+    for sp in shoot.iter_mut() {
+        let rules = sp.rules.clone();
+        let mut seen: Vec<String> = Vec::new();
+        for r in &rules {
+            let base = base_rule_name(r);
+            let (spec, on6) = cond_ap_of(reg, p, &base);
+            if let Some(c) = spec {
+                sp.cond_ap.push(c);
+                seen.push(base);
+            }
+            // Crack's on-6-to-hit AP upgrade (:305-307) — a plain assignment in
+            // GDScript, so the LAST rule of the weapon wins, not the largest.
+            if on6 > 0 {
+                sp.on6_ap = on6;
+            }
+        }
+        for (n, c) in &unit_specs {
+            if !seen.contains(n) {
+                sp.cond_ap.push(c.clone());
+            }
+        }
+    }
+}
+
 /// `AiShooting.profiles_in_range` ai_shooting.gd:14-26 — the merged RANGED set,
 /// UNSTAMPED (the `AiEv.stamp_sergeant` pass belongs to `BattleSim._profiles_of`,
 /// not to this function). `UnitStatic::build` calls it at 0.0 and stamps after;
@@ -705,6 +810,7 @@ impl UnitStatic {
 
         let mut shoot = profiles_in_range(&p.weapons, 0.0);
         stamp(reg, p, &mut shoot, &mut unimplemented);
+        stamp_conditional_ap(reg, p, &mut shoot);
         stamp_unit_strikers(p, &mut shoot);
 
         let mut melee = melee_profiles(&p.weapons);
@@ -713,6 +819,7 @@ impl UnitStatic {
         // cannot model is reported ONCE, not once per array.
         let mut melee_unimpl: Vec<Unimplemented> = Vec::new();
         stamp(reg, p, &mut melee, &mut melee_unimpl);
+        stamp_conditional_ap(reg, p, &mut melee);
         stamp_unit_strikers(p, &mut melee);
         for u in melee_unimpl {
             if !unimplemented.contains(&u) {

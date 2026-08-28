@@ -212,6 +212,27 @@ def sweep(name):
     return clean, len(acts), counts, first, declined
 
 
+#: NML-1103 replay switch, NOT a game knob — the sibling of the `LEGACY_PREFIX_RULES`
+#: / `list_to_profile.LEGACY_CORE_SELFPLAY` pins in the corpus modules, and of
+#: `tests/common::pin_legacy_no_cond_ap` on the Rust side. The in-repo fixtures
+#: (`acts_25.jsonl`, `acts_arb.jsonl`) were cut before `AiEv.stamp_conditional_ap`
+#: reached the sim path, so their recorded search valued Shatter / Tear /
+#: Disintegrate / Melee Slayer / Piercing Assault / Piercing Hunter at their
+#: PRINTED AP while the table resolved them with the bonus (main.gd:6319).
+#: Replaying them against the fixed EV measures the fix, not the search loop the
+#: fixtures pin. Neither reading is game-true forever — re-recording them is
+#: ticket NML-1125, and this pin retires with it.
+#:
+#: REQUESTED BY NAME, not autouse: only the two gates that replay a recorded
+#: SEARCH need it. The corpus-free tests in this module must keep seeing the
+#: shipped rule.
+@pytest.fixture
+def legacy_no_cond_ap():
+    nml_core.set_legacy_no_cond_ap(True)
+    yield
+    nml_core.set_legacy_no_cond_ap(False)
+
+
 # --------------------------------------------------------------- instrument --
 
 
@@ -232,7 +253,7 @@ def test_the_module_is_the_one_this_checkout_built():
 # ------------------------------------------------------------------- gate P --
 
 
-def test_p1_the_python_search_reproduces_every_recorded_pick():
+def test_p1_the_python_search_reproduces_every_recorded_pick(legacy_no_cond_ap):
     """acts_25.jsonl — 23 activations, the G4 field list, from Python."""
     clean, total, counts, first, declined = sweep("acts_25.jsonl")
     print(
@@ -245,7 +266,7 @@ def test_p1_the_python_search_reproduces_every_recorded_pick():
     assert clean == total == 23, f"{counts}\nfirst: {first}"
 
 
-def test_p2_the_python_search_reproduces_every_arbitrated_verdict():
+def test_p2_the_python_search_reproduces_every_arbitrated_verdict(legacy_no_cond_ap):
     """acts_arb.jsonl — 16 activations replayed WITH the recorded playout
     signature, so the stochastic arbitration replays instead of declining."""
     clean, total, counts, first, declined = sweep("acts_arb.jsonl")
