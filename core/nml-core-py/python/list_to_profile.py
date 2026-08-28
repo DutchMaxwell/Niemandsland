@@ -36,9 +36,22 @@ before this port existed to gate on the corpus for real):
     Not ported: `_apply_tough_base_fallback` (opr_api_client.gd:609-633), the
     keyword+Tough ladder for a unit Army Forge gave no usable base for; those
     keep the 32 mm default and are the gate's remaining base residue.
-  * item_grants and attached_hero_rules are ALWAYS empty — item-granted
-    rules and live hero attachment are both import-path/MP-only features
-    this loader never wires (NML-1081).
+  * item_grants was ALWAYS empty, and with it every rule an item grants was
+    missing from special_rules. NML-1098 ports the table's own loadout pass
+    (opr_api_client.gd:_parse_tts_unit :738-813): a non-weapon loadout entry
+    puts its NAME on the rule line and its content's rules under item_grants,
+    which is what RulesRegistry.unit_rules_of_primitive reads. This is the
+    second field where this loader follows the TABLE rather than
+    tools/core_selfplay.gd, which still parses rule names out of upgrade LABEL
+    text and never sees the item name — see tools/loader_gate.py.
+    NOT ported, because it is provably inert here: `_apply_selected_upgrade_rules`
+    (:826-869), the `option.gains` pass. All 6741 selectedUpgrades across both
+    AI list pools carry an EMPTY `gains`, so it contributes nothing; the label
+    text those lists do carry is not a rule source on the table.
+    An item's rules then feed the AURA pass (opr_army_manager.gd:_expand_auras):
+    "Furious Aura" on a hero grants "Furious" to its whole unit, which is the
+    single biggest rule source these lists have. attached_hero_rules stays the
+    caller's (selfplay.play_game) job (NML-1081) and picks all of this up.
   * move_bands only ever needs the NAME-based Fast/Slow/Rapid Rush/Quick/
     Rapid Advance fallback (movement_range_controller.gd's description pass
     and RulesRegistry data-alias pass both read unit_properties keys this
@@ -133,6 +146,15 @@ def _rule_to_string(rule: dict) -> str:
     return rule_name if rule_name else label
 
 
+#: NML-1098 — replay switch, NOT a game knob. True makes this loader reproduce
+#: `tools/core_selfplay.gd` again: rule names parsed out of upgrade LABEL text,
+#: no loadout pass, no item names, no item grants and no aura expansion. Every
+#: corpus THAT harness recorded was played under it, so the seed-for-seed gates
+#: against those corpora (test_selfplay / test_sidecars) set it and keep
+#: measuring the search loop; `tools/loader_gate.py` measures this fix.
+LEGACY_CORE_SELFPLAY = False
+
+
 def _is_weapon_profile_token(token: str) -> bool:
     """core_selfplay.gd:_is_weapon_profile_token — a weapon PROFILE token
     always declares attacks ("A2") and/or a range ("24\"" / "Range...")."""
@@ -144,7 +166,8 @@ def _rules_in_upgrade_label(label: str) -> list[str]:
     OPTION's label grants, e.g. "Archivist (Caster(2))" -> ["Caster(2)"].
     Split at TOP-LEVEL commas so "Caster(1)"'s own parens stay intact; a
     weapon-swap label (any split token looks like a weapon profile) grants
-    nothing here."""
+    nothing here. LEGACY ONLY: the table reads the resolved `loadout` and
+    `option.gains` instead, and never the label text."""
     open_i = label.find("(")
     close_i = label.rfind(")")
     if open_i < 0 or close_i <= open_i:
@@ -170,6 +193,169 @@ def _rules_in_upgrade_label(label: str) -> list[str]:
         if _is_weapon_profile_token(token):
             return []
     return out
+
+
+def _item_count(value: Any, default: int) -> int:
+    """`_safe_int(item["count"], unit.size)` (opr_api_client.gd:260) for the
+    numeric shape a loadout count actually has: None or anything unparsable
+    answers the unit size, an int passes through, a float truncates.
+    `_safe_int`'s "60x35" branch is base-size only and unreachable from here."""
+    if value is None or isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str) and re.fullmatch(r"[+-]?\d+", value):
+        return int(value)
+    return default
+
+
+def _granted_rules_of_item(item: dict[str, Any]) -> list[str]:
+    """opr_api_client.gd:_granted_rules_of_item — the rules a non-weapon
+    loadout entry grants, from its "specialRules" then its "content", deduped
+    in that order. An ArmyBookWeapon inside the content is a weapon profile and
+    never a rule (a Weapon Team's autocannon), so it is skipped here."""
+    out: list[str] = []
+    raw: list = []
+    for key in ("specialRules", "content"):
+        value = item.get(key)
+        if isinstance(value, list):
+            raw.extend(value)
+    for entry in raw:
+        if isinstance(entry, str):
+            granted = entry
+        elif isinstance(entry, dict):
+            if entry.get("type", "") == "ArmyBookWeapon":
+                continue
+            granted = _rule_to_string(entry)
+        else:
+            continue
+        if granted and granted not in out:
+            out.append(granted)
+    return out
+
+
+def _granted_weapon_names_of_item(item: dict[str, Any]) -> list[str]:
+    """opr_api_client.gd:_granted_weapons_of_item — the names of the WEAPONS an
+    item's content carries. The table appends them to the unit's weapons and
+    erases each from the rule line ("they're weapons now, not profile-less
+    rules", :775-781); this loader takes weapons off the list's own `weapons`
+    field, so only the erase matters here."""
+    out: list[str] = []
+    content = item.get("content")
+    if not isinstance(content, list):
+        return out
+    for entry in content:
+        if not isinstance(entry, dict) or entry.get("type", "") != "ArmyBookWeapon":
+            continue
+        if int(entry.get("attacks") or 0) > 0:
+            out.append(str(entry.get("name", entry.get("label", "Unknown"))).strip())
+    return out
+
+
+def _selection_rules(ud: dict[str, Any]) -> tuple[list[str], dict[str, list[str]]]:
+    """opr_api_client.gd:_parse_tts_unit's rule assembly for ONE selection ->
+    `(special_rules, item_grants)`, in the table's own order: the "rules" field
+    first, then each non-weapon LOADOUT entry — its own name onto the rule line,
+    then the rules it grants.
+
+    Two carve-outs are the table's, ported verbatim. An item only a SUBSET of
+    the models carry (`count < size`) is per-model equipment: its NAME stays off
+    the unit rule line, and a Tough(X) it grants must not buff the whole squad
+    (:803-813). And an item that grants a WEAPON has that weapon's name erased
+    from the rule line again (:775-781)."""
+    size = int(ud.get("size", 1))
+    rules: list[str] = []
+    for r in ud.get("rules", []):
+        rl = _rule_label(r)
+        if rl:
+            rules.append(rl)
+    grants: dict[str, list[str]] = {}
+    if LEGACY_CORE_SELFPLAY:
+        for su in ud.get("selectedUpgrades", []):
+            option = su.get("option", {})
+            for rl in _rules_in_upgrade_label(str(option.get("label", ""))):
+                if rl not in rules:
+                    rules.append(rl)
+        return rules, grants
+    for item in ud.get("loadout", []) or []:
+        if isinstance(item, str):
+            if item and item not in rules:
+                rules.append(item)
+            continue
+        if not isinstance(item, dict) or int(item.get("attacks") or 0) > 0:
+            continue  # a weapon profile — it rides in `weapons`, not on the rule line
+        name = str(item.get("name", item.get("label", "")))
+        per_model = size > 1 and 0 < _item_count(item.get("count", size), size) < size
+        granted = _granted_rules_of_item(item)
+        if name and granted:
+            grants[name] = granted
+        for wname in _granted_weapon_names_of_item(item):
+            if wname in rules:
+                rules.remove(wname)  # Array.erase: the FIRST occurrence only
+        if not per_model and name and name not in rules:
+            rules.append(name)
+        for g in granted:
+            if per_model and g.startswith("Tough("):
+                continue
+            if g not in rules:
+                rules.append(g)
+    return rules, grants
+
+
+def _aura_granted_rules(members: list[dict[str, Any]]) -> list[str]:
+    """ai_ev.gd:aura_granted_rules — the base rules a set of unit members (the
+    unit plus its attached heroes) grants to the WHOLE unit through any "X Aura"
+    they carry. The base keeps any qualifier: "Bane in Melee Aura" grants
+    "Bane in Melee"."""
+    granted: list[str] = []
+    for m in members:
+        for r in m["special_rules"]:
+            rule = str(r).strip()
+            if rule.endswith(" Aura"):
+                base = rule[: -len(" Aura")].strip()
+                if base and base not in granted:
+                    granted.append(base)
+    return granted
+
+
+def _expand_auras(units: list[dict[str, Any]]) -> None:
+    """opr_army_manager.gd:_expand_auras (:2112-2147), run once per ARMY right
+    after the joined heroes are attached (:385-389).
+
+    For every unit, every "X Aura" carried by the unit OR by one of its attached
+    heroes grants X to the unit AND to each of those heroes — the official text
+    is "this model and its unit get X", and the heroes need it too or
+    `AiEv.rule_on_all_models`'s "all models" quantifier would withhold it.
+    Purely additive and deduped; a base rule nothing models is simply inert.
+
+    The attachment is `_attach_joined_heroes` (:2150-2164): index the army by
+    selection id, then every unit whose `join_to_unit` names another one joins
+    it. Combined halves are already folded away, so what is left joining is a
+    Hero."""
+    if LEGACY_CORE_SELFPLAY:
+        return
+    by_sel: dict[str, dict[str, Any]] = {}
+    for u in units:
+        if u["selection_id"]:
+            by_sel[u["selection_id"]] = u
+    heroes: dict[str, list[dict[str, Any]]] = {u["unit_id"]: [] for u in units}
+    for u in units:
+        host = by_sel.get(u["join_to_unit"])
+        if host is not None and host["unit_id"] != u["unit_id"]:
+            heroes[host["unit_id"]].append(u)
+    for u in units:
+        members = [u] + heroes[u["unit_id"]]
+        granted = _aura_granted_rules(members)
+        for m in members:
+            for g in granted:
+                if g not in m["special_rules"]:
+                    m["special_rules"].append(g)
+
+
+def _flatten_grants(grants: dict[str, list[str]]) -> list[str]:
+    """battle_sim.gd:_granted_rules — `item_grants.values()` flattened in
+    insertion order, the order rules_registry.gd:167 walks them."""
+    return [g for granted_list in grants.values() for g in granted_list]
 
 
 def _weapon_rating(rules: list[str], rule_name: str) -> int:
@@ -399,12 +585,10 @@ def _units_from_list(
     uidx = 0
 
     def append_selection(u: dict, ud: dict) -> None:
-        rules: list[str] = u["special_rules"]
-        for su in ud.get("selectedUpgrades", []):
-            option = su.get("option", {})
-            for rl in _rules_in_upgrade_label(str(option.get("label", ""))):
-                if rl not in rules:
-                    rules.append(rl)
+        """The selection's WEAPONS and per-model Tough. Its rules and item
+        grants come from `_selection_rules` at the call site, because the
+        table's combined-unit merge folds those two with different rules
+        (dedup / first-item-wins) than the pooling done here."""
         for w in ud.get("weapons", []):
             wrules: list[str] = []
             for wr in w.get("specialRules", []):
@@ -431,11 +615,7 @@ def _units_from_list(
     for ud in raw:
         if ud.get("joinToUnit") and bool(ud.get("combined", False)):
             continue  # folded into its partner in the second pass
-        rules: list[str] = []
-        for r in ud.get("rules", []):
-            rn = _rule_label(r)
-            if rn:
-                rules.append(rn)
+        rules, grants = _selection_rules(ud)
         unit_id = "p%d_%d_%s" % (player, uidx, str(ud.get("id", uidx)))
         uidx += 1
         u = {
@@ -449,6 +629,7 @@ def _units_from_list(
             "selection_id": str(ud.get("selectionId", "")),
             "join_to_unit": str(ud.get("joinToUnit") or ""),
             "special_rules": rules,
+            "item_grants": grants,
             "weapons": [],
             "model_tough": [],
             # NML-1097: the HOST selection's base. A combined-in partner folds
@@ -467,6 +648,15 @@ def _units_from_list(
         host = by_sel.get(str(ud["joinToUnit"]))
         if host is not None:
             append_selection(host, ud)
+            # `_merge_combined_units` (opr_api_client.gd:1400-1407): the partner
+            # half's rule lines are appended to the anchor if absent, and an
+            # item name the anchor already grants under is NOT overwritten.
+            prules, pgrants = _selection_rules(ud)
+            for r in prules:
+                if r not in host["special_rules"]:
+                    host["special_rules"].append(r)
+            for item_name, granted in pgrants.items():
+                host["item_grants"].setdefault(item_name, granted)
         # else: dropped, mirroring core_selfplay.gd's printerr-only WARN
 
     return [units[k] for k in order]
@@ -504,7 +694,7 @@ def _unit_profile(u: dict[str, Any], faction: str, game_system: str) -> dict[str
         else _base_radius_m(u["base"], u["model_tough"][0] if u["model_tough"] else 1),
         "game_system": game_system,
         "faction_folder": faction,
-        "item_grants": [],
+        "item_grants": _flatten_grants(u["item_grants"]),
         "attached_hero_rules": [],
         # legacy fields — see module docstring ("Two more fields")
         "shooting_range_bonus": 0,
@@ -521,6 +711,7 @@ def profiles_from_army_forge_json(
     """
     game_system = str(data.get("gameSystem", "gf"))
     built = _units_from_list(data, player)
+    _expand_auras(built)
     return {u["unit_id"]: _unit_profile(u, faction, game_system) for u in built}
 
 
