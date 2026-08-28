@@ -52,24 +52,31 @@ before this port existed to gate on the corpus for real):
     "Furious Aura" on a hero grants "Furious" to its whole unit, which is the
     single biggest rule source these lists have. attached_hero_rules stays the
     caller's (selfplay.play_game) job (NML-1081) and picks all of this up.
-  * move_bands only ever needs the NAME-based Fast/Slow/Rapid Rush/Quick/
-    Rapid Advance fallback (movement_range_controller.gd's description pass
-    and RulesRegistry data-alias pass both read unit_properties keys this
-    loader never sets — "rule_descriptions" / registry lookups keyed by
-    game_system+faction_folder). Empirically 0 of 101 corpus units need the
-    registry pass; a future faction whose special rules ARE registry
-    aliases (Scurry, Highborn, ...) would need that pass ported too.
+  * move_bands runs the NAME-based Fast/Slow/Rapid Rush/Quick/Rapid Advance
+    fallback AND, since NML-1108, movement_range_controller.gd's REGISTRY
+    pass (:164-188): a rule whose mechanics entry resolves to one of those
+    primitives without sharing the name — Highborn/Scurry/Agile -> Quick,
+    Royal Legion's charge half, an "X Aura" -> Fast — applies its own params
+    to whichever band the name pass left uncovered. The map is read from the
+    very asset the table reads (assets/solo/rules_mechanics_<system>.json),
+    keyed (game_system, faction_folder, name) like RulesRegistry.lookup.
+    Still NOT ported: the DESCRIPTION pass, which needs `rule_descriptions`
+    — free rule text the arena fetches from the army-book API and the
+    bundled AI lists do not carry. Where a book states a movement modifier
+    ONLY in prose and the registry entry does not encode it (AoF Ghostly
+    Undead's Ethereal), the trainer cannot see it — see tools/loader_gate.py.
 
 Two more fields — shooting_range_bonus and max_activation_advance_bonus_in —
-are stamped here too, always 0 / 0.0. Current main's `_unit_profile`
-(battle_sim.gd:1573) no longer carries them (M2-5b moved them into the
-per-ACTIVATION dynamic profile, unit_profile_dyn); the 4 pre-M2-5b games in
-the M3-0 oracle corpus were recorded before that split and still carry them
-in their header. Both read SoloController.shooting_range_bonus/
-max_activation_advance_bonus_in, which only fire for RulesRegistry-driven
-rules (Royal Legion, Bounding) absent from every one of the 44 special rules
-across all 8 oracle games — so 0/0.0 is exactly what a full port would
-compute here too, not a shortcut that happens to pass.
+are stamped here too. Current main's `_unit_profile` (battle_sim.gd:1573) no
+longer carries them (M2-5b moved them into the per-ACTIVATION dynamic
+profile, unit_profile_dyn); the 4 pre-M2-5b games in the M3-0 oracle corpus
+were recorded before that split and still carry them in their header. Both
+read SoloController.shooting_range_bonus / max_activation_advance_bonus_in,
+which fire only for RulesRegistry-driven rules (Royal Legion, Bounding,
+the Teleport family) — absent from all 8 oracle games, which is why they
+stayed hardcoded 0/0.0 until NML-1108. They are now computed off the same
+registry map, so an AoF list's 27 Royal Legion units read 4 and its 5
+Bounding units read 4.0 instead of nothing.
 """
 
 from __future__ import annotations
@@ -102,6 +109,22 @@ FAST_RUSH_BONUS = 4
 RAPID_RUSH_BONUS = 6
 QUICK_BONUS = 2
 RAPID_ADVANCE_BONUS = 4
+
+# rules_registry.gd:SYSTEMS / DEFAULT_SYSTEM / MAP_PATH_TEMPLATE — the mechanics
+# maps the TABLE reads, loaded straight out of the checkout they are committed in.
+REGISTRY_SYSTEMS = ("gf", "gff", "aof", "aofs", "aofr")
+REGISTRY_DEFAULT_SYSTEM = "gf"
+REGISTRY_DIR = Path(__file__).resolve().parents[3] / "assets" / "solo"
+_REGISTRY_CACHE: dict[str, dict] = {}
+
+#: movement_range_controller.gd:179 — the ONLY primitives the move-band registry
+#: pass honours. A rule aliased to anything else (Ethereal -> Teleport, Wild Veil
+#: -> Ranged Shrouding) leaves the bands alone, on the table and here.
+MOVE_PRIMITIVES = ("Fast", "Slow", "Quick", "Rapid Advance", "Rapid Rush", "Royal Legion")
+#: solo_controller.gd:5435 — the byte-identical fallback when the map is absent.
+ROYAL_LEGION_RANGE_BONUS_IN = 4
+#: solo_controller.gd:5563 — the Teleport family's default placement distance.
+TELEPORT_ADVANCE_BONUS_IN = 3.0
 
 
 def _rule_label(r: dict) -> str:
@@ -385,10 +408,112 @@ def _rule_base_name(rule: str) -> str:
     return rule.split("(")[0].strip()
 
 
-def _move_bands(special_rules: list[str]) -> dict[str, float]:
-    """movement_range_controller.gd:move_bands_for_props, restricted to the
-    NAME-based fallback pass (see module docstring for why the description
-    and registry passes are always no-ops for this loader's units)."""
+def _registry_map(system: str) -> dict:
+    """rules_registry.gd:normalize_system + map_for — a system's parsed
+    mechanics map, cached; {} when the asset is missing, which degrades every
+    reader below to its pre-NML-1108 fallback exactly as the table does."""
+    s = str(system).strip().lower()
+    if s not in REGISTRY_SYSTEMS:
+        s = REGISTRY_DEFAULT_SYSTEM
+    if s not in _REGISTRY_CACHE:
+        try:
+            with open(REGISTRY_DIR / ("rules_mechanics_%s.json" % s), encoding="utf-8") as f:
+                parsed = json.load(f)
+        except (OSError, ValueError):
+            parsed = {}
+        _REGISTRY_CACHE[s] = parsed if isinstance(parsed, dict) else {}
+    return _REGISTRY_CACHE[s]
+
+
+def _registry_entry(system: str, faction: str, rule_name: str) -> dict:
+    """rules_registry.gd:lookup — the faction's own entry first, then the
+    system's "common" one. ALWAYS keyed (system, faction, name), never by name
+    alone: 154 of 383 rule names mean different things across game systems."""
+    m = _registry_map(system)
+    if not m:
+        return {}
+    factions = m.get("factions", {})
+    if faction and faction != "common" and rule_name in factions.get(faction, {}):
+        return factions[faction][rule_name]
+    return m.get("common", {}).get(rule_name, {})
+
+
+def _registry_primitive(entry: dict) -> str:
+    """rules_registry.gd:has_primitive — an entry's automating primitive, ""
+    for the explicit `"primitive": null` an UNautomated rule carries."""
+    p = entry.get("primitive")
+    return p if isinstance(p, str) else ""
+
+
+def _has_special_rule(special_rules: list[str], name: str) -> bool:
+    """game_unit.gd:has_special_rule via rule_name_matches (NML-1112) — the
+    exact name or its parametrised form ("Tough(3)" answers "Tough"), never a
+    bare prefix ("Fast" must not answer for "Fast Aura")."""
+    for r in special_rules:
+        t = str(r).strip()
+        if t == name or (t.startswith(name) and t[len(name):].strip().startswith("(")):
+            return True
+    return False
+
+
+def _rule_active(special_rules: list[str], system: str, faction: str, name: str) -> bool:
+    """rules_registry.gd:unit_rule_active — the unit carries the rule AND its
+    book fields it for this system; a MISSING map falls back to the plain
+    rule check, so a checkout without assets keeps the old behaviour."""
+    if not _has_special_rule(special_rules, name):
+        return False
+    if not _registry_map(system):
+        return True
+    return bool(_registry_primitive(_registry_entry(system, faction, name)))
+
+
+def _rules_of_primitive(
+    special_rules: list[str], grants: list[str], system: str, faction: str, primitive: str
+) -> list[tuple[str, dict]]:
+    """rules_registry.gd:unit_rules_of_primitive — (name, params) of every
+    EFFECTIVE rule aliased to `primitive`: direct special_rules first, then
+    item_grants, each base name counted once in first-seen order."""
+    out: list[tuple[str, dict]] = []
+    seen: set[str] = set()
+    for raw in list(special_rules) + list(grants):
+        n = _rule_base_name(str(raw))
+        if not n or n in seen:
+            continue
+        seen.add(n)
+        entry = _registry_entry(system, faction, n)
+        if _registry_primitive(entry) == primitive:
+            out.append((n, entry.get("params", {})))
+    return out
+
+
+def _bounding_dice_count(params: dict) -> int:
+    """solo_controller.gd:bounding_dice_count — how many dice the placement
+    rolls: an explicit `dice_count`, else the head of a `place_die` like
+    "2D3", else one."""
+    if "dice_count" in params:
+        return max(int(params["dice_count"]), 1)
+    pd = str(params.get("place_die", "")).lower()
+    if "d" in pd:
+        head = pd.split("d", 1)[0].strip()
+        if _is_valid_int(head):
+            return max(int(head), 1)
+    return 1
+
+
+def _move_bands(
+    special_rules: list[str], game_system: str = "", faction: str = ""
+) -> dict[str, float]:
+    """movement_range_controller.gd:move_bands_for_props — the NAME pass
+    (:125-163) plus, since NML-1108, the REGISTRY pass (:164-188). The
+    DESCRIPTION pass (:108-115) stays out: it reads `rule_descriptions`, free
+    rule text the arena fetches from the army-book API and these lists lack.
+
+    Order matters and is the table's: a band the name pass already filled is
+    NOT topped up by the registry, so Fast + Highborn is 10"/18" and not
+    12"/22", while an "X Aura" the aura expansion turned into a second, bare
+    "X" DOES stack — the table counts both too (its description pass reads the
+    aura's own text). A once-per-game feat (`uses_per_game`) never rides the
+    permanent bands."""
     advance = OPR_ADVANCE_INCHES
     rush = OPR_RUSH_CHARGE_INCHES
     counted: dict[str, dict[str, bool]] = {}
@@ -423,7 +548,81 @@ def _move_bands(special_rules: list[str]) -> dict[str, float]:
             if not done["advance"]:
                 advance += RAPID_ADVANCE_BONUS
             counted[base] = {"advance": True, "rush": True}
+    if not LEGACY_CORE_SELFPLAY:
+        for r in special_rules:
+            base = _rule_base_name(str(r))
+            done = counted.get(base, {"advance": False, "rush": False})
+            if done["advance"] and done["rush"]:
+                continue
+            entry = _registry_entry(game_system, faction, base)
+            if _registry_primitive(entry) not in MOVE_PRIMITIVES:
+                continue
+            rp = entry.get("params", {})
+            if int(rp.get("uses_per_game", 0)) > 0:
+                continue
+            if not done["advance"]:
+                advance += int(rp.get("advance_mod", 0))
+            if not done["rush"]:
+                rush += int(rp.get("rush_mod", rp.get("charge_mod", 0)))
+            counted[base] = {"advance": True, "rush": True}
     return {"advance": float(max(0, advance)), "rush": float(max(0, rush))}
+
+
+def _shooting_range_bonus(
+    special_rules: list[str], grants: list[str], game_system: str, faction: str
+) -> int:
+    """solo_controller.gd:shooting_range_bonus — Royal Legion's +4" range (the
+    inches are registry DATA, the constant is the byte-identical fallback), or
+    the largest `range_bonus_in` any DATA alias of that primitive carries. The
+    table also adds `unit_properties["spell_range_mod"]`, a live solo-layer
+    stamp that is 0 at deployment — the instant the act header is written."""
+    if _has_special_rule(special_rules, "Royal Legion"):
+        params = _registry_entry(game_system, faction, "Royal Legion").get("params", {})
+        return int(params.get("range_bonus_in", ROYAL_LEGION_RANGE_BONUS_IN))
+    best = 0
+    for _n, params in _rules_of_primitive(
+        special_rules, grants, game_system, faction, "Royal Legion"
+    ):
+        best = max(best, int(params.get("range_bonus_in", 0)))
+    return best
+
+
+def _max_activation_advance_bonus_in(
+    special_rules: list[str], grants: list[str], game_system: str, faction: str
+) -> float:
+    """solo_controller.gd:max_activation_advance_bonus_in — the LARGEST extra
+    Advance inches one activation can put on TOP of the bands, worst-roll on
+    purpose (a reach gate that over-offers only over-offers): Bounding's
+    placement (3" per die plus the flat), a once-per-game Quick feat, and the
+    Teleport family's own `advance_bonus_in`."""
+    bonus = 0.0
+    if _rule_active(special_rules, game_system, faction, "Bounding"):
+        params = _registry_entry(game_system, faction, "Bounding").get("params", {})
+        bonus += _bounding_dice_count(params) * 3.0 + float(params.get("place_d3_plus", 1))
+    else:
+        best = 0.0
+        for _n, params in _rules_of_primitive(
+            special_rules, grants, game_system, faction, "Bounding"
+        ):
+            best = max(
+                best, _bounding_dice_count(params) * 3.0 + float(params.get("place_d3_plus", 0))
+            )
+        bonus += best
+    for _n, params in _rules_of_primitive(special_rules, grants, game_system, faction, "Quick"):
+        if int(params.get("uses_per_game", 0)) > 0:
+            bonus += max(0.0, float(params.get("advance_mod", 2)))
+    tele = "Teleport" if _rule_active(special_rules, game_system, faction, "Teleport") else ""
+    if not tele:
+        for n, _params in _rules_of_primitive(
+            special_rules, grants, game_system, faction, "Teleport"
+        ):
+            if n != "Teleport":
+                tele = n
+                break
+    if tele:
+        params = _registry_entry(game_system, faction, tele).get("params", {})
+        bonus += max(0.0, float(params.get("advance_bonus_in", TELEPORT_ADVANCE_BONUS_IN)))
+    return bonus
 
 
 def _is_valid_int(s: str) -> bool:
@@ -810,6 +1009,7 @@ def _units_from_list(
 def _unit_profile(u: dict[str, Any], faction: str, game_system: str) -> dict[str, Any]:
     """battle_sim.gd:_unit_profile off one internal unit dict."""
     special_rules: list[str] = u["special_rules"]
+    grants: list[str] = _flatten_grants(u["item_grants"])
     model_count = len(u["model_tough"])
     weapons = [
         {
@@ -833,17 +1033,23 @@ def _unit_profile(u: dict[str, Any], faction: str, game_system: str) -> dict[str
         "weapons": weapons,
         "special_rules": special_rules,
         "caster_value": _caster_value(special_rules, model_count),
-        "move_bands": _move_bands(special_rules),
+        "move_bands": _move_bands(special_rules, game_system, faction),
         "base_radius": (DEFAULT_BASE_MM / 2.0) * MM_TO_METERS
         if LEGACY_CORE_SELFPLAY
         else _base_radius_m(u["base"], u["model_tough"][0] if u["model_tough"] else 1),
         "game_system": game_system,
         "faction_folder": faction,
-        "item_grants": _flatten_grants(u["item_grants"]),
+        "item_grants": grants,
         "attached_hero_rules": [],
-        # legacy fields — see module docstring ("Two more fields")
-        "shooting_range_bonus": 0,
-        "max_activation_advance_bonus_in": 0.0,
+        # unit_profile_dyn fields — see module docstring ("Two more fields").
+        # LEGACY_CORE_SELFPLAY replays the pre-NML-1108 hardcoded reading, the
+        # one every corpus tools/core_selfplay.gd recorded was played under.
+        "shooting_range_bonus": 0
+        if LEGACY_CORE_SELFPLAY
+        else _shooting_range_bonus(special_rules, grants, game_system, faction),
+        "max_activation_advance_bonus_in": 0.0
+        if LEGACY_CORE_SELFPLAY
+        else _max_activation_advance_bonus_in(special_rules, grants, game_system, faction),
     }
 
 
