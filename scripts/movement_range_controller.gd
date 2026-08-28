@@ -37,6 +37,25 @@ const QUICK_BONUS: int = 2
 ## OPR army-book "Rapid Advance": "+4" when using Advance actions" — Advance band only.
 const RAPID_ADVANCE_BONUS: int = 4
 
+## NML-1106: rule text whose inches belong to the ENEMY, never to the rule's CARRIER. Melee
+## Shrouding reads "Enemies get -3\" movement to a min. of 6\" when trying to charge units where
+## all models have this rule" — the -3\" is the CHARGER's penalty (solo_controller applies it via
+## melee_shroud_charge_in), yet the description pass scraped it into the carrier's own rush band
+## (arena act header: a Battle Brothers hero with the Melee Shrouding Aura recorded rush 9\"
+## instead of 12\"). An explicit phrase list, not a parser rewrite: either the SUBJECT of the
+## sentence is the enemy, or the carrier is named as the TARGET of the movement.
+const ENEMY_TARGETED_MOVE_PHRASES: Array[String] = [
+	# subject is the enemy
+	"enemies get", "enemies suffer", "enemies have", "enemies take",
+	"enemy units get", "enemy units suffer", "enemy models get",
+	"opponents get", "opposing units get",
+	# the carrier is the TARGET of the movement, not its owner
+	"when charging this unit", "when trying to charge this unit",
+	"against this unit", "targeting this unit",
+	"charge units where all models have this rule",
+	"charging units where all models have this rule",
+]
+
 const RING_Y: float = 0.004
 const RING_SEGMENTS: int = 48
 const RING_BAND_M: float = 0.004  # 4 mm visible band
@@ -218,6 +237,10 @@ static func move_modifier_from_description(description: String) -> Dictionary:
 	# into the band double-counts the bonus. The registry pass keeps its own uses_per_game skip.
 	if description.to_lower().contains("once per game"):
 		return result
+	# NML-1106: an ENEMY-targeted modifier is not the carrier's own band — see
+	# ENEMY_TARGETED_MOVE_PHRASES. Melee Shrouding used to brake the very unit that carries it.
+	if _is_enemy_targeted_move_text(description):
+		return result
 	var re := RegEx.new()
 	if re.compile("([+-]\\d+)\\s*[\"”]") != OK:
 		return result
@@ -244,6 +267,16 @@ static func move_modifier_from_description(description: String) -> Dictionary:
 		elif rush_at != -1:
 			result["rush"] = int(result["rush"]) + value
 	return result
+
+
+## True when the description's movement modifier applies to ENEMIES (or to whoever charges/targets
+## this unit) rather than to the unit carrying the rule — see ENEMY_TARGETED_MOVE_PHRASES (NML-1106).
+static func _is_enemy_targeted_move_text(description: String) -> bool:
+	var low := description.to_lower()
+	for phrase in ENEMY_TARGETED_MOVE_PHRASES:
+		if low.contains(phrase):
+			return true
+	return false
 
 
 ## Lowest index at which any of `needles` occurs in `haystack`, or -1 if none do.
