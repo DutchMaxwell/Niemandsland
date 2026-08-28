@@ -185,6 +185,20 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# arm (fold on one side only) must run with NML_CORE unset — the GDScript path reads the
 			# knob per pick and is always seat-correct.
 			"hero_attach": BattleSim.hero_fold_enabled(),
+			# NML-1129: the ENGAGE half of that same fold — whether THIS game's imagination
+			# measured a landed charge's engage gap over both sides' models INCLUDING attached
+			# heroes (BattleSim._engage_gap_in, battle_sim.gd:791), the way the table does
+			# (main.gd:7970 -> SoloController.nearest_melee_gap_in). It rides `hero_attach` and
+			# has no switch of its own, so this stamp IS that reading; the Rust twin's own
+			# `engage_fold` (core/nml-core/src/acts.rs:100) defaults ON and is a RED switch, not
+			# a feature knob, so a header that predates this key replays unchanged.
+			"engage_fold": BattleSim.hero_fold_enabled(),
+			# NML-1103 (#448): the table's resolution counts CONDITIONAL AP (Shatter/Tear/
+			# Disintegrate/...) — BattleSim._profiles_of stamps `cond_ap` on every profile and
+			# there is no switch to turn it off, so the constant `true`. Inert for the Rust seam
+			# (plain.rs `knobs_of` reads no such key, like `dice`); it exists so a reader can
+			# tell a post-#448 corpus from an older one without dating the file.
+			"cond_ap": true,
 			# NML-1073 M5 D1-B7: which RESOLVER produced this corpus row. The table has only
 			# one — every combat die goes through main._solo_tray_roll — so this side is the
 			# constant "table"; the fast trainer stamps the same key from its own `dice` knob

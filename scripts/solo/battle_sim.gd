@@ -47,13 +47,15 @@ static func cast_phase_enabled() -> bool:
 ## (solo_controller.gd:405-419) ends on `not u.is_attached()` — a joined hero has no activation
 ## of its own; it moves and fights inside its host. `BattleSim`/`AiPlanner` grant it one anyway
 ## (ai_planner.gd:27/:131/:645, and resolve() below moves `su["positions"]` alone), so the AI
-## plans with an army that has more activations than it really has. With the knob ON three
-## things mirror the table, exactly the three halves of the Rust `Seams::hero_attach`
+## plans with an army that has more activations than it really has. With the knob ON four
+## things mirror the table, exactly the four halves of the Rust `Seams::hero_attach`
 ## (core/nml-core/src/io.rs:221): the pool refuses the hero (AiPlanner._can_activate ~ state.rs:414),
-## the host's move carries the hero's models (resolve ~ sim.rs:940), and the host's activation
-## spends the hero (resolve ~ sim.rs:1122). Set per pick from the difficulty preset
-## (SoloDifficulty.hero_fold, like AiPlanner.playout_search); env NML_HERO_FOLD=1 turns it on
-## process-wide for headless runs. OFF = byte-identical to the shipped planner.
+## the host's move carries the hero's models (resolve ~ sim.rs:940), the host's activation
+## spends the hero (resolve ~ sim.rs:1122), and the charge's ENGAGE test measures BOTH sides with
+## their heroes folded in (NML-1129, resolve ~ sim.rs:297 `engage_gap_in`). Set per pick from the
+## difficulty preset (SoloDifficulty.hero_fold, like AiPlanner.playout_search); env
+## NML_HERO_FOLD=1 turns it on process-wide for headless runs. OFF = byte-identical to the
+## shipped planner.
 static var hero_fold := false
 static var _hero_fold_env := -1
 static func hero_fold_enabled() -> bool:
@@ -783,8 +785,10 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 		# 400-game A/B all 30 "move budget spent" fall-shorts sat at a 0.1-1.0"
 		# gap — charges the table would have connected. 1" also swallows both
 		# spacing-clamp shortfalls (bisection <= delta/256, 1/8th fallback sweep).
-		if edge_gap_in(positions, su.get("radii", []), tu["positions"], tu.get("radii", [])) \
-				<= SoloController.MELEE_ENGAGE_IN:
+		# NML-1129: measured over the TABLE's own two model lists — with the hero fold on
+		# that is host + attached heroes on BOTH sides (_engage_gap_in below), not the two
+		# hosts alone. Fold off: the same single edge_gap_in call as before, byte for byte.
+		if _engage_gap_in(next, su, positions, tu) <= SoloController.MELEE_ENGAGE_IN:
 			var tu_before := _wounds_left(tu)
 			var su_before := _wounds_left(su)
 			_apply_expected_wounds(tu, AiEv.melee_ev(_profiles_of(su, true),
@@ -876,6 +880,48 @@ static func edge_gap_in(a_pos: Array, a_radii: Array, b_pos: Array, b_radii: Arr
 			var rb: float = float(b_radii[bi]) if bi < b_radii.size() else SeparationChecker.DEFAULT_BASE_RADIUS_M
 			best = minf(best, Vector3(pa.x - pb.x, 0.0, pa.z - pb.z).length() - ra - rb)
 	return best / IN2M
+
+
+## NML-1129 — BUG-3 fold, HALF 4 (mirrors sim.rs:297-320 `engage_gap_in`): the landed charge's
+## ENGAGE test asks the TABLE's own question. `main._run_ai_melee` (main.gd:7970) measures with
+## `SoloController.nearest_melee_gap_in` (solo_controller.gd:8536), which runs over
+## `_moving_models` (:5385 -> `get_alive_models_with_attached()`) on BOTH sides — so an attached
+## hero standing at the front of its host, or on the target, closes the gap. Half 2 above already
+## MOVES those hero models with the host, so measuring the two HOSTS alone left the imagination
+## calling a charge short that the table fights (NML-1128 bisect: act 26 of qbf_ref
+## alien_hives_1000_vs_battle_brothers_1000_s27, a 3-model host with one attached hero).
+## `edge_gap_in` is itself a minimum over model pairs, so the minimum over the
+## (host + heroes) x (host + heroes) cross product IS the one number `nearest_melee_gap_in`
+## returns; a hero with no models left has an empty position array and contributes INF, exactly
+## the way an empty `b_shapes` does there.
+## SEAM-GATED on `hero_fold_enabled()` alone — no new seam: without the fold nothing else is
+## folded either (the pool, the move, the activation), so folding HERE would measure a unit the
+## rest of resolve() does not believe in. Fold off = the single `edge_gap_in` call, byte for byte.
+static func _engage_gap_in(next: Dictionary, su: Dictionary, su_positions: Array,
+		tu: Dictionary) -> float:
+	if not hero_fold_enabled():
+		return edge_gap_in(su_positions, su.get("radii", []), tu["positions"], tu.get("radii", []))
+	var a_side: Array = [[su_positions, su.get("radii", [])]]
+	_append_attached_models(next, su, a_side)
+	var b_side: Array = [[tu["positions"], tu.get("radii", [])]]
+	_append_attached_models(next, tu, b_side)
+	var best := INF
+	for a in a_side:
+		for b in b_side:
+			best = minf(best, edge_gap_in(a[0], a[1], b[0], b[1]))
+	return best
+
+
+## The [positions, radii] pairs of a snapshot unit's attached heroes, appended to `out` — the
+## same `next["units"].has(hk)` guard halves 2 and 3 use, so a hero the snapshot does not carry
+## is skipped rather than faked. A dead hero's position array is empty (_apply_expected_wounds
+## trims it), which edge_gap_in answers with INF.
+static func _append_attached_models(next: Dictionary, u: Dictionary, out: Array) -> void:
+	for hk in u.get("attached", []):
+		if not next["units"].has(hk):
+			continue
+		var hu: Dictionary = next["units"][hk]
+		out.append([hu["positions"], hu.get("radii", [])])
 
 
 ## AiEv context sourced from the SNAPSHOT's dynamic layer, not the live models.
