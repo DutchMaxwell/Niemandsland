@@ -58,6 +58,7 @@ var _layout_seed := LAYOUT_SEED         # terrain autogen seed; layout_seed= var
 var _symmetric := false                 # symmetric=1: point-symmetric terrain (tuning runs)
 var _objective_count := 3               # objectives=5: five point-symmetric markers
 var _mission_id := ""                   # NML_MISSION: play a catalog mission (M5); empty = legacy centre-line tuning board
+var _objectives_mode := "constant"      # NML_OBJECTIVES: "rulebook" runs the D8a seeded generator; default = the 3 constants
 var _objectives_placed := 0             # what actually reached the overlay — the stamp states played truth, not intent
 var _batch := true                      # headless sweeps: instant (non-physics) dice + zero pacing holds; batch=0 forces the physics tray
 var _army1 := P1_FIXTURE
@@ -314,6 +315,25 @@ func _run() -> void:
 				objectives_in.append(rp as Vector2)
 		printerr("[ARENA] mission '%s': placement=%s markers=%d (catalog-resolved)" % [_mission_id,
 			str((mission.get("markers", {}) as Dictionary).get("placement", "?")), objectives_in.size()])
+	if _objectives_mode == "rulebook":
+		# D8a: count + placement by the rulebook, drawn from a DEDICATED stream seeded with
+		# the layout seed (never the global one the terrain layouter just consumed, never
+		# SoloController._rng). The board is the overlay's own painted cells — the very map
+		# this game's act header records — so the twin re-derives the layout from the header
+		# and the two cannot drift apart.
+		var mid2 := _mission_id if not _mission_id.is_empty() else "duel"
+		var mission2 := MissionCatalog.get_mission(mid2)
+		var style2 := DeploymentCatalog.get_style(str(mission2.get("deployment", "front_line")))
+		var gn: int = layout_editor._calculate_grid_dimensions().x
+		var stamp := ObjectiveLayout.generate(_layout_seed, mission2, style2,
+			terrain_overlay.grid_cells, gn, table.table_size.x * 12.0, table.table_size.y * 12.0)
+		objectives_in = []
+		for rp in (stamp["positions"] as Array):
+			objectives_in.append(Vector2(float(rp[0]), float(rp[1])))
+		AiActRecorder.objectives_stamp = stamp
+		printerr("[ARENA] objectives=rulebook: D3+2 rolled %d, P%d places first, seed %d, %d cells, swept %d" % [
+			int(stamp["count_roll"]), int(stamp["first_placer"]), _layout_seed,
+			(terrain_overlay.grid_cells as Dictionary).size(), int(stamp["swept"])])
 	var obj_world: Array = []
 	for o in objectives_in:
 		obj_world.append(Vector3((o as Vector2).x * IN2M, 0.0, (o as Vector2).y * IN2M))
@@ -633,10 +653,15 @@ func _write_capture_outputs() -> void:
 func _mission_stamp() -> Dictionary:
 	var mid := _mission_id if not _mission_id.is_empty() else "duel"
 	var m := MissionCatalog.get_mission(mid)
-	return {"family": str(m.get("family", "face_off")), "name": mid,
+	var out := {"family": str(m.get("family", "face_off")), "name": mid,
 		"rounds": int(m.get("rounds", 4)), "scoring": str(m.get("scoring", "end")),
 		"deployment": str(m.get("deployment", "front_line")), "symmetric": _symmetric,
 		"objective_count": _objectives_placed, "packs": []}
+	# D8a: the layout INPUTS, so a reader can re-derive the markers instead of trusting
+	# them. Additive and only when armed — an unset run's result file is unchanged.
+	if not AiActRecorder.objectives_stamp.is_empty():
+		out["objectives_layout"] = AiActRecorder.objectives_stamp
+	return out
 
 
 ## The per-game result artifact the ladder tooling aggregates: identity (grades/seeds/armies/sides),
@@ -1008,6 +1033,15 @@ func _parse_config() -> void:
 
 	# Same loud-fallback doctrine as grades/nets: a typo'd NML_MISSION quietly
 	# playing duel would mislabel a whole tournament (the label-bug class).
+	# D8a: NML_OBJECTIVES=rulebook places markers by the book instead of the three
+	# constants. Loud fallback like every other knob — a typo must not quietly record a
+	# mislabeled corpus.
+	var om := OS.get_environment("NML_OBJECTIVES").strip_edges().to_lower()
+	if om != "" and om != "constant" and om != "rulebook":
+		printerr("[ARENA] FATAL: unknown NML_OBJECTIVES '%s' (constant|rulebook)" % om)
+		quit(1)
+		return
+	_objectives_mode = om if om != "" else "constant"
 	_mission_id = OS.get_environment("NML_MISSION").strip_edges().to_lower()
 	if not _mission_id.is_empty() and not MissionCatalog.mission_ids().has(_mission_id):
 		printerr("[ARENA] FATAL: unknown NML_MISSION '%s' (catalog: %s) — refusing a mislabeled run" % [

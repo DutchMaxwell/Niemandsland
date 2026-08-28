@@ -174,6 +174,20 @@ func _run() -> void:
 	# Centred inches * IN2M ARE world metres, so the direct overlay write is exact, and
 	# objectives_provider / _solo_auto_seize read the overlay live, so AI + scoring both see them.
 	var objectives_in: Array[Vector2] = [Vector2(-16.0, 0.0), Vector2(0.0, 0.0), Vector2(16.0, 0.0)]  # table-centred inches
+	# D8a: NML_OBJECTIVES=rulebook swaps the three constants for the seeded rulebook layout,
+	# drawn from a dedicated stream keyed on the LAYOUT seed (never the global one the
+	# terrain layouter just consumed). Board = the overlay's own painted cells.
+	if OS.get_environment("NML_OBJECTIVES").strip_edges().to_lower() == "rulebook":
+		var stamp_o := ObjectiveLayout.generate(_layout_seed, MissionCatalog.get_mission("duel"),
+			DeploymentCatalog.get_style("front_line"), terrain_overlay.grid_cells,
+			layout_editor._calculate_grid_dimensions().x)
+		objectives_in = []
+		for rp in (stamp_o["positions"] as Array):
+			objectives_in.append(Vector2(float(rp[0]), float(rp[1])))
+		AiActRecorder.objectives_stamp = stamp_o
+		printerr("[SELFPLAY] objectives=rulebook: rolled %d, P%d first, seed %d, swept %d" % [
+			int(stamp_o["count_roll"]), int(stamp_o["first_placer"]), _layout_seed,
+			int(stamp_o["swept"])])
 	var obj_world: Array = []
 	for o in objectives_in:
 		obj_world.append(Vector3((o as Vector2).x * IN2M, 0.0, (o as Vector2).y * IN2M))

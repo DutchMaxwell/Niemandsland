@@ -52,6 +52,7 @@ use serde_json::{Map, Value};
 use nmlcore::acts::{ActHeader, ActStatics, Knobs, Sighting};
 use nmlcore::arbitration::Arbitration;
 use nmlcore::menu::{candidates_tuned, Candidate, Tuning};
+use nmlcore::objectives;
 use nmlcore::plan::{Pick, Search};
 use nmlcore::playout::Policy;
 use nmlcore::rollout::Rollout;
@@ -1536,6 +1537,48 @@ fn los_blocked(
     board(terrain)?.los_blocked(a, b)
 }
 
+/// D8a — the rulebook objective layout for one game, derived from the layout seed and
+/// the board. `count` is the mission's raw catalog value (a NUMBER draws no die, a
+/// "d3+N" string does), `style` a `DeploymentCatalog` style dict. Returns the same
+/// stamp `ObjectiveLayout.generate` returns, so the trainer can compare it field for
+/// field with the act header's `objectives` block.
+#[pyfunction]
+#[pyo3(signature = (terrain, layout_seed, count, style, table_w_in=72.0, table_d_in=48.0))]
+fn objective_layout(
+    py: Python<'_>,
+    terrain: Option<&Bound<'_, PyAny>>,
+    layout_seed: i64,
+    count: &Bound<'_, PyAny>,
+    style: &Bound<'_, PyAny>,
+    table_w_in: f64,
+    table_d_in: f64,
+) -> PyResult<Py<PyAny>> {
+    let b = board(terrain)?;
+    let cells = objectives::Cells::from_terrain(&b.inner);
+    let zones = objectives::zones_of_style(&value_of(style)?);
+    let lay = objectives::generate(
+        layout_seed,
+        &value_of(count)?,
+        &zones,
+        &cells,
+        table_w_in,
+        table_d_in,
+    );
+    let out = PyDict::new(py);
+    out.set_item("mode", "rulebook")?;
+    out.set_item("count_roll", lay.count_roll)?;
+    out.set_item("first_placer", lay.first_placer)?;
+    out.set_item("layout_seed", lay.layout_seed)?;
+    out.set_item("edge_margin_in", lay.edge_margin_in)?;
+    out.set_item(
+        "positions",
+        lay.positions.iter().map(|&(x, z)| vec![x, z]).collect::<Vec<_>>(),
+    )?;
+    out.set_item("placed_by", lay.placed_by.clone())?;
+    out.set_item("swept", lay.swept)?;
+    Ok(out.into_any().unbind())
+}
+
 /// `board(terrain).los_pairs(units)` — the one-shot form.
 #[pyfunction]
 fn los_pairs(
@@ -1568,6 +1611,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(type_at, m)?)?;
     m.add_function(wrap_pyfunction!(los_blocked, m)?)?;
     m.add_function(wrap_pyfunction!(los_pairs, m)?)?;
+    m.add_function(wrap_pyfunction!(objective_layout, m)?)?;
     // `TerrainRules.TerrainType` — terrain_rules.gd:24.
     m.add("TERRAIN_NONE", nmlcore::terrain::NONE)?;
     m.add("TERRAIN_RUINS", nmlcore::terrain::RUINS)?;

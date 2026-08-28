@@ -17,6 +17,14 @@ extends RefCounted
 static var _stream: FileAccess = null
 static var _checked := false
 static var _header_written := false
+## D8a (NML-1073 M5): the objective LAYOUT INPUTS for this game — {mode, count_roll,
+## first_placer, layout_seed, edge_margin_in, positions, placed_by, swept}, as
+## ObjectiveLayout.generate returned them. The harness sets it before the first act;
+## the header carries it so a reader can RE-DERIVE the layout instead of trusting the
+## positions. Left empty the key is omitted entirely, so an unset run's header is
+## byte-identical to before.
+static var objectives_stamp: Dictionary = {}
+
 static var _max := 5000
 static var _count := 0
 
@@ -161,7 +169,7 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 		# takes one of those off this table replays a deployment-time reading.
 		profiles[str(key)] = BattleSim._unit_profile(
 			(state["units"][key] as Dictionary)["unit"])
-	return {"kind": "header", "profiles": profiles, "terrain": _terrain_line(terrain_cb, school_world),
+	var head := {"kind": "header", "profiles": profiles, "terrain": _terrain_line(terrain_cb, school_world),
 		# NML-1126: rule-TEXT provenance for THIS game. The special-rule descriptions the
 		# description-driven move modifiers read (movement_range_controller.gd) are fetched
 		# live from the army-forge API at import; a failed fetch used to leave the map empty
@@ -222,6 +230,11 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# to truncate to it; a header WITHOUT this key predates the stamp and reads as
 			# version 2 (`nml_core.vocab_version_of_header`, core/nml-core/src/acts.rs).
 			"rule_vocab_version": BattleSim.RULE_VOCAB_VERSION}}
+	# D8a: additive, and only when the harness armed the rulebook generator — an unset
+	# run's header keeps exactly the keys it had before.
+	if not objectives_stamp.is_empty():
+		head["objectives"] = objectives_stamp
+	return head
 
 
 ## Reaches the live TerrainOverlay the same way SoloController's terrain_type_at
