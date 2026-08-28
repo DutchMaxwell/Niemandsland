@@ -193,3 +193,22 @@ def test_an_auto_activation_takes_an_ordinal_too(tmp_path):
     stale = [r for r in dice if int(r["act"]) == 1]
     assert [r["faces"] for r in stale] == [[1, 1]], "the slice the old reader took"
     assert srg.burn_prefix(dice)[i0] == 2, "and it burned two draws too few"
+
+
+def test_combat_kind_folds_the_nml_1104_rule_kinds_back_to_attack():
+    """NML-1104 split the RECORDED corpus's `roll_kind` by rule for seven
+    special-rule dice (morale, Fearless, No Retreat, Regeneration, Ravage,
+    Battleborn, dangerous terrain) that used to be lumped under "attack". The
+    port's own rolls (`core/nml-core/src/dice.rs`) never got that split, so a
+    `want` tuple built straight from `dice.jsonl` would now part on `kind`
+    alone against a `got` tuple that is otherwise identical — `combat_kind()`
+    is the fold that keeps the two sides comparable. "defense" and "attack"
+    themselves pass through unchanged; an unknown kind is a no-op too, so a
+    future rule that adds its own kind fails safe (compares literally) rather
+    than silently folding into "attack"."""
+    for new_kind in ("morale", "fearless", "no_retreat", "regeneration",
+                      "ravage", "battleborn", "dangerous"):
+        assert srg.combat_kind(new_kind) == "attack"
+    assert srg.combat_kind("attack") == "attack"
+    assert srg.combat_kind("defense") == "defense"
+    assert srg.combat_kind("impact") == "impact", "unknown kinds pass through, not fold to attack"

@@ -35,10 +35,16 @@ gate lands and fights. `port_silent` is the opposite and is never benign.
 
 THE MORALE CHECK, reported apart from the three bars because a morale roll is
 stamped `roll_kind` "attack" like everything else and can only be told apart by
-WHERE it sits: it is the last thing an activation draws. `trailing_morale` takes
-both sides' trailing run and compares (count, target, roller). A 1-attack strike
-that scored no hits looks the same from outside and is counted here too — the
-bucket is symmetric, so it cannot flatter the port. Buckets: `equal`,
+WHERE it sits: it is the last thing an activation draws. (NML-1104 gave the
+RECORDED corpus its own kind per rule — "morale", "fearless", "no_retreat" —
+but the port's OWN rolls, `core/nml-core/src/dice.rs`, still stamp the old
+blanket "attack"; `shoot_replay_gate.combat_kind()` folds the recorded side's
+`roll_kind` back to "attack"/"defense" when this file's `want` tuples are
+built, so every "attack" check below — here and in `dice_gate.py` — still
+means what it always meant.) `trailing_morale` takes both sides' trailing run
+and compares (count, target, roller). A 1-attack strike that scored no hits
+looks the same from outside and is counted here too — the bucket is symmetric,
+so it cannot flatter the port. Buckets: `equal`,
 `table_only` (the table tested and the port did not: it found no loser, or the
 wounds it dealt made the other side lose), `port_only`, `other` (both tested, a
 different target or roller), `neither`.
@@ -68,7 +74,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 import nml_core  # noqa: E402
 from shoot_replay_gate import (  # noqa: E402
-    burn_prefix, defender_state, first_at_or_after, read_game, successes,
+    burn_prefix, combat_kind, defender_state, first_at_or_after, read_game, successes,
 )
 
 #: `BattleSim.CHARGE` — the only act kind that fights a melee.
@@ -218,7 +224,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
                    for r in report["rolls"]]
             # EVERY roll the table drew under this ordinal, never a prefix:
             # truncating would hide "the table drew more than the port did".
-            want = [(r["roll_kind"], r["count"], r["target"], r["faces"], r["owner"])
+            # `roll_kind` goes through `combat_kind()` (NML-1104) — the
+            # module docstring's THE MORALE CHECK section says why.
+            want = [(combat_kind(r["roll_kind"]), r["count"], r["target"], r["faces"], r["owner"])
                     for r in dice[i0:] if int(r["act"]) == k]
             if not got and not want:
                 tally["both_silent"] += 1
