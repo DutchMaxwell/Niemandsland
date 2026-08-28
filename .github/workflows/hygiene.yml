@@ -23,6 +23,8 @@ jobs:
           # NML_ARMY_BOOKS_DIR (fleet boxes), never through res://.
           if [ -d assets/army_books ] || [ -d army_books ]; then
             echo "::error::army_books/ must not be committed — OPR rule text is delivered at runtime (see THIRD_PARTY.md)"; exit 1; fi
+      - name: "No OPR rule TEXT in a gameplay path (NML-1115)"
+        run: bash tools/no_rule_text_in_gameplay.sh
       - name: Docs version matches the engine (truth-pass guard)
         run: |
           V=$(grep -oP 'config/version="\K[^"]+' project.godot)
