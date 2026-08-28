@@ -754,6 +754,67 @@ def test_the_python_harness_plays_the_v4_oracle_seed_for_seed(monkeypatch):
     print("GATE M3-5 (v4): %d/%d seeds seed-for-seed equal" % (len(seeds), len(seeds)))
 
 
+@pytest.mark.skipif(not _gate_seeds_v4(), reason="no m3_ref_v4 recording on this machine")
+def test_the_charge_probe_radius_folds_the_attached_heroes(monkeypatch):
+    """`charge_probe_r` is `_move_base_radius_of` (act_recorder.gd:311-322) over
+    `SoloController._move_base_radius_m(_moving_models(u))`: the host's alive
+    models PLUS its attached heroes', floored at the shared default. It is NOT
+    `state["radii"]`, which carries the host's own base — the recorder says so
+    in as many words at :281-283.
+
+    Held against the ORACLE's own first act, unit for unit, on the only corpus
+    that has an attachment graph to get wrong. The RED half is the reading this
+    replaced: the host's base alone, which misses every host whose hero has the
+    bigger base.
+
+    It is INERT for every corpus recorded so far — `gate::charge_illegal`
+    (charge_gate) and `mv::step` (movement) are its only readers and both knobs
+    are off — which is why no gate number moves. That is the point: a latent
+    divergence closed before the rung that would trip over it.
+    """
+    monkeypatch.setattr(list_to_profile, "LEGACY_CORE_SELFPLAY", False)
+    seed = _gate_seeds_v4()[0]
+    with open(REF_DIR_V4 / ("acts_%d" % seed) / "acts.jsonl", encoding="utf-8") as fh:
+        header = json.loads(fh.readline())
+        state = json.loads(fh.readline())["state"]
+    rec = state["units"]
+
+    units = sp.load_army(ARMY1, 1) + sp.load_army(ARMY2, 2)
+    profiles = {u["unit_id"]: u for u in units}
+    selections = dict(sp.load_selections(ARMY1, 1))
+    selections.update(sp.load_selections(ARMY2, 2))
+    attached, attached_to = sp.derive_attachment(units, selections)
+    assert any(attached.values()), "the v4 lists no longer join a hero"
+
+    board, terrain, _ = sp.load_board(seed, BANK_DIR)
+    core = nml_core.load(str(REPO))
+    core.set_header({"profiles": profiles, "terrain": terrain,
+                     "knobs": dict(header["knobs"], charge_gate=False)})
+    # The recorded positions, so the capture answers about the same board state
+    # the oracle stamped its reads on.
+    positions = [rec[u["unit_id"]]["positions"] for u in units]
+    plain = sp.capture(units, positions, core.capture_reads(), board,
+                       state["objectives"], attached, attached_to)
+
+    off = [
+        (k, plain["units"][k]["charge_probe_r"], rec[k]["charge_probe_r"])
+        for k in rec
+        if abs(plain["units"][k]["charge_probe_r"] - rec[k]["charge_probe_r"]) > 1e-12
+    ]
+    assert not off, "charge_probe_r differs from the recorder: %s" % off
+
+    # RED — the host's own base alone, which is what the capture used to write.
+    red = [
+        k for k in rec
+        if abs(max(float(profiles[k]["base_radius"]), sp.DEFAULT_BASE_RADIUS_M)
+               - rec[k]["charge_probe_r"]) > 1e-12
+    ]
+    assert red, "no host in this fixture carries a hero with a bigger base"
+    for k in red:
+        assert attached[k], "%s differs but joins nobody — the fold is not the cause" % k
+    print("charge probe: %d of %d units need the hero fold (%s)" % (len(red), len(rec), red))
+
+
 @pytest.mark.skipif(not _gate_seeds(), reason="no recorded core_selfplay reference on this machine")
 def test_red_a_different_deployment_is_a_different_game():
     """RED PROOF for the gate: deploy from a generator seeded `seed + 1` while
