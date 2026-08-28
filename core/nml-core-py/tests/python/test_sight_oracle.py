@@ -5,6 +5,7 @@ shapes (no corpus files touched)."""
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -57,3 +58,30 @@ def test_impossible_count_is_unexplained():
     rec = make(alive=5, model_count=5, attacks=3, count=1, own=[4])
     assert rec["candidates"] == []
     assert so.bucket_of(rec) == "unexplained"
+
+
+def test_act_ordinal_is_interleaved_with_auto_lines(tmp_path):
+    # NML-1094: `dice.jsonl` numbers by position among ALL body lines (kind
+    # "act" OR "auto", PR #408), not among "act" lines alone. One "auto" line
+    # ahead of the only "act" line must still land the right dice slice: act
+    # is body position 2, so the recorded roll is stamped act=2, not act=1.
+    head = {"profiles": {SHOOTER: {"name": "Shooter", "model_count": 4,
+                                    "weapons": [{"attacks": 4, "count": 1, "range": 12}]}}}
+    body = [
+        {"kind": "auto"},
+        {"kind": "act", "pick": {"action": {"unit": SHOOTER, "shoot": TARGET, "kind": 0}},
+         "state": {"units": {SHOOTER: {"alive": 4, "attached": []}}}},
+    ]
+    game_dir = tmp_path / "game_1"
+    game_dir.mkdir()
+    lines = "\n".join(json.dumps(x) for x in [head, *body]) + "\n"
+    (game_dir / "acts.jsonl").write_text(lines)
+    dice = [{"act": 2, "roll_kind": "attack", "owner": "AI (Shooter)", "count": 4}]
+    (game_dir / "dice.jsonl").write_text("\n".join(json.dumps(x) for x in dice) + "\n")
+
+    records = so.collect(tmp_path, 0)
+
+    assert len(records) == 1
+    assert records[0]["act_no"] == 2
+    assert records[0]["own"] == [4]
+    assert so.bucket_of(records[0]) == "s_eq_alive"
