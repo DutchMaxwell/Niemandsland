@@ -583,6 +583,7 @@ static func close() -> void:
 	trace_enabled = false
 	close_node_dump()
 	MoveRecorder.close()   # NML-1073 M4-0a: the movement recorder shares this game/tool/test-end seam
+	AiRolloutTrace.close()   # NML-1114: the rollout trace shares the same seam
 
 
 ## NML-1073 M2-0: closes the node-dump stream at a GAME's end (arena_match.gd /

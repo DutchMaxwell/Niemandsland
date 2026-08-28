@@ -3121,6 +3121,8 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 		"target": (state["units"][victim_key] as Dictionary)["unit"] \
 			if victim_key != "" and state["units"].has(victim_key) else null,
 		"why": str(pick["intent"]), "expectation": pick["expectation"]}
+	var pick_features: Dictionary = AiMissionEval.features(_with_reserves(state), me,
+		BattleSim.reply_threat(state, me), true)
 	record_decision({"kind": "planner", "unit": chosen.get_name(),
 		"rule": "PLANNER_V0 unit pick (NML-995): the round is played out for the best openers; the strongest end-of-round position activates first",
 		"candidates": [], "chosen": "activates next", "why": str(pick["intent"]),
@@ -3133,8 +3135,11 @@ func _planner_pick_unit(pool: Array) -> GameUnit:
 			# arena logs the first per (side, round) as offline-fit input.
 			# Feature wave: stamp off-table reserves so the deploy state is a
 			# visible signal (the rollout itself never changes it).
-			"features": AiMissionEval.features(_with_reserves(state), me,
-				BattleSim.reply_threat(state, me), true)}})
+			"features": pick_features}})
+	# NML-1114: env NML_ROLLOUT_TRACE=<path> dumps the per-unit fold behind
+	# presence_*/tail_* for THIS pick (the pair that diverged in the 28.08. Gate C
+	# capture). Unset = a cached env check and an immediate return, no disk.
+	AiRolloutTrace.write(state, me, str(pick["unit_key"]), chosen.get_name(), pick_features)
 	# Leaf row (glasses v4): the winning candidate's horizon-end state — the
 	# distribution the leaf eval actually judges. Same record kind, flagged.
 	# NML-1073 M2-0b: TAKE it — the leaf is a live state (GameUnit refs, this
