@@ -179,6 +179,7 @@ fn seams_of(knobs: &Knobs) -> Seams {
         charge_landing: knobs.charge_landing,
         sighting: knobs.sighting == Sighting::Model,
         movement: knobs.movement,
+        no_dangerous: !knobs.dangerous,
     }
 }
 

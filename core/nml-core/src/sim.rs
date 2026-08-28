@@ -26,7 +26,7 @@ use crate::spell::{cast_success_chance_base, official_pick_order, spell_damage_e
 use crate::state::State;
 use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
 use crate::mv::CLEARANCE_EPS_IN;
-use crate::terrain::{gives_cover, Terrain};
+use crate::terrain::{base_in_terrain, gives_cover, is_dangerous, Terrain};
 use crate::unit::{Ctx, UnitStatic, ShootProfile};
 use crate::{CONTROL_EPS, IN2M};
 
@@ -186,6 +186,92 @@ pub fn land_wounds(state: &mut State, ti: usize, mut left: i64) {
         }
     }
     state.alive[ti] = state.positions[ti].len() as i64;
+}
+
+/// `_solo_tray_roll(model_count, 6, ...)` main.gd:7030 — the tray's SUCCESS
+/// target for a dangerous-terrain test, which the recording stamps on the roll.
+/// It is not the wound threshold: `_run_ai_dangerous` :7033 counts the **1s**.
+pub const DANGEROUS_TARGET: i64 = 6;
+
+/// `_run_ai_dangerous` main.gd:7032-7035 — a face of **1** is a wound to the
+/// unit. Named rather than inlined because the roll's recorded TARGET is 6 and
+/// the two numbers are easy to read as one.
+#[inline]
+pub(crate) fn dangerous_wounds(faces: &[u8]) -> i64 {
+    faces.iter().filter(|&&f| f == 1).count() as i64
+}
+
+/// `SoloController._execute_move` :5033-5047 (GF/AoF v3.5.1 p.12, "Bug 23") —
+/// how many dice the move's dangerous-terrain test rolls.
+///
+/// THE RULE, verbatim from the table. Flying ignores terrain effects while
+/// moving (p.13) and tests for nothing. Every other MOVING model — the host's
+/// and its attached heroes' alike (`_moving_models` :5375) — is affected when
+/// its ROUTE crossed a Dangerous cell OR it was ACTIVATED standing in one, both
+/// measured edge-aware on the base (`TerrainRules.base_in_terrain`). One test
+/// per affected model, and that test rolls the model's TOUGH value in dice
+/// (`maxi(1, wounds_max)`), summed — the count `report["dangerous_dice"]` :2228
+/// carries and `_run_ai_dangerous` draws.
+///
+/// THE CROSSING HALF IS ONLY EXACT WITH `movement="table"`, where D5-2's
+/// `Landing::dangerous` carries the solver's own per-model trails. A rigid move
+/// has no route at all, so the END cell stands in for it and the activation is
+/// marked `dangerous_rigid_end_only`: a model that walked THROUGH a minefield
+/// and stopped past it is missed there. The activated-in-it half is exact
+/// either way.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn dangerous_dice(
+    statics: &[UnitStatic],
+    state: &State,
+    next: &State,
+    si: usize,
+    seams: Seams,
+    landing: Option<&crate::mv::step::Landing>,
+    cover: Cover,
+    shot: &mut ShootResult,
+) -> i64 {
+    let Cover::Board(t) = cover else { return 0 };
+    if !t.is_valid() || state.profile(si).special_rules.iter().any(|r| r == "Flying") {
+        return 0;
+    }
+    // `base_in_terrain` on this board — both halves of the trigger use it.
+    let in_dang = |p: &[f64; 3], r: f64| base_in_terrain(geom::to_f32(*p), r, t, is_dangerous);
+    let radius = |st: &State, u: usize, m: usize| {
+        st.radii[u].get(m).copied().unwrap_or(DEFAULT_BASE_RADIUS_M)
+    };
+    // (unit, model, did the model's route cross a Dangerous cell)
+    let mut movers: Vec<(usize, usize, bool)> = Vec::new();
+    match landing {
+        Some(l) => movers.extend((0..l.movers.len()).map(|i| {
+            (l.movers[i].unit, l.movers[i].model, l.dangerous.get(i).copied().unwrap_or(false))
+        })),
+        None => {
+            shot.mark("dangerous_rigid_end_only");
+            let mut units = vec![si];
+            if seams.hero_attach {
+                units.extend(state.attached[si].iter().copied());
+            }
+            for u in units {
+                let ends = (0..next.positions[u].len())
+                    .map(|m| (u, m, in_dang(&next.positions[u][m], radius(next, u, m))));
+                movers.extend(ends);
+            }
+        }
+    }
+    let mut dice = 0;
+    for (u, m, crossed) in movers {
+        let Some(p0) = state.positions[u].get(m) else { continue };
+        if !crossed && !in_dang(p0, radius(state, u, m)) {
+            continue;
+        }
+        // `wounds_max` is the FULL model list and `positions` only the survivors;
+        // this port's casualties come off the FRONT (`land_wounds`), so the living
+        // models are that list's tail.
+        let w = &statics[state.roster.profile[u]].wounds_max;
+        let off = w.len().saturating_sub(state.positions[u].len());
+        dice += w.get(off + m).copied().unwrap_or(1).max(1);
+    }
+    dice
 }
 
 /// `BattleSim._expected_shooting_morale` battle_sim.gd:1096-1105 /
@@ -1158,7 +1244,7 @@ fn resolve_with(
             );
         }
     }
-    if let Some(land) = landing {
+    if let Some(land) = landing.as_ref() {
         moved = true;
         for (i, m) in land.movers.iter().enumerate() {
             next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
@@ -1278,6 +1364,38 @@ fn resolve_with(
             }
         }
     }
+    // --- DANGEROUS TERRAIN (main.gd:1039-1047 -> `_run_ai_dangerous` :7026) ---
+    // The table rolls this after EVERY executed move — advance, rush and charge
+    // alike — and BEFORE the casts, the buffs and any melee, so it is also the
+    // first thing the activation puts on the tray. Six is the tray's success
+    // TARGET (:7030) but a **1** is what wounds (:7033): the recorded roll is
+    // `attack`, `count` dice, `6`, signed by the moving unit.
+    if moved && !seams.no_dangerous {
+        if let Some((tray, shot)) = dice.as_mut() {
+            let n = dangerous_dice(statics, state, &next, si, seams, landing.as_ref(), cover, shot);
+            if n > 0 {
+                let faces = tray.roll(n as usize);
+                let w = dangerous_wounds(&faces);
+                shot.rolls.push(crate::dice::Roll {
+                    kind: "attack",
+                    count: n,
+                    target: DANGEROUS_TARGET,
+                    faces,
+                    owner: statics[pi_s].name.clone(),
+                });
+                if w > 0 {
+                    land_wounds(&mut next, si, w);
+                    // main.gd:1096-1098 — a NON-charge activation tests morale for
+                    // these wounds at its very END, after everything else it did.
+                    // Not ported: it would need the whole tail of the activation.
+                    if kind != CHARGE {
+                        shot.mark("dangerous_end_morale");
+                    }
+                }
+            }
+        }
+    }
+
     // --- cast sub-phase (battle_sim.gd:602-607), seam-gated ---
     // `_best_spell_target` (:930) probes `_los_clear` with the POST-move
     // centres, which the pre-move `los_pairs` of `state_before` cannot answer —

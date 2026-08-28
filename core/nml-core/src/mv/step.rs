@@ -44,11 +44,6 @@ const DEFAULT_BASE_RADIUS_M: f64 = 0.016;
 /// `SoloController.OVERLAP_EPS_M` :154 — also the distance-truth trim's slack.
 const OVERLAP_EPS_M: f64 = 0.0005;
 
-/// `TerrainRules.is_dangerous` as the fn pointer `base_in_terrain` takes.
-fn is_dangerous(t: i32) -> bool {
-    t == terrain::DANGEROUS
-}
-
 /// One model the charge displaces — `SoloController._moving_models` :5375 is the
 /// unit's own alive models PLUS its attached heroes', one flat list.
 #[derive(Clone, Copy, Debug)]
@@ -68,6 +63,12 @@ pub struct Landing {
     pub budget_in: f64,
     /// The LONGEST single-model arc, in inches — what :8659 subtracts.
     pub arc_in: f64,
+    /// `_dangerous_trail_flags(trails, trail_radii_m)` :5036, in `movers` order:
+    /// did this model's ROUTE cross a DANGEROUS cell? Read off the trails at the
+    /// same point the table reads them — after the distance-truth trim, BEFORE
+    /// `_retrace_to` (:5053) rewrites them toward the gated endpoint. Always
+    /// false for a Flying unit, which ignores terrain effects while moving (p.13).
+    pub dangerous: Vec<bool>,
     /// The `plan_unit_step` call this landing was solved from — the LAST one,
     /// so a p.11 re-plan reports the call it actually kept. `None` only when
     /// the bounds-clamped delta was zero and no call was ever made. Kept for
@@ -221,7 +222,7 @@ fn terrain_cells(t: &Terrain, board: [f64; 2], avoid_diff: bool, avoid_dang: boo
             }
             let cell = (cx as i32, cy as i32);
             grid.insert(cell, ty as i64);
-            if (avoid_diff && terrain::is_difficult(ty)) || (avoid_dang && is_dangerous(ty)) {
+            if (avoid_diff && terrain::is_difficult(ty)) || (avoid_dang && terrain::is_dangerous(ty)) {
                 avoid.insert(cell);
             }
         }
@@ -333,7 +334,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool) -> MoveCa
     let avoid_fine = if avoid_diff || avoid_dang {
         fine_cells(&mpos, mdelta, board, margin_in, t, &|w| {
             (avoid_diff && terrain::base_in_terrain(w, own_r_m, t, terrain::is_difficult))
-                || (avoid_dang && terrain::base_in_terrain(w, own_r_m, t, is_dangerous))
+                || (avoid_dang && terrain::base_in_terrain(w, own_r_m, t, terrain::is_dangerous))
         })
     } else {
         CellSet::new()
@@ -456,19 +457,24 @@ fn retrace_to(route: &[V2], start: V2, gated: V2) -> Vec<V2> {
 /// `_trails_cross_difficult` :5174 over `_path_crosses_terrain` :6963 — the p.11
 /// cap trigger, measured on the REAL polyline with the base edge included.
 fn trails_cross_difficult(trails: &[Vec<V2>], radii_m: &[f64], t: &Terrain) -> bool {
+    trails
+        .iter()
+        .enumerate()
+        .any(|(i, leg)| leg_crosses(leg, radii_m.get(i).copied().unwrap_or(0.0), t, terrain::is_difficult))
+}
+
+/// ONE trail against ONE terrain class — `_path_crosses_terrain` :6963 leg by
+/// leg, at half-cell steps, with the base EDGE included (`base_in_terrain`).
+pub(crate) fn leg_crosses(leg: &[V2], r: f64, t: &Terrain, class: fn(i32) -> bool) -> bool {
     let cell_m = terrain::CELL_IN * IN2M;
-    for (i, leg) in trails.iter().enumerate() {
-        let r = radii_m.get(i).copied().unwrap_or(0.0);
-        for w in leg.windows(2) {
-            let (a, b) = (t.from_inch(w[0], 0.0), t.from_inch(w[1], 0.0));
-            let span = g2::distance_to(w[0], w[1]) * IN2M;
-            let steps = ((span / (cell_m * 0.5)).ceil() as i64).max(1);
-            for k in 0..=steps {
-                let f = k as f64 / steps as f64;
-                let p = geom::add(a, geom::mul(geom::sub(b, a), f));
-                if terrain::base_in_terrain(p, r, t, terrain::is_difficult) {
-                    return true;
-                }
+    for w in leg.windows(2) {
+        let (a, b) = (t.from_inch(w[0], 0.0), t.from_inch(w[1], 0.0));
+        let span = g2::distance_to(w[0], w[1]) * IN2M;
+        let steps = ((span / (cell_m * 0.5)).ceil() as i64).max(1);
+        for k in 0..=steps {
+            let f = k as f64 / steps as f64;
+            if terrain::base_in_terrain(geom::add(a, geom::mul(geom::sub(b, a), f)), r, t, class) {
+                return true;
             }
         }
     }
@@ -533,7 +539,7 @@ pub fn charge_move(
     let mut reach = band_in;
     let avoid_diff = !ignores_difficult
         && !targets_in(&pos, goal, reach, own_r_m, t, half, terrain::is_difficult);
-    let avoid_dang = !flying && !targets_in(&pos, goal, reach, own_r_m, t, half, is_dangerous);
+    let avoid_dang = !flying && !targets_in(&pos, goal, reach, own_r_m, t, half, terrain::is_dangerous);
     let ch = Charge {
         state,
         t,
@@ -563,6 +569,7 @@ pub fn charge_move(
     // :4838-4847 — distance truth: no model's polyline may exceed the budget.
     let budget_in = reach;
     let mut arc_in = 0.0f64;
+    let mut dangerous: Vec<bool> = Vec::with_capacity(trails.len());
     let starts: Vec<V2> = ch.movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
     for (i, leg) in trails.iter_mut().enumerate() {
         if g2::polyline_length(leg) * IN2M > budget_in * IN2M + OVERLAP_EPS_M {
@@ -573,6 +580,10 @@ pub fn charge_move(
                 }
             }
         }
+        // :5036 — the p.12 crossing flag is read HERE, on the routed trail, and
+        // not after the retrace below: the table counts the cells the model
+        // actually traversed even when the gate nudges its resting spot.
+        dangerous.push(!flying && leg_crosses(leg, radii_m.get(i).copied().unwrap_or(0.0), t, terrain::is_dangerous));
         // :4853-4855 — and THEN the trail is retraced to the endpoint, which is
         // the polyline `last_move_paths` publishes and :8659 measures.
         *leg = retrace_to(leg, starts[i], planned.get(i).copied().unwrap_or(starts[i]));
@@ -588,7 +599,7 @@ pub fn charge_move(
             [w[0], ch.pos[i][1], w[2]]
         })
         .collect();
-    Some(Landing { movers: ch.movers.clone(), end, budget_in, arc_in, call })
+    Some(Landing { movers: ch.movers.clone(), end, budget_in, arc_in, dangerous, call })
 }
 
 #[cfg(test)]
@@ -706,6 +717,88 @@ mod tests {
         assert!(w[1][0][0].abs() < 1e-3 && w[1][0][1].abs() < 1e-3, "{w:?}");
         // A board with no `walls` key has none — and that is NOT "no ruins".
         assert!(board(vec![]).walls_in().is_empty());
+    }
+
+    /// A 6x4 ft board with ONE painted DANGEROUS cell at the origin. `type_at`
+    /// indexes `floor(x / cell_m + half_grid)`, and a 72"x48" table's grid is 30
+    /// cells wide, so the cell holding world (0, 0) is (15, 15).
+    fn dangerous_board() -> Terrain {
+        Terrain::build(&PlainTerrain {
+            cells: vec![[15.0, 15.0, terrain::DANGEROUS as f64]],
+            sandbox: Vec::<Obb>::new(),
+            walls: vec![],
+            cell_params: CellParams {
+                table_size_feet: [6.0, 4.0],
+                grid_rotation_degrees: 0.0,
+                grid_size_inches: 3.0,
+                inches_to_meters: IN2M,
+            },
+        })
+    }
+
+    /// The p.12 trigger's CROSSING half, on the real polyline — `_path_crosses_
+    /// terrain` :6963 with the base edge included. GREEN: a leg that walks over
+    /// the painted cell is a crossing. RED: the same leg 12" to the side is not,
+    /// so the flag is reading the board and not returning true on principle.
+    #[test]
+    fn a_trail_over_a_dangerous_cell_is_a_crossing_and_one_beside_it_is_not() {
+        let t = dangerous_board();
+        // The board's inch frame is 0-origin, so the painted centre cell is (36, 24).
+        let over: Vec<V2> = vec![[30.0, 24.0], [42.0, 24.0]];
+        let beside: Vec<V2> = vec![[30.0, 12.0], [42.0, 12.0]];
+        assert!(leg_crosses(&over, 0.0, &t, terrain::is_dangerous));
+        assert!(!leg_crosses(&beside, 0.0, &t, terrain::is_dangerous));
+        // Edge-aware (`base_in_terrain`): the painted cell spans 36..39" x 24..27",
+        // so a leg half an inch short of its edge is a crossing for a 1" base...
+        let short = vec![[30.0, 23.5], [42.0, 23.5]];
+        assert!(leg_crosses(&short, IN2M, &t, terrain::is_dangerous));
+        // ...and the same leg for a POINT (radius 0) is not.
+        assert!(!leg_crosses(&short, 0.0, &t, terrain::is_dangerous));
+    }
+
+    /// `_execute_move` :5033-5047 — WHAT the test rolls. THE FIXTURE the brief
+    /// asks for: a 3-model unit whose route crossed one dangerous cell draws 3
+    /// dice, and a Tough(3) model draws 3 on its own.
+    #[test]
+    fn the_dangerous_test_rolls_one_die_per_tough_point_of_every_affected_model() {
+        use crate::sim::{dangerous_dice, dangerous_wounds};
+        use crate::unit::UnitStatic;
+        let t = dangerous_board();
+        // Three models parked 12" off the painted cell — nobody is STANDING in it,
+        // so every die below has to come from the route.
+        let away = [0.0f32, 0.0, 12.0 * IN2M as f32];
+        let st = two_unit_state(vec![away, away, away], vec![[1.0, 0.0, 0.0]]);
+        let movers: Vec<Mover> = (0..3).map(|model| Mover { unit: 0, model }).collect();
+        let land = |dang: Vec<bool>| Landing {
+            movers: movers.clone(),
+            end: vec![away; 3],
+            budget_in: 6.0,
+            arc_in: 0.0,
+            dangerous: dang,
+            call: None,
+        };
+        let tough1 = vec![UnitStatic { wounds_max: vec![1, 1, 1], ..Default::default() }];
+        let mut shot = crate::dice::ShootResult::default();
+        let seams = crate::io::Seams::default();
+        let call = |statics: &[UnitStatic], l: &Landing, shot: &mut crate::dice::ShootResult| {
+            dangerous_dice(statics, &st, &st, 0, seams, Some(l), crate::sim::Cover::Board(&t), shot)
+        };
+        // Tough(1) x 3, all three routes crossing: three dice.
+        assert_eq!(call(&tough1, &land(vec![true, true, true]), &mut shot), 3);
+        // One model crossed: one die. The count is per MODEL, not per unit.
+        assert_eq!(call(&tough1, &land(vec![true, false, false]), &mut shot), 1);
+        // RED: nobody crossed and nobody stands in it — no test at all.
+        assert_eq!(call(&tough1, &land(vec![false, false, false]), &mut shot), 0);
+        // Tough(3) weighting (p.12 "as many dice as Tough"): one crossing model
+        // with 3 wounds rolls 3, which is `maxi(1, wounds_max)` and not `1`.
+        let tough3 = vec![UnitStatic { wounds_max: vec![3, 3, 3], ..Default::default() }];
+        assert_eq!(call(&tough3, &land(vec![true, false, false]), &mut shot), 3);
+        // A profile that carries no per-model list still rolls the floor of one.
+        let bare = vec![UnitStatic::default()];
+        assert_eq!(call(&bare, &land(vec![true, true, false]), &mut shot), 2);
+        // And the wound rule is the ONE, not the target: 6 is what the tray shows.
+        assert_eq!(dangerous_wounds(&[1, 6, 3, 1]), 2);
+        assert_ne!(dangerous_wounds(&[6, 6, 6]), 3, "counting 6s is the RED reading");
     }
 
     /// `_retrace_to` :6912 is the whole arc measure, so it gets its own red-green.

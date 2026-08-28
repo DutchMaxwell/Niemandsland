@@ -283,6 +283,12 @@ pub struct Seams {
     /// `BattleSim` rollout keeps its cheap straight-line imagination.
     #[serde(default)]
     pub movement: bool,
+    /// NML-1073 M5 D1-B8 — the RED switch for the p.12 DANGEROUS-terrain test,
+    /// and inverted on purpose: the test is not a research seam but a rule, so
+    /// `false` (the `Default`, and every corpus's) RUNS it. It fires only on the
+    /// `dice="table"` path, which is why an EV planner seat can leave it alone.
+    #[serde(default)]
+    pub no_dangerous: bool,
 }
 
 impl Node {

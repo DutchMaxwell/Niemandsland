@@ -163,7 +163,8 @@ def classify(got: list, want: list) -> str:
     return "full_equal" if len(got) == len(want) else "length"
 
 
-def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool) -> int:
+def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
+        no_dangerous: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -189,7 +190,8 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool)
         burn = burn_prefix(dice)
         core = nml_core.load(repo)
         core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
-                         "knobs": dict(head.get("knobs", {}), hero_attach=True)})
+                         "knobs": dict(head.get("knobs", {}), hero_attach=True,
+                                       dangerous=not no_dangerous)})
         for pos, act in enumerate(lines):
             k = int(act["act"])
             action = (act.get("pick") or {}).get("action") or {}
@@ -247,8 +249,9 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool)
 
     acts = sum(grid[c]["acts"] for c in ("shooting", "melee"))
     print()
-    print("GATE D1-B6 over %d games, %d activations%s (%.1fs)"
+    print("GATE D1-B6 over %d games, %d activations%s%s (%.1fs)"
           % (len(games), acts, "" if not red else " — RED --red-%s" % red,
+             " — RED --red-no-dangerous (the p.12 test switched OFF)" if no_dangerous else "",
              time.perf_counter() - t0))
     print("  A STREAM: %d/%d games replay the recorded tray exactly (%d rolls)"
           % (chk["stream_ok"], len(games), chk["rolls"]))
@@ -268,7 +271,7 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool)
             print("  first %s divergence: %s" % (name, text))
 
     summary = {"tool": "dice_gate", "gate": "D1-B6", "ref": str(ref), "games": len(games),
-               "red": red or "none", "checks": chk, "classes": grid, "totals": tot,
+               "red": red or "none", "no_dangerous": no_dangerous, "checks": chk, "classes": grid, "totals": tot,
                "first": first, "seconds": round(time.perf_counter() - t0, 1)}
     if out:
         Path(out).expanduser().write_text(json.dumps(summary, indent=1, sort_keys=True))
@@ -321,13 +324,17 @@ def main(argv: list[str]) -> int:
             ("formula", "RED for check B: score the table's faces one pip off (> instead of >=)"),
             ("one-wound", "RED for check C: move the port's wound total by one")):
         ap.add_argument("--red-" + knob, action="store_true", help=helptext)
+    ap.add_argument("--red-no-dangerous", action="store_true",
+                    help="RED for D1-B8: switch the p.12 DANGEROUS-terrain test back OFF "
+                         "(header knob dangerous=false). Orthogonal to the three checks above "
+                         "— every number must fall back to the pre-D1-B8 baseline")
     a = ap.parse_args(argv)
     reds = [k for k in ("extra-draw", "formula", "one-wound")
             if getattr(a, "red_" + k.replace("-", "_"))]
     if len(reds) > 1:
         ap.error("one red knob at a time — each has to redden its own check alone")
     return run(Path(a.ref).expanduser(), a.repo, a.limit, a.out, reds[0] if reds else "",
-               a.report_only)
+               a.report_only, a.red_no_dangerous)
 
 
 if __name__ == "__main__":
