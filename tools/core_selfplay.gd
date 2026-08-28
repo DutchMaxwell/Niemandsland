@@ -476,8 +476,24 @@ static func _seize_on(state: Dictionary, _objectives: Array, owners: Array) -> v
 	BattleSim.playout_seize(state, owners)
 
 
-## Lightweight GameUnits from an Army-Forge list JSON — the test-fixture
-## recipe (unit_properties + OPRUnit weapons + positionless models), no 3D.
+## GameUnits built through the TABLE's OWN import path — the same two calls
+## `tools/arena_match.gd` makes, minus everything that needs a renderer:
+##   OPRApiClient.build_army_offline()  (opr_api_client.gd, the network-free half
+##     of _parse_tts_api_response) -> Army-Forge base recommendation + Tough base
+##     fallback, item grants, typed upgrade gains, selectionId/joinToUnit, the
+##     Combined fold;
+##   EquipmentDistributor.create_from_opr_unit() (the very call
+##     OPRArmyManager._spawn_unit makes) -> unit_properties, per-model Tough,
+##     loadout distribution, caster tokens;
+##   OPRArmyManager.attach_joined_heroes_of() + .expand_auras_of() -> the two
+##     post-spawn passes, hoisted to statics for exactly this.
+## NML-1105: this used to be a hand-rolled reduced copy, and the oracle it feeds
+## paid for it — 32 mm bases for EVERY unit (no `bases`, no Tough fallback), no
+## item grants, no aura expansion, no hero attachment, and rule names guessed out
+## of upgrade LABEL text (real lists carry `gains`, never a parsable label, so
+## that hack only ever invented rules). Model nodes are bare Node3Ds: no meshes,
+## no renderer — only `SeparationChecker.shape_for_model` reads them, and it
+## takes the base off `unit_properties`.
 func _units_from_list(path: String, player: int) -> Array:
 	var text := FileAccess.get_file_as_string(path)
 	if text.is_empty():
@@ -485,172 +501,42 @@ func _units_from_list(path: String, player: int) -> Array:
 	var data: Variant = JSON.parse_string(text)
 	if not (data is Dictionary):
 		return []
-	var out: Array = []
-	var uidx := 0
 	# v1c (v5.1): the registry resolves spell books via faction_folder +
 	# game_system — factory lists carry the faction in their FILENAME
-	# ({faction}_{points}.json) and the system in the list json.
+	# ({faction}_{points}.json); the table reads it off the army book, which
+	# costs a network round trip this harness must not take.
 	var faction := path.get_file().get_basename()
 	var us := faction.rfind("_")
 	if us > 0:
 		faction = faction.substr(0, us)
-	var gsys := str((data as Dictionary).get("gameSystem", "gf"))
-	# Engine unit accounting (verified on round-1 snapshots): COMBINED pairs
-	# (combined:true + joinToUnit) merge into ONE unit with pooled models and
-	# weapons; attached HEROES (combined:false + joinToUnit) stay separate.
-	var raw: Array = (data as Dictionary).get("units", [])
-	var by_sel := {}
-	for u in raw:
-		var ud := u as Dictionary
-		if ud.get("joinToUnit") and bool(ud.get("combined", false)):
-			continue   # folded into its partner in the second pass
-		var gu := GameUnit.new()
-		gu.unit_id = "p%d_%d_%s" % [player, uidx, str(ud.get("id", uidx))]
-		uidx += 1
-		var rules: Array = []
-		for r in ud.get("rules", []):
-			var rn := str((r as Dictionary).get("label", (r as Dictionary).get("name", "")))
-			if rn != "":
-				rules.append(rn)
-		gu.unit_properties = {"player_id": player, "name": str(ud.get("name", "Unit")),
-			"quality": int(ud.get("quality", 4)), "defense": int(ud.get("defense", 4)),
-			"special_rules": rules}
-		gu.unit_properties["faction_folder"] = faction
-		gu.unit_properties["game_system"] = gsys
-		gu.source_type = "opr"
-		# NML-1073 M3-6b: a fresh OPRUnit() carries only class DEFAULTS
-		# (quality 4, defense 4, size 1, cost 0) — BattleSim.board_rows reads
-		# od.quality/od.defense straight off this object for the trainer's
-		# net-input columns 10/11, so every recorded row was 4/4 no matter the
-		# real unit. Fill the same header fields the list JSON already gave
-		# gu.unit_properties above. selection_id/join_to_unit stay UNSET
-		# (unlike the real import path): battle_sim.gd's NML-1081 attachment
-		# fallback keys off them, and wiring that up changes sim behaviour —
-		# out of scope here (combat profile stays exactly as it was).
-		var ou := OPRApiClient.OPRUnit.new()
-		ou.id = str(ud.get("id", uidx))
-		ou.name = str(ud.get("name", "Unit"))
-		ou.size = int(ud.get("size", 1))
-		ou.cost = int(ud.get("cost", 0))
-		ou.quality = int(ud.get("quality", 4))
-		ou.defense = int(ud.get("defense", 4))
-		gu.source_data = ou
-		_append_selection(gu, ud)
-		by_sel[str(ud.get("selectionId", ""))] = gu
-		out.append(gu)
-	for u in raw:
-		var ud := u as Dictionary
-		if not (ud.get("joinToUnit") and bool(ud.get("combined", false))):
-			continue
-		var host: GameUnit = by_sel.get(str(ud["joinToUnit"]), null)
-		if host != null:
-			_append_selection(host, ud)
-		else:
-			printerr("[CORE] WARN: combined partner %s not found" % str(ud["joinToUnit"]))
-	# NML-1046 M1: grant caster tokens via the SAME shared method the import
-	# path uses (equipment_distributor.gd:394) — no duplicated logic. Must run
-	# AFTER the combined pass above: Caster Group's X is the unit's model
-	# count, and combined halves must already be folded into the host.
-	for built in out:
-		(built as GameUnit).initialize_caster_points()
-	return out
-
-
-## A weapon PROFILE token always declares attacks and/or range — a rule grant
-## never does — so this flags "A2" (attacks), a `24"` range figure, or a
-## "Range..." field.
-static func _is_weapon_profile_token(token: String) -> bool:
-	var re := RegEx.new()
-	re.compile("^A\\d+$|\\d\"$|^Range\\b")
-	return re.search(token) != null
-
-
-## Rule labels an upgrade OPTION's label grants — the parenthesized tail lists them
-## (e.g. "Archivist (Caster(2))" grants "Caster(2)"; "Champion (Fear, Caster(1))"
-## grants both, split at TOP-LEVEL commas so "Caster(1)"'s own parens stay intact).
-## No parenthesized tail = a plain weapon/item swap, not a rule grant -> empty.
-## NML-1066 guard: a WEAPON-SWAP option also carries a parenthesized tail (its
-## profile, e.g. "Energy Sword (A2, AP(1), Rending)") — if ANY split token looks
-## like a weapon-profile field, the whole label is a swap, not a rule grant, so
-## it must NOT leak stray tokens into unit-wide special_rules (RulesRegistry/AiEv
-## read that array for combat EVs — this harness stays parity-bound).
-static func _rules_in_upgrade_label(label: String) -> Array:
-	var open := label.find("(")
-	var close := label.rfind(")")
-	if open < 0 or close <= open:
+	var client := OPRApiClient.new()
+	var army: OPRApiClient.OPRArmy = client.build_army_offline(data as Dictionary)
+	client.free()
+	if army == null:
 		return []
-	var inner := label.substr(open + 1, close - open - 1)
 	var out: Array = []
-	var depth := 0
-	var start := 0
-	for i in range(inner.length()):
-		var c := inner[i]
-		if c == "(":
-			depth += 1
-		elif c == ")":
-			depth -= 1
-		elif c == "," and depth == 0:
-			var piece := inner.substr(start, i - start).strip_edges()
-			if piece != "":
-				out.append(piece)
-			start = i + 1
-	var last := inner.substr(start).strip_edges()
-	if last != "":
-		out.append(last)
-	for token in out:
-		if _is_weapon_profile_token(token):
-			return []
+	var by_unit: Dictionary = {}
+	var uidx := 0
+	for ou: OPRApiClient.OPRUnit in army.units:
+		var nodes: Array[Node3D] = []
+		for _m in range(maxi(ou.size, 1)):
+			var n := Node3D.new()
+			root.add_child(n)
+			nodes.append(n)
+		var gu := EquipmentDistributor.create_from_opr_unit(ou, nodes, player)
+		# GameUnit.generate_unit_id() is time+randi: the sidecar roster, every
+		# board row and every act line key off this id, so the harness keeps its
+		# own DETERMINISTIC one (unchanged shape: "p<player>_<index>_<list id>").
+		gu.unit_id = "p%d_%d_%s" % [player, uidx, str(ou.id)]
+		uidx += 1
+		gu.unit_properties["faction_folder"] = faction
+		by_unit[ou] = gu
+		out.append(gu)
+	# The two passes OPRArmyManager.spawn_army runs after the last unit is built,
+	# in that order: a hero must be attached before the aura pass can read him.
+	OPRArmyManager.attach_joined_heroes_of(army.units, by_unit)
+	OPRArmyManager.expand_auras_of(army.units, by_unit)
 	return out
-
-
-## Adds one selection's models (with their Tough pools) and weapons to a unit —
-## used for the base selection and again for its combined partner, so a
-## combined-in hero's OWN upgrade rules also reach the (shared) host unit.
-func _append_selection(gu: GameUnit, ud: Dictionary) -> void:
-	# NML-1066: rules an upgrade GRANTS (e.g. "Archivist (Caster(2))") never land
-	# in ud["rules"] — the real import path resolves them from the option's typed
-	# "gains" (opr_api_client.gd:850), but this lightweight fixture carries only
-	# the option's label string, so we parse it instead. Must run before
-	# initialize_caster_points() (the loop at the end of _units_from_list) so an
-	# upgrade-granted Caster gets its tokens.
-	var rules: Array = gu.unit_properties.get("special_rules", [])
-	for su in ud.get("selectedUpgrades", []):
-		var option := (su as Dictionary).get("option", {}) as Dictionary
-		for rl in _rules_in_upgrade_label(str(option.get("label", ""))):
-			if rl not in rules:
-				rules.append(rl)
-	for w in ud.get("weapons", []):
-		var wd := w as Dictionary
-		var ow := OPRApiClient.OPRWeapon.new()
-		ow.name = str(wd.get("name", "W"))
-		ow.range_value = int(wd.get("range", 0))
-		ow.attacks = int(wd.get("attacks", 1))
-		ow.count = maxi(int(wd.get("count", 1)), 1)
-		for wr in wd.get("specialRules", []):
-			# NML-1073 M3-3b: weapon-level rule dicts (e.g. {"name":"AP","rating":1})
-			# carry no "label" — the old label/name fallback silently dropped the
-			# rating, zeroing AP/Blast/Deadly for every weapon in the trainer.
-			# _rule_to_string is the shared, tested source of truth (also used by
-			# the arena import path) for turning a rule dict into "Name(X)".
-			var wl := OPRApiClient._rule_to_string(wr as Dictionary)
-			if wl != "":
-				ow.special_rules.append(wl)
-		(gu.source_data as OPRApiClient.OPRUnit).weapons.append(ow)
-	var tough := 1
-	for r in ud.get("rules", []):
-		var rl := str((r as Dictionary).get("label", (r as Dictionary).get("name", "")))
-		if rl.begins_with("Tough("):
-			tough = maxi(int(rl.trim_prefix("Tough(").trim_suffix(")")), 1)
-	for _m in range(int(ud.get("size", 1))):
-		var mi := ModelInstance.new()
-		mi.is_alive = true
-		mi.wounds_current = tough
-		mi.wounds_max = tough
-		mi.unit = gu
-		var n := Node3D.new()
-		root.add_child(n)
-		mi.node = n
-		gu.models.append(mi)
 
 
 ## S3: 12"-deep ZONE deployment — units spread across width AND depth (the

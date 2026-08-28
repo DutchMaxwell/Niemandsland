@@ -403,21 +403,16 @@ func _extract_list_id(input: String) -> String:
 	return input
 
 
-## Parse the TTS API response (contains full resolved unit data!)
-func _parse_tts_api_response(json_text: String) -> OPRArmy:
-	var json = JSON.new()
-	var error = json.parse(json_text)
-
-	if error != OK:
-		push_error("OPRApiClient: JSON parse error: %s" % json.get_error_message())
-		import_failed.emit("Invalid API response format")
-		return null
-
-	var data = json.data
-	if not data is Dictionary:
-		import_failed.emit("Invalid army data")
-		return null
-
+## The NETWORK-FREE half of the TTS import: army header, every unit through
+## `_parse_tts_unit` (Army-Forge base recommendation + Tough fallback, item
+## grants, typed upgrade gains, selectionId/joinToUnit) and the Combined fold.
+## Split out so a HEADLESS tool can build the table's units with no HTTP and no
+## scene: `tools/core_selfplay.gd` (the M3 oracle) hand-rolled a reduced copy of
+## this and got 32 mm bases for everyone, no item grants, no aura input and rule
+## names guessed out of upgrade LABEL text (NML-1105). Everything the ARMY BOOK
+## answers — faction_name/faction_folder, rule_descriptions, spells — stays with
+## the caller: it needs the network.
+func build_army_offline(data: Dictionary) -> OPRArmy:
 	var army = OPRArmy.new()
 
 	# Parse army info
@@ -445,6 +440,25 @@ func _parse_tts_api_response(json_text: String) -> OPRArmy:
 	# Fold OPR "Combined" unit halves into single larger units (e.g. 2x[5] -> 1x[10]).
 	# model_count is the sum of model sizes and is unchanged by merging.
 	army.units = _merge_combined_units(army.units)
+	return army
+
+
+## Parse the TTS API response (contains full resolved unit data!)
+func _parse_tts_api_response(json_text: String) -> OPRArmy:
+	var json = JSON.new()
+	var error = json.parse(json_text)
+
+	if error != OK:
+		push_error("OPRApiClient: JSON parse error: %s" % json.get_error_message())
+		import_failed.emit("Invalid API response format")
+		return null
+
+	var data = json.data
+	if not data is Dictionary:
+		import_failed.emit("Invalid army data")
+		return null
+
+	var army = build_army_offline(data)
 
 	# Fetch faction name from Army Book API using armyId
 	if not army.army_id.is_empty():
