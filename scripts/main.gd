@@ -10835,7 +10835,18 @@ func _solo_apply_wounds(target: GameUnit, wounds: int) -> void:
 		# (the old own-models total printed impossible "(4/3)" shapes once the hero soaked the spill).
 		# Log the wounds that actually LANDED, not the requested amount — the rout wipe passes an overkill
 		# figure and printed "takes 120 wounds" (Windows playtest bug 6); spill past the pool is no wound.
-		battle_log.on_wounds(target.get_name(), maxi(0, requested - maxi(remaining, 0)), _solo_combined_alive(target), SoloController.combined_total(target))
+		var landed: int = maxi(0, requested - maxi(remaining, 0))
+		# NML-1091: a unit that IS one multi-wound model has no model counter to print — "(1/1)" stood
+		# there unchanged from full health to the last wound. Its own remaining wounds are the figure
+		# the reader needs. Read off the model (wounds_max > 1 = what Tough(N) grants) rather than the
+		# rule text, so the printed numbers always come from the same place; every other unit — more
+		# than one model, or a joined hero in the pool — keeps the model counter unchanged.
+		var alone: bool = target.models.size() == 1 and SoloController.combined_total(target) == 1
+		var lone: ModelInstance = target.models[0] if alone else null
+		if lone != null and int(lone.wounds_max) > 1:
+			battle_log.on_wounds(target.get_name(), landed, maxi(int(lone.wounds_current), 0), int(lone.wounds_max), true)
+		else:
+			battle_log.on_wounds(target.get_name(), landed, _solo_combined_alive(target), SoloController.combined_total(target))
 	_solo_hero_carries_on(target)
 
 
