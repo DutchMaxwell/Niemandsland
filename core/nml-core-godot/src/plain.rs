@@ -20,7 +20,9 @@ use godot::builtin::VariantType;
 use nml_core::io::los_positions;
 use nml_core::state::{Bands, MoveBands, Roster};
 use nml_core::terrain::{CellParams, Obb, PlainTerrain};
-use nml_core::{Knobs, Marker, Mods, Objective, Profile, ProfileDyn, Profiles, State, Weapon};
+use nml_core::{
+    Knobs, Marker, Mods, Objective, Profile, ProfileDyn, Profiles, Sighting, State, Weapon,
+};
 
 /// The dynamic per-unit keys `BattleSim._UNIT_DYNAMIC` (battle_sim.gd:1247-1250)
 /// writes, minus the two this port does not model (see `DROPPED`). Bit `i` of a
@@ -795,6 +797,14 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // recorded rollout. Absent = `Knobs::default()` = OFF, and honoured if
         // a header ever does carry it.
         charge_landing: d.get("charge_landing").map(|v| flag(&v)).unwrap_or(dflt.charge_landing),
+        // NML-1073 M5 D6a-B4. A header key, like every seam above: `"model"`
+        // gives the tray volley the table's own per-model, per-weapon die
+        // count. Anything else — including the absent key of every corpus
+        // recorded before it — is `Sighting::Unit`, today's behaviour.
+        sighting: match d.get("sighting").map(|v| v.to_string()).as_deref() {
+            Some("model") => Sighting::Model,
+            _ => dflt.sighting,
+        },
     }
 }
 

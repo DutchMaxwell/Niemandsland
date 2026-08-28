@@ -42,7 +42,7 @@ pub const DESTROY_DEFENCE_WEIGHT: f64 = 0.8;
 
 pub use acts::{
     load_acts, read_act_header, read_acts, Act, ActCorpus, ActHeader, ActStatics, ArbitrationRec,
-    Expectation, Knobs, PickRec, RolloutValue, RunnerRec, Scored,
+    Expectation, Knobs, PickRec, RolloutValue, RunnerRec, Scored, Sighting,
 };
 pub use arbitration::{
     arbitrate, arbitrate_bent, full_playout, full_playout_bent, ArbBend, Arbitration,

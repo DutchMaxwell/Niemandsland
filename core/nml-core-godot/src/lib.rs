@@ -127,7 +127,14 @@ impl NmlCore {
     #[func]
     fn set_seams(&mut self, spacing: bool, cast: bool) {
         let path = self.seams_now().path;
-        self.seams = Some(Seams { spacing, cast, path, hero_attach: false, charge_landing: false });
+        self.seams = Some(Seams {
+            spacing,
+            cast,
+            path,
+            hero_attach: false,
+            charge_landing: false,
+            sighting: false,
+        });
     }
 
     /// NML-1073 M4-7 — NML_SIM_PATH: the imagined move follows a tier-2
@@ -638,6 +645,9 @@ impl NmlCore {
                 hero_attach: false,
                 // NML-1073 M5 D5-1 — same reasoning: a header knob, not an env one.
                 charge_landing: false,
+                // NML-1073 M5 D6a-B4, same reasoning: `sighting` rides the
+                // HEADER knobs into the tray resolver and is inert here.
+                sighting: false,
             });
         }
         self.seams.unwrap()
