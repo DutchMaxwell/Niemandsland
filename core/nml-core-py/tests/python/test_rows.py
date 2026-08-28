@@ -93,6 +93,24 @@ def _legacy_prefix_rules():
     nml_core.set_legacy_prefix_rules(False)
 
 
+#: NML-1103 replay switch, NOT a game knob — the sibling of `LEGACY_PREFIX_RULES`
+#: and `list_to_profile.LEGACY_CORE_SELFPLAY` for the conditional-AP family.
+#: `AiEv.stamp_conditional_ap` was never called in the sim path when this corpus
+#: was cut, so its search valued Shatter / Tear / Disintegrate / Melee Slayer /
+#: Piercing Assault / Piercing Hunter at their PRINTED AP while the table
+#: resolved them with the bonus (main.gd:6319). Replaying those games against the
+#: fixed EV would measure the fix, not the search loop this gate pins. Neither
+#: reading is game-true forever: re-record after NML-1105 and the flag retires.
+LEGACY_NO_COND_AP = True
+
+
+@pytest.fixture(autouse=True)
+def _legacy_no_cond_ap():
+    nml_core.set_legacy_no_cond_ap(LEGACY_NO_COND_AP)
+    yield
+    nml_core.set_legacy_no_cond_ap(False)
+
+
 def test_board_rows_and_features_match_every_recorded_activation():
     names = [n for n, _, _ in games()]
     assert names, f"no games under {ORACLE}"

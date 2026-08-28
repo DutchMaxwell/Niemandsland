@@ -19,6 +19,7 @@
 //! merged once here and filtered per call.
 
 use std::rc::Rc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, SELF_REPAIR_TARGET,
@@ -699,6 +700,24 @@ fn cond_ap_of(reg: &mut Registries, p: &Profile, base: &str) -> (Option<CondAp>,
     )
 }
 
+/// LEGACY REPLAY ONLY — skip the NML-1103 conditional-AP stamp, so
+/// `profile_ev` prices Shatter / Tear / Disintegrate / Melee Slayer / Piercing
+/// Assault / Piercing Hunter at their PRINTED AP the way the pre-NML-1103
+/// `BattleSim` did. Nothing else in this crate reads it, and `false` (the
+/// default, and the only setting a fresh corpus may use) is the shipped rule.
+///
+/// Why a switch exists at all: `AiEv.stamp_conditional_ap` was never called in
+/// the sim path, so every frozen corpus under `~/selfplay_out` recorded a search
+/// that valued those weapons at AP(0) while the TABLE resolved them with the
+/// bonus (`main.gd:6319`). Replaying one of those games against the fixed EV
+/// measures the fix, not the search loop the corpus was cut to pin.
+///
+/// NEITHER READING IS GAME-TRUE FOREVER. The corpora pin the SEARCH LOOP, not
+/// the rule; a corpus re-recorded after NML-1105 (the `core_selfplay.gd` loader)
+/// will differ from both, and this flag retires with it. Never set it to make a
+/// NEW recording agree with an old one.
+pub static LEGACY_NO_COND_AP: AtomicBool = AtomicBool::new(false);
+
 /// `AiEv.stamp_conditional_ap` ai_ev.gd:283-315 — NML-1103. The pass
 /// `BattleSim._profiles_of` (battle_sim.gd:927) runs right after `stamp_sergeant`,
 /// on the melee and the ranged array alike. WEAPON rules stamp their own spec;
@@ -706,6 +725,9 @@ fn cond_ap_of(reg: &mut Registries, p: &Profile, base: &str) -> (Option<CondAp>,
 /// model shoots…") sit on the UNIT and are stamped onto every profile, deduped
 /// against the weapon's own rules BY NAME.
 fn stamp_conditional_ap(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile]) {
+    if LEGACY_NO_COND_AP.load(Ordering::Relaxed) {
+        return; // frozen-corpus replay — see the flag's own note
+    }
     let mut unit_specs: Vec<(String, CondAp)> = Vec::new();
     for r in &p.special_rules {
         let base = base_rule_name(r);
