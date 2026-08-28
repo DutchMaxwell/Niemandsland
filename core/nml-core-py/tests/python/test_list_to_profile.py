@@ -334,14 +334,27 @@ def test_an_oval_base_answers_its_circumscribed_radius():
     assert _radius_of(sel) == pytest.approx(want, abs=1e-12)
 
 
-def test_an_unusable_base_keeps_the_32mm_default():
+def test_an_unusable_base_runs_the_keyword_tough_ladder():
     """Army Forge answers `round:"none"` for a model it has no recommendation
-    for. The table then runs its Tough ladder; this loader does not (module
-    docstring), so the unit keeps OPRUnit's 32 mm — scaled by Tough like any
-    other base, which is why a Tough(12) tank reads 60 mm of radius here."""
-    sel = _selection("u", "Unit", size=1, rules=[{"label": "Tough(12)"}])
-    sel["bases"] = {"round": "none", "square": "none"}
-    assert _radius_of(sel) == pytest.approx(0.016 * (120.0 / 32.0), abs=1e-12)
+    for (common for vehicles). NML-1097b: the table then classifies the model
+    by keyword + Tough (`_classify_big_model`) and sizes an OVAL vehicle base
+    off Tough alone — this loader now matches, reproducing qbf_ref's own
+    "Battle Tank" (Tough(12) -> 92x120) and "Organ Tank" (Tough(9) -> 70x105)."""
+    battle_tank = _selection("u", "Battle Tank", size=1, rules=[{"label": "Tough(12)"}])
+    battle_tank["bases"] = {"round": "none", "square": "none"}
+    want_battle_tank = math.sqrt(0.046**2 + 0.060**2)
+    assert _radius_of(battle_tank) == pytest.approx(want_battle_tank, abs=1e-12)
+
+    organ_tank = _selection("u", "Organ Tank", size=1, rules=[{"label": "Tough(9)"}])
+    organ_tank["bases"] = {"round": "none", "square": "none"}
+    want_organ_tank = math.sqrt(0.035**2 + 0.0525**2)
+    assert _radius_of(organ_tank) == pytest.approx(want_organ_tank, abs=1e-12)
+
+
+def test_an_unusable_base_keeps_the_32mm_default_below_tough_3():
+    """Below Tough(3) `_apply_tough_base_fallback` is a no-op (opr_api_client.gd:
+    617-618) — a normal infantry model with no base recommendation keeps
+    OPRUnit's 32 mm default, unchanged by the NML-1097b keyword ladder."""
     plain = _selection("u", "Unit", size=1)
     plain["bases"] = {}
     assert _radius_of(plain) == pytest.approx(0.016, abs=1e-12)
