@@ -26,6 +26,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
 
+import list_to_profile  # noqa: E402
 from list_to_profile import (  # noqa: E402
     _rule_to_string,
     _rules_in_upgrade_label,
@@ -41,15 +42,28 @@ from list_to_profile import (  # noqa: E402
 ORACLE_DIR = Path.home() / "selfplay_out" / "m3_oracle_v2"
 AI_LISTS_DIR = Path.home() / "nml-mission" / "farm" / "ai_lists"
 
-#: NML-1097 — fields this loader deliberately no longer reproduces field for
-#: field. `tools/core_selfplay.gd:_units_from_list` never copies a list's
-#: "bases" onto `unit_properties`, so every unit in an M3 corpus header was
-#: recorded at the 32 mm fallback; the ARENA, importing the SAME lists through
-#: the table's own path, records the real radii. The trainer now follows the
-#: table, so this corpus can no longer gate the column — `tools/loader_gate.py`
-#: (against the arena's act headers) does, and it is the stronger oracle.
-#: Everything else below still has to match core_selfplay exactly.
-DIVERGED_FROM_CORE_SELFPLAY = ("base_radius",)
+#: NML-1097 — base_radius. `tools/core_selfplay.gd:_units_from_list` never
+#: copies a list's "bases" onto `unit_properties`, so every unit in an M3
+#: corpus header was recorded at the 32 mm fallback; the ARENA, importing the
+#: SAME list through the table's own path, records the real radius.
+#: NML-1098 — special_rules, item_grants, move_bands, tough, caster_value.
+#: `tools/core_selfplay.gd` parses rule names out of upgrade LABEL text and
+#: never reads a list's items, item grants or auras, so every M3 corpus
+#: header was recorded without them; the ARENA, importing the SAME lists
+#: through the table's own path, records all of them.
+#: Both are fields this loader deliberately no longer reproduces field for
+#: field: the trainer now follows the table, so this corpus can no longer
+#: gate these columns — `tools/loader_gate.py` (against the arena's act
+#: headers) does, and it is the stronger oracle. Everything else below still
+#: has to match core_selfplay exactly.
+DIVERGED_FROM_CORE_SELFPLAY = (
+    "base_radius",
+    "special_rules",
+    "item_grants",
+    "move_bands",
+    "tough",
+    "caster_value",
+)
 
 
 # === synthetic unit tests =====================================================
@@ -89,7 +103,7 @@ def test_combined_unit_folds_into_one_profile():
     """A combined:true partner (a champion bought INTO a squad) merges into
     ONE profile keyed by the host — pooled models/wounds, weapons and rules
     from BOTH selections, matching core_selfplay.gd:_units_from_list's
-    two-pass fold."""
+    two-pass fold and, since NML-1098, `_merge_combined_units`' rule fold."""
     data = {
         "gameSystem": "gf",
         "units": [
@@ -104,7 +118,7 @@ def test_combined_unit_folds_into_one_profile():
                 "partner",
                 "Trooper Champion",
                 size=1,
-                rules=[{"name": "Tough(2)"}],  # base rule — NOT folded (see below)
+                rules=[{"name": "Tough(2)"}],  # base rule — folded (see below)
                 weapons=[{"name": "Power Sword", "range": 0, "attacks": 2, "count": 1}],
                 upgrades=[{"option": {"label": "Veteran (Furious)"}}],
                 join_to_unit="host",
@@ -120,12 +134,16 @@ def test_combined_unit_folds_into_one_profile():
     assert prof["wounds_max"] == [1, 1, 1, 1, 2]
     # weapons from BOTH selections, host first
     assert [w["name"] for w in prof["weapons"]] == ["Rifle", "Power Sword"]
-    # Fast (host's own base rule) + Furious (partner's UPGRADE-label grant) fold in;
-    # the partner's own base rule (Tough(2)) does NOT — core_selfplay.gd only ever
-    # copies a selection's base "rules" into special_rules at HOST creation time,
-    # never for a combined partner (only used locally there for per-model tough).
-    assert prof["special_rules"] == ["Fast", "Furious"]
-    assert prof["tough"] == 1  # no "Tough(" in special_rules -> default floor
+    # NML-1098: the partner's own rule line folds into the anchor, deduped —
+    # `_merge_combined_units` (opr_api_client.gd:1402-1404). "Furious" does NOT:
+    # an upgrade LABEL is not a rule source on the table, only `option.gains` is,
+    # and every one of the 6741 selectedUpgrades in both AI list pools has none.
+    assert prof["special_rules"] == ["Fast", "Tough(2)"]
+    # FLAGGED, the table's own reading: a merged Tough(2) champion makes the
+    # WHOLE squad read Tough(2) at unit level while per-model wounds stay 1 — the
+    # per-model Tough guard exists for ITEMS (:809-811) and not for this merge.
+    # Ported as the table has it; no unit in qbf_ref exercises the difference.
+    assert prof["tough"] == 2
     assert prof["move_bands"] == {"advance": 8.0, "rush": 16.0}  # Fast: +2"/+4"
 
 
@@ -159,46 +177,73 @@ def test_joined_hero_stays_a_separate_unit():
     assert hero["weapons"][0]["name"] == "Energy Blade"
 
 
-def test_upgrade_label_grants_an_item_rule():
-    """An upgrade OPTION's parenthesized label tail grants a rule the raw
-    "rules" array never carries (NML-1066) — "Archivist (Caster(2))" must
-    show up in special_rules AND drive caster_value, exactly like
-    core_selfplay.gd:_rules_in_upgrade_label + _append_selection."""
+def _item(name: str, granted: list[str], count: int = 1, weapon: str | None = None) -> dict:
+    """One resolved non-weapon `loadout` entry, in Army Forge's own shape."""
+    content: list[dict] = [{"type": "ArmyBookRule", "name": g} for g in granted]
+    if weapon:
+        content.append({"type": "ArmyBookWeapon", "name": weapon, "attacks": 2})
+    return {"name": name, "type": "ArmyBookItem", "count": count, "content": content}
+
+
+def test_an_items_name_and_its_rules_reach_the_rule_line():
+    """NML-1098, `_parse_tts_unit` :790-813: a unit-wide loadout item puts its
+    OWN name on the rule line and then every rule it grants, in that order, and
+    the grants are also indexed by item for the registry."""
+    sel = _selection("u", "Trooper", rules=[{"label": "Strider"}])
+    sel["loadout"] = [_item("Combat Bio-Engineer", ["Furious Aura"])]
+    prof = profiles_from_army_forge_json(
+        {"gameSystem": "gf", "units": [sel]}, "test_faction", player=1
+    )["p1_0_u"]
+    assert prof["special_rules"] == [
+        "Strider",
+        "Combat Bio-Engineer",
+        "Furious Aura",
+    ]
+    assert prof["item_grants"] == ["Furious Aura"]
+
+
+def test_a_per_model_item_stays_off_the_rule_line_and_keeps_its_tough():
+    """An item only a SUBSET of the models carry is per-model equipment: its
+    name never joins the unit rule line, and a Tough(X) it grants must not buff
+    the whole squad (:803-813). Its other rules still apply unit-wide."""
+    sel = _selection("u", "Squad", size=5)
+    sel["loadout"] = [_item("Weapon Team", ["Tough(3)", "Shielded"], count=1)]
+    prof = profiles_from_army_forge_json(
+        {"gameSystem": "gf", "units": [sel]}, "test_faction", player=1
+    )["p1_0_u"]
+    assert prof["special_rules"] == ["Shielded"]
+    assert prof["tough"] == 1
+    assert prof["item_grants"] == ["Tough(3)", "Shielded"]
+
+
+def test_an_item_that_grants_a_weapon_loses_that_name_from_the_rule_line():
+    """`_granted_weapons_of_item` (:775-781): a Weapon Team's autocannon is a
+    weapon, not a profile-less rule, so the table erases its name again."""
+    sel = _selection("u", "Trooper", rules=[{"label": "HE Autocannon"}])
+    sel["loadout"] = [_item("Weapon Team", [], weapon="HE Autocannon")]
+    prof = profiles_from_army_forge_json(
+        {"gameSystem": "gf", "units": [sel]}, "test_faction", player=1
+    )["p1_0_u"]
+    assert prof["special_rules"] == ["Weapon Team"]
+
+
+def test_the_legacy_reading_still_parses_the_upgrade_label(monkeypatch):
+    """`LEGACY_CORE_SELFPLAY` reproduces `tools/core_selfplay.gd` again — rule
+    names out of the upgrade LABEL text, no loadout pass, no item grants, no
+    auras. The M3-5 seed-for-seed gates replay corpora recorded under it."""
+    monkeypatch.setattr(list_to_profile, "LEGACY_CORE_SELFPLAY", True)
     assert _rules_in_upgrade_label("Archivist (Caster(2))") == ["Caster(2)"]
-    data = {
-        "gameSystem": "gf",
-        "units": [
-            _selection(
-                "caster",
-                "Adept",
-                upgrades=[{"option": {"label": "Archivist (Caster(2))"}}],
-            ),
-        ],
-    }
-    profiles = profiles_from_army_forge_json(data, "test_faction", player=1)
-    prof = profiles["p1_0_caster"]
+    assert _rules_in_upgrade_label("Energy Sword (A2, AP(1), Rending)") == []
+    sel = _selection(
+        "caster", "Adept", upgrades=[{"option": {"label": "Archivist (Caster(2))"}}]
+    )
+    sel["loadout"] = [_item("Combat Bio-Engineer", ["Furious Aura"])]
+    prof = profiles_from_army_forge_json(
+        {"gameSystem": "gf", "units": [sel]}, "test_faction", player=1
+    )["p1_0_caster"]
     assert prof["special_rules"] == ["Caster(2)"]
     assert prof["caster_value"] == 2
-
-
-def test_weapon_swap_label_grants_nothing():
-    """A weapon-swap upgrade's label ALSO carries a parenthesized tail (its
-    profile, e.g. "A2, AP(1)") — that must NOT leak into special_rules
-    (NML-1066 guard: any split token that looks like a weapon-profile field
-    voids the whole label as a rule grant)."""
-    assert _rules_in_upgrade_label('Energy Sword (A2, AP(1), Rending)') == []
-    data = {
-        "gameSystem": "gf",
-        "units": [
-            _selection(
-                "swap",
-                "Trooper",
-                upgrades=[{"option": {"label": "Energy Sword (A2, AP(1), Rending)"}}],
-            ),
-        ],
-    }
-    profiles = profiles_from_army_forge_json(data, "test_faction", player=1)
-    assert profiles["p1_0_swap"]["special_rules"] == []
+    assert prof["item_grants"] == []
 
 
 def test_weapon_rule_keeps_its_rating():

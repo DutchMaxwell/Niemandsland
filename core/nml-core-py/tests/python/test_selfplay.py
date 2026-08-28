@@ -64,13 +64,13 @@ GATE_SEEDS = range(27, 47)
 
 @pytest.fixture(autouse=True)
 def _legacy_core_selfplay_loader():
-    """NML-1097: every corpus this module gates against was recorded by
-    `tools/core_selfplay.gd`, whose loader never copies a list's base sizes — so
-    every model in it sits on the 32 mm fallback. The trainer now reads the real
-    bases (it follows the TABLE, not that harness), so a seed-for-seed replay of
-    THOSE games must ask the loader for THAT reading; otherwise this gate would
-    be measuring the loader fix instead of the search loop, and the fix has its
-    own gate in `tools/loader_gate.py`."""
+    """NML-1098: every corpus this module gates against was recorded by
+    `tools/core_selfplay.gd`, whose loader reads rule names out of upgrade LABEL
+    text and never sees a list's items, item grants or auras. The trainer now
+    follows the TABLE, so a seed-for-seed replay of THOSE games must ask the
+    loader for THAT reading; otherwise this gate would be measuring the loader
+    fix instead of the search loop, and the fix has its own gate in
+    `tools/loader_gate.py`."""
     before = list_to_profile.LEGACY_CORE_SELFPLAY
     list_to_profile.LEGACY_CORE_SELFPLAY = True
     yield
