@@ -39,6 +39,12 @@ pub fn is_difficult(t: i32) -> bool {
     t == FOREST
 }
 
+/// `TerrainRules.is_dangerous` terrain_rules.gd:68-69 — the p.12 test's class.
+#[inline]
+pub fn is_dangerous(t: i32) -> bool {
+    t == DANGEROUS
+}
+
 /// One freely placed shelf piece — `TerrainOverlay._sandbox_shapes()`, flattened
 /// by `AiActRecorder._terrain_line` (act_recorder.gd:143-149).
 #[derive(Debug, Clone, Deserialize)]

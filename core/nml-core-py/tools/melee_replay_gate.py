@@ -140,7 +140,8 @@ def trailing_morale(rolls: list[tuple]) -> list[tuple]:
 
 def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         charge_landing: bool = False, movement: bool = False,
-        walls_check: bool = False, rigid_red: bool = False) -> int:
+        walls_check: bool = False, rigid_red: bool = False,
+        no_dangerous: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -178,6 +179,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
                          if head.get("terrain") else None,
                          "knobs": dict(head.get("knobs", {}), hero_attach=True,
                                        charge_landing=charge_landing,
+                                       dangerous=not no_dangerous,
                                        movement=movement and not rigid_red)})
         if walls_check and walls:
             walls_seen["games"] += 1
@@ -311,6 +313,8 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         label += " + D5-1 charge_landing"
     if movement:
         label += " + D5-2 movement=table" + (" [RED: rigid]" if rigid_red else "")
+    if no_dangerous:
+        label += " [RED: --red-no-dangerous, the p.12 test OFF]"
     silent_table = tally["both_silent"] + tally["table_silent"]
     print()
     print("%s over %d games, %d charge acts (%.1fs)"
@@ -413,11 +417,15 @@ def main(argv: list[str]) -> int:
                          "budget the route left over) also passes. OFF is the D1-B5b bar; the "
                          "D5-1 red is the same corpus WITHOUT the flag, where the 'table drew "
                          "nothing' class climbs back")
+    ap.add_argument("--red-no-dangerous", action="store_true",
+                    help="RED PROOF for D1-B8: switch the p.12 DANGEROUS-terrain test back OFF "
+                         "(header knob dangerous=false), everything else unchanged. Every "
+                         "bucket must fall back to the pre-D1-B8 baseline")
     a = ap.parse_args(argv)
     return run(Path(a.ref).expanduser(), a.repo,
                "misseed" if a.red_misseed else a.mode, a.limit, a.report_only,
                a.charge_landing, a.movement or a.red_move_rigid, a.walls_check,
-               a.red_move_rigid)
+               a.red_move_rigid, a.red_no_dangerous)
 
 
 if __name__ == "__main__":

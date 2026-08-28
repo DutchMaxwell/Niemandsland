@@ -538,6 +538,9 @@ impl Core {
             // per-model, per-weapon die count on for the TRAY resolver only.
             sighting: self.knobs.sighting == Sighting::Model,
             movement: self.knobs.movement,
+            // NML-1073 M5 D1-B8 — the header's RED switch, inverted: `dangerous`
+            // defaults true, so the p.12 test runs unless a gate turns it off.
+            no_dangerous: !self.knobs.dangerous,
         }
     }
 
@@ -598,6 +601,7 @@ impl Core {
             ),
         );
         m.insert("movement".into(), self.knobs.movement.into());
+        m.insert("dangerous".into(), self.knobs.dangerous.into());
         to_py(py, &Value::Object(m))
     }
 

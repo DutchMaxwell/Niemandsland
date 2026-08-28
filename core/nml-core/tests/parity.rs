@@ -236,7 +236,7 @@ fn spacing_clamp_is_load_bearing() {
     let corpus = load_nodes(SPACING).expect("fixture loads");
     let statics = build_statics(&corpus, REPO);
     let off = Seams { spacing: false, cast: false, path: false, hero_attach: false, charge_landing: false, sighting: false,
-        movement: false };
+        movement: false, no_dangerous: false };
     let mut broken = 0usize;
     for node in &corpus.nodes {
         let got = resolve(&statics, &node.state_before, &node.action, node.cover_dest, off, node.cast_los())
@@ -448,7 +448,7 @@ fn the_cast_subphase_is_load_bearing() {
     let corpus = load_nodes(CAST).expect("fixture loads");
     let statics = build_statics(&corpus, REPO);
     let legacy = Seams { spacing: true, cast: false, path: false, hero_attach: false, charge_landing: false, sighting: false,
-        movement: false };
+        movement: false, no_dangerous: false };
     let mut broken = 0usize;
     for node in &corpus.nodes {
         let got = resolve(

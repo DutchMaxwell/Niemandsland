@@ -245,6 +245,11 @@ def test_d5_2_review_the_landing_gate_only_bites_with_charge_landing_on():
     1000_s30` act 24, the review's own proof: off/off draws 2 melee rolls, and
     table/off MUST equal it (before the fix it drew 0); table/table (both
     knobs on) still refuses.
+
+    `dangerous=False` throughout: D1-B8 puts a p.12 dangerous-terrain roll in
+    front of the melee on this very act, and this test's subject is the LANDING
+    gate, not the die count. With the knob on, every arm below simply gains that
+    one roll (3 / 3 / 1) and the three relations are unchanged.
     """
     import nml_core
 
@@ -260,7 +265,8 @@ def test_d5_2_review_the_landing_gate_only_bites_with_charge_landing_on():
         core = nml_core.load(str(REPO))
         core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
                          "knobs": dict(head.get("knobs", {}), hero_attach=True,
-                                       charge_landing=charge_landing, movement=movement)})
+                                       charge_landing=charge_landing, movement=movement,
+                                       dangerous=False)})
         i0 = srg.first_at_or_after(dice, 24)
         tray = nml_core.Tray(seed)
         if burn[i0]:
@@ -273,6 +279,67 @@ def test_d5_2_review_the_landing_gate_only_bites_with_charge_landing_on():
     assert rolls[(True, False)] == rolls[(False, False)], (
         "movement=table with charge_landing OFF must behave like D5-1-off: %s" % rolls)
     assert rolls[(True, True)] == 0, "movement=table WITH charge_landing still refuses: %s" % rolls
+
+
+@pytest.mark.skipif(not QBE_REF.exists(), reason="no qbe_ref reference corpus on this machine")
+def test_d1_b8_the_dangerous_terrain_test_is_the_activations_first_roll():
+    """NML-1073 M5 D1-B8 — the p.12 DANGEROUS-terrain test, end to end against
+    the recording.
+
+    `qbe_ref/alien_hives_1500_vs_change_disciples_1500_s30` act 27 is a charge
+    the table never fought: its ONLY recorded roll is the dangerous test, which
+    is why it sat in `port_silent` before this rung. The table drew 11 dice at
+    6+ signed "AI (Change Mutated Cultists)" — 11, not 8, because the unit's
+    models are Tough-weighted (`maxi(1, wounds_max)`, solo_controller.gd:5046)
+    — and two of the faces are 1s, so the unit took 2 wounds and stood at 14
+    models / 14 wounds in the next act.
+
+    GREEN: the port reproduces the roll TUPLE (kind, count, target, faces,
+    owner) and lands the same two wounds. RED: with the header knob
+    `dangerous=false` it draws nothing and leaves the unit at 16/16, which is
+    not where the table found it.
+    """
+    import nml_core
+
+    game = QBE_REF / "alien_hives_1500_vs_change_disciples_1500_s30"
+    head, lines, dice, seed = srg.read_game(game)
+    burn = srg.burn_prefix(dice)
+    walls, _ = mrg.header_walls_m(game, head)
+    pos = next(i for i, a in enumerate(lines) if int(a["act"]) == 27)
+    action = lines[pos]["pick"]["action"]
+
+    def arm(dangerous: bool):
+        core = nml_core.load(str(REPO))
+        core.set_header({"profiles": head["profiles"],
+                         "terrain": dict(head.get("terrain") or {}, walls=walls),
+                         "knobs": dict(head.get("knobs", {}), hero_attach=True,
+                                       charge_landing=True, movement=True,
+                                       dangerous=dangerous)})
+        i0 = srg.first_at_or_after(dice, 27)
+        tray = nml_core.Tray(seed)
+        if burn[i0]:
+            tray.roll(burn[i0])
+        nxt, report = core.resolve_with_tray(
+            core.state_of(lines[pos]["state"]), action, nml_core.Rng(0), tray)
+        return report, srg.defender_state(nxt.plain(), action["unit"])
+
+    want = [(r["roll_kind"], r["count"], r["target"], r["faces"], r["owner"])
+            for r in dice[srg.first_at_or_after(dice, 27):] if int(r["act"]) == 27]
+    assert len(want) == 1 and want[0][1:3] == (11, 6), "the recording itself: %s" % (want,)
+    table_next = srg.defender_state(lines[pos + 1]["state"], action["unit"])
+
+    report, got_next = arm(True)
+    got = [(r["kind"], r["count"], r["target"], r["faces"], "AI (%s)" % r["owner"])
+           for r in report["rolls"]]
+    assert got == want, "the port's roll vs the table's: %s vs %s" % (got, want)
+    assert got_next == table_next == (14, 14), "%s vs %s" % (got_next, table_next)
+    # No silent skip anywhere on this act: `movement="table"` carries the real
+    # per-model trails, so the rigid-end approximation is never reached.
+    assert "dangerous_rigid_end_only" not in report["unported"]
+
+    red_report, red_next = arm(False)
+    assert red_report["rolls"] == [], "RED --red-no-dangerous still drew: %s" % red_report
+    assert red_next == (16, 16) != table_next, "the RED must leave the unit unwounded: %s" % (red_next,)
 
 
 def test_trailing_morale_keeps_a_no_retreat_block_together():

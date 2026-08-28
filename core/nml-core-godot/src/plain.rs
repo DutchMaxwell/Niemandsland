@@ -818,6 +818,10 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
             _ => dflt.sighting,
         },
         movement: d.get("movement").map(|v| flag(&v)).unwrap_or(dflt.movement),
+        // NML-1073 M5 D1-B8. Not a seam: the p.12 test belongs to `dice="table"`
+        // and defaults ON. Absent (every corpus) = `Knobs::default()` = true, and
+        // a gate that writes `false` gets the RED reading.
+        dangerous: d.get("dangerous").map(|v| flag(&v)).unwrap_or(dflt.dangerous),
     }
 }
 

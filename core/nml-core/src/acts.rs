@@ -85,6 +85,12 @@ pub struct Knobs {
     /// default is OFF and nothing replays differently.
     #[serde(default)]
     pub movement: bool,
+    /// NML-1073 M5 D1-B8 — the p.12 DANGEROUS-terrain test. NOT a feature knob:
+    /// the test is part of `dice="table"` and defaults ON, exactly the way
+    /// `charge_gate` defaults ON. It exists so a gate can switch it OFF and prove
+    /// the numbers come back (`--red-no-dangerous`).
+    #[serde(default = "yes")]
+    pub dangerous: bool,
 }
 
 /// The `sighting` knob's two settings — the header writes them as strings, the
@@ -126,6 +132,7 @@ impl Default for Knobs {
             charge_landing: false,
             sighting: Sighting::Unit,
             movement: false,
+            dangerous: true,
         }
     }
 }
