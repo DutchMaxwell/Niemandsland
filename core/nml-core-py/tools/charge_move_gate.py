@@ -55,7 +55,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 import nml_core  # noqa: E402
-from melee_replay_gate import IN2M, header_walls_m  # noqa: E402
+from melee_replay_gate import IN2M, header_walls_m, round_only_profiles  # noqa: E402
 from shoot_replay_gate import (  # noqa: E402
     read_game, resolve_vintage_flag, vintage_report_line,
 )
@@ -114,7 +114,8 @@ def call_diff(got: dict, want: dict) -> str:
 
 
 def run(ref: Path, repo: str, limit: int, red_shift: bool, red_no_walls: bool,
-        report_only: bool, engage_fold: str = "auto", cond_ap: str = "auto") -> int:
+        report_only: bool, engage_fold: str = "auto", cond_ap: str = "auto",
+        red_round_only: bool = False) -> int:
     games = sorted(d for d in ref.iterdir()
                    if d.is_dir() and (d / "moves_calls.jsonl").exists())
     if limit:
@@ -151,7 +152,8 @@ def run(ref: Path, repo: str, limit: int, red_shift: bool, red_no_walls: bool,
         eff_cond_ap = resolve_vintage_flag(cond_ap, head, repo, "cond_ap")
         vintage_seen.add((eff_engage_fold, eff_cond_ap))
         nml_core.set_legacy_no_cond_ap(not eff_cond_ap)
-        core.set_header({"profiles": head["profiles"],
+        core.set_header({"profiles": round_only_profiles(head["profiles"])
+                         if red_round_only else head["profiles"],
                          "terrain": dict(head.get("terrain") or {},
                                          walls=[] if red_no_walls else walls)
                          if head.get("terrain") else None,
@@ -281,6 +283,10 @@ def main(argv: list[str]) -> int:
                          "withheld; the routes that had to bend must miss")
     ap.add_argument("--report-only", action="store_true",
                     help="exit 0 even when acts are short (this tool is a GATE by default)")
+    ap.add_argument("--red-round-only", action="store_true",
+                    help="RED PROOF for D5-2b: drop the header's base_shape/base_w_mm/"
+                         "base_d_mm so the charge aim measures circumscribing circles "
+                         "again. CALL must fall back to the pre-D5-2b baseline")
     ap.add_argument("--engage-fold", choices=("auto", "on", "off"), default="auto",
                     help="NML-1130: the header knob engage_fold (PR #446). 'auto' (default) "
                          "reads the corpus's OWN vintage (vintage_knobs) — absent means the "
@@ -291,7 +297,7 @@ def main(argv: list[str]) -> int:
                          "force it")
     a = ap.parse_args(argv)
     return run(Path(a.ref).expanduser(), a.repo, a.limit, a.red_shift, a.red_no_walls,
-               a.report_only, a.engage_fold, a.cond_ap)
+               a.report_only, a.engage_fold, a.cond_ap, a.red_round_only)
 
 
 if __name__ == "__main__":

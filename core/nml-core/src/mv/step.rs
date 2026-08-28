@@ -123,10 +123,17 @@ fn nearest_charge_vector(state: &State, from: &[Mover], to: &[Mover]) -> (f64, V
     for cm in from {
         let c = pos_of(state, *cm);
         let rc = radius_of(state, *cm);
+        let sc = state.base_shape(cm.unit);
         for em in to {
             let e = pos_of(state, *em);
-            let flat: V3 = [c[0] - e[0], 0.0, c[2] - e[2]];
-            let gap = (geom::length(flat) as f64 - rc - radius_of(state, *em)) / IN2M;
+            // D5-2b: :8573 asks `SeparationChecker.edge_distance`, i.e. the base
+            // SHAPE. The circumscribing circle read an oval target 0.4-1.4"
+            // closer than the table did, and `travel = min(band, gap)` below
+            // aimed the whole charge that much short. Round bases delegate to
+            // the arithmetic this line always ran.
+            let gap =
+                geom::pair_gap_m(c, rc, sc, e, radius_of(state, *em), state.base_shape(em.unit))
+                    / IN2M;
             if gap < best_gap {
                 best_gap = gap;
                 best_dir = [e[0] - c[0], e[2] - c[2]];
@@ -626,6 +633,9 @@ mod tests {
             special_rules: vec![],
             caster_value: 0,
             base_radius: 0.0,
+            base_shape: String::new(),
+            base_w_mm: 0.0,
+            base_d_mm: 0.0,
             game_system: String::new(),
             faction_folder: String::new(),
             item_grants: vec![],
