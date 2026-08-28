@@ -195,8 +195,13 @@ func on_dice_rolled(count: int, hits: int, target: int, player: String = "", fac
 	log_event(Category.COMBAT, "%s%d dice → %d %s%s (%d+)" % [prefix, count, hits, noun, plural2, target])
 
 
-func on_wounds(unit_name: String, lost: int, alive: int, total: int) -> void:
-	log_event(Category.COMBAT, "%s takes %d wound%s (%d/%d)" % [unit_name, lost, ("" if lost == 1 else "s"), alive, total])
+## `in_wounds` (NML-1091) switches the counter's UNIT: a unit whose whole strength is one Tough model
+## has no model counter worth printing — "(1/1)" reads the same from full health to the last wound — so
+## its caller passes the model's remaining/total WOUNDS and sets the flag, and the line says which
+## currency it is counting. Every multi-model unit keeps the model counter (`alive`/`total` models).
+func on_wounds(unit_name: String, lost: int, alive: int, total: int, in_wounds: bool = false) -> void:
+	log_event(Category.COMBAT, "%s takes %d wound%s (%d/%d%s)" % [
+		unit_name, lost, ("" if lost == 1 else "s"), alive, total, (" wounds" if in_wounds else "")])
 
 
 func on_unit_destroyed(unit_name: String) -> void:
