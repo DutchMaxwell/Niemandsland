@@ -232,6 +232,7 @@ def capture(
     places: the STATIC profile (`list_to_profile`) or the registry reads the
     Rust seam answers (`Core.capture_reads`). Nothing is defaulted silently."""
     us: dict[str, Any] = {}
+    by_id = {u["unit_id"]: u for u in units}
     for u, pos in zip(units, positions):
         key = u["unit_id"]
         r = reads[key]
@@ -267,9 +268,32 @@ def capture(
                 "rush": u["move_bands"]["rush"],
             },
             "charge_no_difficult": r["charge_no_difficult"],
-            # `_move_base_radius_of` act_recorder.gd:262-270: the unit's own
-            # alive models plus attached heroes, floored at the shared default.
-            "charge_probe_r": max(float(u["base_radius"]), DEFAULT_BASE_RADIUS_M),
+            # `_move_base_radius_of` act_recorder.gd:311-322, over
+            # `SoloController._move_base_radius_m(_moving_models(u))` (:4735 /
+            # :4915): the unit's own alive models PLUS its attached heroes',
+            # floored at the shared default.
+            #
+            # NML-1127: this comment said "plus attached heroes" and the code
+            # read the HOST's base alone. Inert while nothing joined — and no
+            # longer, since NML-1105 gave the oracle a real attachment graph.
+            # MEASURED on `m3_ref_v4` seed 27: three of thirteen units differ,
+            # every one a host whose hero has the bigger base — `p2_1_zCo2G8c`
+            # (Protector Sisters, 0.0125 m, floored to 0.016) carrying
+            # `p2_0_BT_-pdh` at 0.02 m, recorded 0.02 and captured 0.016; same
+            # for `p2_2_0Bc4px2` and `p1_3_njiIkJi`.
+            #
+            # LIMIT, deliberate and the same one `attached_hero_rules` carries:
+            # the trainer stamps this ONCE at capture, while the recorder
+            # re-stamps it per activation — so a hero that FALLS keeps its base
+            # in the host's probe here. That is `state::ProfileDyn`'s rung.
+            "charge_probe_r": max(
+                [float(u["base_radius"]), DEFAULT_BASE_RADIUS_M]
+                + [
+                    float(by_id[h]["base_radius"])
+                    for h in (attached or {}).get(key, ())
+                    if h in by_id
+                ]
+            ),
         }
         if r["shroud"] is not None:
             us[key]["shroud"] = list(r["shroud"])
