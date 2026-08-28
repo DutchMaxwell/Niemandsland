@@ -1,26 +1,33 @@
 extends SceneTree
 ## PROSE GATE (NML-1115, tier 1) — does OPR rule TEXT still change what the table PLAYS?
 ##
-## The table parses `±N"` modifiers out of Army Forge rule DESCRIPTIONS and adds them to a
-## unit's Advance/Rush bands (`MovementRangeController.move_bands_for_props`), and the tray's
-## Ambush/Scout lane word-scans the same texts (`OPRArmyManager._unit_rule_describes`). Neither
-## the Godot-free trainer nor the Rust core has that prose, and nothing in a recording pins WHICH
-## text produced a band — so every reading that depends on it is a silent table/trainer split.
+## The table used to parse `±N"` modifiers out of Army Forge rule DESCRIPTIONS and add them to a
+## unit's Advance/Rush bands. Neither the Godot-free trainer nor the Rust core has that prose, and
+## nothing in a recording pins WHICH text produced a band, so every reading that depended on it was
+## a silent table/trainer split. #467 removed the last of it; this gate is what proved that and what
+## keeps it proved.
 ##
-## This gate builds every unit of every list in the given pools TWICE through the table's own
-## import path — once with the fetched rule texts, once with `rule_descriptions` forced EMPTY —
-## and diffs the three readings prose could reach: the move bands, the shooting-range bonus
-## (the control channel: it reads the registry only, so it must stay at 0) and the tray lane.
-## Any difference is RED and exits non-zero.
+## It builds every unit of every list in the given pools TWICE through the table's own import path —
+## once with the fetched rule texts, once with `rule_descriptions` forced EMPTY — and diffs the two
+## readings prose could reach: the move bands (`MovementRangeController.move_bands_for_props`) and
+## the shooting-range bonus (`SoloController.shooting_range_bonus`, the control channel: registry
+## only, so it must stay at 0). The two arms must be IDENTICAL. Any difference is RED, exit non-zero.
+##
+## The tray's Ambush/Scout LANE was a third channel and is gone with #467: the staging predicate
+## reads rule NAMES only now, so both arms compute the same value by construction and the channel
+## could never fire again. Worse, it called a predicate #467 deleted and reported "green" through
+## 16k runtime errors instead of failing — the exact failure mode this gate exists to prevent. It
+## had already done its job (30 unit-instances on pre-#467 main, all false positives, which is what
+## removed the heuristic); `tools/no_rule_text_in_gameplay.sh` is the forward guard.
 ##
 ## Rule texts come from the LIVE Army Forge API, through the normal import (`_parse_tts_api_response`),
 ## so the gate measures what the table would actually have played today.
 ##
-## BASELINE at main 41fc35e (28.08., 435 lists / 4279 units): band 0, lane 30, range 0 — RED.
-## The bands are already clean: #441 (enemy-targeted phrases), #452 (registry target=enemy) and
-## #453 (Ethereal's -6"/-6" as registry data) closed every band difference the NML-1115 recon
-## still measured at 25ee0f2 (88). What is left is the tray lane: 30 unit-instances (12 distinct
-## units) staged into the Ambush/Scout band because another rule's TEXT merely mentions the word.
+## HISTORY, 435 lists / 4279 units: at 25ee0f2 the recon measured 88 band differences; #441
+## (enemy-targeted phrases), #452 (registry target=enemy) and #453 (Ethereal as registry data)
+## closed all of them, so at 41fc35e the gate read band 0, lane 30, range 0 — RED on the lane
+## alone, which is what #467 removed. At 45f2069 (post-#467) it reads band 0, range 0 — GREEN, and
+## that is the state it must hold.
 ##
 ## Run:
 ##   godot --headless --path . -s res://tools/prose_gate.gd -- \
@@ -32,7 +39,6 @@ var _lists := 0
 var _units := 0
 var _band_diffs := 0
 var _range_diffs := 0
-var _lane_diffs := 0
 var _samples: Array[String] = []
 
 
@@ -52,21 +58,18 @@ func _run() -> void:
 		printerr("[PROSE] no lists=<dir> given"); quit(2); return
 	var client := OPRApiClient.new()
 	root.add_child(client)
-	# _unit_rule_describes is non-static (it uses _word_in); a bare, tree-less instance is enough.
-	var manager := OPRArmyManager.new()
 	for pool in _pools:
 		var dir := DirAccess.open(pool.replace("~", OS.get_environment("HOME")))
 		if dir == null:
 			printerr("[PROSE] pool not readable: %s" % pool); quit(2); return
 		for file in dir.get_files():
 			if file.ends_with(".json") and not file.begins_with("_"):
-				await _check_list(client, manager, dir.get_current_dir() + "/" + file)
-	manager.free()
+				await _check_list(client, dir.get_current_dir() + "/" + file)
 	for line in _samples:
 		printerr("[PROSE] %s" % line)
-	printerr("[PROSE] %d lists, %d units | band differences %d | lane differences %d | range differences %d" % [
-		_lists, _units, _band_diffs, _lane_diffs, _range_diffs])
-	var total := _band_diffs + _lane_diffs + _range_diffs
+	printerr("[PROSE] %d lists, %d units | band differences %d | range differences %d" % [
+		_lists, _units, _band_diffs, _range_diffs])
+	var total := _band_diffs + _range_diffs
 	printerr("[PROSE] %s — rule text %s the table's readings" % [
 		"RED" if total > 0 else "GREEN", "still moves" if total > 0 else "no longer moves"])
 	quit(1 if total > 0 else 0)
@@ -76,7 +79,7 @@ func _run() -> void:
 ## including the two post-spawn passes `OPRArmyManager.spawn_army` runs — a joined hero and an
 ## aura-granted rule both change the bands, and a gate that skips them invents differences
 ## (measured: "Rapid Advance Aura" alone looked like a prose-only +4" until `expand_auras_of` ran).
-func _check_list(client: OPRApiClient, manager: OPRArmyManager, path: String) -> void:
+func _check_list(client: OPRApiClient, path: String) -> void:
 	var army = await client._parse_tts_api_response(FileAccess.get_file_as_string(path))
 	if army == null or army.units.is_empty():
 		printerr("[PROSE] FATAL: import produced no units: %s" % path); quit(2); return
@@ -101,9 +104,6 @@ func _check_list(client: OPRApiClient, manager: OPRArmyManager, path: String) ->
 		var with_text := _reading(gu)
 		gu.unit_properties["rule_descriptions"] = {}
 		var without_text := _reading(gu)
-		var lane_with := [_lane(manager, ou, army.rule_descriptions, "Ambush"),
-			_lane(manager, ou, army.rule_descriptions, "Scout")]
-		var lane_without := [_lane(manager, ou, {}, "Ambush"), _lane(manager, ou, {}, "Scout")]
 		_units += 1
 		if with_text[0] != without_text[0] or with_text[1] != without_text[1]:
 			_band_diffs += 1
@@ -113,10 +113,6 @@ func _check_list(client: OPRApiClient, manager: OPRArmyManager, path: String) ->
 			_range_diffs += 1
 			_sample("range %s / %s: %d with text, %d without" % [list_name, ou.name,
 				with_text[2], without_text[2]])
-		if lane_with != lane_without:
-			_lane_diffs += 1
-			_sample("lane  %s / %s: ambush/scout %s with text, %s without" % [list_name, ou.name,
-				lane_with, lane_without])
 	for n in nodes:
 		n.queue_free()
 
@@ -125,12 +121,6 @@ func _check_list(client: OPRApiClient, manager: OPRArmyManager, path: String) ->
 static func _reading(gu: GameUnit) -> Array:
 	var bands := MovementRangeController.move_bands_for_props(gu.unit_properties)
 	return [int(bands["advance"]), int(bands["rush"]), SoloController.shooting_range_bonus(gu)]
-
-
-## The tray's staging lane for one rule, exactly as `OPRArmyManager._spawn_army_units` builds it.
-static func _lane(manager: OPRArmyManager, opr_unit: Variant, descriptions: Dictionary, rule: String) -> bool:
-	return OPRArmyManager._unit_has_rule(opr_unit, rule) \
-		or manager._unit_rule_describes(opr_unit, rule, descriptions)
 
 
 func _sample(line: String) -> void:

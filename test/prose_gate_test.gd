@@ -1,12 +1,13 @@
 extends GdUnitTestSuite
 ## NML-1115: the PROSE GATE's own instrument check — `verify-the-instrument`.
 ##
-## `tools/prose_gate.gd` answers one question over both AI-list pools: does OPR rule TEXT
-## still change what the table plays? A gate that answers "no difference" because it cannot
-## SEE a difference is worthless, so these cases pin its two comparison primitives on
-## synthetic units, with no network and no pool: `_reading` must report a prose-only band
-## modifier, and `_lane` must report a prose-only Ambush/Scout staging hit — and both must
-## fall silent when the same rule's effect is registry/name data instead of text.
+## `tools/prose_gate.gd` answers one question over both AI-list pools: does OPR rule TEXT still
+## change what the table plays? A gate that answers "no difference" because it cannot SEE a
+## difference is worthless — which is exactly how its LANE channel went "green" after #467 deleted
+## the predicate it called, 16k runtime errors deep. These cases pin the one comparison primitive
+## that is left, on synthetic units, with no network and no pool: `_reading` must detect a real
+## band difference, and must be blind to rule TEXT (the invariant #467 established and
+## `tools/no_rule_text_in_gameplay.sh` guards).
 
 const ProseGate := preload("res://tools/prose_gate.gd")
 
@@ -15,53 +16,43 @@ const PROSE_ONLY_RULE := "Nimble Step"
 const PROSE_ONLY_TEXT := "This model moves +2\" when using Advance, and +4\" when using Rush/Charge."
 
 
-func _unit(rules: Array, descriptions: Dictionary) -> GameUnit:
+func _unit(props: Dictionary) -> GameUnit:
 	var gu := GameUnit.new()
-	gu.unit_properties = {"special_rules": rules, "player_id": 1, "name": "Probe",
-		"quality": 4, "defense": 4, "game_system": "gf", "faction_folder": "",
-		"rule_descriptions": descriptions}
+	gu.unit_properties = {"player_id": 1, "name": "Probe", "quality": 4, "defense": 4,
+		"game_system": "gf", "faction_folder": ""}
+	gu.unit_properties.merge(props, true)
 	return gu
 
 
-func _opr_unit(rules: Array) -> OPRApiClient.OPRUnit:
-	var ou := OPRApiClient.OPRUnit.new()
-	ou.name = "Probe"
-	ou.special_rules.assign(rules)
-	return ou
+# ===== _reading must still be able to report a difference =====
+
+func test_reading_detects_a_real_band_difference() -> void:
+	# The comparison machinery itself: two props that genuinely differ must read differently, or a
+	# GREEN run over 4279 units would mean nothing.
+	var plain: Array = ProseGate._reading(_unit({"special_rules": ["Fast"]}))
+	var slowed: Array = ProseGate._reading(_unit({
+		"special_rules": ["Fast"], "spell_move_mod": {"advance": -2, "rush": -4}}))
+	assert_array(plain).is_equal([8, 16, 0])
+	assert_array(slowed).is_equal([6, 12, 0])
 
 
-# ===== _reading: the move bands =====
+# ===== and it must be blind to rule text =====
 
-func test_reading_sees_a_prose_only_band_modifier() -> void:
-	var gu := _unit([PROSE_ONLY_RULE], {PROSE_ONLY_RULE: PROSE_ONLY_TEXT})
+func test_reading_is_blind_to_a_prose_only_modifier() -> void:
+	# A modifier that exists only in an imported description is inert (NML-1115). This is the
+	# invariant the gate protects: its two arms must agree for every unit in both pools.
+	var gu := _unit({"special_rules": [PROSE_ONLY_RULE],
+		"rule_descriptions": {PROSE_ONLY_RULE: PROSE_ONLY_TEXT}})
 	var with_text: Array = ProseGate._reading(gu)
 	gu.unit_properties["rule_descriptions"] = {}
-	var without_text: Array = ProseGate._reading(gu)
-	assert_array(with_text).is_equal([8, 16, 0])
-	assert_array(without_text).is_equal([6, 12, 0])
+	assert_array(with_text) \
+		.override_failure_message("an imported rule DESCRIPTION moved a band reading (NML-1115)") \
+		.is_equal(ProseGate._reading(gu))
 
 
-func test_reading_is_silent_when_the_modifier_is_name_data() -> void:
-	# Fast's +2"/+4" is a name fallback, so the same text changes nothing: this is the
-	# reading the gate must NOT count, or every unit in both pools would be a difference.
-	var gu := _unit(["Fast"], {"Fast": PROSE_ONLY_TEXT})
-	var with_text: Array = ProseGate._reading(gu)
-	gu.unit_properties["rule_descriptions"] = {}
-	assert_array(with_text).is_equal(ProseGate._reading(gu))
-
-
-# ===== _lane: the tray's Ambush/Scout staging =====
-
-func test_lane_sees_an_ambush_named_only_in_another_rule_s_text() -> void:
-	var manager: OPRArmyManager = auto_free(OPRArmyManager.new())
-	var ou := _opr_unit(["Repel Ambushers"])
-	var descriptions := {"Repel Ambushers": "This model may re-roll misses against Ambush units."}
-	assert_bool(ProseGate._lane(manager, ou, descriptions, "Ambush")).is_true()
-	assert_bool(ProseGate._lane(manager, ou, {}, "Ambush")).is_false()
-
-
-func test_lane_is_silent_for_a_directly_carried_rule() -> void:
-	var manager: OPRArmyManager = auto_free(OPRArmyManager.new())
-	var ou := _opr_unit(["Ambush"])
-	assert_bool(ProseGate._lane(manager, ou, {"Ambush": "Deploy from reserve."}, "Ambush")).is_true()
-	assert_bool(ProseGate._lane(manager, ou, {}, "Ambush")).is_true()
+func test_reading_keeps_the_name_and_registry_passes() -> void:
+	# The counter-case: what the bands DO read still reads. Ratmen Clans "Scurry" is registry data
+	# (primitive "Quick", advance_mod/rush_mod 2) and needs no text at all.
+	assert_array(ProseGate._reading(_unit({
+		"game_system": "gf", "faction_folder": "ratmen_clans", "special_rules": ["Scurry"]}))) \
+		.is_equal([8, 14, 0])
