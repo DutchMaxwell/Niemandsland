@@ -97,6 +97,24 @@ def _atomic_write_json(path: Path, obj: dict) -> None:
     os.replace(tmp, path)
 
 
+#: The mode knobs `selfplay.play_game` takes beyond `top_k`/`horizon`, with the
+#: value each one has when nothing is passed. A corpus generator that cannot
+#: reach them can only ever write PRE-M5 games: `dice="expected"` (no tray),
+#: `movement="rigid"` (no M4 charge route), `hero_attach="off"` (no joined
+#: heroes), `charge_landing="off"` (no second engage question) -- silently, and
+#: with a header that correctly says so, which is the only reason it was never
+#: caught by a gate.
+FIDELITY_DEFAULTS = {
+    "charge_gate": "off",
+    "hero_attach": "off",
+    "dice": "expected",
+    "charge_landing": "off",
+    "movement": "rigid",
+    "engage_fold": True,
+    "cond_ap": None,
+}
+
+
 def _worker(
     seeds: list[int],
     lists_dir: str,
@@ -106,21 +124,30 @@ def _worker(
     sizes: list[int],
     top_k: int,
     horizon: int,
+    fidelity: dict,
 ) -> list[dict]:
     """One process's slice of NEEDED seeds (the caller has already dropped
-    seeds whose file exists) -- one `Core`, reused across every seed here,
-    exactly `throughput.py`'s `_worker`. Writes each result to disk itself
-    (atomically) rather than returning the full game payload through the
-    pool -- a training-scale run is many thousands of these, and pickling
-    the whole result dict back to the parent for every game would be the
-    bottleneck this tool exists to avoid."""
-    core = nml_core.load(repo)
+    seeds whose file exists). Writes each result to disk itself (atomically)
+    rather than returning the full game payload through the pool -- a
+    training-scale run is many thousands of these, and pickling the whole
+    result dict back to the parent for every game would be the bottleneck this
+    tool exists to avoid.
+
+    ONE `Core` PER GAME, unlike `throughput.py`'s worker: `RowEncoder.unknown`
+    (rows.rs) is never cleared -- neither `set_header` nor `set_vocab_version`
+    touches it -- so a reused core makes `unknown_rules` CUMULATIVE, and every
+    result file after the first in a slice claims rule names that came off an
+    earlier game's roster. `qa_gate.py` already builds one core per game for
+    exactly this reason. The cost is nil: `set_header` rebuilds `Registries`
+    per game anyway (nml-core-py/src/lib.rs), which is the expensive part."""
     out = Path(out_dir)
     rows = []
     for seed in seeds:
+        core = nml_core.load(repo)
         list1, list2, fa, fb, sz = list_paths(seed, Path(lists_dir), sizes)
         t0 = time.perf_counter()
-        res = sp.play_game(seed, list1, list2, repo, bank, core, top_k=top_k, horizon=horizon)
+        res = sp.play_game(seed, list1, list2, repo, bank, core, top_k=top_k, horizon=horizon,
+                           **fidelity)
         wall = time.perf_counter() - t0
         res["wall_seconds"] = round(wall, 3)
         digest = sp.result_digest(res)
@@ -198,6 +225,7 @@ def run_check_sample(
     sizes: list[int],
     top_k: int,
     horizon: int,
+    fidelity: dict,
 ) -> tuple[bool, list[int]]:
     """Re-play `frac` of `seeds` single-process and compare
     `selfplay.result_digest` against the digest of the WRITTEN FILE on disk
@@ -210,11 +238,12 @@ def run_check_sample(
     rng = random.Random("mass_fast_check_sample:%d:%d:%d" % (seeds[0], len(seeds), round(frac * 1e6)))
     sample = sorted(rng.sample(seeds, k))
 
-    core = nml_core.load(repo)
     mismatched = []
     for seed in sample:
+        core = nml_core.load(repo)
         list1, list2, _fa, _fb, _sz = list_paths(seed, lists_dir, sizes)
-        fresh = sp.play_game(seed, list1, list2, repo, bank, core, top_k=top_k, horizon=horizon)
+        fresh = sp.play_game(seed, list1, list2, repo, bank, core, top_k=top_k, horizon=horizon,
+                             **fidelity)
         fresh_digest = sp.result_digest(fresh)
         path = out_dir / f"core_s{seed}.json"
         with open(path, encoding="utf-8") as f:
@@ -241,6 +270,19 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--bank", default=str(DEFAULT_BANK), help="terrain bank dir")
     ap.add_argument("--repo", default=str(REPO_ROOT), help="repo root -- assets/solo/*.json live here")
     ap.add_argument("--sizes", default="1000,1500,2000", help="comma-separated point sizes, S[] above")
+    ap.add_argument("--dice", choices=list(sp.DICE_MODES), default=FIDELITY_DEFAULTS["dice"])
+    ap.add_argument("--charge-gate", choices=list(sp.CHARGE_GATE_MODES),
+                    default=FIDELITY_DEFAULTS["charge_gate"])
+    ap.add_argument("--hero-attach", choices=list(sp.HERO_ATTACH_MODES),
+                    default=FIDELITY_DEFAULTS["hero_attach"])
+    ap.add_argument("--charge-landing", choices=list(sp.CHARGE_LANDING_MODES),
+                    default=FIDELITY_DEFAULTS["charge_landing"])
+    ap.add_argument("--movement", choices=list(sp.MOVEMENT_MODES),
+                    default=FIDELITY_DEFAULTS["movement"])
+    ap.add_argument("--no-engage-fold", dest="engage_fold", action="store_false", default=True,
+                    help="RED switch for the D5-4 attached-hero fold of the engage test")
+    ap.add_argument("--cond-ap", choices=["auto", "on", "off"], default="auto",
+                    help="conditional AP (NML-1103); 'auto' leaves the process global alone")
     ap.add_argument(
         "--check-sample",
         type=float,
@@ -249,6 +291,16 @@ def main(argv: list[str]) -> int:
         "result_digest against the written files; 0 skips the check",
     )
     a = ap.parse_args(argv)
+
+    fidelity = {
+        "charge_gate": a.charge_gate,
+        "hero_attach": a.hero_attach,
+        "dice": a.dice,
+        "charge_landing": a.charge_landing,
+        "movement": a.movement,
+        "engage_fold": a.engage_fold,
+        "cond_ap": None if a.cond_ap == "auto" else (a.cond_ap == "on"),
+    }
 
     sizes = [int(x) for x in a.sizes.split(",")]
     lists_dir = Path(a.lists)
@@ -290,7 +342,8 @@ def main(argv: list[str]) -> int:
             chunks = pool.starmap(
                 _worker,
                 [
-                    (b, str(lists_dir), repo, bank, str(out_dir), sizes, a.top_k, a.horizon)
+                    (b, str(lists_dir), repo, bank, str(out_dir), sizes, a.top_k, a.horizon,
+                     fidelity)
                     for b in buckets
                 ],
             )
@@ -314,7 +367,7 @@ def main(argv: list[str]) -> int:
     run_info = {
         "args": vars(a),
         "commit": _commit(repo),
-        "knobs": {"top_k": a.top_k, "horizon": a.horizon},
+        "knobs": dict(fidelity, top_k=a.top_k, horizon=a.horizon),
         "start": start_iso,
         "end": end_iso,
         "games": a.games,
@@ -338,7 +391,8 @@ def main(argv: list[str]) -> int:
     exit_code = 0
     if a.check_sample > 0.0:
         ok, mismatched = run_check_sample(
-            seeds, a.check_sample, lists_dir, repo, bank, out_dir, sizes, a.top_k, a.horizon
+            seeds, a.check_sample, lists_dir, repo, bank, out_dir, sizes, a.top_k, a.horizon,
+            fidelity,
         )
         if ok:
             print("CHECK_SAMPLE match=true seeds=%d" % max(1, round(len(seeds) * a.check_sample)))

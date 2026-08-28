@@ -97,3 +97,74 @@ def test_derive_pairing_red_copy_paste_fb_disagrees_with_the_pin():
         if wrong_fb != fb:
             disagreements += 1
     assert disagreements > 0
+
+
+# ------------------------------------------------- the fidelity knobs (M5) ---
+#
+# THE HOLE this closes. `_worker` called
+# `sp.play_game(seed, ..., top_k=top_k, horizon=horizon)` and nothing else, so
+# the corpus generator could only ever write PRE-M5 games -- `dice="expected"`,
+# `movement="rigid"`, `hero_attach="off"`, `charge_landing="off"` -- no matter
+# what the caller wanted. No gate caught it: the header the generator writes is
+# a TRUTHFUL description of the low-fidelity game it played.
+
+
+def test_fidelity_defaults_match_play_games_own_defaults():
+    """`FIDELITY_DEFAULTS` is the CLI's promise that "pass nothing" keeps the
+    old behaviour exactly. It is a second copy of `play_game`'s defaults, so it
+    is pinned against the signature itself -- a default that moves in
+    `selfplay.py` and not here would silently change every corpus this tool
+    writes."""
+    import inspect
+
+    import selfplay as sp
+
+    sig = inspect.signature(sp.play_game).parameters
+    for name, want in mf.FIDELITY_DEFAULTS.items():
+        assert sig[name].default == want, (
+            "mass_fast.FIDELITY_DEFAULTS[%r]=%r but play_game's default is %r"
+            % (name, want, sig[name].default)
+        )
+
+
+def test_the_worker_passes_the_fidelity_knobs_into_the_game(tmp_path):
+    """MUTATION GUARD: `_worker` plays the SAME seed twice, once at the
+    defaults and once with `dice="table"`, and the two written result files
+    must differ. Drop the `**fidelity` from the `play_game` call and both arms
+    write the identical expected-value game, which is exactly the failure that
+    went unnoticed.
+
+    `dice` is the knob under test because it is the cheapest one that has a
+    consumer (`movement="table"` costs ~190x the wall clock of a default game
+    and would make this a minutes-long unit test)."""
+    import json
+    import os
+
+    import pytest
+
+    lists = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
+    bank = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
+    repo = Path(__file__).resolve().parents[4]
+    seed = 300000
+    l1, l2, _fa, _fb, _sz = mf.list_paths(seed, lists, mf.DEFAULT_SIZES)
+    if not (bank.is_dir() and l1.exists() and l2.exists()):
+        pytest.skip("needs the terrain bank + the private 6-faction AI-list corpus")
+
+    def play(fidelity, sub):
+        out = tmp_path / sub
+        out.mkdir()
+        mf._worker([seed], str(lists), str(repo), str(bank), str(out),
+                   mf.DEFAULT_SIZES, 2, 1, fidelity)
+        return json.load(open(out / ("core_s%d.json" % seed)))
+
+    base = play(dict(mf.FIDELITY_DEFAULTS), "base")
+    tray = play(dict(mf.FIDELITY_DEFAULTS, dice="table"), "tray")
+    assert base["knobs"]["dice"] == "expected"
+    assert tray["knobs"]["dice"] == "table"
+    import selfplay as sp
+
+    strip = lambda r: sp.result_digest({k: v for k, v in r.items() if k != "knobs"})
+    assert strip(base) != strip(tray), (
+        "dice=table wrote the same game as dice=expected -- the fidelity knobs "
+        "are not reaching play_game"
+    )
