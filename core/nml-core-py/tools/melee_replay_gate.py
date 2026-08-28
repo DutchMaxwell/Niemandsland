@@ -74,7 +74,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 import nml_core  # noqa: E402
 from shoot_replay_gate import (  # noqa: E402
-    burn_prefix, combat_kind, defender_state, first_at_or_after, read_game, successes,
+    burn_prefix, combat_kind, defender_state, first_at_or_after, read_game,
+    resolve_vintage_flag, successes, vintage_report_line,
 )
 
 #: `BattleSim.CHARGE` — the only act kind that fights a melee.
@@ -147,7 +148,8 @@ def trailing_morale(rolls: list[tuple]) -> list[tuple]:
 def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         charge_landing: bool = False, movement: bool = False,
         walls_check: bool = False, rigid_red: bool = False,
-        no_dangerous: bool = False, no_hero_fold: bool = False) -> int:
+        no_dangerous: bool = False, no_hero_fold: bool = False,
+        engage_fold: str = "auto", cond_ap: str = "auto") -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -166,6 +168,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
     firsts: list[str] = []
     warns: list[str] = []
     walls_seen = {"games": 0, "segments": 0, "worst": 0.0, "source": ""}
+    vintage_seen: set[tuple[bool, bool]] = set()
     t0 = time.perf_counter()
 
     for d in games:
@@ -180,13 +183,22 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         walls_seen["source"] = source
         if movement and not walls:
             warns.append("%s: %s — the charge route sees no walls" % (d.name, source))
+        # NML-1130: `--red-no-hero-fold` still wins outright (it exists to
+        # prove the fold's numbers come back, independent of what this corpus
+        # was recorded with); otherwise engage_fold/cond_ap read the corpus's
+        # OWN vintage — see `vintage_knobs`.
+        eff_engage_fold = False if no_hero_fold else \
+            resolve_vintage_flag(engage_fold, head, repo, "engage_fold")
+        eff_cond_ap = resolve_vintage_flag(cond_ap, head, repo, "cond_ap")
+        vintage_seen.add((eff_engage_fold, eff_cond_ap))
+        nml_core.set_legacy_no_cond_ap(not eff_cond_ap)
         core.set_header({"profiles": head["profiles"],
                          "terrain": dict(head.get("terrain") or {}, walls=walls)
                          if head.get("terrain") else None,
                          "knobs": dict(head.get("knobs", {}), hero_attach=True,
                                        charge_landing=charge_landing,
                                        dangerous=not no_dangerous,
-                                       engage_fold=not no_hero_fold,
+                                       engage_fold=eff_engage_fold,
                                        movement=movement and not rigid_red)})
         if walls_check and walls:
             walls_seen["games"] += 1
@@ -328,8 +340,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, report_only: bool,
         label += " [RED: --red-no-hero-fold, the engage test on the hosts alone]"
     silent_table = tally["both_silent"] + tally["table_silent"]
     print()
-    print("%s over %d games, %d charge acts (%.1fs)"
-          % (label, len(games), tally["acts"], time.perf_counter() - t0))
+    print("%s over %d games, %d charge acts, %s (%.1fs)"
+          % (label, len(games), tally["acts"], vintage_report_line(vintage_seen),
+             time.perf_counter() - t0))
     print("  EQUAL : %d/%d acts FULL-equal (same roll count, every roll identical, same roller)"
           % (tally["full_equal"], tally["acts"]))
     print("        : %d/%d acts PREFIX-equal (the overlap held; %d table_longer, %d port_longer)"
@@ -436,12 +449,22 @@ def main(argv: list[str]) -> int:
                     help="RED PROOF for D5-4: measure the engage test over the two HOSTS again "
                          "(header knob engage_fold=false) while hero_attach stays on, "
                          "everything else unchanged. Every bucket must fall back to the "
-                         "pre-D5-4 baseline")
+                         "pre-D5-4 baseline. Wins over --engage-fold.")
+    ap.add_argument("--engage-fold", choices=("auto", "on", "off"), default="auto",
+                    help="NML-1130: the header knob engage_fold (PR #446). 'auto' (default) "
+                         "reads the corpus's OWN vintage (vintage_knobs) — absent means the "
+                         "corpus predates the knob, so OFF; 'on'/'off' force it. "
+                         "--red-no-hero-fold overrides this to OFF regardless")
+    ap.add_argument("--cond-ap", choices=("auto", "on", "off"), default="auto",
+                    help="NML-1130: conditional AP (PR #448/NML-1103), i.e. LEGACY_NO_COND_AP "
+                         "inverted. 'auto' (default) reads the corpus's OWN vintage; 'on'/'off' "
+                         "force it")
     a = ap.parse_args(argv)
     return run(Path(a.ref).expanduser(), a.repo,
                "misseed" if a.red_misseed else a.mode, a.limit, a.report_only,
                a.charge_landing, a.movement or a.red_move_rigid, a.walls_check,
-               a.red_move_rigid, a.red_no_dangerous, a.red_no_hero_fold)
+               a.red_move_rigid, a.red_no_dangerous, a.red_no_hero_fold,
+               a.engage_fold, a.cond_ap)
 
 
 if __name__ == "__main__":

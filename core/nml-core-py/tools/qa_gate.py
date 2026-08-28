@@ -48,6 +48,9 @@ import nml_core  # noqa: E402
 
 import selfplay as sp  # noqa: E402
 import sidecar_gate as sg  # noqa: E402
+from shoot_replay_gate import (  # noqa: E402
+    resolve_vintage_flag, vintage_report_line,
+)
 
 #: `<p1>_vs_<p2>_s<seed>` — the army list basenames and the game seed. `p1` is
 #: NON-greedy so a faction whose name contains the separator cannot swallow the
@@ -129,6 +132,15 @@ def main(argv: list[str]) -> int:
         help='hero mode to replay; "auto" (default) reads it off the reference '
         "corpus itself (`selfplay.hero_attach_of_corpus`)",
     )
+    ap.add_argument("--engage-fold", choices=("auto", "on", "off"), default="auto",
+                    help="NML-1130: the header knob engage_fold (PR #446). `core_s<seed>.json` "
+                         "itself carries no header, but the acts.jsonl sitting beside it — the "
+                         "same one --hero-attach auto (NML-1127) reads — does; 'auto' (default) "
+                         "reads that file's vintage_knobs(); 'on'/'off' force it")
+    ap.add_argument("--cond-ap", choices=("auto", "on", "off"), default="auto",
+                    help="NML-1130: conditional AP (PR #448/NML-1103), i.e. LEGACY_NO_COND_AP "
+                         "inverted. 'auto' (default) reads the same acts.jsonl's vintage_knobs(); "
+                         "'on'/'off' force it")
     a = ap.parse_args(argv)
 
     lists = Path(a.lists).expanduser()
@@ -138,12 +150,24 @@ def main(argv: list[str]) -> int:
         print("no reference games under %s" % a.ref)
         return 1
 
-    hero_attach, source = sp.resolve_hero_attach_mode(
-        # `found`'s last element is the RESULT file; the act corpus sits beside it.
-        a.hero_attach, (res.parent / "acts.jsonl" for _p, _a, _b, _s, res in found)
-    )
+    # `found`'s last element is the RESULT file; the act corpus sits beside it.
+    acts_paths = [res.parent / "acts.jsonl" for _p, _a, _b, _s, res in found]
+    hero_attach, source = sp.resolve_hero_attach_mode(a.hero_attach, acts_paths)
     if a.hero_attach == "auto":
         print("hero_attach   %s (read off %s)" % (hero_attach, source or "nothing — default"))
+
+    # NML-1130: the SAME acts.jsonl NML-1127 reads --hero-attach off — one
+    # reference directory is one recording session, so the first readable
+    # corpus's header speaks for all of them, the way `resolve_hero_attach_mode`
+    # already treats it.
+    qa_header: dict = {}
+    for p in acts_paths:
+        if p.is_file():
+            with open(p, encoding="utf-8") as fh:
+                qa_header = json.loads(fh.readline())
+            break
+    eff_engage_fold = resolve_vintage_flag(a.engage_fold, qa_header, a.repo, "engage_fold")
+    eff_cond_ap = resolve_vintage_flag(a.cond_ap, qa_header, a.repo, "cond_ap")
 
     red = bool(a.red or a.red_source_qd or a.red_terrain_shift)
     total = equal = rows = 0
@@ -167,6 +191,7 @@ def main(argv: list[str]) -> int:
             legacy_source_qd=a.red_source_qd,
             terrain_shift_cells=a.red_terrain_shift,
             top_k=a.top_k, horizon=a.horizon, hero_attach=hero_attach,
+            engage_fold=eff_engage_fold, cond_ap=eff_cond_ap,
         )
         seconds.append(time.perf_counter() - t0)
         total += 1
@@ -206,8 +231,9 @@ def main(argv: list[str]) -> int:
     elif a.red_terrain_shift:
         label = "RED Q-A (drawing list shifted %d cells)" % a.red_terrain_shift
     print(
-        "\n%s: %d/%d games field-for-field equal across %d pairings (%d planner rows)"
-        % (label, equal, total, len(per_pairing), rows)
+        "\n%s: %d/%d games field-for-field equal across %d pairings (%d planner rows), %s"
+        % (label, equal, total, len(per_pairing), rows,
+           vintage_report_line({(eff_engage_fold, eff_cond_ap)}))
     )
     if red:
         # A red proof PASSES when every game diverged.

@@ -71,6 +71,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -202,8 +203,88 @@ def defender_state(plain: dict, key: str) -> tuple[int, int]:
     return (int(u["alive"]), int(sum(u["wounds"])))
 
 
+#: PR #448's (NML-1103) merge commit — the fix that made conditional AP
+#: (Shatter/Tear/Disintegrate/Melee Slayer/Piercing Assault/Piercing Hunter)
+#: count the way the table resolves it. `vintage_knobs` asks git whether this
+#: is an ancestor of a corpus's recorded commit pin, when one is available.
+_COND_AP_FIX_COMMIT = "c94f825"
+
+
+def vintage_knobs(header: dict, repo: str | Path | None = None) -> dict[str, bool]:
+    """NML-1130 — the `{"engage_fold": bool, "cond_ap": bool}` this corpus was
+    RECORDED under, read off its act header. Every gate's `--engage-fold
+    auto` / `--cond-ap auto` (the default) resolves to this per game, so a gate
+    replays a corpus against the KNOBS IT WAS RECORDED WITH instead of
+    whatever the twin defaults to today.
+
+    `engage_fold` (PR #446, D5-4 — the attached-hero fold of the engage test):
+    `header["knobs"]["engage_fold"]` if the corpus stamps it; absent means the
+    corpus predates the knob itself, so the table it was recorded on had no
+    fold at all — OFF.
+
+    `cond_ap` — True means "count conditional AP the corrected way", i.e.
+    `LEGACY_NO_COND_AP` OFF. No corpus format field carries this yet (a
+    companion PR, NML-1129, is to stamp `knobs.cond_ap` going forward; read
+    here if present). Failing that, this looks for a recorded commit pin
+    (`commit` / `base_commit` / `sha` / `base`, header-level or inside
+    `knobs`) and asks git whether `_COND_AP_FIX_COMMIT` (#448) is an ancestor
+    of it — recorded after the fix -> ON, before -> legacy OFF.
+
+    FALLBACK, and it is a real gap, not a nicety: neither `qbf_ref` nor
+    `qbg_ref` carries a commit pin — the farm scripts only ECHO their
+    PIN_COMMIT into the CALLER's own up-log, never into the corpus itself —
+    so this defaults `cond_ap` ON (today's silent reading) rather than the
+    naive "absent -> legacy OFF" one. `qbg_ref` was recorded AFTER #448
+    without a stamp, and the naive reading costs it 141 acts (NML-1128).
+    `qbf_ref` PREDATES #448 without a pin either, and needs `--cond-ap off`
+    explicit — this fallback cannot tell the two corpora apart."""
+    knobs = header.get("knobs") or {}
+    engage_fold = bool(knobs["engage_fold"]) if "engage_fold" in knobs else False
+
+    if "cond_ap" in knobs:
+        return {"engage_fold": engage_fold, "cond_ap": bool(knobs["cond_ap"])}
+
+    commit = (header.get("commit") or header.get("base_commit") or header.get("sha")
+              or header.get("base") or knobs.get("commit") or knobs.get("base_commit"))
+    cond_ap = None
+    if commit and repo:
+        try:
+            r = subprocess.run(
+                ["git", "-C", str(repo), "merge-base", "--is-ancestor",
+                 _COND_AP_FIX_COMMIT, str(commit)],
+                capture_output=True, timeout=10, check=False)
+            if r.returncode in (0, 1):
+                cond_ap = r.returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            cond_ap = None
+    if cond_ap is None:
+        cond_ap = True  # FALLBACK — see docstring
+    return {"engage_fold": engage_fold, "cond_ap": cond_ap}
+
+
+def resolve_vintage_flag(flag: str, header: dict, repo: str, key: str) -> bool:
+    """One of `--engage-fold`/`--cond-ap`'s `auto`/`on`/`off` resolved for one
+    game's header. `key` is `"engage_fold"` or `"cond_ap"`."""
+    if flag == "on":
+        return True
+    if flag == "off":
+        return False
+    return vintage_knobs(header, repo)[key]
+
+
+def vintage_report_line(seen: set[tuple[bool, bool]]) -> str:
+    """One-line summary of the resolved `(engage_fold, cond_ap)` pairs a run
+    saw across its games, for the report header line NML-1130 requires."""
+    if len(seen) == 1:
+        eng, cap = next(iter(seen))
+        return "engage_fold=%s cond_ap=%s" % (eng, cap)
+    return "engage_fold/cond_ap MIXED: %s" % ", ".join(
+        "(engage_fold=%s cond_ap=%s)" % kv for kv in sorted(seen))
+
+
 def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: bool,
-        hero_attach: str = "table", sighting: str = "unit") -> int:
+        hero_attach: str = "table", sighting: str = "unit",
+        engage_fold: str = "auto", cond_ap: str = "auto") -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -225,6 +306,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
     # field parts first and buries the class this rung is about.
     reasons_clean: dict[str, int] = {}
     firsts: list[str] = []
+    vintage_seen: set[tuple[bool, bool]] = set()
     t0 = time.perf_counter()
 
     for d in games:
@@ -233,6 +315,13 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         core = nml_core.load(repo)
         if hero_attach == "off":
             head = detach_header(head)
+        # NML-1130: replay this game with the ENGAGE FOLD and the CONDITIONAL
+        # AP reading it was recorded under, not today's twin defaults — see
+        # `vintage_knobs`.
+        eff_engage_fold = resolve_vintage_flag(engage_fold, head, repo, "engage_fold")
+        eff_cond_ap = resolve_vintage_flag(cond_ap, head, repo, "cond_ap")
+        vintage_seen.add((eff_engage_fold, eff_cond_ap))
+        nml_core.set_legacy_no_cond_ap(not eff_cond_ap)
         # `hero_attach` is also a SEAM (`Seams::hero_attach`, io.rs): with it on,
         # a host's activation marks its heroes activated and drags their models
         # along. Neither touches this tool's verdict — it replays one recorded
@@ -241,6 +330,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
         core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
                          "knobs": dict(head.get("knobs", {}),
                                        hero_attach=hero_attach == "table",
+                                       engage_fold=eff_engage_fold,
                                        # NML-1073 M5 D6a-B4. `"unit"` is the
                                        # default and the BEFORE half of the
                                        # sighting measurement; `"model"` gives
@@ -415,8 +505,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
              "off": "RED D1-B4 --mode off (dice=expected)",
              "misseed": "RED D1-B4 --red-misseed (tray on dice_seed+1)"}[mode]
     print()
-    print("%s over %d games, %d shooting acts, hero_attach=%s, sighting=%s (%.1fs)" % (
-        label, len(games), tally["acts"], hero_attach, sighting, time.perf_counter() - t0))
+    print("%s over %d games, %d shooting acts, hero_attach=%s, sighting=%s, %s (%.1fs)" % (
+        label, len(games), tally["acts"], hero_attach, sighting,
+        vintage_report_line(vintage_seen), time.perf_counter() - t0))
     print("  EQUAL : %d/%d acts FULL-equal (same roll count, every roll identical)"
           % (tally["full_equal"], tally["acts"]))
     print("  OWNER : %d/%d acts FULL-equal AND every roll signed by the same unit "
@@ -512,10 +603,18 @@ def main(argv: list[str]) -> int:
                          "of sight, per weapon, the way the table does")
     ap.add_argument("--limit", type=int, default=0, help="only the first N game dirs")
     ap.add_argument("--verbose", type=int, default=0, help="print every diverging act")
+    ap.add_argument("--engage-fold", choices=("auto", "on", "off"), default="auto",
+                    help="NML-1130: the header knob engage_fold (PR #446). 'auto' (default) "
+                         "reads the corpus's OWN vintage (vintage_knobs) — absent means the "
+                         "corpus predates the knob, so OFF; 'on'/'off' force it")
+    ap.add_argument("--cond-ap", choices=("auto", "on", "off"), default="auto",
+                    help="NML-1130: conditional AP (PR #448/NML-1103), i.e. LEGACY_NO_COND_AP "
+                         "inverted. 'auto' (default) reads the corpus's OWN vintage; 'on'/'off' "
+                         "force it")
     a = ap.parse_args(argv)
     mode = "misseed" if a.red_misseed else a.mode
     return run(Path(a.ref).expanduser(), a.repo, mode, a.limit, a.verbose, a.report_only,
-               a.hero_attach, a.sighting)
+               a.hero_attach, a.sighting, a.engage_fold, a.cond_ap)
 
 
 if __name__ == "__main__":

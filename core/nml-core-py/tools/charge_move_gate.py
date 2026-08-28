@@ -56,7 +56,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "python"))
 
 import nml_core  # noqa: E402
 from melee_replay_gate import IN2M, header_walls_m  # noqa: E402
-from shoot_replay_gate import read_game  # noqa: E402
+from shoot_replay_gate import (  # noqa: E402
+    read_game, resolve_vintage_flag, vintage_report_line,
+)
 
 #: `BattleSim.CHARGE`.
 CHARGE_KIND = 3
@@ -112,7 +114,7 @@ def call_diff(got: dict, want: dict) -> str:
 
 
 def run(ref: Path, repo: str, limit: int, red_shift: bool, red_no_walls: bool,
-        report_only: bool) -> int:
+        report_only: bool, engage_fold: str = "auto", cond_ap: str = "auto") -> int:
     games = sorted(d for d in ref.iterdir()
                    if d.is_dir() and (d / "moves_calls.jsonl").exists())
     if limit:
@@ -129,6 +131,7 @@ def run(ref: Path, repo: str, limit: int, red_shift: bool, red_no_walls: bool,
     walls_pairs = walls_games = 0
     walls_worst = 0.0
     no_walls_games = 0
+    vintage_seen: set[tuple[bool, bool]] = set()
     t0 = time.perf_counter()
 
     for d in games:
@@ -142,12 +145,19 @@ def run(ref: Path, repo: str, limit: int, red_shift: bool, red_no_walls: bool,
         if not walls:
             no_walls_games += 1
         core = nml_core.load(repo)
+        # NML-1130: replay with the ENGAGE FOLD and the CONDITIONAL AP reading
+        # this corpus was recorded under, not today's twin defaults.
+        eff_engage_fold = resolve_vintage_flag(engage_fold, head, repo, "engage_fold")
+        eff_cond_ap = resolve_vintage_flag(cond_ap, head, repo, "cond_ap")
+        vintage_seen.add((eff_engage_fold, eff_cond_ap))
+        nml_core.set_legacy_no_cond_ap(not eff_cond_ap)
         core.set_header({"profiles": head["profiles"],
                          "terrain": dict(head.get("terrain") or {},
                                          walls=[] if red_no_walls else walls)
                          if head.get("terrain") else None,
                          "knobs": dict(head.get("knobs", {}), hero_attach=True,
-                                       charge_landing=True, movement=True)})
+                                       charge_landing=True, movement=True,
+                                       engage_fold=eff_engage_fold)})
         if walls and not red_no_walls:
             walls_games += 1
             back = [[[(p[0] / IN2M) + half[0], (p[1] / IN2M) + half[1]] for p in w]
@@ -217,8 +227,9 @@ def run(ref: Path, repo: str, limit: int, red_shift: bool, red_no_walls: bool,
     if red_no_walls:
         label = "RED D5-2 --red-no-walls (the board's wall segments withheld)"
     print()
-    print("%s over %d games, %d charge acts with a recorded charge move (%.1fs)"
-          % (label, len(games), t["acts"], time.perf_counter() - t0))
+    print("%s over %d games, %d charge acts with a recorded charge move, %s (%.1fs)"
+          % (label, len(games), t["acts"], vintage_report_line(vintage_seen),
+             time.perf_counter() - t0))
     print("  END   : %d/%d acts land EVERY model within %.2f\" of the table's own endpoint"
           % (t["end_equal"], t["acts"], BAR_IN))
     print("        : %d/%d individual models within the bar; worst act %.4f\""
@@ -270,9 +281,17 @@ def main(argv: list[str]) -> int:
                          "withheld; the routes that had to bend must miss")
     ap.add_argument("--report-only", action="store_true",
                     help="exit 0 even when acts are short (this tool is a GATE by default)")
+    ap.add_argument("--engage-fold", choices=("auto", "on", "off"), default="auto",
+                    help="NML-1130: the header knob engage_fold (PR #446). 'auto' (default) "
+                         "reads the corpus's OWN vintage (vintage_knobs) — absent means the "
+                         "corpus predates the knob, so OFF; 'on'/'off' force it")
+    ap.add_argument("--cond-ap", choices=("auto", "on", "off"), default="auto",
+                    help="NML-1130: conditional AP (PR #448/NML-1103), i.e. LEGACY_NO_COND_AP "
+                         "inverted. 'auto' (default) reads the corpus's OWN vintage; 'on'/'off' "
+                         "force it")
     a = ap.parse_args(argv)
     return run(Path(a.ref).expanduser(), a.repo, a.limit, a.red_shift, a.red_no_walls,
-               a.report_only)
+               a.report_only, a.engage_fold, a.cond_ap)
 
 
 if __name__ == "__main__":

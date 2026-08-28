@@ -111,7 +111,7 @@ from dice_stream_gate import walk_game  # noqa: E402
 from melee_replay_gate import CHARGE_KIND, trailing_morale  # noqa: E402
 from shoot_replay_gate import (  # noqa: E402
     SHOOTING_KINDS, burn_prefix, combat_kind, defender_state, first_at_or_after, read_game,
-    successes,
+    resolve_vintage_flag, successes, vintage_report_line,
 )
 
 CLASSES = ("shooting", "melee", "morale")
@@ -170,7 +170,7 @@ def classify(got: list, want: list) -> str:
 
 
 def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
-        no_dangerous: bool = False) -> int:
+        no_dangerous: bool = False, engage_fold: str = "auto", cond_ap: str = "auto") -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -182,6 +182,7 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
     chk = dict.fromkeys(("stream_ok", "rolls", "tally", "tally_equal", "tally_red",
                          "next", "next_equal", "next_red"), 0)
     first = {"stream": "", "tally": "", "next": ""}
+    vintage_seen: set[tuple[bool, bool]] = set()
     t0 = time.perf_counter()
 
     for d in games:
@@ -195,9 +196,16 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
         head, lines, dice, seed = read_game(d)
         burn = burn_prefix(dice)
         core = nml_core.load(repo)
+        # NML-1130: replay with the ENGAGE FOLD and the CONDITIONAL AP reading
+        # this corpus was recorded under, not today's twin defaults.
+        eff_engage_fold = resolve_vintage_flag(engage_fold, head, repo, "engage_fold")
+        eff_cond_ap = resolve_vintage_flag(cond_ap, head, repo, "cond_ap")
+        vintage_seen.add((eff_engage_fold, eff_cond_ap))
+        nml_core.set_legacy_no_cond_ap(not eff_cond_ap)
         core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
                          "knobs": dict(head.get("knobs", {}), hero_attach=True,
-                                       dangerous=not no_dangerous)})
+                                       dangerous=not no_dangerous,
+                                       engage_fold=eff_engage_fold)})
         for pos, act in enumerate(lines):
             k = int(act["act"])
             action = (act.get("pick") or {}).get("action") or {}
@@ -258,8 +266,9 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
 
     acts = sum(grid[c]["acts"] for c in ("shooting", "melee"))
     print()
-    print("GATE D1-B6 over %d games, %d activations%s%s (%.1fs)"
-          % (len(games), acts, "" if not red else " — RED --red-%s" % red,
+    print("GATE D1-B6 over %d games, %d activations, %s%s%s (%.1fs)"
+          % (len(games), acts, vintage_report_line(vintage_seen),
+             "" if not red else " — RED --red-%s" % red,
              " — RED --red-no-dangerous (the p.12 test switched OFF)" if no_dangerous else "",
              time.perf_counter() - t0))
     print("  A STREAM: %d/%d games replay the recorded tray exactly (%d rolls)"
@@ -337,13 +346,21 @@ def main(argv: list[str]) -> int:
                     help="RED for D1-B8: switch the p.12 DANGEROUS-terrain test back OFF "
                          "(header knob dangerous=false). Orthogonal to the three checks above "
                          "— every number must fall back to the pre-D1-B8 baseline")
+    ap.add_argument("--engage-fold", choices=("auto", "on", "off"), default="auto",
+                    help="NML-1130: the header knob engage_fold (PR #446). 'auto' (default) "
+                         "reads the corpus's OWN vintage (vintage_knobs) — absent means the "
+                         "corpus predates the knob, so OFF; 'on'/'off' force it")
+    ap.add_argument("--cond-ap", choices=("auto", "on", "off"), default="auto",
+                    help="NML-1130: conditional AP (PR #448/NML-1103), i.e. LEGACY_NO_COND_AP "
+                         "inverted. 'auto' (default) reads the corpus's OWN vintage; 'on'/'off' "
+                         "force it")
     a = ap.parse_args(argv)
     reds = [k for k in ("extra-draw", "formula", "one-wound")
             if getattr(a, "red_" + k.replace("-", "_"))]
     if len(reds) > 1:
         ap.error("one red knob at a time — each has to redden its own check alone")
     return run(Path(a.ref).expanduser(), a.repo, a.limit, a.out, reds[0] if reds else "",
-               a.report_only, a.red_no_dangerous)
+               a.report_only, a.red_no_dangerous, a.engage_fold, a.cond_ap)
 
 
 if __name__ == "__main__":
