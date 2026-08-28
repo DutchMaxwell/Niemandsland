@@ -526,6 +526,25 @@ def test_p9_the_board_answers_type_at_los_blocked_and_los_pairs():
     assert not nml_core.board(None).los_blocked(a, foe)
 
 
+def test_p9_a_terrain_header_carrying_walls_still_parses_and_exposes_them():
+    """NML-1073 M5 D5-2a: act_recorder.gd's terrain block now carries a "walls" key
+    (world-space wall segments) alongside cells/sandbox/cell_params. `PlainTerrain`
+    (core/nml-core/src/terrain.rs) has no `walls` field and no `deny_unknown_fields`,
+    so the extra key is expected to be silently ignored on the Rust side; this pins
+    that a header carrying it still parses into a valid board, and that the key
+    itself survives the JSON round trip on the Python side, where a reader (e.g. the
+    trainer) would pick it up."""
+    with_walls = json.loads(json.dumps(SCHOOL_TERRAIN))
+    with_walls["walls"] = [[[0.0, 0.0], [1.0 * IN2M, 0.0]], [[0.0, 0.0], [0.0, 1.0 * IN2M]]]
+    b = nml_core.board(with_walls)
+    assert b.is_valid()
+    assert b.n() == 30
+    # the RUINS cell still reads the same way with the extra key present
+    assert b.type_at([-1.5 * IN2M, 0.0, 1.5 * IN2M]) == nml_core.TERRAIN_RUINS
+    # and the key itself is exposed on the Python side, unmodified by the round trip
+    assert with_walls["walls"] == [[[0.0, 0.0], [1.0 * IN2M, 0.0]], [[0.0, 0.0], [0.0, 1.0 * IN2M]]]
+
+
 def test_p9_the_corpus_header_terrain_crosses_the_seam():
     """The arena corpus's header carries the OVERLAY form of the same object
     (cells + sandbox + cell_params); the board has to read it too."""
