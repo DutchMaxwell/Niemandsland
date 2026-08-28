@@ -65,75 +65,6 @@ func test_move_bands_granted_rule_string_counts() -> void:
 	var b := _controller().move_bands_for_props({"special_rules": ["Rapid Rush (spell)"]})
 	assert_int(b["advance"]).is_equal(6)
 	assert_bool(b["rush"] > 12).is_true()
-
-
-# === movement modifiers parsed from the rule description (issue #79) ===
-
-func test_parse_modifier_fast_text() -> void:
-	var d := "This model moves +2\" when using Advance, and +4\" when using Rush/Charge."
-	var mod := MovementRangeController.move_modifier_from_description(d)
-	assert_int(mod["advance"]).is_equal(2)
-	assert_int(mod["rush"]).is_equal(4)
-
-
-func test_parse_modifier_slow_text_negative() -> void:
-	var d := "This model moves -2\" when using Advance, and -4\" when using Rush/Charge."
-	var mod := MovementRangeController.move_modifier_from_description(d)
-	assert_int(mod["advance"]).is_equal(-2)
-	assert_int(mod["rush"]).is_equal(-4)
-
-
-func test_parse_modifier_curly_quotes_and_inflections() -> void:
-	# Curly inch marks + inflected actions ("Advancing"/"Charging") must still parse.
-	var d := "Gets +1” when Advancing, and +3” when Rushing or Charging."
-	var mod := MovementRangeController.move_modifier_from_description(d)
-	assert_int(mod["advance"]).is_equal(1)
-	assert_int(mod["rush"]).is_equal(3)
-
-
-func test_parse_modifier_ignores_unsigned_distances() -> void:
-	# A plain range like 12" (no sign) is not a movement modifier.
-	var d := "Enemies within 12\" must take a test; this has nothing to do with moving."
-	var mod := MovementRangeController.move_modifier_from_description(d)
-	assert_int(mod["advance"]).is_equal(0)
-	assert_int(mod["rush"]).is_equal(0)
-
-
-func test_parse_modifier_pick_one_rules_never_accrue() -> void:
-	# NML-230, found by a probe game: Versatile Reach ("either get +4\" range when shooting, or move
-	# +2\" when charging") is a per-activation CHOICE. Its charge half was baked permanently into the
-	# rush band, so every Founder's-Banner foot unit rushed 14\" instead of 12\" — even with the range
-	# mode picked, and double-counting when the charge mode fired (solo_controller grants the
-	# conditional +2 at pick time). OPR phrases every pick-one as "either … or"; the parser must
-	# return ZERO for such text.
-	var d := "The hero and their unit get either +4\" range when shooting, or move +2\" when charging."
-	var mod := MovementRangeController.move_modifier_from_description(d)
-	assert_int(mod["advance"]) \
-		.override_failure_message("a pick-one rule accrued into the ADVANCE band — the choice is per activation, not permanent") \
-		.is_equal(0)
-	assert_int(mod["rush"]) \
-		.override_failure_message("a pick-one rule accrued into the RUSH band — this is the permanent-14\"-rush bug") \
-		.is_equal(0)
-
-
-func test_parse_modifier_once_per_game_feats_never_accrue() -> void:
-	# NML-982, measured in a maintainer game (autosave diff: EXACTLY 10.00" on an 8" advance):
-	# Speed Feat is a once-per-game SPEND — the solo layer grants its +2/+4 at activation via the
-	# registry's uses_per_game. Baking the description's inches into the permanent bands too made
-	# the unit move 6 base + 2 permanent + 2 spend = 10" and then shoot. Like the pick-one guard
-	# (NML-230), such text must contribute ZERO to the permanent bands.
-	var d := "Once per game, when this unit moves and all its models have this rule, you may " \
-		+ "use this rule so that they move +2\" when using Advance actions and +4\" when using " \
-		+ "Rush and Charge actions."
-	var mod := MovementRangeController.move_modifier_from_description(d)
-	assert_int(mod["advance"]) \
-		.override_failure_message("a once-per-game feat accrued into the ADVANCE band — the 10\"-advance double count (NML-982)") \
-		.is_equal(0)
-	assert_int(mod["rush"]) \
-		.override_failure_message("a once-per-game feat accrued into the RUSH band (NML-982)") \
-		.is_equal(0)
-
-
 func test_move_bands_once_per_game_feat_stays_out_of_bands() -> void:
 	# The bands-level half of NML-982: with the feat's description present, the permanent bands
 	# stay the plain 6/12 — the +2/+4 belongs to the activation that spends it, nowhere else.
@@ -144,25 +75,6 @@ func test_move_bands_once_per_game_feat_stays_out_of_bands() -> void:
 			+ "Advance actions and +4\" when using Rush and Charge actions."}})
 	assert_int(b["advance"]).is_equal(6)
 	assert_int(b["rush"]).is_equal(12)
-
-
-## NML-1106 (TABLE BUG, found in the qbf_ref arena act header): Melee Shrouding is an ENEMY debuff —
-## "Enemies get -3\" movement … when trying to charge units where all models have this rule". The
-## description pass scraped the -3\" and braked the CARRIER: battle_brothers_2000's Elite Pathfinder
-## (Melee Shrouding Aura) was recorded with rush 9\" where the rules say 12\". The charger-side
-## application (SoloController.melee_shroud_charge_in) is the only place this -3\" belongs.
-func test_parse_modifier_enemy_targeted_text_never_touches_the_carrier() -> void:
-	var d := "Enemies get -3\" movement to a min. of 6\" when trying to charge units where all " \
-		+ "models have this rule."
-	var mod := MovementRangeController.move_modifier_from_description(d)
-	assert_int(mod["advance"]) \
-		.override_failure_message("an enemy-targeted rule moved the CARRIER's advance band (NML-1106)") \
-		.is_equal(0)
-	assert_int(mod["rush"]) \
-		.override_failure_message("an enemy-targeted rule braked the CARRIER's own rush — the 12\"-becomes-9\" bug (NML-1106)") \
-		.is_equal(0)
-
-
 func test_move_bands_melee_shrouding_leaves_its_carrier_at_full_reach() -> void:
 	# The bands-level half of NML-1106: the aura's carrier keeps the plain 6/12.
 	var b := _controller().move_bands_for_props({
@@ -173,21 +85,6 @@ func test_move_bands_melee_shrouding_leaves_its_carrier_at_full_reach() -> void:
 	assert_int(b["rush"]) \
 		.override_failure_message("Melee Shrouding braked its own carrier's rush band (NML-1106)") \
 		.is_equal(12)
-
-
-func test_move_bands_self_modifier_text_still_applies_after_the_enemy_guard() -> void:
-	# The counter-case: a SELF modifier ("Moves -2\" … -4\" …", the official Slow text) must keep
-	# working — the NML-1106 guard may only eat enemy-subject sentences.
-	var d := "Moves -2\" when using Advance, and -4\" when using Rush/Charge."
-	var mod := MovementRangeController.move_modifier_from_description(d)
-	assert_int(mod["advance"]).is_equal(-2)
-	assert_int(mod["rush"]).is_equal(-4)
-	var b := _controller().move_bands_for_props({
-		"special_rules": ["Slow"], "rule_descriptions": {"Slow": d}})
-	assert_int(b["advance"]).is_equal(4)
-	assert_int(b["rush"]).is_equal(8)
-
-
 ## NML-1122 (TABLE BUG, NML-1106 family): wood_elves "Speed Debuff" (the hero Yrana, 3 AoF lists)
 ## picks an ENEMY unit and grants it Slow — but the book phrases that as a RELATIVE CLAUSE, which
 ## the #441 phrase list cannot see, so the description pass scraped -2\"/-4\" onto the CASTER (on
@@ -220,41 +117,28 @@ func test_move_bands_self_slow_still_applies_beside_the_registry_guard() -> void
 	assert_int(b["rush"]) \
 		.override_failure_message("the NML-1122 guard ate a legitimate SELF rush modifier") \
 		.is_equal(8)
-
-
-func test_parse_modifier_both_bands_or_still_accrues() -> void:
-	# The counter-case guarding B10: ONE modifier naming both actions with a plain "or" (no "either")
-	# is NOT a pick-one — it applies to both bands, permanently. The pick-one guard must not eat it.
-	var d := "This model gets +2\" when using Advance or Rush actions."
-	var mod := MovementRangeController.move_modifier_from_description(d)
-	assert_int(mod["advance"]).is_equal(2)
-	assert_int(mod["rush"]).is_equal(2)
-
-
-func test_parse_modifier_empty_description() -> void:
-	var mod := MovementRangeController.move_modifier_from_description("")
-	assert_int(mod["advance"]).is_equal(0)
-	assert_int(mod["rush"]).is_equal(0)
-
-
-func test_move_bands_swift_from_description() -> void:
-	# "Swift" is unknown to the constants but its description carries the modifier (issue #79).
+## NML-1115: rule TEXT no longer reaches the bands. A modifier that exists only in an imported
+## description is INERT — the bands read rule names and the mechanics registry. That loss is the
+## point (the text pass out-ranked the registry, fired on rules the unit did not carry, and the
+## trainer never had it at all); `tools/prose_gate.gd` is what keeps it from going silent.
+func test_move_bands_prose_only_modifier_is_inert() -> void:
 	var b := _controller().move_bands_for_props({
 		"special_rules": ["Swift"],
 		"rule_descriptions": {"Swift": "Moves +1\" when using Advance, and +2\" when using Rush/Charge."},
 	})
-	assert_int(b["advance"]).is_equal(7)   # 6 + 1
-	assert_int(b["rush"]).is_equal(14)      # 12 + 2
+	assert_int(b["advance"]) \
+		.override_failure_message("an imported rule DESCRIPTION moved the advance band (NML-1115)") \
+		.is_equal(6)
+	assert_int(b["rush"]) \
+		.override_failure_message("an imported rule DESCRIPTION moved the rush band (NML-1115)") \
+		.is_equal(12)
 
 
 func test_move_bands_rule_rating_is_stripped() -> void:
-	# A rated rule "Swift(2)" still matches its "Swift" description key.
-	var b := _controller().move_bands_for_props({
-		"special_rules": ["Swift(2)"],
-		"rule_descriptions": {"Swift": "Moves +1\" when using Advance, and +2\" when using Rush/Charge."},
-	})
-	assert_int(b["advance"]).is_equal(7)
-	assert_int(b["rush"]).is_equal(14)
+	# A rated rule "Fast(2)" still resolves to its "Fast" name modifier.
+	var b := _controller().move_bands_for_props({"special_rules": ["Fast(2)"]})
+	assert_int(b["advance"]).is_equal(8)
+	assert_int(b["rush"]).is_equal(16)
 
 
 func test_move_bands_description_overrides_constant() -> void:
@@ -269,11 +153,10 @@ func test_move_bands_description_overrides_constant() -> void:
 
 func test_move_bands_scurry_adds_two_each() -> void:
 	# Ratmen Clans "Scurry": +2" Advance AND +2" Rush/Charge (a direct additive rule, +2/+2 —
-	# unlike Fast's +2/+4). Parsed straight from its description (issue #79).
+	# unlike Fast's +2/+4). REGISTRY data (primitive "Quick", advance_mod/rush_mod 2), so it works
+	# on a list with no description texts at all.
 	var b := _controller().move_bands_for_props({
-		"special_rules": ["Scurry"],
-		"rule_descriptions": {"Scurry": "Moves +2\" when using Advance, and +2\" when using Rush/Charge."},
-	})
+		"game_system": "gf", "faction_folder": "ratmen_clans", "special_rules": ["Scurry"]})
 	assert_int(b["advance"]).is_equal(8)   # 6 + 2
 	assert_int(b["rush"]).is_equal(14)      # 12 + 2
 
@@ -332,22 +215,26 @@ func test_merge_aura_ignores_non_aura_member() -> void:
 
 
 func test_aura_swift_cancels_unit_slow_end_to_end() -> void:
-	# The Dwarf case: a Slow unit with no Swift of its own gains it from the hero's Swift Aura,
-	# so the whole unit ignores Slow -> normal 6"/12" (#79 aura).
-	var own := {"Slow": "Moves -2\" when using Advance, and -4\" when using Rush/Charge."}
-	var members := [{
-		"rules": ["Hero", "Swift Aura"],
-		"descriptions": {"Swift Aura": "This model and its unit get Swift.", "Swift": "This model may ignore the Slow rule."},
-	}]
-	var merged := MovementRangeController.merge_aura_descriptions(own, members)
-	var b := _controller().move_bands_for_props({"special_rules": ["Slow"], "rule_descriptions": merged})
+	# The Dwarf case: a Slow unit with no Swift of its own gains it from the hero's Swift Aura, so
+	# the whole unit ignores Slow -> normal 6"/12" (#79 aura). NML-1115: the aura reaches the bands
+	# through the STRUCTURED path — OPRArmyManager.expand_auras_of stamps the granted rule NAME
+	# ("Swift Aura" -> "Swift") into special_rules at spawn — not through the hero's rule TEXT.
+	var slowed := {"special_rules": ["Slow"]}
+	assert_int(_controller().move_bands_for_props(slowed)["advance"]).is_equal(4)
+	var hero := GameUnit.new()
+	hero.unit_properties = {"special_rules": ["Hero", "Swift Aura"], "player_id": 1, "name": "H"}
+	var granted: Array = AiEv.aura_granted_rules([hero])
+	assert_bool(granted.has("Swift")).is_true()
+	var b := _controller().move_bands_for_props({"special_rules": ["Slow"] + granted})
 	assert_int(b["advance"]).is_equal(6)
 	assert_int(b["rush"]).is_equal(12)
 
 
-func test_move_bands_granted_rule_modifier_applies() -> void:
-	# A direct ability "Fleetfoot" grants Swift; spawn-time expansion puts BOTH descriptions in the
-	# dict. The granting rule carries no modifier text; Swift's does — it must still apply (#79).
+func test_move_bands_free_text_rule_grant_no_longer_moves_the_bands() -> void:
+	# NML-1115: the transitive TEXT grant is gone with the description pass — an ability whose
+	# prose says it "has the Swift special rule" no longer smuggles Swift's inches onto the unit.
+	# A rule the unit really carries arrives as a NAME (item grants, OPRArmyManager.expand_auras_of),
+	# which the name + registry passes read.
 	var b := _controller().move_bands_for_props({
 		"special_rules": ["Fleetfoot"],
 		"rule_descriptions": {
@@ -355,15 +242,15 @@ func test_move_bands_granted_rule_modifier_applies() -> void:
 			"Swift": "Moves +1\" when using Advance, and +2\" when using Rush/Charge.",
 		},
 	})
-	assert_int(b["advance"]).is_equal(7)   # 6 + 1
-	assert_int(b["rush"]).is_equal(14)      # 12 + 2
+	assert_int(b["advance"]).is_equal(6)
+	assert_int(b["rush"]).is_equal(12)
 
 
 func test_move_bands_clamps_at_zero() -> void:
-	# A very heavy Slow can't drive the bands negative.
+	# A heavy Slow plus a debuff spell token can't drive the bands negative.
 	var b := _controller().move_bands_for_props({
 		"special_rules": ["Slow"],
-		"rule_descriptions": {"Slow": "Moves -9\" when using Advance, and -99\" when using Rush/Charge."},
+		"spell_move_mod": {"advance": -9, "rush": -99},
 	})
 	assert_int(b["advance"]).is_equal(0)
 	assert_int(b["rush"]).is_equal(0)
@@ -506,27 +393,16 @@ func test_move_bands_swift_name_fallback_cancels_slow() -> void:
 ## using Charge actions." The move parser must apply ONLY the +2" Charge (the Rush/Charge band), never the
 ## +4" range — so a Royal Legion unit reads Advance 6", Rush/Charge 14".
 func test_move_bands_royal_legion_charge_bonus_only() -> void:
-	var desc := {"Royal Legion": "This model gets +4\" range when shooting and moves +2\" when using Charge actions."}
-	var b := _controller().move_bands_for_props({"special_rules": ["Royal Legion"], "rule_descriptions": desc})
+	# REGISTRY data (aof mummified_undead: range_bonus_in 4, charge_mod 2) — the range half stays
+	# with SoloController.shooting_range_bonus, only the charge half rides the bands.
+	var b := _controller().move_bands_for_props({
+		"game_system": "aof", "faction_folder": "mummified_undead",
+		"special_rules": ["Royal Legion"]})
 	assert_int(b["advance"]).is_equal(6)    # +4" range is NOT a move modifier
 	assert_int(b["rush"]).is_equal(14)       # 12 + 2 (Charge shares the Rush/Charge band)
 
 
 # === B10 (test game 2): movement-mod audit — partial parses must not eat a band ===
-
-func test_parse_modifier_one_value_naming_both_actions() -> void:
-	# ONE modifier naming BOTH actions applies to both bands (old: first-stem-wins dropped rush).
-	var d := "This model moves +2\" when using Advance or Rush/Charge actions."
-	var mod := MovementRangeController.move_modifier_from_description(d)
-	assert_int(mod["advance"]).is_equal(2)
-	assert_int(mod["rush"]).is_equal(2)
-	# The classic Fast pair is UNAFFECTED (windows end at the next modifier).
-	var fast := MovementRangeController.move_modifier_from_description(
-		"Moves +2\" when using Advance, and +4\" when using Rush/Charge.")
-	assert_int(fast["advance"]).is_equal(2)
-	assert_int(fast["rush"]).is_equal(4)
-
-
 func test_move_bands_fast_partial_description_fills_missing_band() -> void:
 	# A Fast description whose rush half is unparseable used to mark the WHOLE rule counted and
 	# suppress the name fallback — the +4" rush/charge bonus vanished (the maintainer's cap read

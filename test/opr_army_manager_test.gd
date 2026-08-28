@@ -254,20 +254,18 @@ func test_unit_has_rule_null_unit_is_false() -> void:
 	assert_bool(OPRArmyManager._unit_has_rule(null, "Scout")).is_false()
 
 
-func test_unit_rule_describes_catches_free_text_grant() -> void:
-	# Path-4 heuristic: a carried rule whose DESCRIPTION grants Scout/Ambush is detected (no structured
-	# "grants" field in ArmyForge). A direct rule is left to _unit_has_rule; this scans descriptions.
+## NML-1115: the tray's Ambush/Scout lane reads rule NAMES only. The old free-text heuristic
+## (`_unit_rule_describes`) scanned the imported rule DESCRIPTIONS for the word — measured over
+## both AI-list pools it flagged 30 unit-instances and every one was a false positive ("Repel
+## Ambushers", "Ambush Re-Deployment", "Ambushing Piercing Shot" only MENTION it), while the AI's
+## real reserve decision (`SoloController.unit_has_ambush`) never consulted prose at all.
+func test_lane_heuristic_no_longer_scans_rule_text() -> void:
 	var mgr: OPRArmyManager = auto_free(OPRArmyManager.new())
-	var unit := _unit_with_rules(["Pathfinder"])
-	assert_bool(mgr._unit_rule_describes(unit, "Scout",
-		{"Pathfinder": "This unit counts as having the Scout special rule."})).is_true()
-	# Unrelated description → not detected.
-	assert_bool(mgr._unit_rule_describes(_unit_with_rules(["Furious"]), "Scout",
-		{"Furious": "Bonus attacks on the charge."})).is_false()
-	# Empty descriptions → not detected.
-	assert_bool(mgr._unit_rule_describes(unit, "Scout", {})).is_false()
-
-
+	assert_bool(mgr.has_method("_unit_rule_describes")) \
+		.override_failure_message("the prose lane heuristic is back — the tray stages by rule NAME (NML-1115)") \
+		.is_false()
+	# A rule that merely MENTIONS Ambush is not an Ambush unit.
+	assert_bool(OPRArmyManager._unit_has_rule(_unit_with_rules(["Repel Ambushers"]), "Ambush")).is_false()
 # ===== _find_mount_glb_name: MOUNT_KEYWORDS + specificity (synthetic model library) =====
 # Mummified Undead go-live: a hero's mount upgrade resolves to a faction mount GLB by keyword, and the
 # most specific candidate wins (the "beast" collision must not steal the flying mount).
