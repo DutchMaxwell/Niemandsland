@@ -69,14 +69,20 @@ def _digest_without_knobs(result: dict) -> str:
     return sp.result_digest({k: v for k, v in result.items() if k != "knobs"})
 
 
-def _first_divergent_seed(army1: Path, army2: Path, knob: str, mode_a: str, mode_b: str):
+def _first_divergent_seed(army1: Path, army2: Path, knob: str, mode_a: str, mode_b: str,
+                          **rest):
     """Play `SEEDS` with `knob=mode_a` vs `knob=mode_b` until the two games'
     knob-free digests disagree; return `(seed, result_a, result_b)` for the
-    first one, or `(None, None, None)` if none of the tried seeds differ."""
+    first one, or `(None, None, None)` if none of the tried seeds differ.
+
+    `rest` is the OTHER knobs both arms need in common — `sighting` only has a
+    consumer inside the tray volley (sim.rs:1632-1645), so its test has to hold
+    `dice="table"` on both sides or the two arms would play the identical
+    expected-value game and the guard would pass for the wrong reason."""
     core = nml_core.load(str(REPO))
     for seed in SEEDS:
-        a = sp.play_game(seed, army1, army2, REPO, BANK_DIR, core, **{knob: mode_a})
-        b = sp.play_game(seed, army1, army2, REPO, BANK_DIR, core, **{knob: mode_b})
+        a = sp.play_game(seed, army1, army2, REPO, BANK_DIR, core, **{knob: mode_a}, **rest)
+        b = sp.play_game(seed, army1, army2, REPO, BANK_DIR, core, **{knob: mode_b}, **rest)
         if _digest_without_knobs(a) != _digest_without_knobs(b):
             return seed, a, b
     return None, None, None
@@ -115,6 +121,38 @@ def test_hero_attach_off_vs_table_plays_a_different_game():
     assert off["knobs"]["hero_attach"] == "off"
     assert table["knobs"]["hero_attach"] == "table"
     print("hero_attach off vs table first diverges at seed %d" % seed)
+
+
+@pytest.mark.skipif(
+    _lists_missing(CHARGE_ARMY1, CHARGE_ARMY2),
+    reason="needs the terrain bank + robot_legions/blessed_sisters 1000pt lists",
+)
+def test_sighting_unit_vs_model_plays_a_different_game():
+    """H6/3: `play_game(sighting=...)` — the D6a-B4 rung, which the trainer
+    could not reach at all before this: `TRAINER_KNOBS` carried no `sighting`
+    key, so the header always took the crate's serde default (`Sighting::Unit`)
+    and a Godot-free corpus could never be written at the sighting fidelity a
+    RECORDED corpus is replayed at (`selfplay_gate`/`sidecar_gate` read the
+    mode off the header).
+
+    Both arms hold `dice="table"`: the knob's only consumer is inside the tray
+    volley (`sim.rs:1632-1645`, `seams.sighting`), so under `dice="expected"`
+    the two modes play the same game by construction and this guard would be
+    vacuous."""
+    seed, unit, model = _first_divergent_seed(
+        CHARGE_ARMY1, CHARGE_ARMY2, "sighting", "unit", "model", dice="table"
+    )
+    assert seed is not None, "no seed in %s diverged between sighting unit/model" % list(SEEDS)
+    assert unit["knobs"]["sighting"] == "unit"
+    assert model["knobs"]["sighting"] == "model"
+    print("sighting unit vs model first diverges at seed %d" % seed)
+
+
+def test_an_unknown_sighting_mode_raises_instead_of_falling_back():
+    """`resolve_sighting` follows `resolve_dice`'s rule: a corpus whose header
+    claims a rung it did not play is worse than no corpus."""
+    with pytest.raises(ValueError, match="sighting must be one of"):
+        sp.resolve_sighting("per_model")
 
 
 # ------------------------------------------------------------ H8: charge_gate.py ---
