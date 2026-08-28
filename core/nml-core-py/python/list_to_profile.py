@@ -63,8 +63,11 @@ before this port existed to gate on the corpus for real):
     Still NOT ported: the DESCRIPTION pass, which needs `rule_descriptions`
     — free rule text the arena fetches from the army-book API and the
     bundled AI lists do not carry. Where a book states a movement modifier
-    ONLY in prose and the registry entry does not encode it (AoF Ghostly
-    Undead's Ethereal), the trainer cannot see it — see tools/loader_gate.py.
+    ONLY in prose and the registry entry does not (yet) encode it as
+    advance_mod/rush_mod, the trainer cannot see it — see tools/loader_gate.py.
+    NML-1121 closed this gap for AoF Ghostly Undead / Shadow Stalkers'
+    "Ethereal" (advance_mod/rush_mod -6/-6, primitive "Teleport"): the data
+    now carries what the prose said, so the registry pass alone reaches it.
 
 Two more fields — shooting_range_bonus and max_activation_advance_bonus_in —
 are stamped here too. Current main's `_unit_profile` (battle_sim.gd:1573) no
@@ -118,9 +121,12 @@ REGISTRY_DIR = Path(__file__).resolve().parents[3] / "assets" / "solo"
 _REGISTRY_CACHE: dict[str, dict] = {}
 
 #: movement_range_controller.gd:179 — the ONLY primitives the move-band registry
-#: pass honours. A rule aliased to anything else (Ethereal -> Teleport, Wild Veil
-#: -> Ranged Shrouding) leaves the bands alone, on the table and here.
-MOVE_PRIMITIVES = ("Fast", "Slow", "Quick", "Rapid Advance", "Rapid Rush", "Royal Legion")
+#: pass honours. A rule aliased to anything else (Wild Veil -> Ranged Shrouding)
+#: leaves the bands alone, on the table and here. NML-1121: "Teleport" joined this
+#: list for Ethereal's own advance_mod/rush_mod (-6/-6); the real "Teleport" rule
+#: carries no such keys (its advance_bonus_in/rush_bonus_in are read elsewhere, by
+#: _max_activation_advance_bonus_in below), so it is unaffected by riding this pass.
+MOVE_PRIMITIVES = ("Fast", "Slow", "Quick", "Rapid Advance", "Rapid Rush", "Royal Legion", "Teleport")
 #: solo_controller.gd:5435 — the byte-identical fallback when the map is absent.
 ROYAL_LEGION_RANGE_BONUS_IN = 4
 #: solo_controller.gd:5563 — the Teleport family's default placement distance.
