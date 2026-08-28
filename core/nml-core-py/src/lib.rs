@@ -1299,6 +1299,21 @@ fn load(repo_root: &str) -> Core {
     }
 }
 
+/// LEGACY REPLAY ONLY — restore the pre-NML-1112 PREFIX reading of rule names
+/// for every `Core` in this process. `False` (the default, and the only setting
+/// a fresh corpus may use) is the shipped rule: exact name or parametrised form.
+///
+/// The frozen corpora were recorded by `tools/core_selfplay.gd`, which runs no
+/// aura expansion, so a "Furious Aura" carrier answered the "Furious" query only
+/// through the old prefix match — baked into board column 18 (the flag) and
+/// column 13 (melee EV, via the attack context). NEITHER reading is game-true: a
+/// real aura grants unit-wide, the prefix gave it to the carrier alone. The
+/// corpora pin the SEARCH LOOP, not the rule; the loader gap is NML-1105.
+#[pyfunction]
+fn set_legacy_prefix_rules(on: bool) {
+    nmlcore::rules::LEGACY_PREFIX_RULES.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
 // ------------------------------------------------------------------ Board ---
 
 /// The header's `"terrain"` object, read once. Every lookup below is a pure
@@ -1428,6 +1443,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRng>()?;
     m.add_class::<PyTray>()?;
     m.add_function(wrap_pyfunction!(load, m)?)?;
+    m.add_function(wrap_pyfunction!(set_legacy_prefix_rules, m)?)?;
     // NML-1073 M3-4: the board as a pure lookup — the header's terrain in, the
     // same answers `SchoolTerrain` gives the live game out.
     m.add_function(wrap_pyfunction!(board, m)?)?;
