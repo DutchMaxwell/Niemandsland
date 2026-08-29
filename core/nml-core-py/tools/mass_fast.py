@@ -110,6 +110,8 @@ FIDELITY_DEFAULTS = {
     "dice": "expected",
     "charge_landing": "off",
     "movement": "rigid",
+    "sighting": "unit",
+    "objectives": "constant",
     "engage_fold": True,
     "cond_ap": None,
 }
@@ -279,6 +281,10 @@ def main(argv: list[str]) -> int:
                     default=FIDELITY_DEFAULTS["charge_landing"])
     ap.add_argument("--movement", choices=list(sp.MOVEMENT_MODES),
                     default=FIDELITY_DEFAULTS["movement"])
+    ap.add_argument("--sighting", choices=list(sp.SIGHTING_MODES),
+                    default=FIDELITY_DEFAULTS["sighting"])
+    ap.add_argument("--objectives", choices=list(sp.OBJECTIVES_MODES),
+                    default=FIDELITY_DEFAULTS["objectives"])
     ap.add_argument("--no-engage-fold", dest="engage_fold", action="store_false", default=True,
                     help="RED switch for the D5-4 attached-hero fold of the engage test")
     ap.add_argument(
@@ -305,6 +311,8 @@ def main(argv: list[str]) -> int:
         "dice": a.dice,
         "charge_landing": a.charge_landing,
         "movement": a.movement,
+        "sighting": a.sighting,
+        "objectives": a.objectives,
         "engage_fold": a.engage_fold,
         "cond_ap": None if a.cond_ap == "auto" else (a.cond_ap == "on"),
         # NML-1142: WHICH eval played. `None` is the hand eval -- the default,
