@@ -58,7 +58,7 @@ pub const RULE_VOCAB_PATH: &str = "data/encoder_rule_vocab_v1.json";
 /// RULE_VOCAB_VERSION` battle_sim.gd:131. The file is SHARED by the table and
 /// this crate, so a build that reads a version it was not written for refuses
 /// to slot anything at all rather than move every board row in silence.
-pub const RULE_VOCAB_VERSION: i64 = 3;
+pub const RULE_VOCAB_VERSION: i64 = 4;
 
 /// NML-1134 — the version a corpus was recorded under when its act header
 /// carries no `rule_vocab_version` at all. Every corpus cut before the stamp
@@ -902,21 +902,40 @@ mod tests {
         }
     }
 
-    /// NML-1134 — the LEGACY reading: a corpus recorded under version 2 replays
-    /// with the vocabulary as it was then. The file is append-only, so that is
-    /// the same map minus the 11 appended names, which then collect as unknown
-    /// exactly as they did in the recording.
+    /// NML-1144b — the v4 append: the 61 names gen0's corpus collected as
+    /// unknown sit at unit slots 139-199, each exactly once, and none of them
+    /// was already listed in another band (the file has never carried one name
+    /// in two lists — "Lust Boon" lives in the spell list and was skipped).
     #[test]
-    fn the_legacy_reading_is_the_vocabulary_as_of_version_2() {
+    fn every_appended_v4_name_sits_at_its_slot() {
+        let v = RowVocab::load(&repo_root());
+        assert!(v.loaded, "{:?}", v.error);
+        assert_eq!(v.unit.len(), 200, "unit band 0-199 is exactly full");
+        assert_eq!(v.weapon.len(), 22, "no weapon name appended");
+        assert_eq!(v.spell.len(), 463, "no spell name appended");
+        assert_eq!(v.unit.get("Army Standard Bearer"), Some(&139));
+        assert_eq!(v.unit.get("Trekker Tires"), Some(&199));
+        let mut slots: Vec<_> = v.unit.values().copied().collect();
+        slots.sort_unstable();
+        slots.dedup();
+        assert_eq!(slots.len(), v.unit.len(), "no name shares a slot");
+    }
+
+    /// NML-1144b — the LEGACY reading: a corpus recorded under version 3
+    /// replays with the vocabulary as it was then. The file is append-only, so
+    /// that is the same map minus the 61 appended names, which then collect as
+    /// unknown exactly as they did in the recording.
+    #[test]
+    fn the_legacy_reading_is_the_vocabulary_as_of_version_3() {
         let now = RowVocab::load(&repo_root());
-        let old = RowVocab::for_version(&repo_root(), LEGACY_VOCAB_VERSION);
+        let old = RowVocab::for_version(&repo_root(), 3);
         assert!(old.loaded, "{:?}", old.error);
-        assert_eq!(old.version, 2);
-        assert_eq!(old.unit.len() + 11, now.unit.len(), "11 unit names appended");
+        assert_eq!(old.version, 3);
+        assert_eq!(old.unit.len() + 61, now.unit.len(), "61 unit names appended");
         assert_eq!(old.weapon.len(), now.weapon.len(), "no weapon name appended");
         assert_eq!(old.spell.len(), now.spell.len(), "no spell name appended");
-        assert_eq!(old.unit.get("Warden"), None, "appended after version 2");
-        assert_eq!(now.unit.get("Warden"), Some(&137));
+        assert_eq!(old.unit.get("Trekker Tires"), None, "appended after version 3");
+        assert_eq!(now.unit.get("Trekker Tires"), Some(&199));
         // Everything the old reading DOES carry sits on the same slot as now —
         // that is what append-only means, and a gate replaying a v2 corpus
         // depends on it.

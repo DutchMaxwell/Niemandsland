@@ -134,7 +134,7 @@ const RULE_VOCAB_PATH := "res://data/encoder_rule_vocab_v1.json"
 ## Rust twin (`nml_core::rows::RULE_VOCAB_VERSION`, core/nml-core/src/rows.rs) and
 ## both sides refuse a file that does not carry exactly this number — a silently
 ## mis-slotted rule would move every board row without a single loud line.
-const RULE_VOCAB_VERSION := 3
+const RULE_VOCAB_VERSION := 4
 static var _vocab_unit: Dictionary = {}
 static var _vocab_weapon: Dictionary = {}
 static var _vocab_spell: Dictionary = {}   # v1c: spell book namespace, slots 300+

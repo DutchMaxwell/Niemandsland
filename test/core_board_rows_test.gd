@@ -206,3 +206,14 @@ func test_rule_vocab_of_a_wrong_version_is_refused() -> void:
 		"Toxic Cysts", "Versatile Reach", "Warden", "Winged Breed"]
 	for i in appended.size():
 		assert_int(int(BattleSim._vocab_unit.get(appended[i], -1))).is_equal(128 + i)
+
+	# NML-1144b: and the 61 names gen0 collected as unknown sit at unit slots
+	# 139-199, straight off the file — the every-appended-name-slots mirror of
+	# rows.rs's v4 test. "Lust Boon" is deliberately absent: it lives in the
+	# spell band already, and no name carries two slots.
+	var v4: Array = committed["unit"].slice(139, 200)
+	assert_int(v4.size()).is_equal(61)
+	for i in v4.size():
+		assert_int(int(BattleSim._vocab_unit.get(str(v4[i]), -1))).is_equal(139 + i)
+	assert_bool(BattleSim._vocab_unit.has("Lust Boon")).is_false()
+	assert_bool(BattleSim._vocab_spell.has("Lust Boon")).is_true()
