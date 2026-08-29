@@ -155,6 +155,26 @@ def test_an_unknown_sighting_mode_raises_instead_of_falling_back():
         sp.resolve_sighting("per_model")
 
 
+@pytest.mark.skipif(
+    _lists_missing(CHARGE_ARMY1, CHARGE_ARMY2),
+    reason="needs the terrain bank + robot_legions/blessed_sisters 1000pt lists",
+)
+def test_the_objectives_mode_is_stamped_into_the_result_knobs():
+    """NML-1147a: `play_game` plays the `objectives` mode (D8a) but never SAID
+    so — the result's `knobs` block carried no `objectives` key, so a Gen-0
+    corpus that played the rulebook layout records exactly what a
+    constants-layout corpus records and no gate can tell them apart. This
+    plays one seed under both modes and requires the stamp to read back; the
+    KeyError on the `rulebook` arm is the red this test is born with."""
+    core = nml_core.load(str(REPO))
+    a = sp.play_game(27, CHARGE_ARMY1, CHARGE_ARMY2, REPO, BANK_DIR, core,
+                     objectives="constant")
+    b = sp.play_game(27, CHARGE_ARMY1, CHARGE_ARMY2, REPO, BANK_DIR, core,
+                     objectives="rulebook")
+    assert a["knobs"]["objectives"] == "constant"
+    assert b["knobs"]["objectives"] == "rulebook"
+
+
 # ------------------------------------------------------------ H8: charge_gate.py ---
 
 

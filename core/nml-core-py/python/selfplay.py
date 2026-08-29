@@ -1472,6 +1472,10 @@ def play_game(
             "charge_landing": charge_landing,
             "movement": movement,
             "sighting": eff_sighting,
+            # NML-1147a: WHICH marker layout the game played (D8a). Gen-0's
+            # rulebook corpus recorded exactly what a constants corpus records
+            # until this key existed — the mode was honoured but never said.
+            "objectives": eff_objectives,
             "engage_fold": engage_fold,
             "cond_ap": cond_ap,
             # NML-1142: WHICH brain played. `""` is the hand eval — every corpus
