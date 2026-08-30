@@ -1,5 +1,5 @@
 {
- "version": 4,
+ "version": 5,
  "comment": "Encoder rule vocabulary v2 (NML-995): built from ALL 43 CDN factions x sizes (210 lists). Slot order APPEND-ONLY; new rules get the next slot centrally at collect time. Unit slots 0-199, weapon slots 200-299 (v1b fix: 128 unit rules overflowed the old 0-99 range) in board rows.",
  "unit": [
   "Agile",
@@ -225,7 +225,10 @@
   "Takedown",
   "Tear",
   "Thrust",
-  "Unstoppable"
+  "Unstoppable",
+  "Precise",
+  "Counter",
+  "Hazardous"
  ],
  "spell": [
   "Absorption Amplifier",
@@ -704,7 +707,13 @@
    "unit": 139,
    "weapon": 22,
    "spell": 463
+  },
+  "4": {
+   "unit": 200,
+   "weapon": 22,
+   "spell": 463
   }
  },
- "comment_v4": "v4 (29.08., NML-1144b): the top 61 of gen0's 162 distinct unknown rule names appended as unit slots 139-199, skipping names already listed in another band (Lust Boon) \u2014 the file has never carried one name in two lists. APPEND-ONLY, so every older version is a PREFIX of this file and legacy_lengths gives where each one ended \u2014 a corpus recorded under an older vocabulary replays under its own reading."
+ "comment_v4": "v4 (29.08., NML-1144b): the top 61 of gen0's 162 distinct unknown rule names appended as unit slots 139-199, skipping names already listed in another band (Lust Boon) \u2014 the file has never carried one name in two lists. APPEND-ONLY, so every older version is a PREFIX of this file and legacy_lengths gives where each one ended \u2014 a corpus recorded under an older vocabulary replays under its own reading.",
+ "comment_v5": "v5 (30.08., NML-1144b follow-up): the 3 weapon-band rules gen0's corpus still collected as unknown (Precise 69, Counter 56, Hazardous 51 occurrences \u2014 176 of 7905) appended at weapon slots 22-24. Their v4 UNIT-band slots are dead weight (the weapon encoder looks up only the weapon band) and stay \u2014 the unit band is full at 200. APPEND-ONLY; legacy_lengths['4'] marks the v4 end."
 }

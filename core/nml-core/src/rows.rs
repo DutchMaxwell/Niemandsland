@@ -58,7 +58,7 @@ pub const RULE_VOCAB_PATH: &str = "data/encoder_rule_vocab_v1.json";
 /// RULE_VOCAB_VERSION` battle_sim.gd:131. The file is SHARED by the table and
 /// this crate, so a build that reads a version it was not written for refuses
 /// to slot anything at all rather than move every board row in silence.
-pub const RULE_VOCAB_VERSION: i64 = 4;
+pub const RULE_VOCAB_VERSION: i64 = 5;
 
 /// NML-1134 — the version a corpus was recorded under when its act header
 /// carries no `rule_vocab_version` at all. Every corpus cut before the stamp
@@ -911,7 +911,7 @@ mod tests {
         let v = RowVocab::load(&repo_root());
         assert!(v.loaded, "{:?}", v.error);
         assert_eq!(v.unit.len(), 200, "unit band 0-199 is exactly full");
-        assert_eq!(v.weapon.len(), 22, "no weapon name appended");
+        assert_eq!(v.weapon.len(), 25, "v5 appended 3 weapon names");
         assert_eq!(v.spell.len(), 463, "no spell name appended");
         assert_eq!(v.unit.get("Army Standard Bearer"), Some(&139));
         assert_eq!(v.unit.get("Trekker Tires"), Some(&199));
@@ -921,21 +921,41 @@ mod tests {
         assert_eq!(slots.len(), v.unit.len(), "no name shares a slot");
     }
 
-    /// NML-1144b — the LEGACY reading: a corpus recorded under version 3
-    /// replays with the vocabulary as it was then. The file is append-only, so
-    /// that is the same map minus the 61 appended names, which then collect as
-    /// unknown exactly as they did in the recording.
+    /// NML-1144b — the v5 append: the 3 weapon-band rules gen0's corpus still
+    /// collected as unknown sit at weapon slots 222-224 (the band is offset-based:
+    /// 200 + array index); the unit band stays
+    /// exactly full at 200 (their v4 unit-band slots are dead weight but
+    /// harmless — no unit grants a rule of these names).
     #[test]
-    fn the_legacy_reading_is_the_vocabulary_as_of_version_3() {
+    fn every_appended_v5_weapon_name_sits_at_its_slot() {
+        let v = RowVocab::load(&repo_root());
+        assert!(v.loaded, "{:?}", v.error);
+        assert_eq!(v.weapon.len(), 25, "3 weapon names appended");
+        for (slot, name) in [(222, "Precise"), (223, "Counter"), (224, "Hazardous")] {
+            assert_eq!(v.weapon.get(name), Some(&slot), "weapon slot of {name}");
+        }
+        assert_eq!(v.unit.len(), 200, "unit band unchanged");
+        assert_eq!(v.spell.len(), 463, "no spell name appended");
+    }
+
+    /// NML-1144b — the LEGACY reading: a corpus recorded under version 4
+    /// replays with the vocabulary as it was then — the same map minus the 3
+    /// appended weapon names, which then collect as unknown exactly as they
+    /// did in the recording.
+    #[test]
+    fn the_legacy_reading_is_the_vocabulary_as_of_version_4() {
         let now = RowVocab::load(&repo_root());
-        let old = RowVocab::for_version(&repo_root(), 3);
+        let old = RowVocab::for_version(&repo_root(), 4);
         assert!(old.loaded, "{:?}", old.error);
-        assert_eq!(old.version, 3);
-        assert_eq!(old.unit.len() + 61, now.unit.len(), "61 unit names appended");
-        assert_eq!(old.weapon.len(), now.weapon.len(), "no weapon name appended");
+        assert_eq!(old.version, 4);
+        assert_eq!(old.weapon.len() + 3, now.weapon.len(), "3 weapon names appended");
+        assert_eq!(old.unit.len(), now.unit.len(), "no unit name appended");
         assert_eq!(old.spell.len(), now.spell.len(), "no spell name appended");
-        assert_eq!(old.unit.get("Trekker Tires"), None, "appended after version 3");
-        assert_eq!(now.unit.get("Trekker Tires"), Some(&199));
+        assert_eq!(old.weapon.get("Precise"), None, "appended after version 4");
+        assert_eq!(now.weapon.get("Precise"), Some(&222));
+        for (name, slot) in &old.weapon {
+            assert_eq!(now.weapon.get(name), Some(slot), "slot of {name} moved");
+        }
         // Everything the old reading DOES carry sits on the same slot as now —
         // that is what append-only means, and a gate replaying a v2 corpus
         // depends on it.

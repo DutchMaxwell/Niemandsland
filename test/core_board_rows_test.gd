@@ -217,3 +217,11 @@ func test_rule_vocab_of_a_wrong_version_is_refused() -> void:
 		assert_int(int(BattleSim._vocab_unit.get(str(v4[i]), -1))).is_equal(139 + i)
 	assert_bool(BattleSim._vocab_unit.has("Lust Boon")).is_false()
 	assert_bool(BattleSim._vocab_spell.has("Lust Boon")).is_true()
+
+	# NML-1144b v5: and the 3 weapon-band rules gen0 still collected sit at
+	# weapon slots 222-224 (band = 200 + index, so the 22nd-24th entries).
+	var v5: Array = committed["weapon"].slice(22, 25)
+	assert_int(v5.size()).is_equal(3)
+	var wslots := [222, 223, 224]
+	for i in v5.size():
+		assert_int(int(BattleSim._vocab_weapon.get(str(v5[i]), -1))).is_equal(wslots[i])
