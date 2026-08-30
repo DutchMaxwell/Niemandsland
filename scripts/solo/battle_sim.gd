@@ -922,9 +922,16 @@ static func edge_gap_in(a_pos: Array, a_radii: Array, b_pos: Array, b_radii: Arr
 ## SEAM-GATED on `hero_fold_enabled()` alone — no new seam: without the fold nothing else is
 ## folded either (the pool, the move, the activation), so folding HERE would measure a unit the
 ## rest of resolve() does not believe in. Fold off = the single `edge_gap_in` call, byte for byte.
+## NML-1148 corpus-vintage pin: a replay of a corpus recorded BEFORE the engage fold
+## (NML-1129) and the weapon fold (NML-1132) must run those two halves OFF while the fold's
+## pool/move/spend halves were live (the header's hero_attach is true) — the recorded rollouts
+## measured host-only engage gaps (qbg_ref s27, nodes.jsonl node 965). GDScript gates all four
+## halves on hero_fold_enabled() alone, so the replay tool pins the late halves here; -1 =
+## unread = today's behaviour, so no live game or other caller changes unless the pin is set.
+static var engage_fold_vintage := -1
 static func _engage_gap_in(next: Dictionary, su: Dictionary, su_positions: Array,
 		tu: Dictionary) -> float:
-	if not hero_fold_enabled():
+	if not hero_fold_enabled() or engage_fold_vintage == 1:
 		return edge_gap_in(su_positions, su.get("radii", []), tu["positions"], tu.get("radii", []))
 	var a_side: Array = [[su_positions, su.get("radii", [])]]
 	_append_attached_models(next, su, a_side)
@@ -1036,7 +1043,7 @@ static func _profiles_of(su: Dictionary, melee: bool, d := 0.0, state := {}) -> 
 ## expected-value layer does not.
 static func _fold_hero_profiles(state: Dictionary, su: Dictionary, melee: bool, d: float,
 		out: Array) -> void:
-	if not hero_fold_enabled() or not state.has("units"):
+	if not hero_fold_enabled() or engage_fold_vintage == 1 or not state.has("units"):
 		return
 	for hk in su.get("attached", []):
 		if not (state["units"] as Dictionary).has(hk):

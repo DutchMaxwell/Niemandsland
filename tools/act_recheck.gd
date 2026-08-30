@@ -84,6 +84,11 @@ func _init() -> void:
 	var profiles: Dictionary = header["profiles"]
 	var terrain: Variant = header.get("terrain")
 	var knobs: Dictionary = header.get("knobs", {})
+	# NML-1148: the corpus's VINTAGE — the twin reads engage_fold from the header
+	# (plain.rs/acts.rs; absent = the corpus predates NML-1129/1132, so the live
+	# search ran the fold's ENGAGE and WEAPON halves OFF while pool/move/spend
+	# were live). Pin the same reading for the GDScript replay.
+	BattleSim.engage_fold_vintage = 0 if bool(knobs.get("engage_fold", false)) else 1
 	if _write_path != "":
 		_write_stream = FileAccess.open(_write_path, FileAccess.WRITE)
 		if _write_stream == null:
@@ -352,6 +357,16 @@ func _stamp_knobs(k: Dictionary) -> void:
 	BattleSim._cast_env = -1
 	OS.set_environment("NML_SIM_SPACING", "1" if bool(k.get("seam_spacing", false)) else "0")
 	BattleSim._spacing_env = -1
+	# NML-1148: the header's hero_attach knob IS the fold the recorded game ran
+	# with (act_recorder.gd _header_line stamps BattleSim.hero_fold_enabled();
+	# the Rust seam reads the same key via plain.rs knobs_of). Without this
+	# stamp the replay ran the fold OFF (the static's default): the pool kept
+	# every attached hero activatable (AiPlanner._can_activate), the host's
+	# move didn't carry the hero's models and its activation didn't spend the
+	# hero (BattleSim.resolve), and the charge's engage test measured hosts
+	# alone (_engage_gap_in) — the qbg_ref drift. Absent key = pre-M5 corpus,
+	# reads as the old default (off).
+	BattleSim.hero_fold = bool(k.get("hero_attach", false))
 
 
 ## NML-1073 M3-0b: whether to stamp the pure charge-legality gate for this act — true
