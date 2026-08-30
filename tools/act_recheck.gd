@@ -40,6 +40,10 @@ var _corrupt_charge := false
 var _corrupt_gate := false
 var _corrupt_los := false
 var _ignore_knobs := false
+# PRINT-ONLY microscope: dump=<cand_idx> resolves that recorded candidate on
+# the rebuilt state (exactly what the prefilter loop does) and prints the
+# resolved plain state for a three-way diff. Never affects the compare.
+var _dump_cand := -1
 var _gate_pairs := 0
 var _gate_points := 0
 var _gate_bad := 0
@@ -71,6 +75,7 @@ func _init() -> void:
 			continue
 		match kv[0]:
 			"file": file_path = kv[1]
+			"dump": _dump_cand = int(kv[1])
 			"n": n = int(kv[1])
 			"offset": offset = int(kv[1])
 			"write": _write_path = kv[1]
@@ -223,6 +228,8 @@ func _check_act(act: Dictionary, header: Dictionary, profiles: Dictionary,
 	if not _ignore_knobs:
 		_stamp_knobs(knobs)
 
+	if _dump_cand >= 0:
+		_dump_candidate(act, state)
 	var pick := AiPlanner.plan_with_rollout(state, int(act["player"]))
 	var trace := AiPlanner.trace
 	if _write_stream != null:
@@ -239,6 +246,30 @@ func _check_act(act: Dictionary, header: Dictionary, profiles: Dictionary,
 	if los_hit[0]:
 		mism.append({"field": "los_at.called", "recorded": "net path inactive", "got": "called"})
 	return mism
+
+
+func _dump_candidate(act: Dictionary, state: Dictionary) -> void:
+	var scored: Array = (act.get("trace", {}) as Dictionary).get("scored", [])
+	if _dump_cand < 0 or _dump_cand >= scored.size():
+		return
+	var row: Dictionary = scored[_dump_cand]
+	var menus: Dictionary = act["trace"]["menus"]
+	var cands: Array = menus[str(row["unit"])]
+	var first := 1 << 30
+	for r0 in scored:
+		if str(r0["unit"]) == str(row["unit"]):
+			first = mini(first, int(r0["idx"]))
+	var within := _dump_cand - first
+	if within < 0 or within >= cands.size():
+		printerr("[ACT_RECHECK] dump: candidate out of menu range")
+		return
+	var action: Dictionary = (cands[within] as Dictionary).duplicate()
+	if action.has("dest"):
+		var dv: Array = action["dest"]
+		action["dest"] = Vector3(float(dv[0]), float(dv[1]), float(dv[2]))
+	var next := BattleSim.resolve(state, action)
+	print("CAND_DUMP %d %s" % [_dump_cand, JSON.stringify(
+		BattleSim.state_to_plain(next), "", true, true)])
 
 
 ## NML-1073 M3-0d oracle: the terrain rebuild, diffed against the LIVE grid the

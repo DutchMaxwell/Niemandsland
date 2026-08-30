@@ -428,10 +428,11 @@ pub fn melee_profiles_of(us: &UnitStatic, alive: i64, sc: &mut Scratch) {
 /// a rifle squad carrying a fusion-pistol hero was valued, targeted and charged as if
 /// the pistol did not exist. Mirrors `BattleSim._profiles_of(su, melee, d, state)`.
 ///
-/// SEAM-GATED on `hero_attach` alone, like `engage_gap_in`: without it neither the
-/// pool nor the move nor the activation folds, so folding the weapons would price a
-/// unit the rest of `resolve` does not believe in. Fold off = the plain filler, and
-/// `sc.fold` stays empty, so `folded_slice` hands back the unit's own slice.
+/// SEAM-GATED on `hero_attach` AND the vintage pin, exactly like `engage_gap_in`
+/// and `BattleSim._fold_hero_profiles` (battle_sim.gd:1055-1057): a corpus recorded
+/// BEFORE the engage/weapon folds (`no_engage_fold`, the RED switch) must fold
+/// nothing, or its charge-melee and shoot volleys price weapons the recording
+/// never carried (measured: qbg_ref s27 act 22, 3 vs 4 expected wounds).
 ///
 /// THE APPROXIMATION, named rather than hidden: `shoot_ev`/`melee_ev` price a volley
 /// with ONE attacker context, so a hero's weapons roll at the HOST's Quality here.
@@ -447,7 +448,10 @@ pub fn member_profiles_of(
     sc: &mut Scratch,
 ) {
     let us = &statics[state.roster.profile[si]];
-    if !(seams.hero_attach && state.attached[si].iter().any(|&h| state.alive[h] > 0)) {
+    if !(seams.hero_attach
+        && !seams.no_engage_fold
+        && state.attached[si].iter().any(|&h| state.alive[h] > 0))
+    {
         if melee {
             melee_profiles_of(us, state.alive[si], sc);
         } else {
@@ -2103,6 +2107,13 @@ mod tests {
         assert_eq!(kept(&statics, true, &sc), vec!["CCW".to_string(), "Fist".into()]);
         assert_eq!(sc.attacks, vec![2, 4]);
         member_profiles_of(&statics, &st, 0, true, 0.0, off, &mut sc);
+        assert_eq!(kept(&statics, true, &sc), vec!["CCW".to_string()]);
+        assert_eq!(sc.attacks, vec![2]);
+        // The RED knob (vintage corpus, `engage_fold=false`): the weapons fold is
+        // one of the LATE halves, so it must read the pin exactly like the
+        // engage half does — host alone even with `hero_attach` on.
+        let red = Seams { hero_attach: true, no_engage_fold: true, ..Seams::default() };
+        member_profiles_of(&statics, &st, 0, true, 0.0, red, &mut sc);
         assert_eq!(kept(&statics, true, &sc), vec!["CCW".to_string()]);
         assert_eq!(sc.attacks, vec![2]);
         member_profiles_of(&statics, &st, 0, false, 30.0, off, &mut sc);
