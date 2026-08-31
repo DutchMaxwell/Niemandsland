@@ -263,6 +263,117 @@ pub fn place_style(a: &Value, b: &Value, style: &Value, cells: &objectives::Cell
     Placed { cells: placed, swept }
 }
 
+/// Design 4 mode "search" — branching cap per ply, and the quantum the
+/// argmax compares in (an argmax never hangs on a float hair; D8a generalized).
+const SEARCH_K: usize = 8;
+const QUANT: f64 = 1e-6;
+
+fn quant(v: f64) -> i64 { (v / QUANT).round() as i64 }
+
+/// Markers in inches — the `edge_scores` input shape.
+fn inch_markers(placed: &[(i64, i64)]) -> Vec<[f64; 3]> {
+    placed.iter().map(|&(x, z)| [x as f64, 0.0, z as f64]).collect()
+}
+
+/// Leaf values: v_X = min over the two edges (design 3); B's hand score is
+/// complementary (gate-tested), so v_B = 1 - max(a1, a2). Integer compare only.
+fn leaf_vals(a1: f64, a2: f64) -> [i64; 2] {
+    [quant(a1.min(a2)), quant(1.0 - a1.max(a2))]
+}
+
+/// The search's frozen inputs: grid bounds, legality, the canonical pair with
+/// their zone rectangles and style labels. Zero RNG by construction.
+struct SearchCtx<'x> {
+    hx: i64, hz: i64, zones: Vec<objectives::Poly>, cells: &'x objectives::Cells,
+    z1: Zone, z2: Zone, first: &'x Value, second: &'x Value,
+    lab_a: StyleLabel, lab_b: StyleLabel,
+}
+
+/// One max^N node (design 4): the placer at `ply` — canonical order, ply
+/// parity — expands its top-K legal cells by the style preference, one eval
+/// per candidate that is BOTH the fairness guard DURING expansion (a set
+/// pushing |a1 - a2| past FAIRNESS_EPS is pruned, not merely scored) and, at
+/// the last ply, the leaf. Each node maximizes the PLACER's own side-blind
+/// value; the node's value is the whole outcome vector of the line its argmax
+/// picks (general-sum max^N — a componentwise max would report vectors no
+/// legal set achieves), and the path follows that same argmax, ties keeping
+/// the first ranked child (preference, then x, z — lexicographic). Guard
+/// starvation (no candidate passes) = the K ranked candidates compete
+/// unguarded, still doctrine-placed, never swept (step 3's reading).
+fn search_node(ctx: &SearchCtx, ply: usize, last: usize, placed: &[(i64, i64)]) -> ([i64; 2], Vec<(i64, i64)>) {
+    let label = if ply % 2 == 0 { ctx.lab_a } else { ctx.lab_b };
+    let mut cands: Vec<(i64, i64)> = Vec::new();
+    for x in (-ctx.hx..=ctx.hx).step_by(GRID_STEP_IN as usize) {
+        for z in (-ctx.hz..=ctx.hz).step_by(GRID_STEP_IN as usize) {
+            if objectives::is_legal(x, z, placed, &ctx.zones, ctx.cells) { cands.push((x, z)); }
+        }
+    }
+    cands.sort_by_key(|&(x, z)| pref_key(label, x, z, placed));
+    cands.truncate(SEARCH_K);
+    if cands.is_empty() {
+        // Dead grid: the game ends here with fewer markers (design 1), valued
+        // on the set placed so far; the root answers such a ply with the sweep.
+        let (a1, a2) = edge_scores(ctx.first, ctx.second, &ctx.z1, &ctx.z2, &inch_markers(placed));
+        return (leaf_vals(a1, a2), Vec::new());
+    }
+    let kids: Vec<((i64, i64), (f64, f64))> = cands.into_iter().map(|c| {
+        let mut m = inch_markers(placed);
+        m.push([c.0 as f64, 0.0, c.1 as f64]);
+        (c, edge_scores(ctx.first, ctx.second, &ctx.z1, &ctx.z2, &m))
+    }).collect();
+    let mut alive: Vec<((i64, i64), (f64, f64))> = kids.clone();
+    alive.retain(|(_, (a1, a2))| (a1 - a2).abs() <= FAIRNESS_EPS);
+    if alive.is_empty() { alive = kids; }
+    let (leaf, placer) = (ply + 1 == last, ply & 1);
+    let (mut val, mut best_v, mut path) = ([i64::MIN; 2], i64::MIN, Vec::new());
+    for &(c, es) in &alive {
+        let (cv, cp) = if leaf {
+            (leaf_vals(es.0, es.1), vec![c])
+        } else {
+            let mut next = placed.to_vec();
+            next.push(c);
+            let (v, sub) = search_node(ctx, ply + 1, last, &next);
+            let mut p = Vec::with_capacity(sub.len() + 1);
+            p.push(c);
+            p.extend(sub);
+            (v, p)
+        };
+        if cv[placer] > best_v { best_v = cv[placer]; val = cv; path = cp; }
+    }
+    (val, path)
+}
+
+/// Mode "search" (design 4): the max^N mini-game over the alternating
+/// placement — `count` plies in canonical roster order, both rosters open.
+/// The sweep stays the last resort for a ply the doctrine cannot place
+/// (no legal grid cell at all; the 1" lattice may still admit what the 3"
+/// grid does not), counted honestly in `swept`; otherwise fewer markers
+/// (design 1). Zero RNG — same inputs, same cells, bit for bit.
+pub fn place_search(a: &Value, b: &Value, style: &Value, cells: &objectives::Cells, count: usize, table_w_in: f64, table_d_in: f64) -> Placed {
+    let zones = objectives::zones_of_style(style);
+    let (z1, z2) = (zone_rect(style, "1"), zone_rect(style, "2"));
+    let (hx, hz) = ((table_w_in / 2.0) as i64 - objectives::EDGE_MARGIN_IN, (table_d_in / 2.0) as i64 - objectives::EDGE_MARGIN_IN);
+    let (first, second) = canonical(a, b);
+    let ctx = SearchCtx {
+        hx, hz, zones, cells, z1, z2, first, second,
+        lab_a: Summary::of_profiles(first).label(), lab_b: Summary::of_profiles(second).label(),
+    };
+    let mut placed: Vec<(i64, i64)> = Vec::new();
+    let mut swept = 0usize;
+    while placed.len() < count {
+        let (_, path) = search_node(&ctx, placed.len(), count, &placed);
+        if path.is_empty() {
+            match objectives::sweep(hx, hz, &placed, &ctx.zones, cells) {
+                Some(c) => { placed.push(c); swept += 1; }
+                None => break,
+            }
+        } else {
+            placed.extend(path);
+        }
+    }
+    Placed { cells: placed, swept }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -490,6 +601,83 @@ mod tests {
         let (z1, z2) = (zone_rect(&front_line_style(), "1"), zone_rect(&front_line_style(), "2"));
         for count in [1, 3] {
             let p = place(SLOWY, &b, count);
+            assert_eq!(p.swept, 0);
+            let m: Vec<[f64; 3]> = p.cells.iter().map(|&(x, z)| [x as f64, 0.0, z as f64]).collect();
+            let (a1, a2) = edge_scores(&serde_json::from_str(SLOWY).unwrap(), &serde_json::from_str(&b).unwrap(), &z1, &z2, &m);
+            assert!((a1 - a2).abs() <= FAIRNESS_EPS, "count {count}: |a1 - a2| = {}", (a1 - a2).abs());
+        }
+    }
+
+    fn place_s(a: &str, b: &str, count: usize) -> Placed {
+        let cells = crate::objectives::Cells::from_pairs(&[], 24);
+        place_search(&serde_json::from_str(a).unwrap(), &serde_json::from_str(b).unwrap(), &front_line_style(), &cells, count, 72.0, 48.0)
+    }
+
+    #[test]
+    fn search_output_is_legal_and_capped_at_five() {
+        use crate::objectives::{is_legal, zones_of_style};
+        let (zones, cells) = (zones_of_style(&front_line_style()), crate::objectives::Cells::from_pairs(&[], 24));
+        let b = mirror(SLOWY);
+        for count in [3, 5] {
+            let p = place_s(SLOWY, &b, count);
+            assert_eq!(p.cells.len(), count, "open terrain places every marker");
+            assert!(p.cells.len() <= 5);
+            assert_eq!(p.swept, 0, "no sweep expected on open terrain");
+            for (i, c) in p.cells.iter().enumerate() {
+                let others: Vec<(i64, i64)> = p.cells.iter().enumerate().filter(|(j, _)| *j != i).map(|(_, c)| *c).collect();
+                assert!(is_legal(c.0, c.1, &others, &zones, &cells), "cell {c:?} illegal");
+            }
+        }
+    }
+
+    #[test]
+    fn search_placement_is_deterministic_and_seat_blind() {
+        let b = mirror(SLOWY);
+        assert_eq!(place_s(SLOWY, &b, 3), place_s(SLOWY, &b, 3));
+        assert_eq!(place_s(SLOWY, &b, 5), place_s(SLOWY, &b, 5));
+        // Canonical roster order, not seat order, drives the plies.
+        assert_eq!(place_s(SLOWY, &b, 3).cells, place_s(&b, SLOWY, 3).cells);
+        assert_eq!(place_s(SLOWY, SHOOTY, 3).cells, place_s(SHOOTY, SLOWY, 3).cells);
+    }
+
+    /// One-unit army for constructing asymmetric pairs: model_count models of
+    /// `wounds` wounds each, no guns, the given move bands.
+    fn army_json(prefix: &str, models: i64, wounds: i64, adv: f64, rush: f64) -> String {
+        let ws: Vec<String> = (0..models).map(|_| wounds.to_string()).collect();
+        format!(r#"{{"{p}_0_h": {{"unit_id": "{p}_0_h", "name": "Horde", "quality": 4, "defense": 4, "tough": 1,
+            "wounds_max": [{ws}], "model_count": {m}, "weapons": [], "special_rules": [], "caster_value": 0,
+            "move_bands": {{"advance": {a}, "rush": {r}}}, "base_radius": 0.025, "game_system": "gf", "faction_folder": "gf_test",
+            "item_grants": [], "attached_hero_rules": [], "shooting_range_bonus": 0, "max_activation_advance_bonus_in": 0.0}}}}"#,
+            p = prefix, ws = ws.join(","), m = models, a = adv, r = rush)
+    }
+
+    /// The RED tooth (design 7 step 4): a constructed asymmetric pair on which
+    /// the in-expansion guard demonstrably prunes. Probe-verified: bypassing
+    /// the guard flips the argmax line to the z-edge-hugging sets — count 2 =
+    /// [(0, 0), (33, -9)], count 3 = [(-3, -3), (33, 9), (-6, 6)] — so these
+    /// pinned guarded outputs fail the moment the guard is removed. (For a
+    /// MIRRORED pair that flip is impossible: v_first = v_second =
+    /// (1 - |a1 - a2|)/2 at every leaf makes the unguarded maximin argmax
+    /// itself the guard — see the mirrored fairness test above.)
+    #[test]
+    fn search_guard_prunes_the_edge_hugging_line() {
+        let a = army_json("p1", 3, 2, 6.0, 12.0);
+        let b = army_json("p2", 2, 4, 4.0, 8.0);
+        assert_eq!(place_s(&a, &b, 2).cells, vec![(3, 0), (-33, 0)]);
+        assert_eq!(place_s(&a, &b, 3).cells, vec![(3, 0), (-33, 0), (-6, -3)]);
+    }
+
+    /// The guard's property on the search output — the RED tooth: for a
+    /// MIRRORED pair v_first = v_second = (1 - |a1 - a2|)/2 at every leaf, so
+    /// the unguarded maximin argmax is itself the guard and this stays green;
+    /// the guard-during-expansion RED therefore lives on the ASYMMETRIC pair
+    /// (`search_output_respects_edge_fairness`).
+    #[test]
+    fn search_output_respects_edge_fairness_mirrored() {
+        let b = mirror(SLOWY);
+        let (z1, z2) = (zone_rect(&front_line_style(), "1"), zone_rect(&front_line_style(), "2"));
+        for count in [1, 3, 5] {
+            let p = place_s(SLOWY, &b, count);
             assert_eq!(p.swept, 0);
             let m: Vec<[f64; 3]> = p.cells.iter().map(|&(x, z)| [x as f64, 0.0, z as f64]).collect();
             let (a1, a2) = edge_scores(&serde_json::from_str(SLOWY).unwrap(), &serde_json::from_str(&b).unwrap(), &z1, &z2, &m);
