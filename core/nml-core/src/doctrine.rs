@@ -374,6 +374,34 @@ pub fn place_search(a: &Value, b: &Value, style: &Value, cells: &objectives::Cel
     Placed { cells: placed, swept }
 }
 
+/// Step 5 — the ONE entry point both seams call: `mode` dispatches to the
+/// style argmax or the search mini-game. "random" and any unknown word are an
+/// Err, never a silent fallback: the random path is the caller's own draw
+/// stream (`objectives::generate`) and the doctrine itself has zero RNG
+/// (design 4).
+pub fn place(
+    mode: &str,
+    a: &Value,
+    b: &Value,
+    style: &Value,
+    cells: &objectives::Cells,
+    count: usize,
+    table_w_in: f64,
+    table_d_in: f64,
+) -> Result<Placed, String> {
+    match Mode::of_str(mode) {
+        Some(Mode::Style) => Ok(place_style(a, b, style, cells, count, table_w_in, table_d_in)),
+        Some(Mode::Search) => Ok(place_search(a, b, style, cells, count, table_w_in, table_d_in)),
+        Some(Mode::Random) => Err(
+            "random is the caller's own draw stream (objectives::generate) — the doctrine has zero RNG"
+                .into(),
+        ),
+        None => Err(format!(
+            "unknown placement mode {mode:?} — expected \"style\" or \"search\""
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -682,6 +710,36 @@ mod tests {
             let m: Vec<[f64; 3]> = p.cells.iter().map(|&(x, z)| [x as f64, 0.0, z as f64]).collect();
             let (a1, a2) = edge_scores(&serde_json::from_str(SLOWY).unwrap(), &serde_json::from_str(&b).unwrap(), &z1, &z2, &m);
             assert!((a1 - a2).abs() <= FAIRNESS_EPS, "count {count}: |a1 - a2| = {}", (a1 - a2).abs());
+        }
+    }
+
+    /// Step 5 — the seams' one entry point: the dispatch answers the mode's
+    /// own function, and a mode word the enum does not know (or "random",
+    /// which belongs to the caller's stream) is a clean Err. RED tooth: a
+    /// `place` that silently fell back to `place_style` on unknown words
+    /// fails the Err assertions. (`super::` — the local `place` helper above
+    /// shadows the glob import.)
+    #[test]
+    fn place_dispatches_and_rejects_unknown_mode() {
+        let cells = crate::objectives::Cells::from_pairs(&[], 24);
+        let (a_v, b_v) = (
+            serde_json::from_str::<Value>(SLOWY).unwrap(),
+            serde_json::from_str::<Value>(&mirror(SLOWY)).unwrap(),
+        );
+        let style = front_line_style();
+        assert_eq!(
+            super::place("style", &a_v, &b_v, &style, &cells, 3, 72.0, 48.0).unwrap(),
+            place_style(&a_v, &b_v, &style, &cells, 3, 72.0, 48.0)
+        );
+        assert_eq!(
+            super::place("search", &a_v, &b_v, &style, &cells, 3, 72.0, 48.0).unwrap(),
+            place_search(&a_v, &b_v, &style, &cells, 3, 72.0, 48.0)
+        );
+        for bad in ["random", "aggressive", ""] {
+            assert!(
+                super::place(bad, &a_v, &b_v, &style, &cells, 3, 72.0, 48.0).is_err(),
+                "{bad:?} must not place"
+            );
         }
     }
 }

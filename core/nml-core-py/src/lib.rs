@@ -1673,6 +1673,87 @@ fn objective_layout(
     Ok(out.into_any().unbind())
 }
 
+/// NML-1140 step 5 — the doctrine's placement choice for the trainer and the
+/// gates: `nmlcore::doctrine_place`, the mode dispatcher over `place_style` /
+/// `place_search`, exposed next to `objective_layout`. `armies` is the PAIR
+/// (a Python 2-TUPLE) of profile dicts, unit key -> `_unit_profile` block;
+/// `count` is the ALREADY drawn marker count — the seed stream stays the
+/// caller's, the doctrine draws nothing (design 1). Positions come back in
+/// inches, `Layout.positions` shape; `swept` counts sweep-filled markers
+/// honestly. A mode word the enum does not know — and "random", which is the
+/// caller's own draw stream — raises `Unsupported`: a clean error, never a
+/// panic.
+#[pyfunction]
+#[pyo3(signature = (terrain, mode, armies, count, style, table_w_in=72.0, table_d_in=48.0))]
+fn doctrine_place(
+    py: Python<'_>,
+    terrain: Option<&Bound<'_, PyAny>>,
+    mode: &str,
+    armies: &Bound<'_, PyAny>,
+    count: usize,
+    style: &Bound<'_, PyAny>,
+    table_w_in: f64,
+    table_d_in: f64,
+) -> PyResult<Py<PyAny>> {
+    let (a, b): (Py<PyAny>, Py<PyAny>) = armies.extract().map_err(|e| {
+        Unsupported::new_err(format!(
+            "armies must be the pair (army_a, army_b) of profile dicts: {e}"
+        ))
+    })?;
+    let placed = nmlcore::doctrine_place(
+        mode,
+        &value_of(a.bind(py))?,
+        &value_of(b.bind(py))?,
+        &value_of(style)?,
+        &objectives::Cells::from_terrain(&board(terrain)?.inner),
+        count,
+        table_w_in,
+        table_d_in,
+    )
+    .map_err(Unsupported::new_err)?;
+    let out = PyDict::new(py);
+    out.set_item("mode", mode)?;
+    out.set_item(
+        "positions",
+        placed.cells.iter().map(|&(x, z)| vec![x, z]).collect::<Vec<_>>(),
+    )?;
+    out.set_item("swept", placed.swept)?;
+    Ok(out.into_any().unbind())
+}
+
+/// `objectives::is_legal` for one candidate marker — the twin's own legality
+/// rule handed to Python (NML-1140 step 5), so a gate re-checks every
+/// `doctrine_place` cell through the SAME function the doctrine searched
+/// with, not a second port. `x`/`z` and `placed` are 1" lattice inches;
+/// `placed` is the OTHER markers only (a marker sits 0" from itself).
+#[pyfunction]
+#[pyo3(signature = (terrain, style, x, z, placed))]
+fn objective_is_legal(
+    terrain: Option<&Bound<'_, PyAny>>,
+    style: &Bound<'_, PyAny>,
+    x: i64,
+    z: i64,
+    placed: Vec<Vec<i64>>,
+) -> PyResult<bool> {
+    let rows: Vec<(i64, i64)> = placed
+        .iter()
+        .map(|v| match v.as_slice() {
+            [x, z] => Ok((*x, *z)),
+            _ => Err(Unsupported::new_err(format!(
+                "each placed marker is [x, z], got {} entries",
+                v.len()
+            ))),
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+    Ok(objectives::is_legal(
+        x,
+        z,
+        &rows,
+        &objectives::zones_of_style(&value_of(style)?),
+        &objectives::Cells::from_terrain(&board(terrain)?.inner),
+    ))
+}
+
 /// `board(terrain).los_pairs(units)` — the one-shot form.
 #[pyfunction]
 fn los_pairs(
@@ -1872,6 +1953,10 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // NML-1152 step 7 — the twin's deployment pipeline for the trainer.
     m.add_function(wrap_pyfunction!(deploy_side, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_finish, m)?)?;
+    // NML-1140 step 5: the doctrine's choice next to the random-legal layout,
+    // plus `objectives::is_legal` so a gate re-checks through the same rule.
+    m.add_function(wrap_pyfunction!(doctrine_place, m)?)?;
+    m.add_function(wrap_pyfunction!(objective_is_legal, m)?)?;
     // `TerrainRules.TerrainType` — terrain_rules.gd:24.
     m.add("TERRAIN_NONE", nmlcore::terrain::NONE)?;
     m.add("TERRAIN_RUINS", nmlcore::terrain::RUINS)?;
