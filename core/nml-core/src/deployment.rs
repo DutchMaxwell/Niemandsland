@@ -183,8 +183,8 @@ pub fn transport_fill(capacities: &[i64], rng: &mut GodotRng) -> Vec<(usize, usi
 
 // ---- the deployment terrain geometry (NML-1152 step 4a). A spot must pass the
 // blocked test of `make_blocked_tests` (ai_deployment.gd:292-331): the Godot
-// physics probe against SOLID props (hits_prop, :300-309 — NOT portable, the
-// banked board carries cells + wall segments but no prop meshes; design §4.3),
+// physics probe against SOLID props (hits_prop, :300-309 — not directly
+// portable; banked as blocker discs since NML-1155, see the PROP layer below),
 // the container/ruin WALL segments at 0.02 m clearance (:301-316), and the
 // terrain class (:317-330). Strider/Flying units take the FLYING class test
 // instead of the walker one (solo_controller.gd:9110-9112). All sample-point
@@ -196,6 +196,34 @@ pub fn transport_fill(capacities: &[i64], rng: &mut GodotRng) -> Vec<(usize, usi
 pub const DEPLOY_WALL_CLEARANCE_M: f64 = 0.02;
 /// `TERRAIN_SAMPLE_STEP_M` — half a 3" terrain cell (ai_deployment.gd:211).
 const TERRAIN_SAMPLE_STEP_M: f64 = 0.0381;
+
+// ---- the PROP layer (NML-1155): the banked stand-in for `hits_prop`
+// (ai_deployment.gd:300-309), the Godot physics probe that is NOT directly
+// portable (design §4.3). The bank v2 (`tools/terrain_bank_dump.gd`) carries
+// each solid prop's XZ incircle disc (`Terrain::blockers_m`, world metres);
+// the probe is a 0.02 m sphere hovering at 0.07 m over a 2.5"-high box (top
+// ≈ 0.0615 m, terrain_overlay.gd:19 + :2890), so the sphere's 2D reach past
+// the box surface is sqrt(0.02² − 0.0085²) ≈ 0.0181 m — the twin's full
+// 0.02 over-blocks that sliver by 1.9 mm, BUT the wall layer already blocks
+// a 0.02 m band around every banked prop's own OBB edges (the dump harvests
+// `walls` from the same overlay pass that spawns the boxes,
+// terrain_overlay.gd:2834-2843), so prop_blocked ⊆ wall_blocked for every
+// banked disc and the twin mirrors the TABLE's law, not the probe's sliver.
+// Measured on the 100 fixture dumps: 0 of the 1036 table-tested recorded
+// spots flip.
+
+/// The probe sphere's radius (ai_deployment.gd:296).
+pub const PROBE_RADIUS_M: f64 = 0.02;
+
+/// One probe-sphere-vs-blocker-disc test: the sample point is blocked when
+/// the disc around it (the sphere's 2D projection) reaches a blocker disc.
+/// `p` is world metres, the blockers ride the board in world metres.
+pub fn prop_blocked(board: &Terrain, p: (f64, f64)) -> bool {
+    board.blockers_m().iter().any(|b| {
+        let (dx, dy) = (p.0 - b[0], p.1 - b[1]);
+        (dx * dx + dy * dy).sqrt() < b[2] + PROBE_RADIUS_M
+    })
+}
 
 /// `AiDeployment.footprint_margins` (ai_deployment.gd:78-87): per-axis zone
 /// margins from the REAL footprint (the Bug-19 fix); an empty footprint
@@ -320,7 +348,9 @@ pub fn cell_blocked(board: &Terrain, p: (f64, f64), flying: bool) -> bool {
 /// + dense disc samples, edges computed once and NOT zero-filtered — the model
 /// centre itself is a sample) with sample points added in f32 like the table's
 /// `p + off + e`; else the dense disc of `probe_radius` (regiment trays, centre
-/// already tested). The probe layer is NOT portable (see the module note).
+/// already tested). Each sample runs the three layers: props (the banked
+/// probe stand-in), walls, cells — the table's order is probe → walls → cells
+/// (ai_deployment.gd:317-330); OR is order-free.
 pub fn spot_blocked(
     board: &Terrain,
     p: (f64, f64),
@@ -329,13 +359,14 @@ pub fn spot_blocked(
     footprint: &[(f64, f64)],
     base_r: f64,
 ) -> bool {
-    if wall_blocked(board, p) || cell_blocked(board, p, flying) {
+    if wall_blocked(board, p) || cell_blocked(board, p, flying) || prop_blocked(board, p) {
         return true;
     }
     let (px, py) = (p.0 as f32, p.1 as f32);
     let hit = |q: [f32; 2]| {
         cell_blocked(board, (q[0] as f64, q[1] as f64), flying)
             || wall_blocked(board, (q[0] as f64, q[1] as f64))
+            || prop_blocked(board, (q[0] as f64, q[1] as f64))
     };
     if !footprint.is_empty() {
         let edges = disc_sample_offsets(base_r);

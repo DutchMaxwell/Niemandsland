@@ -242,6 +242,7 @@ fn transport_fill_draw_law_final_pop_draws_nothing() {
 use std::collections::HashMap;
 
 use nml_core::terrain::{PlainTerrain, Terrain};
+use nml_core::IN2M;
 
 fn spots_fixture() -> serde_json::Value {
     serde_json::from_str(include_str!("fixtures/pregame_deploy_spots.json")).expect("fixture parses")
@@ -480,4 +481,238 @@ fn deploy_footprint_radius_keeps_fixed_cols() {
     let r12 = deployment::deploy_footprint_radius(12, 0.02);
     let want = (0.08f64 * 0.08 + 0.04 * 0.04).sqrt() + 0.03;
     assert!((r12 - want).abs() < 1e-12, "cols stay at 5 even for 12 models, got {r12}");
+}
+
+// ==== NML-1155 step 4c — the banked PROP layer ====
+//
+// The v1 banks carried NO wall segments and NO prop geometry (0/50 banks had
+// walls — the step-4 finding), so the twin's blocked law was strictly more
+// permissive than the table's. The v2 banks
+// (`tools/terrain_bank_dump.gd`, NML-1155) carry both keys:
+//   * `walls` — TerrainOverlay.get_wall_segments_world()'s exact answer for
+//     the layout (container OBB edges + ruin wall segments), 42-64 per board;
+//   * `blockers` — one XZ-incircle disc per SOLID prop (the 6"x3" container
+//     boxes; trees/mines/signs have no collision), radius 1.5", 4 per board.
+// The extract below carries both for the 50 fixture boards, sanitized — the
+// raw banks stay outside the repo. The incircle (not the circumscribed
+// 3.354" disc) is the derivation the corpus tolerates: disc(incircle) ⊕
+// disc(0.02) ⊆ box ⊕ disc(0.02), i.e. the prop layer can never out-block
+// the table's own 0.02 m band around the box outline that `walls` already
+// carries — measured BEFORE building: a circumscribed disc flips 114 of the
+// recorded-clear spots, the incircle flips 0.
+
+fn bank_v2_fixture() -> serde_json::Value {
+    serde_json::from_str(include_str!("fixtures/pregame_bank_v2.json")).expect("extract parses")
+}
+
+fn board_with_props(cell_params: &serde_json::Value, cells: &serde_json::Value, props: &serde_json::Value) -> Terrain {
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": cells,
+        "sandbox": [],
+        "cell_params": cell_params,
+    }))
+    .expect("plain terrain");
+    let mut board = Terrain::build(&plain);
+    let walls: Vec<[f64; 4]> = props["walls"]
+        .as_array().unwrap().iter()
+        .map(|w| [w[0].as_f64().unwrap(), w[1].as_f64().unwrap(), w[2].as_f64().unwrap(), w[3].as_f64().unwrap()])
+        .collect();
+    let blockers: Vec<[f64; 3]> = props["blockers"]
+        .as_array().unwrap().iter()
+        .map(|b| [b[0].as_f64().unwrap(), b[1].as_f64().unwrap(), b[2].as_f64().unwrap()])
+        .collect();
+    board.set_bank_props(&walls, &blockers);
+    board
+}
+
+/// The smallest sample margin over the prop layer: min over every blocked-law
+/// sample of `dist(sample, blocker) − (r + PROBE_RADIUS_M)`; negative = the
+/// prop layer blocks that sample. The fatness report's number.
+fn worst_prop_margin(
+    board: &Terrain,
+    spot: (f64, f64),
+    footprint: &[(f64, f64)],
+    base_r: f64,
+) -> f64 {
+    let px = spot.0 as f32;
+    let py = spot.1 as f32;
+    let mut samples: Vec<[f32; 2]> = vec![[px, py]];
+    for off in footprint {
+        for e in deployment::disc_sample_offsets(base_r) {
+            samples.push([px + off.0 as f32 + e[0], py + off.1 as f32 + e[1]]);
+        }
+    }
+    let mut worst = f64::INFINITY;
+    for s in &samples {
+        for b in board.blockers_m() {
+            let dx = s[0] as f64 - b[0];
+            let dy = s[1] as f64 - b[1];
+            let m = (dx * dx + dy * dy).sqrt() - (b[2] + deployment::PROBE_RADIUS_M);
+            worst = worst.min(m);
+        }
+    }
+    worst
+}
+
+/// Test 1 of the step: the step-4 blocked replay RE-RUN on the v2 boards —
+/// now with wall segments AND blocker discs biting. The classification leads
+/// with the TABLE's structural escape hatch, ahead of any law verdict: a
+/// footprint that cannot fit the 12" zone never reaches a scan candidate, so
+/// `least_blocked_spot` returns its INITIAL value — the exact zone centre —
+/// UNTESTED (ai_deployment.gd:127-144; 20 such landings across the corpus,
+/// all 21-model/30 mm flying units with 2·(0.124" + 0.03) > 0.3048 m). The
+/// step-4 v1 replay could only see the 14 of them that also sat on blocked
+/// CELLS — the wall-blind bank hid the rest. After that hatch: every spot
+/// the table actually TESTED and found clear under the v1 law (cells only)
+/// must STILL be clear under the v2 law (walls + blockers). A flip would
+/// mean the derivation is too fat: reported with the worst case, never
+/// loosened silently.
+#[test]
+fn blocked_law_replays_every_fixture_spot_clear_on_bank_v2_boards() {
+    let fx = spots_fixture();
+    let v2 = bank_v2_fixture();
+    let boards: HashMap<i64, Terrain> = fx["boards"]
+        .as_object().unwrap()
+        .iter()
+        .map(|(k, v)| (k.parse::<i64>().unwrap(), board_of(&fx["cell_params"], v)))
+        .collect();
+    let boards_v2: HashMap<i64, Terrain> = fx["boards"]
+        .as_object().unwrap()
+        .iter()
+        .map(|(k, v)| {
+            let ls = k.parse::<i64>().unwrap();
+            (ls, board_with_props(&fx["cell_params"], &v["cells"], &v2["boards"][k]))
+        })
+        .collect();
+    let (mut n, mut clear, mut degenerate, mut crowded) = (0usize, 0usize, 0usize, 0usize);
+    let mut flips: Vec<(f64, i64, &str, String)> = Vec::new();
+    for d in fx["dumps"].as_array().unwrap() {
+        let seed = d["seed"].as_i64().unwrap();
+        let board_v1 = &boards[&(500000 + seed)];
+        let board_v2 = &boards_v2[&(500000 + seed)];
+        for slot in ["1", "2"] {
+            let (z_lo, z_hi) = if slot == "1" { (-0.6096, -0.3048) } else { (0.3048, 0.6096) };
+            let z_centre = (z_lo + z_hi) / 2.0;
+            for u in d["sides"][slot]["units"].as_array().unwrap() {
+                n += 1;
+                let spot = (u["spot"][0].as_f64().unwrap(), u["spot"][1].as_f64().unwrap());
+                let base_r = u["base_r_m"].as_f64().unwrap();
+                let flying = u["ignores_terrain"].as_bool().unwrap();
+                let fp: Vec<(f64, f64)> = u["footprint"]
+                    .as_array().unwrap().iter()
+                    .map(|o| (o[0].as_f64().unwrap(), o[1].as_f64().unwrap()))
+                    .collect();
+                // the structural hatch FIRST (the table never tests this spot)
+                let my = fp.iter().map(|o| o.1.abs()).fold(0.0f64, f64::max) + base_r;
+                let mx = fp.iter().map(|o| o.0.abs()).fold(0.0f64, f64::max) + base_r;
+                let cannot_fit = 2.0 * my > ZONE_DEPTH || 2.0 * mx > 2.0 * ZONE_HALF_W;
+                let at_zone_centre = spot.0.abs() <= 2e-4 && (spot.1 - z_centre).abs() <= 2e-4;
+                if at_zone_centre && cannot_fit {
+                    degenerate += 1;
+                    continue;
+                }
+                // the table TESTED this spot; the v1 law (cells only — the v1
+                // extract carries no walls) is the floor, the v2 law (walls +
+                // blockers biting) must keep every v1-clear spot clear.
+                if deployment::spot_blocked(board_v1, spot, flying, 0.0, &fp, base_r) {
+                    crowded += 1;
+                    continue;
+                }
+                if deployment::spot_blocked(board_v2, spot, flying, 0.0, &fp, base_r) {
+                    let m = worst_prop_margin(board_v2, spot, &fp, base_r);
+                    flips.push((m, seed, slot, u["key"].as_str().unwrap().to_string()));
+                } else {
+                    clear += 1;
+                }
+            }
+        }
+    }
+    let previously_clear = clear + flips.len();
+    eprintln!(
+        "v2 blocked replay: {clear}/{previously_clear} table-tested, v1-clear recorded spots stay \
+         clear under the v2 law (untested zone-centre landings {degenerate}, blocked-accepting \
+         least_blocked landings {crowded}, of {n} units)"
+    );
+    for (m, seed, slot, key) in &flips {
+        eprintln!("FLIP margin {m:.5} m — seed {seed} side {slot} unit {key}");
+    }
+    assert_eq!(degenerate, 20, "untested zone-centre landings (ai_deployment.gd:127-144)");
+    assert_eq!(crowded, 4, "occupied-driven least_blocked landings (slice-5 scope)");
+    assert!(
+        flips.is_empty(),
+        "the v2 law flips {} table-tested spots the v1 law called clear — blocker derivation \
+         too fat, worst margin {:.5} m (seed {} side {} {}); do NOT loosen silently",
+        flips.len(),
+        flips.iter().map(|(m, ..)| *m).fold(f64::INFINITY, f64::min),
+        flips.first().map(|(_, s, ..)| *s).unwrap_or(0),
+        flips.first().map(|(_, _, sl, _)| *sl).unwrap_or(""),
+        flips.first().map(|(_, _, _, k)| k.clone()).unwrap_or_default(),
+    );
+}
+
+/// Test 2 of the step, the synthetic red-green pair the corpus cannot carry
+/// (its recorded spots are all off-prop): a spot ON a blocker disc is BLOCKED,
+/// and the SAME board with the disc removed is CLEAR — the disc causes the
+/// block. Plus the incircle's exactness on the long side: 2.5 cm past a
+/// container's 3" face is prop-CLEAR (1.5" + 0.02 m = 0.0581 m reach), where a
+/// circumscribed disc would block out to 0.1052 m.
+#[test]
+fn banked_blocker_disc_blocks_its_spot_and_only_its_band() {
+    let fx = spots_fixture();
+    // container box centred at (x 0.2 m, z -0.4 m), 6" along x, 3" along z —
+    // the disc is the XZ incircle, radius 1.5" (tools/terrain_bank_dump.gd).
+    let (cx, cz) = (0.2, -0.4);
+    let blocker_in = [cx / IN2M, cz / IN2M, 1.5];
+    let mut blocked = Terrain::build(&serde_json::from_value(serde_json::json!({
+        "cells": [], "sandbox": [], "cell_params": fx["cell_params"]
+    })).unwrap());
+    blocked.set_bank_props(&[], &[blocker_in]);
+    let clear_board = Terrain::build(&serde_json::from_value(serde_json::json!({
+        "cells": [], "sandbox": [], "cell_params": fx["cell_params"]
+    })).unwrap());
+    let p = (cx, cz);
+    assert!(deployment::prop_blocked(&blocked, p), "the disc centre is blocked");
+    assert!(!deployment::prop_blocked(&clear_board, p), "removing the disc clears it (red half)");
+    let fp = vec![(0.0, 0.0)];
+    assert!(
+        deployment::spot_blocked(&blocked, p, false, 0.0, &fp, 0.016),
+        "spot_blocked consults the prop layer"
+    );
+    assert!(!deployment::spot_blocked(&clear_board, p, false, 0.0, &fp, 0.016));
+    // exactness: 2.5 cm past the long face is prop-clear — the twin stays as
+    // permissive as the table there (the wall band, not the disc, carries the
+    // outline, and it blocks only to 0.02 m).
+    assert!(!deployment::prop_blocked(&blocked, (cx, cz + 0.0381 + 0.025)));
+    // ...while 1 cm past it IS blocked (1.5" + 1 cm < 1.5" + 0.02 m reach).
+    assert!(deployment::prop_blocked(&blocked, (cx, cz + 0.0381 + 0.01)));
+}
+
+/// A bank dumped before NML-1155 carries neither key: `set_bank_props` with
+/// empty slices (the serde-default shape) must leave the blocked law
+/// byte-identical — the default-preserving guarantee the corpus relies on.
+#[test]
+fn bank_without_prop_keys_keeps_the_law_unchanged() {
+    let fx = spots_fixture();
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": [[16, 15, 3]], "sandbox": [], "cell_params": fx["cell_params"]
+    }))
+    .unwrap();
+    let bare = Terrain::build(&plain);
+    let mut loaded = Terrain::build(&plain);
+    loaded.set_bank_props(&[], &[]);
+    assert_eq!(loaded.blockers_m().len(), 0);
+    assert_eq!(loaded.walls_in().len(), 0);
+    // and an ABSENT board ignores the call entirely (in2m 0 — no 2 cm disc
+    // invented at the origin).
+    let mut absent = Terrain::absent();
+    absent.set_bank_props(&[[0.0, 0.0, 1.0, 1.0]], &[[0.0, 0.0, 1.5]]);
+    assert_eq!(absent.blockers_m().len(), 0);
+    for k in -20..20 {
+        let p = (k as f64 * 0.037, (k as f64 + 0.5) * 0.041);
+        assert_eq!(
+            deployment::spot_blocked(&bare, p, false, 0.0, &[], 0.02),
+            deployment::spot_blocked(&loaded, p, false, 0.0, &[], 0.02),
+            "law changed at {p:?}"
+        );
+    }
 }
