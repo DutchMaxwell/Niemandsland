@@ -566,3 +566,77 @@ def test_the_legacy_reading_skips_the_registry_passes(monkeypatch):
     assert prof["move_bands"] == {"advance": 6.0, "rush": 12.0}
     assert prof["shooting_range_bonus"] == 0
     assert prof["max_activation_advance_bonus_in"] == 0.0
+
+
+def test_a_mount_item_replaces_a_single_model_units_base():
+    """NML-1152 step 6c — the MOUNT link (opr_api_client.gd:994-1008): a
+    single-model unit's upgrade item carrying a usable `bases.round` REPLACES
+    the AF recommendation (no clamp on this path); a multi-model unit keeps
+    its own base (the mount folds are vanishingly rare and unmodelled)."""
+    mounted = _selection("u", "Bike Lord", size=1)
+    mounted["bases"] = {"round": "25"}
+    mounted["loadout"] = [
+        {"name": "Combat Bike", "count": 1, "bases": {"round": "60x35"}},
+    ]
+    data = {"gameSystem": "gf", "units": [mounted]}
+    got = list_to_profile._base_of(
+        mounted, "gf", list_to_profile._selection_rules(mounted)[0]
+    )
+    assert got == {"is_oval": True, "width_mm": 35, "depth_mm": 60}
+    squad = _selection("s", "Bike Squad", size=3)
+    squad["bases"] = {"round": "25"}
+    squad["loadout"] = [{"name": "Combat Bike", "count": 1, "bases": {"round": "60x35"}}]
+    assert list_to_profile._base_of(squad, "gf", []) == {
+        "is_oval": False, "width_mm": 25, "depth_mm": 25,
+    }
+
+
+def test_the_tough_fallback_grows_over_a_mount_base():
+    """The fallback runs AFTER the mount replacement (opr_api_client.gd:1040)
+    and its `_set_round_base` guard (:888-889) never SHRINKS: a 40 mm mount on
+    a Tough(6) walker grows to the 50 mm ladder; a 60 mm mount stays."""
+    small = _selection("u", "Combat Walker", size=1, rules=[{"label": "Tough(6)"}])
+    small["loadout"] = [{"name": "Steed", "count": 1, "bases": {"round": "40"}}]
+    assert list_to_profile._base_of(small, "gf", ["Tough(6)"]) == {
+        "is_oval": False, "width_mm": 50, "depth_mm": 50,
+    }
+    big = _selection("v", "Combat Walker", size=1, rules=[{"label": "Tough(6)"}])
+    big["loadout"] = [{"name": "Steed", "count": 1, "bases": {"round": "60"}}]
+    assert list_to_profile._base_of(big, "gf", ["Tough(6)"]) == {
+        "is_oval": False, "width_mm": 60, "depth_mm": 60,
+    }
+
+
+def test_the_manifest_base_override_replaces_the_parsed_base(monkeypatch):
+    """The MANIFEST link (model_library.gd:base_override_mm :132-134 applied by
+    opr_army_manager.gd:2565-2589): MANIFEST > AF base > derived — the override
+    replaces with no grow guard. Keyed faction/normalized-name (make_key
+    :100-109 folds -/_ to spaces). Inert on the real bundled manifest (0
+    `base_mm` entries today) — proven synthetic here."""
+    sel = _selection("u", "Skeleton Giant", size=1)
+    sel["bases"] = {"round": "60"}
+    data = {"gameSystem": "gf", "units": [sel]}
+    monkeypatch.setattr(list_to_profile, "_MANIFEST_BASES", {
+        "test_faction/skeleton giant": {"round": "80"},
+    })
+    prof = profiles_from_army_forge_json(data, "test_faction", player=1)
+    assert prof["p1_0_u"]["base_radius"] == pytest.approx(0.04, abs=1e-12)
+    monkeypatch.setattr(list_to_profile, "_MANIFEST_BASES", {})
+    prof = profiles_from_army_forge_json(data, "test_faction", player=1)
+    assert prof["p1_0_u"]["base_radius"] == pytest.approx(0.03, abs=1e-12)
+
+
+def test_deploy_base_groups_folds_attached_heroes_onto_their_host():
+    """The production seam for the deployment law: heroes_of maps the host's
+    selectionId -> its attached (non-combined joinToUnit) heroes in list
+    order — the `_deploy_models` fold (:10239-10245) the deploy radius and the
+    settle's per-model shapes read."""
+    host = _selection("host", "Shooter Grunts", size=20)
+    hero = _selection("h", "Vradhez", size=1, join_to_unit="host", rules=[{"label": "Tough(3)"}])
+    data = {"gameSystem": "gf", "units": [host, hero]}
+    built, heroes_of = list_to_profile.deploy_base_groups(data, "test_faction", 1)
+    assert [u["name"] for u in built] == ["Shooter Grunts", "Vradhez"]
+    assert [u["name"] for u in heroes_of["host"]] == ["Vradhez"]
+    assert heroes_of["host"][0]["base"] == {
+        "is_oval": False, "width_mm": 40, "depth_mm": 40,
+    }
