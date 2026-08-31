@@ -52,13 +52,15 @@ fn roll_off_replays_every_table_dump_bit_exact() {
 /// The extract generator reconstructed each side's `all_units` in list order
 /// (attached heroes excluded, ambush-reserve units at their list positions) and
 /// asserted: seed_value == seed + slot, dump-unit sections in 1..3, the
-/// units+reserved name multiset equals the non-joined list entries, and no name
-/// appears in BOTH units and reserved (interleave would be ambiguous). The
-/// committed extract carries only keys/flags/sections — no host paths.
+/// units+reserved name multiset equals the non-joined list entries, no name
+/// appears in BOTH units and reserved, and the interleave's deployment ids come
+/// out contiguous 0..n-1. Step 3b re-keyed the dump by unit id
+/// (solo_controller.gd:9160/:9166 `unit_id`), so duplicate display names can no
+/// longer collide — every section is comparable (the v1 fixture carried 8
+/// name-skipped null sections over 4 sides, e.g. seed 56).
 ///
-/// placement_order is step 3b: the dumps record NO placement order, so there is
-/// nothing to replay it against yet (slice 6's full-fixture replay pins it via
-/// final positions).
+/// placement_order is step 3b: replayed against the dumps' own `placement_order`
+/// in the test below.
 #[test]
 fn draw_phases_replay_every_table_dump_bit_exact() {
     let dumps: Vec<serde_json::Value> = serde_json::from_str(include_str!(
@@ -113,12 +115,6 @@ fn draw_phases_replay_every_table_dump_bit_exact() {
                     assert!(row[3].is_null(), "seed {seed} side {slot}: reserved row {i}");
                     continue;
                 }
-                // Null section = duplicate-name unit: pregame_dump.gd keys its
-                // place-record map by NAME (:37, :48), so duplicate-name rows carry the
-                // LAST-deployed unit's record (verified seed 56 side 2) — unrecordable.
-                if row[3].is_null() {
-                    continue;
-                }
                 assert_eq!(
                     section_of[i],
                     row[3].as_i64().unwrap(),
@@ -130,7 +126,7 @@ fn draw_phases_replay_every_table_dump_bit_exact() {
             total_checked += checked as usize;
         }
     }
-    assert_eq!(total_checked, 1052, "pinned section comparisons across the corpus");
+    assert_eq!(total_checked, 1060, "pinned section comparisons across the corpus");
 }
 
 /// The transport fill's draw law, pinned where the corpus cannot (no transports
