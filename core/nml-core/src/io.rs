@@ -167,6 +167,23 @@ pub struct Action {
     /// "patient" is a FLAG on the ADVANCE candidate (ai_planner.gd:517-545), not a key.
     #[serde(default)]
     pub patient: bool,
+    /// NML-1150 — SPLIT FIRE's aim, when the act carries it: per (member,
+    /// weapon) the target key the table resolved that shot at
+    /// (`_solo_pick_overlay_target` main.gd:4011). The act's `shoot` key is the
+    /// PLANNER's one pick and cannot hold this, so a replay gate reads the
+    /// table's own per-shot record and hands it over. AIMING only: every die
+    /// count and face stays port-computed. Absent = the act's one target.
+    #[serde(default)]
+    pub split: Option<Vec<SplitShot>>,
+}
+
+/// One entry of `Action::split` — the table's own record of one shot
+/// (shots.jsonl's `member`/`weapon`/`target`, the target mapped to a key).
+#[derive(Debug, Clone, Deserialize)]
+pub struct SplitShot {
+    pub member: String,
+    pub weapon: String,
+    pub target: String,
 }
 
 #[derive(Deserialize)]

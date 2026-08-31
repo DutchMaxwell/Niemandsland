@@ -203,6 +203,53 @@ def defender_state(plain: dict, key: str) -> tuple[int, int]:
     return (int(u["alive"]), int(sum(u["wounds"])))
 
 
+def shots_of(d: Path) -> dict[int, list[dict]]:
+    """The table's own per-shot record — sidecar `shots.jsonl` (NML_SHOT_DUMP,
+    written inside the per-shot loop of `_solo_resolve_ai_volley`, so per
+    activation ordinal the lines stand in the table's resolve order): member,
+    weapon, and the TARGET NAME that shot fired at. NML-1150's aiming oracle:
+    acts.jsonl carries one `shoot` key and cannot hold per-weapon aims."""
+    f = d / "shots.jsonl"
+    if not f.exists():
+        return {}
+    out: dict[int, list[dict]] = {}
+    for line in f.read_text().splitlines():
+        if line.strip():
+            s = json.loads(line)
+            out.setdefault(int(s["act"]), []).append(s)
+    return out
+
+
+def split_aim(head: dict, rec: list[dict], shoot_key: str, units: dict) -> tuple[list[dict] | None, str, int]:
+    """The `split` aim for one act, or `(None, why, 0)` to stay pooled. The
+    sidecar's target NAME becomes a unit key through the header profiles; a
+    name sitting on more than one key is ambiguous and its entries are dropped
+    (the count rides back as the third slot), never guessed. An aim whose
+    entries all point at the recorded `shoot` key is the pre-1150 path and
+    injects nothing. An aim naming a unit that is DEAD in the replayed state
+    is a stale ordinal (the sidecar shares dice.jsonl's move_act_seq, which a
+    dry side can hand to a later activation) — the whole aim is untrustworthy
+    and injects nothing."""
+    name_keys: dict[str, list[str]] = {}
+    for k, p in head["profiles"].items():
+        name_keys.setdefault(str(p.get("name", "")), []).append(k)
+    aim, amb = [], 0
+    for s in rec:
+        keys = name_keys.get(str(s.get("target", "")), [])
+        if len(keys) == 1:
+            aim.append({"member": str(s["member"]), "weapon": str(s["weapon"]),
+                        "target": keys[0]})
+        else:
+            amb += 1
+    if not aim:
+        return None, "uncovered", amb
+    if any(int(units.get(a["target"], {}).get("alive", -1)) <= 0 for a in aim):
+        return None, "stale", amb
+    if all(a["target"] == shoot_key for a in aim):
+        return None, "aligned", amb
+    return aim, ("reaim" if len({a["target"] for a in aim}) == 1 else "multi"), amb
+
+
 #: PR #448's (NML-1103) merge commit — the fix that made conditional AP
 #: (Shatter/Tear/Disintegrate/Melee Slayer/Piercing Assault/Piercing Hunter)
 #: count the way the table resolves it. `vintage_knobs` asks git whether this
@@ -284,7 +331,7 @@ def vintage_report_line(seen: set[tuple[bool, bool]]) -> str:
 
 def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: bool,
         hero_attach: str = "table", sighting: str = "unit",
-        engage_fold: str = "auto", cond_ap: str = "auto") -> int:
+        engage_fold: str = "auto", cond_ap: str = "auto", inject: bool = True) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -297,7 +344,9 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
               "both_silent", "table_silent", "port_silent", "shape", "faces",
               "declined", "rolls_equal", "rolls", "hits_equal", "hits", "next_checked",
               "next_equal", "equal_over_2", "equal_dice_max", "split_fire",
-              "full_equal_owner", "clean_acts", "clean_full_equal", "clean_both_silent")}
+              "full_equal_owner", "clean_acts", "clean_full_equal", "clean_both_silent",
+              "split_injected", "split_reaim", "split_multi", "split_aligned",
+              "split_uncovered", "split_stale", "split_ambig", "split_full_equal")}
     unported: dict[str, int] = {}
     reasons: dict[str, int] = {}
     # D6a-B5: the SAME classifier over the acts the table did NOT split-fire on.
@@ -312,6 +361,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
     for d in games:
         head, lines, dice, seed = read_game(d)
         burn = burn_prefix(dice)
+        shots = shots_of(d)
         core = nml_core.load(repo)
         if hero_attach == "off":
             head = detach_header(head)
@@ -346,6 +396,25 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
             if int(action.get("kind", -1)) not in SHOOTING_KINDS or not action.get("shoot"):
                 continue
             tally["acts"] += 1
+            # NML-1150: SPLIT FIRE's aim — where the table really pointed each
+            # weapon (shots.jsonl). Injected into the action as `split`; the
+            # core then resolves one tray volley per target group, in the
+            # table's group order. Only the AIM comes from the record — every
+            # count and face stays port-computed.
+            aim, aim_kind, amb = (None, "", 0)
+            if inject:
+                aim, aim_kind, amb = split_aim(head, shots.get(k, []), action["shoot"],
+                                               act["state"]["units"])
+            if aim is not None:
+                tally["split_injected"] += 1
+                tally["split_" + aim_kind] += 1
+                tally["split_ambig"] += bool(amb)
+                action = dict(action, split=aim)
+            elif aim_kind in ("uncovered", "stale"):
+                # no usable aim: the sidecar has no lines here, every entry sat
+                # on an ambiguous name, or the ordinal is stale (a named target
+                # is dead) — the act stays on the pooled path
+                tally["split_" + aim_kind] += 1
             i0 = first_at_or_after(dice, k)
             plain = act["state"] if hero_attach == "table" else detach(act["state"])
             state = core.state_of(plain)
@@ -364,7 +433,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                     report = {"rolls": [], "unported": []}
             except Exception as exc:  # a declined activation is not a dice verdict
                 tally["declined"] += 1
-                if len(firsts) < 3:
+                if len(firsts) < max(3, verbose):
                     firsts.append("%s act %d — DECLINED: %s" % (d.name, k, exc))
                 continue
             for name in report["unported"]:
@@ -402,13 +471,13 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 continue
             if got and not want:
                 tally["table_silent"] += 1
-                if len(firsts) < 3:
+                if len(firsts) < max(3, verbose):
                     firsts.append("%s act %d [table_silent] %s — the port drew %d roll(s), "
                                   "the table none" % (d.name, k, action["shoot"][-6:], len(got)))
                 continue
             if want and not got:
                 tally["port_silent"] += 1
-                if len(firsts) < 3:
+                if len(firsts) < max(3, verbose):
                     firsts.append("%s act %d [port_silent] %s — the table drew %d roll(s), "
                                   "the port none" % (d.name, k, action["shoot"][-6:], len(want)))
                 continue
@@ -472,7 +541,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 owners_ok = all("AI (%s)" % g[4] == w[4] for g, w in zip(got, want))
                 if not owners_ok:
                     reasons["owner"] = reasons.get("owner", 0) + 1
-                    if len(firsts) < 3:
+                    if len(firsts) < max(3, verbose):
                         bad = next((i for i, (g, w) in enumerate(zip(got, want))
                                     if "AI (%s)" % g[4] != w[4]), 0)
                         firsts.append("%s act %d [owner] %s — roll %d: AI (%s) vs table %s"
@@ -481,6 +550,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 if len(got) == len(want):
                     tally["full_equal"] += 1
                     tally["clean_full_equal"] += not split
+                    tally["split_full_equal"] += aim is not None
                     if owners_ok:
                         tally["full_equal_owner"] += 1
                 elif len(want) > len(got):
@@ -489,7 +559,7 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
                 else:
                     tally["port_longer"] += 1
                     reasons["length"] = reasons.get("length", 0) + 1
-                    if len(firsts) < 3:
+                    if len(firsts) < max(3, verbose):
                         firsts.append("%s act %d [port_longer] %s — %d rolls vs the table's %d"
                                       % (d.name, k, action["shoot"][-6:], len(got), len(want)))
                 # The NEXT replayable act, which is a position in `lines`
@@ -524,12 +594,18 @@ def run(ref: Path, repo: str, mode: str, limit: int, verbose: int, report_only: 
     print("  split : %d both silent, %d table silent, %d port silent, %d shape, %d faces, %d declined"
           % (tally["both_silent"], tally["table_silent"], tally["port_silent"],
              tally["shape"], tally["faces"], tally["declined"]))
+    print("  aim   : %d/%d acts injected with the sidecar's per-weapon aim "
+          "(%d single re-aim, %d multi-target, %d aligned, %d uncovered, %d with a dropped "
+          "ambiguous entry); %d of those FULL-equal"
+          % (tally["split_injected"], tally["acts"], tally["split_reaim"],
+             tally["split_multi"], tally["split_aligned"], tally["split_uncovered"],
+             tally["split_ambig"], tally["split_full_equal"]))
     print("  first field to part: %s" % (
         ", ".join("%s=%d" % kv for kv in sorted(reasons.items())) or "none"))
     print("  split-fire: %d/%d acts where the table saved dice under a unit that is NOT "
           "the recorded shoot target" % (tally["split_fire"], tally["acts"]))
     # The same two numbers over the acts split fire did NOT touch — the only
-    # population where a FULL-equal verdict is reachable at all.
+    # population where a FULL-equal verdict was reachable before NML-1150.
     print("  no-split : %d/%d of those acts FULL-equal (+%d both silent); first field to part "
           "there: %s" % (tally["clean_full_equal"], tally["clean_acts"], tally["clean_both_silent"],
                          ", ".join("%s=%d" % kv for kv in sorted(reasons_clean.items())) or "none"))
@@ -611,10 +687,15 @@ def main(argv: list[str]) -> int:
                     help="NML-1130: conditional AP (PR #448/NML-1103), i.e. LEGACY_NO_COND_AP "
                          "inverted. 'auto' (default) reads the corpus's OWN vintage; 'on'/'off' "
                          "force it")
+    ap.add_argument("--inject", choices=("on", "off"), default="on",
+                    help="NML-1150: inject the sidecar shots.jsonl per-weapon aim as the "
+                         "action's `split` (the core then resolves one tray volley per target "
+                         "group, in the table's order). 'off' is the BEFORE control on the same "
+                         "binary — every act stays pooled on the recorded shoot key")
     a = ap.parse_args(argv)
     mode = "misseed" if a.red_misseed else a.mode
     return run(Path(a.ref).expanduser(), a.repo, mode, a.limit, a.verbose, a.report_only,
-               a.hero_attach, a.sighting, a.engage_fold, a.cond_ap)
+               a.hero_attach, a.sighting, a.engage_fold, a.cond_ap, a.inject == "on")
 
 
 if __name__ == "__main__":
