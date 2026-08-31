@@ -1666,7 +1666,330 @@ pub fn settle_units(specs: &[UnitSpec], sd: &SideDeploy, zone: &Rect) -> Vec<(us
 /// insert slot 1 before slot 2, and each army's roster order matches the
 /// dump's). The overlap resolve, then ≤ 2 repair rounds —
 /// `_repair_deploy_coherency` (:9227-9312), each REPAIRING round followed by
-/// another resolve (:9184-9188). The repair is step 6d2.
+/// another resolve (:9184-9188). The repair's RETURN is `forced_any` — set
+/// ONLY by FORCED (overlap-allowed) re-placements (:9265-9266, :9295-9296),
+/// not by free ones — so a free-only repair still ends the loop.
 pub fn deploy_finish_all(units: &mut [SettleUnit], board: &Terrain, walls: &[WallSeg]) {
     resolve_deploy_overlaps(units, board, walls);
+    for _round in 0..2 {
+        if repair_deploy_coherency(units, board, walls) {
+            resolve_deploy_overlaps(units, board, walls);
+        } else {
+            break;
+        }
+    }
+}
+
+// ---- NML-1152 step 6d2: `_repair_deploy_coherency` (solo_controller.gd
+// :9227-9312) — the post-settle coherency repair. Draw-free. Every unit
+// outside its largest 1"-link component gets its stragglers re-placed onto
+// the nearest legal free ring spot around the component; a link-coherent but
+// over-spread unit pulls its farthest-out model to FORCED contact beside the
+// innermost one (the SPREAD case, diagnosis run 8). Skips: reserve/ambush
+// units never enter `units`; regiments and attached (separate) heroes are
+// corpus-absent — unported with the 6b branches (:9242-9245). The pass
+// crosses slots (the SECOND side's finish re-heals the FIRST side's,
+// :9228-9232) — the caller's array IS the cross-slot walk order.
+
+/// `CoherencyChecker` constants (:10, :13): the 1" edge link and the 9" max
+/// chain. The skirmish variant (:18, 6" — `is_skirmish_system` :64-65 reads
+/// game_system gff/aofs) is corpus-absent; unported with the regiments so a
+/// future skirmish corpus trips loudly instead of silently.
+pub const COHERENCY_LINK_IN: f64 = 1.0;
+pub const COHERENCY_CHAIN_IN: f64 = 9.0;
+
+/// `MoveIntent.anchor_of` (move_intent.gd:18-24): the table-plane centroid —
+/// Vector3 sum accumulated in f32 per component, divided by `float(n)`
+/// narrowed to real_t (f32 division). Empty set → ZERO (unreachable here).
+fn anchor_of(pts: &[[f32; 2]]) -> [f32; 2] {
+    let (mut sx, mut sy) = (0.0f32, 0.0f32);
+    for p in pts {
+        sx += p[0];
+        sy += p[1];
+    }
+    let n = pts.len() as f32;
+    [sx / n, sy / n]
+}
+
+/// `_deploy_spot_free` (:9350-9367): NO on-table base (any unit, any side —
+/// both slots' units incl. attached heroes) overlaps a base of radius `r` at
+/// `cand`. `all` is the LIVE flat snapshot of every model (centre, bounding
+/// radius); ONLY the moving model itself is excluded (`mi == moving`, :9362)
+/// — the straggler's own unit's other models DO block. The Vector2 gap
+/// length is f32, the radii sum f64 (`model_base_radius_m` = the shape's
+/// bounding radius), narrowed at the comparison (:9364-9365); the 0.002 m is
+/// the wall-rest clearance constant reused inline (:9365, :6775).
+fn deploy_spot_free(cand: (f32, f32), r: f64, moving: usize, all: &[([f32; 2], f64)]) -> bool {
+    for (k, (pos, r_m)) in all.iter().enumerate() {
+        if k == moving {
+            continue;
+        }
+        let (dx, dy) = (cand.0 - pos[0], cand.1 - pos[1]);
+        let gap = (dx * dx + dy * dy).sqrt(); // Vector2.length — f32
+        if (gap as f64) < r + r_m + 0.002 {
+            return false;
+        }
+    }
+    true
+}
+
+/// `_deploy_ring_spot` (:9317-9346): the nearest legal free ring spot for the
+/// straggler `idx` around the component's models — component models nearest
+/// the straggler FIRST (the smallest legal correction wins; the sort key is
+/// `Vector3.distance_to` in f32 — every model of a unit shares one y, so the
+/// 3D distance equals this 2D one; GDScript's sort is UNSTABLE, exact f32
+/// ties are an accepted residual), two ring slack radii (0.5"/0.85", both
+/// inside the 1" link band) × 24 angles. FORCED mode (`require_free = false`)
+/// skips BOTH gates — terrain and bases — and always returns the FIRST
+/// candidate (comp non-empty ⇒ Some). The blocked test is the SINGLE-POINT
+/// callable (:9341 — no disc sampling here, unlike the ladder): walls at
+/// 0.02 m, cells by the unit's Strider/Flying variant, props. The Vector3
+/// ctor narrows the f64 candidate (centre f32 widened, cos·ring f64).
+#[allow(clippy::too_many_arguments)]
+fn deploy_ring_spot(
+    geoms: &[SettleShapeGeom],
+    pts: &[[f32; 2]],
+    comp: &[usize],
+    idx: usize,
+    board: &Terrain,
+    walls: &[WallSeg],
+    flying: bool,
+    all: &[([f32; 2], f64)],
+    moving: usize,
+    require_free: bool,
+) -> Option<(f32, f32)> {
+    let r_i = geoms[idx].bounding_radius();
+    let straggler = pts[idx];
+    let key = |j: usize| -> f32 {
+        let (dx, dy) = (straggler[0] - pts[j][0], straggler[1] - pts[j][1]);
+        (dx * dx + dy * dy).sqrt()
+    };
+    let mut order: Vec<usize> = comp.to_vec();
+    order.sort_by(|&a, &b| key(a).partial_cmp(&key(b)).unwrap());
+    for &j in &order {
+        let r_j = geoms[j].bounding_radius();
+        let centre = pts[j];
+        for slack_in in [0.5f64, 0.85f64] {
+            let ring = r_i + r_j + slack_in * 0.0254;
+            for step in 0..24 {
+                let ang = std::f64::consts::TAU * step as f64 / 24.0;
+                let cand = (
+                    (centre[0] as f64 + ang.cos() * ring) as f32,
+                    (centre[1] as f64 + ang.sin() * ring) as f32,
+                );
+                if require_free {
+                    // the single-point callable takes the f32 candidate (the
+                    // Vector2 ctor adds no narrowing — widened for the f64
+                    // helpers without drift)
+                    let p64 = (cand.0 as f64, cand.1 as f64);
+                    if wall_blocked(board, p64)
+                        || cell_blocked(board, p64, flying)
+                        || prop_blocked(board, p64)
+                    {
+                        continue;
+                    }
+                    if !deploy_spot_free(cand, r_i, moving, all) {
+                        continue;
+                    }
+                }
+                return Some(cand);
+            }
+        }
+    }
+    None
+}
+
+/// `_largest_link_component_world` (:6529-6552): the largest 1"-edge-link
+/// component (CoherencyChecker's link graph, BFS with a STACK — pop_back,
+/// seen marked when PUSHED, starts ascending 0..n, strict > keeps the
+/// first-largest). `edge_distance_in` = SeparationChecker.edge_distance.
+fn largest_link_component(shapes: &[SettleShape]) -> Vec<usize> {
+    let n = shapes.len();
+    let mut seen = vec![false; n];
+    let mut best: Vec<usize> = Vec::new();
+    for start in 0..n {
+        if seen[start] {
+            continue;
+        }
+        let mut comp = vec![start];
+        let mut queue = vec![start];
+        seen[start] = true;
+        while let Some(cur) = queue.pop() {
+            for other in 0..n {
+                if seen[other] {
+                    continue;
+                }
+                if edge_distance_in(&shapes[cur], &shapes[other]) <= COHERENCY_LINK_IN {
+                    seen[other] = true;
+                    queue.push(other);
+                    comp.push(other);
+                }
+            }
+        }
+        if comp.len() > best.len() {
+            best = comp;
+        }
+    }
+    best
+}
+
+/// `_config_coherent_world` (:6832-6860) via `unit_coherent_now` (:8514-8520,
+/// the 9" chain for non-skirmish units): a SINGLE 1"-link component (BFS from
+/// model 0 ONLY — a smaller model-0 component fails even when a larger one
+/// exists, :6841-6854) AND every pair's edge gap within the max chain
+/// (:6856-6859). n ≤ 1 is coherent.
+fn config_coherent(shapes: &[SettleShape], max_chain_in: f64) -> bool {
+    let n = shapes.len();
+    if n <= 1 {
+        return true;
+    }
+    let mut visited = vec![false; n];
+    visited[0] = true;
+    let mut queue = vec![0usize];
+    let mut seen = 1usize;
+    while let Some(cur) = queue.pop() {
+        for other in 0..n {
+            if visited[other] {
+                continue;
+            }
+            if edge_distance_in(&shapes[cur], &shapes[other]) <= COHERENCY_LINK_IN {
+                visited[other] = true;
+                seen += 1;
+                queue.push(other);
+            }
+        }
+    }
+    if seen < n {
+        return false;
+    }
+    for i in 0..n {
+        for j in (i + 1)..n {
+            if edge_distance_in(&shapes[i], &shapes[j]) > max_chain_in {
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// `_repair_deploy_coherency` (:9227-9312). Per pass (≤ 8 — each re-links one
+/// straggler or shrinks the span one step, :9247): the coherent gate and the
+/// component are computed from the LIVE positions at the TOP of the pass;
+/// `pts` is then a STALE snapshot — ring-spot centres, sort keys, the
+/// straggler position and the SPREAD anchor all read it (:9251, :9276-9290),
+/// while the spot-free check sees LIVE positions (the node is written
+/// immediately, :9270 — earlier same-pass moves block at their NEW spots).
+/// `all` is rebuilt per straggler (live). The return is `forced_any`.
+pub fn repair_deploy_coherency(
+    units: &mut [SettleUnit],
+    board: &Terrain,
+    walls: &[WallSeg],
+) -> bool {
+    let mut forced_any = false;
+    for ui in 0..units.len() {
+        let flying = units[ui].flying;
+        for _pass in 0..8 {
+            let n = units[ui].models.len();
+            if n <= 1 {
+                break;
+            }
+            let shapes: Vec<SettleShape> = units[ui]
+                .models
+                .iter()
+                .zip(&units[ui].geoms)
+                .map(|(m, g)| g.settle_shape(*m))
+                .collect();
+            if config_coherent(&shapes, COHERENCY_CHAIN_IN) {
+                break;
+            }
+            let pts: Vec<[f32; 2]> = units[ui].models.clone(); // stale snapshot
+            let comp = largest_link_component(&shapes);
+            let mut in_comp = vec![false; n];
+            for &c in &comp {
+                in_comp[c] = true;
+            }
+            let prefix: usize = units[..ui].iter().map(|u| u.models.len()).sum();
+            let mut moved_one = false;
+            for i in 0..n {
+                if in_comp[i] {
+                    continue;
+                }
+                let all: Vec<([f32; 2], f64)> = units
+                    .iter()
+                    .flat_map(|u| {
+                        u.models
+                            .iter()
+                            .zip(&u.geoms)
+                            .map(move |(m, g)| (*m, g.bounding_radius()))
+                    })
+                    .collect();
+                let moving = prefix + i;
+                let mut spot = deploy_ring_spot(
+                    &units[ui].geoms, &pts, &comp, i, board, walls, flying, &all, moving, true,
+                );
+                if spot.is_none() {
+                    // packed zone — FORCE contact beside the group (:9262-9266);
+                    // forced_any only on SUCCESS (:9265-9266)
+                    spot = deploy_ring_spot(
+                        &units[ui].geoms, &pts, &comp, i, board, walls, flying, &all, moving,
+                        false,
+                    );
+                    if spot.is_some() {
+                        forced_any = true;
+                    }
+                }
+                if let Some(s) = spot {
+                    units[ui].models[i] = [s.0, s.1]; // Vector3 ctor — f32
+                    moved_one = true;
+                }
+            }
+            if !moved_one && comp.len() == n {
+                // SPREAD case (:9272-9296): link-coherent but wider than the
+                // 9" span — pull the farthest-out model to FORCED contact
+                // beside the innermost one; every pass shrinks the span. The
+                // forced call cannot fail (comp = [near_j] non-empty).
+                let anchor = anchor_of(&pts);
+                let (mut far_i, mut near_j) = (0usize, 0usize);
+                let (mut dmax, mut dmin) = (-1.0f64, f64::INFINITY);
+                for (i, p) in pts.iter().enumerate() {
+                    let (dx, dy) = (anchor[0] - p[0], anchor[1] - p[1]);
+                    let dd = ((dx * dx + dy * dy).sqrt()) as f64; // distance_to f32
+                    if dd > dmax {
+                        dmax = dd;
+                        far_i = i;
+                    }
+                    if dd < dmin {
+                        dmin = dd;
+                        near_j = i;
+                    }
+                }
+                if far_i != near_j {
+                    let all: Vec<([f32; 2], f64)> = units
+                        .iter()
+                        .flat_map(|u| {
+                            u.models
+                                .iter()
+                                .zip(&u.geoms)
+                                .map(move |(m, g)| (*m, g.bounding_radius()))
+                        })
+                        .collect();
+                    if let Some(s2) = deploy_ring_spot(
+                        &units[ui].geoms, &pts, &[near_j], far_i, board, walls, flying, &all,
+                        prefix + far_i, false,
+                    ) {
+                        units[ui].models[far_i] = [s2.0, s2.1];
+                        moved_one = true;
+                        forced_any = true;
+                    }
+                }
+            }
+            if moved_one {
+                // _broadcast_positions + the deploy decision records are
+                // harness cosmetics — no positions (:9297-9302).
+            } else {
+                break; // FAILED record + avoid spinning (:9303-9311)
+            }
+        }
+    }
+    forced_any
 }
