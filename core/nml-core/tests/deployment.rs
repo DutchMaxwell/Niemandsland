@@ -397,3 +397,87 @@ fn footprint_margins_per_axis_from_real_footprint() {
     let (mx, my) = deployment::footprint_margins(0.1, &fp, 0.02);
     assert!((mx - 0.089).abs() < 1e-12 && (my - 0.07).abs() < 1e-12);
 }
+
+// ==== NML-1152 step 4b — the adaptive deployment grid against the fixture ====
+//
+// The dump's `footprint` field IS `_deploy_footprint_offsets`' output (the
+// check grid the spot search tested every model base against), so the grid law
+// replays against all 1060 recorded footprints. The dump quantizes coordinates
+// to 0.0001 m, so the comparison carries that tolerance; the extract-time
+// invariant run confirmed 1060/1060 under the NON-skirmish chain cap and 0
+// units needing the skirmish cap. `models` (post-settle, fixed 0.04 place
+// grid) is slice-6 scope and NOT asserted here.
+
+/// The dump's coordinate quantum — comparisons against recorded numbers.
+const DUMP_QUANT: f64 = 1.5e-4;
+
+#[test]
+fn deploy_grid_matches_every_fixture_footprint() {
+    let fx = spots_fixture();
+    let mut n = 0usize;
+    let mut ok = 0usize;
+    for d in fx["dumps"].as_array().unwrap() {
+        for slot in ["1", "2"] {
+            for u in d["sides"][slot]["units"].as_array().unwrap() {
+                n += 1;
+                let base_r = u["base_r_m"].as_f64().unwrap();
+                let count = u["n_models"].as_u64().unwrap() as usize;
+                let want = deployment::deploy_footprint_offsets(count, base_r, false);
+                let got: Vec<(f64, f64)> = u["footprint"]
+                    .as_array().unwrap().iter()
+                    .map(|o| (o[0].as_f64().unwrap(), o[1].as_f64().unwrap()))
+                    .collect();
+                if want.len() == got.len()
+                    && want.iter().zip(&got).all(|(w, g)| (w.0 - g.0).abs() <= DUMP_QUANT && (w.1 - g.1).abs() <= DUMP_QUANT)
+                {
+                    ok += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(n, 1060, "the full 100-dump corpus");
+    assert_eq!(ok, n, "every recorded footprint is the adaptive check grid");
+    eprintln!("deploy grid replay: {ok}/{n} recorded footprints match the adaptive grid law");
+}
+
+/// The span cap, pinned at the exact case the corpus exercises (Pathfinders,
+/// 6 models, 20 mm bases): uncapped spacing 0.046 overflows the 9" coherency
+/// span, so the grid shrinks to (span_cap - 2·base_r) / diag — the dump's
+/// ±0.0853 x-extent is this value quantized to 0.0001.
+#[test]
+fn deploy_grid_span_cap_shrinks_to_the_coherency_span() {
+    let fp = deployment::deploy_footprint_offsets(6, 0.02, false);
+    let spacing = fp[1].0 - fp[0].0;
+    assert!((spacing - 0.04266201644389096).abs() < 1e-12, "capped spacing, got {spacing}");
+    assert!((fp[5].0 - fp[0].0).abs() - 0.08532403288778193 < 1e-12, "full x extent");
+    // Skirmish systems cap at 6": the floor (2·base_r + 2 mm) wins instead.
+    let fp_skirmish = deployment::deploy_footprint_offsets(6, 0.02, true);
+    assert!((fp_skirmish[1].0 - fp_skirmish[0].0 - 0.042).abs() < 1e-12);
+}
+
+/// Base-aware spacing + squarest grid: 20-model 16 mm bases start at 0.04
+/// spacing (2·0.016+0.006 loses to DEPLOY_SPACING_M), take ceil(√20) = 5
+/// columns, and still overflow the span cap → (span − 2·base_r) / diag.
+#[test]
+fn deploy_grid_sqrt_columns_and_base_aware_spacing() {
+    let fp = deployment::deploy_footprint_offsets(20, 0.016, false);
+    assert_eq!(fp.len(), 20);
+    let spacing = fp[1].0 - fp[0].0;
+    assert_eq!(fp.iter().filter(|o| o.1 == fp[0].1).count(), 5, "row 0 has 5 models (ceil(√20) columns)");
+    assert!((fp[0].1 - -1.5 * spacing).abs() < 1e-12, "4 rows centred on the spot");
+    assert!((spacing - 0.1839 / 5.0).abs() < 1e-12, "capped spacing, got {spacing}");
+    // Small units keep the plain spacing floor: 4 models, 20 mm bases → 0.046.
+    let fp4 = deployment::deploy_footprint_offsets(4, 0.02, false);
+    assert!((fp4[1].0 - fp4[0].0 - 0.046).abs() < 1e-12);
+}
+
+/// `_deploy_footprint_radius` (the FIXED-cols twin of the grid above — the
+/// table's two helpers disagree for n > 10 and both are mirrored as-is).
+#[test]
+fn deploy_footprint_radius_keeps_fixed_cols() {
+    let r4 = deployment::deploy_footprint_radius(4, 0.02);
+    assert!((r4 - 0.09).abs() < 1e-12, "half_w 0.06 + base 0.02 + 0.01, got {r4}");
+    let r12 = deployment::deploy_footprint_radius(12, 0.02);
+    let want = (0.08f64 * 0.08 + 0.04 * 0.04).sqrt() + 0.03;
+    assert!((r12 - want).abs() < 1e-12, "cols stay at 5 even for 12 models, got {r12}");
+}

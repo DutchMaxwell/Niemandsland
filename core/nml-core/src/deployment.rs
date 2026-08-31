@@ -354,3 +354,65 @@ pub fn spot_blocked(
         .iter()
         .any(|e| *e != [0.0f32, 0.0] && hit([px + e[0], py + e[1]]))
 }
+
+// ---- the compact deployment grid (NML-1152 step 4b). TWO grids exist on the
+// table: the CHECK grid below (base-aware spacing, squarest √n columns above
+// 10 models, whole footprint shrunk under the coherency span cap) that the
+// spot search tests every model base against (solo_controller.gd:10273-10303),
+// and the FIXED 0.04 m place grid that actually drops the models
+// (`_place_unit_at`, :10329-10346) — the settle pass then repairs overlaps.
+// The twin's UnitSpec.footprint carries the check grid; models come from slice 6.
+
+/// `DEPLOY_SPACING_M` — model-centre spacing of the compact grid
+/// (solo_controller.gd:10233).
+pub const DEPLOY_SPACING_M: f64 = 0.04;
+/// `DEPLOY_COLS` — models per rank in the fixed place grid (:10234).
+pub const DEPLOY_COLS: usize = 5;
+
+/// `_deploy_footprint_radius` (solo_controller.gd:10251-10258): the circumradius
+/// of the compact grid at FIXED `DEPLOY_COLS` ranks (not the √n law below — the
+/// table's two helpers disagree there; mirrored as-is), plus the largest base
+/// radius and a 1 cm allowance. This is best_spot's `radius`/`probe_radius`.
+pub fn deploy_footprint_radius(model_count: usize, base_r: f64) -> f64 {
+    let n = model_count.max(1);
+    let cols = n.min(DEPLOY_COLS) as f64;
+    let rows = ((n as f64) / (DEPLOY_COLS as f64)).ceil();
+    let half_w = (cols - 1.0) * DEPLOY_SPACING_M * 0.5;
+    let half_d = (rows - 1.0) * DEPLOY_SPACING_M * 0.5;
+    (half_w * half_w + half_d * half_d).sqrt() + base_r + 0.01
+}
+
+/// `_deploy_footprint_offsets` (solo_controller.gd:10281-10303): the per-model
+/// XZ offsets the spot search CHECKS. Spacing adapts to the base
+/// (≥ 2·base_r + 6 mm), the grid goes squarest-√n above 10 models, and the
+/// whole footprint is shrunk under the coherency span cap (9", or 6" for the
+/// skirmish systems — CoherencyChecker.gd:13/:18) so a fresh deploy passes its
+/// own gate. GDScript floats are f64 throughout — no f32 boundary here.
+pub fn deploy_footprint_offsets(model_count: usize, base_r: f64, skirmish: bool) -> Vec<(f64, f64)> {
+    let n = model_count;
+    if n == 0 {
+        return Vec::new();
+    }
+    let mut spacing = DEPLOY_SPACING_M.max(2.0 * base_r + 0.006);
+    let cols = if n <= 2 * DEPLOY_COLS {
+        n.min(DEPLOY_COLS)
+    } else {
+        ((n as f64).sqrt().ceil()) as usize
+    };
+    let rows = (n + cols - 1) / cols;
+    let chain_cap_in = if skirmish { 6.0 } else { 9.0 };
+    let span_cap = (chain_cap_in - 0.5) * 0.0254;
+    let grid_diag = (((cols - 1) as f64).powi(2) + ((rows - 1) as f64).powi(2)).sqrt();
+    if grid_diag > 0.001 && grid_diag * spacing + 2.0 * base_r > span_cap {
+        spacing = (2.0 * base_r + 0.002).max((span_cap - 2.0 * base_r) / grid_diag);
+    }
+    (0..n)
+        .map(|i| {
+            let (col, row) = ((i % cols) as f64, (i / cols) as f64);
+            (
+                (col - (cols - 1) as f64 * 0.5) * spacing,
+                (row - (rows - 1) as f64 * 0.5) * spacing,
+            )
+        })
+        .collect()
+}
