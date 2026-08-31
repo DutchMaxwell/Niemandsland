@@ -1100,3 +1100,202 @@ fn spot_search_replays_every_fixture_unit() {
     assert_eq!(degenerate, 20, "zone-centre degenerate landings (ai_deployment.gd:127)");
     assert_eq!(crowded, 4, "occupied-driven least_blocked landings");
 }
+
+// ==== NML-1152 step 6a — THE END-TO-END PIPELINE REPLAY ====
+//
+// For all 100 dumps × 2 sides the twin runs `deploy_side` from the PREGAME
+// INPUTS ONLY — the roster specs (key/model count/base radius/footprint/flags
+// from the fixture rows), the 12" front-line zone, the rulebook objectives,
+// the bank-v2 board — and its OWN stream does everything: draw phases
+// (bit-exact since steps 3/3b), placement ladder, occupied from its OWN
+// placements (no longer the recorded spots — that was step 5's isolation
+// crutch), models on the fixed 0.04 m grid. The settle pass is step 6b, so
+// the fixture's SETTLED models are classified, not bit-asserted: exact =
+// every model on the twin's pre-settle grid at the dump quantum, else the
+// max deviation is reported. First-divergence classes per failing side:
+// permissive (twin pick scores >= the table spot — the probe vetoed the
+// table's candidate), strict (twin scores worse on a first divergence —
+// "twin stays on a rung the table fell past"), cascade-from-earlier (an
+// earlier unit on the side already diverged, the occupied set shifted).
+
+#[test]
+fn deploy_side_pipeline_replays_every_fixture_side() {
+    use nml_core::objectives::{self, Cells};
+
+    let fx: Vec<serde_json::Value> =
+        serde_json::from_str(include_str!("fixtures/pregame_pipeline.json")).expect("fixture parses");
+    let v2 = bank_v2_fixture();
+    let mut boards: HashMap<i64, Terrain> = HashMap::new();
+    for (k, v) in spots_fixture()["boards"].as_object().unwrap() {
+        let mut board = board_of(&spots_fixture()["cell_params"], v);
+        let props = &v2["boards"][k];
+        let walls_in: Vec<[f64; 4]> = props["walls"]
+            .as_array().unwrap().iter()
+            .map(|w| [w[0].as_f64().unwrap(), w[1].as_f64().unwrap(), w[2].as_f64().unwrap(), w[3].as_f64().unwrap()])
+            .collect();
+        let blockers: Vec<[f64; 3]> = props["blockers"]
+            .as_array().unwrap().iter()
+            .map(|b| [b[0].as_f64().unwrap(), b[1].as_f64().unwrap(), b[2].as_f64().unwrap()])
+            .collect();
+        let boxes = bank_boxes(props);
+        board.set_bank_props(&walls_in, &blockers, &boxes);
+        boards.insert(k.parse::<i64>().unwrap(), board);
+    }
+    let zones = objectives::zones_of_style(&serde_json::json!({
+        "zones": {
+            "1": [[[-36, -24], [36, -24], [36, -12], [-36, -12]]],
+            "2": [[[-36, 12], [36, 12], [36, 24], [-36, 24]]],
+        }
+    }));
+    let (mut n, mut exact, mut within, mut mismatch) = (0usize, 0usize, 0usize, 0usize);
+    let (mut sides_total, mut sides_exact) = (0usize, 0usize);
+    let (mut models_total, mut models_exact) = (0usize, 0usize);
+    let mut models_worst: Vec<(f64, i64, String, String)> = Vec::new();
+    let mut first_div: Vec<(i64, String, String, &'static str)> = Vec::new();
+    let mut side_mismatch_count = 0usize;
+    for d in &fx {
+        let seed = d["seed"].as_i64().unwrap();
+        let board = boards.get(&(500000 + seed)).expect("board for seed");
+        let cells = Cells::from_terrain(board);
+        let lay = objectives::generate(500000 + seed, &serde_json::json!("d3+2"), &zones, &cells, 72.0, 48.0);
+        assert!(!lay.positions.is_empty(), "seed {seed}: rulebook objectives");
+        let objs: Vec<(f64, f64)> = lay
+            .positions.iter()
+            .map(|&(x, z)| ((x as f64 * IN2M) as f32 as f64, (z as f64 * IN2M) as f32 as f64))
+            .collect();
+        for slot in ["1", "2"] {
+            let zone = if slot == "1" {
+                deployment::Rect::new(-0.9144, -0.6096, 1.8288, 0.3048)
+            } else {
+                deployment::Rect::new(-0.9144, 0.3048, 1.8288, 0.3048)
+            };
+            let side = &d["sides"][slot];
+            // the FULL roster (draw-phase view, ambush units included at their
+            // list positions — the draw phases run over it; the placed-only
+            // units map carries the geometry)
+            let roster = side["roster"].as_array().unwrap();
+            let specs: Vec<UnitSpec> = roster
+                .iter()
+                .map(|r| {
+                    let key = r[0].as_str().unwrap();
+                    let g = &side["units"][key];
+                    UnitSpec {
+                        key: key.to_string(),
+                        model_count: if g.is_null() { 0 } else { g["n_models"].as_i64().unwrap() },
+                        base_r_m: if g.is_null() { 0.0 } else { g["base_r_m"].as_f64().unwrap() },
+                        footprint: if g.is_null() {
+                            Vec::new()
+                        } else {
+                            g["footprint"]
+                                .as_array().unwrap().iter()
+                                .map(|o| (o[0].as_f64().unwrap(), o[1].as_f64().unwrap()))
+                                .collect()
+                        },
+                        scout: r[1].as_bool().unwrap(),
+                        ambush: r[2].as_bool().unwrap(),
+                        ignores_terrain: if g.is_null() { false } else { g["ignores_terrain"].as_bool().unwrap() },
+                        vanguard: if g.is_null() { false } else { g["vanguard_pushed"].as_bool().unwrap() },
+                        transport_capacity: 0,
+                    }
+                })
+                .collect();
+            let sd = deployment::deploy_side(&specs, &zone, &objs, board, side["seed_value"].as_i64().unwrap());
+            // draw-phase integrity, pinned END-TO-END here: order, sections,
+            // fills, reserved, flag laws.
+            let want_order: Vec<&str> = side["placement_order"]
+                .as_array().unwrap().iter()
+                .map(|v| v.as_str().unwrap()).collect();
+            let got_order: Vec<&str> = sd.placements.iter().map(|p| p.key.as_str()).collect();
+            assert_eq!(got_order, want_order, "seed {seed} s{slot}: placement order");
+            assert_eq!(sd.fills.len(), side["fills"].as_array().unwrap().len(), "seed {seed} s{slot}: fills");
+            let want_reserved: Vec<&str> = side["reserved"]
+                .as_array().unwrap().iter()
+                .map(|v| v.as_str().unwrap()).collect();
+            let got_reserved: Vec<&str> = sd.reserved.iter().map(|k| k.as_str()).collect();
+            assert_eq!(got_reserved, want_reserved, "seed {seed} s{slot}: reserved");
+            let mut side_all_exact = true;
+            let mut diverged_earlier = false;
+            for p in &sd.placements {
+                let u = &side["units"][p.key.as_str()];
+                assert!(!u["scout"].as_bool().unwrap() && !u["vanguard_pushed"].as_bool().unwrap(),
+                    "corpus has no scouts/vanguards");
+                assert_eq!(p.section, u["section"].as_i64().unwrap(), "seed {seed} s{slot} {}: section", p.key);
+                assert_eq!(p.models.len(), u["n_models"].as_u64().unwrap() as usize,
+                    "seed {seed} s{slot} {}: model count", p.key);
+                n += 1;
+                let spot_r = (u["spot"][0].as_f64().unwrap(), u["spot"][1].as_f64().unwrap());
+                let dist = ((p.spot.0 - spot_r.0) * (p.spot.0 - spot_r.0)
+                    + (p.spot.1 - spot_r.1) * (p.spot.1 - spot_r.1)).sqrt();
+                if (dump_quant_gd(p.spot.0) - dump_quant_gd(spot_r.0)).abs() < 1e-9
+                    && (dump_quant_gd(p.spot.1) - dump_quant_gd(spot_r.1)).abs() < 1e-9
+                {
+                    exact += 1;
+                } else {
+                    if dist <= 0.025 + DUMP_QUANT { within += 1; } else { mismatch += 1; }
+                    side_all_exact = false;
+                    let class = if diverged_earlier {
+                        "cascade-from-earlier"
+                    } else {
+                        let sec = deployment::section_rect(&zone, u["section"].as_i64().unwrap());
+                        let s_t = deployment::nearest_objective_distance(p.spot, &objs, &sec);
+                        let s_r = deployment::nearest_objective_distance(spot_r, &objs, &sec);
+                        if s_t <= s_r { "permissive" } else { "strict" }
+                    };
+                    if diverged_earlier {
+                        first_div.push((seed, slot.to_string(), String::new(), class));
+                    } else {
+                        first_div.push((seed, slot.to_string(), u["name"].as_str().unwrap().to_string(), class));
+                        diverged_earlier = true;
+                    }
+                }
+                // models: the twin's PRE-settle grid vs the fixture's SETTLED nodes
+                models_total += 1;
+                let dump_models: Vec<(f64, f64)> = u["models"]
+                    .as_array().unwrap().iter()
+                    .map(|m| (m[0].as_f64().unwrap(), m[1].as_f64().unwrap()))
+                    .collect();
+                let all_exact = p.models.len() == dump_models.len()
+                    && p.models.iter().zip(&dump_models).all(|(t, m)| {
+                        (dump_quant_gd(t.0) - dump_quant_gd(m.0)).abs() < 1e-9
+                            && (dump_quant_gd(t.1) - dump_quant_gd(m.1)).abs() < 1e-9
+                    });
+                if all_exact {
+                    models_exact += 1;
+                } else {
+                    let worst = p.models.iter().zip(&dump_models)
+                        .map(|(t, m)| ((t.0 - m.0) * (t.0 - m.0) + (t.1 - m.1) * (t.1 - m.1)).sqrt())
+                        .fold(0.0f64, f64::max);
+                    models_worst.push((worst, seed, slot.to_string(), u["name"].as_str().unwrap().to_string()));
+                }
+            }
+            sides_total += 1;
+            if side_all_exact {
+                sides_exact += 1;
+            } else {
+                side_mismatch_count += 1;
+            }
+        }
+    }
+    models_worst.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let permissive = first_div.iter().filter(|c| c.3 == "permissive").count();
+    let strict = first_div.iter().filter(|c| c.3 == "strict").count();
+    let cascade = first_div.iter().filter(|c| c.3 == "cascade-from-earlier").count();
+    eprintln!(
+        "END-TO-END replay: units {n} — spots {exact} EXACT / {within} within / {mismatch} MISMATCH; \
+         sides {sides_exact}/{sides_total} all-exact ({side_mismatch_count} failing)"
+    );
+    eprintln!("models (pre-settle twin vs settled fixture): {models_exact}/{models_total} units exact; worst deviations:");
+    for w in models_worst.iter().take(5) {
+        eprintln!("  {:.4} m — seed {} s{} {}", w.0, w.1, w.2, w.3);
+    }
+    eprintln!(
+        "first-diverging units per failing side: {permissive} permissive / {strict} strict / \
+         {cascade} cascade-from-earlier"
+    );
+    for (seed, slot, name, class) in first_div.iter().filter(|c| c.3 != "cascade-from-earlier") {
+        eprintln!("  first-divergence: seed {seed} s{slot} {name} [{class}]");
+    }
+    assert_eq!(n, 1060, "the full 100-dump corpus");
+    assert_eq!(sides_total, 200, "both sides of every dump");
+    assert_eq!(models_total, 1060, "every unit's models compared");
+}

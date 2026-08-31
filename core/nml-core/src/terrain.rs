@@ -115,6 +115,15 @@ pub struct Terrain {
     /// before D5-2a, and the reason the charge-move seam warns instead of
     /// pretending the board has no ruins.
     walls_in: Vec<[[f32; 2]; 2]>,
+    /// NML-1152 step 6a — the same segments in WORLD METRES at the f32 Vector2
+    /// boundary (main.gd:2316 `get_wall_segments_world()`'s own shape): the
+    /// raw f64 product narrowed ONCE at load. `deployment` reads this for the
+    /// wall-bisect veto — re-deriving from `walls_in` would round-trip through
+    /// the corner-origin inch frame (two extra f32 quantizations + a
+    /// `board_in/2` offset) and no longer be the values the step-5b parity
+    /// replay verified. Filled together with `walls_in`; empty under the same
+    /// conditions.
+    walls_world: Vec<[[f32; 2]; 2]>,
     /// NML-1155 — the bank's optional prop layer: each SOLID deployment prop's
     /// XZ incircle disc as `[centre_x_m, centre_z_m, radius_m]`, world metres
     /// (the dump writes table-centred inches — the bank `pieces` frame — and
@@ -165,6 +174,13 @@ impl Terrain {
         &self.walls_in
     }
 
+    /// The board's wall segments in WORLD METRES, f32 at the Vector2 boundary
+    /// — the load-time narrowing of the raw values (step 6a, see the field doc).
+    #[inline]
+    pub fn walls_world_m(&self) -> &[[[f32; 2]; 2]] {
+        &self.walls_world
+    }
+
     /// `cell_params.inches_to_meters` — the metre-per-inch scale this board's
     /// inch frame was built with, so callers converting a METRE threshold into
     /// this frame (deployment wall clearance) use the board's own scale.
@@ -184,6 +200,15 @@ impl Terrain {
                 [
                     self.to_inch([w[0][0] as f32, 0.0, w[0][1] as f32]),
                     self.to_inch([w[1][0] as f32, 0.0, w[1][1] as f32]),
+                ]
+            })
+            .collect();
+        self.walls_world = raw
+            .iter()
+            .map(|w| {
+                [
+                    [w[0][0] as f32, w[0][1] as f32],
+                    [w[1][0] as f32, w[1][1] as f32],
                 ]
             })
             .collect();
@@ -354,6 +379,7 @@ impl Terrain {
             board_in: [width_in, height_in],
             in2m: cp.inches_to_meters,
             walls_in: Vec::new(),
+            walls_world: Vec::new(),
             blockers_m: Vec::new(),
             blocker_boxes_m: Vec::new(),
         };

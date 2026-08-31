@@ -758,13 +758,15 @@ pub fn vanguard_push(
 
 /// How the ladder landed: the spot, which rung produced it (0 = section scan,
 /// 1 = whole-zone fallback, 2 = crowded/occupied-cleared, 3 = least_blocked —
-/// the table's own `spot_why` ladder), and how many wall-bisect marks were
-/// appended (they persist in `occupied`, solo_controller.gd:9128).
+/// the table's own `spot_why` ladder), how many wall-bisect marks were
+/// appended (they persist in `occupied`, solo_controller.gd:9128), and whether
+/// the Vanguard push moved the unit (the dump's `vanguard_pushed`).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PlaceOutcome {
     pub spot: (f64, f64),
     pub rung: u8,
     pub bisect_marks: u8,
+    pub pushed: bool,
 }
 
 /// `SoloController._deploy_place_id` (solo_controller.gd:9086-9170) for the
@@ -793,7 +795,7 @@ pub fn deploy_place_id(
         |p: (f64, f64)| spot_blocked(board, p, flying, radius, footprint, base_r);
     let mut spot =
         best_spot(sec, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y);
-    let (mut rung, mut marks) = (0u8, 0u8);
+    let (mut rung, mut marks, mut pushed) = (0u8, 0u8, false);
     for _ in 0..4 {
         if spot.0.is_infinite() || !footprint_bisected(spot, footprint, base_r, walls) {
             break;
@@ -824,10 +826,11 @@ pub fn deploy_place_id(
         let v = vanguard_push(spot, zone, occupied, &blocked, radius, footprint, base_r, walls, VANGUARD_PLACE_M);
         if v != spot {
             spot = v;
+            pushed = true;
         }
     }
     occupied.push(Occupied { pos: spot, radius });
-    PlaceOutcome { spot, rung, bisect_marks: marks }
+    PlaceOutcome { spot, rung, bisect_marks: marks, pushed }
 }
 
 /// `AiDeployment._blocked_count` (ai_deployment.gd:151-165): blocked SAMPLE
@@ -899,4 +902,108 @@ pub fn least_blocked_spot(
         y += step;
     }
     best
+}
+
+// ---- the SIDE PIPELINE (NML-1152 step 6a). `deploy_begin` + the queue drain +
+// `_place_unit_at`, replayed end-to-end: one fresh GodotRng per side seeded
+// `seed_value` (solo_controller.gd:8944-8945) drawn IN ORDER — transport fill
+// (:8957-8976) → split_into_groups (:8986) → assign_sections (:8987) →
+// placement_order (:9038) — then each unit lands through the step-5 ladder and
+// drops its models on the FIXED 0.04 m place grid (:10329-10346). The OCCUPIED
+// set is the twin's OWN placements (:9044 `occupied: []`, appended per unit at
+// :9170) — no longer the recorded spots; this is what makes the replay
+// end-to-end. Two dispatched deferrals: the `deploy_finish` settle pass is step
+// 6b, so `models` here are the PRE-settle grid (the fixture's `models` are the
+// SETTLED node positions — the comparison classifies, it does not bit-assert);
+// the scouts' 12" forward band is step 6b too — until then a scout searches
+// its own section rect (the corpus carries 0 scouts either way). Latent gap,
+// corpus-inert: filled cargo must leave the deploying roster before groups
+// (:8981-8982) — the spec list is post-fill in production, all caps 0 here.
+
+/// `_place_unit_at`'s loose-formation branch (solo_controller.gd:10329-10346):
+/// the unit's `n` models on the FIXED compact grid — `cols = min(n, 5)` ranks
+/// of `DEPLOY_COLS`, model i at column `i % DEPLOY_COLS` / row
+/// `i / DEPLOY_COLS`, centred on the spot. GDScript scalars are doubles, the
+/// Vector3 ctor narrows once to f32 — the scalar expression runs f64 and
+/// narrows at the ctor. (The regiment-tray branch above it never occurs in the
+/// corpus — no regiments.)
+pub fn place_unit_models(spot: (f64, f64), n: usize) -> Vec<(f64, f64)> {
+    if n == 0 {
+        return Vec::new();
+    }
+    let cols = n.min(DEPLOY_COLS) as f64;
+    let rows = n.div_ceil(DEPLOY_COLS) as f64;
+    (0..n)
+        .map(|i| {
+            let (col, row) = ((i % DEPLOY_COLS) as f64, (i / DEPLOY_COLS) as f64);
+            (
+                ((spot.0 as f32 as f64) + (col - (cols - 1.0) * 0.5) * DEPLOY_SPACING_M) as f32 as f64,
+                ((spot.1 as f32 as f64) + (row - (rows - 1.0) * 0.5) * DEPLOY_SPACING_M) as f32 as f64,
+            )
+        })
+        .collect()
+}
+
+/// One side's whole pregame (design §3.2): `deploy_begin`'s draw phases on a
+/// FRESH stream, then the queue drain — normals first, scouts last, ambush
+/// reserved — through the table's placement ladder, occupied growing from the
+/// twin's OWN placements. Walls for the bisect veto ride the board's own
+/// load-time world-metre store (`Terrain::walls_world_m` — re-deriving from
+/// the inch frame would quantize twice and shift by the frame offset).
+pub fn deploy_side(
+    specs: &[UnitSpec],
+    zone: &Rect,
+    objectives: &[(f64, f64)],
+    board: &Terrain,
+    seed_value: i64,
+) -> SideDeploy {
+    let mut rng = GodotRng::new(seed_value);
+    let caps: Vec<i64> = specs.iter().map(|s| s.transport_capacity).collect();
+    let fills = transport_fill(&caps, &mut rng);
+    let mut out = SideDeploy {
+        seed_value,
+        fills: fills
+            .iter()
+            .map(|&(t, c)| (specs[t].key.clone(), specs[c].key.clone()))
+            .collect(),
+        placements: Vec::new(),
+        reserved: Vec::new(),
+    };
+    if specs.is_empty() {
+        return out; // deploy_begin's empty-roster early return (:8984)
+    }
+    let groups = split_into_groups(specs.len(), &mut rng);
+    let sections = assign_sections(groups.len(), &mut rng);
+    let mut section_of = vec![0i64; specs.len()];
+    for (g, members) in groups.iter().enumerate() {
+        for &i in members {
+            section_of[i] = sections[g];
+        }
+    }
+    out.reserved = specs.iter().filter(|s| s.ambush).map(|s| s.key.clone()).collect();
+    let end = zone.end();
+    let forward_y = if zone.pos.1.abs() < end.1.abs() { zone.pos.1 } else { end.1 };
+    let walls = board.walls_world_m();
+    let mut occupied: Vec<Occupied> = Vec::new();
+    // placement_order's sequence IS the drain order: the main queue fully,
+    // then the scout queue (:9036-9042 builds them in this order, :9195-9198
+    // drains main-then-scout).
+    for &i in placement_order(specs, &mut rng).iter() {
+        let s = &specs[i];
+        let radius = deploy_footprint_radius(s.model_count.max(0) as usize, s.base_r_m);
+        let sec = section_rect(zone, section_of[i]);
+        let o = deploy_place_id(
+            zone, &sec, forward_y, objectives, &mut occupied, board, walls,
+            radius, &s.footprint, s.base_r_m, s.ignores_terrain, s.vanguard,
+        );
+        out.placements.push(Placement {
+            key: s.key.clone(),
+            section: section_of[i],
+            scout: s.scout,
+            spot: o.spot,
+            vanguard_pushed: o.pushed,
+            models: place_unit_models(o.spot, s.model_count.max(0) as usize),
+        });
+    }
+    out
 }
