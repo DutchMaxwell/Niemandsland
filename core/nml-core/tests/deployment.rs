@@ -129,6 +129,76 @@ fn draw_phases_replay_every_table_dump_bit_exact() {
     assert_eq!(total_checked, 1060, "pinned section comparisons across the corpus");
 }
 
+/// NML-1152 step 3b — placement_order (ai_deployment.gd:54-67, called at
+/// solo_controller.gd:9038) against the table's own dumps. The dumps record the
+/// FINAL placement records in arrival order (main queue drained fully, then the
+/// scout queue — solo_controller.gd:9036-9042, :9071-9083, :9195-9198), which IS
+/// the table's deploy sequence. Replays the full prologue (fill → groups →
+/// sections) on the fresh per-side stream, then placement_order on the SAME rng,
+/// and requires the index→key sequence to match bit-exact per side.
+/// Caveat (corpus can't pin it): an EMPTY side would early-return before any
+/// draw in deploy_begin (solo_controller.gd:8984-8985) — no such side exists in
+/// the corpus; do not "fix" the replay for it.
+#[test]
+fn placement_order_replays_every_table_dump_bit_exact() {
+    let dumps: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+        "fixtures/pregame_draw_phases.json"
+    ))
+    .expect("fixture parses");
+    assert!(dumps.len() >= 20, "need the 100-dump corpus, got {}", dumps.len());
+    let mut sides_checked = 0usize;
+    for d in &dumps {
+        for slot in ["1", "2"] {
+            let sd = &d["sides"][slot];
+            let rows = sd["units"].as_array().unwrap();
+            let specs: Vec<UnitSpec> = rows
+                .iter()
+                .map(|r| UnitSpec {
+                    key: r[0].as_str().unwrap().to_string(),
+                    scout: r[1].as_bool().unwrap(),
+                    ambush: r[2].as_bool().unwrap(),
+                    transport_capacity: 0,
+                    ..Default::default()
+                })
+                .collect();
+            let caps: Vec<i64> = specs.iter().map(|s| s.transport_capacity).collect();
+
+            let mut rng = GodotRng::new(sd["seed_value"].as_i64().unwrap());
+            let _ = deployment::transport_fill(&caps, &mut rng);
+            let _ = deployment::split_into_groups(specs.len(), &mut rng);
+            let _ = deployment::assign_sections(3, &mut rng);
+            let order = deployment::placement_order(&specs, &mut rng);
+            let got: Vec<&str> = order.iter().map(|&i| specs[i].key.as_str()).collect();
+            let want: Vec<&str> = sd["placement_order"]
+                .as_array().unwrap().iter()
+                .map(|v| v.as_str().unwrap()).collect();
+            assert_eq!(got, want, "seed {} side {}: placement order", d["seed"], slot);
+            sides_checked += 1;
+        }
+    }
+    assert_eq!(sides_checked, 200, "pinned sides across the corpus");
+}
+
+/// The scout/ambush law where the corpus cannot (0 scout units in the lists):
+/// same seed and input as the table's own GDScript test
+/// (test/ai_deployment_test.gd:48-65) — ambush excluded, the two scouts occupy
+/// the LAST two slots in either order.
+#[test]
+fn placement_order_scouts_last_ambush_excluded() {
+    let specs = vec![
+        UnitSpec { key: "a".into(), ..Default::default() },
+        UnitSpec { key: "s1".into(), scout: true, ..Default::default() },
+        UnitSpec { key: "b".into(), ..Default::default() },
+        UnitSpec { key: "amb".into(), ambush: true, ..Default::default() },
+        UnitSpec { key: "s2".into(), scout: true, ..Default::default() },
+    ];
+    let order = deployment::placement_order(&specs, &mut GodotRng::new(3));
+    assert_eq!(order.len(), 4, "ambush excluded (reserve)");
+    assert!(order.iter().all(|&i| specs[i].key != "amb"));
+    let tail: Vec<&str> = order[2..].iter().map(|&i| specs[i].key.as_str()).collect();
+    assert!(tail.contains(&"s1") && tail.contains(&"s2"), "scouts last: {tail:?}");
+}
+
 /// The transport fill's draw law, pinned where the corpus cannot (no transports
 /// in the lists): one `randi_range(0, len-1)` draw per pop and the final pop
 /// (a single candidate left) draws NOTHING — the engine's equal-bounds fast

@@ -123,6 +123,30 @@ pub fn assign_sections(group_count: usize, rng: &mut GodotRng) -> Vec<i64> {
     }
 }
 
+/// `AiDeployment.placement_order` (ai_deployment.gd:54-67, called at
+/// solo_controller.gd:9038): units deploy one at a time in RANDOM order —
+/// normals shuffled, scouts shuffled after them, scouts deploy LAST, ambush
+/// units excluded entirely (reserve, arrive round 2). Draw order: n_normal−1
+/// Fisher-Yates draws, then n_scout−1. Returns spec indices in deploy order.
+pub fn placement_order(specs: &[UnitSpec], rng: &mut GodotRng) -> Vec<usize> {
+    let mut normal: Vec<usize> = Vec::new();
+    let mut scouts: Vec<usize> = Vec::new();
+    for (i, s) in specs.iter().enumerate() {
+        if s.ambush {
+            continue;
+        }
+        if s.scout {
+            scouts.push(i);
+        } else {
+            normal.push(i);
+        }
+    }
+    shuffle(&mut normal, rng);
+    shuffle(&mut scouts, rng);
+    normal.extend(scouts);
+    normal
+}
+
 /// `deploy_begin`'s transport fill (solo_controller.gd:8957-8976). The caller
 /// passes capacities of alive, unattached, not-already-embarked units in
 /// game-unit list order. Each transport (capacity > 0, list order) loads random
