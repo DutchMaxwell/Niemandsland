@@ -1246,6 +1246,10 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
             let got_order: Vec<&str> = sd.placements.iter().map(|p| p.key.as_str()).collect();
             assert_eq!(got_order, want_order, "seed {seed} s{slot}: placement order");
             assert_eq!(sd.fills.len(), side["fills"].as_array().unwrap().len(), "seed {seed} s{slot}: fills");
+            // step 6e guard: a transport fill would re-key the tray snapshot's
+            // roster ids between snapshot and dump — prove the corpus keeps it
+            // absent so the tray-row keys stay aligned
+            assert!(side["fills"].as_array().unwrap().is_empty(), "seed {seed} s{slot}: fills must stay corpus-absent");
             let want_reserved: Vec<&str> = side["reserved"]
                 .as_array().unwrap().iter()
                 .map(|v| v.as_str().unwrap()).collect();
@@ -1254,31 +1258,112 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
         };
         assert_draws("1", &sd1);
         assert_draws("2", &sd2);
-        // --- the FINISHES, in the table's per-side order (step 6d) ---
+        // --- the FINISHES, in the table's per-side order (step 6d + 6e trays) ---
         let walls = board.walls_world_m();
-        let finish_side = |sd: &mut deployment::SideDeploy, specs: &[UnitSpec], zone: &deployment::Rect| {
+        // step 6e — the PRE-GAME side-tray rows, INPUT (pregame_dump.gd
+        // `tray_models`): the table's `_deploy_spot_free` (:9350-9367) sees the
+        // tray-standing models of BOTH armies through both finishes, so the
+        // twin's snapshot consults them during replay — a unit's row is live
+        // until its replay placement. The rows must be RESOLVE-inert state
+        // (no base overlap, off forbidden rest — the resolve moves a unit only
+        // on overlap) — asserted below per side. NOT asserted: the 1"-link /
+        // 9"-chain coherency of tray rows — it does NOT hold (measured: seed
+        // 25 s1 Hive Swarms, mixed 40/25 mm base spacing breaks edge
+        // adjacency), i.e. the table's finish repair CAN re-place tray models
+        // (UNSURE-(b) scope: erased for units that later deploy, persistent
+        // only for ambush rows — the snapshot stays the pre-repair state).
+        let tray_rows = |slot: &str, placed: &std::collections::HashSet<String>| -> Vec<([f32; 2], f64)> {
+            d["sides"][slot]["tray_models"]
+                .as_array().unwrap().iter()
+                .flat_map(|r| {
+                    r["models"].as_array().unwrap().iter()
+                        .map(|m| {
+                            ([m[0].as_f64().unwrap() as f32, m[1].as_f64().unwrap() as f32],
+                                m[2].as_f64().unwrap())
+                        })
+                })
+                .collect()
+        };
+        let placed_keys = |slot: &str| -> std::collections::HashSet<String> {
+            d["sides"][slot]["units"].as_object().unwrap().keys().cloned().collect()
+        };
+        for slot in ["1", "2"] {
+            let flat: Vec<([f32; 2], f64)> = tray_rows(slot, &std::collections::HashSet::new());
+            // the unit's base_r_m upper-bounds every model's radius (the hero
+            // fold dominates — step 6c), so this circle law is conservative
+            let placed_models: Vec<([f32; 2], f64)> = d["sides"][slot]["units"]
+                .as_object().unwrap().values()
+                .flat_map(|v| {
+                    let r_u = v["base_r_m"].as_f64().unwrap();
+                    v["models"].as_array().unwrap().iter()
+                        .map(move |m| {
+                            ([m[0].as_f64().unwrap() as f32, m[1].as_f64().unwrap() as f32], r_u)
+                        })
+                })
+                .collect();
+            for (pi, (p, r_p)) in flat.iter().enumerate() {
+                assert!(
+                    !deployment::world_forbidden(board, walls, (p[0] as f64, p[1] as f64), *r_p),
+                    "seed {seed} s{slot}: tray model {pi} on forbidden rest"
+                );
+                // the resolve moves a unit only past a 0.01" OVERLAP edge gap
+                // (RESOLVE_EPSILON_IN) on REAL base shapes; this assert runs on
+                // bounding CIRCLES, which overstate oval overlaps by up to the
+                // base's long/short half-axis difference (measured worst
+                // -0.0089 m: the Artillery Great Beast's 0.0967 bounding circle
+                // swallows a row neighbour the real oval clears) — the guard is
+                // a coarse pile-up check at -5 cm, not a shape law
+                for (qi, (q, r_q)) in flat.iter().enumerate().skip(pi + 1) {
+                    let (dx, dy) = ((p[0] - q[0]) as f64, (p[1] - q[1]) as f64);
+                    let gap = (dx * dx + dy * dy).sqrt() - r_p - r_q;
+                    assert!(
+                        gap >= -0.05,
+                        "seed {seed} s{slot}: tray bases overlap ({pi},{qi}) gap {gap:.5}"
+                    );
+                }
+                for (qm, r_m) in &placed_models {
+                    let (dx, dy) = ((p[0] - qm[0]) as f64, (p[1] - qm[1]) as f64);
+                    let gap = (dx * dx + dy * dy).sqrt() - r_p - r_m;
+                    assert!(
+                        gap >= -0.05,
+                        "seed {seed} s{slot}: tray model {pi} overlaps a placed base gap {gap:.5}"
+                    );
+                }
+            }
+        }
+        let finish_side = |sd: &mut deployment::SideDeploy, specs: &[UnitSpec], zone: &deployment::Rect,
+                           tray: &[([f32; 2], f64)]| {
             let st = deployment::settle_units(specs, sd, zone);
             let mut units: Vec<deployment::SettleUnit> = st.iter().map(|p| p.1.clone()).collect();
-            deployment::deploy_finish_all(&mut units, board, walls);
+            deployment::deploy_finish_all(&mut units, board, walls, tray);
             for (i, (pi, _)) in st.iter().enumerate() {
                 sd.placements[*pi].models = units[i].models.iter().map(|m| (m[0] as f64, m[1] as f64)).collect();
             }
         };
-        // FIRST finish: the first deployer's units alone (the other army's
-        // tray sweep is erased by its later placement)
+        // FIRST finish: the first deployer's units alone; its spot-free gate
+        // sees the deployer's own tray remainders PLUS the whole second army
+        // on its side tray (nothing of that side is placed yet)
+        let (dep_slot, oth_slot) = if first_deployer[&seed] == 1 { ("1", "2") } else { ("2", "1") };
+        let tray_first: Vec<([f32; 2], f64)> = tray_rows(dep_slot, &placed_keys(dep_slot)).into_iter()
+            .chain(tray_rows(oth_slot, &std::collections::HashSet::new())).collect();
         if first_deployer[&seed] == 1 {
-            finish_side(&mut sd1, &specs1, &zone1);
+            finish_side(&mut sd1, &specs1, &zone1, &tray_first);
         } else {
-            finish_side(&mut sd2, &specs2, &zone2);
+            finish_side(&mut sd2, &specs2, &zone2, &tray_first);
         }
         // SECOND finish: BOTH rosters, get_all_game_units order (slot-1 roster
-        // then slot-2) — the cross-slot re-sweep of the first side's units.
+        // then slot-2) — the cross-slot re-sweep of the first side's units;
+        // both sides' tray remainders (the ambush/undeployed rows) are live
+        let p1 = placed_keys("1");
+        let p2 = placed_keys("2");
+        let tray_second: Vec<([f32; 2], f64)> = tray_rows("1", &p1).into_iter()
+            .chain(tray_rows("2", &p2)).collect();
         let st1 = deployment::settle_units(&specs1, &sd1, &zone1);
         let st2 = deployment::settle_units(&specs2, &sd2, &zone2);
         let mut all: Vec<deployment::SettleUnit> = st1.iter().map(|p| p.1.clone()).collect();
         let n1 = all.len();
         all.extend(st2.iter().map(|p| p.1.clone()));
-        deployment::deploy_finish_all(&mut all, board, walls);
+        deployment::deploy_finish_all(&mut all, board, walls, &tray_second);
         for (i, (pi, _)) in st1.iter().enumerate() {
             sd1.placements[*pi].models = all[i].models.iter().map(|m| (m[0] as f64, m[1] as f64)).collect();
         }

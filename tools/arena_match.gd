@@ -493,6 +493,9 @@ func _run() -> void:
 	for o in objectives:
 		objectives_v2.append(Vector2((o as Vector3).x, (o as Vector3).z))
 	var deploy_order: Array = [1, 2] if deploy_first == 1 else [2, 1]
+	# NML-1152 step 6e — the PRE-GAME tray layout (dump=pregame INPUT): captured while both
+	# armies still stand on their side trays, BEFORE any placement moves models off them.
+	var tray_snap := PregameDump.tray_snapshot(army_manager, solo) if not _dump_dir.is_empty() else {}
 	var _prof_dep_t0 := BattleSim.prof_t0()   # NML-1072: physics-probe deployment, both sides
 	for slot in deploy_order:
 		_deploy_side(main, solo, table, terrain_overlay, int(slot), objectives_v2, _seed + int(slot),
@@ -508,7 +511,7 @@ func _run() -> void:
 	# before seed(_dice_seed).
 	if not _dump_dir.is_empty():
 		PregameDump.write(_dump_dir, _army1, _army2, _seed, _dice_seed, _layout_seed, _symmetric,
-			opener, deploy_order, _knob_records, _pregame_records, _pregame_probe_hits,
+			opener, deploy_order, _knob_records, _pregame_records, _pregame_probe_hits, tray_snap,
 			army_manager, solo)
 		quit(0)
 		return

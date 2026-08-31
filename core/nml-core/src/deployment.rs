@@ -1044,12 +1044,14 @@ pub fn deploy_side(
     // The FINISH (deploy_finish, solo_controller.gd:9180-9188) is NOT run
     // here — step 6d split placement from the finish so the caller drives the
     // table's per-side finish order: the first finish sweeps the first
-    // deployer's units (the other army stands on its side tray and IS swept —
-    // its nodes are live — but that sweep is ERASED by the side's later
-    // placement, `_place_unit_at` rewrites every model), the second finish
-    // re-sweeps BOTH rosters (the repair and the resolve CROSS SLOTS,
-    // :9228-9232). `settle_units` rebuilds the live state,
-    // `deploy_finish_all` runs one finish pass.
+    // deployer's units (the other army stands on its side tray with live
+    // nodes — the sweeps walk it too, but tray rows are provably
+    // overlap-free, link-coherent within the 9" chain and off forbidden
+    // terrain, so every sweep is zero-delta there; units that later place are
+    // additionally erased by `_place_unit_at`), the second finish re-sweeps
+    // BOTH rosters (the repair and the resolve CROSS SLOTS, :9228-9232).
+    // `settle_units` rebuilds the live state, `deploy_finish_all` runs one
+    // finish pass.
     out
 }
 
@@ -1388,8 +1390,10 @@ fn escape_to_clear(item: &mut [SettleShape], obstacles: &[SettleShape]) -> [f32;
 /// (ii) wall segments at `radius + WALL_REST_CLEARANCE_M` (0.002 m,
 /// solo_controller.gd:6775) — `MovementPlanner.point_seg_distance` called with
 /// world-metre walls, so the metre EPS applies (the planner helper is
-/// frame-free; `point_seg_distance_in` with in2m = 1 reproduces it).
-fn world_forbidden(board: &Terrain, walls: &[WallSeg], p: (f64, f64), r: f64) -> bool {
+/// frame-free; `point_seg_distance_in` with in2m = 1 reproduces it). Pub for
+/// the step-6e test's tray-inertness assert (tray rows must sit off forbidden
+/// rest — the finish sweeps walk tray units too).
+pub fn world_forbidden(board: &Terrain, walls: &[WallSeg], p: (f64, f64), r: f64) -> bool {
     let on_container = |q: [f32; 2]| board.type_at([q[0], 0.0, q[1]]) == CONTAINER;
     if on_container([p.0 as f32, p.1 as f32]) {
         return true;
@@ -1669,10 +1673,25 @@ pub fn settle_units(specs: &[UnitSpec], sd: &SideDeploy, zone: &Rect) -> Vec<(us
 /// another resolve (:9184-9188). The repair's RETURN is `forced_any` — set
 /// ONLY by FORCED (overlap-allowed) re-placements (:9265-9266, :9295-9296),
 /// not by free ones — so a free-only repair still ends the loop.
-pub fn deploy_finish_all(units: &mut [SettleUnit], board: &Terrain, walls: &[WallSeg]) {
+///
+/// Step 6e: `tray` is the PRE-GAME side-tray layout (pregame_dump.gd
+/// `tray_models` — INPUT, not an answer): every model of BOTH armies still
+/// standing on its side tray at THIS finish's moment (centre f32 + bounding
+/// radius f64, both at the dump's 1e-4 snap — the same accepted dump frame as
+/// spots/models). The table's `_deploy_spot_free` (:9350-9367) reads those
+/// live node XZ through BOTH finishes: the first finish sees the whole second
+/// army on its tray, the second sees the ambush/undeployed remainders. The
+/// twin's own self-play has no trays — callers pass `&[]` (the default-empty
+/// guard: an empty chain yields the 6d snapshot byte-identically).
+pub fn deploy_finish_all(
+    units: &mut [SettleUnit],
+    board: &Terrain,
+    walls: &[WallSeg],
+    tray: &[([f32; 2], f64)],
+) {
     resolve_deploy_overlaps(units, board, walls);
     for _round in 0..2 {
-        if repair_deploy_coherency(units, board, walls) {
+        if repair_deploy_coherency(units, board, walls, tray) {
             resolve_deploy_overlaps(units, board, walls);
         } else {
             break;
@@ -1714,11 +1733,16 @@ fn anchor_of(pts: &[[f32; 2]]) -> [f32; 2] {
 /// `_deploy_spot_free` (:9350-9367): NO on-table base (any unit, any side —
 /// both slots' units incl. attached heroes) overlaps a base of radius `r` at
 /// `cand`. `all` is the LIVE flat snapshot of every model (centre, bounding
-/// radius); ONLY the moving model itself is excluded (`mi == moving`, :9362)
-/// — the straggler's own unit's other models DO block. The Vector2 gap
-/// length is f32, the radii sum f64 (`model_base_radius_m` = the shape's
-/// bounding radius), narrowed at the comparison (:9364-9365); the 0.002 m is
-/// the wall-rest clearance constant reused inline (:9365, :6775).
+/// radius) — and, step 6e, the SIDE-TRAY models: the table's walk reads every
+/// alive model's node XZ (:9360-9364), and models still standing on the army
+/// trays (|x| >= 1.0244 m on the 6'x4' arena — opr_army_manager.gd:1182-1212
+/// + the row packer) veto ring candidates near the lateral zone edges exactly
+/// like placed ones. ONLY the moving model itself is excluded
+/// (`mi == moving`, :9362) — the straggler's own unit's other models DO
+/// block. The Vector2 gap length is f32, the radii sum f64
+/// (`model_base_radius_m` = the shape's bounding radius), narrowed at the
+/// comparison (:9364-9365); the 0.002 m is the wall-rest clearance constant
+/// reused inline (:9365, :6775).
 fn deploy_spot_free(cand: (f32, f32), r: f64, moving: usize, all: &[([f32; 2], f64)]) -> bool {
     for (k, (pos, r_m)) in all.iter().enumerate() {
         if k == moving {
@@ -1879,11 +1903,15 @@ fn config_coherent(shapes: &[SettleShape], max_chain_in: f64) -> bool {
 /// straggler position and the SPREAD anchor all read it (:9251, :9276-9290),
 /// while the spot-free check sees LIVE positions (the node is written
 /// immediately, :9270 — earlier same-pass moves block at their NEW spots).
-/// `all` is rebuilt per straggler (live). The return is `forced_any`.
+/// `all` is rebuilt per straggler (live). The return is `forced_any`. The
+/// step-6e `tray` rows ride the END of every `all` build — the moving index
+/// (`prefix + i`) indexes only the units' models, so a tray row can never be
+/// the excluded mover; the spot-free OR is order-free.
 pub fn repair_deploy_coherency(
     units: &mut [SettleUnit],
     board: &Terrain,
     walls: &[WallSeg],
+    tray: &[([f32; 2], f64)],
 ) -> bool {
     let mut forced_any = false;
     for ui in 0..units.len() {
@@ -1922,6 +1950,7 @@ pub fn repair_deploy_coherency(
                             .zip(&u.geoms)
                             .map(move |(m, g)| (*m, g.bounding_radius()))
                     })
+                    .chain(tray.iter().copied())
                     .collect();
                 let moving = prefix + i;
                 let mut spot = deploy_ring_spot(
@@ -1972,6 +2001,7 @@ pub fn repair_deploy_coherency(
                                 .zip(&u.geoms)
                                 .map(move |(m, g)| (*m, g.bounding_radius()))
                         })
+                        .chain(tray.iter().copied())
                         .collect();
                     if let Some(s2) = deploy_ring_spot(
                         &units[ui].geoms, &pts, &[near_j], far_i, board, walls, flying, &all,

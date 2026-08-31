@@ -26,7 +26,7 @@ const RESULT_SCHEMA := 1   # shared with arena_match.gd's result schema constant
 
 static func write(out_dir: String, army1: String, army2: String, seed_v: int, dice_seed: int,
 		layout_seed: int, symmetric: bool, opener: int, deploy_order: Array,
-		knob_records: Array, records: Array, probe_hits: Dictionary,
+		knob_records: Array, records: Array, probe_hits: Dictionary, tray: Dictionary,
 		army_manager: Node, solo: Node) -> void:
 	var attempts: Array = []
 	for r in knob_records:
@@ -98,7 +98,10 @@ static func write(out_dir: String, army1: String, army2: String, seed_v: int, di
 		sides[str(slot)] = {"seed_value": seed_v + int(slot),
 			"probe_hits": int(probe_hits.get(slot, 0)),
 			"fills": fills.get(slot, []), "reserved": reserved,
-			"placement_order": order.get(slot, []), "units": units}
+			"placement_order": order.get(slot, []),
+			# NML-1152 step 6e — the PRE-GAME tray layout, INPUT (not an answer)
+			"tray_models": tray.get(slot, []),
+			"units": units}
 	var gh: Array = []
 	OS.execute("git", ["rev-parse", "HEAD"], gh)
 	var dump := {"schema": RESULT_SCHEMA, "tool": "pregame_dump", "seed": seed_v,
@@ -117,6 +120,36 @@ static func write(out_dir: String, army1: String, army2: String, seed_v: int, di
 	f.close()
 	printerr("[ARENA] pregame dump: %s" % path)
 	print("PREGAME_DUMP %d %s OK" % [seed_v, tag])
+
+
+## NML-1152 step 6e — the PRE-GAME tray layout, captured BEFORE the first _deploy_side while both
+## armies still stand on their side trays (opr_army_manager.gd:1182-1212 + the row packer). This is
+## the geometry the table's _deploy_spot_free (solo_controller.gd:9350-9367) sees through BOTH
+## finish repairs — every alive model's XZ (the dump's 1e-4 frame, same as unit spots) plus its
+## model_base_radius_m bounding radius (:5202-5207). INPUT, not an answer; the twin drops a unit's
+## row once its replay places that unit. Roster ids follow the write() walk (same filter, same
+## order); a transport fill between snapshot and dump re-keys cargo ids — corpus-absent (0 fills).
+static func tray_snapshot(army_manager: Node, solo: Node) -> Dictionary:
+	var out := {}
+	for slot in [1, 2]:
+		var rows: Array = []
+		var idx := 0
+		for u in army_manager.get_game_units_for_player(slot):
+			var gu := u as GameUnit
+			if gu == null or int(gu.get_alive_count()) <= 0 or gu.is_attached() \
+					or army_manager.transport_of(gu) != null:
+				continue
+			var pos: Array = []
+			for m in solo._deploy_models(gu):
+				var node: Node3D = (m as ModelInstance).node
+				if node != null and is_instance_valid(node):
+					pos.append([snappedf(node.global_position.x, 0.0001),
+						snappedf(node.global_position.z, 0.0001),
+						snappedf(SoloController.model_base_radius_m(m as ModelInstance), 0.0001)])
+			rows.append({"key": str(idx), "name": gu.get_name(), "models": pos})
+			idx += 1
+		out[slot] = rows
+	return out
 
 
 ## Vector2 offsets → JSON [[x, z], ...] at dump precision.
