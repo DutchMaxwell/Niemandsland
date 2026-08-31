@@ -10,6 +10,7 @@ pub mod arbitration;
 pub mod combat;
 pub mod deployment;
 pub mod dice;
+pub mod doctrine;
 pub mod gate;
 pub mod fitted;
 pub mod geom;
