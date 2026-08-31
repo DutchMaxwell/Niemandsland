@@ -70,8 +70,10 @@ bank raises rather than inventing a board.
 """
 
 from __future__ import annotations
+import argparse
 
 import hashlib
+
 import json
 import os
 import re
@@ -1208,6 +1210,7 @@ def play_game(
     objectives: str = "constant",
     net: str | Path | None = None,
     net_player: int = 0,
+    fit_blend: float = 0.5,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -1315,7 +1318,7 @@ def play_game(
     # activation of this game. The loader GATE is the GDScript's own selftest,
     # so a drifted net RAISES here instead of quietly playing.
     if net is not None:
-        core.load_net(str(net))
+        core.load_net(str(net), blend=fit_blend)
     eff_top_k = resolve_top_k(top_k)
     eff_horizon = resolve_horizon(horizon)
     eff_charge_gate = resolve_charge_gate(charge_gate)
@@ -1482,6 +1485,9 @@ def play_game(
             # written before this knob existed, and the default still.
             "net": str(net) if net is not None else "",
             "net_player": net_player,
+            # NML-1158a: the fitted share this game's leaf scores blended with
+            # (NML-1147a pattern). 0.5 is `FIT_BLEND_DEFAULT` fitted.rs:35.
+            "fit_blend": fit_blend,
         },
         # D1-B4 telemetry, empty under `dice="expected"`: how many shooting
         # activations drew from the tray, how many rolls that was, and how many
@@ -1559,6 +1565,19 @@ def result_digest(result: dict) -> str:
     body = {k: v for k, v in result.items() if k not in DIGEST_EXCLUDED_FIELDS}
     canonical = json.dumps(body, sort_keys=True, ensure_ascii=True, allow_nan=True)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def fit_blend_arg(text: str) -> float:
+    """`--fit-blend`'s argparse type (NML-1158 arm a): parse and pin to 0..1 —
+    a junk value must fail the ARGUMENT with a clean error, not silently
+    reshape the E4.2 blend (`AiMissionEval.fit_blend` clamps; the trainer
+    refuses instead, so a typo cannot impersonate a measurement)."""
+    v = float(text)
+    if not (0.0 <= v <= 1.0):
+        raise argparse.ArgumentTypeError(
+            "--fit-blend must be within 0..1, got %r" % (text,)
+        )
+    return v
 
 
 def main(argv: list[str]) -> int:
@@ -1656,6 +1675,14 @@ def main(argv: list[str]) -> int:
         "for every activation. Empty (default) plays the hand eval",
     )
     ap.add_argument(
+        "--fit-blend",
+        type=fit_blend_arg,
+        default=0.5,
+        help="NML-1158 arm (a) — the fitted share in the E4.2 blend "
+        "(1 - fb) * hand + fb * fit. 0.5 default = the table's blend; "
+        "1.0 = pure net, 0.0 = pure hand. Stamped into knobs",
+    )
+    ap.add_argument(
         "--net-player",
         type=int,
         default=0,
@@ -1690,6 +1717,7 @@ def main(argv: list[str]) -> int:
             sighting=a.sighting,
             net=a.net or None,
             net_player=a.net_player,
+            fit_blend=a.fit_blend,
         )
         res["wall_seconds"] = round(time.perf_counter() - t0, 3)
         if a.out:

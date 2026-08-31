@@ -114,6 +114,9 @@ FIDELITY_DEFAULTS = {
     "objectives": "constant",
     "engage_fold": True,
     "cond_ap": None,
+    # NML-1158 arm (a): the fitted share in the E4.2 blend. 0.5 is the table's
+    # own `FIT_BLEND_DEFAULT` (fitted.rs), so "pass nothing" stays identical.
+    "fit_blend": 0.5,
 }
 
 
@@ -294,6 +297,14 @@ def main(argv: list[str]) -> int:
         "the run then plays the FITTED eval (`AiMissionEval.fit_mode`); empty "
         "(the default) is the hand eval and every corpus written before it",
     )
+    ap.add_argument(
+        "--fit-blend",
+        type=sp.fit_blend_arg,
+        default=FIDELITY_DEFAULTS["fit_blend"],
+        help="NML-1158 arm (a) -- the fitted share in the E4.2 blend the armed "
+        "net scores with; 0.5 default = the table's blend. Rides `fidelity`, "
+        "so .RUN.json records it",
+    )
     ap.add_argument("--cond-ap", choices=["auto", "on", "off"], default="auto",
                     help="conditional AP (NML-1103); 'auto' leaves the process global alone")
     ap.add_argument(
@@ -319,6 +330,9 @@ def main(argv: list[str]) -> int:
         # and what every corpus written before this knob carries. It rides
         # `fidelity` like the rest, so `.RUN.json` records the brain too.
         "net": a.net or None,
+        # NML-1158 arm (a): the fitted share that eval blends with. Rides
+        # `fidelity` into `play_game(fit_blend=)` and the `.RUN.json` stamp.
+        "fit_blend": a.fit_blend,
     }
 
     sizes = [int(x) for x in a.sizes.split(",")]
