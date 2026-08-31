@@ -447,3 +447,214 @@ pub fn deploy_footprint_offsets(model_count: usize, base_r: f64, skirmish: bool)
         })
         .collect()
 }
+
+// ---- the SPOT SEARCH (NML-1152 step 5). `SoloController._deploy_place_id`
+// (solo_controller.gd:9086-9170) minus the scout band (slice 6) and the M2b
+// zone-test composite (the arena harness passes NO zone test,
+// tools/arena_match.gd:989 — default invalid Callable): the objective-near
+// scan (ai_deployment.gd:97-115), the fallback ladder (:9131-9145) and
+// least_blocked_spot (ai_deployment.gd:125-165). Draw-free; f32 at every
+// Godot Vector2/Rect2 boundary (real_t), f64 arithmetic between them —
+// exactly GDScript's floats (its scalar `float` is a double).
+
+/// `best_spot`'s scan step at the call site (solo_controller.gd:9121).
+pub const DEPLOY_SPOT_STEP_M: f64 = 0.025;
+/// `least_blocked_spot`'s coarser step (solo_controller.gd:9144).
+pub const LEAST_BLOCKED_STEP_M: f64 = 0.05;
+/// `AiDeployment.FORWARD_EDGE_W` (ai_deployment.gd:94): A/B-REJECTED at any
+/// other weight, 0 keeps the plumbing.
+const FORWARD_EDGE_W: f64 = 0.0;
+/// The scan boundary slop (ai_deployment.gd:102/:104/:132/:134 literal 0.0001).
+const SCAN_EPS: f64 = 0.0001;
+
+/// Godot `Rect2` at the real_t boundary: construction and `end`/`get_center`
+/// narrow to f32; the scan arithmetic between boundaries runs f64.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rect {
+    pub pos: (f64, f64),
+    pub size: (f64, f64),
+}
+
+impl Rect {
+    pub fn new(x: f64, y: f64, w: f64, h: f64) -> Rect {
+        Rect {
+            pos: (x as f32 as f64, y as f32 as f64),
+            size: (w as f32 as f64, h as f32 as f64),
+        }
+    }
+    /// `Rect2.end` — position + size (Vector2 add, f32).
+    pub fn end(&self) -> (f64, f64) {
+        (
+            (self.pos.0 as f32 + self.size.0 as f32) as f64,
+            (self.pos.1 as f32 + self.size.1 as f32) as f64,
+        )
+    }
+    /// `Rect2.get_center` — position + size/2 (f32).
+    pub fn centre(&self) -> (f64, f64) {
+        (
+            (self.pos.0 as f32 + self.size.0 as f32 / 2.0) as f64,
+            (self.pos.1 as f32 + self.size.1 as f32 / 2.0) as f64,
+        )
+    }
+}
+
+/// `Vector2.distance_to` — subtract, dot, sqrt all at real_t.
+fn v2_dist(a: (f64, f64), b: (f64, f64)) -> f64 {
+    let (dx, dy) = (b.0 as f32 - a.0 as f32, b.1 as f32 - a.1 as f32);
+    (dx * dx + dy * dy).sqrt() as f64
+}
+
+/// `Vector2 + Vector2` at the real_t boundary.
+fn v2_add(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
+    ((a.0 as f32 + b.0 as f32) as f64, (a.1 as f32 + b.1 as f32) as f64)
+}
+
+/// One `occupied` entry — `{"pos": Vector2, "radius": float}` (solo_controller.gd:9170).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Occupied {
+    pub pos: (f64, f64),
+    pub radius: f64,
+}
+
+/// `AiDeployment.section_rect` (ai_deployment.gd:47-49): the zone's third-strip
+/// for section 1-3; `w` divides in f64, the Rect2 ctor narrows.
+pub fn section_rect(zone: &Rect, section: i64) -> Rect {
+    let w = zone.size.0 / 3.0;
+    Rect::new(
+        zone.pos.0 + w * (section.clamp(1, 3) - 1) as f64,
+        zone.pos.1,
+        w,
+        zone.size.1,
+    )
+}
+
+/// `AiDeployment._nearest_objective_distance` (ai_deployment.gd:257-263): the
+/// nearest marker; none at all → the rect centre (coherent form-up).
+fn nearest_objective_distance(p: (f64, f64), objectives: &[(f64, f64)], r: &Rect) -> f64 {
+    if objectives.is_empty() {
+        return v2_dist(p, r.centre());
+    }
+    objectives.iter().map(|o| v2_dist(p, *o)).fold(f64::INFINITY, f64::min)
+}
+
+/// `AiDeployment._spot_free` (ai_deployment.gd:247-252): `<` blocks, so free
+/// is the f32 distance NOT below the f64 radius sum.
+fn spot_free(p: (f64, f64), radius: f64, occupied: &[Occupied]) -> bool {
+    occupied.iter().all(|o| v2_dist(p, o.pos) >= radius + o.radius)
+}
+
+/// `AiDeployment.best_spot` (ai_deployment.gd:97-115): y-outer/x-inner scan,
+/// `x` restarting per row from the same expression (:103), repeated `+= step`
+/// in f64, and a strict `<` that keeps the FIRST minimum in scan order — the
+/// iteration order and tie rule are part of the law. Candidates narrow to f32
+/// like the `Vector2(x, y)` ctor; the margins narrow like the Vector2
+/// `footprint_margins` returns. Blocked law via `blocked` (the caller binds
+/// board + unit shape — the invalid-Callable path of :106 is `|_| false`).
+#[allow(clippy::too_many_arguments)]
+pub fn best_spot(
+    section: &Rect,
+    objectives: &[(f64, f64)],
+    occupied: &[Occupied],
+    radius: f64,
+    blocked: &dyn Fn((f64, f64)) -> bool,
+    step: f64,
+    footprint: &[(f64, f64)],
+    base_r: f64,
+    forward_y: f64,
+) -> (f64, f64) {
+    let (mut best, mut best_score) = ((f64::INFINITY, f64::INFINITY), f64::INFINITY);
+    let (mx, my) = footprint_margins(radius, footprint, base_r);
+    let (mx, my) = (mx as f32 as f64, my as f32 as f64);
+    let end = section.end();
+    let mut y = section.pos.1 + my;
+    while y <= end.1 - my + SCAN_EPS {
+        let mut x = section.pos.0 + mx;
+        while x <= end.0 - mx + SCAN_EPS {
+            let p = (x as f32 as f64, y as f32 as f64);
+            if spot_free(p, radius, occupied) && !blocked(p) {
+                let mut score = nearest_objective_distance(p, objectives, section);
+                if forward_y != f64::INFINITY {
+                    score += FORWARD_EDGE_W * (p.1 - forward_y).abs();
+                }
+                if score < best_score {
+                    best_score = score;
+                    best = p;
+                }
+            }
+            x += step;
+        }
+        y += step;
+    }
+    best
+}
+
+/// `AiDeployment._blocked_count` (ai_deployment.gd:151-165): blocked SAMPLE
+/// count over the exact multiset `_blocked_at` early-returns on — "0 here" ==
+/// "clear there". Neither branch skips the zero edge (:157-165), so the centre
+/// counts too. `(p + off) + e` stays left-associated f32.
+fn blocked_count(
+    p: (f64, f64),
+    blocked: &dyn Fn((f64, f64)) -> bool,
+    base_r: f64,
+    footprint: &[(f64, f64)],
+) -> i64 {
+    let edges = disc_sample_offsets(base_r);
+    let (px, py) = (p.0 as f32, p.1 as f32);
+    let mut n = 0i64;
+    if !footprint.is_empty() {
+        for off in footprint {
+            let m = [px + off.0 as f32, py + off.1 as f32];
+            for e in &edges {
+                if blocked(((m[0] + e[0]) as f64, (m[1] + e[1]) as f64)) {
+                    n += 1;
+                }
+            }
+        }
+        return n;
+    }
+    for e in &edges {
+        if blocked(((px + e[0]) as f64, (py + e[1]) as f64)) {
+            n += 1;
+        }
+    }
+    n
+}
+
+/// `AiDeployment.least_blocked_spot` (ai_deployment.gd:125-144): fewest blocked
+/// samples, tie toward the nearest objective. THE DEGENERATE INITIAL VALUE is
+/// law: `best` starts at the zone centre, and a footprint whose margins cannot
+/// fit the zone never reaches a candidate — the centre returns UNTESTED (the
+/// fixture's 20 zone-centre landings pin it).
+#[allow(clippy::too_many_arguments)]
+pub fn least_blocked_spot(
+    zone: &Rect,
+    objectives: &[(f64, f64)],
+    radius: f64,
+    blocked: &dyn Fn((f64, f64)) -> bool,
+    step: f64,
+    base_r: f64,
+    footprint: &[(f64, f64)],
+) -> (f64, f64) {
+    let mut best = zone.centre();
+    let (mut best_blocked, mut best_score) = (f64::INFINITY, f64::INFINITY);
+    let (mx, my) = footprint_margins(radius, footprint, base_r);
+    let (mx, my) = (mx as f32 as f64, my as f32 as f64);
+    let end = zone.end();
+    let mut y = zone.pos.1 + my;
+    while y <= end.1 - my + SCAN_EPS {
+        let mut x = zone.pos.0 + mx;
+        while x <= end.0 - mx + SCAN_EPS {
+            let p = (x as f32 as f64, y as f32 as f64);
+            let bc = blocked_count(p, blocked, base_r, footprint);
+            let score = nearest_objective_distance(p, objectives, zone);
+            if (bc as f64) < best_blocked || ((bc as f64) == best_blocked && score < best_score) {
+                best_blocked = bc as f64;
+                best_score = score;
+                best = p;
+            }
+            x += step;
+        }
+        y += step;
+    }
+    best
+}

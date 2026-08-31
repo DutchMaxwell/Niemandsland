@@ -716,3 +716,89 @@ fn bank_without_prop_keys_keeps_the_law_unchanged() {
         );
     }
 }
+
+// ==== NML-1152 step 5 — the spot-search SCAN (best_spot / least_blocked_spot) ====
+//
+// The four table mirrors below are test/ai_deployment_test.gd:66-140 ported
+// line for line (the GDScript files are the table's own red-green); the fifth
+// pins the degenerate initial value the corpus's 20 zone-centre landings ride.
+
+fn empty_board() -> Terrain {
+    let fx = spots_fixture();
+    Terrain::build(
+        &serde_json::from_value(serde_json::json!({
+            "cells": [], "sandbox": [], "cell_params": fx["cell_params"]
+        }))
+        .unwrap(),
+    )
+}
+
+/// The table's own test_best_spot_moves_toward_nearest_objective_and_respects_occupancy.
+#[test]
+fn best_spot_moves_toward_nearest_objective_and_respects_occupancy() {
+    let section = deployment::Rect::new(0.0, 0.0, 1.0, 1.0);
+    let objective = [(0.5, 2.0)]; // south of the section → hug the south edge, centred
+    let none = |_: (f64, f64)| false;
+    let spot = deployment::best_spot(&section, &objective, &[], 0.05, &none, 0.05, &[], 0.0, f64::INFINITY);
+    assert!(spot.1 > 0.85, "south edge, got {spot:?}");
+    assert!((spot.0 - 0.5).abs() < 0.11, "centred, got {spot:?}");
+    let occupied = vec![deployment::Occupied { pos: spot, radius: 0.05 }];
+    let spot2 = deployment::best_spot(&section, &objective, &occupied, 0.05, &none, 0.05, &[], 0.0, f64::INFINITY);
+    let d = ((spot2.0 - spot.0) * (spot2.0 - spot.0) + (spot2.1 - spot.1) * (spot2.1 - spot.1)).sqrt();
+    assert!(d >= 0.1, "settles beside, not on top: {spot2:?}");
+}
+
+/// The table's own test_best_spot_respects_terrain_callback (the Strider/Flying
+/// path is the same scan with an always-false closure — the invalid Callable).
+#[test]
+fn best_spot_respects_terrain_callback() {
+    let section = deployment::Rect::new(0.0, 0.0, 1.0, 1.0);
+    let objective = [(0.5, 2.0)];
+    let blocked = |p: (f64, f64)| p.1 > 0.5;
+    let spot = deployment::best_spot(&section, &objective, &[], 0.05, &blocked, 0.05, &[], 0.0, f64::INFINITY);
+    assert!(spot.1 <= 0.5, "walker stays in the clear north half: {spot:?}");
+    let none = |_: (f64, f64)| false;
+    let free = deployment::best_spot(&section, &objective, &[], 0.05, &none, 0.05, &[], 0.0, f64::INFINITY);
+    assert!(free.1 > 0.5, "Strider takes the closer southern spot: {free:?}");
+}
+
+/// The table's own test_least_blocked_spot_prefers_clear_ground_over_blocking.
+#[test]
+fn least_blocked_prefers_clear_ground_over_blocking() {
+    let zone = deployment::Rect::new(0.0, 0.0, 4.0, 2.0);
+    let blocked = |p: (f64, f64)| p.0 < 2.0;
+    let spot = deployment::least_blocked_spot(&zone, &[], 0.2, &blocked, 0.2, 0.1, &[]);
+    assert!(spot.0 >= 2.0, "clear right half, never the blocked strip: {spot:?}");
+}
+
+/// The table's own test_least_blocked_spot_always_returns_a_finite_spot.
+#[test]
+fn least_blocked_always_returns_a_finite_spot() {
+    let zone = deployment::Rect::new(0.0, 0.0, 2.0, 2.0);
+    let all_blocked = |_: (f64, f64)| true;
+    let spot = deployment::least_blocked_spot(&zone, &[], 0.5, &all_blocked, 0.5, 0.1, &[]);
+    assert!(spot.0.is_finite() && spot.1.is_finite());
+}
+
+/// The DEGENERATE branch (ai_deployment.gd:127-144): margins that cannot fit
+/// the zone never reach a candidate, so the UNTESTED zone centre is returned
+/// even on a board where every cell is blocked — the corpus's 20 landings.
+#[test]
+fn least_blocked_degenerate_initial_value_is_the_untested_zone_centre() {
+    let zone = deployment::Rect::new(-0.9144, -0.6096, 1.8288, 0.3048);
+    let all_blocked = |_: (f64, f64)| true;
+    // 21-model 30 mm winged grunts: 2·(0.124 + 0.03) = 0.308 > 0.3048 m depth.
+    let fp = deployment::deploy_footprint_offsets(21, 0.03, false);
+    let want = ((0.124 + 0.03) as f32 as f64, (0.124 + 0.03) as f32 as f64);
+    let spot = deployment::least_blocked_spot(&zone, &[(0.0, 0.0)], 0.2, &all_blocked, 0.05, 0.03, &fp);
+    let c = zone.centre();
+    assert!(
+        (spot.0 - c.0).abs() < 1e-6 && (spot.1 - c.1).abs() < 1e-6,
+        "the untested initial value, got {spot:?} vs centre {c:?} (my {})",
+        fp.iter().map(|o| o.1.abs()).fold(0.0f64, f64::max) + 0.03
+    );
+    let _ = want;
+    // and best_spot on the same inputs returns INF (the ladder's ladder-down).
+    let inf = deployment::best_spot(&zone, &[(0.0, 0.0)], &[], 0.2, &all_blocked, 0.025, &fp, 0.03, f64::INFINITY);
+    assert!(inf.0.is_infinite(), "no candidate fits: {inf:?}");
+}
