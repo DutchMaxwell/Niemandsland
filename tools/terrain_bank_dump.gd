@@ -22,26 +22,71 @@ extends SceneTree
 ## drawing list — the `terrain` field of a `core_s<seed>.json`. A bank written
 ## before that key existed is still a valid board bank; a trainer asked to write
 ## the result field off such a bank raises instead of guessing.
+##
+## NML-1155 (bank v2): each board ALSO carries the prop layer the twin's
+## deployment blocked law reads (core/nml-core/src/deployment.rs
+## `wall_blocked`/`spot_blocked`), in the SAME table-centred inch frame as
+## `pieces`:
+##   * `walls` — TerrainOverlay.get_wall_segments_world()'s exact answer for
+##     this layout (terrain_overlay.gd:1682-1709): the container OBB edges
+##     (:2834-2843) plus the ruin wall segments (_segment_world_placement,
+##     :2361-2415). Exactly the array `Terrain::set_walls_world_m` consumes.
+##   * `blockers` — one disc [x, y, r] per SOLID prop the deployment physics
+##     probe (ai_deployment.gd:294-308: a 0.02 m sphere at 0.07 m height hits
+##     any collider outside group "miniature") would hit: the 6"x2.5"x3"
+##     container boxes (BoxShape terrain_overlay.gd:2886-2891; the textured
+##     path builds the identical collider, :3153-3158). Radius = the box's XZ
+##     INCIRCLE (half the shorter side, 1.5") — the largest disc whose own
+##     0.02 m dilation stays inside the box, so disc ⊕ probe ⊆ box ⊕ probe and
+##     the twin never out-blocks the table's own 0.02 m band around the box's
+##     OBB edges (near_wall, ai_deployment.gd:312-316) — measured on the 100
+##     fixture dumps: 0/1042 recorded-clear spots flip; a circumscribed disc
+##     (3.354") flips 114. Trees, mines and signs are decorative — NO
+##     collision (terrain_overlay.gd:2851-2864, :2896-2897). Ruin wall boxes
+##     and corner posts ride `walls`: the probe reaches only 1.81 cm past
+##     their surfaces (sphere centre 0.07 m over a 2.5"-high box top) vs the
+##     2 cm wall band, so their discs would over-block that 1.4 mm gap.
+## A bank dumped without the two keys still loads (serde defaults twin-side).
 
 const IN2M := 0.0254
 ## Half a cell minus a quarter inch — see the anchor note above.
 const LATTICE_OFFSET_IN := 1.25
 
+var _out := ""
+var _from := 1
+var _to := 200
+var _ovl: Node3D
+
 
 func _init() -> void:
-	var out := OS.get_environment("HOME").path_join("selfplay_out/terrain_bank")
-	var from := 1
-	var to := 200
+	_out = OS.get_environment("HOME").path_join("selfplay_out/terrain_bank")
 	for a in OS.get_cmdline_user_args():
 		var arg := str(a)
 		if arg.begins_with("out="):
-			out = arg.substr(4)
+			_out = arg.substr(4)
 		elif arg.begins_with("from="):
-			from = int(arg.substr(5))
+			_from = int(arg.substr(5))
 		elif arg.begins_with("to="):
-			to = int(arg.substr(3))
+			_to = int(arg.substr(3))
+
+
+## The NML-1155 overlay harvest needs the tree initialized (the overlay builds
+## its panel libraries in _ready, terrain_overlay.gd:427-441) — the arena
+## harness's own launch pattern (tools/arena_match.gd:114-116).
+func _initialize() -> void:
+	_run.call_deferred()
+
+
+func _run() -> void:
+	var out := _out
+	var from := _from
+	var to := _to
 	DirAccess.make_dir_recursive_absolute(out)
+	_ovl = (load("res://scripts/terrain_overlay.gd") as GDScript).new()
+	root.add_child(_ovl)
 	var cells_total := 0
+	var walls_total := 0
+	var blockers_total := 0
 	for layout_seed in range(from, to + 1):
 		var world := SchoolTerrain.generate(layout_seed)
 		var n := int(world["n"])
@@ -60,6 +105,42 @@ func _init() -> void:
 			"pieces": world.get("pieces", []),
 			"lattice": _lattice(world, n),
 		}
+		# --- NML-1155: the prop layer, harvested from the REAL overlay. The
+		# arena seeds the same layouter this way (arena_match.gd:278-283 with
+		# symmetric=1, which SchoolTerrain.generate pins, school_terrain.gd:21),
+		# then reads the overlay the harness drove (main.gd:14992-15010). The
+		# grid_cells equality below proves the second run matches the first.
+		var ml: Control = (load("res://scripts/map_layout.gd") as GDScript).new()
+		ml.table_size_feet = Vector2(6.0, 4.0)
+		ml.point_symmetry_enabled = true
+		ml.grid_rotation_degrees = 0.0
+		seed(layout_seed)
+		ml._generate_terrain_layout()
+		ml._rebuild_derived()
+		if ml._calculate_grid_dimensions().x != n or ml.grid_cells != world["cells"]:
+			printerr("[BANK] seed %d: second layout run diverged from SchoolTerrain" % layout_seed)
+			quit(1)
+			return
+		_ovl.update_wall_models(ml.wall_segments, Vector2(6.0, 4.0), 0.0)
+		_ovl.update_placed_objects(ml.placed_objects, Vector2(6.0, 4.0), 0.0)
+		var walls: Array = []
+		for seg in _ovl.get_wall_segments_world():
+			walls.append([seg[0].x / IN2M, seg[0].y / IN2M, seg[1].x / IN2M, seg[1].y / IN2M])
+		var blockers: Array = []
+		for inst in _ovl._object_instances:
+			if not (inst is StaticBody3D):
+				continue   # trees / mines / signs: decorative, no collision
+			for c in inst.get_children():
+				if c is CollisionShape3D and (c as CollisionShape3D).shape is BoxShape3D:
+					var sz: Vector3 = ((c as CollisionShape3D).shape as BoxShape3D).size
+					blockers.append([c.global_position.x / IN2M, c.global_position.z / IN2M,
+						minf(sz.x, sz.z) * 0.5 / IN2M])
+		board["walls"] = walls
+		board["blockers"] = blockers
+		walls_total += walls.size()
+		blockers_total += blockers.size()
+		print("[BANKV2] seed %d walls %d blockers %d" % [layout_seed, walls.size(), blockers.size()])
+		ml.free()
 		var f := FileAccess.open(out.path_join("board_%d.json" % layout_seed), FileAccess.WRITE)
 		if f == null:
 			printerr("[BANK] cannot write board_%d.json to %s" % [layout_seed, out])
@@ -67,8 +148,8 @@ func _init() -> void:
 			return
 		f.store_string(JSON.stringify(board, "", true, true))
 		f.close()
-	print("[BANK] wrote %d boards (seeds %d..%d) to %s — %d terrain cells in total"
-		% [to - from + 1, from, to, out, cells_total])
+	print("[BANK] wrote %d boards (seeds %d..%d) to %s — %d terrain cells, %d wall segments, %d blocker discs"
+		% [to - from + 1, from, to, out, cells_total, walls_total, blockers_total])
 	quit(0)
 
 
