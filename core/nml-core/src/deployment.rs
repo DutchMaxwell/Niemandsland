@@ -466,6 +466,9 @@ pub const LEAST_BLOCKED_STEP_M: f64 = 0.05;
 const FORWARD_EDGE_W: f64 = 0.0;
 /// The scan boundary slop (ai_deployment.gd:102/:104/:132/:134 literal 0.0001).
 const SCAN_EPS: f64 = 0.0001;
+/// `RulesRegistry.unit_param(unit, "Vanguard", "place_in", 9.0)`
+/// (solo_controller.gd:9627), world metres.
+pub const VANGUARD_PLACE_M: f64 = 9.0 * 0.0254;
 
 /// Godot `Rect2` at the real_t boundary: construction and `end`/`get_center`
 /// narrow to f32; the scan arithmetic between boundaries runs f64.
@@ -530,7 +533,7 @@ pub fn section_rect(zone: &Rect, section: i64) -> Rect {
 
 /// `AiDeployment._nearest_objective_distance` (ai_deployment.gd:257-263): the
 /// nearest marker; none at all → the rect centre (coherent form-up).
-fn nearest_objective_distance(p: (f64, f64), objectives: &[(f64, f64)], r: &Rect) -> f64 {
+pub fn nearest_objective_distance(p: (f64, f64), objectives: &[(f64, f64)], r: &Rect) -> f64 {
     if objectives.is_empty() {
         return v2_dist(p, r.centre());
     }
@@ -586,6 +589,219 @@ pub fn best_spot(
         y += step;
     }
     best
+}
+
+// ---- the veto, the push, the ladder (NML-1152 step 5b). Wall geometry runs in
+// WORLD METRES — the shape `main.gd:2316`'s walls_provider hands the planner
+// (`get_wall_segments_world()`, Vector2 = f32) — and its SCALAR arithmetic is
+// f64 on widened f32 components (GDScript floats are doubles; only Vector2 ops
+// are real_t — the deployment.rs:303-313 precedent).
+
+/// One wall segment, world metres, f32 at the Vector2 boundary.
+pub type WallSeg = [[f32; 2]; 2];
+
+/// `MovementPlanner._orient` (movement_planner.gd:91-93): signed area ×2 of
+/// triangle abc — >0 left turn, <0 right turn, ~0 collinear; f64 products of
+/// widened f32 components.
+fn orient(a: [f32; 2], b: [f32; 2], c: [f32; 2]) -> f64 {
+    let (ax, ay, bx, by, cx, cy) =
+        (a[0] as f64, a[1] as f64, b[0] as f64, b[1] as f64, c[0] as f64, c[1] as f64);
+    (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+}
+
+/// `MovementPlanner._on_segment` (:96-99): collinear point in the bbox + EPS.
+fn on_segment(a: [f32; 2], b: [f32; 2], p: [f32; 2]) -> bool {
+    let (ax, bx, px) = (a[0] as f64, b[0] as f64, p[0] as f64);
+    let (ay, by, py) = (a[1] as f64, b[1] as f64, p[1] as f64);
+    px >= ax.min(bx) - SCAN_EPS
+        && px <= ax.max(bx) + SCAN_EPS
+        && py >= ay.min(by) - SCAN_EPS
+        && py <= ay.max(by) + SCAN_EPS
+}
+
+/// `MovementPlanner.segments_cross` (movement_planner.gd:104-133): touching
+/// counts as crossing (a path grazing a wall end is blocked — the safe side).
+fn segments_cross(p1: [f32; 2], p2: [f32; 2], p3: [f32; 2], p4: [f32; 2]) -> bool {
+    let (d1, d2, d3, d4) =
+        (orient(p3, p4, p1), orient(p3, p4, p2), orient(p1, p2, p3), orient(p1, p2, p4));
+    if ((d1 > 0.0 && d2 < 0.0) || (d1 < 0.0 && d2 > 0.0))
+        && ((d3 > 0.0 && d4 < 0.0) || (d3 < 0.0 && d4 > 0.0))
+    {
+        return true;
+    }
+    (d1.abs() <= SCAN_EPS && on_segment(p3, p4, p1))
+        || (d2.abs() <= SCAN_EPS && on_segment(p3, p4, p2))
+        || (d3.abs() <= SCAN_EPS && on_segment(p1, p2, p3))
+        || (d4.abs() <= SCAN_EPS && on_segment(p1, p2, p4))
+}
+
+/// `MovementPlanner.path_crosses_wall` (movement_planner.gd:141-145).
+fn path_crosses_wall(a: (f64, f64), b: (f64, f64), walls: &[WallSeg]) -> bool {
+    let (af, bf) = ([a.0 as f32, a.1 as f32], [b.0 as f32, b.1 as f32]);
+    walls.iter().any(|w| segments_cross(af, bf, w[0], w[1]))
+}
+
+/// `SoloController._deploy_footprint_bisected` (solo_controller.gd:9584-9598):
+/// a formation grid a wall cuts in half is vetoed — any model-to-model link
+/// within one grid pitch + slack (f64) that crosses a wall. `a`/`b` are
+/// Vector2 adds (f32), the distance gate f32-vs-f64 exactly like `_spot_free`.
+pub fn footprint_bisected(
+    spot: (f64, f64),
+    footprint: &[(f64, f64)],
+    base_r: f64,
+    walls: &[WallSeg],
+) -> bool {
+    if walls.is_empty() || footprint.len() <= 1 {
+        return false;
+    }
+    let link_max = base_r * 3.0 + 0.03;
+    for i in 0..footprint.len() {
+        for j in i + 1..footprint.len() {
+            let a = v2_add(spot, footprint[i]);
+            let b = v2_add(spot, footprint[j]);
+            if v2_dist(a, b) > link_max {
+                continue;
+            }
+            if path_crosses_wall(a, b, walls) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// `SoloController._deploy_spot_clear` (solo_controller.gd:9640-9652): the
+/// vanguard candidate's legality — occupied rings, per-MODEL-CENTRE terrain
+/// (no base edges: the table's own law) and no wall bisect.
+#[allow(clippy::too_many_arguments)]
+fn deploy_spot_clear(
+    spot: (f64, f64),
+    occupied: &[Occupied],
+    blocked: &dyn Fn((f64, f64)) -> bool,
+    radius: f64,
+    footprint: &[(f64, f64)],
+    base_r: f64,
+    walls: &[WallSeg],
+) -> bool {
+    if occupied.iter().any(|o| v2_dist(spot, o.pos) < radius + o.radius) {
+        return false;
+    }
+    let (sx, sy) = (spot.0 as f32, spot.1 as f32);
+    if footprint
+        .iter()
+        .any(|off| blocked(((sx + off.0 as f32) as f64, (sy + off.1 as f32) as f64)))
+    {
+        return false;
+    }
+    !footprint_bisected(spot, footprint, base_r, walls)
+}
+
+/// `SoloController._vanguard_push` (solo_controller.gd:9620-9635): toward the
+/// table centre at 100/75/50/25 % of the 9" placement (`push_m` — the
+/// registry's place_in, 9.0 in the corpus), first legal candidate wins; the
+/// pushed spot MAY leave the zone. Vector2·scalar narrows the scalar to f32.
+#[allow(clippy::too_many_arguments)]
+pub fn vanguard_push(
+    spot: (f64, f64),
+    zone: &Rect,
+    occupied: &[Occupied],
+    blocked: &dyn Fn((f64, f64)) -> bool,
+    radius: f64,
+    footprint: &[(f64, f64)],
+    base_r: f64,
+    walls: &[WallSeg],
+    push_m: f64,
+) -> (f64, f64) {
+    let c = zone.centre();
+    let (mut fx, mut fy) = (0.0f32 - c.0 as f32, 0.0f32 - c.1 as f32);
+    let len = (fx * fx + fy * fy).sqrt();
+    if (len as f64) < 0.001 {
+        return spot;
+    }
+    fx /= len;
+    fy /= len;
+    for frac in [1.0f64, 0.75, 0.5, 0.25] {
+        let s = (push_m * frac) as f32;
+        let cand = v2_add(spot, ((fx * s) as f64, (fy * s) as f64));
+        if deploy_spot_clear(cand, occupied, blocked, radius, footprint, base_r, walls) {
+            return cand;
+        }
+    }
+    spot
+}
+
+/// How the ladder landed: the spot, which rung produced it (0 = section scan,
+/// 1 = whole-zone fallback, 2 = crowded/occupied-cleared, 3 = least_blocked —
+/// the table's own `spot_why` ladder), and how many wall-bisect marks were
+/// appended (they persist in `occupied`, solo_controller.gd:9128).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PlaceOutcome {
+    pub spot: (f64, f64),
+    pub rung: u8,
+    pub bisect_marks: u8,
+}
+
+/// `SoloController._deploy_place_id` (solo_controller.gd:9086-9170) for the
+/// MAIN queue (the scout's 12" band is slice 6): objective-near scan in the
+/// unit's section, then the LADDER in the table's exact order — wall-bisect
+/// veto (≤4, marks at 0.6·radius PERSIST in `occupied`, :9128) → whole-zone
+/// (:9132) → crowded, occupied CLEARED (:9138) → least_blocked at 0.05
+/// (:9144) — then the Vanguard push and this spot joins `occupied` at full
+/// radius (:9170).
+#[allow(clippy::too_many_arguments)]
+pub fn deploy_place_id(
+    zone: &Rect,
+    sec: &Rect,
+    forward_y: f64,
+    objectives: &[(f64, f64)],
+    occupied: &mut Vec<Occupied>,
+    board: &Terrain,
+    walls: &[WallSeg],
+    radius: f64,
+    footprint: &[(f64, f64)],
+    base_r: f64,
+    flying: bool,
+    vanguard: bool,
+) -> PlaceOutcome {
+    let blocked =
+        |p: (f64, f64)| spot_blocked(board, p, flying, radius, footprint, base_r);
+    let mut spot =
+        best_spot(sec, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y);
+    let (mut rung, mut marks) = (0u8, 0u8);
+    for _ in 0..4 {
+        if spot.0.is_infinite() || !footprint_bisected(spot, footprint, base_r, walls) {
+            break;
+        }
+        occupied.push(Occupied { pos: spot, radius: radius * 0.6 });
+        marks += 1;
+        spot = best_spot(
+            sec, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y,
+        );
+    }
+    if spot.0.is_infinite() {
+        rung = 1;
+        spot = best_spot(
+            zone, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y,
+        );
+    }
+    if spot.0.is_infinite() {
+        rung = 2;
+        spot = best_spot(
+            zone, objectives, &[], radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y,
+        );
+    }
+    if spot.0.is_infinite() {
+        rung = 3;
+        spot = least_blocked_spot(zone, objectives, radius, &blocked, LEAST_BLOCKED_STEP_M, base_r, footprint);
+    }
+    if vanguard {
+        let v = vanguard_push(spot, zone, occupied, &blocked, radius, footprint, base_r, walls, VANGUARD_PLACE_M);
+        if v != spot {
+            spot = v;
+        }
+    }
+    occupied.push(Occupied { pos: spot, radius });
+    PlaceOutcome { spot, rung, bisect_marks: marks }
 }
 
 /// `AiDeployment._blocked_count` (ai_deployment.gd:151-165): blocked SAMPLE

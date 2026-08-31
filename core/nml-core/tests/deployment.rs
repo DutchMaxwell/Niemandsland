@@ -723,16 +723,6 @@ fn bank_without_prop_keys_keeps_the_law_unchanged() {
 // line for line (the GDScript files are the table's own red-green); the fifth
 // pins the degenerate initial value the corpus's 20 zone-centre landings ride.
 
-fn empty_board() -> Terrain {
-    let fx = spots_fixture();
-    Terrain::build(
-        &serde_json::from_value(serde_json::json!({
-            "cells": [], "sandbox": [], "cell_params": fx["cell_params"]
-        }))
-        .unwrap(),
-    )
-}
-
 /// The table's own test_best_spot_moves_toward_nearest_objective_and_respects_occupancy.
 #[test]
 fn best_spot_moves_toward_nearest_objective_and_respects_occupancy() {
@@ -801,4 +791,249 @@ fn least_blocked_degenerate_initial_value_is_the_untested_zone_centre() {
     // and best_spot on the same inputs returns INF (the ladder's ladder-down).
     let inf = deployment::best_spot(&zone, &[(0.0, 0.0)], &[], 0.2, &all_blocked, 0.025, &fp, 0.03, f64::INFINITY);
     assert!(inf.0.is_infinite(), "no candidate fits: {inf:?}");
+}
+
+/// `SoloController._deploy_footprint_bisected` (solo_controller.gd:9584-9598):
+/// a wall through the formation vetoes the spot; the same wall left of BOTH
+/// models does not; links beyond one grid pitch + slack are not even checked;
+/// an empty wall set never vetoes.
+#[test]
+fn wall_bisect_veto_needs_a_crossed_link() {
+    let walls: Vec<deployment::WallSeg> = vec![[[0.0, 0.0], [0.0, 0.5]]];
+    let fp = vec![(-0.05, 0.0), (0.05, 0.0)];
+    assert!(deployment::footprint_bisected((0.0, 0.0), &fp, 0.03, &walls), "wall between the models");
+    assert!(
+        !deployment::footprint_bisected((0.06, 0.0), &fp, 0.03, &walls),
+        "both models right of the wall"
+    );
+    let wide = vec![(-0.2, 0.0), (0.2, 0.0)];
+    assert!(
+        !deployment::footprint_bisected((0.0, 0.0), &wide, 0.03, &walls),
+        "link 0.4 > one pitch + slack: unchecked"
+    );
+    assert!(!deployment::footprint_bisected((0.0, 0.0), &fp, 0.03, &[]), "no walls, no veto");
+}
+
+/// `SoloController._vanguard_push` (solo_controller.gd:9620-9635): the first
+/// legal candidate along the toward-centre line wins — 9" first, then 75 %,
+/// and a blocked cell under the full step pushes the unit to the 75 % one.
+#[test]
+fn vanguard_push_takes_the_first_legal_step() {
+    let zone = deployment::Rect::new(-0.9144, -0.6096, 1.8288, 0.3048);
+    let none = |_: (f64, f64)| false;
+    let spot = (0.02, -0.5);
+    let v = deployment::vanguard_push(spot, &zone, &[], &none, 0.05, &[(0.0, 0.0)], 0.016, &[], deployment::VANGUARD_PLACE_M);
+    assert!((v.0 - 0.02).abs() < 1e-6 && (v.1 - (-0.5 + 0.2286)).abs() < 1e-6, "full 9\" step: {v:?}");
+    // A DANGEROUS cell under the 9" landing (world (0.02, -0.2714) → school cell
+    // (15,11), n=30 grid) — the next fraction down must win instead.
+    let mut plain: PlainTerrain =
+        serde_json::from_value(serde_json::json!({ "cells": [], "sandbox": [], "cell_params": spots_fixture()["cell_params"] })).unwrap();
+    plain.cells = vec![[15.0, 11.0, 4.0]];
+    let board = Terrain::build(&plain);
+    let blocked = |p: (f64, f64)| deployment::spot_blocked(&board, p, false, 0.05, &[(0.0, 0.0)], 0.016);
+    let v2 = deployment::vanguard_push(spot, &zone, &[], &blocked, 0.05, &[(0.0, 0.0)], 0.016, &[], deployment::VANGUARD_PLACE_M);
+    assert!((v2.1 - (-0.5 + 0.2286 * 0.75)).abs() < 1e-6, "75 % step when the 9\" one is blocked: {v2:?}");
+    assert!(v2.1.abs() < spot.1.abs(), "closer to the table centre");
+}
+
+// ==== NML-1152 step 5b — THE FIRST REAL PARITY NUMBER ====
+//
+// For every unit of the 100 dumps the twin runs the table's placement from the
+// SAME inputs — side, zone, section (the merged fixture), and the previously
+// placed units' RECORDED spots as `occupied` (re-narrowed to f32 like the
+// table's Vector2) plus the twin-derived bisect-veto marks the ladder makes —
+// so each unit is measured in isolation from earlier divergence. The veto
+// marks the table made but the twin never sees are the known blind spot
+// (deep-reasoning review of this replay design). Comparison against the
+// recorded spot: EXACT = the dump's own quantum (Godot snappedf 0.0001,
+// pregame_dump.gd:87) of the twin's spot; within = one scan step 0.025 m
+// (+ the dump quantum); else mismatch. Board = layout-seed cells + bank v2
+// walls/blockers; objectives = the rulebook layout (pregame_fixture.sh:91
+// pins NML_OBJECTIVES=rulebook) via the same objectives::generate the twin's
+// production path uses (selfplay.py:1399-1407 precedent), narrowed to f32
+// like arena_match.gd:338-346.
+
+/// Godot `snappedf(v, 0.0001)` — floor(v/step + 0.5)·step, NOT f64 round.
+fn dump_quant_gd(v: f64) -> f64 {
+    (v / 1e-4 + 0.5).floor() * 1e-4
+}
+
+#[test]
+fn spot_search_replays_every_fixture_unit() {
+    use nml_core::objectives::{self, Cells};
+
+    let fx = spots_fixture();
+    let v2 = bank_v2_fixture();
+    struct BoardSet {
+        board: Terrain,
+        walls: Vec<deployment::WallSeg>,
+    }
+    let mut boards: HashMap<i64, BoardSet> = HashMap::new();
+    for (k, v) in fx["boards"].as_object().unwrap() {
+        let mut board = board_of(&fx["cell_params"], v);
+        let props = &v2["boards"][k];
+        let walls_in: Vec<[f64; 4]> = props["walls"]
+            .as_array().unwrap().iter()
+            .map(|w| [w[0].as_f64().unwrap(), w[1].as_f64().unwrap(), w[2].as_f64().unwrap(), w[3].as_f64().unwrap()])
+            .collect();
+        let blockers: Vec<[f64; 3]> = props["blockers"]
+            .as_array().unwrap().iter()
+            .map(|b| [b[0].as_f64().unwrap(), b[1].as_f64().unwrap(), b[2].as_f64().unwrap()])
+            .collect();
+        board.set_bank_props(&walls_in, &blockers);
+        let in2m = board.in2m();
+        let walls = walls_in
+            .iter()
+            .map(|w| {
+                [
+                    [(w[0] * in2m) as f32, (w[1] * in2m) as f32],
+                    [(w[2] * in2m) as f32, (w[3] * in2m) as f32],
+                ]
+            })
+            .collect();
+        boards.insert(k.parse::<i64>().unwrap(), BoardSet { board, walls });
+    }
+    let zones = objectives::zones_of_style(&serde_json::json!({
+        "zones": {
+            "1": [[[-36, -24], [36, -24], [36, -12], [-36, -12]]],
+            "2": [[[-36, 12], [36, 12], [36, 24], [-36, 24]]],
+        }
+    }));
+    let (mut n, mut exact, mut within, mut mismatch) = (0usize, 0usize, 0usize, 0usize);
+    let (mut degenerate, mut crowded) = (0usize, 0usize);
+    let mut worst: Vec<(f64, i64, String, String, (f64, f64), (f64, f64))> = Vec::new();
+    let mut side_mismatch: HashMap<(i64, &str), usize> = HashMap::new();
+    let mut rung_of_mismatch: [usize; 4] = [0; 4];
+    let mut same_section_mismatch = 0usize;
+    let mut twin_closer_to_marker = 0usize;
+    let mut twin_mark_total = 0usize;
+    for d in fx["dumps"].as_array().unwrap() {
+        let seed = d["seed"].as_i64().unwrap();
+        let bs = boards.get(&(500000 + seed)).expect("board for seed");
+        let cells = Cells::from_terrain(&bs.board);
+        let lay = objectives::generate(500000 + seed, &serde_json::json!("d3+2"), &zones, &cells, 72.0, 48.0);
+        assert!(!lay.positions.is_empty(), "seed {seed}: rulebook objectives");
+        let objs: Vec<(f64, f64)> = lay
+            .positions.iter()
+            .map(|&(x, z)| ((x as f64 * IN2M) as f32 as f64, (z as f64 * IN2M) as f32 as f64))
+            .collect();
+        for slot in ["1", "2"] {
+            // The 6x4 ft table's 12" front-line zones (tools/arena_match.gd:963-968).
+            let zone = if slot == "1" {
+                deployment::Rect::new(-0.9144, -0.6096, 1.8288, 0.3048)
+            } else {
+                deployment::Rect::new(-0.9144, 0.3048, 1.8288, 0.3048)
+            };
+            let end = zone.end();
+            let forward_y = if zone.pos.1.abs() < end.1.abs() { zone.pos.1 } else { end.1 };
+            let units = d["sides"][slot]["units"].as_array().unwrap();
+            let by_key: HashMap<&str, &serde_json::Value> =
+                units.iter().map(|u| (u["key"].as_str().unwrap(), u)).collect();
+            let order: Vec<&str> = d["sides"][slot]["placement_order"]
+                .as_array().unwrap().iter()
+                .map(|v| v.as_str().unwrap()).collect();
+            assert_eq!(order.len(), units.len(), "seed {seed} s{slot}: order covers every unit");
+            let mut occupied: Vec<deployment::Occupied> = Vec::new();
+            for key in order {
+                n += 1;
+                let u = by_key[key];
+                let spot_r = (u["spot"][0].as_f64().unwrap(), u["spot"][1].as_f64().unwrap());
+                let base_r = u["base_r_m"].as_f64().unwrap();
+                let count = u["n_models"].as_u64().unwrap() as usize;
+                let flying = u["ignores_terrain"].as_bool().unwrap();
+                let vanguard = u["vanguard_pushed"].as_bool().unwrap();
+                assert!(!u["scout"].as_bool().unwrap() && !vanguard, "corpus has no scouts/vanguards");
+                let fp: Vec<(f64, f64)> = u["footprint"]
+                    .as_array().unwrap().iter()
+                    .map(|o| (o[0].as_f64().unwrap(), o[1].as_f64().unwrap()))
+                    .collect();
+                let radius = deployment::deploy_footprint_radius(count, base_r);
+                let sec = deployment::section_rect(&zone, u["section"].as_i64().unwrap());
+                let out = deployment::deploy_place_id(
+                    &zone, &sec, forward_y, &objs, &mut occupied, &bs.board, &bs.walls,
+                    radius, &fp, base_r, flying, vanguard,
+                );
+                let spot_t = out.spot;
+                twin_mark_total += out.bisect_marks as usize;
+                // The twin's own final spot leaves the occupied list again — the
+                // replay anchors occupancy to the TABLE's outcome (recorded spot,
+                // re-narrowed to f32) while the veto marks stay twin-derived.
+                assert_eq!(occupied.pop(), Some(deployment::Occupied { pos: spot_t, radius }));
+                occupied.push(deployment::Occupied {
+                    pos: (spot_r.0 as f32 as f64, spot_r.1 as f32 as f64),
+                    radius,
+                });
+                // classify
+                let dist =
+                    ((spot_t.0 - spot_r.0) * (spot_t.0 - spot_r.0) + (spot_t.1 - spot_r.1) * (spot_t.1 - spot_r.1)).sqrt();
+                if (dump_quant_gd(spot_t.0) - dump_quant_gd(spot_r.0)).abs() < 1e-9
+                    && (dump_quant_gd(spot_t.1) - dump_quant_gd(spot_r.1)).abs() < 1e-9
+                {
+                    exact += 1;
+                } else if dist <= 0.025 + DUMP_QUANT {
+                    within += 1;
+                } else {
+                    mismatch += 1;
+                    *side_mismatch.entry((seed, slot)).or_default() += 1;
+                    rung_of_mismatch[out.rung as usize] += 1;
+                    // does the twin's spot still sit in the RECORDED section strip?
+                    let (lo, hi) = (sec.pos.0 as f32 as f64, sec.end().0 as f32 as f64);
+                    if spot_t.0 >= lo && spot_t.0 <= hi {
+                        same_section_mismatch += 1;
+                    }
+                    // permissive-law signature: the twin's pick scores BETTER than
+                    // the table's recorded spot (the probe vetoed it for the table)
+                    if deployment::nearest_objective_distance(spot_t, &objs, &sec)
+                        <= deployment::nearest_objective_distance(spot_r, &objs, &sec)
+                    {
+                        twin_closer_to_marker += 1;
+                    }
+                    worst.push((dist, seed, format!("s{slot}"), u["name"].as_str().unwrap().to_string(), spot_t, spot_r));
+                }
+                // the corpus landing classification, from the RECORDED spot (the
+                // step-4 pins): untested zone centre vs occupied-driven least_blocked
+                let my = fp.iter().map(|o| o.1.abs()).fold(0.0f64, f64::max) + base_r;
+                let mx = fp.iter().map(|o| o.0.abs()).fold(0.0f64, f64::max) + base_r;
+                let c = zone.centre();
+                let at_centre = (spot_r.0 - c.0).abs() <= 2e-4 && (spot_r.1 - c.1).abs() <= 2e-4;
+                if at_centre && (2.0 * my > 0.3048 || 2.0 * mx > 1.8288) {
+                    degenerate += 1;
+                } else if deployment::spot_blocked(&bs.board, spot_r, flying, 0.0, &fp, base_r) {
+                    crowded += 1;
+                }
+            }
+        }
+    }
+    worst.sort_by(|a, b| b.0.total_cmp(&a.0));
+    eprintln!(
+        "spot search replay: {n}/{n} units — {exact} EXACT (dump quantum), \
+         {within} within one step (0.025 m), {mismatch} MISMATCH"
+    );
+    eprintln!(
+        "landings: {degenerate} zone-centre degenerate (untested initial value), \
+         {crowded} occupied-driven least_blocked"
+    );
+    for w in worst.iter().take(5) {
+        eprintln!(
+            "worst: dist {:.4} m — seed {} {} {} — twin ({:.4},{:.4}) vs table ({:.4},{:.4})",
+            w.0, w.1, w.2, w.3, (w.4).0, (w.4).1, (w.5).0, (w.5).1
+        );
+    }
+    let mut sides: Vec<_> = side_mismatch.iter().collect();
+    sides.sort();
+    for ((seed, slot), c) in sides {
+        eprintln!("side pattern: seed {seed} {slot}: {c} mismatched units");
+    }
+    eprintln!(
+        "mismatch ladder rungs: scan {} / zone {} / crowded {} / least_blocked {}; \
+         twin spot still in the recorded section strip: {same_section_mismatch}",
+        rung_of_mismatch[0], rung_of_mismatch[1], rung_of_mismatch[2], rung_of_mismatch[3]
+    );
+    eprintln!(
+        "permissive-law signature: twin pick scores >= the table's spot on \
+         {twin_closer_to_marker}/{mismatch} mismatches; twin bisect marks fired: {twin_mark_total}"
+    );
+    assert_eq!(n, 1060, "the full 100-dump corpus");
+    assert_eq!(degenerate, 20, "zone-centre degenerate landings (ai_deployment.gd:127)");
+    assert_eq!(crowded, 4, "occupied-driven least_blocked landings");
 }
