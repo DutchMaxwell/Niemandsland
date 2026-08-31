@@ -505,6 +505,24 @@ fn bank_v2_fixture() -> serde_json::Value {
     serde_json::from_str(include_str!("fixtures/pregame_bank_v2.json")).expect("extract parses")
 }
 
+/// Parses the bank v2 prop keys of one board, `blocker_boxes` optional
+/// (pre-4d banks): 6-float entries are OBBs, anything else (a dumped convex
+/// polygon) is skipped — the twin reads boxes only.
+fn bank_boxes(props: &serde_json::Value) -> Vec<[f64; 6]> {
+    props.get("blocker_boxes")
+        .and_then(|v| v.as_array())
+        .map(|a| {
+            a.iter()
+                .filter(|e| e.as_array().is_some_and(|e| e.len() == 6))
+                .map(|e| {
+                    let f: Vec<f64> = e.as_array().unwrap().iter().map(|x| x.as_f64().unwrap()).collect();
+                    [f[0], f[1], f[2], f[3], f[4], f[5]]
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn board_with_props(cell_params: &serde_json::Value, cells: &serde_json::Value, props: &serde_json::Value) -> Terrain {
     let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
         "cells": cells,
@@ -521,7 +539,8 @@ fn board_with_props(cell_params: &serde_json::Value, cells: &serde_json::Value, 
         .as_array().unwrap().iter()
         .map(|b| [b[0].as_f64().unwrap(), b[1].as_f64().unwrap(), b[2].as_f64().unwrap()])
         .collect();
-    board.set_bank_props(&walls, &blockers);
+    let boxes = bank_boxes(props);
+    board.set_bank_props(&walls, &blockers, &boxes);
     board
 }
 
@@ -666,7 +685,7 @@ fn banked_blocker_disc_blocks_its_spot_and_only_its_band() {
     let mut blocked = Terrain::build(&serde_json::from_value(serde_json::json!({
         "cells": [], "sandbox": [], "cell_params": fx["cell_params"]
     })).unwrap());
-    blocked.set_bank_props(&[], &[blocker_in]);
+    blocked.set_bank_props(&[], &[blocker_in], &[]);
     let clear_board = Terrain::build(&serde_json::from_value(serde_json::json!({
         "cells": [], "sandbox": [], "cell_params": fx["cell_params"]
     })).unwrap());
@@ -699,13 +718,13 @@ fn bank_without_prop_keys_keeps_the_law_unchanged() {
     .unwrap();
     let bare = Terrain::build(&plain);
     let mut loaded = Terrain::build(&plain);
-    loaded.set_bank_props(&[], &[]);
+    loaded.set_bank_props(&[], &[], &[]);
     assert_eq!(loaded.blockers_m().len(), 0);
     assert_eq!(loaded.walls_in().len(), 0);
     // and an ABSENT board ignores the call entirely (in2m 0 — no 2 cm disc
     // invented at the origin).
     let mut absent = Terrain::absent();
-    absent.set_bank_props(&[[0.0, 0.0, 1.0, 1.0]], &[[0.0, 0.0, 1.5]]);
+    absent.set_bank_props(&[[0.0, 0.0, 1.0, 1.0]], &[[0.0, 0.0, 1.5]], &[]);
     assert_eq!(absent.blockers_m().len(), 0);
     for k in -20..20 {
         let p = (k as f64 * 0.037, (k as f64 + 0.5) * 0.041);
@@ -715,6 +734,49 @@ fn bank_without_prop_keys_keeps_the_law_unchanged() {
             "law changed at {p:?}"
         );
     }
+}
+
+/// NML-1152 step 4d: the box law is an EXACT circle-vs-OBB per probe-visible
+/// collider — it covers the disc law's blind spots (a container's long ends:
+/// the box reaches surface + 0.0189 m ≈ 0.0951 m from centre along the 6"
+/// axis, the disc law stops at 1.5" + 0.02 = 0.0581 m) and it drops the
+/// disc's short-end over-reach (0.0581 vs box 0.0381 + 0.0189 = 0.0570 m —
+/// the table's own 0.02 wall band covers that 1.1 mm, `walls` carries the
+/// container OBB edges). Also pins the dump's angle convention round-trip
+/// (θ = atan2(−basis.x.z, basis.x.x): local X axis (cos θ, −sin θ) in (x, z)).
+#[test]
+fn blocker_boxes_block_the_disc_laws_blind_spots() {
+    let fx = spots_fixture();
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": [[16, 15, 3]], "sandbox": [], "cell_params": fx["cell_params"]
+    }))
+    .unwrap();
+    // The dump's real reach for every 2.5"-high collider (measured on the
+    // re-dump): 0.7447" = 0.018915 m.
+    let reach_in = 0.7447_f64;
+    let (cx, cz) = (36.0 * IN2M, 24.0 * IN2M);
+    let mut container = Terrain::build(&plain);
+    container.set_bank_props(&[], &[], &[[36.0, 24.0, 3.0, 1.5, 0.0, reach_in]]);
+    // long end: box-blocked at 1.7 cm past the face, disc-clear (0.0932 > 0.0581).
+    assert!(deployment::prop_blocked(&container, (cx + 0.0762 + 0.017, cz)));
+    // short end: box-clear past its 0.0570 m reach, where the disc law (and
+    // the table's wall band) still block — boxes-only, no disc union.
+    assert!(!deployment::prop_blocked(&container, (cx, cz + 0.0381 + 0.0195)));
+    // rotated 45°: blocked along the ROTATED long axis, clear across the
+    // rotated short axis at the same world distance — the angle rides.
+    let q = std::f64::consts::FRAC_1_SQRT_2;
+    let mut rot = Terrain::build(&plain);
+    rot.set_bank_props(&[], &[], &[[36.0, 24.0, 3.0, 1.5, std::f64::consts::FRAC_PI_4, reach_in]]);
+    assert!(deployment::prop_blocked(&rot, (cx + 0.0932 * q, cz - 0.0932 * q)));
+    assert!(!deployment::prop_blocked(&rot, (cx + 0.0932 * q, cz + 0.0932 * q)));
+    // the WALL ring (the step's actual payoff): a 3" x 0.25" wall body — the
+    // twin's centreline band reaches 0.02 − 0.003175 = 0.0168 m past its
+    // surface, the probe 0.0189; the box closes that 2.1 mm ring exactly.
+    let mut wall = Terrain::build(&plain);
+    wall.set_bank_props(&[], &[], &[[10.0, 10.0, 1.5, 0.125, 0.0, reach_in]]);
+    let lateral = 0.125 * IN2M + 0.017; // 1.7 cm past the SURFACE
+    assert!(deployment::prop_blocked(&wall, (10.0 * IN2M, 10.0 * IN2M + lateral)));
+    assert!(!deployment::prop_blocked(&wall, (10.0 * IN2M, 10.0 * IN2M + lateral + 0.004)));
 }
 
 // ==== NML-1152 step 5 — the spot-search SCAN (best_spot / least_blocked_spot) ====
@@ -880,7 +942,8 @@ fn spot_search_replays_every_fixture_unit() {
             .as_array().unwrap().iter()
             .map(|b| [b[0].as_f64().unwrap(), b[1].as_f64().unwrap(), b[2].as_f64().unwrap()])
             .collect();
-        board.set_bank_props(&walls_in, &blockers);
+        let boxes = bank_boxes(props);
+        board.set_bank_props(&walls_in, &blockers, &boxes);
         let in2m = board.in2m();
         let walls = walls_in
             .iter()

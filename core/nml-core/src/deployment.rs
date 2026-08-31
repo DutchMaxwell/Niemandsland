@@ -215,10 +215,36 @@ const TERRAIN_SAMPLE_STEP_M: f64 = 0.0381;
 /// The probe sphere's radius (ai_deployment.gd:296).
 pub const PROBE_RADIUS_M: f64 = 0.02;
 
-/// One probe-sphere-vs-blocker-disc test: the sample point is blocked when
-/// the disc around it (the sphere's 2D projection) reaches a blocker disc.
-/// `p` is world metres, the blockers ride the board in world metres.
+/// One probe-sphere-vs-blocker test (ai_deployment.gd:300-309). NML-1152 step
+/// 4d: banks WITH `blocker_boxes` test the REAL collision footprints — exact
+/// circle-vs-OBB, the sample point against the oriented box the dump harvested
+/// from the body's CollisionShape3D + global transform (containers
+/// terrain_overlay.gd:2886-2891/:3153-3158, shell + procedural walls
+/// :1967-1972/:2062-2067, corner posts :1910-1915), dilated by that box's own
+/// `reach` — the probe sphere's XZ reach past THIS box (0.02² − dy²)¹ᐟ² with
+/// dy the sphere's y-gap to the box, dump-side per box). This closes the
+/// 2.1 mm ring the WALL layer cannot: `walls` carries wall-body centrelines,
+/// its band reaches only 0.02 − 0.125" past a wall surface, the probe reaches
+/// 0.0189 m (measured). Banks WITHOUT the key keep the incircle-disc law below
+/// (default-preserving); the box law REPLACES the discs when present — the
+/// discs are the containers' incircles, strictly inside the wall band around
+/// the box outline (the step-4c derivation), so mixing both would only add
+/// boundary noise.
 pub fn prop_blocked(board: &Terrain, p: (f64, f64)) -> bool {
+    let boxes = board.blocker_boxes_m();
+    if !boxes.is_empty() {
+        return boxes.iter().any(|b| {
+            let (dx, dy) = (p.0 - b[0], p.1 - b[1]);
+            // The dump's angle θ = atan2(−basis.x.z, basis.x.x): the box's
+            // local X axis is (cos θ, −sin θ) in the (x, z) frame, its local
+            // Z axis (sin θ, cos θ) — Godot yaw (Basis from rotation.y).
+            let (c, s) = (b[4].cos(), b[4].sin());
+            let (lx, ly) = (dx * c - dy * s, dx * s + dy * c);
+            let (qx, qy) = (lx.clamp(-b[2], b[2]), ly.clamp(-b[3], b[3]));
+            let (ex, ey) = (lx - qx, ly - qy);
+            (ex * ex + ey * ey).sqrt() < b[5]
+        });
+    }
     board.blockers_m().iter().any(|b| {
         let (dx, dy) = (p.0 - b[0], p.1 - b[1]);
         (dx * dx + dy * dy).sqrt() < b[2] + PROBE_RADIUS_M

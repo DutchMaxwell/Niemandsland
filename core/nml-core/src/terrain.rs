@@ -123,6 +123,18 @@ pub struct Terrain {
     /// which keeps the twin's blocked law byte-identical to before
     /// (default-preserving, like `walls_in` above).
     blockers_m: Vec<[f64; 3]>,
+    /// NML-1152 step 4d — the bank's optional `blocker_boxes`: per probe-visible
+    /// collider its REAL XZ footprint `[cx, cy, half_w, half_h, angle_rad,
+    /// reach_m]`, world metres (the dump writes table-centred inches — the bank
+    /// `pieces` frame — and `set_bank_props` converts with the board's own
+    /// `in2m`; the angle rides as-is). Harvested from the bodies' actual
+    /// CollisionShape3D + global transform (tools/terrain_bank_dump.gd
+    /// `_collider_boxes`), so a wall body's 0.25" thickness and a container's
+    /// exact outline ride the box — not the centreline `walls_in` carries nor
+    /// the incircle `blockers_m` approximates. Empty when the bank carried no
+    /// `blocker_boxes` key: every bank recorded before step 4d
+    /// (default-preserving, like `blockers_m` above).
+    blocker_boxes_m: Vec<[f64; 6]>,
 }
 
 impl Terrain {
@@ -185,13 +197,20 @@ impl Terrain {
     /// constant the dump divided by), so a wall, a blocker and a model
     /// position can never land in two different frames; the walls then ride
     /// `set_walls_world_m` (world metres → the planner inch frame) exactly
-    /// like an act header's walls do. Both keys are OPTIONAL — a bank dumped
-    /// before NML-1155 carries neither, and empty slices leave the board
-    /// unchanged (default-preserving). NOTE: this OVERWRITES `walls_in` — the
-    /// bank header's own `terrain.walls` is `[]` (act_recorder.gd:290), so
-    /// don't call it on a board whose header walls matter. An absent/default
+    /// like an act header's walls do. NML-1152 step 4d adds `blocker_boxes`
+    /// (`[cx, cy, half_w, half_h, angle, reach]`, inches + radians) — the
+    /// probe's real footprints, see the field doc. All keys are OPTIONAL — a
+    /// bank dumped before NML-1155 carries none, and empty slices leave the
+    /// board unchanged (default-preserving). NOTE: this OVERWRITES `walls_in`
+    /// — the bank header's own `terrain.walls` is `[]` (act_recorder.gd:290),
+    /// so don't call it on a board whose header walls matter. An absent/default
     /// board (in2m 0) keeps its empty layers — the no-overlay behaviour.
-    pub fn set_bank_props(&mut self, walls: &[[f64; 4]], blockers: &[[f64; 3]]) {
+    pub fn set_bank_props(
+        &mut self,
+        walls: &[[f64; 4]],
+        blockers: &[[f64; 3]],
+        blocker_boxes: &[[f64; 6]],
+    ) {
         if self.in2m <= 0.0 {
             return;
         }
@@ -209,6 +228,19 @@ impl Terrain {
             .iter()
             .map(|b| [b[0] * self.in2m, b[1] * self.in2m, b[2] * self.in2m])
             .collect();
+        self.blocker_boxes_m = blocker_boxes
+            .iter()
+            .map(|b| {
+                [
+                    b[0] * self.in2m,
+                    b[1] * self.in2m,
+                    b[2] * self.in2m,
+                    b[3] * self.in2m,
+                    b[4],
+                    b[5] * self.in2m,
+                ]
+            })
+            .collect();
     }
 
     /// The banked blocker discs, world metres — `deployment::prop_blocked`'s
@@ -217,6 +249,16 @@ impl Terrain {
     #[inline]
     pub fn blockers_m(&self) -> &[[f64; 3]] {
         &self.blockers_m
+    }
+
+    /// The banked blocker OBBs, world metres — `deployment::prop_blocked`'s
+    /// input when present (`[cx, cz, half_w, half_h, angle_rad, reach]`; it
+    /// falls back to the `blockers_m` discs when this is empty). Empty = the
+    /// bank carried no `blocker_boxes` key (NOT "the board has no props" —
+    /// the mirror of the `walls_in` caveat).
+    #[inline]
+    pub fn blocker_boxes_m(&self) -> &[[f64; 6]] {
+        &self.blocker_boxes_m
     }
 
     /// A world point (metres, `x`/`z`) in the movement planner's 0-origin INCH
@@ -313,6 +355,7 @@ impl Terrain {
             in2m: cp.inches_to_meters,
             walls_in: Vec::new(),
             blockers_m: Vec::new(),
+            blocker_boxes_m: Vec::new(),
         };
         out.set_walls_world_m(&p.walls);
         out
