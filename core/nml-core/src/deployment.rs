@@ -21,11 +21,28 @@ pub struct RollOff {
     pub winner: i64,
 }
 
+/// One shape group of a unit's deployment models (step 6c): the unit's OWN
+/// models first, then each attached hero's (solo_controller.gd:_deploy_models
+/// :10239-10245) — `n` models carry this group's base at the group's Tough
+/// scale. Derived py-side (`list_to_profile.deploy_base_groups`); the corpus
+/// carries ≤ 2 groups (host + one hero), per-model toughs uniform.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ModelShape {
+    pub is_oval: bool,
+    pub w_mm: i64,
+    pub d_mm: i64,
+    pub tough: i64,
+    pub n: usize,
+}
+
 /// Pregame input for one unit, built py-side from the list profile (§3.2).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct UnitSpec {
     pub key: String,
     pub model_count: i64,
+    /// After 6c this is NO production input (the ladder reads
+    /// `deploy_base_radius_of`) — it stays as the gate's cross-check artifact
+    /// (derived vs the dump's snapped value).
     pub base_r_m: f64,
     pub footprint: Vec<(f64, f64)>,
     pub scout: bool,
@@ -33,6 +50,11 @@ pub struct UnitSpec {
     pub ignores_terrain: bool,
     pub vanguard: bool,
     pub transport_capacity: i64,
+    /// The deploy yaw (the model node's `global_rotation.y`; 0.0 corpus-wide).
+    pub facing_rad: f64,
+    /// The true per-model shape groups (empty only for callers that never
+    /// reach the settle pass — checked at the SettleUnit build).
+    pub model_shapes: Vec<ModelShape>,
 }
 
 /// One unit's deployed result (slice 5/6 fill this; the gate compares it).
@@ -992,7 +1014,10 @@ pub fn deploy_side(
     // drains main-then-scout).
     for &i in placement_order(specs, &mut rng).iter() {
         let s = &specs[i];
-        let radius = deploy_footprint_radius(s.model_count.max(0) as usize, s.base_r_m);
+        // the ladder threads ONE unit-max radius (solo_controller.gd:9106) —
+        // the derived deploy radius over host + attached heroes (:10263-10267)
+        let base_r = deploy_base_radius_of(s);
+        let radius = deploy_footprint_radius(s.model_count.max(0) as usize, base_r);
         // B9 Scout (:9098-9102): a scout searches its zone EXTENDED 12" forward
         // (whole-width band, `scout_extended_zone`), forward_y recomputed on the
         // band, and its zone-of-record for the settle containment is the band.
@@ -1006,7 +1031,7 @@ pub fn deploy_side(
         };
         let o = deploy_place_id(
             &unit_zone, &sec, fwd, objectives, &mut occupied, board, walls,
-            radius, &s.footprint, s.base_r_m, s.ignores_terrain, s.vanguard,
+            radius, &s.footprint, base_r, s.ignores_terrain, s.vanguard,
         );
         zone_of_record.push(unit_zone);
         out.placements.push(Placement {
@@ -1042,11 +1067,14 @@ pub fn deploy_side(
             .iter()
             .map(|&(ui, pi)| {
                 let p = &out.placements[pi];
-                SettleUnit {
-                    models: p.models.iter().map(|m| [m.0 as f32, m.1 as f32]).collect(),
-                    base_r: specs[ui].base_r_m,
-                    zone: zone_of_record[pi],
-                }
+                let geoms = settle_shape_geoms(&specs[ui]);
+                let n = p.models.len();
+                assert_eq!(
+                    geoms.len(), n,
+                    "unit {}: model_shapes sum {} != model_count {}",
+                    specs[ui].key, geoms.len(), n
+                );
+                SettleUnit { models: p.models.iter().map(|m| [m.0 as f32, m.1 as f32]).collect(), geoms, zone: zone_of_record[pi] }
             })
             .collect();
         resolve_deploy_overlaps(&mut units, board, walls);
@@ -1062,12 +1090,203 @@ pub fn deploy_side(
 // sweeps over every on-table unit: (a) separate the unit's OWN bases to
 // contact, (b) shift the WHOLE unit rigidly out of every other unit's bases
 // (wall-clamped), per-model projected out of forbidden rest, (c) re-separate
-// own, (d) minimal whole-unit re-shift into the recorded zone. All shapes
-// ROUND (the twin's law — UnitSpec.base_r_m is the unit's largest model base;
-// per-model shapes coincide in the corpus, no attached heroes). Godot's
-// Vector2 is f32 (real_t) while GDScript scalars are f64 — centres and the
-// resultant accumulate in f32, radii and edge gaps in f64, narrowed at every
-// Vector2 boundary, exactly like the table.
+// own, (d) minimal whole-unit re-shift into the recorded zone. Step 6c: every
+// model carries its TRUE base shape — `shape_for_model`'s ROUND/OVAL law
+// (separation_checker.gd:267-279) at the model's Tough scale, the host's
+// models first then each attached hero's (`_deploy_models` :10239-10245).
+// Godot's Vector2 is f32 (real_t) while GDScript scalars are f64 — centres and
+// the resultant accumulate in f32, radii and edge gaps in f64, narrowed at
+// every Vector2 boundary, exactly like the table.
+
+/// `OPRApiClient._base_size_from_tough` (opr_api_client.gd:704-715) — the base
+/// long edge (mm) a model's Tough alone justifies. 0 = normal infantry.
+pub fn base_size_from_tough(tough: i64) -> f64 {
+    if tough >= 18 {
+        150.0
+    } else if tough >= 12 {
+        120.0
+    } else if tough >= 9 {
+        80.0
+    } else if tough >= 6 {
+        60.0
+    } else if tough >= 3 {
+        40.0
+    } else {
+        0.0
+    }
+}
+
+/// One model's settle geometry: `SeparationChecker.shape_for_model`
+/// (separation_checker.gd:267-279) at the group's Tough scale
+/// (`OPRArmyManager.model_base_long_mm`, opr_army_manager.gd:1459-1460 — the
+/// unit base vs the Tough-justified edge, never smaller) and the unit's deploy
+/// yaw. Round reads the long edge (base_size_round); oval keeps w×d.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SettleShapeGeom {
+    pub oval: bool,
+    pub radius: f64,
+    pub semi_x: f64,
+    pub semi_z: f64,
+    pub yaw: f32,
+}
+
+impl SettleShapeGeom {
+    fn build(is_oval: bool, w_mm: i64, d_mm: i64, tough: i64, yaw: f64) -> Self {
+        let long = (w_mm.max(d_mm)) as f64;
+        let scale = long.max(base_size_from_tough(tough)) / long.max(1.0);
+        if is_oval {
+            SettleShapeGeom {
+                oval: true,
+                radius: 0.0,
+                semi_x: (w_mm as f64 / 2.0) * 0.001 * scale,
+                semi_z: (d_mm as f64 / 2.0) * 0.001 * scale,
+                yaw: yaw as f32,
+            }
+        } else {
+            SettleShapeGeom {
+                oval: false,
+                radius: long / 2.0 * 0.001 * scale,
+                semi_x: 0.0,
+                semi_z: 0.0,
+                yaw: yaw as f32,
+            }
+        }
+    }
+
+    /// `BaseShape.bounding_radius` (separation_checker.gd:137-140).
+    fn bounding_radius(&self) -> f64 {
+        if !self.oval {
+            return self.radius;
+        }
+        (self.semi_x * self.semi_x + self.semi_z * self.semi_z).sqrt()
+    }
+
+    /// `SeparationChecker._min_extent` (:331-334) — the concentric fallback.
+    fn min_extent(&self) -> f64 {
+        if !self.oval {
+            return self.radius;
+        }
+        self.semi_x.min(self.semi_z)
+    }
+
+    fn settle_shape(&self, center: [f32; 2]) -> SettleShape {
+        SettleShape {
+            center,
+            oval: self.oval,
+            radius: self.radius,
+            semi_x: self.semi_x,
+            semi_z: self.semi_z,
+            yaw: self.yaw,
+        }
+    }
+}
+
+/// Per-model settle geometry for one spec, expanded in `_deploy_models` order
+/// (:10239-10245 — host models first, then each attached hero's).
+pub fn settle_shape_geoms(spec: &UnitSpec) -> Vec<SettleShapeGeom> {
+    let mut out = Vec::new();
+    for g in &spec.model_shapes {
+        for _ in 0..g.n {
+            out.push(SettleShapeGeom::build(g.is_oval, g.w_mm, g.d_mm, g.tough, spec.facing_rad));
+        }
+    }
+    out
+}
+
+/// `solo_controller.gd:_deploy_base_radius` (:10263-10267): the largest
+/// bounding radius among the unit's deployment models (host + attached
+/// heroes), floored at `SeparationChecker.DEFAULT_BASE_RADIUS_M` (0.016) —
+/// the scalar the footprint/ladder law consumes.
+pub fn deploy_base_radius_of(spec: &UnitSpec) -> f64 {
+    let mut r = 0.016f64;
+    for g in &spec.model_shapes {
+        r = r.max(SettleShapeGeom::build(g.is_oval, g.w_mm, g.d_mm, g.tough, spec.facing_rad).bounding_radius());
+    }
+    r
+}
+
+/// One on-table unit during the settle: live model centres (f32, the
+/// `Vector3.global_position` boundary), each model's base geometry (same
+/// order as `models`), its recorded containment zone (`_deploy_zone_of` —
+/// the side zone, the scout's extended band for scouts; Vanguard pushes
+/// erase it, :9159 — corpus-inert).
+#[derive(Debug, Clone)]
+pub struct SettleUnit {
+    pub models: Vec<[f32; 2]>,
+    pub geoms: Vec<SettleShapeGeom>,
+    pub zone: Rect,
+}
+
+/// A base for the settle math: f32 centre (Vector2), f64 extents (the
+/// BaseShape's Variant floats), f32 yaw.
+#[derive(Debug, Clone, Copy)]
+struct SettleShape {
+    center: [f32; 2],
+    oval: bool,
+    radius: f64,
+    semi_x: f64,
+    semi_z: f64,
+    yaw: f32,
+}
+
+impl SettleShape {
+    fn bounding_radius(&self) -> f64 {
+        if !self.oval {
+            return self.radius;
+        }
+        (self.semi_x * self.semi_x + self.semi_z * self.semi_z).sqrt()
+    }
+
+    /// `SeparationChecker._min_extent` (:331-334).
+    fn min_extent(&self) -> f64 {
+        if !self.oval {
+            return self.radius;
+        }
+        self.semi_x.min(self.semi_z)
+    }
+}
+
+/// `SeparationChecker._support_extent` (:307-319) — distance (metres) from the
+/// shape's centre to its boundary along unit-direction `dir`: round exact;
+/// oval the ellipse support, `dir.rotated(-yaw)` computed in f32 (Vector2 is
+/// real_t — the angle narrows BEFORE the f32 sin/cos), then the formula in f64
+/// with the table's left-to-right product order.
+fn support_extent(shape: &SettleShape, dir: [f32; 2]) -> f64 {
+    if !shape.oval {
+        return shape.radius;
+    }
+    let ang = -shape.yaw;
+    let (sn, c) = (ang.sin(), ang.cos());
+    let lx = (dir[0] * c - dir[1] * sn) as f64;
+    let ly = (dir[0] * sn + dir[1] * c) as f64;
+    let a = shape.semi_x;
+    let b = shape.semi_z;
+    let denom = ((b * b * lx) * lx + (a * a * ly) * ly).sqrt();
+    if denom < 0.00001 {
+        return (a + b) * 0.5;
+    }
+    (a * b) / denom
+}
+
+/// `SeparationChecker._edge_distance_meters` (:290-302) + `edge_distance`
+/// (:147-150): round-round exact (:294-295); oval-involved via centre-line
+/// support witnesses (:297-302, concentric fallback −min extent :300) — no
+/// RECT branch exists (`shape_for_model` has none). Vector2 f32 centres and
+/// direction, f64 extents, ÷ INCHES_TO_METERS → inches, f64.
+fn edge_distance_in(a: &SettleShape, b: &SettleShape) -> f64 {
+    if !a.oval && !b.oval {
+        let (dx, dy) = (a.center[0] - b.center[0], a.center[1] - b.center[1]);
+        return (((dx * dx + dy * dy).sqrt()) as f64 - a.radius - b.radius) / 0.0254;
+    }
+    let dx = b.center[0] - a.center[0];
+    let dy = b.center[1] - a.center[1];
+    let center_dist = (dx * dx + dy * dy).sqrt();
+    if (center_dist as f64) < 0.00001 {
+        return -a.min_extent().min(b.min_extent());
+    }
+    let dir = [dx / center_dist, dy / center_dist];
+    (center_dist as f64 - support_extent(a, dir) - support_extent(b, [-dir[0], -dir[1]])) / 0.0254
+}
 
 /// B9: the deployment zone extended 12" toward the table centre — the Scout
 /// band (solo_controller.gd:9051-9055; Rect2 ctor + Vector2 size add f32).
@@ -1079,39 +1298,6 @@ pub fn scout_extended_zone(zone: &Rect, forward_y: f64) -> Rect {
     } else {
         Rect::new(zone.pos.0, zone.pos.1 - ext, zone.size.0, zone.size.1 + ext)
     }
-}
-
-/// One on-table unit during the settle: live model centres (f32, the
-/// `Vector3.global_position` boundary), its base radius, its recorded
-/// containment zone (`_deploy_zone_of` — the side zone, the scout's extended
-/// band for scouts; Vanguard pushes erase it, :9159 — corpus-inert).
-#[derive(Debug, Clone)]
-pub struct SettleUnit {
-    pub models: Vec<[f32; 2]>,
-    pub base_r: f64,
-    pub zone: Rect,
-}
-
-/// A ROUND base for the settle math: f32 centre (Vector2), f64 radius
-/// (the BaseShape's Variant float).
-#[derive(Debug, Clone, Copy)]
-struct SettleShape {
-    center: [f32; 2],
-    radius: f64,
-}
-
-impl SettleShape {
-    fn bounding_radius(&self) -> f64 {
-        self.radius
-    }
-}
-
-/// `SeparationChecker._edge_distance_meters` ROUND-ROUND (:294-295) +
-/// `edge_distance` (:147-150): Vector2 f32 centre distance − radii (metres),
-/// ÷ INCHES_TO_METERS → inches, f64.
-fn edge_distance_in(a: &SettleShape, b: &SettleShape) -> f64 {
-    let (dx, dy) = (a.center[0] - b.center[0], a.center[1] - b.center[1]);
-    ((dx * dx + dy * dy).sqrt() as f64 - a.radius - b.radius) / 0.0254
 }
 
 /// `SeparationResolver` constants (separation_resolver.gd:46-59).
@@ -1259,7 +1445,7 @@ fn world_forbidden(board: &Terrain, walls: &[WallSeg], p: (f64, f64), r: f64) ->
 pub fn resolve_deploy_overlaps(units: &mut [SettleUnit], board: &Terrain, walls: &[WallSeg]) {
     for _sweep in 0..4 {
         for ui in 0..units.len() {
-            let (n, base_r) = (units[ui].models.len(), units[ui].base_r);
+            let n = units[ui].models.len();
             if n == 0 {
                 continue;
             }
@@ -1270,7 +1456,8 @@ pub fn resolve_deploy_overlaps(units: &mut [SettleUnit], board: &Terrain, walls:
                 let mut shapes: Vec<SettleShape> = units[ui]
                     .models
                     .iter()
-                    .map(|m| SettleShape { center: *m, radius: base_r })
+                    .zip(&units[ui].geoms)
+                    .map(|(m, g)| g.settle_shape(*m))
                     .collect();
                 for _p in 0..4 {
                     for i in 0..n {
@@ -1299,13 +1486,15 @@ pub fn resolve_deploy_overlaps(units: &mut [SettleUnit], board: &Terrain, walls:
                 .flat_map(|(_, u)| {
                     u.models
                         .iter()
-                        .map(move |m| SettleShape { center: *m, radius: u.base_r })
+                        .zip(&u.geoms)
+                        .map(move |(m, g)| g.settle_shape(*m))
                 })
                 .collect();
             let mut shapes: Vec<SettleShape> = units[ui]
                 .models
                 .iter()
-                .map(|m| SettleShape { center: *m, radius: base_r })
+                .zip(&units[ui].geoms)
+                .map(|(m, g)| g.settle_shape(*m))
                 .collect();
             let delta = resolve_overlaps(&mut shapes, &obstacles);
             let mut delta = delta;
@@ -1321,12 +1510,16 @@ pub fn resolve_deploy_overlaps(units: &mut [SettleUnit], board: &Terrain, walls:
                     }
                 }
             }
-            for m in units[ui].models.iter_mut() {
+            for (m, g) in units[ui]
+                .models
+                .iter_mut()
+                .zip(&units[ui].geoms)
+            {
                 let projected = project_out_forbidden(
                     board,
                     walls,
                     ((m[0] + delta[0]) as f64, (m[1] + delta[1]) as f64),
-                    base_r,
+                    g.bounding_radius(),
                 );
                 *m = [projected.0 as f32, projected.1 as f32];
             }
@@ -1335,7 +1528,8 @@ pub fn resolve_deploy_overlaps(units: &mut [SettleUnit], board: &Terrain, walls:
                 let mut shapes: Vec<SettleShape> = units[ui]
                     .models
                     .iter()
-                    .map(|m| SettleShape { center: *m, radius: base_r })
+                    .zip(&units[ui].geoms)
+                    .map(|(m, g)| g.settle_shape(*m))
                     .collect();
                 for _p in 0..4 {
                     for i in 0..n {
@@ -1355,22 +1549,33 @@ pub fn resolve_deploy_overlaps(units: &mut [SettleUnit], board: &Terrain, walls:
             // (d) ZONE containment (:9558-9576, Bug 8): if any base left the
             // unit's recorded zone, shift the WHOLE unit minimally back in —
             // dropped when the shift would tunnel any model through a wall.
+            // Per-model radius both here and in the shift (`_deploy_cfg_in_zone`
+            // :9466-9476 and `_deploy_zone_reshift` :9482-9496 walk
+            // `model_base_radius_m(models[i])` inside their loops).
             let zone = units[ui].zone;
             let zend = zone.end();
-            let out_of_zone = units[ui].models.iter().any(|m| {
-                (m[0] as f64 - base_r) < zone.pos.0
-                    || (m[0] as f64 + base_r) > zend.0
-                    || (m[1] as f64 - base_r) < zone.pos.1
-                    || (m[1] as f64 + base_r) > zend.1
-            });
+            let radius_at =
+                |i: usize| -> f64 { units[ui].geoms[i].bounding_radius() };
+            let out_of_zone = units[ui]
+                .models
+                .iter()
+                .enumerate()
+                .any(|(i, m)| {
+                    let r = radius_at(i);
+                    (m[0] as f64 - r) < zone.pos.0
+                        || (m[0] as f64 + r) > zend.0
+                        || (m[1] as f64 - r) < zone.pos.1
+                        || (m[1] as f64 + r) > zend.1
+                });
             if out_of_zone {
                 let mut shift = (0.0f64, 0.0f64);
-                for m in units[ui].models.iter() {
+                for (i, m) in units[ui].models.iter().enumerate() {
+                    let r = radius_at(i);
                     let (px, pz) = (m[0] as f64, m[1] as f64);
-                    shift.0 = shift.0.max(zone.pos.0 - (px - base_r + shift.0));
-                    shift.0 = shift.0.min(zend.0 - (px + base_r + shift.0));
-                    shift.1 = shift.1.max(zone.pos.1 - (pz - base_r + shift.1));
-                    shift.1 = shift.1.min(zend.1 - (pz + base_r + shift.1));
+                    shift.0 = shift.0.max(zone.pos.0 - (px - r + shift.0));
+                    shift.0 = shift.0.min(zend.0 - (px + r + shift.0));
+                    shift.1 = shift.1.max(zone.pos.1 - (pz - r + shift.1));
+                    shift.1 = shift.1.min(zend.1 - (pz + r + shift.1));
                 }
                 let zshift = [shift.0 as f32, shift.1 as f32]; // Vector2 ctor
                 let wall_ok = !units[ui].models.iter().any(|m| {
