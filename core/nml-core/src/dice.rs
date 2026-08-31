@@ -280,16 +280,6 @@ fn save_batch(
 ///   * `takedown`    — resolved "as a unit of [1]" against a picked model, with
 ///     that model's own Defense (:3155).
 ///   * `strafing`    — the table splits a Strafing weapon per model (:2918).
-///   * `split_fire`  — D1-B4b, raised whenever the volley has MORE THAN ONE
-///     member. The table picks a target per SHOT under that weapon's overlay
-///     (`_solo_pick_overlay_target` :2996-3005) and resolves one volley per
-///     target, so an attached hero whose overlay prefers another unit fires
-///     somewhere else entirely; this port aims every member at the
-///     activation's one recorded `shoot` key, and the hero's wounds would
-///     otherwise land on the wrong unit SILENTLY. Measured on the reference
-///     corpus, that is not rare: of the 70 acts whose recording carries a
-///     hero-owned attack roll, several save their dice under a third unit's
-///     name. Flagged, therefore, not skipped.
 ///
 /// STREAM-DESYNCING DRAWS — these ROLL DICE on the table and nothing here does,
 /// so from the first one onward a `dice="table"` corpus is on a different
@@ -315,7 +305,11 @@ fn save_batch(
 ///     deliberate B4 fidelity fix, declared rather than smuggled.
 ///   * per-copy bearer scaling of a weapon's carriers
 ///     (solo_controller.gd:457-467).
-///   * SPLIT FIRE (:2996-3005) — see `split_fire` in the flag list above.
+///
+/// PORTED in NML-1150: SPLIT FIRE (:2996-3005) — one call of THIS function per
+/// target group, in the table's group order, on the same tray (sim.rs builds
+/// the groups from the act's `split` aim). A multi-member volley at ONE target
+/// is not split fire and no longer raises any flag.
 ///
 /// TO-HIT AND SAVE MODIFIERS with no field in the profile/context model:
 ///   * Indirect's moved -1 and its Quick Readjustment opt-out (:3163-3169).
@@ -382,11 +376,6 @@ pub struct Shooter<'a> {
 ///
 /// STILL NOT PORTED here, and now visible because the members are:
 ///
-///   * SPLIT FIRE. The table picks a target per SHOT under that weapon's
-///     overlay (`_solo_pick_overlay_target` :2996-3005) and resolves one volley
-///     per target, so a hero whose overlay prefers another unit fires elsewhere
-///     entirely; this port aims every member at the activation's one recorded
-///     `shoot` key. A multi-member volley therefore raises `split_fire`.
 ///   * The hero's RANGE is the host's. `dist_in` is the one distance the caller
 ///     measured between the host and the target (sim.rs) — the hero's own model
 ///     positions are never read, so a hero standing 3" behind its unit is gated
@@ -411,9 +400,6 @@ pub fn resolve_volley_with_tray(
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
-    if shooters.len() > 1 {
-        out.mark("split_fire");
-    }
     let (mut regenable, mut regen_proof) = (0i64, 0i64);
     let reach_gate = dist_in.ceil();
     // FLATTENED on purpose: one pass over the (member, profile) pairs, so the

@@ -205,6 +205,7 @@ impl Candidate {
             shoot: self.shoot.clone(),
             charge: self.charge.clone(),
             patient: self.patient,
+            split: None,
         }
     }
 

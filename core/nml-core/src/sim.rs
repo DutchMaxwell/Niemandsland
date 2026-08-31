@@ -9,6 +9,7 @@
 //! (:602-607) on. With `cast` off the LEGACY spell rider inside the shoot
 //! branch runs instead (:621-628), which is what the shipped rollouts still do.
 
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::combat::{
@@ -18,7 +19,7 @@ use crate::combat::{
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
 use crate::geom::{self, V3};
-use crate::io::{Action, Seams};
+use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::rng::GodotRng;
 use crate::rules::Spell;
@@ -1307,11 +1308,145 @@ pub fn resolve_stochastic_on_board_reach(
     resolve_with(statics, state, action, Cover::Board(terrain), seams, None, Some(rng), reach, None)
 }
 
+/// NML-1150 — SPLIT FIRE's plan: the act's `split` aim folded onto THIS state's
+/// roster. One entry per target group, in the table's group order
+/// (`main.gd:2963-2984`: first-seen order of the per-weapon overlay picks, one
+/// `_solo_resolve_ai_volley` per group).
+struct SplitGroup {
+    /// The group's target, by roster index and by key (`sees` reads keys).
+    ti: usize,
+    key: String,
+    /// The gate and modifier distance: the recorded target's plain centre gap
+    /// for the pooled plan; the B11 EDGE gap (both base radii off) for a split
+    /// group, which exists because the TABLE's own test fired.
+    d: f64,
+    /// Per member index, the weapon indices of that member's `shoot` list the
+    /// table aimed at THIS group, in build order. `None` = the pooled plan:
+    /// every kept weapon fires, no narrowing.
+    weapons: Option<HashMap<usize, Vec<usize>>>,
+}
+
+/// Folds `action.split` onto the state, or answers `None` when the activation
+/// stays on the one-recorded-target path: no aim recorded, every entry aimed at
+/// the recorded target anyway (the pre-1150 path, byte-identical), a target key
+/// absent from the roster, or one member naming one weapon twice (the pooled
+/// path is the honest fallback then). `marks` names every dropped divergence,
+/// never silent: a port weapon the aim does not list is a shot the table did
+/// not fire (a spent Limited, an overlay that refused) and is dropped with
+/// `split_dropped`.
+fn split_plan(
+    split: Option<&Vec<SplitShot>>,
+    statics: &[UnitStatic],
+    state: &State,
+    si: usize,
+    shoot_key: &str,
+) -> (Option<Vec<SplitGroup>>, Vec<&'static str>) {
+    let mut marks: Vec<&'static str> = Vec::new();
+    let Some(list) = split.filter(|l| !l.is_empty()) else { return (None, marks) };
+    let mut order: Vec<String> = Vec::new();
+    for s in list {
+        if !order.contains(&s.target) {
+            order.push(s.target.clone());
+        }
+    }
+    if order.len() == 1 && order[0] == shoot_key {
+        return (None, marks); // aligned with the recorded target — no split
+    }
+    let mut groups: Vec<SplitGroup> = Vec::new();
+    for key in &order {
+        let Some(&ti) = state.roster.index.get(key.as_str()) else {
+            marks.push("split_unknown_target");
+            continue;
+        };
+        // B11 (main.gd:4098-4104): the table measures shooting range base-EDGE
+        // to base-edge — the centre-space equivalent subtracts BOTH base radii
+        // from every pair distance. The group exists because the TABLE's own
+        // test fired, so every gate below runs on that EDGE gap.
+        let d = (geom::dist_in(&state.positions[si], &state.positions[ti])
+            - (state.radii[si].first().copied().unwrap_or(DEFAULT_BASE_RADIUS_M)
+                + state.radii[ti].first().copied().unwrap_or(DEFAULT_BASE_RADIUS_M))
+                / IN2M)
+            .max(0.0);
+        groups.push(SplitGroup { ti, key: key.clone(), d, weapons: Some(HashMap::new()) });
+    }
+    // The member lookup by name: one host plus its own attached heroes, alive
+    // only, so the names are unique here exactly as the table's are.
+    let member = |name: &str| {
+        std::iter::once(&si).chain(state.attached[si].iter()).copied().find(|&mi| {
+            state.alive[mi] > 0 && statics[state.roster.profile[mi]].name == name
+        })
+    };
+    // Claim each aim entry's (member, weapon) for ITS group; one member naming
+    // one weapon twice (or for two groups) would double-fire it — pooled
+    // fallback, named. A pair naming no port weapon is a shot the port cannot
+    // build (profile drift): it draws nothing, visible by construction.
+    let mut claimed: HashMap<(usize, usize), usize> = HashMap::new();
+    for s in list {
+        let Some(mi) = member(&s.member) else { continue };
+        let Some(pi) = statics[state.roster.profile[mi]].shoot.iter()
+            .position(|p| p.name == s.weapon)
+        else {
+            continue;
+        };
+        let Some(gi) = groups.iter().position(|g| g.key == s.target) else { continue };
+        match claimed.insert((mi, pi), gi) {
+            Some(prev) if prev != gi => {
+                marks.push("split_weapon_reaimed");
+                return (None, marks);
+            }
+            Some(_) => continue,
+            None => {
+                if let Some(w) = groups[gi].weapons.as_mut() {
+                    w.entry(mi).or_default().push(pi);
+                }
+            }
+        }
+    }
+    // A port weapon no entry names is a shot the table never fired — dropped,
+    // named once.
+    let dropped = std::iter::once(si)
+        .chain(state.attached[si].iter().copied())
+        .filter(|&mi| state.alive[mi] > 0)
+        .any(|mi| {
+            (0..statics[state.roster.profile[mi]].shoot.len())
+                .any(|pi| !claimed.contains_key(&(mi, pi)))
+        });
+    if dropped {
+        marks.push("split_dropped");
+    }
+    if groups.is_empty() {
+        return (None, marks);
+    }
+    (Some(groups), marks)
+}
+
 /// NML-1073 M5 D1-B4 — the SAME played activation with `dice="table"`: the
 /// shooting sub-phase draws from `tray` in the table's own order instead of
 /// filling an expected-value pool, and reports what it drew. `rng` still runs
 /// the rest of the activation (the melee/spell remainders B5 will take over),
 /// so the two streams stay exactly as split as the table's are.
+///
+/// The volley's Shooters over a built `parts` list — the table's build order,
+/// each member signing its own dice (main.gd:3199-3200).
+fn shooters_of<'a>(
+    parts: &'a [(usize, Scratch, Ctx)],
+    statics: &'a [UnitStatic],
+    state: &State,
+) -> Vec<crate::dice::Shooter<'a>> {
+    parts
+        .iter()
+        .map(|(mi, msc, att)| {
+            let um = &statics[state.roster.profile[*mi]];
+            crate::dice::Shooter {
+                profiles: &um.shoot,
+                keep: &msc.keep,
+                attacks: &msc.attacks,
+                att,
+                owner: &um.name,
+            }
+        })
+        .collect()
+}
 #[allow(clippy::too_many_arguments)]
 pub fn resolve_stochastic_tray_on_board(
     statics: &[UnitStatic],
@@ -1580,7 +1715,15 @@ fn resolve_with(
             return Err(Unsupported::MovedShootLos);
         }
         if let Some(&ti) = next.roster.index.get(shoot_key.as_str()) {
-            if next.sees(si, &shoot_key) && los_clear(&next, si, ti) {
+            // NML-1150: the split plan is decided BEFORE the recorded target's
+            // gate — a split act may aim at units the recorded key does not
+            // name, and then validity is gated PER GROUP below (main.gd
+            // :2963-2984). The EV half keeps the one-target gate.
+            let (plan, split_marks) = match dice.as_mut() {
+                Some(_) => split_plan(action.split.as_ref(), statics, &next, si, &shoot_key),
+                None => (None, Vec::new()),
+            };
+            if plan.is_some() || (next.sees(si, &shoot_key) && los_clear(&next, si, ti)) {
                 let d = geom::dist_in(&next.positions[si], &next.positions[ti]);
                 // NML-1132: the EXPECTED-VALUE half measures over the table's folded
                 // model set (`fold_dist_in`); the TRAY half below keeps the plain
@@ -1617,19 +1760,10 @@ fn resolve_with(
                 };
                 next.casts[si] -= sp_cost; // 0 unless the spell rider fired
                 match dice.as_mut() {
-                    // D1-B4: the table's dice, in the table's draw order. The
-                    // wounds then land through the SAME casualty machinery the
-                    // EV path uses — kill order stays the trainer's.
                     Some((tray, shot)) => {
-                        let ut = &statics[next.roster.profile[ti]];
-                        let def = ctx_of(ut, &next, ti);
-                        // D1-B4b: the volley's MEMBERS, in the table's build
-                        // order — the host, then its attached heroes in
-                        // capture order (`main._run_ai_shooting` :2954-2958,
-                        // `State::attached` state.rs:361-362). Each brings its
-                        // OWN ranged set, Quality and survivor scaling
-                        // (:2985-2990); a member with no living model is
-                        // skipped exactly as the table skips it (:2959).
+                        for m in split_marks {
+                            shot.mark(m);
+                        }
                         // D6a-B4: with `sighting="model"` the die count is the
                         // table's own, per member and per WEAPON — the board's
                         // sight volumes are built once for the whole volley.
@@ -1637,56 +1771,100 @@ fn resolve_with(
                             (true, Cover::Board(t)) => sight::zones_of(t),
                             _ => Vec::new(),
                         };
-                        let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
-                        for &mi in std::iter::once(&si).chain(next.attached[si].iter()) {
-                            if next.alive[mi] <= 0 {
-                                continue;
-                            }
-                            let um = &statics[next.roster.profile[mi]];
-                            let mut msc = Scratch::default();
-                            if seams.sighting {
-                                sighted_profiles_of(um, &next, statics, mi, ti, &zones, d, &mut msc);
-                            } else {
-                                profiles_of(um, next.alive[mi], d, &mut msc);
-                            }
-                            parts.push((mi, msc, ctx_of(um, &next, mi)));
-                        }
-                        let members: Vec<crate::dice::Shooter<'_>> = parts
-                            .iter()
-                            .map(|(mi, msc, att)| {
-                                let um = &statics[next.roster.profile[*mi]];
-                                crate::dice::Shooter {
-                                    profiles: &um.shoot,
-                                    keep: &msc.keep,
-                                    attacks: &msc.attacks,
-                                    att,
-                                    owner: &um.name,
+                        // D1-B4: the table's dice, in the table's draw order —
+                        // ONE tray volley per target group, in the table's
+                        // group order, on the SAME tray. The pooled plan is the
+                        // act's one recorded target with every weapon (the
+                        // pre-1150 path, byte-identical); a split plan comes
+                        // from the act's `split` aim (NML-1150, main.gd
+                        // :2963-2984, one `_solo_resolve_ai_volley` per group).
+                        //
+                        // NO sees/los gate on a split group: it exists because
+                        // the table fired it — the table's own per-target
+                        // validity check (main.gd:4011-4029, Indirect waiving
+                        // LOS included) already ran at record time, and the
+                        // port's los_pairs matrix is the PLANNER's strict test,
+                        // which would reject exactly those legal indirect
+                        // shots. B11 (main.gd:4098-4104) instead gates split
+                        // groups on the base-EDGE gap — both base radii off
+                        // every pair distance; the pooled plan keeps its
+                        // corpus-anchored centre-space gate.
+                        let pooled = [SplitGroup {
+                            ti,
+                            key: shoot_key.clone(),
+                            d,
+                            weapons: None,
+                        }];
+                        let gs: &[SplitGroup] = plan.as_deref().unwrap_or(&pooled);
+                        for g in gs {
+                            let ut_g = &statics[next.roster.profile[g.ti]];
+                            let def = ctx_of(ut_g, &next, g.ti);
+                            let alive_before_g = next.alive[g.ti];
+                            let wounds_before_g = wounds_left(&next, g.ti);
+                            let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
+                            for &mi in std::iter::once(&si).chain(next.attached[si].iter()) {
+                                if next.alive[mi] <= 0 {
+                                    continue;
                                 }
-                            })
-                            .collect();
-                        let r = crate::dice::resolve_volley_with_tray(
-                            &members, &def, &ut.name, d, tray,
-                        );
-                        // D1-B5a: `absorb`, not `=` — a CHARGE activation puts
-                        // several sub-phases into ONE report, and the replay
-                        // gate compares the whole activation roll by roll.
-                        let w = shot.absorb(r);
-                        land_wounds(&mut next, ti, w);
-                    }
-                    None => apply_expected_wounds(&mut next, ti, volley, rng.as_deref_mut()),
-                }
-                // D1-B5b: the volley's morale test is the NEXT thing on the
-                // table's tray (main.gd:8248-8251). Leaving it undrawn is what
-                // put every later activation of a `dice="table"` game on a
-                // different stream than the recording.
-                let ut = &statics[next.roster.profile[ti]];
-                if shooting_morale_trigger(&next, ut, ti, alive_before, wounds_before) {
-                    match dice.as_mut() {
-                        Some((tray, shot)) => tray_morale(&mut next, ut, ti, false, tray, shot),
-                        None => {
-                            if morale_fails_expected(&next, ut, ti) {
-                                next.shaken[ti] = true;
+                                let um = &statics[next.roster.profile[mi]];
+                                let mut msc = Scratch::default();
+                                if seams.sighting {
+                                    sighted_profiles_of(
+                                        um, &next, statics, mi, g.ti, &zones, g.d, &mut msc,
+                                    );
+                                } else {
+                                    profiles_of(um, next.alive[mi], g.d, &mut msc);
+                                }
+                                if let Some(aims) = &g.weapons {
+                                    // The table gates and scales per TARGET
+                                    // (main.gd:3088-3095); a member the group
+                                    // does not aim brings no shot, a member it
+                                    // aims keeps only ITS OWN weapon indices,
+                                    // index-parallel throughout.
+                                    let Some(want) = aims.get(&mi) else { continue };
+                                    let (keep, attacks): (Vec<usize>, Vec<i64>) = msc
+                                        .keep
+                                        .iter()
+                                        .zip(msc.attacks.iter())
+                                        .filter(|(pi, _)| want.contains(pi))
+                                        .map(|(&pi, &n)| (pi, n))
+                                        .unzip();
+                                    msc.keep = keep;
+                                    msc.attacks = attacks;
+                                }
+                                parts.push((mi, msc, ctx_of(um, &next, mi)));
                             }
+                            let r = crate::dice::resolve_volley_with_tray(
+                                &shooters_of(&parts, statics, &next),
+                                &def, &ut_g.name, g.d, tray,
+                            );
+                            // D1-B5a: `absorb`, not `=` — a CHARGE activation
+                            // puts several sub-phases into ONE report, and the
+                            // replay gate compares the whole activation roll by
+                            // roll.
+                            let w = shot.absorb(r);
+                            land_wounds(&mut next, g.ti, w);
+                            // D1-B5b: the volley's morale test is the NEXT
+                            // thing on the table's tray (main.gd:8248-8251),
+                            // per group — inside the per-group
+                            // `_solo_resolve_ai_volley` (:3249-3255). Leaving
+                            // it undrawn is what put every later activation of
+                            // a `dice="table"` game on a different stream than
+                            // the recording.
+                            if shooting_morale_trigger(
+                                &next, ut_g, g.ti, alive_before_g, wounds_before_g,
+                            ) {
+                                tray_morale(&mut next, ut_g, g.ti, false, tray, shot);
+                            }
+                        }
+                    }
+                    None => {
+                        apply_expected_wounds(&mut next, ti, volley, rng.as_deref_mut());
+                        let ut = &statics[next.roster.profile[ti]];
+                        if shooting_morale_trigger(&next, ut, ti, alive_before, wounds_before)
+                            && morale_fails_expected(&next, ut, ti)
+                        {
+                            next.shaken[ti] = true;
                         }
                     }
                 }
@@ -2141,5 +2319,102 @@ mod tests {
         let on = Seams { hero_attach: true, ..Seams::default() };
         assert!((fold_dist_in(&st, 0, 2, on) - 7.0).abs() < 1e-4);
         assert!((fold_dist_in(&st, 0, 2, Seams::default()) - 12.0).abs() < 1e-4);
+    }
+
+    // ----------------------------------------------- NML-1150: SPLIT FIRE ---
+
+    use crate::faces_to_hits;
+    use crate::io::SplitShot;
+
+    /// `hero_line` with the roster INDEX filled and the two ENEMY statics
+    /// named like their roster keys, so the save batches sign a real unit's
+    /// name.
+    fn split_line() -> (State, Vec<UnitStatic>) {
+        let (mut st, mut statics) = hero_line();
+        let r = &*st.roster;
+        st.roster = Rc::new(crate::state::Roster {
+            keys: r.keys.clone(),
+            index: r
+                .keys
+                .iter()
+                .enumerate()
+                .map(|(i, k)| (k.clone(), i))
+                .collect::<HashMap<_, _>>(),
+            profile: r.profile.clone(),
+        });
+        statics[2] = UnitStatic { name: "b".into(), ..Default::default() };
+        statics[3] = UnitStatic { name: "bh".into(), ..Default::default() };
+        (st, statics)
+    }
+
+    fn split_shot(member: &str, weapon: &str, target: &str) -> SplitShot {
+        SplitShot {
+            member: member.into(),
+            weapon: weapon.into(),
+            target: target.into(),
+        }
+    }
+
+    /// NML-1150: an act whose two members fire at TWO different units resolves
+    /// as the table resolves it — one tray volley per target group, in the
+    /// act's group order, on ONE tray. The host's rifle opens at `b`, the
+    /// joined hero's heavy gun answers at `bh`; each defender eats only its
+    /// own group's wounds, and the tray stands exactly where the drawn faces
+    /// put it. RED for the whole rung: swapping the act's group order moves
+    /// the draw order with it (proven red once by the same assertions under
+    /// the swapped list).
+    #[test]
+    fn the_volley_resolves_per_target_group_in_the_acts_order() {
+        let (st, statics) = split_line();
+        let action = Action {
+            kind: HOLD,
+            unit: "a".into(),
+            dest: None,
+            shoot: Some("b".into()),
+            charge: None,
+            patient: false,
+            split: Some(vec![
+                split_shot("host", "Rifle", "b"),
+                split_shot("hero", "Heavy Gun", "bh"),
+            ]),
+        };
+        let terrain = crate::terrain::Terrain::default();
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = crate::sim::resolve_stochastic_tray_on_board(
+            &statics, &st, &action, &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        // The draw order: the FIRST group's volley, then the second's — the
+        // host's 1 rifle die at `b`, its save batch, then the hero's 3 heavy
+        // gun dice at `bh` with THAT defender's own save batch. Per-model
+        // sighting off, so the counts are the survivor-scaled attacks.
+        let kinds: Vec<&str> = shot.rolls.iter().map(|r| r.kind).collect();
+        let owners: Vec<&str> = shot.rolls.iter().map(|r| r.owner.as_str()).collect();
+        assert_eq!(kinds, vec!["attack", "defense", "attack", "defense"]);
+        assert_eq!(owners, vec!["host", "b", "hero", "bh"]);
+        assert_eq!(shot.rolls[0].count, 1);
+        assert_eq!(shot.rolls[2].count, 3);
+        // The per-group HIT count: each save batch is exactly the hits its own
+        // hit roll drew (faces recomputed off the port's OWN roll, dice_rules
+        // style), signed by ITS group's defender.
+        for (hit, save) in [(0usize, 1usize), (2, 3)] {
+            let hits = faces_to_hits(&shot.rolls[hit].faces, shot.rolls[hit].target as u8) as i64;
+            assert_eq!(shot.rolls[save].count, hits.max(0));
+            assert_eq!(shot.rolls[save].owner, if hit == 0 { "b" } else { "bh" });
+        }
+        // The per-group WOUNDS: each defender eats ONLY its own group's
+        // unsaved wounds — `b` stands (its save blocks everything at Defense
+        // 0 in this fixture), `bh` falls to its group's one landed wound.
+        assert_eq!(next.alive[2], 1);
+        assert_eq!(next.wounds[2].iter().sum::<i64>(), 1);
+        assert_eq!(next.alive[3], 0);
+        assert!(next.wounds[3].is_empty());
+        assert_eq!(shot.caused, 1);
+        // The tray position: exactly the faces the report drew, no more.
+        let mut probe = Tray::seeded(11);
+        let total: usize = shot.rolls.iter().map(|r| r.count as usize).sum();
+        probe.roll(total);
+        assert_eq!(tray.state_i64(), probe.state_i64());
     }
 }
