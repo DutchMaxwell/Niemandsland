@@ -7,6 +7,7 @@
 //! the attempt count is data-dependent (the gate compares the FULL attempt list).
 
 use crate::rng::GodotRng;
+use crate::terrain::{CONTAINER, DANGEROUS, RUINS, Terrain};
 
 /// `SoloController.roll_off`'s tie cap (solo_controller.gd:7508).
 pub const ROLL_OFF_CAP: usize = 100;
@@ -178,4 +179,178 @@ pub fn transport_fill(capacities: &[i64], rng: &mut GodotRng) -> Vec<(usize, usi
         }
     }
     fills
+}
+
+// ---- the deployment terrain geometry (NML-1152 step 4a). A spot must pass the
+// blocked test of `make_blocked_tests` (ai_deployment.gd:292-331): the Godot
+// physics probe against SOLID props (hits_prop, :300-309 — NOT portable, the
+// banked board carries cells + wall segments but no prop meshes; design §4.3),
+// the container/ruin WALL segments at 0.02 m clearance (:301-316), and the
+// terrain class (:317-330). Strider/Flying units take the FLYING class test
+// instead of the walker one (solo_controller.gd:9110-9112). All sample-point
+// math mirrors GDScript's f32 `Vector2` at the narrowing boundary. The
+// invalid-Callable path (ai_deployment.gd:175, terrain ignored entirely) has no
+// twin here — the caller decides per UnitSpec whether to test at all.
+
+/// `DEPLOY_WALL_CLEARANCE_M` (ai_deployment.gd:268).
+pub const DEPLOY_WALL_CLEARANCE_M: f64 = 0.02;
+/// `TERRAIN_SAMPLE_STEP_M` — half a 3" terrain cell (ai_deployment.gd:211).
+const TERRAIN_SAMPLE_STEP_M: f64 = 0.0381;
+
+/// `AiDeployment.footprint_margins` (ai_deployment.gd:78-87): per-axis zone
+/// margins from the REAL footprint (the Bug-19 fix); an empty footprint
+/// (regiment tray) falls back to the circumradius on both axes.
+pub fn footprint_margins(radius: f64, footprint: &[(f64, f64)], base_r: f64) -> (f64, f64) {
+    if footprint.is_empty() {
+        return (radius, radius);
+    }
+    let (mut mx, mut my) = (0.0f64, 0.0f64);
+    for off in footprint {
+        mx = mx.max(off.0.abs());
+        my = my.max(off.1.abs());
+    }
+    (mx + base_r, my + base_r)
+}
+
+/// `AiDeployment._base_edge_offsets` (ai_deployment.gd:200-205): the centre plus
+/// the eight base-edge points (cardinals + diagonals) at radius `r`; a zero
+/// radius collapses to the centre alone. f32 at every Vector2 boundary.
+fn base_edge_offsets(r: f64) -> Vec<[f32; 2]> {
+    if r <= 0.0 {
+        return vec![[0.0, 0.0]];
+    }
+    let diag = (r * 0.70710678) as f32;
+    let rr = r as f32;
+    vec![
+        [0.0, 0.0],
+        [rr, 0.0],
+        [-rr, 0.0],
+        [0.0, rr],
+        [0.0, -rr],
+        [diag, diag],
+        [diag, -diag],
+        [-diag, diag],
+        [-diag, -diag],
+    ]
+}
+
+/// `AiDeployment._disc_sample_offsets` (ai_deployment.gd:217-234, Bug 29): a
+/// COMPLETE sampler for a base disc of radius `r`. A small base (r ≤ one step)
+/// reduces to the 9-point check; a large base densifies on a grid no coarser
+/// than half a terrain cell so no blocked cell can hide between samples, then
+/// appends the exact edge ring — NOT de-duplicated (the table's sample
+/// multiset is mirrored verbatim; `_blocked_count` shares it in slice 5).
+pub fn disc_sample_offsets(r: f64) -> Vec<[f32; 2]> {
+    if r <= TERRAIN_SAMPLE_STEP_M {
+        return base_edge_offsets(r);
+    }
+    let mut offsets = vec![[0.0f32, 0.0]];
+    let n = (r / TERRAIN_SAMPLE_STEP_M).ceil() as i64;
+    let step = r / n as f64;
+    for i in -n..=n {
+        for j in -n..=n {
+            if i == 0 && j == 0 {
+                continue;
+            }
+            let o = [(i as f64 * step) as f32, (j as f64 * step) as f32];
+            let len = (o[0] * o[0] + o[1] * o[1]).sqrt();
+            if len as f64 <= r + 0.0001 {
+                offsets.push(o);
+            }
+        }
+    }
+    for e in base_edge_offsets(r) {
+        if e != [0.0f32, 0.0] {
+            offsets.push(e);
+        }
+    }
+    offsets
+}
+
+/// `MovementPlanner.point_seg_distance` (movement_planner.gd:168-174) in the
+/// planner's 0-origin INCH frame — the frame `Terrain::walls_in` stores wall
+/// segments in. Distances scale by 1/in2m exactly, so the metre EPS
+/// (movement_planner.gd:24) rescales with them for the degenerate-segment gate;
+/// `in2m` is the board's own scale (the one `set_walls_world_m` used).
+fn point_seg_distance_in(p: [f32; 2], a: [f32; 2], b: [f32; 2], in2m: f64) -> f32 {
+    let eps2 = (0.0001f64 * 0.0001 / (in2m * in2m)) as f32;
+    let (abx, aby) = (b[0] - a[0], b[1] - a[1]);
+    let len2 = abx * abx + aby * aby;
+    if len2 < eps2 {
+        return ((p[0] - a[0]) * (p[0] - a[0]) + (p[1] - a[1]) * (p[1] - a[1])).sqrt();
+    }
+    // GDScript divides in f64 (Vector2 dot/length_squared widen at the Variant),
+    // clamps in f64, then narrows back for the `ab * t` multiply (:173-174).
+    let dot = (p[0] - a[0]) * abx + (p[1] - a[1]) * aby;
+    let t = ((dot as f64 / len2 as f64).clamp(0.0, 1.0)) as f32;
+    let (qx, qy) = (a[0] + abx * t, a[1] + aby * t);
+    ((p[0] - qx) * (p[0] - qx) + (p[1] - qy) * (p[1] - qy)).sqrt()
+}
+
+/// The WALL layer (`near_wall`, ai_deployment.gd:312-316): a point within
+/// `DEPLOY_WALL_CLEARANCE_M` of any wall segment is blocked. Segments ride the
+/// banked board (`Terrain::walls_in`); the test runs in the inch frame where
+/// distances are frame-exact and only the threshold converts — frame-equivalent
+/// to the table's metre-space test up to f32 storage noise, NOT bit-identical.
+pub fn wall_blocked(board: &Terrain, p: (f64, f64)) -> bool {
+    let q = board.to_inch([p.0 as f32, 0.0, p.1 as f32]);
+    let clear_in = DEPLOY_WALL_CLEARANCE_M / board.in2m();
+    let in2m = board.in2m();
+    board
+        .walls_in()
+        .iter()
+        .any(|s| (point_seg_distance_in(q, s[0], s[1], in2m) as f64) < clear_in)
+}
+
+/// The CELL layer of `blocked_normal` / `blocked_flying` (ai_deployment.gd:317-330):
+/// a walker rejects DANGEROUS + CONTAINER, a Strider/Flying unit rejects
+/// CONTAINER + RUINS; FOREST floors are legal for both (deploy doctrine).
+/// `p` is world metres, exactly what `get_terrain_at_world_position` takes.
+pub fn cell_blocked(board: &Terrain, p: (f64, f64), flying: bool) -> bool {
+    let t = board.type_at([p.0 as f32, 0.0, p.1 as f32]);
+    if flying {
+        t == CONTAINER || t == RUINS
+    } else {
+        t == DANGEROUS || t == CONTAINER
+    }
+}
+
+/// `AiDeployment._blocked_at` (ai_deployment.gd:174-195): the per-spot TERRAIN
+/// test. The centre first; then, with a model grid, EVERY model's base (centre
+/// + dense disc samples, edges computed once and NOT zero-filtered — the model
+/// centre itself is a sample) with sample points added in f32 like the table's
+/// `p + off + e`; else the dense disc of `probe_radius` (regiment trays, centre
+/// already tested). The probe layer is NOT portable (see the module note).
+pub fn spot_blocked(
+    board: &Terrain,
+    p: (f64, f64),
+    flying: bool,
+    probe_radius: f64,
+    footprint: &[(f64, f64)],
+    base_r: f64,
+) -> bool {
+    if wall_blocked(board, p) || cell_blocked(board, p, flying) {
+        return true;
+    }
+    let (px, py) = (p.0 as f32, p.1 as f32);
+    let hit = |q: [f32; 2]| {
+        cell_blocked(board, (q[0] as f64, q[1] as f64), flying)
+            || wall_blocked(board, (q[0] as f64, q[1] as f64))
+    };
+    if !footprint.is_empty() {
+        let edges = disc_sample_offsets(base_r);
+        for off in footprint {
+            let m = [px + off.0 as f32, py + off.1 as f32];
+            if edges.iter().any(|e| hit([m[0] + e[0], m[1] + e[1]])) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if probe_radius <= 0.0 {
+        return false;
+    }
+    disc_sample_offsets(probe_radius)
+        .iter()
+        .any(|e| *e != [0.0f32, 0.0] && hit([px + e[0], py + e[1]]))
 }

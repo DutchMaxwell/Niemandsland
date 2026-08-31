@@ -145,6 +145,14 @@ impl Terrain {
         &self.walls_in
     }
 
+    /// `cell_params.inches_to_meters` — the metre-per-inch scale this board's
+    /// inch frame was built with, so callers converting a METRE threshold into
+    /// this frame (deployment wall clearance) use the board's own scale.
+    #[inline]
+    pub fn in2m(&self) -> f64 {
+        self.in2m
+    }
+
     /// Converts `TerrainOverlay.get_wall_segments_world()` — WORLD METRES,
     /// `[[ax, az], [bx, bz]]` per segment — into the inch frame and stores it.
     /// The conversion is `to_inch` itself, so a wall and a model position can
