@@ -1,4 +1,4 @@
-//! NML-1140 step 1 — doctrine skeleton: the mode enum, the canonical
+//! NML-1140 steps 1-2 — doctrine skeleton: the mode enum, the canonical
 //! per-army summary and the style label, extracted ONCE here from the
 //! act-header profiles (`battle_sim.gd:_unit_profile` schema,
 //! loader_gate.py parity-gated, field names pinned to list_to_profile.py).
@@ -6,6 +6,10 @@
 //! RNG. UNSURE: label calibration probe-deferred like FAIRNESS_EPS; shots =
 //! attacks x count on range > 0 weapons, 24" / 12" bands.
 use serde_json::Value;
+use std::{collections::HashMap, rc::Rc};
+
+use crate::state::{Bands, Mods, Objective, Profile, Profiles, Roster, State};
+use crate::{IN2M, score};
 
 /// Doctrine mode (design 4/5); "random" is today's byte-identical path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,6 +80,98 @@ impl Summary {
         let tu = 4 * MOVE_REF_IN * self.wounds_total;
         if sh >= fa && sh >= tu { StyleLabel::Shooting } else if fa >= tu { StyleLabel::Fast } else { StyleLabel::Tough }
     }
+}
+
+/// Design 3 — the synthetic zone fill and the edge-fairness leaf inputs.
+/// Zone rectangles and marker positions are in INCHES (the objective_gate.py
+/// bands and the doctrine grid); `State` positions are metres.
+#[derive(Clone, Copy, Debug)]
+pub struct Zone { pub x_min: f64, pub x_max: f64, pub z_min: f64, pub z_max: f64 }
+
+const DEFAULT_RADIUS_IN: f64 = 0.032 / IN2M; // the 32 mm default (design 3)
+
+fn radius_in(p: &Profile) -> f64 {
+    if p.base_radius > 0.0 { p.base_radius / IN2M } else { DEFAULT_RADIUS_IN }
+}
+
+/// The fixed fill: units in capture order along the zone's centre row, each
+/// in a slot of 2 x base-radius + 1", rows wrapping toward the zone's table
+/// edge. All models cluster on the unit's slot centre (control_gap_in takes
+/// the nearest model, so clustering moves nothing).
+fn fill(zone: &Zone, profs: &[Profile]) -> Vec<Vec<[f64; 3]>> {
+    let mut out = Vec::new();
+    let (mut x, mut z) = (zone.x_min, (zone.z_min + zone.z_max) / 2.0);
+    let dz = if zone.z_max > 0.0 { 1.0 } else { -1.0 };
+    for p in profs {
+        let r = radius_in(p);
+        let slot = 2.0 * r + 1.0;
+        if x + slot > zone.x_max { x = zone.x_min; z += dz * slot; }
+        out.push(vec![[(x + r) * IN2M, 0.0, z * IN2M]; p.model_count.max(1) as usize]);
+        x += slot;
+    }
+    out
+}
+
+/// One army's roster slice in profile-map order (capture order) plus its fill.
+fn army_units(army: &Value, zone: &Zone, keys: &mut Vec<String>, profs: &mut Vec<Profile>) -> Vec<Vec<[f64; 3]>> {
+    let start = profs.len();
+    for (k, v) in army.as_object().expect("profiles object") {
+        keys.push(k.clone());
+        profs.push(serde_json::from_value(v.clone()).expect("profile schema"));
+    }
+    fill(zone, &profs[start..])
+}
+
+/// The synthetic state (design 3): army `a` stood up in `zone_a` as player 1,
+/// army `b` in `zone_b` as player 2, `markers` (inches) as owner-0 objectives.
+/// Horizon = round 1 of ROUNDS = 4 (core_selfplay.gd:23). Zero RNG, zero
+/// draws — the streamed roll-off stays at the call site (design 1).
+pub fn synth_state(a: &Value, b: &Value, zone_a: &Zone, zone_b: &Zone, markers: &[[f64; 3]]) -> State {
+    let mut keys = Vec::new();
+    let mut profs: Vec<Profile> = Vec::new();
+    let mut spots = army_units(a, zone_a, &mut keys, &mut profs);
+    let na = profs.len();
+    spots.extend(army_units(b, zone_b, &mut keys, &mut profs));
+    let n = keys.len();
+    let idx: HashMap<String, usize> = keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect();
+    let alive: Vec<i64> = profs.iter().map(|p| p.model_count.max(1)).collect();
+    let wounds: Vec<Vec<i64>> = profs.iter().map(|p| p.wounds_max.clone()).collect();
+    let radii: Vec<Vec<f64>> = profs.iter().map(|p| vec![radius_in(p) * IN2M; p.model_count.max(1) as usize]).collect();
+    let bands: Vec<Bands> = profs.iter().map(|p| Bands { advance: p.move_bands.advance, rush: p.move_bands.rush }).collect();
+    State {
+        roster: Rc::new(Roster { keys, index: idx.clone(), profile: (0..n).collect() }),
+        profiles: Rc::new(Profiles { list: profs, index: idx }),
+        round: 1,
+        rounds_total: 4,
+        scoring: Rc::from("markers"),
+        objectives: markers.iter().map(|m| Objective { pos: [m[0] * IN2M, m[1] * IN2M, m[2] * IN2M], owner: 0 }).collect(),
+        markers_meta: Vec::new(), destroy_seq: Vec::new(),
+        vp: None, vp_flavour: None, vp_memo: None, cast_events: Vec::new(),
+        player: (0..n).map(|i| if i < na { 1 } else { 2 }).collect(),
+        alive,
+        activated: vec![false; n], shaken: vec![false; n], fatigued: vec![false; n],
+        in_cover: vec![false; n], aircraft: vec![false; n], dormant: vec![false; n],
+        casts: vec![0; n], morale_bonus: vec![0; n],
+        ambush_arrived_round: vec![0; n], earliest_arrival_round: vec![0; n],
+        wound_frac: vec![1.0; n],
+        positions: spots,
+        wounds,
+        radii,
+        mods: vec![Mods::default(); n], mods_base: vec![Rc::new(Mods::default()); n],
+        attached: Rc::new(vec![Vec::new(); n]), attached_to: Rc::new(vec![None; n]),
+        los: vec![None; n], los_pairs: None,
+        bands,
+        shroud: vec![None; n], charge_no_difficult: vec![false; n], charge_probe_r: vec![0.0; n],
+    }
+}
+
+/// Design 3 leaf inputs: S1 = A in zone1 / B in zone2, S2 = the swap;
+/// returns (a1, a2), army A's hand score on each edge. On the non-destroy
+/// hand path b1 = 1 - a1 and b2 = 1 - a2 — asserted by the tests.
+pub fn edge_scores(a: &Value, b: &Value, zone1: &Zone, zone2: &Zone, markers: &[[f64; 3]]) -> (f64, f64) {
+    let s1 = synth_state(a, b, zone1, zone2, markers);
+    let s2 = synth_state(b, a, zone1, zone2, markers);
+    (score::score(&s1, 1, score::NO_INCOMING), score::score(&s2, 2, score::NO_INCOMING))
 }
 
 #[cfg(test)]
@@ -187,6 +283,47 @@ mod tests {
             assert_eq!(Mode::of_str(word), Some(m));
         }
         assert_eq!(Mode::of_str("aggressive"), None);
+    }
+
+    /// objective_gate.py:53-58 front-line bands; x spans the hx = 33 lattice.
+    fn front_line_zones() -> (Zone, Zone) {
+        (
+            Zone { x_min: -33.0, x_max: 33.0, z_min: -24.0, z_max: -12.0 },
+            Zone { x_min: -33.0, x_max: 33.0, z_min: 12.0, z_max: 24.0 },
+        )
+    }
+
+    #[test]
+    fn mirrored_armies_edge_scores_complementary() {
+        let a: Value = serde_json::from_str(SHOOTY).unwrap();
+        let b: Value = serde_json::from_str(&SHOOTY.replace("p1_", "p2_")).unwrap();
+        let (z1, z2) = front_line_zones();
+        // Owner-0 marker set, z-symmetric so the mirrored armies must tie.
+        let m = [
+            [0.0, 0.0, 0.0],
+            [-10.0, 0.0, 5.0],
+            [-10.0, 0.0, -5.0],
+            [10.0, 0.0, 5.0],
+            [10.0, 0.0, -5.0],
+        ];
+        let s1 = synth_state(&a, &b, &z1, &z2, &m);
+        let s2 = synth_state(&b, &a, &z1, &z2, &m);
+        let a1 = score::score(&s1, 1, score::NO_INCOMING);
+        let b1 = score::score(&s1, 2, score::NO_INCOMING);
+        let a2 = score::score(&s2, 2, score::NO_INCOMING);
+        let b2 = score::score(&s2, 1, score::NO_INCOMING);
+        // Design 3: the hand eval is complementary per state.
+        assert!((a1 + b1 - 1.0).abs() < 1e-9, "a1+b1 = {}", a1 + b1);
+        assert!((a2 + b2 - 1.0).abs() < 1e-9, "a2+b2 = {}", a2 + b2);
+        // Identical armies on mirrored zones over a z-symmetric set: dead even.
+        assert!((a1 - 0.5).abs() < 1e-9 && (a2 - 0.5).abs() < 1e-9, "a1 = {a1}, a2 = {a2}");
+        // edge_scores exposes exactly (a1, a2).
+        let (e1, e2) = edge_scores(&a, &b, &z1, &z2, &m);
+        assert_eq!(e1, a1);
+        assert_eq!(e2, a2);
+        // The identity: v_X = min over the two edges, v_A + v_B = 1 - |a1 - a2|.
+        let (v_a, v_b) = (a1.min(a2), b1.min(b2));
+        assert!((v_a + v_b - (1.0 - (a1 - a2).abs())).abs() < 1e-9);
     }
 }
 
