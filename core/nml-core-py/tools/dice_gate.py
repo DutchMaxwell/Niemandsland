@@ -169,8 +169,32 @@ def classify(got: list, want: list) -> str:
     return "full_equal" if len(got) == len(want) else "length"
 
 
+def bearer_names(profile: dict) -> set[str]:
+    """Every rule base name the unit or one of its attached heroes carries in
+    the header profiles. The import folds item-granted rules into
+    `special_rules` (opr_api_client.gd:261-263), so the flat lists are the
+    whole check — the same read `RulesRegistry.unit_rule_active` makes."""
+    out = set()
+    for r in profile.get("special_rules", []):
+        out.add(str(r).split("(")[0].strip())
+    for row in profile.get("attached_hero_rules", []):
+        for g in row:
+            out.add(str(g).split("(")[0].strip())
+    return out
+
+
+def is_mend_roll(r: dict) -> bool:
+    """The Mend D3's recorded shape — `_solo_tray_roll(1, 1, ...)` (main.gd:5244)
+    with the tray's default `roll_kind` "attack" (:7107). Unique in the corpus:
+    every other one-die tray roll targets 2+ (cast clamped [2,6] ai_spell.gd,
+    BEST_HIT_TARGET=2, morale clamped [2,6])."""
+    return (r.get("roll_kind") == "attack" and int(r.get("count", 0)) == 1
+            and int(r.get("target", 0)) == 1)
+
+
 def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
-        no_dangerous: bool = False, engage_fold: str = "auto", cond_ap: str = "auto") -> int:
+        no_dangerous: bool = False, engage_fold: str = "auto", cond_ap: str = "auto",
+        only_rule: str = "") -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -180,7 +204,10 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
 
     grid = {c: dict.fromkeys(BUCKETS + ("acts",), 0) for c in CLASSES}
     chk = dict.fromkeys(("stream_ok", "rolls", "tally", "tally_equal", "tally_red",
-                         "next", "next_equal", "next_red"), 0)
+                         "next", "next_equal", "next_red", "mend_rolls", "mend_rolls_equal",
+                         "mend_rolls_clean", "mend_rolls_clean_equal", "confounded"), 0)
+    if only_rule:
+        grid["mend"] = dict.fromkeys(BUCKETS + ("acts",), 0)
     first = {"stream": "", "tally": "", "next": ""}
     vintage_seen: set[tuple[bool, bool]] = set()
     t0 = time.perf_counter()
@@ -210,14 +237,26 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
             k = int(act["act"])
             action = (act.get("pick") or {}).get("action") or {}
             kind = int(action.get("kind", -1))
+            i0 = first_at_or_after(dice, k)
             if kind in SHOOTING_KINDS and action.get("shoot"):
                 cls, foe = "shooting", action["shoot"]
             elif kind == CHARGE_KIND and action.get("charge"):
                 cls, foe = "melee", action["charge"]
+            elif only_rule:
+                # --only-rule: the rule fires BEFORE attacking (main.gd:1056-1058),
+                # on ADVANCE/RUSH activations just as well — a Mend act with no
+                # shoot/charge target is still a replayable act, judged as its
+                # own class.
+                cls, foe = "mend", None
             else:
                 continue
+            if only_rule:
+                unit_key = (act.get("pick") or {}).get("unit_key") or action.get("unit")
+                prof = head["profiles"].get(unit_key) or {}
+                block = [r for r in dice[i0:] if int(r["act"]) == k]
+                if only_rule not in bearer_names(prof) or not any(is_mend_roll(r) for r in block):
+                    continue
             grid[cls]["acts"] += 1
-            i0 = first_at_or_after(dice, k)
             tray = nml_core.Tray(seed)
             if burn[i0]:
                 tray.roll(burn[i0])
@@ -235,14 +274,31 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
             want = [(combat_kind(r["roll_kind"]), r["count"], r["target"], r["faces"], r["owner"])
                     for r in dice[i0:] if int(r["act"]) == k]
             grid[cls][classify(got, want)] += 1
+            # THE RULE'S OWN SUB-CHECK (--only-rule): every recorded roll of the
+            # rule's shape must reappear at the SAME SLOT of the port's draw
+            # order with the same face — the draw happened, where it belongs.
+            if only_rule:
+                clean = len(got) == len(want)
+                for i, w in enumerate(want):
+                    if w[0] == "attack" and w[1] == 1 and w[2] == 1:
+                        chk["mend_rolls"] += 1
+                        hit = i < len(got) and got[i] == w
+                        chk["mend_rolls_equal"] += hit
+                        if clean:
+                            chk["mend_rolls_clean"] += 1
+                            chk["mend_rolls_clean_equal"] += hit
             gm, wm = trailing_morale(got), trailing_morale(want)
             if gm or wm:
                 grid["morale"]["acts"] += 1
                 grid["morale"][classify(gm, wm)] += 1
 
             # CHECK B — only where both sides rolled: an activation the table
-            # never fought has no tally to be compared against.
-            if got and want:
+            # never fought has no tally to be compared against. Under
+            # --only-rule also only where the port reproduced the act's whole
+            # shape: an act the table resolved BEYOND its recorded pick (the
+            # known length confound) has a tally that measures that gap, not
+            # the rule — counted as confounded instead.
+            if got and want and (not only_rule or len(got) == len(want)):
                 chk["tally"] += 1
                 green = tallies(got) == tallies(want)
                 chk["tally_equal"] += green
@@ -251,11 +307,27 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 elif not green and not first["tally"]:
                     first["tally"] = "%s act %d [%s] port %s vs table %s" % (
                         d.name, k, cls, tallies(got), tallies(want))
-            # CHECK C — both combatants, against the NEXT replayable act.
-            if pos + 1 < len(lines):
+            elif only_rule and got != want:
+                chk["confounded"] += 1
+            # CHECK C — both combatants, against the NEXT replayable act. Under
+            # --only-rule it runs only where the act's SHAPE held: a confounded
+            # act's state divergence is the confound's, not the rule's (the
+            # confound is counted above).
+            if (not only_rule or len(got) == len(want)) and pos + 1 < len(lines):
                 chk["next"] += 1
-                nx, keys = nxt.plain(), (action["unit"], foe)
+                nx = nxt.plain()
+                keys = (action["unit"], foe)
                 nxt_state = lines[pos + 1]["state"]
+                if only_rule:
+                    # The rule's patient is usually a THIRD friendly unit (the
+                    # bearer's own host, a joined hero, a neighbour) — check C
+                    # must see the whole friendly side on rule acts, or the
+                    # heal it is supposed to police is invisible to it.
+                    actor = nxt_state["units"].get(action["unit"]) or {}
+                    side = actor.get("player")
+                    if side is not None:
+                        keys = tuple(kk for kk, uu in sorted(nxt_state["units"].items())
+                                     if uu.get("player") == side)
                 green = both_equal(nx, nxt_state, keys)
                 chk["next_equal"] += green
                 if red == "one-wound":
@@ -264,7 +336,7 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                     first["next"] = "%s act %d [%s] %s vs %s" % (
                         d.name, k, cls, keys[0][-6:], keys[1][-6:])
 
-    acts = sum(grid[c]["acts"] for c in ("shooting", "melee"))
+    acts = sum(grid[c]["acts"] for c in grid)
     print()
     print("GATE D1-B6 over %d games, %d activations, %s%s%s (%.1fs)"
           % (len(games), acts, vintage_report_line(vintage_seen),
@@ -277,11 +349,19 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
           % (chk["tally_equal"], chk["tally"]))
     print("  C NEXT  : %d/%d activations leave BOTH combatants where the next act found them"
           % (chk["next_equal"], chk["next"]))
+    if only_rule:
+        print("  rule %s: %d/%d rule-shaped rolls replay at their own slot "
+              "(%d/%d on the %d shape-clean acts), %d acts shape-confounded "
+              "(tally and C skipped there)"
+              % (only_rule, chk["mend_rolls_equal"], chk["mend_rolls"],
+                 chk["mend_rolls_clean_equal"], chk["mend_rolls_clean"],
+                 chk["mend_rolls_clean"], chk["confounded"]))
     cols = ("acts",) + BUCKETS
     fmt = "  %-9s" + "%14s" * len(cols)
-    tot = {b: sum(grid[c][b] for c in CLASSES) for b in cols}
+    grid_classes = tuple(grid)
+    tot = {b: sum(grid[c][b] for c in grid_classes) for b in cols}
     print(fmt % (("class",) + cols))
-    for c in CLASSES + ("TOTAL",):
+    for c in grid_classes + ("TOTAL",):
         g = tot if c == "TOTAL" else grid[c]
         print(fmt % ((c,) + tuple(g[b] for b in cols)))
     for name, text in first.items():
@@ -289,7 +369,8 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
             print("  first %s divergence: %s" % (name, text))
 
     summary = {"tool": "dice_gate", "gate": "D1-B6", "ref": str(ref), "games": len(games),
-               "red": red or "none", "no_dangerous": no_dangerous, "checks": chk, "classes": grid, "totals": tot,
+               "red": red or "none", "no_dangerous": no_dangerous, "only_rule": only_rule,
+               "checks": chk, "classes": grid, "totals": tot,
                "first": first, "seconds": round(time.perf_counter() - t0, 1)}
     if out:
         Path(out).expanduser().write_text(json.dumps(summary, indent=1, sort_keys=True))
@@ -315,9 +396,17 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
     # The bar D1 set for itself: stream exact on every game, every activation's
     # tally exact. `full_equal` and check C are REPORTED, not gated — the melee
     # rung's own log names charge landing (D5) and per-model sighting (D6a) as
-    # what still holds them down.
-    ok = chk["stream_ok"] == len(games) and chk["tally"] > 0 \
-        and chk["tally_equal"] == chk["tally"]
+    # what still holds them down. Under --only-rule the bar is the RULE's:
+    # every rule-shaped roll at its slot, the friendly side where the next act
+    # found it, and every unconfounded activation's tally exact.
+    if only_rule:
+        ok = chk["stream_ok"] == len(games) and 0 < chk["mend_rolls_clean"] \
+            and chk["mend_rolls_clean_equal"] == chk["mend_rolls_clean"] \
+            and chk["tally_equal"] == chk["tally"] \
+            and chk["next_equal"] == chk["next"]
+    else:
+        ok = chk["stream_ok"] == len(games) and chk["tally"] > 0 \
+            and chk["tally_equal"] == chk["tally"]
     if report_only:
         print("  REPORT ONLY — %d/%d activations short of an equal tally, exit 0 by request"
               % (chk["tally"] - chk["tally_equal"], chk["tally"]))
@@ -346,6 +435,11 @@ def main(argv: list[str]) -> int:
                     help="RED for D1-B8: switch the p.12 DANGEROUS-terrain test back OFF "
                          "(header knob dangerous=false). Orthogonal to the three checks above "
                          "— every number must fall back to the pre-D1-B8 baseline")
+    ap.add_argument("--only-rule", default="",
+                    help="restrict the classified activations to the RULE's own acts: "
+                         "an acting unit (or attached hero) bearing the rule whose "
+                         "recorded dice block carries the rule's die shape — block B "
+                         "parity runs read their rule here")
     ap.add_argument("--engage-fold", choices=("auto", "on", "off"), default="auto",
                     help="NML-1130: the header knob engage_fold (PR #446). 'auto' (default) "
                          "reads the corpus's OWN vintage (vintage_knobs) — absent means the "
@@ -360,7 +454,7 @@ def main(argv: list[str]) -> int:
     if len(reds) > 1:
         ap.error("one red knob at a time — each has to redden its own check alone")
     return run(Path(a.ref).expanduser(), a.repo, a.limit, a.out, reds[0] if reds else "",
-               a.report_only, a.red_no_dangerous, a.engage_fold, a.cond_ap)
+               a.report_only, a.red_no_dangerous, a.engage_fold, a.cond_ap, a.only_rule)
 
 
 if __name__ == "__main__":

@@ -202,6 +202,123 @@ pub(crate) fn dangerous_wounds(faces: &[u8]) -> i64 {
     faces.iter().filter(|&&f| f == 1).count() as i64
 }
 
+/// `main._solo_apply_mend`'s D3, counted off ONE tray face (:5247 maps
+/// 1-2→1, 3-4→2, 5-6→3 — `(face + 1) / 2` in integer arithmetic).
+#[inline]
+pub(crate) fn mend_d3(face: u8) -> i64 {
+    (i64::from(face) + 1) / 2
+}
+
+/// The heal primitive's reach — "pick one friendly model within 3\"" (army-book
+/// rule text; mechanics param `range_in: 3.0`, rules_mechanics_gf.json:1350).
+pub const MEND_RANGE_IN: f64 = 3.0;
+/// `_solo_tray_roll(1, 1, ...)` main.gd:5244 — the D3 value roll records the
+/// tray's default `roll_kind` "attack" (main.gd:7107) with success target 1.
+pub const MEND_TARGET: i64 = 1;
+
+/// BLOCK B1 — the heal primitive on the tray path's pre-attack slot:
+/// `_solo_apply_mend` main.gd:5227-5259 and `_solo_mend_pick` :5329-5365.
+/// Official text: "Once per activation, before attacking, pick one friendly
+/// model within 3\" with Tough, and remove D3 wounds from it."
+///
+/// Runs for EVERY action kind, right where main.gd:1056-1058 sits: after the
+/// casts, before attacking. When the acting unit or an alive attached hero
+/// bears Mend (registry-gated, `unit_rule_active` :5234-5238), the most-wounded
+/// alive Tough model (per-model `wounds_max > 1`) of the bearer's player within
+/// 3" of any bearer model heals D3 off ONE tray die. Ties prefer heroes
+/// (`key = lost * 2 + hero`, strict `>` :5361-5364). No bearer, no patient —
+/// or an actor that just died to terrain (:1054) — draws NOTHING, and that
+/// matters: every later face of the activation sits behind this draw. The tray
+/// path only: the EV imagination stays Mend-blind, exactly like the table's
+/// own planner (BattleSim has no Mend).
+pub(crate) fn tray_mend(
+    statics: &[UnitStatic],
+    next: &mut State,
+    si: usize,
+    seams: Seams,
+    tray: &mut Tray,
+    shot: &mut ShootResult,
+) {
+    // main.gd:1054 — an actor killed by its own dangerous-terrain test skips
+    // the whole pre-attack block, Mend included (host-alive only,
+    // game_unit.gd:112-113, NOT the combined count).
+    if next.alive[si] <= 0 {
+        return;
+    }
+    // The bearers: the acting unit plus its attached heroes, each needing at
+    // least one alive model and the rule registry-active (:5230-5240). The
+    // heroes half rides the same seam `dangerous_dice`'s heroes half does —
+    // parity unaffected (the replay gates force `hero_attach=table`).
+    let mut bearers: Vec<usize> = vec![si];
+    if seams.hero_attach {
+        bearers.extend(next.attached[si].iter().copied());
+    }
+    if !bearers
+        .iter()
+        .any(|&b| next.alive[b] > 0 && statics[next.roster.profile[b]].mend_active)
+    {
+        return;
+    }
+    // The bearer models' positions (:5330-5340) — the reach any patient must
+    // fall into. Model-centre distance, planar on the table
+    // (MoveIntent.distance_inches zeroes Y); the corpus records y = 0.
+    let mut bearer_pos: Vec<[f64; 3]> = Vec::new();
+    for &b in &bearers {
+        bearer_pos.extend(next.positions[b].iter().copied());
+    }
+    // The patient scan (:5344-5365): every friendly unit in capture order,
+    // every alive model in array order, first best wins the strict `>`.
+    let pid = next.player[si];
+    let mut patient: Option<(usize, usize, i64)> = None; // (unit, model, wounds_max)
+    let mut best_key: i64 = -1;
+    for u in 0..next.units() {
+        if next.player[u] != pid || next.alive[u] == 0 {
+            continue;
+        }
+        let um = &statics[next.roster.profile[u]];
+        // `wounds_max` is the FULL model list and the wounds array only the
+        // survivors; this port's casualties come off the FRONT (`land_wounds`),
+        // so the living models are that list's tail — the same mapping
+        // `dangerous_dice` ships. (The TABLE removes casualties
+        // defender-optimally, solo_controller.gd:8060-8110; the tail-mapping is
+        // exact for uniform-Tough units and front-eaten casualties alike.)
+        let w = &um.wounds_max;
+        let off = w.len().saturating_sub(next.positions[u].len());
+        for m in 0..next.wounds[u].len() {
+            let Some(&wmax) = w.get(off + m) else { continue };
+            let cur = next.wounds[u][m];
+            if wmax <= 1 || cur >= wmax {
+                continue;
+            }
+            if geom::dist_in(&bearer_pos, &[next.positions[u][m]]) > MEND_RANGE_IN {
+                continue;
+            }
+            let key = (wmax - cur) * 2 + i64::from(um.is_hero);
+            if key > best_key {
+                best_key = key;
+                patient = Some((u, m, wmax));
+            }
+        }
+    }
+    let Some((pu, pm, wmax)) = patient else { return };
+    // One D3 die, recorded exactly as the table records it (:5244, the tap at
+    // :7152-7162): kind "attack", target 1, one face, the ACTING unit's name.
+    let faces = tray.roll(1);
+    let Some(&f0) = faces.first() else { return };
+    let d3 = mend_d3(f0);
+    shot.rolls.push(crate::dice::Roll {
+        kind: "attack",
+        count: 1,
+        target: MEND_TARGET,
+        faces,
+        owner: statics[next.roster.profile[si]].name.clone(),
+    });
+    let healed = d3.min(wmax - next.wounds[pu][pm]);
+    if healed > 0 {
+        next.wounds[pu][pm] += healed;
+    }
+}
+
 /// `SoloController._execute_move` :5033-5047 (GF/AoF v3.5.1 p.12, "Bug 23") —
 /// how many dice the move's dangerous-terrain test rolls.
 ///
@@ -1709,6 +1826,12 @@ fn resolve_with(
         cast_phase(statics, &mut next, si, &row, rng.as_deref_mut());
     }
 
+    // --- MEND (main.gd:1056-1058), the pre-attack slot — every action kind,
+    // tray path only. See `tray_mend`; no bearer, no patient, no draw.
+    if let Some((tray, shot)) = dice.as_mut() {
+        tray_mend(statics, &mut next, si, seams, tray, shot);
+    }
+
     // --- shoot (battle_sim.gd:608-630); HOLD and ADVANCE only ---
     if !shoot_key.is_empty() && (kind == HOLD || kind == ADVANCE) {
         if moved {
@@ -2416,5 +2539,139 @@ mod tests {
         let total: usize = shot.rolls.iter().map(|r| r.count as usize).sum();
         probe.roll(total);
         assert_eq!(tray.state_i64(), probe.state_i64());
+    }
+
+    // -------------------------------------------------- BLOCK B1: MEND ---
+
+    /// A Mend bearer line: actor `a` (bears Mend, unwounded Tough(2)) with the
+    /// joined hero `ah` (Tough(4), two wounds down) 2" ahead, the wounded
+    /// Tough(3) regiment `t` (model 0 two wounds down) 4" from `a` — 2" from
+    /// `ah`, so the hero's base puts it in reach — and an enemy far out.
+    fn mend_line() -> (State, Vec<UnitStatic>) {
+        let mut st = four_unit_line();
+        // Players 0/0/1/1 in the base fixture — `t` must be FRIENDLY.
+        st.player = vec![0, 0, 0, 1];
+        let r = &*st.roster;
+        st.roster = Rc::new(crate::state::Roster {
+            keys: vec!["a".into(), "ah".into(), "t".into(), "f".into()],
+            index: ["a", "ah", "t", "f"]
+                .iter()
+                .enumerate()
+                .map(|(i, k)| (k.to_string(), i))
+                .collect(),
+            profile: vec![0, 1, 2, 3],
+        });
+        st.positions = vec![
+            vec![[0.0, 0.0, 0.0]],
+            vec![[2.0 * IN2M, 0.0, 0.0]],
+            vec![[4.0 * IN2M, 0.0, 0.0], [4.2 * IN2M, 0.0, 0.0]],
+            vec![[30.0 * IN2M, 0.0, 0.0]],
+        ];
+        st.wounds = vec![vec![2], vec![2], vec![1, 3], vec![1]];
+        let mut a = UnitStatic { name: "a".into(), ..Default::default() };
+        a.model_count = 1;
+        a.wounds_max = vec![2];
+        a.mend_active = true;
+        let mut ah = UnitStatic { name: "ah".into(), ..Default::default() };
+        ah.model_count = 1;
+        ah.wounds_max = vec![4];
+        ah.is_hero = true;
+        let mut t = UnitStatic { name: "t".into(), ..Default::default() };
+        t.model_count = 2;
+        t.wounds_max = vec![3, 3];
+        (st, vec![a, ah, t, UnitStatic { name: "f".into(), ..Default::default() }])
+    }
+
+    fn mend_action() -> Action {
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None }
+    }
+
+    /// BLOCK B1 — one fixture act through the tray: the pre-attack Mend slot
+    /// draws exactly ONE die (kind "attack", target 1, signed by the ACTING
+    /// unit), the tie prefers the hero on equal lost wounds, and the heal is
+    /// the D3 capped at the model's own missing wounds.
+    #[test]
+    fn mend_heals_the_tied_hero_d3_capped_and_draws_one_die() {
+        let (st, statics) = mend_line();
+        let terrain = crate::terrain::Terrain::default();
+        let mut tray = Tray::seeded(7);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &mend_action(), &terrain, Seams { hero_attach: true, ..Seams::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        // Exactly one pre-attack die, the table's own record shape.
+        assert_eq!(shot.rolls.len(), 1);
+        let r = &shot.rolls[0];
+        assert_eq!((r.kind, r.count, r.target, r.owner.as_str()),
+            ("attack", 1, MEND_TARGET, "a"));
+        // The hero won the tie (lost 2 each; key 2*2+1 beats the regiment's 4)
+        // and healed exactly min(D3, its own 2 missing wounds) — never capped
+        // WRONG: a D3 face of 4+ cannot exist, and the cap is the model's own.
+        let d3 = mend_d3(r.faces[0]);
+        assert!((1..=3).contains(&d3));
+        assert_eq!(next.wounds[1][0], 2 + d3.min(2));
+        assert_eq!(next.wounds[1][0], 2 + mend_d3(r.faces[0]).min(2));
+        // The tray stands exactly one draw on.
+        let mut probe = Tray::seeded(7);
+        probe.roll(1);
+        assert_eq!(tray.state_i64(), probe.state_i64());
+    }
+
+    /// RED for the whole rung: with the hero unwounded the regiment's model
+    /// takes the heal; out of the 3" ring of BOTH bearers nothing qualifies and
+    /// the slot draws NOTHING; and without the rule the bearer line stays mute.
+    #[test]
+    fn mend_picks_the_most_wounded_in_range_and_draws_nothing_without_a_patient() {
+        let terrain = crate::terrain::Terrain::default();
+        // The hero at full wounds: the regiment's wounded model is the patient.
+        let (st, statics) = mend_line();
+        let mut st = st;
+        st.wounds[1] = vec![4];
+        let (next, shot) = {
+            let mut tray = Tray::seeded(7);
+            let mut rng = crate::rng::GodotRng::new(0);
+            resolve_stochastic_tray_on_board(
+                &statics, &st, &mend_action(), &terrain, Seams { hero_attach: true, ..Seams::default() }, &mut rng, &mut tray,
+            )
+            .unwrap()
+        };
+        let d3 = mend_d3(shot.rolls[0].faces[0]);
+        assert_eq!(next.wounds[2][0], 1 + d3.min(2));
+        // The regiment walked out of the 3" ring AND the hero sits at full
+        // wounds: no patient anywhere, NO draw at all.
+        let (st, statics) = mend_line();
+        let mut st = st;
+        st.positions[2] = vec![[10.0 * IN2M, 0.0, 0.0], [10.2 * IN2M, 0.0, 0.0]];
+        st.wounds[1] = vec![4];
+        let mut tray = Tray::seeded(7);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &mend_action(), &terrain, Seams { hero_attach: true, ..Seams::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert!(shot.rolls.is_empty());
+        let probe = Tray::seeded(7);
+        assert_eq!(tray.state_i64(), probe.state_i64());
+        assert_eq!(next.wounds[2][0], 1);
+        // No Mend, no die — even with a wounded Tough model standing next door.
+        let (st, mut statics) = mend_line();
+        statics[0].mend_active = false;
+        let mut tray = Tray::seeded(7);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (_, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &mend_action(), &terrain, Seams { hero_attach: true, ..Seams::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert!(shot.rolls.is_empty());
+    }
+
+    /// The D3 mapping itself: 1-2→1, 3-4→2, 5-6→3 — main.gd:5247's
+    /// `(face + 1) / 2`.
+    #[test]
+    fn the_mend_d3_maps_the_faces_main_gd_way() {
+        for (face, want) in [(1u8, 1i64), (2, 1), (3, 2), (4, 2), (5, 3), (6, 3)] {
+            assert_eq!(mend_d3(face), want);
+        }
     }
 }
