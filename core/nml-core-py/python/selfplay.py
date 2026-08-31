@@ -85,6 +85,7 @@ import nml_core
 
 from list_to_profile import (
     _faction_from_path,
+    deploy_unit_specs,
     profiles_from_army_forge_json,
     selections_from_army_forge_json,
 )
@@ -179,6 +180,80 @@ def deploy_zone(
             )
         out.append(models)
     return out
+
+
+def _arena_zones() -> dict[str, list[float]]:
+    """arena_match.gd:940-947 — P1's zone front edge at -d/2, P2's at +d/2-12",
+    both 12" deep across the full table width, in metres: the `[x, y, w, h]`
+    Rect the Rust spot search scans."""
+    w = TABLE_W_IN * IN2M
+    return {
+        "1": [-w / 2.0, -TABLE_D_IN / 2.0 * IN2M, w, 12.0 * IN2M],
+        "2": [-w / 2.0, (TABLE_D_IN / 2.0 - 12.0) * IN2M, w, 12.0 * IN2M],
+    }
+
+
+def _arena_roll_off(rng: "nml_core.Rng") -> list[list[int]]:
+    """`SoloController.roll_off` (solo_controller.gd:7517-7528) over the GAME
+    stream: a d6 pair per attempt, TIES RE-ROLL (cap 100), every attempt kept.
+    This is the stream topology the arena branch exists for (design §1): the
+    roll-off is the game stream's FIRST consumer, exactly like `solo._rng` on
+    the table, while deployment itself advances it NOT."""
+    attempts: list[list[int]] = []
+    while len(attempts) < 100:
+        attempts.append([rng.randi_range(1, 6), rng.randi_range(1, 6)])
+        if attempts[-1][0] != attempts[-1][1]:
+            break
+    return attempts
+
+
+def _deploy_arena(
+    seed: int,
+    units1: list[dict[str, Any]],
+    units2: list[dict[str, Any]],
+    list_p1: str | Path,
+    list_p2: str | Path,
+    board: "nml_core.Board",
+    objectives: list[list[float]],
+    opener: int,
+) -> tuple[list[list[list[float]]], list[list[list[float]]]]:
+    """The table's pre-game through the step-7 binding: `deploy_side` per side
+    with the per-side stream `seed + slot` (arena_match.gd:486-488 — the game
+    stream advances NOT), then `deploy_finish` in winner-first order (the FIRST
+    finish runs on the first deployer's units ALONE, solo_controller.gd
+    :9180-9188). Returns the capture positions in units order; a folded hero's
+    models are its slice of the host's settled group, and a reserved (Ambush)
+    unit has no placement — it starts off-table with no models, the round-2
+    arrival being the declared in-game residual (design §1)."""
+    zones = _arena_zones()
+    sides: dict[str, dict[str, Any]] = {}
+    reserved: dict[str, list[str]] = {}
+    hero_fold: dict[str, tuple[str, int, int]] = {}
+    for slot, path in (("1", list_p1), ("2", list_p2)):
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        specs, fold = deploy_unit_specs(data, _faction_from_path(path), int(slot))
+        placed = nml_core.deploy_side(
+            specs, zones[slot], [[o[0], o[2]] for o in objectives], board, seed + int(slot)
+        )
+        sides[slot] = {"units": specs, "placements": placed["placements"], "zone": zones[slot]}
+        reserved[slot] = list(placed["reserved"])
+        hero_fold.update(fold)
+    finished = nml_core.deploy_finish(sides, board, {}, opener)
+    pos: dict[str, list[list[float]]] = {}
+    for slot in ("1", "2"):
+        for key in reserved[slot]:
+            pos[key] = []  # held in reserve — off-table until it arrives
+        for p in finished[slot]:
+            pos[p["key"]] = [[f32(m[0]), 0.0, f32(m[1])] for m in p["models"]]
+    for hero_key, (host_key, offset, count) in hero_fold.items():
+        # A hero rides its host's group — including a host held in reserve,
+        # where the slice of an empty list is empty too.
+        pos[hero_key] = pos.get(host_key, [])[offset : offset + count]
+    return (
+        [pos[u["unit_id"]] for u in units1],
+        [pos[u["unit_id"]] for u in units2],
+    )
 
 
 # ----------------------------------------------------------------- capture ---
@@ -568,6 +643,26 @@ def resolve_sighting(sighting: str) -> str:
             "sighting must be one of %s, not %r" % (list(SIGHTING_MODES), sighting)
         )
     return sighting
+
+
+#: `deployment` modes (NML-1152 step 8). "zone" is the default and is every
+#: corpus written before this knob: the twin's own 12"-zone even spread
+#: (`deploy_zone`, core_selfplay.gd:593-606), roll-off AFTER deployment, P1
+#: winning ties. "arena" plays the TABLE's pre-game instead: roll-off FIRST
+#: from the game stream with ties re-rolled, winner-first finish order, and
+#: the Rust `deploy_side`/`deploy_finish` pipeline (design §3.2-3.3).
+DEPLOYMENT_MODES = ("zone", "arena")
+
+
+def resolve_deployment(deployment: str) -> str:
+    """The validated `deployment` mode. An unknown mode RAISES for the same
+    reason `resolve_dice` does: a corpus whose header claims a rung it did not
+    play is worse than no corpus."""
+    if deployment not in DEPLOYMENT_MODES:
+        raise ValueError(
+            "deployment must be one of %s, not %r" % (list(DEPLOYMENT_MODES), deployment)
+        )
+    return deployment
 
 
 def resolve_hero_attach(hero_attach: str) -> bool:
@@ -1208,6 +1303,7 @@ def play_game(
     cond_ap: bool | None = None,
     vocab_version: int | None = None,
     objectives: str = "constant",
+    deployment: str = "zone",
     net: str | Path | None = None,
     net_player: int = 0,
     fit_blend: float = 0.5,
@@ -1271,6 +1367,18 @@ def play_game(
     where the models were put. A gate that could not tell that apart would be
     measuring the seed, not the deployment.
 
+    `deployment` (NML-1152 step 8) picks the PRE-GAME: "zone" (the default) is
+    the twin's own even spread above and stays byte-identical to every corpus
+    written before this knob existed; "arena" plays the table's pre-game
+    instead — the roll-off drawn FIRST from the game stream with ties re-rolled
+    (stream topology, design §1), winner-first finish order, and the Rust
+    `deploy_side(seed + slot)` / `deploy_finish` pipeline feeding `capture`. A
+    reserved (Ambush) unit starts off-table with no models — the round-2
+    arrival is the declared in-game residual, not something this knob fakes.
+    The stamp rides ONLY the arena branch, exactly like `objectives_layout`:
+    a "zone" game records the same object it did before this knob existed, an
+    arena game must say so (NML-1147a).
+
     `engage_fold` (PR #446, D5-4) and `cond_ap` (PR #448, NML-1103) are plain
     bools/`None`, not a mode string: neither has a "table" reading to fall
     back to here (this call GENERATES a game, it does not replay a recorded
@@ -1326,6 +1434,7 @@ def play_game(
     eff_charge_landing = resolve_charge_landing(charge_landing)
     eff_movement = resolve_movement(movement)
     eff_sighting = resolve_sighting(sighting)
+    eff_deployment = resolve_deployment(deployment)
     knobs = dict(
         TRAINER_KNOBS,
         top_k=eff_top_k,
@@ -1360,6 +1469,11 @@ def play_game(
             nml_core.RULE_VOCAB_VERSION if vocab_version is None else int(vocab_version)
         ),
     )
+    # NML-1152 step 8: the arena stamp rides ONLY the arena branch — a "zone"
+    # game records the identical header it always did (vintage-pin), an arena
+    # game must say so (NML-1147a). The crate's knob struct ignores the key.
+    if eff_deployment != "zone":
+        knobs["deployment"] = eff_deployment
     core.set_header({"profiles": profiles, "terrain": terrain, "knobs": knobs})
     # NML-1130 (PR #448, NML-1103): conditional AP (Shatter/Tear/Disintegrate/
     # Melee Slayer/Piercing Assault/Piercing Hunter) counted the corrected way.
@@ -1410,7 +1524,19 @@ def play_game(
         ]
     else:
         objectives = [[f32(-16.0 * IN2M), 0.0, 0.0], [0.0, 0.0, 0.0], [f32(16.0 * IN2M), 0.0, 0.0]]
-    if deploy_rng_seed is None:
+    arena = eff_deployment == "arena"
+    if arena:
+        # NML-1152 step 8 — the table's pre-game. Roll-off FIRST from the game
+        # stream (ties re-rolled; the winner of the last attempt opens, the
+        # cap fallback 1 matching `roll_off_traced`), then the Rust pipeline
+        # on per-side streams: the game stream advances by the roll-off and
+        # NOTHING else before the first activation.
+        roll_attempts = _arena_roll_off(rng)
+        opener = 1 if roll_attempts[-1][0] >= roll_attempts[-1][1] else 2
+        pos1, pos2 = _deploy_arena(
+            seed, units1, units2, list_p1, list_p2, board, objectives, opener
+        )
+    elif deploy_rng_seed is None:
         pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng)
         pos2 = deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng)
     else:
@@ -1424,10 +1550,11 @@ def play_game(
 
     owners = [0] * len(objectives)
     vp = [0, 0]
-    # The d6 roll-off, P1 winning ties — and BOTH dice are drawn, left first.
-    left = rng.randi_range(1, 6)
-    right = rng.randi_range(1, 6)
-    opener = 1 if left >= right else 2
+    if not arena:
+        # The d6 roll-off, P1 winning ties — and BOTH dice are drawn, left first.
+        left = rng.randi_range(1, 6)
+        right = rng.randi_range(1, 6)
+        opener = 1 if left >= right else 2
     log: list[dict[str, Any]] = []
     rounds_log: list[dict[str, Any]] = []
     rounds_played = 0
@@ -1479,6 +1606,11 @@ def play_game(
             # rulebook corpus recorded exactly what a constants corpus records
             # until this key existed — the mode was honoured but never said.
             "objectives": eff_objectives,
+            # NML-1152 step 8: WHICH pre-game deployment the game played —
+            # stamped only under "arena" for the same reason objectives_layout
+            # is only present when the rulebook generator ran: a default game
+            # is the same object it was before this knob existed.
+            **({"deployment": eff_deployment} if eff_deployment != "zone" else {}),
             "engage_fold": engage_fold,
             "cond_ap": cond_ap,
             # NML-1142: WHICH brain played. `""` is the hand eval — every corpus

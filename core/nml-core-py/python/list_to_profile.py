@@ -1019,6 +1019,167 @@ def deploy_base_groups(
     return built, heroes_of
 
 
+# ------------------------------------------------------- arena deploy roster ---
+# NML-1152 step 8 — the UnitSpec roster the arena deployment branch feeds
+# `nml_core.deploy_side`. The twin derives everything from the LIST (the 6c
+# doctrine: the dump's shape fields are the gate's oracle only).
+
+# solo_controller.gd:10228-10229 — the compact deployment grid the footprint
+# offsets build (the model POSITIONS themselves are `_place_unit_at`'s fixed
+# grid, ported Rust-side in `place_unit_models`).
+DEPLOY_SPACING_M = 0.04
+DEPLOY_COLS = 5
+# coherency_checker.gd:13/:18 — the span cap the grid shrinks under. The
+# skirmish 6" cap is corpus-absent like the Rust port's (a skirmish corpus
+# must extend this law, not silently reuse the 9" one).
+DEPLOY_MAX_CHAIN_IN = 9.0
+# separation_checker.gd — the DEFAULT_BASE_RADIUS_M `_deploy_base_radius`
+# starts from (:10261).
+DEPLOY_DEFAULT_BASE_R_M = 0.016
+
+
+def _rule_matches(candidate: str, rule: str) -> bool:
+    """game_unit.gd:rule_name_matches :254-258 — the exact name, or the name
+    followed by a parenthesised qualifier ("Tough(3)"); a bare prefix is NOT a
+    match ("Fearless" is not "Fear", "Ambush Beacon" is not "Ambush")."""
+    s = str(candidate).strip()
+    return s == rule or (s.startswith(rule) and s[len(rule):].strip().startswith("("))
+
+
+def _base_rule(candidate: str) -> str:
+    """RulesRegistry.base_rule_name :128-129 — the name without its params."""
+    return str(candidate).strip().split("(", 1)[0].strip()
+
+
+def _deploy_flags(u: dict[str, Any]) -> dict[str, bool]:
+    """The four deployment classifications over one internal unit.
+
+    solo_controller.gd:9009-9015 + :10165-10191: Scout = the special rule or an
+    item-granted "Scout" (B12); Ambush = Ambush/Infiltrate/Rapid Ambush by base
+    name, special rules or grants (the counts_as ALIAS branch of
+    `unit_has_ambush` needs the live RulesRegistry and has no list-side
+    reading); Strider/Flying ignore terrain (:9109, special rules only, no
+    grants); Vanguard = the rule or a grant (the table ANDs `unit_rule_active`
+    with the faction book map, which a list cannot see)."""
+    rules = [str(r) for r in u["special_rules"]]
+    grants = [str(g) for g in u["item_grants"]]
+    ambush_rules = ("Ambush", "Infiltrate", "Rapid Ambush")
+    return {
+        "scout": any(_rule_matches(r, "Scout") for r in rules)
+        or any(_base_rule(g) == "Scout" for g in grants),
+        "ambush": any(_base_rule(r) in ambush_rules for r in rules)
+        or any(_base_rule(g) in ambush_rules for g in grants),
+        "ignores_terrain": any(
+            _rule_matches(r, "Strider") or _rule_matches(r, "Flying") for r in rules
+        ),
+        "vanguard": any(_rule_matches(r, "Vanguard") for r in rules)
+        or any(_base_rule(g) == "Vanguard" for g in grants),
+    }
+
+
+def _deploy_footprint_offsets(shapes: list[dict[str, Any]]) -> list[list[float]]:
+    """solo_controller.gd:_deploy_footprint_offsets :10273-10307 over the
+    folded shape groups — the model-local XZ offsets (metres, relative to the
+    drop anchor) the drop WILL build, so the footprint check tests where each
+    model actually lands. Squarest grid + base-aware spacing + span cap."""
+    n = sum(int(g["n"]) for g in shapes)
+    if n == 0:
+        return []
+    base_r = max(
+        [DEPLOY_DEFAULT_BASE_R_M]
+        + [
+            _base_radius_m(
+                {"is_oval": g["is_oval"], "width_mm": g["w_mm"], "depth_mm": g["d_mm"]},
+                int(g["tough"]),
+            )
+            for g in shapes
+        ]
+    )
+    spacing = max(DEPLOY_SPACING_M, 2.0 * base_r + 0.006)
+    cols = min(n, DEPLOY_COLS) if n <= 2 * DEPLOY_COLS else math.ceil(math.sqrt(n))
+    rows = math.ceil(n / cols)
+    span_cap = (DEPLOY_MAX_CHAIN_IN - 0.5) * 0.0254
+    grid_diag = math.sqrt((cols - 1) ** 2 + (rows - 1) ** 2)
+    if grid_diag > 0.001 and grid_diag * spacing + 2.0 * base_r > span_cap:
+        spacing = max(2.0 * base_r + 0.002, (span_cap - 2.0 * base_r) / grid_diag)
+    return [
+        [
+            (float(i % cols) - float(cols - 1) * 0.5) * spacing,
+            (float(i // cols) - float(rows - 1) * 0.5) * spacing,
+        ]
+        for i in range(n)
+    ]
+
+
+def deploy_unit_specs(
+    data: dict[str, Any], faction: str, player: int
+) -> tuple[list[dict[str, Any]], dict[str, tuple[str, int, int]]]:
+    """NML-1152 step 8 — the arena deployment roster for one list:
+    `(specs, hero_fold)`.
+
+    `specs` are UnitSpec dicts in host-creation order, one per unit EXCLUDING
+    its attached heroes — `_deploy_models` (:10238-10245) deploys the host's
+    models PLUS each attached hero's, so a hero folds into its host's group
+    (model_shapes: host first, heroes in list order — the settle reads them in
+    exactly that order). A hero whose joinToUnit names no selection stays its
+    own row, the same guard `derive_attachment` applies. `hero_fold` maps a
+    folded hero's unit_id -> `(host_key, offset, count)`: the hero's models are
+    that slice of the host's settled group.
+
+    NOT ported (corpus-absent, named loudly): regiments deploy from their tray
+    (`_is_regiment` -> empty offsets) and a dangling hero-of-hero chain."""
+    built, heroes_of = deploy_base_groups(data, faction, player)
+    by_sel = {u["selection_id"]: u for u in built if u["selection_id"]}
+    specs: list[dict[str, Any]] = []
+    hero_fold: dict[str, tuple[str, int, int]] = {}
+    for u in built:
+        if u["join_to_unit"] and u["join_to_unit"] in by_sel:
+            continue
+        group = [u] + (heroes_of.get(u["selection_id"], []) if u["selection_id"] else [])
+        shapes: list[dict[str, Any]] = []
+        model_count = 0
+        for m in group:
+            toughs = [int(t) for t in m["model_tough"]]
+            if toughs and any(t != toughs[0] for t in toughs):
+                raise ValueError("per-model Tough not uniform in %s" % m["name"])
+            shapes.append(
+                {
+                    "is_oval": bool(m["base"]["is_oval"]),
+                    "w_mm": int(m["base"]["width_mm"]),
+                    "d_mm": int(m["base"]["depth_mm"]),
+                    "tough": toughs[0] if toughs else 1,
+                    "n": len(toughs),
+                }
+            )
+            model_count += len(toughs)
+        flags = _deploy_flags(u)
+        specs.append(
+            {
+                "key": u["unit_id"],
+                "model_count": model_count,
+                # The ladder reads `deploy_base_radius_of` (the shapes) — this
+                # scalar stays the act-header-style cross-check artifact (6c).
+                "base_r_m": _base_radius_m(
+                    u["base"], int(u["model_tough"][0]) if u["model_tough"] else 1
+                ),
+                "footprint": _deploy_footprint_offsets(shapes),
+                "scout": flags["scout"],
+                "ambush": flags["ambush"],
+                "ignores_terrain": flags["ignores_terrain"],
+                "vanguard": flags["vanguard"],
+                "transport_capacity": 0,
+                "facing_rad": 0.0,
+                "model_shapes": shapes,
+            }
+        )
+        offset = model_count - sum(int(g["n"]) for g in shapes[1:])
+        for h in group[1:]:
+            count = len(h["model_tough"])
+            hero_fold[h["unit_id"]] = (u["unit_id"], offset, count)
+            offset += count
+    return specs, hero_fold
+
+
 def _units_from_list(
     data: dict[str, Any], player: int
 ) -> list[dict[str, Any]]:
