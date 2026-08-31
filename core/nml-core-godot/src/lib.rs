@@ -750,6 +750,9 @@ fn action_of(d: &VarDictionary) -> Action {
         shoot: opt("shoot"),
         charge: opt("charge"),
         patient: d.get("patient").map(|v| plain::flag(&v)).unwrap_or(false),
+        // The live table hands the planner a pooled act; per-weapon aim exists only in
+        // the recorded sidecar (NML-1150), so the bridge never carries a split.
+        split: None,
     }
 }
 
