@@ -83,6 +83,14 @@ static func write(out_dir: String, army1: String, army2: String, seed_v: int, di
 			units.append({"key": uid, "name": gu.get_name(), "section": int(pd.get("section", -1)),
 				"scout": SoloController.unit_has_scout(gu), "ambush": SoloController.unit_has_ambush(gu),
 				"base_r_m": snappedf(solo._deploy_base_radius(solo._deploy_models(gu)), 0.0001),
+				# NML-1152 step 6c — the TRUE per-unit base shape, the gate ORACLE
+				# (equipment_distributor.gd:360-365 writes these; shape_for_model
+				# separation_checker.gd:267-278 reads them). The twin derives its own
+				# shape from the lists and the gate compares — never feeds it.
+				"base_is_oval": bool(gu.unit_properties.get("base_is_oval", false)),
+				"base_width_mm": int(gu.unit_properties.get("base_width_mm", SeparationChecker.DEFAULT_BASE_MM)),
+				"base_depth_mm": int(gu.unit_properties.get("base_depth_mm", SeparationChecker.DEFAULT_BASE_MM)),
+				"base_size_round": int(gu.unit_properties.get("base_size_round", SeparationChecker.DEFAULT_BASE_MM)),
 				"footprint": v2list(solo._deploy_footprint_offsets(gu)),
 				"spot": [snappedf(float(pd.get("x_m", 0.0)), 0.0001), snappedf(float(pd.get("z_m", 0.0)), 0.0001)],
 				"vanguard_pushed": pushed.has("%d|%s" % [slot, uid]),

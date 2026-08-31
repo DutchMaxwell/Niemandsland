@@ -9,6 +9,7 @@ const REQUIRED_TOP := ["schema", "tool", "seed", "dice_seed", "layout_seed", "gi
 	"armies", "symmetric", "roll_off_attempts", "opener", "deploy_order", "sides"]
 const REQUIRED_SIDE := ["seed_value", "probe_hits", "fills", "reserved", "placement_order", "units"]
 const REQUIRED_UNIT := ["key", "name", "section", "scout", "ambush", "base_r_m", "footprint",
+	"base_is_oval", "base_width_mm", "base_depth_mm", "base_size_round",
 	"spot", "vanguard_pushed", "facing_rad", "models"]
 
 var _tmp := ""
@@ -30,7 +31,9 @@ func _write_sample(path: String, drop_key := "", legacy := false) -> void:
 		"sides": {"1": {"seed_value": 8, "probe_hits": 0, "fills": [], "reserved": [],
 			"placement_order": ["0"],
 			"units": [{"key": "0", "name": "Rangers", "section": 2, "scout": false, "ambush": false,
-				"base_r_m": 0.016, "footprint": [[0.0, 0.0]], "spot": [0.31, -0.52],
+				"base_r_m": 0.016, "footprint": [[0.0, 0.0]], "base_is_oval": false,
+				"base_width_mm": 32, "base_depth_mm": 32, "base_size_round": 32,
+				"spot": [0.31, -0.52],
 				"vanguard_pushed": false, "facing_rad": 0.0, "models": [[0.31, -0.52]]}]},
 			"2": {"seed_value": 9, "probe_hits": 0, "fills": [], "reserved": ["X"],
 				"placement_order": [], "units": []}}}
