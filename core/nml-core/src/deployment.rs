@@ -26,7 +26,10 @@ pub struct RollOff {
 /// :10239-10245) — `n` models carry this group's base at the group's Tough
 /// scale. Derived py-side (`list_to_profile.deploy_base_groups`); the corpus
 /// carries ≤ 2 groups (host + one hero), per-model toughs uniform.
-#[derive(Debug, Clone, PartialEq)]
+///
+/// Serde (step 7): the pyo3 binding marshals the trainer's plain dicts through
+/// this exact shape — the `PlainTerrain` precedent (terrain.rs:69).
+#[derive(Debug, Clone, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct ModelShape {
     pub is_oval: bool,
     pub w_mm: i64,
@@ -36,7 +39,8 @@ pub struct ModelShape {
 }
 
 /// Pregame input for one unit, built py-side from the list profile (§3.2).
-#[derive(Debug, Clone, PartialEq, Default)]
+/// Serde = the binding's plain-dict schema, keys verbatim (step 7).
+#[derive(Debug, Clone, PartialEq, Default, serde::Deserialize, serde::Serialize)]
 pub struct UnitSpec {
     pub key: String,
     pub model_count: i64,
@@ -58,7 +62,9 @@ pub struct UnitSpec {
 }
 
 /// One unit's deployed result (slice 5/6 fill this; the gate compares it).
-#[derive(Debug, Clone, PartialEq, Default)]
+/// Serde = the binding's plain-dict schema (step 7): `spot`/`models` as
+/// `[x, z]` pairs.
+#[derive(Debug, Clone, PartialEq, Default, serde::Deserialize, serde::Serialize)]
 pub struct Placement {
     pub key: String,
     pub section: i64,
@@ -68,8 +74,9 @@ pub struct Placement {
     pub models: Vec<(f64, f64)>,
 }
 
-/// One side's full deployment result — the fixture's `sides[slot]`.
-#[derive(Debug, Clone, PartialEq, Default)]
+/// One side's full deployment result — the fixture's `sides[slot]`. Serde =
+/// the binding's return shape (step 7).
+#[derive(Debug, Clone, PartialEq, Default, serde::Deserialize, serde::Serialize)]
 pub struct SideDeploy {
     pub seed_value: i64,
     pub fills: Vec<(String, String)>,

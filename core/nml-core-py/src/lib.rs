@@ -40,6 +40,7 @@
 //! chosen action and `+ 50000` for the runner-up. This module never invents a
 //! seed: a guessed dice stream is a silent lie.
 
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use pyo3::create_exception;
@@ -51,6 +52,7 @@ use serde_json::{Map, Value};
 
 use nmlcore::acts::{ActHeader, ActStatics, Knobs, Sighting};
 use nmlcore::arbitration::Arbitration;
+use nmlcore::deployment::{self, Placement, Rect, SettleUnit, SideDeploy, UnitSpec};
 use nmlcore::menu::{candidates_tuned, Candidate, Tuning};
 use nmlcore::objectives;
 use nmlcore::plan::{Pick, Search};
@@ -1579,6 +1581,26 @@ impl Board {
     fn __repr__(&self) -> String {
         format!("<nml_core.Board n {} valid {}>", self.inner.n(), self.inner.is_valid())
     }
+
+    /// The bank v2 prop layer (`terrain.rs::set_bank_props`, steps 4c/4d):
+    /// `walls` `[x1, y1, x2, y2]`, `blockers` `[x, y, r]`, `boxes`
+    /// `[cx, cy, half_w, half_h, angle, reach]` — table-centred inches
+    /// (+ radians), converted with the board's own `in2m`. Empty lists are
+    /// default-preserving. NOTE: this OVERWRITES `walls_in`/`walls_world` —
+    /// call it on a board built from the bank's own cells, whose header walls
+    /// are `[]` by contract.
+    fn set_bank_props(
+        &mut self,
+        walls: &Bound<'_, PyAny>,
+        blockers: &Bound<'_, PyAny>,
+        boxes: &Bound<'_, PyAny>,
+    ) -> PyResult<()> {
+        let w: Vec<[f64; 4]> = json_of(walls, "walls")?;
+        let b: Vec<[f64; 3]> = json_of(blockers, "blockers")?;
+        let x: Vec<[f64; 6]> = json_of(boxes, "boxes")?;
+        self.inner.set_bank_props(&w, &b, &x);
+        Ok(())
+    }
 }
 
 /// Reads one act header's `"terrain"` object (or `None`) into a `Board`.
@@ -1660,6 +1682,169 @@ fn los_pairs(
     board(terrain)?.los_pairs(units)
 }
 
+// ----------------------------------- the deployment pipeline (NML-1152 step 7) ---
+//
+// The twin's deployment pipeline, callable from the trainer (design §3.3):
+// `deploy_side` runs the per-side PLACEMENT (fresh stream seeded `seed_value`,
+// transport fill → groups → sections → placement order → the step-5 ladder,
+// `nmlcore::deployment::deploy_side`), `deploy_finish` runs the table's
+// per-side FINISH order (settle + coherency repair, steps 6b-6e). The roll-off
+// stays in Python over `Rng` — the game stream's order belongs to the caller
+// (arena_match.gd:373 → :462 precedes every deployment). Dicts cross as JSON
+// both ways (the module header's marshalling contract, incl. the
+// `float_roundtrip` feature both crates enable): the input schema is the serde
+// shape of the `deployment` types, the output theirs.
+
+/// One side's `deploy_finish` input: the roster (UnitSpec dicts, ambush rows
+/// with empty `model_shapes`), `deploy_side`'s placements, the zone
+/// `[x, y, w, h]` metres.
+#[derive(serde::Deserialize)]
+struct SideIn {
+    units: Vec<UnitSpec>,
+    placements: Vec<Placement>,
+    zone: [f64; 4],
+}
+
+/// One JSON-dict argument as `T`, named in the error.
+fn json_of<T: serde::de::DeserializeOwned>(v: &Bound<'_, PyAny>, what: &str) -> PyResult<T> {
+    serde_json::from_value(value_of(v)?)
+        .map_err(|e| Unsupported::new_err(format!("{what}: {e}")))
+}
+
+/// Settled model rows written back into the placements (tests/deployment.rs
+/// write-back law): the settle state's placement index addresses the result.
+fn write_back(
+    st: &[(usize, SettleUnit)],
+    offset: usize,
+    units: &[SettleUnit],
+    sd: &mut SideDeploy,
+) {
+    for (i, (pi, _)) in st.iter().enumerate() {
+        sd.placements[*pi].models =
+            units[i + offset].models.iter().map(|m| (m[0] as f64, m[1] as f64)).collect();
+    }
+}
+
+/// The per-side placement (§3.2's plain-dict signature). `units` = the roster
+/// in list order (ambush rows included; serde has no defaults, every key
+/// present, transport_capacity 0 on the corpus); `objectives` = the rulebook
+/// positions in WORLD METRES, f32-narrowed like arena_match.gd:338-346 (the
+/// `objective_layout` → positions mapping, tests/deployment.rs:1172-1175 — the
+/// inches `objective_layout` returns must be narrowed py-side);
+/// `board` = a Board carrying the bank v2 prop layer (`set_bank_props`).
+/// Returns `SideDeploy` as a plain dict.
+#[pyfunction]
+fn deploy_side(
+    py: Python<'_>,
+    units: &Bound<'_, PyAny>,
+    zone: &Bound<'_, PyAny>,
+    objectives: &Bound<'_, PyAny>,
+    board: PyRef<'_, Board>,
+    seed_value: i64,
+) -> PyResult<Py<PyAny>> {
+    let specs: Vec<UnitSpec> = json_of(units, "units")?;
+    let z: [f64; 4] = json_of(zone, "zone")?;
+    let objs: Vec<[f64; 2]> = json_of(objectives, "objectives")?;
+    let sd = deployment::deploy_side(
+        &specs,
+        &Rect::new(z[0], z[1], z[2], z[3]),
+        &objs.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
+        &board.inner,
+        seed_value,
+    );
+    to_py(py, &serde_json::to_value(&sd).map_err(|e| Unsupported::new_err(e.to_string()))?)
+}
+
+/// The table's per-side FINISH order (solo_controller.gd:9180-9188; the finish
+/// is caller-driven since step 6d): the FIRST finish runs on the first
+/// deployer's units ALONE, its spot-free gate seeing the pre-game tray rows of
+/// BOTH armies (the other army still stands on its side tray,
+/// tests/deployment.rs:1346-1353); the SECOND over both rosters in slot order
+/// (the cross-slot re-sweep, solo_controller.gd:9228-9232,
+/// tests/deployment.rs:1354-1372) with both sides' tray remainders. `sides`
+/// maps "1"/"2" to `SideIn` dicts; `trays` maps "1"/"2" to the side's pre-game
+/// tray rows `[[x, z, r],..]` (pregame_dump.gd `tray_models` — INPUT state; a
+/// caller without trays, the twin's own self-play, passes empty dicts, the 6e
+/// default-empty guard). Returns `{"1": [placement dicts], "2": [..]}` with
+/// the settled models written back.
+#[pyfunction]
+fn deploy_finish(
+    py: Python<'_>,
+    sides: &Bound<'_, PyAny>,
+    board: PyRef<'_, Board>,
+    trays: HashMap<String, Vec<[f64; 3]>>,
+    first_slot: i64,
+) -> PyResult<Py<PyAny>> {
+    let sides: HashMap<String, SideIn> = json_of(sides, "sides")?;
+    let (s1, s2) = (
+        sides.get("1").ok_or_else(|| Unsupported::new_err("sides[\"1\"] missing"))?,
+        sides.get("2").ok_or_else(|| Unsupported::new_err("sides[\"2\"] missing"))?,
+    );
+    let (specs1, mut sd1, zone1) = (
+        &s1.units,
+        SideDeploy {
+            seed_value: 0,
+            fills: Vec::new(),
+            placements: s1.placements.clone(),
+            reserved: Vec::new(),
+        },
+        Rect::new(s1.zone[0], s1.zone[1], s1.zone[2], s1.zone[3]),
+    );
+    let (specs2, mut sd2, zone2) = (
+        &s2.units,
+        SideDeploy {
+            seed_value: 0,
+            fills: Vec::new(),
+            placements: s2.placements.clone(),
+            reserved: Vec::new(),
+        },
+        Rect::new(s2.zone[0], s2.zone[1], s2.zone[2], s2.zone[3]),
+    );
+    let (t1, t2): (Vec<_>, Vec<_>) = (
+        trays.get("1").unwrap_or(&Vec::new()).iter().map(|m| ([m[0] as f32, m[1] as f32], m[2])).collect(),
+        trays.get("2").unwrap_or(&Vec::new()).iter().map(|m| ([m[0] as f32, m[1] as f32], m[2])).collect(),
+    );
+    let walls = board.inner.walls_world_m();
+    let finish = |specs: &[UnitSpec], sd: &mut SideDeploy, zone: &Rect, tray: &[([f32; 2], f64)]| {
+        let st = deployment::settle_units(specs, sd, zone);
+        let mut units: Vec<SettleUnit> = st.iter().map(|p| p.1.clone()).collect();
+        deployment::deploy_finish_all(&mut units, &board.inner, walls, tray);
+        write_back(&st, 0, &units, sd);
+    };
+    // FIRST finish: the first deployer's units alone; tray rows: own
+    // remainders, then the whole other army (tests/deployment.rs:1346-1353).
+    let tray_first: Vec<([f32; 2], f64)> = if first_slot == 2 {
+        t2.iter().copied().chain(t1.iter().copied()).collect()
+    } else {
+        t1.iter().copied().chain(t2.iter().copied()).collect()
+    };
+    if first_slot == 2 {
+        finish(&specs2, &mut sd2, &zone2, &tray_first);
+    } else {
+        finish(&specs1, &mut sd1, &zone1, &tray_first);
+    }
+    // SECOND finish: BOTH rosters, slot-1 roster then slot-2 (the table's
+    // get_all_game_units order; tests/deployment.rs:1354-1372).
+    let st1 = deployment::settle_units(&specs1, &sd1, &zone1);
+    let st2 = deployment::settle_units(&specs2, &sd2, &zone2);
+    let mut all: Vec<SettleUnit> = st1.iter().map(|p| p.1.clone()).collect();
+    let n1 = all.len();
+    all.extend(st2.iter().map(|p| p.1.clone()));
+    let tray_second: Vec<([f32; 2], f64)> = t1.iter().copied().chain(t2.iter().copied()).collect();
+    deployment::deploy_finish_all(&mut all, &board.inner, walls, &tray_second);
+    write_back(&st1, 0, &all, &mut sd1);
+    write_back(&st2, n1, &all, &mut sd2);
+    let mut out = Map::new();
+    for (slot, sd) in [("1", &sd1), ("2", &sd2)] {
+        out.insert(
+            slot.into(),
+            serde_json::to_value(&sd.placements)
+                .map_err(|e| Unsupported::new_err(e.to_string()))?,
+        );
+    }
+    to_py(py, &Value::Object(out))
+}
+
 #[pymodule]
 fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__doc__", "NML-1073 M3-1 — the Niemandsland fast rules core, callable from Python.")?;
@@ -1684,6 +1869,9 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(los_blocked, m)?)?;
     m.add_function(wrap_pyfunction!(los_pairs, m)?)?;
     m.add_function(wrap_pyfunction!(objective_layout, m)?)?;
+    // NML-1152 step 7 — the twin's deployment pipeline for the trainer.
+    m.add_function(wrap_pyfunction!(deploy_side, m)?)?;
+    m.add_function(wrap_pyfunction!(deploy_finish, m)?)?;
     // `TerrainRules.TerrainType` — terrain_rules.gd:24.
     m.add("TERRAIN_NONE", nmlcore::terrain::NONE)?;
     m.add("TERRAIN_RUINS", nmlcore::terrain::RUINS)?;

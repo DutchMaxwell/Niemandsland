@@ -40,6 +40,7 @@ version = "0.1.0"
 dependencies = [
  "nml-core",
  "pyo3",
+ "serde",
  "serde_json",
 ]
 
