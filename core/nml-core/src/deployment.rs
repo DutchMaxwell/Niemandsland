@@ -7,6 +7,7 @@
 //! the attempt count is data-dependent (the gate compares the FULL attempt list).
 
 use crate::rng::GodotRng;
+use std::collections::HashMap;
 use crate::terrain::{CONTAINER, DANGEROUS, RUINS, Terrain};
 
 /// `SoloController.roll_off`'s tie cap (solo_controller.gd:7508).
@@ -985,17 +986,29 @@ pub fn deploy_side(
     let forward_y = if zone.pos.1.abs() < end.1.abs() { zone.pos.1 } else { end.1 };
     let walls = board.walls_world_m();
     let mut occupied: Vec<Occupied> = Vec::new();
+    let mut zone_of_record: Vec<Rect> = Vec::new();
     // placement_order's sequence IS the drain order: the main queue fully,
     // then the scout queue (:9036-9042 builds them in this order, :9195-9198
     // drains main-then-scout).
     for &i in placement_order(specs, &mut rng).iter() {
         let s = &specs[i];
         let radius = deploy_footprint_radius(s.model_count.max(0) as usize, s.base_r_m);
-        let sec = section_rect(zone, section_of[i]);
+        // B9 Scout (:9098-9102): a scout searches its zone EXTENDED 12" forward
+        // (whole-width band, `scout_extended_zone`), forward_y recomputed on the
+        // band, and its zone-of-record for the settle containment is the band.
+        let (unit_zone, sec, fwd) = if s.scout {
+            let ext = scout_extended_zone(zone, forward_y);
+            let e = ext.end();
+            let fwd_ext = if ext.pos.1.abs() < e.1.abs() { ext.pos.1 } else { e.1 };
+            (ext, ext, fwd_ext)
+        } else {
+            (*zone, section_rect(zone, section_of[i]), forward_y)
+        };
         let o = deploy_place_id(
-            zone, &sec, forward_y, objectives, &mut occupied, board, walls,
+            &unit_zone, &sec, fwd, objectives, &mut occupied, board, walls,
             radius, &s.footprint, s.base_r_m, s.ignores_terrain, s.vanguard,
         );
+        zone_of_record.push(unit_zone);
         out.placements.push(Placement {
             key: s.key.clone(),
             section: section_of[i],
@@ -1005,5 +1018,422 @@ pub fn deploy_side(
             models: place_unit_models(o.spot, s.model_count.max(0) as usize),
         });
     }
+    // deploy_finish's first half (solo_controller.gd:9180-9188): the overlap
+    // resolve over this side's on-table units. The coherency repair loop and
+    // the cross-slot re-settle (the SECOND side's finish re-sweeps the FIRST
+    // side's units) are step 6c.
+    if !out.placements.is_empty() {
+        // The table's settle sweeps `get_all_game_units()` — ROSTER order (the
+        // dump's units array order = the specs order), NOT placement order;
+        // the Gauss-Seidel cascade is order-sensitive.
+        let place_at: HashMap<String, usize> = out
+            .placements
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (p.key.clone(), i))
+            .collect();
+        let order: Vec<(usize, usize)> = specs
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| !s.ambush)
+            .map(|(si, s)| (si, place_at[&s.key]))
+            .collect();
+        let mut units: Vec<SettleUnit> = order
+            .iter()
+            .map(|&(ui, pi)| {
+                let p = &out.placements[pi];
+                SettleUnit {
+                    models: p.models.iter().map(|m| [m.0 as f32, m.1 as f32]).collect(),
+                    base_r: specs[ui].base_r_m,
+                    zone: zone_of_record[pi],
+                }
+            })
+            .collect();
+        resolve_deploy_overlaps(&mut units, board, walls);
+        for (&(_ui, pi), u) in order.iter().zip(units.iter()) {
+            out.placements[pi].models = u.models.iter().map(|m| (m[0] as f64, m[1] as f64)).collect();
+        }
+    }
     out
+}
+
+// ---- the SETTLE pass (NML-1152 step 6b): `deploy_finish` →
+// `_resolve_deploy_overlaps` (solo_controller.gd:9497-9577), 4 Gauss-Seidel
+// sweeps over every on-table unit: (a) separate the unit's OWN bases to
+// contact, (b) shift the WHOLE unit rigidly out of every other unit's bases
+// (wall-clamped), per-model projected out of forbidden rest, (c) re-separate
+// own, (d) minimal whole-unit re-shift into the recorded zone. All shapes
+// ROUND (the twin's law — UnitSpec.base_r_m is the unit's largest model base;
+// per-model shapes coincide in the corpus, no attached heroes). Godot's
+// Vector2 is f32 (real_t) while GDScript scalars are f64 — centres and the
+// resultant accumulate in f32, radii and edge gaps in f64, narrowed at every
+// Vector2 boundary, exactly like the table.
+
+/// B9: the deployment zone extended 12" toward the table centre — the Scout
+/// band (solo_controller.gd:9051-9055; Rect2 ctor + Vector2 size add f32).
+pub fn scout_extended_zone(zone: &Rect, forward_y: f64) -> Rect {
+    let ext = 12.0 * 0.0254;
+    let e = zone.end();
+    if (forward_y - e.1).abs() < (forward_y - zone.pos.1).abs() {
+        Rect::new(zone.pos.0, zone.pos.1, zone.size.0, zone.size.1 + ext)
+    } else {
+        Rect::new(zone.pos.0, zone.pos.1 - ext, zone.size.0, zone.size.1 + ext)
+    }
+}
+
+/// One on-table unit during the settle: live model centres (f32, the
+/// `Vector3.global_position` boundary), its base radius, its recorded
+/// containment zone (`_deploy_zone_of` — the side zone, the scout's extended
+/// band for scouts; Vanguard pushes erase it, :9159 — corpus-inert).
+#[derive(Debug, Clone)]
+pub struct SettleUnit {
+    pub models: Vec<[f32; 2]>,
+    pub base_r: f64,
+    pub zone: Rect,
+}
+
+/// A ROUND base for the settle math: f32 centre (Vector2), f64 radius
+/// (the BaseShape's Variant float).
+#[derive(Debug, Clone, Copy)]
+struct SettleShape {
+    center: [f32; 2],
+    radius: f64,
+}
+
+impl SettleShape {
+    fn bounding_radius(&self) -> f64 {
+        self.radius
+    }
+}
+
+/// `SeparationChecker._edge_distance_meters` ROUND-ROUND (:294-295) +
+/// `edge_distance` (:147-150): Vector2 f32 centre distance − radii (metres),
+/// ÷ INCHES_TO_METERS → inches, f64.
+fn edge_distance_in(a: &SettleShape, b: &SettleShape) -> f64 {
+    let (dx, dy) = (a.center[0] - b.center[0], a.center[1] - b.center[1]);
+    ((dx * dx + dy * dy).sqrt() as f64 - a.radius - b.radius) / 0.0254
+}
+
+/// `SeparationResolver` constants (separation_resolver.gd:46-59).
+const RESOLVE_EPSILON_IN: f64 = 0.01;
+const MAX_OVERLAP_ITERATIONS: usize = 24;
+const ESCAPE_SCAN_DIRECTIONS: usize = 24;
+/// `SeparationZone.EPSILON_M` (separation_zone.gd:44) squared, f32 like the
+/// `length_squared` it is compared against.
+const SEP_EPSILON_M2: f32 = 1.0e-10;
+
+/// `SeparationResolver.resolve_overlaps` (separation_resolver.gd:98-128): the
+/// item is RIGID — every relaxation step translates ALL its shapes by one
+/// f32 Vector2 — so the returned translation applies to the caller's own
+/// copy. Resultant of penetration vectors (inches, f32 accumulation) ×
+/// INCHES_TO_METERS per step; ≤ 24 iterations; the symmetric-wedge case
+/// (resultant cancels, overlap remains) breaks to the escape scan; the scan
+/// also runs after a completed non-clearing loop. Returns the total applied
+/// translation (metres, f32 components).
+fn resolve_overlaps(item: &mut [SettleShape], obstacles: &[SettleShape]) -> [f32; 2] {
+    if item.is_empty() || obstacles.is_empty() {
+        return [0.0, 0.0];
+    }
+    let mut applied = [0.0f32, 0.0];
+    for _ in 0..MAX_OVERLAP_ITERATIONS {
+        let mut resultant = [0.0f32, 0.0];
+        let mut deepest = 0.0f64;
+        for s in item.iter() {
+            for o in obstacles {
+                let overlap = -edge_distance_in(s, o);
+                if overlap <= RESOLVE_EPSILON_IN {
+                    continue;
+                }
+                let mut axis = [s.center[0] - o.center[0], s.center[1] - o.center[1]];
+                if axis[0] * axis[0] + axis[1] * axis[1] < SEP_EPSILON_M2 {
+                    axis = [1.0, 0.0]; // Vector2.RIGHT — concentric escape axis
+                }
+                let len = (axis[0] * axis[0] + axis[1] * axis[1]).sqrt();
+                let ov = overlap as f32; // Vector2 * float narrows the scalar
+                resultant[0] += axis[0] / len * ov;
+                resultant[1] += axis[1] / len * ov;
+                deepest = deepest.max(overlap);
+            }
+        }
+        if deepest <= RESOLVE_EPSILON_IN {
+            return applied; // cleared
+        }
+        let rlen = (resultant[0] * resultant[0] + resultant[1] * resultant[1]).sqrt() as f64;
+        if rlen < RESOLVE_EPSILON_IN {
+            break; // symmetric wedge — the escape scan takes over
+        }
+        let step = [resultant[0] * 0.0254, resultant[1] * 0.0254];
+        for s in item.iter_mut() {
+            s.center[0] += step[0];
+            s.center[1] += step[1];
+        }
+        applied[0] += step[0];
+        applied[1] += step[1];
+    }
+    let esc = escape_to_clear(item, obstacles);
+    applied[0] += esc[0];
+    applied[1] += esc[1];
+    applied
+}
+
+/// `SeparationResolver._travel_to_clear_along` (:156-170): the smallest slide
+/// along unit direction `u` that clears every pair on BOUNDING circles — per
+/// pair the quadratic's upper root, max across pairs. f32 centre math, f64
+/// travel.
+fn travel_to_clear_along(item: &[SettleShape], obstacles: &[SettleShape], u: [f32; 2]) -> f64 {
+    let mut travel = 0.0f64;
+    for s in item {
+        for o in obstacles {
+            let r_sum = s.bounding_radius() + o.bounding_radius();
+            let (ex, ey) = (s.center[0] - o.center[0], s.center[1] - o.center[1]);
+            let e_len_sq = (ex * ex + ey * ey) as f64;
+            if e_len_sq >= r_sum * r_sum {
+                continue;
+            }
+            let e_dot_u = (ex * u[0] + ey * u[1]) as f64;
+            let disc = e_dot_u * e_dot_u - e_len_sq + r_sum * r_sum;
+            let t_pair = -e_dot_u + disc.max(0.0).sqrt();
+            travel = travel.max(t_pair);
+        }
+    }
+    travel
+}
+
+/// `SeparationResolver._escape_to_clear` (:136-150): scan 24 directions, take
+/// the one needing the least travel, translate the item there. Returns the
+/// step (metres) — ZERO when already clear.
+fn escape_to_clear(item: &mut [SettleShape], obstacles: &[SettleShape]) -> [f32; 2] {
+    let (mut best_dir, mut best_travel) = ([0.0f32, 0.0], f64::INFINITY);
+    for k in 0..ESCAPE_SCAN_DIRECTIONS {
+        let ang = std::f64::consts::TAU * k as f64 / ESCAPE_SCAN_DIRECTIONS as f64;
+        let u = [ang.cos() as f32, ang.sin() as f32]; // Vector2 ctor narrows
+        let travel = travel_to_clear_along(item, obstacles, u);
+        if travel < best_travel {
+            best_travel = travel;
+            best_dir = u;
+        }
+    }
+    if !(best_travel > 0.0) || best_travel == f64::INFINITY {
+        return [0.0, 0.0];
+    }
+    let step = [best_dir[0] * best_travel as f32, best_dir[1] * best_travel as f32];
+    for s in item.iter_mut() {
+        s.center[0] += step[0];
+        s.center[1] += step[1];
+    }
+    step
+}
+
+/// `_world_forbidden` (solo_controller.gd:6790-6800): (i) terrain —
+/// `TerrainRules.base_in_terrain` (:108-122): the base CENTRE plus a 16-point
+/// ring at the base edge, `is_forbidden_rest` = CONTAINER only
+/// (terrain_rules.gd:80-88; the ring offset narrows at the Vector3 ctor);
+/// (ii) wall segments at `radius + WALL_REST_CLEARANCE_M` (0.002 m,
+/// solo_controller.gd:6775) — `MovementPlanner.point_seg_distance` called with
+/// world-metre walls, so the metre EPS applies (the planner helper is
+/// frame-free; `point_seg_distance_in` with in2m = 1 reproduces it).
+fn world_forbidden(board: &Terrain, walls: &[WallSeg], p: (f64, f64), r: f64) -> bool {
+    let on_container = |q: [f32; 2]| board.type_at([q[0], 0.0, q[1]]) == CONTAINER;
+    if on_container([p.0 as f32, p.1 as f32]) {
+        return true;
+    }
+    if r > 0.0
+        && (0..16).any(|k| {
+            let ang = std::f64::consts::TAU * k as f64 / 16.0;
+            let e = [(p.0 as f32) + (ang.cos() * r) as f32, (p.1 as f32) + (ang.sin() * r) as f32];
+            on_container(e)
+        })
+    {
+        return true;
+    }
+    let q = [p.0 as f32, p.1 as f32];
+    walls.iter().any(|w| {
+        (point_seg_distance_in(q, w[0], w[1], 1.0) as f64) <= r + 0.002
+    })
+}
+
+/// `_resolve_deploy_overlaps` (solo_controller.gd:9497-9577): 4 sweeps
+/// (`OVERLAP_GATE_PASSES`, :149) over every on-table unit in array order.
+/// External obstacles = every OTHER unit's CURRENT bases (live positions,
+/// `:6676-6695`; aircraft excluded — none in the corpus).
+pub fn resolve_deploy_overlaps(units: &mut [SettleUnit], board: &Terrain, walls: &[WallSeg]) {
+    for _sweep in 0..4 {
+        for ui in 0..units.len() {
+            let (n, base_r) = (units[ui].models.len(), units[ui].base_r);
+            if n == 0 {
+                continue;
+            }
+            // (a) INTERNAL (:9511-9524): 4 passes of per-model Gauss-Seidel —
+            // each model's shape against ALL its own unit's others, shapes
+            // mutated in place, cfg written back after the passes.
+            {
+                let mut shapes: Vec<SettleShape> = units[ui]
+                    .models
+                    .iter()
+                    .map(|m| SettleShape { center: *m, radius: base_r })
+                    .collect();
+                for _p in 0..4 {
+                    for i in 0..n {
+                        let others: Vec<SettleShape> = (0..n)
+                            .filter(|&j| j != i)
+                            .map(|j| shapes[j])
+                            .collect();
+                        let mut item = [shapes[i]];
+                        resolve_overlaps(&mut item, &others);
+                        shapes[i] = item[0];
+                    }
+                }
+                for (i, s) in shapes.iter().enumerate() {
+                    units[ui].models[i] = s.center;
+                }
+            }
+            // (b) EXTERNAL (:9525-9542): the whole unit as ONE rigid item
+            // against every other unit's live bases; the returned translation
+            // is wall-clamped (ANY model's path crossing → dropped entirely,
+            // overlap debt stays, :9529-9538), then every model is projected
+            // out of forbidden rest (:9539-9542).
+            let obstacles: Vec<SettleShape> = units
+                .iter()
+                .enumerate()
+                .filter(|&(uj, _)| uj != ui)
+                .flat_map(|(_, u)| {
+                    u.models
+                        .iter()
+                        .map(move |m| SettleShape { center: *m, radius: u.base_r })
+                })
+                .collect();
+            let mut shapes: Vec<SettleShape> = units[ui]
+                .models
+                .iter()
+                .map(|m| SettleShape { center: *m, radius: base_r })
+                .collect();
+            let delta = resolve_overlaps(&mut shapes, &obstacles);
+            let mut delta = delta;
+            if (delta[0] * delta[0] + delta[1] * delta[1]).sqrt() as f64 > 0.0005 {
+                for m in units[ui].models.iter() {
+                    if path_crosses_wall(
+                        (m[0] as f64, m[1] as f64),
+                        ((m[0] + delta[0]) as f64, (m[1] + delta[1]) as f64),
+                        walls,
+                    ) {
+                        delta = [0.0, 0.0];
+                        break;
+                    }
+                }
+            }
+            for m in units[ui].models.iter_mut() {
+                let projected = project_out_forbidden(
+                    board,
+                    walls,
+                    ((m[0] + delta[0]) as f64, (m[1] + delta[1]) as f64),
+                    base_r,
+                );
+                *m = [projected.0 as f32, projected.1 as f32];
+            }
+            // (c) re-separate own to contact (:9543-9557) — same shape as (a).
+            {
+                let mut shapes: Vec<SettleShape> = units[ui]
+                    .models
+                    .iter()
+                    .map(|m| SettleShape { center: *m, radius: base_r })
+                    .collect();
+                for _p in 0..4 {
+                    for i in 0..n {
+                        let others: Vec<SettleShape> = (0..n)
+                            .filter(|&j| j != i)
+                            .map(|j| shapes[j])
+                            .collect();
+                        let mut item = [shapes[i]];
+                        resolve_overlaps(&mut item, &others);
+                        shapes[i] = item[0];
+                    }
+                }
+                for (i, s) in shapes.iter().enumerate() {
+                    units[ui].models[i] = s.center;
+                }
+            }
+            // (d) ZONE containment (:9558-9576, Bug 8): if any base left the
+            // unit's recorded zone, shift the WHOLE unit minimally back in —
+            // dropped when the shift would tunnel any model through a wall.
+            let zone = units[ui].zone;
+            let zend = zone.end();
+            let out_of_zone = units[ui].models.iter().any(|m| {
+                (m[0] as f64 - base_r) < zone.pos.0
+                    || (m[0] as f64 + base_r) > zend.0
+                    || (m[1] as f64 - base_r) < zone.pos.1
+                    || (m[1] as f64 + base_r) > zend.1
+            });
+            if out_of_zone {
+                let mut shift = (0.0f64, 0.0f64);
+                for m in units[ui].models.iter() {
+                    let (px, pz) = (m[0] as f64, m[1] as f64);
+                    shift.0 = shift.0.max(zone.pos.0 - (px - base_r + shift.0));
+                    shift.0 = shift.0.min(zend.0 - (px + base_r + shift.0));
+                    shift.1 = shift.1.max(zone.pos.1 - (pz - base_r + shift.1));
+                    shift.1 = shift.1.min(zend.1 - (pz + base_r + shift.1));
+                }
+                let zshift = [shift.0 as f32, shift.1 as f32]; // Vector2 ctor
+                let wall_ok = !units[ui].models.iter().any(|m| {
+                    path_crosses_wall(
+                        (m[0] as f64, m[1] as f64),
+                        ((m[0] + zshift[0]) as f64, (m[1] + zshift[1]) as f64),
+                        walls,
+                    )
+                });
+                if wall_ok {
+                    for m in units[ui].models.iter_mut() {
+                        *m = [m[0] + zshift[0], m[1] + zshift[1]];
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// `_project_out_forbidden_world` (solo_controller.gd:6807-6825): a base at
+/// rest in forbidden ground walks OUT on 16 compass directions × expanding
+/// 1 cm rings up to 0.20 m (`TERRAIN_OUT_STEP/MAX/DIRS`, :151-154), lowest-x
+/// then lowest-z within a ring (OVERLAP_EPS_M 5e-4 tie-break), clamped to the
+/// table (BOUNDS_MARGIN_M 0.02 inside the 6×4 ft half-extents, :8894-8897).
+/// Returns the input unchanged when clear or when no clear point is in range.
+fn project_out_forbidden(board: &Terrain, walls: &[WallSeg], p: (f64, f64), r: f64) -> (f64, f64) {
+    if !world_forbidden(board, walls, p, r) {
+        return p;
+    }
+    let eps = 5.0e-4;
+    let clamp = |q: (f64, f64)| {
+        // clampf in f64, narrowed by the Vector3 ctor (solo_controller.gd:8894-8897)
+        (
+            (q.0).clamp(-0.9144 + 0.02, 0.9144 - 0.02) as f32 as f64,
+            (q.1).clamp(-0.6096 + 0.02, 0.6096 - 0.02) as f32 as f64,
+        )
+    };
+    let mut dist = 0.01f64;
+    while dist <= 0.20 + eps {
+        let mut best = p;
+        let mut found = false;
+        for k in 0..16 {
+            let ang = std::f64::consts::TAU * k as f64 / 16.0;
+            // pos + Vector3(cos·dist, 0, sin·dist): the offset narrows at the ctor
+            let c = clamp((
+                ((p.0 as f32) + (ang.cos() * dist) as f32) as f64,
+                ((p.1 as f32) + (ang.sin() * dist) as f32) as f64,
+            ));
+            if world_forbidden(board, walls, c, r) {
+                continue;
+            }
+            if !found
+                || c.0 < best.0 - eps
+                || ((c.0 - best.0).abs() <= eps && c.1 < best.1 - eps)
+            {
+                best = c;
+                found = true;
+            }
+        }
+        if found {
+            return best;
+        }
+        dist += 0.01;
+    }
+    p
 }

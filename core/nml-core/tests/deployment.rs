@@ -1111,7 +1111,8 @@ fn spot_search_replays_every_fixture_unit() {
 // placements (no longer the recorded spots — that was step 5's isolation
 // crutch), models on the fixed 0.04 m grid. The settle pass is step 6b, so
 // the fixture's SETTLED models are classified, not bit-asserted: exact =
-// every model on the twin's pre-settle grid at the dump quantum, else the
+// every model the twin's settle leaves at (post-6b: the overlap resolve runs;
+// the coherency repair is 6c) vs the dump's settled nodes, else the
 // max deviation is reported. First-divergence classes per failing side:
 // permissive (twin pick scores >= the table spot — the probe vetoed the
 // table's candidate), strict (twin scores worse on a first divergence —
@@ -1248,7 +1249,8 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
                         diverged_earlier = true;
                     }
                 }
-                // models: the twin's PRE-settle grid vs the fixture's SETTLED nodes
+                // models: the twin's post-resolve grid vs the fixture's settled nodes
+                // (the coherency repair half of deploy_finish is step 6c)
                 models_total += 1;
                 let dump_models: Vec<(f64, f64)> = u["models"]
                     .as_array().unwrap().iter()
@@ -1284,7 +1286,7 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
         "END-TO-END replay: units {n} — spots {exact} EXACT / {within} within / {mismatch} MISMATCH; \
          sides {sides_exact}/{sides_total} all-exact ({side_mismatch_count} failing)"
     );
-    eprintln!("models (pre-settle twin vs settled fixture): {models_exact}/{models_total} units exact; worst deviations:");
+    eprintln!("models (post-resolve twin vs settled fixture): {models_exact}/{models_total} units exact; worst deviations:");
     for w in models_worst.iter().take(5) {
         eprintln!("  {:.4} m — seed {} s{} {}", w.0, w.1, w.2, w.3);
     }
@@ -1298,4 +1300,20 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
     assert_eq!(n, 1060, "the full 100-dump corpus");
     assert_eq!(sides_total, 200, "both sides of every dump");
     assert_eq!(models_total, 1060, "every unit's models compared");
+}
+
+/// The Scout band, pinned synthetically where the corpus cannot (0 scout
+/// units): the zone extends 12" toward the table centre, whole width
+/// (solo_controller.gd:9051-9055) — side 1's band reaches z = 0 (the table
+/// centre), side 2's likewise; the far edge stays put.
+#[test]
+fn scout_band_extends_twelve_inches_forward() {
+    let side1 = deployment::Rect::new(-0.9144, -0.6096, 1.8288, 0.3048);
+    let band1 = deployment::scout_extended_zone(&side1, -0.3048);
+    assert!((band1.pos.1 - -0.6096).abs() < 1e-6, "near edge unchanged: {band1:?}");
+    assert!((band1.end().1 - 0.0).abs() < 1e-6, "far edge reaches the centre: {band1:?}");
+    let side2 = deployment::Rect::new(-0.9144, 0.3048, 1.8288, 0.3048);
+    let band2 = deployment::scout_extended_zone(&side2, 0.3048);
+    assert!((band2.pos.1 - 0.0).abs() < 1e-6, "side 2 extends to the centre: {band2:?}");
+    assert!((band2.end().1 - 0.6096).abs() < 1e-6, "far edge unchanged: {band2:?}");
 }
