@@ -1008,7 +1008,6 @@ pub fn deploy_side(
     let forward_y = if zone.pos.1.abs() < end.1.abs() { zone.pos.1 } else { end.1 };
     let walls = board.walls_world_m();
     let mut occupied: Vec<Occupied> = Vec::new();
-    let mut zone_of_record: Vec<Rect> = Vec::new();
     // placement_order's sequence IS the drain order: the main queue fully,
     // then the scout queue (:9036-9042 builds them in this order, :9195-9198
     // drains main-then-scout).
@@ -1033,7 +1032,6 @@ pub fn deploy_side(
             &unit_zone, &sec, fwd, objectives, &mut occupied, board, walls,
             radius, &s.footprint, base_r, s.ignores_terrain, s.vanguard,
         );
-        zone_of_record.push(unit_zone);
         out.placements.push(Placement {
             key: s.key.clone(),
             section: section_of[i],
@@ -1043,45 +1041,15 @@ pub fn deploy_side(
             models: place_unit_models(o.spot, s.model_count.max(0) as usize),
         });
     }
-    // deploy_finish's first half (solo_controller.gd:9180-9188): the overlap
-    // resolve over this side's on-table units. The coherency repair loop and
-    // the cross-slot re-settle (the SECOND side's finish re-sweeps the FIRST
-    // side's units) are step 6c.
-    if !out.placements.is_empty() {
-        // The table's settle sweeps `get_all_game_units()` — ROSTER order (the
-        // dump's units array order = the specs order), NOT placement order;
-        // the Gauss-Seidel cascade is order-sensitive.
-        let place_at: HashMap<String, usize> = out
-            .placements
-            .iter()
-            .enumerate()
-            .map(|(i, p)| (p.key.clone(), i))
-            .collect();
-        let order: Vec<(usize, usize)> = specs
-            .iter()
-            .enumerate()
-            .filter(|(_, s)| !s.ambush)
-            .map(|(si, s)| (si, place_at[&s.key]))
-            .collect();
-        let mut units: Vec<SettleUnit> = order
-            .iter()
-            .map(|&(ui, pi)| {
-                let p = &out.placements[pi];
-                let geoms = settle_shape_geoms(&specs[ui]);
-                let n = p.models.len();
-                assert_eq!(
-                    geoms.len(), n,
-                    "unit {}: model_shapes sum {} != model_count {}",
-                    specs[ui].key, geoms.len(), n
-                );
-                SettleUnit { models: p.models.iter().map(|m| [m.0 as f32, m.1 as f32]).collect(), geoms, zone: zone_of_record[pi] }
-            })
-            .collect();
-        resolve_deploy_overlaps(&mut units, board, walls);
-        for (&(_ui, pi), u) in order.iter().zip(units.iter()) {
-            out.placements[pi].models = u.models.iter().map(|m| (m[0] as f64, m[1] as f64)).collect();
-        }
-    }
+    // The FINISH (deploy_finish, solo_controller.gd:9180-9188) is NOT run
+    // here — step 6d split placement from the finish so the caller drives the
+    // table's per-side finish order: the first finish sweeps the first
+    // deployer's units (the other army stands on its side tray and IS swept —
+    // its nodes are live — but that sweep is ERASED by the side's later
+    // placement, `_place_unit_at` rewrites every model), the second finish
+    // re-sweeps BOTH rosters (the repair and the resolve CROSS SLOTS,
+    // :9228-9232). `settle_units` rebuilds the live state,
+    // `deploy_finish_all` runs one finish pass.
     out
 }
 
@@ -1215,6 +1183,9 @@ pub struct SettleUnit {
     pub models: Vec<[f32; 2]>,
     pub geoms: Vec<SettleShapeGeom>,
     pub zone: Rect,
+    /// The unit's Strider/Flying law (:9246 picks the coherency repair's
+    /// blocked variant from it) — `UnitSpec.ignores_terrain`'s predicate.
+    pub flying: bool,
 }
 
 /// A base for the settle math: f32 centre (Vector2), f64 extents (the
@@ -1641,4 +1612,61 @@ fn project_out_forbidden(board: &Terrain, walls: &[WallSeg], p: (f64, f64), r: f
         dist += 0.01;
     }
     p
+}
+
+/// The live settle state of one finished side, rebuilt from its `SideDeploy`
+/// — the builder step 6d lifted OUT of `deploy_side`: the table settles
+/// through `deploy_finish` per side and the SECOND side's finish re-sweeps
+/// the FIRST side's live units (:9228-9232), so the caller drives the
+/// finishes. Roster order, non-ambush units, each paired with its placement
+/// index for the write-back; the recorded zone is the side zone (the scout's
+/// extended band for scouts — the `zone_of_record` law, :9098-9102); the
+/// repair's blocked variant rides `ignores_terrain` (= Strider/Flying,
+/// :9246). The f64 placement models re-narrow to the f32 state losslessly
+/// (they were widened from it); the group-sum mismatch fails loudly (6c).
+pub fn settle_units(specs: &[UnitSpec], sd: &SideDeploy, zone: &Rect) -> Vec<(usize, SettleUnit)> {
+    let end = zone.end();
+    let forward_y = if zone.pos.1.abs() < end.1.abs() { zone.pos.1 } else { end.1 };
+    let place_at: HashMap<String, usize> = sd
+        .placements
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (p.key.clone(), i))
+        .collect();
+    specs
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| !s.ambush)
+        .map(|(si, s)| {
+            let pi = place_at[&s.key];
+            let p = &sd.placements[pi];
+            let geoms = settle_shape_geoms(&specs[si]);
+            assert_eq!(
+                geoms.len(), p.models.len(),
+                "unit {}: model_shapes sum {} != model_count {}",
+                specs[si].key, geoms.len(), p.models.len()
+            );
+            (
+                pi,
+                SettleUnit {
+                    models: p.models.iter().map(|m| [m.0 as f32, m.1 as f32]).collect(),
+                    geoms,
+                    zone: if s.scout { scout_extended_zone(zone, forward_y) } else { *zone },
+                    flying: s.ignores_terrain,
+                },
+            )
+        })
+        .collect()
+}
+
+/// One `deploy_finish` pass (solo_controller.gd:9180-9188) over the ON-TABLE
+/// units in `get_all_game_units` order (slot-1 roster then slot-2 —
+/// opr_army_manager.gd:2061-2065 walks `game_units.values()` insertion order;
+/// the 6b UNSURE-(a) assumption is thereby PROVEN: main.gd:1785/:1806-1810
+/// insert slot 1 before slot 2, and each army's roster order matches the
+/// dump's). The overlap resolve, then ≤ 2 repair rounds —
+/// `_repair_deploy_coherency` (:9227-9312), each REPAIRING round followed by
+/// another resolve (:9184-9188). The repair is step 6d2.
+pub fn deploy_finish_all(units: &mut [SettleUnit], board: &Terrain, walls: &[WallSeg]) {
+    resolve_deploy_overlaps(units, board, walls);
 }

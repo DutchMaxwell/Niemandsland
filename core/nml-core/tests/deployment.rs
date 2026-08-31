@@ -1154,6 +1154,15 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
     let mut models_worst: Vec<(f64, i64, String, String)> = Vec::new();
     let mut first_div: Vec<(i64, String, String, &'static str)> = Vec::new();
     let mut side_mismatch_count = 0usize;
+    // the per-seed deploy order (the roll-off extract): the FIRST finish runs
+    // on the first deployer's units ALONE (the table's other army stands on
+    // its side tray and its sweep is erased by the side's later placement)
+    let roll: Vec<serde_json::Value> =
+        serde_json::from_str(include_str!("fixtures/pregame_roll_off.json")).expect("roll-off fixture");
+    let first_deployer: HashMap<i64, i64> = roll
+        .iter()
+        .map(|r| (r["seed"].as_i64().unwrap(), r["deploy_order"][0].as_i64().unwrap()))
+        .collect();
     for d in &fx {
         let seed = d["seed"].as_i64().unwrap();
         let board = boards.get(&(500000 + seed)).expect("board for seed");
@@ -1164,12 +1173,15 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
             .positions.iter()
             .map(|&(x, z)| ((x as f64 * IN2M) as f32 as f64, (z as f64 * IN2M) as f32 as f64))
             .collect();
-        for slot in ["1", "2"] {
-            let zone = if slot == "1" {
+        // --- placement (step 6d: the finish no longer rides deploy_side) ---
+        let zone_of = |slot: &str| {
+            if slot == "1" {
                 deployment::Rect::new(-0.9144, -0.6096, 1.8288, 0.3048)
             } else {
                 deployment::Rect::new(-0.9144, 0.3048, 1.8288, 0.3048)
-            };
+            }
+        };
+        let build = |slot: &str| {
             let side = &d["sides"][slot];
             // the FULL roster (draw-phase view, ambush units included at their
             // list positions — the draw phases run over it; the placed-only
@@ -1218,9 +1230,16 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
                     }
                 })
                 .collect();
-            let sd = deployment::deploy_side(&specs, &zone, &objs, board, side["seed_value"].as_i64().unwrap());
-            // draw-phase integrity, pinned END-TO-END here: order, sections,
-            // fills, reserved, flag laws.
+            (specs, zone_of(slot))
+        };
+        let (specs1, zone1) = build("1");
+        let (specs2, zone2) = build("2");
+        let mut sd1 = deployment::deploy_side(&specs1, &zone1, &objs, board, d["sides"]["1"]["seed_value"].as_i64().unwrap());
+        let mut sd2 = deployment::deploy_side(&specs2, &zone2, &objs, board, d["sides"]["2"]["seed_value"].as_i64().unwrap());
+        // draw-phase integrity, pinned END-TO-END here: order, sections,
+        // fills, reserved, flag laws.
+        let assert_draws = |slot: &str, sd: &deployment::SideDeploy| {
+            let side = &d["sides"][slot];
             let want_order: Vec<&str> = side["placement_order"]
                 .as_array().unwrap().iter()
                 .map(|v| v.as_str().unwrap()).collect();
@@ -1232,6 +1251,45 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
                 .map(|v| v.as_str().unwrap()).collect();
             let got_reserved: Vec<&str> = sd.reserved.iter().map(|k| k.as_str()).collect();
             assert_eq!(got_reserved, want_reserved, "seed {seed} s{slot}: reserved");
+        };
+        assert_draws("1", &sd1);
+        assert_draws("2", &sd2);
+        // --- the FINISHES, in the table's per-side order (step 6d) ---
+        let walls = board.walls_world_m();
+        let finish_side = |sd: &mut deployment::SideDeploy, specs: &[UnitSpec], zone: &deployment::Rect| {
+            let st = deployment::settle_units(specs, sd, zone);
+            let mut units: Vec<deployment::SettleUnit> = st.iter().map(|p| p.1.clone()).collect();
+            deployment::deploy_finish_all(&mut units, board, walls);
+            for (i, (pi, _)) in st.iter().enumerate() {
+                sd.placements[*pi].models = units[i].models.iter().map(|m| (m[0] as f64, m[1] as f64)).collect();
+            }
+        };
+        // FIRST finish: the first deployer's units alone (the other army's
+        // tray sweep is erased by its later placement)
+        if first_deployer[&seed] == 1 {
+            finish_side(&mut sd1, &specs1, &zone1);
+        } else {
+            finish_side(&mut sd2, &specs2, &zone2);
+        }
+        // SECOND finish: BOTH rosters, get_all_game_units order (slot-1 roster
+        // then slot-2) — the cross-slot re-sweep of the first side's units.
+        let st1 = deployment::settle_units(&specs1, &sd1, &zone1);
+        let st2 = deployment::settle_units(&specs2, &sd2, &zone2);
+        let mut all: Vec<deployment::SettleUnit> = st1.iter().map(|p| p.1.clone()).collect();
+        let n1 = all.len();
+        all.extend(st2.iter().map(|p| p.1.clone()));
+        deployment::deploy_finish_all(&mut all, board, walls);
+        for (i, (pi, _)) in st1.iter().enumerate() {
+            sd1.placements[*pi].models = all[i].models.iter().map(|m| (m[0] as f64, m[1] as f64)).collect();
+        }
+        for (i, (pi, _)) in st2.iter().enumerate() {
+            sd2.placements[*pi].models = all[n1 + i].models.iter().map(|m| (m[0] as f64, m[1] as f64)).collect();
+        }
+        // --- comparisons (unchanged law) ---
+        for slot in ["1", "2"] {
+            let zone = zone_of(slot);
+            let side = &d["sides"][slot];
+            let sd = if slot == "1" { &sd1 } else { &sd2 };
             let mut side_all_exact = true;
             let mut diverged_earlier = false;
             for p in &sd.placements {
