@@ -214,6 +214,14 @@ pub struct UnitStatic {
     /// is read here once instead of per imagined round.
     pub battleborn_active: bool,
     pub steadfast_active: bool,
+    /// `RulesRegistry.unit_rule_active(gu, "Mend")` main.gd:5236 — the heal
+    /// primitive's registry gate; the import folds item-granted rules into
+    /// `special_rules` (opr_api_client.gd:261-263), so a Paternal Bond item
+    /// counts here exactly as it does on the table.
+    pub mend_active: bool,
+    /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
+    /// Mend's patient tiebreak prefers heroes (main.gd:5361).
+    pub is_hero: bool,
     /// Rules this unit carries that the port does NOT model — reported by name
     /// with a node count instead of being silently skipped.
     pub unimplemented: Vec<Unimplemented>,
@@ -850,6 +858,8 @@ impl UnitStatic {
             casts_per_round: p.caster_value,
             battleborn_active: unit_rule_active(reg, p, "Battleborn"),
             steadfast_active: unit_rule_active(reg, p, "Steadfast"),
+            mend_active: unit_rule_active(reg, p, "Mend"),
+            is_hero: has_special_rule(&p.special_rules, "Hero"),
             unimplemented,
         }
     }
