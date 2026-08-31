@@ -268,6 +268,13 @@ static func _nearest_objective_distance(p: Vector2, objectives: Array, section: 
 const DEPLOY_WALL_CLEARANCE_M := 0.02   # a deploy sample point within 2 cm (~0.8") of a container/ruin wall is blocked (finding 1)
 
 
+## NML-1152 §4.3: how often the Godot physics-prop probe (`hits_prop` — NOT portable to the twin)
+## flipped a deploy sample to blocked during the CURRENT deployment. Reset per make_blocked_tests;
+## tools/arena_match.gd dumps it per side as probe_hits. 0 across the corpus ⇒ the twin's
+## cells+walls test is exact; >0 ⇒ the spot comparison decides whether it changed any outcome.
+static var probe_hits: int = 0
+
+
 ## The blocked-cell tests a deployment runs on every sample point:
 ## `{"normal": Callable(Vector2) -> bool, "flying": Callable(Vector2) -> bool}`. Extracted verbatim
 ## from main._on_solo_deploy_pressed so the arena harness (tools/arena_match.gd) deploys by the
@@ -289,6 +296,7 @@ static func make_blocked_tests(terrain_overlay: Node3D) -> Dictionary:
 	probe_shape.radius = 0.02
 	probe.shape = probe_shape
 	probe.collide_with_areas = false
+	probe_hits = 0
 	var hits_prop := func(p: Vector2) -> bool:
 		if space == null:
 			return false
@@ -296,6 +304,7 @@ static func make_blocked_tests(terrain_overlay: Node3D) -> Dictionary:
 		for hit in space.intersect_shape(probe, 6):
 			var col: Object = hit.get("collider")
 			if col is Node3D and not (col as Node3D).is_in_group("miniature"):
+				probe_hits += 1
 				return true
 		return false
 	var wall_segs: Array = terrain_overlay.get_wall_segments_world() \

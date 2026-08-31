@@ -48,6 +48,8 @@ const RESULT_SCHEMA := 1
 ## Off-board audit (#215): shared with tools/solo_selfplay.gd so BOTH harnesses emit the identical
 ## parseable line that tools/tactic_audit.py counts as d9.
 const OffboardAudit := preload("res://tools/offboard_audit.gd")
+# NML-1152 dump=pregame: the pregame fixture builder (design §4.1) — new file, the arena diff stays thin.
+const PregameDump := preload("res://tools/pregame_dump.gd")
 
 var _p1_grade := "kriegsherr"
 var _p2_grade := "kriegsherr"
@@ -64,6 +66,11 @@ var _batch := true                      # headless sweeps: instant (non-physics)
 var _army1 := P1_FIXTURE
 var _army2 := P2_FIXTURE
 var _out_dir := ""
+# NML-1152 dump=pregame (design §4.1): write ONE pregame fixture JSON after deployment and quit
+# without playing. Unset (the default) = unchanged behaviour, byte-identical runs.
+var _dump_dir := ""                     # dump=<dir> / NML_AI_DUMP — the fixture directory
+var _pregame_records: Array = []        # dump-mode only: deploy/mission records feeding the fixture
+var _pregame_probe_hits := {}           # slot(int) → AiDeployment.probe_hits after that side's deploy
 
 # Decision capture (via SoloController.decision_sink): per-side per-kind counts for every record, plus the
 # verbatim knob/roll-off records the ladder's monotonicity diagnosis reads ("which knob failed to bite").
@@ -433,6 +440,10 @@ func _run() -> void:
 			annotated["side"] = side
 			annotated["round"] = int(army_manager.current_round)
 			_knob_records.append(annotated)
+		if not _dump_dir.is_empty() and (kind == "deploy" or kind == "mission"):
+			var preg := rec.duplicate(true)
+			preg["side"] = side   # annotated at capture time — solo.ai_slot has moved on by dump time
+			_pregame_records.append(preg)
 		if kind == "planner" and (rec.get("data", {}) as Dictionary).has("win_before"):
 			var d: Dictionary = rec["data"]
 			_calib_records.append({"side": side, "round": int(army_manager.current_round),
@@ -491,6 +502,16 @@ func _run() -> void:
 	# Deployment board BEFORE the dice re-seed below, so the capture's frame ticks cannot leak into
 	# the dice stream (seed(_dice_seed) resets the global RNG right after either way).
 	await _capture_board(main, "deploy.png")
+
+	# NML-1152 dump=pregame: the settled post-repair board IS the fixture (design §4.1) — dump and
+	# quit without playing. After BOTH _deploy_side calls + the settle pass (repairs cross slots),
+	# before seed(_dice_seed).
+	if not _dump_dir.is_empty():
+		PregameDump.write(_dump_dir, _army1, _army2, _seed, _dice_seed, _layout_seed, _symmetric,
+			opener, deploy_order, _knob_records, _pregame_records, _pregame_probe_hits,
+			army_manager, solo)
+		quit(0)
+		return
 
 	# Dice-stream split (harness-proven): everything board-shaped is fixed above (terrain under the layout
 	# seed, deployment under its per-slot seeds, AI pick/D3 under solo._rng = seed). The only remaining
@@ -969,6 +990,7 @@ func _deploy_side(main: Node, solo: Node, table: Node, terrain_overlay: Node, sl
 		blocked_tests["flying"], seed_value)
 	for u in solo.ambush_reserve:
 		main._solo_set_unit_visible(u, false)
+	_pregame_probe_hits[slot] = AiDeployment.probe_hits   # NML-1152 §4.3: physics-probe counter
 	printerr("[ARENA] P%d deployed %d units (%d reserve)" % [slot, int(res.get("deployed", 0)), int(res.get("reserved", 0))])
 
 
@@ -991,6 +1013,7 @@ func _parse_config() -> void:
 	_army2 = _env_or("NML_AI_ARMY2", _army2)
 	_out_dir = _env_or("NML_AI_OUT", _out_dir)
 	_capture_dir = _env_or("NML_AI_CAPTURE", _capture_dir)
+	_dump_dir = _env_or("NML_AI_DUMP", _dump_dir)
 	var s := OS.get_environment("NML_AI_SEED").strip_edges()
 	if s.is_valid_int():
 		_seed = int(s)
@@ -1020,6 +1043,8 @@ func _parse_config() -> void:
 			_out_dir = a.substr(4)
 		elif a.begins_with("capture="):
 			_capture_dir = a.substr(8)
+		elif a.begins_with("dump="):
+			_dump_dir = a.substr(5)
 		elif a.begins_with("batch="):
 			_batch = a.substr(6) != "0"
 		elif a.begins_with("layout_seed=") and a.substr(12).is_valid_int():
