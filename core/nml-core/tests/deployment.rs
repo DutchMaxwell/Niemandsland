@@ -1180,9 +1180,25 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
                 .map(|r| {
                     let key = r[0].as_str().unwrap();
                     let g = &side["units"][key];
+                    let model_shapes: Vec<deployment::ModelShape> = if g.is_null() {
+                        Vec::new()
+                    } else {
+                        g["model_shapes"]
+                            .as_array().unwrap().iter()
+                            .map(|s| deployment::ModelShape {
+                                is_oval: s["is_oval"].as_bool().unwrap(),
+                                w_mm: s["w_mm"].as_i64().unwrap(),
+                                d_mm: s["d_mm"].as_i64().unwrap(),
+                                tough: s["tough"].as_i64().unwrap(),
+                                n: s["n"].as_u64().unwrap() as usize,
+                            })
+                            .collect()
+                    };
                     UnitSpec {
                         key: key.to_string(),
                         model_count: if g.is_null() { 0 } else { g["n_models"].as_i64().unwrap() },
+                        // the dump's snapped value stays ONLY as the shape gate's
+                        // cross-check artifact; the ladder reads the derived radius
                         base_r_m: if g.is_null() { 0.0 } else { g["base_r_m"].as_f64().unwrap() },
                         footprint: if g.is_null() {
                             Vec::new()
@@ -1197,6 +1213,8 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
                         ignores_terrain: if g.is_null() { false } else { g["ignores_terrain"].as_bool().unwrap() },
                         vanguard: if g.is_null() { false } else { g["vanguard_pushed"].as_bool().unwrap() },
                         transport_capacity: 0,
+                        facing_rad: if g.is_null() { 0.0 } else { g["facing_rad"].as_f64().unwrap() },
+                        model_shapes,
                     }
                 })
                 .collect();
@@ -1300,6 +1318,97 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
     assert_eq!(n, 1060, "the full 100-dump corpus");
     assert_eq!(sides_total, 200, "both sides of every dump");
     assert_eq!(models_total, 1060, "every unit's models compared");
+}
+
+// ==== NML-1152 step 6c — THE SHAPE-DERIVATION GATE ====
+//
+// The coordinator's decision on open point 5: the dump carries the TRUE
+// per-unit base shape as a GATE ORACLE; the twin keeps deriving its shapes
+// from the lists (its production path — `list_to_profile.deploy_base_groups`,
+// the AF-base parse + Tough fallback + mount/manifest links, and the
+// attached-hero fold of `_deploy_models` :10239-10245). The gate: derived
+// group-0 shape vs the oracle on every unit; group model counts sum to the
+// deployed model count; and the derived deploy radius
+// (`deploy_base_radius_of` = `_deploy_base_radius` :10263-10267 with the
+// 0.016 floor, host + heroes) equals the dump's base_r_m at its 1e-4
+// snappedf quantum. Verified during the step over the raw dumps: 1060/1060
+// shapes and 1060/1060 radii — this test keeps both derivations pinned
+// against drift.
+
+#[test]
+fn shape_derivation_matches_every_oracle_base() {
+    let fx: Vec<serde_json::Value> =
+        serde_json::from_str(include_str!("fixtures/pregame_pipeline.json")).expect("fixture parses");
+    let (mut n, mut shape_exact, mut radius_exact, mut groups_total) = (0usize, 0usize, 0usize, 0usize);
+    let mut multi_group = 0usize;
+    let mut ovals = 0usize;
+    for d in &fx {
+        let seed = d["seed"].as_i64().unwrap();
+        for slot in ["1", "2"] {
+            for (key, g) in d["sides"][slot]["units"].as_object().unwrap() {
+                if g.is_null() {
+                    continue; // ambush-reserve row, no geometry
+                }
+                n += 1;
+                let name = g["name"].as_str().unwrap();
+                let groups: Vec<deployment::ModelShape> = g["model_shapes"]
+                    .as_array().unwrap().iter()
+                    .map(|s| deployment::ModelShape {
+                        is_oval: s["is_oval"].as_bool().unwrap(),
+                        w_mm: s["w_mm"].as_i64().unwrap(),
+                        d_mm: s["d_mm"].as_i64().unwrap(),
+                        tough: s["tough"].as_i64().unwrap(),
+                        n: s["n"].as_u64().unwrap() as usize,
+                    })
+                    .collect();
+                assert!(!groups.is_empty(), "seed {seed} s{slot} {key} {name}: no shape groups");
+                groups_total += groups.len();
+                if groups.len() > 1 {
+                    multi_group += 1;
+                }
+                if groups[0].is_oval {
+                    ovals += 1;
+                }
+                assert_eq!(
+                    groups.iter().map(|g| g.n).sum::<usize>(),
+                    g["n_models"].as_u64().unwrap() as usize,
+                    "seed {seed} s{slot} {key} {name}: group model counts vs deployed models"
+                );
+                let oracle = &g["oracle_base"];
+                assert_eq!(
+                    (groups[0].is_oval, groups[0].w_mm, groups[0].d_mm),
+                    (
+                        oracle["is_oval"].as_bool().unwrap(),
+                        oracle["w_mm"].as_i64().unwrap(),
+                        oracle["d_mm"].as_i64().unwrap()
+                    ),
+                    "seed {seed} s{slot} {key} {name}: derived shape vs oracle"
+                );
+                shape_exact += 1;
+                let spec = UnitSpec {
+                    key: key.clone(),
+                    model_count: g["n_models"].as_i64().unwrap(),
+                    facing_rad: g["facing_rad"].as_f64().unwrap(),
+                    model_shapes: groups,
+                    ..Default::default()
+                };
+                let r = deployment::deploy_base_radius_of(&spec);
+                let dump_r = g["base_r_m"].as_f64().unwrap();
+                assert_eq!(
+                    (r * 10000.0).round() / 10000.0, dump_r,
+                    "seed {seed} s{slot} {key} {name}: derived deploy radius vs dump"
+                );
+                radius_exact += 1;
+            }
+        }
+    }
+    eprintln!(
+        "SHAPE GATE: derivation {shape_exact}/{n} exact / {} differing; \
+         deploy radius {radius_exact}/{n} at the dump quantum; \
+         {groups_total} shape groups over {n} units ({multi_group} hero-folded, {ovals} oval leads)",
+        n - shape_exact
+    );
+    assert_eq!(n, 1060, "the full 100-dump corpus");
 }
 
 /// The Scout band, pinned synthetically where the corpus cannot (0 scout
