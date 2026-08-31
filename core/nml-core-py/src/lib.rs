@@ -1682,7 +1682,8 @@ fn objective_layout(
 /// inches, `Layout.positions` shape; `swept` counts sweep-filled markers
 /// honestly. A mode word the enum does not know — and "random", which is the
 /// caller's own draw stream — raises `Unsupported`: a clean error, never a
-/// panic.
+/// panic. A `count` over 5 raises too — 8^count search blow-up, and no mission
+/// can draw it (d3+2 tops out at 5): the step-5 UNSURE, coordinator-approved.
 #[pyfunction]
 #[pyo3(signature = (terrain, mode, armies, count, style, table_w_in=72.0, table_d_in=48.0))]
 fn doctrine_place(
@@ -1695,6 +1696,11 @@ fn doctrine_place(
     table_w_in: f64,
     table_d_in: f64,
 ) -> PyResult<Py<PyAny>> {
+    if count > 5 {
+        return Err(Unsupported::new_err(format!(
+            "count must be <= 5 (d3+2 is the mission ceiling; the search tree is 8^count), got {count}"
+        )));
+    }
     let (a, b): (Py<PyAny>, Py<PyAny>) = armies.extract().map_err(|e| {
         Unsupported::new_err(format!(
             "armies must be the pair (army_a, army_b) of profile dicts: {e}"

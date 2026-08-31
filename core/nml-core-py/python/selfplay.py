@@ -514,7 +514,26 @@ DICE_MODES = ("expected", "table")
 #: other marker, off an impassable cell). The draw stream is a `GodotRng` seeded with
 #: the LAYOUT seed — deliberately not the table's global RNG (the terrain layouter
 #: consumes it a data-dependent number of times) and not `SoloController._rng`.
-OBJECTIVES_MODES = ("constant", "rulebook")
+#: "doctrine" (NML-1140 step 9) keeps that draw for count and first placer — the
+#: stream contract — and hands ONLY the candidate choice to `nml_core.doctrine_place`,
+#: the twin's placement doctrine, which draws nothing. Which rung the doctrine
+#: plays is a knob of its own:
+OBJECTIVES_MODES = ("constant", "rulebook", "doctrine")
+
+#: The doctrine rungs (design 5): "search" is the max^N mini-game the shipped
+#: grade plays, "style" the middle rung without the eval. "random" needs no
+#: knob — it IS "rulebook", the caller's own draw stream.
+DOCTRINE_MODES = ("style", "search")
+
+
+def resolve_doctrine_mode(doctrine_mode: str) -> str:
+    """The validated `doctrine_mode`. An unknown rung RAISES: a stamp that claims
+    a doctrine the game did not play is worse than no game."""
+    if doctrine_mode not in DOCTRINE_MODES:
+        raise ValueError(
+            "doctrine_mode must be one of %s, not %r" % (list(DOCTRINE_MODES), doctrine_mode)
+        )
+    return doctrine_mode
 
 #: The catalog deployment style the harnesses play. Both `arena_match.gd` and
 #: `core_selfplay.gd` deploy FRONT_LINE 12" zones, so the twin's legality test uses
@@ -1304,6 +1323,7 @@ def play_game(
     vocab_version: int | None = None,
     objectives: str = "constant",
     deployment: str = "zone",
+    doctrine_mode: str = "search",
     net: str | Path | None = None,
     net_player: int = 0,
     fit_blend: float = 0.5,
@@ -1343,6 +1363,12 @@ def play_game(
     the mode is stamped into `knobs`, and no consumer reads the tray yet, so
     "table" and "expected" play the identical game and differ in that one
     stamped string alone. B4/B5 add the consumers. See `DICE_MODES`.
+
+    `objectives="doctrine"` (NML-1140 step 9) is the rulebook draw with the
+    candidate choice replaced: count and first placer stay on the layout stream,
+    `nml_core.doctrine_place` picks the cells from the two armies' profiles, and
+    the stamp gains the rung under `"doctrine"` beside `"mode": "rulebook"`.
+    `doctrine_mode` picks that rung — see `DOCTRINE_MODES`.
 
     `sidecars` writes the pair/fork counterfactual blocks (NML-1073 M3-9); they
     resolve on clones under generators of their own, so the PLAYED game is
@@ -1513,11 +1539,45 @@ def play_game(
     # core_selfplay.gd:176 — three markers on the centre line, 16" apart.
     eff_objectives = resolve_objectives(objectives)
     objective_layout: dict[str, Any] | None = None
-    if eff_objectives == "rulebook":
+    if eff_objectives in ("rulebook", "doctrine"):
         # D8a: the same layout the table places for this seed. The board is the very
         # `terrain` object the act header carries, so the legality test sees the same
-        # impassable cells on both sides.
-        objective_layout = nml_core.objective_layout(terrain, seed, "d3+2", FRONT_LINE_ZONES)
+        # impassable cells on both sides. NML-1140 step 9: "doctrine" keeps the draw
+        # (count + roll-off, the stream contract — same count and first placer as the
+        # rulebook of this seed) and replaces ONLY the candidate choice, which the
+        # doctrine takes from the two armies' profiles with zero RNG of its own.
+        draw = nml_core.objective_layout(terrain, seed, "d3+2", FRONT_LINE_ZONES)
+        if eff_objectives == "rulebook":
+            objective_layout = draw
+        else:
+            eff_doctrine = resolve_doctrine_mode(doctrine_mode)
+            placed = nml_core.doctrine_place(
+                terrain, eff_doctrine,
+                (
+                    {u["unit_id"]: u for u in units1},
+                    {u["unit_id"]: u for u in units2},
+                ),
+                draw["count_roll"], FRONT_LINE_ZONES,
+            )
+            objective_layout = {
+                "mode": "rulebook",
+                "count_roll": draw["count_roll"],
+                "first_placer": draw["first_placer"],
+                "layout_seed": draw["layout_seed"],
+                "edge_margin_in": draw["edge_margin_in"],
+                "positions": placed["positions"],
+                # objectives.rs:116-117 — the roll-off still books the placer
+                # order even though it feeds no choice (design 4: the doctrine
+                # places in canonical roster order).
+                "placed_by": [
+                    draw["first_placer"] if i % 2 == 0 else 3 - draw["first_placer"]
+                    for i in range(len(placed["positions"]))
+                ],
+                "swept": placed["swept"],
+                # The step-5 UNSURE, taken by the coordinator: the rung rides
+                # under the table's own stamp key, beside "mode": "rulebook".
+                "doctrine": eff_doctrine,
+            }
         objectives = [
             [f32(float(x) * IN2M), 0.0, f32(float(z) * IN2M)]
             for x, z in objective_layout["positions"]
