@@ -1,4 +1,4 @@
-//! NML-1140 steps 1-2 — doctrine skeleton: the mode enum, the canonical
+//! NML-1140 steps 1-3 — doctrine skeleton: the mode enum, the canonical
 //! per-army summary and the style label, extracted ONCE here from the
 //! act-header profiles (`battle_sim.gd:_unit_profile` schema,
 //! loader_gate.py parity-gated, field names pinned to list_to_profile.py).
@@ -9,7 +9,7 @@ use serde_json::Value;
 use std::{collections::HashMap, rc::Rc};
 
 use crate::state::{Bands, Mods, Objective, Profile, Profiles, Roster, State};
-use crate::{IN2M, score};
+use crate::{IN2M, objectives, score};
 
 /// Doctrine mode (design 4/5); "random" is today's byte-identical path.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,7 +29,8 @@ impl Mode {
 pub enum StyleLabel { Shooting, Fast, Tough }
 
 /// Canonical per-army summary (design 2); `*_x2` = doubled means, exact ints.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Field order is the signature tuple the canonical roster order sorts by.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Summary {
     pub shots_far: i64,     // ranged volume (attacks x count) at >= 24"
     pub shots_mid: i64,     // ranged volume at 12-24"
@@ -172,6 +173,94 @@ pub fn edge_scores(a: &Value, b: &Value, zone1: &Zone, zone2: &Zone, markers: &[
     let s1 = synth_state(a, b, zone1, zone2, markers);
     let s2 = synth_state(b, a, zone1, zone2, markers);
     (score::score(&s1, 1, score::NO_INCOMING), score::score(&s2, 2, score::NO_INCOMING))
+}
+
+/// Design 4 mode "style" — the edge-fairness epsilon and the 3" grid step.
+pub const FAIRNESS_EPS: f64 = 0.10;
+const GRID_STEP_IN: i64 = 3;
+
+/// The doctrine's output: placed cells in inches (`Layout.positions` shape)
+/// plus the sweep-honest count (design 1).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Placed { pub cells: Vec<(i64, i64)>, pub swept: usize }
+
+/// One side's fill rectangle (design 3): bbox of that side's zone polygons.
+fn zone_rect(style: &Value, side: &str) -> Zone {
+    let mut z = Zone { x_min: f64::INFINITY, x_max: f64::NEG_INFINITY, z_min: f64::INFINITY, z_max: f64::NEG_INFINITY };
+    let polys = style.get("zones").and_then(|s| s.get(side)).and_then(Value::as_array);
+    for poly in polys.into_iter().flatten() {
+        for p in poly.as_array().into_iter().flatten().filter(|p| p.as_array().is_some_and(|a| a.len() >= 2)) {
+            let (x, zz) = (p.get(0).and_then(Value::as_f64).unwrap_or(0.0), p.get(1).and_then(Value::as_f64).unwrap_or(0.0));
+            z.x_min = z.x_min.min(x); z.x_max = z.x_max.max(x);
+            z.z_min = z.z_min.min(zz); z.z_max = z.z_max.max(zz);
+        }
+    }
+    z
+}
+
+/// Design 4 — canonical roster order: signature tuple, ties by each army's
+/// lexicographically first unit name. doctrine(a, b) = doctrine(b, a).
+fn canonical<'x>(a: &'x Value, b: &'x Value) -> (&'x Value, &'x Value) {
+    let name = |v: &Value| v.as_object().and_then(|m| m.keys().min().cloned()).unwrap_or_default();
+    if (Summary::of_profiles(a), name(a)) <= (Summary::of_profiles(b), name(b)) { (a, b) } else { (b, a) }
+}
+
+/// The per-cell style preference, integer-only (the D8a lesson): ascending
+/// sort = better, ties by x then z (design 4's pinned order). Shooting takes
+/// the centre band, fast spreads from the placed markers, tough the centre
+/// mass. UNSURE: calibration probe-deferred like FAIRNESS_EPS.
+fn pref_key(label: StyleLabel, x: i64, z: i64, placed: &[(i64, i64)]) -> (i64, i64, i64) {
+    let spread = placed.iter().map(|p| { let (dx, dz) = (p.0 - x, p.1 - z); dx * dx + dz * dz }).min().unwrap_or(i64::MAX);
+    let first = match label {
+        StyleLabel::Shooting => x.abs() + z.abs(),
+        StyleLabel::Fast => -spread,
+        StyleLabel::Tough => x * x + z * z,
+    };
+    (first, x, z)
+}
+
+/// Mode "style" (design 4): plies alternate in canonical order; each placer
+/// takes the best-ranked legal grid cell whose marker set keeps |a1 - a2| —
+/// army A's edge bias, B's is complementary (design 3) — within FAIRNESS_EPS,
+/// checked on the GROWING set. If no legal cell passes, the guard is waived
+/// for the top-preference cell (still doctrine-placed); only a ply with NO
+/// legal grid cell falls to the deterministic sweep and counts in `swept`
+/// (design 1); none at all = fewer markers. Zero RNG, legality = is_legal.
+pub fn place_style(a: &Value, b: &Value, style: &Value, cells: &objectives::Cells, count: usize, table_w_in: f64, table_d_in: f64) -> Placed {
+    let zones = objectives::zones_of_style(style);
+    let (z1, z2) = (zone_rect(style, "1"), zone_rect(style, "2"));
+    let (hx, hz) = ((table_w_in / 2.0) as i64 - objectives::EDGE_MARGIN_IN, (table_d_in / 2.0) as i64 - objectives::EDGE_MARGIN_IN);
+    let (first, second) = canonical(a, b);
+    let (lab_a, lab_b) = (Summary::of_profiles(first).label(), Summary::of_profiles(second).label());
+    let mut placed: Vec<(i64, i64)> = Vec::new();
+    let mut swept = 0usize;
+    for ply in 0..count {
+        let label = if ply % 2 == 0 { lab_a } else { lab_b };
+        let mut cands: Vec<(i64, i64)> = Vec::new();
+        for x in (-hx..=hx).step_by(GRID_STEP_IN as usize) {
+            for z in (-hz..=hz).step_by(GRID_STEP_IN as usize) {
+                if objectives::is_legal(x, z, &placed, &zones, cells) { cands.push((x, z)); }
+            }
+        }
+        cands.sort_by_key(|&(x, z)| pref_key(label, x, z, &placed));
+        let fair = cands.iter().copied().find(|&c| {
+            let m: Vec<[f64; 3]> = placed.iter().chain(std::iter::once(&c)).map(|&(x, z)| [x as f64, 0.0, z as f64]).collect();
+            let (a1, a2) = edge_scores(first, second, &z1, &z2, &m);
+            (a1 - a2).abs() <= FAIRNESS_EPS
+        });
+        let (cell, swept_now) = match fair {
+            Some(c) => (Some(c), false),
+            None => match cands.first() {
+                Some(&c) => (Some(c), false),
+                None => (objectives::sweep(hx, hz, &placed, &zones, cells), true),
+            },
+        };
+        match cell {
+            Some(c) => { placed.push(c); if swept_now { swept += 1; } }
+            None => break,
+        }
+    }
+    Placed { cells: placed, swept }
 }
 
 #[cfg(test)]
@@ -324,6 +413,88 @@ mod tests {
         // The identity: v_X = min over the two edges, v_A + v_B = 1 - |a1 - a2|.
         let (v_a, v_b) = (a1.min(a2), b1.min(b2));
         assert!((v_a + v_b - (1.0 - (a1 - a2).abs())).abs() < 1e-9);
+    }
+
+    /// A fast-labelled army with slow feet (no guns, advance 6 / rush 12 —
+    /// still label Fast by the signature): the spread preference's unguarded
+    /// first pick is the z-edge corner (-33, -9), which an army this slow
+    /// cannot hold from the far edge — that edge bias is the fairness test's
+    /// tooth; a rush-24 army would hold it from both edges and stay fair.
+    const SLOWY: &str = r#"{
+        "p1_0_spears": {"unit_id": "p1_0_spears", "name": "Spear Line", "quality": 4, "defense": 4,
+            "tough": 1, "wounds_max": [1, 1, 1], "model_count": 3, "weapons": [],
+            "special_rules": [], "caster_value": 0, "move_bands": {"advance": 6.0, "rush": 12.0},
+            "base_radius": 0.016, "game_system": "gf", "faction_folder": "gf_test",
+            "item_grants": [], "attached_hero_rules": [], "shooting_range_bonus": 0,
+            "max_activation_advance_bonus_in": 0.0},
+        "p1_1_spears": {"unit_id": "p1_1_spears", "name": "Spear Screen", "quality": 4, "defense": 4,
+            "tough": 1, "wounds_max": [1, 1, 1], "model_count": 3, "weapons": [],
+            "special_rules": [], "caster_value": 0, "move_bands": {"advance": 6.0, "rush": 12.0},
+            "base_radius": 0.016, "game_system": "gf", "faction_folder": "gf_test",
+            "item_grants": [], "attached_hero_rules": [], "shooting_range_bonus": 0,
+            "max_activation_advance_bonus_in": 0.0}
+    }"#;
+
+    /// objective_gate.py:53-58 front-line bands, full-width rectangles in inches.
+    fn front_line_style() -> Value {
+        json!({"zones": {
+            "1": [[[-36, -24], [36, -24], [36, -12], [-36, -12]]],
+            "2": [[[-36, 12], [36, 12], [36, 24], [-36, 24]]]
+        }})
+    }
+
+    fn place(a: &str, b: &str, count: usize) -> Placed {
+        let cells = crate::objectives::Cells::from_pairs(&[], 24);
+        place_style(&serde_json::from_str(a).unwrap(), &serde_json::from_str(b).unwrap(), &front_line_style(), &cells, count, 72.0, 48.0)
+    }
+
+    /// The same roster under the other seat's key prefix (step 2's trick).
+    fn mirror(s: &str) -> String { s.replace("p1_", "p2_") }
+
+    #[test]
+    fn style_output_is_legal() {
+        use crate::objectives::{is_legal, zones_of_style};
+        let (zones, cells) = (zones_of_style(&front_line_style()), crate::objectives::Cells::from_pairs(&[], 24));
+        let b = mirror(SLOWY);
+        for (a, b, count) in [(SLOWY, b.as_str(), 3), (SLOWY, SHOOTY, 5)] {
+            let p = place(a, b, count);
+            assert_eq!(p.cells.len(), count);
+            assert_eq!(p.swept, 0, "no sweep expected on open terrain");
+            for (i, c) in p.cells.iter().enumerate() {
+                let others: Vec<(i64, i64)> = p.cells.iter().enumerate().filter(|(j, _)| *j != i).map(|(_, c)| *c).collect();
+                assert!(is_legal(c.0, c.1, &others, &zones, &cells), "cell {c:?} illegal");
+            }
+        }
+    }
+
+    #[test]
+    fn style_placement_is_deterministic() {
+        let b = mirror(SLOWY);
+        assert_eq!(place(SLOWY, &b, 5), place(SLOWY, &b, 5));
+    }
+
+    #[test]
+    fn style_symmetric_in_army_order() {
+        let b = mirror(SLOWY);
+        assert_eq!(place(SLOWY, &b, 3).cells, place(&b, SLOWY, 3).cells);
+        // distinct armies: canonical roster order, not seat order, drives plies
+        assert_eq!(place(SLOWY, SHOOTY, 3).cells, place(SHOOTY, SLOWY, 3).cells);
+    }
+
+    /// The guard's property on the output; RED tooth — bypassing the guard
+    /// makes the count-1 fast opening the z-edge corner (-33, -9) and this
+    /// assertion fails on |a1 - a2| > FAIRNESS_EPS.
+    #[test]
+    fn style_output_respects_edge_fairness() {
+        let b = mirror(SLOWY);
+        let (z1, z2) = (zone_rect(&front_line_style(), "1"), zone_rect(&front_line_style(), "2"));
+        for count in [1, 3] {
+            let p = place(SLOWY, &b, count);
+            assert_eq!(p.swept, 0);
+            let m: Vec<[f64; 3]> = p.cells.iter().map(|&(x, z)| [x as f64, 0.0, z as f64]).collect();
+            let (a1, a2) = edge_scores(&serde_json::from_str(SLOWY).unwrap(), &serde_json::from_str(&b).unwrap(), &z1, &z2, &m);
+            assert!((a1 - a2).abs() <= FAIRNESS_EPS, "count {count}: |a1 - a2| = {}", (a1 - a2).abs());
+        }
     }
 }
 
