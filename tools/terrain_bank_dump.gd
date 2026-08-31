@@ -46,9 +46,26 @@ extends SceneTree
 ##     and corner posts ride `walls`: the probe reaches only 1.81 cm past
 ##     their surfaces (sphere centre 0.07 m over a 2.5"-high box top) vs the
 ##     2 cm wall band, so their discs would over-block that 1.4 mm gap.
-## A bank dumped without the two keys still loads (serde defaults twin-side).
+##   * `blocker_boxes` (NML-1152 step 4d) — per collider the deployment probe
+##     can hit, its REAL XZ footprint: `[cx, cy, half_w, half_h, angle, reach]`
+##     (centred inches, radians, reach inches) read straight off the body's
+##     CollisionShape3D + global transform (containers
+##     terrain_overlay.gd:2886-2891 / :3153-3158, shell + procedural walls
+##     :1967-1972 / :2062-2067, corner posts :1910-1915). `walls` carries the
+##     wall bodies' CENTRELINES, so the twin's 0.02 m band only reaches
+##     0.02 − 0.125" past a wall surface — the probe reaches 0.0181 m (the
+##     sphere's XZ reach at 0.07 m over a 2.5"-high box, ai_deployment.gd:296,
+##     :303): that 1.3 mm ring is step 5's twin-permissive residue. `reach`
+##     stores exactly that per-box figure, so the twin's box layer mirrors the
+##     probe instead of guessing. A non-box shape is recorded as a convex
+##     polygon `[[x, y], ...]` in the same frame (the twin reads boxes only;
+##     no such shape exists in the corpus).
+## A bank dumped without the prop keys still loads (serde defaults twin-side).
 
 const IN2M := 0.0254
+## The probe sphere's radius and centre height (ai_deployment.gd:296, :303).
+const PROBE_RADIUS_M := 0.02
+const PROBE_HEIGHT_M := 0.07
 ## Half a cell minus a quarter inch — see the anchor note above.
 const LATTICE_OFFSET_IN := 1.25
 
@@ -87,6 +104,7 @@ func _run() -> void:
 	var cells_total := 0
 	var walls_total := 0
 	var blockers_total := 0
+	var boxes_total := 0
 	for layout_seed in range(from, to + 1):
 		var world := SchoolTerrain.generate(layout_seed)
 		var n := int(world["n"])
@@ -135,11 +153,22 @@ func _run() -> void:
 					var sz: Vector3 = ((c as CollisionShape3D).shape as BoxShape3D).size
 					blockers.append([c.global_position.x / IN2M, c.global_position.z / IN2M,
 						minf(sz.x, sz.z) * 0.5 / IN2M])
+		# NML-1152 step 4d: the probe's REAL footprints — containers AND wall
+		# bodies (walls ride `walls` as centrelines; the 0.25"-thick bodies,
+		# terrain_overlay.gd:1967-1972, out-reach that band by the ring above).
+		var boxes: Array = []
+		for inst in _ovl._object_instances:
+			boxes.append_array(_collider_boxes(inst))
+		for inst in _ovl._wall_instances:
+			boxes.append_array(_collider_boxes(inst))
 		board["walls"] = walls
 		board["blockers"] = blockers
+		board["blocker_boxes"] = boxes
 		walls_total += walls.size()
 		blockers_total += blockers.size()
-		print("[BANKV2] seed %d walls %d blockers %d" % [layout_seed, walls.size(), blockers.size()])
+		boxes_total += boxes.size()
+		print("[BANKV2] seed %d walls %d blockers %d boxes %d"
+			% [layout_seed, walls.size(), blockers.size(), boxes.size()])
 		ml.free()
 		var f := FileAccess.open(out.path_join("board_%d.json" % layout_seed), FileAccess.WRITE)
 		if f == null:
@@ -148,9 +177,49 @@ func _run() -> void:
 			return
 		f.store_string(JSON.stringify(board, "", true, true))
 		f.close()
-	print("[BANK] wrote %d boards (seeds %d..%d) to %s — %d terrain cells, %d wall segments, %d blocker discs"
-		% [to - from + 1, from, to, out, cells_total, walls_total, blockers_total])
+	print("[BANK] wrote %d boards (seeds %d..%d) to %s — %d terrain cells, %d wall segments, %d blocker discs, %d blocker boxes"
+		% [to - from + 1, from, to, out, cells_total, walls_total, blockers_total, boxes_total])
 	quit(0)
+
+
+## NML-1152 step 4d: the probe-visible collision footprints of one overlay
+## body — per CollisionShape3D child, the XZ oriented box the deployment probe
+## actually tests (ai_deployment.gd:300-309), from the shape + its GLOBAL
+## transform (the same transform `update_placed_objects` / `update_wall_models`
+## spawned it with). `reach` = the probe sphere's XZ reach past THIS box:
+## sqrt(r² − dy²) with dy the sphere centre's y-gap to the nearest box face —
+## 0 when the box top sits below the sphere's bottom (the probe can never hit
+## it, so no box is recorded). A non-box shape is recorded as a convex polygon.
+func _collider_boxes(inst: Node) -> Array:
+	var out: Array = []
+	for c in inst.get_children():
+		var cs := c as CollisionShape3D
+		if cs == null or cs.shape == null:
+			continue
+		var xf := cs.global_transform
+		if cs.shape is BoxShape3D:
+			var sz: Vector3 = (cs.shape as BoxShape3D).size
+			var top: float = xf.origin.y + sz.y * 0.5
+			var bot: float = xf.origin.y - sz.y * 0.5
+			var dy: float = maxf(maxf(0.0, PROBE_HEIGHT_M - top), bot - PROBE_HEIGHT_M)
+			var reach: float = sqrt(maxf(0.0, PROBE_RADIUS_M * PROBE_RADIUS_M - dy * dy))
+			if reach <= 0.0:
+				continue
+			var b := xf.basis
+			# Godot yaw θ: basis.x = (cos θ, 0, −sin θ) — the twin rotates sample
+			# points into the box frame with exactly this angle.
+			out.append([xf.origin.x / IN2M, xf.origin.z / IN2M,
+				sz.x * 0.5 / IN2M, sz.z * 0.5 / IN2M,
+				atan2(-b.x.z, b.x.x), reach / IN2M])
+		elif cs.shape is ConvexPolygonShape3D:
+			var poly: Array = []
+			for p in (cs.shape as ConvexPolygonShape3D).points:
+				var w := xf * p
+				poly.append([w.x / IN2M, w.z / IN2M])
+			out.append(poly)
+		else:
+			printerr("[BANKV2] unsupported collider shape %s skipped" % cs.shape.get_class())
+	return out
 
 
 ## One `SchoolTerrain.type_at` answer per cell, at the cell centre plus
