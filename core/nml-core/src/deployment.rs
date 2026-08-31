@@ -81,3 +81,77 @@ pub fn deploy_order(winner: i64) -> [i64; 2] {
         [2, 1]
     }
 }
+
+// ---- the per-side deploy stream's draw phases (NML-1152 step 3). `deploy_begin`
+// (solo_controller.gd:8943-9047) seeds a FRESH rng per side (:8944-8945) and
+// consumes it IN ORDER: transport fill (:8957-8976) → split_into_groups (:8986)
+// → assign_sections (:8987) → placement_order (:9038, step 3b). Placement draws NOTHING.
+
+/// `AiDeployment._shuffle` (ai_deployment.gd:239-244): Fisher-Yates, one
+/// `randi_range(0, i)` draw per swap, top index down to 1.
+fn shuffle(v: &mut [usize], rng: &mut GodotRng) {
+    for i in (1..v.len()).rev() {
+        let j = rng.randi_range(0, i as i64) as usize;
+        v.swap(i, j);
+    }
+}
+
+/// `AiDeployment.split_into_groups` (ai_deployment.gd:15-23): indices shuffled,
+/// then dealt into 3 groups of equal size as far as possible (`k % 3`).
+pub fn split_into_groups(count: usize, rng: &mut GodotRng) -> Vec<Vec<usize>> {
+    let mut idx: Vec<usize> = (0..count).collect();
+    shuffle(&mut idx, rng);
+    let mut groups: Vec<Vec<usize>> = vec![Vec::new(), Vec::new(), Vec::new()];
+    for (k, &i) in idx.iter().enumerate() {
+        groups[k % 3].push(i);
+    }
+    groups
+}
+
+/// `AiDeployment.assign_sections` (ai_deployment.gd:27-43): one D3 per group,
+/// the whole roll re-done while ALL groups would share one section; a single
+/// group returns after its one draw (:34-35).
+pub fn assign_sections(group_count: usize, rng: &mut GodotRng) -> Vec<i64> {
+    if group_count == 0 {
+        return Vec::new();
+    }
+    loop {
+        let sections: Vec<i64> = (0..group_count).map(|_| rng.randi_range(1, 3)).collect();
+        if group_count == 1 || sections.iter().any(|&s| s != sections[0]) {
+            return sections;
+        }
+    }
+}
+
+/// `deploy_begin`'s transport fill (solo_controller.gd:8957-8976). The caller
+/// passes capacities of alive, unattached, not-already-embarked units in
+/// game-unit list order. Each transport (capacity > 0, list order) loads random
+/// non-transport units up to its cargo limit: one `randi_range(0, len-1)` draw
+/// per pop from a duplicated candidate pool until drained — the final pop (one
+/// candidate left) draws NOTHING (the engine's `randi_range(0,0)` fast path).
+/// The capacity gate is a unit-count stand-in for the engine's space-count
+/// can_embark (opr_army_manager.gd:2930: `unit_embark_spaces` vs
+/// `cap − transport_used_spaces`, plus untransportable/pre-embarked failures
+/// not mirrored) — exact for the transport-free corpus lists. Returns
+/// (transport, cargo) index pairs.
+pub fn transport_fill(capacities: &[i64], rng: &mut GodotRng) -> Vec<(usize, usize)> {
+    let mut fills: Vec<(usize, usize)> = Vec::new();
+    let mut pool: Vec<usize> = (0..capacities.len()).filter(|&i| capacities[i] <= 0).collect();
+    for tr in 0..capacities.len() {
+        if capacities[tr] <= 0 {
+            continue;
+        }
+        let mut tries = pool.clone();
+        let mut loaded = 0usize;
+        while !tries.is_empty() {
+            let pick = tries.remove(rng.randi_range(0, tries.len() as i64 - 1) as usize);
+            if loaded < capacities[tr] as usize {
+                loaded += 1;
+                let at = pool.iter().position(|&p| p == pick).expect("pick in pool");
+                pool.remove(at);
+                fills.push((tr, pick));
+            }
+        }
+    }
+    fills
+}

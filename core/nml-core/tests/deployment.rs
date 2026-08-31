@@ -9,7 +9,7 @@
 //! (opener == winner of the last attempt, deploy_order == [winner, other],
 //! seed_value == seed + slot) before this file was written.
 
-use nml_core::deployment::{self, roll_off_traced};
+use nml_core::deployment::{self, roll_off_traced, UnitSpec};
 use nml_core::rng::GodotRng;
 
 fn fixtures() -> Vec<serde_json::Value> {
@@ -43,4 +43,111 @@ fn roll_off_replays_every_table_dump_bit_exact() {
             assert_eq!(deployment::side_seed_value(seed, slot), want, "seed {} side {}", seed, slot);
         }
     }
+}
+
+/// NML-1152 step 3 — the per-side deploy-stream DRAW PHASES against the table's
+/// own dumps: transport fill → split_into_groups → assign_sections, replayed in
+/// `deploy_begin`'s exact order (solo_controller.gd:8944-8945 fresh rng,
+/// :8957-8976 fill, :8986 groups, :8987 sections; ai_deployment.gd:15-43).
+/// The extract generator reconstructed each side's `all_units` in list order
+/// (attached heroes excluded, ambush-reserve units at their list positions) and
+/// asserted: seed_value == seed + slot, dump-unit sections in 1..3, the
+/// units+reserved name multiset equals the non-joined list entries, and no name
+/// appears in BOTH units and reserved (interleave would be ambiguous). The
+/// committed extract carries only keys/flags/sections — no host paths.
+///
+/// placement_order is step 3b: the dumps record NO placement order, so there is
+/// nothing to replay it against yet (slice 6's full-fixture replay pins it via
+/// final positions).
+#[test]
+fn draw_phases_replay_every_table_dump_bit_exact() {
+    let dumps: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+        "fixtures/pregame_draw_phases.json"
+    ))
+    .expect("fixture parses");
+    assert!(dumps.len() >= 20, "need the 100-dump corpus, got {}", dumps.len());
+    let mut total_checked = 0usize;
+    for d in &dumps {
+        let seed = d["seed"].as_i64().unwrap();
+        for slot in ["1", "2"] {
+            let sd = &d["sides"][slot];
+            let rows = sd["units"].as_array().unwrap();
+            let specs: Vec<UnitSpec> = rows
+                .iter()
+                .map(|r| UnitSpec {
+                    key: r[0].as_str().unwrap().to_string(),
+                    scout: r[1].as_bool().unwrap(),
+                    ambush: r[2].as_bool().unwrap(),
+                    transport_capacity: 0,
+                    ..Default::default()
+                })
+                .collect();
+            let caps: Vec<i64> = specs.iter().map(|s| s.transport_capacity).collect();
+
+            // The fresh per-side stream (solo_controller.gd:8944-8945), phases in
+            // deploy_begin's exact order.
+            let mut rng = GodotRng::new(sd["seed_value"].as_i64().unwrap());
+            let fills = deployment::transport_fill(&caps, &mut rng);
+            let fill_names: Vec<(String, String)> = fills
+                .iter()
+                .map(|&(t, c)| (specs[t].key.clone(), specs[c].key.clone()))
+                .collect();
+            let want_fills: Vec<(String, String)> = sd["fills"]
+                .as_array().unwrap().iter()
+                .map(|f| (f[0].as_str().unwrap().to_string(), f[1].as_str().unwrap().to_string()))
+                .collect();
+            assert_eq!(fill_names, want_fills, "seed {seed} side {slot}: fills");
+
+            let groups = deployment::split_into_groups(specs.len(), &mut rng);
+            assert_eq!(groups.len(), 3, "seed {seed} side {slot}: 3 groups");
+            let sections = deployment::assign_sections(groups.len(), &mut rng);
+            let mut section_of = vec![0i64; specs.len()];
+            for (g, members) in groups.iter().enumerate() {
+                for &i in members {
+                    section_of[i] = sections[g];
+                }
+            }
+            let mut checked = 0u32;
+            for (i, row) in rows.iter().enumerate() {
+                if specs[i].ambush {
+                    assert!(row[3].is_null(), "seed {seed} side {slot}: reserved row {i}");
+                    continue;
+                }
+                // Null section = duplicate-name unit: pregame_dump.gd keys its
+                // place-record map by NAME (:37, :48), so duplicate-name rows carry the
+                // LAST-deployed unit's record (verified seed 56 side 2) — unrecordable.
+                if row[3].is_null() {
+                    continue;
+                }
+                assert_eq!(
+                    section_of[i],
+                    row[3].as_i64().unwrap(),
+                    "seed {seed} side {slot}: unit {i} ({}) section",
+                    specs[i].key
+                );
+                checked += 1;
+            }
+            total_checked += checked as usize;
+        }
+    }
+    assert_eq!(total_checked, 1052, "pinned section comparisons across the corpus");
+}
+
+/// The transport fill's draw law, pinned where the corpus cannot (no transports
+/// in the lists): one `randi_range(0, len-1)` draw per pop and the final pop
+/// (a single candidate left) draws NOTHING — the engine's equal-bounds fast
+/// path that rng.rs::randi_range now mirrors.
+#[test]
+fn transport_fill_draw_law_final_pop_draws_nothing() {
+    let mut rng = GodotRng::new(1234);
+    let fills = deployment::transport_fill(&[2, 0, 0, 0], &mut rng);
+    // Cargo limit 2 → 2 loads, but the pool DRAINS fully: 3 pops, the third
+    // being randi_range(0, 0) — no draw.
+    assert_eq!(fills.len(), 2);
+    assert!(fills.iter().all(|&(t, _)| t == 0));
+    let mut mirror = GodotRng::new(1234);
+    let _ = mirror.randi_range(0, 2); // pop 1 of 3
+    let _ = mirror.randi_range(0, 1); // pop 2 of 3
+    // pop 3: randi_range(0, 0) — consumes nothing.
+    assert_eq!(rng.state_i64(), mirror.state_i64(), "final pop must draw nothing");
 }

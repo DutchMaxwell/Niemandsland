@@ -106,8 +106,12 @@ impl GodotRng {
     }
 
     /// `RandomNumberGenerator::randi_range` — the BIASED modulo the engine ships,
-    /// including its reversed-range branch. One draw.
+    /// including its reversed-range branch. One draw — none when from == to
+    /// (the engine's equal-bounds fast path; verified headless, NML-1152 step 3).
     pub fn randi_range(&mut self, from: i64, to: i64) -> i64 {
+        if from == to {
+            return from;
+        }
         let r = self.rand_u32() as i64;
         if to < from {
             to + r % (from - to + 1)
