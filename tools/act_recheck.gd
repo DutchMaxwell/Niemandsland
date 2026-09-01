@@ -210,10 +210,22 @@ func _check_act(act: Dictionary, header: Dictionary, profiles: Dictionary,
 
 	var statics: Dictionary = act.get("statics", {})
 	var playout_net: Dictionary = statics.get("playout_net", {})
+	var policy_mode := str(statics.get("policy_mode", "off"))
 	var los_hit := [false]
-	if playout_net.is_empty():
-		# _policy_step_net (the only los_at caller) never runs with an empty net —
-		# a call here proves the corpus does NOT cover what actually ran.
+	if policy_mode == "order":
+		# NML-1158b step 7 — the SAME construction tools/policy_dump.gd uses
+		# (M3-0d): `header["los_blocked"]` is the GEOMETRIC terrain rebuild,
+		# built once in `_init()` whenever a board exists — unlike `state
+		# ["los_blocked"]` above (:202-209), it does NOT depend on a recorded
+		# `los_pairs` matrix, so an ARENA (SoloController) corpus still gets
+		# a real sight feature instead of `-1` for every candidate.
+		var lb2: Callable = header.get("los_blocked", Callable())
+		state["los_at"] = (func(pa: Vector3, pb: Vector3) -> bool: return not lb2.call(pa, pb)) \
+			if lb2.is_valid() else Callable()
+	elif playout_net.is_empty():
+		# _policy_step_net (the only OTHER los_at caller) never runs with an
+		# empty net — a call here proves the corpus does NOT cover what
+		# actually ran.
 		state["los_at"] = func(_a, _b) -> bool:
 			push_error("[ACT_RECHECK] los_at called with no net path active")
 			los_hit[0] = true
@@ -225,6 +237,7 @@ func _check_act(act: Dictionary, header: Dictionary, profiles: Dictionary,
 	AiPlanner.playout_search = bool(statics.get("playout_search", false))
 	AiMissionEval.fit_mode = bool(statics.get("fit_mode", false))
 	AiPlanner.playout_net = playout_net
+	AiPlanner.policy_mode = policy_mode
 	if not _ignore_knobs:
 		_stamp_knobs(knobs)
 
