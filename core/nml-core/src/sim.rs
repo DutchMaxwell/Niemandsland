@@ -1485,7 +1485,24 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize) -> Vec<(usize, S
 /// the table resolves Impact, the charger's strikes and the strike-back as
 /// separate phases, and each later one is survivor-scaled by what the earlier
 /// ones killed (main.gd:8067-8102). Returns the PRE-Regeneration wounds it
-/// caused — the melee-winner tally, which is what the table compares.
+/// caused — the melee-winner tally, which is what the table compares — plus
+/// block B13's Retaliate credit (the unsaved lash-back hits, credited to the
+/// DEFENDER's tally by the caller, main.gd:8056/:8079/:8099).
+///
+/// Block B13 — Retaliate(X), main.gd:6146-6171. Measured like the table
+/// measures it: the trigger is what ACTUALLY LANDED on the defender
+/// (`landed_on_defender`, the post-Regeneration return of the pooled
+/// `_solo_land_wounds` :6148-6149 — here `absorb`'s wound count, the same
+/// wound-pool difference), not what the strikes rolled. `X` is the
+/// per-unit `retaliate_hits_per_wound` (`unit.rs::ctx_for`), so hits =
+/// per-wound x wounds TAKEN. The saves roll at the STRIKER's own
+/// Shielded-adjusted Defense with no AP (`dice::retaliate_saves_with_tray`),
+/// the wounds land on the striker, and the TALLY credit goes to the
+/// DEFENDER — `_solo_retaliate_credit += rw` (main.gd:6171), taken by the
+/// defender's side at the melee comparison. NON-CHAINING by construction:
+/// the lash lands through `land_wounds` alone, never through a strike
+/// phase, so retaliation wounds never re-trigger anyone's Retaliate.
+#[allow(clippy::too_many_arguments)]
 fn strike_phase(
     statics: &[UnitStatic],
     next: &mut State,
@@ -1494,7 +1511,7 @@ fn strike_phase(
     charging: bool,
     tray: &mut Tray,
     shot: &mut ShootResult,
-) -> i64 {
+) -> (i64, i64) {
     let parts = melee_parts(statics, next, si);
     let ut = &statics[next.roster.profile[ti]];
     let def = ctx_live(ctx_of(ut, next, ti), statics, next, ti, true);
@@ -1514,9 +1531,34 @@ fn strike_phase(
     let r = crate::dice::resolve_melee_with_tray(&members, &def, &ut.name, charging, tray);
     let caused = r.caused;
     let w = shot.absorb(r);
+    // B13: the table measures the lash-back on wounds actually TAKEN — the
+    // wound-POOL difference (`_solo_retaliate_hits` :4570, NML-937), snapshotted
+    // BEFORE the landing like the table's `pools_before` (:6146) — overkill
+    // wounds past the last model are lost and lash nothing back.
+    let pool_before = wounds_left(next, ti);
     land_wounds(next, ti, w);
+    // Block B13 — the lash-back: ONLY wounds that LANDED post-Regeneration
+    // count (the table's `landed_on_defender`, :6147-6149), only a striker
+    // that still has models, and NON-CHAINING by construction: the wounds
+    // land through `land_wounds` alone, never through another strike phase,
+    // so retaliation wounds can never re-trigger anyone's Retaliate.
+    let mut retaliated = 0i64;
+    let taken = pool_before - wounds_left(next, ti);
+    if w > 0 && taken > 0 && def.retaliate_hits_per_wound > 0 && next.alive[si] > 0 {
+        let hits = def.retaliate_hits_per_wound * taken;
+        shot.log.push(format!("Retaliate: {} lashes back — {} hits", ut.name, hits));
+        let su = &statics[next.roster.profile[si]];
+        let sctx = ctx_of(su, next, si);
+        let (unsaved, landed) = crate::dice::retaliate_saves_with_tray(
+            hits, &sctx, &su.name, tray, &mut shot.rolls,
+        );
+        if unsaved > 0 {
+            land_wounds(next, si, landed);
+            retaliated = unsaved; // _solo_retaliate_credit += rw (main.gd:6171)
+        }
+    }
     spend_exchange(next, si, ti, true); // main.gd:6152, per strike phase
-    caused
+    (caused, retaliated)
 }
 
 /// The charge's Impact, pool by pool — `main._solo_charge_impact` :6292. The
@@ -1638,12 +1680,18 @@ fn tray_charge(
             // :8079 — the charger strikes only while BOTH sides still stand;
             // an Impact pool that wiped the defender ends the melee here.
             if next.alive[si] > 0 && next.alive[ti] > 0 {
-                by_su += strike_phase(statics, next, si, ti, true, tray, shot);
+                // B13: the defender's lash-back credits ITS OWN tally (by_tu).
+                let (c, rc) = strike_phase(statics, next, si, ti, true, tray, shot);
+                by_su += c;
+                by_tu += rc;
                 next.fatigued[si] = true;
             }
         } else if next.alive[ti] > 0 && next.alive[si] > 0 {
             // :8100 — and so does the strike-back, in both directions.
-            by_tu += strike_phase(statics, next, ti, si, false, tray, shot);
+            // B13: the strike-back's lash-back credits the charger's tally.
+            let (c, rc) = strike_phase(statics, next, ti, si, false, tray, shot);
+            by_tu += c;
+            by_su += rc;
             next.fatigued[ti] = true;
         }
     }
@@ -4446,5 +4494,104 @@ mod tests {
         st.round += 1;
         st.activated[2] = true; // "b" enters round 1 already-activated, unused
         assert_eq!(second_wind_candidate(&statics, &st, st.player[0]), Some(2));
+    }
+
+    // -------------------------------------------- block B13: Retaliate(X) ---
+
+    /// Block B13 fixture — unit 0 a 3x1-wound striker (Quality 4, one melee
+    /// profile), unit 1 the defender (3x1 wounds, Defense 4) carrying
+    /// `def_retaliate` as its `retaliate_hits_per_wound` (0 = rule absent).
+    fn duel(def_retaliate: i64) -> (State, Vec<UnitStatic>) {
+        let blade = ShootProfile { name: "Blade".into(), attacks: 8, count: 1, range: 0, ..Default::default() };
+        let profile: Profile = serde_json::from_str(r#"{"unit_id": "u", "name": "u"}"#).unwrap();
+        let statics = vec![
+            UnitStatic {
+                ctx: Ctx { quality: 4, defense: 4, tough: 1, models: 3, ..Default::default() },
+                name: "Striker".into(),
+                melee: vec![blade],
+                model_count: 3,
+                wounds_max: vec![1, 1, 1],
+                ..Default::default()
+            },
+            UnitStatic {
+                ctx: Ctx { defense: 4, tough: 1, models: 3, retaliate_hits_per_wound: def_retaliate, ..Default::default() },
+                name: "Target".into(),
+                model_count: 3,
+                wounds_max: vec![1, 1, 1],
+                ..Default::default()
+            },
+        ];
+        let mut st = four_unit_line();
+        st.roster = Rc::new(Roster {
+            keys: vec!["a".into(), "b".into()],
+            index: HashMap::new(),
+            profile: vec![0, 1],
+        });
+        st.profiles = Rc::new(Profiles { list: vec![profile.clone(), profile], index: HashMap::new() });
+        st.player = vec![0, 1];
+        st.alive = vec![3, 3];
+        st.attached = Rc::new(vec![vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, None]);
+        st.positions[0] = vec![[0.0, 0.0, 0.0], [0.8, 0.0, 0.0], [1.2, 0.0, 0.0]];
+        st.wounds[0] = vec![1, 1, 1];
+        st.radii[0] = vec![IN2M, IN2M, IN2M];
+        st.positions[1] = vec![[2.0, 0.0, 0.0], [3.0, 0.0, 0.0], [4.0, 0.0, 0.0]];
+        st.wounds[1] = vec![1, 1, 1];
+        st.radii[1] = vec![IN2M, IN2M, IN2M];
+        (st, statics)
+    }
+
+    /// Retaliate(2) against 3 wounds LANDED = the striker faces a 6-die save
+    /// batch at its own Defense, AP 0; the wounds land on the striker, the
+    /// credit is the UNSAVED count, and the caller hands it to the defender's
+    /// tally (main.gd:6146-6171).
+    #[test]
+    fn retaliate_throws_two_hits_per_wound_landed_at_the_striker() {
+        let (mut st, statics) = duel(2);
+        let def_pool = wounds_left(&st, 1);
+        let mut tray = Tray::seeded(2);
+        let mut shot = ShootResult::default();
+        let (caused, credit) = strike_phase(&statics, &mut st, 0, 1, false, &mut tray, &mut shot);
+        let landed = def_pool - wounds_left(&st, 1);
+        assert_eq!(landed, 3, "fixture: seed 9 lands exactly 3 wounds (got {landed})");
+        assert!(caused >= landed, "the tally is the PRE-Regeneration count");
+        let lash = shot.rolls.last().expect("the lash-back save batch");
+        assert_eq!((lash.kind, lash.count, lash.owner.as_str()), ("defense", 6, "Striker"));
+        assert_eq!(lash.target, 4, "the striker's own Defense 4+, AP 0");
+        assert_eq!(credit, lash.faces.iter().filter(|&&f| f < 4).count() as i64,
+            "the credit is the unsaved count the caller gives the defender's tally");
+        assert!(wounds_left(&st, 0) < 3, "the retaliation wounds LAND on the striker");
+        assert_eq!(shot.log.last().map(String::as_str),
+            Some("Retaliate: Target lashes back — 6 hits"), "the rules-must-log line");
+    }
+
+    /// The same strike WITHOUT the rule: no lash-back batch, no log line —
+    /// the tray stands exactly where the phase's own draws left it.
+    #[test]
+    fn without_the_rule_no_extra_rolls_and_no_log() {
+        let (mut st, statics) = duel(0);
+        let mut tray = Tray::seeded(2);
+        let mut shot = ShootResult::default();
+        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, &mut tray, &mut shot);
+        assert_eq!(credit, 0, "nothing to credit");
+        assert!(shot.log.iter().all(|l| !l.contains("Retaliate")), "nothing logged");
+        assert!(shot.rolls.iter().all(|r| !(r.kind == "defense" && r.owner == "Striker")),
+            "the striker never rolls a save when the defender carries no Retaliate");
+    }
+
+    /// NON-CHAINING (main.gd:6155): the lash lands through `land_wounds`
+    /// alone, never through another strike phase — a striker that ITSELF
+    /// carries Retaliate(2) does not answer the defender's lash-back.
+    #[test]
+    fn retaliation_wounds_never_trigger_the_strikers_own_retaliate() {
+        let (mut st, mut statics) = duel(2);
+        statics[0].ctx.retaliate_hits_per_wound = 2;
+        let mut tray = Tray::seeded(2);
+        let mut shot = ShootResult::default();
+        strike_phase(&statics, &mut st, 0, 1, false, &mut tray, &mut shot);
+        let striker_saves = shot.rolls.iter().filter(|r| r.kind == "defense" && r.owner == "Striker").count();
+        let defender_saves = shot.rolls.iter().filter(|r| r.kind == "defense" && r.owner == "Target").count();
+        assert_eq!(striker_saves, 1, "exactly the defender's lash-back batch");
+        assert_eq!(defender_saves, 1, "the strike's own save batch — no chained counter-lash");
     }
 }

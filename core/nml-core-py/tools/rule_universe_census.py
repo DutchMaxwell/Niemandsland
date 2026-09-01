@@ -93,6 +93,11 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # (Regenerative Strength) are recorded (registry-gated) and read by
     # nothing, the Utility-Buff over-count shape #489 found.
     "Growth Markers": frozenset({"ap_per_marker", "ap_per_two", "hit_per_marker", "hit_per_two"}),
+    # Block B13: unit.rs::retaliate_hits_per_wound reads `hits_per_wound` into
+    # Ctx.retaliate_hits_per_wound (sim.rs::strike_phase lash-back). "rating"
+    # stays unread on this core (the shipped "X" string falls back to the
+    # rating itself).
+    "Retaliate": frozenset({"hits_per_wound"}),
 }
 
 

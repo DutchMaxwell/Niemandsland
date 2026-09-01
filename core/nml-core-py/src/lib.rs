@@ -1016,7 +1016,8 @@ impl Core {
     /// streams stay split the way the table's are.
     ///
     /// Returns `(state, report)` with `report = {"rolls": [{"kind", "count",
-    /// "target", "faces"}], "unported": [name, ...]}` — `rolls` in draw order
+    /// "target", "faces"}], "unported": [name, ...], "log": [line, ...]}` —
+    /// `rolls` in draw order
     /// (what `dice.jsonl` records), `unported` the table branches THIS
     /// activation hit that the port does not reproduce. A caller that ignores
     /// `unported` is choosing to ignore a known divergence, not being told
@@ -1060,6 +1061,9 @@ impl Core {
         let report = serde_json::json!({
             "rolls": Value::Array(rolls),
             "unported": shot.unported.iter().map(|s| Value::String((*s).into())).collect::<Vec<Value>>(),
+            // Block B13 — the rules-must-log lines, in order (dice.rs's
+            // `ShootResult.log`): the twin's ledger beside the dice stream.
+            "log": shot.log.iter().map(|s| Value::String(s.clone())).collect::<Vec<Value>>(),
         });
         Ok((PyState::derived(next), to_py(py, &report)?))
     }
