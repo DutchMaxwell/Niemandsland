@@ -103,17 +103,20 @@ const PLAYOUT_CAP := 7               # max playouts per branch
 
 
 ## NML-1158b step 6 — POLICY ORDER mode: the twin of `plan.rs`'s
-## `ActStatics.policy_mode` (step 5). "" (default) leaves `plan_with_rollout`'s
-## sort untouched; "order" re-ranks WITHIN each unit's own already-sorted
-## slots by `PolicyOrder`'s net (`_reorder_within_unit`, PHASE 2). Set by the
-## controller or restored by act_recheck.gd from `statics.policy_mode`, same
-## contract as `AiMissionEval.fit_mode`; NML_POLICY_MODE=order arms a bare run.
-static var policy_mode := ""
+## `ActStatics.policy_mode` (step 5). "off" (default) leaves `plan_with_
+## rollout`'s sort untouched; "order" re-ranks WITHIN each unit's own
+## already-sorted slots by `PolicyOrder`'s net (`_reorder_within_unit`, PHASE
+## 2). Set by the controller or restored by act_recheck.gd from `statics.
+## policy_mode`, same contract as `AiMissionEval.fit_mode`; NML_POLICY_MODE=
+## order arms a bare run. "off", never "" — `PolicyMode`'s Rust twin
+## (acts.rs) has no variant for an empty string, and `AiActRecorder.begin`
+## stamps this var's value into every recorded corpus verbatim.
+static var policy_mode := "off"
 static var _pm_env_tried := false
 static func _order_mode() -> String:
 	if not _pm_env_tried:
 		_pm_env_tried = true
-		if policy_mode == "" and OS.get_environment("NML_POLICY_MODE") == "order":
+		if policy_mode == "off" and OS.get_environment("NML_POLICY_MODE") == "order":
 			policy_mode = "order"
 	return policy_mode
 

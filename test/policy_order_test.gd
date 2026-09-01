@@ -1,6 +1,6 @@
 extends GdUnitTestSuite
 ## NML-1158b step 6 — the GDScript ORDER seam (design §7 step 6): default
-## (`AiPlanner.policy_mode == ""`) leaves `plan_with_rollout` byte-identical
+## (`AiPlanner.policy_mode == "off"`) leaves `plan_with_rollout` byte-identical
 ## to the hand order even with a net ARMED; "order" re-ranks WITHIN one
 ## unit's own menu by `PolicyOrder`'s net, exactly — never touching which
 ## unit owns which slot (design §1's cross-menu rule).
@@ -66,13 +66,13 @@ func _reverse_kind_net() -> Dictionary:
 
 func before_test() -> void:
 	AiPlanner.opener_seat = false
-	AiPlanner.policy_mode = ""
+	AiPlanner.policy_mode = "off"
 	AiPlanner.trace_enabled = true
 	PolicyOrder.set_net({})
 
 
 func after_test() -> void:
-	AiPlanner.policy_mode = ""
+	AiPlanner.policy_mode = "off"
 	AiPlanner.trace_enabled = false
 	PolicyOrder.set_net({})
 
