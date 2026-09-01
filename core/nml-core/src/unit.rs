@@ -222,6 +222,9 @@ pub struct UnitStatic {
     /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
     /// Mend's patient tiebreak prefers heroes (main.gd:5361).
     pub is_hero: bool,
+    /// `RulesRegistry.unit_rule_active(gu, "Re-Position Artillery")` — the
+    /// "Utility Buff" movement primitive's registry gate (block B2).
+    pub reposition_artillery_active: bool,
     /// Rules this unit carries that the port does NOT model — reported by name
     /// with a node count instead of being silently skipped.
     pub unimplemented: Vec<Unimplemented>,
@@ -860,6 +863,7 @@ impl UnitStatic {
             steadfast_active: unit_rule_active(reg, p, "Steadfast"),
             mend_active: unit_rule_active(reg, p, "Mend"),
             is_hero: has_special_rule(&p.special_rules, "Hero"),
+            reposition_artillery_active: unit_rule_active(reg, p, "Re-Position Artillery"),
             unimplemented,
         }
     }

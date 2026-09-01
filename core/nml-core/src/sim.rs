@@ -319,6 +319,215 @@ pub(crate) fn tray_mend(
     }
 }
 
+// ------------------------------------ BLOCK B2: UTILITY BUFF (movement) ---
+
+/// "pick one friendly model within 6\" with Artillery" (army-book rule text;
+/// mechanics param `range_in: 6.0`, rules_mechanics_gf.json / _aof.json,
+/// "Re-Position Artillery").
+pub const REPOSITION_PICK_RANGE_IN: f64 = 6.0;
+/// "...which may immediately move by up to 9\"" (mechanics param
+/// `reposition_in: 9.0`).
+pub const REPOSITION_MOVE_IN: f32 = 9.0;
+
+/// BLOCK B2 — the movement half of the "Utility Buff" registry primitive:
+/// Re-Position Artillery, `_solo_apply_utility_buffs` main.gd:16499-16507,
+/// picked by `_solo_utility_target`/`_solo_utility_targets` main.gd:16295-
+/// 16296, :16317-16359. Official text: "Once per activation, pick one
+/// friendly model within 6\" with Artillery, which may immediately move by
+/// up to 9\"."
+///
+/// Runs right after Mend, in the same pre-attack slot `_solo_apply_utility_
+/// buffs` occupies on the table (main.gd:1062, after Mend + the unported
+/// Breath Attack). Per BEARER — the acting unit, then each attached hero in
+/// turn, the table's own `for m in members` loop (main.gd:16481-16483), not
+/// a combined bearer set like Mend's: when a bearer carries the rule, the
+/// highest-VALUE (alive models + Tough, main.gd:16358) friendly Artillery
+/// unit within 6" of THAT bearer's own centre is picked; if it has no legal
+/// shoot target right now (`best_shoot_target_now`, replicated existence-
+/// only below — which target it would pick never matters, only whether one
+/// exists), it is forced straight toward the nearest enemy
+/// (`nearest_human_unit`'s primary key, see `nearest_enemy_reposition`) up
+/// to 9", clamped so no model leaves the table (`_axis_scale` :8911-8915).
+/// Dice-free start to finish, matching the table exactly.
+///
+/// The rest of the "Utility Buff" family — the friendly hit/casting/morale
+/// buffs (Casting Buff, Morale Debuff, Precision Attacks/Fighter Buff,
+/// Primal Boost Buff) and the enemy-side Mark (Unstoppable Mark) — is NOT
+/// ported here: their table-side consumption (`_solo_record_spell_mod` read
+/// back at the hit/cast/morale roll, and the dynamic rule-grant bridge onto
+/// a weapon profile, main.gd:3722-3760) has no Rust twin at all yet —
+/// `state.mods` is WRITTEN by spell buffs (`apply_cast_effect` above) but
+/// read NOWHERE outside JSON serialization (io.rs), so stamping it here
+/// would silently do nothing downstream. That consumption wiring is its own
+/// ticket (block B2b), not a same-shape continuation of this one.
+pub(crate) fn tray_utility_buff(statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams, cover: Cover) {
+    if next.alive[si] <= 0 {
+        return;
+    }
+    let terrain = match cover {
+        Cover::Board(t) => Some(t),
+        Cover::Recorded(_) => None,
+    };
+    let mut bearers: Vec<usize> = vec![si];
+    if seams.hero_attach {
+        bearers.extend(next.attached[si].iter().copied());
+    }
+    for &bearer in &bearers {
+        if next.alive[bearer] > 0 && statics[next.roster.profile[bearer]].reposition_artillery_active {
+            reposition_artillery_for(statics, next, bearer, seams, terrain);
+        }
+    }
+}
+
+/// One bearer's pick + move — see `tray_utility_buff`.
+fn reposition_artillery_for(
+    statics: &[UnitStatic],
+    next: &mut State,
+    bearer: usize,
+    seams: Seams,
+    terrain: Option<&Terrain>,
+) {
+    let pid = next.player[bearer];
+    let from = geom::centre(&next.positions[bearer]);
+    let mut arty: Option<usize> = None;
+    let mut best_v = f64::NEG_INFINITY;
+    for u in 0..next.units() {
+        if next.player[u] != pid || next.alive[u] <= 0 || next.dormant[u] {
+            continue;
+        }
+        if seams.hero_attach && next.attached_to[u].is_some() {
+            continue;
+        }
+        let uc = ctx_of(&statics[next.roster.profile[u]], next, u);
+        if !uc.artillery {
+            continue;
+        }
+        let d = (geom::length(geom::sub(from, geom::centre(&next.positions[u]))) / IN2M as f32) as f64;
+        if d > REPOSITION_PICK_RANGE_IN {
+            continue;
+        }
+        let v = next.alive[u] as f64 + uc.tough as f64;
+        if v > best_v {
+            best_v = v;
+            arty = Some(u);
+        }
+    }
+    let Some(arty) = arty else { return };
+    if has_shoot_target(statics, next, arty) {
+        return;
+    }
+    let Some(enemy) = nearest_enemy_reposition(statics, next, arty) else { return };
+    let delta = geom::sub(geom::centre(&next.positions[enemy]), geom::centre(&next.positions[arty]));
+    let len = (delta[0] * delta[0] + delta[2] * delta[2]).sqrt();
+    if len < 1e-6 {
+        return;
+    }
+    let dir = [delta[0] / len, delta[2] / len];
+    let dist_in = clamp_move_to_board(terrain, &next.positions[arty], dir, REPOSITION_MOVE_IN);
+    if dist_in <= 0.0 {
+        return;
+    }
+    let step_m = dist_in * IN2M as f32;
+    for p in next.positions[arty].iter_mut() {
+        p[0] += (dir[0] * step_m) as f64;
+        p[2] += (dir[1] * step_m) as f64;
+    }
+}
+
+/// `SoloController.best_shoot_target_now` :1141-1171, EXISTENCE-only: the
+/// table ranks candidates by EV to pick the BEST one, but Re-Position
+/// Artillery only ever asks whether ONE exists (`== null`), so the ranking
+/// is not replicated here — a scan over max weapon range + LOS (or
+/// Indirect) answers the same boolean. `shooting_range_bonus` (a flat
+/// per-unit add, e.g. Royal Legion +4") is unmodelled everywhere in this
+/// port (io.rs) and stays unmodelled here too.
+fn has_shoot_target(statics: &[UnitStatic], state: &State, arty: usize) -> bool {
+    let us = &statics[state.roster.profile[arty]];
+    let max_range = us.shoot.iter().map(|p| p.range).max().unwrap_or(0) as f64;
+    if max_range <= 0.0 {
+        return false;
+    }
+    let indirect = us.shoot.iter().any(|p| p.indirect);
+    let pid = state.player[arty];
+    for e in 0..state.units() {
+        if state.player[e] == pid || state.alive[e] <= 0 || state.dormant[e] {
+            continue;
+        }
+        let ectx = ctx_of(&statics[state.roster.profile[e]], state, e);
+        let reach = sight_reach_in(max_range, state.aircraft[e], &ectx);
+        if reach <= 0.0 || geom::dist_in(&state.positions[arty], &state.positions[e]) > reach {
+            continue;
+        }
+        if indirect || los_clear(state, arty, e) {
+            return true;
+        }
+    }
+    false
+}
+
+/// `SoloController.nearest_human_unit` :1183-1210 — the primary key only
+/// (not-yet-activated first, then nearest centre-to-centre); a melee-only
+/// bearer (no ranged profile) skips Aircraft, same as the table. A genuine
+/// tie inside the table's 1" band (`TARGET_TIE_BAND_IN`) is broken there by
+/// a melee EV score (:1218-1235) this port does not replicate — an exact
+/// tie falls back to the lowest roster index, a documented gap rather than
+/// a silent wrong answer (the fresh gate corpus for this rule has none).
+fn nearest_enemy_reposition(statics: &[UnitStatic], state: &State, arty: usize) -> Option<usize> {
+    let melee_only = statics[state.roster.profile[arty]].shoot.is_empty();
+    let pid = state.player[arty];
+    let from = geom::centre(&state.positions[arty]);
+    let (mut best, mut best_activated, mut best_d) = (None, true, f32::INFINITY);
+    for e in 0..state.units() {
+        if state.player[e] == pid || state.alive[e] <= 0 || state.dormant[e] {
+            continue;
+        }
+        if melee_only && state.aircraft[e] {
+            continue;
+        }
+        let d = geom::length(geom::sub(from, geom::centre(&state.positions[e])));
+        let activated = state.activated[e];
+        let better = match best {
+            None => true,
+            Some(_) if activated != best_activated => !activated,
+            Some(_) => d < best_d,
+        };
+        if better {
+            (best, best_activated, best_d) = (Some(e), activated, d);
+        }
+    }
+    best
+}
+
+/// `SoloController.forced_straight_move`'s board clamp :10367-10386 (the
+/// shared `_axis_scale` step, every model's own position, the smallest
+/// per-model per-axis scale wins). No board (`Terrain::absent()`, or a
+/// `Cover::Recorded` node with none) leaves the move unclamped.
+fn clamp_move_to_board(terrain: Option<&Terrain>, positions: &[[f64; 3]], dir: [f32; 2], dist_in: f32) -> f32 {
+    let Some(t) = terrain.filter(|t| t.is_valid()) else { return dist_in };
+    let board = t.board_in();
+    if board[0] <= 0.0 || board[1] <= 0.0 {
+        return dist_in;
+    }
+    let half = [board[0] as f32 * 0.5, board[1] as f32 * 0.5];
+    let step_in = [dir[0] * dist_in, dir[1] * dist_in];
+    let mut scale = 1.0f32;
+    for p in positions {
+        scale = scale.min(axis_scale((p[0] / IN2M) as f32, step_in[0], half[0]));
+        scale = scale.min(axis_scale((p[2] / IN2M) as f32, step_in[1], half[1]));
+    }
+    dist_in * scale.clamp(0.0, 1.0)
+}
+
+/// `SoloController._axis_scale` solo_controller.gd:8911-8915, verbatim.
+fn axis_scale(start: f32, d: f32, limit: f32) -> f32 {
+    let dest = start + d;
+    if dest.abs() <= limit || d.abs() < 1e-6 {
+        return 1.0;
+    }
+    let bound = if dest > 0.0 { limit } else { -limit };
+    ((bound - start) / d).clamp(0.0, 1.0)
+}
+
 /// `SoloController._execute_move` :5033-5047 (GF/AoF v3.5.1 p.12, "Bug 23") —
 /// how many dice the move's dangerous-terrain test rolls.
 ///
@@ -1832,6 +2041,13 @@ fn resolve_with(
         tray_mend(statics, &mut next, si, seams, tray, shot);
     }
 
+    // --- Utility Buff / Re-Position Artillery (main.gd:1062, right after
+    // Mend + the unported Breath Attack), tray path only — see
+    // `tray_utility_buff`. Dice-free: no tray draw either way.
+    if dice.is_some() {
+        tray_utility_buff(statics, &mut next, si, seams, cover);
+    }
+
     // --- shoot (battle_sim.gd:608-630); HOLD and ADVANCE only ---
     if !shoot_key.is_empty() && (kind == HOLD || kind == ADVANCE) {
         if moved {
@@ -2673,5 +2889,113 @@ mod tests {
         for (face, want) in [(1u8, 1i64), (2, 1), (3, 2), (4, 2), (5, 3), (6, 3)] {
             assert_eq!(mend_d3(face), want);
         }
+    }
+
+    // ------------------------------ BLOCK B2: RE-POSITION ARTILLERY ---
+
+    /// Bearer `a` (carries Re-Position Artillery, NOT attached to anyone —
+    /// `Seams::default()` keeps hero_attach off, so the base fixture's own
+    /// attachment wiring never applies) with a friendly Artillery model `g`
+    /// 4" ahead (inside the 6" pick range) that starts with NO weapons at
+    /// all (so it never has a shoot target on its own); two enemies on the
+    /// same line past `g` — `e1` 26" out and never activated, `e2` only 6"
+    /// out but ALREADY activated — so the table's "not-yet-activated first"
+    /// key must send `g` toward the FARTHER `e1`.
+    fn reposition_line() -> (State, Vec<UnitStatic>) {
+        let mut st = four_unit_line();
+        st.player = vec![0, 0, 1, 1];
+        st.activated = vec![false, false, false, true];
+        st.roster = Rc::new(crate::state::Roster {
+            keys: vec!["a".into(), "g".into(), "e1".into(), "e2".into()],
+            index: ["a", "g", "e1", "e2"].iter().enumerate().map(|(i, k)| (k.to_string(), i)).collect(),
+            profile: vec![0, 1, 2, 3],
+        });
+        st.positions = vec![
+            vec![[0.0, 0.0, 0.0]],
+            vec![[4.0 * IN2M, 0.0, 0.0]],
+            vec![[30.0 * IN2M, 0.0, 0.0]],
+            vec![[10.0 * IN2M, 0.0, 0.0]],
+        ];
+        let a = UnitStatic { name: "a".into(), model_count: 1, reposition_artillery_active: true, ..Default::default() };
+        let mut g = UnitStatic { name: "g".into(), model_count: 1, ..Default::default() };
+        g.ctx.artillery = true;
+        g.ctx.tough = 1;
+        let e1 = UnitStatic { name: "e1".into(), model_count: 1, ..Default::default() };
+        let e2 = UnitStatic { name: "e2".into(), model_count: 1, ..Default::default() };
+        (st, vec![a, g, e1, e2])
+    }
+
+    fn reposition_action() -> Action {
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None }
+    }
+
+    /// BLOCK B2 — no dice ride Re-Position Artillery at all, and the picked
+    /// artillery is forced 9" straight toward `e1`, the FARTHER but
+    /// not-yet-activated enemy, never toward the nearer `e2` who already
+    /// acted this round.
+    #[test]
+    fn reposition_moves_the_undefended_artillery_toward_the_not_yet_activated_enemy() {
+        let (st, statics) = reposition_line();
+        let terrain = crate::terrain::Terrain::default();
+        let mut tray = Tray::seeded(7);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &reposition_action(), &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert!(shot.rolls.is_empty(), "Re-Position Artillery is dice-free");
+        let probe = Tray::seeded(7);
+        assert_eq!(tray.state_i64(), probe.state_i64());
+        let g_pos = next.positions[1][0];
+        assert!((g_pos[0] - 13.0 * IN2M).abs() < 1e-6, "g at {g_pos:?}");
+        assert_eq!(g_pos[2], 0.0);
+    }
+
+    /// RED for the pick: a shoot target already in range skips the move
+    /// entirely; out of the 6" pick range there is no artillery to move at
+    /// all; without the rule the bearer stays mute.
+    #[test]
+    fn reposition_skips_with_a_shoot_target_out_of_range_or_without_the_rule() {
+        let terrain = crate::terrain::Terrain::default();
+        let (st, mut statics) = reposition_line();
+        statics[1].shoot = vec![ShootProfile { range: 30, ..Default::default() }];
+        let mut tray = Tray::seeded(7);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &reposition_action(), &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(next.positions[1][0], st.positions[1][0]);
+
+        let (mut st, statics) = reposition_line();
+        st.positions[1] = vec![[20.0 * IN2M, 0.0, 0.0]]; // g walked out of the 6" pick ring
+        let mut tray = Tray::seeded(7);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &reposition_action(), &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(next.positions[1][0], st.positions[1][0]);
+
+        let (st, mut statics) = reposition_line();
+        statics[0].reposition_artillery_active = false;
+        let mut tray = Tray::seeded(7);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &reposition_action(), &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(next.positions[1][0], st.positions[1][0]);
+    }
+
+    /// `SoloController._axis_scale` solo_controller.gd:8911-8915, the pure
+    /// board-edge clamp: inside the limit (or a zero step) the scale stays
+    /// 1.0; stepping past it scales back to land EXACTLY on the edge.
+    #[test]
+    fn the_reposition_axis_scale_clamps_to_the_board_edge() {
+        assert_eq!(axis_scale(0.0, 5.0, 10.0), 1.0);
+        assert_eq!(axis_scale(0.0, 0.0, 10.0), 1.0);
+        let s = axis_scale(8.0, 9.0, 10.0);
+        assert!((8.0 + 9.0 * s - 10.0).abs() < 1e-4, "scale {s} overshoots the edge");
     }
 }
