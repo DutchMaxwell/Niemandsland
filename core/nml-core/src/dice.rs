@@ -326,8 +326,12 @@ fn save_batch(
 /// so from the first one onward a `dice="table"` corpus is on a different
 /// stream than the recording. They are the top of the B5+ list for that reason:
 ///   * the Unpredictable die, ONE per volley before any weapon fires (:3114).
-///     (Block B6 ported the OTHER stream-desyncing draw this list used to name
-///     here — the extra-ATTACK dice of the Bloodborn/Primal/Predator/Clan
+///     PORTED in B12 for the SHOOTING leg (`resolve_volley_with_tray`: the
+///     exact "Unpredictable"/"Unpredictable Shooter" pair, never the
+///     melee-only Fighter); the MELEE leg was already in
+///     `resolve_melee_with_tray` (block D1-B5a).
+///     (Block B6 ported the OTHER stream-desyncing draw this list used to
+///     name here — the extra-ATTACK dice of the Bloodborn/Primal/Predator/Clan
 ///     Warrior family, :4454 — see `surge_attack_hits` and the PORTED line
 ///     above.)
 ///
@@ -454,6 +458,31 @@ pub fn resolve_volley_with_tray(
 ) -> ShootResult {
     let mut out = ShootResult::default();
     let (mut regenable, mut regen_proof) = (0i64, 0i64);
+    // PORTED — Unpredictable's SHOOTING leg :3096-3110: ONE die for the whole
+    // volley, before any weapon fires, off the FIRST shooter's context. A face
+    // at or under `low_roll_max` is +ap_bonus on every profile of this volley
+    // (folded into the shot's AP below, the duplicate-profile leg of
+    // main.gd:3188-3190), above it +hit_bonus to hit (main.gd:3180, folded
+    // into the per-shot modifier sum). The melee-only "Unpredictable Fighter"
+    // is stamped out of `Ctx::unpredictable_shooting` (unit.rs).
+    let mut upr_ap = 0i64;
+    let mut upr_hit = 0i64;
+    if shooters.first().is_some_and(|sh| sh.att.unpredictable_shooting) {
+        let att0 = shooters[0].att;
+        let faces = tray.roll(1);
+        if (faces[0] as i64) <= att0.unpredictable_low_roll_max {
+            upr_ap = att0.unpredictable_ap_bonus;
+        } else {
+            upr_hit = att0.unpredictable_hit_bonus;
+        }
+        out.rolls.push(Roll {
+            kind: "attack",
+            count: 1,
+            target: BEST_HIT_TARGET,
+            faces,
+            owner: shooters[0].owner.into(),
+        });
+    }
     // `dist_in` gates RANGE VALIDITY only (`reach_gate`, B11's edge/nearest-
     // model gap — main.gd:4098-4104). `mod_dist_in` is the table's SEPARATE
     // over-9" modifier distance (`geom::centre_dist_in`, main.gd:3029: unit
@@ -524,7 +553,10 @@ pub fn resolve_volley_with_tray(
             // Block B7 — Precision Frenzy: main.gd:5677-5680's marker-driven
             // hit bonus, shooting only (`_solo_hit_mod_info`'s melee branch
             // returns before that code runs).
-            + att.growth_hit_mod;
+            + att.growth_hit_mod
+            // Unpredictable's 4-6 half (main.gd:3180): folded into the SAME
+            // sum, BEFORE the Unstoppable clamp, like the melee leg.
+            + upr_hit;
         if p.unstoppable && m < 0 {
             m = 0;
         }
@@ -534,7 +566,7 @@ pub fn resolve_volley_with_tray(
             let (hit_mod, ap_mod) = versatile_best_mode(
                 target,
                 shielded_defense(def.defense, def.shielded),
-                p.ap,
+                p.ap + upr_ap,
                 p.bane,
             );
             versatile_ap = ap_mod;
@@ -614,7 +646,7 @@ pub fn resolve_volley_with_tray(
         // Block B7 — Piercing Growth: main.gd:4287's marker-driven AP delta,
         // shooting and melee both (`_solo_attack_groups` adds it to `prof
         // ["ap"]` regardless of which the caller built profiles for).
-        let ap = p.ap + versatile_ap + att.growth_ap_mod;
+        let ap = p.ap + upr_ap + versatile_ap + att.growth_ap_mod;
         let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, tray, &mut out);
         w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, tray, &mut out);
         if p.deadly > 0 {
@@ -1163,6 +1195,67 @@ mod tests {
         assert_eq!(out.rolls[1].count, hits, "one save die per hit");
         assert_eq!(out.rolls[1].target, 4, "Defense 4+, AP(0)");
         assert!(out.unported.is_empty(), "a plain rifle hits no unported branch");
+    }
+
+    // ------------------------ block B12: Unpredictable's SHOOTING leg ---
+
+    /// Unpredictable's SHOOTING leg (main.gd:3096-3110): ONE die for the whole
+    /// volley before any weapon fires, 1-3 is AP(+1) on every profile of the
+    /// volley (the save target rises), 4-6 is +1 to hit (the hit target
+    /// falls). Both halves, off one known seed each, with the second face
+    /// chosen to connect so both save batches are actually observed.
+    #[test]
+    fn an_unpredictable_shooters_volley_draws_the_extra_die_and_its_face_picks_the_half() {
+        let p = [rifle(1)];
+        let att = Ctx {
+            unpredictable_shooting: true,
+            unpredictable_ap_bonus: 1,
+            unpredictable_hit_bonus: 1,
+            unpredictable_low_roll_max: 3,
+            ..shooter(4)
+        };
+        let low = (1i64..)
+            .find(|&s| Tray::seeded(s).roll(2)[0] <= 3 && Tray::seeded(s).roll(2)[1] >= 4)
+            .unwrap();
+        let high = (1i64..)
+            .find(|&s| Tray::seeded(s).roll(2)[0] >= 4 && Tray::seeded(s).roll(2)[1] >= 3)
+            .unwrap();
+
+        let mut tray = Tray::seeded(low);
+        let one = [Shooter { profiles: &p, keep: &[0], attacks: &[1], att: &att, owner: "gunner" }];
+        let out = resolve_volley_with_tray(&one, &defender(4, 5), "Target", 12.0, 12.0, &mut tray);
+        assert_eq!(out.rolls[0].kind, "attack");
+        assert_eq!(out.rolls[0].count, 1, "ONE die for the whole volley");
+        assert_eq!(out.rolls[0].target, BEST_HIT_TARGET);
+        assert_eq!(out.rolls[0].faces, Tray::seeded(low).roll(1), "the rule die draws FIRST");
+        assert_eq!(out.rolls[0].owner, "gunner", "the shooter signs the rule die");
+        assert_eq!(out.rolls[1].target, 4, "the AP half leaves the hit target alone");
+        assert_eq!(out.rolls[1].faces, Tray::seeded(low).roll(2)[1..2], "hit dice come after it");
+        assert_eq!(out.rolls[2].kind, "defense");
+        assert_eq!(out.rolls[2].target, 5, "AP(+1) folded into the volley's profiles");
+
+        let mut tray = Tray::seeded(high);
+        let out = resolve_shooting_with_tray(&p, &[0], &[1], &att, &defender(4, 5), 12.0, &mut tray);
+        assert_eq!(out.rolls[0].faces, Tray::seeded(high).roll(1));
+        assert_eq!(out.rolls[1].target, 3, "the hit half is +1 to hit on Quality 4+");
+        assert_eq!(out.rolls[2].target, 4, "no AP on the hit half");
+    }
+
+    /// The MELEE-only variant must not leak into shooting: a unit stamped with
+    /// the melee flag ("Unpredictable Fighter") fires no extra volley die
+    /// (main.gd:5403-5412 gates the shooting leg on the other two names).
+    #[test]
+    fn an_unpredictable_fighters_volley_draws_no_extra_die() {
+        let p = [rifle(1)];
+        let att = Ctx { unpredictable: true, ..shooter(4) };
+        let seed = (1i64..).find(|&s| Tray::seeded(s).roll(1)[0] >= 4).unwrap();
+        let mut tray = Tray::seeded(seed);
+        let out = resolve_shooting_with_tray(&p, &[0], &[1], &att, &defender(4, 5), 12.0, &mut tray);
+        assert_eq!(out.rolls.len(), 2, "hit die + save batch only: {:?}", out.rolls);
+        assert_eq!(out.rolls[0].count, 1);
+        assert_eq!(out.rolls[0].target, 4, "plain Quality 4+ — no rule die, no +1");
+        assert_eq!(out.rolls[0].faces, Tray::seeded(seed).roll(1),
+            "the tray's first face is the HIT die — nothing came before it");
     }
 
     // ------------------------------------ block B4: Shot Modifier family ---

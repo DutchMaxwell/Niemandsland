@@ -93,6 +93,9 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # (Regenerative Strength) are recorded (registry-gated) and read by
     # nothing, the Utility-Buff over-count shape #489 found.
     "Growth Markers": frozenset({"ap_per_marker", "ap_per_two", "hit_per_marker", "hit_per_two"}),
+    # Block B12: unit.rs::unpredictable_shooting_params (via ctx_for) + dice.rs
+    # ::resolve_volley_with_tray read the shooting volley die's three params.
+    "Unpredictable Shooter": frozenset({"ap_bonus", "hit_bonus", "low_roll_max"}),
 }
 
 
