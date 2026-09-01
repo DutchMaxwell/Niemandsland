@@ -1081,25 +1081,42 @@ impl Core {
     /// `scale` is the RED-PROOF seam and 1.0 in every real call: the net's own
     /// answer times this, before the blend.
     ///
+    /// `mode` (NML-1158a) is "blend" (the E4.2 mix, the default) or "residual"
+    /// (the net's sigmoid read as a DELTA on the hand scale —
+    /// `nmlcore::score::combine_residual` owns the one scale definition).
+    /// Anything else is a clean error, never a silently reinterpreted net.
+    ///
     /// Returns the net's shape, so a caller can log WHICH brain it just armed.
-    #[pyo3(signature = (path, scale = 1.0, blend = None))]
+    #[pyo3(signature = (path, scale = 1.0, blend = None, mode = "blend"))]
     fn load_net(
         &mut self,
         py: Python<'_>,
         path: &str,
         scale: f64,
         blend: Option<f64>,
+        mode: &str,
     ) -> PyResult<Py<PyAny>> {
+        let fit_mode = match mode {
+            "blend" => nmlcore::fitted::FitMode::Blend,
+            "residual" => nmlcore::fitted::FitMode::Residual,
+            other => {
+                return Err(Unsupported::new_err(format!(
+                    "unknown fit mode {other:?} — expected \"blend\" or \"residual\""
+                )))
+            }
+        };
         let net = nmlcore::Net::load(path).map_err(Unsupported::new_err)?;
         let shape = serde_json::json!({
             "slots": net.slots.len(),
             "keys": net.keys.len(),
             "hidden": net.unit_b1.len(),
+            "mode": mode,
         });
         let mut fit =
             Fitted::new(net, &self.repo_root).map_err(Unsupported::new_err)?;
         fit.set_source_qd(self.rows.source_qd);
         fit.scale = scale;
+        fit.mode = fit_mode;
         if let Some(b) = blend {
             fit.blend = b;
         }

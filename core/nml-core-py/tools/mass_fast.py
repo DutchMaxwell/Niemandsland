@@ -120,6 +120,10 @@ FIDELITY_DEFAULTS = {
     # NML-1158c: the exploration knob. 0.0 is today's pure argmax, so "pass
     # nothing" writes byte-identical games.
     "explore": 0.0,
+    # NML-1158 arm (a): HOW the armed net joins the hand eval — "blend" (the
+    # E4.2 mix) or "residual" (hand + net delta). "blend" is the default and
+    # what every corpus written before this knob carries.
+    "fit_mode": "blend",
 }
 
 
@@ -317,6 +321,14 @@ def main(argv: list[str]) -> int:
         "today's argmax, byte-identical. Rides `fidelity`, so .RUN.json "
         "records it",
     )
+    ap.add_argument(
+        "--fit-mode",
+        choices=("blend", "residual"),
+        default=FIDELITY_DEFAULTS["fit_mode"],
+        help="NML-1158 arm (a) -- how the armed net joins the hand eval: "
+        "'blend' is the E4.2 mix; 'residual' plays hand + net delta. Rides "
+        "`fidelity`, so .RUN.json records it",
+    )
     ap.add_argument("--cond-ap", choices=["auto", "on", "off"], default="auto",
                     help="conditional AP (NML-1103); 'auto' leaves the process global alone")
     ap.add_argument(
@@ -348,6 +360,8 @@ def main(argv: list[str]) -> int:
         # NML-1158c: the exploration knob. Rides `fidelity` into
         # `play_game(explore=)` and the `.RUN.json` stamp the same way.
         "explore": a.explore,
+        # NML-1158 arm (a): blend vs residual. Rides `fidelity` the same way.
+        "fit_mode": a.fit_mode,
     }
 
     sizes = [int(x) for x in a.sizes.split(",")]

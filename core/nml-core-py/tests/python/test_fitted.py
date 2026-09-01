@@ -95,7 +95,7 @@ def test_the_loader_gate_refuses_a_drifted_net(tmp_path, act):
     head, _ = act
     core = cored(head)
     shape = core.load_net(write_net(tmp_path, tiny_net()))
-    assert shape == {"slots": 0, "keys": 1, "hidden": 1}
+    assert shape == {"slots": 0, "keys": 1, "hidden": 1, "mode": "blend"}
     assert core.has_net()
 
     # RED: the same net claiming a different answer must not load...

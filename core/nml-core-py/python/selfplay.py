@@ -1383,6 +1383,7 @@ def play_game(
     net_player: int = 0,
     fit_blend: float = 0.5,
     explore: float = 0.0,
+    fit_mode: str = "blend",
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -1524,7 +1525,7 @@ def play_game(
     # activation of this game. The loader GATE is the GDScript's own selftest,
     # so a drifted net RAISES here instead of quietly playing.
     if net is not None:
-        core.load_net(str(net), blend=fit_blend)
+        core.load_net(str(net), blend=fit_blend, mode=fit_mode)
     eff_top_k = resolve_top_k(top_k)
     eff_horizon = resolve_horizon(horizon)
     eff_charge_gate = resolve_charge_gate(charge_gate)
@@ -1821,6 +1822,12 @@ def play_game(
             # default — every corpus written before this knob existed played
             # the pure argmax and would stamp the identical value here.
             "explore": explore,
+            # NML-1158a: HOW the armed net joined the hand eval — "blend" (the
+            # E4.2 mix) or "residual" (hand + delta, the NML-1158a seam). The
+            # default is ABSENT, the deployment knob's pattern: every game
+            # before this knob existed, and every default game still, digests
+            # byte-identically (`result_digest` does not strip `knobs`).
+            **({"fit_mode": fit_mode} if fit_mode != "blend" else {}),
         },
         # D1-B4 telemetry, empty under `dice="expected"`: how many shooting
         # activations drew from the tray, how many rolls that was, and how many
@@ -2028,6 +2035,15 @@ def main(argv: list[str]) -> int:
         "1.0 = pure net, 0.0 = pure hand. Stamped into knobs",
     )
     ap.add_argument(
+        "--fit-mode",
+        choices=("blend", "residual"),
+        default="blend",
+        help="NML-1158 arm (a) — how the armed net joins the hand eval: "
+        "'blend' is the E4.2 mix; 'residual' plays hand + net_delta (the "
+        "net's sigmoid read as a delta on the hand scale, neutral at 0.5). "
+        "Stamped into knobs when not the default",
+    )
+    ap.add_argument(
         "--net-player",
         type=int,
         default=0,
@@ -2074,6 +2090,7 @@ def main(argv: list[str]) -> int:
             net_player=a.net_player,
             fit_blend=a.fit_blend,
             explore=a.explore,
+            fit_mode=a.fit_mode,
         )
         res["wall_seconds"] = round(time.perf_counter() - t0, 3)
         if a.out:
