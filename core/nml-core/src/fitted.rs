@@ -34,6 +34,18 @@ use crate::unit::UnitStatic;
 /// The hand eval keeps the move gradient; pure fit played WORSE (37% vs 40.5%).
 pub const FIT_BLEND_DEFAULT: f64 = 0.5;
 
+/// NML-1158a — HOW an armed net joins the hand eval. `Blend` is the E4.2 mix
+/// the table plays. `Residual` reads the net's sigmoid as a DELTA on the hand
+/// scale: the trainer's label was `outcome - f(hand)` centred, shipped as
+/// `(delta + 1) / 2`, so the core reads `delta = 2*p - 1` (neutral at p = 0.5)
+/// and plays `hand + delta`. ONE scale definition, owned here: the net's
+/// sigmoid is `(delta + 1) / 2` on the hand scale, in both modes, always.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum FitMode {
+    Blend,
+    Residual,
+}
+
 /// The exported holdout row every encoder net must carry — `net["selftest"]`.
 #[derive(Deserialize)]
 pub struct SelfTest {
@@ -257,6 +269,9 @@ pub struct Fitted {
     pub net: Net,
     /// `AiMissionEval.fit_blend()` ai_mission_eval.gd:337-342.
     pub blend: f64,
+    /// NML-1158a — which combination `score_with` runs; `Blend` unless the
+    /// loader was told otherwise (`Core.load_net(mode=)`).
+    pub mode: FitMode,
     /// RED-PROOF seam, 1.0 in every shipping call: the net's own answer times
     /// this, BEFORE the blend. A gate that could not tell this apart from 1.0
     /// would not be reading the net.
@@ -272,7 +287,13 @@ impl Fitted {
                 format!("rule vocab unreadable at {repo_root}/{}", rows::RULE_VOCAB_PATH)
             }));
         }
-        Ok(Fitted { net, blend: FIT_BLEND_DEFAULT, scale: 1.0, enc: RefCell::new(enc) })
+        Ok(Fitted {
+            net,
+            blend: FIT_BLEND_DEFAULT,
+            mode: FitMode::Blend,
+            scale: 1.0,
+            enc: RefCell::new(enc),
+        })
     }
 
     /// `RowEncoder::source_qd` — LEGACY REPLAY ONLY. A state rebuilt from a plain
