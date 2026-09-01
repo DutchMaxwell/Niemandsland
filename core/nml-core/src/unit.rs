@@ -152,6 +152,12 @@ pub struct ShootProfile {
     pub rending: bool,
     pub bane: bool,
     pub thrust: bool,
+    /// The WEAPON's own "Unstoppable" rule, exact name — `_has_rule(w,
+    /// "Unstoppable")` ai_shooting.gd:132, the table's DICE path (to-hit clamp
+    /// main.gd:3149/6012/9857; Regeneration bypass main.gd:6941 via
+    /// `AiEv.has_exact_rule`, which an "Unstoppable Mark" carrier never
+    /// matches — see `unstoppable_ev` below). `dice.rs` reads this field
+    /// alone; `combat.rs` (the EV port) reads `unstoppable_ev`.
     pub unstoppable: bool,
     pub counter: bool,
     pub destructive: bool,
@@ -176,6 +182,13 @@ pub struct ShootProfile {
     /// past `combat::LONG_RANGE_IN` (exactly 9" is not "over", same as every
     /// other over-9" gate in this port).
     pub hit_bonus_over9: i64,
+    /// EV-only sibling of `unstoppable` — `BattleSim._profiles_of`'s UNIT-level
+    /// prefix scan (battle_sim.gd:1003-1021, mirrored by `stamp_unit_strikers`
+    /// below) ORs in ANY unit-level rule whose name starts with "Unstoppable",
+    /// so an "Unstoppable Mark" carrier reads `unstoppable` in the table's EV
+    /// imagination (ai_ev.gd:347/355/434-435) but never on its dice. Stamped
+    /// AFTER the merge, like every other facet in this block.
+    pub unstoppable_ev: bool,
 }
 
 impl ShootProfile {
@@ -743,9 +756,15 @@ fn stamp(
     }
 }
 
-/// `BattleSim._profiles_of`'s UNIT-level striker scan (battle_sim.gd:722-733):
-/// Bane / Rending / Unstoppable carried by the UNIT reach the dice in the game,
-/// so they are OR-ed onto every profile — prefix scan, no registry gate.
+/// `BattleSim._profiles_of`'s UNIT-level striker scan (battle_sim.gd:1003-1021,
+/// EV imagination only): Bane / Rending / Unstoppable carried by the UNIT are
+/// OR-ed onto every profile — prefix scan, no registry gate. Bane/Rending have
+/// a real weapon-OR-unit fallback on the table's own DICE path too (main.gd:
+/// 6396/6852/6880) and keep applying to both `shoot`/`melee` fields here.
+/// Unstoppable does NOT: the table's dice path (ai_shooting.gd:132) reads
+/// only the weapon's own exact rule, so `u_unstop` lands on `unstoppable_ev`
+/// alone — an "Unstoppable Mark" carrier must stay non-Unstoppable on the
+/// tray. Found by #489, caveat 4; this is that ticket.
 fn stamp_unit_strikers(p: &Profile, shoot: &mut [ShootProfile]) {
     let mut u_bane = false;
     let mut u_rending = false;
@@ -763,7 +782,7 @@ fn stamp_unit_strikers(p: &Profile, shoot: &mut [ShootProfile]) {
     for sp in shoot.iter_mut() {
         sp.bane |= u_bane;
         sp.rending |= u_rending;
-        sp.unstoppable |= u_unstop;
+        sp.unstoppable_ev = sp.unstoppable || u_unstop;
     }
 }
 
@@ -1121,5 +1140,74 @@ impl StaticsCache {
         }
         self.entries.push((Rc::clone(profiles), Rc::clone(&rc)));
         rc
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::acts::read_act_header;
+    use crate::rules::Registries;
+
+    /// The checkout this crate lives in — mirrors `rows.rs`'s own helper.
+    fn repo_root() -> String {
+        format!("{}/../..", env!("CARGO_MANIFEST_DIR"))
+    }
+
+    /// Two units: `mark_carrier` prints "Unstoppable Mark" as a UNIT-level
+    /// special rule and its Rifle carries no weapon rule at all; `real_unstop`
+    /// prints nothing unit-level but its Cannon carries the real "Unstoppable"
+    /// weapon rule. Neither unit fires a spell/mark GRANT (`sim::tray_vs_marks`
+    /// / `Ctx::unstoppable_grant`) — this fixture is about the static profile
+    /// flags `UnitStatic::build` stamps, not the live ledger #489 already
+    /// covers in `sim.rs`.
+    const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "mark_carrier":{"unit_id":"mark_carrier","name":"Mark Carrier","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":["Unstoppable Mark"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "real_unstop":{"unit_id":"real_unstop","name":"Real Unstoppable","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":[],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Cannon","range":24,"attacks":1,"count":1,"ap":0,"rules":["Unstoppable"]}]}}}"#;
+
+    /// PROOF (1): a unit carrying only "Unstoppable Mark" has NO unstoppable
+    /// on the tray path but keeps it on the EV path; a unit with a weapon's
+    /// real "Unstoppable" rule has it on both. RED (revert `stamp_unit_
+    /// strikers`'s `sp.unstoppable_ev = sp.unstoppable || u_unstop;` back to
+    /// the pre-fix `sp.unstoppable |= u_unstop;`): this test fails, the tray
+    /// assertion tripping on the now-true `unstoppable`.
+    #[test]
+    fn unstoppable_mark_carrier_is_ev_only_a_real_unstoppable_reaches_both() {
+        let header = read_act_header(HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+
+        let mark_carrier = header.profiles.get("mark_carrier").expect("mark_carrier");
+        let marked = UnitStatic::build(&mut reg, mark_carrier);
+        assert!(
+            !marked.shoot[0].unstoppable,
+            "an Unstoppable MARK carrier is not Unstoppable on the tray — \
+             ai_shooting.gd:132 reads only the weapon's own exact rule"
+        );
+        assert!(
+            marked.shoot[0].unstoppable_ev,
+            "the EV imagination's unit-level prefix scan (battle_sim.gd:1003-1021) \
+             still ORs the Mark's name onto every profile — unchanged from before this fix"
+        );
+
+        let real_unstop = header.profiles.get("real_unstop").expect("real_unstop");
+        let real = UnitStatic::build(&mut reg, real_unstop);
+        assert!(
+            real.shoot[0].unstoppable,
+            "the weapon's own exact \"Unstoppable\" rule reaches the tray (ai_shooting.gd:132)"
+        );
+        assert!(
+            real.shoot[0].unstoppable_ev,
+            "and the EV field follows — `unstoppable_ev = unstoppable || u_unstop`"
+        );
     }
 }
