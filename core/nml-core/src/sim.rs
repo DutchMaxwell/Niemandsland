@@ -4447,4 +4447,489 @@ mod tests {
         st.activated[2] = true; // "b" enters round 1 already-activated, unused
         assert_eq!(second_wind_candidate(&statics, &st, st.player[0]), Some(2));
     }
+
+    // ================================================ mutant-killing tests ====
+
+    // ------------------------------------------ block B3: the breath score ---
+
+    /// One bearer (unit 0, Breath Attack) facing two enemies on the x axis:
+    /// "Alpha" (unit 1: 3 alive, Defense 3) and "Bravo" (unit 2: 2 alive,
+    /// Defense 5); unit 3 is a dead bystander. Base-edge gaps 3" and 4", both
+    /// inside the 6" breath range, LOS clear (`los_pairs` carries no matrix).
+    /// Scores: Alpha `3 · 1/2 = 1.5`, Bravo `2 · 5/6 ≈ 1.67` — Bravo wins.
+    fn breath_scorer_line() -> (State, Vec<UnitStatic>) {
+        let mut st = four_unit_line();
+        st.player = vec![0, 1, 1, 1];
+        st.alive = vec![1, 3, 2, 0];
+        st.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, None, None, None]);
+        st.positions[1] = vec![[5.0 * IN2M, 0.0, 0.0]];
+        st.positions[2] = vec![[6.0 * IN2M, 0.0, 0.0]];
+        st.roster = Rc::new(crate::state::Roster {
+            keys: st.roster.keys.clone(),
+            index: HashMap::new(),
+            profile: vec![0, 1, 2, 2],
+        });
+        let bearer = UnitStatic {
+            name: "Bearer".into(),
+            breath_attack_active: true,
+            ..Default::default()
+        };
+        let alpha = UnitStatic {
+            name: "Alpha".into(),
+            ctx: Ctx { defense: 3, ..Default::default() },
+            ..Default::default()
+        };
+        let bravo = UnitStatic {
+            name: "Bravo".into(),
+            ctx: Ctx { defense: 5, ..Default::default() },
+            ..Default::default()
+        };
+        (st, vec![bearer, alpha, bravo])
+    }
+
+    /// Fires one breath activation at seed 5 (whose first face, the trigger
+    /// die, is a 6) and reports who ate the save batch — the signature of the
+    /// unit the scorer picked.
+    fn breath_save_owner(statics: &[UnitStatic], st: &mut State) -> String {
+        let mut shot = ShootResult::default();
+        let mut tray = Tray::seeded(5);
+        tray_breath_attack(statics, st, 0, Seams::default(), &mut tray, &mut shot);
+        shot.rolls.iter().find(|r| r.kind == "defense")
+            .map(|r| r.owner.clone())
+            .unwrap_or_default()
+    }
+
+    /// The score is `min(Blast, alive) * (1 - block)`: a PRODUCT, so Alpha's
+    /// 1.5 loses to Bravo's 1.67. Turning the multiply into a plus gives
+    /// Alpha 3.5 against 2.83 — the pick flips and the save batch is signed
+    /// "Alpha". Seed 5: the trigger die passes.
+    #[test]
+    fn the_breath_score_is_a_product_never_a_sum() {
+        let (mut st, statics) = breath_scorer_line();
+        assert_eq!(breath_save_owner(&statics, &mut st), "Bravo");
+    }
+
+    /// Same identity, quotient form: `min(Blast, alive) / (1 - block)` scores
+    /// Alpha 6 against Bravo 2.4 — again the wrong unit signs the saves.
+    #[test]
+    fn the_breath_score_is_a_product_never_a_quotient() {
+        let (mut st, statics) = breath_scorer_line();
+        assert_eq!(breath_save_owner(&statics, &mut st), "Bravo");
+    }
+
+    /// The block chance is SUBTRACTED from one: `1 - block` discounts Alpha
+    /// by half. `1 + block` inflates it to 1.5 and Alpha's 4.5 beats Bravo's
+    /// 2.33 — the pick flips, the owner betrays it.
+    #[test]
+    fn the_breath_score_subtracts_the_block_chance_never_adds() {
+        let (mut st, statics) = breath_scorer_line();
+        assert_eq!(breath_save_owner(&statics, &mut st), "Bravo");
+    }
+
+    /// And never divides: `1 / block` AMPLIFIES the low-block unit — Alpha
+    /// (2 alive, Defense 3: `2·1/2 = 1.0`, mutant `2·2 = 4`) must keep the
+    /// pick against Bravo (1 alive, Defense 5: `1·5/6 ≈ 0.83`, mutant
+    /// `1·6 = 6`), whose save batch then signs the wrong name.
+    #[test]
+    fn the_breath_score_uses_one_minus_block_never_one_over_block() {
+        let (mut st, mut statics) = breath_scorer_line();
+        st.alive[1] = 2;
+        st.alive[2] = 1;
+        assert_eq!(breath_save_owner(&statics, &mut st), "Alpha");
+    }
+
+    /// Two EQUAL scores (2 alive, Defense 3 each → 1.0 both) must keep the
+    /// FIRST unit the scan met. A `>=` lets the later twin overwrite it.
+    #[test]
+    fn the_breath_pick_takes_the_first_of_equal_scores() {
+        let (mut st, mut statics) = breath_scorer_line();
+        st.alive[1] = 2;
+        statics[2].ctx.defense = 3;
+        assert_eq!(breath_save_owner(&statics, &mut st), "Alpha");
+    }
+
+    /// One breath PER ACTIVATION needs a LIVING bearer: a joined hero that
+    /// carries the rule but is dead (alive 0) must not earn the trigger die
+    /// for the flagless host. A `>=` on the bearer's alive check lets the
+    /// corpse speak — a die lands on the tray anyway.
+    #[test]
+    fn a_dead_joined_bearer_earns_no_breath_die() {
+        let (mut st, mut statics) = breath_scorer_line();
+        statics[0].breath_attack_active = false;
+        statics.push(UnitStatic {
+            name: "Dead Hero".into(),
+            breath_attack_active: true,
+            ..Default::default()
+        });
+        st.player[1] = 0;
+        st.alive[1] = 0;
+        st.roster = Rc::new(crate::state::Roster {
+            keys: st.roster.keys.clone(),
+            index: HashMap::new(),
+            profile: vec![0, 3, 2, 2],
+        });
+        st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, Some(0), None, None]);
+        let mut shot = ShootResult::default();
+        let mut tray = Tray::seeded(5);
+        tray_breath_attack(
+            &statics, &mut st, 0,
+            Seams { hero_attach: true, ..Seams::default() },
+            &mut tray, &mut shot,
+        );
+        assert!(shot.rolls.is_empty(), "no living bearer, no breath die: {:?}", shot.rolls);
+    }
+
+    /// With the hero fold OFF, the target scan must still consider an enemy
+    /// that is somebody's attached hero — `hero_attach && attached` only
+    /// skips them under the seam. An `||` skips them always, and with Bravo
+    /// dead the scan finds no target at all: no die is ever drawn.
+    #[test]
+    fn with_the_seam_off_an_attached_enemy_is_still_a_breath_target() {
+        let (mut st, statics) = breath_scorer_line();
+        st.attached_to = Rc::new(vec![None, Some(0), None, None]);
+        st.alive[2] = 0;
+        let mut shot = ShootResult::default();
+        let mut tray = Tray::seeded(5);
+        tray_breath_attack(&statics, &mut st, 0, Seams::default(), &mut tray, &mut shot);
+        assert!(
+            shot.rolls.iter().any(|r| r.kind == "attack"),
+            "the trigger die is drawn at the attached enemy: {:?}", shot.rolls
+        );
+    }
+
+    // ------------------------------------------- block B5: hit & run ---
+
+    /// A Hit & Run host (unit 0) with an enemy due south (unit 3, 9" centre
+    /// to centre on the z axis) — the only live enemy, so the flee direction
+    /// is exactly [0, -1] and the 3" step lands at z = -3" in metres.
+    fn har_line() -> (State, Vec<UnitStatic>) {
+        let mut st = four_unit_line();
+        st.positions[3] = vec![[0.0, 0.0, 9.0 * IN2M]];
+        let host = UnitStatic {
+            name: "Fleer".into(),
+            hit_and_run_active: true,
+            ..Default::default()
+        };
+        (st, vec![host])
+    }
+
+    /// `len` is the pythagorean SUM `dx² + dz²`: with dx = 0 it is |dz|, so
+    /// the normalized direction is exactly [0, -1] and the unit ends 3" from
+    /// where it started. `dx² - dz²` is negative here — NaN poisons every
+    /// later step and the unit never arrives.
+    #[test]
+    fn the_flee_length_is_a_pythagorean_sum_never_a_difference() {
+        let (mut st, statics) = har_line();
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+    }
+
+    /// Each delta is SQUARED, not doubled: `dz + dz` over a negative dz is
+    /// negative, sqrt gives NaN — no 3" step ever lands.
+    #[test]
+    fn the_flee_length_squares_each_delta_never_doubles_one() {
+        let (mut st, statics) = har_line();
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+    }
+
+    /// The zero-length guard at EXACTLY the boundary: a 1e-6 m gap measures
+    /// as len == 1e-6 (f32), which is NOT less than the 1e-6 threshold — the
+    /// unit must still flee. An `==` guard returns on the boundary value.
+    #[test]
+    fn a_hair_gap_is_measured_not_guarded_away() {
+        let (mut st, statics) = har_line();
+        st.positions[3] = vec![[0.0, 0.0, 1e-6f32 as f64]];
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+    }
+
+    /// Same boundary, `<=` form: 1e-6 <= 1e-6 returns too. The original
+    /// strictly-below guard lets the hair-gap through and the step lands.
+    #[test]
+    fn a_gap_at_the_guard_boundary_still_flees() {
+        let (mut st, statics) = har_line();
+        st.positions[3] = vec![[0.0, 0.0, 1e-6f32 as f64]];
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+    }
+
+    /// The direction DIVIDES dz by len: -9a/9a = -1, a unit vector. A
+    /// remainder `-9a % 9a` is -0 — the unit stands still instead of fleeing.
+    #[test]
+    fn the_flee_direction_divides_the_delta_never_takes_a_remainder() {
+        let (mut st, statics) = har_line();
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+        assert_eq!(st.positions[0][0][0], 0.0, "no sideways drift");
+    }
+
+    /// And never multiplies: dz·len ≈ -0.0522 m of "direction" drags the
+    /// step to a crawl (≈ 4 mm) instead of the full 3".
+    #[test]
+    fn the_flee_direction_normalizes_to_a_unit_vector() {
+        let (mut st, statics) = har_line();
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+    }
+
+    /// The step is ADDED to the position, moving AWAY from the enemy (dir z
+    /// is -1): `p[2] += -step`. A `-=` walks TOWARD the enemy (+step).
+    #[test]
+    fn the_flee_step_moves_away_from_the_enemy() {
+        let (mut st, statics) = har_line();
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+    }
+
+    /// `+=` never becomes `*=`: 0 · step is still 0 and the host never moves.
+    #[test]
+    fn the_flee_step_is_added_never_multiplied_in() {
+        let (mut st, statics) = har_line();
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+    }
+
+    /// dir · step_m is the metres-per-inch conversion: (-1)·3" = -0.0762 m.
+    /// A division (-1)/0.0762 ≈ -13.1 hurls the unit 13 metres south.
+    #[test]
+    fn the_flee_step_scales_the_direction_by_the_inches() {
+        let (mut st, statics) = har_line();
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+    }
+
+    /// The hero fold moves the joined hero by the SAME away-step: the hero
+    /// sits 2" east on the x line, so its z (0) ends at -3". A `-=` walks
+    /// the hero INTO the enemy (+step).
+    #[test]
+    fn the_joined_hero_flees_away_with_the_host() {
+        let (mut st, statics) = har_line();
+        tray_hit_and_run(
+            &statics, &mut st, 0,
+            Seams { hero_attach: true, ..Seams::default() },
+            Cover::Recorded(None),
+        );
+        assert_eq!(st.positions[1][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+    }
+
+    /// `*=` on the hero's position scales its z (0) by step — 0 stays 0 and
+    /// the hero never moves, instead of taking the fold's away-step.
+    #[test]
+    fn the_heros_flee_step_is_added_never_multiplied_in() {
+        let (mut st, statics) = har_line();
+        tray_hit_and_run(
+            &statics, &mut st, 0,
+            Seams { hero_attach: true, ..Seams::default() },
+            Cover::Recorded(None),
+        );
+        assert_eq!(st.positions[1][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+    }
+
+    /// dir·step in the hero loop too: dir + step ≈ -0.92 m of step.
+    #[test]
+    fn the_heros_flee_step_scales_the_direction_by_the_inches() {
+        let (mut st, statics) = har_line();
+        tray_hit_and_run(
+            &statics, &mut st, 0,
+            Seams { hero_attach: true, ..Seams::default() },
+            Cover::Recorded(None),
+        );
+        assert_eq!(st.positions[1][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+    }
+
+    /// And dir/step ≈ -13.1 m — the hero teleports instead of fleeing 3".
+    #[test]
+    fn the_heros_flee_direction_stays_a_unit_vector() {
+        let (mut st, statics) = har_line();
+        tray_hit_and_run(
+            &statics, &mut st, 0,
+            Seams { hero_attach: true, ..Seams::default() },
+            Cover::Recorded(None),
+        );
+        assert_eq!(st.positions[1][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+    }
+
+    // ---------------------------------------- block B8: second wind ---
+
+    /// The candidate scan's SKIPS: an attached hero of the acting side is
+    /// never a candidate even when activated and unused — the `||` chain at
+    /// the gate must not collapse into an `&&` that lets the hero through.
+    #[test]
+    fn an_attached_hero_is_never_the_second_wind_candidate() {
+        let (mut st, mut statics) = buff_line();
+        st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, Some(0), None, None]);
+        statics[1].second_wind_active = true;
+        st.activated[1] = true;
+        assert_eq!(second_wind_candidate(&statics, &st, 0), None);
+    }
+
+    /// Nor is an ENEMY unit, however eligible it looks: the player mismatch
+    /// alone skips it. An `&&` there lets a fresh enemy carrier be picked.
+    #[test]
+    fn an_enemy_unit_is_never_the_second_wind_candidate() {
+        let (mut st, mut statics) = buff_line();
+        statics[2].second_wind_active = true;
+        st.activated[2] = true;
+        assert_eq!(second_wind_candidate(&statics, &st, 0), None);
+    }
+
+    /// The pick is strictly-greater: two carriers at 2 alive each, the FIRST
+    /// wins. A `>=` lets the later equal twin overwrite the pick.
+    #[test]
+    fn two_equal_carriers_pick_the_first_not_the_last() {
+        let (mut st, mut statics) = buff_line();
+        st.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, None, None, None]);
+        statics[0].second_wind_active = true;
+        statics[1].second_wind_active = true;
+        st.alive[1] = st.alive[0];
+        st.activated[0] = true;
+        st.activated[1] = true;
+        assert_eq!(second_wind_candidate(&statics, &st, 0), Some(0));
+    }
+
+    /// The round cap: ceil(3 carriers / 3) = 1 grant, so one spent use
+    /// exhausts the round. Turning the `- 1` into a `/ 1` inflates the cap
+    /// to 2 and hands out a second activation.
+    #[test]
+    fn one_spent_grant_exhausts_a_three_carrier_round() {
+        let (mut st, mut statics) = buff_line();
+        st.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, None, None, None]);
+        st.player[2] = 0; // a third carrier joins the acting side
+        statics[0].second_wind_active = true;
+        statics[1].second_wind_active = true;
+        statics[2].second_wind_active = true;
+        st.activated[0] = true;
+        st.activated[1] = true;
+        st.second_wind_used[1] = true; // spent, but still a carrier for the cap
+        st.second_wind_round = st.round;
+        st.second_wind_uses = 1;
+        assert_eq!(second_wind_candidate(&statics, &st, 0), None);
+    }
+
+    // ------------------------------------ block B7: the growth bonus ---
+
+    /// One four-unit line whose profile 0 carries a Growth Markers rule at
+    /// the registry's two-rate shape and unit 0 holding `markers` markers.
+    /// At 4 markers the exact bonus is ap `2·4 + 5·(4/2) = 18`, hit
+    /// `1·4 + 3·(4/2) = 10`.
+    fn growth_line(markers: i64) -> (State, Vec<UnitStatic>) {
+        let mut st = four_unit_line();
+        st.growth_markers = vec![markers, 0, 0, 0];
+        let rule = GrowthRule {
+            name: "Test Growth".into(),
+            ap_per_marker: 2,
+            ap_per_two: 5,
+            hit_per_marker: 1,
+            hit_per_two: 3,
+            ..Default::default()
+        };
+        (st, vec![UnitStatic { growth: vec![rule], ..Default::default() }])
+    }
+
+    /// The bonus is COMPUTED from the markers: zero markers, zero bonus —
+    /// and four markers is the exact (18, 10), not a constant (1, 0).
+    #[test]
+    fn the_growth_bonus_is_computed_never_constant() {
+        let (st, statics) = growth_line(0);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (0, 0), "no markers, no bonus");
+        let (st, statics) = growth_line(4);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
+
+    /// The AP per-marker rate MULTIPLIES the marker count: 2 · 4, not 2 / 4.
+    #[test]
+    fn the_ap_rate_multiplies_the_markers() {
+        let (st, statics) = growth_line(4);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
+
+    /// The AP per-two rate MULTIPLIES the pair count: 5 · 2, not 5 / 2.
+    #[test]
+    fn the_ap_pair_rate_multiplies_the_pairs() {
+        let (st, statics) = growth_line(4);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
+
+    /// The pair count HALVES the markers: 4 / 2 = 2 pairs, not 4 % 2 = 0.
+    #[test]
+    fn the_ap_pair_count_halves_the_markers() {
+        let (st, statics) = growth_line(4);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
+
+    /// The AP term ACCUMULATES by addition from zero: `-=` would leave -18.
+    #[test]
+    fn the_ap_bonus_accumulates_by_addition() {
+        let (st, statics) = growth_line(4);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
+
+    /// And addition, not multiplication: 0 · 18 stays 0 — no bonus at all.
+    #[test]
+    fn the_ap_bonus_starts_at_zero_and_adds() {
+        let (st, statics) = growth_line(4);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
+
+    /// The two hit facets ADD together: 4 + 6 = 10, not 4 - 6 = -2.
+    #[test]
+    fn the_hit_facets_add_together() {
+        let (st, statics) = growth_line(4);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
+
+    /// Addition, not multiplication: 4 · 6 = 24 is not the hit bonus.
+    #[test]
+    fn the_hit_facets_add_never_multiply() {
+        let (st, statics) = growth_line(4);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
+
+    /// The hit per-marker rate MULTIPLIES the markers: 1 · 4, not 1 + 4.
+    #[test]
+    fn the_hit_rate_multiplies_the_markers() {
+        let (st, statics) = growth_line(4);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
+
+    /// Nor divides: 1 / 4 = 0 — the markers would count for nothing.
+    #[test]
+    fn the_hit_rate_divides_nothing() {
+        let (st, statics) = growth_line(4);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
+
+    /// The hit per-two rate MULTIPLIES the pairs: 3 · 2, not 3 + 2.
+    #[test]
+    fn the_hit_pair_rate_multiplies_the_pairs() {
+        let (st, statics) = growth_line(4);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
+
+    /// Nor divides: 3 / 2 = 1 pair's worth instead of 2.
+    #[test]
+    fn the_hit_pair_count_halves_the_markers() {
+        let (st, statics) = growth_line(4);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
+
+    /// The hit pair count HALVES the markers: 4 / 2, not 4 % 2 (zero).
+    #[test]
+    fn the_hit_pair_count_is_a_half_never_a_remainder() {
+        let (st, statics) = growth_line(4);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
+
+    /// And never doubles: 4 · 2 = 8 pairs would hand out 24 hit, not 6.
+    #[test]
+    fn the_hit_pair_count_is_a_half_never_a_double() {
+        let (st, statics) = growth_line(4);
+        assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
 }
