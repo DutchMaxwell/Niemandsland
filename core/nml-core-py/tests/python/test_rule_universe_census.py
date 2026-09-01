@@ -100,7 +100,9 @@ def test_census_matrix_red_knob_and_test_gate(mini):
     assert "furious" in tokens
     assert "ghostrule" not in tokens, "a test-gated literal must not be evidence"
 
-    assert "RULES-COVERAGE core-ported        : 2/3  (PARTIAL: 0, MISSING: 1)" in census.summary_lines(res)
+    lines = census.summary_lines(res)
+    assert "RULES-COVERAGE core-ported        : 2/3  (STAMPED: 0, PARTIAL: 0, MISSING: 1)" in lines
+    assert "consumed 2/3 · stamped-only 0 · missing 1" in lines[3]
 
     red = census.census(books, root, hide="Furious")["red"]
     assert red["before"] == 2
@@ -109,6 +111,37 @@ def test_census_matrix_red_knob_and_test_gate(mini):
     assert red["aliased"] == 2
     assert red["ported_aliased"] == 2
     assert red["ok"] is True
+
+
+def test_stamped_vs_ported_on_a_shared_primitive(tmp_path):
+    """A shared "class" primitive (#489's Utility Buff shape): a resolver
+    token for the PRIMITIVE stamps every entry, but only a param in
+    CONSUMED_PARAM_KEYS is actually read - the rest is STAMPED, not PORTED."""
+    root = tmp_path / "repo"
+    for d in ("assets/solo", "data", "core/nml-core/src", "core/nml-core-py/python"):
+        (root / d).mkdir(parents=True)
+    (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
+        "common": {
+            "Buff Stamped": {"primitive": "Utility Buff", "params": {"def_mod": -1}},
+            "Buff Consumed": {"primitive": "Utility Buff", "params": {"hit_mod": 1}},
+        },
+        "factions": {},
+    }))
+    (root / "data/encoder_rule_vocab_v1.json").write_text(json.dumps({"unit": [], "weapon": []}))
+    (root / "core/nml-core-py/python/list_to_profile.py").write_text("MOVE_PRIMITIVES = ()\n")
+    (root / "core/nml-core/src/arm.rs").write_text('pub const UB: &str = "Utility Buff";\n')
+    books = tmp_path / "books" / "gf"
+    books.mkdir(parents=True)
+    (books / "book_a.json").write_text(json.dumps({
+        "name": "Test Faction", "gameSystem": "gf",
+        "specialRules": [{"name": "Buff Stamped"}, {"name": "Buff Consumed"}],
+    }))
+    res = census.census(tmp_path / "books", root)
+    per = res["rows"]
+    assert per["Buff Stamped"]["per_system"]["gf"]["core"] == "STAMPED"
+    assert per["Buff Consumed"]["per_system"]["gf"]["core"] == "PORTED"
+    assert res["summary"]["core_stamped"] == 1
+    assert res["summary"]["core_ported"] == 1
 
 
 def test_cli_prints_summary_and_writes_json(mini, tmp_path, capsys):
