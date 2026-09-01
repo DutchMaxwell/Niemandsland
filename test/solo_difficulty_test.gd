@@ -88,3 +88,48 @@ func test_mission_focus_machinery_skip_rate_tracks_the_knob() -> void:
 
 func test_base_seed_is_stamped_by_for_grade() -> void:
 	assert_int(SoloDifficulty.for_grade("nachtmahr", 12345).base_seed).is_equal(12345)
+
+
+# === NML-1140 step 8 — the placement ladder ====================================
+
+## Set → resolve → unset BEFORE asserting, so a failing assert can never leak the
+## env into a sibling test (the env is process-wide).
+func _resolve_with_env(env_word: String, p1 := "nachtmahr", p2 := "nachtmahr",
+		objectives := "rulebook") -> String:
+	OS.set_environment("NML_OBJECTIVE_DOCTRINE", env_word)
+	var r := SoloDifficulty.resolve_placement(p1, p2, objectives)
+	OS.set_environment("NML_OBJECTIVE_DOCTRINE", "")
+	return r
+
+
+func test_placement_knob_round_trips_for_every_preset() -> void:
+	for key in SoloDifficulty.PRESETS:
+		var d := SoloDifficulty.for_grade(str(key), 7)
+		assert_str(str(SoloDifficulty.PRESETS[key]["placement"])) \
+			.override_failure_message("preset %s ships the rulebook rung (knob-only: the A/B gate was not met)" % key) \
+			.is_equal("rulebook")
+		var flat := d.to_dict()
+		assert_str(str(flat.get("placement", "MISSING"))) \
+			.override_failure_message("preset %s: placement missing from to_dict" % key) \
+			.is_equal(str(d.placement))
+		# the true round-trip: the flat view re-derives itself through for_grade
+		assert_dict(SoloDifficulty.for_grade(str(flat["grade"])).to_dict()).is_equal(flat)
+
+
+func test_resolver_env_beats_preset_and_preset_decides_when_unset() -> void:
+	# Unset env: the preset decides — every preset ships "rulebook" (knob-only
+	# default, the placement A/B gate was not met), so the preset path and the
+	# gradeless harnesses (core/solo selfplay default preset) all land rulebook.
+	OS.set_environment("NML_OBJECTIVE_DOCTRINE", "")
+	assert_str(SoloDifficulty.resolve_placement("nachtmahr", "nachtmahr", "rulebook")).is_equal("rulebook")
+	assert_str(SoloDifficulty.resolve_placement("", "", "")).is_equal("rulebook")
+	assert_str(SoloDifficulty.resolve_placement("kriegsherr", "veteran", "rulebook")).is_equal("rulebook")
+	# The env beats the preset — including pinning the rulebook draw back over a
+	# search preset (the A/B pairing's control arm).
+	assert_str(_resolve_with_env("rulebook")).is_equal("rulebook")
+	assert_str(_resolve_with_env("style")).is_equal("style")
+	assert_str(_resolve_with_env("search")).is_equal("search")
+	assert_str(_resolve_with_env("rulebook", "nachtmahr", "nachtmahr", "")).is_equal("rulebook")
+	# A typo'd word and an armed rung without the rulebook layout: loud "?" (quit law).
+	assert_str(_resolve_with_env("aggressive")).is_equal("?")
+	assert_str(_resolve_with_env("style", "nachtmahr", "nachtmahr", "")).is_equal("?")

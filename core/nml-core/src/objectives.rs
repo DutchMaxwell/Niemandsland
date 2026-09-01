@@ -174,7 +174,8 @@ fn draw(
 }
 
 /// `ObjectiveLayout._sweep` — the deterministic fall-back, x ascending outermost.
-fn sweep(
+/// Public: the doctrine modes keep this last resort (design 1) instead of a copy.
+pub fn sweep(
     hx: i64,
     hz: i64,
     pos: &[(i64, i64)],

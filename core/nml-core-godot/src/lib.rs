@@ -459,6 +459,55 @@ impl NmlCore {
         }
     }
 
+    /// NML-1140 step 10a — the doctrine's placement choice for the table: the
+    /// SAME dispatcher the twin's `nml_core.doctrine_place` runs (pyo3 seam,
+    /// nml-core-py lib.rs:1665-1706) — one implementation, two seams (design 0;
+    /// gate 2(ii) asserts the markers across both). Inputs are the pyo3 seam's,
+    /// in its order: `terrain` (Dictionary or null -> `Terrain::absent`),
+    /// `mode` ("style"|"search"), `armies` = the PAIR `[army_a, army_b]` of
+    /// profile dictionaries (unit key -> the `_unit_profile` block), the
+    /// ALREADY drawn marker `count` (the seed stream stays the caller's — the
+    /// doctrine draws nothing, design 1), the zones object `style` (e.g.
+    /// `{"zones": {"1": …, "2": …}}`), and the table dims in inches (72x48,
+    /// pyo3's defaults — GDScript passes them explicitly). `armies` and
+    /// `style` must be UNTYPED `Array`/`Dictionary` — gdext refuses a typed
+    /// `Array[Dictionary]` or `Dictionary[K, V]` at the boundary (plain.rs:125),
+    /// so the caller passes plain literals. Answers
+    /// `{"mode", "positions": [[x, z] inches, …], "swept"}`; an EMPTY
+    /// dictionary with the reason in `last_error()` otherwise — including a
+    /// `count` outside 0..=5, refused FIRST like the pyo3 seam (8^count search
+    /// blow-up, d3+2 tops out at 5; the step-5 UNSURE, coordinator-approved),
+    /// and "random"/unknown mode words, which `doctrine::place` turns into an
+    /// Err — never a silent fallback. A panic inside the port is caught like
+    /// on every other seam (rule R1).
+    #[func]
+    fn doctrine_place(
+        &mut self,
+        terrain: Variant,
+        mode: GString,
+        armies: VarArray,
+        count: i64,
+        style: VarDictionary,
+        table_w_in: f64,
+        table_d_in: f64,
+    ) -> VarDictionary {
+        self.last_error.clear();
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.doctrine_place_inner(&terrain, &mode, &armies, count, &style, table_w_in, table_d_in)
+        }));
+        let out = match caught {
+            Ok(r) => r,
+            Err(_) => Err("panic inside the port".to_string()),
+        };
+        match out {
+            Ok(d) => d,
+            Err(e) => {
+                self.last_error = e.clone();
+                VarDictionary::new()
+            }
+        }
+    }
+
     /// NML-1073 M4-6a GATE B, half one: the canonical JSON the reader produced
     /// out of a live-shaped `plan_unit_step` DICTIONARY. Empty = the call did
     /// not parse; `last_error()` says why.
@@ -624,6 +673,68 @@ impl NmlCore {
         )
         .map_err(|u| format!("{u:?}"))?;
         Ok(pick_out(&pick, &cap, sig))
+    }
+
+    /// The body of `doctrine_place` in `Result` form — the marshalling is
+    /// `mvcall::flat`, the same Variant -> serde_json reader the move seam
+    /// uses (mvcall.rs:33), so the doctrine sees byte-identical Values from
+    /// both seams.
+    fn doctrine_place_inner(
+        &mut self,
+        terrain: &Variant,
+        mode: &GString,
+        armies: &VarArray,
+        count: i64,
+        style: &VarDictionary,
+        table_w_in: f64,
+        table_d_in: f64,
+    ) -> Result<VarDictionary, String> {
+        if count > 5 {
+            return Err(format!(
+                "count must be <= 5 (d3+2 is the mission ceiling; the search tree is 8^count), got {count}"
+            ));
+        }
+        if count < 0 {
+            return Err(format!("count must be >= 0 — a drawn marker count, got {count}"));
+        }
+        if armies.len() != 2 {
+            return Err(format!(
+                "armies must be the pair [army_a, army_b] of profile dicts, got {} entries",
+                armies.len()
+            ));
+        }
+        let pair: Vec<serde_json::Value> = armies.iter_shared().map(|v| mvcall::flat(&v)).collect();
+        let style_value = mvcall::flat(&style.to_variant());
+        let t = if terrain.get_type() == VariantType::NIL {
+            Terrain::absent()
+        } else {
+            match terrain.try_to::<VarDictionary>() {
+                Ok(d) => Terrain::build(&plain::terrain_of(&d)),
+                Err(_) => return Err("terrain must be a Dictionary or null".to_string()),
+            }
+        };
+        let placed = nml_core::doctrine_place(
+            mode.to_string().as_str(),
+            &pair[0],
+            &pair[1],
+            &style_value,
+            &nml_core::objectives::Cells::from_terrain(&t),
+            count as usize,
+            table_w_in,
+            table_d_in,
+        )?;
+        let mut out = VarDictionary::new();
+        out.set("mode", mode);
+        let mut positions = VarArray::new();
+        for &(x, z) in &placed.cells {
+            let mut cell = VarArray::new();
+            cell.push(&x.to_variant());
+            cell.push(&z.to_variant());
+            positions.push(&cell.to_variant());
+        }
+        out.set("positions", &positions);
+        out.set("swept", placed.swept as i64);
+        Ok(out)
     }
 
     fn seams_now(&mut self) -> Seams {

@@ -32,6 +32,13 @@ extends RefCounted
 ##   • lookahead (bool)   — the ceiling flag (Albtraum): full EV lookahead / boost spending headroom. A design
 ##                          marker surfaced in the decision record; the deterministic engine is shared, so it
 ##                          currently equals Kriegsherr play plus the boost gate — the hook for future depth.
+##   • placement (word)   — NML-1140 step 8: the objective-placement rung (doctrine ladder):
+##                          "rulebook" (random-legal draw), "style" (argmax + fairness guard),
+##                          "search" (max^N mini-game). Knob-only: the placement A/B measured
+##                          'search' at 50.7 % against the rulebook draw (bar >= 55 %), so every
+##                          preset ships "rulebook" and style/search stay reachable through the
+##                          env override / preset values (promotion-not-worse rule). See
+##                          resolve_placement.
 ##
 ## DETERMINISM: every seeded draw is a PURE hash of explicit integer seed parts (base seed, side, activation
 ## index, unit-name hash, a per-knob salt) — NO shared RNG state, NO Math.random-style nondeterminism. Same
@@ -71,12 +78,12 @@ const _UNIT_RESOLUTION := 1000000
 ## persistence tiers, mission-focus draws) stays fully functional and unit-tested, so rebuilding
 ## weaker personas later is a matter of adding presets, not code.
 const PRESETS := {
-	"nachtmahr": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true},
+	"nachtmahr": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "placement": "rulebook"},
 	# NML-1073 M5 (working name, never exposed): the SHIPPED nachtmahr grade plus the
 	# hero_fold knob. ALBTRAUM lookahead uses BattleSim too, so the knob touches the shipped
 	# tree grade, not just the planner — this pairs it for a tree-vs-tree A/B before any
 	# default flip.
-	"nachtmahr_herofold": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "hero_fold": true},
+	"nachtmahr_herofold": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "hero_fold": true, "placement": "rulebook"},
 	# PLANNER_V0 (NML-995, plan D6): NACHTMAHR knobs plus the 1-ply mission planner overlay in
 	# SoloController._solve_planner. WORKING name for the arena A/B — no interactive exposure
 	# before the measurement gate (>=55% vs the tree), and never a display name.
@@ -84,29 +91,29 @@ const PRESETS := {
 	# (pool1_rollout, hero_fold) are DEFAULT ON here — not worse on 298 pairs (four-arm A/B),
 	# ~+14% table time. The four A/B arm presets below (planner_v0_pool1/_herofold/_both) keep
 	# their own explicit combinations for future A/Bs and are untouched by this flip.
-	"planner_v0": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "pool1_rollout": true, "hero_fold": true},
+	"planner_v0": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "pool1_rollout": true, "hero_fold": true},
 	# NML-1073 M2-4 (working name, never exposed): planner_v0 with the PLAYOUT
 	# ARBITRATION armed and the hand eval kept — the recording arm the Rust port
 	# is gated against. planner_v2 cannot serve: its `eval_fit` is a different
 	# value function, which the port declines rather than approximates.
 	# NML-1073 M5: table-fidelity knobs default on, same as planner_v0 (see above).
-	"planner_v0s": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "playout_search": true, "pool1_rollout": true, "hero_fold": true},
+	"planner_v0s": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "playout_search": true, "pool1_rollout": true, "hero_fold": true},
 	# E4 (eval-tuning wave): planner_v0 with the FITTED eval as the leaf — the
 	# arena A/B pair for "did the data-derived value function beat the hand one".
 	# NML-1073 M5: table-fidelity knobs default on, same as planner_v0 (see above).
-	"planner_v1": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "eval_fit": true, "pool1_rollout": true, "hero_fold": true},
+	"planner_v1": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "eval_fit": true, "pool1_rollout": true, "hero_fold": true},
 	# NML-1073 M5 BUG-3 (working name, never exposed): planner_v0 with the JOINED-HERO FOLD
 	# armed in the imagination. One arm of the four-arm A/B the maintainer gated the promotion
 	# on — nothing here becomes a default before that measurement.
-	"planner_v0_herofold": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "hero_fold": true},
+	"planner_v0_herofold": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "hero_fold": true},
 	# NML-1073 M5, the other two A/B arms. `planner_v0_pool1` is planner_v0 with the ONE-UNIT
 	# POOL routed through the rollout (#410); `planner_v0_both` arms that AND the joined-hero
 	# fold. With planner_v0 (neither) and planner_v0_herofold above, the four arms of the A/B
 	# the maintainer gated the promotion on are all selectable PER SEAT.
-	"planner_v0_pool1": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "pool1_rollout": true},
-	"planner_v0_both": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "pool1_rollout": true, "hero_fold": true},
+	"planner_v0_pool1": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "pool1_rollout": true},
+	"planner_v0_both": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "pool1_rollout": true, "hero_fold": true},
 	# NML-1073 M5: table-fidelity knobs default on, same as planner_v0 (see above).
-	"planner_v2": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "eval_fit": true, "playout_search": true, "pool1_rollout": true, "hero_fold": true},
+	"planner_v2": {"grade": Grade.NACHTMAHR, "ev_noise": 0.0, "rule_exploitation": 1.0, "mission_focus": 1.0, "coordination": 1.0, "persistence": 1.0, "lookahead": true, "avoid_overkill": true, "endgame_convergence": true, "planner": true, "placement": "rulebook", "eval_fit": true, "playout_search": true, "pool1_rollout": true, "hero_fold": true},
 }
 
 ## Legacy grade names (old harness scripts, saved arena invocations, docs) all resolve to
@@ -137,6 +144,9 @@ var pool1_rollout: bool = false
 ## (solo_controller.gd:405-419) already refuses it on the real table. env NML_HERO_FOLD=1 sets
 ## the same bit process-wide. Off = the shipped behaviour, byte-identical.
 var hero_fold: bool = false
+## NML-1140 step 8: the placement rung this preset places objectives by (rulebook|style|search),
+## resolved per game by resolve_placement — env override first, else the strongest seat's preset.
+var placement: String = "rulebook"
 
 ## The game-level base seed folded into every deterministic draw (reproducibility across a rating run).
 var base_seed: int = 0
@@ -168,6 +178,7 @@ static func for_grade(name: String, p_base_seed: int = 0) -> SoloDifficulty:
 	d.playout_search = bool(preset.get("playout_search", false))
 	d.pool1_rollout = bool(preset.get("pool1_rollout", false))
 	d.hero_fold = bool(preset.get("hero_fold", false))
+	d.placement = str(preset.get("placement", "rulebook"))
 	d.base_seed = p_base_seed
 	return d
 
@@ -177,12 +188,42 @@ static func grade_names() -> Array:
 	return ["nachtmahr"]
 
 
+## NML-1140 step 8: THE one placement resolver — all three harnesses take their
+## generate() rung from here and nowhere else. Env NML_OBJECTIVE_DOCTRINE
+## (rulebook|style|search) beats the preset — the arena/test control (an explicit
+## "rulebook" pins the random-legal draw back over a search preset, the A/B's control
+## arm). Unset, the STRONGEST seat's preset decides (the layout is ONE shared game
+## input, design 5; unknown grade names fall back to nachtmahr like for_grade).
+## Unknown env words and an armed style/search without NML_OBJECTIVES=rulebook print
+## one loud FATAL and return "?" — the harness quits on "?" (the label-bug class;
+## a typo must never silently record a mislabeled corpus).
+static func resolve_placement(p1_grade := "", p2_grade := "", objectives_mode := "") -> String:
+	var m := OS.get_environment("NML_OBJECTIVE_DOCTRINE").strip_edges().to_lower()
+	if m != "":
+		if m != "rulebook" and m != "style" and m != "search":
+			printerr("[OBJECTIVES] FATAL: unknown NML_OBJECTIVE_DOCTRINE '%s' (rulebook|style|search; unset = the preset decides) — refusing a mislabeled run" % m)
+			return "?"
+		if m != "rulebook" and objectives_mode != "rulebook":
+			printerr("[OBJECTIVES] FATAL: NML_OBJECTIVE_DOCTRINE=%s requires NML_OBJECTIVES=rulebook — refusing an armed-but-inert run" % m)
+			return "?"
+		return m
+	var s1 := p1_grade.strip_edges().to_lower()
+	var s2 := p2_grade.strip_edges().to_lower()
+	if not PRESETS.has(s1):
+		s1 = "nachtmahr"
+	if not PRESETS.has(s2):
+		s2 = "nachtmahr"
+	if int(PRESETS[s2]["grade"]) > int(PRESETS[s1]["grade"]):
+		s1 = s2
+	return str(PRESETS[s1].get("placement", "rulebook"))
+
+
 ## A flat view of this preset's knobs (for the decision record and tests).
 func to_dict() -> Dictionary:
 	return {"grade": grade_name, "ev_noise": ev_noise, "rule_exploitation": rule_exploitation,
 		"mission_focus": mission_focus, "coordination": coordination, "persistence": persistence,
 		"lookahead": lookahead, "avoid_overkill": avoid_overkill, "endgame_convergence": endgame_convergence,
-		"planner": planner, "eval_fit": eval_fit}
+		"planner": planner, "eval_fit": eval_fit, "placement": placement}
 
 
 ## Whether this grade plays the ENDGAME MARKER MATH (albtraum v2): from the second-to-last round a
