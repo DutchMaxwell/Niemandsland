@@ -188,17 +188,35 @@ def bearer_names(profile: dict) -> set[str]:
 #: trigger `_solo_tray_roll(1, trigger, ...)` (main.gd:5307-5308, trigger ==
 #: `BREATH_TRIGGER` == 2, sim.rs). Unlisted rules fall back to Mend's shape,
 #: the only one this gate knew before block B3.
-RULE_ROLL_SHAPE: dict[str, tuple[int, int]] = {"Mend": (1, 1), "Breath Attack": (1, 2)}
+#:
+#: BLOCK B4 (Shot Modifier: Good Shot / Bad Shot / Targeting Visor) does not
+#: fit this shape at all — it is not a separate die, it is a TARGET shift on
+#: the bearer's own already-existing to-hit roll (`_solo_hit_mod_info`
+#: main.gd:5681-5701), so its `count` is the weapon's attack count (rarely 1)
+#: and its `target` is Quality +-1 (not a fixed number). `None` marks that:
+#: "any 'attack' roll of a bearer counts as the rule's own slot", the only
+#: definition that makes sense for a modifier instead of a draw.
+RULE_ROLL_SHAPE: dict[str, tuple[int, int] | None] = {
+    "Mend": (1, 1), "Breath Attack": (1, 2),
+    "Good Shot": None, "Bad Shot": None, "Targeting Visor": None,
+}
 
 
 def is_rule_roll(r: dict, only_rule: str) -> bool:
-    """A count-1 "attack" roll at the rule's own target. Bearer-gated at the
-    call site (`only_rule not in bearer_names(prof)`), so a count-1
-    target-2+ ordinary to-hit die never gets mistaken for the rule's own draw
-    unless the SAME unit also happens to carry the rule."""
-    count, target = RULE_ROLL_SHAPE.get(only_rule, (1, 1))
-    return (r.get("roll_kind") == "attack" and int(r.get("count", 0)) == count
-            and int(r.get("target", 0)) == target)
+    """A count-1 "attack" roll at the rule's own target — OR, for a `None`
+    shape (block B4's target-shift family), any "attack" roll at all. Bearer-
+    gated at the call site (`only_rule not in bearer_names(prof)`), so a
+    count-1 target-2+ ordinary to-hit die never gets mistaken for the rule's
+    own draw unless the SAME unit also happens to carry the rule — and for a
+    `None` shape, EVERY attack roll of a bearer's own shooting act counts,
+    coarser than the other rules' by design (see `RULE_ROLL_SHAPE`)."""
+    if r.get("roll_kind") != "attack":
+        return False
+    shape = RULE_ROLL_SHAPE.get(only_rule, (1, 1))
+    if shape is None:
+        return True
+    count, target = shape
+    return int(r.get("count", 0)) == count and int(r.get("target", 0)) == target
 
 
 def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
@@ -251,15 +269,29 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 cls, foe = "shooting", action["shoot"]
             elif kind == CHARGE_KIND and action.get("charge"):
                 cls, foe = "melee", action["charge"]
-            elif only_rule:
+            elif only_rule and RULE_ROLL_SHAPE.get(only_rule, (1, 1)) is not None:
                 # --only-rule: the rule fires BEFORE attacking (main.gd:1056-1058),
                 # on ADVANCE/RUSH activations just as well — a Mend act with no
                 # shoot/charge target is still a replayable act, judged as its
-                # own class.
+                # own class. A `None`-shape rule (block B4's Shot Modifier
+                # family — a to-hit TARGET shift, not a standalone pre-attack
+                # die) never applies off a shooting act, so it never takes this
+                # branch: `combat_kind()` folds a trailing morale roll's
+                # `roll_kind` back to "attack" too, and without a real shoot
+                # act to anchor on, a `None` shape would misread that morale
+                # die as the rule's own slot.
                 cls, foe = "mend", None
             else:
                 continue
             if only_rule:
+                # A `None`-shape rule (block B4) never reaches melee (main.gd:
+                # 5627-5636's all_attacks/melee_only/when:charge gate keeps it
+                # out) — a CHARGE act's own strikes are ALSO roll_kind
+                # "attack", so without this the coarse "any attack roll"
+                # match would mistake a Good-Shot-bearer's charge for the
+                # rule's own slot.
+                if RULE_ROLL_SHAPE.get(only_rule, (1, 1)) is None and cls != "shooting":
+                    continue
                 unit_key = (act.get("pick") or {}).get("unit_key") or action.get("unit")
                 prof = head["profiles"].get(unit_key) or {}
                 block = [r for r in dice[i0:] if int(r["act"]) == k]
@@ -291,7 +323,7 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 clean = len(got) == len(want)
                 shape = RULE_ROLL_SHAPE.get(only_rule, (1, 1))
                 for i, w in enumerate(want):
-                    if w[0] == "attack" and (w[1], w[2]) == shape:
+                    if w[0] == "attack" and (shape is None or (w[1], w[2]) == shape):
                         chk["mend_rolls"] += 1
                         hit = i < len(got) and got[i] == w
                         chk["mend_rolls_equal"] += hit

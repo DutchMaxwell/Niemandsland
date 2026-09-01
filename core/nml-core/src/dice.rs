@@ -321,7 +321,13 @@ fn save_batch(
 ///   * the Fortified DATA ALIASES (Guardian, Primeborn and their over-9" gate)
 ///     and Fortified Growth's marker-driven AP reduction (:6411-6441): only the
 ///     plain `Fortified` flag reaches this port.
-///   * Stealth / Evasive data aliases, `Shot Modifier`, Vengeance, Instinctive.
+///   * Stealth / Evasive data aliases, Vengeance, Instinctive. `Shot Modifier`
+///     itself: PORTED for its three flat/over-9" carriers (block B4 — Good
+///     Shot, Bad Shot, Targeting Visor; `unit.rs::stamp_shot_modifier`). The
+///     melee-/charge-/terrain-scoped family members (Grounded Precision,
+///     Precision Fighter/Charge Aura) are NOT — they never reach the shooting
+///     branch this function resolves anyway (main.gd:5627-5636's
+///     `all_attacks` / `melee_only` / `when: charge` gate keeps them out).
 ///
 /// AND morale, Fearless and No Retreat (:8313-8342) — B5's, deliberately left
 /// undrawn so the stream stands exactly where the table's morale roll begins.
@@ -444,8 +450,17 @@ pub fn resolve_volley_with_tray(
         }
         // --- to-hit, `profile_ev` ai_ev.gd:335-370's shooting branch ---
         let mut target = reliable_quality(att.quality, p.reliable);
-        let mut m =
-            shooting_hit_modifier(dist_in, att.artillery, def.stealth, def.artillery, def.evasive);
+        // Good Shot / Bad Shot / Targeting Visor (main.gd:5681-5701) — the
+        // table's DICE path folds these in; `p.hit_bonus`/`p.hit_bonus_over9`
+        // are this shot's own profile stamp (unit.rs::stamp_shot_modifier).
+        // `def.stealth_alias_penalty`/`def.stealth_alias_over_in` are the
+        // SAME dice path's Stealth data-alias leg (Changebound et al.,
+        // main.gd:5588-5610/5698-5701) — `unit.rs::stealth_alias_of`.
+        let mut m = shooting_hit_modifier(
+            dist_in, att.artillery, def.stealth, def.artillery, def.evasive,
+            p.hit_bonus, p.hit_bonus_over9,
+            def.stealth_alias_penalty, def.stealth_alias_over_in,
+        );
         if p.unstoppable && m < 0 {
             m = 0;
         }
@@ -1064,6 +1079,185 @@ mod tests {
         assert_eq!(out.rolls[1].count, hits, "one save die per hit");
         assert_eq!(out.rolls[1].target, 4, "Defense 4+, AP(0)");
         assert!(out.unported.is_empty(), "a plain rifle hits no unported branch");
+    }
+
+    // ------------------------------------ block B4: Shot Modifier family ---
+
+    /// Good Shot (+1) and Bad Shot (-1) — main.gd:5681-5701 — are flat, no
+    /// range gate: both move the target by exactly one at 6" (well inside 9").
+    #[test]
+    fn good_shot_and_bad_shot_move_the_to_hit_target_by_one() {
+        let good = [ShootProfile { hit_bonus: 1, ..rifle(1) }];
+        let mut t1 = Tray::seeded(27);
+        let out_good = resolve_shooting_with_tray(
+            &good, &[0], &[1], &shooter(4), &defender(4, 5), 6.0, &mut t1,
+        );
+        assert_eq!(out_good.rolls[0].target, 3, "Good Shot +1 lowers Quality 4+ to 3+");
+
+        let bad = [ShootProfile { hit_bonus: -1, ..rifle(1) }];
+        let mut t2 = Tray::seeded(27);
+        let out_bad = resolve_shooting_with_tray(
+            &bad, &[0], &[1], &shooter(4), &defender(4, 5), 6.0, &mut t2,
+        );
+        assert_eq!(out_bad.rolls[0].target, 5, "Bad Shot -1 raises Quality 4+ to 5+");
+    }
+
+    /// Targeting Visor (+1) is gated behind `over_in: 9` — main.gd:5693-5694 —
+    /// so it does nothing at or under 9" and only helps strictly past it.
+    #[test]
+    fn targeting_visor_only_helps_strictly_past_nine_inches() {
+        let p = [ShootProfile { hit_bonus_over9: 1, ..rifle(1) }];
+        let mut under = Tray::seeded(27);
+        let out_under = resolve_shooting_with_tray(
+            &p, &[0], &[1], &shooter(4), &defender(4, 5), 6.0, &mut under,
+        );
+        assert_eq!(out_under.rolls[0].target, 4, "under 9\": no bonus");
+
+        let mut exactly = Tray::seeded(27);
+        let out_exactly = resolve_shooting_with_tray(
+            &p, &[0], &[1], &shooter(4), &defender(4, 5), 9.0, &mut exactly,
+        );
+        assert_eq!(out_exactly.rolls[0].target, 4, "exactly 9\" is not \"over\" (main.gd's own wording)");
+
+        let mut over = Tray::seeded(27);
+        let out_over = resolve_shooting_with_tray(
+            &p, &[0], &[1], &shooter(4), &defender(4, 5), 12.0, &mut over,
+        );
+        assert_eq!(out_over.rolls[0].target, 3, "past 9\": the +1 lowers Quality 4+ to 3+");
+    }
+
+    /// Good Shot's flat +1 stacks with the target's Stealth -1 (both apply past
+    /// 9", `AiCombatMath.shooting_hit_modifier` :230-243) — here they exactly
+    /// cancel, so the carrier's Good Shot buys back Stealth's own penalty.
+    #[test]
+    fn good_shot_stacks_with_and_can_offset_the_stealth_penalty() {
+        let stealthy = Ctx { stealth: true, ..defender(4, 5) };
+        let mut plain = Tray::seeded(27);
+        let out_plain = resolve_shooting_with_tray(
+            &[rifle(1)], &[0], &[1], &shooter(4), &stealthy, 12.0, &mut plain,
+        );
+        assert_eq!(out_plain.rolls[0].target, 5, "Stealth alone: -1 raises Quality 4+ to 5+");
+
+        let good = [ShootProfile { hit_bonus: 1, ..rifle(1) }];
+        let mut offset = Tray::seeded(27);
+        let out_offset = resolve_shooting_with_tray(
+            &good, &[0], &[1], &shooter(4), &stealthy, 12.0, &mut offset,
+        );
+        assert_eq!(out_offset.rolls[0].target, 4, "Good Shot +1 cancels Stealth's -1, back to 4+");
+    }
+
+    /// The book's floor and ceiling (`AiCombatMath.modified_hit_target` :222-223,
+    /// clamped to [2, 6]) still hold once Shot Modifier stacks with the other
+    /// modifiers in this function — real combinations, not synthetic numbers.
+    #[test]
+    fn shot_modifier_stacking_never_breaks_the_book_bounds() {
+        // Floor: Quality 2+ (best already) + attacker Artillery (+1, past 9")
+        // + Good Shot (+1 flat) would be target -2 unclamped; the book floors
+        // it at 2+.
+        let artillery_att = Ctx { artillery: true, ..shooter(2) };
+        let good = [ShootProfile { hit_bonus: 1, ..rifle(1) }];
+        let mut floor = Tray::seeded(27);
+        let out_floor = resolve_shooting_with_tray(
+            &good, &[0], &[1], &artillery_att, &defender(4, 5), 12.0, &mut floor,
+        );
+        assert_eq!(out_floor.rolls[0].target, 2, "clamped at the 2+ floor");
+
+        // Ceiling: Quality 6+ (worst already) into Stealth (-1, past 9") +
+        // Evasive (-1, any range) + Bad Shot (-1 flat) would be target 9+
+        // unclamped; the book ceilings it at 6+.
+        let bad = [ShootProfile { hit_bonus: -1, ..rifle(1) }];
+        let hard_target = Ctx { stealth: true, evasive: true, ..defender(4, 5) };
+        let mut ceiling = Tray::seeded(27);
+        let out_ceiling = resolve_shooting_with_tray(
+            &bad, &[0], &[1], &shooter(6), &hard_target, 12.0, &mut ceiling,
+        );
+        assert_eq!(out_ceiling.rolls[0].target, 6, "clamped at the 6+ ceiling");
+    }
+
+    /// NO BEARER: a unit carrying none of Good Shot / Bad Shot / Targeting
+    /// Visor stamps a default `ShootProfile` (`hit_bonus`/`hit_bonus_over9`
+    /// both 0, `unit.rs::stamp_shot_modifier`'s no-op case) and must resolve
+    /// exactly like the pre-B4 baseline — the first shooting-order test above.
+    #[test]
+    fn no_bearer_leaves_the_to_hit_target_unmodified() {
+        let p = [rifle(1)];
+        assert_eq!(p[0].hit_bonus, 0);
+        assert_eq!(p[0].hit_bonus_over9, 0);
+        let mut tray = Tray::seeded(27);
+        let out = resolve_shooting_with_tray(
+            &p, &[0], &[1], &shooter(4), &defender(4, 5), 12.0, &mut tray,
+        );
+        assert_eq!(out.rolls[0].target, 4, "Quality 4+ at 12\", no Shot Modifier carrier");
+    }
+
+    // ------------------------ Stealth DATA-ALIAS leg (Changebound et al.) ---
+
+    /// Changebound (`hit_penalty:1, over_in:9`, assets/solo/rules_mechanics_
+    /// aof.json) is a Stealth-primitive alias, not the literal "Stealth" name
+    /// — main.gd:5588-5610/5698-5701. Past 9" it penalizes the to-hit target
+    /// by exactly its own `hit_penalty`, same direction as plain Stealth.
+    #[test]
+    fn changebound_penalizes_the_to_hit_target_past_nine_inches() {
+        let changebound = Ctx { stealth_alias_penalty: 1, stealth_alias_over_in: 9.0, ..defender(4, 5) };
+        let mut tray = Tray::seeded(27);
+        let out = resolve_shooting_with_tray(
+            &[rifle(1)], &[0], &[1], &shooter(4), &changebound, 12.0, &mut tray,
+        );
+        assert_eq!(out.rolls[0].target, 5, "Changebound -1 past 9\" raises Quality 4+ to 5+");
+    }
+
+    /// The SAME defender at or under 9" — Changebound's own `over_in` gate is
+    /// closed, so the target is unmodified (main.gd's `gate <= 0.0 or dist_in
+    /// > gate` reading; here `gate` is 9, `dist_in` is 9, not "over").
+    #[test]
+    fn changebound_does_nothing_at_or_under_nine_inches() {
+        let changebound = Ctx { stealth_alias_penalty: 1, stealth_alias_over_in: 9.0, ..defender(4, 5) };
+        let mut tray = Tray::seeded(27);
+        let out = resolve_shooting_with_tray(
+            &[rifle(1)], &[0], &[1], &shooter(4), &changebound, 9.0, &mut tray,
+        );
+        assert_eq!(out.rolls[0].target, 4, "at exactly 9\", Changebound has not fired");
+    }
+
+    /// Plain Stealth (the literal name) is unaffected by the new alias fields
+    /// staying at their zero default — the pre-existing fixed-constant path
+    /// (`Ctx.stealth` + `STEALTH_HIT_PENALTY`/`LONG_RANGE_IN`) stays exactly
+    /// as before this leg was added. And when BOTH the literal flag and an
+    /// alias are somehow set on the same Ctx, the alias must NOT also apply
+    /// on top — "at most one" penalty (main.gd's `not (stealth and over_nine)`
+    /// guard), so the net target is identical to plain Stealth alone.
+    #[test]
+    fn plain_stealth_is_unchanged_and_never_stacks_with_an_alias() {
+        let plain = Ctx { stealth: true, ..defender(4, 5) };
+        let mut t1 = Tray::seeded(27);
+        let out_plain = resolve_shooting_with_tray(
+            &[rifle(1)], &[0], &[1], &shooter(4), &plain, 12.0, &mut t1,
+        );
+        assert_eq!(out_plain.rolls[0].target, 5, "plain Stealth -1 past 9\" raises 4+ to 5+");
+
+        let both = Ctx { stealth: true, stealth_alias_penalty: 1, stealth_alias_over_in: 9.0, ..defender(4, 5) };
+        let mut t2 = Tray::seeded(27);
+        let out_both = resolve_shooting_with_tray(
+            &[rifle(1)], &[0], &[1], &shooter(4), &both, 12.0, &mut t2,
+        );
+        assert_eq!(out_both.rolls[0].target, 5, "no double-dip: same target as plain Stealth alone");
+    }
+
+    /// The reported corpus finding itself: a Good Shot bearer (+1, block B4)
+    /// shooting a Changebound-carrying target (-1, this leg) past 9" nets to
+    /// UNMODIFIED — Quality stands as printed. This is the exact stack
+    /// `dice_gate.py --only-rule "Good Shot"` found diverging against
+    /// `qag_ref` before this fix (Chameleons, quality 5, vs Rift Daemons of
+    /// Change's Changebound).
+    #[test]
+    fn good_shot_and_changebound_cancel_past_nine_inches() {
+        let good = [ShootProfile { hit_bonus: 1, ..rifle(1) }];
+        let changebound = Ctx { stealth_alias_penalty: 1, stealth_alias_over_in: 9.0, ..defender(5, 5) };
+        let mut tray = Tray::seeded(27);
+        let out = resolve_shooting_with_tray(
+            &good, &[0], &[1], &shooter(5), &changebound, 12.0, &mut tray,
+        );
+        assert_eq!(out.rolls[0].target, 5, "Good Shot +1 and Changebound -1 cancel: Quality 5+ stands");
     }
 
     /// A weapon that scores nothing draws NO save batch — the table `continue`s
