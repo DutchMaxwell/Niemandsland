@@ -10,8 +10,9 @@ the table's dice — and so the three answers cannot drift apart between tools.
 Nothing here re-implements those gates: the act positioning (`read_game`,
 `burn_prefix`, `first_at_or_after`), the success formula (`successes`), the
 next-state reader (`defender_state`), the trailing-morale split
-(`trailing_morale`) and the whole stream walk (`walk_game`) are IMPORTED. This
-file owns the join and the reporting, nothing else.
+(`trailing_morale`), the whole stream walk (`walk_game`), and SPLIT FIRE's own
+aim builder (`shots_of`, `split_aim`) are IMPORTED. This file owns the join and
+the reporting, nothing else.
 
 THE THREE CHECKS
 
@@ -111,7 +112,7 @@ from dice_stream_gate import walk_game  # noqa: E402
 from melee_replay_gate import CHARGE_KIND, trailing_morale  # noqa: E402
 from shoot_replay_gate import (  # noqa: E402
     SHOOTING_KINDS, burn_prefix, combat_kind, defender_state, first_at_or_after, read_game,
-    resolve_vintage_flag, successes, vintage_report_line,
+    resolve_vintage_flag, shots_of, split_aim, successes, vintage_report_line,
 )
 
 CLASSES = ("shooting", "melee", "morale")
@@ -234,6 +235,23 @@ def is_rule_roll(r: dict, only_rule: str) -> bool:
     return int(r.get("count", 0)) == count and int(r.get("target", 0)) == target
 
 
+def inject_split_aim(head: dict, shots: list[dict], action: dict, units: dict) -> tuple[dict, bool]:
+    """NML-1150, the gap PR #488 could only bucket, now filled: `split_aim`
+    (`shoot_replay_gate.py`, imported not copied) folds the sidecar's
+    per-weapon target names onto this act's own `action`. An act that already
+    carries `action.split`, or one `split_aim` cannot cover (no shots.jsonl
+    line under this ordinal, every entry ambiguous or stale, or every shot
+    already agrees with the recorded `shoot` key — nothing to inject), comes
+    back UNCHANGED — `split_unrecorded` below then judges it on the raw dice
+    shape, exactly as it did before this existed."""
+    if action.get("split"):
+        return action, False
+    aim, _, _ = split_aim(head, shots, action["shoot"], units)
+    if aim is None:
+        return action, False
+    return dict(action, split=aim), True
+
+
 def split_unrecorded(cls: str, block: list[dict], action: dict) -> bool:
     """NML-1150 GAP: a shooting act's recorded dice carry MORE THAN ONE raw
     "attack"-shaped roll (`is_rule_roll`'s own shape read — `roll_kind ==
@@ -263,7 +281,7 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
     chk = dict.fromkeys(("stream_ok", "rolls", "tally", "tally_equal", "tally_red",
                          "next", "next_equal", "next_red", "mend_rolls", "mend_rolls_equal",
                          "mend_rolls_clean", "mend_rolls_clean_equal", "confounded",
-                         "split_unrecorded"), 0)
+                         "split_unrecorded", "split_aimed"), 0)
     if only_rule:
         grid["mend"] = dict.fromkeys(BUCKETS + ("acts",), 0)
     first = {"stream": "", "tally": "", "next": ""}
@@ -280,6 +298,7 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
 
         head, lines, dice, seed = read_game(d)
         burn = burn_prefix(dice)
+        shots = shots_of(d)
         core = nml_core.load(repo)
         # NML-1130: replay with the ENGAGE FOLD and the CONDITIONAL AP reading
         # this corpus was recorded under, not today's twin defaults.
@@ -330,6 +349,13 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 if only_rule not in bearer_names(prof) or not (dice_free or any(
                         is_rule_roll(r, only_rule) for r in block)):
                     continue
+            if cls == "shooting":
+                # NML-1150: aim from shots.jsonl BEFORE the confound check
+                # below, so an act this can aim never falls into the
+                # split_unrecorded fallback at all.
+                action, aimed = inject_split_aim(head, shots.get(k, []), action,
+                                                  act["state"]["units"])
+                chk["split_aimed"] += aimed
             grid[cls]["acts"] += 1
             split_confound = split_unrecorded(cls, block, action)
             chk["split_unrecorded"] += split_confound
@@ -429,6 +455,9 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
           % (chk["tally_equal"], chk["tally"]))
     print("  C NEXT  : %d/%d activations leave BOTH combatants where the next act found them"
           % (chk["next_equal"], chk["next"]))
+    print("  AIM     : %d/%d shooting acts split-aimed from shots.jsonl (%d unaimed -> "
+          "split_unrecorded)"
+          % (chk["split_aimed"], grid["shooting"]["acts"], chk["split_unrecorded"]))
     print("  SPLIT   : %d/%d shooting acts split-unrecorded (corpus predates action.split) "
           "— B/C skipped"
           % (chk["split_unrecorded"], grid["shooting"]["acts"]))
