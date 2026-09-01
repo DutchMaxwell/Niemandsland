@@ -14,16 +14,28 @@ distinct rule name against the four layers that must know it:
   2. mechanics - does any entry for the name exist in that map at all?
   3. core      - the fast core (core/nml-core/src/*.rs; rules.rs itself is the
                  lookup/parser twin and carries no resolver arms):
-                   PORTED  - the name or one of its registry primitives appears
-                             as an identifier or string literal in non-test
-                             code beyond the parser (a resolver arm or a
-                             rules_of_primitive consumer);
+                   PORTED  - the name's own token is in non-test code (always
+                             trusted), OR its primitive's token is AND (for a
+                             primitive listed in CONSUMED_PARAM_KEYS) the
+                             entry's own params include a consumed role. A
+                             primitive not in that table is trusted whole;
+                   STAMPED - the primitive token is there (the class is
+                             recognised) but this entry's params map to none
+                             of its consumed roles - stamped, read by nobody
+                             (PR #489's finding: a shared primitive's token
+                             alone over-credits every name under it);
                    PARTIAL - no arm, but the effect reaches the core only
                              through a precomputed channel: the loader's
                              MOVE_PRIMITIVES move-band pass (list_to_profile.py)
                              or the conditional-AP pass (an entry param
                              `condition`/`on6_ap`);
                    MISSING - no evidence (noted when Rust docs name it).
+
+     A port PR for a shared "class" primitive (one resolver arm, params vary
+     per entry) MUST add its consumed param keys to CONSUMED_PARAM_KEYS below
+     - a live rule GRANT's name does not need hand-listing, it is read off
+     the `*::granted(state, i, "X")` call sites (consumed_grant_names).
+     Skipping this reopens #489's bug for the next primitive.
   4. encoder   - a slot in data/encoder_rule_vocab_v1.json (v5, unit band or
                  weapon band).
 
@@ -53,7 +65,16 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 SYSTEMS = ("gf", "aof")
 
-STATUS_RANK = {"PORTED": 2, "PARTIAL": 1, "MISSING": 0}
+STATUS_RANK = {"PORTED": 3, "STAMPED": 2, "PARTIAL": 1, "MISSING": 0}
+
+# Primitive -> the registry param keys a resolver on this core actually
+# reads for it (see the module docstring). Absent = trusted whole.
+CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
+    # mods.rs/sim.rs (#489): dice.rs sums hit_mod into to-hit (shoot+melee);
+    # sim.rs sums morale_mod. casting_mod/def_mod/ap_mod/move_mod/
+    # range_bonus_in are recorded, read by nothing on this core.
+    "Utility Buff": frozenset({"hit_mod", "morale_mod"}),
+}
 
 
 def base_rule_name(rule: str) -> str:
@@ -138,7 +159,8 @@ def load_mechanics(repo: Path, system: str) -> dict:
             continue
         for name, entry in block.items():
             slot = info.setdefault(
-                name, {"primitives": set(), "entry": False, "cond_ap": False}
+                name, {"primitives": set(), "entry": False, "cond_ap": False,
+                       "param_keys": set(), "vs_target": False, "grants_rule_values": set()}
             )
             slot["entry"] = True
             primitive = entry.get("primitive") if isinstance(entry, dict) else None
@@ -147,6 +169,13 @@ def load_mechanics(repo: Path, system: str) -> dict:
             params = entry.get("params") if isinstance(entry, dict) else None
             if isinstance(params, dict) and ("condition" in params or "on6_ap" in params):
                 slot["cond_ap"] = True
+            if isinstance(params, dict):
+                slot["param_keys"].update(params.keys())
+                if params.get("vs_target"):
+                    slot["vs_target"] = True
+                grant = params.get("grants_rule")
+                if isinstance(grant, str) and grant:
+                    slot["grants_rule_values"].add(grant)
     return info
 
 
@@ -174,6 +203,26 @@ def move_primitives(repo: Path) -> set:
     if not m:
         return set()
     return set(re.findall(r'"([^"]+)"', m.group(1)))
+
+
+GRANTED_CALL_RE = re.compile(r'granted\([^()\n]*"([^"\n]+)"[^()\n]*\)')
+
+
+def consumed_grant_names(repo: Path) -> set[str]:
+    """Every literal rule name a `*::granted(state, i, "X")` call checks in
+    core/nml-core/src (rules.rs excluded) - read off the Rust source, never
+    hand-listed."""
+    names: set[str] = set()
+    src = Path(repo) / "core" / "nml-core" / "src"
+    for path in sorted(src.rglob("*.rs")):
+        if path.name == "rules.rs":
+            continue
+        try:
+            text = path.read_text()
+        except OSError:
+            continue
+        names.update(base_rule_name(m) for m in GRANTED_CALL_RE.findall(text))
+    return names
 
 
 # ------------------------------------------------------------------ rust scan
@@ -365,7 +414,22 @@ def mention_of(name: str, joined: str) -> str | None:
     return joined[end + 1 : nl if nl >= 0 else len(joined)]
 
 
-def core_status_for(name: str, mech: dict, tokens: dict, bands: set, hide: str | None):
+def is_consumed(primitive: str, name: str, mech: dict, consumed_grants: set) -> bool:
+    """Does THIS entry's own param evidence map to a role a resolver reads?"""
+    roles = CONSUMED_PARAM_KEYS.get(primitive)
+    if roles is None:
+        return True
+    if roles & mech.get("param_keys", set()):
+        return True
+    if mech.get("vs_target"):
+        implied = name[: -len(" Mark")] if name.endswith(" Mark") else name
+        if base_rule_name(implied) in consumed_grants:
+            return True
+    return any(base_rule_name(g) in consumed_grants for g in mech.get("grants_rule_values", set()))
+
+
+def core_status_for(name: str, mech: dict, tokens: dict, bands: set, hide: str | None,
+                     consumed_grants: set):
     """(status, note) for one (name, system)."""
     prims = set(mech.get("primitives", set()))
     variants = snake_variants(name)
@@ -390,7 +454,10 @@ def core_status_for(name: str, mech: dict, tokens: dict, bands: set, hide: str |
             v, where = name_hit
             return "PORTED", f"name token '{v}' at {where[0]}:{where[1]}"
         p, v, where = prim_hit
-        return "PORTED", f"primitive '{p}' token '{v}' at {where[0]}:{where[1]}"
+        note = f"primitive '{p}' token '{v}' at {where[0]}:{where[1]}"
+        if is_consumed(p, name, mech, consumed_grants):
+            return "PORTED", note
+        return "STAMPED", note + " (recognised; no resolver reads a consumed param on this entry)"
     notes = []
     if prims & bands:
         notes.append("move-band pass only")
@@ -419,7 +486,8 @@ def build_universe(books: list[dict]) -> dict:
     return universe
 
 
-def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None) -> dict:
+def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
+                consumed_grants: set | None = None) -> dict:
     rows = {}
     AURA_SUFFIX = " Aura"
 
@@ -427,7 +495,7 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None) -
         mech = mechanics[s].get(
             name, {"primitives": set(), "entry": False, "cond_ap": False}
         )
-        status, note = core_status_for(name, mech, tokens, bands, hide)
+        status, note = core_status_for(name, mech, tokens, bands, hide, consumed_grants or set())
         if status == "MISSING":
             where = mention_of(name, mentions)
             if where:
@@ -550,6 +618,7 @@ def summarize(rows: dict) -> dict:
             lambda r: any(ps["mechanics_entry"] for ps in r["per_system"].values())
         ),
         "core_ported": count(lambda r: best_core(r) == "PORTED"),
+        "core_stamped": count(lambda r: best_core(r) == "STAMPED"),
         "core_partial": count(lambda r: best_core(r) == "PARTIAL"),
         "core_missing": count(lambda r: best_core(r) == "MISSING"),
         "encoder_slot": count(
@@ -575,6 +644,7 @@ def summarize(rows: dict) -> dict:
             ),
             "mechanics_entry": sum(1 for _n, r in sub if r["per_system"][s]["mechanics_entry"]),
             "core_ported": sum(1 for _n, r in sub if r["per_system"][s]["core"] == "PORTED"),
+            "core_stamped": sum(1 for _n, r in sub if r["per_system"][s]["core"] == "STAMPED"),
             "core_partial": sum(1 for _n, r in sub if r["per_system"][s]["core"] == "PARTIAL"),
             "core_missing": sum(1 for _n, r in sub if r["per_system"][s]["core"] == "MISSING"),
             "encoder_slot": sum(1 for _n, r in sub if r["per_system"][s]["encoder_slot"]),
@@ -726,8 +796,10 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
     mentions = comment_index(comments)
     bands = move_primitives(repo)
     vocab = load_vocab(repo)
+    consumed_grants = consumed_grant_names(repo)
     universe = build_universe(books)
-    rows = build_rows(universe, mechanics, tokens, bands, vocab, mentions)
+    rows = build_rows(universe, mechanics, tokens, bands, vocab, mentions,
+                       consumed_grants=consumed_grants)
     summary = summarize(rows)
     result = {
         "meta": {
@@ -744,7 +816,8 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
             "tool": "core/nml-core-py/tools/rule_universe_census.py",
             "method": {
                 "walk": "specialRules[].name over every book JSON, recursive; base = name before '('",
-                "core_ported": "name or registry-primitive token in non-test core/nml-core/src code beyond rules.rs",
+                "core_ported": "name token, or a CONSUMED_PARAM_KEYS-consumed primitive-param, in non-test core/nml-core/src code beyond rules.rs",
+                "core_stamped": "primitive token present but this entry's params map to no CONSUMED_PARAM_KEYS role - recognised, not read",
                 "core_partial": "move-band pass primitive (list_to_profile.py:MOVE_PRIMITIVES) or conditional-AP entry param",
                 "core_missing": "no token evidence; 'named in Rust docs' when a comment mentions it",
             },
@@ -759,7 +832,8 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
     }
     if hide:
         before = summary["core_ported"]
-        rows_hidden = build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide)
+        rows_hidden = build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide,
+                                  consumed_grants)
         after = summarize(rows_hidden)["core_ported"]
         direct = {
             n for n, r in rows.items()
@@ -791,10 +865,14 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
 def summary_lines(res: dict) -> list[str]:
     s = res["summary"]
     t = s["total"]
+    consumed, stamped = s["core_ported"], s["core_stamped"]
     lines = [
         f"RULES-COVERAGE registry-primitive : {s['registry_primitive']}/{t}",
         f"RULES-COVERAGE mechanics-entry    : {s['mechanics_entry']}/{t}",
-        f"RULES-COVERAGE core-ported        : {s['core_ported']}/{t}  (PARTIAL: {s['core_partial']}, MISSING: {s['core_missing']})",
+        f"RULES-COVERAGE core-ported        : {consumed}/{t}"
+        f"  (STAMPED: {stamped}, PARTIAL: {s['core_partial']}, MISSING: {s['core_missing']})",
+        f"RULES-COVERAGE consumed vs stamped: consumed {consumed}/{t}"
+        f" · stamped-only {stamped} · missing {t - consumed - stamped}",
         f"RULES-COVERAGE encoder-slot       : {s['encoder_slot']}/{t}",
         f"RULES-COVERAGE all-layers         : {s['all_layers']}/{t}",
     ]
@@ -849,11 +927,12 @@ def markdown_report(res: dict) -> str:
         "- Registry/mechanics: the system's `rules_mechanics_<system>.json`,"
         " common + faction blocks. `primitive: null` = registered but"
         " unautomated (UNMAPPED-registered).",
-        f"- Core PORTED: name or registry-primitive token in non-test"
-        f" `core/nml-core/src` code beyond `rules.rs` (the parser twin)."
-        f" PARTIAL: only the loader's move-band pass (`MOVE_PRIMITIVES` in"
-        f" `list_to_profile.py`) or the conditional-AP entry param reaches the"
-        f" core. MISSING: nothing.",
+        f"- Core PORTED: name token, or a `CONSUMED_PARAM_KEYS`-consumed"
+        f" registry-primitive param, in non-test `core/nml-core/src` code."
+        f" STAMPED: the primitive token is there, but this entry's own"
+        f" params map to no consumed role. PARTIAL: only the loader's"
+        f" move-band pass (`MOVE_PRIMITIVES`) or the conditional-AP entry"
+        f" param reaches the core. MISSING: nothing.",
         "- Encoder: a slot in `data/encoder_rule_vocab_v1.json` (unit or weapon band).",
         "",
     ]
