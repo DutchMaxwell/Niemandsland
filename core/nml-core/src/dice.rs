@@ -460,7 +460,15 @@ pub fn resolve_volley_with_tray(
             dist_in, att.artillery, def.stealth, def.artillery, def.evasive,
             p.hit_bonus, p.hit_bonus_over9,
             def.stealth_alias_penalty, def.stealth_alias_over_in,
-        );
+        )
+            // B2b: the LIVE ledger's own nets — `_solo_hit_mod_info`
+            // :5703-5709 adds the shooter's `_solo_spell_hit_mod` and the
+            // target's `_solo_spell_hit_mod_vs` to the SAME `mod` that then
+            // goes through ONE `modified_hit_target`. Kept apart from the
+            // STATIC `p.hit_bonus` stamp above (#487): that one is baked per
+            // weapon at build time, these two are per-activation records.
+            + att.hit_mod
+            + def.vs_hit_mod;
         if p.unstoppable && m < 0 {
             m = 0;
         }
@@ -551,7 +559,9 @@ pub fn resolve_volley_with_tray(
         }
         // `_solo_ignores_regen` :6927-6933 — Bane / Rending (and Unstoppable,
         // ai_ev.gd:433) cut through Regeneration; everything else is poolable.
-        if p.bane || p.rending || p.unstoppable {
+        // B2b: `_solo_ignores_regen`'s last line (main.gd:6941) also answers
+        // for a LIVE "Unstoppable" grant — the Unstoppable Mark seam.
+        if p.bane || p.rending || p.unstoppable || att.unstoppable_grant {
             regen_proof += w;
         } else {
             regenable += w;
@@ -618,7 +628,10 @@ fn melee_hit_target(p: &ShootProfile, att: &Ctx, def: &Ctx, charging: bool, uf_h
         return UNMODIFIED_SIX;
     }
     let base = thrust_to_hit(reliable_quality(att.quality, p.reliable), charging && p.thrust);
-    let mut m = melee_hit_modifier(def.evasive, def.melee_evasion) + uf_hit;
+    // B2b: the melee half of `_solo_hit_mod_info` (:5637-5638) sums the same
+    // two live nets into `mm` before the single clamp below.
+    let mut m = melee_hit_modifier(def.evasive, def.melee_evasion) + uf_hit + att.hit_mod
+        + def.vs_hit_mod;
     if p.unstoppable && m < 0 {
         m = 0;
     }
@@ -785,7 +798,7 @@ pub fn resolve_melee_with_tray(
             if p.deadly > 0 {
                 out.mark("deadly");
             }
-            if p.bane || p.rending || p.unstoppable {
+            if p.bane || p.rending || p.unstoppable || sh.att.unstoppable_grant {
                 regen_proof += w;
             } else {
                 regenable += w;

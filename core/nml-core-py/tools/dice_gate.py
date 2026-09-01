@@ -201,6 +201,18 @@ RULE_ROLL_SHAPE: dict[str, tuple[int, int] | None] = {
     "Good Shot": None, "Bad Shot": None, "Targeting Visor": None,
 }
 
+#: BLOCK B2b (the Utility-Buff family) is a THIRD shape, and it is NOT
+#: `RULE_ROLL_SHAPE`'s `None`: those rules draw no die of their own at all —
+#: the buff is a RECORD that a LATER roll reads (`_solo_record_spell_mod`
+#: main.gd:3649 read back at `_solo_hit_mod_info` :5703 / the morale sum
+#: :8288). B4's `None` says "the roll exists, its shape is just not fixed";
+#: this says "there is no roll to find". An act is selected by BEARER alone
+#: and the rule-slot sub-check has nothing to count.
+DICE_FREE_RULES = frozenset({
+    "Precision Attacks Buff", "Precision Fighter Buff", "Precision Shooter Buff",
+    "Morale Debuff", "Casting Buff", "Primal Boost Buff", "Unstoppable Mark",
+})
+
 
 def is_rule_roll(r: dict, only_rule: str) -> bool:
     """A count-1 "attack" roll at the rule's own target — OR, for a `None`
@@ -209,7 +221,10 @@ def is_rule_roll(r: dict, only_rule: str) -> bool:
     count-1 target-2+ ordinary to-hit die never gets mistaken for the rule's
     own draw unless the SAME unit also happens to carry the rule — and for a
     `None` shape, EVERY attack roll of a bearer's own shooting act counts,
-    coarser than the other rules' by design (see `RULE_ROLL_SHAPE`)."""
+    coarser than the other rules' by design (see `RULE_ROLL_SHAPE`). A rule in
+    `DICE_FREE_RULES` has no roll of its own at all and never matches."""
+    if only_rule in DICE_FREE_RULES:
+        return False   # block B2b: there is no roll of its own to find
     if r.get("roll_kind") != "attack":
         return False
     shape = RULE_ROLL_SHAPE.get(only_rule, (1, 1))
@@ -295,8 +310,9 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 unit_key = (act.get("pick") or {}).get("unit_key") or action.get("unit")
                 prof = head["profiles"].get(unit_key) or {}
                 block = [r for r in dice[i0:] if int(r["act"]) == k]
-                if only_rule not in bearer_names(prof) or not any(
-                        is_rule_roll(r, only_rule) for r in block):
+                dice_free = only_rule in DICE_FREE_RULES
+                if only_rule not in bearer_names(prof) or not (dice_free or any(
+                        is_rule_roll(r, only_rule) for r in block)):
                     continue
             grid[cls]["acts"] += 1
             tray = nml_core.Tray(seed)

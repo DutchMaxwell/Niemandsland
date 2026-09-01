@@ -21,6 +21,7 @@ use crate::sight;
 use crate::geom::{self, V3};
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
+use crate::mods;
 use crate::rng::GodotRng;
 use crate::rules::Spell;
 use crate::spell::{cast_success_chance_base, official_pick_order, spell_damage_ev_of, spell_ev_of};
@@ -28,7 +29,7 @@ use crate::state::State;
 use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
 use crate::mv::CLEARANCE_EPS_IN;
 use crate::terrain::{base_in_terrain, gives_cover, is_dangerous, Terrain};
-use crate::unit::{Ctx, UnitStatic, ShootProfile};
+use crate::unit::{Ctx, UnitStatic, ShootProfile, UtilityBuff};
 use crate::{CONTROL_EPS, IN2M};
 
 /// `BattleSim.CONTACT_IN` battle_sim.gd:725 — the charge's contact ring. No
@@ -469,16 +470,12 @@ pub const REPOSITION_MOVE_IN: f32 = 9.0;
 /// to 9", clamped so no model leaves the table (`_axis_scale` :8911-8915).
 /// Dice-free start to finish, matching the table exactly.
 ///
-/// The rest of the "Utility Buff" family — the friendly hit/casting/morale
-/// buffs (Casting Buff, Morale Debuff, Precision Attacks/Fighter Buff,
-/// Primal Boost Buff) and the enemy-side Mark (Unstoppable Mark) — is NOT
-/// ported here: their table-side consumption (`_solo_record_spell_mod` read
-/// back at the hit/cast/morale roll, and the dynamic rule-grant bridge onto
-/// a weapon profile, main.gd:3722-3760) has no Rust twin at all yet —
-/// `state.mods` is WRITTEN by spell buffs (`apply_cast_effect` above) but
-/// read NOWHERE outside JSON serialization (io.rs), so stamping it here
-/// would silently do nothing downstream. That consumption wiring is its own
-/// ticket (block B2b), not a same-shape continuation of this one.
+/// The rest of the family — the friendly/enemy modifier buffs (Casting Buff,
+/// Morale Debuff, Precision Attacks Buff, Precision Fighter Buff, Primal Boost
+/// Buff) — lands as a RECORD on the picked unit's `State.buffs` ledger, which
+/// `ctx_live` folds into the to-hit and morale targets of every later tray roll
+/// (block B2b). The enemy-side Marks (`vs_target`) are skipped here on purpose:
+/// they belong to the ATTACK seam, `tray_vs_marks`.
 pub(crate) fn tray_utility_buff(statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams, cover: Cover) {
     if next.alive[si] <= 0 {
         return;
@@ -492,8 +489,171 @@ pub(crate) fn tray_utility_buff(statics: &[UnitStatic], next: &mut State, si: us
         bearers.extend(next.attached[si].iter().copied());
     }
     for &bearer in &bearers {
-        if next.alive[bearer] > 0 && statics[next.roster.profile[bearer]].reposition_artillery_active {
+        if next.alive[bearer] <= 0 {
+            continue;
+        }
+        let pb = next.roster.profile[bearer];
+        if statics[pb].reposition_artillery_active {
             reposition_artillery_for(statics, next, bearer, seams, terrain);
+        }
+        for b in &statics[pb].utility_buffs {
+            // :16495 the Mark arm and :16497 the movement arm both `continue`
+            // out of the table's own loop before the pick below.
+            if b.vs_target || b.reposition_in > 0.0 {
+                continue;
+            }
+            for ti in utility_targets(statics, next, bearer, b, seams) {
+                record_buff(next, ti, b);
+            }
+        }
+    }
+}
+
+/// `main._solo_record_spell_mod` :3649-3670 — one record onto the picked
+/// unit's ledger, with the GDScript's own two guards: a record with neither a
+/// modifier nor a grant never lands (:3653/:3663). `beneficiary` is hard-coded
+/// "" at the Utility-Buff call site (:16541), so these are always the bearer's
+/// own net, never an attackers-side one.
+fn record_buff(state: &mut State, ti: usize, b: &UtilityBuff) {
+    if b.hit_mod == 0 && b.casting_mod == 0 && b.morale_mod == 0 && b.grants_rule.is_empty() {
+        return;
+    }
+    state.buffs[ti].push(mods::LiveMod {
+        hit_mod: b.hit_mod,
+        casting_mod: b.casting_mod,
+        morale_mod: b.morale_mod,
+        grants_rule: Rc::from(b.grants_rule.as_str()),
+        scope: Rc::from(b.scope.as_str()),
+        attackers: false,
+        once: b.once,
+    });
+}
+
+/// `RadialMenu._caster_member_of` radial_menu.gd:489-499 — the unit itself or
+/// one of its alive attached heroes is a Caster. Hero-fold seam-gated like
+/// every other chain read in this file.
+fn caster_member(statics: &[UnitStatic], state: &State, u: usize, seams: Seams) -> bool {
+    if statics[state.roster.profile[u]].is_caster {
+        return true;
+    }
+    seams.hero_attach
+        && state.attached[u].iter().any(|&h| state.alive[h] > 0 && statics[state.roster.profile[h]].is_caster)
+}
+
+/// `main._solo_utility_targets` :16317-16359 — up to `max_targets` legal picks
+/// for one buff, best VALUE first (`alive_count + Tough`, :16358). Alive,
+/// non-reserve, never an ATTACHED unit (a joined hero is bought through its
+/// host), the kind's own filter, the printed range measured centre to centre
+/// (`MoveIntent.distance_inches` :16344) and sight when the params ask for it.
+///
+/// NOT PORTED — Extended Buff Range (wave 4, :16326-16337): a candidate beyond
+/// the printed range that the relay clause would still make legal. That is its
+/// own rule with its own registry entry (`SoloController.ebr_relay_ok`), it is
+/// gated on the buffing hero carrying it, and no carrier of the six names in
+/// this block also carries it. A relayed pick this port refuses is the table
+/// buffing someone this twin does not.
+///
+/// The sort is STABLE, so a value tie keeps roster order; the GDScript's
+/// `sort_custom` is an introsort and leaves ties unspecified — the same call
+/// `reposition_artillery_for` already makes with its strict `>` (first wins).
+fn utility_targets(
+    statics: &[UnitStatic],
+    state: &State,
+    bearer: usize,
+    b: &UtilityBuff,
+    seams: Seams,
+) -> Vec<usize> {
+    let own = state.player[bearer];
+    let enemy = b.target == "enemy";
+    let from = geom::centre(&state.positions[bearer]);
+    let mut scored: Vec<(f64, usize)> = Vec::new();
+    for u in 0..state.units() {
+        if (state.player[u] == own) == enemy || state.alive[u] <= 0 || state.dormant[u] {
+            continue;
+        }
+        if seams.hero_attach && state.attached_to[u].is_some() {
+            continue;
+        }
+        if b.target == "friendly_caster" && !caster_member(statics, state, u, seams) {
+            continue;
+        }
+        let uc = ctx_of(&statics[state.roster.profile[u]], state, u);
+        if b.target == "friendly_artillery" && !uc.artillery {
+            continue;
+        }
+        let d = (geom::length(geom::sub(from, geom::centre(&state.positions[u]))) / IN2M as f32) as f64;
+        if d > b.range_in {
+            continue;
+        }
+        if b.needs_los && !los_clear(state, bearer, u) {
+            continue;
+        }
+        scored.push((state.alive[u] as f64 + uc.tough as f64, u));
+    }
+    scored.sort_by(|a, c| c.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    scored.truncate(b.max_targets.max(1) as usize);
+    scored.into_iter().map(|(_, u)| u).collect()
+}
+
+/// `main._solo_consume_once_mods` :3823-3841 — one resolved exchange spends
+/// every `once` record that was AVAILABLE to it: the attacker's own hit mods
+/// and rule grants, the defender's attackers-beneficiary mods and grants. The
+/// two roles this port has no seam for — the defender's "defense" and the
+/// shooter's "range" — are simply not in the ledger yet, so they cannot be
+/// spent either; that is the same gap, not a second one.
+fn spend_exchange(state: &mut State, att: usize, def: usize, melee: bool) {
+    mods::spend_once(state, att, &[mods::Role::AttackerOwn, mods::Role::Grant], melee);
+    mods::spend_once(state, def, &[mods::Role::VsTarget, mods::Role::Grant], melee);
+}
+
+/// `main._solo_apply_vs_marks` :16738-16771 — the ENEMY-side half of the
+/// Utility-Buff family (Unstoppable Mark). It does not run at the pre-attack
+/// slot: the pick IS the attack's committed target, so the table calls it at
+/// the attack seam itself (:3042 inside a volley group, :8035 in a charge —
+/// after Impact, before the strikes). Every bearer of the attacker's joined
+/// chain may mark once per round; the rule's base name (the entry minus
+/// " Mark") lands on the ATTACKER as a once-grant, and `ctx_live` carries it
+/// into the very rolls this seam precedes.
+fn tray_vs_marks(
+    statics: &[UnitStatic],
+    next: &mut State,
+    si: usize,
+    ti: usize,
+    dist_in: f64,
+    seams: Seams,
+) {
+    let mut bearers: Vec<usize> = vec![si];
+    if seams.hero_attach {
+        bearers.extend(next.attached[si].iter().copied());
+        if let Some(h) = next.attached_to[si] {
+            bearers.push(h);
+        }
+    }
+    for bearer in bearers {
+        if next.alive[bearer] <= 0 {
+            continue;
+        }
+        let pb = next.roster.profile[bearer];
+        for b in &statics[pb].utility_buffs {
+            if !b.vs_target || next.vs_mark_round[bearer] == next.round || dist_in > b.range_in {
+                continue;
+            }
+            // NML-936 (:16758): the printed rule picks "within 18\" IN LINE OF
+            // SIGHT", and `needs_los` may waive it from the data.
+            if b.needs_los && !los_clear(next, bearer, ti) {
+                continue;
+            }
+            next.vs_mark_round[bearer] = next.round;
+            let base = b.name.strip_suffix(" Mark").unwrap_or(b.name.as_str());
+            next.buffs[si].push(mods::LiveMod {
+                hit_mod: 0,
+                casting_mod: 0,
+                morale_mod: 0,
+                grants_rule: Rc::from(base),
+                scope: Rc::from(""),
+                attackers: false,
+                once: true,
+            });
         }
     }
 }
@@ -814,6 +974,19 @@ pub fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
     c
 }
 
+/// NML block B2b — the live-buff fold on top of an already-built context. It
+/// is a SEPARATE step, not part of `ctx_of`, so the EV imagination keeps
+/// reading the same buff-blind numbers `BattleSim._ctx_of` gives it and only
+/// the tray path sees the ledger. `melee` is the scope filter of
+/// `AiSpell.mods_for` (ai_spell.gd:390-393), not a fatigue switch.
+#[inline]
+pub fn ctx_live(mut c: Ctx, state: &State, i: usize, melee: bool) -> Ctx {
+    c.hit_mod = mods::sum(state, i, mods::Role::AttackerOwn, melee, |r| r.hit_mod);
+    c.vs_hit_mod = mods::sum(state, i, mods::Role::VsTarget, melee, |r| r.hit_mod);
+    c.unstoppable_grant = mods::granted(state, i, "Unstoppable");
+    c
+}
+
 /// `BattleSim._ctx_of(su, true)` battle_sim.gd:701-708, MELEE half: the same
 /// context plus the snapshot's fatigue flag, which the EV layer is blind to and
 /// which turns the striker's to-hit into a flat unmodified 6 (p.9).
@@ -1087,7 +1260,7 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize) -> Vec<(usize, S
         let mut sc = Scratch::default();
         melee_profiles_of(um, state.alive[mi], &mut sc);
         sc.keep = (0..um.melee.len()).collect();
-        parts.push((mi, sc, ctx_of_melee(um, state, mi)));
+        parts.push((mi, sc, ctx_live(ctx_of_melee(um, state, mi), state, mi, true)));
     }
     parts
 }
@@ -1108,7 +1281,7 @@ fn strike_phase(
 ) -> i64 {
     let parts = melee_parts(statics, next, si);
     let ut = &statics[next.roster.profile[ti]];
-    let def = ctx_of(ut, next, ti);
+    let def = ctx_live(ctx_of(ut, next, ti), next, ti, true);
     let members: Vec<crate::dice::Shooter<'_>> = parts
         .iter()
         .map(|(mi, sc, att)| {
@@ -1126,6 +1299,7 @@ fn strike_phase(
     let caused = r.caused;
     let w = shot.absorb(r);
     land_wounds(next, ti, w);
+    spend_exchange(next, si, ti, true); // main.gd:6152, per strike phase
     caused
 }
 
@@ -1180,7 +1354,12 @@ fn tray_morale(
     // reads `state.morale_bonus[i]` and `_solo_morale_bonus` (main.gd:6632) is
     // the same live read, so the ROLLED target has to be too. Reading the static
     // profile instead is a whole point of target off on every Banner unit.
-    ctx.morale_bonus = state.morale_bonus[i];
+    // B2b: the live morale records join the Banner bonus in the SAME
+    // [2,6]-clamped target the table builds (main.gd:8288-8296).
+    ctx.morale_bonus = state.morale_bonus[i]
+        + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod);
+    // main.gd:8303 — the test die spends the morale once-mods it just used.
+    // Placed after the call because `ctx` already carries the target it built.
     let (outcome, r) = crate::dice::resolve_morale_with_tray(
         &ctx,
         &us.name,
@@ -1193,6 +1372,7 @@ fn tray_morale(
         wounds_left(state, i),
         tray,
     );
+    mods::spend_once(state, i, &[mods::Role::Morale], melee);
     let self_wounds = shot.absorb(r);
     land_wounds(state, i, self_wounds);
     match outcome {
@@ -1222,6 +1402,7 @@ fn tray_charge(
     next: &mut State,
     si: usize,
     ti: usize,
+    seams: Seams,
     tray: &mut Tray,
     shot: &mut ShootResult,
 ) -> Option<usize> {
@@ -1231,6 +1412,9 @@ fn tray_charge(
         shot.mark("counter_strikes_first");
     }
     let mut by_su = impact_phase(statics, next, si, ti, tray, shot);
+    // main.gd:8035 — the charger's Mark lands after Impact and before the
+    // strikes, measured at 0" (the two units are in base contact).
+    tray_vs_marks(statics, next, si, ti, 0.0, seams);
     let mut by_tu = 0;
     let charger_last = statics[next.roster.profile[si]].ctx.unwieldy;
     for slot in 0..2 {
@@ -2262,8 +2446,12 @@ fn resolve_with(
                         }];
                         let gs: &[SplitGroup] = plan.as_deref().unwrap_or(&pooled);
                         for g in gs {
+                            // main.gd:3042 — the Mark is picked and recorded
+                            // BEFORE this group's profiles and contexts are
+                            // read (:3082), so the grant reaches this volley.
+                            tray_vs_marks(statics, &mut next, si, g.ti, g.d, seams);
                             let ut_g = &statics[next.roster.profile[g.ti]];
-                            let def = ctx_of(ut_g, &next, g.ti);
+                            let def = ctx_live(ctx_of(ut_g, &next, g.ti), &next, g.ti, false);
                             let alive_before_g = next.alive[g.ti];
                             let wounds_before_g = wounds_left(&next, g.ti);
                             let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
@@ -2297,7 +2485,7 @@ fn resolve_with(
                                     msc.keep = keep;
                                     msc.attacks = attacks;
                                 }
-                                parts.push((mi, msc, ctx_of(um, &next, mi)));
+                                parts.push((mi, msc, ctx_live(ctx_of(um, &next, mi), &next, mi, false)));
                             }
                             let r = crate::dice::resolve_volley_with_tray(
                                 &shooters_of(&parts, statics, &next),
@@ -2309,6 +2497,9 @@ fn resolve_with(
                             // roll.
                             let w = shot.absorb(r);
                             land_wounds(&mut next, g.ti, w);
+                            // main.gd:3244 — the exchange spends its own
+                            // once-mods BEFORE the post-volley morale test.
+                            spend_exchange(&mut next, si, g.ti, false);
                             // D1-B5b: the volley's morale test is the NEXT
                             // thing on the table's tray (main.gd:8248-8251),
                             // per group — inside the per-group
@@ -2369,7 +2560,7 @@ fn resolve_with(
                 // path gives it — the morale DIE is D1-B5b's, deliberately left
                 // undrawn so this PR changes the melee and nothing else.
                 if let Some((tray, shot)) = dice.as_mut() {
-                    if let Some(li) = tray_charge(statics, &mut next, si, ti, tray, shot) {
+                    if let Some(li) = tray_charge(statics, &mut next, si, ti, seams, tray, shot) {
                         // D1-B5b: the melee loser's test is a REAL die now
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.
@@ -2601,6 +2792,8 @@ mod tests {
             shroud: vec![None; 4],
             charge_no_difficult: vec![false; 4],
             charge_probe_r: vec![0.0; 4],
+            buffs: vec![Vec::new(); 4],
+            vs_mark_round: vec![-1; 4],
         }
     }
 
@@ -3015,6 +3208,283 @@ mod tests {
         for (face, want) in [(1u8, 1i64), (2, 1), (3, 2), (4, 2), (5, 3), (6, 3)] {
             assert_eq!(mend_d3(face), want);
         }
+    }
+
+    // ------------------------------- BLOCK B2b: THE BUFF-CONSUMPTION BRIDGE ---
+
+    /// `a` — two models at 0", Quality 4, one Rifle — is the bearer AND the
+    /// best-value friendly unit in range (2 alive + Tough 1 = 3 against `ah`'s
+    /// 2), so a "friendly" buff lands on itself and the very next roll of the
+    /// same activation has to read it. `b` is three enemy models at 12".
+    fn buff_line() -> (State, Vec<UnitStatic>) {
+        let mut st = four_unit_line();
+        let r = &*st.roster;
+        st.roster = Rc::new(crate::state::Roster {
+            keys: r.keys.clone(),
+            index: r.keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect(),
+            profile: vec![0, 1, 2, 3],
+        });
+        st.positions = vec![
+            vec![[0.0, 0.0, 0.0], [0.02 * IN2M, 0.0, 0.0]],
+            vec![[2.0 * IN2M, 0.0, 0.0]],
+            vec![[12.0 * IN2M, 0.0, 0.0], [12.02 * IN2M, 0.0, 0.0], [12.04 * IN2M, 0.0, 0.0]],
+            vec![],
+        ];
+        st.radii = vec![vec![IN2M; 2], vec![IN2M], vec![IN2M; 3], vec![]];
+        st.wounds = vec![vec![1; 2], vec![1], vec![1; 3], vec![]];
+        st.alive = vec![2, 1, 3, 0];
+        let mut a = UnitStatic {
+            name: "a".into(),
+            model_count: 2,
+            shoot: vec![gun("Rifle", 1, 24)],
+            melee: vec![gun("CCW", 1, 0)],
+            ..Default::default()
+        };
+        a.wounds_max = vec![1, 1];
+        a.ctx.quality = 4;
+        a.ctx.tough = 1;
+        let mut ah = UnitStatic { name: "ah".into(), model_count: 1, ..Default::default() };
+        ah.ctx.tough = 1;
+        let mut b = UnitStatic { name: "b".into(), model_count: 3, ..Default::default() };
+        b.wounds_max = vec![1, 1, 1];
+        b.ctx.defense = 4;
+        b.ctx.quality = 4;
+        b.ctx.tough = 1;
+        (st, vec![a, ah, b, UnitStatic { name: "bh".into(), ..Default::default() }])
+    }
+
+    /// One "Utility Buff" registry entry, at the family's printed defaults.
+    fn ub(name: &str) -> UtilityBuff {
+        UtilityBuff {
+            name: name.into(),
+            range_in: 12.0,
+            target: "friendly".into(),
+            max_targets: 1,
+            once: true,
+            ..Default::default()
+        }
+    }
+
+    fn buff_action(shoot: Option<&str>) -> Action {
+        Action {
+            kind: HOLD,
+            unit: "a".into(),
+            dest: None,
+            shoot: shoot.map(|s| s.to_string()),
+            charge: None,
+            patient: false,
+            split: None,
+        }
+    }
+
+    /// Runs one fixture activation on a fresh tray and hands back the state and
+    /// the report.
+    fn run_buff(st: &State, statics: &[UnitStatic], action: &Action, seed: i64) -> (State, ShootResult) {
+        let terrain = crate::terrain::Terrain::default();
+        let mut tray = Tray::seeded(seed);
+        let mut rng = crate::rng::GodotRng::new(0);
+        resolve_stochastic_tray_on_board(
+            statics, st, action, &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap()
+    }
+
+    /// B2b — Precision Attacks Buff (`hit_mod: 1`, no scope): the bearer buffs
+    /// itself at the pre-attack slot and the volley that follows in the SAME
+    /// activation rolls at 3+ instead of the unit's plain Quality 4+. The
+    /// control (no rule) and the scope negative (the same +1 printed
+    /// `scope: "melee"`, which is Precision Fighter Buff) both stay at 4+ —
+    /// so the number moves for the rule and for nothing else.
+    #[test]
+    fn precision_attacks_buff_improves_the_bearers_own_to_hit_target_by_one() {
+        let (st, mut statics) = buff_line();
+        let (_, plain) = run_buff(&st, &statics, &buff_action(Some("b")), 11);
+        assert_eq!((plain.rolls[0].kind, plain.rolls[0].count, plain.rolls[0].target), ("attack", 1, 4));
+
+        statics[0].utility_buffs = vec![UtilityBuff { hit_mod: 1, ..ub("Precision Attacks Buff") }];
+        let (next, buffed) = run_buff(&st, &statics, &buff_action(Some("b")), 11);
+        assert_eq!((buffed.rolls[0].kind, buffed.rolls[0].count, buffed.rolls[0].target), ("attack", 1, 3));
+        // "once": the exchange that used it spends it (main.gd:3244).
+        assert!(next.buffs.iter().all(|v| v.is_empty()));
+
+        statics[0].utility_buffs =
+            vec![UtilityBuff { hit_mod: 1, scope: "melee".into(), ..ub("Precision Fighter Buff") }];
+        let (next, melee_only) = run_buff(&st, &statics, &buff_action(Some("b")), 11);
+        assert_eq!(melee_only.rolls[0].target, 4, "a melee-scoped record is not a shooting bonus");
+        // It was recorded, it just did not apply — and a shooting exchange does
+        // not spend a melee record either (`mods_for`'s scope filter runs in
+        // `spend_once` too).
+        assert_eq!(next.buffs[0].len(), 1);
+    }
+
+    /// B2b — the stacking precedence: several live records SUM, and the sum
+    /// meets the situational modifier in ONE `modified_hit_target`. Two +1s
+    /// give 2+; a +1 against an Evasive defender nets 0 and leaves 4+, which
+    /// clamping twice could never produce.
+    #[test]
+    fn two_live_hit_mods_sum_before_the_single_to_hit_clamp() {
+        let (st, mut statics) = buff_line();
+        statics[0].utility_buffs = vec![
+            UtilityBuff { hit_mod: 1, ..ub("Precision Attacks Buff") },
+            UtilityBuff { hit_mod: 1, ..ub("Precision Fighter Buff") },
+        ];
+        let (_, r) = run_buff(&st, &statics, &buff_action(Some("b")), 11);
+        assert_eq!(r.rolls[0].target, 2);
+
+        statics[0].utility_buffs = vec![UtilityBuff { hit_mod: 1, ..ub("Precision Attacks Buff") }];
+        statics[2].ctx.evasive = true;
+        let (_, r) = run_buff(&st, &statics, &buff_action(Some("b")), 11);
+        assert_eq!(r.rolls[0].target, 4, "Evasive -1 and the buff +1 net to zero");
+    }
+
+    /// B2b — Precision Fighter Buff (`hit_mod: 1`, `scope: "melee"`) reaches the
+    /// MELEE to-hit target of the charge it precedes: 3+ where the bare fixture
+    /// strikes at 4+.
+    #[test]
+    fn precision_fighter_buff_reaches_the_melee_to_hit_target() {
+        let (mut st, mut statics) = buff_line();
+        st.positions[2] = vec![[2.5 * IN2M, 0.0, 0.0]];
+        st.radii[2] = vec![IN2M];
+        st.wounds[2] = vec![1];
+        st.alive[2] = 1;
+        statics[2].model_count = 1;
+        statics[2].wounds_max = vec![1];
+        let charge = Action {
+            kind: CHARGE,
+            unit: "a".into(),
+            dest: None,
+            shoot: None,
+            charge: Some("b".into()),
+            patient: false,
+            split: None,
+        };
+        let (_, plain) = run_buff(&st, &statics, &charge, 11);
+        assert_eq!(plain.rolls[0].target, 4);
+
+        statics[0].utility_buffs =
+            vec![UtilityBuff { hit_mod: 1, scope: "melee".into(), ..ub("Precision Fighter Buff") }];
+        let (_, buffed) = run_buff(&st, &statics, &charge, 11);
+        assert_eq!(buffed.rolls[0].target, 3);
+    }
+
+    /// B2b — Morale Debuff (`morale_mod: -1`, `target: "enemy"`, 18",
+    /// `needs_los`): the record lands on the enemy pick and worsens ITS morale
+    /// target by one (`morale_target(4, -1)` = 5+), then the test spends it.
+    /// Out of the printed range, and with sight blocked, nothing is recorded.
+    #[test]
+    fn morale_debuff_worsens_the_enemys_morale_target_and_is_spent_by_that_test() {
+        let (st, mut statics) = buff_line();
+        let debuff = UtilityBuff {
+            morale_mod: -1,
+            range_in: 18.0,
+            target: "enemy".into(),
+            needs_los: true,
+            ..ub("Morale Debuff")
+        };
+        statics[0].utility_buffs = vec![debuff.clone()];
+        let (mut next, shot) = run_buff(&st, &statics, &buff_action(None), 11);
+        assert!(shot.rolls.is_empty(), "the buff arm is dice-free");
+        assert_eq!(next.buffs[2].len(), 1);
+        assert_eq!(next.buffs[2][0].morale_mod, -1);
+
+        let mut tray = Tray::seeded(5);
+        let mut mshot = ShootResult::default();
+        tray_morale(&mut next, &statics[2], 2, false, &mut tray, &mut mshot);
+        assert_eq!(mshot.rolls[0].target, 5, "Quality 4+ tested at 5+ under the debuff");
+        assert!(next.buffs[2].is_empty(), "main.gd:8303 — the test die spends it");
+
+        // Out of the printed 18" range: no pick, no record.
+        let mut far = st.clone();
+        far.positions[2] = vec![[30.0 * IN2M, 0.0, 0.0]];
+        far.alive[2] = 1;
+        far.wounds[2] = vec![1];
+        far.radii[2] = vec![IN2M];
+        let (next, _) = run_buff(&far, &statics, &buff_action(None), 11);
+        assert!(next.buffs.iter().all(|v| v.is_empty()));
+
+        // In range, sight blocked: `needs_los` refuses the pick.
+        let mut dark = st.clone();
+        let mut m = vec![true; 16];
+        m[2] = false; // los_pairs[0 * 4 + 2] — a to b
+        dark.los_pairs = Some(Rc::new(m));
+        let (next, _) = run_buff(&dark, &statics, &buff_action(None), 11);
+        assert!(next.buffs.iter().all(|v| v.is_empty()));
+    }
+
+    /// B2b — Unstoppable Mark: at the ATTACK seam the bearer marks the volley's
+    /// committed target and the base rule lands on itself as a once-grant, so
+    /// this volley's wounds cut through the defender's Regeneration — no
+    /// regeneration die is drawn at all. A bearer that already marked this
+    /// round draws one.
+    #[test]
+    fn unstoppable_mark_grants_the_regeneration_bypass_for_one_exchange() {
+        let (st, mut statics) = buff_line();
+        statics[0].shoot = vec![gun("Rifle", 4, 24)]; // enough dice to land a wound
+        statics[2].ctx.defense = 6;
+        statics[2].ctx.regeneration = true;
+        statics[2].ctx.regen_target = 5;
+        statics[0].utility_buffs =
+            vec![UtilityBuff { vs_target: true, needs_los: true, range_in: 18.0, ..ub("Unstoppable Mark") }];
+
+        // Seed 13: 4 hit dice at 4+ draw [4,3,6,6], the three saves at 6+ all
+        // fail — three wounds, which is exactly what a Regeneration roll would
+        // otherwise be handed.
+        let (next, marked) = run_buff(&st, &statics, &buff_action(Some("b")), 13);
+        let landed: i64 = 3 - next.wounds[2].iter().sum::<i64>();
+        assert!(landed > 0, "the fixture has to land a wound for the bypass to be visible");
+        assert_eq!(regen_rolls(&marked), 0, "Unstoppable ignores Regeneration");
+        assert!(next.buffs.iter().all(|v| v.is_empty()), "the exchange spends the grant");
+        assert_eq!(next.vs_mark_round[0], st.round);
+
+        // Already marked this round (main.gd:16752): no grant, and the wounds
+        // go through the Regeneration roll like anyone else's.
+        let mut used = st.clone();
+        used.vs_mark_round[0] = used.round;
+        let (_, plain) = run_buff(&used, &statics, &buff_action(Some("b")), 13);
+        assert_eq!(regen_rolls(&plain), 1);
+    }
+
+    /// The defender's Regeneration batch — `regen_batch` signs it with the
+    /// DEFENDER's name and stamps it "attack".
+    fn regen_rolls(r: &ShootResult) -> usize {
+        // Filtered on the Regeneration TARGET so `b`'s own post-volley morale
+        // die — same kind, same owner — is never counted as one.
+        r.rolls.iter().filter(|x| x.kind == "attack" && x.owner == "b" && x.target == 5).count()
+    }
+
+    /// B2b — the two write-half names. Casting Buff picks by the
+    /// `friendly_caster` filter (`a` is no caster, `ah` is) and records
+    /// `casting_mod`; Primal Boost Buff records the rule GRANT on the
+    /// best-value friendly. Neither has a consumer on this core's tray path —
+    /// there is no cast die here at all, and a granted Surge cannot re-stamp a
+    /// baked weapon profile — so the proof is the record, not a number.
+    /// Without the rule on the bearer nothing is written at all.
+    #[test]
+    fn casting_and_primal_boost_buffs_land_their_records_on_the_right_pick() {
+        let (st, mut statics) = buff_line();
+        statics[1].is_caster = true;
+        statics[0].utility_buffs = vec![UtilityBuff {
+            casting_mod: 1,
+            target: "friendly_caster".into(),
+            ..ub("Casting Buff")
+        }];
+        let (next, _) = run_buff(&st, &statics, &buff_action(None), 11);
+        assert!(next.buffs[0].is_empty(), "the bearer is no caster — the filter refuses it");
+        assert_eq!(next.buffs[1].len(), 1);
+        assert_eq!(next.buffs[1][0].casting_mod, 1);
+
+        statics[0].utility_buffs = vec![UtilityBuff {
+            grants_rule: "Primal Boost".into(),
+            ..ub("Primal Boost Buff")
+        }];
+        let (next, _) = run_buff(&st, &statics, &buff_action(None), 11);
+        assert_eq!(&*next.buffs[0][0].grants_rule, "Primal Boost");
+        assert!(!crate::mods::granted(&next, 0, "Unstoppable"));
+
+        // No rule on the bearer, no record — the ledger stays empty.
+        statics[0].utility_buffs = vec![];
+        let (next, _) = run_buff(&st, &statics, &buff_action(None), 11);
+        assert!(next.buffs.iter().all(|v| v.is_empty()));
     }
 
     // ------------------------------ BLOCK B2: RE-POSITION ARTILLERY ---

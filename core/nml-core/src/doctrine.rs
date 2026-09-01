@@ -163,6 +163,7 @@ pub fn synth_state(a: &Value, b: &Value, zone_a: &Zone, zone_b: &Zone, markers: 
         los: vec![None; n], los_pairs: None,
         bands,
         shroud: vec![None; n], charge_no_difficult: vec![false; n], charge_probe_r: vec![0.0; n],
+        buffs: vec![Vec::new(); n], vs_mark_round: vec![-1; n],
     }
 }
 

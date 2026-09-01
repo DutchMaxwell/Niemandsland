@@ -95,6 +95,23 @@ pub struct Ctx {
     /// The DYNAMIC melee flag `BattleSim._ctx_of(su, true)` writes over the
     /// template (battle_sim.gd:705-707): a fatigued striker hits only on 6s.
     pub fatigued: bool,
+    // --- NML block B2b, the live-buff fold (`sim::ctx_live`). ZERO on every
+    // `ctx_of`, which is what keeps the EV imagination buff-blind exactly like
+    // `BattleSim._ctx_of` (it never sets `AiEv.profile_ev`'s `spell_hit_mod`
+    // key, ai_ev.gd:331). Only the TRAY path folds them in. ---
+    /// `_solo_spell_hit_mod(member, melee)` main.gd:3789 — the BEARER's own net.
+    pub hit_mod: i64,
+    /// `_solo_spell_hit_mod_vs(target, melee)` main.gd:3800 — the net every unit
+    /// attacking THIS one gets (`beneficiary: "attackers"`).
+    pub vs_hit_mod: i64,
+    /// A live `grants_rule: "Unstoppable"` on this unit's joined chain — the
+    /// dynamic half of `_solo_ignores_regen`'s last line (main.gd:6941,
+    /// `AiEv.has_exact_rule`). It reaches the Regeneration bypass and NOTHING
+    /// else, because the table's dice path bridges `profile["unstoppable"]`
+    /// only from the TARGET's attackers-side records (`_solo_bridge_granted_
+    /// flags` :16576-16589 folds relentless/furious/rending from the attacker,
+    /// never unstoppable).
+    pub unstoppable_grant: bool,
 }
 
 /// One conditional-AP spec — the registry `params` block of a Shatter / Tear /
@@ -246,6 +263,9 @@ pub struct UnitStatic {
     /// `RulesRegistry.unit_rule_active(gu, "Re-Position Artillery")` — the
     /// "Utility Buff" movement primitive's registry gate (block B2).
     pub reposition_artillery_active: bool,
+    /// Block B2b — every "Utility Buff" entry this unit carries, params and
+    /// all, in the table's own loop order (`utility_buffs_of`).
+    pub utility_buffs: Vec<UtilityBuff>,
     /// Rules this unit carries that the port does NOT model — reported by name
     /// with a node count instead of being silently skipped.
     pub unimplemented: Vec<Unimplemented>,
@@ -629,6 +649,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         regeneration: regen_target(reg, p) > 0,
         regen_target: regen_target(reg, p),
         fatigued: false,
+        hit_mod: 0,
+        vs_hit_mod: 0,
+        unstoppable_grant: false,
     }
 }
 
@@ -775,6 +798,88 @@ fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         sp.hit_bonus += flat;
         sp.hit_bonus_over9 += over9;
     }
+}
+
+/// One "Utility Buff" registry entry's params — `_solo_apply_utility_buffs`
+/// main.gd:16487-16545 reads exactly these keys. Baked per unit at build time
+/// because the resolver walks `RulesRegistry.unit_rules_of_primitive(member,
+/// "Utility Buff")` per bearer, once per activation.
+#[derive(Debug, Clone, Default)]
+pub struct UtilityBuff {
+    pub name: String,
+    /// `vs_target` — an ENEMY-side Mark, consumed at the attack seam
+    /// (`_solo_apply_vs_marks` :16738), never at the pre-attack slot.
+    pub vs_target: bool,
+    /// `reposition_in` — the block-B2a movement arm (Re-Position Artillery).
+    pub reposition_in: f64,
+    pub range_in: f64,
+    /// `target` — "friendly" / "friendly_caster" / "friendly_artillery" / "enemy".
+    pub target: String,
+    pub needs_los: bool,
+    pub max_targets: i64,
+    pub hit_mod: i64,
+    pub casting_mod: i64,
+    pub morale_mod: i64,
+    pub grants_rule: String,
+    pub scope: String,
+    pub once: bool,
+}
+
+/// Every "Utility Buff" entry the unit carries, in `unit_rules_of_primitive`'s
+/// own order (own rules then item grants, each base name once — rules_registry
+/// .gd:155-176). The two printed defaults that differ between the arms are
+/// resolved HERE, where `vs_target` is known: the friendly pick is 12" and
+/// sight-free (main.gd:16493/16552), the Mark is 18" and needs sight (:16752/
+/// :16758).
+fn utility_buffs_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemented>) -> Vec<UtilityBuff> {
+    let mut out = Vec::new();
+    let mut raws: Vec<&String> = p.special_rules.iter().collect();
+    raws.extend(p.item_grants.iter());
+    let map = reg.rules_for(&p.game_system);
+    let mut seen: Vec<String> = Vec::new();
+    for raw in raws {
+        let n = base_rule_name(raw);
+        if n.is_empty() || seen.iter().any(|s| *s == n) {
+            continue;
+        }
+        seen.push(n.clone());
+        let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
+        if e.primitive.as_deref() != Some("Utility Buff") {
+            continue;
+        }
+        let vs_target = e.param_b("vs_target");
+        let target = match e.param_s("target") {
+            "" => "friendly",
+            s => s,
+        };
+        out.push(UtilityBuff {
+            name: n,
+            vs_target,
+            reposition_in: e.param_f("reposition_in", 0.0),
+            range_in: e.param_f("range_in", if vs_target { 18.0 } else { 12.0 }),
+            target: target.to_string(),
+            needs_los: e.param_b_or("needs_los", vs_target),
+            max_targets: e.param_i("max_targets", 1).max(1),
+            hit_mod: e.param_i("hit_mod", 0),
+            casting_mod: e.param_i("casting_mod", 0),
+            morale_mod: e.param_i("morale_mod", 0),
+            grants_rule: e.param_s("grants_rule").to_string(),
+            scope: e.param_s("scope").to_string(),
+            once: e.param_b_or("once", true),
+        });
+        // The ledger models four knobs (hit / casting / morale / grant) and the
+        // movement arm. An entry whose whole effect is a knob it does NOT carry
+        // — `def_mod`, `defense_mod`, `ap_mod`, `move_mod`, `range_bonus_in` —
+        // would record an all-zero row that `record_buff` drops on the floor.
+        // Named here rather than skipped in silence.
+        let b = out.last().expect("just pushed");
+        if !b.vs_target && b.reposition_in <= 0.0 && b.grants_rule.is_empty()
+            && (b.hit_mod, b.casting_mod, b.morale_mod) == (0, 0, 0) {
+            un.push(Unimplemented { rule: b.name.clone(), why:
+                "Utility Buff params carry no hit/casting/morale mod and no grants_rule, so this resolver records nothing — main.gd:16534 builds the same three keys and _solo_record_spell_mod:3663 drops the all-zero row. If the rule works on the table it does so at a seam this port does not claim".into() });
+        }
+    }
+    out
 }
 
 /// The registry read behind `AiEv.stamp_conditional_ap` ai_ev.gd:291-306: the
@@ -958,6 +1063,7 @@ impl UnitStatic {
             breath_attack_active: unit_rule_active(reg, p, "Breath Attack"),
             is_hero: has_special_rule(&p.special_rules, "Hero"),
             reposition_artillery_active: unit_rule_active(reg, p, "Re-Position Artillery"),
+            utility_buffs: utility_buffs_of(reg, p, &mut unimplemented),
             unimplemented,
         }
     }
