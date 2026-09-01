@@ -69,6 +69,16 @@ pub struct Ctx {
     pub heavy_impact: i64,
     pub ravage: i64,
     pub stealth: bool,
+    /// The DEFENDER's best Stealth-primitive DATA ALIAS (Changebound et al.)
+    /// OTHER than the literal "Stealth" name, which `stealth` above (and the
+    /// fixed `STEALTH_HIT_PENALTY`/`LONG_RANGE_IN` constants) already cover
+    /// byte-identically — the registry's own "Stealth" entry is
+    /// `{hit_penalty:1, over_in:9}`, exactly those constants.
+    /// `unit.rs::stealth_alias_of`. 0 = no alias carried.
+    pub stealth_alias_penalty: i64,
+    /// The alias's own `over_in` gate (0.0 = unconditional for shooting, the
+    /// same `gate <= 0.0` reading `_solo_hit_mod_info` uses, main.gd:5602).
+    pub stealth_alias_over_in: f64,
     pub evasive: bool,
     /// `Melee Evasion` — the melee twin of Evasive (ai_ev.gd:150).
     pub melee_evasion: bool,
@@ -342,6 +352,41 @@ fn rule_on_all_models(p: &Profile, rule: &str) -> bool {
         .all(|hr| has_special_rule(hr, rule))
 }
 
+/// `_solo_hit_mod_info`'s Stealth-primitive DATA-ALIAS loop (main.gd:5588-
+/// 5610): the best (`maxi`) `hit_penalty` among the DEFENDER's Stealth-
+/// primitive rules other than the literal "Stealth" name (`n == "Stealth"`
+/// skips there too), each still gated by `_solo_rule_on_all_models`. Scans
+/// `p.special_rules` only — item-granted rules already reach it through the
+/// import's fold (the `mend_active` precedent). `terrain_within_in`
+/// (Grounded Stealth / Machine-Fog's cover gate) and `requires_stationary`
+/// (Entrenched) are NOT modelled: no per-call "moved this round" state
+/// reaches this static layer, and there is no majority-in-cover read at
+/// build time either — both stay unimplemented, like the rest of this
+/// crate's documented gaps (dice.rs:317-330).
+fn stealth_alias_of(reg: &mut Registries, p: &Profile) -> (i64, f64) {
+    let mut best_penalty = 0;
+    let mut best_over_in = 0.0;
+    let map = reg.rules_for(&p.game_system);
+    for r in &p.special_rules {
+        let name = base_rule_name(r);
+        if name.is_empty() || name == "Stealth" || !rule_on_all_models(p, &name) {
+            continue;
+        }
+        let Some(e) = map.lookup(&p.faction_folder, &name) else {
+            continue;
+        };
+        if e.primitive.as_deref() != Some("Stealth") {
+            continue;
+        }
+        let pen = e.param_i("hit_penalty", 0);
+        if pen > best_penalty {
+            best_penalty = pen;
+            best_over_in = e.param_f("over_in", 0.0);
+        }
+    }
+    (best_penalty, best_over_in)
+}
+
 /// `RulesRegistry.unit_rule_active` rules_registry.gd:132-137 — the unit carries
 /// it AND the map fields it for this (system, faction). A MISSING map answers
 /// true (the wave-1..4 fallback).
@@ -534,6 +579,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
     } else {
         0
     };
+    let (stealth_alias_penalty, stealth_alias_over_in) = stealth_alias_of(reg, p);
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -562,6 +608,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         heavy_impact: unit_rating(&p.special_rules, "Heavy Impact"),
         ravage: unit_rating(&p.special_rules, "Ravage"),
         stealth: rule_on_all_models(p, "Stealth"),
+        stealth_alias_penalty,
+        stealth_alias_over_in,
         evasive: rule_on_all_models(p, "Evasive"),
         melee_evasion: rule_on_all_models(p, "Melee Evasion"),
         fortified: rule_on_all_models(p, "Fortified"),

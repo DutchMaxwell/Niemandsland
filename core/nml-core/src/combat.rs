@@ -85,7 +85,11 @@ pub fn modified_hit_target(base_target: i64, roll_mod: i64) -> i64 {
 /// function; they are `_solo_hit_mod_info`'s own addition on top of it
 /// (main.gd:5681-5701 — Good Shot / Bad Shot / Targeting Visor), folded in
 /// here so the EV and tray callers below share one gated sum instead of each
-/// re-deriving the over-9" test.
+/// re-deriving the over-9" test. `stealth_alias_penalty`/`stealth_alias_over_in`
+/// are that SAME function's Stealth DATA-ALIAS leg (main.gd:5588-5610,
+/// 5698-5701 — Changebound et al.): "at most one" penalty, so the alias is
+/// skipped whenever the literal Stealth flag already fired over 9" — no
+/// double-dip, exactly the table's `not (stealth and over_nine)` guard.
 #[inline]
 pub fn shooting_hit_modifier(
     dist_in: f64,
@@ -95,9 +99,12 @@ pub fn shooting_hit_modifier(
     target_evasive: bool,
     shot_hit_bonus: i64,
     shot_hit_bonus_over9: i64,
+    stealth_alias_penalty: i64,
+    stealth_alias_over_in: f64,
 ) -> i64 {
     let mut m = 0;
-    if dist_in > LONG_RANGE_IN {
+    let over_nine = dist_in > LONG_RANGE_IN;
+    if over_nine {
         if attacker_artillery {
             m += ARTILLERY_SHOOTER_HIT_BONUS;
         }
@@ -108,6 +115,12 @@ pub fn shooting_hit_modifier(
             m -= ARTILLERY_TARGET_HIT_PENALTY;
         }
         m += shot_hit_bonus_over9;
+    }
+    if stealth_alias_penalty > 0
+        && !(target_stealth && over_nine)
+        && (stealth_alias_over_in <= 0.0 || dist_in > stealth_alias_over_in)
+    {
+        m -= stealth_alias_penalty;
     }
     if target_evasive {
         m -= EVASIVE_HIT_PENALTY;
@@ -363,10 +376,12 @@ pub fn profile_ev(
     } else {
         target = reliable_quality(att.quality, p.reliable);
         // ai_ev.gd:352 never reads Shot Modifier (Good Shot / Bad Shot /
-        // Targeting Visor) — the EV imagination stays blind to it, like Mend;
-        // only the tray path (dice.rs) supplies a non-zero pair.
+        // Targeting Visor) OR the Stealth data-alias family (ai_ev.gd:151's
+        // `ctx_for` reads only the literal "Stealth" name too) — the EV
+        // imagination stays blind to both, like Mend; only the tray path
+        // (dice.rs) supplies non-zero values.
         let mut shoot_mod = shooting_hit_modifier(
-            dist_in, att.artillery, def.stealth, def.artillery, def.evasive, 0, 0,
+            dist_in, att.artillery, def.stealth, def.artillery, def.evasive, 0, 0, 0, 0.0,
         );
         if p.unstoppable && shoot_mod < 0 {
             shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.
