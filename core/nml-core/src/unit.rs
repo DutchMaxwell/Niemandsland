@@ -876,7 +876,7 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemente
         if !b.vs_target && b.reposition_in <= 0.0 && b.grants_rule.is_empty()
             && (b.hit_mod, b.casting_mod, b.morale_mod) == (0, 0, 0) {
             un.push(Unimplemented { rule: b.name.clone(), why:
-                "Utility Buff params carry no hit/casting/morale mod and no grants_rule — the knob it does carry (def_mod / ap_mod / move_mod / range_bonus_in) has no ledger field and no reader in this core".into() });
+                "Utility Buff params carry no hit/casting/morale mod and no grants_rule, so this resolver records nothing — main.gd:16534 builds the same three keys and _solo_record_spell_mod:3663 drops the all-zero row. If the rule works on the table it does so at a seam this port does not claim".into() });
         }
     }
     out
