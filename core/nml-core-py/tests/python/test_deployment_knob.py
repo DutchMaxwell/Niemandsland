@@ -46,11 +46,15 @@ ARMY1 = LISTS / "alien_hives_1000.json"
 ARMY2 = LISTS / "battle_brothers_1000.json"
 SEED = 27
 
-#: `sp.result_digest` of the seed-25 default game played at HEAD 9774621 —
-#: the commit this knob landed on — with the knob absent. The byte-identity
-#: reference for the "zone" path (wall time and `dice_tally` are excluded by
-#: the digest's own law).
-DEFAULT_SEED_25_DIGEST = "95f3afeaca488ea57db57a26e420fa44d092e8dc6bb51adb8c6c35781bc974fc"
+#: `sp.result_digest` over the seed-25 default game with its `knobs` block
+#: stripped — the byte-identity reference for the "zone" path (wall time and
+#: `dice_tally` are excluded by the digest's own law, stamps by the stripping:
+#: at HEAD 9774621, the commit this knob landed on, the RAW digest was
+#: `95f3afea…`; NML-1158a (#480) then stamped `knobs.fit_blend` onto every
+#: result — popping that one key restores `95f3afea…` exactly, so the game
+#: stream is unchanged and only stamp metadata moved. The stripped pin
+#: survives future stamp additions; only an in-game or header drift trips it.
+DEFAULT_SEED_25_DIGEST = "f6cf8286c87aee17808cce00759c5f6a7ceb717396c49c4de169b7c9cee24296"
 
 
 def _lists_missing() -> bool:
@@ -116,10 +120,15 @@ def test_the_default_path_is_byte_identical_to_the_pre_change_code():
     """Step 8 / 3: a game with the knob absent must digest exactly what the
     pre-change code digested — the vintage-pin proof on a corpus seed. This is
     the test that fails if the arena branch leaked a draw into the game stream,
-    reordered the header, or stamped the zone path."""
+    reordered the header, or stamped the zone path. The knobs block is stripped
+    before hashing (`_digest_without_knobs`): stamp metadata (`deployment`,
+    `fit_blend`, …) may grow without the game moving — the raw digest at the
+    9774621 vintage is recoverable from the stripped one by re-adding exactly
+    the vintage's stamp set (proven when #480 landed: pop `fit_blend`,
+    `95f3afea…` returns)."""
     core = nml_core.load(str(REPO))
     r = sp.play_game(25, ARMY1, ARMY2, REPO, BANK_DIR, core)
-    assert sp.result_digest(r) == DEFAULT_SEED_25_DIGEST
+    assert _digest_without_knobs(r) == DEFAULT_SEED_25_DIGEST
 
 
 @pytest.mark.skipif(_lists_missing(), reason="needs the terrain bank + the 1000pt lists")
