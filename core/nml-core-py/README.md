@@ -207,3 +207,21 @@ recorded state WITH the stamp, against the recorded pick, on the act corpus's
 OWN search knobs, so the only knob the tool moves is `charge_gate`. The arena
 also rolls REAL dice and runs table rules the trainer has not ported, so whole
 GAMES still diverge; act-level equality is what this rung claims.
+
+## Mutant-killing test forge (`tools/forge_mutants.py`)
+
+Zero-cloud-token harness: for each `cargo-mutants` survivor line
+(`missed.txt` format), it asks a LOCAL Ollama model for one `#[test]` fn and
+accepts it only when the MACHINE proves the kill — spliced in, green on the
+original code, red with the mutant's diff applied, and the mutant reverted
+before a full-suite sanity pass. No cloud tokens, no trusting the model's
+opinion of its own test.
+
+```sh
+python3 tools/forge_mutants.py --survivors missed.txt --crate core/nml-core \
+    --out ~/selfplay_out/forge_run --limit 20 --apply
+```
+
+`--dry-run` builds prompts without calling the model; `--force-noop-diff` is
+the built-in RED proof (a fake no-op mutant, rejected `not_killed`). See the
+module docstring for the full accept rule and reject-reason vocabulary.
