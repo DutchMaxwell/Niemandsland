@@ -163,6 +163,45 @@ fn sixes(faces: &[u8]) -> i64 {
     faces.iter().filter(|&&f| f == 6).count() as i64
 }
 
+/// Block B6 — the extra-ATTACK-DIE form of the "unmodified 6 to hit" family
+/// (Bloodborn / Clan Warrior / Primal / Predator / Royal Warrior / Crazed /
+/// Psychotic and their book aliases, `unit.rs::stamp`'s `surge_attack` /
+/// `surge_attack_low`, `_solo_hits` main.gd:4417-4432): for each unmodified 6
+/// among `faces` — plus each unmodified 5 too, once `surge_attack_low < 6`
+/// (the Primal-Boost-style upgrade) — draw ONE more attack die at
+/// `count_target`, as its own tray slot; the extras are counted as hits but
+/// never re-trigger (`faces` here is always the ORIGINAL roll, never the
+/// extras). Shared by `resolve_volley_with_tray` and `resolve_melee_with_tray`
+/// — the table resolves both through the same `_solo_hits`.
+fn surge_attack_hits(
+    p: &ShootProfile,
+    faces: &[u8],
+    count_target: i64,
+    owner: &str,
+    tray: &mut Tray,
+    rolls: &mut Vec<Roll>,
+) -> i64 {
+    if !p.surge_attack {
+        return 0;
+    }
+    let mut xn = sixes(faces);
+    if p.surge_attack_low < 6 {
+        xn += faces.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
+    }
+    if xn <= 0 {
+        return 0;
+    }
+    let extra_faces = tray.roll(xn as usize);
+    rolls.push(Roll {
+        kind: "attack",
+        count: xn,
+        target: count_target,
+        faces: extra_faces.clone(),
+        owner: owner.into(),
+    });
+    faces_to_hits(&extra_faces, count_target as u8) as i64
+}
+
 /// `AiCombatMath.blocks_with_bane` :354-363 — each unmodified Defense 6 is
 /// replaced by the next re-roll face, in order; a re-rolled 6 still blocks.
 fn blocks_with_bane(faces: &[u8], reroll: &[u8], target: i64) -> i64 {
@@ -262,9 +301,11 @@ fn save_batch(
 /// PORTED: the to-hit target (`profile_ev`'s shooting branch verbatim —
 /// Reliable, the range/Stealth/Artillery/Evasive modifiers, Unstoppable's
 /// clamp, Versatile Attack, Precise), the unmodified-6 bonus hits of Relentless
-/// and Surge, Blast, the Rending/Destructive/on-6 AP sub-batch, Fortified,
-/// Shielded/Guarded/Cover on the save target, Bane's re-roll, Shred, the pooled
-/// Deadly multiplier and the pooled Regeneration roll.
+/// and Surge, block B6's extra-ATTACK-DIE Surge siblings (Bloodborn / Primal /
+/// Predator / Clan Warrior and their book aliases, `surge_attack_hits`), Blast,
+/// the Rending/Destructive/on-6 AP sub-batch, Fortified, Shielded/Guarded/Cover
+/// on the save target, Bane's re-roll, Shred, the pooled Deadly multiplier and
+/// the pooled Regeneration roll.
 ///
 /// NOT PORTED. Nothing here is a silent skip: everything the trainer's own
 /// profile model can SEE is flagged per activation in `unported`; everything
@@ -285,8 +326,10 @@ fn save_batch(
 /// so from the first one onward a `dice="table"` corpus is on a different
 /// stream than the recording. They are the top of the B5+ list for that reason:
 ///   * the Unpredictable die, ONE per volley before any weapon fires (:3114).
-///   * the extra-ATTACK dice of the Bloodborn / Primal / Predator / Clan
-///     Warrior family, rolled for each unmodified 6 to hit (:4454).
+///     (Block B6 ported the OTHER stream-desyncing draw this list used to name
+///     here — the extra-ATTACK dice of the Bloodborn/Primal/Predator/Clan
+///     Warrior family, :4454 — see `surge_attack_hits` and the PORTED line
+///     above.)
 ///
 /// SHOT SELECTION AND SCALING (all of them change the die COUNT, which is the
 /// largest divergence class the replay gate measures):
@@ -520,6 +563,10 @@ pub fn resolve_volley_with_tray(
             hits += sixes(&faces);
             out.mark("surge_gates");
         }
+        // Block B6 — the extra-ATTACK-DIE Surge siblings, ported (see the
+        // helper's own doc). Draws its own tray slot right after Surge's,
+        // matching `_solo_hits`'s order.
+        hits += surge_attack_hits(p, &faces, count_target, sh.owner, tray, &mut out.rolls);
         // `AiCombatMath.sergeant_bonus_hits` :493-494 — the bearer's unmodified
         // 6s, capped at its own attack share. The EV path values this
         // (combat.rs:339-342); the dice path must not be the poorer twin, even
@@ -654,9 +701,11 @@ fn melee_hit_target(p: &ShootProfile, att: &Ctx, def: &Ctx, charging: bool, uf_h
 ///
 /// PORTED: Reliable/Thrust/Evasive/Melee Evasion/Unstoppable on the to-hit, both
 /// variants of the Unpredictable die and both of its halves, Ravage, Furious's
-/// unmodified-6 bonus hits on the charge, Surge, Sergeant, Blast, the
-/// Rending/Destructive/on-6 AP sub-batch, Thrust's charge AP, Bane's re-roll,
-/// Shred, the pooled Deadly multiplier and every Regeneration roll in its place.
+/// unmodified-6 bonus hits on the charge, Surge and its block-B6 extra-ATTACK-
+/// DIE siblings (Predator Fighter et al., `surge_attack_hits`), Sergeant, Blast,
+/// the Rending/Destructive/on-6 AP sub-batch, Thrust's charge AP, Bane's
+/// re-roll, Shred, the pooled Deadly multiplier and every Regeneration roll in
+/// its place.
 ///
 /// FLAGGED per activation, never skipped in silence: `deadly` (the table lands
 /// Deadly per model with its OWN Regeneration roll on the raw unsaved count,
@@ -767,6 +816,9 @@ pub fn resolve_melee_with_tray(
                 hits += sixes(&faces);
                 out.mark("surge_gates");
             }
+            // Block B6 — the extra-ATTACK-DIE Surge siblings (Predator Fighter
+            // is melee-only, so this is the branch it actually fires on).
+            hits += surge_attack_hits(p, &faces, count_target, sh.owner, tray, &mut out.rolls);
             // Furious :4477 — the unit-level rule the table stamps onto every
             // melee profile (main.gd:4343): unmodified 6s, charge only.
             if charging && sh.att.furious {
@@ -1675,5 +1727,107 @@ mod tests {
         assert_eq!(faces_to_hits(&faces, 1), 5, "the natural 1 still fails");
         assert_eq!(faces_to_hits(&faces, 0), 0, "TARGET_NONE tests nothing");
         assert_eq!(faces_to_hits(&[], 4), 0);
+    }
+
+    // ------------------------------ block B6: the extra-ATTACK-DIE family ---
+
+    /// Seed 9 rolls exactly two unmodified 6s in an 8-die attack — the shape
+    /// of the worked corpus act (`qag_ref` s28#19: 10@5+ then a separate
+    /// 2@5+ `[6,3]`, exactly its two 6s). One extra roll of TWO dice, at the
+    /// SAME target as the primary roll (the "right slot"), and its hits fold
+    /// into the save batch.
+    #[test]
+    fn two_unmodified_sixes_draw_one_extra_roll_of_two_dice_at_the_same_target() {
+        let want_primary = Tray::seeded(9).roll(8);
+        assert_eq!(want_primary.iter().filter(|&&f| f == 6).count(), 2, "fixture: seed 9 must roll two 6s");
+        let want_extra = {
+            let mut t = Tray::seeded(9);
+            t.roll(8);
+            t.roll(2)
+        };
+        let p = [ShootProfile { surge_attack: true, ..rifle(8) }];
+        let mut tray = Tray::seeded(9);
+        let out = resolve_shooting_with_tray(&p, &[0], &[8], &shooter(4), &defender(4, 5), 12.0, &mut tray);
+        assert_eq!(out.rolls.len(), 3, "hit roll, one extra roll, one save batch: {:?}", out.rolls);
+        assert_eq!(out.rolls[0].faces, want_primary);
+        assert_eq!(out.rolls[1].kind, "attack");
+        assert_eq!(out.rolls[1].count, 2, "one extra die per unmodified 6");
+        assert_eq!(out.rolls[1].target, 4, "the same to-hit target as the primary roll");
+        assert_eq!(out.rolls[1].faces, want_extra);
+        let want_hits = faces_to_hits(&want_primary, 4) as i64 + faces_to_hits(&want_extra, 4) as i64;
+        assert_eq!(out.rolls[2].kind, "defense");
+        assert_eq!(out.rolls[2].count, want_hits, "the extras' hits are in the save batch's die count");
+    }
+
+    /// Zero unmodified 6s (seed 4) draws nothing extra — the same rifle as
+    /// above, just an unlucky roll.
+    #[test]
+    fn zero_unmodified_sixes_draws_nothing() {
+        let want_primary = Tray::seeded(4).roll(8);
+        assert_eq!(want_primary.iter().filter(|&&f| f == 6).count(), 0, "fixture: seed 4 must roll no 6s");
+        // `surge_attack_low: 6` (unboosted) matters here: seed 4 also rolls one
+        // unmodified 5, which the fixture's `rifle()` would otherwise leave at
+        // the raw i64 default 0 (< 6, silently "boosted") — the same trap
+        // `base_profile` guards against on the real construction path.
+        let p = [ShootProfile { surge_attack: true, surge_attack_low: 6, ..rifle(8) }];
+        let mut tray = Tray::seeded(4);
+        let out = resolve_shooting_with_tray(&p, &[0], &[8], &shooter(4), &defender(4, 5), 12.0, &mut tray);
+        assert_eq!(out.rolls.len(), 2, "hit roll and save batch only, no extra draw: {:?}", out.rolls);
+    }
+
+    /// NEGATIVE: the same two-six seed (9), but the weapon does not carry the
+    /// rule — `surge_attack` defaults to false, so the two 6s draw nothing.
+    #[test]
+    fn without_the_rule_two_sixes_draw_nothing() {
+        let p = [rifle(8)];
+        let mut tray = Tray::seeded(9);
+        let out = resolve_shooting_with_tray(&p, &[0], &[8], &shooter(4), &defender(4, 5), 12.0, &mut tray);
+        assert_eq!(out.rolls.len(), 2, "no `surge_attack` flag, no extra roll: {:?}", out.rolls);
+    }
+
+    /// Primal Boost et al. (`surge_attack_low: 5`): a successful unmodified 5
+    /// ALSO draws an extra die. Seed 6 at Quality 5+ rolls one 6 and two 5s
+    /// (both `>= to_hit`) — unboosted that is one extra die, boosted three.
+    #[test]
+    fn primal_boost_also_spawns_an_extra_die_on_a_successful_unmodified_five() {
+        let primary = Tray::seeded(6).roll(8);
+        assert_eq!(primary.iter().filter(|&&f| f == 6).count(), 1, "fixture: seed 6 must roll one 6");
+        assert_eq!(primary.iter().filter(|&&f| f == 5).count(), 2, "fixture: seed 6 must roll two 5s");
+        let unboosted = [ShootProfile { surge_attack: true, surge_attack_low: 6, ..rifle(8) }];
+        let mut t1 = Tray::seeded(6);
+        let out1 = resolve_shooting_with_tray(&unboosted, &[0], &[8], &shooter(5), &defender(4, 5), 12.0, &mut t1);
+        assert_eq!(out1.rolls[1].count, 1, "unboosted: only the one unmodified 6");
+        let boosted = [ShootProfile { surge_attack: true, surge_attack_low: 5, ..rifle(8) }];
+        let mut t2 = Tray::seeded(6);
+        let out2 = resolve_shooting_with_tray(&boosted, &[0], &[8], &shooter(5), &defender(4, 5), 12.0, &mut t2);
+        assert_eq!(out2.rolls[1].count, 3, "boosted: the 6 plus both successful 5s");
+    }
+
+    /// The extras NEVER re-trigger, even when one of them rolls its own
+    /// unmodified 6 (seed 75: one 6 in the primary roll, and the one extra die
+    /// that draws is itself a 6). Exactly one extra roll, never a second.
+    #[test]
+    fn the_extra_dice_never_retrigger_on_their_own_sixes() {
+        let p = [ShootProfile { surge_attack: true, ..rifle(8) }];
+        let mut tray = Tray::seeded(75);
+        let out = resolve_shooting_with_tray(&p, &[0], &[8], &shooter(4), &defender(4, 5), 12.0, &mut tray);
+        assert_eq!(out.rolls.len(), 3, "hit roll, ONE extra roll, save batch — never a second extra roll: {:?}", out.rolls);
+        assert_eq!(out.rolls[1].count, 1);
+        assert_eq!(out.rolls[1].faces, vec![6], "fixture: the one extra die is itself a natural 6");
+    }
+
+    /// Melee strikes draw their own extra attack die too (`_solo_hits` is
+    /// shared by both call sites) — the same two-six seed as the shooting
+    /// case, through `resolve_melee_with_tray` instead.
+    #[test]
+    fn melee_strikes_draw_their_own_extra_attack_die_too() {
+        let p = [ShootProfile { surge_attack: true, ..blade(8) }];
+        let att = Ctx { quality: 4, models: 1, ..Default::default() };
+        let mut tray = Tray::seeded(9);
+        let out = resolve_melee_with_tray(&[striker(&p, &[0], &[8], &att)], &defender(4, 5), "Target", false, &mut tray);
+        assert_eq!(out.rolls.len(), 3, "hit roll, one extra roll, one save batch: {:?}", out.rolls);
+        assert_eq!(out.rolls[1].kind, "attack");
+        assert_eq!(out.rolls[1].count, 2, "the same two unmodified 6s as the shooting case");
+        assert_eq!(out.rolls[1].target, 4);
     }
 }
