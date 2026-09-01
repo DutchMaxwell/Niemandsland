@@ -598,6 +598,58 @@ fn utility_targets(
     scored.into_iter().map(|(_, u)| u).collect()
 }
 
+/// `main._solo_apply_vs_marks` :16738-16771 — the ENEMY-side half of the
+/// Utility-Buff family (Unstoppable Mark). It does not run at the pre-attack
+/// slot: the pick IS the attack's committed target, so the table calls it at
+/// the attack seam itself (:3042 inside a volley group, :8035 in a charge —
+/// after Impact, before the strikes). Every bearer of the attacker's joined
+/// chain may mark once per round; the rule's base name (the entry minus
+/// " Mark") lands on the ATTACKER as a once-grant, and `ctx_live` carries it
+/// into the very rolls this seam precedes.
+fn tray_vs_marks(
+    statics: &[UnitStatic],
+    next: &mut State,
+    si: usize,
+    ti: usize,
+    dist_in: f64,
+    seams: Seams,
+) {
+    let mut bearers: Vec<usize> = vec![si];
+    if seams.hero_attach {
+        bearers.extend(next.attached[si].iter().copied());
+        if let Some(h) = next.attached_to[si] {
+            bearers.push(h);
+        }
+    }
+    for bearer in bearers {
+        if next.alive[bearer] <= 0 {
+            continue;
+        }
+        let pb = next.roster.profile[bearer];
+        for b in &statics[pb].utility_buffs {
+            if !b.vs_target || next.vs_mark_round[bearer] == next.round || dist_in > b.range_in {
+                continue;
+            }
+            // NML-936 (:16758): the printed rule picks "within 18\" IN LINE OF
+            // SIGHT", and `needs_los` may waive it from the data.
+            if b.needs_los && !los_clear(next, bearer, ti) {
+                continue;
+            }
+            next.vs_mark_round[bearer] = next.round;
+            let base = b.name.strip_suffix(" Mark").unwrap_or(b.name.as_str());
+            next.buffs[si].push(mods::LiveMod {
+                hit_mod: 0,
+                casting_mod: 0,
+                morale_mod: 0,
+                grants_rule: Rc::from(base),
+                scope: mods::Scope::Any,
+                attackers: false,
+                once: true,
+            });
+        }
+    }
+}
+
 /// One bearer's pick + move — see `tray_utility_buff`.
 fn reposition_artillery_for(
     statics: &[UnitStatic],
@@ -1338,6 +1390,7 @@ fn tray_charge(
     next: &mut State,
     si: usize,
     ti: usize,
+    seams: Seams,
     tray: &mut Tray,
     shot: &mut ShootResult,
 ) -> Option<usize> {
@@ -1347,6 +1400,9 @@ fn tray_charge(
         shot.mark("counter_strikes_first");
     }
     let mut by_su = impact_phase(statics, next, si, ti, tray, shot);
+    // main.gd:8035 — the charger's Mark lands after Impact and before the
+    // strikes, measured at 0" (the two units are in base contact).
+    tray_vs_marks(statics, next, si, ti, 0.0, seams);
     let mut by_tu = 0;
     let charger_last = statics[next.roster.profile[si]].ctx.unwieldy;
     for slot in 0..2 {
@@ -2378,6 +2434,10 @@ fn resolve_with(
                         }];
                         let gs: &[SplitGroup] = plan.as_deref().unwrap_or(&pooled);
                         for g in gs {
+                            // main.gd:3042 — the Mark is picked and recorded
+                            // BEFORE this group's profiles and contexts are
+                            // read (:3082), so the grant reaches this volley.
+                            tray_vs_marks(statics, &mut next, si, g.ti, g.d, seams);
                             let ut_g = &statics[next.roster.profile[g.ti]];
                             let def = ctx_live(ctx_of(ut_g, &next, g.ti), &next, g.ti, false);
                             let alive_before_g = next.alive[g.ti];
@@ -2485,7 +2545,7 @@ fn resolve_with(
                 // path gives it — the morale DIE is D1-B5b's, deliberately left
                 // undrawn so this PR changes the melee and nothing else.
                 if let Some((tray, shot)) = dice.as_mut() {
-                    if let Some(li) = tray_charge(statics, &mut next, si, ti, tray, shot) {
+                    if let Some(li) = tray_charge(statics, &mut next, si, ti, seams, tray, shot) {
                         // D1-B5b: the melee loser's test is a REAL die now
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.
