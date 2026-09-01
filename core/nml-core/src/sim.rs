@@ -470,16 +470,12 @@ pub const REPOSITION_MOVE_IN: f32 = 9.0;
 /// to 9", clamped so no model leaves the table (`_axis_scale` :8911-8915).
 /// Dice-free start to finish, matching the table exactly.
 ///
-/// The rest of the "Utility Buff" family — the friendly hit/casting/morale
-/// buffs (Casting Buff, Morale Debuff, Precision Attacks/Fighter Buff,
-/// Primal Boost Buff) and the enemy-side Mark (Unstoppable Mark) — is NOT
-/// ported here: their table-side consumption (`_solo_record_spell_mod` read
-/// back at the hit/cast/morale roll, and the dynamic rule-grant bridge onto
-/// a weapon profile, main.gd:3722-3760) has no Rust twin at all yet —
-/// `state.mods` is WRITTEN by spell buffs (`apply_cast_effect` above) but
-/// read NOWHERE outside JSON serialization (io.rs), so stamping it here
-/// would silently do nothing downstream. That consumption wiring is its own
-/// ticket (block B2b), not a same-shape continuation of this one.
+/// The rest of the family — the friendly/enemy modifier buffs (Casting Buff,
+/// Morale Debuff, Precision Attacks Buff, Precision Fighter Buff, Primal Boost
+/// Buff) — lands as a RECORD on the picked unit's `State.buffs` ledger, which
+/// `ctx_live` folds into the to-hit and morale targets of every later tray roll
+/// (block B2b). The enemy-side Marks (`vs_target`) are skipped here on purpose:
+/// they belong to the ATTACK seam, `tray_vs_marks`.
 pub(crate) fn tray_utility_buff(statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams, cover: Cover) {
     if next.alive[si] <= 0 {
         return;
@@ -493,10 +489,44 @@ pub(crate) fn tray_utility_buff(statics: &[UnitStatic], next: &mut State, si: us
         bearers.extend(next.attached[si].iter().copied());
     }
     for &bearer in &bearers {
-        if next.alive[bearer] > 0 && statics[next.roster.profile[bearer]].reposition_artillery_active {
+        if next.alive[bearer] <= 0 {
+            continue;
+        }
+        let pb = next.roster.profile[bearer];
+        if statics[pb].reposition_artillery_active {
             reposition_artillery_for(statics, next, bearer, seams, terrain);
         }
+        for b in &statics[pb].utility_buffs {
+            // :16495 the Mark arm and :16497 the movement arm both `continue`
+            // out of the table's own loop before the pick below.
+            if b.vs_target || b.reposition_in > 0.0 {
+                continue;
+            }
+            for ti in utility_targets(statics, next, bearer, b, seams) {
+                record_buff(next, ti, b);
+            }
+        }
     }
+}
+
+/// `main._solo_record_spell_mod` :3649-3670 — one record onto the picked
+/// unit's ledger, with the GDScript's own two guards: a record with neither a
+/// modifier nor a grant never lands (:3653/:3663). `beneficiary` is hard-coded
+/// "" at the Utility-Buff call site (:16541), so these are always the bearer's
+/// own net, never an attackers-side one.
+fn record_buff(state: &mut State, ti: usize, b: &UtilityBuff) {
+    if b.hit_mod == 0 && b.casting_mod == 0 && b.morale_mod == 0 && b.grants_rule.is_empty() {
+        return;
+    }
+    state.buffs[ti].push(mods::LiveMod {
+        hit_mod: b.hit_mod,
+        casting_mod: b.casting_mod,
+        morale_mod: b.morale_mod,
+        grants_rule: Rc::from(b.grants_rule.as_str()),
+        scope: mods::Scope::of(&b.scope),
+        attackers: false,
+        once: b.once,
+    });
 }
 
 /// `RadialMenu._caster_member_of` radial_menu.gd:489-499 — the unit itself or
