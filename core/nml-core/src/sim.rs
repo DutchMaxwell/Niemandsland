@@ -30,6 +30,8 @@ use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
 use crate::mv::CLEARANCE_EPS_IN;
 use crate::terrain::{base_in_terrain, gives_cover, is_dangerous, Terrain};
 use crate::unit::{Ctx, UnitStatic, ShootProfile, UtilityBuff};
+#[cfg(test)]
+use crate::unit::GrowthRule;
 use crate::{CONTROL_EPS, IN2M};
 
 /// `BattleSim.CONTACT_IN` battle_sim.gd:725 — the charge's contact ring. No
@@ -1060,11 +1062,69 @@ pub fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
 /// the tray path sees the ledger. `melee` is the scope filter of
 /// `AiSpell.mods_for` (ai_spell.gd:390-393), not a fatigue switch.
 #[inline]
-pub fn ctx_live(mut c: Ctx, state: &State, i: usize, melee: bool) -> Ctx {
+pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, melee: bool) -> Ctx {
     c.hit_mod = mods::sum(state, i, mods::Role::AttackerOwn, melee, |r| r.hit_mod);
     c.vs_hit_mod = mods::sum(state, i, mods::Role::VsTarget, melee, |r| r.hit_mod);
     c.unstoppable_grant = mods::granted(state, i, "Unstoppable");
+    let (ap, hit) = growth_bonus_of(statics, state, i);
+    c.growth_ap_mod = ap;
+    c.growth_hit_mod = hit;
     c
+}
+
+/// Block B7 — `_solo_growth_attack_bonus` main.gd:17069, folded per
+/// `_growth_facet_bonus` (:17060): this unit's own marker COUNT times its
+/// carried "Growth Markers" rule's `*_per_marker`/`*_per_two` rates, AP and
+/// hit summed separately. `state.growth_markers` is a single counter (see
+/// `unit::growth_of`), so a unit carrying two such rules would double-count —
+/// out of the training pool's scope.
+fn growth_bonus_of(statics: &[UnitStatic], state: &State, i: usize) -> (i64, i64) {
+    let markers = state.growth_markers[i];
+    if markers <= 0 {
+        return (0, 0);
+    }
+    let mut ap = 0;
+    let mut hit = 0;
+    for g in &statics[state.roster.profile[i]].growth {
+        ap += g.ap_per_marker * markers + g.ap_per_two * (markers / 2);
+        hit += g.hit_per_marker * markers + g.hit_per_two * (markers / 2);
+    }
+    (ap, hit)
+}
+
+/// `_solo_growth_round_start` main.gd:16984 — the per-round marker for a
+/// `per_round` Growth Markers rule, ticked once per ROUND (`growth_round`
+/// gate, the `hit_and_run_round` shape) and blocked while Shaken. This core
+/// has no whole-board round-start phase, so it ticks lazily at this unit's
+/// own next activation — the only point its OWN marker count is ever read.
+/// Dice-free, tray path only (`resolve_with`'s `dice.is_some()` gate).
+fn growth_round_start(statics: &[UnitStatic], next: &mut State, si: usize, shaken: bool) {
+    if next.growth_round[si] == next.round {
+        return;
+    }
+    let us = &statics[next.roster.profile[si]];
+    let Some(cap) = us.growth.iter().find(|g| g.per_round).map(|g| g.max_markers) else {
+        return;
+    };
+    next.growth_round[si] = next.round;
+    if !shaken && next.growth_markers[si] < cap {
+        next.growth_markers[si] += 1;
+    }
+}
+
+/// `_solo_growth_on_kill` main.gd:17021 — Piercing/Precision Frenzy: +1
+/// marker when this action just fully destroyed the target, capped at the
+/// rule's own `max_markers`. Called with the WIPING side's own index, never a
+/// per-member split (main.gd credits the acting `attacker`/`charger` GameUnit,
+/// not the individual model or weapon that landed the last wound).
+fn growth_on_kill(statics: &[UnitStatic], next: &mut State, si: usize) {
+    let us = &statics[next.roster.profile[si]];
+    let Some(cap) = us.growth.iter().find(|g| g.on_kill).map(|g| g.max_markers) else {
+        return;
+    };
+    if next.growth_markers[si] < cap {
+        next.growth_markers[si] += 1;
+    }
 }
 
 /// `BattleSim._ctx_of(su, true)` battle_sim.gd:701-708, MELEE half: the same
@@ -1340,7 +1400,7 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize) -> Vec<(usize, S
         let mut sc = Scratch::default();
         melee_profiles_of(um, state.alive[mi], &mut sc);
         sc.keep = (0..um.melee.len()).collect();
-        parts.push((mi, sc, ctx_live(ctx_of_melee(um, state, mi), state, mi, true)));
+        parts.push((mi, sc, ctx_live(ctx_of_melee(um, state, mi), statics, state, mi, true)));
     }
     parts
 }
@@ -1361,7 +1421,7 @@ fn strike_phase(
 ) -> i64 {
     let parts = melee_parts(statics, next, si);
     let ut = &statics[next.roster.profile[ti]];
-    let def = ctx_live(ctx_of(ut, next, ti), next, ti, true);
+    let def = ctx_live(ctx_of(ut, next, ti), statics, next, ti, true);
     let members: Vec<crate::dice::Shooter<'_>> = parts
         .iter()
         .map(|(mi, sc, att)| {
@@ -2450,6 +2510,14 @@ fn resolve_with(
         tray_utility_buff(statics, &mut next, si, seams, cover);
     }
 
+    // --- GROWTH MARKERS (main.gd:16984), the per-round tick lazily anchored
+    // to this unit's own next activation — tray path only. See
+    // `growth_round_start`; dice-free, `was_shaken` is the round-start
+    // reading (captured before this activation's own moves/tests run it).
+    if dice.is_some() {
+        growth_round_start(statics, &mut next, si, was_shaken);
+    }
+
     // --- shoot (battle_sim.gd:608-630); HOLD and ADVANCE only ---
     if !shoot_key.is_empty() && (kind == HOLD || kind == ADVANCE) {
         if moved {
@@ -2549,7 +2617,7 @@ fn resolve_with(
                             // read (:3082), so the grant reaches this volley.
                             tray_vs_marks(statics, &mut next, si, g.ti, g.d, seams);
                             let ut_g = &statics[next.roster.profile[g.ti]];
-                            let def = ctx_live(ctx_of(ut_g, &next, g.ti), &next, g.ti, false);
+                            let def = ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false);
                             let alive_before_g = next.alive[g.ti];
                             let wounds_before_g = wounds_left(&next, g.ti);
                             let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
@@ -2583,7 +2651,7 @@ fn resolve_with(
                                     msc.keep = keep;
                                     msc.attacks = attacks;
                                 }
-                                parts.push((mi, msc, ctx_live(ctx_of(um, &next, mi), &next, mi, false)));
+                                parts.push((mi, msc, ctx_live(ctx_of(um, &next, mi), statics, &next, mi, false)));
                             }
                             let r = crate::dice::resolve_volley_with_tray(
                                 &shooters_of(&parts, statics, &next),
@@ -2595,6 +2663,13 @@ fn resolve_with(
                             // roll.
                             let w = shot.absorb(r);
                             land_wounds(&mut next, g.ti, w);
+                            // Coverage wave — growth markers (Precision
+                            // Frenzy): main.gd:3228/9934 credit the shooter's
+                            // own kill marker when this volley just fully
+                            // destroyed its target.
+                            if alive_before_g > 0 && next.alive[g.ti] <= 0 {
+                                growth_on_kill(statics, &mut next, si);
+                            }
                             // main.gd:3244 — the exchange spends its own
                             // once-mods BEFORE the post-volley morale test.
                             spend_exchange(&mut next, si, g.ti, false);
@@ -2664,6 +2739,15 @@ fn resolve_with(
                         // expected-value oracle for the outcome.
                         let ul = &statics[next.roster.profile[li]];
                         tray_morale(&mut next, ul, li, true, tray, shot);
+                    }
+                    // Coverage wave — growth markers (Defensive Frenzy):
+                    // main.gd:8137-8140 credits the WIPING side's own kill
+                    // marker, win-by-wipe only — a mutual wipe or a fight
+                    // that leaves both sides standing earns nothing.
+                    if next.alive[ti] <= 0 && next.alive[si] > 0 {
+                        growth_on_kill(statics, &mut next, si);
+                    } else if next.alive[si] <= 0 && next.alive[ti] > 0 {
+                        growth_on_kill(statics, &mut next, ti);
                     }
                 } else {
                     // The charger strikes: charging profiles, its OWN fatigue state
@@ -2909,6 +2993,8 @@ mod tests {
             buffs: vec![Vec::new(); 4],
             vs_mark_round: vec![-1; 4],
             hit_and_run_round: vec![-1; 4],
+            growth_markers: vec![0; 4],
+            growth_round: vec![-1; 4],
         }
     }
 
@@ -4082,5 +4168,101 @@ mod tests {
         tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Board(&board));
         assert!((st.positions[0][0][0] - (-36.0 * IN2M)).abs() < 1e-6, "got {:?}", st.positions[0]);
         assert_eq!(st.hit_and_run_round[0], st.round);
+    }
+
+    // -------------------------------------- block B7: Growth Markers ---
+
+    /// `_solo_growth_round_start` main.gd:16984: +1 marker at this unit's own
+    /// next activation, once per ROUND (a second call the same round is a
+    /// no-op), blocked while Shaken (main.gd:17005-17009 — the round is still
+    /// consumed, only the marker is not), capped at `max_markers`.
+    #[test]
+    fn growth_round_start_ticks_once_per_round_caps_and_blocks_while_shaken() {
+        let mut st = four_unit_line();
+        let mut statics = vec![UnitStatic::default()];
+        statics[0].growth =
+            vec![GrowthRule { per_round: true, max_markers: 2, ap_per_two: 1, ..Default::default() }];
+        st.round = 1;
+        growth_round_start(&statics, &mut st, 0, false);
+        assert_eq!((st.growth_markers[0], st.growth_round[0]), (1, 1));
+
+        growth_round_start(&statics, &mut st, 0, false); // same round: no-op
+        assert_eq!(st.growth_markers[0], 1);
+
+        st.round = 2;
+        growth_round_start(&statics, &mut st, 0, true); // Shaken: round consumed, no marker
+        assert_eq!((st.growth_markers[0], st.growth_round[0]), (1, 2));
+
+        st.round = 3;
+        growth_round_start(&statics, &mut st, 0, false);
+        assert_eq!(st.growth_markers[0], 2, "cap reached");
+        st.round = 4;
+        growth_round_start(&statics, &mut st, 0, false);
+        assert_eq!(st.growth_markers[0], 2, "capped: a further round earns nothing more");
+    }
+
+    /// `_solo_growth_on_kill` main.gd:17021: +1 marker per call, capped; a
+    /// unit with no "on_kill" Growth Markers rule at all is untouched — the
+    /// no-bearer negative.
+    #[test]
+    fn growth_on_kill_caps_and_ignores_a_non_carrier() {
+        let mut st = four_unit_line();
+        let mut statics = vec![UnitStatic::default()];
+        statics[0].growth =
+            vec![GrowthRule { on_kill: true, max_markers: 2, hit_per_marker: 1, ..Default::default() }];
+        growth_on_kill(&statics, &mut st, 0);
+        growth_on_kill(&statics, &mut st, 0);
+        growth_on_kill(&statics, &mut st, 0);
+        assert_eq!(st.growth_markers[0], 2, "capped at max_markers");
+
+        let mut st2 = four_unit_line();
+        let bare = vec![UnitStatic::default()];
+        growth_on_kill(&bare, &mut st2, 0);
+        assert_eq!(st2.growth_markers[0], 0, "no Growth Markers rule at all: untouched");
+    }
+
+    /// Integration, end to end through `resolve_with`/`resolve_stochastic_
+    /// tray_on_board`: two HOLD activations bank a marker each (the per-round
+    /// tick fires on the bearer's OWN activation, `growth_round` proving each
+    /// round only ticked once), and the THIRD round's real shot already
+    /// carries the AP those two rounds banked — the round/ledger replay proof.
+    #[test]
+    fn growth_ticks_through_resolve_with_and_then_shifts_the_next_shots_save() {
+        let (mut st, mut statics) = buff_line();
+        statics[0].growth =
+            vec![GrowthRule { per_round: true, max_markers: 4, ap_per_two: 1, ..Default::default() }];
+        let terrain = crate::terrain::Terrain::default();
+        let mut rng = crate::rng::GodotRng::new(0);
+        st.round = 1;
+        let mut tray = Tray::seeded(11);
+        let (next1, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(None), &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!((next1.growth_markers[0], next1.growth_round[0]), (1, 1));
+
+        let mut st2 = next1;
+        st2.round = 2;
+        let mut tray = Tray::seeded(12);
+        let (next2, _) = resolve_stochastic_tray_on_board(
+            &statics, &st2, &buff_action(None), &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(next2.growth_markers[0], 2, "each round ticks once — growth_round gates a repeat");
+
+        let mut st3 = next2;
+        st3.round = 3;
+        // More attacks than `buff_line`'s plain 1 — guarantees at least one
+        // hit lands (matching `a_volley_draws_hit_dice_then_one_save_batch_
+        // of_exactly_the_hits`'s own seed-27/6-attack pairing), so the save
+        // roll this assertion reads actually gets drawn.
+        statics[0].shoot = vec![gun("Rifle", 6, 24)];
+        let mut tray = Tray::seeded(27);
+        let (_, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st3, &buff_action(Some("b")), &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(shot.rolls[1].target, 5,
+            "2 markers banked over 2 rounds -> AP(+1) on this round's shot (Defense 4+ becomes 5+)");
     }
 }

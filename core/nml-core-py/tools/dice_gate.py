@@ -260,15 +260,25 @@ def bearer_names(profile: dict) -> set[str]:
 #: ANOTHER "attack" roll at the SAME target (main.gd:4417-4432 draws it right
 #: after the primary hit die, nothing else rolls between them).
 EXTRA_ATTACK_DIE = object()
+#: BLOCK B7 (Growth Markers): the SAME target-shift shape as B4 — Piercing
+#: Growth's AP delta and Precision Frenzy's hit delta each move an EXISTING
+#: attack roll's target, not a die of their own.
 RULE_ROLL_SHAPE: dict[str, tuple[int, int] | None | object] = {
     "Mend": (1, 1), "Breath Attack": (1, 2),
     "Good Shot": None, "Bad Shot": None, "Targeting Visor": None,
+    "Piercing Growth": None, "Precision Frenzy": None,
     "Bloodborn": EXTRA_ATTACK_DIE, "Clan Warrior": EXTRA_ATTACK_DIE,
     "Primal": EXTRA_ATTACK_DIE, "Predator": EXTRA_ATTACK_DIE,
     "Predator Fighter": EXTRA_ATTACK_DIE, "Predator Shooter": EXTRA_ATTACK_DIE,
     "Royal Warrior": EXTRA_ATTACK_DIE, "Crazed": EXTRA_ATTACK_DIE,
     "Psychotic": EXTRA_ATTACK_DIE,
 }
+
+#: Unlike B4's family (shooting only), Piercing Growth's AP facet reaches
+#: melee too — `_solo_attack_groups` adds it to `prof["ap"]` regardless of
+#: which the caller built profiles for (main.gd:4287). The one name the
+#: shooting-only `None`-shape guard below must let a CHARGE act through for.
+NONE_SHAPE_MELEE_OK = frozenset({"Piercing Growth"})
 
 #: BLOCK B2b (the Utility-Buff family) is a THIRD shape, and it is NOT
 #: `RULE_ROLL_SHAPE`'s `None`: those rules draw no die of their own at all —
@@ -422,7 +432,8 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 # "attack", so without this the coarse "any attack roll"
                 # match would mistake a Good-Shot-bearer's charge for the
                 # rule's own slot.
-                if RULE_ROLL_SHAPE.get(only_rule, (1, 1)) is None and cls != "shooting":
+                if RULE_ROLL_SHAPE.get(only_rule, (1, 1)) is None and cls != "shooting" \
+                        and not (cls == "melee" and only_rule in NONE_SHAPE_MELEE_OK):
                     continue
                 unit_key = (act.get("pick") or {}).get("unit_key") or action.get("unit")
                 prof = head["profiles"].get(unit_key) or {}

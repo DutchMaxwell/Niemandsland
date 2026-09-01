@@ -112,6 +112,22 @@ pub struct Ctx {
     /// flags` :16576-16589 folds relentless/furious/rending from the attacker,
     /// never unstoppable).
     pub unstoppable_grant: bool,
+    // --- Block B7, the Growth-Marker family. ZERO on every `ctx_of` (baked
+    // into `ctx_for` below), like `hit_mod` — only `sim::ctx_live` reads the
+    // live marker count and folds it in, so the EV imagination stays
+    // growth-blind exactly like `BattleSim._ctx_of` (`ai_ev.gd`/`ai_combat_
+    // math.gd`/`battle_sim.gd` never mention "growth"). Set for every
+    // `ctx_live` call regardless of attacker/defender role — only the
+    // ATTACKER side is ever read downstream, the same shape as
+    // `unstoppable_grant`. ---
+    /// `_solo_growth_attack_bonus(member).get("ap")` main.gd:17069/:4287 — the
+    /// bearer's own marker-driven AP delta, added to `ShootProfile.ap` on both
+    /// the shooting and the melee tray (Piercing Growth/Frenzy).
+    pub growth_ap_mod: i64,
+    /// The same bonus's `"hit"` half, main.gd:17069/:5677-5680 — folded into
+    /// the SHOOTING to-hit target only (`_solo_hit_mod_info`'s melee branch
+    /// returns before that code runs, main.gd:5608-5648).
+    pub growth_hit_mod: i64,
 }
 
 /// One conditional-AP spec — the registry `params` block of a Shatter / Tear /
@@ -300,6 +316,10 @@ pub struct UnitStatic {
     /// Block B2b — every "Utility Buff" entry this unit carries, params and
     /// all, in the table's own loop order (`utility_buffs_of`).
     pub utility_buffs: Vec<UtilityBuff>,
+    /// Block B7 — every "Growth Markers" entry this unit carries whose params
+    /// this port consumes (`growth_of`); the live marker count itself lives on
+    /// `State.growth_markers`, not here.
+    pub growth: Vec<GrowthRule>,
     /// Rules this unit carries that the port does NOT model — reported by name
     /// with a node count instead of being silently skipped.
     pub unimplemented: Vec<Unimplemented>,
@@ -692,6 +712,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         hit_mod: 0,
         vs_hit_mod: 0,
         unstoppable_grant: false,
+        growth_ap_mod: 0,
+        growth_hit_mod: 0,
     }
 }
 
@@ -937,6 +959,69 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemente
     out
 }
 
+/// One "Growth Markers" registry entry — `_solo_growth_markers`/`_growth_
+/// facet_bonus` main.gd:16978/17060. Block B7 consumes only the two facets a
+/// LIVE training-pool carrier actually uses, the ones `_solo_growth_attack_
+/// bonus` folds into the tray (main.gd:4287 AP, :5675-5680 shooting-only hit):
+/// Piercing Growth (`per_round`, `ap_per_two`) and Precision Frenzy
+/// (`on_kill`, `hit_per_marker`). Defensive Frenzy/Growth (`defense_*`),
+/// Fortified Growth (`enemy_ap_per_two`, the defender-side sister at
+/// main.gd:17084) and Regenerative Strength (`on_ignore_wound`, extra
+/// attacks) are registry-gated and would be STAMPED by the loop below, but
+/// carry none of the four fields this struct reads — `growth_of` reports
+/// them instead of silently modelling them as inert.
+#[derive(Debug, Clone, Default)]
+pub struct GrowthRule {
+    pub name: String,
+    pub per_round: bool,
+    pub on_kill: bool,
+    pub max_markers: i64,
+    pub ap_per_marker: i64,
+    pub ap_per_two: i64,
+    pub hit_per_marker: i64,
+    pub hit_per_two: i64,
+}
+
+/// Every "Growth Markers" entry the unit carries (own rules + item grants,
+/// `unit_rules_of_primitive`'s own order/de-dup — rules_registry.gd:155-176).
+/// `state.growth_markers` is ONE counter per unit (see `sim::growth_bonus_
+/// of`): the training pool never carries two such rules on one bearer, so a
+/// unit with both would wrongly share one count — out of this block's scope.
+fn growth_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemented>) -> Vec<GrowthRule> {
+    let mut out = Vec::new();
+    let mut raws: Vec<&String> = p.special_rules.iter().collect();
+    raws.extend(p.item_grants.iter());
+    let map = reg.rules_for(&p.game_system);
+    let mut seen: Vec<String> = Vec::new();
+    for raw in raws {
+        let n = base_rule_name(raw);
+        if n.is_empty() || seen.iter().any(|s| *s == n) {
+            continue;
+        }
+        seen.push(n.clone());
+        let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
+        if e.primitive.as_deref() != Some("Growth Markers") {
+            continue;
+        }
+        let g = GrowthRule {
+            name: n,
+            per_round: e.param_b("per_round"),
+            on_kill: e.param_b("on_kill"),
+            max_markers: e.param_i("max_markers", 4),
+            ap_per_marker: e.param_i("ap_per_marker", 0),
+            ap_per_two: e.param_i("ap_per_two", 0),
+            hit_per_marker: e.param_i("hit_per_marker", 0),
+            hit_per_two: e.param_i("hit_per_two", 0),
+        };
+        if (g.ap_per_marker, g.ap_per_two, g.hit_per_marker, g.hit_per_two) == (0, 0, 0, 0) {
+            un.push(Unimplemented { rule: g.name.clone(), why:
+                "Growth Markers params carry no ap/hit facet — block B7 only consumes the attack-bonus facets (main.gd:4287/:5675-5680); defense_per_marker/defense_per_two/enemy_ap_per_two/on_ignore_wound are not read".into() });
+        }
+        out.push(g);
+    }
+    out
+}
+
 /// The registry read behind `AiEv.stamp_conditional_ap` ai_ev.gd:291-306: the
 /// conditional-AP spec of ONE rule name (None when the book has no entry, or an
 /// entry without a `condition` key — the presence of that key IS the gate) plus
@@ -1122,6 +1207,7 @@ impl UnitStatic {
                 || unit_rule_active(reg, p, "Guerrilla")
                 || unit_rule_active(reg, p, "Harassing"),
             utility_buffs: utility_buffs_of(reg, p, &mut unimplemented),
+            growth: growth_of(reg, p, &mut unimplemented),
             unimplemented,
         }
     }
