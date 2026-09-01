@@ -250,9 +250,24 @@ def bearer_names(profile: dict) -> set[str]:
 #: and its `target` is Quality +-1 (not a fixed number). `None` marks that:
 #: "any 'attack' roll of a bearer counts as the rule's own slot", the only
 #: definition that makes sense for a modifier instead of a draw.
-RULE_ROLL_SHAPE: dict[str, tuple[int, int] | None] = {
+#:
+#: BLOCK B6 (the extra-ATTACK-DIE Surge siblings — Bloodborn / Clan Warrior /
+#: Primal / Predator / Royal Warrior / Crazed / Psychotic) is a FOURTH shape:
+#: it IS a separate die (unlike B4), but neither its count (one per unmodified
+#: 6/5) nor its target (the bearer's own ordinary to-hit target) is fixed —
+#: so `(count, target)` cannot name it either. Its shape is POSITIONAL
+#: instead: `EXTRA_ATTACK_DIE` marks the roll that immediately follows
+#: ANOTHER "attack" roll at the SAME target (main.gd:4417-4432 draws it right
+#: after the primary hit die, nothing else rolls between them).
+EXTRA_ATTACK_DIE = object()
+RULE_ROLL_SHAPE: dict[str, tuple[int, int] | None | object] = {
     "Mend": (1, 1), "Breath Attack": (1, 2),
     "Good Shot": None, "Bad Shot": None, "Targeting Visor": None,
+    "Bloodborn": EXTRA_ATTACK_DIE, "Clan Warrior": EXTRA_ATTACK_DIE,
+    "Primal": EXTRA_ATTACK_DIE, "Predator": EXTRA_ATTACK_DIE,
+    "Predator Fighter": EXTRA_ATTACK_DIE, "Predator Shooter": EXTRA_ATTACK_DIE,
+    "Royal Warrior": EXTRA_ATTACK_DIE, "Crazed": EXTRA_ATTACK_DIE,
+    "Psychotic": EXTRA_ATTACK_DIE,
 }
 
 #: BLOCK B2b (the Utility-Buff family) is a THIRD shape, and it is NOT
@@ -273,20 +288,25 @@ DICE_FREE_RULES = frozenset({
 })
 
 
-def is_rule_roll(r: dict, only_rule: str) -> bool:
+def is_rule_roll(r: dict, only_rule: str, prev: dict | None = None) -> bool:
     """A count-1 "attack" roll at the rule's own target — OR, for a `None`
-    shape (block B4's target-shift family), any "attack" roll at all. Bearer-
-    gated at the call site (`only_rule not in bearer_names(prof)`), so a
-    count-1 target-2+ ordinary to-hit die never gets mistaken for the rule's
-    own draw unless the SAME unit also happens to carry the rule — and for a
-    `None` shape, EVERY attack roll of a bearer's own shooting act counts,
-    coarser than the other rules' by design (see `RULE_ROLL_SHAPE`). A rule in
+    shape (block B4's target-shift family), any "attack" roll at all — OR, for
+    `EXTRA_ATTACK_DIE` (block B6), an "attack" roll immediately following
+    ANOTHER "attack" roll (`prev`, the roll at `block[i-1]`, `None` for `r`
+    itself being the block's first roll) at the SAME target. Bearer-gated at
+    the call site (`only_rule not in bearer_names(prof)`), so a count-1
+    target-2+ ordinary to-hit die never gets mistaken for the rule's own draw
+    unless the SAME unit also happens to carry the rule — and for a `None`
+    shape, EVERY attack roll of a bearer's own shooting act counts, coarser
+    than the other rules' by design (see `RULE_ROLL_SHAPE`). A rule in
     `DICE_FREE_RULES` has no roll of its own at all and never matches."""
     if only_rule in DICE_FREE_RULES:
         return False   # block B2b: there is no roll of its own to find
     if r.get("roll_kind") != "attack":
         return False
     shape = RULE_ROLL_SHAPE.get(only_rule, (1, 1))
+    if shape is EXTRA_ATTACK_DIE:
+        return prev is not None and prev.get("roll_kind") == "attack" and r.get("target") == prev.get("target")
     if shape is None:
         return True
     count, target = shape
@@ -378,7 +398,7 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 cls, foe = "shooting", action["shoot"]
             elif kind == CHARGE_KIND and action.get("charge"):
                 cls, foe = "melee", action["charge"]
-            elif only_rule and RULE_ROLL_SHAPE.get(only_rule, (1, 1)) is not None:
+            elif only_rule and RULE_ROLL_SHAPE.get(only_rule, (1, 1)) not in (None, EXTRA_ATTACK_DIE):
                 # --only-rule: the rule fires BEFORE attacking (main.gd:1056-1058),
                 # on ADVANCE/RUSH activations just as well — a Mend act with no
                 # shoot/charge target is still a replayable act, judged as its
@@ -388,7 +408,9 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 # branch: `combat_kind()` folds a trailing morale roll's
                 # `roll_kind` back to "attack" too, and without a real shoot
                 # act to anchor on, a `None` shape would misread that morale
-                # die as the rule's own slot.
+                # die as the rule's own slot. `EXTRA_ATTACK_DIE` (block B6)
+                # never fires off a bare move/cast act either — always
+                # attached to a shoot or charge — so it stays out too.
                 cls, foe = "mend", None
             else:
                 continue
@@ -406,7 +428,8 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 prof = head["profiles"].get(unit_key) or {}
                 dice_free = only_rule in DICE_FREE_RULES
                 if only_rule not in bearer_names(prof) or not (dice_free or any(
-                        is_rule_roll(r, only_rule) for r in block)):
+                        is_rule_roll(block[i], only_rule, block[i - 1] if i else None)
+                        for i in range(len(block)))):
                     continue
             if cls == "shooting":
                 # NML-1150: aim from shots.jsonl BEFORE the confound check
@@ -442,7 +465,11 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 clean = len(got) == len(want)
                 shape = RULE_ROLL_SHAPE.get(only_rule, (1, 1))
                 for i, w in enumerate(want):
-                    if w[0] == "attack" and (shape is None or (w[1], w[2]) == shape):
+                    if shape is EXTRA_ATTACK_DIE:
+                        rule_shaped = i > 0 and want[i - 1][0] == "attack" and w[2] == want[i - 1][2]
+                    else:
+                        rule_shaped = shape is None or (w[1], w[2]) == shape
+                    if w[0] == "attack" and rule_shaped:
                         chk["mend_rolls"] += 1
                         hit = i < len(got) and got[i] == w
                         chk["mend_rolls_equal"] += hit

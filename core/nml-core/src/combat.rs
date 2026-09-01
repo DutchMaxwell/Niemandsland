@@ -412,6 +412,10 @@ pub fn profile_ev(
     if p.surge {
         hits += attacks_f * SIX_P;
     }
+    // Block B6's extra-ATTACK-DIE Surge siblings (`p.surge_attack` /
+    // `surge_attack_low`) are deliberately NOT read here — `ai_ev.gd:352`'s
+    // `profile_ev` never reads `surge_attack` either, so the EV imagination
+    // stays exactly as blind to the extra-die form as the table's own planner.
     // Furious: the weapon never carries the flag (`AiShooting._profile` sets no
     // "furious" key), so only the unit-level context can fire it — ai_ev.gd:379.
     if melee && charging && att.furious {

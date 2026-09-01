@@ -189,6 +189,21 @@ pub struct ShootProfile {
     /// imagination (ai_ev.gd:347/355/434-435) but never on its dice. Stamped
     /// AFTER the merge, like every other facet in this block.
     pub unstoppable_ev: bool,
+    /// The extra-ATTACK form of the "unmodified 6 to hit" family — Bloodborn /
+    /// Clan Warrior / Primal / Predator (Fighter/Shooter) / Royal Warrior /
+    /// Crazed / Psychotic and every other `Surge` primitive carrier with
+    /// `extra_attack: true` (main.gd:4417-4432): each unmodified 6 among the
+    /// original hit roll draws one MORE attack die at the same to-hit target,
+    /// as its own tray slot — dice, not auto-hits, and the extras never
+    /// re-trigger. Stamped per `unit.rs::stamp`, gated by `facet_applies`
+    /// exactly like `surge` above (Predator Fighter is melee-only).
+    pub surge_attack: bool,
+    /// The Boost upgrade's `surge_low` (Primal Boost, Clan Warrior Boost, ...):
+    /// a successful unmodified 5 ALSO draws an extra die when this is < 6.
+    /// 6 = no boost — `main.gd`'s own `int(profile.get("surge_attack_low",
+    /// 6))` default, mirrored so an unboosted carrier reads as unboosted
+    /// without a separate bool field.
+    pub surge_attack_low: i64,
 }
 
 impl ShootProfile {
@@ -339,6 +354,8 @@ fn base_profile(w: &Weapon, attacks: i64, range_in: i64) -> ShootProfile {
         limited: weapon_has(w, "Limited"),
         takedown: weapon_has(w, "Takedown"),
         rules: w.rules.clone(),
+        // main.gd's own default ("no boost yet") — see the field's doc.
+        surge_attack_low: 6,
         ..Default::default()
     }
 }
@@ -449,6 +466,9 @@ struct PrimitiveHit {
     upgrades: String,
     cover_only: bool,
     ignores_cover: bool,
+    /// Primal Boost et al.'s own `surge_low` param — read only when
+    /// `extra_attack` is also set (`unit.rs::stamp`'s block 3b).
+    surge_low: i64,
 }
 
 /// `RulesRegistry.unit_rules_of_primitive` rules_registry.gd:155-176 — every
@@ -476,6 +496,7 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
                     upgrades: e.param_s("upgrades").to_string(),
                     cover_only: e.param_b("cover_only"),
                     ignores_cover: e.param_b("ignores_cover"),
+                    surge_low: e.param_i("surge_low", 5),
                 });
             }
         }
@@ -699,31 +720,40 @@ fn stamp(
         }
     }
     // 3. Surge-family data aliases (ai_ev.gd:225-249). `extra_attack`
-    //    (surge_attack) and the `within_in`/`over_in`/`surge_low` knobs are
-    //    stamped by GDScript but NEVER read by profile_ev, so only the plain
-    //    surge facet is carried; an alias that would set one of the others is
-    //    reported instead of silently dropped.
+    //    (surge_attack — block B6, the extra-ATTACK-DIE form: Bloodborn/Clan
+    //    Warrior/Primal/Predator/Royal Warrior/Crazed/Psychotic) is now PORTED,
+    //    read by `dice.rs`'s `surge_attack_hits`; the `within_in`/`over_in`
+    //    knobs of the plain auto-hit Surge aliases stay unread by profile_ev,
+    //    so only THAT facet is carried un-gated (main.gd:4427-4435).
     for hit in rules_of_primitive(reg, p, "Surge") {
         if hit.name == "Surge" || hit.name == "Ferocious" || !hit.upgrades.is_empty() {
             continue;
         }
-        if hit.extra_attack {
-            unimplemented.push(Unimplemented {
-                rule: hit.name.clone(),
-                why: "Surge/extra_attack (surge_attack) — stamped by ai_ev.gd:242-244 but not read by profile_ev".into(),
-            });
-            continue;
-        }
         for sp in shoot.iter_mut() {
             if facet_applies(hit.melee_only, hit.shooting_only, sp.range) {
-                sp.surge = true;
+                if hit.extra_attack {
+                    sp.surge_attack = true;
+                } else {
+                    sp.surge = true;
+                }
             }
         }
     }
-    // 3b. Surge UPGRADE entries (ai_ev.gd:250-260) only move surge_low /
-    //     surge_over_in, which profile_ev does not read.
+    // 3b. Surge UPGRADE entries (ai_ev.gd:250-260): the extra-attack-die
+    //  family's own Boost variants (Primal Boost et al.) move `surge_attack_low`,
+    //  now read by `dice.rs`; the plain auto-hit Surge's `surge_low`/
+    //  `surge_over_in` (Devout Boost) stay unread by profile_ev, reported as
+    //  before.
     for hit in rules_of_primitive(reg, p, "Surge") {
         if hit.upgrades.is_empty() || !has_exact_rule(&p.special_rules, &hit.upgrades) {
+            continue;
+        }
+        if hit.extra_attack {
+            for sp in shoot.iter_mut() {
+                if sp.surge_attack {
+                    sp.surge_attack_low = hit.surge_low;
+                }
+            }
             continue;
         }
         unimplemented.push(Unimplemented {
@@ -1218,5 +1248,50 @@ mod tests {
             real.shoot[0].unstoppable_ev,
             "and the EV field follows — `unstoppable_ev = unstoppable || u_unstop`"
         );
+    }
+
+    /// Block B6, end to end through the REAL registry: `saurian_starhost/gf`'s
+    /// "Primal" (`Surge`, `extra_attack: true`, no melee_only/shooting_only)
+    /// reaches BOTH ranged and melee profiles, and "Primal Boost" moves
+    /// `surge_attack_low` to 5 on both; `alien_hives/gf`'s "Predator Fighter"
+    /// (same primitive, `melee_only: true`) reaches ONLY the melee profile.
+    const SURGE_ATTACK_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "primal_beast":{"unit_id":"primal_beast","name":"Primal Beast","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"saurian_starhost",
+        "special_rules":["Primal","Primal Boost"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]},
+          {"name":"Claws","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "predator_fighter_unit":{"unit_id":"predator_fighter_unit","name":"Predator","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives",
+        "special_rules":["Predator Fighter"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Spitter","range":18,"attacks":1,"count":1,"ap":0,"rules":[]},
+          {"name":"Talons","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    #[test]
+    fn primal_and_its_boost_reach_both_profiles_predator_fighter_only_melee() {
+        let header = read_act_header(SURGE_ATTACK_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+
+        let primal = header.profiles.get("primal_beast").expect("primal_beast");
+        let ps = UnitStatic::build(&mut reg, primal);
+        assert!(ps.shoot[0].surge_attack, "Primal is ungated — it reaches the ranged profile too");
+        assert_eq!(ps.shoot[0].surge_attack_low, 5, "Primal Boost's surge_low");
+        assert!(ps.melee[0].surge_attack);
+        assert_eq!(ps.melee[0].surge_attack_low, 5);
+        assert!(
+            ps.unimplemented.iter().all(|u| u.rule != "Primal" && u.rule != "Primal Boost"),
+            "consumed, not stamped as unimplemented: {:?}", ps.unimplemented
+        );
+
+        let predator = header.profiles.get("predator_fighter_unit").expect("predator_fighter_unit");
+        let pf = UnitStatic::build(&mut reg, predator);
+        assert!(!pf.shoot[0].surge_attack, "melee_only — the ranged profile stays untouched");
+        assert_eq!(pf.shoot[0].surge_attack_low, 6, "unboosted default");
+        assert!(pf.melee[0].surge_attack, "but the melee profile gets it");
+        assert_eq!(pf.melee[0].surge_attack_low, 6, "Predator Fighter carries no Boost upgrade");
     }
 }

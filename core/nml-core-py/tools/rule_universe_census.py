@@ -74,6 +74,17 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # sim.rs sums morale_mod. casting_mod/def_mod/ap_mod/move_mod/
     # range_bonus_in are recorded, read by nothing on this core.
     "Utility Buff": frozenset({"hit_mod", "morale_mod"}),
+    # Block B6: unit.rs::stamp reads `extra_attack` to route a Surge entry
+    # into `surge_attack`/`surge_attack_low` (dice.rs::surge_attack_hits, both
+    # resolve functions). Plain auto-hit Surge aliases (Devout, Point-Blank
+    # Surge, exact "Surge"/"Ferocious") carry no `extra_attack` key, so they
+    # stay STAMPED here — `within_in`/`surge_low`/`surge_over_in` are still
+    # unread for that form (main.gd:4427-4435's own "fires unconditionally"
+    # gap, unchanged by this block). Without this entry "Surge" was TRUSTED
+    # WHOLE, over-crediting every name under it the moment ANY "surge" token
+    # existed anywhere in non-test core/ — PR #489's bug, reopened here until
+    # now.
+    "Surge": frozenset({"extra_attack"}),
 }
 
 
