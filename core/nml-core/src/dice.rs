@@ -850,6 +850,32 @@ pub fn resolve_impact_pool_with_tray(
     out
 }
 
+/// BLOCK B3 — Breath Attack's hit->defense->wound leg on the tray:
+/// `_solo_resolve_saves`/`_solo_save_batch` (main.gd:6310-6459) called with a
+/// FIXED hit count — Blast(3) already applied by the caller (main.gd:5307-
+/// 5308), so unlike Impact's `resolve_impact_pool_with_tray` this pool never
+/// draws an "attack" roll of its own — then `_solo_land_wounds` (main.gd:
+/// 6596-6600, Regeneration on the RAW unsaved count). A bare profile carrying
+/// only the pool's AP, the Impact precedent's shape (no Bane, no Shred, no
+/// Deadly — Breath Attack's own `bprofile` carries none of them either).
+pub fn resolve_breath_attack_with_tray(
+    hits: i64,
+    ap: i64,
+    def: &Ctx,
+    def_owner: &str,
+    tray: &mut Tray,
+) -> ShootResult {
+    let mut out = ShootResult::default();
+    if hits <= 0 {
+        return out;
+    }
+    let bare = ShootProfile { ap, ..Default::default() };
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, tray, &mut out);
+    out.caused = w;
+    out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
+    out
+}
+
 // ------------------------------------- D1-B5b: MORALE on the same tray ---
 
 /// `AiCombatMath.Morale` — the three outcomes of a morale test.

@@ -183,13 +183,22 @@ def bearer_names(profile: dict) -> set[str]:
     return out
 
 
-def is_mend_roll(r: dict) -> bool:
-    """The Mend D3's recorded shape — `_solo_tray_roll(1, 1, ...)` (main.gd:5244)
-    with the tray's default `roll_kind` "attack" (:7107). Unique in the corpus:
-    every other one-die tray roll targets 2+ (cast clamped [2,6] ai_spell.gd,
-    BEST_HIT_TARGET=2, morale clamped [2,6])."""
-    return (r.get("roll_kind") == "attack" and int(r.get("count", 0)) == 1
-            and int(r.get("target", 0)) == 1)
+#: `--only-rule`'s own one-die "attack" shape, `(count, target)`: Mend's D3
+#: `_solo_tray_roll(1, 1, ...)` (main.gd:5244) and BLOCK B3's Breath Attack
+#: trigger `_solo_tray_roll(1, trigger, ...)` (main.gd:5307-5308, trigger ==
+#: `BREATH_TRIGGER` == 2, sim.rs). Unlisted rules fall back to Mend's shape,
+#: the only one this gate knew before block B3.
+RULE_ROLL_SHAPE: dict[str, tuple[int, int]] = {"Mend": (1, 1), "Breath Attack": (1, 2)}
+
+
+def is_rule_roll(r: dict, only_rule: str) -> bool:
+    """A count-1 "attack" roll at the rule's own target. Bearer-gated at the
+    call site (`only_rule not in bearer_names(prof)`), so a count-1
+    target-2+ ordinary to-hit die never gets mistaken for the rule's own draw
+    unless the SAME unit also happens to carry the rule."""
+    count, target = RULE_ROLL_SHAPE.get(only_rule, (1, 1))
+    return (r.get("roll_kind") == "attack" and int(r.get("count", 0)) == count
+            and int(r.get("target", 0)) == target)
 
 
 def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
@@ -254,7 +263,8 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 unit_key = (act.get("pick") or {}).get("unit_key") or action.get("unit")
                 prof = head["profiles"].get(unit_key) or {}
                 block = [r for r in dice[i0:] if int(r["act"]) == k]
-                if only_rule not in bearer_names(prof) or not any(is_mend_roll(r) for r in block):
+                if only_rule not in bearer_names(prof) or not any(
+                        is_rule_roll(r, only_rule) for r in block):
                     continue
             grid[cls]["acts"] += 1
             tray = nml_core.Tray(seed)
@@ -279,8 +289,9 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
             # order with the same face — the draw happened, where it belongs.
             if only_rule:
                 clean = len(got) == len(want)
+                shape = RULE_ROLL_SHAPE.get(only_rule, (1, 1))
                 for i, w in enumerate(want):
-                    if w[0] == "attack" and w[1] == 1 and w[2] == 1:
+                    if w[0] == "attack" and (w[1], w[2]) == shape:
                         chk["mend_rolls"] += 1
                         hit = i < len(got) and got[i] == w
                         chk["mend_rolls_equal"] += hit

@@ -13,8 +13,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::combat::{
-    at_or_below_half, effective_attacks, melee_ev, morale_target, shoot_ev,
-    should_test_shooting_morale, shrouded_reach, SHROUD_FLOOR_IN, SHROUD_RANGE_PENALTY_IN,
+    at_or_below_half, block_chance, effective_attacks, melee_ev, morale_target, shielded_defense,
+    shoot_ev, should_test_shooting_morale, shrouded_reach, SHROUD_FLOOR_IN, SHROUD_RANGE_PENALTY_IN,
 };
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
@@ -316,6 +316,125 @@ pub(crate) fn tray_mend(
     let healed = d3.min(wmax - next.wounds[pu][pm]);
     if healed > 0 {
         next.wounds[pu][pm] += healed;
+    }
+}
+
+/// The breath primitive's shape, uniform across all 17 AoF carriers
+/// (rules_mechanics_aof.json `primitive: "Breath Attack"` — one params block:
+/// `{trigger_target: 2, range_in: 6.0, blast: 3, ap: 1}`). Consts, not a
+/// per-unit registry read, the `MEND_RANGE_IN`/`MEND_TARGET` precedent.
+pub const BREATH_RANGE_IN: f64 = 6.0;
+pub const BREATH_BLAST: i64 = 3;
+pub const BREATH_AP: i64 = 1;
+pub const BREATH_TRIGGER: i64 = 2;
+
+/// `SoloController.combined_alive` (NML-966) — host + attached heroes' alive
+/// model counts, seam-gated exactly like `tray_mend`'s own hero fold.
+fn combined_alive(state: &State, i: usize, seams: Seams) -> i64 {
+    state.alive[i]
+        + if seams.hero_attach {
+            state.attached[i].iter().map(|&h| state.alive[h]).sum::<i64>()
+        } else {
+            0
+        }
+}
+
+/// BLOCK B3 — the breath-weapon primitive on the tray path's pre-attack slot,
+/// right after Mend: `_solo_apply_breath_attack` main.gd:5262-5330. Official
+/// text: "Once per activation, before attacking, pick one enemy unit within
+/// 6\" and roll one die; on a 2+ it takes 3 hits with Blast(3) and AP(1)."
+/// One breath PER AI UNIT ACTIVATION however many bearers carry it (main.gd's
+/// own doc comment, :5263-5264) — the bearer check only asks whether ANY
+/// bearer is active, exactly like `tray_mend`'s.
+///
+/// Range/LOS are read off the ACTING unit's OWN models only (main.gd:5279-
+/// 5286 — `_solo_nearest_model_gap_in(unit, hu, ...)`/`_solo_has_los(unit,
+/// hu)` name `unit`, not the bearer set Mend folds in): the base-EDGE gap
+/// (`edge_gap_in`, the "profile range gate" B11 truth) and the captured LOS
+/// matrix (`los_clear`, the same gate the shoot branch above reads). The
+/// target is the best-scoring living, UNattached enemy unit — `min(Blast,
+/// combined alive) * (1 - block chance)` at the target's Armor+Shielded
+/// Defense. Cover and the Guarded/over-9 family are OUT OF SCOPE by the
+/// table's own wording (main.gd:5390-5397 — `_solo_defense_vs` never calls
+/// `_solo_cover_defense`/`_solo_over9_defense_rule` here).
+///
+/// One trigger die at `BREATH_TRIGGER`; a target found is what earns the draw
+/// (no target, no die, matching Mend's no-patient rule) and a miss still lands
+/// on the tray. Blast already decided the hit count on a 2+ — no to-hit roll
+/// of its own — so `resolve_breath_attack_with_tray` runs straight to the
+/// save + Regeneration leg, and the landed wounds feed the same post-shooting
+/// morale trigger the shoot branch above uses.
+pub(crate) fn tray_breath_attack(
+    statics: &[UnitStatic],
+    next: &mut State,
+    si: usize,
+    seams: Seams,
+    tray: &mut Tray,
+    shot: &mut ShootResult,
+) {
+    if next.alive[si] <= 0 {
+        return;
+    }
+    let mut bearers: Vec<usize> = vec![si];
+    if seams.hero_attach {
+        bearers.extend(next.attached[si].iter().copied());
+    }
+    if !bearers
+        .iter()
+        .any(|&b| next.alive[b] > 0 && statics[next.roster.profile[b]].breath_attack_active)
+    {
+        return;
+    }
+    let pid = next.player[si];
+    let mut target: Option<usize> = None;
+    let mut best = 0.0f64;
+    for ti in 0..next.units() {
+        if next.player[ti] == pid || next.alive[ti] <= 0 {
+            continue;
+        }
+        if seams.hero_attach && next.attached_to[ti].is_some() {
+            continue;
+        }
+        let gap = geom::edge_gap_in(
+            &next.positions[si], &next.radii[si], &next.positions[ti], &next.radii[ti],
+            DEFAULT_BASE_RADIUS_M,
+        );
+        if gap > BREATH_RANGE_IN || !los_clear(next, si, ti) {
+            continue;
+        }
+        let ut = &statics[next.roster.profile[ti]];
+        let def = ctx_of(ut, next, ti);
+        let sdef = shielded_defense(def.defense, def.shielded);
+        let alive_t = combined_alive(next, ti, seams);
+        let score = (BREATH_BLAST.min(alive_t) as f64) * (1.0 - block_chance(sdef, BREATH_AP, false));
+        if score > best {
+            best = score;
+            target = Some(ti);
+        }
+    }
+    let Some(ti) = target else { return };
+    let faces = tray.roll(1);
+    let Some(&f0) = faces.first() else { return };
+    shot.rolls.push(crate::dice::Roll {
+        kind: "attack",
+        count: 1,
+        target: BREATH_TRIGGER,
+        faces,
+        owner: statics[next.roster.profile[si]].name.clone(),
+    });
+    if crate::dice::faces_to_hits(&[f0], BREATH_TRIGGER as u8) == 0 {
+        return;
+    }
+    let hits = BREATH_BLAST.min(combined_alive(next, ti, seams)).max(1);
+    let ut = &statics[next.roster.profile[ti]];
+    let def = ctx_of(ut, next, ti);
+    let alive_before = next.alive[ti];
+    let wounds_before = wounds_left(next, ti);
+    let out = crate::dice::resolve_breath_attack_with_tray(hits, BREATH_AP, &def, &ut.name, tray);
+    let landed = shot.absorb(out);
+    land_wounds(next, ti, landed);
+    if shooting_morale_trigger(next, ut, ti, alive_before, wounds_before) {
+        tray_morale(next, ut, ti, false, tray, shot);
     }
 }
 
@@ -2041,9 +2160,16 @@ fn resolve_with(
         tray_mend(statics, &mut next, si, seams, tray, shot);
     }
 
+    // --- BREATH ATTACK (main.gd:1059), right after Mend in the table's own
+    // pre-attack slot order — every action kind, tray path only. See
+    // `tray_breath_attack`; no bearer, no target, no draw.
+    if let Some((tray, shot)) = dice.as_mut() {
+        tray_breath_attack(statics, &mut next, si, seams, tray, shot);
+    }
+
     // --- Utility Buff / Re-Position Artillery (main.gd:1062, right after
-    // Mend + the unported Breath Attack), tray path only — see
-    // `tray_utility_buff`. Dice-free: no tray draw either way.
+    // Mend + Breath Attack), tray path only — see `tray_utility_buff`.
+    // Dice-free: no tray draw either way.
     if dice.is_some() {
         tray_utility_buff(statics, &mut next, si, seams, cover);
     }
@@ -2997,5 +3123,155 @@ mod tests {
         assert_eq!(axis_scale(0.0, 0.0, 10.0), 1.0);
         let s = axis_scale(8.0, 9.0, 10.0);
         assert!((8.0 + 9.0 * s - 10.0).abs() < 1e-4, "scale {s} overshoots the edge");
+    }
+
+    // ------------------------------------------------- BLOCK B3: Breath Attack ---
+
+    /// BLOCK B3 — a(idx0, the bearer) vs b(idx2, the target), 3" apart
+    /// edge-to-edge (inside the 6" range); ah/bh (idx1/3) field no models, so
+    /// neither the bearer fold nor the target pick can ever reach them — a
+    /// deliberately clean one-bearer-one-target case. b fields 3 alive
+    /// Tough(1) models at Defense 4, so Blast(3) caps its hit count at 3 and
+    /// the save target is `save_target(4, 1) == 5` (AP(1)).
+    fn breath_line() -> (State, Vec<UnitStatic>) {
+        let mut st = four_unit_line();
+        let r = &*st.roster;
+        st.roster = Rc::new(crate::state::Roster {
+            keys: r.keys.clone(),
+            index: r.keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect(),
+            profile: vec![0, 1, 2, 3],
+        });
+        st.positions = vec![
+            vec![[0.0, 0.0, 0.0]],
+            vec![],
+            vec![[5.0 * IN2M, 0.0, 0.0], [5.02 * IN2M, 0.0, 0.0], [5.04 * IN2M, 0.0, 0.0]],
+            vec![],
+        ];
+        st.radii = vec![vec![IN2M], vec![], vec![IN2M; 3], vec![]];
+        st.wounds = vec![vec![1], vec![], vec![1, 1, 1], vec![]];
+        st.alive = vec![1, 0, 3, 0];
+        let mut a = UnitStatic { name: "a".into(), ..Default::default() };
+        a.model_count = 1;
+        a.breath_attack_active = true;
+        let mut b = UnitStatic { name: "b".into(), ..Default::default() };
+        b.model_count = 3;
+        b.wounds_max = vec![1, 1, 1];
+        b.ctx.defense = 4;
+        (
+            st,
+            vec![
+                a,
+                UnitStatic { name: "ah".into(), ..Default::default() },
+                b,
+                UnitStatic { name: "bh".into(), ..Default::default() },
+            ],
+        )
+    }
+
+    fn breath_action() -> Action {
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None }
+    }
+
+    /// One fixture act through the tray: the pre-attack Breath Attack slot
+    /// draws the trigger die (kind "attack", target `BREATH_TRIGGER`, signed
+    /// by the ACTING unit) and, on a hit, the table's own save batch — Blast(3)
+    /// capped at the target's 3 alive models, at AP(1)'s worsened save target.
+    #[test]
+    fn breath_attack_fires_the_trigger_die_then_the_tables_save_batch_on_a_hit() {
+        let (st, statics) = breath_line();
+        let terrain = crate::terrain::Terrain::default();
+        // Seed 7's first face is an unmodified 6 — an automatic trigger success.
+        let mut tray = Tray::seeded(7);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &breath_action(), &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(shot.rolls.len(), 2);
+        let trig = &shot.rolls[0];
+        assert_eq!(
+            (trig.kind, trig.count, trig.target, trig.owner.as_str()),
+            ("attack", 1, BREATH_TRIGGER, "a")
+        );
+        let save = &shot.rolls[1];
+        assert_eq!((save.kind, save.count, save.target, save.owner.as_str()), ("defense", 3, 5, "b"));
+        let blocks = crate::dice::faces_to_hits(&save.faces, 5) as i64;
+        let unsaved = (3 - blocks).max(0);
+        let removed: i64 = 3 - next.wounds[2].iter().sum::<i64>();
+        assert_eq!(removed, unsaved);
+        assert_eq!(next.alive[2], 3 - unsaved);
+        let mut probe = Tray::seeded(7);
+        probe.roll(1);
+        probe.roll(3);
+        assert_eq!(tray.state_i64(), probe.state_i64());
+    }
+
+    /// RED for the pre-attack slot: a trigger face of 1 always fails and
+    /// draws NOTHING else; a target beyond the 6" range, or the rule inactive
+    /// on the only bearer, draws not even the trigger die.
+    #[test]
+    fn breath_attack_fizzles_on_a_1_and_draws_nothing_out_of_range_or_without_the_rule() {
+        let terrain = crate::terrain::Terrain::default();
+        // Seed 3's first face is a 1 — an automatic trigger failure.
+        let (st, statics) = breath_line();
+        let mut tray = Tray::seeded(3);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &breath_action(), &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(shot.rolls.len(), 1);
+        assert_eq!(shot.rolls[0].faces, vec![1]);
+        assert_eq!(next.wounds[2].iter().sum::<i64>(), 3);
+        let mut probe = Tray::seeded(3);
+        probe.roll(1);
+        assert_eq!(tray.state_i64(), probe.state_i64());
+
+        // Out of range: b pushed 20" out (edge gap 18" > the 6" reach).
+        let (mut st2, statics2) = breath_line();
+        st2.positions[2] =
+            vec![[20.0 * IN2M, 0.0, 0.0], [20.02 * IN2M, 0.0, 0.0], [20.04 * IN2M, 0.0, 0.0]];
+        let mut tray2 = Tray::seeded(7);
+        let mut rng2 = crate::rng::GodotRng::new(0);
+        let (_, shot2) = resolve_stochastic_tray_on_board(
+            &statics2, &st2, &breath_action(), &terrain, Seams::default(), &mut rng2, &mut tray2,
+        )
+        .unwrap();
+        assert!(shot2.rolls.is_empty());
+        let probe2 = Tray::seeded(7);
+        assert_eq!(tray2.state_i64(), probe2.state_i64());
+
+        // No bearer: the rule inactive on the only candidate.
+        let (st3, mut statics3) = breath_line();
+        statics3[0].breath_attack_active = false;
+        let mut tray3 = Tray::seeded(7);
+        let mut rng3 = crate::rng::GodotRng::new(0);
+        let (_, shot3) = resolve_stochastic_tray_on_board(
+            &statics3, &st3, &breath_action(), &terrain, Seams::default(), &mut rng3, &mut tray3,
+        )
+        .unwrap();
+        assert!(shot3.rolls.is_empty());
+    }
+
+    /// Blast(3) scales DOWN to the target's own alive count when it fields
+    /// fewer than 3 models — never floors below the models actually there —
+    /// and AP(1) worsens the save target the same way whatever the count.
+    #[test]
+    fn breath_attack_scales_blast_to_the_targets_alive_count() {
+        let (mut st, statics) = breath_line();
+        st.wounds[2] = vec![1]; // b down to 1 alive model
+        st.positions[2] = vec![[5.0 * IN2M, 0.0, 0.0]];
+        st.radii[2] = vec![IN2M];
+        st.alive[2] = 1;
+        let terrain = crate::terrain::Terrain::default();
+        let mut tray = Tray::seeded(7);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (_, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &breath_action(), &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(shot.rolls.len(), 2);
+        let save = &shot.rolls[1];
+        assert_eq!((save.count, save.target), (1, 5));
     }
 }
