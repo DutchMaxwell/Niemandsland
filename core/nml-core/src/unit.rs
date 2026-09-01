@@ -831,11 +831,7 @@ pub struct UtilityBuff {
 /// resolved HERE, where `vs_target` is known: the friendly pick is 12" and
 /// sight-free (main.gd:16493/16552), the Mark is 18" and needs sight (:16752/
 /// :16758).
-fn utility_buffs_of(
-    reg: &mut Registries,
-    p: &Profile,
-    unimplemented: &mut Vec<Unimplemented>,
-) -> Vec<UtilityBuff> {
+fn utility_buffs_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemented>) -> Vec<UtilityBuff> {
     let mut out = Vec::new();
     let mut raws: Vec<&String> = p.special_rules.iter().collect();
     raws.extend(p.item_grants.iter());
@@ -877,15 +873,10 @@ fn utility_buffs_of(
         // would record an all-zero row that `record_buff` drops on the floor.
         // Named here rather than skipped in silence.
         let b = out.last().expect("just pushed");
-        if !b.vs_target
-            && b.reposition_in <= 0.0
-            && (b.hit_mod, b.casting_mod, b.morale_mod) == (0, 0, 0)
-            && b.grants_rule.is_empty()
-        {
-            unimplemented.push(Unimplemented {
-                rule: b.name.clone(),
-                why: "Utility Buff params carry no hit/casting/morale mod and no grants_rule — the knob it does carry (def_mod / ap_mod / move_mod / range_bonus_in) has no ledger field and no reader in this core".into(),
-            });
+        if !b.vs_target && b.reposition_in <= 0.0 && b.grants_rule.is_empty()
+            && (b.hit_mod, b.casting_mod, b.morale_mod) == (0, 0, 0) {
+            un.push(Unimplemented { rule: b.name.clone(), why:
+                "Utility Buff params carry no hit/casting/morale mod and no grants_rule — the knob it does carry (def_mod / ap_mod / move_mod / range_bonus_in) has no ledger field and no reader in this core".into() });
         }
     }
     out

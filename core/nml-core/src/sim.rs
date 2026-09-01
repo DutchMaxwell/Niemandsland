@@ -537,9 +537,7 @@ fn caster_member(statics: &[UnitStatic], state: &State, u: usize, seams: Seams) 
         return true;
     }
     seams.hero_attach
-        && state.attached[u]
-            .iter()
-            .any(|&h| state.alive[h] > 0 && statics[state.roster.profile[h]].is_caster)
+        && state.attached[u].iter().any(|&h| state.alive[h] > 0 && statics[state.roster.profile[h]].is_caster)
 }
 
 /// `main._solo_utility_targets` :16317-16359 — up to `max_targets` legal picks
@@ -583,8 +581,7 @@ fn utility_targets(
         if b.target == "friendly_artillery" && !uc.artillery {
             continue;
         }
-        let d =
-            (geom::length(geom::sub(from, geom::centre(&state.positions[u]))) / IN2M as f32) as f64;
+        let d = (geom::length(geom::sub(from, geom::centre(&state.positions[u]))) / IN2M as f32) as f64;
         if d > b.range_in {
             continue;
         }
