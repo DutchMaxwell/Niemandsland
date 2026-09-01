@@ -26,6 +26,18 @@ extends RefCounted
 ## ALL LEGALITY MATHS IS INTEGER. Candidates come off a 1" integer lattice and the
 ## standard zone polygons have integer vertices, so "inside a zone", "over 9" apart" and
 ## "off the edge" are exact on both sides — no float tie can make the two disagree.
+##
+## NML-1140 step 6: the promise above is kept. A doctrine rung ("style"/"search",
+## the optional `doctrine_mode`/`doctrine_armies` args) replaces the candidate CHOICE
+## alone: count and roll-off still come off the pinned stream and the doctrine draws
+## nothing more, the choice comes from the extension's `NmlCore.doctrine_place` (the
+## SAME Rust `doctrine::place` the twin's pyo3 seam runs — design 0, one
+## implementation), and every returned cell is re-verified with this file's own
+## `is_legal` before it is accepted. The rung rides the stamp's "doctrine" key — the
+## twin's key (the step-5 note, coordinator-approved) — beside "mode": "rulebook",
+## never instead of it. Extension absent, seam refusal, or an answer the book
+## rejects: the rulebook draw runs anyway (the stream state is untouched) and the
+## stamp says "fallback" — design 0's no-silent-fallback law; the gate reads that RED.
 
 const MARKER_GAP_IN := 9      # book: "over 9 inches away from other markers"
 ## OURS, NOT THE BOOK'S. The book names an edge distance only for King of the Hill /
@@ -47,31 +59,100 @@ const IMPASSABLE := 3         # TerrainRules.TerrainType.CONTAINER — terrain_r
 ## `swept` counts markers the random draws could not place (the deterministic lattice
 ## sweep placed them instead) — 0 on every board measured; a non-zero value is a signal
 ## that the legal band got tight, not an error.
+## `doctrine_mode` is "" or "rulebook" for today's rulebook draw (byte-identical
+## default), or a doctrine rung "style"/"search" with `doctrine_armies` the PAIR
+## [army_a, army_b] of profile dictionaries (the `_unit_profile` schema the act
+## header stamps) — the candidate choice then comes from the extension.
 static func generate(layout_seed: int, mission: Dictionary, style: Dictionary,
-		cells: Dictionary, n: int, table_w_in := 72.0, table_d_in := 48.0) -> Dictionary:
+		cells: Dictionary, n: int, table_w_in := 72.0, table_d_in := 48.0,
+		doctrine_mode := "", doctrine_armies: Array = []) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = layout_seed
-	# Draw order, pinned: count, then the roll-off, then the placements.
+	# Draw order, pinned: count, then the roll-off, then the placements. The
+	# doctrine draws NOTHING more — design 1's stream contract, so a doctrine game
+	# and a rulebook game of the same seed share count, roll-off and every later
+	# draw, and the A/B pairing is exact.
 	var count := _count(mission, rng)
 	var first := _roll_off(rng)
 	var hx := int(table_w_in / 2.0) - EDGE_MARGIN_IN
 	var hz := int(table_d_in / 2.0) - EDGE_MARGIN_IN
 	var pos: Array = []
 	var swept := 0
-	for i in range(count):
-		var p := _draw(rng, hx, hz, pos, style, cells, n)
-		if p.is_empty():
-			p = _sweep(hx, hz, pos, style, cells, n)
+	var doct: Dictionary = {}
+	if doctrine_mode != "" and doctrine_mode != "rulebook":
+		doct = _doctrine_choice(doctrine_mode, doctrine_armies, count, style,
+			cells, n, table_w_in, table_d_in)
+	if doct.is_empty():
+		# The rulebook candidates — and, unchanged, the doctrine's LOUD fallback:
+		# the stream state is exactly where a rulebook draw of this seed stands.
+		for i in range(count):
+			var p := _draw(rng, hx, hz, pos, style, cells, n)
 			if p.is_empty():
-				break        # no legal cell left at all: fewer markers, stamped honestly
-			swept += 1
-		pos.append(p)
+				p = _sweep(hx, hz, pos, style, cells, n)
+				if p.is_empty():
+					break        # no legal cell left at all: fewer markers, stamped honestly
+				swept += 1
+			pos.append(p)
+	else:
+		# The doctrine's choice, swept count included — the stream's count and
+		# roll-off already bookkeep `placed_by` below, exactly as the rulebook's.
+		pos = doct["positions"]
+		swept = int(doct["swept"])
 	var placed_by: Array = []
 	for i in range(pos.size()):
 		placed_by.append(first if i % 2 == 0 else (3 - first))
-	return {"mode": "rulebook", "count_roll": count, "first_placer": first,
+	var stamp := {"mode": "rulebook", "count_roll": count, "first_placer": first,
 		"layout_seed": layout_seed, "edge_margin_in": EDGE_MARGIN_IN,
 		"positions": pos, "placed_by": placed_by, "swept": swept}
+	if doctrine_mode != "" and doctrine_mode != "rulebook":
+		stamp["doctrine"] = doctrine_mode if not doct.is_empty() else "fallback"
+	return stamp
+
+
+## The doctrine's candidate choice, through the extension's `NmlCore.doctrine_place`.
+## The board travels as the act header's terrain line (the `AiActRecorder`
+## school-terrain shape, act_recorder.gd:283-292 — 0-based cell triples over the
+## SAME 3" grid `is_legal` reads), so the Rust search sees what the table sees.
+## Every failure prints one loud line and returns {} — `generate` then runs the
+## rulebook draw with the stamp saying "fallback" (never a silent one).
+static func _doctrine_choice(mode: String, armies: Array, count: int,
+		style: Dictionary, cells: Dictionary, n: int,
+		table_w_in: float, table_d_in: float) -> Dictionary:
+	if not ClassDB.class_exists("NmlCore"):
+		printerr("[OBJECTIVES] doctrine rung '%s' requested but the NmlCore extension is absent — the rulebook draw runs instead and the stamp says \"fallback\" (gate RED)" % mode)
+		return {}
+	var core: Object = ClassDB.instantiate("NmlCore")   # the solo_controller.gd:3182 pattern
+	if core == null:
+		printerr("[OBJECTIVES] NmlCore present but not instantiable — the rulebook draw runs instead and the stamp says \"fallback\" (gate RED)")
+		return {}
+	var terrain := {"cells": [], "sandbox": [], "walls": [],
+		"cell_params": {"table_size_feet": [table_w_in / 12.0, table_d_in / 12.0],
+			"grid_rotation_degrees": 0.0, "grid_size_inches": SchoolTerrain.CELL_IN,
+			"inches_to_meters": SchoolTerrain.IN2M}}
+	for k in cells:
+		var c := k as Vector2i
+		(terrain["cells"] as Array).append([c.x, c.y, int(cells[k])])
+	var placed: Dictionary = core.doctrine_place(terrain, mode, armies, count,
+		style, table_w_in, table_d_in)
+	if placed.is_empty():
+		printerr("[OBJECTIVES] doctrine_place refused rung '%s' (%s) — the rulebook draw runs instead and the stamp says \"fallback\" (gate RED)" % [mode, core.last_error()])
+		return {}
+	var pos: Array = placed.get("positions", [])
+	if pos.size() > count:
+		printerr("[OBJECTIVES] the doctrine answered %d markers for a draw of %d — the rulebook draw runs instead and the stamp says \"fallback\" (gate RED)" % [pos.size(), count])
+		return {}
+	# The design's table-side re-verification: each cell against every OTHER
+	# returned cell, the zones and the board — a Rust cell that violates the book
+	# goes RED here, not in a report.
+	for i in range(pos.size()):
+		var others: Array = []
+		for j in range(pos.size()):
+			if j != i:
+				others.append(pos[j])
+		if not is_legal(int(pos[i][0]), int(pos[i][1]), others, style, cells, n):
+			printerr("[OBJECTIVES] the doctrine's cell %s is illegal by the book — the rulebook draw runs instead and the stamp says \"fallback\" (gate RED)" % str(pos[i]))
+			return {}
+	return {"positions": pos, "swept": int(placed.get("swept", 0))}
 
 
 ## D3+2, or the mission's fixed int. Same spec MissionCatalog.marker_count reads.

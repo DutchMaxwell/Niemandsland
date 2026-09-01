@@ -22,7 +22,9 @@ static var _header_written := false
 ## ObjectiveLayout.generate returned them. The harness sets it before the first act;
 ## the header carries it so a reader can RE-DERIVE the layout instead of trusting the
 ## positions. Left empty the key is omitted entirely, so an unset run's header is
-## byte-identical to before.
+## byte-identical to before. NML-1140 step 6: a doctrine game's stamp gains the
+## rung under "doctrine" ("style"/"search", or "fallback") — passed through
+## verbatim, the same key the twin's stamp carries.
 static var objectives_stamp: Dictionary = {}
 
 static var _max := 5000

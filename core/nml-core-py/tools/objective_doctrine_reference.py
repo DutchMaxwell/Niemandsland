@@ -9,6 +9,11 @@ languages — change both or neither. Identity across the two seams is the
 design's whole point (design 0, gate 2(ii)): one implementation in the Rust
 core, two consumers, no second copy of the choice logic.
 
+NML-1140 step 6: the ALREADY-drawn marker count rides argv[2] (default 3 =
+the pinned fixture the smoke drives), so the table's gdUnit suite can ask the
+twin for the count ITS seed drew. Armies, mode and zones stay pinned — the
+doctrine has zero RNG, so the count is the only seed-carried input.
+
 The smoke points NML_DOCTRINE_PYO3_PYTHON at a python that imports the
 nml_core built from THIS commit (maturin develop -m core/nml-core-py/Cargo.toml).
 A file handoff, not a captured pipe: OS.execute's stdout capture is unreliable
@@ -67,8 +72,9 @@ def _army(prefix: str) -> dict:
 
 
 def main() -> None:
+    count = int(sys.argv[2]) if len(sys.argv) > 2 else 3
     line = json.dumps(
-        nml_core.doctrine_place(None, "search", (_army("p1"), _army("p2")), 3, ZONES))
+        nml_core.doctrine_place(None, "search", (_army("p1"), _army("p2")), count, ZONES))
     if len(sys.argv) > 1:
         with open(sys.argv[1], "w", encoding="utf-8") as f:
             f.write(line)
