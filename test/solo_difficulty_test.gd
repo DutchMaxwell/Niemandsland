@@ -106,8 +106,8 @@ func test_placement_knob_round_trips_for_every_preset() -> void:
 	for key in SoloDifficulty.PRESETS:
 		var d := SoloDifficulty.for_grade(str(key), 7)
 		assert_str(str(SoloDifficulty.PRESETS[key]["placement"])) \
-			.override_failure_message("preset %s carries the search rung (the ladder decision)" % key) \
-			.is_equal("search")
+			.override_failure_message("preset %s ships the rulebook rung (knob-only: the A/B gate was not met)" % key) \
+			.is_equal("rulebook")
 		var flat := d.to_dict()
 		assert_str(str(flat.get("placement", "MISSING"))) \
 			.override_failure_message("preset %s: placement missing from to_dict" % key) \
@@ -117,12 +117,13 @@ func test_placement_knob_round_trips_for_every_preset() -> void:
 
 
 func test_resolver_env_beats_preset_and_preset_decides_when_unset() -> void:
-	# Unset env: the preset decides — every preset is nachtmahr-grade, so "search";
-	# gradeless harnesses (core/solo selfplay) land on the default preset the same way.
+	# Unset env: the preset decides — every preset ships "rulebook" (knob-only
+	# default, the placement A/B gate was not met), so the preset path and the
+	# gradeless harnesses (core/solo selfplay default preset) all land rulebook.
 	OS.set_environment("NML_OBJECTIVE_DOCTRINE", "")
-	assert_str(SoloDifficulty.resolve_placement("nachtmahr", "nachtmahr", "rulebook")).is_equal("search")
-	assert_str(SoloDifficulty.resolve_placement("", "", "")).is_equal("search")
-	assert_str(SoloDifficulty.resolve_placement("kriegsherr", "veteran", "rulebook")).is_equal("search")
+	assert_str(SoloDifficulty.resolve_placement("nachtmahr", "nachtmahr", "rulebook")).is_equal("rulebook")
+	assert_str(SoloDifficulty.resolve_placement("", "", "")).is_equal("rulebook")
+	assert_str(SoloDifficulty.resolve_placement("kriegsherr", "veteran", "rulebook")).is_equal("rulebook")
 	# The env beats the preset — including pinning the rulebook draw back over a
 	# search preset (the A/B pairing's control arm).
 	assert_str(_resolve_with_env("rulebook")).is_equal("rulebook")

@@ -139,3 +139,7 @@ core/nml_core.gdextension
 # The GDExtension library itself is a BUILD artefact and is never committed
 # (5 MB, per platform) — R1 keeps a checkout without it fully playable.
 core/nml-core-godot/target/
+# core/nml-core-py has no .gitignore of its own (unlike nml-core and
+# nml-core-godot) — the pyo3 crate's `cargo build`/`maturin develop` target
+# dir (NML-1140 caught it accidentally committed, 1140 build-artifact files).
+core/nml-core-py/target/
