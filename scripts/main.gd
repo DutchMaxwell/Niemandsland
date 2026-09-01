@@ -1929,6 +1929,38 @@ func _solo_run_both_ai_round(opener: int) -> int:
 				printerr("[ARENA] R%d act#%d side P%d = %s done" % [
 					opr_army_manager.current_round, guard, act, unit.get_name()])
 		side = 2 if act == 1 else 1   # alternate to the other side next (one-for-one)
+	# Coverage — Second Wind (Inquisitorial Agent / Martial Prowess): once both pools are
+	# exhausted, either side may still hold a carrier eligible for a second activation this round
+	# (once per game, 1/3-of-carriers cap — enforced entirely inside spend_second_wind, exactly as
+	# the solo human-vs-AI seam in _solo_after_activation; not re-implemented here). The candidate
+	# lookup reads whichever side is currently `ai_slot` (_solo_set_active_side), so both arena
+	# sides are polled in turn instead of the one fixed AI side the solo path always has.
+	var sw_guard := 0
+	const SECOND_WIND_GUARD := 50   # defensive cap, same role as ACTIVATION_GUARD above
+	while sw_guard < SECOND_WIND_GUARD:
+		sw_guard += 1
+		var sw: GameUnit = null
+		var sw_side := 0
+		for cand_side in [1, 2]:
+			_solo_set_active_side(cand_side)
+			sw = solo_controller.second_wind_candidate()
+			if sw != null:
+				sw_side = cand_side
+				break
+		if sw == null:
+			break
+		var sw_rule := solo_controller.spend_second_wind(sw)
+		if battle_log != null:
+			_log_rule_event(BattleLog.Category.GENERAL,
+				"%s: %s activates a SECOND time this round (once per game — fatigue cleared)" % [sw_rule, sw.get_name()], true)
+		_solo_set_active_side(sw_side)
+		var sw_unit: GameUnit = await _solo_activate_one_ai()
+		_solo_flush_dev()
+		if sw_unit != null:
+			last_side = sw_side
+			if _solo_arena_trace:
+				printerr("[ARENA] R%d second-wind side P%d = %s done" % [
+					opr_army_manager.current_round, sw_side, sw_unit.get_name()])
 	return last_side
 
 
