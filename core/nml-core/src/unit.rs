@@ -263,6 +263,12 @@ pub struct UnitStatic {
     /// `RulesRegistry.unit_rule_active(gu, "Re-Position Artillery")` — the
     /// "Utility Buff" movement primitive's registry gate (block B2).
     pub reposition_artillery_active: bool,
+    /// Block B5 — `hit_and_run_move` solo_controller.gd:9657-9713's rule pick,
+    /// scoped to this ticket's three named carriers of the "Hit & Run"
+    /// primitive: the literal name plus its data aliases "Guerrilla" and
+    /// "Harassing" (identical `move_in: 3.0` on every occurrence). "Hit & Run
+    /// Fighter"/"Hit & Run Shooter" are separate primitives, out of scope.
+    pub hit_and_run_active: bool,
     /// Block B2b — every "Utility Buff" entry this unit carries, params and
     /// all, in the table's own loop order (`utility_buffs_of`).
     pub utility_buffs: Vec<UtilityBuff>,
@@ -1063,6 +1069,9 @@ impl UnitStatic {
             breath_attack_active: unit_rule_active(reg, p, "Breath Attack"),
             is_hero: has_special_rule(&p.special_rules, "Hero"),
             reposition_artillery_active: unit_rule_active(reg, p, "Re-Position Artillery"),
+            hit_and_run_active: unit_rule_active(reg, p, "Hit & Run")
+                || unit_rule_active(reg, p, "Guerrilla")
+                || unit_rule_active(reg, p, "Harassing"),
             utility_buffs: utility_buffs_of(reg, p, &mut unimplemented),
             unimplemented,
         }

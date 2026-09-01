@@ -807,6 +807,86 @@ fn axis_scale(start: f32, d: f32, limit: f32) -> f32 {
     ((bound - start) / d).clamp(0.0, 1.0)
 }
 
+// ------------------------------------------- BLOCK B5: HIT & RUN (move) ---
+
+/// "...units where all models have this rule may move by up to 3\" after
+/// shooting or being in melee" (army-book text; mechanics param `move_in:
+/// 3.0`, identical on every occurrence of the three carriers this block
+/// ports — a const stands in for a per-unit registry read, the
+/// `MEND_RANGE_IN`/`BREATH_RANGE_IN` precedent).
+pub const HIT_AND_RUN_MOVE_IN: f32 = 3.0;
+
+/// BLOCK B5 — `SoloController.hit_and_run_move` solo_controller.gd:9649-9713,
+/// called main.gd:1083-1089 right after the ACTING unit's own shoot/melee
+/// resolves (`resolve_with`'s call site, right after the charge block). Ported
+/// carriers: the literal "Hit & Run" name and its two data aliases sharing its
+/// primitive, "Guerrilla" and "Harassing" (`hit_and_run_active`) — "Hit & Run
+/// Fighter"/"Hit & Run Shooter" are SEPARATE primitives, out of this 11-unit/
+/// 2-list block's scope, and neither carries an `after` param on any of the
+/// three ported names, so the table's own shoot-vs-melee half-scoping never
+/// applies to them (verified over every `rules_mechanics_*.json` occurrence).
+///
+/// FIRE GATE: the ACTING unit's OWN rule only — unlike Mend/Breath Attack, the
+/// table's function body never reads an attached hero's rules (it moves the
+/// WHOLE joined formation, not one member of it). Once per ROUND
+/// (`unit_properties["hit_and_run_round"]`, :9685), consumed only on an actual
+/// move — no bearer, no living enemy, or a board-clamped zero step all leave
+/// it unspent.
+///
+/// NOT PORTED — the EV-scored placement branch (`_position_solver_active()` +
+/// `_solve_position`, :9691-9696): a cover/objective/threat-aware spot this
+/// core has no position-solver infrastructure for. This port always takes the
+/// table's own documented FALLBACK instead (:9653, "the fallback steps
+/// straight away from the nearest enemy (kiting)") — a straight-line step
+/// directly AWAY from `nearest_enemy_reposition`'s pick (#485, reused rather
+/// than duplicating `_nearest_enemy_of`'s own slightly different not-yet-
+/// activated tie-break), board-clamped via `clamp_move_to_board`/`axis_scale`
+/// (#485's `forced_straight_move` port, reused rather than porting a second
+/// clamp shape for `_execute_move`'s own `_clamp_to_bounds`). Dangerous
+/// terrain is NOT rolled for this step even when it crosses some: the table's
+/// own `_execute_move` return value is discarded uncalled at both call sites
+/// (:9694/:9698) — a faithful mirror of a table gap, not a new one.
+fn tray_hit_and_run(statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams, cover: Cover) {
+    if next.alive[si] <= 0 || !statics[next.roster.profile[si]].hit_and_run_active {
+        return;
+    }
+    if next.hit_and_run_round[si] == next.round {
+        return;
+    }
+    let Some(enemy) = nearest_enemy_reposition(statics, next, si) else { return };
+    let delta = geom::sub(geom::centre(&next.positions[si]), geom::centre(&next.positions[enemy]));
+    let len = (delta[0] * delta[0] + delta[2] * delta[2]).sqrt();
+    if len < 1e-6 {
+        return;
+    }
+    let dir = [delta[0] / len, delta[2] / len];
+    let terrain = match cover {
+        Cover::Board(t) => Some(t),
+        Cover::Recorded(_) => None,
+    };
+    let dist_in = clamp_move_to_board(terrain, &next.positions[si], dir, HIT_AND_RUN_MOVE_IN);
+    if dist_in <= 0.0 {
+        return;
+    }
+    let step_m = dist_in * IN2M as f32;
+    for p in next.positions[si].iter_mut() {
+        p[0] += (dir[0] * step_m) as f64;
+        p[2] += (dir[1] * step_m) as f64;
+    }
+    // The whole joined formation moves as one (`_moving_models`), the same
+    // hero-fold every other rigid move in `resolve_with` applies.
+    if seams.hero_attach {
+        let heroes = next.attached[si].clone();
+        for h in heroes {
+            for p in next.positions[h].iter_mut() {
+                p[0] += (dir[0] * step_m) as f64;
+                p[2] += (dir[1] * step_m) as f64;
+            }
+        }
+    }
+    next.hit_and_run_round[si] = next.round;
+}
+
 /// `SoloController._execute_move` :5033-5047 (GF/AoF v3.5.1 p.12, "Bug 23") —
 /// how many dice the move's dangerous-terrain test rolls.
 ///
@@ -2605,6 +2685,22 @@ fn resolve_with(
         }
     }
 
+    // --- HIT & RUN (main.gd:1075-1089), the once-per-round post-attack free
+    // move, tray path only. `hnr_attacked` mirrors main.gd's own local var
+    // exactly: computed from the DECIDED action, before it is known whether
+    // the melee actually connected — a declared CHARGE that fell short of
+    // MELEE_ENGAGE_IN still counts (main.gd never resets `report["action"]`
+    // on the early-return "falls short" branches of `_run_ai_melee`), so this
+    // port fires on `kind == CHARGE` alone, not on a landed fight. See
+    // `tray_hit_and_run`.
+    if dice.is_some() {
+        let hnr_attacked =
+            (!shoot_key.is_empty() && (kind == HOLD || kind == ADVANCE)) || kind == CHARGE;
+        if hnr_attacked {
+            tray_hit_and_run(statics, &mut next, si, seams, cover);
+        }
+    }
+
     // --- shaken recovery (battle_sim.gd:648-650) ---
     if was_shaken && kind == HOLD && shoot_key.is_empty() {
         next.shaken[si] = false;
@@ -2794,6 +2890,7 @@ mod tests {
             charge_probe_r: vec![0.0; 4],
             buffs: vec![Vec::new(); 4],
             vs_mark_round: vec![-1; 4],
+            hit_and_run_round: vec![-1; 4],
         }
     }
 
@@ -3743,5 +3840,175 @@ mod tests {
         assert_eq!(shot.rolls.len(), 2);
         let save = &shot.rolls[1];
         assert_eq!((save.count, save.target), (1, 5));
+    }
+
+    // ------------------------------------------------- BLOCK B5: Hit & Run ---
+
+    /// A 6x4 ft school board (72" x 48"), the `terrain.rs` `school()` fixture's
+    /// own shape, empty of cells — only `board_in` matters to `clamp_move_to_board`.
+    fn small_board() -> crate::terrain::Terrain {
+        crate::terrain::Terrain::build(&crate::terrain::PlainTerrain {
+            cells: vec![],
+            sandbox: vec![],
+            walls: vec![],
+            cell_params: crate::terrain::CellParams {
+                table_size_feet: [6.0, 4.0],
+                grid_rotation_degrees: 0.0,
+                grid_size_inches: 3.0,
+                inches_to_meters: IN2M,
+            },
+        })
+    }
+
+    /// BLOCK B5 — a shot lands (`buff_line()`'s "a" vs "b" at 12"), and the
+    /// bearer steps EXACTLY 3" directly AWAY from "b" (the only living enemy)
+    /// on the SAME activation. Dice-free: the tray ends in the identical state
+    /// whether the bearer carries the rule or not.
+    #[test]
+    fn hit_and_run_steps_three_inches_directly_away_from_the_nearest_enemy_after_a_shot_lands() {
+        let (st, mut statics) = buff_line();
+        let terrain = crate::terrain::Terrain::default();
+        let action = buff_action(Some("b"));
+
+        let mut base_tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        resolve_stochastic_tray_on_board(
+            &statics, &st, &action, &terrain, Seams::default(), &mut rng, &mut base_tray,
+        )
+        .unwrap();
+
+        statics[0].hit_and_run_active = true;
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &action, &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(tray.state_i64(), base_tray.state_i64(), "Hit & Run draws no die");
+        assert_eq!(next.hit_and_run_round[0], next.round);
+        for (got, before) in next.positions[0].iter().zip(st.positions[0].iter()) {
+            assert!((got[0] - (before[0] - 3.0 * IN2M as f64)).abs() < 1e-9, "got {got:?}");
+            assert_eq!(got[2], before[2]);
+        }
+        // hero_attach is OFF by default: the attached "ah" is left behind.
+        assert_eq!(next.positions[1], st.positions[1]);
+    }
+
+    /// The whole joined formation steps together when `hero_attach` is on —
+    /// the same fold `resolve_with`'s own rigid move applies.
+    #[test]
+    fn hit_and_run_moves_the_joined_heros_formation_together_under_hero_attach() {
+        let (st, mut statics) = buff_line();
+        statics[0].hit_and_run_active = true;
+        let terrain = crate::terrain::Terrain::default();
+        let on = Seams { hero_attach: true, ..Seams::default() };
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(Some("b")), &terrain, on, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert!((next.positions[1][0][0] - (st.positions[1][0][0] - 3.0 * IN2M as f64)).abs() < 1e-9);
+    }
+
+    /// A DECLARED charge that falls short of contact (`buff_line`'s "b" stays
+    /// 12" away, band 0) still fires Hit & Run: main.gd's own `hnr_attacked`
+    /// is computed from `report["action"] == CHARGE` BEFORE `_run_ai_melee`
+    /// runs, and never reset when the charge falls short — a table quirk,
+    /// ported as found rather than silently tightened to "actually fought".
+    #[test]
+    fn hit_and_run_fires_after_a_declared_charge_that_falls_short_of_contact() {
+        let (st, mut statics) = buff_line();
+        statics[0].hit_and_run_active = true;
+        let terrain = crate::terrain::Terrain::default();
+        let charge = Action {
+            kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
+            charge: Some("b".into()), patient: false, split: None,
+        };
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &charge, &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert!(shot.rolls.is_empty(), "the charge fell short — no melee, no dice at all");
+        assert!((next.positions[0][0][0] - (st.positions[0][0][0] - 3.0 * IN2M as f64)).abs() < 1e-9);
+        assert_eq!(next.hit_and_run_round[0], next.round);
+    }
+
+    /// RED for the fire gate, all built on the falls-short charge above (so
+    /// `hnr_attacked` is true throughout and only the gate under test differs):
+    /// without the rule, already spent this round, or no living enemy at all —
+    /// every one leaves the bearer exactly where it started.
+    #[test]
+    fn hit_and_run_negative_cases() {
+        let terrain = crate::terrain::Terrain::default();
+        let charge = Action {
+            kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
+            charge: Some("b".into()), patient: false, split: None,
+        };
+
+        // No bearer.
+        let (st, statics) = buff_line();
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &charge, &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(next.positions[0], st.positions[0]);
+
+        // Already spent this round.
+        let (mut st, mut statics) = buff_line();
+        statics[0].hit_and_run_active = true;
+        st.hit_and_run_round[0] = st.round;
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &charge, &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(next.positions[0], st.positions[0]);
+
+        // No living enemy: "b" and "bh" both down.
+        let (mut st, mut statics) = buff_line();
+        statics[0].hit_and_run_active = true;
+        st.alive[2] = 0;
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &charge, &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(next.positions[0], st.positions[0]);
+
+        // HOLD with no shoot key: `hnr_attacked` is false, the function is
+        // never even called (unlike the cases above, which reach it and bail).
+        let (st, mut statics) = buff_line();
+        statics[0].hit_and_run_active = true;
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &buff_action(None), &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(next.positions[0], st.positions[0]);
+    }
+
+    /// The board clamp, wired end-to-end (not just `axis_scale`'s own pure-math
+    /// proof, `the_reposition_axis_scale_clamps_to_the_board_edge`): a bearer
+    /// 1" short of the board's left edge, kiting further left, lands EXACTLY on
+    /// the edge instead of running 2" off it.
+    #[test]
+    fn hit_and_run_clamps_the_kiting_step_to_the_board_edge() {
+        let (mut st, mut statics) = buff_line();
+        statics[0].hit_and_run_active = true;
+        st.positions[0] = vec![[-35.0 * IN2M, 0.0, 0.0], [-35.0 * IN2M, 0.0, 0.0]];
+        st.positions[1] = vec![[-35.0 * IN2M, 0.0, 0.0]];
+        st.positions[2] = vec![[0.0, 0.0, 0.0], [0.02 * IN2M, 0.0, 0.0], [0.04 * IN2M, 0.0, 0.0]];
+        let board = small_board();
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Board(&board));
+        assert!((st.positions[0][0][0] - (-36.0 * IN2M)).abs() < 1e-6, "got {:?}", st.positions[0]);
+        assert_eq!(st.hit_and_run_round[0], st.round);
     }
 }

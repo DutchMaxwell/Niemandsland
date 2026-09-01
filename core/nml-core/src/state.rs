@@ -431,6 +431,10 @@ pub struct State {
     /// `unit_properties["vs_mark_round"]` (main.gd:16752) — the once-per-
     /// activation stamp of the vs-target Mark arm, -1 for never.
     pub vs_mark_round: Vec<i64>,
+    /// Block B5 — `unit_properties["hit_and_run_round"]` (solo_controller.gd:
+    /// 9685), the once-per-ROUND stamp of the Hit & Run free move, -1 for
+    /// never; the same shape as `vs_mark_round`.
+    pub hit_and_run_round: Vec<i64>,
 }
 
 impl State {
