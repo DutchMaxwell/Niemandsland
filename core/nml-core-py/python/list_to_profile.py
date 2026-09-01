@@ -786,30 +786,60 @@ def _base_of(ud: dict[str, Any], game_system: str, rules: list[str]) -> dict[str
     exceeds `OPRUnit`'s 32 mm round default, the only base this fallback ever
     starts from, so the guard can never actually block anything. `aofr` reads the
     SQUARE recommendation first; its shape is still `shape_for_model`'s round
-    branch, off the longer edge."""
+    branch, off the longer edge.
+
+    NML-1152 step 6c — the MOUNT link (opr_api_client.gd:994-1008): the item
+    loop runs AFTER the AF parse (:930) and BEFORE the Tough fallback (:1040);
+    a single-model unit's mount/vehicle upgrade carrying a usable
+    `bases.round` REPLACES the unit base (last item wins, no clamp on this
+    path — the table assigns the parsed ints directly)."""
     bases = ud.get("bases") or {}
     if not isinstance(bases, dict):
         bases = {}
+    # The OPRUnit fields exist either way (opr_api_client.gd:269-270 defaults);
+    # the chain mutates them in the table's own order: AF parse (:930) →
+    # mount items (:994-1008) → Tough fallback (:1040, grow-only).
+    base: dict[str, Any] = {"is_oval": False, "width_mm": DEFAULT_BASE_MM, "depth_mm": DEFAULT_BASE_MM}
+    had_recommendation = False
     if game_system == "aofr" and _is_usable_base_value(bases.get("square", "")):
         _, w, d = _parse_base_size(bases.get("square", ""), 25)
-        return {"is_oval": False, "width_mm": _clamp_mm(w), "depth_mm": _clamp_mm(d)}
-    if _is_usable_base_value(bases.get("round", "")):
+        base = {"is_oval": False, "width_mm": _clamp_mm(w), "depth_mm": _clamp_mm(d)}
+        had_recommendation = True
+    elif _is_usable_base_value(bases.get("round", "")):
         is_oval, w, d = _parse_base_size(bases.get("round", ""), DEFAULT_BASE_MM)
-        return {"is_oval": is_oval, "width_mm": _clamp_mm(w), "depth_mm": _clamp_mm(d)}
+        base = {"is_oval": is_oval, "width_mm": _clamp_mm(w), "depth_mm": _clamp_mm(d)}
+        had_recommendation = True
+    if int(ud.get("size", 1)) <= 1:
+        for item in ud.get("loadout", []) or []:
+            if not isinstance(item, dict) or int(item.get("attacks") or 0) > 0:
+                continue
+            item_bases = item.get("bases")
+            if isinstance(item_bases, dict) and _is_usable_base_value(item_bases.get("round", "")):
+                m_oval, m_w, m_d = _parse_base_size(item_bases.get("round", ""), DEFAULT_BASE_MM)
+                base = {"is_oval": bool(m_oval), "width_mm": int(m_w), "depth_mm": int(m_d)}
+    if not had_recommendation:
+        base = _tough_fallback_base(base, str(ud.get("name", "")), int(ud.get("size", 1)), rules)
+    return base
+
+
+def _tough_fallback_base(base: dict[str, Any], name: str, size: int, rules: list[str]) -> dict[str, Any]:
+    """`_apply_tough_base_fallback` (opr_api_client.gd:833-850) with its
+    `_set_round_base` / `_set_oval_base` (:887-906) grow-only guards — a mount
+    base already REPLACED above is never shrunk. The guard IS reachable here
+    (unlike on a fresh 32 mm default): a mount can be smaller than the ladder."""
     tough = _tough_from_rules(rules)
     if tough < 3:
-        return {"is_oval": False, "width_mm": DEFAULT_BASE_MM, "depth_mm": DEFAULT_BASE_MM}
-    verdict = _classify_big_model(str(ud.get("name", "")), int(ud.get("size", 1)), tough)
-    if verdict == "vehicle":
-        w, d = _vehicle_base_mm(tough)
-        return {"is_oval": True, "width_mm": _clamp_mm(w), "depth_mm": _clamp_mm(d)}
-    if verdict == "artillery":
-        w, d = _artillery_base_mm(tough)
-        return {"is_oval": True, "width_mm": _clamp_mm(w), "depth_mm": _clamp_mm(d)}
-    if verdict in ("walker", "monster"):
-        mm = _clamp_mm(_walker_base_mm(tough))
-        return {"is_oval": False, "width_mm": mm, "depth_mm": mm}
-    mm = _clamp_mm(_base_size_from_tough(tough))  # large infantry / cavalry
+        return base  # normal infantry / heroes — keep the base (:835-836)
+    long_mm = max(base["width_mm"], base["depth_mm"])
+    verdict = _classify_big_model(name, size, tough)
+    if verdict in ("vehicle", "artillery"):
+        w, d = _vehicle_base_mm(tough) if verdict == "vehicle" else _artillery_base_mm(tough)
+        if max(w, d) <= long_mm:
+            return base  # _set_oval_base :900-901
+        return {"is_oval": True, "width_mm": w, "depth_mm": d}
+    mm = _walker_base_mm(tough) if verdict in ("walker", "monster") else _base_size_from_tough(tough)
+    if mm <= long_mm:
+        return base  # _set_round_base :888-889
     return {"is_oval": False, "width_mm": mm, "depth_mm": mm}
 
 
@@ -914,6 +944,240 @@ def _faction_from_path(path: str | Path) -> str:
     stem = Path(path).stem
     us = stem.rfind("_")
     return stem[:us] if us > 0 else stem
+
+
+#: NML-1152 step 6c — the bundled model manifest's `base_mm` specs
+#: (model_library.gd:127-134), keyed `faction/normalized unit name`
+#: (make_key :100-109). Loaded once; a missing/malformed file means no
+#: overrides (default-preserving, like the loader's bundled fallback).
+_MANIFEST_BASES: dict[str, dict[str, Any]] | None = None
+
+
+def _manifest_base_overrides() -> dict[str, dict[str, Any]]:
+    global _MANIFEST_BASES
+    if _MANIFEST_BASES is None:
+        out: dict[str, dict[str, Any]] = {}
+        p = Path(__file__).resolve().parents[2] / "assets" / "model_manifest.json"
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        for key, entry in (data.get("models") or {}).items():
+            if isinstance(entry, dict) and isinstance(entry.get("base_mm"), dict):
+                out[str(key)] = entry["base_mm"]
+        _MANIFEST_BASES = out
+    return _MANIFEST_BASES
+
+
+def _normalize_unit(s: str) -> str:
+    """model_library.gd:_normalize_unit — lowercase, -/_ folded to spaces,
+    space repeats collapsed; both sides of the manifest lookup."""
+    t = s.strip().lower().replace("-", " ").replace("_", " ")
+    while "  " in t:
+        t = t.replace("  ", " ")
+    return t
+
+
+def _apply_manifest_base_overrides(built: list[dict[str, Any]], faction: str) -> None:
+    """opr_army_manager.gd:_apply_manifest_base_overrides (:2565-2589) — runs at
+    SPAWN on the table, i.e. post-fold, per unit NAME. Precedence
+    MANIFEST > AF base > Tough-derived: a present override REPLACES the parsed
+    base with no grow guard (the parse has already resolved the lower links).
+    The table's `base_is_square` branch (:2574-2581) is aofr-only; the corpus
+    game system is `gf`, so the round branch here carries the whole law."""
+    overrides = _manifest_base_overrides()
+    if not overrides:
+        return
+    prefix = faction.strip().lower() + "/"
+    for u in built:
+        spec = overrides.get(prefix + _normalize_unit(str(u["name"])))
+        if not spec:
+            continue
+        if _is_usable_base_value(spec.get("round", "")):
+            m_oval, m_w, m_d = _parse_base_size(spec.get("round", ""), DEFAULT_BASE_MM)
+            u["base"] = {"is_oval": bool(m_oval), "width_mm": int(m_w), "depth_mm": int(m_d)}
+
+
+def deploy_base_groups(
+    data: dict[str, Any], faction: str, player: int
+) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    """NML-1152 step 6c — the twin's production base-shape derivation for the
+    deployment law: `(units, heroes_of)`. `units` are `_units_from_list`'s
+    internal units (combined folded, non-combined attached heroes kept as
+    their own entries) with the manifest override applied; `heroes_of` maps a
+    host's selectionId -> its attached heroes in list order. The host's
+    DEPLOYMENT models are its own plus each attached hero's
+    (solo_controller.gd:_deploy_models :10239-10245) — the fold the settle's
+    per-model shapes and `_deploy_base_radius` (:10263-10267) read. Per-unit
+    shape inputs: `u["base"]` + `u["model_tough"]`."""
+    built = _units_from_list(data, player)
+    _apply_manifest_base_overrides(built, faction)
+    heroes_of: dict[str, list[dict[str, Any]]] = {}
+    for u in built:
+        if u["join_to_unit"]:
+            heroes_of.setdefault(u["join_to_unit"], []).append(u)
+    return built, heroes_of
+
+
+# ------------------------------------------------------- arena deploy roster ---
+# NML-1152 step 8 — the UnitSpec roster the arena deployment branch feeds
+# `nml_core.deploy_side`. The twin derives everything from the LIST (the 6c
+# doctrine: the dump's shape fields are the gate's oracle only).
+
+# solo_controller.gd:10228-10229 — the compact deployment grid the footprint
+# offsets build (the model POSITIONS themselves are `_place_unit_at`'s fixed
+# grid, ported Rust-side in `place_unit_models`).
+DEPLOY_SPACING_M = 0.04
+DEPLOY_COLS = 5
+# coherency_checker.gd:13/:18 — the span cap the grid shrinks under. The
+# skirmish 6" cap is corpus-absent like the Rust port's (a skirmish corpus
+# must extend this law, not silently reuse the 9" one).
+DEPLOY_MAX_CHAIN_IN = 9.0
+# separation_checker.gd — the DEFAULT_BASE_RADIUS_M `_deploy_base_radius`
+# starts from (:10261).
+DEPLOY_DEFAULT_BASE_R_M = 0.016
+
+
+def _rule_matches(candidate: str, rule: str) -> bool:
+    """game_unit.gd:rule_name_matches :254-258 — the exact name, or the name
+    followed by a parenthesised qualifier ("Tough(3)"); a bare prefix is NOT a
+    match ("Fearless" is not "Fear", "Ambush Beacon" is not "Ambush")."""
+    s = str(candidate).strip()
+    return s == rule or (s.startswith(rule) and s[len(rule):].strip().startswith("("))
+
+
+def _base_rule(candidate: str) -> str:
+    """RulesRegistry.base_rule_name :128-129 — the name without its params."""
+    return str(candidate).strip().split("(", 1)[0].strip()
+
+
+def _deploy_flags(u: dict[str, Any]) -> dict[str, bool]:
+    """The four deployment classifications over one internal unit.
+
+    solo_controller.gd:9009-9015 + :10165-10191: Scout = the special rule or an
+    item-granted "Scout" (B12); Ambush = Ambush/Infiltrate/Rapid Ambush by base
+    name, special rules or grants (the counts_as ALIAS branch of
+    `unit_has_ambush` needs the live RulesRegistry and has no list-side
+    reading); Strider/Flying ignore terrain (:9109, special rules only, no
+    grants); Vanguard = the rule or a grant (the table ANDs `unit_rule_active`
+    with the faction book map, which a list cannot see)."""
+    rules = [str(r) for r in u["special_rules"]]
+    grants = [str(g) for g in u["item_grants"]]
+    ambush_rules = ("Ambush", "Infiltrate", "Rapid Ambush")
+    return {
+        "scout": any(_rule_matches(r, "Scout") for r in rules)
+        or any(_base_rule(g) == "Scout" for g in grants),
+        "ambush": any(_base_rule(r) in ambush_rules for r in rules)
+        or any(_base_rule(g) in ambush_rules for g in grants),
+        "ignores_terrain": any(
+            _rule_matches(r, "Strider") or _rule_matches(r, "Flying") for r in rules
+        ),
+        "vanguard": any(_rule_matches(r, "Vanguard") for r in rules)
+        or any(_base_rule(g) == "Vanguard" for g in grants),
+    }
+
+
+def _deploy_footprint_offsets(shapes: list[dict[str, Any]]) -> list[list[float]]:
+    """solo_controller.gd:_deploy_footprint_offsets :10273-10307 over the
+    folded shape groups — the model-local XZ offsets (metres, relative to the
+    drop anchor) the drop WILL build, so the footprint check tests where each
+    model actually lands. Squarest grid + base-aware spacing + span cap."""
+    n = sum(int(g["n"]) for g in shapes)
+    if n == 0:
+        return []
+    base_r = max(
+        [DEPLOY_DEFAULT_BASE_R_M]
+        + [
+            _base_radius_m(
+                {"is_oval": g["is_oval"], "width_mm": g["w_mm"], "depth_mm": g["d_mm"]},
+                int(g["tough"]),
+            )
+            for g in shapes
+        ]
+    )
+    spacing = max(DEPLOY_SPACING_M, 2.0 * base_r + 0.006)
+    cols = min(n, DEPLOY_COLS) if n <= 2 * DEPLOY_COLS else math.ceil(math.sqrt(n))
+    rows = math.ceil(n / cols)
+    span_cap = (DEPLOY_MAX_CHAIN_IN - 0.5) * 0.0254
+    grid_diag = math.sqrt((cols - 1) ** 2 + (rows - 1) ** 2)
+    if grid_diag > 0.001 and grid_diag * spacing + 2.0 * base_r > span_cap:
+        spacing = max(2.0 * base_r + 0.002, (span_cap - 2.0 * base_r) / grid_diag)
+    return [
+        [
+            (float(i % cols) - float(cols - 1) * 0.5) * spacing,
+            (float(i // cols) - float(rows - 1) * 0.5) * spacing,
+        ]
+        for i in range(n)
+    ]
+
+
+def deploy_unit_specs(
+    data: dict[str, Any], faction: str, player: int
+) -> tuple[list[dict[str, Any]], dict[str, tuple[str, int, int]]]:
+    """NML-1152 step 8 — the arena deployment roster for one list:
+    `(specs, hero_fold)`.
+
+    `specs` are UnitSpec dicts in host-creation order, one per unit EXCLUDING
+    its attached heroes — `_deploy_models` (:10238-10245) deploys the host's
+    models PLUS each attached hero's, so a hero folds into its host's group
+    (model_shapes: host first, heroes in list order — the settle reads them in
+    exactly that order). A hero whose joinToUnit names no selection stays its
+    own row, the same guard `derive_attachment` applies. `hero_fold` maps a
+    folded hero's unit_id -> `(host_key, offset, count)`: the hero's models are
+    that slice of the host's settled group.
+
+    NOT ported (corpus-absent, named loudly): regiments deploy from their tray
+    (`_is_regiment` -> empty offsets) and a dangling hero-of-hero chain."""
+    built, heroes_of = deploy_base_groups(data, faction, player)
+    by_sel = {u["selection_id"]: u for u in built if u["selection_id"]}
+    specs: list[dict[str, Any]] = []
+    hero_fold: dict[str, tuple[str, int, int]] = {}
+    for u in built:
+        if u["join_to_unit"] and u["join_to_unit"] in by_sel:
+            continue
+        group = [u] + (heroes_of.get(u["selection_id"], []) if u["selection_id"] else [])
+        shapes: list[dict[str, Any]] = []
+        model_count = 0
+        for m in group:
+            toughs = [int(t) for t in m["model_tough"]]
+            if toughs and any(t != toughs[0] for t in toughs):
+                raise ValueError("per-model Tough not uniform in %s" % m["name"])
+            shapes.append(
+                {
+                    "is_oval": bool(m["base"]["is_oval"]),
+                    "w_mm": int(m["base"]["width_mm"]),
+                    "d_mm": int(m["base"]["depth_mm"]),
+                    "tough": toughs[0] if toughs else 1,
+                    "n": len(toughs),
+                }
+            )
+            model_count += len(toughs)
+        flags = _deploy_flags(u)
+        specs.append(
+            {
+                "key": u["unit_id"],
+                "model_count": model_count,
+                # The ladder reads `deploy_base_radius_of` (the shapes) — this
+                # scalar stays the act-header-style cross-check artifact (6c).
+                "base_r_m": _base_radius_m(
+                    u["base"], int(u["model_tough"][0]) if u["model_tough"] else 1
+                ),
+                "footprint": _deploy_footprint_offsets(shapes),
+                "scout": flags["scout"],
+                "ambush": flags["ambush"],
+                "ignores_terrain": flags["ignores_terrain"],
+                "vanguard": flags["vanguard"],
+                "transport_capacity": 0,
+                "facing_rad": 0.0,
+                "model_shapes": shapes,
+            }
+        )
+        offset = model_count - sum(int(g["n"]) for g in shapes[1:])
+        for h in group[1:]:
+            count = len(h["model_tough"])
+            hero_fold[h["unit_id"]] = (u["unit_id"], offset, count)
+            offset += count
+    return specs, hero_fold
 
 
 def _units_from_list(
@@ -1068,6 +1332,11 @@ def profiles_from_army_forge_json(
     """
     game_system = str(data.get("gameSystem", "gf"))
     built = _units_from_list(data, player)
+    # NML-1152 step 6c — the manifest base override rides the table's spawn
+    # order (opr_army_manager.gd:296): after the parse, before any shape read
+    # (`base_radius` below). Inert while the bundled manifest carries no
+    # `base_mm` entries; digest-neutral by construction then.
+    _apply_manifest_base_overrides(built, faction)
     _expand_auras(built)
     return {u["unit_id"]: _unit_profile(u, faction, game_system) for u in built}
 

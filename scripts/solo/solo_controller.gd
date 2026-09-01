@@ -9157,13 +9157,13 @@ func _deploy_place_id(id: int) -> GameUnit:
 		if v_spot != spot:
 			_place_unit_at(unit, v_spot)
 			_deploy_zone_of.erase(unit)   # the pushed spot MAY legally leave the zone
-			record_decision({"kind": "deploy", "unit": unit.get_name(),
+			record_decision({"kind": "deploy", "unit": unit.get_name(), "unit_id": id,
 				"rule": "Vanguard: after deploying, the unit may be placed within 9\" — pushed toward the enemy side",
 				"candidates": [], "chosen": "+%.1f\" forward" % (spot.distance_to(v_spot) / INCHES_TO_METERS),
 				"why": "vanguard forward placement",
 				"data": {"x_m": v_spot.x, "z_m": v_spot.y}})
 			spot = v_spot
-	record_decision({"kind": "deploy", "unit": unit.get_name(),
+	record_decision({"kind": "deploy", "unit": unit.get_name(), "unit_id": id,
 		"rule": "Solo v3.5.0 AI deployment: objective-near spot in the unit's section; Scout/Ambush overlays",
 		"candidates": [], "chosen": "", "why": spot_why,
 		"data": {"section": int(section_of.get(id, 2)), "x_m": spot.x, "z_m": spot.y}})

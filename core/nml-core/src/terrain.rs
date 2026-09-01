@@ -115,6 +115,35 @@ pub struct Terrain {
     /// before D5-2a, and the reason the charge-move seam warns instead of
     /// pretending the board has no ruins.
     walls_in: Vec<[[f32; 2]; 2]>,
+    /// NML-1152 step 6a — the same segments in WORLD METRES at the f32 Vector2
+    /// boundary (main.gd:2316 `get_wall_segments_world()`'s own shape): the
+    /// raw f64 product narrowed ONCE at load. `deployment` reads this for the
+    /// wall-bisect veto — re-deriving from `walls_in` would round-trip through
+    /// the corner-origin inch frame (two extra f32 quantizations + a
+    /// `board_in/2` offset) and no longer be the values the step-5b parity
+    /// replay verified. Filled together with `walls_in`; empty under the same
+    /// conditions.
+    walls_world: Vec<[[f32; 2]; 2]>,
+    /// NML-1155 — the bank's optional prop layer: each SOLID deployment prop's
+    /// XZ incircle disc as `[centre_x_m, centre_z_m, radius_m]`, world metres
+    /// (the dump writes table-centred inches — the bank `pieces` frame — and
+    /// `set_bank_props` converts with the board's own `in2m`). Empty when the
+    /// bank carried no `blockers` key: every bank recorded before NML-1155,
+    /// which keeps the twin's blocked law byte-identical to before
+    /// (default-preserving, like `walls_in` above).
+    blockers_m: Vec<[f64; 3]>,
+    /// NML-1152 step 4d — the bank's optional `blocker_boxes`: per probe-visible
+    /// collider its REAL XZ footprint `[cx, cy, half_w, half_h, angle_rad,
+    /// reach_m]`, world metres (the dump writes table-centred inches — the bank
+    /// `pieces` frame — and `set_bank_props` converts with the board's own
+    /// `in2m`; the angle rides as-is). Harvested from the bodies' actual
+    /// CollisionShape3D + global transform (tools/terrain_bank_dump.gd
+    /// `_collider_boxes`), so a wall body's 0.25" thickness and a container's
+    /// exact outline ride the box — not the centreline `walls_in` carries nor
+    /// the incircle `blockers_m` approximates. Empty when the bank carried no
+    /// `blocker_boxes` key: every bank recorded before step 4d
+    /// (default-preserving, like `blockers_m` above).
+    blocker_boxes_m: Vec<[f64; 6]>,
 }
 
 impl Terrain {
@@ -145,6 +174,21 @@ impl Terrain {
         &self.walls_in
     }
 
+    /// The board's wall segments in WORLD METRES, f32 at the Vector2 boundary
+    /// — the load-time narrowing of the raw values (step 6a, see the field doc).
+    #[inline]
+    pub fn walls_world_m(&self) -> &[[[f32; 2]; 2]] {
+        &self.walls_world
+    }
+
+    /// `cell_params.inches_to_meters` — the metre-per-inch scale this board's
+    /// inch frame was built with, so callers converting a METRE threshold into
+    /// this frame (deployment wall clearance) use the board's own scale.
+    #[inline]
+    pub fn in2m(&self) -> f64 {
+        self.in2m
+    }
+
     /// Converts `TerrainOverlay.get_wall_segments_world()` — WORLD METRES,
     /// `[[ax, az], [bx, bz]]` per segment — into the inch frame and stores it.
     /// The conversion is `to_inch` itself, so a wall and a model position can
@@ -159,6 +203,87 @@ impl Terrain {
                 ]
             })
             .collect();
+        self.walls_world = raw
+            .iter()
+            .map(|w| {
+                [
+                    [w[0][0] as f32, w[0][1] as f32],
+                    [w[1][0] as f32, w[1][1] as f32],
+                ]
+            })
+            .collect();
+    }
+
+    /// NML-1155 — loads the bank v2 keys (`tools/terrain_bank_dump.gd`):
+    /// `walls` as `[x1, y1, x2, y2]` and `blockers` as `[x, y, r]`, both
+    /// TABLE-CENTRED INCHES — the same centred inch frame as the bank's
+    /// `pieces` (SchoolTerrain cell centres, school_terrain.gd:47-49). The
+    /// scale is the board's own `in2m` (the school grid's 0.0254 — the same
+    /// constant the dump divided by), so a wall, a blocker and a model
+    /// position can never land in two different frames; the walls then ride
+    /// `set_walls_world_m` (world metres → the planner inch frame) exactly
+    /// like an act header's walls do. NML-1152 step 4d adds `blocker_boxes`
+    /// (`[cx, cy, half_w, half_h, angle, reach]`, inches + radians) — the
+    /// probe's real footprints, see the field doc. All keys are OPTIONAL — a
+    /// bank dumped before NML-1155 carries none, and empty slices leave the
+    /// board unchanged (default-preserving). NOTE: this OVERWRITES `walls_in`
+    /// — the bank header's own `terrain.walls` is `[]` (act_recorder.gd:290),
+    /// so don't call it on a board whose header walls matter. An absent/default
+    /// board (in2m 0) keeps its empty layers — the no-overlay behaviour.
+    pub fn set_bank_props(
+        &mut self,
+        walls: &[[f64; 4]],
+        blockers: &[[f64; 3]],
+        blocker_boxes: &[[f64; 6]],
+    ) {
+        if self.in2m <= 0.0 {
+            return;
+        }
+        let world_walls: Vec<[[f64; 2]; 2]> = walls
+            .iter()
+            .map(|w| {
+                [
+                    [w[0] * self.in2m, w[1] * self.in2m],
+                    [w[2] * self.in2m, w[3] * self.in2m],
+                ]
+            })
+            .collect();
+        self.set_walls_world_m(&world_walls);
+        self.blockers_m = blockers
+            .iter()
+            .map(|b| [b[0] * self.in2m, b[1] * self.in2m, b[2] * self.in2m])
+            .collect();
+        self.blocker_boxes_m = blocker_boxes
+            .iter()
+            .map(|b| {
+                [
+                    b[0] * self.in2m,
+                    b[1] * self.in2m,
+                    b[2] * self.in2m,
+                    b[3] * self.in2m,
+                    b[4],
+                    b[5] * self.in2m,
+                ]
+            })
+            .collect();
+    }
+
+    /// The banked blocker discs, world metres — `deployment::prop_blocked`'s
+    /// input. Empty = the bank carried no `blockers` key (NOT "the board has
+    /// no props" — the mirror of the `walls_in` caveat).
+    #[inline]
+    pub fn blockers_m(&self) -> &[[f64; 3]] {
+        &self.blockers_m
+    }
+
+    /// The banked blocker OBBs, world metres — `deployment::prop_blocked`'s
+    /// input when present (`[cx, cz, half_w, half_h, angle_rad, reach]`; it
+    /// falls back to the `blockers_m` discs when this is empty). Empty = the
+    /// bank carried no `blocker_boxes` key (NOT "the board has no props" —
+    /// the mirror of the `walls_in` caveat).
+    #[inline]
+    pub fn blocker_boxes_m(&self) -> &[[f64; 6]] {
+        &self.blocker_boxes_m
     }
 
     /// A world point (metres, `x`/`z`) in the movement planner's 0-origin INCH
@@ -254,6 +379,9 @@ impl Terrain {
             board_in: [width_in, height_in],
             in2m: cp.inches_to_meters,
             walls_in: Vec::new(),
+            walls_world: Vec::new(),
+            blockers_m: Vec::new(),
+            blocker_boxes_m: Vec::new(),
         };
         out.set_walls_world_m(&p.walls);
         out
