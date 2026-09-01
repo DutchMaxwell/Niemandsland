@@ -137,20 +137,18 @@ var _seed := 1
 var _games := 1
 var _out := ""
 var _magic: Dictionary = {}
-var _doctrine_mode := ""   # NML_OBJECTIVE_DOCTRINE: "" = rulebook (today), style|search = the doctrine rung (NML-1140 step 7)
+var _doctrine_mode := "rulebook"   # NML-1140 step 8: the resolved placement rung — env override + strongest seat's preset (SoloDifficulty.resolve_placement)
 
 
 func _initialize() -> void:
 	_parse_args()
-	# NML-1140 step 7: the doctrine rung's env seam — unknown mode / rung-without-
-	# rulebook FATALS loudly, never a silent fallback (the label-bug class).
-	# Refused BEFORE the _run_all connect, so nothing plays on.
-	_doctrine_mode = ObjectiveLayout.doctrine_mode_from_env()
+	# NML-1140 step 8: ONE resolver (env NML_OBJECTIVE_DOCTRINE override, else the
+	# strongest seat's preset — no seat grades here, so the default preset decides).
+	# Unknown words and an armed rung without NML_OBJECTIVES=rulebook FATAL loudly
+	# inside it. Refused BEFORE the _run_all connect, so nothing plays on.
+	_doctrine_mode = SoloDifficulty.resolve_placement("", "",
+		OS.get_environment("NML_OBJECTIVES").strip_edges().to_lower())
 	if _doctrine_mode == "?":
-		quit(1)
-		return
-	if _doctrine_mode != "" and OS.get_environment("NML_OBJECTIVES").strip_edges().to_lower() != "rulebook":
-		printerr("[CORESP] FATAL: NML_OBJECTIVE_DOCTRINE requires NML_OBJECTIVES=rulebook")
 		quit(1)
 		return
 	# Script-mode quirk: during _initialize the root window is NOT yet inside
@@ -660,9 +658,10 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array,
 		"magic": _magic}
 	if not profile_summary.is_empty():   # NML-1072: env-gated (NML_PROFILE=1) only
 		result["profile"] = profile_summary
-	# NML-1140 step 7: the resolved doctrine mode rides the result — additive,
-	# only when armed; an unset run's result file is unchanged byte for byte.
-	if _doctrine_mode != "":
+	# NML-1140 step 8: the rung rides the result only when it actually shaped the
+	# RULEBOOK layout (a preset-derived search on a constants game placed nothing).
+	if OS.get_environment("NML_OBJECTIVES").strip_edges().to_lower() == "rulebook" \
+			and (_doctrine_mode == "style" or _doctrine_mode == "search"):
 		result["objectives_doctrine"] = _doctrine_mode
 	if _out != "":
 		DirAccess.make_dir_recursive_absolute(_out)

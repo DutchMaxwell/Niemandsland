@@ -59,7 +59,7 @@ const IN2M := 0.0254
 const OffboardAudit := preload("res://tools/offboard_audit.gd")
 
 var _out_dir: String = ""
-var _doctrine_mode := ""        # NML_OBJECTIVE_DOCTRINE: "" = rulebook (today), style|search = the doctrine rung (NML-1140 step 7)
+var _doctrine_mode := "rulebook"        # NML-1140 step 8: the resolved placement rung — env override + strongest seat's preset (SoloDifficulty.resolve_placement)
 var _decisions: Array = []      # raw SoloController.decision_log records, in order
 var _violations: Array = []     # {round, kind, unit, detail} — runtime rule-violation audit
 var _act_order: Array = []       # sides activated this round, in order (back-to-back audit)
@@ -110,14 +110,13 @@ func _initialize() -> void:
 func _run() -> void:
 	_t0 = Time.get_ticks_msec() / 1000.0
 	_parse_args()
-	# NML-1140 step 7: the doctrine rung's env seam — unknown mode / rung-without-
-	# rulebook FATALS loudly, never a silent fallback (the label-bug class).
-	_doctrine_mode = ObjectiveLayout.doctrine_mode_from_env()
+	# NML-1140 step 8: ONE resolver (env NML_OBJECTIVE_DOCTRINE override, else the
+	# strongest seat's preset — no seat grades here, so the default preset decides).
+	# Unknown words and an armed rung without NML_OBJECTIVES=rulebook FATAL loudly
+	# inside it ("?" = quit).
+	_doctrine_mode = SoloDifficulty.resolve_placement("", "",
+		OS.get_environment("NML_OBJECTIVES").strip_edges().to_lower())
 	if _doctrine_mode == "?":
-		quit(1)
-		return
-	if _doctrine_mode != "" and OS.get_environment("NML_OBJECTIVES").strip_edges().to_lower() != "rulebook":
-		printerr("[SELFPLAY] FATAL: NML_OBJECTIVE_DOCTRINE requires NML_OBJECTIVES=rulebook")
 		quit(1)
 		return
 	seed(_play_seed)
@@ -854,9 +853,10 @@ func _write_outputs(main: Node, solo: Node, terrain_overlay: Node, army_manager:
 		"battle_log_entries": battle_log.size(),
 		"violations": {"total": _violations.size(), "by_kind": counts},
 	}
-	# NML-1140 step 7: the resolved doctrine mode rides the result — additive,
-	# only when armed; an unset run's result file is unchanged byte for byte.
-	if _doctrine_mode != "":
+	# NML-1140 step 8: the rung rides the result only when it actually shaped the
+	# RULEBOOK layout (a preset-derived search on a constants game placed nothing).
+	if OS.get_environment("NML_OBJECTIVES").strip_edges().to_lower() == "rulebook" \
+			and (_doctrine_mode == "style" or _doctrine_mode == "search"):
 		result["objectives_doctrine"] = _doctrine_mode
 	_write_file("%s_result.json" % _out_name, JSON.stringify(result, "\t"))
 

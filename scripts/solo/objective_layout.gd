@@ -51,19 +51,10 @@ const ROLL_OFF_CAP := 100     # SoloController.roll_off's own tie cap
 const IMPASSABLE := 3         # TerrainRules.TerrainType.CONTAINER — terrain_rules.gd:72-73
 
 
-## NML-1140 step 7: the harnesses' env seam, ONE definition for all three call
-## sites (arena_match / core_selfplay / solo_selfplay). "" (unset/blank) is
-## today's rulebook draw byte for byte, "style"/"search" arm the doctrine rung.
-## Anything else prints one loud FATAL line and returns "?" — the harness quits
-## on "?" (a static RefCounted cannot reach SceneTree.quit). A typo'd mode must
-## never fall back to the rulebook silently and record a mislabeled corpus
-## (the label-bug class; the same loud-FATAL law as NML_OBJECTIVES/NML_MISSION).
-static func doctrine_mode_from_env() -> String:
-	var m := OS.get_environment("NML_OBJECTIVE_DOCTRINE").strip_edges().to_lower()
-	if m == "" or m == "style" or m == "search":
-		return m
-	printerr("[OBJECTIVES] FATAL: unknown NML_OBJECTIVE_DOCTRINE '%s' (style|search; unset = rulebook) — refusing a mislabeled run" % m)
-	return "?"
+## NML-1140 step 8: the rung's WORD is resolved once per harness by
+## `SoloDifficulty.resolve_placement` (env NML_OBJECTIVE_DOCTRINE override, else the
+## strongest seat's preset; unknown words FATAL loudly there) — `generate` takes the
+## resolved word as given and treats "rulebook" exactly like "".
 
 
 ## The doctrine's per-army input: {unit_id: profile} in the `_unit_profile`

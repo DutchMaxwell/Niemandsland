@@ -61,7 +61,7 @@ var _symmetric := false                 # symmetric=1: point-symmetric terrain (
 var _objective_count := 3               # objectives=5: five point-symmetric markers
 var _mission_id := ""                   # NML_MISSION: play a catalog mission (M5); empty = legacy centre-line tuning board
 var _objectives_mode := "constant"      # NML_OBJECTIVES: "rulebook" runs the D8a seeded generator; default = the 3 constants
-var _doctrine_mode := ""                # NML_OBJECTIVE_DOCTRINE: "" = rulebook (today), style|search = the doctrine rung (NML-1140 step 7)
+var _doctrine_mode := "rulebook"       # NML-1140 step 8: the resolved placement rung (rulebook|style|search) — env override + strongest seat's preset (SoloDifficulty.resolve_placement)
 var _objectives_placed := 0             # what actually reached the overlay — the stamp states played truth, not intent
 var _batch := true                      # headless sweeps: instant (non-physics) dice + zero pacing holds; batch=0 forces the physics tray
 var _army1 := P1_FIXTURE
@@ -736,7 +736,9 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 	}
 	# NML-1140 step 7: the resolved doctrine mode rides the result — additive,
 	# only when armed; an unset run's result file is unchanged byte for byte.
-	if _doctrine_mode != "":
+	# NML-1140 step 8: the rung rides the result only when it actually shaped the
+	# RULEBOOK layout (a preset-derived search on a constants game placed nothing).
+	if _objectives_mode == "rulebook" and (_doctrine_mode == "style" or _doctrine_mode == "search"):
 		result["objectives_doctrine"] = _doctrine_mode
 	if BattleSim.profile_enabled():   # NML-1072: wall-clock phase split (teardown lands after this write)
 		result["profile"] = BattleSim.profile.duplicate()
@@ -1079,14 +1081,11 @@ func _parse_config() -> void:
 		quit(1)
 		return
 	_objectives_mode = om if om != "" else "constant"
-	# NML-1140 step 7: the doctrine rung's env seam — unknown mode / rung-without-
-	# rulebook FATALS loudly, never a silent fallback (the label-bug class).
-	_doctrine_mode = ObjectiveLayout.doctrine_mode_from_env()
+	# NML-1140 step 8: ONE resolver — env NML_OBJECTIVE_DOCTRINE beats the seat
+	# presets, otherwise the strongest seat's preset decides; unknown words and an
+	# armed rung without NML_OBJECTIVES=rulebook FATAL loudly inside it ("?" = quit).
+	_doctrine_mode = SoloDifficulty.resolve_placement(_p1_grade, _p2_grade, _objectives_mode)
 	if _doctrine_mode == "?":
-		quit(1)
-		return
-	if _doctrine_mode != "" and _objectives_mode != "rulebook":
-		printerr("[ARENA] FATAL: NML_OBJECTIVE_DOCTRINE requires NML_OBJECTIVES=rulebook")
 		quit(1)
 		return
 	_mission_id = OS.get_environment("NML_MISSION").strip_edges().to_lower()
