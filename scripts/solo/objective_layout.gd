@@ -51,6 +51,33 @@ const ROLL_OFF_CAP := 100     # SoloController.roll_off's own tie cap
 const IMPASSABLE := 3         # TerrainRules.TerrainType.CONTAINER — terrain_rules.gd:72-73
 
 
+## NML-1140 step 7: the harnesses' env seam, ONE definition for all three call
+## sites (arena_match / core_selfplay / solo_selfplay). "" (unset/blank) is
+## today's rulebook draw byte for byte, "style"/"search" arm the doctrine rung.
+## Anything else prints one loud FATAL line and returns "?" — the harness quits
+## on "?" (a static RefCounted cannot reach SceneTree.quit). A typo'd mode must
+## never fall back to the rulebook silently and record a mislabeled corpus
+## (the label-bug class; the same loud-FATAL law as NML_OBJECTIVES/NML_MISSION).
+static func doctrine_mode_from_env() -> String:
+	var m := OS.get_environment("NML_OBJECTIVE_DOCTRINE").strip_edges().to_lower()
+	if m == "" or m == "style" or m == "search":
+		return m
+	printerr("[OBJECTIVES] FATAL: unknown NML_OBJECTIVE_DOCTRINE '%s' (style|search; unset = rulebook) — refusing a mislabeled run" % m)
+	return "?"
+
+
+## The doctrine's per-army input: {unit_id: profile} in the `_unit_profile`
+## schema the act header stamps — the one roster schema both worlds share
+## (design 2). The Rust summary sorts the keys itself, so insertion order
+## cannot leak seat order.
+static func army_profiles(units: Array) -> Dictionary:
+	var out := {}
+	for u in units:
+		var gu := u as GameUnit
+		out[str(gu.unit_id)] = BattleSim._unit_profile(gu)
+	return out
+
+
 ## The layout for ONE game. `cells` is the board's {Vector2i: terrain type} (the very map
 ## the act header records and tools/terrain_bank_dump.gd banks), `n` its grid dimension.
 ## Returns the stamp the recorder writes and the twin re-derives:

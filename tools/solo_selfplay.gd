@@ -59,6 +59,7 @@ const IN2M := 0.0254
 const OffboardAudit := preload("res://tools/offboard_audit.gd")
 
 var _out_dir: String = ""
+var _doctrine_mode := ""        # NML_OBJECTIVE_DOCTRINE: "" = rulebook (today), style|search = the doctrine rung (NML-1140 step 7)
 var _decisions: Array = []      # raw SoloController.decision_log records, in order
 var _violations: Array = []     # {round, kind, unit, detail} — runtime rule-violation audit
 var _act_order: Array = []       # sides activated this round, in order (back-to-back audit)
@@ -109,6 +110,16 @@ func _initialize() -> void:
 func _run() -> void:
 	_t0 = Time.get_ticks_msec() / 1000.0
 	_parse_args()
+	# NML-1140 step 7: the doctrine rung's env seam — unknown mode / rung-without-
+	# rulebook FATALS loudly, never a silent fallback (the label-bug class).
+	_doctrine_mode = ObjectiveLayout.doctrine_mode_from_env()
+	if _doctrine_mode == "?":
+		quit(1)
+		return
+	if _doctrine_mode != "" and OS.get_environment("NML_OBJECTIVES").strip_edges().to_lower() != "rulebook":
+		printerr("[SELFPLAY] FATAL: NML_OBJECTIVE_DOCTRINE requires NML_OBJECTIVES=rulebook")
+		quit(1)
+		return
 	seed(_play_seed)
 	_out_dir = OS.get_environment("HOME").path_join("selfplay_out")
 	DirAccess.make_dir_recursive_absolute(_out_dir)
@@ -178,9 +189,13 @@ func _run() -> void:
 	# drawn from a dedicated stream keyed on the LAYOUT seed (never the global one the
 	# terrain layouter just consumed). Board = the overlay's own painted cells.
 	if OS.get_environment("NML_OBJECTIVES").strip_edges().to_lower() == "rulebook":
+		# NML-1140 step 7: the rung ("" = today's rulebook draw) + the armies'
+		# profiles in seat order 1/2 — the doctrine is army-order-symmetric.
+		var armies := [ObjectiveLayout.army_profiles(army_manager.get_game_units_for_player(1)),
+			ObjectiveLayout.army_profiles(army_manager.get_game_units_for_player(2))]
 		var stamp_o := ObjectiveLayout.generate(_layout_seed, MissionCatalog.get_mission("duel"),
 			DeploymentCatalog.get_style("front_line"), terrain_overlay.grid_cells,
-			layout_editor._calculate_grid_dimensions().x)
+			layout_editor._calculate_grid_dimensions().x, 72.0, 48.0, _doctrine_mode, armies)
 		objectives_in = []
 		for rp in (stamp_o["positions"] as Array):
 			objectives_in.append(Vector2(float(rp[0]), float(rp[1])))
@@ -839,6 +854,10 @@ func _write_outputs(main: Node, solo: Node, terrain_overlay: Node, army_manager:
 		"battle_log_entries": battle_log.size(),
 		"violations": {"total": _violations.size(), "by_kind": counts},
 	}
+	# NML-1140 step 7: the resolved doctrine mode rides the result — additive,
+	# only when armed; an unset run's result file is unchanged byte for byte.
+	if _doctrine_mode != "":
+		result["objectives_doctrine"] = _doctrine_mode
 	_write_file("%s_result.json" % _out_name, JSON.stringify(result, "\t"))
 
 	# 4) Full rule-violation audit.

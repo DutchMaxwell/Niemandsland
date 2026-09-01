@@ -61,6 +61,7 @@ var _symmetric := false                 # symmetric=1: point-symmetric terrain (
 var _objective_count := 3               # objectives=5: five point-symmetric markers
 var _mission_id := ""                   # NML_MISSION: play a catalog mission (M5); empty = legacy centre-line tuning board
 var _objectives_mode := "constant"      # NML_OBJECTIVES: "rulebook" runs the D8a seeded generator; default = the 3 constants
+var _doctrine_mode := ""                # NML_OBJECTIVE_DOCTRINE: "" = rulebook (today), style|search = the doctrine rung (NML-1140 step 7)
 var _objectives_placed := 0             # what actually reached the overlay — the stamp states played truth, not intent
 var _batch := true                      # headless sweeps: instant (non-physics) dice + zero pacing holds; batch=0 forces the physics tray
 var _army1 := P1_FIXTURE
@@ -332,8 +333,12 @@ func _run() -> void:
 		var mission2 := MissionCatalog.get_mission(mid2)
 		var style2 := DeploymentCatalog.get_style(str(mission2.get("deployment", "front_line")))
 		var gn: int = layout_editor._calculate_grid_dimensions().x
+		# NML-1140 step 7: the rung ("" = today's rulebook draw) + the armies'
+		# profiles in seat order 1/2 — the doctrine is army-order-symmetric.
 		var stamp := ObjectiveLayout.generate(_layout_seed, mission2, style2,
-			terrain_overlay.grid_cells, gn, table.table_size.x * 12.0, table.table_size.y * 12.0)
+			terrain_overlay.grid_cells, gn, table.table_size.x * 12.0, table.table_size.y * 12.0,
+			_doctrine_mode, [ObjectiveLayout.army_profiles(army_manager.get_game_units_for_player(1)),
+				ObjectiveLayout.army_profiles(army_manager.get_game_units_for_player(2))])
 		objectives_in = []
 		for rp in (stamp["positions"] as Array):
 			objectives_in.append(Vector2(float(rp[0]), float(rp[1])))
@@ -729,6 +734,10 @@ func _write_result_json(main: Node, army_manager: Node, opener: int, winner: Str
 		"unit_activations": _stringify_keys(_unit_activations),
 		"duration_sec": duration_sec,
 	}
+	# NML-1140 step 7: the resolved doctrine mode rides the result — additive,
+	# only when armed; an unset run's result file is unchanged byte for byte.
+	if _doctrine_mode != "":
+		result["objectives_doctrine"] = _doctrine_mode
 	if BattleSim.profile_enabled():   # NML-1072: wall-clock phase split (teardown lands after this write)
 		result["profile"] = BattleSim.profile.duplicate()
 	for c in result["planner_calib"]:
@@ -1070,6 +1079,16 @@ func _parse_config() -> void:
 		quit(1)
 		return
 	_objectives_mode = om if om != "" else "constant"
+	# NML-1140 step 7: the doctrine rung's env seam — unknown mode / rung-without-
+	# rulebook FATALS loudly, never a silent fallback (the label-bug class).
+	_doctrine_mode = ObjectiveLayout.doctrine_mode_from_env()
+	if _doctrine_mode == "?":
+		quit(1)
+		return
+	if _doctrine_mode != "" and _objectives_mode != "rulebook":
+		printerr("[ARENA] FATAL: NML_OBJECTIVE_DOCTRINE requires NML_OBJECTIVES=rulebook")
+		quit(1)
+		return
 	_mission_id = OS.get_environment("NML_MISSION").strip_edges().to_lower()
 	if not _mission_id.is_empty() and not MissionCatalog.mission_ids().has(_mission_id):
 		printerr("[ARENA] FATAL: unknown NML_MISSION '%s' (catalog: %s) — refusing a mislabeled run" % [

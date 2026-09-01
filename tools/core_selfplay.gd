@@ -137,10 +137,22 @@ var _seed := 1
 var _games := 1
 var _out := ""
 var _magic: Dictionary = {}
+var _doctrine_mode := ""   # NML_OBJECTIVE_DOCTRINE: "" = rulebook (today), style|search = the doctrine rung (NML-1140 step 7)
 
 
 func _initialize() -> void:
 	_parse_args()
+	# NML-1140 step 7: the doctrine rung's env seam — unknown mode / rung-without-
+	# rulebook FATALS loudly, never a silent fallback (the label-bug class).
+	# Refused BEFORE the _run_all connect, so nothing plays on.
+	_doctrine_mode = ObjectiveLayout.doctrine_mode_from_env()
+	if _doctrine_mode == "?":
+		quit(1)
+		return
+	if _doctrine_mode != "" and OS.get_environment("NML_OBJECTIVES").strip_edges().to_lower() != "rulebook":
+		printerr("[CORESP] FATAL: NML_OBJECTIVE_DOCTRINE requires NML_OBJECTIVES=rulebook")
+		quit(1)
+		return
 	# Script-mode quirk: during _initialize the root window is NOT yet inside
 	# the tree, so add_child'ed nodes never enter it and every Node3D position
 	# write fails SILENTLY (all units sat at the origin — the S3 gate's whole
@@ -185,8 +197,12 @@ func _play_one(game_seed: int) -> void:
 	# header records — so the twin re-derives the layout from the header. The board seed
 	# IS game_seed here, so that is the objective stream's seed too.
 	if OS.get_environment("NML_OBJECTIVES").strip_edges().to_lower() == "rulebook":
+		# NML-1140 step 7: the rung ("" = today's rulebook draw) + the armies'
+		# profiles in seat order 1/2 — the doctrine is army-order-symmetric.
+		var armies := [ObjectiveLayout.army_profiles(units1), ObjectiveLayout.army_profiles(units2)]
 		var stamp_o := ObjectiveLayout.generate(game_seed, MissionCatalog.get_mission("duel"),
-			DeploymentCatalog.get_style("front_line"), _world["cells"], int(_world["n"]))
+			DeploymentCatalog.get_style("front_line"), _world["cells"], int(_world["n"]),
+			TABLE_W_IN, TABLE_D_IN, _doctrine_mode, armies)
 		objectives = []
 		for rp in (stamp_o["positions"] as Array):
 			objectives.append(Vector3(float(rp[0]) * IN2M, 0.0, float(rp[1]) * IN2M))
@@ -644,6 +660,10 @@ func _write_result(game_seed: int, owners: Array, positions_log: Array,
 		"magic": _magic}
 	if not profile_summary.is_empty():   # NML-1072: env-gated (NML_PROFILE=1) only
 		result["profile"] = profile_summary
+	# NML-1140 step 7: the resolved doctrine mode rides the result — additive,
+	# only when armed; an unset run's result file is unchanged byte for byte.
+	if _doctrine_mode != "":
+		result["objectives_doctrine"] = _doctrine_mode
 	if _out != "":
 		DirAccess.make_dir_recursive_absolute(_out)
 		var f := FileAccess.open(_out.path_join("core_s%d.json" % game_seed), FileAccess.WRITE)
