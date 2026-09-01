@@ -672,3 +672,36 @@ func test_header_books_is_empty_for_an_unpinned_api_game() -> void:
 	assert_str(str(books.get("generated", "MISSING"))).is_equal("")
 	OPRApiClient.reset_rule_text_stamp()
 
+
+## NML-1152 step 10: state_before now carries a per-unit LEDGER — the table-side
+## records (buffs, once-per-round flags, growth markers) `dice_gate.py` used to
+## replay from a fresh, empty Rust `State` no matter what the table had already
+## banked. A carries one of each; B carries nothing and still gets `{}`, not a
+## missing key (append-only: an old reader that never heard of "ledger" ignores it).
+func test_ledger_carries_a_units_buffs_and_growth_markers_the_other_stays_empty() -> void:
+	var state := _state()
+	var a: GameUnit = (state["units"]["A"] as Dictionary)["unit"]
+	a.unit_properties["game_system"] = "gf"
+	a.unit_properties["faction_folder"] = "alien_hives"   # the registry's Piercing Growth carrier
+	a.unit_properties["special_rules"] = ["Piercing Growth"]   # primitive: Growth Markers
+	a.unit_properties["growth_piercing_growth"] = 2
+	a.unit_properties["hit_and_run_round"] = 1
+	a.unit_properties["vs_mark_round"] = 1
+	a.unit_properties["spell_records"] = [{"spell": "Test Buff", "hit_mod": 1, "def_mod": 0,
+		"casting_mod": 0, "morale_mod": 0, "range_in": 0, "advance_in": 0, "rush_in": 0,
+		"grants_rule": "", "scope": "melee", "beneficiary": "", "duration": "once"}]
+
+	var pool: Array = [a]
+	var pending := AiActRecorder.begin(state, 1, pool, Callable())
+	var units := (pending["state"] as Dictionary)["units"] as Dictionary
+
+	var a_ledger := (units["A"] as Dictionary)["ledger"] as Dictionary
+	assert_int((a_ledger["buffs"] as Array).size()).is_equal(1)
+	assert_int(int((a_ledger["buffs"] as Array)[0]["hit_mod"])).is_equal(1)
+	assert_int(int(a_ledger["hit_and_run_round"])).is_equal(1)
+	assert_int(int(a_ledger["vs_mark_round"])).is_equal(1)
+	assert_int(int(a_ledger["growth"])).is_equal(2)
+
+	assert_bool((units["B"] as Dictionary).has("ledger")).is_true()
+	assert_bool(((units["B"] as Dictionary)["ledger"] as Dictionary).is_empty()).is_true()
+

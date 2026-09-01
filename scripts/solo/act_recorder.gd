@@ -352,6 +352,49 @@ static func _stamp_gate_reads(state: Dictionary, plain: Dictionary) -> void:
 		var sh := _melee_shroud_params(u)
 		if not sh.is_empty():
 			pu["shroud"] = sh
+		pu["ledger"] = _ledger_of(u)
+
+
+## NML-1152 step 10: the per-unit LEDGERS the table keeps BETWEEN activations — absent from
+## every other part of state_before, which is one activation's plain snapshot. dice_gate.py
+## replays one act at a time from a fresh Rust `State`, whose matching fields (`State.buffs`
+## #489, `hit_and_run_round` #493, `vs_mark_round`) always start EMPTY/-1, so an accumulating
+## rule (a buff banked two activations ago, a once-per-round move already spent) silently
+## vanishes on replay — Growth Markers' first divergence ("port target 5 vs table 4", #498)
+## is exactly one missing marker. {} (never a missing key) for a unit with nothing recorded,
+## the SAME "written for every unit of every act" contract `_stamp_gate_reads` already keeps
+## above — append-only, so a reader built before this key exists still parses every old line.
+##   buffs              the durable mirror of main._solo_spell_mods (main.gd:3521-3560,
+##                       unit_properties["spell_records"]) verbatim — the table's own record
+##                       shape, so recording it needs no translation.
+##   hit_and_run_round  unit_properties["hit_and_run_round"] (solo_controller.gd:9657) — Hit &
+##                       Run's once-per-round consumption flag (#493).
+##   vs_mark_round      unit_properties["vs_mark_round"] (main.gd:16751) — Unstoppable Mark's
+##                       once-per-round flag, the utility-buff bridge's enemy-side seam (#489).
+##   growth             sum of every "Growth Markers" rule's marker count the unit carries
+##                       (unit_properties["growth_<rule>"], main.gd:16979) — a single
+##                       counter, the training pool's own shape (#498: no bearer carries two
+##                       such rules). No "round" here on purpose: a fold can tell "already
+##                       ticked this round" from `ambush_arrived_round`/`attached_to`/`round`,
+##                       already on state_before without this key's help.
+static func _ledger_of(u: GameUnit) -> Dictionary:
+	var ledger := {}
+	var buffs: Array = u.unit_properties.get("spell_records", [])
+	if not buffs.is_empty():
+		ledger["buffs"] = buffs
+	var hnr := int(u.unit_properties.get("hit_and_run_round", -1))
+	if hnr != -1:
+		ledger["hit_and_run_round"] = hnr
+	var vsm := int(u.unit_properties.get("vs_mark_round", -1))
+	if vsm != -1:
+		ledger["vs_mark_round"] = vsm
+	var markers := 0
+	for e in RulesRegistry.unit_rules_of_primitive(u, "Growth Markers"):
+		var rn := str((e as Dictionary)["name"]).to_snake_case()
+		markers += int(u.unit_properties.get("growth_%s" % rn, 0))
+	if markers > 0:
+		ledger["growth"] = markers
+	return ledger
 
 
 ## SoloController._move_base_radius_m(_moving_models(u)) (:4735 over :4915) mirrored statically:

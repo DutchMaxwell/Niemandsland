@@ -16,6 +16,7 @@ use std::rc::Rc;
 use serde::de::{MapAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 
+use crate::mods::LiveMod;
 use crate::state::{
     Bands, Marker, Mods, Objective, Profile, ProfileCache, ProfileDyn, Profiles, Roster, State,
 };
@@ -116,6 +117,58 @@ pub(crate) struct PlainUnit {
     /// is all there is.
     #[serde(default)]
     prof: Option<ProfileDyn>,
+    /// NML-1152 step 10 — the per-unit ledger the table keeps BETWEEN
+    /// activations (`AiActRecorder._ledger_of`, act_recorder.gd). `None`
+    /// (`#[serde(default)]`, no special-cased fallback) for a corpus recorded
+    /// before this key exists on ANY unit — `state_of` then touches nothing
+    /// it did not touch before, byte-identical on an old corpus. `Some({})`
+    /// (this port's own "nothing recorded" reading) is NOT the same signal:
+    /// it still folds, onto the same -1/0/empty values the struct already
+    /// carries, because a `ledger`-aware corpus's silence is itself data (see
+    /// `growth_round`'s derivation below).
+    #[serde(default)]
+    ledger: Option<PlainLedger>,
+}
+
+/// One `_solo_record_spell_mod` record (main.gd:3649-3670) as the table wrote it
+/// verbatim into `unit_properties["spell_records"]` — only the fields this core
+/// has a `LiveMod` consumer for are read; the rest (`spell`, `def_mod`,
+/// `range_in`, `advance_in`, `rush_in`, `granted_to`) are ignored by serde, not
+/// an error, so the table can grow the record without breaking this reader.
+#[derive(Deserialize)]
+pub(crate) struct PlainBuff {
+    #[serde(default)]
+    hit_mod: i64,
+    #[serde(default)]
+    casting_mod: i64,
+    #[serde(default)]
+    morale_mod: i64,
+    #[serde(default)]
+    grants_rule: String,
+    #[serde(default)]
+    scope: String,
+    #[serde(default)]
+    beneficiary: String,
+    #[serde(default)]
+    duration: String,
+}
+
+/// `AiActRecorder._ledger_of` (act_recorder.gd) — `{}` for a unit with nothing
+/// recorded, which is exactly what `PlainLedger`'s own field defaults answer, so
+/// no special casing is needed for the "empty object, not missing" convention.
+/// `growth` is the unit's SINGLE marker counter (`unit_properties["growth_
+/// <rule>"]` summed, main.gd:16979) — no "round" of its own; `state_of` derives
+/// `growth_round` from facts already on the unit (see below).
+#[derive(Deserialize)]
+pub(crate) struct PlainLedger {
+    #[serde(default)]
+    buffs: Vec<PlainBuff>,
+    #[serde(default = "neg_one")]
+    hit_and_run_round: i64,
+    #[serde(default = "neg_one")]
+    vs_mark_round: i64,
+    #[serde(default)]
+    growth: i64,
 }
 
 /// `SeparationChecker.DEFAULT_BASE_RADIUS_M` — the fallback
@@ -528,6 +581,9 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
     let mut host_keys: Vec<String> = Vec::with_capacity(n);
     for (ui, (_, u)) in plain.units.0.into_iter().enumerate() {
         attached_keys.push(u.attached);
+        // Read before the move below — the growth-round derivation further
+        // down needs "is this unit currently attached", the same string.
+        let is_attached = !u.attached_to.is_empty();
         host_keys.push(u.attached_to);
         st.player.push(u.player);
         st.alive.push(u.alive);
@@ -566,6 +622,41 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         });
         st.charge_no_difficult.push(u.charge_no_difficult);
         st.charge_probe_r.push(u.charge_probe_r);
+        // NML-1152 step 10 — the ledger fold. `None` (a corpus recorded
+        // before the `ledger` key exists, on ANY unit) is a no-op: `st`
+        // already carries the exact -1/0/empty literal it started with
+        // above, so an old corpus's `growth_round`/`growth_markers` stay
+        // untouched too — proof 3's byte-identity turns on that.
+        if let Some(ledger) = u.ledger {
+            for b in ledger.buffs {
+                st.buffs[ui].push(LiveMod {
+                    hit_mod: b.hit_mod,
+                    casting_mod: b.casting_mod,
+                    morale_mod: b.morale_mod,
+                    grants_rule: Rc::from(b.grants_rule.as_str()),
+                    scope: Rc::from(b.scope.as_str()),
+                    attackers: b.beneficiary == "attackers",
+                    once: b.duration == "once",
+                });
+            }
+            st.hit_and_run_round[ui] = ledger.hit_and_run_round;
+            st.vs_mark_round[ui] = ledger.vs_mark_round;
+            st.growth_markers[ui] = ledger.growth;
+            // `growth_round` has no key of its own on the wire (see
+            // `_ledger_of`'s doc comment, act_recorder.gd): it is DERIVED
+            // here from facts every act already carries. `_solo_growth_
+            // round_start` (main.gd:16984) sweeps every alive, unattached,
+            // on-table unit ONCE at true round start, before any activation
+            // — so by the time ANY act's state_before is captured this
+            // round, that sweep already ran for such a unit, grower or not
+            // (`sim.rs::growth_round_start` is a no-op for a non-grower
+            // either way — see the fixture below). Excluded: a unit that
+            // arrived (ambush) THIS round was still in reserve when the
+            // sweep ran, so it was skipped there too.
+            if u.alive > 0 && !is_attached && u.ambush_arrived_round != st.round {
+                st.growth_round[ui] = st.round;
+            }
+        }
     }
     st.attached = Rc::new(
         attached_keys
@@ -673,13 +764,17 @@ pub fn state_from_json(
 /// So `plain_of(state_from_json(x)) == x` holds for a state written by the act
 /// recorder, and a state that GREW a key inside `resolve` reports it.
 ///
-/// ONE key is deliberately not written: the M2-5b `prof` block. It is a
-/// recorded READ, not state this port derives, and two of its seven fields
-/// (`shooting_range_bonus`, `max_activation_advance_bonus_in`) are not modelled
-/// at all — see `ProfileDyn`. A writer that invented them would claim a
-/// coverage the port does not have. A caller that has to hand the plain form
-/// back whole keeps the blocks it read, the way the Godot seam keeps its
-/// captured key mask (`nml-core-godot/src/plain.rs`, `Captured`).
+/// TWO keys are deliberately not written: the M2-5b `prof` block, and (NML-1152
+/// step 10) `ledger`. Neither is state this port derives — `prof` is a recorded
+/// READ (two of its seven fields are not modelled at all, see `ProfileDyn`),
+/// and `ledger` is the RAW table record `state_of` already folded into
+/// `buffs`/`hit_and_run_round`/`vs_mark_round`; nothing downstream of a
+/// resolved state reads the ledger shape again; the GATE's own LEDGER line
+/// reads the RECORDED corpus, never a replayed `plain()`. A writer that
+/// invented either would claim a coverage the port does not have. A caller
+/// that has to hand the plain form back whole keeps the blocks it read, the
+/// way the Godot seam keeps its captured key mask (`nml-core-godot/src/
+/// plain.rs`, `Captured`).
 pub fn plain_of(st: &State) -> serde_json::Value {
     use serde_json::{Map, Value};
     let n = st.units();
@@ -803,7 +898,85 @@ pub fn plain_of(st: &State) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-    use super::{los_positions, units_in_capture_order};
+    use super::{los_positions, state_from_json, units_in_capture_order};
+    use crate::acts::read_act_header;
+    use crate::state::ProfileCache;
+
+    const LEDGER_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "p1_0_a":{"unit_id":"p1_0_a","name":"A","quality":4,"defense":3,"tough":3,
+        "wounds_max":[3],"model_count":1,"caster_value":0,"base_radius":0.016,
+        "game_system":"gf","faction_folder":"robot_legions","special_rules":[],
+        "item_grants":[],"attached_hero_rules":[],
+        "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]},
+      "p2_0_b":{"unit_id":"p2_0_b","name":"B","quality":5,"defense":4,"tough":1,
+        "wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,
+        "game_system":"gf","faction_folder":"blessed_sisters","special_rules":[],
+        "item_grants":[],"attached_hero_rules":[],
+        "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
+
+    /// `p1_0_a` carries a ledger (one buff, both once-per-round flags set),
+    /// `p2_0_b` carries none — the "empty object, not missing" shape
+    /// `AiActRecorder._ledger_of` writes for a unit with nothing recorded.
+    const LEDGER_PLAIN: &str = r#"{"round":2,"rounds_total":4,"scoring":"end",
+      "units":{
+        "p1_0_a":{"player":1,"alive":1,"wounds":[3],"radii":[0.016],
+          "positions":[[0.0,0.0,0.0]],"in_cover":false,"shaken":false,
+          "fatigued":false,"activated":false,"casts":0,"morale_bonus":0,
+          "aircraft":false,"dormant":false,"ambush_arrived_round":-1,
+          "earliest_arrival_round":-1,"wound_frac":0.0,"mods":{},"mods_base":{},
+          "bands":{"advance":6.0,"rush":12.0},
+          "ledger":{"buffs":[{"hit_mod":1,"scope":"melee","beneficiary":"",
+            "duration":"once"}],"hit_and_run_round":2,"vs_mark_round":1,"growth":2}},
+        "p2_0_b":{"player":2,"alive":1,"wounds":[1],"radii":[0.016],
+          "positions":[[-0.254,0.0,0.0]],"in_cover":false,"shaken":false,
+          "fatigued":false,"activated":false,"casts":0,"morale_bonus":0,
+          "aircraft":false,"dormant":false,"ambush_arrived_round":-1,
+          "earliest_arrival_round":-1,"wound_frac":0.0,"mods":{},"mods_base":{},
+          "bands":{"advance":6.0,"rush":12.0}}}}"#;
+
+    /// NML-1152 step 10 GREEN — a unit's `ledger` object folds into
+    /// `State.buffs`/`hit_and_run_round`/`vs_mark_round`/`growth_markers`;
+    /// `growth_round` derives to the state's own round (A is alive, unattached,
+    /// and did not just arrive by ambush). A unit with no `ledger` key at all
+    /// (B) keeps every one of those fields at its pre-existing -1/0/empty
+    /// default — the byte-identity an old corpus (no "ledger" on ANY unit)
+    /// leans on.
+    #[test]
+    fn a_units_ledger_folds_into_the_matching_state_fields_absent_stays_default() {
+        let header = read_act_header(LEDGER_HEADER).expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        let state = state_from_json(LEDGER_PLAIN, &mut cache, &mut roster).expect("state");
+        assert_eq!(state.buffs[0].len(), 1);
+        assert_eq!(state.buffs[0][0].hit_mod, 1);
+        assert_eq!(state.buffs[0][0].scope.as_ref(), "melee");
+        assert!(state.buffs[0][0].once, "duration \"once\" -> once == true");
+        assert_eq!(state.hit_and_run_round[0], 2);
+        assert_eq!(state.vs_mark_round[0], 1);
+        assert_eq!(state.growth_markers[0], 2);
+        assert_eq!(state.growth_round[0], state.round, "eligible -> already ticked this round");
+        assert!(state.buffs[1].is_empty(), "no ledger key -> the pre-existing default");
+        assert_eq!(state.hit_and_run_round[1], -1);
+        assert_eq!(state.vs_mark_round[1], -1);
+        assert_eq!(state.growth_markers[1], 0);
+        assert_eq!(state.growth_round[1], -1);
+    }
+
+    /// A grower that just arrived by ambush THIS round was still in reserve
+    /// when `_solo_growth_round_start` swept the board, so it was skipped
+    /// there too — `growth_round` must NOT derive to "already ticked" for it,
+    /// or a real per-round tick the table still owes it would silently vanish
+    /// on replay.
+    #[test]
+    fn a_units_own_arrival_round_never_reads_as_already_ticked() {
+        let header = read_act_header(LEDGER_HEADER).expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        let plain = LEDGER_PLAIN.replacen("\"ambush_arrived_round\":-1", "\"ambush_arrived_round\":2", 1);
+        let state = state_from_json(&plain, &mut cache, &mut roster).expect("state");
+        assert_eq!(state.growth_markers[0], 2, "the recorded count still folds");
+        assert_eq!(state.growth_round[0], -1, "arrived this round -> not yet swept");
+    }
 
     /// GATE Q-A-2 (NML-1073) — a `units` OBJECT is key-sorted by both writers
     /// that produce one (`JSON.stringify(.., sort_keys)` for the corpus,
