@@ -349,7 +349,10 @@ pub fn resolve_shooting_with_tray(
     tray: &mut Tray,
 ) -> ShootResult {
     let one = [Shooter { profiles, keep, attacks, att, owner: "" }];
-    resolve_volley_with_tray(&one, def, "", dist_in, tray)
+    // Single-scalar convenience form (tests only — sim.rs's real caller
+    // supplies the two distances separately): range gate and modifier gate
+    // are the SAME point here, same as every existing fixture already assumes.
+    resolve_volley_with_tray(&one, def, "", dist_in, dist_in, tray)
 }
 
 /// NML-1073 M5 D1-B4b — ONE member of a shooting activation's volley.
@@ -403,10 +406,16 @@ pub fn resolve_volley_with_tray(
     def: &Ctx,
     def_owner: &str,
     dist_in: f64,
+    mod_dist_in: f64,
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
     let (mut regenable, mut regen_proof) = (0i64, 0i64);
+    // `dist_in` gates RANGE VALIDITY only (`reach_gate`, B11's edge/nearest-
+    // model gap — main.gd:4098-4104). `mod_dist_in` is the table's SEPARATE
+    // over-9" modifier distance (`geom::centre_dist_in`, main.gd:3029: unit
+    // centre to unit centre) — NML-1152, found by a read-only corpus audit:
+    // the twin was reusing the range gap as the modifier gate too.
     let reach_gate = dist_in.ceil();
     // FLATTENED on purpose: one pass over the (member, profile) pairs, so the
     // body below stays the single-shooter one.
@@ -457,7 +466,7 @@ pub fn resolve_volley_with_tray(
         // SAME dice path's Stealth data-alias leg (Changebound et al.,
         // main.gd:5588-5610/5698-5701) — `unit.rs::stealth_alias_of`.
         let mut m = shooting_hit_modifier(
-            dist_in, att.artillery, def.stealth, def.artillery, def.evasive,
+            mod_dist_in, att.artillery, def.stealth, def.artillery, def.evasive,
             p.hit_bonus, p.hit_bonus_over9,
             def.stealth_alias_penalty, def.stealth_alias_over_in,
         )
@@ -474,7 +483,7 @@ pub fn resolve_volley_with_tray(
         }
         target = modified_hit_target(target, m);
         let mut versatile_ap = 0;
-        if p.versatile_attack && dist_in > LONG_RANGE_IN {
+        if p.versatile_attack && mod_dist_in > LONG_RANGE_IN {
             let (hit_mod, ap_mod) = versatile_best_mode(
                 target,
                 shielded_defense(def.defense, def.shielded),
@@ -508,7 +517,7 @@ pub fn resolve_volley_with_tray(
         }
         // --- `_solo_hits` :4404-4487 ---
         let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
-        if p.relentless && dist_in > LONG_RANGE_IN {
+        if p.relentless && mod_dist_in > LONG_RANGE_IN {
             hits += sixes(&faces);
         }
         if p.surge {
@@ -545,7 +554,7 @@ pub fn resolve_volley_with_tray(
         // Defense, in main.gd's own order: Shielded, then Guarded (over 9"),
         // then Cover — which Blast / Indirect / Ignores Cover skip (:3221).
         let mut base = shielded_defense(def.defense, def.shielded);
-        base = guarded_defense(base, def.guarded && dist_in > LONG_RANGE_IN);
+        base = guarded_defense(base, def.guarded && mod_dist_in > LONG_RANGE_IN);
         let save_def = if p.blast > 1 || p.indirect || p.ignores_cover {
             base
         } else {
@@ -1159,6 +1168,37 @@ mod tests {
         assert_eq!(out_offset.rolls[0].target, 4, "Good Shot +1 cancels Stealth's -1, back to 4+");
     }
 
+    /// NML-1152 — the over-9" modifier gate is `mod_dist_in` (unit centre to
+    /// unit centre, main.gd:3029), never `dist_in` (the range-VALIDITY edge
+    /// gap, B11). Numbers are the corpus find (qag_ref act 24, PLAN NML-1152):
+    /// edge gap 7.95" (<= 9", range gate) but centre gap 14.30" (> 9",
+    /// modifier gate) — Stealth must fire off the WIDER centre gap even
+    /// though the closer edge gap is the one that let the shot reach at all.
+    #[test]
+    fn the_modifier_gate_fires_off_the_centre_gap_even_when_the_range_gap_is_closer() {
+        let p = [rifle(1)];
+        let stealthy = Ctx { stealth: true, ..defender(4, 5) };
+        let att = shooter(4);
+        let sh = [Shooter { profiles: &p, keep: &[0], attacks: &[1], att: &att, owner: "" }];
+        let mut tray = Tray::seeded(27);
+        let out = resolve_volley_with_tray(&sh, &stealthy, "Target", 7.95, 14.30, &mut tray);
+        assert_eq!(out.rolls[0].target, 5, "Stealth -1 off the 14.30\" centre gap");
+    }
+
+    /// The flip's other direction: the range gap alone is over 9" (12") but
+    /// the centre gap is not (6") — the table stays silent, RED for a bug
+    /// that read the range gap for the modifier (it would fire here).
+    #[test]
+    fn the_modifier_gate_stays_silent_when_only_the_range_gap_is_over_nine() {
+        let p = [rifle(1)];
+        let stealthy = Ctx { stealth: true, ..defender(4, 5) };
+        let att = shooter(4);
+        let sh = [Shooter { profiles: &p, keep: &[0], attacks: &[1], att: &att, owner: "" }];
+        let mut tray = Tray::seeded(27);
+        let out = resolve_volley_with_tray(&sh, &stealthy, "Target", 12.0, 6.0, &mut tray);
+        assert_eq!(out.rolls[0].target, 4, "no Stealth penalty: the 6\" centre gap is not over 9\"");
+    }
+
     /// The book's floor and ceiling (`AiCombatMath.modified_hit_target` :222-223,
     /// clamped to [2, 6]) still hold once Shot Modifier stacks with the other
     /// modifiers in this function — real combinations, not synthetic numbers.
@@ -1423,7 +1463,8 @@ mod tests {
             profiles: &hero_p, keep: &[0], attacks: &[2], att: &hero_q, owner: "Vradhez",
         };
         let mut tray = Tray::seeded(27);
-        let out = resolve_volley_with_tray(&[host, hero], &def, "Pathfinders", 12.0, &mut tray);
+        let out =
+            resolve_volley_with_tray(&[host, hero], &def, "Pathfinders", 12.0, 12.0, &mut tray);
         let attacks: Vec<_> = out.rolls.iter().filter(|r| r.kind == "attack").collect();
         assert_eq!(attacks.len(), 2, "host then hero: {:?}", out.rolls);
         assert_eq!((attacks[0].count, attacks[0].target, attacks[0].owner.as_str()),

@@ -2025,10 +2025,16 @@ struct SplitGroup {
     /// The group's target, by roster index and by key (`sees` reads keys).
     ti: usize,
     key: String,
-    /// The gate and modifier distance: the recorded target's plain centre gap
-    /// for the pooled plan; the B11 EDGE gap (both base radii off) for a split
-    /// group, which exists because the TABLE's own test fired.
+    /// The RANGE-VALIDITY gate distance only: the recorded target's plain
+    /// nearest-model gap for the pooled plan; the B11 EDGE gap (both base
+    /// radii off) for a split group, which exists because the TABLE's own
+    /// test fired.
     d: f64,
+    /// NML-1152: the over-9" MODIFIER distance (`geom::centre_dist_in` — unit
+    /// centre to unit centre, main.gd:3029), kept apart from `d` — the table
+    /// gates Stealth/Artillery/Versatile Attack/Relentless/Guarded Defense on
+    /// THIS distance, never on the range-validity gap.
+    mod_d: f64,
     /// Per member index, the weapon indices of that member's `shoot` list the
     /// table aimed at THIS group, in build order. `None` = the pooled plan:
     /// every kept weapon fires, no narrowing.
@@ -2076,7 +2082,13 @@ fn split_plan(
                 + state.radii[ti].first().copied().unwrap_or(DEFAULT_BASE_RADIUS_M))
                 / IN2M)
             .max(0.0);
-        groups.push(SplitGroup { ti, key: key.clone(), d, weapons: Some(HashMap::new()) });
+        // NML-1152: the modifier gate is unit-centre to unit-centre
+        // (`main.gd:3029`/solo_controller.gd:8525-8533), not this group's
+        // EDGE gap — a split group's own weapons can still land Stealth or
+        // Versatile Attack on the table's terms even where B11 sees a closer
+        // edge.
+        let mod_d = geom::centre_dist_in(&state.positions[si], &state.positions[ti]);
+        groups.push(SplitGroup { ti, key: key.clone(), d, mod_d, weapons: Some(HashMap::new()) });
     }
     // The member lookup by name: one host plus its own attached heroes, alive
     // only, so the names are unique here exactly as the table's are.
@@ -2454,6 +2466,11 @@ fn resolve_with(
             };
             if plan.is_some() || (next.sees(si, &shoot_key) && los_clear(&next, si, ti)) {
                 let d = geom::dist_in(&next.positions[si], &next.positions[ti]);
+                // NML-1152: the pooled plan's own modifier distance — unit
+                // centre to unit centre (main.gd:3029) — kept apart from `d`
+                // for the SAME reason the split groups above are (below,
+                // :2453-2460's `pooled` literal).
+                let mod_d = geom::centre_dist_in(&next.positions[si], &next.positions[ti]);
                 // NML-1132: the EXPECTED-VALUE half measures over the table's folded
                 // model set (`fold_dist_in`); the TRAY half below keeps the plain
                 // host-to-host `d`, because it already measures per FIRING MEMBER
@@ -2522,6 +2539,7 @@ fn resolve_with(
                             ti,
                             key: shoot_key.clone(),
                             d,
+                            mod_d,
                             weapons: None,
                         }];
                         let gs: &[SplitGroup] = plan.as_deref().unwrap_or(&pooled);
@@ -2569,7 +2587,7 @@ fn resolve_with(
                             }
                             let r = crate::dice::resolve_volley_with_tray(
                                 &shooters_of(&parts, statics, &next),
-                                &def, &ut_g.name, g.d, tray,
+                                &def, &ut_g.name, g.d, g.mod_d, tray,
                             );
                             // D1-B5a: `absorb`, not `=` — a CHARGE activation
                             // puts several sub-phases into ONE report, and the
@@ -3171,6 +3189,60 @@ mod tests {
         let total: usize = shot.rolls.iter().map(|r| r.count as usize).sum();
         probe.roll(total);
         assert_eq!(tray.state_i64(), probe.state_i64());
+    }
+
+    /// NML-1152 — `split_line` with `host` and `b` each on a 2" base, 12"
+    /// centre to centre: the RANGE-VALIDITY edge gap (B11, both radii off) is
+    /// 12 - 2 - 2 = 8" (under 9"), while the MODIFIER distance stays the raw
+    /// 12" centre gap (over 9") — the exact edge-under/centre-over split the
+    /// corpus audit found (qag_ref act 24: edge 7.95" vs centre 14.30").
+    fn stealth_split_line() -> (State, Vec<UnitStatic>) {
+        let (mut st, mut statics) = split_line();
+        st.radii[0] = vec![2.0 * IN2M];
+        st.radii[2] = vec![2.0 * IN2M];
+        statics[0].ctx.quality = 4;
+        statics[2].ctx = Ctx { defense: 4, stealth: true, ..Default::default() };
+        (st, statics)
+    }
+
+    /// RED PROOF, split vs pooled: `b`'s Stealth must fire off the 12" CENTRE
+    /// gap on both the pooled plan (no split aim) and a split group forced
+    /// onto the very same (host, b) pair (recorded target `bh`, but the one
+    /// aim entry names `b`) — even though the two paths disagree on `d`
+    /// itself (pooled keeps the raw 12" nearest-model gap; split subtracts
+    /// both radii to 8"). Quality 4, Stealth -1: to-hit 5+, not 4+ — a bug
+    /// that read the RANGE gap for the modifier would give 4+ on the split
+    /// leg (8" <= 9") while the pooled leg still read 5+, disagreeing.
+    #[test]
+    fn the_modifier_gate_reads_centre_distance_on_both_the_pooled_and_split_paths() {
+        let (st, statics) = stealth_split_line();
+        let terrain = crate::terrain::Terrain::default();
+
+        let pooled = Action {
+            kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()),
+            charge: None, patient: false, split: None,
+        };
+        let mut tray_a = Tray::seeded(11);
+        let mut rng_a = crate::rng::GodotRng::new(0);
+        let (_, shot_a) = resolve_stochastic_tray_on_board(
+            &statics, &st, &pooled, &terrain, Seams::default(), &mut rng_a, &mut tray_a,
+        )
+        .unwrap();
+
+        let split = Action {
+            kind: HOLD, unit: "a".into(), dest: None, shoot: Some("bh".into()),
+            charge: None, patient: false,
+            split: Some(vec![split_shot("host", "Rifle", "b")]),
+        };
+        let mut tray_b = Tray::seeded(11);
+        let mut rng_b = crate::rng::GodotRng::new(0);
+        let (_, shot_b) = resolve_stochastic_tray_on_board(
+            &statics, &st, &split, &terrain, Seams::default(), &mut rng_b, &mut tray_b,
+        )
+        .unwrap();
+
+        assert_eq!(shot_a.rolls[0].target, 5, "pooled: Stealth fires off the 12\" centre gap");
+        assert_eq!(shot_b.rolls[0].target, 5, "split: must agree with the pooled path");
     }
 
     // -------------------------------------------------- BLOCK B1: MEND ---

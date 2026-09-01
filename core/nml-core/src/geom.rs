@@ -98,6 +98,18 @@ pub fn dist_in(a: &[[f64; 3]], b: &[[f64; 3]]) -> f64 {
     best / IN2M
 }
 
+/// `MoveIntent.distance_inches(unit_centre(a), unit_centre(b))` — the table's
+/// SHOOTING-MODIFIER gate distance (`main.gd:3029`), NOT `dist_in`'s
+/// nearest-model gap. `unit_centre` (solo_controller.gd:8525-8533) is the mean
+/// of a side's alive model positions (`MoveIntent.anchor_of`, move_intent.gd
+/// :18-24); `distance_inches` (move_intent.gd:58-60) is the gap between two
+/// such points. NML-1152: the over-9" modifier family (Stealth/Artillery,
+/// Versatile Attack, Relentless, Guarded Defense) reads THIS distance on the
+/// table — `dist_in`/`edge_gap_in` stay the range-VALIDITY measure only.
+pub fn centre_dist_in(a: &[[f64; 3]], b: &[[f64; 3]]) -> f64 {
+    (length(sub(centre(a), centre(b))) / IN2M as f32) as f64
+}
+
 /// `BattleSim.edge_gap_in` battle_sim.gd:766-785 — nearest BASE-EDGE gap of two
 /// snapshot position arrays in inches: min over all model pairs of (HORIZONTAL
 /// centre distance - r_a - r_b), a radii array shorter than its positions
