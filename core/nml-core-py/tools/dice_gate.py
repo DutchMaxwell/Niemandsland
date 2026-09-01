@@ -35,6 +35,13 @@ THE THREE CHECKS
     acting unit bleeds too. Reported as measured: the table can run further
     activations between two planner picks, and those land on the same units.
 
+    C POS (per ACTIVATION, `--no-pos` to skip) — C's blind spot: `alive` and
+    wounds say nothing about WHERE a unit stands, so a movement-only rule
+    (#485, Hit & Run #493) ports wrong and C NEXT never falls. Compares the
+    same two combatants' `positions` (state.rs `plain_of`, meters) reduced
+    to a centroid, in inches, against `--pos-tol` (default 0.5"). #493 found
+    this by hand (17% of Harassing acts within 0.5"); this makes it a check.
+
 THE VERDICT VOCABULARY is the B4/B5 gates' own, per activation, and the eight
 buckets SUM to the class's activation count — a row that does not add up is a
 gate hiding something:
@@ -153,6 +160,52 @@ def both_equal(nx: dict, other: dict, keys, bump: int = 0) -> bool:
     return True
 
 
+#: meters per inch (rows.rs's own fixture: `0.254` == `10.0"`) — `positions`
+#: (state.rs `plain_of`) is written in meters, `--pos-tol` is read in inches.
+INCH_M = 0.0254
+
+#: check C POS's own bucket order, mirroring `BUCKETS`'s "sum to the count".
+POS_BUCKETS = ("pos_equal", "pos_moved_1in", "pos_moved_3in", "pos_moved_far", "pos_unknown")
+
+
+def unit_centroid(plain: dict, key: str) -> tuple[float, float, float] | None:
+    """Mean of one unit's alive-model positions, or `None` — no such unit, or
+    an empty `positions` list (wiped out; the array tracks `alive`, never a
+    dead model's stale spot)."""
+    ps = (plain.get("units", {}).get(key) or {}).get("positions") or []
+    if not ps:
+        return None
+    n = len(ps)
+    return (sum(p[0] for p in ps) / n, sum(p[1] for p in ps) / n, sum(p[2] for p in ps) / n)
+
+
+def pos_gap_in(nx: dict, other: dict, key: str) -> float | None:
+    """Centroid distance, port vs. the table's next-act snapshot, in inches.
+    `None` — `pos_unknown` — when either side has no position at all, never
+    a gap of zero."""
+    a, b = unit_centroid(nx, key), unit_centroid(other, key)
+    if a is None or b is None:
+        return None
+    return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2) ** 0.5 / INCH_M
+
+
+def pos_verdict(nx: dict, other: dict, keys, tol_in: float) -> tuple[str, float | None]:
+    """Check C POS's bucket for one activation: the WORST gap across `keys`
+    (the combatants `both_equal` compares) against `tol_in`. Any key
+    `pos_unknown` makes the whole activation `pos_unknown` — never a fail."""
+    gaps = [pos_gap_in(nx, other, k) for k in keys]
+    if any(g is None for g in gaps):
+        return "pos_unknown", None
+    gap = max(gaps)
+    if gap <= tol_in:
+        return "pos_equal", gap
+    if gap <= 1.0:
+        return "pos_moved_1in", gap
+    if gap <= 3.0:
+        return "pos_moved_3in", gap
+    return "pos_moved_far", gap
+
+
 def classify(got: list, want: list) -> str:
     """One activation's verdict in the B4/B5 vocabulary. `want` is EVERY roll
     the table drew under this ordinal, never a prefix."""
@@ -269,7 +322,7 @@ def split_unrecorded(cls: str, block: list[dict], action: dict) -> bool:
 
 def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
         no_dangerous: bool = False, engage_fold: str = "auto", cond_ap: str = "auto",
-        only_rule: str = "") -> int:
+        only_rule: str = "", pos_tol: float = 0.5, no_pos: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -281,10 +334,11 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
     chk = dict.fromkeys(("stream_ok", "rolls", "tally", "tally_equal", "tally_red",
                          "next", "next_equal", "next_red", "mend_rolls", "mend_rolls_equal",
                          "mend_rolls_clean", "mend_rolls_clean_equal", "confounded",
-                         "split_unrecorded", "split_aimed"), 0)
+                         "split_unrecorded", "split_aimed", "pos") + POS_BUCKETS, 0)
     if only_rule:
         grid["mend"] = dict.fromkeys(BUCKETS + ("acts",), 0)
     first = {"stream": "", "tally": "", "next": ""}
+    pos_gaps: list[float] = []  # every KNOWN gap (inches), for the median line
     vintage_seen: set[tuple[bool, bool]] = set()
     t0 = time.perf_counter()
 
@@ -309,7 +363,7 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
         core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
                          "knobs": dict(head.get("knobs", {}), hero_attach=True,
                                        dangerous=not no_dangerous,
-                                       engage_fold=eff_engage_fold)})
+                                       engage_fold=eff_engage_fold, sighting="model")})
         for pos, act in enumerate(lines):
             k = int(act["act"])
             action = (act.get("pick") or {}).get("action") or {}
@@ -441,6 +495,15 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 elif not green and not first["next"]:
                     first["next"] = "%s act %d [%s] %s vs %s" % (
                         d.name, k, cls, keys[0][-6:], keys[1][-6:])
+                # CHECK C POS — same combatants, added not replacing: a pure
+                # movement rule (#485, #493) leaves `next_equal` untouched, so
+                # this is the only thing in the pass that can catch it.
+                if not no_pos:
+                    chk["pos"] += 1
+                    bucket, gap = pos_verdict(nx, nxt_state, keys, pos_tol)
+                    chk[bucket] += 1
+                    if gap is not None:
+                        pos_gaps.append(gap)
 
     acts = sum(grid[c]["acts"] for c in grid)
     print()
@@ -455,6 +518,15 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
           % (chk["tally_equal"], chk["tally"]))
     print("  C NEXT  : %d/%d activations leave BOTH combatants where the next act found them"
           % (chk["next_equal"], chk["next"]))
+    pos_median = 0.0
+    if pos_gaps:
+        s, n = sorted(pos_gaps), len(pos_gaps)
+        pos_median = s[n // 2] if n % 2 else (s[n // 2 - 1] + s[n // 2]) / 2
+    if not no_pos:
+        print("  C POS   : %d/%d activations with both combatants within %g\" of the table "
+              "(median gap %s\")"
+              % (chk["pos_equal"], chk["pos"], pos_tol,
+                 ("%.3f" % pos_median) if pos_gaps else "n/a"))
     print("  AIM     : %d/%d shooting acts split-aimed from shots.jsonl (%d unaimed -> "
           "split_unrecorded)"
           % (chk["split_aimed"], grid["shooting"]["acts"], chk["split_unrecorded"]))
@@ -482,7 +554,8 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
 
     summary = {"tool": "dice_gate", "gate": "D1-B6", "ref": str(ref), "games": len(games),
                "red": red or "none", "no_dangerous": no_dangerous, "only_rule": only_rule,
-               "checks": chk, "classes": grid, "totals": tot,
+               "checks": chk, "classes": grid, "totals": tot, "pos_tol": pos_tol,
+               "pos_median": round(pos_median, 3) if pos_gaps else None,
                "first": first, "seconds": round(time.perf_counter() - t0, 1)}
     if out:
         Path(out).expanduser().write_text(json.dumps(summary, indent=1, sort_keys=True))
@@ -560,13 +633,19 @@ def main(argv: list[str]) -> int:
                     help="NML-1130: conditional AP (PR #448/NML-1103), i.e. LEGACY_NO_COND_AP "
                          "inverted. 'auto' (default) reads the corpus's OWN vintage; 'on'/'off' "
                          "force it")
+    ap.add_argument("--pos-tol", type=float, default=0.5,
+                    help="check C POS: inches of centroid gap that still counts pos_equal "
+                         "(default 0.5\")")
+    ap.add_argument("--no-pos", action="store_true",
+                    help="skip check C POS (the position add-on to check C)")
     a = ap.parse_args(argv)
     reds = [k for k in ("extra-draw", "formula", "one-wound")
             if getattr(a, "red_" + k.replace("-", "_"))]
     if len(reds) > 1:
         ap.error("one red knob at a time — each has to redden its own check alone")
     return run(Path(a.ref).expanduser(), a.repo, a.limit, a.out, reds[0] if reds else "",
-               a.report_only, a.red_no_dangerous, a.engage_fold, a.cond_ap, a.only_rule)
+               a.report_only, a.red_no_dangerous, a.engage_fold, a.cond_ap, a.only_rule,
+               a.pos_tol, a.no_pos)
 
 
 if __name__ == "__main__":
