@@ -272,8 +272,8 @@ def test_the_seam_refuses_more_than_five_markers():
 #: shipped-default state (no legacy fixtures here) — the byte-identity
 #: reference the mixed patch must not move: the mixed branch is additive
 #: beside the pure modes.
-RULEBOOK_27_DIGEST = "e9a6593d21c2abde73ae0980ba58bdc4c5eca76e02e6ba9a37b17d99fbe37925"
-DOCTRINE_27_DIGEST = "51fa37151c460cf18bf2a0e14e3c09dd46d4fc98d9f440d35df708f0b2bf9ed6"
+RULEBOOK_27_DIGEST = "87759e0a3786a0b15528b35fa90dd80119553830c81ccac71bb6867dd5dc14f7"
+DOCTRINE_27_DIGEST = "4c1b8685dee47c05bc3ec7b7507028c20e757fc6a4ead2d023d32d6a04a27d1b"
 MIXED_A = {"1": "search", "2": "random"}  # the doctrine sits seat 1
 
 
@@ -372,14 +372,17 @@ def test_the_default_paths_stay_byte_identical():
     games this module already gates play byte-identical to the pre-9b build
     (digests captured at 83aa01e). The shared code the branch touches — the
     metre conversion, the mode-word table, the tray-seed default — must not
-    move them."""
+    move them. The pin hashes with the `knobs` block stripped (the
+    `#481`-era `c2a354be` precedent): the stream is the contract, header
+    metadata (`fit_blend`, ...) is not — re-verified across the `5ac14bd`
+    rebase, stripped digests identical on both sides of it."""
     core = nml_core.load(str(REPO))
     rulebook = sp.play_game(27, CHARGE_ARMY1, CHARGE_ARMY2, REPO, BANK_DIR, core,
                             objectives="rulebook")
     doctrine = sp.play_game(27, CHARGE_ARMY1, CHARGE_ARMY2, REPO, BANK_DIR, core,
                             objectives="doctrine")
-    assert sp.result_digest(rulebook) == RULEBOOK_27_DIGEST
-    assert sp.result_digest(doctrine) == DOCTRINE_27_DIGEST
+    assert _digest_without_knobs(rulebook) == RULEBOOK_27_DIGEST
+    assert _digest_without_knobs(doctrine) == DOCTRINE_27_DIGEST
 
 
 @pytest.mark.skipif(
