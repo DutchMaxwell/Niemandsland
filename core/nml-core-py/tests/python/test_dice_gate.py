@@ -93,6 +93,36 @@ def test_classify_names_every_way_two_roll_lists_can_part():
     assert gate.classify([a], [a, a]) == "length"
 
 
+def test_inject_split_aim_reuses_split_aim_and_leaves_covered_or_aligned_acts_alone():
+    """The corpus's own aiming oracle (`shoot_replay_gate.split_aim`), folded
+    onto one act: a shots.jsonl line naming a DIFFERENT unit than the recorded
+    `shoot` key becomes the action's `split`. An act that already carries one,
+    one `split_aim` cannot cover (no shots.jsonl line here), and one where
+    every shot already agrees with the recorded target (nothing to inject)
+    each come back UNCHANGED — the same three `split_aim` outcomes B4 already
+    reads as "stay pooled"."""
+    head = {"profiles": {"u1": {"name": "Squad A"}, "u2": {"name": "Squad B"}}}
+    units = {"u1": {"alive": 3}, "u2": {"alive": 3}}
+    shots = [{"member": "m1", "weapon": "w1", "target": "Squad B"}]
+    action = {"shoot": "u1"}
+
+    aimed_action, aimed = gate.inject_split_aim(head, shots, action, units)
+    assert aimed is True
+    assert aimed_action["split"] == [{"member": "m1", "weapon": "w1", "target": "u2"}]
+    assert action == {"shoot": "u1"}, "the input action is never mutated in place"
+
+    pre_split = {"shoot": "u1", "split": [{"target": "u2"}]}
+    same, aimed2 = gate.inject_split_aim(head, shots, pre_split, units)
+    assert (same, aimed2) == (pre_split, False)
+
+    uncovered, aimed3 = gate.inject_split_aim(head, [], action, units)
+    assert (uncovered, aimed3) == (action, False)
+
+    aligned_shots = [{"member": "m1", "weapon": "w1", "target": "Squad A"}]
+    aligned, aimed4 = gate.inject_split_aim(head, aligned_shots, action, units)
+    assert (aligned, aimed4) == (action, False)
+
+
 def test_split_unrecorded_flags_a_multi_attack_shooting_act_with_no_split_field():
     """NML-1150 GAP: two raw "attack"-shaped rolls under one shooting ordinal,
     no recorded `action.split` — the table split the volley, the recorder
