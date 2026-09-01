@@ -210,9 +210,11 @@ static func _header_line(state: Dictionary, terrain_cb: Callable, school_world: 
 			# measured a landed charge's engage gap over both sides' models INCLUDING attached
 			# heroes (BattleSim._engage_gap_in, battle_sim.gd:791), the way the table does
 			# (main.gd:7970 -> SoloController.nearest_melee_gap_in). It rides `hero_attach` and
-			# has no switch of its own, so this stamp IS that reading; the Rust twin's own
-			# `engage_fold` (core/nml-core/src/acts.rs:100) defaults ON and is a RED switch, not
-			# a feature knob, so a header that predates this key replays unchanged.
+			# has no switch of its own, so this stamp IS that reading. The Rust twin's own
+			# `engage_fold` (core/nml-core/src/acts.rs) reads an ABSENT key as OFF — a header
+			# that predates this key was recorded before the fold existed (the same reading
+			# `BattleSim.engage_fold_vintage` pins for the GDScript replay), so it replays the
+			# host-only engage gap and host-only weapon set it was recorded with.
 			"engage_fold": BattleSim.hero_fold_enabled(),
 			# NML-1103 (#448): the table's resolution counts CONDITIONAL AP (Shatter/Tear/
 			# Disintegrate/...) — BattleSim._profiles_of stamps `cond_ap` on every profile and

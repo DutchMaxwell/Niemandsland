@@ -148,6 +148,13 @@ def test_d5_1_the_charge_landing_knob_reaches_the_resolver_from_the_header():
     the two hosts' was, and a 14" charge now lands inside the contact epsilon
     where the snap is free. 12" puts the same act back in the window the D5-1
     gate is about; nothing else about the test moved.
+
+    THE FOLD IS NAMED, NOT ASSUMED. The bundled game predates the `engage_fold`
+    stamp, and an absent knob now reads OFF (`acts::Knobs`, the corpus-vintage
+    reading `vintage_knobs()` and `BattleSim.engage_fold_vintage` always had) —
+    so the 12" band above only lands in the D5-1 window with the fold switched
+    ON explicitly here. This test is about the `charge_landing` wiring, not the
+    fold's default; it asks for the board it was tuned on.
     """
     import copy
 
@@ -167,7 +174,7 @@ def test_d5_1_the_charge_landing_knob_reaches_the_resolver_from_the_header():
         core = nml_core.load(str(REPO))
         core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
                          "knobs": dict(head.get("knobs", {}), hero_attach=True,
-                                       charge_landing=landing)})
+                                       engage_fold=True, charge_landing=landing)})
         assert core.knobs()["charge_landing"] is landing, "the header knob round-trips"
         i0 = srg.first_at_or_after(dice, 16)
         tray = nml_core.Tray(seed)
