@@ -369,7 +369,7 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
     chk = dict.fromkeys(("stream_ok", "rolls", "tally", "tally_equal", "tally_red",
                          "next", "next_equal", "next_red", "mend_rolls", "mend_rolls_equal",
                          "mend_rolls_clean", "mend_rolls_clean_equal", "confounded",
-                         "split_unrecorded", "split_aimed", "pos") + POS_BUCKETS, 0)
+                         "split_unrecorded", "split_aimed", "pos", "ledger_acts") + POS_BUCKETS, 0)
     if only_rule:
         grid["mend"] = dict.fromkeys(BUCKETS + ("acts",), 0)
     first = {"stream": "", "tally": "", "next": ""}
@@ -450,6 +450,12 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                                                   act["state"]["units"])
                 chk["split_aimed"] += aimed
             grid[cls]["acts"] += 1
+            # NML-1152 step 10: does THIS act's state_before carry NON-EMPTY
+            # ledger content (act_recorder.gd's `_ledger_of`) for at least one
+            # unit — `{}` (recorded, nothing to say) and a missing key (a
+            # corpus predating this schema) both read False here alike.
+            if any(u.get("ledger") for u in act["state"]["units"].values()):
+                chk["ledger_acts"] += 1
             split_confound = split_unrecorded(cls, block, action)
             chk["split_unrecorded"] += split_confound
             tray = nml_core.Tray(seed)
@@ -576,6 +582,7 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
     print("  SPLIT   : %d/%d shooting acts split-unrecorded (corpus predates action.split) "
           "— B/C skipped"
           % (chk["split_unrecorded"], grid["shooting"]["acts"]))
+    print("  LEDGER  : %d/%d acts with recorded ledgers" % (chk["ledger_acts"], acts))
     if only_rule:
         print("  rule %s: %d/%d rule-shaped rolls replay at their own slot "
               "(%d/%d on the %d shape-clean acts), %d acts shape-confounded "
