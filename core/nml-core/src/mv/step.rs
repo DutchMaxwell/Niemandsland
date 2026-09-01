@@ -301,11 +301,13 @@ fn spacing_zones(state: &State, t: &Terrain, si: usize, ci: usize, own_r_m: f64)
     zones
 }
 
-/// Everything one charge's plan passes need that does not change between them —
+/// Everything one move's plan passes need that does not change between them —
 /// the two passes differ ONLY in the granted band and the avoid-difficult flag
 /// (`_execute_move` :4791-4805), so those two stay arguments and the rest lives
-/// here instead of in a sixteen-parameter signature.
-struct Charge<'a> {
+/// here instead of in a sixteen-parameter signature. `plan_once` (below) reads
+/// none of this as charge-specific, so a future non-charge caller builds one of
+/// these too — only `allow_contact` tells `build_call` which move it is.
+struct Move<'a> {
     state: &'a State,
     t: &'a Terrain,
     si: usize,
@@ -324,9 +326,12 @@ struct Charge<'a> {
     half: [f64; 2],
     fast_planner: bool,
     guard: i64,
+    /// A charge may end in base contact with `ci`'s target (p.7); a non-charge
+    /// move may not (`MoveCall.allow_contact`, io.rs:339). Charge = true.
+    allow_contact: bool,
 }
 
-impl Charge<'_> {
+impl Move<'_> {
 /// `_plan_positions` :6136 — one `plan_unit_step` call, inputs only.
 fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool) -> MoveCall {
     let (state, t, si, ci) = (self.state, self.t, self.si, self.ci);
@@ -371,7 +376,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool) -> MoveCa
         // p.13/p.14: Flying ignores walls while moving (:6157).
         walls: if self.flying { Vec::new() } else { t.walls_in().to_vec() },
         grid,
-        allow_contact: true,
+        allow_contact: self.allow_contact,
         board_in: board[0],
         opts: CallOpts {
             radii,
@@ -547,7 +552,7 @@ pub fn charge_move(
     let avoid_diff = !ignores_difficult
         && !targets_in(&pos, goal, reach, own_r_m, t, half, terrain::is_difficult);
     let avoid_dang = !flying && !targets_in(&pos, goal, reach, own_r_m, t, half, terrain::is_dangerous);
-    let ch = Charge {
+    let ch = Move {
         state,
         t,
         si,
@@ -562,6 +567,7 @@ pub fn charge_move(
         half,
         fast_planner,
         guard,
+        allow_contact: true,
     };
     let (mut planned, mut trails, mut call) = ch.plan_once(reach, avoid_diff);
     // :4801-4805 — the ROUTE entered difficult terrain, so p.11 caps the whole
