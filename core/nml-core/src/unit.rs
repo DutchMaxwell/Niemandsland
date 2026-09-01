@@ -831,7 +831,11 @@ pub struct UtilityBuff {
 /// resolved HERE, where `vs_target` is known: the friendly pick is 12" and
 /// sight-free (main.gd:16493/16552), the Mark is 18" and needs sight (:16752/
 /// :16758).
-fn utility_buffs_of(reg: &mut Registries, p: &Profile) -> Vec<UtilityBuff> {
+fn utility_buffs_of(
+    reg: &mut Registries,
+    p: &Profile,
+    unimplemented: &mut Vec<Unimplemented>,
+) -> Vec<UtilityBuff> {
     let mut out = Vec::new();
     let mut raws: Vec<&String> = p.special_rules.iter().collect();
     raws.extend(p.item_grants.iter());
@@ -867,6 +871,22 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile) -> Vec<UtilityBuff> {
             scope: e.param_s("scope").to_string(),
             once: e.param_b_or("once", true),
         });
+        // The ledger models four knobs (hit / casting / morale / grant) and the
+        // movement arm. An entry whose whole effect is a knob it does NOT carry
+        // — `def_mod`, `defense_mod`, `ap_mod`, `move_mod`, `range_bonus_in` —
+        // would record an all-zero row that `record_buff` drops on the floor.
+        // Named here rather than skipped in silence.
+        let b = out.last().expect("just pushed");
+        if !b.vs_target
+            && b.reposition_in <= 0.0
+            && (b.hit_mod, b.casting_mod, b.morale_mod) == (0, 0, 0)
+            && b.grants_rule.is_empty()
+        {
+            unimplemented.push(Unimplemented {
+                rule: b.name.clone(),
+                why: "Utility Buff params carry no hit/casting/morale mod and no grants_rule — the knob it does carry (def_mod / ap_mod / move_mod / range_bonus_in) has no ledger field and no reader in this core".into(),
+            });
+        }
     }
     out
 }
@@ -1052,7 +1072,7 @@ impl UnitStatic {
             breath_attack_active: unit_rule_active(reg, p, "Breath Attack"),
             is_hero: has_special_rule(&p.special_rules, "Hero"),
             reposition_artillery_active: unit_rule_active(reg, p, "Re-Position Artillery"),
-            utility_buffs: utility_buffs_of(reg, p),
+            utility_buffs: utility_buffs_of(reg, p, &mut unimplemented),
             unimplemented,
         }
     }
