@@ -55,6 +55,11 @@ pub const BANNER_MORALE_BONUS: i64 = 1;
 /// `AiEv.REGENERATION_TARGET` ai_ev.gd:41 / `SELF_REPAIR_TARGET` :45.
 pub const REGENERATION_TARGET: i64 = 5;
 pub const SELF_REPAIR_TARGET: i64 = 6;
+/// Block B10 — the Resistance leg (`main._solo_regen_pick` main.gd:6591-6596):
+/// the Regeneration family's whole-unit rule ignores normal wounds on 6+,
+/// SPELL wounds on 2+.
+pub const RESISTANCE_TARGET: i64 = 6;
+pub const RESISTANCE_TARGET_SPELL: i64 = 2;
 
 #[inline]
 fn clampi(v: i64, lo: i64, hi: i64) -> i64 {
