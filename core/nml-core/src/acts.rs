@@ -92,11 +92,19 @@ pub struct Knobs {
     #[serde(default = "yes")]
     pub dangerous: bool,
     /// NML-1073 M5 D5-4 — the RED switch for the attached-hero fold of the
-    /// engage test. NOT a feature knob: the fold rides `hero_attach`, which
-    /// already exists, and defaults ON exactly the way `charge_gate` does. It
-    /// is here so a gate can take the fold away and prove the numbers come back
-    /// (`--red-no-hero-fold`).
-    #[serde(default = "yes")]
+    /// engage test. Unlike `charge_gate`/`dangerous` (rules that were always
+    /// live, so an absent knob must default ON to replay old corpora
+    /// unchanged), this fold is a NEW behaviour (NML-1129/1132):
+    /// `act_recorder.gd:216` only started stamping it once the fold shipped,
+    /// and `BattleSim.engage_fold_vintage`/`vintage_knobs()` (shoot_replay_
+    /// gate.py) both read an absent key as OFF — the corpus predates the
+    /// fold, so the table it was recorded on had none. Defaulting this to ON
+    /// made the twin fold a hero's weapons into a pre-fold corpus's charge
+    /// EV that the table never counted (found by `policy_gate.py`: qbg_ref
+    /// s27 act 21, a CHARGE candidate's melee_ev included the charger's
+    /// attached hero's "Dual Shock Whip" though the fold was never live for
+    /// this recording). `--red-no-hero-fold` still forces it OFF regardless.
+    #[serde(default)]
     pub engage_fold: bool,
     /// NML-1134 — which RULE VOCABULARY this corpus's board rows were slotted
     /// with (`data/encoder_rule_vocab_v1.json`, stamped by `act_recorder.gd`).
@@ -169,7 +177,7 @@ impl Default for Knobs {
             sighting: Sighting::Unit,
             movement: false,
             dangerous: true,
-            engage_fold: true,
+            engage_fold: false,
             // NML-1134: the CORPUS reading — a header with no `knobs` block at
             // all predates the stamp just as surely as one with an unstamped
             // block does. A caller that plays a FRESH game stamps

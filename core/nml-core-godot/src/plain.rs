@@ -837,9 +837,13 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // and defaults ON. Absent (every corpus) = `Knobs::default()` = true, and
         // a gate that writes `false` gets the RED reading.
         dangerous: d.get("dangerous").map(|v| flag(&v)).unwrap_or(dflt.dangerous),
-        // NML-1073 M5 D5-4. Not a seam: the engage test's hero fold rides
-        // `hero_attach` and defaults ON. Absent (every corpus) =
-        // `Knobs::default()` = true; a gate that writes `false` gets the RED.
+        // NML-1073 M5 D5-4. The engage test's hero fold rides `hero_attach`,
+        // and the recorder writes this key (act_recorder.gd `_header_line`,
+        // from `BattleSim.hero_fold_enabled()`) — so a live header always says.
+        // Absent = a corpus recorded BEFORE the fold existed = `Knobs::default()`
+        // = OFF, the reading `BattleSim.engage_fold_vintage` and the Python
+        // gates' `vintage_knobs()` always had; a gate that writes `false` gets
+        // the RED.
         engage_fold: d.get("engage_fold").map(|v| flag(&v)).unwrap_or(dflt.engage_fold),
         // NML-1134. The recorder writes this key (act_recorder.gd `_header_line`,
         // from `BattleSim.RULE_VOCAB_VERSION`); absent = `Knobs::default()` = the
