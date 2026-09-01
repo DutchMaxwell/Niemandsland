@@ -53,7 +53,7 @@ fn main() {
             let search = Search::new(roll, &act.statics);
             let t0 = Instant::now();
             let pick = search
-                .run(&act.state, act.player, &mut sc)
+                .run(&act.state, act.player, &mut sc, None)
                 .unwrap_or_else(|u| panic!("act {ai}: the search declined {u:?}"));
             us.push(t0.elapsed().as_nanos() as f64 / 1000.0);
             sink += pick.expectation_after;

@@ -85,7 +85,7 @@ fn main() {
             search.sig = Some(arb.sig);
             let t0 = Instant::now();
             let p = search
-                .run(&act.state, act.player, &mut sc)
+                .run(&act.state, act.player, &mut sc, None)
                 .unwrap_or_else(|u| panic!("act {ai}: the search declined {u:?}"));
             plan_us.push(t0.elapsed().as_nanos() as f64 / 1000.0);
             sink += p.arbitration.map(|a| a.n).unwrap_or(0);
