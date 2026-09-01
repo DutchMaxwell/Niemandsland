@@ -151,6 +151,13 @@ impl Entry {
     pub fn param_b(&self, key: &str) -> bool {
         matches!(self.params.get(key), Some(Value::Bool(true)))
     }
+    /// A boolean knob whose PRINTED default is `true` (`bool(sp.get(k, true))`).
+    pub fn param_b_or(&self, key: &str, fallback: bool) -> bool {
+        match self.params.get(key) {
+            Some(Value::Bool(b)) => *b,
+            _ => fallback,
+        }
+    }
     pub fn param_s(&self, key: &str) -> &str {
         match self.params.get(key) {
             Some(Value::String(s)) => s.as_str(),
