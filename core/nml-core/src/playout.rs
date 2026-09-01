@@ -58,6 +58,11 @@ pub struct Policy<'a> {
     /// `fit_mode` act that reaches it without one rather than quietly playing
     /// the other brain.
     pub fit: Option<&'a Fitted>,
+    /// NML-1158b step 5 — the ORDER-mode policy net, or `None` for the hand
+    /// order alone. Same contract as `fit`: the CALLER leaves this `None`
+    /// unless `ActStatics.policy_mode == Order`; `Search::admissible`
+    /// declines an `Order` act that reaches it without one.
+    pub policy_net: Option<&'a crate::policy::Policy>,
 }
 
 impl<'a> Policy<'a> {
@@ -70,6 +75,7 @@ impl<'a> Policy<'a> {
             tuning: Tuning::default(),
             force_leaf: None,
             fit: None,
+            policy_net: None,
         }
     }
 

@@ -105,6 +105,11 @@ pub enum Unsupported {
     NetPlayout,
     /// `AiMissionEval.fit_mode` — `score.rs` ports the HAND half only.
     FittedEval,
+    /// NML-1158b step 5 — `ActStatics.policy_mode == Order` but the caller
+    /// wired no policy net: same contract as `FittedEval`, a mode an act
+    /// asked for and the search cannot honour is a decline, not a silent
+    /// fall-back to the hand order.
+    PolicyOrder,
 }
 
 /// `BattleSim._los_clear` battle_sim.gd:666-670, read off the recorded answers.

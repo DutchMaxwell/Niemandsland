@@ -25,10 +25,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use nml_core::acts::PickRec;
+use nml_core::acts::{PickRec, PolicyMode};
 use nml_core::menu::Candidate;
 use nml_core::plan::{build_pool, rank, PlanBend, ScoredRow, Search};
 use nml_core::playout::Policy;
+use nml_core::policy::{Policy as PolicyHarness, PolicyNet};
 use nml_core::rollout::Rollout;
 use nml_core::sim::{Scratch, Unsupported, HOLD, RUSH};
 use nml_core::{act_statics, build_act_statics, load_acts, Act, ActCorpus, Pick, Seams};
@@ -905,4 +906,120 @@ fn the_explore_knob_is_inert_at_zero_and_live_at_one() {
         .filter(|((_, p), (_, a))| p.unit_key != a.unit_key || p.action.kind != a.action.kind)
         .count();
     assert!(moved > 0, "eps=1 over {len} acts never left the argmax", len = full.len());
+}
+
+/// NML-1158b step 5 — ORDER mode (design §4, §7 step 5). A SYNTHETIC net
+/// (no file, no `NML_POLICY_NET`) scores a candidate by its `kind` alone
+/// (`100 + kind`, strictly monotonic over HOLD/ADVANCE/RUSH/CHARGE) so the
+/// "matches the net's logits exactly" bar is checkable straight off the
+/// `pick.scored` trace without reconstructing the net's own arithmetic.
+fn kind_ranking_net() -> PolicyNet {
+    let (state_dim, act_dim, hidden) = (93usize, 20usize, 1usize);
+    let mut w1 = vec![vec![0.0f64; hidden]; state_dim + act_dim];
+    for k in 0..4usize {
+        w1[state_dim + k][0] = k as f64; // the 5-wide kind one-hot, CHARGE(3) highest
+    }
+    PolicyNet {
+        schema: "policy_net/1".into(),
+        state_dim,
+        act_dim,
+        hidden,
+        w1,
+        b1: vec![100.0], // keeps ReLU linear over every real action vector
+        w2: vec![1.0],
+        b2: 0.0,
+        selftest: None,
+    }
+}
+
+#[test]
+fn order_mode_off_is_byte_identical_order_reorders_within_unit_only() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
+        movement: c.knobs.movement, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold };
+    let mut sc = Scratch::default();
+    let harness = PolicyHarness::new(kind_ranking_net(), REPO)
+        .unwrap_or_else(|e| panic!("policy harness must load the checked-in rule vocab: {e}"));
+
+    // Baseline: net UNARMED — every recorded act, the G4 order.
+    let bare = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
+    let mut base: Vec<Vec<(i64, String, i64, f64)>> = Vec::new();
+    for act in &c.acts {
+        let got = Search::new(bare, &act.statics)
+            .run(&act.state, act.player, &mut sc, None)
+            .unwrap_or_else(|e| panic!("{e:?}"));
+        base.push(got.scored);
+    }
+
+    let mut armed = Policy::new(&statics, &c.terrain, seams);
+    armed.policy_net = Some(&harness);
+    let roll = Rollout::new(armed, c.knobs);
+    let mut units_reordered = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        // The net ARMED, mode still off: must not move a single row — the
+        // KNOB decides, not the net's mere presence.
+        let off = Search::new(roll, &act.statics)
+            .run(&act.state, act.player, &mut sc, None)
+            .unwrap_or_else(|e| panic!("{e:?}"));
+        assert_eq!(off.scored, base[ai], "act {ai}: an armed-but-off net moved the plan");
+
+        let mut doctored = act.statics.clone();
+        doctored.policy_mode = PolicyMode::Order;
+        let on = Search::new(roll, &doctored)
+            .run(&act.state, act.player, &mut sc, None)
+            .unwrap_or_else(|e| panic!("{e:?}"));
+        assert_eq!(on.scored.len(), off.scored.len(), "act {ai}: ORDER mode changed the row count");
+
+        // The SET of positions each unit owns is design §1's cross-unit
+        // decision — ORDER mode must not touch it, even though it is free to
+        // fill those positions with a DIFFERENT one of that unit's own rows.
+        let mut off_by_unit: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+        for (p, row) in off.scored.iter().enumerate() {
+            off_by_unit.entry(row.1.clone()).or_default().push(p);
+        }
+        let mut on_by_unit: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+        for (p, row) in on.scored.iter().enumerate() {
+            on_by_unit.entry(row.1.clone()).or_default().push(p);
+        }
+        assert_eq!(off_by_unit, on_by_unit,
+            "act {ai}: ORDER mode moved a slot to a DIFFERENT unit");
+
+        for (unit, positions) in &on_by_unit {
+            let kinds: Vec<i64> = positions.iter().map(|&p| on.scored[p].2).collect();
+            for w in kinds.windows(2) {
+                assert!(w[0] >= w[1],
+                    "act {ai} unit {unit}: not sorted by the net's own logit order (kind {} before {})",
+                    w[0], w[1]);
+            }
+            let moved = positions.iter().map(|&p| on.scored[p].0).collect::<Vec<_>>()
+                != positions.iter().map(|&p| off.scored[p].0).collect::<Vec<_>>();
+            if moved {
+                units_reordered += 1;
+            }
+        }
+    }
+    assert!(units_reordered > 0,
+        "ORDER mode never reordered a single unit's own menu across {} acts", c.acts.len());
+}
+
+/// `policy_mode == Order` with no net wired declines rather than silently
+/// falling back to the hand order (`admissible`, mirroring `fit_mode`).
+#[test]
+fn order_mode_with_no_net_wired_declines() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
+        movement: c.knobs.movement, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold };
+    let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
+    let mut sc = Scratch::default();
+    let act = &c.acts[0];
+    let mut doctored = act.statics.clone();
+    doctored.policy_mode = PolicyMode::Order;
+    let err = Search::new(roll, &doctored)
+        .run(&act.state, act.player, &mut sc, None)
+        .expect_err("policy_mode=order with no net wired must decline, not silently reorder");
+    assert!(matches!(err, Unsupported::PolicyOrder), "wrong decline reason: {err:?}");
 }
