@@ -142,6 +142,13 @@ pub struct ShootProfile {
     /// NML-1103 — `AiEv.stamp_conditional_ap` ai_ev.gd:296-313, read by
     /// `combat::profile_ev`. Stamped AFTER the merge, like every other facet.
     pub cond_ap: Vec<CondAp>,
+    /// Good Shot (+1) / Bad Shot (-1) — `_solo_hit_mod_info` main.gd:5681-5701,
+    /// a flat shooting-only hit-roll bonus with no range gate.
+    pub hit_bonus: i64,
+    /// Targeting Visor (+1) — same site, gated behind `over_in`: applies only
+    /// past `combat::LONG_RANGE_IN` (exactly 9" is not "over", same as every
+    /// other over-9" gate in this port).
+    pub hit_bonus_over9: i64,
 }
 
 impl ShootProfile {
@@ -689,6 +696,39 @@ fn stamp_unit_strikers(p: &Profile, shoot: &mut [ShootProfile]) {
     }
 }
 
+/// `RulesRegistry.unit_rules_of_primitive(shooter, "Shot Modifier")`,
+/// main.gd:5681-5701 — scoped to this port's three named carriers (Good Shot,
+/// Bad Shot, Targeting Visor; `assets/solo/rules_mechanics_gf.json`). None of
+/// the three sets `melee_only` / `all_attacks` / `when: charge`, so — unlike
+/// the unit-level strikers above — the bonus never reaches `melee`, only
+/// `shoot` (main.gd:5627-5636 excludes it from the melee branch on that same
+/// gate). The other `Shot Modifier` family members (Grounded Precision,
+/// Precision Fighter/Charge Aura) are melee-/charge-/terrain-scoped and stay
+/// unported.
+fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile]) {
+    let mut flat = 0;
+    let mut over9 = 0;
+    for name in ["Good Shot", "Bad Shot", "Targeting Visor"] {
+        if !unit_rule_active(reg, p, name) {
+            continue;
+        }
+        let map = reg.rules_for(&p.game_system);
+        let Some(e) = map.lookup(&p.faction_folder, name) else {
+            continue;
+        };
+        let hb = e.param_i("hit_bonus", 0);
+        if e.param_f("over_in", 0.0) > 0.0 {
+            over9 += hb;
+        } else {
+            flat += hb;
+        }
+    }
+    for sp in shoot.iter_mut() {
+        sp.hit_bonus += flat;
+        sp.hit_bonus_over9 += over9;
+    }
+}
+
 /// The registry read behind `AiEv.stamp_conditional_ap` ai_ev.gd:291-306: the
 /// conditional-AP spec of ONE rule name (None when the book has no entry, or an
 /// entry without a `condition` key — the presence of that key IS the gate) plus
@@ -827,6 +867,7 @@ impl UnitStatic {
         stamp(reg, p, &mut shoot, &mut unimplemented);
         stamp_conditional_ap(reg, p, &mut shoot);
         stamp_unit_strikers(p, &mut shoot);
+        stamp_shot_modifier(reg, p, &mut shoot);
 
         let mut melee = melee_profiles(&p.weapons);
         // The same stamping runs on the melee array (`_profiles_of(su, true)`

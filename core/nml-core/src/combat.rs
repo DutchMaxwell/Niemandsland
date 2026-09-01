@@ -81,6 +81,11 @@ pub fn modified_hit_target(base_target: i64, roll_mod: i64) -> i64 {
 }
 
 /// `AiCombatMath.shooting_hit_modifier` :230-243 — exactly 9" is not "over".
+/// `shot_hit_bonus`/`shot_hit_bonus_over9` are NOT part of that GDScript
+/// function; they are `_solo_hit_mod_info`'s own addition on top of it
+/// (main.gd:5681-5701 — Good Shot / Bad Shot / Targeting Visor), folded in
+/// here so the EV and tray callers below share one gated sum instead of each
+/// re-deriving the over-9" test.
 #[inline]
 pub fn shooting_hit_modifier(
     dist_in: f64,
@@ -88,6 +93,8 @@ pub fn shooting_hit_modifier(
     target_stealth: bool,
     target_artillery: bool,
     target_evasive: bool,
+    shot_hit_bonus: i64,
+    shot_hit_bonus_over9: i64,
 ) -> i64 {
     let mut m = 0;
     if dist_in > LONG_RANGE_IN {
@@ -100,11 +107,12 @@ pub fn shooting_hit_modifier(
         if target_artillery {
             m -= ARTILLERY_TARGET_HIT_PENALTY;
         }
+        m += shot_hit_bonus_over9;
     }
     if target_evasive {
         m -= EVASIVE_HIT_PENALTY;
     }
-    m
+    m + shot_hit_bonus
 }
 
 /// `AiCombatMath.shielded_defense` :254-255 / `covered_defense` :261-262 /
@@ -354,8 +362,12 @@ pub fn profile_ev(
         }
     } else {
         target = reliable_quality(att.quality, p.reliable);
-        let mut shoot_mod =
-            shooting_hit_modifier(dist_in, att.artillery, def.stealth, def.artillery, def.evasive);
+        // ai_ev.gd:352 never reads Shot Modifier (Good Shot / Bad Shot /
+        // Targeting Visor) — the EV imagination stays blind to it, like Mend;
+        // only the tray path (dice.rs) supplies a non-zero pair.
+        let mut shoot_mod = shooting_hit_modifier(
+            dist_in, att.artillery, def.stealth, def.artillery, def.evasive, 0, 0,
+        );
         if p.unstoppable && shoot_mod < 0 {
             shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.
         }
@@ -658,5 +670,23 @@ mod tests {
         // Unimplemented spellings answer 0 on both sides.
         assert_eq!(conditional_ap_bonus(&spec("ranged", "", false, 0), 9, 2, true, 30.0, false), 0);
         assert_eq!(conditional_ap_bonus(&spec("in_melee", "", false, 0), 9, 2, true, 0.0, true), 0);
+    }
+
+    /// Block B4: ai_ev.gd:352's shooting branch never reads Good Shot / Bad
+    /// Shot / Targeting Visor — the EV imagination stays blind to Shot
+    /// Modifier, like Mend. A stamped `ShootProfile.hit_bonus`/`hit_bonus_over9`
+    /// must not move `profile_ev`'s number; only the tray path (dice.rs) reads
+    /// them.
+    #[test]
+    fn shot_modifier_never_reaches_the_ev_planner() {
+        let att = Ctx { quality: 4, models: 1, ..Default::default() };
+        let def = Ctx { defense: 4, models: 5, tough: 1, ..Default::default() };
+        let plain = ShootProfile { attacks: 6, range: 24, ..Default::default() };
+        let with_bonus = ShootProfile { hit_bonus: 1, hit_bonus_over9: 1, ..plain.clone() };
+        assert_eq!(
+            profile_ev(&plain, 6, &att, &def, 12.0, false),
+            profile_ev(&with_bonus, 6, &att, &def, 12.0, false),
+            "the EV planner must stay blind to Shot Modifier, like the table's own AiEv"
+        );
     }
 }
