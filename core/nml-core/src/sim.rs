@@ -29,7 +29,7 @@ use crate::state::State;
 use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
 use crate::mv::CLEARANCE_EPS_IN;
 use crate::terrain::{base_in_terrain, gives_cover, is_dangerous, Terrain};
-use crate::unit::{Ctx, UnitStatic, ShootProfile};
+use crate::unit::{Ctx, UnitStatic, ShootProfile, UtilityBuff};
 use crate::{CONTROL_EPS, IN2M};
 
 /// `BattleSim.CONTACT_IN` battle_sim.gd:725 — the charge's contact ring. No
@@ -497,6 +497,75 @@ pub(crate) fn tray_utility_buff(statics: &[UnitStatic], next: &mut State, si: us
             reposition_artillery_for(statics, next, bearer, seams, terrain);
         }
     }
+}
+
+/// `RadialMenu._caster_member_of` radial_menu.gd:489-499 — the unit itself or
+/// one of its alive attached heroes is a Caster. Hero-fold seam-gated like
+/// every other chain read in this file.
+fn caster_member(statics: &[UnitStatic], state: &State, u: usize, seams: Seams) -> bool {
+    if statics[state.roster.profile[u]].is_caster {
+        return true;
+    }
+    seams.hero_attach
+        && state.attached[u]
+            .iter()
+            .any(|&h| state.alive[h] > 0 && statics[state.roster.profile[h]].is_caster)
+}
+
+/// `main._solo_utility_targets` :16317-16359 — up to `max_targets` legal picks
+/// for one buff, best VALUE first (`alive_count + Tough`, :16358). Alive,
+/// non-reserve, never an ATTACHED unit (a joined hero is bought through its
+/// host), the kind's own filter, the printed range measured centre to centre
+/// (`MoveIntent.distance_inches` :16344) and sight when the params ask for it.
+///
+/// NOT PORTED — Extended Buff Range (wave 4, :16326-16337): a candidate beyond
+/// the printed range that the relay clause would still make legal. That is its
+/// own rule with its own registry entry (`SoloController.ebr_relay_ok`), it is
+/// gated on the buffing hero carrying it, and no carrier of the six names in
+/// this block also carries it. A relayed pick this port refuses is the table
+/// buffing someone this twin does not.
+///
+/// The sort is STABLE, so a value tie keeps roster order; the GDScript's
+/// `sort_custom` is an introsort and leaves ties unspecified — the same call
+/// `reposition_artillery_for` already makes with its strict `>` (first wins).
+fn utility_targets(
+    statics: &[UnitStatic],
+    state: &State,
+    bearer: usize,
+    b: &UtilityBuff,
+    seams: Seams,
+) -> Vec<usize> {
+    let own = state.player[bearer];
+    let enemy = b.target == "enemy";
+    let from = geom::centre(&state.positions[bearer]);
+    let mut scored: Vec<(f64, usize)> = Vec::new();
+    for u in 0..state.units() {
+        if (state.player[u] == own) == enemy || state.alive[u] <= 0 || state.dormant[u] {
+            continue;
+        }
+        if seams.hero_attach && state.attached_to[u].is_some() {
+            continue;
+        }
+        if b.target == "friendly_caster" && !caster_member(statics, state, u, seams) {
+            continue;
+        }
+        let uc = ctx_of(&statics[state.roster.profile[u]], state, u);
+        if b.target == "friendly_artillery" && !uc.artillery {
+            continue;
+        }
+        let d =
+            (geom::length(geom::sub(from, geom::centre(&state.positions[u]))) / IN2M as f32) as f64;
+        if d > b.range_in {
+            continue;
+        }
+        if b.needs_los && !los_clear(state, bearer, u) {
+            continue;
+        }
+        scored.push((state.alive[u] as f64 + uc.tough as f64, u));
+    }
+    scored.sort_by(|a, c| c.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));
+    scored.truncate(b.max_targets.max(1) as usize);
+    scored.into_iter().map(|(_, u)| u).collect()
 }
 
 /// One bearer's pick + move — see `tray_utility_buff`.
