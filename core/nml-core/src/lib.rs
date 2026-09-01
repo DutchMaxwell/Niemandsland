@@ -65,6 +65,7 @@ pub use menu::{candidates, candidates_in, candidates_tuned, Candidate, Tuning};
 pub use mv::{load_moves, read_moves, MoveCall, MoveCorpus, MoveHeader};
 pub use objectives::{generate as objective_layout, Cells as ObjectiveCells, Layout as ObjectiveLayoutOut};
 pub use doctrine::place as doctrine_place;
+pub use doctrine::place_step;
 pub use mission::{
     apply_destroy_step, mission_winner, playout_seize, sabotage_winner, vp_end_bonus,
     vp_round_add, vp_score_end, vp_score_round,

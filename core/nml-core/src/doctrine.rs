@@ -374,6 +374,32 @@ pub fn place_search(a: &Value, b: &Value, style: &Value, cells: &objectives::Cel
     Placed { cells: placed, swept }
 }
 
+/// NML-1140 step 9b — the doctrine's NEXT ply on an existing prefix: the
+/// incremental step the mixed placement A/B needs. The same ctx as
+/// `place_search`, one `search_node` call at `placed.len()`; the PV's first
+/// cell is the choice. Zero RNG — the caller owns the draw stream and the
+/// sweep fallback (`None` = no legal grid cell, the ply falls to the sweep).
+pub fn place_step(
+    a: &Value,
+    b: &Value,
+    style: &Value,
+    cells: &objectives::Cells,
+    count: usize,
+    table_w_in: f64,
+    table_d_in: f64,
+    placed: &[(i64, i64)],
+) -> Option<(i64, i64)> {
+    let zones = objectives::zones_of_style(style);
+    let (z1, z2) = (zone_rect(style, "1"), zone_rect(style, "2"));
+    let (hx, hz) = ((table_w_in / 2.0) as i64 - objectives::EDGE_MARGIN_IN, (table_d_in / 2.0) as i64 - objectives::EDGE_MARGIN_IN);
+    let (first, second) = canonical(a, b);
+    let ctx = SearchCtx {
+        hx, hz, zones, cells, z1, z2, first, second,
+        lab_a: Summary::of_profiles(first).label(), lab_b: Summary::of_profiles(second).label(),
+    };
+    search_node(&ctx, placed.len(), count, placed).1.into_iter().next()
+}
+
 /// Step 5 — the ONE entry point both seams call: `mode` dispatches to the
 /// style argmax or the search mini-game. "random" and any unknown word are an
 /// Err, never a silent fallback: the random path is the caller's own draw

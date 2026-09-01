@@ -1727,6 +1727,62 @@ fn doctrine_place(
     Ok(out.into_any().unbind())
 }
 
+/// NML-1140 step 9b — `nmlcore::place_step` for the mixed placement A/B: the
+/// search's NEXT ply on the prefix `placed` (the markers placed so far,
+/// inches). The `doctrine_place` contract, minus the draw: zero RNG, count
+/// <= 5, one call adds ONE cell, `None` when no grid cell passes (the ply
+/// falls to the caller's sweep). A prefix that already reached `count` raises
+/// — the search's leaf test needs a ply to place.
+#[pyfunction]
+#[pyo3(signature = (armies, count, style, placed, table_w_in=72.0, table_d_in=48.0, terrain=None))]
+fn doctrine_place_step(
+    py: Python<'_>,
+    armies: &Bound<'_, PyAny>,
+    count: usize,
+    style: &Bound<'_, PyAny>,
+    placed: Vec<Vec<i64>>,
+    table_w_in: f64,
+    table_d_in: f64,
+    terrain: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Option<(i64, i64)>> {
+    if count > 5 {
+        return Err(Unsupported::new_err(format!(
+            "count must be <= 5 (d3+2 is the mission ceiling; the search tree is 8^count), got {count}"
+        )));
+    }
+    let (a, b): (Py<PyAny>, Py<PyAny>) = armies.extract().map_err(|e| {
+        Unsupported::new_err(format!(
+            "armies must be the pair (army_a, army_b) of profile dicts: {e}"
+        ))
+    })?;
+    let rows: Vec<(i64, i64)> = placed
+        .iter()
+        .map(|v| match v.as_slice() {
+            [x, z] => Ok((*x, *z)),
+            _ => Err(Unsupported::new_err(format!(
+                "each placed marker is [x, z], got {} entries",
+                v.len()
+            ))),
+        })
+        .collect::<PyResult<Vec<_>>>()?;
+    if rows.len() >= count {
+        return Err(Unsupported::new_err(format!(
+            "the prefix must be shorter than count (the search's leaf test needs a ply to place), got {} of {count}",
+            rows.len()
+        )));
+    }
+    Ok(nmlcore::place_step(
+        &value_of(a.bind(py))?,
+        &value_of(b.bind(py))?,
+        &value_of(style)?,
+        &objectives::Cells::from_terrain(&board(terrain)?.inner),
+        count,
+        table_w_in,
+        table_d_in,
+        &rows,
+    ))
+}
+
 /// `objectives::is_legal` for one candidate marker — the twin's own legality
 /// rule handed to Python (NML-1140 step 5), so a gate re-checks every
 /// `doctrine_place` cell through the SAME function the doctrine searched
@@ -1962,6 +2018,9 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // NML-1140 step 5: the doctrine's choice next to the random-legal layout,
     // plus `objectives::is_legal` so a gate re-checks through the same rule.
     m.add_function(wrap_pyfunction!(doctrine_place, m)?)?;
+    // NML-1140 step 9b: the doctrine's next ply on a prefix, for the mixed
+    // per-side placement A/B.
+    m.add_function(wrap_pyfunction!(doctrine_place_step, m)?)?;
     m.add_function(wrap_pyfunction!(objective_is_legal, m)?)?;
     // `TerrainRules.TerrainType` — terrain_rules.gd:24.
     m.add("TERRAIN_NONE", nmlcore::terrain::NONE)?;

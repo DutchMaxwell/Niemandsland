@@ -517,8 +517,10 @@ DICE_MODES = ("expected", "table")
 #: "doctrine" (NML-1140 step 9) keeps that draw for count and first placer — the
 #: stream contract — and hands ONLY the candidate choice to `nml_core.doctrine_place`,
 #: the twin's placement doctrine, which draws nothing. Which rung the doctrine
-#: plays is a knob of its own:
-OBJECTIVES_MODES = ("constant", "rulebook", "doctrine")
+#: plays is a knob of its own. "mixed" (NML-1140 step 9b) splits that choice PER
+#: SEAT — the placement A/B measures the doctrine's placement skill against the
+#: rulebook draw in ONE game instead of a whole-board pair.
+OBJECTIVES_MODES = ("constant", "rulebook", "doctrine", "mixed")
 
 #: The doctrine rungs (design 5): "search" is the max^N mini-game the shipped
 #: grade plays, "style" the middle rung without the eval. "random" needs no
@@ -534,6 +536,24 @@ def resolve_doctrine_mode(doctrine_mode: str) -> str:
             "doctrine_mode must be one of %s, not %r" % (list(DOCTRINE_MODES), doctrine_mode)
         )
     return doctrine_mode
+
+def resolve_mixed_placement(doctrine_mode):
+    """The per-seat placer spec `objectives="mixed"` plays: {"1": rung, "2": rung},
+    "random" (the rulebook draw) allowed beside the doctrine rungs. A bare rung
+    string means the doctrine sits seat 1 and the rulebook seat 2. Unknown words
+    or shapes RAISE — the same rule every mode word here lives by."""
+    spec = {"1": doctrine_mode, "2": "random"} if isinstance(doctrine_mode, str) else doctrine_mode
+    if (
+        not isinstance(spec, dict)
+        or set(spec) != {"1", "2"}
+        or set(spec.values()) - {"random", *DOCTRINE_MODES}
+    ):
+        raise ValueError(
+            "mixed doctrine_mode must be a {'1': rung, '2': rung} dict with rung in %s, not %r"
+            % (sorted({"random", *DOCTRINE_MODES}), doctrine_mode)
+        )
+    return spec
+
 
 #: The catalog deployment style the harnesses play. Both `arena_match.gd` and
 #: `core_selfplay.gd` deploy FRONT_LINE 12" zones, so the twin's legality test uses
@@ -1324,6 +1344,7 @@ def play_game(
     objectives: str = "constant",
     deployment: str = "zone",
     doctrine_mode: str = "search",
+    dice_seed: int | None = None,
     net: str | Path | None = None,
     net_player: int = 0,
     fit_blend: float = 0.5,
@@ -1534,7 +1555,12 @@ def play_game(
     # its FIRST consumer — the shooting sub-phase — so under `dice="expected"`
     # the tray is not even built and every digest written before this knob
     # existed still reproduces byte for byte.
-    tray = nml_core.Tray(seed) if eff_dice == "table" else None
+    # NML-1140 step 9b: the tray's seed is the DICE seed — `_dice_seed`,
+    # which defaults to the game seed (`dice_seed=None` keeps every corpus
+    # written so far byte-identical) and which the mixed A/B grid varies to
+    # get its second dice rung per game seed.
+    eff_dice_seed = seed if dice_seed is None else dice_seed
+    tray = nml_core.Tray(eff_dice_seed) if eff_dice == "table" else None
     dice_tally: dict[str, int] = {}
     # core_selfplay.gd:176 — three markers on the centre line, 16" apart.
     eff_objectives = resolve_objectives(objectives)
@@ -1578,6 +1604,65 @@ def play_game(
                 # under the table's own stamp key, beside "mode": "rulebook".
                 "doctrine": eff_doctrine,
             }
+        objectives = [
+            [f32(float(x) * IN2M), 0.0, f32(float(z) * IN2M)]
+            for x, z in objective_layout["positions"]
+        ]
+    elif eff_objectives == "mixed":
+        # NML-1140 step 9b — per-side placer selection in the alternating
+        # placement: the rolled placer order stands, and each ply's choice goes
+        # to ITS seat's placer. The stream contract holds: the draws (count,
+        # roll-off, then draw() per random ply) are the rulebook's pinned order
+        # off a fresh generator on the layout seed; a doctrine ply draws
+        # nothing. The sweep is the last resort for either side, x ascending.
+        placement = resolve_mixed_placement(doctrine_mode)
+        rng = nml_core.Rng(seed)
+        count_roll = rng.randi_range(1, 3) + 2
+        first_placer = 1
+        for _ in range(100):
+            d1, d2 = rng.randi_range(1, 6), rng.randi_range(1, 6)
+            if d1 != d2:
+                first_placer = 1 if d1 > d2 else 2
+                break
+        hx, hz = 33, 21
+        placed, swept = [], 0
+        while len(placed) < count_roll:
+            seat = first_placer if len(placed) % 2 == 0 else 3 - first_placer
+            cell = None
+            if placement[str(seat)] == "random":
+                for _ in range(1000):
+                    x, z = rng.randi_range(-hx, hx), rng.randi_range(-hz, hz)
+                    if nml_core.objective_is_legal(terrain, FRONT_LINE_ZONES, x, z, placed):
+                        cell = [x, z]
+                        break
+            else:
+                step = nml_core.doctrine_place_step(
+                    ({u["unit_id"]: u for u in units1}, {u["unit_id"]: u for u in units2}),
+                    count_roll, FRONT_LINE_ZONES, placed, terrain=terrain,
+                )
+                cell = list(step) if step else None
+            if cell is None:
+                cell = next(
+                    ([x, z] for x in range(-hx, hx + 1) for z in range(-hz, hz + 1)
+                     if nml_core.objective_is_legal(terrain, FRONT_LINE_ZONES, x, z, placed)),
+                    None,
+                )
+                if cell is not None:
+                    swept += 1
+            if cell is None:  # no legal cell left at all: fewer markers, stamped honestly
+                break
+            placed.append(cell)
+        objective_layout = {
+            "mode": "mixed",
+            "count_roll": count_roll,
+            "first_placer": first_placer,
+            "layout_seed": seed,
+            "edge_margin_in": 3,
+            "positions": placed,
+            "placed_by": [first_placer if i % 2 == 0 else 3 - first_placer for i in range(len(placed))],
+            "swept": swept,
+            "doctrine": {"p1": placement["1"], "p2": placement["2"]},
+        }
         objectives = [
             [f32(float(x) * IN2M), 0.0, f32(float(z) * IN2M)]
             for x, z in objective_layout["positions"]
@@ -1688,7 +1773,7 @@ def play_game(
         # branch is a REPORTED divergence, never a silent skip.
         "dice_tally": dice_tally,
         "seed": seed,
-        "dice_seed": seed,
+        "dice_seed": eff_dice_seed,
         "grades": {"p1": "planner_core", "p2": "planner_core"},
         "mission": {
             "family": "face_off",
