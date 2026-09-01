@@ -31,7 +31,7 @@ use nml_core::terrain::Terrain;
 use nml_core::unit::{StaticsCache, UnitStatic};
 use nml_core::{
     plan_with_rollout_sig, reply_threat, resolve, score, ActStatics, Action, Knobs, Pick,
-    Registries, Seams,
+    PolicyMode, Registries, Seams,
 };
 
 mod mvcall;
@@ -880,10 +880,19 @@ fn act_statics_of(d: &VarDictionary) -> ActStatics {
     if net > 0 {
         m.insert("net".to_string(), serde_json::Value::Bool(true));
     }
+    // NML-1158b step 5 — `AiPlanner.policy_mode` (act_recorder.gd's statics
+    // block, once step 6 stamps it): anything other than the literal "order"
+    // reads as `Off`, the same silently-safe default `playout_net`'s emptiness
+    // check uses above.
+    let policy_mode = match d.get("policy_mode").map(|v| plain::text(&v)) {
+        Some(s) if s == "order" => PolicyMode::Order,
+        _ => PolicyMode::Off,
+    };
     ActStatics {
         opener_seat: d.get("opener_seat").map(|v| plain::flag(&v)).unwrap_or(false),
         playout_search: d.get("playout_search").map(|v| plain::flag(&v)).unwrap_or(false),
         fit_mode: d.get("fit_mode").map(|v| plain::flag(&v)).unwrap_or(false),
+        policy_mode,
         playout_net: serde_json::Value::Object(m),
     }
 }

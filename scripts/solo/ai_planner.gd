@@ -102,6 +102,74 @@ const PLAYOUT_DECIDE_MARGIN := 0.5   # mean marker-delta that settles it
 const PLAYOUT_CAP := 7               # max playouts per branch
 
 
+## NML-1158b step 6 — POLICY ORDER mode: the twin of `plan.rs`'s
+## `ActStatics.policy_mode` (step 5). "off" (default) leaves `plan_with_
+## rollout`'s sort untouched; "order" re-ranks WITHIN each unit's own
+## already-sorted slots by `PolicyOrder`'s net (`_reorder_within_unit`, PHASE
+## 2). Set by the controller or restored by act_recheck.gd from `statics.
+## policy_mode`, same contract as `AiMissionEval.fit_mode`; NML_POLICY_MODE=
+## order arms a bare run. "off", never "" — `PolicyMode`'s Rust twin
+## (acts.rs) has no variant for an empty string, and `AiActRecorder.begin`
+## stamps this var's value into every recorded corpus verbatim.
+static var policy_mode := "off"
+static var _pm_env_tried := false
+static func _order_mode() -> String:
+	if not _pm_env_tried:
+		_pm_env_tried = true
+		if policy_mode == "off" and OS.get_environment("NML_POLICY_MODE") == "order":
+			policy_mode = "order"
+	return policy_mode
+
+
+## The twin of `plan::reorder_within_unit` (plan.rs step 5): `scored` is
+## mutated IN PLACE, refilling the SET of positions each unit already owns
+## (untouched — design §1's cross-menu rule) with that unit's OWN candidates
+## sorted by `PolicyOrder`'s logit (descending, build-`idx` ascending
+## tiebreak — the hand sort's own tiebreak). `build_order` is `scored` from
+## BEFORE the sort, i.e. the menu order the net's training corpus reads.
+static func _reorder_within_unit(scored: Array, build_order: Array, state: Dictionary) -> void:
+	var net := PolicyOrder.net()
+	if net.is_empty():
+		return
+	var terrain_at: Callable = state.get("terrain_at", Callable())
+	var los_at: Callable = state.get("los_at", Callable())
+	var board: Array = BattleSim.board_rows(state)
+	var by_unit := {}   # unit_key -> Array of `scored` dicts, in BUILD order
+	for cand in build_order:
+		var key := str((cand as Dictionary)["unit_key"])
+		if not by_unit.has(key):
+			by_unit[key] = []
+		(by_unit[key] as Array).append(cand)
+	var logit_of := {}   # idx -> float
+	for key in by_unit:
+		var cands: Array = by_unit[key]
+		var side := int((state["units"][key] as Dictionary)["player"])
+		var flat: Array = []
+		for c in cands:
+			flat.append((c as Dictionary)["action"])
+		var tuples := AiClone.menu_tuples(state, key, flat, terrain_at, los_at)
+		var logits := PolicyOrder.score_menu(net, board, side, tuples)
+		for i in range(cands.size()):
+			logit_of[int((cands[i] as Dictionary)["idx"])] = float(logits[i])
+	var positions_by_unit := {}   # unit_key -> Array of indices into `scored`
+	for p in range(scored.size()):
+		var key := str((scored[p] as Dictionary)["unit_key"])
+		if not positions_by_unit.has(key):
+			positions_by_unit[key] = []
+		(positions_by_unit[key] as Array).append(p)
+	for key in by_unit:
+		var cands: Array = (by_unit[key] as Array).duplicate()
+		cands.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+			var la: float = logit_of[int(a["idx"])]
+			var lb: float = logit_of[int(b["idx"])]
+			if la != lb:
+				return la > lb
+			return int(a["idx"]) < int(b["idx"]))
+		var positions: Array = positions_by_unit[key]
+		for i in range(positions.size()):
+			scored[positions[i]] = cands[i]
+
+
 ## NML-1073 M2-0b: the Rust port's per-activation contract needs the search's
 ## INTERMEDIATE results too (root menus, prefilter, pool, rollout values,
 ## winner/runner-up, playout arbitration) — not just plan_with_rollout's final
@@ -154,10 +222,18 @@ static func plan_with_rollout(state: Dictionary, player: int,
 				"score": AiMissionEval.score(next, player, BattleSim.reply_threat(next, player))})
 	if scored.is_empty():
 		return {"used": false}
+	# NML-1158b step 6 — ORDER mode's own build-order copy (`scored` is about
+	# to be sorted IN PLACE): the same array `plan::reorder_within_unit`
+	# (step 5) reads via `scored.iter().enumerate()`. A shallow duplicate is
+	# enough — Dictionaries are references, so `build_order[i]` still IS the
+	# candidate `scored[i]` names before the sort reorders `scored`'s slots.
+	var build_order: Array = scored.duplicate() if _order_mode() == "order" else []
 	scored.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		if float(a["score"]) != float(b["score"]):
 			return float(a["score"]) > float(b["score"])
 		return int(a["idx"]) < int(b["idx"]))
+	if _order_mode() == "order":
+		_reorder_within_unit(scored, build_order, state)
 	var idx_to_pos := {}
 	if trace_on:
 		var scored_plain: Array = []

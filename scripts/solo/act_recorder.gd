@@ -73,7 +73,8 @@ static func begin(state: Dictionary, me: int, pool: Array, terrain_cb: Callable,
 	_stamp_gate_reads(state, plain)
 	return {"kind": "act", "round": int(state["round"]), "player": me,
 		"statics": {"opener_seat": AiPlanner.opener_seat, "playout_search": AiPlanner.playout_search,
-			"fit_mode": AiMissionEval.fit_mode, "playout_net": AiPlanner.playout_net},
+			"fit_mode": AiMissionEval.fit_mode, "playout_net": AiPlanner.playout_net,
+			"policy_mode": AiPlanner.policy_mode},
 		"state": plain,
 		# NML-1073 M3-0b: whether THIS activation's caller wired a real charge-legality
 		# gate — SoloController does (charge_candidate_illegal, solo_controller.gd:1450,

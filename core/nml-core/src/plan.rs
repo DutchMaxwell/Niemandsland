@@ -36,8 +36,9 @@
 //! WHERE two searches diverged.
 
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
-use crate::acts::{ActStatics, Knobs, Sighting};
+use crate::acts::{ActStatics, Knobs, PolicyMode, Sighting};
 use crate::arbitration::{arbitrate_bent, ArbBend, Arbitration};
 use crate::io::Seams;
 use crate::menu::{candidates_tuned, Candidate};
@@ -323,12 +324,19 @@ impl<'a> Search<'a> {
     /// `fit_mode` is now served — but only with a net actually loaded. An act
     /// recorded under the fitted eval that reaches a search with none would
     /// otherwise be answered by the hand eval, green and wrong.
+    ///
+    /// NML-1158b step 5 — `policy_mode == Order` is the same contract: an act
+    /// that asked for the ORDER re-rank and reaches a search with no policy
+    /// net wired declines rather than silently falling back to the hand order.
     fn admissible(&self) -> Result<(), Unsupported> {
         if !self.act.heuristic_playout() {
             return Err(Unsupported::NetPlayout);
         }
         if self.act.fit_mode && self.roll.policy.fit.is_none() {
             return Err(Unsupported::FittedEval);
+        }
+        if self.act.policy_mode == PolicyMode::Order && self.roll.policy.policy_net.is_none() {
+            return Err(Unsupported::PolicyOrder);
         }
         Ok(())
     }
@@ -449,7 +457,24 @@ impl<'a> Search<'a> {
         }
 
         // PHASE 2 — the sort.
-        let order = rank(&scored, self.bend.idx_tiebreak);
+        let mut order = rank(&scored, self.bend.idx_tiebreak);
+        // NML-1158b step 5 — ORDER mode (design §4): re-rank WITHIN each
+        // unit's own slots of `order` by the policy net, before the pool is
+        // built off it. `admissible` already proved a net is wired whenever
+        // this fires, so the fallback branch below is unreached in practice
+        // and only guards against a future caller that skips `admissible`.
+        if self.act.policy_mode == PolicyMode::Order {
+            if let Some(net) = self.roll.policy.policy_net {
+                order = reorder_within_unit(
+                    &scored,
+                    &order,
+                    state,
+                    self.roll.policy.terrain,
+                    self.roll.policy.statics,
+                    net,
+                );
+            }
+        }
         // `idx_to_pos` (:147) — build-order idx -> rank in the sorted array.
         let mut pos_of = vec![0usize; scored.len()];
         for (r, &i) in order.iter().enumerate() {
@@ -607,6 +632,62 @@ pub fn rank(scored: &[ScoredRow], idx_tiebreak: bool) -> Vec<usize> {
         });
     }
     order
+}
+
+/// NML-1158b step 5 — ORDER mode (design §4, §1's "cross-menu logits are NOT
+/// calibrated" rule made concrete). `order` already ranks every candidate of
+/// every unit on one CALIBRATED axis, the hand blend score — which unit owns
+/// which rank-position in it is the cross-unit decision, and this function
+/// never touches it. What it DOES touch: within the set of positions one
+/// unit's own candidates already occupy, it refills them with that unit's
+/// candidates sorted by the policy net's logit (descending, build-`idx`
+/// ascending tiebreak — `rank`'s own tiebreak) instead of by hand score. A
+/// unit whose menu has one candidate is a no-op; `build_pool`'s per-unit
+/// coverage and top-K slice read the result exactly as they read `order`.
+pub fn reorder_within_unit(
+    scored: &[ScoredRow],
+    order: &[usize],
+    state: &State,
+    terrain: &Terrain,
+    statics: &[UnitStatic],
+    net: &crate::policy::Policy,
+) -> Vec<usize> {
+    // Build-order candidates, grouped by unit (first-seen order) — `scored`
+    // IS build order, so each group is already in the order `score_menu`
+    // wants (ai_planner.gd:139-140 build the menu the same way).
+    let mut units: Vec<&str> = Vec::new();
+    let mut idx_by_unit: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (i, row) in scored.iter().enumerate() {
+        idx_by_unit.entry(row.unit_key.as_str()).or_insert_with(|| {
+            units.push(row.unit_key.as_str());
+            Vec::new()
+        }).push(i);
+    }
+    let mut logit_of: HashMap<usize, f64> = HashMap::with_capacity(scored.len());
+    for key in &units {
+        let idxs = &idx_by_unit[key];
+        let menu: Vec<Candidate> = idxs.iter().map(|&i| scored[i].cand.clone()).collect();
+        for (&i, l) in idxs.iter().zip(net.score_menu(state, terrain, statics, &menu)) {
+            logit_of.insert(i, l);
+        }
+    }
+    // The SET of positions each unit occupies in `order` — untouched below.
+    let mut positions_by_unit: HashMap<&str, Vec<usize>> = HashMap::new();
+    for (pos, &i) in order.iter().enumerate() {
+        positions_by_unit.entry(scored[i].unit_key.as_str()).or_default().push(pos);
+    }
+    let mut result = order.to_vec();
+    for key in &units {
+        let positions = &positions_by_unit[key];
+        let mut idxs = idx_by_unit[key].clone();
+        idxs.sort_unstable_by(|&a, &b| {
+            logit_of[&b].partial_cmp(&logit_of[&a]).unwrap_or(Ordering::Equal).then(a.cmp(&b))
+        });
+        for (&p, i) in positions.iter().zip(idxs) {
+            result[p] = i;
+        }
+    }
+    result
 }
 
 /// PHASE 3 — the four pool guarantees, ai_planner.gd:156-185, IN ORDER. Returns

@@ -313,6 +313,23 @@ pub struct ActStatics {
     /// which this port declines rather than approximates.
     #[serde(default)]
     pub playout_net: serde_json::Value,
+    /// NML-1158b step 5 — `AiPlanner.policy_mode` (design §4/§7 step 5):
+    /// "order" re-ranks WITHIN each unit's own PHASE-2 slots by the trained
+    /// policy net (`policy.rs`); absent/`"off"` is the recorded default and
+    /// byte-identical to before this field existed.
+    #[serde(default)]
+    pub policy_mode: PolicyMode,
+}
+
+/// The `policy_mode` knob's two settings — same string-enum pattern as
+/// `Sighting`. "pick" (the net AS the scorer, design §4) is out of scope
+/// until ORDER mode clears its own 600-gate, so this build reads only these.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PolicyMode {
+    #[default]
+    Off,
+    Order,
 }
 
 impl ActStatics {

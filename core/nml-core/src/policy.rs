@@ -357,6 +357,12 @@ pub fn state_phi(board: &[Vec<f64>], side: i64, actor_row: i64) -> Vec<f64> {
 pub struct Policy {
     pub net: PolicyNet,
     enc: RefCell<RowEncoder>,
+    /// NML-1158b step 7 — the `fitted_gate.py --red-scale` lever, ported: a
+    /// multiplier on every returned logit, `1.0` in every shipping call. An
+    /// ORDER gate compares a PERMUTATION, not a magnitude, so `scale < 0` is
+    /// the red proof here — it reverses a unit's own within-menu order
+    /// wherever it has two candidates the net does not tie.
+    pub scale: f64,
 }
 
 impl Policy {
@@ -367,7 +373,7 @@ impl Policy {
                 format!("rule vocab unreadable at {repo_root}/{}", rows::RULE_VOCAB_PATH)
             }));
         }
-        Ok(Policy { net, enc: RefCell::new(enc) })
+        Ok(Policy { net, enc: RefCell::new(enc), scale: 1.0 })
     }
 
     /// `Fitted::set_source_qd` fitted.rs:282-287 — LEGACY REPLAY ONLY. A state
@@ -416,7 +422,7 @@ impl Policy {
         let extras = self.net.extras();
         tuples
             .iter()
-            .map(|t| self.net.logit(&phi, &action_vec(t, &board, side, extras)))
+            .map(|t| self.scale * self.net.logit(&phi, &action_vec(t, &board, side, extras)))
             .collect()
     }
 }

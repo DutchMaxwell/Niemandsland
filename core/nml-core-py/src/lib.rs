@@ -50,13 +50,14 @@ use pyo3::types::{PyDict, PyList};
 
 use serde_json::{Map, Value};
 
-use nmlcore::acts::{ActHeader, ActStatics, Knobs, Sighting};
+use nmlcore::acts::{ActHeader, ActStatics, Knobs, PolicyMode, Sighting};
 use nmlcore::arbitration::Arbitration;
 use nmlcore::deployment::{self, Placement, Rect, SettleUnit, SideDeploy, UnitSpec};
 use nmlcore::menu::{candidates_tuned, Candidate, Tuning};
 use nmlcore::objectives;
 use nmlcore::plan::{Pick, Search};
 use nmlcore::playout::Policy;
+use nmlcore::policy::{Policy as PolicyHarness, PolicyNet};
 use nmlcore::rollout::Rollout;
 use nmlcore::sim::Scratch;
 use nmlcore::state::{Marker, ProfileCache, Roster};
@@ -536,6 +537,11 @@ pub struct Core {
     /// this core's `AiMissionEval.fit_mode`: every search it runs takes the
     /// blended fitted leaf, and one that does not want it must not load a net.
     net: Option<Fitted>,
+    /// NML-1158b step 7 — the ORDER-mode policy net, `None` until
+    /// `load_policy_net`. Presence alone does not arm it: `plan_with_rollout`
+    /// wires it in only when the CALLED act's `statics.policy_mode` asks for
+    /// `Order`, the same contract `net`/`fit_mode` already keep.
+    policy_net: Option<PolicyHarness>,
 }
 
 impl Core {
@@ -895,6 +901,11 @@ impl Core {
         // net — and one recorded with the fitted eval on a core that does not
         // is declined by `admissible`, not silently answered.
         policy.fit = self.net.as_ref().filter(|_| act.fit_mode);
+        // NML-1158b step 7 — same contract, ORDER mode: an act that asks for
+        // it and reaches a core with no policy net loaded is declined by
+        // `admissible` (`Unsupported::PolicyOrder`), not silently answered.
+        policy.policy_net =
+            self.policy_net.as_ref().filter(|_| act.policy_mode == PolicyMode::Order);
         let roll = Rollout::new(policy, self.knobs);
         let mut search = Search::new(roll, &act);
         search.sig = sig;
@@ -1127,6 +1138,29 @@ impl Core {
     /// True when a net is armed — the trainer reads it as `fit_mode`.
     fn has_net(&self) -> bool {
         self.net.is_some()
+    }
+
+    /// NML-1158b step 7 — loads the ORDER-mode net (schema `policy_net/1`,
+    /// `policy::PolicyNet::load`'s own selftest gate). `scale` mirrors
+    /// `load_net`'s red-proof lever, but multiplies the LOGIT, not a leaf
+    /// score: an ORDER gate compares a PERMUTATION, so `scale < 0` is the
+    /// red proof (fitted_gate.py's positive-scale magnitude lever does not
+    /// apply here — see `policy::Policy::scale`'s own doc).
+    #[pyo3(signature = (path, scale = 1.0))]
+    fn load_policy_net(&mut self, path: &str, scale: f64) -> PyResult<()> {
+        let net = PolicyNet::load(path).map_err(Unsupported::new_err)?;
+        let mut harness = PolicyHarness::new(net, &self.repo_root).map_err(Unsupported::new_err)?;
+        harness.scale = scale;
+        // Legacy replay only — see `Policy::set_source_qd`'s own doc: a state
+        // rebuilt from a plain corpus reads the stand-in `source_data` 4/4.
+        harness.set_source_qd(self.rows.source_qd);
+        self.policy_net = Some(harness);
+        Ok(())
+    }
+
+    /// True when a policy net is armed — mirrors `has_net`.
+    fn has_policy_net(&self) -> bool {
+        self.policy_net.is_some()
     }
 
     /// `BattleSim.reply_threat` battle_sim.gd:1099 — expected reply wounds per
@@ -1486,6 +1520,7 @@ fn load(repo_root: &str) -> Core {
         roster: None,
         rows: RowEncoder::new(repo_root),
         net: None,
+        policy_net: None,
     }
 }
 
