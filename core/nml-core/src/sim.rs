@@ -523,7 +523,7 @@ fn record_buff(state: &mut State, ti: usize, b: &UtilityBuff) {
         casting_mod: b.casting_mod,
         morale_mod: b.morale_mod,
         grants_rule: Rc::from(b.grants_rule.as_str()),
-        scope: mods::Scope::of(&b.scope),
+        scope: Rc::from(b.scope.as_str()),
         attackers: false,
         once: b.once,
     });
@@ -653,7 +653,7 @@ fn tray_vs_marks(
                 casting_mod: 0,
                 morale_mod: 0,
                 grants_rule: Rc::from(base),
-                scope: mods::Scope::Any,
+                scope: Rc::from(""),
                 attackers: false,
                 once: true,
             });

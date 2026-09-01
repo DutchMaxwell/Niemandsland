@@ -15,29 +15,6 @@ use std::rc::Rc;
 use crate::rules::base_rule_name;
 use crate::state::State;
 
-/// `effect.scope` — the clause a record scopes itself to (`AiSpell.mods_for`
-/// ai_spell.gd:364-400). "charging" is never applied (the GDScript's own v1
-/// limitation, ai_spell.gd:394).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum Scope {
-    #[default]
-    Any,
-    Melee,
-    Shooting,
-    Charging,
-}
-
-impl Scope {
-    pub fn of(s: &str) -> Scope {
-        match s {
-            "melee" => Scope::Melee,
-            "shooting" => Scope::Shooting,
-            "charging" => Scope::Charging,
-            _ => Scope::Any,
-        }
-    }
-}
-
 /// One `_solo_record_spell_mod` record (main.gd:3649-3670), reduced to the
 /// fields this core has a consumer for. `def_mod` / `range_in` / `advance_in` /
 /// `rush_in` are deliberately ABSENT: the table reads them at seams
@@ -51,7 +28,9 @@ pub struct LiveMod {
     /// `grants_rule` — the rule name the record hands the WHOLE joined chain
     /// (`_solo_apply_grant` main.gd:3730), "" for a plain modifier.
     pub grants_rule: Rc<str>,
-    pub scope: Scope,
+    /// `effect.scope` — "" / "melee" / "shooting" / "charging", the GDScript's
+    /// own strings (`AiSpell.mods_for` ai_spell.gd:390-394).
+    pub scope: Rc<str>,
     /// `beneficiary == "attackers"` — the modifier belongs to whoever attacks
     /// the bearer, and never joins the bearer's own net (main.gd:3652).
     pub attackers: bool,
@@ -74,10 +53,9 @@ pub enum Role {
 
 /// `AiSpell.mods_for` ai_spell.gd:364-400, one record.
 pub fn matches(r: &LiveMod, role: Role, melee: bool) -> bool {
-    match r.scope {
-        Scope::Charging => return false,
-        Scope::Melee if !melee => return false,
-        Scope::Shooting if melee => return false,
+    // "charging" is never applied here — the GDScript's own v1 limitation.
+    match (&*r.scope, melee) {
+        ("charging", _) | ("melee", false) | ("shooting", true) => return false,
         _ => {}
     }
     match role {
