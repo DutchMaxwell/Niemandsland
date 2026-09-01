@@ -85,6 +85,14 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # existed anywhere in non-test core/ — PR #489's bug, reopened here until
     # now.
     "Surge": frozenset({"extra_attack"}),
+    # Block B7: `unit::growth_of` stamps `UnitStatic.growth` off every "Growth
+    # Markers" entry the unit carries, but `sim::growth_bonus_of` only ever
+    # folds the AP/hit facets into the tray (main.gd:4287/:5675-5680) — the
+    # defense facet (Defensive Frenzy/Growth), the defender-side AP reduction
+    # (Fortified Growth's `enemy_ap_per_two`) and the extra-attacks facet
+    # (Regenerative Strength) are recorded (registry-gated) and read by
+    # nothing, the Utility-Buff over-count shape #489 found.
+    "Growth Markers": frozenset({"ap_per_marker", "ap_per_two", "hit_per_marker", "hit_per_two"}),
 }
 
 

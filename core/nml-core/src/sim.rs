@@ -29,7 +29,9 @@ use crate::state::State;
 use crate::mv::reach::{owner_bit, Disc, ReachBuild, ReachIndex, ReachQuery};
 use crate::mv::CLEARANCE_EPS_IN;
 use crate::terrain::{base_in_terrain, gives_cover, is_dangerous, Terrain};
-use crate::unit::{Ctx, UnitStatic, ShootProfile, UtilityBuff, GrowthRule};
+use crate::unit::{Ctx, UnitStatic, ShootProfile, UtilityBuff};
+#[cfg(test)]
+use crate::unit::GrowthRule;
 use crate::{CONTROL_EPS, IN2M};
 
 /// `BattleSim.CONTACT_IN` battle_sim.gd:725 — the charge's contact ring. No
