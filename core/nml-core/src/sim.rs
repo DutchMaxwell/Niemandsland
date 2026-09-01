@@ -894,6 +894,77 @@ fn tray_hit_and_run(statics: &[UnitStatic], next: &mut State, si: usize, seams: 
     next.hit_and_run_round[si] = next.round;
 }
 
+/// BLOCK B8 — `SoloController.second_wind_candidate`/`spend_second_wind`
+/// (solo_controller.gd:10429-10479), called from `_solo_after_activation`
+/// (main.gd:1762) right before a round would otherwise close: once per GAME,
+/// a full carrier unit that has ALREADY activated this round (`is_activated`)
+/// may activate a SECOND time (fatigue clears), capped at `ceil(carriers /
+/// army_cap_fraction)` grants per round, army-wide. Every registry occurrence
+/// of the primitive ("Inquisitorial Agent", "Martial Prowess") sets
+/// `uses_per_game: 1, army_cap_fraction: 3` (verified) — a const stands in for
+/// both, the `HIT_AND_RUN_MOVE_IN` precedent. Picked by `_plan_ev_of(gu) +
+/// alive*0.1` on the table; this port picks by `alive` alone — `_plan_ev_of`
+/// runs the AI's own search tree, which this bookkeeping layer does not carry
+/// (a declared simplification, not a silent one: with ≤6 carriers and a cap
+/// of ≤2 per round, the tie-break rarely changes the outcome).
+///
+/// FIRE GATE — the table's check is scoped to a SINGLE fixed `ai_slot` (the
+/// SoloController's one configured AI opponent, a UI-layer restriction, not a
+/// rule one). This core has no `ai_slot`/`human_slot` split — both players
+/// share the same symmetric `resolve_with` seam — so the port applies the
+/// identical carrier/cap/pick logic to the ACTING side (`next.player[si]`)
+/// once NEITHER side has a unit left that can still activate.
+///
+/// KNOWN GAP, stated plainly: the table's OWN native both-AI arena driver
+/// (`_solo_run_both_ai_round`/`_solo_run_both_ai_game`, main.gd:1828-1922 —
+/// what generates this project's training corpus) never calls
+/// `_solo_after_activation` at all; that seam is reachable only from the
+/// single-player human-vs-AI pump (main.gd:917, :1621). Second Wind (and its
+/// sibling Coordinate, main.gd:1276) have not yet had the "wave 5" that added
+/// Delayed Action to that same round loop (main.gd:1849-1850's own docstring
+/// names exactly this class of gap). So no arena game — recorded before or
+/// after this port — can show a real table-side "Second Wind" firing; see the
+/// PR body for the empirical confirmation. The Rust fixture tests below are
+/// this port's correctness proof.
+const SECOND_WIND_CAP_FRACTION: i64 = 3;
+
+fn second_wind_candidate(statics: &[UnitStatic], state: &State, player: i64) -> Option<usize> {
+    let mut carriers = 0i64;
+    let mut best: Option<(usize, i64)> = None;
+    for i in 0..state.units() {
+        if state.player[i] != player || state.alive[i] <= 0 || state.attached_to[i].is_some() {
+            continue;
+        }
+        if !statics[state.roster.profile[i]].second_wind_active {
+            continue;
+        }
+        carriers += 1;
+        if state.second_wind_used[i] || !state.activated[i] {
+            continue;
+        }
+        if best.map_or(true, |(_, v)| state.alive[i] > v) {
+            best = Some((i, state.alive[i]));
+        }
+    }
+    let cap = (carriers + SECOND_WIND_CAP_FRACTION - 1) / SECOND_WIND_CAP_FRACTION;
+    let uses = if state.second_wind_round == state.round { state.second_wind_uses } else { 0 };
+    if uses >= cap {
+        return None;
+    }
+    best.map(|(i, _)| i)
+}
+
+fn spend_second_wind(next: &mut State, i: usize) {
+    if next.second_wind_round != next.round {
+        next.second_wind_round = next.round;
+        next.second_wind_uses = 0;
+    }
+    next.second_wind_uses += 1;
+    next.second_wind_used[i] = true;
+    next.activated[i] = false;
+    next.fatigued[i] = false;
+}
+
 /// `SoloController._execute_move` :5033-5047 (GF/AoF v3.5.1 p.12, "Bug 23") —
 /// how many dice the move's dangerous-terrain test rolls.
 ///
@@ -2824,6 +2895,16 @@ fn resolve_with(
             next.activated[h] = true;
         }
     }
+    // Block B8 — Second Wind: only once NEITHER side has a unit left that can
+    // still activate (the round would otherwise close now); see
+    // `second_wind_candidate`'s own doc comment for the "acting side" and
+    // "arena-driver-unreachable" caveats.
+    let round_open = (0..next.units()).any(|i| next.can_activate(i, next.player[i], seams.hero_attach));
+    if !round_open {
+        if let Some(bi) = second_wind_candidate(statics, &next, next.player[si]) {
+            spend_second_wind(&mut next, bi);
+        }
+    }
     // NML-1073 M3-5: the sight matrix follows the MODELS. `BattleSim._los_clear`
     // (battle_sim.gd:792-796) calls `state["los_blocked"]` with the CURRENT
     // centres on every probe, so a unit that just rushed — or one that just lost
@@ -3000,6 +3081,9 @@ mod tests {
             hit_and_run_round: vec![-1; 4],
             growth_markers: vec![0; 4],
             growth_round: vec![-1; 4],
+            second_wind_used: vec![false; 4],
+            second_wind_round: -1,
+            second_wind_uses: 0,
         }
     }
 
@@ -4269,5 +4353,98 @@ mod tests {
         .unwrap();
         assert_eq!(shot.rolls[1].target, 5,
             "2 markers banked over 2 rounds -> AP(+1) on this round's shot (Defense 4+ becomes 5+)");
+    }
+
+    // ------------------------------------------------- block B8: Second Wind ---
+
+    /// The table's own moment: the round would otherwise CLOSE right after
+    /// this activation (`ah`/`b`/`bh` are all already spent), and the bearer
+    /// carries the rule — it re-opens its OWN activation and clears fatigue,
+    /// exactly `spend_second_wind` solo_controller.gd:10471-10479.
+    #[test]
+    fn second_wind_grants_a_second_activation_when_the_round_closes() {
+        let (mut st, mut statics) = buff_line();
+        statics[0].second_wind_active = true;
+        st.activated = vec![false, true, true, true];
+        st.fatigued[0] = true;
+        let (next, _) = run_buff(&st, &statics, &buff_action(None), 11);
+        assert!(!next.activated[0], "Second Wind re-opens the bearer's own activation");
+        assert!(!next.fatigued[0], "stops being fatigued when activated for the second time");
+        assert!(next.second_wind_used[0]);
+        assert_eq!((next.second_wind_round, next.second_wind_uses), (next.round, 1));
+    }
+
+    /// Negative: the round is NOT over yet ("b", alive, still un-activated) —
+    /// no grant, even though the bearer would otherwise qualify.
+    #[test]
+    fn second_wind_does_not_fire_while_any_unit_can_still_activate() {
+        let (mut st, mut statics) = buff_line();
+        statics[0].second_wind_active = true;
+        st.activated = vec![false, true, false, true]; // "b" (alive) still open
+        let (next, _) = run_buff(&st, &statics, &buff_action(None), 11);
+        assert!(next.activated[0], "no second wind: 'a' stays activated from its own move alone");
+        assert!(!next.second_wind_used[0]);
+    }
+
+    /// Negative: nobody on the table carries the rule — the round closes but
+    /// nothing is granted.
+    #[test]
+    fn second_wind_no_candidate_without_the_rule() {
+        let (mut st, statics) = buff_line();
+        st.activated = vec![false, true, true, true];
+        let (next, _) = run_buff(&st, &statics, &buff_action(None), 11);
+        assert!(next.activated[0]);
+        assert!(!next.second_wind_used.iter().any(|&u| u));
+    }
+
+    /// Negative: ONCE PER GAME, not once per round — a bearer that already
+    /// spent its Second Wind earlier is skipped even when it is the only
+    /// carrier and the round genuinely closes.
+    #[test]
+    fn second_wind_is_once_per_game_not_once_per_round() {
+        let (mut st, mut statics) = buff_line();
+        statics[0].second_wind_active = true;
+        st.second_wind_used[0] = true;
+        st.activated = vec![false, true, true, true];
+        let (next, _) = run_buff(&st, &statics, &buff_action(None), 11);
+        assert!(next.activated[0], "already spent — no second grant");
+    }
+
+    /// The army cap (`ceil(carriers / army_cap_fraction)`, solo_controller.gd:
+    /// 10464): 2 unattached carriers on one side, `army_cap_fraction: 3` ->
+    /// cap 1. The higher-`alive` carrier is picked first (the `_plan_ev_of +
+    /// alive*0.1` stand-in), and a SECOND grant the same round is refused even
+    /// though the other carrier is still eligible and unused.
+    #[test]
+    fn second_wind_caps_grants_per_round_at_ceil_carriers_over_the_fraction() {
+        let (mut st, mut statics) = buff_line();
+        st.player[2] = st.player[0]; // "b" joins "a"'s side for this fixture
+        statics[0].second_wind_active = true;
+        statics[2].second_wind_active = true;
+        st.activated[0] = true;
+        st.activated[2] = true;
+        let picked = second_wind_candidate(&statics, &st, st.player[0]).expect("a candidate exists");
+        assert_eq!(picked, 2, "\"b\" (alive 3) outranks \"a\" (alive 2)");
+        spend_second_wind(&mut st, picked);
+        assert!(
+            second_wind_candidate(&statics, &st, st.player[0]).is_none(),
+            "cap reached this round — \"a\" is still eligible and unused, but capped"
+        );
+    }
+
+    /// The army cap resets on a NEW round: the same two carriers as above,
+    /// "a" already spent in round 0 — round 1 opens a fresh cap and finds
+    /// "b" (still unused).
+    #[test]
+    fn second_wind_round_cap_resets_on_a_new_round() {
+        let (mut st, mut statics) = buff_line();
+        st.player[2] = st.player[0];
+        statics[0].second_wind_active = true;
+        statics[2].second_wind_active = true;
+        st.activated[0] = true;
+        spend_second_wind(&mut st, 0); // round 0's one grant (cap = ceil(2/3) = 1)
+        st.round += 1;
+        st.activated[2] = true; // "b" enters round 1 already-activated, unused
+        assert_eq!(second_wind_candidate(&statics, &st, st.player[0]), Some(2));
     }
 }

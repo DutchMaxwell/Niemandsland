@@ -169,6 +169,10 @@ pub(crate) struct PlainLedger {
     vs_mark_round: i64,
     #[serde(default)]
     growth: i64,
+    /// Block B8 — `unit_properties["second_wind_used"]` (solo_controller.gd:
+    /// 10474), per unit, ONCE per game (no "round" derivation, unlike growth).
+    #[serde(default)]
+    second_wind_used: bool,
 }
 
 /// `SeparationChecker.DEFAULT_BASE_RADIUS_M` — the fallback
@@ -560,6 +564,9 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         hit_and_run_round: vec![-1; n],
         growth_markers: vec![0; n],
         growth_round: vec![-1; n],
+        second_wind_used: vec![false; n],
+        second_wind_round: -1,
+        second_wind_uses: 0,
         los_pairs: plain.los_pairs.as_ref().map(|rows| {
             // Read the matrix in its own (key-sorted) order and STORE it in
             // roster order, so `_los_clear`'s port can index it with roster
@@ -641,6 +648,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
             }
             st.hit_and_run_round[ui] = ledger.hit_and_run_round;
             st.vs_mark_round[ui] = ledger.vs_mark_round;
+            st.second_wind_used[ui] = ledger.second_wind_used;
             st.growth_markers[ui] = ledger.growth;
             // `growth_round` has no key of its own on the wire (see
             // `_ledger_of`'s doc comment, act_recorder.gd): it is DERIVED

@@ -291,10 +291,14 @@ NONE_SHAPE_MELEE_OK = frozenset({"Piercing Growth"})
 #: move is dice-free start to finish (`tray_hit_and_run`, sim.rs). The literal
 #: primitive name plus its two ported data aliases, so `--only-rule` selects a
 #: bearer act whichever of the three names the unit's own header carries.
+#: BLOCK B8 (Second Wind): pure activation/fatigue bookkeeping
+#: (`second_wind_candidate`/`spend_second_wind`, sim.rs) — no roll of its own.
+#: The primitive name plus its only two literal carriers in the registry.
 DICE_FREE_RULES = frozenset({
     "Precision Attacks Buff", "Precision Fighter Buff", "Precision Shooter Buff",
     "Morale Debuff", "Casting Buff", "Primal Boost Buff", "Unstoppable Mark",
     "Hit & Run", "Guerrilla", "Harassing",
+    "Second Wind", "Inquisitorial Agent", "Martial Prowess",
 })
 
 

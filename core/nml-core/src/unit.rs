@@ -313,6 +313,15 @@ pub struct UnitStatic {
     /// "Harassing" (identical `move_in: 3.0` on every occurrence). "Hit & Run
     /// Fighter"/"Hit & Run Shooter" are separate primitives, out of scope.
     pub hit_and_run_active: bool,
+    /// Block B8 — `RulesRegistry.unit_rules_of_primitive(gu, "Second Wind")`
+    /// (solo_controller.gd:10448/:10477). Only two literal names resolve to
+    /// this primitive anywhere in the registry (`assets/solo/rules_mechanics_
+    /// {gf,gff}.json`, no `aof` occurrence): "Inquisitorial Agent" (human_
+    /// inquisition, the training pool's own carrier) and "Martial Prowess"
+    /// (dark_elf_raiders) — both set `uses_per_game: 1, army_cap_fraction: 3`
+    /// on every occurrence (verified), so sim.rs stands in a const for both,
+    /// the `HIT_AND_RUN_MOVE_IN` precedent.
+    pub second_wind_active: bool,
     /// Block B2b — every "Utility Buff" entry this unit carries, params and
     /// all, in the table's own loop order (`utility_buffs_of`).
     pub utility_buffs: Vec<UtilityBuff>,
@@ -1206,6 +1215,9 @@ impl UnitStatic {
             hit_and_run_active: unit_rule_active(reg, p, "Hit & Run")
                 || unit_rule_active(reg, p, "Guerrilla")
                 || unit_rule_active(reg, p, "Harassing"),
+            second_wind_active: unit_rule_active(reg, p, "Second Wind")
+                || unit_rule_active(reg, p, "Inquisitorial Agent")
+                || unit_rule_active(reg, p, "Martial Prowess"),
             utility_buffs: utility_buffs_of(reg, p, &mut unimplemented),
             growth: growth_of(reg, p, &mut unimplemented),
             unimplemented,
