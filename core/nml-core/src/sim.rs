@@ -2601,6 +2601,8 @@ mod tests {
             shroud: vec![None; 4],
             charge_no_difficult: vec![false; 4],
             charge_probe_r: vec![0.0; 4],
+            buffs: vec![Vec::new(); 4],
+            vs_mark_round: vec![-1; 4],
         }
     }
 

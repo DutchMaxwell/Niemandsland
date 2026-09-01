@@ -17,6 +17,7 @@ pub mod geom;
 pub mod io;
 pub mod menu;
 pub mod mission;
+pub mod mods;
 pub mod mv;
 pub mod objectives;
 pub mod plan;

@@ -420,6 +420,17 @@ pub struct State {
     /// NOT `radii`: the gate measures unit PLUS attached heroes and floors at
     /// `SeparationChecker.DEFAULT_BASE_RADIUS_M`.
     pub charge_probe_r: Vec<f64>,
+    // --- NML block B2b: the LIVE modifier ledger (see `crate::mods`) ---
+    /// `main._solo_spell_mods` (main.gd:370) — the DICE path's own buff
+    /// records, per unit. Written by the Utility-Buff arms on the tray path and
+    /// read back at the roll; deep-cloned with the state like `mods` is, and
+    /// deliberately NOT serialised: the table's own snapshot carries the NET
+    /// (`SoloController.active_mod_net_of`, battle_sim.gd:1530), never records,
+    /// so a captured state can only start this ledger empty.
+    pub buffs: Vec<Vec<crate::mods::LiveMod>>,
+    /// `unit_properties["vs_mark_round"]` (main.gd:16752) — the once-per-
+    /// activation stamp of the vs-target Mark arm, -1 for never.
+    pub vs_mark_round: Vec<i64>,
 }
 
 impl State {
