@@ -424,6 +424,8 @@ pub fn build_state(
         shroud: Vec::with_capacity(n),
         charge_no_difficult: Vec::with_capacity(n),
         charge_probe_r: Vec::with_capacity(n),
+        buffs: vec![Vec::new(); n],
+        vs_mark_round: vec![-1; n],
         los_pairs,
     };
     let mut mask: Vec<u32> = Vec::with_capacity(n);
