@@ -179,6 +179,37 @@ def test_green_the_stream_is_exact_and_every_class_row_adds_up(ref, tmp_path):
     assert s["totals"]["full_equal"] > 0, "the fixtures were chosen to contain equal acts"
 
 
+def test_movement_table_sets_the_header_knob_and_rigid_clears_it(ref, tmp_path, monkeypatch):
+    """NML-1152 S0: `--movement` must reach the twin as `knobs.movement` on
+    EVERY game's header, not just be accepted by argparse. `table` sets it
+    True; the default `rigid` sets it explicitly False, so a corpus's own
+    stale knob can never leak through unclobbered."""
+    real_load = gate.nml_core.load
+    headers: list[dict] = []
+
+    class HeaderSpy:
+        def __init__(self, core):
+            self._core = core
+
+        def set_header(self, header):
+            headers.append(header)
+            return self._core.set_header(header)
+
+        def __getattr__(self, name):
+            return getattr(self._core, name)
+
+    monkeypatch.setattr(gate.nml_core, "load", lambda repo: HeaderSpy(real_load(repo)))
+
+    summary(ref, tmp_path)  # default: rigid
+    assert headers and all(h["knobs"]["movement"] is False for h in headers)
+
+    headers.clear()
+    code = gate.run(ref, str(REPO), 0, str(tmp_path / "table.json"), "",
+                     report_only=True, movement="table")
+    assert code == 0
+    assert headers and all(h["knobs"]["movement"] is True for h in headers)
+
+
 def test_red_extra_draw_reddens_the_STREAM_and_only_the_stream(ref, tmp_path):
     """One burned draw shifts every recorded face by one, so check A must fall
     to 0/2. Checks B and C seed their own tray per activation and never see it."""
