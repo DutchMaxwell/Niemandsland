@@ -136,6 +136,27 @@ def test_split_unrecorded_flags_a_multi_attack_shooting_act_with_no_split_field(
     assert gate.split_unrecorded("melee", two_attacks, {}) is False
 
 
+def test_pos_verdict_buckets_equal_moved_and_unknown():
+    """Check C POS's own vocabulary — NML-1152 step 10, the position add-on
+    check C never had: within tolerance is `pos_equal`, past it is bucketed
+    by inches, and a combatant with no recorded position at all is
+    `pos_unknown` — never counted a failure, on either side."""
+    def state(a, b):
+        return {"units": {"a": {"positions": a}, "b": {"positions": b}}}
+
+    here = [[0.0, 0.0, 0.0]]
+    assert gate.pos_verdict(state(here, here), state(here, here), ("a", "b"), 0.5) \
+        == ("pos_equal", 0.0)
+
+    moved = [[2 * gate.INCH_M, 0.0, 0.0]]
+    bucket, gap = gate.pos_verdict(state(moved, here), state(here, here), ("a", "b"), 0.5)
+    assert bucket == "pos_moved_3in"
+    assert gap == pytest.approx(2.0)
+
+    missing = state([], here)
+    assert gate.pos_verdict(missing, state(here, here), ("a", "b"), 0.5) == ("pos_unknown", None)
+
+
 # ---------------------------------------------------------------- the gate ---
 
 
