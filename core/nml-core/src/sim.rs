@@ -598,6 +598,17 @@ fn utility_targets(
     scored.into_iter().map(|(_, u)| u).collect()
 }
 
+/// `main._solo_consume_once_mods` :3823-3841 — one resolved exchange spends
+/// every `once` record that was AVAILABLE to it: the attacker's own hit mods
+/// and rule grants, the defender's attackers-beneficiary mods and grants. The
+/// two roles this port has no seam for — the defender's "defense" and the
+/// shooter's "range" — are simply not in the ledger yet, so they cannot be
+/// spent either; that is the same gap, not a second one.
+fn spend_exchange(state: &mut State, att: usize, def: usize, melee: bool) {
+    mods::spend_once(state, att, &[mods::Role::AttackerOwn, mods::Role::Grant], melee);
+    mods::spend_once(state, def, &[mods::Role::VsTarget, mods::Role::Grant], melee);
+}
+
 /// `main._solo_apply_vs_marks` :16738-16771 — the ENEMY-side half of the
 /// Utility-Buff family (Unstoppable Mark). It does not run at the pre-attack
 /// slot: the pick IS the attack's committed target, so the table calls it at
@@ -1291,6 +1302,7 @@ fn strike_phase(
     let caused = r.caused;
     let w = shot.absorb(r);
     land_wounds(next, ti, w);
+    spend_exchange(next, si, ti, true); // main.gd:6152, per strike phase
     caused
 }
 
@@ -1349,6 +1361,8 @@ fn tray_morale(
     // [2,6]-clamped target the table builds (main.gd:8288-8296).
     ctx.morale_bonus = state.morale_bonus[i]
         + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod);
+    // main.gd:8303 — the test die spends the morale once-mods it just used.
+    // Placed after the call because `ctx` already carries the target it built.
     let (outcome, r) = crate::dice::resolve_morale_with_tray(
         &ctx,
         &us.name,
@@ -1361,6 +1375,7 @@ fn tray_morale(
         wounds_left(state, i),
         tray,
     );
+    mods::spend_once(state, i, &[mods::Role::Morale], melee);
     let self_wounds = shot.absorb(r);
     land_wounds(state, i, self_wounds);
     match outcome {
@@ -2485,6 +2500,9 @@ fn resolve_with(
                             // roll.
                             let w = shot.absorb(r);
                             land_wounds(&mut next, g.ti, w);
+                            // main.gd:3244 — the exchange spends its own
+                            // once-mods BEFORE the post-volley morale test.
+                            spend_exchange(&mut next, si, g.ti, false);
                             // D1-B5b: the volley's morale test is the NEXT
                             // thing on the table's tray (main.gd:8248-8251),
                             // per group — inside the per-group
