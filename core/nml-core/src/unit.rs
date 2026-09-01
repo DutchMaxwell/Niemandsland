@@ -219,6 +219,10 @@ pub struct UnitStatic {
     /// `special_rules` (opr_api_client.gd:261-263), so a Paternal Bond item
     /// counts here exactly as it does on the table.
     pub mend_active: bool,
+    /// `RulesRegistry.unit_rule_active(gu, "Breath Attack")` main.gd:5279 — the
+    /// breath-weapon primitive's registry gate, block B3's `mend_active`
+    /// precedent.
+    pub breath_attack_active: bool,
     /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
     /// Mend's patient tiebreak prefers heroes (main.gd:5361).
     pub is_hero: bool,
@@ -862,6 +866,7 @@ impl UnitStatic {
             battleborn_active: unit_rule_active(reg, p, "Battleborn"),
             steadfast_active: unit_rule_active(reg, p, "Steadfast"),
             mend_active: unit_rule_active(reg, p, "Mend"),
+            breath_attack_active: unit_rule_active(reg, p, "Breath Attack"),
             is_hero: has_special_rule(&p.special_rules, "Hero"),
             reposition_artillery_active: unit_rule_active(reg, p, "Re-Position Artillery"),
             unimplemented,
