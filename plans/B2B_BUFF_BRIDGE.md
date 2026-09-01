@@ -28,12 +28,22 @@ Chain: hit/morale read self+host (`_solo_mods_of_chain` :3812); a rule GRANT rea
 chain (`_solo_apply_grant` :3730). `once` records are spent by the exchange that could have used them
 (`_solo_consume_once_mods` :3823), per role.
 ## Steps (one diff each, <= ~80 changed lines)
-- [ ] 1. `mods.rs`: `LiveMod`/`Scope`/`Role`/`matches`/`sum`/`granted`/`spend_once`; `State.buffs` + `vs_mark_round`.
-- [ ] 2. `Ctx` + 3 fields; `ctx_of_live`; the tray read swaps in `sim.rs` and `dice.rs`.
-- [ ] 3. `unit.rs`: `UnitStatic.utility_buffs` from `rules_of_primitive(reg, p, "Utility Buff")`.
-- [ ] 4. `sim.rs`: `utility_targets` — `_solo_utility_targets` :16317-16359 minus Extended Buff Range.
-- [ ] 5. `sim.rs`: `tray_utility_buff`'s buff arm — record the pick (the five friendly/enemy names).
-- [ ] 6. `sim.rs`: `tray_vs_marks` at the attack seam (main.gd:3042 volley, :8035 melee) — the Mark.
-- [ ] 7. `sim.rs`: `spend_once` at the exchange and morale seams.
-- [ ] 8. Rust fixture tests; 9. gate / census / RED runs — no production diff.
+- [x] 1. `mods.rs`: `LiveMod`/`Scope`/`Role`/`matches`/`sum`/`granted`/`spend_once`; `State.buffs` + `vs_mark_round`.
+- [x] 2. `Ctx` + 3 fields; `ctx_of_live`; the tray read swaps in `sim.rs` and `dice.rs`.
+- [x] 3. `unit.rs`: `UnitStatic.utility_buffs` from `rules_of_primitive(reg, p, "Utility Buff")`.
+- [x] 4. `sim.rs`: `utility_targets` — `_solo_utility_targets` :16317-16359 minus Extended Buff Range.
+- [x] 5. `sim.rs`: `tray_utility_buff`'s buff arm — record the pick (the five friendly/enemy names).
+- [x] 6. `sim.rs`: `tray_vs_marks` at the attack seam (main.gd:3042 volley, :8035 melee) — the Mark.
+- [x] 7. `sim.rs`: `spend_once` at the exchange and morale seams.
+- [x] 8. Rust fixture tests; 9. gate / census / RED runs — no production diff.
 ## Log
+1. mods.rs + State.buffs/vs_mark_round, 5 construction sites. 154 changed lines / ~80 non-comment — over the ~80 *changed* line rule, but splitting a struct from its only readers gives a non-compiling commit.
+2. Ctx +3 fields, `ctx_live`, six read sites. nml-core still 118/118: the fold is inert until something writes.
+3. `utility_buffs_of` — the params ARE reachable in Rust (`RulesMap::lookup`), so the six names are ONE data-driven arm, not six.
+4. `utility_targets`. Extended Buff Range deliberately out.
+5. The buff arm. Kept `reposition_artillery_active` as B2a left it; the only Utility Buff co-carried by a Re-Position carrier is a `vs_target` Mark, a no-op at this seam, so the split loop order is unobservable.
+6. `tray_vs_marks`; `tray_charge` gained a `seams` argument.
+7. `spend_exchange` + the morale spend. 7b: the `Scope` enum became the GDScript's own strings — 15 lines, and closer to `mods_for`.
+8. Six fixture tests, 124/124. 8b: an entry whose only knob the arm never reads pushes a named `unimplemented` row. FOUND while writing it: main.gd:16534 builds only hit/casting/morale + grants_rule, so such an entry is a no-op on the TABLE too — the note says so.
+9. Gate + census. FOUND: `--hide Fortified` DOES hold (295->283); the earlier "dead knob" reading was a truncated `head -3`. FOUND (pre-existing, reported not fixed): `stamp_unit_strikers` gives an "Unstoppable Mark" carrier `unstoppable` on every weapon on the TRAY path, mirroring battle_sim instead of main.gd's dice path.
+Lines: production non-comment 297 (cap 300), tests 201.
