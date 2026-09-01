@@ -368,7 +368,11 @@ pub fn profile_ev(
         } else {
             target = thrust_to_hit(att.quality, charging && p.thrust);
             let mut melee_mod = melee_hit_modifier(def.evasive, def.melee_evasion);
-            if p.unstoppable && melee_mod < 0 {
+            // EV/tray split (found by #489, caveat 4): `p.unstoppable_ev` folds
+            // in the unit-level prefix scan the EV imagination itself does
+            // (ai_ev.gd:347, `stamp_unit_strikers`); the tray reads the plain
+            // weapon flag alone.
+            if p.unstoppable_ev && melee_mod < 0 {
                 melee_mod = 0;
             }
             target = modified_hit_target(target, melee_mod);
@@ -383,7 +387,8 @@ pub fn profile_ev(
         let mut shoot_mod = shooting_hit_modifier(
             dist_in, att.artillery, def.stealth, def.artillery, def.evasive, 0, 0, 0, 0.0,
         );
-        if p.unstoppable && shoot_mod < 0 {
+        // EV/tray split (found by #489, caveat 4) — see the melee branch above.
+        if p.unstoppable_ev && shoot_mod < 0 {
             shoot_mod = 0; // GF v3.5.1 p.15, head wave 1 — clamp BEFORE weapon bonuses.
         }
         target = modified_hit_target(target, shoot_mod);
@@ -458,7 +463,10 @@ pub fn profile_ev(
     if p.shred {
         unsaved += hits * SIX_P;
     }
-    if def.regeneration && !(bane || p.rending || p.unstoppable) {
+    // ai_ev.gd:434-435 reads the SAME EV-imagination `unstoppable` key
+    // `_profiles_of` stamps (the unit-level prefix scan) here too — EV/tray
+    // split, found by #489 caveat 4.
+    if def.regeneration && !(bane || p.rending || p.unstoppable_ev) {
         unsaved *= 1.0 - success_chance(def.regen_target);
     }
     unsaved
