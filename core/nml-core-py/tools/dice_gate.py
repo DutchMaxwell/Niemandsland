@@ -209,9 +209,14 @@ RULE_ROLL_SHAPE: dict[str, tuple[int, int] | None] = {
 #: :8288). B4's `None` says "the roll exists, its shape is just not fixed";
 #: this says "there is no roll to find". An act is selected by BEARER alone
 #: and the rule-slot sub-check has nothing to count.
+#: BLOCK B5 (Hit & Run): the same "no roll at all" shape as B2b — the free
+#: move is dice-free start to finish (`tray_hit_and_run`, sim.rs). The literal
+#: primitive name plus its two ported data aliases, so `--only-rule` selects a
+#: bearer act whichever of the three names the unit's own header carries.
 DICE_FREE_RULES = frozenset({
     "Precision Attacks Buff", "Precision Fighter Buff", "Precision Shooter Buff",
     "Morale Debuff", "Casting Buff", "Primal Boost Buff", "Unstoppable Mark",
+    "Hit & Run", "Guerrilla", "Harassing",
 })
 
 
