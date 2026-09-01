@@ -21,6 +21,7 @@ use crate::sight;
 use crate::geom::{self, V3};
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
+use crate::mods;
 use crate::rng::GodotRng;
 use crate::rules::Spell;
 use crate::spell::{cast_success_chance_base, official_pick_order, spell_damage_ev_of, spell_ev_of};
@@ -814,6 +815,19 @@ pub fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
     c
 }
 
+/// NML block B2b — the live-buff fold on top of an already-built context. It
+/// is a SEPARATE step, not part of `ctx_of`, so the EV imagination keeps
+/// reading the same buff-blind numbers `BattleSim._ctx_of` gives it and only
+/// the tray path sees the ledger. `melee` is the scope filter of
+/// `AiSpell.mods_for` (ai_spell.gd:390-393), not a fatigue switch.
+#[inline]
+pub fn ctx_live(mut c: Ctx, state: &State, i: usize, melee: bool) -> Ctx {
+    c.hit_mod = mods::sum(state, i, mods::Role::AttackerOwn, melee, |r| r.hit_mod);
+    c.vs_hit_mod = mods::sum(state, i, mods::Role::VsTarget, melee, |r| r.hit_mod);
+    c.unstoppable_grant = mods::granted(state, i, "Unstoppable");
+    c
+}
+
 /// `BattleSim._ctx_of(su, true)` battle_sim.gd:701-708, MELEE half: the same
 /// context plus the snapshot's fatigue flag, which the EV layer is blind to and
 /// which turns the striker's to-hit into a flat unmodified 6 (p.9).
@@ -1087,7 +1101,7 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize) -> Vec<(usize, S
         let mut sc = Scratch::default();
         melee_profiles_of(um, state.alive[mi], &mut sc);
         sc.keep = (0..um.melee.len()).collect();
-        parts.push((mi, sc, ctx_of_melee(um, state, mi)));
+        parts.push((mi, sc, ctx_live(ctx_of_melee(um, state, mi), state, mi, true)));
     }
     parts
 }
@@ -1108,7 +1122,7 @@ fn strike_phase(
 ) -> i64 {
     let parts = melee_parts(statics, next, si);
     let ut = &statics[next.roster.profile[ti]];
-    let def = ctx_of(ut, next, ti);
+    let def = ctx_live(ctx_of(ut, next, ti), next, ti, true);
     let members: Vec<crate::dice::Shooter<'_>> = parts
         .iter()
         .map(|(mi, sc, att)| {
@@ -1180,7 +1194,10 @@ fn tray_morale(
     // reads `state.morale_bonus[i]` and `_solo_morale_bonus` (main.gd:6632) is
     // the same live read, so the ROLLED target has to be too. Reading the static
     // profile instead is a whole point of target off on every Banner unit.
-    ctx.morale_bonus = state.morale_bonus[i];
+    // B2b: the live morale records join the Banner bonus in the SAME
+    // [2,6]-clamped target the table builds (main.gd:8288-8296).
+    ctx.morale_bonus = state.morale_bonus[i]
+        + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod);
     let (outcome, r) = crate::dice::resolve_morale_with_tray(
         &ctx,
         &us.name,
@@ -2263,7 +2280,7 @@ fn resolve_with(
                         let gs: &[SplitGroup] = plan.as_deref().unwrap_or(&pooled);
                         for g in gs {
                             let ut_g = &statics[next.roster.profile[g.ti]];
-                            let def = ctx_of(ut_g, &next, g.ti);
+                            let def = ctx_live(ctx_of(ut_g, &next, g.ti), &next, g.ti, false);
                             let alive_before_g = next.alive[g.ti];
                             let wounds_before_g = wounds_left(&next, g.ti);
                             let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
@@ -2297,7 +2314,7 @@ fn resolve_with(
                                     msc.keep = keep;
                                     msc.attacks = attacks;
                                 }
-                                parts.push((mi, msc, ctx_of(um, &next, mi)));
+                                parts.push((mi, msc, ctx_live(ctx_of(um, &next, mi), &next, mi, false)));
                             }
                             let r = crate::dice::resolve_volley_with_tray(
                                 &shooters_of(&parts, statics, &next),

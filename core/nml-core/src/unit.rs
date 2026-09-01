@@ -95,6 +95,23 @@ pub struct Ctx {
     /// The DYNAMIC melee flag `BattleSim._ctx_of(su, true)` writes over the
     /// template (battle_sim.gd:705-707): a fatigued striker hits only on 6s.
     pub fatigued: bool,
+    // --- NML block B2b, the live-buff fold (`sim::ctx_live`). ZERO on every
+    // `ctx_of`, which is what keeps the EV imagination buff-blind exactly like
+    // `BattleSim._ctx_of` (it never sets `AiEv.profile_ev`'s `spell_hit_mod`
+    // key, ai_ev.gd:331). Only the TRAY path folds them in. ---
+    /// `_solo_spell_hit_mod(member, melee)` main.gd:3789 — the BEARER's own net.
+    pub hit_mod: i64,
+    /// `_solo_spell_hit_mod_vs(target, melee)` main.gd:3800 — the net every unit
+    /// attacking THIS one gets (`beneficiary: "attackers"`).
+    pub vs_hit_mod: i64,
+    /// A live `grants_rule: "Unstoppable"` on this unit's joined chain — the
+    /// dynamic half of `_solo_ignores_regen`'s last line (main.gd:6941,
+    /// `AiEv.has_exact_rule`). It reaches the Regeneration bypass and NOTHING
+    /// else, because the table's dice path bridges `profile["unstoppable"]`
+    /// only from the TARGET's attackers-side records (`_solo_bridge_granted_
+    /// flags` :16576-16589 folds relentless/furious/rending from the attacker,
+    /// never unstoppable).
+    pub unstoppable_grant: bool,
 }
 
 /// One conditional-AP spec — the registry `params` block of a Shatter / Tear /
@@ -629,6 +646,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         regeneration: regen_target(reg, p) > 0,
         regen_target: regen_target(reg, p),
         fatigued: false,
+        hit_mod: 0,
+        vs_hit_mod: 0,
+        unstoppable_grant: false,
     }
 }
 
