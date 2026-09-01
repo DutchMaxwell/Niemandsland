@@ -697,6 +697,9 @@ mod tests {
             hit_and_run_round: vec![-1, -1],
             growth_markers: vec![0, 0],
             growth_round: vec![-1, -1],
+            second_wind_used: vec![false, false],
+            second_wind_round: -1,
+            second_wind_uses: 0,
         }
     }
 

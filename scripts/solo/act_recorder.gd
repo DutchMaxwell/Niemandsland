@@ -377,6 +377,9 @@ static func _stamp_gate_reads(state: Dictionary, plain: Dictionary) -> void:
 ##                       such rules). No "round" here on purpose: a fold can tell "already
 ##                       ticked this round" from `ambush_arrived_round`/`attached_to`/`round`,
 ##                       already on state_before without this key's help.
+##   second_wind_used   unit_properties["second_wind_used"] (solo_controller.gd:10474) — Second
+##                       Wind's ONCE-per-game flag (block B8), the simplest ledger shape here:
+##                       no round derivation, it never resets.
 static func _ledger_of(u: GameUnit) -> Dictionary:
 	var ledger := {}
 	var buffs: Array = u.unit_properties.get("spell_records", [])
@@ -388,6 +391,8 @@ static func _ledger_of(u: GameUnit) -> Dictionary:
 	var vsm := int(u.unit_properties.get("vs_mark_round", -1))
 	if vsm != -1:
 		ledger["vs_mark_round"] = vsm
+	if bool(u.unit_properties.get("second_wind_used", false)):
+		ledger["second_wind_used"] = true
 	var markers := 0
 	for e in RulesRegistry.unit_rules_of_primitive(u, "Growth Markers"):
 		var rn := str((e as Dictionary)["name"]).to_snake_case()

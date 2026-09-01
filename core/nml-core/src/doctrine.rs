@@ -165,6 +165,7 @@ pub fn synth_state(a: &Value, b: &Value, zone_a: &Zone, zone_b: &Zone, markers: 
         shroud: vec![None; n], charge_no_difficult: vec![false; n], charge_probe_r: vec![0.0; n],
         buffs: vec![Vec::new(); n], vs_mark_round: vec![-1; n], hit_and_run_round: vec![-1; n],
         growth_markers: vec![0; n], growth_round: vec![-1; n],
+        second_wind_used: vec![false; n], second_wind_round: -1, second_wind_uses: 0,
     }
 }
 

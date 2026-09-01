@@ -443,6 +443,15 @@ pub struct State {
     /// once-per-round gate, `_solo_growth_round_start`) — the `hit_and_run_
     /// round` shape, -1 for never.
     pub growth_round: Vec<i64>,
+    /// Block B8 — `unit_properties["second_wind_used"]` (solo_controller.gd:
+    /// 10474): per unit, ONCE per game — unlike every other ledger flag above,
+    /// this never resets on a later round.
+    pub second_wind_used: Vec<bool>,
+    /// `army_manager.rule_state["second_wind_round_uses"]` (solo_controller.
+    /// gd:10401-10411): the army-wide (single `ai_slot` on the table) count of
+    /// Second Winds granted in `second_wind_round`; -1 = never counted.
+    pub second_wind_round: i64,
+    pub second_wind_uses: i64,
 }
 
 impl State {
