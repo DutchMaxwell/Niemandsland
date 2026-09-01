@@ -16,6 +16,15 @@ const SMOKE := preload("res://tools/objective_doctrine_smoke.gd")
 ## the D3+2 stream (probe-verified 2026-09-01) — the RED's leverage below rides
 ## the 5 -> 3 flip between the first seed and its +1 neighbour.
 const SEED_BASE := 20260710
+## NML-1140 follow-up: the doctrine rung's own answer only exists behind the
+## NmlCore GDExtension (core/install_gdextension.sh) — absent in CI and in a
+## plain player install. The cases below that assert the ACTUAL doctrine
+## answer (not the fallback) skip loudly (gdUnit `do_skip`/`skip_reason`,
+## evaluated at scan time — literal text only, gdUnit reads it straight off
+## the source, not through the class) rather than fail when it is missing;
+## the rulebook/legality/round-trip cases above and `test_an_unplaceable_
+## doctrine_falls_back_loudly_and_honestly` below (it tests the FALLBACK
+## itself) run unconditionally.
 
 
 func _armies() -> Array:
@@ -102,7 +111,10 @@ func test_a_fixed_count_spec_draws_nothing_and_shifts_no_later_draw() -> void:
 
 # === NML-1140 step 6: the doctrine rung =======================================
 
-func test_the_doctrine_rung_keeps_the_stream_and_places_legal_markers() -> void:
+@warning_ignore('unused_parameter')
+func test_the_doctrine_rung_keeps_the_stream_and_places_legal_markers(
+		do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded — doctrine rung untestable without it") -> void:
 	for s in range(5):
 		var lay := ObjectiveLayout.generate(SEED_BASE + s, DUEL, FRONT_LINE, _cells(), 30,
 			72.0, 48.0, "search", _armies())
@@ -128,7 +140,10 @@ func test_the_doctrine_rung_keeps_the_stream_and_places_legal_markers() -> void:
 			assert_int(absi(int(pos[i][1]))).is_less_equal(24 - ObjectiveLayout.EDGE_MARGIN_IN)
 
 
-func test_the_doctrine_rung_is_deterministic_and_the_rulebook_stamps_no_rung() -> void:
+@warning_ignore('unused_parameter')
+func test_the_doctrine_rung_is_deterministic_and_the_rulebook_stamps_no_rung(
+		do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded — doctrine rung untestable without it") -> void:
 	var a := ObjectiveLayout.generate(4242, DUEL, FRONT_LINE, _cells(), 30,
 		72.0, 48.0, "search", _armies())
 	var b := ObjectiveLayout.generate(4242, DUEL, FRONT_LINE, _cells(), 30,
@@ -138,7 +153,10 @@ func test_the_doctrine_rung_is_deterministic_and_the_rulebook_stamps_no_rung() -
 	assert_bool(rb.has("doctrine")).is_false()
 
 
-func test_the_doctrine_respects_the_board_it_is_handed() -> void:
+@warning_ignore('unused_parameter')
+func test_the_doctrine_respects_the_board_it_is_handed(
+		do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded — doctrine rung untestable without it") -> void:
 	# The board travels to the doctrine as the act header's terrain line; blocking
 	# the open-board answer's cells must MOVE the deterministic answer (or the
 	# terrain never reached the Rust search), and the moved answer stays legal.
@@ -179,7 +197,10 @@ func test_an_unplaceable_doctrine_falls_back_loudly_and_honestly() -> void:
 	assert_int(int(big["count_roll"])).is_equal(6)
 
 
-func test_the_doctrine_matches_the_twin_on_five_seeds() -> void:
+@warning_ignore('unused_parameter')
+func test_the_doctrine_matches_the_twin_on_five_seeds(
+		do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded — doctrine rung untestable without it") -> void:
 	# Gate 2(ii) on the table side: the extension's markers must equal the twin's
 	# pyo3 markers for the SAME drawn count, on five pinned seeds (counts 5,3,5,3,5).
 	var python := OS.get_environment("NML_DOCTRINE_PYO3_PYTHON")
@@ -201,7 +222,10 @@ func test_the_doctrine_matches_the_twin_on_five_seeds() -> void:
 		assert_int(int(lay["swept"])).is_equal(int(ref.get("swept", 0)))
 
 
-func test_red_perturbing_the_seed_on_the_table_side_moves_the_markers() -> void:
+@warning_ignore('unused_parameter')
+func test_red_perturbing_the_seed_on_the_table_side_moves_the_markers(
+		do_skip := not ClassDB.class_exists("NmlCore"),
+		skip_reason := "NmlCore extension not loaded — doctrine rung untestable without it") -> void:
 	# The doctrine has zero RNG — the seed acts ONLY through the rulebook draw.
 	# Perturbing it on the TABLE side alone (SEED_BASE + 1 draws 3, SEED_BASE
 	# draws 5) must move the answer away from the twin's; restoring the seed must

@@ -83,7 +83,11 @@ func _init() -> void:
 		return
 	var red := OS.get_environment("NML_DOCTRINE_SMOKE_RED") == "1"
 	var army_a := _army("p1", 0) if red else _army("p1")
-	var core := NmlCore.new()
+	var core: Object = ClassDB.instantiate("NmlCore")   # the solo_controller.gd:3182 pattern — resolved at runtime, not parse time (NML-1140)
+	if core == null:
+		print("IDENTITY SMOKE FAIL: NmlCore present but not instantiable")
+		quit(1)
+		return
 	var ext: Dictionary = core.doctrine_place(null, MODE, [army_a, _army("p2")], COUNT, ZONES, W_IN, D_IN)
 	if ext.is_empty():
 		print("IDENTITY SMOKE FAIL: extension answered empty — last_error: %s" % core.last_error())
