@@ -79,7 +79,8 @@ def main(argv=None):
             w *= min(3.0, 1.0 + max(0.0, pick_rs - mean_rs))    # clone_train.py:116-121 shape
         out.append({"kind": "policy_row", "game": r["game"], "act_no": r["act_no"],
                     "unit": r["unit"], "side": side, "board": r["board"],
-                    "cands": [{"i": c["i"], "vec": c["vec"]} for c in r["cands"]],
+                    "cands": [{"i": c["i"], "vec": c["vec"],
+                               "scored": c.get("scored")} for c in r["cands"]],
                     "pick_idx": p, "pick_rs": pick_rs, "menu_mean_rs": mean_rs,
                     "winner": win, "vp": res[r["game"]][1:], "weight": w})
     o = Path(a.out).expanduser()
