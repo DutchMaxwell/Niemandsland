@@ -93,6 +93,19 @@ def test_classify_names_every_way_two_roll_lists_can_part():
     assert gate.classify([a], [a, a]) == "length"
 
 
+def test_split_unrecorded_flags_a_multi_attack_shooting_act_with_no_split_field():
+    """NML-1150 GAP: two raw "attack"-shaped rolls under one shooting ordinal,
+    no recorded `action.split` — the table split the volley, the recorder
+    predates the field. One attack roll, a defense roll, a `split` field, or a
+    non-shooting class must each leave it False."""
+    two_attacks = [{"roll_kind": "attack"}, {"roll_kind": "attack"}]
+    assert gate.split_unrecorded("shooting", two_attacks, {}) is True
+    assert gate.split_unrecorded("shooting", two_attacks, {"split": [{"target": "b"}]}) is False
+    one_attack = [{"roll_kind": "attack"}, {"roll_kind": "defense"}]
+    assert gate.split_unrecorded("shooting", one_attack, {}) is False
+    assert gate.split_unrecorded("melee", two_attacks, {}) is False
+
+
 # ---------------------------------------------------------------- the gate ---
 
 

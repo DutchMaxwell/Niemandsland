@@ -234,6 +234,21 @@ def is_rule_roll(r: dict, only_rule: str) -> bool:
     return int(r.get("count", 0)) == count and int(r.get("target", 0)) == target
 
 
+def split_unrecorded(cls: str, block: list[dict], action: dict) -> bool:
+    """NML-1150 GAP: a shooting act's recorded dice carry MORE THAN ONE raw
+    "attack"-shaped roll (`is_rule_roll`'s own shape read — `roll_kind ==
+    "attack"`, distinct from "defense" and the seven named special-rule
+    kinds) under one ordinal: the table split the volley across targets, but
+    the act itself carries no `action.split` (0 of ~1800 shooting acts on
+    every corpus checked so far predate the field). The twin (`sim.rs` shoot
+    branch, `plan.as_deref().unwrap_or(&pooled)`) still pools every shot at
+    the ONE recorded target, so B and C can never agree there — bucketed as
+    confounded, the same reason `--only-rule` already skips B/C for a shape-
+    confounded act. An act that DOES carry `action.split` is untouched."""
+    return (cls == "shooting" and not action.get("split")
+            and sum(1 for r in block if r.get("roll_kind") == "attack") > 1)
+
+
 def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
         no_dangerous: bool = False, engage_fold: str = "auto", cond_ap: str = "auto",
         only_rule: str = "") -> int:
@@ -247,7 +262,8 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
     grid = {c: dict.fromkeys(BUCKETS + ("acts",), 0) for c in CLASSES}
     chk = dict.fromkeys(("stream_ok", "rolls", "tally", "tally_equal", "tally_red",
                          "next", "next_equal", "next_red", "mend_rolls", "mend_rolls_equal",
-                         "mend_rolls_clean", "mend_rolls_clean_equal", "confounded"), 0)
+                         "mend_rolls_clean", "mend_rolls_clean_equal", "confounded",
+                         "split_unrecorded"), 0)
     if only_rule:
         grid["mend"] = dict.fromkeys(BUCKETS + ("acts",), 0)
     first = {"stream": "", "tally": "", "next": ""}
@@ -298,6 +314,7 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 cls, foe = "mend", None
             else:
                 continue
+            block = [r for r in dice[i0:] if int(r["act"]) == k]
             if only_rule:
                 # A `None`-shape rule (block B4) never reaches melee (main.gd:
                 # 5627-5636's all_attacks/melee_only/when:charge gate keeps it
@@ -309,12 +326,13 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                     continue
                 unit_key = (act.get("pick") or {}).get("unit_key") or action.get("unit")
                 prof = head["profiles"].get(unit_key) or {}
-                block = [r for r in dice[i0:] if int(r["act"]) == k]
                 dice_free = only_rule in DICE_FREE_RULES
                 if only_rule not in bearer_names(prof) or not (dice_free or any(
                         is_rule_roll(r, only_rule) for r in block)):
                     continue
             grid[cls]["acts"] += 1
+            split_confound = split_unrecorded(cls, block, action)
+            chk["split_unrecorded"] += split_confound
             tray = nml_core.Tray(seed)
             if burn[i0]:
                 tray.roll(burn[i0])
@@ -356,8 +374,10 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
             # --only-rule also only where the port reproduced the act's whole
             # shape: an act the table resolved BEYOND its recorded pick (the
             # known length confound) has a tally that measures that gap, not
-            # the rule — counted as confounded instead.
-            if got and want and (not only_rule or len(got) == len(want)):
+            # the rule — counted as confounded instead. `split_confound` is the
+            # same skip for the split-unrecorded signature above, regardless of
+            # --only-rule.
+            if got and want and (not only_rule or len(got) == len(want)) and not split_confound:
                 chk["tally"] += 1
                 green = tallies(got) == tallies(want)
                 chk["tally_equal"] += green
@@ -371,8 +391,9 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
             # CHECK C — both combatants, against the NEXT replayable act. Under
             # --only-rule it runs only where the act's SHAPE held: a confounded
             # act's state divergence is the confound's, not the rule's (the
-            # confound is counted above).
-            if (not only_rule or len(got) == len(want)) and pos + 1 < len(lines):
+            # confound is counted above). `split_confound` skips it here too.
+            if (not only_rule or len(got) == len(want)) and pos + 1 < len(lines) \
+                    and not split_confound:
                 chk["next"] += 1
                 nx = nxt.plain()
                 keys = (action["unit"], foe)
@@ -408,6 +429,9 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
           % (chk["tally_equal"], chk["tally"]))
     print("  C NEXT  : %d/%d activations leave BOTH combatants where the next act found them"
           % (chk["next_equal"], chk["next"]))
+    print("  SPLIT   : %d/%d shooting acts split-unrecorded (corpus predates action.split) "
+          "— B/C skipped"
+          % (chk["split_unrecorded"], grid["shooting"]["acts"]))
     if only_rule:
         print("  rule %s: %d/%d rule-shaped rolls replay at their own slot "
               "(%d/%d on the %d shape-clean acts), %d acts shape-confounded "
