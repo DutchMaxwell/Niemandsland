@@ -435,6 +435,14 @@ pub struct State {
     /// 9685), the once-per-ROUND stamp of the Hit & Run free move, -1 for
     /// never; the same shape as `vs_mark_round`.
     pub hit_and_run_round: Vec<i64>,
+    /// Block B7 — `unit_properties["growth_<rule>"]` (main.gd:16978), this
+    /// unit's OWN marker count for its "Growth Markers" rule. A single counter
+    /// per unit, not per rule name (see `unit::growth_of`'s own note).
+    pub growth_markers: Vec<i64>,
+    /// The last ROUND this unit's `per_round` marker ticked (main.gd:17011's
+    /// once-per-round gate, `_solo_growth_round_start`) — the `hit_and_run_
+    /// round` shape, -1 for never.
+    pub growth_round: Vec<i64>,
 }
 
 impl State {

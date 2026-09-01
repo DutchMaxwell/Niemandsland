@@ -427,6 +427,8 @@ pub fn build_state(
         buffs: vec![Vec::new(); n],
         vs_mark_round: vec![-1; n],
         hit_and_run_round: vec![-1; n],
+        growth_markers: vec![0; n],
+        growth_round: vec![-1; n],
         los_pairs,
     };
     let mut mask: Vec<u32> = Vec::with_capacity(n);

@@ -695,6 +695,8 @@ mod tests {
             buffs: vec![Vec::new(), Vec::new()],
             vs_mark_round: vec![-1, -1],
             hit_and_run_round: vec![-1, -1],
+            growth_markers: vec![0, 0],
+            growth_round: vec![-1, -1],
         }
     }
 
