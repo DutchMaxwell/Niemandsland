@@ -145,6 +145,14 @@ fn arb_plain(a: &Arbitration) -> Value {
 fn pick_plain(p: &Pick) -> Value {
     let mut out = Map::new();
     out.insert("used".into(), true.into());
+    // NML-1158c: TRUE only when the exploration knob's coin fired on THIS
+    // pick — see `Pick::explored`'s own doc for what the flag does and does
+    // not say about the answer it left. The key rides ONLY an explored pick:
+    // a default game writes the same pick object it always did (the
+    // NML-1147a stamp law).
+    if p.explored {
+        out.insert("explored".into(), true.into());
+    }
     out.insert("unit_key".into(), Value::String(p.unit_key.clone()));
     out.insert("action".into(), cand_plain(&p.action));
     let mut exp = Map::new();
@@ -855,7 +863,17 @@ impl Core {
     ///
     /// Returns the pick plus `trace` and `leaf_state`, or `{"used": false,
     /// "unsupported": <reason>}` when the port declines.
-    #[pyo3(signature = (state, player, statics, sig = None))]
+    ///
+    /// `eps` / `explore_seed` are the EXPLORATION KNOB (NML-1158c): `eps` is
+    /// the trainer's `--explore` (0..1, 0 = never), and `explore_seed` seeds a
+    /// FRESH `GodotRng` for this one call — its own dedicated stream, exactly
+    /// as `resolve_stochastic` seeds a fresh one per call (module docstring's
+    /// SEEDS section). The caller derives `explore_seed` from the game seed
+    /// and the activation sequence, never from the game's own dice generator,
+    /// so the coin/index draws below never touch it. `eps <= 0.0` (every call
+    /// before this knob existed) takes zero draws in `Search::run` and is
+    /// byte-identical to `None`.
+    #[pyo3(signature = (state, player, statics, sig = None, eps = 0.0, explore_seed = 0))]
     fn plan_with_rollout(
         &mut self,
         py: Python<'_>,
@@ -863,6 +881,8 @@ impl Core {
         player: i64,
         statics: &Bound<'_, PyAny>,
         sig: Option<i64>,
+        eps: f64,
+        explore_seed: i64,
     ) -> PyResult<Py<PyAny>> {
         let act: ActStatics = serde_json::from_value(value_of(statics)?)
             .map_err(|e| Unsupported::new_err(format!("statics: {e}")))?;
@@ -879,7 +899,8 @@ impl Core {
         let mut search = Search::new(roll, &act);
         search.sig = sig;
         let mut sc = Scratch::default();
-        match search.run(&state.inner, player, &mut sc) {
+        let mut xr = GodotRng::new(explore_seed);
+        match search.run(&state.inner, player, &mut sc, Some((eps, &mut xr))) {
             Ok(pick) => to_py(py, &pick_plain(&pick)),
             Err(u) => {
                 let mut m = Map::new();

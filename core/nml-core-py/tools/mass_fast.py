@@ -117,6 +117,9 @@ FIDELITY_DEFAULTS = {
     # NML-1158 arm (a): the fitted share in the E4.2 blend. 0.5 is the table's
     # own `FIT_BLEND_DEFAULT` (fitted.rs), so "pass nothing" stays identical.
     "fit_blend": 0.5,
+    # NML-1158c: the exploration knob. 0.0 is today's pure argmax, so "pass
+    # nothing" writes byte-identical games.
+    "explore": 0.0,
 }
 
 
@@ -305,6 +308,15 @@ def main(argv: list[str]) -> int:
         "net scores with; 0.5 default = the table's blend. Rides `fidelity`, "
         "so .RUN.json records it",
     )
+    ap.add_argument(
+        "--explore",
+        type=sp.explore_arg,
+        default=FIDELITY_DEFAULTS["explore"],
+        help="NML-1158c -- per-activation probability of an off-argmax pick "
+        "among the rolled top-K pool, from a dedicated stream. 0.0 default = "
+        "today's argmax, byte-identical. Rides `fidelity`, so .RUN.json "
+        "records it",
+    )
     ap.add_argument("--cond-ap", choices=["auto", "on", "off"], default="auto",
                     help="conditional AP (NML-1103); 'auto' leaves the process global alone")
     ap.add_argument(
@@ -333,6 +345,9 @@ def main(argv: list[str]) -> int:
         # NML-1158 arm (a): the fitted share that eval blends with. Rides
         # `fidelity` into `play_game(fit_blend=)` and the `.RUN.json` stamp.
         "fit_blend": a.fit_blend,
+        # NML-1158c: the exploration knob. Rides `fidelity` into
+        # `play_game(explore=)` and the `.RUN.json` stamp the same way.
+        "explore": a.explore,
     }
 
     sizes = [int(x) for x in a.sizes.split(",")]

@@ -42,6 +42,7 @@ use crate::arbitration::{arbitrate_bent, ArbBend, Arbitration};
 use crate::io::Seams;
 use crate::menu::{candidates_tuned, Candidate};
 use crate::playout::Policy;
+use crate::rng::GodotRng;
 use crate::rollout::Rollout;
 use crate::score::score_with;
 use crate::mv::reach::ReachIndex;
@@ -122,6 +123,12 @@ pub struct Pick {
     /// `trace.arbitration` (:263-264) — `None` unless the playout arbitration
     /// fired on this pick.
     pub arbitration: Option<Arbitration>,
+    /// TRUE when the exploration knob FIRED on this pick: the coin said
+    /// "explore" and the pick was drawn uniformly from the rolled pool — which
+    /// can land on the argmax's own slot, so the flag says the knob decided,
+    /// not that the answer differs. The trace fields keep describing the
+    /// argmax the pick left.
+    pub explored: bool,
 }
 
 /// TEST SEAMS. Every shipping call uses `PlanBend::default()`, which is the
@@ -232,7 +239,7 @@ pub fn plan_with_rollout(
     let index = reach_of(seams, state, terrain);
     let roll = Rollout::new(policy_of(statics, terrain, seams, index.as_ref(), knobs), *knobs);
     let mut sc = Scratch::default();
-    Search::new(roll, act).run(state, player, &mut sc)
+    Search::new(roll, act).run(state, player, &mut sc, None)
 }
 
 /// The same entry point WITH the recorded playout signature, which is what a
@@ -253,7 +260,7 @@ pub fn plan_with_rollout_sig(
     let mut sc = Scratch::default();
     let mut search = Search::new(roll, act);
     search.sig = sig;
-    search.run(state, player, &mut sc)
+    search.run(state, player, &mut sc, None)
 }
 
 /// The 1-ply `AiPlanner.plan` (:21-45) on its own, for the `top_k <= 0` branch
@@ -415,11 +422,19 @@ impl<'a> Search<'a> {
     }
 
     /// `AiPlanner.plan_with_rollout` ai_planner.gd:118-275.
+    ///
+    /// `explore` is the EXPLORATION KNOB (policy wave, NML-1158c): `Some((eps,
+    /// rng))` asks the search to leave the argmax with probability eps and land
+    /// uniformly on one of the rolled pool candidates. Both draws come from
+    /// `rng`, the caller's DEDICATED stream — never the game's or the tray's —
+    /// so `None` (every shipping call) is byte-identical to the recorded
+    /// behaviour and an explored game stays reproducible from its seed.
     pub fn run(
         &self,
         state: &State,
         player: i64,
         sc: &mut Scratch,
+        mut explore: Option<(f64, &mut GodotRng)>,
     ) -> Result<Pick, Unsupported> {
         self.admissible()?;
         let top_k = self.top_k();
@@ -510,6 +525,25 @@ impl<'a> Search<'a> {
             }
         }
 
+        // PHASE 5.5 — the exploration knob (NML-1158c). The pool IS the rolled
+        // candidate set the top-K budget built (the coverage/patient/wave
+        // guarantees may add rows on top of `top_k`, so it can be longer);
+        // `rs` is index-parallel to it. The coin fires per activation, the
+        // index per explored activation; both from the dedicated stream. An
+        // eps <= 0 takes ZERO draws, so a knob passed at 0 is bit-identical to
+        // no knob at all. `expectation.after` becomes the PICKED candidate's
+        // own rollout value; the trace keeps describing the argmax the pick
+        // left, which is exactly what the `explored` flag is there to say.
+        let mut explored = false;
+        if let Some((eps, xr)) = explore.as_mut() {
+            if *eps > 0.0 && xr.randf() < *eps {
+                let j = xr.randi_range(0, pool.len() as i64 - 1) as usize;
+                bi = pool[j];
+                brs = rs[j].1;
+                explored = true;
+            }
+        }
+
         // PHASE 6 — emission.
         let unit_key = scored[bi].unit_key.clone();
         let mut waits = 0i64;
@@ -541,6 +575,7 @@ impl<'a> Search<'a> {
             runner_idx,
             last_leaf,
             arbitration,
+            explored,
         })
     }
 }

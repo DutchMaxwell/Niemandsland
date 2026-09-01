@@ -285,7 +285,7 @@ fn sweep(c: &ActCorpus, bend: PlanBend) -> Report {
         let mut search = Search::new(roll, &act.statics);
         search.bend = bend;
         r.acts += 1;
-        match search.run(&act.state, act.player, &mut sc) {
+        match search.run(&act.state, act.player, &mut sc, None) {
             Err(u) => {
                 *r.declined.entry(format!("{u:?}")).or_insert(0) += 1;
             }
@@ -585,7 +585,7 @@ fn the_one_ply_valve_routes_to_plan_and_plan_picks_the_ranked_head() {
     for (ai, act) in c.acts.iter().enumerate() {
         let mut search = Search::new(roll, &act.statics);
         search.bend = PlanBend { top_k: Some(0), ..PlanBend::default() };
-        match search.run(&act.state, act.player, &mut sc) {
+        match search.run(&act.state, act.player, &mut sc, None) {
             Err(Unsupported::OnePlyDegrade) => valve += 1,
             other => panic!("act {ai}: top_k 0 answered {other:?} instead of the valve"),
         }
@@ -765,7 +765,7 @@ fn g4b_a_fallen_hero_stops_lending_its_rules_to_its_host() {
         let roll = Rollout::new(Policy::new(&statics[ai], &c.terrain, seams), c.knobs);
         let search = Search::new(roll, &act.statics);
         let got = search
-            .run(&act.state, act.player, &mut sc)
+            .run(&act.state, act.player, &mut sc, None)
             .unwrap_or_else(|u| panic!("act {} declined: {u:?}", ai + 1));
         let (bad, _) = diff(act, want, &got);
         println!(
@@ -796,7 +796,7 @@ fn g4b_a_fallen_hero_stops_lending_its_rules_to_its_host() {
     // --- RED, kept: act 2 through the HEADER's closure, i.e. the pre-M2-5b port ---
     let roll = Rollout::new(Policy::new(&statics[0], &c.terrain, seams), c.knobs);
     let stale = Search::new(roll, &a2.statics)
-        .run(&a2.state, a2.player, &mut sc)
+        .run(&a2.state, a2.player, &mut sc, None)
         .unwrap_or_else(|u| panic!("stale run declined: {u:?}"));
     let (bad, _) = diff(a2, p2, &stale);
     println!(
@@ -848,4 +848,61 @@ fn a_corpus_with_a_moved_profile_read_refuses_a_single_static_closure() {
     common::pin_legacy_no_cond_ap();
     let c = load_acts(HERO_DEAD).unwrap_or_else(|e| panic!("{e}"));
     let _ = build_act_statics(&c, REPO);
+}
+
+
+// ---------------------------------------------------------------------------
+// NML-1158c — the exploration knob. eps=0 (with or without a stream) must be
+// byte-identical to the recorded picks; eps=1 must mark every pick `explored`
+// and move at least one of them onto a different pool candidate.
+
+/// Every answerable act's pick, with the knob set the caller names. `None` is
+/// the shipping call; `Some((eps, seed))` builds the dedicated stream per act,
+/// the way the harness would.
+fn run_corpus(c: &ActCorpus, explore: Option<(f64, i64)>) -> Vec<(usize, Pick)> {
+    use nml_core::GodotRng;
+    let statics = build_act_statics(c, REPO);
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
+        movement: c.knobs.movement, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold };
+    let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
+    let mut sc = Scratch::default();
+    let mut picks = Vec::new();
+    for (ai, act) in c.acts.iter().enumerate() {
+        let search = Search::new(roll, &act.statics);
+        let got = match &explore {
+            None => search.run(&act.state, act.player, &mut sc, None),
+            Some((eps, seed)) => {
+                let mut xr = GodotRng::new(*seed);
+                search.run(&act.state, act.player, &mut sc, Some((*eps, &mut xr)))
+            }
+        };
+        if let Ok(p) = got {
+            picks.push((ai, p));
+        }
+    }
+    picks
+}
+
+#[test]
+fn the_explore_knob_is_inert_at_zero_and_live_at_one() {
+    let c = corpus();
+    let argmax = run_corpus(&c, None);
+    let zero_with_stream = run_corpus(&c, Some((0.0, 7)));
+    assert_eq!(argmax.len(), zero_with_stream.len(), "the knob must not change who answers");
+    for ((ai, a), (_, z)) in argmax.iter().zip(&zero_with_stream) {
+        assert!(!a.explored, "act {ai}: no stream, yet explored=true");
+        assert_eq!(a.unit_key, z.unit_key, "act {ai}: eps=0 moved the pick");
+        assert!((a.expectation_after - z.expectation_after).abs() <= EPS);
+    }
+    let full = run_corpus(&c, Some((1.0, 7)));
+    assert_eq!(full.len(), argmax.len());
+    let explored = full.iter().filter(|(_, p)| p.explored).count();
+    assert_eq!(explored, full.len(), "eps=1 must mark every pick explored");
+    let moved = full
+        .iter()
+        .zip(&argmax)
+        .filter(|((_, p), (_, a))| p.unit_key != a.unit_key || p.action.kind != a.action.kind)
+        .count();
+    assert!(moved > 0, "eps=1 over {len} acts never left the argmax", len = full.len());
 }

@@ -788,18 +788,33 @@ TRAINER_STATICS = {
     "playout_net": {},
 }
 
+# NML-1158c — the exploration knob's OWN stream, seeded per activation as
+# `game_seed * EXPLORE_SEED_STRIDE + seq`, the same shape as the sidecars'
+# `PAIR_SEED_STRIDE` below but for a stream that feeds the PLAYED pick rather
+# than a counterfactual clone. It is a stride of its own, disjoint from
+# `PAIR_SEED_STRIDE` / `FORK_SEED_STRIDE`, so the three derived-seed families
+# stay visually distinct in this file even though each seeds an independent
+# `GodotRng` object and none can observe another's draws.
+EXPLORE_SEED_STRIDE = 700001
+
 
 # ------------------------------------------------------------------- game ----
 
 
-def _pick_for(core, state, player: int, net_player: int = 0) -> dict[str, Any]:
+def _pick_for(
+    core, state, player: int, net_player: int = 0, eps: float = 0.0, explore_seed: int = 0
+) -> dict[str, Any]:
     """`_pick_for` core_selfplay.gd:398-459 — the full planner for whichever side
     still has a living, un-activated unit; `{}` when the side is dry.
 
     The pool is the PLANNER's own filter (:431-436, player / activated / alive)
     unless the header's `hero_attach` FOLD seam is on. NML-1127: reading that
     seam here rather than folding unconditionally is what lets the harness play
-    the oracle's "joined but not folded" game — see `HERO_ATTACH_MODES`."""
+    the oracle's "joined but not folded" game — see `HERO_ATTACH_MODES`.
+
+    `eps` / `explore_seed` are the NML-1158c exploration knob, passed straight
+    through to `Core.plan_with_rollout` — see `play_game`'s docstring and
+    `EXPLORE_SEED_STRIDE` for where `explore_seed` comes from."""
     if not state.pool(player, bool(core.knobs().get("hero_attach", True))):
         return {}
     # NML-1142: `AiMissionEval.fit_mode` is per-ACTIVATION on the table and the
@@ -808,7 +823,7 @@ def _pick_for(core, state, player: int, net_player: int = 0) -> dict[str, Any]:
     # seat, which is the A/B seam described in `play_game`.
     fit = core.has_net() and net_player in (0, player)
     statics = dict(TRAINER_STATICS, fit_mode=True) if fit else TRAINER_STATICS
-    pick = core.plan_with_rollout(state, player, statics)
+    pick = core.plan_with_rollout(state, player, statics, eps=eps, explore_seed=explore_seed)
     return pick if pick.get("used") else {}
 
 
@@ -1071,10 +1086,16 @@ def _play_round(
     dice_tally: dict[str, int] | None = None,
     roll_log: list | None = None,
     net_player: int = 0,
+    eps: float = 0.0,
 ) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
     dry side hands the tail to the other, and the NEXT round opens with whoever
     did NOT take the last activation.
+
+    `eps` (NML-1158c) is the exploration knob: each activation's `_pick_for`
+    draws its coin/index from `seed * EXPLORE_SEED_STRIDE + seq`, a stream of
+    its own that the sidecars below never touch and that never touches `rng`
+    or `tray`. `eps=0.0` (the default) takes zero draws — see `play_game`.
 
     With `sidecars`, every row also carries the board, the roster indices, the
     feature vector and — on a runner-bearing pick — the E0b pair; the ROUND's
@@ -1107,15 +1128,20 @@ def _play_round(
     guard = state.units * 2 + 4
     while guard > 0:
         guard -= 1
-        pick = _pick_for(core, state, turn, net_player)
+        # `seq` is read BEFORE the pick — NML-1158c's dedicated stream is
+        # `seed * EXPLORE_SEED_STRIDE + seq`, and `seq` is this activation's
+        # own ordinal (`len(log)` before its row is appended) exactly as the
+        # pair/fork formulas above already read it after the fact.
+        seq = len(log)
+        explore_seed = seed * EXPLORE_SEED_STRIDE + seq
+        pick = _pick_for(core, state, turn, net_player, eps, explore_seed)
         if not pick:
             other = 2 if turn == 1 else 1
-            pick = _pick_for(core, state, other, net_player)
+            pick = _pick_for(core, state, other, net_player, eps, explore_seed)
             if not pick:
                 break
             turn = other
         action = pick["action"]
-        seq = len(log)
         row = {
             "side": turn,
             "round": round_no,
@@ -1126,6 +1152,14 @@ def _play_round(
             "action": action,
             "intent": str(pick.get("intent", "")),
         }
+        if eps > 0.0:
+            # NML-1158c: present only on a game the knob actually rode —
+            # TRUE only when the coin fired on THIS pick. Omitted at eps=0.0
+            # (every corpus written before this knob existed, and the
+            # default still) so every vintage digest and field-by-field gate
+            # against the Godot oracle stays untouched, exactly like
+            # `knobs["deployment"]` only riding the arena branch.
+            row["explored"] = bool(pick.get("explored", False))
         if sidecars:
             # `AiMissionEval.features(state, player, BattleSim.reply_threat(
             # state, player), true)` — the RICH vector, which is what
@@ -1307,6 +1341,7 @@ def play_game(
     net: str | Path | None = None,
     net_player: int = 0,
     fit_blend: float = 0.5,
+    explore: float = 0.0,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -1396,7 +1431,23 @@ def play_game(
     own callers (the gates under `tools/`) always resolve `auto`/`on`/`off`
     to a concrete bool before they ever reach here (there is no header for
     this function to read a vintage off, so `auto` resolves against
-    `vintage_knobs({}, ...)`)."""
+    `vintage_knobs({}, ...)`).
+
+    `explore` (NML-1158c, `--explore` below) is the POLICY WAVE's exploration
+    knob: with probability `explore` per activation, the twin picks uniformly
+    among the prefilter's rolled top-K pool instead of the argmax. The coin
+    and the index both draw from a stream of their own, seeded per activation
+    as `seed * EXPLORE_SEED_STRIDE + seq` — never `rng` (the game's dice),
+    never a layout or deployment seed — so an explored game is still
+    reproducible from its seed and a `deployment="arena"` or `dice="table"`
+    game explores the identical activations a `deployment="zone"` one would.
+    `0.0` (the default) takes zero draws in the crate (`Search::run`), and a
+    row carries no `explored` key at all under it — every corpus written
+    before this knob existed, and every vintage digest / Godot field-by-field
+    gate, replays byte for byte. `explore > 0.0` puts an `explored` key on
+    every played row, TRUE only where ITS OWN coin fired; the result's
+    `knobs["explore"]` stamp always says what the whole game was played with
+    (NML-1147a pattern, alongside `fit_blend`)."""
     units1 = load_army(list_p1, 1)
     units2 = load_army(list_p2, 2)
     if not units1 or not units2:
@@ -1567,7 +1618,7 @@ def play_game(
             seed=seed, owners=owners, sidecars=sidecars,
             fork_salt=fork_salt, sidecar_skip=sidecar_skip,
             magic=magic, spell_reach=spell_reach, tray=tray, dice_tally=dice_tally,
-            net_player=net_player,
+            net_player=net_player, eps=explore,
         )
         state, owners = core.playout_seize(state, owners)
         vp = core.vp_round_add(owners, vp)
@@ -1620,6 +1671,11 @@ def play_game(
             # NML-1158a: the fitted share this game's leaf scores blended with
             # (NML-1147a pattern). 0.5 is `FIT_BLEND_DEFAULT` fitted.rs:35.
             "fit_blend": fit_blend,
+            # NML-1158c: the exploration knob this game was played with
+            # (NML-1147a pattern, same as `fit_blend` just above). 0.0 is the
+            # default — every corpus written before this knob existed played
+            # the pure argmax and would stamp the identical value here.
+            "explore": explore,
         },
         # D1-B4 telemetry, empty under `dice="expected"`: how many shooting
         # activations drew from the tray, how many rolls that was, and how many
@@ -1708,6 +1764,18 @@ def fit_blend_arg(text: str) -> float:
     if not (0.0 <= v <= 1.0):
         raise argparse.ArgumentTypeError(
             "--fit-blend must be within 0..1, got %r" % (text,)
+        )
+    return v
+
+
+def explore_arg(text: str) -> float:
+    """`--explore`'s argparse type (NML-1158c): parse and pin to 0..1, the
+    same clean-refusal shape as `fit_blend_arg` — a typo must not silently
+    turn into an exploration rate nobody asked for."""
+    v = float(text)
+    if not (0.0 <= v <= 1.0):
+        raise argparse.ArgumentTypeError(
+            "--explore must be within 0..1, got %r" % (text,)
         )
     return v
 
@@ -1822,6 +1890,16 @@ def main(argv: list[str]) -> int:
         help="RESEARCH SEAM (no table twin): 0 = the armed eval plays both "
         "seats, 1 or 2 = only that seat plays the net, for a head-to-head A/B",
     )
+    ap.add_argument(
+        "--explore",
+        type=explore_arg,
+        default=0.0,
+        help="NML-1158c — with this probability per activation, pick "
+        "uniformly among the rolled top-K pool instead of the argmax. 0.0 "
+        "default = today's argmax behaviour, byte-identical. Drawn from a "
+        "dedicated stream, never the game's dice; stamped into knobs and "
+        "into each row's `explored` key",
+    )
     a = ap.parse_args(argv)
 
     core = nml_core.load(a.repo)
@@ -1850,6 +1928,7 @@ def main(argv: list[str]) -> int:
             net=a.net or None,
             net_player=a.net_player,
             fit_blend=a.fit_blend,
+            explore=a.explore,
         )
         res["wall_seconds"] = round(time.perf_counter() - t0, 3)
         if a.out:

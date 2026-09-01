@@ -285,7 +285,7 @@ fn sweep(c: &ActCorpus, bend: PlanBend) -> Report {
         // none — and must not need one.
         search.sig = rec.map(|a| a.sig);
         r.acts += 1;
-        match search.run(&act.state, act.player, &mut sc) {
+        match search.run(&act.state, act.player, &mut sc, None) {
             Err(u) => {
                 *r.declined.entry(format!("{u:?}")).or_insert(0) += 1;
             }
@@ -441,7 +441,7 @@ fn a_close_top_two_without_a_signature_declines() {
         arbitrated += 1;
         let search = Search::new(roll, &act.statics); // sig stays None
         if matches!(
-            search.run(&act.state, act.player, &mut sc),
+            search.run(&act.state, act.player, &mut sc, None),
             Err(nml_core::Unsupported::PlayoutArbitration)
         ) {
             declined += 1;

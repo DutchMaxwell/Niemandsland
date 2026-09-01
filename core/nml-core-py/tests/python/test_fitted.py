@@ -214,7 +214,7 @@ class _StubCore:
     def has_net(self):
         return self._has_net
 
-    def plan_with_rollout(self, _state, _player, statics):
+    def plan_with_rollout(self, _state, _player, statics, eps=0.0, explore_seed=0):
         self.seen.append(dict(statics))
         return {"used": True}
 
