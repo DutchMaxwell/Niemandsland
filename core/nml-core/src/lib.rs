@@ -21,6 +21,7 @@ pub mod mods;
 pub mod mv;
 pub mod objectives;
 pub mod plan;
+pub mod policy;
 pub mod playout;
 pub mod rng;
 pub mod rollout;
