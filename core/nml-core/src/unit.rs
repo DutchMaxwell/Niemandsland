@@ -338,6 +338,14 @@ pub struct UnitStatic {
     /// `GameUnit.is_hero()` game_unit.gd:273-275 — "Hero" in the rule list.
     /// Mend's patient tiebreak prefers heroes (main.gd:5361).
     pub is_hero: bool,
+    /// NML-1152 B14 step 1 (Bounding): `unit_rule_active(gu, "Bounding")`'s own
+    /// named-rule gate, `Some(place_d3_plus)` when active — census evidence
+    /// that this core reads the registry's `place_d3_plus` param (see
+    /// `rule_universe_census.py` CONSUMED_PARAM_KEYS). The DATA-alias family
+    /// (Wolfborn, Rapid Blink, …) stays table-only: only the RECORDED
+    /// `Action::traced` draw (`sim::bounding_bonus_in`) ports its value; this
+    /// stamp is the named rule's own evidence, not a simulation input.
+    pub bounding: Option<f64>,
     /// `RulesRegistry.unit_rule_active(gu, "Re-Position Artillery")` — the
     /// "Utility Buff" movement primitive's registry gate (block B2).
     pub reposition_artillery_active: bool,
@@ -1333,6 +1341,15 @@ impl UnitStatic {
             mend_active: unit_rule_active(reg, p, "Mend"),
             breath_attack_active: unit_rule_active(reg, p, "Breath Attack"),
             is_hero: has_special_rule(&p.special_rules, "Hero"),
+            bounding: if unit_rule_active(reg, p, "Bounding") {
+                let map = reg.rules_for(&p.game_system);
+                Some(match map.lookup(&p.faction_folder, "Bounding") {
+                    Some(e) => e.param_f("place_d3_plus", 1.0),
+                    None => 1.0,
+                })
+            } else {
+                None
+            },
             reposition_artillery_active: unit_rule_active(reg, p, "Re-Position Artillery"),
             hit_and_run_active: unit_rule_active(reg, p, "Hit & Run")
                 || unit_rule_active(reg, p, "Guerrilla")

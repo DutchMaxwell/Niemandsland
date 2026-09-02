@@ -1672,8 +1672,11 @@ func _act(unit: GameUnit) -> Dictionary:
 				bounding_dice = d
 	if not bounding_rule.is_empty():
 		var bounding_in := float(bounding_plus)
+		var bounding_faces: Array = []
 		for _d in bounding_dice:
-			bounding_in += float(_draw_traced(1, 3, "bounding_d3"))
+			var bounding_face := _draw_traced(1, 3, "bounding_d3")
+			bounding_faces.append(bounding_face)
+			bounding_in += float(bounding_face)
 		advance += bounding_in
 		rush += bounding_in
 		charge_reach += bounding_in
@@ -1686,6 +1689,10 @@ func _act(unit: GameUnit) -> Dictionary:
 			"data": {"bonus_in": bounding_in, "rule": bounding_rule, "dice": bounding_dice, "plus": bounding_plus}})
 		_rule_note(report, "%s: rolled %.0f\" of %s\" — every move band +%.0f\" this activation" % [
 			bounding_rule, bounding_in, die_text, bounding_in], true)   # seeded-RNG roll, no tray — travels
+		# NML-1152 B14 step 1: the ONE d3 the fast core needs to replay this activation
+		# byte-identical — everything above (report/record_decision) is developer-mode
+		# introspection the twin never reads.
+		AiActRecorder.traced(_move_act_seq, "bounding_d3", bounding_faces, bounding_plus, bounding_in)
 	# Coverage wave: Speed Feat family — once per GAME, +2\"/+2\" on one move (registry aliases of
 	# Quick carrying uses_per_game). NACHTMAHR spends it in the last two rounds' first move (the
 	# endgame push, where an extra 2\" buys arrivals), logged + recorded; the flag pins the once.

@@ -123,6 +123,24 @@ static func auto(act: int, round_no: int, player: int, unit: String, action: int
 	_count += 1
 
 
+## NML-1152 B14 step 1 (Bounding — the table RECORDS the die, the twin REPLAYS it when
+## present): one line per controller-seeded Bounding placement roll (solo_controller.gd's
+## bounding_rule block), appended to the SAME acts.jsonl stream — necessarily AFTER the
+## "act"/"auto" line for this ordinal, since the roll happens inside _act(), once the pick
+## (finish()) already flushed. Joined by "act" at replay time exactly the way SPLIT FIRE's
+## shots.jsonl record joins its per-shot aim onto the pick's action (dice_gate.py
+## inject_split_aim) — never rewrites an already-written line. No-op when NML_ACT_DUMP is
+## unset, the header never got written, or the line cap is hit.
+static func traced(act: int, tag: String, faces: Array, plus: int, bonus_in: float) -> void:
+	var f := _dump_stream()
+	if f == null or _count >= _max or not _header_written:
+		return
+	f.store_line(JSON.stringify({"kind": "traced", "act": act, "tag": tag,
+		"faces": faces, "plus": plus, "bonus_in": bonus_in}, "", true, true))
+	f.flush()   # a same-process reader (the unit test) must see the line without a close()
+	_count += 1
+
+
 ## NML-1073 M2-0: closes the stream at a GAME's end (arena_match.gd) or a TEST's
 ## end (after_test) — flushed and closed where the writer stands, not left to
 ## process teardown. Resets every cached static so a later begin() reopens a
