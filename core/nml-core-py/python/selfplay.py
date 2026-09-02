@@ -76,6 +76,7 @@ import contextlib
 import hashlib
 
 import json
+import math
 import os
 import re
 import struct
@@ -1146,6 +1147,7 @@ def _pick_for(
     core, state, player: int, net_player: int = 0, eps: float = 0.0, explore_seed: int = 0,
     cands: bool = False, cand_logits_fn: dict[int, Any] | None = None,
     policy_mode: str | None = None,
+    pool_value_fn: dict[int, Any] | None = None, pool_value_w: float = 0.0,
 ) -> dict[str, Any]:
     """`_pick_for` core_selfplay.gd:398-459 — the full planner for whichever side
     still has a living, un-activated unit; `{}` when the side is dry.
@@ -1173,7 +1175,19 @@ def _pick_for(
     second deep search — and hands it to the hook (one forward pass). A
     non-`None` result becomes `cand_logits` on the REAL call below; `None`
     (the hook declining for this one activation) discards the throwaway call
-    and falls through to the plain call, same as no entry at all."""
+    and falls through to the plain call, same as no entry at all.
+
+    `pool_value_fn` / `pool_value_w` are the R2 seam (DESIGN_value_net_
+    2026-09-03 §7): `{side: fn(core, state, cands, pool_idx, rs, side) ->
+    list[float] | None}`. Armed for `player`, the REAL call's own pool
+    (`trace.pool_idx`/`trace.rs`/`trace.cands`, already index-aligned — see
+    lib.rs `pick_plain`) is handed to the hook; a non-`None` answer re-ranks
+    the pool by `rs + pool_value_w * value` (net-only when the weight is
+    `inf`, since `inf * 0` is not a usable tie-break) and swaps in that
+    candidate. `None` for `player`, or the hook declining, leaves the search's
+    own pick untouched — byte-identical to no seam at all. An EXPLORED pick
+    (NML-1158c) is left alone too: the coin already answered for this
+    activation, and re-ranking it would silently undo the exploration."""
     if not state.pool(player, bool(core.knobs().get("hero_attach", True))):
         return {}
     # NML-1142: `AiMissionEval.fit_mode` is per-ACTIVATION on the table and the
@@ -1190,10 +1204,25 @@ def _pick_for(
             return {}
         logits = hook(state, menu_pick["trace"]["cands"], player)
     extra = {"cand_logits": logits, "policy_mode": policy_mode} if logits is not None else {}
+    vhook = (pool_value_fn or {}).get(player)
     pick = core.plan_with_rollout(
-        state, player, statics, eps=eps, explore_seed=explore_seed, cands=cands, **extra
+        state, player, statics, eps=eps, explore_seed=explore_seed,
+        cands=cands or vhook is not None, **extra
     )
-    return pick if pick.get("used") else {}
+    if not pick.get("used"):
+        return {}
+    if vhook is not None and not pick.get("explored"):
+        pool_idx = pick["trace"]["pool_idx"]
+        hand_rs = [e["rs"] for e in pick["trace"]["rs"]]
+        cand_list = pick["trace"]["cands"]
+        values = vhook(core, state, cand_list, pool_idx, hand_rs, player)
+        if values is not None:
+            def _score(h, v, w=pool_value_w):
+                return v if math.isinf(w) else h + w * v
+            bi = max(range(len(pool_idx)), key=lambda j: _score(hand_rs[j], values[j]))
+            act = cand_list[pool_idx[bi]]
+            pick["action"], pick["unit_key"] = act, act["unit"]
+    return pick
 
 
 @contextlib.contextmanager
@@ -1504,6 +1533,8 @@ def _play_round(
     los_model: bool = False,
     cand_logits_fn: dict[int, Any] | None = None,
     policy_mode: str | None = None,
+    pool_value_fn: dict[int, Any] | None = None,
+    pool_value_w: float = 0.0,
 ) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
     dry side hands the tail to the other, and the NEXT round opens with whoever
@@ -1511,6 +1542,9 @@ def _play_round(
 
     `cand_logits_fn` / `policy_mode` are `_pick_for`'s R4 seam, threaded
     through unchanged to both activation picks below — see its docstring.
+
+    `pool_value_fn` / `pool_value_w` are `_pick_for`'s R2 seam, threaded
+    through the same way.
 
     `eps` (NML-1158c) is the exploration knob: each activation's `_pick_for`
     draws its coin/index from `seed * EXPLORE_SEED_STRIDE + seq`, a stream of
@@ -1587,6 +1621,8 @@ def _play_round(
         # full suite caught (`_pick() got an unexpected keyword argument`).
         pf_kw = ({"cand_logits_fn": cand_logits_fn, "policy_mode": policy_mode}
                  if cand_logits_fn is not None or policy_mode is not None else {})
+        if pool_value_fn is not None:
+            pf_kw.update(pool_value_fn=pool_value_fn, pool_value_w=pool_value_w)
         pick = _pick_for(planning, state, turn, net_player, eps, explore_seed,
                          cands=record_cands, **pf_kw)
         if not pick:
@@ -1855,6 +1891,8 @@ def play_game(
     cap_horizon: int = 2,
     cand_logits_fn: dict[int, Any] | None = None,
     policy_mode: str | None = None,
+    pool_value_fn: dict[int, Any] | None = None,
+    pool_value_w: float = 0.0,
     mission: str = "duel",
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
@@ -1865,6 +1903,12 @@ def play_game(
     for the throwaway-menu-call contract. Both default to `None`, which never
     touches `_pick_for`'s new branch and is byte-identical to every call
     written before this seam existed.
+
+    `pool_value_fn` / `pool_value_w` are the R2 seam (DESIGN_value_net_
+    2026-09-03 §7): `{side: fn(core, state, cands, pool_idx, rs, side) ->
+    list[float] | None}`, threaded the same way — see `_pick_for`'s
+    docstring. `pool_value_fn=None` (the default) is byte-identical to every
+    call written before this seam existed.
 
     `core` may be a `nml_core.Core` to reuse across games (the registries and the
     mechanics maps are the expensive part); its header is re-set per game anyway,
@@ -2492,6 +2536,7 @@ def play_game(
             cap_core=cap_core, cap_share=cap_share,
             record_cands=record_cands, los_model=eff_los,
             cand_logits_fn=cand_logits_fn, policy_mode=policy_mode,
+            pool_value_fn=pool_value_fn, pool_value_w=pool_value_w,
         )
         state, owners = core.playout_seize(state, owners)
         if markers_meta:  # W3: an enemy-held owned marker falls before scoring
