@@ -191,6 +191,43 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v205: 0.15 — a marker NO unit projects hold strength at is a soft owner
+/// edge, not the frozen 1.0/0.0 lock: the round-end seize rule still favours
+/// the holder, but a bare marker reads as contestable instead of certain.
+const OWNER_EDGE_V205: f64 = 0.15;
+
+fn objective_p_v205(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = state.objectives[obj_index];
+    let (mut mine, mut theirs) = (0.0f64, 0.0f64);
+    for i in 0..state.units() {
+        let p = presence(state, i, obj.pos, threat_of(incoming, i));
+        if state.player[i] == player { mine += p; } else { theirs += p; }
+    }
+    if mine + theirs > 0.0 { return mine / (mine + theirs); }
+    if obj.owner == 0 { 0.5 } else if obj.owner == player { 0.5 + OWNER_EDGE_V205 } else { 0.5 - OWNER_EDGE_V205 }
+}
+
+/// `score_hand` with every marker read through `objective_p_v205`; structure
+/// is the frozen one, destroyed markers stay locked at 1/0 (NML-1010 W3b).
+fn score_hand_v205(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() { return 0.5; }
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) {
+        let (mut att, mut deff) = (0.0f64, 0.0f64);
+        for i in 0..state.objectives.len().min(state.markers_meta.len()) {
+            let meta = &state.markers_meta[i];
+            let ob = meta.owned_by;
+            if ob == 0 { continue; }
+            if meta.destroyed { if ob == player { deff = 1.0; } else { att = 1.0; } continue; }
+            let pctrl = objective_p_v205(state, i, player, incoming);
+            if ob == player { deff = 1.0 - pctrl; } else { att = pctrl; }
+        }
+        return (0.5 + 0.5 * (att - DESTROY_DEFENCE_WEIGHT * deff)).clamp(0.0, 1.0);
+    }
+    let mut total = 0.0f64;
+    for i in 0..state.objectives.len() { total += objective_p_v205(state, i, player, incoming); }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +238,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        205 => score_hand_v205(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
