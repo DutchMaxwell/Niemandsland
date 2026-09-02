@@ -55,6 +55,22 @@ pub struct Ctx {
     /// "Unpredictable" (exact rule AND registry-active). One die per melee
     /// phase, before any strike.
     pub unpredictable: bool,
+    /// `main._solo_unpredictable_rule(striker, false)` :5403-5412 — the
+    /// SHOOTING leg of the same die: the generic army-book "Unpredictable"
+    /// (exact rule AND registry-active) OR the shooting-only alias
+    /// "Unpredictable Shooter" (same gates). The melee-only "Unpredictable
+    /// Fighter" NEVER reaches this flag. One die per volley, before any
+    /// weapon fires (main.gd:3096-3110).
+    pub unpredictable_shooting: bool,
+    /// The volley die's own registry params (`assets/solo/rules_mechanics_*
+    /// .json`, both "Unpredictable" and "Unpredictable Shooter"): a face at
+    /// or under `low_roll_max` is AP(+ap_bonus) on every profile of the
+    /// volley, above it +hit_bonus to hit (main.gd:3180/:3188-3190,
+    /// `unpredictable_fighter_effect` ai_combat_math.gd:387-388). Read off
+    /// the carried rule's entry in `_ctx_of`, defaults 1/1/3.
+    pub unpredictable_ap_bonus: i64,
+    pub unpredictable_hit_bonus: i64,
+    pub unpredictable_low_roll_max: i64,
     /// `RulesRegistry.unit_rule_active(unit, "No Retreat")` main.gd:8360 — a
     /// failed morale test counts as PASSED instead, and is paid for in
     /// self-wounds that cannot be ignored.
@@ -682,6 +698,26 @@ fn regen_targets(reg: &mut Registries, p: &Profile) -> (i64, i64) {
     (base, base)
 }
 
+/// The SHOOTING leg's three die params (`ap_bonus`/`hit_bonus`/`low_roll_max`)
+/// off the carried rule's own registry entry — "Unpredictable" first, then the
+/// alias "Unpredictable Shooter" (`_ctx_of`'s flag order), defaults 1/1/3
+/// (`unpredictable_fighter_effect` ai_combat_math.gd:387-388).
+fn unpredictable_shooting_params(reg: &mut Registries, p: &Profile) -> (i64, i64, i64) {
+    for name in ["Unpredictable", "Unpredictable Shooter"] {
+        if has_exact_rule(&p.special_rules, name) && unit_rule_active(reg, p, name) {
+            let map = reg.rules_for(&p.game_system);
+            if let Some(e) = map.lookup(&p.faction_folder, name) {
+                return (
+                    e.param_i("ap_bonus", 1),
+                    e.param_i("hit_bonus", 1),
+                    e.param_i("low_roll_max", 3),
+                );
+            }
+        }
+    }
+    (1, 1, 3)
+}
+
 /// `AiEv.ctx_for` ai_ev.gd:135-165. `models` stays at the live-unit reading;
 /// `BattleSim._ctx_of` overwrites it with the snapshot's `alive` on every call.
 fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
@@ -700,6 +736,15 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         0
     };
     let (stealth_alias_penalty, stealth_alias_over_in) = stealth_alias_of(reg, p);
+    let upr_shooting = (has_exact_rule(&p.special_rules, "Unpredictable")
+        && unit_rule_active(reg, p, "Unpredictable"))
+        || (has_exact_rule(&p.special_rules, "Unpredictable Shooter")
+            && unit_rule_active(reg, p, "Unpredictable Shooter"));
+    let (upr_ap_bonus, upr_hit_bonus, upr_low_roll_max) = if upr_shooting {
+        unpredictable_shooting_params(reg, p)
+    } else {
+        (1, 1, 3)
+    };
     let regen_targets = regen_targets(reg, p);
     Ctx {
         quality: p.quality,
@@ -718,6 +763,15 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         unpredictable: rule_on_all_models(p, "Unpredictable Fighter")
             || (has_exact_rule(&p.special_rules, "Unpredictable")
                 && unit_rule_active(reg, p, "Unpredictable")),
+        // The SHOOTING leg, `_solo_unpredictable_rule(striker, false)`'s own
+        // two branches (:5406/:5409-5410) — see `upr_shooting` above. The
+        // melee-only "Unpredictable Fighter" is never consulted here.
+        unpredictable_shooting: upr_shooting,
+        // The die's three params come off the carried rule's own registry
+        // entry (defaults 1/1/3, the table's `unpredictable_fighter_effect`).
+        unpredictable_ap_bonus: upr_ap_bonus,
+        unpredictable_hit_bonus: upr_hit_bonus,
+        unpredictable_low_roll_max: upr_low_roll_max,
         // The table asks the whole joined chain (`_solo_joined_chain`
         // main.gd:16677). The port sees an attached hero only as a list of rule
         // NAMES, so the primitive layer answers for the unit itself and an exact
