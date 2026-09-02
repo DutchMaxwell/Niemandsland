@@ -101,6 +101,24 @@ def moved(act, key):
     return [leg(p, q) for p, q in zip(a, b)] if len(a) == len(b) else [leg(mid(a), mid(b))]
 
 
+def dice_line(rl, bu, au):
+    # BRIEF_NARRFIX I-2: `hits(attack) - hits(defense)` ignores Blast(X)/Deadly(X)
+    # — one hit expands into a whole save batch, so the subtraction printed FEWER
+    # unsaved than the resolve actually applied (53 activations in 18 of the 20
+    # corpus games). The report carries no per-weapon unsaved, so the number is
+    # what the state delta applied — models lost — and where the arithmetic would
+    # exceed it the volley expanded: say so, never a wrong number.
+    dead = sum(u["alive"] - au[k]["alive"] for k, u in bu.items() if k in au)
+    naive = max(0, nr.hits(rl, "attack") - nr.hits(rl, "defense"))
+    unsaved = dead if dead >= naive else "n/a (Blast/Deadly)"
+    return "- dice: %d hits, %d blocks, %s unsaved — %s" % (nr.hits(rl, "attack"),
+                                                            nr.hits(rl, "defense"), unsaved,
+                                                            "; ".join("%s %dd6>=%d %s (%s)"
+                                                                      % (x["kind"], x["count"],
+                                                                         x["target"], x["faces"],
+                                                                         x["owner"]) for x in rl))
+
+
 def narrate(rec, acts, nm, lists):
     ms, ob, kb, inf = rec["mission"], rec["mission"]["objectives_layout"], rec["knobs"], nr.unit_info(lists)
     out = ["# %s — analysis mode" % rec["stem"], "",
@@ -145,10 +163,7 @@ def narrate(rec, acts, nm, lists):
                        len(u["positions"])) if lost else "")]
         rl = a["rep"]["rolls"]
         if rl:
-            out.append("- dice: %d hits, %d blocks, %d unsaved — %s" % (nr.hits(rl, "attack"),
-                       nr.hits(rl, "defense"), max(0, nr.hits(rl, "attack") - nr.hits(rl, "defense")),
-                       "; ".join("%s %dd6>=%d %s (%s)" % (x["kind"], x["count"], x["target"], x["faces"],
-                                                          x["owner"]) for x in rl)))
+            out.append(dice_line(rl, bu, a["after"]["units"]))
         for tag, ex in (("casualties", ["%s %d->%d models, wounds %d->%d" % (nm.get(k, k), bu[k]["alive"],
                         v["alive"], sum(bu[k]["wounds"]), sum(v["wounds"])) for k, v in
                         a["after"]["units"].items() if (v["alive"], sum(v["wounds"]))
@@ -211,7 +226,13 @@ def stats_row(rec, acts, lists):
             row["charges_beyond_band"] += nr.edge_gap_in(
                 bu[key]["positions"], bu[key]["radii"], bu[chosen["charge"]]["positions"],
                 bu[chosen["charge"]]["radii"]) > bu[key]["bands"]["rush"]
-            row["charges_reached_contact"] += bool(rolls)
+            # I-1 (BRIEF_NARRFIX): the charge's own dangerous-terrain test also
+            # draws attack dice (sim.rs:2960-2978 records it `attack Nd6>=6`), so
+            # `bool(rolls)` credited 6 of 13 charges that never reached melee.
+            # Contact is an opposed exchange — a defense-class roll — or a
+            # casualty on the charge target.
+            row["charges_reached_contact"] += (any(x["kind"] == "defense" for x in rolls)
+                or bu[chosen["charge"]]["alive"] > au.get(chosen["charge"], {}).get("alive", 0))
         row["dangerous_plain"] += kind in (1, 2) and au.get(key, {}).get("alive", 0) < bu[key]["alive"]
     for i, pb in enumerate(rec["mission"]["objectives_layout"]["placed_by"]):
         owner = row["owners_by_round"][-1][i]
