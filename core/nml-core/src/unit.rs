@@ -1474,4 +1474,109 @@ mod tests {
         assert_eq!(us.ctx.regen_target, 0, "no regeneration family member fields");
         assert_eq!(us.ctx.regen_target_spell, 0);
     }
+
+    // ================================================ mutant-killing tests ====
+
+    /// Three profiles for `growth_of`: one plain "Piercing Growth" carrier
+    /// (alien_hives: per_round, max_markers 4, ap_per_two 1), one carrying
+    /// the same rule TWICE in special_rules (the de-dup case), and one
+    /// "Defensive Growth" carrier (human_inquisition) whose params carry NO
+    /// ap/hit facet at all.
+    const GROWTH_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "growth_carrier":{"unit_id":"growth_carrier","name":"Growth Carrier","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives",
+        "special_rules":["Piercing Growth"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "growth_dup":{"unit_id":"growth_dup","name":"Growth Dup","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives",
+        "special_rules":["Piercing Growth","Piercing Growth"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "growth_zero":{"unit_id":"growth_zero","name":"Growth Zero","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"human_inquisition",
+        "special_rules":["Defensive Growth"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// `growth_of` REPORTS the registry's Growth Markers entry — a body
+    /// emptied into `vec![]` would report nothing at all.
+    #[test]
+    fn growth_of_reports_a_registry_growth_rule() {
+        let header = read_act_header(GROWTH_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let mut un = Vec::new();
+        let p = header.profiles.get("growth_carrier").expect("carrier");
+        let out = growth_of(&mut reg, p, &mut un);
+        assert_eq!(out.len(), 1, "one Growth Markers entry: {out:?}");
+        assert_eq!(out[0].name, "Piercing Growth");
+    }
+
+    /// ...with the registry's own PARAMS, not a default-constructed stub —
+    /// `vec![Default::default()]` carries an empty name, max_markers 0 and
+    /// no rates at all.
+    #[test]
+    fn growth_of_carries_the_registry_params() {
+        let header = read_act_header(GROWTH_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let mut un = Vec::new();
+        let p = header.profiles.get("growth_carrier").expect("carrier");
+        let out = growth_of(&mut reg, p, &mut un);
+        assert_eq!(out[0].max_markers, 4, "the registry's max_markers");
+        assert!(out[0].per_round, "Piercing Growth ticks per round");
+        assert_eq!(out[0].ap_per_two, 1);
+        assert_eq!(out[0].ap_per_marker, 0);
+        assert_eq!(out[0].hit_per_marker, 0);
+        assert_eq!(out[0].hit_per_two, 0);
+    }
+
+    /// The de-dup: the same rule twice in special_rules reports ONE entry —
+    /// the `||` at the skip gate (empty-name OR already-seen) must not
+    /// collapse into an `&&` that loses the seen-list half.
+    #[test]
+    fn a_duplicated_growth_rule_is_reported_once() {
+        let header = read_act_header(GROWTH_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let mut un = Vec::new();
+        let p = header.profiles.get("growth_dup").expect("dup");
+        let out = growth_of(&mut reg, p, &mut un);
+        assert_eq!(out.len(), 1, "the seen-list keeps one copy: {out:?}");
+    }
+
+    /// Same de-dup, by NAME: the seen comparison `*s == n` must not become
+    /// `!=`, which would re-admit the very rule just recorded.
+    #[test]
+    fn a_repeated_growth_name_is_deduped_by_name() {
+        let header = read_act_header(GROWTH_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let mut un = Vec::new();
+        let p = header.profiles.get("growth_dup").expect("dup");
+        let out = growth_of(&mut reg, p, &mut un);
+        assert_eq!(out.len(), 1, "one entry per distinct name: {out:?}");
+    }
+
+    /// The facet gate: a rule WITH an ap/hit facet is consumed silently; a
+    /// rule whose four facets are all zero is REPORTED as unimplemented.
+    /// Flipping the `==` to `!=` reports the facet-bearing rule instead and
+    /// stays silent about the defense-only one.
+    #[test]
+    fn a_growth_rule_with_no_attack_facet_is_reported_unimplemented() {
+        let header = read_act_header(GROWTH_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let mut un = Vec::new();
+        let p = header.profiles.get("growth_carrier").expect("carrier");
+        let out = growth_of(&mut reg, p, &mut un);
+        assert_eq!(out.len(), 1);
+        assert!(un.is_empty(), "Piercing Growth has an ap facet: {un:?}");
+        let pz = header.profiles.get("growth_zero").expect("zero");
+        let outz = growth_of(&mut reg, pz, &mut un);
+        assert_eq!(outz.len(), 1);
+        assert!(
+            un.iter().any(|u| u.rule == "Defensive Growth"),
+            "the defense-only facets are reported: {un:?}"
+        );
+    }
 }

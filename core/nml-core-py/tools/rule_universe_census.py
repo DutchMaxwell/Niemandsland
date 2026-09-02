@@ -99,6 +99,15 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # dice.rs::regen_batch, combat.rs's unsaved folds and spell.rs's
     # spell-wound leg; `all_models` is the whole-unit gate itself.
     "Resistance": frozenset({"ignore_target", "ignore_target_spell", "all_models"}),
+    # Block B9: deployment.rs::deploy_side reads the registry's `place_in`
+    # (UnitSpec.place_in_m via list_to_profile.py:_deploy_flags — the table's
+    # `unit_param(unit, "Vanguard", "place_in", 9.0)`, solo_controller.gd:9627)
+    # as the Vanguard push band (vanguard_push, the 100/75/50/25 % ladder).
+    # Every Vanguard-primitive entry (Vanguard, Fanatic, Drakesworn) carries
+    # place_in; without this entry the primitive was TRUSTED WHOLE, so all
+    # three names rode the bare 'vanguard' field token — PR #489's
+    # over-credit shape, reopened by the #481 parity wave until now.
+    "Vanguard": frozenset({"place_in"}),
 }
 
 

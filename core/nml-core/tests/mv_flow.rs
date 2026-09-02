@@ -502,3 +502,41 @@ fn the_recorded_endpoints_helper_needs_a_final_entry_per_model() {
     assert!(recorded_endpoints(&blank).is_none() || blank.model_pos.is_empty());
     assert_eq!(CONTACT_SLIDE_EPS_IN, 0.05);
 }
+
+// === Unit tests — the bend switch ===========================================
+// `FlowBend::active` is an OR-chain over every knob: the shipped bend reads
+// false, and bending ANY ONE knob must flip it. An `&&` slipped into the chain
+// (or an inverted comparison) would report a half-bent pipeline as shipped and
+// a shipped one as bent — exactly what a gate's "moved" census rests on.
+#[test]
+fn a_default_bend_is_not_active_and_any_single_knob_is() {
+    assert!(!FlowBend::default().active());
+    let mut b = FlowBend::default();
+    b.untangle_passes -= 1;
+    assert!(b.active(), "untangle_passes");
+    b.untangle_passes += 1;
+    b.no_defer = true;
+    assert!(b.active(), "no_defer");
+    b.no_defer = false;
+    b.contact_slide_eps_in = 0.0;
+    assert!(b.active(), "contact_slide_eps_in");
+    more_single_knobs_are_active(b);
+}
+
+fn more_single_knobs_are_active(mut b: FlowBend) {
+    b.contact_slide_eps_in = CONTACT_SLIDE_EPS_IN;
+    b.theta.strict_open = true;
+    assert!(b.active(), "theta.strict_open");
+    b.theta.strict_open = false;
+    b.theta.diag_swap = Some((0, 1));
+    assert!(b.active(), "theta.diag_swap");
+    b.theta.diag_swap = None;
+    b.pull.cost_break = true;
+    assert!(b.active(), "pull.cost_break");
+    b.pull.cost_break = false;
+    b.walk.eps_swapped = true;
+    assert!(b.active(), "walk.eps_swapped");
+    b.walk.eps_swapped = false;
+    b.walk.bisect_steps -= 1;
+    assert!(b.active(), "walk.bisect_steps");
+}

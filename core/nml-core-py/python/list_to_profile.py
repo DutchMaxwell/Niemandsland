@@ -1051,7 +1051,7 @@ def _base_rule(candidate: str) -> str:
     return str(candidate).strip().split("(", 1)[0].strip()
 
 
-def _deploy_flags(u: dict[str, Any]) -> dict[str, bool]:
+def _deploy_flags(u: dict[str, Any], game_system: str, faction: str) -> dict[str, Any]:
     """The four deployment classifications over one internal unit.
 
     solo_controller.gd:9009-9015 + :10165-10191: Scout = the special rule or an
@@ -1059,11 +1059,32 @@ def _deploy_flags(u: dict[str, Any]) -> dict[str, bool]:
     name, special rules or grants (the counts_as ALIAS branch of
     `unit_has_ambush` needs the live RulesRegistry and has no list-side
     reading); Strider/Flying ignore terrain (:9109, special rules only, no
-    grants); Vanguard = the rule or a grant (the table ANDs `unit_rule_active`
-    with the faction book map, which a list cannot see)."""
+    grants); Vanguard = the rule or a grant, PLUS the table's primitive arm —
+    solo_controller.gd:9154-9155 fires on `unit_rule_active(unit, "Vanguard")
+    or not unit_rules_of_primitive(unit, "Vanguard").is_empty()`, so a registry
+    alias (Fanatic, Drakesworn) vanguards too; the name arms stay the map-less
+    fallback the other three flags use.
+
+    B9 — the Vanguard push band: `RulesRegistry.unit_param(unit, "Vanguard",
+    "place_in", 9.0)` (solo_controller.gd:9627) is param()'s EXACT-name lookup
+    (:83-88), so the mirror reads the registry's "Vanguard" entry directly —
+    the 9" fallback when the map is missing or the faction fields only an
+    alias (Fanatic/Drakesworn carry their own place_in: 9 — same number)."""
     rules = [str(r) for r in u["special_rules"]]
     grants = [str(g) for g in u["item_grants"]]
     ambush_rules = ("Ambush", "Infiltrate", "Rapid Ambush")
+    vanguard = (
+        any(_rule_matches(r, "Vanguard") for r in rules)
+        or any(_base_rule(g) == "Vanguard" for g in grants)
+        or bool(_rules_of_primitive(rules, grants, game_system, faction, "Vanguard"))
+    )
+    place_in = 9.0
+    if vanguard:
+        place_in = float(
+            _registry_entry(game_system, faction, "Vanguard")
+            .get("params", {})
+            .get("place_in", 9.0)
+        )
     return {
         "scout": any(_rule_matches(r, "Scout") for r in rules)
         or any(_base_rule(g) == "Scout" for g in grants),
@@ -1072,8 +1093,8 @@ def _deploy_flags(u: dict[str, Any]) -> dict[str, bool]:
         "ignores_terrain": any(
             _rule_matches(r, "Strider") or _rule_matches(r, "Flying") for r in rules
         ),
-        "vanguard": any(_rule_matches(r, "Vanguard") for r in rules)
-        or any(_base_rule(g) == "Vanguard" for g in grants),
+        "vanguard": vanguard,
+        "vanguard_place_in_m": place_in * 0.0254,
     }
 
 
@@ -1129,6 +1150,9 @@ def deploy_unit_specs(
     NOT ported (corpus-absent, named loudly): regiments deploy from their tray
     (`_is_regiment` -> empty offsets) and a dangling hero-of-hero chain."""
     built, heroes_of = deploy_base_groups(data, faction, player)
+    # _units_from_list's own system reading (:1190) — the registry lookups below
+    # are keyed (system, faction, name) exactly like the table's.
+    game_system = str(data.get("gameSystem", "gf"))
     by_sel = {u["selection_id"]: u for u in built if u["selection_id"]}
     specs: list[dict[str, Any]] = []
     hero_fold: dict[str, tuple[str, int, int]] = {}
@@ -1152,7 +1176,7 @@ def deploy_unit_specs(
                 }
             )
             model_count += len(toughs)
-        flags = _deploy_flags(u)
+        flags = _deploy_flags(u, game_system, faction)
         specs.append(
             {
                 "key": u["unit_id"],
@@ -1167,6 +1191,9 @@ def deploy_unit_specs(
                 "ambush": flags["ambush"],
                 "ignores_terrain": flags["ignores_terrain"],
                 "vanguard": flags["vanguard"],
+                # solo_controller.gd:9627's place_in in metres; None when the
+                # unit does not vanguard (the twin reads it only then).
+                "place_in_m": flags["vanguard_place_in_m"] if flags["vanguard"] else None,
                 "transport_capacity": 0,
                 "facing_rad": 0.0,
                 "model_shapes": shapes,
