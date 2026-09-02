@@ -14,14 +14,16 @@
 //! THREE THINGS DECIDE PARITY:
 //!
 //!   * THE PICK ORDER (:943-945). Movers choose nearest-base-first, and each
-//!     chosen slot then repels later picks by 95 % of the two base radii. The
-//!     GDScript comparator is a bare `<` on `_nearest_base_dist` with NO index
-//!     fallback, so on an exactly symmetric line Godot's unstable introsort may
-//!     order equidistant movers arbitrarily. This port breaks that tie on the
-//!     model INDEX, which is a total order and therefore reproducible. The
-//!     16-game corpus contains ZERO ties (11 charge calls, every mover at a
-//!     distinct distance), so the corpus cannot tell the two apart — see the
-//!     unit test, which builds the symmetric case by hand.
+//!     chosen slot then repels later picks by 95 % of the two base radii. On an
+//!     exact distance tie BOTH sides fall back to `a < b` — the lower model
+//!     index wins the earlier pick — since commit 023e3e28 (26.08.): the
+//!     GDScript comparator at movement_planner.gd:952-955 and this port at
+//!     mv/charge.rs:72-80 agree on it, so the pick order is a total order and
+//!     reproducible. The recorded reference bundles contain real ties and
+//!     follow lower-index-first on all of them (27/27); the remaining 97/996
+//!     slot divergences in those bundles are <= 4 ULP cos/sin differences (the
+//!     recording machine's libm), not ordering — see the unit test, which
+//!     builds the symmetric case by hand.
 //!   * THE FAN (:955-958). Five points around the near face normally; TEN
 //!     (out to ±2.8 rad and the far pole) when the target is a single base or
 //!     when slots are scarce (`bases * 5 < movers`), so a horde can ring a
@@ -63,8 +65,9 @@ pub fn charge_contact_slots(mpos: &[V2], radii: &[f64], tgt_bases: &[(V2, f64)])
     }
     ucentre = div(ucentre, 1.0f64.max(mpos.len() as f64));
 
-    // :945-947 — nearest-to-the-target picks first. The GDScript comparator has
-    // no fallback; the index tie-break here is a total order (see the header).
+    // :945-947 — nearest-to-the-target picks first. On an exact tie the GDScript
+    // comparator falls back to `a < b` too (movement_planner.gd:952-955, since
+    // 023e3e28); the index tie-break here is a total order (see the header).
     let mut order: Vec<usize> = (0..mpos.len()).collect();
     order.sort_by(|&a, &b| {
         let da = nearest_base_dist(mpos[a], tgt_bases);
