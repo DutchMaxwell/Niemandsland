@@ -5689,6 +5689,7 @@ mod tests {
             charge: None,
             patient: false,
             split: None,
+            traced: None,
         };
         let mut rng = crate::rng::GodotRng::new(0);
         let seams = Seams { movement: true, ..Seams::default() };
