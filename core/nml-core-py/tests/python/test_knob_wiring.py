@@ -51,6 +51,8 @@ import selfplay as sp  # noqa: E402
 REPO = Path(__file__).resolve().parents[4]
 BANK_DIR = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
 LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
+# Every test here plays a game from the maintainer's private army lists; on CI (no lists) the whole module skips.
+pytestmark = pytest.mark.skipif(not LISTS.exists(), reason="private ai_lists not present (CI)")
 
 #: seeds tried in order until one produces a different game — the same range
 #: `test_selfplay.py`'s `GATE_SEEDS` starts from.
