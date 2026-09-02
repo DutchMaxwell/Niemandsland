@@ -110,6 +110,11 @@ pub enum Unsupported {
     /// asked for and the search cannot honour is a decline, not a silent
     /// fall-back to the hand order.
     PolicyOrder,
+    /// NML-1164 — `Search::cand_logits` carried a different number of logits
+    /// than the prefilter built rows. A vector that does not line up with the
+    /// menu names the WRONG candidates, so it declines outright rather than
+    /// re-rank part of the order. `(given, built)`.
+    CandLogits(usize, usize),
     /// NML-1073 M3-6b — `tokens::build` refuses a state whose live roster,
     /// marker count or menu width exceeds the padding budget (`N_UNITS`,
     /// `N_OBJ`, `N_CAND`) rather than truncate a row: a truncated board is a

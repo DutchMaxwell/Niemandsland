@@ -1076,7 +1076,16 @@ impl Core {
     /// order, each the same `cand_plain` shape `action` uses, joined by
     /// `trace.scored`'s `idx`. False (every call before this knob existed)
     /// writes a trace byte-identical to what it always wrote.
-    #[pyo3(signature = (state, player, statics, sig = None, eps = 0.0, explore_seed = 0, cands = false))]
+    ///
+    /// `cand_logits` / `policy_mode` are the R4 SEAM (DESIGN_policy_player §6):
+    /// one f32 per built candidate, in the menu's own order, and the knob that
+    /// arms them. `policy_mode="order"` visits the menu in DESCENDING logit
+    /// order and keeps the top-K by logit; `None`/`"off"` (every call written
+    /// before this seam) leaves both the statics and the order exactly as they
+    /// were. A logit vector whose length is not the built menu's DECLINES —
+    /// see `Unsupported::CandLogits`.
+    #[pyo3(signature = (state, player, statics, sig = None, eps = 0.0, explore_seed = 0, cands = false, cand_logits = None, policy_mode = None))]
+    #[allow(clippy::too_many_arguments)]
     fn plan_with_rollout(
         &mut self,
         py: Python<'_>,
@@ -1087,9 +1096,17 @@ impl Core {
         eps: f64,
         explore_seed: i64,
         cands: bool,
+        cand_logits: Option<Vec<f32>>,
+        policy_mode: Option<&str>,
     ) -> PyResult<Py<PyAny>> {
-        let act: ActStatics = serde_json::from_value(value_of(statics)?)
+        let mut act: ActStatics = serde_json::from_value(value_of(statics)?)
             .map_err(|e| Unsupported::new_err(format!("statics: {e}")))?;
+        match policy_mode {
+            None => {}
+            Some("off") => act.policy_mode = PolicyMode::Off,
+            Some("order") => act.policy_mode = PolicyMode::Order,
+            Some(m) => return Err(Unsupported::new_err(format!("policy_mode: {m}"))),
+        }
         let statics = self.statics_for(&state.inner)?;
         let mut policy = Policy::new(&statics, &self.terrain, self.seams());
         policy.tuning = self.tuning();
@@ -1107,6 +1124,7 @@ impl Core {
         let roll = Rollout::new(policy, self.knobs);
         let mut search = Search::new(roll, &act);
         search.sig = sig;
+        search.cand_logits = cand_logits.as_deref();
         let mut sc = Scratch::default();
         let mut xr = GodotRng::new(explore_seed);
         match search.run(&state.inner, player, &mut sc, Some((eps, &mut xr))) {
