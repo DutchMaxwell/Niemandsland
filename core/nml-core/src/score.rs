@@ -191,6 +191,41 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v208 gen2 candidate 7 — price the melee reply. The frozen threat term
+/// (`incoming`) is shooting only: an enemy already inside charge reach of a
+/// unit's lead model also gets a swing the eval never sees. `Incoming` is a
+/// slice, so the reply is folded into the threat vector and the frozen hand
+/// eval reruns on top, unchanged.
+const MELEE_REACH_V208: f64 = 12.0; // flat charge reach: one default rush band (12"), i.e. "the next activation can close and swing".
+const MELEE_WEIGHT_V208: f64 = 0.5; // a point-blank reply strips about half the swinging unit's strength in wounds.
+
+fn melee_threat_v208(state: &State, i: usize) -> f64 {
+    if state.alive[i] <= 0 || state.positions[i].is_empty() {
+        return 0.0;
+    }
+    let here = state.positions[i][0];
+    let mut t = 0.0f64;
+    for j in 0..state.units() {
+        if j == i || state.player[j] == state.player[i] || state.alive[j] <= 0 || state.shaken[j] || state.aircraft[j] { continue; }
+        let d = control_gap_in(state, j, here);
+        if d < MELEE_REACH_V208 {
+            let s: f64 = state.wounds[j].iter().map(|w| *w as f64).sum();
+            t += MELEE_WEIGHT_V208 * s * (1.0 - d / MELEE_REACH_V208);
+        }
+    }
+    t
+}
+
+/// v208: the frozen hand eval over a threat vector that folds the expected
+/// melee reply in beside the shooting reply; destroy branch and seize rule
+/// come along for free, only the threat input differs from variant 0.
+fn score_hand_v208(state: &State, player: i64, incoming: Incoming) -> f64 {
+    let aug: Vec<f64> = (0..state.units())
+        .map(|i| threat_of(incoming, i) + melee_threat_v208(state, i))
+        .collect();
+    score_hand(state, player, &aug)
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +236,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        208 => score_hand_v208(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
