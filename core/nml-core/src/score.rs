@@ -191,6 +191,43 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v405 unheld-marker fix: a marker NO unit still projects to hold is not a locked point —
+/// the owner's paper grip decays by DISCOUNT per round left (v405 == v0 at rounds_left == 0,
+/// the referee's final answer).
+fn objective_p_v405(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = state.objectives[obj_index];
+    let mut mine = 0.0f64;
+    let mut theirs = 0.0f64;
+    for i in 0..state.units() {
+        let p = presence(state, i, obj.pos, threat_of(incoming, i));
+        if state.player[i] == player {
+            mine += p;
+        } else {
+            theirs += p;
+        }
+    }
+    if mine + theirs <= 0.0 {
+        if obj.owner == 0 {
+            return 0.5;
+        }
+        let keep = 0.5 * DISCOUNT.powf((state.rounds_total - state.round).max(0) as f64);
+        return if obj.owner == player { 0.5 + keep } else { 0.5 - keep };
+    }
+    mine / (mine + theirs)
+}
+
+/// v405 score_hand: no-marker and destroy missions keep the frozen path; the plain marker average routes through `objective_p_v405`.
+fn score_hand_v405(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() || (!state.markers_meta.is_empty() && is_destroy_mission(state)) {
+        return score_hand(state, player, incoming);
+    }
+    let mut total = 0.0f64;
+    for i in 0..state.objectives.len() {
+        total += objective_p_v405(state, i, player, incoming);
+    }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +238,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        405 => score_hand_v405(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
