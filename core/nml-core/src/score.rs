@@ -191,6 +191,58 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v106 (gen1 candidate 5) — melee replies join the reply-wounds ledger. The
+/// v0 `incoming` ledger carries expected SHOOTING reply wounds only, so a
+/// unit parked on a marker next to an enemy projects full strength although
+/// a charge removes it. A foe within one rush of the unit trims its
+/// projected hold by a linearly tapered share of the foe's remaining wounds,
+/// so the search sees a smooth gradient, not a cutoff cliff.
+/// 12.0": the eval's own per-activation rush default
+/// (`sim_move_bands(...).get("rush", 12)`, ai_mission_eval.gd:602) — a foe
+/// that close can be on top of the unit next turn.
+const MELEE_REACH_IN_V106: f64 = 12.0;
+/// 0.5: one melee exchange typically strips about half the charger's
+/// remaining wound pool — the same "expected reply wounds" scale the
+/// shooting term uses, kept conservative so holding stays viable.
+const MELEE_WEIGHT_V106: f64 = 0.5;
+
+/// v106's melee component of the expected reply wounds against unit `i`:
+/// every living, unshaken foe of `i` within `MELEE_REACH_IN_V106` of i's
+/// first model contributes its remaining wound pool, tapered linearly to
+/// zero at the reach limit. Measured with the same horizontal base-edge gap
+/// (`control_gap_in`) the hold math uses.
+fn melee_reply_v106(state: &State, i: usize) -> f64 {
+    let Some(p0) = state.positions[i].first() else {
+        return 0.0;
+    };
+    let mut reply = 0.0f64;
+    for j in 0..state.units() {
+        if state.player[j] == state.player[i] || state.alive[j] <= 0 || state.shaken[j] {
+            continue;
+        }
+        let gap = control_gap_in(state, j, *p0);
+        if gap < MELEE_REACH_IN_V106 {
+            let s: f64 = state.wounds[j].iter().map(|&w| w as f64).sum();
+            reply += s * (1.0 - gap / MELEE_REACH_IN_V106);
+        }
+    }
+    reply
+}
+
+/// v106's `score_hand`: fold the melee reply into the same per-unit reply
+/// ledger the shooting term debits, then run the FROZEN `score_hand` math
+/// unchanged on the augmented ledger.
+fn score_hand_v106(state: &State, player: i64, incoming: Incoming) -> f64 {
+    let mut inc: Vec<f64> = incoming.to_vec();
+    if inc.len() < state.units() {
+        inc.resize(state.units(), 0.0);
+    }
+    for i in 0..state.units() {
+        inc[i] += MELEE_WEIGHT_V106 * melee_reply_v106(state, i);
+    }
+    score_hand(state, player, &inc)
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +253,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        106 => score_hand_v106(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
