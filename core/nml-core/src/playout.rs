@@ -212,6 +212,7 @@ impl Candidate {
             charge: self.charge.clone(),
             patient: self.patient,
             split: None,
+            traced: None,
         }
     }
 

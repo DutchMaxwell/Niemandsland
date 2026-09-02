@@ -116,6 +116,34 @@ func test_auto_no_ops_before_the_header_exists() -> void:
 	assert_int(_dump_lines().size()).is_equal(0)
 
 
+## NML-1152 B14 step 1 (Bounding): the traced d3 roll fires INSIDE _act(), after the pick's
+## own act line already flushed — so it lands as its OWN "traced" line, joined onto that act
+## by ordinal, never rewriting the line finish() already wrote.
+func test_traced_writes_a_joined_bounding_line_after_the_act_line() -> void:
+	var state := _state()
+	var pool: Array = [(state["units"]["A"] as Dictionary)["unit"]]
+	var pending := AiActRecorder.begin(state, 1, pool, Callable())
+	AiActRecorder.finish(pending, {"used": true, "unit_key": "A",
+		"action": {"unit": "A", "kind": AiDecision.Action.ADVANCE}})
+	AiActRecorder.traced(1, "bounding_d3", [2], 1, 3.0)
+
+	var lines := _dump_lines()
+	assert_int(lines.size()).is_equal(3)   # header + act + traced
+	var traced_line: Dictionary = JSON.parse_string(lines[2])
+	assert_str(str(traced_line["kind"])).is_equal("traced")
+	assert_int(int(traced_line["act"])).is_equal(1)
+	assert_str(str(traced_line["tag"])).is_equal("bounding_d3")
+	assert_array(traced_line["faces"]).is_equal([2.0])   # JSON.parse_string reads every number as float
+	assert_int(int(traced_line["plus"])).is_equal(1)
+	assert_float(float(traced_line["bonus_in"])).is_equal_approx(3.0, 0.001)
+
+
+## No-op under the same guards as auto(): unset seam, cap hit, or no header yet.
+func test_traced_no_ops_before_the_header_exists() -> void:
+	AiActRecorder.traced(1, "bounding_d3", [2], 1, 3.0)
+	assert_int(_dump_lines().size()).is_equal(0)
+
+
 ## NML-1073 M5 D5-4b: the header profile carries the base SHAPE, not only the
 ## circumscribing radius. `base_radius` is `BaseShape.bounding_radius()`, while
 ## the table's own contact measure walks the exact SUPPORT EXTENT of an oval

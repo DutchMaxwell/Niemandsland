@@ -116,6 +116,10 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # three names rode the bare 'vanguard' field token — PR #489's
     # over-credit shape, reopened by the #481 parity wave until now.
     "Vanguard": frozenset({"place_in"}),
+    # NML-1152 B14 step 1: unit.rs::UnitStatic.bounding reads the named
+    # "Bounding" entry's own `place_d3_plus` (the DATA-alias family stays
+    # table-only, ported instead through the RECORDED `Action::traced` draw).
+    "Bounding": frozenset({"place_d3_plus"}),
     # Block B11: unit.rs::UnitStatic.quick_shot_active reads `shoot_after_rush` as a whole-unit gate for sim.rs's RUSH+shoot predicate.
     "Quick Shot": frozenset({"shoot_after_rush"}),
 }

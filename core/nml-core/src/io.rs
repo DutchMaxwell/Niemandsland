@@ -232,6 +232,29 @@ pub struct Action {
     /// count and face stays port-computed. Absent = the act's one target.
     #[serde(default)]
     pub split: Option<Vec<SplitShot>>,
+    /// NML-1152 B14 step 1 (Bounding) — the table's own controller-seeded
+    /// placement roll(s) for THIS activation, joined on from `act_recorder.gd`'s
+    /// `AiActRecorder.traced` line the same way `split` is joined from
+    /// shots.jsonl (the roll happens inside `_act()`, after the pick's own act
+    /// line already flushed, so it can never ride the act line itself). Absent
+    /// = no traced draw this activation — every corpus recorded before this,
+    /// and every self-play game (no table die to record), replay unchanged.
+    #[serde(default)]
+    pub traced: Option<Vec<TracedRoll>>,
+}
+
+/// One entry of `Action::traced` — a controller-seeded (non-tray) rule roll the
+/// table recorded for this activation. `faces`/`plus` are the table's own
+/// draw; `bonus_in` rides along for human/debug reading only — the twin
+/// derives the band bonus itself (`sim::bounding_bonus_in`) rather than
+/// trusting a redundant number.
+#[derive(Debug, Clone, Deserialize)]
+pub struct TracedRoll {
+    pub tag: String,
+    #[serde(default)]
+    pub faces: Vec<i64>,
+    #[serde(default)]
+    pub plus: i64,
 }
 
 /// One entry of `Action::split` — the table's own record of one shot

@@ -866,6 +866,11 @@ fn action_of(d: &VarDictionary) -> Action {
         // The live table hands the planner a pooled act; per-weapon aim exists only in
         // the recorded sidecar (NML-1150), so the bridge never carries a split.
         split: None,
+        // NML-1152 B14 step 1: the search seam decides the PICK before `_act()` ever
+        // rolls Bounding's die (solo_controller.gd timing), so this live bridge never
+        // has a trace to carry — the movement executor applies it afterward regardless
+        // of which side (this seam or the GDScript fallback) chose the action.
+        traced: None,
     }
 }
 

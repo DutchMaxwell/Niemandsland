@@ -2458,6 +2458,23 @@ pub fn resolve_stochastic_tray_on_board(
     Ok((next, shot))
 }
 
+/// NML-1152 B14 step 1 — the RECORDED Bounding placement's per-activation band
+/// bonus: table records the die (`act_recorder.gd`'s `AiActRecorder.traced`,
+/// joined onto `Action::traced`), twin replays it here instead of rolling its
+/// own (a roll here would desync from the table). 0.0 when the act carries no
+/// `bounding_d3` trace — every corpus recorded before this, and every
+/// self-play game (no table die to record), so the caller's `band_in` stays
+/// byte-identical.
+fn bounding_bonus_in(action: &Action) -> f64 {
+    action
+        .traced
+        .as_ref()
+        .and_then(|rolls| rolls.iter().find(|t| t.tag == "bounding_d3"))
+        .map(|t| t.plus as f64 + t.faces.iter().sum::<i64>() as f64)
+        .unwrap_or(0.0)
+}
+
+
 // ------------------------- S10: destination-side leftovers ------------------
 
 /// S10-a — `AiPlanner.RETREAT_GOAL_IN` ai_planner.gd:11. The retreat
@@ -2618,11 +2635,23 @@ fn resolve_with(
     // `SoloController.sim_move_bands(su["unit"])` is a pure read of the unit's
     // rules (bands + the Musician bonus, solo_controller.gd:4966-4982), flattened
     // into the profile table at capture; RUSH and CHARGE share the rush band.
+    let bounding_in = bounding_bonus_in(action);
     let band_in = match kind {
         ADVANCE => next.bands[si].advance,
         RUSH | CHARGE => next.bands[si].rush,
         _ => 0.0,
-    };
+    } + bounding_in;
+    // NML-1152 B14 step 1 — rules-must-log: the ONLY table die this port does
+    // not draw itself, named here (dice.rs's `ShootResult.log` precedent) the
+    // one time it changes the band.
+    if bounding_in != 0.0 {
+        if let Some((_, shot)) = dice.as_mut() {
+            shot.log.push(format!(
+                "Bounding: {} — +{bounding_in:.0}\" every move band this activation",
+                statics[pi_s].name
+            ));
+        }
+    }
     let mut moved = false;
     // D5-1 — what the band still has left after the charge move, and so what
     // the melee snap may spend (solo_controller.gd:8659). Infinite while the
@@ -3632,6 +3661,7 @@ mod tests {
                 split_shot("host", "Rifle", "b"),
                 split_shot("hero", "Heavy Gun", "bh"),
             ]),
+            traced: None,
         };
         let terrain = crate::terrain::Terrain::default();
         let mut tray = Tray::seeded(11);
@@ -3702,7 +3732,7 @@ mod tests {
 
         let pooled = Action {
             kind: HOLD, unit: "a".into(), dest: None, shoot: Some("b".into()),
-            charge: None, patient: false, split: None,
+            charge: None, patient: false, split: None, traced: None,
         };
         let mut tray_a = Tray::seeded(11);
         let mut rng_a = crate::rng::GodotRng::new(0);
@@ -3715,6 +3745,7 @@ mod tests {
             kind: HOLD, unit: "a".into(), dest: None, shoot: Some("bh".into()),
             charge: None, patient: false,
             split: Some(vec![split_shot("host", "Rifle", "b")]),
+            traced: None,
         };
         let mut tray_b = Tray::seeded(11);
         let mut rng_b = crate::rng::GodotRng::new(0);
@@ -3769,7 +3800,7 @@ mod tests {
     }
 
     fn mend_action() -> Action {
-        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None }
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None }
     }
 
     /// BLOCK B1 — one fixture act through the tray: the pre-attack Mend slot
@@ -3925,6 +3956,7 @@ mod tests {
             charge: None,
             patient: false,
             split: None,
+            traced: None,
         }
     }
 
@@ -4008,6 +4040,7 @@ mod tests {
             charge: Some("b".into()),
             patient: false,
             split: None,
+            traced: None,
         };
         let (_, plain) = run_buff(&st, &statics, &charge, 11);
         assert_eq!(plain.rolls[0].target, 4);
@@ -4154,6 +4187,7 @@ mod tests {
             charge: None,
             patient: false,
             split: None,
+            traced: None,
         }
     }
 
@@ -4229,7 +4263,7 @@ mod tests {
     }
 
     fn reposition_action() -> Action {
-        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None }
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None }
     }
 
     /// BLOCK B2 — no dice ride Re-Position Artillery at all, and the picked
@@ -4346,7 +4380,7 @@ mod tests {
     }
 
     fn breath_action() -> Action {
-        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None }
+        Action { kind: HOLD, unit: "a".into(), dest: None, shoot: None, charge: None, patient: false, split: None, traced: None }
     }
 
     /// One fixture act through the tray: the pre-attack Breath Attack slot
@@ -4486,6 +4520,7 @@ mod tests {
             charge: None,
             patient: false,
             split: None,
+            traced: None,
         }
     }
 
@@ -4535,6 +4570,41 @@ mod tests {
         )
         .unwrap();
         assert_eq!(red.positions, rigid.positions);
+    }
+
+    /// NML-1152 B14 step 1 — the table RECORDS the Bounding die, the twin
+    /// REPLAYS it: a `traced` draw of `faces:[2], plus:1` grows the 6" band by
+    /// exactly 2+1 = 3" for THIS act (RED for the arm: comment out the
+    /// `bounding_bonus_in` addend in `resolve_with` and this falls to 6"),
+    /// and the resolver names it in the log. Every act with no `traced` entry
+    /// (every corpus recorded before this) reads the plain 6" band, unchanged.
+    #[test]
+    fn a_recorded_bounding_trace_grows_the_band_by_its_faces_plus_the_flat_and_logs_it() {
+        use crate::io::TracedRoll;
+        let (st, statics) = buff_line();
+        let terrain = crate::terrain::Terrain::default();
+        let traced_advance = Action {
+            traced: Some(vec![TracedRoll { tag: "bounding_d3".into(), faces: vec![2], plus: 1 }]),
+            ..advance_to(20.0)
+        };
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &traced_advance, &terrain, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert!((next.positions[0][0][0] - (st.positions[0][0][0] + 9.0 * IN2M as f64)).abs() < 1e-6);
+        assert!(shot.log.iter().any(|l| l.contains("Bounding") && l.contains("+3")), "{:?}", shot.log);
+
+        // No trace on the act: the plain 6" band, no log line — every pre-B14 corpus's own reading.
+        let mut tray2 = Tray::seeded(11);
+        let mut rng2 = crate::rng::GodotRng::new(0);
+        let (plain_next, plain_shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &advance_to(20.0), &terrain, Seams::default(), &mut rng2, &mut tray2,
+        )
+        .unwrap();
+        assert!((plain_next.positions[0][0][0] - (st.positions[0][0][0] + 6.0 * IN2M as f64)).abs() < 1e-6);
+        assert!(plain_shot.log.is_empty());
     }
 
     // ------------------------------------------------- BLOCK B5: Hit & Run ---
@@ -4618,7 +4688,7 @@ mod tests {
         let terrain = crate::terrain::Terrain::default();
         let charge = Action {
             kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
-            charge: Some("b".into()), patient: false, split: None,
+            charge: Some("b".into()), patient: false, split: None, traced: None,
         };
         let mut tray = Tray::seeded(11);
         let mut rng = crate::rng::GodotRng::new(0);
@@ -4640,7 +4710,7 @@ mod tests {
         let terrain = crate::terrain::Terrain::default();
         let charge = Action {
             kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
-            charge: Some("b".into()), patient: false, split: None,
+            charge: Some("b".into()), patient: false, split: None, traced: None,
         };
 
         // No bearer.
@@ -5691,6 +5761,7 @@ mod tests {
             charge: None,
             patient: false,
             split: None,
+            traced: None,
         };
         let mut rng = crate::rng::GodotRng::new(0);
         let seams = Seams { movement: true, ..Seams::default() };
