@@ -111,6 +111,44 @@ def test_only_rule_bearer_names_union_the_game_header_and_the_act_state_profile(
         "nothing granted mid-game: the state read adds nothing"
 
 
+def test_only_rule_aura_resolves_to_the_base_die_shape():
+    """Aura rung step 2 — `--only-rule "X Aura"` selects by the AURA name but
+    must resolve to the BASE rule's own die shape. The import expansion puts
+    the bare rule on the unit next to the aura label
+    (opr_army_manager.gd:2117 / list_to_profile.py:350), so the BEARER gate
+    already matches the full aura name — but `RULE_ROLL_SHAPE` knows the base
+    only, so without the strip every aura fell back to Mend's (1, 1) and
+    counted the wrong dice: a clean wrong 0."""
+    primary = {"roll_kind": "attack", "count": 3, "target": 4}
+    extra = {"roll_kind": "attack", "count": 3, "target": 4}
+    mend_shaped = {"roll_kind": "attack", "count": 1, "target": 1}
+    assert gate.is_rule_roll(extra, "Predator Shooter", primary) is True
+    # RED before the strip: the aura read Mend's (1, 1) — matched nothing of
+    # its base's shape and claimed any count-1 target-1 die instead.
+    assert gate.is_rule_roll(extra, "Predator Shooter Aura", primary) is True, \
+        "the aura resolves to its base's EXTRA_ATTACK_DIE shape"
+    assert gate.is_rule_roll(mend_shaped, "Predator Shooter Aura", None) is False, \
+        "EXTRA_ATTACK_DIE needs a preceding attack roll — Mend's fallback must not match"
+    assert gate.shape_key("Predator Shooter Aura") == "Predator Shooter"
+    # "Furious" has no RULE_ROLL_SHAPE entry (both names share the Mend
+    # fallback today) — the parity must hold whichever way the base evolves.
+    for roll in (mend_shaped, extra, {"roll_kind": "attack", "count": 2, "target": 5}):
+        assert gate.is_rule_roll(roll, "Furious Aura") \
+            == gate.is_rule_roll(roll, "Furious"), \
+            "Furious Aura selects the same acts/shape as Furious"
+
+
+def test_only_rule_aura_is_dice_free_like_its_base():
+    """Block B5/B2b family: "Hit & Run Fighter" has NO roll of its own
+    (`DICE_FREE_RULES`), so its aura name must never match a roll either.
+    Without the strip the aura fell through to Mend's (1, 1) and claimed the
+    bearer's ordinary count-1 attack die as the rule's own slot."""
+    roll = {"roll_kind": "attack", "count": 1, "target": 1}
+    assert gate.is_rule_roll(roll, "Hit & Run Fighter") is False
+    assert gate.is_rule_roll(roll, "Hit & Run Fighter Aura") is False, \
+        "the aura is dice-free like its base — never matches a roll"
+
+
 def test_inject_split_aim_reuses_split_aim_and_leaves_covered_or_aligned_acts_alone():
     """The corpus's own aiming oracle (`shoot_replay_gate.split_aim`), folded
     onto one act: a shots.jsonl line naming a DIFFERENT unit than the recorded
