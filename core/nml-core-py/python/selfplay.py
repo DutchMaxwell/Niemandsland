@@ -2013,6 +2013,13 @@ def play_game(
     eff_los = resolve_los(los)
     eff_menu_los = resolve_menu_los(menu_los)
     eff_menu_wide = resolve_menu_wide(menu_wide)
+    # W1: resolved here, not in the deep-seat block below, because the BASE core
+    # is the one that RESOLVES every activation (`_play_round`) — including the
+    # deep seat's ADVANCE+shoot. Without the permission the base core declines
+    # it (`Unsupported::MovedShootLos`) and the game dies mid-round.
+    eff_deep_menu_wide = (
+        eff_menu_wide if deep_menu_wide is None else resolve_menu_wide(deep_menu_wide)
+    )
     eff_deployment = resolve_deployment(deployment)
     knobs = dict(
         TRAINER_KNOBS,
@@ -2057,6 +2064,11 @@ def play_game(
         # W1: whether the MENU may offer ADVANCE+shoot at all. "off" leaves it
         # False, which is the menu every earlier corpus carries.
         menu_wide=eff_menu_wide,
+        # W1: the RESOLVE half, granted to BOTH cores as soon as EITHER seat may
+        # offer a moving shot. A permission, not a rule: with no such candidate
+        # in the menu it changes nothing, which is why a knob-off game is still
+        # byte-identical.
+        moved_shoot=eff_menu_wide or eff_deep_menu_wide,
         # NML-1130: the header knob PR #446 defaults ON in the twin. True here
         # matches that default, so a caller that passes nothing sees no change.
         engage_fold=engage_fold,
@@ -2119,9 +2131,7 @@ def play_game(
         # W1 rides the identical seam: `menu_wide` is a MENU knob, so the deep
         # seat may play the wide menu while the base seat plays today's, on one
         # board and one dice stream — a STRENGTH A/B, the way `menu_los` is.
-        d_menu_wide = (
-            eff_menu_wide if deep_menu_wide is None else resolve_menu_wide(deep_menu_wide)
-        )
+        d_menu_wide = eff_deep_menu_wide
         deep_core.set_header(
             {"profiles": profiles, "terrain": terrain,
              "knobs": dict(knobs, top_k=d_top_k, horizon=d_horizon, menu_los=d_menu_los,

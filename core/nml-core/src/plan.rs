@@ -211,7 +211,9 @@ fn seams_of(knobs: &Knobs) -> Seams {
         melee_reach: knobs.melee_reach == MeleeReach::Table,
         // W1: the menu knob owns BOTH halves. Offering ADVANCE+shoot without
         // this would hand the search a candidate `resolve` declines outright.
-        moved_shoot: knobs.menu_wide,
+        // Either half asks: the wide MENU implies the permission, and a
+        // per-seat A/B grants the permission alone to the resolving core.
+        moved_shoot: knobs.menu_wide || knobs.moved_shoot,
     }
 }
 

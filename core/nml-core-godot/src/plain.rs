@@ -848,6 +848,8 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // so an absent one answers `Knobs::default()` — OFF, the menu every
         // recorded corpus carries.
         menu_wide: dflag(d, "menu_wide"),
+        // W1, the resolve half alone — only a per-seat trainer ever writes it.
+        moved_shoot: dflag(d, "moved_shoot"),
         // NML-1157. A MENU knob, not a seam: it changes what the search may
         // choose, never how a chosen act resolves. No recorder writes the key
         // yet, so an absent one answers `Knobs::default()` — OFF, the menu

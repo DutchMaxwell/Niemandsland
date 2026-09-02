@@ -617,7 +617,7 @@ impl Core {
             melee_reach: self.knobs.melee_reach == MeleeReach::Table,
             // W1 — `menu_wide` owns both halves: the menu offers ADVANCE+shoot
             // and the resolve stops declining it. See `Seams::moved_shoot`.
-            moved_shoot: self.knobs.menu_wide,
+            moved_shoot: self.knobs.menu_wide || self.knobs.moved_shoot,
         }
     }
 
