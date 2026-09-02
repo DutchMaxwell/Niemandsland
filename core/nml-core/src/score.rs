@@ -191,6 +191,42 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v302: v0 hand scoring with one change — a unit's projected hold strength is
+/// scaled by the odds of surviving the march to the marker (per-round death
+/// odds = expected reply wounds / current wounds, compounded over the travel
+/// rounds still ahead, capped at 0.9). Destroy missions keep v0 grip scoring.
+fn score_hand_v302(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() || is_destroy_mission(state) {
+        return score_hand(state, player, incoming);
+    }
+    let mut total = 0.0f64;
+    for oi in 0..state.objectives.len() {
+        let obj = &state.objectives[oi];
+        let (mut mine, mut theirs) = (0.0f64, 0.0f64);
+        for i in 0..state.units() {
+            let threat = threat_of(incoming, i);
+            let base = presence(state, i, obj.pos, threat);
+            if base <= 0.0 { continue; }
+            let d = control_gap_in(state, i, obj.pos);
+            let needed = if d > OBJECTIVE_CONTROL_IN + CONTROL_EPS {
+                ((d - OBJECTIVE_CONTROL_IN) / state.bands[i].rush.max(1.0)).ceil() as i64
+            } else {
+                0
+            };
+            // base > 0 implies positive wound strength, so `wounds` > 0 here.
+            let wounds: f64 = state.wounds[i].iter().map(|w| *w as f64).sum();
+            let p = base * (1.0 - (threat / wounds).clamp(0.0, 0.9)).powf(needed as f64);
+            if state.player[i] == player { mine += p } else { theirs += p }
+        }
+        total += if mine + theirs <= 0.0 {
+            if obj.owner == 0 { 0.5 } else if obj.owner == player { 1.0 } else { 0.0 }
+        } else {
+            mine / (mine + theirs)
+        };
+    }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +237,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        302 => score_hand_v302(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
