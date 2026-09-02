@@ -306,6 +306,70 @@ def test_stats_row_gains_advance_shoot_morale_and_limited_counters():
     assert row["limited_weapon_shots"] == 1
 
 
+def _reserve_acts(with_fields=True):
+    # One synthetic HOLD by a plain grunt; the variables are the per-unit
+    # reserve fields the replay's plain states carry — `dormant` at round 1
+    # (io.rs plain_of writes it only when true) and `ambush_arrived_round` at
+    # game end (-1 = never arrived; the stamp the arrival step writes,
+    # selfplay.py:957). Two list units carry the Ambush NAME anyway: the old
+    # heuristic read the name, not the state.
+    pos = lambda *xs: [[x * 0.0254, 0.0, 0.0] for x in xs]  # noqa: E731
+    g = {"positions": pos(0.0, 1.0), "radii": [0.01, 0.01], "alive": 2,
+         "wounds": [0, 0], "ambush_arrived_round": -1,
+         "bands": {"advance": 6.0, "rush": 12.0}}
+    held = {"positions": [], "radii": [], "alive": 0, "wounds": [],
+            "dormant": True, "dormant_models": 3, "dormant_wounds": [0, 0, 0],
+            "ambush_arrived_round": -1}
+    hero = {"positions": [], "radii": [], "alive": 1, "wounds": [0],
+            "ambush_arrived_round": -1, "attached_to": "p1_0_g"}
+    rec = {"stem": "fixture", "winner": 1, "vp": [0, 0],
+           "mission": {"objectives_layout": {"placed_by": []}},
+           "rounds_log": [{"owners": [], "vp": [0, 0]}]}
+    act = {"row": {"unit": "p1_0_g", "kind": 0, "round": 1, "side": 1, "seq": 1,
+                   "cands": {"best": 0}, "intent": None},
+           "menu": [{"unit": "p1_0_g", "kind": 0}],
+           "before": {"units": {"p1_0_g": g, "p1_1_arr": dict(held),
+                                "p1_2_abs": dict(held), "p1_3_hero": hero}},
+           "after": {"units": {"p1_0_g": g, "p1_1_arr": {"positions": pos(8.0, 9.0, 10.0),
+                                                         "radii": [0.01] * 3, "alive": 3,
+                                                         "wounds": [0, 0, 0],
+                                                         "ambush_arrived_round": 2},
+                               "p1_2_abs": held, "p1_3_hero": hero}},
+           "rep": {"rolls": [], "log": [], "unported": []}}
+    if not with_fields:
+        for u in list(act["before"]["units"].values()) + list(act["after"]["units"].values()):
+            u.pop("dormant", None)
+            u.pop("ambush_arrived_round", None)
+    lists = {"p1": {"name": "Reservers", "listPoints": 340, "units": [
+        {"id": "g", "name": "Line Squad", "cost": 80},
+        {"id": "arr", "name": "Flankers", "cost": 90,
+         "rules": [{"name": "Ambush", "rating": 0, "label": "Ambush"}]},
+        {"id": "abs", "name": "Night Ops", "cost": 110,
+         "rules": [{"name": "Ambush", "rating": 0, "label": "Ambush"}]},
+        {"id": "hero", "name": "Warband Champion", "cost": 60,
+         "items": [{"name": "Shadow Cloak", "content": [{"name": "Ambush"}]}]}]},
+        "p2": {"units": []}}
+    return rec, [act], lists
+
+
+def test_reserve_absent_reads_dormant_and_arrival_not_names():
+    # The reserve ledger comes from the recorded STATE, not the list text:
+    # `dormant` at round 1 is what "was held in reserve" means and
+    # `ambush_arrived_round` at game end is whether it ever arrived. The old
+    # name heuristic also counted a JOINED hero whose item grants Ambush — a
+    # unit never reserved at all — and could not see an arrival.
+    import game_narrator as gn
+    rec, acts, lists = _reserve_acts()
+    row = gn.stats_row(rec, acts, lists)
+    assert row["reserve_absent"] == {"p1": 110, "p2": 0}, row["reserve_absent"]
+    assert row["reserve_arrived_round2"] == {"p1": 90, "p2": 0}, row["reserve_arrived_round2"]
+    assert row["reserve_metric"] == "fields"
+    rec, acts, lists = _reserve_acts(with_fields=False)
+    old = gn.stats_row(rec, acts, lists)
+    assert old["reserve_metric"] == "heuristic"
+    assert old["reserve_absent"] == {"p1": 260, "p2": 0}, old["reserve_absent"]
+
+
 def run_tool(game: Path, out: Path):
     return subprocess.run([sys.executable, str(TOOLS / "game_narrator.py"), str(game),
                            "--out", str(out)], capture_output=True, text=True)
