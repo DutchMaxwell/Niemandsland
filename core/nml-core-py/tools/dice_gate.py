@@ -343,6 +343,22 @@ DICE_FREE_RULES = frozenset({
 })
 
 
+def shape_key(rule: str, known=RULE_ROLL_SHAPE) -> str:
+    """Aura rung step 2: `--only-rule "X Aura"` selects by the AURA name (the
+    bearer gate keeps matching the full label — the recorded header carries
+    both, the import expansion puts the bare rule next to it,
+    opr_army_manager.gd:2117 / list_to_profile.py:350) but resolves its DIE
+    SHAPE to the base rule's: `RULE_ROLL_SHAPE`, `DICE_FREE_RULES` and
+    `NONE_SHAPE_MELEE_OK` know the base, never the aura name. Without the
+    strip every aura read Mend's (1, 1) fallback and counted the wrong dice —
+    a clean wrong 0. `known` guards the strip: an aura whose base the table
+    does not know stays itself (the lookup keeps its own default)."""
+    if not rule.endswith(" Aura"):
+        return rule
+    base = rule[:-5]
+    return base if base in known else rule
+
+
 def is_rule_roll(r: dict, only_rule: str, prev: dict | None = None) -> bool:
     """A count-1 "attack" roll at the rule's own target — OR, for a `None`
     shape (block B4's target-shift family), any "attack" roll at all — OR, for
@@ -355,11 +371,11 @@ def is_rule_roll(r: dict, only_rule: str, prev: dict | None = None) -> bool:
     shape, EVERY attack roll of a bearer's own shooting act counts, coarser
     than the other rules' by design (see `RULE_ROLL_SHAPE`). A rule in
     `DICE_FREE_RULES` has no roll of its own at all and never matches."""
-    if only_rule in DICE_FREE_RULES:
+    if shape_key(only_rule, DICE_FREE_RULES) in DICE_FREE_RULES:
         return False   # block B2b: there is no roll of its own to find
     if r.get("roll_kind") != "attack":
         return False
-    shape = RULE_ROLL_SHAPE.get(only_rule, (1, 1))
+    shape = RULE_ROLL_SHAPE.get(shape_key(only_rule), (1, 1))
     if shape is EXTRA_ATTACK_DIE:
         return prev is not None and prev.get("roll_kind") == "attack" and r.get("target") == prev.get("target")
     if shape is None:
@@ -467,7 +483,7 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 action = dict(action, shoot=foe)
             elif kind == CHARGE_KIND and action.get("charge"):
                 cls, foe = "melee", action["charge"]
-            elif only_rule and RULE_ROLL_SHAPE.get(only_rule, (1, 1)) not in (None, EXTRA_ATTACK_DIE):
+            elif only_rule and RULE_ROLL_SHAPE.get(shape_key(only_rule), (1, 1)) not in (None, EXTRA_ATTACK_DIE):
                 # --only-rule: the rule fires BEFORE attacking (main.gd:1056-1058),
                 # on ADVANCE/RUSH activations just as well — a Mend act with no
                 # shoot/charge target is still a replayable act, judged as its
@@ -491,8 +507,9 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                 # "attack", so without this the coarse "any attack roll"
                 # match would mistake a Good-Shot-bearer's charge for the
                 # rule's own slot.
-                if RULE_ROLL_SHAPE.get(only_rule, (1, 1)) is None and cls != "shooting" \
-                        and not (cls == "melee" and only_rule in NONE_SHAPE_MELEE_OK):
+                if RULE_ROLL_SHAPE.get(shape_key(only_rule), (1, 1)) is None and cls != "shooting" \
+                        and not (cls == "melee" and shape_key(only_rule, NONE_SHAPE_MELEE_OK)
+                                 in NONE_SHAPE_MELEE_OK):
                     continue
                 unit_key = (act.get("pick") or {}).get("unit_key") or action.get("unit")
                 prof = head["profiles"].get(unit_key) or {}
@@ -540,7 +557,7 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
             # order with the same face — the draw happened, where it belongs.
             if only_rule:
                 clean = len(got) == len(want)
-                shape = RULE_ROLL_SHAPE.get(only_rule, (1, 1))
+                shape = RULE_ROLL_SHAPE.get(shape_key(only_rule), (1, 1))
                 for i, w in enumerate(want):
                     if shape is EXTRA_ATTACK_DIE:
                         rule_shaped = i > 0 and want[i - 1][0] == "attack" and w[2] == want[i - 1][2]
