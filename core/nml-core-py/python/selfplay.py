@@ -1045,6 +1045,12 @@ TRAINER_KNOBS = {
     "playout_margin": 0.02,
     "playout_rich": True,
     "seam_cast": False,
+    # NML-1157: a combat intent aimed at a JOINED HERO resolves to its HOST
+    # (GF v3.5.1 p.14, `main._solo_combat_unit`). False here because the
+    # RECORDED reference bundles were produced by the table, which lets wounds
+    # land on the hero — 352 of qbg_ref+qag_ref's 16043 acts name one — so a
+    # bundle replayed with the rule ON would part from its own dice.
+    "hero_last": False,
     "seam_spacing": True,
     "seam_path": False,
     "charge_gate": False,
@@ -1700,6 +1706,7 @@ def play_game(
     horizon: int | None = None,
     charge_gate: str = "off",
     menu_targets: bool = False,
+    hero_last: bool = False,
     hero_attach: str = "off",
     dice: str = "expected",
     charge_landing: str = "off",
@@ -1967,6 +1974,8 @@ def play_game(
         # corpus carries, so a caller that passes nothing writes the identical
         # header and the identical menu.
         menu_targets=bool(menu_targets),
+        # NML-1157: see TRAINER_KNOBS. Needs `hero_attach` on to do anything.
+        hero_last=bool(hero_last),
         # NML-1073 M5 D1-B4b: the SEAM half of `hero_attach`. Deriving the
         # attachment is not enough — without this the hero would fire inside its
         # host's volley AND still be handed a full activation of its own
@@ -2355,6 +2364,7 @@ def play_game(
             # default game writes the identical object it wrote before the knob
             # existed, so no Godot parity gate sees a new key.
             **({"menu_targets": True} if menu_targets else {}),
+            **({"hero_last": True} if hero_last else {}),
             "hero_attach": hero_attach,
             "dice": eff_dice,
             "charge_landing": charge_landing,
@@ -2570,6 +2580,13 @@ def main(argv: list[str]) -> int:
         "scores best; default off, which is the menu every recorded corpus carries",
     )
     ap.add_argument(
+        "--hero-last",
+        action="store_true",
+        help="NML-1157: a volley or charge aimed at a JOINED HERO resolves to its "
+        "HOST while the host has living models (GF v3.5.1 p.14); needs "
+        "--hero-attach table, and default off so every recorded bundle replays",
+    )
+    ap.add_argument(
         "--hero-attach",
         choices=list(HERO_ATTACH_MODES),
         default="off",
@@ -2684,6 +2701,7 @@ def main(argv: list[str]) -> int:
             horizon=a.horizon,
             charge_gate=a.charge_gate,
             menu_targets=a.menu_targets,
+            hero_last=a.hero_last,
             hero_attach=a.hero_attach,
             dice=a.dice,
             charge_landing=a.charge_landing,

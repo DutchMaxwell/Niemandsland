@@ -317,6 +317,15 @@ pub struct Seams {
     /// `BattleSim.cast_phase_enabled()` — NML_SIM_CAST, battle_sim.gd:37-42.
     #[serde(default)]
     pub cast: bool,
+    /// NML-1157 — a combat intent aimed at a JOINED HERO resolves to its HOST
+    /// while the host still has living models, the way `main._solo_combat_unit`
+    /// (:8452) resolves it and GF v3.5.1 p.14 writes it. See `sim::combat_unit`.
+    ///
+    /// Default OFF, and it must stay off for every RECORDED corpus: the table
+    /// itself let 352 of `qbg_ref`+`qag_ref`'s 16 043 acts name a joined hero,
+    /// so a bundle replayed with the rule ON would part from its own dice.
+    #[serde(default)]
+    pub hero_last: bool,
     /// NML-1073 M4-7 — NML_SIM_PATH: the imagined move follows a tier-2
     /// `mv::reach` route instead of a straight line. No corpus was ever
     /// recorded with it, so it defaults OFF and every recorded rollout replays

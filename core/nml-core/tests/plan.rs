@@ -275,9 +275,9 @@ fn flat_slot(act: &Act, idx: i64) -> usize {
 /// the gate; every other bend is a red proof.
 fn sweep(c: &ActCorpus, bend: PlanBend) -> Report {
     let statics = build_act_statics(c, REPO);
-    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
-        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model };
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, ..Seams::default() };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
     let mut r = Report::default();
@@ -577,9 +577,9 @@ fn the_pool_guarantee_order_is_load_bearing() {
 fn the_one_ply_valve_routes_to_plan_and_plan_picks_the_ranked_head() {
     let c = corpus();
     let statics = build_act_statics(&c, REPO);
-    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
-        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model };
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, ..Seams::default() };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
     let (mut checked, mut bad, mut valve) = (0usize, 0usize, 0usize);
@@ -756,9 +756,9 @@ fn g4b_a_fallen_hero_stops_lending_its_rules_to_its_host() {
     );
 
     // --- the picks, on the same bar G4 uses ---
-    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
-        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model };
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, ..Seams::default() };
     let mut sc = Scratch::default();
     let mut clean = 0;
     for (ai, act) in c.acts.iter().enumerate() {
@@ -863,9 +863,9 @@ fn a_corpus_with_a_moved_profile_read_refuses_a_single_static_closure() {
 fn run_corpus(c: &ActCorpus, explore: Option<(f64, i64)>) -> Vec<(usize, Pick)> {
     use nml_core::GodotRng;
     let statics = build_act_statics(c, REPO);
-    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
-        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model };
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, ..Seams::default() };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
     let mut picks = Vec::new();
@@ -936,9 +936,9 @@ fn kind_ranking_net() -> PolicyNet {
 fn order_mode_off_is_byte_identical_order_reorders_within_unit_only() {
     let c = corpus();
     let statics = build_act_statics(&c, REPO);
-    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
-        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model };
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, ..Seams::default() };
     let mut sc = Scratch::default();
     let harness = PolicyHarness::new(kind_ranking_net(), REPO)
         .unwrap_or_else(|e| panic!("policy harness must load the checked-in rule vocab: {e}"));
@@ -1010,9 +1010,9 @@ fn order_mode_off_is_byte_identical_order_reorders_within_unit_only() {
 fn order_mode_with_no_net_wired_declines() {
     let c = corpus();
     let statics = build_act_statics(&c, REPO);
-    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
-        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model };
+    let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, ..Seams::default() };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
     let act = &c.acts[0];
@@ -1029,9 +1029,9 @@ fn order_mode_with_no_net_wired_declines() {
 /// keep in step.
 fn seams_of(c: &ActCorpus) -> Seams {
     Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
-        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false,
-        no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model }
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid,
+        no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, ..Seams::default() }
 }
 
 /// NML-1164 (DESIGN_policy_player §6 R4) — the `cand_logits` seam, on a state
