@@ -87,6 +87,15 @@ pub struct PlainTerrain {
     /// charge-move seam then plans on a board with no ruin walls at all.
     #[serde(default)]
     pub walls: Vec<[[f64; 2]; 2]>,
+    /// NML-1163 — the BANK's own drawing list, `[kind, cx_in, cz_in, w_in,
+    /// h_in, rot_deg]` in table-centred INCHES (`SchoolTerrain.generate(seed)
+    /// ["pieces"]`, the list `selfplay.load_board` returns third). A banked
+    /// board paints its terrain into `cells` and leaves `sandbox` EMPTY, so
+    /// `tokens::build` had no pieces to export and wrote 18 zero rows on every
+    /// live state. Absent from every act header ever recorded — hence
+    /// `default`, and hence `Terrain::pieces`'s fall-back to `sandbox`.
+    #[serde(default)]
+    pub pieces: Vec<[f64; 6]>,
     pub cell_params: CellParams,
 }
 
@@ -96,6 +105,9 @@ pub struct PlainTerrain {
 pub struct Terrain {
     cells: HashMap<(i64, i64), i32>,
     sandbox: Vec<Obb>,
+    /// NML-1163 — `PlainTerrain::pieces` in the same WORLD-METRE frame
+    /// `sandbox` uses, so `Terrain::pieces` can answer with one slice type.
+    bank: Vec<Obb>,
     cell_m: f64,
     /// `-deg_to_rad(grid_rotation_degrees)`, i.e. the `-rot_rad` the lambda uses.
     neg_rot: f64,
@@ -369,6 +381,20 @@ impl Terrain {
         &self.sandbox
     }
 
+    /// NML-1163 — the pieces `tokens::terrain_token` exports: the BANKED
+    /// drawing list when the board carried one, else the header's freely
+    /// placed `sandbox` (the pre-NML-1163 reading, and still the only one an
+    /// act-corpus header has). The two never coexist — a bank writes `cells` +
+    /// `pieces` with `sandbox: []`, a header writes `sandbox` with no
+    /// `pieces` — so the fall-back is a choice, not a merge.
+    pub fn pieces(&self) -> &[Obb] {
+        if self.bank.is_empty() {
+            &self.sandbox
+        } else {
+            &self.bank
+        }
+    }
+
     pub fn build(p: &PlainTerrain) -> Terrain {
         let mut cells = HashMap::with_capacity(p.cells.len());
         for c in &p.cells {
@@ -388,6 +414,16 @@ impl Terrain {
         let mut out = Terrain {
             cells,
             sandbox: p.sandbox.clone(),
+            bank: p
+                .pieces
+                .iter()
+                .map(|q| Obb {
+                    c: [q[1] * crate::IN2M, q[2] * crate::IN2M],
+                    he: [q[3] * 0.5 * crate::IN2M, q[4] * 0.5 * crate::IN2M],
+                    yaw: q[5].to_radians(),
+                    kind: q[0] as i32,
+                })
+                .collect(),
             cell_m,
             neg_rot: -rot_rad,
             half_grid: grid_size as f64 / 2.0,
@@ -590,6 +626,7 @@ mod tests {
         Terrain::build(&PlainTerrain {
             cells: cells.iter().map(|c| [c.0 as f64, c.1 as f64, c.2 as f64]).collect(),
             sandbox: vec![],
+            pieces: vec![],
             walls: vec![],
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],

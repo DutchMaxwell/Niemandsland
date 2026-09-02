@@ -4648,6 +4648,7 @@ mod tests {
         crate::terrain::Terrain::build(&crate::terrain::PlainTerrain {
             cells,
             sandbox: vec![],
+            pieces: vec![],
             walls: vec![],
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -4919,6 +4920,7 @@ mod tests {
         crate::terrain::Terrain::build(&crate::terrain::PlainTerrain {
             cells: vec![],
             sandbox: vec![],
+            pieces: vec![],
             walls: vec![],
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -5091,6 +5093,7 @@ mod tests {
         crate::terrain::Terrain::build(&crate::terrain::PlainTerrain {
             cells,
             sandbox: vec![],
+            pieces: vec![],
             walls: vec![],
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -6275,6 +6278,7 @@ mod tests {
         let board = crate::terrain::Terrain::build(&crate::terrain::PlainTerrain {
             cells: vec![],
             sandbox: Vec::<crate::terrain::Obb>::new(),
+            pieces: vec![],
             walls: vec![],
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
@@ -6342,6 +6346,7 @@ mod tests {
                     [15.0, 16.0, terrain::CONTAINER as f64],
                 ],
                 sandbox: Vec::<Obb>::new(),
+                pieces: vec![],
                 walls: vec![],
                 cell_params: CellParams {
                     table_size_feet: [6.0, 4.0],
