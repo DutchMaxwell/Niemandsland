@@ -64,6 +64,15 @@ def main() -> int:
     # two seats share, so a knob A/B here is a PAIRED whole-game one — the same
     # rows played twice, deep pair == base pair, this flag the only difference.
     ap.add_argument("--los", choices=selfplay.LOS_MODES, default="unit")
+    # NML-1161b — the PER-SEAT menu knob, and the only knob of this harness
+    # that makes a strength claim. `--menu-los` is what BOTH seats play;
+    # `--deep-menu-los` overrides it for the DEEP seat alone, so the seat that
+    # stops offering shots the resolve would drop plays against the seat that
+    # still offers them, on one board, one dice stream, one search depth.
+    # Omitted, both seats keep `--menu-los` and the game is the one this tool
+    # always played.
+    ap.add_argument("--menu-los", choices=selfplay.MENU_LOS_MODES, default="planner")
+    ap.add_argument("--deep-menu-los", choices=selfplay.MENU_LOS_MODES, default=None)
     a = ap.parse_args()
 
     _DICE["v"] = a.dice_seed
@@ -88,6 +97,8 @@ def main() -> int:
         movement="rigid",
         sighting="model",
         los=a.los,
+        menu_los=a.menu_los,
+        deep_menu_los=a.deep_menu_los,
         cond_ap=True,
         objectives="rulebook",
         deployment="arena",
@@ -97,6 +108,9 @@ def main() -> int:
 
     deep_knobs = {"top_k": a.deep_top_k, "horizon": a.deep_horizon}
     base_knobs = {"top_k": a.base_top_k, "horizon": a.base_horizon}
+    if a.deep_menu_los is not None and a.deep_menu_los != a.menu_los:
+        deep_knobs["menu_los"] = a.deep_menu_los
+        base_knobs["menu_los"] = a.menu_los
     if a.deep_player == 1:
         grades = {"p1": "planner_v0_deep", "p2": "planner_v0"}
         seat_knobs = {"p1": deep_knobs, "p2": base_knobs}
@@ -119,6 +133,8 @@ def main() -> int:
                   "dice": "table", "charge_landing": "table", "movement": "rigid",
                   "sighting": "model", "cond_ap": True, "objectives": "rulebook",
                   **({"los": a.los} if a.los != "unit" else {}),
+                  **({"menu_los": a.menu_los} if a.menu_los != "planner" else {}),
+                  **({"deep_menu_los": a.deep_menu_los} if a.deep_menu_los else {}),
                   "engage_fold": True, "sidecars": False},
     }
     os.makedirs(a.out_dir, exist_ok=True)

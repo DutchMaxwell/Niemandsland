@@ -100,3 +100,112 @@ def test_deep_player_stamps_knobs_by_seat():
         "p2": {"top_k": 4, "horizon": 2},
     }
     assert "knobs_by_seat" not in base
+
+
+# ------------------------------- NML-1161b: the PER-SEAT menu knob ---
+# `deep_menu_los` is the first knob of this seam that is not a search depth.
+# It works because `Tuning` is derived per CORE (`plan::tuning_of` off the
+# header) and `_play_round` plans the acting seat on ITS core while both seats
+# still RESOLVE on the base one — so the two seats part in the MENU and in
+# nothing else, which is what a strength A/B needs.
+
+ACTS = REPO / "core" / "nml-core" / "tests" / "fixtures" / "acts_25.jsonl"
+
+
+def _fixture_header_and_act() -> tuple[dict, dict]:
+    """The recorded oracle's header line and its first act line."""
+    import json
+
+    with open(ACTS, encoding="utf-8") as f:
+        header = json.loads(f.readline())
+        act = json.loads(f.readline())
+    return header, act
+
+
+def _core_with_menu_los(header: dict, on: bool):
+    core = nml_core.load(str(REPO))
+    core.set_header({"profiles": header["profiles"], "terrain": header["terrain"],
+                     "knobs": dict(header["knobs"], menu_los=on)})
+    return core
+
+
+def test_two_cores_give_two_menus_on_one_state():
+    """RED for the per-seat seam: ONE state, TWO cores that differ only in
+    `menu_los`, and the menus must part. The state gets a `los_pairs` matrix
+    that blocks every ordered pair — an arena recording carries none, which is
+    exactly why the recorded corpus cannot show this and self-play can (it
+    stamps that matrix at `tools/core_selfplay.gd:675`).
+
+    Without the per-seat wiring both cores read the same `Tuning` and this
+    returns two identical menus."""
+    header, act = _fixture_header_and_act()
+    plain = act["state"]
+    n = len(plain["units"])
+    plain["los_pairs"] = ["0" * n] * n
+    open_core = _core_with_menu_los(header, False)
+    gated_core = _core_with_menu_los(header, True)
+    st_open, st_gated = open_core.state_of(plain), gated_core.state_of(plain)
+    parted = 0
+    shots_open = shots_gated = 0
+    for key in act["pool"]:
+        a = open_core.candidates(st_open, key)
+        b = gated_core.candidates(st_gated, key)
+        shots_open += sum(1 for c in a if c.get("shoot"))
+        shots_gated += sum(1 for c in b if c.get("shoot"))
+        parted += a != b
+    print("NML-1161b two cores, one state: %d of %d menus part; shoot candidates "
+          "%d open vs %d gated" % (parted, len(act["pool"]), shots_open, shots_gated))
+    assert shots_open > 0, "the fixture has to offer shots for this to say anything"
+    assert shots_gated == 0, "a fully blocked matrix must leave the gated seat no target"
+    assert parted > 0, "the two seats got the same menu — the per-seat wiring is cut"
+
+
+@pytest.mark.skipif(_lists_missing(), reason="needs the terrain bank + 1000pt lists")
+def test_deep_menu_los_default_is_byte_identical():
+    """`deep_menu_los=None` (every caller written before this) leaves the deep
+    core on the base value: the equal-pair pin still holds, stamp included."""
+    core = nml_core.load(str(REPO))
+    r = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
+                     deep_player=1, deep_top_k=2, deep_horizon=1, **FAST)
+    assert sp.result_digest(r) == SEED_27_FAST_DIGEST
+    assert "knobs_by_seat" not in r
+
+
+@pytest.mark.skipif(_lists_missing(), reason="needs the terrain bank + 1000pt lists")
+def test_deep_menu_los_parts_the_two_seats_on_the_trainers_own_sight():
+    """MUTATION GUARD: equal search pairs, `los="unit"` (the sight self-play
+    has always had — an empty `los` row and a centre-to-centre `los_pairs`),
+    the DEEP seat on the LOS-aware menu and the BASE seat on the old one. The
+    game must part, and both seats' resolved `menu_los` must be stamped."""
+    core = nml_core.load(str(REPO))
+    both = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
+                        deep_player=1, deep_top_k=2, deep_horizon=1,
+                        dice="table", los="unit", **FAST)
+    split = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
+                         deep_player=1, deep_top_k=2, deep_horizon=1,
+                         dice="table", los="unit", deep_menu_los="resolve", **FAST)
+    assert _digest_without_stamps(both) != _digest_without_stamps(split)
+    assert split["knobs_by_seat"] == {
+        "p1": {"top_k": 2, "horizon": 1, "menu_los": "resolve"},
+        "p2": {"top_k": 2, "horizon": 1, "menu_los": "planner"},
+    }
+    assert "knobs_by_seat" not in both
+
+
+@pytest.mark.skipif(_lists_missing(), reason="needs the terrain bank + 1000pt lists")
+def test_the_per_seat_menu_knob_is_a_no_op_under_los_model():
+    """AND THE LIMIT, measured rather than argued: under `los="model"` (#589)
+    the per-unit `los` row and `los_pairs` are the SAME per-model matrix, so
+    `sees` already answers what `_los_clear` answers and the menu gate adds
+    nothing. The two seats then play a BYTE-IDENTICAL game however they are
+    split — which is why a `menu_los` strength A/B has to run at `los="unit"`,
+    and why on a `los="model"` corpus this rung is a redundancy lock rather
+    than a strength lever."""
+    core = nml_core.load(str(REPO))
+    both = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
+                        deep_player=1, deep_top_k=2, deep_horizon=1,
+                        dice="table", los="model", **FAST)
+    split = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
+                         deep_player=1, deep_top_k=2, deep_horizon=1,
+                         dice="table", los="model", deep_menu_los="resolve", **FAST)
+    assert _digest_without_stamps(both) == _digest_without_stamps(split)
