@@ -83,3 +83,68 @@ def run_shard(idx: int, games: list, lists: str, out_dir: str) -> dict:
     os.replace(tmp_npz, npz_p)
     os.replace(tmp_json, json_p)
     return {"shard": idx, "games": len(games), "positions": len(rows)}
+
+
+def _worker(task_q, done_q, lists, out_dir) -> None:
+    for idx, games in iter(task_q.get, None):
+        done_q.put(run_shard(idx, games, lists, out_dir))
+
+
+def discover_shards(corpus, out_dir, shard_size, sample_every, limit):
+    games = sorted(Path(corpus).glob("gen0_s*_d*.json"))[::sample_every]
+    games = games[:limit] if limit else games
+    shards = [games[i:i + shard_size] for i in range(0, len(games), shard_size)]
+    todo = [(i, g) for i, g in enumerate(shards) if not all(p.exists() for p in shard_paths(out_dir, i))]
+    return games, shards, todo
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("corpus", nargs="?", default=os.path.expanduser("~/selfplay_out/gen0_teacher"))
+    ap.add_argument("--lists", default=gr.LISTS)
+    ap.add_argument("--out", default=OUT_DEFAULT)
+    ap.add_argument("--shard-size", type=int, default=500)
+    ap.add_argument("--workers", type=int, default=10)
+    ap.add_argument("--sample-every", type=int, default=1)
+    ap.add_argument("--limit", type=int, default=0)
+    a = ap.parse_args()
+    out_dir = Path(a.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    games, shards, todo = discover_shards(a.corpus, out_dir, a.shard_size, a.sample_every, a.limit)
+    n_workers = min(a.workers, len(todo))
+    print("[SHARDS] %d games, %d shards, %d already done, %d to run -> %d workers"
+          % (len(games), len(shards), len(shards) - len(todo), len(todo), n_workers))
+    if not todo:
+        return 0
+    ctx = mp.get_context("fork")
+    task_q, done_q = ctx.Queue(), ctx.Queue()
+    for item in list(todo) + [None] * n_workers:
+        task_q.put(item)
+    procs = [ctx.Process(target=_worker, args=(task_q, done_q, a.lists, str(out_dir))) for _ in range(n_workers)]
+    [p.start() for p in procs]
+    (out_dir / "pids.json").write_text(json.dumps({"main": os.getpid(), "workers": [p.pid for p in procs]}))
+    total_games = sum(len(g) for _, g in todo)
+    t0, done_games, last_status = time.time(), 0, 0.0
+
+    def write_status():
+        rate = done_games / max(time.time() - t0, 1e-9)
+        (out_dir / "status.json").write_text(json.dumps({"games_done": done_games, "games_total": total_games,
+            "rate_games_per_s": round(rate, 3), "elapsed_s": round(time.time() - t0, 1)}))
+
+    write_status()
+    while any(p.is_alive() for p in procs) or not done_q.empty():
+        try:
+            done_games += done_q.get(timeout=5)["games"]
+        except Exception:
+            pass
+        if time.time() - last_status > 120:
+            write_status()
+            last_status = time.time()
+    [p.join() for p in procs]
+    write_status()
+    print("[SHARDS] done: %d games in %.1fs" % (done_games, time.time() - t0))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
