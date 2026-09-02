@@ -191,6 +191,44 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v202: `presence` without the moves-left cutoff — an out-of-reach unit keeps a
+/// heavily discounted claim (threat still zeroes it) instead of vanishing.
+fn claim_v202(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
+    if state.alive[i] <= 0 || state.aircraft[i] {
+        return 0.0;
+    }
+    let arrived = state.ambush_arrived_round[i] == state.round;
+    let d = control_gap_in(state, i, obj_pos);
+    let mut needed = if d > OBJECTIVE_CONTROL_IN + CONTROL_EPS { ((d - OBJECTIVE_CONTROL_IN) / state.bands[i].rush.max(1.0)).ceil() as i64 } else { 0 };
+    needed = needed.max(if arrived { 1 } else { 0 }) + i64::from(state.shaken[i]);
+    let strength: f64 = state.wounds[i].iter().map(|w| *w as f64).sum();
+    (strength - threat).max(0.0) * DISCOUNT.powf(needed as f64)
+}
+
+/// v202 `objective_p`: same soft ratio, but a marker nobody projects presence on
+/// is scored by who can still project strength onto it (`claim_v202`), not handed to its owner.
+fn objective_p_v202(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = &state.objectives[obj_index];
+    let live = (0..state.units()).any(|i| presence(state, i, obj.pos, threat_of(incoming, i)) > 0.0);
+    if live { return objective_p(state, obj_index, player, incoming); }
+    let mut mine = 0.0f64;
+    let mut theirs = 0.0f64;
+    for i in 0..state.units() {
+        let c = claim_v202(state, i, obj.pos, threat_of(incoming, i));
+        if state.player[i] == player { mine += c; } else { theirs += c; }
+    }
+    if mine + theirs <= 0.0 { return if obj.owner == 0 { 0.5 } else if obj.owner == player { 1.0 } else { 0.0 }; }
+    mine / (mine + theirs)
+}
+
+/// v202 hand score: `score_hand`'s average over `objective_p_v202`; destroy missions keep the v0 grip formula.
+fn score_hand_v202(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() || (!state.markers_meta.is_empty() && is_destroy_mission(state)) {
+        return score_hand(state, player, incoming);
+    }
+    state.objectives.iter().enumerate().map(|(i, _)| objective_p_v202(state, i, player, incoming)).sum::<f64>() / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +239,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        202 => score_hand_v202(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
