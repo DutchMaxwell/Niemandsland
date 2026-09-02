@@ -23,10 +23,11 @@ def edge_gap_in(a_pos, a_r, b_pos, b_r):
                for i, pa in enumerate(a_pos) for j, pb in enumerate(b_pos)), default=float("inf")) / M_IN
 
 
-def crosses_forest(a, b, terrain, n=20):
-    # Whether leg a->b (table inches) samples inside a FOREST piece; this
-    # corpus's rotations are axis-aligned (0/90/180/270), so a swapped half-extent test is exact.
-    fs = [p for p in terrain if p[0] == 2]
+def crosses_forest(a, b, terrain, n=20, ttype=2):
+    # Whether leg a->b (table inches) samples inside a piece of class `ttype`
+    # (2 = forest, 4 = dangerous); this corpus's rotations are axis-aligned
+    # (0/90/180/270), so a swapped half-extent test is exact.
+    fs = [p for p in terrain if p[0] == ttype]
     return any(abs(a[0] + (b[0] - a[0]) * i / n - p[1]) <= (p[3] / 2 if p[5] in (0, 180) else p[4] / 2)
                and abs(a[1] + (b[1] - a[1]) * i / n - p[2]) <= (p[4] / 2 if p[5] in (0, 180) else p[3] / 2)
                for i in range(n + 1) for p in fs)
