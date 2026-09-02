@@ -825,6 +825,7 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // NML-1157. No recorder writes the key yet, so an absent one answers
         // `Knobs::default()` — OFF, which is what every corpus carries.
         hero_last: dflag(d, "hero_last"),
+        cast_fold: dflag(d, "cast_fold"),
         // NML-1073 M3-5. The GDScript seam runs INSIDE the game, whose
         // SoloController always wires `state["charge_illegal"]` — so the gate
         // is on, which is also `Knobs::default()`. The knob exists for the

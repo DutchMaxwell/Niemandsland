@@ -60,6 +60,11 @@ pub struct Knobs {
     /// default is OFF and nothing replays differently.
     #[serde(default)]
     pub hero_last: bool,
+    /// NML-1157 — `Seams::cast_fold`: the CASTER is read off the activating
+    /// chain, not off the host alone. Absent from every corpus recorded before
+    /// it, so the default is OFF and nothing replays differently.
+    #[serde(default)]
+    pub cast_fold: bool,
     /// NML-1073 M3-5 — whether the CALLER wires `state["charge_illegal"]` at
     /// all. The arena does (solo_controller.gd:3002), `tools/core_selfplay.gd`
     /// never does, and both menu sites skip the gate outright for a caller that
@@ -217,6 +222,7 @@ impl Default for Knobs {
             seam_spacing: false,
             seam_path: false,
             hero_last: false,
+            cast_fold: false,
             charge_gate: true,
             menu_targets: false,
             hero_attach: false,

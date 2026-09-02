@@ -2242,22 +2242,28 @@ fn cast_phase(
     state: &mut State,
     si: usize,
     los: &[bool],
+    seams: Seams,
     mut rng: Option<&mut GodotRng>,
 ) {
     // p.10: a Shaken unit spends its activation idle and never casts.
     if state.shaken[si] {
         return;
     }
-    let tokens = state.casts[si];
-    if tokens <= 0 || state.alive[si] <= 0 {
+    if state.alive[si] <= 0 {
         return;
     }
-    let pi = state.roster.profile[si];
-    if !statics[pi].is_caster || statics[pi].spells.is_empty() {
+    // NML-1157: WHICH member of the chain casts. With `cast_fold` off this is
+    // `si` under exactly the old four conditions, so nothing moves.
+    let Some(ci) = caster_of(statics, state, si, seams) else {
         return;
-    }
+    };
+    let tokens = state.casts[ci];
+    let pi = state.roster.profile[ci];
     let spells = statics[pi].spells.clone();
-    let caster_x = state.profile(si).caster_value;
+    // The PICK still starts from the host: `si` carries the models the buff
+    // lands on and the `los` row the caller built, and p.14 makes the joined
+    // hero part of that unit, so "buff myself" is the unit, not the hero.
+    let caster_x = state.profile(ci).caster_value;
     let weight = 1.0 / 3.0;
     let p_success = cast_success_chance_base();
     let mut cost: Option<i64> = None;
@@ -2271,8 +2277,44 @@ fn cast_phase(
         }
     }
     if let Some(c) = cost {
-        state.casts[si] = (tokens - c).max(0);
+        state.casts[ci] = (tokens - c).max(0);
     }
+}
+
+/// NML-1157 — WHICH member of the activating chain actually casts.
+///
+/// `Caster(X)` is a HERO rule in every faction book this corpus plays, and a
+/// joined hero never activates on its own (`State::can_activate`,
+/// `solo_controller.gd:423`), so `si` is always the HOST — and the host is not
+/// the caster. `cast_phase` and the legacy spell rider (`resolve`'s shoot
+/// branch) both read `statics[profile[si]].is_caster` and `state.casts[si]`,
+/// and both therefore answer "no caster, no tokens" for every joined caster
+/// there is. Turning `seam_cast` on does not fix it: the sub-phase runs and
+/// returns immediately.
+///
+/// MEASURED on `~/selfplay_out/gen0_teacher`, 20 replayed games: 13 caster
+/// units — `Vradhez` Caster(2) and `Echo-3G01` Caster(1), 110 and 100 points —
+/// EVERY ONE an attached hero; 52 activations by a chain holding cast tokens;
+/// **0 casts and 0 tokens spent**, matching the recordings' own `magic`
+/// telemetry (`granted` 4-6 per game, `casts` 0).
+///
+/// The chain walk is the one `tray_mend` (`:270`), `tray_breath_attack`
+/// (`:396`) and the utility buffs (`:504`) already write, and `caster_member`
+/// (`:550`) already asks this exact question for buff TARGETING. Seam-gated on
+/// `cast_fold` AND `hero_attach`, for the same reason `engage_gap_in` is: with
+/// the fold off the rest of the resolver does not believe in the chain either.
+fn caster_of(statics: &[UnitStatic], state: &State, si: usize, seams: Seams) -> Option<usize> {
+    let armed = |u: usize| {
+        let s = &statics[state.roster.profile[u]];
+        state.alive[u] > 0 && state.casts[u] > 0 && s.is_caster && !s.spells.is_empty()
+    };
+    if armed(si) {
+        return Some(si);
+    }
+    if !(seams.cast_fold && seams.hero_attach) {
+        return None;
+    }
+    state.attached[si].iter().copied().find(|&h| armed(h))
 }
 
 /// The reply-threat volley of `si` onto `ti`: `AiEv.shoot_ev(...) +
@@ -3094,7 +3136,7 @@ fn resolve_with(
             Some(r) => r.to_vec(),
             None => (0..next.units()).map(|j| los_clear(&next, si, j)).collect(),
         };
-        cast_phase(statics, &mut next, si, &row, rng.as_deref_mut());
+        cast_phase(statics, &mut next, si, &row, seams, rng.as_deref_mut());
     }
 
     // --- MEND (main.gd:1056-1058), the pre-attack slot — every action kind,
@@ -3168,6 +3210,11 @@ fn resolve_with(
                 // ran. Seam OFF: the LEGACY spell rider (battle_sim.gd:621-628),
                 // where the spell's EV joins the volley and the caster pays for
                 // it inside the shoot pick.
+                // NML-1157: the rider's caster is the CHAIN's, not the host's —
+                // see `caster_of`. With `cast_fold` off this is `Some(si)` under
+                // exactly the conditions `spell_ev_of` already tested, or `None`
+                // where it already returned `(0.0, 0)`.
+                let caster = caster_of(statics, &next, si, seams);
                 let (volley, sp_cost) = {
                     let us = &statics[pi_s];
                     let ut = &statics[next.roster.profile[ti]];
@@ -3180,8 +3227,13 @@ fn resolve_with(
                     if seams.cast {
                         (shooting, 0)
                     } else {
-                        let (sp_ev, sp_cost) =
-                            spell_ev_of(us.is_caster, &us.spells, next.casts[si], &def, d_ev);
+                        let (sp_ev, sp_cost) = match caster {
+                            Some(ci) => {
+                                let cs = &statics[next.roster.profile[ci]];
+                                spell_ev_of(true, &cs.spells, next.casts[ci], &def, d_ev)
+                            }
+                            None => (0.0, 0),
+                        };
                         if sp_ev > 0.0 {
                             (shooting + sp_ev, sp_cost)
                         } else {
@@ -3189,7 +3241,9 @@ fn resolve_with(
                         }
                     }
                 };
-                next.casts[si] -= sp_cost; // 0 unless the spell rider fired
+                if let Some(ci) = caster {
+                    next.casts[ci] -= sp_cost; // 0 unless the spell rider fired
+                }
                 match dice.as_mut() {
                     Some((tray, shot)) => {
                         // Block B11, rules-must-log: names the otherwise-
@@ -6656,5 +6710,121 @@ mod hero_last_tests {
         st.attached_to = Rc::new(vec![Some(1), Some(0), None, Some(2)]);
         assert_eq!(combat_unit(&st, 0, hero_last()), 1);
         assert_eq!(combat_unit(&st, 1, hero_last()), 0);
+    }
+}
+
+/// NML-1157 — the CASTER FOLD: `Caster(X)` is a hero rule, a joined hero never
+/// activates on its own, and both cast paths read the HOST's profile and token
+/// pool. Measured on `~/selfplay_out/gen0_teacher` (20 replayed games): 13
+/// caster units, every one an attached hero, 52 chain activations, **0 casts**
+/// and 0 tokens spent — with `seam_cast` on OR off.
+#[cfg(test)]
+mod cast_fold_tests {
+    use super::*;
+    use crate::rules::{Spell, SpellModifier};
+
+    fn spell() -> Spell {
+        Spell {
+            name: "bolt".into(),
+            status: "modeled".into(),
+            threshold: 1,
+            range_in: 18.0,
+            target_count: 1,
+            effect_kind: "damage".into(),
+            effect_hits: 3,
+            weapon_rules: vec![],
+            beneficiary: String::new(),
+            modifier: SpellModifier::default(),
+        }
+    }
+
+    /// Host (profile 0, no Caster) with a joined hero (profile 1, Caster(2))
+    /// holding both cast tokens — the shape EVERY caster in the corpus has.
+    fn host_and_caster_hero() -> (State, Vec<UnitStatic>) {
+        let mut st = super::tests::four_unit_line();
+        // Two profile slots: the plain host and the Caster(2) hero, so
+        // `State::profile` can answer a `caster_value` per unit.
+        let mut list = st.profiles.list.clone();
+        let mut hero = list[0].clone();
+        hero.caster_value = 2;
+        list.push(hero);
+        st.profiles = Rc::new(crate::state::Profiles { list, index: Default::default() });
+        st.roster = Rc::new(crate::state::Roster {
+            keys: st.roster.keys.clone(),
+            index: st.roster.index.clone(),
+            profile: vec![0, 1, 0, 0],
+        });
+        st.casts = vec![0, 2, 0, 0];
+        let plain = UnitStatic::default();
+        let caster = UnitStatic { is_caster: true, spells: vec![spell()], ..UnitStatic::default() };
+        (st, vec![plain, caster])
+    }
+
+    /// `..Seams::default()` rather than an exhaustive literal on purpose: the
+    /// next seam added to `io::Seams` must not redden a test that never
+    /// mentions it.
+    fn fold() -> Seams {
+        Seams { hero_attach: true, cast_fold: true, ..Seams::default() }
+    }
+
+    fn hero_only() -> Seams {
+        Seams { hero_attach: true, ..Seams::default() }
+    }
+
+    #[test]
+    fn red_the_host_alone_is_never_the_caster() {
+        let (st, statics) = host_and_caster_hero();
+        // The bug, stated: with the fold OFF — every corpus recorded so far —
+        // the activating host answers "no caster", so `cast_phase` and the
+        // legacy spell rider both do nothing, whatever `seam_cast` says.
+        assert_eq!(caster_of(&statics, &st, 0, Seams::default()), None);
+        assert_eq!(caster_of(&statics, &st, 0, hero_only()), None, "hero_attach alone is not enough");
+    }
+
+    #[test]
+    fn green_the_fold_finds_the_joined_caster() {
+        let (st, statics) = host_and_caster_hero();
+        assert_eq!(caster_of(&statics, &st, 0, fold()), Some(1), "the hero is the caster of the chain");
+    }
+
+    #[test]
+    fn the_fold_still_refuses_a_hero_with_no_tokens_and_a_dead_one() {
+        let (mut st, statics) = host_and_caster_hero();
+        st.casts[1] = 0;
+        assert_eq!(caster_of(&statics, &st, 0, fold()), None, "no tokens, no cast");
+        st.casts[1] = 2;
+        st.alive[1] = 0;
+        assert_eq!(caster_of(&statics, &st, 0, fold()), None, "a dead hero casts nothing");
+    }
+
+    #[test]
+    fn a_caster_host_is_still_its_own_caster_with_the_fold_off() {
+        // The other half of "nothing moves": a unit that carries Caster itself
+        // answers exactly what it answered before, seam or no seam.
+        let (mut st, mut statics) = host_and_caster_hero();
+        st.roster = Rc::new(crate::state::Roster {
+            keys: st.roster.keys.clone(),
+            index: st.roster.index.clone(),
+            profile: vec![1, 0, 0, 0],
+        });
+        st.casts = vec![2, 0, 0, 0];
+        statics[1].spells = vec![spell()];
+        assert_eq!(caster_of(&statics, &st, 0, Seams::default()), Some(0));
+        assert_eq!(caster_of(&statics, &st, 0, fold()), Some(0));
+    }
+
+    #[test]
+    fn the_cast_sub_phase_spends_the_heros_tokens_and_only_with_the_fold() {
+        let (st, statics) = host_and_caster_hero();
+        let los = vec![true; st.units()];
+
+        let mut off = st.clone();
+        cast_phase(&statics, &mut off, 0, &los, hero_only(), None);
+        assert_eq!(off.casts, st.casts, "RED: with the fold off nothing is spent — 0 of 52");
+
+        let mut on = st.clone();
+        cast_phase(&statics, &mut on, 0, &los, fold(), None);
+        assert!(on.casts[1] < st.casts[1], "the hero paid for its own spell: {:?}", on.casts);
+        assert_eq!(on.casts[0], 0, "the host's empty pool is untouched");
     }
 }
