@@ -1126,20 +1126,34 @@ fn stamp_unit_strikers(p: &Profile, shoot: &mut [ShootProfile]) {
 }
 
 /// `RulesRegistry.unit_rules_of_primitive(shooter, "Shot Modifier")`,
-/// main.gd:5681-5701 — scoped to this port's three named carriers (Good Shot,
-/// Bad Shot, Targeting Visor; `assets/solo/rules_mechanics_gf.json`). None of
-/// the three sets `melee_only` / `all_attacks` / `when: charge`, so — unlike
-/// the unit-level strikers above — the bonus never reaches `melee`, only
-/// `shoot` (main.gd:5627-5636 excludes it from the melee branch on that same
-/// gate). The melee-/charge-scoped members (Good Fighter, Precision Fighter
-/// Aura, Precision Charge Aura) are stamped onto `Ctx` by `ctx_for` (block
-/// C2); the runtime-gated ones — Grounded Precision (`terrain_within_in`),
-/// Precision Feat (`uses_per_game`), Mobile Artillery (`requires_stationary`)
-/// — stay unported.
+/// main.gd:5681-5701 — scoped to this port's seven named carriers: B4's
+/// (Good Shot, Bad Shot, Targeting Visor) plus block C3's four flat/over-9"
+/// shooting siblings (Targeting Visor Boost, Precision Shooter Aura,
+/// Buccaneer, Buccaneer Boost; `assets/solo/rules_mechanics_gf/aof.json`).
+/// Buccaneer's `over_in: 9` alone routes it into `hit_bonus_over9` (strictly
+/// past 9"); everything else is flat — `phase: "shoot"` is read by nobody in
+/// the table loop, so Precision Shooter Aura is simply a flat shooting bonus.
+/// None of the seven sets `melee_only` / `all_attacks` / `when: charge`, so —
+/// unlike the unit-level strikers above — the bonus never reaches `melee`,
+/// only `shoot` (main.gd:5627-5636 excludes it from the melee branch on that
+/// same gate). The melee-/charge-scoped members (Good Fighter, Precision
+/// Fighter Aura, Precision Charge Aura) are stamped onto `Ctx` by `ctx_for`
+/// (block C2); the runtime-gated ones — Mobile Artillery
+/// (`requires_stationary`), Grounded Precision (`terrain_within_in`),
+/// Precision Feat (`uses_per_game`) — stay out: this core has no runtime gate
+/// for them, so stamping them flat would be bug #489's over-credit.
 fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile]) {
     let mut flat = 0;
     let mut over9 = 0;
-    for name in ["Good Shot", "Bad Shot", "Targeting Visor"] {
+    for name in [
+        "Good Shot",
+        "Bad Shot",
+        "Targeting Visor",
+        "Targeting Visor Boost",
+        "Precision Shooter Aura",
+        "Buccaneer",
+        "Buccaneer Boost",
+    ] {
         if !unit_rule_active(reg, p, name) {
             continue;
         }
