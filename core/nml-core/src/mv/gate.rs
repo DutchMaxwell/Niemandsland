@@ -7,20 +7,17 @@
 //! S5b adds PASS 3 in between, in the table's own order: the projection out of
 //! forbidden rest ground (:6402-6412, `_project_out_forbidden_world` :6807),
 //! spending the same budget. S5c adds PASS 4, the straggler coherency pull
-//! (`_pull_stragglers_coherent_world` :6563).
+//! (`_pull_stragglers_coherent_world` :6563), and S5c-2 closes the chain with
+//! `_clamp_gate_walls` (:6477), the anti-tunnel revert the table runs on EVERY
+//! return path of `_finalize_placement`, the charge arm included (:6443), and
+//! with the pull's own CLOSING overlap push (:6636) — which is why
+//! `_resolve_overlaps_world` is a function here rather than an inline block.
 //!
 //! NOT here, so the seam is not read as more than it is, each its own rung:
-//!   * the pull's CLOSING overlap push (:6636), which clears whatever the
-//!     inward pulls stacked. It wants `_resolve_overlaps_world` as a function
-//!     of its own; measured, it is worth 53 models on qag_ref and 6 the other
-//!     way on qbg_ref, so it waits rather than inflating this one.
 //!   * the WHOLE-UNIT SHORTEN (:6465), the fallback that fires only when pass 4
 //!     leaves an illegal config. It blends the unit back toward `start_world`,
 //!     a fourth configuration this signature does not carry, so its cases stay
 //!     the caller ladder's to settle at a shorter reach.
-//!   * `_clamp_gate_walls` (:6477), the anti-tunnel revert the table runs on
-//!     every return path of the gate: it reads two unit rules (Flying,
-//!     Traversal) this signature does not carry either.
 //!   * skirmish's 6" chain (`CoherencyChecker` :18), corpus-absent and unported
 //!     with the regiments, exactly as `deployment.rs:1783` says.
 //!
@@ -40,7 +37,7 @@
 //! oval/rect base is its circumscribed circle, which is what the escape scan
 //! (:160, `bounding_radius`) uses on the table anyway.
 
-use super::geom2::{point_seg_distance, V2};
+use super::geom2::{point_seg_distance, seg_seg_distance, V2};
 use crate::terrain::{self, Terrain};
 use crate::IN2M;
 
@@ -77,6 +74,13 @@ const WALL_REST_CLEARANCE_IN: f64 = 0.002 / IN2M;
 /// `CoherencyChecker.COHERENCY_DISTANCE_INCHES` coherency_checker.gd:10 — two
 /// models LINK when their bases are within 1" EDGE to edge.
 const COH_LINK_IN: f64 = 1.0;
+/// `SeparationChecker.BASE_CONTACT_EPSILON_INCHES` separation_checker.gd:77 —
+/// x4 is `gate_chord_crosses_base`'s slack (:6537).
+const BASE_CONTACT_EPS_IN: f64 = 0.05;
+/// `_clamp_gate_walls` :6487 — under half a millimetre is not a displacement.
+const WALL_CLAMP_SKIP_IN: f64 = 0.0005 / IN2M;
+/// `_clamp_gate_walls` :6497 — 1 mm of slack past the base radius.
+const WALL_CLAMP_SLACK_IN: f64 = 0.001 / IN2M;
 /// `SoloController.COH_REPAIR_PASSES` :6555 — pass 4's sweep bound.
 const COH_REPAIR_PASSES: usize = 12;
 
@@ -94,6 +98,20 @@ pub struct GateReport {
     pub pulled: Vec<bool>,
     /// The coherency the gate leaves behind (`_config_coherent_world` :6832).
     pub coherent: bool,
+    /// `_clamp_gate_walls` reverted this model to its route-true endpoint.
+    pub reverted: Vec<bool>,
+}
+
+/// The two unit-level exemptions `_clamp_gate_walls` reads before it reverts
+/// anything (:6392-6393, handed down from `_finalize_placement`).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GateFlags {
+    /// `unit.has_special_rule("Flying")` — Flying crosses walls legally, so a
+    /// wall-crossing gate push is no tunnel and the clamp is skipped whole.
+    pub flying: bool,
+    /// `is_traversal(unit)` :5586 — may move THROUGH bases, so only the wall
+    /// half of the clamp binds.
+    pub traversal: bool,
 }
 
 fn dist(a: [f64; 2], b: [f64; 2]) -> f64 {
@@ -283,164 +301,12 @@ fn cap_disp(cand: [f64; 2], goal: [f64; 2], cap: f64, i: usize, rep: &mut GateRe
     [goal[0] + off[0] / l * cap, goal[1] + off[1] / l * cap]
 }
 
-/// Everything a pass-4 sweep needs that does not change between nudges: the RAW
-/// plan the band-slack circles are centred on, those caps, and the board and
-/// terrain every correction is spent against.
-struct Pull<'a> {
-    goal: &'a [[f64; 2]],
-    caps_in: &'a [f64],
-    capped: bool,
-    board_in: [f64; 2],
-    terrain: Option<&'a Terrain>,
-}
-
-impl Pull<'_> {
-    /// ONE straggler nudge (:6608-6616 and :6628-6634 share it): step model `i`
-    /// at most `len` inches toward `to`, then spend the same three corrections
-    /// every gate pass spends — bounds clamp, projection out of forbidden rest
-    /// ground and the band-slack cap. A nudge the cap erases is not taken at
-    /// all: the band leaves no room, and the caller's ladder settles the model
-    /// at a shorter reach. Returns whether the model actually moved.
-    fn nudge(&self, cfg: &mut [Disc], i: usize, to: [f64; 2], len: f64, rep: &mut GateReport) -> bool {
-        let d = [to[0] - cfg[i].c[0], to[1] - cfg[i].c[1]];
-        let l = (d[0] * d[0] + d[1] * d[1]).sqrt();
-        if l < OVERLAP_EPS_IN || len <= OVERLAP_EPS_IN {
-            return false;
-        }
-        let (step, b) = (len.min(l), self.board_in);
-        let mut cand = [
-            (cfg[i].c[0] + d[0] / l * step).clamp(BOUNDS_MARGIN_IN, b[0] - BOUNDS_MARGIN_IN),
-            (cfg[i].c[1] + d[1] / l * step).clamp(BOUNDS_MARGIN_IN, b[1] - BOUNDS_MARGIN_IN),
-        ];
-        if let Some(t) = self.terrain {
-            cand = project_out_forbidden(cand, cfg[i].r, t, b);
-        }
-        if self.capped {
-            cand = cap_disp(cand, self.goal[i], self.caps_in[i], i, rep);
-            if dist(cand, cfg[i].c) <= OVERLAP_EPS_IN {
-                return false;
-            }
-        }
-        cfg[i].c = cand;
-        rep.pulled[i] = true;
-        true
-    }
-
-    /// `_pull_stragglers_coherent_world` :6563 — PASS 4, the MINIMAL coherency
-    /// repair. Each model outside the unit's largest 1"-link component steps
-    /// toward its nearest in-component neighbour, at most one link per sweep and
-    /// stopping AT the 1" link so the step never manufactures the overlap it is
-    /// trying to avoid; and when the unit over-spreads, the single model
-    /// furthest from the centroid is pulled inward. Minimal is the point: the
-    /// models that advanced correctly keep their FULL move, where the whole-unit
-    /// shorten would drag the entire unit back and leave it short of its own
-    /// shooting range.
-    ///
-    /// The sweep IS the bounded fixed point: `COH_REPAIR_PASSES` at the most,
-    /// and it stops the moment a sweep moves nobody or the config comes out
-    /// coherent, so it terminates on any input. The table's CLOSING overlap push
-    /// (:6636) is the next rung, not this one.
-    fn run(&self, cfg: &mut [Disc], rep: &mut GateReport) -> bool {
-        let (n, max_chain) = (cfg.len(), super::MAX_CHAIN_IN);
-        for _ in 0..COH_REPAIR_PASSES {
-            if config_coherent(cfg, max_chain) {
-                return true;
-            }
-            let main = largest_component(cfg);
-            let mut moved = false;
-            // (a) reconnect — nearest in-component neighbour by EDGE distance,
-            // the FIRST winner on a tie (the component's own BFS order).
-            for i in (0..n).filter(|i| !main.contains(i)) {
-                let (mut nd, mut near) = (f64::INFINITY, usize::MAX);
-                for &m in &main {
-                    if edge(&cfg[i], &cfg[m]) < nd {
-                        nd = edge(&cfg[i], &cfg[m]);
-                        near = m;
-                    }
-                }
-                if near == usize::MAX {
-                    continue;
-                }
-                let (to, len) = (cfg[near].c, (nd - COH_LINK_IN).min(COH_LINK_IN));
-                moved |= self.nudge(cfg, i, to, len, rep);
-            }
-            // (b) over-spread — pull the model furthest from the centroid in.
-            if overspread(cfg, max_chain) {
-                let sum = |k: usize| cfg.iter().map(|d| d.c[k]).sum::<f64>() / n as f64;
-                let c = [sum(0), sum(1)];
-                // `_furthest_from_world` :6672 keeps the FIRST strict maximum.
-                let far = (1..n).fold(0, |b, i| if dist(cfg[i].c, c) > dist(cfg[b].c, c) { i } else { b });
-                moved |= self.nudge(cfg, far, c, COH_LINK_IN, rep);
-            }
-            if !moved {
-                break;
-            }
-        }
-        config_coherent(cfg, max_chain)
-    }
-}
-
-/// `_finalize_placement` :6371, passes 1 to 4, over ONE unit's planned
-/// endpoints. `external` is `_external_obstacle_shapes` :6676 — every OTHER
-/// on-table unit's alive-model base. `caps_in` is `_gate_disp_caps_m`'s output;
-/// a length other than `planned`'s means UNCAPPED, the same guard the GDScript
-/// reads at :6398 (a charge passes none). `terrain` switches pass 3 on; `None`
-/// is the board the recorder never wrote a terrain line for.
-pub fn finalize_placement(
-    planned: &[V2],
-    radii_in: &[f64],
-    external: &[Disc],
-    caps_in: &[f64],
-    board_in: [f64; 2],
-    terrain: Option<&Terrain>,
-) -> (Vec<V2>, GateReport) {
-    let n = planned.len();
-    let mut rep = GateReport {
-        disp_in: vec![0.0; n],
-        capped: vec![false; n],
-        bounds_in: 0.0,
-        pulled: vec![false; n],
-        coherent: true,
-    };
-    // (bounds) :6383-6390 — clamp per axis FIRST, so every later correction
-    // starts from a legal configuration. The cap circles below stay anchored on
-    // the RAW plan (`planned_world` is never rewritten, :6373).
-    let goal: Vec<[f64; 2]> = planned.iter().map(|p| [p[0] as f64, p[1] as f64]).collect();
-    let mut cfg: Vec<Disc> = (0..n)
-        .map(|i| {
-            let c = [
-                goal[i][0].clamp(BOUNDS_MARGIN_IN, board_in[0] - BOUNDS_MARGIN_IN),
-                goal[i][1].clamp(BOUNDS_MARGIN_IN, board_in[1] - BOUNDS_MARGIN_IN),
-            ];
-            rep.bounds_in = rep.bounds_in.max(dist(c, goal[i]));
-            Disc {
-                c,
-                r: radii_in.get(i).copied().unwrap_or(0.0),
-            }
-        })
-        .collect();
-    let capped = caps_in.len() == n;
-    // (terrain) :6402-6412 — project every model out of forbidden rest ground
-    // BEFORE the overlap push, so the crowd resolves around spots that are
-    // already legal. A projection costing MORE than the model's band slack is
-    // refused WHOLE, never truncated: a half hop would still rest inside the
-    // container. The route-true spot is kept, the model is marked, and the debt
-    // goes to the caller's ladder at a shorter reach — route truth wins.
-    if let Some(t) = terrain {
-        for i in 0..n {
-            let proj = project_out_forbidden(cfg[i].c, cfg[i].r, t, board_in);
-            if capped && dist(proj, goal[i]) > caps_in[i] {
-                rep.capped[i] = true;
-            } else {
-                cfg[i].c = proj;
-            }
-        }
-    }
-    // (overlap) :6716-6752 — Gauss-Seidel, slack-aware: the models with the most
-    // band left resolve first, a model at its cap is FROZEN (it stays in every
-    // neighbour's obstacle set, so the crowd walks around it), and each push is
-    // truncated to the cap circle. Residual overlap between two capped models is
-    // deliberately LEFT for the caller's ladder to settle at a shorter reach.
+/// `_resolve_overlaps_world` :6716 — the slack-aware Gauss-Seidel push, its own
+/// function because the table runs it TWICE: once as pass 2 and once more to
+/// clear whatever pass 4's inward pulls stacked (:6636).
+fn overlap_pass(cfg: &mut [Disc], goal: &[[f64; 2]], caps_in: &[f64], capped: bool,
+                external: &[Disc], rep: &mut GateReport) {
+    let n = cfg.len();
     for _ in 0..OVERLAP_GATE_PASSES {
         let mut order: Vec<usize> = (0..n).collect();
         if capped {
@@ -495,6 +361,217 @@ pub fn finalize_placement(
             break;
         }
     }
+}
+
+/// Everything a pass-4 sweep needs that does not change between nudges: the RAW
+/// plan the band-slack circles are centred on, those caps, and the board and
+/// terrain every correction is spent against.
+struct Pull<'a> {
+    goal: &'a [[f64; 2]],
+    caps_in: &'a [f64],
+    capped: bool,
+    board_in: [f64; 2],
+    terrain: Option<&'a Terrain>,
+    external: &'a [Disc],
+}
+
+impl Pull<'_> {
+    /// ONE straggler nudge (:6608-6616 and :6628-6634 share it): step model `i`
+    /// at most `len` inches toward `to`, then spend the same three corrections
+    /// every gate pass spends — bounds clamp, projection out of forbidden rest
+    /// ground and the band-slack cap. A nudge the cap erases is not taken at
+    /// all: the band leaves no room, and the caller's ladder settles the model
+    /// at a shorter reach. Returns whether the model actually moved.
+    fn nudge(&self, cfg: &mut [Disc], i: usize, to: [f64; 2], len: f64, rep: &mut GateReport) -> bool {
+        let d = [to[0] - cfg[i].c[0], to[1] - cfg[i].c[1]];
+        let l = (d[0] * d[0] + d[1] * d[1]).sqrt();
+        if l < OVERLAP_EPS_IN || len <= OVERLAP_EPS_IN {
+            return false;
+        }
+        let (step, b) = (len.min(l), self.board_in);
+        let mut cand = [
+            (cfg[i].c[0] + d[0] / l * step).clamp(BOUNDS_MARGIN_IN, b[0] - BOUNDS_MARGIN_IN),
+            (cfg[i].c[1] + d[1] / l * step).clamp(BOUNDS_MARGIN_IN, b[1] - BOUNDS_MARGIN_IN),
+        ];
+        if let Some(t) = self.terrain {
+            cand = project_out_forbidden(cand, cfg[i].r, t, b);
+        }
+        if self.capped {
+            cand = cap_disp(cand, self.goal[i], self.caps_in[i], i, rep);
+            if dist(cand, cfg[i].c) <= OVERLAP_EPS_IN {
+                return false;
+            }
+        }
+        cfg[i].c = cand;
+        rep.pulled[i] = true;
+        true
+    }
+
+    /// `_pull_stragglers_coherent_world` :6563 — PASS 4, the MINIMAL coherency
+    /// repair. Each model outside the unit's largest 1"-link component steps
+    /// toward its nearest in-component neighbour, at most one link per sweep and
+    /// stopping AT the 1" link so the step never manufactures the overlap it is
+    /// trying to avoid; and when the unit over-spreads, the single model
+    /// furthest from the centroid is pulled inward. Minimal is the point: the
+    /// models that advanced correctly keep their FULL move, where the whole-unit
+    /// shorten would drag the entire unit back and leave it short of its own
+    /// shooting range.
+    ///
+    /// The sweep IS the bounded fixed point: `COH_REPAIR_PASSES` at the most,
+    /// and it stops the moment a sweep moves nobody or the config comes out
+    /// coherent, so it terminates on any input. The table's CLOSING overlap push
+    /// A final overlap push clears whatever the inward pulls stacked (:6636) —
+    /// skipped on the early exit above, exactly as the table skips it.
+    fn run(&self, cfg: &mut [Disc], rep: &mut GateReport) -> bool {
+        let (n, max_chain) = (cfg.len(), super::MAX_CHAIN_IN);
+        for _ in 0..COH_REPAIR_PASSES {
+            if config_coherent(cfg, max_chain) {
+                return true;
+            }
+            let main = largest_component(cfg);
+            let mut moved = false;
+            // (a) reconnect — nearest in-component neighbour by EDGE distance,
+            // the FIRST winner on a tie (the component's own BFS order).
+            for i in (0..n).filter(|i| !main.contains(i)) {
+                let (mut nd, mut near) = (f64::INFINITY, usize::MAX);
+                for &m in &main {
+                    if edge(&cfg[i], &cfg[m]) < nd {
+                        nd = edge(&cfg[i], &cfg[m]);
+                        near = m;
+                    }
+                }
+                if near == usize::MAX {
+                    continue;
+                }
+                let (to, len) = (cfg[near].c, (nd - COH_LINK_IN).min(COH_LINK_IN));
+                moved |= self.nudge(cfg, i, to, len, rep);
+            }
+            // (b) over-spread — pull the model furthest from the centroid in.
+            if overspread(cfg, max_chain) {
+                let sum = |k: usize| cfg.iter().map(|d| d.c[k]).sum::<f64>() / n as f64;
+                let c = [sum(0), sum(1)];
+                // `_furthest_from_world` :6672 keeps the FIRST strict maximum.
+                let far = (1..n).fold(0, |b, i| if dist(cfg[i].c, c) > dist(cfg[b].c, c) { i } else { b });
+                moved |= self.nudge(cfg, far, c, COH_LINK_IN, rep);
+            }
+            if !moved {
+                break;
+            }
+        }
+        overlap_pass(cfg, self.goal, self.caps_in, self.capped, self.external, rep);
+        config_coherent(cfg, max_chain)
+    }
+}
+
+/// `_clamp_gate_walls` :6477 — the LAST word on every return path of the table's
+/// gate, the charge arm included (:6443). No gate step may TUNNEL: a model whose
+/// gate displacement (RAW planned -> final) grazes a ruin/container wall inside
+/// its own base radius, or cuts THROUGH an external base
+/// (`gate_chord_crosses_base` :6535), is reverted WHOLE to its planned,
+/// route-true endpoint. The residual overlap/coherency debt is then the caller
+/// ladder's to settle at a shorter reach — route truth wins.
+fn clamp_gate_walls(cfg: &mut [Disc], goal: &[[f64; 2]], external: &[Disc], flags: GateFlags,
+                    terrain: Option<&Terrain>, rep: &mut GateReport) {
+    if flags.flying {
+        return; // Flying crosses walls legally; its push is no tunnel (:6479)
+    }
+    let walls: &[[V2; 2]] = terrain.map_or(&[][..], |t| t.walls_in());
+    if walls.is_empty() && external.is_empty() {
+        return;
+    }
+    let slack = BASE_CONTACT_EPS_IN * 4.0;
+    for i in 0..cfg.len() {
+        let (a, b) = (goal[i], cfg[i].c);
+        if dist(a, b) <= WALL_CLAMP_SKIP_IN {
+            continue;
+        }
+        let (a2, b2): (V2, V2) = ([a[0] as f32, a[1] as f32], [b[0] as f32, b[1] as f32]);
+        // EDGE-AWARE (:6493): crossing alone missed the last leg SLIDING ALONG a
+        // wall inside the base radius, so the segment must keep the radius clear.
+        let lim = cfg[i].r + WALL_CLAMP_SLACK_IN;
+        let grazed = walls.iter().any(|w| seg_seg_distance(a2, b2, w[0], w[1]) < lim);
+        // A chord STARTING inside a base is the overlap push ESCAPING it, and
+        // outward motion is exactly the gate's job — never a tunnel (:6543).
+        // Traversal may move through bases, so only the wall half binds (:6503).
+        let cut = !flags.traversal
+            && external.iter().any(|o| {
+                let l = cfg[i].r + o.r - slack;
+                l > 0.0
+                    && dist(a, o.c) >= l
+                    && point_seg_distance([o.c[0] as f32, o.c[1] as f32], a2, b2) < l
+            });
+        if grazed || cut {
+            cfg[i].c = a;
+            rep.reverted[i] = true;
+        }
+    }
+}
+
+/// `_finalize_placement` :6371, passes 1 to 4 plus the wall clamp, over ONE unit's planned
+/// endpoints. `external` is `_external_obstacle_shapes` :6676 — every OTHER
+/// on-table unit's alive-model base. `caps_in` is `_gate_disp_caps_m`'s output;
+/// a length other than `planned`'s means UNCAPPED, the same guard the GDScript
+/// reads at :6398 (a charge passes none). `terrain` switches pass 3 on; `None`
+/// is the board the recorder never wrote a terrain line for. `flags` carries the
+/// two unit rules only the wall clamp asks about.
+pub fn finalize_placement(
+    planned: &[V2],
+    radii_in: &[f64],
+    external: &[Disc],
+    caps_in: &[f64],
+    board_in: [f64; 2],
+    terrain: Option<&Terrain>,
+    flags: GateFlags,
+) -> (Vec<V2>, GateReport) {
+    let n = planned.len();
+    let mut rep = GateReport {
+        disp_in: vec![0.0; n],
+        capped: vec![false; n],
+        bounds_in: 0.0,
+        pulled: vec![false; n],
+        coherent: true,
+        reverted: vec![false; n],
+    };
+    // (bounds) :6383-6390 — clamp per axis FIRST, so every later correction
+    // starts from a legal configuration. The cap circles below stay anchored on
+    // the RAW plan (`planned_world` is never rewritten, :6373).
+    let goal: Vec<[f64; 2]> = planned.iter().map(|p| [p[0] as f64, p[1] as f64]).collect();
+    let mut cfg: Vec<Disc> = (0..n)
+        .map(|i| {
+            let c = [
+                goal[i][0].clamp(BOUNDS_MARGIN_IN, board_in[0] - BOUNDS_MARGIN_IN),
+                goal[i][1].clamp(BOUNDS_MARGIN_IN, board_in[1] - BOUNDS_MARGIN_IN),
+            ];
+            rep.bounds_in = rep.bounds_in.max(dist(c, goal[i]));
+            Disc {
+                c,
+                r: radii_in.get(i).copied().unwrap_or(0.0),
+            }
+        })
+        .collect();
+    let capped = caps_in.len() == n;
+    // (terrain) :6402-6412 — project every model out of forbidden rest ground
+    // BEFORE the overlap push, so the crowd resolves around spots that are
+    // already legal. A projection costing MORE than the model's band slack is
+    // refused WHOLE, never truncated: a half hop would still rest inside the
+    // container. The route-true spot is kept, the model is marked, and the debt
+    // goes to the caller's ladder at a shorter reach — route truth wins.
+    if let Some(t) = terrain {
+        for i in 0..n {
+            let proj = project_out_forbidden(cfg[i].c, cfg[i].r, t, board_in);
+            if capped && dist(proj, goal[i]) > caps_in[i] {
+                rep.capped[i] = true;
+            } else {
+                cfg[i].c = proj;
+            }
+        }
+    }
+    // (overlap) :6716-6752 — Gauss-Seidel, slack-aware: the models with the most
+    // band left resolve first, a model at its cap is FROZEN (it stays in every
+    // neighbour's obstacle set, so the crowd walks around it), and each push is
+    // truncated to the cap circle. Residual overlap between two capped models is
+    // deliberately LEFT for the caller's ladder to settle at a shorter reach.
+    overlap_pass(&mut cfg, &goal, caps_in, capped, external, &mut rep);
     // (coherency) :6444-6465 — PASS 4. The table keeps the full move when the
     // config is coherent AND overlap-free AND terrain-clear, and otherwise runs
     // the straggler repair before falling back to the whole-unit shorten. The
@@ -502,9 +579,10 @@ pub fn finalize_placement(
     // ported here those three predicates reduce to the coherency one; the other
     // two only ever decide whether the unported shorten fires.
     if !config_coherent(&cfg, super::MAX_CHAIN_IN) {
-        let pull = Pull { goal: &goal, caps_in, capped, board_in, terrain };
+        let pull = Pull { goal: &goal, caps_in, capped, board_in, terrain, external };
         rep.coherent = pull.run(&mut cfg, &mut rep);
     }
+    clamp_gate_walls(&mut cfg, &goal, external, flags, terrain, &mut rep);
     let out = (0..n)
         .map(|i| {
             rep.disp_in[i] = dist(cfg[i].c, goal[i]);
