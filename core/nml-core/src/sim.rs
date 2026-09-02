@@ -901,6 +901,41 @@ fn nearest_enemy_of(state: &State, si: usize) -> Option<usize> {
     best
 }
 
+/// Block C5 — Instinctive's closest-target gate (`_solo_instinctive_mod`
+/// main.gd:5774-5799, read by BOTH branches of `_solo_hit_mod_info`): the
+/// bonus stands exactly while the attacked unit IS the closest enemy —
+/// forfeited when ANY other living, non-reserve, non-attached enemy is
+/// closer than `distance(shooter, target) - 0.5` (the half-inch tie band,
+/// centre to centre). NOT a legality rule: the pick stands, only the +1 is
+/// lost (main.gd:5792-5793). The scan mirrors `nearest_enemy_of`'s skip
+/// list (own side, dead, attached, dormant/reserve) plus the target itself,
+/// in METRES with the band converted by the file's own `IN2M`.
+fn instinctive_applies(state: &State, from: usize, ti: usize) -> bool {
+    let d = geom::length(geom::sub(
+        geom::centre(&state.positions[from]),
+        geom::centre(&state.positions[ti]),
+    ));
+    let band = (0.5 * IN2M) as f32;
+    for e in 0..state.units() {
+        if e == ti
+            || state.player[e] == state.player[from]
+            || state.alive[e] <= 0
+            || state.attached_to[e].is_some()
+            || state.dormant[e]
+        {
+            continue;
+        }
+        let de = geom::length(geom::sub(
+            geom::centre(&state.positions[from]),
+            geom::centre(&state.positions[e]),
+        ));
+        if de < d - band {
+            return false;
+        }
+    }
+    true
+}
+
 /// Returns whether the unit actually moved — the caller logs the battle-log
 /// line on it (main.gd:1089).
 ///
@@ -1615,7 +1650,15 @@ fn strike_phase(
     tray: &mut Tray,
     shot: &mut ShootResult,
 ) -> (i64, i64) {
-    let parts = melee_parts(statics, next, si);
+    let mut parts = melee_parts(statics, next, si);
+    // Block C5 — Instinctive: the +1 reaches the melee fold ONLY when the
+    // attacked unit IS the closest enemy (main.gd:5670-5673), per member
+    // carrying it — the pick itself is never constrained.
+    for (mi, _, att) in parts.iter_mut() {
+        if att.instinctive_hit_bonus > 0 && instinctive_applies(next, *mi, ti) {
+            att.hit_mod += att.instinctive_hit_bonus;
+        }
+    }
     let ut = &statics[next.roster.profile[ti]];
     let def = ctx_live(ctx_of(ut, next, ti), statics, next, ti, true);
     let members: Vec<crate::dice::Shooter<'_>> = parts
@@ -3109,6 +3152,17 @@ fn resolve_with(
                                     msc.attacks = attacks;
                                 }
                                 parts.push((mi, msc, ctx_live(ctx_of(um, &next, mi), statics, &next, mi, false)));
+                            }
+                            // Block C5 — Instinctive: the +1 reaches the
+                            // shooting fold ONLY when THIS group's target is
+                            // the closest enemy (main.gd:5745-5748), per
+                            // member carrying it.
+                            for (mi, _, att) in parts.iter_mut() {
+                                if att.instinctive_hit_bonus > 0
+                                    && instinctive_applies(&next, *mi, g.ti)
+                                {
+                                    att.hit_mod += att.instinctive_hit_bonus;
+                                }
                             }
                             let r = crate::dice::resolve_volley_with_tray(
                                 &shooters_of(&parts, statics, &next),
@@ -5310,6 +5364,110 @@ mod tests {
             "fixture: the lash DID fire (pools [1,1,1] lose all three models)");
         assert!(wounds_left(&st, 0) < 3, "the lash landed on the striker");
         assert_eq!(credit, 0, "the tally is the Retaliate credit — untouched by Deathstrike");
+    }
+
+    // ---------------------------------------------- block C5: Instinctive ---
+
+    /// Block C5 fixture — unit 0 the 1-model Instinctive carrier (Quality 4,
+    /// one 8-dice melee profile), unit 1 the target 10" away, unit 2 a SECOND
+    /// enemy at `third_at` (9" = the forfeit case, 9.5" = the half-inch band's
+    /// own boundary), unit 3 a far bystander so no per-unit vector moves.
+    fn instinctive_line(third_at: f64) -> (State, Vec<UnitStatic>) {
+        let blade = ShootProfile {
+            name: "Blade".into(),
+            attacks: 8,
+            count: 1,
+            range: 0,
+            ..Default::default()
+        };
+        let profile: Profile =
+            serde_json::from_str(r#"{"unit_id": "u", "name": "u"}"#).unwrap();
+        let statics = vec![
+            UnitStatic {
+                ctx: Ctx {
+                    quality: 4,
+                    defense: 4,
+                    tough: 1,
+                    models: 1,
+                    instinctive_hit_bonus: 1,
+                    ..Default::default()
+                },
+                name: "Striker".into(),
+                melee: vec![blade],
+                model_count: 1,
+                wounds_max: vec![1],
+                ..Default::default()
+            },
+            UnitStatic {
+                ctx: Ctx { defense: 4, tough: 1, models: 1, ..Default::default() },
+                name: "Target".into(),
+                model_count: 1,
+                wounds_max: vec![1],
+                ..Default::default()
+            },
+            UnitStatic {
+                ctx: Ctx { defense: 4, tough: 1, models: 1, ..Default::default() },
+                name: "Rival".into(),
+                model_count: 1,
+                wounds_max: vec![1],
+                ..Default::default()
+            },
+        ];
+        let mut st = four_unit_line();
+        st.roster = Rc::new(Roster {
+            keys: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            index: HashMap::new(),
+            profile: vec![0, 1, 2, 2],
+        });
+        st.profiles = Rc::new(Profiles {
+            list: vec![profile.clone(), profile.clone(), profile.clone(), profile],
+            index: HashMap::new(),
+        });
+        st.player = vec![0, 1, 1, 1];
+        st.alive = vec![1, 1, 1, 1];
+        st.attached = Rc::new(vec![vec![], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, None, None, None]);
+        st.positions[0] = vec![[0.0, 0.0, 0.0]];
+        st.positions[1] = vec![[10.0 * IN2M, 0.0, 0.0]];
+        st.positions[2] = vec![[third_at, 0.0, 0.0]];
+        st.positions[3] = vec![[20.0 * IN2M, 0.0, 0.0]];
+        (st, statics)
+    }
+
+    /// The striker's first "attack" batch after one strike phase — the melee
+    /// hit roll's modified target is the number the rule moves.
+    fn striker_hit_target(third_at: f64) -> i64 {
+        let (mut st, statics) = instinctive_line(third_at);
+        let mut tray = Tray::seeded(2);
+        let mut shot = ShootResult::default();
+        strike_phase(&statics, &mut st, 0, 1, false, &mut tray, &mut shot);
+        shot.rolls
+            .iter()
+            .find(|r| r.kind == "attack" && r.owner == "Striker")
+            .expect("the striker's hit batch")
+            .target
+    }
+
+    /// (a) A carrier attacking the CLOSEST enemy hits on one better — the +1
+    /// rides the strike phase's `hit_mod` fold to the melee hit target.
+    #[test]
+    fn instinctive_hits_one_better_when_the_target_is_the_closest_enemy() {
+        assert_eq!(striker_hit_target(12.0 * IN2M), 3, "Quality 4 + Instinctive's +1");
+    }
+
+    /// (b) A second enemy 1" closer forfeits the +1 — the pick stands, the
+    /// hit target falls back to the plain Quality (main.gd:5792-5793).
+    #[test]
+    fn instinctive_is_forfeited_when_a_second_enemy_is_closer() {
+        assert_eq!(striker_hit_target(9.0 * IN2M), 4, "a rival 1\" inside the target");
+    }
+
+    /// (c) The half-inch band's own boundary: a rival at EXACTLY d - 0.5" is
+    /// a tie, not closer — the bonus stands. RED when the band is written
+    /// `<=` instead of `<`, or the half inch is dropped.
+    #[test]
+    fn instinctive_survives_a_rival_on_the_half_inch_band_boundary() {
+        assert_eq!(striker_hit_target(9.5 * IN2M), 3, "9.5\" ties inside the band");
     }
 
     // ================================================ mutant-killing tests ====

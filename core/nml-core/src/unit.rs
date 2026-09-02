@@ -142,6 +142,13 @@ pub struct Ctx {
     /// phase. Read only by `sim::strike_phase`, which takes NO tally credit
     /// from it (main.gd:6174 never touches `_solo_retaliate_credit`).
     pub death_hits_per_kill: i64,
+    /// Block C5 — `Instinctive`'s carried +1 (`_solo_instinctive_mod`
+    /// main.gd:5774-5799): `param_i("hit_bonus", 1)` off the unit's
+    /// registry-gated "Instinctive" entry, 0 when it carries none. NOT folded
+    /// here — the bonus is positional, so only `sim::strike_phase` and the
+    /// volley builder add it into the member's `hit_mod`, and only when
+    /// `sim::instinctive_applies` says the attacked unit IS the closest enemy.
+    pub instinctive_hit_bonus: i64,
     // --- NML block B2b, the live-buff fold (`sim::ctx_live`). ZERO on every
     // `ctx_of`, which is what keeps the EV imagination buff-blind exactly like
     // `BattleSim._ctx_of` (it never sets `AiEv.profile_ev`'s `spell_hit_mod`
@@ -927,6 +934,18 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
             melee_hit_bonus += hb;
         }
     }
+    // Block C5 — Instinctive's carried amount, off the rule's own literal and
+    // its registry params (`unit_rules_of_primitive(shooter, "Instinctive")`'s
+    // `hit_bonus`, default 1 — main.gd:5780-5782). The closest-target GATE is
+    // positional and lives in `sim::instinctive_applies`.
+    let instinctive_hit_bonus = if unit_rule_active(reg, p, "Instinctive") {
+        match reg.rules_for(&p.game_system).lookup(&p.faction_folder, "Instinctive") {
+            Some(e) => e.param_i("hit_bonus", 1),
+            None => 1,
+        }
+    } else {
+        0
+    };
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -988,6 +1007,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         fatigued: false,
         retaliate_hits_per_wound: retaliate_hits_per_wound(reg, p),
         death_hits_per_kill: death_hits_per_kill(reg, p),
+        instinctive_hit_bonus,
         hit_mod: 0,
         vs_hit_mod: 0,
         melee_hit_bonus,
@@ -1735,6 +1755,43 @@ mod tests {
         assert_eq!(built("sd_hive", &mut reg), 3, "Self-Destruct(3)");
         assert_eq!(built("ds_bare", &mut reg), 1, "a bare name rates maxi(0, 1)");
         assert_eq!(built("ds_nomap", &mut reg), 0, "no map for the faction — silent");
+    }
+
+    /// Block C5 — Instinctive stamped end to end through the REAL registry:
+    /// gf goblin_reclaimers and aof vampiric_undead field
+    /// `Instinctive {force_closest_target: true, hit_bonus: 1}`; a carrier
+    /// whose faction map fields nothing stays 0. RED (drop the literal from
+    /// `instinctive_hit_bonus`): every carrier falls to 0.
+    const INSTINCTIVE_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "inst_gf":{"unit_id":"inst_gf","name":"Inst GF","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"goblin_reclaimers",
+        "special_rules":["Instinctive"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Slasha","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "inst_aof":{"unit_id":"inst_aof","name":"Inst AoF","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"vampiric_undead",
+        "special_rules":["Instinctive"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "inst_nomap":{"unit_id":"inst_nomap","name":"Inst Nomap","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":["Instinctive"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    #[test]
+    fn instinctive_stamps_the_registry_hit_bonus_gated() {
+        let header = read_act_header(INSTINCTIVE_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let built = |k: &str, reg: &mut Registries| {
+            UnitStatic::build(reg, header.profiles.get(k).expect(k)).ctx.instinctive_hit_bonus
+        };
+        assert_eq!(built("inst_gf", &mut reg), 1, "gf goblin_reclaimers hit_bonus");
+        assert_eq!(built("inst_aof", &mut reg), 1, "aof vampiric_undead hit_bonus");
+        assert_eq!(built("inst_nomap", &mut reg), 0, "no map for the faction — silent");
     }
 
     /// Block B10 — Resistance end to end through the REAL registry
