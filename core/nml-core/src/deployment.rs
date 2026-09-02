@@ -1187,6 +1187,68 @@ pub fn deploy_side(
     q.out
 }
 
+/// Both armies deployed the RULEBOOK way, plus the order they went down in.
+#[derive(Debug, Clone, PartialEq, Default, serde::Deserialize, serde::Serialize)]
+pub struct InterleavedDeploy {
+    pub side1: SideDeploy,
+    pub side2: SideDeploy,
+    /// `[(slot, unit key)]` in placement order — the CROSS-SIDE fact neither
+    /// side's `placements` can carry (tools/pregame_dump.gd writes the table's
+    /// own as `placement_sequence`). Alternating reads 1,2,1,2…; whole-side
+    /// deployment reads 1,1,1,2,2,2, which is what the interleave gate rejects.
+    pub sequence: Vec<(i64, String)>,
+}
+
+/// GF Advanced Rules v3.5.1 p.6, "DEPLOYING ARMIES": the roll-off winner
+/// "places one unit", the opposing player "places one unit", and "the players
+/// continue alternating in placing one unit each, until all units have been
+/// deployed" — then the Scout phase alternates the same way, AFTER every normal
+/// unit of BOTH armies is down (B9), Ambush never queued. `first` = the
+/// winner's slot (`deploy_order`). A side whose queue has run dry is skipped,
+/// so the longer roster finishes alone. Each side keeps its OWN `occupied`,
+/// exactly like the table's per-side `_deploy_alt` — which is why alternating
+/// reorders the placements without moving one of them.
+#[allow(clippy::too_many_arguments)]
+pub fn deploy_interleaved(
+    specs1: &[UnitSpec],
+    specs2: &[UnitSpec],
+    zone1: &Rect,
+    zone2: &Rect,
+    objectives: &[(f64, f64)],
+    board: &Terrain,
+    seed1: i64,
+    seed2: i64,
+    first: i64,
+) -> InterleavedDeploy {
+    let walls = board.walls_world_m();
+    let specs = [specs1, specs2];
+    let mut q = [deploy_begin(specs1, zone1, seed1), deploy_begin(specs2, zone2, seed2)];
+    let order: [usize; 2] = if first == 2 { [1, 0] } else { [0, 1] };
+    let mut sequence: Vec<(i64, String)> = Vec::new();
+    for scouts in [false, true] {
+        let mut cur = [0usize, 0usize];
+        loop {
+            let mut placed = false;
+            for &k in order.iter() {
+                let n = if scouts { q[k].scouts.len() } else { q[k].main.len() };
+                if cur[k] >= n {
+                    continue;
+                }
+                let i = if scouts { q[k].scouts[cur[k]] } else { q[k].main[cur[k]] };
+                cur[k] += 1;
+                deploy_place_next(&mut q[k], specs[k], i, objectives, board, walls);
+                sequence.push((k as i64 + 1, specs[k][i].key.clone()));
+                placed = true;
+            }
+            if !placed {
+                break;
+            }
+        }
+    }
+    let [q1, q2] = q;
+    InterleavedDeploy { side1: q1.out, side2: q2.out, sequence }
+}
+
 // ---- the SETTLE pass (NML-1152 step 6b): `deploy_finish` →
 // `_resolve_deploy_overlaps` (solo_controller.gd:9497-9577), 4 Gauss-Seidel
 // sweeps over every on-table unit: (a) separate the unit's OWN bases to
