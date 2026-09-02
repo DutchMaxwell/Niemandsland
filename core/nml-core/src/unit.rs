@@ -294,6 +294,21 @@ pub struct Unimplemented {
     pub why: String,
 }
 
+/// `SoloController.INFILTRATE_MIN_ENEMY_DIST_M` (solo_controller.gd:9607) read
+/// back into INCHES the way the table's own fallback expression reads it
+/// (`:9620`, `INFILTRATE_MIN_ENEMY_DIST_M / INCHES_TO_METERS`) — deliberately
+/// NOT the literal `3.0`. `0.0762 / 0.0254` is `3.0000000000000004`, and only
+/// that value multiplies back to exactly `0.0762` m; a hard-coded `3.0` lands
+/// on `0.07619999999999999` m, one ULP short of the ring the table measures.
+/// The registry (`min_enemy_dist_in: 3.0` in every shipped entry) hands back
+/// the exact `3.0` instead, so the two readings are one ULP apart BY DESIGN
+/// and the tests below tell them apart.
+pub const INFILTRATE_MIN_ENEMY_DIST_IN: f64 = 0.0762 / 0.0254;
+/// `SoloController.REPEL_AMBUSHERS_DIST_IN` (solo_controller.gd:9723) — the
+/// book's *"Enemy units using Ambush must be set up over 12\" away from this
+/// model's unit"*. An inch literal on the table too, so no such seam here.
+pub const REPEL_AMBUSHERS_DIST_IN: f64 = 12.0;
+
 /// The immutable per-unit closure of `resolve`/`reply_threat`.
 #[derive(Debug, Default)]
 pub struct UnitStatic {
@@ -368,6 +383,30 @@ pub struct UnitStatic {
     /// on every occurrence (verified), so sim.rs stands in a const for both,
     /// the `HIT_AND_RUN_MOVE_IN` precedent.
     pub second_wind_active: bool,
+    /// Ambush arrival S2 — `SoloController._reserve_min_enemy_dist_m`
+    /// (solo_controller.gd:9617-9621): the ring an ARRIVING ambusher must keep
+    /// from every enemy model. `0.0` means "not an infiltrator", i.e. the plain
+    /// 9" `AMBUSH_MIN_ENEMY_DIST_M` path (`:9606`) the caller owns.
+    ///
+    /// The gate is the PLAIN rule name `"Infiltrate"`
+    /// (`GameUnit.has_special_rule`, `:9618`), NOT the registry's
+    /// `unit_rule_active` — a faction whose map fields no `Infiltrate` entry
+    /// still arrives at the fallback ring, and the twin copies that. The value
+    /// is `RulesRegistry.unit_param(unit, "Infiltrate", "min_enemy_dist_in",
+    /// …)` (`:9620`), so a book that moves the ring moves it here too.
+    pub infiltrate_min_enemy_dist_in: f64,
+    /// Ambush arrival S2 — `SoloController.repel_ambush_dist_m`
+    /// (solo_controller.gd:9724-9727): the ring THIS unit projects onto enemy
+    /// ambushers arriving near it, `0.0` without the rule. A defender's rule —
+    /// nothing about the carrier changes; it only enlarges the arriving unit's
+    /// no-go radius, and the `max` against the arriver's own ring is why 12"
+    /// beats even the 3" Infiltrate concession.
+    ///
+    /// Here the gate IS `RulesRegistry.unit_rule_active(enemy,
+    /// "Repel Ambushers")` (`:9725`), the opposite of the field above: a
+    /// faction whose map fields no entry projects nothing at all. Value from
+    /// `min_dist_in` (`:9727`), `12.0` in all 21 shipped GF+AoF entries.
+    pub repel_ambushers_dist_in: f64,
     /// Block B2b — every "Utility Buff" entry this unit carries, params and
     /// all, in the table's own loop order (`utility_buffs_of`).
     pub utility_buffs: Vec<UtilityBuff>,
@@ -530,6 +569,18 @@ fn unit_rule_active(reg: &mut Registries, p: &Profile, rule: &str) -> bool {
         return true;
     }
     map.has_primitive(&p.faction_folder, rule)
+}
+
+/// `RulesRegistry.unit_param` rules_registry.gd:83-93 — one numeric param off
+/// the (system, faction) entry for `rule`, `fallback` when either the map or
+/// the entry is missing. No rule-carried gate: the caller owns that, exactly as
+/// the two call sites at solo_controller.gd:9620 and :9727 do.
+fn unit_param_f(reg: &mut Registries, p: &Profile, rule: &str, key: &str, fallback: f64) -> f64 {
+    let map = reg.rules_for(&p.game_system);
+    match map.lookup(&p.faction_folder, rule) {
+        Some(e) => e.param_f(key, fallback),
+        None => fallback,
+    }
 }
 
 /// One `unit_rules_of_primitive` hit — rules_registry.gd:155-176.
@@ -1362,6 +1413,16 @@ impl UnitStatic {
             second_wind_active: unit_rule_active(reg, p, "Second Wind")
                 || unit_rule_active(reg, p, "Inquisitorial Agent")
                 || unit_rule_active(reg, p, "Martial Prowess"),
+            infiltrate_min_enemy_dist_in: if has_special_rule(&p.special_rules, "Infiltrate") {
+                unit_param_f(reg, p, "Infiltrate", "min_enemy_dist_in", INFILTRATE_MIN_ENEMY_DIST_IN)
+            } else {
+                0.0
+            },
+            repel_ambushers_dist_in: if unit_rule_active(reg, p, "Repel Ambushers") {
+                unit_param_f(reg, p, "Repel Ambushers", "min_dist_in", REPEL_AMBUSHERS_DIST_IN)
+            } else {
+                0.0
+            },
             utility_buffs: utility_buffs_of(reg, p, &mut unimplemented),
             growth: growth_of(reg, p, &mut unimplemented),
             unimplemented,
@@ -1612,6 +1673,96 @@ mod tests {
         "special_rules":["Defensive Growth"],"item_grants":[],
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// Five gf units chosen so the REGISTRY tells them apart, not a stub.
+    /// `alien_hives` fields an `Infiltrate` entry (`min_enemy_dist_in: 3.0`) and
+    /// NO `Repel Ambushers`; `eternal_dynasty` is the mirror image (a
+    /// `Repel Ambushers` entry at `min_dist_in: 12.0`, no `Infiltrate`).
+    const AMBUSH_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "inf_registry":{"unit_id":"inf_registry","name":"Infiltrator","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives",
+        "special_rules":["Infiltrate"],"item_grants":[],"attached_hero_rules":[],
+        "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]},
+      "inf_unmapped":{"unit_id":"inf_unmapped","name":"Unmapped Infiltrator","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"eternal_dynasty",
+        "special_rules":["Infiltrate"],"item_grants":[],"attached_hero_rules":[],
+        "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]},
+      "plain_ambusher":{"unit_id":"plain_ambusher","name":"Plain Ambusher","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives",
+        "special_rules":["Ambush","Ambush Beacon"],"item_grants":[],"attached_hero_rules":[],
+        "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]},
+      "repel_carrier":{"unit_id":"repel_carrier","name":"Repeller","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"eternal_dynasty",
+        "special_rules":["Repel Ambushers"],"item_grants":[],"attached_hero_rules":[],
+        "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]},
+      "repel_unmapped":{"unit_id":"repel_unmapped","name":"Unmapped Repeller","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives",
+        "special_rules":["Repel Ambushers"],"item_grants":[],"attached_hero_rules":[],
+        "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
+
+    fn ambush_static(key: &str) -> UnitStatic {
+        let header = read_act_header(AMBUSH_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        UnitStatic::build(&mut reg, header.profiles.get(key).expect(key))
+    }
+
+    /// RED — the REGISTRY value wins, and it is measurably not the fallback.
+    /// `min_enemy_dist_in: 3.0` is an exact 3.0; the table's own fallback
+    /// expression (`INFILTRATE_MIN_ENEMY_DIST_M / INCHES_TO_METERS`,
+    /// solo_controller.gd:9620) is `3.0000000000000004`. Stamp the constant
+    /// instead of reading the entry and this assertion fails on that ULP.
+    #[test]
+    fn an_infiltrators_ring_is_the_registrys_value_not_the_constant() {
+        let us = ambush_static("inf_registry");
+        assert_eq!(us.infiltrate_min_enemy_dist_in, 3.0, "the registry's exact 3.0");
+        assert_ne!(
+            us.infiltrate_min_enemy_dist_in, INFILTRATE_MIN_ENEMY_DIST_IN,
+            "and it is NOT the fallback — they are one ULP apart by design"
+        );
+    }
+
+    /// The other half: a faction the map fields no `Infiltrate` entry for still
+    /// gets a ring, because the table gates this one on the PLAIN rule name
+    /// (`has_special_rule`, :9618), not on `unit_rule_active`. Swap the gate to
+    /// `unit_rule_active` and this drops to 0.0.
+    #[test]
+    fn an_unmapped_infiltrator_falls_back_to_the_tables_own_expression() {
+        let us = ambush_static("inf_unmapped");
+        assert_eq!(us.infiltrate_min_enemy_dist_in, INFILTRATE_MIN_ENEMY_DIST_IN);
+        assert_eq!(us.infiltrate_min_enemy_dist_in, 0.0762 / 0.0254);
+        assert_ne!(us.infiltrate_min_enemy_dist_in, 3.0, "a bare 3.0 is a different float");
+    }
+
+    /// A plain Ambush unit is NOT an infiltrator: 0.0 hands the caller the 9"
+    /// `AMBUSH_MIN_ENEMY_DIST_M` path (:9606). "Ambush Beacon" rides along to
+    /// pin the prefix lesson (solo_controller.gd:9731-9734) — `has_special_rule`
+    /// is exact-or-parametrised, so it must not answer the "Infiltrate" query
+    /// and must not answer "Ambush" for the Beacon either.
+    #[test]
+    fn a_plain_ambusher_is_not_an_infiltrator() {
+        let us = ambush_static("plain_ambusher");
+        assert_eq!(us.infiltrate_min_enemy_dist_in, 0.0);
+        assert_eq!(us.repel_ambushers_dist_in, 0.0);
+    }
+
+    /// Repel Ambushers projects the registry's 12"; the gate here IS
+    /// `unit_rule_active`, so a faction whose map fields no entry projects
+    /// NOTHING even though the unit prints the rule. Copy the Infiltrate gate
+    /// onto this field and the second assertion becomes 12.0.
+    #[test]
+    fn repel_ambushers_is_registry_gated_unlike_infiltrate() {
+        assert_eq!(ambush_static("repel_carrier").repel_ambushers_dist_in, 12.0);
+        assert_eq!(ambush_static("repel_carrier").repel_ambushers_dist_in, REPEL_AMBUSHERS_DIST_IN);
+        assert_eq!(
+            ambush_static("repel_unmapped").repel_ambushers_dist_in, 0.0,
+            "alien_hives fields no Repel Ambushers entry -> unit_rule_active is false"
+        );
+    }
 
     /// `growth_of` REPORTS the registry's Growth Markers entry — a body
     /// emptied into `vec![]` would report nothing at all.
