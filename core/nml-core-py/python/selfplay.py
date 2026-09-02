@@ -71,6 +71,7 @@ bank raises rather than inventing a board.
 
 from __future__ import annotations
 import argparse
+import contextlib
 
 import hashlib
 
@@ -923,6 +924,22 @@ def _pick_for(
         state, player, statics, eps=eps, explore_seed=explore_seed, cands=cands
     )
     return pick if pick.get("used") else {}
+
+
+@contextlib.contextmanager
+def forced_picks(fn):
+    """Arm `fn` as `_pick_for` for the `with` block only, restoring whatever was
+    armed before on the way out — including on an exception. A tool that wants
+    every activation FORCED (the Gen-0 replay proofs, the shard exporter, the
+    narrator) must go through this rather than assigning `_pick_for` bare: a
+    bare assignment never restores, so it disarms the real planner for every
+    game-playing test that runs later in the same process."""
+    global _pick_for
+    previous, _pick_for = _pick_for, fn
+    try:
+        yield
+    finally:
+        _pick_for = previous
 
 
 def _refill_round_caster_points(unit: dict[str, Any], profile: dict[str, Any]) -> int:

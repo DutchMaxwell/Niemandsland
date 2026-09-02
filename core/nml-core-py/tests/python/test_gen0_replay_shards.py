@@ -116,6 +116,42 @@ def test_a_replay_divergence_is_skipped_and_counted_not_written(tmp_path):
     assert meta["divergence"], meta
 
 
+def test_forced_picks_restores_pick_for_on_success_and_on_raise():
+    """Regression: a bare `selfplay._pick_for = fn` never restored, so
+    whichever tool's test ran first in a full suite disarmed every later
+    game-playing test (~40 failures, `pytest tests/python` on one process)."""
+    original = gr.selfplay._pick_for
+    sentinel = lambda *a, **k: {}
+    with gr.selfplay.forced_picks(sentinel):
+        assert gr.selfplay._pick_for is sentinel
+    assert gr.selfplay._pick_for is original
+    with pytest.raises(RuntimeError):
+        with gr.selfplay.forced_picks(sentinel):
+            raise RuntimeError("boom")
+    assert gr.selfplay._pick_for is original
+
+
+@needs_corpus
+def test_replay_game_restores_pick_for_after_running(tmp_path):
+    """`replay_game` calls `selfplay.play_game` in-process (no subprocess
+    isolation, unlike the CLI-driven corpus tests) — the exact leak site.
+    `gr.armed` shims `objective_layout`/`Tray` too (same unrestored-global
+    shape, found by this same fix — it broke 8 unrelated dice/tray tests
+    whenever this test ran first in a full suite)."""
+    import gen0_replay_shards as grs
+    before = gr.selfplay._pick_for
+    before_layout, before_tray = gr.nml_core.objective_layout, gr.nml_core.Tray
+    rec = json.loads((CORPUS / GAMES[0]).read_text())
+    row = rec["planner_positions"][5]["cands"]
+    row["best"] = (row["best"] + 1) % len(row["list"])
+    bad = tmp_path / GAMES[0]
+    bad.write_text(json.dumps(rec))
+    grs.replay_game(str(bad), str(LISTS))
+    assert gr.selfplay._pick_for is before
+    assert gr.nml_core.objective_layout is before_layout
+    assert gr.nml_core.Tray is before_tray
+
+
 @needs_corpus
 def test_rerun_over_a_finished_dir_launches_zero_workers(tmp_path):
     code1, out1 = _run(tmp_path)
