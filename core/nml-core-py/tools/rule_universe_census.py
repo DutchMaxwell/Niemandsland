@@ -93,6 +93,12 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # (Regenerative Strength) are recorded (registry-gated) and read by
     # nothing, the Utility-Buff over-count shape #489 found.
     "Growth Markers": frozenset({"ap_per_marker", "ap_per_two", "hit_per_marker", "hit_per_two"}),
+    # Block B10: unit.rs::regen_targets reads `ignore_target` (and the spell
+    # twin `ignore_target_spell`) off the whole-unit "Resistance" entry into
+    # Ctx.regen_target / Ctx.regen_target_spell — consumed by
+    # dice.rs::regen_batch, combat.rs's unsaved folds and spell.rs's
+    # spell-wound leg; `all_models` is the whole-unit gate itself.
+    "Resistance": frozenset({"ignore_target", "ignore_target_spell", "all_models"}),
     # Block B9: deployment.rs::deploy_side reads the registry's `place_in`
     # (UnitSpec.place_in_m via list_to_profile.py:_deploy_flags — the table's
     # `unit_param(unit, "Vanguard", "place_in", 9.0)`, solo_controller.gd:9627)

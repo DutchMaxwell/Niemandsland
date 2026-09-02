@@ -8,7 +8,7 @@
 //! DAMAGE spells only, unit-level tokens, no boost, no interference — so the
 //! cast chance is always `AiSpell.cast_success_chance(0, 0)` = 0.5.
 
-use crate::combat::{block_chance, deadly_multiplier, success_chance, REGENERATION_TARGET, SIX_P};
+use crate::combat::{block_chance, deadly_multiplier, success_chance, SIX_P};
 use crate::rules::Spell;
 use crate::unit::Ctx;
 
@@ -125,10 +125,11 @@ pub fn spell_damage_ev(hits: i64, def: &Ctx, f: &Facets) -> f64 {
         unsaved += h * SIX_P;
     }
     if def.regeneration && !(bane || f.ignores_regen) {
-        // `def_ctx.get("regen_target", REGENERATION_TARGET)` — ctx_for always
-        // writes the key, so the constant is a documented dead fallback here.
-        let _ = REGENERATION_TARGET;
-        unsaved *= 1.0 - success_chance(def.regen_target);
+        // Block B10 — the SPELL-wound leg reads the spell twin
+        // (`_solo_regen_pick`'s `from_spell` key, main.gd:6595): a whole-unit
+        // Resistance carrier ignores on `ignore_target_spell` (2+), every
+        // other unit repeats `regen_target` (ctx_for always writes both).
+        unsaved *= 1.0 - success_chance(def.regen_target_spell);
     }
     unsaved
 }
@@ -184,4 +185,35 @@ pub fn official_pick_order(list_size: usize, d3: i64, caster_x: i64) -> Vec<usiz
     }
     let start = ((d3.clamp(1, 3) + caster_x.max(0) - 1) as usize) % list_size;
     (0..list_size).map(|i| (start + i) % list_size).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Block B10 — the SPELL-wound regeneration leg reads
+    /// `Ctx.regen_target_spell` (`_solo_regen_pick(from_spell=true)`,
+    /// main.gd:6595), not `regen_target`. A whole-unit Resistance carrier
+    /// (regen 6+ normal / 2+ vs spells) therefore takes far fewer unsaved
+    /// SPELL wounds than a plain 6+ regeneration target. RED (read
+    /// `regen_target` here instead): the carrier's unsaved climbs to the
+    /// 6+ value and the inequality below flips to equality.
+    #[test]
+    fn spell_wounds_ignore_on_the_spell_twin_not_the_plain_target() {
+        let carrier = Ctx { defense: 4, regeneration: true, regen_target: 6, regen_target_spell: 2, ..Default::default() };
+        let plain_six = Ctx { defense: 4, regeneration: true, regen_target: 6, regen_target_spell: 6, ..Default::default() };
+
+        let f = spell_facets(&[]);
+        let carrier_unsaved = spell_damage_ev(10, &carrier, &f);
+        let six_unsaved = spell_damage_ev(10, &plain_six, &f);
+
+        assert!(
+            carrier_unsaved < six_unsaved,
+            "the 2+ spell leg must beat the 6+ plain leg: {carrier_unsaved} vs {six_unsaved}"
+        );
+        // 10 hits into Defense 4, AP 0 -> 5 unsaved before regeneration;
+        // a 2+ leg ignores 5/6 of them, leaving 5/6.
+        assert!((carrier_unsaved - 5.0 / 6.0).abs() < 1e-9, "2+ ignores 5/6: {carrier_unsaved}");
+        assert!((six_unsaved - 25.0 / 6.0).abs() < 1e-9, "6+ ignores 1/6: {six_unsaved}");
+    }
 }
