@@ -24,24 +24,8 @@ BANK = os.path.expanduser("~/selfplay_out/terrain_bank")
 
 sys.path.insert(0, PYDIR)
 
-import nml_core  # noqa: E402
 import selfplay  # noqa: E402
-
-_orig_layout = nml_core.objective_layout
-_orig_tray = nml_core.Tray
-_DICE = {"v": 0}
-
-
-def _layout(terrain, seed, mode, zones):
-    return _orig_layout(terrain, seed + 500000, mode, zones)
-
-
-def _tray(_seed):
-    return _orig_tray(_DICE["v"])
-
-
-nml_core.objective_layout = _layout
-nml_core.Tray = _tray
+import gen0_replay_one as gr  # noqa: E402
 
 
 def main() -> int:
@@ -75,35 +59,36 @@ def main() -> int:
     ap.add_argument("--deep-menu-los", choices=selfplay.MENU_LOS_MODES, default=None)
     a = ap.parse_args()
 
-    _DICE["v"] = a.dice_seed
+    gr.G["dice"] = a.dice_seed
     t0 = time.perf_counter()
-    res = selfplay.play_game(
-        a.seed,
-        a.army1,
-        a.army2,
-        a.repo,
-        a.bank,
-        None,
-        sidecars=False,
-        top_k=a.base_top_k,
-        horizon=a.base_horizon,
-        deep_player=a.deep_player,
-        deep_top_k=a.deep_top_k,
-        deep_horizon=a.deep_horizon,
-        charge_gate="off",
-        hero_attach="table",
-        dice="table",
-        charge_landing="table",
-        movement="rigid",
-        sighting="model",
-        los=a.los,
-        menu_los=a.menu_los,
-        deep_menu_los=a.deep_menu_los,
-        cond_ap=True,
-        objectives="rulebook",
-        deployment="arena",
-        dice_seed=a.dice_seed,
-    )
+    with gr.armed(selfplay._pick_for):
+        res = selfplay.play_game(
+            a.seed,
+            a.army1,
+            a.army2,
+            a.repo,
+            a.bank,
+            None,
+            sidecars=False,
+            top_k=a.base_top_k,
+            horizon=a.base_horizon,
+            deep_player=a.deep_player,
+            deep_top_k=a.deep_top_k,
+            deep_horizon=a.deep_horizon,
+            charge_gate="off",
+            hero_attach="table",
+            dice="table",
+            charge_landing="table",
+            movement="rigid",
+            sighting="model",
+            los=a.los,
+            menu_los=a.menu_los,
+            deep_menu_los=a.deep_menu_los,
+            cond_ap=True,
+            objectives="rulebook",
+            deployment="arena",
+            dice_seed=a.dice_seed,
+        )
     wall = time.perf_counter() - t0
 
     deep_knobs = {"top_k": a.deep_top_k, "horizon": a.deep_horizon}

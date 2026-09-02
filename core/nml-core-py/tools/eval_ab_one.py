@@ -35,24 +35,8 @@ BANK = os.path.expanduser("~/selfplay_out/terrain_bank")
 
 sys.path.insert(0, PYDIR)
 
-import nml_core  # noqa: E402
 import selfplay  # noqa: E402
-
-_orig_layout = nml_core.objective_layout
-_orig_tray = nml_core.Tray
-_DICE = {"v": 0}
-
-
-def _layout(terrain, seed, mode, zones):
-    return _orig_layout(terrain, seed + 500000, mode, zones)
-
-
-def _tray(_seed):
-    return _orig_tray(_DICE["v"])
-
-
-nml_core.objective_layout = _layout
-nml_core.Tray = _tray
+import gen0_replay_one as gr  # noqa: E402
 
 
 def main() -> int:
@@ -74,7 +58,7 @@ def main() -> int:
     ap.add_argument("--bank", default=BANK)
     a = ap.parse_args()
 
-    _DICE["v"] = a.dice_seed
+    gr.G["dice"] = a.dice_seed
     deep_on = a.deep_top_k is not None or a.deep_horizon is not None
     kwargs = dict(
         sidecars=False,
@@ -94,7 +78,8 @@ def main() -> int:
         kwargs.update(eval_variant_player=a.cand_player, eval_variant=a.cand_variant)
 
     t0 = time.perf_counter()
-    res = selfplay.play_game(a.seed, a.army1, a.army2, a.repo, a.bank, None, **kwargs)
+    with gr.armed(selfplay._pick_for):
+        res = selfplay.play_game(a.seed, a.army1, a.army2, a.repo, a.bank, None, **kwargs)
     wall = time.perf_counter() - t0
 
     suffix = "".join([
