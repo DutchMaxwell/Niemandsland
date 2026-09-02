@@ -130,6 +130,12 @@ pub struct Pick {
     /// not that the answer differs. The trace fields keep describing the
     /// argmax the pick left.
     pub explored: bool,
+    /// The built candidates' CONTENT, in BUILD index order (`scored`'s own
+    /// rows, whose `idx` equals their position — prefilter). Expert-iteration
+    /// step 1: the pyo3 binding emits this as `trace.cands` under its opt-in,
+    /// joined by `trace.scored`'s `idx`; every other consumer ignores it, so
+    /// the default answer is byte-identical to what it always was.
+    pub cands: Vec<Candidate>,
 }
 
 /// TEST SEAMS. Every shipping call uses `PlanBend::default()`, which is the
@@ -602,6 +608,7 @@ impl<'a> Search<'a> {
             last_leaf,
             arbitration,
             explored,
+            cands: scored.iter().map(|r| r.cand.clone()).collect(),
         })
     }
 }

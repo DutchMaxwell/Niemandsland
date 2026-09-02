@@ -119,6 +119,14 @@ pub struct Knobs {
     /// from Python.
     #[serde(default = "legacy_vocab_version")]
     pub rule_vocab_version: i64,
+    /// The evolved-hand-eval seam: which `score::score_hand_variant` arm a
+    /// call plays. Absent from every corpus recorded before it, so the
+    /// default is 0 — today's frozen eval, byte-identical. Threaded like
+    /// `seat_mode` (`:44`) and `move_rigid` (`:88-92`): this struct only, read
+    /// where `score.rs` and `rollout::blend_score` need it. No arm but 0
+    /// exists yet — this field is the registration point, not a new eval.
+    #[serde(default)]
+    pub eval_variant: i64,
 }
 
 /// The `sighting` knob's two settings — the header writes them as strings, the
@@ -189,6 +197,7 @@ impl Default for Knobs {
             // block does. A caller that plays a FRESH game stamps
             // `rows::RULE_VOCAB_VERSION` itself.
             rule_vocab_version: crate::rows::LEGACY_VOCAB_VERSION,
+            eval_variant: 0,
         }
     }
 }
@@ -450,6 +459,16 @@ pub struct ActHeader {
 /// Parses one act-corpus header line (`{"kind":"header", ...}`).
 pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
     let header: Header = serde_json::from_str(text).map_err(|e| format!("act header: {e}"))?;
+    // The evolved-eval seam: only variant 0 (today's frozen eval) has a
+    // registered arm (`score::score_hand_variant`). A header asking for
+    // anything else is rejected HERE, loudly, rather than silently playing
+    // variant 0 or panicking deep inside a rollout.
+    if header.knobs.eval_variant != 0 {
+        return Err(format!(
+            "eval_variant {}: no registered arm (only 0 exists)",
+            header.knobs.eval_variant
+        ));
+    }
     Ok(header_of(header))
 }
 
@@ -517,4 +536,28 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
         });
     }
     Ok(ActCorpus { profiles, terrain, knobs, acts })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_act_header;
+
+    /// The evolved-eval seam's other RED proof — a header asking for a variant
+    /// with no registered arm is refused HERE, before it can ever reach
+    /// `score::score_hand_variant`'s `unreachable!` fallback.
+    #[test]
+    fn an_unregistered_eval_variant_is_refused_at_header_parse() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"eval_variant":1}}"#;
+        let err = read_act_header(head).expect_err("eval_variant 1 has no registered arm");
+        assert!(err.contains("eval_variant"), "error should name the seam: {err}");
+    }
+
+    /// An absent `eval_variant` (every corpus recorded before this knob
+    /// existed) defaults to 0 and parses exactly as it always did.
+    #[test]
+    fn an_absent_eval_variant_defaults_to_0_and_parses() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{}}"#;
+        let header = read_act_header(head).expect("no knobs at all still parses");
+        assert_eq!(header.knobs.eval_variant, 0);
+    }
 }
