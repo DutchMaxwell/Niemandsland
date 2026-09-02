@@ -125,19 +125,65 @@ def collect(games):
             "baselines": baselines(rows, names)}
 
 
+# An Ambush/Infiltrate/Rapid Ambush/Ambush Beacon carrier never arrives for the
+# twin (selfplay.py ~1528-1536: a reserved unit starts off-table and the twin
+# does not bring it on) -- so any game whose army carries one was played
+# short-handed. A unit is a CARRIER if any of its own rules, or any rule an
+# item's `content` grants it, names one of those (substring match, case-free).
+def is_carrier(u):
+    names = [r.get("name", "") for r in u.get("rules", [])]
+    names += [c.get("name", "") for it in u.get("items", []) for c in it.get("content", [])]
+    return any(k in n.lower() for n in names for k in ("ambush", "infiltrate"))
+
+
+def load_list(path, list_dir, cache):
+    base = Path(path).name
+    if base not in cache:
+        cache[base] = json.loads((list_dir / base).read_text())
+    return cache[base]
+
+
+def ambush_audit(games, list_dir):
+    cache, per_game, list_carriers, pts_hit = {}, [], {}, Counter()
+    for name, g in games:
+        carriers, pts = [], None
+        for side in ("p1", "p2"):
+            path = g["armies"][side]
+            found = [u["name"] for u in load_list(path, list_dir, cache)["units"] if is_carrier(u)]
+            if found:
+                carriers += found
+                list_carriers.setdefault(Path(path).name, set()).update(found)
+            pts = points_of(path) if side == "p1" else pts
+        per_game.append(len(carriers))
+        if carriers:
+            pts_hit[pts] += 1
+    affected = [c for c in per_game if c > 0]
+    return {"games": len(per_game), "affected_games": len(affected),
+            "affected_share": len(affected) / (len(per_game) or 1),
+            "carriers_per_affected_game": stats(affected),
+            "affected_points_split": dict(pts_hit),
+            "lists_with_ambushers": {k: sorted(v) for k, v in list_carriers.items()}}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--corpus", default=str(Path.home() / "selfplay_out/gen0_teacher"))
     ap.add_argument("--every", type=int, default=1, help="sample every Kth file, by name")
     ap.add_argument("--limit", type=int, default=0, help="cap on games after striding")
     ap.add_argument("--out", default=".forge/gen0_stats.json")
+    ap.add_argument("--ambush-audit", action="store_true",
+                    help="report Ambush/Infiltrate carriers per SS1.5's army lists, not the corpus stats")
     a = ap.parse_args(argv)
-    try:
-        summary = collect(load_games(a.corpus, a.every, a.limit))
-    except ValueError as e:
-        sys.exit(f"refusing corrupt corpus record: {e}")
-    if summary["games"] == 0:
-        sys.exit(f"no gen0_s*_d*.json files matched under {a.corpus}")
+    if a.ambush_audit:
+        list_dir = Path.home() / "nml-mission/farm/ai_lists"
+        summary = ambush_audit(load_games(a.corpus, a.every, a.limit), list_dir)
+    else:
+        try:
+            summary = collect(load_games(a.corpus, a.every, a.limit))
+        except ValueError as e:
+            sys.exit(f"refusing corrupt corpus record: {e}")
+        if summary["games"] == 0:
+            sys.exit(f"no gen0_s*_d*.json files matched under {a.corpus}")
     out = Path(a.out).expanduser()
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(summary, indent=1))
