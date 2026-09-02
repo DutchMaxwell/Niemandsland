@@ -191,6 +191,44 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+// v201 melee reach (inches): an enemy within this horizontal gap of the marker can swing at whoever takes it.
+const MELEE_REACH_V201: f64 = 2.0;
+// v201 melee weight: a brawler in reach threatens about half its remaining wounds as reply damage.
+const MELEE_WEIGHT_V201: f64 = 0.5;
+
+// v201: frozen `presence` plus a melee-reply term — enemy wound strength near the marker, fading linearly to zero at the reach edge, which the shooting-only reply threat never charges for.
+fn presence_v201(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
+    let mut melee = 0.0f64;
+    for j in 0..state.units() {
+        if state.player[j] == state.player[i] || state.alive[j] <= 0 || state.aircraft[j] || state.shaken[j] { continue; }
+        let g = control_gap_in(state, j, obj_pos);
+        if g < MELEE_REACH_V201 {
+            melee += (1.0 - g / MELEE_REACH_V201) * state.wounds[j].iter().map(|w| *w as f64).sum::<f64>();
+        }
+    }
+    presence(state, i, obj_pos, threat + MELEE_WEIGHT_V201 * melee)
+}
+
+// v201 hand score: frozen averaging path rerouted through `presence_v201`; destroy missions keep the v0 branch.
+fn score_hand_v201(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() { return 0.5; }
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) {
+        return score_hand(state, player, incoming);
+    }
+    let mut total = 0.0f64;
+    for oi in 0..state.objectives.len() {
+        let obj = state.objectives[oi];
+        let (mut mine, mut theirs) = (0.0f64, 0.0f64);
+        for i in 0..state.units() {
+            let p = presence_v201(state, i, obj.pos, threat_of(incoming, i));
+            if state.player[i] == player { mine += p; } else { theirs += p; }
+        }
+        let seized = if obj.owner == 0 { 0.5 } else if obj.owner == player { 1.0 } else { 0.0 };
+        total += if mine + theirs <= 0.0 { seized } else { mine / (mine + theirs) };
+    }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +239,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        201 => score_hand_v201(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
