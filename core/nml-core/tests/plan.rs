@@ -277,7 +277,7 @@ fn sweep(c: &ActCorpus, bend: PlanBend) -> Report {
     let statics = build_act_statics(c, REPO);
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold };
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
     let mut r = Report::default();
@@ -579,7 +579,7 @@ fn the_one_ply_valve_routes_to_plan_and_plan_picks_the_ranked_head() {
     let statics = build_act_statics(&c, REPO);
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold };
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
     let (mut checked, mut bad, mut valve) = (0usize, 0usize, 0usize);
@@ -758,7 +758,7 @@ fn g4b_a_fallen_hero_stops_lending_its_rules_to_its_host() {
     // --- the picks, on the same bar G4 uses ---
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold };
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model };
     let mut sc = Scratch::default();
     let mut clean = 0;
     for (ai, act) in c.acts.iter().enumerate() {
@@ -865,7 +865,7 @@ fn run_corpus(c: &ActCorpus, explore: Option<(f64, i64)>) -> Vec<(usize, Pick)> 
     let statics = build_act_statics(c, REPO);
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold };
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
     let mut picks = Vec::new();
@@ -938,7 +938,7 @@ fn order_mode_off_is_byte_identical_order_reorders_within_unit_only() {
     let statics = build_act_statics(&c, REPO);
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold };
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model };
     let mut sc = Scratch::default();
     let harness = PolicyHarness::new(kind_ranking_net(), REPO)
         .unwrap_or_else(|e| panic!("policy harness must load the checked-in rule vocab: {e}"));
@@ -1012,7 +1012,7 @@ fn order_mode_with_no_net_wired_declines() {
     let statics = build_act_statics(&c, REPO);
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold };
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
     let act = &c.acts[0];

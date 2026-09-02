@@ -153,6 +153,35 @@ def test_sighting_unit_vs_model_plays_a_different_game():
     print("sighting unit vs model first diverges at seed %d" % seed)
 
 
+@pytest.mark.skipif(
+    _lists_missing(CHARGE_ARMY1, CHARGE_ARMY2),
+    reason="needs the terrain bank + robot_legions/blessed_sisters 1000pt lists",
+)
+def test_los_unit_vs_model_plays_a_different_game():
+    """NML-1160: `play_game(los=...)` — WHICH sight the menu and the resolve
+    read. `"unit"` is the trainer's own pair of wrong answers (an empty `los`
+    row, so `AiPlanner._best_shoot` never refuses a target, and a
+    centre-to-centre `los_pairs`, so the resolve drops the volley the menu
+    offered); `"model"` is the arena's, `sight::sight_matrix` on both.
+
+    The wire is two calls to `Core.restamp_los` — one on the captured state,
+    one per played activation. Cut either and the header still stamps `"model"`
+    while the game plays the centre probe, which is exactly the failure this
+    guard exists to catch: the digest is taken with `knobs` stripped."""
+    seed, unit, model = _first_divergent_seed(
+        CHARGE_ARMY1, CHARGE_ARMY2, "los", "unit", "model", dice="table"
+    )
+    assert seed is not None, "no seed in %s diverged between los unit/model" % list(SEEDS)
+    assert "los" not in unit["knobs"], "the default stamps nothing (NML-1147a)"
+    assert model["knobs"]["los"] == "model"
+
+
+def test_an_unknown_los_mode_raises_instead_of_falling_back():
+    """`resolve_los` follows `resolve_sighting`'s rule."""
+    with pytest.raises(ValueError, match="los must be one of"):
+        sp.resolve_los("per_model")
+
+
 def test_an_unknown_sighting_mode_raises_instead_of_falling_back():
     """`resolve_sighting` follows `resolve_dice`'s rule: a corpus whose header
     claims a rung it did not play is worse than no corpus."""

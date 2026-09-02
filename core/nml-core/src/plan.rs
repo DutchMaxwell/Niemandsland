@@ -196,6 +196,7 @@ fn seams_of(knobs: &Knobs) -> Seams {
         move_rigid: knobs.move_rigid,
         no_dangerous: !knobs.dangerous,
         no_engage_fold: !knobs.engage_fold,
+        los_model: knobs.los_model,
     }
 }
 

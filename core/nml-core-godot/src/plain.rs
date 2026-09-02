@@ -823,6 +823,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // Godot-free harness, whose GDScript twin (tools/core_selfplay.gd)
         // wires no gate; a header that carries the key is honoured either way.
         charge_gate: d.get("charge_gate").map(|v| flag(&v)).unwrap_or(dflt.charge_gate),
+        // NML-1160. No recorder writes this key: an ARENA state already carries
+        // the per-unit `los` rows `BattleSim.capture` fills, and stamps no
+        // `los_pairs` at all — the knob exists for the Godot-free trainer,
+        // whose twin (tools/core_selfplay.gd) is the other way round.
+        los_model: dflag(d, "los_model"),
         // NML-1073 M5 D1-B4b/BUG-3. The recorder NOW writes this key
         // (act_recorder.gd `_header_line`, from `BattleSim.hero_fold_enabled()`),
         // so an in-game seam under the `hero_fold` knob folds the joined hero

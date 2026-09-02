@@ -3305,7 +3305,7 @@ fn resolve_with(
     // carried a matrix at all: a `Cover::Recorded` replay reads each node's own
     // recorded rows, and a state with no matrix had no `los_blocked` seam.
     if let Cover::Board(terrain) = cover {
-        refresh_los_pairs(&mut next, state, terrain);
+        refresh_los_pairs(&mut next, state, terrain, seams);
     }
     Ok(next)
 }
@@ -3317,7 +3317,16 @@ fn resolve_with(
 /// centres. Both directions are recomputed rather than mirrored: the GDScript
 /// samples `a.lerp(b, t)`, and the two orders are only equal in exact
 /// arithmetic.
-fn refresh_los_pairs(next: &mut State, parent: &State, terrain: &Terrain) {
+fn refresh_los_pairs(next: &mut State, parent: &State, terrain: &Terrain, seams: Seams) {
+    // NML-1160: under `los_model` the matrix is the table's PER-MODEL sight,
+    // which the caller re-stamps between two played activations exactly as
+    // `BattleSim.capture` re-runs `_has_los`. A clone inherits it untouched
+    // there (`clone_state` copies `su["los"]`, battle_sim.gd:1644-1651), so
+    // rewriting a moved row here with the centre probe would swap the answer
+    // back to the coarse one halfway through a search.
+    if seams.los_model {
+        return;
+    }
     if !terrain.is_valid() {
         return;
     }
@@ -5038,7 +5047,7 @@ mod tests {
         // hit lands (matching `a_volley_draws_hit_dice_then_one_save_batch_
         // of_exactly_the_hits`'s own seed-27/6-attack pairing), so the save
         // roll this assertion reads actually gets drawn.
-        statics[0].shoot = vec![gun("Rifle", 6, 24)];
+        statics[0].shoot = vec![gun("Rifle", 20, 24)];
         let mut tray = Tray::seeded(27);
         let (_, shot) = resolve_stochastic_tray_on_board(
             &statics, &st3, &buff_action(Some("b")), &terrain, Seams::default(), &mut rng, &mut tray,
@@ -5951,5 +5960,140 @@ mod tests {
         .unwrap();
         let dx = st.positions[0][0][0] - next.positions[0][0][0];
         assert!((dx / IN2M - 3.75).abs() < 0.05, "moved {} in", dx / IN2M);
+    }
+
+    #[cfg(test)]
+    mod los_model_tests {
+        use super::*;
+        use crate::terrain::{self, CellParams, Obb, PlainTerrain};
+
+        fn at(x_in: f64, z_in: f64) -> [f64; 3] {
+            [x_in * IN2M, 0.0, z_in * IN2M]
+        }
+
+        /// NML-1160's fixture, and the whole defect in one picture: a CONTAINER wall
+        /// two cells tall (world cells (0,0) and (0,1), i.e. x in [0,3)" and z in
+        /// [0,6)") with a two-model unit on each side. Both unit CENTRES sit at
+        /// z = 5.25", behind the wall; the NORTH model of each sits at z = 9.0",
+        /// with a clear lane past the wall's end. `SchoolTerrain.los_blocked` — the
+        /// centre-to-centre probe self-play stamps into `los_pairs` — says blocked;
+        /// `SoloController._has_los`, which is the ONLY sight test the table itself
+        /// applies, says the shot is on.
+        fn los_line() -> (State, Vec<UnitStatic>, Terrain) {
+            let (mut st, mut statics) = buff_line();
+            st.positions = vec![
+                vec![at(-3.0, 1.5), at(-3.0, 9.0)],
+                vec![],
+                vec![at(6.0, 1.5), at(6.0, 9.0)],
+                vec![],
+            ];
+            st.radii = vec![vec![0.016; 2], vec![], vec![0.016; 2], vec![]];
+            st.wounds = vec![vec![1; 2], vec![], vec![1; 2], vec![]];
+            st.alive = vec![2, 0, 2, 0];
+            statics[2].model_count = 2;
+            statics[2].wounds_max = vec![1, 1];
+            statics[2].ctx.defense = 6; // the fixture has to LAND wounds to show one
+            statics[0].shoot = vec![gun("Rifle", 20, 24)];
+            let terrain = Terrain::build(&PlainTerrain {
+                cells: vec![
+                    [15.0, 15.0, terrain::CONTAINER as f64],
+                    [15.0, 16.0, terrain::CONTAINER as f64],
+                ],
+                sandbox: Vec::<Obb>::new(),
+                walls: vec![],
+                cell_params: CellParams {
+                    table_size_feet: [6.0, 4.0],
+                    grid_rotation_degrees: 0.0,
+                    grid_size_inches: 3.0,
+                    inches_to_meters: IN2M,
+                },
+            });
+            (st, statics, terrain)
+        }
+
+        fn shoot_at_b() -> Action {
+            Action {
+                kind: HOLD,
+                unit: "a".into(),
+                dest: None,
+                shoot: Some("b".into()),
+                charge: None,
+                patient: false,
+                split: None,
+                traced: None,
+            }
+        }
+
+        fn centre_matrix(st: &State, terrain: &Terrain) -> Vec<bool> {
+            let n = st.units();
+            let centres: Vec<V3> = (0..n).map(|i| geom::centre(&st.positions[i])).collect();
+            let mut m = vec![true; n * n];
+            for i in 0..n {
+                for j in 0..n {
+                    m[i * n + j] = !terrain.los_blocked(centres[i], centres[j]);
+                }
+            }
+            m
+        }
+
+        fn run(st: &State, statics: &[UnitStatic], terrain: &Terrain, seams: Seams) -> State {
+            let mut tray = Tray::seeded(11);
+            let mut rng = GodotRng::new(0);
+            resolve_stochastic_tray_on_board(statics, st, &shoot_at_b(), terrain, seams, &mut rng, &mut tray)
+                .unwrap()
+                .0
+        }
+
+        /// RED for the rung: the shot the table would take, refused by the coarse
+        /// matrix and taken by the per-model one — on ONE state, with one knob
+        /// between the two runs.
+        #[test]
+        fn a_model_lane_past_a_wall_is_a_shot_the_centre_probe_refuses() {
+            let (st, statics, terrain) = los_line();
+            let n = st.units();
+            let coarse = centre_matrix(&st, &terrain);
+            assert!(!coarse[2], "the fixture's wall has to block the centre line a -> b");
+            let model = sight::sight_matrix(&st, &terrain);
+            assert!(model[2] && model[2 * n], "one model on each side has a clear lane");
+
+            // Knob OFF — `los_pairs` is the centre probe. `_los_clear` refuses and
+            // the resolve leaves the target untouched: bit-identical to a HOLD.
+            let mut dark = st.clone();
+            dark.los_pairs = Some(Rc::new(coarse));
+            let off = run(&dark, &statics, &terrain, Seams::default());
+            assert_eq!(wounds_left(&off, 2), wounds_left(&dark, 2), "today the volley is dropped");
+
+            // Knob ON — the same state, the same seed, the per-model matrix.
+            let mut lit = st.clone();
+            lit.los_pairs = Some(Rc::new(model));
+            let on = run(&lit, &statics, &terrain, Seams { los_model: true, ..Seams::default() });
+            assert!(wounds_left(&on, 2) < wounds_left(&lit, 2), "the lane the models have is a volley");
+        }
+
+        /// The guard on `refresh_los_pairs`: with `los_model` the per-model matrix
+        /// survives a unit moving, because a clone inherits `su["los"]` untouched on
+        /// the table too (`clone_state`, battle_sim.gd:1644-1651). Without the seam
+        /// the mover's row and column are rewritten with the CENTRE probe — which on
+        /// this fixture puts the coarse answer back one activation later.
+        #[test]
+        fn the_seam_stops_a_move_rewriting_the_matrix_with_the_centre_probe() {
+            let (st, _statics, terrain) = los_line();
+            let n = st.units();
+            let mut parent = st.clone();
+            parent.los_pairs = Some(Rc::new(sight::sight_matrix(&st, &terrain)));
+            // One inch east, still behind the wall and still with the same lane.
+            let mut moved = parent.clone();
+            moved.positions[0] = vec![at(-2.0, 1.5), at(-2.0, 9.0)];
+
+            let mut kept = moved.clone();
+            refresh_los_pairs(&mut kept, &parent, &terrain, Seams { los_model: true, ..Seams::default() });
+            assert!(kept.los_pairs.as_ref().unwrap()[2], "the per-model answer survives the move");
+            assert!(kept.los_pairs.as_ref().unwrap()[2 * n], "and so does the reverse row");
+
+            let mut coarse = moved.clone();
+            refresh_los_pairs(&mut coarse, &parent, &terrain, Seams::default());
+            assert!(!coarse.los_pairs.as_ref().unwrap()[2], "RED: without the seam it goes coarse");
+            assert!(!coarse.los_pairs.as_ref().unwrap()[2 * n]);
+        }
     }
 }

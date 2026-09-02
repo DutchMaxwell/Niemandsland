@@ -59,6 +59,7 @@ use nmlcore::plan::{Pick, Search};
 use nmlcore::playout::Policy;
 use nmlcore::policy::{Policy as PolicyHarness, PolicyNet};
 use nmlcore::rollout::Rollout;
+use nmlcore::sight;
 use nmlcore::sim::Scratch;
 use nmlcore::state::{Marker, ProfileCache, Roster};
 use nmlcore::rows::{Cell, RowEncoder};
@@ -606,6 +607,9 @@ impl Core {
             // NML-1073 M5 D5-4 — the header's RED switch, inverted: `hero_fold`
             // defaults true, so the engage test folds unless a gate says no.
             no_engage_fold: !self.knobs.engage_fold,
+            // NML-1160 — with `los_model` the state's sight seams are the
+            // table's per-model answer, so a clone inherits them untouched.
+            los_model: self.knobs.los_model,
         }
     }
 
@@ -953,6 +957,40 @@ impl Core {
             prof.push(block.map(|b| b.unbind()));
         }
         Ok(PyState { inner: st, prof: if any { Some(prof) } else { None } })
+    }
+
+    /// NML-1160 — re-stamp both sight seams of one state with the TABLE's
+    /// per-model answer: every unit's `los` row and the `los_pairs` matrix, all
+    /// from `sight::sight_matrix` over this header's board.
+    ///
+    /// `BattleSim.capture` runs that sweep before EVERY activation
+    /// (battle_sim.gd:1563-1576, `los_of` = `SoloController._has_los`); the
+    /// search underneath then inherits the answer, because `clone_state` copies
+    /// `su["los"]` and never recomputes it. This is the trainer's way of doing
+    /// the same, and it is the caller's job to ask for it at the same cadence:
+    /// `selfplay._play_round` calls it once per played activation.
+    ///
+    /// Both seams are written, because the port reads two: the menu asks
+    /// `BattleSim.sees` (the `los` row) and the resolve ANDs it with
+    /// `_los_clear` (the matrix). Filling only one leaves the other's answer
+    /// standing, which is exactly the split this knob exists to close.
+    fn restamp_los(&self, py: Python<'_>, state: &PyState) -> PyState {
+        let mut out = state.copy(py);
+        let n = out.inner.units();
+        let m = sight::sight_matrix(&out.inner, &self.terrain);
+        let rows: Vec<Option<Rc<HashMap<String, bool>>>> = (0..n)
+            .map(|i| {
+                Some(Rc::new(
+                    (0..n)
+                        .filter(|&j| out.inner.player[j] != out.inner.player[i])
+                        .map(|j| (out.inner.key(j).to_string(), m[i * n + j]))
+                        .collect(),
+                ))
+            })
+            .collect();
+        out.inner.los = rows;
+        out.inner.los_pairs = Some(Rc::new(m));
+        out
     }
 
     /// `AiPlanner.plan_with_rollout` ai_planner.gd:118-275 — the whole search.
