@@ -98,6 +98,12 @@ pub struct Knobs {
     /// centre probe, exactly as `clone_state` inherits `los` untouched.
     #[serde(default)]
     pub los_model: bool,
+    /// NML-1161 — `Tuning::shoot_los`: the menu's shoot leg asks the RESOLVE's
+    /// whole question (`sees` AND `_los_clear`) instead of `sees` alone. Absent
+    /// from every recorded header, and the default is OFF, so every corpus
+    /// replays with the GDScript's own menu.
+    #[serde(default)]
+    pub menu_los: bool,
     /// NML-1152 S3 — `Seams::move_rigid`, the RED switch that keeps ADVANCE and
     /// RUSH on the rigid translation while `movement` still routes CHARGE.
     /// Absent from every corpus, so the default is OFF.
@@ -203,6 +209,7 @@ impl Default for Knobs {
             sighting: Sighting::Unit,
             movement: false,
             los_model: false,
+            menu_los: false,
             move_rigid: false,
             dangerous: true,
             engage_fold: false,

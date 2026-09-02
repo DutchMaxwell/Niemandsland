@@ -180,6 +180,30 @@ def test_an_unknown_los_mode_raises_instead_of_falling_back():
     """`resolve_los` follows `resolve_sighting`'s rule."""
     with pytest.raises(ValueError, match="los must be one of"):
         sp.resolve_los("per_model")
+def test_menu_los_planner_vs_resolve_plays_a_different_game():
+    """NML-1161: `play_game(menu_los=...)` — whether the menu's shoot leg asks
+    the RESOLVE's whole question. The wire is one field,
+    `plan::tuning_of(knobs).shoot_los`, read at both menu sites; cut it and the
+    header still stamps `"resolve"` while the menu keeps offering shots the
+    resolve drops. The digest is taken with `knobs` stripped, so only the
+    played game can carry the difference.
+
+    On a RECORDED arena state the knob is inert by construction (no
+    `los_pairs`, so `_los_clear` is true) — the divergence lives in SELF-PLAY,
+    which stamps the centre-to-centre matrix `tools/core_selfplay.gd:675`
+    builds. That is the whole point of the rung."""
+    seed, planner, resolve = _first_divergent_seed(
+        CHARGE_ARMY1, CHARGE_ARMY2, "menu_los", "planner", "resolve", dice="table"
+    )
+    assert seed is not None, "no seed in %s diverged between menu_los planner/resolve" % list(SEEDS)
+    assert "menu_los" not in planner["knobs"], "the default stamps nothing (NML-1147a)"
+    assert resolve["knobs"]["menu_los"] == "resolve"
+
+
+def test_an_unknown_menu_los_mode_raises_instead_of_falling_back():
+    """`resolve_menu_los` follows `resolve_charge_gate`'s rule."""
+    with pytest.raises(ValueError, match="menu_los must be one of"):
+        sp.resolve_menu_los("los_pairs")
 
 
 def test_an_unknown_sighting_mode_raises_instead_of_falling_back():

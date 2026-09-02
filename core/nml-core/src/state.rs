@@ -509,4 +509,20 @@ impl State {
             Some(m) => *m.get(other_key).unwrap_or(&true),
         }
     }
+
+    /// `BattleSim._los_clear` battle_sim.gd:859-870, read off the recorded
+    /// answers. No matrix = no `los_blocked` seam on the state = clear for
+    /// every pair, which is what an ARENA state is: only the trainer twin
+    /// (`tools/core_selfplay.gd:675`) ever stamps that Callable.
+    ///
+    /// Lives here, beside `sees`, because two callers now ask it — the resolve
+    /// (`sim.rs`) and, under `Tuning::shoot_los`, the menu — and one rule with
+    /// two copies is one rule that drifts.
+    #[inline]
+    pub fn los_clear(&self, i: usize, j: usize) -> bool {
+        match &self.los_pairs {
+            None => true,
+            Some(m) => m[i * self.units() + j],
+        }
+    }
 }

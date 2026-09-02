@@ -97,6 +97,18 @@ pub struct Tuning {
     /// corpus) keeps the gate. The act corpus records the same bit per
     /// activation as `charge_gate` (act_recorder.gd:73).
     pub charge_gate: bool,
+    /// NML-1161 — whether the menu's shoot leg asks the RESOLVE's whole
+    /// question. `AiPlanner._best_shoot` (ai_planner.gd:1372-1385) tests
+    /// `BattleSim.sees` alone, while `BattleSim.resolve` (:770-773) ANDs it
+    /// with `_los_clear`; on the TABLE that costs nothing, because no real game
+    /// ever stamps `state["los_blocked"]` and `_los_clear` is true for every
+    /// pair. In self-play it is the whole defect: `tools/core_selfplay.gd:675`
+    /// DOES stamp it, so the menu offers shots the resolve then silently drops,
+    /// and a dropped volley leaves a state bit-identical to plain HOLD — which
+    /// the eval scores equal and the argmax's first-wins tie-break hands to the
+    /// do-nothing. `false` (the default, and every corpus) reproduces the
+    /// GDScript menu exactly; `true` makes the two legs ask one question.
+    pub shoot_los: bool,
 }
 
 impl Default for Tuning {
@@ -105,6 +117,7 @@ impl Default for Tuning {
             cover_bonus_in: SAFE_LINE_COVER_BONUS_IN,
             honour_no_difficult: true,
             charge_gate: true,
+            shoot_los: false,
         }
     }
 }
@@ -167,12 +180,23 @@ fn gap_m(a: &[[f64; 3]], offset: V3, b: &[[f64; 3]]) -> f64 {
 /// `AiPlanner._best_shoot` ai_planner.gd:1227-1243 — best-EV visible target.
 /// `best_ev` starts at 0.0 and the comparison is strict, so a pairing worth
 /// exactly nothing never becomes the pick.
-pub fn best_shoot(state: &State, statics: &[UnitStatic], i: usize, sc: &mut Scratch) -> Option<usize> {
+///
+/// `shoot_los` (NML-1161) adds the resolve's second half, `State::los_clear`,
+/// so the menu cannot offer a target the resolve will refuse. See
+/// `Tuning::shoot_los` for why the GDScript needs no such switch and the
+/// trainer does.
+pub fn best_shoot(
+    state: &State,
+    statics: &[UnitStatic],
+    i: usize,
+    sc: &mut Scratch,
+    shoot_los: bool,
+) -> Option<usize> {
     let us = &statics[state.roster.profile[i]];
     let mut best = None;
     let mut best_ev = 0.0f64;
     for e in enemy_keys(state, i) {
-        if !state.sees(i, state.key(e)) {
+        if !state.sees(i, state.key(e)) || (shoot_los && !state.los_clear(i, e)) {
             continue;
         }
         let ut = &statics[state.roster.profile[e]];
@@ -532,7 +556,7 @@ pub fn candidates_tuned(
 ) -> Vec<Candidate> {
     let key = state.key(unit);
     let mut out = vec![Candidate::new(key, HOLD)];
-    if let Some(e) = best_shoot(state, statics, unit, sc) {
+    if let Some(e) = best_shoot(state, statics, unit, sc, tuning.shoot_los) {
         let mut c = Candidate::new(key, HOLD);
         c.shoot = Some(state.key(e).to_string());
         out.push(c);
