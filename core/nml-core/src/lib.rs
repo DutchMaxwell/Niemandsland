@@ -33,6 +33,7 @@ pub mod sim;
 pub mod spell;
 pub mod state;
 pub mod terrain;
+pub mod tokens;
 pub mod unit;
 
 /// `BattleSim.IN2M` — battle_sim.gd:11. Table units are metres, the book is inches.

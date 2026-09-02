@@ -247,6 +247,25 @@ pub fn board_row_indices(state: &State) -> Vec<i64> {
         .collect()
 }
 
+/// `BattleSim.board_rows` battle_sim.gd:206-209's `sev`/`mev` pair, factored out
+/// of `RowEncoder::board_rows` (formerly inline at rows.rs:380-391) so
+/// `tokens::unit_token` (NML-1073 M3-6b) reads the SAME shooting/melee EV this
+/// crate's own board row does — one arithmetic path, not two. `def` is the
+/// caller's `neutral_defender()`, threaded through rather than rebuilt so a
+/// per-row loop pays for it once.
+pub fn unit_sev_mev(p: &Profile, us: &UnitStatic, def: &Ctx) -> (f64, f64) {
+    let mut att = us.ctx;
+    att.models = p.model_count.max(1);
+    let shoot = profiles_in_range(&p.weapons, EV_REF_DIST_IN);
+    let keep: Vec<usize> = (0..shoot.len()).collect();
+    let s_attacks: Vec<i64> = shoot.iter().map(|s| s.attacks).collect();
+    let sev = snappedf(shoot_ev(&shoot, &keep, &s_attacks, &att, def, EV_REF_DIST_IN), 0.01);
+    let mel = melee_profiles(&p.weapons);
+    let m_attacks: Vec<i64> = mel.iter().map(|s| s.attacks).collect();
+    let mev = snappedf(melee_ev(&mel, &m_attacks, &att, def, true), 0.01);
+    (sev, mev)
+}
+
 /// The row encoder: the vocabulary plus the loud `unknown_rules` collector
 /// (`BattleSim.unknown_rules` battle_sim.gd:82 — a name that is not in the
 /// committed vocabulary is REPORTED, never silently slotted).
@@ -377,18 +396,7 @@ impl RowEncoder {
                 rmax = rmax.max(w.range as i64);
                 atk += w.attacks * w.count.max(1);
             }
-            let mut att = us.ctx;
-            att.models = p.model_count.max(1);
-            let shoot = profiles_in_range(&p.weapons, EV_REF_DIST_IN);
-            let keep: Vec<usize> = (0..shoot.len()).collect();
-            let s_attacks: Vec<i64> = shoot.iter().map(|s| s.attacks).collect();
-            let sev = snappedf(
-                shoot_ev(&shoot, &keep, &s_attacks, &att, &def, EV_REF_DIST_IN),
-                0.01,
-            );
-            let mel = melee_profiles(&p.weapons);
-            let m_attacks: Vec<i64> = mel.iter().map(|s| s.attacks).collect();
-            let mev = snappedf(melee_ev(&mel, &m_attacks, &att, &def, true), 0.01);
+            let (sev, mev) = unit_sev_mev(p, us, &def);
             let pairs = self.rule_pairs(p, us);
             let mut row = vec![
                 Cell::I(state.player[i]),

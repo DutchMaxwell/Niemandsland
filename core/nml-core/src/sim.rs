@@ -110,6 +110,14 @@ pub enum Unsupported {
     /// asked for and the search cannot honour is a decline, not a silent
     /// fall-back to the hand order.
     PolicyOrder,
+    /// NML-1073 M3-6b — `tokens::build` refuses a state whose live roster,
+    /// marker count or menu width exceeds the padding budget (`N_UNITS`,
+    /// `N_OBJ`, `N_CAND`) rather than truncate a row: a truncated board is a
+    /// silently wrong board (the `verify-the-instrument` rule). The `usize` is
+    /// the count actually seen.
+    TooManyUnits(usize),
+    TooManyObjectives(usize),
+    TooManyCandidates(usize),
 }
 
 /// `BattleSim._los_clear` battle_sim.gd:666-670, read off the recorded answers.
