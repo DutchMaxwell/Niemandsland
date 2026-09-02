@@ -13,6 +13,23 @@ TERRAIN = {1: ("#c3a76b", "ruins"), 2: ("#6f9e63", "forest"),
            3: ("#9aa0a6", "container"), 4: ("#c9605a", "dangerous")}
 SIDE = {0: "#777777", 1: "#2f6fd0", 2: "#c8442b"}
 W_IN, H_IN, PX = 72.0, 48.0, 13.0
+DEFAULT_R_M = 0.016                 # geom::edge_gap_in's per-model radius fallback
+
+
+def edge_gap_in(a_pos, a_r, b_pos, b_r):
+    # `geom::edge_gap_in` core/nml-core/src/geom.rs:113 — min base-edge gap in inches.
+    return min((((pa[0] - pb[0]) ** 2 + (pa[2] - pb[2]) ** 2) ** 0.5
+               - (a_r[i] if i < len(a_r) else DEFAULT_R_M) - (b_r[j] if j < len(b_r) else DEFAULT_R_M)
+               for i, pa in enumerate(a_pos) for j, pb in enumerate(b_pos)), default=float("inf")) / M_IN
+
+
+def crosses_forest(a, b, terrain, n=20):
+    # Whether leg a->b (table inches) samples inside a FOREST piece; this
+    # corpus's rotations are axis-aligned (0/90/180/270), so a swapped half-extent test is exact.
+    fs = [p for p in terrain if p[0] == 2]
+    return any(abs(a[0] + (b[0] - a[0]) * i / n - p[1]) <= (p[3] / 2 if p[5] in (0, 180) else p[4] / 2)
+               and abs(a[1] + (b[1] - a[1]) * i / n - p[2]) <= (p[4] / 2 if p[5] in (0, 180) else p[3] / 2)
+               for i in range(n + 1) for p in fs)
 
 
 def rule_label(r):
