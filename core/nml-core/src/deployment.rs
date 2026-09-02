@@ -2092,3 +2092,183 @@ pub fn repair_deploy_coherency(
     }
     forced_any
 }
+
+// ---- the AMBUSH ARRIVAL (SPEC ambush arrival S3 + S5).
+// `SoloController._try_place_reserve_unit` (solo_controller.gd:10044-10112),
+// the shared core of the AI's paced arrival and the human's guided one. It is
+// NOT `deploy_place_id`'s ladder: no wall-bisect loop, no vanguard push, no
+// `least_blocked_spot` fallback — a unit with no legal spot simply STAYS in
+// reserve for a later round (:10098-10099), never force-placed. Every
+// primitive below (`best_spot`, `spot_blocked`, `Occupied`, `Rect`) is reused
+// unchanged; the genuinely new content is the ring arithmetic and the beacon
+// waiver.
+
+/// `AMBUSH_MIN_ENEMY_DIST_M` (solo_controller.gd:9606) — the plain Ambush
+/// arrival ring, 9" ("arrivals deploy MORE THAN 9" from enemy units"). The
+/// caller picks between this and `UnitStatic::infiltrate_min_enemy_dist_in`
+/// exactly as `_reserve_min_enemy_dist_m` (:9617-9621) does.
+pub const AMBUSH_MIN_ENEMY_DIST_M: f64 = 0.2286;
+/// `AMBUSH_BEACON_RADIUS_IN` (:9766) — a beacon MODEL's waiver circle, 6",
+/// registry-tuned per carrier (`beacon_radius_m`, :9775-9777) which is why the
+/// value rides on each `ArrivalBeacon` rather than being read here.
+pub const AMBUSH_BEACON_RADIUS_IN: f64 = 6.0;
+/// `BEACON_EPS_M` (:9770) — 0.5 mm of ruler tolerance so "within 6"" is not
+/// lost to float noise. The one slack in the waiver; a spot beyond it is out.
+pub const BEACON_EPS_M: f64 = 0.0005;
+
+/// One enemy MODEL as the arrival search sees it (main.gd:10515-10533). A
+/// reserve enemy projects nothing at all (:10523 skips `unit_in_reserve`), so
+/// it never reaches this list.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ArrivalEnemy {
+    pub pos: (f64, f64),
+    /// `repel_ambush_dist_m` of this model's UNIT (solo_controller.gd:9724-9727),
+    /// `0.0` without Repel Ambushers — the ring the DEFENDER projects.
+    pub min_dist_m: f64,
+    /// The enemy MODEL's own base radius: the book measures closest point to
+    /// closest point, and the arriving side's spread is already inside
+    /// `radius`, so only the enemy's base edge rides in here (main.gd:10531).
+    pub pad_m: f64,
+}
+
+/// One live friendly beacon MODEL (`beacon_points`, solo_controller.gd:9781+):
+/// a carrier still in reserve or inside a transport projects nothing, so it
+/// never reaches this list either.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ArrivalBeacon {
+    pub pos: (f64, f64),
+    /// `beacon_radius_m(carrier)` — the registry's `beacon_in` in metres.
+    pub radius_m: f64,
+}
+
+/// `Rect2(bpos - Vector2(brad, brad), Vector2(brad * 2, brad * 2))`
+/// (solo_controller.gd:10065): the beacon circle's bounding box. The Vector2
+/// ctor narrows `brad` once, the subtraction runs at f32, and the size is the
+/// f64 doubling narrowed at its own ctor — three separate real_t boundaries.
+fn beacon_box(b: &ArrivalBeacon) -> Rect {
+    let r32 = b.radius_m as f32;
+    Rect::new(
+        (b.pos.0 as f32 - r32) as f64,
+        (b.pos.1 as f32 - r32) as f64,
+        (b.radius_m * 2.0) as f32 as f64,
+        (b.radius_m * 2.0) as f32 as f64,
+    )
+}
+
+/// `Rect2::intersection` — the overlap, or `Rect2()` (all zeros) when the two
+/// do not intersect. Godot's `intersects` excludes the borders, so a
+/// zero-width touch is NOT an intersection; the caller's `size <= 0` guard
+/// (:10063) then reads the same either way.
+fn rect_intersection(a: &Rect, b: &Rect) -> Rect {
+    let (ae, be) = (a.end(), b.end());
+    if a.pos.0 >= be.0 || ae.0 <= b.pos.0 || a.pos.1 >= be.1 || ae.1 <= b.pos.1 {
+        return Rect::new(0.0, 0.0, 0.0, 0.0);
+    }
+    let pos = (a.pos.0.max(b.pos.0), a.pos.1.max(b.pos.1));
+    let end = (ae.0.min(be.0), ae.1.min(be.1));
+    Rect::new(pos.0, pos.1, end.0 - pos.0, end.1 - pos.1)
+}
+
+/// The arrival spot for ONE reserve unit, or `(INF, INF)` when the table has
+/// none right now — in which case the unit stays in reserve for a later round.
+/// On success the spot is booked into `occupied` (the table books it inside
+/// `_finish_reserve_arrival`, :10120), so the next unit of the same alternating
+/// round sees it. Nothing else is written: `arrive_unit` owns the state.
+///
+/// TWO passes, in the table's order and for the table's reason (:10048-10051):
+///
+/// 1. **Ambush Beacon** (:10057-10077) — each friendly beacon's circle,
+///    intersected with the zone, searched against `occupied` ALONE. Inside the
+///    circle EVERY enemy distance restriction is waived (maintainer ruling:
+///    "distance restrictions", plural — the 9"/3" ring AND Repel Ambushers'
+///    12"). Trying it FIRST is what makes the AI play a rule it owns instead of
+///    merely being allowed to. A box corner outside the circle is rejected by
+///    the explicit distance re-check.
+/// 2. **the ringed search** (:10084-10097) — one `best_spot` over the WHOLE
+///    arrival zone (`main.gd:10428-10431`; not a deployment section) with one
+///    extra `Occupied` per enemy MODEL at `max(own_ring_m, min_dist_m) +
+///    pad_m`. That `max` IS Repel Ambushers: 12" beats even the 3" Infiltrate
+///    concession.
+///
+/// `forward_y` is `INFINITY` (the arrival call site passes none), so
+/// `best_spot`'s scan order and its strict `<` first-minimum tie rule decide
+/// the spot alone.
+#[allow(clippy::too_many_arguments)]
+pub fn arrive_one(
+    zone: &Rect,
+    objectives: &[(f64, f64)],
+    occupied: &mut Vec<Occupied>,
+    enemies: &[ArrivalEnemy],
+    beacons: &[ArrivalBeacon],
+    own_ring_m: f64,
+    board: &Terrain,
+    radius: f64,
+    footprint: &[(f64, f64)],
+    base_r: f64,
+    flying: bool,
+) -> (f64, f64) {
+    let blocked = |p: (f64, f64)| spot_blocked(board, p, flying, radius, footprint, base_r);
+    for b in beacons {
+        let bzone = rect_intersection(&beacon_box(b), zone);
+        if bzone.size.0 <= 0.0 || bzone.size.1 <= 0.0 {
+            continue;
+        }
+        let s = best_spot(
+            &bzone, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r,
+            f64::INFINITY,
+        );
+        if s.0 == f64::INFINITY || v2_dist(s, b.pos) > b.radius_m + BEACON_EPS_M {
+            continue;
+        }
+        occupied.push(Occupied { pos: s, radius });
+        return s;
+    }
+    let spot = if enemies.is_empty() {
+        best_spot(
+            zone, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r,
+            f64::INFINITY,
+        )
+    } else {
+        let mut search = occupied.clone();
+        for e in enemies {
+            search.push(Occupied { pos: e.pos, radius: own_ring_m.max(e.min_dist_m) + e.pad_m });
+        }
+        best_spot(
+            zone, objectives, &search, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r,
+            f64::INFINITY,
+        )
+    };
+    if spot.0 == f64::INFINITY {
+        return (f64::INFINITY, f64::INFINITY);
+    }
+    occupied.push(Occupied { pos: spot, radius });
+    spot
+}
+
+/// `_finish_reserve_arrival`'s state half (solo_controller.gd:10118-10123) plus
+/// the `capture()` reading that follows it (battle_sim.gd:1477-1489): the unit
+/// comes back onto the table with the strength it PARKED, not with a fresh one
+/// — Ambush Re-Deployment withdraws a DAMAGED unit (:9951-9958), so `wounds`
+/// come from `dormant_wounds` and never from `Profile.wounds_max`.
+///
+/// The dormant keys are cleared because `capture()` writes them only inside its
+/// `if dormant:` arm: a unit back on the table has none, and leaving stale ones
+/// would let a second arrival read a strength that was already spent.
+/// `earliest_arrival_round` goes back to `-1` for the same reason (:1544 is in
+/// that same arm). `ambush_arrived_round` is the stamp `score.rs:60/:74-93`
+/// already reads: no seizing or contesting in the round a unit arrives.
+///
+/// Arriving is DEPLOYMENT, not an activation — `activated` is deliberately not
+/// touched, so the unit can still act this round (:10121).
+pub fn arrive_unit(st: &mut crate::state::State, i: usize, spot: (f64, f64), round_no: i64) {
+    let n = st.dormant_models[i].max(0) as usize;
+    let base_r = st.profiles.list[st.roster.profile[i]].base_radius;
+    st.positions[i] = place_unit_models(spot, n).into_iter().map(|(x, z)| [x, 0.0, z]).collect();
+    st.wounds[i] = std::mem::take(&mut st.dormant_wounds[i]);
+    st.radii[i] = vec![base_r; n];
+    st.alive[i] = n as i64;
+    st.dormant_models[i] = 0;
+    st.dormant[i] = false;
+    st.earliest_arrival_round[i] = -1;
+    st.ambush_arrived_round[i] = round_no;
+}
