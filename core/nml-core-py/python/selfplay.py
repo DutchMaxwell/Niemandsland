@@ -660,6 +660,22 @@ def resolve_dice(dice: str) -> str:
     return dice
 
 
+_MISSION_CATALOG_CACHE: dict[str, dict[str, Any]] = {}
+
+
+def resolve_mission(mission: str, repo_root: str | Path) -> dict[str, Any]:
+    """The `assets/solo/missions.json` entry for `mission`; an unknown id
+    RAISES rather than falling back to duel the way the table does."""
+    catalog = _MISSION_CATALOG_CACHE.get(str(repo_root))
+    if catalog is None:
+        path = Path(repo_root) / "assets" / "solo" / "missions.json"
+        catalog = json.loads(path.read_text(encoding="utf-8"))["missions"]
+        _MISSION_CATALOG_CACHE[str(repo_root)] = catalog
+    if mission not in catalog:
+        raise ValueError("mission must be one of %s, not %r" % (sorted(catalog), mission))
+    return catalog[mission]
+
+
 def resolve_charge_landing(charge_landing: str) -> bool:
     """`charge_landing` as the bit `play_game` branches on. An unknown mode
     RAISES for the same reason `resolve_dice` does: a corpus whose header claims
@@ -1824,6 +1840,7 @@ def play_game(
     cap_horizon: int = 2,
     cand_logits_fn: dict[int, Any] | None = None,
     policy_mode: str | None = None,
+    mission: str = "duel",
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -2410,6 +2427,19 @@ def play_game(
         reserved if arrivals is not None else None,
         {k: v["earliest"] for k, v in arrivals.items()} if arrivals is not None else None,
     )
+    mission_def = resolve_mission(mission, repo_root)  # SoloController.mission_reset mirrored
+    eff_scoring = mission_def.get("scoring", "end")
+    vp_flavour = mission_def.get("vp", {})
+    mk_spec = mission_def.get("markers", {})
+    markers_meta = [
+        {"owned_by": (i % 2) + 1, "destructible": bool(mk_spec.get("destructible"))}
+        for i in range(len(objectives))
+    ] if mk_spec.get("owned") else []
+    plain["scoring"] = eff_scoring
+    if eff_scoring == "round_vp":
+        plain["vp"], plain["vp_flavour"], plain["vp_memo"] = [0, 0], vp_flavour, {}
+    if markers_meta:
+        plain["markers_meta"], plain["destroy_seq"] = markers_meta, [0]
     state = core.state_of(plain)
     if eff_los:
         # NML-1160: the deployment sweep. `BattleSim.capture` fills `los` on the
@@ -2418,6 +2448,8 @@ def play_game(
 
     owners = [0] * len(objectives)
     vp = [0, 0]
+    vp_memo: dict[str, Any] = {}
+    destroy_seq = [0]
     if not arena:
         # The d6 roll-off, P1 winning ties — and BOTH dice are drawn, left first.
         left = rng.randi_range(1, 6)
@@ -2443,18 +2475,30 @@ def play_game(
             cand_logits_fn=cand_logits_fn, policy_mode=policy_mode,
         )
         state, owners = core.playout_seize(state, owners)
-        vp = core.vp_round_add(owners, vp)
+        if markers_meta:  # W3: an enemy-held owned marker falls before scoring
+            markers_meta, owners, destroy_seq = core.apply_destroy_step(
+                markers_meta, owners, destroy_seq
+            )
+        if eff_scoring == "round_vp":
+            vp, vp_memo = core.vp_score_round(owners, vp, vp_flavour, vp_memo, markers_meta)
+            if round_no == ROUNDS:
+                vp = core.vp_score_end(owners, vp, vp_flavour)
+        elif eff_scoring == "end":
+            vp = core.vp_round_add(owners, vp)
         rounds_played = round_no
         entry = {"round": round_no, "owners": list(owners), "vp": list(vp)}
         if record_aux:
             entry.update(_aux_alive_wounds(state, profiles))
         rounds_log.append(entry)
-    vp = core.vp_end_bonus(owners, vp)
+    if eff_scoring == "end":
+        vp = core.vp_end_bonus(owners, vp)
 
     p1 = sum(1 for o in owners if o == 1)
     p2 = sum(1 for o in owners if o == 2)
-    # `_write_result` :700-706: Face-Off is END-scored, so the MARKERS decide.
-    winner = "draw" if p1 == p2 else ("p1" if p1 > p2 else "p2")
+    # `_write_result` :700-706: Face-Off is END-scored, MARKERS decide; every
+    # other mission asks `BattleSim.mission_winner`'s own referee.
+    winner = ("draw" if p1 == p2 else ("p1" if p1 > p2 else "p2")) if eff_scoring == "end" \
+        else core.mission_winner(eff_scoring, owners, vp, markers_meta, 0, 0)
     return {
         "schema": 1,
         "board_schema": 5,
@@ -2484,6 +2528,8 @@ def play_game(
             "top_k": eff_top_k,
             "horizon": eff_horizon,
             "charge_gate": charge_gate,
+            # Stamped only away from "duel" (the `deployment`/`ambush` idiom).
+            **({"mission": mission} if mission != "duel" else {}),
             # NML-1157: stamped only when ON, the way `deployment` is — a
             # default game writes the identical object it wrote before the knob
             # existed, so no Godot parity gate sees a new key.
@@ -2560,8 +2606,8 @@ def play_game(
         "dice_seed": eff_dice_seed,
         "grades": {"p1": "planner_core", "p2": "planner_core"},
         "mission": {
-            "family": "face_off",
-            "name": "duel",
+            "family": mission_def.get("family", "face_off"),
+            "name": mission,
             "rounds": ROUNDS,
             "deployment": "zone12",
             "symmetric": True,
@@ -2578,7 +2624,7 @@ def play_game(
         # only (rounds_log, and so the digest, must not move by default).
         **(_aux_alive_wounds(state, profiles) if record_aux else {}),
         "vp": {"p1": int(vp[0]), "p2": int(vp[1])},
-        "scoring": "end",
+        "scoring": eff_scoring,
         "winner": winner,
         "rounds_played": rounds_played,
         "rounds_log": rounds_log,
@@ -2825,6 +2871,10 @@ def main(argv: list[str]) -> int:
         "dedicated stream, never the game's dice; stamped into knobs and "
         "into each row's `explored` key",
     )
+    ap.add_argument(
+        "--mission", default="duel",
+        help="a catalog id from assets/solo/missions.json; 'duel' (default) is byte-identical",
+    )
     a = ap.parse_args(argv)
 
     core = nml_core.load(a.repo)
@@ -2860,6 +2910,7 @@ def main(argv: list[str]) -> int:
             fit_blend=a.fit_blend,
             explore=a.explore,
             fit_mode=a.fit_mode,
+            mission=a.mission,
         )
         res["wall_seconds"] = round(time.perf_counter() - t0, 3)
         if a.out:
