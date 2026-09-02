@@ -118,12 +118,32 @@ def _first_divergent_seed(army1: Path, army2: Path, knob: str, mode_a: str, mode
     _lists_missing(CHARGE_ARMY1, CHARGE_ARMY2),
     reason="needs the terrain bank + robot_legions/blessed_sisters 1000pt lists",
 )
-def test_play_game_itself_still_defaults_charge_gate_to_off():
-    """`play_game`'s OWN default is untouched by DEFECT_LEDGER row 2 — every
-    direct caller (every test, every replay tool) must keep seeing exactly
-    what it saw before this knob's CLI default moved."""
+def test_play_game_itself_now_defaults_charge_gate_to_table():
+    """DEFECT_LEDGER row 28 (W5a): `play_game`'s OWN default moves too, not
+    only `main`'s CLI (row 2) — the evidence is in, so a direct caller that
+    passes nothing now gets the table's own gate. A REPLAY of a RECORDED game
+    is unaffected: it always passes its own header's mode back in explicitly
+    (`gen0_replay_one.py`'s `KNOBS`), and a gate holding the fast trainer to a
+    FIXED Godot recording splats `sp.LEGACY_FIDELITY_KNOBS` in for the same
+    reason — see `test_a_fresh_cli_run_now_defaults_charge_gate_to_table`."""
     core = nml_core.load(str(REPO))
     res = sp.play_game(27, CHARGE_ARMY1, CHARGE_ARMY2, REPO, BANK_DIR, core)
+    assert res["knobs"]["charge_gate"] == "table"
+
+
+@pytest.mark.skipif(
+    _lists_missing(CHARGE_ARMY1, CHARGE_ARMY2),
+    reason="needs the terrain bank + robot_legions/blessed_sisters 1000pt lists",
+)
+def test_a_record_without_the_knob_key_replays_with_the_legacy_value():
+    """The other half of row 28: a RECORD written before this knob's default
+    moved carries no `knobs["charge_gate"]` reading it can trust — this is
+    what `sp.LEGACY_FIDELITY_KNOBS` is for, and every replay tool
+    (`gen0_replay_one.py`'s `KNOBS`) splats it in rather than relying on
+    `play_game`'s own default, whichever way that moves next."""
+    core = nml_core.load(str(REPO))
+    res = sp.play_game(27, CHARGE_ARMY1, CHARGE_ARMY2, REPO, BANK_DIR, core,
+                       **sp.LEGACY_FIDELITY_KNOBS)
     assert res["knobs"]["charge_gate"] == "off"
 
 
@@ -249,7 +269,11 @@ def test_menu_los_planner_vs_resolve_plays_a_different_game():
     which stamps the centre-to-centre matrix `tools/core_selfplay.gd:675`
     builds. That is the whole point of the rung."""
     seed, planner, resolve = _first_divergent_seed(
-        CHARGE_ARMY1, CHARGE_ARMY2, "menu_los", "planner", "resolve", dice="table"
+        CHARGE_ARMY1, CHARGE_ARMY2, "menu_los", "planner", "resolve", dice="table",
+        # W5a: the OTHER knobs that moved defaults, pinned to legacy so the
+        # ONLY free variable stays menu_los, same as before the flip.
+        charge_gate="off", menu_wide="off", los="unit", hero_last=False,
+        cast_fold=False, ambush="off",
     )
     assert seed is not None, "no seed in %s diverged between menu_los planner/resolve" % list(SEEDS)
     assert "menu_los" not in planner["knobs"], "the default stamps nothing (NML-1147a)"
@@ -485,11 +509,15 @@ def test_the_default_paths_stay_byte_identical():
     `#481`-era `c2a354be` precedent): the stream is the contract, header
     metadata (`fit_blend`, ...) is not — re-verified across the `5ac14bd`
     rebase, stripped digests identical on both sides of it."""
+    # W5a: pinned to the legacy fidelity knobs — this test is about the
+    # objectives/placement branch, not about the shipped-defaults flip, so it
+    # keeps the ORIGINAL 83aa01e pin instead of moving it for an unrelated
+    # reason.
     core = nml_core.load(str(REPO))
     rulebook = sp.play_game(27, CHARGE_ARMY1, CHARGE_ARMY2, REPO, BANK_DIR, core,
-                            objectives="rulebook")
+                            objectives="rulebook", **sp.LEGACY_FIDELITY_KNOBS)
     doctrine = sp.play_game(27, CHARGE_ARMY1, CHARGE_ARMY2, REPO, BANK_DIR, core,
-                            objectives="doctrine")
+                            objectives="doctrine", **sp.LEGACY_FIDELITY_KNOBS)
     assert _digest_without_knobs(rulebook) == RULEBOOK_27_DIGEST
     assert _digest_without_knobs(doctrine) == DOCTRINE_27_DIGEST
 

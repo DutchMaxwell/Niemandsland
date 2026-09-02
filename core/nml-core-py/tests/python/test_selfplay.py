@@ -720,6 +720,9 @@ def test_the_python_harness_plays_the_same_game_seed_for_seed():
         got = sp.play_game(
             seed, ARMY1, ARMY2, REPO, BANK_DIR, core,
             vocab_version=_vocab_of(REF_DIR, seed),
+            # W5a: this gate holds the fast trainer to a FIXED Godot
+            # recording — pin the pre-flip knobs (`sp.LEGACY_FIDELITY_KNOBS`).
+            **sp.LEGACY_FIDELITY_KNOBS,
         )
         diff = gate.compare(ref, got, gate.ref_picks(REF_DIR, seed))
         if diff:
@@ -775,6 +778,9 @@ def test_the_python_harness_plays_the_fresh_oracle_seed_for_seed(ref_dir, monkey
         got = sp.play_game(
             seed, ARMY1, ARMY2, REPO, BANK_DIR, core, hero_attach=mode,
             vocab_version=_vocab_of(ref_dir, seed),
+            # W5a: pin the pre-flip knobs — a FIXED oracle, same reason as
+            # the v2 gate above.
+            **sp.LEGACY_FIDELITY_KNOBS,
         )
         diff = gate.compare(ref, got, gate.ref_picks(ref_dir, seed))
         if diff:
@@ -860,7 +866,8 @@ def test_red_a_different_deployment_is_a_different_game():
     for seed in seeds:
         with open(REF_DIR / ("core_s%d.json" % seed), encoding="utf-8") as f:
             ref = json.load(f)
-        got = sp.play_game(seed, ARMY1, ARMY2, REPO, BANK_DIR, core, deploy_rng_seed=seed + 1)
+        got = sp.play_game(seed, ARMY1, ARMY2, REPO, BANK_DIR, core, deploy_rng_seed=seed + 1,
+                          **sp.LEGACY_FIDELITY_KNOBS)
         if not gate.compare(ref, got, gate.ref_picks(REF_DIR, seed)):
             same.append(seed)
     assert not same, "seeds that survived a swapped deployment: %s" % same
@@ -912,7 +919,8 @@ def test_the_ambush_knob_brings_reserves_onto_the_table():
     them before round 2. Break the round gate (`<= round_no`) and the second
     assertion catches it; leave `_arrive_reserves` uncalled and the first does.
     """
-    off = sp.play_game(27, AMBUSH_A1, AMBUSH_A2, REPO, BANK_DIR, deployment="arena")
+    off = sp.play_game(27, AMBUSH_A1, AMBUSH_A2, REPO, BANK_DIR, deployment="arena",
+                       ambush="off")
     on = sp.play_game(
         27, AMBUSH_A1, AMBUSH_A2, REPO, BANK_DIR, deployment="arena", ambush="table"
     )

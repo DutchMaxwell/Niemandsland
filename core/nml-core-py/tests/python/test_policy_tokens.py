@@ -137,10 +137,14 @@ def test_20_pinned_games_result_digest_unchanged_by_policy_tokens():
     """RED 5: `policy_tokens` has no default caller — `play_game`'s own
     result must not move by so much as one byte for any of the 20 pinned
     seeds `test_selfplay.py`'s `GATE_SEEDS` starts from."""
+    # W5a: pinned to the legacy fidelity knobs — this test is about
+    # policy_tokens, not the shipped-defaults flip, so it keeps the ORIGINAL
+    # pins instead of moving them for an unrelated reason.
     core = nml_core.load(str(REPO))
     bad = []
     for seed, want in PINNED_DIGESTS.items():
-        got = sp.result_digest(sp.play_game(seed, ARMY1, ARMY2, REPO, BANK_DIR, core, **FAST))
+        got = sp.result_digest(sp.play_game(seed, ARMY1, ARMY2, REPO, BANK_DIR, core,
+                                            **FAST, **sp.LEGACY_FIDELITY_KNOBS))
         if got != want:
             bad.append((seed, want, got))
     assert not bad, "digests moved for seeds: %s" % bad
@@ -168,7 +172,7 @@ def _first_live_export(seed: int) -> tuple[int, dict, str]:
 
     sp._pick_for = probe
     try:
-        result = sp.play_game(seed, ARMY1, ARMY2, REPO, BANK_DIR, core, **FAST)
+        result = sp.play_game(seed, ARMY1, ARMY2, REPO, BANK_DIR, core, **FAST, **sp.LEGACY_FIDELITY_KNOBS)
     finally:
         sp._pick_for = real
     assert seen, "seed %d: no activation reached the probe" % seed

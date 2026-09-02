@@ -333,6 +333,10 @@ def _play(core, seed: int, **kw):
     # read off its own act header. `m3_ref_v2`/`v3` carry no stamp and therefore
     # replay under version 2, which is what they recorded.
     kw.setdefault("vocab_version", _vocab_of(REF_DIR, seed))
+    # W5a: this gate holds the fast trainer to a FIXED Godot recording — pin
+    # the pre-flip knobs so play_game()'s own defaults moving does not move it.
+    for k, v in sp.LEGACY_FIDELITY_KNOBS.items():
+        kw.setdefault(k, v)
     return sp.play_game(seed, ARMY1, ARMY2, REPO, BANK_DIR, core, **kw)
 
 
@@ -405,6 +409,9 @@ def test_the_python_result_file_equals_the_fresh_oracle_field_by_field(ref_dir, 
             seed, ARMY1, ARMY2, REPO, BANK_DIR, core,
             legacy_source_qd=False, hero_attach=mode,
             vocab_version=_vocab_of(ref_dir, seed),
+            # W5a: pin the pre-flip knobs — a FIXED oracle, same reason `_play`
+            # above does it.
+            **sp.LEGACY_FIDELITY_KNOBS,
         )
         np, nf = gate.sidecar_shape(got)
         pairs += np
@@ -441,7 +448,9 @@ def test_red_a_legacy_corpus_replayed_under_the_shipped_vocabulary_diverges():
     # call a core makes, so a second game on the same core would inherit the
     # first game's set (qa_gate.py makes a fresh core per reference game for
     # exactly this reason).
-    kw = dict(legacy_source_qd=False, hero_attach="join")
+    # W5a: pin the pre-flip knobs — a FIXED oracle, same reason `_play` above
+    # does it.
+    kw = dict(legacy_source_qd=False, hero_attach="join", **sp.LEGACY_FIDELITY_KNOBS)
     before = list_to_profile.LEGACY_CORE_SELFPLAY
     list_to_profile.LEGACY_CORE_SELFPLAY = False
     nml_core.set_legacy_no_cond_ap(False)

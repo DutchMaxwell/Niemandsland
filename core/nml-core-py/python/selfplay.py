@@ -888,6 +888,20 @@ def resolve_ambush(ambush: str) -> bool:
     return ambush == "table"
 
 
+#: W5a (DEFECT_LEDGER row 28) — the play_game() ARGUMENT values every corpus
+#: recorded before the fidelity flip carries, i.e. the exact opposite of
+#: play_game()'s own new defaults for the knobs that moved. A gate holding the
+#: fast trainer to a FIXED Godot recording (`qa_gate.py`, `sidecar_gate.py`,
+#: `selfplay_gate.py`) never took an opinion on these seven — it always played
+#: "whatever play_game defaults to" to match `tools/core_selfplay.gd` — so
+#: splatting this in keeps it reading the exact game it always read, whichever
+#: way play_game's own defaults move next.
+LEGACY_FIDELITY_KNOBS: dict[str, Any] = dict(
+    charge_gate="off", menu_wide="off", menu_los="planner",
+    los="unit", hero_last=False, cast_fold=False, ambush="off",
+)
+
+
 def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int) -> int:
     """The table's round-start ambush beat (`main._solo_round_start` :10096-10106
     through `_solo_alternate_ambush_arrivals` :10419-10485), over the PLAIN
@@ -1801,20 +1815,20 @@ def play_game(
     terrain_shift_cells: int = 0,
     top_k: int | None = None,
     horizon: int | None = None,
-    charge_gate: str = "off",
+    charge_gate: str = "table",
     menu_targets: bool = False,
-    hero_last: bool = False,
-    cast_fold: bool = False,
+    hero_last: bool = True,
+    cast_fold: bool = True,
     hero_attach: str = "off",
     dice: str = "expected",
     charge_landing: str = "off",
     movement: str = "rigid",
-    ambush: str = "off",
+    ambush: str = "table",
     sighting: str = "unit",
-    los: str = "unit",
-    menu_los: str = "planner",
+    los: str = "model",
+    menu_los: str = "resolve",
     deep_menu_los: str | None = None,
-    menu_wide: str = "off",
+    menu_wide: str = "table",
     deep_menu_wide: str | None = None,
     engage_fold: bool = True,
     dangerous_end_morale: bool = True,
@@ -1865,15 +1879,15 @@ def play_game(
     training corpus's `NML_TOP_K=2 NML_HORIZON=1` looks like any other run.
 
     `charge_gate` is the THIRD such seam (NML-1073 D2) and the only one that
-    changes a RULE: "off" (the default HERE — direct callers, replays and the
-    pinned-digest tests are unaffected) reproduces `tools/core_selfplay.gd`,
-    which stamps no `state["charge_illegal"]` and therefore lets the planner
-    offer charges against aircraft, past the rush band and through difficult
-    ground; "table" wires the arena's own gate instead. DEFECT_LEDGER row 2
-    moves the OTHER default: `main`'s `--charge-gate` (a fresh self-play RUN
-    with no flag) now resolves to "table", because that entry point is where
-    a new teacher game is actually started; a caller of this function keeps
-    getting exactly what it asked for, nothing implied. It is stamped into
+    changes a RULE: "off" reproduces `tools/core_selfplay.gd`, which stamps no
+    `state["charge_illegal"]` and therefore lets the planner offer charges
+    against aircraft, past the rush band and through difficult ground; "table"
+    (the default HERE since W5a — DEFECT_LEDGER row 28, the per-seat A/B evidence
+    is in) wires the arena's own gate instead. A caller reading a RECORDED game
+    (every replay tool, `gen0_replay_one.py`'s `KNOBS`) passes its header's own
+    mode back in explicitly, so it is unaffected by this default moving; a gate
+    holding the fast trainer to a FIXED Godot recording (`qa_gate.py` et al.)
+    splats `LEGACY_FIDELITY_KNOBS` in for the same reason. It is stamped into
     the result's `knobs` alongside the search pair — see `CHARGE_GATE_MODES`.
 
     `hero_attach` is the D4 rung: "off" (the default) is byte-identical to every
@@ -2763,25 +2777,29 @@ def main(argv: list[str]) -> int:
     ap.add_argument(
         "--menu-wide",
         choices=list(MENU_WIDE_MODES),
-        default="off",
-        help="W1: 'table' offers the ADVANCE+shoot candidates AiPlanner."
-        "candidates_wide has carried since 16.08. (ai_planner.gd:1145-1157), so the "
-        "search can fire without standing still; 'off' (default) is the menu every "
-        "recorded corpus carries",
+        default="table",
+        help="W1: 'table' (default, per-seat A/B 66.3%% p<0.001) offers the "
+        "ADVANCE+shoot candidates AiPlanner.candidates_wide has carried since "
+        "16.08. (ai_planner.gd:1145-1157); 'off' is the menu every corpus "
+        "recorded before this knob carries",
     )
     ap.add_argument(
-        "--hero-last",
-        action="store_true",
+        "--no-hero-last",
+        dest="hero_last",
+        action="store_false",
+        default=True,
         help="NML-1157: a volley or charge aimed at a JOINED HERO resolves to its "
-        "HOST while the host has living models (GF v3.5.1 p.14); needs "
-        "--hero-attach table, and default off so every recorded bundle replays",
+        "HOST while the host has living models (GF v3.5.1 p.14); ON by default "
+        "(needs --hero-attach table); pass this to replay the legacy off game",
     )
     ap.add_argument(
-        "--cast-fold",
-        action="store_true",
+        "--no-cast-fold",
+        dest="cast_fold",
+        action="store_false",
+        default=True,
         help="NML-1157: read the CASTER off the whole activating chain (host + its "
-        "alive attached heroes) instead of the host alone; needs --hero-attach table, "
-        "and without it a joined Caster hero never casts however seam_cast is set",
+        "alive attached heroes) instead of the host alone; ON by default (needs "
+        "--hero-attach table); pass this to replay the legacy off game",
     )
     ap.add_argument(
         "--hero-attach",
@@ -2819,12 +2837,12 @@ def main(argv: list[str]) -> int:
     ap.add_argument(
         "--ambush",
         choices=list(AMBUSH_MODES),
-        default="off",
-        help="'table' plays the Ambush arrival — a reserved unit waits off-table "
-        "DORMANT and arrives at a round start from its earliest round on, "
-        "alternating sides; 'off' (default) leaves it in reserve for the whole "
-        "game, which is what every corpus written before this knob carries. "
-        "Only 'arena' deployment sets units aside at all",
+        default="table",
+        help="'table' (default) plays the Ambush arrival — a reserved unit waits "
+        "off-table DORMANT and arrives at a round start from its earliest round "
+        "on, alternating sides; 'off' leaves it in reserve for the whole game, "
+        "which is what every corpus written before this knob carries. Only "
+        "'arena'/'interleaved' deployment sets units aside at all",
     )
     ap.add_argument(
         "--sighting",

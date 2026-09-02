@@ -322,6 +322,10 @@ def main(argv: list[str]) -> int:
             terrain_shift_cells=a.red_terrain_shift,
             top_k=a.top_k, horizon=a.horizon, hero_attach=hero_attach,
             vocab_version=vocab_version,
+            # W5a: pin the pre-flip knobs — this gate holds the fast trainer
+            # to a FIXED Godot recording, unaffected by play_game()'s own
+            # defaults moving.
+            **sp.LEGACY_FIDELITY_KNOBS,
         )
         seconds.append(time.perf_counter() - t0)
         compared += 1

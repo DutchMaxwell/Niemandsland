@@ -162,6 +162,10 @@ def main(argv: list[str]) -> int:
             deploy_rng_seed=(seed + 1) if a.red else None,
             hero_attach=hero_attach,
             vocab_version=vocab_version,
+            # W5a: pin the pre-flip knobs — this gate holds the fast trainer
+            # to a FIXED Godot recording, unaffected by play_game()'s own
+            # defaults moving.
+            **sp.LEGACY_FIDELITY_KNOBS,
         )
         seconds.append(time.perf_counter() - t0)
         log = ref_dir / ("run_%d.log" % seed)

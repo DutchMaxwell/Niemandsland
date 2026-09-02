@@ -126,8 +126,11 @@ def test_the_default_path_is_byte_identical_to_the_pre_change_code():
     9774621 vintage is recoverable from the stripped one by re-adding exactly
     the vintage's stamp set (proven when #480 landed: pop `fit_blend`,
     `95f3afea…` returns)."""
+    # W5a: pinned to the legacy fidelity knobs — this test is about the
+    # deployment knob, not the shipped-defaults flip, so it keeps the
+    # ORIGINAL vintage pin instead of moving it for an unrelated reason.
     core = nml_core.load(str(REPO))
-    r = sp.play_game(25, ARMY1, ARMY2, REPO, BANK_DIR, core)
+    r = sp.play_game(25, ARMY1, ARMY2, REPO, BANK_DIR, core, **sp.LEGACY_FIDELITY_KNOBS)
     assert _digest_without_knobs(r) == DEFAULT_SEED_25_DIGEST
 
 

@@ -133,8 +133,12 @@ def test_binding_on_joins_scored_to_cands():
 def test_selfplay_off_rows_are_untouched():
     """Default `play_game` plays the pinned pre-change game and stamps no
     `cands` key on any planner row — the byte-identity arm."""
+    # W5a: pinned to the legacy fidelity knobs — this test is about
+    # record_cands, not the shipped-defaults flip, so it keeps the ORIGINAL
+    # vintage pin instead of moving it for an unrelated reason.
     core = nml_core.load(str(REPO))
-    res = sp.play_game(27, ARMY1, ARMY2, REPO, BANK_DIR, core, **FAST)
+    res = sp.play_game(27, ARMY1, ARMY2, REPO, BANK_DIR, core,
+                       **FAST, **sp.LEGACY_FIDELITY_KNOBS)
     assert sp.result_digest(res) == SEED_27_FAST_DIGEST
     assert all("cands" not in row for row in res["planner_positions"])
 

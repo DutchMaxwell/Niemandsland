@@ -50,6 +50,11 @@ GAME = {
     "charge_landing": "table", "movement": "rigid", "sighting": "model",
     "cond_ap": True, "objectives": "rulebook", "deployment": "arena",
     "dice_seed": SEED, "sidecars": False,
+    # W5a: the five OTHER play_game() defaults that just moved, pinned to the
+    # legacy reading this file's fixed harness always played — `hero_last`
+    # itself stays the free variable, set explicitly per call below.
+    "menu_wide": "off", "menu_los": "planner", "los": "unit",
+    "cast_fold": False, "ambush": "off",
 }
 
 
@@ -79,7 +84,8 @@ def test_the_replay_default_is_off():
 
 @pytest.mark.skipif(_lists_missing(), reason="terrain bank / ai_lists not present")
 def test_a_default_game_stamps_no_hero_last_key():
-    res = sp.play_game(SEED, str(ARMY1), str(ARMY2), str(REPO), str(BANK_DIR), None, **GAME)
+    res = sp.play_game(SEED, str(ARMY1), str(ARMY2), str(REPO), str(BANK_DIR), None,
+                       hero_last=False, **GAME)
     assert "hero_last" not in res["knobs"]
 
 
@@ -89,7 +95,8 @@ def test_hero_last_changes_the_game_and_says_so():
     a charge or a volley that used to land on a 1-model hero now lands on its
     host, so the game must diverge. If this ever passes with identical results
     the knob is not reaching `sim::combat_unit`."""
-    off = sp.play_game(SEED, str(ARMY1), str(ARMY2), str(REPO), str(BANK_DIR), None, **GAME)
+    off = sp.play_game(SEED, str(ARMY1), str(ARMY2), str(REPO), str(BANK_DIR), None,
+                       hero_last=False, **GAME)
     on = sp.play_game(
         SEED, str(ARMY1), str(ARMY2), str(REPO), str(BANK_DIR), None, hero_last=True, **GAME
     )
