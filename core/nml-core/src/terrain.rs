@@ -45,6 +45,16 @@ pub fn is_dangerous(t: i32) -> bool {
     t == DANGEROUS
 }
 
+/// `TerrainRules.is_forbidden_rest` terrain_rules.gd:80-89 — the class a model
+/// may not END its move standing in. RUINS was struck off in 2026-07-16 (a
+/// model MAY stand in a ruin; only its WALL segments block) and DANGEROUS in
+/// Windows playtest bug 4b (OPR p.12 allows ending a move there, it only costs
+/// the test), so only the solid CONTAINER is left.
+#[inline]
+pub fn is_forbidden_rest(t: i32) -> bool {
+    t == CONTAINER
+}
+
 /// One freely placed shelf piece — `TerrainOverlay._sandbox_shapes()`, flattened
 /// by `AiActRecorder._terrain_line` (act_recorder.gd:143-149).
 #[derive(Debug, Clone, Deserialize)]

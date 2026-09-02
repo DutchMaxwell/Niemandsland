@@ -4,10 +4,12 @@
 //! separation_resolver.gd:98 run per model), both spending the per-model
 //! displacement budget `_gate_disp_caps_m` :6343 hands in.
 //!
-//! NOT here, so the seam is not read as more than it is: pass 3, the projection
-//! out of forbidden terrain (:6402-6412), and pass 4, the straggler coherency
-//! pull with the whole-unit shorten and the wall clamp (:6448-6465). Both slot
-//! in around this file's one entry without moving it.
+//! S5b adds PASS 3 in between, in the table's own order: the projection out of
+//! forbidden rest ground (:6402-6412, `_project_out_forbidden_world` :6807),
+//! spending the same budget. NOT here, so the seam is not read as more than it
+//! is: pass 4, the straggler coherency pull with the whole-unit shorten and the
+//! wall clamp (:6448-6465). It slots in after this file's one entry without
+//! moving it.
 //!
 //! FRAME. The table gates in world METRES; this gates in the planner's INCH
 //! frame, where the endpoints already live, so a model the gate does not touch
@@ -19,7 +21,8 @@
 //! oval/rect base is its circumscribed circle, which is what the escape scan
 //! (:160, `bounding_radius`) uses on the table anyway.
 
-use super::geom2::V2;
+use super::geom2::{point_seg_distance, V2};
+use crate::terrain::{self, Terrain};
 use crate::IN2M;
 
 /// One base as the gate sees it: centre in the planner's INCH frame, radius in
@@ -44,6 +47,14 @@ const OVERLAP_GATE_PASSES: usize = 4;
 const OVERLAP_EPS_IN: f64 = 0.0005 / IN2M;
 /// `SoloController.BOUNDS_MARGIN_M` solo_controller.gd:16 — a hair inside.
 const BOUNDS_MARGIN_IN: f64 = 0.02 / IN2M;
+/// `SoloController.TERRAIN_OUT_STEP_M` :151 — the projection's ring spacing.
+const TERRAIN_OUT_STEP_IN: f64 = 0.01 / IN2M;
+/// `SoloController.TERRAIN_OUT_MAX_M` :152 — its radial reach, ~7.9".
+const TERRAIN_OUT_MAX_IN: f64 = 0.20 / IN2M;
+/// `SoloController.TERRAIN_OUT_DIRS` :153 — compass points per ring.
+const TERRAIN_OUT_DIRS: usize = 16;
+/// `SoloController.WALL_REST_CLEARANCE_M` :6779 — 2 mm beyond the base radius.
+const WALL_REST_CLEARANCE_IN: f64 = 0.002 / IN2M;
 
 /// What the gate did — for the caller's log line (`rules-must-log`), never for
 /// its geometry.
@@ -130,17 +141,73 @@ fn resolve_overlaps(s: &mut Disc, obs: &[Disc]) -> bool {
     s.c != start
 }
 
-/// `_finalize_placement` :6371, passes 1 and 2, over ONE unit's planned
+/// `SoloController._world_forbidden` :6790 — may this base REST here? Two
+/// clauses, the table's own: the edge-aware containment test against the
+/// impassable class (`TerrainRules.base_in_terrain` x `is_forbidden_rest`, i.e.
+/// CONTAINER — a base dipping in by any amount counts), and a ruin/container
+/// WALL segment nearer than the base radius plus 2 mm. A model may stand IN a
+/// ruin, never ON its wall.
+fn rest_forbidden(c: [f64; 2], r_in: f64, t: &Terrain) -> bool {
+    let p: V2 = [c[0] as f32, c[1] as f32];
+    if terrain::base_in_terrain(t.from_inch(p, 0.0), r_in * IN2M, t, terrain::is_forbidden_rest) {
+        return true;
+    }
+    let lim = r_in + WALL_REST_CLEARANCE_IN;
+    t.walls_in().iter().any(|w| point_seg_distance(p, w[0], w[1]) <= lim)
+}
+
+/// `SoloController._project_out_forbidden_world` :6807 — the shortest hop to a
+/// spot whose WHOLE base is clear: 1 cm rings out to 20 cm, sixteen compass
+/// directions each, nearest ring first and, inside one ring, the world-frame
+/// `x`-then-`z` order (`to_inch` is monotone on both axes, so the inch frame
+/// orders the candidates identically). Candidates are bounds-clamped exactly as
+/// pass 1 clamps. A boxed model is returned UNMOVED — the overlap push and the
+/// caller's ladder still act on it.
+fn project_out_forbidden(p: [f64; 2], r_in: f64, t: &Terrain, board_in: [f64; 2]) -> [f64; 2] {
+    if !rest_forbidden(p, r_in, t) {
+        return p;
+    }
+    let mut ring = TERRAIN_OUT_STEP_IN;
+    while ring <= TERRAIN_OUT_MAX_IN + OVERLAP_EPS_IN {
+        let (mut best, mut found) = (p, false);
+        for k in 0..TERRAIN_OUT_DIRS {
+            let ang = std::f64::consts::TAU * k as f64 / TERRAIN_OUT_DIRS as f64;
+            let c = [
+                (p[0] + ang.cos() * ring).clamp(BOUNDS_MARGIN_IN, board_in[0] - BOUNDS_MARGIN_IN),
+                (p[1] + ang.sin() * ring).clamp(BOUNDS_MARGIN_IN, board_in[1] - BOUNDS_MARGIN_IN),
+            ];
+            if rest_forbidden(c, r_in, t) {
+                continue;
+            }
+            if !found
+                || c[0] < best[0] - OVERLAP_EPS_IN
+                || ((c[0] - best[0]).abs() <= OVERLAP_EPS_IN && c[1] < best[1] - OVERLAP_EPS_IN)
+            {
+                best = c;
+                found = true;
+            }
+        }
+        if found {
+            return best;
+        }
+        ring += TERRAIN_OUT_STEP_IN;
+    }
+    p
+}
+
+/// `_finalize_placement` :6371, passes 1 to 3, over ONE unit's planned
 /// endpoints. `external` is `_external_obstacle_shapes` :6676 — every OTHER
 /// on-table unit's alive-model base. `caps_in` is `_gate_disp_caps_m`'s output;
 /// a length other than `planned`'s means UNCAPPED, the same guard the GDScript
-/// reads at :6398 (a charge passes none).
+/// reads at :6398 (a charge passes none). `terrain` switches pass 3 on; `None`
+/// is the board the recorder never wrote a terrain line for.
 pub fn finalize_placement(
     planned: &[V2],
     radii_in: &[f64],
     external: &[Disc],
     caps_in: &[f64],
     board_in: [f64; 2],
+    terrain: Option<&Terrain>,
 ) -> (Vec<V2>, GateReport) {
     let n = planned.len();
     let mut rep = GateReport {
@@ -165,12 +232,28 @@ pub fn finalize_placement(
             }
         })
         .collect();
+    let capped = caps_in.len() == n;
+    // (terrain) :6402-6412 — project every model out of forbidden rest ground
+    // BEFORE the overlap push, so the crowd resolves around spots that are
+    // already legal. A projection costing MORE than the model's band slack is
+    // refused WHOLE, never truncated: a half hop would still rest inside the
+    // container. The route-true spot is kept, the model is marked, and the debt
+    // goes to the caller's ladder at a shorter reach — route truth wins.
+    if let Some(t) = terrain {
+        for i in 0..n {
+            let proj = project_out_forbidden(cfg[i].c, cfg[i].r, t, board_in);
+            if capped && dist(proj, goal[i]) > caps_in[i] {
+                rep.capped[i] = true;
+            } else {
+                cfg[i].c = proj;
+            }
+        }
+    }
     // (overlap) :6716-6752 — Gauss-Seidel, slack-aware: the models with the most
     // band left resolve first, a model at its cap is FROZEN (it stays in every
     // neighbour's obstacle set, so the crowd walks around it), and each push is
     // truncated to the cap circle. Residual overlap between two capped models is
     // deliberately LEFT for the caller's ladder to settle at a shorter reach.
-    let capped = caps_in.len() == n;
     for _ in 0..OVERLAP_GATE_PASSES {
         let mut order: Vec<usize> = (0..n).collect();
         if capped {
