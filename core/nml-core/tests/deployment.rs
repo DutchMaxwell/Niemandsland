@@ -1687,3 +1687,242 @@ fn scout_band_extends_twelve_inches_forward() {
     assert!((band2.pos.1 - 0.0).abs() < 1e-6, "side 2 extends to the centre: {band2:?}");
     assert!((band2.end().1 - 0.6096).abs() < 1e-6, "far edge unchanged: {band2:?}");
 }
+
+// ---- the AMBUSH ARRIVAL (SPEC ambush arrival S3 + S5) --------------------
+// `deployment::arrive_one` against `SoloController._try_place_reserve_unit`
+// (solo_controller.gd:10044-10112). Synthetic boards on purpose: the recorded
+// corpora DO carry arrivals (measured: 91 arriving units in 77 of qbg_ref's
+// 168 games), but a recorded case pins the whole pipeline at once and cannot
+// isolate ONE ring — that is step S4's fixture. Each test below moves exactly
+// one input and states what must move with it.
+
+/// A board with no cells, no sandbox and no walls: `spot_blocked` then answers
+/// false everywhere, so the RINGS decide the spot and nothing else does.
+fn empty_board() -> Terrain {
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": [], "sandbox": [], "walls": [],
+        "cell_params": {"table_size_feet": [6.0, 4.0], "grid_rotation_degrees": 0.0,
+                        "grid_size_inches": 6.0, "inches_to_meters": IN2M},
+    }))
+    .expect("plain terrain");
+    Terrain::build(&plain)
+}
+
+/// The whole table as the arrival zone (main.gd:10428-10431 — `table_size *
+/// 0.3048`, centred), 6x4 ft.
+fn arrival_zone() -> deployment::Rect {
+    deployment::Rect::new(-6.0 * 0.3048 / 2.0, -4.0 * 0.3048 / 2.0, 6.0 * 0.3048, 4.0 * 0.3048)
+}
+
+/// One enemy model dead centre, on the single objective, so the objective-near
+/// scan WANTS the middle and only the ring pushes it away. `pad_m` is a 30 mm
+/// base: the book measures closest point to closest point.
+fn centre_enemy(min_dist_m: f64) -> Vec<deployment::ArrivalEnemy> {
+    vec![deployment::ArrivalEnemy { pos: (0.0, 0.0), min_dist_m, pad_m: 0.015 }]
+}
+
+fn arrive(
+    enemies: &[deployment::ArrivalEnemy],
+    beacons: &[deployment::ArrivalBeacon],
+    own_ring_m: f64,
+) -> ((f64, f64), Vec<deployment::Occupied>) {
+    let board = empty_board();
+    let mut occ: Vec<deployment::Occupied> = Vec::new();
+    let spot = deployment::arrive_one(
+        &arrival_zone(),
+        &[(0.0, 0.0)],
+        &mut occ,
+        enemies,
+        beacons,
+        own_ring_m,
+        &board,
+        0.05,
+        &[],
+        0.015,
+        false,
+    );
+    (spot, occ)
+}
+
+/// (a) A plain Ambush arrival keeps 9" from the enemy MODEL, and the gap is
+/// measured edge to edge — `pad_m` rides on top of the ring, so the centre
+/// distance must clear 9" + the enemy's base radius. RED: drop `+ e.pad_m`
+/// from the ring and the second assertion fails by exactly that base radius.
+#[test]
+fn a_plain_ambusher_arrives_outside_nine_inches_edge_to_edge() {
+    let ring = deployment::AMBUSH_MIN_ENEMY_DIST_M;
+    let (spot, _) = arrive(&centre_enemy(0.0), &[], ring);
+    let d = (spot.0 * spot.0 + spot.1 * spot.1).sqrt();
+    // `spot_free` compares centre distance against `radius + o.radius`
+    // (ai_deployment.gd:247-252), so the floor is the ring PLUS the enemy's
+    // base radius PLUS the arriving footprint's own radius.
+    let floor = ring + 0.015 + 0.05;
+    assert!(spot.0.is_finite(), "a 6x4 ft table has room outside 9\": {spot:?}");
+    assert!(d >= ring, "inside the 9\" ring: {d} < {ring}");
+    assert!(d >= floor, "the enemy's base radius pads the ring: {d} < {floor}");
+    assert!(
+        d < floor + deployment::DEPLOY_SPOT_STEP_M,
+        "and it hugs the ring within one scan step — the objective is at the centre: {d}"
+    );
+}
+
+/// (b) Infiltrate's 3" concession lands the SAME unit measurably closer.
+#[test]
+fn an_infiltrator_arrives_at_three_inches_not_nine() {
+    let (nine, _) = arrive(&centre_enemy(0.0), &[], deployment::AMBUSH_MIN_ENEMY_DIST_M);
+    let (three, _) = arrive(&centre_enemy(0.0), &[], 0.0762 / 0.0254 * IN2M);
+    let (dn, dt) = (nine.0.hypot(nine.1), three.0.hypot(three.1));
+    assert!(dt >= 0.0762, "still outside 3\": {dt}");
+    assert!(dt < dn - 0.1, "3\" is measurably closer than 9\": {dt} vs {dn}");
+}
+
+/// (c) Repel Ambushers OVERRIDES the concession: the same Infiltrate arriver,
+/// against an enemy projecting 12", must land outside 12" — not outside 3".
+/// RED: write the ring as `own_ring_m` instead of
+/// `own_ring_m.max(e.min_dist_m)` and the unit lands inside 12".
+#[test]
+fn repel_ambushers_overrides_the_infiltrate_concession() {
+    let own = 0.0762 / 0.0254 * IN2M;
+    let repel = 12.0 * IN2M;
+    let (spot, _) = arrive(&centre_enemy(repel), &[], own);
+    let d = spot.0.hypot(spot.1);
+    assert!(spot.0.is_finite(), "still room outside 12\": {spot:?}");
+    assert!(d >= repel, "the max() is the whole rule: {d} < {repel}");
+}
+
+/// (d) No legal spot -> `(INF, INF)`, and NOTHING is booked into `occupied`:
+/// the unit stays in reserve for a later round (:10098-10099). There is no
+/// `least_blocked_spot` fallback on this path and there must never be one.
+#[test]
+fn an_arrival_with_no_legal_spot_stays_in_reserve() {
+    let board = empty_board();
+    let mut occ: Vec<deployment::Occupied> = Vec::new();
+    // A 60" ring around the table centre covers every cell of a 6x4 ft table.
+    let wall = vec![deployment::ArrivalEnemy { pos: (0.0, 0.0), min_dist_m: 60.0 * IN2M, pad_m: 0.0 }];
+    let spot = deployment::arrive_one(
+        &arrival_zone(), &[(0.0, 0.0)], &mut occ, &wall, &[],
+        deployment::AMBUSH_MIN_ENEMY_DIST_M, &board, 0.05, &[], 0.015, false,
+    );
+    assert!(spot.0.is_infinite() && spot.1.is_infinite(), "held back, got {spot:?}");
+    assert!(occ.is_empty(), "a held-back unit books nothing");
+}
+
+/// The tie rule is law (`ai_deployment.gd:110`, a strict `<`): the scan runs y
+/// OUTER / x INNER and the FIRST minimum wins. Two grid cells are DERIVED from
+/// the scan itself (no hard-coded floats), then handed in as the objective
+/// list: a cell sitting exactly on an objective scores exactly `0.0`, so the
+/// two tie bit-for-bit and only the order decides. RED: turn `score <
+/// best_score` into `<=` and the LATER cell wins instead.
+#[test]
+fn equal_scores_resolve_to_the_smallest_y_then_smallest_x() {
+    let zone = deployment::Rect::new(-0.1, -0.1, 0.2, 0.2);
+    let none = |_: (f64, f64)| false;
+    let far = [(0.5, 0.5)];
+    let step = deployment::DEPLOY_SPOT_STEP_M;
+    let a = deployment::best_spot(&zone, &far, &[], 0.0, &none, step, &[], 0.0, f64::INFINITY);
+    let block = vec![deployment::Occupied { pos: a, radius: 0.001 }];
+    let b = deployment::best_spot(&zone, &far, &block, 0.0, &none, step, &[], 0.0, f64::INFINITY);
+    assert!(a.0.is_finite() && b.0.is_finite() && a != b, "two distinct grid cells: {a:?} {b:?}");
+
+    let board = empty_board();
+    let mut occ: Vec<deployment::Occupied> = Vec::new();
+    let objs = [a, b];
+    let spot =
+        deployment::arrive_one(&zone, &objs, &mut occ, &[], &[], 0.0, &board, 0.0, &[], 0.0, false);
+    let earlier = if (a.1, a.0) < (b.1, b.0) { a } else { b };
+    let later = if (a.1, a.0) < (b.1, b.0) { b } else { a };
+    assert_eq!(spot, earlier, "first minimum in scan order wins, not {later:?}");
+    assert!(
+        earlier.1 < later.1 || (earlier.1 == later.1 && earlier.0 < later.0),
+        "y outer, x inner: {earlier:?} before {later:?}"
+    );
+}
+
+/// S5 — the Ambush Beacon pass runs FIRST and against `occupied` alone, so a
+/// beacon standing right on top of a 12" Repel Ambushers carrier still lands
+/// the arriver inside its own 6" circle: EVERY enemy distance restriction is
+/// waived in there (maintainer ruling, :9760-9764).
+#[test]
+fn a_beacon_waives_even_repel_ambushers_twelve_inches() {
+    let beacon = vec![deployment::ArrivalBeacon {
+        pos: (0.0, 0.0),
+        radius_m: deployment::AMBUSH_BEACON_RADIUS_IN * IN2M,
+    }];
+    let (spot, occ) = arrive(&centre_enemy(12.0 * IN2M), &beacon, deployment::AMBUSH_MIN_ENEMY_DIST_M);
+    let d = spot.0.hypot(spot.1);
+    assert!(spot.0.is_finite(), "the beacon pass found a spot: {spot:?}");
+    assert!(d <= 6.0 * IN2M + deployment::BEACON_EPS_M, "inside the circle: {d}");
+    assert!(d < 12.0 * IN2M, "and inside the 12\" ring the waiver dropped: {d}");
+    assert_eq!(occ.len(), 1, "the spot is booked for the next arrival");
+}
+
+/// S5's own RED — the distance RE-CHECK. `best_spot` scans the beacon
+/// circle's BOUNDING BOX, whose corners lie up to `r*(sqrt(2)-1)` outside the
+/// circle. Here everything strictly INSIDE the circle is already taken, so the
+/// only free cells in the box are outside it. Without the
+/// `distance_to(bpos) > brad + BEACON_EPS_M` rejection (:10066) the arriver
+/// takes one and claims a waiver it never earned; with it the beacon pass
+/// declines and the RINGED search answers instead — outside 9", not a
+/// hair outside 6".
+#[test]
+fn a_box_corner_outside_the_beacon_circle_is_rejected() {
+    let board = empty_board();
+    let brad = 6.0 * IN2M;
+    let beacon = vec![deployment::ArrivalBeacon { pos: (0.0, 0.0), radius_m: brad }];
+    // A point unit (radius 0, no footprint) so `spot_free` compares the centre
+    // distance against this disc alone: free means "just outside the circle".
+    let mut occ: Vec<deployment::Occupied> =
+        vec![deployment::Occupied { pos: (0.0, 0.0), radius: brad + 0.001 }];
+    let spot = deployment::arrive_one(
+        &arrival_zone(), &[(0.0, 0.0)], &mut occ, &centre_enemy(0.0), &beacon,
+        deployment::AMBUSH_MIN_ENEMY_DIST_M, &board, 0.0, &[], 0.0, false,
+    );
+    let d = spot.0.hypot(spot.1);
+    assert!(spot.0.is_finite(), "the ringed search still answers: {spot:?}");
+    assert!(
+        d > brad + deployment::BEACON_EPS_M,
+        "no waiver was claimed from outside the circle: {d} vs {brad}"
+    );
+    assert!(
+        d >= deployment::AMBUSH_MIN_ENEMY_DIST_M + 0.015,
+        "so the 9\" ring (plus the enemy's base) applied instead: {d}"
+    );
+}
+
+/// `arrive_unit` brings the unit back with the strength it PARKED. RED: read
+/// `wounds` from `Profile.wounds_max` instead of `dormant_wounds` and the
+/// damaged model comes back healed (3 instead of 2).
+#[test]
+fn arrive_unit_rebuilds_the_parked_strength_not_a_fresh_one() {
+    const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "p1_0_a":{"unit_id":"p1_0_a","name":"A","quality":4,"defense":3,"tough":3,
+        "wounds_max":[3,3,3],"model_count":3,"caster_value":0,"base_radius":0.02,
+        "game_system":"gf","faction_folder":"alien_hives","special_rules":[],
+        "item_grants":[],"attached_hero_rules":[],
+        "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
+    const PLAIN: &str = r#"{"round":2,"rounds_total":4,"scoring":"end","units":{
+        "p1_0_a":{"player":1,"alive":0,"wounds":[],"radii":[],"positions":[],
+          "in_cover":false,"shaken":false,"fatigued":false,"activated":false,
+          "casts":0,"morale_bonus":0,"aircraft":false,"dormant":true,
+          "dormant_models":3,"dormant_wounds":[2,3,3],"ambush_arrived_round":-1,
+          "earliest_arrival_round":2,"wound_frac":0.0,"mods":{},"mods_base":{},
+          "bands":{"advance":6.0,"rush":12.0}}}}"#;
+    let header = nml_core::acts::read_act_header(HEADER).expect("header");
+    let mut cache = nml_core::state::ProfileCache::new(header.profiles);
+    let mut roster = None;
+    let mut st = nml_core::io::state_from_json(PLAIN, &mut cache, &mut roster).expect("state");
+    deployment::arrive_unit(&mut st, 0, (0.3, -0.4), 2);
+    assert_eq!(st.alive[0], 3);
+    assert_eq!(st.wounds[0], vec![2, 3, 3], "the DAMAGED model stays damaged");
+    assert_eq!(st.radii[0], vec![0.02, 0.02, 0.02]);
+    assert_eq!(st.positions[0].len(), 3, "back on the table");
+    assert!(!st.dormant[0]);
+    assert_eq!(st.dormant_models[0], 0, "the tray strength is spent");
+    assert!(st.dormant_wounds[0].is_empty());
+    assert_eq!(st.ambush_arrived_round[0], 2, "no seizing or contesting this round");
+    assert_eq!(st.earliest_arrival_round[0], -1, "capture() writes it only while dormant");
+    assert!(!st.activated[0], "arriving is deployment, not an activation");
+    // ...and the round trip carries none of the dormant keys back out.
+    let back = nml_core::io::plain_of(&st).to_string();
+    assert!(!back.contains("dormant_models"), "{back}");
+}
