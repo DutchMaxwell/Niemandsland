@@ -1,4 +1,6 @@
-//! NML-1073 M5 D5-2 — the CHARGE MOVE as the TABLE executes it, over a `State`.
+//! NML-1073 — the MOVE as the TABLE executes it, over a `State`: `charge_move`
+//! (M5 D5-2, aimed at a target's near face) and `plain_move` (aimed at a
+//! destination the caller picked), both through the one `_execute_move` body.
 //!
 //! The chain on the table is `_charge_move` (solo_controller.gd:8582, the aim)
 //! -> `_move_toward` (:4558) -> `_execute_move` (:4769, the band and the passes)
@@ -278,18 +280,27 @@ fn fine_cells(
     out
 }
 
-/// `_spacing_zones_world` :5218, already in the planner's inch frame: one circle
+/// `_spacing_zones_world` :5232, already in the planner's inch frame: one circle
 /// per alive model of every OTHER on-table unit. The charge target and its
 /// attached heroes get a BODY-ONLY zone (no 1" buffer) — a charge may end in
-/// base contact with its own target but never move through it (p.7).
-fn spacing_zones(state: &State, t: &Terrain, si: usize, ci: usize, own_r_m: f64) -> Vec<Zone> {
+/// base contact with its own target but never move through it (p.7). A
+/// non-charge move passes `None` (:6187 hands the planner `charge_target if
+/// allow_contact else null`) and every unit keeps its full 1" buffer.
+fn spacing_zones(
+    state: &State,
+    t: &Terrain,
+    si: usize,
+    ci: Option<usize>,
+    own_r_m: f64,
+) -> Vec<Zone> {
     let member = |u: usize, host: usize| u == host || state.attached_to[u] == Some(host);
     let mut zones = Vec::new();
     for gu in 0..state.units() {
         if member(gu, si) || state.dormant[gu] || state.aircraft[gu] {
             continue;
         }
-        let buffer_m = if member(gu, ci) { 0.0 } else { UNIT_SPACING_IN * IN2M };
+        let buffer_m =
+            if ci.is_some_and(|c| member(gu, c)) { 0.0 } else { UNIT_SPACING_IN * IN2M };
         for m in 0..state.positions[gu].len() {
             let r = radius_of(state, Mover { unit: gu, model: m });
             zones.push(Zone {
@@ -311,7 +322,9 @@ struct Move<'a> {
     state: &'a State,
     t: &'a Terrain,
     si: usize,
-    ci: usize,
+    /// The charge target — `None` for a non-charge move, which has none
+    /// (`_execute_move`'s `charge_target` argument defaults to `null`, :4785).
+    ci: Option<usize>,
     movers: Vec<Mover>,
     /// `_positions_of(models)` :4772, world metres, in `movers` order.
     pos: Vec<V3>,
@@ -355,12 +368,14 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool) -> MoveCa
         let ty = t.type_at(w);
         ty == terrain::CONTAINER || ty == terrain::RUINS || ty == terrain::DANGEROUS
     });
-    let tgt_bases: Vec<(V2, f64)> = (0..state.positions[ci].len())
-        .map(|m| {
-            let mv = Mover { unit: ci, model: m };
-            (t.to_inch(pos_of(state, mv)), radius_of(state, mv) / IN2M)
-        })
-        .collect();
+    let tgt_bases: Vec<(V2, f64)> = ci.map_or_else(Vec::new, |c| {
+        (0..state.positions[c].len())
+            .map(|m| {
+                let mv = Mover { unit: c, model: m };
+                (t.to_inch(pos_of(state, mv)), radius_of(state, mv) / IN2M)
+            })
+            .collect()
+    });
     let charge_slots = if tgt_bases.is_empty() {
         Vec::new()
     } else {
@@ -392,8 +407,11 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool) -> MoveCa
                 Some(DIFFICULT_MOVE_CAP_IN)
             },
             zones_rest_only: state.profile(si).special_rules.iter().any(|r| r == "Traversal"),
-            charge_allowance: Some(reach_in),
-            charge_goal: Some(t.to_inch(unit_centre(state, ci))),
+            // :6222 — the arc allowance and the body goal are CHARGE-only; a
+            // plain move sends neither, so `allowance()` falls back to the
+            // straight delta length (io.rs:512).
+            charge_allowance: ci.map(|_| reach_in),
+            charge_goal: ci.map(|c| t.to_inch(unit_centre(state, c))),
             charge_tgt_bases: tgt_bases,
             charge_slots,
         },
@@ -436,6 +454,61 @@ fn plan_once(&self, reach_in: f64, avoid_diff: bool) -> (Vec<V2>, Vec<Vec<V2>>, 
         }
         Err(_) => (mpos.clone(), mpos.iter().map(|p| vec![*p, *p]).collect(), Some(call)),
     }
+}
+
+/// `_execute_move` :4813-4855 from the pass-1 plan onward — the p.11 cap
+/// re-plan, the distance-truth trim, the p.12 crossing flags and the retrace.
+/// The table runs ONE body here for a charge and for a plain move; everything
+/// the two disagree about was already decided when `Move` was built, so the
+/// two entries below must not each carry their own copy of this ordering.
+fn execute(&self, band_in: f64, avoid_diff: bool, radii_m: &[f64]) -> Landing {
+    let (state, t) = (self.state, self.t);
+    let mut reach = band_in;
+    let (mut planned, mut trails, mut call) = self.plan_once(reach, avoid_diff);
+    // :4816-4820 — the ROUTE entered difficult terrain, so p.11 caps the whole
+    // move at 6" and it is re-planned THROUGH (dangerous is still avoided).
+    if !self.ignores_difficult && trails_cross_difficult(&trails, radii_m, t) {
+        reach = band_in.min(DIFFICULT_MOVE_CAP_IN);
+        let re = self.plan_once(reach, false);
+        planned = re.0;
+        trails = re.1;
+        call = re.2;
+    }
+    // :4838-4847 — distance truth: no model's polyline may exceed the budget.
+    let budget_in = reach;
+    let mut arc_in = 0.0f64;
+    let mut dangerous: Vec<bool> = Vec::with_capacity(trails.len());
+    let starts: Vec<V2> = self.movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
+    for (i, leg) in trails.iter_mut().enumerate() {
+        if g2::polyline_length(leg) * IN2M > budget_in * IN2M + OVERLAP_EPS_M {
+            *leg = g2::trim_polyline(leg, budget_in);
+            if let Some(fin) = leg.last() {
+                if i < planned.len() {
+                    planned[i] = *fin;
+                }
+            }
+        }
+        // :5051 — the p.12 crossing flag is read HERE, on the routed trail, and
+        // not after the retrace below: the table counts the cells the model
+        // actually traversed even when the gate nudges its resting spot.
+        let r = radii_m.get(i).copied().unwrap_or(0.0);
+        dangerous.push(!self.flying && leg_crosses(leg, r, t, terrain::is_dangerous));
+        // :5068-5071 — and THEN the trail is retraced to the endpoint, which is
+        // the polyline `last_move_paths` publishes and :8659 measures.
+        *leg = retrace_to(leg, starts[i], planned.get(i).copied().unwrap_or(starts[i]));
+        arc_in = arc_in.max(g2::polyline_length(leg));
+    }
+    let end: Vec<V3> = self
+        .movers
+        .iter()
+        .enumerate()
+        .map(|(i, m)| {
+            let p = planned.get(i).copied().unwrap_or_else(|| t.to_inch(pos_of(state, *m)));
+            let w = t.from_inch(p, 0.0);
+            [w[0], self.pos[i][1], w[2]]
+        })
+        .collect();
+    Landing { movers: self.movers.clone(), end, budget_in, arc_in, dangerous, call }
 }
 }
 
@@ -548,15 +621,15 @@ pub fn charge_move(
     let ignores_difficult = state.charge_no_difficult.get(si).copied().unwrap_or(flying);
     // :4791-4797 — pass 1 routes AROUND difficult/dangerous unless the targets
     // themselves lie in it (then going around is impossible).
-    let mut reach = band_in;
     let avoid_diff = !ignores_difficult
-        && !targets_in(&pos, goal, reach, own_r_m, t, half, terrain::is_difficult);
-    let avoid_dang = !flying && !targets_in(&pos, goal, reach, own_r_m, t, half, terrain::is_dangerous);
+        && !targets_in(&pos, goal, band_in, own_r_m, t, half, terrain::is_difficult);
+    let avoid_dang =
+        !flying && !targets_in(&pos, goal, band_in, own_r_m, t, half, terrain::is_dangerous);
     let ch = Move {
         state,
         t,
         si,
-        ci,
+        ci: Some(ci),
         movers,
         pos,
         goal,
@@ -569,50 +642,78 @@ pub fn charge_move(
         guard,
         allow_contact: true,
     };
-    let (mut planned, mut trails, mut call) = ch.plan_once(reach, avoid_diff);
-    // :4801-4805 — the ROUTE entered difficult terrain, so p.11 caps the whole
-    // move at 6" and it is re-planned THROUGH (dangerous is still avoided).
-    if !ignores_difficult && trails_cross_difficult(&trails, &radii_m, t) {
-        reach = band_in.min(DIFFICULT_MOVE_CAP_IN);
-        let re = ch.plan_once(reach, false);
-        planned = re.0;
-        trails = re.1;
-        call = re.2;
+    Some(ch.execute(band_in, avoid_diff, &radii_m))
+}
+
+/// `SoloController._move_toward` :4575 -> `_execute_move` :4784 for a NON-charge
+/// move (ADVANCE, RUSH, the post-melee consolidation, Hit & Run's step): the
+/// same two passes and the same distance truth as a charge, aimed at a
+/// destination the caller already picked instead of at a target's near face.
+/// `None` = the port declines and the caller keeps its rigid translation.
+///
+/// NOT here, and the landing is therefore the PRE-GATE plan rather than the
+/// table's resting place: `_finalize_placement` :6371, the stall escalation
+/// :4820, the gate-collapse ladder :4890 and the boxed/sidestep escape :4960.
+/// A plain move really does enter all four on the table — unlike a charge,
+/// which `not allow_contact` excludes from three of them.
+#[allow(clippy::too_many_arguments)]
+pub fn plain_move(
+    state: &State,
+    t: &Terrain,
+    si: usize,
+    dest: V3,
+    band_in: f64,
+    hero_attach: bool,
+    fast_planner: bool,
+    guard: i64,
+) -> Option<Landing> {
+    let board = t.board_in();
+    if !t.is_valid() || board[0] <= 0.0 || board[1] <= 0.0 {
+        return None;
     }
-    // :4838-4847 — distance truth: no model's polyline may exceed the budget.
-    let budget_in = reach;
-    let mut arc_in = 0.0f64;
-    let mut dangerous: Vec<bool> = Vec::with_capacity(trails.len());
-    let starts: Vec<V2> = ch.movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
-    for (i, leg) in trails.iter_mut().enumerate() {
-        if g2::polyline_length(leg) * IN2M > budget_in * IN2M + OVERLAP_EPS_M {
-            *leg = g2::trim_polyline(leg, budget_in);
-            if let Some(fin) = leg.last() {
-                if i < planned.len() {
-                    planned[i] = *fin;
-                }
-            }
-        }
-        // :5036 — the p.12 crossing flag is read HERE, on the routed trail, and
-        // not after the retrace below: the table counts the cells the model
-        // actually traversed even when the gate nudges its resting spot.
-        dangerous.push(!flying && leg_crosses(leg, radii_m.get(i).copied().unwrap_or(0.0), t, terrain::is_dangerous));
-        // :4853-4855 — and THEN the trail is retraced to the endpoint, which is
-        // the polyline `last_move_paths` publishes and :8659 measures.
-        *leg = retrace_to(leg, starts[i], planned.get(i).copied().unwrap_or(starts[i]));
-        arc_in = arc_in.max(g2::polyline_length(leg));
+    let half = [board[0] * 0.5 * IN2M, board[1] * 0.5 * IN2M];
+    let mut movers = movers_of(state, si);
+    if !hero_attach {
+        movers.retain(|m| m.unit == si);
     }
-    let end: Vec<V3> = ch
-        .movers
-        .iter()
-        .enumerate()
-        .map(|(i, m)| {
-            let p = planned.get(i).copied().unwrap_or_else(|| t.to_inch(pos_of(state, *m)));
-            let w = t.from_inch(p, 0.0);
-            [w[0], ch.pos[i][1], w[2]]
-        })
-        .collect();
-    Some(Landing { movers: ch.movers.clone(), end, budget_in, arc_in, dangerous, call })
+    if movers.is_empty() {
+        return None;
+    }
+    let pos: Vec<V3> = movers.iter().map(|m| pos_of(state, *m)).collect();
+    // :4579 / :4766 — every caller hands `_execute_move` a bounds-clamped goal.
+    let goal = clamp_to_bounds(dest, half);
+    // `_move_base_radius_m` :5209 — the LARGEST moving base is the clearance.
+    let own_r_m =
+        movers.iter().fold(DEFAULT_BASE_RADIUS_M, |acc, m| acc.max(radius_of(state, *m)));
+    let radii_m: Vec<f64> = movers.iter().map(|m| radius_of(state, *m)).collect();
+    let rules = &state.profile(si).special_rules;
+    let flying = rules.iter().any(|r| r == "Flying");
+    // :4790 — Strider ignores Difficult but NOT Dangerous (p.13/p.14).
+    let ignores_difficult = flying || rules.iter().any(|r| r == "Strider");
+    // :4805-4809 — pass 1 routes AROUND both classes unless the rigid targets
+    // land in them, in which case going around is impossible.
+    let avoid_diff = !ignores_difficult
+        && !targets_in(&pos, goal, band_in, own_r_m, t, half, terrain::is_difficult);
+    let avoid_dang =
+        !flying && !targets_in(&pos, goal, band_in, own_r_m, t, half, terrain::is_dangerous);
+    let mv = Move {
+        state,
+        t,
+        si,
+        ci: None,
+        movers,
+        pos,
+        goal,
+        own_r_m,
+        avoid_dang,
+        flying,
+        ignores_difficult,
+        half,
+        fast_planner,
+        guard,
+        allow_contact: false,
+    };
+    Some(mv.execute(band_in, avoid_diff, &radii_m))
 }
 
 #[cfg(test)]
@@ -627,6 +728,19 @@ mod tests {
     /// read: unit 0 (the charger) at `pos_a`, unit 1 (the target) at `pos_b`,
     /// both 1"-radius bases, no attachment, no terrain gate reads.
     fn two_unit_state(pos_a: Vec<V3>, pos_b: Vec<V3>) -> State {
+        let radii = vec![vec![IN2M; pos_a.len()], vec![IN2M; pos_b.len()]];
+        units_state(vec![pos_a, pos_b], radii, vec![vec![], vec![]])
+    }
+
+    /// The same `State`, with as many units as the caller needs and a real base
+    /// radius (METRES) per model — what a recorded call has to be rebuilt from.
+    /// `attached[u]` lists the hero units riding with `u`.
+    fn units_state(
+        pos: Vec<Vec<V3>>,
+        radii_m: Vec<Vec<f64>>,
+        attached: Vec<Vec<usize>>,
+    ) -> State {
+        let n = pos.len();
         let profile = Profile {
             unit_id: "u".into(),
             name: "u".into(),
@@ -650,12 +764,16 @@ mod tests {
         };
         let profiles = Rc::new(Profiles { list: vec![profile], index: HashMap::new() });
         let roster = Rc::new(Roster {
-            keys: vec!["a".into(), "b".into()],
+            keys: (0..n).map(|i| format!("u{i}")).collect(),
             index: HashMap::new(),
-            profile: vec![0, 0],
+            profile: vec![0; n],
         });
-        let na = pos_a.len();
-        let nb = pos_b.len();
+        let mut attached_to = vec![None; n];
+        for (host, hs) in attached.iter().enumerate() {
+            for &h in hs {
+                attached_to[h] = Some(host);
+            }
+        }
         State {
             roster,
             profiles,
@@ -669,41 +787,41 @@ mod tests {
             vp_flavour: None,
             vp_memo: None,
             cast_events: vec![],
-            player: vec![0, 1],
-            alive: vec![1, 1],
-            activated: vec![false, false],
-            shaken: vec![false, false],
-            fatigued: vec![false, false],
-            in_cover: vec![false, false],
-            aircraft: vec![false, false],
-            dormant: vec![false, false],
-            casts: vec![0, 0],
-            morale_bonus: vec![0, 0],
-            ambush_arrived_round: vec![-1, -1],
-            earliest_arrival_round: vec![-1, -1],
-            wound_frac: vec![1.0, 1.0],
-            positions: vec![
-                pos_a.iter().map(|p| geom::to_f64(*p)).collect(),
-                pos_b.iter().map(|p| geom::to_f64(*p)).collect(),
-            ],
-            wounds: vec![vec![1; na], vec![1; nb]],
-            radii: vec![vec![IN2M; na], vec![IN2M; nb]],
-            mods: vec![Mods::default(), Mods::default()],
-            mods_base: vec![Rc::new(Mods::default()), Rc::new(Mods::default())],
-            attached: Rc::new(vec![vec![], vec![]]),
-            attached_to: Rc::new(vec![None, None]),
-            los: vec![None, None],
+            player: (0..n).map(|i| i as i64).collect(),
+            alive: vec![1; n],
+            activated: vec![false; n],
+            shaken: vec![false; n],
+            fatigued: vec![false; n],
+            in_cover: vec![false; n],
+            aircraft: vec![false; n],
+            dormant: vec![false; n],
+            casts: vec![0; n],
+            morale_bonus: vec![0; n],
+            ambush_arrived_round: vec![-1; n],
+            earliest_arrival_round: vec![-1; n],
+            wound_frac: vec![1.0; n],
+            wounds: pos.iter().map(|u| vec![1; u.len()]).collect(),
+            positions: pos
+                .iter()
+                .map(|u| u.iter().map(|p| geom::to_f64(*p)).collect())
+                .collect(),
+            radii: radii_m,
+            mods: vec![Mods::default(); n],
+            mods_base: (0..n).map(|_| Rc::new(Mods::default())).collect(),
+            attached: Rc::new(attached),
+            attached_to: Rc::new(attached_to),
+            los: vec![None; n],
             los_pairs: None,
-            bands: vec![Bands::default(), Bands::default()],
-            shroud: vec![None, None],
-            charge_no_difficult: vec![false, false],
-            charge_probe_r: vec![0.0, 0.0],
-            buffs: vec![Vec::new(), Vec::new()],
-            vs_mark_round: vec![-1, -1],
-            hit_and_run_round: vec![-1, -1],
-            growth_markers: vec![0, 0],
-            growth_round: vec![-1, -1],
-            second_wind_used: vec![false, false],
+            bands: vec![Bands::default(); n],
+            shroud: vec![None; n],
+            charge_no_difficult: vec![false; n],
+            charge_probe_r: vec![0.0; n],
+            buffs: (0..n).map(|_| Vec::new()).collect(),
+            vs_mark_round: vec![-1; n],
+            hit_and_run_round: vec![-1; n],
+            growth_markers: vec![0; n],
+            growth_round: vec![-1; n],
+            second_wind_used: vec![false; n],
             second_wind_round: -1,
             second_wind_uses: 0,
         }
@@ -881,6 +999,104 @@ mod tests {
         // A move that stays on the table is untouched.
         let small: V3 = [(0.5 * IN2M) as f32, 0.0, 0.0];
         assert_eq!(clamp_delta_to_bounds(&pos, small, half), small);
+    }
+
+    /// ONE recorded non-charge activation from the reference corpus, rebuilt
+    /// from its inputs: the moving unit (3 models plus one attached hero), the
+    /// 84 spacing zones the table saw, the board's cells and its ruin walls.
+    /// The recorder wrote TWO `plan_unit_step` calls for it and no more — pass 1
+    /// at the full 12" band routing AROUND difficult terrain, then the p.11
+    /// re-plan at 6" going THROUGH it. So the act isolates the cap branch: no
+    /// stall escalation ran (a third call would have been recorded) and every
+    /// capped route fits inside the 6" budget, which makes the distance-truth
+    /// trim a no-op here and lets the recorded plan BE the landing.
+    ///
+    /// RED: delete the cap branch in `Move::execute` and `plain_move` keeps
+    /// pass 1, whose endpoints the last assertion measures at 8.56" from the
+    /// recorded ones — 171 times the 0.05" this asserts within.
+    #[test]
+    fn the_p11_cap_replan_lands_the_recorded_plain_move() {
+        use serde_json::Value;
+        let raw = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/mv_plain_move_call.json"
+        ))
+        .expect("the recorded call");
+        let fx: Value = serde_json::from_str(&raw).expect("valid JSON");
+        let f = |v: &Value| v.as_f64().expect("number");
+        let v2 = |v: &Value| -> V2 { [f(&v[0]) as f32, f(&v[1]) as f32] };
+        let arr = |v: &Value| v.as_array().expect("array").clone();
+
+        let tr = &fx["terrain"];
+        let cp = &tr["cell_params"];
+        let t = Terrain::build(&PlainTerrain {
+            cells: arr(&tr["cells"]).iter().map(|c| [f(&c[0]), f(&c[1]), f(&c[2])]).collect(),
+            sandbox: Vec::<Obb>::new(),
+            walls: arr(&tr["walls"])
+                .iter()
+                .map(|w| [[f(&w[0][0]), f(&w[0][1])], [f(&w[1][0]), f(&w[1][1])]])
+                .collect(),
+            cell_params: CellParams {
+                table_size_feet: [f(&cp["table_size_feet"][0]), f(&cp["table_size_feet"][1])],
+                grid_rotation_degrees: f(&cp["grid_rotation_degrees"]),
+                grid_size_inches: f(&cp["grid_size_inches"]),
+                inches_to_meters: f(&cp["inches_to_meters"]),
+            },
+        });
+
+        // `_moving_models` :5375 lists the unit's own models first and the
+        // attached hero's last, and the hero here is the one 40 mm base.
+        let mradii = arr(&fx["radii_in"]);
+        let world: Vec<V3> =
+            arr(&fx["model_pos_in"]).iter().map(|p| t.from_inch(v2(p), 0.0)).collect();
+        let h = world.len() - 1;
+        let others = arr(&fx["others"]);
+        let state = units_state(
+            vec![
+                world[..h].to_vec(),
+                vec![world[h]],
+                others.iter().map(|o| t.from_inch(v2(&o["c"]), 0.0)).collect(),
+            ],
+            vec![
+                mradii[..h].iter().map(|r| f(r) * IN2M).collect(),
+                vec![f(&mradii[h]) * IN2M],
+                others.iter().map(|o| f(&o["r_in"]) * IN2M).collect(),
+            ],
+            vec![vec![1], vec![], vec![]],
+        );
+
+        let land = plain_move(
+            &state,
+            &t,
+            0,
+            t.from_inch(v2(&fx["goal_in"]), 0.0),
+            f(&fx["band_in"]),
+            true,
+            true,
+            crate::mv::FAST_PLANNER_GUARD,
+        )
+        .expect("the board is real and the unit has models");
+
+        // The band it kept is the CAPPED one: 6", not the granted 12".
+        assert!((land.budget_in - f(&fx["budget_in"])).abs() < 1e-9, "{}", land.budget_in);
+        // And it is a plain move, so the call carries no charge arc allowance.
+        let call = land.call.as_ref().expect("a call was made");
+        assert!(!call.allow_contact && call.opts.charge_allowance.is_none());
+        assert!(call.opts.charge_goal.is_none() && call.opts.charge_slots.is_empty());
+
+        let want: Vec<V2> = arr(&fx["planned_capped_in"]).iter().map(v2).collect();
+        let pass1: Vec<V2> = arr(&fx["planned_pass1_in"]).iter().map(v2).collect();
+        assert_eq!(land.end.len(), want.len());
+        let worst = want.iter().enumerate().fold(0.0f64, |a, (i, w)| {
+            a.max(g2::distance_to(t.to_inch(land.end[i]), *w) as f64)
+        });
+        assert!(worst < 0.05, "landing {worst}\" off the recorded plan");
+        // The tolerance has teeth: the UNCAPPED plan is nowhere near it.
+        let gap = want
+            .iter()
+            .zip(&pass1)
+            .fold(0.0f64, |a, (w, p)| a.max(g2::distance_to(*w, *p)));
+        assert!(gap > 0.05 * 20.0, "pass 1 only {gap}\" away — the fixture proves nothing");
     }
 
     /// The decline path: no board, no charge move — the caller keeps its rigid

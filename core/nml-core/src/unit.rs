@@ -22,8 +22,8 @@ use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::combat::{
-    armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, SELF_REPAIR_TARGET,
-    SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN,
+    armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
+    RESISTANCE_TARGET_SPELL, SELF_REPAIR_TARGET, SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN,
 };
 use crate::rules::{
     base_rule_name, has_special_rule, rule_rating, unit_rating, Registries, Spell,
@@ -108,6 +108,12 @@ pub struct Ctx {
     pub counter_models: i64,
     pub regeneration: bool,
     pub regen_target: i64,
+    /// Block B10 — the SPELL-wound twin (`main._solo_regen_pick`'s
+    /// `from_spell` key, main.gd:6595): a whole-unit Resistance carrier folds
+    /// the registry's `ignore_target_spell` (2+) into the MIN; every other
+    /// unit repeats `regen_target`, so spell.rs's leg is byte-identical for
+    /// non-carriers.
+    pub regen_target_spell: i64,
     /// The DYNAMIC melee flag `BattleSim._ctx_of(su, true)` writes over the
     /// template (battle_sim.gd:705-707): a fatigued striker hits only on 6s.
     pub fatigued: bool,
@@ -646,25 +652,50 @@ pub fn capture_reads(reg: &mut Registries, p: &Profile) -> CaptureReads {
     }
 }
 
-/// `AiEv._regen_target` ai_ev.gd:171-177.
-fn regen_target(reg: &mut Registries, p: &Profile) -> i64 {
-    if has_special_rule(&p.special_rules, "Regeneration")
+/// `AiEv._regen_target` ai_ev.gd:171-177, plus block B10's Resistance leg
+/// (`main._solo_regen_pick` main.gd:6591-6599): the Regeneration family's
+/// whole-unit rule ignores normal wounds on 6+, SPELL wounds on 2+. The
+/// whole-unit gate is the Self-Repair shape; `unit_rule_active` says the
+/// registry fields the rule for this (system, faction). The candidate joins
+/// the MIN fold — the most generous (lowest) threshold binds (main.gd:6581).
+/// Against SPELL wounds the key choice is `from_spell`'s (main.gd:6595), so
+/// the spell twin folds in the same pass. Returns (target, target_spell).
+fn regen_targets(reg: &mut Registries, p: &Profile) -> (i64, i64) {
+    let base = if has_special_rule(&p.special_rules, "Regeneration")
         || has_special_rule(&p.special_rules, "Medical Training")
     {
         let map = reg.rules_for(&p.game_system);
-        return match map.lookup(&p.faction_folder, "Regeneration") {
+        match map.lookup(&p.faction_folder, "Regeneration") {
             Some(e) => e.param_i("ignore_target", REGENERATION_TARGET),
             None => REGENERATION_TARGET,
-        };
-    }
-    if rule_on_all_models(p, "Self-Repair") {
+        }
+    } else if rule_on_all_models(p, "Self-Repair") {
         let map = reg.rules_for(&p.game_system);
-        return match map.lookup(&p.faction_folder, "Self-Repair") {
+        match map.lookup(&p.faction_folder, "Self-Repair") {
             Some(e) => e.param_i("ignore_target", SELF_REPAIR_TARGET),
             None => SELF_REPAIR_TARGET,
+        }
+    } else {
+        0
+    };
+    if rule_on_all_models(p, "Resistance") && unit_rule_active(reg, p, "Resistance") {
+        let map = reg.rules_for(&p.game_system);
+        let e = map.lookup(&p.faction_folder, "Resistance");
+        let rs = match e {
+            Some(e) => e.param_i("ignore_target", RESISTANCE_TARGET),
+            None => RESISTANCE_TARGET,
         };
+        let rs_spell = match e {
+            Some(e) => e.param_i("ignore_target_spell", RESISTANCE_TARGET_SPELL),
+            None => RESISTANCE_TARGET_SPELL,
+        };
+        let most_generous = |cand: i64| base == 0 || cand < base;
+        return (
+            if most_generous(rs) { rs } else { base },
+            if most_generous(rs_spell) { rs_spell } else { base },
+        );
     }
-    0
+    (base, base)
 }
 
 /// The SHOOTING leg's three die params (`ap_bonus`/`hit_bonus`/`low_roll_max`)
@@ -714,6 +745,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
     } else {
         (1, 1, 3)
     };
+    let regen_targets = regen_targets(reg, p);
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -769,8 +801,9 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         // Impact reduction is inert in this port, and `resolve_melee_with_tray`
         // raises `counter_strikes_first` whenever it would have mattered.
         counter_models: 0,
-        regeneration: regen_target(reg, p) > 0,
-        regen_target: regen_target(reg, p),
+        regeneration: regen_targets.0 > 0,
+        regen_target: regen_targets.0,
+        regen_target_spell: regen_targets.1,
         fatigued: false,
         hit_mod: 0,
         vs_hit_mod: 0,
@@ -1445,5 +1478,159 @@ mod tests {
         assert_eq!(pf.shoot[0].surge_attack_low, 6, "unboosted default");
         assert!(pf.melee[0].surge_attack, "but the melee profile gets it");
         assert_eq!(pf.melee[0].surge_attack_low, 6, "Predator Fighter carries no Boost upgrade");
+    }
+
+    /// Block B10 — Resistance end to end through the REAL registry
+    /// (`alien_hives/gf` fields it with `ignore_target:6,
+    /// ignore_target_spell:2, all_models:true`). `resist_whole` carries it
+    /// alone (whole unit = the models); `resist_partial` carries it but its
+    /// attached hero does NOT — `_solo_rule_on_all_models` (main.gd:4599)
+    /// gates the whole family, so the partial unit gets NO regeneration from
+    /// Resistance. RED (disable the Resistance leg in `regen_targets`):
+    /// `resist_whole`'s assertions trip on regen_target 0 vs 6.
+    const RESISTANCE_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "resist_whole":{"unit_id":"resist_whole","name":"Resist Whole","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives",
+        "special_rules":["Resistance"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "resist_partial":{"unit_id":"resist_partial","name":"Resist Partial","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives",
+        "special_rules":["Resistance"],"item_grants":[],
+        "attached_hero_rules":[["Fearless"]],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    #[test]
+    fn whole_unit_resistance_carries_the_6_plus_2_plus_legs() {
+        let header = read_act_header(RESISTANCE_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+
+        let p = header.profiles.get("resist_whole").expect("resist_whole");
+        let us = UnitStatic::build(&mut reg, p);
+        assert!(us.ctx.regeneration, "a whole-unit Resistance carrier regenerates");
+        assert_eq!(us.ctx.regen_target, 6, "the registry's ignore_target");
+        assert_eq!(us.ctx.regen_target_spell, 2, "the registry's ignore_target_spell");
+    }
+
+    #[test]
+    fn resistance_needs_every_model_so_a_bare_hero_kills_the_leg() {
+        let header = read_act_header(RESISTANCE_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+
+        let p = header.profiles.get("resist_partial").expect("resist_partial");
+        let us = UnitStatic::build(&mut reg, p);
+        assert!(
+            !us.ctx.regeneration,
+            "an attached hero without Resistance breaks the all-models gate"
+        );
+        assert_eq!(us.ctx.regen_target, 0, "no regeneration family member fields");
+        assert_eq!(us.ctx.regen_target_spell, 0);
+    }
+
+    // ================================================ mutant-killing tests ====
+
+    /// Three profiles for `growth_of`: one plain "Piercing Growth" carrier
+    /// (alien_hives: per_round, max_markers 4, ap_per_two 1), one carrying
+    /// the same rule TWICE in special_rules (the de-dup case), and one
+    /// "Defensive Growth" carrier (human_inquisition) whose params carry NO
+    /// ap/hit facet at all.
+    const GROWTH_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "growth_carrier":{"unit_id":"growth_carrier","name":"Growth Carrier","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives",
+        "special_rules":["Piercing Growth"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "growth_dup":{"unit_id":"growth_dup","name":"Growth Dup","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives",
+        "special_rules":["Piercing Growth","Piercing Growth"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "growth_zero":{"unit_id":"growth_zero","name":"Growth Zero","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"human_inquisition",
+        "special_rules":["Defensive Growth"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// `growth_of` REPORTS the registry's Growth Markers entry — a body
+    /// emptied into `vec![]` would report nothing at all.
+    #[test]
+    fn growth_of_reports_a_registry_growth_rule() {
+        let header = read_act_header(GROWTH_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let mut un = Vec::new();
+        let p = header.profiles.get("growth_carrier").expect("carrier");
+        let out = growth_of(&mut reg, p, &mut un);
+        assert_eq!(out.len(), 1, "one Growth Markers entry: {out:?}");
+        assert_eq!(out[0].name, "Piercing Growth");
+    }
+
+    /// ...with the registry's own PARAMS, not a default-constructed stub —
+    /// `vec![Default::default()]` carries an empty name, max_markers 0 and
+    /// no rates at all.
+    #[test]
+    fn growth_of_carries_the_registry_params() {
+        let header = read_act_header(GROWTH_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let mut un = Vec::new();
+        let p = header.profiles.get("growth_carrier").expect("carrier");
+        let out = growth_of(&mut reg, p, &mut un);
+        assert_eq!(out[0].max_markers, 4, "the registry's max_markers");
+        assert!(out[0].per_round, "Piercing Growth ticks per round");
+        assert_eq!(out[0].ap_per_two, 1);
+        assert_eq!(out[0].ap_per_marker, 0);
+        assert_eq!(out[0].hit_per_marker, 0);
+        assert_eq!(out[0].hit_per_two, 0);
+    }
+
+    /// The de-dup: the same rule twice in special_rules reports ONE entry —
+    /// the `||` at the skip gate (empty-name OR already-seen) must not
+    /// collapse into an `&&` that loses the seen-list half.
+    #[test]
+    fn a_duplicated_growth_rule_is_reported_once() {
+        let header = read_act_header(GROWTH_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let mut un = Vec::new();
+        let p = header.profiles.get("growth_dup").expect("dup");
+        let out = growth_of(&mut reg, p, &mut un);
+        assert_eq!(out.len(), 1, "the seen-list keeps one copy: {out:?}");
+    }
+
+    /// Same de-dup, by NAME: the seen comparison `*s == n` must not become
+    /// `!=`, which would re-admit the very rule just recorded.
+    #[test]
+    fn a_repeated_growth_name_is_deduped_by_name() {
+        let header = read_act_header(GROWTH_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let mut un = Vec::new();
+        let p = header.profiles.get("growth_dup").expect("dup");
+        let out = growth_of(&mut reg, p, &mut un);
+        assert_eq!(out.len(), 1, "one entry per distinct name: {out:?}");
+    }
+
+    /// The facet gate: a rule WITH an ap/hit facet is consumed silently; a
+    /// rule whose four facets are all zero is REPORTED as unimplemented.
+    /// Flipping the `==` to `!=` reports the facet-bearing rule instead and
+    /// stays silent about the defense-only one.
+    #[test]
+    fn a_growth_rule_with_no_attack_facet_is_reported_unimplemented() {
+        let header = read_act_header(GROWTH_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let mut un = Vec::new();
+        let p = header.profiles.get("growth_carrier").expect("carrier");
+        let out = growth_of(&mut reg, p, &mut un);
+        assert_eq!(out.len(), 1);
+        assert!(un.is_empty(), "Piercing Growth has an ap facet: {un:?}");
+        let pz = header.profiles.get("growth_zero").expect("zero");
+        let outz = growth_of(&mut reg, pz, &mut un);
+        assert_eq!(outz.len(), 1);
+        assert!(
+            un.iter().any(|u| u.rule == "Defensive Growth"),
+            "the defense-only facets are reported: {un:?}"
+        );
     }
 }

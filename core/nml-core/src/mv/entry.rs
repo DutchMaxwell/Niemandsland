@@ -245,6 +245,35 @@ mod tests {
         assert_eq!(order, vec![0, 1]);
     }
 
+    /// The canonical line carries the inputs VERBATIM: positions print as read
+    /// and the grid prints every cell with its type, sorted. The round-trip
+    /// fixed point above cannot catch a broken printer, because a broken
+    /// printer is a fixed point of itself.
+    #[test]
+    fn canonical_input_prints_model_positions_and_grid_verbatim() {
+        let l = serde_json::json!({
+            "kind": "call", "unit": "Beta", "act": 1, "round": 1, "rung": "r",
+            "model_pos": [[10.5, 20.25], [-3.25, -0.5]],
+            "delta": [1.0, -2.0],
+            "walls": [[[1.0, 2.0], [3.0, 4.0]]],
+            "grid": [[-2, -1, 2], [3, 1, 1]],
+            "allow_contact": false, "board_in": 72.0,
+            "opts": { "radii": [0.5, 0.75], "clearance": 0.6, "board_y_in": 48.0 }
+        })
+        .to_string();
+        let c = read_call_line(&l).expect("call parses");
+        let s = canonical_input(&c);
+        assert!(
+            s.contains("\"model_pos\":[[10.5,20.25],[-3.25,-0.5]]"),
+            "model positions not verbatim: {s}"
+        );
+        // Sorted by [x, y, t], not insertion order: (-2,-1) sorts before (3,1).
+        assert!(
+            s.contains("\"grid\":[[-2,-1,2],[3,1,1]]"),
+            "grid not verbatim: {s}"
+        );
+    }
+
     /// The search configuration is the caller's, not a constant: the guard is
     /// what bounds the any-angle search, so a seam that ignored it would plan a
     /// different route from the GDScript it stands in for.

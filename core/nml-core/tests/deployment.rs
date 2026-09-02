@@ -898,6 +898,123 @@ fn vanguard_push_takes_the_first_legal_step() {
     assert!(v2.1.abs() < spot.1.abs(), "closer to the table centre");
 }
 
+/// B9 — the table's per-move log line: a vanguard carrier's placement carries
+/// `vanguard_pushed` AND the record_decision-shaped event (rule text verbatim,
+/// `chosen` the ACTUAL push distance at the table's +%.1f law, data = the
+/// pushed spot) on the SideDeploy log (solo_controller.gd:9158-9166).
+#[test]
+fn vanguard_push_is_logged_like_the_table() {
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": [], "sandbox": [], "cell_params": spots_fixture()["cell_params"]
+    }))
+    .unwrap();
+    let board = Terrain::build(&plain);
+    let specs = vec![UnitSpec {
+        key: "vanguard_bearer".into(),
+        model_count: 1,
+        base_r_m: 0.016,
+        footprint: vec![(0.0, 0.0)],
+        vanguard: true,
+        place_in_m: Some(deployment::VANGUARD_PLACE_M),
+        model_shapes: vec![deployment::ModelShape {
+            is_oval: false,
+            w_mm: 32,
+            d_mm: 32,
+            tough: 1,
+            n: 1,
+        }],
+        ..Default::default()
+    }];
+    let zone = deployment::Rect::new(-0.9144, -0.6096, 1.8288, 0.3048);
+    let objs = vec![(0.0_f64, 0.0_f64)];
+    let sd = deployment::deploy_side(&specs, &zone, &objs, &board, 7);
+    assert_eq!(sd.placements.len(), 1);
+    let p = &sd.placements[0];
+    assert!(p.vanguard_pushed, "the push fired: {p:?}");
+    assert!(p.spot.1 > -0.6096, "pushed toward the table centre: {p:?}");
+    assert_eq!(sd.events.len(), 1, "one deploy event: {:?}", sd.events);
+    let e = &sd.events[0];
+    assert_eq!(e.kind, "deploy");
+    assert_eq!(e.unit, "vanguard_bearer");
+    assert_eq!(e.rule, deployment::VANGUARD_RULE_TEXT);
+    assert_eq!(e.why, "vanguard forward placement");
+    assert_eq!(e.chosen, "+9.0\" forward", "the table's +%.1f distance law");
+    assert_eq!(e.data.x_m, p.spot.0, "data = the pushed spot");
+    assert_eq!(e.data.z_m, p.spot.1, "data = the pushed spot");
+}
+
+/// B9 — the registry's `place_in` moves the band: the twin reads the param
+/// (`unit_param(unit, "Vanguard", "place_in", 9.0)`'s twin, UnitSpec.place_in_m)
+/// instead of the constant, and the log line shows the ACTUAL distance.
+#[test]
+fn vanguard_place_in_param_scales_the_push() {
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": [], "sandbox": [], "cell_params": spots_fixture()["cell_params"]
+    }))
+    .unwrap();
+    let board = Terrain::build(&plain);
+    let mk = |place_in_m: Option<f64>| vec![UnitSpec {
+        key: "vanguard_bearer".into(),
+        model_count: 1,
+        base_r_m: 0.016,
+        footprint: vec![(0.0, 0.0)],
+        vanguard: true,
+        place_in_m,
+        model_shapes: vec![deployment::ModelShape {
+            is_oval: false,
+            w_mm: 32,
+            d_mm: 32,
+            tough: 1,
+            n: 1,
+        }],
+        ..Default::default()
+    }];
+    let zone = deployment::Rect::new(-0.9144, -0.6096, 1.8288, 0.3048);
+    let objs = vec![(0.0_f64, 0.0_f64)];
+    let sd9 = deployment::deploy_side(&mk(Some(deployment::VANGUARD_PLACE_M)), &zone, &objs, &board, 7);
+    let sd45 = deployment::deploy_side(&mk(Some(4.5 * 0.0254)), &zone, &objs, &board, 7);
+    assert!(sd45.placements[0].vanguard_pushed, "the 4.5\" push fired");
+    // same seed → same ladder spot; the 4.5" push lands 4.5" short of the 9" one
+    let d9 = sd9.placements[0].spot.1;
+    let d45 = sd45.placements[0].spot.1;
+    assert!(
+        (d9 - d45 - 0.1143).abs() < 1e-6,
+        "4.5\" band: {d45} vs 9\" band {d9}"
+    );
+    assert_eq!(sd45.events[0].chosen, "+4.5\" forward");
+}
+
+/// B9 — the off-law: no Vanguard flag, no push, no event, and the dump's
+/// `vanguard_pushed` stays false (the corpus's own state, 1060/1060).
+#[test]
+fn vanguard_off_deploys_in_place_without_events() {
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": [], "sandbox": [], "cell_params": spots_fixture()["cell_params"]
+    }))
+    .unwrap();
+    let board = Terrain::build(&plain);
+    let specs = vec![UnitSpec {
+        key: "plain_line".into(),
+        model_count: 1,
+        base_r_m: 0.016,
+        footprint: vec![(0.0, 0.0)],
+        vanguard: false,
+        model_shapes: vec![deployment::ModelShape {
+            is_oval: false,
+            w_mm: 32,
+            d_mm: 32,
+            tough: 1,
+            n: 1,
+        }],
+        ..Default::default()
+    }];
+    let zone = deployment::Rect::new(-0.9144, -0.6096, 1.8288, 0.3048);
+    let objs = vec![(0.0_f64, 0.0_f64)];
+    let sd = deployment::deploy_side(&specs, &zone, &objs, &board, 7);
+    assert!(!sd.placements[0].vanguard_pushed);
+    assert!(sd.events.is_empty(), "no Vanguard, no log line: {:?}", sd.events);
+}
+
 // ==== NML-1152 step 5b — THE FIRST REAL PARITY NUMBER ====
 //
 // For every unit of the 100 dumps the twin runs the table's placement from the
@@ -1014,7 +1131,7 @@ fn spot_search_replays_every_fixture_unit() {
                 let sec = deployment::section_rect(&zone, u["section"].as_i64().unwrap());
                 let out = deployment::deploy_place_id(
                     &zone, &sec, forward_y, &objs, &mut occupied, &bs.board, &bs.walls,
-                    radius, &fp, base_r, flying, vanguard,
+                    radius, &fp, base_r, flying, vanguard, deployment::VANGUARD_PLACE_M,
                 );
                 let spot_t = out.spot;
                 twin_mark_total += out.bisect_marks as usize;
@@ -1224,6 +1341,7 @@ fn deploy_side_pipeline_replays_every_fixture_side() {
                         ambush: r[2].as_bool().unwrap(),
                         ignores_terrain: if g.is_null() { false } else { g["ignores_terrain"].as_bool().unwrap() },
                         vanguard: if g.is_null() { false } else { g["vanguard_pushed"].as_bool().unwrap() },
+                        place_in_m: None,
                         transport_capacity: 0,
                         facing_rad: if g.is_null() { 0.0 } else { g["facing_rad"].as_f64().unwrap() },
                         model_shapes,
