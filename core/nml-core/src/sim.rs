@@ -827,9 +827,10 @@ pub const HIT_AND_RUN_MOVE_IN: f32 = 3.0;
 /// called main.gd:1083-1089 right after the ACTING unit's own shoot/melee
 /// resolves (`resolve_with`'s call site, right after the charge block). Ported
 /// carriers: the literal "Hit & Run" name and its two data aliases sharing its
-/// primitive, "Guerrilla" and "Harassing" (`hit_and_run_active`) — "Hit & Run
-/// Fighter"/"Hit & Run Shooter" are SEPARATE primitives, out of this 11-unit/
-/// 2-list block's scope, and neither carries an `after` param on any of the
+/// primitive, "Guerrilla" and "Harassing" (`hit_and_run_active`) — the two
+/// half-primitives "Hit & Run Fighter"/"Hit & Run Shooter" were out of that
+/// 11-unit/2-list block's scope and port in BLOCK C1 on top of the same gate
+/// (see `after_shoot` below); neither carries an `after` param on any of the
 /// three ported names, so the table's own shoot-vs-melee half-scoping never
 /// applies to them (verified over every `rules_mechanics_*.json` occurrence).
 ///
@@ -894,14 +895,27 @@ fn nearest_enemy_of(state: &State, si: usize) -> Option<usize> {
 
 /// Returns whether the unit actually moved — the caller logs the battle-log
 /// line on it (main.gd:1089).
+///
+/// BLOCK C1 — `after_shoot` is the table's caller flag (main.gd:1083-1089:
+/// true after a shot, false after melee): the rule pick solo_controller.gd:
+/// 9663-9670 fires the FULL rule on either trigger, but each half ONLY on its
+/// own — `var half := "Hit & Run Shooter" if after_shoot else "Hit & Run
+/// Fighter"`, an EXACT name match (`AiEv.has_exact_rule`). The shared
+/// per-round stamp (:9685) and `move_in` (:9687) are unchanged.
 fn tray_hit_and_run(
     statics: &[UnitStatic],
     next: &mut State,
     si: usize,
     seams: Seams,
     cover: Cover,
+    after_shoot: bool,
 ) -> bool {
-    if next.alive[si] <= 0 || !statics[next.roster.profile[si]].hit_and_run_active {
+    let us = &statics[next.roster.profile[si]];
+    if next.alive[si] <= 0
+        || !(us.hit_and_run_active
+            || (after_shoot && us.hit_and_run_shooter_active)
+            || (!after_shoot && us.hit_and_run_fighter_active))
+    {
         return false;
     }
     if next.hit_and_run_round[si] == next.round {
@@ -3201,10 +3215,13 @@ fn resolve_with(
     // port fires on `kind == CHARGE` alone, not on a landed fight. See
     // `tray_hit_and_run`.
     if dice.is_some() {
-        let hnr_attacked = (!shoot_key.is_empty()
-            && (kind == HOLD || kind == ADVANCE || (kind == RUSH && quick_shot_active)))
-            || kind == CHARGE;
-        if hnr_attacked && tray_hit_and_run(statics, &mut next, si, seams, cover) {
+        // BLOCK C1 — `after_shoot` is the table's own shoot leg (main.gd:
+        // 1083-1089): the SAME two terms that build `hnr_attacked`, with the
+        // melee leg (kind == CHARGE) leaving it false. No third condition.
+        let shot_leg = !shoot_key.is_empty()
+            && (kind == HOLD || kind == ADVANCE || (kind == RUSH && quick_shot_active));
+        let hnr_attacked = shot_leg || kind == CHARGE;
+        if hnr_attacked && tray_hit_and_run(statics, &mut next, si, seams, cover, shot_leg) {
             // The table's own battle-log line, main.gd:1089 — the rules-must-
             // log twin of `record_decision`'s "hit-and-run" entry.
             let (_, shot) = dice.as_mut().unwrap();
@@ -4774,7 +4791,7 @@ mod tests {
         st.positions[1] = vec![[-35.0 * IN2M, 0.0, 0.0]];
         st.positions[2] = vec![[0.0, 0.0, 0.0], [0.02 * IN2M, 0.0, 0.0], [0.04 * IN2M, 0.0, 0.0]];
         let board = small_board();
-        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Board(&board));
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Board(&board), false);
         assert!((st.positions[0][0][0] - (-36.0 * IN2M)).abs() < 1e-6, "got {:?}", st.positions[0]);
         assert_eq!(st.hit_and_run_round[0], st.round);
     }
@@ -5359,7 +5376,7 @@ mod tests {
     #[test]
     fn the_flee_length_is_a_pythagorean_sum_never_a_difference() {
         let (mut st, statics) = har_line();
-        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None), false);
         assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
     }
 
@@ -5368,7 +5385,7 @@ mod tests {
     #[test]
     fn the_flee_length_squares_each_delta_never_doubles_one() {
         let (mut st, statics) = har_line();
-        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None), false);
         assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
     }
 
@@ -5379,7 +5396,7 @@ mod tests {
     fn a_hair_gap_is_measured_not_guarded_away() {
         let (mut st, statics) = har_line();
         st.positions[3] = vec![[0.0, 0.0, 1e-6f32 as f64]];
-        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None), false);
         assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
     }
 
@@ -5389,7 +5406,7 @@ mod tests {
     fn a_gap_at_the_guard_boundary_still_flees() {
         let (mut st, statics) = har_line();
         st.positions[3] = vec![[0.0, 0.0, 1e-6f32 as f64]];
-        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None), false);
         assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
     }
 
@@ -5398,7 +5415,7 @@ mod tests {
     #[test]
     fn the_flee_direction_divides_the_delta_never_takes_a_remainder() {
         let (mut st, statics) = har_line();
-        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None), false);
         assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
         assert_eq!(st.positions[0][0][0], 0.0, "no sideways drift");
     }
@@ -5408,7 +5425,7 @@ mod tests {
     #[test]
     fn the_flee_direction_normalizes_to_a_unit_vector() {
         let (mut st, statics) = har_line();
-        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None), false);
         assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
     }
 
@@ -5417,7 +5434,7 @@ mod tests {
     #[test]
     fn the_flee_step_moves_away_from_the_enemy() {
         let (mut st, statics) = har_line();
-        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None), false);
         assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
     }
 
@@ -5425,7 +5442,7 @@ mod tests {
     #[test]
     fn the_flee_step_is_added_never_multiplied_in() {
         let (mut st, statics) = har_line();
-        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None), false);
         assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
     }
 
@@ -5434,7 +5451,7 @@ mod tests {
     #[test]
     fn the_flee_step_scales_the_direction_by_the_inches() {
         let (mut st, statics) = har_line();
-        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None));
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None), false);
         assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
     }
 
@@ -5448,6 +5465,7 @@ mod tests {
             &statics, &mut st, 0,
             Seams { hero_attach: true, ..Seams::default() },
             Cover::Recorded(None),
+            false,
         );
         assert_eq!(st.positions[1][0][2], -(3.0f32 * (IN2M as f32)) as f64);
     }
@@ -5461,6 +5479,7 @@ mod tests {
             &statics, &mut st, 0,
             Seams { hero_attach: true, ..Seams::default() },
             Cover::Recorded(None),
+            false,
         );
         assert_eq!(st.positions[1][0][2], -(3.0f32 * (IN2M as f32)) as f64);
     }
@@ -5473,6 +5492,7 @@ mod tests {
             &statics, &mut st, 0,
             Seams { hero_attach: true, ..Seams::default() },
             Cover::Recorded(None),
+            false,
         );
         assert_eq!(st.positions[1][0][2], -(3.0f32 * (IN2M as f32)) as f64);
     }
@@ -5485,8 +5505,65 @@ mod tests {
             &statics, &mut st, 0,
             Seams { hero_attach: true, ..Seams::default() },
             Cover::Recorded(None),
+            false,
         );
         assert_eq!(st.positions[1][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+    }
+
+    // -------------------------------- block C1: the two half-primitives ---
+
+    /// A carrier with NEITHER the full "Hit & Run" gate NOR a half set yet —
+    /// enemy 9" due south (the flee anchor), same geometry as `har_line` — so
+    /// each test turns on exactly one flag and one trigger side.
+    fn hnr_half_line() -> (State, Vec<UnitStatic>) {
+        let mut st = four_unit_line();
+        st.positions[3] = vec![[0.0, 0.0, 9.0 * IN2M]];
+        (st, vec![UnitStatic { name: "Kiter".into(), ..Default::default() }])
+    }
+
+    /// (a) solo_controller.gd:9667 — a "Hit & Run Shooter" carrier that SHOT
+    /// (`after_shoot = true`) kites 3" away from the nearest enemy and takes
+    /// the shared per-round stamp (:9685), though the full "Hit & Run" gate
+    /// would refuse it (no full-rule name on the profile).
+    #[test]
+    fn a_shooter_carrier_that_shot_steps_3_inches_and_stamps_the_round() {
+        let (mut st, mut statics) = hnr_half_line();
+        statics[0].hit_and_run_shooter_active = true;
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None), true);
+        assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+        assert_eq!(st.hit_and_run_round[0], st.round);
+    }
+
+    /// (b) THE RED — the same Shooter carrier after a CHARGE is on the WRONG
+    /// half (the table's pick is `"Hit & Run Shooter" if after_shoot else
+    /// "Hit & Run Fighter"`, :9667): no step, no stamp. This is the test that
+    /// fails the moment the `after_shoot` gate is dropped.
+    #[test]
+    fn a_shooter_carrier_after_a_charge_is_on_the_wrong_half() {
+        let (mut st, mut statics) = hnr_half_line();
+        statics[0].hit_and_run_shooter_active = true;
+        let before = st.positions[0].clone();
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None), false);
+        assert_eq!(st.positions[0], before);
+        assert_eq!(st.hit_and_run_round[0], -1);
+    }
+
+    /// (c) the mirror: a "Hit & Run Fighter" carrier moves after a CHARGE
+    /// (the melee leg, `after_shoot = false`) and does NOT after a shot —
+    /// each half fires on its own trigger and its own EXACT name only.
+    #[test]
+    fn a_fighter_carrier_moves_after_a_charge_never_after_a_shot() {
+        let (mut st, mut statics) = hnr_half_line();
+        statics[0].hit_and_run_fighter_active = true;
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None), false);
+        assert_eq!(st.positions[0][0][2], -(3.0f32 * (IN2M as f32)) as f64);
+
+        let (mut st, mut statics) = hnr_half_line();
+        statics[0].hit_and_run_fighter_active = true;
+        let before = st.positions[0].clone();
+        tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Recorded(None), true);
+        assert_eq!(st.positions[0], before);
+        assert_eq!(st.hit_and_run_round[0], -1);
     }
 
     // ---------------------------------------- block B8: second wind ---
