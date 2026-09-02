@@ -156,6 +156,54 @@ def test_stamped_vs_ported_on_a_shared_primitive(tmp_path):
     assert res["summary"]["core_ported"] == 1
 
 
+def test_infiltrate_consumed_param_gates_surprise_attack(tmp_path):
+    """Ambush arrival S6: the twin reads `min_enemy_dist_in` off the
+    "Infiltrate" primitive (unit.rs:1553-1556), so CONSUMED_PARAM_KEYS gates
+    it - Surprise Attack (same primitive, its own params carry no consumed
+    key, registry marks arrival_strike "planned") stays STAMPED instead of
+    riding the bare infiltrate token to PORTED (#489's shape). --hide
+    Infiltrate drops Infiltrate itself out of PORTED but must not touch
+    Repel Ambushers (separate primitive, separate literal)."""
+    root = tmp_path / "repo"
+    for d in ("assets/solo", "data", "core/nml-core/src", "core/nml-core-py/python"):
+        (root / d).mkdir(parents=True)
+    (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
+        "common": {
+            "Infiltrate": {"primitive": "Infiltrate",
+                           "params": {"min_enemy_dist_in": 3.0}},
+            "Surprise Attack": {"primitive": "Infiltrate",
+                                "params": {"arrival_strike": "planned"}},
+            "Repel Ambushers": {"primitive": "Repel Ambushers",
+                                "params": {"min_dist_in": 12.0}},
+        },
+        "factions": {},
+    }))
+    (root / "data/encoder_rule_vocab_v1.json").write_text(json.dumps({"unit": [], "weapon": []}))
+    (root / "core/nml-core-py/python/list_to_profile.py").write_text("MOVE_PRIMITIVES = ()\n")
+    (root / "core/nml-core/src/arm.rs").write_text(
+        'pub const INF: &str = "Infiltrate";\n'
+        'pub const REPEL: &str = "Repel Ambushers";\n'
+    )
+    books = tmp_path / "books" / "gf"
+    books.mkdir(parents=True)
+    (books / "book_a.json").write_text(json.dumps({
+        "name": "Test Faction", "gameSystem": "gf",
+        "specialRules": [
+            {"name": "Infiltrate"}, {"name": "Surprise Attack"},
+            {"name": "Repel Ambushers"},
+        ],
+    }))
+    res = census.census(tmp_path / "books", root)
+    per = res["rows"]
+    assert per["Infiltrate"]["per_system"]["gf"]["core"] == "PORTED"
+    assert per["Surprise Attack"]["per_system"]["gf"]["core"] == "STAMPED"
+    assert per["Repel Ambushers"]["per_system"]["gf"]["core"] == "PORTED"
+    red = census.census(tmp_path / "books", root, hide="Infiltrate")["red"]
+    assert red["before"] == 2 and red["after"] == 1
+    assert red["aliased_names"] == ["Infiltrate", "Surprise Attack"]
+    assert "Repel Ambushers" not in red["aliased_names"]
+
+
 def test_unmapped_registered_aura_never_ported_by_token_sharing(tmp_path):
     """The aura rule: an UNMAPPED-registered "Foo Aura" (registry lists it,
     primitive null) must not inherit PORTED from its ported base "Foo" -
