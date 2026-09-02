@@ -4187,6 +4187,7 @@ mod tests {
             charge: None,
             patient: false,
             split: None,
+            traced: None,
         }
     }
 
