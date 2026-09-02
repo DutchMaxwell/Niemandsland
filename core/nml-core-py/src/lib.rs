@@ -131,6 +131,17 @@ fn cand_plain(c: &Candidate) -> Value {
     Value::Object(m)
 }
 
+/// One `tokens::Tokens` row set as a Python list of lists — `board_rows`'s own
+/// `PyList` idiom, generic over the row width so `units`/`objs`/`terr`/`cands`
+/// share it.
+fn rows2d<const N: usize>(py: Python<'_>, rows: &[[f32; N]]) -> PyResult<Py<PyAny>> {
+    let out = PyList::empty(py);
+    for r in rows {
+        out.append(PyList::new(py, r.iter().copied())?)?;
+    }
+    Ok(out.into_any().unbind())
+}
+
 fn arb_plain(a: &Arbitration) -> Value {
     let mut m = Map::new();
     m.insert("n".into(), a.n.into());
@@ -1410,6 +1421,58 @@ impl Core {
             out.append(r)?;
         }
         Ok(out.into_any().unbind())
+    }
+
+    /// DESIGN_gen0_training_2026-09-02.md §8.2 — `policy_vecs`'s replacement:
+    /// the board-seeing token export. `cands` is the recorded `cands.list` as
+    /// plain dicts (the same shape `cand_plain` above writes); `best` is the
+    /// recorded pick's build index, returned unchanged as `label`. `hero_attach`
+    /// mirrors the unit token's own `can_activate` seam; `opener_seat` is
+    /// `ActStatics.opener_seat` (acts.rs:328), a per-act header field `State`
+    /// does not carry, so the caller reads it off `act["statics"]` and passes
+    /// it — the two DEVIATIONs from the design's literal 4-argument table are
+    /// both keyword, both default to the corpus's own common case, and both are
+    /// spelled out in `nmlcore::tokens`'s own module doc.
+    #[pyo3(signature = (state, side, cands, best, hero_attach = false, opener_seat = false))]
+    fn policy_tokens(
+        &mut self,
+        py: Python<'_>,
+        state: PyRef<'_, PyState>,
+        side: i64,
+        cands: &Bound<'_, PyAny>,
+        best: i64,
+        hero_attach: bool,
+        opener_seat: bool,
+    ) -> PyResult<Py<PyAny>> {
+        let statics = self.statics_for(&state.inner)?;
+        let cand_list: Vec<Candidate> =
+            serde_json::from_value(value_of(cands)?).map_err(|e| Unsupported::new_err(e.to_string()))?;
+        let t = nmlcore::tokens::build(
+            &state.inner,
+            side,
+            &statics,
+            &self.terrain,
+            &mut self.rows,
+            &cand_list,
+            best,
+            hero_attach,
+            opener_seat,
+        )
+        .map_err(declined)?;
+        let dict = PyDict::new(py);
+        dict.set_item("units", rows2d(py, &t.units)?)?;
+        dict.set_item("units_mask", t.units_mask)?;
+        dict.set_item("objs", rows2d(py, &t.objs)?)?;
+        dict.set_item("objs_mask", t.objs_mask)?;
+        dict.set_item("terr", rows2d(py, &t.terr)?)?;
+        dict.set_item("terr_mask", t.terr_mask)?;
+        dict.set_item("glob", t.glob.to_vec())?;
+        dict.set_item("cands", rows2d(py, &t.cands)?)?;
+        dict.set_item("cands_mask", t.cands_mask)?;
+        dict.set_item("actor", t.actor)?;
+        dict.set_item("target", t.target)?;
+        dict.set_item("label", t.label)?;
+        Ok(dict.into_any().unbind())
     }
 
     /// `BattleSim.board_row_indices` battle_sim.gd:166 — the capture index of

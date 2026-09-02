@@ -333,7 +333,7 @@ pub struct Objective {
 }
 
 /// Marker-mission state — `SoloController` :33, read by `_score_hand` :368-380.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Marker {
     #[serde(default)]
     pub owned_by: i64,
