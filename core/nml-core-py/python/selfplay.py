@@ -1393,6 +1393,8 @@ def play_game(
     deep_player: int = 0,
     deep_top_k: int | None = None,
     deep_horizon: int | None = None,
+    eval_variant_player: int = 0,
+    eval_variant: int = 0,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -1518,7 +1520,17 @@ def play_game(
     proof that the second core really sees the same header — and when the
     pair parts, the result stamps both seats' resolved depths as
     `knobs_by_seat` (the NML-1147a pattern: the stamp rides only a game whose
-    deep pair actually differs)."""
+    deep pair actually differs).
+
+    `eval_variant_player` / `eval_variant` (evolved-eval lane, step 2) are
+    `deep_player`'s counterpart for the HAND EVAL instead of the search pair:
+    seat 1 or 2 plays on a second core whose header carries `eval_variant` in
+    place of 0. Today only variant 0 exists (`Knobs::eval_variant` has no
+    registered arm past it — `set_header` refuses any other value), so every
+    caller that passes nothing plays the identical game the pre-knob code
+    did; this is the seam a future generation registers a real variant into,
+    not a new eval. Shares the deep-player core when both target the same
+    seat. Stamped into `knobs_by_seat` the same way, only when it moved."""
     units1 = load_army(list_p1, 1)
     units2 = load_army(list_p2, 2)
     if not units1 or not units2:
@@ -1646,6 +1658,30 @@ def play_game(
             }
             if deep_player == 2:
                 seat_knobs["p1"], seat_knobs["p2"] = seat_knobs["p2"], seat_knobs["p1"]
+    # EVAL-VARIANT seam (evolved-eval lane step 2): `deep_player`'s
+    # counterpart for the HAND EVAL — a second core off the identical header,
+    # `eval_variant` in place of 0. Built whenever a seat is named, even at
+    # the default 0, so a caller can prove the second core changes nothing
+    # (byte-identical digest) before any real variant exists; the stamp
+    # rides only a game whose variant actually moved (NML-1147a pattern).
+    if eval_variant_player in (1, 2):
+        ev_core = nml_core.load(str(repo_root))
+        if net is not None:
+            ev_core.load_net(str(net), blend=fit_blend, mode=fit_mode)
+        ev_core.set_header(
+            {"profiles": profiles, "terrain": terrain,
+             "knobs": dict(knobs, eval_variant=eval_variant)}
+        )
+        if legacy_source_qd:
+            ev_core.set_encoder_source_qd(SOURCE_DATA_QUALITY, SOURCE_DATA_DEFENSE)
+        else:
+            ev_core.clear_encoder_source_qd()
+        act_cores = {**(act_cores or {}), eval_variant_player: ev_core}
+        if eval_variant != 0:
+            seat_key, other_key = ("p1", "p2") if eval_variant_player == 1 else ("p2", "p1")
+            seat_knobs = seat_knobs or {"p1": {}, "p2": {}}
+            seat_knobs[seat_key] = dict(seat_knobs.get(seat_key, {}), eval_variant=eval_variant)
+            seat_knobs.setdefault(other_key, {})
     reads = core.capture_reads()
     # `SpellsRegistry.spells_for_unit(gu)` per unit — the book `_magic_init` asks
     # whether it resolved, and whose LONGEST range gates the eligibility tally.
