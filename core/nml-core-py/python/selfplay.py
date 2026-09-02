@@ -1217,18 +1217,14 @@ def _play_round(
         if cap_core is not None:
             use_cap = nml_core.Rng(seed * CAP_SEED_STRIDE + seq).randf() < cap_share
         planning = cap_core if use_cap else cores[turn]
-        pick = _pick_for(planning, state, turn, net_player, eps, explore_seed)
-        if not pick:
-            other = 2 if turn == 1 else 1
-            pick = _pick_for(
-                cap_core if use_cap else cores[other], state, other, net_player, eps, explore_seed
-            )
-        pick = _pick_for(cores[turn], state, turn, net_player, eps, explore_seed,
+        pick = _pick_for(planning, state, turn, net_player, eps, explore_seed,
                          cands=record_cands)
         if not pick:
             other = 2 if turn == 1 else 1
-            pick = _pick_for(cores[other], state, other, net_player, eps, explore_seed,
-                             cands=record_cands)
+            pick = _pick_for(
+                cap_core if use_cap else cores[other], state, other, net_player, eps, explore_seed,
+                cands=record_cands,
+            )
             if not pick:
                 break
             turn = other
