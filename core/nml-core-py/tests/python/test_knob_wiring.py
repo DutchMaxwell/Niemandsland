@@ -107,6 +107,10 @@ def test_play_game_itself_still_defaults_charge_gate_to_off():
     assert res["knobs"]["charge_gate"] == "off"
 
 
+@pytest.mark.skipif(
+    _lists_missing(CHARGE_ARMY1, CHARGE_ARMY2),
+    reason="needs the terrain bank + robot_legions/blessed_sisters 1000pt lists",
+)
 def test_a_fresh_cli_run_now_defaults_charge_gate_to_table(tmp_path):
     """DEFECT_LEDGER row 2: `main()` is what a fresh self-play RUN invokes
     (`nogodot_runner.sh` et al., no `--charge-gate` flag) — a run started with
