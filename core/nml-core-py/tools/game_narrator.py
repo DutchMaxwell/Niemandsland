@@ -67,15 +67,14 @@ def replay(path, lists, repo, bank):
         raise SystemExit("REFUSED %s: not a Gen-0 teacher recording" % path)
     A.update(rows=rec["planner_positions"], i=0, acts=[])
     gr.G["dice"] = rec["dice_seed"]
-    nml_core.objective_layout = lambda t, s, m, z: gr._layout(t, s + 500000, m, z)
-    nml_core.Tray = lambda _s: gr._tray(gr.G["dice"])
-    selfplay._pick_for, load = _pick, nml_core.load
+    load = nml_core.load
     nml_core.load = lambda p: Tapped(load(p))
     try:
         a1, a2 = [str(Path(lists) / Path(rec["armies"][s]).name) for s in ("p1", "p2")]
-        out = selfplay.play_game(rec["seed"], a1, a2, repo, bank, None, top_k=kn["top_k"],
-                                 horizon=kn["horizon"], dice_seed=rec["dice_seed"],
-                                 movement=kn["movement"], **gr.KNOBS)
+        with gr.armed(_pick):
+            out = selfplay.play_game(rec["seed"], a1, a2, repo, bank, None, top_k=kn["top_k"],
+                                     horizon=kn["horizon"], dice_seed=rec["dice_seed"],
+                                     movement=kn["movement"], **gr.KNOBS)
     finally:
         nml_core.load = load
     # Three ways for the replay to be a different game, all fatal: a short run, a

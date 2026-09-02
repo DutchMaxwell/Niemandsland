@@ -13,6 +13,7 @@ away, so the hand-argmax top-1 baseline falls out for free. Point `PYTHONPATH`
 at a `.forge/site` built from the corpus's own commit. Corpus files are READ-ONLY.
 """
 import argparse
+import contextlib
 import json
 import os
 import sys
@@ -73,17 +74,26 @@ def forced_pick(core, state, player, net_player=0, eps=0.0, explore_seed=0, cand
     return pick
 
 
-def arm() -> None:
-    """gen0_one.py's shims (layout +500000, tray on the DICE seed) and the forced
-    picker, installed on the first replay so that importing this module is inert."""
+@contextlib.contextmanager
+def armed(fn):
+    """gen0_one.py's shims (layout +500000, tray on the DICE seed) and `fn`
+    forced as `_pick_for`, scoped to the `with` block and restored on the way
+    out — including on an exception. A bare assignment never restores, so a
+    caller that replays IN-PROCESS (not through this tool's own subprocess
+    CLI, which exits and takes every shim with it) leaves the next test
+    reading this replay's stale globals."""
+    prev_layout, prev_tray = nml_core.objective_layout, nml_core.Tray
     nml_core.objective_layout = lambda t, s, m, z: _layout(t, s + 500000, m, z)
     nml_core.Tray = lambda _s: _tray(G["dice"])
-    selfplay._pick_for = forced_pick
+    try:
+        with selfplay.forced_picks(fn):
+            yield
+    finally:
+        nml_core.objective_layout, nml_core.Tray = prev_layout, prev_tray
 
 
 def replay(path: str, lists: str, dice_offset: int) -> dict:
     """One game replayed; the returned `divergence` is "" only on a clean run."""
-    arm()
     rec = json.loads(Path(path).read_text(encoding="utf-8"))
     kn = rec["prescreen"]["knobs"]
     # The corpus names no core commit (DESIGN §1.6.4): the sha ef9a3e48 is
@@ -98,9 +108,10 @@ def replay(path: str, lists: str, dice_offset: int) -> dict:
     armies = [str(Path(lists) / Path(rec["armies"][s]).name) for s in ("p1", "p2")]
     t0 = time.perf_counter()
     try:
-        selfplay.play_game(rec["seed"], armies[0], armies[1], REPO, BANK, None,
-                           top_k=1, horizon=1, dice_seed=G["dice"],
-                           movement=kn["movement"], **KNOBS)
+        with armed(forced_pick):
+            selfplay.play_game(rec["seed"], armies[0], armies[1], REPO, BANK, None,
+                               top_k=1, horizon=1, dice_seed=G["dice"],
+                               movement=kn["movement"], **KNOBS)
         bad = "" if G["i"] == len(G["rows"]) else (
             "ran dry after %d of %d recorded positions" % (G["i"], len(G["rows"])))
     except Diverged as exc:

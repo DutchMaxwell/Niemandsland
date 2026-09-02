@@ -76,8 +76,6 @@ def replay_game(path: str, lists: str) -> tuple:
     # written) — it does not fail the shard.
     global _ROWS, _OPENER, _TERR
     _ROWS = []
-    gr.arm()
-    selfplay._pick_for = _export_picker
     rec = json.loads(Path(path).read_text(encoding="utf-8"))
     kn = rec["prescreen"]["knobs"]
     if not kn.get("record_cands") or kn.get("record_aux"):
@@ -89,8 +87,9 @@ def replay_game(path: str, lists: str) -> tuple:
     _TERR = {1: terrain_rows(rec["terrain"], 1), 2: terrain_rows(rec["terrain"], 2)}
     armies = [str(Path(lists) / Path(rec["armies"][s]).name) for s in ("p1", "p2")]
     try:
-        selfplay.play_game(rec["seed"], armies[0], armies[1], gr.REPO, gr.BANK, None, top_k=1, horizon=1,
-                           dice_seed=gr.G["dice"], movement=kn["movement"], **gr.KNOBS)
+        with gr.armed(_export_picker):
+            selfplay.play_game(rec["seed"], armies[0], armies[1], gr.REPO, gr.BANK, None, top_k=1, horizon=1,
+                               dice_seed=gr.G["dice"], movement=kn["movement"], **gr.KNOBS)
         bad = "" if gr.G["i"] == len(gr.G["rows"]) else "ran dry %d/%d" % (gr.G["i"], len(gr.G["rows"]))
     except (gr.Diverged, gr.nml_core.Unsupported) as exc:
         bad = str(exc)
