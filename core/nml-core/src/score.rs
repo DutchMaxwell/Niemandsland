@@ -191,6 +191,42 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v402 `presence`: continuous in distance — fractional travel rounds (no
+/// `ceil` quantization), and rounds beyond the horizon discounted twice
+/// (travel plus lateness, same `DISCOUNT`) instead of the hard "can't arrive
+/// in time" zero — one inch of movement never flips full credit to nothing.
+fn presence_v402(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
+    if state.alive[i] <= 0 || state.aircraft[i] { return 0.0; }
+    let arrived_now = state.ambush_arrived_round[i] == state.round;
+    if arrived_now && state.round >= state.rounds_total { return 0.0; }
+    let d = control_gap_in(state, i, obj_pos);
+    let mut needed = ((d - OBJECTIVE_CONTROL_IN) / state.bands[i].rush.max(1.0)).max(0.0);
+    if arrived_now { needed = needed.max(1.0); }
+    if state.shaken[i] { needed += 1.0; }
+    let moves_left = (state.rounds_total - state.round + if state.activated[i] { 0 } else { 1 }) as f64;
+    needed += (needed - moves_left).max(0.0);
+    let strength: f64 = state.wounds[i].iter().map(|&w| w as f64).sum();
+    (strength - threat).max(0.0) * DISCOUNT.powf(needed)
+}
+
+/// v402 `score_hand`: the soft control ratio over `presence_v402` — the
+/// unreachable-marker owner fallback (seize rule) is unchanged and destroy
+/// missions delegate to the frozen v0 path (att/deff shape is orthogonal).
+fn score_hand_v402(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() { return 0.5; }
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) { return score_hand(state, player, incoming); }
+    let mut total = 0.0f64;
+    for obj in &state.objectives {
+        let (mut mine, mut theirs) = (0.0f64, 0.0f64);
+        for i in 0..state.units() {
+            let p = presence_v402(state, i, obj.pos, threat_of(incoming, i));
+            if state.player[i] == player { mine += p; } else { theirs += p; }
+        }
+        total += if mine + theirs <= 0.0 { if obj.owner == 0 { 0.5 } else if obj.owner == player { 1.0 } else { 0.0 } } else { mine / (mine + theirs) };
+    }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +237,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        402 => score_hand_v402(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
