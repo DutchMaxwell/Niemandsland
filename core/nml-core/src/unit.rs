@@ -117,6 +117,18 @@ pub struct Ctx {
     /// The DYNAMIC melee flag `BattleSim._ctx_of(su, true)` writes over the
     /// template (battle_sim.gd:705-707): a fatigued striker hits only on 6s.
     pub fatigued: bool,
+    /// Block B13 — `Retaliate(X)`'s hits one carrier throws back FOR EACH wound
+    /// it takes in melee (`_solo_retaliate_hits_per_wound` main.gd:4521-4529):
+    /// the rule's own rating ("Retaliate(3)" -> 3, a bare "Retaliate" -> the
+    /// wave-7 fallback 1), overridden by the registry's `hits_per_wound` param
+    /// ONLY when it is numeric — the shipped registry carries the string "X",
+    /// which reads as "the rating" and keeps the rating answer. 0 = the rule is
+    /// not on this unit under the registry gate (`unit_rule_active`), so a
+    /// carrier whose system map fields no Retaliate primitive stays silent
+    /// exactly like the table's `_solo_retaliate_hits` gate (main.gd:4568).
+    /// Read only by the tray path (`sim::strike_phase`); the EV imagination
+    /// never asks who lashes back.
+    pub retaliate_hits_per_wound: i64,
     // --- NML block B2b, the live-buff fold (`sim::ctx_live`). ZERO on every
     // `ctx_of`, which is what keeps the EV imagination buff-blind exactly like
     // `BattleSim._ctx_of` (it never sets `AiEv.profile_ev`'s `spell_hit_mod`
@@ -718,6 +730,28 @@ fn unpredictable_shooting_params(reg: &mut Registries, p: &Profile) -> (i64, i64
     (1, 1, 3)
 }
 
+/// Block B13 — `_solo_retaliate_hits_per_wound` main.gd:4521-4529, gated by
+/// `_solo_retaliate_hits`'s `unit_rule_active` (main.gd:4568): 0 when the unit
+/// does not carry the rule for its (system, faction). The scale is the rating
+/// (`maxi(1, rating)` — a bare "Retaliate" lashes back ONE hit per wound); the
+/// registry's `hits_per_wound` knob overrides only when NUMERIC. The shipped
+/// entries carry the string "X" = "the rule's own rating", and a non-numeric
+/// string falls back to the rating (main.gd:4524-4526), so a missing map keeps
+/// the shipped wave-7 hardcoding byte-identical.
+fn retaliate_hits_per_wound(reg: &mut Registries, p: &Profile) -> i64 {
+    if !unit_rule_active(reg, p, "Retaliate") {
+        return 0;
+    }
+    let rating = unit_rating(&p.special_rules, "Retaliate").max(1);
+    let map = reg.rules_for(&p.game_system);
+    let Some(e) = map.lookup(&p.faction_folder, "Retaliate") else { return rating };
+    match e.params.get("hits_per_wound") {
+        Some(serde_json::Value::Number(n)) => n.as_f64().map(|f| f as i64).unwrap_or(rating).max(1),
+        Some(serde_json::Value::String(s)) => s.trim().parse::<i64>().map(|v| v.max(1)).unwrap_or(rating),
+        _ => rating,
+    }
+}
+
 /// `AiEv.ctx_for` ai_ev.gd:135-165. `models` stays at the live-unit reading;
 /// `BattleSim._ctx_of` overwrites it with the snapshot's `alive` on every call.
 fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
@@ -805,6 +839,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         regen_target: regen_targets.0,
         regen_target_spell: regen_targets.1,
         fatigued: false,
+        retaliate_hits_per_wound: retaliate_hits_per_wound(reg, p),
         hit_mod: 0,
         vs_hit_mod: 0,
         unstoppable_grant: false,

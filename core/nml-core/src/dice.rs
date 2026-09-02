@@ -130,6 +130,12 @@ pub struct ShootResult {
     /// Table branches this port does NOT reproduce that THIS activation hit.
     /// Never silent: a flagged activation is a reported divergence, not a skip.
     pub unported: Vec<&'static str>,
+    /// Block B13 — the rules-must-log lines THIS activation wrote, in order:
+    /// the twin has no battle log, so an applied rule names itself here (the
+    /// table's `battle_log.log_event`, e.g. "Retaliate: %s lashes back — %d
+    /// hits", main.gd:6162-6165). Carried beside the dice stream, never a roll
+    /// of its own.
+    pub log: Vec<String>,
 }
 
 impl ShootResult {
@@ -151,6 +157,7 @@ impl ShootResult {
     pub fn absorb(&mut self, other: ShootResult) -> i64 {
         self.rolls.extend(other.rolls);
         self.caused += other.caused;
+        self.log.extend(other.log);
         for u in other.unported {
             self.mark(u);
         }
@@ -693,6 +700,37 @@ fn regen_batch(
         owner: def_owner.into(),
     });
     (w - ignored).max(0)
+}
+
+/// Block B13 — Retaliate(X)'s saves on the tray, `_solo_melee_strike_phase`
+/// main.gd:6166-6170: the lashed-back hits are saved at the STRIKER's
+/// Shielded-adjusted Defense (melee reads neither Cover nor Guarded — the
+/// strike saves' own ladder, `shielded_defense`), AP 0, and NOT a weapon: the
+/// table's rprofile is `{"name": "Retaliate", "ap": 0, "deadly": 0, "rules":
+/// []}`, so no Bane re-roll, no Shred, no Deadly multiplier. The table lands
+/// them with `_solo_land_wounds(striker, rw, 0)` — its `0` is the REGEN_PROOF
+/// bucket, so every failed save stays regenerable and the STRIKER's own
+/// Regeneration draws here, AFTER the save batch, exactly the table's draw
+/// order (:6170). Returns `(unsaved, landed)`: the tally credit is the
+/// PRE-Regeneration unsaved count (`_solo_retaliate_credit += rw`,
+/// main.gd:6171), the landing is the post-Regeneration one.
+pub fn retaliate_saves_with_tray(
+    hits: i64,
+    def: &Ctx,
+    def_owner: &str,
+    tray: &mut Tray,
+    rolls: &mut Vec<Roll>,
+) -> (i64, i64) {
+    if hits <= 0 {
+        return (0, 0);
+    }
+    let save_def = shielded_defense(def.defense, def.shielded);
+    let mut sub = ShootResult::default();
+    let unsaved =
+        save_batch(&ShootProfile::default(), def, def_owner, hits, save_def, 0, tray, &mut sub);
+    rolls.extend(sub.rolls);
+    let landed = regen_batch(unsaved, def, def_owner, tray, rolls);
+    (unsaved, landed)
 }
 
 // ------------------------------- D1-B5a: MELEE and IMPACT on the same tray ---
