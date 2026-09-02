@@ -53,6 +53,8 @@ const GATE_SLACK_EPS_IN: f64 = 0.05;
 
 /// Test-only knob: forces the S6 gate-collapse ladder below off (RED proof).
 pub static LADDER_DISABLED: AtomicBool = AtomicBool::new(false);
+/// Test-only knob: forces the S7 stall escalation below off (RED proof).
+pub static STALL_DISABLED: AtomicBool = AtomicBool::new(false);
 
 /// One model the charge displaces — `SoloController._moving_models` :5375 is the
 /// unit's own alive models PLUS its attached heroes', one flat list.
@@ -358,9 +360,9 @@ struct Move<'a> {
 
 impl Move<'_> {
 /// `_plan_positions` :6136 — one `plan_unit_step` call, inputs only.
-fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool) -> MoveCall {
+fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool, avoid_dang: bool) -> MoveCall {
     let (state, t, si, ci) = (self.state, self.t, self.si, self.ci);
-    let (movers, own_r_m, avoid_dang) = (&self.movers, self.own_r_m, self.avoid_dang);
+    let (movers, own_r_m) = (&self.movers, self.own_r_m);
     let board = t.board_in();
     let mpos: Vec<V2> = movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
     let mdelta: V2 = [(delta_world[0] as f64 / IN2M) as f32, (delta_world[2] as f64 / IN2M) as f32];
@@ -436,7 +438,12 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool) -> MoveCa
 
 /// `_plan_move` :5132 — the rigid delta, bounds-clamped, then the solver. A
 /// zero delta short-circuits to straight (zero-length) trails, :5136.
-fn plan_once(&self, reach_in: f64, avoid_diff: bool) -> (Vec<V2>, Vec<Vec<V2>>, Option<MoveCall>) {
+fn plan_once(
+    &self,
+    reach_in: f64,
+    avoid_diff: bool,
+    avoid_dang: bool,
+) -> (Vec<V2>, Vec<Vec<V2>>, Option<MoveCall>) {
     let (state, t) = (self.state, self.t);
     let mpos: Vec<V2> = self.movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
     let delta =
@@ -445,7 +452,7 @@ fn plan_once(&self, reach_in: f64, avoid_diff: bool) -> (Vec<V2>, Vec<Vec<V2>>, 
         let trails = mpos.iter().map(|p| vec![*p, *p]).collect();
         return (mpos, trails, None);
     }
-    let call = self.build_call(delta, reach_in, avoid_diff);
+    let call = self.build_call(delta, reach_in, avoid_diff, avoid_dang);
     match plan_unit_step_call(&call, self.fast_planner, self.guard) {
         Ok(p) => {
             // :6288-6296 — the world trail always ends where the model ends, and
@@ -523,24 +530,46 @@ fn external_discs(&self) -> Vec<super::gate::Disc> {
 /// The table runs ONE body here for a charge and for a plain move; everything
 /// the two disagree about was already decided when `Move` was built, so the
 /// two entries below must not each carry their own copy of this ordering.
-fn execute(&self, band_in: f64, avoid_diff: bool, radii_m: &[f64]) -> Landing {
+fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landing {
     let (state, t) = (self.state, self.t);
     let mut reach = band_in;
-    let (mut planned, mut trails, mut call) = self.plan_once(reach, avoid_diff);
+    let mut avoid_dang = self.avoid_dang;
+    let starts: Vec<V2> = self.movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
+    let (mut planned, mut trails, mut call) = self.plan_once(reach, avoid_diff, avoid_dang);
     // :4816-4820 — the ROUTE entered difficult terrain, so p.11 caps the whole
     // move at 6" and it is re-planned THROUGH (dangerous is still avoided).
     if !self.ignores_difficult && trails_cross_difficult(&trails, radii_m, t) {
         reach = band_in.min(DIFFICULT_MOVE_CAP_IN);
-        let re = self.plan_once(reach, false);
+        let re = self.plan_once(reach, false, avoid_dang);
         planned = re.0;
         trails = re.1;
         call = re.2;
+    }
+    // :4829-4850 STALL ESCALATION (S7), its OWN gate — not chained onto the
+    // p.11 branch above (Windows playtest bug 4b: chaining made it unreachable
+    // whenever that branch fired). A route hemmed in by its own avoided cells
+    // can collapse to a token step; going THROUGH is always legal (p.11 caps
+    // it, p.12 tests it) — try it before conceding to the gate-collapse ladder.
+    if !STALL_DISABLED.load(Ordering::Relaxed)
+        && !self.allow_contact
+        && (avoid_diff || avoid_dang)
+        && achieved_in(&starts, &planned) < reach * 0.25
+    {
+        let (mut p2, mut t2, mut c2) = self.plan_once(reach, false, false);
+        let mut r2 = reach;
+        if !self.ignores_difficult && trails_cross_difficult(&t2, radii_m, t) {
+            r2 = band_in.min(DIFFICULT_MOVE_CAP_IN);
+            (p2, t2, c2) = self.plan_once(r2, false, false);
+        }
+        if achieved_in(&starts, &p2) > achieved_in(&starts, &planned) + 0.01 / IN2M {
+            (reach, planned, trails, call) = (r2, p2, t2, c2);
+            (avoid_diff, avoid_dang) = (false, false); // NML-1027: keep THROUGH for the ladder below.
+        }
     }
     // :4838-4847 — distance truth: no model's polyline may exceed the budget.
     let mut budget_in = reach; // `mut`: the ladder below may shorten it (:5075).
     let mut arc_in = 0.0f64;
     let mut dangerous: Vec<bool> = Vec::with_capacity(trails.len());
-    let starts: Vec<V2> = self.movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
     for (i, leg) in trails.iter_mut().enumerate() {
         if g2::polyline_length(leg) * IN2M > budget_in * IN2M + OVERLAP_EPS_M {
             *leg = g2::trim_polyline(leg, budget_in);
@@ -600,7 +629,7 @@ fn execute(&self, band_in: f64, avoid_diff: bool, radii_m: &[f64]) -> Landing {
             let (mut best_reach, mut best_call) = (budget_in, call.clone());
             for frac in [0.75, 0.5, 0.25] {
                 let r3 = budget_in * frac;
-                let (mut p3, mut t3, c3) = self.plan_once(r3, avoid_diff);
+                let (mut p3, mut t3, c3) = self.plan_once(r3, avoid_diff, avoid_dang);
                 for (i, leg) in t3.iter_mut().enumerate() {
                     if g2::polyline_length(leg) * IN2M > r3 * IN2M + OVERLAP_EPS_M {
                         *leg = g2::trim_polyline(leg, r3);
@@ -827,11 +856,10 @@ pub fn charge_move(
 /// destination the caller already picked instead of at a target's near face.
 /// `None` = the port declines and the caller keeps its rigid translation.
 ///
-/// NOT here, and the landing is therefore the PRE-GATE plan rather than the
-/// table's resting place: `_finalize_placement` :6371, the stall escalation
-/// :4820, the gate-collapse ladder :4890 and the boxed/sidestep escape :4960.
-/// A plain move really does enter all four on the table — unlike a charge,
-/// which `not allow_contact` excludes from three of them.
+/// NOT here: the boxed/sidestep escape :4960 (S8). `_finalize_placement`
+/// :6371, the stall escalation :4820 (S7) and the gate-collapse ladder :4890
+/// (S6) are all entered below — unlike a charge, which `not allow_contact`
+/// excludes from every one of them.
 #[allow(clippy::too_many_arguments)]
 pub fn plain_move(
     state: &State,
@@ -1360,6 +1388,82 @@ mod tests {
             acc.max((geom::length(geom::sub(off.end[i], *w)) as f64) / IN2M)
         });
         assert!(worst_off > 0.05 * 10.0, "ladder forced off should miss badly, got {worst_off}\"");
+    }
+
+    /// ONE recorded RUSH from the reference corpus (`Heavy Annihilator`, a lone
+    /// Strider tank, 12" band) whose pass 1 avoided a dangerous field and
+    /// stalled at 1.39" of a 12" band; the table's own next call went straight
+    /// through and covered 9.76". `others` is every OTHER on-table model's own
+    /// base, reconstructed straight from the recorded `State` — the same
+    /// selection `external_discs`/`spacing_zones` make.
+    ///
+    /// RED: with `STALL_DISABLED` forced on, `plain_move` keeps pass 1's own
+    /// stalled result, which the last assertion measures far outside the
+    /// 0.05" bar the escalated landing matches the recorded position within.
+    #[test]
+    fn the_stall_escalation_lands_the_recorded_through_plan() {
+        use serde_json::Value;
+        let raw = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/mv_stall_move_call.json"
+        ))
+        .expect("the recorded call");
+        let fx: Value = serde_json::from_str(&raw).expect("valid JSON");
+        let f = |v: &Value| v.as_f64().expect("number");
+        let v2 = |v: &Value| -> V2 { [f(&v[0]) as f32, f(&v[1]) as f32] };
+        let v3 = |v: &Value| -> V3 { [f(&v[0]) as f32, 0.0, f(&v[2]) as f32] };
+        let arr = |v: &Value| v.as_array().expect("array").clone();
+
+        let tr = &fx["terrain"];
+        let cp = &tr["cell_params"];
+        let t = Terrain::build(&PlainTerrain {
+            cells: arr(&tr["cells"]).iter().map(|c| [f(&c[0]), f(&c[1]), f(&c[2])]).collect(),
+            sandbox: Vec::<Obb>::new(),
+            walls: arr(&tr["walls"])
+                .iter()
+                .map(|w| [[f(&w[0][0]), f(&w[0][1])], [f(&w[1][0]), f(&w[1][1])]])
+                .collect(),
+            cell_params: CellParams {
+                table_size_feet: [f(&cp["table_size_feet"][0]), f(&cp["table_size_feet"][1])],
+                grid_rotation_degrees: f(&cp["grid_rotation_degrees"]),
+                grid_size_inches: f(&cp["grid_size_inches"]),
+                inches_to_meters: f(&cp["inches_to_meters"]),
+            },
+        });
+
+        let mradii = arr(&fx["radii_in"]);
+        let world: Vec<V3> = arr(&fx["model_pos_world"]).iter().map(v3).collect();
+        let others = arr(&fx["others"]);
+        let mut state = units_state(
+            vec![world.clone(), others.iter().map(|o| t.from_inch(v2(&o["c"]), 0.0)).collect()],
+            vec![
+                mradii.iter().map(|r| f(r) * IN2M).collect(),
+                others.iter().map(|o| f(&o["r_in"]) * IN2M).collect(),
+            ],
+            vec![vec![], vec![]],
+        );
+        // Strider (GF/AoF v3.5.1 p.13): ignores the p.11 cap but NOT dangerous
+        // terrain — without it this fixture's pass 1 would also hit the cap.
+        Rc::get_mut(&mut state.profiles).unwrap().list[0].special_rules = vec!["Strider".into()];
+        let dest = v3(&fx["dest_world"]);
+        let band = f(&fx["band_in"]);
+        let want: Vec<V3> = arr(&fx["final_world"]).iter().map(v3).collect();
+
+        let land = plain_move(&state, &t, 0, dest, band, true, true, crate::mv::FAST_PLANNER_GUARD)
+            .expect("the board is real and the unit has models");
+        let worst = want.iter().enumerate().fold(0.0f64, |acc, (i, w)| {
+            acc.max((geom::length(geom::sub(land.end[i], *w)) as f64) / IN2M)
+        });
+        assert!(worst < 0.05, "landing {worst}\" off the recorded final positions");
+
+        STALL_DISABLED.store(true, Ordering::Relaxed);
+        let off = plain_move(&state, &t, 0, dest, band, true, true, crate::mv::FAST_PLANNER_GUARD)
+            .expect("same inputs, same decline rule");
+        STALL_DISABLED.store(false, Ordering::Relaxed);
+        let worst_off = want.iter().enumerate().fold(0.0f64, |acc, (i, w)| {
+            acc.max((geom::length(geom::sub(off.end[i], *w)) as f64) / IN2M)
+        });
+        assert!(worst_off > 0.05 * 10.0, "escalation forced off should miss badly, got {worst_off}\"");
     }
 
     /// The decline path: no board, no charge move — the caller keeps its rigid
