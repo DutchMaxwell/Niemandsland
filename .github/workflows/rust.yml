@@ -39,3 +39,15 @@ jobs:
         run: cargo check --manifest-path core/nml-core-py/Cargo.toml
         env:
           PYO3_PYTHON: python3
+
+      - name: Install Python build/test deps
+        run: pip install maturin pytest numpy pytest-timeout
+
+      - name: Build nml-core-py wheel
+        run: maturin build --release -m core/nml-core-py/Cargo.toml -o dist
+
+      - name: Install nml-core-py wheel
+        run: pip install dist/*.whl
+
+      - name: Run nml-core-py pytest suite
+        run: PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900

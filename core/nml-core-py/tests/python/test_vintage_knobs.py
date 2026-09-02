@@ -114,11 +114,20 @@ def test_cond_ap_absent_with_no_repo_falls_back_on():
     assert srg.vintage_knobs({"knobs": {}}, repo=None)["cond_ap"] is True
 
 
+
+def _commit_visible(sha: str) -> bool:
+    """CI checks out a shallow clone; a pin git cannot place must skip, not fail (the fallback is tested separately)."""
+    import subprocess
+    r = subprocess.run(["git", "-C", str(REPO), "cat-file", "-e", f"{sha}^{{commit}}"], capture_output=True)
+    return r.returncode == 0
+
+@pytest.mark.skipif(not _commit_visible(BEFORE_FIX), reason="commit pin not in this (shallow) clone")
 def test_cond_ap_absent_with_a_commit_pin_before_the_fix_reads_legacy_off():
     head = {"knobs": {}, "commit": BEFORE_FIX}
     assert srg.vintage_knobs(head, repo=str(REPO))["cond_ap"] is False
 
 
+@pytest.mark.skipif(not _commit_visible(BEFORE_FIX), reason="commit pin not in this (shallow) clone")
 def test_cond_ap_absent_with_a_commit_pin_at_or_after_the_fix_reads_on():
     assert srg.vintage_knobs(
         {"knobs": {}, "commit": COND_AP_FIX}, repo=str(REPO))["cond_ap"] is True
@@ -126,6 +135,7 @@ def test_cond_ap_absent_with_a_commit_pin_at_or_after_the_fix_reads_on():
         {"knobs": {}, "base_commit": AFTER_FIX}, repo=str(REPO))["cond_ap"] is True
 
 
+@pytest.mark.skipif(not _commit_visible(BEFORE_FIX), reason="commit pin not in this (shallow) clone")
 def test_cond_ap_commit_pin_can_ride_inside_knobs_too():
     head = {"knobs": {"commit": BEFORE_FIX}}
     assert srg.vintage_knobs(head, repo=str(REPO))["cond_ap"] is False
