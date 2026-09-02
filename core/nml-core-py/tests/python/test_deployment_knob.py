@@ -147,3 +147,56 @@ def test_an_unknown_deployment_mode_raises_instead_of_falling_back():
     header claims a rung it did not play is worse than no corpus."""
     with pytest.raises(ValueError, match="deployment must be one of"):
         sp.resolve_deployment("table")
+
+
+# --- the RULEBOOK's turn order (GF v3.5.1 p.6), `deployment="interleaved"` ----
+#
+# THE HOLE this guards: the alternation is invisible in the positions. Each
+# side scores against its OWN `occupied` (solo_controller.gd:9044), so the
+# interleaved game deploys to the SAME spots as the whole-side one — a cut
+# wire would leave every position, digest and gate green. `placement_sequence`
+# is the only observable, so it is what these tests read.
+
+
+@pytest.mark.skipif(_lists_missing(), reason="needs the terrain bank + the 1000pt lists")
+def test_interleaved_alternates_and_starts_with_the_roll_off_winner():
+    """The knob ON: the recorded sequence alternates the two slots end to end.
+    Whole-side deployment would read 1,1,1,1,2,2,2,2 — that is the RED."""
+    core = nml_core.load(str(REPO))
+    r = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, deployment="interleaved")
+    seq = r["placement_sequence"]
+    assert seq, "the interleaved branch must record the cross-side order"
+    slots = [e[0] for e in seq]
+    assert all(a != b for a, b in zip(slots, slots[1:])), (
+        "one unit each, in turn (GF v3.5.1 p.6), got %r" % (slots,)
+    )
+    assert all(isinstance(e[1], str) and e[1] for e in seq), "each entry names its unit: %r" % (seq,)
+    assert len(seq) == len(set(e[1] for e in seq)), "every unit is placed once: %r" % (seq,)
+
+
+@pytest.mark.skipif(_lists_missing(), reason="needs the terrain bank + the 1000pt lists")
+def test_interleaved_reorders_the_deployment_and_changes_nothing_else():
+    """The second claim, and the tripwire: strip `placement_sequence` and the
+    interleaved game IS the arena game — same positions, same dice, same
+    result. If this ever parts, the deploy ladder has grown an enemy-aware
+    term and every recorded arena fixture needs re-recording."""
+    core = nml_core.load(str(REPO))
+    arena = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, deployment="arena")
+    inter = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, deployment="interleaved")
+    assert "placement_sequence" not in arena, "the field rides the interleaved branch only"
+    bare = {k: v for k, v in inter.items() if k not in ("knobs", "placement_sequence")}
+    assert sp.result_digest(bare) == _digest_without_knobs(arena)
+
+
+@pytest.mark.skipif(_lists_missing(), reason="needs the terrain bank + the 1000pt lists")
+def test_the_interleaved_mode_is_stamped_and_deterministic():
+    """A corpus must say which pre-game it played, and say it reproducibly."""
+    core = nml_core.load(str(REPO))
+    a = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, deployment="interleaved")
+    b = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, deployment="interleaved")
+    assert a["knobs"]["deployment"] == "interleaved"
+    assert sp.result_digest(a) == sp.result_digest(b)
+
+
+def test_interleaved_is_a_known_mode():
+    assert sp.resolve_deployment("interleaved") == "interleaved"
