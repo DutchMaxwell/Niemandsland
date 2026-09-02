@@ -342,6 +342,10 @@ struct Move<'a> {
     own_r_m: f64,
     avoid_dang: bool,
     flying: bool,
+    /// `is_traversal(unit)` :5586 — may move THROUGH friendly and enemy bases.
+    /// The plan call reads it as `zones_rest_only`; `mv::gate`'s wall clamp
+    /// reads it as the exemption from its base-crossing half.
+    traversal: bool,
     ignores_difficult: bool,
     /// The table's half extents in METRES.
     half: [f64; 2],
@@ -414,7 +418,7 @@ fn build_call(&self, delta_world: V3, reach_in: f64, avoid_diff: bool) -> MoveCa
             } else {
                 Some(DIFFICULT_MOVE_CAP_IN)
             },
-            zones_rest_only: state.profile(si).special_rules.iter().any(|r| r == "Traversal"),
+            zones_rest_only: self.traversal,
             // :6222 — the arc allowance and the body goal are CHARGE-only; a
             // plain move sends neither, so `allowance()` falls back to the
             // straight delta length (io.rs:512).
@@ -470,6 +474,11 @@ fn plan_once(&self, reach_in: f64, avoid_diff: bool) -> (Vec<V2>, Vec<Vec<V2>>, 
 /// granted reach, p.11-capped for a model whose OWN leg entered difficult
 /// terrain; slack = budget minus the walked arc, plus the packed-contact
 /// epsilon a full-band mover in a deploy-packed line always needs.
+/// The two unit rules `mv::gate`'s wall clamp asks about (:6392-6393).
+fn gate_flags(&self) -> super::gate::GateFlags {
+    super::gate::GateFlags { flying: self.flying, traversal: self.traversal }
+}
+
 fn gate_caps(&self, trails: &[Vec<V2>], radii_m: &[f64], reach_in: f64) -> Vec<f64> {
     trails
         .iter()
@@ -554,12 +563,12 @@ fn execute(&self, band_in: f64, avoid_diff: bool, radii_m: &[f64]) -> Landing {
         .enumerate()
         .any(|(i, p)| g2::distance_to(*p, starts[i]) as f64 * IN2M > OVERLAP_EPS_M);
     // :4884-4885 — THE HARD FINAL PLACEMENT GATE, applied HERE, after the trim,
-    // so the trim can never cut a gate-corrected endpoint off its trail. Only
-    // passes 1-3 are ported (`mv::gate`). A CHARGE is deliberately left out of
-    // this call even though the table gates one too: its gate is a different
-    // animal — no band caps (the contact push owns the endpoint), the
-    // contact-model exemption, `_clamp_gate_walls` on top — and none of that is
-    // written yet. S5c widens this call; it does not move it.
+    // so the trim can never cut a gate-corrected endpoint off its trail. Passes
+    // 1-4 and the wall clamp are ported (`mv::gate`); the whole-unit shorten
+    // (:6465) is still out. A CHARGE is deliberately left out of this call even
+    // though the table gates one too: its gate is a different animal — no band
+    // caps (the contact push owns the endpoint) and the contact-model exemption
+    // — and neither of those is written yet.
     if !self.allow_contact && stirred {
         let planned_in = achieved_in(&starts, &planned);
         let radii_in: Vec<f64> = radii_m.iter().map(|r| r / IN2M).collect();
@@ -572,6 +581,7 @@ fn execute(&self, band_in: f64, avoid_diff: bool, radii_m: &[f64]) -> Landing {
             &caps,
             t.board_in(),
             Some(t),
+            self.gate_flags(),
         );
         planned = fixed;
         // :4890-4931 GATE-COLLAPSE LADDER (S6): re-plan shorter when the gate
@@ -603,7 +613,8 @@ fn execute(&self, band_in: f64, avoid_diff: bool, radii_m: &[f64]) -> Landing {
                 }
                 let caps3 = self.gate_caps(&t3, radii_m, r3);
                 let (p3, _rep3) =
-                    super::gate::finalize_placement(&p3, &radii_in, &ext, &caps3, t.board_in(), Some(t));
+                    super::gate::finalize_placement(&p3, &radii_in, &ext, &caps3, t.board_in(),
+                        Some(t), self.gate_flags());
                 let a3 = achieved_in(&starts, &p3);
                 let c3ok = config_coherent(&p3, &radii_in);
                 // Lexicographic tie-break, same as the table: coherent beats
@@ -779,7 +790,9 @@ pub fn charge_move(
             acc.max(radius_of(state, movers[i]))
         }));
     let radii_m: Vec<f64> = movers.iter().map(|m| radius_of(state, *m)).collect();
-    let flying = state.profile(si).special_rules.iter().any(|r| r == "Flying");
+    let rules = &state.profile(si).special_rules;
+    let flying = rules.iter().any(|r| r == "Flying");
+    let traversal = rules.iter().any(|r| r == "Traversal");
     let ignores_difficult = state.charge_no_difficult.get(si).copied().unwrap_or(flying);
     // :4791-4797 — pass 1 routes AROUND difficult/dangerous unless the targets
     // themselves lie in it (then going around is impossible).
@@ -798,6 +811,7 @@ pub fn charge_move(
         own_r_m,
         avoid_dang,
         flying,
+        traversal,
         ignores_difficult,
         half,
         fast_planner,
@@ -850,6 +864,7 @@ pub fn plain_move(
     let radii_m: Vec<f64> = movers.iter().map(|m| radius_of(state, *m)).collect();
     let rules = &state.profile(si).special_rules;
     let flying = rules.iter().any(|r| r == "Flying");
+    let traversal = rules.iter().any(|r| r == "Traversal");
     // :4790 — Strider ignores Difficult but NOT Dangerous (p.13/p.14).
     let ignores_difficult = flying || rules.iter().any(|r| r == "Strider");
     // :4805-4809 — pass 1 routes AROUND both classes unless the rigid targets
@@ -869,6 +884,7 @@ pub fn plain_move(
         own_r_m,
         avoid_dang,
         flying,
+        traversal,
         ignores_difficult,
         half,
         fast_planner,

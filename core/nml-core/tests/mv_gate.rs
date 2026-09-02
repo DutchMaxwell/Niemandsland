@@ -10,7 +10,7 @@
 //! caller's ladder by design (:6722-6728) — there the RED is the CAP, not the
 //! clearing.
 
-use nml_core::mv::gate::{finalize_placement, Disc};
+use nml_core::mv::gate::{finalize_placement, Disc, GateFlags};
 use nml_core::mv::geom2::V2;
 use serde_json::Value;
 
@@ -85,7 +85,7 @@ fn the_gate_clears_a_recorded_base_overlap_inside_every_band_cap() {
         "the fixture's own number and its endpoints disagree"
     );
 
-    let (got, rep) = finalize_placement(&c.planned, &c.radii_in, &[], &c.caps_in, c.board_in, None);
+    let (got, rep) = finalize_placement(&c.planned, &c.radii_in, &[], &c.caps_in, c.board_in, None, GateFlags::default());
 
     // `SeparationResolver.RESOLVE_EPSILON_INCHES` :46 is what "cleared" means.
     let left = worst_overlap(&got, &c.radii_in);
@@ -115,7 +115,7 @@ fn the_gate_clears_a_recorded_base_overlap_inside_every_band_cap() {
 fn a_band_spent_unit_is_frozen_rather_than_pushed_past_its_cap() {
     let c = load("frozen");
     assert!(c.worst_overlap_in > 0.5, "{}", c.worst_overlap_in);
-    let (got, rep) = finalize_placement(&c.planned, &c.radii_in, &[], &c.caps_in, c.board_in, None);
+    let (got, rep) = finalize_placement(&c.planned, &c.radii_in, &[], &c.caps_in, c.board_in, None, GateFlags::default());
     for (i, d) in rep.disp_in.iter().enumerate() {
         assert!(
             *d <= c.caps_in[i] + 1e-9,
@@ -140,7 +140,7 @@ fn pass_one_clamps_a_model_back_onto_the_table() {
     let board = [72.0, 48.0];
     let margin = 0.02 / 0.0254;
     let planned: Vec<V2> = vec![[80.0, -3.0], [69.8, 0.8]];
-    let (got, rep) = finalize_placement(&planned, &[0.5, 0.5], &[], &[], board, None);
+    let (got, rep) = finalize_placement(&planned, &[0.5, 0.5], &[], &[], board, None, GateFlags::default());
     assert!(
         (got[0][0] as f64 - (72.0 - margin)).abs() < 1e-4,
         "{:?}",
@@ -160,7 +160,7 @@ fn the_gate_pushes_off_another_units_base() {
         c: [36.4, 24.0],
         r: 0.8,
     };
-    let (got, _) = finalize_placement(&planned, &[0.8], &[other], &[4.0], [72.0, 48.0], None);
+    let (got, _) = finalize_placement(&planned, &[0.8], &[other], &[4.0], [72.0, 48.0], None, GateFlags::default());
     let d =
         ((got[0][0] as f64 - other.c[0]).powi(2) + (got[0][1] as f64 - other.c[1]).powi(2)).sqrt();
     assert!(
@@ -209,7 +209,7 @@ fn pass_three_projects_a_model_out_of_an_impassable_container() {
     assert_eq!(t.type_at(t.from_inch(planned[0], 0.0)), CONTAINER, "fixture is not in a container");
     assert!(in_container(&t, planned[0], 0.5));
 
-    let (got, rep) = finalize_placement(&planned, &[0.5], &[], &[6.0], [72.0, 48.0], Some(&t));
+    let (got, rep) = finalize_placement(&planned, &[0.5], &[], &[6.0], [72.0, 48.0], Some(&t), GateFlags::default());
 
     assert!(!in_container(&t, got[0], 0.5), "still resting in the container at {:?}", got[0]);
     assert!(rep.disp_in[0] > 2.0 && rep.disp_in[0] <= 6.0, "hop was {}\"", rep.disp_in[0]);
@@ -227,7 +227,7 @@ fn pass_three_projects_a_model_out_of_an_impassable_container() {
 fn a_projection_beyond_the_band_slack_is_refused_whole() {
     let t = school(&[(15, 15, CONTAINER)]);
     let planned: Vec<V2> = vec![[37.5, 25.5]];
-    let (got, rep) = finalize_placement(&planned, &[0.5], &[], &[1.0], [72.0, 48.0], Some(&t));
+    let (got, rep) = finalize_placement(&planned, &[0.5], &[], &[1.0], [72.0, 48.0], Some(&t), GateFlags::default());
     assert_eq!(got[0], planned[0], "the route-true spot must survive");
     assert!(rep.capped[0], "the refusal must be marked");
     assert_eq!(rep.disp_in[0], 0.0);
@@ -238,7 +238,7 @@ fn a_projection_beyond_the_band_slack_is_refused_whole() {
 #[test]
 fn pass_three_is_off_without_a_terrain() {
     let planned: Vec<V2> = vec![[37.5, 25.5]];
-    let (got, _) = finalize_placement(&planned, &[0.5], &[], &[6.0], [72.0, 48.0], None);
+    let (got, _) = finalize_placement(&planned, &[0.5], &[], &[6.0], [72.0, 48.0], None, GateFlags::default());
     assert_eq!(got[0], planned[0]);
 }
 
@@ -326,6 +326,7 @@ fn pass_four_pulls_a_recorded_straggler_back_into_coherency() {
         &caps,
         board,
         None,
+        GateFlags::default(),
     );
 
     assert!(coherent(&got, &radii), "still torn after the gate: {got:?}");
@@ -369,6 +370,7 @@ fn pass_four_terminates_on_a_config_it_can_never_repair() {
         &[],
         [72.0, 48.0],
         None,
+        GateFlags::default(),
     );
 
     assert!(
@@ -389,4 +391,99 @@ fn pass_four_terminates_on_a_config_it_can_never_repair() {
         "the pull barely ran: {:?}",
         rep.disp_in
     );
+}
+
+/// `_clamp_gate_walls` :6477 — no gate step may TUNNEL. A model planned right
+/// beside a container wall is projected THROUGH it by pass 3; the clamp sees the
+/// displacement graze the wall inside the base radius and reverts the model
+/// whole to its route-true endpoint, leaving the debt to the caller's ladder.
+/// Drop the clamp and the model keeps the far-side spot, straight through a wall.
+#[test]
+fn the_wall_clamp_reverts_a_gate_push_that_tunnels() {
+    let t = Terrain::build(&PlainTerrain {
+        cells: vec![[15.0, 15.0, CONTAINER as f64]],
+        sandbox: vec![],
+        // a rest wall due west of the container cell, in world metres
+        // world metres: the container's own west face at inch x = 37, z 24-27,
+        // i.e. straight across the projection's shortest way out (-x).
+        walls: vec![[[0.0254, 0.0], [0.0254, 0.0762]]],
+        cell_params: CellParams {
+            table_size_feet: [6.0, 4.0],
+            grid_rotation_degrees: 0.0,
+            grid_size_inches: 3.0,
+            inches_to_meters: 0.0254,
+        },
+    });
+    let planned: Vec<V2> = vec![[37.5, 25.5]];
+    let (got, rep) = finalize_placement(
+        &planned,
+        &[0.5],
+        &[],
+        &[6.0],
+        [72.0, 48.0],
+        Some(&t),
+        GateFlags::default(),
+    );
+    assert_eq!(
+        got[0], planned[0],
+        "the tunnelling hop must be reverted whole"
+    );
+    assert!(rep.reverted[0], "the revert must be reported");
+    assert_eq!(rep.disp_in[0], 0.0);
+
+    // Flying crosses walls legally (GF v3.5.1) — the same push stands.
+    let flying = GateFlags {
+        flying: true,
+        traversal: false,
+    };
+    let (fly, frep) = finalize_placement(
+        &planned,
+        &[0.5],
+        &[],
+        &[6.0],
+        [72.0, 48.0],
+        Some(&t),
+        flying,
+    );
+    assert!(!frep.reverted[0]);
+    assert!(fly[0] != planned[0], "a flyer keeps its projected spot");
+}
+
+/// The pull's CLOSING overlap push (:6636), the other half of S5c-2. Pass 4's
+/// reconnect step stops AT the 1" link so it never overlaps the model it walks
+/// toward — but the over-spread step (b) pulls a full link toward the centroid
+/// with no such guard, and either step can walk a model across a THIRD one. The
+/// table therefore ends the pull with `_resolve_overlaps_world` whenever it did
+/// not exit early on a coherent config, and so does this.
+///
+/// The fixture is the worst of 4000 pseudo-random torn configurations: five
+/// bases whose sweeps run to exhaustion, so the closing push is owed rather
+/// than skipped by the early exit. With it, nothing overlaps by more than the
+/// resolver's own 0.01" epsilon. Comment the `overlap_pass` call out of
+/// `Pull::run` and two bases are left 1.427" inside each other — 142x the bar.
+#[test]
+fn the_pull_closes_on_an_overlap_push() {
+    let radii = vec![
+        0.5188637662257216,
+        0.6834840646906486,
+        0.7264599364079675,
+        0.7402862185240459,
+        0.6062861359925675,
+    ];
+    let planned: Vec<V2> = vec![
+        [35.201515, 7.7232237],
+        [30.942068, 16.571203],
+        [15.653746, 17.719282],
+        [21.905203, 15.571972],
+        [35.40595, 8.106078],
+    ];
+    // No caps: the band never freezes anyone, so the push is the only thing
+    // that can clear what the pull stacked.
+    let (got, rep) =
+        finalize_placement(&planned, &radii, &[], &[], [72.0, 48.0], None, GateFlags::default());
+
+    assert!(!coherent(&planned, &radii), "the plan must be torn, else pass 4 never runs");
+    assert!(rep.pulled.iter().any(|p| *p), "pass 4 must actually have run");
+    let left = worst_overlap(&got, &radii);
+    assert!(left <= 0.01, "the pull left {left}\" of base overlap standing");
 }
