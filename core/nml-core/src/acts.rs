@@ -459,13 +459,13 @@ pub struct ActHeader {
 /// Parses one act-corpus header line (`{"kind":"header", ...}`).
 pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
     let header: Header = serde_json::from_str(text).map_err(|e| format!("act header: {e}"))?;
-    // The evolved-eval seam: only variant 0 (today's frozen eval) has a
-    // registered arm (`score::score_hand_variant`). A header asking for
-    // anything else is rejected HERE, loudly, rather than silently playing
-    // variant 0 or panicking deep inside a rollout.
-    if header.knobs.eval_variant != 0 {
+    // The evolved-eval seam: only variants with a registered arm in
+    // `score::score_hand_variant` (0 = the frozen eval, 408 = gen4 candidate 7)
+    // get past HERE, loudly, rather than silently playing variant 0 or
+    // panicking deep inside a rollout.
+    if !matches!(header.knobs.eval_variant, 0 | 408) {
         return Err(format!(
-            "eval_variant {}: no registered arm (only 0 exists)",
+            "eval_variant {}: no registered arm (only 0 and 408 exist)",
             header.knobs.eval_variant
         ));
     }

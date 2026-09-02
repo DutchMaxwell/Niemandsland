@@ -191,6 +191,45 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v408: trip-survival discount — frozen `presence` assumes the unit SURVIVES
+/// the trip it discounts for; compound per-round survival odds
+/// `(s - threat) / s` over the travel rounds (`p > 0` implies `s > threat > 0`).
+fn presence_v408(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
+    let p = presence(state, i, obj_pos, threat);
+    let d = control_gap_in(state, i, obj_pos);
+    if p <= 0.0 || d <= OBJECTIVE_CONTROL_IN + CONTROL_EPS || threat <= 0.0 {
+        return p;
+    }
+    let s: f64 = state.wounds[i].iter().map(|w| *w as f64).sum();
+    let needed = ((d - OBJECTIVE_CONTROL_IN) / state.bands[i].rush.max(1.0)).ceil() as i64;
+    p * ((s - threat) / s).powf(needed as f64)
+}
+
+/// v408 mirror of `objective_p` reading `presence_v408`; owner fallback unchanged.
+fn objective_p_v408(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = state.objectives[obj_index];
+    let mut mine = 0.0f64;
+    let mut theirs = 0.0f64;
+    for i in 0..state.units() {
+        let p = presence_v408(state, i, obj.pos, threat_of(incoming, i));
+        if state.player[i] == player { mine += p; } else { theirs += p; }
+    }
+    if mine + theirs <= 0.0 {
+        return if obj.owner == 0 { 0.5 } else if obj.owner == player { 1.0 } else { 0.0 };
+    }
+    mine / (mine + theirs)
+}
+
+/// v408: `score_hand` with survival-discounted control; destroy branch untouched.
+fn score_hand_v408(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() { return 0.5; }
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) {
+        return score_hand(state, player, incoming);
+    }
+    let n = state.objectives.len();
+    (0..n).map(|i| objective_p_v408(state, i, player, incoming)).sum::<f64>() / n as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +240,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        408 => score_hand_v408(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
