@@ -89,7 +89,10 @@ def replay_game(path: str, lists: str) -> tuple:
     try:
         with gr.armed(_export_picker):
             selfplay.play_game(rec["seed"], armies[0], armies[1], gr.REPO, gr.BANK, None, top_k=1, horizon=1,
-                               dice_seed=gr.G["dice"], movement=kn["movement"], **gr.KNOBS)
+                               dice_seed=gr.G["dice"], movement=kn["movement"],
+                               # DEFECT_LEDGER #12: the RECORD's own key, absent = OFF.
+                               dangerous_end_morale=bool(kn.get("dangerous_end_morale", False)),
+                               **gr.KNOBS)
         bad = "" if gr.G["i"] == len(gr.G["rows"]) else "ran dry %d/%d" % (gr.G["i"], len(gr.G["rows"]))
     except (gr.Diverged, gr.nml_core.Unsupported) as exc:
         bad = str(exc)

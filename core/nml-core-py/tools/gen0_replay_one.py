@@ -111,7 +111,12 @@ def replay(path: str, lists: str, dice_offset: int) -> dict:
         with armed(forced_pick):
             selfplay.play_game(rec["seed"], armies[0], armies[1], REPO, BANK, None,
                                top_k=1, horizon=1, dice_seed=G["dice"],
-                               movement=kn["movement"], **KNOBS)
+                               movement=kn["movement"],
+                               # DEFECT_LEDGER #12: the RECORD's own key, absent
+                               # (every corpus here) meaning OFF — this proof stays
+                               # about the recording, not today's default.
+                               dangerous_end_morale=bool(kn.get("dangerous_end_morale", False)),
+                               **KNOBS)
         bad = "" if G["i"] == len(G["rows"]) else (
             "ran dry after %d of %d recorded positions" % (G["i"], len(G["rows"])))
     except Diverged as exc:

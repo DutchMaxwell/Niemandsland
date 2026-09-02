@@ -1801,6 +1801,7 @@ def play_game(
     menu_wide: str = "off",
     deep_menu_wide: str | None = None,
     engage_fold: bool = True,
+    dangerous_end_morale: bool = True,
     cond_ap: bool | None = None,
     vocab_version: int | None = None,
     objectives: str = "constant",
@@ -2115,6 +2116,10 @@ def play_game(
         # NML-1130: the header knob PR #446 defaults ON in the twin. True here
         # matches that default, so a caller that passes nothing sees no change.
         engage_fold=engage_fold,
+        # DEFECT_LEDGER #12: a NEW rule (like `engage_fold`), True by default
+        # so a fresh game stamps it and gets the p.10 test; a replay tool reads
+        # the RECORD's own key instead and passes False when it predates this.
+        dangerous_end_morale=dangerous_end_morale,
         # NML-1134: which RULE VOCABULARY this game's board rows are slotted
         # with. A fresh game uses THIS BUILD's version — the default here, and
         # the only setting a fresh corpus may use. A gate replaying a corpus
@@ -2523,6 +2528,7 @@ def play_game(
             # is the same object it was before this knob existed.
             **({"deployment": eff_deployment} if eff_deployment != "zone" else {}),
             "engage_fold": engage_fold,
+            "dangerous_end_morale": dangerous_end_morale,
             "cond_ap": cond_ap,
             # NML-1142: WHICH brain played. `""` is the hand eval — every corpus
             # written before this knob existed, and the default still.

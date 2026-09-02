@@ -893,6 +893,10 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // gates' `vintage_knobs()` always had; a gate that writes `false` gets
         // the RED.
         engage_fold: d.get("engage_fold").map(|v| flag(&v)).unwrap_or(dflt.engage_fold),
+        // DEFECT_LEDGER #12: a NEW rule, like `engage_fold` above. Absent =
+        // `Knobs::default()` = OFF, so a corpus recorded before it is untouched.
+        dangerous_end_morale: d.get("dangerous_end_morale").map(|v| flag(&v))
+            .unwrap_or(dflt.dangerous_end_morale),
         // NML-1134. The recorder writes this key (act_recorder.gd `_header_line`,
         // from `BattleSim.RULE_VOCAB_VERSION`); absent = `Knobs::default()` = the
         // pre-stamp version 2. INERT for the in-game seam — nothing in

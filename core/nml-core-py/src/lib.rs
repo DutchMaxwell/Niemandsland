@@ -618,6 +618,10 @@ impl Core {
             // W1 — `menu_wide` owns both halves: the menu offers ADVANCE+shoot
             // and the resolve stops declining it. See `Seams::moved_shoot`.
             moved_shoot: self.knobs.menu_wide || self.knobs.moved_shoot,
+            // DEFECT_LEDGER #12 — passed straight through, not inverted: a
+            // NEW rule, so an absent key (every corpus recorded before it)
+            // stays OFF.
+            dangerous_end_morale: self.knobs.dangerous_end_morale,
         }
     }
 

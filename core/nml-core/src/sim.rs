@@ -3110,6 +3110,10 @@ fn resolve_with(
     // first thing the activation puts on the tray. Six is the tray's success
     // TARGET (:7030) but a **1** is what wounds (:7033): the recorded roll is
     // `attack`, `count` dice, `6`, signed by the moving unit.
+    // `dangerous_morale_due` carries the pre-wound (alive, wounds) snapshot past
+    // the cast/shoot/melee/hit-and-run tail below, to where main.gd:1092-1098
+    // actually rolls the END-of-activation test — not here.
+    let mut dangerous_morale_due: Option<(i64, i64)> = None;
     if moved && !seams.no_dangerous {
         if let Some((tray, shot)) = dice.as_mut() {
             let n = dangerous_dice(statics, state, &next, si, seams, landing.as_ref(), cover, shot);
@@ -3124,12 +3128,19 @@ fn resolve_with(
                     owner: statics[pi_s].name.clone(),
                 });
                 if w > 0 {
+                    // main.gd:1042-1043 — the snapshot for that later test, taken
+                    // BEFORE these wounds land.
+                    let alive_before = next.alive[si];
+                    let wounds_before = wounds_left(&next, si);
                     land_wounds(&mut next, si, w);
                     // main.gd:1096-1098 — a NON-charge activation tests morale for
-                    // these wounds at its very END, after everything else it did.
-                    // Not ported: it would need the whole tail of the activation.
-                    if kind != CHARGE {
+                    // these wounds at its very END ("units in melee don't take
+                    // morale tests from wounds at the end of an activation").
+                    // Knob-gated (DEFECT_LEDGER #12): OFF replays a corpus
+                    // recorded before this rule unchanged.
+                    if kind != CHARGE && seams.dangerous_end_morale {
                         shot.mark("dangerous_end_morale");
+                        dangerous_morale_due = Some((alive_before, wounds_before));
                     }
                 }
             }
@@ -3540,6 +3551,24 @@ fn resolve_with(
                 "Hit & Run: {} steps up to 3\" after its attack",
                 statics[next.roster.profile[si]].name
             ));
+        }
+    }
+
+    // --- DANGEROUS-TERRAIN END MORALE (main.gd:1092-1098, GF v3.5.1 p.10
+    // General Morale Tests) --- the test for the wounds landed by the
+    // DANGEROUS TERRAIN block above, held back until now so the wounds never
+    // stopped this activation's own cast/shoot/melee/hit-and-run. Single-model
+    // vs multi-model and the alive-count trigger are the exact same
+    // `shooting_morale_trigger` the volley morale test above already uses; a
+    // failure here is always Shaken, never a Rout (Rout exists only in melee).
+    if let Some((alive_before, wounds_before)) = dangerous_morale_due {
+        if next.alive[si] > 0 {
+            if let Some((tray, shot)) = dice.as_mut() {
+                let us = &statics[pi_s];
+                if shooting_morale_trigger(&next, us, si, alive_before, wounds_before) {
+                    tray_morale(&mut next, us, si, false, tray, shot);
+                }
+            }
         }
     }
 
@@ -4911,6 +4940,133 @@ mod tests {
             split: None,
             traced: None,
         }
+    }
+
+    /// A lone 4-model unit (Tough 1, Quality 4+) — row 12 (`dangerous_end_morale`,
+    /// DEFECT_LEDGER): GF v3.5.1 p.10/p.12, main.gd:1092-1098.
+    fn dangerous_line() -> (State, Vec<UnitStatic>) {
+        let mut st = four_unit_line();
+        let r = &*st.roster;
+        st.roster = Rc::new(Roster {
+            keys: r.keys.clone(),
+            index: r.keys.iter().enumerate().map(|(i, k)| (k.clone(), i)).collect(),
+            profile: vec![0, 1, 2, 3],
+        });
+        st.positions[0] = vec![
+            [0.0, 0.0, 0.0],
+            [0.02 * IN2M, 0.0, 0.0],
+            [0.04 * IN2M, 0.0, 0.0],
+            [0.06 * IN2M, 0.0, 0.0],
+        ];
+        st.radii[0] = vec![IN2M; 4];
+        st.wounds[0] = vec![1; 4];
+        st.alive[0] = 4;
+        let mut a = UnitStatic { name: "a".into(), model_count: 4, ..Default::default() };
+        a.wounds_max = vec![1; 4];
+        a.ctx.quality = 4;
+        a.ctx.tough = 1;
+        (st, vec![a, UnitStatic::default(), UnitStatic::default(), UnitStatic::default()])
+    }
+
+    /// Marks BOTH cell-index neighbours on x AND z DANGEROUS (`forest_bar_board`'s
+    /// own straddling trick): a rigid ADVANCE band always lands `dangerous_line`'s
+    /// unit exactly on x=6"/z=0", both of them cell-index boundaries.
+    fn dangerous_bar_board() -> crate::terrain::Terrain {
+        let cells = vec![
+            [16.0, 14.0, crate::terrain::DANGEROUS as f64],
+            [16.0, 15.0, crate::terrain::DANGEROUS as f64],
+            [17.0, 14.0, crate::terrain::DANGEROUS as f64],
+            [17.0, 15.0, crate::terrain::DANGEROUS as f64],
+        ];
+        crate::terrain::Terrain::build(&crate::terrain::PlainTerrain {
+            cells,
+            sandbox: vec![],
+            walls: vec![],
+            pieces: vec![],
+            cell_params: crate::terrain::CellParams {
+                table_size_feet: [6.0, 4.0],
+                grid_rotation_degrees: 0.0,
+                grid_size_inches: 3.0,
+                inches_to_meters: IN2M,
+            },
+        })
+    }
+
+    /// RED for DEFECT_LEDGER row 12: a plain ADVANCE through DANGEROUS terrain
+    /// that kills half or more of the unit must draw a REAL morale die from the
+    /// tray at the END of the activation (GF v3.5.1 p.10 General Morale Tests) —
+    /// before this port, the wound landed and `shot.mark("dangerous_end_morale")`
+    /// fired, but main.gd:1092-1098's actual test was "not ported": no die was
+    /// ever drawn and `next.shaken` never moved.
+    #[test]
+    fn dangerous_terrain_losses_at_half_or_more_draw_a_morale_die() {
+        let (st, statics) = dangerous_line();
+        let t = dangerous_bar_board();
+        // Seeds are searched, not guessed (same convention as the RED in
+        // `the_die_count_takes_the_ratio_or_the_bearer_cap` above): the
+        // dangerous roll is 4 dice, and a face of 1 is what wounds — this seed's
+        // first 4 faces give >= 2 ones, so >= half of the 4 models die.
+        let seed = (1i64..)
+            .find(|&s| Tray::seeded(s).roll(4).iter().filter(|&&f| f == 1).count() >= 2)
+            .unwrap();
+        let mut tray = Tray::seeded(seed);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &advance_to(100.0), &t,
+            Seams { dangerous_end_morale: true, ..Seams::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert!(next.alive[0] > 0 && next.alive[0] <= 2, "setup didn't kill >= half: {}", next.alive[0]);
+        // Two "a"-owned rolls on the tray: the dangerous test (4 dice), THEN
+        // the morale test (1 die) — RED without the port, which draws only
+        // the first and never touches `next.shaken`.
+        let a_rolls: Vec<&crate::dice::Roll> = shot.rolls.iter().filter(|r| r.owner == "a").collect();
+        assert_eq!(a_rolls.len(), 2, "{:?}", shot.rolls);
+        assert_eq!((a_rolls[0].count, a_rolls[1].count), (4, 1));
+    }
+
+    /// The same crossing with losses BELOW half: no morale die is drawn, and
+    /// only the dangerous roll appears on the tray.
+    #[test]
+    fn dangerous_terrain_losses_below_half_draw_no_morale_die() {
+        let (st, statics) = dangerous_line();
+        let t = dangerous_bar_board();
+        let seed = (1i64..)
+            .find(|&s| Tray::seeded(s).roll(4).iter().filter(|&&f| f == 1).count() == 1)
+            .unwrap();
+        let mut tray = Tray::seeded(seed);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &advance_to(100.0), &t,
+            Seams { dangerous_end_morale: true, ..Seams::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(next.alive[0], 3, "setup didn't kill exactly one of four: {}", next.alive[0]);
+        let a_rolls: Vec<&crate::dice::Roll> = shot.rolls.iter().filter(|r| r.owner == "a").collect();
+        assert_eq!(a_rolls.len(), 1, "no morale die below half: {:?}", shot.rolls);
+    }
+
+    /// DEFECT_LEDGER #12 knob: `Seams::default()` — every corpus recorded
+    /// before this rule shipped, `dangerous_end_morale` absent and false —
+    /// replays with the OLD (bug-present) behaviour: the wound lands, the
+    /// mark fires, no die is drawn, even at >= half losses. This is what
+    /// keeps the frozen gen0 self-play snapshot byte-exact.
+    #[test]
+    fn dangerous_terrain_losses_draw_no_morale_die_with_the_knob_off() {
+        let (st, statics) = dangerous_line();
+        let t = dangerous_bar_board();
+        let seed = (1i64..)
+            .find(|&s| Tray::seeded(s).roll(4).iter().filter(|&&f| f == 1).count() >= 2)
+            .unwrap();
+        let mut tray = Tray::seeded(seed);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &advance_to(100.0), &t, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert!(next.alive[0] > 0 && next.alive[0] <= 2, "setup didn't kill >= half: {}", next.alive[0]);
+        let a_rolls: Vec<&crate::dice::Roll> = shot.rolls.iter().filter(|r| r.owner == "a").collect();
+        assert_eq!(a_rolls.len(), 1, "knob off must not draw the morale die: {:?}", shot.rolls);
     }
 
     /// S3 — a NON-charge move goes through `mv::step::plain_move` once

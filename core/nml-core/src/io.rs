@@ -454,6 +454,12 @@ pub struct Seams {
     /// byte-identical and nothing that replays today changes its answer.
     #[serde(default)]
     pub moved_shoot: bool,
+    /// `Knobs::dangerous_end_morale` (DEFECT_LEDGER #12) passed straight
+    /// through, not inverted: a NEW rule, so `false` (the `Default`, and
+    /// every corpus recorded before it) SKIPS the p.10 test, matching the
+    /// bug this replaces exactly for corpora that predate it.
+    #[serde(default)]
+    pub dangerous_end_morale: bool,
 }
 
 impl Node {
