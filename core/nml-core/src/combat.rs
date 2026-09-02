@@ -278,6 +278,37 @@ fn gd_round(v: f64) -> f64 {
     v.round()
 }
 
+/// GF v3.5.1 p.9 "Who Can Strike": the base-contact allowance folded onto the
+/// rulebook's own 2" melee reach — `SoloController.striking_models`
+/// solo_controller.gd:8402-8414, the centre-space fallback the table itself
+/// uses wherever no base shapes are on hand ("for the sim and for tests
+/// without scene shapes", :8399-8401), which is this headless core's every
+/// call. `MELEE_REACH_IN` and `BASE_CONTACT_IN` are the same two constants
+/// (solo_controller.gd:48-49).
+pub const MELEE_REACH_IN: f64 = 2.0;
+pub const BASE_CONTACT_IN: f64 = 1.0;
+
+/// Count of `striker`'s models within reach of ANY `enemy` model — the
+/// `melee_reach="table"` knob's own gate. Either side empty keeps today's
+/// behaviour (every striker counts), matching the GDScript fallback.
+pub fn striking_models(striker: &[[f64; 3]], enemy: &[[f64; 3]]) -> i64 {
+    if striker.is_empty() || enemy.is_empty() {
+        return striker.len() as i64;
+    }
+    let reach_m = (BASE_CONTACT_IN + MELEE_REACH_IN) * crate::IN2M;
+    let reach2 = reach_m * reach_m;
+    striker
+        .iter()
+        .filter(|s| {
+            enemy.iter().any(|e| {
+                let dx = s[0] - e[0];
+                let dz = s[2] - e[2];
+                dx * dx + dz * dz <= reach2
+            })
+        })
+        .count() as i64
+}
+
 /// `AiEv.block_chance` ai_ev.gd:441-446 — one save die at Defense+AP; Bane
 /// re-rolls the defender's unmodified 6s once.
 #[inline]
@@ -598,6 +629,17 @@ mod tests {
         assert_eq!(effective_attacks(3, 1, 2), 2, "1.5 rounds away from zero");
         assert!(at_or_below_half(2, 4));
         assert!(!at_or_below_half(3, 4));
+    }
+
+    #[test]
+    fn striking_models_counts_only_those_within_2in_of_an_enemy() {
+        // Ten models in a line, one inch apart, an enemy at the head of the
+        // line: only the first three sit within the 3" (2" reach + 1" base
+        // contact) centre-space threshold.
+        let line: Vec<[f64; 3]> = (1..=10).map(|i| [i as f64 * crate::IN2M, 0.0, 0.0]).collect();
+        let enemy = vec![[0.0, 0.0, 0.0]];
+        assert_eq!(striking_models(&line, &enemy), 3);
+        assert_eq!(striking_models(&line, &[]), 10, "no enemy positions -> everyone counts");
     }
 
     #[test]

@@ -50,7 +50,7 @@ use pyo3::types::{PyDict, PyList};
 
 use serde_json::{Map, Value};
 
-use nmlcore::acts::{ActHeader, ActStatics, Knobs, PolicyMode, Sighting};
+use nmlcore::acts::{ActHeader, ActStatics, Knobs, MeleeReach, PolicyMode, Sighting};
 use nmlcore::arbitration::Arbitration;
 use nmlcore::deployment::{self, Placement, Rect, SettleUnit, SideDeploy, UnitSpec};
 use nmlcore::menu::{candidates_tuned, Candidate, Tuning};
@@ -611,6 +611,9 @@ impl Core {
             // NML-1160 — with `los_model` the state's sight seams are the
             // table's per-model answer, so a clone inherits them untouched.
             los_model: self.knobs.los_model,
+            // W2 S0 — `melee_reach="table"` in the header scales a strike
+            // phase's attacks by the models within 2" of an enemy model.
+            melee_reach: self.knobs.melee_reach == MeleeReach::Table,
         }
     }
 
@@ -688,6 +691,16 @@ impl Core {
         m.insert("engage_fold".into(), self.knobs.engage_fold.into());
         m.insert("rule_vocab_version".into(), self.knobs.rule_vocab_version.into());
         m.insert("eval_variant".into(), self.knobs.eval_variant.into());
+        m.insert(
+            "melee_reach".into(),
+            Value::String(
+                match self.knobs.melee_reach {
+                    MeleeReach::All => "all",
+                    MeleeReach::Table => "table",
+                }
+                .into(),
+            ),
+        );
         to_py(py, &Value::Object(m))
     }
 

@@ -159,6 +159,23 @@ pub struct Knobs {
     /// exists yet — this field is the registration point, not a new eval.
     #[serde(default)]
     pub eval_variant: i64,
+    /// W2 S0 — `Seams::melee_reach`: `"all"` is today's behaviour (every alive
+    /// model of the unit strikes); `"table"` is the p.9 rule, scaling by the
+    /// models within 2" of an enemy model instead. Absent from every corpus
+    /// recorded before it, so the default replays byte-identical.
+    #[serde(default)]
+    pub melee_reach: MeleeReach,
+}
+
+/// The `melee_reach` knob's two settings — written the way `sighting` is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MeleeReach {
+    /// `combat::effective_attacks` scaled by the whole unit's `alive` count.
+    #[default]
+    All,
+    /// GF v3.5.1 p.9 "Who Can Strike": only models within 2" of an enemy model.
+    Table,
 }
 
 /// The `sighting` knob's two settings — the header writes them as strings, the
@@ -234,6 +251,7 @@ impl Default for Knobs {
             // `rows::RULE_VOCAB_VERSION` itself.
             rule_vocab_version: crate::rows::LEGACY_VOCAB_VERSION,
             eval_variant: 0,
+            melee_reach: MeleeReach::All,
         }
     }
 }

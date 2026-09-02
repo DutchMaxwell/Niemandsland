@@ -1643,7 +1643,12 @@ fn expected_melee_morale(
 /// each with its OWN melee set, Quality and fatigue flag. Melee has no range
 /// gate, so `keep` is every profile — the two `Shooter` arrays stay
 /// index-parallel and the shooting resolver's shape is reused, not copied.
-fn melee_parts(statics: &[UnitStatic], state: &State, i: usize) -> Vec<(usize, Scratch, Ctx)> {
+///
+/// `seams.melee_reach` (W2 S0) is `_solo_attack_groups`' own
+/// `melee_count = solo_controller.striking_models_for(member, enemy)`
+/// (main.gd:4314-4317): each member scales by ITS OWN models within 2" of `ti`
+/// instead of its whole `alive` count. Off (the default) is today's behaviour.
+fn melee_parts(statics: &[UnitStatic], state: &State, i: usize, ti: usize, seams: Seams) -> Vec<(usize, Scratch, Ctx)> {
     let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
     for &mi in std::iter::once(&i).chain(state.attached[i].iter()) {
         if state.alive[mi] <= 0 {
@@ -1651,7 +1656,12 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize) -> Vec<(usize, S
         }
         let um = &statics[state.roster.profile[mi]];
         let mut sc = Scratch::default();
-        melee_profiles_of(um, state.alive[mi], &mut sc);
+        let count = if seams.melee_reach {
+            crate::combat::striking_models(&state.positions[mi], &state.positions[ti])
+        } else {
+            state.alive[mi]
+        };
+        melee_profiles_of(um, count, &mut sc);
         sc.keep = (0..um.melee.len()).collect();
         drop_spent_limited(&um.melee, &state.limited_used[mi], &mut sc);
         parts.push((mi, sc, ctx_live(ctx_of_melee(um, state, mi), statics, state, mi, true)));
@@ -1687,10 +1697,11 @@ fn strike_phase(
     si: usize,
     ti: usize,
     charging: bool,
+    seams: Seams,
     tray: &mut Tray,
     shot: &mut ShootResult,
 ) -> (i64, i64) {
-    let mut parts = melee_parts(statics, next, si);
+    let mut parts = melee_parts(statics, next, si, ti, seams);
     // Block C5 — Instinctive: the +1 reaches the melee fold ONLY when the
     // attacked unit IS the closest enemy (main.gd:5670-5673), per member
     // carrying it — the pick itself is never constrained.
@@ -1901,7 +1912,7 @@ fn tray_charge(
             // an Impact pool that wiped the defender ends the melee here.
             if next.alive[si] > 0 && next.alive[ti] > 0 {
                 // B13: the defender's lash-back credits ITS OWN tally (by_tu).
-                let (c, rc) = strike_phase(statics, next, si, ti, true, tray, shot);
+                let (c, rc) = strike_phase(statics, next, si, ti, true, seams, tray, shot);
                 by_su += c;
                 by_tu += rc;
                 next.fatigued[si] = true;
@@ -1909,7 +1920,7 @@ fn tray_charge(
         } else if next.alive[ti] > 0 && next.alive[si] > 0 {
             // :8100 — and so does the strike-back, in both directions.
             // B13: the strike-back's lash-back credits the charger's tally.
-            let (c, rc) = strike_phase(statics, next, ti, si, false, tray, shot);
+            let (c, rc) = strike_phase(statics, next, ti, si, false, seams, tray, shot);
             by_tu += c;
             by_su += rc;
             next.fatigued[ti] = true;
@@ -5589,6 +5600,56 @@ mod tests {
         (st, statics)
     }
 
+    // -------------------------------------------- W2 S0: melee_reach="table" ---
+
+    /// A 10-model line, one inch apart, striking a single enemy model planted
+    /// at the head of the line: only the first three sit within the p.9 2"
+    /// reach (+1" base contact = 3" centre-space, `combat::MELEE_REACH_IN`/
+    /// `BASE_CONTACT_IN`). `melee_reach` OFF (the default) is unaffected —
+    /// today's behaviour scales by the whole unit's `alive` count.
+    #[test]
+    fn melee_reach_table_scales_by_the_models_within_2in_of_the_enemy() {
+        let blade = ShootProfile { name: "Blade".into(), attacks: 10, count: 1, range: 0, ..Default::default() };
+        let profile: Profile = serde_json::from_str(r#"{"unit_id": "u", "name": "u"}"#).unwrap();
+        let statics = vec![
+            UnitStatic {
+                ctx: Ctx { quality: 4, defense: 4, tough: 1, models: 10, ..Default::default() },
+                name: "Line".into(),
+                melee: vec![blade],
+                model_count: 10,
+                wounds_max: vec![1; 10],
+                ..Default::default()
+            },
+            UnitStatic {
+                ctx: Ctx { defense: 4, tough: 1, models: 1, ..Default::default() },
+                name: "Target".into(),
+                model_count: 1,
+                wounds_max: vec![1],
+                ..Default::default()
+            },
+        ];
+        let mut st = four_unit_line();
+        st.roster = Rc::new(Roster { keys: vec!["a".into(), "b".into()], index: HashMap::new(), profile: vec![0, 1] });
+        st.profiles = Rc::new(Profiles { list: vec![profile.clone(), profile], index: HashMap::new() });
+        st.player = vec![0, 1];
+        st.alive = vec![10, 1];
+        st.attached = Rc::new(vec![vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, None]);
+        st.positions[0] = (1..=10).map(|i| [i as f64 * IN2M, 0.0, 0.0]).collect();
+        st.wounds[0] = vec![1; 10];
+        st.radii[0] = vec![IN2M; 10];
+        st.positions[1] = vec![[0.0, 0.0, 0.0]];
+        st.wounds[1] = vec![1];
+        st.radii[1] = vec![IN2M];
+
+        let all = melee_parts(&statics, &st, 0, 1, Seams::default());
+        assert_eq!(all[0].1.attacks[0], 10, "melee_reach=all (default): every model strikes");
+
+        let table = Seams { melee_reach: true, ..Seams::default() };
+        let reached = melee_parts(&statics, &st, 0, 1, table);
+        assert_eq!(reached[0].1.attacks[0], 3, "melee_reach=table: only the 3 models within 2\" strike");
+    }
+
     /// Retaliate(2) against 3 wounds LANDED = the striker faces a 6-die save
     /// batch at its own Defense, AP 0; the wounds land on the striker, the
     /// credit is the UNSAVED count, and the caller hands it to the defender's
@@ -5599,7 +5660,7 @@ mod tests {
         let def_pool = wounds_left(&st, 1);
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        let (caused, credit) = strike_phase(&statics, &mut st, 0, 1, false, &mut tray, &mut shot);
+        let (caused, credit) = strike_phase(&statics, &mut st, 0, 1, false, Seams::default(), &mut tray, &mut shot);
         let landed = def_pool - wounds_left(&st, 1);
         assert_eq!(landed, 3, "fixture: seed 9 lands exactly 3 wounds (got {landed})");
         assert!(caused >= landed, "the tally is the PRE-Regeneration count");
@@ -5620,7 +5681,7 @@ mod tests {
         let (mut st, statics) = duel(0);
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, &mut tray, &mut shot);
+        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, Seams::default(), &mut tray, &mut shot);
         assert_eq!(credit, 0, "nothing to credit");
         assert!(shot.log.iter().all(|l| !l.contains("Retaliate")), "nothing logged");
         assert!(shot.rolls.iter().all(|r| !(r.kind == "defense" && r.owner == "Striker")),
@@ -5636,7 +5697,7 @@ mod tests {
         statics[0].ctx.retaliate_hits_per_wound = 2;
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        strike_phase(&statics, &mut st, 0, 1, false, &mut tray, &mut shot);
+        strike_phase(&statics, &mut st, 0, 1, false, Seams::default(), &mut tray, &mut shot);
         let striker_saves = shot.rolls.iter().filter(|r| r.kind == "defense" && r.owner == "Striker").count();
         let defender_saves = shot.rolls.iter().filter(|r| r.kind == "defense" && r.owner == "Target").count();
         assert_eq!(striker_saves, 1, "exactly the defender's lash-back batch");
@@ -5657,7 +5718,7 @@ mod tests {
         st.wounds[1] = vec![1, 3, 1]; // seed 9 lands 4: exactly the outer two die
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, &mut tray, &mut shot);
+        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, Seams::default(), &mut tray, &mut shot);
         assert_eq!(st.alive[1], 1, "fixture: exactly the two outer models die");
         let lash = shot.rolls.last().expect("the dying-models save batch");
         assert_eq!((lash.kind, lash.count, lash.owner.as_str()), ("defense", 4, "Striker"));
@@ -5680,7 +5741,7 @@ mod tests {
         st.wounds[1] = vec![5, 1, 1]; // 4 wounds soak into the first model
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, &mut tray, &mut shot);
+        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, Seams::default(), &mut tray, &mut shot);
         assert_eq!(st.alive[1], 3, "fixture: 3 wounds soak, no model dies");
         assert_eq!(credit, 0, "nothing to credit");
         assert!(shot.log.iter().all(|l| !l.contains("dying models")), "nothing logged");
@@ -5699,7 +5760,7 @@ mod tests {
         statics[1].ctx.death_hits_per_kill = 2;
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, &mut tray, &mut shot);
+        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, Seams::default(), &mut tray, &mut shot);
         assert!(shot.rolls.iter().any(|r| r.kind == "defense" && r.owner == "Striker"),
             "fixture: the lash DID fire (pools [1,1,1] lose all three models)");
         assert!(wounds_left(&st, 0) < 3, "the lash landed on the striker");
@@ -5780,7 +5841,7 @@ mod tests {
         let (mut st, statics) = instinctive_line(third_at);
         let mut tray = Tray::seeded(2);
         let mut shot = ShootResult::default();
-        strike_phase(&statics, &mut st, 0, 1, false, &mut tray, &mut shot);
+        strike_phase(&statics, &mut st, 0, 1, false, Seams::default(), &mut tray, &mut shot);
         shot.rolls
             .iter()
             .find(|r| r.kind == "attack" && r.owner == "Striker")

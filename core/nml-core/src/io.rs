@@ -423,6 +423,12 @@ pub struct Seams {
     /// rewriting a moved row with the CENTRE probe would swap the answer back.
     #[serde(default)]
     pub los_model: bool,
+    /// W2 S0 — `Knobs::melee_reach == MeleeReach::Table`: a strike phase scales
+    /// its attacks by the models within the p.9 2" reach of an enemy model
+    /// (`combat::striking_models`) instead of the whole unit's `alive` count.
+    /// Default OFF: every corpus recorded before this replays byte-identical.
+    #[serde(default)]
+    pub melee_reach: bool,
 }
 
 impl Node {
