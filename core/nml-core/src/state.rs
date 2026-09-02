@@ -461,6 +461,10 @@ pub struct State {
     /// Second Winds granted in `second_wind_round`; -1 = never counted.
     pub second_wind_round: i64,
     pub second_wind_uses: i64,
+    /// GF v3.5.1 "Limited" — "may only be used once per game"
+    /// (`unit_properties["limited_used"]`, solo_controller.gd:7681-7722).
+    /// Per unit, weapon names fired this game; never resets on a later round.
+    pub limited_used: Vec<Vec<String>>,
 }
 
 impl State {

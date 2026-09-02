@@ -614,6 +614,7 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         second_wind_used: vec![false; n],
         second_wind_round: -1,
         second_wind_uses: 0,
+        limited_used: vec![Vec::new(); n],
         los_pairs: plain.los_pairs.as_ref().map(|rows| {
             // Read the matrix in its own (key-sorted) order and STORE it in
             // roster order, so `_los_clear`'s port can index it with roster
