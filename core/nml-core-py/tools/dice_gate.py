@@ -362,7 +362,7 @@ def split_unrecorded(cls: str, block: list[dict], action: dict) -> bool:
 def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
         no_dangerous: bool = False, engage_fold: str = "auto", cond_ap: str = "auto",
         only_rule: str = "", pos_tol: float = 0.5, no_pos: bool = False,
-        movement: str = "rigid") -> int:
+        movement: str = "rigid", move_rigid: bool = False) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -404,7 +404,8 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                          "knobs": dict(head.get("knobs", {}), hero_attach=True,
                                        dangerous=not no_dangerous,
                                        engage_fold=eff_engage_fold, sighting="model",
-                                       movement=(movement == "table"))})
+                                       movement=(movement == "table"),
+                                       move_rigid=move_rigid)})
         for pos, act in enumerate(lines):
             k = int(act["act"])
             action = (act.get("pick") or {}).get("action") or {}
@@ -562,8 +563,11 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
 
     acts = sum(grid[c]["acts"] for c in grid)
     print()
-    print("GATE D1-B6 over %d games, %d activations, movement=%s, %s%s%s (%.1fs)"
-          % (len(games), acts, movement, vintage_report_line(vintage_seen),
+    print("GATE D1-B6 over %d games, %d activations, movement=%s%s, %s%s%s (%.1fs)"
+          % (len(games), acts, movement,
+             " — RED --red-move-rigid (ADVANCE/RUSH back on the rigid arm)"
+             if move_rigid else "",
+             vintage_report_line(vintage_seen),
              "" if not red else " — RED --red-%s" % red,
              " — RED --red-no-dangerous (the p.12 test switched OFF)" if no_dangerous else "",
              time.perf_counter() - t0))
@@ -700,6 +704,13 @@ def main(argv: list[str]) -> int:
                          "the M4 movement port (mv::step::charge_move) instead of one rigid "
                          "translation of the whole unit — slower, moves check C POS and "
                          "C NEXT up")
+    ap.add_argument("--red-move-rigid", action="store_true",
+                    help="NML-1152 S3 RED: header knob move_rigid — ADVANCE and RUSH stay on "
+                         "the rigid translation while --movement table still routes CHARGE. "
+                         "THIS gate replays only acts that DRAW dice (a shot, a charge), so a "
+                         "bare move never reaches its counters and the knob must leave every "
+                         "number here byte-identical; it reds the S3 arm for the instruments "
+                         "that do replay moves")
     a = ap.parse_args(argv)
     reds = [k for k in ("extra-draw", "formula", "one-wound")
             if getattr(a, "red_" + k.replace("-", "_"))]
@@ -707,7 +718,7 @@ def main(argv: list[str]) -> int:
         ap.error("one red knob at a time — each has to redden its own check alone")
     return run(Path(a.ref).expanduser(), a.repo, a.limit, a.out, reds[0] if reds else "",
                a.report_only, a.red_no_dangerous, a.engage_fold, a.cond_ap, a.only_rule,
-               a.pos_tol, a.no_pos, a.movement)
+               a.pos_tol, a.no_pos, a.movement, a.red_move_rigid)
 
 
 if __name__ == "__main__":

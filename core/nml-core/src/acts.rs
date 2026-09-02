@@ -85,6 +85,11 @@ pub struct Knobs {
     /// default is OFF and nothing replays differently.
     #[serde(default)]
     pub movement: bool,
+    /// NML-1152 S3 — `Seams::move_rigid`, the RED switch that keeps ADVANCE and
+    /// RUSH on the rigid translation while `movement` still routes CHARGE.
+    /// Absent from every corpus, so the default is OFF.
+    #[serde(default)]
+    pub move_rigid: bool,
     /// NML-1073 M5 D1-B8 — the p.12 DANGEROUS-terrain test. NOT a feature knob:
     /// the test is part of `dice="table"` and defaults ON, exactly the way
     /// `charge_gate` defaults ON. It exists so a gate can switch it OFF and prove
@@ -176,6 +181,7 @@ impl Default for Knobs {
             charge_landing: false,
             sighting: Sighting::Unit,
             movement: false,
+            move_rigid: false,
             dangerous: true,
             engage_fold: false,
             // NML-1134: the CORPUS reading — a header with no `knobs` block at
