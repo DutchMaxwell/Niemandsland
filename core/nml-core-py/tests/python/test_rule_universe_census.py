@@ -431,6 +431,38 @@ def test_untracked_primitive_no_longer_trusted_whole(tmp_path):
     assert per["Ambushing Piercing Shot"]["per_system"]["gf"]["core"] == "MISSING"
 
 
+def test_universe_includes_common_json_core_rulebook_names(tmp_path):
+    """C-1 (AUDIT_armybook_flanks_2026-09-02.md sec.3): walk_rule_names only
+    harvested `specialRules[]`, so the shared `_common.json` core-rulebook
+    glossary - weapon/core names like Limited, Reliable, Banner, Transport,
+    ... - never entered the universe (its own top-level array is `rules`,
+    not `specialRules`). Walk both."""
+    root = tmp_path / "repo"
+    for d in ("assets/solo", "data", "core/nml-core/src", "core/nml-core-py/python"):
+        (root / d).mkdir(parents=True)
+    (root / "assets/solo/rules_mechanics_gf.json").write_text(
+        json.dumps({"common": {}, "factions": {}}))
+    (root / "data/encoder_rule_vocab_v1.json").write_text(json.dumps({"unit": [], "weapon": []}))
+    (root / "core/nml-core-py/python/list_to_profile.py").write_text("MOVE_PRIMITIVES = ()\n")
+    (root / "core/nml-core/src/arm.rs").write_text("pub const X: i64 = 1;\n")
+    books = tmp_path / "books" / "gf"
+    books.mkdir(parents=True)
+    (books / "book_a.json").write_text(json.dumps({
+        "name": "Test Faction", "gameSystem": "gf",
+        "specialRules": [{"name": "Furious"}],
+    }))
+    (books / "_common.json").write_text(json.dumps({
+        "gameSystem": "gf",
+        "rules": [{"name": "Limited"}, {"name": "Reliable"}],
+    }))
+    res = census.census(tmp_path / "books", root)
+    assert "Limited" in res["rows"], (
+        "the shared _common.json rules[] glossary must enter the universe"
+    )
+    assert "Reliable" in res["rows"]
+    assert res["rows"]["Limited"]["per_system"]["gf"]["core"] == "MISSING"
+
+
 def test_cli_prints_summary_and_writes_json(mini, tmp_path, capsys):
     root, books = mini
     out_json = tmp_path / "out" / "census.json"
