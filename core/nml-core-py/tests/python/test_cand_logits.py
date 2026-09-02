@@ -34,6 +34,7 @@ import pytest
 import nml_core
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "python"))
+import selfplay as sp  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[4]
 FIXTURES = REPO / "core" / "nml-core" / "tests" / "fixtures"
@@ -157,3 +158,69 @@ def test_an_unknown_policy_mode_declines():
         core.plan_with_rollout(
             state, act["player"], act["statics"], _sig(act), policy_mode="pick",
         )
+
+
+def test_cand_logits_fn_hook_makes_the_deep_seat_play_its_choice():
+    """`selfplay._pick_for`'s R4 seam at the HARNESS boundary: a hook that
+    names a candidate the hand order does NOT pick makes the deep seat play
+    it anyway. Every OTHER of the player's own live units is patched to
+    `activated` first — the same isolation `plan.rs`'s
+    `cand_logits_name_the_pool_and_the_pick_at_top_k_one` uses — because the
+    search's coverage guarantee rolls at least one candidate per live unit
+    REGARDLESS of `top_k`, so a multi-unit menu can let a competing unit's
+    candidate win the rollout even with the crafted head visited first."""
+    lines = [json.loads(l) for l in open(FIXTURES / "acts_25.jsonl", encoding="utf-8")]
+    core = nml_core.load(str(REPO))
+    core.set_header(dict(lines[0], knobs=dict(lines[0]["knobs"], top_k=1, horizon=1)))
+    checked = 0
+    for act in lines[1:]:
+        raw, player = act["state"], act["player"]
+        live = core.state_of(raw).pool(player, bool(core.knobs().get("hero_attach", True)))
+        for keep in live:
+            units = {
+                k: (dict(u, activated=True) if k in live and k != keep else u)
+                for k, u in raw["units"].items()
+            }
+            state = core.state_of(dict(raw, units=units))
+            base = core.plan_with_rollout(state, player, sp.TRAINER_STATICS, cands=True)
+            if not base["used"] or len(base["trace"]["cands"]) < 2:
+                continue
+            target = base["trace"]["scored"][-1]["idx"]
+            if base["trace"]["scored"][0]["idx"] == target:
+                continue  # the hand order already agrees -- no contrast
+            lg = [0.0] * len(base["trace"]["cands"])
+            lg[target] = 1.0
+            calls = []
+
+            def hook(st, menu, side, lg=lg, calls=calls):
+                calls.append(side)
+                assert len(menu) == len(lg)
+                return lg
+
+            pick = sp._pick_for(core, state, player, cand_logits_fn={player: hook}, policy_mode="order")
+            if not pick or pick["action"] != base["trace"]["cands"][target]:
+                continue
+            assert calls == [player], "the hook must fire exactly once, for the acting side"
+            checked += 1
+            break
+        if checked == 3:
+            break
+    assert checked == 3, "only %d positions let a crafted logit carry the pick" % checked
+
+
+def test_cand_logits_fn_none_result_is_the_old_call():
+    """A hook present for this side but declining (`None`) never surfaces the
+    throwaway call's `cand_logits` and never touches `policy_mode` — the pick
+    is byte-identical to no hook at all, which is every caller written
+    before this seam existed."""
+    lines = [json.loads(l) for l in open(FIXTURES / "acts_25.jsonl", encoding="utf-8")]
+    core = nml_core.load(str(REPO))
+    core.set_header(lines[0])
+    act = lines[1]
+    state = core.state_of(act["state"])
+    player = act["player"]
+    plain = sp._pick_for(core, state, player)
+    hooked = sp._pick_for(
+        core, state, player, cand_logits_fn={player: lambda *a: None}, policy_mode="order",
+    )
+    assert hooked == plain, "a declining hook must not move the pick"

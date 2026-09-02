@@ -1093,7 +1093,8 @@ CAP_SEED_STRIDE = 700003
 
 def _pick_for(
     core, state, player: int, net_player: int = 0, eps: float = 0.0, explore_seed: int = 0,
-    cands: bool = False,
+    cands: bool = False, cand_logits_fn: dict[int, Any] | None = None,
+    policy_mode: str | None = None,
 ) -> dict[str, Any]:
     """`_pick_for` core_selfplay.gd:398-459 — the full planner for whichever side
     still has a living, un-activated unit; `{}` when the side is dry.
@@ -1109,7 +1110,19 @@ def _pick_for(
 
     `cands` is the expert-iteration opt-in (step 1): the binding then stamps
     `trace.cands` — the built candidates' content, build index order, joined
-    by `trace.scored`'s `idx` — and writes nothing it did not write before."""
+    by `trace.scored`'s `idx` — and writes nothing it did not write before.
+
+    `cand_logits_fn` / `policy_mode` are the R4 seam at the harness boundary
+    (NML-1164, DESIGN_policy_player §6): `{side: fn(state, menu, side) ->
+    list[float] | None}`. A `player` with NO entry never makes any extra call
+    and is byte-identical to before this seam existed. One WITH an entry
+    always pays for one THROWAWAY `plan_with_rollout(cands=True)` call to name
+    the exact menu the real search will score — Phase 0/1 (menu build) never
+    depends on `top_k`/`horizon`, so this costs one shallow prefilter, not a
+    second deep search — and hands it to the hook (one forward pass). A
+    non-`None` result becomes `cand_logits` on the REAL call below; `None`
+    (the hook declining for this one activation) discards the throwaway call
+    and falls through to the plain call, same as no entry at all."""
     if not state.pool(player, bool(core.knobs().get("hero_attach", True))):
         return {}
     # NML-1142: `AiMissionEval.fit_mode` is per-ACTIVATION on the table and the
@@ -1118,8 +1131,16 @@ def _pick_for(
     # seat, which is the A/B seam described in `play_game`.
     fit = core.has_net() and net_player in (0, player)
     statics = dict(TRAINER_STATICS, fit_mode=True) if fit else TRAINER_STATICS
+    hook = (cand_logits_fn or {}).get(player)
+    logits = None
+    if hook is not None:
+        menu_pick = core.plan_with_rollout(state, player, statics, cands=True)
+        if not menu_pick.get("used"):
+            return {}
+        logits = hook(state, menu_pick["trace"]["cands"], player)
+    extra = {"cand_logits": logits, "policy_mode": policy_mode} if logits is not None else {}
     pick = core.plan_with_rollout(
-        state, player, statics, eps=eps, explore_seed=explore_seed, cands=cands
+        state, player, statics, eps=eps, explore_seed=explore_seed, cands=cands, **extra
     )
     return pick if pick.get("used") else {}
 
@@ -1430,10 +1451,15 @@ def _play_round(
     cap_share: float = 0.0,
     record_cands: bool = False,
     los_model: bool = False,
+    cand_logits_fn: dict[int, Any] | None = None,
+    policy_mode: str | None = None,
 ) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
     dry side hands the tail to the other, and the NEXT round opens with whoever
     did NOT take the last activation.
+
+    `cand_logits_fn` / `policy_mode` are `_pick_for`'s R4 seam, threaded
+    through unchanged to both activation picks below — see its docstring.
 
     `eps` (NML-1158c) is the exploration knob: each activation's `_pick_for`
     draws its coin/index from `seed * EXPLORE_SEED_STRIDE + seq`, a stream of
@@ -1503,12 +1529,12 @@ def _play_round(
             use_cap = nml_core.Rng(seed * CAP_SEED_STRIDE + seq).randf() < cap_share
         planning = cap_core if use_cap else cores[turn]
         pick = _pick_for(planning, state, turn, net_player, eps, explore_seed,
-                         cands=record_cands)
+                         cands=record_cands, cand_logits_fn=cand_logits_fn, policy_mode=policy_mode)
         if not pick:
             other = 2 if turn == 1 else 1
             pick = _pick_for(
                 cap_core if use_cap else cores[other], state, other, net_player, eps, explore_seed,
-                cands=record_cands,
+                cands=record_cands, cand_logits_fn=cand_logits_fn, policy_mode=policy_mode,
             )
             if not pick:
                 break
@@ -1765,8 +1791,17 @@ def play_game(
     cap_share: float = 0.0,
     cap_top_k: int = 6,
     cap_horizon: int = 2,
+    cand_logits_fn: dict[int, Any] | None = None,
+    policy_mode: str | None = None,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
+
+    `cand_logits_fn` / `policy_mode` are the R4 seam (NML-1164,
+    DESIGN_policy_player §6): `{side: fn(state, menu, side) -> list[float] |
+    None}`, threaded to every activation's `_pick_for` — see its docstring
+    for the throwaway-menu-call contract. Both default to `None`, which never
+    touches `_pick_for`'s new branch and is byte-identical to every call
+    written before this seam existed.
 
     `core` may be a `nml_core.Core` to reuse across games (the registries and the
     mechanics maps are the expensive part); its header is re-set per game anyway,
@@ -2348,6 +2383,7 @@ def play_game(
             net_player=net_player, eps=explore, act_cores=act_cores,
             cap_core=cap_core, cap_share=cap_share,
             record_cands=record_cands, los_model=eff_los,
+            cand_logits_fn=cand_logits_fn, policy_mode=policy_mode,
         )
         state, owners = core.playout_seize(state, owners)
         vp = core.vp_round_add(owners, vp)
