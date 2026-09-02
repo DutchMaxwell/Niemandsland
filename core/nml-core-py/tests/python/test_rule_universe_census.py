@@ -104,7 +104,10 @@ def test_census_matrix_red_knob_and_test_gate(mini):
     assert "ghostrule" not in tokens, "a test-gated literal must not be evidence"
 
     lines = census.summary_lines(res)
-    assert "RULES-COVERAGE core-ported        : 1/3  (STAMPED: 1, PARTIAL: 0, MISSING: 1)" in lines
+    assert (
+        "RULES-COVERAGE core-ported        : 1/3"
+        "  (STAMPED: 1, PARTIAL: 0, MISSING: 1, N/A: 0 excluded from 3)"
+    ) in lines
     assert "consumed 1/3 · stamped-only 1 · missing 1" in lines[3]
 
     red = census.census(books, root, hide="Furious")["red"]
@@ -197,6 +200,68 @@ def test_unmapped_registered_aura_never_ported_by_token_sharing(tmp_path):
     assert res["summary"]["core_ported"] == 2
     assert res["summary"]["core_stamped"] == 1
     assert "capped at STAMPED" in census.markdown_report(res)
+
+
+def test_na_names_excluded_from_ported_denominator(tmp_path):
+    """SPEC_block_C_next_2026-09-02.md's census-hygiene bullet: Unique
+    (list-building only) and Swift (already folded into the loader's
+    move-band pass) must land in the N/A class, never MISSING, and the
+    core-ported ratio's own denominator must exclude them - a stale
+    denominator would silently count them as still-unported. "Swift Aura"
+    rides the same N/A verdict through the existing aura-inherits-base pass,
+    with no NA_NAMES entry of its own."""
+    root = tmp_path / "repo"
+    for d in ("assets/solo", "data", "core/nml-core/src", "core/nml-core-py/python"):
+        (root / d).mkdir(parents=True)
+    (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
+        "common": {
+            "Unique": {"primitive": None, "params": {}},
+            "Swift": {"primitive": "Swift", "params": {"negates": "Slow"}},
+            "Swift Aura": {"primitive": None, "params": {}},
+            "Furious": {"primitive": "Furious", "params": {}},
+        },
+        "factions": {},
+    }))
+    (root / "data/encoder_rule_vocab_v1.json").write_text(json.dumps({"unit": [], "weapon": []}))
+    (root / "core/nml-core-py/python/list_to_profile.py").write_text("MOVE_PRIMITIVES = ()\n")
+    (root / "core/nml-core/src/arm.rs").write_text('pub const ARM: &str = "Furious";\n')
+    books = tmp_path / "books" / "gf"
+    books.mkdir(parents=True)
+    (books / "book_a.json").write_text(json.dumps({
+        "name": "Test Faction", "gameSystem": "gf",
+        "specialRules": [
+            {"name": "Unique"}, {"name": "Swift"}, {"name": "Swift Aura"},
+            {"name": "Furious"},
+        ],
+    }))
+    res = census.census(tmp_path / "books", root)
+    rows = res["rows"]
+    assert rows["Unique"]["per_system"]["gf"]["core"] == "N/A"
+    assert rows["Swift"]["per_system"]["gf"]["core"] == "N/A"
+    assert rows["Swift Aura"]["per_system"]["gf"]["core"] == "N/A", (
+        "an aura inherits its base's N/A verdict without its own NA_NAMES entry"
+    )
+    assert rows["Furious"]["per_system"]["gf"]["core"] == "PORTED"
+
+    s = res["summary"]
+    assert s["total"] == 4
+    # Unique, Swift and the inherited Swift Aura all land in N/A - the
+    # inheritance adds its own row to the count, it just needs no NA_NAMES
+    # entry of its own to get there.
+    assert s["core_na"] == 3
+    assert s["core_ported_denominator"] == 1
+    assert s["core_ported"] == 1
+    assert s["core_missing"] == 0, "no N/A name may count as MISSING"
+
+    lines = census.summary_lines(res)
+    ported_line = next(l for l in lines if "core-ported" in l)
+    assert "1/1" in ported_line
+    assert "N/A: 3 excluded from 1" in ported_line
+
+    offenders = res["offenders"]
+    assert offenders[0]["occ_unported"] == 0, (
+        "Unique/Swift/Swift Aura must never count as unported offenders"
+    )
 
 
 def test_cli_prints_summary_and_writes_json(mini, tmp_path, capsys):

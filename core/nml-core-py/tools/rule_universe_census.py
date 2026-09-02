@@ -65,7 +65,25 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 SYSTEMS = ("gf", "aof")
 
-STATUS_RANK = {"PORTED": 3, "STAMPED": 2, "PARTIAL": 1, "MISSING": 0}
+STATUS_RANK = {"PORTED": 3, "STAMPED": 2, "PARTIAL": 1, "MISSING": 0, "N/A": -1}
+
+# Names that are census hygiene, not porting targets (SPEC_block_C_next_
+# 2026-09-02.md's "Census hygiene, not ports" bullet). A MISSING verdict on
+# these reads as "still to port", which is false for both: Unique is
+# list-building only (rules_registry.gd never reads it at runtime, so no
+# resolver arm will ever exist for it); Swift's whole effect (params:
+# {"negates": "Slow"}) is already baked into the move value the loader
+# computes per-unit BEFORE the core ever runs (list_to_profile.py's
+# move-band pass resolves Fast/Slow/Quick/... and their negations into one
+# static `mv` field - Swift is consumed there, not at runtime, so it is not
+# itself a MOVE_PRIMITIVES entry and would never earn PARTIAL either).
+# Rank -1 so real evidence elsewhere always outranks N/A if this table and
+# reality ever disagree.
+NA_NAMES: dict[str, str] = {
+    "Unique": "list-building only, no in-game effect (not a porting target)",
+    "Swift": "already folded into the loader's move-band pass"
+             " (negates Slow before the core ever runs)",
+}
 
 # Primitive -> the registry param keys a resolver on this core actually
 # reads for it (see the module docstring). Absent = trusted whole.
@@ -479,6 +497,8 @@ def is_consumed(primitive: str, name: str, mech: dict, consumed_grants: set) -> 
 def core_status_for(name: str, mech: dict, tokens: dict, bands: set, hide: str | None,
                      consumed_grants: set):
     """(status, note) for one (name, system)."""
+    if name in NA_NAMES:
+        return "N/A", NA_NAMES[name]
     prims = set(mech.get("primitives", set()))
     variants = snake_variants(name)
     if hide and hide in prims:
@@ -691,6 +711,10 @@ def summarize(rows: dict) -> dict:
         "core_stamped": count(lambda r: best_core(r) == "STAMPED"),
         "core_partial": count(lambda r: best_core(r) == "PARTIAL"),
         "core_missing": count(lambda r: best_core(r) == "MISSING"),
+        # census hygiene (NA_NAMES): not a porting target, so not counted in
+        # any ported/unported bucket above and excluded from the denominator
+        # summary_lines prints for them (core_ported_denominator below).
+        "core_na": count(lambda r: best_core(r) == "N/A"),
         "encoder_slot": count(
             lambda r: any(ps["encoder_slot"] for ps in r["per_system"].values())
         ),
@@ -704,6 +728,11 @@ def summarize(rows: dict) -> dict:
             )
         ),
     }
+    # The ported/unported ratio's own denominator: total minus the N/A
+    # (census-hygiene) names, so 212/442 with 2 N/A names reads 212/440,
+    # never 212/442 - a stale denominator would silently count Unique and
+    # Swift as still-unported.
+    summary["core_ported_denominator"] = summary["total"] - summary["core_na"]
     by_system = {}
     for s in SYSTEMS:
         sub = [(n, r) for n, r in rows.items() if s in r["per_system"]]
@@ -766,7 +795,7 @@ def compute_offenders(books: list[dict], rows: dict) -> list:
             if row is None:
                 continue
             st = row["per_system"].get(book["system"], {}).get("core", "MISSING")
-            if st != "PORTED":
+            if st not in ("PORTED", "N/A"):
                 unported.append({"name": name, "core": st, "occ": occ})
         unported.sort(key=lambda e: (-e["occ"], e["name"]))
         out.append(
@@ -935,14 +964,16 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
 def summary_lines(res: dict) -> list[str]:
     s = res["summary"]
     t = s["total"]
+    pd = s["core_ported_denominator"]
     consumed, stamped = s["core_ported"], s["core_stamped"]
     lines = [
         f"RULES-COVERAGE registry-primitive : {s['registry_primitive']}/{t}",
         f"RULES-COVERAGE mechanics-entry    : {s['mechanics_entry']}/{t}",
-        f"RULES-COVERAGE core-ported        : {consumed}/{t}"
-        f"  (STAMPED: {stamped}, PARTIAL: {s['core_partial']}, MISSING: {s['core_missing']})",
-        f"RULES-COVERAGE consumed vs stamped: consumed {consumed}/{t}"
-        f" · stamped-only {stamped} · missing {t - consumed - stamped}",
+        f"RULES-COVERAGE core-ported        : {consumed}/{pd}"
+        f"  (STAMPED: {stamped}, PARTIAL: {s['core_partial']}, MISSING: {s['core_missing']},"
+        f" N/A: {s['core_na']} excluded from {pd})",
+        f"RULES-COVERAGE consumed vs stamped: consumed {consumed}/{pd}"
+        f" · stamped-only {stamped} · missing {pd - consumed - stamped}",
         f"RULES-COVERAGE encoder-slot       : {s['encoder_slot']}/{t}",
         f"RULES-COVERAGE all-layers         : {s['all_layers']}/{t}",
     ]
@@ -1010,6 +1041,9 @@ def markdown_report(res: dict) -> str:
         " full-name token (snake variants of the aura name) is core"
         " evidence.",
         "- Encoder: a slot in `data/encoder_rule_vocab_v1.json` (unit or weapon band).",
+        f"- N/A: census hygiene, not a porting target ({', '.join(sorted(NA_NAMES))}) -"
+        f" excluded from the core-ported ratio's denominator, never counted"
+        f" MISSING or as a faction offender.",
         "",
     ]
 
