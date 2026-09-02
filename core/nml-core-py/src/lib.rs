@@ -333,6 +333,17 @@ impl PyState {
         self.inner.roster.keys.clone()
     }
 
+    /// `SoloController.sim_move_bands(unit)` off THIS state's own per-unit
+    /// table — `(advance, rush)` inches, the same field `mv::step::charge_move`
+    /// reads internally as `state.bands[si].rush`. `plain_move` takes `band_in`
+    /// from its CALLER instead: unlike a charge, a non-charge move's band
+    /// depends on the act's own kind (ADVANCE vs RUSH), so `move_call_gate.py`
+    /// reads this first. `None` for an unknown unit key.
+    fn move_bands(&self, unit: &str) -> Option<(f64, f64)> {
+        let st = &self.inner;
+        st.roster.index.get(unit).map(|&i| (st.bands[i].advance, st.bands[i].rush))
+    }
+
     #[getter]
     fn round(&self) -> i64 {
         self.inner.round
@@ -747,6 +758,67 @@ impl Core {
             si,
             ci,
             st.bands[si].rush,
+            self.knobs.hero_attach,
+            true,
+            nmlcore::mv::FAST_PLANNER_GUARD,
+        );
+        let Some(l) = land else { return to_py(py, &Value::Null) };
+        let mut m = Map::new();
+        m.insert(
+            "movers".into(),
+            Value::Array(
+                l.movers
+                    .iter()
+                    .map(|mv| Value::Array(vec![(mv.unit as i64).into(), (mv.model as i64).into()]))
+                    .collect(),
+            ),
+        );
+        m.insert(
+            "end".into(),
+            Value::Array(
+                l.end
+                    .iter()
+                    .map(|p| Value::Array(p.iter().map(|c| Value::from(*c as f64)).collect()))
+                    .collect(),
+            ),
+        );
+        m.insert("budget_in".into(), Value::from(l.budget_in));
+        m.insert("arc_in".into(), Value::from(l.arc_in));
+        m.insert("remaining_in".into(), Value::from(l.remaining_in()));
+        if let Some(c) = &l.call {
+            let text = nmlcore::mv::entry::canonical_input(c);
+            m.insert("call".into(), serde_json::from_str(&text).unwrap_or(Value::Null));
+        }
+        to_py(py, &Value::Object(m))
+    }
+
+    /// NML-1073 M5 S4 — the table's NON-CHARGE move (ADVANCE/RUSH/the post-melee
+    /// consolidation step) for one unit aimed at `dest` (a world `[x, y, z]`
+    /// point, e.g. the AI act's own recorded `dest`), granted `band_in`.
+    ///
+    /// Same return shape as `charge_move`, so `move_call_gate.py` scores it with
+    /// the identical END/CALL/BUDGET bars. `band_in` is the CALLER's to pick
+    /// (the advance or rush band off the act's own kind) because a plain move,
+    /// unlike a charge, is not always the rush band. `None` when the port
+    /// declines (no board, no models).
+    fn plain_move(
+        &self,
+        py: Python<'_>,
+        state: PyRef<'_, PyState>,
+        unit: &str,
+        dest: &Bound<'_, PyAny>,
+        band_in: f64,
+    ) -> PyResult<Py<PyAny>> {
+        let st = &state.inner;
+        let Some(&si) = st.roster.index.get(unit) else {
+            return to_py(py, &Value::Null);
+        };
+        let land = nmlcore::mv::step::plain_move(
+            st,
+            &self.terrain,
+            si,
+            v3_of(dest)?,
+            band_in,
             self.knobs.hero_attach,
             true,
             nmlcore::mv::FAST_PLANNER_GUARD,
