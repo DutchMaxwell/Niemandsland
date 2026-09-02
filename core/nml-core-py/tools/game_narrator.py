@@ -101,22 +101,41 @@ def moved(act, key):
     return [leg(p, q) for p, q in zip(a, b)] if len(a) == len(b) else [leg(mid(a), mid(b))]
 
 
-def dice_line(rl, bu, au):
+def dice_line(rl, bu, au, key=None, nm=None, crossed=False, inferred=False):
     # BRIEF_NARRFIX I-2: `hits(attack) - hits(defense)` ignores Blast(X)/Deadly(X)
     # — one hit expands into a whole save batch, so the subtraction printed FEWER
     # unsaved than the resolve actually applied (53 activations in 18 of the 20
     # corpus games). The report carries no per-weapon unsaved, so the number is
     # what the state delta applied — models lost — and where the arithmetic would
     # exceed it the volley expanded: say so, never a wrong number.
+    # BRIEF_NARRFIX I-3: the end-of-move dangerous-terrain test is STAMPED an
+    # "attack" roll (sim.rs:2960-2978: target 6, the moving unit, a 1 wounds) and
+    # printed as a phantom attack with no target; a first-roll stamp match IS the
+    # test, attack-kind leftovers in a no-target activation over a dangerous
+    # crossing are inferred, K is the 1s (`dangerous_wounds`, sim.rs:214).
+    terr = set()
+
+    def label(i, x):
+        own = key is not None and x["owner"] in (key, (nm or {}).get(key, key))
+        if crossed and i == 0 and own and x["kind"] == "attack" and x["target"] == 6:
+            terr.add(i)
+            return "dangerous terrain test %dd6: %s -> %d models lost" % (
+                x["count"], x["faces"], sum(f == 1 for f in x["faces"]))
+        if x["kind"] == "attack" and inferred:
+            terr.add(i)
+            return "terrain test (inferred) %dd6: %s -> %d models lost" % (
+                x["count"], x["faces"], sum(f == 1 for f in x["faces"]))
+        return "%s %dd6>=%d %s (%s)" % (x["kind"], x["count"], x["target"],
+                                        x["faces"], x["owner"])
+
+    segs = [label(i, x) for i, x in enumerate(rl)]
+    atk = [x for i, x in enumerate(rl) if i not in terr]
     dead = sum(u["alive"] - au[k]["alive"] for k, u in bu.items() if k in au)
-    naive = max(0, nr.hits(rl, "attack") - nr.hits(rl, "defense"))
+    naive = max(0, nr.hits(atk, "attack") - nr.hits(rl, "defense"))
     unsaved = dead if dead >= naive else "n/a (Blast/Deadly)"
-    return "- dice: %d hits, %d blocks, %s unsaved — %s" % (nr.hits(rl, "attack"),
+    return "- dice: %d hits, %d blocks, %s unsaved — %s" % (nr.hits(atk, "attack"),
                                                             nr.hits(rl, "defense"), unsaved,
-                                                            "; ".join("%s %dd6>=%d %s (%s)"
-                                                                      % (x["kind"], x["count"],
-                                                                         x["target"], x["faces"],
-                                                                         x["owner"]) for x in rl))
+                                                            "; ".join(segs))
 
 
 def narrate(rec, acts, nm, lists):
@@ -163,7 +182,10 @@ def narrate(rec, acts, nm, lists):
                        len(u["positions"])) if lost else "")]
         rl = a["rep"]["rolls"]
         if rl:
-            out.append(dice_line(rl, bu, a["after"]["units"]))
+            crossed = any(nr.crosses_forest(p, q, rec["terrain"], ttype=4) for p, q, d in mv if d > 0.01)
+            chosen = a["menu"][best]
+            out.append(dice_line(rl, bu, a["after"]["units"], key, nm, crossed,
+                                 crossed and not (chosen.get("shoot") or chosen.get("charge"))))
         for tag, ex in (("casualties", ["%s %d->%d models, wounds %d->%d" % (nm.get(k, k), bu[k]["alive"],
                         v["alive"], sum(bu[k]["wounds"]), sum(v["wounds"])) for k, v in
                         a["after"]["units"].items() if (v["alive"], sum(v["wounds"]))

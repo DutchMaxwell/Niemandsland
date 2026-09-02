@@ -175,6 +175,53 @@ def test_unsaved_honours_blast_and_never_drops_below_casualties():
                                                 {"a": {"alive": 3}, "b": {"alive": 2}})
 
 
+def _rush_act(rolls, terrain):
+    # One synthetic RUSH through a dangerous piece: no shoot, no charge — the
+    # only attack-kind roll such an activation can hold is the terrain test.
+    pos = lambda *xs: [[x * 0.0254, 0.0, 0.0] for x in xs]  # noqa: E731
+    unit = lambda p, alive: {"positions": pos(*p), "radii": [], "alive": alive,
+                             "wounds": [0] * alive,
+                             "bands": {"advance": 6.0, "rush": 12.0}}  # noqa: E731
+    rec = {"stem": "fixture", "seed": 1, "dice_seed": 1, "scoring": "?", "terrain": terrain,
+           "winner": 1, "vp": [0, 0], "knobs": {"top_k": 1, "horizon": 1, "movement": "free"},
+           "mission": {"family": "f", "name": "n", "rounds": 1, "deployment": "d",
+                       "objectives_layout": {"positions": [], "placed_by": []}},
+           "rounds_log": [{"owners": [], "vp": [0, 0]}]}
+    act = {"row": {"unit": "a", "kind": 2, "round": 1, "side": 1, "seq": 1,
+                   "cands": {"best": 0}, "intent": None},
+           "menu": [{"unit": "a", "kind": 2, "dest": [0.254, 0.0, 0.0]}],
+           "hand": [(0, 0.5)], "rs": {0: 0.25}, "exp": {"before": 0.0, "after": 0.0},
+           "waits": 0, "own": 0, "up": 0,
+           "before": {"units": {"a": unit((0.0, 1.0, 2.0), 3)}},
+           "after": {"units": {"a": unit((10.0, 11.0), 2)}},
+           "rep": {"rolls": rolls, "log": [], "unported": []}}
+    return rec, [act], {"p1": {"units": []}, "p2": {"units": []}}
+
+
+def test_terrain_test_is_never_printed_as_attack_dice():
+    # BRIEF_NARRFIX I-3: the end-of-move dangerous-terrain test reaches the
+    # record stamped kind "attack" (sim.rs:2960-2978), so a RUSH through
+    # dangerous terrain narrated "attack 3d6>=6" with no target — reviewers
+    # read phantom attack rolls. It must narrate as a terrain test, never as
+    # attack dice; a stamp the record cannot match falls back to the inferred
+    # label, and a genuine attack stays an attack.
+    import game_narrator as gn
+    terrain = [[4, 5.0, 0.0, 6.0, 6.0, 0]]  # dangerous piece astride the move
+    line = lambda rolls, terr: [x for x in gn.narrate(
+        *(lambda t: (t[0], t[1], {"a": "Guards"}, t[2]))(_rush_act(rolls, terr))
+    ) if x.startswith("- dice:")][0]  # noqa: E731
+    roll = [{"kind": "attack", "count": 3, "target": 6, "faces": [1, 6, 3], "owner": "a"}]
+    got = line(roll, terrain)
+    assert "dangerous terrain test 3d6: [1, 6, 3] -> 1 models lost" in got, got
+    assert "attack" not in got, got
+    got = line([dict(roll[0], owner="Unrecorded")], terrain)
+    assert "terrain test (inferred) 3d6: [1, 6, 3] -> 1 models lost" in got, got
+    assert "attack" not in got, got
+    got = line([{"kind": "attack", "count": 3, "target": 4, "faces": [4, 4, 1],
+                 "owner": "a"}], [])
+    assert "attack 3d6>=4 [4, 4, 1] (a)" in got, got
+
+
 def run_tool(game: Path, out: Path):
     return subprocess.run([sys.executable, str(TOOLS / "game_narrator.py"), str(game),
                            "--out", str(out)], capture_output=True, text=True)
