@@ -129,6 +129,19 @@ pub struct Ctx {
     /// Read only by the tray path (`sim::strike_phase`); the EV imagination
     /// never asks who lashes back.
     pub retaliate_hits_per_wound: i64,
+    /// Block C4 — `Deathstrike` / `Self-Destruct`'s death-half
+    /// (`_solo_deathstrike_hits` main.gd:16698-16731, called at :6174 right
+    /// after the Retaliate block): the hits the STRIKER takes for each of this
+    /// unit's models KILLED by the phase's strikes. Stamped in `ctx_for` as the
+    /// SUM of both literals, each registry-gated (`unit_rule_active`) at its
+    /// own `maxi(rating, 1)` off the rule's own rating — a unit carrying both
+    /// pays both, like the table's two primitive loops per chain member
+    /// (main.gd:16709-16720). 0 = the unit carries neither. The attached-hero
+    /// facet of the table's chain loop is not ported: this twin's
+    /// `land_wounds` never kills a hero's models in the defender's strike
+    /// phase. Read only by `sim::strike_phase`, which takes NO tally credit
+    /// from it (main.gd:6174 never touches `_solo_retaliate_credit`).
+    pub death_hits_per_kill: i64,
     // --- NML block B2b, the live-buff fold (`sim::ctx_live`). ZERO on every
     // `ctx_of`, which is what keeps the EV imagination buff-blind exactly like
     // `BattleSim._ctx_of` (it never sets `AiEv.profile_ev`'s `spell_hit_mod`
@@ -824,6 +837,26 @@ fn retaliate_hits_per_wound(reg: &mut Registries, p: &Profile) -> i64 {
     }
 }
 
+/// Block C4 — the death-half of `Deathstrike` / `Self-Destruct`
+/// (`_solo_deathstrike_hits` main.gd:16709-16720): each rule pays
+/// `maxi(rating, 1)` hits PER MODEL KILLED this strike phase, so one unit
+/// stamps the SUM of both literals, each gated by `unit_rule_active` — a
+/// faction whose map fields neither stays silent (the shipped maps field
+/// Deathstrike only in gf goblin_reclaimers/infected_colonies and aof
+/// kingdom_of_angels, Self-Destruct only in gf alien_hives/ratmen_clans).
+/// The rating is the rule's own ("Deathstrike(2)" -> 2, a bare name -> 1),
+/// the `retaliate_hits_per_wound` read; the registry's `rating` param is the
+/// string "X" = the rule's own rating, so no knob override exists here.
+fn death_hits_per_kill(reg: &mut Registries, p: &Profile) -> i64 {
+    let mut hits = 0;
+    for name in ["Deathstrike", "Self-Destruct"] {
+        if unit_rule_active(reg, p, name) {
+            hits += unit_rating(&p.special_rules, name).max(1);
+        }
+    }
+    hits
+}
+
 /// `AiEv.ctx_for` ai_ev.gd:135-165. `models` stays at the live-unit reading;
 /// `BattleSim._ctx_of` overwrites it with the snapshot's `alive` on every call.
 fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
@@ -912,6 +945,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         regen_target_spell: regen_targets.1,
         fatigued: false,
         retaliate_hits_per_wound: retaliate_hits_per_wound(reg, p),
+        death_hits_per_kill: death_hits_per_kill(reg, p),
         hit_mod: 0,
         vs_hit_mod: 0,
         unstoppable_grant: false,
@@ -1610,6 +1644,51 @@ mod tests {
         assert_eq!(pf.shoot[0].surge_attack_low, 6, "unboosted default");
         assert!(pf.melee[0].surge_attack, "but the melee profile gets it");
         assert_eq!(pf.melee[0].surge_attack_low, 6, "Predator Fighter carries no Boost upgrade");
+    }
+
+    /// Block C4 — the death-half field, end to end through the REAL registry:
+    /// the rating is the rule's own (`maxi(rating, 1)`), each literal is
+    /// registry-gated (`unit_rule_active`). gf goblin_reclaimers fields
+    /// Deathstrike, gf alien_hives fields Self-Destruct, robot_legions fields
+    /// neither (a carrier there stays silent). RED (drop a literal from
+    /// `death_hits_per_kill`): its carrier's count falls to 0.
+    const DEATH_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "ds_goblin":{"unit_id":"ds_goblin","name":"DS Goblin","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"goblin_reclaimers",
+        "special_rules":["Deathstrike(2)"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Slasha","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "sd_hive":{"unit_id":"sd_hive","name":"SD Hive","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives",
+        "special_rules":["Self-Destruct(3)"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "ds_bare":{"unit_id":"ds_bare","name":"DS Bare","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"goblin_reclaimers",
+        "special_rules":["Deathstrike"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Slasha","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "ds_nomap":{"unit_id":"ds_nomap","name":"DS Nomap","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":["Deathstrike(2)"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    #[test]
+    fn deathstrike_and_self_destruct_stamp_their_ratings_registry_gated() {
+        let header = read_act_header(DEATH_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let built = |k: &str, reg: &mut Registries| {
+            UnitStatic::build(reg, header.profiles.get(k).expect(k)).ctx.death_hits_per_kill
+        };
+        assert_eq!(built("ds_goblin", &mut reg), 2, "Deathstrike(2)");
+        assert_eq!(built("sd_hive", &mut reg), 3, "Self-Destruct(3)");
+        assert_eq!(built("ds_bare", &mut reg), 1, "a bare name rates maxi(0, 1)");
+        assert_eq!(built("ds_nomap", &mut reg), 0, "no map for the faction — silent");
     }
 
     /// Block B10 — Resistance end to end through the REAL registry
