@@ -346,6 +346,18 @@ pub struct UnitStatic {
     /// `Action::traced` draw (`sim::bounding_bonus_in`) ports its value; this
     /// stamp is the named rule's own evidence, not a simulation input.
     pub bounding: Option<f64>,
+    /// Versatile Reach (solo_controller.gd:1787-1789) — `Some(charge_bonus_in)`
+    /// when the unit carries the rule, i.e. the CHARGE half of the per-activation
+    /// "pick one". The `range_bonus_in` half is NOT stamped: this core models no
+    /// shooting range bonus at all (state.rs:172-176, sim.rs:727-730), so a field
+    /// for it would claim coverage that does not exist.
+    /// "Versatile Reach Aura" is an UNMAPPED-registered name (primitive null, so
+    /// `unit_rule_active` is false for it by construction, rules.rs:213-218); the
+    /// import expands it to the base rule on the bearer AND its attached heroes
+    /// (opr_army_manager.gd:2106-2140, "This model and its unit get Versatile
+    /// Reach", tutorial_board.nml:5423), so the raw-name arm is what makes this
+    /// core independent of that expander rather than a second effect.
+    pub versatile_reach_charge_in: Option<f64>,
     /// `RulesRegistry.unit_rule_active(gu, "Re-Position Artillery")` — the
     /// "Utility Buff" movement primitive's registry gate (block B2).
     pub reposition_artillery_active: bool,
@@ -1354,6 +1366,17 @@ impl UnitStatic {
             } else {
                 None
             },
+            versatile_reach_charge_in: if unit_rule_active(reg, p, "Versatile Reach")
+                || has_special_rule(&p.special_rules, "Versatile Reach Aura")
+            {
+                let map = reg.rules_for(&p.game_system);
+                Some(match map.lookup(&p.faction_folder, "Versatile Reach") {
+                    Some(e) => e.param_f("charge_bonus_in", 2.0),
+                    None => 2.0,
+                })
+            } else {
+                None
+            },
             reposition_artillery_active: unit_rule_active(reg, p, "Re-Position Artillery"),
             hit_and_run_active: unit_rule_active(reg, p, "Hit & Run")
                 || unit_rule_active(reg, p, "Guerrilla")
@@ -1688,6 +1711,51 @@ mod tests {
         assert!(
             un.iter().any(|u| u.rule == "Defensive Growth"),
             "the defense-only facets are reported: {un:?}"
+        );
+    }
+
+    /// Block C (Versatile Reach) end to end through the REAL registry: the
+    /// base rule's `charge_bonus_in` param (`battle_brothers/gf`, identical
+    /// 2.0 on every occurrence) stamps `Some(2.0)`; a profile without either
+    /// name stamps `None`. RED the moment the rule-NAME literal is misspelled
+    /// (the field then falls to `None` on every arm).
+    const VR_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "vr_carrier":{"unit_id":"vr_carrier","name":"VR Carrier","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"battle_brothers","special_rules":["Versatile Reach"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "vr_plain":{"unit_id":"vr_plain","name":"VR Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"battle_brothers","special_rules":["Fearless"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "vr_aura":{"unit_id":"vr_aura","name":"VR Aura","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"battle_brothers","special_rules":["Versatile Reach Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    #[test]
+    fn the_base_rule_stamps_the_registry_charge_bonus_and_a_non_carrier_stamps_none() {
+        let header = read_act_header(VR_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let carrier = header.profiles.get("vr_carrier").expect("vr_carrier");
+        let us = UnitStatic::build(&mut reg, carrier);
+        assert_eq!(
+            us.versatile_reach_charge_in, Some(2.0),
+            "the registry's charge_bonus_in, read off the rule-NAME literal"
+        );
+        let plain = header.profiles.get("vr_plain").expect("vr_plain");
+        let us = UnitStatic::build(&mut reg, plain);
+        assert_eq!(
+            us.versatile_reach_charge_in, None,
+            "no VR name, no stamp — the +4\" range half is not a field at all"
+        );
+    }
+
+    /// The AURA arm: "Versatile Reach Aura" is UNMAPPED-registered
+    /// (`primitive: null`, so `unit_rule_active` is false for it by
+    /// construction) — the raw-name arm is what credits the aura carrier
+    /// without depending on the import's `_expand_auras` having run. RED the
+    /// moment that arm is dropped: the stamp falls to `None`.
+    #[test]
+    fn an_aura_only_carrier_stamps_too() {
+        let header = read_act_header(VR_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let aura = header.profiles.get("vr_aura").expect("vr_aura");
+        let us = UnitStatic::build(&mut reg, aura);
+        assert_eq!(
+            us.versatile_reach_charge_in, Some(2.0),
+            "the raw-name arm makes the core independent of the expander"
         );
     }
 }
