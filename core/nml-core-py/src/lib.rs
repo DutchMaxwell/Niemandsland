@@ -142,8 +142,11 @@ fn arb_plain(a: &Arbitration) -> Value {
 
 /// The pick in the shape the recorder wrote it (`AiActRecorder.finish`
 /// act_recorder.gd:80-82): the dictionary `plan_with_rollout` returned, plus
-/// `trace` and the winning rollout's leaf state in plain form.
-fn pick_plain(p: &Pick) -> Value {
+/// `trace` and the winning rollout's leaf state in plain form. `cands` is the
+/// expert-iteration opt-in (step 1): true appends `trace.cands`, the CONTENT
+/// of every built candidate in build index order — `scored[i].idx` joins —
+/// and leaves every other key exactly where it was.
+fn pick_plain(p: &Pick, cands: bool) -> Value {
     let mut out = Map::new();
     out.insert("used".into(), true.into());
     // NML-1158c: TRUE only when the exploration knob's coin fired on THIS
@@ -210,6 +213,12 @@ fn pick_plain(p: &Pick) -> Value {
                 .collect(),
         ),
     );
+    if cands {
+        trace.insert(
+            "cands".into(),
+            Value::Array(p.cands.iter().map(cand_plain).collect()),
+        );
+    }
     trace.insert("best_idx".into(), p.best_idx.into());
     trace.insert("runner_idx".into(), p.runner_idx.into());
     trace.insert(
@@ -953,7 +962,13 @@ impl Core {
     /// so the coin/index draws below never touch it. `eps <= 0.0` (every call
     /// before this knob existed) takes zero draws in `Search::run` and is
     /// byte-identical to `None`.
-    #[pyo3(signature = (state, player, statics, sig = None, eps = 0.0, explore_seed = 0))]
+    ///
+    /// `cands` is the EXPERT-ITERATION opt-in (step 1): when true, `trace`
+    /// gains `cands` — every built candidate's full content, in build index
+    /// order, each the same `cand_plain` shape `action` uses, joined by
+    /// `trace.scored`'s `idx`. False (every call before this knob existed)
+    /// writes a trace byte-identical to what it always wrote.
+    #[pyo3(signature = (state, player, statics, sig = None, eps = 0.0, explore_seed = 0, cands = false))]
     fn plan_with_rollout(
         &mut self,
         py: Python<'_>,
@@ -963,6 +978,7 @@ impl Core {
         sig: Option<i64>,
         eps: f64,
         explore_seed: i64,
+        cands: bool,
     ) -> PyResult<Py<PyAny>> {
         let act: ActStatics = serde_json::from_value(value_of(statics)?)
             .map_err(|e| Unsupported::new_err(format!("statics: {e}")))?;
@@ -986,7 +1002,7 @@ impl Core {
         let mut sc = Scratch::default();
         let mut xr = GodotRng::new(explore_seed);
         match search.run(&state.inner, player, &mut sc, Some((eps, &mut xr))) {
-            Ok(pick) => to_py(py, &pick_plain(&pick)),
+            Ok(pick) => to_py(py, &pick_plain(&pick, cands)),
             Err(u) => {
                 let mut m = Map::new();
                 m.insert("used".into(), false.into());
