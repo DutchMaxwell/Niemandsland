@@ -45,9 +45,9 @@ pub struct Ctx {
     pub fearless: bool,
     /// `Fear(X)` — the melee WINNER comparison and nothing else
     /// (`AiCombatMath.fear_adjusted_wounds` :338, main.gd:8110-8112). It never
-    /// changes a wound applied, only which side ends up testing morale, so the
-    /// D1 dice path needs it and the EV path — which never asks who won — does
-    /// not.
+    /// changes a wound applied, only which side ends up testing morale, so
+    /// both the D1 dice path (`tray_charge`) and the EV path
+    /// (`expected_melee_morale`) ask who won and both need it.
     pub fear: i64,
     /// `main._solo_unpredictable_rule(striker, true)` :5414-5418 — the melee
     /// form of the Unpredictable die, EITHER variant: the melee-only

@@ -1571,6 +1571,14 @@ fn sighted_profiles_of(
 /// ROUT, and the loser leaves the board: wounds, positions and radii cleared,
 /// `alive` 0. `wound_frac` is deliberately NOT cleared — the GDScript leaves it
 /// standing too.
+///
+/// Fear(X) (GF/AoF Advanced Rules v3.5.1): "This model counts as having dealt
+/// +X wounds when checking who won melee." The GDScript this ports left that
+/// as "a v0 gap, noted" (battle_sim.gd:1449) and so did this port, but the
+/// RESOLVED dice path (`tray_charge`) already adds it — the table itself
+/// (`AiCombatMath.fear_adjusted_wounds`, main.gd:8106-8109/:10035-10038)
+/// always has. Bug fix, not a new knob: each side's own Fear rating lifts
+/// only ITS dealt tally for this comparison, never a wound actually applied.
 fn expected_melee_morale(
     state: &mut State,
     statics: &[UnitStatic],
@@ -1581,10 +1589,12 @@ fn expected_melee_morale(
 ) {
     let dealt_by_su = tu_before - wounds_left(state, ti);
     let dealt_by_tu = su_before - wounds_left(state, si);
-    if dealt_by_su == dealt_by_tu {
+    let score_su = dealt_by_su + statics[state.roster.profile[si]].ctx.fear;
+    let score_tu = dealt_by_tu + statics[state.roster.profile[ti]].ctx.fear;
+    if score_su == score_tu {
         return;
     }
-    let li = if dealt_by_su > dealt_by_tu { ti } else { si };
+    let li = if score_su > score_tu { ti } else { si };
     let ul = &statics[state.roster.profile[li]];
     if state.alive[li] <= 0 || !morale_fails_expected(state, ul, li) {
         return;
@@ -3573,6 +3583,31 @@ mod tests {
             second_wind_round: -1,
             second_wind_uses: 0,
         }
+    }
+
+    /// Fear(X) (GF/AoF v3.5.1): "counts as having dealt +X wounds when
+    /// checking who won melee." Unit 0 (host, Fear(2)) deals 1 wound and
+    /// takes 2 from unit 2 (host, no Fear) — raw tallies say unit 0 loses
+    /// (1 < 2), but 1+2 > 2 means Fear(2) should flip the result. Both units'
+    /// quality is set to fail morale for certain, so `alive == 0` after the
+    /// call marks exactly which side was made to test — and lose.
+    #[test]
+    fn fear_x_lifts_its_own_side_s_tally_in_the_ev_melee_comparison() {
+        let mut st = four_unit_line();
+        st.roster = Rc::new(Roster {
+            keys: st.roster.keys.clone(),
+            index: HashMap::new(),
+            profile: vec![0, 0, 1, 0],
+        });
+        st.wounds[0] = vec![8]; // su_before(10) - 8 = 2 dealt BY the target
+        st.wounds[2] = vec![9]; // tu_before(10) - 9 = 1 dealt BY the Fear unit
+        let statics = vec![
+            UnitStatic { ctx: Ctx { fear: 2, ..Ctx::default() }, quality: 6, ..UnitStatic::default() },
+            UnitStatic { quality: 6, ..UnitStatic::default() },
+        ];
+        expected_melee_morale(&mut st, &statics, 0, 10, 2, 10);
+        assert_eq!(st.alive[0], 1, "the Fear(2) unit dealt 1+2=3 > 2, it must not test morale");
+        assert_eq!(st.alive[2], 0, "the plain unit lost the comparison and must rout");
     }
 
     /// D5-4. `nearest_melee_gap_in` (:8526) measures `_moving_models` on BOTH
