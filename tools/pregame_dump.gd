@@ -18,6 +18,10 @@ extends RefCounted
 ##  * `placement_order` per side = the FINAL placement records in arrival order — the main
 ##    queue then the scout queue, exactly the table's deploy sequence (solo_controller.gd:9038,
 ##    :9071-9083). Vanguard/repair records carry no `section` and are excluded.
+##  * `placement_sequence` = the same final placement records ACROSS both sides, `[side, unit_id]`
+##    in arrival order. The per-side orders cannot express who placed when, and the rulebook's
+##    alternation (GF v3.5.1 p.6) is exactly that cross-side fact — whole-side deployment reads
+##    1,1,1,2,2,2, alternating reads 1,2,1,2. This is the deployment gate's interleave oracle.
 ##  * `records` arrive side-annotated (arena_match annotates at capture time — solo.ai_slot has
 ##    moved on by dump time).
 
@@ -36,6 +40,7 @@ static func write(out_dir: String, army1: String, army2: String, seed_v: int, di
 	var place := {}    # "side|<unit_id>" → last deploy record data with x_m/z_m (final anchor)
 	var pushed := {}   # "side|<unit_id>" → saw the vanguard record
 	var order := {}    # side(int) → [unit_id, ...] final placement records in arrival order
+	var seq: Array = []   # [[side, unit_id], ...] — the CROSS-SIDE arrival order (interleave oracle)
 	var fills := {}    # side(int) → [{transport, cargo}]
 	for r in records:
 		var rec: Dictionary = r
@@ -51,6 +56,7 @@ static func write(out_dir: String, army1: String, army2: String, seed_v: int, di
 			var oid: Array = order.get(side, [])
 			oid.append(str(rec.get("unit_id", uname)))
 			order[side] = oid
+			seq.append([side, str(rec.get("unit_id", uname))])
 		if str(rec.get("why", "")) == "transport fill at deployment":
 			var fl: Array = fills.get(side, [])
 			fl.append({"transport": uname, "cargo": str(rec.get("chosen", "")).substr(6)})
@@ -108,7 +114,8 @@ static func write(out_dir: String, army1: String, army2: String, seed_v: int, di
 		"dice_seed": dice_seed, "layout_seed": layout_seed,
 		"git_head": str(gh[0]).strip_edges() if not gh.is_empty() else "",
 		"armies": {"p1": army1, "p2": army2}, "symmetric": symmetric,
-		"roll_off_attempts": attempts, "opener": opener, "deploy_order": deploy_order, "sides": sides}
+		"roll_off_attempts": attempts, "opener": opener, "deploy_order": deploy_order,
+		"placement_sequence": seq, "sides": sides}
 	DirAccess.make_dir_recursive_absolute(out_dir)
 	var tag := "%s_vs_%s" % [(army1 as String).get_file().get_basename(), (army2 as String).get_file().get_basename()]
 	var path := out_dir.path_join("pregame_%s_s%d.json" % [tag, seed_v])

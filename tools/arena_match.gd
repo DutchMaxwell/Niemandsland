@@ -32,6 +32,11 @@ extends SceneTree
 ##     "ARENA_FAIL rule text missing for <army>" and quits BEFORE any result JSON is written,
 ##     so a corpus runner sees "no arena_*.json" and retries/flags instead of banking a game
 ##     whose description-driven move modifiers were silently off. Unset = unchanged behaviour.
+##   NML_DEPLOY_INTERLEAVE=1 — deploy by the RULEBOOK (GF v3.5.1 p.6): the roll-off winner places
+##     ONE unit, the opponent places one, and the sides alternate until every unit is down (Scouts
+##     in their own alternating phase afterwards, Ambush reserved) — the per-unit path main.gd's
+##     human deployment drives. Unset = the legacy whole-side order (the winner's WHOLE army, then
+##     the other's), byte-identical so every recorded corpus and pregame fixture still reproduces.
 ##   Golden-corpus reproducibility (NML-1073 M0-0b): a capture= run is byte-identical across machines
 ##   ONLY on a WARMED user:// (every *_cache dir below already populated) — a cold box's first run
 ##   fetches assets live and the timing races the dice-tray RNG. Warm every box once before recording;
@@ -502,9 +507,12 @@ func _run() -> void:
 	# armies still stand on their side trays, BEFORE any placement moves models off them.
 	var tray_snap := PregameDump.tray_snapshot(army_manager, solo) if not _dump_dir.is_empty() else {}
 	var _prof_dep_t0 := BattleSim.prof_t0()   # NML-1072: physics-probe deployment, both sides
-	for slot in deploy_order:
-		_deploy_side(main, solo, table, terrain_overlay, int(slot), objectives_v2, _seed + int(slot),
-			int(slot) == deploy_first)
+	if OS.get_environment("NML_DEPLOY_INTERLEAVE") == "1":
+		_deploy_alternating(main, solo, table, terrain_overlay, deploy_order, objectives_v2)
+	else:
+		for slot in deploy_order:
+			_deploy_side(main, solo, table, terrain_overlay, int(slot), objectives_v2, _seed + int(slot),
+				int(slot) == deploy_first)
 	BattleSim.prof_mark("deploy", _prof_dep_t0)
 	await process_frame
 	# Deployment board BEFORE the dice re-seed below, so the capture's frame ticks cannot leak into
@@ -972,7 +980,7 @@ func _import_and_spawn(main: Node, army_manager: Node, fixture: String, player_i
 	return true
 
 
-func _deploy_side(main: Node, solo: Node, table: Node, terrain_overlay: Node, slot: int, objectives_v2: Array, seed_value: int, first := false) -> void:
+func _deploy_side(main: Node, solo: Node, table: Node, terrain_overlay: Node, slot: int, objectives_v2: Array, seed_value: int, first := false, begin_only := false) -> void:
 	solo.ai_slot = slot
 	solo.human_slot = 2 if slot == 1 else 1
 	var w: float = table.table_size.x * 0.3048
@@ -1000,12 +1008,53 @@ func _deploy_side(main: Node, solo: Node, table: Node, terrain_overlay: Node, sl
 	# deploy identically. Until now this was a physics-ONLY probe that also blanket-blocked FOREST and
 	# RUINS — cells the shipped game deploys into — and it missed the DATA-side container/ruin walls.
 	var blocked_tests: Dictionary = AiDeployment.make_blocked_tests(terrain_overlay as Node3D)
+	if begin_only:
+		# The alternating path only PREPARES this side (queues, sections, reserves — the same rng
+		# draws in the same order); the units land one per turn in _deploy_alternating's loop.
+		solo.deploy_begin(zone, objectives_v2, blocked_tests["normal"], blocked_tests["flying"], seed_value)
+		return
 	var res: Dictionary = solo.deploy_army(zone, objectives_v2, blocked_tests["normal"],
 		blocked_tests["flying"], seed_value)
 	for u in solo.ambush_reserve:
 		main._solo_set_unit_visible(u, false)
 	_pregame_probe_hits[slot] = AiDeployment.probe_hits   # NML-1152 §4.3: physics-probe counter
 	printerr("[ARENA] P%d deployed %d units (%d reserve)" % [slot, int(res.get("deployed", 0)), int(res.get("reserved", 0))])
+
+
+## GF v3.5.1 p.6 verbatim, behind NML_DEPLOY_INTERLEAVE=1: "the winner ... places one unit ... the
+## opposing player places one unit ... then the players continue alternating in placing one unit
+## each, until all units have been deployed." Scouts keep their own phase AFTER both main queues are
+## empty (B9) and Ambush units never enter a queue. Drives solo_controller's per-unit entry points
+## (deploy_next_one / deploy_next_scout) — the very ones main.gd's human deployment clicks, so the
+## arena and the table now deploy in the same ORDER, not just to the same spots. ONE SoloController
+## serves both slots here, so a side's deploy state (_deploy_alt) and the acting slot are parked per
+## side and swapped back in around every single placement.
+func _deploy_alternating(main: Node, solo: Node, table: Node, terrain_overlay: Node,
+		deploy_order: Array, objectives_v2: Array) -> void:
+	var alt := {}   # slot(int) → that side's own _deploy_alt (queues, sections, occupied, reserves)
+	for slot in deploy_order:
+		_deploy_side(main, solo, table, terrain_overlay, int(slot), objectives_v2, _seed + int(slot),
+			int(slot) == int(deploy_order[0]), true)
+		alt[int(slot)] = solo._deploy_alt
+		_pregame_probe_hits[int(slot)] = 0   # NML-1152 §4.3: accumulated per placement below
+	for scout_phase in [false, true]:
+		var placed := true
+		while placed:
+			placed = false
+			for slot in deploy_order:
+				solo.ai_slot = int(slot)
+				solo.human_slot = 2 if int(slot) == 1 else 1
+				solo._deploy_alt = alt[int(slot)]
+				var hits0: int = AiDeployment.probe_hits
+				var u: Object = solo.deploy_next_scout() if scout_phase else solo.deploy_next_one()
+				_pregame_probe_hits[int(slot)] = int(_pregame_probe_hits[int(slot)]) \
+					+ AiDeployment.probe_hits - hits0
+				placed = placed or u != null
+	for u in solo.ambush_reserve:
+		main._solo_set_unit_visible(u, false)
+	printerr("[ARENA] alternating deployment (GF v3.5.1 p.6): P%d first, %d + %d units placed" % [
+		int(deploy_order[0]), int((alt[1] as Dictionary).get("deployed", 0)),
+		int((alt[2] as Dictionary).get("deployed", 0))])
 
 
 func _await_main() -> Node:
