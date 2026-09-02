@@ -561,7 +561,11 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
     # them to X on both sides (opr_army_manager.gd:_expand_auras and the
     # loader's twin), so their core status is X's; their own mechanics entry
     # stays primitive-null BY DESIGN (that is why the label keeps the aura
-    # pointer). An aura whose base is not itself a book rule stays as judged.
+    # pointer). Aura rule: an UNMAPPED-registered aura has no primitive and
+    # therefore no params anyone reads, so the base's token alone caps it at
+    # STAMPED - never PORTED by token sharing - unless its OWN full-name
+    # token (snake variants of the aura name) is non-test core evidence.
+    # An aura whose base is not itself a book rule stays as judged.
     for name, u in universe.items():
         if name.endswith(AURA_SUFFIX):
             continue
@@ -582,10 +586,28 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
             base_row = rows.get(base)
             if base_row is not None and s in base_row["per_system"]:
                 base_ps = base_row["per_system"][s]
-                ps["core"] = base_ps["core"]
-                ps["core_note"] = (
-                    f"aura of '{base}' (expanded at import): {base_ps['core_note']}"
-                )
+                unmapped_reg = ps["primitive"] == "UNMAPPED-registered"
+                if unmapped_reg and ps["core"] == "PORTED":
+                    # own full-name token in non-test core: the one way an
+                    # UNMAPPED-registered name may read PORTED
+                    ps["core_note"] = (
+                        f"aura of '{base}' (expanded at import): {ps['core_note']}"
+                    )
+                elif unmapped_reg and base_ps["core"] == "PORTED":
+                    # PORTED means CONSUMED: this entry has no primitive, so
+                    # no params anyone reads - the base's token is not its own
+                    ps["core"] = "STAMPED"
+                    ps["core_note"] = (
+                        f"aura of '{base}' (expanded at import): base is PORTED"
+                        f" ({base_ps['core_note']}) but this entry is"
+                        f" UNMAPPED-registered - no params anyone reads"
+                        f" (aura rule: capped at STAMPED)"
+                    )
+                else:
+                    ps["core"] = base_ps["core"]
+                    ps["core_note"] = (
+                        f"aura of '{base}' (expanded at import): {base_ps['core_note']}"
+                    )
             elif base in universe:
                 ps["core_note"] = (
                     f"aura of '{base}' (expanded at import); base not a book rule"
@@ -970,6 +992,12 @@ def markdown_report(res: dict) -> str:
         f" params map to no consumed role. PARTIAL: only the loader's"
         f" move-band pass (`MOVE_PRIMITIVES`) or the conditional-AP entry"
         f" param reaches the core. MISSING: nothing.",
+        "- Aura rule: an \"X Aura\" rides its base's import-time expansion,"
+        " but an UNMAPPED-registered aura (primitive null) has no params"
+        " anyone reads, so the base's token alone leaves it capped at"
+        " STAMPED - never PORTED by token sharing - unless the aura's own"
+        " full-name token (snake variants of the aura name) is core"
+        " evidence.",
         "- Encoder: a slot in `data/encoder_rule_vocab_v1.json` (unit or weapon band).",
         "",
     ]
