@@ -1617,6 +1617,12 @@ fn strike_phase(
     // BEFORE the landing like the table's `pools_before` (:6146) — overkill
     // wounds past the last model are lost and lash nothing back.
     let pool_before = wounds_left(next, ti);
+    // Block C4 — the death-half snapshots its own count next to the pool: the
+    // table snapshots every chain member's alive count BEFORE the phase's
+    // casualties (main.gd:5968-5970), and the twin's equivalent is the
+    // defender unit's own alive count — nothing else moves `alive[ti]` inside
+    // this phase.
+    let alive_before = next.alive[ti];
     land_wounds(next, ti, w);
     // Block B13 — the lash-back: ONLY wounds that LANDED post-Regeneration
     // count (the table's `landed_on_defender`, :6147-6149), only a striker
@@ -1637,6 +1643,30 @@ fn strike_phase(
             land_wounds(next, si, landed);
             retaliated = unsaved; // _solo_retaliate_credit += rw (main.gd:6171)
         }
+    }
+    // Block C4 — Deathstrike / Self-Destruct death-half (`_solo_deathstrike_hits`
+    // main.gd:16698-16731, called at :6174 immediately after the Retaliate
+    // block): models KILLED by this phase's strikes lash out at the striker,
+    // X hits per killed model with X = `death_hits_per_kill` (the two
+    // literals' summed rating, `maxi(rating, 1)` each). The hits save at the
+    // STRIKER's Shielded-adjusted melee Defense with ap 0 — the same
+    // `retaliate_saves_with_tray` — the wounds land on the striker, and,
+    // unlike Retaliate, there is NO tally credit: main.gd:6174 never touches
+    // `_solo_retaliate_credit`. NON-CHAINING: the wounds land through
+    // `land_wounds` alone, never through a new strike phase.
+    let killed = alive_before - next.alive[ti];
+    if killed > 0 && def.death_hits_per_kill > 0 && next.alive[si] > 0 {
+        let su = &statics[next.roster.profile[si]];
+        let hits = def.death_hits_per_kill * killed;
+        shot.log.push(format!(
+            "Deathstrike/Self-Destruct: {}'s dying models lash out — {} takes {} hits",
+            ut.name, su.name, hits
+        ));
+        let sctx = ctx_of(su, next, si);
+        let (_, landed) = crate::dice::retaliate_saves_with_tray(
+            hits, &sctx, &su.name, tray, &mut shot.rolls,
+        );
+        land_wounds(next, si, landed);
     }
     spend_exchange(next, si, ti, true); // main.gd:6152, per strike phase
     (caused, retaliated)
@@ -5181,6 +5211,69 @@ mod tests {
         let defender_saves = shot.rolls.iter().filter(|r| r.kind == "defense" && r.owner == "Target").count();
         assert_eq!(striker_saves, 1, "exactly the defender's lash-back batch");
         assert_eq!(defender_saves, 1, "the strike's own save batch — no chained counter-lash");
+    }
+
+    // ------------------- block C4: Deathstrike / Self-Destruct, death-half ---
+
+    /// (a) Deathstrike(2) on the defender, the phase lands 4 wounds into
+    /// pools [1,3,1]: the two outer models die, the middle survives on 1
+    /// wound left — the striker faces a 4-die save batch at its own Defense,
+    /// AP 0, the lash lands on the striker, and the returned TALLY credit
+    /// stays 0 (main.gd:6174 touches no `_solo_retaliate_credit`).
+    #[test]
+    fn deathstrike_throws_two_hits_per_killed_model_at_the_striker() {
+        let (mut st, mut statics) = duel(0);
+        statics[1].ctx.death_hits_per_kill = 2;
+        st.wounds[1] = vec![1, 3, 1]; // seed 9 lands 4: exactly the outer two die
+        let mut tray = Tray::seeded(2);
+        let mut shot = ShootResult::default();
+        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, &mut tray, &mut shot);
+        assert_eq!(st.alive[1], 1, "fixture: exactly the two outer models die");
+        let lash = shot.rolls.last().expect("the dying-models save batch");
+        assert_eq!((lash.kind, lash.count, lash.owner.as_str()), ("defense", 4, "Striker"));
+        assert_eq!(lash.target, 4, "the striker's own Defense 4+, AP 0");
+        assert!(wounds_left(&st, 0) < 3, "the lash lands on the striker");
+        assert_eq!(credit, 0, "no tally credit — :6174 never touches _solo_retaliate_credit");
+        assert_eq!(shot.log.last().map(String::as_str),
+            Some("Deathstrike/Self-Destruct: Target's dying models lash out — Striker takes 4 hits"),
+            "the rules-must-log line");
+    }
+
+    /// (b) Deathstrike(2) but NO model dies: the 4 landed wounds soak into
+    /// pools [5,1,1] and every model survives — nothing lashes back, no log
+    /// line. RED when the `killed > 0` guard goes: the block would fire for
+    /// `death_hits_per_kill * 0` and push a "…— 0 hits" line.
+    #[test]
+    fn deathstrike_lashes_nothing_when_no_model_is_lost() {
+        let (mut st, mut statics) = duel(0);
+        statics[1].ctx.death_hits_per_kill = 2;
+        st.wounds[1] = vec![5, 1, 1]; // 4 wounds soak into the first model
+        let mut tray = Tray::seeded(2);
+        let mut shot = ShootResult::default();
+        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, &mut tray, &mut shot);
+        assert_eq!(st.alive[1], 3, "fixture: 3 wounds soak, no model dies");
+        assert_eq!(credit, 0, "nothing to credit");
+        assert!(shot.log.iter().all(|l| !l.contains("dying models")), "nothing logged");
+        assert!(shot.rolls.iter().all(|r| !(r.kind == "defense" && r.owner == "Striker")),
+            "the striker never rolls a save when no model is lost");
+    }
+
+    /// (c) The dying lash is NOT a Retaliate: even with the lash landing on
+    /// the striker, the returned tally credit stays exactly what the Retaliate
+    /// block left it (0 here) — main.gd:6174 runs `_solo_deathstrike_hits`
+    /// without touching `_solo_retaliate_credit`. RED the moment the credit
+    /// line is copied over from the Retaliate block.
+    #[test]
+    fn deathstrike_lash_never_touches_the_retaliate_credit() {
+        let (mut st, mut statics) = duel(0);
+        statics[1].ctx.death_hits_per_kill = 2;
+        let mut tray = Tray::seeded(2);
+        let mut shot = ShootResult::default();
+        let (_, credit) = strike_phase(&statics, &mut st, 0, 1, false, &mut tray, &mut shot);
+        assert!(shot.rolls.iter().any(|r| r.kind == "defense" && r.owner == "Striker"),
+            "fixture: the lash DID fire (pools [1,1,1] lose all three models)");
+        assert!(wounds_left(&st, 0) < 3, "the lash landed on the striker");
+        assert_eq!(credit, 0, "the tally is the Retaliate credit — untouched by Deathstrike");
     }
 
     // ================================================ mutant-killing tests ====
