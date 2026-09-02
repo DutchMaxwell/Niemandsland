@@ -1528,13 +1528,21 @@ def _play_round(
         if cap_core is not None:
             use_cap = nml_core.Rng(seed * CAP_SEED_STRIDE + seq).randf() < cap_share
         planning = cap_core if use_cap else cores[turn]
+        # R4 kwargs ride ONLY when armed: a tool that swaps in its own
+        # `_pick_for`-shaped callable via `forced_picks` (game_narrator,
+        # gen0_replay_one/shards, stats_mode, charge_landing_census) carries
+        # the PRE-seam signature, and an unconditional kwarg would break every
+        # one of them even at `cand_logits_fn=None` — the exact TypeError the
+        # full suite caught (`_pick() got an unexpected keyword argument`).
+        pf_kw = ({"cand_logits_fn": cand_logits_fn, "policy_mode": policy_mode}
+                 if cand_logits_fn is not None or policy_mode is not None else {})
         pick = _pick_for(planning, state, turn, net_player, eps, explore_seed,
-                         cands=record_cands, cand_logits_fn=cand_logits_fn, policy_mode=policy_mode)
+                         cands=record_cands, **pf_kw)
         if not pick:
             other = 2 if turn == 1 else 1
             pick = _pick_for(
                 cap_core if use_cap else cores[other], state, other, net_player, eps, explore_seed,
-                cands=record_cands, cand_logits_fn=cand_logits_fn, policy_mode=policy_mode,
+                cands=record_cands, **pf_kw,
             )
             if not pick:
                 break
