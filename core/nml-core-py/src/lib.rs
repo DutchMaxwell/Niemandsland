@@ -909,6 +909,64 @@ impl Core {
         to_py(py, &Value::Object(out))
     }
 
+    /// The ARRIVAL-time reads for every unit of the header's profile table —
+    /// what `_try_place_reserve_unit` asks the live `GameUnit` and the registry
+    /// for, answered here so the trainer never grows a second reader that can
+    /// drift (the `capture_reads` precedent above).
+    ///
+    /// * `ring_m` — `_reserve_min_enemy_dist_m` (solo_controller.gd:9617-9621):
+    ///   the infiltrator's registry-scoped ring, else the plain 9" Ambush one.
+    /// * `repel_m` — `repel_ambush_dist_m` (:9724-9727), `0.0` without the rule.
+    /// * `beacon` — an "Ambush Beacon" carrier's models project the 6" waiver
+    ///   circle (:9781+); own rule line or item grant, like `unit_carries_rule`.
+    /// * `earliest` — `ambush_earliest_round` (:9832-9835): 1 with Rapid
+    ///   Ambush, else 2 (GF/AoF v3.5.1 p.13, "any round after the first").
+    /// * `flying` — the p.13 difficult-terrain exemption the arrival branches
+    ///   on (:10047), a plain rule-name read.
+    /// * `radius` / `footprint` / `base_r` / `models` — the already-ported
+    ///   deploy geometry (deployment.rs:495/:510), reused unchanged.
+    fn arrival_reads(&mut self, py: Python<'_>) -> PyResult<Py<PyAny>> {
+        let profiles = self.profiles.as_ref().ok_or_else(Core::no_header)?;
+        let reg = self.reg.as_mut().ok_or_else(Core::no_header)?;
+        let base = profiles.base();
+        let mut out = Map::new();
+        for p in &base.list {
+            let us = UnitStatic::build(reg, p);
+            let n = p.model_count.max(1) as usize;
+            let carries = |r: &str| {
+                nmlcore::rules::has_special_rule(&p.special_rules, r)
+                    || nmlcore::rules::has_special_rule(&p.item_grants, r)
+            };
+            let mut m = Map::new();
+            m.insert(
+                "ring_m".into(),
+                if us.infiltrate_min_enemy_dist_in > 0.0 {
+                    (us.infiltrate_min_enemy_dist_in * nmlcore::IN2M).into()
+                } else {
+                    deployment::AMBUSH_MIN_ENEMY_DIST_M.into()
+                },
+            );
+            m.insert("repel_m".into(), (us.repel_ambushers_dist_in * nmlcore::IN2M).into());
+            m.insert("beacon".into(), carries("Ambush Beacon").into());
+            m.insert("earliest".into(), if carries("Rapid Ambush") { 1 } else { 2 }.into());
+            m.insert("flying".into(), (carries("Strider") || carries("Flying")).into());
+            m.insert("radius".into(), deployment::deploy_footprint_radius(n, p.base_radius).into());
+            m.insert("base_r".into(), p.base_radius.into());
+            m.insert("models".into(), (n as i64).into());
+            m.insert(
+                "footprint".into(),
+                Value::Array(
+                    deployment::deploy_footprint_offsets(n, p.base_radius, false)
+                        .iter()
+                        .map(|o| Value::Array(vec![o.0.into(), o.1.into()]))
+                        .collect(),
+                ),
+            );
+            out.insert(p.unit_id.clone(), Value::Object(m));
+        }
+        to_py(py, &Value::Object(out))
+    }
+
     /// `SpellsRegistry.spells_for_unit` spells_registry.gd:62-63 — every
     /// header unit's spell BOOK, by unit id, as the `range_in` of each entry in
     /// book order. The registry keys on (system, faction) alone, so this is NOT
@@ -2167,6 +2225,103 @@ fn deploy_side(
     to_py(py, &serde_json::to_value(&sd).map_err(|e| Unsupported::new_err(e.to_string()))?)
 }
 
+/// A board that blocks nothing — the ARRIVAL fixture's own reading. Its 98
+/// recorded cases were reconstructed from `acts.jsonl`, which carries no
+/// per-arrival terrain probe, and its 2 synthetic cases were dumped off a bare
+/// `main.tscn` whose `_deploy_blocked_normal` answers false everywhere
+/// (`tools/ambush_arrival_dump.gd`). So `board=None` is not a convenience
+/// default: it is the oracle's terrain, stated instead of guessed. The twin's
+/// own self-play passes its real `Board` and gets the real terrain law.
+fn no_terrain() -> Terrain {
+    Terrain::build(&nmlcore::terrain::PlainTerrain {
+        cells: Vec::new(),
+        sandbox: Vec::new(),
+        walls: Vec::new(),
+        cell_params: nmlcore::terrain::CellParams {
+            table_size_feet: [6.0, 4.0],
+            grid_rotation_degrees: 0.0,
+            grid_size_inches: 6.0,
+            inches_to_meters: 0.0254,
+        },
+    })
+}
+
+/// `deployment::arrive_one` (SPEC ambush arrival S3/S5) as the gate's contract
+/// spells it: `arrive_one(zone, objectives, occupied, enemies, own_ring_m,
+/// radius, footprint, base_r, flying) -> [x, z] | None`, `None` = "no legal
+/// spot, the unit stays in reserve". `radius` is the ALREADY-PORTED
+/// `deploy_footprint_radius`, computed by the caller, so the gate and the
+/// trainer hand in the same number.
+///
+/// `board` and `beacons` are appended, never inserted, so the nine positional
+/// arguments `deployment_gate.py --arrival` passes keep meaning what they
+/// meant. `occupied` is BORROWED-and-returned rather than mutated in place:
+/// the Rust side books the chosen spot into it (the table does that inside
+/// `_finish_reserve_arrival`), and the caller reads the booking back off the
+/// returned list so the next unit of the same alternating round sees it.
+#[pyfunction]
+#[pyo3(signature = (zone, objectives, occupied, enemies, own_ring_m, radius, footprint, base_r, flying, board=None, beacons=None))]
+#[allow(clippy::too_many_arguments)]
+fn arrive_one(
+    py: Python<'_>,
+    zone: &Bound<'_, PyAny>,
+    objectives: &Bound<'_, PyAny>,
+    occupied: &Bound<'_, PyAny>,
+    enemies: &Bound<'_, PyAny>,
+    own_ring_m: f64,
+    radius: f64,
+    footprint: &Bound<'_, PyAny>,
+    base_r: f64,
+    flying: bool,
+    board: Option<PyRef<'_, Board>>,
+    beacons: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Py<PyAny>> {
+    let z: [f64; 4] = json_of(zone, "zone")?;
+    let objs: Vec<[f64; 2]> = json_of(objectives, "objectives")?;
+    let mut occ: Vec<deployment::Occupied> = json_of(occupied, "occupied")?;
+    let ene: Vec<deployment::ArrivalEnemy> = json_of(enemies, "enemies")?;
+    let bcn: Vec<deployment::ArrivalBeacon> = match beacons {
+        Some(b) => json_of(b, "beacons")?,
+        None => Vec::new(),
+    };
+    let fp: Vec<[f64; 2]> = json_of(footprint, "footprint")?;
+    let owned;
+    let terrain = match &board {
+        Some(b) => &b.inner,
+        None => {
+            owned = no_terrain();
+            &owned
+        }
+    };
+    let spot = deployment::arrive_one(
+        &Rect::new(z[0], z[1], z[2], z[3]),
+        &objs.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
+        &mut occ,
+        &ene,
+        &bcn,
+        own_ring_m,
+        terrain,
+        radius,
+        &fp.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
+        base_r,
+        flying,
+    );
+    if !spot.0.is_finite() {
+        return Ok(py.None());
+    }
+    to_py(py, &serde_json::json!([spot.0, spot.1]))
+}
+
+/// `_place_unit_at`'s loose-formation drop (solo_controller.gd:10329-10346) as
+/// `deployment::place_unit_models` already ports it: the arriving unit's `n`
+/// models on the fixed 0.04 m / 5-column grid, centred on `spot`. Exposed so
+/// the trainer's round-start arrival does not re-derive the grid in Python.
+#[pyfunction]
+fn place_models(py: Python<'_>, spot: (f64, f64), n: usize) -> PyResult<Py<PyAny>> {
+    let ms = deployment::place_unit_models(spot, n);
+    to_py(py, &Value::Array(ms.iter().map(|m| Value::Array(vec![m.0.into(), m.1.into()])).collect()))
+}
+
 /// The table's per-side FINISH order (solo_controller.gd:9180-9188; the finish
 /// is caller-driven since step 6d): the FIRST finish runs on the first
 /// deployer's units ALONE, its spot-free gate seeing the pre-game tray rows of
@@ -2286,6 +2441,8 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // NML-1152 step 7 — the twin's deployment pipeline for the trainer.
     m.add_function(wrap_pyfunction!(deploy_side, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_finish, m)?)?;
+    m.add_function(wrap_pyfunction!(arrive_one, m)?)?;
+    m.add_function(wrap_pyfunction!(place_models, m)?)?;
     // NML-1140 step 5: the doctrine's choice next to the random-legal layout,
     // plus `objectives::is_legal` so a gate re-checks through the same rule.
     m.add_function(wrap_pyfunction!(doctrine_place, m)?)?;

@@ -239,7 +239,7 @@ def _deploy_arena(
     board: "nml_core.Board",
     objectives: list[list[float]],
     opener: int,
-) -> tuple[list[list[list[float]]], list[list[list[float]]]]:
+) -> tuple[list[list[list[float]]], list[list[list[float]]], set[str]]:
     """The table's pre-game through the step-7 binding: `deploy_side` per side
     with the per-side stream `seed + slot` (arena_match.gd:486-488 — the game
     stream advances NOT), then `deploy_finish` in winner-first order (the FIRST
@@ -273,9 +273,14 @@ def _deploy_arena(
         # A hero rides its host's group — including a host held in reserve,
         # where the slice of an empty list is empty too.
         pos[hero_key] = pos.get(host_key, [])[offset : offset + count]
+    # The reserve KEYS ride out with the positions: `capture` needs them to
+    # mark a unit dormant (battle_sim.gd:1483 asks `unit_in_reserve`), and an
+    # empty placement list is not the same signal — a folded hero of a reserved
+    # host has one too.
     return (
         [pos[u["unit_id"]] for u in units1],
         [pos[u["unit_id"]] for u in units2],
+        {k for slot in ("1", "2") for k in reserved[slot]},
     )
 
 
@@ -324,6 +329,8 @@ def capture(
     objectives: list[list[float]],
     attached: dict[str, list[str]] | None = None,
     attached_to: dict[str, str] | None = None,
+    reserved: set[str] | None = None,
+    earliest: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     """`_capture` (core_selfplay.gd:608-637) through `BattleSim.capture` and
     `BattleSim.state_to_plain(state, false)` — the plain state the search reads.
@@ -397,6 +404,20 @@ def capture(
         }
         if r["shroud"] is not None:
             us[key]["shroud"] = list(r["shroud"])
+        if reserved is not None and key in reserved:
+            # `BattleSim.capture`'s dormant arm (battle_sim.gd:1477-1489,
+            # :1539-1544): ZERO table presence — no positions, no wounds, no
+            # radii, `alive` already 0 — with the strength parked in
+            # `dormant_*` for the arrival step and the earliest round it may
+            # take. A tray node's position must never leak into the board
+            # picture, which is why nothing here is a placeholder.
+            us[key].update(
+                wounds=[],
+                dormant=True,
+                dormant_models=int(u["model_count"]),
+                dormant_wounds=list(u["wounds_max"]),
+                earliest_arrival_round=(earliest or {}).get(key, 2),
+            )
     state = {
         "round": 1,
         "rounds_total": ROUNDS,
@@ -763,6 +784,110 @@ def resolve_menu_los(menu_los: str) -> bool:
 #: from the game stream with ties re-rolled, winner-first finish order, and
 #: the Rust `deploy_side`/`deploy_finish` pipeline (design §3.2-3.3).
 DEPLOYMENT_MODES = ("zone", "arena")
+
+#: `ambush` modes (SPEC_rule_ambush_arrival_2026-09-02 S3b). "off" is the
+#: default and is every corpus written before this knob: a unit set aside by
+#: `deploy_side` as `reserved` sits off-table for the whole game and never
+#: acts, which is the residual `_deploy_arena`'s docstring has been declaring
+#: since step 8. "table" plays the rule — a reserve unit enters the snapshot
+#: DORMANT with its strength parked (battle_sim.gd:1477-1489, :1539-1544) and
+#: ARRIVES at a round start from `earliest_arrival_round` on, through
+#: `deployment::arrive_one` (main.gd:10096-10106, :10419-10485). The knob
+#: exists because turning it on moves every arena game that owns an ambusher,
+#: and a corpus recorded at one fidelity must never be replayed at another.
+AMBUSH_MODES = ("off", "table")
+
+#: `AMBUSH_BEACON_RADIUS_IN` (solo_controller.gd:9766) in metres. The registry
+#: fields no `Ambush Beacon` entry at all (grepped, five books, zero hits), so
+#: `beacon_radius_m`'s `unit_param` would return this fallback for every
+#: carrier anyway — the `HIT_AND_RUN_MOVE_IN` precedent: a constant, named,
+#: with the reason it is one.
+AMBUSH_BEACON_RADIUS_M = 6.0 * IN2M
+
+
+def resolve_ambush(ambush: str) -> bool:
+    """`ambush` as the bit `play_game` branches on. An unknown mode RAISES for
+    the same reason `resolve_dice` does."""
+    if ambush not in AMBUSH_MODES:
+        raise ValueError("ambush must be one of %s, not %r" % (list(AMBUSH_MODES), ambush))
+    return ambush == "table"
+
+
+def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int) -> int:
+    """The table's round-start ambush beat (`main._solo_round_start` :10096-10106
+    through `_solo_alternate_ambush_arrivals` :10419-10485), over the PLAIN
+    state — the same layer `_round_start` already works on.
+
+    Players ALTERNATE, starting with the player that activates next (GF v3.5.1
+    p.13, main.gd:10419-10424), ONE unit per turn (:10453). The arrival zone is
+    the WHOLE table (:10428-10431), `occupied` seeds from every live model of
+    BOTH sides at `radius + 0.005` m (`occupied_from_live_bases` :10196-10214),
+    and a unit with no legal spot simply stays in reserve for a later round
+    (:10019, :10091) — it is never force-placed.
+
+    Arriving is DEPLOYMENT, not an activation: `activated` stays False, so the
+    unit can act the same round (`_finish_reserve_arrival` :10118-10123). The
+    `ambush_arrived_round` stamp is what stops it seizing or contesting this
+    round (`score.rs:60`, `:74-93`). Returns how many units arrived.
+    """
+    units = plain["units"]
+    zone = [-TABLE_W_IN * IN2M / 2.0, -TABLE_D_IN * IN2M / 2.0, TABLE_W_IN * IN2M, TABLE_D_IN * IN2M]
+    objs = [[o[0], o[2]] for o in objectives]
+    live = [(k, u) for k, u in units.items() if not u.get("dormant") and u["positions"]]
+    occ = [
+        {"pos": [p[0], p[2]], "radius": r + 0.005}
+        for _, u in live
+        for p, r in zip(u["positions"], u["radii"])
+    ]
+    queue = {1: [], 2: []}
+    for key, u in units.items():
+        if u.get("dormant") and u.get("earliest_arrival_round", -1) <= round_no:
+            queue[int(u["player"])].append(key)
+    turn, arrived = int(opener), 0
+    while queue[1] or queue[2]:
+        if not queue[turn]:
+            turn = 3 - turn
+            continue
+        key = queue[turn].pop(0)
+        turn = 3 - turn
+        u = units[key]
+        r = reads[key]
+        side = int(u["player"])
+        # A RESERVE enemy projects nothing (main.gd:10523); a reserve beacon
+        # carrier likewise stands nowhere (`beacon_points` :9781+).
+        enemies = [
+            {"pos": [p[0], p[2]], "min_dist_m": reads[k]["repel_m"], "pad_m": rr}
+            for k, ou in live
+            if int(ou["player"]) != side
+            for p, rr in zip(ou["positions"], ou["radii"])
+        ]
+        beacons = [
+            {"pos": [p[0], p[2]], "radius_m": AMBUSH_BEACON_RADIUS_M}
+            for k, ou in live
+            if int(ou["player"]) == side and reads[k]["beacon"]
+            for p in ou["positions"]
+        ]
+        spot = nml_core.arrive_one(
+            zone, objs, occ, enemies, r["ring_m"], r["radius"], r["footprint"],
+            r["base_r"], r["flying"], board, beacons,
+        )
+        if spot is None:
+            continue
+        n = int(u.get("dormant_models", 0))
+        models = nml_core.place_models((spot[0], spot[1]), n)
+        u["positions"] = [[f32(m[0]), 0.0, f32(m[1])] for m in models]
+        u["wounds"] = list(u.get("dormant_wounds", []))
+        u["radii"] = [r["base_r"]] * n
+        u["alive"] = n
+        u["dormant"] = False
+        u["ambush_arrived_round"] = round_no
+        for gone in ("dormant_models", "dormant_wounds", "earliest_arrival_round"):
+            u.pop(gone, None)
+        occ.append({"pos": spot, "radius": r["radius"]})
+        live.append((key, u))
+        arrived += 1
+    return arrived
+
 
 
 def resolve_deployment(deployment: str) -> str:
@@ -1523,6 +1648,7 @@ def play_game(
     dice: str = "expected",
     charge_landing: str = "off",
     movement: str = "rigid",
+    ambush: str = "off",
     sighting: str = "unit",
     los: str = "unit",
     menu_los: str = "planner",
@@ -1748,6 +1874,7 @@ def play_game(
     eff_dice = resolve_dice(dice)
     eff_charge_landing = resolve_charge_landing(charge_landing)
     eff_movement = resolve_movement(movement)
+    eff_ambush = resolve_ambush(ambush)
     eff_sighting = resolve_sighting(sighting)
     eff_los = resolve_los(los)
     eff_menu_los = resolve_menu_los(menu_los)
@@ -2029,7 +2156,7 @@ def play_game(
         # NOTHING else before the first activation.
         roll_attempts = _arena_roll_off(rng)
         opener = 1 if roll_attempts[-1][0] >= roll_attempts[-1][1] else 2
-        pos1, pos2 = _deploy_arena(
+        pos1, pos2, reserved = _deploy_arena(
             seed, units1, units2, list_p1, list_p2, board, objectives, opener
         )
     elif deploy_rng_seed is None:
@@ -2041,7 +2168,16 @@ def play_game(
         pos2 = deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, side)
         deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng)
         deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng)
-    plain = capture(units, pos1 + pos2, reads, board, objectives, attached, attached_to)
+    # The arrival reads are the registry's, taken once off the header the way
+    # `capture_reads` is — never re-derived in Python. Only `ambush="table"`
+    # asks for them, so an "off" game builds byte-identically to every corpus
+    # written before this knob.
+    arrivals = core.arrival_reads() if (arena and eff_ambush) else None
+    plain = capture(
+        units, pos1 + pos2, reads, board, objectives, attached, attached_to,
+        reserved if arrivals is not None else None,
+        {k: v["earliest"] for k, v in arrivals.items()} if arrivals is not None else None,
+    )
     state = core.state_of(plain)
     if eff_los:
         # NML-1160: the deployment sweep. `BattleSim.capture` fills `los` on the
@@ -2061,6 +2197,8 @@ def play_game(
     for round_no in range(1, ROUNDS + 1):
         plain = state.plain()
         _round_start(plain, round_no, profiles, magic)
+        if arrivals is not None:
+            _arrive_reserves(plain, arrivals, board, objectives, opener, round_no)
         state = core.state_of(plain)
         state, opener = _play_round(
             core, state, opener, rng, log, round_no,
@@ -2111,6 +2249,12 @@ def play_game(
             "dice": eff_dice,
             "charge_landing": charge_landing,
             "movement": movement,
+            # SPEC ambush arrival S3b: stamped only under "table", the
+            # `deployment` idiom two keys below — an "off" game is the same
+            # object it was before this knob existed, so every digest and
+            # every recorded corpus stays byte-identical. The absence of the
+            # key IS "off", which is what every corpus so far played.
+            **({"ambush": ambush} if eff_ambush else {}),
             "sighting": eff_sighting,
             # NML-1160: WHICH sight the game played. Stamped only under
             # "model", for the same reason `deployment` is only stamped under
@@ -2342,6 +2486,16 @@ def main(argv: list[str]) -> int:
         "by one clamped delta",
     )
     ap.add_argument(
+        "--ambush",
+        choices=list(AMBUSH_MODES),
+        default="off",
+        help="'table' plays the Ambush arrival — a reserved unit waits off-table "
+        "DORMANT and arrives at a round start from its earliest round on, "
+        "alternating sides; 'off' (default) leaves it in reserve for the whole "
+        "game, which is what every corpus written before this knob carries. "
+        "Only 'arena' deployment sets units aside at all",
+    )
+    ap.add_argument(
         "--sighting",
         choices=list(SIGHTING_MODES),
         default="unit",
@@ -2416,6 +2570,7 @@ def main(argv: list[str]) -> int:
             dice=a.dice,
             charge_landing=a.charge_landing,
             movement=a.movement,
+            ambush=a.ambush,
             sighting=a.sighting,
             net=a.net or None,
             net_player=a.net_player,

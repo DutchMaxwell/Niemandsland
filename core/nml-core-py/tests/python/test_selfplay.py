@@ -873,3 +873,197 @@ def test_f32_is_the_engines_real_t():
     assert sp.f32(0.1) != 0.1
     assert sp._centre_f32([]) == [0.0, 0.0, 0.0]
     assert sp._centre_f32([[1.0, 0.0, 3.0], [3.0, 0.0, 1.0]]) == [2.0, 0.0, 2.0]
+
+
+# --- the AMBUSH arrival knob (SPEC_rule_ambush_arrival_2026-09-02 S3b) --------
+
+#: The one pair in the gate-canon list dir where BOTH sides field an ambusher:
+#: robot_legions' Flesh-Eaters carry Infiltrate (the 3" ring), blessed_sisters'
+#: Pistoleer Sisters carry Ambush (9"). Reserves exist only under the ARENA
+#: pre-game — `deploy_side` is the only path that sets a unit aside.
+AMBUSH_A1 = LISTS / "robot_legions_1500.json"
+AMBUSH_A2 = LISTS / "blessed_sisters_2000.json"
+
+
+def _acted(res):
+    """`unit -> the rounds it was picked in`, off the planner log."""
+    out = {}
+    for row in res["planner_positions"]:
+        out.setdefault(row.get("unit", "?"), set()).add(row.get("round"))
+    return out
+
+
+@pytest.mark.skipif(
+    not (BANK_DIR.is_dir() and AMBUSH_A1.exists() and AMBUSH_A2.exists()),
+    reason="no terrain bank / AI lists on this machine",
+)
+def test_the_ambush_knob_brings_reserves_onto_the_table():
+    """THE RED for S3b, in the shape B4's dice test uses.
+
+    `ambush="off"` is the residual `_deploy_arena`'s docstring has been
+    declaring since step 8: a unit `deploy_side` set aside sits off-table for
+    the whole game and never acts. `ambush="table"` plays the rule instead —
+    the unit waits DORMANT and arrives at a round start from
+    `earliest_arrival_round` on (2 without Rapid Ambush), then acts the SAME
+    round, because arriving is deployment and not an activation
+    (`_finish_reserve_arrival`, solo_controller.gd:10118-10123).
+
+    Both halves are asserted: units that act ONLY with the knob on, and none of
+    them before round 2. Break the round gate (`<= round_no`) and the second
+    assertion catches it; leave `_arrive_reserves` uncalled and the first does.
+    """
+    off = sp.play_game(27, AMBUSH_A1, AMBUSH_A2, REPO, BANK_DIR, deployment="arena")
+    on = sp.play_game(
+        27, AMBUSH_A1, AMBUSH_A2, REPO, BANK_DIR, deployment="arena", ambush="table"
+    )
+    a_off, a_on = _acted(off), _acted(on)
+    new = sorted(set(a_on) - set(a_off))
+    assert new, "no reserve arrived: %d units acted either way" % len(a_on)
+    for key in new:
+        assert min(a_on[key]) >= 2, "%s acted in round %d, before any arrival" % (
+            key, min(a_on[key]),
+        )
+    assert sp.result_digest(off) != sp.result_digest(on), "the knob must move the game"
+    # ...and the knob is honest about itself: absent when off (so every digest
+    # written before it still reproduces), named when on.
+    assert "ambush" not in off["knobs"]
+    assert on["knobs"]["ambush"] == "table"
+
+
+def test_the_arrival_alternates_and_never_force_places():
+    """`_solo_alternate_ambush_arrivals` (main.gd:10419-10485) without a game.
+
+    Three claims, each with its own construction:
+
+    * a unit with NO legal spot stays in reserve and is never force-placed
+      (:10019, :10091) — one occupied disc of 5 m covers the whole 6x4 ft
+      table, so no spot can exist for anyone;
+    * the arrival takes the PARKED strength, clears the tray keys, stamps
+      `ambush_arrived_round` and leaves `activated` alone;
+    * who goes FIRST is the player that activates next (GF v3.5.1 p.13,
+      main.gd:10419-10424) — with a footprint so wide that one unit fills the
+      table, only the opener's side gets a unit down, and that flips with the
+      opener.
+
+    What this test does NOT claim: that the turn FLIPS after each placement.
+    On a symmetric board the flip changes the spots but not, measurably, any
+    law-shaped ordering, so asserting it would mean pinning floats. The
+    alternation is pinned by the game-level test above instead, where both
+    sides' reserves arrive.
+    """
+    board = nml_core.board(
+        {
+            "cells": [], "sandbox": [], "walls": [],
+            "cell_params": {
+                "table_size_feet": [6.0, 4.0], "grid_rotation_degrees": 0.0,
+                "grid_size_inches": 6.0, "inches_to_meters": sp.IN2M,
+            },
+        }
+    )
+    reads = {
+        k: {
+            "ring_m": 0.2286, "repel_m": 0.0, "beacon": False, "flying": False,
+            "radius": 0.05, "footprint": [], "base_r": 0.015, "models": 1,
+        }
+        # "blocker" too: `arrival_reads` answers for EVERY header unit, and
+        # `_arrive_reserves` reads `repel_m`/`beacon` off every live one.
+        for k in ("p1_a", "p2_b", "p1_c", "blocker")
+    }
+
+    arrivers = ("p1_a", "p2_b", "p1_c")
+
+    def plain(occupied_radius, bx=0.0, bz=0.0):
+        us = {
+            k: {
+                "player": 1 if k.startswith("p1") else 2, "positions": [], "wounds": [],
+                "radii": [], "alive": 0, "dormant": True, "dormant_models": 1,
+                "dormant_wounds": [3], "earliest_arrival_round": 2,
+                "ambush_arrived_round": -1, "activated": False,
+            }
+            for k in arrivers
+        }
+        us["blocker"] = {
+            "player": 1, "positions": [[bx, 0.0, bz]], "wounds": [1],
+            "radii": [occupied_radius], "alive": 1, "ambush_arrived_round": -1,
+        }
+        return {"units": us}
+
+    # A blocker whose ring swallows the table: every arriver holds.
+    held = plain(5.0)
+    assert sp._arrive_reserves(held, reads, board, [[0.0, 0.0, 0.0]], 1, 2) == 0
+    for k in arrivers:
+        assert held["units"][k]["dormant"], "%s was force-placed" % k
+        assert held["units"][k]["positions"] == []
+
+    # A pinhead blocker: all three arrive, and the ORDER alternates 1, 2, 1.
+    ok = plain(0.001)
+    assert sp._arrive_reserves(ok, reads, board, [[0.0, 0.0, 0.0]], 1, 2) == 3
+    for k in arrivers:
+        u = ok["units"][k]
+        assert not u["dormant"] and u["alive"] == 1
+        assert u["wounds"] == [3], "the PARKED strength, not a fresh one"
+        assert u["ambush_arrived_round"] == 2
+        assert not u["activated"], "arriving is deployment, not an activation"
+        assert "dormant_models" not in u and "earliest_arrival_round" not in u
+    # WHO GOES FIRST is the law (GF v3.5.1 p.13, main.gd:10419-10424): with a
+    # footprint so wide that ONE unit fills the table, the opener is the only
+    # side that gets a unit down — and that flips with the opener.
+    # 0.48 m: the scan band it leaves on a 6x4 ft table is 0.907 m across,
+    # narrower than the 0.96 m two such units would need between their centres.
+    wide = {k: dict(v, radius=0.48) for k, v in reads.items()}
+    for opener, winner in ((1, "p1_a"), (2, "p2_b")):
+        st = plain(0.001, 5.0, 5.0)
+        assert sp._arrive_reserves(st, wide, board, [[0.0, 0.0, 0.0]], opener, 2) == 1
+        down = [k for k in arrivers if not st["units"][k]["dormant"]]
+        assert down == [winner], "opener %d must place %s first, got %s" % (
+            opener, winner, down,
+        )
+    # ...and the opener reaches the SPOTS, not just who gets one: the same
+    # three reserves on the same board land differently when the other side
+    # chooses first.
+    x, y = plain(0.001, 5.0, 5.0), plain(0.001, 5.0, 5.0)
+    sp._arrive_reserves(x, reads, board, [[0.0, 0.0, 0.0]], 1, 2)
+    sp._arrive_reserves(y, reads, board, [[0.0, 0.0, 0.0]], 2, 2)
+    assert [x["units"][k]["positions"] for k in arrivers] != [
+        y["units"][k]["positions"] for k in arrivers
+    ], "the opener must reach the arrival spots"
+
+
+def test_the_arrival_round_gate_holds_a_unit_back():
+    """`may_arrive_this_round` (solo_controller.gd:9838-9847) through
+    `earliest_arrival_round`: a unit whose earliest round has not come stays
+    dormant, and the SAME unit arrives once it has. Drop the `<= round_no`
+    guard and the first half fails."""
+    board = nml_core.board(
+        {
+            "cells": [], "sandbox": [], "walls": [],
+            "cell_params": {
+                "table_size_feet": [6.0, 4.0], "grid_rotation_degrees": 0.0,
+                "grid_size_inches": 6.0, "inches_to_meters": sp.IN2M,
+            },
+        }
+    )
+    reads = {
+        "p1_a": {
+            "ring_m": 0.2286, "repel_m": 0.0, "beacon": False, "flying": False,
+            "radius": 0.05, "footprint": [], "base_r": 0.015, "models": 2,
+        }
+    }
+    def one():
+        return {
+            "units": {
+                "p1_a": {
+                    "player": 1, "positions": [], "wounds": [], "radii": [], "alive": 0,
+                    "dormant": True, "dormant_models": 2, "dormant_wounds": [3, 2],
+                    "earliest_arrival_round": 2, "ambush_arrived_round": -1,
+                    "activated": False,
+                }
+            }
+        }
+    early = one()
+    assert sp._arrive_reserves(early, reads, board, [], 1, 1) == 0
+    assert early["units"]["p1_a"]["dormant"]
+    late = one()
+    assert sp._arrive_reserves(late, reads, board, [], 1, 2) == 1
+    assert late["units"]["p1_a"]["wounds"] == [3, 2], "the DAMAGED model stays damaged"
+    assert len(late["units"]["p1_a"]["positions"]) == 2
