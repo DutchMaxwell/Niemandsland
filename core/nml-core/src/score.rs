@@ -191,6 +191,43 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v207: does `side` have a referee-eligible unit inside this marker's ring?
+fn holds_now_v207(state: &State, pos: [f64; 3], side: i64) -> bool {
+    (0..state.units()).any(|i| {
+        state.player[i] == side
+            && can_hold_marker(state, i, state.round)
+            && control_gap_in(state, i, pos) <= OBJECTIVE_CONTROL_IN + CONTROL_EPS
+    })
+}
+
+/// v207 control at one marker: as `objective_p`, but the nobody-projects
+/// fallback gives a hard 1/0 only while the owner holds the ring now; else 0.5.
+fn objective_p_v207(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = state.objectives[obj_index];
+    let mut mine = 0.0f64;
+    let mut theirs = 0.0f64;
+    for i in 0..state.units() {
+        let p = presence(state, i, obj.pos, threat_of(incoming, i));
+        if state.player[i] == player { mine += p; } else { theirs += p; }
+    }
+    if mine + theirs > 0.0 { return mine / (mine + theirs); }
+    if obj.owner == 0 { return 0.5; }
+    let held = holds_now_v207(state, obj.pos, obj.owner);
+    if obj.owner == player { return if held { 1.0 } else { 0.5 }; }
+    if held { 0.0 } else { 0.5 }
+}
+
+/// v207 of `score_hand`: destroy missions keep the frozen grip math verbatim.
+fn score_hand_v207(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() { return 0.5; }
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) { return score_hand(state, player, incoming); }
+    let mut total = 0.0f64;
+    for i in 0..state.objectives.len() {
+        total += objective_p_v207(state, i, player, incoming);
+    }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +238,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        207 => score_hand_v207(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
