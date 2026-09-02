@@ -1657,6 +1657,7 @@ def play_game(
     sighting: str = "unit",
     los: str = "unit",
     menu_los: str = "planner",
+    deep_menu_los: str | None = None,
     engage_fold: bool = True,
     cond_ap: bool | None = None,
     vocab_version: int | None = None,
@@ -1966,9 +1967,19 @@ def play_game(
         deep_core = nml_core.load(str(repo_root))
         if net is not None:
             deep_core.load_net(str(net), blend=fit_blend, mode=fit_mode)
+        # NML-1161b: the DEEP seat may also carry its own `menu_los`. It is the
+        # first knob of this seam that is not a search depth, and it works for
+        # one reason: `Tuning` is derived per CORE (`plan::tuning_of` off the
+        # header), and `_play_round` plans the acting seat on ITS core while
+        # both seats still RESOLVE on the base one. So the two seats differ in
+        # the MENU and in nothing else — which is what makes a `menu_los` A/B a
+        # STRENGTH measurement rather than the impact measurement a state-level
+        # knob like `los` can give. `None` leaves the base value on both, which
+        # is every caller written before this.
+        d_menu_los = eff_menu_los if deep_menu_los is None else resolve_menu_los(deep_menu_los)
         deep_core.set_header(
             {"profiles": profiles, "terrain": terrain,
-             "knobs": dict(knobs, top_k=d_top_k, horizon=d_horizon)}
+             "knobs": dict(knobs, top_k=d_top_k, horizon=d_horizon, menu_los=d_menu_los)}
         )
         if legacy_source_qd:
             deep_core.set_encoder_source_qd(SOURCE_DATA_QUALITY, SOURCE_DATA_DEFENSE)
@@ -1978,11 +1989,16 @@ def play_game(
         # NML-1147a pattern: the stamp rides ONLY a game whose deep pair parted
         # from the base pair — an equal-knobs deep game digests byte-identically
         # to a plain game, stamp included.
-        if (d_top_k, d_horizon) != (eff_top_k, eff_horizon):
-            seat_knobs = {
-                "p1": {"top_k": d_top_k, "horizon": d_horizon},
-                "p2": {"top_k": eff_top_k, "horizon": eff_horizon},
-            }
+        if (d_top_k, d_horizon, d_menu_los) != (eff_top_k, eff_horizon, eff_menu_los):
+            deep_stamp: dict[str, Any] = {"top_k": d_top_k, "horizon": d_horizon}
+            base_stamp: dict[str, Any] = {"top_k": eff_top_k, "horizon": eff_horizon}
+            # NML-1161b, NML-1147a pattern: the MENU half of the stamp rides
+            # only a game whose two seats actually parted on it, so a
+            # depth-only A/B records the exact object it always did.
+            if d_menu_los != eff_menu_los:
+                deep_stamp["menu_los"] = "resolve" if d_menu_los else "planner"
+                base_stamp["menu_los"] = menu_los
+            seat_knobs = {"p1": deep_stamp, "p2": base_stamp}
             if deep_player == 2:
                 seat_knobs["p1"], seat_knobs["p2"] = seat_knobs["p2"], seat_knobs["p1"]
     # EVAL-VARIANT seam (evolved-eval lane step 2): `deep_player`'s
