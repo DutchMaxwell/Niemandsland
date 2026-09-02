@@ -204,6 +204,10 @@ def main(argv: list[str]) -> int:
             top_k=a.top_k, horizon=a.horizon, hero_attach=hero_attach,
             engage_fold=eff_engage_fold, cond_ap=eff_cond_ap,
             vocab_version=eff_vocab_version,
+            # W5a: this gate holds the fast trainer to a FIXED Godot
+            # recording, which never moves — pin the pre-flip knobs so
+            # play_game()'s own defaults changing does not move `got`.
+            **sp.LEGACY_FIDELITY_KNOBS,
         )
         seconds.append(time.perf_counter() - t0)
         total += 1

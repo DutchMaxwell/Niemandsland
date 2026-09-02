@@ -105,7 +105,9 @@ def _atomic_write_json(path: Path, obj: dict) -> None:
 #: with a header that correctly says so, which is the only reason it was never
 #: caught by a gate.
 FIDELITY_DEFAULTS = {
-    "charge_gate": "off",
+    # W5a (DEFECT_LEDGER row 28): "table" is play_game()'s own default now —
+    # this driver starts FRESH corpora, so it gets the evidence-backed set too.
+    "charge_gate": "table",
     "hero_attach": "off",
     "dice": "expected",
     "charge_landing": "off",

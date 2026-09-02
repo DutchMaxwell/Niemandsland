@@ -53,6 +53,11 @@ GAME = {
     "charge_landing": "table", "movement": "rigid", "sighting": "model",
     "cond_ap": True, "objectives": "rulebook", "deployment": "arena",
     "dice_seed": SEED, "sidecars": False,
+    # W5a: the five OTHER play_game() defaults that just moved, pinned to the
+    # legacy reading this file's fixed harness always played — `cast_fold`
+    # itself stays the free variable, set explicitly per call below.
+    "menu_wide": "off", "menu_los": "planner", "los": "unit",
+    "hero_last": False, "ambush": "off",
 }
 
 
@@ -86,7 +91,8 @@ def test_the_trainer_default_is_off():
 
 @pytest.mark.skipif(_lists_missing(), reason="terrain bank / ai_lists not present")
 def test_a_default_game_stamps_no_cast_fold_key():
-    res = sp.play_game(SEED, str(ARMY1), str(ARMY2), str(REPO), str(BANK_DIR), None, **GAME)
+    res = sp.play_game(SEED, str(ARMY1), str(ARMY2), str(REPO), str(BANK_DIR), None,
+                       cast_fold=False, **GAME)
     assert "cast_fold" not in res["knobs"]
 
 
@@ -95,7 +101,8 @@ def test_the_teachers_casters_are_joined_heroes_and_never_cast_today():
     """The measurement, reproduced in one game: the list carries a Caster, it is
     granted tokens, and the game books zero casts. This is the RED — it must
     keep passing for as long as the trainer records with the fold off."""
-    res = sp.play_game(SEED, str(ARMY1), str(ARMY2), str(REPO), str(BANK_DIR), None, **GAME)
+    res = sp.play_game(SEED, str(ARMY1), str(ARMY2), str(REPO), str(BANK_DIR), None,
+                       cast_fold=False, **GAME)
     magic = res.get("magic") or {}
     assert sum((magic.get("casters") or {}).values()) > 0, "the fixture list must carry a Caster"
     assert sum((magic.get("granted") or {}).values()) > 0, "and it must be granted tokens"
@@ -111,7 +118,8 @@ def test_cast_fold_changes_a_game_that_has_a_joined_caster(monkeypatch):
     turns it on. If this ever passes with identical results the knob is not
     reaching `sim::caster_of`."""
     monkeypatch.setitem(sp.TRAINER_KNOBS, "seam_cast", True)
-    off = sp.play_game(SEED, str(ARMY1), str(ARMY2), str(REPO), str(BANK_DIR), None, **GAME)
+    off = sp.play_game(SEED, str(ARMY1), str(ARMY2), str(REPO), str(BANK_DIR), None,
+                       cast_fold=False, **GAME)
     on = sp.play_game(
         SEED, str(ARMY1), str(ARMY2), str(REPO), str(BANK_DIR), None, cast_fold=True, **GAME
     )

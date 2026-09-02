@@ -60,12 +60,16 @@ def test_default_is_byte_identical():
     """Passing nothing must leave the pre-step game untouched: the FULL result
     digest equals the digest captured before the step, and no new key rides
     anywhere — not on the rows, not in `rounds_log`, not in `knobs`."""
+    # W5a: pinned to the legacy fidelity knobs — this test is about
+    # record_aux/cap_share, not the shipped-defaults flip, so it keeps the
+    # ORIGINAL vintage pin instead of moving it for an unrelated reason.
     core = nml_core.load(str(REPO))
-    res = sp.play_game(27, ARMY1, ARMY2, REPO, BANK_DIR, core, **FAST)
+    res = sp.play_game(27, ARMY1, ARMY2, REPO, BANK_DIR, core,
+                       **FAST, **sp.LEGACY_FIDELITY_KNOBS)
     assert sp.result_digest(res) == DEFAULT_27_DIGEST
     assert sp.result_digest(
         sp.play_game(27, ARMY1, ARMY2, REPO, BANK_DIR, core,
-                     record_aux=False, cap_share=0.0, **FAST)
+                     record_aux=False, cap_share=0.0, **FAST, **sp.LEGACY_FIDELITY_KNOBS)
     ) == DEFAULT_27_DIGEST
     assert all("cap" not in row for row in res["planner_positions"])
     assert all("alive" not in e and "wounds" not in e for e in res["rounds_log"])
@@ -105,14 +109,19 @@ def test_cap_share_marks_its_rows():
     `CAP_27_FIRED` of seed 27's activations, play a DIFFERENT game than the
     default (digest, without relying on the stamp), stamp `knobs["cap_share"]`
     (the NML-1147a pattern) and replay byte-identically from the seed."""
+    # W5a: pinned to the legacy fidelity knobs — CAP_27_FIRED was measured
+    # under them, and this test is about cap_share, not the flip.
     core = nml_core.load(str(REPO))
-    base = sp.play_game(27, ARMY1, ARMY2, REPO, BANK_DIR, core, **FAST)
-    cap = sp.play_game(27, ARMY1, ARMY2, REPO, BANK_DIR, core, cap_share=0.25, **FAST)
+    base = sp.play_game(27, ARMY1, ARMY2, REPO, BANK_DIR, core,
+                        **FAST, **sp.LEGACY_FIDELITY_KNOBS)
+    cap = sp.play_game(27, ARMY1, ARMY2, REPO, BANK_DIR, core, cap_share=0.25,
+                       **FAST, **sp.LEGACY_FIDELITY_KNOBS)
     rows = cap["planner_positions"]
     assert rows and all("cap" in row for row in rows)
     assert sum(1 for row in rows if row["cap"]) == CAP_27_FIRED
     assert sp.result_digest(cap) != sp.result_digest(base)
     assert cap["knobs"]["cap_share"] == 0.25
     assert "cap_share" not in base["knobs"]
-    again = sp.play_game(27, ARMY1, ARMY2, REPO, BANK_DIR, core, cap_share=0.25, **FAST)
+    again = sp.play_game(27, ARMY1, ARMY2, REPO, BANK_DIR, core, cap_share=0.25,
+                         **FAST, **sp.LEGACY_FIDELITY_KNOBS)
     assert sp.result_digest(cap) == sp.result_digest(again)

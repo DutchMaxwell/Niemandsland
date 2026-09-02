@@ -65,10 +65,14 @@ def _digest_without_stamps(result: dict) -> str:
 def test_deep_default_is_byte_identical():
     """`deep_player=0` — passed and defaulted — must leave the pre-knob game
     untouched: same seed, RAW result digest equal to the vintage pin."""
+    # W5a: pinned to the legacy fidelity knobs — this test is about
+    # deep_player, not the shipped-defaults flip, so it keeps the ORIGINAL
+    # vintage pin instead of moving it for an unrelated reason.
     core = nml_core.load(str(REPO))
-    base = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core, **FAST)
+    base = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
+                        **FAST, **sp.LEGACY_FIDELITY_KNOBS)
     explicit = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
-                            deep_player=0, **FAST)
+                            deep_player=0, **FAST, **sp.LEGACY_FIDELITY_KNOBS)
     assert sp.result_digest(base) == SEED_27_FAST_DIGEST
     assert sp.result_digest(explicit) == SEED_27_FAST_DIGEST
 
@@ -78,9 +82,12 @@ def test_deep_equal_knobs_digest_byte_identical():
     """A deep game whose deep pair EQUALS the base pair must digest exactly
     what the pre-change code digested: the second core is built and planned
     on, so the pin can only hold if that core really sees the same header."""
+    # W5a: pinned to the legacy fidelity knobs — see test_deep_default_is_
+    # byte_identical above.
     core = nml_core.load(str(REPO))
     r = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
-                     deep_player=1, deep_top_k=2, deep_horizon=1, **FAST)
+                     deep_player=1, deep_top_k=2, deep_horizon=1,
+                     **FAST, **sp.LEGACY_FIDELITY_KNOBS)
     assert sp.result_digest(r) == SEED_27_FAST_DIGEST
     assert "knobs_by_seat" not in r  # the stamp rides only a parted pair
 
@@ -164,9 +171,12 @@ def test_two_cores_give_two_menus_on_one_state():
 def test_deep_menu_los_default_is_byte_identical():
     """`deep_menu_los=None` (every caller written before this) leaves the deep
     core on the base value: the equal-pair pin still holds, stamp included."""
+    # W5a: pinned to the legacy fidelity knobs — see test_deep_default_is_
+    # byte_identical above.
     core = nml_core.load(str(REPO))
     r = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
-                     deep_player=1, deep_top_k=2, deep_horizon=1, **FAST)
+                     deep_player=1, deep_top_k=2, deep_horizon=1,
+                     **FAST, **sp.LEGACY_FIDELITY_KNOBS)
     assert sp.result_digest(r) == SEED_27_FAST_DIGEST
     assert "knobs_by_seat" not in r
 
@@ -177,13 +187,18 @@ def test_deep_menu_los_parts_the_two_seats_on_the_trainers_own_sight():
     has always had — an empty `los` row and a centre-to-centre `los_pairs`),
     the DEEP seat on the LOS-aware menu and the BASE seat on the old one. The
     game must part, and both seats' resolved `menu_los` must be stamped."""
+    # W5a: every OTHER knob pinned to legacy (`LEGACY_FIDELITY_KNOBS` already
+    # carries `los="unit"`/`menu_los="planner"`) — the split's p2 stays
+    # "planner" (asserted below), whichever way play_game()'s own defaults
+    # move next.
     core = nml_core.load(str(REPO))
     both = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                         deep_player=1, deep_top_k=2, deep_horizon=1,
-                        dice="table", los="unit", **FAST)
+                        dice="table", **FAST, **sp.LEGACY_FIDELITY_KNOBS)
     split = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                          deep_player=1, deep_top_k=2, deep_horizon=1,
-                         dice="table", los="unit", deep_menu_los="resolve", **FAST)
+                         dice="table", deep_menu_los="resolve",
+                         **FAST, **sp.LEGACY_FIDELITY_KNOBS)
     assert _digest_without_stamps(both) != _digest_without_stamps(split)
     assert split["knobs_by_seat"] == {
         "p1": {"top_k": 2, "horizon": 1, "menu_los": "resolve"},
@@ -225,13 +240,17 @@ def test_the_per_seat_menu_knob_is_a_no_op_under_los_model():
 def test_deep_menu_wide_plays_and_parts_the_two_seats():
     """A per-seat wide-menu game must PLAY — the BASE core has to resolve the
     DEEP seat's moving shot — and both seats' resolved `menu_wide` is stamped."""
+    # W5a: every OTHER knob pinned to legacy (`LEGACY_FIDELITY_KNOBS` already
+    # carries `los="unit"`/`menu_wide="off"`) — the split's p2 stays "off"
+    # (asserted below), whichever way play_game()'s own defaults move next.
     core = nml_core.load(str(REPO))
     both = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                         deep_player=1, deep_top_k=2, deep_horizon=1,
-                        dice="table", los="unit", **FAST)
+                        dice="table", **FAST, **sp.LEGACY_FIDELITY_KNOBS)
     split = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
                          deep_player=1, deep_top_k=2, deep_horizon=1,
-                         dice="table", los="unit", deep_menu_wide="table", **FAST)
+                         dice="table", deep_menu_wide="table",
+                         **FAST, **sp.LEGACY_FIDELITY_KNOBS)
     assert _digest_without_stamps(both) != _digest_without_stamps(split)
     assert split["knobs_by_seat"] == {
         "p1": {"top_k": 2, "horizon": 1, "menu_wide": "table"},
