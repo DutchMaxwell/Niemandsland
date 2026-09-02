@@ -669,6 +669,7 @@ impl Core {
         m.insert("dangerous".into(), self.knobs.dangerous.into());
         m.insert("engage_fold".into(), self.knobs.engage_fold.into());
         m.insert("rule_vocab_version".into(), self.knobs.rule_vocab_version.into());
+        m.insert("eval_variant".into(), self.knobs.eval_variant.into());
         to_py(py, &Value::Object(m))
     }
 

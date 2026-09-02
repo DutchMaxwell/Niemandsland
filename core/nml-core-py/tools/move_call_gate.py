@@ -32,8 +32,18 @@ was always going to move on to a different final resting point than its
 recorded `planned` — that is not a miss, it is the recording predating the
 trim. Such models are excused from END as "trimmed", counted separately.
 
+THE GATE (S5a). END scores the port's landing against the recorded PLAN
+call's `planned`, which the recorder writes BEFORE `_finalize_placement`
+(solo_controller.gd:6371) ever runs. So every post-plan correction the port
+grows — the bounds clamp, the overlap push, later the terrain projection and
+the coherency pull — must READ AS A MISS on END even when it is exactly what
+the table did. FINAL is the bar that answers the gate: the port's landing
+against the NEXT recorded act's own per-model positions, i.e. where the table
+really left the models once its whole placement chain had run. END stays in
+the report as the pre-gate reading; `--final` makes FINAL the pass criterion.
+
 THE RED. `--red-shift` moves every RECORDED endpoint 0.06" and changes
-nothing else, same as the charge gate's.
+nothing else, same as the charge gate's — it damages BOTH bars.
 
     PYTHONPATH=<module> python core/nml-core-py/tools/move_call_gate.py \\
         --ref ~/selfplay_out/qbg_ref --limit 3
@@ -103,7 +113,7 @@ def score_end(got_end: list, want_planned: list, want_trails: list | None,
 
 
 def run(ref: Path, repo: str, limit: int, red_shift: bool, report_only: bool,
-        engage_fold: str = "auto", cond_ap: str = "auto") -> int:
+        engage_fold: str = "auto", cond_ap: str = "auto", final: bool = False) -> int:
     games = sorted(d for d in ref.iterdir()
                    if d.is_dir() and (d / "moves_calls.jsonl").exists())
     if limit:
@@ -113,8 +123,10 @@ def run(ref: Path, repo: str, limit: int, red_shift: bool, report_only: bool,
         return 1
 
     t = {k: 0 for k in ("acts", "no_call", "declined", "end_equal", "call_equal", "budget_equal",
-                        "models", "models_equal", "models_trimmed", "acts_all_trimmed")}
+                        "models", "models_equal", "models_trimmed", "acts_all_trimmed",
+                        "fin", "fin_equal", "fin_models", "fin_models_equal", "fin_unknown")}
     worst = 0.0
+    fin_worst = 0.0
     reasons: dict[str, int] = {}
     firsts: list[str] = []
     vintage_seen: set[tuple[bool, bool]] = set()
@@ -140,7 +152,7 @@ def run(ref: Path, repo: str, limit: int, red_shift: bool, report_only: bool,
                          "knobs": dict(head.get("knobs", {}), hero_attach=True,
                                        charge_landing=True, movement=True,
                                        engage_fold=eff_engage_fold)})
-        for act in lines:
+        for idx, act in enumerate(lines):
             k = int(act["act"])
             a = (act.get("pick") or {}).get("action") or {}
             kind = int(a.get("kind", -1))
@@ -178,6 +190,28 @@ def run(ref: Path, repo: str, limit: int, red_shift: bool, report_only: bool,
                 t["call_equal"] += 1
             else:
                 reasons[why.split(":")[0]] = reasons.get(why.split(":")[0], 0) + 1
+            # FINAL — where the table's WHOLE placement chain left the models,
+            # read off the next act's own snapshot (the same source check C POS
+            # uses in dice_gate.py). World metres on both sides, own models only
+            # (`got["end"]` lists the unit's models first, then attached heroes).
+            own = (act["state"]["units"].get(a["unit"]) or {}).get("positions") or []
+            nxt = (lines[idx + 1]["state"]["units"].get(a["unit"]) or {}) \
+                if idx + 1 < len(lines) else {}
+            rest = nxt.get("positions") or []
+            if not own or len(rest) != len(own) or len(got["end"]) < len(own):
+                t["fin_unknown"] += 1
+            else:
+                t["fin"] += 1
+                shift = 0.06 * IN2M if red_shift else 0.0
+                gaps = [max(abs(g[0] - (w[0] + shift)), abs(g[2] - (w[2] + shift))) / IN2M
+                        for g, w in zip(got["end"], rest)]
+                t["fin_models"] += len(gaps)
+                t["fin_models_equal"] += sum(1 for g in gaps if g <= BAR_IN)
+                fin_worst = max(fin_worst, max(gaps))
+                if max(gaps) <= BAR_IN:
+                    t["fin_equal"] += 1
+                else:
+                    reasons["final"] = reasons.get("final", 0) + 1
             end = [[(p[0] / IN2M) + half[0], (p[2] / IN2M) + half[1]] for p in got["end"]]
             pl = want.get("planned") or []
             if len(pl) != len(end):
@@ -204,7 +238,7 @@ def run(ref: Path, repo: str, limit: int, red_shift: bool, report_only: bool,
                                   % (d.name, k, gap, (" — call: " + why) if why else ""))
 
     end_acts = t["acts"] - t["acts_all_trimmed"]
-    label = "GATE S4 plain move"
+    label = "GATE S4 plain move (scored on %s)" % ("FINAL" if final else "END")
     if red_shift:
         label = "RED S4 --red-shift (every recorded endpoint moved 0.06\")"
     print()
@@ -215,6 +249,10 @@ def run(ref: Path, repo: str, limit: int, red_shift: bool, report_only: bool,
           "every scored model within %.2f\"" % (t["end_equal"], end_acts, t["acts_all_trimmed"], BAR_IN))
     print("        : %d/%d individual models within the bar; %d trimmed models excused; worst act %.4f\""
           % (t["models_equal"], t["models"], t["models_trimmed"], worst))
+    print("  FINAL : %d/%d acts (%d unscorable) put every model within %.2f\" of the NEXT act's "
+          "own snapshot" % (t["fin_equal"], t["fin"], t["fin_unknown"], BAR_IN))
+    print("        : %d/%d individual models within the bar; worst act %.4f\""
+          % (t["fin_models_equal"], t["fin_models"], fin_worst))
     print("  CALL  : %d/%d acts build the plan_unit_step call the table recorded"
           % (t["call_equal"], t["acts"]))
     print("  BUDGET: %d/%d acts grant a band the recorded ladder actually tried"
@@ -227,11 +265,12 @@ def run(ref: Path, repo: str, limit: int, red_shift: bool, report_only: bool,
         print("  first : %s" % f)
 
     if red_shift:
-        ok = t["end_equal"] < end_acts
+        ok = t["end_equal"] < end_acts and t["fin_equal"] < t["fin"]
         print("  RED %s" % ("held — %d of %d acts part" % (end_acts - t["end_equal"], end_acts)
                             if ok else "FAILED — every act survived the damage"))
         return 0 if ok else 1
-    ok = t["acts"] > 0 and t["end_equal"] == end_acts and t["call_equal"] == t["acts"]
+    ok = t["acts"] > 0 and t["call_equal"] == t["acts"] and (
+        t["fin_equal"] == t["fin"] if final else t["end_equal"] == end_acts)
     if report_only:
         print("  REPORT ONLY — %d/%d acts short, exit 0 by request" % (end_acts - t["end_equal"], end_acts))
         return 0
@@ -249,6 +288,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--red-shift", action="store_true",
                     help="RED PROOF: move every RECORDED endpoint 0.06\" — one hundredth past "
                          "the bar — and nothing else; the RED must part")
+    ap.add_argument("--final", action="store_true",
+                    help="score the gate on FINAL (the next act's own positions) instead of "
+                         "END (the recorded PRE-gate plan) — S5a onward")
     ap.add_argument("--report-only", action="store_true",
                     help="exit 0 even when acts are short (this tool is a GATE by default)")
     ap.add_argument("--engage-fold", choices=("auto", "on", "off"), default="auto",
@@ -259,7 +301,7 @@ def main(argv: list[str]) -> int:
                          "vintage; 'on'/'off' force it")
     a = ap.parse_args(argv)
     return run(Path(a.ref).expanduser(), a.repo, a.limit, a.red_shift, a.report_only,
-               a.engage_fold, a.cond_ap)
+               a.engage_fold, a.cond_ap, a.final)
 
 
 if __name__ == "__main__":

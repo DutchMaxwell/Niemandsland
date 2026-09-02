@@ -191,6 +191,20 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
+/// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
+/// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
+/// here. The `match` deliberately has no arm past 0 — an evolved variant
+/// registers a new arm later, this commit only adds the seam.
+/// `acts::read_act_header` refuses any other value before a header is ever
+/// played, so the fallback arm is an invariant, not a live path.
+pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
+    match eval_variant {
+        0 => score_hand(state, player, incoming),
+        other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
+    }
+}
+
 /// NML-1158a — the RESIDUAL combination, the one scale definition in the crate:
 /// the net's sigmoid `p` ships as `(delta + 1) / 2` where `delta` is the
 /// trained residual `outcome - f(hand)` on the [0, 1] hand scale, so `delta =
@@ -221,18 +235,33 @@ pub fn score_with(
     incoming: Incoming,
     fit: Option<&Fitted>,
 ) -> f64 {
+    score_with_variant(state, statics, player, incoming, fit, 0)
+}
+
+/// `score_with` at an explicit `eval_variant` — the evolved-eval lane's other
+/// read site (`Rollout::blend_score`). Every other caller keeps calling
+/// `score_with` above, unchanged, so this function existing moves nothing
+/// until something passes a nonzero variant.
+pub fn score_with_variant(
+    state: &State,
+    statics: &[UnitStatic],
+    player: i64,
+    incoming: Incoming,
+    fit: Option<&Fitted>,
+    eval_variant: i64,
+) -> f64 {
     let Some(fit) = fit else {
-        return score_hand(state, player, incoming);
+        return score_hand_variant(state, player, incoming, eval_variant);
     };
     match fit.mode {
         FitMode::Residual => combine_residual(
-            score_hand(state, player, incoming),
+            score_hand_variant(state, player, incoming, eval_variant),
             fit.score_fit(state, statics, player, incoming),
             fit.scale,
         ),
         FitMode::Blend => {
             let fb = fit.blend;
-            (1.0 - fb) * score_hand(state, player, incoming)
+            (1.0 - fb) * score_hand_variant(state, player, incoming, eval_variant)
                 + fb * fit.score_fit(state, statics, player, incoming)
         }
     }
@@ -240,12 +269,45 @@ pub fn score_with(
 
 #[cfg(test)]
 mod tests {
-    use super::combine_residual;
+    use super::{combine_residual, score_hand, score_hand_variant, NO_INCOMING};
+    use crate::acts::read_act_header;
+    use crate::io::state_from_json;
+    use crate::state::ProfileCache;
 
     /// The tiny test net's constant answer (`test_fitted.py::FIT`, the
     /// sigmoid(2) any state with a living own unit scores) — the arithmetic
     /// the Python-side divergence gate rides on.
     const FIT: f64 = 0.880_797_077_977_882_3;
+
+    /// The evolved-eval seam's RED proof — variant 0 is exactly `score_hand`,
+    /// nothing routed through the seam. One unit, no objectives, so
+    /// `score_hand` takes its trivial 0.5 branch (io.rs's own tests build the
+    /// identical minimal fixture): the point here is the DISPATCH, not the
+    /// arithmetic.
+    #[test]
+    fn variant_0_is_exactly_score_hand() {
+        const HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+          "p1_0_a":{"unit_id":"p1_0_a","name":"A","quality":4,"defense":3,"tough":3,
+            "wounds_max":[3],"model_count":1,"caster_value":0,"base_radius":0.016,
+            "game_system":"gf","faction_folder":"robot_legions","special_rules":[],
+            "item_grants":[],"attached_hero_rules":[],
+            "move_bands":{"advance":6.0,"rush":12.0},"weapons":[]}}}"#;
+        const PLAIN: &str = r#"{"round":1,"rounds_total":4,"scoring":"end",
+          "units":{"p1_0_a":{"player":1,"alive":1,"wounds":[3],"radii":[0.016],
+            "positions":[[0.0,0.0,0.0]],"in_cover":false,"shaken":false,
+            "fatigued":false,"activated":false,"casts":0,"morale_bonus":0,
+            "aircraft":false,"dormant":false,"ambush_arrived_round":-1,
+            "earliest_arrival_round":-1,"wound_frac":0.0,"mods":{},"mods_base":{},
+            "bands":{"advance":6.0,"rush":12.0}}}}"#;
+        let header = read_act_header(HEADER).expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        let state = state_from_json(PLAIN, &mut cache, &mut roster).expect("state");
+        let direct = score_hand(&state, 1, NO_INCOMING);
+        let via_seam = score_hand_variant(&state, 1, NO_INCOMING, 0);
+        assert_eq!(direct, via_seam, "variant 0 must be byte-identical to the direct call");
+        assert_eq!(direct, 0.5, "no objectives -> score_hand's trivial branch");
+    }
 
     #[test]
     fn residual_is_hand_plus_the_centred_delta() {

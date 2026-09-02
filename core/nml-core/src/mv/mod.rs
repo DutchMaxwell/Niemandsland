@@ -21,6 +21,7 @@ pub mod cost;
 pub mod entry;
 pub mod flow;
 pub mod form;
+pub mod gate;
 pub mod geom2;
 pub mod io;
 pub mod plan;
@@ -46,6 +47,7 @@ pub use form::{
     project_out_of_zones, project_separate, solve_formation, spread, wall_zone_blocked, FormBend,
     FormPass, FormResult, SolveOpts,
 };
+pub use gate::{finalize_placement, Disc as GateDisc, GateReport};
 pub use geom2::{
     add, distance_to, div, dot, length, length_squared, lerp, mul, normalized, orient,
     path_crosses_wall, point_seg_distance, polyline_length, seg_seg_distance, segments_cross, sub,
