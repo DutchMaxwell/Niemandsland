@@ -237,6 +237,27 @@ def bearer_names(profile: dict) -> set[str]:
     return out
 
 
+#: `AiDecision.Action.RUSH` ai_decision.gd:16 / sim.rs `RUSH` — never a member
+#: of `SHOOTING_KINDS`, because the search that wrote these corpora
+#: (`ai_planner.gd`/`menu.rs`) never pairs it with a `shoot` key. Block B11
+#: (Quick Shot) is the one rule that makes a RUSH act shoot on the table.
+RUSH_KIND = 2
+
+
+def quick_shot_rush_foe(head: dict, action: dict, shots: list[dict], units: dict) -> str | None:
+    """B11: the ONE unit key a Quick Shot RUSH act fired at, or `None` if this
+    act does not qualify. A Quick Shot RUSH carries no `action.shoot` at all
+    (see `RUSH_KIND`), so the per-shot sidecar (`shots_of`, NML-1150) is the
+    only place naming who it fired at — `split_aim` already turns those names
+    into unit keys and drops a dead or ambiguous one, so this reuses it
+    verbatim with an unmatchable `shoot_key` (forces its "aligned" shortcut
+    off; the aim list itself never depends on that argument)."""
+    if "Quick Shot" not in bearer_names(head["profiles"].get(action.get("unit")) or {}):
+        return None
+    aim, _, _ = split_aim(head, shots, "", units)
+    return aim[0]["target"] if aim else None
+
+
 #: `--only-rule`'s own one-die "attack" shape, `(count, target)`: Mend's D3
 #: `_solo_tray_roll(1, 1, ...)` (main.gd:5244) and BLOCK B3's Breath Attack
 #: trigger `_solo_tray_roll(1, trigger, ...)` (main.gd:5307-5308, trigger ==
@@ -272,6 +293,11 @@ RULE_ROLL_SHAPE: dict[str, tuple[int, int] | None | object] = {
     "Predator Fighter": EXTRA_ATTACK_DIE, "Predator Shooter": EXTRA_ATTACK_DIE,
     "Royal Warrior": EXTRA_ATTACK_DIE, "Crazed": EXTRA_ATTACK_DIE,
     "Psychotic": EXTRA_ATTACK_DIE,
+    # Block B11 (Quick Shot): the rule adds no die of its own — its "roll" IS
+    # the RUSH act's own shooting volley (shape None, the Good Shot family),
+    # which the RUSH-reclassification below (`quick_shot_rush_foe`) is what
+    # ever makes `cls == "shooting"` for one of its acts in the first place.
+    "Quick Shot": None,
 }
 
 #: Unlike B4's family (shooting only), Piercing Growth's AP facet reaches
@@ -411,8 +437,19 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
             action = (act.get("pick") or {}).get("action") or {}
             kind = int(action.get("kind", -1))
             i0 = first_at_or_after(dice, k)
+            # Block B11: a RUSH act never carries `action.shoot` (`RUSH_KIND`),
+            # so this is the ONLY way a Quick Shot volley is found at all —
+            # computed once, ahead of the class chain below, so a table-truth
+            # HOLD/ADVANCE shoot (never confounded with RUSH here) still wins
+            # unconditionally when both would somehow apply.
+            quick_shot_foe = quick_shot_rush_foe(
+                head, action, shots.get(k, []), act["state"]["units"],
+            ) if kind == RUSH_KIND else None
             if kind in SHOOTING_KINDS and action.get("shoot"):
                 cls, foe = "shooting", action["shoot"]
+            elif quick_shot_foe:
+                cls, foe = "shooting", quick_shot_foe
+                action = dict(action, shoot=foe)
             elif kind == CHARGE_KIND and action.get("charge"):
                 cls, foe = "melee", action["charge"]
             elif only_rule and RULE_ROLL_SHAPE.get(only_rule, (1, 1)) not in (None, EXTRA_ATTACK_DIE):
