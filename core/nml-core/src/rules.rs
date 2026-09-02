@@ -79,13 +79,14 @@ pub fn rule_name_matches(candidate: &str, rule: &str) -> bool {
 /// only setting a fresh corpus may use) is the shipped rule: exact name or
 /// parametrised form.
 ///
-/// Why a switch exists at all: `tools/core_selfplay.gd` runs no aura expansion
-/// (see `list_to_profile.LEGACY_CORE_SELFPLAY`), so a unit that carries
-/// "Furious Aura" never got the plain "Furious" the live import writes via
-/// `OPRArmyManager._expand_auras`. Under the old prefix match the aura label
-/// answered the "Furious" query by accident, and the frozen corpora recorded
-/// that answer into board column 18 (the flag) and column 13 (melee EV, through
-/// `ctx_for`'s `furious`).
+/// Why a switch exists at all: the frozen pre-NML-1105 corpora predate the
+/// aura expansion `tools/core_selfplay.gd` does run today — since NML-1105 it
+/// attaches the joined heroes and calls `OPRArmyManager.expand_auras_of`
+/// (:568-570); `list_to_profile.LEGACY_CORE_SELFPLAY` replays them on
+/// purpose. In them a "Furious Aura" carrier never got the plain "Furious":
+/// under the old prefix match the aura label answered the "Furious" query by
+/// accident, and the frozen corpora recorded that answer into board column 18
+/// (the flag) and column 13 (melee EV, through `ctx_for`'s `furious`).
 ///
 /// NEITHER READING IS THE GAME-TRUE ONE. The prefix gave the rule to the aura's
 /// CARRIER only; a real aura grants it to the whole unit. These corpora pin the
