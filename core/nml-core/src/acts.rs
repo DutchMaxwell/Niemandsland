@@ -480,13 +480,14 @@ pub struct ActHeader {
 /// Parses one act-corpus header line (`{"kind":"header", ...}`).
 pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
     let header: Header = serde_json::from_str(text).map_err(|e| format!("act header: {e}"))?;
-    // The evolved-eval seam: only variant 0 (today's frozen eval) has a
-    // registered arm (`score::score_hand_variant`). A header asking for
-    // anything else is rejected HERE, loudly, rather than silently playing
-    // variant 0 or panicking deep inside a rollout.
-    if header.knobs.eval_variant != 0 {
+    // The evolved-eval seam: variant 0 (today's frozen eval) and variant 1 (the
+    // referee-shaped marker term, ledger row 7) have registered arms in
+    // `score::score_hand_variant`. A header asking for anything else is
+    // rejected HERE, loudly, rather than silently playing variant 0 or
+    // panicking deep inside a rollout.
+    if !matches!(header.knobs.eval_variant, 0 | 1) {
         return Err(format!(
-            "eval_variant {}: no registered arm (only 0 exists)",
+            "eval_variant {}: no registered arm (only 0 and 1 exist)",
             header.knobs.eval_variant
         ));
     }
@@ -568,9 +569,18 @@ mod tests {
     /// `score::score_hand_variant`'s `unreachable!` fallback.
     #[test]
     fn an_unregistered_eval_variant_is_refused_at_header_parse() {
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"eval_variant":1}}"#;
-        let err = read_act_header(head).expect_err("eval_variant 1 has no registered arm");
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"eval_variant":2}}"#;
+        let err = read_act_header(head).expect_err("eval_variant 2 has no registered arm");
         assert!(err.contains("eval_variant"), "error should name the seam: {err}");
+    }
+
+    /// Ledger row 7's arm — variant 1 IS registered now, so the same parser
+    /// that refuses 2 must accept 1 and carry it through.
+    #[test]
+    fn the_registered_marker_eval_variant_parses() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"eval_variant":1}}"#;
+        let header = read_act_header(head).expect("eval_variant 1 is registered");
+        assert_eq!(header.knobs.eval_variant, 1);
     }
 
     /// An absent `eval_variant` (every corpus recorded before this knob
