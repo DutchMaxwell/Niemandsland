@@ -2196,4 +2196,71 @@ mod tests {
         assert_eq!(out.rolls[0].faces, Tray::seeded(27).roll(2),
             "the hit dice are the tray's first two draws, byte for byte");
     }
+
+    // ------------- block C3: Shot Modifier, the flat / over-9" siblings ---
+
+    /// Block C3's fixture, end to end through the REAL registry: a Buccaneer
+    /// carrier (aof/sky_city_dwarves, `{hit_bonus: 1, over_in: 9}`) and a
+    /// Targeting Visor Boost carrier (gf/dao_union, `{hit_bonus: 1}`), each
+    /// with one 24" rifle.
+    const C3_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "buccaneer":{"unit_id":"buccaneer","name":"Buccaneer","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"sky_city_dwarves",
+        "special_rules":["Buccaneer"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "visor_boost":{"unit_id":"visor_boost","name":"Visor Boost","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"dao_union",
+        "special_rules":["Targeting Visor Boost"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    fn c3_static(id: &str) -> UnitStatic {
+        let header = read_act_header(C3_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get(id).expect(id);
+        UnitStatic::build(&mut reg, p)
+    }
+
+    /// Buccaneer's `over_in: 9` routes its +1 into `hit_bonus_over9` —
+    /// `stamp_shot_modifier`'s own `param_f("over_in", 0.0) > 0.0` branch, no
+    /// new code — so the bonus helps strictly past 9" and is absent at or
+    /// under it. RED (drop the `over_in` branch): the +1 becomes flat and the
+    /// 6" rifle flips to 3+.
+    #[test]
+    fn a_buccaneer_carrier_improves_past_nine_inches_and_not_at_or_under() {
+        let us = c3_static("buccaneer");
+        assert_eq!(us.shoot[0].hit_bonus_over9, 1, "stamped into the over-9\" bucket");
+        assert_eq!(us.shoot[0].hit_bonus, 0, "and never into the flat one");
+        let mut t_over = Tray::seeded(27);
+        let over = resolve_shooting_with_tray(
+            &us.shoot, &[0], &[1], &us.ctx, &defender(4, 5), 12.0, &mut t_over);
+        assert_eq!(over.rolls[0].target, 3, "past 9\": Quality 4+ -> 3+");
+        let mut t_at = Tray::seeded(27);
+        let at = resolve_shooting_with_tray(
+            &us.shoot, &[0], &[1], &us.ctx, &defender(4, 5), 9.0, &mut t_at);
+        assert_eq!(at.rolls[0].target, 4, "exactly 9\" is not \"over\" (main.gd's own wording)");
+        let mut t_under = Tray::seeded(27);
+        let under = resolve_shooting_with_tray(
+            &us.shoot, &[0], &[1], &us.ctx, &defender(4, 5), 6.0, &mut t_under);
+        assert_eq!(under.rolls[0].target, 4, "under 9\": no bonus");
+    }
+
+    /// Targeting Visor Boost carries no `over_in`, so it lands in the flat
+    /// bucket and improves the to-hit at EVERY range. RED (drop the name from
+    /// `stamp_shot_modifier`'s array): the rifle stays at Quality 4+.
+    #[test]
+    fn a_targeting_visor_boost_carrier_improves_at_every_range() {
+        let us = c3_static("visor_boost");
+        assert_eq!(us.shoot[0].hit_bonus, 1, "flat bucket");
+        assert_eq!(us.shoot[0].hit_bonus_over9, 0);
+        for dist in [6.0, 9.0, 12.0] {
+            let mut tray = Tray::seeded(27);
+            let out = resolve_shooting_with_tray(
+                &us.shoot, &[0], &[1], &us.ctx, &defender(4, 5), dist, &mut tray);
+            assert_eq!(out.rolls[0].target, 3, "{dist}\": the flat +1 applies everywhere");
+        }
+    }
 }
