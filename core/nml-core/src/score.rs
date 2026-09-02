@@ -191,6 +191,45 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v301: fraction of its expected reply wounds a unit eats per travel round (a moving target commits only part of a fight).
+const TRIP_EXPOSURE_V301: f64 = 0.5;
+/// v301: survival factor over the trip to `obj_pos` — the frozen eval prices the trip itself at zero risk.
+fn trip_survival_v301(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
+    let strength: f64 = state.wounds[i].iter().map(|w| *w as f64).sum();
+    let d = control_gap_in(state, i, obj_pos);
+    if threat <= 0.0 || strength <= 0.0 || d <= OBJECTIVE_CONTROL_IN + CONTROL_EPS { return 1.0; }
+    let needed = ((d - OBJECTIVE_CONTROL_IN) / state.bands[i].rush.max(1.0)).ceil() as i32;
+    (1.0 - (threat / strength).min(1.0) * TRIP_EXPOSURE_V301).powi(needed)
+}
+
+/// v301 `_objective_p`: frozen shape, each unit weighted by its trip survival.
+fn objective_p_v301(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = &state.objectives[obj_index];
+    let mut s = [0.0f64; 2];
+    for i in 0..state.units() {
+        s[(state.player[i] != player) as usize] += presence(state, i, obj.pos, threat_of(incoming, i)) * trip_survival_v301(state, i, obj.pos, threat_of(incoming, i));
+    }
+    if s[0] + s[1] <= 0.0 { return if obj.owner == 0 { 0.5 } else if obj.owner == player { 1.0 } else { 0.0 }; }
+    s[0] / (s[0] + s[1])
+}
+
+/// v301 `_score_hand`: frozen shape over `objective_p_v301`.
+fn score_hand_v301(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() { return 0.5; }
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) {
+        let (mut att, mut deff) = (0.0f64, 0.0f64);
+        for i in 0..state.objectives.len().min(state.markers_meta.len()) {
+            let m = &state.markers_meta[i];
+            if m.owned_by == 0 { continue; }
+            if m.destroyed { if m.owned_by == player { deff = 1.0 } else { att = 1.0 }; continue; }
+            let pc = objective_p_v301(state, i, player, incoming);
+            if m.owned_by == player { deff = 1.0 - pc } else { att = pc };
+        }
+        return (0.5 + 0.5 * (att - DESTROY_DEFENCE_WEIGHT * deff)).clamp(0.0, 1.0);
+    }
+    (0..state.objectives.len()).map(|i| objective_p_v301(state, i, player, incoming)).sum::<f64>() / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +240,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        301 => score_hand_v301(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
