@@ -140,6 +140,13 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     "Bounding": frozenset({"place_d3_plus"}),
     # Block B11: unit.rs::UnitStatic.quick_shot_active reads `shoot_after_rush` as a whole-unit gate for sim.rs's RUSH+shoot predicate.
     "Quick Shot": frozenset({"shoot_after_rush"}),
+    # Ambush arrival S6: the twin's arrive_one leg reads `min_enemy_dist_in`
+    # (unit.rs:1553-1556 -> deployment.rs::arrive_one's own_ring_m), so the
+    # primitive is no longer trusted whole. Without this entry Surprise Attack
+    # (same primitive; its GF/AoF params carry no consumed key - the registry
+    # itself marks its arrival_strike "planned") rode the bare 'infiltrate'
+    # token to PORTED - the #489 over-credit shape, declined by the spec (§6).
+    "Infiltrate": frozenset({"min_enemy_dist_in"}),
 }
 
 
