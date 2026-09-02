@@ -171,17 +171,27 @@ def snake_variants(name: str) -> set[str]:
 # ------------------------------------------------------------------ books
 
 
+# AUDIT_armybook_flanks_2026-09-02.md sec.3 (C-1): a book carries rule
+# occurrences under both keys - `specialRules` on units/weapons/upgrades,
+# and `rules` for the shared `_common.json` core-rulebook glossary (Limited,
+# Reliable, Banner, Transport, ... - ten names that live ONLY there). Walk
+# both so the universe covers every layer the books actually use.
+RULE_LIST_KEYS = ("specialRules", "rules")
+
+
 def walk_rule_names(node, out: list) -> None:
-    """Every `specialRules` array anywhere in the JSON - units, weapons,
-    upgrades, wherever they nest - contributes one sighting per entry."""
+    """Every `specialRules` or `rules` array anywhere in the JSON - units,
+    weapons, upgrades, the shared `_common.json` glossary, wherever they
+    nest - contributes one sighting per entry."""
     if isinstance(node, dict):
-        rules = node.get("specialRules")
-        if isinstance(rules, list):
-            for entry in rules:
-                if isinstance(entry, dict):
-                    name = base_rule_name(str(entry.get("name", "")))
-                    if name:
-                        out.append(name)
+        for key in RULE_LIST_KEYS:
+            rules = node.get(key)
+            if isinstance(rules, list):
+                for entry in rules:
+                    if isinstance(entry, dict):
+                        name = base_rule_name(str(entry.get("name", "")))
+                        if name:
+                            out.append(name)
         for value in node.values():
             walk_rule_names(value, out)
     elif isinstance(node, list):
@@ -190,8 +200,9 @@ def walk_rule_names(node, out: list) -> None:
 
 
 def load_books(books_dir: Path) -> list[dict]:
-    """Each book: {faction, system, names[]}. Files without `specialRules`
-    (a `_common`-style shared file) contribute nothing by construction."""
+    """Each book: {faction, system, names[]}. A `_common`-style shared file
+    (no `specialRules`) now contributes its `rules[]` core glossary instead
+    of nothing."""
     books = []
     for system in SYSTEMS:
         for path in sorted((books_dir / system).glob("*.json")):
@@ -944,7 +955,7 @@ def census(books_dir: Path, repo: Path, hide: str | None = None,
             "audit": str(audit_path) if audit_path else "",
             "tool": "core/nml-core-py/tools/rule_universe_census.py",
             "method": {
-                "walk": "specialRules[].name over every book JSON, recursive; base = name before '('",
+                "walk": "specialRules[].name and rules[].name over every book JSON, recursive; base = name before '('",
                 "core_ported": "name token, or a CONSUMED_PARAM_KEYS-consumed primitive-param, in non-test core/nml-core/src code beyond rules.rs",
                 "core_stamped": "primitive token present but this entry's params map to no CONSUMED_PARAM_KEYS role - recognised, not read",
                 "core_partial": "move-band pass primitive (list_to_profile.py:MOVE_PRIMITIVES) or conditional-AP entry param",
@@ -1055,9 +1066,10 @@ def markdown_report(res: dict) -> str:
     out += [
         "## Method",
         "",
-        "- Walk: every `specialRules[].name` in each book JSON (recursive, so"
-        " units/weapons/upgrades count wherever they nest); base name = text"
-        " before the first `(` (the registry's own `base_rule_name`).",
+        "- Walk: every `specialRules[].name` or `rules[].name` in each book"
+        " JSON (recursive, so units/weapons/upgrades and the shared"
+        " `_common.json` core-rulebook glossary all count); base name ="
+        " text before the first `(` (the registry's own `base_rule_name`).",
         "- Registry/mechanics: the system's `rules_mechanics_<system>.json`,"
         " common + faction blocks. `primitive: null` = registered but"
         " unautomated (UNMAPPED-registered).",
