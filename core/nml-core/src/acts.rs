@@ -64,6 +64,14 @@ pub struct Knobs {
     /// The act line records the same bit per activation as `charge_gate`.
     #[serde(default = "yes")]
     pub charge_gate: bool,
+    /// NML-1157 — `Tuning::target_units`: the MENU treats a joined Hero as part
+    /// of its host (GF v3.5.1 p.14) and offers the charge the unit can REACH
+    /// beside the one it scores best. A MENU knob, not a seam: it changes what
+    /// the search may choose, never how a chosen act resolves, so a recorded
+    /// act replays byte-identical either way. Absent from every corpus recorded
+    /// before it, so the default is OFF and no menu moves.
+    #[serde(default)]
+    pub menu_targets: bool,
     /// NML-1073 M5 D1-B4b — `Seams::hero_attach`, carried in the header the way
     /// every other seam is. Absent from every corpus recorded before it, so the
     /// default is OFF and nothing replays differently.
@@ -204,6 +212,7 @@ impl Default for Knobs {
             seam_spacing: false,
             seam_path: false,
             charge_gate: true,
+            menu_targets: false,
             hero_attach: false,
             charge_landing: false,
             sighting: Sighting::Unit,

@@ -1015,6 +1015,7 @@ TRAINER_KNOBS = {
     "seam_spacing": True,
     "seam_path": False,
     "charge_gate": False,
+    "menu_targets": False,
 }
 
 # `AiActRecorder.begin` :65-66 — the planner's per-activation class statics, all
@@ -1649,6 +1650,7 @@ def play_game(
     top_k: int | None = None,
     horizon: int | None = None,
     charge_gate: str = "off",
+    menu_targets: bool = False,
     hero_attach: str = "off",
     dice: str = "expected",
     charge_landing: str = "off",
@@ -1904,6 +1906,12 @@ def play_game(
         top_k=eff_top_k,
         horizon=eff_horizon,
         charge_gate=eff_charge_gate,
+        # NML-1157: the MENU treats a joined Hero as part of its host (GF
+        # v3.5.1 p.14) and offers the charge the unit can REACH beside the one
+        # it scores best. False is the crate's default and what every earlier
+        # corpus carries, so a caller that passes nothing writes the identical
+        # header and the identical menu.
+        menu_targets=bool(menu_targets),
         # NML-1073 M5 D1-B4b: the SEAM half of `hero_attach`. Deriving the
         # attachment is not enough — without this the hero would fire inside its
         # host's volley AND still be handed a full activation of its own
@@ -2280,6 +2288,10 @@ def play_game(
             "top_k": eff_top_k,
             "horizon": eff_horizon,
             "charge_gate": charge_gate,
+            # NML-1157: stamped only when ON, the way `deployment` is — a
+            # default game writes the identical object it wrote before the knob
+            # existed, so no Godot parity gate sees a new key.
+            **({"menu_targets": True} if menu_targets else {}),
             "hero_attach": hero_attach,
             "dice": eff_dice,
             "charge_landing": charge_landing,
@@ -2488,6 +2500,13 @@ def main(argv: list[str]) -> int:
         "'off' is tools/core_selfplay.gd, which stamps no gate at all",
     )
     ap.add_argument(
+        "--menu-targets",
+        action="store_true",
+        help="NML-1157: the MENU treats a joined Hero as part of its host (GF "
+        "v3.5.1 p.14) and offers the charge the unit can REACH beside the one it "
+        "scores best; default off, which is the menu every recorded corpus carries",
+    )
+    ap.add_argument(
         "--hero-attach",
         choices=list(HERO_ATTACH_MODES),
         default="off",
@@ -2601,6 +2620,7 @@ def main(argv: list[str]) -> int:
             top_k=a.top_k,
             horizon=a.horizon,
             charge_gate=a.charge_gate,
+            menu_targets=a.menu_targets,
             hero_attach=a.hero_attach,
             dice=a.dice,
             charge_landing=a.charge_landing,
