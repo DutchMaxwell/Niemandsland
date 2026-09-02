@@ -584,6 +584,7 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
             "cond_ap_param": mech["cond_ap"],
             "core": status,
             "core_note": note,
+            "aura_live": False,
             "encoder_slot": bool(band),
             "encoder_band": band,
         }
@@ -626,13 +627,20 @@ def build_rows(universe, mechanics, tokens, bands, vocab, mentions, hide=None,
                     )
                 elif unmapped_reg and base_ps["core"] == "PORTED":
                     # PORTED means CONSUMED: this entry has no primitive, so
-                    # no params anyone reads - the base's token is not its own
+                    # no params anyone reads - the base's token is not its own.
+                    # The name is still LIVE through the import expansion
+                    # (opr_army_manager.gd:2117 / list_to_profile.py:350), so
+                    # it is flagged on its own line, never folded into
+                    # core-ported (the #489/#517 invariant stays untouched).
                     ps["core"] = "STAMPED"
+                    ps["aura_live"] = True
                     ps["core_note"] = (
                         f"aura of '{base}' (expanded at import): base is PORTED"
                         f" ({base_ps['core_note']}) but this entry is"
                         f" UNMAPPED-registered - no params anyone reads"
-                        f" (aura rule: capped at STAMPED)"
+                        f" (aura rule: capped at STAMPED; LIVE via the import"
+                        f" expansion — opr_army_manager.gd:2117 /"
+                        f" list_to_profile.py:350)"
                     )
                 else:
                     ps["core"] = base_ps["core"]
@@ -715,6 +723,9 @@ def summarize(rows: dict) -> dict:
         # any ported/unported bucket above and excluded from the denominator
         # summary_lines prints for them (core_ported_denominator below).
         "core_na": count(lambda r: best_core(r) == "N/A"),
+        "aura_live": count(
+            lambda r: any(ps["aura_live"] for ps in r["per_system"].values())
+        ),
         "encoder_slot": count(
             lambda r: any(ps["encoder_slot"] for ps in r["per_system"].values())
         ),
@@ -976,6 +987,9 @@ def summary_lines(res: dict) -> list[str]:
         f" · stamped-only {stamped} · missing {pd - consumed - stamped}",
         f"RULES-COVERAGE encoder-slot       : {s['encoder_slot']}/{t}",
         f"RULES-COVERAGE all-layers         : {s['all_layers']}/{t}",
+        f"RULES-COVERAGE aura-granted       : {s['aura_live']}/{t}"
+        f"  (base PORTED, live through the import expansion;"
+        f" NOT counted as core-ported)",
     ]
     for system in SYSTEMS:
         b = s["by_system"][system]
@@ -1040,6 +1054,12 @@ def markdown_report(res: dict) -> str:
         " STAMPED - never PORTED by token sharing - unless the aura's own"
         " full-name token (snake variants of the aura name) is core"
         " evidence.",
+        "- Aura-granted: an \"X Aura\" reads \"this model and its unit get"
+        " X\"; both the table (opr_army_manager.gd:394) and the loader"
+        " (list_to_profile.py:1367) expand it to X at import, so an aura"
+        " whose base is PORTED is live even though its own entry consumes"
+        " nothing - counted on the separate aura-granted line, never folded"
+        " into core-ported.",
         "- Encoder: a slot in `data/encoder_rule_vocab_v1.json` (unit or weapon band).",
         f"- N/A: census hygiene, not a porting target ({', '.join(sorted(NA_NAMES))}) -"
         f" excluded from the core-ported ratio's denominator, never counted"

@@ -94,10 +94,16 @@ def test_census_matrix_red_knob_and_test_gate(mini):
     assert aura["core"] == "STAMPED"
     assert "aura of 'Furious'" in aura["core_note"]
     assert "UNMAPPED-registered" in aura["core_note"]
+    assert aura["aura_live"] is True, (
+        "base PORTED + import expansion = live, reported on its own line"
+    )
+    assert furious["aura_live"] is False
+    assert s["aura_live"] == 1
     off_book = rows["Off Book"]["per_system"]["gf"]
     assert off_book["primitive"] == "UNMAPPED"
     assert off_book["core"] == "MISSING"
     assert off_book["encoder_slot"] is False
+    assert off_book["aura_live"] is False
 
     tokens, _comments = census.scan_rust(root)
     assert "furious" in tokens
@@ -241,6 +247,9 @@ def test_na_names_excluded_from_ported_denominator(tmp_path):
     assert rows["Swift Aura"]["per_system"]["gf"]["core"] == "N/A", (
         "an aura inherits its base's N/A verdict without its own NA_NAMES entry"
     )
+    assert rows["Swift Aura"]["per_system"]["gf"]["aura_live"] is False, (
+        "N/A outranks the aura pass - an N/A base is never live"
+    )
     assert rows["Furious"]["per_system"]["gf"]["core"] == "PORTED"
 
     s = res["summary"]
@@ -262,6 +271,63 @@ def test_na_names_excluded_from_ported_denominator(tmp_path):
     assert offenders[0]["occ_unported"] == 0, (
         "Unique/Swift/Swift Aura must never count as unported offenders"
     )
+
+
+def test_aura_live_control_and_core_counter_net(tmp_path):
+    """The aura-live marker (NML aura-family rung, 2026-09-02): an aura whose
+    BASE is PORTED is live through the import expansion and reads
+    aura_live=True - while core stays STAMPED (PORTED means CONSUMED). Two
+    nets: (a) a control aura whose base is NOT ported stays aura_live=False
+    (the flag must not be unconditional); (b) the four core counters equal
+    the pre-change values - folding aura_live into core_ported fails here."""
+    root = tmp_path / "repo"
+    for d in ("assets/solo", "data", "core/nml-core/src", "core/nml-core-py/python"):
+        (root / d).mkdir(parents=True)
+    (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
+        "common": {
+            "Rage": {"primitive": "Rage", "params": {}},
+            "Rage Aura": {"primitive": None, "params": {}},
+            "Dull Aura": {"primitive": None, "params": {}},
+        },
+        "factions": {},
+    }))
+    (root / "data/encoder_rule_vocab_v1.json").write_text(json.dumps({"unit": [], "weapon": []}))
+    (root / "core/nml-core-py/python/list_to_profile.py").write_text("MOVE_PRIMITIVES = ()\n")
+    (root / "core/nml-core/src/arm.rs").write_text('pub const RAGE: &str = "Rage";\n')
+    books = tmp_path / "books" / "gf"
+    books.mkdir(parents=True)
+    (books / "book_a.json").write_text(json.dumps({
+        "name": "Test Faction", "gameSystem": "gf",
+        "specialRules": [
+            {"name": "Rage"},
+            {"name": "Rage Aura"},
+            {"name": "Dull"},
+            {"name": "Dull Aura"},
+        ],
+    }))
+    res = census.census(tmp_path / "books", root)
+    per = res["rows"]
+    live = per["Rage Aura"]["per_system"]["gf"]
+    assert live["core"] == "STAMPED"
+    assert live["aura_live"] is True
+    control = per["Dull Aura"]["per_system"]["gf"]
+    assert control["core"] == "MISSING"
+    assert control["aura_live"] is False, "base not ported - nothing is live"
+    assert per["Rage"]["per_system"]["gf"]["aura_live"] is False
+    assert per["Dull"]["per_system"]["gf"]["aura_live"] is False
+    s = res["summary"]
+    assert s["aura_live"] == 1
+    # byte-identity net: the four core counters are the PRE-CHANGE values
+    assert s["core_ported"] == 1
+    assert s["core_stamped"] == 1
+    assert s["core_partial"] == 0
+    assert s["core_missing"] == 2
+    lines = census.summary_lines(res)
+    assert (
+        "RULES-COVERAGE aura-granted       : 1/4  (base PORTED, live through the"
+        " import expansion; NOT counted as core-ported)"
+    ) in lines
+    assert "LIVE via the import expansion" in live["core_note"]
 
 
 def test_cli_prints_summary_and_writes_json(mini, tmp_path, capsys):
