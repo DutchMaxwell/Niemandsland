@@ -340,6 +340,10 @@ DICE_FREE_RULES = frozenset({
     "Hit & Run", "Guerrilla", "Harassing",
     "Hit & Run Fighter", "Hit & Run Shooter",
     "Second Wind", "Inquisitorial Agent", "Martial Prowess",
+    # Block C (Versatile Reach): the rule draws no die of its own — it is a
+    # per-activation reach/band choice (`sim::versatile_reach_charge_in`), so
+    # `--only-rule` selects bearer acts by BEARER alone, as B5/B8 did.
+    "Versatile Reach", "Versatile Reach Aura",
 })
 
 

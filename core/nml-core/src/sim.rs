@@ -2569,6 +2569,32 @@ fn bounding_bonus_in(action: &Action) -> f64 {
         .unwrap_or(0.0)
 }
 
+/// Versatile Reach (solo_controller.gd:1781-1827) — the CHARGE half of the
+/// per-activation "pick one". The ACTION is the witness: at the table the
+/// charge execution (:2213) is reachable with a gap in the unlock ring only if
+/// `charge_reach += vr_charge_in` fired at :1819, i.e. only if the table's own
+/// EV judge (:1796-1809) chose the charge. A gap inside the plain band means
+/// the table took the `elif` (the +4" range half) and the band was NOT bumped.
+/// The range half has no consumer in this core — see state.rs:172-176 and
+/// sim.rs:727-730 — and is deliberately not ported here.
+fn versatile_reach_charge_in(
+    statics: &[UnitStatic], state: &State, si: usize, kind: i64,
+    ci: Option<usize>, bounding_in: f64,
+) -> f64 {
+    if kind != CHARGE { return 0.0; }
+    let us = &statics[state.roster.profile[si]];
+    let (Some(bonus), Some(ti)) = (us.versatile_reach_charge_in, ci) else { return 0.0 };
+    if us.melee.is_empty() { return 0.0; } // solo_controller.gd:1791
+    let band = state.bands[si].rush + bounding_in; // = the table's `charge_reach`
+    let gap = geom::edge_gap_in(
+        &state.positions[si], &state.radii[si],
+        &state.positions[ti], &state.radii[ti],
+        crate::menu::DEFAULT_BASE_RADIUS_M,
+    )
+    .max(0.0);
+    if gap > band && gap <= band + bonus { bonus } else { 0.0 }
+}
+
 
 // ------------------------- S10: destination-side leftovers ------------------
 
@@ -2731,11 +2757,15 @@ fn resolve_with(
     // rules (bands + the Musician bonus, solo_controller.gd:4966-4982), flattened
     // into the profile table at capture; RUSH and CHARGE share the rush band.
     let bounding_in = bounding_bonus_in(action);
+    // Versatile Reach — the witness policy evaluated at the resolve seam, the
+    // same seam Bounding rides (`sim::versatile_reach_charge_in`).
+    let vr_in = versatile_reach_charge_in(statics, &next, si, kind, ci, bounding_in);
     let band_in = match kind {
         ADVANCE => next.bands[si].advance,
         RUSH | CHARGE => next.bands[si].rush,
         _ => 0.0,
-    } + bounding_in;
+    } + bounding_in
+        + vr_in;
     // NML-1152 B14 step 1 — rules-must-log: the ONLY table die this port does
     // not draw itself, named here (dice.rs's `ShootResult.log` precedent) the
     // one time it changes the band.
@@ -4725,6 +4755,163 @@ mod tests {
         .unwrap();
         assert!((plain_next.positions[0][0][0] - (st.positions[0][0][0] + 6.0 * IN2M as f64)).abs() < 1e-6);
         assert!(plain_shot.log.is_empty());
+    }
+
+    // ------------------------------------------- BLOCK C: Versatile Reach ---
+
+    /// Block C fixture (the `duel` shape) — a single-model carrier "a" with
+    /// one melee profile facing a single-model target "b" whose base-edge gap
+    /// (inches) the caller picks. Bands are the state defaults (rush 12").
+    fn vr_charge_line(gap_in: f64) -> (State, Vec<UnitStatic>) {
+        let blade = ShootProfile { name: "Blade".into(), attacks: 8, count: 1, range: 0, ..Default::default() };
+        let profile: Profile = serde_json::from_str(r#"{"unit_id": "u", "name": "u"}"#).unwrap();
+        let mut st = four_unit_line();
+        st.roster = Rc::new(Roster {
+            keys: vec!["a".into(), "b".into()],
+            index: ["a".to_string(), "b".to_string()]
+                .iter()
+                .enumerate()
+                .map(|(i, k)| (k.clone(), i))
+                .collect(),
+            profile: vec![0, 1],
+        });
+        st.profiles = Rc::new(Profiles { list: vec![profile.clone(), profile], index: HashMap::new() });
+        st.player = vec![0, 1];
+        st.alive = vec![1, 1];
+        st.attached = Rc::new(vec![vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, None]);
+        st.positions = vec![vec![[0.0, 0.0, 0.0]], vec![[(gap_in + 2.0) * IN2M, 0.0, 0.0]]];
+        st.wounds = vec![vec![1], vec![1]];
+        st.radii = vec![vec![IN2M], vec![IN2M]];
+        (st, vec![
+            UnitStatic {
+                ctx: Ctx { quality: 4, defense: 4, tough: 1, models: 1, ..Default::default() },
+                name: "Charger".into(),
+                melee: vec![blade],
+                model_count: 1,
+                wounds_max: vec![1],
+                ..Default::default()
+            },
+            UnitStatic {
+                ctx: Ctx { defense: 4, tough: 1, models: 1, ..Default::default() },
+                name: "Target".into(),
+                model_count: 1,
+                wounds_max: vec![1],
+                ..Default::default()
+            },
+        ])
+    }
+
+    fn vr_charge() -> Action {
+        Action {
+            kind: CHARGE, unit: "a".into(), dest: None, shoot: None,
+            charge: Some("b".into()), patient: false, split: None, traced: None,
+        }
+    }
+
+    /// The seam-armed resolver run every VR charge test replays: the M4
+    /// movement port is what the table's `_charge_move` (:2213) feeds, so the
+    /// +2" must reach its band argument exactly there.
+    fn vr_resolve(st: &State, statics: &[UnitStatic], action: &Action) -> State {
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        resolve_stochastic_tray_on_board(
+            statics, st, action, &small_board(),
+            Seams { movement: true, ..Seams::default() }, &mut rng, &mut tray,
+        )
+        .unwrap()
+        .0
+    }
+
+    /// The post-move base-edge gap of the charger vs its target, in inches.
+    fn vr_gap(next: &State) -> f64 {
+        geom::edge_gap_in(
+            &next.positions[0], &next.radii[0], &next.positions[1], &next.radii[1],
+            DEFAULT_BASE_RADIUS_M,
+        )
+    }
+
+    /// (a) THE WITNESS POLICY — a CHARGE whose base-edge gap sits in the
+    /// unlock ring `(band, band + 2"]` lands in contact: the action itself is
+    /// the evidence the table's own judge took the charge half. RED without
+    /// the port (the plain 12" band falls 1.5" short of the boundary).
+    #[test]
+    fn a_vr_charge_in_the_unlock_ring_lands_in_contact() {
+        let (st, mut statics) = vr_charge_line(13.5);
+        statics[0].versatile_reach_charge_in = Some(2.0);
+        let next = vr_resolve(&st, &statics, &vr_charge());
+        assert!(
+            vr_gap(&next) < 0.3,
+            "in the ring, the +2\" must land contact: gap {:.3}\"",
+            vr_gap(&next)
+        );
+    }
+
+    /// (b) THE UPPER BOUND — a gap of `band + 2.5"` is outside the closed
+    /// ring: the band stays byte-identical to a non-carrier's and the charge
+    /// falls 2.5" short. RED the moment the upper bound is loosened or lost.
+    #[test]
+    fn a_vr_charge_outside_the_ring_gets_no_bonus() {
+        let (st, mut statics) = vr_charge_line(14.5);
+        statics[0].versatile_reach_charge_in = Some(2.0);
+        let next = vr_resolve(&st, &statics, &vr_charge());
+        assert!(
+            vr_gap(&next) > 2.0,
+            "outside the ring the plain band stands: gap {:.3}\"",
+            vr_gap(&next)
+        );
+    }
+
+    /// (c) THE LOWER BOUND — a charge that is already legal (`gap <= band`)
+    /// gets NOTHING: on the rigid arm the carrier's translation is
+    /// byte-identical to a non-carrier's, which is what keeps the port from
+    /// over-granting on ordinary charges. RED the moment the `gap > band`
+    /// guard is dropped — the band then reaches the target CENTRE one inch
+    /// further on.
+    #[test]
+    fn an_ordinary_vr_charge_lands_exactly_like_a_non_carriers() {
+        let (st, statics) = vr_charge_line(11.0);
+        let action = Action { dest: Some(st.positions[1][0]), ..vr_charge() };
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (plain, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &action, &small_board(), Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        let (st2, mut statics2) = vr_charge_line(11.0);
+        statics2[0].versatile_reach_charge_in = Some(2.0);
+        let mut tray2 = Tray::seeded(11);
+        let mut rng2 = crate::rng::GodotRng::new(0);
+        let (carrier, _) = resolve_stochastic_tray_on_board(
+            &statics2, &st2, &action, &small_board(), Seams::default(), &mut rng2, &mut tray2,
+        )
+        .unwrap();
+        assert_eq!(
+            carrier.positions[0], plain.positions[0],
+            "inside the plain band the landing is byte-identical"
+        );
+    }
+
+    /// (d) THE KIND GATE — the same carrier RUSHing at the same point draws no
+    /// band. The act mirrors battle_sim.gd:649-650, which reads the charge key
+    /// for EVERY move kind, so a recorded RUSH can carry one: without the
+    /// `kind != CHARGE` gate the helper would grant the +2" here too and the
+    /// rigid arm would spend 14". RED the moment the gate falls.
+    #[test]
+    fn a_vr_rush_draws_no_band_bonus() {
+        let (st, mut statics) = vr_charge_line(13.5);
+        statics[0].versatile_reach_charge_in = Some(2.0);
+        let rush = Action {
+            kind: RUSH, unit: "a".into(), dest: Some(st.positions[1][0]), shoot: None,
+            charge: Some("b".into()), patient: false, split: None, traced: None,
+        };
+        let next = vr_resolve(&st, &statics, &rush);
+        let moved = (next.positions[0][0][0] - st.positions[0][0][0]).abs() / IN2M as f64;
+        assert!(
+            (moved - 12.0).abs() < 1e-6,
+            "the plain rush band, nothing more: moved {:.3}\"",
+            moved
+        );
     }
 
     // ------------------------------------------------- BLOCK B5: Hit & Run ---
