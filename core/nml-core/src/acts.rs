@@ -463,9 +463,9 @@ pub fn read_act_header(text: &str) -> Result<ActHeader, String> {
     // registered arm (`score::score_hand_variant`). A header asking for
     // anything else is rejected HERE, loudly, rather than silently playing
     // variant 0 or panicking deep inside a rollout.
-    if header.knobs.eval_variant != 0 {
+    if !matches!(header.knobs.eval_variant, 0 | 107) {
         return Err(format!(
-            "eval_variant {}: no registered arm (only 0 exists)",
+            "eval_variant {}: no registered arm (only 0 and 107 exist)",
             header.knobs.eval_variant
         ));
     }

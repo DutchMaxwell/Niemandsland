@@ -191,6 +191,44 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v107 -- CONTESTED FALLBACK: v0 hands a marker no unit projects onto to its
+/// owner outright. The fallback instead blends that outright grip toward even
+/// (0.5) by the nearest eligible opposing unit's `control_gap_in`, saturating
+/// at 24" -- two default 12" move bands, past which the grip is safe again.
+const CONTEST_SATURATION_IN_V107: f64 = 24.0;
+
+/// v107 `objective_p`: v0's presence ratio; only the no-projection fallback changes.
+fn objective_p_v107(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = state.objectives[obj_index];
+    let (mine, theirs) = (0..state.units()).fold((0.0, 0.0), |(m, t), i| {
+        let p = presence(state, i, obj.pos, threat_of(incoming, i));
+        if state.player[i] == player { (m + p, t) } else { (m, t + p) }
+    });
+    if mine + theirs > 0.0 {
+        return mine / (mine + theirs);
+    }
+    let challenger = if obj.owner == player { 1 - player } else { player };
+    let near = (0..state.units())
+        .filter(|&j| state.player[j] == challenger && state.alive[j] > 0 && !state.aircraft[j])
+        .map(|j| control_gap_in(state, j, obj.pos))
+        .fold(f64::INFINITY, f64::min);
+    let closeness = (1.0 - near / CONTEST_SATURATION_IN_V107).clamp(0.0, 1.0);
+    let owned = if obj.owner == 0 { 0.5 } else if obj.owner == player { 1.0 } else { 0.0 };
+    owned + (0.5 - owned) * closeness
+}
+
+/// v107 `score_hand`: hold missions average `objective_p_v107`; destroy stays v0.
+fn score_hand_v107(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() {
+        return 0.5;
+    }
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) {
+        return score_hand(state, player, incoming);
+    }
+    let n = state.objectives.len();
+    (0..n).map(|i| objective_p_v107(state, i, player, incoming)).sum::<f64>() / n as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +239,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        107 => score_hand_v107(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
