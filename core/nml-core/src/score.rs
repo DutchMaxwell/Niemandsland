@@ -191,6 +191,44 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v305 of `objective_p` — sharpened grip: v0's linear marker ratio
+/// `mine / (mine + theirs)` reads a 2:1 strength edge as a mere 0.67, so
+/// boards with real differences keep scoring near 0.5 (the measured 28-32 %
+/// draw rate). Squaring the odds — `p^2 / (p^2 + (1-p)^2)` — reads a 2:1
+/// edge as ~0.8 to hold, closer to winner-take-most round-end scoring, while
+/// 0.5 stays exactly even and the 1/0 seize fallbacks are untouched.
+fn objective_p_v305(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = state.objectives[obj_index];
+    let mut mine = 0.0f64;
+    let mut theirs = 0.0f64;
+    for i in 0..state.units() {
+        let p = presence(state, i, obj.pos, threat_of(incoming, i));
+        if state.player[i] == player {
+            mine += p;
+        } else {
+            theirs += p;
+        }
+    }
+    if mine + theirs <= 0.0 {
+        return if obj.owner == 0 { 0.5 } else if obj.owner == player { 1.0 } else { 0.0 };
+    }
+    let p = mine / (mine + theirs);
+    let a = p * p;
+    a / (a + (1.0 - p) * (1.0 - p))
+}
+
+/// v305 of `score_hand`: empty boards and destroy missions (locked 1/0
+/// grips, difference-of-grips shape) keep v0 exactly, so the A/B attributes
+/// the whole delta to the sharpened ratio alone.
+fn score_hand_v305(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() || is_destroy_mission(state) { return score_hand(state, player, incoming); }
+    let mut total = 0.0f64;
+    for i in 0..state.objectives.len() {
+        total += objective_p_v305(state, i, player, incoming);
+    }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +239,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        305 => score_hand_v305(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
