@@ -352,9 +352,18 @@ pub struct UnitStatic {
     /// Block B5 — `hit_and_run_move` solo_controller.gd:9657-9713's rule pick,
     /// scoped to this ticket's three named carriers of the "Hit & Run"
     /// primitive: the literal name plus its data aliases "Guerrilla" and
-    /// "Harassing" (identical `move_in: 3.0` on every occurrence). "Hit & Run
-    /// Fighter"/"Hit & Run Shooter" are separate primitives, out of scope.
+    /// "Harassing" (identical `move_in: 3.0` on every occurrence). The two
+    /// half-primitives follow in block C1, below.
     pub hit_and_run_active: bool,
+    /// Block C1 — `hit_and_run_move`'s half pick solo_controller.gd:9667: the
+    /// Shooter half fires ONLY on its own trigger (`after_shoot`, the caller's
+    /// shoot leg) and only on an EXACT name match (`AiEv.has_exact_rule`),
+    /// never through the "Hit & Run" alias loop (:9669-9681). Every registry
+    /// occurrence carries `move_in: 3.0`, so `HIT_AND_RUN_MOVE_IN` stays exact.
+    pub hit_and_run_shooter_active: bool,
+    /// Block C1 — the mirror half of solo_controller.gd:9667: the Fighter half
+    /// fires only on the melee leg (`after_shoot == false`), exact name only.
+    pub hit_and_run_fighter_active: bool,
     /// Block B11 — `RulesRegistry.unit_rule_active(gu, "Quick Shot")`
     /// solo_controller.gd:1846/:4033 — a carrier's move-and-shoot band becomes
     /// its RUSH distance, so RUSH may also shoot (normally HOLD/ADVANCE only).
@@ -1358,6 +1367,11 @@ impl UnitStatic {
             hit_and_run_active: unit_rule_active(reg, p, "Hit & Run")
                 || unit_rule_active(reg, p, "Guerrilla")
                 || unit_rule_active(reg, p, "Harassing"),
+            // BLOCK C1 — the half pick, solo_controller.gd:9667: credited by
+            // each name's OWN literal, never by iterating a shared primitive
+            // (the census's trusted-whole trap, #489).
+            hit_and_run_shooter_active: unit_rule_active(reg, p, "Hit & Run Shooter"),
+            hit_and_run_fighter_active: unit_rule_active(reg, p, "Hit & Run Fighter"),
             quick_shot_active: unit_rule_active(reg, p, "Quick Shot"),
             second_wind_active: unit_rule_active(reg, p, "Second Wind")
                 || unit_rule_active(reg, p, "Inquisitorial Agent")
