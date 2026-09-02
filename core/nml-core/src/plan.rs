@@ -181,6 +181,15 @@ pub struct Search<'a> {
     /// `None` means the caller cannot supply one, and a close top-2 then declines
     /// with `Unsupported::PlayoutArbitration` instead of inventing a dice stream.
     pub sig: Option<i64>,
+    /// NML-1164 (DESIGN_policy_player §6 R4) — ONE logit per PREFILTER row, in
+    /// the menu's own build order. Under `policy_mode == Order` the PHASE-2
+    /// order becomes descending by THESE numbers instead of by
+    /// `Policy::score_menu`, which is what lets an out-of-crate policy (the
+    /// token model: torch, Python, an attention net the `policy_net/1` loader
+    /// cannot hold) steer the search without being ported. A PARAMETER, not a
+    /// net. `None` — every call written before this field existed — is
+    /// byte-identical to the recorded behaviour.
+    pub cand_logits: Option<&'a [f32]>,
 }
 
 /// The three seams `resolve` branches on, off the resolved knobs.
@@ -295,7 +304,7 @@ pub fn plan(
 
 impl<'a> Search<'a> {
     pub fn new(roll: Rollout<'a>, act: &'a ActStatics) -> Search<'a> {
-        Search { roll, act, bend: PlanBend::default(), sig: None }
+        Search { roll, act, bend: PlanBend::default(), sig: None, cand_logits: None }
     }
 
     /// `AiPlanner.top_k_default` ai_planner.gd:52-56 — the recorded knob already
@@ -347,7 +356,10 @@ impl<'a> Search<'a> {
         if self.act.fit_mode && self.roll.policy.fit.is_none() {
             return Err(Unsupported::FittedEval);
         }
-        if self.act.policy_mode == PolicyMode::Order && self.roll.policy.policy_net.is_none() {
+        if self.act.policy_mode == PolicyMode::Order
+            && self.roll.policy.policy_net.is_none()
+            && self.cand_logits.is_none()
+        {
             return Err(Unsupported::PolicyOrder);
         }
         Ok(())
@@ -476,7 +488,24 @@ impl<'a> Search<'a> {
         // this fires, so the fallback branch below is unreached in practice
         // and only guards against a future caller that skips `admissible`.
         if self.act.policy_mode == PolicyMode::Order {
-            if let Some(net) = self.roll.policy.policy_net {
+            if let Some(lg) = self.cand_logits {
+                // NML-1164 R4 — the CALLER's numbers win over any wired net.
+                // A GLOBAL descending sort, so `build_pool`'s top-K slice
+                // keeps the top-k BY LOGIT; the hand score still evaluates
+                // every pooled row and still decides the pick.
+                //
+                // DELIBERATE DEVIATION from the net path below, which re-ranks
+                // WITHIN each unit's own slots and leaves the cross-unit
+                // decision to the hand order (design §1). A vector spans the
+                // whole menu, so this one can move which UNIT activates —
+                // that is the R4 mode being asked for, not a slip.
+                if lg.len() != scored.len() {
+                    return Err(Unsupported::CandLogits(lg.len(), scored.len()));
+                }
+                order.sort_by(|&a, &b| {
+                    lg[b].partial_cmp(&lg[a]).unwrap_or(Ordering::Equal).then(a.cmp(&b))
+                });
+            } else if let Some(net) = self.roll.policy.policy_net {
                 order = reorder_within_unit(
                     &scored,
                     &order,

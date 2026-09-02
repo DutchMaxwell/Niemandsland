@@ -1023,3 +1023,138 @@ fn order_mode_with_no_net_wired_declines() {
         .expect_err("policy_mode=order with no net wired must decline, not silently reorder");
     assert!(matches!(err, Unsupported::PolicyOrder), "wrong decline reason: {err:?}");
 }
+
+/// The G4 seams, verbatim from `run_corpus` — the four tests below all build
+/// their own `Search`, and a second copy of this literal is a second thing to
+/// keep in step.
+fn seams_of(c: &ActCorpus) -> Seams {
+    Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
+        hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false,
+        no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model }
+}
+
+/// NML-1164 (DESIGN_policy_player §6 R4) — the `cand_logits` seam, on a state
+/// doctored down to ONE activatable unit so that PHASE 2 is the only stage
+/// that can move: at `top_k = 1` the top-K slice and the per-unit coverage
+/// admit exactly ONE candidate, and the seam decides WHICH.
+///
+/// The crafted logit names the row the HAND order ranked LAST — a candidate
+/// the off-mode search never rolls at all — and the bar is that the search
+/// comes back with THAT candidate: `scored[best_idx].idx` is the winner's own
+/// build index. A search that ignored the vector could not pass by accident,
+/// and the off-mode pick beside it is the control.
+#[test]
+fn cand_logits_name_the_pool_and_the_pick_at_top_k_one() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let seams = seams_of(&c);
+    let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
+    let mut sc = Scratch::default();
+
+    let mut hit: Option<(usize, usize, Pick, Pick)> = None;
+    'outer: for (ai, act) in c.acts.iter().enumerate() {
+        let live: Vec<usize> = (0..act.state.units())
+            .filter(|&i| act.state.can_activate(i, act.player, seams.hero_attach))
+            .collect();
+        for &keep in &live {
+            let mut state = act.state.clone();
+            for &i in &live {
+                state.activated[i] = i != keep;
+            }
+            let mut off = Search::new(roll, &act.statics);
+            off.bend.top_k = Some(1);
+            let Ok(hand) = off.run(&state, act.player, &mut sc, None) else { continue };
+            if hand.scored.len() < 2 {
+                continue; // a one-row menu has no order to show
+            }
+            let target = hand.scored.last().unwrap().0 as usize;
+            if hand.scored[hand.best_idx as usize].0 as usize == target {
+                continue; // the hand already answers with it — no contrast
+            }
+            let mut lg = vec![0.0f32; hand.scored.len()];
+            lg[target] = 1.0;
+            let mut doctored = act.statics.clone();
+            doctored.policy_mode = PolicyMode::Order;
+            let mut on = Search::new(roll, &doctored);
+            on.bend.top_k = Some(1);
+            on.cand_logits = Some(&lg);
+            let got = on.run(&state, act.player, &mut sc, None).unwrap_or_else(|e| panic!("{e:?}"));
+            if got.scored[got.best_idx as usize].0 as usize == target {
+                hit = Some((ai, target, hand, got));
+                break 'outer;
+            }
+        }
+    }
+    let (ai, target, hand, got) =
+        hit.expect("no corpus position let a crafted logit carry the pick at top_k=1");
+
+    assert_eq!(got.scored[0].0 as usize, target, "act {ai}: the logit head is not the order head");
+    assert_eq!(got.pool_idx[0], target, "act {ai}: top_k=1 kept a row that is not the top BY LOGIT");
+    assert_eq!(
+        got.scored[got.best_idx as usize].0 as usize,
+        target,
+        "act {ai}: the search did not return the crafted candidate",
+    );
+    // The control: the hand order neither rolled nor picked it.
+    assert!(!hand.pool_idx.contains(&target), "act {ai}: the hand rolled the target anyway");
+    assert!(
+        same_action(&got.action, &hand.action).is_err() || got.unit_key != hand.unit_key,
+        "act {ai}: the crafted vector left the hand's own pick in place",
+    );
+}
+
+/// The vector has to line up with the menu it re-ranks: a shorter or longer
+/// one names the WRONG candidates, so it declines instead of re-ranking part
+/// of the order.
+#[test]
+fn cand_logits_of_the_wrong_length_decline() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
+    let mut sc = Scratch::default();
+    let act = &c.acts[0];
+    let mut doctored = act.statics.clone();
+    doctored.policy_mode = PolicyMode::Order;
+    let short = vec![0.0f32; 3];
+    let mut search = Search::new(roll, &doctored);
+    search.cand_logits = Some(&short);
+    let err = search
+        .run(&act.state, act.player, &mut sc, None)
+        .expect_err("a wrong-length logit vector must decline");
+    assert!(matches!(err, Unsupported::CandLogits(3, _)), "wrong decline reason: {err:?}");
+}
+
+/// DEFAULT OFF: the knob decides, not the vector's mere presence. Every act of
+/// the recorded corpus, run with a logit vector that would REVERSE the order
+/// if it were read, has to answer with the G4 pick unchanged.
+#[test]
+fn cand_logits_are_inert_while_policy_mode_is_off() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
+    let mut sc = Scratch::default();
+    let mut checked = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let Ok(base) = Search::new(roll, &act.statics).run(&act.state, act.player, &mut sc, None)
+        else {
+            continue;
+        };
+        // Descending by rank: read, this would stand the order on its head.
+        let mut lg = vec![0.0f32; base.scored.len()];
+        for (r, row) in base.scored.iter().enumerate() {
+            lg[row.0 as usize] = r as f32;
+        }
+        let mut search = Search::new(roll, &act.statics);
+        search.cand_logits = Some(&lg);
+        let got = search
+            .run(&act.state, act.player, &mut sc, None)
+            .unwrap_or_else(|e| panic!("act {ai}: {e:?}"));
+        assert_eq!(got.scored, base.scored, "act {ai}: an off-mode vector moved the order");
+        assert_eq!(got.pool_idx, base.pool_idx, "act {ai}: an off-mode vector moved the pool");
+        assert_eq!(got.unit_key, base.unit_key, "act {ai}: an off-mode vector moved the pick");
+        assert!(same_action(&got.action, &base.action).is_ok());
+        checked += 1;
+    }
+    assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+}
