@@ -191,6 +191,46 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v103 — `presence` with the march priced: a unit still outside control range
+/// eats its expected reply volley every round until arrival, so the threat is
+/// scaled by `1 + trip` (excess inches over control range in rush-bands; 1.0
+/// at the marker keeps v103 v0-identical, and the real length stays smooth).
+fn presence_v103(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
+    let d = control_gap_in(state, i, obj_pos);
+    let trip = ((d - OBJECTIVE_CONTROL_IN) / state.bands[i].rush.max(1.0)).max(0.0);
+    presence(state, i, obj_pos, threat * (1.0 + trip))
+}
+
+/// v103 — `score_hand` reading `presence_v103` via a local `objective_p` closure; else identical to frozen.
+fn score_hand_v103(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() { return 0.5; }
+    let p_ctrl = |obj_index: usize| -> f64 {
+        let obj = state.objectives[obj_index];
+        let (mut mine, mut theirs) = (0.0f64, 0.0f64);
+        for i in 0..state.units() {
+            let p = presence_v103(state, i, obj.pos, threat_of(incoming, i));
+            if state.player[i] == player { mine += p; } else { theirs += p; }
+        }
+        if mine + theirs <= 0.0 { return if obj.owner == player { 1.0 } else if obj.owner == 0 { 0.5 } else { 0.0 }; }
+        mine / (mine + theirs)
+    };
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) {
+        let (mut att, mut deff) = (0.0f64, 0.0f64);
+        for i in 0..state.objectives.len().min(state.markers_meta.len()) {
+            let meta = &state.markers_meta[i];
+            let ob = meta.owned_by;
+            if ob == 0 { continue; }
+            if meta.destroyed { if ob == player { deff = 1.0; } else { att = 1.0; } continue; }
+            let pctrl = p_ctrl(i);
+            if ob == player { deff = 1.0 - pctrl; } else { att = pctrl; }
+        }
+        return (0.5 + 0.5 * (att - DESTROY_DEFENCE_WEIGHT * deff)).clamp(0.0, 1.0);
+    }
+    let mut total = 0.0f64;
+    for i in 0..state.objectives.len() { total += p_ctrl(i); }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +241,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        103 => score_hand_v103(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
