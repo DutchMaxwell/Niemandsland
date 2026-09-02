@@ -131,12 +131,15 @@ fn a_band_spent_unit_is_frozen_rather_than_pushed_past_its_cap() {
 }
 
 /// Pass 1 on its own: a model planned off the table edge is clamped back inside
-/// the 0.02 m margin, on BOTH axes, and the report says by how much.
+/// the 0.02 m margin, on BOTH axes, and the report says by how much. Its
+/// neighbour sits where the clamped model lands NEXT to it, so the unit comes
+/// out coherent and overlap-free and pass 4 has nothing to do — this test stays
+/// about the bounds clamp alone.
 #[test]
 fn pass_one_clamps_a_model_back_onto_the_table() {
     let board = [72.0, 48.0];
     let margin = 0.02 / 0.0254;
-    let planned: Vec<V2> = vec![[80.0, -3.0], [36.0, 24.0]];
+    let planned: Vec<V2> = vec![[80.0, -3.0], [69.8, 0.8]];
     let (got, rep) = finalize_placement(&planned, &[0.5, 0.5], &[], &[], board, None);
     assert!(
         (got[0][0] as f64 - (72.0 - margin)).abs() < 1e-4,
@@ -237,4 +240,153 @@ fn pass_three_is_off_without_a_terrain() {
     let planned: Vec<V2> = vec![[37.5, 25.5]];
     let (got, _) = finalize_placement(&planned, &[0.5], &[], &[6.0], [72.0, 48.0], None);
     assert_eq!(got[0], planned[0]);
+}
+
+// === S5c — pass 4, the straggler coherency pull, and the wall clamp ========
+
+/// `CoherencyChecker.COHERENCY_DISTANCE_INCHES` :10 / `MAX_CHAIN_DISTANCE_INCHES` :13.
+const COH_LINK_IN: f64 = 1.0;
+const MAX_CHAIN_IN: f64 = 9.0;
+/// `SoloController.COH_REPAIR_PASSES` :6555 — pass 4's sweep bound.
+const COH_REPAIR_PASSES: usize = 12;
+
+/// `_config_coherent_world` :6832 on a bare config: ONE 1"-link component
+/// holding every model, widest edge spread within the chain cap.
+fn coherent(cfg: &[V2], radii: &[f64]) -> bool {
+    let n = cfg.len();
+    let edge = |i: usize, j: usize| {
+        ((cfg[i][0] as f64 - cfg[j][0] as f64).powi(2)
+            + (cfg[i][1] as f64 - cfg[j][1] as f64).powi(2))
+        .sqrt()
+            - radii[i]
+            - radii[j]
+    };
+    let (mut seen, mut queue, mut count) = (vec![false; n], vec![0usize], 1usize);
+    seen[0] = true;
+    while let Some(cur) = queue.pop() {
+        for o in 0..n {
+            if !seen[o] && edge(cur, o) <= COH_LINK_IN {
+                seen[o] = true;
+                count += 1;
+                queue.push(o);
+            }
+        }
+    }
+    count == n && !(0..n).any(|i| (i + 1..n).any(|j| edge(i, j) > MAX_CHAIN_IN))
+}
+
+/// The recorded torn plan and the band caps `_gate_disp_caps_m` :6343 hands it.
+fn straggler_case() -> (Vec<V2>, Vec<f64>, Vec<f64>, [f64; 2], usize, f64) {
+    let raw = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/fixtures/mv_gate_coherency.json"
+    ))
+    .expect("the recorded coherency fixture");
+    let fx: Value = serde_json::from_str(&raw).expect("valid JSON");
+    let c = &fx["straggler"];
+    let f = |v: &Value| v.as_f64().expect("number");
+    let arr = |v: &Value| v.as_array().expect("array").clone();
+    let reach = f(&c["reach_in"]);
+    (
+        arr(&c["planned_in"])
+            .iter()
+            .map(|p| [f(&p[0]) as f32, f(&p[1]) as f32])
+            .collect(),
+        arr(&c["radii_in"]).iter().map(f).collect(),
+        arr(&c["trail_len_in"])
+            .iter()
+            .map(|l| (reach - f(l)).max(0.0) + GATE_SLACK_EPS_IN)
+            .collect(),
+        [f(&c["board_in"][0]), f(&c["board_in"][1])],
+        c["straggler"].as_u64().expect("index") as usize,
+        f(&c["edge_gap_in"]),
+    )
+}
+
+/// RED: a recorded plan that leaves model 4 torn 6.445" (edge to edge) off its
+/// unit. Passes 1-3 do not touch it — the config is already overlap-free, on
+/// the table and clear of terrain — so it is pass 4 that walks it back into the
+/// 1" link chain, one link per sweep, inside its own 9.05" of band slack. Skip
+/// the `pull_stragglers` call in `finalize_placement` and the unit comes back
+/// exactly as planned: the coherency assertion fails by the full 5.445" the
+/// pull had to close, and `rep.pulled` is all false.
+#[test]
+fn pass_four_pulls_a_recorded_straggler_back_into_coherency() {
+    let (planned, radii, caps, board, i, gap) = straggler_case();
+    assert!(gap > 6.0, "the fixture must actually be torn: {gap}\"");
+    assert!(
+        !coherent(&planned, &radii),
+        "the fixture is already coherent"
+    );
+
+    let (got, rep) = finalize_placement(
+        &planned,
+        &radii,
+        &[],
+        &caps,
+        board,
+        None,
+    );
+
+    assert!(coherent(&got, &radii), "still torn after the gate: {got:?}");
+    assert!(rep.coherent, "the report must agree with the geometry");
+    assert!(
+        rep.pulled[i],
+        "model {i} is the straggler and must have moved"
+    );
+    for (k, d) in rep.disp_in.iter().enumerate() {
+        assert!(
+            *d <= caps[k] + 1e-9,
+            "model {k} spent {d}\" of a {}\" cap",
+            caps[k]
+        );
+    }
+    // Minimal, not a retreat: the models that advanced correctly keep their move.
+    let untouched = rep.pulled.iter().filter(|p| !**p).count();
+    assert!(
+        untouched >= 5,
+        "only {untouched} of 7 models kept their full move"
+    );
+}
+
+/// The bound, proven rather than asserted in a comment. Three models 12" apart
+/// on a line and no band caps at all: the unit can never link inside twelve 1"
+/// sweeps, so pass 4 runs its whole budget and STOPS — the call returns, the
+/// report says the config is still torn, and no model travelled further than
+/// the bound the two sweep branches allow (one link each per sweep, so
+/// `COH_REPAIR_PASSES * COH_LINK_IN * 2`). Remove the sweep bound and this test
+/// does not fail, it HANGS — which is the point of pinning it.
+#[test]
+fn pass_four_terminates_on_a_config_it_can_never_repair() {
+    let planned: Vec<V2> = vec![[10.0, 24.0], [22.0, 24.0], [34.0, 24.0]];
+    let radii = vec![0.5, 0.5, 0.5];
+    assert!(!coherent(&planned, &radii));
+
+    let (got, rep) = finalize_placement(
+        &planned,
+        &radii,
+        &[],
+        &[],
+        [72.0, 48.0],
+        None,
+    );
+
+    assert!(
+        !rep.coherent,
+        "24\" apart cannot be repaired in twelve 1\" steps"
+    );
+    assert!(!coherent(&got, &radii));
+    let bound = COH_REPAIR_PASSES as f64 * COH_LINK_IN * 2.0;
+    for (k, d) in rep.disp_in.iter().enumerate() {
+        assert!(
+            *d <= bound + 1e-6,
+            "model {k} walked {d}\", past the {bound}\" bound"
+        );
+    }
+    // and it really did sweep: the outer models spent their budget walking in
+    assert!(
+        rep.disp_in[2] > 10.0,
+        "the pull barely ran: {:?}",
+        rep.disp_in
+    );
 }
