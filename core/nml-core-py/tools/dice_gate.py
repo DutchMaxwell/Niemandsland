@@ -237,6 +237,16 @@ def bearer_names(profile: dict) -> set[str]:
     return out
 
 
+def only_rule_bearer_names(prof: dict, act_prof: dict) -> set[str]:
+    """BLOCK C1 follow-up — `bearer_names` over the game-header profile AND
+    the acting unit's per-act state profile (`act["state"]["units"][key]
+    ["prof"]`, the same state `core.state_of` replays). A rule granted
+    MID-GAME by a spell exists only in the latter — 93 qbg_ref acts carry
+    "Hit & Run Fighter (spell)" on the acting unit with an empty game-header
+    read, invisible to `--only-rule` before this union."""
+    return bearer_names(prof) | bearer_names(act_prof)
+
+
 #: `AiDecision.Action.RUSH` ai_decision.gd:16 / sim.rs `RUSH` — never a member
 #: of `SHOOTING_KINDS`, because the search that wrote these corpora
 #: (`ai_planner.gd`/`menu.rs`) never pairs it with a `shoot` key. Block B11
@@ -320,10 +330,15 @@ NONE_SHAPE_MELEE_OK = frozenset({"Piercing Growth"})
 #: BLOCK B8 (Second Wind): pure activation/fatigue bookkeeping
 #: (`second_wind_candidate`/`spend_second_wind`, sim.rs) — no roll of its own.
 #: The primitive name plus its only two literal carriers in the registry.
+#: BLOCK C1: the two half-primitives of `hit_and_run_move`'s own pick
+#: (solo_controller.gd:9667) — the same dice-free free move as B5, selected
+#: by bearer alone; the bearer read must cover the act-state profile, where
+#: this corpus's spell-granted carriers live (see `only_rule_bearer_names`).
 DICE_FREE_RULES = frozenset({
     "Precision Attacks Buff", "Precision Fighter Buff", "Precision Shooter Buff",
     "Morale Debuff", "Casting Buff", "Primal Boost Buff", "Unstoppable Mark",
     "Hit & Run", "Guerrilla", "Harassing",
+    "Hit & Run Fighter", "Hit & Run Shooter",
     "Second Wind", "Inquisitorial Agent", "Martial Prowess",
 })
 
@@ -334,7 +349,7 @@ def is_rule_roll(r: dict, only_rule: str, prev: dict | None = None) -> bool:
     `EXTRA_ATTACK_DIE` (block B6), an "attack" roll immediately following
     ANOTHER "attack" roll (`prev`, the roll at `block[i-1]`, `None` for `r`
     itself being the block's first roll) at the SAME target. Bearer-gated at
-    the call site (`only_rule not in bearer_names(prof)`), so a count-1
+    the call site (`only_rule not in only_rule_bearer_names(prof, act_prof)`), so a count-1
     target-2+ ordinary to-hit die never gets mistaken for the rule's own draw
     unless the SAME unit also happens to carry the rule — and for a `None`
     shape, EVERY attack roll of a bearer's own shooting act counts, coarser
@@ -481,8 +496,9 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
                     continue
                 unit_key = (act.get("pick") or {}).get("unit_key") or action.get("unit")
                 prof = head["profiles"].get(unit_key) or {}
+                act_prof = (act["state"]["units"].get(unit_key) or {}).get("prof") or {}
                 dice_free = only_rule in DICE_FREE_RULES
-                if only_rule not in bearer_names(prof) or not (dice_free or any(
+                if only_rule not in only_rule_bearer_names(prof, act_prof) or not (dice_free or any(
                         is_rule_roll(block[i], only_rule, block[i - 1] if i else None)
                         for i in range(len(block)))):
                     continue

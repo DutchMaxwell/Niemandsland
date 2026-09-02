@@ -93,6 +93,24 @@ def test_classify_names_every_way_two_roll_lists_can_part():
     assert gate.classify([a], [a, a]) == "length"
 
 
+def test_only_rule_bearer_names_union_the_game_header_and_the_act_state_profile():
+    """BLOCK C1 follow-up — a rule granted MID-GAME by a spell is recorded
+    only in the per-act state profile (the same state `core.state_of` replays),
+    never in the game header: 93 qbg_ref acts carry "Hit & Run Fighter (spell)"
+    on the ACTING unit that way and `--only-rule` saw none of them. The
+    bearer check must union BOTH reads; the "(spell)" suffix folds off the
+    same way `bearer_names` folds any parameter bracket."""
+    header_prof = {"special_rules": ["Flying"]}
+    act_prof = {"special_rules": ["Hit & Run Fighter (spell)"]}
+    assert gate.only_rule_bearer_names(header_prof, act_prof) == {
+        "Flying", "Hit & Run Fighter",
+    }
+    assert gate.only_rule_bearer_names({}, act_prof) == {"Hit & Run Fighter"}, \
+        "a unit with no game-header profile at all still reads from the act state"
+    assert gate.only_rule_bearer_names(header_prof, {}) == {"Flying"}, \
+        "nothing granted mid-game: the state read adds nothing"
+
+
 def test_inject_split_aim_reuses_split_aim_and_leaves_covered_or_aligned_acts_alone():
     """The corpus's own aiming oracle (`shoot_replay_gate.split_aim`), folded
     onto one act: a shots.jsonl line naming a DIFFERENT unit than the recorded
