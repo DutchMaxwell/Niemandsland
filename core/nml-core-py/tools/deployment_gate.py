@@ -159,13 +159,73 @@ def compare_dump(dump, roll, run):
     return c
 
 
+# === ARRIVAL (S4, SPEC_rule_ambush_arrival_2026-09-02.md §4) ===================================
+# Oracle: core/nml-core/tests/fixtures/ambush_arrival.json (tools/ambush_arrival_dump.gd,
+# READ-ONLY against the table's shipped SoloController.arrive_one_ambush_unit). Same vocabulary
+# as the pregame gate above — exact (DUMP_QUANT) / within (one SCAN_STEP) / mismatch — plus HELD
+# (both the table and the twin answer "no legal spot"; one side holding while the other places is
+# a MISMATCH, never a HELD — SPEC §6.2). CONTRACT for the twin, which has NOT landed as this
+# section was written (S1-S3 build in parallel): nml_core.arrive_one(zone, objectives, occupied,
+# enemies, own_ring_m, radius, footprint, base_r, flying) -> [x, y] | None, `radius` = the
+# ALREADY-PORTED deploy_footprint_radius (solo_controller.gd:10258-10265, reused unchanged per
+# SPEC §3) computed by radius_of() below. Beacon geometry is out of scope (SPEC §2.5 decision 2)
+# — the fixture carries none, and every case here passes none.
+
+def radius_of(n_models, base_r):
+    n = max(n_models, 1); cols = min(n, 5); rows = -(-n // cols)
+    return math.hypot((cols - 1) * 0.02, (rows - 1) * 0.02) + base_r + 0.01   # DEPLOY_SPACING_M 0.04, halved
+
+
+def arrival_class(truth, twin):
+    if truth is None and twin is None: return "held"
+    if truth is None or twin is None: return "mismatch"
+    if abs(quant(twin[0]) - quant(truth[0])) < 1e-9 and abs(quant(twin[1]) - quant(truth[1])) < 1e-9: return "exact"
+    return "within" if math.hypot(twin[0] - truth[0], twin[1] - truth[1]) <= SCAN_STEP + DUMP_QUANT else "mismatch"
+
+
+def run_arrival(cases, fn, red_shift):
+    c = dict(exact=0, within=0, mismatch=0, held=0)
+    for case in cases:
+        twin = None
+        if fn is not None:
+            twin = fn(case["zone"], case["objectives"], [dict(o) for o in case["occupied"]], [dict(e) for e in case["enemies"]],
+                      case["own_ring_m"], radius_of(len(case["footprint"]), case["base_r"]), case["footprint"], case["base_r"], case["flying"])
+            if twin is not None and red_shift: twin = [twin[0] + red_shift * SCAN_STEP, twin[1]]
+        c[arrival_class(case["spot"], twin)] += 1
+    return c
+
+
+def main_arrival(args):
+    cases = json.load(open(os.path.join(args.fixtures, "ambush_arrival.json")))["cases"]
+    fn = getattr(nml_core, "arrive_one", None)   # import guard — the twin may not exist yet
+    c = run_arrival(cases, fn, args.arrival_red_shift)
+    n = len(cases)
+    print("ARRIVAL %d cases: %d exact | %d within | %d mismatch | %d held" % (n, c["exact"], c["within"], c["mismatch"], c["held"]))
+    if fn is None:
+        print("ARRIVAL: nml_core.arrive_one absent (deployment::arrive_one not landed) — fixture loaded, cases ran the stub (every case mismatch/held) — NO VERDICT, refusing a pass")
+        return 2
+    if args.arrival_red_shift:
+        red = c["exact"] == 0
+        print("ARRIVAL RED knob %d: exact %d — %s" % (args.arrival_red_shift, c["exact"], "collapsed, exit 1 as designed" if red else "INERT — RED proof FAILED"))
+        return 1 if red else 2
+    ok = c["mismatch"] == 0   # SPEC §6.2: mismatch == 0 alone implies every held case agreed too
+    print("ARRIVAL %s" % ("floor OK" if ok else "floor REGRESSION"))
+    return 0 if ok else 1
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description="deployment parity gate (NML-1152 step 9)")
     ap.add_argument("--fixtures", default=FIXTURES, help="dir holding the pregame_* extract JSONs")
     ap.add_argument("--bank-dir", default=None, help="uncommitted terrain_bank_v2 dump (layout-seed boards)")
     ap.add_argument("--red-shift", type=int, default=0, metavar="N",
                     help="RED knob: shift every twin spot by N * 0.025 m")
+    ap.add_argument("--arrival", action="store_true",
+                    help="run the ARRIVAL section (ambush_arrival.json) instead of the pregame gate")
+    ap.add_argument("--arrival-red-shift", type=int, default=0, metavar="N",
+                    help="ARRIVAL's own RED knob: shift every twin spot by N * 0.025 m")
     args = ap.parse_args(argv)
+    if args.arrival:
+        return main_arrival(args)
 
     dumps = json.load(open(os.path.join(args.fixtures, "pregame_pipeline.json")))
     rolls = {r["seed"]: r for r in json.load(open(os.path.join(args.fixtures, "pregame_roll_off.json")))}
