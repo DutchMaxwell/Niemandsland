@@ -38,7 +38,7 @@
 use std::cmp::Ordering;
 use std::collections::HashMap;
 
-use crate::acts::{ActStatics, Knobs, PolicyMode, Sighting};
+use crate::acts::{ActStatics, Knobs, MeleeReach, PolicyMode, Sighting};
 use crate::arbitration::{arbitrate_bent, ArbBend, Arbitration};
 use crate::io::Seams;
 use crate::menu::{candidates_tuned, Candidate};
@@ -208,6 +208,7 @@ fn seams_of(knobs: &Knobs) -> Seams {
         no_dangerous: !knobs.dangerous,
         no_engage_fold: !knobs.engage_fold,
         los_model: knobs.los_model,
+        melee_reach: knobs.melee_reach == MeleeReach::Table,
     }
 }
 

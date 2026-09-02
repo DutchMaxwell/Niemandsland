@@ -136,6 +136,7 @@ impl NmlCore {
             sighting: false,
             movement: false,
             move_rigid: false,
+            melee_reach: false,
             // D1-B8: inert without a tray — this seat resolves expected values.
             no_dangerous: false,
             // D5-4: inert — this seat never turns `hero_attach` on.
@@ -787,6 +788,8 @@ impl NmlCore {
                 // NML-1160 — a header knob, not an env one, and inert in-game:
                 // `BattleSim.capture` already fills the per-unit `los` rows.
                 los_model: false,
+                // W2 S0 — a header-only knob for the trainer, inert in-game.
+                melee_reach: false,
             });
         }
         self.seams.unwrap()

@@ -21,7 +21,8 @@ use nml_core::io::los_positions;
 use nml_core::state::{Bands, MoveBands, Roster};
 use nml_core::terrain::{CellParams, Obb, PlainTerrain};
 use nml_core::{
-    Knobs, Marker, Mods, Objective, Profile, ProfileDyn, Profiles, Sighting, State, Weapon,
+    Knobs, Marker, MeleeReach, Mods, Objective, Profile, ProfileDyn, Profiles, Sighting, State,
+    Weapon,
 };
 
 /// The dynamic per-unit keys `BattleSim._UNIT_DYNAMIC` (battle_sim.gd:1247-1250)
@@ -895,6 +896,12 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // never read anything past 0 here. Absent = `Knobs::default()` = 0,
         // and honoured if a header ever does carry it (mirrors `charge_landing`).
         eval_variant: dint(d, "eval_variant", dflt.eval_variant),
+        // W2 S0. Header-only, like `sighting`: no recorder writes this key yet,
+        // so an absent one is `Knobs::default()` = `MeleeReach::All`.
+        melee_reach: match d.get("melee_reach").map(|v| v.to_string()).as_deref() {
+            Some("table") => MeleeReach::Table,
+            _ => dflt.melee_reach,
+        },
     }
 }
 
