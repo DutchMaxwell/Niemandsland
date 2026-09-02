@@ -841,7 +841,8 @@ EXPLORE_SEED_STRIDE = 700001
 
 
 def _pick_for(
-    core, state, player: int, net_player: int = 0, eps: float = 0.0, explore_seed: int = 0
+    core, state, player: int, net_player: int = 0, eps: float = 0.0, explore_seed: int = 0,
+    cands: bool = False,
 ) -> dict[str, Any]:
     """`_pick_for` core_selfplay.gd:398-459 — the full planner for whichever side
     still has a living, un-activated unit; `{}` when the side is dry.
@@ -853,7 +854,11 @@ def _pick_for(
 
     `eps` / `explore_seed` are the NML-1158c exploration knob, passed straight
     through to `Core.plan_with_rollout` — see `play_game`'s docstring and
-    `EXPLORE_SEED_STRIDE` for where `explore_seed` comes from."""
+    `EXPLORE_SEED_STRIDE` for where `explore_seed` comes from.
+
+    `cands` is the expert-iteration opt-in (step 1): the binding then stamps
+    `trace.cands` — the built candidates' content, build index order, joined
+    by `trace.scored`'s `idx` — and writes nothing it did not write before."""
     if not state.pool(player, bool(core.knobs().get("hero_attach", True))):
         return {}
     # NML-1142: `AiMissionEval.fit_mode` is per-ACTIVATION on the table and the
@@ -862,7 +867,9 @@ def _pick_for(
     # seat, which is the A/B seam described in `play_game`.
     fit = core.has_net() and net_player in (0, player)
     statics = dict(TRAINER_STATICS, fit_mode=True) if fit else TRAINER_STATICS
-    pick = core.plan_with_rollout(state, player, statics, eps=eps, explore_seed=explore_seed)
+    pick = core.plan_with_rollout(
+        state, player, statics, eps=eps, explore_seed=explore_seed, cands=cands
+    )
     return pick if pick.get("used") else {}
 
 
@@ -1127,6 +1134,7 @@ def _play_round(
     net_player: int = 0,
     eps: float = 0.0,
     act_cores: dict[int, Any] | None = None,
+    record_cands: bool = False,
 ) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
     dry side hands the tail to the other, and the NEXT round opens with whoever
@@ -1179,10 +1187,12 @@ def _play_round(
         # pair/fork formulas above already read it after the fact.
         seq = len(log)
         explore_seed = seed * EXPLORE_SEED_STRIDE + seq
-        pick = _pick_for(cores[turn], state, turn, net_player, eps, explore_seed)
+        pick = _pick_for(cores[turn], state, turn, net_player, eps, explore_seed,
+                         cands=record_cands)
         if not pick:
             other = 2 if turn == 1 else 1
-            pick = _pick_for(cores[other], state, other, net_player, eps, explore_seed)
+            pick = _pick_for(cores[other], state, other, net_player, eps, explore_seed,
+                             cands=record_cands)
             if not pick:
                 break
             turn = other
@@ -1205,6 +1215,17 @@ def _play_round(
             # against the Godot oracle stays untouched, exactly like
             # `knobs["deployment"]` only riding the arena branch.
             row["explored"] = bool(pick.get("explored", False))
+        if record_cands:
+            # Expert-iteration step 1: the planner's own menu — `trace.cands`
+            # in build index order, `trace.scored[i].idx` joining into it —
+            # plus the argmax's build index (`trace.scored[best_idx].idx`,
+            # which at eps=0 is the played candidate). Absent by default, so
+            # every vintage row stays byte-identical.
+            trace = pick["trace"]
+            row["cands"] = {
+                "list": trace["cands"],
+                "best": trace["scored"][trace["best_idx"]]["idx"],
+            }
         if sidecars:
             # `AiMissionEval.features(state, player, BattleSim.reply_threat(
             # state, player), true)` — the RICH vector, which is what
@@ -1393,6 +1414,7 @@ def play_game(
     deep_player: int = 0,
     deep_top_k: int | None = None,
     deep_horizon: int | None = None,
+    record_cands: bool = False,
     eval_variant_player: int = 0,
     eval_variant: int = 0,
 ) -> dict[str, Any]:
@@ -1507,6 +1529,14 @@ def play_game(
     every played row, TRUE only where ITS OWN coin fired; the result's
     `knobs["explore"]` stamp always says what the whole game was played with
     (NML-1147a pattern, alongside `fit_blend`).
+
+    `record_cands` is the expert-iteration opt-in (step 1): True asks every
+    `_pick_for` for the binding's `cands=True` and stamps each played row
+    with `row["cands"] = {"list": [...], "best": idx}` — the planner's built
+    candidates' full content in build index order (`trace.scored[i].idx`
+    joins into the list) plus the argmax's build index. False (the default)
+    writes the rows byte for byte as every corpus before this flag did, and
+    nothing is stamped into `knobs` — the key rides the rows alone.
 
     `deep_player` (the SEARCH A/B seam) is the per-seat counterpart of
     `top_k`/`horizon`: seat 1 or 2 plays ITS activations with a SECOND core
@@ -1858,6 +1888,7 @@ def play_game(
             fork_salt=fork_salt, sidecar_skip=sidecar_skip,
             magic=magic, spell_reach=spell_reach, tray=tray, dice_tally=dice_tally,
             net_player=net_player, eps=explore, act_cores=act_cores,
+            record_cands=record_cands,
         )
         state, owners = core.playout_seize(state, owners)
         vp = core.vp_round_add(owners, vp)
