@@ -308,3 +308,54 @@ fn the_oracle_names_what_it_does_not_cover() {
     assert_eq!(shrouded, 0);
     assert_eq!(carriers, 0);
 }
+
+/// NML-1161 GREEN — the knob is INERT on the table. Every recorded ARENA act
+/// carries per-unit `los` rows and NO `los_pairs` (nothing in a real game
+/// stamps `state["los_blocked"]`), so `State::los_clear` answers true for every
+/// pair and the whole recorded oracle reproduces under `shoot_los` too. This is
+/// the "no corpus moves" half, measured rather than asserted.
+#[test]
+fn the_shoot_los_gate_is_inert_on_a_recorded_arena_menu() {
+    let c = corpus();
+    assert!(
+        c.acts.iter().all(|a| a.state.los_pairs.is_none()),
+        "an arena recording carries no los_pairs — that is the premise of this test"
+    );
+    let r = menu_sweep(&c, Tuning { shoot_los: true, ..Tuning::default() });
+    println!("NML-1161 shoot_los on a recorded menu: {} of {} candidates differ", r.bad, r.cands);
+    assert_eq!(r.bad, 0, "first: {}", r.first.unwrap_or_default());
+}
+
+/// NML-1161 RED — and load-bearing where the TRAINER lives. Self-play stamps a
+/// `los_pairs` matrix (`tools/core_selfplay.gd:675`), and the resolve refuses a
+/// blocked pair (`sim.rs`, `sees` AND `_los_clear`) while the menu today asks
+/// only `sees`. Blank the matrix over every ordered pair and the menu must lose
+/// exactly its shoot targets — with the gate off it keeps them, offering shots
+/// the resolve would drop, each of them a state bit-equal to plain HOLD.
+#[test]
+fn the_shoot_los_gate_drops_a_target_the_resolve_would_refuse() {
+    let mut c = corpus();
+    for act in c.acts.iter_mut() {
+        let n = act.state.units();
+        act.state.los_pairs = Some(std::rc::Rc::new(vec![false; n * n]));
+    }
+    let shoots = |t: Tuning| -> usize {
+        let statics = build_act_statics(&c, REPO);
+        let mut sc = Scratch::default();
+        let mut n = 0;
+        for act in &c.acts {
+            for key in &act.pool {
+                let got = candidates_tuned(
+                    &act.state, &c.terrain, &statics, idx(&act.state, key), &mut sc, t,
+                );
+                n += got.iter().filter(|cd| cd.shoot.is_some()).count();
+            }
+        }
+        n
+    };
+    let open = shoots(Tuning::default());
+    let gated = shoots(Tuning { shoot_los: true, ..Tuning::default() });
+    println!("NML-1161 all pairs blocked: {open} shoot candidates open, {gated} gated");
+    assert!(open > 0, "the corpus has to offer shots for this to say anything");
+    assert_eq!(gated, 0, "a blocked matrix must leave the menu no shoot target at all");
+}

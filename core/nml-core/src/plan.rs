@@ -230,7 +230,11 @@ fn policy_of<'a>(
 
 /// The menu tuning a header resolves to — see `policy_of`.
 pub fn tuning_of(knobs: &Knobs) -> crate::menu::Tuning {
-    crate::menu::Tuning { charge_gate: knobs.charge_gate, ..Default::default() }
+    crate::menu::Tuning {
+        charge_gate: knobs.charge_gate,
+        shoot_los: knobs.menu_los,
+        ..Default::default()
+    }
 }
 
 /// `plan_with_rollout` with everything default — the entry point the game would

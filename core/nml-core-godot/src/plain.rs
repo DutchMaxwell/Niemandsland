@@ -828,6 +828,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // `los_pairs` at all — the knob exists for the Godot-free trainer,
         // whose twin (tools/core_selfplay.gd) is the other way round.
         los_model: dflag(d, "los_model"),
+        // NML-1161. No recorder writes this key, and no in-game state needs it:
+        // `_los_clear` is true for every pair in a real game (nothing stamps
+        // `state["los_blocked"]` there), so menu and resolve already agree.
+        // The knob exists for the trainer twin, which stamps that Callable.
+        menu_los: dflag(d, "menu_los"),
         // NML-1073 M5 D1-B4b/BUG-3. The recorder NOW writes this key
         // (act_recorder.gd `_header_line`, from `BattleSim.hero_fold_enabled()`),
         // so an in-game seam under the `hero_fold` knob folds the joined hero

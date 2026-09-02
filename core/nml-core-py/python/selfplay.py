@@ -730,6 +730,30 @@ def resolve_los(los: str) -> bool:
     if los not in LOS_MODES:
         raise ValueError("los must be one of %s, not %r" % (list(LOS_MODES), los))
     return los == "model"
+#: `menu_los` modes (NML-1161). "planner" is the default and every corpus
+#: written before this knob: `AiPlanner._best_shoot` (ai_planner.gd:1372-1385)
+#: filters targets on `BattleSim.sees` ALONE, while `BattleSim.resolve`
+#: (:770-773) ANDs `sees` with `_los_clear`. On the TABLE the two agree, because
+#: no real game stamps `state["los_blocked"]` and `_los_clear` is then true for
+#: every pair. In SELF-PLAY they do not: `tools/core_selfplay.gd:675` stamps it,
+#: so the menu offers shots the resolve silently drops — and a dropped volley
+#: leaves a state bit-identical to plain HOLD, which the eval scores equal and
+#: the argmax's first-wins tie-break hands to the do-nothing. "resolve" makes
+#: the menu ask the resolve's whole question, so an unexecutable shot is never
+#: offered as a tie with HOLD.
+MENU_LOS_MODES = ("planner", "resolve")
+
+
+def resolve_menu_los(menu_los: str) -> bool:
+    """`menu_los` as the crate's `Knobs.menu_los` bit, which `plan::tuning_of`
+    hands the menu as `Tuning::shoot_los`. An unknown mode RAISES for the same
+    reason `resolve_charge_gate` does: a silently ungated menu is worse than
+    no corpus."""
+    if menu_los not in MENU_LOS_MODES:
+        raise ValueError(
+            "menu_los must be one of %s, not %r" % (list(MENU_LOS_MODES), menu_los)
+        )
+    return menu_los == "resolve"
 
 
 #: `deployment` modes (NML-1152 step 8). "zone" is the default and is every
@@ -1501,6 +1525,7 @@ def play_game(
     movement: str = "rigid",
     sighting: str = "unit",
     los: str = "unit",
+    menu_los: str = "planner",
     engage_fold: bool = True,
     cond_ap: bool | None = None,
     vocab_version: int | None = None,
@@ -1725,6 +1750,7 @@ def play_game(
     eff_movement = resolve_movement(movement)
     eff_sighting = resolve_sighting(sighting)
     eff_los = resolve_los(los)
+    eff_menu_los = resolve_menu_los(menu_los)
     eff_deployment = resolve_deployment(deployment)
     knobs = dict(
         TRAINER_KNOBS,
@@ -1750,6 +1776,10 @@ def play_game(
         # NML-1160: WHICH sight the menu and the resolve read. "unit" leaves it
         # False, which is the default and what every earlier corpus carries.
         los_model=eff_los,
+        # NML-1161: whether the MENU's shoot leg asks the resolve's whole
+        # question. "planner" leaves it False, which is the GDScript's own menu
+        # and what every earlier corpus carries.
+        menu_los=eff_menu_los,
         # NML-1130: the header knob PR #446 defaults ON in the twin. True here
         # matches that default, so a caller that passes nothing sees no change.
         engage_fold=engage_fold,
@@ -2086,6 +2116,10 @@ def play_game(
             # "model", for the same reason `deployment` is only stamped under
             # "arena": a default game is the object it was before the knob.
             **({"los": los} if los != "unit" else {}),
+            # NML-1161: WHICH menu the game played. Stamped only under
+            # "resolve", for the same reason `deployment` is only stamped under
+            # "arena": a default game is the object it was before the knob.
+            **({"menu_los": menu_los} if menu_los != "planner" else {}),
             # NML-1147a: WHICH marker layout the game played (D8a). Gen-0's
             # rulebook corpus recorded exactly what a constants corpus records
             # until this key existed — the mode was honoured but never said.

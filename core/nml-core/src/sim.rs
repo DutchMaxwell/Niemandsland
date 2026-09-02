@@ -124,10 +124,7 @@ pub enum Unsupported {
 /// No matrix = no `los_blocked` seam on the state = clear for every pair.
 #[inline]
 fn los_clear(state: &State, i: usize, j: usize) -> bool {
-    match &state.los_pairs {
-        None => true,
-        Some(m) => m[i * state.units() + j],
-    }
+    state.los_clear(i, j)
 }
 
 /// `BattleSim._wounds_left` battle_sim.gd:1057-1061.
