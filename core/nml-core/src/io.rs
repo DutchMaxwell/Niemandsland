@@ -66,6 +66,14 @@ pub(crate) struct PlainUnit {
     aircraft: bool,
     #[serde(default)]
     dormant: bool,
+    /// The tray strength of a DORMANT unit (`battle_sim.gd:1539-1543`): the
+    /// living-model count and their current wounds, written by the recorder
+    /// only inside its `if dormant:` arm. `#[serde(default)]` because every
+    /// corpus recorded before this reader carries neither key on ANY unit.
+    #[serde(default)]
+    dormant_models: i64,
+    #[serde(default)]
+    dormant_wounds: Vec<i64>,
     #[serde(default)]
     casts: i64,
     #[serde(default)]
@@ -571,6 +579,8 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         in_cover: Vec::with_capacity(n),
         aircraft: Vec::with_capacity(n),
         dormant: Vec::with_capacity(n),
+        dormant_models: Vec::with_capacity(n),
+        dormant_wounds: Vec::with_capacity(n),
         casts: Vec::with_capacity(n),
         morale_bonus: Vec::with_capacity(n),
         ambush_arrived_round: Vec::with_capacity(n),
@@ -629,6 +639,8 @@ pub(crate) fn state_of(plain: PlainState, profiles: &Rc<Profiles>, roster: Rc<Ro
         st.in_cover.push(u.in_cover);
         st.aircraft.push(u.aircraft);
         st.dormant.push(u.dormant);
+        st.dormant_models.push(u.dormant_models);
+        st.dormant_wounds.push(u.dormant_wounds);
         st.casts.push(u.casts);
         st.morale_bonus.push(u.morale_bonus);
         st.ambush_arrived_round.push(u.ambush_arrived_round);
@@ -790,7 +802,8 @@ pub fn state_from_json(
 /// this one has no mask and writes a key whenever the value can be told apart
 /// from "the sim never carried it" —
 ///
-///   * `dormant` only when true, `earliest_arrival_round` only when it is not
+///   * `dormant` (and with it `dormant_models`/`dormant_wounds`, the recorder's
+///     own one-arm grouping) only when true, `earliest_arrival_round` only when it is not
 ///     the `-1` the reader defaults to, `wound_frac` only when non-zero (the
 ///     same rule plain.rs:508 applies), `los`/`shroud` only when present;
 ///   * `ambush_arrived_round`, `bands`, `charge_no_difficult` and
@@ -830,6 +843,16 @@ pub fn plain_of(st: &State) -> serde_json::Value {
         u.insert("ambush_arrived_round".into(), st.ambush_arrived_round[i].into());
         if st.dormant[i] {
             u.insert("dormant".into(), true.into());
+            // battle_sim.gd:1540-1543 writes all three keys in ONE `if dormant:`
+            // arm, so the flag is the condition for the strength too — a unit
+            // whose models are all gone still gets `0` / `[]` written, and a
+            // LIVE unit gets none of the three. Gating on the values instead
+            // would drop that first case and diverge from the recorder.
+            u.insert("dormant_models".into(), st.dormant_models[i].into());
+            u.insert(
+                "dormant_wounds".into(),
+                Value::Array(st.dormant_wounds[i].iter().map(|&w| w.into()).collect()),
+            );
         }
         if st.earliest_arrival_round[i] != -1 {
             u.insert("earliest_arrival_round".into(), st.earliest_arrival_round[i].into());
@@ -935,7 +958,7 @@ pub fn plain_of(st: &State) -> serde_json::Value {
 
 #[cfg(test)]
 mod tests {
-    use super::{los_positions, state_from_json, units_in_capture_order};
+    use super::{los_positions, plain_of, state_from_json, units_in_capture_order};
     use crate::acts::read_act_header;
     use crate::state::ProfileCache;
 
@@ -1013,6 +1036,68 @@ mod tests {
         let state = state_from_json(&plain, &mut cache, &mut roster).expect("state");
         assert_eq!(state.growth_markers[0], 2, "the recorded count still folds");
         assert_eq!(state.growth_round[0], -1, "arrived this round -> not yet swept");
+    }
+
+    /// `p1_0_a` on the tray: the shape `battle_sim.gd:1477-1489` + `:1539-1543`
+    /// write for a unit `SoloController.unit_in_reserve` answers true for —
+    /// zero table presence (`alive: 0`, no positions/wounds/radii) and its
+    /// strength parked in `dormant_models`/`dormant_wounds`, DAMAGED (one model
+    /// at 2 of 3 wounds, the Ambush Re-Deployment case of `:9951-9958`).
+    const DORMANT_PLAIN: &str = r#"{"round":1,"rounds_total":4,"scoring":"end",
+      "units":{
+        "p1_0_a":{"player":1,"alive":0,"wounds":[],"radii":[],
+          "positions":[],"in_cover":false,"shaken":false,
+          "fatigued":false,"activated":false,"casts":0,"morale_bonus":0,
+          "aircraft":false,"dormant":true,"dormant_models":3,
+          "dormant_wounds":[2,3,3],"ambush_arrived_round":-1,
+          "earliest_arrival_round":2,"wound_frac":0.0,"mods":{},"mods_base":{},
+          "bands":{"advance":6.0,"rush":12.0}},
+        "p2_0_b":{"player":2,"alive":1,"wounds":[1],"radii":[0.016],
+          "positions":[[-0.254,0.0,0.0]],"in_cover":false,"shaken":false,
+          "fatigued":false,"activated":false,"casts":0,"morale_bonus":0,
+          "aircraft":false,"dormant":false,"ambush_arrived_round":-1,
+          "earliest_arrival_round":-1,"wound_frac":0.0,"mods":{},"mods_base":{},
+          "bands":{"advance":6.0,"rush":12.0}}}}"#;
+
+    fn state_of(plain: &str) -> crate::state::State {
+        let header = read_act_header(LEDGER_HEADER).expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        state_from_json(plain, &mut cache, &mut roster).expect("state")
+    }
+
+    /// NML-1153 S1 RED/GREEN — the tray strength survives `plain -> State ->
+    /// plain`. Before this step `PlainUnit` had no field for either key, so
+    /// serde dropped both without a word and the arrival step would have had to
+    /// rebuild a damaged unit from `wounds_max` (i.e. heal it). Break either
+    /// half of the carry — the `PlainUnit` field, the `st.dormant_*.push`, or
+    /// the `plain_of` insert — and this fails.
+    #[test]
+    fn a_dormant_units_tray_strength_survives_the_round_trip() {
+        let st = state_of(DORMANT_PLAIN);
+        assert!(st.dormant[0], "p1_0_a is the reserve unit");
+        assert_eq!(st.alive[0], 0, "zero table presence, per battle_sim.gd:1477-1489");
+        assert_eq!(st.dormant_models[0], 3);
+        assert_eq!(st.dormant_wounds[0], vec![2, 3, 3]);
+        assert_eq!(st.dormant_models[1], 0, "a live unit carries the reader default");
+        assert!(st.dormant_wounds[1].is_empty());
+        let back = plain_of(&st);
+        let u = &back["units"]["p1_0_a"];
+        assert_eq!(u["dormant_models"], serde_json::json!(3));
+        assert_eq!(u["dormant_wounds"], serde_json::json!([2, 3, 3]));
+        assert_eq!(u["earliest_arrival_round"], serde_json::json!(2));
+    }
+
+    /// The byte-identity half: the qbg/qag bundles were recorded before either
+    /// key existed and carry no dormant unit at all, so `plain_of` must write
+    /// NEITHER name anywhere — a new key on every unit would move every replayed
+    /// state and with it the gates that diff them.
+    #[test]
+    fn a_corpus_without_the_tray_keys_gets_neither_key_back() {
+        let back = plain_of(&state_of(LEDGER_PLAIN)).to_string();
+        assert!(!back.contains("dormant_models"), "{back}");
+        assert!(!back.contains("dormant_wounds"), "{back}");
+        assert!(!back.contains("\"dormant\""), "no unit is dormant, so no flag either");
     }
 
     /// GATE Q-A-2 (NML-1073) — a `units` OBJECT is key-sorted by both writers

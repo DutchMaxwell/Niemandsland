@@ -69,6 +69,8 @@ fn diff_states(got: &State, want: &State) -> Vec<String> {
     cmp_int!(in_cover);
     cmp_int!(aircraft);
     cmp_int!(dormant);
+    cmp_int!(dormant_models);
+    cmp_int!(dormant_wounds);
     cmp_int!(casts);
     cmp_int!(morale_bonus);
     cmp_int!(ambush_arrived_round);

@@ -52,8 +52,10 @@ pub const UNIT_KEYS: [&str; 19] = [
     "attached_to",
 ];
 
-/// Keys of `_UNIT_DYNAMIC` the Rust state does not carry. Reported by
-/// `NmlCore.dropped_keys()` rather than silently swallowed.
+/// Keys of `_UNIT_DYNAMIC` this SEAM does not read. Reported by
+/// `NmlCore.dropped_keys()` rather than silently swallowed. (`State` itself has
+/// carried the two since NML-1153 S1, through the JSON loader in `io.rs`; this
+/// seam's `UNIT_KEYS` mask has no bit for them, so it declines them here too.)
 pub const DROPPED: [&str; 2] = ["dormant_models", "dormant_wounds"];
 
 /// The state-level blobs nothing in `resolve`/`score` reads: kept verbatim and
@@ -407,6 +409,8 @@ pub fn build_state(
         in_cover: Vec::with_capacity(n),
         aircraft: Vec::with_capacity(n),
         dormant: Vec::with_capacity(n),
+        dormant_models: Vec::with_capacity(n),
+        dormant_wounds: Vec::with_capacity(n),
         casts: Vec::with_capacity(n),
         morale_bonus: Vec::with_capacity(n),
         ambush_arrived_round: Vec::with_capacity(n),
@@ -465,6 +469,14 @@ pub fn build_state(
         st.in_cover.push(dflag(&u, "in_cover"));
         st.aircraft.push(dflag(&u, "aircraft"));
         st.dormant.push(dflag(&u, "dormant"));
+        // The two DROPPED keys stay dropped ON THIS SEAM: the state carries the
+        // fields since NML-1153 S1, but `plain_of`'s key mask (`UNIT_KEYS`) has
+        // no bit for them, so reading them here would let a round trip through
+        // this seam silently LOSE them again. Filled at the reader's default so
+        // every per-unit vector keeps length `n`; `dropped_keys()` is still the
+        // honest report. Wiring them is the S4 fixture's job, not S1's.
+        st.dormant_models.push(0);
+        st.dormant_wounds.push(Vec::new());
         st.casts.push(dint(&u, "casts", 0));
         st.morale_bonus.push(dint(&u, "morale_bonus", 0));
         st.ambush_arrived_round.push(dint(&u, "ambush_arrived_round", -1));

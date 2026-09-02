@@ -376,6 +376,15 @@ pub struct State {
     pub in_cover: Vec<bool>,
     pub aircraft: Vec<bool>,
     pub dormant: Vec<bool>,
+    /// The strength a DORMANT unit keeps on the tray (`battle_sim.gd:1539-1544`
+    /// writes `dormant_models`/`dormant_wounds` only inside its `if dormant:`
+    /// arm, so a live unit carries `0` / `[]` here and nothing else means
+    /// anything). Ambush Re-Deployment withdraws a DAMAGED unit into reserve
+    /// (`solo_controller.gd:9951-9958`), so the arrival step has to rebuild it
+    /// from these and not from `Profile.wounds_max`, which would heal it on the
+    /// way back in.
+    pub dormant_models: Vec<i64>,
+    pub dormant_wounds: Vec<Vec<i64>>,
     pub casts: Vec<i64>,
     pub morale_bonus: Vec<i64>,
     pub ambush_arrived_round: Vec<i64>,

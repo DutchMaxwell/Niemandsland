@@ -3394,6 +3394,8 @@ mod tests {
             in_cover: vec![false; 4],
             aircraft: vec![false; 4],
             dormant: vec![false; 4],
+            dormant_models: vec![0; 4],
+            dormant_wounds: vec![Vec::new(); 4],
             casts: vec![0; 4],
             morale_bonus: vec![0; 4],
             ambush_arrived_round: vec![-1; 4],

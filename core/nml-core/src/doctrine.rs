@@ -152,6 +152,7 @@ pub fn synth_state(a: &Value, b: &Value, zone_a: &Zone, zone_b: &Zone, markers: 
         alive,
         activated: vec![false; n], shaken: vec![false; n], fatigued: vec![false; n],
         in_cover: vec![false; n], aircraft: vec![false; n], dormant: vec![false; n],
+        dormant_models: vec![0; n], dormant_wounds: vec![Vec::new(); n],
         casts: vec![0; n], morale_bonus: vec![0; n],
         ambush_arrived_round: vec![0; n], earliest_arrival_round: vec![0; n],
         wound_frac: vec![1.0; n],
