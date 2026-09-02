@@ -372,16 +372,20 @@ fn no_target_base_means_no_slots() {
     assert!(charge_contact_slots(&[[0.0, 0.0]], &[0.5], &[]).is_empty());
 }
 
-/// THE UNGATED TIE. `charge_contact_slots`' pick order is a bare `<` on
-/// `_nearest_base_dist` (movement_planner.gd:944-945) with NO index fallback,
-/// and `Array.sort_custom` is an unstable introsort — so two EXACTLY
-/// equidistant chargers could be ordered either way in Godot, and the one that
-/// picks first takes the better slot. This port breaks the tie on the model
-/// index, which is a total order.
+/// THE TIE. `charge_contact_slots`' pick order sorts on `_nearest_base_dist`
+/// (movement_planner.gd:944-945) and on an exact distance tie falls back to
+/// `a < b` — the lower model index picks first — on BOTH sides since commit
+/// 023e3e28 (26.08.): GDScript at movement_planner.gd:952-955, this port at
+/// mv/charge.rs:72-80. (`Array.sort_custom` is an unstable introsort, so
+/// without that fallback the order among equidistant chargers would be left
+/// to the sort's pivoting, and the one that picks first takes the better
+/// slot.)
 ///
-/// The 16-game corpus contains ZERO such ties (11 charge calls, every mover at
-/// a distinct distance), so the corpus cannot falsify either choice; this test
-/// pins the behaviour the port ships.
+/// The recorded reference bundles contain real ties and follow
+/// lower-index-first on all of them (27/27); the remaining 97/996 slot
+/// divergences in those bundles are <= 4 ULP cos/sin differences (the
+/// recording machine's libm), not ordering. This test pins the shared
+/// behaviour with a symmetric case built by hand.
 #[test]
 fn an_exact_tie_in_the_charge_pick_order_goes_to_the_lower_index() {
     // Both chargers on the SAME spot: they are exactly equidistant, and they
