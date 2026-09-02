@@ -378,6 +378,59 @@ def test_aura_live_control_and_core_counter_net(tmp_path):
     assert "LIVE via the import expansion" in live["core_note"]
 
 
+def test_untracked_primitive_no_longer_trusted_whole(tmp_path):
+    """C-2 (AUDIT_armybook_flanks_2026-09-02.md sec.8, "census spot-check"):
+    a primitive-token match must not credit PORTED unless the primitive is a
+    vetted CONSUMED_PARAM_KEYS class. Today, an untracked primitive is
+    "trusted whole" the instant ITS OWN name happens to be a real, separate
+    rule reached only through an exact-literal gate elsewhere (Shielded's
+    `name == "Shielded"`, Ambush's own field) - every ALIAS sharing that
+    primitive tag (Sturdy Boost/Shielded, Ambushing Piercing Shot/Ambush)
+    rides along even though the alias can never pass that literal gate. The
+    real registry maps Sturdy Boost -> Shielded, Ignores Regeneration ->
+    Lacerate, Vale Oath -> Battleborn, Ambushing Piercing Shot -> Ambush -
+    none of the four are CONSUMED_PARAM_KEYS classes, so all four must drop
+    out of PORTED; the primitive's OWN row (Shielded) stays PORTED on its
+    own name literal."""
+    root = tmp_path / "repo"
+    for d in ("assets/solo", "data", "core/nml-core/src", "core/nml-core-py/python"):
+        (root / d).mkdir(parents=True)
+    (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
+        "common": {
+            "Shielded": {"primitive": "Shielded", "params": {}},
+            "Sturdy Boost": {"primitive": "Shielded", "params": {"defense_bonus": 1}},
+            "Ambush": {"primitive": "Ambush", "params": {}},
+            "Ambushing Piercing Shot": {"primitive": "Ambush", "params": {}},
+        },
+        "factions": {},
+    }))
+    (root / "data/encoder_rule_vocab_v1.json").write_text(json.dumps({"unit": [], "weapon": []}))
+    (root / "core/nml-core-py/python/list_to_profile.py").write_text("MOVE_PRIMITIVES = ()\n")
+    (root / "core/nml-core/src/arm.rs").write_text(
+        'fn unit_rule_active(name: &str) -> bool { name == "Shielded" }\n'
+        '\n'
+        'struct UnitSpec { ambush: bool }\n'
+    )
+    books = tmp_path / "books" / "gf"
+    books.mkdir(parents=True)
+    (books / "book_a.json").write_text(json.dumps({
+        "name": "Test Faction", "gameSystem": "gf",
+        "specialRules": [
+            {"name": "Shielded"}, {"name": "Sturdy Boost"},
+            {"name": "Ambush"}, {"name": "Ambushing Piercing Shot"},
+        ],
+    }))
+    res = census.census(tmp_path / "books", root)
+    per = res["rows"]
+    assert per["Shielded"]["per_system"]["gf"]["core"] == "PORTED", (
+        "the literal-gated name itself is genuinely PORTED - control"
+    )
+    assert per["Sturdy Boost"]["per_system"]["gf"]["core"] == "MISSING", (
+        "an untracked primitive must not credit its aliases (audit spot-check)"
+    )
+    assert per["Ambushing Piercing Shot"]["per_system"]["gf"]["core"] == "MISSING"
+
+
 def test_cli_prints_summary_and_writes_json(mini, tmp_path, capsys):
     root, books = mini
     out_json = tmp_path / "out" / "census.json"
