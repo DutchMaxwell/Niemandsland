@@ -555,18 +555,24 @@ fn execute(&self, band_in: f64, avoid_diff: bool, radii_m: &[f64]) -> Landing {
         .any(|(i, p)| g2::distance_to(*p, starts[i]) as f64 * IN2M > OVERLAP_EPS_M);
     // :4884-4885 — THE HARD FINAL PLACEMENT GATE, applied HERE, after the trim,
     // so the trim can never cut a gate-corrected endpoint off its trail. Only
-    // passes 1-2 are ported (`mv::gate`). A CHARGE is deliberately left out of
+    // passes 1-3 are ported (`mv::gate`). A CHARGE is deliberately left out of
     // this call even though the table gates one too: its gate is a different
     // animal — no band caps (the contact push owns the endpoint), the
     // contact-model exemption, `_clamp_gate_walls` on top — and none of that is
-    // written yet. S5b/S5c widen this call; they do not move it.
+    // written yet. S5c widens this call; it does not move it.
     if !self.allow_contact && stirred {
         let planned_in = achieved_in(&starts, &planned);
         let radii_in: Vec<f64> = radii_m.iter().map(|r| r / IN2M).collect();
         let ext = self.external_discs();
         let caps = self.gate_caps(&trails, radii_m, budget_in);
-        let (fixed, _rep) =
-            super::gate::finalize_placement(&planned, &radii_in, &ext, &caps, t.board_in());
+        let (fixed, _rep) = super::gate::finalize_placement(
+            &planned,
+            &radii_in,
+            &ext,
+            &caps,
+            t.board_in(),
+            Some(t),
+        );
         planned = fixed;
         // :4890-4931 GATE-COLLAPSE LADDER (S6): re-plan shorter when the gate
         // nearly erased pass 1 (`rescue_should_fire`); a coherent rung always
@@ -597,7 +603,7 @@ fn execute(&self, band_in: f64, avoid_diff: bool, radii_m: &[f64]) -> Landing {
                 }
                 let caps3 = self.gate_caps(&t3, radii_m, r3);
                 let (p3, _rep3) =
-                    super::gate::finalize_placement(&p3, &radii_in, &ext, &caps3, t.board_in());
+                    super::gate::finalize_placement(&p3, &radii_in, &ext, &caps3, t.board_in(), Some(t));
                 let a3 = achieved_in(&starts, &p3);
                 let c3ok = config_coherent(&p3, &radii_in);
                 // Lexicographic tie-break, same as the table: coherent beats
