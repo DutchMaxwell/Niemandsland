@@ -172,22 +172,15 @@ def compare_dump(dump, roll, run):
 # — the fixture carries none, and every case here passes none.
 
 def radius_of(n_models, base_r):
-    n = max(n_models, 1)
-    cols = min(n, 5)
-    rows = -(-n // cols)
-    half_w, half_d = (cols - 1) * 0.02, (rows - 1) * 0.02   # DEPLOY_SPACING_M 0.04, halved
-    return math.hypot(half_w, half_d) + base_r + 0.01
+    n = max(n_models, 1); cols = min(n, 5); rows = -(-n // cols)
+    return math.hypot((cols - 1) * 0.02, (rows - 1) * 0.02) + base_r + 0.01   # DEPLOY_SPACING_M 0.04, halved
 
 
 def arrival_class(truth, twin):
-    if truth is None and twin is None:
-        return "held"
-    if truth is None or twin is None:
-        return "mismatch"
-    if abs(quant(twin[0]) - quant(truth[0])) < 1e-9 and abs(quant(twin[1]) - quant(truth[1])) < 1e-9:
-        return "exact"
-    d = math.hypot(twin[0] - truth[0], twin[1] - truth[1])
-    return "within" if d <= SCAN_STEP + DUMP_QUANT else "mismatch"
+    if truth is None and twin is None: return "held"
+    if truth is None or twin is None: return "mismatch"
+    if abs(quant(twin[0]) - quant(truth[0])) < 1e-9 and abs(quant(twin[1]) - quant(truth[1])) < 1e-9: return "exact"
+    return "within" if math.hypot(twin[0] - truth[0], twin[1] - truth[1]) <= SCAN_STEP + DUMP_QUANT else "mismatch"
 
 
 def run_arrival(cases, fn, red_shift):
@@ -195,12 +188,9 @@ def run_arrival(cases, fn, red_shift):
     for case in cases:
         twin = None
         if fn is not None:
-            twin = fn(case["zone"], case["objectives"], [dict(o) for o in case["occupied"]],
-                      [dict(e) for e in case["enemies"]], case["own_ring_m"],
-                      radius_of(len(case["footprint"]), case["base_r"]),
-                      case["footprint"], case["base_r"], case["flying"])
-            if twin is not None and red_shift:
-                twin = [twin[0] + red_shift * SCAN_STEP, twin[1]]
+            twin = fn(case["zone"], case["objectives"], [dict(o) for o in case["occupied"]], [dict(e) for e in case["enemies"]],
+                      case["own_ring_m"], radius_of(len(case["footprint"]), case["base_r"]), case["footprint"], case["base_r"], case["flying"])
+            if twin is not None and red_shift: twin = [twin[0] + red_shift * SCAN_STEP, twin[1]]
         c[arrival_class(case["spot"], twin)] += 1
     return c
 
@@ -210,21 +200,15 @@ def main_arrival(args):
     fn = getattr(nml_core, "arrive_one", None)   # import guard — the twin may not exist yet
     c = run_arrival(cases, fn, args.arrival_red_shift)
     n = len(cases)
-    print("ARRIVAL %d cases: %d exact | %d within | %d mismatch | %d held" % (
-        n, c["exact"], c["within"], c["mismatch"], c["held"]))
+    print("ARRIVAL %d cases: %d exact | %d within | %d mismatch | %d held" % (n, c["exact"], c["within"], c["mismatch"], c["held"]))
     if fn is None:
-        print("ARRIVAL: nml_core.arrive_one absent (deployment::arrive_one not landed) — fixture "
-              "loaded, cases ran the stub (every case mismatch/held) — NO VERDICT, refusing a pass")
+        print("ARRIVAL: nml_core.arrive_one absent (deployment::arrive_one not landed) — fixture loaded, cases ran the stub (every case mismatch/held) — NO VERDICT, refusing a pass")
         return 2
     if args.arrival_red_shift:
         red = c["exact"] == 0
-        print("ARRIVAL RED knob %d: exact %d — %s" % (args.arrival_red_shift, c["exact"],
-            "collapsed, exit 1 as designed" if red else "INERT — RED proof FAILED"))
+        print("ARRIVAL RED knob %d: exact %d — %s" % (args.arrival_red_shift, c["exact"], "collapsed, exit 1 as designed" if red else "INERT — RED proof FAILED"))
         return 1 if red else 2
-    # SPEC §6.2: exact + within == N non-held cases, mismatch == 0 — the classifier already
-    # routes a held-disagreement to "mismatch" (arrival_class), so mismatch == 0 alone implies
-    # every held case agreed on both sides too.
-    ok = c["mismatch"] == 0
+    ok = c["mismatch"] == 0   # SPEC §6.2: mismatch == 0 alone implies every held case agreed too
     print("ARRIVAL %s" % ("floor OK" if ok else "floor REGRESSION"))
     return 0 if ok else 1
 

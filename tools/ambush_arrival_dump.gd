@@ -22,13 +22,10 @@ const CASES := [
 	["held_fully_occupied", "Ambush", [["", Vector3(1.0, 0, 1.0)]], Vector2.ZERO, [[Vector2.ZERO, 2.0]]],
 ]
 
-var _out_path := "res://core/nml-core/tests/fixtures/ambush_arrival_gap.json"
 var _main: Node; var _solo: SoloController; var _units: Array = []
 
 
 func _initialize() -> void:
-	for a in OS.get_cmdline_user_args():
-		if a.begins_with("out="): _out_path = a.substr(4)
 	ProjectSettings.set_setting("niemandsland/harness_mode", true); change_scene_to_file("res://scenes/main.tscn"); _drive.call_deferred()
 
 
@@ -37,16 +34,14 @@ func _drive() -> void:
 	_main = current_scene; _main.solo_ai_slots = {2: true}; _main._ensure_solo_controller()
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING; _main._solo_batch = true
 	_solo = _main.solo_controller
-	var w: float = _main.table.table_size.x * 0.3048; var d: float = _main.table.table_size.y * 0.3048
-	var zone := Rect2(Vector2(-w / 2.0, -d / 2.0), Vector2(w, d))
+	var zone := Rect2(Vector2(-0.9144, -0.6096), Vector2(1.8288, 1.2192))   # the DEFAULT_TABLE_SIZE_FEET 6x4ft zone (main.gd:23, :10428-10431)
 	var cases: Array = CASES.map(func(spec): return _run_case(spec, zone))
-	var f := FileAccess.open(_out_path, FileAccess.WRITE)
+	var f := FileAccess.open("res://core/nml-core/tests/fixtures/ambush_arrival_gap.json", FileAccess.WRITE)
 	f.store_string(JSON.stringify({"cases": cases}, "  ")); f.close()
 	print("AMBUSH_ARRIVAL_GAP %d OK" % cases.size())
-	for u in _units:
+	for u in _units:   # models.clear() alone breaks the GameUnit<->ModelInstance cycle
 		for m in (u as GameUnit).models:
-			var mi := m as ModelInstance; if is_instance_valid(mi.node): mi.node.free()
-			mi.unit = null
+			if is_instance_valid((m as ModelInstance).node): (m as ModelInstance).node.free()
 		(u as GameUnit).models.clear()
 	quit(0)
 
@@ -60,17 +55,13 @@ func _run_case(spec: Array, zone: Rect2) -> Dictionary:
 		var enemy: GameUnit = E2EBoot.make_unit(_main, 1, "%s_e" % spec[0], [e[1]])
 		if str(e[0]) != "": enemy.unit_properties["special_rules"] = [str(e[0])]; enemy.unit_properties["faction_folder"] = "eternal_dynasty"   # a real GF faction carrying Repel Ambushers — repel_ambush_dist_m is faction-scoped (rules_registry.gd:59-69)
 		_units.append(enemy)
-		for m in enemy.get_alive_models():
-			var mi := m as ModelInstance
-			enemies.append({"pos": Vector2(mi.node.global_position.x, mi.node.global_position.z),
-				"min_dist_m": SoloController.repel_ambush_dist_m(enemy), "pad_m": SoloController.model_base_radius_m(mi)})
+		enemies += enemy.get_alive_models().map(func(m): return {"pos": Vector2((m as ModelInstance).node.global_position.x, (m as ModelInstance).node.global_position.z), "min_dist_m": SoloController.repel_ambush_dist_m(enemy), "pad_m": SoloController.model_base_radius_m(m)})
 	var occupied: Array = (spec[4] as Array).map(func(o): return {"pos": o[0], "radius": o[1]})
 	_solo.ambush_reserve = [arriver]; _solo._deploy_objectives = [spec[3]]
 	var arrived: GameUnit = _solo.arrive_one_ambush_unit(zone, enemies, occupied.duplicate(true), 2, [])
 	var c: Vector3 = _solo.unit_centre(arriver) if arrived == arriver else Vector3.INF
 	var spot = null if arrived != arriver else [c.x, c.z]
-	return {"case": spec[0], "zone": [zone.position.x, zone.position.y, zone.size.x, zone.size.y],
-		"objectives": [[(spec[3] as Vector2).x, (spec[3] as Vector2).y]],
+	return {"case": spec[0], "zone": [zone.position.x, zone.position.y, zone.size.x, zone.size.y], "objectives": [[(spec[3] as Vector2).x, (spec[3] as Vector2).y]],
 		"occupied": occupied.map(func(o): return {"pos": [(o["pos"] as Vector2).x, (o["pos"] as Vector2).y], "radius": float(o["radius"])}),
 		"enemies": enemies.map(func(e): return {"pos": [(e["pos"] as Vector2).x, (e["pos"] as Vector2).y], "min_dist_m": float(e["min_dist_m"]), "pad_m": float(e["pad_m"])}),
 		"own_ring_m": _solo._reserve_min_enemy_dist_m(arriver), "footprint": _solo._deploy_footprint_offsets(arriver).map(func(v): return [(v as Vector2).x, (v as Vector2).y]),

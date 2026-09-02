@@ -19,10 +19,7 @@
 # "hasn't had its alternating turn yet").
 #
 # Usage: ambush_arrival_corpus.py <out.json> <corpus_dir> [<corpus_dir> ...]
-import glob
-import json
-import os
-import sys
+import glob, json, os, sys
 
 
 def game_cases(path):
@@ -31,30 +28,23 @@ def game_cases(path):
     zone = [-tf[0] * 0.1524, -tf[1] * 0.1524, tf[0] * 0.3048, tf[1] * 0.3048]
     dormant, arrivals, out = {}, {}, []
     for act in acts:
-        if act.get("kind") != "act":
-            continue
+        if act.get("kind") != "act": continue
         rnd, st = act["round"], act["state"]
         for uid, u in st["units"].items():
             if dormant.get(uid, u.get("dormant", False)) and not u.get("dormant", False) and u.get("ambush_arrived_round", -1) == rnd:
                 arrivals.setdefault(rnd, []).append((uid, st))
             dormant[uid] = u.get("dormant", False)
     for arr in arrivals.values():
-        if len(arr) != 1:
-            continue
+        if len(arr) != 1: continue
         uid, st = arr[0]; units = st["units"]; u = units[uid]; pos = u["positions"]
-        if not pos:
-            continue
+        if not pos: continue
         cx, cz = sum(p[0] for p in pos) / len(pos), sum(p[2] for p in pos) / len(pos)
         rules = u["prof"]["special_rules"]
-        others = [(ou, p, r) for oid, ou in units.items() if oid != uid and not ou.get("dormant") and ou.get("alive", 0) > 0
-                  for p, r in zip(ou["positions"], ou.get("radii") or [0.016] * len(ou["positions"]))]
+        others = [(ou, p, r) for oid, ou in units.items() if oid != uid and not ou.get("dormant") and ou.get("alive", 0) > 0 for p, r in zip(ou["positions"], ou.get("radii") or [0.016] * len(ou["positions"]))]
         occ = [{"pos": [p[0], p[2]], "radius": r + 0.005} for ou, p, r in others]
-        ene = [{"pos": [p[0], p[2]], "min_dist_m": 0.3048 if "Repel Ambushers" in ou["prof"]["special_rules"] else 0.0, "pad_m": r}
-               for ou, p, r in others if ou["player"] != u["player"]]
-        out.append({"case": "%s_%s" % (os.path.basename(os.path.dirname(path)), uid[-8:]), "zone": zone,
-            "objectives": [[o["pos"][0], o["pos"][2]] for o in st["objectives"]], "occupied": occ, "enemies": ene,
-            "own_ring_m": 0.0762 if "Infiltrate" in rules else 0.2286, "footprint": [[p[0] - cx, p[2] - cz] for p in pos],
-            "base_r": (u.get("radii") or [0.016])[0], "flying": "Strider" in rules or "Flying" in rules, "spot": [cx, cz]})
+        ene = [{"pos": [p[0], p[2]], "min_dist_m": 0.3048 if "Repel Ambushers" in ou["prof"]["special_rules"] else 0.0, "pad_m": r} for ou, p, r in others if ou["player"] != u["player"]]
+        out.append({"case": "%s_%s" % (os.path.basename(os.path.dirname(path)), uid[-8:]), "zone": zone, "objectives": [[o["pos"][0], o["pos"][2]] for o in st["objectives"]], "occupied": occ, "enemies": ene,
+            "own_ring_m": 0.0762 if "Infiltrate" in rules else 0.2286, "footprint": [[p[0] - cx, p[2] - cz] for p in pos], "base_r": (u.get("radii") or [0.016])[0], "flying": "Strider" in rules or "Flying" in rules, "spot": [cx, cz]})
     return out
 
 
