@@ -191,6 +191,109 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v104 -- "survive the approach": v0's `presence` charges exactly one round of
+/// expected reply fire no matter how many rounds a unit still needs to reach
+/// the marker, so a unit that will be shot to pieces en route counts its full
+/// projected strength today. v104 rebuilds `needed` exactly as `presence`
+/// computes it and charges the expected reply once per transit round beyond
+/// the first, discounted like everything else: with no threat, or once the
+/// unit is in control range or one activation away (`needed` <= 1), it is
+/// bit-identical to v0 -- the divergence is confined to multi-round approaches.
+fn presence_v104(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
+    let base = presence(state, i, obj_pos, threat);
+    if base <= 0.0 || threat <= 0.0 {
+        return base;
+    }
+    // The correction rides on v0's own arithmetic: base = (S - threat) *
+    // DISCOUNT^needed with S > threat here, so charging `threat` for each
+    // extra transit round is exactly `base - threat * (needed-1) *
+    // DISCOUNT^needed`, floored at zero. `needed` must mirror `presence`
+    // verbatim or the DISCOUNT factor of the correction would not line up.
+    let d = control_gap_in(state, i, obj_pos);
+    let rush = state.bands[i].rush;
+    let mut needed: i64 = 0;
+    if d > OBJECTIVE_CONTROL_IN + CONTROL_EPS {
+        needed = ((d - OBJECTIVE_CONTROL_IN) / rush.max(1.0)).ceil() as i64;
+    }
+    if state.ambush_arrived_round[i] == state.round {
+        needed = needed.max(1);
+    }
+    if state.shaken[i] {
+        needed += 1;
+    }
+    // `needed <= moves_left` holds whenever base > 0, so `needed` is small and
+    // the powf below is cheap; an unreachable unit already returned 0 above.
+    let extra_rounds = (needed - 1).max(0) as f64;
+    (base - threat * extra_rounds * DISCOUNT.powf(needed as f64)).max(0.0)
+}
+
+/// v104 `_objective_p` -- verbatim v0, but every unit's hold strength comes
+/// from `presence_v104` (survival-priced approach).
+fn objective_p_v104(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = state.objectives[obj_index];
+    let mut mine = 0.0f64;
+    let mut theirs = 0.0f64;
+    for i in 0..state.units() {
+        let p = presence_v104(state, i, obj.pos, threat_of(incoming, i));
+        if state.player[i] == player {
+            mine += p;
+        } else {
+            theirs += p;
+        }
+    }
+    if mine + theirs <= 0.0 {
+        return if obj.owner == 0 {
+            0.5
+        } else if obj.owner == player {
+            1.0
+        } else {
+            0.0
+        };
+    }
+    mine / (mine + theirs)
+}
+
+/// v104 `_score_hand` -- verbatim v0 routing (destroy missions keep the frozen
+/// grip logic); the only behavioural difference is the presence term above.
+fn score_hand_v104(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() {
+        return 0.5;
+    }
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) {
+        // NML-1010 W3b: destroy missions score my grip on THEIR marker minus
+        // their grip on MINE, destroyed states locked at 1/0.
+        let mut att = 0.0f64;
+        let mut deff = 0.0f64;
+        for i in 0..state.objectives.len().min(state.markers_meta.len()) {
+            let meta = &state.markers_meta[i];
+            let ob = meta.owned_by;
+            if ob == 0 {
+                continue;
+            }
+            if meta.destroyed {
+                if ob == player {
+                    deff = 1.0;
+                } else {
+                    att = 1.0;
+                }
+                continue;
+            }
+            let pctrl = objective_p_v104(state, i, player, incoming);
+            if ob == player {
+                deff = 1.0 - pctrl;
+            } else {
+                att = pctrl;
+            }
+        }
+        return (0.5 + 0.5 * (att - DESTROY_DEFENCE_WEIGHT * deff)).clamp(0.0, 1.0);
+    }
+    let mut total = 0.0f64;
+    for i in 0..state.objectives.len() {
+        total += objective_p_v104(state, i, player, incoming);
+    }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +304,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        104 => score_hand_v104(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
