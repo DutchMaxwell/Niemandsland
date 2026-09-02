@@ -326,6 +326,18 @@ pub struct Seams {
     /// so a bundle replayed with the rule ON would part from its own dice.
     #[serde(default)]
     pub hero_last: bool,
+    /// NML-1157 — the CASTER is read off the whole activating chain (host plus
+    /// its alive attached heroes), not off the host alone. `Caster(X)` is a hero
+    /// rule, a joined hero never activates on its own, and both cast paths read
+    /// `statics[profile[si]].is_caster` / `state.casts[si]` — so on
+    /// `~/selfplay_out/gen0_teacher` all 13 caster units are attached heroes and
+    /// **0 of 52** chain activations ever cast, with `cast` on or off. See
+    /// `sim::caster_of`.
+    ///
+    /// Default OFF: it moves the LEGACY spell rider's volley EV as well as the
+    /// sub-phase, so every corpus recorded before it replays unchanged.
+    #[serde(default)]
+    pub cast_fold: bool,
     /// NML-1073 M4-7 — NML_SIM_PATH: the imagined move follows a tier-2
     /// `mv::reach` route instead of a straight line. No corpus was ever
     /// recorded with it, so it defaults OFF and every recorded rollout replays

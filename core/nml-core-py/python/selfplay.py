@@ -1051,6 +1051,11 @@ TRAINER_KNOBS = {
     # land on the hero — 352 of qbg_ref+qag_ref's 16043 acts name one — so a
     # bundle replayed with the rule ON would part from its own dice.
     "hero_last": False,
+    # NML-1157: the CASTER is read off the activating chain, not off the host
+    # alone. False is the crate's default and what every earlier corpus carries.
+    # Turning `seam_cast` on WITHOUT this still casts nothing: `Caster(X)` is a
+    # hero rule and a joined hero never activates on its own.
+    "cast_fold": False,
     "seam_spacing": True,
     "seam_path": False,
     "charge_gate": False,
@@ -1200,6 +1205,15 @@ def _magic_init(units: list[dict[str, Any]], books: dict[str, list[float]]) -> d
             if books.get(u["unit_id"]):
                 magic["books_resolved"][key] += 1
     return magic
+
+
+def _chain_casts(state, chain: dict[int, list[int]] | None, actor: int) -> int:
+    """NML-1157 — the activating CHAIN's cast tokens: the acting unit plus its
+    joined heroes. `Caster(X)` is a hero rule and a joined hero never activates
+    on its own, so under `cast_fold` the pool that shrinks is the HERO's slot;
+    reading the actor's alone booked every such cast as no cast at all."""
+    c = state.casts()
+    return sum(c[i] for i in chain[actor]) if chain is not None else c[actor]
 
 
 def _magic_tally(magic: dict[str, Any], side_key: str, before: int, after: int) -> None:
@@ -1459,6 +1473,17 @@ def _play_round(
     # `state["units"]` is keyed by unit key and the crate's per-unit lists by
     # capture index; the roster never changes shape inside a game.
     at = {k: i for i, k in enumerate(state.keys())}
+    # NML-1157: the CASTER of an activation may be a JOINED HERO, whose tokens
+    # live in its own roster slot (`Seams::cast_fold`, `sim::caster_of`). The
+    # magic ledger counts the CHAIN so a hero's cast is not booked as no cast.
+    # One `plain()` per round; attachment never changes inside a game.
+    chain: dict[int, list[int]] | None = None
+    if magic is not None:
+        plain_units = state.plain()["units"]
+        chain = {
+            at[k]: [at[k]] + [at[h] for h in v["attached"] if h in at]
+            for k, v in plain_units.items()
+        }
     guard = state.units * 2 + 4
     while guard > 0:
         guard -= 1
@@ -1554,7 +1579,7 @@ def _play_round(
         side_key = "p%d" % turn
         actor = at[pick["unit_key"]]
         if magic is not None:
-            casts_before = state.casts()[actor]
+            casts_before = _chain_casts(state, chain, actor)
             events_before = len(state.cast_event_kinds())
             _magic_eligibility_tally(
                 magic, side_key, state, actor,
@@ -1583,7 +1608,7 @@ def _play_round(
             # inherits the answer exactly as `clone_state` does.
             state = core.restamp_los(state)
         if magic is not None:
-            _magic_tally(magic, side_key, casts_before, state.casts()[actor])
+            _magic_tally(magic, side_key, casts_before, _chain_casts(state, chain, actor))
             _spells_by_kind_tally(magic, side_key, state.cast_event_kinds(), events_before)
         last_side = turn
         turn = 2 if turn == 1 else 1
@@ -1707,6 +1732,7 @@ def play_game(
     charge_gate: str = "off",
     menu_targets: bool = False,
     hero_last: bool = False,
+    cast_fold: bool = False,
     hero_attach: str = "off",
     dice: str = "expected",
     charge_landing: str = "off",
@@ -1976,6 +2002,10 @@ def play_game(
         menu_targets=bool(menu_targets),
         # NML-1157: see TRAINER_KNOBS. Needs `hero_attach` on to do anything.
         hero_last=bool(hero_last),
+        # NML-1157: see TRAINER_KNOBS. Needs `hero_attach` on to do anything —
+        # without the fold the rest of the resolver does not believe in the
+        # chain either (`sim::caster_of`).
+        cast_fold=bool(cast_fold),
         # NML-1073 M5 D1-B4b: the SEAM half of `hero_attach`. Deriving the
         # attachment is not enough — without this the hero would fire inside its
         # host's volley AND still be handed a full activation of its own
@@ -2365,6 +2395,7 @@ def play_game(
             # existed, so no Godot parity gate sees a new key.
             **({"menu_targets": True} if menu_targets else {}),
             **({"hero_last": True} if hero_last else {}),
+            **({"cast_fold": True} if cast_fold else {}),
             "hero_attach": hero_attach,
             "dice": eff_dice,
             "charge_landing": charge_landing,
@@ -2587,6 +2618,13 @@ def main(argv: list[str]) -> int:
         "--hero-attach table, and default off so every recorded bundle replays",
     )
     ap.add_argument(
+        "--cast-fold",
+        action="store_true",
+        help="NML-1157: read the CASTER off the whole activating chain (host + its "
+        "alive attached heroes) instead of the host alone; needs --hero-attach table, "
+        "and without it a joined Caster hero never casts however seam_cast is set",
+    )
+    ap.add_argument(
         "--hero-attach",
         choices=list(HERO_ATTACH_MODES),
         default="off",
@@ -2702,6 +2740,7 @@ def main(argv: list[str]) -> int:
             charge_gate=a.charge_gate,
             menu_targets=a.menu_targets,
             hero_last=a.hero_last,
+            cast_fold=a.cast_fold,
             hero_attach=a.hero_attach,
             dice=a.dice,
             charge_landing=a.charge_landing,

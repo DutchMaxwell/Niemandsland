@@ -198,6 +198,7 @@ fn seams_of(knobs: &Knobs) -> Seams {
         spacing: knobs.seam_spacing,
         cast: knobs.seam_cast,
         hero_last: knobs.hero_last,
+        cast_fold: knobs.cast_fold,
         path: knobs.seam_path,
         hero_attach: knobs.hero_attach,
         charge_landing: knobs.charge_landing,

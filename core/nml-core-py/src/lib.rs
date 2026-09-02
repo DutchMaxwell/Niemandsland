@@ -594,6 +594,7 @@ impl Core {
             spacing: self.knobs.seam_spacing,
             cast: self.knobs.seam_cast,
             hero_last: self.knobs.hero_last,
+            cast_fold: self.knobs.cast_fold,
             path: self.knobs.seam_path,
             hero_attach: self.knobs.hero_attach,
             charge_landing: self.knobs.charge_landing,
@@ -668,6 +669,7 @@ impl Core {
         m.insert("seam_spacing".into(), self.knobs.seam_spacing.into());
         m.insert("seam_path".into(), self.knobs.seam_path.into());
         m.insert("hero_last".into(), self.knobs.hero_last.into());
+        m.insert("cast_fold".into(), self.knobs.cast_fold.into());
         m.insert("charge_gate".into(), self.knobs.charge_gate.into());
         m.insert("menu_targets".into(), self.knobs.menu_targets.into());
         m.insert("hero_attach".into(), self.knobs.hero_attach.into());
