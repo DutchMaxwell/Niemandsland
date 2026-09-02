@@ -238,7 +238,9 @@ def narrate(rec, acts, nm, lists):
 
 
 def is_reserve(u):
-    # Ambush/Infiltrate/Rapid Ambush, on the unit's own rules or an item's grant.
+    # Ambush/Infiltrate/Rapid Ambush, on the unit's own rules or an item's
+    # grant. FALLBACK ONLY: states whose plain form carries the per-unit
+    # reserve fields (io.rs plain_of) are read by stats_row directly.
     ns = [r.get("name", "") for r in u.get("rules", [])]
     ns += [c.get("name", "") for it in u.get("items", []) for c in it.get("content", [])]
     return any(k in n.lower() for n in ns for k in ("ambush", "infiltrate"))
@@ -270,8 +272,9 @@ def stats_row(rec, acts, lists):
                charges_declared=0, charges_beyond_band=0, charges_reached_contact=0, hold_nothing=0,
                acts_with_dice=0, shoot_offers_total=0, shoot_offers_unexecutable=0, shots_executed=0,
                hero_snipes=0, offboard_destinations=0, full_band_forest=0, dangerous_plain=0,
-               objective_gifts=0, morale_tests_rolled=0, advance_shoot_acts=0,
-               limited_weapon_shots=0, reserve_absent={"p1": 0, "p2": 0},
+                objective_gifts=0, morale_tests_rolled=0, advance_shoot_acts=0,
+                limited_weapon_shots=0, reserve_absent={"p1": 0, "p2": 0},
+                reserve_arrived_round2={"p1": 0, "p2": 0},
                owners_by_round=[g["owners"] for g in rec["rounds_log"]])
     nm = dict(zip(acts[0].get("keys", []), rec.get("roster", []))) if acts else {}
     acted = {a["row"]["unit"] for a in acts}
@@ -319,10 +322,29 @@ def stats_row(rec, acts, lists):
     for i, pb in enumerate(rec["mission"]["objectives_layout"]["placed_by"]):
         owner = row["owners_by_round"][-1][i]
         row["objective_gifts"] += pb in (1, 2) and owner in (1, 2) and owner != pb
-    for s in ("p1", "p2"):
-        for i, u in enumerate(lists[s]["units"]):
-            if is_reserve(u) and "%s_%d_%s" % (s, i, u.get("id", i)) not in acted:
-                row["reserve_absent"][s] += u.get("cost", 0)
+    # "Was in reserve" is `dormant` at round 1 and "never arrived" is
+    # `ambush_arrived_round == -1` at game end (io.rs plain_of, selfplay.py:957);
+    # the name heuristic — the fallback for states without the fields — also
+    # counted joined heroes whose ITEM granted Ambush, never reserved at all.
+    first, last = acts[0]["before"]["units"], acts[-1]["after"]["units"]
+    if not any("ambush_arrived_round" in u for u in first.values()):
+        row["reserve_metric"] = "heuristic"
+        for s in ("p1", "p2"):
+            for i, u in enumerate(lists[s]["units"]):
+                if is_reserve(u) and "%s_%d_%s" % (s, i, u.get("id", i)) not in acted:
+                    row["reserve_absent"][s] += u.get("cost", 0)
+    else:
+        row["reserve_metric"] = "fields"
+        for s in ("p1", "p2"):
+            for i, u in enumerate(lists[s]["units"]):
+                k = "%s_%d_%s" % (s, i, u.get("id", i))
+                if not first.get(k, {}).get("dormant"):
+                    continue
+                arr = last.get(k, {}).get("ambush_arrived_round", -1)
+                if arr == -1:
+                    row["reserve_absent"][s] += u.get("cost", 0)
+                elif arr == 2:
+                    row["reserve_arrived_round2"][s] += u.get("cost", 0)
     return row
 
 
