@@ -191,6 +191,44 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v403: v0's hand score, except a marker that NEITHER side projects any hold
+/// presence on is scored by approach proximity — each side's best reachable
+/// unit's distance past `OBJECTIVE_CONTROL_IN`, shared as
+/// `d_theirs / (d_mine + d_theirs)` (INF saturates) — instead of outright
+/// owner credit. An empty marker nobody controls is contested, not owned, so
+/// early boards keep a search gradient. Destroy missions and empty boards
+/// stay v0.
+fn score_hand_v403(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() || (!state.markers_meta.is_empty() && is_destroy_mission(state)) {
+        return score_hand(state, player, incoming);
+    }
+    let mut total = 0.0f64;
+    for obj in state.objectives.iter() {
+        let (mut mine, mut theirs, mut d_m, mut d_t) = (0.0, 0.0, f64::INFINITY, f64::INFINITY);
+        for i in 0..state.units() {
+            let p = presence(state, i, obj.pos, threat_of(incoming, i));
+            if state.player[i] == player { mine += p } else { theirs += p }
+            let d = control_gap_in(state, i, obj.pos) - OBJECTIVE_CONTROL_IN;
+            // presence's reach gate on excess distance; INF saturates the cast.
+            if can_hold_marker(state, i, state.round)
+                && d > 0.0
+                && (d / state.bands[i].rush.max(1.0)).ceil() as i64
+                    <= state.rounds_total - state.round + i64::from(!state.activated[i])
+            {
+                if state.player[i] == player { d_m = d_m.min(d) } else { d_t = d_t.min(d) }
+            }
+        }
+        total += if mine + theirs > 0.0 {
+            mine / (mine + theirs)
+        } else if d_m.is_infinite() && d_t.is_infinite() {
+            if obj.owner == player { 1.0 } else if obj.owner == 0 { 0.5 } else { 0.0 }
+        } else if d_m.is_infinite() { 0.0 }
+        else if d_t.is_infinite() { 1.0 }
+        else { d_t / (d_m + d_t) };
+    }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +239,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        403 => score_hand_v403(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
