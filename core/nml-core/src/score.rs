@@ -191,6 +191,48 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+const PROXIMITY_REACH_IN_V101: f64 = 24.0; // two standard 12" double-moves: beyond this a unit cannot contest the marker by the next round end.
+const OWNER_INERTIA_V101: f64 = 0.25; // seize rule: an unchallenged standing owner keeps an unheld marker, but only a quarter-step from even.
+const CONTEST_WEIGHT_V101: f64 = 0.25; // approach distance is the best evidence of who takes an unheld marker; 0.25 keeps every owner+distance mix inside [0, 1].
+
+/// v101 — as frozen `objective_p` while any unit projects presence; when NO
+/// unit does, tilt the owner default by approach distance (see consts above).
+fn objective_p_v101(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = state.objectives[obj_index];
+    let (mut mine, mut theirs, mut my_prox, mut their_prox) = (0.0f64, 0.0f64, 0.0f64, 0.0f64);
+    for i in 0..state.units() {
+        let mine_side = state.player[i] == player;
+        let p = presence(state, i, obj.pos, threat_of(incoming, i));
+        if mine_side { mine += p; } else { theirs += p; }
+        if state.alive[i] > 0 && !state.aircraft[i] {
+            let d = control_gap_in(state, i, obj.pos);
+            let prox = (1.0 - (d - OBJECTIVE_CONTROL_IN).max(0.0) / PROXIMITY_REACH_IN_V101).max(0.0);
+            if mine_side { my_prox = my_prox.max(prox); } else { their_prox = their_prox.max(prox); }
+        }
+    }
+    if mine + theirs > 0.0 {
+        return mine / (mine + theirs);
+    }
+    let own = if obj.owner == 0 { 0.0 } else if obj.owner == player { 1.0 } else { -1.0 };
+    (0.5 + OWNER_INERTIA_V101 * own + CONTEST_WEIGHT_V101 * (my_prox - their_prox)).clamp(0.0, 1.0)
+}
+
+/// v101 `score_hand` — hold missions score with the distance-aware fallback;
+/// destroy missions are untouched (delegated to the frozen `score_hand`).
+fn score_hand_v101(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() {
+        return 0.5;
+    }
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) {
+        return score_hand(state, player, incoming);
+    }
+    let mut total = 0.0f64;
+    for i in 0..state.objectives.len() {
+        total += objective_p_v101(state, i, player, incoming);
+    }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +243,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        101 => score_hand_v101(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
