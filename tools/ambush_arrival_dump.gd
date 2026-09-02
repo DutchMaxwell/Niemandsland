@@ -61,16 +61,14 @@ func _initialize() -> void:
 
 func _drive() -> void:
 	for _i in 40: await process_frame
-	_main = current_scene
-	if _main == null: printerr("AMBUSH_DUMP FATAL: main.tscn never mounted"); quit(1); return
+	_main = current_scene; if _main == null: printerr("AMBUSH_DUMP FATAL: main.tscn never mounted"); quit(1); return
 	_main.solo_ai_slots = {2: true}; _main._ensure_solo_controller()
 	_main.opr_army_manager.game_phase = OPRArmyManager.GamePhase.PLAYING; _main._solo_batch = true
 	_solo = _main.solo_controller
 	var zone := _zone()
 	var cases: Array = CASES.map(func(spec): return _run_case(spec, zone))
 	var held: int = cases.filter(func(c): return c["spot"] == null).size()
-	var out := {"schema": 1, "tool": "ambush_arrival_dump", "beacon_cases": 0,
-		"table_size_ft": [_main.table.table_size.x, _main.table.table_size.y], "cases": cases}
+	var out := {"schema": 1, "tool": "ambush_arrival_dump", "beacon_cases": 0, "table_size_ft": [_main.table.table_size.x, _main.table.table_size.y], "cases": cases}
 	var f := FileAccess.open(_out_path, FileAccess.WRITE)
 	if f == null: printerr("AMBUSH_DUMP FATAL: cannot write %s" % _out_path); quit(1); return
 	f.store_string(JSON.stringify(out, "  ")); f.close()
@@ -81,8 +79,7 @@ func _drive() -> void:
 func _free_units() -> void:
 	for u in _units:
 		for m in (u as GameUnit).models:
-			var mi := m as ModelInstance
-			if is_instance_valid(mi.node): mi.node.free()
+			var mi := m as ModelInstance; if is_instance_valid(mi.node): mi.node.free()
 			mi.unit = null
 		(u as GameUnit).models.clear()
 
@@ -111,24 +108,19 @@ func _run_case(spec: Array, zone: Rect2) -> Dictionary:
 ## _enemy_entries (e2e_ambush_variants_test.gd:74-81), per model, edge-true. "pos" stays a real
 ## Vector2 here — this SAME list feeds arrive_one_ambush_unit's ring search, not just the record.
 func _enemy_entries(enemy: GameUnit) -> Array:
-	return enemy.get_alive_models().map(func(m): return {"pos": Vector2((m as ModelInstance).node.global_position.x, (m as ModelInstance).node.global_position.z),
-		"min_dist_m": SoloController.repel_ambush_dist_m(enemy), "pad_m": SoloController.model_base_radius_m(m)})
+	return enemy.get_alive_models().map(func(m): return {"pos": Vector2((m as ModelInstance).node.global_position.x, (m as ModelInstance).node.global_position.z), "min_dist_m": SoloController.repel_ambush_dist_m(enemy), "pad_m": SoloController.model_base_radius_m(m)})
 
 
-func _v2(p: Vector2) -> Array:
-	return [p.x, p.y]
-
-
-## Run one arrival and record the ARRIVAL gate's case shape (SPEC §4 S4).
+## Run one arrival and record the ARRIVAL gate's case shape (SPEC §4 S4). Vector2 "pos" fields
+## flatten to [x, y] inline (JSON.stringify has no Vector2 encoding) — no shared helper, to keep
+## this one function's line count self-contained.
 func _record(name: String, unit: GameUnit, zone: Rect2, objectives: Array, occupied: Array, enemies: Array) -> Dictionary:
 	_solo.ambush_reserve = [unit]; _solo._deploy_objectives = objectives
 	var arrived: GameUnit = _solo.arrive_one_ambush_unit(zone, enemies, occupied.duplicate(true), ROUND_NO, [])
 	var c: Vector3 = _solo.unit_centre(unit) if arrived == unit else Vector3.INF
 	var spot = null if arrived != unit else [c.x, c.z]
-	return {"case": name, "zone": [zone.position.x, zone.position.y, zone.size.x, zone.size.y],
-		"objectives": objectives.map(func(o): return _v2(o)),
-		"occupied": occupied.map(func(o): return {"pos": _v2(o["pos"]), "radius": float(o["radius"])}),
-		"enemies": enemies.map(func(e): return {"pos": _v2(e["pos"]), "min_dist_m": float(e["min_dist_m"]), "pad_m": float(e["pad_m"])}),
-		"own_ring_m": _solo._reserve_min_enemy_dist_m(unit), "footprint": _solo._deploy_footprint_offsets(unit).map(func(v): return _v2(v)),
-		"base_r": _solo._deploy_base_radius(_solo._deploy_models(unit)),
-		"flying": unit.has_special_rule("Strider") or unit.has_special_rule("Flying"), "spot": spot}
+	return {"case": name, "zone": [zone.position.x, zone.position.y, zone.size.x, zone.size.y], "objectives": objectives.map(func(o): return [(o as Vector2).x, (o as Vector2).y]),
+		"occupied": occupied.map(func(o): return {"pos": [(o["pos"] as Vector2).x, (o["pos"] as Vector2).y], "radius": float(o["radius"])}),
+		"enemies": enemies.map(func(e): return {"pos": [(e["pos"] as Vector2).x, (e["pos"] as Vector2).y], "min_dist_m": float(e["min_dist_m"]), "pad_m": float(e["pad_m"])}),
+		"own_ring_m": _solo._reserve_min_enemy_dist_m(unit), "footprint": _solo._deploy_footprint_offsets(unit).map(func(v): return [(v as Vector2).x, (v as Vector2).y]),
+		"base_r": _solo._deploy_base_radius(_solo._deploy_models(unit)), "flying": unit.has_special_rule("Strider") or unit.has_special_rule("Flying"), "spot": spot}
