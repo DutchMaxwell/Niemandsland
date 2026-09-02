@@ -98,7 +98,7 @@ impl<'a> Policy<'a> {
             return vec![Candidate::hold(key)];
         }
         let mut hold = Candidate::hold(key);
-        if let Some(e) = best_shoot(state, self.statics, unit, sc, self.tuning.shoot_los) {
+        if let Some(e) = best_shoot(state, self.statics, unit, sc, self.tuning) {
             hold.shoot = Some(state.key(e).to_string());
         }
         let mut out = vec![hold];

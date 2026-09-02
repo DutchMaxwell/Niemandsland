@@ -109,6 +109,23 @@ pub struct Tuning {
     /// do-nothing. `false` (the default, and every corpus) reproduces the
     /// GDScript menu exactly; `true` makes the two legs ask one question.
     pub shoot_los: bool,
+    /// NML-1157 — the MENU reads a joined unit the way GF Advanced Rules
+    /// v3.5.1 p.14 writes it ("when a Hero joins a unit, they count as part of
+    /// that unit"), and a unit offers the charge it can REACH as well as the
+    /// one it scores best.
+    ///
+    /// Two halves, one bit, because they are the same mistake seen twice: with
+    /// the hero its own target, `charge_score` (`:195`) always prefers the
+    /// smallest strike-back on the board, and with exactly ONE charge
+    /// candidate per unit that preference costs the whole activation. Measured
+    /// on `~/selfplay_out/gen0_teacher`, 796 replayed activations: 544 of 787
+    /// charge offers (69 %) name a joined hero, only 51 (6 %) name the nearest
+    /// enemy, and 134 of the 144 activations with an enemy inside 2" are
+    /// offered a charge at somebody else instead.
+    ///
+    /// Default OFF: every recorded corpus replays with the identical menu, so
+    /// GATE G2 (`tests/menu.rs`) and the act corpora do not move.
+    pub target_units: bool,
 }
 
 impl Default for Tuning {
@@ -118,6 +135,7 @@ impl Default for Tuning {
             honour_no_difficult: true,
             charge_gate: true,
             shoot_los: false,
+            target_units: false,
         }
     }
 }
@@ -149,9 +167,25 @@ pub fn max_range_inches(weapons: &[Weapon]) -> i64 {
 /// `AiPlanner._enemy_keys` ai_planner.gd:1217-1224 — living units of the other
 /// side, in the state's own iteration (capture) order.
 pub fn enemy_keys(state: &State, i: usize) -> Vec<usize> {
+    enemy_keys_tuned(state, i, false)
+}
+
+/// The same list under `Tuning::target_units`: a joined Hero is PART of its
+/// host (GF v3.5.1 p.14), so while the host still has living models the hero is
+/// not a target of its own. The shipped table has never let one be named —
+/// `solo_controller.gd:1197` ("a joined hero is PART of its host unit — you
+/// target the unit, never the hero alone"), `main.gd:8452` `_solo_combat_unit`
+/// and `main.gd:9166` all resolve a hero to its host — and this crate already
+/// applies the identical guard in `tray_breath_attack` (`sim.rs:411`) and Hit &
+/// Run (`sim.rs:890`). A hero whose host is dead "fights on alone" (p.14) and
+/// stays a target, which is why the guard reads the HOST's `alive`.
+pub fn enemy_keys_tuned(state: &State, i: usize, target_units: bool) -> Vec<usize> {
     let player = state.player[i];
     (0..state.units())
         .filter(|&k| state.player[k] != player && state.alive[k] > 0)
+        .filter(|&k| {
+            !target_units || !matches!(state.attached_to[k], Some(h) if state.alive[h] > 0)
+        })
         .collect()
 }
 
@@ -184,19 +218,20 @@ fn gap_m(a: &[[f64; 3]], offset: V3, b: &[[f64; 3]]) -> f64 {
 /// `shoot_los` (NML-1161) adds the resolve's second half, `State::los_clear`,
 /// so the menu cannot offer a target the resolve will refuse. See
 /// `Tuning::shoot_los` for why the GDScript needs no such switch and the
-/// trainer does.
+/// trainer does. NML-1157's `target_units` rides the same `Tuning`: both menu
+/// legs ask ONE object which targets are legal to name.
 pub fn best_shoot(
     state: &State,
     statics: &[UnitStatic],
     i: usize,
     sc: &mut Scratch,
-    shoot_los: bool,
+    tuning: Tuning,
 ) -> Option<usize> {
     let us = &statics[state.roster.profile[i]];
     let mut best = None;
     let mut best_ev = 0.0f64;
-    for e in enemy_keys(state, i) {
-        if !state.sees(i, state.key(e)) || (shoot_los && !state.los_clear(i, e)) {
+    for e in enemy_keys_tuned(state, i, tuning.target_units) {
+        if !state.sees(i, state.key(e)) || (tuning.shoot_los && !state.los_clear(i, e)) {
             continue;
         }
         let ut = &statics[state.roster.profile[e]];
@@ -268,7 +303,7 @@ pub fn best_charge(
     let centre_us = geom::centre(&state.positions[i]);
     let mut best = None;
     let mut best_score = f64::NEG_INFINITY;
-    for e in enemy_keys(state, i) {
+    for e in enemy_keys_tuned(state, i, tuning.target_units) {
         let gap_in = geom::edge_gap_in(
             &state.positions[i],
             &state.radii[i],
@@ -304,6 +339,69 @@ pub fn best_charge(
             best_score = s;
             best = Some(e);
         }
+    }
+    best
+}
+
+/// NML-1157 — the nearest enemy this unit could actually REACH: the smallest
+/// base-edge gap among the targets the charge gate and the futile bar both
+/// accept. `best_charge` answers "who is the best matchup"; with one candidate
+/// per unit that is the only question the search ever gets asked, and the
+/// answer is a far hero. This answers "who is standing in front of me", and
+/// `candidates_tuned` carries BOTH so there is a target decision to make.
+///
+/// The gate runs unconditionally here, not under `Tuning::charge_gate`: this
+/// candidate is new, so it has no gateless GDScript to reproduce, and without
+/// the gate "reachable" would not mean anything — `charge_illegal_tuned`
+/// (`gate.rs:47`) is what carries the rush band, Melee Shrouding and the p.11
+/// difficult corridor.
+pub fn nearest_chargeable(
+    state: &State,
+    terrain: &Terrain,
+    statics: &[UnitStatic],
+    i: usize,
+    sc: &mut Scratch,
+    tuning: Tuning,
+) -> Option<usize> {
+    let us_static = &statics[state.roster.profile[i]];
+    if us_static.melee.is_empty() {
+        return None;
+    }
+    melee_profiles_of(us_static, state.alive[i], sc);
+    let our_attacks = sc.attacks.clone();
+    let us = ctx_of(us_static, state, i);
+    let mut best = None;
+    let mut best_gap = f64::INFINITY;
+    for e in enemy_keys_tuned(state, i, tuning.target_units) {
+        let gap_in = geom::edge_gap_in(
+            &state.positions[i],
+            &state.radii[i],
+            &state.positions[e],
+            &state.radii[e],
+            DEFAULT_BASE_RADIUS_M,
+        )
+        .max(0.0);
+        if gap_in >= best_gap {
+            continue;
+        }
+        if crate::gate::charge_illegal_tuned(
+            state,
+            terrain,
+            i,
+            e,
+            gap_in,
+            None,
+            None,
+            tuning.honour_no_difficult,
+        ) {
+            continue;
+        }
+        let them = ctx_of(&statics[state.roster.profile[e]], state, e);
+        if melee_ev(&us_static.melee, &our_attacks, &us, &them, true) < FUTILE_CHARGE_EV {
+            continue;
+        }
+        best_gap = gap_in;
+        best = Some(e);
     }
     best
 }
@@ -544,6 +642,16 @@ pub fn candidates_in(
     candidates_tuned(state, terrain, statics, unit, sc, Tuning::default())
 }
 
+/// One CHARGE candidate aimed at `e`, built the way both menu sites build it:
+/// the destination is the TARGET UNIT'S CENTRE (`ai_planner.gd:1035`), which is
+/// what `resolve`'s rigid arm then walks toward.
+fn charge_at(state: &State, key: &str, e: usize) -> Candidate {
+    let mut c = Candidate::new(key, CHARGE);
+    c.dest = Some(geom::to_f64(geom::centre(&state.positions[e])));
+    c.charge = Some(state.key(e).to_string());
+    c
+}
+
 /// The same menu with the parity `Tuning` exposed — see `Tuning`. Shipping code
 /// calls `candidates`/`candidates_in`; only the red proofs pass anything else.
 pub fn candidates_tuned(
@@ -556,7 +664,7 @@ pub fn candidates_tuned(
 ) -> Vec<Candidate> {
     let key = state.key(unit);
     let mut out = vec![Candidate::new(key, HOLD)];
-    if let Some(e) = best_shoot(state, statics, unit, sc, tuning.shoot_los) {
+    if let Some(e) = best_shoot(state, statics, unit, sc, tuning) {
         let mut c = Candidate::new(key, HOLD);
         c.shoot = Some(state.key(e).to_string());
         out.push(c);
@@ -571,11 +679,19 @@ pub fn candidates_tuned(
         c.dest = Some(o.pos);
         out.push(c);
     }
-    if let Some(e) = best_charge(state, terrain, statics, unit, sc, tuning) {
-        let mut c = Candidate::new(key, CHARGE);
-        c.dest = Some(geom::to_f64(geom::centre(&state.positions[e])));
-        c.charge = Some(state.key(e).to_string());
-        out.push(c);
+    let scored = best_charge(state, terrain, statics, unit, sc, tuning);
+    if let Some(e) = scored {
+        out.push(charge_at(state, key, e));
+    }
+    // NML-1157: the SECOND charge candidate — the one this unit can reach. Only
+    // when it is a different unit from the best-scoring one, so a menu never
+    // carries the same charge twice.
+    if tuning.target_units {
+        if let Some(e) = nearest_chargeable(state, terrain, statics, unit, sc, tuning) {
+            if Some(e) != scored {
+                out.push(charge_at(state, key, e));
+            }
+        }
     }
     if let Some(t) = nearest_enemy(state, unit) {
         let centre = geom::centre(&state.positions[unit]);

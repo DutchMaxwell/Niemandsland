@@ -233,6 +233,7 @@ pub fn tuning_of(knobs: &Knobs) -> crate::menu::Tuning {
     crate::menu::Tuning {
         charge_gate: knobs.charge_gate,
         shoot_los: knobs.menu_los,
+        target_units: knobs.menu_targets,
         ..Default::default()
     }
 }

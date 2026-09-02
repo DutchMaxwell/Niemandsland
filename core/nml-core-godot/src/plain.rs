@@ -833,6 +833,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // `state["los_blocked"]` there), so menu and resolve already agree.
         // The knob exists for the trainer twin, which stamps that Callable.
         menu_los: dflag(d, "menu_los"),
+        // NML-1157. A MENU knob, not a seam: it changes what the search may
+        // choose, never how a chosen act resolves. No recorder writes the key
+        // yet, so an absent one answers `Knobs::default()` — OFF, the menu
+        // every recorded corpus carries.
+        menu_targets: dflag(d, "menu_targets"),
         // NML-1073 M5 D1-B4b/BUG-3. The recorder NOW writes this key
         // (act_recorder.gd `_header_line`, from `BattleSim.hero_fold_enabled()`),
         // so an in-game seam under the `hero_fold` knob folds the joined hero
