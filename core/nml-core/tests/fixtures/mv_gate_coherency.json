@@ -1,0 +1,61 @@
+{
+ "_": "S5c RED \u2014 a recorded non-charge plan (qbg_ref) that leaves ONE model torn off its unit. Model 4 rests 6.445\" (edge to edge) from the nearest model of the largest 1\"-link component, so the unit is out of coherency (GF/AoF v3.5.1 p.7) at the planner's endpoints, and every base is already overlap-free \u2014 the case is about pass 4 alone. Its own band left 9.05\" of slack, far more than the 5.445\" the pull has to close, so `_gate_disp_caps_m` is not what decides here.",
+ "straggler": {
+  "source": "alien_hives_2000_vs_change_disciples_2000_s31 moves_calls.jsonl act=16 (rung reach_in=12.0000 avoid_difficult=false avoid_dangerous=true allow_contact=false)",
+  "board_in": [
+   71.99999854320616,
+   48.00000059323048
+  ],
+  "reach_in": 12.0,
+  "radii_in": [
+   0.7874015748031497,
+   0.7874015748031497,
+   0.7874015748031497,
+   0.7874015748031497,
+   0.7874015748031497,
+   0.7874015748031497,
+   0.7874015748031498
+  ],
+  "planned_in": [
+   [
+    19.539220809936523,
+    14.468814849853516
+   ],
+   [
+    22.6998291015625,
+    12.099771499633789
+   ],
+   [
+    20.930574417114258,
+    12.608068466186523
+   ],
+   [
+    18.328670501708984,
+    15.939449310302734
+   ],
+   [
+    31.631757736206055,
+    7.996139049530029
+   ],
+   [
+    24.524995803833008,
+    11.713074684143066
+   ],
+   [
+    17.5,
+    17.795429229736328
+   ]
+  ],
+  "trail_len_in": [
+   6.662805,
+   3.236068,
+   7.762346,
+   19.000005,
+   2.999999,
+   12.794706,
+   12.0
+  ],
+  "straggler": 4,
+  "edge_gap_in": 6.4453
+ }
+}

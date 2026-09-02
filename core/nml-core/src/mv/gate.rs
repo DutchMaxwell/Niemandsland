@@ -6,10 +6,29 @@
 //!
 //! S5b adds PASS 3 in between, in the table's own order: the projection out of
 //! forbidden rest ground (:6402-6412, `_project_out_forbidden_world` :6807),
-//! spending the same budget. NOT here, so the seam is not read as more than it
-//! is: pass 4, the straggler coherency pull with the whole-unit shorten and the
-//! wall clamp (:6448-6465). It slots in after this file's one entry without
-//! moving it.
+//! spending the same budget. S5c adds PASS 4, the straggler coherency pull
+//! (`_pull_stragglers_coherent_world` :6563).
+//!
+//! NOT here, so the seam is not read as more than it is, each its own rung:
+//!   * the pull's CLOSING overlap push (:6636), which clears whatever the
+//!     inward pulls stacked. It wants `_resolve_overlaps_world` as a function
+//!     of its own; measured, it is worth 53 models on qag_ref and 6 the other
+//!     way on qbg_ref, so it waits rather than inflating this one.
+//!   * the WHOLE-UNIT SHORTEN (:6465), the fallback that fires only when pass 4
+//!     leaves an illegal config. It blends the unit back toward `start_world`,
+//!     a fourth configuration this signature does not carry, so its cases stay
+//!     the caller ladder's to settle at a shorter reach.
+//!   * `_clamp_gate_walls` (:6477), the anti-tunnel revert the table runs on
+//!     every return path of the gate: it reads two unit rules (Flying,
+//!     Traversal) this signature does not carry either.
+//!   * skirmish's 6" chain (`CoherencyChecker` :18), corpus-absent and unported
+//!     with the regiments, exactly as `deployment.rs:1783` says.
+//!
+//! THE BOUNDED FIXED POINT. There is no outer `repeat` in the table: the
+//! iteration lives INSIDE the passes and each bound is its own constant —
+//! `OVERLAP_GATE_PASSES` 4 (:149) for the push, `COH_REPAIR_PASSES` 12 (:6555)
+//! for the pull. Both loops also stop the moment a sweep moves nobody, so the
+//! gate terminates on any input, pathological configurations included.
 //!
 //! FRAME. The table gates in world METRES; this gates in the planner's INCH
 //! frame, where the endpoints already live, so a model the gate does not touch
@@ -55,6 +74,11 @@ const TERRAIN_OUT_MAX_IN: f64 = 0.20 / IN2M;
 const TERRAIN_OUT_DIRS: usize = 16;
 /// `SoloController.WALL_REST_CLEARANCE_M` :6779 — 2 mm beyond the base radius.
 const WALL_REST_CLEARANCE_IN: f64 = 0.002 / IN2M;
+/// `CoherencyChecker.COHERENCY_DISTANCE_INCHES` coherency_checker.gd:10 — two
+/// models LINK when their bases are within 1" EDGE to edge.
+const COH_LINK_IN: f64 = 1.0;
+/// `SoloController.COH_REPAIR_PASSES` :6555 — pass 4's sweep bound.
+const COH_REPAIR_PASSES: usize = 12;
 
 /// What the gate did — for the caller's log line (`rules-must-log`), never for
 /// its geometry.
@@ -66,6 +90,10 @@ pub struct GateReport {
     pub capped: Vec<bool>,
     /// The largest correction pass 1 applied (`clamped_by_m` :6386), inches.
     pub bounds_in: f64,
+    /// Pass 4 nudged this model back into the unit's link chain.
+    pub pulled: Vec<bool>,
+    /// The coherency the gate leaves behind (`_config_coherent_world` :6832).
+    pub coherent: bool,
 }
 
 fn dist(a: [f64; 2], b: [f64; 2]) -> f64 {
@@ -195,7 +223,164 @@ fn project_out_forbidden(p: [f64; 2], r_in: f64, t: &Terrain, board_in: [f64; 2]
     p
 }
 
-/// `_finalize_placement` :6371, passes 1 to 3, over ONE unit's planned
+/// `SeparationChecker.edge_distance` :294 for two ROUND bases — the one measure
+/// both the coherency link and the no-stack test are written in.
+fn edge(a: &Disc, b: &Disc) -> f64 {
+    dist(a.c, b.c) - a.r - b.r
+}
+
+/// `_config_overspread_world` :6650 — the widest EDGE-to-edge spread exceeds
+/// the chain cap (p.7).
+fn overspread(cfg: &[Disc], max_chain: f64) -> bool {
+    (0..cfg.len()).any(|i| (i + 1..cfg.len()).any(|j| edge(&cfg[i], &cfg[j]) > max_chain))
+}
+
+/// `_largest_link_component_world` :6604 — the indices of the largest 1"-link
+/// component, in the table's own BFS discovery order (LIFO queue, ascending
+/// neighbour scan). The order is load-bearing: pass 4's nearest-neighbour
+/// search keeps the FIRST winner on a tie, so it reads this order.
+fn largest_component(cfg: &[Disc]) -> Vec<usize> {
+    let n = cfg.len();
+    let (mut best, mut seen) = (Vec::new(), vec![false; n]);
+    for start in 0..n {
+        if seen[start] {
+            continue;
+        }
+        seen[start] = true;
+        let (mut comp, mut queue) = (vec![start], vec![start]);
+        while let Some(cur) = queue.pop() {
+            for o in 0..n {
+                if !seen[o] && edge(&cfg[cur], &cfg[o]) <= COH_LINK_IN {
+                    seen[o] = true;
+                    queue.push(o);
+                    comp.push(o);
+                }
+            }
+        }
+        if comp.len() > best.len() {
+            best = comp;
+        }
+    }
+    best
+}
+
+/// `_config_coherent_world` :6832 — ONE 1"-link component holding every model,
+/// spread within `max_chain`. Same graph as the component walk above, so it is
+/// asked of that walk rather than of a second BFS.
+fn config_coherent(cfg: &[Disc], max_chain: f64) -> bool {
+    cfg.len() <= 1 || (largest_component(cfg).len() == cfg.len() && !overspread(cfg, max_chain))
+}
+
+/// `_cap_gate_disp` :6360 — truncate one gate correction to the model's
+/// band-slack circle around its RAW planned endpoint, marking it when it bit.
+fn cap_disp(cand: [f64; 2], goal: [f64; 2], cap: f64, i: usize, rep: &mut GateReport) -> [f64; 2] {
+    let off = [cand[0] - goal[0], cand[1] - goal[1]];
+    let l = (off[0] * off[0] + off[1] * off[1]).sqrt();
+    if l <= cap {
+        return cand;
+    }
+    rep.capped[i] = true;
+    [goal[0] + off[0] / l * cap, goal[1] + off[1] / l * cap]
+}
+
+/// Everything a pass-4 sweep needs that does not change between nudges: the RAW
+/// plan the band-slack circles are centred on, those caps, and the board and
+/// terrain every correction is spent against.
+struct Pull<'a> {
+    goal: &'a [[f64; 2]],
+    caps_in: &'a [f64],
+    capped: bool,
+    board_in: [f64; 2],
+    terrain: Option<&'a Terrain>,
+}
+
+impl Pull<'_> {
+    /// ONE straggler nudge (:6608-6616 and :6628-6634 share it): step model `i`
+    /// at most `len` inches toward `to`, then spend the same three corrections
+    /// every gate pass spends — bounds clamp, projection out of forbidden rest
+    /// ground and the band-slack cap. A nudge the cap erases is not taken at
+    /// all: the band leaves no room, and the caller's ladder settles the model
+    /// at a shorter reach. Returns whether the model actually moved.
+    fn nudge(&self, cfg: &mut [Disc], i: usize, to: [f64; 2], len: f64, rep: &mut GateReport) -> bool {
+        let d = [to[0] - cfg[i].c[0], to[1] - cfg[i].c[1]];
+        let l = (d[0] * d[0] + d[1] * d[1]).sqrt();
+        if l < OVERLAP_EPS_IN || len <= OVERLAP_EPS_IN {
+            return false;
+        }
+        let (step, b) = (len.min(l), self.board_in);
+        let mut cand = [
+            (cfg[i].c[0] + d[0] / l * step).clamp(BOUNDS_MARGIN_IN, b[0] - BOUNDS_MARGIN_IN),
+            (cfg[i].c[1] + d[1] / l * step).clamp(BOUNDS_MARGIN_IN, b[1] - BOUNDS_MARGIN_IN),
+        ];
+        if let Some(t) = self.terrain {
+            cand = project_out_forbidden(cand, cfg[i].r, t, b);
+        }
+        if self.capped {
+            cand = cap_disp(cand, self.goal[i], self.caps_in[i], i, rep);
+            if dist(cand, cfg[i].c) <= OVERLAP_EPS_IN {
+                return false;
+            }
+        }
+        cfg[i].c = cand;
+        rep.pulled[i] = true;
+        true
+    }
+
+    /// `_pull_stragglers_coherent_world` :6563 — PASS 4, the MINIMAL coherency
+    /// repair. Each model outside the unit's largest 1"-link component steps
+    /// toward its nearest in-component neighbour, at most one link per sweep and
+    /// stopping AT the 1" link so the step never manufactures the overlap it is
+    /// trying to avoid; and when the unit over-spreads, the single model
+    /// furthest from the centroid is pulled inward. Minimal is the point: the
+    /// models that advanced correctly keep their FULL move, where the whole-unit
+    /// shorten would drag the entire unit back and leave it short of its own
+    /// shooting range.
+    ///
+    /// The sweep IS the bounded fixed point: `COH_REPAIR_PASSES` at the most,
+    /// and it stops the moment a sweep moves nobody or the config comes out
+    /// coherent, so it terminates on any input. The table's CLOSING overlap push
+    /// (:6636) is the next rung, not this one.
+    fn run(&self, cfg: &mut [Disc], rep: &mut GateReport) -> bool {
+        let (n, max_chain) = (cfg.len(), super::MAX_CHAIN_IN);
+        for _ in 0..COH_REPAIR_PASSES {
+            if config_coherent(cfg, max_chain) {
+                return true;
+            }
+            let main = largest_component(cfg);
+            let mut moved = false;
+            // (a) reconnect — nearest in-component neighbour by EDGE distance,
+            // the FIRST winner on a tie (the component's own BFS order).
+            for i in (0..n).filter(|i| !main.contains(i)) {
+                let (mut nd, mut near) = (f64::INFINITY, usize::MAX);
+                for &m in &main {
+                    if edge(&cfg[i], &cfg[m]) < nd {
+                        nd = edge(&cfg[i], &cfg[m]);
+                        near = m;
+                    }
+                }
+                if near == usize::MAX {
+                    continue;
+                }
+                let (to, len) = (cfg[near].c, (nd - COH_LINK_IN).min(COH_LINK_IN));
+                moved |= self.nudge(cfg, i, to, len, rep);
+            }
+            // (b) over-spread — pull the model furthest from the centroid in.
+            if overspread(cfg, max_chain) {
+                let sum = |k: usize| cfg.iter().map(|d| d.c[k]).sum::<f64>() / n as f64;
+                let c = [sum(0), sum(1)];
+                // `_furthest_from_world` :6672 keeps the FIRST strict maximum.
+                let far = (1..n).fold(0, |b, i| if dist(cfg[i].c, c) > dist(cfg[b].c, c) { i } else { b });
+                moved |= self.nudge(cfg, far, c, COH_LINK_IN, rep);
+            }
+            if !moved {
+                break;
+            }
+        }
+        config_coherent(cfg, max_chain)
+    }
+}
+
+/// `_finalize_placement` :6371, passes 1 to 4, over ONE unit's planned
 /// endpoints. `external` is `_external_obstacle_shapes` :6676 — every OTHER
 /// on-table unit's alive-model base. `caps_in` is `_gate_disp_caps_m`'s output;
 /// a length other than `planned`'s means UNCAPPED, the same guard the GDScript
@@ -214,6 +399,8 @@ pub fn finalize_placement(
         disp_in: vec![0.0; n],
         capped: vec![false; n],
         bounds_in: 0.0,
+        pulled: vec![false; n],
+        coherent: true,
     };
     // (bounds) :6383-6390 — clamp per axis FIRST, so every later correction
     // starts from a legal configuration. The cap circles below stay anchored on
@@ -307,6 +494,16 @@ pub fn finalize_placement(
         if !moved {
             break;
         }
+    }
+    // (coherency) :6444-6465 — PASS 4. The table keeps the full move when the
+    // config is coherent AND overlap-free AND terrain-clear, and otherwise runs
+    // the straggler repair before falling back to the whole-unit shorten. The
+    // repair itself returns AT ONCE on a coherent config, so for everything
+    // ported here those three predicates reduce to the coherency one; the other
+    // two only ever decide whether the unported shorten fires.
+    if !config_coherent(&cfg, super::MAX_CHAIN_IN) {
+        let pull = Pull { goal: &goal, caps_in, capped, board_in, terrain };
+        rep.coherent = pull.run(&mut cfg, &mut rep);
     }
     let out = (0..n)
         .map(|i| {
