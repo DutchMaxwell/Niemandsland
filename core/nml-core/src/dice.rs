@@ -765,6 +765,16 @@ fn melee_hit_target(p: &ShootProfile, att: &Ctx, def: &Ctx, charging: bool, uf_h
     // two live nets into `mm` before the single clamp below.
     let mut m = melee_hit_modifier(def.evasive, def.melee_evasion) + uf_hit + att.hit_mod
         + def.vs_hit_mod;
+    // Block C2 — the melee branch's Shot Modifier loop (main.gd:5658-5668):
+    // `melee_only` names on every strike, `when: "charge"` names only on one.
+    // Stamped per NAME in `ctx_for` (`melee_hit_bonus*`), never via the shared
+    // primitive. Inside the Unstoppable clamp below, like the table's, whose
+    // clamp reads `p_mod.mod + uf_hit` with the bonuses already in `p_mod`
+    // (main.gd:6043-6045).
+    m += att.melee_hit_bonus;
+    if charging {
+        m += att.melee_hit_bonus_charge;
+    }
     if p.unstoppable && m < 0 {
         m = 0;
     }
@@ -2080,5 +2090,110 @@ mod tests {
         assert_eq!(rolls[0].target, 4, "the extras roll at the weapon's own target");
         let want = Tray::seeded(5).roll(3);
         assert_eq!(extra, faces_to_hits(&want, 4) as i64, "the extras are the tray's next three");
+    }
+
+    // ------------------ block C2: Shot Modifier, the melee / charge leg ---
+
+    use crate::acts::read_act_header;
+    use crate::rules::Registries;
+    use crate::unit::UnitStatic;
+
+    /// The checkout this crate lives in — mirrors the unit.rs tests' helper.
+    fn repo_root() -> String {
+        format!("{}/../..", env!("CARGO_MANIFEST_DIR"))
+    }
+
+    /// Block C2's fixture, end to end through the REAL registry: a Good Fighter
+    /// carrier (aof/goblins, `{hit_bonus: 1, melee_only: true}`), a Precision
+    /// Charge Aura carrier (gf/orc_marauders, `{hit_bonus: 1, when: "charge"}`)
+    /// and a plain rule-less unit — each with a rifle and a blade, so the melee
+    /// stamp and the shooting non-stamp are both observable.
+    const C2_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "good_fighter":{"unit_id":"good_fighter","name":"Good Fighter","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"goblins",
+        "special_rules":["Good Fighter"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},
+          {"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "charge_aura":{"unit_id":"charge_aura","name":"Charge Aura","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"orc_marauders",
+        "special_rules":["Precision Charge Aura"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},
+          {"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain":{"unit_id":"plain","name":"Plain","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":[],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},
+          {"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    fn c2_static(id: &str) -> UnitStatic {
+        let header = read_act_header(C2_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get(id).expect(id);
+        UnitStatic::build(&mut reg, p)
+    }
+
+    /// (a) `_solo_hit_mod_info`'s melee branch (main.gd:5658-5668) keeps a
+    /// `melee_only` Shot Modifier on EVERY melee strike, charge or not: a Good
+    /// Fighter carrier hits one better than its plain Quality both ways. The
+    /// SHOOTING branch (:5721-5722) skips `melee_only` entries — the dead-aura
+    /// wave — so the same unit's rifle stays at Quality 4+.
+    #[test]
+    fn a_good_fighter_carrier_hits_one_better_in_melee_charging_or_not() {
+        let us = c2_static("good_fighter");
+        let def = defender(4, 5);
+        assert_eq!(
+            melee_hit_target(&us.melee[0], &us.ctx, &def, false, 0), 3,
+            "Good Fighter +1 on a plain melee strike: Quality 4+ -> 3+");
+        assert_eq!(
+            melee_hit_target(&us.melee[0], &us.ctx, &def, true, 0), 3,
+            "melee_only carries no charge gate: the charge strikes at 3+ too");
+        let mut tray = Tray::seeded(27);
+        let volley = resolve_shooting_with_tray(
+            &us.shoot, &[0], &[1], &us.ctx, &defender(4, 5), 12.0, &mut tray);
+        assert_eq!(volley.rolls[0].target, 4,
+            "the melee-scoped bonus never reaches the rifle (dead-aura wave)");
+    }
+
+    /// (b) `when: "charge"` is a GATE (main.gd:5661-5663 keeps the entry only
+    /// when `charge_only3 and charging`): a Precision Charge Aura carrier hits
+    /// one better ONLY while charging, and at its plain Quality when it does
+    /// not. RED if the `if charging` guard is dropped — the uncharged strike
+    /// would flip to 3+.
+    #[test]
+    fn a_precision_charge_aura_carrier_hits_one_better_only_while_charging() {
+        let us = c2_static("charge_aura");
+        let def = defender(4, 5);
+        assert_eq!(
+            melee_hit_target(&us.melee[0], &us.ctx, &def, false, 0), 4,
+            "when: \"charge\" without a charge is no bonus at all");
+        assert_eq!(
+            melee_hit_target(&us.melee[0], &us.ctx, &def, true, 0), 3,
+            "and on the charge it is exactly +1");
+    }
+
+    /// (c) A unit that carries none of the three names is BYTE-IDENTICAL: its
+    /// melee target stays the plain Quality both ways, and a seeded melee
+    /// resolve draws exactly the raw tray's faces — the stamping pass adds no
+    /// die and no draw for a non-carrier.
+    #[test]
+    fn a_plain_unit_stays_byte_identical_on_target_and_faces() {
+        let us = c2_static("plain");
+        let def = defender(4, 5);
+        assert_eq!(melee_hit_target(&us.melee[0], &us.ctx, &def, false, 0), 4);
+        assert_eq!(melee_hit_target(&us.melee[0], &us.ctx, &def, true, 0), 4);
+        let p = [us.melee[0].clone()];
+        let mut tray = Tray::seeded(27);
+        let strikers = [striker(&p, &[0], &[2], &us.ctx)];
+        let out = resolve_melee_with_tray(&strikers, &defender(4, 5), "Target", false, &mut tray);
+        assert_eq!(out.rolls[0].kind, "attack");
+        assert_eq!(out.rolls[0].target, 4);
+        assert_eq!(out.rolls[0].faces, Tray::seeded(27).roll(2),
+            "the hit dice are the tray's first two draws, byte for byte");
     }
 }
