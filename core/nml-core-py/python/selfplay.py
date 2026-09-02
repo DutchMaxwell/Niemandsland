@@ -1126,6 +1126,7 @@ def _play_round(
     roll_log: list | None = None,
     net_player: int = 0,
     eps: float = 0.0,
+    act_cores: dict[int, Any] | None = None,
 ) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
     dry side hands the tail to the other, and the NEXT round opens with whoever
@@ -1161,6 +1162,11 @@ def _play_round(
     last_side = 0
     forked = False
     rp_count = 0
+    # SEARCH A/B: the ACTING player's core — the deep seat plans on its own
+    # core (deeper search), the other seat and every default caller on the
+    # base one. Planning only reads the state; the resolve stays on the base
+    # core, whose knobs differ in the search pair alone.
+    cores = {**{1: core, 2: core}, **(act_cores or {})}
     # `state["units"]` is keyed by unit key and the crate's per-unit lists by
     # capture index; the roster never changes shape inside a game.
     at = {k: i for i, k in enumerate(state.keys())}
@@ -1173,10 +1179,10 @@ def _play_round(
         # pair/fork formulas above already read it after the fact.
         seq = len(log)
         explore_seed = seed * EXPLORE_SEED_STRIDE + seq
-        pick = _pick_for(core, state, turn, net_player, eps, explore_seed)
+        pick = _pick_for(cores[turn], state, turn, net_player, eps, explore_seed)
         if not pick:
             other = 2 if turn == 1 else 1
-            pick = _pick_for(core, state, other, net_player, eps, explore_seed)
+            pick = _pick_for(cores[other], state, other, net_player, eps, explore_seed)
             if not pick:
                 break
             turn = other
@@ -1384,6 +1390,9 @@ def play_game(
     fit_blend: float = 0.5,
     explore: float = 0.0,
     fit_mode: str = "blend",
+    deep_player: int = 0,
+    deep_top_k: int | None = None,
+    deep_horizon: int | None = None,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -1495,7 +1504,21 @@ def play_game(
     gate, replays byte for byte. `explore > 0.0` puts an `explored` key on
     every played row, TRUE only where ITS OWN coin fired; the result's
     `knobs["explore"]` stamp always says what the whole game was played with
-    (NML-1147a pattern, alongside `fit_blend`)."""
+    (NML-1147a pattern, alongside `fit_blend`).
+
+    `deep_player` (the SEARCH A/B seam) is the per-seat counterpart of
+    `top_k`/`horizon`: seat 1 or 2 plays ITS activations with a SECOND core
+    built off the same header payload but carrying `deep_top_k`/`deep_horizon`
+    instead of the base pair, so one seat searches deeper on the same board.
+    State objects are core-independent (`state_of`/`resolve_*` take them as
+    arguments), so the two cores share one game; the other seat keeps the base
+    core and every caller that passes nothing (0, the default) plays the
+    identical game the pre-knob code did. A deep game whose deep pair EQUALS
+    the resolved base pair digests byte-identically to a plain game — the
+    proof that the second core really sees the same header — and when the
+    pair parts, the result stamps both seats' resolved depths as
+    `knobs_by_seat` (the NML-1147a pattern: the stamp rides only a game whose
+    deep pair actually differs)."""
     units1 = load_army(list_p1, 1)
     units2 = load_army(list_p2, 2)
     if not units1 or not units2:
@@ -1589,6 +1612,40 @@ def play_game(
         core.set_encoder_source_qd(SOURCE_DATA_QUALITY, SOURCE_DATA_DEFENSE)
     else:
         core.clear_encoder_source_qd()
+    # SEARCH A/B: the DEEP seat's own core. Same header payload (same profiles,
+    # terrain and every other knob) but `deep_top_k`/`deep_horizon` in place of
+    # the base pair, so its `plan_with_rollout` searches deeper on the same
+    # board; per-core state (`has_net`, the encoder source qd) is mirrored so
+    # the two cores differ in the search pair alone. `act_cores` hands
+    # `_play_round` the ACTING player's core — `None` leaves both seats on the
+    # base core, which is every caller that passes nothing.
+    act_cores: dict[int, Any] | None = None
+    seat_knobs: dict[str, Any] | None = None
+    if deep_player in (1, 2):
+        d_top_k = resolve_top_k(deep_top_k)
+        d_horizon = resolve_horizon(deep_horizon)
+        deep_core = nml_core.load(str(repo_root))
+        if net is not None:
+            deep_core.load_net(str(net), blend=fit_blend, mode=fit_mode)
+        deep_core.set_header(
+            {"profiles": profiles, "terrain": terrain,
+             "knobs": dict(knobs, top_k=d_top_k, horizon=d_horizon)}
+        )
+        if legacy_source_qd:
+            deep_core.set_encoder_source_qd(SOURCE_DATA_QUALITY, SOURCE_DATA_DEFENSE)
+        else:
+            deep_core.clear_encoder_source_qd()
+        act_cores = {deep_player: deep_core}
+        # NML-1147a pattern: the stamp rides ONLY a game whose deep pair parted
+        # from the base pair — an equal-knobs deep game digests byte-identically
+        # to a plain game, stamp included.
+        if (d_top_k, d_horizon) != (eff_top_k, eff_horizon):
+            seat_knobs = {
+                "p1": {"top_k": d_top_k, "horizon": d_horizon},
+                "p2": {"top_k": eff_top_k, "horizon": eff_horizon},
+            }
+            if deep_player == 2:
+                seat_knobs["p1"], seat_knobs["p2"] = seat_knobs["p2"], seat_knobs["p1"]
     reads = core.capture_reads()
     # `SpellsRegistry.spells_for_unit(gu)` per unit — the book `_magic_init` asks
     # whether it resolved, and whose LONGEST range gates the eligibility tally.
@@ -1764,7 +1821,7 @@ def play_game(
             seed=seed, owners=owners, sidecars=sidecars,
             fork_salt=fork_salt, sidecar_skip=sidecar_skip,
             magic=magic, spell_reach=spell_reach, tray=tray, dice_tally=dice_tally,
-            net_player=net_player, eps=explore,
+            net_player=net_player, eps=explore, act_cores=act_cores,
         )
         state, owners = core.playout_seize(state, owners)
         vp = core.vp_round_add(owners, vp)
@@ -1829,6 +1886,10 @@ def play_game(
             # byte-identically (`result_digest` does not strip `knobs`).
             **({"fit_mode": fit_mode} if fit_mode != "blend" else {}),
         },
+        # SEARCH A/B: WHICH resolved depth each seat searched with — present
+        # only when the deep seat's pair parted from the base pair, so every
+        # other game records the identical object it always did.
+        **({"knobs_by_seat": seat_knobs} if seat_knobs else {}),
         # D1-B4 telemetry, empty under `dice="expected"`: how many shooting
         # activations drew from the tray, how many rolls that was, and how many
         # of those activations hit a table branch this port does NOT reproduce
