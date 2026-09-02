@@ -1926,3 +1926,75 @@ fn arrive_unit_rebuilds_the_parked_strength_not_a_fresh_one() {
     let back = nml_core::io::plain_of(&st).to_string();
     assert!(!back.contains("dormant_models"), "{back}");
 }
+
+/// GF Advanced Rules v3.5.1 p.6, "DEPLOYING ARMIES": the roll-off winner places
+/// ONE unit, the opposing player places one, "and the players continue
+/// alternating in placing one unit each, until all units have been deployed" —
+/// then the Scout phase (B9) alternates the same way AFTER every normal unit of
+/// BOTH armies is down, Ambush never queued. `deploy_side` deploys a whole side
+/// at a time and cannot express any of that; `deploy_interleaved` can, and the
+/// SEQUENCE is the claim under test.
+///
+/// Second claim, equally load-bearing: alternating REORDERS and moves nothing.
+/// Each side scores against its own `occupied` only (solo_controller.gd:9044),
+/// so every placement must stay byte-identical to `deploy_side`'s. If that ever
+/// breaks, the deployment ladder has grown an enemy-aware term and every
+/// recorded fixture needs re-recording — this test is the tripwire.
+#[test]
+fn deployment_alternates_one_unit_per_player() {
+    let plain: PlainTerrain = serde_json::from_value(serde_json::json!({
+        "cells": [], "sandbox": [], "cell_params": spots_fixture()["cell_params"]
+    }))
+    .unwrap();
+    let board = Terrain::build(&plain);
+    let unit = |key: &str, scout: bool, ambush: bool| UnitSpec {
+        key: key.into(),
+        model_count: 1,
+        base_r_m: 0.016,
+        footprint: vec![(0.0, 0.0)],
+        scout,
+        ambush,
+        model_shapes: vec![deployment::ModelShape { is_oval: false, w_mm: 32, d_mm: 32, tough: 1, n: 1 }],
+        ..Default::default()
+    };
+    // side 1: 3 normals + 1 scout + 1 ambush (reserved, never queued)
+    let specs1: Vec<UnitSpec> = vec![
+        unit("a1", false, false), unit("a2", false, false), unit("a3", false, false),
+        unit("a_scout", true, false), unit("a_ambush", false, true),
+    ];
+    // side 2: 4 normals + 1 scout — the longer roster finishes its main queue alone
+    let specs2: Vec<UnitSpec> = vec![
+        unit("b1", false, false), unit("b2", false, false), unit("b3", false, false),
+        unit("b4", false, false), unit("b_scout", true, false),
+    ];
+    let zone1 = deployment::Rect::new(-0.9144, -0.6096, 1.8288, 0.3048);
+    let zone2 = deployment::Rect::new(-0.9144, 0.3048, 1.8288, 0.3048);
+    let objs = vec![(0.0_f64, 0.0_f64)];
+
+    let won_by_1 = deployment::deploy_interleaved(
+        &specs1, &specs2, &zone1, &zone2, &objs, &board, 7, 8, 1);
+    let slots: Vec<i64> = won_by_1.sequence.iter().map(|(s, _)| *s).collect();
+    // mains 3 vs 4 -> 1,2,1,2,1,2 then side 2 alone; scouts 1 each -> 1,2
+    assert_eq!(slots, vec![1, 2, 1, 2, 1, 2, 2, 1, 2], "winner first, strictly alternating: {:?}", won_by_1.sequence);
+    let keys: Vec<&str> = won_by_1.sequence.iter().map(|(_, k)| k.as_str()).collect();
+    assert!(keys[6].starts_with('b') && keys[6] != "b_scout",
+        "the longer roster's last NORMAL lands alone, side 1 being out of units: {keys:?}");
+    assert_eq!(&keys[7..], &["a_scout", "b_scout"], "the scout phase runs after BOTH main queues: {keys:?}");
+    assert!(!keys.contains(&"a_ambush"), "an Ambush unit never enters a queue: {keys:?}");
+    assert_eq!(won_by_1.side1.reserved, vec!["a_ambush".to_string()], "it is held in reserve");
+
+    // The roll-off's other outcome: side 2 opens and keeps the priority.
+    let won_by_2 = deployment::deploy_interleaved(
+        &specs1, &specs2, &zone1, &zone2, &objs, &board, 7, 8, 2);
+    let slots2: Vec<i64> = won_by_2.sequence.iter().map(|(s, _)| *s).collect();
+    assert_eq!(slots2, vec![2, 1, 2, 1, 2, 1, 2, 2, 1], "the other winner deploys first: {:?}", won_by_2.sequence);
+
+    // REORDER ONLY: each side's placements are exactly deploy_side's, in the
+    // same per-side order, at the same spots — for BOTH roll-off outcomes.
+    let whole1 = deployment::deploy_side(&specs1, &zone1, &objs, &board, 7);
+    let whole2 = deployment::deploy_side(&specs2, &zone2, &objs, &board, 8);
+    for (tag, got) in [("winner 1", &won_by_1), ("winner 2", &won_by_2)] {
+        assert_eq!(got.side1, whole1, "{tag}: side 1 unchanged by the interleave");
+        assert_eq!(got.side2, whole2, "{tag}: side 2 unchanged by the interleave");
+    }
+}
