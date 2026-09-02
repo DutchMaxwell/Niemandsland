@@ -362,6 +362,13 @@ impl Terrain {
         self.sandbox.len()
     }
 
+    /// The pieces themselves — `tokens::terrain_token` (NML-1073 M3-6b) reads
+    /// `c`/`he`/`yaw`/`kind` straight off them, the same `Obb`s `type_at` walks.
+    #[inline]
+    pub fn sandbox(&self) -> &[Obb] {
+        &self.sandbox
+    }
+
     pub fn build(p: &PlainTerrain) -> Terrain {
         let mut cells = HashMap::with_capacity(p.cells.len());
         for c in &p.cells {
