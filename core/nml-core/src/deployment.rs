@@ -607,7 +607,9 @@ fn v2_add(a: (f64, f64), b: (f64, f64)) -> (f64, f64) {
 }
 
 /// One `occupied` entry — `{"pos": Vector2, "radius": float}` (solo_controller.gd:9170).
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// `Deserialize` so the py seam can hand these in as plain dicts (the
+/// module's JSON marshalling contract, `nml-core-py/src/lib.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
 pub struct Occupied {
     pub pos: (f64, f64),
     pub radius: f64,
@@ -2182,7 +2184,9 @@ pub const BEACON_EPS_M: f64 = 0.0005;
 /// One enemy MODEL as the arrival search sees it (main.gd:10515-10533). A
 /// reserve enemy projects nothing at all (:10523 skips `unit_in_reserve`), so
 /// it never reaches this list.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// `Deserialize` so the py seam can hand these in as plain dicts (the
+/// module's JSON marshalling contract, `nml-core-py/src/lib.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
 pub struct ArrivalEnemy {
     pub pos: (f64, f64),
     /// `repel_ambush_dist_m` of this model's UNIT (solo_controller.gd:9724-9727),
@@ -2197,7 +2201,9 @@ pub struct ArrivalEnemy {
 /// One live friendly beacon MODEL (`beacon_points`, solo_controller.gd:9781+):
 /// a carrier still in reserve or inside a transport projects nothing, so it
 /// never reaches this list either.
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// `Deserialize` so the py seam can hand these in as plain dicts (the
+/// module's JSON marshalling contract, `nml-core-py/src/lib.rs`).
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
 pub struct ArrivalBeacon {
     pub pos: (f64, f64),
     /// `beacon_radius_m(carrier)` — the registry's `beacon_in` in metres.
