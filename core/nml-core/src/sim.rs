@@ -2400,6 +2400,31 @@ fn resolve_with(
             );
         }
     }
+    // D5-3, seam-gated: every NON-charge move with a destination goes through
+    // the SAME ported chain. `_move_toward` :4575 -> `_execute_move` :4784 is
+    // what the table runs for ADVANCE and RUSH too — routed around difficult
+    // and dangerous terrain, capped by p.11, solved per model — where the rigid
+    // block below walks one straight delta through walls and forests and then
+    // trims it by `spacing_fraction`. It runs BEFORE that block and, when it
+    // answers, replaces it whole: `plain_move` has already spent the band and
+    // placed every model, so both clamps would be measuring a move that is no
+    // longer a translation. `--red-move-rigid` (`move_rigid`) forces the old
+    // arm back for the gate's RED. `None` = the port declines and the rigid
+    // translation still stands.
+    if seams.movement && !seams.move_rigid && kind != CHARGE && band_in > 0.0 {
+        if let (Cover::Board(t), Some(dest)) = (cover, action.dest) {
+            landing = crate::mv::step::plain_move(
+                &next,
+                t,
+                si,
+                geom::to_f32(dest),
+                band_in,
+                seams.hero_attach,
+                true,
+                crate::mv::FAST_PLANNER_GUARD,
+            );
+        }
+    }
     if let Some(land) = landing.as_ref() {
         moved = true;
         for (i, m) in land.movers.iter().enumerate() {
@@ -4087,6 +4112,91 @@ mod tests {
         assert_eq!(shot.rolls.len(), 2);
         let save = &shot.rolls[1];
         assert_eq!((save.count, save.target), (1, 5));
+    }
+
+    // --------------------------------------------- NML-1152 S3: plain moves ---
+
+    /// `small_board()`'s 72" x 48" school board with a FOREST bar across
+    /// x in [3", 6"), z in [-3", 3") —
+    /// a 3"-thick difficult block sitting squarely on the straight line from the
+    /// unit to its destination, and NOT on the rigid landing spot, which is what
+    /// makes `_targets_in_difficult` (:5159) answer "route around it".
+    fn forest_bar_board() -> crate::terrain::Terrain {
+        // `type_at` indexes cells as `floor(inches / 3 + 15)` on this 72" x 48"
+        // grid, so cell 16 is x in [3", 6") and cells 14/15 are z in [-3", 3").
+        let cells = vec![[16.0, 14.0, crate::terrain::FOREST as f64],
+                         [16.0, 15.0, crate::terrain::FOREST as f64]];
+        crate::terrain::Terrain::build(&crate::terrain::PlainTerrain {
+            cells,
+            sandbox: vec![],
+            walls: vec![],
+            cell_params: crate::terrain::CellParams {
+                table_size_feet: [6.0, 4.0],
+                grid_rotation_degrees: 0.0,
+                grid_size_inches: 3.0,
+                inches_to_meters: IN2M,
+            },
+        })
+    }
+
+    fn advance_to(x_in: f64) -> Action {
+        Action {
+            kind: ADVANCE,
+            unit: "a".into(),
+            dest: Some([x_in * IN2M as f64, 0.0, 0.0]),
+            shoot: None,
+            charge: None,
+            patient: false,
+            split: None,
+        }
+    }
+
+    /// S3 — a NON-charge move goes through `mv::step::plain_move` once
+    /// `movement` is on: the unit routes AROUND the forest instead of walking
+    /// its whole 6" band straight through it, so the models rest somewhere the
+    /// rigid translation never puts them.
+    #[test]
+    fn a_plain_advance_lands_through_the_solver_under_the_movement_seam() {
+        let (st, statics) = buff_line();
+        let t = forest_bar_board();
+        let rigid = resolve_on_board(&statics, &st, &advance_to(8.0), &t, Seams::default())
+            .unwrap();
+        let solved = resolve_on_board(
+            &statics, &st, &advance_to(8.0), &t, Seams { movement: true, ..Seams::default() },
+        )
+        .unwrap();
+        // The rigid arm spends the full band on the straight line, every model
+        // the same delta — through the forest.
+        for (got, before) in rigid.positions[0].iter().zip(st.positions[0].iter()) {
+            assert!((got[0] - (before[0] + 6.0 * IN2M)).abs() < 1e-6, "rigid {got:?}");
+        }
+        let gap_in = solved.positions[0]
+            .iter()
+            .zip(rigid.positions[0].iter())
+            .map(|(a, b)| ((a[0] - b[0]).powi(2) + (a[2] - b[2]).powi(2)).sqrt() / IN2M as f64)
+            .fold(0.0f64, f64::max);
+        assert!(gap_in > 0.5, "the solver landed on the rigid answer, gap {gap_in}\"");
+    }
+
+    /// The RED for that routing: `move_rigid` puts ADVANCE and RUSH back on the
+    /// rigid arm with `movement` still on, and every model must return to the
+    /// straight-line answer to the digit. Without it the assertion above could
+    /// be reading any other difference the seam makes.
+    #[test]
+    fn the_move_rigid_red_returns_a_plain_advance_to_the_straight_line() {
+        let (st, statics) = buff_line();
+        let t = forest_bar_board();
+        let rigid = resolve_on_board(&statics, &st, &advance_to(8.0), &t, Seams::default())
+            .unwrap();
+        let red = resolve_on_board(
+            &statics,
+            &st,
+            &advance_to(8.0),
+            &t,
+            Seams { movement: true, move_rigid: true, ..Seams::default() },
+        )
+        .unwrap();
+        assert_eq!(red.positions, rigid.positions);
     }
 
     // ------------------------------------------------- BLOCK B5: Hit & Run ---

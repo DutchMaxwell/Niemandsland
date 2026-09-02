@@ -833,6 +833,10 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
             _ => dflt.sighting,
         },
         movement: d.get("movement").map(|v| flag(&v)).unwrap_or(dflt.movement),
+        // NML-1152 S3. The RED half of `movement`, header-only like its parent;
+        // absent (every corpus) = `Knobs::default()` = OFF, so the non-charge arm
+        // follows `movement` unless a gate writes this key.
+        move_rigid: d.get("move_rigid").map(|v| flag(&v)).unwrap_or(dflt.move_rigid),
         // NML-1073 M5 D1-B8. Not a seam: the p.12 test belongs to `dice="table"`
         // and defaults ON. Absent (every corpus) = `Knobs::default()` = true, and
         // a gate that writes `false` gets the RED reading.

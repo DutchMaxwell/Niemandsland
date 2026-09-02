@@ -135,6 +135,7 @@ impl NmlCore {
             charge_landing: false,
             sighting: false,
             movement: false,
+            move_rigid: false,
             // D1-B8: inert without a tray — this seat resolves expected values.
             no_dangerous: false,
             // D5-4: inert — this seat never turns `hero_attach` on.
@@ -767,6 +768,7 @@ impl NmlCore {
                 // NML-1073 M5 D5-2 — likewise. The in-game `BattleSim` keeps its
                 // rigid imagination; only the trainer's header turns this on.
                 movement: false,
+                move_rigid: false,
                 // D1-B8: inert without a tray — this seat resolves expected values.
                 no_dangerous: false,
                 // D5-4: inert — this seat never turns `hero_attach` on.

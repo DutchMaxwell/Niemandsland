@@ -357,6 +357,12 @@ pub struct Seams {
     /// `BattleSim` rollout keeps its cheap straight-line imagination.
     #[serde(default)]
     pub movement: bool,
+    /// NML-1152 S3 — the RED switch for the NON-charge half of `movement`: with
+    /// it on, ADVANCE/RUSH fall back to the rigid translation while CHARGE still
+    /// goes through the port, so a gate can prove the numbers S3 moved come back
+    /// (`--red-move-rigid`). Default OFF, so nothing replays differently.
+    #[serde(default)]
+    pub move_rigid: bool,
     /// NML-1073 M5 D1-B8 — the RED switch for the p.12 DANGEROUS-terrain test,
     /// and inverted on purpose: the test is not a research seam but a rule, so
     /// `false` (the `Default`, and every corpus's) RUNS it. It fires only on the
