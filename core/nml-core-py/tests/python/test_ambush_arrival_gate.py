@@ -44,8 +44,8 @@ def test_committed_fixture_loads_and_the_import_guard_refuses_a_verdict(capsys):
     code = gate.main(["--arrival", "--fixtures", fixtures])
     out = capsys.readouterr().out
     assert code == 2
-    assert "10 cases" in out
-    assert "2 held" in out
+    assert "100 cases" in out
+    assert "1 held" in out
     assert "NO VERDICT" in out
     assert "floor OK" not in out and "floor REGRESSION" not in out
 
