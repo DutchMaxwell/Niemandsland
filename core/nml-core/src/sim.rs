@@ -1393,6 +1393,33 @@ pub fn melee_profiles_of(us: &UnitStatic, alive: i64, sc: &mut Scratch) {
     }
 }
 
+/// GF v3.5.1 "Limited" — `SoloController.filter_limited` (solo_controller.gd:
+/// 7715-7723): drop an already-fired Limited profile from `sc.keep`/
+/// `sc.attacks` (index-parallel). Resolution only, ranged and melee alike.
+fn drop_spent_limited(profiles: &[ShootProfile], used: &[String], sc: &mut Scratch) {
+    let mut i = 0;
+    while i < sc.keep.len() {
+        if profiles[sc.keep[i]].limited && used.iter().any(|n| n == &profiles[sc.keep[i]].name) {
+            sc.keep.remove(i);
+            sc.attacks.remove(i);
+        } else {
+            i += 1;
+        }
+    }
+}
+
+/// `SoloController.mark_limited_used` (solo_controller.gd:7700-7708,
+/// main.gd:3207-3208): called AFTER the dice actually rolled, win or lose —
+/// every Limited profile that fired is spent for the rest of the game.
+fn mark_spent_limited(profiles: &[ShootProfile], keep: &[usize], used: &mut Vec<String>) {
+    for &i in keep {
+        let p = &profiles[i];
+        if p.limited && !used.iter().any(|n| n == &p.name) {
+            used.push(p.name.clone());
+        }
+    }
+}
+
 /// NML-1132 — `profiles_of`/`melee_profiles_of` over the TABLE's own MEMBER list:
 /// the host, then every ALIVE attached hero, each with its own weapons and its own
 /// survivor scaling. The live table has always built a volley that way
@@ -1626,6 +1653,7 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize) -> Vec<(usize, S
         let mut sc = Scratch::default();
         melee_profiles_of(um, state.alive[mi], &mut sc);
         sc.keep = (0..um.melee.len()).collect();
+        drop_spent_limited(&um.melee, &state.limited_used[mi], &mut sc);
         parts.push((mi, sc, ctx_live(ctx_of_melee(um, state, mi), statics, state, mi, true)));
     }
     parts
@@ -1687,6 +1715,10 @@ fn strike_phase(
         })
         .collect();
     let r = crate::dice::resolve_melee_with_tray(&members, &def, &ut.name, charging, tray);
+    for (mi, sc, _) in &parts {
+        let melee = &statics[next.roster.profile[*mi]].melee;
+        mark_spent_limited(melee, &sc.keep, &mut next.limited_used[*mi]);
+    }
     let caused = r.caused;
     let w = shot.absorb(r);
     // B13: the table measures the lash-back on wounds actually TAKEN — the
@@ -3228,6 +3260,7 @@ fn resolve_with(
                                 } else {
                                     profiles_of(um, next.alive[mi], g.d, &mut msc);
                                 }
+                                drop_spent_limited(&um.shoot, &next.limited_used[mi], &mut msc);
                                 if let Some(aims) = &g.weapons {
                                     // The table gates and scales per TARGET
                                     // (main.gd:3088-3095); a member the group
@@ -3262,6 +3295,10 @@ fn resolve_with(
                                 &shooters_of(&parts, statics, &next),
                                 &def, &ut_g.name, g.d, g.mod_d, tray,
                             );
+                            for (mi, msc, _) in &parts {
+                                let shoot = &statics[next.roster.profile[*mi]].shoot;
+                                mark_spent_limited(shoot, &msc.keep, &mut next.limited_used[*mi]);
+                            }
                             // D1-B5a: `absorb`, not `=` — a CHARGE activation
                             // puts several sub-phases into ONE report, and the
                             // replay gate compares the whole activation roll by
@@ -3634,6 +3671,7 @@ mod tests {
             second_wind_used: vec![false; 4],
             second_wind_round: -1,
             second_wind_uses: 0,
+            limited_used: vec![Vec::new(); 4],
         }
     }
 
@@ -4465,6 +4503,29 @@ mod tests {
         statics[0].quick_shot_active = true;
         let (_, with_rule) = run_buff(&st, &statics, &advance_shoot("b"), 11);
         assert!(!with_rule.rolls.is_empty());
+    }
+
+    // ------------------------------------------- GF v3.5.1: Limited weapons ---
+
+    /// GF v3.5.1 weapon rule Limited — "may only be used once per game": the
+    /// Limited Cannon fires alongside the plain Rifle in round 1, then draws
+    /// no dice at all in round 2, while the Rifle keeps firing.
+    #[test]
+    fn a_limited_weapon_fires_once_then_draws_no_dice_the_next_round() {
+        let (st, mut statics) = buff_line();
+        statics[0].shoot = vec![ShootProfile { limited: true, ..gun("Cannon", 1, 24) }, gun("Rifle", 1, 24)];
+        let (round1, shot1) = run_buff(&st, &statics, &buff_action(Some("b")), 11);
+        assert_eq!(
+            shot1.rolls.iter().filter(|r| r.kind == "attack").count(), 2,
+            "round 1: Cannon and Rifle both fire"
+        );
+        assert!(round1.limited_used[0].iter().any(|n| n == "Cannon"));
+
+        let (_, shot2) = run_buff(&round1, &statics, &buff_action(Some("b")), 12);
+        assert_eq!(
+            shot2.rolls.iter().filter(|r| r.kind == "attack").count(), 1,
+            "round 2: the spent Cannon draws no dice, the Rifle still fires"
+        );
     }
 
     // ------------------------------ BLOCK B2: RE-POSITION ARTILLERY ---

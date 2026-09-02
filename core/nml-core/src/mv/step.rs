@@ -1032,6 +1032,7 @@ mod tests {
             second_wind_used: vec![false; n],
             second_wind_round: -1,
             second_wind_uses: 0,
+            limited_used: vec![Vec::new(); n],
         }
     }
 
