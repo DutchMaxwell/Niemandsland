@@ -53,6 +53,13 @@ pub struct UnitSpec {
     pub ambush: bool,
     pub ignores_terrain: bool,
     pub vanguard: bool,
+    /// The registry's `place_in` in metres — `RulesRegistry.unit_param(unit,
+    /// "Vanguard", "place_in", 9.0)` (solo_controller.gd:9627) via
+    /// list_to_profile.py's `_rules_of_primitive`; `None` = the table's 9"
+    /// fallback (`VANGUARD_PLACE_M`, the corpus value). Read only under
+    /// `vanguard`; the gate's dump back-fill omits the key.
+    #[serde(default)]
+    pub place_in_m: Option<f64>,
     pub transport_capacity: i64,
     /// The deploy yaw (the model node's `global_rotation.y`; 0.0 corpus-wide).
     pub facing_rad: f64,
@@ -82,6 +89,31 @@ pub struct SideDeploy {
     pub fills: Vec<(String, String)>,
     pub placements: Vec<Placement>,
     pub reserved: Vec<String>,
+    /// The per-move decision log — the twin's mirror of the table's
+    /// `record_decision` deploy lines: one event per Vanguard push
+    /// (solo_controller.gd:9158-9166), fields verbatim.
+    #[serde(default)]
+    pub events: Vec<DeployEvent>,
+}
+
+/// `SoloController.record_decision`'s deploy line for one Vanguard push
+/// (solo_controller.gd:9158-9166) — the same shape the table writes, so a
+/// caller logs the twin's rule application like the table's.
+#[derive(Debug, Clone, PartialEq, Default, serde::Deserialize, serde::Serialize)]
+pub struct DeployEvent {
+    pub kind: String,
+    pub unit: String,
+    pub rule: String,
+    pub chosen: String,
+    pub why: String,
+    pub data: DeployEventData,
+}
+
+/// The table's `data` dict of the Vanguard deploy line: the pushed spot.
+#[derive(Debug, Clone, PartialEq, Default, serde::Deserialize, serde::Serialize)]
+pub struct DeployEventData {
+    pub x_m: f64,
+    pub z_m: f64,
 }
 
 /// `SoloController.roll_off` with the trace kept (fallback winner 1 after the cap).
@@ -526,6 +558,12 @@ const SCAN_EPS: f64 = 0.0001;
 /// (solo_controller.gd:9627), world metres.
 pub const VANGUARD_PLACE_M: f64 = 9.0 * 0.0254;
 
+/// The table's `rule` text of the Vanguard deploy line
+/// (solo_controller.gd:9161), verbatim — the 9" is the rule's official band
+/// even when `place_in` moves the push.
+pub const VANGUARD_RULE_TEXT: &str =
+    "Vanguard: after deploying, the unit may be placed within 9\" — pushed toward the enemy side";
+
 /// Godot `Rect2` at the real_t boundary: construction and `end`/`get_center`
 /// narrow to f32; the scan arithmetic between boundaries runs f64.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -797,6 +835,10 @@ pub struct PlaceOutcome {
     pub rung: u8,
     pub bisect_marks: u8,
     pub pushed: bool,
+    /// The pre-push spot (== `spot` when the push did not move the unit) —
+    /// the table's `chosen` distance source, `spot.distance_to(v_spot)`
+    /// (solo_controller.gd:9162).
+    pub pushed_from: (f64, f64),
 }
 
 /// `SoloController._deploy_place_id` (solo_controller.gd:9086-9170) for the
@@ -820,12 +862,14 @@ pub fn deploy_place_id(
     base_r: f64,
     flying: bool,
     vanguard: bool,
+    push_m: f64,
 ) -> PlaceOutcome {
     let blocked =
         |p: (f64, f64)| spot_blocked(board, p, flying, radius, footprint, base_r);
     let mut spot =
         best_spot(sec, objectives, occupied, radius, &blocked, DEPLOY_SPOT_STEP_M, footprint, base_r, forward_y);
     let (mut rung, mut marks, mut pushed) = (0u8, 0u8, false);
+    let mut pushed_from = spot;
     for _ in 0..4 {
         if spot.0.is_infinite() || !footprint_bisected(spot, footprint, base_r, walls) {
             break;
@@ -853,14 +897,15 @@ pub fn deploy_place_id(
         spot = least_blocked_spot(zone, objectives, radius, &blocked, LEAST_BLOCKED_STEP_M, base_r, footprint);
     }
     if vanguard {
-        let v = vanguard_push(spot, zone, occupied, &blocked, radius, footprint, base_r, walls, VANGUARD_PLACE_M);
+        pushed_from = spot;
+        let v = vanguard_push(spot, zone, occupied, &blocked, radius, footprint, base_r, walls, push_m);
         if v != spot {
             spot = v;
             pushed = true;
         }
     }
     occupied.push(Occupied { pos: spot, radius });
-    PlaceOutcome { spot, rung, bisect_marks: marks, pushed }
+    PlaceOutcome { spot, rung, bisect_marks: marks, pushed, pushed_from }
 }
 
 /// `AiDeployment._blocked_count` (ai_deployment.gd:151-165): blocked SAMPLE
@@ -998,6 +1043,7 @@ pub fn deploy_side(
             .collect(),
         placements: Vec::new(),
         reserved: Vec::new(),
+        events: Vec::new(),
     };
     if specs.is_empty() {
         return out; // deploy_begin's empty-roster early return (:8984)
@@ -1035,9 +1081,12 @@ pub fn deploy_side(
         } else {
             (*zone, section_rect(zone, section_of[i]), forward_y)
         };
+        // the push band: the registry's place_in when the list carries it,
+        // the table's 9" fallback otherwise (solo_controller.gd:9627)
+        let push_m = s.place_in_m.unwrap_or(VANGUARD_PLACE_M);
         let o = deploy_place_id(
             &unit_zone, &sec, fwd, objectives, &mut occupied, board, walls,
-            radius, &s.footprint, base_r, s.ignores_terrain, s.vanguard,
+            radius, &s.footprint, base_r, s.ignores_terrain, s.vanguard, push_m,
         );
         out.placements.push(Placement {
             key: s.key.clone(),
@@ -1047,6 +1096,19 @@ pub fn deploy_side(
             vanguard_pushed: o.pushed,
             models: place_unit_models(o.spot, s.model_count.max(0) as usize),
         });
+        // the table's per-move log line (record_decision, :9158-9166): one
+        // event per Vanguard push, `chosen` the ACTUAL distance — the table's
+        // `spot.distance_to(v_spot) / INCHES_TO_METERS`, the f32 v2_dist law.
+        if o.pushed {
+            out.events.push(DeployEvent {
+                kind: "deploy".into(),
+                unit: s.key.clone(),
+                rule: VANGUARD_RULE_TEXT.into(),
+                chosen: format!("+{:.1}\" forward", v2_dist(o.pushed_from, o.spot) / 0.0254),
+                why: "vanguard forward placement".into(),
+                data: DeployEventData { x_m: o.spot.0, z_m: o.spot.1 },
+            });
+        }
     }
     // The FINISH (deploy_finish, solo_controller.gd:9180-9188) is NOT run
     // here — step 6d split placement from the finish so the caller drives the

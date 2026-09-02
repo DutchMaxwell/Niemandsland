@@ -2007,6 +2007,7 @@ fn deploy_finish(
             fills: Vec::new(),
             placements: s1.placements.clone(),
             reserved: Vec::new(),
+            events: Vec::new(),
         },
         Rect::new(s1.zone[0], s1.zone[1], s1.zone[2], s1.zone[3]),
     );
@@ -2017,6 +2018,7 @@ fn deploy_finish(
             fills: Vec::new(),
             placements: s2.placements.clone(),
             reserved: Vec::new(),
+            events: Vec::new(),
         },
         Rect::new(s2.zone[0], s2.zone[1], s2.zone[2], s2.zone[3]),
     );

@@ -98,6 +98,24 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # stays unread on this core (the shipped "X" string falls back to the
     # rating itself).
     "Retaliate": frozenset({"hits_per_wound"}),
+    # Block B12: unit.rs::unpredictable_shooting_params (via ctx_for) + dice.rs
+    # ::resolve_volley_with_tray read the shooting volley die's three params.
+    "Unpredictable Shooter": frozenset({"ap_bonus", "hit_bonus", "low_roll_max"}),
+    # Block B10: unit.rs::regen_targets reads `ignore_target` (and the spell
+    # twin `ignore_target_spell`) off the whole-unit "Resistance" entry into
+    # Ctx.regen_target / Ctx.regen_target_spell — consumed by
+    # dice.rs::regen_batch, combat.rs's unsaved folds and spell.rs's
+    # spell-wound leg; `all_models` is the whole-unit gate itself.
+    "Resistance": frozenset({"ignore_target", "ignore_target_spell", "all_models"}),
+    # Block B9: deployment.rs::deploy_side reads the registry's `place_in`
+    # (UnitSpec.place_in_m via list_to_profile.py:_deploy_flags — the table's
+    # `unit_param(unit, "Vanguard", "place_in", 9.0)`, solo_controller.gd:9627)
+    # as the Vanguard push band (vanguard_push, the 100/75/50/25 % ladder).
+    # Every Vanguard-primitive entry (Vanguard, Fanatic, Drakesworn) carries
+    # place_in; without this entry the primitive was TRUSTED WHOLE, so all
+    # three names rode the bare 'vanguard' field token — PR #489's
+    # over-credit shape, reopened by the #481 parity wave until now.
+    "Vanguard": frozenset({"place_in"}),
 }
 
 
