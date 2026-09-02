@@ -45,6 +45,20 @@ the report as the pre-gate reading; `--final` makes FINAL the pass criterion.
 THE RED. `--red-shift` moves every RECORDED endpoint 0.06" and changes
 nothing else, same as the charge gate's — it damages BOTH bars.
 
+PER-MODEL (S12). END already fails an act the moment ONE model of the unit
+misses the bar (`gap` is the WORST model's own gap) — PER-MODEL is that same
+fold, reported on its own line as the ladder's closing target: the share of
+acts where EVERY model lands within 0.05", plus a histogram of the worst-
+model gap (`GAP_BUCKETS`) and a breakdown by how many models the acting unit
+carries. `--red-shift` reddens it exactly the way it reddens END, because
+both read the same `score_end` output.
+
+`--final` (S5a, #519) scores the gate on the NEXT recorded act's own
+positions instead of the pre-gate `planned` field — a separate tool landing
+from that PR, not this one. PER-MODEL's `GAP_BUCKETS`/`SIZE_GROUPS`
+histogram is built so it can be pointed at that FINAL reading too once both
+are in; wiring it there is a follow-up, not done in this file.
+
     PYTHONPATH=<module> python core/nml-core-py/tools/move_call_gate.py \\
         --ref ~/selfplay_out/qbg_ref --limit 3
 """
@@ -73,6 +87,35 @@ RUSH_KIND = 2
 #: `OVERLAP_EPS_M` step.rs:47, in inches — the distance-truth trim's own
 #: slack, so a trail exactly AT the budget is not flagged as trimmed.
 TRIM_SLACK_IN = 0.0005 / IN2M
+
+#: S12's worst-model-gap histogram for the PER-MODEL line. Order matters:
+#: `gap_bucket` returns the FIRST one a gap qualifies for.
+GAP_BUCKETS = ("le_bar", "le_0_5in", "le_2in", "le_6in", "gt_6in")
+
+#: S12's per-model-count breakdown for the PER-MODEL line.
+SIZE_GROUPS = ("1", "2-5", "6+")
+
+
+def gap_bucket(gap_in: float) -> str:
+    """Which `GAP_BUCKETS` slot one worst-model gap (inches) falls into."""
+    if gap_in <= BAR_IN:
+        return "le_bar"
+    if gap_in <= 0.5:
+        return "le_0_5in"
+    if gap_in <= 2.0:
+        return "le_2in"
+    if gap_in <= 6.0:
+        return "le_6in"
+    return "gt_6in"
+
+
+def size_group(n_models: int) -> str:
+    """Which `SIZE_GROUPS` slot one acting unit's model count falls into."""
+    if n_models <= 1:
+        return "1"
+    if n_models <= 5:
+        return "2-5"
+    return "6+"
 
 
 def call_reach_in(c: dict) -> float:
@@ -125,6 +168,10 @@ def run(ref: Path, repo: str, limit: int, red_shift: bool, report_only: bool,
     t = {k: 0 for k in ("acts", "no_call", "declined", "end_equal", "call_equal", "budget_equal",
                         "models", "models_equal", "models_trimmed", "acts_all_trimmed",
                         "fin", "fin_equal", "fin_models", "fin_models_equal", "fin_unknown")}
+    # S12 PER-MODEL — the same END fold, reported on its own with a histogram
+    # of the worst-model gap and a breakdown by the acting unit's model count.
+    per_model = dict.fromkeys(("acts", "equal") + GAP_BUCKETS, 0)
+    groups = {g: {"acts": 0, "equal": 0} for g in SIZE_GROUPS}
     worst = 0.0
     fin_worst = 0.0
     reasons: dict[str, int] = {}
@@ -237,6 +284,18 @@ def run(ref: Path, repo: str, limit: int, red_shift: bool, report_only: bool,
                     firsts.append("%s act %d [end] worst model %.3f\" off%s"
                                   % (d.name, k, gap, (" — call: " + why) if why else ""))
 
+            # S12 PER-MODEL — the SAME fold (`gap` is already the worst model's
+            # own gap), reported on its own with a histogram and a breakdown by
+            # how many models the acting unit carries.
+            per_model["acts"] += 1
+            per_model[gap_bucket(gap)] += 1
+            if gap <= BAR_IN:
+                per_model["equal"] += 1
+            grp = size_group(len(pl))
+            groups[grp]["acts"] += 1
+            if gap <= BAR_IN:
+                groups[grp]["equal"] += 1
+
     end_acts = t["acts"] - t["acts_all_trimmed"]
     label = "GATE S4 plain move (scored on %s)" % ("FINAL" if final else "END")
     if red_shift:
@@ -263,10 +322,21 @@ def run(ref: Path, repo: str, limit: int, red_shift: bool, report_only: bool,
           % (", ".join("%s=%d" % kv for kv in sorted(reasons.items())) or "none"))
     for f in firsts:
         print("  first : %s" % f)
+    print("  PER-MODEL: %d/%d acts put EVERY model of the acting unit within %.2f\" (S12's "
+          "closing target)" % (per_model["equal"], per_model["acts"], BAR_IN))
+    print("           : worst-model-gap buckets: %s"
+          % ", ".join("%s=%d" % (b, per_model[b]) for b in GAP_BUCKETS))
+    print("           : by unit size — %s"
+          % ", ".join("%s models %d/%d" % (g, groups[g]["equal"], groups[g]["acts"])
+                       for g in SIZE_GROUPS))
 
     if red_shift:
-        ok = t["end_equal"] < end_acts and t["fin_equal"] < t["fin"]
-        print("  RED %s" % ("held — %d of %d acts part" % (end_acts - t["end_equal"], end_acts)
+        ok = (t["end_equal"] < end_acts and t["fin_equal"] < t["fin"]
+              and per_model["equal"] < per_model["acts"])
+        print("  RED %s" % ("held — %d of %d acts part on END, %d of %d on FINAL, %d of %d on PER-MODEL"
+                            % (end_acts - t["end_equal"], end_acts,
+                               t["fin"] - t["fin_equal"], t["fin"],
+                               per_model["acts"] - per_model["equal"], per_model["acts"])
                             if ok else "FAILED — every act survived the damage"))
         return 0 if ok else 1
     ok = t["acts"] > 0 and t["call_equal"] == t["acts"] and (
