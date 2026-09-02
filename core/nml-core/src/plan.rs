@@ -209,6 +209,11 @@ fn seams_of(knobs: &Knobs) -> Seams {
         no_engage_fold: !knobs.engage_fold,
         los_model: knobs.los_model,
         melee_reach: knobs.melee_reach == MeleeReach::Table,
+        // W1: the menu knob owns BOTH halves. Offering ADVANCE+shoot without
+        // this would hand the search a candidate `resolve` declines outright.
+        // Either half asks: the wide MENU implies the permission, and a
+        // per-seat A/B grants the permission alone to the resolving core.
+        moved_shoot: knobs.menu_wide || knobs.moved_shoot,
     }
 }
 
@@ -246,6 +251,7 @@ pub fn tuning_of(knobs: &Knobs) -> crate::menu::Tuning {
         charge_gate: knobs.charge_gate,
         shoot_los: knobs.menu_los,
         target_units: knobs.menu_targets,
+        wide_shoot: knobs.menu_wide,
         ..Default::default()
     }
 }

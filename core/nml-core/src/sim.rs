@@ -3185,7 +3185,10 @@ fn resolve_with(
     // Quick Shot RUSH exactly as it already does to a moved ADVANCE.
     let quick_shot_active = statics[pi_s].quick_shot_active;
     if !shoot_key.is_empty() && (kind == HOLD || kind == ADVANCE || (kind == RUSH && quick_shot_active)) {
-        if moved {
+        // W1: the decline stands unless the caller has asked for the moving
+        // shot, which is the other half of `Knobs::menu_wide` — the menu may
+        // now offer ADVANCE+shoot, so the resolve has to be able to answer it.
+        if moved && !seams.moved_shoot {
             return Err(Unsupported::MovedShootLos);
         }
         // NML-1157: a volley NAMED at a joined hero hits its HOST — the same
@@ -3202,7 +3205,26 @@ fn resolve_with(
                 Some(_) => split_plan(action.split.as_ref(), statics, &next, si, &shoot_key),
                 None => (None, Vec::new()),
             };
-            if plan.is_some() || (next.sees(si, &shoot_key) && los_clear(&next, si, ti)) {
+            // W1: a MOVED shooter's sight is not in the recorded rows — `sees`
+            // and `los_clear` both answer for the PRE-move centre. With the
+            // board in hand it is a question the terrain answers directly, and
+            // from the same source `tools/core_selfplay.gd:675` builds
+            // `los_pairs` from (`menu::safe_advance` already probes it that
+            // way). Without a board the rows are all there is, and only a state
+            // that stamps no sight seam at all can still be trusted: both reads
+            // are then `true` for every pair, wherever the unit stands.
+            let sighted = if moved {
+                match cover {
+                    Cover::Board(t) if t.is_valid() => !t.los_blocked(
+                        geom::centre(&next.positions[si]),
+                        geom::centre(&next.positions[ti]),
+                    ),
+                    _ => next.los[si].is_none() && next.los_pairs.is_none(),
+                }
+            } else {
+                next.sees(si, &shoot_key) && los_clear(&next, si, ti)
+            };
+            if plan.is_some() || sighted {
                 let d = geom::dist_in(&next.positions[si], &next.positions[ti]);
                 // NML-1152: the pooled plan's own modifier distance — unit
                 // centre to unit centre (main.gd:3029) — kept apart from `d`

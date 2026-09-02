@@ -57,6 +57,11 @@ def main() -> int:
     # always played.
     ap.add_argument("--menu-los", choices=selfplay.MENU_LOS_MODES, default="planner")
     ap.add_argument("--deep-menu-los", choices=selfplay.MENU_LOS_MODES, default=None)
+    # W1 — the SECOND per-seat menu knob, same seam: `--deep-menu-wide table`
+    # puts the seat that may ADVANCE and shoot against the seat that can only
+    # fire by standing still.
+    ap.add_argument("--menu-wide", choices=selfplay.MENU_WIDE_MODES, default="off")
+    ap.add_argument("--deep-menu-wide", choices=selfplay.MENU_WIDE_MODES, default=None)
     a = ap.parse_args()
 
     gr.G["dice"] = a.dice_seed
@@ -84,6 +89,8 @@ def main() -> int:
             los=a.los,
             menu_los=a.menu_los,
             deep_menu_los=a.deep_menu_los,
+            menu_wide=a.menu_wide,
+            deep_menu_wide=a.deep_menu_wide,
             cond_ap=True,
             objectives="rulebook",
             deployment="arena",
@@ -96,6 +103,9 @@ def main() -> int:
     if a.deep_menu_los is not None and a.deep_menu_los != a.menu_los:
         deep_knobs["menu_los"] = a.deep_menu_los
         base_knobs["menu_los"] = a.menu_los
+    if a.deep_menu_wide is not None and a.deep_menu_wide != a.menu_wide:
+        deep_knobs["menu_wide"] = a.deep_menu_wide
+        base_knobs["menu_wide"] = a.menu_wide
     if a.deep_player == 1:
         grades = {"p1": "planner_v0_deep", "p2": "planner_v0"}
         seat_knobs = {"p1": deep_knobs, "p2": base_knobs}
@@ -120,6 +130,8 @@ def main() -> int:
                   **({"los": a.los} if a.los != "unit" else {}),
                   **({"menu_los": a.menu_los} if a.menu_los != "planner" else {}),
                   **({"deep_menu_los": a.deep_menu_los} if a.deep_menu_los else {}),
+                  **({"menu_wide": a.menu_wide} if a.menu_wide != "off" else {}),
+                  **({"deep_menu_wide": a.deep_menu_wide} if a.deep_menu_wide else {}),
                   "engage_fold": True, "sidecars": False},
     }
     os.makedirs(a.out_dir, exist_ok=True)

@@ -843,6 +843,13 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // `state["los_blocked"]` there), so menu and resolve already agree.
         // The knob exists for the trainer twin, which stamps that Callable.
         menu_los: dflag(d, "menu_los"),
+        // W1. A MENU knob, not a seam (like `menu_targets`): it widens what the
+        // search may choose and changes no resolve. No recorder writes the key,
+        // so an absent one answers `Knobs::default()` — OFF, the menu every
+        // recorded corpus carries.
+        menu_wide: dflag(d, "menu_wide"),
+        // W1, the resolve half alone — only a per-seat trainer ever writes it.
+        moved_shoot: dflag(d, "moved_shoot"),
         // NML-1157. A MENU knob, not a seam: it changes what the search may
         // choose, never how a chosen act resolves. No recorder writes the key
         // yet, so an absent one answers `Knobs::default()` — OFF, the menu

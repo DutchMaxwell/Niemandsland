@@ -122,6 +122,26 @@ pub struct Knobs {
     /// replays with the GDScript's own menu.
     #[serde(default)]
     pub menu_los: bool,
+    /// W1 (AUDIT_rulebook_flanks_2026-09-02, top-1) — `Tuning::wide_shoot`: the
+    /// menu offers ADVANCE+shoot, the leg `AiPlanner.candidates_wide` has
+    /// carried since 16.08. and `menu::candidates` never had. A MENU knob, not
+    /// a seam: it changes what the search may choose, never how a chosen act
+    /// resolves, so a recorded act replays byte-identical either way. Absent
+    /// from every corpus recorded before it, so the default is OFF and no menu
+    /// moves.
+    #[serde(default)]
+    pub menu_wide: bool,
+    /// W1, the RESOLVE half of `menu_wide` on its own. `Seams::moved_shoot` is
+    /// a PERMISSION to answer a moved shooter's volley, not a rule: with no
+    /// menu offering that pairing it changes nothing. It needs its own bit
+    /// because a PER-SEAT A/B plans the acting seat on ITS core and RESOLVES
+    /// every activation on the BASE one (`selfplay._play_round`) — so a deep
+    /// seat playing the wide menu hands its ADVANCE+shoot to a base core that
+    /// would decline it (`Unsupported::MovedShootLos`), and the whole game
+    /// dies. `plan::seams_of` ORs it with `menu_wide`, so a single-core caller
+    /// never has to think about it. Default OFF: the decline stands.
+    #[serde(default)]
+    pub moved_shoot: bool,
     /// NML-1152 S3 — `Seams::move_rigid`, the RED switch that keeps ADVANCE and
     /// RUSH on the rigid translation while `movement` still routes CHARGE.
     /// Absent from every corpus, so the default is OFF.
@@ -248,6 +268,8 @@ impl Default for Knobs {
             movement: false,
             los_model: false,
             menu_los: false,
+            menu_wide: false,
+            moved_shoot: false,
             move_rigid: false,
             dangerous: true,
             engage_fold: false,

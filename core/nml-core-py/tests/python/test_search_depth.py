@@ -209,3 +209,47 @@ def test_the_per_seat_menu_knob_is_a_no_op_under_los_model():
                          deep_player=1, deep_top_k=2, deep_horizon=1,
                          dice="table", los="model", deep_menu_los="resolve", **FAST)
     assert _digest_without_stamps(both) == _digest_without_stamps(split)
+
+
+# W1 — `deep_menu_wide` is the first per-seat knob with a RESOLVE half, and that
+# is a trap the `menu_los` seam does not have: `_play_round` plans the acting
+# seat on ITS core but RESOLVES every activation on the BASE one. A deep seat
+# playing the wide menu therefore hands its ADVANCE+shoot to a core that would
+# decline it (`Unsupported::MovedShootLos`) and the whole game dies mid-round —
+# which is exactly how the first A/B run failed. The permission is
+# `Knobs::moved_shoot`, granted to BOTH cores as soon as EITHER seat may offer
+# a moving shot; without it this test raises instead of asserting.
+
+
+@pytest.mark.skipif(_lists_missing(), reason="needs the terrain bank + 1000pt lists")
+def test_deep_menu_wide_plays_and_parts_the_two_seats():
+    """A per-seat wide-menu game must PLAY — the BASE core has to resolve the
+    DEEP seat's moving shot — and both seats' resolved `menu_wide` is stamped."""
+    core = nml_core.load(str(REPO))
+    both = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
+                        deep_player=1, deep_top_k=2, deep_horizon=1,
+                        dice="table", los="unit", **FAST)
+    split = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
+                         deep_player=1, deep_top_k=2, deep_horizon=1,
+                         dice="table", los="unit", deep_menu_wide="table", **FAST)
+    assert _digest_without_stamps(both) != _digest_without_stamps(split)
+    assert split["knobs_by_seat"] == {
+        "p1": {"top_k": 2, "horizon": 1, "menu_wide": "table"},
+        "p2": {"top_k": 2, "horizon": 1, "menu_wide": "off"},
+    }
+    assert "knobs_by_seat" not in both
+
+
+@pytest.mark.skipif(_lists_missing(), reason="needs the terrain bank + 1000pt lists")
+def test_deep_menu_wide_default_is_byte_identical():
+    """`deep_menu_wide=None` (every caller written before this) leaves both
+    seats on the base value, so the game is the one it always was — the
+    permission bit alone must move nothing."""
+    core = nml_core.load(str(REPO))
+    a = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
+                     deep_player=1, deep_top_k=2, deep_horizon=1,
+                     dice="table", los="unit", **FAST)
+    b = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, core,
+                     deep_player=1, deep_top_k=2, deep_horizon=1,
+                     dice="table", los="unit", deep_menu_wide=None, **FAST)
+    assert _digest_without_stamps(a) == _digest_without_stamps(b)
