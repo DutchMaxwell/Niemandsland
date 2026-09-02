@@ -75,6 +75,29 @@ def test_shard_matches_corpus_positions_and_label_indices(tmp_path):
     want_menu_lens = [len(row["cands"]["list"]) for r in recs for row in r["planner_positions"]]
     ptr = arrays["cands_ptr"]
     assert (ptr[1:] - ptr[:-1]).tolist() == want_menu_lens
+    # Every position carries all 18 recorded terrain pieces (the bank's own
+    # Terrain::sandbox() is empty — terrain comes from the record instead,
+    # see terrain_rows()) — never 0, the gap this run replaces.
+    tp = arrays["terr_ptr"]
+    assert set((tp[1:] - tp[:-1]).tolist()) == {18}
+
+
+def test_terrain_rows_matches_hand_computation_for_a_known_forest_piece():
+    """The RED for `terrain_rows()` itself: a synthetic piece, by-hand math,
+    reproducing tokens.rs's `terrain_token` column for column (PR #584)."""
+    import math
+
+    import gen0_replay_shards as grs
+
+    piece = [2, 12.0, -6.0, 6.0, 9.0, 90.0]  # FOREST, 6x9in, centre (12,-6)in, 90 deg
+    got = grs.terrain_rows([piece], side=1)[0].tolist()
+    yaw = math.radians(90.0)
+    want = [12.0 / 30.0, -6.0 / 30.0, 3.0 / 12.0, 4.5 / 12.0, math.cos(yaw), math.sin(yaw),
+            0.0, 1.0, 0.0, 0.0, 1.0, 1.0]
+    assert got == pytest.approx(want, abs=2e-3)  # f16 rounding
+    mirrored = grs.terrain_rows([piece], side=2)[0]
+    assert mirrored[0] == pytest.approx(-12.0 / 30.0, abs=2e-3)
+    assert mirrored[1] == pytest.approx(6.0 / 30.0, abs=2e-3)
 
 
 @needs_corpus

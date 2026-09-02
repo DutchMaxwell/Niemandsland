@@ -8,7 +8,7 @@ Shards land as atomic `.npz`+`.json` pairs, skipped once finished and
 redone if truncated. PYTHONPATH must reach a `.forge/site` wheel built from
 `core-policy-tokens-s` — never the shared venv.
 """
-import argparse, json, multiprocessing as mp, numpy as np, os, sys, time  # noqa: E401
+import argparse, json, math, multiprocessing as mp, numpy as np, os, sys, time  # noqa: E401
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -18,16 +18,35 @@ OUT_DEFAULT = os.path.expanduser("~/selfplay_out/gen0_shards")
 RAGGED = {"units": 72, "objs": 12, "terr": 12, "cands": 40}  # §8.1 token widths
 
 
+def terrain_rows(pieces: list, side: int) -> np.ndarray:
+    # The terrain BANK's Terrain::sandbox() is empty for every replayed game
+    # (found in prep: 200/35,200 bank files checked, 0 pieces each), so the
+    # 18 pieces come from the RECORD's own `terrain` key instead — the
+    # narrator's drawing list (narrator_render.py:9-14,122-126), format
+    # [kind, x_in, z_in, w_in, h_in, rot_deg], already inches, centre origin.
+    # Every column tokens.rs's `terrain_token` (PR #584) reads is present in
+    # that list — none is zero-filled: kind, centre and half-extent (w/h are
+    # FULL extents there, halved below), and rotation (degrees, converted).
+    out = []
+    for kind, x, z, w, h, rot in pieces:
+        cx, cz = (-x, -z) if side == 2 else (x, z)
+        yaw = math.radians(rot)
+        out.append([cx / 30.0, cz / 30.0, (w / 2) / 12.0, (h / 2) / 12.0, math.cos(yaw), math.sin(yaw),
+                    float(kind == 1), float(kind == 2), float(kind == 3), float(kind == 4),
+                    float(kind in (1, 2)), float(kind == 2)])
+    return np.array(out, dtype=np.float16)
+
+
 def export(core, state, row: dict, cands: list, opener_seat: bool) -> dict:
     # §8.2/§8.6: the real token export. `opener_seat` is derived from the
     # game record (no other seam carries it into a forced replay).
     # `hero_attach` is a documented no-op in PR #584 (reserved for later).
     t = core.policy_tokens(state, row["side"], cands, row["cands"]["best"],
                            hero_attach=True, opener_seat=opener_seat)
-    nu, no_, nt, nc = (sum(t[k]) for k in ("units_mask", "objs_mask", "terr_mask", "cands_mask"))
+    nu, no_, nc = (sum(t[k]) for k in ("units_mask", "objs_mask", "cands_mask"))
     return {"units": np.array(t["units"][:nu], dtype=np.float16),
             "objs": np.array(t["objs"][:no_], dtype=np.float16),
-            "terr": np.array(t["terr"][:nt], dtype=np.float16),
+            "terr": _TERR[row["side"]],
             "glob": np.array(t["glob"], dtype=np.float16),
             "cands": np.array(t["cands"][:nc], dtype=np.float16),
             "actor": np.array(t["actor"][:nc], dtype=np.int16),
@@ -39,6 +58,7 @@ def export(core, state, row: dict, cands: list, opener_seat: bool) -> dict:
 
 _ROWS: list = []  # per-process accumulator, reset per game
 _OPENER: dict = {}  # {round: side} for the game currently replaying
+_TERR: dict = {}  # {side: (18, 12) rows} for the game currently replaying
 
 
 def _export_picker(core, state, player, net_player=0, eps=0.0, explore_seed=0, cands=False):
@@ -54,7 +74,7 @@ def _export_picker(core, state, player, net_player=0, eps=0.0, explore_seed=0, c
 def replay_game(path: str, lists: str) -> tuple:
     # A divergence discards THIS game's rows (skipped and counted, never
     # written) — it does not fail the shard.
-    global _ROWS, _OPENER
+    global _ROWS, _OPENER, _TERR
     _ROWS = []
     gr.arm()
     selfplay._pick_for = _export_picker
@@ -66,6 +86,7 @@ def replay_game(path: str, lists: str) -> tuple:
     _OPENER = {}
     for r in rec["planner_positions"]:
         _OPENER.setdefault(r["round"], r["side"])
+    _TERR = {1: terrain_rows(rec["terrain"], 1), 2: terrain_rows(rec["terrain"], 2)}
     armies = [str(Path(lists) / Path(rec["armies"][s]).name) for s in ("p1", "p2")]
     try:
         selfplay.play_game(rec["seed"], armies[0], armies[1], gr.REPO, gr.BANK, None, top_k=1, horizon=1,
