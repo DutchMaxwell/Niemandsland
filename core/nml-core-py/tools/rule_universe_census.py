@@ -488,10 +488,16 @@ def mention_of(name: str, joined: str) -> str | None:
 
 
 def is_consumed(primitive: str, name: str, mech: dict, consumed_grants: set) -> bool:
-    """Does THIS entry's own param evidence map to a role a resolver reads?"""
+    """Does THIS entry's own param evidence map to a role a resolver reads?
+    `primitive` is a CONSUMED_PARAM_KEYS key by construction here (see
+    core_status_for's prim_hit) - an untracked primitive is no longer
+    trusted whole (AUDIT_armybook_flanks_2026-09-02.md sec.8's spot-check:
+    Sturdy Boost/Shielded, Ignores Regeneration/Lacerate, Vale
+    Oath/Battleborn and Ambushing Piercing Shot/Ambush all rode a bare
+    literal-gate or an unrelated string/field reuse to PORTED)."""
     roles = CONSUMED_PARAM_KEYS.get(primitive)
     if roles is None:
-        return True
+        return False
     if roles & mech.get("param_keys", set()):
         return True
     if mech.get("vs_target"):
@@ -516,8 +522,14 @@ def core_status_for(name: str, mech: dict, tokens: dict, bands: set, hide: str |
         if v in tokens:
             name_hit = (v, tokens[v])
             break
+    # C-2 (AUDIT_armybook_flanks_2026-09-02.md sec.8): a primitive-token
+    # match is only real alias evidence for a vetted CONSUMED_PARAM_KEYS
+    # class - an untracked primitive's token is, as often as not, an
+    # exact-literal gate or an unrelated string/field on that SAME-NAMED
+    # rule, which no alias can ever reach (Shielded/Battleborn/Lacerate/
+    # Ambush - none are CONSUMED_PARAM_KEYS classes).
     prim_hit = None
-    for p in sorted(prims):
+    for p in sorted(prims & CONSUMED_PARAM_KEYS.keys()):
         for v in sorted(snake_variants(p)):
             if v in tokens:
                 prim_hit = (p, v, tokens[v])
