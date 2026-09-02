@@ -191,6 +191,58 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v105 — v0 `score_hand` with marker control from `objective_p_v105`; the
+/// destroy branch keeps the frozen v0 path untouched.
+fn score_hand_v105(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() { return 0.5; }
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) {
+        return score_hand(state, player, incoming);
+    }
+    let mut total = 0.0f64;
+    for i in 0..state.objectives.len() {
+        total += objective_p_v105(state, i, player, incoming);
+    }
+    total / state.objectives.len() as f64
+}
+
+/// v105's `objective_p` — v0's ratio, but the seize-rule fallback awards the
+/// current owner full credit only when every unit that could still reach the
+/// marker belongs to the owner; a reachable neutralized challenger (expected
+/// reply wounds eat its strength today, yet it might survive and hold) makes
+/// the marker genuinely contested.
+fn objective_p_v105(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = state.objectives[obj_index];
+    let mut mine = 0.0f64;
+    let mut theirs = 0.0f64;
+    let mut challenger_reach = false;
+    for i in 0..state.units() {
+        if state.alive[i] <= 0 || state.aircraft[i] { continue; }
+        let arrived_now = state.ambush_arrived_round[i] == state.round;
+        if arrived_now && state.round >= state.rounds_total { continue; }
+        let d = control_gap_in(state, i, obj.pos);
+        if !d.is_finite() { continue; }
+        // Mirror of `presence`'s reach gate minus the strength term.
+        let mut needed: i64 = 0;
+        if d > OBJECTIVE_CONTROL_IN + CONTROL_EPS {
+            needed = ((d - OBJECTIVE_CONTROL_IN) / state.bands[i].rush.max(1.0)).ceil() as i64;
+        }
+        if arrived_now { needed = needed.max(1); }
+        if state.shaken[i] { needed += 1; }
+        let moves_left = state.rounds_total - state.round + if state.activated[i] { 0 } else { 1 };
+        let p = presence(state, i, obj.pos, threat_of(incoming, i));
+        if state.player[i] == player { mine += p; } else { theirs += p; }
+        challenger_reach |= needed <= moves_left && state.player[i] != obj.owner;
+    }
+    if mine + theirs > 0.0 { return mine / (mine + theirs); }
+    if challenger_reach { return CONTESTED_P_V105; }
+    if obj.owner == 0 { 0.5 } else if obj.owner == player { 1.0 } else { 0.0 }
+}
+
+/// A marker every would-be holder is projected neutralized at, but that a
+/// non-owner could still physically reach, is a coin flip, not owner-locked:
+/// 0.5 is the eval's even point, so no side gains from a standoff.
+const CONTESTED_P_V105: f64 = 0.5;
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +253,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        105 => score_hand_v105(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
