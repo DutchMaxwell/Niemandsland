@@ -2,13 +2,14 @@
 mini-repo and a 3-rule synthetic book.
 
   * the matrix: PORTED via the resolver-arm token, the aura pass deriving
-    "Furious Aura" from its base (its own mechanics entry stays
-    primitive-null BY DESIGN - the import expands "X Aura" to X), and the
-    plain UNMAPPED MISSING row;
+    "Furious Aura" from its base - capped at STAMPED by the aura rule (its
+    own mechanics entry stays primitive-null BY DESIGN - the import expands
+    "X Aura" to X, but an UNMAPPED-registered aura is never PORTED by the
+    base's token), and the plain UNMAPPED MISSING row;
   * the summary arithmetic over 3 names;
   * the RED knob: --hide Furious must drop the core-ported covered count by
-    exactly the names that ride the primitive - the alias and its expanded
-    aura;
+    exactly the names that ride the primitive - the alias alone (its
+    expanded aura was already capped at STAMPED by the aura rule);
   * a #[cfg(test)] literal is not evidence: a rule name that only appears
     behind the test gate leaves no token, so it can never read PORTED.
 """
@@ -77,7 +78,8 @@ def test_census_matrix_red_knob_and_test_gate(mini):
     assert s["total"] == 3
     assert s["registry_primitive"] == 1
     assert s["mechanics_entry"] == 2
-    assert s["core_ported"] == 2
+    assert s["core_ported"] == 1
+    assert s["core_stamped"] == 1
     assert s["core_partial"] == 0
     assert s["core_missing"] == 1
     assert s["encoder_slot"] == 1
@@ -89,8 +91,9 @@ def test_census_matrix_red_knob_and_test_gate(mini):
     assert furious["primitive"] == "Furious"
     assert "arm.rs" in furious["core_note"]
     aura = rows["Furious Aura"]["per_system"]["gf"]
-    assert aura["core"] == "PORTED"
+    assert aura["core"] == "STAMPED"
     assert "aura of 'Furious'" in aura["core_note"]
+    assert "UNMAPPED-registered" in aura["core_note"]
     off_book = rows["Off Book"]["per_system"]["gf"]
     assert off_book["primitive"] == "UNMAPPED"
     assert off_book["core"] == "MISSING"
@@ -101,15 +104,15 @@ def test_census_matrix_red_knob_and_test_gate(mini):
     assert "ghostrule" not in tokens, "a test-gated literal must not be evidence"
 
     lines = census.summary_lines(res)
-    assert "RULES-COVERAGE core-ported        : 2/3  (STAMPED: 0, PARTIAL: 0, MISSING: 1)" in lines
-    assert "consumed 2/3 · stamped-only 0 · missing 1" in lines[3]
+    assert "RULES-COVERAGE core-ported        : 1/3  (STAMPED: 1, PARTIAL: 0, MISSING: 1)" in lines
+    assert "consumed 1/3 · stamped-only 1 · missing 1" in lines[3]
 
     red = census.census(books, root, hide="Furious")["red"]
-    assert red["before"] == 2
+    assert red["before"] == 1
     assert red["after"] == 0
-    assert red["drop"] == 2
+    assert red["drop"] == 1
     assert red["aliased"] == 2
-    assert red["ported_aliased"] == 2
+    assert red["ported_aliased"] == 1
     assert red["ok"] is True
 
 
@@ -142,6 +145,58 @@ def test_stamped_vs_ported_on_a_shared_primitive(tmp_path):
     assert per["Buff Consumed"]["per_system"]["gf"]["core"] == "PORTED"
     assert res["summary"]["core_stamped"] == 1
     assert res["summary"]["core_ported"] == 1
+
+
+def test_unmapped_registered_aura_never_ported_by_token_sharing(tmp_path):
+    """The aura rule: an UNMAPPED-registered "Foo Aura" (registry lists it,
+    primitive null) must not inherit PORTED from its ported base "Foo" -
+    PORTED means CONSUMED and the aura has no primitive, hence no params
+    anyone reads. The base's token alone caps it at STAMPED; only the
+    aura's OWN full-name token (e.g. bar_aura) in non-test core code
+    reads PORTED."""
+    root = tmp_path / "repo"
+    for d in ("assets/solo", "data", "core/nml-core/src", "core/nml-core-py/python"):
+        (root / d).mkdir(parents=True)
+    (root / "assets/solo/rules_mechanics_gf.json").write_text(json.dumps({
+        "common": {
+            "Foo": {"primitive": "Foo", "params": {}},
+            "Foo Aura": {"primitive": None, "params": {}},
+            "Bar Aura": {"primitive": None, "params": {}},
+        },
+        "factions": {},
+    }))
+    (root / "data/encoder_rule_vocab_v1.json").write_text(json.dumps({"unit": [], "weapon": []}))
+    (root / "core/nml-core-py/python/list_to_profile.py").write_text("MOVE_PRIMITIVES = ()\n")
+    (root / "core/nml-core/src/arm.rs").write_text(
+        'pub const FOO: &str = "Foo";\n'
+        'pub const BAR_AURA: &str = "Bar Aura";\n'
+    )
+    books = tmp_path / "books" / "gf"
+    books.mkdir(parents=True)
+    (books / "book_a.json").write_text(json.dumps({
+        "name": "Test Faction", "gameSystem": "gf",
+        "specialRules": [
+            {"name": "Foo"},
+            {"name": "Foo Aura"},
+            {"name": "Bar"},
+            {"name": "Bar Aura"},
+        ],
+    }))
+    res = census.census(tmp_path / "books", root)
+    per = res["rows"]
+    assert per["Foo"]["per_system"]["gf"]["core"] == "PORTED"
+    aura = per["Foo Aura"]["per_system"]["gf"]
+    assert aura["primitive"] == "UNMAPPED-registered"
+    assert aura["core"] == "STAMPED", (
+        f"UNMAPPED-registered aura must cap at STAMPED, got {aura['core']}"
+        f" ({aura['core_note']})"
+    )
+    own = per["Bar Aura"]["per_system"]["gf"]
+    assert own["core"] == "PORTED"
+    assert "bar_aura" in own["core_note"]
+    assert res["summary"]["core_ported"] == 2
+    assert res["summary"]["core_stamped"] == 1
+    assert "capped at STAMPED" in census.markdown_report(res)
 
 
 def test_cli_prints_summary_and_writes_json(mini, tmp_path, capsys):
