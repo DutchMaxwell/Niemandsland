@@ -1870,6 +1870,15 @@ def play_game(
             ]
 
     board, terrain, pieces = load_board(seed, bank_dir)
+    # NML-1163 — the banked drawing list rides the HEADER, so that
+    # `Core.policy_tokens` exports the same terrain rows the shard exporter
+    # packs (`tools/gen0_replay_shards.terrain_rows`). A banked board paints
+    # its terrain into `cells` and carries an EMPTY `sandbox`, which is the
+    # only list `tokens::build` could read before: every live state exported
+    # 18 zero rows while the board carried 16 or 18 real pieces. The list is
+    # the BANK's, never `_shift_pieces`'s — the shift knob's whole point is
+    # that the board does not move with the drawing list.
+    terrain = dict(terrain, pieces=pieces)
     if core is None:
         core = nml_core.load(str(repo_root))
     # NML-1142 — the trained eval. `None` leaves whatever the caller armed (a

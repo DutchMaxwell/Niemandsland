@@ -531,7 +531,7 @@ pub fn build(
     objs_mask.resize(N_OBJ, 0);
 
     let mut terr: Vec<[f32; F_T]> =
-        terrain.sandbox().iter().take(N_TERR).map(|p| terrain_token(side, p)).collect();
+        terrain.pieces().iter().take(N_TERR).map(|p| terrain_token(side, p)).collect();
     let mut terr_mask = vec![1u8; terr.len()];
     terr.resize(N_TERR, [0.0; F_T]);
     terr_mask.resize(N_TERR, 0);
@@ -639,6 +639,7 @@ mod tests {
                 Obb { c: [8.0 * IN2M, 0.0], he: [2.0 * IN2M, 2.0 * IN2M], yaw: 0.0, kind: FOREST },
                 Obb { c: [-8.0 * IN2M, 3.0 * IN2M], he: [1.5 * IN2M, 1.5 * IN2M], yaw: 0.0, kind: DANGEROUS },
             ],
+            pieces: vec![],
             walls: vec![],
             cell_params: CellParams {
                 table_size_feet: [6.0, 4.0],

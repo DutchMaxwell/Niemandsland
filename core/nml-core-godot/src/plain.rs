@@ -782,6 +782,10 @@ pub fn terrain_of(d: &VarDictionary) -> PlainTerrain {
     PlainTerrain {
         cells,
         sandbox,
+        // NML-1163 — the BANK's drawing list is a self-play seam
+        // (`selfplay.load_board`); the live overlay hands its shapes as
+        // `sandbox`, so nothing here reads a `pieces` key.
+        pieces: Vec::new(),
         walls,
         cell_params: CellParams {
             table_size_feet: pair(&darr(&cp, "table_size_feet")),
