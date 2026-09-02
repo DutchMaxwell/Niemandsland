@@ -170,6 +170,10 @@ def main() -> int:
     print("[SHARDS] %d games, %d shards, %d already done, %d to run -> %d workers"
           % (len(games), len(shards), len(shards) - len(todo), len(todo), n_workers))
     if not todo:
+        # Nothing to replay (a rerun over a finished corpus): the night
+        # chain's sentinel must still land, or a re-launch after completion
+        # hangs it forever.
+        (out_dir / "STATUS").write_text("DONE games=0/0 rate=0.000/s elapsed=0.0s\n")
         return 0
     ctx = mp.get_context("fork")
     task_q, done_q = ctx.Queue(), ctx.Queue()
@@ -181,10 +185,13 @@ def main() -> int:
     total_games = sum(len(g) for _, g in todo)
     t0, done_games, last_status = time.time(), 0, 0.0
 
-    def write_status():
+    def write_status(done=False):
         rate = done_games / max(time.time() - t0, 1e-9)
         (out_dir / "status.json").write_text(json.dumps({"games_done": done_games, "games_total": total_games,
             "rate_games_per_s": round(rate, 3), "elapsed_s": round(time.time() - t0, 1)}))
+        # The night chain's sentinel: a line starting "DONE" in plain STATUS.
+        (out_dir / "STATUS").write_text("%s games=%d/%d rate=%.3f/s elapsed=%.1fs\n"
+            % ("DONE" if done else "RUNNING", done_games, total_games, rate, time.time() - t0))
 
     write_status()
     while any(p.is_alive() for p in procs) or not done_q.empty():
@@ -196,7 +203,7 @@ def main() -> int:
             write_status()
             last_status = time.time()
     [p.join() for p in procs]
-    write_status()
+    write_status(done=True)
     print("[SHARDS] done: %d games in %.1fs" % (done_games, time.time() - t0))
     return 0
 
