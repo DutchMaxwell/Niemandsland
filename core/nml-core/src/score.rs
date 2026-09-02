@@ -191,6 +191,45 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v407 — the regular loop over `objective_p_v407` (mutual melee suppression);
+/// destroy missions keep the frozen branch, this idea does not touch their
+/// locked 1/0 scores.
+fn score_hand_v407(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() {
+        return 0.5;
+    }
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) {
+        return score_hand(state, player, incoming);
+    }
+    let mut total = 0.0f64;
+    for i in 0..state.objectives.len() {
+        total += objective_p_v407(state, i, player, incoming);
+    }
+    total / state.objectives.len() as f64
+}
+
+/// v407 — `objective_p` with a melee term: v0 reads a 2:1 grip and a 10:1
+/// grip alike (0.67) and never sees the charger standing on the marker. Both
+/// sides pay `DISCOUNT` x the opposing projected hold (frozen `presence`)
+/// before the ratio — one round of contact costs the same half as one round
+/// of delay — so thin grips stay honest and contact cuts the garrison. The
+/// clamps keep the ratio continuous, inside [0, 1]; m = t still scores 0.5.
+fn objective_p_v407(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = state.objectives[obj_index];
+    let mut mine = 0.0f64;
+    let mut theirs = 0.0f64;
+    for i in 0..state.units() {
+        let p = presence(state, i, obj.pos, threat_of(incoming, i));
+        if state.player[i] == player { mine += p; } else { theirs += p; }
+    }
+    if mine + theirs <= 0.0 {
+        return if obj.owner == 0 { 0.5 } else if obj.owner == player { 1.0 } else { 0.0 };
+    }
+    let m = (mine - DISCOUNT * theirs).max(0.0);
+    let t = (theirs - DISCOUNT * mine).max(0.0);
+    m / (m + t)
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +240,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        407 => score_hand_v407(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
