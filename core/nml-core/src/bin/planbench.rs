@@ -40,7 +40,7 @@ fn main() {
     let statics = build_act_statics(&c, REPO);
     let seams = Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, hero_last: c.knobs.hero_last, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, ..Seams::default() };
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_engage_fold: !c.knobs.engage_fold, los_model: c.knobs.los_model, dangerous_end_morale: c.knobs.dangerous_end_morale, ..Seams::default() };
     let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams), c.knobs);
     let mut sc = Scratch::default();
 

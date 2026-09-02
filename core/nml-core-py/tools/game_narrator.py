@@ -74,7 +74,10 @@ def replay(path, lists, repo, bank):
         with gr.armed(_pick):
             out = selfplay.play_game(rec["seed"], a1, a2, repo, bank, None, top_k=kn["top_k"],
                                      horizon=kn["horizon"], dice_seed=rec["dice_seed"],
-                                     movement=kn["movement"], **gr.KNOBS)
+                                     movement=kn["movement"],
+                                     # DEFECT_LEDGER #12: the RECORD's own key, absent = OFF.
+                                     dangerous_end_morale=bool(kn.get("dangerous_end_morale", False)),
+                                     **gr.KNOBS)
     finally:
         nml_core.load = load
     # Three ways for the replay to be a different game, all fatal: a short run, a

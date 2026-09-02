@@ -168,6 +168,12 @@ pub struct Knobs {
     /// this recording). `--red-no-hero-fold` still forces it OFF regardless.
     #[serde(default)]
     pub engage_fold: bool,
+    /// DEFECT_LEDGER #12 — the p.10 General Morale Test after a
+    /// non-CHARGE activation's dangerous-terrain wounds. A NEW behaviour
+    /// like `engage_fold`, not an always-live rule like `dangerous`: an
+    /// absent key means the corpus predates the port, so it defaults OFF.
+    #[serde(default)]
+    pub dangerous_end_morale: bool,
     /// NML-1134 — which RULE VOCABULARY this corpus's board rows were slotted
     /// with (`data/encoder_rule_vocab_v1.json`, stamped by `act_recorder.gd`).
     /// THE ONE RULE, and every reader gets it from here: the header says, and a
@@ -273,6 +279,7 @@ impl Default for Knobs {
             move_rigid: false,
             dangerous: true,
             engage_fold: false,
+            dangerous_end_morale: false,
             // NML-1134: the CORPUS reading — a header with no `knobs` block at
             // all predates the stamp just as surely as one with an unstamped
             // block does. A caller that plays a FRESH game stamps

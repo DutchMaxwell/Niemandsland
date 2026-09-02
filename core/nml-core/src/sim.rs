@@ -3136,7 +3136,9 @@ fn resolve_with(
                     // main.gd:1096-1098 — a NON-charge activation tests morale for
                     // these wounds at its very END ("units in melee don't take
                     // morale tests from wounds at the end of an activation").
-                    if kind != CHARGE {
+                    // Knob-gated (DEFECT_LEDGER #12): OFF replays a corpus
+                    // recorded before this rule unchanged.
+                    if kind != CHARGE && seams.dangerous_end_morale {
                         shot.mark("dangerous_end_morale");
                         dangerous_morale_due = Some((alive_before, wounds_before));
                     }
@@ -4980,6 +4982,7 @@ mod tests {
             cells,
             sandbox: vec![],
             walls: vec![],
+            pieces: vec![],
             cell_params: crate::terrain::CellParams {
                 table_size_feet: [6.0, 4.0],
                 grid_rotation_degrees: 0.0,
@@ -5009,7 +5012,8 @@ mod tests {
         let mut tray = Tray::seeded(seed);
         let mut rng = crate::rng::GodotRng::new(0);
         let (next, shot) = resolve_stochastic_tray_on_board(
-            &statics, &st, &advance_to(100.0), &t, Seams::default(), &mut rng, &mut tray,
+            &statics, &st, &advance_to(100.0), &t,
+            Seams { dangerous_end_morale: true, ..Seams::default() }, &mut rng, &mut tray,
         )
         .unwrap();
         assert!(next.alive[0] > 0 && next.alive[0] <= 2, "setup didn't kill >= half: {}", next.alive[0]);
@@ -5033,12 +5037,36 @@ mod tests {
         let mut tray = Tray::seeded(seed);
         let mut rng = crate::rng::GodotRng::new(0);
         let (next, shot) = resolve_stochastic_tray_on_board(
-            &statics, &st, &advance_to(100.0), &t, Seams::default(), &mut rng, &mut tray,
+            &statics, &st, &advance_to(100.0), &t,
+            Seams { dangerous_end_morale: true, ..Seams::default() }, &mut rng, &mut tray,
         )
         .unwrap();
         assert_eq!(next.alive[0], 3, "setup didn't kill exactly one of four: {}", next.alive[0]);
         let a_rolls: Vec<&crate::dice::Roll> = shot.rolls.iter().filter(|r| r.owner == "a").collect();
         assert_eq!(a_rolls.len(), 1, "no morale die below half: {:?}", shot.rolls);
+    }
+
+    /// DEFECT_LEDGER #12 knob: `Seams::default()` — every corpus recorded
+    /// before this rule shipped, `dangerous_end_morale` absent and false —
+    /// replays with the OLD (bug-present) behaviour: the wound lands, the
+    /// mark fires, no die is drawn, even at >= half losses. This is what
+    /// keeps the frozen gen0 self-play snapshot byte-exact.
+    #[test]
+    fn dangerous_terrain_losses_draw_no_morale_die_with_the_knob_off() {
+        let (st, statics) = dangerous_line();
+        let t = dangerous_bar_board();
+        let seed = (1i64..)
+            .find(|&s| Tray::seeded(s).roll(4).iter().filter(|&&f| f == 1).count() >= 2)
+            .unwrap();
+        let mut tray = Tray::seeded(seed);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (next, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &advance_to(100.0), &t, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert!(next.alive[0] > 0 && next.alive[0] <= 2, "setup didn't kill >= half: {}", next.alive[0]);
+        let a_rolls: Vec<&crate::dice::Roll> = shot.rolls.iter().filter(|r| r.owner == "a").collect();
+        assert_eq!(a_rolls.len(), 1, "knob off must not draw the morale die: {:?}", shot.rolls);
     }
 
     /// S3 — a NON-charge move goes through `mv::step::plain_move` once
