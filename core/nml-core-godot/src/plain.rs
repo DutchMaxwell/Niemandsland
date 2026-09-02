@@ -854,6 +854,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // pre-stamp version 2. INERT for the in-game seam — nothing in
         // nml-core-godot builds encoder rows — and carried so a header round-trips.
         rule_vocab_version: dint(d, "rule_vocab_version", dflt.rule_vocab_version),
+        // Evolved-eval lane step 2. No recorder writes this key: the SHIPPED
+        // table plays only the frozen hand eval, so the in-game seam must
+        // never read anything past 0 here. Absent = `Knobs::default()` = 0,
+        // and honoured if a header ever does carry it (mirrors `charge_landing`).
+        eval_variant: dint(d, "eval_variant", dflt.eval_variant),
     }
 }
 
