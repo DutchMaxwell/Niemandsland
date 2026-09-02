@@ -163,17 +163,90 @@ def narrate(rec, acts, nm, lists):
     return out
 
 
+def is_reserve(u):
+    # Ambush/Infiltrate/Rapid Ambush, on the unit's own rules or an item's grant.
+    ns = [r.get("name", "") for r in u.get("rules", [])]
+    ns += [c.get("name", "") for it in u.get("items", []) for c in it.get("content", [])]
+    return any(k in n.lower() for n in ns for k in ("ambush", "infiltrate"))
+
+
+def stats_row(rec, acts, lists):
+    # One JSON-able dict of ANALYSIS_first_pass.md's cross-cutting counts for ONE
+    # game, no prose or SVG. Q1/Q2 (INVESTIGATION_teacher_defects.md): an
+    # unexecutable shoot offer is a candidate with a shoot target whose
+    # `los_pairs` entry is 0; a charge beyond band is a declared CHARGE whose
+    # gap (`geom::edge_gap_in`) exceeds the actor's own rush band.
+    row = dict(game=rec["stem"], points=lists["p1"].get("listPoints"), p1=lists["p1"].get("name"),
+               p2=lists["p2"].get("name"), winner=rec["winner"], vp=rec["vp"], activations=len(acts),
+               charges_declared=0, charges_beyond_band=0, charges_reached_contact=0, hold_nothing=0,
+               acts_with_dice=0, shoot_offers_total=0, shoot_offers_unexecutable=0, shots_executed=0,
+               hero_snipes=0, offboard_destinations=0, full_band_forest=0, dangerous_plain=0,
+               objective_gifts=0, reserve_absent={"p1": 0, "p2": 0},
+               owners_by_round=[g["owners"] for g in rec["rounds_log"]])
+    acted = {a["row"]["unit"] for a in acts}
+    for a in acts:
+        r, key, bu, au = a["row"], a["row"]["unit"], a["before"]["units"], a["after"]["units"]
+        kind, rolls, chosen = int(r["kind"]), a["rep"]["rolls"], a["menu"][r["cands"]["best"]]
+        mv = moved(a, key); far = max([x[2] for x in mv] + [0.0])
+        row["hold_nothing"] += kind == 0 and not rolls
+        row["acts_with_dice"] += bool(rolls)
+        skeys, los, seen = sorted(bu), a["before"].get("los_pairs"), set()
+        for c in a["menu"]:
+            if c["unit"] == key and c.get("shoot") and c["shoot"] not in seen:
+                seen.add(c["shoot"])
+                row["shoot_offers_total"] += 1
+                row["shoot_offers_unexecutable"] += bool(
+                    los is not None and los[skeys.index(key)][skeys.index(c["shoot"])] == "0")
+        if (tgt := chosen.get("shoot")) and rolls:
+            row["shots_executed"] += 1
+            if bu.get(tgt, {}).get("alive", 0) > 0 and au.get(tgt, {}).get("alive", 0) == 0:
+                h = bu[tgt].get("attached_to")
+                row["hero_snipes"] += bool(h and bu[h]["alive"] == au[h]["alive"])
+        if d := chosen.get("dest"):
+            row["offboard_destinations"] += abs(d[0] / nr.M_IN) > 36 or abs(d[2] / nr.M_IN) > 24
+        if kind in (1, 2, 3) and mv and far >= bu[key]["bands"]["rush" if kind > 1 else "advance"] - 0.05:
+            row["full_band_forest"] += any(nr.crosses_forest(p, q, rec["terrain"]) for p, q, _ in mv)
+        if kind == 3:
+            row["charges_declared"] += 1
+            row["charges_beyond_band"] += nr.edge_gap_in(
+                bu[key]["positions"], bu[key]["radii"], bu[chosen["charge"]]["positions"],
+                bu[chosen["charge"]]["radii"]) > bu[key]["bands"]["rush"]
+            row["charges_reached_contact"] += bool(rolls)
+        row["dangerous_plain"] += kind in (1, 2) and au.get(key, {}).get("alive", 0) < bu[key]["alive"]
+    for i, pb in enumerate(rec["mission"]["objectives_layout"]["placed_by"]):
+        owner = row["owners_by_round"][-1][i]
+        row["objective_gifts"] += pb in (1, 2) and owner in (1, 2) and owner != pb
+    for s in ("p1", "p2"):
+        for i, u in enumerate(lists[s]["units"]):
+            if is_reserve(u) and "%s_%d_%s" % (s, i, u.get("id", i)) not in acted:
+                row["reserve_absent"][s] += u.get("cost", 0)
+    return row
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("games", nargs="+", help="corpus gen0_s<seed>_d<dice>.json files")
-    ap.add_argument("--out", required=True, help="output dir; one subdir per game")
+    ap.add_argument("games", nargs="*", help="corpus gen0_s<seed>_d<dice>.json files")
+    ap.add_argument("--corpus", help="scan this dir for gen0_s*_d*.json instead of GAMES")
+    ap.add_argument("--sample-every", type=int, default=1, help="stride over the sorted files")
+    ap.add_argument("--out", help="output dir; one subdir per game (narration mode)")
+    ap.add_argument("--stats", help="write one JSON line per game here; skips narration/SVG")
     ap.add_argument("--lists", default=gr.LISTS, help="local mirror of the fleet's ai_lists")
     a = ap.parse_args()
-    for g in a.games:
-        rec, acts = replay(g, a.lists, gr.REPO, gr.BANK)
-        rec["stem"], nm = Path(g).stem, dict(zip(acts[0]["keys"], rec["roster"]))
+    games = ([str(p) for p in sorted(Path(a.corpus).glob("gen0_s*_d*.json"))] if a.corpus
+             else a.games)[::a.sample_every]
+    out = open(a.stats, "w", encoding="utf-8") if a.stats else None
+    for g in games:
+        try:
+            rec, acts = replay(g, a.lists, gr.REPO, gr.BANK)
+        except gr.Diverged as exc:
+            if not out: raise
+            print("[SKIP] %s: %s" % (g, exc), file=sys.stderr); continue
+        rec["stem"] = Path(g).stem
         lists = {s: json.loads((Path(a.lists) / Path(rec["armies"][s]).name).read_text("utf-8"))
                  for s in ("p1", "p2")}
+        if out:
+            out.write(json.dumps(stats_row(rec, acts, lists)) + "\n"); continue
+        nm = dict(zip(acts[0]["keys"], rec["roster"]))
         d = Path(a.out) / rec["stem"]
         d.mkdir(parents=True, exist_ok=True)
         (d / "narration.md").write_text("\n".join(narrate(rec, acts, nm, lists)) + "\n", "utf-8")
@@ -181,6 +254,7 @@ def main():
         nr.boards(rec, acts, nm, moved, d)
         print("[NARRATED] %s -> %s (%d activations, %d rolls)"
               % (rec["stem"], d, len(acts), sum(len(x["rep"]["rolls"]) for x in acts)))
+    if out: out.close()
     return 0
 
 
