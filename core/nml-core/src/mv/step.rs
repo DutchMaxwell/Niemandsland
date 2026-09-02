@@ -45,6 +45,9 @@ const UNIT_SPACING_IN: f64 = 1.0;
 const DEFAULT_BASE_RADIUS_M: f64 = 0.016;
 /// `SoloController.OVERLAP_EPS_M` :154 — also the distance-truth trim's slack.
 const OVERLAP_EPS_M: f64 = 0.0005;
+/// `SoloController.GATE_SLACK_EPS_IN` :159 — the packed-contact epsilon every
+/// gate displacement budget carries on top of its band slack.
+const GATE_SLACK_EPS_IN: f64 = 0.05;
 
 /// One model the charge displaces — `SoloController._moving_models` :5375 is the
 /// unit's own alive models PLUS its attached heroes', one flat list.
@@ -456,6 +459,51 @@ fn plan_once(&self, reach_in: f64, avoid_diff: bool) -> (Vec<V2>, Vec<Vec<V2>>, 
     }
 }
 
+/// `_gate_disp_caps_m` :6343, in INCHES: how far the gate may still displace
+/// each model past its planned endpoint before the RETRACED trail (which
+/// appends the correction) would exceed the model's legal band. Budget = the
+/// granted reach, p.11-capped for a model whose OWN leg entered difficult
+/// terrain; slack = budget minus the walked arc, plus the packed-contact
+/// epsilon a full-band mover in a deploy-packed line always needs.
+fn gate_caps(&self, trails: &[Vec<V2>], radii_m: &[f64], reach_in: f64) -> Vec<f64> {
+    trails
+        .iter()
+        .enumerate()
+        .map(|(i, leg)| {
+            let r = radii_m.get(i).copied().unwrap_or(0.0);
+            let mut budget = reach_in;
+            if !self.ignores_difficult && leg_crosses(leg, r, self.t, terrain::is_difficult) {
+                budget = budget.min(DIFFICULT_MOVE_CAP_IN);
+            }
+            (budget - g2::polyline_length(leg)).max(0.0) + GATE_SLACK_EPS_IN
+        })
+        .collect()
+}
+
+/// `_external_obstacle_shapes` :6676 — every OTHER on-table unit's alive-model
+/// base, in the planner's inch frame. Excluded exactly as the GDScript does it:
+/// the moving unit and its attached heroes (coherency owns their spacing), any
+/// Ambush reserve (off table) and any Aircraft (its base blocks nothing).
+fn external_discs(&self) -> Vec<super::gate::Disc> {
+    let state = self.state;
+    let member = |u: usize| u == self.si || state.attached_to[u] == Some(self.si);
+    let mut out = Vec::new();
+    for gu in 0..state.units() {
+        if member(gu) || state.dormant[gu] || state.aircraft[gu] {
+            continue;
+        }
+        for model in 0..state.positions[gu].len() {
+            let mv = Mover { unit: gu, model };
+            let c = self.t.to_inch(pos_of(state, mv));
+            out.push(super::gate::Disc {
+                c: [c[0] as f64, c[1] as f64],
+                r: radius_of(state, mv) / IN2M,
+            });
+        }
+    }
+    out
+}
+
 /// `_execute_move` :4813-4855 from the pass-1 plan onward — the p.11 cap
 /// re-plan, the distance-truth trim, the p.12 crossing flags and the retrace.
 /// The table runs ONE body here for a charge and for a plain move; everything
@@ -493,6 +541,33 @@ fn execute(&self, band_in: f64, avoid_diff: bool, radii_m: &[f64]) -> Landing {
         // actually traversed even when the gate nudges its resting spot.
         let r = radii_m.get(i).copied().unwrap_or(0.0);
         dangerous.push(!self.flying && leg_crosses(leg, r, t, terrain::is_dangerous));
+    }
+    // :4858-4866 — nothing actually moved: the table returns BEFORE the gate,
+    // so a unit already stacked where it stands is not re-arranged for free.
+    let stirred = planned
+        .iter()
+        .enumerate()
+        .any(|(i, p)| g2::distance_to(*p, starts[i]) as f64 * IN2M > OVERLAP_EPS_M);
+    // :4884-4885 — THE HARD FINAL PLACEMENT GATE, applied HERE, after the trim,
+    // so the trim can never cut a gate-corrected endpoint off its trail. Only
+    // passes 1-2 are ported (`mv::gate`). A CHARGE is deliberately left out of
+    // this call even though the table gates one too: its gate is a different
+    // animal — no band caps (the contact push owns the endpoint), the
+    // contact-model exemption, `_clamp_gate_walls` on top — and none of that is
+    // written yet. S5b/S5c widen this call; they do not move it.
+    if !self.allow_contact && stirred {
+        let caps = self.gate_caps(&trails, radii_m, budget_in);
+        let radii_in: Vec<f64> = radii_m.iter().map(|r| r / IN2M).collect();
+        let (fixed, _rep) = super::gate::finalize_placement(
+            &planned,
+            &radii_in,
+            &self.external_discs(),
+            &caps,
+            t.board_in(),
+        );
+        planned = fixed;
+    }
+    for (i, leg) in trails.iter_mut().enumerate() {
         // :5068-5071 — and THEN the trail is retraced to the endpoint, which is
         // the polyline `last_move_paths` publishes and :8659 measures.
         *leg = retrace_to(leg, starts[i], planned.get(i).copied().unwrap_or(starts[i]));

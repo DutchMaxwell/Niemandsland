@@ -1,0 +1,95 @@
+{
+ "_": "S5a RED \u2014 two recorded non-charge plans whose OWN models' bases overlap at the planner's endpoints. `roomy` has band slack to spare and the gate must clear the overlap outright; `frozen` walked its whole band, so `_gate_disp_caps_m` freezes six of seven models at the 0.05\" packed-contact epsilon and the residual overlap is deliberately LEFT to the caller's ladder (solo_controller.gd:6722-6728).",
+ "roomy": {
+  "source": "alien_hives_1000_vs_change_disciples_1000_s29 moves_calls.jsonl act=7 unit='Chosen Change Brothers' round=1 (1 recorded non-charge call(s), this is the last)",
+  "rung": "reach_in=12.0000 avoid_difficult=false avoid_dangerous=true allow_contact=false",
+  "board_in": [
+   71.99999854320616,
+   48.00000059323048
+  ],
+  "reach_in": 12.0,
+  "radii_in": [
+   0.6299212598425197,
+   0.6299212598425197,
+   0.6299212598425197
+  ],
+  "planned_in": [
+   [
+    17.501678466796875,
+    30.7360897064209
+   ],
+   [
+    20.35222053527832,
+    31.130596160888672
+   ],
+   [
+    20.79457664489746,
+    30.76522445678711
+   ]
+  ],
+  "trail_len_in": [
+   6.0000005598,
+   5.9999999221,
+   5.9999998392
+  ],
+  "worst_overlap_in": 0.686104
+ },
+ "frozen": {
+  "source": "alien_hives_1500_vs_battle_brothers_1500_s32 moves_calls.jsonl act=13 unit='Support Brothers' round=2 (2 recorded non-charge call(s), this is the last)",
+  "rung": "reach_in=6.0000 avoid_difficult=false avoid_dangerous=false allow_contact=false",
+  "board_in": [
+   71.99999854320616,
+   48.00000059323048
+  ],
+  "reach_in": 6.0,
+  "radii_in": [
+   0.4921259842519686,
+   0.4921259842519686,
+   0.4921259842519686,
+   0.4921259842519686,
+   0.4921259842519686,
+   0.4921259842519686,
+   0.7874015748031497
+  ],
+  "planned_in": [
+   [
+    47.81304168701172,
+    38.03634262084961
+   ],
+   [
+    49.5,
+    37.5
+   ],
+   [
+    50.81575012207031,
+    38.5
+   ],
+   [
+    52.8068962097168,
+    37.85578918457031
+   ],
+   [
+    52.77550506591797,
+    37.540462493896484
+   ],
+   [
+    46.62358474731445,
+    39.23855209350586
+   ],
+   [
+    48.91915512084961,
+    39.21306610107422
+   ]
+  ],
+  "trail_len_in": [
+   5.9999978685,
+   5.303750069,
+   5.9999995086,
+   6.0000012818,
+   6.999998844,
+   5.9999991394,
+   5.9999991394
+  ],
+  "worst_overlap_in": 0.667367
+ }
+}
