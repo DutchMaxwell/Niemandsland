@@ -25,6 +25,8 @@
 //! empty on such a corpus and the route then bends only around Impassable CELLS
 //! — the caller says so out loud rather than pretending the board is clear.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use crate::geom::{self, V3};
 use crate::state::State;
 use crate::terrain::{self, Terrain};
@@ -48,6 +50,9 @@ const OVERLAP_EPS_M: f64 = 0.0005;
 /// `SoloController.GATE_SLACK_EPS_IN` :159 — the packed-contact epsilon every
 /// gate displacement budget carries on top of its band slack.
 const GATE_SLACK_EPS_IN: f64 = 0.05;
+
+/// Test-only knob: forces the S6 gate-collapse ladder below off (RED proof).
+pub static LADDER_DISABLED: AtomicBool = AtomicBool::new(false);
 
 /// One model the charge displaces — `SoloController._moving_models` :5375 is the
 /// unit's own alive models PLUS its attached heroes', one flat list.
@@ -523,7 +528,7 @@ fn execute(&self, band_in: f64, avoid_diff: bool, radii_m: &[f64]) -> Landing {
         call = re.2;
     }
     // :4838-4847 — distance truth: no model's polyline may exceed the budget.
-    let budget_in = reach;
+    let mut budget_in = reach; // `mut`: the ladder below may shorten it (:5075).
     let mut arc_in = 0.0f64;
     let mut dangerous: Vec<bool> = Vec::with_capacity(trails.len());
     let starts: Vec<V2> = self.movers.iter().map(|m| t.to_inch(pos_of(state, *m))).collect();
@@ -556,17 +561,64 @@ fn execute(&self, band_in: f64, avoid_diff: bool, radii_m: &[f64]) -> Landing {
     // contact-model exemption, `_clamp_gate_walls` on top — and none of that is
     // written yet. S5c widens this call; it does not move it.
     if !self.allow_contact && stirred {
-        let caps = self.gate_caps(&trails, radii_m, budget_in);
+        let planned_in = achieved_in(&starts, &planned);
         let radii_in: Vec<f64> = radii_m.iter().map(|r| r / IN2M).collect();
+        let ext = self.external_discs();
+        let caps = self.gate_caps(&trails, radii_m, budget_in);
         let (fixed, _rep) = super::gate::finalize_placement(
             &planned,
             &radii_in,
-            &self.external_discs(),
+            &ext,
             &caps,
             t.board_in(),
             Some(t),
         );
         planned = fixed;
+        // :4890-4931 GATE-COLLAPSE LADDER (S6): re-plan shorter when the gate
+        // nearly erased pass 1 (`rescue_should_fire`); a coherent rung always
+        // beats a torn one, and more distance wins within a class.
+        let mut best_ach = achieved_in(&starts, &planned);
+        let mut best_coherent = config_coherent(&planned, &radii_in);
+        let start_coherent = config_coherent(&starts, &radii_in);
+        let goal_gap_in = g2::distance_to(super::centroid(&starts), t.to_inch(self.goal));
+        if !LADDER_DISABLED.load(Ordering::Relaxed)
+            && rescue_should_fire(
+                best_ach, planned_in, best_coherent, start_coherent, goal_gap_in, budget_in,
+            )
+        {
+            let (mut best_pos, mut best_trails) = (planned.clone(), trails.clone());
+            let (mut best_reach, mut best_call) = (budget_in, call.clone());
+            for frac in [0.75, 0.5, 0.25] {
+                let r3 = budget_in * frac;
+                let (mut p3, mut t3, c3) = self.plan_once(r3, avoid_diff);
+                for (i, leg) in t3.iter_mut().enumerate() {
+                    if g2::polyline_length(leg) * IN2M > r3 * IN2M + OVERLAP_EPS_M {
+                        *leg = g2::trim_polyline(leg, r3);
+                        if let Some(fin) = leg.last() {
+                            if i < p3.len() {
+                                p3[i] = *fin;
+                            }
+                        }
+                    }
+                }
+                let caps3 = self.gate_caps(&t3, radii_m, r3);
+                let (p3, _rep3) =
+                    super::gate::finalize_placement(&p3, &radii_in, &ext, &caps3, t.board_in(), Some(t));
+                let a3 = achieved_in(&starts, &p3);
+                let c3ok = config_coherent(&p3, &radii_in);
+                // Lexicographic tie-break, same as the table: coherent beats
+                // torn at ANY displacement; within a class more distance wins.
+                if (c3ok && !best_coherent) || (c3ok == best_coherent && a3 > best_ach + 0.005 / IN2M)
+                {
+                    (best_pos, best_trails, best_reach) = (p3, t3, r3);
+                    (best_call, best_ach, best_coherent) = (c3, a3, c3ok);
+                }
+                if a3 >= r3 * 0.75 && c3ok {
+                    break;
+                }
+            }
+            (planned, trails, budget_in, call) = (best_pos, best_trails, best_reach, best_call);
+        }
     }
     for (i, leg) in trails.iter_mut().enumerate() {
         // :5068-5071 — and THEN the trail is retraced to the endpoint, which is
@@ -613,6 +665,40 @@ fn retrace_to(route: &[V2], start: V2, gated: V2) -> Vec<V2> {
         trimmed.push(gated);
     }
     trimmed
+}
+
+/// `_achieved_m` :5140 — centroid displacement, kept in INCHES like the rest
+/// of this file (only the caller's absolute thresholds convert from metres).
+fn achieved_in(before: &[V2], after: &[V2]) -> f64 {
+    g2::distance_to(super::centroid(before), super::centroid(after))
+}
+
+/// `_config_coherent_world` :6832 — one 1"-link component spanning every
+/// model (`components_r`, the same truth as the table's BFS-from-model-0)
+/// AND every pair within `MAX_CHAIN_IN` (9", no Skirmish variant here).
+fn config_coherent(pos: &[V2], radii_in: &[f64]) -> bool {
+    pos.len() <= 1
+        || (super::components_r(pos, radii_in).len() == 1
+            && super::max_edge_spread_r(pos, radii_in) <= super::MAX_CHAIN_IN)
+}
+
+/// `rescue_should_fire` :1526 — collapse, a self-inflicted tear, or a
+/// committed distant move that lost over 20% of its plan to the gate.
+fn rescue_should_fire(
+    ach_in: f64,
+    planned_in: f64,
+    post_coherent: bool,
+    start_coherent: bool,
+    goal_gap_in: f64,
+    reach_in: f64,
+) -> bool {
+    if planned_in <= 0.01 / IN2M {
+        return false;
+    }
+    if ach_in < planned_in * 0.25 || (!post_coherent && start_coherent) {
+        return true;
+    }
+    ach_in < planned_in * 0.8 && goal_gap_in > reach_in
 }
 
 /// `_trails_cross_difficult` :5174 over `_path_crosses_terrain` :6963 — the p.11
@@ -1173,6 +1259,91 @@ mod tests {
             .zip(&pass1)
             .fold(0.0f64, |a, (w, p)| a.max(g2::distance_to(*w, *p)));
         assert!(gap > 0.05 * 20.0, "pass 1 only {gap}\" away — the fixture proves nothing");
+    }
+
+    /// ONE recorded RUSH from the reference corpus (`Hive Swarms` + its
+    /// attached hero, 12" band) whose recorded reach COLLAPSED 12 -> 9 -> 6 ->
+    /// 3": the full-band gate left the unit almost where it started, and only
+    /// the smallest rung found a legal, coherent end state. `others` is the
+    /// 61 spacing discs the move actually reads, reconstructed from the same
+    /// call `Move::build_call` itself produces (so this fixture needs no
+    /// terrain-frame reasoning beyond `others`' own inch-frame centres).
+    ///
+    /// RED: with `LADDER_DISABLED` forced on, `plain_move` keeps pass 1's own
+    /// post-gate result, which the last assertion measures far outside the
+    /// 0.05" bar every model lands within once the ladder runs.
+    #[test]
+    fn the_gate_collapse_ladder_lands_the_recorded_rush() {
+        use serde_json::Value;
+        let raw = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/mv_ladder_move_call.json"
+        ))
+        .expect("the recorded call");
+        let fx: Value = serde_json::from_str(&raw).expect("valid JSON");
+        let f = |v: &Value| v.as_f64().expect("number");
+        let v2 = |v: &Value| -> V2 { [f(&v[0]) as f32, f(&v[1]) as f32] };
+        let v3 = |v: &Value| -> V3 { [f(&v[0]) as f32, 0.0, f(&v[2]) as f32] };
+        let arr = |v: &Value| v.as_array().expect("array").clone();
+
+        let tr = &fx["terrain"];
+        let cp = &tr["cell_params"];
+        let t = Terrain::build(&PlainTerrain {
+            cells: arr(&tr["cells"]).iter().map(|c| [f(&c[0]), f(&c[1]), f(&c[2])]).collect(),
+            sandbox: Vec::<Obb>::new(),
+            walls: arr(&tr["walls"])
+                .iter()
+                .map(|w| [[f(&w[0][0]), f(&w[0][1])], [f(&w[1][0]), f(&w[1][1])]])
+                .collect(),
+            cell_params: CellParams {
+                table_size_feet: [f(&cp["table_size_feet"][0]), f(&cp["table_size_feet"][1])],
+                grid_rotation_degrees: f(&cp["grid_rotation_degrees"]),
+                grid_size_inches: f(&cp["grid_size_inches"]),
+                inches_to_meters: f(&cp["inches_to_meters"]),
+            },
+        });
+
+        let mradii = arr(&fx["radii_in"]);
+        let world: Vec<V3> = arr(&fx["model_pos_world"]).iter().map(v3).collect();
+        let h = world.len() - 1;
+        let others = arr(&fx["others"]);
+        let mut state = units_state(
+            vec![
+                world[..h].to_vec(),
+                vec![world[h]],
+                others.iter().map(|o| t.from_inch(v2(&o["c"]), 0.0)).collect(),
+            ],
+            vec![
+                mradii[..h].iter().map(|r| f(r) * IN2M).collect(),
+                vec![f(&mradii[h]) * IN2M],
+                others.iter().map(|o| f(&o["r_in"]) * IN2M).collect(),
+            ],
+            vec![vec![1], vec![], vec![]],
+        );
+        // `Hive Swarms`' own profile carries Strider (ignores the p.11 cap,
+        // GF/AoF v3.5.1 p.13) — without it this fixture's route crosses
+        // difficult terrain the real unit was exempt from.
+        Rc::get_mut(&mut state.profiles).unwrap().list[0].special_rules = vec!["Strider".into()];
+        let dest = v3(&fx["dest_world"]);
+        let band = f(&fx["band_in"]);
+        let want: Vec<V3> = arr(&fx["final_world"]).iter().map(v3).collect();
+
+        let land = plain_move(&state, &t, 0, dest, band, true, true, crate::mv::FAST_PLANNER_GUARD)
+            .expect("the board is real and the unit has models");
+        assert!((land.budget_in - f(&fx["budget_in"])).abs() < 1e-6, "{}", land.budget_in);
+        let worst = want.iter().enumerate().fold(0.0f64, |acc, (i, w)| {
+            acc.max((geom::length(geom::sub(land.end[i], *w)) as f64) / IN2M)
+        });
+        assert!(worst < 0.05, "landing {worst}\" off the recorded final positions");
+
+        LADDER_DISABLED.store(true, Ordering::Relaxed);
+        let off = plain_move(&state, &t, 0, dest, band, true, true, crate::mv::FAST_PLANNER_GUARD)
+            .expect("same inputs, same decline rule");
+        LADDER_DISABLED.store(false, Ordering::Relaxed);
+        let worst_off = want.iter().enumerate().fold(0.0f64, |acc, (i, w)| {
+            acc.max((geom::length(geom::sub(off.end[i], *w)) as f64) / IN2M)
+        });
+        assert!(worst_off > 0.05 * 10.0, "ladder forced off should miss badly, got {worst_off}\"");
     }
 
     /// The decline path: no board, no charge move — the caller keeps its rigid
