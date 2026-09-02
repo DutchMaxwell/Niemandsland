@@ -175,6 +175,23 @@ pub struct Ctx {
     /// the SHOOTING to-hit target only (`_solo_hit_mod_info`'s melee branch
     /// returns before that code runs, main.gd:5608-5648).
     pub growth_hit_mod: i64,
+    // --- Block C2 — the melee / charge leg of the Shot Modifier family,
+    // `_solo_hit_mod_info`'s melee branch (main.gd:5658-5668): an entry is
+    // kept when `all_attacks` OR `melee_only` OR (`when: "charge"` on a
+    // charge), and a kept entry adds `hit_bonus` to the melee modifier.
+    // Stamped in `ctx_for` from an explicit name allowlist — the three family
+    // names that pass with NO runtime gate. Grounded Precision
+    // (`terrain_within_in`) and Precision Feat (`uses_per_game`) carry
+    // `all_attacks` but need runtime state, so they stay unported. SEPARATE
+    // from `hit_mod` on purpose: the table's shooting branch skips
+    // `melee_only`/`when: charge` entries (main.gd:5721-5722), and a
+    // melee-only bonus leaking into a shot is bug #489's exact shape. ---
+    /// The `melee_only` names (Good Fighter, Precision Fighter Aura): every
+    /// melee strike, charge or not.
+    pub melee_hit_bonus: i64,
+    /// The `when: "charge"` names (Precision Charge Aura): only while the
+    /// strike is a charge.
+    pub melee_hit_bonus_charge: i64,
 }
 
 /// One conditional-AP spec — the registry `params` block of a Shatter / Tear /
@@ -885,6 +902,31 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         (1, 1, 3)
     };
     let regen_targets = regen_targets(reg, p);
+    // Block C2 — the melee/charge leg of the Shot Modifier family (see the
+    // `Ctx` fields). The name list IS the port: these three are exactly the
+    // family's entries with no runtime gate, and naming them one by one keeps
+    // the rest of the primitive (Grounded Precision, Precision Feat, Mobile
+    // Artillery, ...) uncredited — #489's lesson.
+    let (mut melee_hit_bonus, mut melee_hit_bonus_charge) = (0, 0);
+    for (name, charge_only) in [
+        ("Good Fighter", false),
+        ("Precision Fighter Aura", false),
+        ("Precision Charge Aura", true),
+    ] {
+        if !unit_rule_active(reg, p, name) {
+            continue;
+        }
+        let map = reg.rules_for(&p.game_system);
+        let Some(e) = map.lookup(&p.faction_folder, name) else {
+            continue;
+        };
+        let hb = e.param_i("hit_bonus", 0);
+        if charge_only {
+            melee_hit_bonus_charge += hb;
+        } else {
+            melee_hit_bonus += hb;
+        }
+    }
     Ctx {
         quality: p.quality,
         defense: armored_defense(p.defense, armor),
@@ -948,6 +990,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         death_hits_per_kill: death_hits_per_kill(reg, p),
         hit_mod: 0,
         vs_hit_mod: 0,
+        melee_hit_bonus,
+        melee_hit_bonus_charge,
         unstoppable_grant: false,
         growth_ap_mod: 0,
         growth_hit_mod: 0,
@@ -1087,9 +1131,11 @@ fn stamp_unit_strikers(p: &Profile, shoot: &mut [ShootProfile]) {
 /// the three sets `melee_only` / `all_attacks` / `when: charge`, so — unlike
 /// the unit-level strikers above — the bonus never reaches `melee`, only
 /// `shoot` (main.gd:5627-5636 excludes it from the melee branch on that same
-/// gate). The other `Shot Modifier` family members (Grounded Precision,
-/// Precision Fighter/Charge Aura) are melee-/charge-/terrain-scoped and stay
-/// unported.
+/// gate). The melee-/charge-scoped members (Good Fighter, Precision Fighter
+/// Aura, Precision Charge Aura) are stamped onto `Ctx` by `ctx_for` (block
+/// C2); the runtime-gated ones — Grounded Precision (`terrain_within_in`),
+/// Precision Feat (`uses_per_game`), Mobile Artillery (`requires_stationary`)
+/// — stay unported.
 fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile]) {
     let mut flat = 0;
     let mut over9 = 0;
