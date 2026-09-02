@@ -2377,6 +2377,127 @@ pub fn resolve_stochastic_tray_on_board(
     Ok((next, shot))
 }
 
+// ------------------------- S10: destination-side leftovers ------------------
+
+/// S10-a — `AiPlanner.RETREAT_GOAL_IN` ai_planner.gd:11. The retreat
+/// candidate's dest sits EXACTLY this far from its mover, which is what makes a
+/// recorded kite act recognisable in replay: no other dest on a 6x4' board is
+/// 100" from its unit (the diagonal is 86.7").
+const RETREAT_GOAL_IN: f64 = 100.0;
+/// S10-a — `SoloController.KITE_RANGE_MARGIN_IN` :61 — the kite holds a
+/// measuring hair INSIDE range so the post-move shot never flips on floats.
+const KITE_RANGE_MARGIN_IN: f64 = 0.25;
+
+/// Rules-must-log: each S10 arm names its rule on stderr when NML_TRACE_RULES=1.
+/// Off by default — the fast core stays silent in gates and rollouts.
+fn trace_rule(arm: &str, rule: &str, detail: &str) {
+    if std::env::var("NML_TRACE_RULES").as_deref() == Ok("1") {
+        eprintln!("[{arm}] {rule} — {detail}");
+    }
+}
+
+/// S10-a/b — rewrite the (dest, band) the plain arm is aimed with, per the
+/// table's own body: (a) the in-range shooter's KITE step
+/// (solo_controller.gd:2218-2222 via `_move_away` :4761), (b) the goal stop —
+/// objective moves are granted min(band, goal_dist) (:2207/:2216) and so end
+/// AT the marker instead of spending the band past it. `*hold` = the table
+/// moves nothing at all (the kite's zero step).
+fn s10_dest_arms(
+    statics: &[UnitStatic],
+    next: &State,
+    si: usize,
+    kind: i64,
+    dest: [f64; 3],
+    band_in: f64,
+    hold: &mut bool,
+) -> ([f64; 3], f64) {
+    let centre = geom::centre(&next.positions[si]);
+    // The retreat candidate's dest is exactly 100" out (ai_planner.gd:1077) —
+    // no other dest on a 6x4' board (86.7" diagonal) can match that distance.
+    let retreat = kind == ADVANCE
+        && (geom::length(geom::sub(geom::to_f32(dest), centre)) as f64 - RETREAT_GOAL_IN * IN2M)
+            .abs()
+            < 1e-3;
+    if retreat {
+        if let Some(en) = nearest_enemy_reposition(statics, next, si) {
+            let ec = geom::centre(&next.positions[en]);
+            let enemy_dist = geom::length(geom::sub(centre, ec)) as f64 / IN2M;
+            let range = statics[next.roster.profile[si]]
+                .shoot
+                .iter()
+                .map(|w| w.range as f64)
+                .fold(0.0_f64, f64::max);
+            return s10_kite(next, statics, si, en, centre, ec, enemy_dist, range, band_in, hold);
+        }
+    }
+    s10_goal_stop(next, kind, dest, band_in, centre)
+}
+
+/// S10-a — the kite: move AWAY from the target, at most
+/// min(band, range - dist - 0.25) (`_move_away` solo_controller.gd:4761); a
+/// floored step moves nothing (`is_zero_approx`, :4762) -> *hold.
+#[allow(clippy::too_many_arguments)]
+fn s10_kite(
+    next: &State,
+    statics: &[UnitStatic],
+    si: usize,
+    en: usize,
+    centre: V3,
+    ec: V3,
+    enemy_dist: f64,
+    range: f64,
+    band_in: f64,
+    hold: &mut bool,
+) -> ([f64; 3], f64) {
+    let goal = geom::to_f64(geom::add(centre, geom::sub(centre, ec)));
+    let step = (range - enemy_dist - KITE_RANGE_MARGIN_IN).max(0.0).min(band_in);
+    *hold = step <= 0.0;
+    trace_rule(
+        "S10-a",
+        "in-range shooter kites back toward the range edge (p.58)",
+        &format!(
+            "{} steps {:.2}\" from {}",
+            statics[next.roster.profile[si]].name,
+            if *hold { 0.0 } else { step },
+            statics[next.roster.profile[en]].name
+        ),
+    );
+    (goal, if *hold { 0.0 } else { step })
+}
+
+/// S10-b — the goal stop: objective moves are granted min(band, goal_dist)
+/// (solo_controller.gd:2207/:2216) and end AT the marker — the distance-truth
+/// trim and the p.11 re-plan budget both read the granted reach. A dest that
+/// is not a marker keeps the full band.
+fn s10_goal_stop(
+    next: &State,
+    kind: i64,
+    dest: [f64; 3],
+    band_in: f64,
+    centre: V3,
+) -> ([f64; 3], f64) {
+    if !matches!(kind, ADVANCE | RUSH) {
+        return (dest, band_in);
+    }
+    for o in &next.objectives {
+        if (o.pos[0] - dest[0]).abs() < 1e-6
+            && (o.pos[1] - dest[1]).abs() < 1e-6
+            && (o.pos[2] - dest[2]).abs() < 1e-6
+        {
+            let goal_dist = geom::length(geom::sub(geom::to_f32(dest), centre)) as f64 / IN2M;
+            if goal_dist < band_in {
+                trace_rule(
+                    "S10-b",
+                    "objective move stops at the goal (p.57 band)",
+                    &format!("band {:.2}\" -> {:.2}\"", band_in, goal_dist),
+                );
+                return (dest, goal_dist);
+            }
+            break;
+        }
+    }
+    (dest, band_in)
+}
 #[allow(clippy::too_many_arguments)]
 fn resolve_with(
     statics: &[UnitStatic],
@@ -2434,6 +2555,9 @@ fn resolve_with(
     // is the contact boundary, not the planner's `dest`, so the band clamp and
     // the spacing clamp below would be measuring a different move.
     let mut landing: Option<crate::mv::step::Landing> = None;
+    // S10-a: a kite whose cap floors at zero moves NOTHING on the table (the
+    // `_move_away` is_zero_approx guard) — neither the plain arm nor rigid.
+    let mut hold = false;
     if seams.movement && kind == CHARGE && band_in > 0.0 {
         if let (Cover::Board(t), Some(ti)) = (cover, ci) {
             landing = crate::mv::step::charge_move(
@@ -2461,16 +2585,20 @@ fn resolve_with(
     // translation still stands.
     if seams.movement && !seams.move_rigid && kind != CHARGE && band_in > 0.0 {
         if let (Cover::Board(t), Some(dest)) = (cover, action.dest) {
-            landing = crate::mv::step::plain_move(
-                &next,
-                t,
-                si,
-                geom::to_f32(dest),
-                band_in,
-                seams.hero_attach,
-                true,
-                crate::mv::FAST_PLANNER_GUARD,
-            );
+            let (dest, band) =
+                s10_dest_arms(statics, &next, si, kind, dest, band_in, &mut hold);
+            if !hold {
+                landing = crate::mv::step::plain_move(
+                    &next,
+                    t,
+                    si,
+                    geom::to_f32(dest),
+                    band,
+                    seams.hero_attach,
+                    true,
+                    crate::mv::FAST_PLANNER_GUARD,
+                );
+            }
         }
     }
     if let Some(land) = landing.as_ref() {
@@ -2492,7 +2620,11 @@ fn resolve_with(
                 next.in_cover[si] = gives_cover(t.type_at(geom::centre(&next.positions[si])));
             }
         }
-    } else if band_in > 0.0 && action.dest.is_some() && !next.positions[si].is_empty() {
+    } else if band_in > 0.0
+        && !hold
+        && action.dest.is_some()
+        && !next.positions[si].is_empty()
+    {
         moved = true;
         let dest = geom::to_f32(action.dest.unwrap());
         let centre = geom::centre(&next.positions[si]);
@@ -5188,5 +5320,109 @@ mod tests {
     fn the_hit_pair_count_is_a_half_never_a_double() {
         let (st, statics) = growth_line(4);
         assert_eq!(growth_bonus_of(&statics, &st, 0), (18, 10));
+    }
+
+    // ---------------------------------------------- S10: dest-side arms ----
+
+    /// S10 fixture on the four-unit line: unit 0 "a" (player 0, one 24" gun)
+    /// at (30", 24") on the 72x48 board, unit 2 "b" (player 1) 20" east, unit
+    /// 3 out of the way, one neutral marker 5" east of "a".
+    fn s10_line() -> (State, Vec<UnitStatic>) {
+        let mut st = four_unit_line();
+        st.roster = Rc::new(Roster {
+            keys: vec!["a".into(), "ah".into(), "b".into(), "bh".into()],
+            index: ["a", "ah", "b", "bh"]
+                .iter()
+                .enumerate()
+                .map(|(i, k)| (k.to_string(), i))
+                .collect(),
+            profile: vec![0, 0, 0, 0],
+        });
+        st.positions[0] = vec![[30.0 * IN2M, 0.0, 24.0 * IN2M]];
+        st.positions[1] = vec![[30.0 * IN2M, 0.0, 30.0 * IN2M]];
+        st.positions[2] = vec![[50.0 * IN2M, 0.0, 24.0 * IN2M]];
+        st.positions[3] = vec![[2.0 * IN2M, 0.0, 46.0 * IN2M]];
+        st.objectives =
+            vec![crate::state::Objective { pos: [35.0 * IN2M, 0.0, 24.0 * IN2M], owner: -1 }];
+        let mut shooter = UnitStatic { name: "a".into(), ..Default::default() };
+        shooter.shoot =
+            vec![ShootProfile { name: "gun".into(), range: 24, ..Default::default() }];
+        (st, vec![shooter])
+    }
+
+    /// S10-a — the in-range shooter's kite: 20" from a 24" gun with a 6"
+    /// Advance grants exactly min(6, 24 - 20 - 0.25) = 3.75", aimed at the
+    /// enemy centre MIRRORED through the mover; an enemy inside the 0.25"
+    /// range-edge margin floors the step and the table stands still.
+    #[test]
+    fn s10_kite_grants_the_tables_distance_and_aims_away() {
+        let (st, statics) = s10_line();
+        let centre = geom::centre(&st.positions[0]);
+        // 100" due west OF THE UNIT: the retreat candidate's own dest shape
+        let dest = [(30.0 - RETREAT_GOAL_IN) * IN2M, 0.0, 24.0 * IN2M];
+        let mut hold = false;
+        let (goal, band) = s10_dest_arms(&statics, &st, 0, ADVANCE, dest, 6.0, &mut hold);
+        assert!(!hold);
+        assert!((band - 3.75).abs() < 1e-4);
+        assert!((goal[0] - (centre[0] as f64 - 20.0 * IN2M)).abs() < 1e-5);
+        let mut st2 = st.clone();
+        st2.positions[2] = vec![[(30.0 + 23.9) * IN2M, 0.0, 24.0 * IN2M]];
+        let mut hold2 = false;
+        let (_, band2) = s10_dest_arms(&statics, &st2, 0, ADVANCE, dest, 6.0, &mut hold2);
+        assert!(hold2 && band2 == 0.0);
+    }
+
+    /// S10-b — the goal stop: a RUSH whose dest IS a marker is granted
+    /// min(band, goal_dist) (12" band, marker 5" away -> 5"); a dest that is
+    /// no marker (the toward-enemy else-branch) keeps the full band.
+    #[test]
+    fn s10_goal_stop_ends_the_move_at_the_marker() {
+        let (st, statics) = s10_line();
+        let marker = st.objectives[0].pos;
+        let mut hold = false;
+        let (dest, band) = s10_dest_arms(&statics, &st, 0, RUSH, marker, 12.0, &mut hold);
+        assert!(!hold);
+        assert!((band - 5.0).abs() < 1e-4);
+        assert_eq!(dest, marker);
+        let enemy_centre = [(30.0 + 20.0) * IN2M, 0.0, 24.0 * IN2M];
+        let (_, band_far) = s10_dest_arms(&statics, &st, 0, RUSH, enemy_centre, 12.0, &mut hold);
+        assert!((band_far - 12.0).abs() < 1e-4);
+    }
+
+    /// S10-a through the routing (movement=table): the in-range shooter's
+    /// ADVANCE with the 100" retreat dest moves exactly the table's 3.75"
+    /// kite step, not the full band.
+    #[test]
+    fn s10_kite_routing_moves_the_shooter_the_tables_distance() {
+        let (st, statics) = s10_line();
+        let board = crate::terrain::Terrain::build(&crate::terrain::PlainTerrain {
+            cells: vec![],
+            sandbox: Vec::<crate::terrain::Obb>::new(),
+            walls: vec![],
+            cell_params: crate::terrain::CellParams {
+                table_size_feet: [6.0, 4.0],
+                grid_rotation_degrees: 0.0,
+                grid_size_inches: 3.0,
+                inches_to_meters: IN2M,
+            },
+        });
+        let dest = [(30.0 - RETREAT_GOAL_IN) * IN2M, 0.0, 24.0 * IN2M];
+        let action = Action {
+            kind: ADVANCE,
+            unit: "a".into(),
+            dest: Some(dest),
+            shoot: None,
+            charge: None,
+            patient: false,
+            split: None,
+        };
+        let mut rng = crate::rng::GodotRng::new(0);
+        let seams = Seams { movement: true, ..Seams::default() };
+        let next = resolve_stochastic_on_board(
+            &statics, &st, &action, &board, seams, &mut rng,
+        )
+        .unwrap();
+        let dx = st.positions[0][0][0] - next.positions[0][0][0];
+        assert!((dx / IN2M - 3.75).abs() < 0.05, "moved {} in", dx / IN2M);
     }
 }
