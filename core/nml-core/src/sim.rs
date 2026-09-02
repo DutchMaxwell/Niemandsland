@@ -844,36 +844,116 @@ pub const HIT_AND_RUN_MOVE_IN: f32 = 3.0;
 /// `_solve_position`, :9691-9696): a cover/objective/threat-aware spot this
 /// core has no position-solver infrastructure for. This port always takes the
 /// table's own documented FALLBACK instead (:9653, "the fallback steps
-/// straight away from the nearest enemy (kiting)") — a straight-line step
-/// directly AWAY from `nearest_enemy_reposition`'s pick (#485, reused rather
-/// than duplicating `_nearest_enemy_of`'s own slightly different not-yet-
-/// activated tie-break), board-clamped via `clamp_move_to_board`/`axis_scale`
-/// (#485's `forced_straight_move` port, reused rather than porting a second
-/// clamp shape for `_execute_move`'s own `_clamp_to_bounds`). Dangerous
-/// terrain is NOT rolled for this step even when it crosses some: the table's
-/// own `_execute_move` return value is discarded uncalled at both call sites
-/// (:9694/:9698) — a faithful mirror of a table gap, not a new one.
-fn tray_hit_and_run(statics: &[UnitStatic], next: &mut State, si: usize, seams: Seams, cover: Cover) {
+/// straight away from the nearest enemy (kiting)") — a step directly AWAY from
+/// `nearest_enemy_reposition`'s pick (#485, reused rather than duplicating
+/// `_nearest_enemy_of`'s own slightly different not-yet-activated tie-break).
+///
+/// S11 — HOW the fallback step lands, seam-gated: the table's fallback runs
+/// `_move_away` :4761 -> `_execute_move` :4784, the per-model solver — the
+/// same chain S3 (`mv::step::plain_move`) already ports for ADVANCE/RUSH.
+/// Under `movement=table` the kiting goal is the table's own mirror (`centre
+/// + (centre - enemy centre)`, `_move_away` :4767, anchored on the
+/// `_nearest_enemy_of` pick :9669 — `plain_move` clamps it to the board
+/// itself, its `clamp_to_bounds` being the ported `_clamp_to_bounds`), handed
+/// to `plain_move` with the 3" band; the solver routes the formation around
+/// difficult/dangerous terrain and spends the band per model.
+///
+/// `None` (the port declines) or `movement=rigid`/`--red-move-rigid`: the
+/// pre-S11 rigid translation below, byte-identical —
+/// `clamp_move_to_board`/`axis_scale` (#485's `forced_straight_move` port,
+/// reused rather than porting a second clamp shape for `_execute_move`'s own
+/// `_clamp_to_bounds`). Dangerous terrain is NOT rolled for this step even
+/// when it crosses some: the table's own `_execute_move` return value is
+/// discarded uncalled at both call sites (:9694/:9698) — a faithful mirror of
+/// a table gap, not a new one.
+///
+/// `SoloController._nearest_enemy_of` solo_controller.gd:4738-4757 — the
+/// nearest living enemy by centre distance, attached heroes skipped
+/// (`is_attached`), reserves skipped, no activated preference. Hit & Run's
+/// own kiting anchor (:9669), unlike #485's reposition pick.
+fn nearest_enemy_of(state: &State, si: usize) -> Option<usize> {
+    let pid = state.player[si];
+    let from = geom::centre(&state.positions[si]);
+    let (mut best, mut best_d) = (None, f32::INFINITY);
+    for e in 0..state.units() {
+        if state.player[e] == pid
+            || state.alive[e] <= 0
+            || state.attached_to[e].is_some()
+            || state.dormant[e]
+        {
+            continue;
+        }
+        let d = geom::length(geom::sub(from, geom::centre(&state.positions[e])));
+        if d < best_d {
+            best_d = d;
+            best = Some(e);
+        }
+    }
+    best
+}
+
+/// Returns whether the unit actually moved — the caller logs the battle-log
+/// line on it (main.gd:1089).
+fn tray_hit_and_run(
+    statics: &[UnitStatic],
+    next: &mut State,
+    si: usize,
+    seams: Seams,
+    cover: Cover,
+) -> bool {
     if next.alive[si] <= 0 || !statics[next.roster.profile[si]].hit_and_run_active {
-        return;
+        return false;
     }
     if next.hit_and_run_round[si] == next.round {
-        return;
+        return false;
     }
-    let Some(enemy) = nearest_enemy_reposition(statics, next, si) else { return };
+    let Some(enemy) = nearest_enemy_reposition(statics, next, si) else { return false };
     let delta = geom::sub(geom::centre(&next.positions[si]), geom::centre(&next.positions[enemy]));
     let len = (delta[0] * delta[0] + delta[2] * delta[2]).sqrt();
     if len < 1e-6 {
-        return;
+        return false;
     }
     let dir = [delta[0] / len, delta[2] / len];
     let terrain = match cover {
         Cover::Board(t) => Some(t),
         Cover::Recorded(_) => None,
     };
+    if seams.movement && !seams.move_rigid {
+        if let Cover::Board(t) = cover {
+            let land = nearest_enemy_of(next, si).and_then(|foe| {
+                // `_move_away` :4767 — the table's own `_nearest_enemy_of`
+                // anchor (:9669), mirrored through the bearer's own centre;
+                // `plain_move` does the `_clamp_to_bounds(goal)`.
+                let centre = geom::centre(&next.positions[si]);
+                let foe = geom::centre(&next.positions[foe]);
+                let dest = [
+                    centre[0] + (centre[0] - foe[0]),
+                    centre[1],
+                    centre[2] + (centre[2] - foe[2]),
+                ];
+                crate::mv::step::plain_move(
+                    next,
+                    t,
+                    si,
+                    dest,
+                    HIT_AND_RUN_MOVE_IN as f64,
+                    seams.hero_attach,
+                    true,
+                    crate::mv::FAST_PLANNER_GUARD,
+                )
+            });
+            if let Some(land) = land {
+                for (i, m) in land.movers.iter().enumerate() {
+                    next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
+                }
+                next.hit_and_run_round[si] = next.round;
+                return true;
+            }
+        }
+    }
     let dist_in = clamp_move_to_board(terrain, &next.positions[si], dir, HIT_AND_RUN_MOVE_IN);
     if dist_in <= 0.0 {
-        return;
+        return false;
     }
     let step_m = dist_in * IN2M as f32;
     for p in next.positions[si].iter_mut() {
@@ -892,6 +972,7 @@ fn tray_hit_and_run(statics: &[UnitStatic], next: &mut State, si: usize, seams: 
         }
     }
     next.hit_and_run_round[si] = next.round;
+    true
 }
 
 /// BLOCK B8 — `SoloController.second_wind_candidate`/`spend_second_wind`
@@ -2947,8 +3028,14 @@ fn resolve_with(
     if dice.is_some() {
         let hnr_attacked =
             (!shoot_key.is_empty() && (kind == HOLD || kind == ADVANCE)) || kind == CHARGE;
-        if hnr_attacked {
-            tray_hit_and_run(statics, &mut next, si, seams, cover);
+        if hnr_attacked && tray_hit_and_run(statics, &mut next, si, seams, cover) {
+            // The table's own battle-log line, main.gd:1089 — the rules-must-
+            // log twin of `record_decision`'s "hit-and-run" entry.
+            let (_, shot) = dice.as_mut().unwrap();
+            shot.log.push(format!(
+                "Hit & Run: {} steps up to 3\" after its attack",
+                statics[next.roster.profile[si]].name
+            ));
         }
     }
 
@@ -4415,6 +4502,124 @@ mod tests {
         tray_hit_and_run(&statics, &mut st, 0, Seams::default(), Cover::Board(&board));
         assert!((st.positions[0][0][0] - (-36.0 * IN2M)).abs() < 1e-6, "got {:?}", st.positions[0]);
         assert_eq!(st.hit_and_run_round[0], st.round);
+    }
+
+    /// S11 — the `forest_bar_board` forest mirrored onto the kiting side: unit
+    /// 0's Hit & Run step runs from x≈0 straight to x≈-3" (away from "b" at
+    /// x=12"), and cells (13,14)/(13,15) cover x in [-6",-3") — the corridor's
+    /// far edge, the same near-landing relationship the S3 fixture has.
+    fn kiting_forest_board() -> crate::terrain::Terrain {
+        let cells = vec![[13.0, 14.0, crate::terrain::FOREST as f64],
+                         [13.0, 15.0, crate::terrain::FOREST as f64]];
+        crate::terrain::Terrain::build(&crate::terrain::PlainTerrain {
+            cells,
+            sandbox: vec![],
+            walls: vec![],
+            cell_params: crate::terrain::CellParams {
+                table_size_feet: [6.0, 4.0],
+                grid_rotation_degrees: 0.0,
+                grid_size_inches: 3.0,
+                inches_to_meters: IN2M,
+            },
+        })
+    }
+
+    /// S11 — under `movement=table` the Hit & Run carrier lands through the
+    /// SOLVER: on the mirrored forest the routed detour rests the models
+    /// somewhere the rigid 3" translation never puts them, and the move names
+    /// itself in the rules-must-log lines.
+    #[test]
+    fn hit_and_run_lands_through_the_solver_under_the_movement_seam() {
+        let (st, mut statics) = buff_line();
+        statics[0].hit_and_run_active = true;
+        let t = kiting_forest_board();
+        let action = buff_action(Some("b"));
+
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (rigid, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &action, &t, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (solved, shot) = resolve_stochastic_tray_on_board(
+            &statics, &st, &action, &t,
+            Seams { movement: true, ..Seams::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert!(shot.log.iter().any(|l| l.contains("Hit & Run")), "rules-must-log: {:?}", shot.log);
+
+        let gap_in = solved.positions[0]
+            .iter()
+            .zip(rigid.positions[0].iter())
+            .map(|(a, b)| ((a[0] - b[0]).powi(2) + (a[2] - b[2]).powi(2)).sqrt() / IN2M as f64)
+            .fold(0.0f64, f64::max);
+        assert!(gap_in > 0.5, "the solver landed on the rigid answer, gap {gap_in}\"");
+    }
+
+    /// The RED for that routing: `move_rigid` puts the Hit & Run step back on
+    /// the rigid arm with `movement` still on — the straight 3" translation to
+    /// the digit, byte-identical to the seam-off run.
+    #[test]
+    fn the_move_rigid_red_returns_a_hit_and_run_step_to_the_straight_line() {
+        let (st, mut statics) = buff_line();
+        statics[0].hit_and_run_active = true;
+        let t = kiting_forest_board();
+        let action = buff_action(Some("b"));
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (rigid, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &action, &t, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (red, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &action, &t,
+            Seams { movement: true, move_rigid: true, ..Seams::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert_eq!(red.positions, rigid.positions);
+    }
+
+    /// The kiting anchor under the seam is the table's `_nearest_enemy_of`
+    /// pick — plain nearest, NO activated preference: with an ACTIVATED enemy
+    /// at 6" and an un-activated one at 12" the carrier steps away from the
+    /// near one (the rigid arm keeps #485's pick and steps the other way).
+    #[test]
+    fn hit_and_run_kites_away_from_the_plain_nearest_enemy_under_the_seam() {
+        let (mut st, mut statics) = buff_line();
+        statics[0].hit_and_run_active = true;
+        st.attached = Rc::new(vec![vec![1], vec![], vec![], vec![]]);
+        st.attached_to = Rc::new(vec![None, Some(0), None, None]);
+        st.alive[3] = 1;
+        st.positions[2] =
+            vec![[6.0 * IN2M, 0.0, 0.0], [6.02 * IN2M, 0.0, 0.0], [6.04 * IN2M, 0.0, 0.0]];
+        st.positions[3] = vec![[-12.0 * IN2M, 0.0, 0.0]];
+        st.activated[2] = true;
+        let board = small_board();
+        let action = buff_action(Some("b"));
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (rigid, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &action, &board, Seams::default(), &mut rng, &mut tray,
+        )
+        .unwrap();
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (solved, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &action, &board,
+            Seams { movement: true, ..Seams::default() }, &mut rng, &mut tray,
+        )
+        .unwrap();
+        // Rigid: away from the un-activated "bh" at -12" -> +3" along +x.
+        // Solved: away from the plain-nearest "b" at +6" -> 3" along -x.
+        assert!((rigid.positions[0][0][0] - (st.positions[0][0][0] + 3.0 * IN2M as f64)).abs()
+            < 1e-6, "rigid {:?}", rigid.positions[0]);
+        assert!((solved.positions[0][0][0] - (st.positions[0][0][0] - 3.0 * IN2M as f64)).abs()
+            < 1e-6, "solved {:?}", solved.positions[0]);
+        assert_eq!(solved.hit_and_run_round[0], solved.round);
     }
 
     // -------------------------------------- block B7: Growth Markers ---
