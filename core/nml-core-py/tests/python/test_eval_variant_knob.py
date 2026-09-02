@@ -4,12 +4,17 @@ test_knob_wiring / test_deployment_knob style.
 THE HOLE this guards: a header knob that is accepted and stamped but never
 actually read (or read at only ONE of the two call sites `score.rs` and
 `rollout::blend_score` name) would leave every gate green while quietly
-routing a future evolved eval nowhere. Today only variant 0 exists, so the
-proof this PR can make is narrower than a real A/B: the second core built
-off `eval_variant_player`/`eval_variant` (the `deep_player` pattern, PR
-#515) must be BYTE-IDENTICAL to the pre-knob game at variant 0 — the seam
-changes nothing until a variant is registered — and a header asking for
-anything else must be refused loudly, never a silent fallback.
+routing a future evolved eval nowhere. The second core built off
+`eval_variant_player`/`eval_variant` (the `deep_player` pattern, PR #515)
+must be BYTE-IDENTICAL to the pre-knob game at variant 0 — the default moves
+nothing — and a header asking for an UNregistered variant must be refused
+loudly, never a silent fallback.
+
+Ledger row 7 adds arm 1 (the referee-shaped marker term, `score.rs`
+`score_hand_majority`). Its half of this gate is the other direction of the
+same control: variant 1 must be accepted AND must MOVE the digest. A knob
+that is wired but inert would pass every "byte-identical" check above and
+still be worthless, so both directions are asserted here.
 
 SKIP: the game-level checks need the terrain bank and the private AI-list
 corpus outside the repo, the same escape hatch every knob-wiring test here
@@ -62,11 +67,19 @@ def test_the_default_header_carries_eval_variant_0():
 
 def test_an_unregistered_eval_variant_is_refused_loudly():
     """`acts::read_act_header`'s own RED proof, reached through the Python
-    seam: variant 1 has no registered arm, so `set_header` raises instead of
+    seam: variant 2 has no registered arm, so `set_header` raises instead of
     silently arming variant 0 or panicking deep inside a rollout."""
     core = nml_core.load(str(REPO))
     with pytest.raises(Exception):
-        core.set_header({"profiles": {}, "knobs": {"eval_variant": 1}})
+        core.set_header({"profiles": {}, "knobs": {"eval_variant": 2}})
+
+
+def test_the_registered_marker_variant_is_accepted():
+    """Ledger row 7 — variant 1 IS registered now, so the same parser that
+    refuses 2 must take 1 and carry it back out of `Core.knobs()`."""
+    core = nml_core.load(str(REPO))
+    core.set_header({"profiles": {}, "knobs": {"eval_variant": 1}})
+    assert core.knobs()["eval_variant"] == 1
 
 
 @pytest.mark.skipif(_lists_missing(), reason="needs the terrain bank + 1000pt lists")
@@ -89,5 +102,22 @@ def test_an_unregistered_variant_raises_from_play_game_too():
     with pytest.raises(Exception):
         sp.play_game(
             SEED, ARMY1, ARMY2, REPO, BANK_DIR, None, sidecars=False,
-            eval_variant_player=1, eval_variant=1, **GAME,
+            eval_variant_player=1, eval_variant=2, **GAME,
         )
+
+
+@pytest.mark.skipif(_lists_missing(), reason="needs the terrain bank + 1000pt lists")
+def test_eval_variant_1_moves_the_digest_and_stamps_the_seat():
+    """Ledger row 7's control (a), the ON direction: the same seed and the
+    same knobs, one seat on the marker term, must NOT replay the variant-0
+    game — otherwise the arm is wired to nothing — and the seat it was armed
+    on must be stamped in `knobs_by_seat` so a harvested result says which
+    eval played it. The full 20-seed sweep lives in the PR; one seed here
+    keeps the suite fast while still failing on an inert arm."""
+    plain = sp.play_game(SEED, ARMY1, ARMY2, REPO, BANK_DIR, None, sidecars=False, **GAME)
+    marker = sp.play_game(
+        SEED, ARMY1, ARMY2, REPO, BANK_DIR, None, sidecars=False,
+        eval_variant_player=1, eval_variant=1, **GAME,
+    )
+    assert sp.result_digest(plain) != sp.result_digest(marker)
+    assert marker["knobs_by_seat"]["p1"]["eval_variant"] == 1

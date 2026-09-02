@@ -60,20 +60,24 @@ pub fn can_hold_marker(state: &State, i: usize, round_no: i64) -> bool {
     state.ambush_arrived_round[i] != round_no
 }
 
-/// `AiMissionEval._presence` ai_mission_eval.gd:591-617 — one unit's projected
-/// hold strength at one marker, discounted per future activation still needed.
-pub fn presence(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
+/// The activation count `_presence` (ai_mission_eval.gd:591-614) needs to put
+/// unit `i` inside marker `obj_pos`'s ring, or `None` for every case that
+/// function drops to zero before it ever reads the unit's wounds. Extracted
+/// VERBATIM out of `presence` — same order, same comparisons, same saturation —
+/// so `presence` below is unchanged to the bit and variant 1 can ask the same
+/// reachability question without a second, drifting copy of it.
+fn activations_needed(state: &State, i: usize, obj_pos: [f64; 3]) -> Option<i64> {
     if state.alive[i] <= 0 {
-        return 0.0;
+        return None;
     }
     if state.aircraft[i] {
-        return 0.0;
+        return None;
     }
     let rounds_total = state.rounds_total;
     let round_now = state.round;
     let arrived_now = state.ambush_arrived_round[i] == round_now;
     if arrived_now && round_now >= rounds_total {
-        return 0.0;
+        return None;
     }
     let d = control_gap_in(state, i, obj_pos);
     // `float(SoloController.sim_move_bands(su["unit"]).get("rush", 12))`
@@ -97,8 +101,17 @@ pub fn presence(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 
     }
     let moves_left = rounds_total - round_now + if state.activated[i] { 0 } else { 1 };
     if needed > moves_left {
-        return 0.0;
+        return None;
     }
+    Some(needed)
+}
+
+/// `AiMissionEval._presence` ai_mission_eval.gd:591-617 — one unit's projected
+/// hold strength at one marker, discounted per future activation still needed.
+pub fn presence(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
+    let Some(needed) = activations_needed(state, i, obj_pos) else {
+        return 0.0;
+    };
     let mut strength = 0.0f64;
     for w in &state.wounds[i] {
         strength += *w as f64;
@@ -191,16 +204,100 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// Variant 1's per-unit half — the probability that unit `i` is one of the
+/// bodies the REFEREE finds inside marker `obj_pos`'s ring at the deciding
+/// round end. `activations_needed` is `presence`'s own reachability, so
+/// `can_hold_marker`'s shaken refusal (`battle_sim.gd:297-302`) falls out
+/// without a second rule: shaken already costs one activation, and a shaken
+/// unit that has spent its activation in the final round has `moves_left = 0`,
+/// so the `needed > moves_left` drop answers `None`. `survive` is the same
+/// `incoming` reply threat `presence` subtracts, read as "will any model of
+/// this unit still be standing" instead of "how much strength is left".
+fn hold_p(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
+    let Some(needed) = activations_needed(state, i, obj_pos) else {
+        return 0.0;
+    };
+    let mut strength = 0.0f64;
+    for w in &state.wounds[i] {
+        strength += *w as f64;
+    }
+    if strength <= 0.0 {
+        return 0.0;
+    }
+    let survive = (((strength - threat).max(0.0)) / strength).min(1.0);
+    survive * DISCOUNT.powf(needed as f64)
+}
+
+/// Variant 1's per-marker half — `mission::playout_seize` (mission.rs:41-69) in
+/// EXPECTATION. That function reads the SET of sides inside the ring, never the
+/// count of bodies: one side alone seizes, both sides make the marker NEUTRAL
+/// (worth nothing to either), nobody leaves the current owner in place. With
+/// `A`/`B` the chance each side puts at least one eligible unit in the ring,
+/// the referee's three outcomes are `A(1-B)`, `B(1-A)` and `(1-A)(1-B)`, and
+/// the contested mass `A*B` is priced at zero — its honest value in a marker
+/// COUNT difference. `A(1-B) - B(1-A)` collapses to `A - B`, which is why mass
+/// cancels here exactly the way `mission_winner` (mission.rs:247-257) cancels
+/// it. Same [0, 1] scale as `objective_p`, 0.5 = level.
+fn objective_own(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = state.objectives[obj_index];
+    let mut mine_absent = 1.0f64;
+    let mut theirs_absent = 1.0f64;
+    for i in 0..state.units() {
+        let q = hold_p(state, i, obj.pos, threat_of(incoming, i)).clamp(0.0, 1.0);
+        if state.player[i] == player {
+            mine_absent *= 1.0 - q;
+        } else {
+            theirs_absent *= 1.0 - q;
+        }
+    }
+    let a = 1.0 - mine_absent;
+    let b = 1.0 - theirs_absent;
+    let keep = if obj.owner == 0 {
+        0.0
+    } else if obj.owner == player {
+        1.0
+    } else {
+        -1.0
+    };
+    (0.5 + 0.5 * ((a - b) + mine_absent * theirs_absent * keep)).clamp(0.0, 1.0)
+}
+
+/// `eval_variant = 1` (ledger row 7) — the marker term the REFEREE would book,
+/// blended into the frozen mean share by how much game is left. `w` rises from
+/// `1/rounds_total` at the opening round to 1.0 at the round that decides the
+/// game, so the search keeps `objective_p`'s continuous gradient early and is
+/// priced by `playout_seize`'s own verdict where it counts. The destroy /
+/// sabotage branch is NOT this rung's business and is handed back to variant 0
+/// whole.
+fn score_hand_majority(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() {
+        return 0.5;
+    }
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) {
+        return score_hand(state, player, incoming);
+    }
+    let total_rounds = state.rounds_total.max(1) as f64;
+    let left = (state.rounds_total - state.round).max(0) as f64;
+    let w = (1.0 - left / total_rounds).clamp(0.0, 1.0);
+    let mut total = 0.0f64;
+    for i in 0..state.objectives.len() {
+        let share = objective_p(state, i, player, incoming);
+        let own = objective_own(state, i, player, incoming);
+        total += (1.0 - w) * share + w * own;
+    }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
-/// here. The `match` deliberately has no arm past 0 — an evolved variant
-/// registers a new arm later, this commit only adds the seam.
-/// `acts::read_act_header` refuses any other value before a header is ever
-/// played, so the fallback arm is an invariant, not a live path.
+/// here. Arm 1 (ledger row 7) is the marker term above; every value past the
+/// registered arms is refused by `acts::read_act_header` before a header is
+/// ever played, so the fallback arm is an invariant, not a live path.
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        1 => score_hand_majority(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
@@ -307,6 +404,169 @@ mod tests {
         let via_seam = score_hand_variant(&state, 1, NO_INCOMING, 0);
         assert_eq!(direct, via_seam, "variant 0 must be byte-identical to the direct call");
         assert_eq!(direct, 0.5, "no objectives -> score_hand's trivial branch");
+    }
+
+    /// One one-model unit for the ledger-row-7 fixtures: id, player, x in
+    /// METRES (the state's own unit), remaining wounds, shaken, activated.
+    struct U(&'static str, i64, f64, i64, bool, bool);
+
+    /// A 4-round face-off with ONE marker at the origin and the given units on
+    /// the x axis, built through the real `read_act_header` / `state_from_json`
+    /// path so the fixture cannot drift from what a corpus produces.
+    fn marker_state(units: &[U], marker_owner: i64, round: i64) -> crate::state::State {
+        let profiles: Vec<String> = units
+            .iter()
+            .map(|u| {
+                format!(
+                    r#""{id}":{{"unit_id":"{id}","name":"U","quality":4,"defense":3,"tough":6,
+                     "wounds_max":[6],"model_count":1,"caster_value":0,"base_radius":0.016,
+                     "game_system":"gf","faction_folder":"robot_legions","special_rules":[],
+                     "item_grants":[],"attached_hero_rules":[],
+                     "move_bands":{{"advance":6.0,"rush":12.0}},"weapons":[]}}"#,
+                    id = u.0
+                )
+            })
+            .collect();
+        let plain_units: Vec<String> = units
+            .iter()
+            .map(|u| {
+                format!(
+                    r#""{id}":{{"player":{p},"alive":1,"wounds":[{w}],"radii":[0.016],
+                     "positions":[[{x},0.0,0.0]],"in_cover":false,"shaken":{sh},
+                     "fatigued":false,"activated":{ac},"casts":0,"morale_bonus":0,
+                     "aircraft":false,"dormant":false,"ambush_arrived_round":-1,
+                     "earliest_arrival_round":-1,"wound_frac":0.0,"mods":{{}},"mods_base":{{}},
+                     "bands":{{"advance":6.0,"rush":12.0}}}}"#,
+                    id = u.0, p = u.1, x = u.2, w = u.3, sh = u.4, ac = u.5
+                )
+            })
+            .collect();
+        let head = format!(
+            r#"{{"kind":"header","knobs":{{}},"profiles":{{{}}}}}"#,
+            profiles.join(",")
+        );
+        let plain = format!(
+            r#"{{"round":{round},"rounds_total":4,"scoring":"end",
+             "objectives":[{{"pos":[0.0,0.0,0.0],"owner":{marker_owner}}}],
+             "units":{{{}}}}}"#,
+            plain_units.join(",")
+        );
+        let header = read_act_header(&head).expect("header");
+        let mut cache = ProfileCache::new(header.profiles);
+        let mut roster = None;
+        state_from_json(&plain, &mut cache, &mut roster).expect("state")
+    }
+
+    /// The reply threat `presence` and `hold_p` both subtract, addressed by
+    /// SIDE rather than by index so the fixture does not depend on capture
+    /// order: every enemy model is expected to lose `threat` wounds.
+    fn threat_on_p2(state: &crate::state::State, threat: f64) -> Vec<f64> {
+        (0..state.units())
+            .map(|i| if state.player[i] == 2 { threat } else { 0.0 })
+            .collect()
+    }
+
+    /// RED, ledger row 7. ONE contested marker in the deciding round: my
+    /// 3-wound unit and their 6-wound unit both stand on it, and their unit is
+    /// expected to lose 3 of those wounds to the reply. The frozen eval reads
+    /// the MASS SHARE 3/(3+3) = exactly 0.5 — the "contested = 0.5" the ledger
+    /// names. `playout_seize` (mission.rs:41-69) never weighs mass; it asks who
+    /// is STILL THERE, and a unit half expected to die is a coin flip, so
+    /// variant 1 reads 0.75. Doubling my mass then moves the frozen eval and
+    /// leaves variant 1 exactly where it was: the referee counts sides.
+    #[test]
+    fn a_contested_marker_is_priced_by_presence_not_by_mass() {
+        let light = marker_state(
+            &[
+                U("p1_0_a", 1, 0.0, 3, false, false),
+                U("p2_0_a", 2, 0.0, 6, false, false),
+            ],
+            0,
+            4,
+        );
+        let inc = threat_on_p2(&light, 3.0);
+        let old = score_hand_variant(&light, 1, &inc, 0);
+        let new = score_hand_variant(&light, 1, &inc, 1);
+        assert_eq!(old, 0.5, "the frozen eval's mass share on a contested marker");
+        assert!((new - 0.75).abs() < 1e-12, "variant 1 prices presence, got {new}");
+
+        let heavy = marker_state(
+            &[
+                U("p1_0_a", 1, 0.0, 3, false, false),
+                U("p1_1_a", 1, 0.0, 3, false, false),
+                U("p2_0_a", 2, 0.0, 6, false, false),
+            ],
+            0,
+            4,
+        );
+        let inc = threat_on_p2(&heavy, 3.0);
+        let old_heavy = score_hand_variant(&heavy, 1, &inc, 0);
+        let new_heavy = score_hand_variant(&heavy, 1, &inc, 1);
+        assert!(old_heavy > old, "the frozen eval pays for mass: {old} -> {old_heavy}");
+        assert!(
+            (new_heavy - new).abs() < 1e-12,
+            "variant 1 must not pay for mass: {new} -> {new_heavy}"
+        );
+    }
+
+    /// RED — `can_hold_marker` (battle_sim.gd:297-302, score.rs) refuses a
+    /// SHAKEN unit, so variant 1 must refuse it too: a body inside the ring is
+    /// not a holder. Deciding round, the marker theirs, my only unit already
+    /// activated and standing on it, their unit 30" away and out of reach.
+    /// Shaken, my unit cannot recover in time and the owner keeps the marker;
+    /// clear the one flag on the same fixture and the identical unit seizes it.
+    #[test]
+    fn a_shaken_unit_does_not_hold_the_marker() {
+        const FAR: f64 = 0.762; // 30" in metres
+        let shaken = marker_state(
+            &[
+                U("p1_0_a", 1, 0.0, 3, true, true),
+                U("p2_0_a", 2, FAR, 3, false, false),
+            ],
+            2,
+            4,
+        );
+        let steady = marker_state(
+            &[
+                U("p1_0_a", 1, 0.0, 3, false, true),
+                U("p2_0_a", 2, FAR, 3, false, false),
+            ],
+            2,
+            4,
+        );
+        assert_eq!(
+            score_hand_variant(&shaken, 1, NO_INCOMING, 1),
+            0.0,
+            "a shaken holder cannot hold: the owner keeps the marker"
+        );
+        assert_eq!(
+            score_hand_variant(&steady, 1, NO_INCOMING, 1),
+            1.0,
+            "the same unit, unshaken, seizes it"
+        );
+    }
+
+    /// The end-of-game weighting: with rounds still to play, variant 1 is a
+    /// BLEND of the frozen share and the referee's verdict, so an opening-round
+    /// read sits strictly between the two and the search keeps its gradient.
+    #[test]
+    fn the_ownership_term_rises_as_the_rounds_run_out() {
+        let units = || {
+            [
+                U("p1_0_a", 1, 0.0, 3, false, false),
+                U("p2_0_a", 2, 0.0, 6, false, false),
+            ]
+        };
+        let early = marker_state(&units(), 0, 1);
+        let late = marker_state(&units(), 0, 4);
+        let inc = threat_on_p2(&early, 3.0);
+        let share = score_hand_variant(&early, 1, &inc, 0);
+        let blended = score_hand_variant(&early, 1, &inc, 1);
+        let decided = score_hand_variant(&late, 1, &inc, 1);
+        assert!(
+            share < blended && blended < decided,
+            "round 1 must sit between the share {share} and the verdict {decided}, got {blended}"
+        );
     }
 
     #[test]
