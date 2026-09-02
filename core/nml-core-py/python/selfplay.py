@@ -239,7 +239,8 @@ def _deploy_arena(
     board: "nml_core.Board",
     objectives: list[list[float]],
     opener: int,
-) -> tuple[list[list[list[float]]], list[list[list[float]]], set[str]]:
+    interleave: bool = False,
+) -> tuple[list[list[list[float]]], list[list[list[float]]], set[str], list[list[Any]]]:
     """The table's pre-game through the step-7 binding: `deploy_side` per side
     with the per-side stream `seed + slot` (arena_match.gd:486-488 — the game
     stream advances NOT), then `deploy_finish` in winner-first order (the FIRST
@@ -247,21 +248,44 @@ def _deploy_arena(
     :9180-9188). Returns the capture positions in units order; a folded hero's
     models are its slice of the host's settled group, and a reserved (Ambush)
     unit has no placement — it starts off-table with no models, the round-2
-    arrival being the declared in-game residual (design §1)."""
+    arrival being the declared in-game residual (design §1).
+
+    `interleave` swaps the two whole-side `deploy_side` calls for ONE
+    `deploy_interleaved` call — the rulebook's alternation (GF v3.5.1 p.6),
+    same per-side streams, same finish. Returns the capture positions and the
+    cross-side `[[slot, key], ..]` placement sequence (empty when off)."""
     zones = _arena_zones()
     sides: dict[str, dict[str, Any]] = {}
     reserved: dict[str, list[str]] = {}
     hero_fold: dict[str, tuple[str, int, int]] = {}
+    roster: dict[str, list[dict[str, Any]]] = {}
     for slot, path in (("1", list_p1), ("2", list_p2)):
         with open(path, encoding="utf-8") as f:
             data = json.load(f)
-        specs, fold = deploy_unit_specs(data, _faction_from_path(path), int(slot))
-        placed = nml_core.deploy_side(
-            specs, zones[slot], [[o[0], o[2]] for o in objectives], board, seed + int(slot)
-        )
-        sides[slot] = {"units": specs, "placements": placed["placements"], "zone": zones[slot]}
-        reserved[slot] = list(placed["reserved"])
+        roster[slot], fold = deploy_unit_specs(data, _faction_from_path(path), int(slot))
         hero_fold.update(fold)
+    objs2 = [[o[0], o[2]] for o in objectives]
+    sequence: list[list[Any]] = []
+    if interleave:
+        out = nml_core.deploy_interleaved(
+            roster["1"], roster["2"], zones["1"], zones["2"], objs2, board,
+            seed + 1, seed + 2, opener,
+        )
+        placed_by = {"1": out["side1"], "2": out["side2"]}
+        sequence = [list(e) for e in out["sequence"]]
+    else:
+        placed_by = {
+            slot: nml_core.deploy_side(
+                roster[slot], zones[slot], objs2, board, seed + int(slot)
+            )
+            for slot in ("1", "2")
+        }
+    for slot in ("1", "2"):
+        placed = placed_by[slot]
+        sides[slot] = {
+            "units": roster[slot], "placements": placed["placements"], "zone": zones[slot]
+        }
+        reserved[slot] = list(placed["reserved"])
     finished = nml_core.deploy_finish(sides, board, {}, opener)
     pos: dict[str, list[list[float]]] = {}
     for slot in ("1", "2"):
@@ -281,6 +305,7 @@ def _deploy_arena(
         [pos[u["unit_id"]] for u in units1],
         [pos[u["unit_id"]] for u in units2],
         {k for slot in ("1", "2") for k in reserved[slot]},
+        sequence,
     )
 
 
@@ -783,7 +808,14 @@ def resolve_menu_los(menu_los: str) -> bool:
 #: winning ties. "arena" plays the TABLE's pre-game instead: roll-off FIRST
 #: from the game stream with ties re-rolled, winner-first finish order, and
 #: the Rust `deploy_side`/`deploy_finish` pipeline (design §3.2-3.3).
-DEPLOYMENT_MODES = ("zone", "arena")
+#: "interleaved" is "arena" plus the RULEBOOK's turn order (GF v3.5.1 p.6): the
+#: roll-off winner places ONE unit, the opponent places one, alternating to the
+#: end, Scouts in their own phase after both armies' normals, Ambush reserved —
+#: `deploy_interleaved` instead of two whole-side `deploy_side` calls. Every
+#: draw, spot and settle stays what "arena" produces (each side scores against
+#: its OWN occupied); what changes is the cross-side ORDER, recorded as
+#: `placement_sequence`.
+DEPLOYMENT_MODES = ("zone", "arena", "interleaved")
 
 #: `ambush` modes (SPEC_rule_ambush_arrival_2026-09-02 S3b). "off" is the
 #: default and is every corpus written before this knob: a unit set aside by
@@ -1748,6 +1780,12 @@ def play_game(
     `deploy_side(seed + slot)` / `deploy_finish` pipeline feeding `capture`. A
     reserved (Ambush) unit starts off-table with no models — the round-2
     arrival is the declared in-game residual, not something this knob fakes.
+    "interleaved" is "arena" with the rulebook's TURN ORDER (GF v3.5.1 p.6):
+    one `deploy_interleaved` call alternates the two sides' queues winner-first
+    instead of draining each side whole, Scouts in their own phase after both
+    armies' normals. Same per-side streams, same spots, same finish — only the
+    order changes — and the game record carries `placement_sequence`, the
+    cross-side fact `deployment_gate.py`'s interleave class reads.
     The stamp rides ONLY the arena branch, exactly like `objectives_layout`:
     a "zone" game records the same object it did before this knob existed, an
     arena game must say so (NML-1147a).
@@ -2147,7 +2185,8 @@ def play_game(
         ]
     else:
         objectives = [[f32(-16.0 * IN2M), 0.0, 0.0], [0.0, 0.0, 0.0], [f32(16.0 * IN2M), 0.0, 0.0]]
-    arena = eff_deployment == "arena"
+    arena = eff_deployment in ("arena", "interleaved")
+    deploy_seq: list[list[Any]] = []
     if arena:
         # NML-1152 step 8 — the table's pre-game. Roll-off FIRST from the game
         # stream (ties re-rolled; the winner of the last attempt opens, the
@@ -2156,8 +2195,9 @@ def play_game(
         # NOTHING else before the first activation.
         roll_attempts = _arena_roll_off(rng)
         opener = 1 if roll_attempts[-1][0] >= roll_attempts[-1][1] else 2
-        pos1, pos2, reserved = _deploy_arena(
-            seed, units1, units2, list_p1, list_p2, board, objectives, opener
+        pos1, pos2, reserved, deploy_seq = _deploy_arena(
+            seed, units1, units2, list_p1, list_p2, board, objectives, opener,
+            eff_deployment == "interleaved",
         )
     elif deploy_rng_seed is None:
         pos1 = deploy_zone(units1, -TABLE_D_IN / 2.0, 12.0, rng)
@@ -2231,6 +2271,12 @@ def play_game(
         # judge bench's drawing list, straight out of the bank.
         "terrain": _shift_pieces(pieces, terrain_shift_cells),
         "tool": "core_selfplay_py",
+        # The CROSS-SIDE placement order (GF v3.5.1 p.6), `[[slot, unit key], ..]`
+        # — the same fact tools/pregame_dump.gd writes as `placement_sequence`,
+        # and the ONLY place a game record can show that the sides alternated.
+        # Rides the "interleaved" branch only (NML-1147a pattern): a "zone" or
+        # "arena" game stays the exact object it was, `result_digest` included.
+        **({"placement_sequence": deploy_seq} if eff_deployment == "interleaved" else {}),
         # Gen-1 recorder fix: WHICH core build recorded the game — the short
         # sha of the checkout at import. Rides the expert-iteration corpus
         # path only (NML-1147a pattern): a default game stays the exact

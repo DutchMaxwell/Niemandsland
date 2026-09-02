@@ -2322,6 +2322,50 @@ fn place_models(py: Python<'_>, spot: (f64, f64), n: usize) -> PyResult<Py<PyAny
     to_py(py, &Value::Array(ms.iter().map(|m| Value::Array(vec![m.0.into(), m.1.into()])).collect()))
 }
 
+/// The RULEBOOK's alternating deployment for BOTH sides in one call
+/// (`deployment::deploy_interleaved`, GF v3.5.1 p.6): the roll-off winner
+/// places ONE unit, the opponent places one, alternating until every unit is
+/// down, then the Scout phase after BOTH main queues, Ambush reserved. Each
+/// side keeps its OWN per-side stream (`seed + slot`, passed as `seed1`/`seed2`)
+/// and its own `occupied`, so a side's draws and spots are exactly what
+/// `deploy_side` produces — only the cross-side ORDER changes. `first` is the
+/// winner's slot (1 or 2). Returns `InterleavedDeploy` as a plain dict:
+/// `side1`, `side2` (each a `SideDeploy`) and `sequence` = `[[slot, key], ..]`
+/// in placement order — the fact `tools/pregame_dump.gd` writes as
+/// `placement_sequence`, and the one the interleave gate compares.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn deploy_interleaved(
+    py: Python<'_>,
+    units1: &Bound<'_, PyAny>,
+    units2: &Bound<'_, PyAny>,
+    zone1: &Bound<'_, PyAny>,
+    zone2: &Bound<'_, PyAny>,
+    objectives: &Bound<'_, PyAny>,
+    board: PyRef<'_, Board>,
+    seed1: i64,
+    seed2: i64,
+    first: i64,
+) -> PyResult<Py<PyAny>> {
+    let specs1: Vec<UnitSpec> = json_of(units1, "units1")?;
+    let specs2: Vec<UnitSpec> = json_of(units2, "units2")?;
+    let z1: [f64; 4] = json_of(zone1, "zone1")?;
+    let z2: [f64; 4] = json_of(zone2, "zone2")?;
+    let objs: Vec<[f64; 2]> = json_of(objectives, "objectives")?;
+    let out = deployment::deploy_interleaved(
+        &specs1,
+        &specs2,
+        &Rect::new(z1[0], z1[1], z1[2], z1[3]),
+        &Rect::new(z2[0], z2[1], z2[2], z2[3]),
+        &objs.iter().map(|o| (o[0], o[1])).collect::<Vec<_>>(),
+        &board.inner,
+        seed1,
+        seed2,
+        first,
+    );
+    to_py(py, &serde_json::to_value(&out).map_err(|e| Unsupported::new_err(e.to_string()))?)
+}
+
 /// The table's per-side FINISH order (solo_controller.gd:9180-9188; the finish
 /// is caller-driven since step 6d): the FIRST finish runs on the first
 /// deployer's units ALONE, its spot-free gate seeing the pre-game tray rows of
@@ -2440,6 +2484,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(objective_layout, m)?)?;
     // NML-1152 step 7 — the twin's deployment pipeline for the trainer.
     m.add_function(wrap_pyfunction!(deploy_side, m)?)?;
+    m.add_function(wrap_pyfunction!(deploy_interleaved, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_finish, m)?)?;
     m.add_function(wrap_pyfunction!(arrive_one, m)?)?;
     m.add_function(wrap_pyfunction!(place_models, m)?)?;
