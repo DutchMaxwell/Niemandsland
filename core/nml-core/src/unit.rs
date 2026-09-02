@@ -355,6 +355,10 @@ pub struct UnitStatic {
     /// "Harassing" (identical `move_in: 3.0` on every occurrence). "Hit & Run
     /// Fighter"/"Hit & Run Shooter" are separate primitives, out of scope.
     pub hit_and_run_active: bool,
+    /// Block B11 — `RulesRegistry.unit_rule_active(gu, "Quick Shot")`
+    /// solo_controller.gd:1846/:4033 — a carrier's move-and-shoot band becomes
+    /// its RUSH distance, so RUSH may also shoot (normally HOLD/ADVANCE only).
+    pub quick_shot_active: bool,
     /// Block B8 — `RulesRegistry.unit_rules_of_primitive(gu, "Second Wind")`
     /// (solo_controller.gd:10448/:10477). Only two literal names resolve to
     /// this primitive anywhere in the registry (`assets/solo/rules_mechanics_
@@ -1354,6 +1358,7 @@ impl UnitStatic {
             hit_and_run_active: unit_rule_active(reg, p, "Hit & Run")
                 || unit_rule_active(reg, p, "Guerrilla")
                 || unit_rule_active(reg, p, "Harassing"),
+            quick_shot_active: unit_rule_active(reg, p, "Quick Shot"),
             second_wind_active: unit_rule_active(reg, p, "Second Wind")
                 || unit_rule_active(reg, p, "Inquisitorial Agent")
                 || unit_rule_active(reg, p, "Martial Prowess"),

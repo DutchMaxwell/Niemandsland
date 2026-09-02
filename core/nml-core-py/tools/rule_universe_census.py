@@ -120,6 +120,8 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # "Bounding" entry's own `place_d3_plus` (the DATA-alias family stays
     # table-only, ported instead through the RECORDED `Action::traced` draw).
     "Bounding": frozenset({"place_d3_plus"}),
+    # Block B11: unit.rs::UnitStatic.quick_shot_active reads `shoot_after_rush` as a whole-unit gate for sim.rs's RUSH+shoot predicate.
+    "Quick Shot": frozenset({"shoot_after_rush"}),
 }
 
 
