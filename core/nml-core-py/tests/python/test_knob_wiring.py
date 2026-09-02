@@ -34,6 +34,7 @@ count no mission can draw.
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from pathlib import Path
@@ -91,6 +92,37 @@ def _first_divergent_seed(army1: Path, army2: Path, knob: str, mode_a: str, mode
         if _digest_without_knobs(a) != _digest_without_knobs(b):
             return seed, a, b
     return None, None, None
+
+
+@pytest.mark.skipif(
+    _lists_missing(CHARGE_ARMY1, CHARGE_ARMY2),
+    reason="needs the terrain bank + robot_legions/blessed_sisters 1000pt lists",
+)
+def test_play_game_itself_still_defaults_charge_gate_to_off():
+    """`play_game`'s OWN default is untouched by DEFECT_LEDGER row 2 — every
+    direct caller (every test, every replay tool) must keep seeing exactly
+    what it saw before this knob's CLI default moved."""
+    core = nml_core.load(str(REPO))
+    res = sp.play_game(27, CHARGE_ARMY1, CHARGE_ARMY2, REPO, BANK_DIR, core)
+    assert res["knobs"]["charge_gate"] == "off"
+
+
+def test_a_fresh_cli_run_now_defaults_charge_gate_to_table(tmp_path):
+    """DEFECT_LEDGER row 2: `main()` is what a fresh self-play RUN invokes
+    (`nogodot_runner.sh` et al., no `--charge-gate` flag) — a run started with
+    nothing must now stamp "table", not the old gateless "off". A RECORDED
+    game is unaffected either way, because a replay always passes its own
+    header's `knobs["charge_gate"]` back in explicitly (see
+    `tools/gen0_replay_one.py`'s `KNOBS`), never relying on either default."""
+    seed = 27
+    rc = sp.main([
+        "--army1", str(CHARGE_ARMY1), "--army2", str(CHARGE_ARMY2),
+        "--repo", str(REPO), "--bank", str(BANK_DIR),
+        "--seed", str(seed), "--games", "1", "--out", str(tmp_path),
+    ])
+    assert rc == 0
+    res = json.loads((tmp_path / ("core_s%d.json" % seed)).read_text(encoding="utf-8"))
+    assert res["knobs"]["charge_gate"] == "table"
 
 
 @pytest.mark.skipif(

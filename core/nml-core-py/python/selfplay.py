@@ -505,18 +505,23 @@ def resolve_horizon(horizon: int | None) -> int:
     return _env_knob("NML_HORIZON", 1, 3, ROLLOUT_HORIZON_ROUNDS)
 
 
-#: `charge_gate` modes. "off" is the default and is what the OLD planner-lane
-#: trainer does: `tools/core_selfplay.gd` never stamps `state["charge_illegal"]`,
-#: so both planner menu sites read `illegal_cb.is_valid()` as false
-#: (ai_planner.gd:1024/1308) and offer charges the table would refuse. "table"
-#: wires the gate the ARENA wires — `SoloController.charge_candidate_illegal`
-#: (solo_controller.gd:1450, stamped at :3002/:3358/:3475/:3704) — through its
-#: pure twin `gate::charge_illegal` (NML-1073 M2-0c), whose five inputs the
-#: capture already carries per unit: `aircraft`, the rush `bands`, the melee
-#: `shroud` pair, `charge_no_difficult` (the p.13 Strider/Flying exemption) and
+#: `charge_gate` modes. "off" is `play_game`'s OWN default (unchanged — every
+#: existing caller, replay and pinned-digest test stays byte-identical) and is
+#: what the OLD planner-lane trainer does: `tools/core_selfplay.gd` never
+#: stamps `state["charge_illegal"]`, so both planner menu sites read
+#: `illegal_cb.is_valid()` as false (ai_planner.gd:1024/1308) and offer
+#: charges the table would refuse. "table" wires the gate the ARENA wires —
+#: `SoloController.charge_candidate_illegal` (solo_controller.gd:1450,
+#: stamped at :3002/:3358/:3475/:3704) — through its pure twin
+#: `gate::charge_illegal` (NML-1073 M2-0c), whose five inputs the capture
+#: already carries per unit: `aircraft`, the rush `bands`, the melee `shroud`
+#: pair, `charge_no_difficult` (the p.13 Strider/Flying exemption) and
 #: `charge_probe_r` (the unit footprint), against the header board's difficult
-#: ground. Nothing else changes, so "off" stays byte-identical to every corpus
-#: written before this knob existed.
+#: ground. DEFECT_LEDGER row 2: the CLI (`main`, what a fresh self-play RUN
+#: invokes — `nogodot_runner.sh` et al.) now defaults `--charge-gate` to
+#: "table" instead, so a new teacher run started with no flag stops offering
+#: charges the table would refuse; a direct `play_game(...)` caller (every
+#: test and replay tool) is untouched.
 CHARGE_GATE_MODES = ("off", "table")
 
 
@@ -1690,11 +1695,16 @@ def play_game(
     training corpus's `NML_TOP_K=2 NML_HORIZON=1` looks like any other run.
 
     `charge_gate` is the THIRD such seam (NML-1073 D2) and the only one that
-    changes a RULE: "off" (the default) reproduces `tools/core_selfplay.gd`,
+    changes a RULE: "off" (the default HERE — direct callers, replays and the
+    pinned-digest tests are unaffected) reproduces `tools/core_selfplay.gd`,
     which stamps no `state["charge_illegal"]` and therefore lets the planner
     offer charges against aircraft, past the rush band and through difficult
-    ground; "table" wires the arena's own gate. It is stamped into the result's
-    `knobs` alongside the search pair — see `CHARGE_GATE_MODES`.
+    ground; "table" wires the arena's own gate instead. DEFECT_LEDGER row 2
+    moves the OTHER default: `main`'s `--charge-gate` (a fresh self-play RUN
+    with no flag) now resolves to "table", because that entry point is where
+    a new teacher game is actually started; a caller of this function keeps
+    getting exactly what it asked for, nothing implied. It is stamped into
+    the result's `knobs` alongside the search pair — see `CHARGE_GATE_MODES`.
 
     `hero_attach` is the D4 rung: "off" (the default) is byte-identical to every
     corpus written before it, "join" joins the heroes the list joins and folds
@@ -2448,9 +2458,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument(
         "--charge-gate",
         choices=list(CHARGE_GATE_MODES),
-        default="off",
-        help="'table' wires SoloController.charge_candidate_illegal; 'off' (default) "
-        "is tools/core_selfplay.gd, which stamps no gate at all",
+        default="table",
+        help="'table' (default) wires SoloController.charge_candidate_illegal; "
+        "'off' is tools/core_selfplay.gd, which stamps no gate at all",
     )
     ap.add_argument(
         "--hero-attach",
