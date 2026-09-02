@@ -191,6 +191,57 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// Variant 108 (candidate 7) — trip attrition: the frozen `presence` discounts
+/// by the rounds still needed to reach a marker but not by the wounds taken
+/// GETTING there. Each travelling round costs a runner its expected reply
+/// wounds once more, so it arrives thinned, not at full strength, and one the
+/// trip would kill counts for nothing. Units already in control range have
+/// `trip == 0` and score bit-identical to v0.
+fn presence_v108(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
+    let p0 = presence(state, i, obj_pos, threat);
+    if p0 <= 0.0 {
+        return 0.0;
+    }
+    let d = control_gap_in(state, i, obj_pos);
+    let trip = (d - OBJECTIVE_CONTROL_IN).max(0.0) / state.bands[i].rush.max(1.0);
+    let strength: f64 = state.wounds[i].iter().map(|w| *w as f64).sum();
+    p0 * ((strength - threat * trip) / strength).clamp(0.0, 1.0)
+}
+
+/// Variant 108's `_objective_p`: the same soft control ratio over
+/// `presence_v108`; capture-order accumulation and the seize fallback are
+/// v0 verbatim.
+fn objective_p_v108(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = state.objectives[obj_index];
+    let (mut mine, mut theirs) = (0.0f64, 0.0f64);
+    for i in 0..state.units() {
+        let p = presence_v108(state, i, obj.pos, threat_of(incoming, i));
+        if state.player[i] == player {
+            mine += p;
+        } else {
+            theirs += p;
+        }
+    }
+    if mine + theirs <= 0.0 {
+        return if obj.owner == 0 { 0.5 } else if obj.owner == player { 1.0 } else { 0.0 };
+    }
+    mine / (mine + theirs)
+}
+
+/// Variant 108's `_score_hand`: the frozen hand score with `presence_v108`
+/// under the marker ratio. Destroy missions and the empty-objectives 0.5
+/// delegate to v0 unchanged — the idea only re-weights who is trusted to arrive.
+fn score_hand_v108(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() || (!state.markers_meta.is_empty() && is_destroy_mission(state)) {
+        return score_hand(state, player, incoming);
+    }
+    let mut total = 0.0f64;
+    for i in 0..state.objectives.len() {
+        total += objective_p_v108(state, i, player, incoming);
+    }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +252,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        108 => score_hand_v108(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
