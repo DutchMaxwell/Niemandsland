@@ -112,6 +112,69 @@ def test_moved_refuses_to_pair_a_reformed_unit():
     assert gn.moved({"before": m([]), "after": m([1.0])}, "u") == []
 
 
+def _charge_act(rolls, target_alive=3):
+    # One synthetic CHARGE activation: "a" charges "b" in band, no forest, no
+    # shoot — the only variable is what the dice report carries. Needs neither
+    # the corpus nor a replay.
+    pos = lambda *xs: [[x * 0.0254, 0.0, 0.0] for x in xs]  # noqa: E731
+    unit = lambda p, alive: {"positions": pos(*p), "radii": [], "alive": alive,
+                             "wounds": [0] * alive,
+                             "bands": {"advance": 6.0, "rush": 12.0}}  # noqa: E731
+    rec = {"stem": "fixture", "terrain": [], "winner": 1, "vp": [0, 0],
+           "mission": {"objectives_layout": {"placed_by": []}},
+           "rounds_log": [{"owners": [], "vp": [0, 0]}]}
+    act = {"row": {"unit": "a", "kind": 3, "round": 1, "side": 1, "seq": 1,
+                   "cands": {"best": 0}, "intent": None},
+           "menu": [{"unit": "a", "kind": 3, "charge": "b"}],
+           "before": {"units": {"a": unit((0.0, 1.0), 3), "b": unit((3.0, 4.0), 3)}},
+           "after": {"units": {"a": unit((1.0, 2.0), 3), "b": unit((3.0, 4.0), target_alive)}},
+           "rep": {"rolls": rolls, "log": [], "unported": []}}
+    return rec, [act], {"p1": {"units": []}, "p2": {"units": []}}
+
+
+def test_charge_contact_needs_an_opposed_exchange_not_just_any_dice():
+    # BRIEF_NARRFIX I-1: the charger's OWN dangerous-terrain test draws attack
+    # dice too (sim.rs:2960-2978 records it `attack Nd6>=6`), so
+    # `charges_reached_contact += bool(rolls)` credited 6 of 13 charges that
+    # never reached melee. Contact is an opposed exchange: a defense-class
+    # roll, or a casualty on the charge target.
+    import game_narrator as gn
+    terrain_test = [{"kind": "attack", "count": 2, "target": 6, "faces": [1, 6], "owner": "a"}]
+    rec, acts, lists = _charge_act(terrain_test)
+    assert gn.stats_row(rec, acts, lists)["charges_reached_contact"] == 0
+    rec, acts, lists = _charge_act(terrain_test + [
+        {"kind": "attack", "count": 3, "target": 4, "faces": [2, 4, 5], "owner": "a"},
+        {"kind": "defense", "count": 2, "target": 4, "faces": [3, 6], "owner": "b"}])
+    assert gn.stats_row(rec, acts, lists)["charges_reached_contact"] == 1
+    rec, acts, lists = _charge_act(terrain_test + [
+        {"kind": "attack", "count": 3, "target": 4, "faces": [4, 4, 4], "owner": "a"}],
+        target_alive=0)
+    assert gn.stats_row(rec, acts, lists)["charges_reached_contact"] == 1
+
+
+def test_unsaved_honours_blast_and_never_drops_below_casualties():
+    # BRIEF_NARRFIX I-2: `hits(attack) - hits(defense)` ignores Blast(X)/Deadly(X)
+    # — one hit expands into a whole save batch, so the line printed "2 unsaved"
+    # while the resolve applied 14 (s306052 R4 A27: "6 hits, 4 blocks, 2
+    # unsaved" over defense 15d6>=7, Novice Sisters 20->6). The report carries
+    # no per-weapon unsaved, so the line states what the state delta applied
+    # and says "n/a (Blast/Deadly)" where the arithmetic cannot be trusted.
+    import game_narrator as gn
+    bu = {"a": {"alive": 3}, "b": {"alive": 20}}
+    blast = [{"kind": "attack", "count": 1, "target": 4, "faces": [4], "owner": "a"},
+             {"kind": "defense", "count": 15, "target": 7,
+              "faces": [6, 6, 6, 6] + [1] * 11, "owner": "b"}]
+    line = gn.dice_line(blast, bu, {"a": {"alive": 3}, "b": {"alive": 6}})
+    m = re.search(r"blocks, (.+?) unsaved", line)
+    assert m, line
+    assert m.group(1) == "n/a (Blast/Deadly)" or int(m.group(1)) >= 14, line
+    expanded = [{"kind": "attack", "count": 2, "target": 4, "faces": [4, 5], "owner": "a"},
+                {"kind": "defense", "count": 2, "target": 4, "faces": [1, 2], "owner": "b"}]
+    assert "n/a (Blast/Deadly)" in gn.dice_line(expanded, {"a": {"alive": 3},
+                                                           "b": {"alive": 3}},
+                                                {"a": {"alive": 3}, "b": {"alive": 2}})
+
+
 def run_tool(game: Path, out: Path):
     return subprocess.run([sys.executable, str(TOOLS / "game_narrator.py"), str(game),
                            "--out", str(out)], capture_output=True, text=True)
