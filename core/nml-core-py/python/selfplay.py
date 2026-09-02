@@ -835,6 +835,10 @@ TRAINER_STATICS = {
 # stay visually distinct in this file even though each seeds an independent
 # `GodotRng` object and none can observe another's draws.
 EXPLORE_SEED_STRIDE = 700001
+# Expert-iteration step 2 — the playout-cap coin's own per-activation stream,
+# `game_seed * CAP_SEED_STRIDE + seq`: a stride of its own, disjoint from every
+# other derived-seed family here, so no stream can observe another's draws.
+CAP_SEED_STRIDE = 700003
 
 
 # ------------------------------------------------------------------- game ----
@@ -1007,6 +1011,22 @@ def _round_start(
     return granted
 
 
+def _aux_alive_wounds(state, profiles: dict[str, dict]) -> dict[str, Any]:
+    """The KataGo-style AUX targets (expert-iteration step 2) at ONE point in
+    the game: models alive per side (`State.alive_models`) and wounds taken
+    per side — the profile's per-model `wounds_max` total minus what the plain
+    state still carries, a dead (or routed, wounds-cleared) unit therefore
+    counting its full health. Monotone as the game grinds on, which is what
+    the value head's aux loss wants."""
+    alive = state.alive_models()
+    wounds = {"p1": 0, "p2": 0}
+    for key, u in state.plain()["units"].items():
+        wounds["p%d" % int(u["player"])] += (
+            sum(profiles[key]["wounds_max"]) - sum(u["wounds"])
+        )
+    return {"alive": {"p1": int(alive[0]), "p2": int(alive[1])}, "wounds": wounds}
+
+
 # ---------------------------------------------------------------- sidecars ---
 
 # `tools/core_selfplay.gd:262-268` and `:309-318` — the three log-local dice
@@ -1134,6 +1154,8 @@ def _play_round(
     net_player: int = 0,
     eps: float = 0.0,
     act_cores: dict[int, Any] | None = None,
+    cap_core=None,
+    cap_share: float = 0.0,
     record_cands: bool = False,
 ) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
@@ -1187,12 +1209,22 @@ def _play_round(
         # pair/fork formulas above already read it after the fact.
         seq = len(log)
         explore_seed = seed * EXPLORE_SEED_STRIDE + seq
-        pick = _pick_for(cores[turn], state, turn, net_player, eps, explore_seed,
+        # PLAYOUT-CAP (expert-iteration step 2): the per-activation coin off
+        # its own generator — `rng` and the sidecars never see a draw, and off
+        # it takes zero draws, exactly like `eps=0.0`. The fallback pick below
+        # is the SAME activation, so it rides the same coin.
+        use_cap = False
+        if cap_core is not None:
+            use_cap = nml_core.Rng(seed * CAP_SEED_STRIDE + seq).randf() < cap_share
+        planning = cap_core if use_cap else cores[turn]
+        pick = _pick_for(planning, state, turn, net_player, eps, explore_seed,
                          cands=record_cands)
         if not pick:
             other = 2 if turn == 1 else 1
-            pick = _pick_for(cores[other], state, other, net_player, eps, explore_seed,
-                             cands=record_cands)
+            pick = _pick_for(
+                cap_core if use_cap else cores[other], state, other, net_player, eps, explore_seed,
+                cands=record_cands,
+            )
             if not pick:
                 break
             turn = other
@@ -1215,6 +1247,9 @@ def _play_round(
             # against the Godot oracle stays untouched, exactly like
             # `knobs["deployment"]` only riding the arena branch.
             row["explored"] = bool(pick.get("explored", False))
+        if cap_share > 0.0:
+            # True = the cap core planned this act (value-only row).
+            row["cap"] = use_cap
         if record_cands:
             # Expert-iteration step 1: the planner's own menu — `trace.cands`
             # in build index order, `trace.scored[i].idx` joining into it —
@@ -1417,6 +1452,10 @@ def play_game(
     record_cands: bool = False,
     eval_variant_player: int = 0,
     eval_variant: int = 0,
+    record_aux: bool = False,
+    cap_share: float = 0.0,
+    cap_top_k: int = 6,
+    cap_horizon: int = 2,
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
 
@@ -1560,7 +1599,22 @@ def play_game(
     caller that passes nothing plays the identical game the pre-knob code
     did; this is the seam a future generation registers a real variant into,
     not a new eval. Shares the deep-player core when both target the same
-    seat. Stamped into `knobs_by_seat` the same way, only when it moved."""
+    seat. Stamped into `knobs_by_seat` the same way, only when it moved.
+
+    `record_aux` (expert-iteration step 2) hangs the KataGo-style AUX targets —
+    models alive per side, wounds taken per side (`_aux_alive_wounds`) — on
+    every `rounds_log` entry and on the result beside `objectives`. Opt-in
+    because `result_digest` hashes `rounds_log`: a default game must stay
+    byte-identical to every corpus written before the flag existed.
+
+    `cap_share` (playout-cap randomization, same step) generalises the
+    per-SEAT second core to per-ACTIVATION: when > 0, one extra core built
+    with `cap_top_k`/`cap_horizon` off the same header joins the seats' cores,
+    and each activation's coin — a stream of its own, seeded
+    `seed * CAP_SEED_STRIDE + seq` — hands it the pick with probability
+    `cap_share`, stamping `row["cap"]` (True = cap core planned the act, a
+    value-only row; False = the seat's full-search core, the policy target).
+    0.0, the default, builds no core, draws no coin, stamps no key."""
     units1 = load_army(list_p1, 1)
     units2 = load_army(list_p2, 2)
     if not units1 or not units2:
@@ -1712,6 +1766,22 @@ def play_game(
             seat_knobs = seat_knobs or {"p1": {}, "p2": {}}
             seat_knobs[seat_key] = dict(seat_knobs.get(seat_key, {}), eval_variant=eval_variant)
             seat_knobs.setdefault(other_key, {})
+    # PLAYOUT-CAP (expert-iteration step 2): the per-ACTIVATION second core,
+    # same header payload with `cap_top_k`/`cap_horizon` in place of the base
+    # pair; per-core state mirrored exactly like the deep core above.
+    cap_core = None
+    if cap_share > 0.0:
+        cap_core = nml_core.load(str(repo_root))
+        if net is not None:
+            cap_core.load_net(str(net), blend=fit_blend, mode=fit_mode)
+        cap_core.set_header(
+            {"profiles": profiles, "terrain": terrain,
+             "knobs": dict(knobs, top_k=cap_top_k, horizon=cap_horizon)}
+        )
+        if legacy_source_qd:
+            cap_core.set_encoder_source_qd(SOURCE_DATA_QUALITY, SOURCE_DATA_DEFENSE)
+        else:
+            cap_core.clear_encoder_source_qd()
     reads = core.capture_reads()
     # `SpellsRegistry.spells_for_unit(gu)` per unit — the book `_magic_init` asks
     # whether it resolved, and whose LONGEST range gates the eligibility tally.
@@ -1888,12 +1958,16 @@ def play_game(
             fork_salt=fork_salt, sidecar_skip=sidecar_skip,
             magic=magic, spell_reach=spell_reach, tray=tray, dice_tally=dice_tally,
             net_player=net_player, eps=explore, act_cores=act_cores,
+            cap_core=cap_core, cap_share=cap_share,
             record_cands=record_cands,
         )
         state, owners = core.playout_seize(state, owners)
         vp = core.vp_round_add(owners, vp)
         rounds_played = round_no
-        rounds_log.append({"round": round_no, "owners": list(owners), "vp": list(vp)})
+        entry = {"round": round_no, "owners": list(owners), "vp": list(vp)}
+        if record_aux:
+            entry.update(_aux_alive_wounds(state, profiles))
+        rounds_log.append(entry)
     vp = core.vp_end_bonus(owners, vp)
 
     p1 = sum(1 for o in owners if o == 1)
@@ -1946,6 +2020,9 @@ def play_game(
             # default — every corpus written before this knob existed played
             # the pure argmax and would stamp the identical value here.
             "explore": explore,
+            # NML-1147a pattern: absent at the default 0.0, so every earlier
+            # corpus and every default game digests unchanged.
+            **({"cap_share": cap_share} if cap_share > 0.0 else {}),
             # NML-1158a: HOW the armed net joined the hand eval — "blend" (the
             # E4.2 mix) or "residual" (hand + delta, the NML-1158a seam). The
             # default is ABSENT, the deployment knob's pattern: every game
@@ -1981,6 +2058,9 @@ def play_game(
         "armies": {"p1": str(list_p1), "p2": str(list_p2)},
         "opener": 0,
         "objectives": {"p1": p1, "p2": p2, "neutral": len(owners) - p1 - p2},
+        # Expert-iteration step 2: the AUX targets at game end, `record_aux`
+        # only (rounds_log, and so the digest, must not move by default).
+        **(_aux_alive_wounds(state, profiles) if record_aux else {}),
         "vp": {"p1": int(vp[0]), "p2": int(vp[1])},
         "scoring": "end",
         "winner": winner,
