@@ -191,6 +191,44 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v304 — trip attrition: v0 `presence` discounts for activation tempo but not
+/// for surviving the trip, so a unit that dies en route still counts in full.
+/// Multiplies v0's answer by `((strength - threat) / strength)` per fractional
+/// travel round — the loss rate is the threat term itself (1.0 when unopposed).
+fn presence_v304(state: &State, i: usize, obj_pos: [f64; 3], threat: f64) -> f64 {
+    let base = presence(state, i, obj_pos, threat);
+    if base <= 0.0 || threat <= 0.0 { return base; }
+    let strength: f64 = state.wounds[i].iter().map(|w| *w as f64).sum();
+    let d = control_gap_in(state, i, obj_pos);
+    if !d.is_finite() || d <= OBJECTIVE_CONTROL_IN + CONTROL_EPS { return base; }
+    let rounds = (d - OBJECTIVE_CONTROL_IN) / state.bands[i].rush.max(1.0);
+    let keep = ((strength - threat) / strength).clamp(0.0, 1.0);
+    base * keep.powf(rounds)
+}
+
+/// v304 `score_hand`: v0's aggregation with `presence_v304` in place of
+/// `presence`; destroy missions delegate to the frozen `score_hand` unchanged.
+fn score_hand_v304(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() { return 0.5; }
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) {
+        return score_hand(state, player, incoming);
+    }
+    let mut total = 0.0f64;
+    for obj in &state.objectives {
+        let (mut mine, mut theirs) = (0.0f64, 0.0f64);
+        for u in 0..state.units() {
+            let p = presence_v304(state, u, obj.pos, threat_of(incoming, u));
+            if state.player[u] == player { mine += p; } else { theirs += p; }
+        }
+        total += if mine + theirs <= 0.0 {
+            if obj.owner == 0 { 0.5 } else if obj.owner == player { 1.0 } else { 0.0 }
+        } else {
+            mine / (mine + theirs)
+        };
+    }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +239,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        304 => score_hand_v304(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
