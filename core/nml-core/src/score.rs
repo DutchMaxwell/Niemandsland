@@ -191,6 +191,55 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// Variant 102 proximity scale: 12 in is one standard rush band (the same
+/// default the frozen presence path reads through `State.bands`), so a unit
+/// one activation away from a marker counts half of one standing on it.
+const PROX_SCALE_IN_V102: f64 = 12.0;
+
+/// Variant 102 - v0's presence ratio, but when NO unit projects hold strength
+/// the seize-rule fallback is graded: the referee's ownership is blended with
+/// a nearest-eligible-unit proximity ratio (`can_hold_marker` set, so dead,
+/// aircraft and shaken-this-round units carry no weight), and the blend fades
+/// back to pure ownership on the final round, where the seize rule really is
+/// final. Symmetric: p(A) + p(B) == 1 for every marker.
+fn objective_p_v102(state: &State, obj_index: usize, player: i64, incoming: Incoming) -> f64 {
+    let obj = state.objectives[obj_index];
+    let mut held = [0.0f64; 2];
+    let mut prox = [0.0f64; 2];
+    for i in 0..state.units() {
+        let s = usize::from(state.player[i] != player);
+        held[s] += presence(state, i, obj.pos, threat_of(incoming, i));
+        if can_hold_marker(state, i, state.round) {
+            prox[s] += 1.0 / (1.0 + control_gap_in(state, i, obj.pos).max(0.0) / PROX_SCALE_IN_V102);
+        }
+    }
+    if held[0] + held[1] > 0.0 {
+        return held[0] / (held[0] + held[1]);
+    }
+    let owner = if obj.owner == player { 1.0 } else if obj.owner == 0 { 0.5 } else { 0.0 };
+    // Rounds still to be played over rounds total: ownership only hardens as
+    // the future rounds that could still contest the marker run out.
+    let w_time = (state.rounds_total - state.round).clamp(0, state.rounds_total) as f64
+        / state.rounds_total.max(1) as f64;
+    if w_time <= 0.0 || prox[0] + prox[1] <= 0.0 {
+        return owner;
+    }
+    (1.0 - w_time) * owner + w_time * (prox[0] / (prox[0] + prox[1]))
+}
+
+/// Variant 102 - `score_hand` with `objective_p_v102` at each marker; destroy
+/// missions and the empty roster keep the frozen lane untouched.
+fn score_hand_v102(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() || (!state.markers_meta.is_empty() && is_destroy_mission(state)) {
+        return score_hand(state, player, incoming);
+    }
+    let mut total = 0.0f64;
+    for i in 0..state.objectives.len() {
+        total += objective_p_v102(state, i, player, incoming);
+    }
+    total / state.objectives.len() as f64
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +250,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        102 => score_hand_v102(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
