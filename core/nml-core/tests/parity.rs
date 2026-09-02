@@ -235,8 +235,8 @@ fn gate_b_spacing_corpus_resolves_every_kind() {
 fn spacing_clamp_is_load_bearing() {
     let corpus = load_nodes(SPACING).expect("fixture loads");
     let statics = build_statics(&corpus, REPO);
-    let off = Seams { spacing: false, cast: false, path: false, hero_attach: false, charge_landing: false, sighting: false,
-        movement: false, move_rigid: false, no_dangerous: false, no_engage_fold: false, los_model: false };
+    let off = Seams {
+        los_model: false, ..Seams::default() };
     let mut broken = 0usize;
     for node in &corpus.nodes {
         let got = resolve(&statics, &node.state_before, &node.action, node.cover_dest, off, node.cast_los())
@@ -447,8 +447,8 @@ fn gate_b_cast_subphase_reproduces_every_recorded_cast() {
 fn the_cast_subphase_is_load_bearing() {
     let corpus = load_nodes(CAST).expect("fixture loads");
     let statics = build_statics(&corpus, REPO);
-    let legacy = Seams { spacing: true, cast: false, path: false, hero_attach: false, charge_landing: false, sighting: false,
-        movement: false, move_rigid: false, no_dangerous: false, no_engage_fold: false, los_model: false };
+    let legacy = Seams { spacing: true,
+        los_model: false, ..Seams::default() };
     let mut broken = 0usize;
     for node in &corpus.nodes {
         let got = resolve(

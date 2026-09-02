@@ -140,6 +140,9 @@ impl NmlCore {
             no_dangerous: false,
             // D5-4: inert — this seat never turns `hero_attach` on.
             no_engage_fold: false,
+            // NML-1157: a HEADER knob, not an env one — inert for this seat,
+            // which never turns `hero_attach` on either.
+            hero_last: false,
             // NML-1160: the sight seams ride the HEADER knobs, not this one —
             // the in-game state carries the arena's own per-unit `los` already.
             los_model: false,
@@ -765,6 +768,9 @@ impl NmlCore {
                 hero_attach: false,
                 // NML-1073 M5 D5-1 — same reasoning: a header knob, not an env one.
                 charge_landing: false,
+                // NML-1157 — likewise a header knob: `plan_inner` takes it off
+                // the header the way it takes `hero_attach`.
+                hero_last: false,
                 // NML-1073 M5 D6a-B4, same reasoning: `sighting` rides the
                 // HEADER knobs into the tray resolver and is inert here.
                 sighting: false,

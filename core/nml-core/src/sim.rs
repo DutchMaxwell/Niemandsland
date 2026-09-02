@@ -1891,6 +1891,43 @@ fn tray_charge(
     Some(if a > b { ti } else { si })
 }
 
+/// NML-1157 — `main._solo_combat_unit` main.gd:8452-8458, the table's own line:
+/// "combat intents from an attached hero resolve to its HOST — the joined unit
+/// fights as ONE (GF v3.5.1 'Hero')". `main._solo_pick_unit_at` (:9166) does the
+/// same for a click, and `solo_controller.gd:1197` keeps attached heroes out of
+/// the AI's target list entirely — "a joined hero is PART of its host unit — you
+/// target the unit, never the hero alone".
+///
+/// GF Advanced Rules v3.5.1 p.14 (Hero): a Hero that joins a unit counts as part
+/// of that unit; Tough(X): heroes are assigned wounds LAST. This port had
+/// neither — `strike_phase` and the volley apply to the NAMED index alone, so a
+/// 1-model Tough(3) hero can be killed inside a living 20-model host.
+///
+/// MEASURED. `~/selfplay_out/gen0_teacher`, 796 replayed activations: 42 of 63
+/// chosen charges name a joined hero (25 of 36 in games 11-20), and 544 of 787
+/// menu offers do. On the recorded reference bundles `qbg_ref` + `qag_ref` (336
+/// games, 16 043 acts) the TABLE ITSELF did it **352 times** — 221 volleys and
+/// 131 charges — which is why this is seam-gated OFF: those recordings are the
+/// dice oracle, and an oracle that plays an illegal target still has to replay.
+///
+/// WHAT THIS DOES NOT DO, stated so the seam is not read as more than it is:
+/// there is no per-model SPILL. Wounds fill the host and stop there; the hero
+/// starts taking them only once its host has no living models, which is p.14's
+/// "fights on alone" reached an activation later than the table's own
+/// allocation (`main.gd:10823` -> `_solo_wound_models`) reaches it.
+///
+/// Seam-gated on `hero_last` AND `hero_attach`, like every other chain read in
+/// this file: without the fold the resolver does not believe in the chain at all.
+fn combat_unit(state: &State, ti: usize, seams: Seams) -> usize {
+    if !(seams.hero_last && seams.hero_attach) {
+        return ti;
+    }
+    match state.attached_to[ti] {
+        Some(h) if state.alive[h] > 0 => h,
+        _ => ti,
+    }
+}
+
 /// `BattleSim._unit_group` battle_sim.gd:528-547 as a membership test — is unit
 /// `oi` part of the group `key_i` moves and ends as? That is `key_i` itself plus
 /// its attached heroes, plus (only when `include_host`) its host. Only the
@@ -2754,10 +2791,20 @@ fn resolve_with(
     // reused by the melee branch below. A key the roster does not carry maps to
     // None: the GDScript's key set then holds a name no obstacle can match.
     let charge_key = action.charge.clone().unwrap_or_default();
+    // NML-1157: a charge NAMED at a joined hero fights its HOST — see
+    // `combat_unit`. Off by default, so a recorded act resolves where it always
+    // resolved. It rides here rather than at the melee branch because `ci` is
+    // also the spacing clamp's body-only group (`spacing_fraction`), and GF
+    // v3.5.1 p.7 exempts the enemy UNIT, which p.14 says includes its hero.
     let ci = if charge_key.is_empty() {
         None
     } else {
-        state.roster.index.get(charge_key.as_str()).copied()
+        state
+            .roster
+            .index
+            .get(charge_key.as_str())
+            .copied()
+            .map(|c| combat_unit(state, c, seams))
     };
     let pi_s = state.roster.profile[si];
     let mut next = state.clone();
@@ -3056,7 +3103,12 @@ fn resolve_with(
         if moved {
             return Err(Unsupported::MovedShootLos);
         }
-        if let Some(&ti) = next.roster.index.get(shoot_key.as_str()) {
+        // NML-1157: a volley NAMED at a joined hero hits its HOST — the same
+        // `combat_unit` redirect the charge takes above. `shoot_key` itself is
+        // left alone: it is the recorded act's own field and `sees`/`los_clear`
+        // are the table's per-KEY reads.
+        let named = next.roster.index.get(shoot_key.as_str()).copied();
+        if let Some(ti) = named.map(|t| combat_unit(&next, t, seams)) {
             // NML-1150: the split plan is decided BEFORE the recorded target's
             // gate — a split act may aim at units the recorded key does not
             // name, and then validity is gated PER GROUP below (main.gd
@@ -3506,7 +3558,7 @@ mod tests {
     /// four base-edge gaps the engage test can pick from are therefore
     /// 10" (host to host), 8" and 7" (one hero folded) and 5" (both) — one
     /// number per fold, so a single assertion says which lists were measured.
-    fn four_unit_line() -> State {
+    pub(super) fn four_unit_line() -> State {
         let profile = Profile {
             unit_id: "u".into(),
             name: "u".into(),
@@ -6482,5 +6534,66 @@ mod tests {
             assert!(!coarse.los_pairs.as_ref().unwrap()[2], "RED: without the seam it goes coarse");
             assert!(!coarse.los_pairs.as_ref().unwrap()[2 * n]);
         }
+    }
+}
+
+/// NML-1157 — HERO-LAST: a combat intent aimed at a JOINED HERO resolves to its
+/// HOST (`main._solo_combat_unit` :8452, GF v3.5.1 p.14). The port aimed at the
+/// named index alone, so a 1-model Tough(3) hero could be killed inside a living
+/// 20-model host — 42 of 63 chosen charges over 20 replayed teacher games, and
+/// 352 of `qbg_ref`+`qag_ref`'s 16 043 recorded acts on the TABLE itself.
+#[cfg(test)]
+mod hero_last_tests {
+    use super::*;
+
+    /// `..Seams::default()` rather than an exhaustive literal on purpose: the
+    /// next seam added to `io::Seams` must not redden a test that never
+    /// mentions it.
+    fn hero_only() -> Seams {
+        Seams { hero_attach: true, ..Seams::default() }
+    }
+
+    fn hero_last() -> Seams {
+        Seams { hero_attach: true, hero_last: true, ..Seams::default() }
+    }
+
+    /// `four_unit_line`: unit 0 hosts hero 1, unit 2 hosts hero 3.
+    fn line() -> State {
+        super::tests::four_unit_line()
+    }
+
+    #[test]
+    fn red_a_named_hero_is_its_own_target_today() {
+        let st = line();
+        assert_eq!(combat_unit(&st, 3, Seams::default()), 3, "the port aims at the hero itself");
+        assert_eq!(combat_unit(&st, 3, hero_only()), 3, "hero_attach alone does not redirect");
+    }
+
+    #[test]
+    fn green_hero_last_resolves_the_intent_to_the_host() {
+        let st = line();
+        assert_eq!(combat_unit(&st, 3, hero_last()), 2, "p.14: you fight the unit, not the hero");
+        assert_eq!(combat_unit(&st, 2, hero_last()), 2, "a host is already the unit");
+        assert_eq!(combat_unit(&st, 0, hero_last()), 0);
+    }
+
+    #[test]
+    fn a_hero_whose_host_is_dead_fights_on_alone() {
+        // GF v3.5.1 p.14 — the host wiped, the hero IS the unit now and becomes
+        // a target in its own right again. Same reading `menu::enemy_keys_tuned`
+        // and `State::can_activate` take.
+        let mut st = line();
+        st.alive[2] = 0;
+        assert_eq!(combat_unit(&st, 3, hero_last()), 3);
+    }
+
+    #[test]
+    fn the_redirect_is_idempotent_and_never_loops() {
+        // A hero attached to a hero is not a shape the capture builds, but the
+        // helper must terminate on any input: one hop, never a walk.
+        let mut st = line();
+        st.attached_to = Rc::new(vec![Some(1), Some(0), None, Some(2)]);
+        assert_eq!(combat_unit(&st, 0, hero_last()), 1);
+        assert_eq!(combat_unit(&st, 1, hero_last()), 0);
     }
 }
