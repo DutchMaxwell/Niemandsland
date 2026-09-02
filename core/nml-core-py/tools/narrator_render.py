@@ -119,10 +119,11 @@ def dice_md(rec, acts, nm):
                           KIND[int(row["kind"])], nm.get(c.get("shoot") or c.get("charge") or "", "-"),
                           r["kind"], r["count"], r["target"], r["faces"], hits([r], r["kind"])))
     return out + ["", "%d rolls over %d activations; an activation that drew none is absent."
-                  " Under `dice=table` the tray serves shooting, melee AND the end-of-move"
-                  " dangerous-terrain test. MORALE is the class that never reaches it (selfplay.py"
-                  ":1182-1183), so no Fearless or No-Retreat re-roll appears anywhere below."
-                  % (j, len(acts))]
+                  " Under `dice=table` the tray serves shooting, melee, MORALE (D1-B5b: the"
+                  " test, its Fearless recovery and No Retreat's self-wounds) AND the"
+                  " end-of-move dangerous-terrain test — verified by replay. The morale die"
+                  " is stamped `kind: \"attack\"` (dice.rs:1108); the narration labels it"
+                  " where the state delta can." % (j, len(acts))]
 
 
 def _xy(x_in, z_in):

@@ -222,6 +222,66 @@ def test_terrain_test_is_never_printed_as_attack_dice():
     assert "attack 3d6>=4 [4, 4, 1] (a)" in got, got
 
 
+def _morale_act(rolls, tgt=False, flip=False, up=0):
+    # One synthetic HOLD/SHOOT activation whose delta carries a casualty: the
+    # trailing count-1 "attack" die is the morale test (dice.rs:1108 stamps it
+    # `kind: "attack"`), the only variables are the named target, the shaken
+    # flip and the runner-up index. Needs neither the corpus nor a replay.
+    pos = lambda *xs: [[x * 0.0254, 0.0, 0.0] for x in xs]  # noqa: E731
+    unit = lambda p, alive, sh=False: {"positions": pos(*p), "radii": [], "alive": alive,
+                                       "wounds": [0] * alive, "shaken": sh,
+                                       "bands": {"advance": 6.0, "rush": 12.0}}  # noqa: E731
+    rec = {"stem": "fixture", "seed": 1, "dice_seed": 1, "scoring": "?", "terrain": [],
+           "winner": 1, "vp": [0, 0], "knobs": {"top_k": 1, "horizon": 1, "movement": "free"},
+           "mission": {"family": "f", "name": "n", "rounds": 1, "deployment": "d",
+                       "objectives_layout": {"positions": [], "placed_by": []}},
+           "rounds_log": [{"owners": [], "vp": [0, 0]}]}
+    act = {"row": {"unit": "a", "kind": 0, "round": 1, "side": 1, "seq": 1,
+                   "cands": {"best": 0}, "intent": None},
+           "menu": [{"unit": "a", "kind": 0, "shoot": "b"}] if tgt else [{"unit": "a", "kind": 0}],
+           "hand": [(0, 0.5)], "rs": {0: 0.25}, "exp": {"before": 0.0, "after": 0.0},
+           "waits": 0, "own": 0, "up": up,
+           "before": {"units": {"a": unit((0.0, 1.0), 3), "b": unit((3.0, 4.0), 4)}},
+           "after": {"units": {"a": unit((0.0, 1.0), 3), "b": unit((3.0, 4.0), 2, flip)}},
+           "rep": {"rolls": rolls, "log": [], "unported": []}}
+    return rec, [act], {"p1": {"units": []}, "p2": {"units": []}}
+
+
+def test_count_one_morale_die_is_narrated_as_a_morale_test():
+    # Verified by replay tonight: morale tests ARE rolled in self-play, but the
+    # die is stamped `kind: "attack", count: 1` (dice.rs:1108), so the narrator
+    # printed every test as a phantom attack and reviewers concluded morale
+    # never happens. The state delta names the site — the owner's shaken flag
+    # flipping False->True, or a count-1 attack die after casualties when no
+    # attack target is named — and it must read as a morale test in the line
+    # and in --stats. `runner_idx == -1` means NO runner-up: `scored[-1]` was
+    # the LAST candidate, printed twice.
+    import game_narrator as gn
+
+    def dice(rolls, **kw):
+        rec, acts, lists = _morale_act(rolls, **kw)
+        return [x for x in gn.narrate(rec, acts, {"a": "Guards", "b": "Foes"}, lists)
+                if x.startswith("- dice:")][0]
+
+    volley = [{"kind": "attack", "count": 2, "target": 4, "faces": [4, 3], "owner": "a"},
+              {"kind": "defense", "count": 2, "target": 4, "faces": [1, 6], "owner": "b"}]
+    got = dice(volley + [{"kind": "attack", "count": 1, "target": 4, "faces": [5],
+                          "owner": "b"}])
+    assert "morale test 1d6>=4 [5] -> holds" in got, got
+    assert "attack 1d6>=4 [5]" not in got, got
+    assert "dice: 1 hits," in got, got  # the passing test die was a phantom hit
+    got = dice(volley + [{"kind": "attack", "count": 1, "target": 4, "faces": [1],
+                          "owner": "b"}], tgt=True, flip=True)
+    assert "morale test 1d6>=4 [1] -> Shaken" in got, got
+    assert "attack 1d6>=4 [1]" not in got, got
+    rec, acts, lists = _morale_act(volley + [{"kind": "attack", "count": 1, "target": 4,
+                                              "faces": [5], "owner": "b"}])
+    assert gn.stats_row(rec, acts, lists)["morale_tests_rolled"] == 1
+    rec, acts, lists = _morale_act(volley, up=None)
+    text = "\n".join(gn.narrate(rec, acts, {"a": "Guards", "b": "Foes"}, lists))
+    assert "runner-up" not in text, text
+
+
 def run_tool(game: Path, out: Path):
     return subprocess.run([sys.executable, str(TOOLS / "game_narrator.py"), str(game),
                            "--out", str(out)], capture_output=True, text=True)

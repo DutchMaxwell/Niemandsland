@@ -3334,9 +3334,10 @@ fn resolve_with(
                 let su_before = wounds_left(&next, si);
                 // D1-B5a: with `dice="table"` the whole melee is resolved on the
                 // tray instead, phase by phase in the table's own order. The
-                // loser then takes the SAME expected-value morale outcome the EV
-                // path gives it — the morale DIE is D1-B5b's, deliberately left
-                // undrawn so this PR changes the melee and nothing else.
+                // loser's morale test began as the expected-value outcome the EV
+                // path gives; D1-B5b now draws it as a REAL die right below
+                // (`tray_morale`) — no morale draw is left standing, verified by
+                // replay.
                 if let Some((tray, shot)) = dice.as_mut() {
                     if let Some(li) = tray_charge(statics, &mut next, si, ti, seams, tray, shot) {
                         // D1-B5b: the melee loser's test is a REAL die now
