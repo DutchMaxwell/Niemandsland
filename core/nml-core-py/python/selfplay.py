@@ -78,6 +78,7 @@ import json
 import os
 import re
 import struct
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -89,6 +90,28 @@ from list_to_profile import (
     profiles_from_army_forge_json,
     selections_from_army_forge_json,
 )
+
+
+def _git_short_sha() -> str:
+    """The short sha of the checkout this module runs from — the core build
+    identity a corpus stamps as `core_commit` (Gen-1 recorder fix: Gen-0's
+    rows could not say WHICH build had scored them). "unknown" when the tree
+    is not a checkout (a wheel install) or git is unavailable — the stamp
+    must never block a game."""
+    try:
+        return subprocess.run(
+            ["git", "-C", str(Path(__file__).resolve().parent),
+             "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, check=True, timeout=10,
+        ).stdout.strip()
+    except Exception:
+        return "unknown"
+
+
+#: Computed ONCE at import — every game this process writes stamps the same
+#: sha, whatever the tree does afterwards.
+_core_commit = _git_short_sha()
+
 
 # core_selfplay.gd:20-23
 IN2M = 0.0254
@@ -1256,10 +1279,20 @@ def _play_round(
             # plus the argmax's build index (`trace.scored[best_idx].idx`,
             # which at eps=0 is the played candidate). Absent by default, so
             # every vintage row stays byte-identical.
+            # Gen-1 recorder fix: the per-candidate scores the trace already
+            # computed are KEPT, as arrays parallel to `list` — `scored[i]`
+            # is candidate i's hand prior score, `rs[i]` its rollout/search
+            # value, None where the pool never rolled it. Parallel arrays
+            # rather than inline keys: fewer lines, and `list` stays the
+            # exact cand_plain shape `row["action"]` compares against.
             trace = pick["trace"]
+            score_of = {e["idx"]: e["score"] for e in trace["scored"]}
+            rs_of = {e["idx"]: e["rs"] for e in trace["rs"]}
             row["cands"] = {
                 "list": trace["cands"],
                 "best": trace["scored"][trace["best_idx"]]["idx"],
+                "scored": [score_of[i] for i in range(len(trace["cands"]))],
+                "rs": [rs_of.get(i) for i in range(len(trace["cands"]))],
             }
         if sidecars:
             # `AiMissionEval.features(state, player, BattleSim.reply_threat(
@@ -1573,9 +1606,14 @@ def play_game(
     `_pick_for` for the binding's `cands=True` and stamps each played row
     with `row["cands"] = {"list": [...], "best": idx}` — the planner's built
     candidates' full content in build index order (`trace.scored[i].idx`
-    joins into the list) plus the argmax's build index. False (the default)
-    writes the rows byte for byte as every corpus before this flag did, and
-    nothing is stamped into `knobs` — the key rides the rows alone.
+    joins into the list) plus the argmax's build index. Gen-1 recorder fix:
+    the scores the trace already computed ride along as arrays PARALLEL to
+    `list` — `cands["scored"][i]` is candidate i's hand prior score,
+    `cands["rs"][i]` its rollout/search value, None where the pool never
+    rolled it — and the header stamps `core_commit`, the short sha of the
+    checkout the core was built from. False (the default) writes the rows
+    byte for byte as every corpus before this flag did, stamps neither, and
+    nothing joins `knobs` — the keys ride the rows and the header alone.
 
     `deep_player` (the SEARCH A/B seam) is the per-seat counterpart of
     `top_k`/`horizon`: seat 1 or 2 plays ITS activations with a SECOND core
@@ -1983,6 +2021,11 @@ def play_game(
         # judge bench's drawing list, straight out of the bank.
         "terrain": _shift_pieces(pieces, terrain_shift_cells),
         "tool": "core_selfplay_py",
+        # Gen-1 recorder fix: WHICH core build recorded the game — the short
+        # sha of the checkout at import. Rides the expert-iteration corpus
+        # path only (NML-1147a pattern): a default game stays the exact
+        # object it always was, digest included.
+        **({"core_commit": _core_commit} if record_cands else {}),
         # `tools/core_selfplay.gd` stamps no such field (it always runs the
         # planner's own defaults) — this documents the fast trainer's MODE,
         # e.g. the old training corpus's `NML_TOP_K=2 NML_HORIZON=1`. Excluded
