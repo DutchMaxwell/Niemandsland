@@ -2880,8 +2880,13 @@ fn resolve_with(
         growth_round_start(statics, &mut next, si, was_shaken);
     }
 
-    // --- shoot (battle_sim.gd:608-630); HOLD and ADVANCE only ---
-    if !shoot_key.is_empty() && (kind == HOLD || kind == ADVANCE) {
+    // --- shoot (battle_sim.gd:608-630); HOLD and ADVANCE only, plus RUSH for
+    // a Quick Shot carrier (block B11, solo_controller.gd:1846/:2257/:4033 —
+    // "may shoot after using Rush actions": its move-and-shoot band becomes
+    // its RUSH distance). The `moved` decline right below still applies to a
+    // Quick Shot RUSH exactly as it already does to a moved ADVANCE.
+    let quick_shot_active = statics[pi_s].quick_shot_active;
+    if !shoot_key.is_empty() && (kind == HOLD || kind == ADVANCE || (kind == RUSH && quick_shot_active)) {
         if moved {
             return Err(Unsupported::MovedShootLos);
         }
@@ -2937,6 +2942,15 @@ fn resolve_with(
                 next.casts[si] -= sp_cost; // 0 unless the spell rider fired
                 match dice.as_mut() {
                     Some((tray, shot)) => {
+                        // Block B11, rules-must-log: names the otherwise-
+                        // impossible shot (solo_controller.gd:2260-2261's own
+                        // "shoots after its Rush action" note).
+                        if kind == RUSH && quick_shot_active {
+                            shot.log.push(format!(
+                                "Quick Shot: {} shoots after its Rush action",
+                                statics[pi_s].name
+                            ));
+                        }
                         for m in split_marks {
                             shot.mark(m);
                         }
@@ -3158,8 +3172,9 @@ fn resolve_with(
     // port fires on `kind == CHARGE` alone, not on a landed fight. See
     // `tray_hit_and_run`.
     if dice.is_some() {
-        let hnr_attacked =
-            (!shoot_key.is_empty() && (kind == HOLD || kind == ADVANCE)) || kind == CHARGE;
+        let hnr_attacked = (!shoot_key.is_empty()
+            && (kind == HOLD || kind == ADVANCE || (kind == RUSH && quick_shot_active)))
+            || kind == CHARGE;
         if hnr_attacked && tray_hit_and_run(statics, &mut next, si, seams, cover) {
             // The table's own battle-log line, main.gd:1089 — the rules-must-
             // log twin of `record_decision`'s "hit-and-run" entry.
@@ -4121,6 +4136,62 @@ mod tests {
         statics[0].utility_buffs = vec![];
         let (next, _) = run_buff(&st, &statics, &buff_action(None), 11);
         assert!(next.buffs.iter().all(|v| v.is_empty()));
+    }
+
+    // ------------------------------------------------- BLOCK B11: Quick Shot ---
+
+    /// A RUSH action with a shoot target. `dest: None` keeps the activation
+    /// stationary — the same way every OTHER shoot fixture in this file
+    /// sidesteps `Unsupported::MovedShootLos` (the port declines a MOVED
+    /// unit's shot rather than re-probe LOS off a stale pre-move matrix; that
+    /// decline is pre-existing and shared with ADVANCE, untouched by B11).
+    fn rush_shoot(target: &str) -> Action {
+        Action {
+            kind: RUSH,
+            unit: "a".into(),
+            dest: None,
+            shoot: Some(target.to_string()),
+            charge: None,
+            patient: false,
+            split: None,
+        }
+    }
+
+    fn advance_shoot(target: &str) -> Action {
+        Action { kind: ADVANCE, ..rush_shoot(target) }
+    }
+
+    /// A Quick Shot carrier's RUSH still rolls its volley, and the activation
+    /// names the rule (rules-must-log).
+    #[test]
+    fn quick_shot_lets_a_rush_action_fire_its_volley() {
+        let (st, mut statics) = buff_line();
+        statics[0].quick_shot_active = true;
+        let (_, shot) = run_buff(&st, &statics, &rush_shoot("b"), 11);
+        assert!(!shot.rolls.is_empty());
+        assert!(shot.log.iter().any(|l| l.starts_with("Quick Shot:")));
+    }
+
+    /// The same RUSH, no rule: no volley, no log line — RUSH stays a move-only
+    /// action for every carrier that does not have Quick Shot.
+    #[test]
+    fn without_quick_shot_a_rush_action_never_shoots() {
+        let (st, statics) = buff_line();
+        let (_, shot) = run_buff(&st, &statics, &rush_shoot("b"), 11);
+        assert!(shot.rolls.is_empty());
+        assert!(shot.log.is_empty());
+    }
+
+    /// ADVANCE already shoots regardless of Quick Shot — B11 only widens the
+    /// predicate to include RUSH, it must not touch ADVANCE's own gate.
+    #[test]
+    fn advance_shoots_with_or_without_quick_shot() {
+        let (st, mut statics) = buff_line();
+        let (_, without) = run_buff(&st, &statics, &advance_shoot("b"), 11);
+        assert!(!without.rolls.is_empty());
+        statics[0].quick_shot_active = true;
+        let (_, with_rule) = run_buff(&st, &statics, &advance_shoot("b"), 11);
+        assert!(!with_rule.rolls.is_empty());
     }
 
     // ------------------------------ BLOCK B2: RE-POSITION ARTILLERY ---
