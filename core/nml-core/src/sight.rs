@@ -514,6 +514,42 @@ pub fn sighted_count(
     })
 }
 
+/// `main.SOLO_LOS_UNBOUNDED_RANGE_IN` main.gd:9174 — the "range never gates"
+/// sentinel the unit-level query passes so `sighted_count` is a pure sight test.
+pub const UNBOUNDED_RANGE_IN: f64 = 9999.0;
+
+/// `SoloController._has_los` (:6121-6128) as main.gd:2338 wires it:
+/// `_solo_sighted_count(shooter, target, SOLO_LOS_UNBOUNDED_RANGE_IN) > 0` —
+/// ANY alive model of `i` with a sight line to ANY alive model of `j`, terrain
+/// volumes and every other unit's bases included, the range half switched off.
+pub fn unit_sees(state: &State, zones: &[Zone], i: usize, j: usize) -> bool {
+    let blockers = blockers_of(state, i, j);
+    sighted_count(state, zones, &blockers, i, j, UNBOUNDED_RANGE_IN, false) > 0
+}
+
+/// `BattleSim.capture`'s sight sweep (battle_sim.gd:1563-1576) as one row-major
+/// n x n matrix in ROSTER order: `m[i * n + j]` is `unit_sees(i, j)`.
+///
+/// Only CROSS-PLAYER pairs are asked, which is the sweep's own shape — the
+/// GDScript writes `matrix[ok]` only where `other["player"] != su["player"]`,
+/// and `BattleSim.sees` reads an unlisted key as `true`. A dormant unit
+/// neither sees nor is seen there either (its whole row is `{}`), and `true`
+/// is what both readers already answer for one.
+pub fn sight_matrix(state: &State, terrain: &Terrain) -> Vec<bool> {
+    let n = state.units();
+    let zones = zones_of(terrain);
+    let mut m = vec![true; n * n];
+    for i in 0..n {
+        for j in 0..n {
+            if state.player[i] == state.player[j] || state.dormant[i] || state.dormant[j] {
+                continue;
+            }
+            m[i * n + j] = unit_sees(state, &zones, i, j);
+        }
+    }
+    m
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

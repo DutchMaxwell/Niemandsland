@@ -85,6 +85,19 @@ pub struct Knobs {
     /// default is OFF and nothing replays differently.
     #[serde(default)]
     pub movement: bool,
+    /// NML-1160 — WHICH SIGHT the menu and the resolve read. `false` is every
+    /// corpus recorded before it: a self-play state carries `los_pairs` from
+    /// `SchoolTerrain.los_blocked` (a unit-CENTRE to unit-CENTRE probe,
+    /// `tools/core_selfplay.gd:675`) and NO per-unit `los`, so
+    /// `AiPlanner._best_shoot`'s only sight test (`BattleSim.sees`) never
+    /// refuses a target and the resolve silently drops the volley instead. An
+    /// ARENA recording is the other way round: `BattleSim.capture` fills `los`
+    /// from `SoloController._has_los` and stamps no matrix at all. `true` gives
+    /// the trainer the arena's own answer — `sight::sight_matrix` on both seams
+    /// — and `Seams::los_model` then keeps a clone from rewriting it with the
+    /// centre probe, exactly as `clone_state` inherits `los` untouched.
+    #[serde(default)]
+    pub los_model: bool,
     /// NML-1152 S3 — `Seams::move_rigid`, the RED switch that keeps ADVANCE and
     /// RUSH on the rigid translation while `movement` still routes CHARGE.
     /// Absent from every corpus, so the default is OFF.
@@ -189,6 +202,7 @@ impl Default for Knobs {
             charge_landing: false,
             sighting: Sighting::Unit,
             movement: false,
+            los_model: false,
             move_rigid: false,
             dangerous: true,
             engage_fold: false,

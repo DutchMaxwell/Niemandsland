@@ -29,7 +29,7 @@ const CHARGE_IDX: i64 = 5;
 fn seams_of(c: &ActCorpus, no_engage_fold: bool) -> Seams {
     Seams { spacing: c.knobs.seam_spacing, cast: c.knobs.seam_cast, path: c.knobs.seam_path,
         hero_attach: c.knobs.hero_attach, charge_landing: c.knobs.charge_landing, sighting: false,
-        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold }
+        movement: c.knobs.movement, move_rigid: c.knobs.move_rigid, no_dangerous: false, no_engage_fold, los_model: c.knobs.los_model }
 }
 
 /// Every prefilter row's 1-ply score under `seams`, keyed by build idx.

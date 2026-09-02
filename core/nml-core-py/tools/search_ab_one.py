@@ -58,6 +58,12 @@ def main() -> int:
     ap.add_argument("--base-horizon", type=int, default=2)
     ap.add_argument("--repo", default=REPO)
     ap.add_argument("--bank", default=BANK)
+    # NML-1160 — WHICH sight both seats read. "unit" is the default and every
+    # A/B run before this knob existed; "model" is the arena's own per-model
+    # answer. It is NOT a per-seat knob: `los`/`los_pairs` live on the state the
+    # two seats share, so a knob A/B here is a PAIRED whole-game one — the same
+    # rows played twice, deep pair == base pair, this flag the only difference.
+    ap.add_argument("--los", choices=selfplay.LOS_MODES, default="unit")
     a = ap.parse_args()
 
     _DICE["v"] = a.dice_seed
@@ -81,6 +87,7 @@ def main() -> int:
         charge_landing="table",
         movement="rigid",
         sighting="model",
+        los=a.los,
         cond_ap=True,
         objectives="rulebook",
         deployment="arena",
@@ -111,6 +118,7 @@ def main() -> int:
         "knobs": {"charge_gate": "off", "hero_attach": "table",
                   "dice": "table", "charge_landing": "table", "movement": "rigid",
                   "sighting": "model", "cond_ap": True, "objectives": "rulebook",
+                  **({"los": a.los} if a.los != "unit" else {}),
                   "engage_fold": True, "sidecars": False},
     }
     os.makedirs(a.out_dir, exist_ok=True)

@@ -707,6 +707,31 @@ def resolve_sighting(sighting: str) -> str:
     return sighting
 
 
+#: `los` modes (NML-1160). "unit" is the default and every corpus written
+#: before this knob: `capture` stamps `los_pairs` from `SchoolTerrain.
+#: los_blocked` (`tools/core_selfplay.gd:675`), a unit-CENTRE to unit-CENTRE
+#: probe, and fills NO per-unit `los` — so `AiPlanner._best_shoot`'s only sight
+#: test (`BattleSim.sees`, which reads an absent row as "sees everything")
+#: never refuses a target and `BattleSim.resolve` drops the volley one layer
+#: later on the coarse matrix instead. An ARENA recording is the other way
+#: round: `BattleSim.capture` fills `los` per unit from `SoloController.
+#: _has_los` (`_solo_sighted_count(s, t, 9999) > 0`, main.gd:2338 — ANY model
+#: of the shooter with a sight line to ANY model of the target) and stamps no
+#: matrix at all. "model" gives the trainer the arena's answer on BOTH seams,
+#: re-stamped once per played activation exactly as `capture` re-runs the
+#: sweep, and the search underneath inherits it the way `clone_state` does.
+LOS_MODES = ("unit", "model")
+
+
+def resolve_los(los: str) -> bool:
+    """`los` as the crate's `Knobs.los_model` bit. An unknown mode RAISES for
+    the same reason `resolve_sighting` does: a corpus whose header claims a
+    sight fidelity it did not play is worse than no corpus."""
+    if los not in LOS_MODES:
+        raise ValueError("los must be one of %s, not %r" % (list(LOS_MODES), los))
+    return los == "model"
+
+
 #: `deployment` modes (NML-1152 step 8). "zone" is the default and is every
 #: corpus written before this knob: the twin's own 12"-zone even spread
 #: (`deploy_zone`, core_selfplay.gd:593-606), roll-off AFTER deployment, P1
@@ -1180,6 +1205,7 @@ def _play_round(
     cap_core=None,
     cap_share: float = 0.0,
     record_cands: bool = False,
+    los_model: bool = False,
 ) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
     dry side hands the tail to the other, and the NEXT round opens with whoever
@@ -1339,6 +1365,13 @@ def _play_round(
                     dice_tally["unported_acts"] = dice_tally.get("unported_acts", 0) + 1
                 for name in report["unported"]:
                     dice_tally[name] = dice_tally.get(name, 0) + 1
+        if los_model:
+            # NML-1160: `BattleSim.capture` re-runs the whole `_has_los` sweep
+            # before EVERY activation (battle_sim.gd:1563-1576) — the models
+            # have moved, so the sight rows have. This is that cadence: once
+            # per PLAYED activation, never inside the search, where a clone
+            # inherits the answer exactly as `clone_state` does.
+            state = core.restamp_los(state)
         if magic is not None:
             _magic_tally(magic, side_key, casts_before, state.casts()[actor])
             _spells_by_kind_tally(magic, side_key, state.cast_event_kinds(), events_before)
@@ -1467,6 +1500,7 @@ def play_game(
     charge_landing: str = "off",
     movement: str = "rigid",
     sighting: str = "unit",
+    los: str = "unit",
     engage_fold: bool = True,
     cond_ap: bool | None = None,
     vocab_version: int | None = None,
@@ -1690,6 +1724,7 @@ def play_game(
     eff_charge_landing = resolve_charge_landing(charge_landing)
     eff_movement = resolve_movement(movement)
     eff_sighting = resolve_sighting(sighting)
+    eff_los = resolve_los(los)
     eff_deployment = resolve_deployment(deployment)
     knobs = dict(
         TRAINER_KNOBS,
@@ -1712,6 +1747,9 @@ def play_game(
         # crate's own default and what every earlier corpus carries, so a caller
         # that passes nothing writes the identical header.
         sighting=eff_sighting,
+        # NML-1160: WHICH sight the menu and the resolve read. "unit" leaves it
+        # False, which is the default and what every earlier corpus carries.
+        los_model=eff_los,
         # NML-1130: the header knob PR #446 defaults ON in the twin. True here
         # matches that default, so a caller that passes nothing sees no change.
         engage_fold=engage_fold,
@@ -1975,6 +2013,10 @@ def play_game(
         deploy_zone(units2, TABLE_D_IN / 2.0 - 12.0, 12.0, rng)
     plain = capture(units, pos1 + pos2, reads, board, objectives, attached, attached_to)
     state = core.state_of(plain)
+    if eff_los:
+        # NML-1160: the deployment sweep. `BattleSim.capture` fills `los` on the
+        # state it hands the planner, and this is the same state.
+        state = core.restamp_los(state)
 
     owners = [0] * len(objectives)
     vp = [0, 0]
@@ -1997,7 +2039,7 @@ def play_game(
             magic=magic, spell_reach=spell_reach, tray=tray, dice_tally=dice_tally,
             net_player=net_player, eps=explore, act_cores=act_cores,
             cap_core=cap_core, cap_share=cap_share,
-            record_cands=record_cands,
+            record_cands=record_cands, los_model=eff_los,
         )
         state, owners = core.playout_seize(state, owners)
         vp = core.vp_round_add(owners, vp)
@@ -2040,6 +2082,10 @@ def play_game(
             "charge_landing": charge_landing,
             "movement": movement,
             "sighting": eff_sighting,
+            # NML-1160: WHICH sight the game played. Stamped only under
+            # "model", for the same reason `deployment` is only stamped under
+            # "arena": a default game is the object it was before the knob.
+            **({"los": los} if los != "unit" else {}),
             # NML-1147a: WHICH marker layout the game played (D8a). Gen-0's
             # rulebook corpus recorded exactly what a constants corpus records
             # until this key existed — the mode was honoured but never said.

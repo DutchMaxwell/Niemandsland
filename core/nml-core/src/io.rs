@@ -406,6 +406,14 @@ pub struct Seams {
     /// every corpus's) FOLDS. It can only ever matter where `hero_attach` is on.
     #[serde(default)]
     pub no_engage_fold: bool,
+    /// NML-1160 — `Knobs::los_model`: the state's sight seams carry the table's
+    /// per-MODEL answer (`sight::sight_matrix`), re-stamped between activations
+    /// by the caller the way `BattleSim.capture` re-runs `_has_los` every time.
+    /// `sim::refresh_los_pairs` then leaves the matrix alone, because a clone
+    /// inherits `los` untouched on the table too (battle_sim.gd:1644-1651) and
+    /// rewriting a moved row with the CENTRE probe would swap the answer back.
+    #[serde(default)]
+    pub los_model: bool,
 }
 
 impl Node {
