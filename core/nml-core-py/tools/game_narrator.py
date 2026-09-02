@@ -37,7 +37,7 @@ def _pick(core, state, player, net_player=0, eps=0.0, explore_seed=0, cands=Fals
     A["acts"].append({"row": row, "menu": tr["cands"], "keys": state.keys(), "exp": pick["expectation"],
                       "hand": [(s["idx"], s["score"]) for s in tr["scored"]], "waits": pick["waits"],
                       "rs": {r["idx"]: r["rs"] for r in tr["rs"]}, "own": tr["scored"][tr["best_idx"]]["idx"],
-                      "up": tr["scored"][tr["runner_idx"]]["idx"]})
+                      "up": tr["scored"][tr["runner_idx"]]["idx"] if tr["runner_idx"] >= 0 else None})
     A["i"], act = A["i"] + 1, row["cands"]["list"][row["cands"]["best"]]
     pick["action"], pick["unit_key"] = act, act["unit"]
     return pick
@@ -100,7 +100,30 @@ def moved(act, key):
     return [leg(p, q) for p, q in zip(a, b)] if len(a) == len(b) else [leg(mid(a), mid(b))]
 
 
-def dice_line(rl, bu, au, key=None, nm=None, crossed=False, inferred=False):
+def morale_rolls(rl, bu, au, tgt=None, nm=None):
+    # D1-B5b, verified on the corpus by replay: morale tests ARE rolled, but the
+    # die is STAMPED `kind: "attack", count: 1` like every tray roll (dice.rs
+    # :1108), so it prints as a phantom attack. The state delta names the site:
+    # the owner's `shaken` flag flipping False->True is a failed test (sim.rs
+    # :1826), and with no attack target named a count-1 attack die AFTER
+    # casualties is the loser's/target's test — a real attack always names one.
+    # Returns {index: "Shaken"/"holds"}; the die leaves the hits arithmetic.
+    names = {v: k for k, v in (nm or {}).items()}
+    dead = any(k in au and au[k]["alive"] < bu[k]["alive"] for k in bu)
+    out = {}
+    for i, x in enumerate(rl):
+        if x.get("kind") != "attack" or x.get("count") != 1:
+            continue
+        k = x.get("owner")
+        k = k if k in au else names.get(k)
+        flip = k is not None and k in bu and au[k].get("shaken") and not bu[k].get("shaken")
+        if not flip and not (tgt is None and dead and i):
+            continue
+        out[i] = "Shaken" if flip or nr.hits([x], "attack") == 0 else "holds"
+    return out
+
+
+def dice_line(rl, bu, au, key=None, nm=None, crossed=False, inferred=False, tgt=None):
     # BRIEF_NARRFIX I-2: `hits(attack) - hits(defense)` ignores Blast(X)/Deadly(X)
     # — one hit expands into a whole save batch, so the subtraction printed FEWER
     # unsaved than the resolve actually applied (53 activations in 18 of the 20
@@ -113,6 +136,7 @@ def dice_line(rl, bu, au, key=None, nm=None, crossed=False, inferred=False):
     # test, attack-kind leftovers in a no-target activation over a dangerous
     # crossing are inferred, K is the 1s (`dangerous_wounds`, sim.rs:214).
     terr = set()
+    morale = morale_rolls(rl, bu, au, tgt, nm)
 
     def label(i, x):
         own = key is not None and x["owner"] in (key, (nm or {}).get(key, key))
@@ -120,6 +144,10 @@ def dice_line(rl, bu, au, key=None, nm=None, crossed=False, inferred=False):
             terr.add(i)
             return "dangerous terrain test %dd6: %s -> %d models lost" % (
                 x["count"], x["faces"], sum(f == 1 for f in x["faces"]))
+        if i in morale:
+            terr.add(i)
+            return "morale test %dd6>=%d %s -> %s" % (x["count"], x["target"], x["faces"],
+                                                      morale[i])
         if x["kind"] == "attack" and inferred:
             terr.add(i)
             return "terrain test (inferred) %dd6: %s -> %d models lost" % (
@@ -161,16 +189,18 @@ def narrate(rec, acts, nm, lists):
         u, best, mv = bu[key], r["cands"]["best"], moved(a, key)
         lost = len(mv) != len(u["positions"])
         band = u["bands"]["rush" if int(r["kind"]) > 1 else "advance"] * min(1, int(r["kind"]))
+        up = "" if a["up"] is None else "; runner-up #%d %s" % (
+            a["up"], nr.cand_text(a["menu"][a["up"]], nm))
         out += ["", "### R%d A%d (seq %d) — p%d activates **%s** (Q%s+ D%s+, %d models; %s)"
                 % (rnd, n, r["seq"], r["side"], nm.get(key, key), inf.get(key, "?" * 3)[0],
                    inf.get(key, "?" * 3)[1], u["alive"], inf.get(key, ("", "", "-"))[2]),
                 "- menu %d candidates; top-3 by hand prior: %s" % (len(a["menu"]), ", ".join(
                     "%s %.4f" % (nr.cand_text(a["menu"][i], nm), s) for i, s in a["hand"][:3])),
-                "- chose #%d **%s**%s — hand %.4f, rs %s; runner-up #%d %s; value %.4f -> %.4f, %d unit(s)"
+                "- chose #%d **%s**%s — hand %.4f, rs %s%s; value %.4f -> %.4f, %d unit(s)"
                 " still to act%s" % (best, nr.cand_text(a["menu"][best], nm),
                     " [intent %s]" % r["intent"] if r["intent"] else "", dict(a["hand"])[best],
-                    "%.4f" % a["rs"][best] if best in a["rs"] else "NOT expanded", a["up"],
-                    nr.cand_text(a["menu"][a["up"]], nm), a["exp"]["before"], a["exp"]["after"], a["waits"],
+                    "%.4f" % a["rs"][best] if best in a["rs"] else "NOT expanded", up,
+                    a["exp"]["before"], a["exp"]["after"], a["waits"],
                     "" if a["own"] == best else " — **replay argmax #%d != recorded pick**" % a["own"]),
                 '- move (%s, band %.1f", farthest model %.2f"): %s' % (nr.KIND[int(r["kind"])], band,
                     max([x[2] for x in mv] or [0.0]), "; ".join('m%d (%.1f,%.1f)->(%.1f,%.1f) %.2f"'
@@ -184,7 +214,8 @@ def narrate(rec, acts, nm, lists):
             crossed = any(nr.crosses_forest(p, q, rec["terrain"], ttype=4) for p, q, d in mv if d > 0.01)
             chosen = a["menu"][best]
             out.append(dice_line(rl, bu, a["after"]["units"], key, nm, crossed,
-                                 crossed and not (chosen.get("shoot") or chosen.get("charge"))))
+                                 crossed and not (chosen.get("shoot") or chosen.get("charge")),
+                                 chosen.get("shoot") or chosen.get("charge")))
         for tag, ex in (("casualties", ["%s %d->%d models, wounds %d->%d" % (nm.get(k, k), bu[k]["alive"],
                         v["alive"], sum(bu[k]["wounds"]), sum(v["wounds"])) for k, v in
                         a["after"]["units"].items() if (v["alive"], sum(v["wounds"]))
@@ -217,8 +248,9 @@ def stats_row(rec, acts, lists):
                charges_declared=0, charges_beyond_band=0, charges_reached_contact=0, hold_nothing=0,
                acts_with_dice=0, shoot_offers_total=0, shoot_offers_unexecutable=0, shots_executed=0,
                hero_snipes=0, offboard_destinations=0, full_band_forest=0, dangerous_plain=0,
-               objective_gifts=0, reserve_absent={"p1": 0, "p2": 0},
+               objective_gifts=0, morale_tests_rolled=0, reserve_absent={"p1": 0, "p2": 0},
                owners_by_round=[g["owners"] for g in rec["rounds_log"]])
+    nm = dict(zip(acts[0].get("keys", []), rec.get("roster", []))) if acts else {}
     acted = {a["row"]["unit"] for a in acts}
     for a in acts:
         r, key, bu, au = a["row"], a["row"]["unit"], a["before"]["units"], a["after"]["units"]
@@ -226,6 +258,8 @@ def stats_row(rec, acts, lists):
         mv = moved(a, key); far = max([x[2] for x in mv] + [0.0])
         row["hold_nothing"] += kind == 0 and not rolls
         row["acts_with_dice"] += bool(rolls)
+        row["morale_tests_rolled"] += len(morale_rolls(
+            rolls, bu, au, chosen.get("shoot") or chosen.get("charge"), nm))
         skeys, los, seen = sorted(bu), a["before"].get("los_pairs"), set()
         for c in a["menu"]:
             if c["unit"] == key and c.get("shoot") and c["shoot"] not in seen:

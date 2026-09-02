@@ -1451,9 +1451,10 @@ def _play_round(
     (see `DICE_MODES`). It is `None` under `dice="expected"`; under
     `dice="table"` (D1-B4) the played resolve draws its SHOOTING dice from it
     in the table's own order, and `dice_tally` collects the unported branches
-    those activations hit (see `Core.resolve_with_tray`). Nothing else draws
-    from the tray in B4 — melee, impact and morale are B5's, which is why the
-    stream is left standing exactly before the morale roll.
+    those activations hit (see `Core.resolve_with_tray`). Since D1-B5a/B5b
+    nothing is left for a later block: melee, impact AND morale (the test, its
+    Fearless recovery and No Retreat's self-wounds) draw from the tray in the
+    table's own order — verified by replay, every tray face matches.
 
     `roll_log` is the OUTCOME GATE's seam (NML-1073 M5 D0) and nothing else:
     when a list is passed, this round appends ONE entry per played activation —
