@@ -122,6 +122,15 @@ pub struct Knobs {
     /// replays with the GDScript's own menu.
     #[serde(default)]
     pub menu_los: bool,
+    /// W1 (AUDIT_rulebook_flanks_2026-09-02, top-1) — `Tuning::wide_shoot`: the
+    /// menu offers ADVANCE+shoot, the leg `AiPlanner.candidates_wide` has
+    /// carried since 16.08. and `menu::candidates` never had. A MENU knob, not
+    /// a seam: it changes what the search may choose, never how a chosen act
+    /// resolves, so a recorded act replays byte-identical either way. Absent
+    /// from every corpus recorded before it, so the default is OFF and no menu
+    /// moves.
+    #[serde(default)]
+    pub menu_wide: bool,
     /// NML-1152 S3 — `Seams::move_rigid`, the RED switch that keeps ADVANCE and
     /// RUSH on the rigid translation while `movement` still routes CHARGE.
     /// Absent from every corpus, so the default is OFF.
@@ -248,6 +257,7 @@ impl Default for Knobs {
             movement: false,
             los_model: false,
             menu_los: false,
+            menu_wide: false,
             move_rigid: false,
             dangerous: true,
             engage_fold: false,

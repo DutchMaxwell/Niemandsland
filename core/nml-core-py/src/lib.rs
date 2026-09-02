@@ -615,6 +615,9 @@ impl Core {
             // W2 S0 — `melee_reach="table"` in the header scales a strike
             // phase's attacks by the models within 2" of an enemy model.
             melee_reach: self.knobs.melee_reach == MeleeReach::Table,
+            // W1 — `menu_wide` owns both halves: the menu offers ADVANCE+shoot
+            // and the resolve stops declining it. See `Seams::moved_shoot`.
+            moved_shoot: self.knobs.menu_wide,
         }
     }
 

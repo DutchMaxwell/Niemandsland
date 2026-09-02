@@ -126,6 +126,17 @@ pub struct Tuning {
     /// Default OFF: every recorded corpus replays with the identical menu, so
     /// GATE G2 (`tests/menu.rs`) and the act corpora do not move.
     pub target_units: bool,
+    /// W1 (AUDIT_rulebook_flanks_2026-09-02, top-1) — the ADVANCE+shoot leg of
+    /// `AiPlanner.candidates_wide` (ai_planner.gd:1145-1157). Every shoot
+    /// target in this menu hangs on HOLD, so the search can only fire by
+    /// STANDING STILL; the table added this leg on 16.08. for exactly that
+    /// reason ("the policy could fire only by standing still ... it moved and
+    /// stopped fighting"), and the engine has always resolved the pair
+    /// (`sim.rs:3102` fires a volley for HOLD **and** ADVANCE). `true` offers,
+    /// per enemy the unit could shoot AFTER its advance, one ADVANCE at that
+    /// enemy's centre carrying the shot. Default OFF, so every recorded corpus
+    /// replays with the identical menu.
+    pub wide_shoot: bool,
 }
 
 impl Default for Tuning {
@@ -136,6 +147,7 @@ impl Default for Tuning {
             charge_gate: true,
             shoot_los: false,
             target_units: false,
+            wide_shoot: false,
         }
     }
 }
@@ -246,6 +258,59 @@ pub fn best_shoot(
         }
     }
     best
+}
+
+/// W1 — `AiPlanner.candidates_wide`'s ADVANCE+shoot leg (ai_planner.gd:
+/// 1145-1157), the one action this menu has never been able to express: every
+/// shoot target hangs on HOLD, so a search that wants to fire has to stand
+/// still. The table added this leg on 16.08. after measuring the cost (the
+/// clone stood still in 3.5 % of activations, rushed in 85 %, and its
+/// clone-vs-clone games ended with a median 62 survivors against tree-vs-tree's
+/// 54 — "it moved and stopped fighting"), and `sim::resolve` has always fired
+/// the volley for ADVANCE as well as HOLD (`sim.rs:3102`).
+///
+/// Which enemies come back: those the HOLD-shoot leg's own two gates accept —
+/// `State::sees`, plus `State::los_clear` under `Tuning::shoot_los` — scored
+/// from the POST-ADVANCE distance instead of the standing one. The GDScript
+/// gate is `_can_shoot_at(su, tu, max(gap - advance_in, 0))` (ai_planner.gd:
+/// 1154-1155): the OPTIMISTIC gap, closing straight in at the full band, worst
+/// case on purpose so the menu never deletes a shot the move could have set up.
+/// `best_shoot`'s own bar (`shoot_ev > 0`, strict) is the bar here, so a target
+/// out of every barrel's reach after the move scores 0 and never enters.
+///
+/// Sight is NOT re-probed at the destination: `sees`/`los_pairs` are recorded
+/// per unit PAIR, not per point, so the post-advance answer does not exist in
+/// the state. The advance band is the state's own `bands[i].advance` — the
+/// GDScript adds `max_activation_advance_bonus_in` (Bounding/Quick/Teleport) on
+/// top, which this crate does not model at all; the effect is a slightly
+/// TIGHTER gate than the table's, i.e. this never offers a shot the GDScript
+/// would refuse.
+///
+/// Capture order, first-wins, one entry per enemy — the same iteration every
+/// other leg of this menu uses.
+pub fn advance_shoots(
+    state: &State,
+    statics: &[UnitStatic],
+    i: usize,
+    sc: &mut Scratch,
+    tuning: Tuning,
+) -> Vec<usize> {
+    let us = &statics[state.roster.profile[i]];
+    let advance_in = state.bands[i].advance;
+    let mut out = Vec::new();
+    for e in enemy_keys_tuned(state, i, tuning.target_units) {
+        if !state.sees(i, state.key(e)) || (tuning.shoot_los && !state.los_clear(i, e)) {
+            continue;
+        }
+        let d = (geom::dist_in(&state.positions[i], &state.positions[e]) - advance_in).max(0.0);
+        profiles_of(us, state.alive[i], d, sc);
+        let att = ctx_of(us, state, i);
+        let def = ctx_of(&statics[state.roster.profile[e]], state, e);
+        if shoot_ev(&us.shoot, &sc.keep, &sc.attacks, &att, &def, d) > 0.0 {
+            out.push(e);
+        }
+    }
+    out
 }
 
 /// `AiEv.charge_score` ai_ev.gd:537-553 — the charge matchup tie-break: wounds
@@ -710,6 +775,18 @@ pub fn candidates_tuned(
     }
     if let Some(c) = second_wave(state, unit) {
         out.push(c);
+    }
+    // W1: appended LAST, so an OFF menu is byte-identical and an ON menu only
+    // ever GROWS at the tail — every recorded candidate keeps its index, which
+    // is the imitation label the policy corpus trains on. The count is one per
+    // shootable enemy and the search's `top_k` bounds what any of them cost.
+    if tuning.wide_shoot {
+        for e in advance_shoots(state, statics, unit, sc, tuning) {
+            let mut c = Candidate::new(key, ADVANCE);
+            c.dest = Some(geom::to_f64(geom::centre(&state.positions[e])));
+            c.shoot = Some(state.key(e).to_string());
+            out.push(c);
+        }
     }
     out
 }

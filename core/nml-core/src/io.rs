@@ -441,6 +441,19 @@ pub struct Seams {
     /// Default OFF: every corpus recorded before this replays byte-identical.
     #[serde(default)]
     pub melee_reach: bool,
+    /// W1 — whether `resolve` will resolve a MOVED unit's volley at all.
+    /// `sim.rs` has always had the ADVANCE arm, and has always declined it two
+    /// lines later (`Unsupported::MovedShootLos`): `sees`/`_los_clear` are read
+    /// off rows recorded for the PRE-move centre, and no recorder ever wrote
+    /// the post-move answer, because `_policy_candidates` never paired a shoot
+    /// with a move. `menu_wide` puts that pairing in the menu, so the resolve
+    /// has to be able to answer — from the BOARD, `Terrain::los_blocked` on the
+    /// post-move centres, which is the same source `tools/core_selfplay.gd:675`
+    /// stamps `los_pairs` from and the same probe `menu::safe_advance` already
+    /// makes. Default OFF: the decline stands, so every recorded corpus is
+    /// byte-identical and nothing that replays today changes its answer.
+    #[serde(default)]
+    pub moved_shoot: bool,
 }
 
 impl Node {

@@ -808,6 +808,27 @@ def resolve_menu_los(menu_los: str) -> bool:
     return menu_los == "resolve"
 
 
+#: `menu_wide` modes (W1, AUDIT_rulebook_flanks_2026-09-02 top-1). "off" is the
+#: default and every corpus written before this knob: `menu::candidates` hangs
+#: every shoot target on HOLD, so the search can only fire by STANDING STILL,
+#: while `sim::resolve` has always fired a volley for ADVANCE too. "table" is
+#: the TABLE's own answer — `AiPlanner.candidates_wide` (ai_planner.gd:
+#: 1145-1157) has offered ADVANCE-then-shoot since 16.08., added because "the
+#: policy could fire only by standing still ... it moved and stopped fighting".
+MENU_WIDE_MODES = ("off", "table")
+
+
+def resolve_menu_wide(menu_wide: str) -> bool:
+    """`menu_wide` as the crate's `Knobs.menu_wide` bit, which `plan::tuning_of`
+    hands the menu as `Tuning::wide_shoot`. An unknown mode RAISES for the same
+    reason `resolve_menu_los` does."""
+    if menu_wide not in MENU_WIDE_MODES:
+        raise ValueError(
+            "menu_wide must be one of %s, not %r" % (list(MENU_WIDE_MODES), menu_wide)
+        )
+    return menu_wide == "table"
+
+
 #: `deployment` modes (NML-1152 step 8). "zone" is the default and is every
 #: corpus written before this knob: the twin's own 12"-zone even spread
 #: (`deploy_zone`, core_selfplay.gd:593-606), roll-off AFTER deployment, P1
@@ -1743,6 +1764,8 @@ def play_game(
     los: str = "unit",
     menu_los: str = "planner",
     deep_menu_los: str | None = None,
+    menu_wide: str = "off",
+    deep_menu_wide: str | None = None,
     engage_fold: bool = True,
     cond_ap: bool | None = None,
     vocab_version: int | None = None,
@@ -1989,6 +2012,7 @@ def play_game(
     eff_sighting = resolve_sighting(sighting)
     eff_los = resolve_los(los)
     eff_menu_los = resolve_menu_los(menu_los)
+    eff_menu_wide = resolve_menu_wide(menu_wide)
     eff_deployment = resolve_deployment(deployment)
     knobs = dict(
         TRAINER_KNOBS,
@@ -2030,6 +2054,9 @@ def play_game(
         # question. "planner" leaves it False, which is the GDScript's own menu
         # and what every earlier corpus carries.
         menu_los=eff_menu_los,
+        # W1: whether the MENU may offer ADVANCE+shoot at all. "off" leaves it
+        # False, which is the menu every earlier corpus carries.
+        menu_wide=eff_menu_wide,
         # NML-1130: the header knob PR #446 defaults ON in the twin. True here
         # matches that default, so a caller that passes nothing sees no change.
         engage_fold=engage_fold,
@@ -2089,9 +2116,16 @@ def play_game(
         # knob like `los` can give. `None` leaves the base value on both, which
         # is every caller written before this.
         d_menu_los = eff_menu_los if deep_menu_los is None else resolve_menu_los(deep_menu_los)
+        # W1 rides the identical seam: `menu_wide` is a MENU knob, so the deep
+        # seat may play the wide menu while the base seat plays today's, on one
+        # board and one dice stream — a STRENGTH A/B, the way `menu_los` is.
+        d_menu_wide = (
+            eff_menu_wide if deep_menu_wide is None else resolve_menu_wide(deep_menu_wide)
+        )
         deep_core.set_header(
             {"profiles": profiles, "terrain": terrain,
-             "knobs": dict(knobs, top_k=d_top_k, horizon=d_horizon, menu_los=d_menu_los)}
+             "knobs": dict(knobs, top_k=d_top_k, horizon=d_horizon, menu_los=d_menu_los,
+                           menu_wide=d_menu_wide)}
         )
         if legacy_source_qd:
             deep_core.set_encoder_source_qd(SOURCE_DATA_QUALITY, SOURCE_DATA_DEFENSE)
@@ -2101,7 +2135,9 @@ def play_game(
         # NML-1147a pattern: the stamp rides ONLY a game whose deep pair parted
         # from the base pair — an equal-knobs deep game digests byte-identically
         # to a plain game, stamp included.
-        if (d_top_k, d_horizon, d_menu_los) != (eff_top_k, eff_horizon, eff_menu_los):
+        if (d_top_k, d_horizon, d_menu_los, d_menu_wide) != (
+            eff_top_k, eff_horizon, eff_menu_los, eff_menu_wide
+        ):
             deep_stamp: dict[str, Any] = {"top_k": d_top_k, "horizon": d_horizon}
             base_stamp: dict[str, Any] = {"top_k": eff_top_k, "horizon": eff_horizon}
             # NML-1161b, NML-1147a pattern: the MENU half of the stamp rides
@@ -2110,6 +2146,9 @@ def play_game(
             if d_menu_los != eff_menu_los:
                 deep_stamp["menu_los"] = "resolve" if d_menu_los else "planner"
                 base_stamp["menu_los"] = menu_los
+            if d_menu_wide != eff_menu_wide:
+                deep_stamp["menu_wide"] = "table" if d_menu_wide else "off"
+                base_stamp["menu_wide"] = menu_wide
             seat_knobs = {"p1": deep_stamp, "p2": base_stamp}
             if deep_player == 2:
                 seat_knobs["p1"], seat_knobs["p2"] = seat_knobs["p2"], seat_knobs["p1"]
@@ -2416,6 +2455,10 @@ def play_game(
             # "resolve", for the same reason `deployment` is only stamped under
             # "arena": a default game is the object it was before the knob.
             **({"menu_los": menu_los} if menu_los != "planner" else {}),
+            # W1: WHICH menu the game played. Stamped only under "table", the
+            # `menu_los` idiom above: a default game is the object it was
+            # before this knob existed, so no digest and no corpus moves.
+            **({"menu_wide": menu_wide} if menu_wide != "off" else {}),
             # NML-1147a: WHICH marker layout the game played (D8a). Gen-0's
             # rulebook corpus recorded exactly what a constants corpus records
             # until this key existed — the mode was honoured but never said.
@@ -2612,6 +2655,15 @@ def main(argv: list[str]) -> int:
         "scores best; default off, which is the menu every recorded corpus carries",
     )
     ap.add_argument(
+        "--menu-wide",
+        choices=list(MENU_WIDE_MODES),
+        default="off",
+        help="W1: 'table' offers the ADVANCE+shoot candidates AiPlanner."
+        "candidates_wide has carried since 16.08. (ai_planner.gd:1145-1157), so the "
+        "search can fire without standing still; 'off' (default) is the menu every "
+        "recorded corpus carries",
+    )
+    ap.add_argument(
         "--hero-last",
         action="store_true",
         help="NML-1157: a volley or charge aimed at a JOINED HERO resolves to its "
@@ -2740,6 +2792,7 @@ def main(argv: list[str]) -> int:
             horizon=a.horizon,
             charge_gate=a.charge_gate,
             menu_targets=a.menu_targets,
+            menu_wide=a.menu_wide,
             hero_last=a.hero_last,
             cast_fold=a.cast_fold,
             hero_attach=a.hero_attach,

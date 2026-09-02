@@ -148,6 +148,9 @@ impl NmlCore {
             // NML-1160: the sight seams ride the HEADER knobs, not this one —
             // the in-game state carries the arena's own per-unit `los` already.
             los_model: false,
+            // W1 and every seam added after it: this seat is the SHIPPED table,
+            // which plays the crate's defaults.
+            ..Seams::default()
         });
     }
 
@@ -790,6 +793,9 @@ impl NmlCore {
                 los_model: false,
                 // W2 S0 — a header-only knob for the trainer, inert in-game.
                 melee_reach: false,
+                // W1 and every seam added after it: the SHIPPED table plays the
+                // crate's defaults.
+                ..Seams::default()
             });
         }
         self.seams.unwrap()
