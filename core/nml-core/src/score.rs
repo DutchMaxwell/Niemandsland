@@ -191,6 +191,45 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
     score_hand(state, player, incoming)
 }
 
+/// v203 - a bare-owned marker leans to its owner under the seize rule but is
+/// not a fortress: 0.75 keeps the owner's edge, mirrors to 0.25, keeps 0.5 even.
+const UNGUARDED_HOLD_V203: f64 = 0.75;
+
+/// v203 - soften the seize rule: `objective_p` hands a marker with zero
+/// projected hold strength on BOTH sides to its owner at full 1.0/0.0, so a
+/// bare marker reads as garrisoned and the score saturates (measured draw
+/// rate 27.7-32.2 %). It is worth `UNGUARDED_HOLD_V203` to its owner and the
+/// mirror to the opponent; guarded/neutral markers and the destroy branch
+/// stay exactly v0.
+pub fn score_hand_v203(state: &State, player: i64, incoming: Incoming) -> f64 {
+    if state.objectives.is_empty() {
+        return 0.5;
+    }
+    let base = score_hand(state, player, incoming);
+    if !state.markers_meta.is_empty() && is_destroy_mission(state) {
+        return base;
+    }
+    let mut adj = 0.0f64;
+    for i in 0..state.objectives.len() {
+        let obj = &state.objectives[i];
+        if obj.owner == 0 {
+            continue;
+        }
+        let mut both = 0.0f64;
+        for u in 0..state.units() {
+            both += presence(state, u, obj.pos, threat_of(incoming, u));
+        }
+        if both <= 0.0 {
+            if obj.owner == player {
+                adj -= 1.0 - UNGUARDED_HOLD_V203;
+            } else {
+                adj += UNGUARDED_HOLD_V203;
+            }
+        }
+    }
+    (base + adj / state.objectives.len() as f64).clamp(0.0, 1.0)
+}
+
 /// The evolved-hand-eval registry (NML-1073 evolved-eval lane, step 2). Every
 /// call site keeps calling `score_hand`/`score_with` at variant 0 unchanged;
 /// only `Rollout::blend_score` reads `Knobs::eval_variant` and comes through
@@ -201,6 +240,7 @@ pub fn score(state: &State, player: i64, incoming: Incoming) -> f64 {
 pub fn score_hand_variant(state: &State, player: i64, incoming: Incoming, eval_variant: i64) -> f64 {
     match eval_variant {
         0 => score_hand(state, player, incoming),
+        203 => score_hand_v203(state, player, incoming),
         other => unreachable!("eval_variant {other}: read_act_header should have refused this"),
     }
 }
