@@ -282,6 +282,30 @@ def test_count_one_morale_die_is_narrated_as_a_morale_test():
     assert "runner-up" not in text, text
 
 
+def test_stats_row_gains_advance_shoot_morale_and_limited_counters():
+    # DEFECT_LEDGER verification counters, reusing _morale_act's fixture record
+    # (a named shoot target, a shaken-flip morale die) with the shooter renamed
+    # to a realistic "p<side>_<index>_<id>" key and given a Limited weapon: row
+    # 23 (PR #620 menu_wide, ADVANCE+shoot) and row 30 (PR #615, Limited) both
+    # need something real to count; morale_tests_rolled is PR #619's own field.
+    import game_narrator as gn
+    volley = [{"kind": "attack", "count": 2, "target": 4, "faces": [4, 3], "owner": "a"},
+              {"kind": "defense", "count": 2, "target": 4, "faces": [1, 6], "owner": "b"},
+              {"kind": "attack", "count": 1, "target": 4, "faces": [1], "owner": "b"}]
+    rec, acts, lists = _morale_act(volley, tgt=True, flip=True)
+    act = acts[0]
+    act["row"]["unit"] = act["menu"][0]["unit"] = "p1_0_x"
+    act["row"]["kind"] = 1  # ADVANCE, for ledger row 23
+    for side in ("before", "after"):
+        act[side]["units"]["p1_0_x"] = act[side]["units"].pop("a")
+    lists["p1"] = {"units": [{"weapons": [{"specialRules": [{"name": "Limited"}]}]}]}
+    row = gn.stats_row(rec, acts, lists)
+    assert {"advance_shoot_acts", "morale_tests_rolled", "limited_weapon_shots"} <= row.keys()
+    assert row["advance_shoot_acts"] == 1
+    assert row["morale_tests_rolled"] == 1
+    assert row["limited_weapon_shots"] == 1
+
+
 def run_tool(game: Path, out: Path):
     return subprocess.run([sys.executable, str(TOOLS / "game_narrator.py"), str(game),
                            "--out", str(out)], capture_output=True, text=True)

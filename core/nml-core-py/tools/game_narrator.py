@@ -230,6 +230,10 @@ def narrate(rec, acts, nm, lists):
             g = rec["rounds_log"][rnd - 1]
             out.append("- **round %d ends: objectives %s, VP p1 %d – p2 %d**"
                        % (rnd, g["owners"], g["vp"][0], g["vp"][1]))
+    st = stats_row(rec, acts, lists)
+    out += ["", "## Stats", "- advance_shoot_acts %d, morale_tests_rolled %d, "
+            "limited_weapon_shots %d" % (st["advance_shoot_acts"], st["morale_tests_rolled"],
+                                         st["limited_weapon_shots"])]
     return out
 
 
@@ -238,6 +242,21 @@ def is_reserve(u):
     ns = [r.get("name", "") for r in u.get("rules", [])]
     ns += [c.get("name", "") for it in u.get("items", []) for c in it.get("content", [])]
     return any(k in n.lower() for n in ns for k in ("ambush", "infiltrate"))
+
+
+def _has_limited(key, lists):
+    # Ledger row 30 (PR #615): "Limited" (usable once per game) lives only on
+    # the army list — the record's dice report and state.plain() (io.rs
+    # `plain_of`) never carry `limited_used`, so the acting unit's own sheet is
+    # the sole surviving trace. Key shape is `list_to_profile`'s own
+    # "p<side>_<index>_<id>" (unit_info's docstring).
+    side, _, rest = key.partition("_")
+    idx = rest.partition("_")[0]
+    us = lists.get(side, {}).get("units", [])
+    if not idx.isdigit() or int(idx) >= len(us):
+        return False
+    return any(x.get("name") == "Limited" for w in us[int(idx)].get("weapons", [])
+               for x in w.get("specialRules", []))
 
 
 def stats_row(rec, acts, lists):
@@ -251,7 +270,8 @@ def stats_row(rec, acts, lists):
                charges_declared=0, charges_beyond_band=0, charges_reached_contact=0, hold_nothing=0,
                acts_with_dice=0, shoot_offers_total=0, shoot_offers_unexecutable=0, shots_executed=0,
                hero_snipes=0, offboard_destinations=0, full_band_forest=0, dangerous_plain=0,
-               objective_gifts=0, morale_tests_rolled=0, reserve_absent={"p1": 0, "p2": 0},
+               objective_gifts=0, morale_tests_rolled=0, advance_shoot_acts=0,
+               limited_weapon_shots=0, reserve_absent={"p1": 0, "p2": 0},
                owners_by_round=[g["owners"] for g in rec["rounds_log"]])
     nm = dict(zip(acts[0].get("keys", []), rec.get("roster", []))) if acts else {}
     acted = {a["row"]["unit"] for a in acts}
@@ -272,6 +292,10 @@ def stats_row(rec, acts, lists):
                     los is not None and los[skeys.index(key)][skeys.index(c["shoot"])] == "0")
         if (tgt := chosen.get("shoot")) and rolls:
             row["shots_executed"] += 1
+            # Ledger row 23 (PR #620 menu_wide): the ADVANCE+shoot candidate the
+            # engine used to decline outright (sim.rs MovedShootLos) now fires.
+            row["advance_shoot_acts"] += kind == 1
+            row["limited_weapon_shots"] += _has_limited(key, lists)
             if bu.get(tgt, {}).get("alive", 0) > 0 and au.get(tgt, {}).get("alive", 0) == 0:
                 h = bu[tgt].get("attached_to")
                 row["hero_snipes"] += bool(h and bu[h]["alive"] == au[h]["alive"])
