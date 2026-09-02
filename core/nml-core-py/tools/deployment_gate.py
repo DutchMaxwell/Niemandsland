@@ -10,7 +10,16 @@ twin's own winner as first slot — and compares:
 - roll-off attempts + opener EXACT; deploy order (winner first) EXACT;
 - per unit: spot EXACT at the dump's 1e-4 snappedf quantum / within one
   0.025 m scan step / MISMATCH; settled models pairwise EXACT;
-- per side (hard fails): fills, reserved, seed_value, sections, placement order.
+- per side (hard fails): fills, reserved, seed_value, sections, placement order;
+- `interleave_order` (hard fail): the dump's CROSS-SIDE `placement_sequence`
+  against the rulebook's own order (GF v3.5.1 p.6) derived from the two sides'
+  placement orders — winner first, one unit each in turn, the Scout phase (B9)
+  after BOTH armies' normals. Whole-side deployment reads 1,1,1,2,2,2 and
+  fails. A dump WITHOUT the field is counted `pending`, never `OK`: every
+  committed dump predates tools/pregame_dump.gd's `placement_sequence` (#575)
+  and was recorded whole-side, so the class goes green only on a re-recorded
+  fixture. RED knob --red-whole-side synthesizes that whole-side order for
+  every dump and requires the class to reject all of them.
 
 Dumps are processed one by one and carry their own lists tag — position records
 are NEVER joined by seed alone: the fixture carries BOTH seat orders per seed
@@ -81,6 +90,34 @@ def roll_off(seed):
     return attempts, (1 if attempts[-1][0] > attempts[-1][1] else 2)
 
 
+def expected_interleave(orders, scouts, first):
+    """The rulebook's cross-side placement order (GF v3.5.1 p.6) DERIVED from
+    the two sides' own `placement_order`s — data the gate already proves the
+    twin reproduces exactly. The winner places one unit, the opponent places
+    one, alternating; a side whose queue has run dry is skipped, so the longer
+    roster finishes alone; the Scout phase (B9) runs after BOTH armies' normals.
+    `orders` maps slot -> placement order, `scouts` slot -> its scout keys."""
+    seq = []
+    lead = str(first)
+    other = "1" if lead == "2" else "2"
+    for scout_phase in (False, True):
+        q = {s: [k for k in orders[s] if (k in scouts[s]) == scout_phase] for s in ("1", "2")}
+        at = {"1": 0, "2": 0}
+        while any(at[s] < len(q[s]) for s in ("1", "2")):
+            for s in (lead, other):
+                if at[s] < len(q[s]):
+                    seq.append((int(s), q[s][at[s]]))
+                    at[s] += 1
+    return seq
+
+
+def whole_side_sequence(dump, first):
+    """What a PRE-#575 dump recorded, made explicit: the winner's whole army,
+    then the other's. The RED knob's input — the deviation the class rejects."""
+    return [(int(s), k) for s in (str(first), str(3 - first))
+            for k in dump["sides"][str(s)]["placement_order"]]
+
+
 def bank_props(bank_dir, board_key):
     b = json.load(open(os.path.join(bank_dir, "board_%s.json" % board_key)))
     return b["walls"], b["blockers"], b["blocker_boxes"]
@@ -122,11 +159,27 @@ def run_dump(dump, cells, cell_params, bank, red_shift):
     return attempts, opener, finished, sds
 
 
-def compare_dump(dump, roll, run):
+def compare_dump(dump, roll, run, red_whole_side=False):
     """One dump vs the twin: per-unit classes + hard structural fails."""
     attempts, opener, finished, sds = run
     c = dict(units=0, exact=0, within=0, mismatch=0, models=0, models_exact=0,
-             sides=0, sides_all=0, roll_ok=0, order_ok=0, struct_ok=0)
+             sides=0, sides_all=0, roll_ok=0, order_ok=0, struct_ok=0,
+             inter_ok=0, inter_fail=0, inter_pending=0)
+    # interleave_order: the recorded CROSS-SIDE order against the rulebook's.
+    first = roll["deploy_order"][0]
+    got = dump.get("placement_sequence")
+    if got is None and red_whole_side:
+        got = whole_side_sequence(dump, first)
+    if got is None:
+        c["inter_pending"] = 1   # pre-#575 recording — whole-side, no field to read
+    else:
+        want = expected_interleave(
+            {s: dump["sides"][s]["placement_order"] for s in ("1", "2")},
+            {s: {k for k, u in dump["sides"][s]["units"].items() if u["scout"]}
+             for s in ("1", "2")},
+            first)
+        ok = [(int(a), b) for a, b in got] == want
+        c["inter_ok"], c["inter_fail"] = int(ok), int(not ok)
     c["roll_ok"] = int(attempts == roll["attempts"] and opener == roll["opener"])
     c["order_ok"] = int([opener, 3 - opener] == roll["deploy_order"])
     struct_ok = True
@@ -219,6 +272,8 @@ def main(argv=None):
     ap.add_argument("--bank-dir", default=None, help="uncommitted terrain_bank_v2 dump (layout-seed boards)")
     ap.add_argument("--red-shift", type=int, default=0, metavar="N",
                     help="RED knob: shift every twin spot by N * 0.025 m")
+    ap.add_argument("--red-whole-side", action="store_true",
+                    help="RED knob: feed interleave_order the pre-#575 whole-side order")
     ap.add_argument("--arrival", action="store_true",
                     help="run the ARRIVAL section (ambush_arrival.json) instead of the pregame gate")
     ap.add_argument("--arrival-red-shift", type=int, default=0, metavar="N",
@@ -232,7 +287,8 @@ def main(argv=None):
     spots = json.load(open(os.path.join(args.fixtures, "pregame_deploy_spots.json")))
     banks = json.load(open(os.path.join(args.fixtures, "pregame_bank_v2.json")))["boards"]
     tot = {k: 0 for k in ("dumps", "units", "exact", "within", "mismatch", "models", "models_exact",
-                          "sides", "sides_all", "roll_ok", "order_ok", "struct_ok")}
+                          "sides", "sides_all", "roll_ok", "order_ok", "struct_ok",
+                          "inter_ok", "inter_fail", "inter_pending")}
     lines = []
     for dump in dumps:
         key = str(500000 + dump["seed"])
@@ -240,7 +296,7 @@ def main(argv=None):
             banks[key]["walls"], banks[key]["blockers"], banks[key]["blocker_boxes"])
         board = spots["boards"][key]
         run = run_dump(dump, board["cells"], spots["cell_params"], bank, args.red_shift)
-        c = compare_dump(dump, rolls[dump["seed"]], run)
+        c = compare_dump(dump, rolls[dump["seed"]], run, args.red_whole_side)
         tot["dumps"] += 1
         for k, v in c.items():
             tot[k] += v
@@ -252,10 +308,20 @@ def main(argv=None):
     lines.append("corpus %d dumps / %d sides / %d placed units" % (tot["dumps"], tot["sides"], n))
     lines.append("roll-off %d/%d OK; deploy order %d/%d OK; structure %d/%d OK" % (
         tot["roll_ok"], tot["dumps"], tot["order_ok"], tot["dumps"], tot["struct_ok"], tot["dumps"]))
+    lines.append("interleave_order %d OK / %d FAIL / %d pending (no placement_sequence — "
+                 "pre-#575 whole-side recording, green needs the re-record)" % (
+                     tot["inter_ok"], tot["inter_fail"], tot["inter_pending"]))
     lines.append("spots %d/%d EXACT | %d within | %d MISMATCH" % (tot["exact"], n, tot["within"], tot["mismatch"]))
     lines.append("models %d/%d exact; sides all-exact %d/%d" % (
         tot["models_exact"], n, tot["sides_all"], tot["sides"]))
-    if args.red_shift:
+    if args.red_whole_side:
+        red = tot["inter_fail"] > 0 and tot["inter_ok"] == 0
+        lines.append("RED whole-side: interleave_order %d FAIL / %d OK — %s" % (
+            tot["inter_fail"], tot["inter_ok"],
+            "the whole-side order is rejected, exit 1 as designed" if red
+            else "INERT — RED proof FAILED"))
+        code = 1 if red else 2
+    elif args.red_shift:
         if n == BASELINE["units"]:
             red = tot["exact"] < BASELINE["exact"]
         else:
@@ -267,7 +333,7 @@ def main(argv=None):
         code = 1 if red else 2
     else:
         hard = (tot["roll_ok"] < tot["dumps"] or tot["order_ok"] < tot["dumps"]
-                or tot["struct_ok"] < tot["dumps"])
+                or tot["struct_ok"] < tot["dumps"] or tot["inter_fail"] > 0)
         if n != BASELINE["units"]:
             lines.append("floor SKIPPED (partial corpus %d/%d units)" % (n, BASELINE["units"]))
             code = 1 if hard else 0
