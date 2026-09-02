@@ -101,8 +101,9 @@ def dice_md(rec, acts, nm):
                           KIND[int(row["kind"])], nm.get(c.get("shoot") or c.get("charge") or "", "-"),
                           r["kind"], r["count"], r["target"], r["faces"], hits([r], r["kind"])))
     return out + ["", "%d rolls over %d activations; an activation that drew none is absent."
-                  " Under `dice=table` the twin draws for SHOOTING and MELEE only — morale, Impact"
-                  " and the dangerous-terrain test never reach the tray (see the UNPORTED lines)."
+                  " Under `dice=table` the tray serves shooting, melee AND the end-of-move"
+                  " dangerous-terrain test. MORALE is the class that never reaches it (selfplay.py"
+                  ":1182-1183), so no Fearless or No-Retreat re-roll appears anywhere below."
                   % (j, len(acts))]
 
 

@@ -87,10 +87,18 @@ def replay(path, lists, repo, bank):
 
 
 def moved(act, key):
-    # Per-model (from, to, inches) for the acting unit, in table inches.
-    return [((p[0] / nr.M_IN, p[2] / nr.M_IN), (q[0] / nr.M_IN, q[2] / nr.M_IN),
-             ((p[0] - q[0]) ** 2 + (p[2] - q[2]) ** 2) ** 0.5 / nr.M_IN)
-            for p, q in zip(act["before"]["units"][key]["positions"], act["after"]["units"][key]["positions"])]
+    # Per-model (from, to, inches) for the acting unit, in table inches. A unit
+    # that LOSES models inside its own activation — the end-of-move dangerous
+    # -terrain test, or a charge's strike-back — comes back with a shorter and
+    # RE-FORMED array: pairing those by index invents moves of 17" on a 12"
+    # band, so the pairing is refused and the unit CENTROID reported instead.
+    a, b = (act[s]["units"][key]["positions"] for s in ("before", "after"))
+    xz = lambda p: (p[0] / nr.M_IN, p[2] / nr.M_IN)
+    leg = lambda p, q: (xz(p), xz(q), ((p[0] - q[0]) ** 2 + (p[2] - q[2]) ** 2) ** 0.5 / nr.M_IN)
+    mid = lambda v: [sum(p[i] for p in v) / len(v) for i in range(3)]
+    if not a or not b:
+        return []
+    return [leg(p, q) for p, q in zip(a, b)] if len(a) == len(b) else [leg(mid(a), mid(b))]
 
 
 def narrate(rec, acts, nm, lists):
@@ -115,6 +123,7 @@ def narrate(rec, acts, nm, lists):
             rnd = r["round"]
             out += ["", "## Round %d" % rnd]
         u, best, mv = bu[key], r["cands"]["best"], moved(a, key)
+        lost = len(mv) != len(u["positions"])
         band = u["bands"]["rush" if int(r["kind"]) > 1 else "advance"] * min(1, int(r["kind"]))
         out += ["", "### R%d A%d (seq %d) — p%d activates **%s** (Q%s+ D%s+, %d models; %s)"
                 % (rnd, n, r["seq"], r["side"], nm.get(key, key), inf.get(key, "?" * 3)[0],
@@ -130,7 +139,10 @@ def narrate(rec, acts, nm, lists):
                 '- move (%s, band %.1f", farthest model %.2f"): %s' % (nr.KIND[int(r["kind"])], band,
                     max([x[2] for x in mv] or [0.0]), "; ".join('m%d (%.1f,%.1f)->(%.1f,%.1f) %.2f"'
                     % (i, p[0], p[1], t[0], t[1], s) for i, (p, t, s) in enumerate(mv, 1) if s > 0.01)
-                    or "nobody moved")]
+                    or "nobody moved") + (" — UNIT CENTROID: %d of %d models were removed inside this"
+                    " activation (dangerous terrain or a strike-back), so per-model pairing is refused"
+                    % (len(u["positions"]) - len(a["after"]["units"][key]["positions"]),
+                       len(u["positions"])) if lost else "")]
         rl = a["rep"]["rolls"]
         if rl:
             out.append("- dice: %d hits, %d blocks, %d unsaved — %s" % (nr.hits(rl, "attack"),

@@ -98,6 +98,20 @@ def test_terrain_summary_counts_by_class():
             [[2, 0, 0, 3, 3, 0], [2, 1, 1, 3, 3, 0], [1, 2, 2, 3, 3, 0]]) == "2 forest, 1 ruins"
 
 
+def test_moved_refuses_to_pair_a_reformed_unit():
+    # A unit that loses models inside its OWN activation (the end-of-move
+    # dangerous-terrain test) comes back re-formed and shorter; pairing those by
+    # index invents a 17" move on a 12" band, which is what this refuses.
+    import game_narrator as gn
+    m = lambda xs: {"units": {"u": {"positions": [[x * 0.0254, 0.0, 0.0] for x in xs]}}}
+    act = {"before": m([0.0, 2.0, 4.0, 6.0]), "after": m([8.0, 10.0, 12.0, 14.0])}
+    assert [round(d, 3) for _, _, d in gn.moved(act, "u")] == [8.0, 8.0, 8.0, 8.0]
+    act["after"] = m([8.0, 10.0])
+    got = gn.moved(act, "u")
+    assert len(got) == 1 and round(got[0][2], 3) == 6.0, got
+    assert gn.moved({"before": m([]), "after": m([1.0])}, "u") == []
+
+
 def run_tool(game: Path, out: Path):
     return subprocess.run([sys.executable, str(TOOLS / "game_narrator.py"), str(game),
                            "--out", str(out)], capture_output=True, text=True)
