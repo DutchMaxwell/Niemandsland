@@ -1025,17 +1025,32 @@ pub fn place_unit_models(spot: (f64, f64), n: usize) -> Vec<(f64, f64)> {
 /// twin's OWN placements. Walls for the bisect veto ride the board's own
 /// load-time world-metre store (`Terrain::walls_world_m` — re-deriving from
 /// the inch frame would quantize twice and shift by the frame offset).
-pub fn deploy_side(
-    specs: &[UnitSpec],
-    zone: &Rect,
-    objectives: &[(f64, f64)],
-    board: &Terrain,
-    seed_value: i64,
-) -> SideDeploy {
+/// One side mid-deployment: everything `deploy_begin` (solo_controller.gd
+/// :8950-9047) computed, plus the two queues the per-unit turns pop from and
+/// the side's OWN `occupied` list (`_deploy_alt["occupied"]`, :9044, appended
+/// per unit at :9170) — never the enemy's: the ladder scores objectives, the
+/// side's own footprints and terrain, nothing across the table.
+pub struct SideQueue {
+    pub out: SideDeploy,
+    main: Vec<usize>,
+    scouts: Vec<usize>,
+    section_of: Vec<i64>,
+    occupied: Vec<Occupied>,
+    zone: Rect,
+    forward_y: f64,
+}
+
+/// `deploy_begin` (solo_controller.gd:8950-9047) ALONE: the side's whole draw
+/// phase on a fresh stream — transport fill, `split_into_groups`,
+/// `assign_sections`, `placement_order` — split into the MAIN queue and the
+/// SCOUT queue (:9036-9042, scouts deploy in their own phase after all other
+/// units). Nobody placed. Same draws in the same order as the old all-at-once
+/// body, so every recorded seed still replays byte-identically.
+fn deploy_begin(specs: &[UnitSpec], zone: &Rect, seed_value: i64) -> SideQueue {
     let mut rng = GodotRng::new(seed_value);
     let caps: Vec<i64> = specs.iter().map(|s| s.transport_capacity).collect();
     let fills = transport_fill(&caps, &mut rng);
-    let mut out = SideDeploy {
+    let out = SideDeploy {
         seed_value,
         fills: fills
             .iter()
@@ -1045,70 +1060,118 @@ pub fn deploy_side(
         reserved: Vec::new(),
         events: Vec::new(),
     };
+    let end = zone.end();
+    let mut q = SideQueue {
+        out,
+        main: Vec::new(),
+        scouts: Vec::new(),
+        section_of: vec![0i64; specs.len()],
+        occupied: Vec::new(),
+        zone: *zone,
+        forward_y: if zone.pos.1.abs() < end.1.abs() { zone.pos.1 } else { end.1 },
+    };
     if specs.is_empty() {
-        return out; // deploy_begin's empty-roster early return (:8984)
+        return q; // deploy_begin's empty-roster early return (:8984)
     }
     let groups = split_into_groups(specs.len(), &mut rng);
     let sections = assign_sections(groups.len(), &mut rng);
-    let mut section_of = vec![0i64; specs.len()];
     for (g, members) in groups.iter().enumerate() {
         for &i in members {
-            section_of[i] = sections[g];
+            q.section_of[i] = sections[g];
         }
     }
-    out.reserved = specs.iter().filter(|s| s.ambush).map(|s| s.key.clone()).collect();
-    let end = zone.end();
-    let forward_y = if zone.pos.1.abs() < end.1.abs() { zone.pos.1 } else { end.1 };
-    let walls = board.walls_world_m();
-    let mut occupied: Vec<Occupied> = Vec::new();
-    // placement_order's sequence IS the drain order: the main queue fully,
-    // then the scout queue (:9036-9042 builds them in this order, :9195-9198
-    // drains main-then-scout).
+    q.out.reserved = specs.iter().filter(|s| s.ambush).map(|s| s.key.clone()).collect();
+    // placement_order already yields the normals then the scouts (:9036-9042
+    // splits it exactly so, :9195-9198 drains main-then-scout).
     for &i in placement_order(specs, &mut rng).iter() {
-        let s = &specs[i];
-        // the ladder threads ONE unit-max radius (solo_controller.gd:9106) —
-        // the derived deploy radius over host + attached heroes (:10263-10267)
-        let base_r = deploy_base_radius_of(s);
-        let radius = deploy_footprint_radius(s.model_count.max(0) as usize, base_r);
-        // B9 Scout (:9098-9102): a scout searches its zone EXTENDED 12" forward
-        // (whole-width band, `scout_extended_zone`), forward_y recomputed on the
-        // band, and its zone-of-record for the settle containment is the band.
-        let (unit_zone, sec, fwd) = if s.scout {
-            let ext = scout_extended_zone(zone, forward_y);
-            let e = ext.end();
-            let fwd_ext = if ext.pos.1.abs() < e.1.abs() { ext.pos.1 } else { e.1 };
-            (ext, ext, fwd_ext)
+        if specs[i].scout {
+            q.scouts.push(i);
         } else {
-            (*zone, section_rect(zone, section_of[i]), forward_y)
-        };
-        // the push band: the registry's place_in when the list carries it,
-        // the table's 9" fallback otherwise (solo_controller.gd:9627)
-        let push_m = s.place_in_m.unwrap_or(VANGUARD_PLACE_M);
-        let o = deploy_place_id(
-            &unit_zone, &sec, fwd, objectives, &mut occupied, board, walls,
-            radius, &s.footprint, base_r, s.ignores_terrain, s.vanguard, push_m,
-        );
-        out.placements.push(Placement {
-            key: s.key.clone(),
-            section: section_of[i],
-            scout: s.scout,
-            spot: o.spot,
-            vanguard_pushed: o.pushed,
-            models: place_unit_models(o.spot, s.model_count.max(0) as usize),
-        });
-        // the table's per-move log line (record_decision, :9158-9166): one
-        // event per Vanguard push, `chosen` the ACTUAL distance — the table's
-        // `spot.distance_to(v_spot) / INCHES_TO_METERS`, the f32 v2_dist law.
-        if o.pushed {
-            out.events.push(DeployEvent {
-                kind: "deploy".into(),
-                unit: s.key.clone(),
-                rule: VANGUARD_RULE_TEXT.into(),
-                chosen: format!("+{:.1}\" forward", v2_dist(o.pushed_from, o.spot) / 0.0254),
-                why: "vanguard forward placement".into(),
-                data: DeployEventData { x_m: o.spot.0, z_m: o.spot.1 },
-            });
+            q.main.push(i);
         }
+    }
+    q
+}
+
+/// ONE deployment turn: `deploy_next_one` / `deploy_next_scout`
+/// (solo_controller.gd:9078-9091) into `_deploy_place_id` (:9093-9178) — the
+/// unit at spec index `i` lands through the step-5 ladder and drops its models
+/// on the FIXED 0.04 m place grid, its footprint joining the side's `occupied`.
+fn deploy_place_next(
+    q: &mut SideQueue,
+    specs: &[UnitSpec],
+    i: usize,
+    objectives: &[(f64, f64)],
+    board: &Terrain,
+    walls: &[WallSeg],
+) {
+    let s = &specs[i];
+    let (zone, section, forward_y) = (q.zone, q.section_of[i], q.forward_y);
+    // the ladder threads ONE unit-max radius (solo_controller.gd:9106) —
+    // the derived deploy radius over host + attached heroes (:10263-10267)
+    let base_r = deploy_base_radius_of(s);
+    let radius = deploy_footprint_radius(s.model_count.max(0) as usize, base_r);
+    // B9 Scout (:9098-9102): a scout searches its zone EXTENDED 12" forward
+    // (whole-width band, `scout_extended_zone`), forward_y recomputed on the
+    // band, and its zone-of-record for the settle containment is the band.
+    let (unit_zone, sec, fwd) = if s.scout {
+        let ext = scout_extended_zone(&zone, forward_y);
+        let e = ext.end();
+        let fwd_ext = if ext.pos.1.abs() < e.1.abs() { ext.pos.1 } else { e.1 };
+        (ext, ext, fwd_ext)
+    } else {
+        (zone, section_rect(&zone, section), forward_y)
+    };
+    // the push band: the registry's place_in when the list carries it,
+    // the table's 9" fallback otherwise (solo_controller.gd:9627)
+    let push_m = s.place_in_m.unwrap_or(VANGUARD_PLACE_M);
+    let o = deploy_place_id(
+        &unit_zone, &sec, fwd, objectives, &mut q.occupied, board, walls,
+        radius, &s.footprint, base_r, s.ignores_terrain, s.vanguard, push_m,
+    );
+    q.out.placements.push(Placement {
+        key: s.key.clone(),
+        section,
+        scout: s.scout,
+        spot: o.spot,
+        vanguard_pushed: o.pushed,
+        models: place_unit_models(o.spot, s.model_count.max(0) as usize),
+    });
+    // the table's per-move log line (record_decision, :9158-9166): one
+    // event per Vanguard push, `chosen` the ACTUAL distance — the table's
+    // `spot.distance_to(v_spot) / INCHES_TO_METERS`, the f32 v2_dist law.
+    if o.pushed {
+        q.out.events.push(DeployEvent {
+            kind: "deploy".into(),
+            unit: s.key.clone(),
+            rule: VANGUARD_RULE_TEXT.into(),
+            chosen: format!("+{:.1}\" forward", v2_dist(o.pushed_from, o.spot) / 0.0254),
+            why: "vanguard forward placement".into(),
+            data: DeployEventData { x_m: o.spot.0, z_m: o.spot.1 },
+        });
+    }
+}
+
+/// One side's whole pregame (design §3.2) in WHOLE-SIDE order: `deploy_begin`,
+/// then the queue drained in one go — normals first, scouts last, ambush
+/// reserved (`deploy_remaining`, :9200-9212). THE entry point every recorded
+/// fixture and every existing caller replays through; the begin/turn split
+/// above changed no draw, no order and no placement. Walls for the bisect veto
+/// ride the board's own load-time world-metre store (`Terrain::walls_world_m` —
+/// re-deriving from the inch frame would quantize twice and shift by the frame
+/// offset).
+pub fn deploy_side(
+    specs: &[UnitSpec],
+    zone: &Rect,
+    objectives: &[(f64, f64)],
+    board: &Terrain,
+    seed_value: i64,
+) -> SideDeploy {
+    let mut q = deploy_begin(specs, zone, seed_value);
+    let walls = board.walls_world_m();
+    let order: Vec<usize> = q.main.iter().chain(q.scouts.iter()).copied().collect();
+    for i in order {
+        deploy_place_next(&mut q, specs, i, objectives, board, walls);
     }
     // The FINISH (deploy_finish, solo_controller.gd:9180-9188) is NOT run
     // here — step 6d split placement from the finish so the caller drives the
@@ -1121,7 +1184,7 @@ pub fn deploy_side(
     // BOTH rosters (the repair and the resolve CROSS SLOTS, :9228-9232).
     // `settle_units` rebuilds the live state, `deploy_finish_all` runs one
     // finish pass.
-    out
+    q.out
 }
 
 // ---- the SETTLE pass (NML-1152 step 6b): `deploy_finish` →
