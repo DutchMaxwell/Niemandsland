@@ -51,8 +51,26 @@ import selfplay as sp  # noqa: E402
 REPO = Path(__file__).resolve().parents[4]
 BANK_DIR = Path(os.path.expanduser("~/selfplay_out/terrain_bank"))
 LISTS = Path(os.path.expanduser("~/nml-mission/farm/ai_lists"))
-# Every test here plays a game from the maintainer's private army lists; on CI (no lists) the whole module skips.
-pytestmark = pytest.mark.skipif(not LISTS.exists(), reason="private ai_lists not present (CI)")
+# Game-playing tests need the private army lists (~/nml-mission/farm/ai_lists);
+# on CI the directory is absent. One module-level guard skips everything except
+# the pure-unit tests listed here — new game-playing tests are covered by
+# default, a new pure-unit test must be added to this set to run on CI too.
+_PURE_UNIT_TESTS = frozenset((
+    "test_an_unknown_los_mode_raises_instead_of_falling_back",
+    "test_an_unknown_menu_los_mode_raises_instead_of_falling_back",
+    "test_an_unknown_sighting_mode_raises_instead_of_falling_back",
+    "test_the_seam_refuses_more_than_five_markers",
+    "test_the_mixed_spec_refuses_junk",
+    "test_vecs_differ_treats_unequal_length_as_a_mismatch",
+))
+
+
+@pytest.fixture(autouse=True)
+def _require_private_lists(request):
+    if request.function.__name__ in _PURE_UNIT_TESTS:
+        return
+    if not LISTS.exists():
+        pytest.skip("private ai_lists not present (CI)")
 
 #: seeds tried in order until one produces a different game — the same range
 #: `test_selfplay.py`'s `GATE_SEEDS` starts from.
