@@ -19,7 +19,7 @@ use crate::combat::{
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
 use crate::geom::{self, V3};
-use crate::acts::rule_on;
+use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
@@ -3549,7 +3549,11 @@ fn resolve_with(
                             let r = crate::dice::resolve_volley_with_tray(
                                 &shooters_of(&parts, statics, &next),
                                 &def, &ut_g.name, g.d, g.mod_d,
-                                seams.cond_ap_dice || rule_on(seams.rules_epoch, 1), tray,
+                                seams.cond_ap_dice || rule_on(seams.rules_epoch, 1),
+                                // Surge's own gates: the CLASS FIX
+                                // (`acts::rule_on`), same seam as `cond_ap_dice`.
+                                rule_on(seams.rules_epoch, CURRENT_RULES_EPOCH),
+                                tray,
                             );
                             for (mi, msc, _) in &parts {
                                 let shoot = &statics[next.roster.profile[*mi]].shoot;

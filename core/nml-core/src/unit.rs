@@ -310,6 +310,21 @@ pub struct ShootProfile {
     /// 6))` default, mirrored so an unboosted carrier reads as unboosted
     /// without a separate bool field.
     pub surge_attack_low: i64,
+    /// The plain auto-hit form's `surge_within_in` (Point-Blank Surge, stamped
+    /// by `ai_ev.gd:228-231`): main.gd:4465-4467 — the WHOLE surge bonus
+    /// (sixes and Boost 5s alike) fires only at or under this centre
+    /// distance; 0.0 = no gate. Read by the volley's epoch-gated surge block.
+    pub surge_within_in: f64,
+    /// The Boost upgrade's `surge_low` (Devout/Ferocious/Lucky Boost et al.,
+    /// stamped by `stamp`'s upgrades arm, ai_ev.gd:243): a successful
+    /// unmodified 5 ALSO adds a hit when this is < 6. 6 = no boost —
+    /// main.gd:4469's `profile.get("surge_low", 6)` default, so an unboosted
+    /// carrier reads as unboosted without a separate bool field.
+    pub surge_low: i64,
+    /// The Boost's distance gate (main.gd:4469): the 5s count only past this
+    /// centre distance — melee resolves at 0.0, so a Boost NEVER fires its 5s
+    /// in melee, exactly the table's own reading.
+    pub surge_over_in: f64,
 }
 
 impl ShootProfile {
@@ -545,8 +560,9 @@ fn base_profile(w: &Weapon, attacks: i64, range_in: i64) -> ShootProfile {
         limited: weapon_has(w, "Limited"),
         takedown: weapon_has(w, "Takedown"),
         rules: w.rules.clone(),
-        // main.gd's own default ("no boost yet") — see the field's doc.
+        // main.gd's own default ("no boost yet") — see both fields' docs.
         surge_attack_low: 6,
+        surge_low: 6,
         ..Default::default()
     }
 }
@@ -675,6 +691,11 @@ struct PrimitiveHit {
     /// The Bane family's coverage-wave gate (main.gd:6553-6560) — an alias
     /// with `reroll_save_sixes` re-rolls the defender's sixes.
     reroll_save_sixes: bool,
+    /// Point-Blank Surge's own `within_in` (0.0 = no gate) and the Boost
+    /// variants' `over_in` (ai_ev.gd's stamp default 9.0), read off the
+    /// SAME `Surge` primitive entry.
+    within_in: f64,
+    over_in: f64,
 }
 
 /// `RulesRegistry.unit_rules_of_primitive` rules_registry.gd:155-176 — every
@@ -704,6 +725,8 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
                     ignores_cover: e.param_b("ignores_cover"),
                     surge_low: e.param_i("surge_low", 5),
                     reroll_save_sixes: e.param_b("reroll_save_sixes"),
+                    within_in: e.param_f("within_in", 0.0),
+                    over_in: e.param_f("over_in", 9.0),
                 });
             }
         }
@@ -1141,9 +1164,9 @@ fn stamp(
     // 3. Surge-family data aliases (ai_ev.gd:225-249). `extra_attack`
     //    (surge_attack — block B6, the extra-ATTACK-DIE form: Bloodborn/Clan
     //    Warrior/Primal/Predator/Royal Warrior/Crazed/Psychotic) is now PORTED,
-    //    read by `dice.rs`'s `surge_attack_hits`; the `within_in`/`over_in`
-    //    knobs of the plain auto-hit Surge aliases stay unread by profile_ev,
-    //    so only THAT facet is carried un-gated (main.gd:4427-4435).
+    //    read by `dice.rs`'s `surge_attack_hits`; the plain auto-hit form now
+    //    stamps its `within_in` gate too (ai_ev.gd:228-231), read by `dice.rs`'s
+    //    epoch-gated surge block.
     for hit in rules_of_primitive(reg, p, "Surge") {
         if hit.name == "Surge" || hit.name == "Ferocious" || !hit.upgrades.is_empty() {
             continue;
@@ -1154,15 +1177,20 @@ fn stamp(
                     sp.surge_attack = true;
                 } else {
                     sp.surge = true;
+                    if hit.within_in > 0.0 {
+                        sp.surge_within_in = hit.within_in;
+                    }
                 }
             }
         }
     }
     // 3b. Surge UPGRADE entries (ai_ev.gd:250-260): the extra-attack-die
     //  family's own Boost variants (Primal Boost et al.) move `surge_attack_low`,
-    //  now read by `dice.rs`; the plain auto-hit Surge's `surge_low`/
-    //  `surge_over_in` (Devout Boost) stay unread by profile_ev, reported as
-    //  before.
+    //  and the plain auto-hit Boosts (Devout/Ferocious/Lucky Boost) stamp
+    //  `surge_low`/`surge_over_in` onto every profile the base rule already
+    //  gave `surge` — both read by `dice.rs`'s epoch-gated surge block.
+    //  `profile_ev` (combat.rs) stays blind to all of them, exactly like
+    //  ai_ev.gd:373-385's EV metric.
     for hit in rules_of_primitive(reg, p, "Surge") {
         if hit.upgrades.is_empty() || !has_exact_rule(&p.special_rules, &hit.upgrades) {
             continue;
@@ -1175,10 +1203,12 @@ fn stamp(
             }
             continue;
         }
-        unimplemented.push(Unimplemented {
-            rule: hit.name.clone(),
-            why: "Surge upgrade (surge_low/surge_over_in) — stamped by ai_ev.gd:255-260 but not read by profile_ev".into(),
-        });
+        for sp in shoot.iter_mut() {
+            if sp.surge {
+                sp.surge_low = hit.surge_low;
+                sp.surge_over_in = hit.over_in;
+            }
+        }
     }
     // 4. Rending data aliases (ai_ev.gd:261-272).
     for hit in rules_of_primitive(reg, p, "Rending") {
@@ -2824,6 +2854,63 @@ mod tests {
         let plain = header.profiles.get("plain_blessed_sisters").expect("plain_blessed_sisters");
         let us = UnitStatic::build(&mut reg, plain);
         assert!(!us.melee[0].surge, "no Brutal, no auto-hit");
+    }
+
+    /// The Surge family's plain-form gates through the REAL registry: Devout
+    /// Boost stamps `surge_low`/`surge_over_in` onto every profile Devout gave
+    /// `surge` (ai_ev.gd:250-260) and stops being reported unimplemented;
+    /// Point-Blank stamps its `within_in` on BOTH facets (no `shooting_only`
+    /// in the entry). RED: drop the stamp arms or the entries — the asserts
+    /// fall back to the defaults.
+    const SURGE_GATES_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "devout_boost_unit":{"unit_id":"devout_boost_unit","name":"Devout Boost Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":["Devout","Devout Boost"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "plain_blessed":{"unit_id":"plain_blessed","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "point_blank_unit":{"unit_id":"point_blank_unit","name":"Point Blank Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":["Point-Blank Surge"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "brutal_fighter_unit":{"unit_id":"brutal_fighter_unit","name":"Brutal Fighter Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"human_inquisition","special_rules":["Brutal Fighter"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "plain_inquisition":{"unit_id":"plain_inquisition","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"human_inquisition","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+    #[test]
+    fn the_surge_gates_stamp_through_the_real_registry() {
+        let header = read_act_header(SURGE_GATES_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let dev = UnitStatic::build(
+            &mut reg, header.profiles.get("devout_boost_unit").expect("devout_boost_unit"),
+        );
+        assert_eq!(dev.shoot[0].surge_low, 5, "Devout Boost's surge_low");
+        assert_eq!(dev.shoot[0].surge_over_in, 9.0, "Devout Boost's over_in");
+        assert_eq!(dev.melee[0].surge_low, 5, "the boost rides EVERY profile Devout gave surge");
+        assert!(
+            dev.unimplemented.iter().all(|u| u.rule != "Devout Boost"),
+            "consumed, not stamped as unimplemented: {:?}", dev.unimplemented
+        );
+        let plain = UnitStatic::build(
+            &mut reg, header.profiles.get("plain_blessed").expect("plain_blessed"),
+        );
+        assert_eq!(plain.shoot[0].surge_low, 6, "no Boost, no 5s (main.gd's default)");
+        assert_eq!(plain.shoot[0].surge_over_in, 0.0, "and no over-9\" gate");
+        let pb = UnitStatic::build(
+            &mut reg, header.profiles.get("point_blank_unit").expect("point_blank_unit"),
+        );
+        assert_eq!(pb.shoot[0].surge_within_in, 12.0, "Point-Blank's within gate, ranged");
+        assert_eq!(pb.melee[0].surge_within_in, 12.0, "and melee — the entry carries no shooting_only");
+    }
+
+    /// Brutal Fighter = the `melee_only` Surge alias (gf human_inquisition):
+    /// the facet gate keeps it off the ranged profile. Its effect predates the
+    /// epoch mechanism (consumed ungated since block B6), so the RED leg here
+    /// is the WITHOUT-rule one: the plain sibling stays silent on both.
+    #[test]
+    fn brutal_fighter_is_melee_only_through_the_real_registry() {
+        let header = read_act_header(SURGE_GATES_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let bf = UnitStatic::build(
+            &mut reg, header.profiles.get("brutal_fighter_unit").expect("brutal_fighter_unit"),
+        );
+        assert!(bf.melee[0].surge, "Brutal Fighter's melee-only surge facet");
+        assert!(!bf.shoot[0].surge, "the ranged profile stays untouched (melee_only)");
+        let plain = UnitStatic::build(
+            &mut reg, header.profiles.get("plain_inquisition").expect("plain_inquisition"),
+        );
+        assert!(!plain.melee[0].surge && !plain.shoot[0].surge, "no Brutal Fighter, no facet");
     }
 
     /// Precision Hunter = Targeting Visor's word-for-word twin, now on the

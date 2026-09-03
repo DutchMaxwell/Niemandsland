@@ -309,7 +309,9 @@ fn save_batch(
 /// PORTED: the to-hit target (`profile_ev`'s shooting branch verbatim —
 /// Reliable, the range/Stealth/Artillery/Evasive modifiers, Unstoppable's
 /// clamp, Versatile Attack, Precise), the unmodified-6 bonus hits of Relentless
-/// and Surge, block B6's extra-ATTACK-DIE Surge siblings (Bloodborn / Primal /
+/// and Surge plus Surge's own gates (Point-Blank's within-12" cap, the Boosts'
+/// successful 5s past 9" — epoch-3, ungated for pre-epoch records), block B6's
+/// extra-ATTACK-DIE Surge siblings (Bloodborn / Primal /
 /// Predator / Clan Warrior and their book aliases, `surge_attack_hits`), Blast,
 /// the Rending/Destructive/on-6 AP sub-batch, Fortified, Shielded/Guarded/Cover
 /// on the save target, Bane's re-roll, Shred, the pooled Deadly multiplier and
@@ -320,8 +322,11 @@ fn save_batch(
 /// below the line has no field to detect it by and is listed instead.
 ///
 /// FLAGGED (a counter per activation):
-///   * `surge_gates` — Surge fires unconditionally; the table gates it on
-///     `surge_within_in` and `surge_low` (main.gd:4427-4435).
+///   * `surge_gates` — LEGACY REPLAY ONLY since the epoch-3 surge-gates port:
+///     the volley now reads the table's own gates off the profile
+///     (`surge_within_in`, `surge_low`/`surge_over_in`, main.gd:4465-4482) and
+///     flags nothing; every pre-epoch record keeps the ungated read, and the
+///     MELEE leg (whose gates are no-ops at dist 0) keeps the mark.
 ///   * `hazardous`   — Hazardous wounds the FIRER on its natural 1s (:16555).
 ///   * `deadly`      — the table lands Deadly per model with its OWN
 ///     Regeneration roll on the RAW unsaved count (:6634), not the pooled one
@@ -406,11 +411,10 @@ pub fn resolve_shooting_with_tray(
     let one = [Shooter { profiles, keep, attacks, att, owner: "" }];
     // Single-scalar convenience form (tests only — sim.rs's real caller
     // supplies the two distances separately): range gate and modifier gate
-    // are the SAME point here, same as every existing fixture already assumes.
-    // Test-only convenience: assumes the shipped `cond_ap_dice=true` state.
-    // A test that needs the legacy OFF path calls `resolve_volley_with_tray`
-    // directly (see the RED/GREEN pair below).
-    resolve_volley_with_tray(&one, def, "", dist_in, dist_in, true, tray)
+    // are the SAME point here. Assumes the shipped `cond_ap_dice=true` state
+    // and the fresh `rules_epoch` (both surge gates read); a legacy-OFF test
+    // calls `resolve_volley_with_tray` directly.
+    resolve_volley_with_tray(&one, def, "", dist_in, dist_in, true, true, tray)
 }
 
 /// NML-1073 M5 D1-B4b — ONE member of a shooting activation's volley.
@@ -466,6 +470,7 @@ pub fn resolve_volley_with_tray(
     dist_in: f64,
     mod_dist_in: f64,
     cond_ap_dice: bool,
+    surge_gates: bool,
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
@@ -612,13 +617,23 @@ pub fn resolve_volley_with_tray(
             hits += sixes(&faces);
         }
         if p.surge {
-            // The two GATES this port cannot see — `surge_within_in` (Point-Blank
-            // Surge: only within 12") and `surge_low` (Devout Boost: successful
-            // unmodified 5s count too, over 9") — have no field in
-            // `ShootProfile`, so Surge fires UNCONDITIONALLY here and every
-            // Surge activation says so (main.gd:4427-4435).
-            hits += sixes(&faces);
-            out.mark("surge_gates");
+            if surge_gates {
+                // The table's own gates (main.gd:4465-4482): `surge_within_in`
+                // (Point-Blank) caps the whole bonus at or under the centre
+                // distance; a Boost adds successful unmodified 5s only PAST
+                // `surge_over_in` — melee (0.0) never qualifies.
+                if p.surge_within_in <= 0.0 || mod_dist_in <= p.surge_within_in {
+                    hits += sixes(&faces);
+                    if p.surge_low < 6 && mod_dist_in > p.surge_over_in {
+                        hits += faces.iter().filter(|&&f| f == 5 && count_target <= 5).count() as i64;
+                    }
+                }
+            } else {
+                // LEGACY REPLAY ONLY — the ungated read, kept for every
+                // pre-epoch record (epoch < 3), plus its divergence counter.
+                hits += sixes(&faces);
+                out.mark("surge_gates");
+            }
         }
         // Block B6 — the extra-ATTACK-DIE Surge siblings, ported (see the
         // helper's own doc). Draws its own tray slot right after Surge's,
@@ -1299,7 +1314,7 @@ mod tests {
 
         let mut tray = Tray::seeded(low);
         let one = [Shooter { profiles: &p, keep: &[0], attacks: &[1], att: &att, owner: "gunner" }];
-        let out = resolve_volley_with_tray(&one, &defender(4, 5), "Target", 12.0, 12.0, true, &mut tray);
+        let out = resolve_volley_with_tray(&one, &defender(4, 5), "Target", 12.0, 12.0, true, true, &mut tray);
         assert_eq!(out.rolls[0].kind, "attack");
         assert_eq!(out.rolls[0].count, 1, "ONE die for the whole volley");
         assert_eq!(out.rolls[0].target, BEST_HIT_TARGET);
@@ -1412,7 +1427,7 @@ mod tests {
         let att = shooter(4);
         let sh = [Shooter { profiles: &p, keep: &[0], attacks: &[1], att: &att, owner: "" }];
         let mut tray = Tray::seeded(27);
-        let out = resolve_volley_with_tray(&sh, &stealthy, "Target", 7.95, 14.30, true, &mut tray);
+        let out = resolve_volley_with_tray(&sh, &stealthy, "Target", 7.95, 14.30, true, true, &mut tray);
         assert_eq!(out.rolls[0].target, 5, "Stealth -1 off the 14.30\" centre gap");
     }
 
@@ -1426,7 +1441,7 @@ mod tests {
         let att = shooter(4);
         let sh = [Shooter { profiles: &p, keep: &[0], attacks: &[1], att: &att, owner: "" }];
         let mut tray = Tray::seeded(27);
-        let out = resolve_volley_with_tray(&sh, &stealthy, "Target", 12.0, 6.0, true, &mut tray);
+        let out = resolve_volley_with_tray(&sh, &stealthy, "Target", 12.0, 6.0, true, true, &mut tray);
         assert_eq!(out.rolls[0].target, 4, "no Stealth penalty: the 6\" centre gap is not over 9\"");
     }
 
@@ -1695,7 +1710,7 @@ mod tests {
         };
         let mut tray = Tray::seeded(27);
         let out =
-            resolve_volley_with_tray(&[host, hero], &def, "Pathfinders", 12.0, 12.0, true, &mut tray);
+            resolve_volley_with_tray(&[host, hero], &def, "Pathfinders", 12.0, 12.0, true, true, &mut tray);
         let attacks: Vec<_> = out.rolls.iter().filter(|r| r.kind == "attack").collect();
         assert_eq!(attacks.len(), 2, "host then hero: {:?}", out.rolls);
         assert_eq!((attacks[0].count, attacks[0].target, attacks[0].owner.as_str()),
@@ -2049,6 +2064,124 @@ mod tests {
         assert_eq!(out.rolls[1].kind, "attack");
         assert_eq!(out.rolls[1].count, 2, "the same two unmodified 6s as the shooting case");
         assert_eq!(out.rolls[1].target, 4);
+    }
+
+    // ------------- epoch 3: the plain auto-hit Surge's own gates ---
+
+    /// ONE volley call at `d` inches, gate switch explicit: every RED/GREEN
+    /// leg below names which epoch's reading it asserts.
+    fn surge_volley(
+        p: &[ShootProfile],
+        quality: i64,
+        d: f64,
+        gates: bool,
+        tray: &mut Tray,
+    ) -> ShootResult {
+        resolve_volley_with_tray(
+            &[Shooter { profiles: p, keep: &[0], attacks: &[8], att: &shooter(quality), owner: "" }],
+            &defender(4, 5), "Target", d, d, true, gates, tray,
+        )
+    }
+
+    /// Point-Blank Surge's `surge_within_in` (main.gd:4465-4467): past 12" the
+    /// whole bonus stays behind the gate at the current epoch; epoch 0 keeps
+    /// the ungated read; exactly 12" opens it; no stamped gate fires at any
+    /// range. Seed 9: two unmodified 6s in 8 dice.
+    #[test]
+    fn point_blank_surge_keeps_its_sixes_behind_the_within_gate_past_twelve_inches() {
+        use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
+        let want = Tray::seeded(9).roll(8);
+        assert_eq!(want.iter().filter(|&&f| f == 6).count(), 2, "fixture: seed 9 must roll two 6s");
+        let base = faces_to_hits(&want, 4) as i64;
+        let pb = [ShootProfile { surge: true, surge_within_in: 12.0, surge_low: 6, ..rifle(8) }];
+        let plain = [ShootProfile { surge: true, surge_low: 6, ..rifle(8) }];
+        let fresh = rule_on(CURRENT_RULES_EPOCH, CURRENT_RULES_EPOCH);
+        let legacy = rule_on(0, CURRENT_RULES_EPOCH);
+        let mut t = Tray::seeded(9);
+        assert_eq!(surge_volley(&pb, 4, 13.0, fresh, &mut t).rolls[1].count, base,
+            "past 12\": the sixes stay behind the gate");
+        let mut t = Tray::seeded(9);
+        assert_eq!(surge_volley(&pb, 4, 13.0, legacy, &mut t).rolls[1].count, base + 2,
+            "epoch 0: the ungated read still fires");
+        let mut t = Tray::seeded(9);
+        assert_eq!(surge_volley(&pb, 4, 12.0, fresh, &mut t).rolls[1].count, base + 2,
+            "exactly 12\": the gate is open (dist <= within)");
+        let mut t = Tray::seeded(9);
+        assert_eq!(surge_volley(&plain, 4, 13.0, fresh, &mut t).rolls[1].count, base + 2,
+            "no gate stamped: Surge fires at any range");
+    }
+
+    /// Devout Boost (gf blessed_sisters: `surge_low: 5`, `over_in: 9`, upgrades
+    /// "Devout", main.gd:4469): successful unmodified 5s count only past 9" at
+    /// the current epoch; epoch 0 keeps the unboosted read; `surge_low` 6 never
+    /// counts 5s. Seed 6: one 6 plus two 5s in 8 dice.
+    #[test]
+    fn devout_boost_counts_successful_fives_only_past_nine_inches() {
+        use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
+        let want = Tray::seeded(6).roll(8);
+        assert_eq!(want.iter().filter(|&&f| f == 6).count(), 1, "fixture: seed 6 must roll one 6");
+        assert_eq!(want.iter().filter(|&&f| f == 5).count(), 2, "fixture: seed 6 must roll two 5s");
+        let base = faces_to_hits(&want, 4) as i64;
+        let boosted = [ShootProfile { surge: true, surge_low: 5, surge_over_in: 9.0, ..rifle(8) }];
+        let unboosted = [ShootProfile { surge: true, surge_low: 6, ..rifle(8) }];
+        let fresh = rule_on(CURRENT_RULES_EPOCH, CURRENT_RULES_EPOCH);
+        let legacy = rule_on(0, CURRENT_RULES_EPOCH);
+        let mut t = Tray::seeded(6);
+        assert_eq!(surge_volley(&boosted, 4, 10.0, fresh, &mut t).rolls[1].count, base + 3,
+            "past 9\": the 6 plus both successful 5s");
+        let mut t = Tray::seeded(6);
+        assert_eq!(surge_volley(&boosted, 4, 10.0, legacy, &mut t).rolls[1].count, base + 1,
+            "epoch 0: the boost is unread, the 6 alone");
+        let mut t = Tray::seeded(6);
+        assert_eq!(surge_volley(&unboosted, 4, 10.0, fresh, &mut t).rolls[1].count, base + 1,
+            "no Devout Boost (`surge_low` 6): the 5s count for nothing");
+        let mut t = Tray::seeded(6);
+        assert_eq!(surge_volley(&boosted, 4, 9.0, fresh, &mut t).rolls[1].count, base + 1,
+            "exactly 9\" is not over 9\": the gate stays shut");
+    }
+
+    /// Ferocious Boost (gf/aof orcs, the same boost shape): its 5s never fire
+    /// in MELEE — the table resolves melee at dist 0.0 (main.gd:6103), never
+    /// "over 9"" — and a 5 below the to-hit target is never a "successful" hit
+    /// (main.gd:4471's `5 >= to_hit`).
+    #[test]
+    fn ferocious_boosts_fives_never_fire_in_melee_or_below_their_target() {
+        use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
+        let want = Tray::seeded(6).roll(8);
+        assert_eq!(want.iter().filter(|&&f| f == 5).count(), 2, "fixture: seed 6 must roll two 5s");
+        let boosted = [ShootProfile { surge: true, surge_low: 5, surge_over_in: 9.0, ..rifle(8) }];
+        let fresh = rule_on(CURRENT_RULES_EPOCH, CURRENT_RULES_EPOCH);
+        let att = Ctx { quality: 4, models: 1, ..Default::default() };
+        let mut t = Tray::seeded(6);
+        let melee = resolve_melee_with_tray(
+            &[striker(&boosted, &[0], &[8], &att)], &defender(4, 5), "Target", false, true, &mut t);
+        assert_eq!(melee.rolls[1].count, faces_to_hits(&want, 4) as i64 + 1,
+            "melee resolves at 0.0\": sixes only, the boost's 5s stay shut");
+        let mut t = Tray::seeded(6);
+        assert_eq!(surge_volley(&boosted, 6, 10.0, fresh, &mut t).rolls[1].count, 2,
+            "a 5 never beats a 6+ target: the one unmodified 6 alone");
+    }
+
+    /// Lucky Boost (aof halflings, the third boost twin): the 9" gate is the
+    /// strict `dist_in > surge_over_in` — exactly 9" stays shut, 9.5" opens.
+    #[test]
+    fn lucky_boosts_five_bonus_opens_only_strictly_past_nine_inches() {
+        use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
+        let want = Tray::seeded(6).roll(8);
+        assert_eq!(want.iter().filter(|&&f| f == 6).count(), 1, "fixture: seed 6 must roll one 6");
+        let base = faces_to_hits(&want, 4) as i64;
+        let boosted = [ShootProfile { surge: true, surge_low: 5, surge_over_in: 9.0, ..rifle(8) }];
+        let fresh = rule_on(CURRENT_RULES_EPOCH, CURRENT_RULES_EPOCH);
+        let legacy = rule_on(0, CURRENT_RULES_EPOCH);
+        let mut t = Tray::seeded(6);
+        assert_eq!(surge_volley(&boosted, 4, 9.0, fresh, &mut t).rolls[1].count, base + 1,
+            "exactly 9.0\": strictly-past fails, the 6 alone");
+        let mut t = Tray::seeded(6);
+        assert_eq!(surge_volley(&boosted, 4, 9.5, fresh, &mut t).rolls[1].count, base + 3,
+            "9.5\": the gate opens, the 6 plus both 5s");
+        let mut t = Tray::seeded(6);
+        assert_eq!(surge_volley(&boosted, 4, 9.5, legacy, &mut t).rolls[1].count, base + 1,
+            "epoch 0: the ungated read never counts 5s");
     }
 
     // -------------------------------------- block B7: Growth Markers ---

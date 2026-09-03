@@ -255,11 +255,13 @@ pub struct Knobs {
 /// their Boosts and the rest — `unit::regen_targets`' alias loop mirroring
 /// main.gd:6637-6652), the Bane family's scope ladder
 /// (`unit.rs::stamp_unit_strikers` mirroring `_solo_striker_has_bane`
-/// main.gd:6525-6560), and the Lacerate+Counter wave — the Counter DATA
+/// main.gd:6525-6560), the Lacerate+Counter wave — the Counter DATA
 /// aliases ("Counter-Attack", "Counter in Melee") stamp the melee array's
 /// `counter` flag in `unit::UnitStatic::build_for`, read off the `rules_epoch`
-/// the closure is built under — every record below it keeps the flat Gen-0
-/// prefix reading and skips the Regeneration/Counter aliasing alike.
+/// the closure is built under — and the Surge family's own gates (the volley
+/// reads the plain auto-hit form's `surge_within_in` / `surge_low` /
+/// `surge_over_in`, main.gd:4465-4482) — every record below it keeps the flat
+/// Gen-0 prefix reading and skips the Regeneration/Counter/Surge gating alike.
 pub const CURRENT_RULES_EPOCH: u32 = 3;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
