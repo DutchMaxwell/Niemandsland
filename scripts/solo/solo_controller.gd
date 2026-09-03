@@ -8466,13 +8466,6 @@ func _plan_cache_store(key: String, planned: Array, trails: Array, flow_order: A
 		_plan_cache.erase(oldest)
 
 
-## Drop the whole prewarm cache (the board changed enough that no cached plan is trustworthy — e.g. a
-## new round, a fresh deploy, or the caller decided the state moved). Cheap; called sparingly.
-func clear_plan_cache() -> void:
-	_plan_cache.clear()
-	_plan_cache_order.clear()
-
-
 ## Expected wounds already committed against `target` by this round's earlier activations.
 func claimed_on(target: GameUnit) -> float:
 	return float(_round_claims.get(target.get_instance_id(), 0.0))

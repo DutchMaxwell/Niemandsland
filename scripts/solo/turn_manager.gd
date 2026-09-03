@@ -97,10 +97,6 @@ func has_eligible(side: int) -> bool:
 	return not eligible_units(side).is_empty()
 
 
-func is_round_over() -> bool:
-	return not has_eligible(Side.HUMAN) and not has_eligible(Side.AI)
-
-
 ## Record that `unit` completed its activation and advance the turn. Strictly ignored if the unit
 ## isn't a legal activation right now (wrong side / already activated / not in an activation state),
 ## so an off-turn or duplicate call can't desync the engine.

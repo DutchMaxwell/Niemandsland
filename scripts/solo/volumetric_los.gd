@@ -265,14 +265,6 @@ static func cells_key(p: Vector2, vol: Dictionary) -> Vector2i:
 	return TerrainRules.cell_of(q, float(vol["cell_size"]))
 
 
-## True if `p` stands inside `vol`'s footprint AND at or below its top — the endpoint-in-zone test the
-## area rule keys on (a model on a 6" roof is NOT "in" the 3.4" forest below it).
-static func point_inside_volume(p: Vector3, vol: Dictionary) -> bool:
-	if p.y > float(vol["y1"]) + Y_EPS_M:
-		return false
-	return point_in_footprint(Vector2(p.x, p.z), vol)
-
-
 ## True if the MODEL `cyl` stands IN `vol`: its eye at or below the volume's top (a model on a 6" roof is
 ## not "in" the 3.4" forest below it), and its BASE FOOTPRINT — not merely the base CENTRE — overlapping
 ## the zone. NML-1086 (maintainer game 27.08.): a Sister whose 32 mm base was planted in the trees, her
