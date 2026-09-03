@@ -1787,7 +1787,11 @@ fn strike_phase(
     // unaffected; `rules_epoch >= 1` (fresh games from this build on) turns
     // this rule on regardless of the boolean.
     let cond_ap_dice = seams.cond_ap_dice || rule_on(seams.rules_epoch, 1);
-    let r = crate::dice::resolve_melee_with_tray(&members, &def, &ut.name, charging, cond_ap_dice, tray);
+    // Shred data-alias FAMILY (unit.rs::stamp's arm) — no boolean knob of its
+    // own: on from the current rules epoch onward, pre-port corpora replay
+    // byte-exact (dice.rs::save_batch's gate).
+    let shred_alias_dice = rule_on(seams.rules_epoch, crate::acts::CURRENT_RULES_EPOCH);
+    let r = crate::dice::resolve_melee_with_tray(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, tray);
     for (mi, sc, _) in &parts {
         let melee = &statics[next.roster.profile[*mi]].melee;
         mark_spent_limited(melee, &sc.keep, &mut next.limited_used[*mi]);
@@ -3552,6 +3556,8 @@ fn resolve_with(
                                 seams.cond_ap_dice || rule_on(seams.rules_epoch, 1),
                                 // Surge's own gates: the CLASS FIX
                                 // (`acts::rule_on`), same seam as `cond_ap_dice`.
+                                rule_on(seams.rules_epoch, CURRENT_RULES_EPOCH),
+                                // The Shred-family alias gate — the same epoch.
                                 rule_on(seams.rules_epoch, CURRENT_RULES_EPOCH),
                                 tray,
                             );

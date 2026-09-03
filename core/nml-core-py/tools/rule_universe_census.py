@@ -183,6 +183,18 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # variants' 5-6 extension (reroll_save_low/reroll_save_from, over_in) is
     # read by nobody on this core — those entries stay STAMPED.
     "Bane": frozenset({"reroll_save_sixes"}),
+    # Shred-family wave: unit.rs::stamp's Shred data-alias arm (the table's
+    # main.gd:3001/:4355 `unit_rule_active(member, "Shred") or
+    # _solo_shred_facet_applies`) reads the scope pair per profile via
+    # facet_applies — that is what separates the scoped halves ("Shred in
+    # Melee"/"when Shooting") from the ungated aliases. The base wound
+    # amount (`extra_wound_per_save_one`) is deliberately NOT listed: the
+    # core's shred path reads no param for it (dice.rs shred_ones/combat.rs
+    # hard-code the table's fixed +1), and the Boost entries (Destroyer/
+    # Infected/Warbound Boost) carry it as their base half while their boost
+    # half (save_fail_max/extra_wound_save_low + over_in + upgrades) is read
+    # by nobody — they stay STAMPED until a resolver consumes those keys.
+    "Shred": frozenset({"melee_only", "shooting_only"}),
 }
 
 

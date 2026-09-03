@@ -250,6 +250,12 @@ fn shred_ones(faces: &[u8], reroll: &[u8]) -> i64 {
 /// `main._solo_save_batch` :6385-6483 — ONE batch for the whole defender (not
 /// per model), Fortified first, then the dice, then Bane's re-roll of the
 /// unmodified 6s, then Shred and the pooled Deadly multiplier.
+///
+/// `shred_alias_dice` is the Shred-FAMILY epoch gate
+/// (`sim.rs` passes `rule_on(seams.rules_epoch, CURRENT_RULES_EPOCH)`): the
+/// unit-level alias stamp (`ShootProfile.shred_alias` — Destroyer/Infected/
+/// Warbound and the two scoped halves) reaches the batch only at the current
+/// epoch, so every pre-port corpus replays byte-exact.
 #[allow(clippy::too_many_arguments)]
 fn save_batch(
     p: &ShootProfile,
@@ -259,6 +265,7 @@ fn save_batch(
     defense: i64,
     ap: i64,
     shred_grant: bool,
+    shred_alias_dice: bool,
     tray: &mut Tray,
     out: &mut ShootResult,
 ) -> i64 {
@@ -289,7 +296,11 @@ fn save_batch(
         }
     }
     let unsaved = (count - blocks_with_bane(&faces, &reroll, target)).max(0);
-    let shred = if p.shred || shred_grant { shred_ones(&faces, &reroll) } else { 0 };
+    let shred = if p.shred || shred_grant || (p.shred_alias && shred_alias_dice) {
+        shred_ones(&faces, &reroll)
+    } else {
+        0
+    };
     let mult = if p.deadly > 0 { deadly_multiplier(p.deadly, def.tough.max(1)) } else { 1 };
     unsaved * mult + shred
 }
@@ -412,9 +423,10 @@ pub fn resolve_shooting_with_tray(
     // Single-scalar convenience form (tests only — sim.rs's real caller
     // supplies the two distances separately): range gate and modifier gate
     // are the SAME point here. Assumes the shipped `cond_ap_dice=true` state
-    // and the fresh `rules_epoch` (both surge gates read); a legacy-OFF test
-    // calls `resolve_volley_with_tray` directly.
-    resolve_volley_with_tray(&one, def, "", dist_in, dist_in, true, true, tray)
+    // and the current rules epoch (both surge gates and the Shred-family
+    // alias gate on); a legacy-OFF test calls `resolve_volley_with_tray`
+    // directly (see the RED/GREEN pairs below).
+    resolve_volley_with_tray(&one, def, "", dist_in, dist_in, true, true, true, tray)
 }
 
 /// NML-1073 M5 D1-B4b — ONE member of a shooting activation's volley.
@@ -471,6 +483,7 @@ pub fn resolve_volley_with_tray(
     mod_dist_in: f64,
     cond_ap_dice: bool,
     surge_gates: bool,
+    shred_alias_dice: bool,
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
@@ -686,8 +699,8 @@ pub fn resolve_volley_with_tray(
                 ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, false, mod_dist_in, false);
             }
         }
-        let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, tray, &mut out);
-        w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, att.shred_grant, tray, &mut out);
+        let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_dice, tray, &mut out);
+        w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, att.shred_grant, shred_alias_dice, tray, &mut out);
         if p.deadly > 0 {
             out.mark("deadly");
         }
@@ -759,7 +772,7 @@ pub fn retaliate_saves_with_tray(
     let save_def = shielded_defense(def.defense, def.shielded);
     let mut sub = ShootResult::default();
     let unsaved =
-        save_batch(&ShootProfile::default(), def, def_owner, hits, save_def, 0, false, tray, &mut sub);
+        save_batch(&ShootProfile::default(), def, def_owner, hits, save_def, 0, false, false, tray, &mut sub);
     rolls.extend(sub.rolls);
     let landed = regen_batch(unsaved, def, def_owner, tray, rolls);
     (unsaved, landed)
@@ -864,6 +877,7 @@ pub fn resolve_melee_with_tray(
     def_owner: &str,
     charging: bool,
     cond_ap_dice: bool,
+    shred_alias_dice: bool,
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
@@ -987,8 +1001,8 @@ pub fn resolve_melee_with_tray(
                     ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, charging, 0.0, true);
                 }
             }
-            let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, tray, &mut out);
-            w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, sh.att.shred_grant, tray, &mut out);
+            let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, tray, &mut out);
+            w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, sh.att.shred_grant, shred_alias_dice, tray, &mut out);
             if p.deadly > 0 {
                 out.mark("deadly");
             }
@@ -1066,7 +1080,7 @@ pub fn resolve_impact_pool_with_tray(
     // "Impact is not a weapon": no Deadly, no Bane, no Shred — a bare profile
     // carrying only the pool's AP, exactly as :6325 builds it.
     let bare = ShootProfile { ap, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, false, tray, &mut out);
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, false, false, tray, &mut out);
     out.caused = w;
     out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
     out
@@ -1092,7 +1106,7 @@ pub fn resolve_breath_attack_with_tray(
         return out;
     }
     let bare = ShootProfile { ap, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, false, tray, &mut out);
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, false, false, tray, &mut out);
     out.caused = w;
     out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
     out
@@ -1314,7 +1328,7 @@ mod tests {
 
         let mut tray = Tray::seeded(low);
         let one = [Shooter { profiles: &p, keep: &[0], attacks: &[1], att: &att, owner: "gunner" }];
-        let out = resolve_volley_with_tray(&one, &defender(4, 5), "Target", 12.0, 12.0, true, true, &mut tray);
+        let out = resolve_volley_with_tray(&one, &defender(4, 5), "Target", 12.0, 12.0, true, true, true, &mut tray);
         assert_eq!(out.rolls[0].kind, "attack");
         assert_eq!(out.rolls[0].count, 1, "ONE die for the whole volley");
         assert_eq!(out.rolls[0].target, BEST_HIT_TARGET);
@@ -1427,7 +1441,7 @@ mod tests {
         let att = shooter(4);
         let sh = [Shooter { profiles: &p, keep: &[0], attacks: &[1], att: &att, owner: "" }];
         let mut tray = Tray::seeded(27);
-        let out = resolve_volley_with_tray(&sh, &stealthy, "Target", 7.95, 14.30, true, true, &mut tray);
+        let out = resolve_volley_with_tray(&sh, &stealthy, "Target", 7.95, 14.30, true, true, true, &mut tray);
         assert_eq!(out.rolls[0].target, 5, "Stealth -1 off the 14.30\" centre gap");
     }
 
@@ -1441,7 +1455,7 @@ mod tests {
         let att = shooter(4);
         let sh = [Shooter { profiles: &p, keep: &[0], attacks: &[1], att: &att, owner: "" }];
         let mut tray = Tray::seeded(27);
-        let out = resolve_volley_with_tray(&sh, &stealthy, "Target", 12.0, 6.0, true, true, &mut tray);
+        let out = resolve_volley_with_tray(&sh, &stealthy, "Target", 12.0, 6.0, true, true, true, &mut tray);
         assert_eq!(out.rolls[0].target, 4, "no Stealth penalty: the 6\" centre gap is not over 9\"");
     }
 
@@ -1710,7 +1724,7 @@ mod tests {
         };
         let mut tray = Tray::seeded(27);
         let out =
-            resolve_volley_with_tray(&[host, hero], &def, "Pathfinders", 12.0, 12.0, true, true, &mut tray);
+            resolve_volley_with_tray(&[host, hero], &def, "Pathfinders", 12.0, 12.0, true, true, true, &mut tray);
         let attacks: Vec<_> = out.rolls.iter().filter(|r| r.kind == "attack").collect();
         assert_eq!(attacks.len(), 2, "host then hero: {:?}", out.rolls);
         assert_eq!((attacks[0].count, attacks[0].target, attacks[0].owner.as_str()),
@@ -1765,14 +1779,14 @@ mod tests {
         table.absorb(resolve_impact_pool_with_tray(
             pools[0].0, pools[0].1, "Striker", &def, "Target", &mut tray));
         table.absorb(resolve_melee_with_tray(
-            &[striker(&p, &[0], &[3], &att)], &def, "Target", true, true, &mut tray));
+            &[striker(&p, &[0], &[3], &att)], &def, "Target", true, true, true, &mut tray));
         assert_eq!(table.rolls[0].count, 4);
         assert_eq!(table.rolls[0].target, IMPACT_HIT_TARGET);
         // RED PROOF: the same two phases, strikes first.
         let mut tray = Tray::seeded(27);
         let mut swapped = ShootResult::default();
         swapped.absorb(resolve_melee_with_tray(
-            &[striker(&p, &[0], &[3], &att)], &def, "Target", true, true, &mut tray));
+            &[striker(&p, &[0], &[3], &att)], &def, "Target", true, true, true, &mut tray));
         swapped.absorb(resolve_impact_pool_with_tray(
             pools[0].0, pools[0].1, "Striker", &def, "Target", &mut tray));
         assert_ne!(faces_of(&table), faces_of(&swapped), "swapping the phases must move the faces");
@@ -1790,7 +1804,7 @@ mod tests {
         let mut tray = Tray::seeded(9);
         let want = Tray::seeded(9).roll(3);
         let out = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[2], &att)], &defender(4, 4), "Target", false, true, &mut tray);
+            &[striker(&p, &[0], &[2], &att)], &defender(4, 4), "Target", false, true, true, &mut tray);
         assert_eq!(out.rolls[0].count, 3, "Ravage(1) x 3 alive models");
         assert_eq!(out.rolls[0].target, RAVAGE_WOUND_TARGET);
         assert_eq!(out.rolls[0].faces, want, "Ravage draws first");
@@ -1871,7 +1885,7 @@ mod tests {
         let def = Ctx { regeneration: true, regen_target: 2, ..defender(6, 6) };
         let mut tray = Tray::seeded(4);
         let out = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[6], &att)], &def, "Target", false, true, &mut tray);
+            &[striker(&p, &[0], &[6], &att)], &def, "Target", false, true, true, &mut tray);
         assert!(out.caused > 0, "the strike caused wounds: {:?}", out.rolls);
         assert!(out.wounds < out.caused, "Regeneration ignored some: {} vs {}", out.wounds, out.caused);
     }
@@ -1889,7 +1903,7 @@ mod tests {
                 Shooter { profiles: &hp, keep: &[0], attacks: &[4], att: &att, owner: "Host" },
                 Shooter { profiles: &hero, keep: &[0], attacks: &[1], att: &att, owner: "Hero" },
             ],
-            &defender(6, 3), "Target", false, true, &mut tray);
+            &defender(6, 3), "Target", false, true, true, &mut tray);
         let attacks: Vec<(&str, i64)> = out.rolls.iter().filter(|r| r.kind == "attack")
             .map(|r| (r.owner.as_str(), r.count)).collect();
         assert_eq!(attacks, vec![("Host", 4), ("Hero", 1)], "host first, then the hero");
@@ -2059,7 +2073,7 @@ mod tests {
         let p = [ShootProfile { surge_attack: true, ..blade(8) }];
         let att = Ctx { quality: 4, models: 1, ..Default::default() };
         let mut tray = Tray::seeded(9);
-        let out = resolve_melee_with_tray(&[striker(&p, &[0], &[8], &att)], &defender(4, 5), "Target", false, true, &mut tray);
+        let out = resolve_melee_with_tray(&[striker(&p, &[0], &[8], &att)], &defender(4, 5), "Target", false, true, true, &mut tray);
         assert_eq!(out.rolls.len(), 3, "hit roll, one extra roll, one save batch: {:?}", out.rolls);
         assert_eq!(out.rolls[1].kind, "attack");
         assert_eq!(out.rolls[1].count, 2, "the same two unmodified 6s as the shooting case");
@@ -2079,7 +2093,7 @@ mod tests {
     ) -> ShootResult {
         resolve_volley_with_tray(
             &[Shooter { profiles: p, keep: &[0], attacks: &[8], att: &shooter(quality), owner: "" }],
-            &defender(4, 5), "Target", d, d, true, gates, tray,
+            &defender(4, 5), "Target", d, d, true, gates, true, tray,
         )
     }
 
@@ -2154,7 +2168,7 @@ mod tests {
         let att = Ctx { quality: 4, models: 1, ..Default::default() };
         let mut t = Tray::seeded(6);
         let melee = resolve_melee_with_tray(
-            &[striker(&boosted, &[0], &[8], &att)], &defender(4, 5), "Target", false, true, &mut t);
+            &[striker(&boosted, &[0], &[8], &att)], &defender(4, 5), "Target", false, true, true, &mut t);
         assert_eq!(melee.rolls[1].count, faces_to_hits(&want, 4) as i64 + 1,
             "melee resolves at 0.0\": sixes only, the boost's 5s stay shut");
         let mut t = Tray::seeded(6);
@@ -2209,7 +2223,7 @@ mod tests {
         let ccw = [ShootProfile { name: "CCW".into(), attacks: 6, count: 1, range: 0, ..Default::default() }];
         let strikers = [Shooter { profiles: &ccw, keep: &[0], attacks: &[6], att: &grown_att, owner: "" }];
         let mut t3 = Tray::seeded(27);
-        let melee = resolve_melee_with_tray(&strikers, &defender(4, 5), "", false, true, &mut t3);
+        let melee = resolve_melee_with_tray(&strikers, &defender(4, 5), "", false, true, true, &mut t3);
         assert_eq!(melee.rolls[1].target, 5, "the SAME AP delta reaches the melee save too");
     }
 
@@ -2229,7 +2243,7 @@ mod tests {
         let ccw = [ShootProfile { name: "CCW".into(), attacks: 1, count: 1, range: 0, ..Default::default() }];
         let strikers = [Shooter { profiles: &ccw, keep: &[0], attacks: &[1], att: &grown, owner: "" }];
         let mut t2 = Tray::seeded(27);
-        let melee = resolve_melee_with_tray(&strikers, &defender(4, 5), "", false, true, &mut t2);
+        let melee = resolve_melee_with_tray(&strikers, &defender(4, 5), "", false, true, true, &mut t2);
         assert_eq!(melee.rolls[0].target, 4,
             "the hit facet is shooting-only: melee_hit_target never reads growth_hit_mod");
     }
@@ -2351,7 +2365,7 @@ mod tests {
         let p = [us.melee[0].clone()];
         let mut tray = Tray::seeded(27);
         let strikers = [striker(&p, &[0], &[2], &us.ctx)];
-        let out = resolve_melee_with_tray(&strikers, &defender(4, 5), "Target", false, true, &mut tray);
+        let out = resolve_melee_with_tray(&strikers, &defender(4, 5), "Target", false, true, true, &mut tray);
         assert_eq!(out.rolls[0].kind, "attack");
         assert_eq!(out.rolls[0].target, 4);
         assert_eq!(out.rolls[0].faces, Tray::seeded(27).roll(2),
@@ -2475,11 +2489,11 @@ mod tests {
         let def = defender(4, 5);
         let mut t1 = Tray::seeded(27);
         let charging = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true, true, &mut t1);
+            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true, true, true, &mut t1);
         assert_eq!(charging.rolls[1].target, 5, "AP(+1) on the charge: Defense 4+ -> 5+");
         let mut t2 = Tray::seeded(27);
         let steady = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", false, true, &mut t2);
+            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", false, true, true, &mut t2);
         assert_eq!(steady.rolls[1].target, 4, "no charge: Piercing Assault stays silent");
     }
 
@@ -2497,11 +2511,11 @@ mod tests {
         let def = defender(4, 5);
         let mut off = Tray::seeded(27);
         let legacy = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true, false, &mut off);
+            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true, false, true, &mut off);
         assert_eq!(legacy.rolls[1].target, 4, "knob OFF: charging Piercing Assault still saves at 4+");
         let mut on = Tray::seeded(27);
         let shipped = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true, true, &mut on);
+            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true, true, true, &mut on);
         assert_eq!(shipped.rolls[1].target, 5, "knob ON: the same charge now saves at 5+");
     }
 
@@ -2523,13 +2537,208 @@ mod tests {
         let mut off = Tray::seeded(27);
         let legacy = resolve_melee_with_tray(
             &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true,
-            false || rule_on(0, 1), &mut off);
+            false || rule_on(0, 1), true, &mut off);
         assert_eq!(legacy.rolls[1].target, 4, "epoch 0, knob false: still saves at 4+");
         let mut on = Tray::seeded(27);
         let shipped = resolve_melee_with_tray(
             &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true,
-            false || rule_on(CURRENT_RULES_EPOCH, 1), &mut on);
+            false || rule_on(CURRENT_RULES_EPOCH, 1), true, &mut on);
         assert_eq!(shipped.rolls[1].target, 5, "epoch CURRENT_RULES_EPOCH, knob false: now saves at 5+");
+    }
+
+    // ------------- Wave: the Shred data-alias FAMILY (unit.rs::stamp's arm
+    // 6 -> dice.rs::save_batch's `shred_alias_dice` epoch gate). One RED/GREEN
+    // pair per ported name: the alias shreds at `rules_epoch =
+    // CURRENT_RULES_EPOCH` (what a fresh play_game() stamps), stays silent at
+    // epoch 0 (every pre-port corpus) and without the rule.
+
+    /// Fixtures pulled from the REAL registries — `Destroyer` is an aof ogres
+    /// faction entry, `Infected` a gf infected_colonies one, `Warbound` a gf
+    /// war_disciples one, the two scoped halves live in gf's COMMON block
+    /// (lookup's faction->common fallback fields them for any faction).
+    const SHRED_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "destroyer":{"unit_id":"destroyer","name":"Destroyer","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"ogres",
+        "special_rules":["Destroyer"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Blade","range":0,"attacks":6,"count":1,"ap":0,"rules":[]}]},
+      "plain_ogre":{"unit_id":"plain_ogre","name":"Plain Ogre","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"ogres",
+        "special_rules":[],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Blade","range":0,"attacks":6,"count":1,"ap":0,"rules":[]}]},
+      "infected":{"unit_id":"infected","name":"Infected","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"infected_colonies",
+        "special_rules":["Infected"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]}]},
+      "warbound":{"unit_id":"warbound","name":"Warbound","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"war_disciples",
+        "special_rules":["Warbound"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Blade","range":0,"attacks":6,"count":1,"ap":0,"rules":[]}]},
+      "shred_melee":{"unit_id":"shred_melee","name":"Shred in Melee","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters",
+        "special_rules":["Shred in Melee"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]},
+          {"name":"Blade","range":0,"attacks":6,"count":1,"ap":0,"rules":[]}]},
+      "shred_shooting":{"unit_id":"shred_shooting","name":"Shred when Shooting","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters",
+        "special_rules":["Shred when Shooting"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]},
+          {"name":"Blade","range":0,"attacks":6,"count":1,"ap":0,"rules":[]}]},
+      "plain_gf":{"unit_id":"plain_gf","name":"Plain","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters",
+        "special_rules":[],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]},
+          {"name":"Blade","range":0,"attacks":6,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    fn shred_static(id: &str) -> UnitStatic {
+        let header = read_act_header(SHRED_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get(id).expect(id);
+        UnitStatic::build(&mut reg, p)
+    }
+
+    #[test]
+    fn a_destroyer_carrier_shreds_melee_only_at_the_current_epoch() {
+        use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
+        let us = shred_static("destroyer");
+        let p = [us.melee[0].clone()];
+        let def = defender(4, 5);
+        let mut t_on = Tray::seeded(2);
+        let on = resolve_melee_with_tray(&[striker(&p, &[0], &[6], &us.ctx)], &def, "Target",
+            false, true, rule_on(CURRENT_RULES_EPOCH, CURRENT_RULES_EPOCH), &mut t_on);
+        let mut t_off = Tray::seeded(2);
+        let off = resolve_melee_with_tray(&[striker(&p, &[0], &[6], &us.ctx)], &def, "Target",
+            false, true, rule_on(0, CURRENT_RULES_EPOCH), &mut t_off);
+        assert_eq!(on.rolls, off.rolls, "the gate moves no die");
+        assert!(on.wounds > off.wounds,
+            "epoch CURRENT: every unmodified Defense 1 deals +1 wound ({} -> {})", off.wounds, on.wounds);
+        assert_eq!(on.wounds - off.wounds, on.rolls[1].faces.iter().filter(|&&f| f as i64 == 1).count() as i64,
+            "the delta is exactly the Defense 1s");
+        // and the plain ogre (no rule, gate on) never shreds
+        let plain = shred_static("plain_ogre");
+        let pp = [plain.melee[0].clone()];
+        let mut t_c = Tray::seeded(2);
+        let control = resolve_melee_with_tray(&[striker(&pp, &[0], &[6], &plain.ctx)], &def, "Target",
+            false, true, true, &mut t_c);
+        assert_eq!(control.wounds, off.wounds, "without the rule the same dice shred nothing");
+    }
+
+    #[test]
+    fn an_infected_carrier_shreds_shooting_only_at_the_current_epoch() {
+        use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
+        let us = shred_static("infected");
+        let p = [us.shoot[0].clone()];
+        let def = defender(4, 5);
+        let mut t_on = Tray::seeded(3);
+        let on = resolve_volley_with_tray(&[striker(&p, &[0], &[6], &us.ctx)], &def, "Target",
+            12.0, 12.0, true, true, rule_on(CURRENT_RULES_EPOCH, CURRENT_RULES_EPOCH), &mut t_on);
+        let mut t_off = Tray::seeded(3);
+        let off = resolve_volley_with_tray(&[striker(&p, &[0], &[6], &us.ctx)], &def, "Target",
+            12.0, 12.0, true, true, rule_on(0, CURRENT_RULES_EPOCH), &mut t_off);
+        assert_eq!(on.rolls, off.rolls, "the gate moves no die");
+        assert!(on.wounds > off.wounds,
+            "epoch CURRENT: the shooting save 1s shred ({} -> {})", off.wounds, on.wounds);
+        assert_eq!(on.wounds - off.wounds, on.rolls[1].faces.iter().filter(|&&f| f as i64 == 1).count() as i64,
+            "the delta is exactly the Defense 1s");
+    }
+
+    #[test]
+    fn a_warbound_carrier_shreds_melee_only_at_the_current_epoch() {
+        use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
+        let us = shred_static("warbound");
+        let p = [us.melee[0].clone()];
+        let def = defender(4, 5);
+        let mut t_on = Tray::seeded(2);
+        let on = resolve_melee_with_tray(&[striker(&p, &[0], &[6], &us.ctx)], &def, "Target",
+            false, true, rule_on(CURRENT_RULES_EPOCH, CURRENT_RULES_EPOCH), &mut t_on);
+        let mut t_off = Tray::seeded(2);
+        let off = resolve_melee_with_tray(&[striker(&p, &[0], &[6], &us.ctx)], &def, "Target",
+            false, true, rule_on(0, CURRENT_RULES_EPOCH), &mut t_off);
+        assert_eq!(on.rolls, off.rolls, "the gate moves no die");
+        assert!(on.wounds > off.wounds,
+            "epoch CURRENT: Warbound's save 1s shred ({} -> {})", off.wounds, on.wounds);
+        assert_eq!(on.wounds - off.wounds, on.rolls[1].faces.iter().filter(|&&f| f as i64 == 1).count() as i64);
+    }
+
+    #[test]
+    fn shred_in_melee_shreds_the_melee_half_and_not_the_shooting_half() {
+        let us = shred_static("shred_melee");
+        let plain = shred_static("plain_gf");
+        let def = defender(4, 5);
+        // melee half: the alias shreds — the wound delta over a non-carrier on
+        // the same seed is exactly the save batch's Defense 1s.
+        let pm = [us.melee[0].clone()];
+        let cm = [plain.melee[0].clone()];
+        let mut t_a = Tray::seeded(2);
+        let with = resolve_melee_with_tray(&[striker(&pm, &[0], &[6], &us.ctx)], &def, "Target",
+            false, true, true, &mut t_a);
+        let mut t_b = Tray::seeded(2);
+        let without = resolve_melee_with_tray(&[striker(&cm, &[0], &[6], &plain.ctx)], &def, "Target",
+            false, true, true, &mut t_b);
+        assert_eq!(with.rolls, without.rolls, "the gate moves no die");
+        assert!(with.wounds > without.wounds,
+            "melee half shreds ({} -> {})", without.wounds, with.wounds);
+        assert_eq!(with.wounds - without.wounds,
+            with.rolls[1].faces.iter().filter(|&&f| f as i64 == 1).count() as i64);
+        // shooting half: the melee_only facet keeps the rifle silent — the
+        // carrier's volley lands exactly a non-carrier's on the same seed.
+        let ps = [us.shoot[0].clone()];
+        let cs2 = [plain.shoot[0].clone()];
+        let mut t_c = Tray::seeded(3);
+        let shoot_with = resolve_volley_with_tray(&[striker(&ps, &[0], &[6], &us.ctx)], &def, "Target",
+            12.0, 12.0, true, true, true, &mut t_c);
+        let mut t_d = Tray::seeded(3);
+        let shoot_without = resolve_volley_with_tray(&[striker(&cs2, &[0], &[6], &plain.ctx)], &def, "Target",
+            12.0, 12.0, true, true, true, &mut t_d);
+        assert_eq!(shoot_with.rolls, shoot_without.rolls);
+        assert_eq!(shoot_with.wounds, shoot_without.wounds,
+            "shooting_only: the melee-only alias never shreds a ranged save");
+    }
+
+    #[test]
+    fn shred_when_shooting_shreds_the_shooting_half_and_not_the_melee_half() {
+        let us = shred_static("shred_shooting");
+        let plain = shred_static("plain_gf");
+        let def = defender(4, 5);
+        // shooting half: the alias shreds the save batch.
+        let ps = [us.shoot[0].clone()];
+        let cs = [plain.shoot[0].clone()];
+        let mut t_a = Tray::seeded(3);
+        let shoot_with = resolve_volley_with_tray(&[striker(&ps, &[0], &[6], &us.ctx)], &def, "Target",
+            12.0, 12.0, true, true, true, &mut t_a);
+        let mut t_b = Tray::seeded(3);
+        let shoot_without = resolve_volley_with_tray(&[striker(&cs, &[0], &[6], &plain.ctx)], &def, "Target",
+            12.0, 12.0, true, true, true, &mut t_b);
+        assert_eq!(shoot_with.rolls, shoot_without.rolls, "the gate moves no die");
+        assert!(shoot_with.wounds > shoot_without.wounds,
+            "shooting half shreds ({} -> {})", shoot_without.wounds, shoot_with.wounds);
+        assert_eq!(shoot_with.wounds - shoot_without.wounds,
+            shoot_with.rolls[1].faces.iter().filter(|&&f| f as i64 == 1).count() as i64);
+        // melee half: the shooting_only facet keeps the blade silent.
+        let pm = [us.melee[0].clone()];
+        let cm2 = [plain.melee[0].clone()];
+        let mut t_c = Tray::seeded(2);
+        let with = resolve_melee_with_tray(&[striker(&pm, &[0], &[6], &us.ctx)], &def, "Target",
+            false, true, true, &mut t_c);
+        let mut t_d = Tray::seeded(2);
+        let without = resolve_melee_with_tray(&[striker(&cm2, &[0], &[6], &plain.ctx)], &def, "Target",
+            false, true, true, &mut t_d);
+        assert_eq!(with.rolls, without.rolls);
+        assert_eq!(with.wounds, without.wounds,
+            "melee half: the shooting-only alias never shreds in melee");
     }
 
     /// Condition kind 2 — `vs_tough_ge` behind `charge_only` (Melee Slayer):
@@ -2542,15 +2751,15 @@ mod tests {
         let soft = Ctx { defense: 4, tough: 2, models: 5, ..Default::default() };
         let mut t1 = Tray::seeded(27);
         let charging_tough = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[6], &us.ctx)], &tough, "Target", true, true, &mut t1);
+            &[striker(&p, &[0], &[6], &us.ctx)], &tough, "Target", true, true, true, &mut t1);
         assert_eq!(charging_tough.rolls[1].target, 6, "AP(+2) charging vs Tough(3)+: 4+ -> 6+");
         let mut t2 = Tray::seeded(27);
         let steady_tough = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[6], &us.ctx)], &tough, "Target", false, true, &mut t2);
+            &[striker(&p, &[0], &[6], &us.ctx)], &tough, "Target", false, true, true, &mut t2);
         assert_eq!(steady_tough.rolls[1].target, 4, "not charging: the charge_only gate stays shut");
         let mut t3 = Tray::seeded(27);
         let charging_soft = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[6], &us.ctx)], &soft, "Target", true, true, &mut t3);
+            &[striker(&p, &[0], &[6], &us.ctx)], &soft, "Target", true, true, true, &mut t3);
         assert_eq!(charging_soft.rolls[1].target, 4, "charging a Tough(2) target: vs_tough_ge(3) stays shut");
     }
 
@@ -2588,7 +2797,7 @@ mod tests {
         let melee = [us.melee[0].clone()];
         let mut t3 = Tray::seeded(27);
         let charging = resolve_melee_with_tray(
-            &[striker(&melee, &[0], &[6], &us.ctx)], &tough, "Target", true, true, &mut t3);
+            &[striker(&melee, &[0], &[6], &us.ctx)], &tough, "Target", true, true, true, &mut t3);
         assert_eq!(charging.rolls[1].target, 6, "charge leg: charging vs Tough(3)+ is AP(+2) on its own too");
     }
 }
