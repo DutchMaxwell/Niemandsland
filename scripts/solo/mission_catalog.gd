@@ -45,6 +45,14 @@ static func mission_ids() -> Array:
 	return ids if not ids.is_empty() else ["duel"]
 
 
+## Player-facing label for the mission picker — READS the catalog's own "name" field so a catalog
+## edit renames the menu everywhere at once; working ids ("king_of_the_hill") are never shown.
+## Falls back to a humanized id only for a mission predating the field.
+static func display_name(id: String) -> String:
+	var n := str(get_mission(id).get("name", ""))
+	return n if not n.is_empty() else id.capitalize()
+
+
 ## The mission definition for `id`; unknown ids return DUEL (loudly), so a
 ## stale save or a typo'd env can never select a mission that does not exist.
 static func get_mission(id: String) -> Dictionary:
