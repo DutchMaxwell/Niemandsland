@@ -220,7 +220,7 @@ impl RulesMap {
 }
 
 /// One spell-list entry of `spells_mechanics_<system>.json`.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Spell {
     pub name: String,
     pub status: String,
@@ -238,6 +238,13 @@ pub struct Spell {
     /// test: a NON-empty dict makes the cast a stamp even when every field the
     /// sim reads is zero (e.g. a `casting_mod`-only debuff).
     pub modifier: SpellModifier,
+    /// `effect.grants_rule` — the rule name a "buff"/"debuff" cast hands its
+    /// target(s), "" when the spell has none (DEFECT_LEDGER #33: a
+    /// `grants_rule`-only spell had no field to parse it into at all, so
+    /// Animate Spirit/Infuse Bloodthirst/Terror Seeker/Inspiring Bots/Mending
+    /// Bots burned their pick and tokens for nothing). Same shape as
+    /// `UtilityBuff.grants_rule` (unit.rs).
+    pub grants_rule: String,
 }
 
 /// The six `effect.modifier` fields `BattleSim._apply_cast_effect` reads
@@ -382,6 +389,11 @@ fn spell_of(e: &Value) -> Spell {
             .unwrap_or("")
             .to_string(),
         modifier: modifier_of(eff.and_then(|v| v.get("modifier"))),
+        grants_rule: eff
+            .and_then(|v| v.get("grants_rule"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
     }
 }
 
