@@ -960,6 +960,15 @@
      "pooled": true
     }
    },
+   "Courageous": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1,
+     "scope": "unit"
+    }
+   },
    "Destructive": {
     "primitive": "Destructive",
     "rated": false,
@@ -1455,6 +1464,14 @@
    }
   },
   "blessed_sisters": {
+   "Brutal": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
    "Casting Debuff": {
     "primitive": "Utility Buff",
     "rated": false,
@@ -1780,6 +1797,14 @@
     "rated": false,
     "book_version": "3.5.3"
    },
+   "Predator": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack": true
+    }
+   },
    "Rapid Rush": {
     "primitive": "Rapid Rush",
     "rated": false,
@@ -1961,6 +1986,14 @@
     "book_version": "3.5.3",
     "params": {
      "hit_bonus": 1
+    }
+   },
+   "Predator": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack": true
     }
    },
    "Rapid Rush": {
@@ -2160,6 +2193,16 @@
     "primitive": null,
     "rated": false,
     "book_version": "3.5.3"
+   },
+   "Screened": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9,
+     "applies_charged": true
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -2541,6 +2584,15 @@
      "scope": "shooting",
      "target": "enemy",
      "vs_marked": true
+    }
+   },
+   "Precision Hunter": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "over_in": 9
     }
    },
    "Precision Spotter": {
@@ -3463,6 +3515,14 @@
      "hit_penalty": 1
     }
    },
+   "Nimble": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 0
+    }
+   },
    "Point-Blank Surge": {
     "primitive": "Surge",
     "rated": false,
@@ -3728,6 +3788,14 @@
     "params": {
      "hit_bonus": 1,
      "melee_only": true
+    }
+   },
+   "Predator": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack": true
     }
    },
    "Rapid Advance": {
@@ -4468,6 +4536,15 @@
      "range_in": 12.0,
      "activates_friendly": true,
      "no_chain": true
+    }
+   },
+   "Courageous": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1,
+     "scope": "unit"
     }
    },
    "Crack": {
@@ -6050,6 +6127,16 @@
      "once": false
     }
    },
+   "Screened": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9,
+     "applies_charged": true
+    }
+   },
    "Shred": {
     "primitive": "Shred",
     "rated": false,
@@ -6145,6 +6232,14 @@
     "book_version": "3.5.3",
     "params": {
      "place_d3_plus": 1
+    }
+   },
+   "Brutal": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
     }
    },
    "Ferocious": {
@@ -7577,6 +7672,14 @@
      "uses_per_game": 1
     }
    },
+   "Predator": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack": true
+    }
+   },
    "Primal": {
     "primitive": "Surge",
     "rated": false,
@@ -8005,6 +8108,16 @@
     "book_version": "3.5.2",
     "params": {
      "incoming_ap_reduction": 1
+    }
+   },
+   "Screened": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9,
+     "applies_charged": true
     }
    },
    "Surge": {
@@ -8819,6 +8932,14 @@
      "requires_tough": true
     }
    },
+   "Nimble": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 0
+    }
+   },
    "Piercing Assault": {
     "primitive": "Piercing Assault",
     "rated": false,
@@ -9009,6 +9130,14 @@
      "heal_d3": true,
      "range_in": 3.0,
      "requires_tough": true
+    }
+   },
+   "Nimble": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 0
     }
    },
    "Piercing Assault": {
@@ -9250,6 +9379,16 @@
     "primitive": null,
     "rated": false,
     "book_version": "3.5.3"
+   },
+   "Screened": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9,
+     "applies_charged": true
+    }
    },
    "Shred": {
     "primitive": "Shred",

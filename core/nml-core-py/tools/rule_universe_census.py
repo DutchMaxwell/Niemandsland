@@ -147,6 +147,17 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # itself marks its arrival_strike "planned") rode the bare 'infiltrate'
     # token to PORTED - the #489 over-credit shape, declined by the spec (§6).
     "Infiltrate": frozenset({"min_enemy_dist_in"}),
+    # Rung C data port (AUDIT_armybook_flanks_2026-09-02.md): unit.rs's
+    # `stealth_alias_of` is a genuine per-entry DATA-ALIAS loop (scans every
+    # carried rule, keeps the best `hit_penalty` off any OTHER entry whose own
+    # primitive is "Stealth") — the same shape as Infiltrate/Bounding above,
+    # just never given a CONSUMED_PARAM_KEYS row before this port. Screened is
+    # its first alias to actually exist in the registry.
+    "Stealth": frozenset({"hit_penalty"}),
+    # Rung C data port: unit.rs's `banner_bonus_of` is the same kind of
+    # generic DATA-ALIAS loop for `morale_bonus`, feeding `CaptureReads` —
+    # Courageous is its first alias.
+    "Banner": frozenset({"morale_bonus"}),
 }
 
 

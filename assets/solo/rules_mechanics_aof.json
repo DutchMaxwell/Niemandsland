@@ -1165,6 +1165,16 @@
     "rated": false,
     "book_version": "3.5.3"
    },
+   "Screened": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9,
+     "applies_charged": true
+    }
+   },
    "Shred": {
     "primitive": "Shred",
     "rated": false,
@@ -1746,6 +1756,14 @@
      "melee_only": true
     }
    },
+   "Nimble": {
+    "primitive": "Bounding",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "place_d3_plus": 0
+    }
+   },
    "Precision Debuff": {
     "primitive": "Utility Buff",
     "rated": false,
@@ -1926,6 +1944,14 @@
      "range_in": 12,
      "target": "friendly",
      "once": true
+    }
+   },
+   "Predator": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack": true
     }
    },
    "Quick Readjustment": {
@@ -2826,6 +2852,16 @@
     "rated": false,
     "book_version": "3.5.3"
    },
+   "Screened": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9,
+     "applies_charged": true
+    }
+   },
    "Shielded": {
     "primitive": "Shielded",
     "rated": false,
@@ -2984,6 +3020,16 @@
     "book_version": "3.5.2",
     "params": {
      "hit_bonus": 1
+    }
+   },
+   "Screened": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.2",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9,
+     "applies_charged": true
     }
    },
    "Surge": {
@@ -3472,6 +3518,14 @@
     "book_version": "3.5.3",
     "params": {
      "place_d3_plus": 1
+    }
+   },
+   "Brutal": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
     }
    },
    "Good Fighter": {
@@ -4244,6 +4298,15 @@
      "range_in": 12.0,
      "activates_friendly": true,
      "no_chain": true
+    }
+   },
+   "Courageous": {
+    "primitive": "Banner",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "morale_bonus": 1,
+     "scope": "unit"
     }
    },
    "Crack": {
@@ -5259,6 +5322,14 @@
    }
   },
   "orcs": {
+   "Brutal": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "bonus_hits_per_six": 1
+    }
+   },
    "Counter-Attack": {
     "primitive": "Counter",
     "rated": false,
@@ -6190,6 +6261,16 @@
     "rated": false,
     "book_version": "3.5.3"
    },
+   "Screened": {
+    "primitive": "Stealth",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_penalty": 1,
+     "over_in": 9,
+     "applies_charged": true
+    }
+   },
    "Shred": {
     "primitive": "Shred",
     "rated": false,
@@ -6915,6 +6996,14 @@
      "uses_per_game": 1
     }
    },
+   "Predator": {
+    "primitive": "Surge",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "extra_attack": true
+    }
+   },
    "Primal": {
     "primitive": "Surge",
     "rated": false,
@@ -7339,6 +7428,15 @@
      "heal_d3": true,
      "range_in": 3.0,
      "requires_tough": true
+    }
+   },
+   "Precision Hunter": {
+    "primitive": "Shot Modifier",
+    "rated": false,
+    "book_version": "3.5.3",
+    "params": {
+     "hit_bonus": 1,
+     "over_in": 9
     }
    },
    "Rending when Shooting Aura": {

@@ -1180,14 +1180,16 @@ fn stamp_unit_strikers(p: &Profile, shoot: &mut [ShootProfile]) {
 }
 
 /// `RulesRegistry.unit_rules_of_primitive(shooter, "Shot Modifier")`,
-/// main.gd:5681-5701 — scoped to this port's seven named carriers: B4's
+/// main.gd:5681-5701 — scoped to this port's eight named carriers: B4's
 /// (Good Shot, Bad Shot, Targeting Visor) plus block C3's four flat/over-9"
 /// shooting siblings (Targeting Visor Boost, Precision Shooter Aura,
-/// Buccaneer, Buccaneer Boost; `assets/solo/rules_mechanics_gf/aof.json`).
+/// Buccaneer, Buccaneer Boost; `assets/solo/rules_mechanics_gf/aof.json`) plus
+/// the rung-C data alias Precision Hunter (Targeting Visor's word-for-word
+/// twin — AUDIT_armybook_flanks_2026-09-02.md).
 /// Buccaneer's `over_in: 9` alone routes it into `hit_bonus_over9` (strictly
 /// past 9"); everything else is flat — `phase: "shoot"` is read by nobody in
 /// the table loop, so Precision Shooter Aura is simply a flat shooting bonus.
-/// None of the seven sets `melee_only` / `all_attacks` / `when: charge`, so —
+/// None of the eight sets `melee_only` / `all_attacks` / `when: charge`, so —
 /// unlike the unit-level strikers above — the bonus never reaches `melee`,
 /// only `shoot` (main.gd:5627-5636 excludes it from the melee branch on that
 /// same gate). The melee-/charge-scoped members (Good Fighter, Precision
@@ -1207,6 +1209,11 @@ fn stamp_shot_modifier(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
         "Precision Shooter Aura",
         "Buccaneer",
         "Buccaneer Boost",
+        // Rung C data port (AUDIT_armybook_flanks_2026-09-02.md): Precision
+        // Hunter is Targeting Visor's word-for-word twin ("+1 to hit rolls
+        // when shooting at enemies over 9\" away") — same primitive, same
+        // params shape, added here rather than a new name-literal branch.
+        "Precision Hunter",
     ] {
         if !unit_rule_active(reg, p, name) {
             continue;
@@ -1508,6 +1515,22 @@ pub(crate) fn melee_profiles(weapons: &[Weapon]) -> Vec<ShootProfile> {
     merge_identical(raw)
 }
 
+/// Nimble is Bounding's word-for-word twin, own D3 reach vs Bounding's D3+1
+/// (AUDIT_armybook_flanks_2026-09-02.md rung C) — same named-carrier loop as
+/// `unpredictable_shooting_params` above.
+fn bounding_of(reg: &mut Registries, p: &Profile) -> Option<f64> {
+    for name in ["Bounding", "Nimble"] {
+        if unit_rule_active(reg, p, name) {
+            let map = reg.rules_for(&p.game_system);
+            return Some(match map.lookup(&p.faction_folder, name) {
+                Some(e) => e.param_f("place_d3_plus", 1.0),
+                None => 1.0,
+            });
+        }
+    }
+    None
+}
+
 impl UnitStatic {
     pub fn build(reg: &mut Registries, p: &Profile) -> UnitStatic {
         let mut unimplemented: Vec<Unimplemented> = Vec::new();
@@ -1558,15 +1581,7 @@ impl UnitStatic {
             mend_active: unit_rule_active(reg, p, "Mend"),
             breath_attack_active: unit_rule_active(reg, p, "Breath Attack"),
             is_hero: has_special_rule(&p.special_rules, "Hero"),
-            bounding: if unit_rule_active(reg, p, "Bounding") {
-                let map = reg.rules_for(&p.game_system);
-                Some(match map.lookup(&p.faction_folder, "Bounding") {
-                    Some(e) => e.param_f("place_d3_plus", 1.0),
-                    None => 1.0,
-                })
-            } else {
-                None
-            },
+            bounding: bounding_of(reg, p),
             versatile_reach_charge_in: if unit_rule_active(reg, p, "Versatile Reach")
                 || has_special_rule(&p.special_rules, "Versatile Reach Aura")
             {
@@ -2145,5 +2160,124 @@ mod tests {
             us.versatile_reach_charge_in, Some(2.0),
             "the raw-name arm makes the core independent of the expander"
         );
+    }
+
+    /// Rung C data port (AUDIT_armybook_flanks_2026-09-02.md §"NO REGISTRY
+    /// ENTRY"): six names with no registry entry in any system, now aliased
+    /// onto an existing primitive through the SAME faction folders the new
+    /// `assets/solo/rules_mechanics_gf.json` entries live in. Each carrier
+    /// sits next to a plain non-carrier in the identical faction, so the
+    /// registry lookup (system, faction, name) is exercised for real, not
+    /// synthesised.
+    const RUNG_C_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "screened_unit":{"unit_id":"screened_unit","name":"Screened Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"change_disciples","special_rules":["Screened"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_change_disciple":{"unit_id":"plain_change_disciple","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"change_disciples","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "predator_unit":{"unit_id":"predator_unit","name":"Predator Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"saurian_starhost","special_rules":["Predator"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_saurian_starhost":{"unit_id":"plain_saurian_starhost","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"saurian_starhost","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]},{"name":"Claws","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "brutal_unit":{"unit_id":"brutal_unit","name":"Brutal Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":["Brutal"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Claws","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_blessed_sisters":{"unit_id":"plain_blessed_sisters","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Claws","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "precision_hunter_unit":{"unit_id":"precision_hunter_unit","name":"Precision Hunter Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"dao_union","special_rules":["Precision Hunter"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_dao_union":{"unit_id":"plain_dao_union","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"dao_union","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "nimble_unit":{"unit_id":"nimble_unit","name":"Nimble Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"elven_jesters","special_rules":["Nimble"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Claws","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_elven_jesters":{"unit_id":"plain_elven_jesters","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"elven_jesters","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Claws","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "courageous_unit":{"unit_id":"courageous_unit","name":"Courageous Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":["Courageous"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Claws","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_alien_hives":{"unit_id":"plain_alien_hives","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Claws","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// Screened = the Stealth DATA ALIAS (`stealth_alias_of`): -1 to hit past
+    /// 9", same shape as the pre-existing `wormhole_daemons_of_plague` entry.
+    /// RED (drop the new `change_disciples` registry entry): the alias
+    /// fields fall back to the carrier's plain-Fearless sibling's zero.
+    #[test]
+    fn screened_carries_the_stealth_alias_a_plain_sibling_does_not() {
+        let header = read_act_header(RUNG_C_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let carrier = header.profiles.get("screened_unit").expect("screened_unit");
+        let us = UnitStatic::build(&mut reg, carrier);
+        assert_eq!(us.ctx.stealth_alias_penalty, 1, "Screened's own hit_penalty");
+        assert_eq!(us.ctx.stealth_alias_over_in, 9.0, "Screened's own over_in");
+        let plain = header.profiles.get("plain_change_disciple").expect("plain_change_disciple");
+        let us = UnitStatic::build(&mut reg, plain);
+        assert_eq!(us.ctx.stealth_alias_penalty, 0, "no Screened, no alias");
+    }
+
+    /// Predator = the Surge `extra_attack` DATA ALIAS, same shape as the
+    /// pre-existing `ratmen_clans` entry — reaches both profiles (ungated).
+    /// RED (drop the new `saurian_starhost` registry entry): `surge_attack`
+    /// stays false on both.
+    #[test]
+    fn predator_reaches_both_profiles_via_the_surge_extra_attack_alias() {
+        let header = read_act_header(RUNG_C_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let carrier = header.profiles.get("predator_unit").expect("predator_unit");
+        let us = UnitStatic::build(&mut reg, carrier);
+        assert!(us.shoot[0].surge_attack, "Predator's extra-attack-die facet, ranged");
+        assert!(us.melee[0].surge_attack, "and melee — Predator carries no facet gate");
+        let plain = header.profiles.get("plain_saurian_starhost").expect("plain_saurian_starhost");
+        let us = UnitStatic::build(&mut reg, plain);
+        assert!(!us.shoot[0].surge_attack, "no Predator, no extra-attack die");
+    }
+
+    /// Brutal = Devout's twin: the PLAIN auto-hit Surge alias (no
+    /// `extra_attack`), so it lands on `surge`, never `surge_attack`. RED
+    /// (drop the new `blessed_sisters` registry entry): `surge` stays false.
+    #[test]
+    fn brutal_fires_the_plain_surge_auto_hit_not_the_extra_attack_die() {
+        let header = read_act_header(RUNG_C_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let carrier = header.profiles.get("brutal_unit").expect("brutal_unit");
+        let us = UnitStatic::build(&mut reg, carrier);
+        assert!(us.melee[0].surge, "Brutal's plain auto-hit facet");
+        assert!(!us.melee[0].surge_attack, "not the extra-attack-die form");
+        let plain = header.profiles.get("plain_blessed_sisters").expect("plain_blessed_sisters");
+        let us = UnitStatic::build(&mut reg, plain);
+        assert!(!us.melee[0].surge, "no Brutal, no auto-hit");
+    }
+
+    /// Precision Hunter = Targeting Visor's word-for-word twin, now on the
+    /// `stamp_shot_modifier` allow-list: +1 to hit past 9". RED (drop the
+    /// list entry, or the new `dao_union` registry entry): `hit_bonus_over9`
+    /// stays 0.
+    #[test]
+    fn precision_hunter_stamps_the_over_nine_hit_bonus() {
+        let header = read_act_header(RUNG_C_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let carrier = header.profiles.get("precision_hunter_unit").expect("precision_hunter_unit");
+        let us = UnitStatic::build(&mut reg, carrier);
+        assert_eq!(us.shoot[0].hit_bonus_over9, 1, "Precision Hunter's own hit_bonus");
+        assert_eq!(us.shoot[0].hit_bonus, 0, "flat (non-over-9) leg stays untouched");
+        let plain = header.profiles.get("plain_dao_union").expect("plain_dao_union");
+        let us = UnitStatic::build(&mut reg, plain);
+        assert_eq!(us.shoot[0].hit_bonus_over9, 0, "no Precision Hunter, no bonus");
+    }
+
+    /// Nimble = Bounding's word-for-word twin, own D3 (vs Bounding's D3+1) —
+    /// `bounding_of`'s named-carrier loop. RED (drop the new
+    /// `elven_jesters` registry entry): `bounding` falls back to `None`.
+    #[test]
+    fn nimble_stamps_its_own_d3_reach_not_boundings_d3_plus_one() {
+        let header = read_act_header(RUNG_C_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let carrier = header.profiles.get("nimble_unit").expect("nimble_unit");
+        let us = UnitStatic::build(&mut reg, carrier);
+        assert_eq!(us.bounding, Some(0.0), "Nimble's own place_d3_plus");
+        let plain = header.profiles.get("plain_elven_jesters").expect("plain_elven_jesters");
+        let us = UnitStatic::build(&mut reg, plain);
+        assert_eq!(us.bounding, None, "no Nimble, no stamp");
+    }
+
+    /// Courageous = the Banner DATA ALIAS (`banner_bonus_of`'s generic scan
+    /// over every carried rule's own registry entry) — the SAME mechanism
+    /// Screened rides for Stealth, so no Rust change was needed here either.
+    /// RED (drop the new `alien_hives` registry entry): `morale_bonus` stays 0.
+    #[test]
+    fn courageous_reaches_capture_reads_via_the_banner_alias() {
+        let header = read_act_header(RUNG_C_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let carrier = header.profiles.get("courageous_unit").expect("courageous_unit");
+        let reads = capture_reads(&mut reg, carrier);
+        assert_eq!(reads.morale_bonus, 1, "Courageous's own morale_bonus");
+        let plain = header.profiles.get("plain_alien_hives").expect("plain_alien_hives");
+        let reads = capture_reads(&mut reg, plain);
+        assert_eq!(reads.morale_bonus, 0, "no Courageous, no bonus");
     }
 }
