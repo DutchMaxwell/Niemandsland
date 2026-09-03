@@ -156,3 +156,39 @@ def test_bucket_is_fine_at_the_start_and_coarse_in_the_tail():
 
 def test_hist_keeps_the_given_order_and_drops_zeros():
     assert gate.hist(["b", "a", "b"], ("a", "b", "c")) == "a=1  b=2"
+
+
+# ------------------------------------------------------------ --knobs W5b ---
+
+
+def test_knobs_legacy_is_pinned_to_every_fidelity_knob_the_gate_has_always_used():
+    """RED before W5b: this is the ONLY arm the gate has ever reported a number
+    for, so a `--knobs` flag that could not reproduce it byte-identical would
+    silently move every number this tool has ever printed."""
+    assert gate.knobs_for("legacy") == {
+        "hero_attach": True, "charge_landing": True, "sighting": "model",
+        "movement": True, "dangerous": True,
+    }
+
+
+def test_knobs_shipped_is_play_games_own_current_defaults():
+    """`selfplay.play_game`'s defaults for the same five keys (`dangerous` is
+    not one of its parameters and defaults ON in the crate either way)."""
+    assert gate.knobs_for("shipped") == {
+        "hero_attach": False, "charge_landing": False, "sighting": "unit",
+        "movement": False, "dangerous": True,
+    }
+
+
+def test_knobs_flag_defaults_to_legacy_and_reaches_run(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(gate, "run", lambda *a: seen.setdefault("knobs", a[-1]))
+    gate.main(["--ref", "/nonexistent"])
+    assert seen["knobs"] == "legacy"
+
+
+def test_knobs_flag_shipped_reaches_run(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(gate, "run", lambda *a: seen.setdefault("knobs", a[-1]))
+    gate.main(["--ref", "/nonexistent", "--knobs", "shipped"])
+    assert seen["knobs"] == "shipped"
