@@ -7,12 +7,12 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-LIB_PATH="nml-core-godot/target/release/libnml_core_godot.so"
+LIB_PATH="target/release/libnml_core_godot.so"
 
 # NML-1073 M2-5: a build with CARGO_TARGET_DIR set (the shared cache the
-# milestone builds with) leaves the library outside the crate. The manifest can
-# only name ONE res:// path, so the library is copied to the path it names
-# instead of the manifest learning a second one.
+# milestone builds with) leaves the library outside core/target (F7). The
+# manifest can only name ONE res:// path, so the library is copied to the path
+# it names instead of the manifest learning a second one.
 if [[ -n "${CARGO_TARGET_DIR:-}" && -f "$CARGO_TARGET_DIR/release/libnml_core_godot.so" ]]; then
 	mkdir -p "$(dirname "$LIB_PATH")"
 	cp -u "$CARGO_TARGET_DIR/release/libnml_core_godot.so" "$LIB_PATH"

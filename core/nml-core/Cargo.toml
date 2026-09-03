@@ -12,6 +12,3 @@ serde = { version = "1", features = ["derive"] }
 # writes every recorded position with 17 digits. Measured on the act corpus:
 # "-0.41839998960494995" parsed to bfdac710bfffffff instead of bfdac710c0000000.
 serde_json = { version = "1", features = ["float_roundtrip"] }
-
-[profile.release]
-debug = true

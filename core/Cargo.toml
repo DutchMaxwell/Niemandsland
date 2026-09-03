@@ -1,0 +1,13 @@
+# External review 03.09. item F7: one Cargo workspace for the three core
+# crates — ONE Cargo.lock and ONE shared target dir (core/target/) instead of
+# three of each. The crates' manifests stay as they are; nothing moves.
+[workspace]
+members = ["nml-core", "nml-core-godot", "nml-core-py"]
+resolver = "2"
+
+# Carried from nml-core's pre-workspace manifest: release builds keep full
+# debug info (the corpus tools symbolize backtraces through it). A workspace
+# only honours profiles declared HERE; the per-member [profile.release] blocks
+# (opt-level = 3, the release default anyway) were dropped with this file.
+[profile.release]
+debug = true

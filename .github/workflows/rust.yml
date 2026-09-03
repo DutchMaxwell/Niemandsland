@@ -24,10 +24,9 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: |
-            core/nml-core
-            core/nml-core-godot
-            core/nml-core-py
+          # F7: the three core crates are ONE Cargo workspace now — one
+          # workspace root, one target dir. Cache the workspace, not each crate.
+          workspaces: core
 
       - name: Test nml-core
         run: cargo test --manifest-path core/nml-core/Cargo.toml --release
