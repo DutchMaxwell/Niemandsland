@@ -427,6 +427,23 @@ impl Policy {
     }
 }
 
+/// Gate for the private-fixture tests: `None` = "fixture not on this
+/// machine". Prints a visible SKIPPED note; under `CI=true` it panics
+/// instead of silently passing — a check that cannot fail is not a check.
+#[cfg(test)]
+fn fixture_or_skip(path: &str) -> Option<Vec<u8>> {
+    match std::fs::read(path) {
+        Ok(bytes) => Some(bytes),
+        Err(_) => {
+            eprintln!("SKIPPED (fixture missing): {path}");
+            if std::env::var_os("CI").is_some() {
+                panic!("CI is set and fixture is missing, refusing to silently pass: {path}");
+            }
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -455,10 +472,10 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs private fixture policy_v1.json (NML_POLICY_NET)"]
     fn policy_v1_loads_and_gates_green() {
         let p = net_path();
-        if !std::path::Path::new(&p).exists() {
-            eprintln!("skip: no policy net at {p}");
+        if fixture_or_skip(&p).is_none() {
             return;
         }
         let net = PolicyNet::load(&p).expect("policy_v1 must load and selftest green");
@@ -467,10 +484,10 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs private fixture policy_v1.json (NML_POLICY_NET)"]
     fn a_tampered_forward_fails_the_selftest_gate() {
         let p = net_path();
-        if !std::path::Path::new(&p).exists() {
-            eprintln!("skip: no policy net at {p}");
+        if fixture_or_skip(&p).is_none() {
             return;
         }
         let mut net = PolicyNet::load(&p).expect("policy_v1 must load");
@@ -507,8 +524,13 @@ mod identity {
             pick("NML_POLICY_CORPUS", "selfplay_out/qbg_ref"),
             pick("NML_POLICY_NET", "nml-mission/netlab/nets/policy_v1.json"),
         );
-        if [&fx.0, &fx.1, &fx.2].iter().any(|p| !std::path::Path::new(p).exists()) {
-            eprintln!("skip: policy identity fixtures missing");
+        let corpus_ok = std::path::Path::new(&fx.1).is_dir();
+        if !corpus_ok {
+            eprintln!("SKIPPED (fixture missing): {}", fx.1);
+        }
+        let dump_ok = corpus_ok && fixture_or_skip(&fx.0).is_some();
+        let net_ok = corpus_ok && fixture_or_skip(&fx.2).is_some();
+        if !(dump_ok && net_ok) {
             return None;
         }
         Some(fx)
@@ -569,6 +591,7 @@ mod identity {
     /// menu rows, every candidate, every slot, exact f64 equality. The board
     /// is part of the claim: the dump's board feeds geo_vec and the span.
     #[test]
+    #[ignore = "needs private fixtures qbg_ref_all.jsonl + qbg_ref corpus + policy_v1.json"]
     fn feature_builder_is_bit_identical_to_the_dump() {
         let Some((dump_path, corpus, _net)) = fixtures() else { return };
         let mut reg = Registries::new(&repo_root());
@@ -632,6 +655,7 @@ mod identity {
     /// The loader + harness end to end: the real net scores one rebuilt
     /// fixture menu, one finite logit per candidate.
     #[test]
+    #[ignore = "needs private fixtures qbg_ref_all.jsonl + qbg_ref corpus + policy_v1.json"]
     fn policy_v1_scores_a_fixture_menu() {
         let Some((dump_path, corpus, net_path)) = fixtures() else { return };
         let net = PolicyNet::load(&net_path).expect("policy_v1 loads");
