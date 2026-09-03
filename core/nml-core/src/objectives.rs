@@ -266,3 +266,59 @@ pub fn zones_of_style(style: &Value) -> Vec<Poly> {
     }
     out
 }
+
+/// `MissionCatalog.marker_positions` `mission_catalog.gd:78-112` — the catalog's four
+/// deterministic layouts (missions R2). `alternate` (Duel, Pitched Battle) returns
+/// `[]` here, same as the table; callers keep using `generate` for it. `style` keeps
+/// PER-SIDE identity (unlike the flattened `zones_of_style`), because
+/// `deploy_zone_front` needs P1's centroid apart from P2's; positions come back
+/// `[P1, P2]` — the order `owned_by = index + 1` (sabotage/demolition) relies on.
+pub fn marker_positions(
+    placement: &str,
+    edge_in: f64,
+    style: &Value,
+    table_w_in: f64,
+    table_d_in: f64,
+) -> Vec<(f64, f64)> {
+    match placement {
+        "quarter_centres" => vec![
+            (-table_w_in / 4.0, -table_d_in / 4.0),
+            (table_w_in / 4.0, -table_d_in / 4.0),
+            (-table_w_in / 4.0, table_d_in / 4.0),
+            (table_w_in / 4.0, table_d_in / 4.0),
+        ],
+        "deploy_zone_centres" | "deploy_zone_front" => {
+            let mut out = Vec::new();
+            for pk in ["1", "2"] {
+                let Some(first) = style
+                    .get("zones")
+                    .and_then(|z| z.get(pk))
+                    .and_then(|v| v.as_array())
+                    .and_then(|a| a.first())
+                    .and_then(|p| p.as_array())
+                else {
+                    continue;
+                };
+                let (mut cx, mut cz, mut n) = (0.0, 0.0, 0.0);
+                for p in first.iter().filter_map(|p| p.as_array()).filter(|p| p.len() >= 2) {
+                    cx += p[0].as_f64().unwrap_or(0.0);
+                    cz += p[1].as_f64().unwrap_or(0.0);
+                    n += 1.0;
+                }
+                if n <= 0.0 {
+                    continue;
+                }
+                cx /= n;
+                cz /= n;
+                if placement == "deploy_zone_front" {
+                    let s = if cz > 0.0 { 1.0 } else if cz < 0.0 { -1.0 } else { 0.0 };
+                    cz = s * (table_d_in / 2.0 - edge_in);
+                }
+                out.push((cx, cz));
+            }
+            out
+        }
+        "table_centre" => vec![(0.0, 0.0)],
+        _ => Vec::new(),
+    }
+}
