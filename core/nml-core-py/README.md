@@ -23,7 +23,8 @@ CARGO_TARGET_DIR=~/.cache/nml-m3-1-target \
 ```
 
 `maturin build --release` writes a wheel instead; install it with
-`uv pip install --python ~/venvs/nmlcore/bin/python target/wheels/nml_core-*.whl`.
+`uv pip install --python ~/venvs/nmlcore/bin/python core/target/wheels/nml_core-*.whl`
+(the one workspace target dir, F7 — not the crate's own `target/`).
 
 ## API
 

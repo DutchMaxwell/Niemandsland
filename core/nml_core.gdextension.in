@@ -6,6 +6,7 @@
 ;
 ; LINUX x86_64 ONLY for now — the .so is built by hand with
 ;   cargo build --release --manifest-path core/nml-core-godot/Cargo.toml
+; (F7: that lands in the one workspace target dir, core/target/release)
 ; and is NOT committed. A Windows .dll (and a macOS .dylib) is a CI/packaging
 ; question and stays out until the core ships — rule R3 keeps the release
 ; pipeline independent of the Rust job.
@@ -24,5 +25,5 @@ reloadable = false
 
 [libraries]
 
-linux.debug.x86_64 = "res://core/nml-core-godot/target/release/libnml_core_godot.so"
-linux.release.x86_64 = "res://core/nml-core-godot/target/release/libnml_core_godot.so"
+linux.debug.x86_64 = "res://core/target/release/libnml_core_godot.so"
+linux.release.x86_64 = "res://core/target/release/libnml_core_godot.so"
