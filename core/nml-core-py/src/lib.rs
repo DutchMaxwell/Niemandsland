@@ -40,6 +40,7 @@
 //! chosen action and `+ 50000` for the runner-up. This module never invents a
 //! seed: a guessed dice stream is a silent lie.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -55,7 +56,7 @@ use nmlcore::arbitration::Arbitration;
 use nmlcore::deployment::{self, Placement, Rect, SettleUnit, SideDeploy, UnitSpec};
 use nmlcore::menu::{candidates_tuned, Candidate, Tuning};
 use nmlcore::objectives;
-use nmlcore::plan::{Pick, Search};
+use nmlcore::plan::{LeafValue, Pick, Search};
 use nmlcore::playout::Policy;
 use nmlcore::policy::{Policy as PolicyHarness, PolicyNet};
 use nmlcore::rollout::Rollout;
@@ -141,6 +142,66 @@ fn rows2d<const N: usize>(py: Python<'_>, rows: &[[f32; N]]) -> PyResult<Py<PyAn
         out.append(PyList::new(py, r.iter().copied())?)?;
     }
     Ok(out.into_any().unbind())
+}
+
+/// One position's `Tokens` as the dict `Core.policy_tokens` answers with. The
+/// R4 leaf batch below hands out a LIST of exactly these, so both doors of the
+/// token export are one shape and one place to keep in step.
+fn tokens_dict(py: Python<'_>, t: nmlcore::tokens::Tokens) -> PyResult<Bound<'_, PyDict>> {
+    let dict = PyDict::new(py);
+    dict.set_item("units", rows2d(py, &t.units)?)?;
+    dict.set_item("units_mask", t.units_mask)?;
+    dict.set_item("objs", rows2d(py, &t.objs)?)?;
+    dict.set_item("objs_mask", t.objs_mask)?;
+    dict.set_item("terr", rows2d(py, &t.terr)?)?;
+    dict.set_item("terr_mask", t.terr_mask)?;
+    dict.set_item("glob", t.glob.to_vec())?;
+    dict.set_item("cands", rows2d(py, &t.cands)?)?;
+    dict.set_item("cands_mask", t.cands_mask)?;
+    dict.set_item("actor", t.actor)?;
+    dict.set_item("target", t.target)?;
+    dict.set_item("label", t.label)?;
+    Ok(dict)
+}
+
+/// NML-1165 R4 (DESIGN_value_net §7) — `plan::LeafValue` backed by a Python
+/// callable: `fn(leaves, side) -> list[float]`, ONE call per activation.
+///
+/// `leaves` is a list of `policy_tokens` dicts, one per leaf state the search
+/// is about to price with the hand eval, in pool order then boundary order.
+/// The export is STATE-ONLY (`cands=[]`, `best=-1`), so `t[69]
+/// is_the_acting_unit` reads 0 — the same zero the trainer masks (DESIGN §2) —
+/// and the terrain block is the board's own since #608.
+///
+/// A Python exception is PARKED, not swallowed: `LeafValue::value` may answer
+/// only with an `Unsupported`, so the error is stashed here and re-raised by
+/// `plan_with_rollout`. A hook that silently declined would measure the hand
+/// player against itself, the tripwire DESIGN §6 names.
+struct PyLeafValue<'a> {
+    fun: &'a Bound<'a, PyAny>,
+    statics: &'a [UnitStatic],
+    terrain: &'a Terrain,
+    rows: RefCell<&'a mut RowEncoder>,
+    hero_attach: bool,
+    opener_seat: bool,
+    err: RefCell<Option<PyErr>>,
+}
+
+impl LeafValue for PyLeafValue<'_> {
+    fn value(&self, leaves: &[&CoreState], side: i64) -> Result<Vec<f64>, CoreUnsupported> {
+        let (py, mut rows) = (self.fun.py(), self.rows.borrow_mut());
+        let batch = PyList::empty(py);
+        let park = |e: PyErr| {
+            *self.err.borrow_mut() = Some(e);
+            CoreUnsupported::LeafValue(0, leaves.len())
+        };
+        for st in leaves {
+            let t = nmlcore::tokens::build(st, side, self.statics, self.terrain, &mut rows,
+                &[], -1, self.hero_attach, self.opener_seat)?;
+            tokens_dict(py, t).and_then(|d| batch.append(d)).map_err(&park)?;
+        }
+        self.fun.call1((batch, side)).and_then(|o| o.extract::<Vec<f64>>()).map_err(&park)
+    }
 }
 
 fn arb_plain(a: &Arbitration) -> Value {
@@ -1112,7 +1173,20 @@ impl Core {
     /// before this seam) leaves both the statics and the order exactly as they
     /// were. A logit vector whose length is not the built menu's DECLINES —
     /// see `Unsupported::CandLogits`.
-    #[pyo3(signature = (state, player, statics, sig = None, eps = 0.0, explore_seed = 0, cands = false, cand_logits = None, policy_mode = None))]
+    ///
+    /// `leaf_value_fn` / `leaf_value_w` are the R4 SEAM of DESIGN_value_net
+    /// §7: `fn(leaves, side) -> list[float]`, called ONCE per activation with
+    /// EVERY leaf state the search would price with the hand eval — the round
+    /// boundaries of every pooled candidate's rollout, pool order then
+    /// boundary order, each exported as a `policy_tokens` dict. The answer is
+    /// blended in AT THE LEAF (`hand + w * value`) before the rollout backs
+    /// up, so the net moves the number the pick is made on. `None` / `0.0`
+    /// (every call written before this seam) never builds a batch and is
+    /// byte-identical to the recorded behaviour; a weight armed with NO hook
+    /// declines (`Unsupported::LeafValueMissing`) rather than quietly playing
+    /// the hand leaf, and an answer of the wrong length declines too
+    /// (`Unsupported::LeafValue`).
+    #[pyo3(signature = (state, player, statics, sig = None, eps = 0.0, explore_seed = 0, cands = false, cand_logits = None, policy_mode = None, leaf_value_fn = None, leaf_value_w = 0.0))]
     #[allow(clippy::too_many_arguments)]
     fn plan_with_rollout(
         &mut self,
@@ -1126,6 +1200,8 @@ impl Core {
         cands: bool,
         cand_logits: Option<Vec<f32>>,
         policy_mode: Option<&str>,
+        leaf_value_fn: Option<&Bound<'_, PyAny>>,
+        leaf_value_w: f64,
     ) -> PyResult<Py<PyAny>> {
         let mut act: ActStatics = serde_json::from_value(value_of(statics)?)
             .map_err(|e| Unsupported::new_err(format!("statics: {e}")))?;
@@ -1136,8 +1212,10 @@ impl Core {
             Some(m) => return Err(Unsupported::new_err(format!("policy_mode: {m}"))),
         }
         let statics = self.statics_for(&state.inner)?;
-        let mut policy = Policy::new(&statics, &self.terrain, self.seams());
-        policy.tuning = self.tuning();
+        let seams = self.seams();
+        let tuning = self.tuning();
+        let mut policy = Policy::new(&statics, &self.terrain, seams);
+        policy.tuning = tuning;
         // The net is this core's `AiMissionEval.fit_mode`, but WHETHER it is
         // switched on is the activation's own static. An act recorded with the
         // hand eval must replay on the hand eval even on a core that carries a
@@ -1153,11 +1231,30 @@ impl Core {
         let mut search = Search::new(roll, &act);
         search.sig = sig;
         search.cand_logits = cand_logits.as_deref();
+        // NML-1165 R4 — the leaf value seam. The WEIGHT rides even with no
+        // hook so `admissible` can decline it; the hook itself borrows this
+        // core's own row encoder, which is what makes the leaf export the same
+        // `policy_tokens` a live token player already reads.
+        let rows = RefCell::new(&mut self.rows);
+        let hook = leaf_value_fn.map(|f| PyLeafValue {
+            fun: f, statics: &statics, terrain: &self.terrain, rows,
+            hero_attach: seams.hero_attach, opener_seat: act.opener_seat,
+            err: RefCell::new(None),
+        });
+        search.leaf_value = hook.as_ref().map(|h| h as &dyn LeafValue);
+        search.leaf_value_w = leaf_value_w;
         let mut sc = Scratch::default();
         let mut xr = GodotRng::new(explore_seed);
         match search.run(&state.inner, player, &mut sc, Some((eps, &mut xr))) {
             Ok(pick) => to_py(py, &pick_plain(&pick, cands)),
             Err(u) => {
+                // A PARKED Python error is the hook's own, and it is re-raised
+                // rather than flattened into a decline: a value-net game that
+                // silently fell back to the hand leaf would measure the hand
+                // player against itself (DESIGN §6's fallback tripwire).
+                if let Some(e) = hook.as_ref().and_then(|h| h.err.borrow_mut().take()) {
+                    return Err(e);
+                }
                 let mut m = Map::new();
                 m.insert("used".into(), false.into());
                 m.insert("unsupported".into(), Value::String(format!("{u:?}")));
@@ -1601,20 +1698,7 @@ impl Core {
             opener_seat,
         )
         .map_err(declined)?;
-        let dict = PyDict::new(py);
-        dict.set_item("units", rows2d(py, &t.units)?)?;
-        dict.set_item("units_mask", t.units_mask)?;
-        dict.set_item("objs", rows2d(py, &t.objs)?)?;
-        dict.set_item("objs_mask", t.objs_mask)?;
-        dict.set_item("terr", rows2d(py, &t.terr)?)?;
-        dict.set_item("terr_mask", t.terr_mask)?;
-        dict.set_item("glob", t.glob.to_vec())?;
-        dict.set_item("cands", rows2d(py, &t.cands)?)?;
-        dict.set_item("cands_mask", t.cands_mask)?;
-        dict.set_item("actor", t.actor)?;
-        dict.set_item("target", t.target)?;
-        dict.set_item("label", t.label)?;
-        Ok(dict.into_any().unbind())
+        Ok(tokens_dict(py, t)?.into_any().unbind())
     }
 
     /// `BattleSim.board_row_indices` battle_sim.gd:166 — the capture index of

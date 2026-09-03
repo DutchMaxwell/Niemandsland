@@ -115,6 +115,16 @@ pub enum Unsupported {
     /// menu names the WRONG candidates, so it declines outright rather than
     /// re-rank part of the order. `(given, built)`.
     CandLogits(usize, usize),
+    /// NML-1165 R4 (DESIGN_value_net §7) — the LEAF VALUE hook answered with a
+    /// different number of values than the search handed it leaves. `(given,
+    /// handed)`. Same contract as `CandLogits`: a vector that does not line up
+    /// prices the WRONG leaves, so the search declines outright rather than
+    /// blend part of the backup.
+    LeafValue(usize, usize),
+    /// NML-1165 R4 — `leaf_value_w != 0.0` with no hook wired. Mirrors
+    /// `FittedEval` / `PolicyOrder`: a blend that was asked for and cannot be
+    /// honoured is a decline, never a silent fall-back to the hand leaf.
+    LeafValueMissing,
     /// NML-1073 M3-6b — `tokens::build` refuses a state whose live roster,
     /// marker count or menu width exceeds the padding budget (`N_UNITS`,
     /// `N_OBJ`, `N_CAND`) rather than truncate a row: a truncated board is a

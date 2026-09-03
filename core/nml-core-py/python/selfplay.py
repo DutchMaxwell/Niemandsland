@@ -1148,6 +1148,7 @@ def _pick_for(
     cands: bool = False, cand_logits_fn: dict[int, Any] | None = None,
     policy_mode: str | None = None,
     pool_value_fn: dict[int, Any] | None = None, pool_value_w: float = 0.0,
+    leaf_value_fn: dict[int, Any] | None = None, leaf_value_w: float = 0.0,
 ) -> dict[str, Any]:
     """`_pick_for` core_selfplay.gd:398-459 — the full planner for whichever side
     still has a living, un-activated unit; `{}` when the side is dry.
@@ -1187,7 +1188,15 @@ def _pick_for(
     candidate. `None` for `player`, or the hook declining, leaves the search's
     own pick untouched — byte-identical to no seam at all. An EXPLORED pick
     (NML-1158c) is left alone too: the coin already answered for this
-    activation, and re-ranking it would silently undo the exploration."""
+    activation, and re-ranking it would silently undo the exploration.
+
+    `leaf_value_fn` / `leaf_value_w` are the R4 seam (DESIGN_value_net
+    2026-09-03 §7): `{side: fn(leaves, side) -> list[float]}`, handed straight
+    to `Core.plan_with_rollout`, which calls it ONCE per activation with every
+    leaf state the search would price with the hand eval and blends the answer
+    in AT THE LEAF. Unlike the R2 hook above this one never re-picks in
+    Python — the search's own argmax already ran on the blended value. `None`
+    for `player` never reaches the binding's new kwargs at all."""
     if not state.pool(player, bool(core.knobs().get("hero_attach", True))):
         return {}
     # NML-1142: `AiMissionEval.fit_mode` is per-ACTIVATION on the table and the
@@ -1205,6 +1214,9 @@ def _pick_for(
         logits = hook(state, menu_pick["trace"]["cands"], player)
     extra = {"cand_logits": logits, "policy_mode": policy_mode} if logits is not None else {}
     vhook = (pool_value_fn or {}).get(player)
+    lhook = (leaf_value_fn or {}).get(player)
+    if lhook is not None:
+        extra = dict(extra, leaf_value_fn=lhook, leaf_value_w=leaf_value_w)
     pick = core.plan_with_rollout(
         state, player, statics, eps=eps, explore_seed=explore_seed,
         cands=cands or vhook is not None, **extra
@@ -1535,6 +1547,8 @@ def _play_round(
     policy_mode: str | None = None,
     pool_value_fn: dict[int, Any] | None = None,
     pool_value_w: float = 0.0,
+    leaf_value_fn: dict[int, Any] | None = None,
+    leaf_value_w: float = 0.0,
 ) -> tuple[Any, int]:
     """`_play_round` core_selfplay.gd:247-307 — strict one-for-one alternation, a
     dry side hands the tail to the other, and the NEXT round opens with whoever
@@ -1543,8 +1557,8 @@ def _play_round(
     `cand_logits_fn` / `policy_mode` are `_pick_for`'s R4 seam, threaded
     through unchanged to both activation picks below — see its docstring.
 
-    `pool_value_fn` / `pool_value_w` are `_pick_for`'s R2 seam, threaded
-    through the same way.
+    `pool_value_fn` / `pool_value_w` are `_pick_for`'s R2 seam, and
+    `leaf_value_fn` / `leaf_value_w` its R4 one, threaded through the same way.
 
     `eps` (NML-1158c) is the exploration knob: each activation's `_pick_for`
     draws its coin/index from `seed * EXPLORE_SEED_STRIDE + seq`, a stream of
@@ -1623,6 +1637,8 @@ def _play_round(
                  if cand_logits_fn is not None or policy_mode is not None else {})
         if pool_value_fn is not None:
             pf_kw.update(pool_value_fn=pool_value_fn, pool_value_w=pool_value_w)
+        if leaf_value_fn is not None:
+            pf_kw.update(leaf_value_fn=leaf_value_fn, leaf_value_w=leaf_value_w)
         pick = _pick_for(planning, state, turn, net_player, eps, explore_seed,
                          cands=record_cands, **pf_kw)
         if not pick:
@@ -1893,6 +1909,8 @@ def play_game(
     policy_mode: str | None = None,
     pool_value_fn: dict[int, Any] | None = None,
     pool_value_w: float = 0.0,
+    leaf_value_fn: dict[int, Any] | None = None,
+    leaf_value_w: float = 0.0,
     mission: str = "duel",
 ) -> dict[str, Any]:
     """One full match for `seed` — `_play_one` core_selfplay.gd:164-244.
@@ -1909,6 +1927,11 @@ def play_game(
     list[float] | None}`, threaded the same way — see `_pick_for`'s
     docstring. `pool_value_fn=None` (the default) is byte-identical to every
     call written before this seam existed.
+
+    `leaf_value_fn` / `leaf_value_w` are the R4 seam (DESIGN_value_net
+    2026-09-03 §7): `{side: fn(leaves, side) -> list[float]}`, threaded the
+    same way — the net prices the SEARCH'S OWN leaf states, one batch per
+    activation. `None` is byte-identical to every call before it too.
 
     `core` may be a `nml_core.Core` to reuse across games (the registries and the
     mechanics maps are the expensive part); its header is re-set per game anyway,
@@ -2537,6 +2560,7 @@ def play_game(
             record_cands=record_cands, los_model=eff_los,
             cand_logits_fn=cand_logits_fn, policy_mode=policy_mode,
             pool_value_fn=pool_value_fn, pool_value_w=pool_value_w,
+            leaf_value_fn=leaf_value_fn, leaf_value_w=leaf_value_w,
         )
         state, owners = core.playout_seize(state, owners)
         if markers_meta:  # W3: an enemy-held owned marker falls before scoring

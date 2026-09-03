@@ -199,6 +199,23 @@ impl<'a> Rollout<'a> {
     /// both seats take the geometric discount. Mode 1 lets the OPENER vote with
     /// the last boundary alone, mode 2 swaps which seat gets which.
     pub fn blend_score(&self, ends: &[State], player: i64, opener_seat: bool) -> f64 {
+        self.blend_score_leaf(ends, player, opener_seat, &[], 0.0)
+    }
+
+    /// NML-1165 R4 (DESIGN_value_net §7 "L2 leaf blend") — `blend_score` with a
+    /// LEARNED value added at the leaf: every boundary is priced
+    /// `hand + w * vals[k]` before the seat mode or the geometric discount
+    /// folds it, so the net moves the number the pick is made on rather than
+    /// the order it is made in. `vals` is index-parallel to `ends` and may be
+    /// LONGER — the caller hands out one activation's whole leaf batch from
+    /// this rollout's offset on, and only the first `ends.len()` are read.
+    ///
+    /// An EMPTY `vals` takes the hand score UNTOUCHED — not `+ 0.0 * v`, which
+    /// would still round-trip the sum through an addition and turn a `-0.0`
+    /// leaf into `+0.0`. That is what makes the default byte-identical.
+    pub fn blend_score_leaf(&self, ends: &[State], player: i64, opener_seat: bool,
+                            vals: &[f64], w: f64) -> f64 {
+        let leaf = |k: usize, s: f64| if vals.is_empty() { s } else { s + w * vals[k] };
         let mode = self.knobs.seat_mode;
         // The evolved-eval seam's read site: `Knobs::eval_variant` (default 0,
         // today's frozen eval) picks which `score::score_hand_variant` arm
@@ -207,7 +224,8 @@ impl<'a> Rollout<'a> {
         if (mode == 1 && opener_seat) || (mode == 2 && !opener_seat) {
             let last = &ends[ends.len() - 1];
             let incoming = reply_threat(self.statics(), last, player);
-            return score_with_variant(last, self.statics(), player, &incoming, self.policy.fit, variant);
+            let s = score_with_variant(last, self.statics(), player, &incoming, self.policy.fit, variant);
+            return leaf(ends.len() - 1, s);
         }
         let dd = self.depth_discount();
         let mut total = 0.0f64;
@@ -215,13 +233,16 @@ impl<'a> Rollout<'a> {
         // REPEATED MULTIPLY, not `dd.powi(k)`: at dd = 0.5 the two agree to the
         // bit, at any other discount they do not, and the blend is a ratio of
         // two sums where that difference survives.
-        let mut w = 1.0f64;
-        for end in ends {
+        // Named `dw`, not `w`: the LEARNED blend weight is the parameter `w`,
+        // and a shadowed name here would make the closure above read as if it
+        // saw the discount.
+        let mut dw = 1.0f64;
+        for (k, end) in ends.iter().enumerate() {
             let incoming = reply_threat(self.statics(), end, player);
-            total +=
-                w * score_with_variant(end, self.statics(), player, &incoming, self.policy.fit, variant);
-            weights += w;
-            w *= dd;
+            let s = score_with_variant(end, self.statics(), player, &incoming, self.policy.fit, variant);
+            total += dw * leaf(k, s);
+            weights += dw;
+            dw *= dd;
         }
         total / weights
     }

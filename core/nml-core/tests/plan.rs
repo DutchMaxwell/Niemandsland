@@ -23,11 +23,12 @@
 //! A mismatch in any one of them names the stage that broke, which is the whole
 //! reason the trace fields are on `Pick` at all.
 
+use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 
 use nml_core::acts::{PickRec, PolicyMode};
 use nml_core::menu::Candidate;
-use nml_core::plan::{build_pool, rank, PlanBend, ScoredRow, Search};
+use nml_core::plan::{build_pool, rank, LeafValue, PlanBend, ScoredRow, Search};
 use nml_core::playout::Policy;
 use nml_core::policy::{Policy as PolicyHarness, PolicyNet};
 use nml_core::rollout::Rollout;
@@ -1156,5 +1157,203 @@ fn cand_logits_are_inert_while_policy_mode_is_off() {
         assert!(same_action(&got.action, &base.action).is_ok());
         checked += 1;
     }
+    assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
+}
+
+// ------------------------------------------------- NML-1165 R4: leaf value ---
+
+/// A crafted `LeafValue` for the R4 red proof: `bump` on the flat leaf range
+/// `[lo, hi)` and nothing anywhere else, plus a call counter. The counter IS
+/// half the bar — the seam's whole reason to exist is ONE batch per
+/// activation, and a per-leaf hook would answer 34 times instead of once.
+struct CraftedLeafValue {
+    lo: usize,
+    hi: usize,
+    bump: f64,
+    /// `None` = answer with the wrong length, the decline arm below.
+    truncate: Option<usize>,
+    calls: Cell<usize>,
+    leaves: Cell<usize>,
+}
+
+impl CraftedLeafValue {
+    fn bumping(lo: usize, hi: usize) -> CraftedLeafValue {
+        CraftedLeafValue {
+            lo,
+            hi,
+            bump: 1000.0,
+            truncate: None,
+            calls: Cell::new(0),
+            leaves: Cell::new(0),
+        }
+    }
+}
+
+impl LeafValue for CraftedLeafValue {
+    fn value(&self, leaves: &[&nml_core::State], _side: i64) -> Result<Vec<f64>, Unsupported> {
+        self.calls.set(self.calls.get() + 1);
+        self.leaves.set(leaves.len());
+        let n = self.truncate.unwrap_or(leaves.len());
+        Ok((0..n).map(|j| if j >= self.lo && j < self.hi { self.bump } else { 0.0 }).collect())
+    }
+}
+
+/// NML-1165 R4 (DESIGN_value_net §7) — the leaf value seam CARRIES THE PICK.
+///
+/// The hand search names its own winner; the crafted evaluator then favours
+/// the leaves of ONE OTHER pooled candidate and nothing else, and at `w = 1.0`
+/// the search has to come back with THAT candidate. The leaf ranges are taken
+/// from `Rollout::rollout_boundaries` itself — the same public rollout PHASE 4
+/// runs — so the test knows exactly which flat slice belongs to which pool row
+/// without the search having to export one.
+///
+/// A search that ignored the hook could not pass by accident, and the hand
+/// pick beside it is the control. `calls == 1` is the second bar: the whole
+/// activation's leaves arrive in ONE batch.
+#[test]
+fn leaf_value_flips_the_pick_at_w_one() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
+    let mut sc = Scratch::default();
+
+    let mut hit: Option<(usize, Pick, Pick, usize)> = None;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let Ok(hand) = Search::new(roll, &act.statics).run(&act.state, act.player, &mut sc, None)
+        else {
+            continue;
+        };
+        if hand.pool_idx.len() < 2 {
+            continue; // a one-row pool has no other candidate to promote
+        }
+        // The flat leaf offsets, pool row by pool row.
+        let mut off: Vec<usize> = vec![0];
+        for &i in &hand.pool_idx {
+            let n = roll
+                .rollout_boundaries(&act.state, &hand.cands[i], act.player, -1, &mut sc)
+                .unwrap_or_else(|e| panic!("act {ai}: {e:?}"))
+                .len();
+            off.push(off.last().unwrap() + n);
+        }
+        let win = hand.scored[hand.best_idx as usize].0 as usize;
+        let Some(t) = hand.pool_idx.iter().position(|&x| x != win) else { continue };
+        let hook = CraftedLeafValue::bumping(off[t], off[t + 1]);
+        let mut on = Search::new(roll, &act.statics);
+        on.leaf_value = Some(&hook);
+        on.leaf_value_w = 1.0;
+        let got = on.run(&act.state, act.player, &mut sc, None).unwrap_or_else(|e| panic!("{e:?}"));
+        assert_eq!(hook.calls.get(), 1, "act {ai}: the leaf batch was not ONE call per activation");
+        assert_eq!(
+            hook.leaves.get(),
+            *off.last().unwrap(),
+            "act {ai}: the batch is not every pooled rollout's boundaries",
+        );
+        let target = hand.pool_idx[t];
+        assert_eq!(
+            got.scored[got.best_idx as usize].0 as usize,
+            target,
+            "act {ai}: the crafted leaf value did not carry the pick",
+        );
+        if same_action(&got.action, &hand.action).is_err() || got.unit_key != hand.unit_key {
+            hit = Some((ai, hand, got, target));
+            break;
+        }
+    }
+    let (ai, hand, got, target) =
+        hit.expect("no corpus act let a crafted leaf value move the pick away from the hand's");
+    assert_ne!(
+        hand.scored[hand.best_idx as usize].0 as usize,
+        target,
+        "act {ai}: the hand already answered with the promoted candidate — no contrast",
+    );
+    // The blend is `hand + w * value`, so the promoted row's rollout value has
+    // to have moved by the bump — the pick did not merely change, it changed
+    // for the reason the seam claims.
+    let before = hand.rs.iter().find(|(i, _)| *i as usize == target).expect("target was pooled").1;
+    let after = got.rs.iter().find(|(i, _)| *i as usize == target).expect("target stayed pooled").1;
+    assert!(
+        (after - before - 1000.0).abs() < 1e-6,
+        "act {ai}: promoted row moved by {} , not by the bump",
+        after - before,
+    );
+}
+
+/// The batch has to line up with the leaves it prices: a shorter answer names
+/// the WRONG leaves, so the search declines instead of blending part of the
+/// backup — the same contract `CandLogits` carries for the menu.
+#[test]
+fn leaf_values_of_the_wrong_length_decline() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
+    let mut sc = Scratch::default();
+    let act = &c.acts[0];
+    let mut hook = CraftedLeafValue::bumping(0, 0);
+    hook.truncate = Some(3);
+    let mut search = Search::new(roll, &act.statics);
+    search.leaf_value = Some(&hook);
+    search.leaf_value_w = 1.0;
+    let err = search
+        .run(&act.state, act.player, &mut sc, None)
+        .expect_err("a short leaf-value batch must decline");
+    assert!(matches!(err, Unsupported::LeafValue(3, _)), "wrong decline reason: {err:?}");
+}
+
+/// A weight armed with no evaluator wired declines rather than quietly pricing
+/// the hand leaf and calling the game a value-net game (`admissible`,
+/// mirroring `fit_mode` and `policy_mode == Order`).
+#[test]
+fn leaf_value_weight_with_no_hook_declines() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
+    let mut sc = Scratch::default();
+    let act = &c.acts[0];
+    let mut search = Search::new(roll, &act.statics);
+    search.leaf_value_w = 0.5;
+    let err = search
+        .run(&act.state, act.player, &mut sc, None)
+        .expect_err("leaf_value_w with no hook must decline");
+    assert!(matches!(err, Unsupported::LeafValueMissing), "wrong decline reason: {err:?}");
+}
+
+/// DEFAULT OFF: the WEIGHT decides, not the hook's mere presence. Every act of
+/// the recorded corpus, run with an evaluator that would swamp the hand score
+/// if it were read, has to answer with the G4 pick unchanged — trace included,
+/// to the BIT — and the hook must never be called at all.
+#[test]
+fn leaf_value_is_inert_at_weight_zero() {
+    let c = corpus();
+    let statics = build_act_statics(&c, REPO);
+    let roll = Rollout::new(Policy::new(&statics, &c.terrain, seams_of(&c)), c.knobs);
+    let mut sc = Scratch::default();
+    let hook = CraftedLeafValue::bumping(0, usize::MAX);
+    let mut checked = 0usize;
+    for (ai, act) in c.acts.iter().enumerate() {
+        let Ok(base) = Search::new(roll, &act.statics).run(&act.state, act.player, &mut sc, None)
+        else {
+            continue;
+        };
+        let mut search = Search::new(roll, &act.statics);
+        search.leaf_value = Some(&hook);
+        let got = search
+            .run(&act.state, act.player, &mut sc, None)
+            .unwrap_or_else(|e| panic!("act {ai}: {e:?}"));
+        assert_eq!(got.scored, base.scored, "act {ai}: an unarmed hook moved the order");
+        assert_eq!(got.pool_idx, base.pool_idx, "act {ai}: an unarmed hook moved the pool");
+        for (g, b) in got.rs.iter().zip(&base.rs) {
+            assert_eq!(g.0, b.0);
+            assert_eq!(g.1.to_bits(), b.1.to_bits(), "act {ai}: an unarmed hook moved a value");
+        }
+        assert_eq!(
+            got.expectation_after.to_bits(),
+            base.expectation_after.to_bits(),
+            "act {ai}: an unarmed hook moved the expectation",
+        );
+        assert_eq!(got.unit_key, base.unit_key, "act {ai}: an unarmed hook moved the pick");
+        assert!(same_action(&got.action, &base.action).is_ok());
+        checked += 1;
+    }
+    assert_eq!(hook.calls.get(), 0, "an unarmed hook was called anyway");
     assert!(checked > 0, "the corpus declined everywhere — the gate proves nothing");
 }
