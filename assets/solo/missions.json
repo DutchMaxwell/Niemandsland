@@ -3,6 +3,7 @@
   "comment": "Mission catalog v1 (grill 2026-08-12, D1-D4): the four placement-only Face-Off missions. One catalog feeds game selection AND ladder rotation. Wording is our own; rules follow the official advanced missions. marker count is an int or a dice term like 'd3+2'; placement modes: alternate (players place outside zones, min_gap apart), quarter_centres, deploy_zone_centres, deploy_zone_front (zone centre across, edge_in inches from the owner's table edge), table_centre. W3: owned/destructible marker flags; scoring 'sabotage' = destroy-theirs-keep-yours end verdict.",
   "missions": {
     "duel": {
+      "name": "Duel",
       "family": "face_off",
       "rounds": 4,
       "scoring": "end",
@@ -15,6 +16,7 @@
       }
     },
     "seize_ground": {
+      "name": "Seize Ground",
       "family": "face_off",
       "rounds": 4,
       "scoring": "end",
@@ -25,6 +27,7 @@
       }
     },
     "breakthrough": {
+      "name": "Breakthrough",
       "family": "face_off",
       "rounds": 4,
       "scoring": "end",
@@ -36,6 +39,7 @@
       }
     },
     "king_of_the_hill": {
+      "name": "King of the Hill",
       "family": "face_off",
       "rounds": 4,
       "scoring": "end",
@@ -46,6 +50,7 @@
       }
     },
     "pitched_battle": {
+      "name": "Pitched Battle",
       "family": "progressive",
       "rounds": 4,
       "scoring": "round_vp",
@@ -61,6 +66,7 @@
       }
     },
     "domination": {
+      "name": "Domination",
       "family": "progressive",
       "rounds": 4,
       "scoring": "round_vp",
@@ -74,6 +80,7 @@
       }
     },
     "headquarters": {
+      "name": "Headquarters",
       "family": "progressive",
       "rounds": 4,
       "scoring": "round_vp",
@@ -88,6 +95,7 @@
       }
     },
     "mosh_pit": {
+      "name": "Mosh Pit",
       "family": "progressive",
       "rounds": 4,
       "scoring": "round_vp",
@@ -102,6 +110,7 @@
       }
     },
     "sabotage": {
+      "name": "Sabotage",
       "family": "face_off",
       "rounds": 4,
       "scoring": "sabotage",
@@ -115,6 +124,7 @@
       }
     },
     "demolition": {
+      "name": "Demolition",
       "family": "progressive",
       "rounds": 4,
       "scoring": "round_vp",

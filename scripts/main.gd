@@ -265,6 +265,8 @@ var _solo_interactive_grade: String = "nachtmahr"  # the ONE grade (NML-211): NA
                                                   # its ceiling. WITHOUT a grade active_difficulty()==null
                                                   # → the naive baseline AI (no position solver, no knobs).
 var solo_panel_box: VBoxContainer = null     # left-panel "Solo" section (per-army AI toggles)
+var solo_mission_option: OptionButton = null # left-panel Mission picker (MissionCatalog + "Duel (no mission)")
+var _solo_mission_id: String = ""            # "" = Duel (no mission, today's byte-identical behaviour)
 var _solo_target_mode: Dictionary = {}       # {unit, melee} while the player picks an attack target (P8)
 var _solo_model_pick: Dictionary = {}        # B5: {unit, chain, recommended, outcome, spots, strip, armed} while a Takedown / wound / Reanimation pick awaits a model click (strip/armed: NML-1040)
 # TC-023 (Takedown, GF v3.5.1 p.14 "resolved as if it was a unit of [1]"): while this holds the picked
@@ -2366,6 +2368,36 @@ func _ensure_solo_controller() -> void:
 	_solo_apply_difficulty()
 
 
+## Missions wave M5 (table-side selector): the SAME mission_reset + catalog marker_positions path
+## tools/arena_match.gd:302-330 drives ("constant" objective layout), so a game started from this
+## panel and a headless arena game agree on the catalog's rules. "" (Duel, no mission — the
+## selector's default) is a no-op on purpose: SoloController's live statics and the hand-placed
+## overlay objectives stay exactly what today's table already does — byte-identical.
+func _solo_apply_mission_if_chosen() -> void:
+	if _solo_mission_id.is_empty():
+		return
+	var mission := MissionCatalog.get_mission(_solo_mission_id)
+	var mk: Dictionary = mission.get("markers", {})
+	var mmeta: Array = []
+	if bool(mk.get("owned", false)):
+		for mi in range(int(mk.get("count", 2))):
+			mmeta.append({"owned_by": mi + 1, "destructible": bool(mk.get("destructible", false)),
+				"destroyed": false, "destroyed_seq": 0})
+	SoloController.mission_reset(str(mission.get("scoring", "end")), (mission.get("vp", {}) as Dictionary), mmeta)
+	if terrain_overlay != null and table != null:
+		var style := DeploymentCatalog.get_style(str(mission.get("deployment", "front_line")))
+		var resolved: Array = MissionCatalog.marker_positions(mission, style,
+			table.table_size.x * 12.0, table.table_size.y * 12.0)
+		if not resolved.is_empty():
+			var obj_world: Array = []
+			for rp in resolved:
+				obj_world.append(Vector3((rp as Vector2).x * SoloController.INCHES_TO_METERS, 0.0,
+					(rp as Vector2).y * SoloController.INCHES_TO_METERS))
+			terrain_overlay.update_objectives(obj_world)
+	# Maintainer policy (2026-07-19): every applied rule surfaces in the battle log.
+	_log_rule_event(BattleLog.Category.GENERAL, "Mission: %s" % MissionCatalog.display_name(_solo_mission_id), true)
+
+
 ## "Deploy AI army" (goal 001 P2b): run the official OPR AI deployment for the designated army — the
 ## 12" front-line zone on the AI's table edge, objectives from the overlay, terrain classified per the
 ## solo rules (Forest=Difficult, Dangerous, Container=Impassable; Strider/Flying ignore the first two).
@@ -2382,6 +2414,7 @@ func _on_solo_deploy_pressed() -> void:
 	var w: float = table.table_size.x * 0.3048
 	var d: float = table.table_size.y * 0.3048
 	var depth: float = 12.0 * 0.0254
+	_solo_apply_mission_if_chosen()   # BEFORE objectives is read — an armed mission may have just placed them
 	# The AI's zone edge is chosen AFTER the roll-off (winner picks a side — GF v3.5.1 p.6);
 	# _solo_deploy_begin_side builds the zone from the choice.
 	var objectives: Array = []
@@ -15119,6 +15152,29 @@ func _refresh_solo_panel() -> void:
 		cb.add_theme_font_size_override("font_size", 12)
 		cb.toggled.connect(_on_solo_ai_toggled.bind(int(pid)))
 		solo_panel_box.add_child(cb)
+	# Missions wave M5 — the table-side selector the design doc calls a prerequisite (never
+	# hard-code display names: read them from the catalog so a catalog edit renames the menu).
+	var mission_label := Label.new()
+	mission_label.text = "Mission:"
+	mission_label.add_theme_font_size_override("font_size", 12)
+	solo_panel_box.add_child(mission_label)
+	solo_mission_option = OptionButton.new()
+	solo_mission_option.tooltip_text = "Pick a catalog mission for this game (automatic objectives), or Duel for today's hand-placed markers."
+	solo_mission_option.focus_mode = Control.FOCUS_NONE
+	solo_mission_option.add_theme_font_size_override("font_size", 12)
+	solo_mission_option.add_item("Duel (no mission)")
+	solo_mission_option.set_item_metadata(0, "")
+	var mission_ids := MissionCatalog.mission_ids()
+	var mission_idx := 0
+	for i in range(mission_ids.size()):
+		solo_mission_option.add_item(MissionCatalog.display_name(mission_ids[i]))
+		solo_mission_option.set_item_metadata(i + 1, mission_ids[i])
+		if mission_ids[i] == _solo_mission_id:
+			mission_idx = i + 1
+	solo_mission_option.select(mission_idx)
+	solo_mission_option.item_selected.connect(func(idx: int) -> void:
+		_solo_mission_id = str(solo_mission_option.get_item_metadata(idx)))
+	solo_panel_box.add_child(solo_mission_option)
 	var deploy_btn := Button.new()
 	deploy_btn.text = "Start Deployment"
 	deploy_btn.tooltip_text = "GF v3.5.1: roll-off, the winner picks a table edge and deploys first; then alternate one unit each (hand-over by click), then the Scout phase. The roll-off winner takes round 1's first turn."
