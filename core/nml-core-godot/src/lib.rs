@@ -318,8 +318,11 @@ impl NmlCore {
         self.scache.set_epoch(knobs.rules_epoch);
         // The closure for the header's own reading is built here rather than on
         // the first activation, so a broken registry path is a `set_game_header`
-        // failure and not a mid-game decline.
+        // failure and not a mid-game decline. Built under the header's own
+        // recorded epoch (`Registries::rules_epoch`, default 0); the LIVE
+        // planning closures below stamp `CURRENT_RULES_EPOCH`.
         let reg = self.reg.as_mut().unwrap();
+        reg.rules_epoch = knobs.rules_epoch;
         let _ = self.scache.get(reg, &profiles);
         self.header = Some(GameHeader {
             pcache: ProfileCache::new(Rc::clone(&profiles)),
@@ -665,6 +668,11 @@ impl NmlCore {
         }
         let unit_statics = {
             let reg = self.reg.as_mut().unwrap();
+            // Live planning closure — the current rule set
+            // (`acts::CURRENT_RULES_EPOCH`, the Lacerate+Counter wave from
+            // epoch 3 on): the twin mirrors the table, which already automates
+            // these aliases. Recorded corpora never come through here.
+            reg.rules_epoch = nml_core::CURRENT_RULES_EPOCH;
             self.scache.get(reg, &effective)
         };
         let h = self.header.as_ref().unwrap();

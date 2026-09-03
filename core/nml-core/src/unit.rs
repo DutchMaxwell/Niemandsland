@@ -1663,6 +1663,22 @@ impl UnitStatic {
         stamp(reg, p, &mut melee, &mut melee_unimpl);
         stamp_conditional_ap(reg, p, &mut melee);
         stamp_unit_strikers(reg, p, &mut melee, rules_epoch);
+        // Lacerate+Counter wave, epoch-gated (`acts::rule_on`, epoch 3): the
+        // Counter DATA aliases live on the MODEL — the table's strike-first
+        // gate reads them unit-level (`_solo_has_counter`'s coverage wave,
+        // main.gd:5932-5935) — so they stamp the melee array's own `counter`
+        // flag, the same field the weapon-level rule lands on
+        // (ai_shooting.gd:135). Melee-only by nature: the shooting array never
+        // sees the flag. `rules_epoch` defaults to 0, so every pre-wave
+        // record replays the Gen-0 rule set untouched.
+        if rule_on(rules_epoch, CURRENT_RULES_EPOCH)
+            && (rule_on_all_models(p, "Counter-Attack")
+                || rule_on_all_models(p, "Counter in Melee"))
+        {
+            for sp in melee.iter_mut() {
+                sp.counter = true;
+            }
+        }
         for u in melee_unimpl {
             if !unimplemented.contains(&u) {
                 unimplemented.push(u);
@@ -2750,6 +2766,48 @@ mod tests {
         let plain = header.profiles.get("plain_saurian_starhost").expect("plain_saurian_starhost");
         let us = UnitStatic::build(&mut reg, plain);
         assert!(!us.shoot[0].surge_attack, "no Predator, no extra-attack die");
+    }
+
+    /// Lacerate+Counter wave — one melee-weapon carrier per Counter DATA
+    /// alias next to a plain sibling. The stamp is the EPOCH-gated one
+    /// (`UnitStatic::build`'s `rule_on` gate), so every test reads the rule at
+    /// the current epoch, at epoch 0 (every recorded corpus) and without the
+    /// rule — the three rows the port must never confuse.
+    const COUNTER_ALIASES_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "counter_attack_unit":{"unit_id":"counter_attack_unit","name":"Counter-Attack Bearer","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions","special_rules":["Counter-Attack"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "counter_in_melee_unit":{"unit_id":"counter_in_melee_unit","name":"Counter in Melee Bearer","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions","special_rules":["Counter in Melee"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_unit":{"unit_id":"plain_unit","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Blade","range":0,"attacks":2,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// RED (drop the `rule_on` gate or the "Counter-Attack" arm): the carrier
+    /// reads `counter` at the wrong epoch or never; GREEN (any ungated stamp):
+    /// the epoch-0 row flips and the recorded corpora stop replaying.
+    #[test]
+    fn counter_attack_strikes_first_only_from_the_current_epoch() {
+        let header = read_act_header(COUNTER_ALIASES_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let carrier = header.profiles.get("counter_attack_unit").expect("counter_attack_unit");
+        let us = UnitStatic::build_for(&mut reg, carrier, CURRENT_RULES_EPOCH);
+        assert!(us.melee[0].counter, "the alias strikes first at the current epoch");
+        let us = UnitStatic::build_for(&mut reg, carrier, 0);
+        assert!(!us.melee[0].counter, "epoch 0 replays the Gen-0 rule set");
+        let plain = header.profiles.get("plain_unit").expect("plain_unit");
+        let us = UnitStatic::build_for(&mut reg, plain, CURRENT_RULES_EPOCH);
+        assert!(!us.melee[0].counter, "no rule, no stamp");
+    }
+
+    /// Same three rows for "Counter in Melee" — the AoF-only sibling.
+    #[test]
+    fn counter_in_melee_strikes_first_only_from_the_current_epoch() {
+        let header = read_act_header(COUNTER_ALIASES_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let carrier = header.profiles.get("counter_in_melee_unit").expect("counter_in_melee_unit");
+        let us = UnitStatic::build_for(&mut reg, carrier, CURRENT_RULES_EPOCH);
+        assert!(us.melee[0].counter, "the melee-scoped alias strikes first at the current epoch");
+        let us = UnitStatic::build_for(&mut reg, carrier, 0);
+        assert!(!us.melee[0].counter, "epoch 0 replays the Gen-0 rule set");
+        let plain = header.profiles.get("plain_unit").expect("plain_unit");
+        let us = UnitStatic::build_for(&mut reg, plain, CURRENT_RULES_EPOCH);
+        assert!(!us.melee[0].counter, "no rule, no stamp");
     }
 
     /// Brutal = Devout's twin: the PLAIN auto-hit Surge alias (no
