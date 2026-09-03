@@ -2130,6 +2130,21 @@ fn objective_layout(
     Ok(out.into_any().unbind())
 }
 
+/// Missions R2 — `objectives::marker_positions`, the catalog's deterministic layouts
+/// next to `objective_layout`'s rulebook draw. `style` is the same `DeploymentCatalog`
+/// style dict `objective_layout` takes.
+#[pyfunction]
+#[pyo3(signature = (placement, edge_in, style, table_w_in=72.0, table_d_in=48.0))]
+fn mission_marker_positions(
+    placement: &str,
+    edge_in: f64,
+    style: &Bound<'_, PyAny>,
+    table_w_in: f64,
+    table_d_in: f64,
+) -> PyResult<Vec<(f64, f64)>> {
+    Ok(objectives::marker_positions(placement, edge_in, &value_of(style)?, table_w_in, table_d_in))
+}
+
 /// NML-1140 step 5 — the doctrine's placement choice for the trainer and the
 /// gates: `nmlcore::doctrine_place`, the mode dispatcher over `place_style` /
 /// `place_search`, exposed next to `objective_layout`. `armies` is the PAIR
@@ -2613,6 +2628,7 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(los_blocked, m)?)?;
     m.add_function(wrap_pyfunction!(los_pairs, m)?)?;
     m.add_function(wrap_pyfunction!(objective_layout, m)?)?;
+    m.add_function(wrap_pyfunction!(mission_marker_positions, m)?)?;
     // NML-1152 step 7 — the twin's deployment pipeline for the trainer.
     m.add_function(wrap_pyfunction!(deploy_side, m)?)?;
     m.add_function(wrap_pyfunction!(deploy_interleaved, m)?)?;

@@ -596,7 +596,9 @@ DICE_MODES = ("expected", "table")
 #: plays is a knob of its own. "mixed" (NML-1140 step 9b) splits that choice PER
 #: SEAT — the placement A/B measures the doctrine's placement skill against the
 #: rulebook draw in ONE game instead of a whole-board pair.
-OBJECTIVES_MODES = ("constant", "rulebook", "doctrine", "mixed")
+#: "mission" (R2) — the SELECTED mission's own catalog layout, a no-op on the
+#: "alternate" ones (duel, pitched_battle), which keep the rulebook draw.
+OBJECTIVES_MODES = ("constant", "rulebook", "doctrine", "mixed", "mission")
 
 #: The doctrine rungs (design 5): "search" is the max^N mini-game the shipped
 #: grade plays, "style" the middle rung without the eval. "random" needs no
@@ -2418,6 +2420,24 @@ def play_game(
         objectives = [
             [f32(float(x) * IN2M), 0.0, f32(float(z) * IN2M)]
             for x, z in objective_layout["positions"]
+        ]
+    elif eff_objectives == "mission":
+        # R2 — the SELECTED mission's own catalog layout (mission_catalog.gd:78-112,
+        # ported to `objectives::marker_positions`). "alternate" keeps the D3+2
+        # rulebook draw above; the other three modes are deterministic geometry.
+        mk_spec = resolve_mission(mission, repo_root).get("markers", {})
+        mk_placement = str(mk_spec.get("placement", "alternate"))
+        if mk_placement == "alternate":
+            draw = nml_core.objective_layout(terrain, seed, mk_spec.get("count", "d3+2"), FRONT_LINE_ZONES)
+            objective_layout = draw
+            positions = draw["positions"]
+        else:
+            positions = nml_core.mission_marker_positions(
+                mk_placement, float(mk_spec.get("edge_in", 12.0)), FRONT_LINE_ZONES, TABLE_W_IN, TABLE_D_IN,
+            )
+            objective_layout = {"mode": "mission", "placement": mk_placement, "positions": positions}
+        objectives = [
+            [f32(float(x) * IN2M), 0.0, f32(float(z) * IN2M)] for x, z in positions
         ]
     elif eff_objectives == "mixed":
         # NML-1140 step 9b — per-side placer selection in the alternating

@@ -163,3 +163,50 @@ fn an_impassable_cell_is_rejected() {
     let open = Cells::from_pairs(&[((15, 15), 2)], 30);
     assert!(objectives::is_legal(1, 1, &[], &zones, &open), "forest is passable");
 }
+
+/// Missions R2 — `objectives::marker_positions` against `mission_catalog.gd:78-112`,
+/// the table's own `front_line` style (assets/solo/deployments.json) and its 72x48
+/// board. One test per catalog placement, numbers hand-derived from the GDScript
+/// formulas so a coordinate this disagrees with is a real port bug, not a fixture gap.
+fn front_line_style() -> serde_json::Value {
+    serde_json::json!({ "zones": {
+        "1": [[[-36, -24], [36, -24], [36, -12], [-36, -12]]],
+        "2": [[[-36, 12], [36, 12], [36, 24], [-36, 24]]],
+    }})
+}
+
+#[test]
+fn seize_ground_and_domination_use_quarter_centres() {
+    let got = objectives::marker_positions("quarter_centres", 12.0, &front_line_style(), 72.0, 48.0);
+    assert_eq!(got, vec![(-18.0, -12.0), (18.0, -12.0), (-18.0, 12.0), (18.0, 12.0)]);
+}
+
+#[test]
+fn deploy_zone_centres_is_the_bare_zone_centroid() {
+    let got = objectives::marker_positions("deploy_zone_centres", 12.0, &front_line_style(), 72.0, 48.0);
+    assert_eq!(got, vec![(0.0, -18.0), (0.0, 18.0)]);
+}
+
+#[test]
+fn breakthrough_headquarters_sabotage_demolition_use_deploy_zone_front() {
+    let got = objectives::marker_positions("deploy_zone_front", 12.0, &front_line_style(), 72.0, 48.0);
+    // The zone centroid (0, ±18) pulled to the 12" edge line, [P1, P2] order — the
+    // order `sabotage`/`demolition`'s `owned_by = index + 1` convention relies on.
+    assert_eq!(got, vec![(0.0, -12.0), (0.0, 12.0)]);
+}
+
+#[test]
+fn king_of_the_hill_and_mosh_pit_use_table_centre() {
+    let got = objectives::marker_positions("table_centre", 12.0, &front_line_style(), 72.0, 48.0);
+    assert_eq!(got, vec![(0.0, 0.0)]);
+}
+
+/// Duel and Pitched Battle are `alternate` — no headless hand-placement equivalent,
+/// so this rung must leave them at `[]` (the hand-placement flow, unchanged: callers
+/// keep drawing the D3+2 rulebook layout via `generate`, never this function).
+#[test]
+fn alternate_placement_is_untouched_by_this_rung() {
+    let style = front_line_style();
+    assert_eq!(objectives::marker_positions("alternate", 12.0, &style, 72.0, 48.0), Vec::<(f64, f64)>::new());
+    assert_eq!(objectives::marker_positions("unknown", 12.0, &style, 72.0, 48.0), Vec::<(f64, f64)>::new());
+}
