@@ -70,16 +70,36 @@ from shoot_replay_gate import (  # noqa: E402
     combat_kind, read_game, resolve_vintage_flag, vintage_report_line,
 )
 
-#: The FIDELITY knobs, all on: this gate measures the twin at its best, not the
-#: default trainer. `engage_fold`/`cond_ap` are NOT here — those are the
-#: corpus's own VINTAGE (NML-1130) and resolve per game. `charge_gate` is not
-#: here either: `acts::ActKnobs` defaults it ON, which is what the corpus's own
-#: per-act `charge_gate: true` records. Nor is `objectives` (D8a): a replay
-#: INHERITS the table's markers off the recorded state — count, positions and
-#: starting ownership — so there is no mode for this gate to pick. See
+#: W5b (DEFECT_LEDGER row 28) — `--knobs legacy` (the default): this gate
+#: measures the twin at its best, not the shipped trainer. These five are NOT
+#: `selfplay.LEGACY_FIDELITY_KNOBS` (charge_gate/menu_wide/menu_los/los/
+#: hero_last/cast_fold/ambush, PR #624's shipped-defaults flip) — that set
+#: never moved here. It is pinned for the same reason: byte-identical to every
+#: number this gate has ever reported, on purpose, because a corpus recorded
+#: outside full table fidelity is still asked the full-fidelity question.
+#: `engage_fold`/`cond_ap` are NOT here — those are the corpus's own VINTAGE
+#: (NML-1130) and resolve per game. `charge_gate` is not here either:
+#: `acts::ActKnobs` defaults it ON, which is what the corpus's own per-act
+#: `charge_gate: true` records. Nor is `objectives` (D8a): a replay INHERITS
+#: the table's markers off the recorded state — count, positions and starting
+#: ownership — so there is no mode for this gate to pick. See
 #: `selfplay.play_from_state`'s THE OBJECTIVES KNOB.
-FIDELITY = {"hero_attach": True, "charge_landing": True, "sighting": "model",
-            "movement": True, "dangerous": True}
+LEGACY = {"hero_attach": True, "charge_landing": True, "sighting": "model",
+          "movement": True, "dangerous": True}
+#: `--knobs shipped` — `selfplay.play_game`'s OWN current defaults for the
+#: same five keys (hero_attach="off", charge_landing="off", sighting="unit",
+#: movement="rigid"; `dangerous` is not a `play_game` argument at all and
+#: `acts::Knobs::dangerous` defaults ON in the crate regardless, so it is the
+#: same bit in both arms). The first end-to-end read of what a Gen-0 game
+#: actually ships with, against this corpus's own recorded result.
+SHIPPED = {"hero_attach": False, "charge_landing": False, "sighting": "unit",
+           "movement": False, "dangerous": True}
+
+
+def knobs_for(mode: str) -> dict:
+    """The fidelity dict `--knobs {legacy,shipped}` selects. A function, not an
+    inline ternary, so a test can pin both arms without paying for a game."""
+    return LEGACY if mode == "legacy" else SHIPPED
 #: The fields a pick is compared on, in the order they are tested — which is
 #: also the order `pick_class` names them.
 PICK_FIELDS = ("seat", "unit", "kind", "target")
@@ -190,7 +210,8 @@ def _play(core, head: dict, lines: list, opener: int, seed: int, offset: int) ->
 def play_one(job: tuple) -> dict:
     """One recorded game, replayed whole. Runs in a worker process; everything
     it returns is plain data, because a `State` does not cross a pipe."""
-    name, ref, repo, misseed, engage_fold, cond_ap = job
+    name, ref, repo, misseed, engage_fold, cond_ap, knobs_mode = job
+    fidelity = knobs_for(knobs_mode)
     d = Path(ref) / name
     head, lines, dice, seed = read_game(d)
     arena = json.loads(next(d.glob("arena_*.json")).read_text())
@@ -199,7 +220,7 @@ def play_one(job: tuple) -> dict:
     nml_core.set_legacy_no_cond_ap(not eff[1])
     core = _CORE.get(repo) or _CORE.setdefault(repo, nml_core.load(repo))
     core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
-                     "knobs": dict(head.get("knobs", {}), engage_fold=eff[0], **FIDELITY)})
+                     "knobs": dict(head.get("knobs", {}), engage_fold=eff[0], **fidelity)})
     t0 = time.perf_counter()
     got, rolls = _play(core, head, lines, int(arena["opener"]), seed, 0)
     secs = time.perf_counter() - t0
@@ -306,7 +327,7 @@ def fresh(n: int, army1: str, army2: str, repo: str, bank: str, start: int, jobs
 
 
 def run(ref: Path, repo: str, limit: int, jobs: int, misseed: bool,
-        engage_fold: str, cond_ap: str) -> int:
+        engage_fold: str, cond_ap: str, knobs: str) -> int:
     games = sorted(d.name for d in ref.iterdir()
                    if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
@@ -315,7 +336,7 @@ def run(ref: Path, repo: str, limit: int, jobs: int, misseed: bool,
         print("no dice.jsonl under %s" % ref)
         return 1
     jobs = max(1, min(jobs, len(games)))
-    jobargs = [(g, str(ref), repo, misseed, engage_fold, cond_ap) for g in games]
+    jobargs = [(g, str(ref), repo, misseed, engage_fold, cond_ap, knobs) for g in games]
     t0 = time.perf_counter()
     if jobs == 1:
         rows = [play_one(j) for j in jobargs]
@@ -323,7 +344,7 @@ def run(ref: Path, repo: str, limit: int, jobs: int, misseed: bool,
         with mp.get_context("spawn").Pool(jobs) as pool:
             rows = pool.map(play_one, jobargs)
     label = ("GATE D0 outcome parity + RED --red-misseed" if misseed
-             else "GATE D0 outcome parity")
+             else "GATE D0 outcome parity") + " [knobs=%s]" % knobs
     rc = report(label, ref, rows, time.perf_counter() - t0, jobs)
     if not misseed:
         return rc
@@ -357,6 +378,10 @@ def main(argv: list[str]) -> int:
                     help="NML-1130: 'auto' reads the corpus's own vintage (vintage_knobs)")
     ap.add_argument("--cond-ap", choices=("auto", "on", "off"), default="auto",
                     help="NML-1130: 'auto' reads the corpus's own vintage (vintage_knobs)")
+    ap.add_argument("--knobs", choices=("shipped", "legacy"), default="legacy",
+                    help="W5b: 'legacy' (default) forces every fidelity knob on — every number "
+                         "this gate has ever reported. 'shipped' plays selfplay.play_game()'s "
+                         "own current defaults instead, against this corpus's recorded result")
     ap.add_argument("--fresh", type=int, default=0,
                     help="instead of the gate: N fresh seeds, both seats the twin")
     ap.add_argument("--army1")
@@ -371,7 +396,7 @@ def main(argv: list[str]) -> int:
     if not a.ref:
         ap.error("--ref is required (or use --fresh)")
     return run(Path(a.ref).expanduser(), a.repo, a.limit, a.jobs, a.red_misseed,
-               a.engage_fold, a.cond_ap)
+               a.engage_fold, a.cond_ap, a.knobs)
 
 
 if __name__ == "__main__":
