@@ -84,13 +84,16 @@ def replay(path, lists, repo, bank):
                                      movement=kn["movement"],
                                      # DEFECT_LEDGER #12: the RECORD's own key, absent = OFF.
                                      dangerous_end_morale=bool(kn.get("dangerous_end_morale", False)),
-                                     # The corpus predates the W5a knobs, so the pins above
-                                     # stand where the recording is silent; an ARENA record
-                                     # stamps its own menu/sight/ambush pair, and THAT played.
-                                     **{**gr.KNOBS, **{k: kn[k] for k in ("menu_wide", "menu_los",
-                                                                          "los", "hero_last",
-                                                                          "cast_fold", "ambush")
-                                                       if k in kn}})
+                                     # The corpus predates every knob `gr.KNOBS` pins, so those
+                                     # pins stand where the recording is silent; an ARENA record
+                                     # stamps EVERY one of them itself — not just the six W5a
+                                     # menu/sight/ambush keys this once read back, but also
+                                     # charge_gate/hero_attach/charge_landing/sighting/cond_ap/
+                                     # objectives, each its own rung with its own legacy value
+                                     # (DEFECT_LEDGER: a 6-key allowlist silently kept gen0's
+                                     # pins under a shipped-default arena record) — and THAT
+                                     # played.
+                                     **{**gr.KNOBS, **{k: kn[k] for k in gr.KNOBS if k in kn}})
     finally:
         nml_core.load = load
     # Three ways for the replay to be a different game, all fatal: a short run, a
@@ -333,7 +336,10 @@ def stats_row(rec, acts, lists):
             row["charges_reached_contact"] += (any(x["kind"] == "defense" for x in rolls)
                 or bu[chosen["charge"]]["alive"] > au.get(chosen["charge"], {}).get("alive", 0))
         row["dangerous_plain"] += kind in (1, 2) and au.get(key, {}).get("alive", 0) < bu[key]["alive"]
-    for i, pb in enumerate(rec["mission"]["objectives_layout"]["placed_by"]):
+    # `objectives_layout` (D8a) is present only under "rulebook" — an arena
+    # record played with the shipped `objectives="constant"` default names no
+    # placer at all, so nobody can have been "gifted" an objective by it.
+    for i, pb in enumerate(rec["mission"].get("objectives_layout", {}).get("placed_by", [])):
         owner = row["owners_by_round"][-1][i]
         row["objective_gifts"] += pb in (1, 2) and owner in (1, 2) and owner != pb
     # "Was in reserve" is `dormant` at round 1 and "never arrived" is
