@@ -721,6 +721,8 @@ impl Core {
         // The statics closures are built under THIS record's rule set —
         // `Knobs::rules_epoch` gates the epoch-gated rule ports inside
         // `UnitStatic::build_for` (epoch 0/2 corpora replay byte-exact).
+        // The header's own `rules_epoch` — `acts::rule_on`'s build-time leg:
+        // the statics this corpus stamps read the epoch its header carries.
         self.statics = StaticsCache::with_epoch(knobs.rules_epoch);
         self.terrain = terrain;
         self.knobs = knobs;

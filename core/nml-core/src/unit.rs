@@ -672,6 +672,9 @@ struct PrimitiveHit {
     /// Primal Boost et al.'s own `surge_low` param — read only when
     /// `extra_attack` is also set (`unit.rs::stamp`'s block 3b).
     surge_low: i64,
+    /// The Bane family's coverage-wave gate (main.gd:6553-6560) — an alias
+    /// with `reroll_save_sixes` re-rolls the defender's sixes.
+    reroll_save_sixes: bool,
 }
 
 /// `RulesRegistry.unit_rules_of_primitive` rules_registry.gd:155-176 — every
@@ -700,6 +703,7 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
                     cover_only: e.param_b("cover_only"),
                     ignores_cover: e.param_b("ignores_cover"),
                     surge_low: e.param_i("surge_low", 5),
+                    reroll_save_sixes: e.param_b("reroll_save_sixes"),
                 });
             }
         }
@@ -1216,22 +1220,58 @@ fn stamp(
 /// only the weapon's own exact rule, so `u_unstop` lands on `unstoppable_ev`
 /// alone — an "Unstoppable Mark" carrier must stay non-Unstoppable on the
 /// tray. Found by #489, caveat 4; this is that ticket.
-fn stamp_unit_strikers(p: &Profile, shoot: &mut [ShootProfile]) {
+///
+/// CLASS FIX (`acts::rule_on`): at `rules_epoch >= CURRENT_RULES_EPOCH` the
+/// Bane half becomes the table's own scope ladder (`_solo_striker_has_bane`
+/// main.gd:6525-6560) — "Bane in Melee"/"Bane in Melee Buff" melee-only,
+/// "Bane when Shooting" shooting-only, a striker's own "… Aura" never fires,
+/// and the Bane-primitive DATA-ALIAS wave (Bestial, Mischievous, Scrapper —
+/// non-"Bane", non-"Aura", `reroll_save_sixes`) joins it, exactly main.gd:
+/// 6553-6560. Every record below that epoch keeps the flat prefix reading.
+fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], rules_epoch: u32) {
+    let table_ladder = rule_on(rules_epoch, CURRENT_RULES_EPOCH);
     let mut u_bane = false;
+    let mut melee_bane = false;
+    let mut shooting_bane = false;
     let mut u_rending = false;
     let mut u_unstop = false;
     for r in &p.special_rules {
         let rs = r.trim();
         if rs.starts_with("Bane") || rs.starts_with("Lacerate") {
-            u_bane = true;
+            if table_ladder && rs.ends_with("Aura") {
+                continue; // a striker's own aura rule never fires — main.gd:6540
+            }
+            if table_ladder && !rs.starts_with("Lacerate") {
+                if rs.starts_with("Bane in Melee") {
+                    melee_bane = true;
+                } else if rs.starts_with("Bane when Shooting") {
+                    shooting_bane = true;
+                } else {
+                    u_bane = true; // plain "Bane", "Bane Mark", "… Buff"
+                }
+            } else {
+                u_bane = true;
+            }
         } else if rs.starts_with("Rending") {
             u_rending = true;
         } else if rs.starts_with("Unstoppable") && !rs.contains(" in ") && !rs.contains(" when ") {
             u_unstop = true;
         }
     }
+    if table_ladder {
+        // The coverage wave (main.gd:6553-6560): Bane-primitive data aliases
+        // whose own entry carries `reroll_save_sixes` — no scope qualifier.
+        for hit in rules_of_primitive(reg, p, "Bane") {
+            if hit.name.starts_with("Bane") || hit.name.ends_with("Aura") {
+                continue;
+            }
+            u_bane |= hit.reroll_save_sixes;
+        }
+    }
     for sp in shoot.iter_mut() {
-        sp.bane |= u_bane;
+        sp.bane |= u_bane
+            || (melee_bane && sp.range <= 0)
+            || (shooting_bane && sp.range > 0);
         sp.rending |= u_rending;
         sp.unstoppable_ev = sp.unstoppable || u_unstop;
     }
@@ -1600,9 +1640,10 @@ impl UnitStatic {
 
     /// The epoch-aware build: `rules_epoch` is the RECORD's own
     /// `Knobs::rules_epoch`, and the epoch-gated rule ports inside
-    /// (`regen_targets`' Regeneration-family alias wave) stamp their
-    /// behaviour only when `acts::rule_on(rules_epoch, CURRENT_RULES_EPOCH)`.
-    /// The statics of one record are built from that record's header —
+    /// (`regen_targets`' Regeneration-family alias wave, the Bane family's
+    /// scope ladder) stamp their behaviour only when
+    /// `acts::rule_on(rules_epoch, CURRENT_RULES_EPOCH)`. The statics of one
+    /// record are built from that record's header —
     /// `lib::build_statics`/`act_statics` and the two host caches do — so the
     /// gate rides the same line the profile table does.
     pub fn build_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> UnitStatic {
@@ -1611,7 +1652,7 @@ impl UnitStatic {
         let mut shoot = profiles_in_range(&p.weapons, 0.0);
         stamp(reg, p, &mut shoot, &mut unimplemented);
         stamp_conditional_ap(reg, p, &mut shoot);
-        stamp_unit_strikers(p, &mut shoot);
+        stamp_unit_strikers(reg, p, &mut shoot, rules_epoch);
         stamp_shot_modifier(reg, p, &mut shoot);
 
         let mut melee = melee_profiles(&p.weapons);
@@ -1621,7 +1662,7 @@ impl UnitStatic {
         let mut melee_unimpl: Vec<Unimplemented> = Vec::new();
         stamp(reg, p, &mut melee, &mut melee_unimpl);
         stamp_conditional_ap(reg, p, &mut melee);
-        stamp_unit_strikers(p, &mut melee);
+        stamp_unit_strikers(reg, p, &mut melee, rules_epoch);
         for u in melee_unimpl {
             if !unimplemented.contains(&u) {
                 unimplemented.push(u);
@@ -1710,6 +1751,10 @@ impl UnitStatic {
 /// that returns to its deployment reading finds it still here.
 #[derive(Default)]
 pub struct StaticsCache {
+    /// The `rules_epoch` this cache's closures are stamped under — the CLASS
+    /// FIX's build-time leg (`acts::rule_on`). `0` (the `new()` default) is
+    /// the Gen-0 reading every record before a port replays byte-exact.
+    epoch: u32,
     entries: Vec<(Rc<Profiles>, Rc<Vec<UnitStatic>>)>,
     /// How many tables were rebuilt (a diagnostic — the cost this cache exists
     /// to keep off the per-activation path).
@@ -1841,6 +1886,165 @@ mod tests {
             real.shoot[0].unstoppable_ev,
             "and the EV field follows — `unstoppable_ev = unstoppable || u_unstop`"
         );
+    }
+
+    /// Bane family (rules-wave-bane) — end to end through the REAL registry,
+    /// one test per ported name. Each carrier holds a ranged Rifle (24") and a
+    /// melee Blade, so a scope suffix is observable per profile; each test
+    /// reads the stamp at `rules_epoch: CURRENT_RULES_EPOCH` (the new reading)
+    /// and `0` (the flat prefix reading every earlier corpus replayed). The
+    /// DATA-ALIAS carriers need the REAL (system, faction) entry their books
+    /// print: aof/beastmen (Bestial), aof/goblins (Mischievous), gf/jackals
+    /// (Scrapper, Scrapper Boost).
+    const BANE_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "carrier":{"unit_id":"carrier","name":"Carrier","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":["Bane in Melee"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},
+          {"name":"Blade","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// One rule's truth table through the template: the (shoot, melee) bane
+    /// stamp at `epoch`, with `rule` swapped into the carrier's special_rules
+    /// and (system, faction) set so the REAL registry entry resolves (the
+    /// alias wave needs aof/beastmen, aof/goblins, gf/jackals).
+    fn bane_stamp_of(rule: &str, system: &str, faction: &str, epoch: u32) -> (bool, bool) {
+        let tpl = BANE_HEADER
+            .replace("\"Bane in Melee\"", &format!("\"{rule}\""))
+            .replace("\"game_system\":\"gf\"", &format!("\"game_system\":\"{system}\""))
+            .replace("\"faction_folder\":\"robot_legions\"", &format!("\"faction_folder\":\"{faction}\""));
+        let header = read_act_header(&tpl).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("carrier").expect("carrier");
+        let us = UnitStatic::build_for(&mut reg, p, epoch);
+        (us.shoot[0].bane, us.melee[0].bane)
+    }
+
+    /// "Bane in Melee" (main.gd:6543-6545): melee-only at the current epoch;
+    /// the flat prefix reading (both profiles) at epoch 0 — and a rule-less
+    /// unit never stamps bane.
+    #[test]
+    fn bane_in_melee_reaches_melee_only_at_the_current_epoch() {
+        assert_eq!(
+            bane_stamp_of("Bane in Melee", "gf", "robot_legions", crate::acts::CURRENT_RULES_EPOCH),
+            (false, true),
+            "melee-only: the rifle stays clean"
+        );
+        assert_eq!(bane_stamp_of("Bane in Melee", "gf", "robot_legions", 0), (true, true), "flat Gen-0 reading");
+        assert_eq!(bane_stamp_of("", "gf", "robot_legions", crate::acts::CURRENT_RULES_EPOCH), (false, false));
+    }
+
+    /// "Bane in Melee Buff" (main.gd:6543's prefix arm — the Buff shares the
+    /// "Bane in Melee" branch): melee-only at the current epoch, flat at 0.
+    #[test]
+    fn bane_in_melee_buff_reaches_melee_only_at_the_current_epoch() {
+        assert_eq!(
+            bane_stamp_of("Bane in Melee Buff", "gf", "human_defense_force", crate::acts::CURRENT_RULES_EPOCH),
+            (false, true),
+            "the Buff's melee scope"
+        );
+        assert_eq!(bane_stamp_of("Bane in Melee Buff", "gf", "human_defense_force", 0), (true, true), "flat Gen-0 reading");
+    }
+
+    /// "Bane when Shooting" (main.gd:6546-6548): shooting-only at the current
+    /// epoch; the flat prefix reading at epoch 0.
+    #[test]
+    fn bane_when_shooting_reaches_shooting_only_at_the_current_epoch() {
+        assert_eq!(
+            bane_stamp_of("Bane when Shooting", "gf", "robot_legions", crate::acts::CURRENT_RULES_EPOCH),
+            (true, false),
+            "shooting-only: the blade stays clean"
+        );
+        assert_eq!(bane_stamp_of("Bane when Shooting", "gf", "robot_legions", 0), (true, true), "flat Gen-0 reading");
+    }
+
+    /// "Bane in Melee Aura" (main.gd:6540): a striker's own "… Aura" rule
+    /// never fires — nothing stamps at the current epoch (the aura expansion
+    /// hands the base rule to the unit), while epoch 0 keeps the flat read.
+    #[test]
+    fn bane_in_melee_aura_never_fires_for_its_own_striker() {
+        assert_eq!(
+            bane_stamp_of("Bane in Melee Aura", "gf", "robot_legions", crate::acts::CURRENT_RULES_EPOCH),
+            (false, false),
+            "the aura name itself is skipped"
+        );
+        assert_eq!(bane_stamp_of("Bane in Melee Aura", "gf", "robot_legions", 0), (true, true), "flat Gen-0 reading");
+    }
+
+    /// "Bane when Shooting Aura" (main.gd:6540): the same aura skip.
+    #[test]
+    fn bane_when_shooting_aura_never_fires_for_its_own_striker() {
+        assert_eq!(
+            bane_stamp_of("Bane when Shooting Aura", "gf", "robot_legions", crate::acts::CURRENT_RULES_EPOCH),
+            (false, false),
+            "the aura name itself is skipped"
+        );
+        assert_eq!(bane_stamp_of("Bane when Shooting Aura", "gf", "robot_legions", 0), (true, true), "flat Gen-0 reading");
+    }
+
+    /// "Bane Mark" (main.gd:6550's plain arm — the table's dice path reads the
+    /// Mark as plain always-on Bane; the once-per-activation pick is the
+    /// table's own live state): both profiles at the current epoch, and the
+    /// same at epoch 0 (the legacy prefix already caught it).
+    #[test]
+    fn bane_mark_reads_as_plain_bane() {
+        assert_eq!(
+            bane_stamp_of("Bane Mark", "gf", "robot_legions", crate::acts::CURRENT_RULES_EPOCH),
+            (true, true),
+            "plain-bane arm, both profiles"
+        );
+        assert_eq!(bane_stamp_of("Bane Mark", "gf", "robot_legions", 0), (true, true), "the legacy prefix read too");
+    }
+
+    /// "Bestial" (aof/beastmen) — the coverage wave (main.gd:6553-6560):
+    /// a Bane-primitive alias with `reroll_save_sixes` re-rolls the defender's
+    /// sixes at the current epoch; the legacy prefix scan never caught it, so
+    /// epoch 0 stays clean.
+    #[test]
+    fn bestial_joins_through_the_coverage_wave() {
+        assert_eq!(
+            bane_stamp_of("Bestial", "aof", "beastmen", crate::acts::CURRENT_RULES_EPOCH),
+            (true, true),
+            "reroll_save_sixes: both profiles, no scope"
+        );
+        assert_eq!(bane_stamp_of("Bestial", "aof", "beastmen", 0), (false, false), "the wave is epoch-gated");
+    }
+
+    /// "Mischievous" (aof/goblins) — the same coverage wave.
+    #[test]
+    fn mischievous_joins_through_the_coverage_wave() {
+        assert_eq!(
+            bane_stamp_of("Mischievous", "aof", "goblins", crate::acts::CURRENT_RULES_EPOCH),
+            (true, true),
+            "reroll_save_sixes: both profiles, no scope"
+        );
+        assert_eq!(bane_stamp_of("Mischievous", "aof", "goblins", 0), (false, false), "the wave is epoch-gated");
+    }
+
+    /// "Scrapper" (gf/jackals) — the same coverage wave.
+    #[test]
+    fn scrapper_joins_through_the_coverage_wave() {
+        assert_eq!(
+            bane_stamp_of("Scrapper", "gf", "jackals", crate::acts::CURRENT_RULES_EPOCH),
+            (true, true),
+            "reroll_save_sixes: both profiles, no scope"
+        );
+        assert_eq!(bane_stamp_of("Scrapper", "gf", "jackals", 0), (false, false), "the wave is epoch-gated");
+    }
+
+    /// "Scrapper Boost" (gf/jackals) — the gf entry carries `reroll_save_sixes`
+    /// alongside its un-read 5-6 extension, so the wave joins it too (the
+    /// reroll_save_low/over_in params stay read by nobody — the Boost's own
+    /// documented gap).
+    #[test]
+    fn scrapper_boost_joins_through_the_coverage_wave() {
+        assert_eq!(
+            bane_stamp_of("Scrapper Boost", "gf", "jackals", crate::acts::CURRENT_RULES_EPOCH),
+            (true, true),
+            "the gf entry's reroll_save_sixes"
+        );
+        assert_eq!(bane_stamp_of("Scrapper Boost", "gf", "jackals", 0), (false, false), "the wave is epoch-gated");
     }
 
     /// Block B6, end to end through the REAL registry: `saurian_starhost/gf`'s

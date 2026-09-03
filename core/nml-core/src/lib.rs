@@ -147,6 +147,7 @@ pub fn act_statics(corpus: &ActCorpus, repo_root: &str) -> Vec<std::rc::Rc<Vec<U
     // One cache, ONE epoch: the corpus header's `Knobs::rules_epoch` — every
     // activation of this corpus replays under that rule set, so its closures
     // must too (the cache key stays the profile table alone).
+    // The corpus header's own epoch — `acts::rule_on`'s build-time leg.
     let mut cache = StaticsCache::with_epoch(corpus.knobs.rules_epoch);
     corpus.acts.iter().map(|a| cache.get(&mut reg, &a.state.profiles)).collect()
 }

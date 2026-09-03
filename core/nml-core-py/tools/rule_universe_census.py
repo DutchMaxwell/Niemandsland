@@ -170,6 +170,14 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # (acts::CURRENT_RULES_EPOCH). Without this row the primitive is trusted
     # whole for the twelve names under it — the #489 over-credit shape.
     "Regeneration": frozenset({"ignore_target", "ignore_target_spell", "all_models"}),
+    # Bane family port (rules-wave-bane, 2026-09-03): unit.rs
+    # ::stamp_unit_strikers' epoch-gated ladder mirrors main.gd's
+    # `_solo_striker_has_bane` — the Bane-prefixed names by scope suffix, and
+    # the DATA-ALIAS wave (Bestial, Mischievous, Scrapper — non-"Bane",
+    # non-"Aura") gated on the entry's own `reroll_save_sixes`. The Boost
+    # variants' 5-6 extension (reroll_save_low/reroll_save_from, over_in) is
+    # read by nobody on this core — those entries stay STAMPED.
+    "Bane": frozenset({"reroll_save_sixes"}),
 }
 
 
