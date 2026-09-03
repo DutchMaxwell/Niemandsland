@@ -225,6 +225,42 @@ pub struct Knobs {
     /// never saw this bonus stays byte-identical.
     #[serde(default)]
     pub versatile_reach: bool,
+    /// The CLASS FIX (external review 03.09. item 3 / F9: "a rule port
+    /// without a legacy opt-out breaks byte-exact replay of the recorded
+    /// corpora"). Absent/`0` means "the rule set of the Gen-0 corpus" — every
+    /// header recorded before this field existed reads back `0`, same as
+    /// every other knob here. A fresh `play_game()` stamps
+    /// `CURRENT_RULES_EPOCH`. See `rule_on` and `CURRENT_RULES_EPOCH`: a
+    /// future rule port that has no legacy reading should NOT add another
+    /// boolean knob like `cond_ap_dice`/`versatile_reach` above — it should
+    /// gate on `rule_on(rules_epoch, CURRENT_RULES_EPOCH)` and bump the
+    /// constant in the same change.
+    #[serde(default)]
+    pub rules_epoch: u32,
+}
+
+/// The current rule-set generation (see `Knobs`/`Seams::rules_epoch`, `rule_on`).
+/// Bump this — do not add a new boolean knob — when a table rule port has no
+/// legacy opt-out of its own: give the new gate `since_epoch: CURRENT_RULES_EPOCH`
+/// in the same change that bumps this constant, so `play_game()` starts
+/// stamping fresh records at the new epoch and every earlier record (whose
+/// `rules_epoch` reads back lower, or `0` if it predates the field) keeps
+/// replaying exactly as it did before the port. `1` is the epoch at which
+/// `cond_ap_dice` (PR #637) and `versatile_reach` (PR #642) — the two ports
+/// that shipped without their own opt-out before this field existed — turn on
+/// unconditionally; `2` (this constant) is this class fix landing.
+pub const CURRENT_RULES_EPOCH: u32 = 2;
+
+/// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
+/// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
+/// `since_epoch: 1` as `knob || rule_on(rules_epoch, 1)` at their call sites,
+/// so a pre-epoch record with the boolean at its legacy `false` (or the key
+/// altogether absent) still replays exactly as before this fix, while a fresh
+/// record stamping `rules_epoch: CURRENT_RULES_EPOCH` gets both rules
+/// regardless of what the two booleans read. A future port with no legacy
+/// reading should call this directly instead of adding a third boolean knob.
+pub fn rule_on(rules_epoch: u32, since_epoch: u32) -> bool {
+    rules_epoch >= since_epoch
 }
 
 /// The `melee_reach` knob's two settings — written the way `sighting` is.
@@ -319,6 +355,7 @@ impl Default for Knobs {
             consolidate: false,
             cond_ap_dice: false,
             versatile_reach: false,
+            rules_epoch: 0,
         }
     }
 }
@@ -662,7 +699,38 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
 
 #[cfg(test)]
 mod tests {
-    use super::read_act_header;
+    use super::{read_act_header, rule_on, CURRENT_RULES_EPOCH};
+
+    /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
+    /// `rule_on` is a plain `>=`, tested at its own boundary — `since_epoch`
+    /// itself turns a rule on, one below it does not, and above it stays on.
+    #[test]
+    fn rule_on_is_true_from_its_since_epoch_onward() {
+        assert!(!rule_on(0, 1), "epoch 0 is before since_epoch 1: off");
+        assert!(rule_on(1, 1), "epoch reaches its own since_epoch: on");
+        assert!(rule_on(2, 1), "epoch past its since_epoch: on");
+        assert!(!rule_on(0, CURRENT_RULES_EPOCH), "epoch 0 is before every future port");
+    }
+
+    /// An absent `rules_epoch` (every corpus recorded before this field
+    /// existed) defaults to 0 — "the Gen-0/Gen-1 rule set" — exactly like
+    /// `eval_variant` above.
+    #[test]
+    fn an_absent_rules_epoch_defaults_to_0_and_parses() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{}}"#;
+        let header = read_act_header(head).expect("no knobs at all still parses");
+        assert_eq!(header.knobs.rules_epoch, 0);
+    }
+
+    /// A header that stamps `rules_epoch` carries it through unchanged — the
+    /// reading a fresh `play_game()` recording and a replay tool that passes
+    /// a record's own key both rely on.
+    #[test]
+    fn a_stamped_rules_epoch_parses_through() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":2}}"#;
+        let header = read_act_header(head).expect("a stamped rules_epoch parses");
+        assert_eq!(header.knobs.rules_epoch, 2);
+    }
 
     /// The evolved-eval seam's other RED proof — a header asking for a variant
     /// with no registered arm is refused HERE, before it can ever reach
