@@ -108,7 +108,7 @@ pub use unit::{capture_reads, CaptureReads, StaticsCache, Unimplemented, UnitSta
 /// `repo_root` is the checkout the mechanics assets are read from
 /// (`assets/solo/rules_mechanics_<system>.json`, `spells_mechanics_<system>.json`).
 pub fn build_statics(corpus: &NodeCorpus, repo_root: &str) -> Vec<UnitStatic> {
-    statics_of(&corpus.profiles, repo_root)
+    statics_of(&corpus.profiles, repo_root, corpus.seams.rules_epoch)
 }
 
 /// The ONE static closure of an act corpus whose every activation reads the
@@ -130,7 +130,7 @@ pub fn build_act_statics(corpus: &ActCorpus, repo_root: &str) -> Vec<UnitStatic>
             i + 1
         );
     }
-    statics_of(&corpus.profiles, repo_root)
+    statics_of(&corpus.profiles, repo_root, corpus.knobs.rules_epoch)
 }
 
 /// The per-ACTIVATION static closure of an act corpus — one entry per act, in
@@ -144,11 +144,14 @@ pub fn build_act_statics(corpus: &ActCorpus, repo_root: &str) -> Vec<UnitStatic>
 /// changed.
 pub fn act_statics(corpus: &ActCorpus, repo_root: &str) -> Vec<std::rc::Rc<Vec<UnitStatic>>> {
     let mut reg = Registries::new(repo_root);
-    let mut cache = StaticsCache::new();
+    // One cache, ONE epoch: the corpus header's `Knobs::rules_epoch` — every
+    // activation of this corpus replays under that rule set, so its closures
+    // must too (the cache key stays the profile table alone).
+    let mut cache = StaticsCache::with_epoch(corpus.knobs.rules_epoch);
     corpus.acts.iter().map(|a| cache.get(&mut reg, &a.state.profiles)).collect()
 }
 
-fn statics_of(profiles: &Profiles, repo_root: &str) -> Vec<UnitStatic> {
+fn statics_of(profiles: &Profiles, repo_root: &str, rules_epoch: u32) -> Vec<UnitStatic> {
     let mut reg = Registries::new(repo_root);
-    profiles.list.iter().map(|p| UnitStatic::build(&mut reg, p)).collect()
+    profiles.list.iter().map(|p| UnitStatic::build_for(&mut reg, p, rules_epoch)).collect()
 }

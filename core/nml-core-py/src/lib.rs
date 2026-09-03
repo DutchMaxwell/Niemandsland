@@ -718,7 +718,10 @@ impl Core {
             .map_err(|e| Unsupported::new_err(e))?;
         self.profiles = Some(ProfileCache::new(profiles));
         self.reg = Some(Registries::new(&self.repo_root));
-        self.statics = StaticsCache::new();
+        // The statics closures are built under THIS record's rule set —
+        // `Knobs::rules_epoch` gates the epoch-gated rule ports inside
+        // `UnitStatic::build_for` (epoch 0/2 corpora replay byte-exact).
+        self.statics = StaticsCache::with_epoch(knobs.rules_epoch);
         self.terrain = terrain;
         self.knobs = knobs;
         self.roster = None;
@@ -1029,7 +1032,7 @@ impl Core {
         let base = profiles.base();
         let mut out = Map::new();
         for p in &base.list {
-            let us = UnitStatic::build(reg, p);
+            let us = UnitStatic::build_for(reg, p, self.knobs.rules_epoch);
             let n = p.model_count.max(1) as usize;
             let carries = |r: &str| {
                 nmlcore::rules::has_special_rule(&p.special_rules, r)
