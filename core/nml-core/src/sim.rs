@@ -2741,11 +2741,17 @@ fn bounding_bonus_in(action: &Action) -> f64 {
 /// the table took the `elif` (the +4" range half) and the band was NOT bumped.
 /// The range half has no consumer in this core — see state.rs:172-176 and
 /// sim.rs:727-730 — and is deliberately not ported here.
+///
+/// `versatile_reach` (`Knobs`/`Seams::versatile_reach`, PR #582 shipped no
+/// legacy gate at all): OFF unconditionally returns 0.0, the pre-#582
+/// reading — 2.25 % of the Gen-0 corpus was recorded before this rule existed
+/// (INVESTIGATION_gen0_replay_drift_2026-09-03.md) and no longer replays
+/// byte-identical without this gate.
 fn versatile_reach_charge_in(
     statics: &[UnitStatic], state: &State, si: usize, kind: i64,
-    ci: Option<usize>, bounding_in: f64,
+    ci: Option<usize>, bounding_in: f64, versatile_reach: bool,
 ) -> f64 {
-    if kind != CHARGE { return 0.0; }
+    if kind != CHARGE || !versatile_reach { return 0.0; }
     let us = &statics[state.roster.profile[si]];
     let (Some(bonus), Some(ti)) = (us.versatile_reach_charge_in, ci) else { return 0.0 };
     if us.melee.is_empty() { return 0.0; } // solo_controller.gd:1791
@@ -2992,7 +2998,8 @@ fn resolve_with(
     let bounding_in = bounding_bonus_in(action);
     // Versatile Reach — the witness policy evaluated at the resolve seam, the
     // same seam Bounding rides (`sim::versatile_reach_charge_in`).
-    let vr_in = versatile_reach_charge_in(statics, &next, si, kind, ci, bounding_in);
+    let vr_in =
+        versatile_reach_charge_in(statics, &next, si, kind, ci, bounding_in, seams.versatile_reach);
     let band_in = match kind {
         ADVANCE => next.bands[si].advance,
         RUSH | CHARGE => next.bands[si].rush,
@@ -5301,13 +5308,16 @@ mod tests {
 
     /// The seam-armed resolver run every VR charge test replays: the M4
     /// movement port is what the table's `_charge_move` (:2213) feeds, so the
-    /// +2" must reach its band argument exactly there.
+    /// +2" must reach its band argument exactly there. `versatile_reach: true`
+    /// because every existing caller of this helper is proving the RULE
+    /// itself (the on-by-default `play_game` reading) — the knob's own
+    /// off/on behaviour has its dedicated test below.
     fn vr_resolve(st: &State, statics: &[UnitStatic], action: &Action) -> State {
         let mut tray = Tray::seeded(11);
         let mut rng = crate::rng::GodotRng::new(0);
         resolve_stochastic_tray_on_board(
             statics, st, action, &small_board(),
-            Seams { movement: true, ..Seams::default() }, &mut rng, &mut tray,
+            Seams { movement: true, versatile_reach: true, ..Seams::default() }, &mut rng, &mut tray,
         )
         .unwrap()
         .0
@@ -5433,6 +5443,41 @@ mod tests {
             (moved - 12.0).abs() < 1e-6,
             "the plain rush band, nothing more: moved {:.3}\"",
             moved
+        );
+    }
+
+    /// The `versatile_reach` knob itself (`Knobs`/`Seams::versatile_reach`,
+    /// INVESTIGATION_gen0_replay_drift_2026-09-03.md): PR #582 shipped this
+    /// bonus with no legacy gate at all, so 45/2000 sampled Gen-0 games
+    /// (recorded before #582) no longer replay byte-identical. OFF (the
+    /// `Default`, every corpus recorded before #582) must replay the same gap
+    /// a non-carrier gets — no bonus, band unchanged; ON (the shipped current
+    /// engine) applies the same +2" ring bonus test (a) above proves. RED if
+    /// the `!versatile_reach` guard in `versatile_reach_charge_in` is
+    /// dropped: the "off" row would land in contact like the "on" row.
+    #[test]
+    fn the_versatile_reach_knob_off_replays_legacy_and_on_applies_the_bonus() {
+        let (st, mut statics) = vr_charge_line(13.5);
+        statics[0].versatile_reach_charge_in = Some(2.0);
+        let mut tray = Tray::seeded(11);
+        let mut rng = crate::rng::GodotRng::new(0);
+        let (legacy, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &vr_charge(), &small_board(),
+            Seams { movement: true, versatile_reach: false, ..Seams::default() },
+            &mut rng, &mut tray,
+        )
+        .unwrap();
+        assert!(
+            (vr_gap(&legacy) - 1.5).abs() < 1e-6,
+            "knob OFF: the plain 12\" rush band alone, 1.5\" short of the 13.5\" gap, got {:.3}\"",
+            vr_gap(&legacy)
+        );
+
+        let on = vr_resolve(&st, &statics, &vr_charge());
+        assert!(
+            vr_gap(&on) < 0.3,
+            "knob ON: the +2\" ring bonus lands in contact, gap {:.3}\"",
+            vr_gap(&on)
         );
     }
 
