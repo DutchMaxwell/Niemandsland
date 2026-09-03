@@ -402,6 +402,25 @@ def test_no_model_outruns_its_band(tmp_path):
 
 
 @needs_corpus
+def test_an_arena_style_record_without_prescreen_still_stats(tmp_path):
+    # ARENA records (the A/B harness) carry play_game's own header at the TOP
+    # level — knobs, seed, dice_seed — and no Gen-0 "prescreen" block, so
+    # --stats died on them with KeyError: prescreen. A COPY of a corpus game
+    # with the header stripped must still replay and yield its stats row.
+    rec = json.loads((CORPUS / GAME).read_text(encoding="utf-8"))
+    rec.pop("prescreen")
+    stripped = tmp_path / GAME
+    stripped.write_text(json.dumps(rec), encoding="utf-8")
+    got = subprocess.run([sys.executable, str(TOOLS / "game_narrator.py"), str(stripped),
+                          "--stats", str(tmp_path / "stats.jsonl")],
+                         capture_output=True, text=True)
+    assert got.returncode == 0, got.stderr[-2000:]
+    rows = [json.loads(x) for x in
+            (tmp_path / "stats.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 1 and rows[0]["game"] == Path(GAME).stem
+
+
+@needs_corpus
 def test_narration_refuses_a_menu_that_parted(tmp_path):
     # THE RED. One destination coordinate off by a nanometre on a COPY: the tool
     # must raise at the position where the menus part, not narrate a fiction.
