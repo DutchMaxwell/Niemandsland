@@ -94,15 +94,20 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     "Utility Buff": frozenset({"hit_mod", "morale_mod"}),
     # Block B6: unit.rs::stamp reads `extra_attack` to route a Surge entry
     # into `surge_attack`/`surge_attack_low` (dice.rs::surge_attack_hits, both
-    # resolve functions). Plain auto-hit Surge aliases (Devout, Point-Blank
-    # Surge, exact "Surge"/"Ferocious") carry no `extra_attack` key, so they
-    # stay STAMPED here — `within_in`/`surge_low`/`surge_over_in` are still
-    # unread for that form (main.gd:4427-4435's own "fires unconditionally"
-    # gap, unchanged by this block). Without this entry "Surge" was TRUSTED
-    # WHOLE, over-crediting every name under it the moment ANY "surge" token
-    # existed anywhere in non-test core/ — PR #489's bug, reopened here until
-    # now.
-    "Surge": frozenset({"extra_attack"}),
+    # resolve functions). melee_only/shooting_only are the alias loop's own
+    # facet gate; the epoch-3 surge-gates port reads the plain auto-hit form's
+    # `within_in` (Point-Blank Surge, ai_ev.gd:228-231) and the Boosts'
+    # `over_in` (Devout/Ferocious/Lucky Boost, ai_ev.gd:243-244 -> dice.rs's
+    # epoch-gated surge block). `surge_low` is deliberately NOT listed: the
+    # resolver reads it only off `upgrades`-carrying entries, and the one
+    # upgrades-less carrier that prints it (Great Sergeant) is dead data in
+    # the TABLE's own stamp loop — listing it would over-credit that name's
+    # printed 5-6 form, the exact #489 shape. The remaining
+    # bonus_hits_per_six-only names (Brutal, Devout, Lucky, Surge Mark, Surge
+    # when Shooting) stay STAMPED: the table reads no param of theirs, so
+    # neither does the twin. Without this entry "Surge" was TRUSTED WHOLE —
+    # PR #489's bug, reopened here until now.
+    "Surge": frozenset({"extra_attack", "melee_only", "shooting_only", "within_in", "over_in"}),
     # Block B7: `unit::growth_of` stamps `UnitStatic.growth` off every "Growth
     # Markers" entry the unit carries, but `sim::growth_bonus_of` only ever
     # folds the AP/hit facets into the tray (main.gd:4287/:5675-5680) — the
