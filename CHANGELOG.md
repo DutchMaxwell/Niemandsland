@@ -4,6 +4,67 @@ All notable changes to Niemandsland. Versions follow the project's alpha line
 (`config/version` in `project.godot`). Game-state save format (`.nml`) is versioned
 separately (`SAVE_VERSION` in `save_manager.gd`).
 
+## [Unreleased]
+
+### Added
+- **The Solo panel has a mission selector, driven by the mission catalogue.** (#640)
+- **The mission catalogue reaches the AI twin.** The Python side can play the ten catalogue missions from `missions.json`
+  (missions R1, default duel), and the twin sets deterministic mission-marker placements. (#623, #639)
+
+### Changed
+- **AI rules fidelity — named rules ported to the fast core.** Split fire (a volley per target group), Mend, Re-Position
+  Artillery and the Utility Buff bridge, Breath Attack, Shot Modifier with melee leg and flat / over-9" siblings, Hit &
+  Run (incl. Fighter + Shooter), natural-6 extra attack dice, Growth Markers, Second Wind, Vanguard, Resistance,
+  Unpredictable Shooter, Retaliate(X), Bounding (the table records the traced D3, the twin replays it), Quick Shot,
+  Instinctive, Deathstrike with Self-Destruct's death half, Versatile Reach's charge half. (#476, #479, #485–#487, #489,
+  #493, #497–#498, #501, #507, #510–#512, #525, #527, #554, #569, #579, #582, #587, #594)
+- **AI rules fidelity — outcome and grant rules.** Fear(X) counts in the melee-result comparison (W4); Limited weapons
+  fire once per game (L1); conditional AP (Piercing Assault family) applies in the dice path (L2); spells that grant a
+  rule take effect until the end of the round (E2); grants_rule ports for Rung D auras and Rung E buffs plus Rung E
+  Marks/Debuffs; table-fidelity knobs: ADVANCE+shoot candidates (W1), 2" melee reach (W2), the 3" post-melee
+  consolidation (W3), a legacy gate for Versatile Reach's charge bonus; the hand eval can follow the referee's marker
+  rule, and the dangerous-end morale test runs after terrain losses. (#595, #600, #612, #615–#616, #620, #629–#630,
+  #637, #641–#642, #644)
+- **AI rules fidelity — how the twin sets up and moves.** Rulebook-legal objective count and placement, seeded
+  identically on table and twin (doctrine behind a knob); deployment parity and the rulebook's alternating deployment
+  turn order in twin and arena; Ambush reserves arrive with dormant strength, the two distances and the Beacon pass; the
+  position-solver ladder routes non-charge moves through plain_move (terrain projection, displacement caps, collapse
+  ladder, stall escalation, bounded straggler pull); self-play reads the table's per-model sight and the shoot leg asks
+  the whole resolve question. (#473, #481, #484, #505, #509, #514, #519, #523–#524, #537–#538, #555, #565, #567,
+  #575–#577, #581, #583, #586, #589, #592–#593, #599)
+- **AI decisions fixed.** The menu targets the UNIT and offers the charge it can reach; a joined Caster hero can finally
+  cast; a combat intent aimed at a joined hero fights its HOST; Unstoppable follows the table's dice path; the over-9"
+  modifier gate measures centre-to-centre; an absent knob key reads as OFF. (#492, #495, #502, #601–#602, #605)
+
+### Fixed
+- **The Solo arena's both-AI round loop grants Second Wind.** (#503)
+
+### Internal
+- **Training and self-play.** The outcome gate replays whole recorded games from the deployment on the table's dice
+  tape; fitted, residual and blend eval modes; the policy-net steps (candidate dump, outcome rows, Rust loader; ORDER
+  mode with policy gate and holdout); expert-iteration and value-net seams (trace.cands, aux targets, cand_logits_fn,
+  pool_value_fn, batched leaf_value_fn); Gen-0 corpus tooling (stats reader, replay-fidelity proof, shards,
+  policy_tokens); per-seat A/B drivers; shipped defaults record the evidence-backed table knobs. (#471–#472, #474–#475,
+  #480, #482–#483, #496, #499, #515, #521–#522, #533, #563–#564, #571, #573, #584, #588, #597–#598, #608–#609, #618,
+  #621, #624, #627, #633, #643)
+- **Gates, census and analysis instruments.** Rule universe and fire census with stricter credit (PORTED only on an
+  exact read, no aura token over-credit, the aura_live report, N/A class, universe extended to weapon and core-book
+  names); dice_gate split-aim injection, --only-rule with spell-granted bearers and X-Aura base shapes, --movement
+  {rigid,table}; move_call_gate; per-model same-move agreement and a position check; recorder ledgers and
+  per-candidate scores; the ambush ARRIVAL gate with corpus oracle; deployment_gate interleave_order;
+  charge_landing_census; outcome_gate --knobs shipped|legacy; replays honour every stamped knob. (#477–#478, #488,
+  #490–#491, #494, #500, #506, #516–#517, #520, #568, #570, #572, #574, #580, #585, #596, #603–#604, #607, #611, #614,
+  #632, #636)
+- **The game narrator.** Prose + board SVG + dice trail analysis mode; --stats with advance+shoot, morale-test and
+  Limited counts; the reserve metric reads dormant/arrival fields; labels fixed (unsaved honours Blast/Deadly, contact
+  = melee dice only, the count-1 morale die is a morale test, dangerous-terrain tests are not attack dice); arena
+  records replay without a prescreen header. (#578, #591, #606, #610, #619, #625–#626, #631)
+- **Tests and CI.** Mutant-killing tests for the block-B rule functions and the mv solver; the forge_mutants test forge;
+  a CI fast lane for core-only PRs; the nml-core-py pytest suite runs in the core job; the core crates job is blocking,
+  not advisory; monkeypatched globals restored for a green pytest run; mission.rs scoring arms pinned; digests
+  re-pinned after the dangerous-end-morale port. (#504, #508, #513, #526, #613, #617, #622, #628, #645)
+- **Docs.** Stale charge_contact_slots comments corrected. (#518)
+
 ## [0.3.12.0-alpha] — 2026-08-06
 
 ### Added
