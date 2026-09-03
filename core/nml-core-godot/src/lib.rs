@@ -309,6 +309,11 @@ impl NmlCore {
             self.reg = Some(Registries::new(&root));
         }
         let profiles = Rc::new(profiles);
+        // The closures are built under THIS record's rule set —
+        // `Knobs::rules_epoch` gates the epoch-gated rule ports inside
+        // `UnitStatic::build_for`; a retune drops entries built for a
+        // different epoch (stale by definition).
+        self.scache.set_epoch(knobs.rules_epoch);
         // The closure for the header's own reading is built here rather than on
         // the first activation, so a broken registry path is a `set_game_header`
         // failure and not a mid-game decline.
@@ -827,8 +832,9 @@ impl NmlCore {
             self.reg = Some(Registries::new(&root));
         }
         let reg = self.reg.as_mut().unwrap();
+        let rules_epoch = self.header.as_ref().map(|h| h.knobs.rules_epoch).unwrap_or(0);
         let statics: Vec<UnitStatic> =
-            profiles.list.iter().map(|p| UnitStatic::build(reg, p)).collect();
+            profiles.list.iter().map(|p| UnitStatic::build_for(reg, p, rules_epoch)).collect();
         self.cache.keys = keys.to_vec();
         self.cache.profiles = Some(Rc::new(profiles));
         self.cache.roster = Some(Rc::new(roster));

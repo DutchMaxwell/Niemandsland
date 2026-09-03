@@ -248,8 +248,11 @@ pub struct Knobs {
 /// replaying exactly as it did before the port. `1` is the epoch at which
 /// `cond_ap_dice` (PR #637) and `versatile_reach` (PR #642) — the two ports
 /// that shipped without their own opt-out before this field existed — turn on
-/// unconditionally; `2` (this constant) is this class fix landing.
-pub const CURRENT_RULES_EPOCH: u32 = 2;
+/// unconditionally; `2` (this constant) is this class fix landing; `3` is the
+/// Regeneration family's DATA-ALIAS wave (Plaguebound, Protected, Knightborn,
+/// Cursed Undead, Angelic Blessing, their Boosts and the rest —
+/// `unit::regen_targets`' alias loop mirroring main.gd:6637-6652).
+pub const CURRENT_RULES_EPOCH: u32 = 3;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at

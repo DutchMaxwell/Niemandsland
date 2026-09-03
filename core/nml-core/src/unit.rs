@@ -21,6 +21,7 @@
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
     RESISTANCE_TARGET_SPELL, SELF_REPAIR_TARGET, SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN,
@@ -811,7 +812,23 @@ pub fn capture_reads(reg: &mut Registries, p: &Profile) -> CaptureReads {
 /// the MIN fold — the most generous (lowest) threshold binds (main.gd:6581).
 /// Against SPELL wounds the key choice is `from_spell`'s (main.gd:6595), so
 /// the spell twin folds in the same pass. Returns (target, target_spell).
-fn regen_targets(reg: &mut Registries, p: &Profile) -> (i64, i64) {
+///
+/// The Regeneration family's DATA-ALIAS wave (main.gd:6637-6652, the table's
+/// coverage wave over `RulesRegistry.unit_rules_of_primitive(unit,
+/// "Regeneration")`): every carried rule whose registry entry resolves to the
+/// "Regeneration" primitive folds its own `ignore_target` /
+/// `ignore_target_spell` into the same MIN — Plaguebound (6+), Protected
+/// (6+), Cursed Undead (6+), Knightborn (6+, spells 4+), Angelic Blessing
+/// (6+, spells 4+), their Boosts (the 5-6/2-5 upgrades), Protection Feat,
+/// Grounded Protection, Regeneration Buff, Self-Repair Boost. Whole-unit
+/// entries (`all_models`) gate on every model like Self-Repair; the three
+/// named forms above stay the one truth (main.gd:6639-6641) and are skipped.
+/// `uses_per_game`, `terrain_within_in`, `upgrades` and `spell_only` are
+/// unread — the table's own alias layer reads none of them either
+/// (main.gd:6643-6650). EPOCH-GATED (`acts::rule_on`): new behaviour, so
+/// epoch 0/2 corpora replay byte-exact and epoch CURRENT_RULES_EPOCH (= 3)
+/// folds the aliases in.
+fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i64) {
     let base = if has_special_rule(&p.special_rules, "Regeneration")
         || has_special_rule(&p.special_rules, "Medical Training")
     {
@@ -829,6 +846,7 @@ fn regen_targets(reg: &mut Registries, p: &Profile) -> (i64, i64) {
     } else {
         0
     };
+    let mut picked = (base, base);
     if rule_on_all_models(p, "Resistance") && unit_rule_active(reg, p, "Resistance") {
         let map = reg.rules_for(&p.game_system);
         let e = map.lookup(&p.faction_folder, "Resistance");
@@ -841,12 +859,52 @@ fn regen_targets(reg: &mut Registries, p: &Profile) -> (i64, i64) {
             None => RESISTANCE_TARGET_SPELL,
         };
         let most_generous = |cand: i64| base == 0 || cand < base;
-        return (
+        picked = (
             if most_generous(rs) { rs } else { base },
             if most_generous(rs_spell) { rs_spell } else { base },
         );
     }
-    (base, base)
+    // The DATA-ALIAS wave itself (main.gd:6642-6652): the carrier walk is
+    // `rules_of_primitive`'s (own + item-granted, each name once), the gate
+    // and the two thresholds are the table's per-entry reads, the fold is the
+    // running MIN. Gated whole by `rule_on` — see the doc above.
+    if rule_on(rules_epoch, CURRENT_RULES_EPOCH) {
+        let map = reg.rules_for(&p.game_system);
+        let mut raws: Vec<&String> = p.special_rules.iter().collect();
+        raws.extend(p.item_grants.iter());
+        let mut seen: Vec<String> = Vec::new();
+        for raw in raws {
+            let n = base_rule_name(raw);
+            if n.is_empty()
+                || seen.iter().any(|s| *s == n)
+                || n == "Regeneration"
+                || n == "Medical Training"
+                || n == "Self-Repair"
+                || n == "Resistance"
+            {
+                continue;
+            }
+            seen.push(n.clone());
+            let Some(e) = map.lookup(&p.faction_folder, &n) else {
+                continue;
+            };
+            if e.primitive.as_deref() != Some("Regeneration") {
+                continue;
+            }
+            if e.param_b("all_models") && !rule_on_all_models(p, &n) {
+                continue;
+            }
+            let normal = e.param_i("ignore_target", 0);
+            let spell = e.param_i("ignore_target_spell", normal);
+            if normal > 0 && (picked.0 == 0 || normal < picked.0) {
+                picked.0 = normal;
+            }
+            if spell > 0 && (picked.1 == 0 || spell < picked.1) {
+                picked.1 = spell;
+            }
+        }
+    }
+    picked
 }
 
 /// The SHOOTING leg's three die params (`ap_bonus`/`hit_bonus`/`low_roll_max`)
@@ -913,7 +971,7 @@ fn death_hits_per_kill(reg: &mut Registries, p: &Profile) -> i64 {
 
 /// `AiEv.ctx_for` ai_ev.gd:135-165. `models` stays at the live-unit reading;
 /// `BattleSim._ctx_of` overwrites it with the snapshot's `alive` on every call.
-fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
+fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
     let armor = if unit_rule_active(reg, p, "Armor") {
         unit_rating(&p.special_rules, "Armor")
     } else {
@@ -938,7 +996,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
     } else {
         (1, 1, 3)
     };
-    let regen_targets = regen_targets(reg, p);
+    let regen_targets = regen_targets(reg, p, rules_epoch);
     // Block C2 — the melee/charge leg of the Shot Modifier family (see the
     // `Ctx` fields). The name list IS the port: these three are exactly the
     // family's entries with no runtime gate, and naming them one by one keeps
@@ -1532,7 +1590,22 @@ fn bounding_of(reg: &mut Registries, p: &Profile) -> Option<f64> {
 }
 
 impl UnitStatic {
+    /// The legacy epoch-0 build — every corpus recorded before
+    /// `Knobs::rules_epoch` existed reads back that epoch, so this answers
+    /// exactly what it always answered. The epoch-aware caller is
+    /// `build_for` (and a `StaticsCache` built `with_epoch`).
     pub fn build(reg: &mut Registries, p: &Profile) -> UnitStatic {
+        Self::build_for(reg, p, 0)
+    }
+
+    /// The epoch-aware build: `rules_epoch` is the RECORD's own
+    /// `Knobs::rules_epoch`, and the epoch-gated rule ports inside
+    /// (`regen_targets`' Regeneration-family alias wave) stamp their
+    /// behaviour only when `acts::rule_on(rules_epoch, CURRENT_RULES_EPOCH)`.
+    /// The statics of one record are built from that record's header —
+    /// `lib::build_statics`/`act_statics` and the two host caches do — so the
+    /// gate rides the same line the profile table does.
+    pub fn build_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> UnitStatic {
         let mut unimplemented: Vec<Unimplemented> = Vec::new();
 
         let mut shoot = profiles_in_range(&p.weapons, 0.0);
@@ -1564,7 +1637,7 @@ impl UnitStatic {
         };
 
         UnitStatic {
-            ctx: ctx_for(reg, p),
+            ctx: ctx_for(reg, p, rules_epoch),
             name: p.name.clone(),
             shoot,
             melee,
@@ -1641,6 +1714,11 @@ pub struct StaticsCache {
     /// How many tables were rebuilt (a diagnostic — the cost this cache exists
     /// to keep off the per-activation path).
     pub builds: u64,
+    /// The record's `Knobs::rules_epoch` — handed to `UnitStatic::build_for`
+    /// so the epoch-gated rule ports stamp on the cache's closures too.
+    /// `new()` keeps 0 (the legacy reading every pre-epoch corpus replays);
+    /// the host runners that know a fresh record's header take `with_epoch`.
+    rules_epoch: u32,
 }
 
 impl std::fmt::Debug for StaticsCache {
@@ -1661,13 +1739,32 @@ impl StaticsCache {
         StaticsCache::default()
     }
 
+    /// The cache for ONE record's epoch — `rules_epoch` is that record's own
+    /// `Knobs::rules_epoch` (0 for every header recorded before the field
+    /// existed). Replacing a cache mid-record is the caller's business: the
+    /// py host rebuilds `self.statics` at every `set_header`.
+    pub fn with_epoch(rules_epoch: u32) -> StaticsCache {
+        StaticsCache { rules_epoch, ..StaticsCache::default() }
+    }
+
+    /// Retune an existing cache to `rules_epoch` — the godot host's path, whose
+    /// cache outlives the header it was built empty with. Entries built for a
+    /// different epoch are stale by definition and dropped.
+    pub fn set_epoch(&mut self, rules_epoch: u32) {
+        if self.rules_epoch != rules_epoch {
+            self.rules_epoch = rules_epoch;
+            self.entries.clear();
+        }
+    }
+
     /// The closure for `profiles`, built once per distinct table.
     pub fn get(&mut self, reg: &mut Registries, profiles: &Rc<Profiles>) -> Rc<Vec<UnitStatic>> {
         if let Some((_, s)) = self.entries.iter().find(|(p, _)| Rc::ptr_eq(p, profiles)) {
             return Rc::clone(s);
         }
+        let epoch = self.rules_epoch;
         let built: Vec<UnitStatic> =
-            profiles.list.iter().map(|p| UnitStatic::build(reg, p)).collect();
+            profiles.list.iter().map(|p| UnitStatic::build_for(reg, p, epoch)).collect();
         let rc = Rc::new(built);
         self.builds += 1;
         if self.entries.len() >= STATICS_CACHE_CAP {
@@ -1920,6 +2017,240 @@ mod tests {
         );
         assert_eq!(us.ctx.regen_target, 0, "no regeneration family member fields");
         assert_eq!(us.ctx.regen_target_spell, 0);
+    }
+
+    // ====================================== Regeneration family alias wave ====
+
+    /// The Regeneration family's DATA-ALIAS wave, end to end through the REAL
+    /// registry — one unit per ported name, in the faction whose mechanics
+    /// map fields the entry (`_forge/names.md`'s twelve, all primitive
+    /// "Regeneration"). RED (drop the `rule_on` gate in `regen_targets`): the
+    /// epoch-0 asserts trip — the alias layer is new behaviour, so the
+    /// pre-epoch corpora must keep reading 0/0. RED (drop the `all_models`
+    /// gate): `plague_partial`'s asserts trip.
+    const REGEN_FAMILY_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "angelic":{"unit_id":"angelic","name":"Angelic","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"kingdom_of_angels",
+        "special_rules":["Angelic Blessing"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "angelic_boost":{"unit_id":"angelic_boost","name":"Angelic Boost","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"kingdom_of_angels",
+        "special_rules":["Angelic Blessing Boost"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "cursed":{"unit_id":"cursed","name":"Cursed","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"vampiric_undead",
+        "special_rules":["Cursed Undead"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "cursed_boost":{"unit_id":"cursed_boost","name":"Cursed Boost","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"vampiric_undead",
+        "special_rules":["Cursed Undead Boost"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "plague":{"unit_id":"plague","name":"Plague","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"plague_disciples",
+        "special_rules":["Plaguebound"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "plague_boost":{"unit_id":"plague_boost","name":"Plague Boost","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"plague_disciples",
+        "special_rules":["Plaguebound Boost"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "plague_partial":{"unit_id":"plague_partial","name":"Plague Partial","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"plague_disciples",
+        "special_rules":["Plaguebound"],"item_grants":[],
+        "attached_hero_rules":[["Fearless"]],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "protected":{"unit_id":"protected","name":"Protected","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"duchies_of_vinci",
+        "special_rules":["Protected"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "protection_feat":{"unit_id":"protection_feat","name":"Protection Feat","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"saurians",
+        "special_rules":["Protection Feat"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "grounded":{"unit_id":"grounded","name":"Grounded","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"volcanic_dwarves",
+        "special_rules":["Grounded Protection"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "knightborn":{"unit_id":"knightborn","name":"Knightborn","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"knight_brothers",
+        "special_rules":["Knightborn"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "self_repair_boost":{"unit_id":"self_repair_boost","name":"Self-Repair Boost","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":["Self-Repair Boost"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "regen_buff":{"unit_id":"regen_buff","name":"Regeneration Buff","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"ossified_undead",
+        "special_rules":["Regeneration Buff"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "bare_aof":{"unit_id":"bare_aof","name":"Bare Aof","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"aof","faction_folder":"kingdom_of_angels",
+        "special_rules":[],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]},
+      "bare_gf":{"unit_id":"bare_gf","name":"Bare Gf","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"knight_brothers",
+        "special_rules":[],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Claws","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// (regen_target, regen_target_spell) for one fixture unit at one epoch.
+    fn regen_pair_at(header: &crate::acts::ActHeader, key: &str, epoch: u32) -> (i64, i64) {
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get(key).expect(key);
+        let us = UnitStatic::build_for(&mut reg, p, epoch);
+        (us.ctx.regen_target, us.ctx.regen_target_spell)
+    }
+
+    #[test]
+    fn angelic_blessing_ignores_on_6_and_spells_on_4_epoch_gated() {
+        let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
+        assert_eq!(
+            regen_pair_at(&header, "angelic", CURRENT_RULES_EPOCH),
+            (6, 4),
+            "the registry's ignore_target 6 / ignore_target_spell 4"
+        );
+        assert_eq!(regen_pair_at(&header, "angelic", 0), (0, 0), "epoch 0 replays legacy");
+        assert_eq!(
+            regen_pair_at(&header, "bare_aof", CURRENT_RULES_EPOCH),
+            (0, 0),
+            "without the rule: none"
+        );
+    }
+
+    #[test]
+    fn angelic_blessing_boost_is_spell_only_on_2_epoch_gated() {
+        let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
+        assert_eq!(
+            regen_pair_at(&header, "angelic_boost", CURRENT_RULES_EPOCH),
+            (0, 2),
+            "spell_only entry: no normal leg, spells ignored on 2+"
+        );
+        assert_eq!(regen_pair_at(&header, "angelic_boost", 0), (0, 0), "epoch 0 replays legacy");
+    }
+
+    #[test]
+    fn cursed_undead_ignores_on_6_epoch_gated() {
+        let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
+        assert_eq!(
+            regen_pair_at(&header, "cursed", CURRENT_RULES_EPOCH),
+            (6, 6),
+            "no spell twin: the spell pick falls back to ignore_target (main.gd:6648)"
+        );
+        assert_eq!(regen_pair_at(&header, "cursed", 0), (0, 0), "epoch 0 replays legacy");
+        assert_eq!(regen_pair_at(&header, "bare_aof", CURRENT_RULES_EPOCH), (0, 0));
+    }
+
+    #[test]
+    fn cursed_undead_boost_ignores_on_5_6_epoch_gated() {
+        let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
+        assert_eq!(
+            regen_pair_at(&header, "cursed_boost", CURRENT_RULES_EPOCH),
+            (5, 5),
+            "ignore_target 5 = rolls of 5-6"
+        );
+        assert_eq!(regen_pair_at(&header, "cursed_boost", 0), (0, 0), "epoch 0 replays legacy");
+    }
+
+    #[test]
+    fn plaguebound_ignores_on_6_and_needs_every_model() {
+        let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
+        assert_eq!(regen_pair_at(&header, "plague", CURRENT_RULES_EPOCH), (6, 6));
+        assert_eq!(regen_pair_at(&header, "plague", 0), (0, 0), "epoch 0 replays legacy");
+        assert_eq!(
+            regen_pair_at(&header, "plague_partial", CURRENT_RULES_EPOCH),
+            (0, 0),
+            "all_models: an attached hero without the rule kills the leg"
+        );
+    }
+
+    #[test]
+    fn plaguebound_boost_ignores_on_5_6_epoch_gated() {
+        let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
+        assert_eq!(regen_pair_at(&header, "plague_boost", CURRENT_RULES_EPOCH), (5, 5));
+        assert_eq!(regen_pair_at(&header, "plague_boost", 0), (0, 0), "epoch 0 replays legacy");
+    }
+
+    #[test]
+    fn protected_ignores_on_6_epoch_gated() {
+        let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
+        assert_eq!(regen_pair_at(&header, "protected", CURRENT_RULES_EPOCH), (6, 6));
+        assert_eq!(regen_pair_at(&header, "protected", 0), (0, 0), "epoch 0 replays legacy");
+        assert_eq!(regen_pair_at(&header, "bare_aof", CURRENT_RULES_EPOCH), (0, 0));
+    }
+
+    #[test]
+    fn protection_feat_ignores_on_5_epoch_gated() {
+        let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
+        assert_eq!(
+            regen_pair_at(&header, "protection_feat", CURRENT_RULES_EPOCH),
+            (5, 5),
+            "uses_per_game is the table's own unread param, mirrored"
+        );
+        assert_eq!(regen_pair_at(&header, "protection_feat", 0), (0, 0), "epoch 0 replays legacy");
+    }
+
+    #[test]
+    fn grounded_protection_ignores_on_5_epoch_gated() {
+        let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
+        assert_eq!(
+            regen_pair_at(&header, "grounded", CURRENT_RULES_EPOCH),
+            (5, 5),
+            "terrain_within_in is the table's own unread param, mirrored"
+        );
+        assert_eq!(regen_pair_at(&header, "grounded", 0), (0, 0), "epoch 0 replays legacy");
+    }
+
+    #[test]
+    fn knightborn_ignores_on_6_and_spells_on_4_epoch_gated() {
+        let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
+        assert_eq!(regen_pair_at(&header, "knightborn", CURRENT_RULES_EPOCH), (6, 4));
+        assert_eq!(regen_pair_at(&header, "knightborn", 0), (0, 0), "epoch 0 replays legacy");
+        assert_eq!(regen_pair_at(&header, "bare_gf", CURRENT_RULES_EPOCH), (0, 0));
+    }
+
+    #[test]
+    fn self_repair_boost_ignores_on_5_6_epoch_gated() {
+        let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
+        assert_eq!(regen_pair_at(&header, "self_repair_boost", CURRENT_RULES_EPOCH), (5, 5));
+        assert_eq!(regen_pair_at(&header, "self_repair_boost", 0), (0, 0), "epoch 0 replays legacy");
+    }
+
+    #[test]
+    fn regeneration_buff_reads_5_epoch_gated() {
+        let header = read_act_header(REGEN_FAMILY_HEADER).expect("header");
+        assert_eq!(
+            regen_pair_at(&header, "regen_buff", CURRENT_RULES_EPOCH),
+            (5, 5),
+            "table-faithful: the alias layer pays the carrier, the buff flow is unmodelled"
+        );
+        assert_eq!(regen_pair_at(&header, "regen_buff", 0), (0, 0), "epoch 0 replays legacy");
     }
 
     // ================================================ mutant-killing tests ====

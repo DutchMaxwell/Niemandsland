@@ -158,6 +158,18 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # generic DATA-ALIAS loop for `morale_bonus`, feeding `CaptureReads` —
     # Courageous is its first alias.
     "Banner": frozenset({"morale_bonus"}),
+    # Regeneration-family DATA-ALIAS wave (2026-09-03, rules-wave-regen):
+    # unit.rs::regen_targets folds every carried entry whose primitive is
+    # "Regeneration" into Ctx.regen_target / Ctx.regen_target_spell — the
+    # table's own coverage wave (main.gd:6637-6652,
+    # RulesRegistry.unit_rules_of_primitive(target, "Regeneration")). Reads
+    # `ignore_target` / `ignore_target_spell` off the entry and `all_models`
+    # as the whole-unit gate; `upgrades` / `uses_per_game` /
+    # `terrain_within_in` / `spell_only` are unread — the table's alias
+    # layer reads none of them either. Whole-by `rules_epoch >= 3`
+    # (acts::CURRENT_RULES_EPOCH). Without this row the primitive is trusted
+    # whole for the twelve names under it — the #489 over-credit shape.
+    "Regeneration": frozenset({"ignore_target", "ignore_target_spell", "all_models"}),
 }
 
 
