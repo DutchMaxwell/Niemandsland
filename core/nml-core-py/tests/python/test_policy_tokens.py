@@ -105,8 +105,8 @@ def test_policy_tokens_shapes_on_a_real_replayed_position():
         assert len(toks["objs"]) == 6 and len(toks["objs"][0]) == 12
         assert len(toks["terr"]) == 18 and len(toks["terr"][0]) == 12
         assert len(toks["glob"]) == 16
-        assert len(toks["cands"]) == 80 and len(toks["cands"][0]) == 40
-        assert len(toks["actor"]) == 80 and len(toks["target"]) == 80
+        assert len(toks["cands"]) == 160 and len(toks["cands"][0]) == 40
+        assert len(toks["actor"]) == 160 and len(toks["target"]) == 160
         n_live_units = sum(toks["units_mask"])
         assert 0 < n_live_units <= 24
         assert sum(1 for m in toks["units_mask"] if m) == n_live_units
@@ -131,7 +131,7 @@ def test_policy_tokens_refuses_an_oversized_menu():
     act = acts[0]
     state = core.state_of(act["state"])
     unit_key = next(iter(act["state"]["units"]))
-    cands = [{"unit": unit_key, "kind": 0}] * 81
+    cands = [{"unit": unit_key, "kind": 0}] * 161
     with pytest.raises(nml_core.Unsupported):
         core.policy_tokens(state, act["player"], cands, 0)
 
