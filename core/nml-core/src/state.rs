@@ -122,7 +122,7 @@ fn six() -> f64 {
 /// during a live game. The two defaults are the caller's own fallbacks —
 /// `bands.get("advance", 6)` (ai_planner.gd:713) and `bands.get("rush", 12)`
 /// (ai_planner.gd:1192) — so an absent key answers what the GDScript answers.
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 pub struct Bands {
     #[serde(default = "six")]
     pub advance: f64,

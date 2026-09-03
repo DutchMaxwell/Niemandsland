@@ -260,12 +260,14 @@ pub struct Knobs {
 /// `counter` flag in `unit::UnitStatic::build_for`, read off the `rules_epoch`
 /// the closure is built under — the Surge family's own gates (the volley
 /// reads the plain auto-hit form's `surge_within_in` / `surge_low` /
-/// `surge_over_in`, main.gd:4465-4482), and the Shred-FAMILY port
+/// `surge_over_in`, main.gd:4465-4482), the Shred-FAMILY port
 /// (`unit.rs::stamp`'s alias arm -> `dice.rs::save_batch`'s `shred_alias_dice`
 /// gate: unit-level Shred-primitive rules — Destroyer/Infected/Warbound and
-/// the two scoped halves — reach the tray from this epoch on) — every record
-/// below it keeps the flat Gen-0 prefix reading and skips the
-/// Regeneration/Counter/Surge/Shred gating alike.
+/// the two scoped halves — reach the tray from this epoch on), and the
+/// Quick/Fast move-band family (`UnitStatic::move_rule_mods`, stamped in
+/// `build_for` under the same `rules_epoch`) — every record below it keeps the
+/// flat Gen-0 prefix reading and skips the Regeneration/Counter/Surge/Shred/
+/// Quick-Fast gating alike.
 pub const CURRENT_RULES_EPOCH: u32 = 3;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
