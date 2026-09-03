@@ -11,9 +11,9 @@ jobs:
   rust:
     name: Build and test core crates
     runs-on: ubuntu-latest
-    # Advisory only: the crates aren't wired into the release build yet, so a
-    # failure here must not block main. Flip once they ship (NML-1073 R3).
-    continue-on-error: true
+    # Blocking since 2026-09-03: the core crates drive the training corpus,
+    # the fidelity gates and the promoted AI player, so a red build or test
+    # here is a red workflow (external review 03.09., item 2).
     steps:
       - name: Checkout
         uses: actions/checkout@v4
