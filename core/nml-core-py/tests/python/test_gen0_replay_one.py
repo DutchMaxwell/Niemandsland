@@ -11,7 +11,9 @@ replay from an unfaithful one. Two halves:
     monkeypatching of `selfplay._pick_for` never leaks into the rest of the
     suite. Green: every recorded menu reproduced. Three reds, each of which
     must FAIL and name the position it failed at — a wrong dice seed, a
-    shifted act index, and a file that is not a Gen-0 recording at all.
+    shifted act index, and a file missing `record_cands`. A fourth case, NOT
+    a red: `record_aux` (Gen-1 recorder fix) is additive and must not be
+    refused.
 
 The corpus half is skipped where the corpus, the army lists or the terrain
 bank are absent (CI), and it only reproduces when `PYTHONPATH` points at a
@@ -119,13 +121,29 @@ def test_a_shifted_act_index_diverges(tmp_path):
 
 
 @needs_corpus
-def test_a_file_that_is_not_a_gen0_recording_is_refused(tmp_path):
-    """`record_cands` landed at PR #522 and `record_aux` at PR #533; a file
-    reporting anything but true/false was written by another build entirely."""
+def test_a_file_missing_record_cands_is_refused(tmp_path):
+    """`record_cands` landed at PR #522: a file recorded without it carries no
+    candidate menu to replay against at all."""
     rec = json.loads((CORPUS / GAMES[0]).read_text(encoding="utf-8"))
-    rec["prescreen"]["knobs"]["record_aux"] = True
+    rec["prescreen"]["knobs"]["record_cands"] = False
     bad = tmp_path / GAMES[0]
     bad.write_text(json.dumps(rec), encoding="utf-8")
     code, out = _run(str(bad))
     assert code != 0, out
     assert "REFUSED" in out, out
+
+
+@needs_corpus
+def test_a_record_aux_file_is_accepted_not_refused(tmp_path):
+    """Gen-1 recorder fix: `record_aux` (PR #533) hangs ADDITIVE AUX targets
+    (models alive / wounds) off `rounds_log` and the result — it never
+    changes the game actually played, so a record stamping it must replay
+    exactly like one that does not, not get refused at the door."""
+    rec = json.loads((CORPUS / GAMES[0]).read_text(encoding="utf-8"))
+    rec["prescreen"]["knobs"]["record_aux"] = True
+    ok = tmp_path / GAMES[0]
+    ok.write_text(json.dumps(rec), encoding="utf-8")
+    code, out = _run(str(ok))
+    assert "REFUSED" not in out, out
+    assert "[VERDICT] PASS 1/1 games" in out, out
+    assert code == 0, out

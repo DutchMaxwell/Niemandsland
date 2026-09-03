@@ -41,7 +41,13 @@ def export(core, state, row: dict, cands: list, opener_seat: bool) -> dict:
     # §8.2/§8.6: the real token export. `opener_seat` is derived from the
     # game record (no other seam carries it into a forced replay).
     # `hero_attach` is a documented no-op in PR #584 (reserved for later).
-    t = core.policy_tokens(state, row["side"], cands, row["cands"]["best"],
+    # Gen-1 recorder fix: the LABEL is `cands["played"]` — the build index
+    # that IS the recorded `row["action"]` — falling back to `cands["best"]`
+    # (the hand argmax) on a Gen-0 row that predates `played`, where the two
+    # were always equal. Training a `pool_value_fn`-armed corpus on `best`
+    # teaches the HAND's picks, not the promoted player's.
+    label_kind = "played" if "played" in row["cands"] else "best"
+    t = core.policy_tokens(state, row["side"], cands, row["cands"][label_kind],
                            hero_attach=True, opener_seat=opener_seat)
     nu, no_, nc = (sum(t[k]) for k in ("units_mask", "objs_mask", "cands_mask"))
     return {"units": np.array(t["units"][:nu], dtype=np.float16),
@@ -53,7 +59,10 @@ def export(core, state, row: dict, cands: list, opener_seat: bool) -> dict:
             "target": np.array(t["target"][:nc], dtype=np.int16),
             # Gen-0 recorded no cands.scored (§1.6) — NaN until Gen-1 (§2.6).
             "hand_score": np.full(nc, np.nan, dtype=np.float16),
-            "label": np.int16(t["label"])}
+            "label": np.int16(t["label"]),
+            # Popped back off in `run_shard` into the shard's own meta
+            # (`label_kinds`) — never packed into the npz itself.
+            "label_kind": label_kind}
 
 
 _ROWS: list = []  # per-process accumulator, reset per game
@@ -92,7 +101,10 @@ def replay_game(path: str, lists: str) -> tuple:
                                dice_seed=gr.G["dice"], movement=kn["movement"],
                                # DEFECT_LEDGER #12: the RECORD's own key, absent = OFF.
                                dangerous_end_morale=bool(kn.get("dangerous_end_morale", False)),
-                               **gr.KNOBS)
+                               # PR #636's fix, generalised (see `gr.replay_knobs`): every
+                               # knob a shipped-default (Gen-1) record stamps itself reads
+                               # back off the record, not off gen0's own legacy pins.
+                               **gr.replay_knobs(kn))
         bad = "" if gr.G["i"] == len(gr.G["rows"]) else "ran dry %d/%d" % (gr.G["i"], len(gr.G["rows"]))
     except (gr.Diverged, gr.nml_core.Unsupported) as exc:
         bad = str(exc)
@@ -124,17 +136,25 @@ def run_shard(idx: int, games: list, lists: str, out_dir: str, id_of: dict) -> d
     # Whole-or-nothing: partial progress never reaches the final filenames.
     npz_p, json_p = shard_paths(Path(out_dir), idx)
     rows, index = [], []
+    label_kinds = {"played": 0, "best": 0}
     for g in games:
         game_rows, meta = replay_game(str(g), lists)
         for r in game_rows:
             r["game_id"] = id_of[Path(g).name]
+            # `label_kind` is bookkeeping for the shard's own meta below, not
+            # a packed column (`pack()` only reads the keys it names).
+            label_kinds[r.pop("label_kind")] += 1
         index.append(meta)
         rows.extend(game_rows)
     arrays = pack(rows)
     tmp_npz, tmp_json = npz_p.with_name(npz_p.name + ".tmp"), json_p.with_name(json_p.name + ".tmp")
     with open(tmp_npz, "wb") as fh:
         np.savez(fh, **arrays)
-    tmp_json.write_text(json.dumps({"shard": idx, "games": index, "positions": len(rows)}, indent=2))
+    tmp_json.write_text(json.dumps({"shard": idx, "games": index, "positions": len(rows),
+                                     # Gen-1 recorder fix: how many exported rows used the
+                                     # promoted-player label ("played") vs the hand argmax
+                                     # fallback ("best") — 0 played on a pure Gen-0 shard.
+                                     "label_kinds": label_kinds}, indent=2))
     os.replace(tmp_npz, npz_p)
     os.replace(tmp_json, json_p)
     return {"shard": idx, "games": len(games), "positions": len(rows)}
