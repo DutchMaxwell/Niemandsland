@@ -138,6 +138,22 @@ pub struct Pick {
     pub cands: Vec<Candidate>,
 }
 
+/// NML-1165 R4 (DESIGN_value_net §7) — the LEAF VALUE seam. `Search::run`
+/// hands out EVERY leaf state it is about to price with the hand eval — the
+/// round boundaries of every pooled candidate's rollout, pool order then
+/// boundary order — in ONE call per activation, and blends the answer in at
+/// the leaf (`Rollout::blend_score_leaf`).
+///
+/// ONE call, never one per leaf: the whole point of the seam is that an
+/// out-of-crate evaluator (the token value net: torch, Python, an attention
+/// net this crate cannot hold) pays one batched forward per activation
+/// instead of 34. `Search::run` is two-phase for exactly that reason.
+pub trait LeafValue {
+    /// One value per leaf, index-parallel to `leaves`. `side` is the searching
+    /// player, the frame every leaf is to be judged in.
+    fn value(&self, leaves: &[&State], side: i64) -> Result<Vec<f64>, Unsupported>;
+}
+
 /// TEST SEAMS. Every shipping call uses `PlanBend::default()`, which is the
 /// GDScript. Each field turns ONE load-bearing decision of the search off, so a
 /// red proof can count how many activations that decision actually moves
@@ -190,6 +206,11 @@ pub struct Search<'a> {
     /// net. `None` — every call written before this field existed — is
     /// byte-identical to the recorded behaviour.
     pub cand_logits: Option<&'a [f32]>,
+    /// NML-1165 R4 — the leaf value hook, and the weight it enters with.
+    /// `None` / `0.0` (every call written before this seam) never asks for a
+    /// leaf batch and prices the backup with `blend_score` verbatim.
+    pub leaf_value: Option<&'a dyn LeafValue>,
+    pub leaf_value_w: f64,
 }
 
 /// The three seams `resolve` branches on, off the resolved knobs.
@@ -316,7 +337,8 @@ pub fn plan(
 
 impl<'a> Search<'a> {
     pub fn new(roll: Rollout<'a>, act: &'a ActStatics) -> Search<'a> {
-        Search { roll, act, bend: PlanBend::default(), sig: None, cand_logits: None }
+        Search { roll, act, bend: PlanBend::default(), sig: None, cand_logits: None,
+            leaf_value: None, leaf_value_w: 0.0 }
     }
 
     /// `AiPlanner.top_k_default` ai_planner.gd:52-56 — the recorded knob already
@@ -373,6 +395,12 @@ impl<'a> Search<'a> {
             && self.cand_logits.is_none()
         {
             return Err(Unsupported::PolicyOrder);
+        }
+        // NML-1165 R4 — same contract once more: a caller that armed the leaf
+        // blend WEIGHT but wired no evaluator declines rather than quietly
+        // playing the hand leaf and reporting a value-net game.
+        if self.leaf_value_w != 0.0 && self.leaf_value.is_none() {
+            return Err(Unsupported::LeafValueMissing);
         }
         Ok(())
     }
@@ -538,15 +566,38 @@ impl<'a> Search<'a> {
         let (covered, pool) = build_pool(&scored, &order, top_k, self.bend);
 
         // PHASE 4 — exactly ONE rollout per pool candidate, in pool order.
+        //
+        // NML-1165 R4: the loop is TWO-PHASE so the leaf value seam can price a
+        // whole activation's leaves in ONE call. 4a expands every rollout and
+        // KEEPS its boundaries, 4b hands them out as one flat batch, 4c backs
+        // the values up. `rollout_boundaries` is called in the same order with
+        // the same `Scratch` as before and `blend_score` reads no scratch at
+        // all, so splitting the loop moves nothing — with no hook wired 4b is
+        // skipped and 4c prices exactly what the single loop priced.
+        let mut ends_of: Vec<Vec<State>> = Vec::with_capacity(pool.len());
+        for &i in &pool {
+            ends_of.push(self.roll.rollout_boundaries(state, &scored[i].cand, player, -1, sc)?);
+        }
+        let mut leaf_vals: Vec<f64> = Vec::new();
+        if let Some(h) = self.leaf_value.filter(|_| self.leaf_value_w != 0.0) {
+            let leaves: Vec<&State> = ends_of.iter().flatten().collect();
+            leaf_vals = h.value(&leaves, player)?;
+            if leaf_vals.len() != leaves.len() {
+                return Err(Unsupported::LeafValue(leaf_vals.len(), leaves.len()));
+            }
+        }
         let mut best: Option<(usize, f64)> = None;
         let mut runner: Option<(usize, f64)> = None;
         let mut best_idx: i64 = -1;
         let mut runner_idx: i64 = -1;
         let mut rs: Vec<(i64, f64)> = Vec::with_capacity(pool.len());
         let mut last_leaf: Option<State> = None;
-        for &i in &pool {
-            let ends = self.roll.rollout_boundaries(state, &scored[i].cand, player, -1, sc)?;
-            let v = self.roll.blend_score(&ends, player, self.act.opener_seat);
+        let mut cut = 0usize;
+        for (k, &i) in pool.iter().enumerate() {
+            let (ends, seat) = (&ends_of[k], self.act.opener_seat);
+            let vals = if leaf_vals.is_empty() { &[][..] } else { &leaf_vals[cut..] };
+            cut += ends.len();
+            let v = self.roll.blend_score_leaf(ends, player, seat, vals, self.leaf_value_w);
             rs.push((i as i64, v));
             if best.is_none_or(|(_, b)| v > b) {
                 // The OLD best becomes the runner, with its OLD sorted position
@@ -555,8 +606,8 @@ impl<'a> Search<'a> {
                 runner_idx = best_idx;
                 best = Some((i, v));
                 best_idx = pos_of[i] as i64;
-                if !ends.is_empty() {
-                    last_leaf = ends.into_iter().next_back();
+                if let Some(e) = ends.last() {
+                    last_leaf = Some(e.clone());
                 }
             } else if runner.is_none_or(|(_, r)| v > r) {
                 runner = Some((i, v));
