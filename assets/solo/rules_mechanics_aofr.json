@@ -3430,9 +3430,17 @@
     }
    },
    "Thrust in Melee Aura": {
-    "primitive": null,
+    "primitive": "Utility Buff",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Thrust",
+     "scope": "melee",
+     "target": "friendly",
+     "range_in": 0,
+     "max_targets": 1,
+     "once": false
+    }
    },
    "Traversal": {
     "primitive": "Phase Through",
@@ -3568,9 +3576,17 @@
     }
    },
    "Rending when Shooting Aura": {
-    "primitive": null,
+    "primitive": "Utility Buff",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Rending",
+     "scope": "shooting",
+     "target": "friendly",
+     "range_in": 0,
+     "max_targets": 1,
+     "once": false
+    }
    },
    "Strafing": {
     "primitive": "Strafing",
@@ -5192,9 +5208,17 @@
     "book_version": "3.5.3"
    },
    "Unstoppable when Shooting Aura": {
-    "primitive": null,
+    "primitive": "Utility Buff",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Unstoppable",
+     "scope": "shooting",
+     "target": "friendly",
+     "range_in": 0,
+     "max_targets": 1,
+     "once": false
+    }
    },
    "Unwieldy": {
     "primitive": "Unwieldy",
@@ -6409,9 +6433,17 @@
     }
    },
    "Unstoppable when Shooting Aura": {
-    "primitive": null,
+    "primitive": "Utility Buff",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Unstoppable",
+     "scope": "shooting",
+     "target": "friendly",
+     "range_in": 0,
+     "max_targets": 1,
+     "once": false
+    }
    }
   },
   "rift_daemons_of_plague": {
@@ -7140,9 +7172,17 @@
     "book_version": "3.5.3"
    },
    "Thrust in Melee Aura": {
-    "primitive": null,
+    "primitive": "Utility Buff",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Thrust",
+     "scope": "melee",
+     "target": "friendly",
+     "range_in": 0,
+     "max_targets": 1,
+     "once": false
+    }
    },
    "Unpredictable": {
     "primitive": "Unpredictable",
@@ -7264,9 +7304,17 @@
     }
    },
    "Rending when Shooting Aura": {
-    "primitive": null,
+    "primitive": "Utility Buff",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants_rule": "Rending",
+     "scope": "shooting",
+     "target": "friendly",
+     "range_in": 0,
+     "max_targets": 1,
+     "once": false
+    }
    },
    "Resistance": {
     "primitive": "Resistance",

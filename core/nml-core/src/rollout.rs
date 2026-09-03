@@ -300,7 +300,11 @@ pub(crate) fn round_start_refresh(statics: &[UnitStatic], state: &mut State, i: 
     } else if us.casts_per_round > 0 {
         state.casts[i] = (state.casts[i] + us.casts_per_round).min(CASTER_POINTS_CAP);
     }
-    if state.shaken[i] && (us.battleborn_active || us.steadfast_active) {
+    if state.shaken[i]
+        && (us.battleborn_active
+            || us.steadfast_active
+            || crate::mods::granted(state, i, "Steadfast"))
+    {
         state.shaken[i] = false;
     }
 }

@@ -1297,6 +1297,17 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // static special-rule scan (`unit::ctx_for`) already sets it, and stays
     // out of the EV-only imagination, which never calls `ctx_live` at all.
     c.furious = c.furious || mods::granted(state, i, "Furious");
+    // The rending/thrust legs of the same grant bridge (main.gd:16576-16589),
+    // and the Ctx-flag grants the rung E buffs hand out — each lands exactly
+    // where the static has-rule test already stamped its flag.
+    c.rending_grant = mods::granted(state, i, "Rending");
+    c.thrust_grant = mods::granted(state, i, "Thrust");
+    c.guarded = c.guarded || mods::granted(state, i, "Guarded");
+    c.melee_evasion = c.melee_evasion || mods::granted(state, i, "Melee Evasion");
+    // No Retreat folds HERE for every ctx_live caller; the rolled morale test
+    // is not one (tray_morale builds on ctx_of), so it carries its own fold
+    // next to the same read below.
+    c.no_retreat = c.no_retreat || mods::granted(state, i, "No Retreat");
     let (ap, hit) = growth_bonus_of(statics, state, i);
     c.growth_ap_mod = ap;
     c.growth_hit_mod = hit;
@@ -1862,6 +1873,7 @@ fn tray_morale(
     // [2,6]-clamped target the table builds (main.gd:8288-8296).
     ctx.morale_bonus = state.morale_bonus[i]
         + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod);
+    ctx.no_retreat = ctx.no_retreat || mods::granted(state, i, "No Retreat");
     // main.gd:8303 — the test die spends the morale once-mods it just used.
     // Placed after the call because `ctx` already carries the target it built.
     let (outcome, r) = crate::dice::resolve_morale_with_tray(

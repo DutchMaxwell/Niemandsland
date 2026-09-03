@@ -16,7 +16,7 @@ const SYSTEMS := ["gf", "gff", "aof", "aofs", "aofr"]
 
 ## The aura families that are still knowingly open — they need a mechanic that does not exist yet, so
 ## they are a separate wave, not a data fix. Anything NOT on this list must resolve.
-const KNOWN_OPEN := ["Thrust in Melee", "Piercing Fighter", "Piercing Shooter"]
+const KNOWN_OPEN := ["Piercing Fighter", "Piercing Shooter"]
 
 
 func _unit_with(rules: Array, system: String, faction: String) -> GameUnit:
@@ -249,7 +249,7 @@ func test_no_aura_grants_a_rule_that_resolves_nowhere() -> void:
 		"aura families granting a rule that resolves nowhere: %s" % str(dead)).is_empty()
 
 
-func test_the_known_open_families_are_still_exactly_three() -> void:
+func test_the_known_open_families_are_still_exactly_two() -> void:
 	# The debt this wave deliberately did NOT take: they need a mechanic that does not exist yet.
 	# If one of them gets built, it must drop off KNOWN_OPEN — this test is what forces that.
 	var open_counts: Dictionary = {}
