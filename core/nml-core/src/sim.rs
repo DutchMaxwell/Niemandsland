@@ -1282,6 +1282,11 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     c.hit_mod = mods::sum(state, i, mods::Role::AttackerOwn, melee, |r| r.hit_mod);
     c.vs_hit_mod = mods::sum(state, i, mods::Role::VsTarget, melee, |r| r.hit_mod);
     c.unstoppable_grant = mods::granted(state, i, "Unstoppable");
+    // DEFECT_LEDGER #33 — a live "Furious" grant (a spell cast, same shape as
+    // any other rule grant) reaches this round's melee exactly where the
+    // static special-rule scan (`unit::ctx_for`) already sets it, and stays
+    // out of the EV-only imagination, which never calls `ctx_live` at all.
+    c.furious = c.furious || mods::granted(state, i, "Furious");
     let (ap, hit) = growth_bonus_of(statics, state, i);
     c.growth_ap_mod = ap;
     c.growth_hit_mod = hit;
@@ -2219,12 +2224,27 @@ fn apply_cast_effect(
         apply_expected_wounds(state, ti, scale * ev, rng);
         return;
     }
-    let m = entry.modifier;
-    if !m.present {
-        return; // a grants_rule-only "castable" spell leaves no snapshot trace
-    }
     if scale <= 0.0 {
         return;
+    }
+    // DEFECT_LEDGER #33: a `grants_rule` cast lands the same "once" record the
+    // utility-buff family already writes (`record_buff`) — `ctx_live` folds it
+    // into THIS round's dice, `spend_once` clears it at the first exchange
+    // that could have used it, so it never survives into the next round.
+    if !entry.grants_rule.is_empty() {
+        state.buffs[ti].push(mods::LiveMod {
+            hit_mod: 0,
+            casting_mod: 0,
+            morale_mod: 0,
+            grants_rule: Rc::from(entry.grants_rule.as_str()),
+            scope: Rc::from(""),
+            attackers: entry.beneficiary == "attackers",
+            once: true,
+        });
+    }
+    let m = entry.modifier;
+    if !m.present {
+        return; // no scalar modifier fields — the grant above already landed
     }
     let mods = &mut state.mods[ti];
     // "beneficiary: attackers" is the ATTACKER's hit/def modifier against this
@@ -7072,6 +7092,7 @@ mod cast_fold_tests {
             weapon_rules: vec![],
             beneficiary: String::new(),
             modifier: SpellModifier::default(),
+            grants_rule: String::new(),
         }
     }
 
@@ -7163,5 +7184,36 @@ mod cast_fold_tests {
         cast_phase(&statics, &mut on, 0, &los, fold(), None);
         assert!(on.casts[1] < st.casts[1], "the hero paid for its own spell: {:?}", on.casts);
         assert_eq!(on.casts[0], 0, "the host's empty pool is untouched");
+    }
+
+    /// DEFECT_LEDGER #33 — Animate Spirit and 4 siblings grant a rule and
+    /// nothing else; before this PR `Spell` had no field to carry that, so the
+    /// "castable" cast burned its pick and its tokens for no effect at all.
+    /// RED: a Furious grant reaches THIS round's melee context and is spent —
+    /// gone — by the time the round after asks the same question.
+    #[test]
+    fn a_furious_grant_reaches_this_rounds_melee_and_is_spent_by_it() {
+        let (mut st, statics) = host_and_caster_hero();
+        let grant = Spell { effect_kind: "buff".into(), grants_rule: "Furious".into(), ..spell() };
+        apply_cast_effect(&statics, &mut st, 0, &grant, 1.0, None);
+        assert!(crate::mods::granted(&st, 0, "Furious"), "the cast lands the grant on its target");
+
+        let base = ctx_of(&statics[st.roster.profile[0]], &st, 0);
+        assert!(!base.furious, "the static profile carries no Furious of its own");
+        let live = ctx_live(base, &statics, &st, 0, true);
+        assert!(live.furious, "THIS round's melee context sees the grant");
+
+        let p = ShootProfile { range: 0, ..Default::default() };
+        let def = Ctx::default();
+        let plain = crate::combat::profile_ev(&p, 4, &base, &def, 0.0, true);
+        let buffed = crate::combat::profile_ev(&p, 4, &live, &def, 0.0, true);
+        assert!(buffed > plain, "the grant adds Furious's extra-6s hits to THIS charge: {plain} -> {buffed}");
+
+        // One melee exchange spends the "once" grant, the same call a real
+        // strike makes (`spend_exchange`) — nothing survives into round 2.
+        crate::mods::spend_once(&mut st, 0, &[crate::mods::Role::Grant], true);
+        assert!(!crate::mods::granted(&st, 0, "Furious"), "the exchange consumed the grant");
+        let next_round = ctx_live(base, &statics, &st, 0, true);
+        assert!(!next_round.furious, "gone for the round after — no double-dip");
     }
 }
