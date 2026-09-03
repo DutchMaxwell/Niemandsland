@@ -1203,7 +1203,10 @@ def _pick_for(
     argmax's own index by default, and the re-ranked candidate's index once
     a `vhook` swap lands. This is what stops `row["cands"]["best"]` (the
     HAND argmax, unchanged) from silently mis-describing "the played
-    candidate" once a re-rank moves the pick away from it.
+    candidate" once a re-rank moves the pick away from it. Absent whenever
+    the pick carries no `trace` at all (never true of the real binding;
+    true of a test double answering only `_pick_for`'s own three-call
+    contract) — `row["cands"]["played"]` falls back to `best` there too.
 
     `leaf_value_fn` / `leaf_value_w` are the R4 seam (DESIGN_value_net
     2026-09-03 §7): `{side: fn(leaves, side) -> list[float]}`, handed straight
@@ -1241,9 +1244,17 @@ def _pick_for(
     # Gen-1 recorder fix: the hand argmax's own build index, BEFORE any
     # re-rank below — `trace.best_idx` is a position in the sorted `scored`
     # list, `scored[best_idx].idx` is what that names in build-index terms
-    # (row["cands"]["best"]'s own definition in `play_game`).
-    trace = pick["trace"]
-    pick["played_idx"] = trace["scored"][trace["best_idx"]]["idx"]
+    # (row["cands"]["best"]'s own definition in `play_game`). `.get("trace")`
+    # rather than `["trace"]`: the REAL binding always carries one (`lib.rs`'s
+    # `pick_plain` inserts it unconditionally, only `trace["cands"]` rides
+    # the `cands` bool), but a hand-rolled test double answering `_pick_for`'s
+    # OWN three-call contract (`test_fitted.py`'s `_StubCore`) is not obliged
+    # to build one, and never did before this fix — `row["cands"]["played"]`
+    # (`play_game`) already falls back to `best` wherever `played_idx` never
+    # lands on the pick at all.
+    trace = pick.get("trace")
+    if trace is not None:
+        pick["played_idx"] = trace["scored"][trace["best_idx"]]["idx"]
     if vhook is not None and not pick.get("explored"):
         pool_idx = trace["pool_idx"]
         hand_rs = [e["rs"] for e in trace["rs"]]
