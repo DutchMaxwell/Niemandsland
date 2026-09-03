@@ -2372,6 +2372,33 @@ mod tests {
         assert_eq!(shipped.rolls[1].target, 5, "knob ON: the same charge now saves at 5+");
     }
 
+    /// The CLASS FIX (external review 03.09. item 3 / F9, `acts::rule_on`):
+    /// this rule's effective reading at its two `sim.rs` call sites is
+    /// `seams.cond_ap_dice || rule_on(seams.rules_epoch, 1)`. `rules_epoch: 0`
+    /// (every pre-epoch corpus, this test's own boolean-OFF row above
+    /// included) must still resolve with no AP at all;
+    /// `rules_epoch: CURRENT_RULES_EPOCH` — what a fresh `play_game()`
+    /// stamps — turns the SAME rule on even with the boolean itself left
+    /// `false`, exactly the `versatile_reach` sibling test (sim.rs) proves
+    /// for its rule.
+    #[test]
+    fn the_cond_ap_dice_epoch_gate_matches_the_knob_gate() {
+        use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
+        let us = cond_ap_static("piercing_assault");
+        let p = [us.melee[0].clone()];
+        let def = defender(4, 5);
+        let mut off = Tray::seeded(27);
+        let legacy = resolve_melee_with_tray(
+            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true,
+            false || rule_on(0, 1), &mut off);
+        assert_eq!(legacy.rolls[1].target, 4, "epoch 0, knob false: still saves at 4+");
+        let mut on = Tray::seeded(27);
+        let shipped = resolve_melee_with_tray(
+            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true,
+            false || rule_on(CURRENT_RULES_EPOCH, 1), &mut on);
+        assert_eq!(shipped.rolls[1].target, 5, "epoch CURRENT_RULES_EPOCH, knob false: now saves at 5+");
+    }
+
     /// Condition kind 2 — `vs_tough_ge` behind `charge_only` (Melee Slayer):
     /// AP(+2) only when BOTH charging and the target is Tough(3)+.
     #[test]

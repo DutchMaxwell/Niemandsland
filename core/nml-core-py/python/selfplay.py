@@ -902,7 +902,7 @@ def resolve_ambush(ambush: str) -> bool:
 LEGACY_FIDELITY_KNOBS: dict[str, Any] = dict(
     charge_gate="off", menu_wide="off", menu_los="planner",
     los="unit", hero_last=False, cast_fold=False, ambush="off",
-    cond_ap_dice=False, versatile_reach=False,
+    cond_ap_dice=False, versatile_reach=False, rules_epoch=0,
 )
 
 
@@ -1124,6 +1124,11 @@ TRAINER_KNOBS = {
     # recorded before it, and a bundle replayed with the bonus ON would move
     # its own rollout picks.
     "versatile_reach": False,
+    # The CLASS FIX (external review 03.09. item 3 / F9). 0 here because
+    # `~/selfplay_out/gen0_teacher` was recorded before this field existed —
+    # every future rule gated on `rule_on` stays off for this trainer's own
+    # bundle until it is re-recorded, same as `cond_ap_dice`/`versatile_reach`.
+    "rules_epoch": 0,
 }
 
 # `AiActRecorder.begin` :65-66 — the planner's per-activation class statics, all
@@ -1951,6 +1956,16 @@ def play_game(
     # its header's own key, and LEGACY_FIDELITY_KNOBS pins it False for a
     # gate holding the fast trainer to a corpus recorded before this rung.
     versatile_reach: bool = True,
+    # The CLASS FIX (external review 03.09. item 3 / F9, `Knobs`/
+    # `Seams::rules_epoch`): one monotonic integer per resolution-semantics
+    # change that has no legacy reading, instead of a new bespoke boolean
+    # knob like `cond_ap_dice`/`versatile_reach` above (the last two such
+    # ports, now re-expressed through it at `since_epoch: 1`). Default is
+    # `nml_core.CURRENT_RULES_EPOCH`, the shipped/current engine; a replay
+    # tool passes its header's own key back, and LEGACY_FIDELITY_KNOBS/
+    # TRAINER_KNOBS pin it `0` — "the Gen-0/Gen-1 rule set" — for a corpus
+    # recorded before this field existed.
+    rules_epoch: int = nml_core.CURRENT_RULES_EPOCH,
     vocab_version: int | None = None,
     objectives: str = "constant",
     deployment: str = "zone",
@@ -2125,6 +2140,24 @@ def play_game(
     shipped/current engine (the table has the rule, unconditionally); a
     replay tool passes its header's own key back, and `LEGACY_FIDELITY_KNOBS`
     pins it `False` for every corpus (Gen-0 included) recorded before #582.
+
+    `rules_epoch` (external review 03.09. item 3 / F9, `Knobs`/
+    `Seams::rules_epoch`) is the CLASS FIX for `cond_ap_dice` and
+    `versatile_reach` above: both shipped as one-off booleans because the
+    class of bug they fix — "a rule port without a legacy opt-out breaks
+    byte-exact replay" — had no general gate yet. It does now: `rule_on`
+    (`nml-core/src/acts.rs`) turns a rule on once `rules_epoch` reaches the
+    epoch that rule was ported at, and `cond_ap_dice`/`versatile_reach` are
+    re-expressed through it at `since_epoch: 1` (`knob OR rule_on(epoch, 1)`),
+    so a pre-epoch record with either boolean at its legacy `False` (or absent
+    altogether) still replays exactly as before this fix, while a fresh record
+    stamping `rules_epoch: CURRENT_RULES_EPOCH` gets both regardless of what
+    the two booleans read. A future rule port with no legacy reading should
+    call `rule_on` at a new `since_epoch` and bump `CURRENT_RULES_EPOCH`
+    instead of adding a third boolean knob. Default is
+    `nml_core.CURRENT_RULES_EPOCH`; a replay tool passes its header's own key
+    back, and `LEGACY_FIDELITY_KNOBS`/`TRAINER_KNOBS` pin it `0` for every
+    corpus recorded before this field existed.
 
     `explore` (NML-1158c, `--explore` below) is the POLICY WAVE's exploration
     knob: with probability `explore` per activation, the twin picks uniformly
@@ -2318,6 +2351,10 @@ def play_game(
         # PR #582's charge-distance bonus. True is the shipped default; a
         # replay tool passes its header's own key back.
         versatile_reach=bool(versatile_reach),
+        # The CLASS FIX (external review 03.09. item 3 / F9).
+        # `nml_core.CURRENT_RULES_EPOCH` is the shipped default; a replay
+        # tool passes its header's own key back.
+        rules_epoch=int(rules_epoch),
         # NML-1134: which RULE VOCABULARY this game's board rows are slotted
         # with. A fresh game uses THIS BUILD's version — the default here, and
         # the only setting a fresh corpus may use. A gate replaying a corpus
@@ -3008,6 +3045,16 @@ def main(argv: list[str]) -> int:
         "2026-09-03.md)",
     )
     ap.add_argument(
+        "--rules-epoch",
+        type=int,
+        default=nml_core.CURRENT_RULES_EPOCH,
+        help="external review 03.09. item 3 / F9: the CLASS FIX for a rule port "
+        "with no legacy opt-out (cond_ap_dice/versatile_reach above are its first "
+        "two instances, now re-expressed through it); defaults to "
+        "nml_core.CURRENT_RULES_EPOCH; pass 0 to replay a corpus recorded before "
+        "this field existed (e.g. Gen-0/Gen-1)",
+    )
+    ap.add_argument(
         "--hero-attach",
         choices=list(HERO_ATTACH_MODES),
         default="off",
@@ -3131,6 +3178,7 @@ def main(argv: list[str]) -> int:
             cast_fold=a.cast_fold,
             cond_ap_dice=a.cond_ap_dice,
             versatile_reach=a.versatile_reach,
+            rules_epoch=a.rules_epoch,
             hero_attach=a.hero_attach,
             dice=a.dice,
             charge_landing=a.charge_landing,

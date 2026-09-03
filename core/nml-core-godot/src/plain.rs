@@ -928,6 +928,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // Versatile Reach until `act_recorder.gd` is taught to stamp it,
         // matching every seam above.
         versatile_reach: dflag(d, "versatile_reach"),
+        // The CLASS FIX (external review 03.09. item 3 / F9). No recorder
+        // writes this key yet, so an absent one answers `Knobs::default()` =
+        // 0, the same Gen-0/Gen-1 rule set the in-game AI search has always
+        // read — `act_recorder.gd` would need to stamp it for this to move.
+        rules_epoch: dint(d, "rules_epoch", dflt.rules_epoch as i64) as u32,
     }
 }
 

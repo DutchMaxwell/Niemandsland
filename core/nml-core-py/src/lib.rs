@@ -690,6 +690,10 @@ impl Core {
             // PR #582's charge-distance bonus — `versatile_reach` in the
             // header (INVESTIGATION_gen0_replay_drift_2026-09-03.md).
             versatile_reach: self.knobs.versatile_reach,
+            // The CLASS FIX (external review 03.09. item 3 / F9) —
+            // `rules_epoch` in the header, `acts::CURRENT_RULES_EPOCH` for a
+            // fresh one.
+            rules_epoch: self.knobs.rules_epoch,
         }
     }
 
@@ -2626,6 +2630,9 @@ fn nml_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(rule_vocab_version, m)?)?;
     m.add("RULE_VOCAB_VERSION", nmlcore::RULE_VOCAB_VERSION)?;
     m.add("LEGACY_VOCAB_VERSION", nmlcore::LEGACY_VOCAB_VERSION)?;
+    // The CLASS FIX (external review 03.09. item 3 / F9): the epoch a fresh
+    // `play_game()` stamps. See `acts::rule_on`.
+    m.add("CURRENT_RULES_EPOCH", nmlcore::CURRENT_RULES_EPOCH)?;
     // NML-1073 M3-4: the board as a pure lookup — the header's terrain in, the
     // same answers `SchoolTerrain` gives the live game out.
     m.add_function(wrap_pyfunction!(board, m)?)?;

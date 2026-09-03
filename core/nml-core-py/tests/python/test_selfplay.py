@@ -591,6 +591,49 @@ def test_b4_the_dice_knob_now_moves_the_game():
     print("B4: seeds 27+28 part company between the two dice modes; a stream shift still reddens seed 28")
 
 
+@pytest.mark.skipif(
+    not (BANK_DIR.is_dir() and ARMY1.exists() and ARMY2.exists()),
+    reason="no terrain bank / AI lists on this machine",
+)
+def test_a_fresh_play_game_stamps_current_rules_epoch():
+    """External review 03.09. item 3 / F9 — the CLASS FIX. A `play_game()`
+    call with no `rules_epoch` override is a FRESH recording, so the header
+    it hands `Core.set_header` — the actual `Knobs` the crate resolves and
+    runs the game on, not merely the curated top-level `knobs` summary the
+    returned record carries — must stamp `nml_core.CURRENT_RULES_EPOCH` (not
+    some hand-copied literal `2`, which would silently drift from the crate's
+    own constant the day it next bumps): every rule gated on `rule_on` at or
+    below that epoch — including `cond_ap_dice` (since_epoch 1) and
+    `versatile_reach` (since_epoch 1), both also true by their own defaults
+    here — applies to this game regardless of what their own booleans say.
+
+    Captured by wrapping `Core.set_header` for the one call (the same
+    monkeypatch-and-restore shape `test_b4_the_dice_knob_now_moves_the_game`
+    uses on `sp._play_round`), because the header dict is a local variable
+    inside `play_game` with no other read-back seam."""
+    core = nml_core.load(str(REPO))
+    captured: dict = {}
+    orig_set_header = nml_core.Core.set_header
+
+    def capture_header(self, header):
+        captured["header"] = header
+        return orig_set_header(self, header)
+
+    nml_core.Core.set_header = capture_header
+    try:
+        sp.play_game(28, ARMY1, ARMY2, REPO, BANK_DIR, core)
+    finally:
+        nml_core.Core.set_header = orig_set_header
+
+    knobs = captured["header"]["knobs"]
+    assert knobs["rules_epoch"] == nml_core.CURRENT_RULES_EPOCH, (
+        "a fresh recording's header must carry the CURRENT rules epoch, got %r" % (knobs,)
+    )
+    assert knobs["cond_ap_dice"] is True and knobs["versatile_reach"] is True, (
+        "both pre-epoch instance knobs still default on too: %r" % (knobs,)
+    )
+
+
 def test_the_top_k_horizon_env_knobs_mirror_ai_planner(monkeypatch):
     """`NML_TOP_K` / `NML_HORIZON` (ai_planner.gd:49-56, 290-297) reach the fast
     trainer the same way: unset is the trainer's own default, set is

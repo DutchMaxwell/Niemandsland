@@ -19,6 +19,7 @@ use crate::combat::{
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
 use crate::geom::{self, V3};
+use crate::acts::rule_on;
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
@@ -1781,7 +1782,12 @@ fn strike_phase(
             }
         })
         .collect();
-    let r = crate::dice::resolve_melee_with_tray(&members, &def, &ut.name, charging, seams.cond_ap_dice, tray);
+    // CLASS FIX (external review 03.09. item 3 / F9, `acts::rule_on`): a
+    // pre-epoch record with the boolean legacy-OFF (or absent) stays
+    // unaffected; `rules_epoch >= 1` (fresh games from this build on) turns
+    // this rule on regardless of the boolean.
+    let cond_ap_dice = seams.cond_ap_dice || rule_on(seams.rules_epoch, 1);
+    let r = crate::dice::resolve_melee_with_tray(&members, &def, &ut.name, charging, cond_ap_dice, tray);
     for (mi, sc, _) in &parts {
         let melee = &statics[next.roster.profile[*mi]].melee;
         mark_spent_limited(melee, &sc.keep, &mut next.limited_used[*mi]);
@@ -3039,9 +3045,14 @@ fn resolve_with(
     // into the profile table at capture; RUSH and CHARGE share the rush band.
     let bounding_in = bounding_bonus_in(action);
     // Versatile Reach — the witness policy evaluated at the resolve seam, the
-    // same seam Bounding rides (`sim::versatile_reach_charge_in`).
-    let vr_in =
-        versatile_reach_charge_in(statics, &next, si, kind, ci, bounding_in, seams.versatile_reach);
+    // same seam Bounding rides (`sim::versatile_reach_charge_in`). CLASS FIX
+    // (external review 03.09. item 3 / F9, `acts::rule_on`): a pre-epoch
+    // record with the boolean legacy-OFF (or absent) stays unaffected;
+    // `rules_epoch >= 1` turns this rule on regardless of the boolean.
+    let vr_in = versatile_reach_charge_in(
+        statics, &next, si, kind, ci, bounding_in,
+        seams.versatile_reach || rule_on(seams.rules_epoch, 1),
+    );
     let band_in = match kind {
         ADVANCE => next.bands[si].advance,
         RUSH | CHARGE => next.bands[si].rush,
@@ -3532,9 +3543,13 @@ fn resolve_with(
                                     att.hit_mod += att.instinctive_hit_bonus;
                                 }
                             }
+                            // CLASS FIX (external review 03.09. item 3 / F9,
+                            // `acts::rule_on`) — same gate as `strike_phase`'s
+                            // melee half above.
                             let r = crate::dice::resolve_volley_with_tray(
                                 &shooters_of(&parts, statics, &next),
-                                &def, &ut_g.name, g.d, g.mod_d, seams.cond_ap_dice, tray,
+                                &def, &ut_g.name, g.d, g.mod_d,
+                                seams.cond_ap_dice || rule_on(seams.rules_epoch, 1), tray,
                             );
                             for (mi, msc, _) in &parts {
                                 let shoot = &statics[next.roster.profile[*mi]].shoot;
@@ -5525,6 +5540,52 @@ mod tests {
             vr_gap(&on) < 0.3,
             "knob ON: the +2\" ring bonus lands in contact, gap {:.3}\"",
             vr_gap(&on)
+        );
+    }
+
+    /// The CLASS FIX (external review 03.09. item 3 / F9, `acts::rule_on`):
+    /// the boolean's own OFF row above is `rules_epoch: 0`, the reading every
+    /// pre-epoch corpus (including this test's own default) carries and must
+    /// keep replaying unaffected. `rules_epoch: CURRENT_RULES_EPOCH` — what a
+    /// fresh `play_game()` stamps — turns the SAME rule on even with the
+    /// boolean left at its legacy `false`, exactly like a fresh recording
+    /// that never sets `versatile_reach` itself. RED if `rule_on` is dropped
+    /// from the `versatile_reach_charge_in` call site in `resolve_with`: the
+    /// epoch row would land short like the legacy row.
+    #[test]
+    fn the_versatile_reach_epoch_gate_turns_the_bonus_on_without_the_knob() {
+        let (st, mut statics) = vr_charge_line(13.5);
+        statics[0].versatile_reach_charge_in = Some(2.0);
+
+        let mut off_tray = Tray::seeded(11);
+        let mut off_rng = crate::rng::GodotRng::new(0);
+        let (epoch_0, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &vr_charge(), &small_board(),
+            Seams { movement: true, versatile_reach: false, rules_epoch: 0, ..Seams::default() },
+            &mut off_rng, &mut off_tray,
+        )
+        .unwrap();
+        assert!(
+            (vr_gap(&epoch_0) - 1.5).abs() < 1e-6,
+            "epoch 0, knob false: still the plain 12\" rush band, got {:.3}\"",
+            vr_gap(&epoch_0)
+        );
+
+        let mut on_tray = Tray::seeded(11);
+        let mut on_rng = crate::rng::GodotRng::new(0);
+        let (epoch_current, _) = resolve_stochastic_tray_on_board(
+            &statics, &st, &vr_charge(), &small_board(),
+            Seams {
+                movement: true, versatile_reach: false,
+                rules_epoch: crate::acts::CURRENT_RULES_EPOCH, ..Seams::default()
+            },
+            &mut on_rng, &mut on_tray,
+        )
+        .unwrap();
+        assert!(
+            vr_gap(&epoch_current) < 0.3,
+            "rules_epoch: CURRENT_RULES_EPOCH, knob false: the +2\" bonus still lands in contact, gap {:.3}\"",
+            vr_gap(&epoch_current)
         );
     }
 

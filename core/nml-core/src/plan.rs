@@ -239,6 +239,7 @@ fn seams_of(knobs: &Knobs) -> Seams {
         consolidate: knobs.consolidate,
         cond_ap_dice: knobs.cond_ap_dice,
         versatile_reach: knobs.versatile_reach,
+        rules_epoch: knobs.rules_epoch,
     }
 }
 

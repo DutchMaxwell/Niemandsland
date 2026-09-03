@@ -485,6 +485,12 @@ pub struct Seams {
     /// byte-identical.
     #[serde(default)]
     pub versatile_reach: bool,
+    /// `Knobs::rules_epoch` — the CLASS FIX (external review 03.09. item 3 /
+    /// F9). Default `0`: every corpus recorded before this field existed (or
+    /// silent on it) reads back the Gen-0 rule set. See `acts::rule_on` and
+    /// `acts::CURRENT_RULES_EPOCH`.
+    #[serde(default)]
+    pub rules_epoch: u32,
 }
 
 impl Node {
