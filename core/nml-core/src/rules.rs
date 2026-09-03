@@ -268,6 +268,14 @@ pub struct Registries {
     /// (system, faction) -> BOOK-ORDERED spell list (spells_registry.gd:13-14:
     /// the committed order IS rule data, never sort it).
     spells: HashMap<String, HashMap<String, Vec<Spell>>>,
+    /// The rule-set epoch the NEXT `UnitStatic::build` under this registry
+    /// stamps its epoch-gated ports under (`acts::rule_on`, see
+    /// `acts::CURRENT_RULES_EPOCH`). `Registries::new` leaves it at the
+    /// serde-default `0` — the Gen-0 rule set every recorded corpus replays —
+    /// so a caller that never sets it stays byte-exact by construction. The
+    /// corpus loader (`lib.rs`) copies `Knobs::rules_epoch`; the live Godot/py
+    /// game closures stamp `CURRENT_RULES_EPOCH`.
+    pub rules_epoch: u32,
 }
 
 impl Registries {

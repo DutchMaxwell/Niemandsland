@@ -253,10 +253,13 @@ pub struct Knobs {
 /// fix's own follow-ups — the Regeneration family's DATA-ALIAS wave
 /// (Plaguebound, Protected, Knightborn, Cursed Undead, Angelic Blessing,
 /// their Boosts and the rest — `unit::regen_targets`' alias loop mirroring
-/// main.gd:6637-6652) and the Bane family's scope ladder
+/// main.gd:6637-6652), the Bane family's scope ladder
 /// (`unit.rs::stamp_unit_strikers` mirroring `_solo_striker_has_bane`
-/// main.gd:6525-6560) — every record below it keeps the flat Gen-0 prefix
-/// reading and skips the Regeneration aliasing alike.
+/// main.gd:6525-6560), and the Lacerate+Counter wave — the Counter DATA
+/// aliases ("Counter-Attack", "Counter in Melee") stamp the melee array's
+/// `counter` flag in `unit::UnitStatic::build_for`, read off the `rules_epoch`
+/// the closure is built under — every record below it keeps the flat Gen-0
+/// prefix reading and skips the Regeneration/Counter aliasing alike.
 pub const CURRENT_RULES_EPOCH: u32 = 3;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.

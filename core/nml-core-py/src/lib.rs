@@ -727,6 +727,12 @@ impl Core {
         self.terrain = terrain;
         self.knobs = knobs;
         self.roster = None;
+        // The epoch-gated rule ports stamp under THIS corpus's own recorded
+        // epoch (`Registries::rules_epoch`, serde-default 0) — a recorded
+        // corpus replays its recorded rule set, a fresh one the current one.
+        if let Some(reg) = self.reg.as_mut() {
+            reg.rules_epoch = self.knobs.rules_epoch;
+        }
         // NML-1134: the board rows are slotted with the vocabulary THIS corpus
         // was recorded under — `knobs.rule_vocab_version`, absent meaning the
         // pre-stamp version 2. A version the committed file cannot serve is an
