@@ -166,6 +166,15 @@ pub struct Ctx {
     /// flags` :16576-16589 folds relentless/furious/rending from the attacker,
     /// never unstoppable).
     pub unstoppable_grant: bool,
+    /// A live `grants_rule: "Rending"` on this unit's joined chain — the
+    /// rending leg of `_solo_bridge_granted_flags` (main.gd:16576-16589),
+    /// which folds granted rending into the striker's roll flags. Read by the
+    /// TRAY's on-6 AP and Regeneration-bypass tests (dice.rs) and by nothing
+    /// else — the EV imagination never calls `ctx_live`.
+    pub rending_grant: bool,
+    /// A live `grants_rule: "Thrust"` — the same bridge's thrust leg, read by
+    /// the tray's charging to-hit and AP bonuses (dice.rs) only.
+    pub thrust_grant: bool,
     // --- Block B7, the Growth-Marker family. ZERO on every `ctx_of` (baked
     // into `ctx_for` below), like `hit_mod` — only `sim::ctx_live` reads the
     // live marker count and folds it in, so the EV imagination stays
@@ -1025,6 +1034,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         melee_hit_bonus,
         melee_hit_bonus_charge,
         unstoppable_grant: false,
+        rending_grant: false,
+        thrust_grant: false,
         growth_ap_mod: 0,
         growth_hit_mod: 0,
     }

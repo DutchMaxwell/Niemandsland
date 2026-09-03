@@ -639,7 +639,7 @@ pub fn resolve_volley_with_tray(
         // --- `_solo_resolve_saves` :6337-6376: the on-6 AP sub-batch first ---
         let on6 = if p.on6_ap > 0 {
             p.on6_ap
-        } else if p.rending || p.destructive {
+        } else if p.rending || p.destructive || att.rending_grant {
             RENDING_AP_BONUS
         } else {
             0
@@ -679,7 +679,7 @@ pub fn resolve_volley_with_tray(
         // ai_ev.gd:433) cut through Regeneration; everything else is poolable.
         // B2b: `_solo_ignores_regen`'s last line (main.gd:6941) also answers
         // for a LIVE "Unstoppable" grant — the Unstoppable Mark seam.
-        if p.bane || p.rending || p.unstoppable || att.unstoppable_grant {
+        if p.bane || p.rending || p.unstoppable || att.rending_grant || att.unstoppable_grant {
             regen_proof += w;
         } else {
             regenable += w;
@@ -776,7 +776,7 @@ fn melee_hit_target(p: &ShootProfile, att: &Ctx, def: &Ctx, charging: bool, uf_h
     if att.fatigued {
         return UNMODIFIED_SIX;
     }
-    let base = thrust_to_hit(reliable_quality(att.quality, p.reliable), charging && p.thrust);
+    let base = thrust_to_hit(reliable_quality(att.quality, p.reliable), charging && (p.thrust || att.thrust_grant));
     // B2b: the melee half of `_solo_hit_mod_info` (:5637-5638) sums the same
     // two live nets into `mm` before the single clamp below.
     let mut m = melee_hit_modifier(def.evasive, def.melee_evasion) + uf_hit + att.hit_mod
@@ -948,7 +948,7 @@ pub fn resolve_melee_with_tray(
             }
             let on6 = if p.on6_ap > 0 {
                 p.on6_ap
-            } else if p.rending || p.destructive {
+            } else if p.rending || p.destructive || sh.att.rending_grant {
                 RENDING_AP_BONUS
             } else {
                 0
@@ -960,7 +960,7 @@ pub fn resolve_melee_with_tray(
             // Block B7 — Piercing Growth's AP delta, melee half (see the
             // shooting site's own note above).
             let mut ap = p.ap + uf_ap + sh.att.growth_ap_mod
-                + if charging && p.thrust { THRUST_AP_BONUS } else { 0 };
+                + if charging && (p.thrust || sh.att.thrust_grant) { THRUST_AP_BONUS } else { 0 };
             // Rung I — the melee half of the same `cond_ap` fold, same
             // `Knobs::cond_ap_dice` gate as the shooting half. Real `charging`
             // is already this function's own parameter (unlike `profile_ev`'s
@@ -976,7 +976,7 @@ pub fn resolve_melee_with_tray(
             if p.deadly > 0 {
                 out.mark("deadly");
             }
-            if p.bane || p.rending || p.unstoppable || sh.att.unstoppable_grant {
+            if p.bane || p.rending || p.unstoppable || sh.att.rending_grant || sh.att.unstoppable_grant {
                 regen_proof += w;
             } else {
                 regenable += w;
