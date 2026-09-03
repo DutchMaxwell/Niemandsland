@@ -1,17 +1,19 @@
-//! The live rule-GRANT family (rung D auras + rung E buffs): every granted
-//! base rule must reach the dice path through `mods::granted`, folded by
-//! `sim::ctx_live` exactly where the static has-rule test already stamps its
-//! flag — the same seam `a_furious_grant_reaches_this_rounds_melee_and_is_
-//! spent_by_it` (sim.rs) pins for the spell grants. One test per grant KIND:
-//! the melee attacker grant (Furious), the shooting-scoped aura grant
-//! (Rending), the defender-side morale grant (No Retreat).
+//! The live rule-GRANT family (rung D auras + rung E buffs/marks): every
+//! granted base rule must reach the dice path through `mods::granted`, folded
+//! by `sim::ctx_live` exactly where the static has-rule test already stamps
+//! its flag — the same seam `a_furious_grant_reaches_this_rounds_melee_and_
+//! is_spent_by_it` (sim.rs) pins for the spell grants. One test per grant
+//! KIND: the melee attacker grant (Furious), the shooting-scoped aura grant
+//! (Rending), the defender-side morale grant (No Retreat), and the rung E
+//! Mark — a record on the BEARER with `attackers: true`, folded into the
+//! ATTACKER's ctx by the bridge (`sim::ctx_live_vs`, main.gd:16676-16685).
 
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use nml_core::dice::{resolve_melee_with_tray, resolve_morale_with_tray, resolve_volley_with_tray, Shooter, Tray};
 use nml_core::mods::LiveMod;
-use nml_core::sim::{ctx_live, ctx_of};
+use nml_core::sim::{ctx_live, ctx_live_vs, ctx_of};
 use nml_core::state::{Bands, Mods, MoveBands, Profile, Profiles, Roster};
 use nml_core::unit::{Ctx, ShootProfile, UnitStatic};
 use nml_core::IN2M;
@@ -111,6 +113,12 @@ fn grant(rule: &str, scope: &str, once: bool) -> LiveMod {
     }
 }
 
+/// The Mark family's landing shape: `beneficiary == "attackers"` — the record
+/// sits on the BEARER and belongs to whoever attacks it (main.gd:3652).
+fn mark(rule: &str) -> LiveMod {
+    LiveMod { attackers: true, once: true, ..grant(rule, "", true) }
+}
+
 fn live_ctx(st: &nml_core::State, statics: &[UnitStatic], i: usize, melee: bool) -> Ctx {
     ctx_live(ctx_of(&statics[st.roster.profile[i]], st, i), statics, st, i, melee)
 }
@@ -202,4 +210,52 @@ fn a_live_no_retreat_grant_pays_a_failed_test_in_self_wounds() {
         resolve_morale_with_tray(&buffed, "u", true, true, false, 2, &mut Tray::seeded(3));
     assert_eq!(result, nml_core::dice::Morale::Passed, "No Retreat stands instead");
     assert!(out.wounds > 0, "and pays for it in self-wounds on this seed");
+}
+
+/// The rung E Mark kind ("Rending Mark"): the record lands on the BEARER
+/// (unit 1) with `attackers: true` — the attacker's volley gains Rending
+/// through the bridge fold (`ctx_live_vs`), the same state without the mark
+/// rolls plain, and the bearer itself gains NOTHING: `granted` skips its own
+/// attackers-records (main.gd:3652) and its own ctx stays grant-blind.
+#[test]
+fn a_mark_on_the_bearer_hands_its_attacker_the_rending_grant() {
+    let (st, statics) = two_units();
+    let plain = live_ctx(&st, &statics, 0, false);
+    assert!(!plain.rending_grant, "no mark, no grant");
+
+    let profile = [ShootProfile { range: 24, attacks: 6, ..Default::default() }];
+    let def = Ctx { defense: 3, models: 1, tough: 1, ..Default::default() };
+    let without = resolve_volley_with_tray(
+        &[Shooter { profiles: &profile, keep: &[0], attacks: &[6], att: &plain, owner: "att" }],
+        &def, "def", 12.0, 12.0, false, &mut Tray::seeded(12),
+    );
+
+    let mut marked_state = st;
+    marked_state.buffs[1].push(mark("Rending"));
+    assert!(
+        nml_core::mods::granted_vs(&marked_state, 1, "Rending"),
+        "the attackers-side read answers for whoever attacks the bearer"
+    );
+    assert!(
+        !nml_core::mods::granted(&marked_state, 1, "Rending"),
+        "the bearer itself does NOT gain the rule (main.gd:3652)"
+    );
+    assert!(
+        !live_ctx(&marked_state, &statics, 1, false).rending_grant,
+        "the bearer attacking anyone else stays grant-blind"
+    );
+    let marked = ctx_live_vs(
+        ctx_of(&statics[marked_state.roster.profile[0]], &marked_state, 0),
+        &statics, &marked_state, 0, 1, false,
+    );
+    assert!(marked.rending_grant, "the mark reaches the ATTACKER's shooting context");
+    let with = resolve_volley_with_tray(
+        &[Shooter { profiles: &profile, keep: &[0], attacks: &[6], att: &marked, owner: "att" }],
+        &def, "def", 12.0, 12.0, false, &mut Tray::seeded(12),
+    );
+    assert!(
+        with.wounds > without.wounds,
+        "the granted sixes cut one step deeper on this seed: {} -> {}",
+        without.wounds, with.wounds
+    );
 }

@@ -1485,14 +1485,15 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "beneficiary": "attackers",
      "grants_rule": "AP(+1) in melee",
-     "target": "enemy",
-     "vs_marked": true,
-     "beneficiary": "friendly_attackers",
      "max_targets": 4,
-     "range_in": 18,
+     "needs_los": true,
      "once": true,
-     "needs_los": true
+     "range_in": 18,
+     "scope": "melee",
+     "target": "enemy",
+     "vs_marked": true
     }
    },
    "Precision Fighter Aura": {
@@ -2576,14 +2577,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "beneficiary": "attackers",
      "grants_rule": "Rapid Charge",
-     "target": "enemy",
-     "vs_marked": true,
-     "beneficiary": "friendly_attackers",
      "max_targets": 4,
-     "range_in": 18,
+     "needs_los": true,
      "once": true,
-     "needs_los": true
+     "range_in": 18,
+     "target": "enemy",
+     "vs_marked": true
     }
    },
    "Repel Ambushers": {
@@ -9912,14 +9913,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "beneficiary": "attackers",
      "grants_rule": "Slayer",
-     "target": "enemy",
-     "vs_marked": true,
-     "beneficiary": "friendly_attackers",
      "max_targets": 4,
-     "range_in": 18,
+     "needs_los": true,
      "once": true,
-     "needs_los": true
+     "range_in": 18,
+     "target": "enemy",
+     "vs_marked": true
     }
    },
    "Strider Aura": {

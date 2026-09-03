@@ -1642,14 +1642,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "beneficiary": "attackers",
      "grants_rule": "Rapid Charge",
-     "target": "enemy",
-     "vs_marked": true,
-     "beneficiary": "friendly_attackers",
      "max_targets": 1,
-     "range_in": 18,
+     "needs_los": true,
      "once": true,
-     "needs_los": true
+     "range_in": 18,
+     "target": "enemy",
+     "vs_marked": true
     }
    },
    "Ravage": {
@@ -1870,11 +1870,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "beneficiary": "attackers",
      "grants_rule": "Indirect",
-     "range_in": 18,
-     "target": "enemy",
+     "max_targets": 1,
+     "needs_los": true,
      "once": true,
-     "needs_los": true
+     "range_in": 18,
+     "scope": "shooting",
+     "target": "enemy"
     }
    },
    "Melee Slayer": {
@@ -2143,11 +2146,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "beneficiary": "attackers",
      "grants_rule": "+6\" shooting range",
-     "range_in": 18,
-     "target": "enemy",
+     "max_targets": 1,
+     "needs_los": true,
      "once": true,
-     "needs_los": true
+     "range_in": 18,
+     "scope": "shooting",
+     "target": "enemy"
     }
    },
    "Melee Slayer": {
@@ -3315,14 +3321,15 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "beneficiary": "attackers",
      "grants_rule": "AP(+1) in melee",
-     "target": "enemy",
-     "vs_marked": true,
-     "beneficiary": "friendly_attackers",
      "max_targets": 1,
-     "range_in": 18,
+     "needs_los": true,
      "once": true,
-     "needs_los": true
+     "range_in": 18,
+     "scope": "melee",
+     "target": "enemy",
+     "vs_marked": true
     }
    },
    "Precision Fighter Buff": {
@@ -3767,8 +3774,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true,
-     "needs_los": true
+     "beneficiary": "attackers",
+     "grants_rule": "Relentless",
+     "max_targets": 1,
+     "needs_los": true,
+     "once": true,
+     "range_in": 18,
+     "target": "enemy",
+     "vs_target": true
     }
    },
    "Slayer": {
@@ -4572,11 +4585,13 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "beneficiary": "attackers",
      "grants_rule": "Slayer",
-     "range_in": 18,
-     "target": "enemy",
+     "max_targets": 1,
+     "needs_los": true,
      "once": true,
-     "needs_los": true
+     "range_in": 18,
+     "target": "enemy"
     }
    },
    "Spell Conduit": {
@@ -5395,8 +5410,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true,
-     "needs_los": true
+     "beneficiary": "attackers",
+     "grants_rule": "Rending",
+     "max_targets": 1,
+     "needs_los": true,
+     "once": true,
+     "range_in": 18,
+     "target": "enemy",
+     "vs_target": true
     }
    },
    "Speed Debuff": {
@@ -5496,8 +5517,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true,
-     "needs_los": true
+     "beneficiary": "attackers",
+     "grants_rule": "Furious",
+     "max_targets": 1,
+     "needs_los": true,
+     "once": true,
+     "range_in": 18,
+     "target": "enemy",
+     "vs_target": true
     }
    },
    "Infiltrate": {
@@ -6357,11 +6384,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "beneficiary": "attackers",
      "grants_rule": "Quick Shot",
-     "range_in": 18,
-     "target": "enemy",
+     "max_targets": 1,
+     "needs_los": true,
      "once": true,
-     "needs_los": true
+     "range_in": 18,
+     "scope": "shooting",
+     "target": "enemy"
     }
    },
    "Resistance": {
@@ -6962,11 +6992,13 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "beneficiary": "attackers",
      "grants_rule": "Shred",
-     "range_in": 18,
-     "target": "enemy",
+     "max_targets": 1,
+     "needs_los": true,
      "once": true,
-     "needs_los": true
+     "range_in": 18,
+     "target": "enemy"
     }
    },
    "Spawn": {
@@ -7204,8 +7236,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true,
-     "needs_los": true
+     "beneficiary": "attackers",
+     "grants_rule": "Unpredictable Fighter",
+     "max_targets": 1,
+     "needs_los": true,
+     "once": true,
+     "range_in": 18,
+     "target": "enemy",
+     "vs_target": true
     }
    }
   },
@@ -8136,11 +8174,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "beneficiary": "attackers",
      "grants_rule": "Quick Shot",
-     "range_in": 18,
-     "target": "enemy",
+     "max_targets": 1,
+     "needs_los": true,
      "once": true,
-     "needs_los": true
+     "range_in": 18,
+     "scope": "shooting",
+     "target": "enemy"
     }
    },
    "Rapid Advance": {

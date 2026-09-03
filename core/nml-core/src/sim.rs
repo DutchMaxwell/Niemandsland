@@ -551,7 +551,7 @@ fn record_buff(state: &mut State, ti: usize, b: &UtilityBuff) {
         morale_mod: b.morale_mod,
         grants_rule: Rc::from(b.grants_rule.as_str()),
         scope: Rc::from(b.scope.as_str()),
-        attackers: false,
+        attackers: b.beneficiary == "attackers",
         once: b.once,
     });
 }
@@ -630,7 +630,7 @@ fn utility_targets(
 /// spent either; that is the same gap, not a second one.
 fn spend_exchange(state: &mut State, att: usize, def: usize, melee: bool) {
     mods::spend_once(state, att, &[mods::Role::AttackerOwn, mods::Role::Grant], melee);
-    mods::spend_once(state, def, &[mods::Role::VsTarget, mods::Role::Grant], melee);
+    mods::spend_once(state, def, &[mods::Role::VsTarget, mods::Role::Grant, mods::Role::GrantVs], melee);
 }
 
 /// `main._solo_apply_vs_marks` :16738-16771 — the ENEMY-side half of the
@@ -1302,6 +1302,9 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // where the static has-rule test already stamped its flag.
     c.rending_grant = mods::granted(state, i, "Rending");
     c.thrust_grant = mods::granted(state, i, "Thrust");
+    c.relentless_grant = mods::granted(state, i, "Relentless");
+    c.shred_grant = mods::granted(state, i, "Shred");
+    c.unpredictable = c.unpredictable || mods::granted(state, i, "Unpredictable Fighter");
     c.guarded = c.guarded || mods::granted(state, i, "Guarded");
     c.melee_evasion = c.melee_evasion || mods::granted(state, i, "Melee Evasion");
     // No Retreat folds HERE for every ctx_live caller; the rolled morale test
@@ -1311,6 +1314,29 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     let (ap, hit) = growth_bonus_of(statics, state, i);
     c.growth_ap_mod = ap;
     c.growth_hit_mod = hit;
+    c
+}
+
+/// `_solo_bridge_granted_flags`' target half (main.gd:16676-16685): the
+/// `beneficiary == "attackers"` records on the TARGET's ledger belong to
+/// whoever attacks it (`AiSpell.attacker_grants_from_target` ai_spell.gd:
+/// 454-465), so the BRIDGEABLE flag legs (AiSpell.BRIDGE_FLAGS ai_spell.gd:
+/// 415) fold into the STRIKER's ctx here, at the exchange seams where the
+/// target is known — a mark landed on the bearer empowers its attackers, and
+/// never the bearer itself. Tray-only, like `ctx_live`.
+pub fn ctx_live_vs(
+    mut c: Ctx,
+    statics: &[UnitStatic],
+    state: &State,
+    i: usize,
+    target: usize,
+    melee: bool,
+) -> Ctx {
+    c = ctx_live(c, statics, state, i, melee);
+    c.rending_grant = c.rending_grant || mods::granted_vs(state, target, "Rending");
+    c.furious = c.furious || mods::granted_vs(state, target, "Furious");
+    c.relentless_grant = c.relentless_grant || mods::granted_vs(state, target, "Relentless");
+    c.shred_grant = c.shred_grant || mods::granted_vs(state, target, "Shred");
     c
 }
 
@@ -1690,7 +1716,11 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize, ti: usize, seams
         melee_profiles_of(um, count, &mut sc);
         sc.keep = (0..um.melee.len()).collect();
         drop_spent_limited(&um.melee, &state.limited_used[mi], &mut sc);
-        parts.push((mi, sc, ctx_live(ctx_of_melee(um, state, mi), statics, state, mi, true)));
+        parts.push((
+            mi,
+            sc,
+            ctx_live_vs(ctx_of_melee(um, state, mi), statics, state, mi, ti, true),
+        ));
     }
     parts
 }
@@ -3302,7 +3332,8 @@ fn resolve_with(
     // "may shoot after using Rush actions": its move-and-shoot band becomes
     // its RUSH distance). The `moved` decline right below still applies to a
     // Quick Shot RUSH exactly as it already does to a moved ADVANCE.
-    let quick_shot_active = statics[pi_s].quick_shot_active;
+    let quick_shot_active =
+        statics[pi_s].quick_shot_active || mods::granted(&next, si, "Quick Shot");
     if !shoot_key.is_empty() && (kind == HOLD || kind == ADVANCE || (kind == RUSH && quick_shot_active)) {
         // W1: the decline stands unless the caller has asked for the moving
         // shot, which is the other half of `Knobs::menu_wide` — the menu may
@@ -3484,7 +3515,11 @@ fn resolve_with(
                                     msc.keep = keep;
                                     msc.attacks = attacks;
                                 }
-                                parts.push((mi, msc, ctx_live(ctx_of(um, &next, mi), statics, &next, mi, false)));
+                                parts.push((
+                                    mi,
+                                    msc,
+                                    ctx_live_vs(ctx_of(um, &next, mi), statics, &next, mi, g.ti, false),
+                                ));
                             }
                             // Block C5 — Instinctive: the +1 reaches the
                             // shooting fold ONLY when THIS group's target is

@@ -49,6 +49,7 @@ pub enum Role {
     Casting,
     Morale,
     Grant,
+    GrantVs,
 }
 
 /// `AiSpell.mods_for` ai_spell.gd:364-400, one record.
@@ -63,7 +64,8 @@ pub fn matches(r: &LiveMod, role: Role, melee: bool) -> bool {
         Role::VsTarget => r.attackers && r.hit_mod != 0,
         Role::Casting => r.casting_mod != 0,
         Role::Morale => r.morale_mod != 0,
-        Role::Grant => !r.grants_rule.is_empty(),
+        Role::Grant => !r.attackers && !r.grants_rule.is_empty(),
+        Role::GrantVs => r.attackers && !r.grants_rule.is_empty(),
     }
 }
 
@@ -87,17 +89,35 @@ pub fn sum(state: &State, i: usize, role: Role, melee: bool, f: impl Fn(&LiveMod
 /// three, one hop wider than `sum`'s self+host. Scope-BLIND, like the overlay
 /// itself. Name comparison is `AiEv.has_exact_rule` (ai_ev.gd:92-99): the base
 /// name, so "Unstoppable (spell)" answers "Unstoppable" and "Unstoppable Mark"
-/// does not.
+/// does not. `beneficiary == "attackers"` records are NOT the bearer's own
+/// grants (main.gd:3652 — they never join the bearer's own net): `granted_vs`
+/// reads them for whoever attacks the bearer instead.
 pub fn granted(state: &State, i: usize, rule: &str) -> bool {
+    chain_grant(state, i, rule, false)
+}
+
+/// `AiSpell.attacker_grants_from_target` (ai_spell.gd:454-465) — the
+/// `beneficiary == "attackers"` records on the TARGET's joined chain belong to
+/// whoever ATTACKS it, never to the bearer itself (main.gd:3652). The
+/// roll-seam half of `_solo_bridge_granted_flags` (main.gd:16676-16685):
+/// called with the attack's target, it hands the striker the target's
+/// attackers-side grants.
+pub fn granted_vs(state: &State, target: usize, rule: &str) -> bool {
+    chain_grant(state, target, rule, true)
+}
+
+fn chain_grant(state: &State, i: usize, rule: &str, attackers: bool) -> bool {
     let mut who: Vec<usize> = vec![i];
     if let Some(h) = state.attached_to[i] {
         who.push(h);
     }
     who.extend(state.attached[i].iter().copied());
     who.iter().any(|&u| {
-        state.buffs[u]
-            .iter()
-            .any(|r| !r.grants_rule.is_empty() && base_rule_name(&r.grants_rule) == rule)
+        state.buffs[u].iter().any(|r| {
+            r.attackers == attackers
+                && !r.grants_rule.is_empty()
+                && base_rule_name(&r.grants_rule) == rule
+        })
     })
 }
 

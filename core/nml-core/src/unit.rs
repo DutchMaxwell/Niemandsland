@@ -175,6 +175,15 @@ pub struct Ctx {
     /// A live `grants_rule: "Thrust"` — the same bridge's thrust leg, read by
     /// the tray's charging to-hit and AP bonuses (dice.rs) only.
     pub thrust_grant: bool,
+    /// A live `grants_rule: "Relentless"` — the relentless leg of the same
+    /// bridge (AiSpell.BRIDGE_FLAGS ai_spell.gd:415), folded into the
+    /// striker's roll flags where the WEAPON's own `p.relentless` is read
+    /// (dice.rs, over-9" volleys). Zero on every `ctx_of`.
+    pub relentless_grant: bool,
+    /// A live `grants_rule: "Shred"` — the same bridge's shred leg, folded
+    /// into the save batch the way the weapon's own `p.shred` is (dice.rs).
+    /// Zero on every `ctx_of`.
+    pub shred_grant: bool,
     // --- Block B7, the Growth-Marker family. ZERO on every `ctx_of` (baked
     // into `ctx_for` below), like `hit_mod` — only `sim::ctx_live` reads the
     // live marker count and folds it in, so the EV imagination stays
@@ -1036,6 +1045,8 @@ fn ctx_for(reg: &mut Registries, p: &Profile) -> Ctx {
         unstoppable_grant: false,
         rending_grant: false,
         thrust_grant: false,
+        relentless_grant: false,
+        shred_grant: false,
         growth_ap_mod: 0,
         growth_hit_mod: 0,
     }
@@ -1239,6 +1250,10 @@ pub struct UtilityBuff {
     pub morale_mod: i64,
     pub grants_rule: String,
     pub scope: String,
+    /// `beneficiary` — "attackers" on the Mark family: the record belongs to
+    /// whoever ATTACKS the bearer, never to the bearer's own net
+    /// (main.gd:3652).
+    pub beneficiary: String,
     pub once: bool,
 }
 
@@ -1282,6 +1297,7 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemente
             morale_mod: e.param_i("morale_mod", 0),
             grants_rule: e.param_s("grants_rule").to_string(),
             scope: e.param_s("scope").to_string(),
+            beneficiary: e.param_s("beneficiary").to_string(),
             once: e.param_b_or("once", true),
         });
         // The ledger models four knobs (hit / casting / morale / grant) and the

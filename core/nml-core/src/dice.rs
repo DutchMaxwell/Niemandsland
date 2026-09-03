@@ -258,6 +258,7 @@ fn save_batch(
     count: i64,
     defense: i64,
     ap: i64,
+    shred_grant: bool,
     tray: &mut Tray,
     out: &mut ShootResult,
 ) -> i64 {
@@ -288,7 +289,7 @@ fn save_batch(
         }
     }
     let unsaved = (count - blocks_with_bane(&faces, &reroll, target)).max(0);
-    let shred = if p.shred { shred_ones(&faces, &reroll) } else { 0 };
+    let shred = if p.shred || shred_grant { shred_ones(&faces, &reroll) } else { 0 };
     let mult = if p.deadly > 0 { deadly_multiplier(p.deadly, def.tough.max(1)) } else { 1 };
     unsaved * mult + shred
 }
@@ -607,7 +608,7 @@ pub fn resolve_volley_with_tray(
         }
         // --- `_solo_hits` :4404-4487 ---
         let mut hits = faces_to_hits(&faces, count_target as u8) as i64;
-        if p.relentless && mod_dist_in > LONG_RANGE_IN {
+        if (p.relentless || att.relentless_grant) && mod_dist_in > LONG_RANGE_IN {
             hits += sixes(&faces);
         }
         if p.surge {
@@ -670,8 +671,8 @@ pub fn resolve_volley_with_tray(
                 ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, false, mod_dist_in, false);
             }
         }
-        let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, tray, &mut out);
-        w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, tray, &mut out);
+        let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, tray, &mut out);
+        w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, att.shred_grant, tray, &mut out);
         if p.deadly > 0 {
             out.mark("deadly");
         }
@@ -743,7 +744,7 @@ pub fn retaliate_saves_with_tray(
     let save_def = shielded_defense(def.defense, def.shielded);
     let mut sub = ShootResult::default();
     let unsaved =
-        save_batch(&ShootProfile::default(), def, def_owner, hits, save_def, 0, tray, &mut sub);
+        save_batch(&ShootProfile::default(), def, def_owner, hits, save_def, 0, false, tray, &mut sub);
     rolls.extend(sub.rolls);
     let landed = regen_batch(unsaved, def, def_owner, tray, rolls);
     (unsaved, landed)
@@ -971,8 +972,8 @@ pub fn resolve_melee_with_tray(
                     ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, charging, 0.0, true);
                 }
             }
-            let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, tray, &mut out);
-            w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, tray, &mut out);
+            let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, tray, &mut out);
+            w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, sh.att.shred_grant, tray, &mut out);
             if p.deadly > 0 {
                 out.mark("deadly");
             }
@@ -1050,7 +1051,7 @@ pub fn resolve_impact_pool_with_tray(
     // "Impact is not a weapon": no Deadly, no Bane, no Shred — a bare profile
     // carrying only the pool's AP, exactly as :6325 builds it.
     let bare = ShootProfile { ap, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, tray, &mut out);
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, false, tray, &mut out);
     out.caused = w;
     out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
     out
@@ -1076,7 +1077,7 @@ pub fn resolve_breath_attack_with_tray(
         return out;
     }
     let bare = ShootProfile { ap, ..Default::default() };
-    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, tray, &mut out);
+    let w = save_batch(&bare, def, def_owner, hits, shielded_defense(def.defense, def.shielded), ap, false, tray, &mut out);
     out.caused = w;
     out.wounds = regen_batch(w, def, def_owner, tray, &mut out.rolls);
     out

@@ -1701,8 +1701,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true,
-     "needs_los": true
+     "beneficiary": "attackers",
+     "grants_rule": "Unpredictable Fighter",
+     "max_targets": 1,
+     "needs_los": true,
+     "once": true,
+     "range_in": 18,
+     "target": "enemy",
+     "vs_target": true
     }
    }
   },
@@ -3941,14 +3947,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "beneficiary": "attackers",
      "grants_rule": "Slayer",
-     "target": "enemy",
-     "vs_marked": true,
-     "beneficiary": "friendly_attackers",
      "max_targets": 4,
-     "range_in": 18,
+     "needs_los": true,
      "once": true,
-     "needs_los": true
+     "range_in": 18,
+     "target": "enemy",
+     "vs_marked": true
     }
    },
    "Takedown Strike": {
@@ -4277,12 +4283,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
+     "beneficiary": "attackers",
      "grants_rule": "Quick Shot",
-     "range_in": 18,
-     "target": "enemy",
-     "once": true,
+     "max_targets": 4,
      "needs_los": true,
-     "max_targets": 4
+     "once": true,
+     "range_in": 18,
+     "scope": "shooting",
+     "target": "enemy"
     }
    },
    "Repel Ambushers": {
@@ -5133,8 +5141,14 @@
     "rated": false,
     "book_version": "3.5.3",
     "params": {
-     "vs_target": true,
-     "needs_los": true
+     "beneficiary": "attackers",
+     "grants_rule": "Relentless",
+     "max_targets": 1,
+     "needs_los": true,
+     "once": true,
+     "range_in": 18,
+     "target": "enemy",
+     "vs_target": true
     }
    },
    "Repel Ambushers": {
