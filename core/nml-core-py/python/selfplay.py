@@ -902,6 +902,7 @@ def resolve_ambush(ambush: str) -> bool:
 LEGACY_FIDELITY_KNOBS: dict[str, Any] = dict(
     charge_gate="off", menu_wide="off", menu_los="planner",
     los="unit", hero_last=False, cast_fold=False, ambush="off",
+    cond_ap_dice=False,
 )
 
 
@@ -1114,6 +1115,10 @@ TRAINER_KNOBS = {
     "seam_path": False,
     "charge_gate": False,
     "menu_targets": False,
+    # Rung I (DEFECT_LEDGER row 31): the dice path's `cond_ap` fold. False
+    # here because `~/selfplay_out/gen0_teacher` was recorded before it, and a
+    # bundle replayed with the fold ON would move its own rollout picks.
+    "cond_ap_dice": False,
 }
 
 # `AiActRecorder.begin` :65-66 — the planner's per-activation class statics, all
@@ -1887,6 +1892,14 @@ def play_game(
     engage_fold: bool = True,
     dangerous_end_morale: bool = True,
     cond_ap: bool | None = None,
+    # Rung I (DEFECT_LEDGER row 31) — the dice path's OWN cond_ap fold,
+    # `Knobs::cond_ap_dice` (separate from `cond_ap` above: that flag
+    # gates the STAMP `profile_ev`'s EV reads and must stay live for this
+    # bundle's own recorded vintage; this one gates the TRAY resolvers
+    # alone). True is the shipped/current engine; a replay tool passes
+    # its header's own key, and LEGACY_FIDELITY_KNOBS pins it False for a
+    # gate holding the fast trainer to a corpus recorded before this rung.
+    cond_ap_dice: bool = True,
     vocab_version: int | None = None,
     objectives: str = "constant",
     deployment: str = "zone",
@@ -2039,6 +2052,18 @@ def play_game(
     to a concrete bool before they ever reach here (there is no header for
     this function to read a vintage off, so `auto` resolves against
     `vintage_knobs({}, ...)`).
+
+    `cond_ap_dice` (DEFECT_LEDGER row 31) is the DICE PATH's own half of the
+    same rule family, and deliberately NOT folded into `cond_ap` above: that
+    flag gates whether `stamp_conditional_ap` runs AT ALL, which the EV path
+    (`profile_ev`) needs live for every corpus recorded after NML-1103 shipped
+    (`~/selfplay_out/gen0_teacher` included) — turning it off to pin the dice
+    path would also blind the EV path and desync a DIFFERENT number. A plain
+    bool with a concrete default (`True`, unlike `cond_ap`'s `None`) because it
+    is a real `Knobs`/`Seams` field, stamped into the header like every other
+    seam, so a replay tool never has to resolve a vintage for it by hand —
+    it reads back whatever the corpus itself carries, `False` for every
+    corpus (this one included) recorded before this rung.
 
     `explore` (NML-1158c, `--explore` below) is the POLICY WAVE's exploration
     knob: with probability `explore` per activation, the twin picks uniformly
@@ -2220,6 +2245,9 @@ def play_game(
         # so a fresh game stamps it and gets the p.10 test; a replay tool reads
         # the RECORD's own key instead and passes False when it predates this.
         dangerous_end_morale=dangerous_end_morale,
+        # Rung I (DEFECT_LEDGER row 31): the dice path's cond_ap fold. True is
+        # the shipped default; a replay tool passes its header's own key back.
+        cond_ap_dice=bool(cond_ap_dice),
         # NML-1134: which RULE VOCABULARY this game's board rows are slotted
         # with. A fresh game uses THIS BUILD's version — the default here, and
         # the only setting a fresh corpus may use. A gate replaying a corpus
@@ -2891,6 +2919,15 @@ def main(argv: list[str]) -> int:
         "--hero-attach table); pass this to replay the legacy off game",
     )
     ap.add_argument(
+        "--no-cond-ap-dice",
+        dest="cond_ap_dice",
+        action="store_false",
+        default=True,
+        help="DEFECT_LEDGER row 31: fold conditional AP (Piercing Assault family) "
+        "into the DICE path's save target; ON by default; pass this to replay a "
+        "corpus recorded before this rung (e.g. gen0_teacher)",
+    )
+    ap.add_argument(
         "--hero-attach",
         choices=list(HERO_ATTACH_MODES),
         default="off",
@@ -3012,6 +3049,7 @@ def main(argv: list[str]) -> int:
             menu_wide=a.menu_wide,
             hero_last=a.hero_last,
             cast_fold=a.cast_fold,
+            cond_ap_dice=a.cond_ap_dice,
             hero_attach=a.hero_attach,
             dice=a.dice,
             charge_landing=a.charge_landing,

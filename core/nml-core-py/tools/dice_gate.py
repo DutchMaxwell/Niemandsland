@@ -423,7 +423,8 @@ def split_unrecorded(cls: str, block: list[dict], action: dict) -> bool:
 def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
         no_dangerous: bool = False, engage_fold: str = "auto", cond_ap: str = "auto",
         only_rule: str = "", pos_tol: float = 0.5, no_pos: bool = False,
-        movement: str = "rigid", move_rigid: bool = False) -> int:
+        movement: str = "rigid", move_rigid: bool = False,
+        cond_ap_dice: bool = True) -> int:
     games = sorted(d for d in ref.iterdir() if d.is_dir() and (d / "dice.jsonl").exists())
     if limit:
         games = games[:limit]
@@ -462,11 +463,17 @@ def run(ref: Path, repo: str, limit: int, out: str, red: str, report_only: bool,
         vintage_seen.add((eff_engage_fold, eff_cond_ap))
         nml_core.set_legacy_no_cond_ap(not eff_cond_ap)
         core.set_header({"profiles": head["profiles"], "terrain": head.get("terrain"),
+                         # DEFECT_LEDGER row 31: qbg_ref/qag_ref are the GODOT
+                         # TABLE's own recordings, not a corpus this port's
+                         # search once played blind — the dice path should
+                         # always match the shipped table, so this reads a
+                         # plain CLI flag, not a per-corpus vintage.
                          "knobs": dict(head.get("knobs", {}), hero_attach=True,
                                        dangerous=not no_dangerous,
                                        engage_fold=eff_engage_fold, sighting="model",
                                        movement=(movement == "table"),
-                                       move_rigid=move_rigid)})
+                                       move_rigid=move_rigid,
+                                       cond_ap_dice=cond_ap_dice)})
         for pos, act in enumerate(lines):
             k = int(act["act"])
             action = (act.get("pick") or {}).get("action") or {}
@@ -785,6 +792,12 @@ def main(argv: list[str]) -> int:
                          "bare move never reaches its counters and the knob must leave every "
                          "number here byte-identical; it reds the S3 arm for the instruments "
                          "that do replay moves")
+    ap.add_argument("--cond-ap-dice", choices=("on", "off"), default="on",
+                    help="DEFECT_LEDGER row 31: fold conditional AP (Piercing Assault "
+                         "family) into the DICE path's save target. 'on' (default) is the "
+                         "shipped engine, the right reading against a Godot TABLE recording "
+                         "like qbg_ref/qag_ref; 'off' replays the pre-rung port for a "
+                         "before/after comparison")
     a = ap.parse_args(argv)
     reds = [k for k in ("extra-draw", "formula", "one-wound")
             if getattr(a, "red_" + k.replace("-", "_"))]
@@ -792,7 +805,7 @@ def main(argv: list[str]) -> int:
         ap.error("one red knob at a time — each has to redden its own check alone")
     return run(Path(a.ref).expanduser(), a.repo, a.limit, a.out, reds[0] if reds else "",
                a.report_only, a.red_no_dangerous, a.engage_fold, a.cond_ap, a.only_rule,
-               a.pos_tol, a.no_pos, a.movement, a.red_move_rigid)
+               a.pos_tol, a.no_pos, a.movement, a.red_move_rigid, a.cond_ap_dice == "on")
 
 
 if __name__ == "__main__":

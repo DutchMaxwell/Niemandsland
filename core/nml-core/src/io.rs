@@ -471,6 +471,12 @@ pub struct Seams {
     /// not ported here.
     #[serde(default)]
     pub consolidate: bool,
+    /// `Knobs::cond_ap_dice` (rung I, DEFECT_LEDGER row 31) — whether the
+    /// tray resolvers (`dice::resolve_volley_with_tray` / `resolve_melee_
+    /// with_tray`) fold `ShootProfile.cond_ap` into the save AP. Default OFF:
+    /// every corpus recorded before this seam replays byte-identical.
+    #[serde(default)]
+    pub cond_ap_dice: bool,
 }
 
 impl Node {

@@ -917,6 +917,11 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // yet, so an absent one answers `Knobs::default()` = OFF, the melee
         // every recorded corpus resolves without a post-melee move.
         consolidate: dflag(d, "consolidate"),
+        // Rung I (DEFECT_LEDGER row 31). No recorder writes this key yet, so
+        // an absent one answers `Knobs::default()` = OFF: the in-game AI
+        // search's dice-tray resolver stays blind to `cond_ap` until
+        // `act_recorder.gd` is taught to stamp it, matching every seam above.
+        cond_ap_dice: dflag(d, "cond_ap_dice"),
     }
 }
 

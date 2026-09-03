@@ -237,6 +237,7 @@ fn seams_of(knobs: &Knobs) -> Seams {
         moved_shoot: knobs.menu_wide || knobs.moved_shoot,
         dangerous_end_morale: knobs.dangerous_end_morale,
         consolidate: knobs.consolidate,
+        cond_ap_dice: knobs.cond_ap_dice,
     }
 }
 

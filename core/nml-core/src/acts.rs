@@ -203,6 +203,16 @@ pub struct Knobs {
     /// it, so the default is OFF and nothing replays differently.
     #[serde(default)]
     pub consolidate: bool,
+    /// Rung I (AUDIT_armybook_flanks_2026-09-02, DEFECT_LEDGER row 31) — the
+    /// dice path's own `p.cond_ap` fold (`dice::resolve_volley_with_tray` /
+    /// `resolve_melee_with_tray`), separate from the EV path's long-shipped
+    /// `LEGACY_NO_COND_AP` (which gates the STAMP itself and must stay ON for
+    /// `~/selfplay_out/gen0_teacher`, recorded after that stamp shipped). A
+    /// NEW dice-resolution behaviour, so it follows `melee_reach`/`consolidate`
+    /// exactly: absent means the corpus predates it, defaulting OFF so a
+    /// recorded rollout that never saw this AP stays byte-identical.
+    #[serde(default)]
+    pub cond_ap_dice: bool,
 }
 
 /// The `melee_reach` knob's two settings — written the way `sighting` is.
@@ -295,6 +305,7 @@ impl Default for Knobs {
             eval_variant: 0,
             melee_reach: MeleeReach::All,
             consolidate: false,
+            cond_ap_dice: false,
         }
     }
 }
