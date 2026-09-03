@@ -24,6 +24,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import game_narrator as gn  # noqa: E402
 import gen0_replay_one as gr  # noqa: E402
+from narrator_render import played_index  # noqa: E402
 
 # `BattleSim.IN2M`; `SeparationChecker.DEFAULT_BASE_RADIUS_M` :81;
 # `SoloController.MELEE_ENGAGE_IN` :57 = sim.rs:53; `AiDecision.Action` :16.
@@ -67,7 +68,7 @@ def census(path: str, lists: str, red_farthest: bool = False) -> list:
     names, keys, rows = dict(zip(acts[0]["keys"], rec["roster"])), acts[0]["keys"], []
     for n, act in enumerate(acts, 1):
         row = act["row"]
-        target = row["cands"]["list"][row["cands"]["best"]].get("charge")
+        target = row["cands"]["list"][played_index(row["cands"])].get("charge")
         before, after = act["before"]["units"], act["after"]["units"]
         if int(row["kind"]) != CHARGE_KIND or not target or target not in before:
             continue
