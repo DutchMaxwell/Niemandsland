@@ -57,7 +57,11 @@ FAST = {"top_k": 2, "horizon": 1}
 #: raw `sp.result_digest` of the seed-27 fast game at the PRE-CHANGE head
 #: b532e975, built and run through the private-module recipe (maturin build
 #: --release into .forge/site). The OFF arm's red-green anchor.
-SEED_27_FAST_DIGEST = "15455727f2dace38d0ce9e30c0801d704baa6c7d0edd9bae2904d3a9df03bad7"
+#: Re-pinned after PR #600 (`dangerous_end_morale`, default True) landed and
+#: moved this seed's game under `LEGACY_FIDELITY_KNOBS` too — this test is
+#: about record_cands, not that knob, so the pin just follows today's other
+#: defaults rather than pinning a growing list of unrelated ones.
+SEED_27_FAST_DIGEST = "86249fc93149f8d49e74f19fbef634e985f3224710aba39d4248f535f8c94504"
 
 
 def _read_acts(name: str):
