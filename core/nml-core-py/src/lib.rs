@@ -685,6 +685,8 @@ impl Core {
             dangerous_end_morale: self.knobs.dangerous_end_morale,
             // GF v3.5.1 p.9 — `consolidate="table"` in the header.
             consolidate: self.knobs.consolidate,
+            // Rung I (DEFECT_LEDGER row 31) — `cond_ap_dice` in the header.
+            cond_ap_dice: self.knobs.cond_ap_dice,
         }
     }
 

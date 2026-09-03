@@ -1740,7 +1740,7 @@ fn strike_phase(
             }
         })
         .collect();
-    let r = crate::dice::resolve_melee_with_tray(&members, &def, &ut.name, charging, tray);
+    let r = crate::dice::resolve_melee_with_tray(&members, &def, &ut.name, charging, seams.cond_ap_dice, tray);
     for (mi, sc, _) in &parts {
         let melee = &statics[next.roster.profile[*mi]].melee;
         mark_spent_limited(melee, &sc.keep, &mut next.limited_used[*mi]);
@@ -3480,7 +3480,7 @@ fn resolve_with(
                             }
                             let r = crate::dice::resolve_volley_with_tray(
                                 &shooters_of(&parts, statics, &next),
-                                &def, &ut_g.name, g.d, g.mod_d, tray,
+                                &def, &ut_g.name, g.d, g.mod_d, seams.cond_ap_dice, tray,
                             );
                             for (mi, msc, _) in &parts {
                                 let shoot = &statics[next.roster.profile[*mi]].shoot;

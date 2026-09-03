@@ -406,7 +406,10 @@ pub fn resolve_shooting_with_tray(
     // Single-scalar convenience form (tests only — sim.rs's real caller
     // supplies the two distances separately): range gate and modifier gate
     // are the SAME point here, same as every existing fixture already assumes.
-    resolve_volley_with_tray(&one, def, "", dist_in, dist_in, tray)
+    // Test-only convenience: assumes the shipped `cond_ap_dice=true` state.
+    // A test that needs the legacy OFF path calls `resolve_volley_with_tray`
+    // directly (see the RED/GREEN pair below).
+    resolve_volley_with_tray(&one, def, "", dist_in, dist_in, true, tray)
 }
 
 /// NML-1073 M5 D1-B4b — ONE member of a shooting activation's volley.
@@ -461,6 +464,7 @@ pub fn resolve_volley_with_tray(
     def_owner: &str,
     dist_in: f64,
     mod_dist_in: f64,
+    cond_ap_dice: bool,
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
@@ -656,11 +660,15 @@ pub fn resolve_volley_with_tray(
         let mut ap = p.ap + upr_ap + versatile_ap + att.growth_ap_mod;
         // Rung I (audit 2026-09-02, DEFECT_LEDGER row 31) — the SAME `cond_ap`
         // fold `profile_ev` uses (combat.rs) now reaches the dice save target
-        // too. Shooting never charges, so `is_charging` is false here; the
-        // `ranged_over`/`ranged_over_or_charge` gates read `mod_dist_in`, the
-        // NML-1152 modifier-distance split, not the plain range gap.
-        for c in &p.cond_ap {
-            ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, false, mod_dist_in, false);
+        // too, gated by `Knobs::cond_ap_dice` (absent/OFF replays every
+        // pre-PR corpus unchanged). Shooting never charges, so `is_charging`
+        // is false here; the `ranged_over`/`ranged_over_or_charge` gates read
+        // `mod_dist_in`, the NML-1152 modifier-distance split, not the plain
+        // range gap.
+        if cond_ap_dice {
+            for c in &p.cond_ap {
+                ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, false, mod_dist_in, false);
+            }
         }
         let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, tray, &mut out);
         w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, tray, &mut out);
@@ -839,6 +847,7 @@ pub fn resolve_melee_with_tray(
     def: &Ctx,
     def_owner: &str,
     charging: bool,
+    cond_ap_dice: bool,
     tray: &mut Tray,
 ) -> ShootResult {
     let mut out = ShootResult::default();
@@ -952,12 +961,15 @@ pub fn resolve_melee_with_tray(
             // shooting site's own note above).
             let mut ap = p.ap + uf_ap + sh.att.growth_ap_mod
                 + if charging && p.thrust { THRUST_AP_BONUS } else { 0 };
-            // Rung I — the melee half of the same `cond_ap` fold: real
-            // `charging` is already this function's own parameter (unlike
-            // `profile_ev`'s EV call, which is structurally stuck at `false`),
-            // so `on_charge`/`vs_tough_ge` gates fire correctly here.
-            for c in &p.cond_ap {
-                ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, charging, 0.0, true);
+            // Rung I — the melee half of the same `cond_ap` fold, same
+            // `Knobs::cond_ap_dice` gate as the shooting half. Real `charging`
+            // is already this function's own parameter (unlike `profile_ev`'s
+            // EV call, which is structurally stuck at `false`), so
+            // `on_charge`/`vs_tough_ge` gates fire correctly here.
+            if cond_ap_dice {
+                for c in &p.cond_ap {
+                    ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, charging, 0.0, true);
+                }
             }
             let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, tray, &mut out);
             w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, tray, &mut out);
@@ -1286,7 +1298,7 @@ mod tests {
 
         let mut tray = Tray::seeded(low);
         let one = [Shooter { profiles: &p, keep: &[0], attacks: &[1], att: &att, owner: "gunner" }];
-        let out = resolve_volley_with_tray(&one, &defender(4, 5), "Target", 12.0, 12.0, &mut tray);
+        let out = resolve_volley_with_tray(&one, &defender(4, 5), "Target", 12.0, 12.0, true, &mut tray);
         assert_eq!(out.rolls[0].kind, "attack");
         assert_eq!(out.rolls[0].count, 1, "ONE die for the whole volley");
         assert_eq!(out.rolls[0].target, BEST_HIT_TARGET);
@@ -1399,7 +1411,7 @@ mod tests {
         let att = shooter(4);
         let sh = [Shooter { profiles: &p, keep: &[0], attacks: &[1], att: &att, owner: "" }];
         let mut tray = Tray::seeded(27);
-        let out = resolve_volley_with_tray(&sh, &stealthy, "Target", 7.95, 14.30, &mut tray);
+        let out = resolve_volley_with_tray(&sh, &stealthy, "Target", 7.95, 14.30, true, &mut tray);
         assert_eq!(out.rolls[0].target, 5, "Stealth -1 off the 14.30\" centre gap");
     }
 
@@ -1413,7 +1425,7 @@ mod tests {
         let att = shooter(4);
         let sh = [Shooter { profiles: &p, keep: &[0], attacks: &[1], att: &att, owner: "" }];
         let mut tray = Tray::seeded(27);
-        let out = resolve_volley_with_tray(&sh, &stealthy, "Target", 12.0, 6.0, &mut tray);
+        let out = resolve_volley_with_tray(&sh, &stealthy, "Target", 12.0, 6.0, true, &mut tray);
         assert_eq!(out.rolls[0].target, 4, "no Stealth penalty: the 6\" centre gap is not over 9\"");
     }
 
@@ -1682,7 +1694,7 @@ mod tests {
         };
         let mut tray = Tray::seeded(27);
         let out =
-            resolve_volley_with_tray(&[host, hero], &def, "Pathfinders", 12.0, 12.0, &mut tray);
+            resolve_volley_with_tray(&[host, hero], &def, "Pathfinders", 12.0, 12.0, true, &mut tray);
         let attacks: Vec<_> = out.rolls.iter().filter(|r| r.kind == "attack").collect();
         assert_eq!(attacks.len(), 2, "host then hero: {:?}", out.rolls);
         assert_eq!((attacks[0].count, attacks[0].target, attacks[0].owner.as_str()),
@@ -1737,14 +1749,14 @@ mod tests {
         table.absorb(resolve_impact_pool_with_tray(
             pools[0].0, pools[0].1, "Striker", &def, "Target", &mut tray));
         table.absorb(resolve_melee_with_tray(
-            &[striker(&p, &[0], &[3], &att)], &def, "Target", true, &mut tray));
+            &[striker(&p, &[0], &[3], &att)], &def, "Target", true, true, &mut tray));
         assert_eq!(table.rolls[0].count, 4);
         assert_eq!(table.rolls[0].target, IMPACT_HIT_TARGET);
         // RED PROOF: the same two phases, strikes first.
         let mut tray = Tray::seeded(27);
         let mut swapped = ShootResult::default();
         swapped.absorb(resolve_melee_with_tray(
-            &[striker(&p, &[0], &[3], &att)], &def, "Target", true, &mut tray));
+            &[striker(&p, &[0], &[3], &att)], &def, "Target", true, true, &mut tray));
         swapped.absorb(resolve_impact_pool_with_tray(
             pools[0].0, pools[0].1, "Striker", &def, "Target", &mut tray));
         assert_ne!(faces_of(&table), faces_of(&swapped), "swapping the phases must move the faces");
@@ -1762,7 +1774,7 @@ mod tests {
         let mut tray = Tray::seeded(9);
         let want = Tray::seeded(9).roll(3);
         let out = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[2], &att)], &defender(4, 4), "Target", false, &mut tray);
+            &[striker(&p, &[0], &[2], &att)], &defender(4, 4), "Target", false, true, &mut tray);
         assert_eq!(out.rolls[0].count, 3, "Ravage(1) x 3 alive models");
         assert_eq!(out.rolls[0].target, RAVAGE_WOUND_TARGET);
         assert_eq!(out.rolls[0].faces, want, "Ravage draws first");
@@ -1843,7 +1855,7 @@ mod tests {
         let def = Ctx { regeneration: true, regen_target: 2, ..defender(6, 6) };
         let mut tray = Tray::seeded(4);
         let out = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[6], &att)], &def, "Target", false, &mut tray);
+            &[striker(&p, &[0], &[6], &att)], &def, "Target", false, true, &mut tray);
         assert!(out.caused > 0, "the strike caused wounds: {:?}", out.rolls);
         assert!(out.wounds < out.caused, "Regeneration ignored some: {} vs {}", out.wounds, out.caused);
     }
@@ -1861,7 +1873,7 @@ mod tests {
                 Shooter { profiles: &hp, keep: &[0], attacks: &[4], att: &att, owner: "Host" },
                 Shooter { profiles: &hero, keep: &[0], attacks: &[1], att: &att, owner: "Hero" },
             ],
-            &defender(6, 3), "Target", false, &mut tray);
+            &defender(6, 3), "Target", false, true, &mut tray);
         let attacks: Vec<(&str, i64)> = out.rolls.iter().filter(|r| r.kind == "attack")
             .map(|r| (r.owner.as_str(), r.count)).collect();
         assert_eq!(attacks, vec![("Host", 4), ("Hero", 1)], "host first, then the hero");
@@ -2031,7 +2043,7 @@ mod tests {
         let p = [ShootProfile { surge_attack: true, ..blade(8) }];
         let att = Ctx { quality: 4, models: 1, ..Default::default() };
         let mut tray = Tray::seeded(9);
-        let out = resolve_melee_with_tray(&[striker(&p, &[0], &[8], &att)], &defender(4, 5), "Target", false, &mut tray);
+        let out = resolve_melee_with_tray(&[striker(&p, &[0], &[8], &att)], &defender(4, 5), "Target", false, true, &mut tray);
         assert_eq!(out.rolls.len(), 3, "hit roll, one extra roll, one save batch: {:?}", out.rolls);
         assert_eq!(out.rolls[1].kind, "attack");
         assert_eq!(out.rolls[1].count, 2, "the same two unmodified 6s as the shooting case");
@@ -2063,7 +2075,7 @@ mod tests {
         let ccw = [ShootProfile { name: "CCW".into(), attacks: 6, count: 1, range: 0, ..Default::default() }];
         let strikers = [Shooter { profiles: &ccw, keep: &[0], attacks: &[6], att: &grown_att, owner: "" }];
         let mut t3 = Tray::seeded(27);
-        let melee = resolve_melee_with_tray(&strikers, &defender(4, 5), "", false, &mut t3);
+        let melee = resolve_melee_with_tray(&strikers, &defender(4, 5), "", false, true, &mut t3);
         assert_eq!(melee.rolls[1].target, 5, "the SAME AP delta reaches the melee save too");
     }
 
@@ -2083,7 +2095,7 @@ mod tests {
         let ccw = [ShootProfile { name: "CCW".into(), attacks: 1, count: 1, range: 0, ..Default::default() }];
         let strikers = [Shooter { profiles: &ccw, keep: &[0], attacks: &[1], att: &grown, owner: "" }];
         let mut t2 = Tray::seeded(27);
-        let melee = resolve_melee_with_tray(&strikers, &defender(4, 5), "", false, &mut t2);
+        let melee = resolve_melee_with_tray(&strikers, &defender(4, 5), "", false, true, &mut t2);
         assert_eq!(melee.rolls[0].target, 4,
             "the hit facet is shooting-only: melee_hit_target never reads growth_hit_mod");
     }
@@ -2205,7 +2217,7 @@ mod tests {
         let p = [us.melee[0].clone()];
         let mut tray = Tray::seeded(27);
         let strikers = [striker(&p, &[0], &[2], &us.ctx)];
-        let out = resolve_melee_with_tray(&strikers, &defender(4, 5), "Target", false, &mut tray);
+        let out = resolve_melee_with_tray(&strikers, &defender(4, 5), "Target", false, true, &mut tray);
         assert_eq!(out.rolls[0].kind, "attack");
         assert_eq!(out.rolls[0].target, 4);
         assert_eq!(out.rolls[0].faces, Tray::seeded(27).roll(2),
@@ -2329,12 +2341,34 @@ mod tests {
         let def = defender(4, 5);
         let mut t1 = Tray::seeded(27);
         let charging = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true, &mut t1);
+            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true, true, &mut t1);
         assert_eq!(charging.rolls[1].target, 5, "AP(+1) on the charge: Defense 4+ -> 5+");
         let mut t2 = Tray::seeded(27);
         let steady = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", false, &mut t2);
+            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", false, true, &mut t2);
         assert_eq!(steady.rolls[1].target, 4, "no charge: Piercing Assault stays silent");
+    }
+
+    /// The `cond_ap_dice` knob itself (`Knobs::cond_ap_dice` / `Seams::cond_ap_dice`,
+    /// DEFECT_LEDGER row 31): a legacy-vintage replay (knob OFF, what every
+    /// corpus recorded before this rung carries) rolls the SAME charging
+    /// Piercing Assault attack with no AP at all — byte-identical to the old
+    /// engine `~/selfplay_out/gen0_teacher` was recorded with; the shipped
+    /// setting (ON) applies it. RED if the `if cond_ap_dice` guard in
+    /// `resolve_melee_with_tray` is dropped: the "off" row would flip to 5+.
+    #[test]
+    fn the_cond_ap_dice_knob_off_replays_legacy_and_on_applies_the_fix() {
+        let us = cond_ap_static("piercing_assault");
+        let p = [us.melee[0].clone()];
+        let def = defender(4, 5);
+        let mut off = Tray::seeded(27);
+        let legacy = resolve_melee_with_tray(
+            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true, false, &mut off);
+        assert_eq!(legacy.rolls[1].target, 4, "knob OFF: charging Piercing Assault still saves at 4+");
+        let mut on = Tray::seeded(27);
+        let shipped = resolve_melee_with_tray(
+            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true, true, &mut on);
+        assert_eq!(shipped.rolls[1].target, 5, "knob ON: the same charge now saves at 5+");
     }
 
     /// Condition kind 2 — `vs_tough_ge` behind `charge_only` (Melee Slayer):
@@ -2347,15 +2381,15 @@ mod tests {
         let soft = Ctx { defense: 4, tough: 2, models: 5, ..Default::default() };
         let mut t1 = Tray::seeded(27);
         let charging_tough = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[6], &us.ctx)], &tough, "Target", true, &mut t1);
+            &[striker(&p, &[0], &[6], &us.ctx)], &tough, "Target", true, true, &mut t1);
         assert_eq!(charging_tough.rolls[1].target, 6, "AP(+2) charging vs Tough(3)+: 4+ -> 6+");
         let mut t2 = Tray::seeded(27);
         let steady_tough = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[6], &us.ctx)], &tough, "Target", false, &mut t2);
+            &[striker(&p, &[0], &[6], &us.ctx)], &tough, "Target", false, true, &mut t2);
         assert_eq!(steady_tough.rolls[1].target, 4, "not charging: the charge_only gate stays shut");
         let mut t3 = Tray::seeded(27);
         let charging_soft = resolve_melee_with_tray(
-            &[striker(&p, &[0], &[6], &us.ctx)], &soft, "Target", true, &mut t3);
+            &[striker(&p, &[0], &[6], &us.ctx)], &soft, "Target", true, true, &mut t3);
         assert_eq!(charging_soft.rolls[1].target, 4, "charging a Tough(2) target: vs_tough_ge(3) stays shut");
     }
 
@@ -2393,7 +2427,7 @@ mod tests {
         let melee = [us.melee[0].clone()];
         let mut t3 = Tray::seeded(27);
         let charging = resolve_melee_with_tray(
-            &[striker(&melee, &[0], &[6], &us.ctx)], &tough, "Target", true, &mut t3);
+            &[striker(&melee, &[0], &[6], &us.ctx)], &tough, "Target", true, true, &mut t3);
         assert_eq!(charging.rolls[1].target, 6, "charge leg: charging vs Tough(3)+ is AP(+2) on its own too");
     }
 }
