@@ -26,7 +26,19 @@ use crate::{IN2M, OBJECTIVE_CONTROL_IN};
 pub const N_UNITS: usize = 24;
 pub const N_OBJ: usize = 6;
 pub const N_TERR: usize = 18;
-pub const N_CAND: usize = 80;
+/// Raised from 80 (NML-1073, `tools/gen0_replay_shards.py` wide-menu RED/
+/// GREEN, see `test_wide_menu_export.py`): the shipped `menu_wide="table"`
+/// knob routinely produces menus over 80 wide (measured, full Gen-1 corpus
+/// scan: p99.9 109, max 136) — a padding cap this low silently threw away
+/// 52% of Gen-1's games in the shard exporter (`TooManyCandidates`), not
+/// the ~4% of positions actually over the old cap, since one over-cap
+/// position refuses its WHOLE game. 160 covers the measured max with
+/// headroom; nothing downstream is shaped by the exact value
+/// (`gen0_replay_shards.export()` re-slices each position back to its own
+/// live count before packing, and the trainer's `pad_batch` buckets/pads
+/// dynamically per batch — see the RED/GREEN test's module docstring for
+/// the read-only verification).
+pub const N_CAND: usize = 160;
 pub const F_U: usize = 72;
 pub const F_O: usize = 12;
 pub const F_T: usize = 12;
@@ -925,11 +937,12 @@ mod tests {
             other => panic!("expected TooManyObjectives(7), got {other:?}"),
         }
 
-        // 81 candidates on the original state.
-        let many_cands: Vec<Candidate> = (0..81).map(|_| Candidate::new("p1_0_a", HOLD)).collect();
+        // N_CAND + 1 candidates on the original state.
+        let many_cands: Vec<Candidate> =
+            (0..N_CAND + 1).map(|_| Candidate::new("p1_0_a", HOLD)).collect();
         match build(&base, 1, &statics, &terrain, &mut enc, &many_cands, 0, false, false) {
-            Err(Unsupported::TooManyCandidates(81)) => {}
-            other => panic!("expected TooManyCandidates(81), got {other:?}"),
+            Err(Unsupported::TooManyCandidates(n)) if n == N_CAND + 1 => {}
+            other => panic!("expected TooManyCandidates({}), got {other:?}", N_CAND + 1),
         }
     }
 }
