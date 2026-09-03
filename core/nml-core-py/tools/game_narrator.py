@@ -31,14 +31,16 @@ def _pick(core, state, player, net_player=0, eps=0.0, explore_seed=0, cands=Fals
     if not pick.get("used"):
         return {}
     row, tr = A["rows"][A["i"]], pick["trace"]
-    bad = gr.menu_diff(tr["cands"], row["cands"]["list"])
-    if bad:                                      # #564's tripwire, verbatim
-        raise gr.Diverged("seq %d (round %d, side %d): %s" % (row["seq"], row["round"], row["side"], bad))
+    if "cands" in row:                           # #564's tripwire, verbatim —
+        bad = gr.menu_diff(tr["cands"], row["cands"]["list"])  # Gen-0 corpus only:
+        if bad:                                  # arena rows record no menu.
+            raise gr.Diverged("seq %d (round %d, side %d): %s" % (row["seq"], row["round"], row["side"], bad))
     A["acts"].append({"row": row, "menu": tr["cands"], "keys": state.keys(), "exp": pick["expectation"],
                       "hand": [(s["idx"], s["score"]) for s in tr["scored"]], "waits": pick["waits"],
                       "rs": {r["idx"]: r["rs"] for r in tr["rs"]}, "own": tr["scored"][tr["best_idx"]]["idx"],
                       "up": tr["scored"][tr["runner_idx"]]["idx"] if tr["runner_idx"] >= 0 else None})
-    A["i"], act = A["i"] + 1, row["cands"]["list"][row["cands"]["best"]]
+    A["i"], act = A["i"] + 1, (row["cands"]["list"][row["cands"]["best"]] if "cands" in row
+                               else row["action"])
     pick["action"], pick["unit_key"] = act, act["unit"]
     return pick
 
@@ -62,8 +64,13 @@ class Tapped:
 def replay(path, lists, repo, bank):
     """One recorded game replayed act for act; raises unless it reproduces."""
     rec = json.loads(Path(path).read_text(encoding="utf-8"))
-    kn = rec["prescreen"]["knobs"]
-    if not kn.get("record_cands") or kn.get("record_aux"):
+    # ARENA records (the A/B harness) carry the same header at the TOP level —
+    # knobs, seed, dice_seed; the layout seed stays the armed() +500000 shim —
+    # and no prescreen block, so their rows record the CHOSEN act but no menu
+    # (record_cands was never on): the fidelity check downgrades to the forced
+    # acts plus the outcome. seed/dice_seed were always top-level reads.
+    kn = rec.get("prescreen", {}).get("knobs") or rec["knobs"]
+    if rec.get("prescreen") and (not kn.get("record_cands") or kn.get("record_aux")):
         raise SystemExit("REFUSED %s: not a Gen-0 teacher recording" % path)
     A.update(rows=rec["planner_positions"], i=0, acts=[])
     gr.G["dice"] = rec["dice_seed"]
@@ -77,7 +84,13 @@ def replay(path, lists, repo, bank):
                                      movement=kn["movement"],
                                      # DEFECT_LEDGER #12: the RECORD's own key, absent = OFF.
                                      dangerous_end_morale=bool(kn.get("dangerous_end_morale", False)),
-                                     **gr.KNOBS)
+                                     # The corpus predates the W5a knobs, so the pins above
+                                     # stand where the recording is silent; an ARENA record
+                                     # stamps its own menu/sight/ambush pair, and THAT played.
+                                     **{**gr.KNOBS, **{k: kn[k] for k in ("menu_wide", "menu_los",
+                                                                          "los", "hero_last",
+                                                                          "cast_fold", "ambush")
+                                                       if k in kn}})
     finally:
         nml_core.load = load
     # Three ways for the replay to be a different game, all fatal: a short run, a
@@ -280,7 +293,8 @@ def stats_row(rec, acts, lists):
     acted = {a["row"]["unit"] for a in acts}
     for a in acts:
         r, key, bu, au = a["row"], a["row"]["unit"], a["before"]["units"], a["after"]["units"]
-        kind, rolls, chosen = int(r["kind"]), a["rep"]["rolls"], a["menu"][r["cands"]["best"]]
+        kind, rolls = int(r["kind"]), a["rep"]["rolls"]
+        chosen = a["menu"][r["cands"]["best"]] if "cands" in r else r["action"]
         mv = moved(a, key); far = max([x[2] for x in mv] + [0.0])
         row["hold_nothing"] += kind == 0 and not rolls
         row["acts_with_dice"] += bool(rolls)
