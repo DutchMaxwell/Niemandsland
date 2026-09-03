@@ -2851,6 +2851,65 @@ fn s10_goal_stop(
     }
     (dest, band_in)
 }
+
+/// GF v3.5.1 p.9: the survivor's consolidation band.
+const CONSOLIDATE_WIN_IN: f64 = 3.0;
+
+/// The winner consolidation's goal — `SoloController.
+/// consolidate_after_melee_win` solo_controller.gd:4607-4628: the nearest
+/// objective the winner's own side does not already control, else the
+/// nearest living enemy. `None` (no goal at all) is the honest "may": the
+/// table stays put too.
+fn consolidation_goal(next: &State, winner: usize) -> Option<V3> {
+    let centre = geom::centre(&next.positions[winner]);
+    let pid = next.player[winner];
+    let mut best: Option<(f32, V3)> = None;
+    for o in &next.objectives {
+        if o.owner == pid {
+            continue;
+        }
+        let pos = geom::to_f32(o.pos);
+        let d = geom::length(geom::sub(pos, centre));
+        if best.is_none_or(|(bd, _)| d < bd) {
+            best = Some((d, pos));
+        }
+    }
+    best.map(|(_, pos)| pos).or_else(|| {
+        nearest_enemy_of(next, winner).map(|e| geom::centre(&next.positions[e]))
+    })
+}
+
+/// Consolidation Moves (GF v3.5.1 p.9), seam-gated by `consolidate`. Only the
+/// "one side destroyed" half is ported: the survivor may move up to 3" via
+/// the SAME routed chain `plain_move` gives ADVANCE/RUSH. Neither destroyed
+/// (or a mutual wipe) is not this port's rung — no rule fires, no move, and
+/// `consolidate="off"` (default) never reaches this function at all.
+fn consolidate_after_melee(next: &mut State, cover: Cover, seams: Seams, si: usize, ti: usize) {
+    let winner = if next.alive[ti] <= 0 && next.alive[si] > 0 {
+        si
+    } else if next.alive[si] <= 0 && next.alive[ti] > 0 {
+        ti
+    } else {
+        return;
+    };
+    let Cover::Board(t) = cover else { return };
+    let Some(goal) = consolidation_goal(next, winner) else { return };
+    if let Some(land) = crate::mv::step::plain_move(
+        next,
+        t,
+        winner,
+        goal,
+        CONSOLIDATE_WIN_IN,
+        seams.hero_attach,
+        true,
+        crate::mv::FAST_PLANNER_GUARD,
+    ) {
+        for (i, m) in land.movers.iter().enumerate() {
+            next.positions[m.unit][m.model] = geom::to_f64(land.end[i]);
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn resolve_with(
     statics: &[UnitStatic],
@@ -3523,6 +3582,12 @@ fn resolve_with(
                         next.fatigued[ti] = true;
                     }
                     expected_melee_morale(&mut next, statics, si, su_before, ti, tu_before);
+                }
+                // Consolidation Moves (GF v3.5.1 p.9), seam-gated: one side
+                // wiped by the melee just resolved above (wounds or the
+                // morale rout), win or EV path alike — the survivor may move.
+                if seams.consolidate {
+                    consolidate_after_melee(&mut next, cover, seams, si, ti);
                 }
             }
         }
@@ -5224,6 +5289,38 @@ mod tests {
             &next.positions[0], &next.radii[0], &next.positions[1], &next.radii[1],
             DEFAULT_BASE_RADIUS_M,
         )
+    }
+
+    /// GF v3.5.1 p.9 "Consolidation Moves": a melee that wipes the enemy
+    /// (`vr_charge_line`'s "a" vs the melee-less "b", already in contact) lets
+    /// the survivor move up to 3" toward the nearest objective, stamped 10"
+    /// due z of "a" so the whole band is spent and the delta is exact. RED
+    /// without the seam: `consolidate="off"` (the default) never moves it.
+    #[test]
+    fn consolidate_table_moves_the_winner_three_inches_toward_the_nearest_marker() {
+        let (mut st, statics) = vr_charge_line(0.0);
+        st.objectives = vec![crate::state::Objective { pos: [0.0, 0.0, 10.0 * IN2M], owner: 1 }];
+        let terrain = small_board();
+        let action = vr_charge();
+
+        let off = resolve_on_board(&statics, &st, &action, &terrain, Seams::default()).unwrap();
+        assert_eq!(off.alive[1], 0, "the melee must wipe the target for this test to prove anything");
+        assert_eq!(
+            off.positions[0][0], [0.0, 0.0, 0.0],
+            "consolidate=\"off\" (default): the winner never moves"
+        );
+
+        let on = resolve_on_board(
+            &statics, &st, &action, &terrain, Seams { consolidate: true, ..Seams::default() },
+        )
+        .unwrap();
+        assert_eq!(on.alive[1], 0);
+        let moved_in = on.positions[0][0][2] / IN2M;
+        assert!(
+            (moved_in - 3.0).abs() < 1e-6,
+            "consolidate=\"table\": the winner spends the whole 3\" band toward the marker, got {:.4}\"",
+            moved_in
+        );
     }
 
     /// (a) THE WITNESS POLICY — a CHARGE whose base-edge gap sits in the

@@ -622,6 +622,8 @@ impl Core {
             // NEW rule, so an absent key (every corpus recorded before it)
             // stays OFF.
             dangerous_end_morale: self.knobs.dangerous_end_morale,
+            // GF v3.5.1 p.9 — `consolidate="table"` in the header.
+            consolidate: self.knobs.consolidate,
         }
     }
 
@@ -710,6 +712,7 @@ impl Core {
                 .into(),
             ),
         );
+        m.insert("consolidate".into(), self.knobs.consolidate.into());
         to_py(py, &Value::Object(m))
     }
 

@@ -460,6 +460,17 @@ pub struct Seams {
     /// bug this replaces exactly for corpora that predate it.
     #[serde(default)]
     pub dangerous_end_morale: bool,
+
+    /// GF Advanced Rules v3.5.1 p.9 "Consolidation Moves" — `consolidate=
+    /// "table"` in the header: after a melee that wipes one side, the survivor
+    /// may move up to 3" via `mv::step::plain_move`, toward the nearest
+    /// objective its side doesn't already control, else the nearest living
+    /// enemy — `SoloController.consolidate_after_melee_win`
+    /// solo_controller.gd:4603. Default OFF: no corpus recorded before it
+    /// moves, and neither side destroyed (the p.9 1" separation instead) is
+    /// not ported here.
+    #[serde(default)]
+    pub consolidate: bool,
 }
 
 impl Node {
