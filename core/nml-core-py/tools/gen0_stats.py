@@ -6,6 +6,9 @@ import argparse, json, re, sys
 from collections import Counter
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from narrator_render import played_index  # noqa: E402
+
 # kind ids per SS1.3 (lib.rs cand_plain): 0 HOLD, 1 ADVANCE, 2 RUSH, 3 CHARGE.
 KIND_NAMES = {0: "HOLD", 1: "ADVANCE", 2: "RUSH", 3: "CHARGE"}
 
@@ -45,13 +48,13 @@ def points_of(army_path):  # ".../<faction>_<points>.json" -> points (SS1.5)
 
 
 def validate(name, positions):
-    # REFUSE (raise), never warn: SS1.4's exact join, checked on every position.
+    # REFUSE (raise), never warn: SS1.4's exact join on the PLAYED act's index — re-ranked Gen-1 rows must pass.
     for i, p in enumerate(positions):
-        best, lst = p["cands"]["best"], p["cands"]["list"]
-        if not 0 <= best < len(lst):
-            raise ValueError(f"{name}#{i}: cands.best {best} out of range 0..{len(lst)}")
-        if p["action"] != lst[best]:
-            raise ValueError(f"{name}#{i}: action != cands.list[best]")
+        lst, pick = p["cands"]["list"], played_index(p["cands"])
+        if not 0 <= pick < len(lst):
+            raise ValueError(f"{name}#{i}: cands index {pick} out of range 0..{len(lst)}")
+        if p["action"] != lst[pick]:
+            raise ValueError(f"{name}#{i}: action != cands.list[pick]")
 
 
 def unit_slots(p):
@@ -89,7 +92,7 @@ def baselines(rows, names):
 
 
 def collect(games):
-    positions, widths, best_idx = [], [], []
+    positions, widths, played_idx = [], [], []
     chosen_kind, menu_kind, winner, rounds_played = Counter(), Counter(), Counter(), Counter()
     cu_idx, own_slot, distinct_units, acting_block = [], [], [], []
     width_by_points, rows, names = {}, [], []
@@ -100,24 +103,25 @@ def collect(games):
         winner[g["winner"]] += 1; rounds_played[g["rounds_played"]] += 1
         pts = points_of(g["armies"]["p1"])
         for p in pp:
-            lst, best = p["cands"]["list"], p["cands"]["best"]
+            # output keys keep `best`'s old name; the index scored is the PLAYED act's
+            lst, pick = p["cands"]["list"], played_index(p["cands"])
             cu, ws = unit_slots(p)
             kind = KIND_NAMES[p["kind"]]
             widths.append(len(lst))
             width_by_points.setdefault(pts, []).append(len(lst))
             chosen_kind[kind] += 1
             menu_kind.update(KIND_NAMES[c["kind"]] for c in lst)
-            best_idx.append(best); cu_idx.append(cu); own_slot.append(ws)
+            played_idx.append(pick); cu_idx.append(cu); own_slot.append(ws)
             distinct_units.append(len({c["unit"] for c in lst}))
             acting_block.append(sum(c["unit"] == p["unit"] for c in lst))
-            rows.append((name, best == 0, cu == 0, ws == 0, kind))
+            rows.append((name, pick == 0, cu == 0, ws == 0, kind))
     return {"games": len(names), "positions_per_game": stats(positions),
             "menu_width": dict(stats(widths), **width_hist(widths)),
             "menu_width_by_points": {p: stats(v) for p, v in sorted(
                 width_by_points.items(), key=lambda kv: (kv[0] is None, kv[0]))},
             "chosen_kind_share": shares(chosen_kind), "menu_kind_share": shares(menu_kind),
-            "best_nonzero_share": sum(b != 0 for b in best_idx) / (len(best_idx) or 1),
-            "best_idx": stats(best_idx), "distinct_units": stats(distinct_units),
+            "best_nonzero_share": sum(b != 0 for b in played_idx) / (len(played_idx) or 1),
+            "best_idx": stats(played_idx), "distinct_units": stats(distinct_units),
             "acting_unit_block": stats(acting_block),
             "chosen_unit_first_share": cu_idx.count(0) / (len(cu_idx) or 1),
             "within_unit_slot0_share": own_slot.count(0) / (len(own_slot) or 1),

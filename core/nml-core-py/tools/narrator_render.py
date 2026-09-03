@@ -102,6 +102,13 @@ def hits(rolls, kind):
                for r in rolls if r["kind"] == kind and r["target"] > 0)
 
 
+def played_index(cands: dict) -> int:
+    """The build index of the act actually PLAYED: `cands["played"]` (PR #643,
+    the index that names `row["action"]`) falling back to `cands["best"]` on a
+    record from before the key existed, where the two were always equal."""
+    return cands.get("played", cands["best"])
+
+
 def dice_md(rec, acts, nm):
     out = ["# Dice trail — seed %d, dice seed %d" % (rec["seed"], rec["dice_seed"]), "",
            "Every roll the twin draws from the tray, in draw order; the recording's own",
@@ -111,7 +118,7 @@ def dice_md(rec, acts, nm):
     j = 0
     for n, act in enumerate(acts, 1):
         row = act["row"]
-        c = act["menu"][row["cands"]["best"]]
+        c = act["menu"][played_index(row["cands"])]
         for r in act["rep"]["rolls"]:
             j += 1
             out.append("| %d | %d | A%d | %s | %s | %s | %s | %d | %d+ | %s | %d |"

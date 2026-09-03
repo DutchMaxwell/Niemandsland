@@ -39,8 +39,8 @@ def _pick(core, state, player, net_player=0, eps=0.0, explore_seed=0, cands=Fals
                       "hand": [(s["idx"], s["score"]) for s in tr["scored"]], "waits": pick["waits"],
                       "rs": {r["idx"]: r["rs"] for r in tr["rs"]}, "own": tr["scored"][tr["best_idx"]]["idx"],
                       "up": tr["scored"][tr["runner_idx"]]["idx"] if tr["runner_idx"] >= 0 else None})
-    A["i"], act = A["i"] + 1, (row["cands"]["list"][row["cands"]["best"]] if "cands" in row
-                               else row["action"])
+    A["i"], act = A["i"] + 1, (row["cands"]["list"][nr.played_index(row["cands"])]
+                               if "cands" in row else row["action"])
     pick["action"], pick["unit_key"] = act, act["unit"]
     return pick
 
@@ -205,7 +205,7 @@ def narrate(rec, acts, nm, lists):
         if r["round"] != rnd:
             rnd = r["round"]
             out += ["", "## Round %d" % rnd]
-        u, best, mv = bu[key], r["cands"]["best"], moved(a, key)
+        u, best, pick, mv = bu[key], r["cands"]["best"], nr.played_index(r["cands"]), moved(a, key)
         lost = len(mv) != len(u["positions"])
         band = u["bands"]["rush" if int(r["kind"]) > 1 else "advance"] * min(1, int(r["kind"]))
         up = "" if a["up"] is None else "; runner-up #%d %s" % (
@@ -216,9 +216,9 @@ def narrate(rec, acts, nm, lists):
                 "- menu %d candidates; top-3 by hand prior: %s" % (len(a["menu"]), ", ".join(
                     "%s %.4f" % (nr.cand_text(a["menu"][i], nm), s) for i, s in a["hand"][:3])),
                 "- chose #%d **%s**%s — hand %.4f, rs %s%s; value %.4f -> %.4f, %d unit(s)"
-                " still to act%s" % (best, nr.cand_text(a["menu"][best], nm),
-                    " [intent %s]" % r["intent"] if r["intent"] else "", dict(a["hand"])[best],
-                    "%.4f" % a["rs"][best] if best in a["rs"] else "NOT expanded", up,
+                " still to act%s" % (pick, nr.cand_text(a["menu"][pick], nm),
+                    " [intent %s]" % r["intent"] if r["intent"] else "", dict(a["hand"])[pick],
+                    "%.4f" % a["rs"][pick] if pick in a["rs"] else "NOT expanded", up,
                     a["exp"]["before"], a["exp"]["after"], a["waits"],
                     "" if a["own"] == best else " — **replay argmax #%d != recorded pick**" % a["own"]),
                 '- move (%s, band %.1f", farthest model %.2f"): %s' % (nr.KIND[int(r["kind"])], band,
@@ -231,7 +231,7 @@ def narrate(rec, acts, nm, lists):
         rl = a["rep"]["rolls"]
         if rl:
             crossed = any(nr.crosses_forest(p, q, rec["terrain"], ttype=4) for p, q, d in mv if d > 0.01)
-            chosen = a["menu"][best]
+            chosen = a["menu"][pick]
             out.append(dice_line(rl, bu, a["after"]["units"], key, nm, crossed,
                                  crossed and not (chosen.get("shoot") or chosen.get("charge")),
                                  chosen.get("shoot") or chosen.get("charge")))
@@ -297,7 +297,7 @@ def stats_row(rec, acts, lists):
     for a in acts:
         r, key, bu, au = a["row"], a["row"]["unit"], a["before"]["units"], a["after"]["units"]
         kind, rolls = int(r["kind"]), a["rep"]["rolls"]
-        chosen = a["menu"][r["cands"]["best"]] if "cands" in r else r["action"]
+        chosen = a["menu"][nr.played_index(r["cands"])] if "cands" in r else r["action"]
         mv = moved(a, key); far = max([x[2] for x in mv] + [0.0])
         row["hold_nothing"] += kind == 0 and not rolls
         row["acts_with_dice"] += bool(rolls)
