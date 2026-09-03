@@ -687,6 +687,9 @@ impl Core {
             consolidate: self.knobs.consolidate,
             // Rung I (DEFECT_LEDGER row 31) — `cond_ap_dice` in the header.
             cond_ap_dice: self.knobs.cond_ap_dice,
+            // PR #582's charge-distance bonus — `versatile_reach` in the
+            // header (INVESTIGATION_gen0_replay_drift_2026-09-03.md).
+            versatile_reach: self.knobs.versatile_reach,
         }
     }
 

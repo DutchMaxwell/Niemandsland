@@ -902,7 +902,7 @@ def resolve_ambush(ambush: str) -> bool:
 LEGACY_FIDELITY_KNOBS: dict[str, Any] = dict(
     charge_gate="off", menu_wide="off", menu_los="planner",
     los="unit", hero_last=False, cast_fold=False, ambush="off",
-    cond_ap_dice=False,
+    cond_ap_dice=False, versatile_reach=False,
 )
 
 
@@ -1119,6 +1119,11 @@ TRAINER_KNOBS = {
     # here because `~/selfplay_out/gen0_teacher` was recorded before it, and a
     # bundle replayed with the fold ON would move its own rollout picks.
     "cond_ap_dice": False,
+    # PR #582's charge-distance bonus (INVESTIGATION_gen0_replay_drift_
+    # 2026-09-03.md). False here because `~/selfplay_out/gen0_teacher` was
+    # recorded before it, and a bundle replayed with the bonus ON would move
+    # its own rollout picks.
+    "versatile_reach": False,
 }
 
 # `AiActRecorder.begin` :65-66 — the planner's per-activation class statics, all
@@ -1900,6 +1905,14 @@ def play_game(
     # its header's own key, and LEGACY_FIDELITY_KNOBS pins it False for a
     # gate holding the fast trainer to a corpus recorded before this rung.
     cond_ap_dice: bool = True,
+    # PR #582's charge-distance bonus (`Knobs`/`Seams::versatile_reach`,
+    # INVESTIGATION_gen0_replay_drift_2026-09-03.md) — shipped with no legacy
+    # gate at all, so 2.25% of a 2000-game Gen-0 sample (recorded before this
+    # rule existed) no longer replays byte-identical. True is the
+    # shipped/current engine (the table has the rule); a replay tool passes
+    # its header's own key, and LEGACY_FIDELITY_KNOBS pins it False for a
+    # gate holding the fast trainer to a corpus recorded before this rung.
+    versatile_reach: bool = True,
     vocab_version: int | None = None,
     objectives: str = "constant",
     deployment: str = "zone",
@@ -2064,6 +2077,16 @@ def play_game(
     seam, so a replay tool never has to resolve a vintage for it by hand —
     it reads back whatever the corpus itself carries, `False` for every
     corpus (this one included) recorded before this rung.
+
+    `versatile_reach` (INVESTIGATION_gen0_replay_drift_2026-09-03.md) gates
+    PR #582's charge-distance bonus (`sim::versatile_reach_charge_in`): a
+    carrier CHARGEing with a base-edge gap in the ring `(band, band + bonus]`
+    gets `+bonus` added to its charge band. #582 shipped with NO legacy gate
+    at all, so 45 of 2000 sampled Gen-0 games (2.25%, recorded before #582)
+    no longer replay byte-identical against an ungated build. `True` is the
+    shipped/current engine (the table has the rule, unconditionally); a
+    replay tool passes its header's own key back, and `LEGACY_FIDELITY_KNOBS`
+    pins it `False` for every corpus (Gen-0 included) recorded before #582.
 
     `explore` (NML-1158c, `--explore` below) is the POLICY WAVE's exploration
     knob: with probability `explore` per activation, the twin picks uniformly
@@ -2248,6 +2271,9 @@ def play_game(
         # Rung I (DEFECT_LEDGER row 31): the dice path's cond_ap fold. True is
         # the shipped default; a replay tool passes its header's own key back.
         cond_ap_dice=bool(cond_ap_dice),
+        # PR #582's charge-distance bonus. True is the shipped default; a
+        # replay tool passes its header's own key back.
+        versatile_reach=bool(versatile_reach),
         # NML-1134: which RULE VOCABULARY this game's board rows are slotted
         # with. A fresh game uses THIS BUILD's version — the default here, and
         # the only setting a fresh corpus may use. A gate replaying a corpus
@@ -2928,6 +2954,16 @@ def main(argv: list[str]) -> int:
         "corpus recorded before this rung (e.g. gen0_teacher)",
     )
     ap.add_argument(
+        "--no-versatile-reach",
+        dest="versatile_reach",
+        action="store_false",
+        default=True,
+        help="PR #582's charge-distance bonus for Versatile Reach carriers; ON by "
+        "default (the table has the rule); pass this to replay a corpus recorded "
+        "before this rung (e.g. Gen-0, INVESTIGATION_gen0_replay_drift_"
+        "2026-09-03.md)",
+    )
+    ap.add_argument(
         "--hero-attach",
         choices=list(HERO_ATTACH_MODES),
         default="off",
@@ -3050,6 +3086,7 @@ def main(argv: list[str]) -> int:
             hero_last=a.hero_last,
             cast_fold=a.cast_fold,
             cond_ap_dice=a.cond_ap_dice,
+            versatile_reach=a.versatile_reach,
             hero_attach=a.hero_attach,
             dice=a.dice,
             charge_landing=a.charge_landing,

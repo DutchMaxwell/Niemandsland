@@ -213,6 +213,18 @@ pub struct Knobs {
     /// recorded rollout that never saw this AP stays byte-identical.
     #[serde(default)]
     pub cond_ap_dice: bool,
+    /// `Seams::versatile_reach` — PR #582's charge-distance bonus
+    /// (`sim::versatile_reach_charge_in`, table: solo_controller.gd:1781-1827
+    /// "Versatile Reach"): a carrier CHARGEing with a base-edge gap in the
+    /// ring `(band, band + bonus]` gets `+bonus` added to its charge band.
+    /// #582 shipped with no legacy gate (2.25 % of the 143,548-game Gen-0
+    /// corpus, recorded before this rule existed, no longer replays
+    /// byte-identical — INVESTIGATION_gen0_replay_drift_2026-09-03.md), so
+    /// this follows `cond_ap_dice`/`consolidate` exactly: absent means the
+    /// corpus predates the rule, defaulting OFF so a recorded rollout that
+    /// never saw this bonus stays byte-identical.
+    #[serde(default)]
+    pub versatile_reach: bool,
 }
 
 /// The `melee_reach` knob's two settings — written the way `sighting` is.
@@ -306,6 +318,7 @@ impl Default for Knobs {
             melee_reach: MeleeReach::All,
             consolidate: false,
             cond_ap_dice: false,
+            versatile_reach: false,
         }
     }
 }

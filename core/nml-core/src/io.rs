@@ -477,6 +477,14 @@ pub struct Seams {
     /// every corpus recorded before this seam replays byte-identical.
     #[serde(default)]
     pub cond_ap_dice: bool,
+    /// `Knobs::versatile_reach` — gates `sim::versatile_reach_charge_in`
+    /// (PR #582's charge-distance bonus). Default OFF: 2.25 % of the
+    /// 143,548-game Gen-0 corpus (recorded before #582) no longer replays
+    /// byte-identical against an ungated build
+    /// (INVESTIGATION_gen0_replay_drift_2026-09-03.md); OFF keeps it
+    /// byte-identical.
+    #[serde(default)]
+    pub versatile_reach: bool,
 }
 
 impl Node {

@@ -36,7 +36,8 @@ G = {"dice": 0, "rows": [], "i": 0, "cmp": 0, "ok": 0, "hand": 0}
 # elsewhere back to what this recording actually played.
 KNOBS = dict(selfplay.LEGACY_FIDELITY_KNOBS, sidecars=False, hero_attach="table",
              dice="table", charge_landing="table", sighting="model", cond_ap=True,
-             objectives="rulebook", deployment="arena", engage_fold=True)
+             objectives="rulebook", deployment="arena", engage_fold=True,
+             versatile_reach=False)
 
 
 class Diverged(Exception):

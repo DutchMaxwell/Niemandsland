@@ -922,6 +922,12 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
         // search's dice-tray resolver stays blind to `cond_ap` until
         // `act_recorder.gd` is taught to stamp it, matching every seam above.
         cond_ap_dice: dflag(d, "cond_ap_dice"),
+        // PR #582 shipped this bonus with no legacy gate. No recorder writes
+        // this key yet, so an absent one answers `Knobs::default()` = OFF:
+        // the in-game AI search's charge-band computation stays blind to
+        // Versatile Reach until `act_recorder.gd` is taught to stamp it,
+        // matching every seam above.
+        versatile_reach: dflag(d, "versatile_reach"),
     }
 }
 
