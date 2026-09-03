@@ -26,12 +26,12 @@
 //! `randi_range(1, 6)` on it.
 
 use crate::combat::{
-    covered_defense, deadly_multiplier, fortified_ap, guarded_defense, impact_total_dice,
-    melee_hit_modifier, modified_hit_target, reliable_quality, save_target, shielded_defense,
-    morale_target, shooting_hit_modifier, shrouded_reach, thrust_to_hit, versatile_best_mode,
-    BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP, IMPACT_HIT_TARGET, LONG_RANGE_IN,
-    NO_RETREAT_SELF_WOUND_MAX, RAVAGE_WOUND_TARGET, RENDING_AP_BONUS, SHROUD_FLOOR_IN,
-    SHROUD_RANGE_PENALTY_IN, THRUST_AP_BONUS, UNMODIFIED_SIX,
+    conditional_ap_bonus, covered_defense, deadly_multiplier, fortified_ap, guarded_defense,
+    impact_total_dice, melee_hit_modifier, modified_hit_target, reliable_quality, save_target,
+    shielded_defense, morale_target, shooting_hit_modifier, shrouded_reach, thrust_to_hit,
+    versatile_best_mode, BEST_HIT_TARGET, FEARLESS_RECOVER_TARGET, HEAVY_IMPACT_AP,
+    IMPACT_HIT_TARGET, LONG_RANGE_IN, NO_RETREAT_SELF_WOUND_MAX, RAVAGE_WOUND_TARGET,
+    RENDING_AP_BONUS, SHROUD_FLOOR_IN, SHROUD_RANGE_PENALTY_IN, THRUST_AP_BONUS, UNMODIFIED_SIX,
 };
 use crate::rng::GodotRng;
 use crate::unit::{Ctx, ShootProfile};
@@ -653,7 +653,15 @@ pub fn resolve_volley_with_tray(
         // Block B7 — Piercing Growth: main.gd:4287's marker-driven AP delta,
         // shooting and melee both (`_solo_attack_groups` adds it to `prof
         // ["ap"]` regardless of which the caller built profiles for).
-        let ap = p.ap + upr_ap + versatile_ap + att.growth_ap_mod;
+        let mut ap = p.ap + upr_ap + versatile_ap + att.growth_ap_mod;
+        // Rung I (audit 2026-09-02, DEFECT_LEDGER row 31) — the SAME `cond_ap`
+        // fold `profile_ev` uses (combat.rs) now reaches the dice save target
+        // too. Shooting never charges, so `is_charging` is false here; the
+        // `ranged_over`/`ranged_over_or_charge` gates read `mod_dist_in`, the
+        // NML-1152 modifier-distance split, not the plain range gap.
+        for c in &p.cond_ap {
+            ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, false, mod_dist_in, false);
+        }
         let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, tray, &mut out);
         w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, tray, &mut out);
         if p.deadly > 0 {
@@ -942,8 +950,15 @@ pub fn resolve_melee_with_tray(
             let save_def = shielded_defense(def.defense, def.shielded);
             // Block B7 — Piercing Growth's AP delta, melee half (see the
             // shooting site's own note above).
-            let ap = p.ap + uf_ap + sh.att.growth_ap_mod
+            let mut ap = p.ap + uf_ap + sh.att.growth_ap_mod
                 + if charging && p.thrust { THRUST_AP_BONUS } else { 0 };
+            // Rung I — the melee half of the same `cond_ap` fold: real
+            // `charging` is already this function's own parameter (unlike
+            // `profile_ev`'s EV call, which is structurally stuck at `false`),
+            // so `on_charge`/`vs_tough_ge` gates fire correctly here.
+            for c in &p.cond_ap {
+                ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, charging, 0.0, true);
+            }
             let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, tray, &mut out);
             w += save_batch(p, def, def_owner, hits - ap4, save_def, ap, tray, &mut out);
             if p.deadly > 0 {
@@ -2262,5 +2277,123 @@ mod tests {
                 &us.shoot, &[0], &[1], &us.ctx, &defender(4, 5), dist, &mut tray);
             assert_eq!(out.rolls[0].target, 3, "{dist}\": the flat +1 applies everywhere");
         }
+    }
+
+    // ------------- Rung I (audit 2026-09-02, DEFECT_LEDGER row 31): the dice
+    // path now folds `cond_ap` too, not just `profile_ev`'s EV imagination.
+
+    /// One fixture per condition kind, each pulled from the REAL gf registry
+    /// (`rules_mechanics_gf.json`) so the `ap_bonus`/`condition`/`gate` values
+    /// are the book's own, not a synthetic `CondAp` literal.
+    const COND_AP_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "piercing_assault":{"unit_id":"piercing_assault","name":"Piercing Assault","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters",
+        "special_rules":["Piercing Assault"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Blade","range":0,"attacks":6,"count":1,"ap":0,"rules":[]}]},
+      "melee_slayer":{"unit_id":"melee_slayer","name":"Melee Slayer","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"blood_prime_brothers",
+        "special_rules":["Melee Slayer"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Blade","range":0,"attacks":6,"count":1,"ap":0,"rules":[]}]},
+      "piercing_hunter":{"unit_id":"piercing_hunter","name":"Piercing Hunter","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters",
+        "special_rules":["Piercing Hunter"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]}]},
+      "slayer":{"unit_id":"slayer","name":"Slayer","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"dao_union",
+        "special_rules":["Slayer"],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":6,"count":1,"ap":0,"rules":[]},
+          {"name":"Blade","range":0,"attacks":6,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    fn cond_ap_static(id: &str) -> UnitStatic {
+        let header = read_act_header(COND_AP_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get(id).expect(id);
+        UnitStatic::build(&mut reg, p)
+    }
+
+    /// Condition kind 1 — `on_charge` (Piercing Assault): AP(+1) only while
+    /// charging. RED before this rung: the dice save stayed at Defense 4+ in
+    /// both rows, because `resolve_melee_with_tray` never read `p.cond_ap`.
+    #[test]
+    fn piercing_assault_raises_the_melee_save_ap_only_while_charging() {
+        let us = cond_ap_static("piercing_assault");
+        let p = [us.melee[0].clone()];
+        let def = defender(4, 5);
+        let mut t1 = Tray::seeded(27);
+        let charging = resolve_melee_with_tray(
+            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true, &mut t1);
+        assert_eq!(charging.rolls[1].target, 5, "AP(+1) on the charge: Defense 4+ -> 5+");
+        let mut t2 = Tray::seeded(27);
+        let steady = resolve_melee_with_tray(
+            &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", false, &mut t2);
+        assert_eq!(steady.rolls[1].target, 4, "no charge: Piercing Assault stays silent");
+    }
+
+    /// Condition kind 2 — `vs_tough_ge` behind `charge_only` (Melee Slayer):
+    /// AP(+2) only when BOTH charging and the target is Tough(3)+.
+    #[test]
+    fn melee_slayer_raises_the_melee_save_ap_only_charging_a_tough_three_target() {
+        let us = cond_ap_static("melee_slayer");
+        let p = [us.melee[0].clone()];
+        let tough = Ctx { defense: 4, tough: 3, models: 5, ..Default::default() };
+        let soft = Ctx { defense: 4, tough: 2, models: 5, ..Default::default() };
+        let mut t1 = Tray::seeded(27);
+        let charging_tough = resolve_melee_with_tray(
+            &[striker(&p, &[0], &[6], &us.ctx)], &tough, "Target", true, &mut t1);
+        assert_eq!(charging_tough.rolls[1].target, 6, "AP(+2) charging vs Tough(3)+: 4+ -> 6+");
+        let mut t2 = Tray::seeded(27);
+        let steady_tough = resolve_melee_with_tray(
+            &[striker(&p, &[0], &[6], &us.ctx)], &tough, "Target", false, &mut t2);
+        assert_eq!(steady_tough.rolls[1].target, 4, "not charging: the charge_only gate stays shut");
+        let mut t3 = Tray::seeded(27);
+        let charging_soft = resolve_melee_with_tray(
+            &[striker(&p, &[0], &[6], &us.ctx)], &soft, "Target", true, &mut t3);
+        assert_eq!(charging_soft.rolls[1].target, 4, "charging a Tough(2) target: vs_tough_ge(3) stays shut");
+    }
+
+    /// Condition kind 3 — `ranged_over` (Piercing Hunter): AP(+1) only past
+    /// 9", off `mod_dist_in` like every other shooting modifier (NML-1152).
+    #[test]
+    fn piercing_hunter_raises_the_shooting_save_ap_only_past_nine_inches() {
+        let us = cond_ap_static("piercing_hunter");
+        let def = defender(4, 5);
+        let mut t1 = Tray::seeded(27);
+        let over = resolve_shooting_with_tray(
+            &us.shoot, &[0], &[6], &us.ctx, &def, 12.0, &mut t1);
+        assert_eq!(over.rolls[1].target, 5, "AP(+1) past 9\": Defense 4+ -> 5+");
+        let mut t2 = Tray::seeded(27);
+        let under = resolve_shooting_with_tray(
+            &us.shoot, &[0], &[6], &us.ctx, &def, 6.0, &mut t2);
+        assert_eq!(under.rolls[1].target, 4, "at or under 9\": no bonus");
+    }
+
+    /// Condition kind 4 — the shared `ranged_over_or_charge` gate (Slayer):
+    /// ONE unit-level stamp reaches both dice paths, each leg firing on its
+    /// own half of the gate — proof the fold is generic, not per-rule.
+    #[test]
+    fn slayer_raises_ap_from_either_leg_of_its_shared_gate_vs_a_tough_target() {
+        let us = cond_ap_static("slayer");
+        let tough = Ctx { defense: 4, tough: 3, models: 5, ..Default::default() };
+        let mut t1 = Tray::seeded(27);
+        let over = resolve_shooting_with_tray(
+            &us.shoot, &[0], &[6], &us.ctx, &tough, 12.0, &mut t1);
+        assert_eq!(over.rolls[1].target, 6, "ranged leg: past 9\" vs Tough(3)+ is AP(+2) on its own");
+        let mut t2 = Tray::seeded(27);
+        let under = resolve_shooting_with_tray(
+            &us.shoot, &[0], &[6], &us.ctx, &tough, 6.0, &mut t2);
+        assert_eq!(under.rolls[1].target, 4, "at 6\" and not charging: neither leg of the gate is open");
+        let melee = [us.melee[0].clone()];
+        let mut t3 = Tray::seeded(27);
+        let charging = resolve_melee_with_tray(
+            &[striker(&melee, &[0], &[6], &us.ctx)], &tough, "Target", true, &mut t3);
+        assert_eq!(charging.rolls[1].target, 6, "charge leg: charging vs Tough(3)+ is AP(+2) on its own too");
     }
 }
