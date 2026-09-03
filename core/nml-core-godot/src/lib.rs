@@ -304,6 +304,8 @@ impl NmlCore {
             None => Terrain::absent(),
         };
         let knobs = plain::knobs_of(&plain::sub_dict(&header, "knobs"));
+        // The header's own `rules_epoch` — `acts::rule_on`'s build-time leg.
+        self.scache = StaticsCache::with_epoch(knobs.rules_epoch);
         let root = self.root();
         if self.reg.is_none() {
             self.reg = Some(Registries::new(&root));
