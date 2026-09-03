@@ -40,6 +40,17 @@ KNOBS = dict(selfplay.LEGACY_FIDELITY_KNOBS, sidecars=False, hero_attach="table"
              versatile_reach=False)
 
 
+def replay_knobs(kn: dict) -> dict:
+    """PR #636's fix (`tools/game_narrator.py`'s `replay()`), generalised here
+    rather than duplicated in both this module and `gen0_replay_shards.py`:
+    every `KNOBS`-pinned knob the RECORD itself stamps a value for wins over
+    `KNOBS`'s gen0-era pin, so a shipped-default record (every one a
+    `pool_value_fn`-armed A/B seat writes) replays with the knobs it was
+    actually played with. A key the record is silent on (every Gen-0 file
+    here, predating it) keeps `KNOBS`'s legacy value, exactly as before."""
+    return {**KNOBS, **{k: kn[k] for k in KNOBS if k in kn}}
+
+
 class Diverged(Exception):
     """The replay left the recording — the proof failing, loudly and with a place."""
 
@@ -57,7 +68,15 @@ def menu_diff(got: list, want: list) -> str:
 
 def forced_pick(core, state, player, net_player=0, eps=0.0, explore_seed=0, cands=False):
     """`selfplay._pick_for` with the RECORDED act in place of the search's answer.
-    The menu is checked BEFORE the act goes in: no game outlives its divergence."""
+    The menu is checked BEFORE the act goes in: no game outlives its divergence.
+
+    Gen-1 recorder fix: the forced act is `cands["played"]` — the build index
+    that IS the recorded `row["action"]` — falling back to `cands["best"]`
+    (the hand argmax) on a record from before `played` existed, where the
+    two were always equal. Forcing `best` unconditionally (the old code)
+    diverges at the very first `pool_value_fn` re-rank (PR #627): the search
+    itself never picked `best` there, so the state after "playing" it stops
+    matching the recording's own next state."""
     if not state.pool(player, bool(core.knobs().get("hero_attach", True))):
         return {}
     pick = core.plan_with_rollout(state, player, selfplay.TRAINER_STATICS,
@@ -73,7 +92,8 @@ def forced_pick(core, state, player, net_player=0, eps=0.0, explore_seed=0, cand
         raise Diverged("seq %d (round %d, side %d): %s" % (row["seq"], row["round"], row["side"], bad))
     G["ok"] += 1
     G["hand"] += int(pick["trace"]["scored"][0]["idx"] == row["cands"]["best"])
-    act = row["cands"]["list"][row["cands"]["best"]]
+    played_idx = row["cands"].get("played", row["cands"]["best"])
+    act = row["cands"]["list"][played_idx]
     pick["action"], pick["unit_key"] = act, act["unit"]
     return pick
 
@@ -101,12 +121,14 @@ def replay(path: str, lists: str, dice_offset: int) -> dict:
     rec = json.loads(Path(path).read_text(encoding="utf-8"))
     kn = rec["prescreen"]["knobs"]
     # The corpus names no core commit (DESIGN §1.6.4): the sha ef9a3e48 is
-    # DERIVED from the fleet epoch and corroborated by two signature probes —
-    # `record_cands` landed at PR #522, `record_aux` at PR #533. A file saying
-    # otherwise was not written by the build this proof is about.
-    if not kn.get("record_cands") or kn.get("record_aux"):
-        raise SystemExit("REFUSED %s: record_cands=%s record_aux=%s"
-                         % (path, kn.get("record_cands"), kn.get("record_aux")))
+    # DERIVED from the fleet epoch and corroborated by one signature probe —
+    # `record_cands` landed at PR #522. A file saying otherwise was not
+    # written by the build this proof is about. `record_aux` (PR #533) is
+    # NOT refused: its targets (models-alive/wounds on `rounds_log`, DESIGN_
+    # gen0_training §2.6) are additive to the game actually played, so a
+    # Gen-1 record stamping it replays exactly like one that does not.
+    if not kn.get("record_cands"):
+        raise SystemExit("REFUSED %s: record_cands=%s" % (path, kn.get("record_cands")))
     G.update(dice=rec["dice_seed"] + dice_offset, rows=rec["planner_positions"],
              i=0, cmp=0, ok=0, hand=0)
     armies = [str(Path(lists) / Path(rec["armies"][s]).name) for s in ("p1", "p2")]
@@ -120,7 +142,7 @@ def replay(path: str, lists: str, dice_offset: int) -> dict:
                                # (every corpus here) meaning OFF — this proof stays
                                # about the recording, not today's default.
                                dangerous_end_morale=bool(kn.get("dangerous_end_morale", False)),
-                               **KNOBS)
+                               **replay_knobs(kn))
         bad = "" if G["i"] == len(G["rows"]) else (
             "ran dry after %d of %d recorded positions" % (G["i"], len(G["rows"])))
     except Diverged as exc:
@@ -137,8 +159,9 @@ def main() -> int:
     ap.add_argument("--dice-offset", type=int, default=0, help="RED: must diverge")
     a = ap.parse_args()
     print("[REPLAY] corpus commit ef9a3e48, DERIVED (DESIGN §1.6.4) from the fleet epoch:"
-          " record_cands landed at PR #522, record_aux at PR #533, and every file below must"
-          " report cands=true/aux=false.\n[REPLAY] module=%s dice_offset=%d"
+          " record_cands landed at PR #522, and every file below must report cands=true"
+          " (record_aux, PR #533, is additive and accepted either way).\n[REPLAY]"
+          " module=%s dice_offset=%d"
           % (nml_core.__file__, a.dice_offset))
     out = []
     for g in a.games:

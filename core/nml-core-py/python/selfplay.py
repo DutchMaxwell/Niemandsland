@@ -1202,6 +1202,17 @@ def _pick_for(
     (NML-1158c) is left alone too: the coin already answered for this
     activation, and re-ranking it would silently undo the exploration.
 
+    Gen-1 recorder fix (row["cands"]["played"], see `play_game`): the pick
+    also carries `played_idx`, the BUILD index (into `trace.cands`, the same
+    array `best` indexes) of the act actually returned above — the hand
+    argmax's own index by default, and the re-ranked candidate's index once
+    a `vhook` swap lands. This is what stops `row["cands"]["best"]` (the
+    HAND argmax, unchanged) from silently mis-describing "the played
+    candidate" once a re-rank moves the pick away from it. Absent whenever
+    the pick carries no `trace` at all (never true of the real binding;
+    true of a test double answering only `_pick_for`'s own three-call
+    contract) — `row["cands"]["played"]` falls back to `best` there too.
+
     `leaf_value_fn` / `leaf_value_w` are the R4 seam (DESIGN_value_net
     2026-09-03 §7): `{side: fn(leaves, side) -> list[float]}`, handed straight
     to `Core.plan_with_rollout`, which calls it ONCE per activation with every
@@ -1235,10 +1246,24 @@ def _pick_for(
     )
     if not pick.get("used"):
         return {}
+    # Gen-1 recorder fix: the hand argmax's own build index, BEFORE any
+    # re-rank below — `trace.best_idx` is a position in the sorted `scored`
+    # list, `scored[best_idx].idx` is what that names in build-index terms
+    # (row["cands"]["best"]'s own definition in `play_game`). `.get("trace")`
+    # rather than `["trace"]`: the REAL binding always carries one (`lib.rs`'s
+    # `pick_plain` inserts it unconditionally, only `trace["cands"]` rides
+    # the `cands` bool), but a hand-rolled test double answering `_pick_for`'s
+    # OWN three-call contract (`test_fitted.py`'s `_StubCore`) is not obliged
+    # to build one, and never did before this fix — `row["cands"]["played"]`
+    # (`play_game`) already falls back to `best` wherever `played_idx` never
+    # lands on the pick at all.
+    trace = pick.get("trace")
+    if trace is not None:
+        pick["played_idx"] = trace["scored"][trace["best_idx"]]["idx"]
     if vhook is not None and not pick.get("explored"):
-        pool_idx = pick["trace"]["pool_idx"]
-        hand_rs = [e["rs"] for e in pick["trace"]["rs"]]
-        cand_list = pick["trace"]["cands"]
+        pool_idx = trace["pool_idx"]
+        hand_rs = [e["rs"] for e in trace["rs"]]
+        cand_list = trace["cands"]
         values = vhook(core, state, cand_list, pool_idx, hand_rs, player)
         if values is not None:
             def _score(h, v, w=pool_value_w):
@@ -1246,6 +1271,7 @@ def _pick_for(
             bi = max(range(len(pool_idx)), key=lambda j: _score(hand_rs[j], values[j]))
             act = cand_list[pool_idx[bi]]
             pick["action"], pick["unit_key"] = act, act["unit"]
+            pick["played_idx"] = pool_idx[bi]
     return pick
 
 
@@ -1696,12 +1722,24 @@ def _play_round(
             # value, None where the pool never rolled it. Parallel arrays
             # rather than inline keys: fewer lines, and `list` stays the
             # exact cand_plain shape `row["action"]` compares against.
+            #
+            # DEFECT_LEDGER (Gen-1 corpus recording): `best` is the HAND
+            # argmax and does NOT move once a `pool_value_fn` re-rank (PR
+            # #627) swaps a different candidate into `row["action"]` — the
+            # comment above was only ever true at `pool_value_fn=None`, and
+            # 17 of 28 rows measured at `pool_value_w=1.0` disagreed. `played`
+            # is the build index that IS `row["action"]`, always (`_pick_for`
+            # stamps `played_idx` on every pick, re-ranked or not) — equal to
+            # `best` whenever nothing moved it, which is the only case every
+            # record before this fix ever recorded.
             trace = pick["trace"]
             score_of = {e["idx"]: e["score"] for e in trace["scored"]}
             rs_of = {e["idx"]: e["rs"] for e in trace["rs"]}
+            best_idx = trace["scored"][trace["best_idx"]]["idx"]
             row["cands"] = {
                 "list": trace["cands"],
-                "best": trace["scored"][trace["best_idx"]]["idx"],
+                "best": best_idx,
+                "played": pick.get("played_idx", best_idx),
                 "scored": [score_of[i] for i in range(len(trace["cands"]))],
                 "rs": [rs_of.get(i) for i in range(len(trace["cands"]))],
             }
@@ -2106,16 +2144,22 @@ def play_game(
 
     `record_cands` is the expert-iteration opt-in (step 1): True asks every
     `_pick_for` for the binding's `cands=True` and stamps each played row
-    with `row["cands"] = {"list": [...], "best": idx}` — the planner's built
-    candidates' full content in build index order (`trace.scored[i].idx`
-    joins into the list) plus the argmax's build index. Gen-1 recorder fix:
-    the scores the trace already computed ride along as arrays PARALLEL to
-    `list` — `cands["scored"][i]` is candidate i's hand prior score,
-    `cands["rs"][i]` its rollout/search value, None where the pool never
-    rolled it — and the header stamps `core_commit`, the short sha of the
-    checkout the core was built from. False (the default) writes the rows
-    byte for byte as every corpus before this flag did, stamps neither, and
-    nothing joins `knobs` — the keys ride the rows and the header alone.
+    with `row["cands"] = {"list": [...], "best": idx, "played": idx}` — the
+    planner's built candidates' full content in build index order
+    (`trace.scored[i].idx` joins into the list), the HAND argmax's build
+    index (`best`), and the build index that IS `row["action"]` (`played`,
+    `_pick_for`'s `played_idx`). `best` and `played` part company only under
+    a `pool_value_fn` re-rank (PR #627): `best` never moves, `played` always
+    names the candidate actually chosen — training code must read `played`
+    (falling back to `best` on a record from before this key existed, where
+    the two were always equal). Gen-1 recorder fix: the scores the trace
+    already computed ride along as arrays PARALLEL to `list` —
+    `cands["scored"][i]` is candidate i's hand prior score, `cands["rs"][i]`
+    its rollout/search value, None where the pool never rolled it — and the
+    header stamps `core_commit`, the short sha of the checkout the core was
+    built from. False (the default) writes the rows byte for byte as every
+    corpus before this flag did, stamps neither, and nothing joins `knobs` —
+    the keys ride the rows and the header alone.
 
     `deep_player` (the SEARCH A/B seam) is the per-seat counterpart of
     `top_k`/`horizon`: seat 1 or 2 plays ITS activations with a SECOND core
