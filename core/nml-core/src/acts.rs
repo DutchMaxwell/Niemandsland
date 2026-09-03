@@ -196,6 +196,13 @@ pub struct Knobs {
     /// recorded before it, so the default replays byte-identical.
     #[serde(default)]
     pub melee_reach: MeleeReach,
+    /// `Seams::consolidate` — GF Advanced Rules v3.5.1 p.9 "Consolidation
+    /// Moves": one side wiped in melee, the survivor may move up to 3".
+    /// Mirrors `SoloController.consolidate_after_melee_win`
+    /// (solo_controller.gd:4603). Absent from every corpus recorded before
+    /// it, so the default is OFF and nothing replays differently.
+    #[serde(default)]
+    pub consolidate: bool,
 }
 
 /// The `melee_reach` knob's two settings — written the way `sighting` is.
@@ -287,6 +294,7 @@ impl Default for Knobs {
             rule_vocab_version: crate::rows::LEGACY_VOCAB_VERSION,
             eval_variant: 0,
             melee_reach: MeleeReach::All,
+            consolidate: false,
         }
     }
 }

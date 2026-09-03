@@ -215,6 +215,7 @@ fn seams_of(knobs: &Knobs) -> Seams {
         // per-seat A/B grants the permission alone to the resolving core.
         moved_shoot: knobs.menu_wide || knobs.moved_shoot,
         dangerous_end_morale: knobs.dangerous_end_morale,
+        consolidate: knobs.consolidate,
     }
 }
 

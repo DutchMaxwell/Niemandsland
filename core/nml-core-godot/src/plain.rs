@@ -913,6 +913,10 @@ pub fn knobs_of(d: &VarDictionary) -> Knobs {
             Some("table") => MeleeReach::Table,
             _ => dflt.melee_reach,
         },
+        // GF v3.5.1 p.9 "Consolidation Moves". No recorder writes this key
+        // yet, so an absent one answers `Knobs::default()` = OFF, the melee
+        // every recorded corpus resolves without a post-melee move.
+        consolidate: dflag(d, "consolidate"),
     }
 }
 
