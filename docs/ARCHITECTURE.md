@@ -273,5 +273,5 @@ GPU, recent log files) and scrubs room codes, file paths and player names before
 
 ## Tests
 
-gdUnit4 suites in `test/`; Python tests in `relay/`.
+gdUnit4 suites in `test/`; Python tests in `relay/` and in `core/nml-core-py/tests/python/` (56 pytest files, run by CI: `PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900`).
 Runner commands in [`DEVELOPMENT.md`](DEVELOPMENT.md).

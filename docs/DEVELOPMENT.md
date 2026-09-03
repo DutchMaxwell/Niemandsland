@@ -91,7 +91,7 @@ Reports are written to `reports/` (git-ignored).
 > e2e test, **prove it can go red** (make it fail against the un-fixed behaviour first), so a
 > green run actually means something.
 
-**Python** — the relay's tests (the offline asset pipeline lives in a separate private repo and has no tests here):
+**Python** — the relay's tests, and the nml-core-py bindings suite: `core/nml-core-py/tests/python/` holds 56 pytest files, run by CI as `PYTHONPATH=core/nml-core-py/python python3 -m pytest core/nml-core-py/tests/python -q -x --timeout 900` (the offline asset pipeline lives in a separate private repo and has no tests here):
 
 ```bash
 cd relay && python -m pytest                       # WebSocket relay (base + churn/soak)
