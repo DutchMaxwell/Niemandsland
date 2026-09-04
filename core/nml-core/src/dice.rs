@@ -483,7 +483,16 @@ pub struct Shooter<'a> {
 ///     member (`_solo_nearest_model_gap_in` :4370-4386).
 ///   * The Takedown SHOT bonus groups (`_solo_takedown_bonus_groups`, appended
 ///     to the shot list at :3057-3062 before the sort) are absent: this port has
-///     no once-per-game ledger to spend.
+///     no once-per-game ledger to spend. That group IS the family's "Takedown
+///     Shot" rule (resolver wave A, main.gd:3046-3086; its melee sibling
+///     "Takedown Strike" joins the strike groups at :6032-6034): a synthetic
+///     single-attack profile {ap, deadly, takedown} off the registry params at
+///     its OWN Quality (`extra_attack_q` — the tray's per-Shooter Ctx could
+///     carry that), spent once per game per bearer and name
+///     (`unit_properties["takedown_bonus_used_<name>"]`). NEEDS PRIMITIVE: a
+///     per-unit, per-name once-per-game ledger (the `limited_used` shape)
+///     before either name can port exactly — a flat always-on stamp would be
+///     the #489 over-credit.
 ///
 /// SORT STABILITY, the one caveat on the order below: Godot's `sort_custom`
 /// is an introsort whose quicksort half only engages above 16 elements
@@ -897,8 +906,10 @@ fn melee_hit_target(p: &ShootProfile, att: &Ctx, def: &Ctx, charging: bool, uf_h
 ///   3. Bloodthirsty Fighter's extra attacks off the defender's blocked 1s
 ///      (:6123), Retaliate (:6175), Deathstrike / Self-Destruct (:6198).
 ///   4. Reckless Piercing's round AP stamp (:5974), Versatile Attack's melee
-///      half (:6076), vs-target Marks, Takedown's unit-of-[1] pick and its bonus
-///      groups, Limited's once-per-game ledger.
+///      half (:6076), vs-target Marks, Takedown's unit-of-[1] pick, its melee
+///      bonus group ("Takedown Strike", main.gd:6032-6034 — see the shooting
+///      leg's NEEDS PRIMITIVE note above: no once-per-game ledger to spend it
+///      through) and Limited's once-per-game ledger.
 ///   5. Guarded / Versatile Defense's charged-from-over-9" +1 Defense (:5948):
 ///      the port never measured a pre-charge gap.
 pub fn resolve_melee_with_tray(
