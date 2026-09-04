@@ -2157,7 +2157,9 @@ def play_game(
     instead of adding a third boolean knob. Default is
     `nml_core.CURRENT_RULES_EPOCH`; a replay tool passes its header's own key
     back, and `LEGACY_FIDELITY_KNOBS`/`TRAINER_KNOBS` pin it `0` for every
-    corpus recorded before this field existed.
+    corpus recorded before this field existed. Also rides the result's own
+    `knobs` dict under `record_cands` (`core_commit`'s gate), so a corpus
+    recorder needs no sibling stamp of its own to know which epoch it played.
 
     `explore` (NML-1158c, `--explore` below) is the POLICY WAVE's exploration
     knob: with probability `explore` per activation, the twin picks uniformly
@@ -2814,6 +2816,18 @@ def play_game(
             "engage_fold": engage_fold,
             "dangerous_end_morale": dangerous_end_morale,
             "cond_ap": cond_ap,
+            # The CLASS FIX's own record stamp (root cause of the Gen-2 replay
+            # gap this closes): `rules_epoch` rode ONLY `core.set_header`'s
+            # internal knobs (line ~2373, consumed by the crate) until now, so
+            # a recorder that builds its own `prescreen.knobs` summary by
+            # copying THIS dict had no epoch to copy — the already-shipped
+            # Gen-2 corpus stamped it as a sibling (`prescreen.rules_epoch`)
+            # instead, which `gen0_replay_one.replay_knobs` now falls back to.
+            # Rides `record_cands` only, the same gate `core_commit` rides a
+            # few lines up (NML-1147a pattern): a non-recording call
+            # (search_ab_one.py, eval_ab_one.py, every gate under tools/)
+            # stays the exact object it always was, `result_digest` included.
+            **({"rules_epoch": int(rules_epoch)} if record_cands else {}),
             # NML-1142: WHICH brain played. `""` is the hand eval — every corpus
             # written before this knob existed, and the default still.
             "net": str(net) if net is not None else "",
