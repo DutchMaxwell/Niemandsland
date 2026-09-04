@@ -113,6 +113,44 @@ def test_replay_knobs_keeps_the_legacy_pin_with_neither_key_present():
     assert gr.replay_knobs({})["rules_epoch"] == 0
 
 
+# ------------------------------------------------ replay_knobs / melee_reach ---
+
+
+def test_replay_knobs_reads_melee_reach_off_the_records_own_top_level_knobs():
+    """Gen-2b export gate (reproduced on gen0_s10013_d14013.json: divergence
+    at seq 14, cand[7] a wholly different candidate). `play_game()` stamps
+    `melee_reach` (PR #669 / issue #635, W2 S0) only into the record's own
+    TOP-LEVEL `knobs` — its actual return value — never into
+    `prescreen.knobs` (a different producer, the prescreen step's generation
+    config, predating this knob and silent on it in every record). Without
+    this fallback `replay_knobs` keeps `KNOBS`'s legacy pin ("all") for every
+    "table" Gen-2b record, so the candidate menu the replay computes diverges
+    from the one recorded."""
+    record = {"prescreen": {"knobs": {}}, "knobs": {"melee_reach": "table"}}
+    assert gr.replay_knobs(record["prescreen"]["knobs"], record["prescreen"],
+                           record)["melee_reach"] == "table"
+
+
+def test_replay_knobs_prefers_its_own_key_over_the_top_level_stamp():
+    """A record whose own `prescreen.knobs.melee_reach` disagrees with the
+    top-level stamp (never true today, but the rule the fallback must
+    honour) is read off `prescreen.knobs` — the top-level stamp is a
+    FALLBACK, not an override, exactly the rule the `rules_epoch` sibling
+    fallback above already honours."""
+    record = {"prescreen": {"knobs": {"melee_reach": "all"}},
+              "knobs": {"melee_reach": "table"}}
+    assert gr.replay_knobs(record["prescreen"]["knobs"], record["prescreen"],
+                           record)["melee_reach"] == "all"
+
+
+def test_replay_knobs_keeps_the_legacy_melee_reach_pin_with_neither_key_present():
+    """Every pre-#669 corpus (Gen-0/Gen-1/Gen-1b/Gen-2) stamps neither key —
+    `KNOBS`'s own unchanged legacy pin, `record` argument included or
+    omitted."""
+    assert gr.replay_knobs({}, {"knobs": {}}, {"knobs": {}})["melee_reach"] == "all"
+    assert gr.replay_knobs({})["melee_reach"] == "all"
+
+
 # ---------------------------------------------------------- green and red ---
 
 
