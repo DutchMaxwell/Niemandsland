@@ -40,7 +40,7 @@ KNOBS = dict(selfplay.LEGACY_FIDELITY_KNOBS, sidecars=False, hero_attach="table"
              versatile_reach=False)
 
 
-def replay_knobs(kn: dict, prescreen: dict | None = None) -> dict:
+def replay_knobs(kn: dict, prescreen: dict | None = None, record: dict | None = None) -> dict:
     """PR #636's fix (`tools/game_narrator.py`'s `replay()`), generalised here
     rather than duplicated in both this module and `gen0_replay_shards.py`:
     every `KNOBS`-pinned knob the RECORD itself stamps a value for wins over
@@ -59,12 +59,31 @@ def replay_knobs(kn: dict, prescreen: dict | None = None) -> dict:
     if the record's own knobs carry it, else `prescreen["rules_epoch"]` if
     the sibling stamp is there, else `KNOBS`'s legacy pin (`0`) exactly as
     before — a pre-epoch record (neither key present, every Gen-0/Gen-1 file)
-    replays exactly as it always did."""
+    replays exactly as it always did.
+
+    `melee_reach` gets its own fallback, one level further up again — the
+    Gen-2b export gate's whole reason to fail (reproduced on
+    gen0_s10013_d14013.json: divergence at seq 14, cand[7] a wholly different
+    candidate). PR #669 / issue #635 (W2 S0) stamps it only into the
+    record's own TOP-LEVEL `knobs` — `selfplay.play_game`'s actual return
+    value — never into `prescreen.knobs` (a different producer, the
+    prescreen step's generation config, predating this knob and silent on it
+    in every record, Gen-2b included). So the order is: `kn["melee_reach"]`
+    if the record's own prescreen knobs ever carry it, else
+    `record["knobs"]["melee_reach"]` if the top-level stamp is there (every
+    "table" Gen-2b record), else `KNOBS`'s legacy pin (`"all"`) exactly as
+    before — a pre-#669 record (neither key present) replays exactly as it
+    always did."""
     merged = {**KNOBS, **{k: kn[k] for k in KNOBS if k in kn}}
     if "rules_epoch" not in kn and prescreen is not None and "rules_epoch" in prescreen:
         merged["rules_epoch"] = prescreen["rules_epoch"]
         print("[replay] rules_epoch %r read from prescreen's sibling stamp "
               "(absent from prescreen.knobs)" % prescreen["rules_epoch"])
+    top_knobs = (record or {}).get("knobs") or {}
+    if "melee_reach" not in kn and "melee_reach" in top_knobs:
+        merged["melee_reach"] = top_knobs["melee_reach"]
+        print("[replay] melee_reach %r read from the record's own top-level "
+              "knobs (absent from prescreen.knobs)" % top_knobs["melee_reach"])
     return merged
 
 
@@ -159,7 +178,7 @@ def replay(path: str, lists: str, dice_offset: int) -> dict:
                                # (every corpus here) meaning OFF — this proof stays
                                # about the recording, not today's default.
                                dangerous_end_morale=bool(kn.get("dangerous_end_morale", False)),
-                               **replay_knobs(kn, rec["prescreen"]))
+                               **replay_knobs(kn, rec["prescreen"], rec))
         bad = "" if G["i"] == len(G["rows"]) else (
             "ran dry after %d of %d recorded positions" % (G["i"], len(G["rows"])))
     except Diverged as exc:
