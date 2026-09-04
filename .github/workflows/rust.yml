@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  # Reusable: build.yml calls this workflow as the release gate's Rust check on
+  # tag pushes (rust.yml itself has no tag trigger — tags don't touch main/PR).
+  workflow_call:
 
 jobs:
   rust:

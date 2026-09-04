@@ -173,6 +173,15 @@ jobs:
           name: windows-build
           path: build/windows
 
+  # Tag-only invocation of rust.yml's own job (as a reusable workflow) so the
+  # release below can `needs` it — cross-workflow `needs` doesn't exist, and
+  # rust.yml has no tag trigger of its own (tags don't touch main/PR). Every
+  # non-tag push/PR is still covered by rust.yml running directly.
+  rust-gate:
+    name: Rust workspace checks (release gate)
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/rust.yml
+
   # Tag-gated: pushing a "v*" tag (e.g. v0.3.7-alpha) builds both platforms and
   # publishes them as a GitHub Release with permanent, public, direct download links.
   # Self-contained (builds its own binaries) so it does NOT depend on the best-effort
@@ -180,7 +189,9 @@ jobs:
   release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
-    needs: test
+    # gdUnit (test), the relay suite and the Rust workspace checks must all be
+    # green for the tagged sha before a release is built and published.
+    needs: [test, relay-tests, rust-gate]
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
