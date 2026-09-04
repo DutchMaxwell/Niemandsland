@@ -11489,6 +11489,7 @@ func _do_next_round() -> void:
 		return
 	if opr_army_manager:
 		opr_army_manager.advance_round()
+	_solo_growth_round_start()   # coverage wave: MP has no automated round-start sequence, but per-round growth is not a Solo rule
 	_refresh_round_visuals()
 	# Round advance ends every activation — the painted move trails sweep clean.
 	if move_trails:
@@ -11504,6 +11505,7 @@ func _do_next_round() -> void:
 
 ## A remote peer advanced the round (the RPC already advanced our state).
 func _on_remote_round_advanced() -> void:
+	_solo_growth_round_start()   # coverage wave: same tick as the local MP branch — both peers land identical counters
 	_refresh_round_visuals()
 	if move_trails:
 		move_trails.on_round_advance()
