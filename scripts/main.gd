@@ -9230,7 +9230,11 @@ func _solo_update_los_line(screen_pos: Vector2) -> void:
 	# MP gate removal (audit row 3): a hovered unit is a target when it is the solo AI's OR — in a
 	# live multiplayer session — when it belongs to a DIFFERENT player than the attacker. The AI
 	# disjunct stays untouched, so solo behaviour is preserved unchanged.
-	var is_valid_target: bool = hovered != null and attacker != null and (
+	# Null-controller guard: a pure human-vs-human room never builds solo_controller
+	# (_ensure_solo_controller bails early when solo_ai_slots is empty and MP is active — untouched
+	# here), so the non-AI-target disjunct above can pick a target while solo_controller is still
+	# null. Treat that as no valid target instead of crashing on unit_centre() below.
+	var is_valid_target: bool = hovered != null and attacker != null and solo_controller != null and (
 		_solo_is_ai_unit(hovered)
 		or (network_manager != null and network_manager.is_multiplayer_active()
 			and int(hovered.unit_properties.get("player_id", 0)) != int(attacker.unit_properties.get("player_id", 0))))

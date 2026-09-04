@@ -195,3 +195,48 @@ func test_the_solo_ai_path_is_unchanged(timeout := 120000) -> void:
 	assert_bool(_line_shown()) \
 		.override_failure_message("the solo AI targeting line stopped showing") \
 		.is_true()
+
+
+# === 3. Null solo_controller guard =================================================================
+
+## THE CRASH THIS GUARDS AGAINST. #667 (the MP gate removal above) let a hovered unit of a
+## DIFFERENT player_id pass as a valid target without checking that solo_controller actually
+## exists. before_test's own setup order never hits this (it calls _ensure_solo_controller() while
+## network_manager is still the scene's real, not-yet-active one, so a controller gets built before
+## _fake is wired in) — so here the suite re-runs the REAL gate (main.gd ~2289) with the fake,
+## already-active MP net wired first: solo_ai_slots stays empty and network_manager.is_multiplayer_active()
+## is already true, so _ensure_solo_controller bails out and leaves solo_controller null, exactly like
+## a genuine human-vs-human room. Hovering a different-player_id unit must not crash on
+## solo_controller.unit_centre() — it must draw nothing, same as any other invalid target.
+func test_hover_does_not_crash_with_a_null_solo_controller_in_a_human_vs_human_room(timeout := 120000) -> void:
+	if _main.solo_controller != null:
+		_main.solo_controller.queue_free()
+		_main.solo_controller = null
+	_main.network_manager = _fake   # already active + solo_ai_slots empty: the real gate now bails
+	_main._ensure_solo_controller()
+	assert_object(_main.solo_controller) \
+		.override_failure_message("fixture check: solo_controller must be null for this scenario") \
+		.is_null()
+
+	var pair := await _place_pair(1, 2)
+	var attacker: GameUnit = pair[0]
+	var target: GameUnit = pair[1]
+	var pt: Vector2 = pair[2]
+	assert_bool(attacker != null) \
+		.override_failure_message("fixture check: no clickable attacker spot found") \
+		.is_true()
+	assert_bool(target != null) \
+		.override_failure_message("fixture check: no clickable target spot found") \
+		.is_true()
+
+	_hover_target(attacker, pt)   # must not raise "Nonexistent function 'unit_centre' in base 'Nil'"
+
+	assert_object(_main.solo_controller) \
+		.override_failure_message("the guard must not summon a controller as a side effect") \
+		.is_null()
+	assert_object(_main._solo_los_line) \
+		.override_failure_message("no LOS line node should be created while solo_controller is null") \
+		.is_null()
+	assert_bool(_label_shown()) \
+		.override_failure_message("the sight-count label stays hidden alongside the line") \
+		.is_false()
