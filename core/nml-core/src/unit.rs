@@ -723,6 +723,9 @@ struct PrimitiveHit {
     /// The Bane family's coverage-wave gate (main.gd:6553-6560) — an alias
     /// with `reroll_save_sixes` re-rolls the defender's sixes.
     reroll_save_sixes: bool,
+    /// The Lacerate family's bypass gate (main.gd:6996-6997) — an entry with
+    /// `bypass_regen` cuts through Regeneration, facet-scoped per profile.
+    bypass_regen: bool,
     /// Point-Blank Surge's own `within_in` (0.0 = no gate) and the Boost
     /// variants' `over_in` (ai_ev.gd's stamp default 9.0), read off the
     /// SAME `Surge` primitive entry.
@@ -757,6 +760,7 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
                     ignores_cover: e.param_b("ignores_cover"),
                     surge_low: e.param_i("surge_low", 5),
                     reroll_save_sixes: e.param_b("reroll_save_sixes"),
+                    bypass_regen: e.param_b("bypass_regen"),
                     within_in: e.param_f("within_in", 0.0),
                     over_in: e.param_f("over_in", 9.0),
                 });
@@ -1349,6 +1353,21 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
                 continue;
             }
             u_bane |= hit.reroll_save_sixes;
+        }
+    }
+    // Lacerate family (rules-wave2-lacerate2): main.gd:6990-7001's unit-level
+    // coverage wave — every carried Lacerate-primitive entry whose params
+    // carry `bypass_regen` bypasses Regeneration, facet-scoped per profile
+    // ("Ignores Regeneration" ungated, "… in Melee" melee-only); the plain
+    // "Lacerate" name keeps its own prefix reading above (main.gd:6995-6997).
+    if rule_on(rules_epoch, 4) {
+        for hit in rules_of_primitive(reg, p, "Lacerate") {
+            if !hit.bypass_regen || hit.name.starts_with("Lacerate") {
+                continue;
+            }
+            melee_bane |= hit.melee_only;
+            shooting_bane |= hit.shooting_only;
+            u_bane |= !hit.melee_only && !hit.shooting_only;
         }
     }
     for sp in shoot.iter_mut() {
@@ -2177,6 +2196,62 @@ mod tests {
             "the gf entry's reroll_save_sixes"
         );
         assert_eq!(bane_stamp_of("Scrapper Boost", "gf", "jackals", 0), (false, false), "the wave is epoch-gated");
+    }
+
+    /// Lacerate family (rules-wave2-lacerate2) — one test per ported name,
+    /// through the same template as the Bane ladder. Epoch literals 4/3, NOT
+    /// `CURRENT_RULES_EPOCH`: a wave-3 epoch bump must not re-date what these
+    /// assertions mean.
+    ///
+    /// "Ignores Regeneration" (main.gd:6983-6989, common entries): bypass on
+    /// BOTH profiles at epoch 4; epoch 3 replays the pre-wave reading.
+    #[test]
+    fn ignores_regeneration_bypasses_regen_on_every_profile_at_epoch_4() {
+        assert_eq!(
+            bane_stamp_of("Ignores Regeneration", "gf", "robot_legions", 4),
+            (true, true),
+            "ungated bypass: both profiles"
+        );
+        assert_eq!(
+            bane_stamp_of("Ignores Regeneration", "gf", "robot_legions", 3),
+            (false, false),
+            "the wave is epoch-gated"
+        );
+        assert_eq!(bane_stamp_of("", "gf", "robot_legions", 4), (false, false), "no rule, no bypass");
+    }
+
+    /// "Unstoppable in Melee" (main.gd:6986-6989): the melee_only facet keeps
+    /// the rifle clean and the blade bypassing at epoch 4.
+    #[test]
+    fn unstoppable_in_melee_bypasses_regen_in_melee_only_at_epoch_4() {
+        assert_eq!(
+            bane_stamp_of("Unstoppable in Melee", "gf", "robot_legions", 4),
+            (false, true),
+            "melee-only facet"
+        );
+        assert_eq!(
+            bane_stamp_of("Unstoppable in Melee", "gf", "robot_legions", 3),
+            (false, false),
+            "the wave is epoch-gated"
+        );
+        assert_eq!(bane_stamp_of("", "gf", "robot_legions", 4), (false, false), "no rule, no bypass");
+    }
+
+    /// "Ignores Regeneration in Melee" (gf/gff common): the same melee-only
+    /// facet, distinct name, same primitive.
+    #[test]
+    fn ignores_regeneration_in_melee_bypasses_regen_in_melee_only_at_epoch_4() {
+        assert_eq!(
+            bane_stamp_of("Ignores Regeneration in Melee", "gf", "robot_legions", 4),
+            (false, true),
+            "melee-only facet"
+        );
+        assert_eq!(
+            bane_stamp_of("Ignores Regeneration in Melee", "gf", "robot_legions", 3),
+            (false, false),
+            "the wave is epoch-gated"
+        );
+        assert_eq!(bane_stamp_of("", "gf", "robot_legions", 4), (false, false), "no rule, no bypass");
     }
 
     /// Block B6, end to end through the REAL registry: `saurian_starhost/gf`'s
