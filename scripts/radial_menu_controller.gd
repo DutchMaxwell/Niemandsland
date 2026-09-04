@@ -2627,12 +2627,17 @@ func _disembark_unit(unit: GameUnit, override_spots: Array = []) -> void:
 				str(unit.unit_properties.get("name", "unit")), str(tr.unit_properties.get("name", "transport"))])
 
 
-## #209 — whether a solo game's activation economy is running. Embark/disembark are "any move
-## action" then (GF v3.5.1 p.15), so they consume the acting unit's activation; in the free
-## sandbox (and during deployment's reserve loading) nothing is consumed, like dice and rulers.
+## #209 — whether the transport activation economy is running. Embark/disembark are "any move
+## action" then (GF v3.5.1 p.15), so they consume the acting unit's activation; during
+## deployment's reserve loading nothing is consumed, like dice and rulers. Solo AND MP (audit
+## row 48 — the flag is the same bookkeeping a player could already set by hand via the manual
+## Activate toggle; no turn-order enforcement is implied), but NOT the free offline sandbox:
+## there the transport move stays free, exactly as before.
 func _activation_economy_on() -> bool:
 	if army_manager != null and army_manager.is_deployment_phase():
 		return false
+	if network_manager != null and network_manager.is_multiplayer_active():
+		return true
 	var main_node := get_node_or_null("/root/Main")
 	return main_node != null and main_node.has_method("_solo_alternation_active") \
 			and main_node._solo_alternation_active()
@@ -2654,6 +2659,10 @@ func _consume_transport_activation(unit: GameUnit, verb: String) -> void:
 	if not _activation_economy_on() or unit.is_activated:
 		return
 	unit.activate(army_manager.current_round if army_manager != null else 1)
+	# The manual toggle broadcasts the marker; so does the auto-consumption, or the peer's
+	# client keeps the unit unactivated (sync_unit_embark never sets is_activated).
+	if network_manager:
+		network_manager.broadcast_unit_activation(unit)
 	_transport_log("%s spends its activation to %s (any move action — GF v3.5.1 p.15)" % [
 		str(unit.unit_properties.get("name", "unit")), verb])
 	unit_activated.emit(unit)
