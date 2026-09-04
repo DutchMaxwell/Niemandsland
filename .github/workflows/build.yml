@@ -51,7 +51,7 @@ jobs:
           version: ${{ env.GODOT_VERSION }}
 
       - name: Import project (generates .godot/, compile-check)
-        run: godot --headless --editor --quit --path . || true
+        run: godot --headless --editor --quit --path .
 
       - name: Run gdUnit4 tests
         run: |
@@ -120,7 +120,7 @@ jobs:
           templates: "true"
 
       - name: Import project (generates .godot/)
-        run: godot --headless --editor --quit --path . || true
+        run: godot --headless --editor --quit --path .
 
       - name: Stamp build hash
         run: sed -i "/^config\/version=/a config/build_hash=\"${GITHUB_SHA::7}\"" project.godot
@@ -156,7 +156,7 @@ jobs:
           templates: "true"
 
       - name: Import project (generates .godot/)
-        run: godot --headless --editor --quit --path . || true
+        run: godot --headless --editor --quit --path .
 
       - name: Stamp build hash
         run: sed -i "/^config\/version=/a config/build_hash=\"${GITHUB_SHA::7}\"" project.godot
@@ -206,7 +206,7 @@ jobs:
           templates: "true"
 
       - name: Import project (generates .godot/)
-        run: godot --headless --editor --quit --path . || true
+        run: godot --headless --editor --quit --path .
 
       - name: Stamp build hash
         run: sed -i "/^config\/version=/a config/build_hash=\"${GITHUB_SHA::7}\"" project.godot
