@@ -21,7 +21,7 @@
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::acts::{rule_on, EPOCH_3_TABLE_RULES};
+use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES};
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
     RESISTANCE_TARGET_SPELL, SELF_REPAIR_TARGET, SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN,
@@ -185,7 +185,7 @@ pub struct Ctx {
     /// into the save batch the way the weapon's own `p.shred` is (dice.rs).
     /// Zero on every `ctx_of`.
     pub shred_grant: bool,
-    // --- Wave 2 "Utility Buff" family (epoch-gated `acts::rule_on(.., 4)`). ---
+    // --- Wave 2 "Utility Buff" family (gated `acts::rule_on(.., EPOCH_5_TABLE_RULES)`). ---
     /// A live `grants_rule: "Slayer"` — AP(+2) vs Tough 3+, charge or over 9".
     pub slayer_grant: bool,
     /// A live `grants_rule: "Primal Boost"` — the Surge primitive's low form.
@@ -1395,7 +1395,7 @@ fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProf
     // carry `bypass_regen` bypasses Regeneration, facet-scoped per profile
     // ("Ignores Regeneration" ungated, "… in Melee" melee-only); the plain
     // "Lacerate" name keeps its own prefix reading above (main.gd:6995-6997).
-    if rule_on(rules_epoch, 4) {
+    if rule_on(rules_epoch, EPOCH_5_TABLE_RULES) {
         for hit in rules_of_primitive(reg, p, "Lacerate") {
             if !hit.bypass_regen || hit.name.starts_with("Lacerate") {
                 continue;
@@ -1539,9 +1539,10 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         if e.primitive.as_deref() != Some("Utility Buff") {
             continue;
         }
-        // WAVE 2 GATE (`acts::rule_on`, literal 4): these twelve names are NEW
-        // behaviour — a pre-epoch-4 record must never carry them.
-        if !rule_on(rules_epoch, 4) && WAVE2_UTILITY_BUFF_RULES.contains(&n.as_str()) {
+        // WAVE 2 GATE (`acts::rule_on`, `EPOCH_5_TABLE_RULES`): these twelve names
+        // are NEW behaviour — a record below rules_epoch 5 (Gen-2b's
+        // stamping-gap window at 4 included) must never carry them.
+        if !rule_on(rules_epoch, EPOCH_5_TABLE_RULES) && WAVE2_UTILITY_BUFF_RULES.contains(&n.as_str()) {
             continue;
         }
         let vs_target = e.param_b("vs_target");
@@ -1584,8 +1585,9 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
 /// registry names that ride the "Ambush" primitive, each read at its OWN
 /// literal — never a `rules_of_primitive` loop, the #489 trusted-whole trap
 /// (an untracked primitive's token alone over-credits every name under it).
-/// Gated `rule_on(rules_epoch, 4)` with the LITERAL 4: a wave-3 bump of
-/// `CURRENT_RULES_EPOCH` must not re-date these reads (see `acts::rule_on`).
+/// Gated `rule_on(rules_epoch, EPOCH_5_TABLE_RULES)`, frozen at `5` (the
+/// stamping-gap fix, NOT the naive `4` — see `acts::EPOCH_5_TABLE_RULES`): a
+/// wave-3 bump of `CURRENT_RULES_EPOCH` must not re-date these reads.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct AmbushFamily {
     /// "Ambushing Piercing Shot": `counts_as: "Ambush"` — the unit deploys AS
@@ -1618,7 +1620,7 @@ pub struct AmbushFamily {
 /// it for this (system, faction) — with the entry's own params on top.
 fn ambush_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> AmbushFamily {
     let mut f = AmbushFamily::default();
-    if !rule_on(rules_epoch, 4) {
+    if !rule_on(rules_epoch, EPOCH_5_TABLE_RULES) {
         return f;
     }
     for n in [
@@ -1941,9 +1943,10 @@ impl UnitStatic {
                 sp.counter = true;
             }
         }
-        // Surge family wave 2 (rules-wave2-surge2), epoch-gated with the
-        // LITERAL 4 — never the CURRENT_RULES_EPOCH symbol, so a wave-3 bump
-        // cannot re-date the reading: the six bonus-hits-per-six names are the
+        // Surge family wave 2 (rules-wave2-surge2), gated on
+        // `EPOCH_5_TABLE_RULES` (frozen at 5, never the literal 4 or the
+        // CURRENT_RULES_EPOCH symbol) so a wave-3 bump cannot re-date the
+        // reading: the six bonus-hits-per-six names are the
         // plain auto-hit form's own aliases (ai_ev.gd's alias loop stamps each
         // exactly like block 3 above; `bonus_hits_per_six` is read by table
         // and twin alike, and Great Sergeant's printed 5-6 / Surge Mark's
@@ -1951,7 +1954,7 @@ impl UnitStatic {
         // loop). The named walk states that facet BY NAME — the census's
         // own-token evidence — while the wave-2 gate keeps every epoch-3
         // replay on the generic walk alone.
-        if rule_on(rules_epoch, 4) {
+        if rule_on(rules_epoch, EPOCH_5_TABLE_RULES) {
             for hit in rules_of_primitive(reg, p, "Surge").into_iter().filter(|hit| {
                 matches!(
                     hit.name.as_str(),
@@ -2234,89 +2237,93 @@ mod tests {
     }
 
     /// "Ambushing Piercing Shot" (gf/jackals): counts-as + the arrival-round
-    /// AP(+1) at epoch 4 — and NOTHING at epoch 3 or without the rule. Epoch
-    /// literals 4/3, NOT `CURRENT_RULES_EPOCH`: a wave-3 bump must not
+    /// AP(+1) at epoch 5 — and NOTHING at epoch 4 (Gen-2b's stamping-gap
+    /// window — see `acts::EPOCH_5_TABLE_RULES`) or without the rule. Epoch
+    /// literals 5/4, NOT `CURRENT_RULES_EPOCH`: a wave-3 bump must not
     /// re-date what these assertions mean.
     #[test]
-    fn an_ambushing_piercing_shot_counts_as_ambush_with_its_arrival_round_ap_at_epoch_4() {
+    fn an_ambushing_piercing_shot_counts_as_ambush_with_its_arrival_round_ap_at_epoch_5() {
         assert_eq!(
-            ambush_family_of("Ambushing Piercing Shot", "jackals", 4),
+            ambush_family_of("Ambushing Piercing Shot", "jackals", 5),
             AmbushFamily { counts_as_ambush: true, deploy_round_ap: 1, ..Default::default() },
             "counts-as and the AP(+1) at the family's own epoch"
         );
         assert_eq!(
-            ambush_family_of("Ambushing Piercing Shot", "jackals", 3),
+            ambush_family_of("Ambushing Piercing Shot", "jackals", 4),
             AmbushFamily::default(),
-            "the wave is epoch-gated"
+            "the wave is epoch-gated: rules_epoch 4 is Gen-2b's stamping-gap window, RED before the fix"
         );
         assert_eq!(
-            ambush_family_of("", "jackals", 4),
+            ambush_family_of("", "jackals", 5),
             AmbushFamily::default(),
             "no rule, no stamp"
         );
     }
 
     /// "Ambush Beacon" (gf/eternal_dynasty): the registry's `beacon_in` is
-    /// the waiver radius at epoch 4; epoch 3 and the rule-less carrier stay
-    /// 0.0 (the caller's constant answers for them).
+    /// the waiver radius at epoch 5; epoch 4 (Gen-2b's stamping-gap window)
+    /// and the rule-less carrier stay 0.0 (the caller's constant answers for
+    /// them).
     #[test]
-    fn an_ambush_beacons_radius_is_the_registrys_beacon_in_at_epoch_4() {
+    fn an_ambush_beacons_radius_is_the_registrys_beacon_in_at_epoch_5() {
         assert_eq!(
-            ambush_family_of("Ambush Beacon", "eternal_dynasty", 4).beacon_radius_in,
+            ambush_family_of("Ambush Beacon", "eternal_dynasty", 5).beacon_radius_in,
             6.0,
             "the registry's own beacon_in"
         );
         assert_eq!(
-            ambush_family_of("Ambush Beacon", "eternal_dynasty", 3).beacon_radius_in,
+            ambush_family_of("Ambush Beacon", "eternal_dynasty", 4).beacon_radius_in,
             0.0,
-            "the wave is epoch-gated"
+            "the wave is epoch-gated: rules_epoch 4 is Gen-2b's stamping-gap window, RED before the fix"
         );
         assert_eq!(
-            ambush_family_of("", "eternal_dynasty", 4).beacon_radius_in,
+            ambush_family_of("", "eternal_dynasty", 5).beacon_radius_in,
             0.0,
             "no rule, no beacon"
         );
     }
 
-    /// "Rapid Ambush" (gf/dark_brothers): `arrive_from_round` 1 at epoch 4 —
-    /// the round the table's `ambush_earliest_round` hardcodes; epoch 3 and
-    /// the rule-less carrier stay 0 (the caller's own ladder answers).
+    /// "Rapid Ambush" (gf/dark_brothers): `arrive_from_round` 1 at epoch 5 —
+    /// the round the table's `ambush_earliest_round` hardcodes; epoch 4
+    /// (Gen-2b's stamping-gap window) and the rule-less carrier stay 0 (the
+    /// caller's own ladder answers).
     #[test]
-    fn a_rapid_ambusher_arrives_from_the_registrys_round_at_epoch_4() {
+    fn a_rapid_ambusher_arrives_from_the_registrys_round_at_epoch_5() {
         assert_eq!(
-            ambush_family_of("Rapid Ambush", "dark_brothers", 4).arrive_from_round,
+            ambush_family_of("Rapid Ambush", "dark_brothers", 5).arrive_from_round,
             1,
             "the registry's own arrive_from_round"
         );
         assert_eq!(
-            ambush_family_of("Rapid Ambush", "dark_brothers", 3).arrive_from_round,
+            ambush_family_of("Rapid Ambush", "dark_brothers", 4).arrive_from_round,
             0,
-            "the wave is epoch-gated"
+            "the wave is epoch-gated: rules_epoch 4 is Gen-2b's stamping-gap window, RED before the fix"
         );
         assert_eq!(
-            ambush_family_of("", "dark_brothers", 4).arrive_from_round,
+            ambush_family_of("", "dark_brothers", 5).arrive_from_round,
             0,
             "no rule, no first-round arrival"
         );
     }
 
     /// "Ambush Re-Deployment" (gf/elven_jesters): `re_reserve` +
-    /// `uses_per_game` stamped at epoch 4; epoch 3 and the rule-less carrier
-    /// stay false/0. The withdraw beat itself is a future port.
+    /// `uses_per_game` stamped at epoch 5; epoch 4 (Gen-2b's stamping-gap
+    /// window) and the rule-less carrier stay false/0. The withdraw beat
+    /// itself is a future port.
     #[test]
-    fn an_ambush_re_deployment_stamps_its_once_per_game_params_at_epoch_4() {
+    fn an_ambush_re_deployment_stamps_its_once_per_game_params_at_epoch_5() {
         assert_eq!(
-            ambush_family_of("Ambush Re-Deployment", "elven_jesters", 4),
+            ambush_family_of("Ambush Re-Deployment", "elven_jesters", 5),
             AmbushFamily { re_reserve: true, re_reserve_uses: 1, ..Default::default() },
             "the registry's own re_reserve/uses_per_game"
         );
         assert_eq!(
-            ambush_family_of("Ambush Re-Deployment", "elven_jesters", 3),
+            ambush_family_of("Ambush Re-Deployment", "elven_jesters", 4),
             AmbushFamily::default(),
-            "the wave is epoch-gated"
+            "the wave is epoch-gated: rules_epoch 4 is Gen-2b's stamping-gap window, RED before the fix"
         );
         assert_eq!(
-            ambush_family_of("", "elven_jesters", 4),
+            ambush_family_of("", "elven_jesters", 5),
             AmbushFamily::default(),
             "no rule, no re-reserve"
         );
@@ -2465,59 +2472,60 @@ mod tests {
     }
 
     /// Lacerate family (rules-wave2-lacerate2) — one test per ported name,
-    /// through the same template as the Bane ladder. Epoch literals 4/3, NOT
+    /// through the same template as the Bane ladder. Epoch literals 5/4, NOT
     /// `CURRENT_RULES_EPOCH`: a wave-3 epoch bump must not re-date what these
     /// assertions mean.
     ///
     /// "Ignores Regeneration" (main.gd:6983-6989, common entries): bypass on
-    /// BOTH profiles at epoch 4; epoch 3 replays the pre-wave reading.
+    /// BOTH profiles at epoch 5; epoch 4 (Gen-2b's stamping-gap window — see
+    /// `acts::EPOCH_5_TABLE_RULES`) replays the pre-wave reading.
     #[test]
-    fn ignores_regeneration_bypasses_regen_on_every_profile_at_epoch_4() {
+    fn ignores_regeneration_bypasses_regen_on_every_profile_at_epoch_5() {
         assert_eq!(
-            bane_stamp_of("Ignores Regeneration", "gf", "robot_legions", 4),
+            bane_stamp_of("Ignores Regeneration", "gf", "robot_legions", 5),
             (true, true),
             "ungated bypass: both profiles"
         );
         assert_eq!(
-            bane_stamp_of("Ignores Regeneration", "gf", "robot_legions", 3),
+            bane_stamp_of("Ignores Regeneration", "gf", "robot_legions", 4),
             (false, false),
-            "the wave is epoch-gated"
+            "the wave is epoch-gated: rules_epoch 4 is Gen-2b's stamping-gap window, RED before the fix"
         );
-        assert_eq!(bane_stamp_of("", "gf", "robot_legions", 4), (false, false), "no rule, no bypass");
+        assert_eq!(bane_stamp_of("", "gf", "robot_legions", 5), (false, false), "no rule, no bypass");
     }
 
     /// "Unstoppable in Melee" (main.gd:6986-6989): the melee_only facet keeps
-    /// the rifle clean and the blade bypassing at epoch 4.
+    /// the rifle clean and the blade bypassing at epoch 5.
     #[test]
-    fn unstoppable_in_melee_bypasses_regen_in_melee_only_at_epoch_4() {
+    fn unstoppable_in_melee_bypasses_regen_in_melee_only_at_epoch_5() {
         assert_eq!(
-            bane_stamp_of("Unstoppable in Melee", "gf", "robot_legions", 4),
+            bane_stamp_of("Unstoppable in Melee", "gf", "robot_legions", 5),
             (false, true),
             "melee-only facet"
         );
         assert_eq!(
-            bane_stamp_of("Unstoppable in Melee", "gf", "robot_legions", 3),
+            bane_stamp_of("Unstoppable in Melee", "gf", "robot_legions", 4),
             (false, false),
-            "the wave is epoch-gated"
+            "the wave is epoch-gated: rules_epoch 4 is Gen-2b's stamping-gap window, RED before the fix"
         );
-        assert_eq!(bane_stamp_of("", "gf", "robot_legions", 4), (false, false), "no rule, no bypass");
+        assert_eq!(bane_stamp_of("", "gf", "robot_legions", 5), (false, false), "no rule, no bypass");
     }
 
     /// "Ignores Regeneration in Melee" (gf/gff common): the same melee-only
     /// facet, distinct name, same primitive.
     #[test]
-    fn ignores_regeneration_in_melee_bypasses_regen_in_melee_only_at_epoch_4() {
+    fn ignores_regeneration_in_melee_bypasses_regen_in_melee_only_at_epoch_5() {
         assert_eq!(
-            bane_stamp_of("Ignores Regeneration in Melee", "gf", "robot_legions", 4),
+            bane_stamp_of("Ignores Regeneration in Melee", "gf", "robot_legions", 5),
             (false, true),
             "melee-only facet"
         );
         assert_eq!(
-            bane_stamp_of("Ignores Regeneration in Melee", "gf", "robot_legions", 3),
+            bane_stamp_of("Ignores Regeneration in Melee", "gf", "robot_legions", 4),
             (false, false),
-            "the wave is epoch-gated"
+            "the wave is epoch-gated: rules_epoch 4 is Gen-2b's stamping-gap window, RED before the fix"
         );
-        assert_eq!(bane_stamp_of("", "gf", "robot_legions", 4), (false, false), "no rule, no bypass");
+        assert_eq!(bane_stamp_of("", "gf", "robot_legions", 5), (false, false), "no rule, no bypass");
     }
 
     /// Block B6, end to end through the REAL registry: `saurian_starhost/gf`'s
@@ -3287,14 +3295,18 @@ mod tests {
     /// end to end through the REAL registry (each name's own (system, faction)
     /// entry, the folder its book prints). The six names ride the plain
     /// auto-hit form: the generic alias walk (stamp's block 3, ungated) has
-    /// stamped them since the coverage wave, and build_for's epoch-4 named arm
-    /// states the same facet BY NAME on top. So the ladder per name is
-    /// inverted against the Lacerate wave's: present at 4 (the named arm),
-    /// present at 3 (the pre-wave generic walk, byte-exact — the wave must
-    /// never re-date it), absent WITHOUT the rule (the RED leg; the effect
-    /// predates the epoch mechanism, the Brutal Fighter precedent). Epoch
-    /// literals 4/3, NOT `CURRENT_RULES_EPOCH`: a wave-3 epoch bump must not
-    /// re-date what these assertions mean.
+    /// stamped them since the coverage wave, and build_for's named arm (gated
+    /// `EPOCH_5_TABLE_RULES`, frozen at 5 — the stamping-gap fix, NOT the
+    /// naive 4) states the same facet BY NAME on top. Since the generic walk
+    /// already covers these six names, the named arm is a redundant safety
+    /// net for THEM specifically: the assertions below stay true at 4
+    /// (Gen-2b's stamping-gap window) exactly as they did at 3, unlike
+    /// Lacerate/Ambush/Utility Buff, whose gates are the ONLY path to their
+    /// effect and so DO flip at the new boundary (see their own tests).
+    /// Present at 5 (the named arm) and at 3/4 (the pre-wave generic walk,
+    /// byte-exact — the wave must never re-date it), absent WITHOUT the rule
+    /// (the RED leg; the effect predates the epoch mechanism, the Brutal
+    /// Fighter precedent).
     const SURGE_WAVE2_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
       "carrier":{"unit_id":"carrier","name":"Carrier","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":["Brutal"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Blade","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
 

@@ -21,7 +21,7 @@ use crate::combat::{
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
 use crate::geom::{self, V3};
-use crate::acts::{rule_on, EPOCH_3_TABLE_RULES};
+use crate::acts::{rule_on, EPOCH_3_TABLE_RULES, EPOCH_5_TABLE_RULES};
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
@@ -689,10 +689,11 @@ fn tray_vs_marks(
 }
 
 /// `tray_charge`'s strike-order leg: the static Unwieldy flag, or — wave 2
-/// (`acts::rule_on`, literal 4) — a live "Unwieldy" grant on the charger's chain.
+/// (`acts::rule_on`, frozen at `EPOCH_5_TABLE_RULES`) — a live "Unwieldy"
+/// grant on the charger's chain.
 fn charger_strikes_last(statics: &[UnitStatic], state: &State, si: usize, seams: Seams) -> bool {
     statics[state.roster.profile[si]].ctx.unwieldy
-        || (rule_on(seams.rules_epoch, 4) && mods::granted(state, si, "Unwieldy"))
+        || (rule_on(seams.rules_epoch, EPOCH_5_TABLE_RULES) && mods::granted(state, si, "Unwieldy"))
 }
 
 /// One bearer's pick + move — see `tray_utility_buff`.
@@ -1326,9 +1327,11 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // is not one (tray_morale builds on ctx_of), so it carries its own fold
     // next to the same read below.
     c.no_retreat = c.no_retreat || mods::granted(state, i, "No Retreat");
-    // WAVE 2 — the family's live-grant legs. LITERAL 4: a rules_epoch below 4
-    // replays every pre-wave corpus untouched (spell grants included).
-    if rule_on(rules_epoch, 4) {
+    // WAVE 2 — the family's live-grant legs. Gated on `EPOCH_5_TABLE_RULES`
+    // (frozen at 5, the stamping-gap fix): a rules_epoch below 5 replays
+    // every pre-wave corpus untouched (spell grants included, Gen-2b's
+    // stamping-gap window at rules_epoch 4 included).
+    if rule_on(rules_epoch, EPOCH_5_TABLE_RULES) {
         c.slayer_grant = mods::granted(state, i, "Slayer");
         c.surge_grant = mods::granted(state, i, "Primal Boost");
         c.versatile_grant = mods::granted(state, i, "Versatile Attack");
@@ -1969,7 +1972,7 @@ fn tray_morale(
     // granted "Hold the Line Boost" joins the same net, epoch-gated.
     ctx.morale_bonus = state.morale_bonus[i]
         + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod)
-        + if rule_on(rules_epoch, 4) && mods::granted(state, i, "Hold the Line Boost") { HOLD_THE_LINE_BOOST_MORALE_BONUS } else { 0 };
+        + if rule_on(rules_epoch, EPOCH_5_TABLE_RULES) && mods::granted(state, i, "Hold the Line Boost") { HOLD_THE_LINE_BOOST_MORALE_BONUS } else { 0 };
     ctx.no_retreat = ctx.no_retreat || mods::granted(state, i, "No Retreat");
     // main.gd:8303 — the test die spends the morale once-mods it just used.
     // Placed after the call because `ctx` already carries the target it built.
@@ -4777,62 +4780,89 @@ mod tests {
     }
 
     #[test]
-    fn the_unpredictable_shooter_mark_sets_the_shooting_die_leg_at_epoch_4_only() {
-        assert!(fold_leg("Unpredictable Shooter", 4).unpredictable_shooting);
-        assert!(!fold_leg("Unpredictable Shooter", 3).unpredictable_shooting);
+    fn the_unpredictable_shooter_mark_sets_the_shooting_die_leg_at_epoch_5_only() {
+        assert!(fold_leg("Unpredictable Shooter", 5).unpredictable_shooting);
+        assert!(
+            !fold_leg("Unpredictable Shooter", 4).unpredictable_shooting,
+            "rules_epoch 4 is Gen-2b's stamping-gap window (acts::EPOCH_5_TABLE_RULES), RED before the fix"
+        );
         let (statics, st) = fold_legs("Unpredictable Shooter");
-        assert!(!ctx_live(statics[0].ctx.clone(), &statics, &st, 2, false, 4).unpredictable_shooting,
+        assert!(!ctx_live(statics[0].ctx.clone(), &statics, &st, 2, false, 5).unpredictable_shooting,
             "the leg rides the GRANT, not the bare bearer");
     }
 
     #[test]
-    fn self_repair_boost_buff_folds_the_regen_target_at_epoch_4_only() {
-        let on = fold_leg("Self-Repair Boost", 4);
+    fn self_repair_boost_buff_folds_the_regen_target_at_epoch_5_only() {
+        let on = fold_leg("Self-Repair Boost", 5);
         assert!(on.regeneration && on.regen_target == SELF_REPAIR_BOOST_TARGET);
         assert_eq!(on.regen_target_spell, SELF_REPAIR_BOOST_TARGET);
-        let off = fold_leg("Self-Repair Boost", 3);
-        assert!(!off.regeneration && off.regen_target == 0, "epoch 3 replays the Gen-0 set");
+        let off = fold_leg("Self-Repair Boost", 4);
+        assert!(
+            !off.regeneration && off.regen_target == 0,
+            "rules_epoch 4 (Gen-2b's stamping-gap window) replays the Gen-0 set, RED before the fix"
+        );
         let (statics, st) = fold_legs("Self-Repair Boost");
         let mut regen6 = Ctx { regeneration: true, regen_target: 6, regen_target_spell: 6, ..statics[0].ctx.clone() };
-        let mixed = ctx_live(regen6, &statics, &st, 0, false, 4);
+        let mixed = ctx_live(regen6, &statics, &st, 0, false, 5);
         assert_eq!(mixed.regen_target, 5, "the running MIN picks the granted 5+");
         assert_eq!(mixed.regen_target_spell, 5);
     }
 
     #[test]
     fn cursed_undead_and_angelic_blessing_boost_buffs_fold_their_printed_legs() {
-        let cursed = fold_leg("Cursed Undead Boost", 4);
+        let cursed = fold_leg("Cursed Undead Boost", 5);
         assert!(cursed.regeneration && cursed.regen_target == CURSED_UNDEAD_BOOST_TARGET);
-        let angelic = fold_leg("Angelic Blessing Boost", 4);
+        let angelic = fold_leg("Angelic Blessing Boost", 5);
         assert_eq!(angelic.regen_target_spell, ANGELIC_BLESSING_BOOST_TARGET_SPELL);
         assert!(!angelic.regeneration, "spell_only never touches the normal leg");
-        let off = fold_leg("Cursed Undead Boost", 3);
-        assert!(!off.regeneration && off.regen_target_spell == 0);
+        let off = fold_leg("Cursed Undead Boost", 4);
+        assert!(
+            !off.regeneration && off.regen_target_spell == 0,
+            "rules_epoch 4 is Gen-2b's stamping-gap window, RED before the fix"
+        );
     }
 
     #[test]
-    fn hold_the_line_boost_buff_joins_the_morale_net_at_epoch_4_only() {
+    fn hold_the_line_boost_buff_joins_the_morale_net_at_epoch_5_only() {
         let (statics, mut st) = fold_legs("Hold the Line Boost");
         let mut tray = Tray::seeded(5);
         let mut mshot = ShootResult::default();
-        tray_morale(&mut st.clone(), &statics[0], 0, false, 4, &mut tray, &mut mshot);
+        tray_morale(&mut st.clone(), &statics[0], 0, false, 5, &mut tray, &mut mshot);
         let on = mshot.rolls[0].target;
         st.buffs[0].clear();
         let mut tray_b = Tray::seeded(5);
         let mut mshot_b = ShootResult::default();
-        tray_morale(&mut st, &statics[0], 0, false, 4, &mut tray_b, &mut mshot_b);
+        tray_morale(&mut st, &statics[0], 0, false, 5, &mut tray_b, &mut mshot_b);
         assert_eq!(on, (mshot_b.rolls[0].target - HOLD_THE_LINE_BOOST_MORALE_BONUS).clamp(2, 6),
-            "epoch 4: the printed morale_bonus 2 joins the same [2,6]-clamped net");
+            "epoch 5: the printed morale_bonus 2 joins the same [2,6]-clamped net");
+
+        // RED before the fix: rules_epoch 4 (Gen-2b's stamping-gap window)
+        // must NOT get the buff either, only 3 did before this change.
+        let (statics2, mut st2) = fold_legs("Hold the Line Boost");
+        let mut tray2 = Tray::seeded(5);
+        let mut mshot2 = ShootResult::default();
+        tray_morale(&mut st2.clone(), &statics2[0], 0, false, 4, &mut tray2, &mut mshot2);
+        st2.buffs[0].clear();
+        let mut tray2_b = Tray::seeded(5);
+        let mut mshot2_b = ShootResult::default();
+        tray_morale(&mut st2, &statics2[0], 0, false, 4, &mut tray2_b, &mut mshot2_b);
+        assert_eq!(
+            mshot2.rolls[0].target, mshot2_b.rolls[0].target,
+            "rules_epoch 4 gets none of the buff — buffed and unbuffed targets match"
+        );
     }
     #[test]
-    fn the_unwieldy_debuff_strikes_the_granted_charger_last_at_epoch_4_only() {
+    fn the_unwieldy_debuff_strikes_the_granted_charger_last_at_epoch_5_only() {
         let (statics, st) = fold_legs("Unwieldy");
         let (st2, statics2) = buff_line();
+        let s5 = Seams { rules_epoch: 5, ..Seams::default() };
         let s4 = Seams { rules_epoch: 4, ..Seams::default() };
-        let s3 = Seams { rules_epoch: 3, ..Seams::default() };
-        assert!(charger_strikes_last(&statics, &st, 0, s4));
-        assert!(!charger_strikes_last(&statics, &st, 0, s3), "epoch 3 replays blind");
-        assert!(!charger_strikes_last(&statics2, &st2, 0, s4), "no rule, no leg");
+        assert!(charger_strikes_last(&statics, &st, 0, s5));
+        assert!(
+            !charger_strikes_last(&statics, &st, 0, s4),
+            "rules_epoch 4 is Gen-2b's stamping-gap window, RED before the fix"
+        );
+        assert!(!charger_strikes_last(&statics2, &st2, 0, s5), "no rule, no leg");
     }
 
     /// B2b — the two write-half names. Casting Buff picks by the
