@@ -21,7 +21,7 @@
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
+use crate::acts::{rule_on, EPOCH_3_TABLE_RULES};
 use crate::combat::{
     armored_defense, BANNER_MORALE_BONUS, LONG_RANGE_IN, REGENERATION_TARGET, RESISTANCE_TARGET,
     RESISTANCE_TARGET_SPELL, SELF_REPAIR_TARGET, SHROUD_CHARGE_PENALTY_IN, SHROUD_FLOOR_IN,
@@ -927,7 +927,7 @@ fn regen_targets(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> (i64, i
     // `rules_of_primitive`'s (own + item-granted, each name once), the gate
     // and the two thresholds are the table's per-entry reads, the fold is the
     // running MIN. Gated whole by `rule_on` — see the doc above.
-    if rule_on(rules_epoch, CURRENT_RULES_EPOCH) {
+    if rule_on(rules_epoch, EPOCH_3_TABLE_RULES) {
         let map = reg.rules_for(&p.game_system);
         let mut raws: Vec<&String> = p.special_rules.iter().collect();
         raws.extend(p.item_grants.iter());
@@ -1312,7 +1312,7 @@ fn stamp(
 /// non-"Bane", non-"Aura", `reroll_save_sixes`) joins it, exactly main.gd:
 /// 6553-6560. Every record below that epoch keeps the flat prefix reading.
 fn stamp_unit_strikers(reg: &mut Registries, p: &Profile, shoot: &mut [ShootProfile], rules_epoch: u32) {
-    let table_ladder = rule_on(rules_epoch, CURRENT_RULES_EPOCH);
+    let table_ladder = rule_on(rules_epoch, EPOCH_3_TABLE_RULES);
     let mut u_bane = false;
     let mut melee_bane = false;
     let mut shooting_bane = false;
@@ -1721,7 +1721,7 @@ fn bounding_of(reg: &mut Registries, p: &Profile) -> Option<f64> {
 /// `advance_mod`/`rush_mod` (`charge_mod` as the fallback). Epoch-gated:
 /// `None` below `CURRENT_RULES_EPOCH` — see `UnitStatic::move_rule_mods`.
 fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<Bands> {
-    if !rule_on(rules_epoch, CURRENT_RULES_EPOCH) {
+    if !rule_on(rules_epoch, EPOCH_3_TABLE_RULES) {
         return None;
     }
     // zero-banded, NOT `Bands::default()` — those serde defaults are the
@@ -1782,7 +1782,7 @@ impl UnitStatic {
         // (ai_shooting.gd:135). Melee-only by nature: the shooting array never
         // sees the flag. `rules_epoch` defaults to 0, so every pre-wave
         // record replays the Gen-0 rule set untouched.
-        if rule_on(rules_epoch, CURRENT_RULES_EPOCH)
+        if rule_on(rules_epoch, EPOCH_3_TABLE_RULES)
             && (rule_on_all_models(p, "Counter-Attack")
                 || rule_on_all_models(p, "Counter in Melee"))
         {
@@ -1951,6 +1951,10 @@ impl StaticsCache {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Tests exercise "the current epoch" generically (bumped forward each
+    // wave); production reads the FROZEN `EPOCH_3_TABLE_RULES` instead — see
+    // acts.rs.
+    use crate::acts::CURRENT_RULES_EPOCH;
     use crate::acts::read_act_header;
     use crate::rules::Registries;
 
