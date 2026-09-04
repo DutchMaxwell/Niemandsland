@@ -268,6 +268,15 @@ pub struct ShootProfile {
     pub counter: bool,
     pub destructive: bool,
     pub shred: bool,
+    /// A unit-level Shred-FAMILY rule — the plain name or any carried
+    /// Shred-primitive entry ("Shred in Melee"/"when Shooting" facet-scoped,
+    /// Destroyer/Infected/Warbound ungated — main.gd:3001/:4355's
+    /// `unit_rule_active(member, "Shred") or _solo_shred_facet_applies`).
+    /// Kept APART from `shred` (the weapon's own flag) so the epoch gate
+    /// (`dice.rs` `save_batch`, `rule_on(rules_epoch, CURRENT_RULES_EPOCH)`)
+    /// can keep every pre-port corpus byte-exact. `profile_ev` reads neither
+    /// leg — ai_ev.gd:429's EV imagination sees the weapon flag only.
+    pub shred_alias: bool,
     pub indirect: bool,
     pub limited: bool,
     pub takedown: bool,
@@ -351,6 +360,7 @@ impl ShootProfile {
             && self.counter == o.counter
             && self.destructive == o.destructive
             && self.shred == o.shred
+            && self.shred_alias == o.shred_alias
             && self.indirect == o.indirect
             && self.limited == o.limited
             && self.takedown == o.takedown
@@ -1231,7 +1241,28 @@ fn stamp(
             }
         }
     }
-    // 6. Sergeant (ai_ev.gd:282-291). Its share reads the LIVE alive count,
+    // 6. The Shred data-alias FAMILY (main.gd:3001/:4355 — the dead-aura
+    //    wave's `unit_rule_active(member, "Shred") or
+    //    _solo_shred_facet_applies`): the plain unit-level name (whose
+    //    empty-map fallback the primitive walk cannot see) plus EVERY carried
+    //    Shred-primitive entry — "Shred in Melee"/"when Shooting" facet-scoped,
+    //    Destroyer/Infected/Warbound ungated. On `shred_alias`, never `shred`:
+    //    the weapon's own flag keeps its meaning and the dice-path epoch gate
+    //    (dice.rs `save_batch`, `rule_on(rules_epoch, CURRENT_RULES_EPOCH)`)
+    //    keeps every pre-port corpus byte-exact. `profile_ev` reads neither
+    //    leg — ai_ev.gd's EV imagination sees the weapon flag only.
+    let plain_shred = unit_rule_active(reg, p, "Shred");
+    let shred_hits = rules_of_primitive(reg, p, "Shred");
+    for sp in shoot.iter_mut() {
+        if plain_shred
+            || shred_hits
+                .iter()
+                .any(|h| facet_applies(h.melee_only, h.shooting_only, sp.range))
+        {
+            sp.shred_alias = true;
+        }
+    }
+    // 7. Sergeant (ai_ev.gd:282-291). Its share reads the LIVE alive count,
     //    which the static profile does not carry — reported, never guessed.
     if unit_rule_active(reg, p, "Sergeant") {
         unimplemented.push(Unimplemented {
