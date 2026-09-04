@@ -102,11 +102,14 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # resolver reads it only off `upgrades`-carrying entries, and the one
     # upgrades-less carrier that prints it (Great Sergeant) is dead data in
     # the TABLE's own stamp loop — listing it would over-credit that name's
-    # printed 5-6 form, the exact #489 shape. The remaining
-    # bonus_hits_per_six-only names (Brutal, Devout, Lucky, Surge Mark, Surge
-    # when Shooting) stay STAMPED: the table reads no param of theirs, so
-    # neither does the twin. Without this entry "Surge" was TRUSTED WHOLE —
-    # PR #489's bug, reopened here until now.
+    # printed 5-6 form, the exact #489 shape. The bonus_hits_per_six-only
+    # names (Brutal, Devout, Lucky, Surge Mark, Surge when Shooting, Great
+    # Sergeant) stay UNREAD as params — the table reads no param of theirs, so
+    # neither does the twin — but the surge2 wave (2026-09-04) ports each BY
+    # NAME: unit.rs::build_for's epoch-4 named arm (rule_on(rules_epoch, 4),
+    # the literal) re-states the plain auto-hit facet the generic walk gives
+    # them, so the names reach the core through their own tokens. Without this
+    # entry "Surge" was TRUSTED WHOLE — PR #489's bug, reopened here until now.
     "Surge": frozenset({"extra_attack", "melee_only", "shooting_only", "within_in", "over_in"}),
     # Block B7: `unit::growth_of` stamps `UnitStatic.growth` off every "Growth
     # Markers" entry the unit carries, but `sim::growth_bonus_of` only ever

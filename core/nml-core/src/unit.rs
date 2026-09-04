@@ -1809,6 +1809,30 @@ impl UnitStatic {
                 sp.counter = true;
             }
         }
+        // Surge family wave 2 (rules-wave2-surge2), epoch-gated with the
+        // LITERAL 4 — never the CURRENT_RULES_EPOCH symbol, so a wave-3 bump
+        // cannot re-date the reading: the six bonus-hits-per-six names are the
+        // plain auto-hit form's own aliases (ai_ev.gd's alias loop stamps each
+        // exactly like block 3 above; `bonus_hits_per_six` is read by table
+        // and twin alike, and Great Sergeant's printed 5-6 / Surge Mark's
+        // once-per-activation pick are dead data in the table's own stamp
+        // loop). The named walk states that facet BY NAME — the census's
+        // own-token evidence — while the wave-2 gate keeps every epoch-3
+        // replay on the generic walk alone.
+        if rule_on(rules_epoch, 4) {
+            for hit in rules_of_primitive(reg, p, "Surge").into_iter().filter(|hit| {
+                matches!(
+                    hit.name.as_str(),
+                    "Brutal" | "Great Sergeant" | "Devout" | "Surge when Shooting" | "Lucky" | "Surge Mark"
+                )
+            }) {
+                for sp in shoot.iter_mut().chain(melee.iter_mut()) {
+                    if facet_applies(hit.melee_only, hit.shooting_only, sp.range) {
+                        sp.surge = true;
+                    }
+                }
+            }
+        }
         for u in melee_unimpl {
             if !unimplemented.contains(&u) {
                 unimplemented.push(u);
@@ -3015,6 +3039,98 @@ mod tests {
         let plain = header.profiles.get("plain_blessed_sisters").expect("plain_blessed_sisters");
         let us = UnitStatic::build(&mut reg, plain);
         assert!(!us.melee[0].surge, "no Brutal, no auto-hit");
+    }
+
+    /// Surge family wave 2 (rules-wave2-surge2) — one test per ported name,
+    /// end to end through the REAL registry (each name's own (system, faction)
+    /// entry, the folder its book prints). The six names ride the plain
+    /// auto-hit form: the generic alias walk (stamp's block 3, ungated) has
+    /// stamped them since the coverage wave, and build_for's epoch-4 named arm
+    /// states the same facet BY NAME on top. So the ladder per name is
+    /// inverted against the Lacerate wave's: present at 4 (the named arm),
+    /// present at 3 (the pre-wave generic walk, byte-exact — the wave must
+    /// never re-date it), absent WITHOUT the rule (the RED leg; the effect
+    /// predates the epoch mechanism, the Brutal Fighter precedent). Epoch
+    /// literals 4/3, NOT `CURRENT_RULES_EPOCH`: a wave-3 epoch bump must not
+    /// re-date what these assertions mean.
+    const SURGE_WAVE2_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "carrier":{"unit_id":"carrier","name":"Carrier","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"blessed_sisters","special_rules":["Brutal"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},{"name":"Blade","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// One rule's truth table through the template: the (shoot, melee) surge
+    /// stamp at `epoch`, with `rule` swapped into the carrier's special_rules
+    /// and (system, faction) set so the REAL registry entry resolves.
+    fn surge_stamp_of(rule: &str, system: &str, faction: &str, epoch: u32) -> (bool, bool) {
+        let tpl = SURGE_WAVE2_HEADER
+            .replace("\"Brutal\"", &format!("\"{rule}\""))
+            .replace("\"game_system\":\"gf\"", &format!("\"game_system\":\"{system}\""))
+            .replace("\"faction_folder\":\"blessed_sisters\"", &format!("\"faction_folder\":\"{faction}\""));
+        let header = read_act_header(&tpl).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("carrier").expect("carrier");
+        let us = UnitStatic::build_for(&mut reg, p, epoch);
+        (us.shoot[0].surge, us.melee[0].surge)
+    }
+
+    /// "Brutal" (gf/blessed_sisters, aof/halflings|orcs): the plain auto-hit
+    /// facet on BOTH profiles from 4, the same at 3 (the pre-wave walk),
+    /// nothing without the rule.
+    #[test]
+    fn brutal_reads_as_plain_surge_from_epoch_4() {
+        assert_eq!(surge_stamp_of("Brutal", "gf", "blessed_sisters", 4), (true, true), "the named arm's facet, both profiles");
+        assert_eq!(surge_stamp_of("Brutal", "gf", "blessed_sisters", 3), (true, true), "epoch 3 replays the pre-wave generic walk");
+        assert_eq!(surge_stamp_of("", "gf", "blessed_sisters", 4), (false, false), "no rule, no surge");
+    }
+
+    /// "Great Sergeant" (aof/ogres, aof/plague_disciples): the table's own
+    /// stamp loop never reads the entry's printed `surge_low: 5` (it reads
+    /// `surge_low` only off `upgrades` carriers), so the port replays the
+    /// TABLE — the plain 6s form — not the printed 5-6 text.
+    #[test]
+    fn great_sergeant_reads_as_plain_surge_from_epoch_4() {
+        assert_eq!(surge_stamp_of("Great Sergeant", "aof", "ogres", 4), (true, true), "the named arm's facet, both profiles");
+        assert_eq!(surge_stamp_of("Great Sergeant", "aof", "ogres", 3), (true, true), "epoch 3 replays the pre-wave generic walk");
+        assert_eq!(surge_stamp_of("", "aof", "ogres", 4), (false, false), "no rule, no surge");
+    }
+
+    /// "Devout" (gf/blessed_sisters): Devout-Boost's own base, the plain
+    /// auto-hit facet on BOTH profiles, same three rows.
+    #[test]
+    fn devout_reads_as_plain_surge_from_epoch_4() {
+        assert_eq!(surge_stamp_of("Devout", "gf", "blessed_sisters", 4), (true, true), "the named arm's facet, both profiles");
+        assert_eq!(surge_stamp_of("Devout", "gf", "blessed_sisters", 3), (true, true), "epoch 3 replays the pre-wave generic walk");
+        assert_eq!(surge_stamp_of("", "gf", "blessed_sisters", 4), (false, false), "no rule, no surge");
+    }
+
+    /// "Surge when Shooting" (gf/gff common; the book carrier is Dwarf
+    /// Guilds): the entry carries NO `shooting_only`, so the table's alias
+    /// loop stamps both arrays — the port replays the table, scoping gap and
+    /// all (the printed "when shooting" is the table's own gap).
+    #[test]
+    fn surge_when_shooting_reads_as_plain_surge_from_epoch_4() {
+        assert_eq!(surge_stamp_of("Surge when Shooting", "gf", "dwarf_guilds", 4), (true, true), "the named arm's facet, both profiles");
+        assert_eq!(surge_stamp_of("Surge when Shooting", "gf", "dwarf_guilds", 3), (true, true), "epoch 3 replays the pre-wave generic walk");
+        assert_eq!(surge_stamp_of("", "gf", "dwarf_guilds", 4), (false, false), "no rule, no surge");
+    }
+
+    /// "Lucky" (aof/halflings): Lucky-Boost's own base, the plain auto-hit
+    /// facet on BOTH profiles, same three rows.
+    #[test]
+    fn lucky_reads_as_plain_surge_from_epoch_4() {
+        assert_eq!(surge_stamp_of("Lucky", "aof", "halflings", 4), (true, true), "the named arm's facet, both profiles");
+        assert_eq!(surge_stamp_of("Lucky", "aof", "halflings", 3), (true, true), "epoch 3 replays the pre-wave generic walk");
+        assert_eq!(surge_stamp_of("", "aof", "halflings", 4), (false, false), "no rule, no surge");
+    }
+
+    /// "Surge Mark" (aof/chivalrous_kingdoms): the table's dice path reads the
+    /// Mark as plain always-on Surge through the alias loop — the
+    /// once-per-activation pick is a Utility-Buff `vs_target` overlay this
+    /// entry does not carry (the Bane Mark precedent), so the port replays the
+    /// table's plain reading.
+    #[test]
+    fn surge_mark_reads_as_plain_surge_from_epoch_4() {
+        assert_eq!(surge_stamp_of("Surge Mark", "aof", "chivalrous_kingdoms", 4), (true, true), "the named arm's facet, both profiles");
+        assert_eq!(surge_stamp_of("Surge Mark", "aof", "chivalrous_kingdoms", 3), (true, true), "epoch 3 replays the pre-wave generic walk");
+        assert_eq!(surge_stamp_of("", "aof", "chivalrous_kingdoms", 4), (false, false), "no rule, no surge");
     }
 
     /// The Surge family's plain-form gates through the REAL registry: Devout
