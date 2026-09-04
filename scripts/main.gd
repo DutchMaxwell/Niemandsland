@@ -10112,9 +10112,9 @@ func _solo_set_fatigued(unit: GameUnit) -> void:
 ## their own markers by hand. Fires with the NEW round number.
 func _on_solo_round_advanced(_round_number: int) -> void:
 	_solo_expire_spell_tokens()   # v3.5.1: spell effects end with the round — clear the placed tokens
+	_solo_reset_all_fatigue()
 	if solo_ai_slots.is_empty():
 		return
-	_solo_reset_all_fatigue()
 	# Battleborn recovery + Ambush arrivals + the human reserve prompt are the ROUND-START sequence, now driven
 	# AND AWAITED by _solo_end_round (_solo_round_start) so they complete before the opener activates (field-test
 	# round 6, finding 4). Kept OUT of this fire-and-forget signal handler so they never run concurrently with
