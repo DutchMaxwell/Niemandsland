@@ -1940,10 +1940,6 @@ impl UnitStatic {
 /// that returns to its deployment reading finds it still here.
 #[derive(Default)]
 pub struct StaticsCache {
-    /// The `rules_epoch` this cache's closures are stamped under — the CLASS
-    /// FIX's build-time leg (`acts::rule_on`). `0` (the `new()` default) is
-    /// the Gen-0 reading every record before a port replays byte-exact.
-    epoch: u32,
     entries: Vec<(Rc<Profiles>, Rc<Vec<UnitStatic>>)>,
     /// How many tables were rebuilt (a diagnostic — the cost this cache exists
     /// to keep off the per-activation path).
