@@ -195,6 +195,11 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
+    env:
+      # docs/UPDATE_CHECK.md: the project is on its alpha line, so every alpha/beta tag must
+      # publish as a GitHub *prerelease* — "/releases/latest" only ever returns the newest
+      # non-prerelease, so a mislabeled alpha 404s there and is invisible to that link.
+      IS_PRERELEASE: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -266,11 +271,24 @@ jobs:
         with:
           name: Niemandsland ${{ github.ref_name }}
           body_path: release_notes.md
-          prerelease: false
+          prerelease: ${{ env.IS_PRERELEASE }}
           files: |
             dist/Niemandsland-${{ github.ref_name }}-linux.zip
             dist/Niemandsland-${{ github.ref_name }}-windows.zip
             dist/Niemandsland-${{ github.ref_name }}-macos.zip
+
+      - name: Verify published prerelease metadata matches the tag
+        # Self-check the softprops output rather than trusting the input echoed back: catches a
+        # regression in the tag-name match above or a future softprops/action-gh-release change.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ACTUAL=$(gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --json isPrerelease -q .isPrerelease)
+          if [ "$ACTUAL" != "$IS_PRERELEASE" ]; then
+            echo "::error::published release isPrerelease=$ACTUAL but tag ${GITHUB_REF_NAME} expected IS_PRERELEASE=$IS_PRERELEASE"
+            exit 1
+          fi
+          echo "OK: isPrerelease=$ACTUAL matches tag ${GITHUB_REF_NAME}"
 
       # Auto-update channel: push the desktop builds to itch.io so players who installed through the
       # itch desktop app get automatic updates (butler does delta updates per channel). Runs AFTER the
