@@ -54,8 +54,8 @@ var _root_before: Array
 var _pump: Timer = null        # harness pump: answers the save dialog and feeds the wound picks
 var _rolls := 0                # roll_finnished emissions seen so far
 var _flip_batch_on := 0        # >0: drop _solo_batch when _rolls reaches this
-var _pick_hero: GameUnit = null   # while alive, every clicked wound goes HERE (the defect's setup)
-var _pick_rest: GameUnit = null   # the leftovers once the hero is down
+var _pick_host: GameUnit = null   # #590: every clicked wound goes HERE while it still has a model
+var _pick_hero: GameUnit = null   # … only once the host is fully destroyed does it take the rest
 var _picks_fed := 0
 var _prompt_ticks := 0
 
@@ -75,8 +75,8 @@ func before_test() -> void:
 	_main._solo_batch = true
 	_rolls = 0
 	_flip_batch_on = 0
+	_pick_host = null
 	_pick_hero = null
-	_pick_rest = null
 	_picks_fed = 0
 	_prompt_ticks = 0
 	_main.dice_roller_control.roll_finnished.connect(_on_roll_finished)
@@ -113,7 +113,7 @@ func _on_pump() -> void:
 		return
 	_answer_save_prompt()
 	var prompt: Dictionary = _main._solo_model_pick
-	if prompt.is_empty() or _pick_hero == null:
+	if prompt.is_empty() or _pick_host == null:
 		return
 	var outcome: Array = prompt["outcome"]
 	_prompt_ticks += 1
@@ -124,10 +124,11 @@ func _on_pump() -> void:
 		return
 	if not outcome.is_empty():
 		return   # the previous click has not been applied yet — one wound at a time
-	# ONE wound per click, onto the hero for as long as he stands. Feeding them one at a time (and
-	# only after the last one landed) is what makes "the first three killed the hero" true by
-	# construction instead of by dice count.
-	var on: GameUnit = _pick_hero if _pick_hero.get_alive_count() > 0 else _pick_rest
+	# #590: ONE wound per click, onto the HOST for as long as it stands — a click on the joined
+	# hero is refused while a host model is alive, so the pump follows the only order the prompt
+	# now accepts. Feeding them one at a time (and only after the last one landed) is what makes
+	# "the host went down first" true by construction instead of by dice count.
+	var on: GameUnit = _pick_host if _pick_host.get_alive_count() > 0 else _pick_hero
 	outcome.append({"unit": on, "index": 0})
 	_picks_fed += 1
 	if _picks_fed == 1:
@@ -267,31 +268,32 @@ func test_auto_allocation_volley_triggers_half_strength_morale(timeout := 120000
 	await E2EBoot.settle(get_tree())
 
 
-# === 2. RED (NML-966) — the same drop, clicked onto the attached hero, tests nothing ==========
+# === 2. The combined-chain trigger still fires when a joined hero shares the casualties ==========
 
-## The defect. A Tough(9) trooper with a joined Tough(3) hero is a TWO-model unit (GF/AoF v3.5.1 p.14:
-## a joined unit measures its strength over unit + hero together). A real AI volley lands its wounds,
-## the owner clicks the first three onto the HERO — he dies — and the leftovers onto the trooper, who
-## is Tough enough to soak them. The chain now stands at 1 of 2 models, half strength or less, while
-## the squad's own model count never moved: 1 alive before, 1 alive after.
-##
-## EXPECTED AT HEAD: every fixture assertion passes (the hero is dead, no own model died, the chain IS
-## below half) and the morale assertion FAILS — `should_test_shooting_morale` saw "no casualties".
+## NML-966 is fixed (`_solo_shooting_morale` reads SoloController.combined_alive/combined_total on
+## both sides, main.gd:8280) — this case is now a plain regression guard for that fix, updated for
+## #590: a joined hero may only take wounds once the host's own model is a casualty (GF v3.5.1 p.14),
+## so the fixture no longer clicks the hero FIRST — it can no longer be legal to. A Tough(3) trooper
+## with a joined Tough(3) hero is a TWO-model chain (pool 6, comfortably above this volley's 5 landed
+## wounds — the click prompt must stay open, not fall through to an overkill wipe); a real AI volley
+## lands its wounds, the pump clicks the trooper for as long as it stands and only then the hero, who
+## is Tough enough to survive the rest. The chain ends at 1 of 2 models, half strength or less, even
+## though it was the HOST that died this time, not the hero.
 func test_hero_click_allocation_volley_triggers_half_strength_morale(timeout := 120000) -> void:
 	var ai := _unit(2, "Sturmtrupp", [Vector3.ZERO], 2)
-	var squad := _make_tough(_unit(1, "Wachtrupp", [Vector3(0.15, 0.0, 0.0)]), 9)
+	var squad := _make_tough(_unit(1, "Wachtrupp", [Vector3(0.15, 0.0, 0.0)]), 3)
 	var hero := _joined_hero(squad, "Klauenherr", Vector3(0.20, 0.0, 0.10), 3)
 	assert_int(SoloController.combined_total(squad)) \
 		.override_failure_message("fixture: the joined chain must count 2 models (trooper + hero)") \
 		.is_equal(2)
 	_main._solo_batch = false
 	assert_bool(_main._solo_wound_choice_matters(squad, 3)) \
-		.override_failure_message("fixture: the Tough models in the chain must open the click prompt") \
+		.override_failure_message("fixture: the Tough hero in the chain must open the click prompt") \
 		.is_true()
 	_main._solo_batch = true
 
-	_pick_hero = hero            # every wound goes onto the hero while he stands …
-	_pick_rest = squad           # … the rest onto the Tough trooper, who survives them
+	_pick_host = squad           # #590: every wound goes onto the host's own model while it stands …
+	_pick_hero = hero            # … only once it is destroyed does the Tough hero take the rest
 	_flip_batch_on = ROLLS_BEFORE_WOUNDS
 
 	seed(VOLLEY_SEED)
@@ -301,18 +303,18 @@ func test_hero_click_allocation_volley_triggers_half_strength_morale(timeout := 
 	assert_int(_picks_fed) \
 		.override_failure_message("fixture: the wound-allocation prompt never opened — nothing was clicked\n%s" % _log_text()) \
 		.is_greater_equal(3)
-	assert_int(hero.get_alive_count()) \
-		.override_failure_message("fixture: the first three clicked wounds had to kill the Tough(3) hero\n%s" % _log_text()) \
-		.is_equal(0)
 	assert_int(squad.get_alive_count()) \
-		.override_failure_message("fixture: no OWN model may die — the trigger's own inputs must not move\n%s" % _log_text()) \
+		.override_failure_message("fixture: the clicked wounds had to kill the Tough(3) trooper before the hero could be touched\n%s" % _log_text()) \
+		.is_equal(0)
+	assert_int(hero.get_alive_count()) \
+		.override_failure_message("fixture: the Tough(3) hero must survive the leftover wounds once the host is gone\n%s" % _log_text()) \
 		.is_equal(1)
 	assert_bool(_main._solo_below_half_strength(squad)) \
 		.override_failure_message("fixture: 1 of 2 combined models must read as half strength or less") \
 		.is_true()
 
 	assert_array(_morale_lines()) \
-		.override_failure_message("NML-966 — the joined unit stands at 1 of 2 models (half strength or less) after the volley, but NO morale test was rolled: the shooting trigger counts the squad's OWN models (1 before, 1 after = \"no casualties\") while the outcome predicate counts the combined chain. Every wound the owner clicked onto the hero is invisible to the trigger.\n%s" % _log_text()) \
+		.override_failure_message("the joined unit stands at 1 of 2 models (half strength or less) after the volley, but NO morale test was rolled — the combined-chain trigger (NML-966) must still fire when the HOST is the model that died.\n%s" % _log_text()) \
 		.is_not_empty()
 	await E2EBoot.settle(get_tree())
 
