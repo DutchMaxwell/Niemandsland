@@ -195,6 +195,14 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # half (save_fail_max/extra_wound_save_low + over_in + upgrades) is read
     # by nobody — they stay STAMPED until a resolver consumes those keys.
     "Shred": frozenset({"melee_only", "shooting_only"}),
+    # Lacerate-family wave (rules-wave2-lacerate2, 2026-09-04): unit.rs
+    # ::stamp_unit_strikers' epoch-4 arm mirrors main.gd:6990-7001's unit-level
+    # coverage wave — every carried Lacerate-primitive entry whose params carry
+    # `bypass_regen` stamps the profile bane flag, facet-scoped by melee_only/
+    # shooting_only ("Ignores Regeneration" ungated, "… in Melee" melee-only).
+    # The plain "Lacerate" name keeps its own-token PORTED through the
+    # weapon-level literal read (unit.rs::base_profile) regardless of params.
+    "Lacerate": frozenset({"bypass_regen", "melee_only", "shooting_only"}),
 }
 
 
