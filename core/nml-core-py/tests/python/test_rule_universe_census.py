@@ -384,14 +384,18 @@ def test_untracked_primitive_no_longer_trusted_whole(tmp_path):
     vetted CONSUMED_PARAM_KEYS class. Today, an untracked primitive is
     "trusted whole" the instant ITS OWN name happens to be a real, separate
     rule reached only through an exact-literal gate elsewhere (Shielded's
-    `name == "Shielded"`, Ambush's own field) - every ALIAS sharing that
-    primitive tag (Sturdy Boost/Shielded, Ambushing Piercing Shot/Ambush)
-    rides along even though the alias can never pass that literal gate. The
-    real registry maps Sturdy Boost -> Shielded, Ignores Regeneration ->
-    Lacerate, Vale Oath -> Battleborn, Ambushing Piercing Shot -> Ambush -
-    none of the four are CONSUMED_PARAM_KEYS classes, so all four must drop
-    out of PORTED; the primitive's OWN row (Shielded) stays PORTED on its
-    own name literal."""
+    `name == "Shielded"`, Battleborn's own field) - every ALIAS sharing that
+    primitive tag (Sturdy Boost/Shielded, Vale Oath/Battleborn) rides along
+    even though the alias can never pass that literal gate. The real
+    registry maps Sturdy Boost -> Shielded and Vale Oath -> Battleborn -
+    neither primitive is a CONSUMED_PARAM_KEYS class (checked against the
+    live table so this spot-check keeps failing loudly the day either one
+    is ported), so both aliases must drop out of PORTED; the primitive's
+    OWN row (Shielded) stays PORTED on its own name literal."""
+    assert not {"Shielded", "Battleborn"} & census.CONSUMED_PARAM_KEYS.keys(), (
+        "spot-check examples must stay genuinely untracked - pick new ones "
+        "once either primitive gets a CONSUMED_PARAM_KEYS row"
+    )
     root = tmp_path / "repo"
     for d in ("assets/solo", "data", "core/nml-core/src", "core/nml-core-py/python"):
         (root / d).mkdir(parents=True)
@@ -399,8 +403,8 @@ def test_untracked_primitive_no_longer_trusted_whole(tmp_path):
         "common": {
             "Shielded": {"primitive": "Shielded", "params": {}},
             "Sturdy Boost": {"primitive": "Shielded", "params": {"defense_bonus": 1}},
-            "Ambush": {"primitive": "Ambush", "params": {}},
-            "Ambushing Piercing Shot": {"primitive": "Ambush", "params": {}},
+            "Battleborn": {"primitive": "Battleborn", "params": {}},
+            "Vale Oath": {"primitive": "Battleborn", "params": {}},
         },
         "factions": {},
     }))
@@ -409,7 +413,7 @@ def test_untracked_primitive_no_longer_trusted_whole(tmp_path):
     (root / "core/nml-core/src/arm.rs").write_text(
         'fn unit_rule_active(name: &str) -> bool { name == "Shielded" }\n'
         '\n'
-        'struct UnitSpec { ambush: bool }\n'
+        'struct UnitSpec { battleborn: bool }\n'
     )
     books = tmp_path / "books" / "gf"
     books.mkdir(parents=True)
@@ -417,7 +421,7 @@ def test_untracked_primitive_no_longer_trusted_whole(tmp_path):
         "name": "Test Faction", "gameSystem": "gf",
         "specialRules": [
             {"name": "Shielded"}, {"name": "Sturdy Boost"},
-            {"name": "Ambush"}, {"name": "Ambushing Piercing Shot"},
+            {"name": "Battleborn"}, {"name": "Vale Oath"},
         ],
     }))
     res = census.census(tmp_path / "books", root)
@@ -428,7 +432,7 @@ def test_untracked_primitive_no_longer_trusted_whole(tmp_path):
     assert per["Sturdy Boost"]["per_system"]["gf"]["core"] == "MISSING", (
         "an untracked primitive must not credit its aliases (audit spot-check)"
     )
-    assert per["Ambushing Piercing Shot"]["per_system"]["gf"]["core"] == "MISSING"
+    assert per["Vale Oath"]["per_system"]["gf"]["core"] == "MISSING"
 
 
 def test_universe_includes_common_json_core_rulebook_names(tmp_path):
