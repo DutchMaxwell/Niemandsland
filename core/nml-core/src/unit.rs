@@ -185,6 +185,19 @@ pub struct Ctx {
     /// into the save batch the way the weapon's own `p.shred` is (dice.rs).
     /// Zero on every `ctx_of`.
     pub shred_grant: bool,
+    // --- Wave 2 "Utility Buff" family (epoch-gated `acts::rule_on(.., 4)`). ---
+    /// A live `grants_rule: "Slayer"` — AP(+2) vs Tough 3+, charge or over 9".
+    pub slayer_grant: bool,
+    /// A live `grants_rule: "Primal Boost"` — the Surge primitive's low form.
+    pub surge_grant: bool,
+    /// A live `grants_rule: "Versatile Attack"` — the shoot-arm flag fold.
+    pub versatile_grant: bool,
+    /// A live `grants_rule: "AP(+1) when shooting"` (Piercing Shooting Mark).
+    pub pierce_shooting_grant: bool,
+    /// A live `grants_rule: "AP(+1) in melee"` (Piercing Fighting Mark).
+    pub pierce_melee_grant: bool,
+    /// A live `grants_rule: "Piercing Assault"` — AP(+1) while charging.
+    pub pierce_assault_grant: bool,
     // --- Block B7, the Growth-Marker family. ZERO on every `ctx_of` (baked
     // into `ctx_for` below), like `hit_mod` — only `sim::ctx_live` reads the
     // live marker count and folds it in, so the EV imagination stays
@@ -1168,6 +1181,12 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         thrust_grant: false,
         relentless_grant: false,
         shred_grant: false,
+        slayer_grant: false,
+        surge_grant: false,
+        versatile_grant: false,
+        pierce_shooting_grant: false,
+        pierce_melee_grant: false,
+        pierce_assault_grant: false,
         growth_ap_mod: 0,
         growth_hit_mod: 0,
     }
@@ -1464,13 +1483,31 @@ pub struct UtilityBuff {
     pub once: bool,
 }
 
+/// The twelve "Utility Buff" names the wave-2 port reads at runtime, stamped
+/// only from `rules_epoch` 4 on. The other 18 family names stay
+/// stamped-but-unconsumed (their seams do not exist on this core).
+const WAVE2_UTILITY_BUFF_RULES: [&str; 12] = [
+    "Unwieldy Debuff",
+    "Unpredictable Shooter Mark",
+    "Versatile Attack Buff",
+    "Slayer Mark",
+    "Piercing Assault Buff",
+    "Piercing Shooting Mark",
+    "Piercing Fighting Mark",
+    "Self-Repair Boost Buff",
+    "Cursed Undead Boost Buff",
+    "Angelic Blessing Boost Buff",
+    "Hold the Line Boost Buff",
+    "Primal Boost Buff",
+];
+
 /// Every "Utility Buff" entry the unit carries, in `unit_rules_of_primitive`'s
 /// own order (own rules then item grants, each base name once — rules_registry
 /// .gd:155-176). The two printed defaults that differ between the arms are
 /// resolved HERE, where `vs_target` is known: the friendly pick is 12" and
 /// sight-free (main.gd:16493/16552), the Mark is 18" and needs sight (:16752/
 /// :16758).
-fn utility_buffs_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemented>) -> Vec<UtilityBuff> {
+fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mut Vec<Unimplemented>) -> Vec<UtilityBuff> {
     let mut out = Vec::new();
     let mut raws: Vec<&String> = p.special_rules.iter().collect();
     raws.extend(p.item_grants.iter());
@@ -1484,6 +1521,11 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, un: &mut Vec<Unimplemente
         seen.push(n.clone());
         let Some(e) = map.lookup(&p.faction_folder, &n) else { continue };
         if e.primitive.as_deref() != Some("Utility Buff") {
+            continue;
+        }
+        // WAVE 2 GATE (`acts::rule_on`, literal 4): these twelve names are NEW
+        // behaviour — a pre-epoch-4 record must never carry them.
+        if !rule_on(rules_epoch, 4) && WAVE2_UTILITY_BUFF_RULES.contains(&n.as_str()) {
             continue;
         }
         let vs_target = e.param_b("vs_target");
@@ -1877,7 +1919,7 @@ impl UnitStatic {
             } else {
                 0.0
             },
-            utility_buffs: utility_buffs_of(reg, p, &mut unimplemented),
+            utility_buffs: utility_buffs_of(reg, p, rules_epoch, &mut unimplemented),
             growth: growth_of(reg, p, &mut unimplemented),
             unimplemented,
         }

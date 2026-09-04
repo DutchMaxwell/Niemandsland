@@ -14,7 +14,9 @@ use std::rc::Rc;
 
 use crate::combat::{
     at_or_below_half, block_chance, effective_attacks, melee_ev, morale_target, shielded_defense,
-    shoot_ev, should_test_shooting_morale, shrouded_reach, SHROUD_FLOOR_IN, SHROUD_RANGE_PENALTY_IN,
+    shoot_ev, should_test_shooting_morale, shrouded_reach, ANGELIC_BLESSING_BOOST_TARGET_SPELL,
+    CURSED_UNDEAD_BOOST_TARGET, HOLD_THE_LINE_BOOST_MORALE_BONUS, SELF_REPAIR_BOOST_TARGET,
+    SHROUD_FLOOR_IN, SHROUD_RANGE_PENALTY_IN,
 };
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
@@ -463,7 +465,7 @@ pub(crate) fn tray_breath_attack(
     let landed = shot.absorb(out);
     land_wounds(next, ti, landed);
     if shooting_morale_trigger(next, ut, ti, alive_before, wounds_before) {
-        tray_morale(next, ut, ti, false, tray, shot);
+        tray_morale(next, ut, ti, false, seams.rules_epoch, tray, shot);
     }
 }
 
@@ -684,6 +686,13 @@ fn tray_vs_marks(
             });
         }
     }
+}
+
+/// `tray_charge`'s strike-order leg: the static Unwieldy flag, or — wave 2
+/// (`acts::rule_on`, literal 4) — a live "Unwieldy" grant on the charger's chain.
+fn charger_strikes_last(statics: &[UnitStatic], state: &State, si: usize, seams: Seams) -> bool {
+    statics[state.roster.profile[si]].ctx.unwieldy
+        || (rule_on(seams.rules_epoch, 4) && mods::granted(state, si, "Unwieldy"))
 }
 
 /// One bearer's pick + move — see `tray_utility_buff`.
@@ -1289,7 +1298,12 @@ pub fn ctx_of(us: &UnitStatic, state: &State, i: usize) -> Ctx {
 /// the tray path sees the ledger. `melee` is the scope filter of
 /// `AiSpell.mods_for` (ai_spell.gd:390-393), not a fatigue switch.
 #[inline]
-pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, melee: bool) -> Ctx {
+/// The regen fold's 0-means-unset MIN (the `regen_targets` stamp's own rule).
+fn fold_min(have: i64, cand: i64) -> i64 {
+    if cand > 0 && (cand < have || have == 0) { cand } else { have }
+}
+
+pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, melee: bool, rules_epoch: u32) -> Ctx {
     c.hit_mod = mods::sum(state, i, mods::Role::AttackerOwn, melee, |r| r.hit_mod);
     c.vs_hit_mod = mods::sum(state, i, mods::Role::VsTarget, melee, |r| r.hit_mod);
     c.unstoppable_grant = mods::granted(state, i, "Unstoppable");
@@ -1312,6 +1326,36 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     // is not one (tray_morale builds on ctx_of), so it carries its own fold
     // next to the same read below.
     c.no_retreat = c.no_retreat || mods::granted(state, i, "No Retreat");
+    // WAVE 2 — the family's live-grant legs. LITERAL 4: a rules_epoch below 4
+    // replays every pre-wave corpus untouched (spell grants included).
+    if rule_on(rules_epoch, 4) {
+        c.slayer_grant = mods::granted(state, i, "Slayer");
+        c.surge_grant = mods::granted(state, i, "Primal Boost");
+        c.versatile_grant = mods::granted(state, i, "Versatile Attack");
+        c.pierce_shooting_grant = mods::granted(state, i, "AP(+1) when shooting");
+        c.pierce_melee_grant = mods::granted(state, i, "AP(+1) in melee");
+        c.pierce_assault_grant = mods::granted(state, i, "Piercing Assault");
+        c.unpredictable_shooting =
+            c.unpredictable_shooting || mods::granted(state, i, "Unpredictable Shooter");
+        // The Regeneration-primitive boosts: the granted entry's printed
+        // targets, folded by the static stamp's own running-MIN rule.
+        if mods::granted(state, i, "Self-Repair Boost") {
+            c.regeneration = true;
+            c.regen_target = fold_min(c.regen_target, SELF_REPAIR_BOOST_TARGET);
+            c.regen_target_spell = fold_min(c.regen_target_spell, SELF_REPAIR_BOOST_TARGET);
+        }
+        if mods::granted(state, i, "Cursed Undead Boost") {
+            c.regeneration = true;
+            c.regen_target = fold_min(c.regen_target, CURSED_UNDEAD_BOOST_TARGET);
+            c.regen_target_spell = fold_min(c.regen_target_spell, CURSED_UNDEAD_BOOST_TARGET);
+        }
+        // spell_only: the Angelic stamp folds the spell twin ONLY.
+        c.regen_target_spell = if mods::granted(state, i, "Angelic Blessing Boost") {
+            fold_min(c.regen_target_spell, ANGELIC_BLESSING_BOOST_TARGET_SPELL)
+        } else {
+            c.regen_target_spell
+        };
+    }
     let (ap, hit) = growth_bonus_of(statics, state, i);
     c.growth_ap_mod = ap;
     c.growth_hit_mod = hit;
@@ -1332,8 +1376,9 @@ pub fn ctx_live_vs(
     i: usize,
     target: usize,
     melee: bool,
+    rules_epoch: u32,
 ) -> Ctx {
-    c = ctx_live(c, statics, state, i, melee);
+    c = ctx_live(c, statics, state, i, melee, rules_epoch);
     c.rending_grant = c.rending_grant || mods::granted_vs(state, target, "Rending");
     c.furious = c.furious || mods::granted_vs(state, target, "Furious");
     c.relentless_grant = c.relentless_grant || mods::granted_vs(state, target, "Relentless");
@@ -1720,7 +1765,7 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize, ti: usize, seams
         parts.push((
             mi,
             sc,
-            ctx_live_vs(ctx_of_melee(um, state, mi), statics, state, mi, ti, true),
+            ctx_live_vs(ctx_of_melee(um, state, mi), statics, state, mi, ti, true, seams.rules_epoch),
         ));
     }
     parts
@@ -1768,7 +1813,7 @@ fn strike_phase(
         }
     }
     let ut = &statics[next.roster.profile[ti]];
-    let def = ctx_live(ctx_of(ut, next, ti), statics, next, ti, true);
+    let def = ctx_live(ctx_of(ut, next, ti), statics, next, ti, true, seams.rules_epoch);
     let members: Vec<crate::dice::Shooter<'_>> = parts
         .iter()
         .map(|(mi, sc, att)| {
@@ -1898,6 +1943,7 @@ fn tray_morale(
     us: &UnitStatic,
     i: usize,
     melee: bool,
+    rules_epoch: u32,
     tray: &mut Tray,
     shot: &mut ShootResult,
 ) {
@@ -1910,9 +1956,11 @@ fn tray_morale(
     // the same live read, so the ROLLED target has to be too. Reading the static
     // profile instead is a whole point of target off on every Banner unit.
     // B2b: the live morale records join the Banner bonus in the SAME
-    // [2,6]-clamped target the table builds (main.gd:8288-8296).
+    // [2,6]-clamped target the table builds (main.gd:8288-8296). Wave 2: a
+    // granted "Hold the Line Boost" joins the same net, epoch-gated.
     ctx.morale_bonus = state.morale_bonus[i]
-        + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod);
+        + mods::sum(state, i, mods::Role::Morale, melee, |r| r.morale_mod)
+        + if rule_on(rules_epoch, 4) && mods::granted(state, i, "Hold the Line Boost") { HOLD_THE_LINE_BOOST_MORALE_BONUS } else { 0 };
     ctx.no_retreat = ctx.no_retreat || mods::granted(state, i, "No Retreat");
     // main.gd:8303 — the test die spends the morale once-mods it just used.
     // Placed after the call because `ctx` already carries the target it built.
@@ -1972,7 +2020,7 @@ fn tray_charge(
     // strikes, measured at 0" (the two units are in base contact).
     tray_vs_marks(statics, next, si, ti, 0.0, seams);
     let mut by_tu = 0;
-    let charger_last = statics[next.roster.profile[si]].ctx.unwieldy;
+    let charger_last = charger_strikes_last(statics, next, si, seams);
     for slot in 0..2 {
         if (slot == 0) != charger_last {
             // :8079 — the charger strikes only while BOTH sides still stand;
@@ -3495,7 +3543,7 @@ fn resolve_with(
                             // read (:3082), so the grant reaches this volley.
                             tray_vs_marks(statics, &mut next, si, g.ti, g.d, seams);
                             let ut_g = &statics[next.roster.profile[g.ti]];
-                            let def = ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false);
+                            let def = ctx_live(ctx_of(ut_g, &next, g.ti), statics, &next, g.ti, false, seams.rules_epoch);
                             let alive_before_g = next.alive[g.ti];
                             let wounds_before_g = wounds_left(&next, g.ti);
                             let mut parts: Vec<(usize, Scratch, Ctx)> = Vec::new();
@@ -3533,7 +3581,7 @@ fn resolve_with(
                                 parts.push((
                                     mi,
                                     msc,
-                                    ctx_live_vs(ctx_of(um, &next, mi), statics, &next, mi, g.ti, false),
+                                    ctx_live_vs(ctx_of(um, &next, mi), statics, &next, mi, g.ti, false, seams.rules_epoch),
                                 ));
                             }
                             // Block C5 — Instinctive: the +1 reaches the
@@ -3591,7 +3639,7 @@ fn resolve_with(
                             if shooting_morale_trigger(
                                 &next, ut_g, g.ti, alive_before_g, wounds_before_g,
                             ) {
-                                tray_morale(&mut next, ut_g, g.ti, false, tray, shot);
+                                tray_morale(&mut next, ut_g, g.ti, false, seams.rules_epoch, tray, shot);
                             }
                         }
                     }
@@ -3647,7 +3695,7 @@ fn resolve_with(
                         // (:8116-8118), where D1-B5a still asked the
                         // expected-value oracle for the outcome.
                         let ul = &statics[next.roster.profile[li]];
-                        tray_morale(&mut next, ul, li, true, tray, shot);
+                        tray_morale(&mut next, ul, li, true, seams.rules_epoch, tray, shot);
                     }
                     // Coverage wave — growth markers (Defensive Frenzy):
                     // main.gd:8137-8140 credits the WIPING side's own kill
@@ -3740,7 +3788,7 @@ fn resolve_with(
             if let Some((tray, shot)) = dice.as_mut() {
                 let us = &statics[pi_s];
                 if shooting_morale_trigger(&next, us, si, alive_before, wounds_before) {
-                    tray_morale(&mut next, us, si, false, tray, shot);
+                    tray_morale(&mut next, us, si, false, seams.rules_epoch, tray, shot);
                 }
             }
         }
@@ -4641,7 +4689,7 @@ mod tests {
 
         let mut tray = Tray::seeded(5);
         let mut mshot = ShootResult::default();
-        tray_morale(&mut next, &statics[2], 2, false, &mut tray, &mut mshot);
+        tray_morale(&mut next, &statics[2], 2, false, 4, &mut tray, &mut mshot);
         assert_eq!(mshot.rolls[0].target, 5, "Quality 4+ tested at 5+ under the debuff");
         assert!(next.buffs[2].is_empty(), "main.gd:8303 — the test die spends it");
 
@@ -4702,6 +4750,80 @@ mod tests {
         // Filtered on the Regeneration TARGET so `b`'s own post-volley morale
         // die — same kind, same owner — is never counted as one.
         r.rolls.iter().filter(|x| x.kind == "attack" && x.owner == "b" && x.target == 5).count()
+    }
+
+    // --- Wave 2 fold-gate fixture: one live grant of `rule` on unit 0. ---
+    fn fold_legs(rule: &str) -> (Vec<UnitStatic>, State) {
+        let (mut st, statics) = buff_line();
+        st.buffs[0].push(mods::LiveMod {
+            hit_mod: 0, casting_mod: 0, morale_mod: 0, grants_rule: Rc::from(rule),
+            scope: Rc::from(""), attackers: false, once: true,
+        });
+        (statics, st)
+    }
+
+    fn fold_leg(rule: &str, epoch: u32) -> Ctx {
+        let (statics, st) = fold_legs(rule);
+        ctx_live(statics[0].ctx.clone(), &statics, &st, 0, false, epoch)
+    }
+
+    #[test]
+    fn the_unpredictable_shooter_mark_sets_the_shooting_die_leg_at_epoch_4_only() {
+        assert!(fold_leg("Unpredictable Shooter", 4).unpredictable_shooting);
+        assert!(!fold_leg("Unpredictable Shooter", 3).unpredictable_shooting);
+        let (statics, st) = fold_legs("Unpredictable Shooter");
+        assert!(!ctx_live(statics[0].ctx.clone(), &statics, &st, 2, false, 4).unpredictable_shooting,
+            "the leg rides the GRANT, not the bare bearer");
+    }
+
+    #[test]
+    fn self_repair_boost_buff_folds_the_regen_target_at_epoch_4_only() {
+        let on = fold_leg("Self-Repair Boost", 4);
+        assert!(on.regeneration && on.regen_target == SELF_REPAIR_BOOST_TARGET);
+        assert_eq!(on.regen_target_spell, SELF_REPAIR_BOOST_TARGET);
+        let off = fold_leg("Self-Repair Boost", 3);
+        assert!(!off.regeneration && off.regen_target == 0, "epoch 3 replays the Gen-0 set");
+        let (statics, st) = fold_legs("Self-Repair Boost");
+        let mut regen6 = Ctx { regeneration: true, regen_target: 6, regen_target_spell: 6, ..statics[0].ctx.clone() };
+        let mixed = ctx_live(regen6, &statics, &st, 0, false, 4);
+        assert_eq!(mixed.regen_target, 5, "the running MIN picks the granted 5+");
+        assert_eq!(mixed.regen_target_spell, 5);
+    }
+
+    #[test]
+    fn cursed_undead_and_angelic_blessing_boost_buffs_fold_their_printed_legs() {
+        let cursed = fold_leg("Cursed Undead Boost", 4);
+        assert!(cursed.regeneration && cursed.regen_target == CURSED_UNDEAD_BOOST_TARGET);
+        let angelic = fold_leg("Angelic Blessing Boost", 4);
+        assert_eq!(angelic.regen_target_spell, ANGELIC_BLESSING_BOOST_TARGET_SPELL);
+        assert!(!angelic.regeneration, "spell_only never touches the normal leg");
+        let off = fold_leg("Cursed Undead Boost", 3);
+        assert!(!off.regeneration && off.regen_target_spell == 0);
+    }
+
+    #[test]
+    fn hold_the_line_boost_buff_joins_the_morale_net_at_epoch_4_only() {
+        let (statics, mut st) = fold_legs("Hold the Line Boost");
+        let mut tray = Tray::seeded(5);
+        let mut mshot = ShootResult::default();
+        tray_morale(&mut st.clone(), &statics[0], 0, false, 4, &mut tray, &mut mshot);
+        let on = mshot.rolls[0].target;
+        st.buffs[0].clear();
+        let mut tray_b = Tray::seeded(5);
+        let mut mshot_b = ShootResult::default();
+        tray_morale(&mut st, &statics[0], 0, false, 4, &mut tray_b, &mut mshot_b);
+        assert_eq!(on, (mshot_b.rolls[0].target - HOLD_THE_LINE_BOOST_MORALE_BONUS).clamp(2, 6),
+            "epoch 4: the printed morale_bonus 2 joins the same [2,6]-clamped net");
+    }
+    #[test]
+    fn the_unwieldy_debuff_strikes_the_granted_charger_last_at_epoch_4_only() {
+        let (statics, st) = fold_legs("Unwieldy");
+        let (st2, statics2) = buff_line();
+        let s4 = Seams { rules_epoch: 4, ..Seams::default() };
+        let s3 = Seams { rules_epoch: 3, ..Seams::default() };
+        assert!(charger_strikes_last(&statics, &st, 0, s4));
+        assert!(!charger_strikes_last(&statics, &st, 0, s3), "epoch 3 replays blind");
+        assert!(!charger_strikes_last(&statics2, &st2, 0, s4), "no rule, no leg");
     }
 
     /// B2b — the two write-half names. Casting Buff picks by the
@@ -7373,7 +7495,7 @@ mod cast_fold_tests {
 
         let base = ctx_of(&statics[st.roster.profile[0]], &st, 0);
         assert!(!base.furious, "the static profile carries no Furious of its own");
-        let live = ctx_live(base, &statics, &st, 0, true);
+        let live = ctx_live(base, &statics, &st, 0, true, 4);
         assert!(live.furious, "THIS round's melee context sees the grant");
 
         let p = ShootProfile { range: 0, ..Default::default() };
@@ -7386,7 +7508,7 @@ mod cast_fold_tests {
         // strike makes (`spend_exchange`) — nothing survives into round 2.
         crate::mods::spend_once(&mut st, 0, &[crate::mods::Role::Grant], true);
         assert!(!crate::mods::granted(&st, 0, "Furious"), "the exchange consumed the grant");
-        let next_round = ctx_live(base, &statics, &st, 0, true);
+        let next_round = ctx_live(base, &statics, &st, 0, true, 4);
         assert!(!next_round.furious, "gone for the round after — no double-dip");
     }
 }

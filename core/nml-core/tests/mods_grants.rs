@@ -101,6 +101,33 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
     (st, vec![UnitStatic::default(), UnitStatic::default()])
 }
 
+/// A single-model gf carrier with `rules` and no weapons of its own.
+fn carrier(rules: &[&str]) -> Profile {
+    Profile {
+        unit_id: "u".into(), name: "u".into(), quality: 4, defense: 4, tough: 1,
+        wounds_max: vec![], model_count: 1, weapons: vec![],
+        special_rules: rules.iter().map(|s| s.to_string()).collect(),
+        caster_value: 0, base_radius: 0.0, base_shape: String::new(),
+        base_w_mm: 0.0, base_d_mm: 0.0, game_system: "gf".into(),
+        faction_folder: "elven_jesters".into(),
+        item_grants: vec![], attached_hero_rules: vec![], move_bands: MoveBands::default(),
+    }
+}
+
+/// The wave-2 STAMP gate (`acts::rule_on`, literal 4): a "Utility Buff" name
+/// this wave ports reaches `UnitStatic.utility_buffs` only from epoch 4 — the
+/// real registry entry (gf elven_jesters fields "Slayer Mark") proves the walk.
+#[test]
+fn the_wave2_utility_buff_names_stamp_only_from_epoch_4() {
+    let repo = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
+    let mut reg = nml_core::Registries::new(&repo);
+    let on = UnitStatic::build_for(&mut reg, &carrier(&["Slayer Mark"]), 4);
+    let off = UnitStatic::build_for(&mut reg, &carrier(&["Slayer Mark"]), 3);
+    assert_eq!(on.utility_buffs.len(), 1, "epoch 4: the wave-2 name stamps");
+    assert!(off.utility_buffs.is_empty(), "the gate keeps pre-epoch-4 records blind");
+    assert_eq!(&*on.utility_buffs[0].grants_rule, "Slayer", "the entry's grants_rule");
+}
+
 fn grant(rule: &str, scope: &str, once: bool) -> LiveMod {
     LiveMod {
         hit_mod: 0,
@@ -120,7 +147,7 @@ fn mark(rule: &str) -> LiveMod {
 }
 
 fn live_ctx(st: &nml_core::State, statics: &[UnitStatic], i: usize, melee: bool) -> Ctx {
-    ctx_live(ctx_of(&statics[st.roster.profile[i]], st, i), statics, st, i, melee)
+    ctx_live(ctx_of(&statics[st.roster.profile[i]], st, i), statics, st, i, melee, 4)
 }
 
 /// The brief's own example, on the real tray: a unit WITHOUT Furious plus a
@@ -246,7 +273,7 @@ fn a_mark_on_the_bearer_hands_its_attacker_the_rending_grant() {
     );
     let marked = ctx_live_vs(
         ctx_of(&statics[marked_state.roster.profile[0]], &marked_state, 0),
-        &statics, &marked_state, 0, 1, false,
+        &statics, &marked_state, 0, 1, false, 4,
     );
     assert!(marked.rending_grant, "the mark reaches the ATTACKER's shooting context");
     let with = resolve_volley_with_tray(
