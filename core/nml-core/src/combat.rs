@@ -60,6 +60,12 @@ pub const SELF_REPAIR_TARGET: i64 = 6;
 /// SPELL wounds on 2+.
 pub const RESISTANCE_TARGET: i64 = 6;
 pub const RESISTANCE_TARGET_SPELL: i64 = 2;
+// --- Wave 2, "Utility Buff" family: the granted-boost entries' own printed
+// values, uniform on every shipped gf/aof occurrence (HIT_AND_RUN_MOVE_IN).
+pub const SELF_REPAIR_BOOST_TARGET: i64 = 5;
+pub const CURSED_UNDEAD_BOOST_TARGET: i64 = 5;
+pub const ANGELIC_BLESSING_BOOST_TARGET_SPELL: i64 = 2;
+pub const HOLD_THE_LINE_BOOST_MORALE_BONUS: i64 = 2;
 
 #[inline]
 fn clampi(v: i64, lo: i64, hi: i64) -> i64 {

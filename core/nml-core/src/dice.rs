@@ -34,7 +34,7 @@ use crate::combat::{
     RENDING_AP_BONUS, SHROUD_FLOOR_IN, SHROUD_RANGE_PENALTY_IN, THRUST_AP_BONUS, UNMODIFIED_SIX,
 };
 use crate::rng::GodotRng;
-use crate::unit::{Ctx, ShootProfile};
+use crate::unit::{CondAp, Ctx, ShootProfile};
 
 /// One dice tray: the generator `seed_tray_rng` seeds, and nothing else.
 #[derive(Debug, Clone, Copy)]
@@ -180,6 +180,23 @@ fn sixes(faces: &[u8]) -> i64 {
 /// never re-trigger (`faces` here is always the ORIGINAL roll, never the
 /// extras). Shared by `resolve_volley_with_tray` and `resolve_melee_with_tray`
 /// — the table resolves both through the same `_solo_hits`.
+/// Wave 2 grant stand-ins — the family's printed shapes, uniform on every
+/// shipped occurrence (HIT_AND_RUN_MOVE_IN precedent).
+fn primal_boost_grant_profile() -> ShootProfile {
+    ShootProfile { surge_attack: true, surge_attack_low: 5, ..Default::default() }
+}
+
+fn slayer_grant_cond() -> CondAp {
+    CondAp {
+        ap_bonus: 2, condition: "vs_tough_ge".into(), threshold: 3,
+        gate: "ranged_over_or_charge".into(), over_in: 9.0, ..Default::default()
+    }
+}
+
+fn piercing_assault_grant_cond() -> CondAp {
+    CondAp { ap_bonus: 1, condition: "on_charge".into(), ..Default::default() }
+}
+
 fn surge_attack_hits(
     p: &ShootProfile,
     faces: &[u8],
@@ -592,7 +609,7 @@ pub fn resolve_volley_with_tray(
         }
         target = modified_hit_target(target, m);
         let mut versatile_ap = 0;
-        if p.versatile_attack && mod_dist_in > LONG_RANGE_IN {
+        if (p.versatile_attack || att.versatile_grant) && mod_dist_in > LONG_RANGE_IN {
             let (hit_mod, ap_mod) = versatile_best_mode(
                 target,
                 shielded_defense(def.defense, def.shielded),
@@ -652,6 +669,10 @@ pub fn resolve_volley_with_tray(
         // helper's own doc). Draws its own tray slot right after Surge's,
         // matching `_solo_hits`'s order.
         hits += surge_attack_hits(p, &faces, count_target, sh.owner, tray, &mut out.rolls);
+        // Wave 2 — a granted "Primal Boost", the same low-surge form.
+        if att.surge_grant {
+            hits += surge_attack_hits(&primal_boost_grant_profile(), &faces, count_target, sh.owner, tray, &mut out.rolls);
+        }
         // `AiCombatMath.sergeant_bonus_hits` :493-494 — the bearer's unmodified
         // 6s, capped at its own attack share. The EV path values this
         // (combat.rs:339-342); the dice path must not be the poorer twin, even
@@ -687,6 +708,11 @@ pub fn resolve_volley_with_tray(
         // shooting and melee both (`_solo_attack_groups` adds it to `prof
         // ["ap"]` regardless of which the caller built profiles for).
         let mut ap = p.ap + upr_ap + versatile_ap + att.growth_ap_mod;
+        // Wave 2 — the "AP(+1) when shooting" mark's flat AP, off its
+        // epoch-gated Ctx leg (`sim::ctx_live`).
+        if att.pierce_shooting_grant {
+            ap += 1;
+        }
         // Rung I (audit 2026-09-02, DEFECT_LEDGER row 31) — the SAME `cond_ap`
         // fold `profile_ev` uses (combat.rs) now reaches the dice save target
         // too, gated by `Knobs::cond_ap_dice` (absent/OFF replays every
@@ -694,9 +720,13 @@ pub fn resolve_volley_with_tray(
         // is false here; the `ranged_over`/`ranged_over_or_charge` gates read
         // `mod_dist_in`, the NML-1152 modifier-distance split, not the plain
         // range gap.
-        if cond_ap_dice {
+            if cond_ap_dice {
             for c in &p.cond_ap {
                 ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, false, mod_dist_in, false);
+            }
+            // Wave 2 — the Slayer mark's granted conditional (epoch-gated).
+            if att.slayer_grant {
+                ap += conditional_ap_bonus(&slayer_grant_cond(), def.tough.max(1), def.defense, false, mod_dist_in, false);
             }
         }
         let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, att.shred_grant, shred_alias_dice, tray, &mut out);
@@ -962,6 +992,10 @@ pub fn resolve_melee_with_tray(
             // Block B6 — the extra-ATTACK-DIE Surge siblings (Predator Fighter
             // is melee-only, so this is the branch it actually fires on).
             hits += surge_attack_hits(p, &faces, count_target, sh.owner, tray, &mut out.rolls);
+            // Wave 2 — a granted "Primal Boost", the same low-surge form.
+            if sh.att.surge_grant {
+                hits += surge_attack_hits(&primal_boost_grant_profile(), &faces, count_target, sh.owner, tray, &mut out.rolls);
+            }
             // Furious :4477 — the unit-level rule the table stamps onto every
             // melee profile (main.gd:4343): unmodified 6s, charge only.
             if charging && sh.att.furious {
@@ -990,7 +1024,8 @@ pub fn resolve_melee_with_tray(
             // Block B7 — Piercing Growth's AP delta, melee half (see the
             // shooting site's own note above).
             let mut ap = p.ap + uf_ap + sh.att.growth_ap_mod
-                + if charging && (p.thrust || sh.att.thrust_grant) { THRUST_AP_BONUS } else { 0 };
+                + if charging && (p.thrust || sh.att.thrust_grant) { THRUST_AP_BONUS } else { 0 }
+                + if sh.att.pierce_melee_grant { 1 } else { 0 };
             // Rung I — the melee half of the same `cond_ap` fold, same
             // `Knobs::cond_ap_dice` gate as the shooting half. Real `charging`
             // is already this function's own parameter (unlike `profile_ev`'s
@@ -999,6 +1034,14 @@ pub fn resolve_melee_with_tray(
             if cond_ap_dice {
                 for c in &p.cond_ap {
                     ap += conditional_ap_bonus(c, def.tough.max(1), def.defense, charging, 0.0, true);
+                }
+                // Wave 2 — the Slayer mark and Piercing Assault on their
+                // granted legs, the same ladder the weapon-stamped conds ride.
+                if sh.att.slayer_grant {
+                    ap += conditional_ap_bonus(&slayer_grant_cond(), def.tough.max(1), def.defense, charging, 0.0, true);
+                }
+                if sh.att.pierce_assault_grant {
+                    ap += conditional_ap_bonus(&piercing_assault_grant_cond(), def.tough.max(1), def.defense, charging, 0.0, true);
                 }
             }
             let mut w = save_batch(p, def, def_owner, ap4, save_def, ap + on6, sh.att.shred_grant, shred_alias_dice, tray, &mut out);
@@ -2517,6 +2560,82 @@ mod tests {
         let shipped = resolve_melee_with_tray(
             &[striker(&p, &[0], &[6], &us.ctx)], &def, "Target", true, true, true, &mut on);
         assert_eq!(shipped.rolls[1].target, 5, "knob ON: the same charge now saves at 5+");
+    }
+
+// --- Wave 2 granted-rule READS: legs folded in `sim::ctx_live` (gated there).
+
+    #[test]
+    fn the_versatile_attack_buff_picks_the_shoot_arm_over_9_in() {
+        let p = [rifle(8)];
+        let def = defender(4, 5);
+        let mut t1 = Tray::seeded(27);
+        let on = Ctx { quality: 4, versatile_grant: true, ..shooter(4) };
+        let mut t2 = Tray::seeded(27);
+        let g = resolve_volley_with_tray(&[striker(&p, &[0], &[8], &on)], &def, "Target", 12.0, 12.0, true, true, true, &mut t1);
+        let pl = resolve_volley_with_tray(&[striker(&p, &[0], &[8], &shooter(4))], &def, "Target", 12.0, 12.0, true, true, true, &mut t2);
+        assert!(g.rolls[1].target != pl.rolls[1].target || g.rolls[0].target != pl.rolls[0].target,
+            "the granted pick_one must move a target");
+    }
+
+    #[test]
+    fn the_slayer_mark_folds_granted_ap_vs_tough_3_at_both_legs() {
+        let p = [rifle(8)];
+        let tough = Ctx { defense: 4, models: 5, tough: 3, ..defender(4, 5) };
+        let mut t1 = Tray::seeded(27);
+        let on = Ctx { quality: 4, slayer_grant: true, ..shooter(4) };
+        let mut t2 = Tray::seeded(27);
+        let g = resolve_volley_with_tray(&[striker(&p, &[0], &[8], &on)], &tough, "Target", 12.0, 12.0, true, true, true, &mut t1);
+        assert_eq!(g.rolls[1].target, 6, "over 9\" vs Tough 3+: the granted AP(+2) lands");
+        let pl = resolve_volley_with_tray(&[striker(&p, &[0], &[8], &shooter(4))], &tough, "Target", 12.0, 12.0, true, true, true, &mut t2);
+        assert_eq!(pl.rolls[1].target, 4, "no grant, no AP");
+        let mut t3 = Tray::seeded(27);
+        let blades = [blade(6)];
+        let m = resolve_melee_with_tray(&[striker(&blades, &[0], &[6], &on)], &tough, "Target", true, true, true, &mut t3);
+        assert_eq!(m.rolls[1].target, 6, "charging vs Tough 3+: the melee leg lands too");
+    }
+
+    #[test]
+    fn the_piercing_assault_buff_folds_granted_ap_on_the_charge() {
+        let blades = [blade(6)];
+        let def = defender(4, 5);
+        let mut t1 = Tray::seeded(27);
+        let on = Ctx { quality: 4, pierce_assault_grant: true, ..shooter(4) };
+        let mut t2 = Tray::seeded(27);
+        let c = resolve_melee_with_tray(&[striker(&blades, &[0], &[6], &on)], &def, "Target", true, true, true, &mut t1);
+        assert_eq!(c.rolls[1].target, 5, "the granted on_charge AP(+1) lands");
+        let s = resolve_melee_with_tray(&[striker(&blades, &[0], &[6], &on)], &def, "Target", false, true, true, &mut t2);
+        assert_eq!(s.rolls[1].target, 4, "no charge: the granted condition stays shut");
+    }
+
+    #[test]
+    fn the_piercing_shooting_and_fighting_marks_fold_their_flat_ap() {
+        let p = [rifle(8)];
+        let def = defender(4, 5);
+        let mut t1 = Tray::seeded(27);
+        let sg = Ctx { quality: 4, pierce_shooting_grant: true, ..shooter(4) };
+        let g = resolve_volley_with_tray(&[striker(&p, &[0], &[8], &sg)], &def, "Target", 12.0, 12.0, true, true, true, &mut t1);
+        assert_eq!(g.rolls[1].target, 5, "AP(+1) when shooting");
+        let blades = [blade(6)];
+        let mut t2 = Tray::seeded(27);
+        let mg = Ctx { quality: 4, pierce_melee_grant: true, ..shooter(4) };
+        let mut t3 = Tray::seeded(27);
+        let m = resolve_melee_with_tray(&[striker(&blades, &[0], &[6], &mg)], &def, "Target", false, true, true, &mut t2);
+        assert_eq!(m.rolls[1].target, 5, "AP(+1) in melee");
+        let pl = resolve_volley_with_tray(&[striker(&p, &[0], &[8], &shooter(4))], &def, "Target", 12.0, 12.0, true, true, true, &mut t3);
+        assert_eq!(pl.rolls[1].target, 4, "the marks ride their grant, not the bearer");
+    }
+
+    #[test]
+    fn the_primal_boost_buff_draws_the_granted_low_surge_dice() {
+        let blades = [blade(6)];
+        let on = Ctx { quality: 4, surge_grant: true, ..shooter(4) };
+        let mut t1 = Tray::seeded(27);
+        let def = defender(4, 5);
+        let mut t2 = Tray::seeded(27);
+        let g = resolve_melee_with_tray(&[striker(&blades, &[0], &[6], &on)], &def, "Target", false, true, true, &mut t1);
+        let pl = resolve_melee_with_tray(&[striker(&blades, &[0], &[6], &shooter(4))], &def, "Target", false, true, true, &mut t2);
+        let attacks = |r: &ShootResult| r.rolls.iter().filter(|x| x.kind == "attack").count();
+        assert_eq!(attacks(&g) - attacks(&pl), 1, "the low-surge draw is its own extra attack roll");
     }
 
     /// The CLASS FIX (external review 03.09. item 3 / F9, `acts::rule_on`):
