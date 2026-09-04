@@ -1051,7 +1051,30 @@ impl Core {
             );
             m.insert("repel_m".into(), (us.repel_ambushers_dist_in * nmlcore::IN2M).into());
             m.insert("beacon".into(), carries("Ambush Beacon").into());
-            m.insert("earliest".into(), if carries("Rapid Ambush") { 1 } else { 2 }.into());
+            // Ambush family (rules-wave2-ambush): the registry's own values at
+            // `rules_epoch` 4 — `beacon_in` off the "Ambush Beacon" entry, the
+            // table's 6" constant below it (:9766); `arrive_from_round` off
+            // "Rapid Ambush", the name-literal 1/2 ladder below it (:9832-9835).
+            m.insert(
+                "beacon_r_m".into(),
+                if us.ambush_family.beacon_radius_in > 0.0 {
+                    us.ambush_family.beacon_radius_in * nmlcore::IN2M
+                } else {
+                    deployment::AMBUSH_BEACON_RADIUS_IN * nmlcore::IN2M
+                }
+                .into(),
+            );
+            m.insert(
+                "earliest".into(),
+                if us.ambush_family.arrive_from_round > 0 {
+                    us.ambush_family.arrive_from_round
+                } else if carries("Rapid Ambush") {
+                    1
+                } else {
+                    2
+                }
+                .into(),
+            );
             m.insert("flying".into(), (carries("Strider") || carries("Flying")).into());
             m.insert("radius".into(), deployment::deploy_footprint_radius(n, p.base_radius).into());
             m.insert("base_r".into(), p.base_radius.into());

@@ -716,7 +716,11 @@ pub fn resolve_volley_with_tray(
         // Block B7 — Piercing Growth: main.gd:4287's marker-driven AP delta,
         // shooting and melee both (`_solo_attack_groups` adds it to `prof
         // ["ap"]` regardless of which the caller built profiles for).
-        let mut ap = p.ap + upr_ap + versatile_ap + att.growth_ap_mod;
+        let mut ap = p.ap + upr_ap + versatile_ap + att.growth_ap_mod
+            // Ambush family (rules-wave2-ambush): "Ambushing Piercing Shot"'s
+            // arrival-round AP(+1) — SHOOTING only, the melee fold at :992
+            // never reads it (its own facet gate).
+            + att.ambush_arrival_ap;
         // Wave 2 — the "AP(+1) when shooting" mark's flat AP, off its
         // epoch-gated Ctx leg (`sim::ctx_live`).
         if att.pierce_shooting_grant {

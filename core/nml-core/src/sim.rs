@@ -1359,6 +1359,15 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
     let (ap, hit) = growth_bonus_of(statics, state, i);
     c.growth_ap_mod = ap;
     c.growth_hit_mod = hit;
+    // Ambush family (rules-wave2-ambush): "Ambushing Piercing Shot" shoots
+    // AP(+1) on the very round the unit arrives — `ambush_arrived_round` is
+    // the stamp `arrive_unit`/`_finish_reserve_arrival` writes, and `!melee`
+    // is the rule's own shooting-only facet. Zero below `rules_epoch` 4 (the
+    // family stamp is epoch-gated) and for every EV-only path: those never
+    // call `ctx_live`, the same buff-blindness `growth_ap_mod` keeps.
+    if !melee && state.ambush_arrived_round[i] == state.round {
+        c.ambush_arrival_ap = statics[state.roster.profile[i]].ambush_family.deploy_round_ap;
+    }
     c
 }
 

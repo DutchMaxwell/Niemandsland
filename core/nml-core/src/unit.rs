@@ -214,6 +214,16 @@ pub struct Ctx {
     /// the SHOOTING to-hit target only (`_solo_hit_mod_info`'s melee branch
     /// returns before that code runs, main.gd:5608-5648).
     pub growth_hit_mod: i64,
+    // --- Ambush family (rules-wave2-ambush). ZERO on every `ctx_of` (baked
+    // into `ctx_for`), like `growth_ap_mod` — only `sim::ctx_live` reads the
+    // arrival stamp and folds it in, so the EV imagination stays blind to it
+    // exactly like the growth markers above. ---
+    /// "Ambushing Piercing Shot": the AP(+N) its weapons shoot with on the
+    /// very round the unit ARRIVES via Ambush (GF v3.5.3, "AP(+1) when
+    /// shooting on the round in which it deploys via this rule"). SHOOTING
+    /// only — the melee fold never reads it. Stamped in `ctx_live` off
+    /// `State.ambush_arrived_round` (the stamp `arrive_unit` writes).
+    pub ambush_arrival_ap: i64,
     // --- Block C2 — the melee / charge leg of the Shot Modifier family,
     // `_solo_hit_mod_info`'s melee branch (main.gd:5658-5668): an entry is
     // kept when `all_attacks` OR `melee_only` OR (`when: "charge"` on a
@@ -532,6 +542,11 @@ pub struct UnitStatic {
     /// is `RulesRegistry.unit_param(unit, "Infiltrate", "min_enemy_dist_in",
     /// …)` (`:9620`), so a book that moves the ring moves it here too.
     pub infiltrate_min_enemy_dist_in: f64,
+    /// Ambush family (rules-wave2-ambush) — the four registry names that ride
+    /// the "Ambush" primitive, each read at its OWN literal with the entry's
+    /// own params (`ambush_family_of`). Every field is its zero-value when the
+    /// unit carries no such name or the record predates `rules_epoch` 4.
+    pub ambush_family: AmbushFamily,
     /// Ambush arrival S2 — `SoloController.repel_ambush_dist_m`
     /// (solo_controller.gd:9724-9727): the ring THIS unit projects onto enemy
     /// ambushers arriving near it, `0.0` without the rule. A defender's rule —
@@ -1189,6 +1204,7 @@ fn ctx_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Ctx {
         pierce_assault_grant: false,
         growth_ap_mod: 0,
         growth_hit_mod: 0,
+        ambush_arrival_ap: 0,
     }
 }
 
@@ -1562,6 +1578,80 @@ fn utility_buffs_of(reg: &mut Registries, p: &Profile, rules_epoch: u32, un: &mu
         }
     }
     out
+}
+
+/// The Ambush family's own stamp (rules-wave2-ambush, 2026-09-04): the four
+/// registry names that ride the "Ambush" primitive, each read at its OWN
+/// literal — never a `rules_of_primitive` loop, the #489 trusted-whole trap
+/// (an untracked primitive's token alone over-credits every name under it).
+/// Gated `rule_on(rules_epoch, 4)` with the LITERAL 4: a wave-3 bump of
+/// `CURRENT_RULES_EPOCH` must not re-date these reads (see `acts::rule_on`).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct AmbushFamily {
+    /// "Ambushing Piercing Shot": `counts_as: "Ambush"` — the unit deploys AS
+    /// an ambusher. Read here; the deploy-flag seam itself (list-side
+    /// `_deploy_flags` has no live-registry reading) is a future port.
+    pub counts_as_ambush: bool,
+    /// The same name's shooting half: AP(+1) on the round the unit ARRIVES
+    /// via Ambush (GF v3.5.3 rule text; the registry fields no AP param, the
+    /// fixed +1 is the table's own hardcode shape — the Shred precedent).
+    pub deploy_round_ap: i64,
+    /// "Ambush Beacon": the carrier's waiver-circle radius in inches
+    /// (`beacon_in`, the table's `beacon_radius_m` :9775-9777), the registry
+    /// 6" fallback when the entry carries no value. 0.0 = no beacon rule.
+    pub beacon_radius_in: f64,
+    /// "Rapid Ambush": the round the carrier may first arrive from
+    /// (`arrive_from_round`), the table's `ambush_earliest_round` :9832-9835
+    /// hardcode as fallback. 0 = no Rapid Ambush (plain Ambush "round 2", the
+    /// caller owns that answer).
+    pub arrive_from_round: i64,
+    /// "Ambush Re-Deployment": `re_reserve` + `uses_per_game` — the entry's
+    /// params, read and stamped. The once-per-game withdraw beat itself is a
+    /// future port: an OPTIONAL end-of-activation choice needs a core seam
+    /// (and a policy) this wave does not invent.
+    pub re_reserve: bool,
+    pub re_reserve_uses: i64,
+}
+
+/// The Ambush family's per-profile read (`UnitStatic.ambush_family`): each
+/// name gated by `unit_rule_active` — the unit carries it AND the map fields
+/// it for this (system, faction) — with the entry's own params on top.
+fn ambush_family_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> AmbushFamily {
+    let mut f = AmbushFamily::default();
+    if !rule_on(rules_epoch, 4) {
+        return f;
+    }
+    for n in [
+        "Ambushing Piercing Shot",
+        "Ambush Beacon",
+        "Rapid Ambush",
+        "Ambush Re-Deployment",
+    ] {
+        if !unit_rule_active(reg, p, n) {
+            continue;
+        }
+        let Some(e) = reg.rules_for(&p.game_system).lookup(&p.faction_folder, n) else {
+            continue;
+        };
+        match n {
+            "Ambushing Piercing Shot" => {
+                f.counts_as_ambush = e.param_s("counts_as") == "Ambush";
+                f.deploy_round_ap = 1;
+            }
+            "Ambush Beacon" => {
+                f.beacon_radius_in =
+                    e.param_f("beacon_in", crate::deployment::AMBUSH_BEACON_RADIUS_IN);
+            }
+            "Rapid Ambush" => {
+                f.arrive_from_round = e.param_i("arrive_from_round", 1).max(0);
+            }
+            _ => {
+                f.re_reserve = e.param_b("re_reserve");
+                f.re_reserve_uses = e.param_i("uses_per_game", 1).max(0);
+            }
+        }
+    }
+    f
 }
 
 /// One "Growth Markers" registry entry — `_solo_growth_markers`/`_growth_
@@ -1943,6 +2033,7 @@ impl UnitStatic {
             } else {
                 0.0
             },
+            ambush_family: ambush_family_of(reg, p, rules_epoch),
             utility_buffs: utility_buffs_of(reg, p, rules_epoch, &mut unimplemented),
             growth: growth_of(reg, p, &mut unimplemented),
             unimplemented,
@@ -2117,6 +2208,119 @@ mod tests {
         "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
         "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]},
           {"name":"Blade","range":0,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// Ambush family (rules-wave2-ambush) — the rule-less carrier template:
+    /// `ambush_family_of` swaps a rule into `special_rules` (empty = the
+    /// no-rule arm) and the faction over so the REAL gf registry entry
+    /// resolves — the same factions the mechanics map fields.
+    const AMBUSH_FAMILY_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "carrier":{"unit_id":"carrier","name":"Carrier","quality":4,
+        "defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,
+        "base_radius":0.016,"game_system":"gf","faction_folder":"robot_legions",
+        "special_rules":[],"item_grants":[],
+        "attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},
+        "weapons":[{"name":"Rifle","range":24,"attacks":1,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    /// One name's family stamp at `epoch`: the `rule` swapped into the
+    /// carrier's special_rules, the faction over so the real entry resolves.
+    fn ambush_family_of(rule: &str, faction: &str, epoch: u32) -> AmbushFamily {
+        let tpl = AMBUSH_FAMILY_HEADER
+            .replace("\"special_rules\":[]", &format!("\"special_rules\":[\"{rule}\"]"))
+            .replace("\"faction_folder\":\"robot_legions\"", &format!("\"faction_folder\":\"{faction}\""));
+        let header = read_act_header(&tpl).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        let p = header.profiles.get("carrier").expect("carrier");
+        UnitStatic::build_for(&mut reg, p, epoch).ambush_family
+    }
+
+    /// "Ambushing Piercing Shot" (gf/jackals): counts-as + the arrival-round
+    /// AP(+1) at epoch 4 — and NOTHING at epoch 3 or without the rule. Epoch
+    /// literals 4/3, NOT `CURRENT_RULES_EPOCH`: a wave-3 bump must not
+    /// re-date what these assertions mean.
+    #[test]
+    fn an_ambushing_piercing_shot_counts_as_ambush_with_its_arrival_round_ap_at_epoch_4() {
+        assert_eq!(
+            ambush_family_of("Ambushing Piercing Shot", "jackals", 4),
+            AmbushFamily { counts_as_ambush: true, deploy_round_ap: 1, ..Default::default() },
+            "counts-as and the AP(+1) at the family's own epoch"
+        );
+        assert_eq!(
+            ambush_family_of("Ambushing Piercing Shot", "jackals", 3),
+            AmbushFamily::default(),
+            "the wave is epoch-gated"
+        );
+        assert_eq!(
+            ambush_family_of("", "jackals", 4),
+            AmbushFamily::default(),
+            "no rule, no stamp"
+        );
+    }
+
+    /// "Ambush Beacon" (gf/eternal_dynasty): the registry's `beacon_in` is
+    /// the waiver radius at epoch 4; epoch 3 and the rule-less carrier stay
+    /// 0.0 (the caller's constant answers for them).
+    #[test]
+    fn an_ambush_beacons_radius_is_the_registrys_beacon_in_at_epoch_4() {
+        assert_eq!(
+            ambush_family_of("Ambush Beacon", "eternal_dynasty", 4).beacon_radius_in,
+            6.0,
+            "the registry's own beacon_in"
+        );
+        assert_eq!(
+            ambush_family_of("Ambush Beacon", "eternal_dynasty", 3).beacon_radius_in,
+            0.0,
+            "the wave is epoch-gated"
+        );
+        assert_eq!(
+            ambush_family_of("", "eternal_dynasty", 4).beacon_radius_in,
+            0.0,
+            "no rule, no beacon"
+        );
+    }
+
+    /// "Rapid Ambush" (gf/dark_brothers): `arrive_from_round` 1 at epoch 4 —
+    /// the round the table's `ambush_earliest_round` hardcodes; epoch 3 and
+    /// the rule-less carrier stay 0 (the caller's own ladder answers).
+    #[test]
+    fn a_rapid_ambusher_arrives_from_the_registrys_round_at_epoch_4() {
+        assert_eq!(
+            ambush_family_of("Rapid Ambush", "dark_brothers", 4).arrive_from_round,
+            1,
+            "the registry's own arrive_from_round"
+        );
+        assert_eq!(
+            ambush_family_of("Rapid Ambush", "dark_brothers", 3).arrive_from_round,
+            0,
+            "the wave is epoch-gated"
+        );
+        assert_eq!(
+            ambush_family_of("", "dark_brothers", 4).arrive_from_round,
+            0,
+            "no rule, no first-round arrival"
+        );
+    }
+
+    /// "Ambush Re-Deployment" (gf/elven_jesters): `re_reserve` +
+    /// `uses_per_game` stamped at epoch 4; epoch 3 and the rule-less carrier
+    /// stay false/0. The withdraw beat itself is a future port.
+    #[test]
+    fn an_ambush_re_deployment_stamps_its_once_per_game_params_at_epoch_4() {
+        assert_eq!(
+            ambush_family_of("Ambush Re-Deployment", "elven_jesters", 4),
+            AmbushFamily { re_reserve: true, re_reserve_uses: 1, ..Default::default() },
+            "the registry's own re_reserve/uses_per_game"
+        );
+        assert_eq!(
+            ambush_family_of("Ambush Re-Deployment", "elven_jesters", 3),
+            AmbushFamily::default(),
+            "the wave is epoch-gated"
+        );
+        assert_eq!(
+            ambush_family_of("", "elven_jesters", 4),
+            AmbushFamily::default(),
+            "no rule, no re-reserve"
+        );
+    }
 
     /// One rule's truth table through the template: the (shoot, melee) bane
     /// stamp at `epoch`, with `rule` swapped into the carrier's special_rules

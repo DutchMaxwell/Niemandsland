@@ -206,6 +206,17 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # The plain "Lacerate" name keeps its own-token PORTED through the
     # weapon-level literal read (unit.rs::base_profile) regardless of params.
     "Lacerate": frozenset({"bypass_regen", "melee_only", "shooting_only"}),
+    # Ambush family (rules-wave2-ambush, 2026-09-04): unit.rs
+    # ::ambush_family_of reads each name at its OWN literal, gated
+    # `rule_on(rules_epoch, 4)` — "Ambushing Piercing Shot"'s counts_as (+
+    # its name-literal arrival-round AP(+1), consumed by dice.rs's volley
+    # fold via sim::ctx_live), "Ambush Beacon"'s beacon_in and "Rapid
+    # Ambush"'s arrive_from_round (both consumed by the core-py
+    # arrival_reads export), "Ambush Re-Deployment"'s re_reserve/
+    # uses_per_game (stamped; the once-per-game withdraw beat is a future
+    # port). Without this row the primitive is trusted whole for every name
+    # under it — the #489 over-credit shape.
+    "Ambush": frozenset({"counts_as", "beacon_in", "arrive_from_round", "re_reserve", "uses_per_game"}),
 }
 
 

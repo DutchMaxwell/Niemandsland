@@ -900,13 +900,6 @@ DEPLOYMENT_MODES = ("zone", "arena", "interleaved")
 #: and a corpus recorded at one fidelity must never be replayed at another.
 AMBUSH_MODES = ("off", "table")
 
-#: `AMBUSH_BEACON_RADIUS_IN` (solo_controller.gd:9766) in metres. The registry
-#: fields no `Ambush Beacon` entry at all (grepped, five books, zero hits), so
-#: `beacon_radius_m`'s `unit_param` would return this fallback for every
-#: carrier anyway — the `HIT_AND_RUN_MOVE_IN` precedent: a constant, named,
-#: with the reason it is one.
-AMBUSH_BEACON_RADIUS_M = 6.0 * IN2M
-
 
 def resolve_ambush(ambush: str) -> bool:
     """`ambush` as the bit `play_game` branches on. An unknown mode RAISES for
@@ -984,7 +977,11 @@ def _arrive_reserves(plain, reads, board, objectives, opener: int, round_no: int
             for p, rr in zip(ou["positions"], ou["radii"])
         ]
         beacons = [
-            {"pos": [p[0], p[2]], "radius_m": AMBUSH_BEACON_RADIUS_M}
+            # Ambush family (rules-wave2-ambush): the radius is the carrier's
+            # own registry `beacon_in` (arrival_reads, epoch 4) over the
+            # table's 6" constant — AMBUSH_BEACON_RADIUS_M's stale
+            # "no registry entry" claim is gone with the constant.
+            {"pos": [p[0], p[2]], "radius_m": reads[k]["beacon_r_m"]}
             for k, ou in live
             if int(ou["player"]) == side and reads[k]["beacon"]
             for p in ou["positions"]
