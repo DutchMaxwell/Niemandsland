@@ -29,7 +29,7 @@ use crate::combat::{
 use crate::rules::{
     base_rule_name, has_special_rule, rule_rating, unit_rating, Registries, Spell,
 };
-use crate::state::{Profile, Profiles, Weapon};
+use crate::state::{Bands, Profile, Profiles, Weapon};
 
 /// `AiEv` unit context — `ctx_for`'s dictionary as a struct. `models`,
 /// `in_cover` and `fatigued` are the DYNAMIC three `BattleSim._ctx_of`
@@ -442,6 +442,28 @@ pub struct UnitStatic {
     /// `Action::traced` draw (`sim::bounding_bonus_in`) ports its value; this
     /// stamp is the named rule's own evidence, not a simulation input.
     pub bounding: Option<f64>,
+    /// The Quick/Fast move-band family — the named carriers' own registry
+    /// params, summed the way BOTH band passes stack them (per rule NAME:
+    /// `movement_range_controller.gd:164-188`'s `counted` dict,
+    /// `list_to_profile.py::_move_bands`'s twin). `Some` only when a carrier
+    /// is active AND the registry's epoch has reached `CURRENT_RULES_EPOCH`
+    /// (`rule_on(rules_epoch, CURRENT_RULES_EPOCH)`); a pre-port header
+    /// reads `None`.
+    ///
+    /// Census/evidence-only on this core (the accepted `bounding` shape, PR
+    /// #653): the effect reaches it precomputed — the two band passes fold
+    /// these same params into the profile `move_bands` this core consumes as
+    /// `state.bands` — so a live re-fold at the move seam would double-count
+    /// a recorded band; this stamp is the core's own per-entry read, never a
+    /// simulation input. The conditions the entries also record
+    /// (`charge_only`, `upgrades`, `terrain_within_in`, `uses_per_game`) are
+    /// read by nobody on this core — neither twin's band pass reads them
+    /// either, so the flat fold IS the shipped behaviour. The conditional
+    /// names (Speed Feat, Grounded Speed, Highborn Boost, Scurry Boost) stay
+    /// OUT of this loop for exactly that reason: their entries express the
+    /// magnitudes but not the conditions, so stamping them would claim
+    /// coverage the core does not have.
+    pub move_rule_mods: Option<Bands>,
     /// Versatile Reach (solo_controller.gd:1787-1789) — `Some(charge_bonus_in)`
     /// when the unit carries the rule, i.e. the CHARGE half of the per-activation
     /// "pick one". The `range_bonus_in` half is NOT stamped: this core models no
@@ -1690,6 +1712,35 @@ fn bounding_of(reg: &mut Registries, p: &Profile) -> Option<f64> {
     None
 }
 
+/// The Quick/Fast move-band family's own per-entry param read — a named-
+/// carrier loop credited by each name's OWN literal, never by a shared
+/// primitive token (the census's trusted-whole trap, #489; the bare `fast`
+/// token already exists as `doctrine.rs::StyleLabel::Fast` and must not start
+/// crediting Fast-primitive entries). Sums every carrier the way the two band
+/// passes stack them: per rule NAME, each contributing its own
+/// `advance_mod`/`rush_mod` (`charge_mod` as the fallback). Epoch-gated:
+/// `None` below `CURRENT_RULES_EPOCH` — see `UnitStatic::move_rule_mods`.
+fn move_rule_mods_of(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> Option<Bands> {
+    if !rule_on(rules_epoch, CURRENT_RULES_EPOCH) {
+        return None;
+    }
+    // zero-banded, NOT `Bands::default()` — those serde defaults are the
+    // 6"/12" OPR fallback, not zero.
+    let (mut acc, mut hit) = (Bands { advance: 0.0, rush: 0.0 }, false);
+    for name in ["Agile", "Highborn", "Quick", "Scurry", "Rapid Charge", "Rapid Charge Aura"] {
+        if !unit_rule_active(reg, p, name) {
+            continue;
+        }
+        let map = reg.rules_for(&p.game_system);
+        if let Some(e) = map.lookup(&p.faction_folder, name) {
+            acc.advance += e.param_f("advance_mod", 0.0);
+            acc.rush += e.param_f("rush_mod", e.param_f("charge_mod", 0.0));
+            hit = true;
+        }
+    }
+    if hit { Some(acc) } else { None }
+}
+
 impl UnitStatic {
     /// The legacy epoch-0 build — every corpus recorded before
     /// `Knobs::rules_epoch` existed reads back that epoch, so this answers
@@ -1709,7 +1760,6 @@ impl UnitStatic {
     /// gate rides the same line the profile table does.
     pub fn build_for(reg: &mut Registries, p: &Profile, rules_epoch: u32) -> UnitStatic {
         let mut unimplemented: Vec<Unimplemented> = Vec::new();
-
         let mut shoot = profiles_in_range(&p.weapons, 0.0);
         stamp(reg, p, &mut shoot, &mut unimplemented);
         stamp_conditional_ap(reg, p, &mut shoot);
@@ -1773,6 +1823,7 @@ impl UnitStatic {
             breath_attack_active: unit_rule_active(reg, p, "Breath Attack"),
             is_hero: has_special_rule(&p.special_rules, "Hero"),
             bounding: bounding_of(reg, p),
+            move_rule_mods: move_rule_mods_of(reg, p, rules_epoch),
             versatile_reach_charge_in: if unit_rule_active(reg, p, "Versatile Reach")
                 || has_special_rule(&p.special_rules, "Versatile Reach Aura")
             {
@@ -2990,5 +3041,154 @@ mod tests {
         let plain = header.profiles.get("plain_alien_hives").expect("plain_alien_hives");
         let reads = capture_reads(&mut reg, plain);
         assert_eq!(reads.morale_bonus, 0, "no Courageous, no bonus");
+    }
+
+    /// The Quick/Fast move-band family's six carriers, one per real gf faction
+    /// block (`assets/solo/rules_mechanics_gf.json`), each next to a plain
+    /// sibling in the SAME faction so the (system, faction, name) lookup is
+    /// real. Three rows per name: stamped with the rule at
+    /// CURRENT_RULES_EPOCH, absent without the rule, absent at epoch 0 —
+    /// the same reading the recorded (epoch 0/2) corpora replay with.
+    const QUICKFAST_HEADER: &str = r#"{"kind":"header","knobs":{},"profiles":{
+      "agile_unit":{"unit_id":"agile_unit","name":"Agile Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"dark_elf_raiders","special_rules":["Agile"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_dark_elf_raiders":{"unit_id":"plain_dark_elf_raiders","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"dark_elf_raiders","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "highborn_unit":{"unit_id":"highborn_unit","name":"Highborn Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"high_elf_fleets","special_rules":["Highborn"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_high_elf_fleets":{"unit_id":"plain_high_elf_fleets","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"high_elf_fleets","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "quick_unit":{"unit_id":"quick_unit","name":"Quick Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"goblin_reclaimers","special_rules":["Quick"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_goblin_reclaimers":{"unit_id":"plain_goblin_reclaimers","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"goblin_reclaimers","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "scurry_unit":{"unit_id":"scurry_unit","name":"Scurry Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"ratmen_clans","special_rules":["Scurry"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_ratmen_clans":{"unit_id":"plain_ratmen_clans","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"ratmen_clans","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "rapid_charge_unit":{"unit_id":"rapid_charge_unit","name":"Rapid Charge Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"wormhole_daemons_of_war","special_rules":["Rapid Charge"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_wormhole_daemons_of_war":{"unit_id":"plain_wormhole_daemons_of_war","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"wormhole_daemons_of_war","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "rapid_charge_aura_unit":{"unit_id":"rapid_charge_aura_unit","name":"Rapid Charge Aura Unit","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":["Rapid Charge Aura"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "rapid_charge_expanded_unit":{"unit_id":"rapid_charge_expanded_unit","name":"Rapid Charge Expanded","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":["Rapid Charge Aura","Rapid Charge"],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]},
+      "plain_alien_hives_qf":{"unit_id":"plain_alien_hives_qf","name":"Plain","quality":4,"defense":3,"tough":1,"wounds_max":[1],"model_count":1,"caster_value":0,"base_radius":0.016,"game_system":"gf","faction_folder":"alien_hives","special_rules":[],"item_grants":[],"attached_hero_rules":[],"move_bands":{"advance":6.0,"rush":12.0},"weapons":[{"name":"Rifle","range":24,"attacks":2,"count":1,"ap":0,"rules":[]}]}}}"#;
+
+    fn quickfast_bands(name: &str, rules_epoch: u32) -> Option<Bands> {
+        let header = read_act_header(QUICKFAST_HEADER).expect("header");
+        let mut reg = Registries::new(&repo_root());
+        UnitStatic::build_for(&mut reg, header.profiles.get(name).expect(name), rules_epoch).move_rule_mods
+    }
+
+    /// Agile rides Quick's own params (+1" Advance, +2" Rush/Charge) — the
+    /// entry's own `advance_mod`/`rush_mod`, not a constant. RED: drop the
+    /// `move_rule_mods_of` arm (or the registry entry) and the carrier falls
+    /// to `None`.
+    #[test]
+    fn agile_stamps_its_own_advance_and_rush_mods() {
+        assert_eq!(
+            quickfast_bands("agile_unit", CURRENT_RULES_EPOCH),
+            Some(Bands { advance: 1.0, rush: 2.0 })
+        );
+        assert_eq!(
+            quickfast_bands("plain_dark_elf_raiders", CURRENT_RULES_EPOCH),
+            None,
+            "no Agile, no stamp"
+        );
+        assert_eq!(quickfast_bands("agile_unit", 0), None, "epoch 0 reads the pre-port row");
+    }
+
+    /// Highborn = the Quick primitive's +2"/+2" alias. RED: drop the loop's
+    /// "Highborn" literal (or the entry): `None`.
+    #[test]
+    fn highborn_stamps_the_quick_primitive_bands() {
+        assert_eq!(
+            quickfast_bands("highborn_unit", CURRENT_RULES_EPOCH),
+            Some(Bands { advance: 2.0, rush: 2.0 })
+        );
+        assert_eq!(
+            quickfast_bands("plain_high_elf_fleets", CURRENT_RULES_EPOCH),
+            None,
+            "no Highborn, no stamp"
+        );
+        assert_eq!(quickfast_bands("highborn_unit", 0), None, "epoch 0 is pre-port");
+    }
+
+    /// Quick itself — the name pass's own constant rule (+2"/+2"), stamped
+    /// from its own entry's params. RED: drop the "Quick" literal: `None`.
+    #[test]
+    fn quick_stamps_its_own_entry_params() {
+        assert_eq!(
+            quickfast_bands("quick_unit", CURRENT_RULES_EPOCH),
+            Some(Bands { advance: 2.0, rush: 2.0 })
+        );
+        assert_eq!(
+            quickfast_bands("plain_goblin_reclaimers", CURRENT_RULES_EPOCH),
+            None,
+            "no Quick, no stamp"
+        );
+        assert_eq!(quickfast_bands("quick_unit", 0), None, "epoch 0 is pre-port");
+    }
+
+    /// Scurry = the Quick primitive's ratmen alias (+2"/+2"). RED: drop the
+    /// "Scurry" literal (or the entry): `None`.
+    #[test]
+    fn scurry_stamps_its_own_entry_params() {
+        assert_eq!(
+            quickfast_bands("scurry_unit", CURRENT_RULES_EPOCH),
+            Some(Bands { advance: 2.0, rush: 2.0 })
+        );
+        assert_eq!(
+            quickfast_bands("plain_ratmen_clans", CURRENT_RULES_EPOCH),
+            None,
+            "no Scurry, no stamp"
+        );
+        assert_eq!(quickfast_bands("scurry_unit", 0), None, "epoch 0 is pre-port");
+    }
+
+    /// Rapid Charge rides Fast's `rush_mod` (+4" Charge; the rush band is the
+    /// system's charge_reach), no advance half. RED: drop the "Rapid Charge"
+    /// literal (or the entry): `None`.
+    #[test]
+    fn rapid_charge_stamps_fast_rush_mod_only() {
+        assert_eq!(
+            quickfast_bands("rapid_charge_unit", CURRENT_RULES_EPOCH),
+            Some(Bands { advance: 0.0, rush: 4.0 })
+        );
+        assert_eq!(
+            quickfast_bands("plain_wormhole_daemons_of_war", CURRENT_RULES_EPOCH),
+            None,
+            "no Rapid Charge, no stamp"
+        );
+        assert_eq!(quickfast_bands("rapid_charge_unit", 0), None, "epoch 0 is pre-port");
+    }
+
+    /// Rapid Charge Aura — its OWN gf entry carries the same
+    /// `rush_mod`/`charge_mod` shape, so the aura name is a carrier in its
+    /// own right (the raw-name arm keeps the core independent of the import's
+    /// aura expander). The import is ADDITIVE (keeps "X Aura", appends "X"),
+    /// so a real aura unit carries BOTH names and the stamp sums to +8
+    /// exactly like both band passes' per-name `counted` stacks. RED: drop
+    /// the "Rapid Charge Aura" literal: the aura row falls to `None`.
+    #[test]
+    fn rapid_charge_aura_stamps_own_entry_and_stacks_the_expansion() {
+        assert_eq!(
+            quickfast_bands("rapid_charge_aura_unit", CURRENT_RULES_EPOCH),
+            Some(Bands { advance: 0.0, rush: 4.0 }),
+            "the aura entry's own rush_mod"
+        );
+        assert_eq!(
+            quickfast_bands("plain_alien_hives_qf", CURRENT_RULES_EPOCH),
+            None,
+            "no aura, no stamp"
+        );
+        assert_eq!(quickfast_bands("rapid_charge_aura_unit", 0), None, "epoch 0 is pre-port");
+    }
+
+    /// The import is ADDITIVE (keeps "X Aura", appends "X"), so a real aura
+    /// unit carries BOTH names and the stamp sums to +8 — exactly like both
+    /// band passes' per-name `counted` stacks.
+    #[test]
+    fn rapid_charge_aura_plus_expanded_base_stacks_like_the_loaders() {
+        assert_eq!(
+            quickfast_bands("rapid_charge_expanded_unit", CURRENT_RULES_EPOCH),
+            Some(Bands { advance: 0.0, rush: 8.0 }),
+            "aura + expanded base, the loaders' per-name stack"
+        );
+        assert_eq!(
+            quickfast_bands("rapid_charge_expanded_unit", 0),
+            None,
+            "epoch 0 is pre-port"
+        );
     }
 }
