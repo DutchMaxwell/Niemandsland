@@ -9227,7 +9227,14 @@ func _solo_reach_note(attacker: GameUnit, hovered: GameUnit) -> String:
 func _solo_update_los_line(screen_pos: Vector2) -> void:
 	var attacker: GameUnit = _solo_target_mode.get("unit")
 	var hovered := _solo_pick_unit_at(screen_pos)
-	if attacker == null or hovered == null or not _solo_is_ai_unit(hovered):
+	# MP gate removal (audit row 3): a hovered unit is a target when it is the solo AI's OR — in a
+	# live multiplayer session — when it belongs to a DIFFERENT player than the attacker. The AI
+	# disjunct stays untouched, so solo behaviour is preserved unchanged.
+	var is_valid_target: bool = hovered != null and attacker != null and (
+		_solo_is_ai_unit(hovered)
+		or (network_manager != null and network_manager.is_multiplayer_active()
+			and int(hovered.unit_properties.get("player_id", 0)) != int(attacker.unit_properties.get("player_id", 0))))
+	if attacker == null or hovered == null or not is_valid_target:
 		if _solo_los_line != null and is_instance_valid(_solo_los_line):
 			_solo_los_line.visible = false
 		if _solo_los_label != null and is_instance_valid(_solo_los_label):
