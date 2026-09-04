@@ -84,6 +84,35 @@ def test_a_missing_optional_key_is_a_divergence():
     assert gr.menu_diff(got, want) == "cand[0].patient = None, recorded True"
 
 
+# ---------------------------------------------------- replay_knobs / epoch ---
+
+
+def test_replay_knobs_reads_rules_epoch_off_the_prescreen_sibling():
+    """Root cause of the 15% Gen-2 replay gap this closes: the recorder
+    stamps the epoch ONE LEVEL UP, `prescreen["rules_epoch"]`, a sibling of
+    `prescreen["knobs"]` rather than a member of it — `kn` (the record's own
+    `knobs`) is silent on `rules_epoch`, so the sibling wins over the legacy
+    pin."""
+    prescreen = {"knobs": {}, "rules_epoch": 3}
+    assert gr.replay_knobs(prescreen["knobs"], prescreen)["rules_epoch"] == 3
+
+
+def test_replay_knobs_prefers_its_own_key_over_the_sibling_stamp():
+    """A record whose own `knobs.rules_epoch` disagrees with the sibling
+    (never true today, but the rule the fallback must honour) is read off
+    `knobs` — the sibling is a FALLBACK, not an override."""
+    prescreen = {"knobs": {"rules_epoch": 2}, "rules_epoch": 3}
+    assert gr.replay_knobs(prescreen["knobs"], prescreen)["rules_epoch"] == 2
+
+
+def test_replay_knobs_keeps_the_legacy_pin_with_neither_key_present():
+    """Every Gen-0/Gen-1 file predates both `knobs.rules_epoch` and the
+    sibling stamp — this is `KNOBS`'s own unchanged behaviour before this
+    fix, `prescreen` argument included or omitted."""
+    assert gr.replay_knobs({}, {"knobs": {}})["rules_epoch"] == 0
+    assert gr.replay_knobs({})["rules_epoch"] == 0
+
+
 # ---------------------------------------------------------- green and red ---
 
 

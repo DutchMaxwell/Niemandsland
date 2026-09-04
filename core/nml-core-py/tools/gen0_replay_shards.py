@@ -103,8 +103,10 @@ def replay_game(path: str, lists: str) -> tuple:
                                dangerous_end_morale=bool(kn.get("dangerous_end_morale", False)),
                                # PR #636's fix, generalised (see `gr.replay_knobs`): every
                                # knob a shipped-default (Gen-1) record stamps itself reads
-                               # back off the record, not off gen0's own legacy pins.
-                               **gr.replay_knobs(kn))
+                               # back off the record, not off gen0's own legacy pins. The
+                               # `prescreen` sibling covers `rules_epoch` for a Gen-2 record
+                               # that stamped the epoch one level up (`gr.replay_knobs`).
+                               **gr.replay_knobs(kn, rec["prescreen"]))
         bad = "" if gr.G["i"] == len(gr.G["rows"]) else "ran dry %d/%d" % (gr.G["i"], len(gr.G["rows"]))
     except (gr.Diverged, gr.nml_core.Unsupported) as exc:
         bad = str(exc)

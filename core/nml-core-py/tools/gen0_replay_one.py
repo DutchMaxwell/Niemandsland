@@ -40,15 +40,32 @@ KNOBS = dict(selfplay.LEGACY_FIDELITY_KNOBS, sidecars=False, hero_attach="table"
              versatile_reach=False)
 
 
-def replay_knobs(kn: dict) -> dict:
+def replay_knobs(kn: dict, prescreen: dict | None = None) -> dict:
     """PR #636's fix (`tools/game_narrator.py`'s `replay()`), generalised here
     rather than duplicated in both this module and `gen0_replay_shards.py`:
     every `KNOBS`-pinned knob the RECORD itself stamps a value for wins over
     `KNOBS`'s gen0-era pin, so a shipped-default record (every one a
     `pool_value_fn`-armed A/B seat writes) replays with the knobs it was
     actually played with. A key the record is silent on (every Gen-0 file
-    here, predating it) keeps `KNOBS`'s legacy value, exactly as before."""
-    return {**KNOBS, **{k: kn[k] for k in KNOBS if k in kn}}
+    here, predating it) keeps `KNOBS`'s legacy value, exactly as before.
+
+    `rules_epoch` gets one extra fallback (root cause of the 15% Gen-2 replay
+    gap this closes, INVESTIGATION-grade proof: forcing epoch 3 replays
+    gen0_s10004_d13004.json 54/54 exact): the Gen-2 recorder stamps the epoch
+    it actually played at ONE LEVEL UP, `prescreen["rules_epoch"]`, a sibling
+    of `prescreen["knobs"]` rather than a member of it (`selfplay.play_game`
+    only started writing it INTO its own `knobs` dict, under `record_cands`,
+    after these corpora were recorded). So the order is: `kn["rules_epoch"]`
+    if the record's own knobs carry it, else `prescreen["rules_epoch"]` if
+    the sibling stamp is there, else `KNOBS`'s legacy pin (`0`) exactly as
+    before — a pre-epoch record (neither key present, every Gen-0/Gen-1 file)
+    replays exactly as it always did."""
+    merged = {**KNOBS, **{k: kn[k] for k in KNOBS if k in kn}}
+    if "rules_epoch" not in kn and prescreen is not None and "rules_epoch" in prescreen:
+        merged["rules_epoch"] = prescreen["rules_epoch"]
+        print("[replay] rules_epoch %r read from prescreen's sibling stamp "
+              "(absent from prescreen.knobs)" % prescreen["rules_epoch"])
+    return merged
 
 
 class Diverged(Exception):
@@ -142,7 +159,7 @@ def replay(path: str, lists: str, dice_offset: int) -> dict:
                                # (every corpus here) meaning OFF — this proof stays
                                # about the recording, not today's default.
                                dangerous_end_morale=bool(kn.get("dangerous_end_morale", False)),
-                               **replay_knobs(kn))
+                               **replay_knobs(kn, rec["prescreen"]))
         bad = "" if G["i"] == len(G["rows"]) else (
             "ran dry after %d of %d recorded positions" % (G["i"], len(G["rows"])))
     except Diverged as exc:
