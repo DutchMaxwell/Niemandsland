@@ -86,3 +86,150 @@ func test_clicked_model_takes_the_wound_and_rmb_hands_back_the_rest() -> void:
 	# The plain models were NOT touched by the click phase.
 	assert_bool((u.models[0] as ModelInstance).is_alive).is_true()
 	assert_bool((u.models[1] as ModelInstance).is_alive).is_true()
+
+
+# === #590 — a joined hero is part of the unit: wounds go to the host's OWN models first =========
+## GF v3.5.1 p.14: "a joined hero counts as part of the unit" — its wounds come from the SAME pool,
+## and the host's own models are the ones that take them, the hero only once every one of them is a
+## casualty. The automatic path (_solo_apply_wounds → _solo_wound_models → hero spill) already got
+## this right; these suites lock the INTERACTIVE click prompt to the same order.
+
+## A joined hero, Tough(`tough`) so a partially-absorbed wound is observable across more than one click.
+func _joined_hero(host: GameUnit, hero_name: String, tough: int) -> GameUnit:
+	var h := E2EBoot.make_unit(_main, int(host.unit_properties.get("player_id", 1)), hero_name,
+		[Vector3(0.3, 0, 0.3)])
+	(h.models[0] as ModelInstance).model_index = 0
+	h.unit_properties["special_rules"] = ["Hero"]
+	var m := h.models[0] as ModelInstance
+	m.wounds_max = tough
+	m.wounds_current = tough
+	h.unit_properties["attached_to"] = host
+	host.unit_properties["attached_heroes"] = [h]
+	return h
+
+
+## #590 RED 1/3: while the host's own model still stands, a click on the attached hero must be
+## refused — the same feedback an invalid pick gets, and no wound spent.
+func test_hero_click_refused_while_host_alive() -> void:
+	_main._solo_batch = false
+	var host := E2EBoot.make_unit(_main, 1, "Host590a", [Vector3.ZERO])
+	(host.models[0] as ModelInstance).model_index = 0
+	var hero := _joined_hero(host, "Hero590a", 1)
+	# t1: click the hero while the host still stands — must be refused, not spent.
+	get_tree().create_timer(0.25).timeout.connect(func() -> void:
+		if not _main._solo_model_pick.is_empty():
+			(_main._solo_model_pick["outcome"] as Array).append({"unit": hero, "index": 0}))
+	# t2: right-click hands the (still whole) wound to the auto path so the prompt returns.
+	get_tree().create_timer(0.6).timeout.connect(func() -> void:
+		if not _main._solo_model_pick.is_empty():
+			(_main._solo_model_pick["outcome"] as Array).append({}))
+	var left: int = await _main._solo_prompt_wound_allocation(host, 1, 1)
+	assert_int(left) \
+		.override_failure_message("the click on the hero must have been refused — nothing legal was spent") \
+		.is_equal(1)
+	assert_bool((hero.models[0] as ModelInstance).is_alive).is_true()
+	assert_int((hero.models[0] as ModelInstance).wounds_current).is_equal(1)
+	assert_bool((host.models[0] as ModelInstance).is_alive).is_true()
+
+
+## #590 boundary: eligibility is re-checked on EVERY click, never cached across the prompt — the
+## instant the host's last model falls, the SAME hero click that was just refused must be accepted.
+func test_hero_eligible_the_instant_the_host_is_destroyed() -> void:
+	_main._solo_batch = false
+	var host := E2EBoot.make_unit(_main, 1, "Host590b", [Vector3.ZERO])
+	(host.models[0] as ModelInstance).model_index = 0
+	var hero := _joined_hero(host, "Hero590b", 1)
+	# t1: the host's own model takes the first wound and dies.
+	get_tree().create_timer(0.2).timeout.connect(func() -> void:
+		if not _main._solo_model_pick.is_empty():
+			(_main._solo_model_pick["outcome"] as Array).append({"unit": host, "index": 0}))
+	# t2: the host is gone — the SAME click on the hero must now be accepted.
+	get_tree().create_timer(0.45).timeout.connect(func() -> void:
+		if not _main._solo_model_pick.is_empty():
+			(_main._solo_model_pick["outcome"] as Array).append({"unit": hero, "index": 0}))
+	var left: int = await _main._solo_prompt_wound_allocation(host, 2, 1)
+	assert_int(left).is_equal(0)
+	assert_bool((host.models[0] as ModelInstance).is_alive).is_false()
+	assert_bool((hero.models[0] as ModelInstance).is_alive).is_false()
+
+
+## #590 RED 2/3: an already-wounded Tough hero stays protected too — surviving a partial wound does
+## not waive the host-before-hero order. Two host models must BOTH fall before the hero (Tough(3),
+## already carrying one earlier wound) is eligible for its second.
+func test_already_wounded_tough_hero_stays_protected_until_host_dies() -> void:
+	_main._solo_batch = false
+	var host := E2EBoot.make_unit(_main, 1, "Host590c", [Vector3.ZERO, Vector3(0.05, 0, 0)])
+	for i in range(host.models.size()):
+		(host.models[i] as ModelInstance).model_index = i
+	var hero := _joined_hero(host, "Hero590c", 3)
+	(hero.models[0] as ModelInstance).wounds_current = 2   # one wound already landed earlier
+	# t1: refused — TWO host models still stand.
+	get_tree().create_timer(0.2).timeout.connect(func() -> void:
+		if not _main._solo_model_pick.is_empty():
+			(_main._solo_model_pick["outcome"] as Array).append({"unit": hero, "index": 0}))
+	# t2: the FIRST host model takes a wound and dies — one still stands.
+	get_tree().create_timer(0.4).timeout.connect(func() -> void:
+		if not _main._solo_model_pick.is_empty():
+			(_main._solo_model_pick["outcome"] as Array).append({"unit": host, "index": 0}))
+	# t3: refused again — the SECOND host model is still alive.
+	get_tree().create_timer(0.6).timeout.connect(func() -> void:
+		if not _main._solo_model_pick.is_empty():
+			(_main._solo_model_pick["outcome"] as Array).append({"unit": hero, "index": 0}))
+	# t4: the second host model falls — the host is now fully destroyed.
+	get_tree().create_timer(0.8).timeout.connect(func() -> void:
+		if not _main._solo_model_pick.is_empty():
+			(_main._solo_model_pick["outcome"] as Array).append({"unit": host, "index": 1}))
+	# t5: only NOW is the hero's already-wounded model eligible.
+	get_tree().create_timer(1.0).timeout.connect(func() -> void:
+		if not _main._solo_model_pick.is_empty():
+			(_main._solo_model_pick["outcome"] as Array).append({"unit": hero, "index": 0}))
+	var left: int = await _main._solo_prompt_wound_allocation(host, 3, 1)
+	assert_int(left) \
+		.override_failure_message("all three wounds were legal picks (host, host, hero) — none should be left over") \
+		.is_equal(0)
+	assert_bool((host.models[0] as ModelInstance).is_alive).is_false()
+	assert_bool((host.models[1] as ModelInstance).is_alive).is_false()
+	assert_bool((hero.models[0] as ModelInstance).is_alive) \
+		.override_failure_message("the hero absorbed 2 wounds total (1 earlier + 1 here) against Tough(3) — it must still stand") \
+		.is_true()
+	assert_int((hero.models[0] as ModelInstance).wounds_current).is_equal(1)
+
+
+## #590 RED 3/3: given the SAME starting unit and the SAME wound count, the automatic path
+## (_solo_apply_wounds on an AI unit, no prompt) and a legally ordered interactive click sequence
+## (host models first, hero last) must land on the identical casualty state — the interactive gate
+## may never legalise an order the automatic path forbids.
+func test_auto_and_interactive_paths_agree_on_the_final_casualty_state() -> void:
+	_main._solo_batch = true
+	var host_auto := E2EBoot.make_unit(_main, 2, "HostAuto590", [Vector3.ZERO, Vector3(0.05, 0, 0)])
+	for i in range(host_auto.models.size()):
+		(host_auto.models[i] as ModelInstance).model_index = i
+	var hero_auto := _joined_hero(host_auto, "HeroAuto590", 3)
+	await _main._solo_apply_wounds(host_auto, 3)   # AI-owned unit → the automatic path only, no prompt
+
+	_main._solo_batch = false
+	var host_click := E2EBoot.make_unit(_main, 1, "HostClick590", [Vector3.ZERO, Vector3(0.05, 0, 0)])
+	for i in range(host_click.models.size()):
+		(host_click.models[i] as ModelInstance).model_index = i
+	var hero_click := _joined_hero(host_click, "HeroClick590", 3)
+	# Legal order: both host models, then the hero — the same choices a rule-following player makes.
+	get_tree().create_timer(0.2).timeout.connect(func() -> void:
+		if not _main._solo_model_pick.is_empty():
+			(_main._solo_model_pick["outcome"] as Array).append({"unit": host_click, "index": 0}))
+	get_tree().create_timer(0.4).timeout.connect(func() -> void:
+		if not _main._solo_model_pick.is_empty():
+			(_main._solo_model_pick["outcome"] as Array).append({"unit": host_click, "index": 1}))
+	get_tree().create_timer(0.6).timeout.connect(func() -> void:
+		if not _main._solo_model_pick.is_empty():
+			(_main._solo_model_pick["outcome"] as Array).append({"unit": hero_click, "index": 0}))
+	var left: int = await _main._solo_prompt_wound_allocation(host_click, 3, 1)
+	assert_int(left).is_equal(0)
+
+	assert_bool((host_click.models[0] as ModelInstance).is_alive) \
+		.is_equal((host_auto.models[0] as ModelInstance).is_alive)
+	assert_bool((host_click.models[1] as ModelInstance).is_alive) \
+		.is_equal((host_auto.models[1] as ModelInstance).is_alive)
+	assert_bool((hero_click.models[0] as ModelInstance).is_alive) \
+		.is_equal((hero_auto.models[0] as ModelInstance).is_alive)
+	assert_int((hero_click.models[0] as ModelInstance).wounds_current) \
+		.is_equal((hero_auto.models[0] as ModelInstance).wounds_current)

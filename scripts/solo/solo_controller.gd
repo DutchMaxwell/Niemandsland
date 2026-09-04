@@ -8214,6 +8214,23 @@ static func apply_wounds_to_models(unit: GameUnit, wounds: int, on_changed: Call
 	return remaining
 
 
+## #590 (GF v3.5.1 p.14): a joined hero counts as part of the unit — the unit's own (non-hero)
+## models take wounds FIRST, the hero only once every one of them is a casualty. `target` is the
+## host GameUnit the wound batch landed on (the automatic path already reads it this way, see
+## _solo_apply_wounds); `picked` is the model's owning GameUnit the player just clicked. Pure/
+## testable: the SAME predicate backs the interactive click gate and its regression tests, so the
+## automatic and interactive paths can never legalise a different casualty order.
+## Re-evaluate this on EVERY click (never cache it across the allocation prompt) — the host may be
+## destroyed by an earlier click in the very same batch, at which point the hero becomes eligible
+## immediately.
+static func wound_pick_eligible(target: GameUnit, picked: GameUnit) -> bool:
+	if target == null or picked == null or picked == target:
+		return true   # the host's own models are always eligible
+	if not target.has_method("get_attached_heroes") or not target.get_attached_heroes().has(picked):
+		return true   # not an attached hero of this host — no host-before-hero restriction applies
+	return target.get_alive_count() <= 0   # eligible only once every host model is a casualty
+
+
 ## What the P8 targeting mode does with one input event (pure, testable — the event→action resolution).
 ## The mode owns the MOUSE while active: LMB picks the hovered enemy, RMB/ESC cancels, motion tracks the
 ## live LOS line. There is no "is the pointer over UI?" parameter any more: main forwards these events

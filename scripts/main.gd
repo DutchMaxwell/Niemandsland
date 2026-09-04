@@ -10953,6 +10953,15 @@ func _solo_prompt_wound_allocation(target: GameUnit, wounds: int, pid: int) -> i
 		var mi: ModelInstance = pu.models[idx]
 		if mi == null or not mi.is_alive:
 			continue
+		# #590 (GF v3.5.1 p.14): a joined hero is part of the unit — it may not take a wound while
+		# any of the unit's OWN models still stand. Re-checked on every click (never cached), so a
+		# host destroyed by an earlier click in this same batch opens the hero up immediately.
+		if not SoloController.wound_pick_eligible(target, pu):
+			if battle_log != null:
+				battle_log.log_event(BattleLog.Category.COMBAT,
+					"%s is part of %s — its own models take wounds first (GF v3.5.1 p.14)" % [
+					pu.get_name(), target.get_name()], false)
+			continue
 		left -= 1
 		_solo_apply_picked_wound(pu, mi, pid)
 		if left > 0:
