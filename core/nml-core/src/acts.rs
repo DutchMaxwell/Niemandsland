@@ -268,7 +268,28 @@ pub struct Knobs {
 /// `build_for` under the same `rules_epoch`) — every record below it keeps the
 /// flat Gen-0 prefix reading and skips the Regeneration/Counter/Surge/Shred/
 /// Quick-Fast gating alike.
-pub const CURRENT_RULES_EPOCH: u32 = 3;
+///
+/// WAVE 2 / epoch 4 (external review incident 04.09.): every one of the six
+/// call sites above was written as `rule_on(rules_epoch, CURRENT_RULES_EPOCH)`
+/// — the LIVE symbol, not a literal. Bumping this constant for a new wave
+/// would have silently re-pointed every one of them at the new value too,
+/// turning epoch-3 records into a moving target instead of a frozen one. The
+/// fix: those six call sites now read `EPOCH_3_TABLE_RULES` (below), a
+/// constant that never changes again, so `CURRENT_RULES_EPOCH` is free to
+/// keep moving forward — 4 here — with each new wave gating against its OWN
+/// frozen epoch number instead of this symbol. Wave 2's families (epoch 4)
+/// gate with the literal `4`, not `CURRENT_RULES_EPOCH`, for the same reason.
+pub const CURRENT_RULES_EPOCH: u32 = 4;
+
+/// The frozen `since_epoch` for the six families that landed together at
+/// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
+/// Lacerate+Counter wave, Surge's own gates, the Shred-family port and the
+/// Quick/Fast move-band family — see `CURRENT_RULES_EPOCH`'s doc above for
+/// where each one lives). Every one of their call sites in `unit.rs`/`sim.rs`
+/// reads THIS constant, not `CURRENT_RULES_EPOCH` — so a record stamping
+/// `rules_epoch: 3` keeps getting all six forever, no matter how many times
+/// `CURRENT_RULES_EPOCH` moves on for later waves.
+pub const EPOCH_3_TABLE_RULES: u32 = 3;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -718,7 +739,7 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{read_act_header, rule_on, CURRENT_RULES_EPOCH};
+    use super::{read_act_header, rule_on, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES};
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
     /// `rule_on` is a plain `>=`, tested at its own boundary — `since_epoch`
@@ -729,6 +750,31 @@ mod tests {
         assert!(rule_on(1, 1), "epoch reaches its own since_epoch: on");
         assert!(rule_on(2, 1), "epoch past its since_epoch: on");
         assert!(!rule_on(0, CURRENT_RULES_EPOCH), "epoch 0 is before every future port");
+    }
+
+    /// Wave 2 (epoch 4): bumping the live epoch must NOT shift the six
+    /// families frozen at epoch 3. A record stamped `rules_epoch: 3` keeps
+    /// all six ON (`EPOCH_3_TABLE_RULES`) while getting none of this wave's
+    /// epoch-4 rules yet (`CURRENT_RULES_EPOCH`) — and a fresh header stamps
+    /// the new, bumped epoch.
+    #[test]
+    fn epoch_4_bump_keeps_the_six_epoch_3_families_frozen() {
+        assert_eq!(CURRENT_RULES_EPOCH, 4, "wave 2 bumps the live epoch to 4");
+        assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
+        assert!(
+            rule_on(3, EPOCH_3_TABLE_RULES),
+            "a record at epoch 3 still replays with the six families ON"
+        );
+        assert!(
+            !rule_on(3, CURRENT_RULES_EPOCH),
+            "a record at epoch 3 gets none of the epoch-4 rules this wave ports"
+        );
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":4}}"#;
+        let header = read_act_header(head).expect("a fresh-epoch header parses");
+        assert_eq!(
+            header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
+            "a fresh play_game() now stamps the bumped epoch, 4"
+        );
     }
 
     /// An absent `rules_epoch` (every corpus recorded before this field

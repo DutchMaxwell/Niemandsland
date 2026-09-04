@@ -19,7 +19,7 @@ use crate::combat::{
 // NML-1073 M5 D6a-B4 — the per-model sight twin, used only behind `sighting`.
 use crate::sight;
 use crate::geom::{self, V3};
-use crate::acts::{rule_on, CURRENT_RULES_EPOCH};
+use crate::acts::{rule_on, EPOCH_3_TABLE_RULES};
 use crate::io::{Action, Seams, SplitShot};
 use crate::dice::{Morale, ShootResult, Tray};
 use crate::mods;
@@ -1790,7 +1790,7 @@ fn strike_phase(
     // Shred data-alias FAMILY (unit.rs::stamp's arm) — no boolean knob of its
     // own: on from the current rules epoch onward, pre-port corpora replay
     // byte-exact (dice.rs::save_batch's gate).
-    let shred_alias_dice = rule_on(seams.rules_epoch, crate::acts::CURRENT_RULES_EPOCH);
+    let shred_alias_dice = rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES);
     let r = crate::dice::resolve_melee_with_tray(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, tray);
     for (mi, sc, _) in &parts {
         let melee = &statics[next.roster.profile[*mi]].melee;
@@ -3556,9 +3556,9 @@ fn resolve_with(
                                 seams.cond_ap_dice || rule_on(seams.rules_epoch, 1),
                                 // Surge's own gates: the CLASS FIX
                                 // (`acts::rule_on`), same seam as `cond_ap_dice`.
-                                rule_on(seams.rules_epoch, CURRENT_RULES_EPOCH),
+                                rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES),
                                 // The Shred-family alias gate — the same epoch.
-                                rule_on(seams.rules_epoch, CURRENT_RULES_EPOCH),
+                                rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES),
                                 tray,
                             );
                             for (mi, msc, _) in &parts {
