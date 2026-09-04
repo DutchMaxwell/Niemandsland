@@ -276,10 +276,32 @@ pub struct Knobs {
 /// turning epoch-3 records into a moving target instead of a frozen one. The
 /// fix: those six call sites now read `EPOCH_3_TABLE_RULES` (below), a
 /// constant that never changes again, so `CURRENT_RULES_EPOCH` is free to
-/// keep moving forward — 4 here — with each new wave gating against its OWN
-/// frozen epoch number instead of this symbol. Wave 2's families (epoch 4)
-/// gate with the literal `4`, not `CURRENT_RULES_EPOCH`, for the same reason.
-pub const CURRENT_RULES_EPOCH: u32 = 4;
+/// keep moving forward with each new wave gating against its OWN frozen
+/// epoch number instead of this symbol. Wave 2's five family ports
+/// (Lacerate, Utility Buff, Surge's own wave-2 gates, Ambush — Takedown
+/// shipped 0 names) landed gating with the literal `4`, per that same
+/// convention.
+///
+/// WAVE 2 STAMPING-GAP INCIDENT (04.09.): PR #671 bumped this constant to
+/// `4` to RESERVE the epoch for wave 2 before any wave-2 rule existed. Every
+/// `play_game()` in the window between that PR and the five family ports
+/// landing (`rules-wave2-*`) stamped `rules_epoch: 4` with NONE of those
+/// rules active — the Gen-2b corpus (41,997 records, recorded at main
+/// `cf8831d1`) is exactly that window. Once the family ports landed gating
+/// on the literal `4`, replaying Gen-2b against the new code silently
+/// turned its records into a moving target: verified divergence tonight.
+/// Freezing wave 2's gates at `4` (mirroring `EPOCH_3_TABLE_RULES` naively)
+/// would PRESERVE the bug — `rule_on(4, 4)` stays `true` forever, so
+/// Gen-2b keeps getting rules it was never recorded with. The fix bumps
+/// this constant to `5` AND freezes wave 2's gates one past the poisoned
+/// value, at `EPOCH_5_TABLE_RULES == 5` (below): a record stamped
+/// `rules_epoch: 4` (Gen-2b included) now reads `rule_on(4, 5) == false` —
+/// replaying exactly as it did before any wave-2 rule existed — while a
+/// fresh header stamping the bumped epoch (`5`) reads `rule_on(5, 5) ==
+/// true` and gets every wave-2 family. Every wave from here on must check,
+/// before reusing a just-reserved epoch number for its gates, whether any
+/// corpus was already stamped with it in the reservation window.
+pub const CURRENT_RULES_EPOCH: u32 = 5;
 
 /// The frozen `since_epoch` for the six families that landed together at
 /// epoch 3 (Regeneration's DATA-ALIAS wave, the Bane scope ladder, the
@@ -290,6 +312,25 @@ pub const CURRENT_RULES_EPOCH: u32 = 4;
 /// `rules_epoch: 3` keeps getting all six forever, no matter how many times
 /// `CURRENT_RULES_EPOCH` moves on for later waves.
 pub const EPOCH_3_TABLE_RULES: u32 = 3;
+
+/// The frozen `since_epoch` for wave 2's five family ports (Lacerate,
+/// Utility Buff, Surge's own wave-2 gates, Ambush — Takedown ported 0 names,
+/// nothing to freeze). Named the same way `EPOCH_3_TABLE_RULES` is: the
+/// epoch a record needs to reach to get these rules — NOT the epoch their
+/// code happened to be written under (every "WAVE 2" comment in
+/// `unit.rs`/`sim.rs` still says the literal `4`, since that's what wave 2
+/// was written against before this fix). See the WAVE 2 STAMPING-GAP
+/// INCIDENT note on `CURRENT_RULES_EPOCH` above for why the NEEDED epoch is
+/// `5`, one past the family ports' own literal: Gen-2b was already stamping
+/// `rules_epoch: 4` before this wave's rule code existed, so `4` would keep
+/// that corpus wrongly getting these rules forever. `5` instead excludes
+/// every record stamped `4` or below (Gen-2b included) while still catching
+/// every wave-2 call site's original intent (a fresh record from the moment
+/// these rules landed onward). Every one of `unit.rs`/`sim.rs`'s wave-2 call
+/// sites reads THIS constant, not the literal `4` or `CURRENT_RULES_EPOCH`,
+/// so a record stamping `rules_epoch: 5` keeps getting all five forever, no
+/// matter how many times `CURRENT_RULES_EPOCH` moves on for later waves.
+pub const EPOCH_5_TABLE_RULES: u32 = 5;
 
 /// The class-fix gate itself: true once `rules_epoch` has reached `since_epoch`.
 /// `cond_ap_dice` and `versatile_reach` are re-expressed through it at
@@ -739,7 +780,10 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{read_act_header, rule_on, MeleeReach, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES};
+    use super::{
+        read_act_header, rule_on, MeleeReach, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES,
+        EPOCH_5_TABLE_RULES,
+    };
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
     /// `rule_on` is a plain `>=`, tested at its own boundary — `since_epoch`
@@ -752,28 +796,54 @@ mod tests {
         assert!(!rule_on(0, CURRENT_RULES_EPOCH), "epoch 0 is before every future port");
     }
 
-    /// Wave 2 (epoch 4): bumping the live epoch must NOT shift the six
+    /// Wave 2 (epoch 4 -> 5): bumping the live epoch must NOT shift the six
     /// families frozen at epoch 3. A record stamped `rules_epoch: 3` keeps
-    /// all six ON (`EPOCH_3_TABLE_RULES`) while getting none of this wave's
-    /// epoch-4 rules yet (`CURRENT_RULES_EPOCH`) — and a fresh header stamps
-    /// the new, bumped epoch.
+    /// all six ON (`EPOCH_3_TABLE_RULES`) while getting none of wave 2's
+    /// rules yet (`EPOCH_5_TABLE_RULES`) — and a fresh header stamps the
+    /// new, bumped epoch.
     #[test]
-    fn epoch_4_bump_keeps_the_six_epoch_3_families_frozen() {
-        assert_eq!(CURRENT_RULES_EPOCH, 4, "wave 2 bumps the live epoch to 4");
+    fn epoch_5_bump_keeps_the_six_epoch_3_families_frozen() {
+        assert_eq!(CURRENT_RULES_EPOCH, 5, "wave 3's reservation bumps the live epoch to 5");
         assert_eq!(EPOCH_3_TABLE_RULES, 3, "the six epoch-3 families stay frozen at 3, forever");
         assert!(
             rule_on(3, EPOCH_3_TABLE_RULES),
             "a record at epoch 3 still replays with the six families ON"
         );
         assert!(
-            !rule_on(3, CURRENT_RULES_EPOCH),
-            "a record at epoch 3 gets none of the epoch-4 rules this wave ports"
+            !rule_on(3, EPOCH_5_TABLE_RULES),
+            "a record at epoch 3 gets none of wave 2's rules"
         );
-        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":4}}"#;
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"rules_epoch":5}}"#;
         let header = read_act_header(head).expect("a fresh-epoch header parses");
         assert_eq!(
             header.knobs.rules_epoch, CURRENT_RULES_EPOCH,
-            "a fresh play_game() now stamps the bumped epoch, 4"
+            "a fresh play_game() now stamps the bumped epoch, 5"
+        );
+    }
+
+    /// The WAVE 2 STAMPING-GAP INCIDENT fix itself (04.09.): `EPOCH_5_TABLE_RULES`
+    /// must freeze wave 2's five family ports at `5`, NOT `4` — Gen-2b (41,997
+    /// records, recorded at main `cf8831d1`) already stamped `rules_epoch: 4`
+    /// in the window between `CURRENT_RULES_EPOCH` reaching `4` (PR #671) and
+    /// the family ports landing, so freezing at `4` would keep it wrongly
+    /// getting wave 2's rules forever. This is the RED/GREEN proof: on the
+    /// unbumped code (`CURRENT_RULES_EPOCH == 4`, wave-2 call sites gated on
+    /// the literal `4`), a Gen-2b-shaped header (`rules_epoch: 4`) WOULD get
+    /// wave 2's rules (`rule_on(4, 4) == true`) — exactly the divergence
+    /// found tonight; after this fix it must not.
+    #[test]
+    fn epoch_5_table_rules_excludes_the_gen2b_stamping_gap_at_epoch_4() {
+        assert_eq!(
+            EPOCH_5_TABLE_RULES, 5,
+            "wave 2's gates freeze one PAST the poisoned epoch-4 stamp, not at it"
+        );
+        assert!(
+            !rule_on(4, EPOCH_5_TABLE_RULES),
+            "a record stamped rules_epoch:4 (Gen-2b's stamping-gap window) gets none of wave 2"
+        );
+        assert!(
+            rule_on(5, EPOCH_5_TABLE_RULES),
+            "a record stamped rules_epoch:5 (recorded after this fix) gets all of wave 2"
         );
     }
 

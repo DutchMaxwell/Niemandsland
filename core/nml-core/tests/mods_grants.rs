@@ -114,17 +114,24 @@ fn carrier(rules: &[&str]) -> Profile {
     }
 }
 
-/// The wave-2 STAMP gate (`acts::rule_on`, literal 4): a "Utility Buff" name
-/// this wave ports reaches `UnitStatic.utility_buffs` only from epoch 4 — the
-/// real registry entry (gf elven_jesters fields "Slayer Mark") proves the walk.
+/// The wave-2 STAMP gate (`acts::rule_on`, `EPOCH_5_TABLE_RULES`): a "Utility
+/// Buff" name this wave ports reaches `UnitStatic.utility_buffs` only from
+/// epoch 5 — the real registry entry (gf elven_jesters fields "Slayer Mark")
+/// proves the walk. Frozen at 5, NOT the naive 4: Gen-2b (41,997 records,
+/// recorded at main `cf8831d1`) already stamped `rules_epoch: 4` before this
+/// wave's rule code existed (`acts::EPOCH_5_TABLE_RULES`'s stamping-gap
+/// note), so `rules_epoch: 4` must stay blind too, not just `3`.
 #[test]
-fn the_wave2_utility_buff_names_stamp_only_from_epoch_4() {
+fn the_wave2_utility_buff_names_stamp_only_from_epoch_5() {
     let repo = format!("{}/../..", env!("CARGO_MANIFEST_DIR"));
     let mut reg = nml_core::Registries::new(&repo);
-    let on = UnitStatic::build_for(&mut reg, &carrier(&["Slayer Mark"]), 4);
-    let off = UnitStatic::build_for(&mut reg, &carrier(&["Slayer Mark"]), 3);
-    assert_eq!(on.utility_buffs.len(), 1, "epoch 4: the wave-2 name stamps");
-    assert!(off.utility_buffs.is_empty(), "the gate keeps pre-epoch-4 records blind");
+    let on = UnitStatic::build_for(&mut reg, &carrier(&["Slayer Mark"]), 5);
+    let off = UnitStatic::build_for(&mut reg, &carrier(&["Slayer Mark"]), 4);
+    assert_eq!(on.utility_buffs.len(), 1, "epoch 5: the wave-2 name stamps");
+    assert!(
+        off.utility_buffs.is_empty(),
+        "the gate keeps rules_epoch 4 (Gen-2b's stamping-gap window) blind too, RED before the fix"
+    );
     assert_eq!(&*on.utility_buffs[0].grants_rule, "Slayer", "the entry's grants_rule");
 }
 
