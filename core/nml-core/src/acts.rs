@@ -739,7 +739,7 @@ pub fn read_acts<R: BufRead>(reader: R, origin: &str) -> Result<ActCorpus, Strin
 
 #[cfg(test)]
 mod tests {
-    use super::{read_act_header, rule_on, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES};
+    use super::{read_act_header, rule_on, MeleeReach, CURRENT_RULES_EPOCH, EPOCH_3_TABLE_RULES};
 
     /// The CLASS FIX's one gate (external review 03.09. item 3 / F9):
     /// `rule_on` is a plain `>=`, tested at its own boundary — `since_epoch`
@@ -823,5 +823,27 @@ mod tests {
         let head = r#"{"kind":"header","profiles":{},"knobs":{}}"#;
         let header = read_act_header(head).expect("no knobs at all still parses");
         assert_eq!(header.knobs.eval_variant, 0);
+    }
+
+    /// W2 S0 (issue #635) — an absent `melee_reach` (every corpus recorded
+    /// before this knob existed, and every corpus recorded so far: neither
+    /// `TRAINER_KNOBS` nor `act_recorder.gd` stamp it yet) defaults to
+    /// `MeleeReach::All`, the enum's own `#[default]` — untouched by the
+    /// #635 fix, which moves only `play_game()`'s own default — so a
+    /// Gen-0/Gen-1/Gen-2 replay stays byte-identical.
+    #[test]
+    fn an_absent_melee_reach_defaults_to_all_and_parses() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{}}"#;
+        let header = read_act_header(head).expect("no knobs at all still parses");
+        assert_eq!(header.knobs.melee_reach, MeleeReach::All);
+    }
+
+    /// A header that stamps `melee_reach:"table"` (what a fresh
+    /// `play_game()` writes from now on) carries it through unchanged.
+    #[test]
+    fn a_stamped_melee_reach_table_parses_through() {
+        let head = r#"{"kind":"header","profiles":{},"knobs":{"melee_reach":"table"}}"#;
+        let header = read_act_header(head).expect("a stamped melee_reach parses");
+        assert_eq!(header.knobs.melee_reach, MeleeReach::Table);
     }
 }

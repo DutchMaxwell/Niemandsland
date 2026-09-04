@@ -778,6 +778,31 @@ def resolve_sighting(sighting: str) -> str:
     return sighting
 
 
+#: `melee_reach` modes (W2 S0, PR #616 / issue #635). "all" is every corpus
+#: recorded so far, `~/selfplay_out/gen0_teacher` included: every alive model
+#: of the unit strikes, `combat::effective_attacks` scaled by `alive` alone.
+#: "table" is the shipped default HERE (issue #635): GF v3.5.1 p.9 "Who Can
+#: Strike" — only the models within 2" of an enemy model
+#: (`combat::striking_models`). The crate has carried the header knob since
+#: PR #616 (`acts::MeleeReach`); no recorder (`act_recorder.gd`, this
+#: trainer's own `TRAINER_KNOBS`) has ever stamped it, so every Gen-1/Gen-1b/
+#: Gen-2 training game was played with the reach limit off. A replay tool
+#: passes a record's own key back, and `LEGACY_FIDELITY_KNOBS` pins it "all"
+#: for a gate holding the fast trainer to a corpus recorded before this rung.
+MELEE_REACH_MODES = ("all", "table")
+
+
+def resolve_melee_reach(melee_reach: str) -> str:
+    """The validated `melee_reach` mode, as the header spells it. An unknown
+    mode RAISES for the same reason `resolve_dice` does: a corpus whose
+    header claims a rung it did not play is worse than no corpus."""
+    if melee_reach not in MELEE_REACH_MODES:
+        raise ValueError(
+            "melee_reach must be one of %s, not %r" % (list(MELEE_REACH_MODES), melee_reach)
+        )
+    return melee_reach
+
+
 #: `los` modes (NML-1160). "unit" is the default and every corpus written
 #: before this knob: `capture` stamps `los_pairs` from `SchoolTerrain.
 #: los_blocked` (`tools/core_selfplay.gd:675`), a unit-CENTRE to unit-CENTRE
@@ -903,6 +928,10 @@ LEGACY_FIDELITY_KNOBS: dict[str, Any] = dict(
     charge_gate="off", menu_wide="off", menu_los="planner",
     los="unit", hero_last=False, cast_fold=False, ambush="off",
     cond_ap_dice=False, versatile_reach=False, rules_epoch=0,
+    # W2 S0 (issue #635) — `play_game()`'s own default moved to "table";
+    # every corpus recorded before this rung (Gen-0/Gen-1/Gen-1b/Gen-2 alike)
+    # played "all", so a gate holding the trainer to one of them pins it back.
+    melee_reach="all",
 )
 
 
@@ -1129,6 +1158,12 @@ TRAINER_KNOBS = {
     # every future rule gated on `rule_on` stays off for this trainer's own
     # bundle until it is re-recorded, same as `cond_ap_dice`/`versatile_reach`.
     "rules_epoch": 0,
+    # W2 S0 (issue #635) — GF v3.5.1 p.9 "Who Can Strike". "all" here because
+    # `~/selfplay_out/gen0_teacher` (and every Gen-1/Gen-1b/Gen-2 bundle this
+    # trainer has recorded so far) was played with every alive model striking:
+    # `play_game(melee_reach="table")` overrides it in its own per-game copy,
+    # which is now the default (`MELEE_REACH_MODES`).
+    "melee_reach": "all",
 }
 
 # `AiActRecorder.begin` :65-66 — the planner's per-activation class statics, all
@@ -1932,6 +1967,14 @@ def play_game(
     movement: str = "rigid",
     ambush: str = "table",
     sighting: str = "unit",
+    # W2 S0 (issue #635) — GF v3.5.1 p.9 "Who Can Strike": only the models
+    # within 2" of an enemy model fight in melee (`combat::striking_models`),
+    # instead of every alive model of the unit. "table" is the shipped
+    # default HERE; a replay tool passes a record's own key back, and
+    # `LEGACY_FIDELITY_KNOBS`/`TRAINER_KNOBS` pin it "all" for every corpus
+    # recorded before this rung (Gen-0/Gen-1/Gen-1b/Gen-2 alike — none of
+    # them stamped it, so all of them were played with the reach limit off).
+    melee_reach: str = "table",
     los: str = "model",
     menu_los: str = "resolve",
     deep_menu_los: str | None = None,
@@ -2281,6 +2324,7 @@ def play_game(
     eff_movement = resolve_movement(movement)
     eff_ambush = resolve_ambush(ambush)
     eff_sighting = resolve_sighting(sighting)
+    eff_melee_reach = resolve_melee_reach(melee_reach)
     eff_los = resolve_los(los)
     eff_menu_los = resolve_menu_los(menu_los)
     eff_menu_wide = resolve_menu_wide(menu_wide)
@@ -2325,6 +2369,11 @@ def play_game(
         # crate's own default and what every earlier corpus carries, so a caller
         # that passes nothing writes the identical header.
         sighting=eff_sighting,
+        # W2 S0 (issue #635): GF v3.5.1 p.9's 2" reach limit on who may strike
+        # in melee. "table" is the shipped default HERE; a replay tool or
+        # `LEGACY_FIDELITY_KNOBS`/`TRAINER_KNOBS` passes "all" for a corpus
+        # recorded before this rung.
+        melee_reach=eff_melee_reach,
         # NML-1160: WHICH sight the menu and the resolve read. "unit" leaves it
         # False, which is the default and what every earlier corpus carries.
         los_model=eff_los,
@@ -2792,6 +2841,14 @@ def play_game(
             # key IS "off", which is what every corpus so far played.
             **({"ambush": ambush} if eff_ambush else {}),
             "sighting": eff_sighting,
+            # W2 S0 (issue #635): WHICH melee reach rule the game played.
+            # Stamped only away from "all" (the `ambush`/`los` idiom, NOT
+            # `sighting`'s): "all" is every corpus recorded so far, so a
+            # caller pinned to `LEGACY_FIDELITY_KNOBS`/`TRAINER_KNOBS` (every
+            # existing byte-identical digest test included) writes the exact
+            # object it wrote before this knob existed, and a replay tool
+            # still reads a "table" record's own value back.
+            **({"melee_reach": eff_melee_reach} if eff_melee_reach != "all" else {}),
             # NML-1160: WHICH sight the game played. Stamped only under
             # "model", for the same reason `deployment` is only stamped under
             # "arena": a default game is the object it was before the knob.
@@ -3121,6 +3178,15 @@ def main(argv: list[str]) -> int:
         "before D6a-B4 carries",
     )
     ap.add_argument(
+        "--melee-reach",
+        choices=list(MELEE_REACH_MODES),
+        default="table",
+        help="GF v3.5.1 p.9 'Who Can Strike': 'table' (default, issue #635) "
+        "limits a strike to the models within 2\" of an enemy model; 'all' is "
+        "every corpus recorded so far (Gen-0/Gen-1/Gen-1b/Gen-2), which never "
+        "stamped this knob and so was played with every alive model striking",
+    )
+    ap.add_argument(
         "--net",
         default="",
         help="NML-1142 — a netlab/fork_train.py ENCODER net JSON; arms the "
@@ -3199,6 +3265,7 @@ def main(argv: list[str]) -> int:
             movement=a.movement,
             ambush=a.ambush,
             sighting=a.sighting,
+            melee_reach=a.melee_reach,
             net=a.net or None,
             net_player=a.net_player,
             fit_blend=a.fit_blend,

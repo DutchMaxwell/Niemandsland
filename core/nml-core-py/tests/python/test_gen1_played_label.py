@@ -36,7 +36,10 @@ this file can toggle):
         recorded 50"`);
   (ii)  exporting that same record through `gen0_replay_shards` labels
         every row `cands["played"]`, never `cands["best"]` (they differ at
-        19 of 50 rows in the fixture below);
+        17 of 47 rows in the fixture below — issue #635's `melee_reach`
+        defaulting to "table" for a fresh `play_game()` shortened this
+        fixture from 50 to 47 rows; re-measured, replay still matches
+        exactly, `divergence == ""`);
   (iii) an OLD Gen-0 record (predating `played`) still replays 100% and
         exports the byte-identical shard it always did — measured by hand,
         sha256 `1168e0f76dbf8795b91a1694e081e76ee6353e094e9d7605e6afb0e350
@@ -96,8 +99,10 @@ def _invert_hook(core, state, cands, pool_idx, rs, side):
 def _build_reranked_record(out_dir: Path) -> Path:
     """One fixed-seed game, shipped knobs (`play_game`'s own bare defaults
     bar `dice`/`deployment`), `top_k=2 horizon=1`, side 1 re-ranked by
-    `_invert_hook` — measured: 19 of its 50 rows land `best != played`,
-    including the very first (seq 0)."""
+    `_invert_hook` — measured: 17 of its 47 rows land `best != played`,
+    including the very first (seq 0). Re-measured for issue #635: `play_game`'s
+    own bare defaults now include `melee_reach="table"`, which shortened this
+    fixture from 50 to 47 rows (replay still reproduces it exactly)."""
     out = selfplay.play_game(
         4242, str(P1), str(P2), gr.REPO, str(BANK), None,
         dice_seed=4242, dice="table", deployment="arena",
@@ -133,13 +138,16 @@ def test_a_reranked_record_replays_exactly_through_gen0_replay_one(tmp_path):
     path = _build_reranked_record(tmp_path)
     res = gr.replay(str(path), str(LISTS), 0)
     assert res["divergence"] == "", res
-    assert res["matched"] == res["recorded"] == res["compared"] == 50, res
+    # 47, not 50 — issue #635 (`melee_reach` now defaults to "table" for a
+    # fresh `play_game()`) shortened this fixture; re-measured, replay still
+    # matches exactly, which is the whole point of this assertion.
+    assert res["matched"] == res["recorded"] == res["compared"] == 47, res
 
 
 @needs_fixtures
 def test_export_of_a_reranked_record_labels_played_not_best(tmp_path):
     """GREEN: the shard exporter's label matches `cands["played"]` at every
-    row -- including the 19 where that is NOT `cands["best"]` -- and the
+    row -- including the 17 where that is NOT `cands["best"]` -- and the
     shard meta says every row used the `played` label kind."""
     corpus_dir = tmp_path / "corpus"
     corpus_dir.mkdir()
@@ -155,7 +163,8 @@ def test_export_of_a_reranked_record_labels_played_not_best(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
     index = json.loads((out_dir / "gen0_shard_00000.json").read_text())
     assert index["games"][0]["divergence"] == "", index
-    assert index["positions"] == len(rows) == index["games"][0]["recorded"] == 50
+    # 47, not 50 — see `_build_reranked_record`'s docstring (issue #635).
+    assert index["positions"] == len(rows) == index["games"][0]["recorded"] == 47
     # Every row carries `played` (record_cands=True end to end) -- the shard
     # meta's own bookkeeping says so, and it must agree with the array.
     assert index["label_kinds"] == {"played": len(rows), "best": 0}, index
