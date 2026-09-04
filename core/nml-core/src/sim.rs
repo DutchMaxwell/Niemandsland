@@ -3607,6 +3607,11 @@ fn resolve_with(
                                 rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES),
                                 // The Shred-family alias gate — the same epoch.
                                 rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES),
+                                // The Shred Boost's widened save-fail window —
+                                // the WAVE-2 epoch, the LITERAL 4 (never the
+                                // `CURRENT_RULES_EPOCH` symbol: a future bump
+                                // must not re-date this family's rules).
+                                rule_on(seams.rules_epoch, 4),
                                 tray,
                             );
                             for (mi, msc, _) in &parts {

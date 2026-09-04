@@ -192,12 +192,15 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # facet_applies — that is what separates the scoped halves ("Shred in
     # Melee"/"when Shooting") from the ungated aliases. The base wound
     # amount (`extra_wound_per_save_one`) is deliberately NOT listed: the
-    # core's shred path reads no param for it (dice.rs shred_ones/combat.rs
-    # hard-code the table's fixed +1), and the Boost entries (Destroyer/
-    # Infected/Warbound Boost) carry it as their base half while their boost
-    # half (save_fail_max/extra_wound_save_low + over_in + upgrades) is read
-    # by nobody — they stay STAMPED until a resolver consumes those keys.
-    "Shred": frozenset({"melee_only", "shooting_only"}),
+    # core's shred path reads no param for it (dice.rs shred_faces/combat.rs
+    # hard-code the table's fixed +1). The Boost entries' widened save-fail
+    # window IS consumed as of the shred2 wave (2026-09-04): unit.rs::stamp's
+    # upgrades arm (6b) reads `save_fail_max` / `extra_wound_save_low` (one
+    # meaning, two key spellings) plus `over_in` off the entry, gating on the
+    # model also carrying the `upgrades` base rule, and dice.rs's volley
+    # consumes the window behind `rule_on(rules_epoch, 4)` past the entry's
+    # own `over_in` distance (melee never widens — no pre-charge gap).
+    "Shred": frozenset({"melee_only", "shooting_only", "save_fail_max", "extra_wound_save_low", "over_in"}),
     # Lacerate-family wave (rules-wave2-lacerate2, 2026-09-04): unit.rs
     # ::stamp_unit_strikers' epoch-4 arm mirrors main.gd:6990-7001's unit-level
     # coverage wave — every carried Lacerate-primitive entry whose params carry

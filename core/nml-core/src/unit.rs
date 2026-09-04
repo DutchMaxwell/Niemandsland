@@ -290,6 +290,19 @@ pub struct ShootProfile {
     /// can keep every pre-port corpus byte-exact. `profile_ev` reads neither
     /// leg — ai_ev.gd:429's EV imagination sees the weapon flag only.
     pub shred_alias: bool,
+    /// The Shred Boost's widened save-fail window top face (unit.rs::stamp's
+    /// arm 6b: `save_fail_max` / `extra_wound_save_low` off the carried Boost
+    /// entry, stamped only when the model also carries its `upgrades` base
+    /// rule): failed defense rolls up to this face each take the shred extra
+    /// wound. 1 = no boost — the base shred window, the same "no boost"
+    /// default shape as `surge_low`. Read by the volley's epoch-4 shred
+    /// window (`shred_boost_dice`, `rule_on(rules_epoch, 4)`); the melee
+    /// resolve never widens (no pre-charge gap measured, dice.rs NOT-PORTED).
+    pub shred_low: i64,
+    /// The Shred Boost's distance gate (the entry's own `over_in`): the
+    /// widened window counts only past this centre distance, exactly 9" not
+    /// "over" — same strict gate as every other over-9" read in this port.
+    pub shred_over_in: f64,
     pub indirect: bool,
     pub limited: bool,
     pub takedown: bool,
@@ -608,6 +621,8 @@ fn base_profile(w: &Weapon, attacks: i64, range_in: i64) -> ShootProfile {
         // main.gd's own default ("no boost yet") — see both fields' docs.
         surge_attack_low: 6,
         surge_low: 6,
+        // The base shred window ("no boost") — see `shred_low`'s doc.
+        shred_low: 1,
         ..Default::default()
     }
 }
@@ -741,9 +756,15 @@ struct PrimitiveHit {
     bypass_regen: bool,
     /// Point-Blank Surge's own `within_in` (0.0 = no gate) and the Boost
     /// variants' `over_in` (ai_ev.gd's stamp default 9.0), read off the
-    /// SAME `Surge` primitive entry.
+    /// SAME `Surge` primitive entry. The Shred Boosts carry the same
+    /// `over_in` pair (`stamp`'s arm 6b).
     within_in: f64,
     over_in: f64,
+    /// The Shred Boost's widened save-fail window (`save_fail_max` on
+    /// Infected/Destroyer Boost, `extra_wound_save_low` on Warbound Boost —
+    /// one meaning, two key spellings across the systems), read off the
+    /// carried `Shred` primitive entry. 0 = not a Boost.
+    save_fail_max: i64,
 }
 
 /// `RulesRegistry.unit_rules_of_primitive` rules_registry.gd:155-176 — every
@@ -776,6 +797,7 @@ fn rules_of_primitive(reg: &mut Registries, p: &Profile, primitive: &str) -> Vec
                     bypass_regen: e.param_b("bypass_regen"),
                     within_in: e.param_f("within_in", 0.0),
                     over_in: e.param_f("over_in", 9.0),
+                    save_fail_max: e.param_i("save_fail_max", 0).max(e.param_i("extra_wound_save_low", 0)),
                 });
             }
         }
@@ -1305,6 +1327,26 @@ fn stamp(
                 .any(|h| facet_applies(h.melee_only, h.shooting_only, sp.range))
         {
             sp.shred_alias = true;
+        }
+    }
+    // 6b. Shred UPGRADE entries (the Boost family): fires only when the model
+    //     ALSO carries the entry's `upgrades` base rule, stamps the widened
+    //     save-fail window + `over_in` gate onto every shredding profile.
+    //     Read by the volley's epoch-4 shred window (`rule_on(rules_epoch, 4)`,
+    //     dice.rs `save_batch`); melee never widens (no pre-charge gap
+    //     measured — dice.rs NOT-PORTED, the Surge Boosts' 5s shape).
+    for hit in &shred_hits {
+        if hit.save_fail_max <= 0
+            || hit.upgrades.is_empty()
+            || !has_exact_rule(&p.special_rules, &hit.upgrades)
+        {
+            continue;
+        }
+        for sp in shoot.iter_mut() {
+            if sp.shred_alias {
+                sp.shred_low = hit.save_fail_max;
+                sp.shred_over_in = hit.over_in;
+            }
         }
     }
     // 7. Sergeant (ai_ev.gd:282-291). Its share reads the LIVE alive count,

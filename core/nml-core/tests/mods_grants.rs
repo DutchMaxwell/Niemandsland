@@ -195,7 +195,7 @@ fn a_live_rending_grant_shoots_with_the_on6_ap_bonus() {
     let def = Ctx { defense: 3, models: 1, tough: 1, ..Default::default() };
     let without = resolve_volley_with_tray(
         &[Shooter { profiles: &profile, keep: &[0], attacks: &[6], att: &plain, owner: "att" }],
-        &def, "def", 12.0, 12.0, false, true, true, &mut Tray::seeded(12),
+        &def, "def", 12.0, 12.0, false, true, true, true, &mut Tray::seeded(12),
     );
 
     let mut buffed_state = st;
@@ -204,7 +204,7 @@ fn a_live_rending_grant_shoots_with_the_on6_ap_bonus() {
     assert!(buffed.rending_grant, "the aura grant reaches the shooting context");
     let with = resolve_volley_with_tray(
         &[Shooter { profiles: &profile, keep: &[0], attacks: &[6], att: &buffed, owner: "att" }],
-        &def, "def", 12.0, 12.0, false, true, true, &mut Tray::seeded(12),
+        &def, "def", 12.0, 12.0, false, true, true, true, &mut Tray::seeded(12),
     );
     assert!(
         with.wounds > without.wounds,
@@ -254,7 +254,7 @@ fn a_mark_on_the_bearer_hands_its_attacker_the_rending_grant() {
     let def = Ctx { defense: 3, models: 1, tough: 1, ..Default::default() };
     let without = resolve_volley_with_tray(
         &[Shooter { profiles: &profile, keep: &[0], attacks: &[6], att: &plain, owner: "att" }],
-        &def, "def", 12.0, 12.0, false, true, true, &mut Tray::seeded(12),
+        &def, "def", 12.0, 12.0, false, true, true, true, &mut Tray::seeded(12),
     );
 
     let mut marked_state = st;
@@ -278,7 +278,7 @@ fn a_mark_on_the_bearer_hands_its_attacker_the_rending_grant() {
     assert!(marked.rending_grant, "the mark reaches the ATTACKER's shooting context");
     let with = resolve_volley_with_tray(
         &[Shooter { profiles: &profile, keep: &[0], attacks: &[6], att: &marked, owner: "att" }],
-        &def, "def", 12.0, 12.0, false, true, true, &mut Tray::seeded(12),
+        &def, "def", 12.0, 12.0, false, true, true, true, &mut Tray::seeded(12),
     );
     assert!(
         with.wounds > without.wounds,
