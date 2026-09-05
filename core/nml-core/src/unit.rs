@@ -1610,8 +1610,10 @@ pub struct UtilityBuff {
 }
 
 /// The twelve "Utility Buff" names the wave-2 port reads at runtime, stamped
-/// only from `rules_epoch` 4 on. The other 18 family names stay
-/// stamped-but-unconsumed (their seams do not exist on this core).
+/// only from `rules_epoch` 4 on. Of the other 18 family names wave 3 ported
+/// the two marks whose records this core now consumes (`sim::ctx_live` +
+/// the volley sight/range seams); the remaining 16 stay stamped-but-unconsumed
+/// (their seams still do not exist on this core).
 const WAVE2_UTILITY_BUFF_RULES: [&str; 12] = [
     "Unwieldy Debuff",
     "Unpredictable Shooter Mark",
