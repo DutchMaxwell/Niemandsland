@@ -93,8 +93,12 @@ pub struct Landing {
 
 impl Landing {
     /// Post-charge snap result: None when the stage is not entered.
-    pub fn snap_charge(&mut self, _state: &State, _target: usize, _rules_epoch: u32) -> Option<f64> {
-        None
+    pub fn snap_charge(&mut self, state: &State, target: usize, rules_epoch: u32) -> Option<f64> {
+        if !rule_on(rules_epoch, EPOCH_6_TABLE_RULES) { return None; }
+        let pose = ChargePose { state, positions: &self.end };
+        let (snap, delta) = pose.snap(&self.movers, &movers_of(state, target), self.remaining_in())?;
+        for p in &mut self.end { *p = geom::add(*p, delta); }
+        Some(snap)
     }
 
     /// `SoloController.last_move_remaining_in` :8659-8667.
@@ -138,10 +142,22 @@ fn unit_centre(state: &State, u: usize) -> V3 {
 /// (inches) over all charger/target model pairs and the unit table-plane
 /// direction from that charger model toward that target model.
 fn nearest_charge_vector(state: &State, from: &[Mover], to: &[Mover]) -> (f64, V2) {
+    ChargePose { state, positions: &[] }.nearest(from, to)
+}
+
+/// The same footprint query serves charge aim and the final post-move snap.
+struct ChargePose<'a> {
+    state: &'a State,
+    positions: &'a [V3],
+}
+
+impl ChargePose<'_> {
+fn nearest(&self, from: &[Mover], to: &[Mover]) -> (f64, V2) {
+    let state = self.state;
     let mut best_gap = f64::INFINITY;
     let mut best_dir: V2 = [0.0, 0.0];
-    for cm in from {
-        let c = pos_of(state, *cm);
+    for (i, cm) in from.iter().enumerate() {
+        let c = self.positions.get(i).copied().unwrap_or_else(|| pos_of(state, *cm));
         let rc = radius_of(state, *cm);
         let sc = state.base_shape(cm.unit);
         for em in to {
@@ -164,6 +180,18 @@ fn nearest_charge_vector(state: &State, from: &[Mover], to: &[Mover]) -> (f64, V
         return (best_gap, [0.0, 0.0]);
     }
     (best_gap, g2::normalized(best_dir))
+}
+
+fn snap(&self, from: &[Mover], to: &[Mover], remaining_in: f64) -> Option<(f64, V3)> {
+    let (gap, dir) = self.nearest(from, to);
+    if gap > crate::sim::MELEE_ENGAGE_IN { return None; }
+    let eps = crate::sim::BASE_CONTACT_EPSILON_IN;
+    if gap <= eps || !gap.is_finite() || dir == [0.0, 0.0] {
+        return Some((0.0, [0.0; 3]));
+    }
+    if gap > remaining_in + eps { return Some((-gap, [0.0; 3])); }
+    Some((gap, geom::mul([dir[0], 0.0, dir[1]], gap * IN2M)))
+}
 }
 
 /// `SoloController._clamp_to_bounds` :8879, `half` in METRES.
@@ -606,16 +634,21 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
     // :4884-4885 — THE HARD FINAL PLACEMENT GATE, applied HERE, after the trim,
     // so the trim can never cut a gate-corrected endpoint off its trail. Passes
     // 1-4, the epoch-gated whole-unit shorten and the wall clamp are ported
-    // (`mv::gate`). A CHARGE is deliberately left out of this call even
-    // though the table gates one too: its gate is a different animal — no band
-    // caps (the contact push owns the endpoint) and the contact-model exemption
-    // — and neither of those is written yet.
-    if !self.allow_contact && stirred {
+    // (`mv::gate`). Epoch-6 charges enter the uncapped contact-aware arm;
+    // the collapse ladder remains exclusive to ordinary movement.
+    if stirred && (!self.allow_contact || rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES)) {
         let planned_in = achieved_in(&starts, &planned);
         let radii_in: Vec<f64> = radii_m.iter().map(|r| r / IN2M).collect();
         let ext = self.external_discs();
         let shapes: Vec<_> = self.movers.iter().map(|m| state.base_shape(m.unit)).collect();
-        let flags = super::gate::GateFlags { shapes: &shapes, ..self.gate_flags() };
+        let targets: Vec<_> = self.ci.into_iter().flat_map(|ci| movers_of(state, ci))
+            .map(|m| (pos_of(state, m), radius_of(state, m))).collect();
+        let chain = if matches!(state.profile(self.si).game_system.as_str(), "gff" | "aofs") {
+            6.0
+        } else { super::MAX_CHAIN_IN };
+        let flags = super::gate::GateFlags { shapes: &shapes,
+            charge_targets: self.allow_contact.then_some(targets.as_slice()),
+            charge_chain_in: chain, ..self.gate_flags() };
         let caps = self.gate_caps(&trails, radii_m, budget_in);
         let (fixed, _rep) = super::gate::finalize_placement(
             &planned,
@@ -634,7 +667,7 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         let mut best_coherent = super::gate::coherent_placement(&planned, &radii_in, flags);
         let start_coherent = super::gate::coherent_placement(&starts, &radii_in, flags);
         let goal_gap_in = g2::distance_to(super::centroid(&starts), t.to_inch(self.goal));
-        if !LADDER_DISABLED.load(Ordering::Relaxed)
+        if !self.allow_contact && !LADDER_DISABLED.load(Ordering::Relaxed)
             && rescue_should_fire(
                 best_ach, planned_in, best_coherent, start_coherent, goal_gap_in, budget_in,
             )
@@ -788,6 +821,57 @@ pub fn charge_move(
     fast_planner: bool,
     guard: i64,
 ) -> Option<Landing> {
+    MoveRules::default().charge_move(state, t, si, ci, band_in, hero_attach, fast_planner, guard)
+}
+
+/// `SoloController._move_toward` :4575 -> `_execute_move` :4784 for a NON-charge
+/// move (ADVANCE, RUSH, the post-melee consolidation, Hit & Run's step): the
+/// same two passes and the same distance truth as a charge, aimed at a
+/// destination the caller already picked instead of at a target's near face.
+/// `None` = the port declines and the caller keeps its rigid translation.
+///
+/// NOT here: the boxed/sidestep escape :4960 (S8). `_finalize_placement`
+/// :6371, the stall escalation :4820 (S7) and the gate-collapse ladder :4890
+/// (S6) are all entered below — unlike a charge, which `not allow_contact`
+/// excludes from every one of them.
+#[allow(clippy::too_many_arguments)]
+pub fn plain_move(
+    state: &State,
+    t: &Terrain,
+    si: usize,
+    dest: V3,
+    band_in: f64,
+    hero_attach: bool,
+    fast_planner: bool,
+    guard: i64,
+) -> Option<Landing> {
+    MoveRules::default().plain_move(state, t, si, dest, band_in, hero_attach, fast_planner, guard)
+}
+
+/// Rule context for movement callers; the original free function preserves epoch 0.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MoveRules {
+    pub rules_epoch: u32,
+}
+
+impl MoveRules {
+/// Apply the same snap to the simulator's surviving models, after movement hazards.
+pub(crate) fn snap_charge_state(self, state: &mut State, si: usize, ci: usize,
+    remaining_in: f64, hero_attach: bool) -> Option<f64> {
+    if !rule_on(self.rules_epoch, EPOCH_6_TABLE_RULES) { return None; }
+    let mut from = movers_of(state, si);
+    let mut to = movers_of(state, ci);
+    if !hero_attach { from.retain(|m| m.unit == si); to.retain(|m| m.unit == ci); }
+    let (snap, delta) = ChargePose { state, positions: &[] }.snap(&from, &to, remaining_in)?;
+    for m in from {
+        state.positions[m.unit][m.model] = geom::to_f64(geom::add(pos_of(state, m), delta));
+    }
+    Some(snap)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn charge_move(self, state: &State, t: &Terrain, si: usize, ci: usize,
+    band_in: f64, hero_attach: bool, fast_planner: bool, guard: i64) -> Option<Landing> {
     let board = t.board_in();
     if !t.is_valid() || board[0] <= 0.0 || board[1] <= 0.0 {
         return None;
@@ -836,7 +920,7 @@ pub fn charge_move(
     let avoid_dang =
         !flying && !targets_in(&pos, goal, band_in, own_r_m, t, half, terrain::is_dangerous);
     let ch = Move {
-        rules_epoch: 0,
+        rules_epoch: self.rules_epoch,
         state,
         t,
         si,
@@ -855,43 +939,6 @@ pub fn charge_move(
         allow_contact: true,
     };
     Some(ch.execute(band_in, avoid_diff, &radii_m))
-}
-
-/// `SoloController._move_toward` :4575 -> `_execute_move` :4784 for a NON-charge
-/// move (ADVANCE, RUSH, the post-melee consolidation, Hit & Run's step): the
-/// same two passes and the same distance truth as a charge, aimed at a
-/// destination the caller already picked instead of at a target's near face.
-/// `None` = the port declines and the caller keeps its rigid translation.
-///
-/// NOT here: the boxed/sidestep escape :4960 (S8). `_finalize_placement`
-/// :6371, the stall escalation :4820 (S7) and the gate-collapse ladder :4890
-/// (S6) are all entered below — unlike a charge, which `not allow_contact`
-/// excludes from every one of them.
-#[allow(clippy::too_many_arguments)]
-pub fn plain_move(
-    state: &State,
-    t: &Terrain,
-    si: usize,
-    dest: V3,
-    band_in: f64,
-    hero_attach: bool,
-    fast_planner: bool,
-    guard: i64,
-) -> Option<Landing> {
-    MoveRules::default().plain_move(state, t, si, dest, band_in, hero_attach, fast_planner, guard)
-}
-
-/// Rule context for movement callers; the original free function preserves epoch 0.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct MoveRules {
-    pub rules_epoch: u32,
-}
-
-impl MoveRules {
-#[allow(clippy::too_many_arguments)]
-pub fn charge_move(self, state: &State, t: &Terrain, si: usize, ci: usize,
-    band_in: f64, hero_attach: bool, fast_planner: bool, guard: i64) -> Option<Landing> {
-    charge_move(state, t, si, ci, band_in, hero_attach, fast_planner, guard)
 }
 
 #[allow(clippy::too_many_arguments)]

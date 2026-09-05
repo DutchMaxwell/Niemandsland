@@ -3402,7 +3402,9 @@ fn resolve_with(
     // the melee snap may spend (solo_controller.gd:8659). Infinite while the
     // seam is off: the second engage gate then never refuses anything, which is
     // what every corpus recorded before D5-1 replayed with.
-    let mut charge_remaining_in = f64::INFINITY;
+    let mut charge_remaining_in = if seams.movement && rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
+        band_in.max(0.0)
+    } else { f64::INFINITY };
     // D5-2, seam-gated: the CHARGE moves per model through the M4 movement port
     // instead of as one rigid delta — the table's own aim (`_charge_move`
     // solo_controller.gd:8582), its own arc budget and its own route. It runs
@@ -3415,7 +3417,7 @@ fn resolve_with(
     let mut hold = false;
     if seams.movement && kind == CHARGE && band_in > 0.0 {
         if let (Cover::Board(t), Some(ti)) = (cover, ci) {
-            landing = crate::mv::step::charge_move(
+            landing = (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch }).charge_move(
                 &next,
                 t,
                 si,
@@ -3465,7 +3467,7 @@ fn resolve_with(
         // gate when `charge_landing` asks for it — otherwise `movement=
         // "table"` silently forces `charge_landing="table"` on, and the
         // engage snap gate refuses charges D5-1-off never refused.
-        if seams.charge_landing {
+        if seams.charge_landing || rule_on(seams.rules_epoch, EPOCH_6_TABLE_RULES) {
             charge_remaining_in = land.remaining_in();
         }
         // battle_sim.gd:598-600 — the mover's cover follows it, probed at the
@@ -4008,6 +4010,10 @@ fn resolve_with(
                 && (engage_gap_in <= BASE_CONTACT_EPSILON_IN
                     || engage_gap_in <= charge_remaining_in + BASE_CONTACT_EPSILON_IN)
             {
+                if seams.movement {
+                    (crate::mv::step::MoveRules { rules_epoch: seams.rules_epoch })
+                        .snap_charge_state(&mut next, si, ti, charge_remaining_in, seams.hero_attach);
+                }
                 let tu_before = wounds_left(&next, ti);
                 let su_before = wounds_left(&next, si);
                 // D1-B5a: with `dice="table"` the whole melee is resolved on the

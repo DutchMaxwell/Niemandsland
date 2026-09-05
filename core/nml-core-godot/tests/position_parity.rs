@@ -14,6 +14,12 @@ fn pinned_shorten_fixture_crosses_the_godot_move_boundary() {
     run_pin("whole_unit_shorten.json", "whole_unit_shorten");
 }
 
+#[test]
+#[ignore = "requires Godot 4.6 and the installed GDExtension manifest"]
+fn pinned_charge_fixture_crosses_the_godot_move_boundary() {
+    run_pin("charge_gates.json", "charge_snap");
+}
+
 fn run_pin(pin_file: &str, capability: &str) {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().parent().unwrap();
     let result = Command::new("python3")
@@ -43,6 +49,8 @@ with tempfile.TemporaryDirectory(prefix='position-parity-seam-') as directory:
     assert row['rust_ok'], row['boundary_error']
     assert sys.argv[2] in row['table_stages']
     assert sys.argv[2] in row['rust_capabilities']
+    if sys.argv[2] == 'charge_snap':
+        assert abs(row['rust_snap_in'] - row['table_snap_in']) <= pin['tolerance_in']
     measured = p.measure(fixtures, report)
     assert measured['summary']['declined'] == 0, measured
     assert measured['summary']['within_0.5in'] == 1, measured
