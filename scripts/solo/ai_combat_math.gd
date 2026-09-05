@@ -429,6 +429,8 @@ static func conditional_ap_bonus(params: Dictionary, target_tough: int, target_d
 			return bonus if target_defense <= threshold else 0
 		"in_melee":
 			return bonus if melee else 0
+		"ranged":
+			return bonus if not melee else 0
 		"on_charge":
 			# Charge-gated, no target property (Piercing Assault: "AP(+1) when charging").
 			return bonus if is_charging else 0

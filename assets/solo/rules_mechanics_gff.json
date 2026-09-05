@@ -915,6 +915,15 @@
     "ap_bonus": 1,
     "condition": "in_melee"
    }
+  },
+  "Piercing Shooter": {
+   "primitive": "Piercing Hunter",
+   "rated": false,
+   "book_version": "3.5.3",
+   "params": {
+    "ap_bonus": 1,
+    "condition": "ranged"
+   }
   }
  },
  "factions": {
@@ -10959,9 +10968,12 @@
     }
    },
    "Piercing Shooter Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Piercing Shooter"
+    }
    },
    "Rapid Charge Aura": {
     "primitive": "Royal Legion",
