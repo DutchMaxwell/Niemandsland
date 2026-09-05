@@ -1484,6 +1484,20 @@ fn growth_on_kill(statics: &[UnitStatic], next: &mut State, si: usize) {
     }
 }
 
+/// rules-wave3-growthmark (epoch 6) — the defender-side facets' log lines.
+fn growth_log_defender(us: &UnitStatic, def: &Ctx, markers: i64, shot: &mut ShootResult) {
+    if def.growth_def_mod != 0 {
+        let dn = us.growth.iter().find(|g| g.defense_per_marker != 0 || g.defense_per_two != 0).map(|g| g.name.clone()).unwrap_or_default();
+        shot.log.push(format!(
+            "{}: {} Defense rolls +{} ({} marker(s))", dn, us.name, def.growth_def_mod, markers));
+    }
+    if def.growth_fortify_ap != 0 {
+        let fn_ = us.growth.iter().find(|g| g.enemy_ap_per_two != 0).map(|g| g.name.clone()).unwrap_or_default();
+        shot.log.push(format!(
+            "{}: every unit attacking {} rides AP({}) per two markers", fn_, us.name, def.growth_fortify_ap));
+    }
+}
+
 /// rules-wave3-growthmark (epoch 6) — Regenerative Strength's own trigger
 /// (`on_ignore_wound`): +1 marker for every wound this unit IGNORED
 /// (Regeneration's ignored count, `caused - landed`), capped at the rule's
