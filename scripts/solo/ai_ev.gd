@@ -153,6 +153,7 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"evasive": rule_on_all_models(unit, "Evasive"),
 		"melee_evasion": rule_on_all_models(unit, "Melee Evasion"),
 		"fortified": rule_on_all_models(unit, "Fortified"),
+		"fortified_over_in": _fortified_over_in(unit),
 		# Guarded OR Versatile Defense's consistently-played def-half (both: +1 Def when shot/charged
 		# from over 9" — one EV flag, one dice-path arithmetic).
 		"guarded": rule_on_all_models(unit, "Guarded") or rule_on_all_models(unit, "Versatile Defense"),
@@ -163,6 +164,18 @@ static func ctx_for(unit: GameUnit, in_cover: bool = false, counter_models: int 
 		"regeneration": _regen_target(unit) > 0,
 		"regen_target": _regen_target(unit),
 	}
+
+
+static func _fortified_over_in(unit: GameUnit) -> float:
+	var best := -1.0
+	for e in RulesRegistry.unit_rules_of_primitive(unit, "Fortified"):
+		var name := str((e as Dictionary).get("name", ""))
+		if name == "Fortified" or not rule_on_all_models(unit, name):
+			continue
+		var threshold := float((e as Dictionary).get("params", {}).get("over_in", 0.0))
+		if best < 0.0 or threshold < best:
+			best = threshold
+	return best
 
 
 ## The Regeneration-family wound-ignore roll target for a unit (0 = none): Regeneration / Medical Training
@@ -437,6 +450,9 @@ static func profile_ev(profile: Dictionary, att: Dictionary, def_ctx: Dictionary
 	var bane := bool(profile.get("bane", false))
 	# Fortified (defender): each incoming hit's FINAL AP counts as -1 (min 0) — applied per sub-batch.
 	var fort := bool(def_ctx.get("fortified", false))
+	var fort_over := float(def_ctx.get("fortified_over_in", -1.0))
+	if fort_over >= 0.0 and (fort_over == 0.0 or (dist_in > fort_over and (not melee or charging))):
+		fort = true
 	var unsaved := (hits - six_hits) * (1.0 - block_chance(defense, AiCombatMath.fortified_ap(ap, fort), bane)) \
 		+ six_hits * (1.0 - block_chance(defense, AiCombatMath.fortified_ap(ap + on6_ap, fort), bane))
 	# — Deadly (Tough-capped multiply) —
@@ -501,12 +517,13 @@ static func shoot_ev(profiles: Array, att: Dictionary, def_ctx: Dictionary, dist
 
 ## Expected wounds of a unit's MELEE strikes (all melee profiles; `charging` enables Furious/Thrust),
 ## plus the charge's Impact hits when charging.
-static func melee_ev(profiles: Array, att: Dictionary, def_ctx: Dictionary, charging: bool) -> float:
+static func melee_ev(profiles: Array, att: Dictionary, def_ctx: Dictionary, charging: bool,
+		charge_dist_in: float = 0.0) -> float:
 	var total := 0.0
 	for p in profiles:
 		var profile := p as Dictionary
 		if int(profile.get("range", 0)) <= 0:
-			total += profile_ev(profile, att, def_ctx, 0.0, charging)
+			total += profile_ev(profile, att, def_ctx, charge_dist_in if charging else 0.0, charging)
 	if charging:
 		total += impact_ev(att, def_ctx)
 	total += ravage_ev(att, def_ctx)   # every melee turn, not just charges ("turn to attack in melee")
@@ -553,8 +570,9 @@ static func impact_ev(att: Dictionary, def_ctx: Dictionary) -> float:
 ## counter wounds thin our attackers before we swing) minus the wounds their strike-back deals,
 ## risk-weighted: OUR Fearless halves the weight of wounds taken (its 4+ re-roll halves the chance a
 ## failed morale sticks — GF/AoF v3.5.1 p.13; an advisory heuristic, tie-breaks only).
-static func charge_score(our_profiles: Array, us: Dictionary, their_profiles: Array, them: Dictionary) -> float:
-	var dealt := melee_ev(our_profiles, us, them, true)
+static func charge_score(our_profiles: Array, us: Dictionary, their_profiles: Array, them: Dictionary,
+		charge_dist_in: float = 0.0) -> float:
+	var dealt := melee_ev(our_profiles, us, them, true, charge_dist_in)
 	# Counter strikes first (p.13): first-order attacker attrition = counter wounds / our wound pool.
 	var counter_first := 0.0
 	for p in their_profiles:

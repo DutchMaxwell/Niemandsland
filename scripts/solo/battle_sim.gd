@@ -711,6 +711,10 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 	var su: Dictionary = next["units"][action["unit"]]
 	var was_shaken := bool(su.get("shaken", false))
 	var kind: int = int(action.get("kind", AiDecision.Action.HOLD))
+	var charge_dist := 0.0
+	var charge_target := str(action.get("charge", ""))
+	if kind == AiDecision.Action.CHARGE and next["units"].has(charge_target):
+		charge_dist = maxf(_engage_gap_in(next, su, su["positions"], next["units"][charge_target]), 0.0)
 	var bands := SoloController.sim_move_bands(su["unit"])
 	var band_in := 0.0
 	if kind == AiDecision.Action.ADVANCE:
@@ -817,7 +821,7 @@ static func resolve(state: Dictionary, action: Dictionary) -> Dictionary:
 			# the host's melee set PLUS every alive attached hero's (main.gd:4284-4290),
 			# on the charger and on the striking-back defender alike.
 			_apply_expected_wounds(tu, AiEv.melee_ev(_profiles_of(su, true, 0.0, next),
-				_ctx_of(su, true), _ctx_of(tu), true))
+				_ctx_of(su, true), _ctx_of(tu), true, charge_dist))
 			su["fatigued"] = true
 			if int(tu["alive"]) > 0:   # survivors strike back, already survivor-scaled
 				_apply_expected_wounds(su, AiEv.melee_ev(_profiles_of(tu, true, 0.0, next),
@@ -1093,7 +1097,8 @@ static func _append_attached_positions(state: Dictionary, u: Dictionary, out: Ar
 ## magnitude signal: a grot mob and an ogre block threaten very differently,
 ## which the binary charge-exposure count cannot see.
 static func melee_threat(su: Dictionary, tu: Dictionary) -> float:
-	return AiEv.melee_ev(_profiles_of(su, true), _ctx_of(su, true), _ctx_of(tu), true)
+	var gap := maxf(edge_gap_in(su["positions"], su.get("radii", []), tu["positions"], tu.get("radii", [])), 0.0)
+	return AiEv.melee_ev(_profiles_of(su, true), _ctx_of(su, true), _ctx_of(tu), true, gap)
 
 
 ## Spell EV (parity wave; ladder-v3 evidence: the caster faction scored
