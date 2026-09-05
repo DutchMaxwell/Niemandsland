@@ -1399,9 +1399,12 @@
     }
    },
    "Ranged Slayer Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ranged Slayer"
+    }
    },
    "Rapid Rush": {
     "primitive": "Rapid Rush",
@@ -1483,9 +1486,12 @@
     }
    },
    "Vale Oath Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Vale Oath Boost"
+    }
    },
    "Vanguard": {
     "primitive": "Vanguard",
@@ -1668,9 +1674,12 @@
     }
    },
    "Quick Shot Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Quick Shot"
+    }
    },
    "Rapid Charge": {
     "primitive": "Fast",
@@ -1911,9 +1920,12 @@
     }
    },
    "Wave-Step Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Wave-Step Boost"
+    }
    }
   },
   "dragon_empire": {
@@ -2055,9 +2067,12 @@
     }
    },
    "Royal Warrior Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Royal Warrior Boost"
+    }
    },
    "Shielded": {
     "primitive": "Shielded",
@@ -2303,9 +2318,12 @@
     }
    },
    "Ranged Slayer Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ranged Slayer"
+    }
    },
    "Rapid Advance": {
     "primitive": "Rapid Advance",
@@ -2316,9 +2334,12 @@
     }
    },
    "Rapid Advance Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Advance"
+    }
    },
    "Re-Position Artillery": {
     "primitive": "Utility Buff",
@@ -2465,9 +2486,12 @@
     }
    },
    "Vinci Tech Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Vinci Tech Boost"
+    }
    }
   },
   "dwarves": {
@@ -2556,9 +2580,12 @@
     }
    },
    "Rending in Melee Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rending in Melee"
+    }
    },
    "Resistance": {
     "primitive": "Resistance",
@@ -2631,9 +2658,12 @@
     }
    },
    "Sturdy Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Sturdy Boost"
+    }
    },
    "Swift": {
     "primitive": "Swift",
@@ -2644,9 +2674,12 @@
     }
    },
    "Swift Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Swift"
+    }
    }
   },
   "eternal_wardens": {
@@ -2792,9 +2825,12 @@
     }
    },
    "Warden Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Warden Boost"
+    }
    }
   },
   "ghostly_undead": {
@@ -3470,9 +3506,12 @@
     }
    },
    "Quick Shot Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Quick Shot"
+    }
    },
    "Rapid Charge Aura": {
     "primitive": "Fast",
@@ -3758,9 +3797,12 @@
     }
    },
    "Teleport Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Teleport"
+    }
    },
    "Vengeance": {
     "primitive": "Vengeance",
@@ -3955,9 +3997,12 @@
     }
    },
    "Swift Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Swift"
+    }
    },
    "Versatile Defense": {
     "primitive": "Versatile Defense",
@@ -5629,9 +5674,12 @@
     }
    },
    "Ravage Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Ravage"
+    }
    },
    "Rending Mark": {
     "primitive": "Utility Buff",
@@ -5671,9 +5719,12 @@
     }
    },
    "Speed Feat Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Speed Feat"
+    }
    },
    "Tear": {
     "primitive": "Tear",
@@ -5887,9 +5938,12 @@
     }
    },
    "Swift Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Swift"
+    }
    },
    "Unpredictable Fighter": {
     "primitive": "Unpredictable Fighter",
@@ -6318,9 +6372,12 @@
     }
    },
    "Scurry Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Scurry Boost"
+    }
    },
    "Shielded": {
     "primitive": "Shielded",
@@ -6750,9 +6807,12 @@
     }
    },
    "Strider Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Strider"
+    }
    },
    "Surge": {
     "primitive": "Surge",
@@ -6872,9 +6932,12 @@
     }
    },
    "Rending in Melee Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rending in Melee"
+    }
    },
    "Steadfast": {
     "primitive": "Steadfast",
@@ -7042,9 +7105,12 @@
     }
    },
    "Reckless Piercing Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Reckless Piercing"
+    }
    },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
@@ -7117,9 +7183,12 @@
     }
    },
    "Warbound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Warbound Boost"
+    }
    }
   },
   "saurians": {
@@ -7302,9 +7371,12 @@
     }
    },
    "Rending in Melee Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rending in Melee"
+    }
    },
    "Shred": {
     "primitive": "Shred",
@@ -7524,14 +7596,20 @@
     }
    },
    "Shadowborn Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Shadowborn Boost"
+    }
    },
    "Strider Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Strider"
+    }
    },
    "Thrust in Melee Aura": {
     "primitive": "Utility Buff",
@@ -7935,9 +8013,12 @@
     }
    },
    "Reanimation Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Reanimation"
+    }
    },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
@@ -8135,9 +8216,12 @@
     }
    },
    "Quick Shot Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Quick Shot"
+    }
    },
    "Reinforcement": {
     "primitive": "Reinforcement",
@@ -8170,9 +8254,12 @@
     }
    },
    "Strider Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Strider"
+    }
    },
    "Swift": {
     "primitive": "Swift",
@@ -8183,9 +8270,12 @@
     }
    },
    "Swift Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Swift"
+    }
    },
    "Takedown Strike": {
     "primitive": "Takedown",
@@ -8415,9 +8505,12 @@
     }
    },
    "Warbound Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Warbound Boost"
+    }
    }
   },
   "wood_elves": {
@@ -8589,9 +8682,12 @@
     }
    },
    "Rapid Advance Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Rapid Advance"
+    }
    },
    "Repel Ambushers": {
     "primitive": "Repel Ambushers",
@@ -8701,9 +8797,12 @@
     }
    },
    "Wild Veil Boost Aura": {
-    "primitive": null,
+    "primitive": "Aura Channel",
     "rated": false,
-    "book_version": "3.5.3"
+    "book_version": "3.5.3",
+    "params": {
+     "grants": "Wild Veil Boost"
+    }
    }
   }
  }
