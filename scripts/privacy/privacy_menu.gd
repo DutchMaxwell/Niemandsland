@@ -3,7 +3,7 @@ extends Window
 ## Consent and byte-exact example preview. This milestone deliberately has no send
 ## path: the only write is the player's explicit local example export.
 
-const FIXTURE_PATH := "res://test/fixtures/privacy/example_record.json"
+const FIXTURE_PATH := "res://assets/privacy/example_record.json"
 const EXPORT_PATH := "user://shared_records/example.json"
 const Builder := preload("res://scripts/privacy/shared_record_builder.gd")
 const Store := preload("res://scripts/privacy/consent_store.gd")
@@ -62,14 +62,14 @@ const COPY := {
 		"saved": "Die exakten Beispieldaten wurden unter %s gespeichert",
 		"fields": "Felder im Datensatz:\n• payload_schema_version — Nummer des Datenformats\n• consent_schema_version — Version dieser Einwilligung\n• deletion_code — zufälliger Löschcode dieser Installation\n• record_id — zufällige Kennung des Datensatzes\n• game_version und build_hash — öffentliche Spielversion\n• core_abi und rules_epoch — Versionen der Regel-Engine\n• training_use — ob die getrennte Trainingsfreigabe erteilt wurde\n• brain.engine, brain.id und brain.hash — öffentliche Gegnerversion oder Classic\n• game.system_id, mission_id und scoring_id — öffentliche Regelkennungen\n• game.random_seed, layout_seed und dice_seed — bekannte Spiel-Zufallswerte\n• table.width_inches und height_inches — Tischgröße\n• table.terrain — Typkennungen, Koordinaten und Drehungen\n• table.objectives — Typkennungen, Koordinaten und Besitznummern\n• armies — Seite sowie Buch- und Fraktionskennungen\n• armies.units — stabile Einheiten-/Profilkennungen, Zahlenwerte und Ausrüstungs-/Regelkennungen\n• actions — Reihenfolge, Runde, Seite, stabile Aktions-/Einheiten-/Zielkennungen, Koordinaten, beobachtete Würfelaugen und Zahlenwert\n• rounds — Zahl abgeschlossener Runden\n• final.vp, objective_owners und outcome — Endstand und Ergebnis\n• payload_sha256 — Prüfsumme aller vorherigen Felder",
 		"never": "Niemals in diesem Datensatz erhoben:\nAnzeige-Namen von Spielern, Armeen oder Einheiten; Chat oder Schlachtprosa; Raumcodes; Mehrspieler-Identitätsschlüssel; Konto-, Plattform-, Geräte- oder IP-Kennungen; Spielstände; Bildschirmfotos; Zeitstempel; Dateipfade; Rechnernamen; Hardwaredaten; sonstige Diagnosen.",
-		"destination": "Ziel: to be published by the maintainer",
-		"controller": "Verantwortlicher: to be published by the maintainer",
-		"processor": "Auftragsverarbeiter und Hosting-Region: to be published by the maintainer",
+		"destination": "Ziel: wird vom Betreiber veröffentlicht",
+		"controller": "Verantwortlicher: wird vom Betreiber veröffentlicht",
+		"processor": "Auftragsverarbeiter und Hosting-Region: wird vom Betreiber veröffentlicht",
 		"purposes": "Zwecke: Auswertung und Suche nach blinden Flecken; Training nur mit der getrennten Trainingsfreigabe",
-		"recipients": "Empfänger: to be published by the maintainer",
-		"retention": "Speicherdauer: to be published by the maintainer",
-		"withdrawal": "Widerruf ist jederzeit auf dieser Seite möglich und stoppt künftige Freigaben sofort. Weg für Löschwünsche: to be published by the maintainer",
-		"contact": "Kontakt, Datenschutzhinweis und Aufsichtsbehörde: to be published by the maintainer",
+		"recipients": "Empfänger: wird vom Betreiber veröffentlicht",
+		"retention": "Speicherdauer: wird vom Betreiber veröffentlicht",
+		"withdrawal": "Widerruf ist jederzeit auf dieser Seite möglich und stoppt künftige Freigaben sofort. Weg für Löschwünsche: wird vom Betreiber veröffentlicht",
+		"contact": "Kontakt, Datenschutzhinweis und Aufsichtsbehörde: wird vom Betreiber veröffentlicht",
 	},
 }
 
@@ -180,7 +180,9 @@ func _build_shell() -> void:
 
 func _clear_content() -> void:
 	for child in _content.get_children():
-		child.free()
+		# A pressed button still has feedback handlers to run on the same signal.
+		child.hide()
+		child.queue_free()
 
 
 func _label(text: String, heading: bool = false) -> Label:

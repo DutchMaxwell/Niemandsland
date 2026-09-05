@@ -3,7 +3,7 @@ extends GdUnitTestSuite
 const BUILDER_PATH := "res://scripts/privacy/shared_record_builder.gd"
 const STORE_PATH := "res://scripts/privacy/consent_store.gd"
 const MENU_SCENE := "res://scenes/privacy/privacy_menu.tscn"
-const FIXTURE_PATH := "res://test/fixtures/privacy/example_record.json"
+const FIXTURE_PATH := "res://assets/privacy/example_record.json"
 const GOLDEN_PATH := "res://test/fixtures/privacy/example_record.canonical.json"
 const TEST_STORE := "user://test_privacy_m10/privacy.json"
 const TEST_EXPORT := "user://test_shared_records/example.json"
@@ -175,3 +175,65 @@ func test_required_english_and_german_wording() -> void:
 	assert_str(menu_script.text_for("en", "deletion_code")).is_equal("Deletion code")
 	assert_str(menu_script.text_for("de", "deletion_code")).is_equal("Löschcode")
 	assert_str(FileAccess.get_file_as_string("res://scripts/privacy/privacy_menu.gd")).not_contains("Share this game")
+
+
+func test_example_is_shipped_and_preview_is_nonempty() -> void:
+	var shipped_path := "res://assets/privacy/example_record.json"
+	assert_bool(FileAccess.file_exists(shipped_path)).is_true()
+	var presets := ConfigFile.new()
+	assert_int(presets.load("res://export_presets.cfg")).is_equal(OK)
+	var checked := 0
+	for section in presets.get_sections():
+		if not presets.has_section_key(section, "export_filter"):
+			continue
+		checked += 1
+		var included := false
+		for pattern in str(presets.get_value(section, "include_filter")).split(","):
+			included = included or shipped_path.trim_prefix("res://").match(pattern.strip_edges())
+		assert_bool(included).override_failure_message("Example missing from %s include_filter" % section).is_true()
+		for pattern in str(presets.get_value(section, "exclude_filter")).split(","):
+			assert_bool(shipped_path.trim_prefix("res://").match(pattern.strip_edges())).is_false()
+	assert_int(checked).is_equal(3)
+	var menu = load(MENU_SCENE).instantiate()
+	add_child(menu)
+	menu.set_store_path_for_tests(TEST_STORE)
+	assert_str(menu.FIXTURE_PATH).is_equal(shipped_path)
+	menu._show_details()
+	var preview := menu.find_child("ExamplePreview", true, false) as TextEdit
+	assert_str(preview.text).is_not_empty()
+	assert_str(preview.text).is_equal(menu.example_bytes().get_string_from_utf8())
+	assert_str(menu.save_example_locally(TEST_EXPORT)).is_equal(TEST_EXPORT)
+	assert_array(FileAccess.get_file_as_bytes(TEST_EXPORT)).is_equal(preview.text.to_utf8_buffer())
+	menu.queue_free()
+
+
+func test_german_maintainer_placeholders_are_localized() -> void:
+	var menu_script = load("res://scripts/privacy/privacy_menu.gd")
+	for key in ["destination", "controller", "processor", "recipients", "retention", "withdrawal", "contact"]:
+		assert_str(menu_script.text_for("de", key)).contains("wird vom Betreiber veröffentlicht")
+		assert_str(menu_script.text_for("de", key)).not_contains("to be published by the maintainer")
+		assert_str(menu_script.text_for("en", key)).contains("to be published by the maintainer")
+
+
+func test_press_review_details_keeps_button_alive_for_feedback() -> void:
+	var menu = load(MENU_SCENE).instantiate()
+	add_child(menu)
+	menu.set_store_path_for_tests(TEST_STORE)
+	menu.open_settings()
+	await get_tree().process_frame
+	var review: Button
+	for node in menu.find_children("*", "Button", true, false):
+		if node.text == menu.localized_text("review"):
+			review = node
+	assert_bool(is_instance_valid(review)).is_true()
+	assert_bool(has_node("/root/UiFeedback")).is_true()
+	assert_bool(review.has_meta("_ui_feedback_wired")).is_true()
+	# Emit the real signal: the menu handler and the autoload feedback must both run.
+	review.pressed.emit()
+	assert_bool(is_instance_valid(review)).is_true()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_bool(is_instance_valid(review)).is_false()
+	assert_bool(menu.find_child("ExamplePreview", true, false) is TextEdit).is_true()
+	assert_bool(_load_json(TEST_STORE).get("prompt_seen", false)).is_true()
+	menu.queue_free()
