@@ -1492,6 +1492,17 @@ pub fn ctx_live(mut c: Ctx, statics: &[UnitStatic], state: &State, i: usize, mel
             }
         }
     }
+    // WAVE 3 — the Fortified family's live-grant leg, gated on the FROZEN
+    // `EPOCH_6_TABLE_RULES`: the three Boost names' uniform printed shape
+    // (AP(-1), no distance gate) folds as one flag-width stamp, the
+    // Self-Repair Boost precedent; epoch-5 records replay untouched.
+    if rule_on(rules_epoch, EPOCH_6_TABLE_RULES)
+        && (mods::granted(state, i, "Guardian Boost")
+            || mods::granted(state, i, "Warden Boost")
+            || mods::granted(state, i, "Ossified Boost"))
+    {
+        c.fortified_boost_ap = c.fortified_boost_ap.max(1);
+    }
     let (ap, hit) = growth_bonus_of(statics, state, i);
     c.growth_ap_mod = ap;
     c.growth_hit_mod = hit;
@@ -2057,6 +2068,24 @@ fn melee_parts(statics: &[UnitStatic], state: &State, i: usize, ti: usize, seams
 /// defender's side at the melee comparison. NON-CHAINING by construction:
 /// the lash lands through `land_wounds` alone, never through a strike
 /// phase, so retaliation wounds never re-trigger anyone's Retaliate.
+/// WAVE 3 — the family's rules-must-log name (B13's shape: the orchestrators
+/// own the log, `save_batch` only reports that the arm lowered a target): the
+/// static stamp first (gated alias when `over9` met it, else the Boost), then
+/// the live grants. None = nothing carried.
+fn fortified_log_name(statics: &[UnitStatic], state: &State, ti: usize, over9: bool) -> Option<String> {
+    let us = &statics[state.roster.profile[ti]];
+    if over9 && !us.fortified_alias_name.is_empty() {
+        return Some(us.fortified_alias_name.clone());
+    }
+    if !us.fortified_boost_name.is_empty() {
+        return Some(us.fortified_boost_name.clone());
+    }
+    ["Guardian Boost", "Warden Boost", "Ossified Boost"]
+        .into_iter()
+        .find(|n| mods::granted(state, ti, n))
+        .map(String::from)
+}
+
 #[allow(clippy::too_many_arguments)]
 fn strike_phase(
     statics: &[UnitStatic],
@@ -2118,6 +2147,14 @@ fn strike_phase(
     // byte-exact (dice.rs::save_batch's gate).
     let shred_alias_dice = rule_on(seams.rules_epoch, EPOCH_3_TABLE_RULES);
     let r = crate::dice::resolve_melee_with_tray(&members, &def, &ut.name, charging, cond_ap_dice, shred_alias_dice, tray);
+    // WAVE 3, rules-must-log — the melee leg's Boost shape fired (no distance
+    // here; the gated aliases never reach a melee save batch, exactly the
+    // table's own `dist_in: -1.0` read, main.gd:6119).
+    if r.fortified_fired {
+        if let Some(n) = fortified_log_name(statics, next, ti, false) {
+            shot.log.push(format!("{n}: {} takes the hits at AP(-1), min. AP(0) — saves one better", ut.name));
+        }
+    }
     for (mi, sc, _) in &parts {
         let melee = &statics[next.roster.profile[*mi]].melee;
         mark_spent_limited(melee, &sc.keep, &mut next.limited_used[*mi]);
@@ -3959,6 +3996,16 @@ fn resolve_with(
                                 shred_boost_active(seams.rules_epoch),
                                 tray,
                             );
+                            // WAVE 3, rules-must-log — the arm lowered a
+                            // save target; the volley is the one leg whose
+                            // over-9" gate can fire the gated aliases.
+                            if r.fortified_fired {
+                                let over9 =
+                                    def.fortified_alias_over_in > 0.0 && g.mod_d > def.fortified_alias_over_in;
+                                if let Some(n) = fortified_log_name(statics, &next, g.ti, over9) {
+                                    shot.log.push(format!("{n}: {} takes the hits at AP(-1), min. AP(0) — saves one better", ut_g.name));
+                                }
+                            }
                             for (mi, msc, _) in &parts {
                                 let shoot = &statics[next.roster.profile[*mi]].shoot;
                                 mark_spent_limited(shoot, &msc.keep, &mut next.limited_used[*mi]);
@@ -5095,6 +5142,42 @@ mod tests {
         .unwrap()
     }
 
+    /// WAVE 3 fixture — the buff line with an AP(1) rifle on the shooter and,
+    /// when `with_alias`, Guardian's own stamp on the 12"-away target "b".
+    fn fortified_line(with_alias: bool) -> (State, Vec<UnitStatic>) {
+        let (mut st, mut statics) = buff_line();
+        statics[0].shoot[0].ap = 1;
+        statics[0].shoot[0].attacks = 64; // a save batch is guaranteed to follow
+        if with_alias {
+            statics[2].ctx.fortified_alias_ap = 1;
+            statics[2].ctx.fortified_alias_over_in = 9.0;
+            statics[2].fortified_alias_name = "Guardian".into();
+        }
+        (st, statics)
+    }
+
+    /// WAVE 3 — the family's rules-must-log line on the volley leg: the alias
+    /// arm actually lowered a save target (AP(1) rifle at 12", past Guardian's
+    /// own 9" gate) and the report names the rule off the defender's stamp.
+    /// The control (no alias) stays silent.
+    #[test]
+    fn a_guardian_save_one_better_past_nine_inches_logs_the_rule() {
+        let (st, statics) = fortified_line(true);
+        let (_, shot) = run_buff(&st, &statics, &buff_action(Some("b")), 27);
+        assert!(
+            shot.log.iter().any(|l| l.contains("Guardian") && l.contains("AP(-1)")),
+            "rules-must-log: {:?}",
+            shot.log
+        );
+        let (st2, plain) = fortified_line(false);
+        let (_, plain_shot) = run_buff(&st2, &plain, &buff_action(Some("b")), 27);
+        assert!(
+            plain_shot.log.iter().all(|l| !l.contains("Guardian")),
+            "no alias, no line: {:?}",
+            plain_shot.log
+        );
+    }
+
     /// B2b — Precision Attacks Buff (`hit_mod: 1`, no scope): the bearer buffs
     /// itself at the pre-attack slot and the volley that follows in the SAME
     /// activation rolls at 3+ instead of the unit's plain Quality 4+. The
@@ -5272,6 +5355,22 @@ mod tests {
     fn fold_leg(rule: &str, epoch: u32) -> Ctx {
         let (statics, st) = fold_legs(rule);
         ctx_live(statics[0].ctx.clone(), &statics, &st, 0, false, epoch)
+    }
+
+    /// WAVE 3 — the Fortified family's live-grant leg: a spell granting one of
+    /// the three Boost names folds the AP(-1) stamp at epoch 6 only (frozen
+    /// `EPOCH_6_TABLE_RULES`; epoch 5 is the Gen-3 fleet's window), and a
+    /// non-family grant folds nothing.
+    #[test]
+    fn fortified_boost_grants_fold_the_ap_stamp_at_epoch_6_only() {
+        for rule in ["Guardian Boost", "Warden Boost", "Ossified Boost"] {
+            let on = fold_leg(rule, 6);
+            assert_eq!(on.fortified_boost_ap, 1, "{rule} folds its AP(-1) at 6");
+        }
+        let off = fold_leg("Guardian Boost", 5);
+        assert_eq!(off.fortified_boost_ap, 0, "epoch 5 replays the Gen-0 set");
+        let other = fold_leg("Self-Repair Boost", 6);
+        assert_eq!(other.fortified_boost_ap, 0, "only the family's own names fold");
     }
 
     #[test]
