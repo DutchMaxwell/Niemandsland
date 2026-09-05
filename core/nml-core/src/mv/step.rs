@@ -482,8 +482,8 @@ fn plan_once(
 /// terrain; slack = budget minus the walked arc, plus the packed-contact
 /// epsilon a full-band mover in a deploy-packed line always needs.
 /// The two unit rules `mv::gate`'s wall clamp asks about (:6392-6393).
-fn gate_flags(&self) -> super::gate::GateFlags {
-    super::gate::GateFlags { flying: self.flying, traversal: self.traversal }
+fn gate_flags(&self) -> super::gate::GateFlags<'_> {
+    super::gate::GateFlags { flying: self.flying, traversal: self.traversal, ..Default::default() }
 }
 
 fn gate_caps(&self, trails: &[Vec<V2>], radii_m: &[f64], reach_in: f64) -> Vec<f64> {
@@ -519,6 +519,8 @@ fn external_discs(&self) -> Vec<super::gate::Disc> {
             out.push(super::gate::Disc {
                 c: [c[0] as f64, c[1] as f64],
                 r: radius_of(state, mv) / IN2M,
+                shape: state.base_shape(gu),
+                ..Default::default()
             });
         }
     }
@@ -602,6 +604,8 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
         let planned_in = achieved_in(&starts, &planned);
         let radii_in: Vec<f64> = radii_m.iter().map(|r| r / IN2M).collect();
         let ext = self.external_discs();
+        let shapes: Vec<_> = self.movers.iter().map(|m| state.base_shape(m.unit)).collect();
+        let flags = super::gate::GateFlags { shapes: &shapes, ..self.gate_flags() };
         let caps = self.gate_caps(&trails, radii_m, budget_in);
         let (fixed, _rep) = super::gate::finalize_placement(
             &planned,
@@ -610,15 +614,15 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
             &caps,
             t.board_in(),
             Some(t),
-            self.gate_flags(),
+            flags,
         );
         planned = fixed;
         // :4890-4931 GATE-COLLAPSE LADDER (S6): re-plan shorter when the gate
         // nearly erased pass 1 (`rescue_should_fire`); a coherent rung always
         // beats a torn one, and more distance wins within a class.
         let mut best_ach = achieved_in(&starts, &planned);
-        let mut best_coherent = config_coherent(&planned, &radii_in);
-        let start_coherent = config_coherent(&starts, &radii_in);
+        let mut best_coherent = super::gate::coherent_placement(&planned, &radii_in, flags);
+        let start_coherent = super::gate::coherent_placement(&starts, &radii_in, flags);
         let goal_gap_in = g2::distance_to(super::centroid(&starts), t.to_inch(self.goal));
         if !LADDER_DISABLED.load(Ordering::Relaxed)
             && rescue_should_fire(
@@ -643,9 +647,9 @@ fn execute(&self, band_in: f64, mut avoid_diff: bool, radii_m: &[f64]) -> Landin
                 let caps3 = self.gate_caps(&t3, radii_m, r3);
                 let (p3, _rep3) =
                     super::gate::finalize_placement(&p3, &radii_in, &ext, &caps3, t.board_in(),
-                        Some(t), self.gate_flags());
+                        Some(t), flags);
                 let a3 = achieved_in(&starts, &p3);
-                let c3ok = config_coherent(&p3, &radii_in);
+                let c3ok = super::gate::coherent_placement(&p3, &radii_in, flags);
                 // Lexicographic tie-break, same as the table: coherent beats
                 // torn at ANY displacement; within a class more distance wins.
                 if (c3ok && !best_coherent) || (c3ok == best_coherent && a3 > best_ach + 0.005 / IN2M)
@@ -711,15 +715,6 @@ fn retrace_to(route: &[V2], start: V2, gated: V2) -> Vec<V2> {
 /// of this file (only the caller's absolute thresholds convert from metres).
 fn achieved_in(before: &[V2], after: &[V2]) -> f64 {
     g2::distance_to(super::centroid(before), super::centroid(after))
-}
-
-/// `_config_coherent_world` :6832 — one 1"-link component spanning every
-/// model (`components_r`, the same truth as the table's BFS-from-model-0)
-/// AND every pair within `MAX_CHAIN_IN` (9", no Skirmish variant here).
-fn config_coherent(pos: &[V2], radii_in: &[f64]) -> bool {
-    pos.len() <= 1
-        || (super::components_r(pos, radii_in).len() == 1
-            && super::max_edge_spread_r(pos, radii_in) <= super::MAX_CHAIN_IN)
 }
 
 /// `rescue_should_fire` :1526 — collapse, a self-inflicted tear, or a

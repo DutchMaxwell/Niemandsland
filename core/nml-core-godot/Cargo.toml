@@ -7,7 +7,8 @@ build = "../nml-core-py/build.rs"
 description = "NML-1073 M1-5: the GDExtension seam — the Rust rollout node (nml-core) callable from Godot as the RefCounted class NmlCore."
 
 [lib]
-crate-type = ["cdylib"]
+# The rlib makes the runtime library a dependency of integration tests.
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 godot = { version = "0.5.5", features = ["api-4-6"] }

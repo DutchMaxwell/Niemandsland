@@ -88,8 +88,9 @@ pub fn run(input: &VarDictionary, fast: bool, guard: i64) -> Result<VarDictionar
     }
     if action.kind != 3 {
         caps.push(&GString::from("final_placement").to_variant());
+        caps.push(&GString::from("base_shapes").to_variant());
     }
-    // step::Move::execute skips the final gate on charges. Disc geometry,
+    // step::Move::execute still skips shaped final placement on charges;
     // whole-unit shorten, skirmish chains and post-charge snap remain unported.
     out.set("stage_a_capabilities", &caps);
     Ok(out)
