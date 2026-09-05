@@ -97,6 +97,7 @@ fn two_units() -> (nml_core::State, Vec<UnitStatic>) {
         second_wind_round: -1,
         second_wind_uses: 0,
         limited_used: vec![Vec::new(); 2],
+        storm_used: vec![Vec::new(); 2],
     };
     (st, vec![UnitStatic::default(), UnitStatic::default()])
 }

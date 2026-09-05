@@ -17271,8 +17271,8 @@ func _solo_apply_storm_attack(unit: GameUnit) -> void:
 					n, bu.get_name(), successes, dice], true)
 			var facet := str(sp.get("facet", "ap1"))
 			var profile := {"name": n, "attacks": int(sp.get("hits", 3)),
-				"ap": (1 if facet == "ap1" else 0), "shred": facet == "shred", "rules": []}
-			var bane: bool = facet == "bane"
+				"ap": (1 if facet == "ap1" else 0), "shred": facet == "shred",
+				"bane": facet == "bane", "rules": []}
 			for _i in range(successes):
 				# Best target per success (repeatable — the text allows stacking the same unit).
 				targets_in_reach.sort_custom(func(a, b) -> bool:
@@ -17284,9 +17284,22 @@ func _solo_apply_storm_attack(unit: GameUnit) -> void:
 					for sf in s_faces:
 						if int(sf) == 6:
 							hits += 1
-				var w: int = await _solo_resolve_saves(bu, tgt, n, [], hits,
-					_solo_defense_vs(tgt), profile, not _solo_is_ai_unit(tgt), false, true, false, range_in)
-				await _solo_land_wounds(tgt, w, 0)
+				# Direct save batch (the spell path's own route): the burst's facet
+				# rides Bane/Shred/AP through the batch — _solo_resolve_saves derives
+				# Bane from the striker's rules only, which never sees the facet.
+				var alive_before: int = _solo_combined_alive(tgt)
+				var wounds_before: int = _solo_unit_wounds_now(tgt)
+				var w: int = await _solo_save_batch(bu, tgt, n, hits,
+					_solo_defense_vs(tgt), int(profile.get("ap", 0)), profile,
+					not _solo_is_ai_unit(tgt), facet == "bane", true, false)
+				# Bane wounds bypass Regeneration (`_solo_ignores_regen`'s own
+				# ladder); everything else lands regenerable.
+				if facet == "bane":
+					await _solo_land_wounds(tgt, 0, w)
+				else:
+					await _solo_land_wounds(tgt, w, 0)
+				# Post-shooting morale, the Breath Attack twin's tail (main.gd:5423).
+				await _solo_shooting_morale(tgt, alive_before, _solo_owner_label(tgt), wounds_before)
 				if _solo_combined_alive(tgt) <= 0:
 					targets_in_reach.erase(tgt)
 					if targets_in_reach.is_empty():

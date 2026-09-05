@@ -1033,6 +1033,7 @@ mod tests {
             second_wind_round: -1,
             second_wind_uses: 0,
             limited_used: vec![Vec::new(); n],
+            storm_used: vec![Vec::new(); n],
         }
     }
 

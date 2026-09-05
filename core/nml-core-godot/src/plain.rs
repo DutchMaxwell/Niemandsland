@@ -438,6 +438,7 @@ pub fn build_state(
         second_wind_round: -1,
         second_wind_uses: 0,
         limited_used: vec![Vec::new(); n],
+        storm_used: vec![Vec::new(); n],
         los_pairs,
     };
     let mut mask: Vec<u32> = Vec::with_capacity(n);

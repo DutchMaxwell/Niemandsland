@@ -465,6 +465,11 @@ pub struct State {
     /// (`unit_properties["limited_used"]`, solo_controller.gd:7681-7722).
     /// Per unit, weapon names fired this game; never resets on a later round.
     pub limited_used: Vec<Vec<String>>,
+    /// Wave 3 — `unit_properties["storm_used_<rule>"]` (main.gd:17244): the
+    /// Storm Attack family's ONCE-per-game flags, per unit the DISPLAY names
+    /// already fired this game (the recorder stamps them off the same flags,
+    /// act_recorder.gd `_ledger_of`); never resets on a later round.
+    pub storm_used: Vec<Vec<String>>,
 }
 
 impl State {

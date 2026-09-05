@@ -260,6 +260,14 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # CondAp spec does not carry; Havocbound Boost needs an always-on leg +
     # the `upgrades` coupling the stamp pass does not read) — the #489
     # over-credit shape, declined.
+
+    # Storm Attack family (rules-wave3-stormattack, 2026-09-05): unit.rs
+    # ::storm_of reads each "Storm of X" entry's own params (dice/trigger_
+    # target/range_in/hits/facet) into UnitStatic.storm, consumed by sim.rs
+    # ::tray_storm_attack behind `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`.
+    # `uses_per_game` stays unlisted on purpose: the once-per-game is read
+    # from the structural `State.storm_used` flag, never from the param.
+    "Storm Attack": frozenset({"dice", "trigger_target", "range_in", "hits", "facet"}),
 }
 
 
