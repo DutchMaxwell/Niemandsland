@@ -318,6 +318,13 @@ CONSUMED_PARAM_KEYS: dict[str, frozenset[str]] = {
     # would be trusted whole for every name under it - the #489 over-credit
     # shape.
     "Aura Channel": frozenset({"grants"}),
+    # Storm Attack family (rules-wave3-stormattack, 2026-09-05): unit.rs
+    # ::storm_of reads each "Storm of X" entry's own params (dice/trigger_
+    # target/range_in/hits/facet) into UnitStatic.storm, consumed by sim.rs
+    # ::tray_storm_attack behind `rule_on(rules_epoch, EPOCH_6_TABLE_RULES)`.
+    # `uses_per_game` stays unlisted on purpose: the once-per-game is read
+    # from the structural `State.storm_used` flag, never from the param.
+    "Storm Attack": frozenset({"dice", "trigger_target", "range_in", "hits", "facet"}),
 }
 
 
