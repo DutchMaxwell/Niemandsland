@@ -14,7 +14,7 @@ def fixture_repo(tmp_path):
     data = {"common": {name: {"primitive": name} for name in BASES},
             "factions": {"test": {name + " Aura": {"primitive": None, "rated": False,
                                                     "book_version": "3.5.3"} for name in BASES}}}
-    data["factions"]["test"]["Piercing Shooter Aura"] = {"primitive": None}
+    data["factions"]["test"]["Unresolved Aura"] = {"primitive": None}
     data["factions"]["legacy"] = {"Rapid Rush Aura": {
         "primitive": "Rapid Rush", "params": {"rush_mod": 6}}}
     for system in ("gf", "gff", "aof", "aofs", "aofr"):
@@ -38,7 +38,7 @@ def test_priority_is_metadata_only_and_idempotent(tmp_path):
             "primitive": "Aura Channel", "params": {"grants": name},
             "rated": False, "book_version": "3.5.3"}
         assert data["common"][name] == {"primitive": name}
-    assert data["factions"]["test"]["Piercing Shooter Aura"]["primitive"] is None
+    assert data["factions"]["test"]["Unresolved Aura"]["primitive"] is None
     assert data["factions"]["legacy"]["Rapid Rush Aura"] == {
         "primitive": "Rapid Rush", "params": {"rush_mod": 6}}
     assert run(repo, "--priority").returncode == 0
@@ -47,7 +47,7 @@ def test_priority_is_metadata_only_and_idempotent(tmp_path):
     assert run(repo, "--audit", "--write").returncode == 2
 
 
-def test_plans_are_stable_and_deferred_names_are_rejected(tmp_path):
+def test_plans_are_stable_and_unknown_names_are_rejected(tmp_path):
     repo = fixture_repo(tmp_path)
     before = {path: path.read_bytes() for path in repo.rglob("*.json")}
     first = run(repo, "--plan", "--limit", "10")
@@ -56,7 +56,7 @@ def test_plans_are_stable_and_deferred_names_are_rejected(tmp_path):
     batches = [row for line in first.stdout.splitlines() if "names" in (row := json.loads(line))]
     assert [row["entries"] for row in batches] == [10, 10, 5]
     assert [name for row in batches for name in row["names"]] == sorted(name + " Aura" for name in BASES)
-    assert run(repo, "--names", "Piercing Shooter Aura", "--write").returncode == 2
+    assert run(repo, "--names", "Unknown Aura", "--write").returncode == 2
     assert before == {path: path.read_bytes() for path in repo.rglob("*.json")}
 
 

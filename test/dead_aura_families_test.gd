@@ -16,7 +16,7 @@ const SYSTEMS := ["gf", "gff", "aof", "aofs", "aofr"]
 
 ## The aura families that are still knowingly open — they need a mechanic that does not exist yet, so
 ## they are a separate wave, not a data fix. Anything NOT on this list must resolve.
-const KNOWN_OPEN := ["Piercing Shooter"]
+const KNOWN_OPEN := []
 
 
 func _unit_with(rules: Array, system: String, faction: String) -> GameUnit:
