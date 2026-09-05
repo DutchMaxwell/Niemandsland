@@ -58,3 +58,19 @@ def test_plans_are_stable_and_deferred_names_are_rejected(tmp_path):
     assert [name for row in batches for name in row["names"]] == sorted(name + " Aura" for name in BASES)
     assert run(repo, "--names", "Piercing Fighter Aura", "--write").returncode == 2
     assert before == {path: path.read_bytes() for path in repo.rglob("*.json")}
+
+
+def test_reserved_names_stay_open_and_out_of_plans(tmp_path):
+    repo = fixture_repo(tmp_path)
+    args = ("--plan", "--limit", "10", "--exclude-names", "Ambush Aura")
+    first = run(repo, *args)
+    assert first.returncode == 0, first.stderr
+    assert first.stdout == run(repo, *args).stdout
+    batches = [row for line in first.stdout.splitlines() if "names" in (row := json.loads(line))]
+    assert [row["entries"] for row in batches] == [10, 10]
+    assert "Ambush Aura" not in [name for row in batches for name in row["names"]]
+    assert run(repo, "--names", "Ambush Aura", "--exclude-names", "Ambush Aura", "--write").returncode == 2
+    assert run(repo, "--names", "Scout Aura", "--exclude-names", "Ambush Aura", "--write").returncode == 0
+    debt = json.loads((repo / "test/fixtures/rules_registry_open.json").read_text())
+    assert "Ambush Aura" in debt
+    assert "Scout Aura" not in debt

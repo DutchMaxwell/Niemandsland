@@ -28,6 +28,8 @@ def main():
     mode.add_argument("--plan", action="store_true")
     mode.add_argument("--audit", action="store_true")
     parser.add_argument("--limit", type=int, default=200)
+    parser.add_argument("--exclude-names", nargs="+", default=[],
+                        help="names reserved by another open slice; also rejected by --names")
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args()
     maps = {path: json.loads(path.read_text()) for path in sorted(
@@ -40,7 +42,7 @@ def main():
         for faction, rules in entries(data):
             for name, entry in sorted(rules.items()):
                 all_names.add(name)
-                if not name.endswith(" Aura") or entry.get("primitive"):
+                if name in args.exclude_names or not name.endswith(" Aura") or entry.get("primitive"):
                     continue
                 base = name.removesuffix(" Aura")
                 resolved = rules.get(base, data["common"].get(base, {}))
@@ -60,8 +62,8 @@ def main():
         if batch:
             print(json.dumps({"names": batch, "entries": count}))
     selected = PRIORITY if args.priority else set(args.names or [])
-    if selected - all_names or selected & DEFERRED:
-        parser.error("unknown names or deferred resolver families selected")
+    if selected - all_names or selected & (DEFERRED | set(args.exclude_names)):
+        parser.error("unknown, reserved or deferred resolver families selected")
     changed = 0
     for name in sorted(selected):
         for entry in pending[name]:
