@@ -111,3 +111,26 @@ func test_split_registry_entries_expose_the_consumed_placement_limit() -> void:
 		var faction := "wormhole_daemons_of_change" if system in ["gf", "gff"] else "rift_daemons_of_change"
 		assert_bool(RulesRegistry.has_primitive(system, faction, "Split")).is_true()
 		assert_int(int(RulesRegistry.param(system, faction, "Split", "place_in", 0))).is_equal(6)
+
+
+func test_split_resolves_from_a_manually_picked_last_wound() -> void:
+	var carrier := _carrier()
+	await _main._solo_apply_wounds(carrier, 1)
+	var last := carrier.get_alive_models()[0] as ModelInstance
+	var anchor := last.node.global_position
+	var radius := SoloController.model_base_radius_m(last)
+	await _main._solo_apply_picked_wound(carrier, last, 2)
+	_assert_split_at(anchor, radius)
+
+
+func test_split_resolves_from_regiment_pooled_wounds() -> void:
+	var carrier := _carrier()
+	var regiment: Regiment = _main.opr_army_manager.form_regiment(carrier)
+	assert_object(regiment).is_not_null()
+	await _main._solo_apply_wounds(carrier, 1)
+	assert_array(_spawned()).is_empty()
+	var last := carrier.get_alive_models()[0] as ModelInstance
+	var anchor := last.node.global_position
+	var radius := SoloController.model_base_radius_m(last)
+	await _main._solo_apply_wounds(carrier, 1)
+	_assert_split_at(anchor, radius)
